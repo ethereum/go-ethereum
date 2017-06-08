@@ -23,6 +23,7 @@ import (
 	"net"
 	"sync"
 	"time"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -111,6 +112,14 @@ func NewBzz(config *BzzConfig, kad Overlay, store StateStore) *Bzz {
 		localAddr:  &bzzAddr{config.OverlayAddr, config.UnderlayAddr},
 		handshakes: make(map[discover.NodeID]*bzzHandshake),
 	}
+}
+
+func (b *Bzz) UpdateLocalAddr(byteaddr []byte) *bzzAddr {
+	b.localAddr.Update(&bzzAddr{
+		UAddr: byteaddr,
+		OAddr: b.localAddr.OAddr,
+	})
+	return b.localAddr
 }
 
 // Bzz implements the node.Service interface, offers Protocols
@@ -221,12 +230,12 @@ type bzzPeer struct {
 	lastActive      time.Time // time is updated whenever mutexes are releasing
 }
 
-func newBzzPeer(p *protocols.Peer, over, under []byte) *bzzPeer {
-	return &bzzPeer{
-		Peer:      p,
-		localAddr: &bzzAddr{over, under},
-	}
-}
+//func newBzzPeer(p *protocols.Peer, over, under []byte) *bzzPeer {
+//	return &bzzPeer{
+//		Peer:      p,
+//		localAddr: &bzzAddr{over, under},
+//	}
+//}
 
 // Off returns the overlay peer record for offline persistance
 func (self *bzzPeer) Off() OverlayAddr {
@@ -283,6 +292,22 @@ func (self *bzzHandshake) Perform(p *p2p.Peer, rw p2p.MsgReadWriter) (err error)
 		return fmt.Errorf("version mismatch %d (!= %d)", rhs.Version, self.Version)
 	}
 	self.peerAddr = rhs.Addr
+	peerid := p.ID()
+	log.Warn(
+		strings.Join(
+			[]string{
+					"handshake ok:",
+					fmt.Sprintf("p2p.Peer.ID(): 		......	%v",	p.ID()),
+					fmt.Sprintf("peerAddr.UAddr:		......	%x",	self.peerAddr.UAddr[:32]),
+					fmt.Sprintf("peerAddr.OAddr:		......	%x",	self.peerAddr.OAddr[:32]),
+					fmt.Sprintf("selfAddr.UAddr:		......	%x",	self.Addr.UAddr[:32]),
+					fmt.Sprintf("selfAddr.OAddr:		......	%x",	self.Addr.OAddr[:32]),
+					fmt.Sprintf("ToOverlayAddr(p2p.Peer.ID):  ....	%x",	ToOverlayAddr(peerid[:])),
+					fmt.Sprintf("ToOverlayAddr(peerAddr.UAddr): ..	%x",	ToOverlayAddr(self.peerAddr.UAddr)),
+			}, "\n",
+		),
+	)
+
 	return nil
 }
 

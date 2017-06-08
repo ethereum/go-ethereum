@@ -1,4 +1,4 @@
-// +build !psschat
+// +build psschat
 
 // Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/chequebook"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -41,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	psschat "github.com/ethereum/go-ethereum/swarm/pss/protocols/chat"
 )
 
 // the swarm stack
@@ -110,9 +112,12 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	)
 
 	config.HiveParams.Discovery = true
+
+	nodeid := discover.PubkeyID(crypto.ToECDSAPub(common.FromHex(config.PublicKey)))
+	addr := network.NewAddrFromNodeID(nodeid)
 	bzzconfig := &network.BzzConfig{
-		UnderlayAddr: common.FromHex(config.PublicKey),
 		OverlayAddr:  common.FromHex(config.BzzKey),
+		UnderlayAddr: addr.UAddr,
 		HiveParams:   config.HiveParams,
 	}
 	self.bzz = network.NewBzz(bzzconfig, to, nil)
@@ -133,7 +138,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	dpaChunkStore := storage.NewDpaChunkStore(self.lstore, self.storage)
 	log.Debug(fmt.Sprintf("-> Local Access to Swarm"))
 
-		// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
+	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)
 	log.Debug(fmt.Sprintf("-> Content Store API"))
 
@@ -189,6 +194,11 @@ Start is called when the stack is started
 */
 // implements the node.Service interface
 func (self *Swarm) Start(net *p2p.Server) error {
+
+	// update uaddr to correct enode
+	newaddr := self.bzz.UpdateLocalAddr([]byte(net.Self().String()))
+	log.Warn("Updated bzz local addr", "oaddr", fmt.Sprintf("%s", newaddr.OAddr), "uaddr", fmt.Sprintf("%x", newaddr.UAddr))
+
 	// set chequebook
 	if self.swapEnabled {
 		ctx := context.Background() // The initial setup has no deadline.
@@ -213,6 +223,25 @@ func (self *Swarm) Start(net *p2p.Server) error {
 
 	if self.pss != nil {
 		self.pss.Start(net)
+		log.Info("Pss started")
+		pss.RegisterPssProtocol(self.pss, &psschat.ChatTopic, psschat.ChatProtocol, psschat.New(nil, nil, func(ctrl *psschat.ChatCtrl) {
+			if ctrl.OutC != nil {
+				go func() {
+					for {
+						select {
+						case msg := <-ctrl.OutC:
+							err := ctrl.Peer.Send(msg)
+							if err != nil {
+								// do something with ctrl.ConnC here
+								//pp.Drop(err)
+								//return
+							}
+						}
+					}
+				}()
+			}
+
+		}))
 	}
 
 	self.dpa.Start()
@@ -242,9 +271,9 @@ func (self *Swarm) Stop() error {
 	self.dpa.Stop()
 	//self.hive.Stop()
 	self.bzz.Stop()
-	if self.pss != nil {
-		self.pss.Stop()
-	}
+	//if self.pss != nil {
+	//	self.pss.Stop()
+	//}
 	if ch := self.config.Swap.Chequebook(); ch != nil {
 		ch.Stop()
 		ch.Save()
@@ -265,6 +294,7 @@ func (self *Swarm) Protocols() (protos []p2p.Protocol) {
 	}
 
 	if self.pss != nil {
+		log.Warn("adding pss protos")
 		for _, p := range self.pss.Protocols() {
 			protos = append(protos, p)
 		}

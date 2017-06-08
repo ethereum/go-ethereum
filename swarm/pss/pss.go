@@ -32,6 +32,7 @@ var (
 )
 
 type senderPeer interface {
+	ID() discover.NodeID
 	Address() []byte
 	Send(interface{}) error
 }
@@ -69,7 +70,8 @@ type pssDigest [digestLength]byte
 type Pss struct {
 	network.Overlay                                             // we can get the overlayaddress from this
 	peerPool        map[pot.Address]map[Topic]p2p.MsgReadWriter // keep track of all virtual p2p.Peers we are currently speaking to
-	fwdPool         map[pot.Address]*protocols.Peer             // keep track of all peers sitting on the pssmsg routing layer
+	//fwdPool         map[pot.Address]*protocols.Peer             // keep track of all peers sitting on the pssmsg routing layer
+	fwdPool         map[discover.NodeID]*protocols.Peer             // keep track of all peers sitting on the pssmsg routing layer
 	handlers        map[Topic]map[*Handler]bool                 // topic and version based pss payload handlers
 	fwdcache        map[pssDigest]pssCacheEntry                 // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
 	cachettl        time.Duration                               // how long to keep messages in fwdcache
@@ -98,7 +100,8 @@ func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 	return &Pss{
 		Overlay:  k,
 		peerPool: make(map[pot.Address]map[Topic]p2p.MsgReadWriter, PssPeerCapacity),
-		fwdPool:  make(map[pot.Address]*protocols.Peer),
+		//fwdPool:  make(map[pot.Address]*protocols.Peer),
+		fwdPool:  make(map[discover.NodeID]*protocols.Peer),
 		handlers: make(map[Topic]map[*Handler]bool),
 		fwdcache: make(map[pssDigest]pssCacheEntry),
 		cachettl: params.Cachettl,
@@ -132,9 +135,11 @@ func (self *Pss) Protocols() []p2p.Protocol {
 
 func (self *Pss) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	pp := protocols.NewPeer(p, rw, pssSpec)
-	id := p.ID()
-	a := pot.NewAddressFromBytes(network.ToOverlayAddr(id[:]))
-	self.fwdPool[a] = pp
+	//addr := network.NewAddrFromNodeID(id)
+	//potaddr := pot.NewHashAddressFromBytes(addr.OAddr)
+	//self.fwdPool[potaddr.Address] = pp
+	self.fwdPool[p.ID()] = pp
+
 	return pp.Run(self.handlePssMsg)
 }
 
@@ -315,15 +320,21 @@ func (self *Pss) Forward(msg *PssMsg) error {
 	// send with kademlia
 	// find the closest peer to the recipient and attempt to send
 	self.Overlay.EachConn(msg.To, 256, func(op network.OverlayConn, po int, isproxbin bool) bool {
-		a := pot.NewAddressFromBytes(op.Address())
-		pp := self.fwdPool[a]
-		addr := self.Overlay.BaseAddr()
-		sendMsg := fmt.Sprintf("%x: msg to %x via %x", common.ByteLabel(addr), common.ByteLabel(msg.To), common.ByteLabel(op.Address()))
+		sp, ok := op.(senderPeer)
+		if !ok {
+			log.Crit("Pss cannot use kademlia peer type")
+			return false
+		}
+		sendMsg := fmt.Sprintf("TO %x FROM %x VIA %x", common.ByteLabel(msg.To), common.ByteLabel(self.BaseAddr()), common.ByteLabel(op.Address()))
+		//h := pot.NewHashAddressFromBytes(op.Address())
+		//pp := self.fwdPool[h.Address]
+		pp := self.fwdPool[sp.ID()]
 		if self.checkFwdCache(op.Address(), digest) {
-			log.Info(fmt.Sprintf("%v: peer already forwarded to", sendMsg))
+			log.Info("%v: peer already forwarded to", sendMsg)
 			return true
 		}
 		err := pp.Send(msg)
+		//err := sp.Send(msg)
 		if err != nil {
 			log.Warn(fmt.Sprintf("%v: failed forwarding: %v", sendMsg, err))
 			return true
@@ -416,7 +427,7 @@ func (prw PssReadWriter) ReadMsg() (p2p.Msg, error) {
 
 // Implements p2p.MsgWriter
 func (prw PssReadWriter) WriteMsg(msg p2p.Msg) error {
-	log.Warn("got writemsg pssclient", "msg", msg)
+	log.Trace("pssrw writemsg", "msg", msg)
 	rlpdata := make([]byte, msg.Size)
 	msg.Payload.Read(rlpdata)
 	pmsg, err := rlp.EncodeToBytes(ProtocolMsg{
@@ -446,19 +457,18 @@ type PssProtocol struct {
 }
 
 // Constructor
-func RegisterPssProtocol(ps *Pss, topic *Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol) error {
+func RegisterPssProtocol(ps *Pss, topic *Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol) *PssProtocol {
 	pp := &PssProtocol{
 		Pss:   ps,
 		proto: targetprotocol,
 		topic: topic,
 		spec:  spec,
 	}
-	ps.Register(topic, pp.handle)
-	return nil
+	return pp
 }
 
-func (self *PssProtocol) handle(msg []byte, p *p2p.Peer, senderAddr []byte) error {
-	hashoaddr := pot.NewAddressFromBytes(senderAddr)
+func (self *PssProtocol) Handle(msg []byte, p *p2p.Peer, senderAddr []byte) error {
+	hashoaddr := pot.NewHashAddressFromBytes(senderAddr).Address
 	if !self.isActive(hashoaddr, *self.topic) {
 		rw := &PssReadWriter{
 			Pss:   self.Pss,
@@ -480,3 +490,4 @@ func (self *PssProtocol) handle(msg []byte, p *p2p.Peer, senderAddr []byte) erro
 
 	return nil
 }
+

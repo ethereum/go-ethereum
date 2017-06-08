@@ -207,6 +207,10 @@ func (self *Client) Stop() error {
 
 func (self *Client) AddPssPeer(addr pot.Address, spec *protocols.Spec) {
 	topic := pss.NewTopic(spec.Name, int(spec.Version))
+	if self.peerPool[topic] == nil {
+		log.Error("addpeer on unset topic")
+		return
+	}
 	if self.peerPool[topic][addr] == nil {
 		self.peerPool[topic][addr] = self.newpssRPCRW(addr, &topic)
 		nid, _ := discover.HexID("0x00")

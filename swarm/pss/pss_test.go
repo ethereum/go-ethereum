@@ -187,7 +187,7 @@ func TestSimpleLinear(t *testing.T) {
 		C: make(chan struct{}),
 	}
 
-	err = RegisterPssProtocol(ps, &PingTopic, PingProtocol, NewPingProtocol(ping.PingHandler))
+	ps.Register(&PingTopic, RegisterPssProtocol(ps, &PingTopic, PingProtocol, NewPingProtocol(ping.PingHandler)).Handle)
 
 	if err != nil {
 		t.Fatalf("Failed to register virtual protocol in pss: %v", err)
@@ -543,7 +543,7 @@ func newServices() adapters.Services {
 			ping := &Ping{
 				C: make(chan struct{}),
 			}
-			err = RegisterPssProtocol(ps, &PingTopic, PingProtocol, NewPingProtocol(ping.PingHandler))
+			ps.Register(&PingTopic, RegisterPssProtocol(ps, &PingTopic, PingProtocol, NewPingProtocol(ping.PingHandler)).Handle)
 			if err != nil {
 				log.Error("Couldnt register pss protocol", "err", err)
 				os.Exit(1)
