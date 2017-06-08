@@ -9,7 +9,6 @@ import (
 )
 
 func TestByteOp(t *testing.T) {
-
 	var (
 		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
 		stack = newstack()

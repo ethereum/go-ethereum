@@ -141,6 +141,7 @@ func BenchmarkPaddedBigBytesLargePadding(b *testing.B) {
 		PaddedBigBytes(bigint, 200)
 	}
 }
+
 func BenchmarkPaddedBigBytesSmallPadding(b *testing.B) {
 	bigint := MustParseBig256("0x18F8F8F1000111000110011100222004330052300000000000000000FEFCF3CC")
 	for i := 0; i < b.N; i++ {
@@ -154,18 +155,21 @@ func BenchmarkPaddedBigBytesSmallOnePadding(b *testing.B) {
 		PaddedBigBytes(bigint, 32)
 	}
 }
+
 func BenchmarkByteAtBrandNew(b *testing.B) {
 	bigint := MustParseBig256("0x18F8F8F1000111000110011100222004330052300000000000000000FEFCF3CC")
 	for i := 0; i < b.N; i++ {
 		bigEndianByteAt(bigint, 15)
 	}
 }
+
 func BenchmarkByteAt(b *testing.B) {
 	bigint := MustParseBig256("0x18F8F8F1000111000110011100222004330052300000000000000000FEFCF3CC")
 	for i := 0; i < b.N; i++ {
 		bigEndianByteAt(bigint, 15)
 	}
 }
+
 func BenchmarkByteAtOld(b *testing.B) {
 
 	bigint := MustParseBig256("0x18F8F8F1000111000110011100222004330052300000000000000000FEFCF3CC")
@@ -207,21 +211,22 @@ func TestU256(t *testing.T) {
 		}
 	}
 }
-func TestLittleEndianByteAt(t *testing.T) {
 
+func TestBigEndianByteAt(t *testing.T) {
 	tests := []struct {
 		x   string
 		y   int
 		exp byte
 	}{
-		{"0", 0, 0x00},
-		{"1", 1, 0x00},
-		{"0", 1, 0x00},
-		//{"1", 0, 0x01},
+		{"00", 0, 0x00},
+		{"01", 1, 0x00},
+		{"00", 1, 0x00},
+		{"01", 0, 0x01},
 		{"0000000000000000000000000000000000000000000000000000000000102030", 0, 0x30},
 		{"0000000000000000000000000000000000000000000000000000000000102030", 1, 0x20},
 		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 31, 0xAB},
 		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 32, 0x00},
+		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 500, 0x00},
 	}
 	for _, test := range tests {
 		v := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
@@ -232,17 +237,16 @@ func TestLittleEndianByteAt(t *testing.T) {
 
 	}
 }
-func TestBigEndianByteAt(t *testing.T) {
-
+func TestLittleEndianByteAt(t *testing.T) {
 	tests := []struct {
 		x   string
 		y   int
 		exp byte
 	}{
-		{"0", 0, 0x00},
-		{"1", 1, 0x00},
-		{"0", 1, 0x00},
-		{"1", 0, 0x00},
+		{"00", 0, 0x00},
+		{"01", 1, 0x00},
+		{"00", 1, 0x00},
+		{"01", 0, 0x00},
 		{"0000000000000000000000000000000000000000000000000000000000102030", 0, 0x00},
 		{"0000000000000000000000000000000000000000000000000000000000102030", 1, 0x00},
 		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 31, 0x00},
@@ -266,6 +270,7 @@ func TestBigEndianByteAt(t *testing.T) {
 
 	}
 }
+
 func TestS256(t *testing.T) {
 	tests := []struct{ x, y *big.Int }{
 		{x: big.NewInt(0), y: big.NewInt(0)},
