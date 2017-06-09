@@ -468,7 +468,8 @@ func RegisterPssProtocol(ps *Pss, topic *Topic, spec *protocols.Spec, targetprot
 }
 
 func (self *PssProtocol) Handle(msg []byte, p *p2p.Peer, senderAddr []byte) error {
-	hashoaddr := pot.NewHashAddressFromBytes(senderAddr).Address
+	//hashoaddr := pot.NewHashAddressFromBytes(senderAddr).Address
+	hashoaddr := pot.NewAddressFromBytes(senderAddr)
 	if !self.isActive(hashoaddr, *self.topic) {
 		rw := &PssReadWriter{
 			Pss:   self.Pss,
