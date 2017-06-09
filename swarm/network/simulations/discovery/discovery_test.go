@@ -2,6 +2,7 @@ package discovery_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -135,6 +136,13 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 		t.Fatalf("simulation failed: %s", result.Error)
 	}
 
+	snap, err := net.Snapshot()
+	if err != nil {
+		t.Fatalf("no shapshot dude")
+	}
+	jsonsnapshot, err := json.Marshal(snap)
+	ioutil.WriteFile("jsonsnapshot.txt", jsonsnapshot, os.ModePerm)
+	
 	t.Log("Simulation Passed:")
 	t.Logf("Duration: %s", result.FinishedAt.Sub(result.StartedAt))
 	for _, id := range ids {

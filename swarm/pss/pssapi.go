@@ -11,17 +11,20 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
-// API is the RPC API module for Pss
+// Pss API services
 type API struct {
 	*Pss
 }
 
-// NewAPI constructs a PssAPI instance
 func NewAPI(ps *Pss) *API {
 	return &API{Pss: ps}
 }
 
-// NewMsg API endpoint creates an RPC subscription
+// Creates a new subscription for the caller. Enables external handling of incoming messages.
+//
+// A new handler is registered in pss for the supplied topic
+//
+// All incoming messages to the node matching this topic will be encapsulated in the APIMsg struct and sent to the subscriber 
 func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -54,31 +57,47 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription,
 	return psssub, nil
 }
 
-// SendRaw sends the message (serialized into byte slice) to a peer with topic
+// Sends the message wrapped in APIMsg through pss
+//
+// Wrapper method for the pss.SendRaw function.
+//
+// The method will pass on the error received from pss.
+//
+// Note that normally pss will report an error if an attempt is made to send a pss to oneself. However, if the debug flag has been set, and the address specified in APIMsg is the node's own, this method implements a short-circuit which injects the message as an incoming message (using Pss.Process). This can be useful for testing purposes, when only operating with one node.
 func (pssapi *API) Send(topic Topic, msg APIMsg) error {
-	if pssapi.debug && bytes.Equal(msg.Addr, pssapi.BaseAddr()) {
+	if pssapi.debug && bytes.Equal(msg.Addr, pssapi.Pss.BaseAddr()) {
 		log.Warn("Pss debug enabled; send to self shortcircuit", "apimsg", msg, "topic", topic)
 		env := NewEnvelope(msg.Addr, topic, msg.Msg)
 		return pssapi.Process(&PssMsg{
-			To:      pssapi.BaseAddr(),
+			To:      pssapi.Pss.BaseAddr(),
 			Payload: env,
 		})
 	}
 	return pssapi.SendRaw(msg.Addr, topic, msg.Msg)
 }
 
+// BaseAddr returns the pss node's swarm overlay address
+//
+// Note that the overlay address is NOT inferable. To really know the node's overlay address it must reveal it itself.
+func (pssapi *API) BaseAddr() ([]byte, error) {
+	return pssapi.Pss.BaseAddr(), nil
+}
+
 // PssAPITest are temporary API calls for development use only
-// These symbols should not be included in production environment
+//
+// These symbols should NOT be included in production environment
 type APITest struct {
 	*Pss
 }
 
-// NewAPI constructs a API instance
+// Include these methods to the node.Service if test symbols should be used
 func NewAPITest(ps *Pss) *APITest {
 	return &APITest{Pss: ps}
 }
 
-// temporary for access to overlay while faking kademlia healthy routines
+// Get the current nearest swarm node to the specified address
+//
+// (Can be used for diagnosing kademlia state)
 func (pssapitest *APITest) GetForwarder(addr []byte) (fwd struct {
 	Addr  []byte
 	Count int
@@ -93,7 +112,3 @@ func (pssapitest *APITest) GetForwarder(addr []byte) (fwd struct {
 	return
 }
 
-// BaseAddr gets our own overlayaddress
-func (pssapitest *APITest) BaseAddr() ([]byte, error) {
-	return pssapitest.Pss.BaseAddr(), nil
-}

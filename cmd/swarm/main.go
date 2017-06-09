@@ -121,6 +121,11 @@ var (
 		Name: "pss",
 		Usage: "Enable pss (message passing over swarm)",
 	}
+	PssHostFlag = cli.StringFlag{
+		Name: "psshost",
+		Usage: fmt.Sprintf("Websockets host or ip for pss (default '%v')", node.DefaultWSHost),
+		Value: node.DefaultWSHost,
+	}
 	PssPortFlag = cli.IntFlag{
 		Name: "pssport",
 		Usage: fmt.Sprintf("Websockets port for pss (default %d)", node.DefaultWSPort),
@@ -269,6 +274,7 @@ Cleans database of corrupted entries.
 		SwarmUpFromStdinFlag,
 		SwarmUploadMimeType,
 		// pss flags
+		PssHostFlag,
 		PssEnabledFlag,
 		PssPortFlag,
 	}
@@ -307,7 +313,7 @@ func version(ctx *cli.Context) error {
 func bzzd(ctx *cli.Context) error {
 	cfg := defaultNodeConfig
 	if ctx.GlobalIsSet(PssEnabledFlag.Name) {
-		cfg.WSHost = "127.0.0.1"
+		cfg.WSHost = ctx.GlobalString(PssHostFlag.Name)
 		cfg.WSModules = []string{"eth","pss"}
 		cfg.WSOrigins = []string{"*"}
 		if ctx.GlobalIsSet(PssPortFlag.Name) {
@@ -366,7 +372,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	swapEnabled := ctx.GlobalBool(SwarmSwapEnabledFlag.Name)
 	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabledFlag.Name)
 	pssEnabled := ctx.GlobalBool(PssEnabledFlag.Name)
-	
+
 	ethapi := ctx.GlobalString(EthAPIFlag.Name)
 	cors := ctx.GlobalString(CorsStringFlag.Name)
 

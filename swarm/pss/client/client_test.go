@@ -152,7 +152,10 @@ func newClient(t *testing.T, ctx context.Context, cancel func(), quitC chan stru
 
 	conf := NewClientConfig()
 
-	pssclient := NewClient(ctx, cancel, conf)
+	pssclient, err := NewClient(ctx, cancel, conf)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	ps := pss.NewTestPss(nil)
 	srv := rpc.NewServer()

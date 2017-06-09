@@ -42,7 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	psschat "github.com/ethereum/go-ethereum/swarm/pss/protocols/chat"
+	//psschat "github.com/ethereum/go-ethereum/swarm/pss/protocols/chat"
 )
 
 // the swarm stack
@@ -197,7 +197,7 @@ func (self *Swarm) Start(net *p2p.Server) error {
 
 	// update uaddr to correct enode
 	newaddr := self.bzz.UpdateLocalAddr([]byte(net.Self().String()))
-	log.Warn("Updated bzz local addr", "oaddr", fmt.Sprintf("%s", newaddr.OAddr), "uaddr", fmt.Sprintf("%x", newaddr.UAddr))
+	log.Warn("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%x", newaddr.UAddr))
 
 	// set chequebook
 	if self.swapEnabled {
@@ -223,25 +223,30 @@ func (self *Swarm) Start(net *p2p.Server) error {
 
 	if self.pss != nil {
 		self.pss.Start(net)
-		log.Info("Pss started")
-		pss.RegisterPssProtocol(self.pss, &psschat.ChatTopic, psschat.ChatProtocol, psschat.New(nil, nil, func(ctrl *psschat.ChatCtrl) {
-			if ctrl.OutC != nil {
-				go func() {
-					for {
-						select {
-						case msg := <-ctrl.OutC:
-							err := ctrl.Peer.Send(msg)
-							if err != nil {
-								// do something with ctrl.ConnC here
-								//pp.Drop(err)
-								//return
-							}
-						}
-					}
-				}()
-			}
-
-		}))
+		topic := pss.NewTopic("pssChat", 1)
+		self.pss.Register(&topic, func(msg []byte, p *p2p.Peer, from []byte) error {
+			log.Trace("placeholder handler for node got psschat proto incoming", "msg", msg, "from", from)
+			return nil
+		})
+		log.Info("Pss started ... with 'pssChat' :)")
+//		pss.RegisterPssProtocol(self.pss, &psschat.ChatTopic, psschat.ChatProtocol, psschat.New(nil, nil, nil, func(ctrl *psschat.ChatCtrl) {
+//			if ctrl.OutC != nil {
+//				go func() {
+//					for {
+//						select {
+//						case msg := <-ctrl.OutC:
+//							err := ctrl.Peer.Send(msg)
+//							if err != nil {
+//								// do something with ctrl.ConnC here
+//								//pp.Drop(err)
+//								//return
+//							}
+//						}
+//					}
+//				}()
+//			}
+//
+//		}))
 	}
 
 	self.dpa.Start()
