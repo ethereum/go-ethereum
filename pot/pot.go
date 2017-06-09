@@ -13,6 +13,8 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+// Package pot see doc.go
 package pot
 
 import (
@@ -33,66 +35,69 @@ type Pot struct {
 
 // pot is the node type (same for root, branching node and leaf)
 type pot struct {
-	pin  PotVal
+	pin  Val
 	bins []*pot
 	size int
 	po   int
+	pof  Pof
 }
 
-// PotVal is the interface the generic container item should implement
-type PotVal interface {
-	PO(PotVal, int) (po int, eq bool)
-	String() string
-}
+// Val is the element type for pots
+type Val interface{}
 
-type AnyVal interface{}
+// Pof is the proximity order function
+type Pof func(Val, Val, int) (int, bool)
 
-// Pot constructor. Requires  value of type PotVal to pin
-// and po to point to a span in the PotVal key
+// NewPot constructor. Requires  value of type Val to pin
+// and po to point to a span in the Val key
 // The pinned item counts towards the size
-func NewPot(v PotVal, po int) *Pot {
+func NewPot(v Val, po int, pof Pof) *Pot {
 	var size int
 	if v != nil {
 		size++
+	}
+	if pof == nil {
+		pof = DefaultPof(keylen)
 	}
 	return &Pot{
 		pot: &pot{
 			pin:  v,
 			po:   po,
 			size: size,
+			pof:  pof,
 		},
 	}
 }
 
-// Pin() returns the pinned element (key) of the Pot
-func (t *Pot) Pin() PotVal {
+// Pin returns the pinned element (key) of the Pot
+func (t *Pot) Pin() Val {
 	return t.pin
 }
 
-// Size() returns the number of values in the Pot
+// Size returns the number of values in the Pot
 func (t *Pot) Size() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	return t.size
 }
 
-// Add(v) inserts v into the Pot and
+// Add inserts v into the Pot and
 // returns the proximity order of v and a boolean
 // indicating if the item was found
 // Add locks the Pot while using applicative add on its pot
-func (t *Pot) Add(val PotVal) (po int, found bool) {
+func (t *Pot) Add(val Val) (po int, found bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	t.pot, po, found = add(t.pot, val)
 	return po, found
 }
 
-// Add(t, v) returns a new Pot that contains all the elements of t
+// Add called on (t, v) returns a new Pot that contains all the elements of t
 // plus the value v, using the applicative add
 // the second return value is the proximity order of the inserted element
 // the third is boolean indicating if the item was found
 // it only readlocks the Pot while reading its pot
-func Add(t *Pot, val PotVal) (*Pot, int, bool) {
+func Add(t *Pot, val Val) (*Pot, int, bool) {
 	t.lock.RLock()
 	n := t.pot
 	t.lock.RUnlock()
@@ -100,25 +105,28 @@ func Add(t *Pot, val PotVal) (*Pot, int, bool) {
 	return &Pot{pot: r}, po, found
 }
 
-func add(t *pot, val PotVal) (*pot, int, bool) {
+func (t *pot) clone() *pot {
+	return &pot{
+		pin:  t.pin,
+		size: t.size,
+		po:   t.po,
+		bins: t.bins,
+		pof:  t.pof,
+	}
+}
+
+func add(t *pot, val Val) (*pot, int, bool) {
 	var r *pot
 	if t == nil || t.pin == nil {
-		r = &pot{
-			pin:  val,
-			size: t.size + 1,
-			po:   t.po,
-			bins: t.bins,
-		}
+		r = t.clone()
+		r.pin = val
+		r.size++
 		return r, 0, false
 	}
-	po, found := t.pin.PO(val, t.po)
+	po, found := t.pof(t.pin, val, t.po)
 	if found {
-		r = &pot{
-			pin:  val,
-			size: t.size,
-			po:   t.po,
-			bins: t.bins,
-		}
+		r = t.clone()
+		r.pin = val
 		return r, po, true
 	}
 
@@ -147,6 +155,7 @@ func add(t *pot, val PotVal) (*pot, int, bool) {
 			pin:  val,
 			size: 1,
 			po:   po,
+			pof:  t.pof,
 		}
 	}
 
@@ -158,28 +167,29 @@ func add(t *pot, val PotVal) (*pot, int, bool) {
 		size: size,
 		po:   t.po,
 		bins: bins,
+		pof:  t.pof,
 	}
 
 	return r, po, found
 }
 
-// T.Re move(v) deletes v from the Pot and returns
+// Remove called on (v) deletes v from the Pot and returns
 // the proximity order of v and a boolean value indicating
 // if the value was found
 // Remove locks Pot while using applicative remove on its pot
-func (t *Pot) Remove(val PotVal) (po int, found bool) {
+func (t *Pot) Remove(val Val) (po int, found bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	t.pot, po, found = remove(t.pot, val)
 	return po, found
 }
 
-// Remove(t, v) returns a new Pot that contains all the elements of t
+// Remove called on (t, v) returns a new Pot that contains all the elements of t
 // minus the value v, using the applicative remove
 // the second return value is the proximity order of the inserted element
 // the third is boolean indicating if the item was found
 // it only readlocks the Pot while reading its pot
-func Remove(t *Pot, v PotVal) (*Pot, int, bool) {
+func Remove(t *Pot, v Val) (*Pot, int, bool) {
 	t.lock.RLock()
 	n := t.pot
 	t.lock.RUnlock()
@@ -187,14 +197,15 @@ func Remove(t *Pot, v PotVal) (*Pot, int, bool) {
 	return &Pot{pot: r}, po, found
 }
 
-func remove(t *pot, val PotVal) (r *pot, po int, found bool) {
+func remove(t *pot, val Val) (r *pot, po int, found bool) {
 	size := t.size
-	po, found = t.pin.PO(val, t.po)
+	po, found = t.pof(t.pin, val, t.po)
 	if found {
 		size--
 		if size == 0 {
 			r = &pot{
-				po: t.po,
+				po:  t.po,
+				pof: t.pof,
 			}
 			return r, po, true
 		}
@@ -205,6 +216,7 @@ func remove(t *pot, val PotVal) (r *pot, po int, found bool) {
 			bins: append(t.bins[:i], last.bins...),
 			size: size,
 			po:   t.po,
+			pof:  t.pof,
 		}
 		return r, t.po, true
 	}
@@ -237,58 +249,56 @@ func remove(t *pot, val PotVal) (r *pot, po int, found bool) {
 		size: size,
 		po:   t.po,
 		bins: bins,
+		pof:  t.pof,
 	}
 	return r, po, found
 }
 
-// Swap(k, f) looks up the item at k
+// Swap called on (k, f) looks up the item at k
 // and applies the function f to the value v at k or nil if the item is not found
 // if f returns nil, the element is removed
 // if f returns v' <> v then v' is inserted into the Pot
 // if v' == v the pot is not changed
 // it panics if v'.PO(k, 0) says v and k are not equal
-func (t *Pot) Swap(val AnyVal, f func(v PotVal) PotVal) (po int, found bool, change bool) {
+func (t *Pot) Swap(val Val, f func(v Val) Val) (po int, found bool, change bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	ba := NewBytesVal(val, nil)
 	var t0 *pot
-	t0, po, found, change = swap(t.pot, ba, f)
+	t0, po, found, change = swap(t.pot, val, f)
 	if change {
 		t.pot = t0
 	}
 	return po, found, change
 }
 
-func swap(t *pot, k PotVal, f func(v PotVal) PotVal) (r *pot, po int, found bool, change bool) {
-	var val PotVal
+func swap(t *pot, k Val, f func(v Val) Val) (r *pot, po int, found bool, change bool) {
+	var val Val
 	if t == nil || t.pin == nil {
 		val = f(nil)
 		if val == nil {
 			return t, t.po, false, false
 		}
-		if _, eq := val.PO(k, t.po); !eq {
-			panic("value key mismatch")
-		}
-		r = &pot{
-			pin:  val,
-			size: t.size + 1,
-			po:   t.po,
-			bins: t.bins,
-		}
+		// if _, eq := t.pof(k, t.pin, t.po); !eq {
+		// 	panic("value key mismatch")
+		// }
+		r = t.clone()
+		r.pin = val
+		r.size++
 		return r, t.po, false, true
 	}
 	size := t.size
 	if k == nil {
 		panic("k is nil")
 	}
-	po, found = k.PO(t.pin, t.po)
+	po, found = t.pof(k, t.pin, t.po)
 	if found {
 		val = f(t.pin)
 		if val == nil {
 			size--
 			if size == 0 {
 				r = &pot{
-					po: t.po,
+					po:  t.po,
+					pof: t.pof,
 				}
 				return r, po, true, true
 			}
@@ -299,18 +309,15 @@ func swap(t *pot, k PotVal, f func(v PotVal) PotVal) (r *pot, po int, found bool
 				bins: append(t.bins[:i], last.bins...),
 				size: size,
 				po:   t.po,
+				pof:  t.pof,
 			}
 			return r, t.po, true, true
 			// remove element
 		} else if val == t.pin {
 			return nil, po, true, false
 		} else { // add element
-			r = &pot{
-				pin:  val,
-				size: t.size,
-				po:   t.po,
-				bins: t.bins,
-			}
+			r = t.clone()
+			r.pin = val
 			return r, po, true, true
 		}
 	}
@@ -344,6 +351,7 @@ func swap(t *pot, k PotVal, f func(v PotVal) PotVal) (r *pot, po int, found bool
 			pin:  val,
 			size: 1,
 			po:   po,
+			pof:  t.pof,
 		}
 	}
 
@@ -357,12 +365,13 @@ func swap(t *pot, k PotVal, f func(v PotVal) PotVal) (r *pot, po int, found bool
 		size: size,
 		po:   t.po,
 		bins: bins,
+		pof:  t.pof,
 	}
 
 	return r, po, found, true
 }
 
-// t0.Merge(t1) changes t0 to contain all the elements of t1
+// Merge called on (t1) changes t0 to contain all the elements of t1
 // it locks t0, but only readlocks t1 while taking its pot
 // uses applicative union
 func (t *Pot) Merge(t1 *Pot) (c int) {
@@ -388,9 +397,7 @@ func Union(t0, t1 *Pot) (*Pot, int) {
 	t1.lock.RUnlock()
 
 	p, c := union(n0, n1)
-	return &Pot{
-		pot: p,
-	}, c
+	return &Pot{pot: p}, c
 }
 
 func union(t0, t1 *pot) (*pot, int) {
@@ -400,7 +407,7 @@ func union(t0, t1 *pot) (*pot, int) {
 	if t1 == nil || t1.size == 0 {
 		return t0, 0
 	}
-	var pin PotVal
+	var pin Val
 	var bins []*pot
 	var mis []int
 	wg := &sync.WaitGroup{}
@@ -411,7 +418,7 @@ func union(t0, t1 *pot) (*pot, int) {
 	var i0, i1 int
 	var common int
 
-	po, eq := pin0.PO(pin1, 0)
+	po, eq := t0.pof(pin0, pin1, 0)
 
 	for {
 		l0 := len(bins0)
@@ -486,6 +493,7 @@ func union(t0, t1 *pot) (*pot, int) {
 			bins: bins0[i:],
 			size: size0 + 1,
 			po:   po,
+			pof:  t0.pof,
 		}
 
 		bins2 := []*pot{np}
@@ -499,7 +507,7 @@ func union(t0, t1 *pot) (*pot, int) {
 			bins2 = append(bins2, n0.bins...)
 			pin0 = pin1
 			pin1 = n0.pin
-			po, eq = pin0.PO(pin1, n0.po)
+			po, eq = t0.pof(pin0, pin1, n0.po)
 
 		}
 		bins0 = bins1
@@ -518,21 +526,22 @@ func union(t0, t1 *pot) (*pot, int) {
 		bins: bins,
 		size: t0.size + t1.size - common,
 		po:   t0.po,
+		pof:  t0.pof,
 	}
 	return n, common
 }
 
-// Each(f) is a synchronous iterator over the bins of a node
+// Each called with (f) is a synchronous iterator over the bins of a node
 // respecting an ordering
 // proximity > pinnedness
-func (t *Pot) Each(f func(PotVal, int) bool) bool {
+func (t *Pot) Each(f func(Val, int) bool) bool {
 	t.lock.RLock()
 	n := t.pot
 	t.lock.RUnlock()
 	return n.each(f)
 }
 
-func (t *pot) each(f func(PotVal, int) bool) bool {
+func (t *pot) each(f func(Val, int) bool) bool {
 	var next bool
 	for _, n := range t.bins {
 		if n == nil {
@@ -546,7 +555,7 @@ func (t *pot) each(f func(PotVal, int) bool) bool {
 	return f(t.pin, t.po)
 }
 
-// EachFrom(f, start) is a synchronous iterator over the elements of a pot
+// EachFrom called with (f, start) is a synchronous iterator over the elements of a pot
 // within the inclusive range starting from proximity order start
 // the function argument is passed the value and the proximity order wrt the root pin
 // it does NOT include the pinned item of the root
@@ -554,14 +563,14 @@ func (t *pot) each(f func(PotVal, int) bool) bool {
 // proximity > pinnedness
 // the iteration ends if the function return false or there are no more elements
 // end of a po range can be implemented since po is passed to the function
-func (t *Pot) EachFrom(f func(PotVal, int) bool, po int) bool {
+func (t *Pot) EachFrom(f func(Val, int) bool, po int) bool {
 	t.lock.RLock()
 	n := t.pot
 	t.lock.RUnlock()
 	return n.eachFrom(f, po)
 }
 
-func (t *pot) eachFrom(f func(PotVal, int) bool, po int) bool {
+func (t *pot) eachFrom(f func(Val, int) bool, po int) bool {
 	var next bool
 	_, lim := t.getPos(po)
 	for i := lim; i < len(t.bins); i++ {
@@ -578,18 +587,18 @@ func (t *pot) eachFrom(f func(PotVal, int) bool, po int) bool {
 // subtree passing the proximity order and the size
 // the iteration continues until the function's return value is false
 // or there are no more subtries
-func (t *Pot) EachBin(val PotVal, po int, f func(int, int, func(func(val PotVal, i int) bool) bool) bool) {
+func (t *Pot) EachBin(val Val, po int, f func(int, int, func(func(val Val, i int) bool) bool) bool) {
 	t.lock.RLock()
 	n := t.pot
 	t.lock.RUnlock()
 	n.eachBin(val, po, f)
 }
 
-func (t *pot) eachBin(val PotVal, po int, f func(int, int, func(func(val PotVal, i int) bool) bool) bool) {
+func (t *pot) eachBin(val Val, po int, f func(int, int, func(func(val Val, i int) bool) bool) bool) {
 	if t == nil || t.size == 0 {
 		return
 	}
-	spr, _ := t.pin.PO(val, t.po)
+	spr, _ := t.pof(t.pin, val, t.po)
 	_, lim := t.getPos(spr)
 	var size int
 	var n *pot
@@ -604,7 +613,7 @@ func (t *pot) eachBin(val PotVal, po int, f func(int, int, func(func(val PotVal,
 		}
 	}
 	if lim == len(t.bins) {
-		f(spr, 1, func(g func(PotVal, int) bool) bool {
+		f(spr, 1, func(g func(Val, int) bool) bool {
 			return g(t.pin, spr)
 		})
 		return
@@ -616,8 +625,8 @@ func (t *pot) eachBin(val PotVal, po int, f func(int, int, func(func(val PotVal,
 		spo++
 		size += n.size
 	}
-	if !f(spr, t.size-size, func(g func(PotVal, int) bool) bool {
-		return t.eachFrom(func(v PotVal, j int) bool {
+	if !f(spr, t.size-size, func(g func(Val, int) bool) bool {
+		return t.eachFrom(func(v Val, j int) bool {
 			return g(v, spr)
 		}, spo)
 	}) {
@@ -628,17 +637,17 @@ func (t *pot) eachBin(val PotVal, po int, f func(int, int, func(func(val PotVal,
 	}
 }
 
-// syncronous iterator over neighbours of any target val
+// EachNeighbour is a syncronous iterator over neighbours of any target val
 // the order of elements retrieved reflect proximity order to the target
 // TODO: add maximum proxbin to start range of iteration
-func (t *Pot) EachNeighbour(val PotVal, f func(PotVal, int) bool) bool {
+func (t *Pot) EachNeighbour(val Val, f func(Val, int) bool) bool {
 	t.lock.RLock()
 	n := t.pot
 	t.lock.RUnlock()
 	return n.eachNeighbour(val, f)
 }
 
-func (t *pot) eachNeighbour(val PotVal, f func(PotVal, int) bool) bool {
+func (t *pot) eachNeighbour(val Val, f func(Val, int) bool) bool {
 	if t == nil || t.size == 0 {
 		return false
 	}
@@ -647,7 +656,7 @@ func (t *pot) eachNeighbour(val PotVal, f func(PotVal, int) bool) bool {
 	var n *pot
 	ir := l
 	il := l
-	po, eq := t.pin.PO(val, t.po)
+	po, eq := t.pof(t.pin, val, t.po)
 	if !eq {
 		n, il = t.getPos(po)
 		if n != nil {
@@ -667,7 +676,7 @@ func (t *pot) eachNeighbour(val PotVal, f func(PotVal, int) bool) bool {
 	}
 
 	for i := l - 1; i > ir; i-- {
-		next = t.bins[i].each(func(v PotVal, _ int) bool {
+		next = t.bins[i].each(func(v Val, _ int) bool {
 			return f(v, po)
 		})
 		if !next {
@@ -677,7 +686,7 @@ func (t *pot) eachNeighbour(val PotVal, f func(PotVal, int) bool) bool {
 
 	for i := il - 1; i >= 0; i-- {
 		n := t.bins[i]
-		next = n.each(func(v PotVal, _ int) bool {
+		next = n.each(func(v Val, _ int) bool {
 			return f(v, n.po)
 		})
 		if !next {
@@ -687,7 +696,7 @@ func (t *pot) eachNeighbour(val PotVal, f func(PotVal, int) bool) bool {
 	return true
 }
 
-// EachNeighnbourAsync(val, max, maxPos, f, wait) is an asyncronous iterator
+// EachNeighbourAsync called on (val, max, maxPos, f, wait) is an asyncronous iterator
 // over elements not closer than maxPos wrt val.
 // val does not need to be match an element of the pot, but if it does, and
 // maxPos is keylength than it is included in the iteration
@@ -698,7 +707,7 @@ func (t *pot) eachNeighbour(val PotVal, f func(PotVal, int) bool) bool {
 // or if the entire there are no nodes not closer than maxPos that is not visited
 // if wait is true, the iterator returns only if all calls to f are finished
 // TODO: implement minPos for proper prox range iteration
-func (t *Pot) EachNeighbourAsync(val PotVal, max int, maxPos int, f func(PotVal, int), wait bool) {
+func (t *Pot) EachNeighbourAsync(val Val, max int, maxPos int, f func(Val, int), wait bool) {
 	t.lock.RLock()
 	n := t.pot
 	t.lock.RUnlock()
@@ -715,15 +724,14 @@ func (t *Pot) EachNeighbourAsync(val PotVal, max int, maxPos int, f func(PotVal,
 	}
 }
 
-func (t *pot) eachNeighbourAsync(val PotVal, max int, maxPos int, f func(PotVal, int), wg *sync.WaitGroup) (extra int) {
-
+func (t *pot) eachNeighbourAsync(val Val, max int, maxPos int, f func(Val, int), wg *sync.WaitGroup) (extra int) {
 	l := len(t.bins)
 	var n *pot
 	il := l
 	ir := l
 	// ic := l
 
-	po, eq := t.pin.PO(val, t.po)
+	po, eq := t.pof(t.pin, val, t.po)
 
 	// if po is too close, set the pivot branch (pom) to maxPos
 	pom := po
@@ -799,7 +807,7 @@ func (t *pot) eachNeighbourAsync(val PotVal, max int, maxPos int, f func(PotVal,
 				wg.Add(m)
 			}
 			go func(pn *pot, pm int) {
-				pn.each(func(v PotVal, _ int) bool {
+				pn.each(func(v Val, _ int) bool {
 					if wg != nil {
 						defer wg.Done()
 					}
@@ -826,7 +834,7 @@ func (t *pot) eachNeighbourAsync(val PotVal, max int, maxPos int, f func(PotVal,
 			wg.Add(m)
 		}
 		go func(pn *pot, pm int) {
-			pn.each(func(v PotVal, _ int) bool {
+			pn.each(func(v Val, _ int) bool {
 				if wg != nil {
 					defer wg.Done()
 				}
@@ -840,7 +848,7 @@ func (t *pot) eachNeighbourAsync(val PotVal, max int, maxPos int, f func(PotVal,
 	return max + extra
 }
 
-// getPos(n) returns the forking node at PO n and its index if it exists
+// getPos called on (n) returns the forking node at PO n and its index if it exists
 // otherwise nil
 // caller is suppoed to hold the lock
 func (t *pot) getPos(po int) (n *pot, i int) {
@@ -856,7 +864,7 @@ func (t *pot) getPos(po int) (n *pot, i int) {
 	return nil, len(t.bins)
 }
 
-// need(m, max, extra) uses max m out of extra, and then max
+// need called on (m, max, extra) uses max m out of extra, and then max
 // if needed, returns the adjusted counts
 func need(m, max, extra int) (int, int, int) {
 	if m <= extra {

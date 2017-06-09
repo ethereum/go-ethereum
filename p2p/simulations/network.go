@@ -255,7 +255,7 @@ func (self *Network) newConn(oneID, otherID discover.NodeID) (*Conn, error) {
 	if other == nil {
 		return nil, fmt.Errorf("other %v does not exist", other)
 	}
-	distance, _ := pot.NewBytesVal(one.Addr(), nil).PO(pot.NewBytesVal(other.Addr(), nil), 0)
+	distance, _ := pot.DefaultPof(256)(one.Addr(), other.Addr(), 0)
 	return &Conn{
 		One:      oneID,
 		Other:    otherID,

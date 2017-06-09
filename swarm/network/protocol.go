@@ -333,15 +333,15 @@ func RandomAddr() *bzzAddr {
 	pubkey := crypto.FromECDSAPub(&key.PublicKey)
 	var id discover.NodeID
 	copy(id[:], pubkey[1:])
-	return &bzzAddr{
-		OAddr: crypto.Keccak256(pubkey[1:]),
-		UAddr: id[:],
-	}
+	return NewAddrFromNodeID(id)
 }
 
 // NewNodeIDFromAddr transforms the underlay address to an adapters.NodeID
 func NewNodeIDFromAddr(addr Addr) discover.NodeID {
-	return discover.MustBytesID(addr.Under())
+	log.Info(fmt.Sprintf("uaddr=%s", string(addr.Under())))
+	node := discover.MustParseNode(string(addr.Under()))
+	// return discover.MustBytesID(addr.Under())
+	return node.ID
 }
 
 // NewAddrFromNodeID constucts a bzzAddr from a discover.NodeID

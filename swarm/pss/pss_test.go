@@ -199,8 +199,8 @@ func TestSimpleLinear(t *testing.T) {
 			Peer: pp,
 			addr: network.ToOverlayAddr(id[:]),
 		}
-		h := pot.NewHashAddressFromBytes(bp.addr)
-		ps.fwdPool[h.Address] = pp
+		a := pot.NewAddressFromBytes(bp.addr)
+		ps.fwdPool[a] = pp
 		ps.Overlay.On(bp)
 		defer ps.Overlay.Off(bp)
 		log.Debug(fmt.Sprintf("%v", ps.Overlay))

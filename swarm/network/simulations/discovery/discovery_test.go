@@ -57,7 +57,7 @@ func TestDiscoverySimulationSimAdapter(t *testing.T) {
 }
 
 func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
-	// create 10 node network
+	// create network
 	nodeCount := 10
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",

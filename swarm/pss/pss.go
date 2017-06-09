@@ -133,8 +133,8 @@ func (self *Pss) Protocols() []p2p.Protocol {
 func (self *Pss) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	pp := protocols.NewPeer(p, rw, pssSpec)
 	id := p.ID()
-	h := pot.NewHashAddressFromBytes(network.ToOverlayAddr(id[:]))
-	self.fwdPool[h.Address] = pp
+	a := pot.NewAddressFromBytes(network.ToOverlayAddr(id[:]))
+	self.fwdPool[a] = pp
 	return pp.Run(self.handlePssMsg)
 }
 
@@ -315,9 +315,8 @@ func (self *Pss) Forward(msg *PssMsg) error {
 	// send with kademlia
 	// find the closest peer to the recipient and attempt to send
 	self.Overlay.EachConn(msg.To, 256, func(op network.OverlayConn, po int, isproxbin bool) bool {
-		//p, ok := op.(senderPeer)
-		h := pot.NewHashAddressFromBytes(op.Address())
-		pp := self.fwdPool[h.Address]
+		a := pot.NewAddressFromBytes(op.Address())
+		pp := self.fwdPool[a]
 		addr := self.Overlay.BaseAddr()
 		sendMsg := fmt.Sprintf("%x: msg to %x via %x", common.ByteLabel(addr), common.ByteLabel(msg.To), common.ByteLabel(op.Address()))
 		if self.checkFwdCache(op.Address(), digest) {
@@ -459,7 +458,7 @@ func RegisterPssProtocol(ps *Pss, topic *Topic, spec *protocols.Spec, targetprot
 }
 
 func (self *PssProtocol) handle(msg []byte, p *p2p.Peer, senderAddr []byte) error {
-	hashoaddr := pot.NewHashAddressFromBytes(senderAddr).Address
+	hashoaddr := pot.NewAddressFromBytes(senderAddr)
 	if !self.isActive(hashoaddr, *self.topic) {
 		rw := &PssReadWriter{
 			Pss:   self.Pss,

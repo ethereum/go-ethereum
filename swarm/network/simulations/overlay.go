@@ -209,8 +209,9 @@ func main() {
 
 	config := &simulations.ServerConfig{
 		NewAdapter:      func() adapters.NodeAdapter { return adapters.NewSimAdapter(services) },
-		DefaultMockerID: "bootNet",
-		Mockers:         mockers,
+		DefaultMockerID: "randomNodes",
+		// DefaultMockerID: "bootNet",
+		Mockers: mockers,
 	}
 
 	log.Info("starting simulation server on 0.0.0.0:8888...")
