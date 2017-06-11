@@ -54,7 +54,6 @@ type PublicFilterAPI struct {
 	backend   Backend
 	useMipMap bool
 	mux       *event.TypeMux
-	quit      chan struct{}
 	chainDb   ethdb.Database
 	events    *EventSystem
 	filtersMu sync.Mutex

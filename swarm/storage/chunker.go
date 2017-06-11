@@ -156,14 +156,13 @@ func (self *TreeChunker) Split(data io.Reader, size int64, chunkC chan *Chunk, s
 		close(errC)
 	}()
 
-	select {
-	case err := <-errC:
-		if err != nil {
-			close(quitC)
-			return nil, err
-		}
-		//TODO: add a timeout
+	err := <-errC
+	if err != nil {
+		close(quitC)
+		return nil, err
 	}
+	//TODO: add a timeout
+
 	return key, nil
 }
 

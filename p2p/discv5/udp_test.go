@@ -390,6 +390,20 @@ func TestForwardCompatibility(t *testing.T) {
 	}
 }
 
+// WriteToUDP queues a datagram.
+func (c *dgramPipe) WriteToUDP(b []byte, to *net.UDPAddr) (n int, err error) {
+	msg := make([]byte, len(b))
+	copy(msg, b)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return 0, errors.New("closed")
+	}
+	c.queue = append(c.queue, msg)
+	c.cond.Signal()
+	return len(b), nil
+}
+
 // dgramPipe is a fake UDP socket. It queues all sent datagrams.
 type dgramPipe struct {
 	mu      *sync.Mutex
@@ -406,20 +420,6 @@ func newpipe() *dgramPipe {
 		cond:    &sync.Cond{L: mu},
 		mu:      mu,
 	}
-}
-
-// WriteToUDP queues a datagram.
-func (c *dgramPipe) WriteToUDP(b []byte, to *net.UDPAddr) (n int, err error) {
-	msg := make([]byte, len(b))
-	copy(msg, b)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed {
-		return 0, errors.New("closed")
-	}
-	c.queue = append(c.queue, msg)
-	c.cond.Signal()
-	return len(b), nil
 }
 
 // ReadFromUDP just hangs until the pipe is closed.

@@ -224,7 +224,7 @@ func (s *Server) handleMultipartUpload(req *Request, boundary string, mw *api.Ma
 			if err != nil {
 				return fmt.Errorf("error copying multipart content: %s", err)
 			}
-			if _, err := tmp.Seek(0, os.SEEK_SET); err != nil {
+			if _, err := tmp.Seek(0, io.SeekStart); err != nil {
 				return fmt.Errorf("error copying multipart content: %s", err)
 			}
 			reader = tmp

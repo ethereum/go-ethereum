@@ -62,7 +62,6 @@ var (
 	oldBodySuffix          = []byte("-body")
 	oldBlockNumPrefix      = []byte("block-num-")
 	oldBlockReceiptsPrefix = []byte("receipts-block-")
-	oldBlockHashPrefix     = []byte("block-hash-") // [deprecated by the header/block split, remove eventually]
 
 	ErrChainConfigNotFound = errors.New("ChainConfig not found") // general config not found error
 

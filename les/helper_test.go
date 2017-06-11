@@ -20,7 +20,6 @@
 package les
 
 import (
-	"crypto/ecdsa"
 	"crypto/rand"
 	"math/big"
 	"sync"
@@ -219,14 +218,6 @@ func (p *testTxPool) GetTransactions() types.Transactions {
 	copy(txs, p.pool)
 
 	return txs
-}
-
-// newTestTransaction create a new dummy transaction.
-func newTestTransaction(from *ecdsa.PrivateKey, nonce uint64, datasize int) *types.Transaction {
-	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), make([]byte, datasize))
-	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, from)
-
-	return tx
 }
 
 // testPeer is a simulated peer to allow testing direct network calls.

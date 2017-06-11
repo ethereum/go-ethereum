@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"path/filepath"
 )
@@ -78,16 +77,6 @@ func readJson(reader io.Reader, value interface{}) error {
 		return fmt.Errorf("JSON unmarshal error: %v", err)
 	}
 	return nil
-}
-
-func readJsonHttp(uri string, value interface{}) error {
-	resp, err := http.Get(uri)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	return readJson(resp.Body, value)
 }
 
 func readJsonFile(fn string, value interface{}) error {

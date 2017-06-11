@@ -22,7 +22,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -40,12 +39,6 @@ type Receipt struct {
 	TxHash          common.Hash    `json:"transactionHash" gencodec:"required"`
 	ContractAddress common.Address `json:"contractAddress"`
 	GasUsed         *big.Int       `json:"gasUsed" gencodec:"required"`
-}
-
-type receiptMarshaling struct {
-	PostState         hexutil.Bytes
-	CumulativeGasUsed *hexutil.Big
-	GasUsed           *hexutil.Big
 }
 
 // NewReceipt creates a barebone transaction receipt, copying the init fields.

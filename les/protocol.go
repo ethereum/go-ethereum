@@ -23,7 +23,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -105,12 +104,6 @@ var errorToString = map[int]string{
 	ErrHandshakeMissingKey:     "Key missing from handshake message",
 }
 
-type chainManager interface {
-	GetBlockHashesFromHash(hash common.Hash, amount uint64) (hashes []common.Hash)
-	GetBlock(hash common.Hash) (block *types.Block)
-	Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash)
-}
-
 // announceData is the network packet for the block announcements.
 type announceData struct {
 	Hash       common.Hash // Hash of one particular block being announced
@@ -118,23 +111,12 @@ type announceData struct {
 	Td         *big.Int    // Total difficulty of one particular block being announced
 	ReorgDepth uint64
 	Update     keyValueList
-
-	haveHeaders uint64 // we have the headers of the remote peer's chain up to this number
-	headKnown   bool
-	requested   bool
-	next        *announceData
 }
 
 type blockInfo struct {
 	Hash   common.Hash // Hash of one particular block being announced
 	Number uint64      // Number of one particular block being announced
 	Td     *big.Int    // Total difficulty of one particular block being announced
-}
-
-// getBlockHashesData is the network packet for the hash based hash retrieval.
-type getBlockHashesData struct {
-	Hash   common.Hash
-	Amount uint64
 }
 
 // getBlockHeadersData represents a block header query.
@@ -180,15 +162,6 @@ func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
 	}
 	return err
 }
-
-// newBlockData is the network packet for the block propagation message.
-type newBlockData struct {
-	Block *types.Block
-	TD    *big.Int
-}
-
-// blockBodiesData is the network packet for block content distribution.
-type blockBodiesData []*types.Body
 
 // CodeData is the network response packet for a node data retrieval.
 type CodeData []struct {

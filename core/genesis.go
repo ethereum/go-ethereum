@@ -24,7 +24,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -62,21 +61,6 @@ type GenesisAccount struct {
 	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
 	Balance *big.Int                    `json:"balance" gencodec:"required"`
 	Nonce   uint64                      `json:"nonce,omitempty"`
-}
-
-// field type overrides for gencodec
-type genesisSpecMarshaling struct {
-	Nonce      math.HexOrDecimal64
-	Timestamp  math.HexOrDecimal64
-	ExtraData  hexutil.Bytes
-	GasLimit   math.HexOrDecimal64
-	Difficulty *math.HexOrDecimal256
-	Alloc      map[common.UnprefixedAddress]GenesisAccount
-}
-type genesisAccountMarshaling struct {
-	Code    hexutil.Bytes
-	Balance *math.HexOrDecimal256
-	Nonce   math.HexOrDecimal64
 }
 
 // GenesisMismatchError is raised when trying to overwrite an existing

@@ -145,7 +145,7 @@ func (l *lexer) ignore() {
 
 // Accepts checks whether the given input matches the next rune
 func (l *lexer) accept(valid string) bool {
-	if strings.IndexRune(valid, l.next()) >= 0 {
+	if strings.ContainsRune(valid, l.next()) {
 		return true
 	}
 
@@ -157,7 +157,7 @@ func (l *lexer) accept(valid string) bool {
 // acceptRun will continue to advance the seeker until valid
 // can no longer be met.
 func (l *lexer) acceptRun(valid string) {
-	for strings.IndexRune(valid, l.next()) >= 0 {
+	for strings.ContainsRune(valid, l.next()) {
 	}
 	l.backup()
 }
@@ -166,7 +166,7 @@ func (l *lexer) acceptRun(valid string) {
 // to advance the seeker until the rune has been found.
 func (l *lexer) acceptRunUntil(until rune) bool {
 	// Continues running until a rune is found
-	for i := l.next(); strings.IndexRune(string(until), i) == -1; i = l.next() {
+	for i := l.next(); !strings.ContainsRune(string(until), i); i = l.next() {
 		if i == 0 {
 			return false
 		}

@@ -51,8 +51,6 @@ type operation struct {
 	writes bool
 	// valid is used to check whether the retrieved operation is valid and known
 	valid bool
-	// reverts determined whether the operation reverts state
-	reverts bool
 }
 
 var (

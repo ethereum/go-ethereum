@@ -77,8 +77,6 @@ type tester struct {
 	console   *Console
 	input     *hookedPrompter
 	output    *bytes.Buffer
-
-	lastConfirm string
 }
 
 // newTester creates a test environment based on which the console can operate.

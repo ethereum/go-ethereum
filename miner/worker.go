@@ -39,10 +39,7 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-const (
-	resultQueueSize  = 10
-	miningLogAtDepth = 5
-)
+const resultQueueSize = 10
 
 // Agent can register themself with the worker
 type Agent interface {
@@ -109,8 +106,7 @@ type worker struct {
 	uncleMu        sync.Mutex
 	possibleUncles map[common.Hash]*types.Block
 
-	txQueueMu sync.Mutex
-	txQueue   map[common.Hash]*types.Transaction
+	txQueue map[common.Hash]*types.Transaction
 
 	unconfirmed *unconfirmedBlocks // set of locally mined blocks pending canonicalness confirmations
 

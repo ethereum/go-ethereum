@@ -206,8 +206,6 @@ func (s *MemStore) Put(entry *Chunk) {
 	node.lastDBaccess = s.dbAccessCnt
 	node.updateAccess(s.accessCnt)
 	s.entryCnt++
-
-	return
 }
 
 func (s *MemStore) Get(hash Key) (chunk *Chunk, err error) {
@@ -324,5 +322,4 @@ func (s *MemStore) removeOldest() {
 
 // Close memstore
 func (s *MemStore) Close() {
-	return
 }

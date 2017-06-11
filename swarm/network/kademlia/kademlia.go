@@ -420,8 +420,8 @@ func (self *Kademlia) String() string {
 			}
 		}
 		rows = append(rows, strings.Join(row, " "))
-		if i == self.MaxProx {
-		}
+		//if i == self.MaxProx {
+		//}
 	}
 	rows = append(rows, "=========================================================================")
 	return strings.Join(rows, "\n")

@@ -18,7 +18,6 @@ package light
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -115,13 +114,6 @@ func testFork(t *testing.T, LightChain *LightChain, i, n int, comparator func(td
 	tdPost = LightChain.GetTdByHash(headerChainB[len(headerChainB)-1].Hash())
 	// Compare the total difficulties of the chains
 	comparator(tdPre, tdPost)
-}
-
-func printChain(bc *LightChain) {
-	for i := bc.CurrentHeader().Number.Uint64(); i > 0; i-- {
-		b := bc.GetHeaderByNumber(uint64(i))
-		fmt.Printf("\t%x %v\n", b.Hash(), b.Difficulty)
-	}
 }
 
 // testHeaderChainImport tries to process a chain of header, writing them into

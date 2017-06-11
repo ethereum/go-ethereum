@@ -25,17 +25,13 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 //go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
 
-var (
-	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
-	errNoSigner   = errors.New("missing signing methods")
-)
+var ErrInvalidSig = errors.New("invalid transaction v, r, s values")
 
 // deriveSigner makes a *best* guess about which signer to use.
 func deriveSigner(V *big.Int) Signer {
@@ -69,17 +65,6 @@ type txdata struct {
 
 	// This is only used when marshaling to JSON.
 	Hash *common.Hash `json:"hash" rlp:"-"`
-}
-
-type txdataMarshaling struct {
-	AccountNonce hexutil.Uint64
-	Price        *hexutil.Big
-	GasLimit     *hexutil.Big
-	Amount       *hexutil.Big
-	Payload      hexutil.Bytes
-	V            *hexutil.Big
-	R            *hexutil.Big
-	S            *hexutil.Big
 }
 
 func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {

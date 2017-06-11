@@ -284,9 +284,8 @@ func waitForMessages(api *PublicWhisperAPI, id string, target int) []*WhisperMes
 	for i := 0; i < 100; i++ {
 		mail := api.GetNewSubscriptionMessages(id)
 		if len(mail) > 0 {
-			for _, m := range mail {
-				result = append(result, m)
-			}
+			result = append(result, mail...)
+
 			if len(result) >= target {
 				break
 			}

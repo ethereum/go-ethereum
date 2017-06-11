@@ -24,7 +24,6 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -114,8 +113,4 @@ type Config struct {
 	PowFake   bool   `toml:"-"`
 	PowTest   bool   `toml:"-"`
 	PowShared bool   `toml:"-"`
-}
-
-type configMarshaling struct {
-	ExtraData hexutil.Bytes
 }

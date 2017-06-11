@@ -8,6 +8,11 @@
 .PHONY: geth-darwin geth-darwin-386 geth-darwin-amd64
 .PHONY: geth-windows geth-windows-386 geth-windows-amd64
 
+PACKAGES=$(shell go list ./... | grep -v '/vendor/')
+
+megacheck:
+	@for pkg in ${PACKAGES}; do megacheck "$$pkg"; done
+
 GOBIN = build/bin
 GO ?= latest
 

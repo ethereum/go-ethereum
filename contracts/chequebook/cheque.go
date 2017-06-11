@@ -395,7 +395,6 @@ func (self *Chequebook) autoDeposit(interval time.Duration) {
 			}
 		}
 	}()
-	return
 }
 
 // Outbox can issue cheques from a single contract to a single beneficiary.
@@ -436,7 +435,6 @@ type Inbox struct {
 	sender      common.Address              // local peer's address to send cashing tx from
 	signer      *ecdsa.PublicKey            // peer's public key
 	txhash      string                      // tx hash of last cashing tx
-	abigen      bind.ContractBackend        // blockchain API
 	session     *contract.ChequebookSession // abi contract backend with tx opts
 	quit        chan bool                   // when closed causes autocash to stop
 	maxUncashed *big.Int                    // threshold that triggers autocashing
@@ -543,7 +541,6 @@ func (self *Inbox) autoCash(cashInterval time.Duration) {
 			}
 		}
 	}()
-	return
 }
 
 // Receive is called to deposit the latest cheque to the incoming Inbox.

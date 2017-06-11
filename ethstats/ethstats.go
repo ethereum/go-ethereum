@@ -39,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/websocket"
@@ -52,8 +51,6 @@ const historyUpdateRange = 50
 // Service implements an Ethereum netstats reporting daemon that pushes local
 // chain statistics up to a monitoring server.
 type Service struct {
-	stack *node.Node // Temporary workaround, remove when API finalized
-
 	server *p2p.Server        // Peer-to-peer server to retrieve networking infos
 	eth    *eth.Ethereum      // Full Ethereum service if monitoring a full node
 	les    *les.LightEthereum // Light Ethereum service if monitoring a light node

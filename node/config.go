@@ -40,7 +40,6 @@ var (
 	datadirDefaultKeyStore = "keystore"           // Path within the datadir to the keystore
 	datadirStaticNodes     = "static-nodes.json"  // Path within the datadir to the static node list
 	datadirTrustedNodes    = "trusted-nodes.json" // Path within the datadir to the trusted node list
-	datadirNodeDatabase    = "nodes"              // Path within the datadir to store the node infos
 )
 
 // Config represents a small collection of configuration values to fine tune the

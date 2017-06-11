@@ -18,9 +18,9 @@ package discv5
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"math/rand"
-
 	"net"
 	"reflect"
 	"testing"
@@ -30,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
+
+var errTimeout = errors.New("RPC timeout")
 
 type nullTransport struct{}
 
@@ -139,17 +141,6 @@ func TestBucket_bumpNoDuplicates(t *testing.T) {
 	}
 }
 
-// fillBucket inserts nodes into the given bucket until
-// it is full. The node's IDs dont correspond to their
-// hashes.
-func fillBucket(tab *Table, ld int) (last *Node) {
-	b := tab.buckets[ld]
-	for len(b.entries) < bucketSize {
-		b.entries = append(b.entries, nodeAtDistance(tab.self.sha, ld))
-	}
-	return b.entries[bucketSize-1]
-}
-
 // nodeAtDistance creates a node for which logdist(base, n.sha) == ld.
 // The node's ID does not correspond to n.sha.
 func nodeAtDistance(base common.Hash, ld int) (n *Node) {
@@ -160,10 +151,6 @@ func nodeAtDistance(base common.Hash, ld int) (n *Node) {
 }
 
 type pingRecorder struct{ responding, pinged map[NodeID]bool }
-
-func newPingRecorder() *pingRecorder {
-	return &pingRecorder{make(map[NodeID]bool), make(map[NodeID]bool)}
-}
 
 func (t *pingRecorder) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node, error) {
 	panic("findnode called on pingRecorder")
