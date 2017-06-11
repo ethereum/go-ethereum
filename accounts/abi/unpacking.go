@@ -139,6 +139,7 @@ func readInteger(kind reflect.Kind, b []byte) interface{} {
 	}
 }
 
+// todo: this is inefficient for a bool, just look at the last cell, save yourself 32 iterations
 func allZero(b []byte) bool {
 	for _, byte := range b {
 		if byte != 0 {
