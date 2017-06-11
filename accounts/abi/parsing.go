@@ -24,7 +24,7 @@ import (
 // separates byte slice into a slice of 32 byte slices.
 func chunkBytes(output []byte) (chunked [][32]byte) {
 	for i, j := 0, 0; i < len(output); i, j = i+32, j+1 {
-		chunked[j] = output[i : i+32]
+		copy(chunked[j][:], output[i:i+32])
 	}
 	return
 }

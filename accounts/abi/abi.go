@@ -17,13 +17,10 @@
 package abi
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/big"
 	"reflect"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -101,7 +98,8 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) (err error) {
 	if method, ok := abi.Methods[name]; ok {
 		err = method.unpack(v, output)
 	} else if event, ok := abi.Events[name]; ok {
-		err = event.unpackLog(v, output)
+		//err = event.unpackLog(v, output) // to create
+		err = fmt.Errorf("abi: could not find requested method or event %v", name)
 	} else {
 		err = fmt.Errorf("abi: could not find requested method or event %v", name)
 	}

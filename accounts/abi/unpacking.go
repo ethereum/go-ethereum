@@ -3,6 +3,7 @@ package abi
 import (
 	"encoding/binary"
 	"fmt"
+	"math/big"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
