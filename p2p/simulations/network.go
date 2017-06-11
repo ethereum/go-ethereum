@@ -201,6 +201,11 @@ func (self *Network) NewNode() (*Node, error) {
 func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
+	if conf.ID == (discover.NodeID{}) {
+		c := adapters.RandomNodeConfig()
+		conf.ID = c.ID
+		conf.PrivateKey = c.PrivateKey
+	}
 	id := conf.ID
 	if conf.Name == "" {
 		conf.Name = fmt.Sprintf("node%02d", len(self.Nodes)+1)
