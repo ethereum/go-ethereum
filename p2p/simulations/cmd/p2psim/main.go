@@ -26,6 +26,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -39,7 +40,10 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-var client *simulations.Client
+var (
+	client    *simulations.Client
+	networkID string
+)
 
 func main() {
 	app := cli.NewApp()
@@ -109,18 +113,32 @@ func main() {
 			Name:   "node",
 			Usage:  "manage simulation nodes",
 			Action: listNodes,
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "network",
+					Usage: "simulation network",
+				},
+			},
+			Before: func(ctx *cli.Context) error {
+				networkID = ctx.GlobalString("network")
+				if networkID == "" {
+					networkID = os.Getenv("P2PSIM_NETWORK")
+				}
+				if networkID == "" {
+					return errors.New("missing network, set with --network or P2PSIM_NETWORK")
+				}
+				return nil
+			},
 			Subcommands: []cli.Command{
 				{
-					Name:      "list",
-					ArgsUsage: "<network>",
-					Usage:     "list nodes",
-					Action:    listNodes,
+					Name:   "list",
+					Usage:  "list nodes",
+					Action: listNodes,
 				},
 				{
-					Name:      "create",
-					ArgsUsage: "<network>",
-					Usage:     "create a node",
-					Action:    createNode,
+					Name:   "create",
+					Usage:  "create a node",
+					Action: createNode,
 					Flags: []cli.Flag{
 						cli.StringFlag{
 							Name:  "config",
@@ -131,37 +149,37 @@ func main() {
 				},
 				{
 					Name:      "show",
-					ArgsUsage: "<network> <node>",
+					ArgsUsage: "<node>",
 					Usage:     "show node information",
 					Action:    showNode,
 				},
 				{
 					Name:      "start",
-					ArgsUsage: "<network> <node>",
+					ArgsUsage: "<node>",
 					Usage:     "start a node",
 					Action:    startNode,
 				},
 				{
 					Name:      "stop",
-					ArgsUsage: "<network> <node>",
+					ArgsUsage: "<node>",
 					Usage:     "stop a node",
 					Action:    stopNode,
 				},
 				{
 					Name:      "connect",
-					ArgsUsage: "<network> <node> <peer>",
+					ArgsUsage: "<node> <peer>",
 					Usage:     "connect a node to a peer node",
 					Action:    connectNode,
 				},
 				{
 					Name:      "disconnect",
-					ArgsUsage: "<network> <node> <peer>",
+					ArgsUsage: "<node> <peer>",
 					Usage:     "disconnect a node from a peer node",
 					Action:    disconnectNode,
 				},
 				{
 					Name:      "rpc",
-					ArgsUsage: "<network> <node> <method> [<args>]",
+					ArgsUsage: "<node> <method> [<args>]",
 					Usage:     "call a node RPC method",
 					Action:    rpcNode,
 					Flags: []cli.Flag{
@@ -280,11 +298,9 @@ func loadSnapshot(ctx *cli.Context) error {
 }
 
 func listNodes(ctx *cli.Context) error {
-	args := ctx.Args()
-	if len(args) != 1 {
+	if len(ctx.Args()) != 0 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	networkID := args[0]
 	nodes, err := client.GetNodes(networkID)
 	if err != nil {
 		return err
@@ -307,11 +323,9 @@ func protocolList(node *p2p.NodeInfo) []string {
 }
 
 func createNode(ctx *cli.Context) error {
-	args := ctx.Args()
-	if len(args) != 1 {
+	if len(ctx.Args()) != 0 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	networkID := args[0]
 	config := &adapters.NodeConfig{}
 	if err := json.Unmarshal([]byte(ctx.String("config")), config); err != nil {
 		return err
@@ -326,11 +340,10 @@ func createNode(ctx *cli.Context) error {
 
 func showNode(ctx *cli.Context) error {
 	args := ctx.Args()
-	if len(args) != 2 {
+	if len(args) != 1 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	networkID := args[0]
-	nodeName := args[1]
+	nodeName := args[0]
 	node, err := client.GetNode(networkID, nodeName)
 	if err != nil {
 		return err
@@ -352,11 +365,10 @@ func showNode(ctx *cli.Context) error {
 
 func startNode(ctx *cli.Context) error {
 	args := ctx.Args()
-	if len(args) != 2 {
+	if len(args) != 1 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	networkID := args[0]
-	nodeName := args[1]
+	nodeName := args[0]
 	if err := client.StartNode(networkID, nodeName); err != nil {
 		return err
 	}
@@ -366,11 +378,10 @@ func startNode(ctx *cli.Context) error {
 
 func stopNode(ctx *cli.Context) error {
 	args := ctx.Args()
-	if len(args) != 2 {
+	if len(args) != 1 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	networkID := args[0]
-	nodeName := args[1]
+	nodeName := args[0]
 	if err := client.StopNode(networkID, nodeName); err != nil {
 		return err
 	}
@@ -380,12 +391,11 @@ func stopNode(ctx *cli.Context) error {
 
 func connectNode(ctx *cli.Context) error {
 	args := ctx.Args()
-	if len(args) != 3 {
+	if len(args) != 2 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	networkID := args[0]
-	nodeName := args[1]
-	peerName := args[2]
+	nodeName := args[0]
+	peerName := args[1]
 	if err := client.ConnectNode(networkID, nodeName, peerName); err != nil {
 		return err
 	}
@@ -395,12 +405,11 @@ func connectNode(ctx *cli.Context) error {
 
 func disconnectNode(ctx *cli.Context) error {
 	args := ctx.Args()
-	if len(args) != 3 {
+	if len(args) != 2 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	networkID := args[0]
-	nodeName := args[1]
-	peerName := args[2]
+	nodeName := args[0]
+	peerName := args[1]
 	if err := client.DisconnectNode(networkID, nodeName, peerName); err != nil {
 		return err
 	}
@@ -410,12 +419,11 @@ func disconnectNode(ctx *cli.Context) error {
 
 func rpcNode(ctx *cli.Context) error {
 	args := ctx.Args()
-	if len(args) < 3 {
+	if len(args) < 2 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	networkID := args[0]
-	nodeName := args[1]
-	method := args[2]
+	nodeName := args[0]
+	method := args[1]
 	rpcClient, err := client.RPCClient(context.Background(), networkID, nodeName)
 	if err != nil {
 		return err
