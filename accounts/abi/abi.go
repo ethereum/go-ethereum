@@ -304,12 +304,21 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 		// struct will match named return values to the struct's field
 		// names
 		case reflect.Struct:
+			idx := 0
 			for i := 0; i < len(method.Outputs); i++ {
-				marshalledValue, err := toGoType(i, method.Outputs[i], output)
+				marshalledValue, err := toGoType(idx, method.Outputs[i], output)
 				if err != nil {
 					return err
 				}
 				reflectValue := reflect.ValueOf(marshalledValue)
+				kind := reflectValue.Type().Kind()
+				if (kind == reflect.Array || kind == reflect.Slice) &&
+					reflectValue.Type().Elem().Kind() != reflect.Uint8 {
+					// This is a slice of something other than bytes.
+					idx += reflectValue.Len()
+				} else {
+					idx++
+				}
 
 				for j := 0; j < typ.NumField(); j++ {
 					field := typ.Field(j)

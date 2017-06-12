@@ -1002,7 +1002,8 @@ func TestUnmarshal(t *testing.T) {
 	{ "name" : "intArraySingle", "constant" : false, "outputs": [ { "type": "uint256[3]" } ] },
 	{ "name" : "addressSliceSingle", "constant" : false, "outputs": [ { "type": "address[]" } ] },
 	{ "name" : "addressSliceDouble", "constant" : false, "outputs": [ { "name": "a", "type": "address[]" }, { "name": "b", "type": "address[]" } ] },
-	{ "name" : "mixedBytes", "constant" : true, "outputs": [ { "name": "a", "type": "bytes" }, { "name": "b", "type": "bytes32" } ] }]`
+	{ "name" : "mixedBytes", "constant" : true, "outputs": [ { "name": "a", "type": "bytes" }, { "name": "b", "type": "bytes32" } ] },
+	{ "name" : "arraysStruct", "constant" : true, "outputs": [ { "name": "a", "type": "bytes4[2]" }, { "name": "b", "type": "bytes20[2]" } ] }]`
 
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
@@ -1237,5 +1238,38 @@ func TestUnmarshal(t *testing.T) {
 	err = abi.Unpack(&outAddr, "addressSliceSingle", buff.Bytes())
 	if err == nil {
 		t.Fatal("expected error:", err)
+	}
+
+	// marshal arrays of arrays
+	buff.Reset()
+	buff.Write(common.Hex2Bytes("0000000100000000000000000000000000000000000000000000000000000000")) // a[0]
+	buff.Write(common.Hex2Bytes("0000000200000000000000000000000000000000000000000000000000000000")) // a[1]
+	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000003000000000000000000000000")) // b[0]
+	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000004000000000000000000000000")) // b[1]
+
+	var arraysStruct struct {
+		A [2][4]byte
+		B [2][20]byte
+	}
+	err = abi.Unpack(&arraysStruct, "arraysStruct", buff.Bytes())
+	if err != nil {
+		t.Fatal("didn't expect error:", err)
+	}
+
+	exp4 := [4]byte{0, 0, 0, 1}
+	if arraysStruct.A[0] != exp4 {
+		t.Errorf("expected %x, got %x", exp4, arraysStruct.A[0])
+	}
+	exp4 = [4]byte{0, 0, 0, 2}
+	if arraysStruct.A[1] != exp4 {
+		t.Errorf("expected %x, got %x", exp4, arraysStruct.A[1])
+	}
+	exp20 := [20]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3}
+	if arraysStruct.B[0] != exp20 {
+		t.Errorf("expected %x, got %x", exp20, arraysStruct.B[0])
+	}
+	exp20 = [20]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4}
+	if arraysStruct.B[1] != exp20 {
+		t.Errorf("expected %x, got %x", exp20, arraysStruct.B[1])
 	}
 }
