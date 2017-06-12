@@ -308,14 +308,14 @@ func (d *dataset) release() {
 
 // MakeCache generates a new ethash cache and optionally stores it to disk.
 func MakeCache(block uint64, dir string) {
-	c := cache{epoch: block/epochLength + 1}
+	c := cache{epoch: block / epochLength}
 	c.generate(dir, math.MaxInt32, false)
 	c.release()
 }
 
 // MakeDataset generates a new ethash dataset and optionally stores it to disk.
 func MakeDataset(block uint64, dir string) {
-	d := dataset{epoch: block/epochLength + 1}
+	d := dataset{epoch: block / epochLength}
 	d.generate(dir, math.MaxInt32, false)
 	d.release()
 }
