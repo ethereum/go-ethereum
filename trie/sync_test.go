@@ -42,7 +42,7 @@ func makeTestTrie() (ethdb.Database, *Trie, map[string][]byte) {
 		content[string(key)] = val
 		trie.Update(key, val)
 
-		// Add some other data to inflate th trie
+		// Add some other data to inflate the trie
 		for j := byte(3); j < 13; j++ {
 			key, val = common.LeftPadBytes([]byte{j, i}, 32), []byte{j, i}
 			content[string(key)] = val
@@ -78,7 +78,7 @@ func checkTrieConsistency(db Database, root common.Hash) error {
 	// Create and iterate a trie rooted in a subnode
 	trie, err := New(root, db)
 	if err != nil {
-		return nil // // Consider a non existent state consistent
+		return nil // Consider a non existent state consistent
 	}
 	it := trie.NodeIterator(nil)
 	for it.Next(true) {
@@ -310,7 +310,7 @@ func TestIncompleteTrieSync(t *testing.T) {
 		for _, result := range results {
 			added = append(added, result.Hash)
 		}
-		// Check that all known sub-tries in the synced trie is complete
+		// Check that all known sub-tries in the synced trie are complete
 		for _, root := range added {
 			if err := checkTrieConsistency(dstDb, root); err != nil {
 				t.Fatalf("trie inconsistent: %v", err)

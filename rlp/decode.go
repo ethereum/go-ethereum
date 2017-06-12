@@ -55,7 +55,7 @@ type Decoder interface {
 // To decode into a pointer, Decode will decode into the value pointed
 // to. If the pointer is nil, a new value of the pointer's element
 // type is allocated. If the pointer is non-nil, the existing value
-// will reused.
+// will be reused.
 //
 // To decode into a struct, Decode expects the input to be an RLP
 // list. The decoded elements of the list are assigned to each public
@@ -290,7 +290,7 @@ func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
 		}
 	case tag.tail:
 		// A slice with "tail" tag can occur as the last field
-		// of a struct and is upposed to swallow all remaining
+		// of a struct and is supposed to swallow all remaining
 		// list elements. The struct decoder already called s.List,
 		// proceed directly to decoding the elements.
 		dec = func(s *Stream, val reflect.Value) error {
@@ -741,7 +741,7 @@ func (s *Stream) uint(maxbits int) (uint64, error) {
 }
 
 // Bool reads an RLP string of up to 1 byte and returns its contents
-// as an boolean. If the input does not contain an RLP string, the
+// as a boolean. If the input does not contain an RLP string, the
 // returned error will be ErrExpectedString.
 func (s *Stream) Bool() (bool, error) {
 	num, err := s.uint(8)
