@@ -158,7 +158,7 @@ func testSuggestPeer(t *testing.T, k *testKademlia, expAddr string, expPo int, e
 	if want != expWant {
 		return fmt.Errorf("expected SuggestPeer to want peers: %v", expWant)
 	}
-	// t.Logf("%v", k)
+	t.Logf("%v", k)
 	return nil
 }
 
@@ -206,9 +206,8 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 	}
 
 	// reintroduce gap, disconnected peer callable
-	log.Info(k.String())
+	// log.Info(k.String())
 	k.Off("01000000")
-	log.Info(k.String())
 	err = testSuggestPeer(t, k, "01000000", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -433,7 +432,7 @@ func TestPruning(t *testing.T) {
 func TestKademliaHiveString(t *testing.T) {
 	k := newTestKademlia("00000000").On("01000000", "00100000").Register("10000000", "10000001")
 	h := k.String()
-	expH := "\n=========================================================================\nMon Feb 27 12:10:28 UTC 2017 KΛÐΞMLIΛ hive: queen's address: 000000\npopulation: 2 (4), MinProxBinSize: 2, MinBinSize: 1, MaxBinSize: 4\n============ PROX LIMIT: 0 ==========================================\n000  0                                           |  2 840000 800000\n001  1 400000                                    |  1 400000\n002  1 200000                                    |  1 200000\n003  0                                           |  0\n004  0                                           |  0\n005  0                                           |  0\n006  0                                           |  0\n007  0                                           |  0\n========================================================================="
+	expH := "\n=========================================================================\nMon Feb 27 12:10:28 UTC 2017 KΛÐΞMLIΛ hive: queen's address: 000000\npopulation: 2 (4), MinProxBinSize: 2, MinBinSize: 1, MaxBinSize: 4\n============ DEPTH: 0 ==========================================\n000  0                              |  2 8100 (0) 8000 (0)\n001  1 4000                         |  1 4000 (0)\n002  1 2000                         |  1 2000 (0)\n003  0                              |  0\n004  0                              |  0\n005  0                              |  0\n006  0                              |  0\n007  0                              |  0\n========================================================================="
 	if expH[100:] != h[100:] {
 		t.Fatalf("incorrect hive output. expected %v, got %v", expH, h)
 	}

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -46,6 +47,8 @@ points. Since in every hop, the finite distance halves, there is
 a guaranteed constant maximum limit on the number of hops needed to reach one
 node from the other.
 */
+
+var pof = pot.DefaultPof(256)
 
 // KadParams holds the config params for Kademlia
 type KadParams struct {
@@ -76,11 +79,12 @@ func NewKadParams() *KadParams {
 
 // Kademlia is a table of live peers and a db of known peers
 type Kademlia struct {
-	*KadParams          // Kademlia configuration parameters
-	base       []byte   // immutable baseaddress of the table
-	addrs      *pot.Pot // pots container for known peer addresses
-	conns      *pot.Pot // pots container for live peer connections
-	depth      uint8    // stores the last calculated depth
+	lock         sync.RWMutex
+	*KadParams            // Kademlia configuration parameters
+	base         []byte   // immutable baseaddress of the table
+	addrs        *pot.Pot // pots container for known peer addresses
+	conns        *pot.Pot // pots container for live peer connections
+	currentDepth uint8    // stores the last calculated depth
 }
 
 // NewKademlia creates a Kademlia table for base address addr
@@ -93,8 +97,8 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 	return &Kademlia{
 		base:      addr,
 		KadParams: params,
-		addrs:     pot.NewPot(nil, 0, nil),
-		conns:     pot.NewPot(nil, 0, nil),
+		addrs:     pot.NewPot(nil, 0),
+		conns:     pot.NewPot(nil, 0),
 	}
 }
 
@@ -173,15 +177,19 @@ func (e *entry) conn() OverlayConn {
 // Register enters each OverlayAddr as kademlia peer record into the
 // database of known peer addresses
 func (k *Kademlia) Register(peers chan OverlayAddr) error {
-	np := pot.NewPot(nil, 0, nil)
+
+	np := pot.NewPot(nil, 0)
 	for p := range peers {
 		// error if k received, peer should know better
 		if bytes.Equal(p.Address(), k.base) {
 			return fmt.Errorf("add peers: %x is k", k.base)
 		}
-		np, _, _ = pot.Add(np, newEntry(p))
+		np, _, _ = pot.Add(np, newEntry(p), pof)
 	}
-	com := k.addrs.Merge(np)
+	var com int
+	k.lock.Lock()
+	defer k.lock.Unlock()
+	k.addrs, com = pot.Union(k.addrs, np, pof)
 	log.Trace(fmt.Sprintf("%x merged %v peers, %v known, total: %v", k.BaseAddr()[:4], np.Size(), com, k.addrs.Size()))
 	return nil
 }
@@ -191,13 +199,14 @@ func (k *Kademlia) Register(peers chan OverlayAddr) error {
 // naturally if there is an empty row it returns a peer for that
 //
 func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
+	k.lock.RLock()
+	defer k.lock.RUnlock()
 	minsize := k.MinBinSize
-	depth := k.Depth()
-	// empty := k.FirstEmptyBin()
+	depth := k.depth()
 	// if there is a callable neighbour within the current proxBin, connect
 	// this makes sure nearest neighbour set is fully connected
 	var ppo int
-	k.addrs.EachNeighbour(k.base, func(val pot.Val, po int) bool {
+	k.addrs.EachNeighbour(k.base, pof, func(val pot.Val, po int) bool {
 		if po < depth {
 			return false
 		}
@@ -214,7 +223,7 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 
 	var bpo []int
 	prev := -1
-	k.conns.EachBin(k.base, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
+	k.conns.EachBin(k.base, pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
 		prev++
 		for ; prev < po; prev++ {
 			bpo = append(bpo, prev)
@@ -238,7 +247,7 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 	// find the first callable peer
 	i := 0
 	nxt := bpo[0]
-	k.addrs.EachBin(k.base, nxt, func(po, size int, f func(func(pot.Val, int) bool) bool) bool {
+	k.addrs.EachBin(k.base, pof, nxt, func(po, size int, f func(func(pot.Val, int) bool) bool) bool {
 		// for each bin we find callable candidate peers
 		if i >= depth {
 			return false
@@ -264,29 +273,34 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 
 // On inserts the peer as a kademlia peer into the live peers
 func (k *Kademlia) On(p OverlayConn) {
+	k.lock.Lock()
+	defer k.lock.Unlock()
 	e := newEntry(p)
-	k.conns.Swap(p, func(v pot.Val) pot.Val {
+	var ins bool
+	k.conns, _, _, _ = pot.Swap(k.conns, p, pof, func(v pot.Val) pot.Val {
 		// if not found live
 		if v == nil {
-			// insert new online peer into addrs
-			k.addrs.Swap(p, func(v pot.Val) pot.Val {
-				return e
-			})
+			ins = true
 			// insert new online peer into conns
 			return e
 		}
 		// found among live peers, do nothing
 		return v
 	})
-
+	if ins {
+		// insert new online peer into addrs
+		k.addrs, _, _, _ = pot.Swap(k.addrs, p, pof, func(v pot.Val) pot.Val {
+			return e
+		})
+	}
 	np, ok := p.(Notifier)
 	if !ok {
 		return
 	}
 
-	depth := uint8(k.Depth())
-	if depth != k.depth {
-		k.depth = depth
+	depth := uint8(k.depth())
+	if depth != k.currentDepth {
+		k.currentDepth = depth
 	} else {
 		depth = 0
 	}
@@ -301,33 +315,41 @@ func (k *Kademlia) On(p OverlayConn) {
 			log.Trace(fmt.Sprintf("peer %v notified of new depth %v", dp, depth))
 		}
 	}
-	k.conns.EachNeighbourAsync(e, 1024, 255, f, false)
+	k.conns.EachNeighbourAsync(e, pof, 1024, 255, f, false)
 }
 
 // Off removes a peer from among live peers
 func (k *Kademlia) Off(p OverlayConn) {
-	k.addrs.Swap(p, func(v pot.Val) pot.Val {
+	k.lock.Lock()
+	defer k.lock.Unlock()
+	var del bool
+	k.addrs, _, _, _ = pot.Swap(k.addrs, p, pof, func(v pot.Val) pot.Val {
 		// v cannot be nil, must check otherwise we overwrite entry
 		if v == nil {
 			panic(fmt.Sprintf("connected peer not found %v", p))
 		}
-		k.conns.Swap(p, func(_ pot.Val) pot.Val {
+		del = true
+		return newEntry(p.Off())
+	})
+	if del {
+		k.conns, _, _, _ = pot.Swap(k.conns, p, pof, func(_ pot.Val) pot.Val {
 			// v cannot be nil, but no need to check
 			return nil
 		})
-		return newEntry(p.Off())
-	})
+	}
 }
 
 // EachConn is an iterator with args (base, po, f) applies f to each live peer
 // that has proximity order po or less as measured from the base
 // if base is nil, kademlia base address is used
 func (k *Kademlia) EachConn(base []byte, o int, f func(OverlayConn, int, bool) bool) {
+	k.lock.RLock()
+	defer k.lock.RUnlock()
 	if len(base) == 0 {
 		base = k.base
 	}
-	depth := k.Depth()
-	k.conns.EachNeighbour(base, func(val pot.Val, po int) bool {
+	depth := k.depth()
+	k.conns.EachNeighbour(base, pof, func(val pot.Val, po int) bool {
 		if po > o {
 			return true
 		}
@@ -342,7 +364,9 @@ func (k *Kademlia) EachAddr(base []byte, o int, f func(OverlayAddr, int) bool) {
 	if len(base) == 0 {
 		base = k.base
 	}
-	k.addrs.EachNeighbour(base, func(val pot.Val, po int) bool {
+	k.lock.RLock()
+	defer k.lock.RUnlock()
+	k.addrs.EachNeighbour(base, pof, func(val pot.Val, po int) bool {
 		if po > o {
 			return true
 		}
@@ -354,6 +378,12 @@ func (k *Kademlia) EachAddr(base []byte, o int, f func(OverlayAddr, int) bool) {
 // the nearest neighbour set with cardinality >= MinProxBinSize
 // if there is altogether less than MinProxBinSize peers it returns 0
 func (k *Kademlia) Depth() (depth int) {
+	k.lock.RLock()
+	defer k.lock.RUnlock()
+	return k.depth()
+}
+
+func (k *Kademlia) depth() (depth int) {
 	if k.conns.Size() < k.MinProxBinSize {
 		return 0
 	}
@@ -363,7 +393,7 @@ func (k *Kademlia) Depth() (depth int) {
 		depth = i
 		return size < k.MinProxBinSize
 	}
-	k.conns.EachNeighbour(k.base, f)
+	k.conns.EachNeighbour(k.base, pof, f)
 	return depth
 }
 
@@ -401,7 +431,9 @@ func (k *Kademlia) BaseAddr() []byte {
 
 // String returns kademlia table + kaddb table displayed with ascii
 func (k *Kademlia) String() string {
-	wsrow := "                                                          "
+	k.lock.RLock()
+	defer k.lock.RUnlock()
+	wsrow := "                          "
 	var rows []string
 
 	rows = append(rows, "=========================================================================")
@@ -414,7 +446,7 @@ func (k *Kademlia) String() string {
 	prev := -1
 	var depthSet bool
 	rest := k.conns.Size()
-	k.conns.EachBin(k.base, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
+	k.conns.EachBin(k.base, pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
 		var rowlen int
 		if po >= k.MaxProxDisplay {
 			po = k.MaxProxDisplay - 1
@@ -423,7 +455,7 @@ func (k *Kademlia) String() string {
 		rest -= size
 		f(func(val pot.Val, vpo int) bool {
 			e := val.(*entry)
-			row = append(row, e.String())
+			row = append(row, fmt.Sprintf("%x", e.Address()[:2]))
 			rowlen++
 			return rowlen < 4
 		})
@@ -431,14 +463,14 @@ func (k *Kademlia) String() string {
 			depthSet = true
 			depth = prev + 1
 		}
-		row = append(row, wsrow)
 		r := strings.Join(row, " ")
-		liverows[po] = r[:35]
+		r = r + wsrow
+		liverows[po] = r[:31]
 		prev = po
 		return true
 	})
 
-	k.addrs.EachBin(k.base, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
+	k.addrs.EachBin(k.base, pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
 		var rowlen int
 		if po >= k.MaxProxDisplay {
 			po = k.MaxProxDisplay - 1
@@ -464,7 +496,7 @@ func (k *Kademlia) String() string {
 		left := liverows[i]
 		right := peersrows[i]
 		if len(left) == 0 {
-			left = " 0                                          "
+			left = " 0                             "
 		}
 		if len(right) == 0 {
 			right = " 0"
@@ -483,10 +515,12 @@ func (k *Kademlia) String() string {
 // the bin is reduced to MinBinSize peers thus leaving slots to newly
 // connecting peers
 func (k *Kademlia) Prune(c <-chan time.Time) {
+	k.lock.RLock()
+	defer k.lock.RUnlock()
 	go func() {
 		for range c {
 			total := 0
-			k.conns.EachBin(k.base, 0, func(po, size int, f func(func(pot.Val, int) bool) bool) bool {
+			k.conns.EachBin(k.base, pof, 0, func(po, size int, f func(func(pot.Val, int) bool) bool) bool {
 				extra := size - k.MinBinSize
 				if size > k.MaxBinSize {
 					n := 0
@@ -507,17 +541,17 @@ func (k *Kademlia) Prune(c <-chan time.Time) {
 // NewPeerPot just creates a new pot record OverlayAddr
 func NewPeerPot(kadMinProxSize int, ids ...discover.NodeID) map[discover.NodeID][][]byte {
 	// create a table of all nodes for health check
-	np := pot.NewPot(nil, 0, nil)
+	np := pot.NewPot(nil, 0)
 	for _, id := range ids {
 		o := ToOverlayAddr(id.Bytes())
-		np, _, _ = pot.Add(np, o)
+		np, _, _ = pot.Add(np, o, pof)
 	}
 	nnmap := make(map[discover.NodeID][][]byte)
 
 	for _, id := range ids {
 		pl := 0
 		var nns [][]byte
-		np.EachNeighbour(id.Bytes(), func(val pot.Val, po int) bool {
+		np.EachNeighbour(id.Bytes(), pof, func(val pot.Val, po int) bool {
 			// a := val.(pot.BytesAddress).Address()
 			// nns = append(nns, a)
 			a := val.([]byte)
@@ -533,9 +567,9 @@ func NewPeerPot(kadMinProxSize int, ids ...discover.NodeID) map[discover.NodeID]
 }
 
 // FirstEmptyBin returns the farthest proximity order (int) that has no peer records
-func (k *Kademlia) FirstEmptyBin() (i int) {
+func (k *Kademlia) firstEmptyBin() (i int) {
 	i = -1
-	k.conns.EachBin(k.base, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
+	k.conns.EachBin(k.base, pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
 		if po > i+1 {
 			i = po
 			return false
@@ -547,13 +581,15 @@ func (k *Kademlia) FirstEmptyBin() (i int) {
 }
 
 // Full returns a bool if the kademlia table is healthy and complete
-func (k *Kademlia) Full() bool {
-	return k.FirstEmptyBin() >= k.Depth()
+func (k *Kademlia) full() bool {
+	return k.firstEmptyBin() >= k.depth()
 }
 
 // Healthy reports the health state of the kademlia connectivity
 func (k *Kademlia) Healthy(peers [][]byte) bool {
-	return k.gotNearestNeighbours(peers) && k.Full()
+	k.lock.RLock()
+	defer k.lock.RUnlock()
+	return k.gotNearestNeighbours(peers) && k.full()
 }
 
 func (k *Kademlia) gotNearestNeighbours(peers [][]byte) (got bool) {
