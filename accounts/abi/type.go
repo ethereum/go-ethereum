@@ -33,7 +33,7 @@ const (
 	FixedBytesTy
 	BytesTy
 	HashTy
-	FixedpointTy
+	FixedPointTy
 	FunctionTy
 )
 
