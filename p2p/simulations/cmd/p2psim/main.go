@@ -33,7 +33,9 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -77,9 +79,14 @@ func main() {
 					Action: createNetwork,
 					Flags: []cli.Flag{
 						cli.StringFlag{
-							Name:  "config",
-							Value: "{}",
-							Usage: "JSON encoded network config",
+							Name:  "id",
+							Value: "",
+							Usage: "network ID",
+						},
+						cli.StringFlag{
+							Name:  "default-service",
+							Value: "",
+							Usage: "default service",
 						},
 					},
 				},
@@ -141,9 +148,19 @@ func main() {
 					Action: createNode,
 					Flags: []cli.Flag{
 						cli.StringFlag{
-							Name:  "config",
-							Value: "{}",
-							Usage: "JSON encoded node config",
+							Name:  "name",
+							Value: "",
+							Usage: "node name",
+						},
+						cli.StringFlag{
+							Name:  "services",
+							Value: "",
+							Usage: "node services (comma separated)",
+						},
+						cli.StringFlag{
+							Name:  "key",
+							Value: "",
+							Usage: "node private key (hex encoded)",
 						},
 					},
 				},
@@ -216,9 +233,9 @@ func createNetwork(ctx *cli.Context) error {
 	if len(ctx.Args()) != 0 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	config := &simulations.NetworkConfig{}
-	if err := json.Unmarshal([]byte(ctx.String("config")), config); err != nil {
-		return err
+	config := &simulations.NetworkConfig{
+		ID:             ctx.String("id"),
+		DefaultService: ctx.String("default-service"),
 	}
 	network, err := client.CreateNetwork(config)
 	if err != nil {
@@ -326,9 +343,19 @@ func createNode(ctx *cli.Context) error {
 	if len(ctx.Args()) != 0 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	config := &adapters.NodeConfig{}
-	if err := json.Unmarshal([]byte(ctx.String("config")), config); err != nil {
-		return err
+	config := &adapters.NodeConfig{
+		Name: ctx.String("name"),
+	}
+	if key := ctx.String("key"); key != "" {
+		privKey, err := crypto.HexToECDSA(key)
+		if err != nil {
+			return err
+		}
+		config.ID = discover.PubkeyID(&privKey.PublicKey)
+		config.PrivateKey = privKey
+	}
+	if services := ctx.String("services"); services != "" {
+		config.Services = strings.Split(services, ",")
 	}
 	node, err := client.CreateNode(networkID, config)
 	if err != nil {
