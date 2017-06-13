@@ -440,11 +440,6 @@ var (
 		Usage: "Restricts network communication to the given IP networks (CIDR masks)",
 	}
 
-	WhisperEnabledFlag = cli.BoolFlag{
-		Name:  "shh",
-		Usage: "Enable Whisper",
-	}
-
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
@@ -878,6 +873,16 @@ func checkExclusive(ctx *cli.Context, flags ...cli.Flag) {
 	}
 }
 
+// SetShhConfig applies shh-related command line flags to the config.
+func SetShhConfig(ctx *cli.Context, stack *node.Node, cfg *whisper.Config) {
+	if ctx.GlobalIsSet(whisper.MaxMessageSizeFlag.Name) {
+		cfg.MaxMessageSize = uint32(ctx.GlobalUint(whisper.MaxMessageSizeFlag.Name))
+	}
+	if ctx.GlobalIsSet(whisper.MinPOWFlag.Name) {
+		cfg.MinimumAcceptedPOW = ctx.GlobalFloat64(whisper.MinPOWFlag.Name)
+	}
+}
+
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Avoid conflicting network flags
@@ -983,8 +988,10 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 }
 
 // RegisterShhService configures Whisper and adds it to the given node.
-func RegisterShhService(stack *node.Node) {
-	if err := stack.Register(func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
+func RegisterShhService(stack *node.Node, cfg *whisper.Config) {
+	if err := stack.Register(func(n *node.ServiceContext) (node.Service, error) {
+		return whisper.New(cfg), nil
+	}); err != nil {
 		Fatalf("Failed to register the Whisper service: %v", err)
 	}
 }

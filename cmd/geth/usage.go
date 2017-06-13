@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/internal/debug"
+	"github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -188,6 +189,10 @@ var AppHelpFlagGroups = []flagGroup{
 		}, debug.Flags...),
 	},
 	{
+		Name:  "Whisper (EXPERIMENTAL)",
+		Flags: whisperv5.Flags,
+	},
+	{
 		Name: "DEPRECATED",
 		Flags: []cli.Flag{
 			utils.FastSyncFlag,
@@ -195,10 +200,7 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
-		Name: "EXPERIMENTAL",
-		Flags: []cli.Flag{
-			utils.WhisperEnabledFlag,
-		},
+		Name: "MISC",
 	},
 }
 

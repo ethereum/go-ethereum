@@ -66,37 +66,32 @@ var unmarshalTestsGood = []struct {
 	topic TopicType
 	data  []byte
 }{
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("0x00000000")},
-	{topic: TopicType{0x00, 0x7f, 0x80, 0xff}, data: []byte("0x007f80ff")},
-	{topic: TopicType{0xff, 0x80, 0x7f, 0x00}, data: []byte("0xff807f00")},
-	{topic: TopicType{0xf2, 0x6e, 0x77, 0x79}, data: []byte("0xf26e7779")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("00000000")},
-	{topic: TopicType{0x00, 0x80, 0x01, 0x00}, data: []byte("00800100")},
-	{topic: TopicType{0x00, 0x7f, 0x80, 0xff}, data: []byte("007f80ff")},
-	{topic: TopicType{0xff, 0x80, 0x7f, 0x00}, data: []byte("ff807f00")},
-	{topic: TopicType{0xf2, 0x6e, 0x77, 0x79}, data: []byte("f26e7779")},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"0x00000000"`)},
+	{topic: TopicType{0x00, 0x7f, 0x80, 0xff}, data: []byte(`"0x007f80ff"`)},
+	{topic: TopicType{0xff, 0x80, 0x7f, 0x00}, data: []byte(`"0xff807f00"`)},
+	{topic: TopicType{0xf2, 0x6e, 0x77, 0x79}, data: []byte(`"0xf26e7779"`)},
 }
 
 var unmarshalTestsBad = []struct {
 	topic TopicType
 	data  []byte
 }{
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("0x000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("0x0000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("0x000000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("0x0000000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("0000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("000000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("0000000000")},
-	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte("abcdefg0")},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"0x000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"0x0000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"0x000000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"0x0000000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"0000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"000000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"0000000000"`)},
+	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: []byte(`"abcdefg0"`)},
 }
 
 var unmarshalTestsUgly = []struct {
 	topic TopicType
 	data  []byte
 }{
-	{topic: TopicType{0x01, 0x00, 0x00, 0x00}, data: []byte("00000001")},
+	{topic: TopicType{0x01, 0x00, 0x00, 0x00}, data: []byte(`"0x00000001"`)},
 }
 
 func TestUnmarshalTestsGood(t *testing.T) {
@@ -104,7 +99,7 @@ func TestUnmarshalTestsGood(t *testing.T) {
 		var top TopicType
 		err := top.UnmarshalJSON(tst.data)
 		if err != nil {
-			t.Fatalf("failed test %d. input: %v.", i, tst.data)
+			t.Fatalf("failed test %d. input: %v. err: %v", i, tst.data, err)
 		} else if top != tst.topic {
 			t.Fatalf("failed test %d: have %v, want %v.", i, t, tst.topic)
 		}

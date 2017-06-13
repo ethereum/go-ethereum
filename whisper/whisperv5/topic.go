@@ -19,10 +19,11 @@
 package whisperv5
 
 import (
+	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 // Topic represents a cryptographically secure, probabilistic partial
@@ -46,24 +47,19 @@ func (topic *TopicType) String() string {
 	return string(common.ToHex(topic[:]))
 }
 
+func (t *TopicType) MarshalJSON() ([]byte, error) {
+	return json.Marshal(hexutil.Bytes(t[:]))
+}
+
 // UnmarshalJSON parses a hex representation to a topic.
 func (t *TopicType) UnmarshalJSON(input []byte) error {
-	length := len(input)
-	if length >= 2 && input[0] == '"' && input[length-1] == '"' {
-		input = input[1 : length-1]
+	var data hexutil.Bytes
+	if err := json.Unmarshal(input, &data); err != nil {
+		return err
 	}
-	// strip "0x" for length check
-	if len(input) > 1 && strings.ToLower(string(input[:2])) == "0x" {
-		input = input[2:]
+	if len(data) != TopicLength {
+		return fmt.Errorf("unmarshalJSON failed: topic must be exactly %d bytes(%d)", TopicLength, len(input))
 	}
-	// validate the length of the input
-	if len(input) != TopicLength*2 {
-		return fmt.Errorf("unmarshalJSON failed: topic must be exactly %d bytes", TopicLength)
-	}
-	b := common.FromHex(string(input))
-	if b == nil {
-		return fmt.Errorf("unmarshalJSON failed: wrong topic format")
-	}
-	*t = BytesToTopic(b)
+	*t = BytesToTopic(data)
 	return nil
 }

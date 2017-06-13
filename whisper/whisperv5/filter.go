@@ -163,6 +163,7 @@ func (f *Filter) Retrieve() (all []*ReceivedMessage) {
 	for _, msg := range f.Messages {
 		all = append(all, msg)
 	}
+
 	f.Messages = make(map[common.Hash]*ReceivedMessage) // delete old messages
 	return all
 }
