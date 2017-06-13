@@ -156,14 +156,13 @@ func readInteger(kind reflect.Kind, b []byte) interface{} {
 	}
 }
 
-// todo: this is inefficient for a bool, just look at the last cell, save yourself 32 iterations
-func allZero(b []byte) bool {
-	for _, byte := range b {
-		if byte != 0 {
-			return false
+func getBoolValue(b []byte) (bool, error) {
+	for i, byte := range b {
+		if byte != 0 && i != 31 {
+			return false, fmt.Errorf("abi: Improperly encoded boolean value.")
 		}
 	}
-	return true
+	return bool(b[31]), nil
 }
 
 // toGoType parses the input and casts it to the proper type defined by the ABI
@@ -206,7 +205,7 @@ func toGoType(i int, t Argument, output []byte) (interface{}, error) {
 	case IntTy, UintTy:
 		return readInteger(t.Type.Kind, returnOutput), nil
 	case BoolTy:
-		return !allZero(returnOutput), nil
+		return getBoolValue(returnOutput)
 	case AddressTy:
 		return common.BytesToAddress(returnOutput), nil
 	case HashTy:
