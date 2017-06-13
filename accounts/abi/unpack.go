@@ -166,10 +166,15 @@ func getBoolValue(b []byte) (bool, error) {
 			return false, fmt.Errorf("abi: Improperly encoded boolean value.")
 		}
 	}
-	if uint(b[31]) == 1 {
+	switch uint(b[31]) {
+	case 0:
+		return false, nil
+	case 1:
 		return true, nil
+	default:
+		return false, fmt.Errorf("abi: Improperly encoded boolean value.")
 	}
-	return false, nil
+
 }
 
 // toGoType parses the input and casts it to the proper type defined by the ABI
