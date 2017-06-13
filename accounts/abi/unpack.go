@@ -111,13 +111,17 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 		var (
 			inter        interface{}             // interface type
 			returnOutput = slice[i*32 : i*32+32] // the return output
+			err          error
 		)
 		// set inter to the correct type (cast)
 		switch elem.T {
 		case IntTy, UintTy:
 			inter = readInteger(t.Type.Kind, returnOutput)
 		case BoolTy:
-			inter = !allZero(returnOutput)
+			inter, err = getBoolValue(returnOutput)
+			if err != nil {
+				return nil, err
+			}
 		case AddressTy:
 			inter = common.BytesToAddress(returnOutput)
 		case HashTy:
@@ -162,7 +166,10 @@ func getBoolValue(b []byte) (bool, error) {
 			return false, fmt.Errorf("abi: Improperly encoded boolean value.")
 		}
 	}
-	return bool(b[31]), nil
+	if uint(b[31]) == 1 {
+		return true, nil
+	}
+	return false, nil
 }
 
 // toGoType parses the input and casts it to the proper type defined by the ABI
