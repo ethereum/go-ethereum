@@ -67,7 +67,9 @@ func main() {
 	}
 
 	log.Info("starting simulation server on 0.0.0.0:8888...")
-	http.ListenAndServe(":8888", simulations.NewServer(config))
+	if err := http.ListenAndServe(":8888", simulations.NewServer(config)); err != nil {
+		log.Crit("error starting simulation server", "err", err)
+	}
 }
 
 // pingPongService runs a ping-pong protocol between nodes where each node
