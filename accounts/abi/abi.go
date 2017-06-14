@@ -65,7 +65,7 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 		}
 		method = m
 	}
-	arguments, err := method.pack(method, args...)
+	arguments, err := method.pack(args...)
 	if err != nil {
 		return nil, err
 	}
