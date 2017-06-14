@@ -504,14 +504,23 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 	header.Nonce = types.BlockNonce{}
 
 	number := header.Number.Uint64()
+	// Assemble the voting snapshot
+	snap, err := c.snapshot(chain, number-1, header.ParentHash, nil)
+	if err != nil {
+		return err
+	}
 	if number%c.config.Epoch != 0 {
+		// Get valid votes
 		c.lock.RLock()
-		if len(c.proposals) > 0 {
-			addresses := make([]common.Address, 0, len(c.proposals))
-			for address := range c.proposals {
+		var addresses []common.Address
+		for address, authorize := range c.proposals {
+			if snap.validVote(address, authorize) {
 				addresses = append(addresses, address)
 			}
-			header.Coinbase = addresses[rand.Intn(len(addresses))]
+		}
+		if len(addresses) > 0 {
+			index := rand.Intn(len(addresses))
+			header.Coinbase = addresses[index]
 			if c.proposals[header.Coinbase] {
 				copy(header.Nonce[:], nonceAuthVote)
 			} else {
@@ -520,11 +529,8 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 		}
 		c.lock.RUnlock()
 	}
-	// Assemble the voting snapshot and set the correct difficulty
-	snap, err := c.snapshot(chain, number-1, header.ParentHash, nil)
-	if err != nil {
-		return err
-	}
+
+	// Set the correct difficulty
 	header.Difficulty = diffNoTurn
 	if snap.inturn(header.Number.Uint64(), c.signer) {
 		header.Difficulty = diffInTurn
