@@ -207,8 +207,14 @@ func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error)
 		conf.PrivateKey = c.PrivateKey
 	}
 	id := conf.ID
+	if node := self.getNode(id); node != nil {
+		return nil, fmt.Errorf("node already exists: %q", id)
+	}
 	if conf.Name == "" {
 		conf.Name = fmt.Sprintf("node%02d", len(self.Nodes)+1)
+	}
+	if node := self.getNodeByName(conf.Name); node != nil {
+		return nil, fmt.Errorf("node already exists: %q", conf.Name)
 	}
 	if len(conf.Services) == 0 {
 		conf.Services = []string{self.DefaultService}
@@ -533,6 +539,10 @@ func (self *Network) GetNode(id discover.NodeID) *Node {
 func (self *Network) GetNodeByName(name string) *Node {
 	self.lock.Lock()
 	defer self.lock.Unlock()
+	return self.getNodeByName(name)
+}
+
+func (self *Network) getNodeByName(name string) *Node {
 	for _, node := range self.Nodes {
 		if node.Config.Name == name {
 			return node
