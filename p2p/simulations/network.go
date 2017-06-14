@@ -347,21 +347,13 @@ func (self *Network) watchPeerEvents(id discover.NodeID, events chan *p2p.PeerEv
 			peer := event.Peer
 			switch event.Type {
 			case p2p.PeerEventTypeAdd:
-				if err := self.DidConnect(id, peer); err != nil {
-					log.Error(fmt.Sprintf("error generating connection up event %s => %s", id.TerminalString(), peer.TerminalString()), "err", err)
-				}
+				self.DidConnect(id, peer)
 			case p2p.PeerEventTypeDrop:
-				if err := self.DidDisconnect(id, peer); err != nil {
-					log.Error(fmt.Sprintf("error generating connection down event %s => %s", id.TerminalString(), peer.TerminalString()), "err", err)
-				}
+				self.DidDisconnect(id, peer)
 			case p2p.PeerEventTypeMsgSend:
-				if err := self.DidSend(id, peer, *event.MsgCode); err != nil {
-					log.Error(fmt.Sprintf("error generating msg send event %s => %s", id.TerminalString(), peer.TerminalString()), "err", err)
-				}
+				self.DidSend(id, peer, *event.MsgCode)
 			case p2p.PeerEventTypeMsgRecv:
-				if err := self.DidReceive(peer, id, *event.MsgCode); err != nil {
-					log.Error(fmt.Sprintf("error generating msg receive event %s => %s", peer.TerminalString(), id.TerminalString()), "err", err)
-				}
+				self.DidReceive(peer, id, *event.MsgCode)
 			}
 		case err := <-sub.Err():
 			if err != nil {
