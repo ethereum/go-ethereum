@@ -160,19 +160,20 @@ func readInteger(kind reflect.Kind, b []byte) interface{} {
 	}
 }
 
-func getBoolValue(b []byte) (bool, error) {
-	for i, byte := range b {
-		if byte != 0 && i != 31 {
-			return false, fmt.Errorf("abi: Improperly encoded boolean value.")
+func getBoolValue(word []byte) (bool, error) {
+	improperEncoding := "abi: improperly encoded boolean value"
+	for i, b := range word {
+		if b != 0 && i != 31 {
+			return false, fmt.Errorf(improperEncoding)
 		}
 	}
-	switch uint(b[31]) {
+	switch word[31] {
 	case 0:
 		return false, nil
 	case 1:
 		return true, nil
 	default:
-		return false, fmt.Errorf("abi: Improperly encoded boolean value.")
+		return false, fmt.Errorf(improperEncoding)
 	}
 
 }
