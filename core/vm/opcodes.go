@@ -208,6 +208,8 @@ const (
 	DELEGATECALL
 	STATIC_CALL
 
+	CREATE2 OpCode = 0xfb
+
 	REVERT       = 0xfd
 	SELFDESTRUCT = 0xff
 )

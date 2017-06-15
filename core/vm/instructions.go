@@ -541,6 +541,18 @@ func opGas(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stac
 	return nil, nil
 }
 
+func CreateAddressFn(chainConfig *params.ChainConfig, blockNumber *big.Int, senderAddress common.Address, nonce uint64, input []byte) func() common.Address {
+	if chainConfig.IsMetropolis(blockNumber) {
+		return func() common.Address {
+			return common.BytesToAddress(crypto.Keccak256(senderAddress.Bytes(), crypto.Keccak256(input))[12:])
+		}
+	} else {
+		return func() common.Address {
+			return crypto.CreateAddress(senderAddress, nonce)
+		}
+	}
+}
+
 func opCreate(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	var (
 		value        = stack.pop()
@@ -552,8 +564,46 @@ func opCreate(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 		gas -= gas / 64
 	}
 
+	createAddressFn := CreateAddressFn(evm.ChainConfig(), evm.BlockNumber, contract.Address(), evm.StateDB.GetNonce(contract.Address()), input)
+
 	contract.UseGas(gas)
-	_, addr, returnGas, suberr := evm.Create(contract, input, gas, value)
+	_, addr, returnGas, suberr := evm.Create(contract, createAddressFn, input, gas, value)
+	// Push item on the stack based on the returned error. If the ruleset is
+	// homestead we must check for CodeStoreOutOfGasError (homestead only
+	// rule) and treat as an error, if the ruleset is frontier we must
+	// ignore this error and pretend the operation was successful.
+	if evm.ChainConfig().IsHomestead(evm.BlockNumber) && suberr == ErrCodeStoreOutOfGas {
+		stack.push(new(big.Int))
+	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
+		stack.push(new(big.Int))
+	} else {
+		stack.push(addr.Big())
+	}
+	contract.Gas += returnGas
+
+	evm.interpreter.intPool.put(value, offset, size)
+
+	return nil, nil
+}
+
+func opCreate2(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	var (
+		value        = stack.pop()
+		salt         = stack.pop()
+		offset, size = stack.pop(), stack.pop()
+		input        = memory.Get(offset.Int64(), size.Int64())
+		gas          = contract.Gas
+	)
+	if evm.ChainConfig().IsEIP150(evm.BlockNumber) {
+		gas -= gas / 64
+	}
+
+	createAddress := func() common.Address {
+		return common.BytesToAddress(crypto.Keccak256(contract.Address().Bytes(), salt.Bytes(), crypto.Keccak256(input))[12:])
+	}
+
+	contract.UseGas(gas)
+	_, addr, returnGas, suberr := evm.Create(contract, createAddress, input, gas, value)
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must

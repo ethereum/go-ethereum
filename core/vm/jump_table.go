@@ -891,6 +891,15 @@ func NewFrontierInstructionSet() [256]operation {
 			writes:           true,
 			clearsReturndata: true,
 		},
+		CREATE2: {
+			execute:          opCreate2,
+			gasCost:          gasCreate,
+			validateStack:    makeStackFunc(4, 1),
+			memorySize:       memoryCreate2,
+			valid:            true,
+			writes:           true,
+			clearsReturndata: true,
+		},
 		CALL: {
 			execute:          opCall,
 			gasCost:          gasCall,

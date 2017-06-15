@@ -290,7 +290,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 }
 
 // Create creates a new contract using code as deployment code.
-func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+func (evm *EVM) Create(caller ContractRef, createAddress addressCreationFn, code []byte, gas uint64, value *big.Int) (ret []byte, _ common.Address, leftOverGas uint64, err error) {
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, common.Address{}, gas, nil
 	}
@@ -309,7 +309,9 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	evm.StateDB.SetNonce(caller.Address(), nonce+1)
 
 	snapshot := evm.StateDB.Snapshot()
-	contractAddr = crypto.CreateAddress(caller.Address(), nonce)
+
+	contractAddr := createAddress()
+
 	evm.StateDB.CreateAccount(contractAddr)
 	if evm.ChainConfig().IsEIP158(evm.BlockNumber) {
 		evm.StateDB.SetNonce(contractAddr, 1)
@@ -361,3 +363,5 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 // Interpreter returns the EVM interpreter
 func (evm *EVM) Interpreter() *Interpreter { return evm.interpreter }
+
+type addressCreationFn func() common.Address
