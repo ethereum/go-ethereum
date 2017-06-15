@@ -88,7 +88,6 @@ type Ethereum struct {
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
 	s.lesServer = ls
-	s.protocolManager.lesServer = ls
 }
 
 // New creates a new Ethereum object (including the
