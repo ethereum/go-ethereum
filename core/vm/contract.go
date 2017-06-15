@@ -62,6 +62,8 @@ type Contract struct {
 	Args []byte
 
 	DelegateCall bool
+	Reverted     bool // use to represent whether transaction is reverted during state transition
+	// child's reverted field changed will also affect parent.
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
@@ -150,4 +152,13 @@ func (self *Contract) SetCallCode(addr *common.Address, hash common.Hash, code [
 	self.Code = code
 	self.CodeHash = hash
 	self.CodeAddr = addr
+}
+
+// MarkReverted mark current transaction's execution has meet revert.
+func (self *Contract) MarkReverted() {
+	self.Reverted = true
+	// affect parent recursively
+	if parent, ok := self.caller.(*Contract); ok {
+		parent.MarkReverted()
+	}
 }
