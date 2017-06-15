@@ -637,7 +637,7 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	// Setup the gas pool (also for unmetered requests)
 	// and apply the message.
 	gp := new(core.GasPool).AddGas(math.MaxBig256)
-	res, gas, err := core.ApplyMessage(evm, msg, gp)
+	res, gas, _, err := core.ApplyMessage(evm, msg, gp)
 	if err := vmError(); err != nil {
 		return nil, common.Big0, err
 	}
@@ -690,6 +690,7 @@ type ExecutionResult struct {
 	Gas         *big.Int       `json:"gas"`
 	ReturnValue string         `json:"returnValue"`
 	StructLogs  []StructLogRes `json:"structLogs"`
+	Reverted    bool           `json:"reverted"`
 }
 
 // StructLogRes stores a structured log emitted by the EVM while replaying a
@@ -1080,6 +1081,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(hash common.Hash) (map[
 		"contractAddress":   nil,
 		"logs":              receipt.Logs,
 		"logsBloom":         receipt.Bloom,
+		"reverted":          receipt.Reverted,
 	}
 	if receipt.Logs == nil {
 		fields["logs"] = [][]*types.Log{}

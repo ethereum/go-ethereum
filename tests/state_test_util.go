@@ -188,7 +188,7 @@ func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, db ethdb.
 	gaspool := new(core.GasPool).AddGas(math.MustParseBig256(env["currentGasLimit"]))
 
 	snapshot := statedb.Snapshot()
-	ret, _, err := core.ApplyMessage(environment, msg, gaspool)
+	ret, _, _, err := core.ApplyMessage(environment, msg, gaspool)
 	if err != nil {
 		statedb.RevertToSnapshot(snapshot)
 	}
