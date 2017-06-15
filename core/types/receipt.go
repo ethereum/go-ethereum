@@ -40,6 +40,10 @@ type Receipt struct {
 	TxHash          common.Hash    `json:"transactionHash" gencodec:"required"`
 	ContractAddress common.Address `json:"contractAddress"`
 	GasUsed         *big.Int       `json:"gasUsed" gencodec:"required"`
+	// The Reverted field is true if transaction is reverted during state transition,
+	// As the transaction revert will cause all the remaining gas to be consumed,
+	// This field could help to gas estimation.
+	Reverted bool `json:"reverted" gencode:"required"`
 }
 
 type receiptMarshaling struct {
@@ -91,7 +95,7 @@ func (r *ReceiptForStorage) EncodeRLP(w io.Writer) error {
 	for i, log := range r.Logs {
 		logs[i] = (*LogForStorage)(log)
 	}
-	return rlp.Encode(w, []interface{}{r.PostState, r.CumulativeGasUsed, r.Bloom, r.TxHash, r.ContractAddress, logs, r.GasUsed})
+	return rlp.Encode(w, []interface{}{r.PostState, r.CumulativeGasUsed, r.Bloom, r.TxHash, r.ContractAddress, logs, r.GasUsed, r.Reverted})
 }
 
 // DecodeRLP implements rlp.Decoder, and loads both consensus and implementation
@@ -105,6 +109,7 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 		ContractAddress   common.Address
 		Logs              []*LogForStorage
 		GasUsed           *big.Int
+		Reverted          bool
 	}
 	if err := s.Decode(&receipt); err != nil {
 		return err
@@ -116,7 +121,7 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 		r.Logs[i] = (*Log)(log)
 	}
 	// Assign the implementation fields
-	r.TxHash, r.ContractAddress, r.GasUsed = receipt.TxHash, receipt.ContractAddress, receipt.GasUsed
+	r.TxHash, r.ContractAddress, r.GasUsed, r.Reverted = receipt.TxHash, receipt.ContractAddress, receipt.GasUsed, receipt.Reverted
 
 	return nil
 }
