@@ -23,7 +23,6 @@ import (
 )
 
 const (
-	keylen    = 256
 	maxkeylen = 256
 )
 
@@ -277,22 +276,25 @@ func Swap(t *Pot, k Val, pof Pof, f func(v Val) Val) (r *Pot, po int, found bool
 	if t.pin == nil {
 		val = f(nil)
 		if val == nil {
-			return t, t.po, false, false
+			return nil, 0, false, false
 		}
-		return NewPot(val, t.po), t.po, false, true
+		return NewPot(val, t.po), 0, false, true
 	}
 	size := t.size
 	po, found = pof(k, t.pin, t.po)
 	if found {
 		val = f(t.pin)
+		// remove element
 		if val == nil {
 			size--
 			if size == 0 {
 				r = &Pot{
 					po: t.po,
 				}
+				// return empty pot
 				return r, po, true, true
 			}
+			// actually remove pin, by merging last bin
 			i := len(t.bins) - 1
 			last := t.bins[i]
 			r = &Pot{
@@ -301,55 +303,71 @@ func Swap(t *Pot, k Val, pof Pof, f func(v Val) Val) (r *Pot, po int, found bool
 				size: size,
 				po:   t.po,
 			}
-			return r, t.po, true, true
-			// remove element
-		} else if val == t.pin {
-			return t, po, true, false
-		} else { // add element
-			r = t.clone()
-			r.pin = val
 			return r, po, true, true
 		}
+		// element found but no change
+		if val == t.pin {
+			return t, po, true, false
+		}
+		// actually modify the pinned element, but no change in structure
+		r = t.clone()
+		r.pin = val
+		return r, po, true, true
 	}
+
 	// recursive step
 	var p *Pot
 	n, i := t.getPos(po)
 	if n != nil {
 		p, po, found, change = Swap(n, k, pof, f)
+		// recursive no change
 		if !change {
 			return t, po, found, false
 		}
-		size += p.size - n.size
-	} else {
-		val = f(nil)
-		if val == nil {
-			return t, po, false, false
+		// recursive change
+		//size += p.size - n.size
+		bins := append([]*Pot{}, t.bins[:i]...)
+		if p.size == 0 {
+			size--
+		} else {
+			size += p.size - n.size
+			bins = append(bins, p)
 		}
-		if _, eq := pof(val, k, po); !eq {
-			panic("invalid value")
+		i++
+		if i < len(t.bins) {
+			bins = append(bins, t.bins[i:]...)
 		}
-		size++
-		p = &Pot{
-			pin:  val,
-			size: 1,
-			po:   po,
-		}
+		r = t.clone()
+		r.bins = bins
+		r.size = size
+		return r, po, found, true
+	}
+	// key does not exist
+	val = f(nil)
+	if val == nil {
+		// and it should not be created
+		return t, po, false, false
+	}
+	// otherwise check val if equal to k
+	if _, eq := pof(val, k, po); !eq {
+		panic("invalid value")
+	}
+	///
+	size++
+	p = &Pot{
+		pin:  val,
+		size: 1,
+		po:   po,
 	}
 
 	bins := append([]*Pot{}, t.bins[:i]...)
-	if p.pin != nil {
-		bins = append(bins, p)
-	}
+	bins = append(bins, p)
 	if i < len(t.bins) {
-		bins = append(bins, t.bins[i+1:]...)
+		bins = append(bins, t.bins[i:]...)
 	}
-	r = &Pot{
-		pin:  f(t.pin),
-		size: size,
-		po:   t.po,
-		bins: bins,
-	}
-
+	r = t.clone()
+	r.bins = bins
+	r.size = size
 	return r, po, found, true
 }
 
@@ -394,6 +412,7 @@ func union(t0, t1 *Pot, pof Pof) (*Pot, int) {
 	var bins []*Pot
 	var mis []int
 	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	pin0 := t0.pin
 	pin1 := t1.pin
 	bins0 := t0.bins
@@ -445,11 +464,12 @@ func union(t0, t1 *Pot, pof Pof) (*Pot, int) {
 				bins = append(bins, nil)
 				ml := len(mis)
 				mis = append(mis, 0)
-				wg.Add(1)
-				go func(b, m int, m0, m1 *Pot) {
-					defer wg.Done()
-					bins[b], mis[m] = union(m0, m1, pof)
-				}(bl, ml, n0, n1)
+				// wg.Add(1)
+				// go func(b, m int, m0, m1 *Pot) {
+				// 	defer wg.Done()
+				// bins[b], mis[m] = union(m0, m1, pof)
+				// }(bl, ml, n0, n1)
+				bins[bl], mis[ml] = union(n0, n1, pof)
 				i0++
 				i1++
 				n0 = nil
@@ -499,6 +519,7 @@ func union(t0, t1 *Pot, pof Pof) (*Pot, int) {
 
 	}
 
+	wg.Done()
 	wg.Wait()
 	for _, c := range mis {
 		common += c
@@ -533,6 +554,9 @@ func (t *Pot) each(f func(Val, int) bool) bool {
 		if !next {
 			return false
 		}
+	}
+	if t.size == 0 {
+		return false
 	}
 	return f(t.pin, t.po)
 }

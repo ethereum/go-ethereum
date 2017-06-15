@@ -17,7 +17,7 @@ func newHiveTester(t *testing.T, params *HiveParams) (*bzzTester, *Hive) {
 }
 
 func TestRegisterAndConnect(t *testing.T) {
-	t.Skip("deadlocked")
+	//t.Skip("deadlocked")
 	params := NewHiveParams()
 	s, pp := newHiveTester(t, params)
 	defer s.Stop()
@@ -47,6 +47,11 @@ func TestRegisterAndConnect(t *testing.T) {
 	s.TestExchanges(p2ptest.Exchange{
 		Label: "getPeersMsg message",
 		Expects: []p2ptest.Expect{
+			p2ptest.Expect{
+				Code: 2,
+				Msg:  &subPeersMsg{0},
+				Peer: id,
+			},
 			p2ptest.Expect{
 				Code: 1,
 				Msg:  &getPeersMsg{uint8(o), 5},
