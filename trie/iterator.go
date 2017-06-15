@@ -221,7 +221,7 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 		if root != emptyRoot {
 			state.hash = root
 		}
-		err := state.resolve(it.trie)
+		err := state.resolve(it.trie, nil)
 		return state, nil, nil, err
 	}
 	if !descend {
@@ -238,8 +238,8 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 		}
 		state, path, ok := it.nextChild(parent, ancestor)
 		if ok {
-			if err := state.resolve(it.trie); err != nil {
-				return parent, &parent.index, it.path, err
+			if err := state.resolve(it.trie, path); err != nil {
+				return parent, &parent.index, path, err
 			}
 			return state, &parent.index, path, nil
 		}
@@ -249,9 +249,9 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 	return nil, nil, nil, iteratorEnd
 }
 
-func (st *nodeIteratorState) resolve(tr *Trie) error {
+func (st *nodeIteratorState) resolve(tr *Trie, path []byte) error {
 	if hash, ok := st.node.(hashNode); ok {
-		resolved, err := tr.resolveHash(hash, nil, nil)
+		resolved, err := tr.resolveHash(hash, path)
 		if err != nil {
 			return err
 		}
