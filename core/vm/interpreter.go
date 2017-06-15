@@ -231,9 +231,9 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		case !operation.jumps:
 			pc++
 		}
-		// if the operation returned a value make sure that is also set
-		// the last return data.
-		if res != nil {
+		// if the operation clears the return data (e.g. it has returning data)
+		// set the last return to the result of the operation.
+		if operation.clearsReturndata {
 			in.returnData = res
 		}
 	}

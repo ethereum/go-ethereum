@@ -53,11 +53,13 @@ type operation struct {
 	valid bool
 	// reverts determined whether the operation reverts state
 	reverts bool
+	// clearsReturndata determines whether the opertions clears the return data
+	clearsReturndata bool
 }
 
 var (
-	frontierInstructionSet  = NewFrontierInstructionSet()
-	homesteadInstructionSet = NewHomesteadInstructionSet()
+	frontierInstructionSet   = NewFrontierInstructionSet()
+	homesteadInstructionSet  = NewHomesteadInstructionSet()
 	metropolisInstructionSet = NewMetropolisInstructionSet()
 )
 
@@ -881,26 +883,29 @@ func NewFrontierInstructionSet() [256]operation {
 			writes:        true,
 		},
 		CREATE: {
-			execute:       opCreate,
-			gasCost:       gasCreate,
-			validateStack: makeStackFunc(3, 1),
-			memorySize:    memoryCreate,
-			valid:         true,
-			writes:        true,
+			execute:          opCreate,
+			gasCost:          gasCreate,
+			validateStack:    makeStackFunc(3, 1),
+			memorySize:       memoryCreate,
+			valid:            true,
+			writes:           true,
+			clearsReturndata: true,
 		},
 		CALL: {
-			execute:       opCall,
-			gasCost:       gasCall,
-			validateStack: makeStackFunc(7, 1),
-			memorySize:    memoryCall,
-			valid:         true,
+			execute:          opCall,
+			gasCost:          gasCall,
+			validateStack:    makeStackFunc(7, 1),
+			memorySize:       memoryCall,
+			valid:            true,
+			clearsReturndata: true,
 		},
 		CALLCODE: {
-			execute:       opCallCode,
-			gasCost:       gasCallCode,
-			validateStack: makeStackFunc(7, 1),
-			memorySize:    memoryCall,
-			valid:         true,
+			execute:          opCallCode,
+			gasCost:          gasCallCode,
+			validateStack:    makeStackFunc(7, 1),
+			memorySize:       memoryCall,
+			valid:            true,
+			clearsReturndata: true,
 		},
 		RETURN: {
 			execute:       opReturn,
