@@ -163,7 +163,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil {
 		contract.UseGas(contract.Gas)
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.Revert(snapshot, contract)
 	}
 	return ret, contract.Gas, err
 }
@@ -200,7 +200,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	ret, err = run(evm, snapshot, contract, input)
 	if err != nil {
 		contract.UseGas(contract.Gas)
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.Revert(snapshot, contract)
 	}
 
 	return ret, contract.Gas, err
@@ -234,7 +234,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	ret, err = run(evm, snapshot, contract, input)
 	if err != nil {
 		contract.UseGas(contract.Gas)
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.Revert(snapshot, contract)
 	}
 
 	return ret, contract.Gas, err
@@ -295,7 +295,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	if maxCodeSizeExceeded ||
 		(err != nil && (evm.ChainConfig().IsHomestead(evm.BlockNumber) || err != ErrCodeStoreOutOfGas)) {
 		contract.UseGas(contract.Gas)
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.Revert(snapshot, contract)
 	}
 	// If the vm returned with an error the return value should be set to nil.
 	// This isn't consensus critical but merely to for behaviour reasons such as
@@ -312,3 +312,10 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 // Interpreter returns the EVM interpreter
 func (evm *EVM) Interpreter() *Interpreter { return evm.interpreter }
+
+// Revert revert all state changes made since the given revision.
+// set `reverted` flag recursively.
+func (evm *EVM) Revert(snapshot int, contract *Contract) {
+	evm.StateDB.RevertToSnapshot(snapshot)
+	contract.MarkReverted()
+}
