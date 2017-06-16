@@ -94,7 +94,7 @@ func setDefaults(cfg *Config) {
 // Executes sets up a in memory, temporarily, environment for the execution of
 // the given code. It enabled the JIT by default and make sure that it's restored
 // to it's original state afterwards.
-func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
+func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, bool, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
@@ -113,7 +113,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	// set the receiver's (the executing contract) code for execution.
 	cfg.State.SetCode(address, code)
 	// Call the code with the given configuration.
-	ret, _, _, err := vmenv.Call(
+	ret, _, reverted, err := vmenv.Call(
 		sender,
 		common.StringToAddress("contract"),
 		input,
@@ -121,11 +121,11 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		cfg.Value,
 	)
 
-	return ret, cfg.State, err
+	return ret, cfg.State, reverted, err
 }
 
 // Create executes the code using the EVM create method
-func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
+func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, bool, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
@@ -141,13 +141,13 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	)
 
 	// Call the code with the given configuration.
-	code, address, leftOverGas, _, err := vmenv.Create(
+	code, address, leftOverGas, reverted, err := vmenv.Create(
 		sender,
 		input,
 		cfg.GasLimit,
 		cfg.Value,
 	)
-	return code, address, leftOverGas, err
+	return code, address, leftOverGas, reverted, err
 }
 
 // Call executes the code given by the contract's address. It will return the
@@ -155,14 +155,14 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 //
 // Call, unlike Execute, requires a config and also requires the State field to
 // be set.
-func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, error) {
+func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, bool, error) {
 	setDefaults(cfg)
 
 	vmenv := NewEnv(cfg, cfg.State)
 
 	sender := cfg.State.GetOrNewStateObject(cfg.Origin)
 	// Call the code with the given configuration.
-	ret, leftOverGas, _, err := vmenv.Call(
+	ret, leftOverGas, reverted, err := vmenv.Call(
 		sender,
 		address,
 		input,
@@ -170,5 +170,5 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		cfg.Value,
 	)
 
-	return ret, leftOverGas, err
+	return ret, leftOverGas, reverted, err
 }

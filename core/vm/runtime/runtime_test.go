@@ -75,7 +75,7 @@ func TestEVM(t *testing.T) {
 }
 
 func TestExecute(t *testing.T) {
-	ret, _, err := Execute([]byte{
+	ret, _, _, err := Execute([]byte{
 		byte(vm.PUSH1), 10,
 		byte(vm.PUSH1), 0,
 		byte(vm.MSTORE),
@@ -106,7 +106,7 @@ func TestCall(t *testing.T) {
 		byte(vm.RETURN),
 	})
 
-	ret, _, err := Call(address, nil, &Config{State: state})
+	ret, _, _, err := Call(address, nil, &Config{State: state})
 	if err != nil {
 		t.Fatal("didn't expect error", err)
 	}
