@@ -162,7 +162,7 @@ func readInteger(kind reflect.Kind, b []byte) interface{} {
 
 func readBool(word []byte) (bool, error) {
 	if len(word) != 32 {
-		panic("abi: fatal error. Incorrect word length.")
+		panic("abi: fatal error: incorrect word length")
 	}
 	improperEncoding := "abi: improperly encoded boolean value"
 	for i, b := range word {
