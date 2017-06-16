@@ -113,6 +113,13 @@ func TestSimpleMethodUnpack(t *testing.T) {
 		err              string      // empty or error if expected
 	}{
 		{
+			`[ { "type": "bool" } ]`,
+			pad([]byte{1}, 32, true),
+			bool(true),
+			"bool",
+			"",
+		},
+		{
 			`[ { "type": "uint32" } ]`,
 			pad([]byte{1}, 32, true),
 			uint32(1),
@@ -215,6 +222,10 @@ func TestSimpleMethodUnpack(t *testing.T) {
 
 		var outvar interface{}
 		switch test.outVar {
+		case "bool":
+			var v bool
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
 		case "uint8":
 			var v uint8
 			err = abi.Unpack(&v, "method", test.marshalledOutput)

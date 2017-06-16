@@ -118,7 +118,7 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 		case IntTy, UintTy:
 			inter = readInteger(t.Type.Kind, returnOutput)
 		case BoolTy:
-			inter, err = getBoolValue(returnOutput)
+			inter, err = readBool(returnOutput)
 			if err != nil {
 				return nil, err
 			}
@@ -160,7 +160,10 @@ func readInteger(kind reflect.Kind, b []byte) interface{} {
 	}
 }
 
-func getBoolValue(word []byte) (bool, error) {
+func readBool(word []byte) (bool, error) {
+	if len(word) != 32 {
+		panic("abi: fatal error. Incorrect word length.")
+	}
 	improperEncoding := "abi: improperly encoded boolean value"
 	for i, b := range word {
 		if b != 0 && i != 31 {
@@ -218,7 +221,7 @@ func toGoType(i int, t Argument, output []byte) (interface{}, error) {
 	case IntTy, UintTy:
 		return readInteger(t.Type.Kind, returnOutput), nil
 	case BoolTy:
-		return getBoolValue(returnOutput)
+		return readBool(returnOutput)
 	case AddressTy:
 		return common.BytesToAddress(returnOutput), nil
 	case HashTy:
