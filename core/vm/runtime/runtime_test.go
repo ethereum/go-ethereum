@@ -75,7 +75,7 @@ func TestEVM(t *testing.T) {
 }
 
 func TestExecute(t *testing.T) {
-	ret, _, err := Execute([]byte{
+	ret, _, _, err := Execute([]byte{
 		byte(vm.PUSH1), 10,
 		byte(vm.PUSH1), 0,
 		byte(vm.MSTORE),
@@ -106,7 +106,7 @@ func TestCall(t *testing.T) {
 		byte(vm.RETURN),
 	})
 
-	ret, _, err := Call(address, nil, &Config{State: state})
+	ret, _, _, err := Call(address, nil, &Config{State: state})
 	if err != nil {
 		t.Fatal("didn't expect error", err)
 	}
@@ -114,6 +114,143 @@ func TestCall(t *testing.T) {
 	num := new(big.Int).SetBytes(ret)
 	if num.Cmp(big.NewInt(10)) != 0 {
 		t.Error("Expected 10, got", num)
+	}
+}
+
+func TestTransactionReverted(t *testing.T) {
+	/*
+	   	Contract Source Code
+	   	```
+	   	contract Demo {
+	       		function Demo() {}
+	       		function IllegalDivision() returns(int) {
+	           		var dividend = 0;
+	           		return 1 / dividend;
+	       		}
+	       		function LegalDivision() returns(int) {
+	           		var dividend = 1;
+	           		return 1 / dividend;
+	       		}
+	   	}
+	   	```
+	*/
+	var definition = `[{"constant":false,"inputs":[],"name":"LegalDivision","outputs":[{"name":"","type":"int256"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"IllegalDivision","outputs":[{"name":"","type":"int256"}],"payable":false,"type":"function"},{"inputs":[],"payable":false,"type":"constructor"}]`
+	var rawcode = common.Hex2Bytes("6060604052341561000c57fe5b5b5b5b60f88061001d6000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680632d256662146044578063522de105146067575bfe5b3415604b57fe5b6051608a565b6040518082815260200191505060405180910390f35b3415606e57fe5b607460ab565b6040518082815260200191505060405180910390f35b60006000600190508060ff16600181151560a057fe5b0460ff1691505b5090565b60006000600090508060ff16600181151560c157fe5b0460ff1691505b50905600a165627a7a7230582091585859014c4644d0427bf34abc65433b5874993ddea00cac57bcb87ee4cb6b0029")
+
+	abi, err := abi.JSON(strings.NewReader(definition))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	legalDivision, err := abi.Pack("LegalDivision")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	illegalDivision, err := abi.Pack("IllegalDivision")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reverted bool
+	// deploy
+	cfg := &Config{
+		Origin: common.HexToAddress("sender"),
+	}
+	code, _, _, _, err := Create(rawcode, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, reverted, _ = Execute(code, legalDivision, cfg)
+	if reverted != false {
+		t.Fatal("Expect false, got true")
+	}
+	_, _, reverted, _ = Execute(code, illegalDivision, cfg)
+	if reverted != true {
+		t.Fatal("Expect true, got false")
+	}
+}
+
+func TestDelegateReverted(t *testing.T) {
+	/*
+		Contract Source Code
+		```
+		contract Relay {
+		    address public currentVersion;
+		    address public owner;
+
+		    modifier onlyOwner() {
+			if (msg.sender != owner) {
+			    throw;
+			}
+			_;
+		    }
+		    function Relay(address _address) {
+			currentVersion = _address;
+			owner = msg.sender;
+		    }
+		    function changeContract(address newVersion) public
+		    onlyOwner()
+		    {
+			currentVersion = newVersion;
+		    }
+		    function() {
+			if(!currentVersion.delegatecall(msg.data)) throw;
+		    }
+		}
+
+		contract Demo {
+		    function Demo() {
+		    }
+		    function IllegalDivision() returns(int) {
+			var dividend = 0;
+			return 1 / dividend;
+		    }
+		    function LegalDivision() returns(int) {
+			var dividend = 1;
+			return 1 / dividend;
+		    }
+		}
+		```
+	*/
+	var definition = `[{"constant":false,"inputs":[],"name":"LegalDivision","outputs":[{"name":"","type":"int256"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"IllegalDivision","outputs":[{"name":"","type":"int256"}],"payable":false,"type":"function"},{"inputs":[],"payable":false,"type":"constructor"}]`
+	var rawcode1 = common.Hex2Bytes("6060604052341561000c57fe5b5b5b5b60f88061001d6000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680632d256662146044578063522de105146067575bfe5b3415604b57fe5b6051608a565b6040518082815260200191505060405180910390f35b3415606e57fe5b607460ab565b6040518082815260200191505060405180910390f35b60006000600190508060ff16600181151560a057fe5b0460ff1691505b5090565b60006000600090508060ff16600181151560c157fe5b0460ff1691505b50905600a165627a7a7230582091585859014c4644d0427bf34abc65433b5874993ddea00cac57bcb87ee4cb6b0029")
+	var rawcode2 = common.Hex2Bytes("6060604052341561000c57fe5b60405160208061039c833981016040528080519060200190919050505b80600060006101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555033600160006101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055505b505b6102df806100bd6000396000f30060606040523615610055576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680633d71c3af146100ea5780638da5cb5b146101205780639d888e8614610172575b341561005d57fe5b6100e85b600060009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16600036600060405160200152604051808383808284378201915050925050506020604051808303818560325a03f415156100d057fe5b50506040518051905015156100e55760006000fd5b5b565b005b34156100f257fe5b61011e600480803573ffffffffffffffffffffffffffffffffffffffff169060200190919050506101c4565b005b341561012857fe5b610130610267565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b341561017a57fe5b61018261028d565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b600160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff161415156102215760006000fd5b80600060006101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055505b5b50565b600160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b600060009054906101000a900473ffffffffffffffffffffffffffffffffffffffff16815600a165627a7a723058208496aa0ef6d67e2e0423b76e8fd61b92e0047fe2e20ad20f887caf2b378dfa300029")
+
+	abi, err := abi.JSON(strings.NewReader(definition))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	legalDivision, err := abi.Pack("LegalDivision")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	illegalDivision, err := abi.Pack("IllegalDivision")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reverted bool
+	// deploy
+	cfg := &Config{
+		Origin: common.HexToAddress("sender"),
+	}
+	_, addr, _, _, err := Create(rawcode1, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, addr2, _, _, err := Create(append(rawcode2, common.LeftPadBytes(addr.Bytes(), 32)...), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, reverted, _ = Call(addr2, legalDivision, cfg)
+	if reverted != false {
+		t.Fatal("Expect false, got true")
+	}
+	_, _, reverted, _ = Call(addr2, illegalDivision, cfg)
+	if reverted != true {
+		t.Fatal("Expect true, got false")
 	}
 }
 

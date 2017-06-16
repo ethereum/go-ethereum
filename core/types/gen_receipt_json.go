@@ -20,6 +20,7 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 		TxHash            common.Hash    `json:"transactionHash" gencodec:"required"`
 		ContractAddress   common.Address `json:"contractAddress"`
 		GasUsed           *hexutil.Big   `json:"gasUsed" gencodec:"required"`
+		Reverted          bool           `json:"reverted" gencode:"required"`
 	}
 	var enc Receipt
 	enc.PostState = r.PostState
@@ -29,6 +30,7 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 	enc.TxHash = r.TxHash
 	enc.ContractAddress = r.ContractAddress
 	enc.GasUsed = (*hexutil.Big)(r.GasUsed)
+	enc.Reverted = r.Reverted
 	return json.Marshal(&enc)
 }
 
@@ -41,6 +43,7 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 		TxHash            *common.Hash    `json:"transactionHash" gencodec:"required"`
 		ContractAddress   *common.Address `json:"contractAddress"`
 		GasUsed           *hexutil.Big    `json:"gasUsed" gencodec:"required"`
+		Reverted          *bool           `json:"reverted" gencode:"required"`
 	}
 	var dec Receipt
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -73,5 +76,8 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'gasUsed' for Receipt")
 	}
 	r.GasUsed = (*big.Int)(dec.GasUsed)
+	if dec.Reverted != nil {
+		r.Reverted = *dec.Reverted
+	}
 	return nil
 }

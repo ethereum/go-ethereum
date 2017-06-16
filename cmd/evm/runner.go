@@ -174,12 +174,12 @@ func runCmd(ctx *cli.Context) error {
 	var leftOverGas uint64
 	if ctx.GlobalBool(CreateFlag.Name) {
 		input := append(code, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name))...)
-		ret, _, leftOverGas, err = runtime.Create(input, &runtimeConfig)
+		ret, _, leftOverGas, _, err = runtime.Create(input, &runtimeConfig)
 	} else {
 		receiver := common.StringToAddress("receiver")
 		statedb.SetCode(receiver, code)
 
-		ret, leftOverGas, err = runtime.Call(receiver, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtimeConfig)
+		ret, leftOverGas, _, err = runtime.Call(receiver, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtimeConfig)
 	}
 	execTime := time.Since(tstart)
 
