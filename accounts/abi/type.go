@@ -29,25 +29,30 @@ const (
 	BoolTy
 	StringTy
 	SliceTy
+	//StructTy
 	AddressTy
 	FixedBytesTy
 	BytesTy
 	HashTy
-	FixedpointTy
+	FixedPointTy
 	FunctionTy
 )
 
 // Type is the reflection of the supported argument type
 type Type struct {
-	IsSlice, IsArray bool
-	SliceSize        int
+	// Slice descriptions
+	IsArray        bool //todo: change to IsStatic
+	IsSlice        bool //todo: change to IsDynamic
+	IsDoublySliced bool //todo: find a better name
+	SliceSize      int
 
+	// If applicable (struct, slice), the underlying type
 	Elem *Type
 
-	Kind reflect.Kind
-	Type reflect.Type
-	Size int
-	T    byte // Our own type checking
+	Kind reflect.Kind // corresponding go Kind.
+	Type reflect.Type // corresponding go Type.
+	Size int          // type size (denotes uint256, uint248, etc.)
+	T    byte         // Our own type checking
 
 	stringKind string // holds the unparsed string for deriving signatures
 }
@@ -65,7 +70,7 @@ var (
 	//      string     int       uint       fixed
 	//      string32   int8      uint8      uint[]
 	//      address    int256    uint256    fixed128x128[2]
-	fullTypeRegex = regexp.MustCompile(`([a-zA-Z0-9]+)(\[([0-9]*)\])?`)
+	fullTypeRegex = regexp.MustCompile(`([a-zA-Z0-9]+)(\[([0-9]*)\])?(\[([0-9]*)\])?`)
 	// typeRegex parses the abi sub types
 	typeRegex = regexp.MustCompile("([a-zA-Z]+)(([0-9]+)(x([0-9]+))?)?")
 )

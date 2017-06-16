@@ -44,3 +44,10 @@ func (e Event) Id() common.Hash {
 	}
 	return common.BytesToHash(crypto.Keccak256([]byte(fmt.Sprintf("%v(%v)", e.Name, strings.Join(types, ",")))))
 }
+
+/*func (e Event) UnpackLog(v interface{}, data []byte) error {
+	// if not indexed, should be able to unpack normal log
+
+	// if it is indexed, we will not be able to get back the value, rather we will only be able to
+	// search for it.
+}*/

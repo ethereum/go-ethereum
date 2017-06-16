@@ -370,6 +370,7 @@ func TestPack(t *testing.T) {
 		{"address[]", []common.Address{{1}, {2}}, formatSliceOutput(pad([]byte{1}, 20, false), pad([]byte{2}, 20, false))},
 		{"bytes32[]", []common.Hash{{1}, {2}}, formatSliceOutput(pad([]byte{1}, 32, false), pad([]byte{2}, 32, false))},
 		{"function", [24]byte{1}, pad([]byte{1}, 32, false)},
+		{"bool[]", []bool{false, false}, formatSliceOutput(pad([]byte{0}, 32, true), pad([]byte{0}, 32, true))},
 	} {
 		typ, err := NewType(test.typ)
 		if err != nil {
@@ -471,7 +472,8 @@ const jsondata2 = `
 	{ "type" : "function", "name" : "uint64[2]", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[2]" } ] },
 	{ "type" : "function", "name" : "uint64[]", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[]" } ] },
 	{ "type" : "function", "name" : "foo", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
-	{ "type" : "function", "name" : "bar", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
+	{ "type" : "function", "name" : "bar", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "", "type" : "uint16" } ] },
+	{ "type" : "function", "name" : "boolMultiPack", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "bool" }, { "name" : "", "type" : "bool" } ] },
 	{ "type" : "function", "name" : "slice", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
 	{ "type" : "function", "name" : "slice256", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] },
 	{ "type" : "function", "name" : "sliceAddress", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "address[]" } ] },
@@ -626,6 +628,22 @@ func TestMultiPack(t *testing.T) {
 	if !bytes.Equal(packed, sig) {
 		t.Errorf("expected %x got %x", sig, packed)
 	}
+
+	sig = crypto.Keccak256([]byte("boolMultiPack(bool,bool)"))[:4]
+	sig = append(sig, make([]byte, 64)...)
+	sig[35] = 0
+	sig[67] = 0
+
+	packed, err = abi.Pack("boolMultiPack", []interface{}{false, false}...)
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+
+	if !bytes.Equal(packed, sig) {
+		t.Errorf("expected %x got %x", sig, packed)
+	}
+
 }
 
 func ExampleJSON() {
