@@ -29,6 +29,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+var (
+	MainNetAddress = common.HexToAddress("0x314159265dD8dbb310642f98f50C066173C1259b")
+	TestNetAddress = common.HexToAddress("0x112234455c3a32fd11230c42e7bccd4a84e02010")
+)
+
 // swarm domain name registry and resolver
 type ENS struct {
 	*contract.ENSSession
