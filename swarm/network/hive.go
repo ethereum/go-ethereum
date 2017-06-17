@@ -163,7 +163,7 @@ func (h *Hive) Stop() {
 
 // Run protocol run function
 func (h *Hive) Run(p *bzzPeer) error {
-	dp := NewDiscovery(p, h)
+	dp := newDiscovery(p, h)
 	log.Debug(fmt.Sprintf("to add new bee %v", p))
 	h.On(dp)
 	h.wake()

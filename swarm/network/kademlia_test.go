@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package network
 
 import (
@@ -27,9 +28,8 @@ import (
 )
 
 func init() {
-	h := log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
-	// h := log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
-	// h := log.CallerFileHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
+	// h := log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
+	h := log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
 	log.Root().SetHandler(h)
 }
 
@@ -65,26 +65,26 @@ type dropError struct {
 	addr string
 }
 
-func (self *testDropPeer) Drop(err error) {
-	err2 := &dropError{err, binStr(self)}
-	self.dropc <- err2
+func (d *testDropPeer) Drop(err error) {
+	err2 := &dropError{err, binStr(d)}
+	d.dropc <- err2
 }
 
-func (self *testDiscPeer) NotifyDepth(po uint8) error {
-	key := binStr(self)
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	self.notifications[key] = po
+func (d *testDiscPeer) NotifyDepth(po uint8) error {
+	key := binStr(d)
+	d.lock.Lock()
+	defer d.lock.Unlock()
+	d.notifications[key] = po
 	return nil
 }
 
-func (self *testDiscPeer) NotifyPeer(p OverlayAddr, po uint8) error {
-	key := binStr(self)
+func (d *testDiscPeer) NotifyPeer(p OverlayAddr, po uint8) error {
+	key := binStr(d)
 	key += binStr(p)
-	self.lock.Lock()
-	defer self.lock.Unlock()
+	d.lock.Lock()
+	defer d.lock.Unlock()
 	log.Trace(fmt.Sprintf("key %v=>%v", key, po))
-	self.notifications[key] = po
+	d.notifications[key] = po
 	return nil
 }
 
@@ -432,31 +432,31 @@ func TestPruning(t *testing.T) {
 func TestKademliaHiveString(t *testing.T) {
 	k := newTestKademlia("00000000").On("01000000", "00100000").Register("10000000", "10000001")
 	h := k.String()
-	expH := "\n=========================================================================\nMon Feb 27 12:10:28 UTC 2017 KΛÐΞMLIΛ hive: queen's address: 000000\npopulation: 2 (4), MinProxBinSize: 2, MinBinSize: 1, MaxBinSize: 4\n============ DEPTH: 0 ==========================================\n000  0                              |  2 8100 (0) 8000 (0)\n001  1 4000                         |  1 4000 (0)\n002  1 2000                         |  1 2000 (0)\n003  0                              |  0\n004  0                              |  0\n005  0                              |  0\n006  0                              |  0\n007  0                              |  0\n========================================================================="
+	expH := "\n=========================================================================\nMon Feb 27 12:10:28 UTC 2017 KΛÐΞMLIΛ hive: queen's address: 000000\npopulation: 2 (4), MinProxBinSize: 2, MinBinSize: 1, MaxBinSize: 4\n000  0                              |  2 8100 (0) 8000 (0)\n============ DEPTH: 1 ==========================================\n001  1 4000                         |  1 4000 (0)\n002  1 2000                         |  1 2000 (0)\n003  0                              |  0\n004  0                              |  0\n005  0                              |  0\n006  0                              |  0\n007  0                              |  0\n========================================================================="
 	if expH[100:] != h[100:] {
 		t.Fatalf("incorrect hive output. expected %v, got %v", expH, h)
 	}
 }
 
-func (self *testKademlia) checkNotifications(npeers []*testPeerNotification, nprox []*testDepthNotification) error {
+func (k *testKademlia) checkNotifications(npeers []*testPeerNotification, nprox []*testDepthNotification) error {
 	for _, pn := range npeers {
 		key := pn.rec + pn.addr
-		po, found := self.notifications[key]
+		po, found := k.notifications[key]
 		if !found || pn.po != po {
 			return fmt.Errorf("%v, expected to have notified %v about peer %v (%v)", key, pn.rec, pn.addr, pn.po)
 		}
-		delete(self.notifications, key)
+		delete(k.notifications, key)
 	}
 	for _, pn := range nprox {
 		key := pn.rec
-		po, found := self.notifications[key]
+		po, found := k.notifications[key]
 		if !found || pn.po != po {
 			return fmt.Errorf("expected to have notified %v about new prox limit %v", pn.rec, pn.po)
 		}
-		delete(self.notifications, key)
+		delete(k.notifications, key)
 	}
-	if len(self.notifications) > 0 {
-		return fmt.Errorf("%v unexpected notifications", len(self.notifications))
+	if len(k.notifications) > 0 {
+		return fmt.Errorf("%v unexpected notifications", len(k.notifications))
 	}
 	return nil
 }

@@ -197,7 +197,7 @@ func ToBytes(v Val) []byte {
 	return b
 }
 
-// DefaultPof returns a proximity order operator function
+// DefaultPof returns a proximity order comparison operator function
 // where all
 func DefaultPof(max int) func(one, other Val, pos int) (int, bool) {
 	return func(one, other Val, pos int) (int, bool) {

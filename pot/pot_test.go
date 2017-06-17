@@ -158,7 +158,6 @@ func TestPotRemove(t *testing.T) {
 
 func TestPotSwap(t *testing.T) {
 	for i := 0; i < maxSwapTests; i++ {
-		// alen := maxkeylen
 		alen := maxkeylen
 		pof := DefaultPof(alen)
 		max := rand.Intn(maxSwap)
@@ -292,7 +291,6 @@ func TestPotMergeCommon(t *testing.T) {
 	vs := make([]*testAddr, mergeTestCount)
 	for i := 0; i < maxEachNeighbourTests; i++ {
 		alen := maxkeylen
-		// alen := maxkeylen
 		pof := DefaultPof(alen)
 
 		for j := 0; j < len(vs); j++ {

@@ -33,10 +33,11 @@ import (
 )
 
 const (
-	NetworkId          = 322 // BZZ in l33t
+	NetworkID          = 322 // BZZ in l33t
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
 )
 
+// BzzHandshakeSpec is the spec of the generic swarm handshake
 var BzzHandshakeSpec = &protocols.Spec{
 	Name:       "bzz",
 	Version:    1,
@@ -211,7 +212,7 @@ func (b *Bzz) getHandshake(peerID discover.NodeID) *bzzHandshake {
 	if !ok {
 		handshake = &bzzHandshake{
 			Version:   uint64(BzzHandshakeSpec.Version),
-			NetworkId: uint64(NetworkId),
+			NetworkID: uint64(NetworkID),
 			Addr:      b.localAddr,
 			done:      make(chan struct{}),
 		}
@@ -250,12 +251,12 @@ func (self *bzzPeer) LastActive() time.Time {
  Handshake
 
 * Version: 8 byte integer version of the protocol
-* NetworkId: 8 byte integer network identifier
+* NetworkID: 8 byte integer network identifier
 * Addr: the address advertised by the node including underlay and overlay connecctions
 */
 type bzzHandshake struct {
 	Version   uint64
-	NetworkId uint64
+	NetworkID uint64
 	Addr      *bzzAddr
 
 	// peerAddr is the address received in the peer handshake
@@ -266,7 +267,7 @@ type bzzHandshake struct {
 }
 
 func (self *bzzHandshake) String() string {
-	return fmt.Sprintf("Handshake: Version: %v, NetworkId: %v, Addr: %v", self.Version, self.NetworkId, self.Addr)
+	return fmt.Sprintf("Handshake: Version: %v, NetworkID: %v, Addr: %v", self.Version, self.NetworkID, self.Addr)
 }
 
 const bzzHandshakeTimeout = time.Second
@@ -284,8 +285,8 @@ func (self *bzzHandshake) Perform(p *p2p.Peer, rw p2p.MsgReadWriter) (err error)
 		return err
 	}
 	rhs := hs.(*bzzHandshake)
-	if rhs.NetworkId != self.NetworkId {
-		return fmt.Errorf("network id mismatch %d (!= %d)", rhs.NetworkId, self.NetworkId)
+	if rhs.NetworkID != self.NetworkID {
+		return fmt.Errorf("network id mismatch %d (!= %d)", rhs.NetworkID, self.NetworkID)
 	}
 	if rhs.Version != self.Version {
 		return fmt.Errorf("version mismatch %d (!= %d)", rhs.Version, self.Version)

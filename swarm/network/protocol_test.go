@@ -1,3 +1,19 @@
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package network
 
 import (
@@ -140,12 +156,12 @@ func (s *bzzTester) runHandshakes(ids ...discover.NodeID) {
 func correctBzzHandshake(addr *bzzAddr) *bzzHandshake {
 	return &bzzHandshake{
 		Version:   0,
-		NetworkId: 322,
+		NetworkID: 322,
 		Addr:      addr,
 	}
 }
 
-func TestBzzHandshakeNetworkIdMismatch(t *testing.T) {
+func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 	pp := p2ptest.NewTestPeerPool()
 	addr := RandomAddr()
 	s := newBzzTester(t, 1, addr, pp, nil, nil)
@@ -154,7 +170,7 @@ func TestBzzHandshakeNetworkIdMismatch(t *testing.T) {
 	id := s.IDs[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
-		&bzzHandshake{Version: 0, NetworkId: 321, Addr: NewAddrFromNodeID(id)},
+		&bzzHandshake{Version: 0, NetworkID: 321, Addr: NewAddrFromNodeID(id)},
 		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("network id mismatch 321 (!= 322)")},
 	)
 }
@@ -168,7 +184,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 	id := s.IDs[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
-		&bzzHandshake{Version: 1, NetworkId: 322, Addr: NewAddrFromNodeID(id)},
+		&bzzHandshake{Version: 1, NetworkID: 322, Addr: NewAddrFromNodeID(id)},
 		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("version mismatch 1 (!= 0)")},
 	)
 }
@@ -182,6 +198,6 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 	id := s.IDs[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
-		&bzzHandshake{Version: 0, NetworkId: 322, Addr: NewAddrFromNodeID(id)},
+		&bzzHandshake{Version: 0, NetworkID: 322, Addr: NewAddrFromNodeID(id)},
 	)
 }

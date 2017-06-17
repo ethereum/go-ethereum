@@ -299,10 +299,10 @@ func (k *Kademlia) On(p OverlayConn) {
 	}
 
 	depth := uint8(k.depth())
+	var depthChanged bool
 	if depth != k.currentDepth {
+		depthChanged = true
 		k.currentDepth = depth
-	} else {
-		depth = 0
 	}
 
 	go np.NotifyDepth(depth)
@@ -310,7 +310,7 @@ func (k *Kademlia) On(p OverlayConn) {
 		dp := val.(*entry).OverlayPeer.(Notifier)
 		dp.NotifyPeer(p.Off(), uint8(po))
 		log.Trace(fmt.Sprintf("peer %v notified of %v (%v)", dp, p, po))
-		if depth > 0 {
+		if depthChanged {
 			dp.NotifyDepth(depth)
 			log.Trace(fmt.Sprintf("peer %v notified of new depth %v", dp, depth))
 		}
@@ -442,9 +442,8 @@ func (k *Kademlia) String() string {
 
 	liverows := make([]string, k.MaxProxDisplay)
 	peersrows := make([]string, k.MaxProxDisplay)
-	var depth int
-	prev := -1
-	var depthSet bool
+
+	depth := k.depth()
 	rest := k.conns.Size()
 	k.conns.EachBin(k.base, pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
 		var rowlen int
@@ -459,14 +458,9 @@ func (k *Kademlia) String() string {
 			rowlen++
 			return rowlen < 4
 		})
-		if !depthSet && (po > prev+1 || rest < k.MinProxBinSize) {
-			depthSet = true
-			depth = prev + 1
-		}
 		r := strings.Join(row, " ")
 		r = r + wsrow
 		liverows[po] = r[:31]
-		prev = po
 		return true
 	})
 
