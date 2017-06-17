@@ -133,7 +133,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	dpaChunkStore := storage.NewDpaChunkStore(self.lstore, self.storage)
 	log.Debug(fmt.Sprintf("-> Local Access to Swarm"))
 
-		// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
+	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)
 	log.Debug(fmt.Sprintf("-> Content Store API"))
 
@@ -368,7 +368,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 		return
 	}
 
-	config, err := api.NewConfig(datadir, common.Address{}, prvKey, network.NetworkId)
+	config, err := api.NewConfig(datadir, common.Address{}, prvKey, network.NetworkID)
 	if err != nil {
 		return
 	}

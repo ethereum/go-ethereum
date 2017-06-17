@@ -345,6 +345,10 @@ func (k *Kademlia) Off(p OverlayConn) {
 func (k *Kademlia) EachConn(base []byte, o int, f func(OverlayConn, int, bool) bool) {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
+	k.eachConn(base, o, f)
+}
+
+func (k *Kademlia) eachConn(base []byte, o int, f func(OverlayConn, int, bool) bool) {
 	if len(base) == 0 {
 		base = k.base
 	}
