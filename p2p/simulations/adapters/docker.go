@@ -13,6 +13,7 @@ import (
 
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 // DockerAdapter is a NodeAdapter which runs nodes inside Docker containers.
@@ -20,7 +21,9 @@ import (
 // A Docker image is built which contains the current binary at /bin/p2p-node
 // which when executed runs the underlying service (see the description
 // of the execP2PNode function for more details)
-type DockerAdapter struct{}
+type DockerAdapter struct {
+	ExecAdapter
+}
 
 // NewDockerAdapter builds the p2p-node Docker image containing the current
 // binary and returns a DockerAdapter
@@ -33,7 +36,11 @@ func NewDockerAdapter() (*DockerAdapter, error) {
 		return nil, err
 	}
 
-	return &DockerAdapter{}, nil
+	return &DockerAdapter{
+		ExecAdapter{
+			nodes: make(map[discover.NodeID]*ExecNode),
+		},
+	}, nil
 }
 
 // Name returns the name of the adapter for logging purpoeses
@@ -58,17 +65,22 @@ func (d *DockerAdapter) NewNode(config *NodeConfig) (Node, error) {
 		Node:  config,
 	}
 	conf.Stack.DataDir = "/data"
+	conf.Stack.WSHost = "0.0.0.0"
+	conf.Stack.WSOrigins = []string{"*"}
+	conf.Stack.WSExposeAll = true
 	conf.Stack.P2P.EnableMsgEvents = true
 	conf.Stack.P2P.NoDiscovery = true
 	conf.Stack.P2P.NAT = nil
 
 	node := &DockerNode{
 		ExecNode: ExecNode{
-			ID:     config.ID,
-			Config: conf,
+			ID:      config.ID,
+			Config:  conf,
+			adapter: &d.ExecAdapter,
 		},
 	}
 	node.newCmd = node.dockerCommand
+	d.ExecAdapter.nodes[node.ID] = &node.ExecNode
 	return node, nil
 }
 

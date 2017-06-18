@@ -347,17 +347,24 @@ func execP2PNode() {
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
 
 	// use explicit IP address in ListenAddr so that Enode URL is usable
-	if strings.HasPrefix(conf.Stack.P2P.ListenAddr, ":") {
+	externalIP := func() string {
 		addrs, err := net.InterfaceAddrs()
 		if err != nil {
 			log.Crit("error getting IP address", "err", err)
 		}
 		for _, addr := range addrs {
 			if ip, ok := addr.(*net.IPNet); ok && !ip.IP.IsLoopback() {
-				conf.Stack.P2P.ListenAddr = ip.IP.String() + conf.Stack.P2P.ListenAddr
-				break
+				return ip.IP.String()
 			}
 		}
+		log.Crit("unable to determine explicit IP address")
+		return ""
+	}
+	if strings.HasPrefix(conf.Stack.P2P.ListenAddr, ":") {
+		conf.Stack.P2P.ListenAddr = externalIP() + conf.Stack.P2P.ListenAddr
+	}
+	if conf.Stack.WSHost == "0.0.0.0" {
+		conf.Stack.WSHost = externalIP()
 	}
 
 	// initialize the devp2p stack
