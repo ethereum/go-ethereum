@@ -337,7 +337,16 @@ func (self *Network) startWithSnapshots(id discover.NodeID, snapshots map[string
 }
 
 func (self *Network) watchPeerEvents(id discover.NodeID, events chan *p2p.PeerEvent, sub event.Subscription) {
-	defer sub.Unsubscribe()
+	defer func() {
+		sub.Unsubscribe()
+
+		// assume the node is now down
+		self.lock.Lock()
+		node := self.getNode(id)
+		node.Up = false
+		self.lock.Unlock()
+		self.events.Send(NewEvent(node))
+	}()
 	for {
 		select {
 		case event, ok := <-events:
