@@ -589,14 +589,6 @@ func (self *Network) getConn(oneID, otherID discover.NodeID) *Conn {
 }
 
 func (self *Network) Shutdown() {
-	// disconnect all nodes
-	for _, conn := range self.Conns {
-		log.Debug(fmt.Sprintf("disconnecting %s from %s", conn.One.TerminalString(), conn.Other.TerminalString()))
-		if err := self.Disconnect(conn.One, conn.Other); err != nil {
-			log.Warn(fmt.Sprintf("error disconnecting %s from %s", conn.One.TerminalString(), conn.Other.TerminalString()), "err", err)
-		}
-	}
-
 	// stop all nodes
 	for _, node := range self.Nodes {
 		log.Debug(fmt.Sprintf("stopping node %s", node.ID().TerminalString()))
