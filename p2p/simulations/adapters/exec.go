@@ -183,25 +183,18 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 
 	// read the WebSocket address from the stderr logs
 	var wsAddr string
-	errC := make(chan error)
+	wsAddrC := make(chan string)
 	go func() {
 		s := bufio.NewScanner(stderrR)
 		for s.Scan() {
 			if strings.Contains(s.Text(), "WebSocket endpoint opened:") {
-				wsAddr = wsAddrPattern.FindString(s.Text())
-				break
+				wsAddrC <- wsAddrPattern.FindString(s.Text())
 			}
-		}
-		select {
-		case errC <- s.Err():
-		default:
 		}
 	}()
 	select {
-	case err := <-errC:
-		if err != nil {
-			return fmt.Errorf("error reading WebSocket address from stderr: %s", err)
-		} else if wsAddr == "" {
+	case wsAddr = <-wsAddrC:
+		if wsAddr == "" {
 			return errors.New("failed to read WebSocket address from stderr")
 		}
 	case <-time.After(10 * time.Second):
