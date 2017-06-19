@@ -17,6 +17,7 @@
 package node
 
 import (
+	"crypto/ecdsa"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -65,6 +66,11 @@ func (ctx *ServiceContext) Service(service interface{}) error {
 		return nil
 	}
 	return ErrServiceUnknown
+}
+
+// NodeKey returns node key from config
+func (ctx *ServiceContext) NodeKey() *ecdsa.PrivateKey {
+	return ctx.config.NodeKey()
 }
 
 // ServiceConstructor is the function signature of the constructors needed to be
