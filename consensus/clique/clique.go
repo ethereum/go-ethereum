@@ -99,10 +99,10 @@ var (
 	// their extra-data fields.
 	errExtraSigners = errors.New("non-checkpoint block contains extra signer list")
 
-	// drrInvalidCheckpointSigners is returned if a checkpoint block contains an
+	// errInvalidCheckpointSigners is returned if a checkpoint block contains an
 	// invalid list of signers (i.e. non divisible by 20 bytes, or not the correct
 	// ones).
-	drrInvalidCheckpointSigners = errors.New("invalid signer list on checkpoint block")
+	errInvalidCheckpointSigners = errors.New("invalid signer list on checkpoint block")
 
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
 	errInvalidMixDigest = errors.New("non-zero mix digest")
@@ -297,7 +297,7 @@ func (c *Clique) verifyHeader(chain consensus.ChainReader, header *types.Header,
 		return errExtraSigners
 	}
 	if checkpoint && signersBytes%common.AddressLength != 0 {
-		return drrInvalidCheckpointSigners
+		return errInvalidCheckpointSigners
 	}
 	// Ensure that the mix digest is zero as we don't have fork protection currently
 	if header.MixDigest != (common.Hash{}) {
@@ -353,7 +353,7 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainReader, header *type
 		}
 		extraSuffix := len(header.Extra) - extraSeal
 		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], signers) {
-			return drrInvalidCheckpointSigners
+			return errInvalidCheckpointSigners
 		}
 	}
 	// All basic checks passed, verify the seal and return
@@ -467,7 +467,6 @@ func (c *Clique) verifySeal(chain consensus.ChainReader, header *types.Header, p
 	if err != nil {
 		return err
 	}
-	c.recents.Add(snap.Hash, snap)
 
 	// Resolve the authorization key and check against signers
 	signer, err := ecrecover(header, c.signatures)
@@ -479,13 +478,13 @@ func (c *Clique) verifySeal(chain consensus.ChainReader, header *types.Header, p
 	}
 	for seen, recent := range snap.Recents {
 		if recent == signer {
-			// Signer is among recents, only fail if the current block doens't shift it out
+			// Signer is among recents, only fail if the current block doesn't shift it out
 			if limit := uint64(len(snap.Signers)/2 + 1); seen > number-limit {
 				return errUnauthorized
 			}
 		}
 	}
-	// Ensure that the difficulty corresponts to the turn-ness of the signer
+	// Ensure that the difficulty corresponds to the turn-ness of the signer
 	inturn := snap.inturn(header.Number.Uint64(), signer)
 	if inturn && header.Difficulty.Cmp(diffInTurn) != 0 {
 		return errInvalidDifficulty
@@ -604,7 +603,7 @@ func (c *Clique) Seal(chain consensus.ChainReader, block *types.Block, stop <-ch
 	// If we're amongst the recent signers, wait for the next block
 	for seen, recent := range snap.Recents {
 		if recent == signer {
-			// Signer is among recents, only wait if the current block doens't shift it out
+			// Signer is among recents, only wait if the current block doesn't shift it out
 			if limit := uint64(len(snap.Signers)/2 + 1); number < limit || seen > number-limit {
 				log.Info("Signed recently, must wait for others")
 				<-stop
