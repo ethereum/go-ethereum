@@ -229,6 +229,68 @@ func TestSimpleMethodUnpack(t *testing.T) {
 	}
 }
 
+func TestArraysAndSlicesUnpack(t *testing.T) {
+	for i, test := range []struct {
+		def              string      // definition of the **output** ABI params
+		marshalledOutput []byte      // evm return data
+		expectedOut      interface{} // the expected output
+		outVar           interface{} // the output variable (e.g. uint32, *big.Int, etc)
+		err              string      // empty or error if expected
+	}{
+		{
+			`[ { "type": "uint32[]" } ]`,
+			append(pad(common.Hex2Bytes("20"), 32, true), formatSliceOutput([]byte{1}, []byte{2})...),
+			[]uint32{1, 2},
+			[]uint32{},
+			"",
+		},
+		{
+			`[ { "type": "uint32[2]" } ]`,
+			append(pad([]byte{1}, 32, true), pad([]byte{2}, 32, true)...),
+			[2]uint32{1, 2},
+			[2]uint32{},
+			"",
+		},
+		{
+			`[ { "type": "uint256[3]" } ]`,
+			append(pad([]byte{1}, 32, true), append(pad([]byte{2}, 32, true), pad([]byte{3}, 32, true)...)...),
+			[3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)},
+			[3]*big.Int{},
+			"",
+		},
+	} {
+
+		abiDefinition := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
+		abi, err := JSON(strings.NewReader(abiDefinition))
+		if err != nil {
+			t.Errorf("%d failed. %v", i, err)
+			continue
+		}
+
+		err = abi.Unpack(&test.outVar, "method", test.marshalledOutput)
+
+		if err != nil && len(test.err) == 0 {
+			t.Errorf("%d failed. Expected no err but got: %v", i, err)
+			continue
+		}
+		if err == nil && len(test.err) != 0 {
+			t.Errorf("%d failed. Expected err: %v but got none", i, test.err)
+			continue
+		}
+		if err != nil && len(test.err) != 0 && err.Error() != test.err {
+			t.Errorf("%d failed. Expected err: '%v' got err: '%v'", i, test.err, err)
+			continue
+		}
+
+		if err == nil {
+			if !reflect.DeepEqual(test.expectedOut, test.outVar) {
+				t.Errorf("%d failed. Output error: expected %v, got %v", i, test.expectedOut, test.outVar)
+			}
+		}
+
+	}
+}
+
 func TestUnpackSetInterfaceSlice(t *testing.T) {
 	var (
 		var1 = new(uint8)

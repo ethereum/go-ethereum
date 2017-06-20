@@ -34,45 +34,11 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 	if index+32 > len(output) {
 		return nil, fmt.Errorf("abi: cannot marshal in to go slice: insufficient size output %d require %d", len(output), index+32)
 	}
+
 	elem := t.Type.Elem
 
-	// first we need to create a slice of the type
+	// this value will become our slice or our array, depending on the type
 	var refSlice reflect.Value
-	switch elem.T {
-	case IntTy, UintTy, BoolTy:
-		// create a new reference slice matching the element type
-		switch t.Type.Kind {
-		case reflect.Bool:
-			refSlice = reflect.ValueOf([]bool(nil))
-		case reflect.Uint8:
-			refSlice = reflect.ValueOf([]uint8(nil))
-		case reflect.Uint16:
-			refSlice = reflect.ValueOf([]uint16(nil))
-		case reflect.Uint32:
-			refSlice = reflect.ValueOf([]uint32(nil))
-		case reflect.Uint64:
-			refSlice = reflect.ValueOf([]uint64(nil))
-		case reflect.Int8:
-			refSlice = reflect.ValueOf([]int8(nil))
-		case reflect.Int16:
-			refSlice = reflect.ValueOf([]int16(nil))
-		case reflect.Int32:
-			refSlice = reflect.ValueOf([]int32(nil))
-		case reflect.Int64:
-			refSlice = reflect.ValueOf([]int64(nil))
-		default:
-			refSlice = reflect.ValueOf([]*big.Int(nil))
-		}
-	case AddressTy: // address must be of slice Address
-		refSlice = reflect.ValueOf([]common.Address(nil))
-	case HashTy: // hash must be of slice hash
-		refSlice = reflect.ValueOf([]common.Hash(nil))
-	case FixedBytesTy:
-		refSlice = reflect.ValueOf([][]byte(nil))
-	default: // no other types are supported
-		return nil, fmt.Errorf("abi: unsupported slice type %v", elem.T)
-	}
-
 	var slice []byte
 	var size int
 	var offset int
@@ -95,10 +61,13 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 
 		// reslice to match the required size
 		slice = slice[:size*32]
-	} else if t.Type.IsArray {
+		// declare our slice
+		refSlice = reflect.MakeSlice(reflect.SliceOf(elem.Type), size, size)
+	} else if t.Type.T == ArrayTy {
 		//get the number of elements in the array
-		size = t.Type.SliceSize
-
+		size = t.Type.Size
+		// declare our slice
+		refSlice = reflect.New(reflect.ArrayOf(size, elem.Type)).Elem()
 		//check to make sure array size matches up
 		if index+32*size > len(output) {
 			return nil, fmt.Errorf("abi: cannot marshal in to go array: offset %d would go over slice boundary (len=%d)", len(output), index+32*size)
@@ -128,9 +97,11 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 			inter = common.BytesToHash(returnOutput)
 		case FixedBytesTy:
 			inter = returnOutput
+		default:
+			return nil, fmt.Errorf("abi: unsupported slice type passed in")
 		}
 		// append the item to our reflect slice
-		refSlice = reflect.Append(refSlice, reflect.ValueOf(inter))
+		refSlice.Index(i).Set(reflect.ValueOf(inter))
 	}
 
 	// return the interface

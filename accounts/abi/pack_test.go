@@ -322,12 +322,12 @@ func TestPack(t *testing.T) {
 	} {
 		typ, err := NewType(test.typ)
 		if err != nil {
-			t.Fatal("unexpected parse error:", err)
+			t.Fatalf("%v failed. Unexpected parse error: %v", i, err)
 		}
 
 		output, err := typ.pack(reflect.ValueOf(test.input))
 		if err != nil {
-			t.Fatal("unexpected pack error:", err)
+			t.Fatalf("%v failed. Unexpected pack error: %v", i, err)
 		}
 
 		if !bytes.Equal(output, test.output) {
