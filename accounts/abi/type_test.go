@@ -17,8 +17,11 @@
 package abi
 
 import (
+	"math/big"
 	"reflect"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // typeWithoutStringer is a alias for the Type type which simply doesn't implement
@@ -91,6 +94,62 @@ func TestTypeRegexp(t *testing.T) {
 		}
 		if !reflect.DeepEqual(typ, tt.kind) {
 			t.Errorf("type %d: parsed type mismatch:\n  have %+v\n  want %+v", i, typeWithoutStringer(typ), typeWithoutStringer(tt.kind))
+		}
+	}
+}
+
+func TestTypeCheck(t *testing.T) {
+	for i, test := range []struct {
+		typ   string
+		input interface{}
+		err   string
+	}{
+		{"uint", big.NewInt(1), ""},
+		{"int", big.NewInt(1), ""},
+		{"uint30", big.NewInt(1), ""},
+		{"uint30", uint8(1), "abi: cannot use uint8 as type ptr as argument"},
+		{"uint16", uint16(1), ""},
+		{"uint16", uint8(1), "abi: cannot use uint8 as type uint16 as argument"},
+		{"uint16[]", []uint16{1, 2, 3}, ""},
+		{"uint16[]", [3]uint16{1, 2, 3}, ""},
+		{"uint16[]", []uint32{1, 2, 3}, "abi: cannot use []uint32 as type []uint16 as argument"},
+		{"uint16[3]", [3]uint32{1, 2, 3}, "abi: cannot use [3]uint32 as type [3]uint16 as argument"},
+		{"uint16[3]", [4]uint16{1, 2, 3}, "abi: cannot use [4]uint16 as type [3]uint16 as argument"},
+		{"uint16[3]", []uint16{1, 2, 3}, ""},
+		{"uint16[3]", []uint16{1, 2, 3, 4}, "abi: cannot use [4]uint16 as type [3]uint16 as argument"},
+		{"address[]", []common.Address{{1}}, ""},
+		{"address[1]", []common.Address{{1}}, ""},
+		{"address[1]", [1]common.Address{{1}}, ""},
+		{"address[2]", [1]common.Address{{1}}, "abi: cannot use [1]array as type [2]array as argument"},
+		{"bytes32", [32]byte{}, ""},
+		{"bytes32", [33]byte{}, "abi: cannot use [33]uint8 as type [32]uint8 as argument"},
+		{"bytes32", common.Hash{1}, ""},
+		{"bytes31", [31]byte{}, ""},
+		{"bytes31", [32]byte{}, "abi: cannot use [32]uint8 as type [31]uint8 as argument"},
+		{"bytes", []byte{0, 1}, ""},
+		{"bytes", [2]byte{0, 1}, ""},
+		{"bytes", common.Hash{1}, ""},
+		{"string", "hello world", ""},
+		{"bytes32[]", [][32]byte{{}}, ""},
+		{"function", [24]byte{}, ""},
+	} {
+		typ, err := NewType(test.typ)
+		if err != nil {
+			t.Fatal("unexpected parse error:", err)
+		}
+
+		err = typeCheck(typ, reflect.ValueOf(test.input))
+		if err != nil && len(test.err) == 0 {
+			t.Errorf("%d failed. Expected no err but got: %v", i, err)
+			continue
+		}
+		if err == nil && len(test.err) != 0 {
+			t.Errorf("%d failed. Expected err: %v but got none", i, test.err)
+			continue
+		}
+
+		if err != nil && len(test.err) != 0 && err.Error() != test.err {
+			t.Errorf("%d failed. Expected err: '%v' got err: '%v'", i, test.err, err)
 		}
 	}
 }
