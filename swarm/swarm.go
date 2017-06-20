@@ -1,5 +1,3 @@
-// +build !psschat
-
 // Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -35,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
@@ -47,13 +46,12 @@ import (
 
 // the swarm stack
 type Swarm struct {
-	config  *api.Config        // swarm configuration
-	api     *api.Api           // high level api layer (fs/manifest)
-	dns     api.Resolver       // DNS registrar
-	storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
-	dpa     *storage.DPA       // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	cloud   storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
-	//hive        *network.Hive      // the logistic manager
+	config      *api.Config        // swarm configuration
+	api         *api.Api           // high level api layer (fs/manifest)
+	dns         api.Resolver       // DNS registrar
+	storage     storage.ChunkStore // internal access to storage, common interface to cloud storage backends
+	dpa         *storage.DPA       // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
 	bzz         *network.Bzz       // hive and bzz protocol
 	backend     chequebook.Backend // simple blockchain Backend
 	privateKey  *ecdsa.PrivateKey
@@ -122,14 +120,6 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	}
 	self.bzz = network.NewBzz(bzzconfig, to, nil)
 
-	// set up the kademlia hive
-	//	self.hive = network.NewHive(
-	//		config.HiveParams, // configuration parameters
-	//		self.Kademlia,
-	//		stateStore,
-	//	)
-	//	log.Debug(fmt.Sprintf("Set up swarm network with Kademlia hive"))
-	//
 	// setup cloud storage internal access layer
 	self.storage = storage.NewNetStore(hash, self.lstore, nil, config.StoreParams)
 	log.Debug("-> swarm net store shared access layer to Swarm Chunk Store")
@@ -213,7 +203,6 @@ func (self *Swarm) Start(net *p2p.Server) error {
 
 	log.Warn(fmt.Sprintf("Starting Swarm service"))
 
-	//	self.hive.Start(net)
 	err := self.bzz.Start(net)
 	if err != nil {
 		log.Error("bzz failed", "err", err)
@@ -251,7 +240,6 @@ func (self *Swarm) Start(net *p2p.Server) error {
 // stops all component services.
 func (self *Swarm) Stop() error {
 	self.dpa.Stop()
-	//self.hive.Stop()
 	self.bzz.Stop()
 	//if self.pss != nil {
 	//	self.pss.Stop()
@@ -281,18 +269,6 @@ func (self *Swarm) Protocols() (protos []p2p.Protocol) {
 			protos = append(protos, p)
 		}
 	}
-	// ct := network.BzzCodeMap()
-	// ct.Register(2, network.DiscoveryMsgs...)
-
-	//	proto := network.Bzz(
-	//		self.hive.Overlay.GetAddr().Over(),
-	//		self.hive.Overlay.GetAddr().Under(),
-	//		ct,
-	//		nil,
-	//		nil,
-	//		nil,
-	//	)
-	//
 	return
 }
 
@@ -380,7 +356,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 		return
 	}
 
-	config, err := api.NewConfig(datadir, common.Address{}, prvKey, network.NetworkID)
+	config, err := api.NewConfig(datadir, common.Address{}, prvKey, network.NetworkId)
 	if err != nil {
 		return
 	}

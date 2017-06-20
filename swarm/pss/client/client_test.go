@@ -51,7 +51,7 @@ func TestIncoming(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 
-	client.ws.Call(&addr, "psstest_baseAddr")
+	client.rpc.Call(&addr, "psstest_baseAddr")
 
 	code, _ := pss.PingProtocol.GetCode(&pss.PingMsg{})
 	rlpbundle, err := pss.NewProtocolMsg(code, &pss.PingMsg{
@@ -94,7 +94,7 @@ func TestOutgoing(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 
-	client.ws.Call(&addr, "psstest_baseAddr")
+	client.rpc.Call(&addr, "psstest_baseAddr")
 	copy(potaddr[:], addr)
 
 	msg := &pss.PingMsg{
@@ -118,12 +118,7 @@ func TestOutgoing(t *testing.T) {
 func baseTester(t *testing.T, proto *p2p.Protocol, ps *pss.Pss, ctx context.Context, cancel func(), quitC chan struct{}) (*Client, error) {
 	var err error
 
-	client := newClient(t, ctx, cancel, quitC)
-
-	err = client.Start()
-	if err != nil {
-		return nil, err
-	}
+	client := newTestclient(t, ctx, cancel, quitC)
 
 	err = client.RunProtocol(proto)
 
@@ -148,14 +143,7 @@ func newProtocol(ping *pss.Ping) *p2p.Protocol {
 	}
 }
 
-func newClient(t *testing.T, ctx context.Context, cancel func(), quitC chan struct{}) *Client {
-
-	conf := NewClientConfig()
-
-	pssclient, err := NewClient(ctx, cancel, conf)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
+func newTestclient(t *testing.T, ctx context.Context, cancel func(), quitC chan struct{}) *Client {
 
 	ps := pss.NewTestPss(nil)
 	srv := rpc.NewServer()
@@ -177,5 +165,11 @@ func newClient(t *testing.T, ctx context.Context, cancel func(), quitC chan stru
 		<-quitC
 		sock.Close()
 	}()
+
+	pssclient, err := NewClient(ctx, cancel, "ws://localhost:8546")
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
 	return pssclient
 }

@@ -292,25 +292,6 @@ func (self *bzzHandshake) Perform(p *p2p.Peer, rw p2p.MsgReadWriter) (err error)
 		return fmt.Errorf("version mismatch %d (!= %d)", rhs.Version, self.Version)
 	}
 	self.peerAddr = rhs.Addr
-	//log.Debug("L&R handshake", "local", fmt.Sprintf("%x", self.Addr.Over()), "remote", fmt.Sprintf("%x", rhs.Addr.Over()))
-	//	log.Debug("RHS handshake", "addr", rhs.Addr, "peeraddr", rhs.peerAddr)
-	//	log.Debug("LHS handshake", "addr", self.Addr, "peeraddr", self.peerAddr)
-	//
-	//	log.Warn(
-	//		strings.Join(
-	//			[]string{
-	//					"handshake ok:",
-	//					fmt.Sprintf("p2p.Peer.ID(): 		......	%v",	p.ID()),
-	//					fmt.Sprintf("peerAddr.UAddr:		......	%x",	self.peerAddr.UAddr[:32]),
-	//					fmt.Sprintf("peerAddr.OAddr:		......	%x",	self.peerAddr.OAddr[:32]),
-	//					fmt.Sprintf("selfAddr.UAddr:		......	%x",	self.Addr.UAddr[:32]),
-	//					fmt.Sprintf("selfAddr.OAddr:		......	%x",	self.Addr.OAddr[:32]),
-	//					fmt.Sprintf("ToOverlayAddr(p2p.Peer.ID):  ....	%x",	ToOverlayAddr(peerid[:])),
-	//					fmt.Sprintf("ToOverlayAddr(peerAddr.UAddr): ..	%x",	ToOverlayAddr(self.peerAddr.UAddr)),
-	//			}, "\n",
-	//		),
-	//	)
-
 	return nil
 }
 

@@ -3,8 +3,8 @@ package discovery_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -30,8 +30,8 @@ var services = adapters.Services{
 
 var (
 	snapshotFile = flag.String("snapshot", "", "create snapshot")
-	nodeCount = flag.Int("nodes", 10, "number of nodes to create (default 10)")
-	verbose = flag.Bool("verbose", false, "output extra logs")
+	nodeCount    = flag.Int("nodes", 10, "number of nodes to create (default 10)")
+	verbose      = flag.Bool("verbose", false, "output extra logs")
 )
 
 func init() {
@@ -156,7 +156,7 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 			t.Fatalf("corrupt json snapshot: %v", err)
 		}
 		log.Info("writing snapshot", "file", *snapshotFile)
-		err = ioutil.WriteFile(*snapshotFile, jsonsnapshot, os.ModePerm)
+		err = ioutil.WriteFile(*snapshotFile, jsonsnapshot, 0755)
 		if err != nil {
 			t.Fatal(err)
 		}

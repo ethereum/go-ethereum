@@ -118,17 +118,8 @@ var (
 		Usage: "force mime type",
 	}
 	PssEnabledFlag = cli.BoolFlag{
-		Name: "pss",
+		Name:  "pss",
 		Usage: "Enable pss (message passing over swarm)",
-	}
-	PssHostFlag = cli.StringFlag{
-		Name: "psshost",
-		Usage: fmt.Sprintf("Websockets host or ip for pss (default '%v')", node.DefaultWSHost),
-		Value: node.DefaultWSHost,
-	}
-	PssPortFlag = cli.IntFlag{
-		Name: "pssport",
-		Usage: fmt.Sprintf("Websockets port for pss (default %d)", node.DefaultWSPort),
 	}
 	CorsStringFlag = cli.StringFlag{
 		Name:  "corsdomain",
@@ -312,14 +303,6 @@ func version(ctx *cli.Context) error {
 
 func bzzd(ctx *cli.Context) error {
 	cfg := defaultNodeConfig
-	if ctx.GlobalIsSet(PssEnabledFlag.Name) {
-		cfg.WSHost = ctx.GlobalString(PssHostFlag.Name)
-		cfg.WSModules = []string{"eth","pss"}
-		cfg.WSOrigins = []string{"*"}
-		if ctx.GlobalIsSet(PssPortFlag.Name) {
-			cfg.WSPort = ctx.GlobalInt(PssPortFlag.Name)
-		}
-	}
 	utils.SetNodeConfig(ctx, &cfg)
 	stack, err := node.New(&cfg)
 	if err != nil {
