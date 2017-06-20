@@ -231,11 +231,11 @@ func (c *bn256Add) Run(in []byte) ([]byte, error) {
 		return nil, errInvalidCurvePoint
 	}
 
-	y, onCurve := new(bn256.G1).Unmarshal(in[:64])
+	y, onCurve := new(bn256.G1).Unmarshal(in[64:128])
 	if !onCurve {
 		return nil, errNotOnCurve
 	}
-	gx, gy, _, _ = x.CurvePoints()
+	gx, gy, _, _ = y.CurvePoints()
 	if gx.Cmp(bn256.P) >= 0 || gy.Cmp(bn256.P) >= 0 {
 		return nil, errInvalidCurvePoint
 	}
@@ -278,7 +278,8 @@ type pairing struct{}
 // This method does not require any overflow checking as the input size gas costs
 // required for anything significant is so high it's impossible to pay for.
 func (c *pairing) RequiredGas(input []byte) uint64 {
-	return 0 // TODO
+	//return 0 // TODO
+	return uint64(60000*len(input) + 40000)
 }
 
 const pairSize = 192
