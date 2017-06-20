@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"flag"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -27,13 +28,23 @@ var services = adapters.Services{
 	serviceName: newService,
 }
 
+var (
+	snapshotFile = flag.String("snapshot", "", "create snapshot")
+	nodeCount = flag.Int("nodes", 10, "number of nodes to create (default 10)")
+	verbose = flag.Bool("verbose", false, "output extra logs")
+)
+
 func init() {
+	flag.Parse()
 	// register the discovery service which will run as a devp2p
 	// protocol when using the exec adapter
 	adapters.RegisterServices(services)
 
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	if *verbose {
+		log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	} else {
+		log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	}
 }
 
 func TestDiscoverySimulationDockerAdapter(t *testing.T) {
@@ -59,15 +70,14 @@ func TestDiscoverySimulationSimAdapter(t *testing.T) {
 
 func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 	// create network
-	nodeCount := 10
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",
 		DefaultService: serviceName,
 	})
 	defer net.Shutdown()
 	trigger := make(chan discover.NodeID)
-	ids := make([]discover.NodeID, nodeCount)
-	for i := 0; i < nodeCount; i++ {
+	ids := make([]discover.NodeID, *nodeCount)
+	for i := 0; i < *nodeCount; i++ {
 		node, err := net.NewNode()
 		if err != nil {
 			t.Fatalf("error starting node: %s", err)
@@ -136,13 +146,22 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 		t.Fatalf("simulation failed: %s", result.Error)
 	}
 
-	snap, err := net.Snapshot()
-	if err != nil {
-		t.Fatalf("no shapshot dude")
+	if *snapshotFile != "" {
+		snap, err := net.Snapshot()
+		if err != nil {
+			t.Fatalf("no shapshot dude")
+		}
+		jsonsnapshot, err := json.Marshal(snap)
+		if err != nil {
+			t.Fatalf("corrupt json snapshot: %v", err)
+		}
+		log.Info("writing snapshot", "file", *snapshotFile)
+		err = ioutil.WriteFile(*snapshotFile, jsonsnapshot, os.ModePerm)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
-	jsonsnapshot, err := json.Marshal(snap)
-	ioutil.WriteFile("jsonsnapshot.txt", jsonsnapshot, os.ModePerm)
-	
+
 	t.Log("Simulation Passed:")
 	t.Logf("Duration: %s", result.FinishedAt.Sub(result.StartedAt))
 	for _, id := range ids {

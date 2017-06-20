@@ -18,12 +18,12 @@
 //  	"github.com/ethereum/go-ethereum/pot"
 //  	"github.com/ethereum/go-ethereum/log"
 //  )
-//  
+//
 //  type FooMsg struct {
 //  	Bar int
 //  }
-//  
-//  
+//
+//
 //  func fooHandler (msg interface{}) error {
 //  	foomsg, ok := msg.(*FooMsg)
 //  	if ok {
@@ -31,7 +31,7 @@
 //  	}
 //  	return fmt.Errorf("Unknown message")
 //  }
-//  
+//
 //  spec := &protocols.Spec{
 //  	Name: "foo",
 //  	Version: 1,
@@ -40,7 +40,7 @@
 //  		FooMsg{},
 //  	},
 //  }
-//  
+//
 //  proto := &p2p.Protocol{
 //  	Name: spec.Name,
 //  	Version: spec.Version,
@@ -51,7 +51,7 @@
 //  	},
 //  }
 //
-//  func implementation() {      
+//  func implementation() {
 //      cfg := pss.NewClientConfig()
 //      psc := pss.NewClient(context.Background(), nil, cfg)
 //      err := psc.Start()
@@ -61,21 +61,21 @@
 //      }
 //
 //	log.Debug("connected to pss node", "bzz addr", psc.BaseAddr)
-//      
-//      err = psc.RunProtocol(proto) 
+//
+//      err = psc.RunProtocol(proto)
 //      if err != nil {
 //      	log.Crit("can't start protocol on pss websocket")
 //      	os.Exit(1)
 //      }
-//      
+//
 //      addr := pot.RandomAddress() // should be a real address, of course
 //      psc.AddPssPeer(addr, spec)
-//      
+//
 //      // use the protocol for something
-//      
+//
 //      psc.Stop()
-//  } 
-//  
+//  }
+//
 // BUG(test): TestIncoming test times out due to deadlock issues in the swarm hive
 package client
 
@@ -86,11 +86,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/pot"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/pss"
@@ -125,7 +125,7 @@ func NewClientConfig() *ClientConfig {
 
 // After a successful connection with Client.Start, BaseAddr contains the swarm overlay address of the pss node
 type Client struct {
-	BaseAddr	[]byte
+	BaseAddr     []byte
 	localuri     string
 	remoteuri    string
 	ctx          context.Context
@@ -234,7 +234,7 @@ func NewClientWithRPC(ctx context.Context, rpcclient *rpc.Client) (*Client, erro
 		protos:   make(map[pss.Topic]*p2p.Protocol),
 		ws:       rpcclient,
 		ctx:      ctx,
-		BaseAddr:	oaddr,
+		BaseAddr: oaddr,
 	}, nil
 }
 
@@ -267,7 +267,7 @@ func (self *Client) Start() error {
 }
 
 // Mounts a new devp2p protcool on the pss connection
-// the protocol is aliased as a "pss topic" 
+// the protocol is aliased as a "pss topic"
 // uses normal devp2p Send and incoming message handler routines from the p2p/protocols package
 //
 // when an incoming message is received from a peer that is not yet known to the client, this peer object is instantiated, and the protocol is run on it.

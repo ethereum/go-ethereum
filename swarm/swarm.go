@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/chequebook"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -41,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	//psschat "github.com/ethereum/go-ethereum/swarm/pss/protocols/chat"
 )
 
 // the swarm stack
@@ -110,9 +112,12 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	)
 
 	config.HiveParams.Discovery = true
+
+	nodeid := discover.PubkeyID(crypto.ToECDSAPub(common.FromHex(config.PublicKey)))
+	addr := network.NewAddrFromNodeID(nodeid)
 	bzzconfig := &network.BzzConfig{
-		UnderlayAddr: common.FromHex(config.PublicKey),
 		OverlayAddr:  common.FromHex(config.BzzKey),
+		UnderlayAddr: addr.UAddr,
 		HiveParams:   config.HiveParams,
 	}
 	self.bzz = network.NewBzz(bzzconfig, to, nil)
@@ -189,6 +194,11 @@ Start is called when the stack is started
 */
 // implements the node.Service interface
 func (self *Swarm) Start(net *p2p.Server) error {
+
+	// update uaddr to correct enode
+	newaddr := self.bzz.UpdateLocalAddr([]byte(net.Self().String()))
+	log.Warn("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%x", newaddr.UAddr))
+
 	// set chequebook
 	if self.swapEnabled {
 		ctx := context.Background() // The initial setup has no deadline.
@@ -213,6 +223,7 @@ func (self *Swarm) Start(net *p2p.Server) error {
 
 	if self.pss != nil {
 		self.pss.Start(net)
+		log.Info("Pss started")
 	}
 
 	self.dpa.Start()
@@ -242,9 +253,9 @@ func (self *Swarm) Stop() error {
 	self.dpa.Stop()
 	//self.hive.Stop()
 	self.bzz.Stop()
-	if self.pss != nil {
-		self.pss.Stop()
-	}
+	//if self.pss != nil {
+	//	self.pss.Stop()
+	//}
 	if ch := self.config.Swap.Chequebook(); ch != nil {
 		ch.Stop()
 		ch.Save()
@@ -265,6 +276,7 @@ func (self *Swarm) Protocols() (protos []p2p.Protocol) {
 	}
 
 	if self.pss != nil {
+		log.Warn("adding pss protos")
 		for _, p := range self.pss.Protocols() {
 			protos = append(protos, p)
 		}

@@ -49,7 +49,6 @@ func (self *PssMsg) String() string {
 	return fmt.Sprintf("PssMsg: Recipient: %x", common.ByteLabel(self.To))
 }
 
-
 // Pre-Whisper placeholder, payload of PssMsg, sender address, Topic
 type Envelope struct {
 	Topic   Topic
@@ -98,6 +97,11 @@ func NewProtocolMsg(code uint64, msg interface{}) ([]byte, error) {
 type APIMsg struct {
 	Msg  []byte
 	Addr []byte
+}
+
+// for debugging, show nice hex version
+func (self *APIMsg) String() string {
+	return fmt.Sprintf("APIMsg: from: %s..., msg: %s...", common.ByteLabel(self.Msg), common.ByteLabel(self.Addr))
 }
 
 // Signature for a message handler function for a PssMsg

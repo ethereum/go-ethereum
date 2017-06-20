@@ -24,7 +24,7 @@ func NewAPI(ps *Pss) *API {
 //
 // A new handler is registered in pss for the supplied topic
 //
-// All incoming messages to the node matching this topic will be encapsulated in the APIMsg struct and sent to the subscriber 
+// All incoming messages to the node matching this topic will be encapsulated in the APIMsg struct and sent to the subscriber
 func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -111,4 +111,3 @@ func (pssapitest *APITest) GetForwarder(addr []byte) (fwd struct {
 	})
 	return
 }
-

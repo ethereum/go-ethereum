@@ -229,24 +229,6 @@ func (self *Swarm) Start(net *p2p.Server) error {
 			return nil
 		})
 		log.Info("Pss started ... with 'pssChat' :)")
-//		pss.RegisterPssProtocol(self.pss, &psschat.ChatTopic, psschat.ChatProtocol, psschat.New(nil, nil, nil, func(ctrl *psschat.ChatCtrl) {
-//			if ctrl.OutC != nil {
-//				go func() {
-//					for {
-//						select {
-//						case msg := <-ctrl.OutC:
-//							err := ctrl.Peer.Send(msg)
-//							if err != nil {
-//								// do something with ctrl.ConnC here
-//								//pp.Drop(err)
-//								//return
-//							}
-//						}
-//					}
-//				}()
-//			}
-//
-//		}))
 	}
 
 	self.dpa.Start()

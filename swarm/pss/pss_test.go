@@ -34,18 +34,33 @@ const (
 
 var (
 	snapshotfile string
+	debugflag = flag.Bool("v", false, "verbose")
+
+	// custom logging
+	psslogmain log.Logger
+
 )
 
 var services = newServices()
 
 func init() {
+
+	flag.Parse()
+	rand.Seed(time.Now().Unix())
+
 	adapters.RegisterServices(services)
+
+	loglevel := log.LvlDebug
+	if *debugflag {
+		loglevel = log.LvlTrace
+	}
+
+	psslogmain = log.New("psslog", "*")
 	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-	hf := log.LvlFilterHandler(log.LvlTrace, hs)
+	hf := log.LvlFilterHandler(loglevel, hs)
 	h := log.CallerFileHandler(hf)
 	log.Root().SetHandler(h)
 
-	flag.StringVar(&snapshotfile, "file", "snapsnot.json", "snapshot file")
 }
 
 func TestCache(t *testing.T) {
@@ -243,72 +258,49 @@ func TestSimpleLinear(t *testing.T) {
 	}
 }
 
-func TestFullRandom50n(t *testing.T) {
-	adapter := adapters.NewSimAdapter(services)
-	testFullRandom(t, adapter, 50, 50)
+func TestSnapshot_50_5(t *testing.T) {
+	testSnapshot(t, "testdata/snapshot_50.json", 5, true)
 }
 
-func TestFullRandom25n(t *testing.T) {
-	adapter := adapters.NewSimAdapter(services)
-	testFullRandom(t, adapter, 25, 25)
+func TestSnapshot_5_50(t *testing.T) {
+	testSnapshot(t, "testdata/snapshot_5.json", 50, true)
 }
 
-func TestFullRandom10n(t *testing.T) {
-	adapter := adapters.NewSimAdapter(services)
-	testFullRandom(t, adapter, 10, 10)
+func TestSnapshot_5_5(t *testing.T) {
+	testSnapshot(t, "testdata/snapshot_5.json", 5, true)
 }
 
-func TestFullRandom5n(t *testing.T) {
-	baseDir, err := ioutil.TempDir("", "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(baseDir)
-	adapter := adapters.NewExecAdapter(baseDir)
-	testFullRandom(t, adapter, 5, 5)
-}
-
-func testFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int, msgcount int) {
-}
-
-func TestFullRandomSnapshot50(t *testing.T) {
-	testFullRandomSnapshot(t, true, 5)
-}
-
-func testFullRandomSnapshot(t *testing.T, sim bool, msgcount int) {
-
-	var msgtoids []discover.NodeID
-	var msgreceived []discover.NodeID
-	var cancelmain func()
-	//var triggerptr *chan discover.NodeID
+func testSnapshot(t *testing.T, snapshotfile string, msgcount int, sim bool) {
 
 
-	baseDir, err := ioutil.TempDir("", "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(baseDir)
-
+	// choose the adapter to use
 	var adapter adapters.NodeAdapter
 	if sim {
 		adapter = adapters.NewSimAdapter(services)
 	} else {
+		baseDir, err := ioutil.TempDir("", "swarm-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(baseDir)
 		adapter = adapters.NewExecAdapter(baseDir)
 	}
 
-	wg := sync.WaitGroup{}
-	wg.Add(msgcount)
-
-	psslog := make(map[discover.NodeID]log.Logger)
-	psslogmain := log.New("psslog", "*")
-
+	// process shapshot
 	jsonsnapshot, err := ioutil.ReadFile(snapshotfile)
 	if err != nil {
 		t.Fatalf("cant read snapshot: %s", snapshotfile)
 	}
 	snapshot := &simulations.Snapshot{}
 	err = json.Unmarshal(jsonsnapshot, snapshot)
+	if err != nil {
+		t.Fatalf("snapshot file unreadable: %v", err)
+	}
+	for _, node := range snapshot.Nodes {
+		node.Config.Services = []string{"bzz", "pss"}
+	}
 
+	// setup network with snapshot
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID: "0",
 	})
@@ -319,121 +311,30 @@ func testFullRandomSnapshot(t *testing.T, sim bool, msgcount int) {
 		t.Fatalf("invalid snapshot: %v", err)
 	}
 
-	//msgtoids := make([]discover.NodeID, msgcount)
-
 	timeout := 15 * time.Second
 	ctx, cancelmain := context.WithTimeout(context.Background(), timeout)
 	defer cancelmain()
 
-	trigger := make(chan discover.NodeID)
-	//triggerptr = &trigger
+	// nodes expecting messages
+	recvids := make([]discover.NodeID, msgcount)
 
+	// the overlay address map to recvids
 	recvaddrs := make(map[discover.NodeID][]byte)
 
-//	for i = 0; i < nodecount; i++ {
-//		nodeconfig := adapters.RandomNodeConfig()
-//		nodeconfig.Services = []string{"bzz", "pss"}
-//		node, err := net.NewNodeWithConfig(nodeconfig)
-//		if err != nil {
-//			t.Fatalf("error starting node: %s", err)
-//		}
-//
-//		if err := net.Start(node.ID()); err != nil {
-//			t.Fatalf("error starting node %s: %s", node.ID().TerminalString(), err)
-//		}
-//
-//		if err := triggerChecks(ctx, &wg, triggerptr, net, node.ID()); err != nil {
-//			t.Fatal("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
-//		}
-//		ids[i] = node.ID()
-//		if i < fullnodecount {
-//			fullpeers[ids[i]] = network.ToOverlayAddr(node.ID().Bytes())
-//			psslog[ids[i]] = log.New("psslog", fmt.Sprintf("%x", fullpeers[ids[i]]))
-//		}
-//		log.Debug("psslog starting node", "id", nodeconfig.ID)
-//	}
-//
-//	for i, id := range fullids {
-//		msgfromids = append(msgfromids, id)
-//		msgtoids[i] = fullids[(i+(len(fullids)/2)+1)%len(fullids)]
-//	}
+	// messages actually received (registered through trigger and test check)
+	var msgreceived []discover.NodeID
 
-	// run a simulation which connects the 10 nodes in a ring and waits
-	// for full peer discovery
-//	action := func(ctx context.Context) error {
-//		for i, id := range ids {
-//			peerID := ids[(i+1)%len(ids)]
-//			if net.GetConn(id, peerID) != nil {
-//				continue
-//			}
-//			if err := net.Connect(id, peerID); err != nil {
-//				return err
-//			}
-//			psslog[id].Debug("conn ok", "one", id, "other", peerID)
-//		}
-//		return nil
-//	}
-//	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
-//		select {
-//		case <-ctx.Done():
-//			wg.Done()
-//			psslog[id].Error("conn failed!", "id", id)
-//			return false, ctx.Err()
-//		default:
-//		}
-//		var tgt []byte
-//		var fwd struct {
-//			Addr  []byte
-//			Count int
-//		}
-//
-//		for i, fid := range msgfromids {
-//			if id == fid {
-//				tgt = network.ToOverlayAddr(msgtoids[(i+(len(msgtoids)/2)+1)%len(msgtoids)].Bytes())
-//				break
-//			}
-//		}
-//		p := net.GetNode(id)
-//		if p == nil {
-//			return false, fmt.Errorf("Unknown node: %v", id)
-//		}
-//		c, err := p.Client()
-//		if err != nil {
-//			return false, err
-//		}
-//		for fwd.Count < 2 {
-//			c.CallContext(context.Background(), &fwd, "pss_getForwarder", tgt)
-//			time.Sleep(time.Microsecond * 250)
-//		}
-//		psslog[id].Debug("fwd check ok", "topaddr", fmt.Sprintf("%x", common.ByteLabel(fwd.Addr)), "kadcount", fwd.Count)
-//		return true, nil
-//	}
-//
-//	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
-//		Action:  action,
-//		Trigger: trigger,
-//		Expect: &simulations.Expectation{
-//			Nodes: ids,
-//			Check: check,
-//		},
-//	})
-//	if result.Error != nil {
-//		t.Fatalf("simulation failed: %s", result.Error)
-//		cancelmain()
-//	}
-//
-//	trigger = make(chan discover.NodeID)
-//	triggerptr = &trigger
+	// trigger for expect in test
+	trigger := make(chan discover.NodeID)
 
-	var ids []discover.NodeID
+	// one wait for every message
+	wg := sync.WaitGroup{}
+	wg.Add(msgcount)
 
 	action := func(ctx context.Context) error {
 		var rpcerr error
 		var rpcbyte []byte
-		//for ii, id := range msgfromids {
 		for _, simnode := range net.Nodes {
-			ids = append(ids, simnode.ID())
-			//node := net.GetNode(id)
 			if simnode == nil {
 				return fmt.Errorf("unknown node: %s", simnode.ID())
 			}
@@ -452,17 +353,22 @@ func testFullRandomSnapshot(t *testing.T, sim bool, msgcount int) {
 			if err != nil {
 				t.Fatalf("cant get overlayaddr: %v", err)
 			}
+
+			err = triggerChecks(ctx, &wg, &trigger, net, simnode.ID())
+			if err != nil {
+				t.Fatalf("trigger setup failed: %v", err)
+			}
 		}
 		for i := 0; i < msgcount; i++ {
 
 			idx := rand.Intn(len(net.Nodes))
 			sendernode := net.Nodes[idx]
 			toidx := rand.Intn(len(net.Nodes)-1)
-			if idx >= toidx {
+			if toidx >= idx {
 				toidx++
 			}
-
 			recvnode := net.Nodes[toidx]
+			recvids[i] = recvnode.ID()
 			msg := PingMsg{Created: time.Now()}
 			code, _ := PingProtocol.GetCode(&PingMsg{})
 			pmsg, _ := NewProtocolMsg(code, msg)
@@ -472,7 +378,6 @@ func testFullRandomSnapshot(t *testing.T, sim bool, msgcount int) {
 				return fmt.Errorf("error getting sendernode client: %s", err)
 			}
 			client.CallContext(ctx, &rpcerr, "pss_send", PingTopic, APIMsg{
-				//Addr: fullpeers[msgtoids[ii]],
 				Addr: recvaddrs[recvnode.ID()],
 				Msg:  pmsg,
 			})
@@ -483,15 +388,14 @@ func testFullRandomSnapshot(t *testing.T, sim bool, msgcount int) {
 		return nil
 	}
 	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
-
 		select {
-		case <-ctx.Done():
-			wg.Done()
-			return false, ctx.Err()
-		default:
+			case <-ctx.Done():
+				wg.Done()
+				return false, ctx.Err()
+			default:
 		}
 		msgreceived = append(msgreceived, id)
-		psslog[id].Info("trigger received", "id", id, "len", len(msgreceived))
+		psslogmain.Info("trigger received", "id", id, "len", len(msgreceived))
 		wg.Done()
 		return true, nil
 	}
@@ -500,8 +404,7 @@ func testFullRandomSnapshot(t *testing.T, sim bool, msgcount int) {
 		Action:  action,
 		Trigger: trigger,
 		Expect: &simulations.Expectation{
-			//Nodes: msgtoids,
-			Nodes: ids,
+			Nodes: recvids,
 			Check: check,
 		},
 	})
@@ -511,13 +414,14 @@ func testFullRandomSnapshot(t *testing.T, sim bool, msgcount int) {
 		t.Fatalf("simulation failed: %s", result.Error)
 	}
 
-	if len(msgreceived) != len(msgtoids) {
-		t.Fatalf("Simulation Failed, got %d of %d msgs", len(msgreceived), len(msgtoids))
+	wg.Wait()
+
+	if len(msgreceived) != msgcount {
+		t.Fatalf("Simulation Failed, got %d of %d msgs", len(msgreceived), msgcount)
 	}
 
-	wg.Wait()
 	psslogmain.Info("done!")
-	t.Logf("Simulation Passed, got %d of %d msgs", len(msgreceived), len(msgtoids))
+	t.Logf("Simulation Passed, got %d of %d msgs", len(msgreceived), msgcount)
 	//t.Logf("Duration: %s", result.FinishedAt.Sub(result.StartedAt))
 }
 
@@ -527,7 +431,6 @@ func testFullRandomSnapshot(t *testing.T, sim bool, msgcount int) {
 func triggerChecks(ctx context.Context, wg *sync.WaitGroup, trigger *chan discover.NodeID, net *simulations.Network, id discover.NodeID) error {
 
 	quitC := make(chan struct{})
-	got := false
 
 	node := net.GetNode(id)
 	if node == nil {
@@ -555,12 +458,8 @@ func triggerChecks(ctx context.Context, wg *sync.WaitGroup, trigger *chan discov
 		defer peersub.Unsubscribe()
 		for {
 			select {
-			case event := <-peerevents:
-				if event.Type == "add" && !got {
-					got = true
-					*trigger <- id
-				}
 			case <-msgevents:
+				psslogmain.Debug("incoming msg", "node", id)
 				*trigger <- id
 			case err := <-peersub.Err():
 				if err != nil {
