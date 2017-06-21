@@ -19,9 +19,6 @@
 package whisperv5
 
 import (
-	"encoding/json"
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -47,19 +44,12 @@ func (topic *TopicType) String() string {
 	return string(common.ToHex(topic[:]))
 }
 
-func (t *TopicType) MarshalJSON() ([]byte, error) {
-	return json.Marshal(hexutil.Bytes(t[:]))
+// MarshalText returns the hex representation of t.
+func (t TopicType) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(t[:]).MarshalText()
 }
 
-// UnmarshalJSON parses a hex representation to a topic.
-func (t *TopicType) UnmarshalJSON(input []byte) error {
-	var data hexutil.Bytes
-	if err := json.Unmarshal(input, &data); err != nil {
-		return err
-	}
-	if len(data) != TopicLength {
-		return fmt.Errorf("unmarshalJSON failed: topic must be exactly %d bytes(%d)", TopicLength, len(input))
-	}
-	*t = BytesToTopic(data)
-	return nil
+// UnmarshalText parses a hex representation to a topic.
+func (t *TopicType) UnmarshalText(input []byte) error {
+	return hexutil.UnmarshalFixedText("Topic", input, t[:])
 }

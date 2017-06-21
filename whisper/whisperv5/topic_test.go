@@ -16,7 +16,10 @@
 
 package whisperv5
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 var topicStringTests = []struct {
 	topic TopicType
@@ -53,15 +56,6 @@ var bytesToTopicTests = []struct {
 	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: nil},
 }
 
-func TestBytesToTopic(t *testing.T) {
-	for i, tst := range bytesToTopicTests {
-		top := BytesToTopic(tst.data)
-		if top != tst.topic {
-			t.Fatalf("failed test %d: have %v, want %v.", i, t, tst.topic)
-		}
-	}
-}
-
 var unmarshalTestsGood = []struct {
 	topic TopicType
 	data  []byte
@@ -94,14 +88,23 @@ var unmarshalTestsUgly = []struct {
 	{topic: TopicType{0x01, 0x00, 0x00, 0x00}, data: []byte(`"0x00000001"`)},
 }
 
+func TestBytesToTopic(t *testing.T) {
+	for i, tst := range bytesToTopicTests {
+		top := BytesToTopic(tst.data)
+		if top != tst.topic {
+			t.Fatalf("failed test %d: have %v, want %v.", i, t, tst.topic)
+		}
+	}
+}
+
 func TestUnmarshalTestsGood(t *testing.T) {
 	for i, tst := range unmarshalTestsGood {
 		var top TopicType
-		err := top.UnmarshalJSON(tst.data)
+		err := json.Unmarshal(tst.data, &top)
 		if err != nil {
-			t.Fatalf("failed test %d. input: %v. err: %v", i, tst.data, err)
+			t.Errorf("failed test %d. input: %v. err: %v", i, tst.data, err)
 		} else if top != tst.topic {
-			t.Fatalf("failed test %d: have %v, want %v.", i, t, tst.topic)
+			t.Errorf("failed test %d: have %v, want %v.", i, t, tst.topic)
 		}
 	}
 }
@@ -110,7 +113,7 @@ func TestUnmarshalTestsBad(t *testing.T) {
 	// in this test UnmarshalJSON() is supposed to fail
 	for i, tst := range unmarshalTestsBad {
 		var top TopicType
-		err := top.UnmarshalJSON(tst.data)
+		err := json.Unmarshal(tst.data, &top)
 		if err == nil {
 			t.Fatalf("failed test %d. input: %v.", i, tst.data)
 		}
@@ -121,11 +124,11 @@ func TestUnmarshalTestsUgly(t *testing.T) {
 	// in this test UnmarshalJSON() is NOT supposed to fail, but result should be wrong
 	for i, tst := range unmarshalTestsUgly {
 		var top TopicType
-		err := top.UnmarshalJSON(tst.data)
+		err := json.Unmarshal(tst.data, &top)
 		if err != nil {
-			t.Fatalf("failed test %d. input: %v.", i, tst.data)
+			t.Errorf("failed test %d. input: %v.", i, tst.data)
 		} else if top == tst.topic {
-			t.Fatalf("failed test %d: have %v, want %v.", i, top, tst.topic)
+			t.Errorf("failed test %d: have %v, want %v.", i, top, tst.topic)
 		}
 	}
 }
