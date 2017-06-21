@@ -109,6 +109,10 @@ type Whisper struct {
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
 func New(cfg *Config) *Whisper {
+	if cfg == nil {
+		cfg = &DefaultConfig
+	}
+	
 	whisper := &Whisper{
 		privateKeys:  make(map[string]*ecdsa.PrivateKey),
 		symKeys:      make(map[string][]byte),
