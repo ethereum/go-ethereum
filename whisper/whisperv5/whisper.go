@@ -26,8 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"sync/atomic"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -35,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"golang.org/x/crypto/pbkdf2"
+	"golang.org/x/sync/syncmap"
 	set "gopkg.in/fatih/set.v0"
 )
 
@@ -46,37 +45,11 @@ type Statistics struct {
 	totalMessagesCleared int
 }
 
-type settingType byte
-type settingsMap map[settingType]interface{}
-
 const (
-	minPowIdx     settingType = iota // Minimal PoW required by the whisper node
-	maxMsgSizeIdx settingType = iota // Maximal message length allowed by the whisper node
-	OverflowIdx   settingType = iota // Indicator of message queue overflow
+	minPowIdx     = iota // Minimal PoW required by the whisper node
+	maxMsgSizeIdx = iota // Maximal message length allowed by the whisper node
+	overflowIdx   = iota // Indicator of message queue overflow
 )
-
-type settingsVault struct {
-	vaultMu sync.Mutex
-	vault   atomic.Value
-}
-
-func (s *settingsVault) get(idx settingType) interface{} {
-	m := s.vault.Load().(settingsMap)
-	return m[idx]
-}
-
-func (s *settingsVault) store(idx settingType, val interface{}) {
-	s.vaultMu.Lock()
-	defer s.vaultMu.Unlock()
-
-	m1 := s.vault.Load().(settingsMap)
-	m2 := make(settingsMap)
-	for k, v := range m1 {
-		m2[k] = v
-	}
-	m2[idx] = val
-	s.vault.Store(m2)
-}
 
 // Whisper represents a dark communication interface through the Ethereum
 // network, using its very own P2P communication layer.
@@ -99,7 +72,7 @@ type Whisper struct {
 	p2pMsgQueue  chan *Envelope // Message queue for peer-to-peer messages (not to be forwarded any further)
 	quit         chan struct{}  // Channel used for graceful exit
 
-	settings settingsVault // holds configuration settings that can be dynamically changed
+	settings syncmap.Map // holds configuration settings that can be dynamically changed
 
 	statsMu sync.Mutex // guard stats
 	stats   Statistics // Statistics of whisper node
@@ -126,10 +99,9 @@ func New(cfg *Config) *Whisper {
 
 	whisper.filters = NewFilters(whisper)
 
-	whisper.settings.vault.Store(make(settingsMap))
-	whisper.settings.store(minPowIdx, cfg.MinimumAcceptedPOW)
-	whisper.settings.store(maxMsgSizeIdx, cfg.MaxMessageSize)
-	whisper.settings.store(OverflowIdx, false)
+	whisper.settings.Store(minPowIdx, cfg.MinimumAcceptedPOW)
+	whisper.settings.Store(maxMsgSizeIdx, cfg.MaxMessageSize)
+	whisper.settings.Store(overflowIdx, false)
 
 	// p2p whisper sub protocol handler
 	whisper.protocol = p2p.Protocol{
@@ -150,17 +122,20 @@ func New(cfg *Config) *Whisper {
 }
 
 func (w *Whisper) MinPow() float64 {
-	return w.settings.get(minPowIdx).(float64)
+	val, _ := w.settings.Load(minPowIdx)
+	return val.(float64)
 }
 
 // MaxMessageSize returns the maximum accepted message size.
 func (w *Whisper) MaxMessageSize() uint32 {
-	return w.settings.get(maxMsgSizeIdx).(uint32)
+	val, _ := w.settings.Load(maxMsgSizeIdx)
+	return val.(uint32)
 }
 
 // Overflow returns an indication if the message queue is full.
 func (w *Whisper) Overflow() bool {
-	return w.settings.get(OverflowIdx).(bool)
+	val, _ := w.settings.Load(overflowIdx)
+	return val.(bool)
 }
 
 // APIs returns the RPC descriptors the Whisper implementation offers
@@ -196,7 +171,7 @@ func (w *Whisper) SetMaxMessageSize(size uint32) error {
 	if size > MaxMessageSize {
 		return fmt.Errorf("message size too large [%d>%d]", size, MaxMessageSize)
 	}
-	w.settings.store(maxMsgSizeIdx, uint32(size))
+	w.settings.Store(maxMsgSizeIdx, uint32(size))
 	return nil
 }
 
@@ -205,7 +180,7 @@ func (w *Whisper) SetMinimumPoW(val float64) error {
 	if val <= 0.0 {
 		return fmt.Errorf("invalid PoW: %f", val)
 	}
-	w.settings.store(minPowIdx, val)
+	w.settings.Store(minPowIdx, val)
 	return nil
 }
 
@@ -679,12 +654,12 @@ func (w *Whisper) checkOverflow() {
 
 	if queueSize == messageQueueLimit {
 		if !w.Overflow() {
-			w.settings.store(OverflowIdx, true)
+			w.settings.Store(overflowIdx, true)
 			log.Warn("message queue overflow")
 		}
 	} else if queueSize <= messageQueueLimit/2 {
 		if w.Overflow() {
-			w.settings.store(OverflowIdx, false)
+			w.settings.Store(overflowIdx, false)
 			log.Warn("message queue overflow fixed (back to normal)")
 		}
 	}
