@@ -10,17 +10,18 @@ main() {
   fi
 
   info "creating the example network"
-  p2psim network create --config '{"id": "example", "default_service": "ping-pong"}'
+  export P2PSIM_NETWORK="example"
+  p2psim network create --id "${P2PSIM_NETWORK}"
 
   info "creating 10 nodes"
   for i in $(seq 1 10); do
-    p2psim node create "example"
-    p2psim node start "example" "$(node_name $i)"
+    p2psim node create --name "$(node_name $i)" --services "ping-pong"
+    p2psim node start "$(node_name $i)"
   done
 
   info "connecting node01 to all other nodes"
   for i in $(seq 2 10); do
-    p2psim node connect "example" "node01" "$(node_name $i)"
+    p2psim node connect "node01" "$(node_name $i)"
   done
 
   info "done"

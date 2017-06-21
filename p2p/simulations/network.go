@@ -201,9 +201,20 @@ func (self *Network) NewNode() (*Node, error) {
 func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
+	if conf.ID == (discover.NodeID{}) {
+		c := adapters.RandomNodeConfig()
+		conf.ID = c.ID
+		conf.PrivateKey = c.PrivateKey
+	}
 	id := conf.ID
+	if node := self.getNode(id); node != nil {
+		return nil, fmt.Errorf("node already exists: %q", id)
+	}
 	if conf.Name == "" {
 		conf.Name = fmt.Sprintf("node%02d", len(self.Nodes)+1)
+	}
+	if node := self.getNodeByName(conf.Name); node != nil {
+		return nil, fmt.Errorf("node already exists: %q", conf.Name)
 	}
 	if len(conf.Services) == 0 {
 		conf.Services = []string{self.DefaultService}
@@ -326,7 +337,16 @@ func (self *Network) startWithSnapshots(id discover.NodeID, snapshots map[string
 }
 
 func (self *Network) watchPeerEvents(id discover.NodeID, events chan *p2p.PeerEvent, sub event.Subscription) {
-	defer sub.Unsubscribe()
+	defer func() {
+		sub.Unsubscribe()
+
+		// assume the node is now down
+		self.lock.Lock()
+		node := self.getNode(id)
+		node.Up = false
+		self.lock.Unlock()
+		self.events.Send(NewEvent(node))
+	}()
 	for {
 		select {
 		case event, ok := <-events:
@@ -336,21 +356,13 @@ func (self *Network) watchPeerEvents(id discover.NodeID, events chan *p2p.PeerEv
 			peer := event.Peer
 			switch event.Type {
 			case p2p.PeerEventTypeAdd:
-				if err := self.DidConnect(id, peer); err != nil {
-					log.Error(fmt.Sprintf("error generating connection up event %s => %s", id.TerminalString(), peer.TerminalString()), "err", err)
-				}
+				self.DidConnect(id, peer)
 			case p2p.PeerEventTypeDrop:
-				if err := self.DidDisconnect(id, peer); err != nil {
-					log.Error(fmt.Sprintf("error generating connection down event %s => %s", id.TerminalString(), peer.TerminalString()), "err", err)
-				}
+				self.DidDisconnect(id, peer)
 			case p2p.PeerEventTypeMsgSend:
-				if err := self.DidSend(id, peer, *event.MsgCode); err != nil {
-					log.Error(fmt.Sprintf("error generating msg send event %s => %s", id.TerminalString(), peer.TerminalString()), "err", err)
-				}
+				self.DidSend(id, peer, *event.MsgCode)
 			case p2p.PeerEventTypeMsgRecv:
-				if err := self.DidReceive(peer, id, *event.MsgCode); err != nil {
-					log.Error(fmt.Sprintf("error generating msg receive event %s => %s", peer.TerminalString(), id.TerminalString()), "err", err)
-				}
+				self.DidReceive(peer, id, *event.MsgCode)
 			}
 		case err := <-sub.Err():
 			if err != nil {
@@ -528,6 +540,10 @@ func (self *Network) GetNode(id discover.NodeID) *Node {
 func (self *Network) GetNodeByName(name string) *Node {
 	self.lock.Lock()
 	defer self.lock.Unlock()
+	return self.getNodeByName(name)
+}
+
+func (self *Network) getNodeByName(name string) *Node {
 	for _, node := range self.Nodes {
 		if node.Config.Name == name {
 			return node
@@ -589,14 +605,6 @@ func (self *Network) getConn(oneID, otherID discover.NodeID) *Conn {
 }
 
 func (self *Network) Shutdown() {
-	// disconnect all nodes
-	for _, conn := range self.Conns {
-		log.Debug(fmt.Sprintf("disconnecting %s from %s", conn.One.TerminalString(), conn.Other.TerminalString()))
-		if err := self.Disconnect(conn.One, conn.Other); err != nil {
-			log.Warn(fmt.Sprintf("error disconnecting %s from %s", conn.One.TerminalString(), conn.Other.TerminalString()), "err", err)
-		}
-	}
-
 	// stop all nodes
 	for _, node := range self.Nodes {
 		log.Debug(fmt.Sprintf("stopping node %s", node.ID().TerminalString()))
