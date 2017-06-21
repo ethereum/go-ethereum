@@ -30,7 +30,8 @@ import (
 
 var (
 	bigZero            = new(big.Int)
-	errWriteProtection = errors.New("evm write protection")
+	errWriteProtection = errors.New("evm: write protection")
+	errReadOutOfBound  = errors.New("evm: read out of bound")
 )
 
 func opAdd(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -778,9 +779,14 @@ func opReturnDataCopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, 
 		cOff = stack.pop()
 		l    = stack.pop()
 	)
-	memory.Set(mOff.Uint64(), l.Uint64(), getData(evm.interpreter.returnData, cOff, l))
+	defer evm.interpreter.intPool.put(mOff, cOff, l)
 
-	evm.interpreter.intPool.put(mOff, cOff, l)
+	cEnd := new(big.Int).Add(cOff, l)
+	if cEnd.BitLen() > 64 || uint64(len(evm.interpreter.returnData)) < cEnd.Uint64() {
+		return nil, errReadOutOfBound
+	}
+	memory.Set(mOff.Uint64(), l.Uint64(), evm.interpreter.returnData[cOff.Uint64():cEnd.Uint64()])
+
 	return nil, nil
 }
 

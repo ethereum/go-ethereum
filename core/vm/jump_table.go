@@ -84,7 +84,7 @@ func NewMetropolisInstructionSet() [256]operation {
 	}
 	instructionSet[RETURNDATASIZE] = operation{
 		execute:       opReturnDataSize,
-		gasCost:       constGasFunc(0), // TODO
+		gasCost:       constGasFunc(GasQuickStep),
 		validateStack: makeStackFunc(0, 1),
 		valid:         true,
 	}
