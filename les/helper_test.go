@@ -25,7 +25,6 @@ import (
 	"math/big"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -132,22 +131,22 @@ func testRCL() RequestCostList {
 // newTestProtocolManager creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, and potential notification
 // channels for different events.
-func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *core.BlockGen)) (*ProtocolManager, ethdb.Database, *LesOdr, error) {
+func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *core.BlockGen), peers *peerSet, odr *LesOdr, db ethdb.Database) (*ProtocolManager, error) {
 	var (
 		evmux  = new(event.TypeMux)
 		engine = ethash.NewFaker()
-		db, _  = ethdb.NewMemDatabase()
 		gspec  = core.Genesis{
 			Config: params.TestChainConfig,
 			Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
 		}
 		genesis = gspec.MustCommit(db)
-		odr     *LesOdr
-		chain   BlockChain
+		chain       BlockChain
 	)
+	if peers == nil {
+		peers = newPeerSet()
+	}
 
 	if lightSync {
-		odr = NewLesOdr(db)
 		chain, _ = light.NewLightChain(odr, gspec.Config, engine, evmux)
 	} else {
 		blockchain, _ := core.NewBlockChain(db, gspec.Config, engine, evmux, vm.Config{})
@@ -158,9 +157,9 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		chain = blockchain
 	}
 
-	pm, err := NewProtocolManager(gspec.Config, lightSync, NetworkId, evmux, engine, chain, nil, db, odr, nil)
+	pm, err := NewProtocolManager(gspec.Config, lightSync, NetworkId, evmux, engine, peers, chain, nil, db, odr, nil, make(chan struct{}), new(sync.WaitGroup))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	if !lightSync {
 		srv := &LesServer{protocolManager: pm}
@@ -174,20 +173,20 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		srv.fcManager = flowcontrol.NewClientManager(50, 10, 1000000000)
 		srv.fcCostStats = newCostStats(nil)
 	}
-	pm.Start(nil)
-	return pm, db, odr, nil
+	pm.Start()
+	return pm, nil
 }
 
 // newTestProtocolManagerMust creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, and potential notification
 // channels for different events. In case of an error, the constructor force-
 // fails the test.
-func newTestProtocolManagerMust(t *testing.T, lightSync bool, blocks int, generator func(int, *core.BlockGen)) (*ProtocolManager, ethdb.Database, *LesOdr) {
-	pm, db, odr, err := newTestProtocolManager(lightSync, blocks, generator)
+func newTestProtocolManagerMust(t *testing.T, lightSync bool, blocks int, generator func(int, *core.BlockGen), peers *peerSet, odr *LesOdr, db ethdb.Database) *ProtocolManager {
+	pm, err := newTestProtocolManager(lightSync, blocks, generator, peers, odr, db)
 	if err != nil {
 		t.Fatalf("Failed to create protocol manager: %v", err)
 	}
-	return pm, db, odr
+	return pm
 }
 
 // testTxPool is a fake, helper transaction pool for testing purposes
@@ -341,31 +340,4 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 // manager of termination.
 func (p *testPeer) close() {
 	p.app.Close()
-}
-
-type testServerPool struct {
-	peer *peer
-	lock sync.RWMutex
-}
-
-func (p *testServerPool) setPeer(peer *peer) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	p.peer = peer
-}
-
-func (p *testServerPool) getAllPeers() map[distPeer]struct{} {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	m := make(map[distPeer]struct{})
-	if p.peer != nil {
-		m[p.peer] = struct{}{}
-	}
-	return m
-}
-
-func (p *testServerPool) adjustResponseTime(*poolEntry, time.Duration, bool) {
-
 }
