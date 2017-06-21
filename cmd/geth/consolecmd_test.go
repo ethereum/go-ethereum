@@ -47,15 +47,15 @@ func TestConsoleWelcome(t *testing.T) {
 		"console")
 
 	// Gather all the infos the welcome message needs to contain
-	geth.setTemplateFunc("goos", func() string { return runtime.GOOS })
-	geth.setTemplateFunc("goarch", func() string { return runtime.GOARCH })
-	geth.setTemplateFunc("gover", runtime.Version)
-	geth.setTemplateFunc("gethver", func() string { return params.Version })
-	geth.setTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
-	geth.setTemplateFunc("apis", func() string { return ipcAPIs })
+	geth.SetTemplateFunc("goos", func() string { return runtime.GOOS })
+	geth.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
+	geth.SetTemplateFunc("gover", runtime.Version)
+	geth.SetTemplateFunc("gethver", func() string { return params.Version })
+	geth.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
+	geth.SetTemplateFunc("apis", func() string { return ipcAPIs })
 
 	// Verify the actual welcome message to the required template
-	geth.expect(`
+	geth.Expect(`
 Welcome to the Geth JavaScript console!
 
 instance: Geth/v{{gethver}}/{{goos}}-{{goarch}}/{{gover}}
@@ -66,7 +66,7 @@ at block: 0 ({{niltime}})
 
 > {{.InputLine "exit"}}
 `)
-	geth.expectExit()
+	geth.ExpectExit()
 }
 
 // Tests that a console can be attached to a running node via various means.
@@ -90,8 +90,8 @@ func TestIPCAttachWelcome(t *testing.T) {
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, geth, "ipc:"+ipc, ipcAPIs)
 
-	geth.interrupt()
-	geth.expectExit()
+	geth.Interrupt()
+	geth.ExpectExit()
 }
 
 func TestHTTPAttachWelcome(t *testing.T) {
@@ -104,8 +104,8 @@ func TestHTTPAttachWelcome(t *testing.T) {
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, geth, "http://localhost:"+port, httpAPIs)
 
-	geth.interrupt()
-	geth.expectExit()
+	geth.Interrupt()
+	geth.ExpectExit()
 }
 
 func TestWSAttachWelcome(t *testing.T) {
@@ -119,29 +119,29 @@ func TestWSAttachWelcome(t *testing.T) {
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, geth, "ws://localhost:"+port, httpAPIs)
 
-	geth.interrupt()
-	geth.expectExit()
+	geth.Interrupt()
+	geth.ExpectExit()
 }
 
 func testAttachWelcome(t *testing.T, geth *testgeth, endpoint, apis string) {
 	// Attach to a running geth note and terminate immediately
 	attach := runGeth(t, "attach", endpoint)
-	defer attach.expectExit()
-	attach.stdin.Close()
+	defer attach.ExpectExit()
+	attach.CloseStdin()
 
 	// Gather all the infos the welcome message needs to contain
-	attach.setTemplateFunc("goos", func() string { return runtime.GOOS })
-	attach.setTemplateFunc("goarch", func() string { return runtime.GOARCH })
-	attach.setTemplateFunc("gover", runtime.Version)
-	attach.setTemplateFunc("gethver", func() string { return params.Version })
-	attach.setTemplateFunc("etherbase", func() string { return geth.Etherbase })
-	attach.setTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
-	attach.setTemplateFunc("ipc", func() bool { return strings.HasPrefix(endpoint, "ipc") })
-	attach.setTemplateFunc("datadir", func() string { return geth.Datadir })
-	attach.setTemplateFunc("apis", func() string { return apis })
+	attach.SetTemplateFunc("goos", func() string { return runtime.GOOS })
+	attach.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
+	attach.SetTemplateFunc("gover", runtime.Version)
+	attach.SetTemplateFunc("gethver", func() string { return params.Version })
+	attach.SetTemplateFunc("etherbase", func() string { return geth.Etherbase })
+	attach.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
+	attach.SetTemplateFunc("ipc", func() bool { return strings.HasPrefix(endpoint, "ipc") })
+	attach.SetTemplateFunc("datadir", func() string { return geth.Datadir })
+	attach.SetTemplateFunc("apis", func() string { return apis })
 
 	// Verify the actual welcome message to the required template
-	attach.expect(`
+	attach.Expect(`
 Welcome to the Geth JavaScript console!
 
 instance: Geth/v{{gethver}}/{{goos}}-{{goarch}}/{{gover}}
@@ -152,7 +152,7 @@ at block: 0 ({{niltime}}){{if ipc}}
 
 > {{.InputLine "exit" }}
 `)
-	attach.expectExit()
+	attach.ExpectExit()
 }
 
 // trulyRandInt generates a crypto random integer used by the console tests to
