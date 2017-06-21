@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package whisperv5
+package shhclient
 
 import (
 	"context"
@@ -22,9 +22,10 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
-// Client defines typed wrappers for the Whisper RPC API.
+// Client defines typed wrappers for the Whisper v5 RPC API.
 type Client struct {
 	c *rpc.Client
 }
@@ -51,8 +52,8 @@ func (sc *Client) Version(ctx context.Context) (uint, error) {
 }
 
 // Info returns diagnostic information about the whisper node.
-func (sc *Client) Info(ctx context.Context) (Info, error) {
-	var info Info
+func (sc *Client) Info(ctx context.Context) (whisper.Info, error) {
+	var info whisper.Info
 	err := sc.c.CallContext(ctx, &info, "shh_info")
 	return info, err
 }
@@ -159,7 +160,7 @@ func (sc *Client) DeleteSymmetricKey(ctx context.Context, id string) error {
 }
 
 // Post a message onto the network.
-func (sc *Client) Post(ctx context.Context, message NewMessage) error {
+func (sc *Client) Post(ctx context.Context, message whisper.NewMessage) error {
 	var ignored bool
 	return sc.c.CallContext(ctx, &ignored, "shh_post", message)
 }
@@ -167,14 +168,14 @@ func (sc *Client) Post(ctx context.Context, message NewMessage) error {
 // SubscribeMessages subscribes to messages that match the given criteria. This method
 // is only supported on bi-directional connections such as websockets and IPC.
 // NewMessageFilter uses polling and is supported over HTTP.
-func (ec *Client) SubscribeMessages(ctx context.Context, criteria Criteria, ch chan<- *Message) (ethereum.Subscription, error) {
+func (ec *Client) SubscribeMessages(ctx context.Context, criteria whisper.Criteria, ch chan<- *whisper.Message) (ethereum.Subscription, error) {
 	return ec.c.ShhSubscribe(ctx, ch, "messages", criteria)
 }
 
 // NewMessageFilter creates a filter within the node. This filter can be used to poll
 // for new messages (see FilterMessages) that satisfy the given criteria. A filter can
 // timeout when it was polled for in whisper.filterTimeout.
-func (ec *Client) NewMessageFilter(ctx context.Context, criteria Criteria) (string, error) {
+func (ec *Client) NewMessageFilter(ctx context.Context, criteria whisper.Criteria) (string, error) {
 	var id string
 	return id, ec.c.CallContext(ctx, &id, "shh_newMessageFilter", criteria)
 }
@@ -187,7 +188,7 @@ func (ec *Client) DeleteMessageFilter(ctx context.Context, id string) error {
 
 // FilterMessages retrieves all messages that are received between the last call to
 // this function and match the criteria that where given when the filter was created.
-func (ec *Client) FilterMessages(ctx context.Context, id string) ([]*Message, error) {
-	var messages []*Message
+func (ec *Client) FilterMessages(ctx context.Context, id string) ([]*whisper.Message, error) {
+	var messages []*whisper.Message
 	return messages, ec.c.CallContext(ctx, &messages, "shh_getFilterMessages", id)
 }
