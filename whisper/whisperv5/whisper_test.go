@@ -18,10 +18,10 @@ package whisperv5
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	mrand "math/rand"
 	"testing"
 	"time"
-	"crypto/ecdsa"
 )
 
 func TestWhisperBasic(t *testing.T) {
@@ -120,11 +120,11 @@ func TestWhisperBasic(t *testing.T) {
 
 func TestWhisperAsymmetricKeyImport(t *testing.T) {
 	var (
-		w = New(&DefaultConfig)
+		w           = New(&DefaultConfig)
 		privateKeys []*ecdsa.PrivateKey
 	)
 
-	for i:=0; i < 50; i++ {
+	for i := 0; i < 50; i++ {
 		id, err := w.NewKeyPair()
 		if err != nil {
 			t.Fatalf("could not generate key: %v", err)

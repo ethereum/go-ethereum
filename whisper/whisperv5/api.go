@@ -18,11 +18,11 @@ package whisperv5
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"time"
-	"crypto/ecdsa"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -37,12 +37,12 @@ const (
 )
 
 var (
-	SymAsymErr             = errors.New("specify either a symetric or a asymmetric key")
-	InvalidSymmetricKeyErr = errors.New("invalid symmetric key")
-	InvalidPublicKeyErr    = errors.New("invalid public key")
-	InvalidSigningPubKey   = errors.New("invalid signing public key")
-	TooLowPoWErr           = errors.New("message rejected, PoW too low")
-	NoTopicsErr            = errors.New("missing topic(s)")
+	ErrSymAsym              = errors.New("specify either a symetric or a asymmetric key")
+	ErrInvalidSymmetricKey  = errors.New("invalid symmetric key")
+	ErrInvalidPublicKey     = errors.New("invalid public key")
+	ErrInvalidSigningPubKey = errors.New("invalid signing public key")
+	ErrTooLowPoW            = errors.New("message rejected, PoW too low")
+	ErrNoTopics             = errors.New("missing topic(s)")
 )
 
 // PublicWhisperAPI provides the whisper RPC service that can be
@@ -245,7 +245,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 
 	// user must specify either a symmetric or a asymmetric key
 	if (symKeyGiven && pubKeyGiven) || (!symKeyGiven && !pubKeyGiven) {
-		return false, SymAsymErr
+		return false, ErrSymAsym
 	}
 
 	params := &MessageParams{
@@ -267,13 +267,13 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 	// Set symmetric key that is used to encrypt the message
 	if symKeyGiven {
 		if params.Topic == (TopicType{}) { // topics are mandatory with symmetric encryption
-			return false, NoTopicsErr
+			return false, ErrNoTopics
 		}
 		if params.KeySym, err = api.w.GetSymKey(req.SymKeyID); err != nil {
 			return false, err
 		}
 		if !validateSymmetricKey(params.KeySym) {
-			return false, InvalidSymmetricKeyErr
+			return false, ErrInvalidSymmetricKey
 		}
 	}
 
@@ -281,7 +281,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 	if pubKeyGiven {
 		params.Dst = crypto.ToECDSAPub(req.PublicKey)
 		if !ValidatePublicKey(params.Dst) {
-			return false, InvalidPublicKeyErr
+			return false, ErrInvalidPublicKey
 		}
 	}
 
@@ -307,7 +307,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 
 	// ensure that the message PoW meets the node's minimum accepted PoW
 	if req.PowTarget < api.w.MinPow() {
-		return false, TooLowPoWErr
+		return false, ErrTooLowPoW
 	}
 
 	return true, api.w.Send(env)
@@ -346,7 +346,7 @@ func (api *PublicWhisperAPI) Messages(ctx context.Context, crit Criteria) (*rpc.
 
 	// user must specify either a symmetric or a asymmetric key
 	if (symKeyGiven && pubKeyGiven) || (!symKeyGiven && !pubKeyGiven) {
-		return nil, SymAsymErr
+		return nil, ErrSymAsym
 	}
 
 	filter := Filter{
@@ -358,7 +358,7 @@ func (api *PublicWhisperAPI) Messages(ctx context.Context, crit Criteria) (*rpc.
 	if len(crit.Sig) > 0 {
 		filter.Src = crypto.ToECDSAPub(crit.Sig)
 		if !ValidatePublicKey(filter.Src) {
-			return nil, InvalidSigningPubKey
+			return nil, ErrInvalidSigningPubKey
 		}
 	}
 
@@ -372,14 +372,14 @@ func (api *PublicWhisperAPI) Messages(ctx context.Context, crit Criteria) (*rpc.
 	// listen for message that are encrypted with the given symmetric key
 	if symKeyGiven {
 		if len(filter.Topics) == 0 {
-			return nil, NoTopicsErr
+			return nil, ErrNoTopics
 		}
 		key, err := api.w.GetSymKey(crit.SymKeyID)
 		if err != nil {
 			return nil, err
 		}
 		if !validateSymmetricKey(key) {
-			return nil, InvalidSymmetricKeyErr
+			return nil, ErrInvalidSymmetricKey
 		}
 		filter.KeySym = key
 		filter.SymKeyHash = crypto.Keccak256Hash(filter.KeySym)
@@ -389,7 +389,7 @@ func (api *PublicWhisperAPI) Messages(ctx context.Context, crit Criteria) (*rpc.
 	if pubKeyGiven {
 		filter.KeyAsym, err = api.w.GetPrivateKey(crit.PrivateKeyID)
 		if err != nil || filter.KeyAsym == nil {
-			return nil, InvalidPublicKeyErr
+			return nil, ErrInvalidPublicKey
 		}
 	}
 
@@ -536,13 +536,13 @@ func (api *PublicWhisperAPI) NewMessageFilter(req Criteria) (string, error) {
 
 	// user must specify either a symmetric or a asymmetric key
 	if (symKeyGiven && asymKeyGiven) || (!symKeyGiven && !asymKeyGiven) {
-		return "", SymAsymErr
+		return "", ErrSymAsym
 	}
 
 	if len(req.Sig) > 0 {
 		src = crypto.ToECDSAPub(req.Sig)
 		if !ValidatePublicKey(src) {
-			return "", InvalidSigningPubKey
+			return "", ErrInvalidSigningPubKey
 		}
 	}
 
@@ -551,7 +551,7 @@ func (api *PublicWhisperAPI) NewMessageFilter(req Criteria) (string, error) {
 			return "", err
 		}
 		if !validateSymmetricKey(keySym) {
-			return "", InvalidSymmetricKeyErr
+			return "", ErrInvalidSymmetricKey
 		}
 	}
 

@@ -112,7 +112,7 @@ func New(cfg *Config) *Whisper {
 	if cfg == nil {
 		cfg = &DefaultConfig
 	}
-	
+
 	whisper := &Whisper{
 		privateKeys:  make(map[string]*ecdsa.PrivateKey),
 		symKeys:      make(map[string][]byte),
