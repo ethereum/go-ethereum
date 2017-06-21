@@ -43,7 +43,7 @@ var (
 		Name:        "dumpconfig",
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
-		Flags:       append(append(nodeFlags, rpcFlags...), whisper.Flags...),
+		Flags:       append(append(nodeFlags, rpcFlags...), whisperFlags...),
 		Category:    "MISCELLANEOUS COMMANDS",
 		Description: `The dumpconfig command shows configuration values.`,
 	}
@@ -140,7 +140,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 
 // enableWhisper returns true in case one of the whisper flags is set.
 func enableWhisper(ctx *cli.Context) bool {
-	for _, flag := range whisper.Flags {
+	for _, flag := range whisperFlags {
 		if ctx.GlobalIsSet(flag.GetName()) {
 			return true
 		}
@@ -155,13 +155,13 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
 	shhEnabled := enableWhisper(ctx)
-	shhAutoEnabled := !ctx.GlobalIsSet(whisper.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DevModeFlag.Name)
+	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DevModeFlag.Name)
 	if shhEnabled || shhAutoEnabled {
-		if ctx.GlobalIsSet(whisper.MaxMessageSizeFlag.Name) {
-			cfg.Shh.MaxMessageSize = uint32(ctx.Int(whisper.MaxMessageSizeFlag.Name))
+		if ctx.GlobalIsSet(utils.WhisperMaxMessageSizeFlag.Name) {
+			cfg.Shh.MaxMessageSize = uint32(ctx.Int(utils.WhisperMaxMessageSizeFlag.Name))
 		}
-		if ctx.GlobalIsSet(whisper.MinPOWFlag.Name) {
-			cfg.Shh.MinimumAcceptedPOW = ctx.Float64(whisper.MinPOWFlag.Name)
+		if ctx.GlobalIsSet(utils.WhisperMinPOWFlag.Name) {
+			cfg.Shh.MinimumAcceptedPOW = ctx.Float64(utils.WhisperMinPOWFlag.Name)
 		}
 		utils.RegisterShhService(stack, &cfg.Shh)
 	}

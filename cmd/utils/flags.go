@@ -458,6 +458,20 @@ var (
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices",
 		Value: eth.DefaultConfig.GPO.Percentile,
 	}
+	WhisperEnabledFlag = cli.BoolFlag{
+		Name:  "shh",
+		Usage: "Enable Whisper",
+	}
+	WhisperMaxMessageSizeFlag = cli.IntFlag{
+		Name:  "shh.maxmessagesize",
+		Usage: "Max message size accepted",
+		Value: int(whisper.DefaultMaxMessageSize),
+	}
+	WhisperMinPOWFlag = cli.Float64Flag{
+		Name:  "shh.pow",
+		Usage: "Minimum POW accepted",
+		Value: whisper.DefaultMinimumPoW,
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -875,11 +889,11 @@ func checkExclusive(ctx *cli.Context, flags ...cli.Flag) {
 
 // SetShhConfig applies shh-related command line flags to the config.
 func SetShhConfig(ctx *cli.Context, stack *node.Node, cfg *whisper.Config) {
-	if ctx.GlobalIsSet(whisper.MaxMessageSizeFlag.Name) {
-		cfg.MaxMessageSize = uint32(ctx.GlobalUint(whisper.MaxMessageSizeFlag.Name))
+	if ctx.GlobalIsSet(WhisperMaxMessageSizeFlag.Name) {
+		cfg.MaxMessageSize = uint32(ctx.GlobalUint(WhisperMaxMessageSizeFlag.Name))
 	}
-	if ctx.GlobalIsSet(whisper.MinPOWFlag.Name) {
-		cfg.MinimumAcceptedPOW = ctx.GlobalFloat64(whisper.MinPOWFlag.Name)
+	if ctx.GlobalIsSet(WhisperMinPOWFlag.Name) {
+		cfg.MinimumAcceptedPOW = ctx.GlobalFloat64(WhisperMinPOWFlag.Name)
 	}
 }
 

@@ -16,10 +16,6 @@
 
 package whisperv5
 
-import (
-	"gopkg.in/urfave/cli.v1"
-)
-
 type Config struct {
 	MaxMessageSize     uint32  `toml:",omitempty"`
 	MinimumAcceptedPOW float64 `toml:",omitempty"`
@@ -30,21 +26,4 @@ var DefaultConfig = Config{
 	MinimumAcceptedPOW: DefaultMinimumPoW,
 }
 
-var (
-	WhisperEnabledFlag = cli.BoolFlag{
-		Name:  "shh",
-		Usage: "Enable Whisper",
-	}
-	MaxMessageSizeFlag = cli.IntFlag{
-		Name:  "shh.maxmessagesize",
-		Usage: "Max message size accepted",
-		Value: int(DefaultMaxMessageSize),
-	}
-	MinPOWFlag = cli.Float64Flag{
-		Name:  "shh.pow",
-		Usage: "Minimum POW accepted",
-		Value: DefaultMinimumPoW,
-	}
-
-	Flags = []cli.Flag{WhisperEnabledFlag, MaxMessageSizeFlag, MinPOWFlag}
-)
+var ()

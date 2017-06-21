@@ -24,7 +24,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -190,7 +189,7 @@ var AppHelpFlagGroups = []flagGroup{
 	},
 	{
 		Name:  "Whisper (EXPERIMENTAL)",
-		Flags: whisperv5.Flags,
+		Flags: whisperFlags,
 	},
 	{
 		Name: "DEPRECATED",
