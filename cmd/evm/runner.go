@@ -73,6 +73,10 @@ func runCmd(ctx *cli.Context) error {
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
+	logconfig := &vm.LogConfig{
+		DisableMemory: ctx.GlobalBool(DisableMemoryFlag.Name),
+		DisableStack:  ctx.GlobalBool(DisableStackFlag.Name),
+	}
 
 	var (
 		tracer      vm.Tracer
@@ -82,12 +86,12 @@ func runCmd(ctx *cli.Context) error {
 		sender      = common.StringToAddress("sender")
 	)
 	if ctx.GlobalBool(MachineFlag.Name) {
-		tracer = NewJSONLogger(os.Stdout)
+		tracer = NewJSONLogger(logconfig, os.Stdout)
 	} else if ctx.GlobalBool(DebugFlag.Name) {
-		debugLogger = vm.NewStructLogger(nil)
+		debugLogger = vm.NewStructLogger(logconfig)
 		tracer = debugLogger
 	} else {
-		debugLogger = vm.NewStructLogger(nil)
+		debugLogger = vm.NewStructLogger(logconfig)
 	}
 	if ctx.GlobalString(GenesisFlag.Name) != "" {
 		gen := readGenesis(ctx.GlobalString(GenesisFlag.Name))

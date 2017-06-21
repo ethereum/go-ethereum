@@ -28,25 +28,32 @@ import (
 
 type JSONLogger struct {
 	encoder *json.Encoder
+	cfg     *vm.LogConfig
 }
 
-func NewJSONLogger(writer io.Writer) *JSONLogger {
-	return &JSONLogger{json.NewEncoder(writer)}
+func NewJSONLogger(cfg *vm.LogConfig, writer io.Writer) *JSONLogger {
+	return &JSONLogger{json.NewEncoder(writer), cfg}
 }
 
 // CaptureState outputs state information on the logger.
 func (l *JSONLogger) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
-	return l.encoder.Encode(vm.StructLog{
-		Pc:      pc,
-		Op:      op,
-		Gas:     gas + cost,
-		GasCost: cost,
-		Memory:  memory.Data(),
-		Stack:   stack.Data(),
-		Storage: nil,
-		Depth:   depth,
-		Err:     err,
-	})
+	log := vm.StructLog{
+		Pc:         pc,
+		Op:         op,
+		Gas:        gas + cost,
+		GasCost:    cost,
+		MemorySize: memory.Len(),
+		Storage:    nil,
+		Depth:      depth,
+		Err:        err,
+	}
+	if !l.cfg.DisableMemory {
+		log.Memory = memory.Data()
+	}
+	if !l.cfg.DisableStack {
+		log.Stack = stack.Data()
+	}
+	return l.encoder.Encode(log)
 }
 
 // CaptureEnd is triggered at end of execution.

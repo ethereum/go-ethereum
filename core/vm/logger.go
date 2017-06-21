@@ -54,33 +54,29 @@ type LogConfig struct {
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.
 type StructLog struct {
-	Pc      uint64                      `json:"pc"`
-	Op      OpCode                      `json:"op"`
-	Gas     uint64                      `json:"gas"`
-	GasCost uint64                      `json:"gasCost"`
-	Memory  []byte                      `json:"memory"`
-	Stack   []*big.Int                  `json:"stack"`
-	Storage map[common.Hash]common.Hash `json:"-"`
-	Depth   int                         `json:"depth"`
-	Err     error                       `json:"error"`
+	Pc         uint64                      `json:"pc"`
+	Op         OpCode                      `json:"op"`
+	Gas        uint64                      `json:"gas"`
+	GasCost    uint64                      `json:"gasCost"`
+	Memory     []byte                      `json:"memory"`
+	MemorySize int                         `json:"memSize"`
+	Stack      []*big.Int                  `json:"stack"`
+	Storage    map[common.Hash]common.Hash `json:"-"`
+	Depth      int                         `json:"depth"`
+	Err        error                       `json:"error"`
 }
 
 // overrides for gencodec
 type structLogMarshaling struct {
-	Stack      []*math.HexOrDecimal256
-	Gas        math.HexOrDecimal64
-	GasCost    math.HexOrDecimal64
-	Memory     hexutil.Bytes
-	OpName     string `json:"opName"`
-	MemorySize int    `json:"memSize"`
+	Stack   []*math.HexOrDecimal256
+	Gas     math.HexOrDecimal64
+	GasCost math.HexOrDecimal64
+	Memory  hexutil.Bytes
+	OpName  string `json:"opName"`
 }
 
 func (s *StructLog) OpName() string {
 	return s.Op.String()
-}
-
-func (s *StructLog) MemorySize() int {
-	return len(s.Memory)
 }
 
 // Tracer is used to collect execution traces from an EVM transaction
@@ -181,7 +177,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		}
 	}
 	// create a new snaptshot of the EVM.
-	log := StructLog{pc, op, gas, cost, mem, stck, storage, env.depth, err}
+	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, storage, depth, err}
 
 	l.logs = append(l.logs, log)
 	return nil

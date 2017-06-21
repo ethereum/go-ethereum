@@ -102,6 +102,14 @@ var (
 		Name:  "sender",
 		Usage: "The transaction origin",
 	}
+	DisableMemoryFlag = cli.BoolFlag{
+		Name:  "nomemory",
+		Usage: "disable memory output",
+	}
+	DisableStackFlag = cli.BoolFlag{
+		Name:  "nostack",
+		Usage: "disable stack output",
+	}
 )
 
 func init() {
@@ -123,6 +131,8 @@ func init() {
 		GenesisFlag,
 		MachineFlag,
 		SenderFlag,
+		DisableMemoryFlag,
+		DisableStackFlag,
 	}
 	app.Commands = []cli.Command{
 		compileCommand,
