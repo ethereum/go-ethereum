@@ -21,13 +21,14 @@ package fuse
 import (
 	"bytes"
 	"crypto/rand"
-	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 type fileInfo struct {
@@ -37,26 +38,7 @@ type fileInfo struct {
 	contents []byte
 }
 
-func testFuseFileSystem(t *testing.T, f func(*api.Api)) {
-
-	datadir, err := ioutil.TempDir("", "fuse")
-	if err != nil {
-		t.Fatalf("unable to create temp dir: %v", err)
-	}
-	os.RemoveAll(datadir)
-
-	dpa, err := storage.NewLocalDPA(datadir)
-	if err != nil {
-		return
-	}
-	api := api.NewApi(dpa, nil)
-	dpa.Start()
-	f(api)
-	dpa.Stop()
-}
-
 func createTestFilesAndUploadToSwarm(t *testing.T, api *api.Api, files map[string]fileInfo, uploadDir string) string {
-
 	os.RemoveAll(uploadDir)
 
 	for fname, finfo := range files {
@@ -89,8 +71,6 @@ func createTestFilesAndUploadToSwarm(t *testing.T, api *api.Api, files map[strin
 }
 
 func mountDir(t *testing.T, api *api.Api, files map[string]fileInfo, bzzHash string, mountDir string) *SwarmFS {
-
-	// Test Mount
 	os.RemoveAll(mountDir)
 	os.MkdirAll(mountDir, 0777)
 	swarmfs := NewSwarmFS(api)
@@ -123,11 +103,9 @@ func mountDir(t *testing.T, api *api.Api, files map[string]fileInfo, bzzHash str
 	compareGeneratedFileWithFileInMount(t, files, mountDir)
 
 	return swarmfs
-
 }
 
 func compareGeneratedFileWithFileInMount(t *testing.T, files map[string]fileInfo, mountDir string) {
-
 	err := filepath.Walk(mountDir, func(path string, f os.FileInfo, err error) error {
 		if f.IsDir() {
 			return nil
@@ -143,7 +121,6 @@ func compareGeneratedFileWithFileInMount(t *testing.T, files map[string]fileInfo
 	}
 
 	for fname, finfo := range files {
-
 		destinationFile := filepath.Join(mountDir, fname)
 
 		dfinfo, err := os.Stat(destinationFile)
@@ -163,18 +140,15 @@ func compareGeneratedFileWithFileInMount(t *testing.T, files map[string]fileInfo
 		if err != nil {
 			t.Fatalf("Could not readfile %v : %v", fname, err)
 		}
-
 		if bytes.Compare(fileContents, finfo.contents) != 0 {
 			t.Fatalf("File %v contents mismatch: %v , %v", fname, fileContents, finfo.contents)
 
 		}
-
 		// TODO: check uid and gid
 	}
 }
 
 func checkFile(t *testing.T, testMountDir, fname string, contents []byte) {
-
 	destinationFile := filepath.Join(testMountDir, fname)
 	dfinfo, err1 := os.Stat(destinationFile)
 	if err1 != nil {
@@ -201,10 +175,9 @@ func getRandomBtes(size int) []byte {
 	contents := make([]byte, size)
 	rand.Read(contents)
 	return contents
-
 }
 
-func IsDirEmpty(name string) bool {
+func isDirEmpty(name string) bool {
 	f, err := os.Open(name)
 	if err != nil {
 		return false
@@ -218,8 +191,11 @@ func IsDirEmpty(name string) bool {
 	return false
 }
 
-func testMountListAndUnmount(api *api.Api, t *testing.T) {
+type testAPI struct {
+	api *api.Api
+}
 
+func (ta *testAPI) mountListAndUnmount(t *testing.T) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "fuse-source")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "fuse-dest")
@@ -240,9 +216,9 @@ func testMountListAndUnmount(api *api.Api, t *testing.T) {
 	files["twice/2.txt"] = fileInfo{0777, 444, 333, getRandomBtes(200)}
 	files["one/two/three/four/five/six/seven/eight/nine/10.txt"] = fileInfo{0777, 333, 444, getRandomBtes(10240)}
 	files["one/two/three/four/five/six/six"] = fileInfo{0777, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
 
-	swarmfs := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs.Stop()
 
 	// Check unmount
@@ -250,53 +226,52 @@ func testMountListAndUnmount(api *api.Api, t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not unmount  %v", bzzHash)
 	}
-	if !IsDirEmpty(testMountDir) {
+	if !isDirEmpty(testMountDir) {
 		t.Fatalf("unmount didnt work for %v", testMountDir)
 	}
 
 }
 
-func testMaxMounts(api *api.Api, t *testing.T) {
-
+func (ta *testAPI) maxMounts(t *testing.T) {
 	files := make(map[string]fileInfo)
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	uploadDir1, _ := ioutil.TempDir(os.TempDir(), "max-upload1")
-	bzzHash1 := createTestFilesAndUploadToSwarm(t, api, files, uploadDir1)
+	bzzHash1 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir1)
 	mount1, _ := ioutil.TempDir(os.TempDir(), "max-mount1")
-	swarmfs1 := mountDir(t, api, files, bzzHash1, mount1)
+	swarmfs1 := mountDir(t, ta.api, files, bzzHash1, mount1)
 	defer swarmfs1.Stop()
 
 	files["2.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	uploadDir2, _ := ioutil.TempDir(os.TempDir(), "max-upload2")
-	bzzHash2 := createTestFilesAndUploadToSwarm(t, api, files, uploadDir2)
+	bzzHash2 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir2)
 	mount2, _ := ioutil.TempDir(os.TempDir(), "max-mount2")
-	swarmfs2 := mountDir(t, api, files, bzzHash2, mount2)
+	swarmfs2 := mountDir(t, ta.api, files, bzzHash2, mount2)
 	defer swarmfs2.Stop()
 
 	files["3.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	uploadDir3, _ := ioutil.TempDir(os.TempDir(), "max-upload3")
-	bzzHash3 := createTestFilesAndUploadToSwarm(t, api, files, uploadDir3)
+	bzzHash3 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir3)
 	mount3, _ := ioutil.TempDir(os.TempDir(), "max-mount3")
-	swarmfs3 := mountDir(t, api, files, bzzHash3, mount3)
+	swarmfs3 := mountDir(t, ta.api, files, bzzHash3, mount3)
 	defer swarmfs3.Stop()
 
 	files["4.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	uploadDir4, _ := ioutil.TempDir(os.TempDir(), "max-upload4")
-	bzzHash4 := createTestFilesAndUploadToSwarm(t, api, files, uploadDir4)
+	bzzHash4 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir4)
 	mount4, _ := ioutil.TempDir(os.TempDir(), "max-mount4")
-	swarmfs4 := mountDir(t, api, files, bzzHash4, mount4)
+	swarmfs4 := mountDir(t, ta.api, files, bzzHash4, mount4)
 	defer swarmfs4.Stop()
 
 	files["5.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	uploadDir5, _ := ioutil.TempDir(os.TempDir(), "max-upload5")
-	bzzHash5 := createTestFilesAndUploadToSwarm(t, api, files, uploadDir5)
+	bzzHash5 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir5)
 	mount5, _ := ioutil.TempDir(os.TempDir(), "max-mount5")
-	swarmfs5 := mountDir(t, api, files, bzzHash5, mount5)
+	swarmfs5 := mountDir(t, ta.api, files, bzzHash5, mount5)
 	defer swarmfs5.Stop()
 
 	files["6.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	uploadDir6, _ := ioutil.TempDir(os.TempDir(), "max-upload6")
-	bzzHash6 := createTestFilesAndUploadToSwarm(t, api, files, uploadDir6)
+	bzzHash6 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir6)
 	mount6, _ := ioutil.TempDir(os.TempDir(), "max-mount6")
 
 	os.RemoveAll(mount6)
@@ -308,18 +283,17 @@ func testMaxMounts(api *api.Api, t *testing.T) {
 
 }
 
-func testReMounts(api *api.Api, t *testing.T) {
-
+func (ta *testAPI) remount(t *testing.T) {
 	files := make(map[string]fileInfo)
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	uploadDir1, _ := ioutil.TempDir(os.TempDir(), "re-upload1")
-	bzzHash1 := createTestFilesAndUploadToSwarm(t, api, files, uploadDir1)
+	bzzHash1 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir1)
 	testMountDir1, _ := ioutil.TempDir(os.TempDir(), "re-mount1")
-	swarmfs := mountDir(t, api, files, bzzHash1, testMountDir1)
+	swarmfs := mountDir(t, ta.api, files, bzzHash1, testMountDir1)
 	defer swarmfs.Stop()
 
 	uploadDir2, _ := ioutil.TempDir(os.TempDir(), "re-upload2")
-	bzzHash2 := createTestFilesAndUploadToSwarm(t, api, files, uploadDir2)
+	bzzHash2 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir2)
 	testMountDir2, _ := ioutil.TempDir(os.TempDir(), "re-mount2")
 
 	// try mounting the same hash second time
@@ -341,19 +315,17 @@ func testReMounts(api *api.Api, t *testing.T) {
 	if err == nil {
 		t.Fatalf("Error mounting hash  %v", bzzHash2)
 	}
-
 }
 
-func testUnmount(api *api.Api, t *testing.T) {
-
+func (ta *testAPI) unmount(t *testing.T) {
 	files := make(map[string]fileInfo)
 	uploadDir, _ := ioutil.TempDir(os.TempDir(), "ex-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "ex-mount")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, uploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir)
 
-	swarmfs := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs.Stop()
 
 	swarmfs.Unmount(testMountDir)
@@ -364,19 +336,17 @@ func testUnmount(api *api.Api, t *testing.T) {
 			t.Fatalf("mount state not cleaned up in unmount case %v", testMountDir)
 		}
 	}
-
 }
 
-func testUnmountWhenResourceBusy(api *api.Api, t *testing.T) {
-
+func (ta *testAPI) unmountWhenResourceBusy(t *testing.T) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "ex-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "ex-mount")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
 
-	swarmfs := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs.Stop()
 
 	actualPath := filepath.Join(testMountDir, "2.txt")
@@ -395,18 +365,17 @@ func testUnmountWhenResourceBusy(api *api.Api, t *testing.T) {
 			t.Fatalf("mount state not cleaned up in unmount case %v", testMountDir)
 		}
 	}
-
 }
-func testSeekInMultiChunkFile(api *api.Api, t *testing.T) {
 
+func (ta *testAPI) seekInMultiChunkFile(t *testing.T) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "seek-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "seek-mount")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10240)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
 
-	swarmfs := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs.Stop()
 
 	// Create a new file seek the second chunk
@@ -423,11 +392,9 @@ func testSeekInMultiChunkFile(api *api.Api, t *testing.T) {
 		t.Fatalf("File seek contents mismatch")
 	}
 	d.Close()
-
 }
 
-func testCreateNewFile(api *api.Api, t *testing.T) {
-
+func (ta *testAPI) createNewFile(t *testing.T) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "create-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "create-mount")
@@ -435,9 +402,9 @@ func testCreateNewFile(api *api.Api, t *testing.T) {
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
 
-	swarmfs1 := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
 
 	// Create a new file in the root dir and check
@@ -458,23 +425,21 @@ func testCreateNewFile(api *api.Api, t *testing.T) {
 
 	// mount again and see if things are okay
 	files["2.txt"] = fileInfo{0700, 333, 444, contents}
-	swarmfs2 := mountDir(t, api, files, mi.LatestManifest, testMountDir)
+	swarmfs2 := mountDir(t, ta.api, files, mi.LatestManifest, testMountDir)
 	defer swarmfs2.Stop()
 
 	checkFile(t, testMountDir, "2.txt", contents)
-
 }
 
-func testCreateNewFileInsideDirectory(api *api.Api, t *testing.T) {
-
+func (ta *testAPI) createNewFileInsideDirectory(t *testing.T) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "createinsidedir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "createinsidedir-mount")
 
 	files["one/1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
 
-	swarmfs1 := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
 
 	// Create a new file inside a existing dir and check
@@ -496,23 +461,21 @@ func testCreateNewFileInsideDirectory(api *api.Api, t *testing.T) {
 
 	// mount again and see if things are okay
 	files["one/2.txt"] = fileInfo{0700, 333, 444, contents}
-	swarmfs2 := mountDir(t, api, files, mi.LatestManifest, testMountDir)
+	swarmfs2 := mountDir(t, ta.api, files, mi.LatestManifest, testMountDir)
 	defer swarmfs2.Stop()
 
 	checkFile(t, testMountDir, "one/2.txt", contents)
-
 }
 
-func testCreateNewFileInsideNewDirectory(api *api.Api, t *testing.T) {
-
+func (ta *testAPI) createNewFileInsideNewDirectory(t *testing.T) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "createinsidenewdir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "createinsidenewdir-mount")
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
 
-	swarmfs1 := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
 
 	// Create a new file inside a existing dir and check
@@ -535,15 +498,13 @@ func testCreateNewFileInsideNewDirectory(api *api.Api, t *testing.T) {
 
 	// mount again and see if things are okay
 	files["one/2.txt"] = fileInfo{0700, 333, 444, contents}
-	swarmfs2 := mountDir(t, api, files, mi.LatestManifest, testMountDir)
+	swarmfs2 := mountDir(t, ta.api, files, mi.LatestManifest, testMountDir)
 	defer swarmfs2.Stop()
 
 	checkFile(t, testMountDir, "one/2.txt", contents)
-
 }
 
-func testRemoveExistingFile(api *api.Api, t *testing.T) {
-
+func (ta *testAPI) removeExistingFile(t *testing.T) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "remove-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "remove-mount")
@@ -551,9 +512,9 @@ func testRemoveExistingFile(api *api.Api, t *testing.T) {
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
 
-	swarmfs1 := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
 
 	// Remove a file in the root dir and check
@@ -567,13 +528,11 @@ func testRemoveExistingFile(api *api.Api, t *testing.T) {
 
 	// mount again and see if things are okay
 	delete(files, "five.txt")
-	swarmfs2 := mountDir(t, api, files, mi.LatestManifest, testMountDir)
+	swarmfs2 := mountDir(t, ta.api, files, mi.LatestManifest, testMountDir)
 	defer swarmfs2.Stop()
-
 }
 
-func testRemoveExistingFileInsideADir(api *api.Api, t *testing.T) {
-
+func (ta *testAPI) removeExistingFileInsideDir(t *testing.T) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "remove-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "remove-mount")
@@ -581,9 +540,9 @@ func testRemoveExistingFileInsideADir(api *api.Api, t *testing.T) {
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["one/five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["one/six.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
 
-	swarmfs1 := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
 
 	// Remove a file in the root dir and check
@@ -597,12 +556,11 @@ func testRemoveExistingFileInsideADir(api *api.Api, t *testing.T) {
 
 	// mount again and see if things are okay
 	delete(files, "one/five.txt")
-	swarmfs2 := mountDir(t, api, files, mi.LatestManifest, testMountDir)
+	swarmfs2 := mountDir(t, ta.api, files, mi.LatestManifest, testMountDir)
 	defer swarmfs2.Stop()
-
 }
 
-func testRemoveNewlyAddedFile(api *api.Api, t *testing.T) {
+func (ta *testAPI) removeNewlyAddedFile(t *testing.T) {
 
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "removenew-upload")
@@ -611,9 +569,9 @@ func testRemoveNewlyAddedFile(api *api.Api, t *testing.T) {
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
 
-	swarmfs1 := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
 
 	// Adda a new file and remove it
@@ -639,17 +597,15 @@ func testRemoveNewlyAddedFile(api *api.Api, t *testing.T) {
 	}
 
 	// mount again and see if things are okay
-	swarmfs2 := mountDir(t, api, files, mi.LatestManifest, testMountDir)
+	swarmfs2 := mountDir(t, ta.api, files, mi.LatestManifest, testMountDir)
 	defer swarmfs2.Stop()
 
 	if bzzHash != mi.LatestManifest {
 		t.Fatalf("same contents different hash orig(%v): new(%v)", bzzHash, mi.LatestManifest)
 	}
-
 }
 
-func testAddNewFileAndModifyContents(api *api.Api, t *testing.T) {
-
+func (ta *testAPI) addNewFileAndModifyContents(t *testing.T) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "modifyfile-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "modifyfile-mount")
@@ -657,9 +613,9 @@ func testAddNewFileAndModifyContents(api *api.Api, t *testing.T) {
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
 
-	swarmfs1 := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
 
 	// Create a new file in the root dir and check
@@ -680,7 +636,7 @@ func testAddNewFileAndModifyContents(api *api.Api, t *testing.T) {
 
 	// mount again and see if things are okay
 	files["2.txt"] = fileInfo{0700, 333, 444, line1}
-	swarmfs2 := mountDir(t, api, files, mi1.LatestManifest, testMountDir)
+	swarmfs2 := mountDir(t, ta.api, files, mi1.LatestManifest, testMountDir)
 	defer swarmfs2.Stop()
 
 	checkFile(t, testMountDir, "2.txt", line1)
@@ -691,7 +647,7 @@ func testAddNewFileAndModifyContents(api *api.Api, t *testing.T) {
 	}
 
 	// mount again and modify
-	swarmfs3 := mountDir(t, api, files, mi2.LatestManifest, testMountDir)
+	swarmfs3 := mountDir(t, ta.api, files, mi2.LatestManifest, testMountDir)
 	defer swarmfs3.Stop()
 
 	fd, err4 := os.OpenFile(actualPath, os.O_RDWR|os.O_APPEND, os.FileMode(0665))
@@ -713,14 +669,13 @@ func testAddNewFileAndModifyContents(api *api.Api, t *testing.T) {
 	b := [][]byte{line1, line2}
 	line1and2 := bytes.Join(b, []byte(""))
 	files["2.txt"] = fileInfo{0700, 333, 444, line1and2}
-	swarmfs4 := mountDir(t, api, files, mi3.LatestManifest, testMountDir)
+	swarmfs4 := mountDir(t, ta.api, files, mi3.LatestManifest, testMountDir)
 	defer swarmfs4.Stop()
 
 	checkFile(t, testMountDir, "2.txt", line1and2)
-
 }
 
-func testRemoveEmptyDir(api *api.Api, t *testing.T) {
+func (ta *testAPI) removeEmptyDir(t *testing.T) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-mount")
@@ -728,9 +683,9 @@ func testRemoveEmptyDir(api *api.Api, t *testing.T) {
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
 
-	swarmfs1 := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
 
 	os.MkdirAll(filepath.Join(testMountDir, "newdir"), 0777)
@@ -739,15 +694,12 @@ func testRemoveEmptyDir(api *api.Api, t *testing.T) {
 	if err3 != nil {
 		t.Fatalf("Could not unmount %v", err3)
 	}
-
 	if bzzHash != mi.LatestManifest {
 		t.Fatalf("same contents different hash orig(%v): new(%v)", bzzHash, mi.LatestManifest)
 	}
-
 }
 
-func testRemoveDirWhichHasFiles(api *api.Api, t *testing.T) {
-
+func (ta *testAPI) removeDirWhichHasFiles(t *testing.T) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-mount")
@@ -755,9 +707,9 @@ func testRemoveDirWhichHasFiles(api *api.Api, t *testing.T) {
 	files["one/1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["two/five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["two/six.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
 
-	swarmfs1 := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
 
 	dirPath := filepath.Join(testMountDir, "two")
@@ -772,13 +724,11 @@ func testRemoveDirWhichHasFiles(api *api.Api, t *testing.T) {
 	delete(files, "two/five.txt")
 	delete(files, "two/six.txt")
 
-	swarmfs2 := mountDir(t, api, files, mi.LatestManifest, testMountDir)
+	swarmfs2 := mountDir(t, ta.api, files, mi.LatestManifest, testMountDir)
 	defer swarmfs2.Stop()
-
 }
 
-func testRemoveDirWhichHasSubDirs(api *api.Api, t *testing.T) {
-
+func (ta *testAPI) removeDirWhichHasSubDirs(t *testing.T) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "rmsubdir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "rmsubdir-mount")
@@ -790,9 +740,9 @@ func testRemoveDirWhichHasSubDirs(api *api.Api, t *testing.T) {
 	files["two/four/6.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 	files["two/four/six/7.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
 
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
 
-	swarmfs1 := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
 
 	dirPath := filepath.Join(testMountDir, "two")
@@ -810,13 +760,11 @@ func testRemoveDirWhichHasSubDirs(api *api.Api, t *testing.T) {
 	delete(files, "two/four/6.txt")
 	delete(files, "two/four/six/7.txt")
 
-	swarmfs2 := mountDir(t, api, files, mi.LatestManifest, testMountDir)
+	swarmfs2 := mountDir(t, ta.api, files, mi.LatestManifest, testMountDir)
 	defer swarmfs2.Stop()
-
 }
 
-func testAppendFileContentsToEnd(api *api.Api, t *testing.T) {
-
+func (ta *testAPI) appendFileContentsToEnd(t *testing.T) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "appendlargefile-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "appendlargefile-mount")
@@ -824,9 +772,9 @@ func testAppendFileContentsToEnd(api *api.Api, t *testing.T) {
 	line1 := make([]byte, 10)
 	rand.Read(line1)
 	files["1.txt"] = fileInfo{0700, 333, 444, line1}
-	bzzHash := createTestFilesAndUploadToSwarm(t, api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
 
-	swarmfs1 := mountDir(t, api, files, bzzHash, testMountDir)
+	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
 
 	actualPath := filepath.Join(testMountDir, "1.txt")
@@ -849,49 +797,42 @@ func testAppendFileContentsToEnd(api *api.Api, t *testing.T) {
 	b := [][]byte{line1, line2}
 	line1and2 := bytes.Join(b, []byte(""))
 	files["1.txt"] = fileInfo{0700, 333, 444, line1and2}
-	swarmfs2 := mountDir(t, api, files, mi1.LatestManifest, testMountDir)
+	swarmfs2 := mountDir(t, ta.api, files, mi1.LatestManifest, testMountDir)
 	defer swarmfs2.Stop()
 
 	checkFile(t, testMountDir, "1.txt", line1and2)
-
 }
 
-func TestSwarmFileSystem(t *testing.T) {
-	testFuseFileSystem(t, func(api *api.Api) {
+func TestFUSE(t *testing.T) {
+	datadir, err := ioutil.TempDir("", "fuse")
+	if err != nil {
+		t.Fatalf("unable to create temp dir: %v", err)
+	}
+	os.RemoveAll(datadir)
 
-		testMountListAndUnmount(api, t)
+	dpa, err := storage.NewLocalDPA(datadir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ta := &testAPI{api: api.NewApi(dpa, nil)}
+	dpa.Start()
+	defer dpa.Stop()
 
-		testMaxMounts(api, t)
-
-		testReMounts(api, t)
-
-		testUnmount(api, t)
-
-		testUnmountWhenResourceBusy(api, t)
-
-		testSeekInMultiChunkFile(api, t)
-
-		testCreateNewFile(api, t)
-
-		testCreateNewFileInsideDirectory(api, t)
-
-		testCreateNewFileInsideNewDirectory(api, t)
-
-		testRemoveExistingFile(api, t)
-
-		testRemoveExistingFileInsideADir(api, t)
-
-		testRemoveNewlyAddedFile(api, t)
-
-		testAddNewFileAndModifyContents(api, t)
-
-		testRemoveEmptyDir(api, t)
-
-		testRemoveDirWhichHasFiles(api, t)
-
-		testRemoveDirWhichHasSubDirs(api, t)
-
-		testAppendFileContentsToEnd(api, t)
-
-	})
+	t.Run("mountListAndUmount", ta.mountListAndUnmount)
+	t.Run("maxMounts", ta.maxMounts)
+	t.Run("remount", ta.remount)
+	t.Run("unmount", ta.unmount)
+	t.Run("unmountWhenResourceBusy", ta.unmountWhenResourceBusy)
+	t.Run("seekInMultiChunkFile", ta.seekInMultiChunkFile)
+	t.Run("createNewFile", ta.createNewFile)
+	t.Run("createNewFileInsideDirectory", ta.createNewFileInsideDirectory)
+	t.Run("createNewFileInsideNewDirectory", ta.createNewFileInsideNewDirectory)
+	t.Run("removeExistingFile", ta.removeExistingFile)
+	t.Run("removeExistingFileInsideDir", ta.removeExistingFileInsideDir)
+	t.Run("removeNewlyAddedFile", ta.removeNewlyAddedFile)
+	t.Run("addNewFileAndModifyContents", ta.addNewFileAndModifyContents)
+	t.Run("removeEmptyDir", ta.removeEmptyDir)
+	t.Run("removeDirWhichHasFiles", ta.removeDirWhichHasFiles)
+	t.Run("removeDirWhichHasSubDirs", ta.removeDirWhichHasSubDirs)
+	t.Run("appendFileContentsToEnd", ta.appendFileContentsToEnd)
 }

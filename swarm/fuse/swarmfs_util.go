@@ -19,46 +19,30 @@
 package fuse
 
 import (
+	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"os/exec"
 	"runtime"
-	"time"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
-func externalUnMount(mountPoint string) error {
+func externalUnmount(mountPoint string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), unmountTimeout)
+	defer cancel()
 
-	var cmd *exec.Cmd
-
+	// Try generic umount.
+	if err := exec.CommandContext(ctx, "umount", mountPoint).Run(); err == nil {
+		return nil
+	}
+	// Try FUSE-specific commands if umount didn't work.
 	switch runtime.GOOS {
-
 	case "darwin":
-		cmd = exec.Command("/usr/bin/diskutil", "umount", "force", mountPoint)
-
+		return exec.CommandContext(ctx, "diskutil", "umount", "force", mountPoint).Run()
 	case "linux":
-		cmd = exec.Command("fusermount", "-u", mountPoint)
-
+		return exec.CommandContext(ctx, "fusermount", "-u", mountPoint).Run()
 	default:
 		return fmt.Errorf("unmount: unimplemented")
-	}
-
-	errc := make(chan error, 1)
-	go func() {
-		defer close(errc)
-
-		if err := exec.Command("umount", mountPoint).Run(); err == nil {
-			return
-		}
-		errc <- cmd.Run()
-	}()
-
-	select {
-
-	case <-time.After(unmountTimeout):
-		return fmt.Errorf("umount timeout")
-
-	case err := <-errc:
-		return err
 	}
 }
 
