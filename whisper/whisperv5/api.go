@@ -222,7 +222,7 @@ func (api *PublicWhisperAPI) Subscribe(args WhisperFilterArgs) (string, error) {
 	var err error
 	for i, bt := range args.Topics {
 		if len(bt) == 0 || len(bt) > 4 {
-			return "", errors.New(fmt.Sprintf("subscribe: topic %d has wrong size: %d", i, len(bt)))
+			return "", fmt.Errorf("subscribe: topic %d has wrong size: %d", i, len(bt))
 		}
 		filter.Topics = append(filter.Topics, bt)
 	}
@@ -332,7 +332,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 	if len(args.Topic) == TopicLength {
 		params.Topic = BytesToTopic(args.Topic)
 	} else if len(args.Topic) != 0 {
-		return errors.New(fmt.Sprintf("post: wrong topic size %d", len(args.Topic)))
+		return fmt.Errorf("post: wrong topic size %d", len(args.Topic))
 	}
 
 	if args.Type == "sym" {

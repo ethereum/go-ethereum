@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -63,16 +62,6 @@ type StructLog struct {
 	Storage map[common.Hash]common.Hash `json:"-"`
 	Depth   int                         `json:"depth"`
 	Err     error                       `json:"error"`
-}
-
-// overrides for gencodec
-type structLogMarshaling struct {
-	Stack      []*math.HexOrDecimal256
-	Gas        math.HexOrDecimal64
-	GasCost    math.HexOrDecimal64
-	Memory     hexutil.Bytes
-	OpName     string `json:"opName"`
-	MemorySize int    `json:"memSize"`
 }
 
 func (s *StructLog) OpName() string {

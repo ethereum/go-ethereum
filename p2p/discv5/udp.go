@@ -36,25 +36,15 @@ const Version = 4
 
 // Errors
 var (
-	errPacketTooSmall   = errors.New("too small")
-	errBadHash          = errors.New("bad hash")
-	errExpired          = errors.New("expired")
-	errUnsolicitedReply = errors.New("unsolicited reply")
-	errUnknownNode      = errors.New("unknown node")
-	errTimeout          = errors.New("RPC timeout")
-	errClockWarp        = errors.New("reply deadline too far in the future")
-	errClosed           = errors.New("socket closed")
+	errPacketTooSmall = errors.New("too small")
+	errBadHash        = errors.New("bad hash")
 )
 
 // Timeouts
 const (
-	respTimeout = 500 * time.Millisecond
-	sendTimeout = 500 * time.Millisecond
-	expiration  = 20 * time.Second
-
-	ntpFailureThreshold = 32               // Continuous timeouts after which to check NTP
-	ntpWarningCooldown  = 10 * time.Minute // Minimum amount of time to pass before repeating NTP warning
-	driftThreshold      = 10 * time.Second // Allowed clock drift before warning user
+	respTimeout    = 500 * time.Millisecond
+	expiration     = 20 * time.Second
+	driftThreshold = 10 * time.Second // Allowed clock drift before warning user
 )
 
 // RPC request structures
@@ -194,10 +184,6 @@ func makeEndpoint(addr *net.UDPAddr, tcpPort uint16) rpcEndpoint {
 	return rpcEndpoint{IP: ip, UDP: uint16(addr.Port), TCP: tcpPort}
 }
 
-func (e1 rpcEndpoint) equal(e2 rpcEndpoint) bool {
-	return e1.UDP == e2.UDP && e1.TCP == e2.TCP && e1.IP.Equal(e2.IP)
-}
-
 func nodeFromRPC(sender *net.UDPAddr, rn rpcNode) (*Node, error) {
 	if err := netutil.CheckRelayIP(sender.IP, rn.IP); err != nil {
 		return nil, err
@@ -232,7 +218,6 @@ type udp struct {
 	conn        conn
 	priv        *ecdsa.PrivateKey
 	ourEndpoint rpcEndpoint
-	nat         nat.Interface
 	net         *Network
 }
 

@@ -24,10 +24,7 @@ import (
 	"strconv"
 )
 
-var (
-	textZero     = []byte(`0x0`)
-	errNonString = errors.New("cannot unmarshal non-string as hex data")
-)
+var errNonString = errors.New("cannot unmarshal non-string as hex data")
 
 // Bytes marshals/unmarshals as a JSON string with 0x prefix.
 // The empty slice marshals as "0x".

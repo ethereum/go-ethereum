@@ -19,7 +19,6 @@ package storage
 import (
 	"fmt"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -40,7 +39,6 @@ type NetStore struct {
 	hashfunc   Hasher
 	localStore *LocalStore
 	cloud      CloudStore
-	lock       sync.Mutex
 }
 
 // backend engine for cloud store
@@ -78,11 +76,6 @@ func NewNetStore(hash Hasher, lstore *LocalStore, cloud CloudStore, params *Stor
 		cloud:      cloud,
 	}
 }
-
-const (
-	// maximum number of peers that a retrieved message is delivered to
-	requesterCount = 3
-)
 
 var (
 	// timeout interval before retrieval is timed out
@@ -135,5 +128,4 @@ func (self *NetStore) Get(key Key) (*Chunk, error) {
 
 // Close netstore
 func (self *NetStore) Close() {
-	return
 }

@@ -25,11 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 )
 
-const (
-	//forceSyncCycle      = 10 * time.Second // Time interval to force syncs, even if few peers are available
-	minDesiredPeerCount = 5 // Amount of peers desired to start syncing
-)
-
 // syncer is responsible for periodically synchronising with the network, both
 // downloading hashes and blocks as well as handling the announcement handler.
 func (pm *ProtocolManager) syncer() {

@@ -71,19 +71,6 @@ func TestKDF(t *testing.T) {
 
 var ErrBadSharedKeys = fmt.Errorf("ecies: shared keys don't match")
 
-// cmpParams compares a set of ECIES parameters. We assume, as per the
-// docs, that AES is the only supported symmetric encryption algorithm.
-func cmpParams(p1, p2 *ECIESParams) bool {
-	if p1.hashAlgo != p2.hashAlgo {
-		return false
-	} else if p1.KeyLen != p2.KeyLen {
-		return false
-	} else if p1.BlockSize != p2.BlockSize {
-		return false
-	}
-	return true
-}
-
 // cmpPublic returns true if the two public keys represent the same pojnt.
 func cmpPublic(pub1, pub2 PublicKey) bool {
 	if pub1.X == nil || pub1.Y == nil {

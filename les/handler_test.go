@@ -26,8 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 func expectResponse(r p2p.MsgReader, msgcode, reqID, bv uint64, data interface{}) error {
@@ -301,38 +299,3 @@ func testGetReceipt(t *testing.T, protocol int) {
 
 // Tests that trie merkle proofs can be retrieved
 func TestGetProofsLes1(t *testing.T) { testGetReceipt(t, 1) }
-
-func testGetProofs(t *testing.T, protocol int) {
-	// Assemble the test environment
-	pm, db, _ := newTestProtocolManagerMust(t, false, 4, testChainGen)
-	bc := pm.blockchain.(*core.BlockChain)
-	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
-	defer peer.close()
-
-	var proofreqs []ProofReq
-	var proofs [][]rlp.RawValue
-
-	accounts := []common.Address{testBankAddress, acc1Addr, acc2Addr, {}}
-	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
-		header := bc.GetHeaderByNumber(i)
-		root := header.Root
-		trie, _ := trie.New(root, db)
-
-		for _, acc := range accounts {
-			req := ProofReq{
-				BHash: header.Hash(),
-				Key:   acc[:],
-			}
-			proofreqs = append(proofreqs, req)
-
-			proof := trie.Prove(crypto.Keccak256(acc[:]))
-			proofs = append(proofs, proof)
-		}
-	}
-	// Send the proof request and verify the response
-	cost := peer.GetRequestCost(GetProofsMsg, len(proofreqs))
-	sendRequest(peer.app, GetProofsMsg, 42, cost, proofreqs)
-	if err := expectResponse(peer.app, ProofsMsg, 42, testBufLimit, proofs); err != nil {
-		t.Errorf("proofs mismatch: %v", err)
-	}
-}

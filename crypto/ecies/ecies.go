@@ -158,7 +158,6 @@ func incCounter(ctr []byte) {
 	} else if ctr[0]++; ctr[0] != 0 {
 		return
 	}
-	return
 }
 
 // NIST SP 800-56 Concatenation Key Derivation Function (see section 5.8.1).

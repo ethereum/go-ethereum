@@ -93,7 +93,7 @@ func TestBzzrGetPath(t *testing.T) {
 					isexpectedfailrequest = true
 				}
 			}
-			if isexpectedfailrequest == false {
+			if !isexpectedfailrequest {
 				t.Fatalf("Response body does not match, expected: %v, got %v", testmanifest[v], string(respbody))
 			}
 		}
@@ -116,12 +116,16 @@ func TestBzzrGetPath(t *testing.T) {
 		var respbody []byte
 
 		resp, err = http.Get(url)
-
 		if err != nil {
 			t.Fatalf("Request failed: %v", err)
 		}
 		defer resp.Body.Close()
+
 		respbody, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Reading body failed: %v", err)
+		}
+
 		if string(respbody) != nonhashresponses[i] {
 			t.Fatalf("Non-Hash response body does not match, expected: %v, got: %v", nonhashresponses[i], string(respbody))
 		}

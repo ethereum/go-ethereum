@@ -34,11 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var (
-	hashMatcher      = regexp.MustCompile("^[0-9A-Fa-f]{64}")
-	slashes          = regexp.MustCompile("/+")
-	domainAndVersion = regexp.MustCompile("[@:;,]+")
-)
+var hashMatcher = regexp.MustCompile("^[0-9A-Fa-f]{64}")
 
 type Resolver interface {
 	Resolve(string) (common.Hash, error)
@@ -356,5 +352,5 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 		manifestEntryMap[suffix] = entry
 	})
 
-	return key, manifestEntryMap, nil
+	return key, manifestEntryMap, err
 }

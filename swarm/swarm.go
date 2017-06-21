@@ -50,7 +50,6 @@ type Swarm struct {
 	storage     storage.ChunkStore     // internal access to storage, common interface to cloud storage backends
 	dpa         *storage.DPA           // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
-	cloud       storage.CloudStore     // procurement, cloud storage backend (can multi-cloud)
 	hive        *network.Hive          // the logistic manager
 	backend     chequebook.Backend     // simple blockchain Backend
 	privateKey  *ecdsa.PrivateKey

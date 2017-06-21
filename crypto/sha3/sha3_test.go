@@ -53,15 +53,6 @@ var testShakes = map[string]func() ShakeHash{
 	"SHAKE256": NewShake256,
 }
 
-// decodeHex converts a hex-encoded string into a raw byte string.
-func decodeHex(s string) []byte {
-	b, err := hex.DecodeString(s)
-	if err != nil {
-		panic(err)
-	}
-	return b
-}
-
 // structs used to marshal JSON test-cases.
 type KeccakKats struct {
 	Kats map[string][]struct {
@@ -118,37 +109,6 @@ func TestKeccakKats(t *testing.T) {
 					t.FailNow()
 				}
 				continue
-			}
-		}
-	})
-}
-
-// TestUnalignedWrite tests that writing data in an arbitrary pattern with
-// small input buffers.
-func testUnalignedWrite(t *testing.T) {
-	testUnalignedAndGeneric(t, func(impl string) {
-		buf := sequentialBytes(0x10000)
-		for alg, df := range testDigests {
-			d := df()
-			d.Reset()
-			d.Write(buf)
-			want := d.Sum(nil)
-			d.Reset()
-			for i := 0; i < len(buf); {
-				// Cycle through offsets which make a 137 byte sequence.
-				// Because 137 is prime this sequence should exercise all corner cases.
-				offsets := [17]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1}
-				for _, j := range offsets {
-					if v := len(buf) - i; v < j {
-						j = v
-					}
-					d.Write(buf[i : i+j])
-					i += j
-				}
-			}
-			got := d.Sum(nil)
-			if !bytes.Equal(got, want) {
-				t.Errorf("Unaligned writes, implementation=%s, alg=%s\ngot %q, want %q", impl, alg, got, want)
 			}
 		}
 	})

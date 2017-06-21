@@ -48,7 +48,6 @@ import (
 const (
 	defaultGas      = 90000
 	defaultGasPrice = 50 * params.Shannon
-	emptyHex        = "0x"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -634,10 +633,8 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	// Wait for the context to be done and cancel the evm. Even if the
 	// EVM has finished, cancelling may be done (repeatedly)
 	go func() {
-		select {
-		case <-ctx.Done():
-			evm.Cancel()
-		}
+		<-ctx.Done()
+		evm.Cancel()
 	}()
 
 	// Setup the gas pool (also for unmetered requests)
@@ -1393,7 +1390,7 @@ func (api *PublicDebugAPI) PrintBlock(ctx context.Context, number uint64) (strin
 	if block == nil {
 		return "", fmt.Errorf("block #%d not found", number)
 	}
-	return fmt.Sprintf("%s", block), nil
+	return block.String(), nil
 }
 
 // SeedHash retrieves the seed hash of a block.

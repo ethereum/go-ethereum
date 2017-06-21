@@ -43,13 +43,13 @@ type odrPeerSelector interface {
 
 type LesOdr struct {
 	light.OdrBackend
-	db           ethdb.Database
-	stop         chan struct{}
-	removePeer   peerDropFn
-	mlock, clock sync.Mutex
-	sentReqs     map[uint64]*sentReq
-	serverPool   odrPeerSelector
-	reqDist      *requestDistributor
+	db         ethdb.Database
+	stop       chan struct{}
+	removePeer peerDropFn
+	mlock      sync.Mutex
+	sentReqs   map[uint64]*sentReq
+	serverPool odrPeerSelector
+	reqDist    *requestDistributor
 }
 
 func NewLesOdr(db ethdb.Database) *LesOdr {

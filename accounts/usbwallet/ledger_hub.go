@@ -199,7 +199,7 @@ func (hub *LedgerHub) updater() {
 	for {
 		// Wait for a USB hotplug event (not supported yet) or a refresh timeout
 		select {
-		//case <-hub.changes: // reenable on hutplug implementation
+		// case <-hub.changes: // re-enable on hutplug implementation
 		case <-time.After(ledgerRefreshCycle):
 		}
 		// Run the wallet refresher

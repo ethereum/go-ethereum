@@ -121,7 +121,7 @@ func TestCompression(t *testing.T) {
 	in := hexutil.MustDecode("0x4912385c0e7b64000000")
 	out := hexutil.MustDecode("0x80fe4912385c0e7b64")
 
-	if data := CompressBytes(in); bytes.Compare(data, out) != 0 {
+	if data := CompressBytes(in); !bytes.Equal(data, out) {
 		t.Errorf("encoding mismatch for sparse data: have %x, want %x", data, out)
 	}
 	if data, err := DecompressBytes(out, len(in)); err != nil || bytes.Compare(data, in) != 0 {

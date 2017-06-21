@@ -60,8 +60,6 @@ type Interpreter struct {
 	cfg      Config
 	gasTable params.GasTable
 	intPool  *intPool
-
-	readonly bool
 }
 
 // NewInterpreter returns a new instance of the Interpreter.

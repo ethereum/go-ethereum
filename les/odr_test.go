@@ -158,7 +158,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 
 func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	// Assemble the test environment
-	pm, db, odr := newTestProtocolManagerMust(t, false, 4, testChainGen)
+	pm, db, _ := newTestProtocolManagerMust(t, false, 4, testChainGen)
 	lpm, ldb, odr := newTestProtocolManagerMust(t, true, 0, nil)
 	_, err1, lpeer, err2 := newTestPeerPair("peer", protocol, pm, lpm)
 	pool := &testServerPool{}
