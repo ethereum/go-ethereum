@@ -347,11 +347,11 @@ func (s *stateSync) fillTasks(n int, req *stateReq) {
 // delivered.
 func (s *stateSync) process(req *stateReq) (bool, error) {
 	// Collect processing stats and update progress if valid data was received
-	processed, duplicate, unexpected := 0, 0, 0
+	processed, written, duplicate, unexpected := 0, 0, 0, 0
 
 	defer func(start time.Time) {
-		if processed+duplicate+unexpected > 0 {
-			s.updateStats(processed, duplicate, unexpected, time.Since(start))
+		if processed+written+duplicate+unexpected > 0 {
+			s.updateStats(processed, written, duplicate, unexpected, time.Since(start))
 		}
 	}(time.Now())
 
@@ -379,10 +379,25 @@ func (s *stateSync) process(req *stateReq) (bool, error) {
 			stale = false
 		}
 	}
-	// If some data managed to hit the database, sync progressed so reset any pivot fail counter
-	if progress && atomic.LoadUint32(&s.d.fsPivotFails) > 1 {
-		log.Trace("Fast-sync progressed, resetting fail counter", "previous", atomic.LoadUint32(&s.d.fsPivotFails))
-		atomic.StoreUint32(&s.d.fsPivotFails, 1) // Don't ever reset to 0, as that will unlock the pivot block
+	// If some data managed to hit the database, flush and reset failure counters
+	if progress {
+		// Flush any accumulated data out to disk
+		batch := s.d.stateDB.NewBatch()
+
+		count, err := s.sched.Commit(batch)
+		if err != nil {
+			return stale, err
+		}
+		if err := batch.Write(); err != nil {
+			return stale, err
+		}
+		written = count
+
+		// If we're inside the critical section, reset fail counter since we progressed
+		if atomic.LoadUint32(&s.d.fsPivotFails) > 1 {
+			log.Trace("Fast-sync progressed, resetting fail counter", "previous", atomic.LoadUint32(&s.d.fsPivotFails))
+			atomic.StoreUint32(&s.d.fsPivotFails, 1) // Don't ever reset to 0, as that will unlock the pivot block
+		}
 	}
 	// Put unfulfilled tasks back into the retry queue
 	npeers := s.d.peers.Len()
@@ -409,28 +424,19 @@ func (s *stateSync) process(req *stateReq) (bool, error) {
 // peer into the state trie, returning whether anything useful was written or any
 // error occurred.
 func (s *stateSync) processNodeData(blob []byte) (bool, common.Hash, error) {
-	// Convert the delivered data blob into a trie sync result
 	res := trie.SyncResult{Data: blob}
 
 	s.keccak.Reset()
 	s.keccak.Write(blob)
 	s.keccak.Sum(res.Hash[:0])
 
-	// Process the trie node and write any finalized data
-	batch := s.d.stateDB.NewBatch()
-
-	committed, _, err := s.sched.Process([]trie.SyncResult{res}, batch)
-	if committed {
-		if werr := batch.Write(); werr != nil {
-			return false, common.Hash{}, werr
-		}
-	}
+	committed, _, err := s.sched.Process([]trie.SyncResult{res})
 	return committed, res.Hash, err
 }
 
 // updateStats bumps the various state sync progress counters and displays a log
 // message for the user to see.
-func (s *stateSync) updateStats(processed, duplicate, unexpected int, duration time.Duration) {
+func (s *stateSync) updateStats(processed, written, duplicate, unexpected int, duration time.Duration) {
 	s.d.syncStatsLock.Lock()
 	defer s.d.syncStatsLock.Unlock()
 
@@ -439,5 +445,5 @@ func (s *stateSync) updateStats(processed, duplicate, unexpected int, duration t
 	s.d.syncStatsState.duplicate += uint64(duplicate)
 	s.d.syncStatsState.unexpected += uint64(unexpected)
 
-	log.Info("Imported new state entries", "count", processed, "elapsed", common.PrettyDuration(duration), "processed", s.d.syncStatsState.processed, "pending", s.d.syncStatsState.pending, "retry", len(s.tasks), "duplicate", s.d.syncStatsState.duplicate, "unexpected", s.d.syncStatsState.unexpected)
+	log.Info("Imported new state entries", "count", processed, "flushed", written, "elapsed", common.PrettyDuration(duration), "processed", s.d.syncStatsState.processed, "pending", s.d.syncStatsState.pending, "retry", len(s.tasks), "duplicate", s.d.syncStatsState.duplicate, "unexpected", s.d.syncStatsState.unexpected)
 }

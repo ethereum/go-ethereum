@@ -52,6 +52,21 @@ type SyncResult struct {
 	Data []byte      // Data content of the retrieved node
 }
 
+// SyncMemCache is an in-memory cache of successfully downloaded but not yet
+// persisted data items.
+type SyncMemCache struct {
+	cache map[common.Hash][]byte // In-memory memcache of recently ocmpleted items
+	order []common.Hash          // Order of completion to prevent out-of-order data loss
+}
+
+// newSyncMemCache allocates a new memory-cache for not-yet persisted trie nodes.
+func newSyncMemCache() *SyncMemCache {
+	return &SyncMemCache{
+		cache: make(map[common.Hash][]byte),
+		order: make([]common.Hash, 0, 256),
+	}
+}
+
 // TrieSyncLeafCallback is a callback type invoked when a trie sync reaches a
 // leaf node. It's used by state syncing to check if the leaf node requires some
 // further data syncing.
@@ -61,7 +76,8 @@ type TrieSyncLeafCallback func(leaf []byte, parent common.Hash) error
 // unknown trie hashes to retrieve, accepts node data associated with said hashes
 // and reconstructs the trie step by step until all is done.
 type TrieSync struct {
-	database DatabaseReader
+	database DatabaseReader           // Persistent database to check for existing entries
+	memcache *SyncMemCache            // Memory cache to avoid frequest database writes
 	requests map[common.Hash]*request // Pending requests pertaining to a key hash
 	queue    *prque.Prque             // Priority queue with the pending requests
 }
@@ -70,6 +86,7 @@ type TrieSync struct {
 func NewTrieSync(root common.Hash, database DatabaseReader, callback TrieSyncLeafCallback) *TrieSync {
 	ts := &TrieSync{
 		database: database,
+		memcache: newSyncMemCache(),
 		requests: make(map[common.Hash]*request),
 		queue:    prque.New(),
 	}
@@ -81,6 +98,9 @@ func NewTrieSync(root common.Hash, database DatabaseReader, callback TrieSyncLea
 func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callback TrieSyncLeafCallback) {
 	// Short circuit if the trie is empty or already known
 	if root == emptyRoot {
+		return
+	}
+	if _, ok := s.memcache.cache[root]; ok {
 		return
 	}
 	key := root.Bytes()
@@ -113,6 +133,9 @@ func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, c
 func (s *TrieSync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) {
 	// Short circuit if the entry is empty or already known
 	if hash == emptyState {
+		return
+	}
+	if _, ok := s.memcache.cache[hash]; ok {
 		return
 	}
 	if blob, _ := s.database.Get(hash.Bytes()); blob != nil {
@@ -148,7 +171,7 @@ func (s *TrieSync) Missing(max int) []common.Hash {
 // Process injects a batch of retrieved trie nodes data, returning if something
 // was committed to the database and also the index of an entry if processing of
 // it failed.
-func (s *TrieSync) Process(results []SyncResult, dbw DatabaseWriter) (bool, int, error) {
+func (s *TrieSync) Process(results []SyncResult) (bool, int, error) {
 	committed := false
 
 	for i, item := range results {
@@ -163,7 +186,7 @@ func (s *TrieSync) Process(results []SyncResult, dbw DatabaseWriter) (bool, int,
 		// If the item is a raw entry request, commit directly
 		if request.raw {
 			request.data = item.Data
-			s.commit(request, dbw)
+			s.commit(request)
 			committed = true
 			continue
 		}
@@ -180,7 +203,7 @@ func (s *TrieSync) Process(results []SyncResult, dbw DatabaseWriter) (bool, int,
 			return committed, i, err
 		}
 		if len(requests) == 0 && request.deps == 0 {
-			s.commit(request, dbw)
+			s.commit(request)
 			committed = true
 			continue
 		}
@@ -190,6 +213,22 @@ func (s *TrieSync) Process(results []SyncResult, dbw DatabaseWriter) (bool, int,
 		}
 	}
 	return committed, 0, nil
+}
+
+// Commit flushes the data stored in the internal memcache out to persistent
+// storage, returning th enumber of items written and any occurred error.
+func (s *TrieSync) Commit(dbw DatabaseWriter) (int, error) {
+	// Dump the memcache into a database dbw
+	for i, key := range s.memcache.order {
+		if err := dbw.Put(key[:], s.memcache.cache[key]); err != nil {
+			return i, err
+		}
+	}
+	written := len(s.memcache.order)
+
+	// Drop the memcache data and return
+	s.memcache = newSyncMemCache()
+	return written, nil
 }
 
 // Pending returns the number of state entries currently pending for download.
@@ -253,13 +292,17 @@ func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 		// If the child references another node, resolve or schedule
 		if node, ok := (child.node).(hashNode); ok {
 			// Try to resolve the node from the local database
+			hash := common.BytesToHash(node)
+			if _, ok := s.memcache.cache[hash]; ok {
+				continue
+			}
 			blob, _ := s.database.Get(node)
 			if local, err := decodeNode(node[:], blob, 0); local != nil && err == nil {
 				continue
 			}
 			// Locally unknown node, schedule for retrieval
 			requests = append(requests, &request{
-				hash:     common.BytesToHash(node),
+				hash:     hash,
 				parents:  []*request{req},
 				depth:    child.depth,
 				callback: req.callback,
@@ -269,21 +312,21 @@ func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 	return requests, nil
 }
 
-// commit finalizes a retrieval request and stores it into the database. If any
+// commit finalizes a retrieval request and stores it into the memcache. If any
 // of the referencing parent requests complete due to this commit, they are also
 // committed themselves.
-func (s *TrieSync) commit(req *request, dbw DatabaseWriter) (err error) {
-	// Write the node content to disk
-	if err := dbw.Put(req.hash[:], req.data); err != nil {
-		return err
-	}
+func (s *TrieSync) commit(req *request) (err error) {
+	// Write the node content to the memcache
+	s.memcache.cache[req.hash] = req.data
+	s.memcache.order = append(s.memcache.order, req.hash)
+
 	delete(s.requests, req.hash)
 
 	// Check all parents for completion
 	for _, parent := range req.parents {
 		parent.deps--
 		if parent.deps == 0 {
-			if err := s.commit(parent, dbw); err != nil {
+			if err := s.commit(parent); err != nil {
 				return err
 			}
 		}
