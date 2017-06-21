@@ -20,8 +20,6 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-//go:generate gencodec -type Config -formats toml -out gen_config.go
-
 type Config struct {
 	MaxMessageSize     uint32  `toml:",omitempty"`
 	MinimumAcceptedPOW float64 `toml:",omitempty"`
