@@ -526,7 +526,7 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash) bool {
 		return false
 	}
 	// Ensure the associated state is also present
-	_, err := state.New(block.Root(), bc.stateCache)
+	_, err := bc.stateCache.OpenTrie(block.Root())
 	return err == nil
 }
 
