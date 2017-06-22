@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -17,6 +18,7 @@ import (
 )
 
 const (
+	rpcTimeout     = time.Second
 	inboxCapacity  = 3000
 	outboxCapacity = 100
 	addrLen        = common.HashLength
@@ -39,9 +41,7 @@ type Client struct {
 	msgC    chan pss.APIMsg
 	quitC   chan struct{}
 
-	ctx    context.Context
-	cancel func()
-	lock   sync.Mutex
+	lock sync.Mutex
 }
 
 // implements p2p.MsgReadWriter
@@ -85,20 +85,21 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 		return err
 	}
 
-	return rw.Client.rpc.CallContext(rw.Client.ctx, nil, "pss_send", rw.topic, pss.APIMsg{
+	ctx, _ := context.WithTimeout(context.Background(), rpcTimeout)
+	return rw.Client.rpc.CallContext(ctx, nil, "pss_send", rw.topic, pss.APIMsg{
 		Addr: rw.addr.Bytes(),
 		Msg:  pmsg,
 	})
 
 }
 
-func NewClient(ctx context.Context, rpcurl string) (*Client, error) {
+func NewClient(rpcurl string) (*Client, error) {
 	rpcclient, err := rpc.Dial(rpcurl)
 	if err != nil {
 		return nil, err
 	}
 
-	client, err := NewClientWithRPC(ctx, rpcclient)
+	client, err := NewClientWithRPC(rpcclient)
 	if err != nil {
 		return nil, err
 	}
@@ -107,26 +108,23 @@ func NewClient(ctx context.Context, rpcurl string) (*Client, error) {
 
 // Constructor for test implementations
 // The 'rpcclient' parameter allows passing a in-memory rpc client to act as the remote websocket RPC.
-func NewClientWithRPC(ctx context.Context, rpcclient *rpc.Client) (*Client, error) {
-	client := newClient(ctx)
+func NewClientWithRPC(rpcclient *rpc.Client) (*Client, error) {
+	client := newClient()
 	client.rpc = rpcclient
-	err := client.rpc.CallContext(client.ctx, &client.BaseAddr, "pss_baseAddr")
+	ctx, _ := context.WithTimeout(context.Background(), rpcTimeout)
+	err := client.rpc.CallContext(ctx, &client.BaseAddr, "pss_baseAddr")
 	if err != nil {
 		return nil, fmt.Errorf("cannot get pss node baseaddress: %v", err)
 	}
 	return client, nil
 }
 
-func newClient(ctx context.Context) (client *Client) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+func newClient() (client *Client) {
 	client = &Client{
 		msgC:     make(chan pss.APIMsg),
 		quitC:    make(chan struct{}),
 		peerPool: make(map[pss.Topic]map[pot.Address]*pssRPCRW),
 		protos:   make(map[pss.Topic]*p2p.Protocol),
-		ctx:      ctx,
 	}
 	return
 }
@@ -140,7 +138,8 @@ func (self *Client) RunProtocol(proto *p2p.Protocol) error {
 	topic := pss.NewTopic(proto.Name, int(proto.Version))
 	msgC := make(chan pss.APIMsg)
 	self.peerPool[topic] = make(map[pot.Address]*pssRPCRW)
-	sub, err := self.rpc.Subscribe(self.ctx, "pss", msgC, "receive", topic)
+	ctx, _ := context.WithTimeout(context.Background(), rpcTimeout)
+	sub, err := self.rpc.Subscribe(ctx, "pss", msgC, "receive", topic)
 	if err != nil {
 		return fmt.Errorf("pss event subscription failed: %v", err)
 	}
@@ -174,7 +173,6 @@ func (self *Client) RunProtocol(proto *p2p.Protocol) error {
 
 // Always call this to ensure that we exit cleanly
 func (self *Client) Stop() error {
-	self.cancel()
 	return nil
 }
 

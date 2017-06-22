@@ -69,11 +69,7 @@ func TestIncoming(t *testing.T) {
 
 	ps.Process(&pssmsg)
 
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("outgoing timed out or canceled")
-	case <-ping.C:
-	}
+	<-ping.C
 
 	quitC <- struct{}{}
 }
@@ -107,18 +103,14 @@ func TestOutgoing(t *testing.T) {
 	p := p2p.NewPeer(nid, fmt.Sprintf("%v", potaddr), []p2p.Cap{})
 	pp := protocols.NewPeer(p, client.peerPool[topic][potaddr], pss.PingProtocol)
 	pp.Send(msg)
-	select {
-	case <-client.ctx.Done():
-		t.Fatalf("outgoing timed out or canceled")
-	case <-ping.C:
-	}
+	<-ping.C
 	quitC <- struct{}{}
 }
 
 func baseTester(t *testing.T, proto *p2p.Protocol, ps *pss.Pss, ctx context.Context, quitC chan struct{}) (*Client, error) {
 	var err error
 
-	client := newTestclient(t, ctx, quitC)
+	client := newTestclient(t, quitC)
 
 	err = client.RunProtocol(proto)
 
@@ -143,7 +135,7 @@ func newProtocol(ping *pss.Ping) *p2p.Protocol {
 	}
 }
 
-func newTestclient(t *testing.T, ctx context.Context, quitC chan struct{}) *Client {
+func newTestclient(t *testing.T, quitC chan struct{}) *Client {
 
 	ps := pss.NewTestPss(nil)
 	srv := rpc.NewServer()
@@ -166,7 +158,7 @@ func newTestclient(t *testing.T, ctx context.Context, quitC chan struct{}) *Clie
 		sock.Close()
 	}()
 
-	pssclient, err := NewClient(ctx, "ws://localhost:8546")
+	pssclient, err := NewClient("ws://localhost:8546")
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
