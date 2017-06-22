@@ -53,6 +53,7 @@ matrix:
             - debhelper
             - dput
             - gcc-multilib
+            - fakeroot
       script:
         # Build for the primary platforms that Trusty can manage
         - go run build/ci.go debsrc -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>" -upload ppa:ethereum/ethereum
