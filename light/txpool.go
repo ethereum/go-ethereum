@@ -360,7 +360,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	currentState := pool.currentState()
 	if n, err := currentState.GetNonce(ctx, from); err == nil {
 		if n > tx.Nonce() {
-			return core.ErrNonce
+			return core.ErrNonceTooLow
 		}
 	} else {
 		return err

@@ -35,16 +35,41 @@ import (
 )
 
 var (
-	// Transaction Pool Errors
-	ErrInvalidSender      = errors.New("invalid sender")
-	ErrNonce              = errors.New("nonce too low")
-	ErrUnderpriced        = errors.New("transaction underpriced")
+	// ErrInvalidSender is returned if the transaction contains an invalid signature.
+	ErrInvalidSender = errors.New("invalid sender")
+
+	// ErrNonceTooLow is returned if the nonce of a transaction is lower than the
+	// one present in the local chain.
+	ErrNonceTooLow = errors.New("nonce too low")
+
+	// ErrUnderpriced is returned if a transaction's gas price is below the minimum
+	// configured for the transaction pool.
+	ErrUnderpriced = errors.New("transaction underpriced")
+
+	// ErrReplaceUnderpriced is returned if a transaction is attempted to be replaced
+	// with a different one without the required price bump.
 	ErrReplaceUnderpriced = errors.New("replacement transaction underpriced")
-	ErrBalance            = errors.New("insufficient balance")
-	ErrInsufficientFunds  = errors.New("insufficient funds for gas * price + value")
-	ErrIntrinsicGas       = errors.New("intrinsic gas too low")
-	ErrGasLimit           = errors.New("exceeds block gas limit")
-	ErrNegativeValue      = errors.New("negative value")
+
+	// ErrInsufficientFunds is returned if the total cost of executing a transaction
+	// is higher than the balance of the user's account.
+	ErrInsufficientFunds = errors.New("insufficient funds for gas * price + value")
+
+	// ErrIntrinsicGas is returned if the transaction is specified to use less gas
+	// than required to start the invocation.
+	ErrIntrinsicGas = errors.New("intrinsic gas too low")
+
+	// ErrGasLimit is returned if a transaction's requested gas limit exceeds the
+	// maximum allowance of the current block.
+	ErrGasLimit = errors.New("exceeds block gas limit")
+
+	// ErrNegativeValue is a sanity error to ensure noone is able to specify a
+	// transaction with a negative value.
+	ErrNegativeValue = errors.New("negative value")
+
+	// ErrOversizedData is returned if the input data of a transaction is greater
+	// than some meaningful limit a user might use. This is not a consensus error
+	// making the transaction invalid, rather a DOS protection.
+	ErrOversizedData = errors.New("oversized data")
 )
 
 var (
@@ -54,16 +79,16 @@ var (
 
 var (
 	// Metrics for the pending pool
-	pendingDiscardCounter = metrics.NewCounter("txpool/pending/discard")
-	pendingReplaceCounter = metrics.NewCounter("txpool/pending/replace")
-	pendingRLCounter      = metrics.NewCounter("txpool/pending/ratelimit") // Dropped due to rate limiting
-	pendingNofundsCounter = metrics.NewCounter("txpool/pending/nofunds")   // Dropped due to out-of-funds
+	pendingDiscardCounter   = metrics.NewCounter("txpool/pending/discard")
+	pendingReplaceCounter   = metrics.NewCounter("txpool/pending/replace")
+	pendingRateLimitCounter = metrics.NewCounter("txpool/pending/ratelimit") // Dropped due to rate limiting
+	pendingNofundsCounter   = metrics.NewCounter("txpool/pending/nofunds")   // Dropped due to out-of-funds
 
 	// Metrics for the queued pool
-	queuedDiscardCounter = metrics.NewCounter("txpool/queued/discard")
-	queuedReplaceCounter = metrics.NewCounter("txpool/queued/replace")
-	queuedRLCounter      = metrics.NewCounter("txpool/queued/ratelimit") // Dropped due to rate limiting
-	queuedNofundsCounter = metrics.NewCounter("txpool/queued/nofunds")   // Dropped due to out-of-funds
+	queuedDiscardCounter   = metrics.NewCounter("txpool/queued/discard")
+	queuedReplaceCounter   = metrics.NewCounter("txpool/queued/replace")
+	queuedRateLimitCounter = metrics.NewCounter("txpool/queued/ratelimit") // Dropped due to rate limiting
+	queuedNofundsCounter   = metrics.NewCounter("txpool/queued/nofunds")   // Dropped due to out-of-funds
 
 	// General tx metrics
 	invalidTxCounter     = metrics.NewCounter("txpool/invalid")
@@ -374,7 +399,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	}
 	// Last but not least check for nonce errors
 	if currentState.GetNonce(from) > tx.Nonce() {
-		return ErrNonce
+		return ErrNonceTooLow
 	}
 
 	// Check the transaction doesn't exceed the current
@@ -395,12 +420,15 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	if currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 		return ErrInsufficientFunds
 	}
-
 	intrGas := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
 	if tx.Gas().Cmp(intrGas) < 0 {
 		return ErrIntrinsicGas
 	}
 
+	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
+	if tx.Size() > 32*1024 {
+		return ErrOversizedData
+	}
 	return nil
 }
 
@@ -638,8 +666,9 @@ func (pool *TxPool) removeTx(hash common.Hash) {
 			}
 			// Update the account nonce if needed
 			if nonce := tx.Nonce(); pool.pendingState.GetNonce(addr) > nonce {
-				pool.pendingState.SetNonce(addr, tx.Nonce())
+				pool.pendingState.SetNonce(addr, nonce)
 			}
+			return
 		}
 	}
 	// Transaction is in the future queue
@@ -696,10 +725,10 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB, accounts []common.A
 		// Drop all transactions over the allowed limit
 		for _, tx := range list.Cap(int(pool.config.AccountQueue)) {
 			hash := tx.Hash()
-			log.Trace("Removed cap-exceeding queued transaction", "hash", hash)
 			delete(pool.all, hash)
 			pool.priced.Removed()
-			queuedRLCounter.Inc(1)
+			queuedRateLimitCounter.Inc(1)
+			log.Trace("Removed cap-exceeding queued transaction", "hash", hash)
 		}
 		queued += uint64(list.Len())
 
@@ -745,7 +774,18 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB, accounts []common.A
 				for pending > pool.config.GlobalSlots && pool.pending[offenders[len(offenders)-2]].Len() > threshold {
 					for i := 0; i < len(offenders)-1; i++ {
 						list := pool.pending[offenders[i]]
-						list.Cap(list.Len() - 1)
+						for _, tx := range list.Cap(list.Len() - 1) {
+							// Drop the transaction from the global pools too
+							hash := tx.Hash()
+							delete(pool.all, hash)
+							pool.priced.Removed()
+
+							// Update the account nonce to the dropped transaction
+							if nonce := tx.Nonce(); pool.pendingState.GetNonce(offenders[i]) > nonce {
+								pool.pendingState.SetNonce(offenders[i], nonce)
+							}
+							log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
+						}
 						pending--
 					}
 				}
@@ -756,12 +796,23 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB, accounts []common.A
 			for pending > pool.config.GlobalSlots && uint64(pool.pending[offenders[len(offenders)-1]].Len()) > pool.config.AccountSlots {
 				for _, addr := range offenders {
 					list := pool.pending[addr]
-					list.Cap(list.Len() - 1)
+					for _, tx := range list.Cap(list.Len() - 1) {
+						// Drop the transaction from the global pools too
+						hash := tx.Hash()
+						delete(pool.all, hash)
+						pool.priced.Removed()
+
+						// Update the account nonce to the dropped transaction
+						if nonce := tx.Nonce(); pool.pendingState.GetNonce(addr) > nonce {
+							pool.pendingState.SetNonce(addr, nonce)
+						}
+						log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
+					}
 					pending--
 				}
 			}
 		}
-		pendingRLCounter.Inc(int64(pendingBeforeCap - pending))
+		pendingRateLimitCounter.Inc(int64(pendingBeforeCap - pending))
 	}
 	// If we've queued more transactions than the hard limit, drop oldest ones
 	if queued > pool.config.GlobalQueue {
@@ -785,7 +836,7 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB, accounts []common.A
 					pool.removeTx(tx.Hash())
 				}
 				drop -= size
-				queuedRLCounter.Inc(int64(size))
+				queuedRateLimitCounter.Inc(int64(size))
 				continue
 			}
 			// Otherwise drop only last few transactions
@@ -793,7 +844,7 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB, accounts []common.A
 			for i := len(txs) - 1; i >= 0 && drop > 0; i-- {
 				pool.removeTx(txs[i].Hash())
 				drop--
-				queuedRLCounter.Inc(1)
+				queuedRateLimitCounter.Inc(1)
 			}
 		}
 	}
