@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -18,7 +17,6 @@ import (
 )
 
 const (
-	rpcTimeout     = time.Second
 	inboxCapacity  = 3000
 	outboxCapacity = 100
 	addrLen        = common.HashLength
@@ -85,8 +83,7 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 		return err
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), rpcTimeout)
-	return rw.Client.rpc.CallContext(ctx, nil, "pss_send", rw.topic, pss.APIMsg{
+	return rw.Client.rpc.Call(nil, "pss_send", rw.topic, pss.APIMsg{
 		Addr: rw.addr.Bytes(),
 		Msg:  pmsg,
 	})
@@ -111,8 +108,7 @@ func NewClient(rpcurl string) (*Client, error) {
 func NewClientWithRPC(rpcclient *rpc.Client) (*Client, error) {
 	client := newClient()
 	client.rpc = rpcclient
-	ctx, _ := context.WithTimeout(context.Background(), rpcTimeout)
-	err := client.rpc.CallContext(ctx, &client.BaseAddr, "pss_baseAddr")
+	err := client.rpc.Call(&client.BaseAddr, "pss_baseAddr")
 	if err != nil {
 		return nil, fmt.Errorf("cannot get pss node baseaddress: %v", err)
 	}
@@ -134,11 +130,10 @@ func newClient() (client *Client) {
 // uses normal devp2p Send and incoming message handler routines from the p2p/protocols package
 //
 // when an incoming message is received from a peer that is not yet known to the client, this peer object is instantiated, and the protocol is run on it.
-func (self *Client) RunProtocol(proto *p2p.Protocol) error {
+func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error {
 	topic := pss.NewTopic(proto.Name, int(proto.Version))
 	msgC := make(chan pss.APIMsg)
 	self.peerPool[topic] = make(map[pot.Address]*pssRPCRW)
-	ctx, _ := context.WithTimeout(context.Background(), rpcTimeout)
 	sub, err := self.rpc.Subscribe(ctx, "pss", msgC, "receive", topic)
 	if err != nil {
 		return fmt.Errorf("pss event subscription failed: %v", err)

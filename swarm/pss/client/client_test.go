@@ -112,7 +112,7 @@ func baseTester(t *testing.T, proto *p2p.Protocol, ps *pss.Pss, ctx context.Cont
 
 	client := newTestclient(t, quitC)
 
-	err = client.RunProtocol(proto)
+	err = client.RunProtocol(context.Background(), proto)
 
 	if err != nil {
 		return nil, err
