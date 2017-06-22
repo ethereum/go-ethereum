@@ -719,6 +719,12 @@ func testTransactionLimitingEquivalency(t *testing.T, origin uint64) {
 		txns = append(txns, transaction(origin+i, big.NewInt(100000), key2))
 	}
 	pool2.AddBatch(txns)
+	if err := pool2.validateInternals(); err != nil {
+		t.Error(err)
+	}
+	if err := pool1.validateInternals(); err != nil {
+		t.Error(err)
+	}
 
 	// Ensure the batch optimization honors the same pool mechanics
 	if len(pool1.pending) != len(pool2.pending) {
@@ -769,12 +775,51 @@ func TestTransactionPendingGlobalLimiting(t *testing.T) {
 	// Import the batch and verify that limits have been enforced
 	pool.AddBatch(txs)
 
+	if err := pool.validateInternals(); err != nil {
+		t.Error(err)
+	}
 	pending := 0
 	for _, list := range pool.pending {
 		pending += list.Len()
 	}
 	if pending > int(DefaultTxPoolConfig.GlobalSlots) {
 		t.Fatalf("total pending transactions overflow allowance: %d > %d", pending, DefaultTxPoolConfig.GlobalSlots)
+	}
+}
+
+// Tests that if transactions start being capped, transasctions are also removed from 'all'
+func TestTransactionCapClearsFromAll(t *testing.T) {
+	// Reduce the queue limits to shorten test time
+	defer func(old uint64) { DefaultTxPoolConfig.GlobalSlots = old }(DefaultTxPoolConfig.GlobalSlots)
+	DefaultTxPoolConfig.AccountSlots = 2
+	DefaultTxPoolConfig.AccountQueue = 2
+	DefaultTxPoolConfig.GlobalSlots = 8
+
+	// Create the pool to test the limit enforcement with
+	db, _ := ethdb.NewMemDatabase()
+	statedb, _ := state.New(common.Hash{}, db)
+
+	pool := NewTxPool(DefaultTxPoolConfig, params.TestChainConfig, new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
+	pool.resetState()
+
+	// Create a number of test accounts and fund them
+	state, _ := pool.currentState()
+
+	key, _ := crypto.GenerateKey()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	state.AddBalance(addr, big.NewInt(1000000))
+
+	txs := types.Transactions{}
+	nonce := uint64(0)
+	for j := 0; j < int(DefaultTxPoolConfig.GlobalSlots)*2; j++ {
+		tx := transaction(nonce, big.NewInt(100000), key)
+		txs = append(txs, tx)
+		nonce++
+	}
+	// Import the batch and verify that limits have been enforced
+	pool.AddBatch(txs)
+	if err := pool.validateInternals(); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -814,6 +859,10 @@ func TestTransactionPendingMinimumAllowance(t *testing.T) {
 	}
 	// Import the batch and verify that limits have been enforced
 	pool.AddBatch(txs)
+
+	if err := pool.validateInternals(); err != nil {
+		t.Error(err)
+	}
 
 	for addr, list := range pool.pending {
 		if list.Len() != int(DefaultTxPoolConfig.AccountSlots) {
@@ -860,6 +909,10 @@ func TestTransactionPoolRepricing(t *testing.T) {
 	// Import the batch and that both pending and queued transactions match up
 	pool.AddBatch(txs)
 
+	if err := pool.validateInternals(); err != nil {
+		t.Error(err)
+	}
+
 	pending, queued := pool.stats()
 	if pending != 4 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 4)
@@ -894,6 +947,10 @@ func TestTransactionPoolRepricing(t *testing.T) {
 	if pending, _ = pool.stats(); pending != 3 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 3)
 	}
+	if err := pool.validateInternals(); err != nil {
+		t.Error(err)
+	}
+
 }
 
 // Tests that when the pool reaches its global transaction limit, underpriced
@@ -937,6 +994,9 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 
 	// Import the batch and that both pending and queued transactions match up
 	pool.AddBatch(txs)
+	if err := pool.validateInternals(); err != nil {
+		t.Error(err)
+	}
 
 	pending, queued := pool.stats()
 	if pending != 3 {
@@ -979,6 +1039,9 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 	}
 	if queued != 2 {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
+	}
+	if err := pool.validateInternals(); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -1040,6 +1103,9 @@ func TestTransactionReplacement(t *testing.T) {
 	}
 	if err := pool.Add(pricedTransaction(2, big.NewInt(100000), big.NewInt(threshold+1), key)); err != nil {
 		t.Fatalf("failed to replace original queued transaction: %v", err)
+	}
+	if err := pool.validateInternals(); err != nil {
+		t.Error(err)
 	}
 }
 

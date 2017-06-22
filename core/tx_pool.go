@@ -301,6 +301,19 @@ func (pool *TxPool) Stats() (int, int) {
 	return pool.stats()
 }
 
+// validateInternals checks if the content in pool.all
+// is consistent with the numbers reported in pending and queued
+func (pool *TxPool) validateInternals() error {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+	p, q := pool.stats()
+	a := len(pool.all)
+	if a != p+q {
+		return fmt.Errorf("Pool.all size %d != %d pending + %d queued", a, p, q)
+	}
+	return nil
+}
+
 // stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
 func (pool *TxPool) stats() (int, int) {
