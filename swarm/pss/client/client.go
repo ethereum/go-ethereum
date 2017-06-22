@@ -92,13 +92,13 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 
 }
 
-func NewClient(ctx context.Context, cancel func(), rpcurl string) (*Client, error) {
+func NewClient(ctx context.Context, rpcurl string) (*Client, error) {
 	rpcclient, err := rpc.Dial(rpcurl)
 	if err != nil {
 		return nil, err
 	}
 
-	client, err := NewClientWithRPC(ctx, cancel, rpcclient)
+	client, err := NewClientWithRPC(ctx, rpcclient)
 	if err != nil {
 		return nil, err
 	}
@@ -107,8 +107,8 @@ func NewClient(ctx context.Context, cancel func(), rpcurl string) (*Client, erro
 
 // Constructor for test implementations
 // The 'rpcclient' parameter allows passing a in-memory rpc client to act as the remote websocket RPC.
-func NewClientWithRPC(ctx context.Context, cancel func(), rpcclient *rpc.Client) (*Client, error) {
-	client := newClient(ctx, cancel)
+func NewClientWithRPC(ctx context.Context, rpcclient *rpc.Client) (*Client, error) {
+	client := newClient(ctx)
 	client.rpc = rpcclient
 	err := client.rpc.CallContext(client.ctx, &client.BaseAddr, "pss_baseAddr")
 	if err != nil {
@@ -117,12 +117,9 @@ func NewClientWithRPC(ctx context.Context, cancel func(), rpcclient *rpc.Client)
 	return client, nil
 }
 
-func newClient(ctx context.Context, cancel func()) (client *Client) {
+func newClient(ctx context.Context) (client *Client) {
 	if ctx == nil {
 		ctx = context.Background()
-	}
-	if cancel == nil {
-		cancel = func() {}
 	}
 	client = &Client{
 		msgC:     make(chan pss.APIMsg),
@@ -130,13 +127,8 @@ func newClient(ctx context.Context, cancel func()) (client *Client) {
 		peerPool: make(map[pss.Topic]map[pot.Address]*pssRPCRW),
 		protos:   make(map[pss.Topic]*p2p.Protocol),
 		ctx:      ctx,
-		cancel:   cancel,
 	}
 	return
-}
-
-func (self *Client) shutdown() {
-	self.cancel()
 }
 
 // Mounts a new devp2p protcool on the pss connection
@@ -171,7 +163,6 @@ func (self *Client) RunProtocol(proto *p2p.Protocol) error {
 					self.peerPool[topic][addr].msgC <- msg.Msg
 				}()
 			case <-self.quitC:
-				self.shutdown()
 				return
 			}
 		}

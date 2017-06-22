@@ -30,7 +30,7 @@ func TestRunProtocol(t *testing.T) {
 		C: make(chan struct{}),
 	}
 	proto := newProtocol(ping)
-	_, err := baseTester(t, proto, ps, nil, nil, quitC)
+	_, err := baseTester(t, proto, ps, nil, quitC)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -40,13 +40,13 @@ func TestRunProtocol(t *testing.T) {
 func TestIncoming(t *testing.T) {
 	quitC := make(chan struct{})
 	ps := pss.NewTestPss(nil)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
 	var addr []byte
 	ping := &pss.Ping{
 		C: make(chan struct{}),
 	}
 	proto := newProtocol(ping)
-	client, err := baseTester(t, proto, ps, ctx, cancel, quitC)
+	client, err := baseTester(t, proto, ps, ctx, quitC)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -81,7 +81,7 @@ func TestIncoming(t *testing.T) {
 func TestOutgoing(t *testing.T) {
 	quitC := make(chan struct{})
 	ps := pss.NewTestPss(nil)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*250)
+	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond*250)
 	var addr []byte
 	var potaddr pot.Address
 
@@ -89,7 +89,7 @@ func TestOutgoing(t *testing.T) {
 		C: make(chan struct{}),
 	}
 	proto := newProtocol(ping)
-	client, err := baseTester(t, proto, ps, ctx, cancel, quitC)
+	client, err := baseTester(t, proto, ps, ctx, quitC)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -115,10 +115,10 @@ func TestOutgoing(t *testing.T) {
 	quitC <- struct{}{}
 }
 
-func baseTester(t *testing.T, proto *p2p.Protocol, ps *pss.Pss, ctx context.Context, cancel func(), quitC chan struct{}) (*Client, error) {
+func baseTester(t *testing.T, proto *p2p.Protocol, ps *pss.Pss, ctx context.Context, quitC chan struct{}) (*Client, error) {
 	var err error
 
-	client := newTestclient(t, ctx, cancel, quitC)
+	client := newTestclient(t, ctx, quitC)
 
 	err = client.RunProtocol(proto)
 
@@ -143,7 +143,7 @@ func newProtocol(ping *pss.Ping) *p2p.Protocol {
 	}
 }
 
-func newTestclient(t *testing.T, ctx context.Context, cancel func(), quitC chan struct{}) *Client {
+func newTestclient(t *testing.T, ctx context.Context, quitC chan struct{}) *Client {
 
 	ps := pss.NewTestPss(nil)
 	srv := rpc.NewServer()
@@ -166,7 +166,7 @@ func newTestclient(t *testing.T, ctx context.Context, cancel func(), quitC chan 
 		sock.Close()
 	}()
 
-	pssclient, err := NewClient(ctx, cancel, "ws://localhost:8546")
+	pssclient, err := NewClient(ctx, "ws://localhost:8546")
 	if err != nil {
 		t.Fatalf(err.Error())
 	}

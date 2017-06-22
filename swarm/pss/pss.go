@@ -131,6 +131,8 @@ func (self *Pss) Protocols() []p2p.Protocol {
 
 // Starts the PssMsg protocol
 func (self *Pss) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	self.lock.Lock()
+	defer self.lock.Unlock()
 	pp := protocols.NewPeer(p, rw, pssSpec)
 	//addr := network.NewAddrFromNodeID(id)
 	//potaddr := pot.NewHashAddressFromBytes(addr.OAddr)
