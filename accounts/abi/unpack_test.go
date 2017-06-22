@@ -37,35 +37,35 @@ func TestSimpleMethodUnpack(t *testing.T) {
 	}{
 		{
 			`[ { "type": "bool" } ]`,
-			pad([]byte{1}, 32, true),
+			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			bool(true),
 			"bool",
 			"",
 		},
 		{
 			`[ { "type": "uint32" } ]`,
-			pad([]byte{1}, 32, true),
+			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			uint32(1),
 			"uint32",
 			"",
 		},
 		{
 			`[ { "type": "uint32" } ]`,
-			pad([]byte{1}, 32, true),
+			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			nil,
 			"uint16",
 			"abi: cannot unmarshal uint32 in to uint16",
 		},
 		{
 			`[ { "type": "uint17" } ]`,
-			pad([]byte{1}, 32, true),
+			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			nil,
 			"uint16",
 			"abi: cannot unmarshal *big.Int in to uint16",
 		},
 		{
 			`[ { "type": "uint17" } ]`,
-			pad([]byte{1}, 32, true),
+			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			big.NewInt(1),
 			"*big.Int",
 			"",
@@ -73,28 +73,28 @@ func TestSimpleMethodUnpack(t *testing.T) {
 
 		{
 			`[ { "type": "int32" } ]`,
-			pad([]byte{1}, 32, true),
+			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			int32(1),
 			"int32",
 			"",
 		},
 		{
 			`[ { "type": "int32" } ]`,
-			pad([]byte{1}, 32, true),
+			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			nil,
 			"int16",
 			"abi: cannot unmarshal int32 in to int16",
 		},
 		{
 			`[ { "type": "int17" } ]`,
-			pad([]byte{1}, 32, true),
+			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			nil,
 			"int16",
 			"abi: cannot unmarshal *big.Int in to int16",
 		},
 		{
 			`[ { "type": "int17" } ]`,
-			pad([]byte{1}, 32, true),
+			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			big.NewInt(1),
 			"*big.Int",
 			"",
@@ -102,35 +102,35 @@ func TestSimpleMethodUnpack(t *testing.T) {
 
 		{
 			`[ { "type": "address" } ]`,
-			pad(pad([]byte{1}, 20, false), 32, true),
+			common.Hex2Bytes("0000000000000000000000000100000000000000000000000000000000000000"),
 			common.Address{1},
 			"address",
 			"",
 		},
 		{
 			`[ { "type": "bytes32" } ]`,
-			pad([]byte{1}, 32, false),
-			pad([]byte{1}, 32, false),
+			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
+			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
 			"bytes",
 			"",
 		},
 		{
 			`[ { "type": "bytes32" } ]`,
-			pad([]byte{1}, 32, false),
-			pad([]byte{1}, 32, false),
+			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
+			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
 			"hash",
 			"",
 		},
 		{
 			`[ { "type": "bytes32" } ]`,
-			pad([]byte{1}, 32, false),
-			pad([]byte{1}, 32, false),
+			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
+			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
 			"interface",
 			"",
 		},
 		{
 			`[ { "type": "function" } ]`,
-			pad([]byte{1}, 32, false),
+			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
 			[24]byte{1},
 			"function",
 			"",
@@ -245,7 +245,7 @@ func TestUnpackSetInterfaceSlice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	marshalledReturn := append(pad([]byte{1}, 32, true), pad([]byte{2}, 32, true)...)
+	marshalledReturn := append(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"), common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000002")...)
 	err = abi.Unpack(&out, "ints", marshalledReturn)
 	if err != nil {
 		t.Fatal(err)
@@ -276,7 +276,7 @@ func TestUnpackSetInterfaceArrayOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	marshalledReturn := append(pad([]byte{1}, 32, true), pad([]byte{2}, 32, true)...)
+	marshalledReturn := append(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"), common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000002")...)
 	err = abi.Unpack(&out, "ints", marshalledReturn)
 	if err != nil {
 		t.Fatal(err)
