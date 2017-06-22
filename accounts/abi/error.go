@@ -21,6 +21,10 @@ import (
 	"reflect"
 )
 
+var (
+	errBadBool error = "abi: improperly encoded boolean value"
+)
+
 // formatSliceString formats the reflection kind with the given slice size
 // and returns a formatted string representation.
 func formatSliceString(kind reflect.Kind, sliceSize int) string {

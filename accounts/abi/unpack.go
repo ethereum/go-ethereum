@@ -164,10 +164,10 @@ func readBool(word []byte) (bool, error) {
 	if len(word) != 32 {
 		return false, fmt.Errorf("abi: fatal error: incorrect word length")
 	}
-	improperEncoding := "abi: improperly encoded boolean value"
+
 	for i, b := range word {
 		if b != 0 && i != 31 {
-			return false, fmt.Errorf(improperEncoding)
+			return false, errBadBool
 		}
 	}
 	switch word[31] {
@@ -176,7 +176,7 @@ func readBool(word []byte) (bool, error) {
 	case 1:
 		return true, nil
 	default:
-		return false, fmt.Errorf(improperEncoding)
+		return false, errBadBool
 	}
 
 }
