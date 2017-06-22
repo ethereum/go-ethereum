@@ -30,6 +30,7 @@ var Modules = map[string]string{
 	"shh":        Shh_JS,
 	"swarmfs":    SWARMFS_JS,
 	"txpool":     TxPool_JS,
+	"istanbul":   Istanbul_JS,
 }
 
 const Chequebook_JS = `
@@ -627,6 +628,54 @@ web3._extend({
 				status.queued = web3._extend.utils.toDecimal(status.queued);
 				return status;
 			}
+		}),
+	]
+});
+`
+
+const Istanbul_JS = `
+web3._extend({
+	property: 'istanbul',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'getSnapshot',
+			call: 'istanbul_getSnapshot',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'getSnapshotAtHash',
+			call: 'istanbul_getSnapshotAtHash',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getValidators',
+			call: 'istanbul_getValidators',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'getValidatorsAtHash',
+			call: 'istanbul_getValidatorsAtHash',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'propose',
+			call: 'istanbul_propose',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'discard',
+			call: 'istanbul_discard',
+			params: 1
+		})
+	],
+	properties:
+	[
+		new web3._extend.Property({
+			name: 'candidates',
+			getter: 'istanbul_candidates'
 		}),
 	]
 });
