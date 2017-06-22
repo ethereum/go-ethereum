@@ -52,17 +52,17 @@ type SyncResult struct {
 	Data []byte      // Data content of the retrieved node
 }
 
-// SyncMemCache is an in-memory cache of successfully downloaded but not yet
+// syncMemBatch is an in-memory buffer of successfully downloaded but not yet
 // persisted data items.
-type SyncMemCache struct {
-	cache map[common.Hash][]byte // In-memory memcache of recently ocmpleted items
+type syncMemBatch struct {
+	batch map[common.Hash][]byte // In-memory membatch of recently ocmpleted items
 	order []common.Hash          // Order of completion to prevent out-of-order data loss
 }
 
-// newSyncMemCache allocates a new memory-cache for not-yet persisted trie nodes.
-func newSyncMemCache() *SyncMemCache {
-	return &SyncMemCache{
-		cache: make(map[common.Hash][]byte),
+// newSyncMemBatch allocates a new memory-buffer for not-yet persisted trie nodes.
+func newSyncMemBatch() *syncMemBatch {
+	return &syncMemBatch{
+		batch: make(map[common.Hash][]byte),
 		order: make([]common.Hash, 0, 256),
 	}
 }
@@ -77,7 +77,7 @@ type TrieSyncLeafCallback func(leaf []byte, parent common.Hash) error
 // and reconstructs the trie step by step until all is done.
 type TrieSync struct {
 	database DatabaseReader           // Persistent database to check for existing entries
-	memcache *SyncMemCache            // Memory cache to avoid frequest database writes
+	membatch *syncMemBatch            // Memory buffer to avoid frequest database writes
 	requests map[common.Hash]*request // Pending requests pertaining to a key hash
 	queue    *prque.Prque             // Priority queue with the pending requests
 }
@@ -86,7 +86,7 @@ type TrieSync struct {
 func NewTrieSync(root common.Hash, database DatabaseReader, callback TrieSyncLeafCallback) *TrieSync {
 	ts := &TrieSync{
 		database: database,
-		memcache: newSyncMemCache(),
+		membatch: newSyncMemBatch(),
 		requests: make(map[common.Hash]*request),
 		queue:    prque.New(),
 	}
@@ -100,7 +100,7 @@ func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, c
 	if root == emptyRoot {
 		return
 	}
-	if _, ok := s.memcache.cache[root]; ok {
+	if _, ok := s.membatch.batch[root]; ok {
 		return
 	}
 	key := root.Bytes()
@@ -135,7 +135,7 @@ func (s *TrieSync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) 
 	if hash == emptyState {
 		return
 	}
-	if _, ok := s.memcache.cache[hash]; ok {
+	if _, ok := s.membatch.batch[hash]; ok {
 		return
 	}
 	if blob, _ := s.database.Get(hash.Bytes()); blob != nil {
@@ -215,19 +215,19 @@ func (s *TrieSync) Process(results []SyncResult) (bool, int, error) {
 	return committed, 0, nil
 }
 
-// Commit flushes the data stored in the internal memcache out to persistent
+// Commit flushes the data stored in the internal membatch out to persistent
 // storage, returning th enumber of items written and any occurred error.
 func (s *TrieSync) Commit(dbw DatabaseWriter) (int, error) {
-	// Dump the memcache into a database dbw
-	for i, key := range s.memcache.order {
-		if err := dbw.Put(key[:], s.memcache.cache[key]); err != nil {
+	// Dump the membatch into a database dbw
+	for i, key := range s.membatch.order {
+		if err := dbw.Put(key[:], s.membatch.batch[key]); err != nil {
 			return i, err
 		}
 	}
-	written := len(s.memcache.order)
+	written := len(s.membatch.order)
 
-	// Drop the memcache data and return
-	s.memcache = newSyncMemCache()
+	// Drop the membatch data and return
+	s.membatch = newSyncMemBatch()
 	return written, nil
 }
 
@@ -293,7 +293,7 @@ func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 		if node, ok := (child.node).(hashNode); ok {
 			// Try to resolve the node from the local database
 			hash := common.BytesToHash(node)
-			if _, ok := s.memcache.cache[hash]; ok {
+			if _, ok := s.membatch.batch[hash]; ok {
 				continue
 			}
 			blob, _ := s.database.Get(node)
@@ -312,13 +312,13 @@ func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 	return requests, nil
 }
 
-// commit finalizes a retrieval request and stores it into the memcache. If any
+// commit finalizes a retrieval request and stores it into the membatch. If any
 // of the referencing parent requests complete due to this commit, they are also
 // committed themselves.
 func (s *TrieSync) commit(req *request) (err error) {
-	// Write the node content to the memcache
-	s.memcache.cache[req.hash] = req.data
-	s.memcache.order = append(s.memcache.order, req.hash)
+	// Write the node content to the membatch
+	s.membatch.batch[req.hash] = req.data
+	s.membatch.order = append(s.membatch.order, req.hash)
 
 	delete(s.requests, req.hash)
 
