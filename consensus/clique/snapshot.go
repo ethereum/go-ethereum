@@ -126,11 +126,17 @@ func (s *Snapshot) copy() *Snapshot {
 	return cpy
 }
 
+// validVote returns whether it makes sense to cast the specified vote in the
+// given snapshot context (e.g. don't try to add an already authorized signer).
+func (s *Snapshot) validVote(address common.Address, authorize bool) bool {
+	_, signer := s.Signers[address]
+	return (signer && !authorize) || (!signer && authorize)
+}
+
 // cast adds a new vote into the tally.
 func (s *Snapshot) cast(address common.Address, authorize bool) bool {
 	// Ensure the vote is meaningful
-	_, signer := s.Signers[address]
-	if (signer && authorize) || (!signer && !authorize) {
+	if !s.validVote(address, authorize) {
 		return false
 	}
 	// Cast the vote into an existing or new tally
