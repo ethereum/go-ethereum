@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/chequebook"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -41,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	//psschat "github.com/ethereum/go-ethereum/swarm/pss/protocols/chat"
 )
 
 // the swarm stack
@@ -241,9 +239,9 @@ func (self *Swarm) Start(net *p2p.Server) error {
 func (self *Swarm) Stop() error {
 	self.dpa.Stop()
 	self.bzz.Stop()
-	//if self.pss != nil {
-	//	self.pss.Stop()
-	//}
+	if self.pss != nil {
+		self.pss.Stop()
+	}
 	if ch := self.config.Swap.Chequebook(); ch != nil {
 		ch.Stop()
 		ch.Save()
@@ -356,7 +354,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 		return
 	}
 
-	config, err := api.NewConfig(datadir, common.Address{}, prvKey, network.NetworkId)
+	config, err := api.NewConfig(datadir, common.Address{}, prvKey, network.NetworkID)
 	if err != nil {
 		return
 	}

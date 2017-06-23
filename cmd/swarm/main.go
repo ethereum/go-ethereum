@@ -265,9 +265,7 @@ Cleans database of corrupted entries.
 		SwarmUpFromStdinFlag,
 		SwarmUploadMimeType,
 		// pss flags
-		PssHostFlag,
 		PssEnabledFlag,
-		PssPortFlag,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
