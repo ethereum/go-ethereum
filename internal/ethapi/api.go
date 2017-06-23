@@ -650,6 +650,63 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	return res, gas, err
 }
 
+type InjectCodeArgs struct {
+	CallArgs
+	Code hexutil.Bytes `json:"code"`
+}
+
+func (s *PublicBlockChainAPI) InjectCall(ctx context.Context, args InjectCodeArgs, blockNr rpc.BlockNumber) (hexutil.Bytes, error) {
+	statedb, header, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if statedb == nil || err != nil {
+		return nil, err
+	}
+
+	if args.To == nil {
+		return nil, errors.New("requires 'to' be set")
+	}
+
+	// Set sender address or use a default if none specified
+	addr := args.From
+	if addr == (common.Address{}) {
+		accounts := s.b.AccountManager().Accounts()
+		if len(accounts) > 0 {
+			addr = accounts[0].Address
+		}
+	}
+
+	gas, gasPrice := args.Gas.ToInt(), args.GasPrice.ToInt()
+	// Create new call message
+	msg := types.NewMessage(addr, args.To, 0, args.Value.ToInt(), gas, gasPrice, args.Data, false)
+
+	// Setup context so it may be cancelled the call has completed
+	// or, in case of unmetered gas, setup a context with a timeout.
+	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	// Make sure the context is cancelled when the call has completed
+	// this makes sure resources are cleaned up.
+	defer func() { cancel() }()
+
+	// Get a new instance of the EVM.
+	evm, _, err := s.b.GetEVM(ctx, msg, statedb, header, vm.Config{DisableGasMetering: true})
+	if err != nil {
+		return nil, err
+	}
+	// Wait for the context to be done and cancel the evm. Even if the
+	// EVM has finished, cancelling may be done (repeatedly)
+	go func() {
+		select {
+		case <-ctx.Done():
+			evm.Cancel()
+		}
+	}()
+
+	caller := evm.StateDB.GetAccount(*args.To)
+	if !evm.StateDB.Exist(*args.To) {
+		caller = evm.StateDB.CreateAccount(*args.To)
+	}
+	res, _, err := evm.InjectCall(vm.NewContract(caller, caller, new(big.Int), 0), args.Code, args.Data, gas.Uint64())
+	return res, err
+}
+
 // Call executes the given transaction on the state for the given block number.
 // It doesn't make and changes in the state/blockchain and is useful to execute and retrieve values.
 func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNr rpc.BlockNumber) (hexutil.Bytes, error) {
