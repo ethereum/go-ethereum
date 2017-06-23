@@ -504,23 +504,25 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 	header.Nonce = types.BlockNonce{}
 
 	number := header.Number.Uint64()
-	// Assemble the voting snapshot
+
+	// Assemble the voting snapshot to check which votes make sense
 	snap, err := c.snapshot(chain, number-1, header.ParentHash, nil)
 	if err != nil {
 		return err
 	}
 	if number%c.config.Epoch != 0 {
-		// Get valid votes
 		c.lock.RLock()
-		var addresses []common.Address
+
+		// Gather all the proposals that make sense voting on
+		addresses := make([]common.Address, 0, len(c.proposals))
 		for address, authorize := range c.proposals {
 			if snap.validVote(address, authorize) {
 				addresses = append(addresses, address)
 			}
 		}
+		// If there's pending proposals, cast a vote on them
 		if len(addresses) > 0 {
-			index := rand.Intn(len(addresses))
-			header.Coinbase = addresses[index]
+			header.Coinbase = addresses[rand.Intn(len(addresses))]
 			if c.proposals[header.Coinbase] {
 				copy(header.Nonce[:], nonceAuthVote)
 			} else {
@@ -529,7 +531,6 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 		}
 		c.lock.RUnlock()
 	}
-
 	// Set the correct difficulty
 	header.Difficulty = diffNoTurn
 	if snap.inturn(header.Number.Uint64(), c.signer) {
