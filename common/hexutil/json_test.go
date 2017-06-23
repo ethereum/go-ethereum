@@ -62,12 +62,12 @@ var errJSONEOF = errors.New("unexpected end of JSON input")
 var unmarshalBytesTests = []unmarshalTest{
 	// invalid encoding
 	{input: "", wantErr: errJSONEOF},
-	{input: "null", wantErr: errNonString},
-	{input: "10", wantErr: errNonString},
-	{input: `"0"`, wantErr: ErrMissingPrefix},
-	{input: `"0x0"`, wantErr: ErrOddLength},
-	{input: `"0xxx"`, wantErr: ErrSyntax},
-	{input: `"0x01zz01"`, wantErr: ErrSyntax},
+	{input: "null", wantErr: errNonString(bytesT)},
+	{input: "10", wantErr: errNonString(bytesT)},
+	{input: `"0"`, wantErr: wrapTypeError(ErrMissingPrefix, bytesT)},
+	{input: `"0x0"`, wantErr: wrapTypeError(ErrOddLength, bytesT)},
+	{input: `"0xxx"`, wantErr: wrapTypeError(ErrSyntax, bytesT)},
+	{input: `"0x01zz01"`, wantErr: wrapTypeError(ErrSyntax, bytesT)},
 
 	// valid encoding
 	{input: `""`, want: referenceBytes("")},
@@ -127,16 +127,16 @@ func TestMarshalBytes(t *testing.T) {
 var unmarshalBigTests = []unmarshalTest{
 	// invalid encoding
 	{input: "", wantErr: errJSONEOF},
-	{input: "null", wantErr: errNonString},
-	{input: "10", wantErr: errNonString},
-	{input: `"0"`, wantErr: ErrMissingPrefix},
-	{input: `"0x"`, wantErr: ErrEmptyNumber},
-	{input: `"0x01"`, wantErr: ErrLeadingZero},
-	{input: `"0xx"`, wantErr: ErrSyntax},
-	{input: `"0x1zz01"`, wantErr: ErrSyntax},
+	{input: "null", wantErr: errNonString(bigT)},
+	{input: "10", wantErr: errNonString(bigT)},
+	{input: `"0"`, wantErr: wrapTypeError(ErrMissingPrefix, bigT)},
+	{input: `"0x"`, wantErr: wrapTypeError(ErrEmptyNumber, bigT)},
+	{input: `"0x01"`, wantErr: wrapTypeError(ErrLeadingZero, bigT)},
+	{input: `"0xx"`, wantErr: wrapTypeError(ErrSyntax, bigT)},
+	{input: `"0x1zz01"`, wantErr: wrapTypeError(ErrSyntax, bigT)},
 	{
 		input:   `"0x10000000000000000000000000000000000000000000000000000000000000000"`,
-		wantErr: ErrBig256Range,
+		wantErr: wrapTypeError(ErrBig256Range, bigT),
 	},
 
 	// valid encoding
@@ -208,14 +208,14 @@ func TestMarshalBig(t *testing.T) {
 var unmarshalUint64Tests = []unmarshalTest{
 	// invalid encoding
 	{input: "", wantErr: errJSONEOF},
-	{input: "null", wantErr: errNonString},
-	{input: "10", wantErr: errNonString},
-	{input: `"0"`, wantErr: ErrMissingPrefix},
-	{input: `"0x"`, wantErr: ErrEmptyNumber},
-	{input: `"0x01"`, wantErr: ErrLeadingZero},
-	{input: `"0xfffffffffffffffff"`, wantErr: ErrUint64Range},
-	{input: `"0xx"`, wantErr: ErrSyntax},
-	{input: `"0x1zz01"`, wantErr: ErrSyntax},
+	{input: "null", wantErr: errNonString(uint64T)},
+	{input: "10", wantErr: errNonString(uint64T)},
+	{input: `"0"`, wantErr: wrapTypeError(ErrMissingPrefix, uint64T)},
+	{input: `"0x"`, wantErr: wrapTypeError(ErrEmptyNumber, uint64T)},
+	{input: `"0x01"`, wantErr: wrapTypeError(ErrLeadingZero, uint64T)},
+	{input: `"0xfffffffffffffffff"`, wantErr: wrapTypeError(ErrUint64Range, uint64T)},
+	{input: `"0xx"`, wantErr: wrapTypeError(ErrSyntax, uint64T)},
+	{input: `"0x1zz01"`, wantErr: wrapTypeError(ErrSyntax, uint64T)},
 
 	// valid encoding
 	{input: `""`, want: uint64(0)},
@@ -298,15 +298,15 @@ var (
 var unmarshalUintTests = []unmarshalTest{
 	// invalid encoding
 	{input: "", wantErr: errJSONEOF},
-	{input: "null", wantErr: errNonString},
-	{input: "10", wantErr: errNonString},
-	{input: `"0"`, wantErr: ErrMissingPrefix},
-	{input: `"0x"`, wantErr: ErrEmptyNumber},
-	{input: `"0x01"`, wantErr: ErrLeadingZero},
-	{input: `"0x100000000"`, want: uint(maxUint33bits), wantErr32bit: ErrUintRange},
-	{input: `"0xfffffffffffffffff"`, wantErr: ErrUintRange},
-	{input: `"0xx"`, wantErr: ErrSyntax},
-	{input: `"0x1zz01"`, wantErr: ErrSyntax},
+	{input: "null", wantErr: errNonString(uintT)},
+	{input: "10", wantErr: errNonString(uintT)},
+	{input: `"0"`, wantErr: wrapTypeError(ErrMissingPrefix, uintT)},
+	{input: `"0x"`, wantErr: wrapTypeError(ErrEmptyNumber, uintT)},
+	{input: `"0x01"`, wantErr: wrapTypeError(ErrLeadingZero, uintT)},
+	{input: `"0x100000000"`, want: uint(maxUint33bits), wantErr32bit: wrapTypeError(ErrUintRange, uintT)},
+	{input: `"0xfffffffffffffffff"`, wantErr: wrapTypeError(ErrUintRange, uintT)},
+	{input: `"0xx"`, wantErr: wrapTypeError(ErrSyntax, uintT)},
+	{input: `"0x1zz01"`, wantErr: wrapTypeError(ErrSyntax, uintT)},
 
 	// valid encoding
 	{input: `""`, want: uint(0)},
@@ -317,7 +317,7 @@ var unmarshalUintTests = []unmarshalTest{
 	{input: `"0x1122aaff"`, want: uint(0x1122aaff)},
 	{input: `"0xbbb"`, want: uint(0xbbb)},
 	{input: `"0xffffffff"`, want: uint(0xffffffff)},
-	{input: `"0xffffffffffffffff"`, want: uint(maxUint64bits), wantErr32bit: ErrUintRange},
+	{input: `"0xffffffffffffffff"`, want: uint(maxUint64bits), wantErr32bit: wrapTypeError(ErrUintRange, uintT)},
 }
 
 func TestUnmarshalUint(t *testing.T) {
