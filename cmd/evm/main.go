@@ -90,6 +90,26 @@ var (
 		Name:  "nogasmetering",
 		Usage: "disable gas metering",
 	}
+	GenesisFlag = cli.StringFlag{
+		Name:  "prestate",
+		Usage: "JSON file with prestate (genesis) config",
+	}
+	MachineFlag = cli.BoolFlag{
+		Name:  "json",
+		Usage: "output trace logs in machine readable format (json)",
+	}
+	SenderFlag = cli.StringFlag{
+		Name:  "sender",
+		Usage: "The transaction origin",
+	}
+	DisableMemoryFlag = cli.BoolFlag{
+		Name:  "nomemory",
+		Usage: "disable memory output",
+	}
+	DisableStackFlag = cli.BoolFlag{
+		Name:  "nostack",
+		Usage: "disable stack output",
+	}
 )
 
 func init() {
@@ -108,6 +128,11 @@ func init() {
 		MemProfileFlag,
 		CPUProfileFlag,
 		StatDumpFlag,
+		GenesisFlag,
+		MachineFlag,
+		SenderFlag,
+		DisableMemoryFlag,
+		DisableStackFlag,
 	}
 	app.Commands = []cli.Command{
 		compileCommand,

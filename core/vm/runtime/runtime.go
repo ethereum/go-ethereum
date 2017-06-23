@@ -125,7 +125,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 }
 
 // Create executes the code using the EVM create method
-func Create(input []byte, cfg *Config) ([]byte, common.Address, error) {
+func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}
@@ -141,13 +141,13 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, error) {
 	)
 
 	// Call the code with the given configuration.
-	code, address, _, err := vmenv.Create(
+	code, address, leftOverGas, err := vmenv.Create(
 		sender,
 		input,
 		cfg.GasLimit,
 		cfg.Value,
 	)
-	return code, address, err
+	return code, address, leftOverGas, err
 }
 
 // Call executes the code given by the contract's address. It will return the
@@ -155,14 +155,14 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, error) {
 //
 // Call, unlike Execute, requires a config and also requires the State field to
 // be set.
-func Call(address common.Address, input []byte, cfg *Config) ([]byte, error) {
+func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, error) {
 	setDefaults(cfg)
 
 	vmenv := NewEnv(cfg, cfg.State)
 
 	sender := cfg.State.GetOrNewStateObject(cfg.Origin)
 	// Call the code with the given configuration.
-	ret, _, err := vmenv.Call(
+	ret, leftOverGas, err := vmenv.Call(
 		sender,
 		address,
 		input,
@@ -170,5 +170,5 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, error) {
 		cfg.Value,
 	)
 
-	return ret, err
+	return ret, leftOverGas, err
 }

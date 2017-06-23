@@ -19,6 +19,7 @@ package trie
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -239,8 +240,8 @@ func TestUnionIterator(t *testing.T) {
 
 	all := []struct{ k, v string }{
 		{"aardvark", "c"},
-		{"barb", "bd"},
 		{"barb", "ba"},
+		{"barb", "bd"},
 		{"bard", "bc"},
 		{"bars", "bb"},
 		{"bars", "be"},
@@ -266,4 +267,108 @@ func TestUnionIterator(t *testing.T) {
 	if it.Next() {
 		t.Errorf("Iterator returned extra values.")
 	}
+}
+
+func TestIteratorNoDups(t *testing.T) {
+	var tr Trie
+	for _, val := range testdata1 {
+		tr.Update([]byte(val.k), []byte(val.v))
+	}
+	checkIteratorNoDups(t, tr.NodeIterator(nil), nil)
+}
+
+// This test checks that nodeIterator.Next can be retried after inserting missing trie nodes.
+func TestIteratorContinueAfterError(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	tr, _ := New(common.Hash{}, db)
+	for _, val := range testdata1 {
+		tr.Update([]byte(val.k), []byte(val.v))
+	}
+	tr.Commit()
+	wantNodeCount := checkIteratorNoDups(t, tr.NodeIterator(nil), nil)
+	keys := db.Keys()
+	t.Log("node count", wantNodeCount)
+
+	for i := 0; i < 20; i++ {
+		// Create trie that will load all nodes from DB.
+		tr, _ := New(tr.Hash(), db)
+
+		// Remove a random node from the database. It can't be the root node
+		// because that one is already loaded.
+		var rkey []byte
+		for {
+			if rkey = keys[rand.Intn(len(keys))]; !bytes.Equal(rkey, tr.Hash().Bytes()) {
+				break
+			}
+		}
+		rval, _ := db.Get(rkey)
+		db.Delete(rkey)
+
+		// Iterate until the error is hit.
+		seen := make(map[string]bool)
+		it := tr.NodeIterator(nil)
+		checkIteratorNoDups(t, it, seen)
+		missing, ok := it.Error().(*MissingNodeError)
+		if !ok || !bytes.Equal(missing.NodeHash[:], rkey) {
+			t.Fatal("didn't hit missing node, got", it.Error())
+		}
+
+		// Add the node back and continue iteration.
+		db.Put(rkey, rval)
+		checkIteratorNoDups(t, it, seen)
+		if it.Error() != nil {
+			t.Fatal("unexpected error", it.Error())
+		}
+		if len(seen) != wantNodeCount {
+			t.Fatal("wrong node iteration count, got", len(seen), "want", wantNodeCount)
+		}
+	}
+}
+
+// Similar to the test above, this one checks that failure to create nodeIterator at a
+// certain key prefix behaves correctly when Next is called. The expectation is that Next
+// should retry seeking before returning true for the first time.
+func TestIteratorContinueAfterSeekError(t *testing.T) {
+	// Commit test trie to db, then remove the node containing "bars".
+	db, _ := ethdb.NewMemDatabase()
+	ctr, _ := New(common.Hash{}, db)
+	for _, val := range testdata1 {
+		ctr.Update([]byte(val.k), []byte(val.v))
+	}
+	root, _ := ctr.Commit()
+	barNodeHash := common.HexToHash("05041990364eb72fcb1127652ce40d8bab765f2bfe53225b1170d276cc101c2e")
+	barNode, _ := db.Get(barNodeHash[:])
+	db.Delete(barNodeHash[:])
+
+	// Create a new iterator that seeks to "bars". Seeking can't proceed because
+	// the node is missing.
+	tr, _ := New(root, db)
+	it := tr.NodeIterator([]byte("bars"))
+	missing, ok := it.Error().(*MissingNodeError)
+	if !ok {
+		t.Fatal("want MissingNodeError, got", it.Error())
+	} else if missing.NodeHash != barNodeHash {
+		t.Fatal("wrong node missing")
+	}
+
+	// Reinsert the missing node.
+	db.Put(barNodeHash[:], barNode[:])
+
+	// Check that iteration produces the right set of values.
+	if err := checkIteratorOrder(testdata1[2:], NewIterator(it)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func checkIteratorNoDups(t *testing.T, it NodeIterator, seen map[string]bool) int {
+	if seen == nil {
+		seen = make(map[string]bool)
+	}
+	for it.Next(true) {
+		if seen[string(it.Path())] {
+			t.Fatalf("iterator visited node path %x twice", it.Path())
+		}
+		seen[string(it.Path())] = true
+	}
+	return len(seen)
 }

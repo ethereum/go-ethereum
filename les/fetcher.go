@@ -116,6 +116,7 @@ func newLightFetcher(pm *ProtocolManager) *lightFetcher {
 		syncDone:       make(chan *peer),
 		maxConfirmedTd: big.NewInt(0),
 	}
+	pm.peers.notify(f)
 	go f.syncLoop()
 	return f
 }
@@ -209,8 +210,8 @@ func (f *lightFetcher) syncLoop() {
 	}
 }
 
-// addPeer adds a new peer to the fetcher's peer set
-func (f *lightFetcher) addPeer(p *peer) {
+// registerPeer adds a new peer to the fetcher's peer set
+func (f *lightFetcher) registerPeer(p *peer) {
 	p.lock.Lock()
 	p.hasBlock = func(hash common.Hash, number uint64) bool {
 		return f.peerHasBlock(p, hash, number)
@@ -223,8 +224,8 @@ func (f *lightFetcher) addPeer(p *peer) {
 	f.peers[p] = &fetcherPeerInfo{nodeByHash: make(map[common.Hash]*fetcherTreeNode)}
 }
 
-// removePeer removes a new peer from the fetcher's peer set
-func (f *lightFetcher) removePeer(p *peer) {
+// unregisterPeer removes a new peer from the fetcher's peer set
+func (f *lightFetcher) unregisterPeer(p *peer) {
 	p.lock.Lock()
 	p.hasBlock = nil
 	p.lock.Unlock()
@@ -416,7 +417,7 @@ func (f *lightFetcher) nextRequest() (*distReq, uint64) {
 	f.syncing = bestSyncing
 
 	var rq *distReq
-	reqID := getNextReqID()
+	reqID := genReqID()
 	if f.syncing {
 		rq = &distReq{
 			getCost: func(dp distPeer) uint64 {

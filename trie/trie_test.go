@@ -19,6 +19,7 @@ package trie
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -34,7 +35,7 @@ import (
 
 func init() {
 	spew.Config.Indent = "    "
-	spew.Config.DisableMethods = true
+	spew.Config.DisableMethods = false
 }
 
 // Used for testing
@@ -357,6 +358,7 @@ type randTestStep struct {
 	op    int
 	key   []byte // for opUpdate, opDelete, opGet
 	value []byte // for opUpdate
+	err   error  // for debugging
 }
 
 const (
@@ -406,7 +408,7 @@ func runRandTest(rt randTest) bool {
 	tr, _ := New(common.Hash{}, db)
 	values := make(map[string]string) // tracks content of the trie
 
-	for _, step := range rt {
+	for i, step := range rt {
 		switch step.op {
 		case opUpdate:
 			tr.Update(step.key, step.value)
@@ -418,23 +420,22 @@ func runRandTest(rt randTest) bool {
 			v := tr.Get(step.key)
 			want := values[string(step.key)]
 			if string(v) != want {
-				fmt.Printf("mismatch for key 0x%x, got 0x%x want 0x%x", step.key, v, want)
-				return false
+				rt[i].err = fmt.Errorf("mismatch for key 0x%x, got 0x%x want 0x%x", step.key, v, want)
 			}
 		case opCommit:
-			if _, err := tr.Commit(); err != nil {
-				panic(err)
-			}
+			_, rt[i].err = tr.Commit()
 		case opHash:
 			tr.Hash()
 		case opReset:
 			hash, err := tr.Commit()
 			if err != nil {
-				panic(err)
+				rt[i].err = err
+				return false
 			}
 			newtr, err := New(hash, db)
 			if err != nil {
-				panic(err)
+				rt[i].err = err
+				return false
 			}
 			tr = newtr
 		case opItercheckhash:
@@ -444,17 +445,20 @@ func runRandTest(rt randTest) bool {
 				checktr.Update(it.Key, it.Value)
 			}
 			if tr.Hash() != checktr.Hash() {
-				fmt.Println("hashes not equal")
-				return false
+				rt[i].err = fmt.Errorf("hash mismatch in opItercheckhash")
 			}
 		case opCheckCacheInvariant:
-			return checkCacheInvariant(tr.root, nil, tr.cachegen, false, 0)
+			rt[i].err = checkCacheInvariant(tr.root, nil, tr.cachegen, false, 0)
+		}
+		// Abort the test on error.
+		if rt[i].err != nil {
+			return false
 		}
 	}
 	return true
 }
 
-func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool, depth int) bool {
+func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool, depth int) error {
 	var children []node
 	var flag nodeFlag
 	switch n := n.(type) {
@@ -465,33 +469,34 @@ func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool
 		flag = n.flags
 		children = n.Children[:]
 	default:
-		return true
+		return nil
 	}
 
-	showerror := func() {
-		fmt.Printf("at depth %d node %s", depth, spew.Sdump(n))
-		fmt.Printf("parent: %s", spew.Sdump(parent))
+	errorf := func(format string, args ...interface{}) error {
+		msg := fmt.Sprintf(format, args...)
+		msg += fmt.Sprintf("\nat depth %d node %s", depth, spew.Sdump(n))
+		msg += fmt.Sprintf("parent: %s", spew.Sdump(parent))
+		return errors.New(msg)
 	}
 	if flag.gen > parentCachegen {
-		fmt.Printf("cache invariant violation: %d > %d\n", flag.gen, parentCachegen)
-		showerror()
-		return false
+		return errorf("cache invariant violation: %d > %d\n", flag.gen, parentCachegen)
 	}
 	if depth > 0 && !parentDirty && flag.dirty {
-		fmt.Printf("cache invariant violation: child is dirty but parent isn't\n")
-		showerror()
-		return false
+		return errorf("cache invariant violation: %d > %d\n", flag.gen, parentCachegen)
 	}
 	for _, child := range children {
-		if !checkCacheInvariant(child, n, flag.gen, flag.dirty, depth+1) {
-			return false
+		if err := checkCacheInvariant(child, n, flag.gen, flag.dirty, depth+1); err != nil {
+			return err
 		}
 	}
-	return true
+	return nil
 }
 
 func TestRandom(t *testing.T) {
 	if err := quick.Check(runRandTest, nil); err != nil {
+		if cerr, ok := err.(*quick.CheckError); ok {
+			t.Fatalf("random test iteration %d failed: %s", cerr.Count, spew.Sdump(cerr.In))
+		}
 		t.Fatal(err)
 	}
 }

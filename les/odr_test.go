@@ -158,15 +158,15 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 
 func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	// Assemble the test environment
-	pm, db, odr := newTestProtocolManagerMust(t, false, 4, testChainGen)
-	lpm, ldb, odr := newTestProtocolManagerMust(t, true, 0, nil)
+	peers := newPeerSet()
+	dist := newRequestDistributor(peers, make(chan struct{}))
+	rm := newRetrieveManager(peers, dist, nil)
+	db, _ := ethdb.NewMemDatabase()
+	ldb, _ := ethdb.NewMemDatabase()
+	odr := NewLesOdr(ldb, rm)
+	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
+	lpm := newTestProtocolManagerMust(t, true, 0, nil, peers, odr, ldb)
 	_, err1, lpeer, err2 := newTestPeerPair("peer", protocol, pm, lpm)
-	pool := &testServerPool{}
-	lpm.reqDist = newRequestDistributor(pool.getAllPeers, lpm.quitSync)
-	odr.reqDist = lpm.reqDist
-	pool.setPeer(lpeer)
-	odr.serverPool = pool
-	lpeer.hasBlock = func(common.Hash, uint64) bool { return true }
 	select {
 	case <-time.After(time.Millisecond * 100):
 	case err := <-err1:
@@ -198,13 +198,19 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	}
 
 	// temporarily remove peer to test odr fails
-	pool.setPeer(nil)
 	// expect retrievals to fail (except genesis block) without a les peer
+	peers.Unregister(lpeer.id)
+	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
 	test(expFail)
-	pool.setPeer(lpeer)
 	// expect all retrievals to pass
+	peers.Register(lpeer)
+	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
+	lpeer.lock.Lock()
+	lpeer.hasBlock = func(common.Hash, uint64) bool { return true }
+	lpeer.lock.Unlock()
 	test(5)
-	pool.setPeer(nil)
 	// still expect all retrievals to pass, now data should be cached locally
+	peers.Unregister(lpeer.id)
+	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
 	test(5)
 }

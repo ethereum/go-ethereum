@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -41,17 +42,24 @@ type LesServer struct {
 	fcManager       *flowcontrol.ClientManager // nil if our node is client only
 	fcCostStats     *requestCostStats
 	defParams       *flowcontrol.ServerParams
+	lesTopic        discv5.Topic
+	quitSync        chan struct{}
 	stopped         bool
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
-	pm, err := NewProtocolManager(eth.BlockChain().Config(), false, config.NetworkId, eth.EventMux(), eth.Engine(), eth.BlockChain(), eth.TxPool(), eth.ChainDb(), nil, nil)
+	quitSync := make(chan struct{})
+	pm, err := NewProtocolManager(eth.BlockChain().Config(), false, config.NetworkId, eth.EventMux(), eth.Engine(), newPeerSet(), eth.BlockChain(), eth.TxPool(), eth.ChainDb(), nil, nil, quitSync, new(sync.WaitGroup))
 	if err != nil {
 		return nil, err
 	}
 	pm.blockLoop()
 
-	srv := &LesServer{protocolManager: pm}
+	srv := &LesServer{
+		protocolManager: pm,
+		quitSync:        quitSync,
+		lesTopic:        lesTopic(eth.BlockChain().Genesis().Hash()),
+	}
 	pm.server = srv
 
 	srv.defParams = &flowcontrol.ServerParams{
@@ -69,7 +77,14 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 
 // Start starts the LES server
 func (s *LesServer) Start(srvr *p2p.Server) {
-	s.protocolManager.Start(srvr)
+	s.protocolManager.Start()
+	go func() {
+		logger := log.New("topic", s.lesTopic)
+		logger.Info("Starting topic registration")
+		defer logger.Info("Terminated topic registration")
+
+		srvr.DiscV5.RegisterTopic(s.lesTopic, s.quitSync)
+	}()
 }
 
 // Stop stops the LES service
