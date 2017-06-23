@@ -94,7 +94,7 @@ func (api *PublicWhisperAPI) Version(ctx context.Context) string {
 // Info contains diagnostic information.
 type Info struct {
 	Memory         int     `json:"memory"`         // Memory size of the floating messages in bytes.
-	Message        int     `json:"message"`        // Number of floating messages.
+	Messages       int     `json:"messages"`       // Number of floating messages.
 	MinPow         float64 `json:"minPow"`         // Minimal accepted PoW
 	MaxMessageSize uint32  `json:"maxMessageSize"` // Maximum accepted message size
 }
@@ -104,7 +104,7 @@ func (api *PublicWhisperAPI) Info(ctx context.Context) Info {
 	stats := api.w.Stats()
 	return Info{
 		Memory:         stats.memoryUsed,
-		Message:        len(api.w.messageQueue) + len(api.w.p2pMsgQueue),
+		Messages:        len(api.w.messageQueue) + len(api.w.p2pMsgQueue),
 		MinPow:         api.w.MinPow(),
 		MaxMessageSize: api.w.MaxMessageSize(),
 	}
