@@ -228,7 +228,7 @@ func (self *Peer) Send(msg interface{}) error {
 	if !found {
 		return errorf(ErrInvalidMsgType, "%v", code)
 	}
-	log.Trace(fmt.Sprintf("=> msg #%d TO %v : %v", code, self.ID(), msg))
+	log.Trace(fmt.Sprintf("=> msg %s#%d TO %v : %v", self.spec.Name, code, self.ID(), msg))
 	return p2p.Send(self.rw, code, msg)
 }
 
@@ -257,7 +257,7 @@ func (self *Peer) handleIncoming(handle func(msg interface{}) error) error {
 	if err := msg.Decode(val); err != nil {
 		return errorf(ErrDecode, "<= %v: %v", msg, err)
 	}
-	log.Trace(fmt.Sprintf("<= %v FROM %v %T %v", msg, self.ID(), val, val))
+	log.Trace(fmt.Sprintf("<= %s/%v FROM %v %T %v", self.spec.Name, msg, self.ID(), val, val))
 
 	// call the registered handler callbacks
 	// a registered callback take the decoded message as argument as an interface
