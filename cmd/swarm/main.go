@@ -267,6 +267,14 @@ Cleans database of corrupted entries.
 		// pss flags
 		PssEnabledFlag,
 	}
+	rpcFlags := []cli.Flag{
+		utils.WSEnabledFlag,
+		utils.WSListenAddrFlag,
+		utils.WSPortFlag,
+		utils.WSApiFlag,
+		utils.WSAllowedOriginsFlag,
+	}
+	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
@@ -301,6 +309,9 @@ func version(ctx *cli.Context) error {
 
 func bzzd(ctx *cli.Context) error {
 	cfg := defaultNodeConfig
+	if ctx.GlobalBool(PssEnabledFlag.Name) && ctx.GlobalBool(utils.WSEnabledFlag.Name) {
+		cfg.WSModules = append(cfg.WSModules, "pss")
+	}
 	utils.SetNodeConfig(ctx, &cfg)
 	stack, err := node.New(&cfg)
 	if err != nil {
