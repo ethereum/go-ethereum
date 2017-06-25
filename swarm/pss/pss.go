@@ -131,8 +131,6 @@ func (self *Pss) Protocols() []p2p.Protocol {
 
 // Starts the PssMsg protocol
 func (self *Pss) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	self.lock.Lock()
-	defer self.lock.Unlock()
 	pp := protocols.NewPeer(p, rw, pssSpec)
 	//addr := network.NewAddrFromNodeID(id)
 	//potaddr := pot.NewHashAddressFromBytes(addr.OAddr)
@@ -326,8 +324,8 @@ func (self *Pss) Forward(msg *PssMsg) error {
 			log.Crit("Pss cannot use kademlia peer type")
 			return false
 		}
-		//sendMsg := fmt.Sprintf("MSG %x TO %x FROM %x VIA %x", digest, common.ByteLabel(msg.To), common.ByteLabel(self.BaseAddr()), common.ByteLabel(op.Address()))
-		sendMsg := fmt.Sprintf("TO %x FROM %x VIA %x", common.ByteLabel(msg.To), common.ByteLabel(self.BaseAddr()), common.ByteLabel(op.Address()))
+		sendMsg := fmt.Sprintf("MSG %x TO %x FROM %x VIA %x", digest, common.ByteLabel(msg.To), common.ByteLabel(self.BaseAddr()), common.ByteLabel(op.Address()))
+		//sendMsg := fmt.Sprintf("TO %x FROM %x VIA %x", common.ByteLabel(msg.To), common.ByteLabel(self.BaseAddr()), common.ByteLabel(op.Address()))
 		pp := self.fwdPool[sp.ID()]
 		if self.checkFwdCache(op.Address(), digest) {
 			log.Info(fmt.Sprintf("%v: peer already forwarded to", sendMsg))
