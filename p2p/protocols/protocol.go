@@ -228,7 +228,7 @@ func (self *Peer) Send(msg interface{}) error {
 	if !found {
 		return errorf(ErrInvalidMsgType, "%v", code)
 	}
-	log.Trace(fmt.Sprintf("=> msg #%d TO %v : %v", code, self.ID(), msg))
+	log.Trace(fmt.Sprintf("=> msg %s#%d TO %v : %v", self.spec.Name, code, self.ID(), msg))
 	return p2p.Send(self.rw, code, msg)
 }
 
@@ -257,7 +257,7 @@ func (self *Peer) handleIncoming(handle func(msg interface{}) error) error {
 	if err := msg.Decode(val); err != nil {
 		return errorf(ErrDecode, "<= %v: %v", msg, err)
 	}
-	log.Trace(fmt.Sprintf("<= %v FROM %v %T %v", msg, self.ID(), val, val))
+	log.Trace(fmt.Sprintf("<= %s/%v FROM %v %T %v", self.spec.Name, msg, self.ID(), val, val))
 
 	// call the registered handler callbacks
 	// a registered callback take the decoded message as argument as an interface
@@ -280,29 +280,24 @@ func (self *Peer) Handshake(ctx context.Context, hs interface{}) (interface{}, e
 	}
 	errc := make(chan error, 2)
 	go func() {
-		if err := self.Send(hs); err != nil {
-			errc <- errorf(ErrHandshake, "cannot send: %v", err)
-		}
+		errc <- self.Send(hs)
 	}()
-	hsc := make(chan interface{})
+	var rhs interface{}
 	go func() {
-		var rhs interface{}
-		err := self.handleIncoming(func(msg interface{}) error {
+		errc <- self.handleIncoming(func(msg interface{}) error {
 			rhs = msg
 			return nil
 		})
-		if err != nil {
-			errc <- err
-			return
-		}
-		hsc <- rhs
 	}()
-	select {
-	case rhs := <-hsc:
-		return rhs, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err := <-errc:
-		return nil, err
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-errc:
+			if err != nil {
+				return nil, errorf(ErrHandshake, err.Error())
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
+	return rhs, nil
 }

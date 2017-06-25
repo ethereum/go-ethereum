@@ -595,7 +595,7 @@ func (k *Kademlia) gotNearestNeighbours(peers [][]byte) (got bool) {
 	for _, p := range peers {
 		pm[string(p)] = true
 	}
-	k.EachConn(nil, 255, func(p OverlayConn, po int, nn bool) bool {
+	k.eachConn(nil, 255, func(p OverlayConn, po int, nn bool) bool {
 		if !nn {
 			return false
 		}

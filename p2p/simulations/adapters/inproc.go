@@ -74,14 +74,29 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 		}
 	}
 
-	node := &SimNode{
+	n, err := node.New(&node.Config{
+		P2P: p2p.Config{
+			PrivateKey:      config.PrivateKey,
+			MaxPeers:        math.MaxInt32,
+			NoDiscovery:     true,
+			Dialer:          s,
+			EnableMsgEvents: false,
+		},
+		NoUSB: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	simNode := &SimNode{
 		ID:      id,
 		config:  config,
+		node:    n,
 		adapter: s,
 		running: make(map[string]node.Service),
 	}
-	s.nodes[id] = node
-	return node, nil
+	s.nodes[id] = simNode
+	return simNode, nil
 }
 
 func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
@@ -99,17 +114,11 @@ func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
 }
 
 func (s *SimAdapter) DialRPC(id discover.NodeID) (*rpc.Client, error) {
-	simNode, ok := s.GetNode(id)
+	node, ok := s.GetNode(id)
 	if !ok {
 		return nil, fmt.Errorf("unknown node: %s", id)
 	}
-	simNode.lock.RLock()
-	node := simNode.node
-	simNode.lock.RUnlock()
-	if node == nil {
-		return nil, errors.New("node not started")
-	}
-	handler, err := node.RPCHandler()
+	handler, err := node.node.RPCHandler()
 	if err != nil {
 		return nil, err
 	}
@@ -164,13 +173,7 @@ func (self *SimNode) Client() (*rpc.Client, error) {
 // ServeRPC serves RPC requests over the given connection by creating an
 // in-process client to the node's RPC server
 func (self *SimNode) ServeRPC(conn net.Conn) error {
-	self.lock.RLock()
-	node := self.node
-	self.lock.RUnlock()
-	if node == nil {
-		return errors.New("node not started")
-	}
-	handler, err := node.RPCHandler()
+	handler, err := self.node.RPCHandler()
 	if err != nil {
 		return err
 	}
@@ -181,9 +184,12 @@ func (self *SimNode) ServeRPC(conn net.Conn) error {
 // Snapshots creates snapshots of the services by calling the
 // simulation_snapshot RPC method
 func (self *SimNode) Snapshots() (map[string][]byte, error) {
-	self.lock.Lock()
-	services := self.running
-	self.lock.Unlock()
+	self.lock.RLock()
+	services := make(map[string]node.Service, len(self.running))
+	for name, service := range self.running {
+		services[name] = service
+	}
+	self.lock.RUnlock()
 	if len(services) == 0 {
 		return nil, errors.New("no running services")
 	}
@@ -206,10 +212,6 @@ func (self *SimNode) Snapshots() (map[string][]byte, error) {
 func (self *SimNode) Start(snapshots map[string][]byte) error {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	if self.node != nil {
-		return errors.New("node already started")
-	}
-
 	newService := func(name string) func(ctx *node.ServiceContext) (node.Service, error) {
 		return func(nodeCtx *node.ServiceContext) (node.Service, error) {
 			ctx := &ServiceContext{
@@ -230,59 +232,34 @@ func (self *SimNode) Start(snapshots map[string][]byte) error {
 		}
 	}
 
-	node, err := node.New(&node.Config{
-		P2P: p2p.Config{
-			PrivateKey:      self.config.PrivateKey,
-			MaxPeers:        math.MaxInt32,
-			NoDiscovery:     true,
-			Dialer:          self.adapter,
-			EnableMsgEvents: false,
-		},
-		NoUSB: true,
-	})
-	if err != nil {
-		return err
-	}
-
 	for _, name := range self.config.Services {
-		if err := node.Register(newService(name)); err != nil {
+		if err := self.node.Register(newService(name)); err != nil {
 			return err
 		}
 	}
 
-	if err := node.Start(); err != nil {
+	if err := self.node.Start(); err != nil {
 		return err
 	}
 
 	// create an in-process RPC client
-	handler, err := node.RPCHandler()
+	handler, err := self.node.RPCHandler()
 	if err != nil {
 		return err
 	}
 	self.client = rpc.DialInProc(handler)
 
-	self.node = node
-
 	return nil
 }
 
 func (self *SimNode) Stop() error {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	if self.node == nil {
-		return nil
-	}
-	if err := self.node.Stop(); err != nil {
-		return err
-	}
-	self.node = nil
-	return nil
+	return self.node.Stop()
 }
 
 // Services returns the underlying services
 func (self *SimNode) Services() []node.Service {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+	self.lock.RLock()
+	defer self.lock.RUnlock()
 	services := make([]node.Service, 0, len(self.running))
 	for _, service := range self.running {
 		services = append(services, service)
@@ -291,11 +268,6 @@ func (self *SimNode) Services() []node.Service {
 }
 
 func (self *SimNode) Server() *p2p.Server {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	if self.node == nil {
-		return nil
-	}
 	return self.node.Server()
 }
 
