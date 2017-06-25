@@ -1,13 +1,16 @@
 package pss
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -39,28 +42,6 @@ var PingProtocol = &protocols.Spec{
 
 var PingTopic = NewTopic(PingProtocol.Name, int(PingProtocol.Version))
 
-func NewPingMsg(to []byte, spec *protocols.Spec, topic Topic, senderaddr []byte) PssMsg {
-	data := PingMsg{
-		Created: time.Now(),
-	}
-	code, found := spec.GetCode(&data)
-	if !found {
-		return PssMsg{}
-	}
-
-	rlpbundle, err := NewProtocolMsg(code, data)
-	if err != nil {
-		return PssMsg{}
-	}
-
-	pssmsg := PssMsg{
-		To:      to,
-		Payload: NewEnvelope(senderaddr, topic, rlpbundle),
-	}
-
-	return pssmsg
-}
-
 func NewPingProtocol(handler func(interface{}) error) *p2p.Protocol {
 	return &p2p.Protocol{
 		Name:    PingProtocol.Name,
@@ -75,10 +56,11 @@ func NewPingProtocol(handler func(interface{}) error) *p2p.Protocol {
 	}
 }
 
-func NewTestPss(addr []byte) *Pss {
-	if addr == nil {
-		addr = network.RandomAddr().OAddr
-	}
+func NewTestPss(privkey *ecdsa.PrivateKey) *Pss {
+
+	var nid discover.NodeID
+	copy(nid[:], crypto.FromECDSAPub(&privkey.PublicKey))
+	addr := network.NewAddrFromNodeID(nid)
 
 	// set up storage
 	cachedir, err := ioutil.TempDir("", "pss-cache")
@@ -97,9 +79,9 @@ func NewTestPss(addr []byte) *Pss {
 	kp.MinProxBinSize = 3
 
 	// create pss
-	pp := NewPssParams(true)
+	pp := NewPssParams(privkey)
 
-	overlay := network.NewKademlia(addr, kp)
+	overlay := network.NewKademlia(addr.Over(), kp)
 	ps := NewPss(overlay, dpa, pp)
 
 	return ps

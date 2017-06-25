@@ -2,6 +2,7 @@ package pss
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"encoding/binary"
 	"fmt"
 	"time"
@@ -10,32 +11,35 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 const (
-	TopicLength           = 32
-	DefaultTTL            = 6000
-	defaultDigestCacheTTL = time.Second
+	TopicLength            = 32
+	DefaultTTL             = 6000
+	defaultDigestCacheTTL  = time.Second
+	defaultWhisperWorkTime = 1
+	defaultWhisperPoW      = 0.01
 )
 
 // Pss configuration parameters
 type PssParams struct {
-	Cachettl time.Duration
-	Debug    bool
+	Cachettl   time.Duration
+	privatekey *ecdsa.PrivateKey
 }
 
 // Sane defaults for Pss
-func NewPssParams(debug bool) *PssParams {
+func NewPssParams(privatekey *ecdsa.PrivateKey) *PssParams {
 	return &PssParams{
-		Cachettl: defaultDigestCacheTTL,
-		Debug:    debug,
+		Cachettl:   defaultDigestCacheTTL,
+		privatekey: privatekey,
 	}
 }
 
 // Encapsulates messages transported over pss.
 type PssMsg struct {
 	To      []byte
-	Payload *Envelope
+	Payload *whisper.Envelope
 }
 
 // serializes the message for use in cache
@@ -47,24 +51,6 @@ func (msg *PssMsg) serialize() []byte {
 // String representation of PssMsg
 func (self *PssMsg) String() string {
 	return fmt.Sprintf("PssMsg: Recipient: %x", common.ByteLabel(self.To))
-}
-
-// Pre-Whisper placeholder, payload of PssMsg, sender address, Topic
-type Envelope struct {
-	Topic   Topic
-	TTL     uint16
-	Payload []byte
-	From    []byte
-}
-
-// Creates A Pss envelope from sender address, topic and raw payload
-func NewEnvelope(addr []byte, topic Topic, payload []byte) *Envelope {
-	return &Envelope{
-		From:    addr,
-		Topic:   topic,
-		TTL:     DefaultTTL,
-		Payload: payload,
-	}
 }
 
 // Convenience wrapper for devp2p protocol messages for transport over pss
@@ -109,26 +95,22 @@ func (self *APIMsg) String() string {
 // Implementations of this type are passed to Pss.Register together with a topic,
 type Handler func(msg []byte, p *p2p.Peer, from []byte) error
 
-// Topic defines the context of a message being transported over pss
-// It is used by pss to determine what action is to be taken on an incoming message
-// Typically, one can map protocol handlers for the message payloads by mapping topic to them; see Pss.Register
-type Topic [TopicLength]byte
-
 // String representation of Topic
-func (self *Topic) String() string {
-	return fmt.Sprintf("%x", self)
-}
+//func (self *Topic) String() string {
+//	return fmt.Sprintf("%x", self)
+//}
 
 // Constructs a new PssTopic from a given name and version.
 //
 // Analogous to the name and version members of p2p.Protocol.
-func NewTopic(s string, v int) (topic Topic) {
+func NewTopic(s string, v int) (topic whisper.TopicType) {
 	h := sha3.NewKeccak256()
 	h.Write([]byte(s))
 	buf := make([]byte, TopicLength/8)
 	binary.PutUvarint(buf, uint64(v))
 	h.Write(buf)
-	copy(topic[:], h.Sum(buf)[:])
+	//copy(topic[:], h.Sum(buf)[:])
+	topic = whisper.BytesToTopic(h.Sum(buf)[:4])
 	return topic
 }
 

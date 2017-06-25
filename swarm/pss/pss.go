@@ -2,12 +2,14 @@ package pss
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -17,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 const (
@@ -28,6 +31,7 @@ const (
 
 var (
 	errorForwardToSelf = errors.New("forward to self")
+	errorWhisper       = errors.New("whisper backend")
 )
 
 // abstraction to enable access to p2p.protocols.Peer.Send
@@ -58,15 +62,17 @@ type pssDigest [digestLength]byte
 //
 // Implements node.Service
 type Pss struct {
-	network.Overlay                                             // we can get the overlayaddress from this
-	peerPool        map[pot.Address]map[Topic]p2p.MsgReadWriter // keep track of all virtual p2p.Peers we are currently speaking to
-	fwdPool         map[discover.NodeID]*protocols.Peer         // keep track of all peers sitting on the pssmsg routing layer
-	handlers        map[Topic]map[*Handler]bool                 // topic and version based pss payload handlers
-	fwdcache        map[pssDigest]pssCacheEntry                 // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
-	cachettl        time.Duration                               // how long to keep messages in fwdcache
+	network.Overlay                                                         // we can get the overlayaddress from this
+	peerPool        map[pot.Address]map[whisper.TopicType]p2p.MsgReadWriter // keep track of all virtual p2p.Peers we are currently speaking to
+	fwdPool         map[discover.NodeID]*protocols.Peer                     // keep track of all peers sitting on the pssmsg routing layer
+	keyPool         map[pot.Address]ecdsa.PublicKey                         // keep track of all public keys so we can encrypt for our peers
+	reverseKeyPool  map[string]pot.Address                                  // as above but reverse lookup
+	handlers        map[whisper.TopicType]map[*Handler]bool                 // topic and version based pss payload handlers
+	fwdcache        map[pssDigest]pssCacheEntry                             // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
+	cachettl        time.Duration                                           // how long to keep messages in fwdcache
 	lock            sync.Mutex
 	dpa             *storage.DPA
-	debug           bool
+	privatekey      *ecdsa.PrivateKey
 }
 
 func (self *Pss) storeMsg(msg *PssMsg) (pssDigest, error) {
@@ -89,14 +95,16 @@ func (self *Pss) storeMsg(msg *PssMsg) (pssDigest, error) {
 // Needs a swarm network overlay, a DPA storage for message cache storage.
 func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 	return &Pss{
-		Overlay:  k,
-		peerPool: make(map[pot.Address]map[Topic]p2p.MsgReadWriter, PssPeerCapacity),
-		fwdPool:  make(map[discover.NodeID]*protocols.Peer),
-		handlers: make(map[Topic]map[*Handler]bool),
-		fwdcache: make(map[pssDigest]pssCacheEntry),
-		cachettl: params.Cachettl,
-		dpa:      dpa,
-		debug:    params.Debug,
+		Overlay:        k,
+		peerPool:       make(map[pot.Address]map[whisper.TopicType]p2p.MsgReadWriter, PssPeerCapacity),
+		fwdPool:        make(map[discover.NodeID]*protocols.Peer),
+		keyPool:        make(map[pot.Address]ecdsa.PublicKey),
+		reverseKeyPool: make(map[string]pot.Address),
+		handlers:       make(map[whisper.TopicType]map[*Handler]bool),
+		fwdcache:       make(map[pssDigest]pssCacheEntry),
+		cachettl:       params.Cachettl,
+		dpa:            dpa,
+		privatekey:     params.privatekey,
 	}
 }
 
@@ -132,10 +140,7 @@ func (self *Pss) Protocols() []p2p.Protocol {
 // Starts the PssMsg protocol
 func (self *Pss) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	pp := protocols.NewPeer(p, rw, pssSpec)
-	//addr := network.NewAddrFromNodeID(id)
-	//potaddr := pot.NewHashAddressFromBytes(addr.OAddr)
 	self.fwdPool[p.ID()] = pp
-
 	return pp.Run(self.handlePssMsg)
 }
 
@@ -151,14 +156,6 @@ func (self *Pss) APIs() []rpc.API {
 			Public:    true,
 		},
 	}
-	if self.debug {
-		apis = append(apis, rpc.API{
-			Namespace: "pss",
-			Version:   "0.1",
-			Service:   NewAPITest(self),
-			Public:    true,
-		})
-	}
 	return apis
 }
 
@@ -167,7 +164,7 @@ func (self *Pss) APIs() []rpc.API {
 // After calling this, all incoming messages with an envelope Topic matching the Topic specified will be passed to the given Handler function.
 //
 // Returns a deregister function which needs to be called to deregister the handler,
-func (self *Pss) Register(topic *Topic, handler Handler) func() {
+func (self *Pss) Register(topic *whisper.TopicType, handler Handler) func() {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	handlers := self.handlers[*topic]
@@ -179,7 +176,27 @@ func (self *Pss) Register(topic *Topic, handler Handler) func() {
 	return func() { self.deregister(topic, &handler) }
 }
 
-func (self *Pss) deregister(topic *Topic, h *Handler) {
+func (self *Pss) AddAddressKeyPair(addr pot.Address, pubkey ecdsa.PublicKey) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	self.keyPool[addr] = pubkey
+	self.reverseKeyPool[common.ToHex(crypto.FromECDSAPub(&pubkey))] = addr
+}
+
+// may need these later, please let them be
+////func (self *Pss) RemoveAddressKeyPair(addr pot.Address, pubkey ecdsa.PublicKey) {
+//	delete(self.reverseKeyPool, &self.keyPool[addr])
+//	delete(self.keyPool, addr)
+//}
+//
+//func (self *Pss) hasAddressKeyPair(addr pot.Address, pubkey ecdsa.PublicKey) bool {
+//	if self.keyPool[addr] != nil {
+//		return *self.keyPool[addr] == pubkey
+//	}
+//	return false
+//}
+
+func (self *Pss) deregister(topic *whisper.TopicType, h *Handler) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	handlers := self.handlers[*topic]
@@ -241,35 +258,56 @@ func (self *Pss) checkFwdCache(addr []byte, digest pssDigest) bool {
 	return false
 }
 
-func (self *Pss) getHandlers(topic Topic) map[*Handler]bool {
+func (self *Pss) getHandlers(topic whisper.TopicType) map[*Handler]bool {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	return self.handlers[topic]
 }
 
 func (self *Pss) handlePssMsg(msg interface{}) error {
-	pssmsg := msg.(*PssMsg)
+	pssmsg, ok := msg.(*PssMsg)
+	if ok {
+		if !self.isSelfRecipient(pssmsg) {
+			log.Trace("pss was for someone else :'( ... forwarding")
+			return self.Forward(pssmsg)
+		}
+		log.Trace("pss for us, yay! ... let's process!")
 
-	if !self.isSelfRecipient(pssmsg) {
-		log.Trace("pss was for someone else :'( ... forwarding")
-		return self.Forward(pssmsg)
+		return self.Process(pssmsg)
 	}
-	log.Trace("pss for us, yay! ... let's process!")
-	return self.Process(pssmsg)
+
+	return fmt.Errorf("invalid message")
 }
 
 // Entry point to processing a message for which the current node is the intended recipient.
 func (self *Pss) Process(pssmsg *PssMsg) error {
 	env := pssmsg.Payload
-	payload := env.Payload
+	recvmsg, err := env.OpenAsymmetric(self.privatekey)
+	if err != nil {
+		// todo: add check on if key is full length and identical, then fail
+		//return self.Forward(pssmsg)
+		return fmt.Errorf("not for us", "err", err)
+	}
+	if !recvmsg.Validate() {
+		return fmt.Errorf("invalid signature")
+	}
+
+	payload := recvmsg.Payload
 	handlers := self.getHandlers(env.Topic)
 	if len(handlers) == 0 {
 		return fmt.Errorf("No registered handler for topic '%x'", env.Topic)
 	}
+
 	nid, _ := discover.HexID("0x00")
-	p := p2p.NewPeer(nid, fmt.Sprintf("%x", env.From), []p2p.Cap{})
+	p := p2p.NewPeer(nid, fmt.Sprintf("%x", recvmsg.Src), []p2p.Cap{})
+	addr := self.reverseKeyPool[common.ToHex(crypto.FromECDSAPub(recvmsg.Src))]
+	log.Warn("recvkey", "key", *recvmsg.Src, "addr", addr)
+	if bytes.Equal([]byte{}, addr[:]) {
+		return fmt.Errorf("unknown key", "addr", addr)
+	}
+
 	for f := range handlers {
-		err := (*f)(payload, p, env.From)
+		err := (*f)(payload, p, addr.Bytes())
 		if err != nil {
 			return err
 		}
@@ -282,12 +320,38 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 // This method is payload agnostic, and will accept any arbitrary byte slice as the payload for a message.
 //
 // It generates an envelope for the specified recipient and topic, and wraps the message payload in it.
-func (self *Pss) SendRaw(to []byte, topic Topic, msg []byte) error {
-	sender := self.Overlay.BaseAddr()
-	pssenv := NewEnvelope(sender, topic, msg)
+func (self *Pss) SendAsym(to []byte, topic whisper.TopicType, msg []byte) error {
+	var potaddr pot.Address
+	copy(potaddr[:], to)
+	topubkey := self.keyPool[potaddr]
+	log.Debug("using pubkey", "pubkey", topubkey)
+	wparams := &whisper.MessageParams{
+		TTL:      DefaultTTL,
+		Src:      self.privatekey,
+		Dst:      &topubkey,
+		Topic:    topic,
+		WorkTime: defaultWhisperWorkTime,
+		PoW:      defaultWhisperPoW,
+		Payload:  msg,
+	}
+
+	// set up outgoing message container, which does encryption and envelope wrapping
+	woutmsg, err := whisper.NewSentMessage(wparams)
+	if err != nil {
+		return fmt.Errorf("%v: %s", errorWhisper, err)
+	}
+
+	// performs encryption and PoW
+	// after this the message is ready for sending
+	env, err := woutmsg.Wrap(wparams)
+	if err != nil {
+		return fmt.Errorf("%v: %s", errorWhisper, err)
+	}
+	log.Trace("pssmsg whisper done", "env", env)
+
 	pssmsg := &PssMsg{
 		To:      to,
-		Payload: pssenv,
+		Payload: env,
 	}
 	return self.Forward(pssmsg)
 }
@@ -298,7 +362,8 @@ func (self *Pss) SendRaw(to []byte, topic Topic, msg []byte) error {
 func (self *Pss) Forward(msg *PssMsg) error {
 
 	if self.isSelfRecipient(msg) {
-		return errorForwardToSelf
+		//return errorForwardToSelf
+		return self.Process(msg)
 	}
 
 	// cache it
@@ -360,7 +425,7 @@ func (self *Pss) Forward(msg *PssMsg) error {
 // Links a remote peer and Topic to a dedicated p2p.MsgReadWriter in the pss peerpool, and runs the specificed protocol using these resources.
 //
 // The effect is that now we have a "virtual" protocol running on an artificial p2p.Peer, which can be looked up and piped to through Pss using swarm overlay address and topic
-func (self *Pss) AddPeer(p *p2p.Peer, addr pot.Address, run func(*p2p.Peer, p2p.MsgReadWriter) error, topic Topic, rw p2p.MsgReadWriter) error {
+func (self *Pss) AddPeer(p *p2p.Peer, addr pot.Address, run func(*p2p.Peer, p2p.MsgReadWriter) error, topic whisper.TopicType, rw p2p.MsgReadWriter) error {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	self.addPeerTopic(addr, topic, rw)
@@ -372,15 +437,15 @@ func (self *Pss) AddPeer(p *p2p.Peer, addr pot.Address, run func(*p2p.Peer, p2p.
 	return nil
 }
 
-func (self *Pss) addPeerTopic(id pot.Address, topic Topic, rw p2p.MsgReadWriter) error {
+func (self *Pss) addPeerTopic(id pot.Address, topic whisper.TopicType, rw p2p.MsgReadWriter) error {
 	if self.peerPool[id] == nil {
-		self.peerPool[id] = make(map[Topic]p2p.MsgReadWriter, PssPeerTopicDefaultCapacity)
+		self.peerPool[id] = make(map[whisper.TopicType]p2p.MsgReadWriter, PssPeerTopicDefaultCapacity)
 	}
 	self.peerPool[id][topic] = rw
 	return nil
 }
 
-func (self *Pss) removePeerTopic(rw p2p.MsgReadWriter, topic Topic) {
+func (self *Pss) removePeerTopic(rw p2p.MsgReadWriter, topic whisper.TopicType) {
 	prw, ok := rw.(*PssReadWriter)
 	if !ok {
 		return
@@ -395,7 +460,7 @@ func (self *Pss) isSelfRecipient(msg *PssMsg) bool {
 	return bytes.Equal(msg.To, self.Overlay.BaseAddr())
 }
 
-func (self *Pss) isActive(id pot.Address, topic Topic) bool {
+func (self *Pss) isActive(id pot.Address, topic whisper.TopicType) bool {
 	if self.peerPool[id] == nil {
 		return false
 	}
@@ -413,7 +478,7 @@ type PssReadWriter struct {
 	LastActive time.Time
 	rw         chan p2p.Msg
 	spec       *protocols.Spec
-	topic      *Topic
+	topic      *whisper.TopicType
 }
 
 // Implements p2p.MsgReader
@@ -436,7 +501,7 @@ func (prw PssReadWriter) WriteMsg(msg p2p.Msg) error {
 	if err != nil {
 		return err
 	}
-	return prw.SendRaw(prw.To.Bytes(), *prw.topic, pmsg)
+	return prw.SendAsym(prw.To.Bytes(), *prw.topic, pmsg)
 }
 
 // Injects a p2p.Msg into the MsgReadWriter, so that it appears on the associated p2p.MsgReader
@@ -452,14 +517,14 @@ func (prw PssReadWriter) injectMsg(msg p2p.Msg) error {
 type PssProtocol struct {
 	*Pss
 	proto *p2p.Protocol
-	topic *Topic
+	topic *whisper.TopicType
 	spec  *protocols.Spec
 }
 
 // For devp2p protocol integration only.
 //
 // Maps a Topic to a devp2p protocol.
-func RegisterPssProtocol(ps *Pss, topic *Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol) *PssProtocol {
+func RegisterPssProtocol(ps *Pss, topic *whisper.TopicType, spec *protocols.Spec, targetprotocol *p2p.Protocol) *PssProtocol {
 	pp := &PssProtocol{
 		Pss:   ps,
 		proto: targetprotocol,
@@ -496,4 +561,8 @@ func (self *PssProtocol) Handle(msg []byte, p *p2p.Peer, senderAddr []byte) erro
 	vrw.injectMsg(pmsg)
 
 	return nil
+}
+
+func getPadding() []byte {
+	return []byte{0x64, 0x6f, 0x6f, 0x62, 0x61, 0x72}
 }
