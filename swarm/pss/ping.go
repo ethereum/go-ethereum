@@ -27,6 +27,7 @@ func (self *Ping) PingHandler(msg interface{}) error {
 	return nil
 }
 
+// Sample protocol used for tests
 var PingProtocol = &protocols.Spec{
 	Name:       "psstest",
 	Version:    1,

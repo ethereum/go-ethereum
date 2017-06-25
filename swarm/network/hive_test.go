@@ -1,3 +1,19 @@
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package network
 
 import (
@@ -17,6 +33,7 @@ func newHiveTester(t *testing.T, params *HiveParams) (*bzzTester, *Hive) {
 }
 
 func TestRegisterAndConnect(t *testing.T) {
+	//t.Skip("deadlocked")
 	params := NewHiveParams()
 	s, pp := newHiveTester(t, params)
 	defer s.Stop()
@@ -46,6 +63,11 @@ func TestRegisterAndConnect(t *testing.T) {
 	s.TestExchanges(p2ptest.Exchange{
 		Label: "getPeersMsg message",
 		Expects: []p2ptest.Expect{
+			p2ptest.Expect{
+				Code: 2,
+				Msg:  &subPeersMsg{0},
+				Peer: id,
+			},
 			p2ptest.Expect{
 				Code: 1,
 				Msg:  &getPeersMsg{uint8(o), 5},

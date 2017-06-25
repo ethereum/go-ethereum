@@ -18,13 +18,13 @@ const (
 	defaultDigestCacheTTL = time.Second
 )
 
-// Defines params for Pss
+// Pss configuration parameters
 type PssParams struct {
 	Cachettl time.Duration
 	Debug    bool
 }
 
-// Initializes default params for Pss
+// Sane defaults for Pss
 func NewPssParams(debug bool) *PssParams {
 	return &PssParams{
 		Cachettl: defaultDigestCacheTTL,
@@ -32,13 +32,14 @@ func NewPssParams(debug bool) *PssParams {
 	}
 }
 
-// Encapsulates the message transported over pss.
+// Encapsulates messages transported over pss.
 type PssMsg struct {
 	To      []byte
 	Payload *Envelope
 }
 
-func (msg *PssMsg) Serialize() []byte {
+// serializes the message for use in cache
+func (msg *PssMsg) serialize() []byte {
 	rlpdata, _ := rlp.EncodeToBytes(msg)
 	return rlpdata
 }
@@ -48,16 +49,7 @@ func (self *PssMsg) String() string {
 	return fmt.Sprintf("PssMsg: Recipient: %x", common.ByteLabel(self.To))
 }
 
-// Topic defines the context of a message being transported over pss
-// It is used by pss to determine what action is to be taken on an incoming message
-// Typically, one can map protocol handlers for the message payloads by mapping topic to them; see *Pss.Register()
-type Topic [TopicLength]byte
-
-func (self *Topic) String() string {
-	return fmt.Sprintf("%x", self)
-}
-
-// Pre-Whisper placeholder, payload of PssMsg
+// Pre-Whisper placeholder, payload of PssMsg, sender address, Topic
 type Envelope struct {
 	Topic   Topic
 	TTL     uint16
@@ -65,7 +57,7 @@ type Envelope struct {
 	From    []byte
 }
 
-// creates Pss envelope from sender address, topic and raw payload
+// Creates A Pss envelope from sender address, topic and raw payload
 func NewEnvelope(addr []byte, topic Topic, payload []byte) *Envelope {
 	return &Envelope{
 		From:    addr,
@@ -75,7 +67,7 @@ func NewEnvelope(addr []byte, topic Topic, payload []byte) *Envelope {
 	}
 }
 
-// encapsulates a protocol msg as PssEnvelope data
+// Convenience wrapper for devp2p protocol messages for transport over pss
 type ProtocolMsg struct {
 	Code       uint64
 	Size       uint32
@@ -83,13 +75,7 @@ type ProtocolMsg struct {
 	ReceivedAt time.Time
 }
 
-// PssAPIMsg is the type for messages, it extends the rlp encoded protocol Msg
-// with the Sender's overlay address
-type APIMsg struct {
-	Msg  []byte
-	Addr []byte
-}
-
+// Creates a ProtocolMsg
 func NewProtocolMsg(code uint64, msg interface{}) ([]byte, error) {
 
 	rlpdata, err := rlp.EncodeToBytes(msg)
@@ -97,8 +83,6 @@ func NewProtocolMsg(code uint64, msg interface{}) ([]byte, error) {
 		return nil, err
 	}
 
-	// previous attempts corrupted nested structs in the payload iself upon deserializing
-	// therefore we use two separate []byte fields instead of peerAddr
 	// TODO verify that nested structs cannot be used in rlp
 	smsg := &ProtocolMsg{
 		Code:    code,
@@ -109,12 +93,35 @@ func NewProtocolMsg(code uint64, msg interface{}) ([]byte, error) {
 	return rlp.EncodeToBytes(smsg)
 }
 
-// Message handler func for a topic
+// Convenience wrapper for sending and receiving pss messages when using the pss API
+type APIMsg struct {
+	Msg  []byte
+	Addr []byte
+}
+
+// for debugging, show nice hex version
+func (self *APIMsg) String() string {
+	return fmt.Sprintf("APIMsg: from: %s..., msg: %s...", common.ByteLabel(self.Msg), common.ByteLabel(self.Addr))
+}
+
+// Signature for a message handler function for a PssMsg
+//
+// Implementations of this type are passed to Pss.Register together with a topic,
 type Handler func(msg []byte, p *p2p.Peer, from []byte) error
 
-// constructs a new PssTopic from a given name and version.
+// Topic defines the context of a message being transported over pss
+// It is used by pss to determine what action is to be taken on an incoming message
+// Typically, one can map protocol handlers for the message payloads by mapping topic to them; see Pss.Register
+type Topic [TopicLength]byte
+
+// String representation of Topic
+func (self *Topic) String() string {
+	return fmt.Sprintf("%x", self)
+}
+
+// Constructs a new PssTopic from a given name and version.
 //
-// Analogous to the name and version members of p2p.Protocol
+// Analogous to the name and version members of p2p.Protocol.
 func NewTopic(s string, v int) (topic Topic) {
 	h := sha3.NewKeccak256()
 	h.Write([]byte(s))
@@ -125,6 +132,11 @@ func NewTopic(s string, v int) (topic Topic) {
 	return topic
 }
 
+// For devp2p protocol integration only
+//
+// Creates a serialized (non-buffered) version of a p2p.Msg, used in the specialized p2p.MsgReadwriter implementations used internally by pss
+//
+// Should not normally be called outside the pss package hierarchy
 func ToP2pMsg(msg []byte) (p2p.Msg, error) {
 	payload := &ProtocolMsg{}
 	if err := rlp.DecodeBytes(msg, payload); err != nil {

@@ -51,7 +51,7 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 	kp.MinBinSize = 1
 	kp.MaxRetries = 1000
 	kp.RetryExponent = 2
-	kp.RetryInterval = 1000
+	kp.RetryInterval = 1000000
 	kp.PruneInterval = 2000
 	kad := network.NewKademlia(addr.Over(), kp)
 	ticker := time.NewTicker(time.Duration(kad.PruneInterval) * time.Millisecond)
@@ -97,7 +97,7 @@ func setupMocker(net *simulations.Network) []discover.NodeID {
 	conf := net.Config()
 	conf.DefaultService = "overlay"
 
-	nodeCount := 60
+	nodeCount := 30
 	ids := make([]discover.NodeID, nodeCount)
 	for i := 0; i < nodeCount; i++ {
 		node, err := net.NewNode()
@@ -209,8 +209,9 @@ func main() {
 
 	config := &simulations.ServerConfig{
 		NewAdapter:      func() adapters.NodeAdapter { return adapters.NewSimAdapter(services) },
-		DefaultMockerID: "bootNet",
-		Mockers:         mockers,
+		DefaultMockerID: "randomNodes",
+		// DefaultMockerID: "bootNet",
+		Mockers: mockers,
 	}
 
 	log.Info("starting simulation server on 0.0.0.0:8888...")

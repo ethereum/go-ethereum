@@ -13,6 +13,8 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+// Package pot see doc.go
 package pot
 
 import (
@@ -26,35 +28,40 @@ import (
 )
 
 var (
-	zeroAddr = &common.Hash{}
-	zerosHex = zeroAddr.Hex()[2:]
 	zerosBin = Address{}.Bin()
 )
 
-var (
-	addrlen = keylen
-)
-
+// Address is an alias for common.Hash
 type Address common.Hash
+
+// NewAddressFromBytes constructs an Address from a byte slice
+func NewAddressFromBytes(b []byte) Address {
+	h := common.Hash{}
+	copy(h[:], b)
+	return Address(h)
+}
 
 func (a Address) String() string {
 	return fmt.Sprintf("%x", a[:])
 }
 
+// MarshalJSON Address serialisation
 func (a *Address) MarshalJSON() (out []byte, err error) {
 	return []byte(`"` + a.String() + `"`), nil
 }
 
+// UnmarshalJSON Address deserialisation
 func (a *Address) UnmarshalJSON(value []byte) error {
 	*a = Address(common.HexToHash(string(value[1 : len(value)-1])))
 	return nil
 }
 
-// the string form of the binary representation of an address (only first 8 bits)
+// Bin returns the string form of the binary representation of an address (only first 8 bits)
 func (a Address) Bin() string {
 	return ToBin(a[:])
 }
 
+// ToBin converts a byteslice to the string binary representation
 func ToBin(a []byte) string {
 	var bs []string
 	for _, b := range a {
@@ -63,6 +70,7 @@ func ToBin(a []byte) string {
 	return strings.Join(bs, "")
 }
 
+// Bytes returns the Address as a byte slice
 func (a Address) Bytes() []byte {
 	return a[:]
 }
@@ -107,23 +115,23 @@ func posProximity(one, other Address, pos int) (ret int, eq bool) {
 	return len(one) * 8, true
 }
 
-// Address.ProxCmp compares the distances a->target and b->target.
+// ProxCmp compares the distances a->target and b->target.
 // Returns -1 if a is closer to target, 1 if b is closer to target
 // and 0 if they are equal.
-func (target Address) ProxCmp(a, b Address) int {
-	for i := range target {
-		da := a[i] ^ target[i]
-		db := b[i] ^ target[i]
-		if da > db {
+func (a Address) ProxCmp(x, y Address) int {
+	for i := range a {
+		dx := x[i] ^ a[i]
+		dy := y[i] ^ a[i]
+		if dx > dy {
 			return 1
-		} else if da < db {
+		} else if dx < dy {
 			return -1
 		}
 	}
 	return 0
 }
 
-// randomAddressAt(address, prox) generates a random address
+// RandomAddressAt (address, prox) generates a random address
 // at proximity order prox relative to address
 // if prox is negative a random address is generated
 func RandomAddressAt(self Address, prox int) (addr Address) {
@@ -148,71 +156,12 @@ func RandomAddressAt(self Address, prox int) (addr Address) {
 	return
 }
 
-// KeyRange(a0, a1, proxLimit) returns the address inclusive address
-// range that contain addresses closer to one than other
-// func KeyRange(one, other Address, proxLimit int) (start, stop Address) {
-// 	prox := proximity(one, other)
-// 	if prox >= proxLimit {
-// 		prox = proxLimit
-// 	}
-// 	start = CommonBitsAddrByte(one, other, byte(0x00), prox)
-// 	stop = CommonBitsAddrByte(one, other, byte(0xff), prox)
-// 	return
-// }
-
-func CommonBitsAddrF(self, other Address, f func() byte, p int) (addr Address) {
-	prox, _ := proximity(self, other)
-	var pos int
-	if p <= prox {
-		prox = p
-	}
-	pos = prox / 8
-	addr = self
-	trans := byte(prox % 8)
-	var transbytea byte
-	if p > prox {
-		transbytea = byte(0x7f)
-	} else {
-		transbytea = byte(0xff)
-	}
-	transbytea >>= trans
-	transbyteb := transbytea ^ byte(0xff)
-	addrpos := addr[pos]
-	addrpos &= transbyteb
-	if p > prox {
-		addrpos ^= byte(0x80 >> trans)
-	}
-	addrpos |= transbytea & f()
-	addr[pos] = addrpos
-	for i := pos + 1; i < len(addr); i++ {
-		addr[i] = f()
-	}
-
-	return
-}
-
-func CommonBitsAddr(self, other Address, prox int) (addr Address) {
-	return CommonBitsAddrF(self, other, func() byte { return byte(rand.Intn(255)) }, prox)
-}
-
-func CommonBitsAddrByte(self, other Address, b byte, prox int) (addr Address) {
-	return CommonBitsAddrF(self, other, func() byte { return b }, prox)
-}
-
-// randomAddressAt() generates a random address
+// RandomAddress generates a random address
 func RandomAddress() Address {
 	return RandomAddressAt(Address{}, -1)
 }
 
-// wraps an Address to implement the PotVal interface
-type HashAddress struct {
-	Address
-}
-
-func (a *HashAddress) String() string {
-	return a.Address.Bin()
-}
-
+// NewAddressFromString creates a byte slice from a string in binary representation
 func NewAddressFromString(s string) []byte {
 	ha := [32]byte{}
 
@@ -227,85 +176,16 @@ func NewAddressFromString(s string) []byte {
 	return ha[:]
 }
 
-func NewHashAddress(s string) *HashAddress {
-	ha := NewAddressFromString(s)
-	h := common.Hash{}
-	copy(h[:], ha)
-	return &HashAddress{Address(h)}
-}
-
-func NewHashAddressFromBytes(b []byte) *HashAddress {
-	h := common.Hash{}
-	copy(h[:], b)
-	return &HashAddress{Address(h)}
-}
-
-// PO(addr, pos) return the proximity order of addr wrt to
-// the pinned address of the tree
-// assuming it is greater than or  equal to pos
-func (self *HashAddress) PO(val PotVal, pos int) (po int, eq bool) {
-	return posProximity(self.Address, val.(*HashAddress).Address, pos)
-}
-
-type BoolAddress struct {
-	addr []bool
-}
-
-func NewBoolAddress(s string) *BoolAddress {
-	return NewBoolAddressXOR(s, zerosBin[:len(s)])
-}
-
-func NewBoolAddressXOR(s, t string) *BoolAddress {
-	if len(s) != len(t) {
-		panic("lengths do not match")
-	}
-	addr := make([]bool, len(s))
-	for i, _ := range addr {
-		addr[i] = s[i] != t[i]
-	}
-	return &BoolAddress{addr}
-}
-
-func (self *BoolAddress) String() string {
-	a := self.addr
-	s := []byte(zerosBin)[:len(a)]
-	for i, one := range a {
-		if one {
-			s[i] = byte('1')
-		}
-	}
-	return string(s)
-}
-
-func (self *BoolAddress) PO(val PotVal, pos int) (po int, eq bool) {
-	a := self.addr
-	b := val.(*BoolAddress).addr
-	for po = pos; po < len(b); po++ {
-		if a[po] != b[po] {
-			return po, false
-		}
-	}
-	return po, true
-}
-
+// BytesAddress is an interface for elements addressable by a byte slice
 type BytesAddress interface {
 	Address() []byte
 }
 
-type bytesAddress struct {
-	bytes   []byte
-	toBytes func(v AnyVal) []byte
-}
-
-func NewBytesVal(v AnyVal, f func(v AnyVal) []byte) *bytesAddress {
-	if f == nil {
-		f = ToBytes
+// ToBytes turns the Val into bytes
+func ToBytes(v Val) []byte {
+	if v == nil {
+		return nil
 	}
-	b := f(v)
-	return &bytesAddress{b, f}
-}
-
-func ToBytes(v AnyVal) []byte {
 	b, ok := v.([]byte)
 	if !ok {
 		ba, ok := v.(BytesAddress)
@@ -317,15 +197,17 @@ func ToBytes(v AnyVal) []byte {
 	return b
 }
 
-func (a *bytesAddress) String() string {
-	return fmt.Sprintf("%08b", a.bytes)
-}
-func (a *bytesAddress) Address() []byte {
-	return a.bytes
-}
-
-func (a *bytesAddress) PO(val PotVal, i int) (int, bool) {
-	return proximityOrder(a.bytes, a.toBytes(val), i)
+// DefaultPof returns a proximity order comparison operator function
+// where all
+func DefaultPof(max int) func(one, other Val, pos int) (int, bool) {
+	return func(one, other Val, pos int) (int, bool) {
+		po, eq := proximityOrder(ToBytes(one), ToBytes(other), pos)
+		if po >= max {
+			eq = true
+			po = max
+		}
+		return po, eq
+	}
 }
 
 func proximityOrder(one, other []byte, pos int) (int, bool) {
@@ -345,4 +227,18 @@ func proximityOrder(one, other []byte, pos int) (int, bool) {
 		}
 	}
 	return len(one) * 8, true
+}
+
+// Label displays the node's key in binary format
+func Label(v Val) string {
+	if v == nil {
+		return "<nil>"
+	}
+	if s, ok := v.(fmt.Stringer); ok {
+		return s.String()
+	}
+	if b, ok := v.([]byte); ok {
+		return ToBin(b)
+	}
+	panic(fmt.Sprintf("unsupported value type %T", v))
 }

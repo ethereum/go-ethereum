@@ -139,9 +139,13 @@ func (t *testWrapper) newTestService(ctx *adapters.ServiceContext) (node.Service
 	if err != nil {
 		panic(err)
 	}
+	pssclient, err := client.NewClientWithRPC(rpcClient)
+	if err != nil {
+		return nil, err
+	}
 	return &testService{
 		id:         ctx.Config.ID,
-		pss:        client.NewClientWithRPC(context.Background(), rpcClient),
+		pss:        pssclient,
 		handshakes: make(chan *testHandshake),
 	}, nil
 }

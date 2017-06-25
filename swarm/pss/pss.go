@@ -20,22 +20,24 @@ import (
 )
 
 const (
-	TopicResolverLength         = 8
-	PssPeerCapacity             = 256
-	PssPeerTopicDefaultCapacity = 8
-	digestLength                = 32
-	digestCapacity              = 256
+	PssPeerCapacity             = 256 // limit of peers kept in cache. (not implemented)
+	PssPeerTopicDefaultCapacity = 8   // limit of topics kept per peer. (not implemented)
+	digestLength                = 32  // byte length of digest used for pss cache (currently same as swarm chunk hash)
+	digestCapacity              = 256 // cache entry limit (not implement)
 )
 
 var (
 	errorForwardToSelf = errors.New("forward to self")
 )
 
+// abstraction to enable access to p2p.protocols.Peer.Send
 type senderPeer interface {
+	ID() discover.NodeID
 	Address() []byte
 	Send(interface{}) error
 }
 
+// protocol specification of the pss capsule
 var pssSpec = &protocols.Spec{
 	Name:       "pss",
 	Version:    1,
@@ -52,24 +54,13 @@ type pssCacheEntry struct {
 
 type pssDigest [digestLength]byte
 
-// implements node.Service
+// Toplevel pss object, taking care of message sending and receiving, message handler dispatchers and message forwarding.
 //
-// pss provides sending messages to nodes without having to be directly connected to them.
-//
-// The messages are wrapped in a PssMsg structure and routed using the swarm kademlia routing.
-//
-// The top-level Pss object provides:
-//
-// - access to the swarm overlay and routing (kademlia)
-// - a collection of remote overlay addresses mapped to MsgReadWriters, representing the virtually connected peers
-// - a collection of remote underlay address, mapped to the overlay addresses above
-// - a method to send a message to specific overlayaddr
-// - a dispatcher lookup, mapping protocols to topics
-// - a message cache to spot messages that previously have been forwarded
+// Implements node.Service
 type Pss struct {
 	network.Overlay                                             // we can get the overlayaddress from this
 	peerPool        map[pot.Address]map[Topic]p2p.MsgReadWriter // keep track of all virtual p2p.Peers we are currently speaking to
-	fwdPool         map[pot.Address]*protocols.Peer             // keep track of all peers sitting on the pssmsg routing layer
+	fwdPool         map[discover.NodeID]*protocols.Peer         // keep track of all peers sitting on the pssmsg routing layer
 	handlers        map[Topic]map[*Handler]bool                 // topic and version based pss payload handlers
 	fwdcache        map[pssDigest]pssCacheEntry                 // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
 	cachettl        time.Duration                               // how long to keep messages in fwdcache
@@ -81,7 +72,7 @@ type Pss struct {
 func (self *Pss) storeMsg(msg *PssMsg) (pssDigest, error) {
 	swg := &sync.WaitGroup{}
 	wwg := &sync.WaitGroup{}
-	buf := bytes.NewReader(msg.Serialize())
+	buf := bytes.NewReader(msg.serialize())
 	key, err := self.dpa.Store(buf, int64(buf.Len()), swg, wwg)
 	if err != nil {
 		log.Warn("Could not store in swarm", "err", err)
@@ -93,12 +84,14 @@ func (self *Pss) storeMsg(msg *PssMsg) (pssDigest, error) {
 	return digest, nil
 }
 
-// Creates a new Pss instance. A node should only need one of these
+// Creates a new Pss instance.
+//
+// Needs a swarm network overlay, a DPA storage for message cache storage.
 func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 	return &Pss{
 		Overlay:  k,
 		peerPool: make(map[pot.Address]map[Topic]p2p.MsgReadWriter, PssPeerCapacity),
-		fwdPool:  make(map[pot.Address]*protocols.Peer),
+		fwdPool:  make(map[discover.NodeID]*protocols.Peer),
 		handlers: make(map[Topic]map[*Handler]bool),
 		fwdcache: make(map[pssDigest]pssCacheEntry),
 		cachettl: params.Cachettl,
@@ -107,18 +100,24 @@ func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 	}
 }
 
+// Convenience accessor to the swarm overlay address of the pss node
 func (self *Pss) BaseAddr() []byte {
 	return self.Overlay.BaseAddr()
 }
 
+// For node.Service implementation. Does nothing for now, but should be included in the code for backwards compatibility.
 func (self *Pss) Start(srv *p2p.Server) error {
 	return nil
 }
 
+// For node.Service implementation. Does nothing for now, but should be included in the code for backwards compatibility.
 func (self *Pss) Stop() error {
 	return nil
 }
 
+// devp2p protocol object for the PssMsg struct.
+//
+// This represents the PssMsg capsule, and is the entry point for processing, receiving and sending pss messages between directly connected peers.
 func (self *Pss) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		p2p.Protocol{
@@ -130,14 +129,21 @@ func (self *Pss) Protocols() []p2p.Protocol {
 	}
 }
 
+// Starts the PssMsg protocol
 func (self *Pss) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	self.lock.Lock()
+	defer self.lock.Unlock()
 	pp := protocols.NewPeer(p, rw, pssSpec)
-	id := p.ID()
-	h := pot.NewHashAddressFromBytes(network.ToOverlayAddr(id[:]))
-	self.fwdPool[h.Address] = pp
+	//addr := network.NewAddrFromNodeID(id)
+	//potaddr := pot.NewHashAddressFromBytes(addr.OAddr)
+	self.fwdPool[p.ID()] = pp
+
 	return pp.Run(self.handlePssMsg)
 }
 
+// Exposes the API methods
+//
+// If the debug-parameter was given to the top Pss object, the TestAPI methods will also be included
 func (self *Pss) APIs() []rpc.API {
 	apis := []rpc.API{
 		rpc.API{
@@ -158,12 +164,11 @@ func (self *Pss) APIs() []rpc.API {
 	return apis
 }
 
-// Takes the generated Topic of a protocol/chatroom etc, and links a handler function to it
-// This allows the implementer to retrieve the right handler functions (invoke the right protocol)
-// for an incoming message by inspecting the topic on it.
-// a topic allows for multiple handlers
-// returns a deregister function which needs to be called to deregister the handler
-// (similar to event.Subscription.Unsubscribe())
+// Links a handler function to a Topic
+//
+// After calling this, all incoming messages with an envelope Topic matching the Topic specified will be passed to the given Handler function.
+//
+// Returns a deregister function which needs to be called to deregister the handler,
 func (self *Pss) Register(topic *Topic, handler Handler) func() {
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -187,10 +192,7 @@ func (self *Pss) deregister(topic *Topic, h *Handler) {
 	delete(handlers, h)
 }
 
-// enables to set address of node, to avoid backwards forwarding
-//
-// currently not in use as forwarder address is not known in the handler function hooked to the pss dispatcher.
-// it is included as a courtesy to custom transport layers that may want to implement this
+// Adds an address/message pair to the cache
 func (self *Pss) AddToCache(addr []byte, msg *PssMsg) error {
 	digest, err := self.storeMsg(msg)
 	if err != nil {
@@ -258,13 +260,13 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 	return self.Process(pssmsg)
 }
 
-// processes a message with self as recipient
+// Entry point to processing a message for which the current node is the intended recipient.
 func (self *Pss) Process(pssmsg *PssMsg) error {
 	env := pssmsg.Payload
 	payload := env.Payload
 	handlers := self.getHandlers(env.Topic)
 	if len(handlers) == 0 {
-		return fmt.Errorf("No registered handler for topic '%s'", env.Topic)
+		return fmt.Errorf("No registered handler for topic '%x'", env.Topic)
 	}
 	nid, _ := discover.HexID("0x00")
 	p := p2p.NewPeer(nid, fmt.Sprintf("%x", env.From), []p2p.Cap{})
@@ -277,9 +279,11 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 	return nil
 }
 
-// Sends a message using  The message could be anything at all, and will be handled by whichever handler function is mapped to Topic using *Pss.Register()
+// Sends a message using Pss.
 //
-// The to address is a swarm overlay address
+// This method is payload agnostic, and will accept any arbitrary byte slice as the payload for a message.
+//
+// It generates an envelope for the specified recipient and topic, and wraps the message payload in it.
 func (self *Pss) SendRaw(to []byte, topic Topic, msg []byte) error {
 	sender := self.Overlay.BaseAddr()
 	pssenv := NewEnvelope(sender, topic, msg)
@@ -292,18 +296,20 @@ func (self *Pss) SendRaw(to []byte, topic Topic, msg []byte) error {
 
 // Forwards a pss message to the peer(s) closest to the to address
 //
-// Handlers that want to pass on a message should call this directly
+// Handlers that are merely passing on the PssMsg to its final recipient should call this directly
 func (self *Pss) Forward(msg *PssMsg) error {
 
 	if self.isSelfRecipient(msg) {
 		return errorForwardToSelf
 	}
 
+	// cache it
 	digest, err := self.storeMsg(msg)
 	if err != nil {
 		log.Warn(fmt.Sprintf("could not store message %v to cache: %v", msg, err))
 	}
 
+	// flood guard
 	if self.checkFwdCache(nil, digest) {
 		log.Trace(fmt.Sprintf("pss relay block-cache match: FROM %x TO %x", common.ByteLabel(self.Overlay.BaseAddr()), common.ByteLabel(msg.To)))
 		return nil
@@ -315,11 +321,14 @@ func (self *Pss) Forward(msg *PssMsg) error {
 	// send with kademlia
 	// find the closest peer to the recipient and attempt to send
 	self.Overlay.EachConn(msg.To, 256, func(op network.OverlayConn, po int, isproxbin bool) bool {
-		//p, ok := op.(senderPeer)
-		h := pot.NewHashAddressFromBytes(op.Address())
-		pp := self.fwdPool[h.Address]
-		addr := self.Overlay.BaseAddr()
-		sendMsg := fmt.Sprintf("%x: msg to %x via %x", common.ByteLabel(addr), common.ByteLabel(msg.To), common.ByteLabel(op.Address()))
+		sp, ok := op.(senderPeer)
+		if !ok {
+			log.Crit("Pss cannot use kademlia peer type")
+			return false
+		}
+		//sendMsg := fmt.Sprintf("MSG %x TO %x FROM %x VIA %x", digest, common.ByteLabel(msg.To), common.ByteLabel(self.BaseAddr()), common.ByteLabel(op.Address()))
+		sendMsg := fmt.Sprintf("TO %x FROM %x VIA %x", common.ByteLabel(msg.To), common.ByteLabel(self.BaseAddr()), common.ByteLabel(op.Address()))
+		pp := self.fwdPool[sp.ID()]
 		if self.checkFwdCache(op.Address(), digest) {
 			log.Info(fmt.Sprintf("%v: peer already forwarded to", sendMsg))
 			return true
@@ -329,7 +338,7 @@ func (self *Pss) Forward(msg *PssMsg) error {
 			log.Warn(fmt.Sprintf("%v: failed forwarding: %v", sendMsg, err))
 			return true
 		}
-		log.Trace(fmt.Sprintf("%v: successfully forwarded", sendMsg))
+		log.Debug(fmt.Sprintf("%v: successfully forwarded", sendMsg))
 		sent++
 		// if equality holds, p is always the first peer given in the iterator
 		if bytes.Equal(msg.To, op.Address()) || !isproxbin {
@@ -341,14 +350,16 @@ func (self *Pss) Forward(msg *PssMsg) error {
 
 	if sent == 0 {
 		log.Error("PSS: unable to forward to any peers")
-		return nil
+		return fmt.Errorf("unable to forward to any peers")
 	}
 
 	self.addFwdCacheExpire(digest)
 	return nil
 }
 
-// Links a pss peer address and topic to a dedicated p2p.MsgReadWriter in the pss peerpool, and runs the specificed protocol on this p2p.MsgReadWriter and the specified peer
+// For devp2p protocol integration only. Analogous to an outgoing devp2p connection.
+//
+// Links a remote peer and Topic to a dedicated p2p.MsgReadWriter in the pss peerpool, and runs the specificed protocol using these resources.
 //
 // The effect is that now we have a "virtual" protocol running on an artificial p2p.Peer, which can be looked up and piped to through Pss using swarm overlay address and topic
 func (self *Pss) AddPeer(p *p2p.Peer, addr pot.Address, run func(*p2p.Peer, p2p.MsgReadWriter) error, topic Topic, rw p2p.MsgReadWriter) error {
@@ -393,10 +404,9 @@ func (self *Pss) isActive(id pot.Address, topic Topic) bool {
 	return self.peerPool[id][topic] != nil
 }
 
-// Convenience object that:
+// For devp2p protocol integration only.
 //
-// - allows passing of the unwrapped PssMsg payload to the p2p level message handlers
-// - interprets outgoing p2p.Msg from the p2p level to pass in to *Pss.Send()
+// Bridges pss send/receive with devp2p protocol send/receive
 //
 // Implements p2p.MsgReadWriter
 type PssReadWriter struct {
@@ -417,7 +427,7 @@ func (prw PssReadWriter) ReadMsg() (p2p.Msg, error) {
 
 // Implements p2p.MsgWriter
 func (prw PssReadWriter) WriteMsg(msg p2p.Msg) error {
-	log.Warn("got writemsg pssclient", "msg", msg)
+	log.Trace("pssrw writemsg", "msg", msg)
 	rlpdata := make([]byte, msg.Size)
 	msg.Payload.Read(rlpdata)
 	pmsg, err := rlp.EncodeToBytes(ProtocolMsg{
@@ -438,6 +448,8 @@ func (prw PssReadWriter) injectMsg(msg p2p.Msg) error {
 	return nil
 }
 
+// For devp2p protocol integration only.
+//
 // Convenience object for passing messages in and out of the p2p layer
 type PssProtocol struct {
 	*Pss
@@ -446,20 +458,26 @@ type PssProtocol struct {
 	spec  *protocols.Spec
 }
 
-// Constructor
-func RegisterPssProtocol(ps *Pss, topic *Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol) error {
+// For devp2p protocol integration only.
+//
+// Maps a Topic to a devp2p protocol.
+func RegisterPssProtocol(ps *Pss, topic *Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol) *PssProtocol {
 	pp := &PssProtocol{
 		Pss:   ps,
 		proto: targetprotocol,
 		topic: topic,
 		spec:  spec,
 	}
-	ps.Register(topic, pp.handle)
-	return nil
+	return pp
 }
 
-func (self *PssProtocol) handle(msg []byte, p *p2p.Peer, senderAddr []byte) error {
-	hashoaddr := pot.NewHashAddressFromBytes(senderAddr).Address
+// For devp2p protocol integration only.
+//
+// Generic handler for initiating devp2p-like protocol connections
+//
+// This handler should be passed to Pss.Register with the associated ropic.
+func (self *PssProtocol) Handle(msg []byte, p *p2p.Peer, senderAddr []byte) error {
+	hashoaddr := pot.NewAddressFromBytes(senderAddr)
 	if !self.isActive(hashoaddr, *self.topic) {
 		rw := &PssReadWriter{
 			Pss:   self.Pss,

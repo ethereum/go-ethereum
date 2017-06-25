@@ -118,12 +118,8 @@ var (
 		Usage: "force mime type",
 	}
 	PssEnabledFlag = cli.BoolFlag{
-		Name: "pss",
+		Name:  "pss",
 		Usage: "Enable pss (message passing over swarm)",
-	}
-	PssPortFlag = cli.IntFlag{
-		Name: "pssport",
-		Usage: fmt.Sprintf("Websockets port for pss (default %d)", node.DefaultWSPort),
 	}
 	CorsStringFlag = cli.StringFlag{
 		Name:  "corsdomain",
@@ -270,8 +266,15 @@ Cleans database of corrupted entries.
 		SwarmUploadMimeType,
 		// pss flags
 		PssEnabledFlag,
-		PssPortFlag,
 	}
+	rpcFlags := []cli.Flag{
+		utils.WSEnabledFlag,
+		utils.WSListenAddrFlag,
+		utils.WSPortFlag,
+		utils.WSApiFlag,
+		utils.WSAllowedOriginsFlag,
+	}
+	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
@@ -306,13 +309,8 @@ func version(ctx *cli.Context) error {
 
 func bzzd(ctx *cli.Context) error {
 	cfg := defaultNodeConfig
-	if ctx.GlobalIsSet(PssEnabledFlag.Name) {
-		cfg.WSHost = "127.0.0.1"
-		cfg.WSModules = []string{"eth","pss"}
-		cfg.WSOrigins = []string{"*"}
-		if ctx.GlobalIsSet(PssPortFlag.Name) {
-			cfg.WSPort = ctx.GlobalInt(PssPortFlag.Name)
-		}
+	if ctx.GlobalBool(PssEnabledFlag.Name) && ctx.GlobalBool(utils.WSEnabledFlag.Name) {
+		cfg.WSModules = append(cfg.WSModules, "pss")
 	}
 	utils.SetNodeConfig(ctx, &cfg)
 	stack, err := node.New(&cfg)
@@ -366,7 +364,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	swapEnabled := ctx.GlobalBool(SwarmSwapEnabledFlag.Name)
 	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabledFlag.Name)
 	pssEnabled := ctx.GlobalBool(PssEnabledFlag.Name)
-	
+
 	ethapi := ctx.GlobalString(EthAPIFlag.Name)
 	cors := ctx.GlobalString(CorsStringFlag.Name)
 

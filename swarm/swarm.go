@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"io/ioutil"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -31,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
@@ -42,13 +44,12 @@ import (
 
 // the swarm stack
 type Swarm struct {
-	config  *api.Config        // swarm configuration
-	api     *api.Api           // high level api layer (fs/manifest)
-	dns     api.Resolver       // DNS registrar
-	storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
-	dpa     *storage.DPA       // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	cloud   storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
-	//hive        *network.Hive      // the logistic manager
+	config      *api.Config        // swarm configuration
+	api         *api.Api           // high level api layer (fs/manifest)
+	dns         api.Resolver       // DNS registrar
+	storage     storage.ChunkStore // internal access to storage, common interface to cloud storage backends
+	dpa         *storage.DPA       // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
 	bzz         *network.Bzz       // hive and bzz protocol
 	backend     chequebook.Backend // simple blockchain Backend
 	privateKey  *ecdsa.PrivateKey
@@ -106,21 +107,17 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		kp,
 	)
 
+	config.HiveParams.Discovery = true
+
+	nodeid := discover.PubkeyID(crypto.ToECDSAPub(common.FromHex(config.PublicKey)))
+	addr := network.NewAddrFromNodeID(nodeid)
 	bzzconfig := &network.BzzConfig{
-		UnderlayAddr: common.FromHex(config.PublicKey),
 		OverlayAddr:  common.FromHex(config.BzzKey),
+		UnderlayAddr: addr.UAddr,
 		HiveParams:   config.HiveParams,
 	}
 	self.bzz = network.NewBzz(bzzconfig, to, nil)
 
-	// set up the kademlia hive
-	//	self.hive = network.NewHive(
-	//		config.HiveParams, // configuration parameters
-	//		self.Kademlia,
-	//		stateStore,
-	//	)
-	//	log.Debug(fmt.Sprintf("Set up swarm network with Kademlia hive"))
-	//
 	// setup cloud storage internal access layer
 	self.storage = storage.NewNetStore(hash, self.lstore, nil, config.StoreParams)
 	log.Debug("-> swarm net store shared access layer to Swarm Chunk Store")
@@ -132,6 +129,16 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)
 	log.Debug(fmt.Sprintf("-> Content Store API"))
+
+	// netstore is broken, temp workaround to fiddle with pss
+	cachedir, err := ioutil.TempDir("", "bzz-tmp")
+	if err != nil {
+		return nil, err
+	}
+	self.dpa, err = storage.NewLocalDPA(cachedir)
+	if err != nil {
+		return nil, err
+	}
 
 	// Pss = postal service over swarm (devp2p over bzz)
 	if pssEnabled {
@@ -175,6 +182,11 @@ Start is called when the stack is started
 */
 // implements the node.Service interface
 func (self *Swarm) Start(net *p2p.Server) error {
+
+	// update uaddr to correct enode
+	newaddr := self.bzz.UpdateLocalAddr([]byte(net.Self().String()))
+	log.Warn("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%x", newaddr.UAddr))
+
 	// set chequebook
 	if self.swapEnabled {
 		ctx := context.Background() // The initial setup has no deadline.
@@ -189,16 +201,16 @@ func (self *Swarm) Start(net *p2p.Server) error {
 
 	log.Warn(fmt.Sprintf("Starting Swarm service"))
 
-	//	self.hive.Start(net)
 	err := self.bzz.Start(net)
 	if err != nil {
 		log.Error("bzz failed", "err", err)
 		return err
 	}
-	log.Info(fmt.Sprintf("Swarm network started on bzz address: %v", self.bzz.Hive.Overlay.BaseAddr()))
+	log.Info(fmt.Sprintf("Swarm network started on bzz address: %x", self.bzz.Hive.Overlay.BaseAddr()))
 
 	if self.pss != nil {
 		self.pss.Start(net)
+		log.Info("Pss started")
 	}
 
 	self.dpa.Start()
@@ -226,7 +238,6 @@ func (self *Swarm) Start(net *p2p.Server) error {
 // stops all component services.
 func (self *Swarm) Stop() error {
 	self.dpa.Stop()
-	//self.hive.Stop()
 	self.bzz.Stop()
 	if self.pss != nil {
 		self.pss.Stop()
@@ -251,22 +262,11 @@ func (self *Swarm) Protocols() (protos []p2p.Protocol) {
 	}
 
 	if self.pss != nil {
+		log.Warn("adding pss protos")
 		for _, p := range self.pss.Protocols() {
 			protos = append(protos, p)
 		}
 	}
-	// ct := network.BzzCodeMap()
-	// ct.Register(2, network.DiscoveryMsgs...)
-
-	//	proto := network.Bzz(
-	//		self.hive.Overlay.GetAddr().Over(),
-	//		self.hive.Overlay.GetAddr().Under(),
-	//		ct,
-	//		nil,
-	//		nil,
-	//		nil,
-	//	)
-	//
 	return
 }
 
@@ -354,7 +354,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 		return
 	}
 
-	config, err := api.NewConfig(datadir, common.Address{}, prvKey, network.NetworkId)
+	config, err := api.NewConfig(datadir, common.Address{}, prvKey, network.NetworkID)
 	if err != nil {
 		return
 	}

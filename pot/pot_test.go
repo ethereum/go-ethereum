@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"os"
 	"runtime"
 	"sync"
 	"testing"
@@ -31,61 +30,43 @@ import (
 const (
 	maxEachNeighbourTests = 420
 	maxEachNeighbour      = 420
+	maxSwap               = 420
+	maxSwapTests          = 420
 )
 
-func init() {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
-}
-
-type testBVAddr struct {
-	*HashAddress
-	i int
-}
-
-func NewTestBVAddr(s string, i int) *testBVAddr {
-	return &testBVAddr{NewHashAddress(s), i}
-}
-
-func (a *testBVAddr) String() string {
-	return a.HashAddress.String()[:keylen]
-}
-
-func (self *testBVAddr) PO(val PotVal, po int) (int, bool) {
-	return self.HashAddress.PO(val.(*testBVAddr).HashAddress, po)
-}
+// func init() {
+// 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+// }
 
 type testAddr struct {
-	*BoolAddress
+	a []byte
 	i int
 }
 
-func NewTestAddr(s string, i int) *testAddr {
-	return &testAddr{NewBoolAddress(s), i}
+func newTestAddr(s string, i int) *testAddr {
+	return &testAddr{NewAddressFromString(s), i}
 }
 
-func (self *testAddr) PO(val PotVal, po int) (int, bool) {
-	return self.BoolAddress.PO(val.(*testAddr).BoolAddress, po)
+func (a *testAddr) Address() []byte {
+	return a.a
 }
 
-func str(v PotVal) string {
-	if v == nil {
-		return ""
-	}
-	return v.(*testAddr).String()
+func (a *testAddr) String() string {
+	return Label(a.a)
 }
 
 func randomTestAddr(n int, i int) *testAddr {
 	v := RandomAddress().Bin()[:n]
-	return NewTestAddr(v, i)
+	return newTestAddr(v, i)
 }
 
-func randomTestBVAddr(n int, i int) *testBVAddr {
+func randomtestAddr(n int, i int) *testAddr {
 	v := RandomAddress().Bin()[:n]
-	return NewTestBVAddr(v, i)
+	return newTestAddr(v, i)
 }
 
 func indexes(t *Pot) (i []int, po []int) {
-	t.Each(func(v PotVal, p int) bool {
+	t.Each(func(v Val, p int) bool {
 		a := v.(*testAddr)
 		i = append(i, a.i)
 		po = append(po, p)
@@ -94,18 +75,19 @@ func indexes(t *Pot) (i []int, po []int) {
 	return i, po
 }
 
-func testAdd(t *Pot, n int, values ...string) {
+func testAdd(t *Pot, pof Pof, j int, values ...string) (_ *Pot, n int, f bool) {
 	for i, val := range values {
-		t.Add(NewTestAddr(val, i+n))
+		t, n, f = Add(t, newTestAddr(val, i+j), pof)
 	}
+	return t, n, f
 }
 
-// func RandomBoolAddress()
 func TestPotAdd(t *testing.T) {
-	n := NewPot(NewTestAddr("001111", 0), 0)
+	pof := DefaultPof(8)
+	n := NewPot(newTestAddr("00111100", 0), 0)
 	// Pin set correctly
-	exp := "001111"
-	got := str(n.Pin())[:6]
+	exp := "00111100"
+	got := Label(n.Pin())[:8]
 	if got != exp {
 		t.Fatalf("incorrect pinned value. Expected %v, got %v", exp, got)
 	}
@@ -116,7 +98,7 @@ func TestPotAdd(t *testing.T) {
 		t.Fatalf("incorrect number of elements in Pot. Expected %v, got %v", expi, goti)
 	}
 
-	testAdd(n, 1, "011111", "001111", "011111", "000111")
+	n, _, _ = testAdd(n, pof, 1, "01111100", "00111100", "01111100", "00011100")
 	// check size
 	goti = n.Size()
 	expi = 3
@@ -136,17 +118,17 @@ func TestPotAdd(t *testing.T) {
 	}
 }
 
-// func RandomBoolAddress()
 func TestPotRemove(t *testing.T) {
-	n := NewPot(NewTestAddr("001111", 0), 0)
-	n.Remove(NewTestAddr("001111", 0))
-	exp := ""
-	got := str(n.Pin())
+	pof := DefaultPof(8)
+	n := NewPot(newTestAddr("00111100", 0), 0)
+	n, _, _ = Remove(n, newTestAddr("00111100", 0), pof)
+	exp := "<nil>"
+	got := Label(n.Pin())
 	if got != exp {
 		t.Fatalf("incorrect pinned value. Expected %v, got %v", exp, got)
 	}
-	testAdd(n, 1, "000000", "011111", "001111", "000111")
-	n.Remove(NewTestAddr("001111", 0))
+	n, _, _ = testAdd(n, pof, 1, "00000000", "01111100", "00111100", "00011100")
+	n, _, _ = Remove(n, newTestAddr("00111100", 0), pof)
 	goti := n.Size()
 	expi := 3
 	if goti != expi {
@@ -164,8 +146,8 @@ func TestPotRemove(t *testing.T) {
 		t.Fatalf("incorrect po-s in iteration over Pot. Expected %v, got %v", exp, got)
 	}
 	// remove again
-	n.Remove(NewTestAddr("001111", 0))
-	inds, po = indexes(n)
+	n, _, _ = Remove(n, newTestAddr("00111100", 0), pof)
+	inds, _ = indexes(n)
 	got = fmt.Sprintf("%v", inds)
 	exp = "[2 4]"
 	if got != exp {
@@ -175,66 +157,75 @@ func TestPotRemove(t *testing.T) {
 }
 
 func TestPotSwap(t *testing.T) {
-	max := maxEachNeighbour
-	n := NewPot(nil, 0)
-	var m []*testBVAddr
-	for j := 0; j < 2*max; {
-		v := randomTestBVAddr(keylen, j)
-		_, found := n.Add(v)
-		if !found {
-			m = append(m, v)
-			j++
-		}
-	}
-	k := make(map[string]*testBVAddr)
-	for j := 0; j < max; {
-		v := randomTestBVAddr(keylen, 1)
-		_, found := k[v.String()]
-		if !found {
-			k[v.String()] = v
-			j++
-		}
-	}
-	for _, v := range k {
-		m = append(m, v)
-	}
-	f := func(v PotVal) PotVal {
-		tv := v.(*testBVAddr)
-		if tv.i < max {
-			return nil
-		}
-		tv.i = 0
-		return v
-	}
-	for _, val := range m {
-		n.Swap(val, func(v PotVal) PotVal {
-			if v == nil {
-				return val
+	for i := 0; i < maxSwapTests; i++ {
+		alen := maxkeylen
+		pof := DefaultPof(alen)
+		max := rand.Intn(maxSwap)
+
+		n := NewPot(nil, 0)
+		var m []*testAddr
+		var found bool
+		for j := 0; j < 2*max; {
+			v := randomtestAddr(alen, j)
+			n, _, found = Add(n, v, pof)
+			if !found {
+				m = append(m, v)
+				j++
 			}
-			return f(v)
-		})
-	}
-	sum := 0
-	n.Each(func(v PotVal, i int) bool {
-		sum++
-		tv := v.(*testBVAddr)
-		if tv.i > 1 {
-			t.Fatalf("item value incorrect, expected 0, got %v", tv.i)
 		}
-		return true
-	})
-	if sum != 2*max {
-		t.Fatalf("incorrect number of elements. expected %v, got %v", 2*max, sum)
-	}
-	if sum != n.Size() {
-		t.Fatalf("incorrect size. expected %v, got %v", sum, n.Size())
+		k := make(map[string]*testAddr)
+		for j := 0; j < max; {
+			v := randomtestAddr(alen, 1)
+			_, found := k[Label(v)]
+			if !found {
+				k[Label(v)] = v
+				j++
+			}
+		}
+		for _, v := range k {
+			m = append(m, v)
+		}
+		f := func(v Val) Val {
+			tv := v.(*testAddr)
+			if tv.i < max {
+				return nil
+			}
+			tv.i = 0
+			return v
+		}
+		for _, val := range m {
+			n, _, _, _ = Swap(n, val, pof, func(v Val) Val {
+				if v == nil {
+					return val
+				}
+				return f(v)
+			})
+		}
+		sum := 0
+		n.Each(func(v Val, i int) bool {
+			if v == nil {
+				return true
+			}
+			sum++
+			tv := v.(*testAddr)
+			if tv.i > 1 {
+				t.Fatalf("item value incorrect, expected 0, got %v", tv.i)
+			}
+			return true
+		})
+		if sum != 2*max {
+			t.Fatalf("incorrect number of elements. expected %v, got %v", 2*max, sum)
+		}
+		if sum != n.Size() {
+			t.Fatalf("incorrect size. expected %v, got %v", sum, n.Size())
+		}
 	}
 }
 
-func checkPo(val PotVal) func(PotVal, int) error {
-	return func(v PotVal, po int) error {
+func checkPo(val Val, pof Pof) func(Val, int) error {
+	return func(v Val, po int) error {
 		// check the po
-		exp, _ := val.PO(v, 0)
+		exp, _ := pof(val, v, 0)
 		if po != exp {
 			return fmt.Errorf("incorrect prox order for item %v in neighbour iteration for %v. Expected %v, got %v", v, val, exp, po)
 		}
@@ -242,9 +233,9 @@ func checkPo(val PotVal) func(PotVal, int) error {
 	}
 }
 
-func checkOrder(val PotVal) func(PotVal, int) error {
-	var po int = keylen
-	return func(v PotVal, p int) error {
+func checkOrder(val Val) func(Val, int) error {
+	po := maxkeylen
+	return func(v Val, p int) error {
 		if po < p {
 			return fmt.Errorf("incorrect order for item %v in neighbour iteration for %v. PO %v > %v (previous max)", v, val, p, po)
 		}
@@ -253,26 +244,26 @@ func checkOrder(val PotVal) func(PotVal, int) error {
 	}
 }
 
-func checkValues(m map[string]bool, val PotVal) func(PotVal, int) error {
-	return func(v PotVal, po int) error {
-		duplicate, ok := m[v.String()]
+func checkValues(m map[string]bool, val Val) func(Val, int) error {
+	return func(v Val, po int) error {
+		duplicate, ok := m[Label(v)]
 		if !ok {
 			return fmt.Errorf("alien value %v", v)
 		}
 		if duplicate {
 			return fmt.Errorf("duplicate value returned: %v", v)
 		}
-		m[v.String()] = true
+		m[Label(v)] = true
 		return nil
 	}
 }
 
 var errNoCount = errors.New("not count")
 
-func testPotEachNeighbour(n *Pot, val PotVal, expCount int, fs ...func(PotVal, int) error) error {
+func testPotEachNeighbour(n *Pot, pof Pof, val Val, expCount int, fs ...func(Val, int) error) error {
 	var err error
 	var count int
-	n.EachNeighbour(val, func(v PotVal, po int) bool {
+	n.EachNeighbour(val, pof, func(v Val, po int) bool {
 		for _, f := range fs {
 			err = f(v, po)
 			if err != nil {
@@ -296,30 +287,14 @@ const (
 	mergeTestChoose = 5
 )
 
-func TestPotMergeOne(t *testing.T) {
-	pot1 := NewPot(nil, 0)
-	pot1.Add(NewTestAddr("10", 0))
-	pot1.Add(NewTestAddr("00", 0))
-	pot2 := NewPot(nil, 0)
-	pot2.Add(NewTestAddr("01", 0))
-	log.Debug(fmt.Sprintf("\n%v\n%v", pot2, pot1))
-	pot1.Merge(pot2)
-	count := 0
-	pot1.Each(func(val PotVal, i int) bool {
-		count++
-		return true
-	})
-	if count != 3 {
-		t.Fatalf("expected count to be 3, got %d\n%v\n%v", count, pot2, pot1)
-	}
-}
-
 func TestPotMergeCommon(t *testing.T) {
-	vs := make([]*testBVAddr, mergeTestCount)
+	vs := make([]*testAddr, mergeTestCount)
 	for i := 0; i < maxEachNeighbourTests; i++ {
+		alen := maxkeylen
+		pof := DefaultPof(alen)
 
-		for i := 0; i < len(vs); i++ {
-			vs[i] = randomTestBVAddr(keylen, i)
+		for j := 0; j < len(vs); j++ {
+			vs[j] = randomtestAddr(alen, j)
 		}
 		max0 := rand.Intn(mergeTestChoose) + 1
 		max1 := rand.Intn(mergeTestChoose) + 1
@@ -327,13 +302,13 @@ func TestPotMergeCommon(t *testing.T) {
 		n1 := NewPot(nil, 0)
 		log.Trace(fmt.Sprintf("round %v: %v - %v", i, max0, max1))
 		m := make(map[string]bool)
+		var found bool
 		for j := 0; j < max0; {
 			r := rand.Intn(max0)
 			v := vs[r]
-			// v := randomTestBVAddr(keylen, j)
-			_, found := n0.Add(v)
+			n0, _, found = Add(n0, v, pof)
 			if !found {
-				m[v.String()] = false
+				m[Label(v)] = false
 				j++
 			}
 		}
@@ -342,14 +317,14 @@ func TestPotMergeCommon(t *testing.T) {
 		for j := 0; j < max1; {
 			r := rand.Intn(max1)
 			v := vs[r]
-			_, found := n1.Add(v)
+			n1, _, found = Add(n1, v, pof)
 			if !found {
 				j++
 			}
-			_, found = m[v.String()]
+			_, found = m[Label(v)]
 			if !found {
 				expAdded++
-				m[v.String()] = false
+				m[Label(v)] = false
 			}
 		}
 		if i < 6 {
@@ -359,7 +334,7 @@ func TestPotMergeCommon(t *testing.T) {
 		log.Trace(fmt.Sprintf("%v-0: pin: %v, size: %v", i, n0.Pin(), max0))
 		log.Trace(fmt.Sprintf("%v-1: pin: %v, size: %v", i, n1.Pin(), max1))
 		log.Trace(fmt.Sprintf("%v: merged tree size: %v, newly added: %v", i, expSize, expAdded))
-		n, common := Union(n0, n1)
+		n, common := Union(n0, n1, pof)
 		added := n1.Size() - common
 		size := n.Size()
 
@@ -369,13 +344,13 @@ func TestPotMergeCommon(t *testing.T) {
 		if expAdded != added {
 			t.Fatalf("%v: incorrect number of added elements in merged pot, expected %v, got %v", i, expAdded, added)
 		}
-		if !checkDuplicates(n.pot) {
+		if !checkDuplicates(n) {
 			t.Fatalf("%v: merged pot contains duplicates: \n%v", i, n)
 		}
-		for k, _ := range m {
-			_, found := n.Add(NewTestBVAddr(k, 0))
+		for k := range m {
+			_, _, found = Add(n, newTestAddr(k, 0), pof)
 			if !found {
-				t.Fatalf("%v: merged pot (size:%v, added: %v) missing element %v\n%v", i, size, added, k, n)
+				t.Fatalf("%v: merged pot (size:%v, added: %v) missing element %v", i, size, added, k)
 			}
 		}
 	}
@@ -383,34 +358,35 @@ func TestPotMergeCommon(t *testing.T) {
 
 func TestPotMergeScale(t *testing.T) {
 	for i := 0; i < maxEachNeighbourTests; i++ {
+		alen := maxkeylen
+		pof := DefaultPof(alen)
 		max0 := rand.Intn(maxEachNeighbour) + 1
 		max1 := rand.Intn(maxEachNeighbour) + 1
 		n0 := NewPot(nil, 0)
 		n1 := NewPot(nil, 0)
 		log.Trace(fmt.Sprintf("round %v: %v - %v", i, max0, max1))
 		m := make(map[string]bool)
+		var found bool
 		for j := 0; j < max0; {
-			v := randomTestBVAddr(keylen, j)
-			// v := randomTestBVAddr(keylen, j)
-			_, found := n0.Add(v)
+			v := randomtestAddr(alen, j)
+			n0, _, found = Add(n0, v, pof)
 			if !found {
-				m[v.String()] = false
+				m[Label(v)] = false
 				j++
 			}
 		}
 		expAdded := 0
 
 		for j := 0; j < max1; {
-			v := randomTestBVAddr(keylen, j)
-			// v := randomTestBVAddr(keylen, j)
-			_, found := n1.Add(v)
+			v := randomtestAddr(alen, j)
+			n1, _, found = Add(n1, v, pof)
 			if !found {
 				j++
 			}
-			_, found = m[v.String()]
+			_, found = m[Label(v)]
 			if !found {
 				expAdded++
-				m[v.String()] = false
+				m[Label(v)] = false
 			}
 		}
 		if i < 6 {
@@ -420,30 +396,30 @@ func TestPotMergeScale(t *testing.T) {
 		log.Trace(fmt.Sprintf("%v-0: pin: %v, size: %v", i, n0.Pin(), max0))
 		log.Trace(fmt.Sprintf("%v-1: pin: %v, size: %v", i, n1.Pin(), max1))
 		log.Trace(fmt.Sprintf("%v: merged tree size: %v, newly added: %v", i, expSize, expAdded))
-		n, common := Union(n0, n1)
+		n, common := Union(n0, n1, pof)
 		added := n1.Size() - common
 		size := n.Size()
 
 		if expSize != size {
-			t.Fatalf("%v: incorrect number of elements in merged pot, expected %v, got %v\n%v", i, expSize, size, n)
+			t.Fatalf("%v: incorrect number of elements in merged pot, expected %v, got %v", i, expSize, size)
 		}
 		if expAdded != added {
 			t.Fatalf("%v: incorrect number of added elements in merged pot, expected %v, got %v", i, expAdded, added)
 		}
-		if !checkDuplicates(n.pot) {
-			t.Fatalf("%v: merged pot contains duplicates: \n%v", i, n)
+		if !checkDuplicates(n) {
+			t.Fatalf("%v: merged pot contains duplicates", i)
 		}
-		for k, _ := range m {
-			_, found := n.Add(NewTestBVAddr(k, 0))
+		for k := range m {
+			_, _, found = Add(n, newTestAddr(k, 0), pof)
 			if !found {
-				t.Fatalf("%v: merged pot (size:%v, added: %v) missing element %v\n%v", i, size, added, k, n)
+				t.Fatalf("%v: merged pot (size:%v, added: %v) missing element %v", i, size, added, k)
 			}
 		}
 	}
 }
 
-func checkDuplicates(t *pot) bool {
-	var po int = -1
+func checkDuplicates(t *Pot) bool {
+	po := -1
 	for _, c := range t.bins {
 		if c == nil {
 			return false
@@ -458,15 +434,17 @@ func checkDuplicates(t *pot) bool {
 
 func TestPotEachNeighbourSync(t *testing.T) {
 	for i := 0; i < maxEachNeighbourTests; i++ {
+		alen := maxkeylen
+		pof := DefaultPof(maxkeylen)
 		max := rand.Intn(maxEachNeighbour/2) + maxEachNeighbour/2
-		pin := randomTestAddr(keylen, 0)
+		pin := randomTestAddr(alen, 0)
 		n := NewPot(pin, 0)
 		m := make(map[string]bool)
-		m[pin.String()] = false
+		m[Label(pin)] = false
 		for j := 1; j <= max; j++ {
-			v := randomTestAddr(keylen, j)
-			n.Add(v)
-			m[v.String()] = false
+			v := randomTestAddr(alen, j)
+			n, _, _ = Add(n, v, pof)
+			m[Label(v)] = false
 		}
 
 		size := n.Size()
@@ -474,16 +452,16 @@ func TestPotEachNeighbourSync(t *testing.T) {
 			continue
 		}
 		count := rand.Intn(size/2) + size/2
-		val := randomTestAddr(keylen, max+1)
+		val := randomTestAddr(alen, max+1)
 		log.Trace(fmt.Sprintf("%v: pin: %v, size: %v, val: %v, count: %v", i, n.Pin(), size, val, count))
-		err := testPotEachNeighbour(n, val, count, checkPo(val), checkOrder(val), checkValues(m, val))
+		err := testPotEachNeighbour(n, pof, val, count, checkPo(val, pof), checkOrder(val), checkValues(m, val))
 		if err != nil {
 			t.Fatal(err)
 		}
-		minPoFound := keylen
+		minPoFound := alen
 		maxPoNotFound := 0
 		for k, found := range m {
-			po, _ := val.PO(NewTestAddr(k, 0), 0)
+			po, _ := pof(val, newTestAddr(k, 0), 0)
 			if found {
 				if po < minPoFound {
 					minPoFound = po
@@ -503,11 +481,14 @@ func TestPotEachNeighbourSync(t *testing.T) {
 func TestPotEachNeighbourAsync(t *testing.T) {
 	for i := 0; i < maxEachNeighbourTests; i++ {
 		max := rand.Intn(maxEachNeighbour/2) + maxEachNeighbour/2
-		n := NewPot(randomTestAddr(keylen, 0), 0)
-		var size int = 1
+		alen := maxkeylen
+		pof := DefaultPof(alen)
+		n := NewPot(randomTestAddr(alen, 0), 0)
+		size := 1
+		var found bool
 		for j := 1; j <= max; j++ {
-			v := randomTestAddr(keylen, j)
-			_, found := n.Add(v)
+			v := randomTestAddr(alen, j)
+			n, _, found = Add(n, v, pof)
 			if !found {
 				size++
 			}
@@ -519,42 +500,34 @@ func TestPotEachNeighbourAsync(t *testing.T) {
 			continue
 		}
 		count := rand.Intn(size/2) + size/2
-		val := randomTestAddr(keylen, max+1)
+		val := randomTestAddr(alen, max+1)
 
 		mu := sync.Mutex{}
 		m := make(map[string]bool)
-		maxPos := rand.Intn(keylen)
+		maxPos := rand.Intn(alen)
 		log.Trace(fmt.Sprintf("%v: pin: %v, size: %v, val: %v, count: %v, maxPos: %v", i, n.Pin(), size, val, count, maxPos))
 		msize := 0
-		remember := func(v PotVal, po int) error {
-			// mu.Lock()
-			// defer mu.Unlock()
+		remember := func(v Val, po int) error {
 			if po > maxPos {
-				// log.Trace(fmt.Sprintf("NOT ADD %v", v))
 				return errNoCount
 			}
-			// log.Trace(fmt.Sprintf("ADD %v, %v", v, msize))
-			m[v.String()] = true
+			m[Label(v)] = true
 			msize++
 			return nil
 		}
 		if i == 0 {
 			continue
 		}
-		err := testPotEachNeighbour(n, val, count, remember)
-		if err != nil {
-			log.Error(err.Error())
-		}
+		testPotEachNeighbour(n, pof, val, count, remember)
 		d := 0
-		forget := func(v PotVal, po int) {
+		forget := func(v Val, po int) {
 			mu.Lock()
 			defer mu.Unlock()
 			d++
-			// log.Trace(fmt.Sprintf("DEL %v", v))
-			delete(m, v.String())
+			delete(m, Label(v))
 		}
 
-		n.EachNeighbourAsync(val, count, maxPos, forget, true)
+		n.EachNeighbourAsync(val, pof, count, maxPos, forget, true)
 		if d != msize {
 			t.Fatalf("incorrect number of neighbour calls in async iterator. expected %v, got %v", msize, d)
 		}
@@ -566,20 +539,23 @@ func TestPotEachNeighbourAsync(t *testing.T) {
 
 func benchmarkEachNeighbourSync(t *testing.B, max, count int, d time.Duration) {
 	t.ReportAllocs()
-	pin := randomTestAddr(keylen, 0)
+	alen := maxkeylen
+	pof := DefaultPof(alen)
+	pin := randomTestAddr(alen, 0)
 	n := NewPot(pin, 0)
+	var found bool
 	for j := 1; j <= max; {
-		v := randomTestAddr(keylen, j)
-		_, found := n.Add(v)
+		v := randomTestAddr(alen, j)
+		n, _, found = Add(n, v, pof)
 		if !found {
 			j++
 		}
 	}
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		val := randomTestAddr(keylen, max+1)
+		val := randomTestAddr(alen, max+1)
 		m := 0
-		n.EachNeighbour(val, func(v PotVal, po int) bool {
+		n.EachNeighbour(val, pof, func(v Val, po int) bool {
 			time.Sleep(d)
 			m++
 			if m == count {
@@ -591,31 +567,32 @@ func benchmarkEachNeighbourSync(t *testing.B, max, count int, d time.Duration) {
 	t.StopTimer()
 	stats := new(runtime.MemStats)
 	runtime.ReadMemStats(stats)
-	// fmt.Println(stats.Sys)
 }
 
 func benchmarkEachNeighbourAsync(t *testing.B, max, count int, d time.Duration) {
 	t.ReportAllocs()
-	pin := randomTestAddr(keylen, 0)
+	alen := maxkeylen
+	pof := DefaultPof(alen)
+	pin := randomTestAddr(alen, 0)
 	n := NewPot(pin, 0)
+	var found bool
 	for j := 1; j <= max; {
-		v := randomTestAddr(keylen, j)
-		_, found := n.Add(v)
+		v := randomTestAddr(alen, j)
+		n, _, found = Add(n, v, pof)
 		if !found {
 			j++
 		}
 	}
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		val := randomTestAddr(keylen, max+1)
-		n.EachNeighbourAsync(val, count, keylen, func(v PotVal, po int) {
+		val := randomTestAddr(alen, max+1)
+		n.EachNeighbourAsync(val, pof, count, alen, func(v Val, po int) {
 			time.Sleep(d)
 		}, true)
 	}
 	t.StopTimer()
 	stats := new(runtime.MemStats)
 	runtime.ReadMemStats(stats)
-	// fmt.Println(stats.Sys)
 }
 
 func BenchmarkEachNeighbourSync_3_1_0(t *testing.B) {

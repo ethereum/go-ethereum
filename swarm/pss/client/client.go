@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -20,44 +19,30 @@ import (
 const (
 	inboxCapacity  = 3000
 	outboxCapacity = 100
-	defaultWSHost  = 8546
 	addrLen        = common.HashLength
 )
 
-// RemoteHost: hostname of node running websockets proxy to pss (default localhost)
-// RemotePort: port of node running websockets proxy to pss (0 = go-ethereum node default)
-// Secure: whether or not to use secure connection
-// SelfHost: local if host to connect from
-type ClientConfig struct {
-	SelfHost   string
-	RemoteHost string
-	RemotePort int
-	Secure     bool
-}
-
-func NewClientConfig() *ClientConfig {
-	return &ClientConfig{
-		SelfHost:   "localhost",
-		RemoteHost: "localhost",
-		RemotePort: 8546,
-	}
-}
-
+// After a successful connection with Client.Start, BaseAddr contains the swarm overlay address of the pss node
 type Client struct {
-	localuri     string
-	remoteuri    string
-	ctx          context.Context
-	cancel       func()
-	subscription *rpc.ClientSubscription
-	topicsC      chan []byte
-	msgC         chan pss.APIMsg
-	quitC        chan struct{}
-	ws           *rpc.Client
-	lock         sync.Mutex
-	peerPool     map[pss.Topic]map[pot.Address]*pssRPCRW
-	protos       map[pss.Topic]*p2p.Protocol
+	BaseAddr []byte
+
+	// peers
+	peerPool map[pss.Topic]map[pot.Address]*pssRPCRW
+	protos   map[pss.Topic]*p2p.Protocol
+
+	// rpc connections
+	rpc *rpc.Client
+	sub *rpc.ClientSubscription
+
+	// channels
+	topicsC chan []byte
+	msgC    chan pss.APIMsg
+	quitC   chan struct{}
+
+	lock sync.Mutex
 }
 
+// implements p2p.MsgReadWriter
 type pssRPCRW struct {
 	*Client
 	topic *pss.Topic
@@ -97,81 +82,63 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 	if err != nil {
 		return err
 	}
-	return rw.Client.ws.CallContext(rw.Client.ctx, nil, "pss_send", rw.topic, pss.APIMsg{
+
+	return rw.Client.rpc.Call(nil, "pss_send", rw.topic, pss.APIMsg{
 		Addr: rw.addr.Bytes(),
 		Msg:  pmsg,
 	})
+
 }
 
-func NewClient(ctx context.Context, cancel func(), config *ClientConfig) *Client {
-	prefix := "ws"
-
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if cancel == nil {
-		cancel = func() { return }
-	}
-
-	pssc := &Client{
-		msgC:     make(chan pss.APIMsg),
-		quitC:    make(chan struct{}),
-		peerPool: make(map[pss.Topic]map[pot.Address]*pssRPCRW),
-		protos:   make(map[pss.Topic]*p2p.Protocol),
-		ctx:      ctx,
-		cancel:   cancel,
-	}
-
-	if config.Secure {
-		prefix = "wss"
-	}
-
-	pssc.remoteuri = fmt.Sprintf("%s://%s:%d", prefix, config.RemoteHost, config.RemotePort)
-	pssc.localuri = fmt.Sprintf("%s://%s", prefix, config.SelfHost)
-
-	return pssc
-}
-
-func NewClientWithRPC(ctx context.Context, client *rpc.Client) *Client {
-	return &Client{
-		msgC:     make(chan pss.APIMsg),
-		quitC:    make(chan struct{}),
-		peerPool: make(map[pss.Topic]map[pot.Address]*pssRPCRW),
-		protos:   make(map[pss.Topic]*p2p.Protocol),
-		ws:       client,
-		ctx:      ctx,
-	}
-}
-
-func (self *Client) shutdown() {
-	self.cancel()
-}
-
-func (self *Client) Start() error {
-	if self.ws != nil {
-		return nil
-	}
-	log.Debug("Dialing ws", "src", self.localuri, "dst", self.remoteuri)
-	ws, err := rpc.DialWebsocket(self.ctx, self.remoteuri, self.localuri)
+func NewClient(rpcurl string) (*Client, error) {
+	rpcclient, err := rpc.Dial(rpcurl)
 	if err != nil {
-		return fmt.Errorf("Couldnt dial pss websocket: %v", err)
+		return nil, err
 	}
 
-	self.ws = ws
-
-	return nil
+	client, err := NewClientWithRPC(rpcclient)
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
-func (self *Client) RunProtocol(proto *p2p.Protocol) error {
+// Constructor for test implementations
+// The 'rpcclient' parameter allows passing a in-memory rpc client to act as the remote websocket RPC.
+func NewClientWithRPC(rpcclient *rpc.Client) (*Client, error) {
+	client := newClient()
+	client.rpc = rpcclient
+	err := client.rpc.Call(&client.BaseAddr, "pss_baseAddr")
+	if err != nil {
+		return nil, fmt.Errorf("cannot get pss node baseaddress: %v", err)
+	}
+	return client, nil
+}
+
+func newClient() (client *Client) {
+	client = &Client{
+		msgC:     make(chan pss.APIMsg),
+		quitC:    make(chan struct{}),
+		peerPool: make(map[pss.Topic]map[pot.Address]*pssRPCRW),
+		protos:   make(map[pss.Topic]*p2p.Protocol),
+	}
+	return
+}
+
+// Mounts a new devp2p protcool on the pss connection
+// the protocol is aliased as a "pss topic"
+// uses normal devp2p Send and incoming message handler routines from the p2p/protocols package
+//
+// when an incoming message is received from a peer that is not yet known to the client, this peer object is instantiated, and the protocol is run on it.
+func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error {
 	topic := pss.NewTopic(proto.Name, int(proto.Version))
 	msgC := make(chan pss.APIMsg)
 	self.peerPool[topic] = make(map[pot.Address]*pssRPCRW)
-	sub, err := self.ws.Subscribe(self.ctx, "pss", msgC, "receive", topic)
+	sub, err := self.rpc.Subscribe(ctx, "pss", msgC, "receive", topic)
 	if err != nil {
 		return fmt.Errorf("pss event subscription failed: %v", err)
 	}
-
-	self.subscription = sub
+	self.sub = sub
 
 	// dispatch incoming messages
 	go func() {
@@ -190,7 +157,6 @@ func (self *Client) RunProtocol(proto *p2p.Protocol) error {
 					self.peerPool[topic][addr].msgC <- msg.Msg
 				}()
 			case <-self.quitC:
-				self.shutdown()
 				return
 			}
 		}
@@ -200,13 +166,18 @@ func (self *Client) RunProtocol(proto *p2p.Protocol) error {
 	return nil
 }
 
+// Always call this to ensure that we exit cleanly
 func (self *Client) Stop() error {
-	self.cancel()
 	return nil
 }
 
+// Preemptively add a remote pss peer
 func (self *Client) AddPssPeer(addr pot.Address, spec *protocols.Spec) {
 	topic := pss.NewTopic(spec.Name, int(spec.Version))
+	if self.peerPool[topic] == nil {
+		log.Error("addpeer on unset topic")
+		return
+	}
 	if self.peerPool[topic][addr] == nil {
 		self.peerPool[topic][addr] = self.newpssRPCRW(addr, &topic)
 		nid, _ := discover.HexID("0x00")
@@ -215,31 +186,10 @@ func (self *Client) AddPssPeer(addr pot.Address, spec *protocols.Spec) {
 	}
 }
 
+// Remove a remote pss peer
+//
+// Note this doesn't actually currently drop the peer, but only remmoves the reference from the client's peer lookup table
 func (self *Client) RemovePssPeer(addr pot.Address, spec *protocols.Spec) {
 	topic := pss.NewTopic(spec.Name, int(spec.Version))
 	delete(self.peerPool[topic], addr)
-}
-
-func (self *Client) SubscribeEvents(ch chan *p2p.PeerEvent) event.Subscription {
-	log.Error("PSS client handles events internally, use the read functions instead")
-	return nil
-}
-
-func (self *Client) PeerCount() int {
-	return len(self.peerPool)
-}
-
-func (self *Client) NodeInfo() *p2p.NodeInfo {
-	return nil
-}
-
-func (self *Client) PeersInfo() []*p2p.PeerInfo {
-	return nil
-}
-func (self *Client) AddPeer(node *discover.Node) {
-	log.Error("Cannot add peer in PSS with discover.Node, need swarm overlay address")
-}
-
-func (self *Client) RemovePeer(node *discover.Node) {
-	log.Error("Cannot remove peer in PSS with discover.Node, need swarm overlay address")
 }
