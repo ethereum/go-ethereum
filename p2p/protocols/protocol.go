@@ -280,29 +280,24 @@ func (self *Peer) Handshake(ctx context.Context, hs interface{}) (interface{}, e
 	}
 	errc := make(chan error, 2)
 	go func() {
-		if err := self.Send(hs); err != nil {
-			errc <- errorf(ErrHandshake, "cannot send: %v", err)
-		}
+		errc <- self.Send(hs)
 	}()
-	hsc := make(chan interface{})
+	var rhs interface{}
 	go func() {
-		var rhs interface{}
-		err := self.handleIncoming(func(msg interface{}) error {
+		errc <- self.handleIncoming(func(msg interface{}) error {
 			rhs = msg
 			return nil
 		})
-		if err != nil {
-			errc <- err
-			return
-		}
-		hsc <- rhs
 	}()
-	select {
-	case rhs := <-hsc:
-		return rhs, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err := <-errc:
-		return nil, err
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-errc:
+			if err != nil {
+				return nil, errorf(ErrHandshake, err.Error())
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
+	return rhs, nil
 }
