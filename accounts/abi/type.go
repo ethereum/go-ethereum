@@ -89,34 +89,51 @@ func NewType(t string) (typ Type, err error) {
 		if err != nil {
 			return Type{}, err
 		}
-		typ.Elem = &sliceType
-		typ.stringKind = sliceType.stringKind + t[len(res[1]):]
-		// Although we know that this is an array, we cannot return
-		// as we don't know the type of the element, however, if it
-		// is still an array, then don't determine the type.
-		if typ.Elem.IsArray || typ.Elem.IsSlice {
-			return typ, nil
-		}
-	}
 
-	// parse the type and size of the abi-type.
-	parsedType := typeRegex.FindAllStringSubmatch(res[1], -1)[0]
-	// varSize is the size of the variable
-	var varSize int
-	if len(parsedType[3]) > 0 {
-		var err error
-		varSize, err = strconv.Atoi(parsedType[2])
-		if err != nil {
-			return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
+		// grab the last cell and create a type from there
+		sliced := t[i:]
+		// grab the slice size with regexp
+		re := regexp.MustCompile("[0-9]+")
+		intz := re.FindAllString(sliced, -1)
+
+		if len(intz) == 0 {
+			// is a slice
+			typ.T = SliceTy
+			typ.Kind = reflect.Slice
+			typ.Elem = &embeddedType
+		} else if len(intz) == 1 {
+			// is a array
+			typ.T = ArrayTy
+			typ.Kind = reflect.Array
+			typ.Elem = &embeddedType
+			typ.Size, err = strconv.Atoi(intz[0])
+			if err != nil {
+				return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
+			}
+		} else {
+			return Type{}, fmt.Errorf("invalid formatting of array type")
 		}
-	}
-	// varType is the parsed abi type
-	varType := parsedType[1]
-	// substitute canonical integer
-	if varSize == 0 && (varType == "int" || varType == "uint") {
-		varSize = 256
-		t += "256"
-	}
+		return typ, err
+	} else {
+		// parse the type and size of the abi-type.
+		parsedType := typeRegex.FindAllStringSubmatch(t, -1)[0]
+		// varSize is the size of the variable
+		var varSize int
+		if len(parsedType[3]) > 0 {
+			var err error
+			varSize, err = strconv.Atoi(parsedType[2])
+			if err != nil {
+				return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
+			}
+		} else {
+			if parsedType[0] == "uint" || parsedType[0] == "int" {
+				// this should fail because it means that there's something wrong with
+				// the abi type (the compiler should always format it to the size...always)
+				return Type{}, fmt.Errorf("unsupported arg type: %s", t)
+			}
+		}
+		// varType is the parsed abi type
+		varType := parsedType[1]
 
 	// only set stringKind if not array or slice, as for those,
 	// the correct string type has been set

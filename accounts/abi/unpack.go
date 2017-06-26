@@ -85,7 +85,7 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 		// set inter to the correct type (cast)
 		switch elem.T {
 		case IntTy, UintTy:
-			inter = readInteger(t.Type.Kind, returnOutput)
+			inter = readInteger(elem.Kind, returnOutput)
 		case BoolTy:
 			inter, err = readBool(returnOutput)
 			if err != nil {
@@ -100,6 +100,9 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 		default:
 			return nil, fmt.Errorf("abi: unsupported slice type passed in")
 		}
+
+		//fmt.Printf("type: %T, value: %v\n", inter, inter)
+		//fmt.Printf("%v\n", elem.stringKind)
 		// append the item to our reflect slice
 		refSlice.Index(i).Set(reflect.ValueOf(inter))
 	}
