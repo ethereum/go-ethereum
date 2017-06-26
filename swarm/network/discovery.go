@@ -201,7 +201,8 @@ func (d *discPeer) handleGetPeersMsg(msg *getPeersMsg) error {
 	resp := &peersMsg{
 		Peers: peers,
 	}
-	return d.Send(resp)
+	go d.Send(resp)
+	return nil
 }
 
 // RequestOrder broadcasts to trageted peers a request for peers of a particular
@@ -212,17 +213,22 @@ func RequestOrder(k Overlay, order, broadcastSize, maxPeers uint8) {
 		Max:   maxPeers,
 	}
 	var i uint8
-	//var err error
+	var peers []Conn
 	k.EachConn(nil, 255, func(p OverlayConn, po int, isproxbin bool) bool {
-		if err := p.(Conn).Send(req); err == nil {
-			i++
-			if i >= broadcastSize {
-				return false
-			}
+		peers = append(peers, p.(Conn))
+		if len(peers) >= int(broadcastSize) {
+			return false
 		}
 		return true
 	})
-	log.Info(fmt.Sprintf("requesting bees of PO%03d from %v/%v (each max %v)", order, i, broadcastSize, maxPeers))
+	go func() {
+		for _, c := range peers {
+			if err := c.Send(req); err != nil {
+				break
+			}
+		}
+		log.Info(fmt.Sprintf("requesting bees of PO%03d from %v/%v (each max %v)", order, i, broadcastSize, maxPeers))
+	}()
 }
 
 func (d *discPeer) seen(p OverlayPeer) bool {
