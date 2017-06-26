@@ -188,7 +188,7 @@ var AppHelpFlagGroups = []flagGroup{
 		}, debug.Flags...),
 	},
 	{
-		Name:  "Whisper (EXPERIMENTAL)",
+		Name:  "WHISPER (EXPERIMENTAL)",
 		Flags: whisperFlags,
 	},
 	{
