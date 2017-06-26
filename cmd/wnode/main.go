@@ -87,7 +87,7 @@ var (
 	argVerbosity = flag.Int("verbosity", int(log.LvlError), "log verbosity level")
 	argTTL       = flag.Uint("ttl", 30, "time-to-live for messages in seconds")
 	argWorkTime  = flag.Uint("work", 5, "work time in seconds")
-	argMaxSize   = flag.Int("maxsize", whisper.DefaultMaxMessageLength, "max size of message")
+	argMaxSize   = flag.Uint("maxsize", uint(whisper.DefaultMaxMessageSize), "max size of message")
 	argPoW       = flag.Float64("pow", whisper.DefaultMinimumPoW, "PoW for normal messages in float format (e.g. 2.7)")
 	argServerPoW = flag.Float64("mspow", whisper.DefaultMinimumPoW, "PoW requirement for Mail Server request")
 
@@ -198,6 +198,11 @@ func initialize() {
 		peers = append(peers, peer)
 	}
 
+	cfg := &whisper.Config{
+		MaxMessageSize:     uint32(*argMaxSize),
+		MinimumAcceptedPOW: *argPoW,
+	}
+
 	if *mailServerMode {
 		if len(msPassword) == 0 {
 			msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
@@ -205,11 +210,12 @@ func initialize() {
 				utils.Fatalf("Failed to read Mail Server password: %s", err)
 			}
 		}
-		shh = whisper.New()
+
+		shh = whisper.New(cfg)
 		shh.RegisterServer(&mailServer)
 		mailServer.Init(shh, *argDBPath, msPassword, *argServerPoW)
 	} else {
-		shh = whisper.New()
+		shh = whisper.New(cfg)
 	}
 
 	if *argPoW != whisper.DefaultMinimumPoW {
@@ -219,8 +225,8 @@ func initialize() {
 		}
 	}
 
-	if *argMaxSize != whisper.DefaultMaxMessageLength {
-		err := shh.SetMaxMessageLength(*argMaxSize)
+	if uint32(*argMaxSize) != whisper.DefaultMaxMessageSize {
+		err := shh.SetMaxMessageSize(uint32(*argMaxSize))
 		if err != nil {
 			utils.Fatalf("Failed to set max message size: %s", err)
 		}

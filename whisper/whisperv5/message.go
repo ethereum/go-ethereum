@@ -49,7 +49,7 @@ type MessageParams struct {
 // SentMessage represents an end-user data packet to transmit through the
 // Whisper protocol. These are wrapped into Envelopes that need not be
 // understood by intermediate nodes, just forwarded.
-type SentMessage struct {
+type sentMessage struct {
 	Raw []byte
 }
 
@@ -87,8 +87,8 @@ func (msg *ReceivedMessage) isAsymmetricEncryption() bool {
 }
 
 // NewMessage creates and initializes a non-signed, non-encrypted Whisper message.
-func NewSentMessage(params *MessageParams) (*SentMessage, error) {
-	msg := SentMessage{}
+func NewSentMessage(params *MessageParams) (*sentMessage, error) {
+	msg := sentMessage{}
 	msg.Raw = make([]byte, 1, len(params.Payload)+len(params.Padding)+signatureLength+padSizeLimit)
 	msg.Raw[0] = 0 // set all the flags to zero
 	err := msg.appendPadding(params)
@@ -119,7 +119,7 @@ func intSize(i int) (s int) {
 
 // appendPadding appends the pseudorandom padding bytes and sets the padding flag.
 // The last byte contains the size of padding (thus, its size must not exceed 256).
-func (msg *SentMessage) appendPadding(params *MessageParams) error {
+func (msg *sentMessage) appendPadding(params *MessageParams) error {
 	rawSize := len(params.Payload) + 1
 	if params.Src != nil {
 		rawSize += signatureLength
@@ -164,7 +164,7 @@ func (msg *SentMessage) appendPadding(params *MessageParams) error {
 
 // sign calculates and sets the cryptographic signature for the message,
 // also setting the sign flag.
-func (msg *SentMessage) sign(key *ecdsa.PrivateKey) error {
+func (msg *sentMessage) sign(key *ecdsa.PrivateKey) error {
 	if isMessageSigned(msg.Raw[0]) {
 		// this should not happen, but no reason to panic
 		log.Error("failed to sign the message: already signed")
@@ -183,7 +183,7 @@ func (msg *SentMessage) sign(key *ecdsa.PrivateKey) error {
 }
 
 // encryptAsymmetric encrypts a message with a public key.
-func (msg *SentMessage) encryptAsymmetric(key *ecdsa.PublicKey) error {
+func (msg *sentMessage) encryptAsymmetric(key *ecdsa.PublicKey) error {
 	if !ValidatePublicKey(key) {
 		return errors.New("invalid public key provided for asymmetric encryption")
 	}
@@ -196,7 +196,7 @@ func (msg *SentMessage) encryptAsymmetric(key *ecdsa.PublicKey) error {
 
 // encryptSymmetric encrypts a message with a topic key, using AES-GCM-256.
 // nonce size should be 12 bytes (see cipher.gcmStandardNonceSize).
-func (msg *SentMessage) encryptSymmetric(key []byte) (nonce []byte, err error) {
+func (msg *sentMessage) encryptSymmetric(key []byte) (nonce []byte, err error) {
 	if !validateSymmetricKey(key) {
 		return nil, errors.New("invalid key provided for symmetric encryption")
 	}
@@ -224,13 +224,12 @@ func (msg *SentMessage) encryptSymmetric(key []byte) (nonce []byte, err error) {
 }
 
 // Wrap bundles the message into an Envelope to transmit over the network.
-func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err error) {
+func (msg *sentMessage) Wrap(options *MessageParams) (envelope *Envelope, err error) {
 	if options.TTL == 0 {
 		options.TTL = DefaultTTL
 	}
 	if options.Src != nil {
-		err = msg.sign(options.Src)
-		if err != nil {
+		if err = msg.sign(options.Src); err != nil {
 			return nil, err
 		}
 	}
@@ -242,14 +241,12 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 	} else {
 		err = errors.New("unable to encrypt the message: neither symmetric nor assymmetric key provided")
 	}
-
 	if err != nil {
 		return nil, err
 	}
 
 	envelope = NewEnvelope(options.TTL, options.Topic, nonce, msg)
-	err = envelope.Seal(options)
-	if err != nil {
+	if err = envelope.Seal(options); err != nil {
 		return nil, err
 	}
 	return envelope, nil

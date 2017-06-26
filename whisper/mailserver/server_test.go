@@ -88,7 +88,7 @@ func TestMailServer(t *testing.T) {
 	}
 
 	var server WMailServer
-	shh = whisper.New()
+	shh = whisper.New(&whisper.DefaultConfig)
 	shh.RegisterServer(&server)
 
 	server.Init(shh, dir, password, powRequirement)
