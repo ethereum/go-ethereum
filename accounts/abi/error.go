@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	errBadBool error = errors.New("abi: improperly encoded boolean value")
+	errBadBool = errors.New("abi: improperly encoded boolean value")
 )
 
 // formatSliceString formats the reflection kind with the given slice size

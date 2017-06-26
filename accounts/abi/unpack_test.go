@@ -196,7 +196,7 @@ func TestSimpleMethodUnpack(t *testing.T) {
 		case "hash":
 			var v common.Hash
 			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v
+			outvar = v.Bytes()[:]
 		case "function":
 			var v [24]byte
 			err = abi.Unpack(&v, "method", test.marshalledOutput)
@@ -222,12 +222,6 @@ func TestSimpleMethodUnpack(t *testing.T) {
 		}
 
 		if err == nil {
-			// bit of an ugly hack for hash type but I don't feel like finding a proper solution
-			if test.outVar == "hash" {
-				tmp := outvar.(common.Hash) // without assignment it's unaddressable
-				outvar = tmp[:]
-			}
-
 			if !reflect.DeepEqual(test.expectedOut, outvar) {
 				t.Errorf("%d failed. Output error: expected %v, got %v", i, test.expectedOut, outvar)
 			}
