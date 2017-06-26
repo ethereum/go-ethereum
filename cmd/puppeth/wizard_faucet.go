@@ -165,8 +165,7 @@ func (w *wizard) deployFaucet() {
 	}
 	// Load up the credential needed to release funds
 	if infos.node.keyJSON != "" {
-		var key keystore.Key
-		if err := json.Unmarshal([]byte(infos.node.keyJSON), &key); err != nil {
+		if key, err := keystore.DecryptKey([]byte(infos.node.keyJSON), infos.node.keyPass); err != nil {
 			infos.node.keyJSON, infos.node.keyPass = "", ""
 		} else {
 			fmt.Println()
