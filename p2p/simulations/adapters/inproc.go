@@ -140,13 +140,14 @@ func (s *SimAdapter) GetNode(id discover.NodeID) (*SimNode, bool) {
 // It implements the p2p.Server interface so it can be used transparently
 // by the underlying service.
 type SimNode struct {
-	lock    sync.RWMutex
-	ID      discover.NodeID
-	config  *NodeConfig
-	adapter *SimAdapter
-	node    *node.Node
-	running map[string]node.Service
-	client  *rpc.Client
+	lock         sync.RWMutex
+	ID           discover.NodeID
+	config       *NodeConfig
+	adapter      *SimAdapter
+	node         *node.Node
+	running      map[string]node.Service
+	client       *rpc.Client
+	registerOnce sync.Once
 }
 
 // Addr returns the node's discovery address
@@ -210,8 +211,6 @@ func (self *SimNode) Snapshots() (map[string][]byte, error) {
 
 // Start starts the RPC handler and the underlying service
 func (self *SimNode) Start(snapshots map[string][]byte) error {
-	self.lock.Lock()
-	defer self.lock.Unlock()
 	newService := func(name string) func(ctx *node.ServiceContext) (node.Service, error) {
 		return func(nodeCtx *node.ServiceContext) (node.Service, error) {
 			ctx := &ServiceContext{
@@ -232,10 +231,17 @@ func (self *SimNode) Start(snapshots map[string][]byte) error {
 		}
 	}
 
-	for _, name := range self.config.Services {
-		if err := self.node.Register(newService(name)); err != nil {
-			return err
+	var regErr error
+	self.registerOnce.Do(func() {
+		for _, name := range self.config.Services {
+			if err := self.node.Register(newService(name)); err != nil {
+				regErr = err
+				return
+			}
 		}
+	})
+	if regErr != nil {
+		return regErr
 	}
 
 	if err := self.node.Start(); err != nil {
@@ -247,7 +253,10 @@ func (self *SimNode) Start(snapshots map[string][]byte) error {
 	if err != nil {
 		return err
 	}
+
+	self.lock.Lock()
 	self.client = rpc.DialInProc(handler)
+	self.lock.Unlock()
 
 	return nil
 }
