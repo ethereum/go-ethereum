@@ -101,6 +101,7 @@ func NewType(t string) (typ Type, err error) {
 			typ.T = SliceTy
 			typ.Kind = reflect.Slice
 			typ.Elem = &embeddedType
+			typ.Type = reflect.SliceOf(embeddedType.Type)
 		} else if len(intz) == 1 {
 			// is a array
 			typ.T = ArrayTy
@@ -110,6 +111,7 @@ func NewType(t string) (typ Type, err error) {
 			if err != nil {
 				return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
 			}
+			typ.Type = reflect.ArrayOf(typ.Size, embeddedType.Type)
 		} else {
 			return Type{}, fmt.Errorf("invalid formatting of array type")
 		}
@@ -135,54 +137,48 @@ func NewType(t string) (typ Type, err error) {
 		// varType is the parsed abi type
 		varType := parsedType[1]
 
-	// only set stringKind if not array or slice, as for those,
-	// the correct string type has been set
-	if !(typ.IsArray || typ.IsSlice) {
-		typ.stringKind = t
-	}
-
-	switch varType {
-	case "int":
-		typ.Kind, typ.Type = reflectIntKindAndType(false, varSize)
-		typ.Size = varSize
-		typ.T = IntTy
-	case "uint":
-		typ.Kind, typ.Type = reflectIntKindAndType(true, varSize)
-		typ.Size = varSize
-		typ.T = UintTy
-	case "bool":
-		typ.Kind = reflect.Bool
-		typ.T = BoolTy
-	case "address":
-		typ.Kind = reflect.Array
-		typ.Type = address_t
-		typ.Size = 20
-		typ.T = AddressTy
-	case "string":
-		typ.Kind = reflect.String
-		typ.Size = -1
-		typ.T = StringTy
-	case "bytes":
-		sliceType, _ := NewType("uint8")
-		typ.Elem = &sliceType
-		if varSize == 0 {
-			typ.IsSlice = true
-			typ.T = BytesTy
-			typ.SliceSize = -1
-		} else {
-			typ.IsArray = true
-			typ.T = FixedBytesTy
-			typ.SliceSize = varSize
+		switch varType {
+		case "int":
+			typ.Kind, typ.Type = reflectIntKindAndType(false, varSize)
+			typ.Size = varSize
+			typ.T = IntTy
+		case "uint":
+			typ.Kind, typ.Type = reflectIntKindAndType(true, varSize)
+			typ.Size = varSize
+			typ.T = UintTy
+		case "bool":
+			typ.Kind = reflect.Bool
+			typ.T = BoolTy
+			typ.Type = reflect.TypeOf(bool(false))
+		case "address":
+			typ.Kind = reflect.Array
+			typ.Type = address_t
+			typ.Size = 20
+			typ.T = AddressTy
+		case "string":
+			typ.Kind = reflect.String
+			typ.Type = reflect.TypeOf("")
+			typ.T = StringTy
+		case "bytes":
+			if varSize == 0 {
+				typ.T = BytesTy
+				typ.Kind = reflect.Slice
+				typ.Type = reflect.SliceOf(reflect.TypeOf(byte(0)))
+			} else {
+				typ.T = FixedBytesTy
+				typ.Kind = reflect.Array
+				typ.Size = varSize
+				typ.Type = reflect.ArrayOf(varSize, reflect.TypeOf(byte(0)))
+			}
+		case "function":
+			typ.Kind = reflect.Array
+			typ.T = FunctionTy
+			typ.Size = 24
+			typ.Type = reflect.ArrayOf(24, reflect.TypeOf(byte(0)))
+		default:
+			return Type{}, fmt.Errorf("unsupported arg type: %s", t)
 		}
-	case "function":
-		sliceType, _ := NewType("uint8")
-		typ.Elem = &sliceType
-		typ.IsArray = true
-		typ.T = FunctionTy
-		typ.SliceSize = 24
-	default:
-		return Type{}, fmt.Errorf("unsupported arg type: %s", t)
-	}
+
 
 	return
 }

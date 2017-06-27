@@ -41,8 +41,9 @@ func sliceTypeCheck(t Type, val reflect.Value) error {
 	if val.Kind() != reflect.Slice && val.Kind() != reflect.Array {
 		return typeErr(formatSliceString(t.Kind, t.SliceSize), val.Type())
 	}
-	if t.IsArray && val.Len() != t.SliceSize {
-		return typeErr(formatSliceString(t.Elem.Kind, t.SliceSize), formatSliceString(val.Type().Elem().Kind(), val.Len()))
+
+	if t.T == ArrayTy && val.Len() != t.Size {
+		return typeErr(formatSliceString(t.Elem.Kind, t.Size), formatSliceString(val.Type().Elem().Kind(), val.Len()))
 	}
 
 	if t.Elem.IsSlice {
@@ -69,8 +70,12 @@ func typeCheck(t Type, value reflect.Value) error {
 	// Check base type validity. Element types will be checked later on.
 	if t.Kind != value.Kind() {
 		return typeErr(t.Kind, value.Kind())
+	} else if t.T == FixedBytesTy && t.Size != value.Len() {
+		return typeErr(t.Type, value.Type())
+	} else {
+		return nil
 	}
-	return nil
+
 }
 
 // varErr returns a formatted error.
