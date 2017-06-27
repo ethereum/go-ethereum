@@ -96,9 +96,7 @@ func newTester() *downloadTester {
 	tester.stateDb, _ = ethdb.NewMemDatabase()
 	tester.stateDb.Put(genesis.Root().Bytes(), []byte{0x00})
 
-	tester.downloader = New(FullSync, tester.stateDb, new(event.TypeMux), tester.hasHeader, tester.hasBlock, tester.getHeader,
-		tester.getBlock, tester.headHeader, tester.headBlock, tester.headFastBlock, tester.commitHeadBlock, tester.getTd,
-		tester.insertHeaders, tester.insertBlocks, tester.insertReceipts, tester.rollback, tester.dropPeer)
+	tester.downloader = New(FullSync, tester.stateDb, new(event.TypeMux), tester, nil, tester.dropPeer)
 
 	return tester
 }
@@ -218,14 +216,14 @@ func (dl *downloadTester) sync(id string, td *big.Int, mode SyncMode) error {
 	return err
 }
 
-// hasHeader checks if a header is present in the testers canonical chain.
-func (dl *downloadTester) hasHeader(hash common.Hash) bool {
-	return dl.getHeader(hash) != nil
+// HasHeader checks if a header is present in the testers canonical chain.
+func (dl *downloadTester) HasHeader(hash common.Hash) bool {
+	return dl.GetHeaderByHash(hash) != nil
 }
 
-// hasBlock checks if a block and associated state is present in the testers canonical chain.
-func (dl *downloadTester) hasBlock(hash common.Hash) bool {
-	block := dl.getBlock(hash)
+// HasBlockAndState checks if a block and associated state is present in the testers canonical chain.
+func (dl *downloadTester) HasBlockAndState(hash common.Hash) bool {
+	block := dl.GetBlockByHash(hash)
 	if block == nil {
 		return false
 	}
@@ -233,24 +231,24 @@ func (dl *downloadTester) hasBlock(hash common.Hash) bool {
 	return err == nil
 }
 
-// getHeader retrieves a header from the testers canonical chain.
-func (dl *downloadTester) getHeader(hash common.Hash) *types.Header {
+// GetHeader retrieves a header from the testers canonical chain.
+func (dl *downloadTester) GetHeaderByHash(hash common.Hash) *types.Header {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	return dl.ownHeaders[hash]
 }
 
-// getBlock retrieves a block from the testers canonical chain.
-func (dl *downloadTester) getBlock(hash common.Hash) *types.Block {
+// GetBlock retrieves a block from the testers canonical chain.
+func (dl *downloadTester) GetBlockByHash(hash common.Hash) *types.Block {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	return dl.ownBlocks[hash]
 }
 
-// headHeader retrieves the current head header from the canonical chain.
-func (dl *downloadTester) headHeader() *types.Header {
+// CurrentHeader retrieves the current head header from the canonical chain.
+func (dl *downloadTester) CurrentHeader() *types.Header {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -262,8 +260,8 @@ func (dl *downloadTester) headHeader() *types.Header {
 	return dl.genesis.Header()
 }
 
-// headBlock retrieves the current head block from the canonical chain.
-func (dl *downloadTester) headBlock() *types.Block {
+// CurrentBlock retrieves the current head block from the canonical chain.
+func (dl *downloadTester) CurrentBlock() *types.Block {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -277,8 +275,8 @@ func (dl *downloadTester) headBlock() *types.Block {
 	return dl.genesis
 }
 
-// headFastBlock retrieves the current head fast-sync block from the canonical chain.
-func (dl *downloadTester) headFastBlock() *types.Block {
+// CurrentFastBlock retrieves the current head fast-sync block from the canonical chain.
+func (dl *downloadTester) CurrentFastBlock() *types.Block {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -290,26 +288,26 @@ func (dl *downloadTester) headFastBlock() *types.Block {
 	return dl.genesis
 }
 
-// commitHeadBlock manually sets the head block to a given hash.
-func (dl *downloadTester) commitHeadBlock(hash common.Hash) error {
+// FastSynccommitHead manually sets the head block to a given hash.
+func (dl *downloadTester) FastSyncCommitHead(hash common.Hash) error {
 	// For now only check that the state trie is correct
-	if block := dl.getBlock(hash); block != nil {
+	if block := dl.GetBlockByHash(hash); block != nil {
 		_, err := trie.NewSecure(block.Root(), dl.stateDb, 0)
 		return err
 	}
 	return fmt.Errorf("non existent block: %x", hash[:4])
 }
 
-// getTd retrieves the block's total difficulty from the canonical chain.
-func (dl *downloadTester) getTd(hash common.Hash) *big.Int {
+// GetTdByHash retrieves the block's total difficulty from the canonical chain.
+func (dl *downloadTester) GetTdByHash(hash common.Hash) *big.Int {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	return dl.ownChainTd[hash]
 }
 
-// insertHeaders injects a new batch of headers into the simulated chain.
-func (dl *downloadTester) insertHeaders(headers []*types.Header, checkFreq int) (int, error) {
+// InsertHeaderChain injects a new batch of headers into the simulated chain.
+func (dl *downloadTester) InsertHeaderChain(headers []*types.Header, checkFreq int) (int, error) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
@@ -337,8 +335,8 @@ func (dl *downloadTester) insertHeaders(headers []*types.Header, checkFreq int) 
 	return len(headers), nil
 }
 
-// insertBlocks injects a new batch of blocks into the simulated chain.
-func (dl *downloadTester) insertBlocks(blocks types.Blocks) (int, error) {
+// InsertChain injects a new batch of blocks into the simulated chain.
+func (dl *downloadTester) InsertChain(blocks types.Blocks) (int, error) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
@@ -359,8 +357,8 @@ func (dl *downloadTester) insertBlocks(blocks types.Blocks) (int, error) {
 	return len(blocks), nil
 }
 
-// insertReceipts injects a new batch of receipts into the simulated chain.
-func (dl *downloadTester) insertReceipts(blocks types.Blocks, receipts []types.Receipts) (int, error) {
+// InsertReceiptChain injects a new batch of receipts into the simulated chain.
+func (dl *downloadTester) InsertReceiptChain(blocks types.Blocks, receipts []types.Receipts) (int, error) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
@@ -377,8 +375,8 @@ func (dl *downloadTester) insertReceipts(blocks types.Blocks, receipts []types.R
 	return len(blocks), nil
 }
 
-// rollback removes some recently added elements from the chain.
-func (dl *downloadTester) rollback(hashes []common.Hash) {
+// Rollback removes some recently added elements from the chain.
+func (dl *downloadTester) Rollback(hashes []common.Hash) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
@@ -1212,7 +1210,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 	if err := tester.sync("fast-attack", nil, mode); err == nil {
 		t.Fatalf("succeeded fast attacker synchronisation")
 	}
-	if head := tester.headHeader().Number.Int64(); int(head) > MaxHeaderFetch {
+	if head := tester.CurrentHeader().Number.Int64(); int(head) > MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, MaxHeaderFetch)
 	}
 	// Attempt to sync with an attacker that feeds junk during the block import phase.
@@ -1226,11 +1224,11 @@ func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 	if err := tester.sync("block-attack", nil, mode); err == nil {
 		t.Fatalf("succeeded block attacker synchronisation")
 	}
-	if head := tester.headHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
+	if head := tester.CurrentHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
 	}
 	if mode == FastSync {
-		if head := tester.headBlock().NumberU64(); head != 0 {
+		if head := tester.CurrentBlock().NumberU64(); head != 0 {
 			t.Errorf("fast sync pivot block #%d not rolled back", head)
 		}
 	}
@@ -1251,11 +1249,11 @@ func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 	if err := tester.sync("withhold-attack", nil, mode); err == nil {
 		t.Fatalf("succeeded withholding attacker synchronisation")
 	}
-	if head := tester.headHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
+	if head := tester.CurrentHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
 	}
 	if mode == FastSync {
-		if head := tester.headBlock().NumberU64(); head != 0 {
+		if head := tester.CurrentBlock().NumberU64(); head != 0 {
 			t.Errorf("fast sync pivot block #%d not rolled back", head)
 		}
 	}

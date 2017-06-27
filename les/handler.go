@@ -206,9 +206,7 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, network
 	}
 
 	if lightSync {
-		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, blockchain.HasHeader, nil, blockchain.GetHeaderByHash,
-			nil, blockchain.CurrentHeader, nil, nil, nil, blockchain.GetTdByHash,
-			blockchain.InsertHeaderChain, nil, nil, blockchain.Rollback, removePeer)
+		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, nil, blockchain, removePeer)
 		manager.peers.notify((*downloaderPeerNotify)(manager))
 		manager.fetcher = newLightFetcher(manager)
 	}
