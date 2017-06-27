@@ -93,6 +93,10 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 		return fmt.Errorf("abi: unmarshalling empty output")
 	}
 
+	if len(output)%32 != 0 {
+		return nil, fmt.Errorf("abi: improperly formatted output")
+	}
+
 	// make sure the passed value is a pointer
 	valueOf := reflect.ValueOf(v)
 	if reflect.Ptr != valueOf.Kind() {
