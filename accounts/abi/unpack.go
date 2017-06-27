@@ -97,6 +97,11 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 			inter = common.BytesToHash(returnOutput)
 		case FixedBytesTy:
 			inter = returnOutput
+		case SliceTy, ArrayTy:
+			inter, err = toGoSlice(i+index/32, t, output)
+			if err != nil {
+				return nil, err
+			}
 		default:
 			return nil, fmt.Errorf("abi: unsupported slice type passed in")
 		}
@@ -158,6 +163,9 @@ func readBool(word []byte) (bool, error) {
 // toGoType parses the input and casts it to the proper type defined by the ABI
 // argument in T.
 func toGoType(i int, t Argument, output []byte) (interface{}, error) {
+	if len(output)%32 != 0 {
+		return nil, fmt.Errorf("abi: improperly formatted output")
+	}
 	// we need to treat slices differently
 	if (t.Type.IsSlice || t.Type.IsArray) && t.Type.T != BytesTy && t.Type.T != StringTy && t.Type.T != FixedBytesTy && t.Type.T != FunctionTy {
 		return toGoSlice(i, t, output)
