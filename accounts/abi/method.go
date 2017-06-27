@@ -39,7 +39,7 @@ type Method struct {
 	Outputs []Argument
 }
 
-func (m Method) pack(method Method, args ...interface{}) ([]byte, error) {
+func (method Method) pack(args ...interface{}) ([]byte, error) {
 	// Make sure arguments match up and pack them
 	if len(args) != len(method.Inputs) {
 		return nil, fmt.Errorf("argument count mismatch: %d for %d", len(args), len(method.Inputs))

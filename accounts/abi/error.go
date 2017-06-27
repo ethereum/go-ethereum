@@ -17,8 +17,13 @@
 package abi
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
+)
+
+var (
+	errBadBool = errors.New("abi: improperly encoded boolean value")
 )
 
 // formatSliceString formats the reflection kind with the given slice size
