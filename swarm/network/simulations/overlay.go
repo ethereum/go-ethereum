@@ -94,9 +94,6 @@ func createMockers() map[string]*simulations.MockerConfig {
 }
 
 func setupMocker(net *simulations.Network) []discover.NodeID {
-	conf := net.Config()
-	conf.DefaultService = "overlay"
-
 	nodeCount := 30
 	ids := make([]discover.NodeID, nodeCount)
 	for i := 0; i < nodeCount; i++ {
@@ -203,17 +200,20 @@ func main() {
 	services := adapters.Services{
 		"overlay": s.NewService,
 	}
-	adapters.RegisterServices(services)
+	adapter := adapters.NewSimAdapter(services)
+
+	network := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+		DefaultService: "overlay",
+	})
 
 	mockers := createMockers()
 
-	config := &simulations.ServerConfig{
-		NewAdapter:      func() adapters.NodeAdapter { return adapters.NewSimAdapter(services) },
+	config := simulations.ServerConfig{
 		DefaultMockerID: "randomNodes",
 		// DefaultMockerID: "bootNet",
 		Mockers: mockers,
 	}
 
 	log.Info("starting simulation server on 0.0.0.0:8888...")
-	http.ListenAndServe(":8888", simulations.NewServer(config))
+	http.ListenAndServe(":8888", simulations.NewServer(network, config))
 }

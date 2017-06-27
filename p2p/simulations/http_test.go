@@ -127,54 +127,32 @@ var testServices = adapters.Services{
 	"test": newTestService,
 }
 
-func testHTTPServer(t *testing.T) *httptest.Server {
-	return httptest.NewServer(NewServer(&ServerConfig{
-		NewAdapter: func() adapters.NodeAdapter { return adapters.NewSimAdapter(testServices) },
-	}))
+func testHTTPServer(t *testing.T) (*Network, *httptest.Server) {
+	adapter := adapters.NewSimAdapter(testServices)
+	network := NewNetwork(adapter, &NetworkConfig{
+		DefaultService: "test",
+	})
+	return network, httptest.NewServer(NewServer(network, ServerConfig{}))
 }
 
-// TestHTTPNetwork tests creating and interacting with a simulation
-// network using the HTTP API
+// TestHTTPNetwork tests interacting with a simulation network using the HTTP
+// API
 func TestHTTPNetwork(t *testing.T) {
 	// start the server
-	s := testHTTPServer(t)
+	network, s := testHTTPServer(t)
 	defer s.Close()
 
-	// create a network
-	client := NewClient(s.URL)
-	config := &NetworkConfig{
-		DefaultService: "test",
-	}
-	network, err := client.CreateNetwork(config)
-	if err != nil {
-		t.Fatalf("error creating network: %s", err)
-	}
-
 	// subscribe to events so we can check them later
+	client := NewClient(s.URL)
 	events := make(chan *Event, 100)
-	sub, err := client.SubscribeNetwork(network.ID, events)
+	sub, err := client.SubscribeNetwork(events)
 	if err != nil {
 		t.Fatalf("error subscribing to network events: %s", err)
 	}
 	defer sub.Unsubscribe()
 
-	// check the network has an ID
-	if network.ID == "" {
-		t.Fatal("expected network.ID to be set")
-	}
-
-	// check the network exists
-	networks, err := client.GetNetworks()
-	if err != nil {
-		t.Fatalf("error getting networks: %s", err)
-	}
-	if len(networks) != 1 {
-		t.Fatalf("expected 1 network, got %d", len(networks))
-	}
-	if networks[0].ID != network.ID {
-		t.Fatalf("expected network to have ID %q, got %q", network.ID, networks[0].ID)
-	}
-	gotNetwork, err := client.GetNetwork(network.ID)
+	// check we can retrieve details about the network
+	gotNetwork, err := client.GetNetwork()
 	if err != nil {
 		t.Fatalf("error getting network: %s", err)
 	}
@@ -185,7 +163,7 @@ func TestHTTPNetwork(t *testing.T) {
 	// create 2 nodes
 	nodeIDs := make([]string, 2)
 	for i := 0; i < 2; i++ {
-		node, err := client.CreateNode(network.ID, nil)
+		node, err := client.CreateNode(nil)
 		if err != nil {
 			t.Fatalf("error creating node: %s", err)
 		}
@@ -193,7 +171,7 @@ func TestHTTPNetwork(t *testing.T) {
 	}
 
 	// check both nodes exist
-	nodes, err := client.GetNodes(network.ID)
+	nodes, err := client.GetNodes()
 	if err != nil {
 		t.Fatalf("error getting nodes: %s", err)
 	}
@@ -204,7 +182,7 @@ func TestHTTPNetwork(t *testing.T) {
 		if nodes[i].ID != nodeID {
 			t.Fatalf("expected node %d to have ID %q, got %q", i, nodeID, nodes[i].ID)
 		}
-		node, err := client.GetNode(network.ID, nodeID)
+		node, err := client.GetNode(nodeID)
 		if err != nil {
 			t.Fatalf("error getting node %d: %s", i, err)
 		}
@@ -215,13 +193,13 @@ func TestHTTPNetwork(t *testing.T) {
 
 	// start both nodes
 	for _, nodeID := range nodeIDs {
-		if err := client.StartNode(network.ID, nodeID); err != nil {
+		if err := client.StartNode(nodeID); err != nil {
 			t.Fatalf("error starting node %q: %s", nodeID, err)
 		}
 	}
 
 	// connect the nodes
-	if err := client.ConnectNode(network.ID, nodeIDs[0], nodeIDs[1]); err != nil {
+	if err := client.ConnectNode(nodeIDs[0], nodeIDs[1]); err != nil {
 		t.Fatalf("error connecting nodes: %s", err)
 	}
 
@@ -319,31 +297,27 @@ func (t *expectEvents) expect(events ...*Event) {
 // TestHTTPNodeRPC tests calling RPC methods on nodes via the HTTP API
 func TestHTTPNodeRPC(t *testing.T) {
 	// start the server
-	s := testHTTPServer(t)
+	_, s := testHTTPServer(t)
 	defer s.Close()
 
-	// start a node in a network
+	// start a node in the network
 	client := NewClient(s.URL)
-	network, err := client.CreateNetwork(&NetworkConfig{DefaultService: "test"})
-	if err != nil {
-		t.Fatalf("error creating network: %s", err)
-	}
-	node, err := client.CreateNode(network.ID, nil)
+	node, err := client.CreateNode(nil)
 	if err != nil {
 		t.Fatalf("error creating node: %s", err)
 	}
-	if err := client.StartNode(network.ID, node.ID); err != nil {
+	if err := client.StartNode(node.ID); err != nil {
 		t.Fatalf("error starting node: %s", err)
 	}
 
 	// create two RPC clients
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	rpcClient1, err := client.RPCClient(ctx, network.ID, node.ID)
+	rpcClient1, err := client.RPCClient(ctx, node.ID)
 	if err != nil {
 		t.Fatalf("error getting node RPC client: %s", err)
 	}
-	rpcClient2, err := client.RPCClient(ctx, network.ID, node.ID)
+	rpcClient2, err := client.RPCClient(ctx, node.ID)
 	if err != nil {
 		t.Fatalf("error getting node RPC client: %s", err)
 	}
@@ -382,35 +356,31 @@ func TestHTTPNodeRPC(t *testing.T) {
 // TestHTTPSnapshot tests creating and loading network snapshots
 func TestHTTPSnapshot(t *testing.T) {
 	// start the server
-	s := testHTTPServer(t)
+	_, s := testHTTPServer(t)
 	defer s.Close()
 
 	// create a two-node network
 	client := NewClient(s.URL)
-	network, err := client.CreateNetwork(&NetworkConfig{DefaultService: "test"})
-	if err != nil {
-		t.Fatalf("error creating network: %s", err)
-	}
 	nodeCount := 2
 	nodes := make([]*p2p.NodeInfo, nodeCount)
 	for i := 0; i < nodeCount; i++ {
-		node, err := client.CreateNode(network.ID, nil)
+		node, err := client.CreateNode(nil)
 		if err != nil {
 			t.Fatalf("error creating node: %s", err)
 		}
-		if err := client.StartNode(network.ID, node.ID); err != nil {
+		if err := client.StartNode(node.ID); err != nil {
 			t.Fatalf("error starting node: %s", err)
 		}
 		nodes[i] = node
 	}
-	if err := client.ConnectNode(network.ID, nodes[0].ID, nodes[1].ID); err != nil {
+	if err := client.ConnectNode(nodes[0].ID, nodes[1].ID); err != nil {
 		t.Fatalf("error connecting nodes: %s", err)
 	}
 
 	// store some state in the test services
 	states := make([]string, nodeCount)
 	for i, node := range nodes {
-		rpc, err := client.RPCClient(context.Background(), network.ID, node.ID)
+		rpc, err := client.RPCClient(context.Background(), node.ID)
 		if err != nil {
 			t.Fatalf("error getting RPC client: %s", err)
 		}
@@ -423,7 +393,7 @@ func TestHTTPSnapshot(t *testing.T) {
 	}
 
 	// create a snapshot
-	snap, err := client.CreateSnapshot(network.ID)
+	snap, err := client.CreateSnapshot()
 	if err != nil {
 		t.Fatalf("error creating snapshot: %s", err)
 	}
@@ -435,26 +405,25 @@ func TestHTTPSnapshot(t *testing.T) {
 	}
 
 	// create another network
-	network, err = client.CreateNetwork(&NetworkConfig{DefaultService: "test"})
-	if err != nil {
-		t.Fatalf("error creating network: %s", err)
-	}
+	_, s = testHTTPServer(t)
+	defer s.Close()
+	client = NewClient(s.URL)
 
 	// subscribe to events so we can check them later
 	events := make(chan *Event, 100)
-	sub, err := client.SubscribeNetwork(network.ID, events)
+	sub, err := client.SubscribeNetwork(events)
 	if err != nil {
 		t.Fatalf("error subscribing to network events: %s", err)
 	}
 	defer sub.Unsubscribe()
 
 	// load the snapshot
-	if err := client.LoadSnapshot(network.ID, snap); err != nil {
+	if err := client.LoadSnapshot(snap); err != nil {
 		t.Fatalf("error loading snapshot: %s", err)
 	}
 
 	// check the nodes and connection exists
-	net, err := client.GetNetwork(network.ID)
+	net, err := client.GetNetwork()
 	if err != nil {
 		t.Fatalf("error getting network: %s", err)
 	}
@@ -480,7 +449,7 @@ func TestHTTPSnapshot(t *testing.T) {
 
 	// check the node states were restored
 	for i, node := range nodes {
-		rpc, err := client.RPCClient(context.Background(), network.ID, node.ID)
+		rpc, err := client.RPCClient(context.Background(), node.ID)
 		if err != nil {
 			t.Fatalf("error getting RPC client: %s", err)
 		}

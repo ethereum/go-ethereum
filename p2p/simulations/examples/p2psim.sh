@@ -9,13 +9,9 @@ main() {
     fail "missing p2psim binary (you need to build p2p/simulations/cmd/p2psim)"
   fi
 
-  info "creating the example network"
-  export P2PSIM_NETWORK="example"
-  p2psim network create --id "${P2PSIM_NETWORK}"
-
   info "creating 10 nodes"
   for i in $(seq 1 10); do
-    p2psim node create --name "$(node_name $i)" --services "ping-pong"
+    p2psim node create --name "$(node_name $i)"
     p2psim node start "$(node_name $i)"
   done
 

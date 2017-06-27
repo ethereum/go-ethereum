@@ -3,22 +3,19 @@
 // Here is an example of creating a 2 node network with the first node
 // connected to the second:
 //
-//     $ p2psim network create
-//     Created network net1
-//
-//     $ p2psim node create net1
+//     $ p2psim node create
 //     Created node01
 //
-//     $ p2psim node start net1 node01
+//     $ p2psim node start node01
 //     Started node01
 //
-//     $ p2psim node create net1
+//     $ p2psim node create
 //     Created node02
 //
-//     $ p2psim node start net1 node02
+//     $ p2psim node start node02
 //     Started node02
 //
-//     $ p2psim node connect net1 node01 node02
+//     $ p2psim node connect node01 node02
 //     Connected node01 to node02
 //
 package main
@@ -26,7 +23,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -42,10 +38,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-var (
-	client    *simulations.Client
-	networkID string
-)
+var client *simulations.Client
 
 func main() {
 	app := cli.NewApp()
@@ -64,78 +57,29 @@ func main() {
 	}
 	app.Commands = []cli.Command{
 		{
-			Name:   "network",
-			Usage:  "manage simulation networks",
-			Action: listNetworks,
-			Subcommands: []cli.Command{
-				{
-					Name:   "list",
-					Usage:  "list networks",
-					Action: listNetworks,
-				},
-				{
-					Name:   "create",
-					Usage:  "create a network",
-					Action: createNetwork,
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:  "id",
-							Value: "",
-							Usage: "network ID",
-						},
-						cli.StringFlag{
-							Name:  "default-service",
-							Value: "",
-							Usage: "default service",
-						},
-					},
-				},
-				{
-					Name:      "show",
-					ArgsUsage: "<network>",
-					Usage:     "show network information",
-					Action:    showNetwork,
-				},
-				{
-					Name:      "events",
-					ArgsUsage: "<network>",
-					Usage:     "stream network events",
-					Action:    streamNetwork,
-				},
-				{
-					Name:      "snapshot",
-					ArgsUsage: "<network>",
-					Usage:     "create a network snapshot to stdout",
-					Action:    createSnapshot,
-				},
-				{
-					Name:      "load",
-					ArgsUsage: "<network>",
-					Usage:     "load a network snapshot from stdin",
-					Action:    loadSnapshot,
-				},
-			},
+			Name:   "show",
+			Usage:  "show network information",
+			Action: showNetwork,
+		},
+		{
+			Name:   "events",
+			Usage:  "stream network events",
+			Action: streamNetwork,
+		},
+		{
+			Name:   "snapshot",
+			Usage:  "create a network snapshot to stdout",
+			Action: createSnapshot,
+		},
+		{
+			Name:   "load",
+			Usage:  "load a network snapshot from stdin",
+			Action: loadSnapshot,
 		},
 		{
 			Name:   "node",
 			Usage:  "manage simulation nodes",
 			Action: listNodes,
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "network",
-					Usage: "simulation network",
-				},
-			},
-			Before: func(ctx *cli.Context) error {
-				networkID = ctx.GlobalString("network")
-				if networkID == "" {
-					networkID = os.Getenv("P2PSIM_NETWORK")
-				}
-				if networkID == "" {
-					return errors.New("missing network, set with --network or P2PSIM_NETWORK")
-				}
-				return nil
-			},
 			Subcommands: []cli.Command{
 				{
 					Name:   "list",
@@ -212,65 +156,27 @@ func main() {
 	app.Run(os.Args)
 }
 
-func listNetworks(ctx *cli.Context) error {
-	if len(ctx.Args()) != 0 {
-		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
-	}
-	networks, err := client.GetNetworks()
-	if err != nil {
-		return err
-	}
-	w := tabwriter.NewWriter(ctx.App.Writer, 1, 2, 2, ' ', 0)
-	defer w.Flush()
-	fmt.Fprintf(w, "ID\tNODES\tCONNS\n")
-	for _, network := range networks {
-		fmt.Fprintf(w, "%s\t%d\t%d\n", network.ID, len(network.Nodes), len(network.Conns))
-	}
-	return nil
-}
-
-func createNetwork(ctx *cli.Context) error {
-	if len(ctx.Args()) != 0 {
-		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
-	}
-	config := &simulations.NetworkConfig{
-		ID:             ctx.String("id"),
-		DefaultService: ctx.String("default-service"),
-	}
-	network, err := client.CreateNetwork(config)
-	if err != nil {
-		return err
-	}
-	fmt.Fprintln(ctx.App.Writer, "Created network", network.ID)
-	return nil
-}
-
 func showNetwork(ctx *cli.Context) error {
-	args := ctx.Args()
-	if len(args) != 1 {
+	if len(ctx.Args()) != 0 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	networkID := args[0]
-	network, err := client.GetNetwork(networkID)
+	network, err := client.GetNetwork()
 	if err != nil {
 		return err
 	}
 	w := tabwriter.NewWriter(ctx.App.Writer, 1, 2, 2, ' ', 0)
 	defer w.Flush()
-	fmt.Fprintf(w, "ID\t%s\n", network.ID)
 	fmt.Fprintf(w, "NODES\t%d\n", len(network.Nodes))
 	fmt.Fprintf(w, "CONNS\t%d\n", len(network.Conns))
 	return nil
 }
 
 func streamNetwork(ctx *cli.Context) error {
-	args := ctx.Args()
-	if len(args) != 1 {
+	if len(ctx.Args()) != 0 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	networkID := args[0]
 	events := make(chan *simulations.Event)
-	sub, err := client.SubscribeNetwork(networkID, events)
+	sub, err := client.SubscribeNetwork(events)
 	if err != nil {
 		return err
 	}
@@ -289,12 +195,10 @@ func streamNetwork(ctx *cli.Context) error {
 }
 
 func createSnapshot(ctx *cli.Context) error {
-	args := ctx.Args()
-	if len(args) != 1 {
+	if len(ctx.Args()) != 0 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	networkID := args[0]
-	snap, err := client.CreateSnapshot(networkID)
+	snap, err := client.CreateSnapshot()
 	if err != nil {
 		return err
 	}
@@ -302,23 +206,21 @@ func createSnapshot(ctx *cli.Context) error {
 }
 
 func loadSnapshot(ctx *cli.Context) error {
-	args := ctx.Args()
-	if len(args) != 1 {
+	if len(ctx.Args()) != 0 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	networkID := args[0]
 	snap := &simulations.Snapshot{}
 	if err := json.NewDecoder(os.Stdin).Decode(snap); err != nil {
 		return err
 	}
-	return client.LoadSnapshot(networkID, snap)
+	return client.LoadSnapshot(snap)
 }
 
 func listNodes(ctx *cli.Context) error {
 	if len(ctx.Args()) != 0 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	nodes, err := client.GetNodes(networkID)
+	nodes, err := client.GetNodes()
 	if err != nil {
 		return err
 	}
@@ -357,7 +259,7 @@ func createNode(ctx *cli.Context) error {
 	if services := ctx.String("services"); services != "" {
 		config.Services = strings.Split(services, ",")
 	}
-	node, err := client.CreateNode(networkID, config)
+	node, err := client.CreateNode(config)
 	if err != nil {
 		return err
 	}
@@ -371,7 +273,7 @@ func showNode(ctx *cli.Context) error {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
 	nodeName := args[0]
-	node, err := client.GetNode(networkID, nodeName)
+	node, err := client.GetNode(nodeName)
 	if err != nil {
 		return err
 	}
@@ -396,7 +298,7 @@ func startNode(ctx *cli.Context) error {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
 	nodeName := args[0]
-	if err := client.StartNode(networkID, nodeName); err != nil {
+	if err := client.StartNode(nodeName); err != nil {
 		return err
 	}
 	fmt.Fprintln(ctx.App.Writer, "Started", nodeName)
@@ -409,7 +311,7 @@ func stopNode(ctx *cli.Context) error {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
 	nodeName := args[0]
-	if err := client.StopNode(networkID, nodeName); err != nil {
+	if err := client.StopNode(nodeName); err != nil {
 		return err
 	}
 	fmt.Fprintln(ctx.App.Writer, "Stopped", nodeName)
@@ -423,7 +325,7 @@ func connectNode(ctx *cli.Context) error {
 	}
 	nodeName := args[0]
 	peerName := args[1]
-	if err := client.ConnectNode(networkID, nodeName, peerName); err != nil {
+	if err := client.ConnectNode(nodeName, peerName); err != nil {
 		return err
 	}
 	fmt.Fprintln(ctx.App.Writer, "Connected", nodeName, "to", peerName)
@@ -437,7 +339,7 @@ func disconnectNode(ctx *cli.Context) error {
 	}
 	nodeName := args[0]
 	peerName := args[1]
-	if err := client.DisconnectNode(networkID, nodeName, peerName); err != nil {
+	if err := client.DisconnectNode(nodeName, peerName); err != nil {
 		return err
 	}
 	fmt.Fprintln(ctx.App.Writer, "Disconnected", nodeName, "from", peerName)
@@ -451,7 +353,7 @@ func rpcNode(ctx *cli.Context) error {
 	}
 	nodeName := args[0]
 	method := args[1]
-	rpcClient, err := client.RPCClient(context.Background(), networkID, nodeName)
+	rpcClient, err := client.RPCClient(context.Background(), nodeName)
 	if err != nil {
 		return err
 	}
