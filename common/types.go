@@ -31,6 +31,11 @@ const (
 	AddressLength = 20
 )
 
+var (
+	hashT    = reflect.TypeOf(Hash{})
+	addressT = reflect.TypeOf(Address{})
+)
+
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
 type Hash [HashLength]byte
 
@@ -70,6 +75,11 @@ func (h Hash) Format(s fmt.State, c rune) {
 // UnmarshalText parses a hash in hex syntax.
 func (h *Hash) UnmarshalText(input []byte) error {
 	return hexutil.UnmarshalFixedText("Hash", input, h[:])
+}
+
+// UnmarshalJSON parses a hash in hex syntax.
+func (h *Hash) UnmarshalJSON(input []byte) error {
+	return hexutil.UnmarshalFixedJSON(hashT, input, h[:])
 }
 
 // MarshalText returns the hex representation of h.
@@ -192,6 +202,11 @@ func (a Address) MarshalText() ([]byte, error) {
 // UnmarshalText parses a hash in hex syntax.
 func (a *Address) UnmarshalText(input []byte) error {
 	return hexutil.UnmarshalFixedText("Address", input, a[:])
+}
+
+// UnmarshalJSON parses a hash in hex syntax.
+func (a *Address) UnmarshalJSON(input []byte) error {
+	return hexutil.UnmarshalFixedJSON(addressT, input, a[:])
 }
 
 // UnprefixedHash allows marshaling an Address without 0x prefix.
