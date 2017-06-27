@@ -6,6 +6,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -21,6 +22,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
+
+var noDiscovery = flag.Bool("no-discovery", false, "disable discovery (useful if you want to load a snapshot)")
 
 type Simulation struct {
 	mtx    sync.Mutex
@@ -57,6 +60,7 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 	ticker := time.NewTicker(time.Duration(kad.PruneInterval) * time.Millisecond)
 	kad.Prune(ticker.C)
 	hp := network.NewHiveParams()
+	hp.Discovery = !*noDiscovery
 	hp.KeepAliveInterval = 3 * time.Second
 
 	config := &network.BzzConfig{
@@ -192,6 +196,8 @@ func startStopMocker(net *simulations.Network) {
 
 // var server
 func main() {
+	flag.Parse()
+
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
