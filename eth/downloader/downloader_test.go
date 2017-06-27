@@ -657,7 +657,7 @@ func assertOwnForkedChain(t *testing.T, tester *downloadTester, common int, leng
 			index = len(tester.ownHashes) - lengths[len(lengths)-1] + int(tester.downloader.queue.fastSyncPivot)
 		}
 		if index > 0 {
-			if statedb, err := state.New(tester.ownHeaders[tester.ownHashes[index]].Root, tester.stateDb); statedb == nil || err != nil {
+			if statedb, err := state.New(tester.ownHeaders[tester.ownHashes[index]].Root, state.NewDatabase(tester.stateDb)); statedb == nil || err != nil {
 				t.Fatalf("state reconstruction failed: %v", err)
 			}
 		}

@@ -44,7 +44,7 @@ func pricedTransaction(nonce uint64, gaslimit, gasprice *big.Int, key *ecdsa.Pri
 
 func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 
 	key, _ := crypto.GenerateKey()
 	newPool := NewTxPool(DefaultTxPoolConfig, params.TestChainConfig, new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
@@ -95,7 +95,7 @@ func TestStateChangeDuringPoolReset(t *testing.T) {
 		key, _     = crypto.GenerateKey()
 		address    = crypto.PubkeyToAddress(key.PublicKey)
 		mux        = new(event.TypeMux)
-		statedb, _ = state.New(common.Hash{}, db)
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(db))
 		trigger    = false
 	)
 
@@ -114,7 +114,7 @@ func TestStateChangeDuringPoolReset(t *testing.T) {
 		// a state change between those fetches.
 		stdb := statedb
 		if trigger {
-			statedb, _ = state.New(common.Hash{}, db)
+			statedb, _ = state.New(common.Hash{}, state.NewDatabase(db))
 			// simulate that the new head block included tx0 and tx1
 			statedb.SetNonce(address, 2)
 			statedb.SetBalance(address, new(big.Int).SetUint64(params.Ether))
@@ -292,7 +292,7 @@ func TestTransactionChainFork(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	resetState := func() {
 		db, _ := ethdb.NewMemDatabase()
-		statedb, _ := state.New(common.Hash{}, db)
+		statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 		pool.currentState = func() (*state.StateDB, error) { return statedb, nil }
 		currentState, _ := pool.currentState()
 		currentState.AddBalance(addr, big.NewInt(100000000000000))
@@ -318,7 +318,7 @@ func TestTransactionDoubleNonce(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	resetState := func() {
 		db, _ := ethdb.NewMemDatabase()
-		statedb, _ := state.New(common.Hash{}, db)
+		statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 		pool.currentState = func() (*state.StateDB, error) { return statedb, nil }
 		currentState, _ := pool.currentState()
 		currentState.AddBalance(addr, big.NewInt(100000000000000))
@@ -628,7 +628,7 @@ func TestTransactionQueueGlobalLimiting(t *testing.T) {
 
 	// Create the pool to test the limit enforcement with
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 
 	pool := NewTxPool(DefaultTxPoolConfig, params.TestChainConfig, new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
 	pool.resetState()
@@ -783,7 +783,7 @@ func TestTransactionPendingGlobalLimiting(t *testing.T) {
 
 	// Create the pool to test the limit enforcement with
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 
 	pool := NewTxPool(DefaultTxPoolConfig, params.TestChainConfig, new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
 	pool.resetState()
@@ -835,7 +835,7 @@ func TestTransactionCapClearsFromAll(t *testing.T) {
 
 	// Create the pool to test the limit enforcement with
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 
 	pool := NewTxPool(DefaultTxPoolConfig, params.TestChainConfig, new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
 	pool.resetState()
@@ -868,7 +868,7 @@ func TestTransactionPendingMinimumAllowance(t *testing.T) {
 
 	// Create the pool to test the limit enforcement with
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 
 	pool := NewTxPool(DefaultTxPoolConfig, params.TestChainConfig, new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
 	pool.resetState()
@@ -913,7 +913,7 @@ func TestTransactionPendingMinimumAllowance(t *testing.T) {
 func TestTransactionPoolRepricing(t *testing.T) {
 	// Create the pool to test the pricing enforcement with
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 
 	pool := NewTxPool(DefaultTxPoolConfig, params.TestChainConfig, new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
 	pool.resetState()
@@ -1006,7 +1006,7 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 
 	// Create the pool to test the pricing enforcement with
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 
 	pool := NewTxPool(DefaultTxPoolConfig, params.TestChainConfig, new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
 	pool.resetState()
@@ -1091,7 +1091,7 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 func TestTransactionReplacement(t *testing.T) {
 	// Create the pool to test the pricing enforcement with
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 
 	pool := NewTxPool(DefaultTxPoolConfig, params.TestChainConfig, new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
 	pool.resetState()

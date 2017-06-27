@@ -75,24 +75,23 @@ func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainCon
 	dummyAddr := common.HexToAddress("1234567812345678123456781234567812345678")
 	acc := []common.Address{testBankAddress, acc1Addr, acc2Addr, dummyAddr}
 
-	var res []byte
+	var (
+		res []byte
+		st  *state.StateDB
+		err error
+	)
 	for _, addr := range acc {
 		if bc != nil {
 			header := bc.GetHeaderByHash(bhash)
-			st, err := state.New(header.Root, db)
-			if err == nil {
-				bal := st.GetBalance(addr)
-				rlp, _ := rlp.EncodeToBytes(bal)
-				res = append(res, rlp...)
-			}
+			st, err = state.New(header.Root, state.NewDatabase(db))
 		} else {
 			header := lc.GetHeaderByHash(bhash)
-			st := light.NewLightState(light.StateTrieID(header), lc.Odr())
-			bal, err := st.GetBalance(ctx, addr)
-			if err == nil {
-				rlp, _ := rlp.EncodeToBytes(bal)
-				res = append(res, rlp...)
-			}
+			st = light.NewState(ctx, header, lc.Odr())
+		}
+		if err == nil {
+			bal := st.GetBalance(addr)
+			rlp, _ := rlp.EncodeToBytes(bal)
+			res = append(res, rlp...)
 		}
 	}
 
@@ -115,7 +114,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 		data[35] = byte(i)
 		if bc != nil {
 			header := bc.GetHeaderByHash(bhash)
-			statedb, err := state.New(header.Root, db)
+			statedb, err := state.New(header.Root, state.NewDatabase(db))
 
 			if err == nil {
 				from := statedb.GetOrNewStateObject(testBankAddress)
@@ -133,23 +132,15 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			}
 		} else {
 			header := lc.GetHeaderByHash(bhash)
-			state := light.NewLightState(light.StateTrieID(header), lc.Odr())
-			vmstate := light.NewVMState(ctx, state)
-			from, err := state.GetOrNewStateObject(ctx, testBankAddress)
-			if err == nil {
-				from.SetBalance(math.MaxBig256)
-
-				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(100000), new(big.Int), data, false)}
-
-				context := core.NewEVMContext(msg, header, lc, nil)
-				vmenv := vm.NewEVM(context, vmstate, config, vm.Config{})
-
-				//vmenv := light.NewEnv(ctx, state, config, lc, msg, header, vm.Config{})
-				gp := new(core.GasPool).AddGas(math.MaxBig256)
-				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
-				if vmstate.Error() == nil {
-					res = append(res, ret...)
-				}
+			state := light.NewState(ctx, header, lc.Odr())
+			state.SetBalance(testBankAddress, math.MaxBig256)
+			msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), big.NewInt(100000), new(big.Int), data, false)}
+			context := core.NewEVMContext(msg, header, lc, nil)
+			vmenv := vm.NewEVM(context, state, config, vm.Config{})
+			gp := new(core.GasPool).AddGas(math.MaxBig256)
+			ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
+			if state.Error() == nil {
+				res = append(res, ret...)
 			}
 		}
 	}

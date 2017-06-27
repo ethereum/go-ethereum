@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"math/big"
 	"strconv"
 	"strings"
 	"testing"
@@ -99,7 +98,7 @@ func benchStateTest(chainConfig *params.ChainConfig, test VmTest, env map[string
 	statedb := makePreState(db, test.Pre)
 	b.StartTimer()
 
-	RunState(chainConfig, statedb, env, test.Exec)
+	RunState(chainConfig, statedb, db, env, test.Exec)
 }
 
 func runStateTests(chainConfig *params.ChainConfig, tests map[string]VmTest, skipTests []string) error {
@@ -143,16 +142,9 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 		env["currentTimestamp"] = test.Env.CurrentTimestamp.(string)
 	}
 
-	var (
-		ret []byte
-		// gas  *big.Int
-		// err  error
-		logs []*types.Log
-	)
+	ret, logs, root, _ := RunState(chainConfig, statedb, db, env, test.Transaction)
 
-	ret, logs, _, _ = RunState(chainConfig, statedb, env, test.Transaction)
-
-	// Compare expected and actual return
+	// Return value:
 	var rexp []byte
 	if strings.HasPrefix(test.Out, "#") {
 		n, _ := strconv.Atoi(test.Out[1:])
@@ -163,61 +155,43 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 	if !bytes.Equal(rexp, ret) {
 		return fmt.Errorf("return failed. Expected %x, got %x\n", rexp, ret)
 	}
-
-	// check post state
+	// Post state content:
 	for addr, account := range test.Post {
 		address := common.HexToAddress(addr)
 		if !statedb.Exist(address) {
 			return fmt.Errorf("did not find expected post-state account: %s", addr)
 		}
-
 		if balance := statedb.GetBalance(address); balance.Cmp(math.MustParseBig256(account.Balance)) != 0 {
 			return fmt.Errorf("(%x) balance failed. Expected: %v have: %v\n", address[:4], math.MustParseBig256(account.Balance), balance)
 		}
-
 		if nonce := statedb.GetNonce(address); nonce != math.MustParseUint64(account.Nonce) {
 			return fmt.Errorf("(%x) nonce failed. Expected: %v have: %v\n", address[:4], account.Nonce, nonce)
 		}
-
 		for addr, value := range account.Storage {
 			v := statedb.GetState(address, common.HexToHash(addr))
 			vexp := common.HexToHash(value)
-
 			if v != vexp {
 				return fmt.Errorf("storage failed:\n%x: %s:\nexpected: %x\nhave:     %x\n(%v %v)\n", address[:4], addr, vexp, v, vexp.Big(), v.Big())
 			}
 		}
 	}
-
-	root, _ := statedb.Commit(false)
+	// Root:
 	if common.HexToHash(test.PostStateRoot) != root {
 		return fmt.Errorf("Post state root error. Expected: %s have: %x", test.PostStateRoot, root)
 	}
-
-	// check logs
-	if len(test.Logs) > 0 {
-		if err := checkLogs(test.Logs, logs); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	// Logs:
+	return checkLogs(test.Logs, logs)
 }
 
-func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx map[string]string) ([]byte, []*types.Log, *big.Int, error) {
+func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, db ethdb.Database, env, tx map[string]string) ([]byte, []*types.Log, common.Hash, error) {
 	environment, msg := NewEVMEnvironment(false, chainConfig, statedb, env, tx)
 	gaspool := new(core.GasPool).AddGas(math.MustParseBig256(env["currentGasLimit"]))
 
-	root, _ := statedb.Commit(false)
-	statedb.Reset(root)
-
 	snapshot := statedb.Snapshot()
-
-	ret, gasUsed, err := core.ApplyMessage(environment, msg, gaspool)
+	ret, _, err := core.ApplyMessage(environment, msg, gaspool)
 	if err != nil {
 		statedb.RevertToSnapshot(snapshot)
 	}
-	statedb.Commit(chainConfig.IsEIP158(environment.Context.BlockNumber))
-
-	return ret, statedb.Logs(), gasUsed, err
+	root, _ := statedb.CommitTo(db, chainConfig.IsEIP158(environment.Context.BlockNumber))
+	return ret, statedb.Logs(), root, err
 }

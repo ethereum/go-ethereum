@@ -28,6 +28,8 @@ import (
 	"testing"
 	"testing/quick"
 
+	check "gopkg.in/check.v1"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -38,7 +40,7 @@ import (
 func TestUpdateLeaks(t *testing.T) {
 	// Create an empty state database
 	db, _ := ethdb.NewMemDatabase()
-	state, _ := New(common.Hash{}, db)
+	state, _ := New(common.Hash{}, NewDatabase(db))
 
 	// Update it with some accounts
 	for i := byte(0); i < 255; i++ {
@@ -66,8 +68,8 @@ func TestIntermediateLeaks(t *testing.T) {
 	// Create two state databases, one transitioning to the final state, the other final from the beginning
 	transDb, _ := ethdb.NewMemDatabase()
 	finalDb, _ := ethdb.NewMemDatabase()
-	transState, _ := New(common.Hash{}, transDb)
-	finalState, _ := New(common.Hash{}, finalDb)
+	transState, _ := New(common.Hash{}, NewDatabase(transDb))
+	finalState, _ := New(common.Hash{}, NewDatabase(finalDb))
 
 	modify := func(state *StateDB, addr common.Address, i, tweak byte) {
 		state.SetBalance(addr, big.NewInt(int64(11*i)+int64(tweak)))
@@ -95,10 +97,10 @@ func TestIntermediateLeaks(t *testing.T) {
 	}
 
 	// Commit and cross check the databases.
-	if _, err := transState.Commit(false); err != nil {
+	if _, err := transState.CommitTo(transDb, false); err != nil {
 		t.Fatalf("failed to commit transition state: %v", err)
 	}
-	if _, err := finalState.Commit(false); err != nil {
+	if _, err := finalState.CommitTo(finalDb, false); err != nil {
 		t.Fatalf("failed to commit final state: %v", err)
 	}
 	for _, key := range finalDb.Keys() {
@@ -282,7 +284,7 @@ func (test *snapshotTest) run() bool {
 	// Run all actions and create snapshots.
 	var (
 		db, _        = ethdb.NewMemDatabase()
-		state, _     = New(common.Hash{}, db)
+		state, _     = New(common.Hash{}, NewDatabase(db))
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0
 	)
@@ -297,7 +299,7 @@ func (test *snapshotTest) run() bool {
 	// Revert all snapshots in reverse order. Each revert must yield a state
 	// that is equivalent to fresh state with all actions up the snapshot applied.
 	for sindex--; sindex >= 0; sindex-- {
-		checkstate, _ := New(common.Hash{}, db)
+		checkstate, _ := New(common.Hash{}, NewDatabase(db))
 		for _, action := range test.actions[:test.snapshots[sindex]] {
 			action.fn(action, checkstate)
 		}
@@ -354,21 +356,19 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 	return nil
 }
 
-func TestTouchDelete(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
-	state, _ := New(common.Hash{}, db)
-	state.GetOrNewStateObject(common.Address{})
-	root, _ := state.Commit(false)
-	state.Reset(root)
+func (s *StateSuite) TestTouchDelete(c *check.C) {
+	s.state.GetOrNewStateObject(common.Address{})
+	root, _ := s.state.CommitTo(s.db, false)
+	s.state.Reset(root)
 
-	snapshot := state.Snapshot()
-	state.AddBalance(common.Address{}, new(big.Int))
-	if len(state.stateObjectsDirty) != 1 {
-		t.Fatal("expected one dirty state object")
+	snapshot := s.state.Snapshot()
+	s.state.AddBalance(common.Address{}, new(big.Int))
+	if len(s.state.stateObjectsDirty) != 1 {
+		c.Fatal("expected one dirty state object")
 	}
 
-	state.RevertToSnapshot(snapshot)
-	if len(state.stateObjectsDirty) != 0 {
-		t.Fatal("expected no dirty state object")
+	s.state.RevertToSnapshot(snapshot)
+	if len(s.state.stateObjectsDirty) != 0 {
+		c.Fatal("expected no dirty state object")
 	}
 }

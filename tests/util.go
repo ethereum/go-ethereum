@@ -48,7 +48,6 @@ func init() {
 }
 
 func checkLogs(tlog []Log, logs []*types.Log) error {
-
 	if len(tlog) != len(logs) {
 		return fmt.Errorf("log length mismatch. Expected %d, got %d", len(tlog), len(logs))
 	} else {
@@ -106,10 +105,14 @@ func (self Log) Topics() [][]byte {
 }
 
 func makePreState(db ethdb.Database, accounts map[string]Account) *state.StateDB {
-	statedb, _ := state.New(common.Hash{}, db)
+	sdb := state.NewDatabase(db)
+	statedb, _ := state.New(common.Hash{}, sdb)
 	for addr, account := range accounts {
 		insertAccount(statedb, addr, account)
 	}
+	// Commit and re-open to start with a clean state.
+	root, _ := statedb.CommitTo(db, false)
+	statedb, _ = state.New(root, sdb)
 	return statedb
 }
 

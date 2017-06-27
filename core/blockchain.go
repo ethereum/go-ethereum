@@ -92,7 +92,7 @@ type BlockChain struct {
 	currentBlock     *types.Block // Current head of the block chain
 	currentFastBlock *types.Block // Current head of the fast-sync chain (may be above the block chain!)
 
-	stateCache   *state.StateDB // State database to reuse between imports (contains state cache)
+	stateCache   state.Database // State database to reuse between imports (contains state cache)
 	bodyCache    *lru.Cache     // Cache for the most recent block bodies
 	bodyRLPCache *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
 	blockCache   *lru.Cache     // Cache for the most recent entire blocks
@@ -125,6 +125,7 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, engine co
 	bc := &BlockChain{
 		config:       config,
 		chainDb:      chainDb,
+		stateCache:   state.NewDatabase(chainDb),
 		eventMux:     mux,
 		quit:         make(chan struct{}),
 		bodyCache:    bodyCache,
@@ -190,7 +191,7 @@ func (bc *BlockChain) loadLastState() error {
 		return bc.Reset()
 	}
 	// Make sure the state associated with the block is available
-	if _, err := state.New(currentBlock.Root(), bc.chainDb); err != nil {
+	if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
 		// Dangling block without a state associated, init from scratch
 		log.Warn("Head state missing, resetting chain", "number", currentBlock.Number(), "hash", currentBlock.Hash())
 		return bc.Reset()
@@ -214,12 +215,6 @@ func (bc *BlockChain) loadLastState() error {
 			bc.currentFastBlock = block
 		}
 	}
-	// Initialize a statedb cache to ensure singleton account bloom filter generation
-	statedb, err := state.New(bc.currentBlock.Root(), bc.chainDb)
-	if err != nil {
-		return err
-	}
-	bc.stateCache = statedb
 
 	// Issue a status log for the user
 	headerTd := bc.GetTd(currentHeader.Hash(), currentHeader.Number.Uint64())
@@ -261,7 +256,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 		bc.currentBlock = bc.GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64())
 	}
 	if bc.currentBlock != nil {
-		if _, err := state.New(bc.currentBlock.Root(), bc.chainDb); err != nil {
+		if _, err := state.New(bc.currentBlock.Root(), bc.stateCache); err != nil {
 			// Rewound state missing, rolled back to before pivot, reset to genesis
 			bc.currentBlock = nil
 		}
@@ -384,7 +379,7 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 
 // StateAt returns a new mutable state based on a particular point in time.
 func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
-	return bc.stateCache.New(root)
+	return state.New(root, bc.stateCache)
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
@@ -531,7 +526,7 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash) bool {
 		return false
 	}
 	// Ensure the associated state is also present
-	_, err := state.New(block.Root(), bc.chainDb)
+	_, err := bc.stateCache.OpenTrie(block.Root())
 	return err == nil
 }
 
@@ -959,31 +954,30 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		}
 		// Create a new statedb using the parent block and report an
 		// error if it fails.
-		switch {
-		case i == 0:
-			err = bc.stateCache.Reset(bc.GetBlock(block.ParentHash(), block.NumberU64()-1).Root())
-		default:
-			err = bc.stateCache.Reset(chain[i-1].Root())
+		var parent *types.Block
+		if i == 0 {
+			parent = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+		} else {
+			parent = chain[i-1]
 		}
+		state, err := state.New(parent.Root(), bc.stateCache)
 		if err != nil {
-			bc.reportBlock(block, nil, err)
 			return i, err
 		}
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, err := bc.processor.Process(block, bc.stateCache, bc.vmConfig)
+		receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return i, err
 		}
 		// Validate the state using the default validator
-		err = bc.Validator().ValidateState(block, bc.GetBlock(block.ParentHash(), block.NumberU64()-1), bc.stateCache, receipts, usedGas)
+		err = bc.Validator().ValidateState(block, parent, state, receipts, usedGas)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return i, err
 		}
 		// Write state changes to database
-		_, err = bc.stateCache.Commit(bc.config.IsEIP158(block.Number()))
-		if err != nil {
+		if _, err = state.CommitTo(bc.chainDb, bc.config.IsEIP158(block.Number())); err != nil {
 			return i, err
 		}
 
@@ -1021,7 +1015,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 				return i, err
 			}
 			// Write hash preimages
-			if err := WritePreimages(bc.chainDb, block.NumberU64(), bc.stateCache.Preimages()); err != nil {
+			if err := WritePreimages(bc.chainDb, block.NumberU64(), state.Preimages()); err != nil {
 				return i, err
 			}
 		case SideStatTy:

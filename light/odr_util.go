@@ -106,25 +106,6 @@ func GetCanonicalHash(ctx context.Context, odr OdrBackend, number uint64) (commo
 	return common.Hash{}, err
 }
 
-// retrieveContractCode tries to retrieve the contract code of the given account
-// with the given hash from the network (id points to the storage trie belonging
-// to the same account)
-func retrieveContractCode(ctx context.Context, odr OdrBackend, id *TrieID, hash common.Hash) ([]byte, error) {
-	if hash == sha3_nil {
-		return nil, nil
-	}
-	res, _ := odr.Database().Get(hash[:])
-	if res != nil {
-		return res, nil
-	}
-	r := &CodeRequest{Id: id, Hash: hash}
-	if err := odr.Retrieve(ctx, r); err != nil {
-		return nil, err
-	} else {
-		return r.Data, nil
-	}
-}
-
 // GetBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
 func GetBodyRLP(ctx context.Context, odr OdrBackend, hash common.Hash, number uint64) (rlp.RawValue, error) {
 	if data := core.GetBodyRLP(odr.Database(), hash, number); data != nil {
