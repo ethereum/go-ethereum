@@ -68,9 +68,10 @@ func (c *Client) LoadSnapshot(snap *Snapshot) error {
 }
 
 // SubscribeNetwork subscribes to network events which are sent from the server
-// as a server-sent-events stream
-func (c *Client) SubscribeNetwork(events chan *Event) (event.Subscription, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/events", c.URL), nil)
+// as a server-sent-events stream, optionally receiving events for existing
+// nodes and connections
+func (c *Client) SubscribeNetwork(events chan *Event, current bool) (event.Subscription, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/events?current=%t", c.URL, current), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -366,6 +367,17 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 			fw.Flush()
 		}
 	}
+	writeEvent := func(event *Event) error {
+		data, err := json.Marshal(event)
+		if err != nil {
+			return err
+		}
+		write("network", string(data))
+		return nil
+	}
+	writeErr := func(err error) {
+		write("error", err.Error())
+	}
 
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -373,15 +385,37 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 	if fw, ok := w.(http.Flusher); ok {
 		fw.Flush()
 	}
+
+	// optionally send the existing nodes and connections
+	if req.URL.Query().Get("current") == "true" {
+		snap, err := s.network.Snapshot()
+		if err != nil {
+			writeErr(err)
+			return
+		}
+		for _, node := range snap.Nodes {
+			event := NewEvent(&node.Node)
+			if err := writeEvent(event); err != nil {
+				writeErr(err)
+				return
+			}
+		}
+		for _, conn := range snap.Conns {
+			event := NewEvent(&conn)
+			if err := writeEvent(event); err != nil {
+				writeErr(err)
+				return
+			}
+		}
+	}
+
 	for {
 		select {
 		case event := <-events:
-			data, err := json.Marshal(event)
-			if err != nil {
-				write("error", err.Error())
+			if err := writeEvent(event); err != nil {
+				writeErr(err)
 				return
 			}
-			write("network", string(data))
 		case <-clientGone:
 			return
 		}

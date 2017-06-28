@@ -65,6 +65,12 @@ func main() {
 			Name:   "events",
 			Usage:  "stream network events",
 			Action: streamNetwork,
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "current",
+					Usage: "get existing nodes and conns first",
+				},
+			},
 		},
 		{
 			Name:   "snapshot",
@@ -176,7 +182,7 @@ func streamNetwork(ctx *cli.Context) error {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
 	events := make(chan *simulations.Event)
-	sub, err := client.SubscribeNetwork(events)
+	sub, err := client.SubscribeNetwork(events, ctx.Bool("current"))
 	if err != nil {
 		return err
 	}
