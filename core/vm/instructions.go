@@ -551,7 +551,7 @@ func opCreate(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	}
 
 	contract.UseGas(gas)
-	// ignore reverted here since it is only useful in vm entry.
+	// ignore failed flag here since it is only useful in vm entrance.
 	_, addr, returnGas, _, suberr := evm.Create(contract, input, gas, value)
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
@@ -589,7 +589,7 @@ func opCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 	if value.Sign() != 0 {
 		gas += params.CallStipend
 	}
-	// ignore revert here, same with opCreate.
+	// ignore failed flag here, same with opCreate.
 	ret, returnGas, _, err := evm.Call(contract, address, args, gas, value)
 	if err != nil {
 		stack.push(new(big.Int))
