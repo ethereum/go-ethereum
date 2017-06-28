@@ -172,45 +172,45 @@ func TestTransactionReverted(t *testing.T) {
 
 func TestDelegateReverted(t *testing.T) {
 	/*
-	 		Contract Source Code
-	 		```
-	 		contract Relay {
-	 		    address public currentVersion;
-	 		    address public owner;
+		 		Contract Source Code
+		 		```
+		 		contract Relay {
+		 		    address public currentVersion;
+		 		    address public owner;
 
-			    modifier onlyOwner() {
-	 			if (msg.sender != owner) {
-	 			    throw;
-	 			}
-	 			_;
-	 		    }
-	 		    function Relay(address _address) {
-	 			currentVersion = _address;
-	 			owner = msg.sender;
-	 		    }
-	 		    function changeContract(address newVersion) public
-	 		    onlyOwner()
-	 		    {
-	 			currentVersion = newVersion;
-	 		    }
-	 		    function() {
-	 			if(!currentVersion.delegatecall(msg.data)) throw;
-	 		    }
-			}
+				    modifier onlyOwner() {
+		 			if (msg.sender != owner) {
+		 			    throw;
+		 			}
+		 			_;
+		 		    }
+		 		    function Relay(address _address) {
+		 			currentVersion = _address;
+		 			owner = msg.sender;
+		 		    }
+		 		    function changeContract(address newVersion) public
+		 		    onlyOwner()
+		 		    {
+		 			currentVersion = newVersion;
+		 		    }
+		 		    function() {
+		 			if(!currentVersion.delegatecall(msg.data)) throw;
+		 		    }
+				}
 
-	 		contract Demo {
-	 		    function Demo() {
-	 		    }
-	 		    function IllegalDivision() returns(int) {
-	 			var dividend = 0;
-	 			return 1 / dividend;
-	 		    }
-	 		    function LegalDivision() returns(int) {
-	 			var dividend = 1;
-	 			return 1 / dividend;
-	 		    }
-	 		}
-	 		```
+		 		contract Demo {
+		 		    function Demo() {
+		 		    }
+		 		    function IllegalDivision() returns(int) {
+		 			var dividend = 0;
+		 			return 1 / dividend;
+		 		    }
+		 		    function LegalDivision() returns(int) {
+		 			var dividend = 1;
+		 			return 1 / dividend;
+		 		    }
+		 		}
+		 		```
 	*/
 	var definition = `[{"constant":false,"inputs":[],"name":"LegalDivision","outputs":[{"name":"","type":"int256"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"IllegalDivision","outputs":[{"name":"","type":"int256"}],"payable":false,"type":"function"},{"inputs":[],"payable":false,"type":"constructor"}]`
 	var rawcode1 = common.Hex2Bytes("6060604052341561000c57fe5b5b5b5b60f88061001d6000396000f30060606040526000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680632d256662146044578063522de105146067575bfe5b3415604b57fe5b6051608a565b6040518082815260200191505060405180910390f35b3415606e57fe5b607460ab565b6040518082815260200191505060405180910390f35b60006000600190508060ff16600181151560a057fe5b0460ff1691505b5090565b60006000600090508060ff16600181151560c157fe5b0460ff1691505b50905600a165627a7a7230582091585859014c4644d0427bf34abc65433b5874993ddea00cac57bcb87ee4cb6b0029")
