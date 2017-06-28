@@ -16,24 +16,20 @@
 
 package vm
 
-import (
-	"math"
-	"testing"
-)
+import "testing"
 
 func TestMemoryGasCost(t *testing.T) {
-	size := uint64(math.MaxUint64 - 64)
-	_, err := memoryGasCost(&Memory{}, size)
+	//size := uint64(math.MaxUint64 - 64)
+	size := uint64(0xffffffffe0)
+	v, err := memoryGasCost(&Memory{}, size)
 	if err != nil {
 		t.Error("didn't expect error:", err)
 	}
-
-	_, err = memoryGasCost(&Memory{}, size+32)
-	if err != nil {
-		t.Error("didn't expect error:", err)
+	if v != 36028899963961341 {
+		t.Errorf("Expected: 36028899963961341, got %d", v)
 	}
 
-	_, err = memoryGasCost(&Memory{}, size+33)
+	_, err = memoryGasCost(&Memory{}, size+1)
 	if err == nil {
 		t.Error("expected error")
 	}
