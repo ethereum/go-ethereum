@@ -34,16 +34,16 @@ func main() {
 
 	adapters.RegisterServices(services)
 
-	config := &simulations.ServerConfig{}
-
-	adapter := flag.String("adapter", "sim", `node adapter to use (one of "sim", "exec" or "docker")`)
+	adapterType := flag.String("adapter", "sim", `node adapter to use (one of "sim", "exec" or "docker")`)
 	flag.Parse()
 
-	switch *adapter {
+	var adapter adapters.NodeAdapter
+
+	switch *adapterType {
 
 	case "sim":
 		log.Info("using sim adapter")
-		config.NewAdapter = func() adapters.NodeAdapter { return adapters.NewSimAdapter(services) }
+		adapter = adapters.NewSimAdapter(services)
 
 	case "exec":
 		tmpdir, err := ioutil.TempDir("", "p2p-example")
@@ -52,22 +52,26 @@ func main() {
 		}
 		defer os.RemoveAll(tmpdir)
 		log.Info("using exec adapter", "tmpdir", tmpdir)
-		config.NewAdapter = func() adapters.NodeAdapter { return adapters.NewExecAdapter(tmpdir) }
+		adapter = adapters.NewExecAdapter(tmpdir)
 
 	case "docker":
 		log.Info("using docker adapter")
-		adapter, err := adapters.NewDockerAdapter()
+		var err error
+		adapter, err = adapters.NewDockerAdapter()
 		if err != nil {
 			log.Crit("error creating docker adapter", "err", err)
 		}
-		config.NewAdapter = func() adapters.NodeAdapter { return adapter }
 
 	default:
-		log.Crit(fmt.Sprintf("unknown node adapter %q", *adapter))
+		log.Crit(fmt.Sprintf("unknown node adapter %q", *adapterType))
 	}
 
 	log.Info("starting simulation server on 0.0.0.0:8888...")
-	if err := http.ListenAndServe(":8888", simulations.NewServer(config)); err != nil {
+	network := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+		DefaultService: "ping-pong",
+	})
+	config := simulations.ServerConfig{}
+	if err := http.ListenAndServe(":8888", simulations.NewServer(network, config)); err != nil {
 		log.Crit("error starting simulation server", "err", err)
 	}
 }

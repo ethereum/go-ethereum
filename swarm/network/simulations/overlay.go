@@ -6,6 +6,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -21,6 +22,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
+
+var noDiscovery = flag.Bool("no-discovery", false, "disable discovery (useful if you want to load a snapshot)")
 
 type Simulation struct {
 	mtx    sync.Mutex
@@ -57,6 +60,7 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 	ticker := time.NewTicker(time.Duration(kad.PruneInterval) * time.Millisecond)
 	kad.Prune(ticker.C)
 	hp := network.NewHiveParams()
+	hp.Discovery = !*noDiscovery
 	hp.KeepAliveInterval = 3 * time.Second
 
 	config := &network.BzzConfig{
@@ -94,9 +98,6 @@ func createMockers() map[string]*simulations.MockerConfig {
 }
 
 func setupMocker(net *simulations.Network) []discover.NodeID {
-	conf := net.Config()
-	conf.DefaultService = "overlay"
-
 	nodeCount := 30
 	ids := make([]discover.NodeID, nodeCount)
 	for i := 0; i < nodeCount; i++ {
@@ -195,6 +196,8 @@ func startStopMocker(net *simulations.Network) {
 
 // var server
 func main() {
+	flag.Parse()
+
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
@@ -203,17 +206,20 @@ func main() {
 	services := adapters.Services{
 		"overlay": s.NewService,
 	}
-	adapters.RegisterServices(services)
+	adapter := adapters.NewSimAdapter(services)
+
+	network := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+		DefaultService: "overlay",
+	})
 
 	mockers := createMockers()
 
-	config := &simulations.ServerConfig{
-		NewAdapter:      func() adapters.NodeAdapter { return adapters.NewSimAdapter(services) },
+	config := simulations.ServerConfig{
 		DefaultMockerID: "randomNodes",
 		// DefaultMockerID: "bootNet",
 		Mockers: mockers,
 	}
 
 	log.Info("starting simulation server on 0.0.0.0:8888...")
-	http.ListenAndServe(":8888", simulations.NewServer(config))
+	http.ListenAndServe(":8888", simulations.NewServer(network, config))
 }
