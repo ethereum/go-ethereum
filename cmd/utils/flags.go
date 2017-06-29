@@ -139,7 +139,7 @@ var (
 	}
 	FastSyncFlag = cli.BoolFlag{
 		Name:  "fast",
-		Usage: "Enable fast syncing through state downloads",
+		Usage: "Enable fast syncing through state downloads - Currently UNSUPPORTED",
 	}
 	LightModeFlag = cli.BoolFlag{
 		Name:  "light",
@@ -731,7 +731,7 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 	ethConf := &eth.Config{
 		Etherbase:               MakeEtherbase(ks, ctx),
 		ChainConfig:             MakeChainConfig(ctx, stack),
-		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
+		FastSync:                false,
 		LightMode:               ctx.GlobalBool(LightModeFlag.Name),
 		LightServ:               ctx.GlobalInt(LightServFlag.Name),
 		LightPeers:              ctx.GlobalInt(LightPeersFlag.Name),
