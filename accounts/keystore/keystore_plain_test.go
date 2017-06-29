@@ -142,19 +142,19 @@ func TestV3_PBKDF2_1(t *testing.T) {
 
 func TestV3_PBKDF2_2(t *testing.T) {
 	t.Parallel()
-	tests := loadKeyStoreTestV3("../../tests/files/KeyStoreTests/basic_tests.json", t)
+	tests := loadKeyStoreTestV3("../../tests/testdata/KeyStoreTests/basic_tests.json", t)
 	testDecryptV3(tests["test1"], t)
 }
 
 func TestV3_PBKDF2_3(t *testing.T) {
 	t.Parallel()
-	tests := loadKeyStoreTestV3("../../tests/files/KeyStoreTests/basic_tests.json", t)
+	tests := loadKeyStoreTestV3("../../tests/testdata/KeyStoreTests/basic_tests.json", t)
 	testDecryptV3(tests["python_generated_test_with_odd_iv"], t)
 }
 
 func TestV3_PBKDF2_4(t *testing.T) {
 	t.Parallel()
-	tests := loadKeyStoreTestV3("../../tests/files/KeyStoreTests/basic_tests.json", t)
+	tests := loadKeyStoreTestV3("../../tests/testdata/KeyStoreTests/basic_tests.json", t)
 	testDecryptV3(tests["evilnonce"], t)
 }
 
@@ -166,7 +166,7 @@ func TestV3_Scrypt_1(t *testing.T) {
 
 func TestV3_Scrypt_2(t *testing.T) {
 	t.Parallel()
-	tests := loadKeyStoreTestV3("../../tests/files/KeyStoreTests/basic_tests.json", t)
+	tests := loadKeyStoreTestV3("../../tests/testdata/KeyStoreTests/basic_tests.json", t)
 	testDecryptV3(tests["test2"], t)
 }
 

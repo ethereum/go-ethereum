@@ -57,7 +57,7 @@ func (d *diffTest) UnmarshalJSON(b []byte) (err error) {
 }
 
 func TestCalcDifficulty(t *testing.T) {
-	file, err := os.Open("../../tests/files/BasicTests/difficulty.json")
+	file, err := os.Open("../../tests/testdata/BasicTests/difficulty.json")
 	if err != nil {
 		t.Fatal(err)
 	}
