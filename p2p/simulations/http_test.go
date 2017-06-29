@@ -145,7 +145,7 @@ func TestHTTPNetwork(t *testing.T) {
 	// subscribe to events so we can check them later
 	client := NewClient(s.URL)
 	events := make(chan *Event, 100)
-	sub, err := client.SubscribeNetwork(events)
+	sub, err := client.SubscribeNetwork(events, false)
 	if err != nil {
 		t.Fatalf("error subscribing to network events: %s", err)
 	}
@@ -211,6 +211,20 @@ func TestHTTPNetwork(t *testing.T) {
 		x.nodeEvent(nodeIDs[0], true),
 		x.nodeEvent(nodeIDs[1], true),
 		x.connEvent(nodeIDs[0], nodeIDs[1], false),
+		x.connEvent(nodeIDs[0], nodeIDs[1], true),
+	)
+
+	// reconnect the stream and check we get the current nodes and conns
+	events = make(chan *Event, 100)
+	sub, err = client.SubscribeNetwork(events, true)
+	if err != nil {
+		t.Fatalf("error subscribing to network events: %s", err)
+	}
+	defer sub.Unsubscribe()
+	x = &expectEvents{t, events, sub}
+	x.expect(
+		x.nodeEvent(nodeIDs[0], true),
+		x.nodeEvent(nodeIDs[1], true),
 		x.connEvent(nodeIDs[0], nodeIDs[1], true),
 	)
 }
@@ -411,7 +425,7 @@ func TestHTTPSnapshot(t *testing.T) {
 
 	// subscribe to events so we can check them later
 	events := make(chan *Event, 100)
-	sub, err := client.SubscribeNetwork(events)
+	sub, err := client.SubscribeNetwork(events, false)
 	if err != nil {
 		t.Fatalf("error subscribing to network events: %s", err)
 	}
