@@ -1073,7 +1073,7 @@ func (st *insertStats) report(chain []*types.Block, index int) {
 		}
 		log.Info("Imported new chain segment", context...)
 
-		*st = insertStats{startTime: now, lastIndex: index}
+		*st = insertStats{startTime: now, lastIndex: index + 1}
 	}
 }
 
