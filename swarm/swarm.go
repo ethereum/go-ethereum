@@ -76,7 +76,7 @@ func (self *Swarm) API() *SwarmAPI {
 
 // creates a new swarm service instance
 // implements node.Service
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config, swapEnabled, syncEnabled bool, cors string) (self *Swarm, err error) {
+func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *ethclient.Client, config *api.Config, swapEnabled, syncEnabled bool, cors string) (self *Swarm, err error) {
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
 	}
@@ -136,10 +136,10 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	// set up high level api
 	transactOpts := bind.NewKeyedTransactor(self.privateKey)
 
-	if backend == (*ethclient.Client)(nil) {
-		log.Warn("No ENS, please specify non-empty --ethapi to use domain name resolution")
+	if ensClient == nil {
+		log.Warn("No ENS, please specify non-empty --ens-api to use domain name resolution")
 	} else {
-		self.dns, err = ens.NewENS(transactOpts, config.EnsRoot, self.backend)
+		self.dns, err = ens.NewENS(transactOpts, config.EnsRoot, ensClient)
 		if err != nil {
 			return nil, err
 		}
