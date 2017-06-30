@@ -194,7 +194,7 @@ func newTestNode(t *testing.T, dir string) *testNode {
 		"--nodiscover",
 		"--datadir", dir,
 		"--ipcpath", conf.IPCPath,
-		"--ethapi", "",
+		"--ens-api", "",
 		"--bzzaccount", account.Address.String(),
 		"--bzznetworkid", "321",
 		"--bzzport", httpPort,

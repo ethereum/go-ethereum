@@ -100,10 +100,6 @@ var (
 		Name:  "sync",
 		Usage: "Swarm Syncing enabled (default true)",
 	}
-	EthAPIFlag = cli.StringFlag{
-		Name:  "ethapi",
-		Usage: "DEPRECATED: please use --ens-api and --swap-api",
-	}
 	EnsAPIFlag = cli.StringFlag{
 		Name:  "ens-api",
 		Usage: "URL of the Ethereum API provider to use for ENS record lookups",
@@ -141,6 +137,12 @@ var (
 	CorsStringFlag = cli.StringFlag{
 		Name:  "corsdomain",
 		Usage: "Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied separated by a ',')",
+	}
+
+	// the following flags are deprecated and should be removed in the future
+	DeprecatedEthAPIFlag = cli.StringFlag{
+		Name:  "ethapi",
+		Usage: "DEPRECATED: please use --ens-api and --swap-api",
 	}
 )
 
@@ -266,7 +268,6 @@ Cleans database of corrupted entries.
 		utils.PasswordFileFlag,
 		// bzzd-specific flags
 		CorsStringFlag,
-		EthAPIFlag,
 		EnsAPIFlag,
 		EnsAddrFlag,
 		SwarmConfigPathFlag,
@@ -285,6 +286,8 @@ Cleans database of corrupted entries.
 		SwarmUploadDefaultPath,
 		SwarmUpFromStdinFlag,
 		SwarmUploadMimeType,
+		//deprecated flags
+		DeprecatedEthAPIFlag,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
@@ -319,6 +322,11 @@ func version(ctx *cli.Context) error {
 }
 
 func bzzd(ctx *cli.Context) error {
+	// exit if the deprecated --ethapi flag is set
+	if ctx.GlobalString(DeprecatedEthAPIFlag.Name) != "" {
+		utils.Fatalf("--ethapi is no longer a valid command line flag, please use --ens-api and/or --swap-api.")
+	}
+
 	cfg := defaultNodeConfig
 	utils.SetNodeConfig(ctx, &cfg)
 	stack, err := node.New(&cfg)
@@ -408,21 +416,12 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	swapEnabled := ctx.GlobalBool(SwarmSwapEnabledFlag.Name)
 	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabledFlag.Name)
 
-	ethapi := ctx.GlobalString(EthAPIFlag.Name)
-	if ethapi != "" {
-		log.Warn("DEPRECATED: --ethapi is deprecated and will be removed in a future version, please use --ens-api and --swap-api")
-	}
-
 	swapapi := ctx.GlobalString(SwarmSwapAPIFlag.Name)
 	if swapEnabled && swapapi == "" {
 		utils.Fatalf("SWAP is enabled but --swap-api is not set")
 	}
 
 	ensapi := ctx.GlobalString(EnsAPIFlag.Name)
-	// use the deprecated --ethapi if --ens-api is not set
-	if ensapi == "" {
-		ensapi = ethapi
-	}
 	ensAddr := ctx.GlobalString(EnsAddrFlag.Name)
 
 	cors := ctx.GlobalString(CorsStringFlag.Name)
