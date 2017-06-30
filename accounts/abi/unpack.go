@@ -25,103 +25,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-<<<<<<< HEAD
-// toGoSliceType parses the input and casts it to the proper slice defined by the ABI
-// argument in T.
-func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
-	index := i * 32
-	// The slice must, at very least be large enough for the index+32 which is exactly the size required
-	// for the [offset in output, size of offset].
-	if index+32 > len(output) {
-		return nil, fmt.Errorf("abi: cannot marshal in to go slice: insufficient size output %d require %d", len(output), index+32)
-	}
-
-	elem := t.Type.Elem
-
-	// this value will become our slice or our array, depending on the type
-	var refSlice reflect.Value
-	var slice []byte
-	var size int
-	var offset int
-	if t.Type.IsSlice {
-		// get the offset which determines the start of this array ...
-		offset = int(binary.BigEndian.Uint64(output[index+24 : index+32]))
-		if offset+32 > len(output) {
-			return nil, fmt.Errorf("abi: cannot marshal in to go slice: offset %d would go over slice boundary (len=%d)", len(output), offset+32)
-		}
-
-		slice = output[offset:]
-		// ... starting with the size of the array in elements ...
-		size = int(binary.BigEndian.Uint64(slice[24:32]))
-		slice = slice[32:]
-		// ... and make sure that we've at the very least the amount of bytes
-		// available in the buffer.
-		if size*32 > len(slice) {
-			return nil, fmt.Errorf("abi: cannot marshal in to go slice: insufficient size output %d require %d", len(output), offset+32+size*32)
-		}
-
-		// reslice to match the required size
-		slice = slice[:size*32]
-		// declare our slice
-		refSlice = reflect.MakeSlice(reflect.SliceOf(elem.Type), size, size)
-	} else if t.Type.T == ArrayTy {
-		//get the number of elements in the array
-		size = t.Type.Size
-		// declare our slice
-		refSlice = reflect.New(reflect.ArrayOf(size, elem.Type)).Elem()
-		//check to make sure array size matches up
-		if index+32*size > len(output) {
-			return nil, fmt.Errorf("abi: cannot marshal in to go array: offset %d would go over slice boundary (len=%d)", len(output), index+32*size)
-		}
-		//slice is there for a fixed amount of times
-		slice = output[index : index+size*32]
-	}
-
-	for i := 0; i < size; i++ {
-		var (
-			inter        interface{}             // interface type
-			returnOutput = slice[i*32 : i*32+32] // the return output
-			err          error
-		)
-		// set inter to the correct type (cast)
-		switch elem.T {
-		case IntTy, UintTy:
-			inter = readInteger(elem.Kind, returnOutput)
-		case BoolTy:
-			inter, err = readBool(returnOutput)
-			if err != nil {
-				return nil, err
-			}
-		case AddressTy:
-			inter = common.BytesToAddress(returnOutput)
-		case HashTy:
-			inter = common.BytesToHash(returnOutput)
-		case FixedBytesTy:
-			inter = returnOutput
-		case SliceTy, ArrayTy:
-			fmt.Println("Index: ", i+index/32)
-			/*inter, err = toGoSlice(i+index/32, t, output)
-			if err != nil {
-				return nil, err
-			}*/
-		default:
-			return nil, fmt.Errorf("abi: unsupported slice type passed in")
-		}
-
-		//fmt.Printf("type: %T, value: %v\n", inter, inter)
-		//fmt.Printf("%v\n", elem.stringKind)
-		// append the item to our reflect slice
-		refSlice.Index(i).Set(reflect.ValueOf(inter))
-	}
-
-	// return the interface
-	return refSlice.Interface(), nil
-=======
 type unpacker interface {
 	tupleUnpack(v interface{}, output []byte) error
 	singleUnpack(v interface{}, output []byte) error
 	tupleReturn() bool
->>>>>>> 03ed394... accounts/abi: redo unpacking logic into nice modular pieces
 }
 
 func readInteger(kind reflect.Kind, b []byte) interface{} {
@@ -179,18 +86,9 @@ func readFunctionType(t Type, word []byte) (funcTy [24]byte, err error) {
 	return
 }
 
-<<<<<<< HEAD
-// toGoType parses the input and casts it to the proper type defined by the ABI
-// argument in T.
-func toGoType(i int, t Argument, output []byte) (interface{}, error) {
-	// we need to treat slices differently
-	if (t.Type.IsSlice || t.Type.IsArray) && t.Type.T != BytesTy && t.Type.T != StringTy && t.Type.T != FixedBytesTy && t.Type.T != FunctionTy {
-		return toGoSlice(i, t, output)
-=======
 func readFixedBytes(t Type, word []byte) (interface{}, error) {
 	if t.T != FixedBytesTy {
 		return nil, fmt.Errorf("abi: invalid type in call to make fixed byte array.")
->>>>>>> 03ed394... accounts/abi: redo unpacking logic into nice modular pieces
 	}
 	// convert
 	array := reflect.New(t.Type).Elem()
