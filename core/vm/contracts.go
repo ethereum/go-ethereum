@@ -279,7 +279,8 @@ type pairing struct{}
 // required for anything significant is so high it's impossible to pay for.
 func (c *pairing) RequiredGas(input []byte) uint64 {
 	//return 0 // TODO
-	return uint64(60000*len(input) + 40000)
+	k := (len(input) + 191) / pairSize
+	return uint64(60000*k + 40000)
 }
 
 const pairSize = 192
