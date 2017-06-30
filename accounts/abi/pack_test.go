@@ -435,7 +435,4 @@ func TestPackNumber(t *testing.T) {
 			t.Errorf("test %d: pack mismatch: have %x, want %x", i, packed, tt.packed)
 		}
 	}
-	if packed := packNum(reflect.ValueOf("string")); packed != nil {
-		t.Errorf("expected 'string' to pack to nil. got %x instead", packed)
-	}
 }
