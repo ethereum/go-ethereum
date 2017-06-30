@@ -155,7 +155,7 @@ type TxPool struct {
 	gasPrice     *big.Int
 	eventMux     *event.TypeMux
 	events       *event.TypeMuxSubscription
-	locals       *txSet
+	locals       *accountSet
 	signer       types.Signer
 	mu           sync.RWMutex
 
@@ -176,12 +176,12 @@ type TxPool struct {
 func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
 	// Sanitize the input to ensure no vulnerable gas prices are set
 	config = (&config).sanitize()
-
+	signer := types.NewEIP155Signer(chainconfig.ChainId)
 	// Create the transaction pool with its initial settings
 	pool := &TxPool{
 		config:       config,
 		chainconfig:  chainconfig,
-		signer:       types.NewEIP155Signer(chainconfig.ChainId),
+		signer:       signer,
 		pending:      make(map[common.Address]*txList),
 		queue:        make(map[common.Address]*txList),
 		beats:        make(map[common.Address]time.Time),
@@ -191,7 +191,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, eventMux *e
 		gasLimit:     gasLimitFn,
 		gasPrice:     new(big.Int).SetUint64(config.PriceLimit),
 		pendingState: nil,
-		locals:       newTxSet(),
+		locals:       newAccountSet(signer),
 		events:       eventMux.Subscribe(ChainHeadEvent{}, RemovedTransactionEvent{}),
 		quit:         make(chan struct{}),
 	}
@@ -376,13 +376,19 @@ func (pool *TxPool) Pending() (map[common.Address]types.Transactions, error) {
 func (pool *TxPool) SetLocal(tx *types.Transaction) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
-	pool.locals.add(tx.Hash())
+	pool.locals.add(tx)
 }
 
 // validateTx checks whether a transaction is valid according
 // to the consensus rules.
 func (pool *TxPool) validateTx(tx *types.Transaction) error {
-	local := pool.locals.contains(tx.Hash())
+
+	from, err := types.Sender(pool.signer, tx)
+	if err != nil {
+		return ErrInvalidSender
+	}
+
+	local := pool.locals.containsAddress(from)
 	// Drop transactions under our own minimal accepted gas price
 	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrUnderpriced
@@ -393,10 +399,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		return err
 	}
 
-	from, err := types.Sender(pool.signer, tx)
-	if err != nil {
-		return ErrInvalidSender
-	}
 	// Last but not least check for nonce errors
 	if currentState.GetNonce(from) > tx.Nonce() {
 		return ErrNonceTooLow
@@ -748,14 +750,8 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB, accounts []common.A
 		spammers := prque.New()
 		for addr, list := range pool.pending {
 			// Only evict transactions from high rollers
-			if uint64(list.Len()) > pool.config.AccountSlots {
-				// Skip local accounts as pools should maintain backlogs for themselves
-				for _, tx := range list.txs.items {
-					if !pool.locals.contains(tx.Hash()) {
-						spammers.Push(addr, float32(list.Len()))
-					}
-					break // Checking on transaction for locality is enough
-				}
+			if !pool.locals.containsAddress(addr) && uint64(list.Len()) > pool.config.AccountSlots {
+				spammers.Push(addr, float32(list.Len()))
 			}
 		}
 		// Gradually drop transactions from offenders
@@ -929,48 +925,41 @@ func (a addresssByHeartbeat) Len() int           { return len(a) }
 func (a addresssByHeartbeat) Less(i, j int) bool { return a[i].heartbeat.Before(a[j].heartbeat) }
 func (a addresssByHeartbeat) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
-// txSet represents a set of transaction hashes in which entries
-//  are automatically dropped after txSetDuration time
-type txSet struct {
-	txMap          map[common.Hash]struct{}
-	txOrd          map[uint64]txOrdType
-	addPtr, delPtr uint64
+// accountSet is simply a map of addresses, and a signer, to be able
+// to determine the address from a tx
+type accountSet struct {
+	accounts map[common.Address]struct{}
+	signer   types.Signer
 }
 
-const txSetDuration = time.Hour * 2
-
-// txOrdType represents an entry in the time-ordered list of transaction hashes
-type txOrdType struct {
-	hash common.Hash
-	time time.Time
-}
-
-// newTxSet creates a new transaction set
-func newTxSet() *txSet {
-	return &txSet{
-		txMap: make(map[common.Hash]struct{}),
-		txOrd: make(map[uint64]txOrdType),
+func newAccountSet(signer types.Signer) *accountSet {
+	return &accountSet{
+		accounts: make(map[common.Address]struct{}),
+		signer:   signer,
 	}
 }
 
-// contains returns true if the set contains the given transaction hash
-// (not thread safe, should be called from a locked environment)
-func (ts *txSet) contains(hash common.Hash) bool {
-	_, ok := ts.txMap[hash]
-	return ok
+// containsAddress checks if a given address is within the set
+func (as *accountSet) containsAddress(address common.Address) bool {
+	_, exist := as.accounts[address]
+	return exist
 }
 
-// add adds a transaction hash to the set, then removes entries older than txSetDuration
-// (not thread safe, should be called from a locked environment)
-func (ts *txSet) add(hash common.Hash) {
-	ts.txMap[hash] = struct{}{}
-	now := time.Now()
-	ts.txOrd[ts.addPtr] = txOrdType{hash: hash, time: now}
-	ts.addPtr++
-	delBefore := now.Add(-txSetDuration)
-	for ts.delPtr < ts.addPtr && ts.txOrd[ts.delPtr].time.Before(delBefore) {
-		delete(ts.txMap, ts.txOrd[ts.delPtr].hash)
-		delete(ts.txOrd, ts.delPtr)
-		ts.delPtr++
+// contains checks if the sender of a given tx is within the set
+func (as *accountSet) contains(tx *types.Transaction) bool {
+	if address, err := types.Sender(as.signer, tx); err == nil {
+		return as.containsAddress(address)
 	}
+	return false
+}
+
+// add a transaction sender to the set
+// if sender can't be derived, this is a no-op (no errors returned)
+func (as *accountSet) add(tx *types.Transaction) {
+	if address, err := types.Sender(as.signer, tx); err == nil {
+		if _, exist := as.accounts[address]; !exist {
+			as.accounts[address] = struct{}{}
+		}
+	}
+
 }
