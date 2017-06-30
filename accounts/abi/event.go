@@ -18,6 +18,7 @@ package abi
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -43,4 +44,73 @@ func (e Event) Id() common.Hash {
 		i++
 	}
 	return common.BytesToHash(crypto.Keccak256([]byte(fmt.Sprintf("%v(%v)", e.Name, strings.Join(types, ",")))))
+}
+
+func (e Event) tupleUnpack(v interface{}, output []byte) error {
+	// make sure the passed value is a pointer
+	valueOf := reflect.ValueOf(v)
+	if reflect.Ptr != valueOf.Kind() {
+		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
+	}
+
+	var (
+		value = valueOf.Elem()
+		typ   = value.Type()
+	)
+
+	if value.Kind() != reflect.Struct {
+		return fmt.Errorf("abi: cannot unmarshal tuple in to %v", typ)
+	}
+
+	j := 0
+	for i := 0; i < len(e.Inputs); i++ {
+		input := e.Inputs[i]
+		if input.Indexed {
+			// can't read, continue
+			continue
+		} else if input.Type.T == ArrayTy {
+			// need to move this up because they read sequentially
+			j += input.Type.Size
+		}
+		marshalledValue, err := toGoType((i+j)*32, input.Type, output)
+		if err != nil {
+			return err
+		}
+		reflectValue := reflect.ValueOf(marshalledValue)
+		for j := 0; j < typ.NumField(); j++ {
+			field := typ.Field(j)
+			// TODO read tags: `abi:"fieldName"`
+			if field.Name == strings.ToUpper(e.Inputs[i].Name[:1])+e.Inputs[i].Name[1:] {
+				if err := set(value.Field(j), reflectValue, e.Inputs[i]); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (e Event) tupleReturn() bool { return len(e.Inputs) > 1 }
+
+func (e Event) singleUnpack(v interface{}, output []byte) error {
+	// make sure the passed value is a pointer
+	valueOf := reflect.ValueOf(v)
+	if reflect.Ptr != valueOf.Kind() {
+		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
+	}
+
+	if e.Inputs[0].Indexed {
+		return fmt.Errorf("abi: attempting to unpack indexed variable into element.")
+	}
+
+	value := valueOf.Elem()
+
+	marshalledValue, err := toGoType(0, e.Inputs[0].Type, output)
+	if err != nil {
+		return err
+	}
+	if err := set(value, reflect.ValueOf(marshalledValue), e.Inputs[0]); err != nil {
+		return err
+	}
+	return nil
 }

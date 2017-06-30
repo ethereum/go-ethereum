@@ -77,6 +77,68 @@ func (method Method) pack(args ...interface{}) ([]byte, error) {
 	return ret, nil
 }
 
+func (method Method) tupleUnpack(v interface{}, output []byte) error {
+	// make sure the passed value is a pointer
+	valueOf := reflect.ValueOf(v)
+	if reflect.Ptr != valueOf.Kind() {
+		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
+	}
+
+	var (
+		value = valueOf.Elem()
+		typ   = value.Type()
+	)
+
+	if value.Kind() != reflect.Struct {
+		return fmt.Errorf("abi: cannot unmarshal tuple in to %v", typ)
+	}
+
+	j := 0
+	for i := 0; i < len(method.Outputs); i++ {
+		toUnpack := method.Outputs[i]
+		if toUnpack.Type.T == ArrayTy {
+			// need to move this up because they read sequentially
+			j += toUnpack.Type.Size
+		}
+		marshalledValue, err := toGoType((i+j)*32, toUnpack.Type, output)
+		if err != nil {
+			return err
+		}
+		reflectValue := reflect.ValueOf(marshalledValue)
+		for j := 0; j < typ.NumField(); j++ {
+			field := typ.Field(j)
+			// TODO read tags: `abi:"fieldName"`
+			if field.Name == strings.ToUpper(method.Outputs[i].Name[:1])+method.Outputs[i].Name[1:] {
+				if err := set(value.Field(j), reflectValue, method.Outputs[i]); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (method Method) tupleReturn() bool { return len(method.Outputs) > 1 }
+
+func (method Method) singleUnpack(v interface{}, output []byte) error {
+	// make sure the passed value is a pointer
+	valueOf := reflect.ValueOf(v)
+	if reflect.Ptr != valueOf.Kind() {
+		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
+	}
+
+	value := valueOf.Elem()
+
+	marshalledValue, err := toGoType(0, method.Outputs[0].Type, output)
+	if err != nil {
+		return err
+	}
+	if err := set(value, reflect.ValueOf(marshalledValue), method.Outputs[0]); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Sig returns the methods string signature according to the ABI spec.
 //
 // Example
