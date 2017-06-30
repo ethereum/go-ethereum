@@ -39,23 +39,23 @@ func formatSliceString(kind reflect.Kind, sliceSize int) string {
 // type in t.
 func sliceTypeCheck(t Type, val reflect.Value) error {
 	if val.Kind() != reflect.Slice && val.Kind() != reflect.Array {
-		return typeErr(formatSliceString(t.Kind, t.SliceSize), val.Type())
+		return typeErr(formatSliceString(t.Kind, t.Size), val.Type())
 	}
 
 	if t.T == ArrayTy && val.Len() != t.Size {
 		return typeErr(formatSliceString(t.Elem.Kind, t.Size), formatSliceString(val.Type().Elem().Kind(), val.Len()))
 	}
 
-	if t.Elem.IsSlice {
+	if t.Elem.T == SliceTy {
 		if val.Len() > 0 {
 			return sliceTypeCheck(*t.Elem, val.Index(0))
 		}
-	} else if t.Elem.IsArray {
+	} else if t.Elem.T == ArrayTy {
 		return sliceTypeCheck(*t.Elem, val.Index(0))
 	}
 
 	if elemKind := val.Type().Elem().Kind(); elemKind != t.Elem.Kind {
-		return typeErr(formatSliceString(t.Elem.Kind, t.SliceSize), val.Type())
+		return typeErr(formatSliceString(t.Elem.Kind, t.Size), val.Type())
 	}
 	return nil
 }
@@ -63,7 +63,7 @@ func sliceTypeCheck(t Type, val reflect.Value) error {
 // typeCheck checks that the given reflection value can be assigned to the reflection
 // type in t.
 func typeCheck(t Type, value reflect.Value) error {
-	if t.IsSlice || t.IsArray {
+	if t.T == SliceTy || t.T == ArrayTy {
 		return sliceTypeCheck(t, value)
 	}
 

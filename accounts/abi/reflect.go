@@ -73,15 +73,9 @@ func mustArrayToByteSlice(value reflect.Value) reflect.Value {
 func set(dst, src reflect.Value, output Argument) error {
 	dstType := dst.Type()
 	srcType := src.Type()
-
 	switch {
-	case dstType.AssignableTo(src.Type()):
+	case dstType.AssignableTo(srcType):
 		dst.Set(src)
-	case dstType.Kind() == reflect.Array && srcType.Kind() == reflect.Slice:
-		if dst.Len() < output.Type.SliceSize {
-			return fmt.Errorf("abi: cannot unmarshal src (len=%d) in to dst (len=%d)", output.Type.SliceSize, dst.Len())
-		}
-		reflect.Copy(dst, src)
 	case dstType.Kind() == reflect.Interface:
 		dst.Set(src)
 	case dstType.Kind() == reflect.Ptr:

@@ -32,42 +32,42 @@ func TestSimpleMethodUnpack(t *testing.T) {
 		def              string      // definition of the **output** ABI params
 		marshalledOutput []byte      // evm return data
 		expectedOut      interface{} // the expected output
-		outVar           interface{} // the output variable (e.g. uint32, *big.Int, etc)
+		outVar           string      // the output variable (e.g. uint32, *big.Int, etc)
 		err              string      // empty or error if expected
 	}{
 		{
 			`[ { "type": "bool" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			bool(true),
-			bool(false),
+			"bool",
 			"",
 		},
 		{
 			`[ { "type": "uint32" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			uint32(1),
-			uint32(0),
+			"uint32",
 			"",
 		},
 		{
 			`[ { "type": "uint32" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			nil,
-			uint16(0),
+			"uint16",
 			"abi: cannot unmarshal uint32 in to uint16",
 		},
 		{
 			`[ { "type": "uint17" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			nil,
-			uint16(0),
+			"uint16",
 			"abi: cannot unmarshal *big.Int in to uint16",
 		},
 		{
 			`[ { "type": "uint17" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			big.NewInt(1),
-			big.NewInt(0),
+			"*big.Int",
 			"",
 		},
 
@@ -75,28 +75,28 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			`[ { "type": "int32" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			int32(1),
-			int32(0),
+			"int32",
 			"",
 		},
 		{
 			`[ { "type": "int32" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			nil,
-			int16(0),
+			"int16",
 			"abi: cannot unmarshal int32 in to int16",
 		},
 		{
 			`[ { "type": "int17" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			nil,
-			int16(0),
+			"int16",
 			"abi: cannot unmarshal *big.Int in to int16",
 		},
 		{
 			`[ { "type": "int17" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			big.NewInt(1),
-			big.NewInt(0),
+			"*big.Int",
 			"",
 		},
 
@@ -104,28 +104,42 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			`[ { "type": "address" } ]`,
 			common.Hex2Bytes("0000000000000000000000000100000000000000000000000000000000000000"),
 			common.Address{1},
-			common.Address{0},
+			"address",
 			"",
 		},
 		{
 			`[ { "type": "bytes32" } ]`,
 			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
 			[32]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-			[32]byte{},
+			"fixedBytes32",
 			"",
+		},
+		{
+			`[ { "type": "bytes" } ]`,
+			common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200100000000000000000000000000000000000000000000000000000000000000"),
+			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
+			"bytes",
+			"",
+		},
+		{
+			`[ { "type": "bytes" } ]`,
+			common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200100000000000000000000000000000000000000000000000000000000000000"),
+			nil,
+			"fixedBytes32",
+			"abi: cannot unmarshal []uint8 in to [32]uint8",
 		},
 		{
 			`[ { "type": "bytes32" } ]`,
 			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
-			common.Hash{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-			common.Hash{},
+			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
+			"hash",
 			"",
 		},
 		{
 			`[ { "type": "function" } ]`,
 			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
 			[24]byte{1},
-			[24]byte{},
+			"function",
 			"",
 		},
 	} {
@@ -136,7 +150,73 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			continue
 		}
 
-		err = abi.Unpack(&test.outVar, "method", test.marshalledOutput)
+		var outvar interface{}
+		switch test.outVar {
+		case "bool":
+			var v bool
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "uint8":
+			var v uint8
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "uint16":
+			var v uint16
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "uint32":
+			var v uint32
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "uint64":
+			var v uint64
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "int8":
+			var v int8
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "int16":
+			var v int16
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "int32":
+			var v int32
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "int64":
+			var v int64
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "*big.Int":
+			var v *big.Int
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "address":
+			var v common.Address
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "bytes":
+			var v []byte
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "fixedBytes32":
+			// this is a bit presumptive but will work for testing for now
+			var v [32]byte
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "hash":
+			var v common.Hash
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v.Bytes()[:]
+		case "function":
+			var v [24]byte
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		default:
+			t.Errorf("unsupported type '%v' please add it to the switch statement in this test", test.outVar)
+			continue
+		}
 
 		if err != nil && len(test.err) == 0 {
 			t.Errorf("%d failed. Expected no err but got: %v", i, err)
@@ -152,167 +232,165 @@ func TestSimpleMethodUnpack(t *testing.T) {
 		}
 
 		if err == nil {
-			t.Logf("expected %T, got %T for %v\n", test.expectedOut, test.outVar, i)
-			if !reflect.DeepEqual(test.expectedOut, test.outVar) {
-				t.Errorf("%d failed. Output error: expected %v, got %v", i, test.expectedOut, test.outVar)
+			if !reflect.DeepEqual(test.expectedOut, outvar) {
+				t.Errorf("%d failed. Output error: expected %v, got %v", i, test.expectedOut, outvar)
 			}
 		}
 	}
 }
-
 func TestArraysAndSlicesUnpack(t *testing.T) {
 	for i, test := range []struct {
 		def              string      // definition of the **output** ABI params
 		marshalledOutput []byte      // evm return data
 		expectedOut      interface{} // the expected output
-		outVar           interface{} // the output variable (e.g. uint32, *big.Int, etc)
+		outVar           string      // the output variable (e.g. uint32, *big.Int, etc)
 		err              string      // empty or error if expected
 	}{
 		{
 			`[ { "type": "uint8[]" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[]uint8{1, 2},
-			[]uint8{},
+			"[]uint8",
 			"",
 		},
 		{
 			`[ { "type": "uint8[][]" } ]`,
 			common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000E0000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[][]uint8{{1, 2}, {1, 2}},
-			[][]uint8{{}},
+			"[][]uint8",
 			"",
 		},
 		{
 			`[ { "type": "uint8[2]" } ]`,
 			common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[2]uint8{1, 2},
-			[2]uint8{},
+			"[2]uint8",
 			"",
 		},
 		{
 			`[ { "type": "uint16[]" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[]uint16{1, 2},
-			[]uint16{},
+			"[]uint16",
 			"",
 		},
 		{
 			`[ { "type": "uint16[2]" } ]`,
 			common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[2]uint16{1, 2},
-			[2]uint16{},
+			"[2]uint16",
 			"",
 		},
 		{
 			`[ { "type": "uint32[]" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[]uint32{1, 2},
-			[]uint32{},
+			"[]uint32",
 			"",
 		},
 		{
 			`[ { "type": "uint32[2]" } ]`,
 			common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[2]uint32{1, 2},
-			[2]uint32{},
+			"[2]uint32",
 			"",
 		},
 		{
 			`[ { "type": "uint64[]" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[]uint64{1, 2},
-			[]uint64{},
+			"[]uint64",
 			"",
 		},
 		{
 			`[ { "type": "uint64[2]" } ]`,
 			common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[2]uint64{1, 2},
-			[2]uint64{},
+			"[2]uint64",
 			"",
 		},
 		{
 			`[ { "type": "uint256[]" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[]*big.Int{big.NewInt(1), big.NewInt(2)},
-			[]*big.Int{},
+			"[]*big.Int",
 			"",
 		},
 		{
 			`[ { "type": "uint256[3]" } ]`,
 			append(pad([]byte{1}, 32, true), append(pad([]byte{2}, 32, true), pad([]byte{3}, 32, true)...)...),
 			[3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)},
-			[3]*big.Int{},
+			"[3]*big.Int",
 			"",
 		},
 		{
 			`[ { "type": "int8[]" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[]int8{1, 2},
-			[]int8{},
+			"[]int8",
 			"",
 		},
 		{
 			`[ { "type": "int8[2]" } ]`,
 			common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[2]int8{1, 2},
-			[2]int8{},
+			"[2]int8",
 			"",
 		},
 		{
 			`[ { "type": "int16[]" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[]int16{1, 2},
-			[]int16{},
+			"[]int16",
 			"",
 		},
 		{
 			`[ { "type": "int16[2]" } ]`,
 			common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[2]int16{1, 2},
-			[2]int16{},
+			"[2]int16",
 			"",
 		},
 		{
 			`[ { "type": "int32[]" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[]int32{1, 2},
-			[]int32{},
+			"[]int32",
 			"",
 		},
 		{
 			`[ { "type": "int32[2]" } ]`,
 			common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[2]int32{1, 2},
-			[2]int32{},
+			"[2]int32",
 			"",
 		},
 		{
 			`[ { "type": "int64[]" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[]int64{1, 2},
-			[]int64{},
+			"[]int64",
 			"",
 		},
 		{
 			`[ { "type": "int64[2]" } ]`,
 			common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[2]int64{1, 2},
-			[2]int64{},
+			"[2]int64",
 			"",
 		},
 		{
 			`[ { "type": "int256[]" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[]*big.Int{big.NewInt(1), big.NewInt(2)},
-			[]*big.Int{},
+			"[]*big.Int",
 			"",
 		},
 		{
 			`[ { "type": "int256[3]" } ]`,
 			common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003"),
 			[3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)},
-			[3]*big.Int{},
+			"[3]*big.Int",
 			"",
 		},
 	} {
@@ -325,7 +403,88 @@ func TestArraysAndSlicesUnpack(t *testing.T) {
 			continue
 		}
 
-		err = abi.Unpack(&test.outVar, "method", test.marshalledOutput)
+		var outvar interface{}
+		switch test.outVar {
+		case "[][]uint8":
+			var v [][]uint8
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[]uint8":
+			var v []uint8
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[2]uint8":
+			var v [2]uint8
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[]uint16":
+			var v []uint16
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[2]uint16":
+			var v [2]uint16
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[]uint32":
+			var v []uint32
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[2]uint32":
+			var v [2]uint32
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[]uint64":
+			var v []uint64
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[2]uint64":
+			var v [2]uint64
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[]int8":
+			var v []int8
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[2]int8":
+			var v [2]int8
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[]int16":
+			var v []int16
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[2]int16":
+			var v [2]int16
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[]int32":
+			var v []int32
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[2]int32":
+			var v [2]int32
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[]int64":
+			var v []int64
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[2]int64":
+			var v [2]int64
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[3]*big.Int":
+			var v [3]*big.Int
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[]*big.Int":
+			var v []*big.Int
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		default:
+			t.Errorf("unsupported type '%v' please add it to the switch statement in this test", test.outVar)
+			continue
+		}
 
 		if err != nil && len(test.err) == 0 {
 			t.Errorf("%d failed. Expected no err but got: %v", i, err)
@@ -341,8 +500,8 @@ func TestArraysAndSlicesUnpack(t *testing.T) {
 		}
 
 		if err == nil {
-			if !reflect.DeepEqual(test.expectedOut, test.outVar) {
-				t.Errorf("%d failed. Output error: expected %v, got %v", i, test.expectedOut, test.outVar)
+			if !reflect.DeepEqual(test.expectedOut, outvar) {
+				t.Errorf("%d failed. Output error: expected %v, got %v", i, test.expectedOut, outvar)
 			}
 		}
 
@@ -474,11 +633,11 @@ func TestUnmarshal(t *testing.T) {
 		t.Errorf("expected %x got %x", bytesOut, Bytes)
 	}
 
-	// marshall dynamic bytes max length 63
+	// marshall dynamic bytes max length 64
 	buff.Reset()
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020"))
 	buff.Write(common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000003f"))
-	bytesOut = common.RightPadBytes([]byte("hello"), 63)
+	bytesOut = common.RightPadBytes([]byte("hello"), 64)
 	buff.Write(bytesOut)
 
 	err = abi.Unpack(&Bytes, "bytes", buff.Bytes())
@@ -486,8 +645,8 @@ func TestUnmarshal(t *testing.T) {
 		t.Error(err)
 	}
 
-	if !bytes.Equal(Bytes, bytesOut) {
-		t.Errorf("expected %x got %x", bytesOut, Bytes)
+	if !bytes.Equal(Bytes, bytesOut[:len(bytesOut)-1]) {
+		t.Errorf("expected %x got %x", bytesOut[:len(bytesOut)-1], Bytes)
 	}
 
 	// marshal dynamic bytes output empty
@@ -537,29 +696,6 @@ func TestUnmarshal(t *testing.T) {
 	err = abi.Unpack(&Bytes, "multi", make([]byte, 64))
 	if err == nil {
 		t.Error("expected error")
-	}
-
-	// marshal mixed bytes
-	buff.Reset()
-	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000040"))
-	fixed := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001")
-	buff.Write(fixed)
-	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020"))
-	bytesOut = common.RightPadBytes([]byte("hello"), 32)
-	buff.Write(bytesOut)
-
-	var out []interface{}
-	err = abi.Unpack(&out, "mixedBytes", buff.Bytes())
-	if err != nil {
-		t.Fatal("didn't expect error:", err)
-	}
-
-	if !bytes.Equal(bytesOut, out[0].([]byte)) {
-		t.Errorf("expected %x, got %x", bytesOut, out[0])
-	}
-
-	if !bytes.Equal(fixed, out[1].([]byte)) {
-		t.Errorf("expected %x, got %x", fixed, out[1])
 	}
 
 	buff.Reset()

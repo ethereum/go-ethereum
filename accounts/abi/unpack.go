@@ -105,7 +105,7 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 
 	// this value will become our slice or our array, depending on the type
 	var refSlice reflect.Value
-	slice := output[start : size*32]
+	slice := output[start : start+size*32]
 	if t.T == SliceTy {
 		// declare our slice
 		refSlice = reflect.MakeSlice(t.Type, size, size)

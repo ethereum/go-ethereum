@@ -191,7 +191,7 @@ func TestMethodSignature(t *testing.T) {
 		t.Errorf("expected ids to match %x != %x", m.Id(), idexp)
 	}
 
-	uintt, _ := NewType("uint")
+	uintt, _ := NewType("uint256")
 	m = Method{"foo", false, []Argument{{"bar", uintt, false}}, nil}
 	exp = "foo(uint256)"
 	if m.Sig() != exp {

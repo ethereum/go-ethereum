@@ -31,7 +31,7 @@ func TestEventId(t *testing.T) {
 	}{
 		{
 			definition: `[
-			{ "type" : "event", "name" : "balance", "inputs": [{ "name" : "in", "type": "uint" }] },
+			{ "type" : "event", "name" : "balance", "inputs": [{ "name" : "in", "type": "uint256" }] },
 			{ "type" : "event", "name" : "check", "inputs": [{ "name" : "t", "type": "address" }, { "name": "b", "type": "uint256" }] }
 			]`,
 			expectations: map[string]common.Hash{

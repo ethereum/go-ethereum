@@ -184,6 +184,13 @@ func TestTypeCheck(t *testing.T) {
 		{"int240", big.NewInt(1), ""},
 		{"int248", big.NewInt(1), ""},
 		{"uint30", uint8(1), "abi: cannot use uint8 as type ptr as argument"},
+		{"uint8", uint16(1), "abi: cannot use uint16 as type uint8 as argument"},
+		{"uint8", uint32(1), "abi: cannot use uint32 as type uint8 as argument"},
+		{"uint8", uint64(1), "abi: cannot use uint64 as type uint8 as argument"},
+		{"uint8", int8(1), "abi: cannot use int8 as type uint8 as argument"},
+		{"uint8", int16(1), "abi: cannot use int16 as type uint8 as argument"},
+		{"uint8", int32(1), "abi: cannot use int32 as type uint8 as argument"},
+		{"uint8", int64(1), "abi: cannot use int64 as type uint8 as argument"},
 		{"uint16", uint16(1), ""},
 		{"uint16", uint8(1), "abi: cannot use uint8 as type uint16 as argument"},
 		{"uint16[]", []uint16{1, 2, 3}, ""},
@@ -246,7 +253,7 @@ func TestTypeCheck(t *testing.T) {
 		{"address", common.Address{}, ""},
 	} {
 		typ, err := NewType(test.typ)
-		if err != nil {
+		if err != nil && len(test.err) == 0 {
 			t.Fatal("unexpected parse error:", err)
 		} else if err != nil && len(test.err) != 0 {
 			if err.Error() != test.err {
