@@ -32,42 +32,42 @@ func TestSimpleMethodUnpack(t *testing.T) {
 		def              string      // definition of the **output** ABI params
 		marshalledOutput []byte      // evm return data
 		expectedOut      interface{} // the expected output
-		outVar           string      // the output variable (e.g. uint32, *big.Int, etc)
+		outVar           interface{} // the output variable (e.g. uint32, *big.Int, etc)
 		err              string      // empty or error if expected
 	}{
 		{
 			`[ { "type": "bool" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			bool(true),
-			"bool",
+			bool(false),
 			"",
 		},
 		{
 			`[ { "type": "uint32" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			uint32(1),
-			"uint32",
+			uint32(0),
 			"",
 		},
 		{
 			`[ { "type": "uint32" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			nil,
-			"uint16",
+			uint16(0),
 			"abi: cannot unmarshal uint32 in to uint16",
 		},
 		{
 			`[ { "type": "uint17" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			nil,
-			"uint16",
+			uint16(0),
 			"abi: cannot unmarshal *big.Int in to uint16",
 		},
 		{
 			`[ { "type": "uint17" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			big.NewInt(1),
-			"*big.Int",
+			big.NewInt(0),
 			"",
 		},
 
@@ -75,28 +75,28 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			`[ { "type": "int32" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			int32(1),
-			"int32",
+			int32(0),
 			"",
 		},
 		{
 			`[ { "type": "int32" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			nil,
-			"int16",
+			int16(0),
 			"abi: cannot unmarshal int32 in to int16",
 		},
 		{
 			`[ { "type": "int17" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			nil,
-			"int16",
+			int16(0),
 			"abi: cannot unmarshal *big.Int in to int16",
 		},
 		{
 			`[ { "type": "int17" } ]`,
 			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
 			big.NewInt(1),
-			"*big.Int",
+			big.NewInt(0),
 			"",
 		},
 
@@ -104,35 +104,28 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			`[ { "type": "address" } ]`,
 			common.Hex2Bytes("0000000000000000000000000100000000000000000000000000000000000000"),
 			common.Address{1},
-			"address",
+			common.Address{0},
 			"",
 		},
 		{
 			`[ { "type": "bytes32" } ]`,
 			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
-			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
-			"bytes",
+			[32]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			[32]byte{},
 			"",
 		},
 		{
 			`[ { "type": "bytes32" } ]`,
 			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
-			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
-			"hash",
-			"",
-		},
-		{
-			`[ { "type": "bytes32" } ]`,
-			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
-			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
-			"interface",
+			common.Hash{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			common.Hash{},
 			"",
 		},
 		{
 			`[ { "type": "function" } ]`,
 			common.Hex2Bytes("0100000000000000000000000000000000000000000000000000000000000000"),
 			[24]byte{1},
-			"function",
+			[24]byte{},
 			"",
 		},
 	} {
@@ -143,70 +136,7 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			continue
 		}
 
-		var outvar interface{}
-		switch test.outVar {
-		case "bool":
-			var v bool
-			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v
-		case "uint8":
-			var v uint8
-			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v
-		case "uint16":
-			var v uint16
-			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v
-		case "uint32":
-			var v uint32
-			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v
-		case "uint64":
-			var v uint64
-			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v
-		case "int8":
-			var v int8
-			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v
-		case "int16":
-			var v int16
-			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v
-		case "int32":
-			var v int32
-			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v
-		case "int64":
-			var v int64
-			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v
-		case "*big.Int":
-			var v *big.Int
-			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v
-		case "address":
-			var v common.Address
-			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v
-		case "bytes":
-			var v []byte
-			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v
-		case "hash":
-			var v common.Hash
-			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v.Bytes()[:]
-		case "function":
-			var v [24]byte
-			err = abi.Unpack(&v, "method", test.marshalledOutput)
-			outvar = v
-		case "interface":
-			err = abi.Unpack(&outvar, "method", test.marshalledOutput)
-		default:
-			t.Errorf("unsupported type '%v' please add it to the switch statement in this test", test.outVar)
-			continue
-		}
+		err = abi.Unpack(&test.outVar, "method", test.marshalledOutput)
 
 		if err != nil && len(test.err) == 0 {
 			t.Errorf("%d failed. Expected no err but got: %v", i, err)
@@ -222,8 +152,9 @@ func TestSimpleMethodUnpack(t *testing.T) {
 		}
 
 		if err == nil {
-			if !reflect.DeepEqual(test.expectedOut, outvar) {
-				t.Errorf("%d failed. Output error: expected %v, got %v", i, test.expectedOut, outvar)
+			t.Logf("expected %T, got %T for %v\n", test.expectedOut, test.outVar, i)
+			if !reflect.DeepEqual(test.expectedOut, test.outVar) {
+				t.Errorf("%d failed. Output error: expected %v, got %v", i, test.expectedOut, test.outVar)
 			}
 		}
 	}
@@ -418,61 +349,6 @@ func TestArraysAndSlicesUnpack(t *testing.T) {
 	}
 }
 
-func TestUnpackSetInterfaceSlice(t *testing.T) {
-	var (
-		var1 = new(uint8)
-		var2 = new(uint8)
-	)
-	out := []interface{}{var1, var2}
-	abi, err := JSON(strings.NewReader(`[{"type":"function", "name":"ints", "outputs":[{"type":"uint8"}, {"type":"uint8"}]}]`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	marshalledReturn := append(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"), common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000002")...)
-	err = abi.Unpack(&out, "ints", marshalledReturn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if *var1 != 1 {
-		t.Error("expected var1 to be 1, got", *var1)
-	}
-	if *var2 != 2 {
-		t.Error("expected var2 to be 2, got", *var2)
-	}
-
-	out = []interface{}{var1}
-	err = abi.Unpack(&out, "ints", marshalledReturn)
-
-	expErr := "abi: cannot marshal in to slices of unequal size (require: 2, got: 1)"
-	if err == nil || err.Error() != expErr {
-		t.Error("expected err:", expErr, "Got:", err)
-	}
-}
-
-func TestUnpackSetInterfaceArrayOutput(t *testing.T) {
-	var (
-		var1 = new([1]uint32)
-		var2 = new([1]uint32)
-	)
-	out := []interface{}{var1, var2}
-	abi, err := JSON(strings.NewReader(`[{"type":"function", "name":"ints", "outputs":[{"type":"uint32[1]"}, {"type":"uint32[1]"}]}]`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	marshalledReturn := append(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"), common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000002")...)
-	err = abi.Unpack(&out, "ints", marshalledReturn)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if *var1 != [1]uint32{1} {
-		t.Error("expected var1 to be [1], got", *var1)
-	}
-	if *var2 != [1]uint32{2} {
-		t.Error("expected var2 to be [2], got", *var2)
-	}
-}
-
 func TestMultiReturnWithStruct(t *testing.T) {
 	const definition = `[
 	{ "name" : "multi", "constant" : false, "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
@@ -523,101 +399,6 @@ func TestMultiReturnWithStruct(t *testing.T) {
 
 	if reversed.String != stringOut {
 		t.Error("expected String to be", stringOut, "got", reversed.String)
-	}
-}
-
-func TestMultiReturnWithSlice(t *testing.T) {
-	const definition = `[
-	{ "name" : "multi", "constant" : false, "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
-
-	abi, err := JSON(strings.NewReader(definition))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// using buff to make the code readable
-	buff := new(bytes.Buffer)
-	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"))
-	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000040"))
-	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000005"))
-	stringOut := "hello"
-	buff.Write(common.RightPadBytes([]byte(stringOut), 32))
-
-	var inter []interface{}
-	err = abi.Unpack(&inter, "multi", buff.Bytes())
-	if err != nil {
-		t.Error(err)
-	}
-
-	if len(inter) != 2 {
-		t.Fatal("expected 2 results got", len(inter))
-	}
-
-	if num, ok := inter[0].(*big.Int); !ok || num.Cmp(big.NewInt(1)) != 0 {
-		t.Error("expected index 0 to be 1 got", num)
-	}
-
-	if str, ok := inter[1].(string); !ok || str != stringOut {
-		t.Error("expected index 1 to be", stringOut, "got", str)
-	}
-}
-
-func TestMarshalArrays(t *testing.T) {
-	const definition = `[
-	{ "name" : "bytes32", "constant" : false, "outputs": [ { "type": "bytes32" } ] },
-	{ "name" : "bytes10", "constant" : false, "outputs": [ { "type": "bytes10" } ] }
-	]`
-
-	abi, err := JSON(strings.NewReader(definition))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	output := common.LeftPadBytes([]byte{1}, 32)
-
-	var bytes10 [10]byte
-	err = abi.Unpack(&bytes10, "bytes32", output)
-	if err == nil || err.Error() != "abi: cannot unmarshal src (len=32) in to dst (len=10)" {
-		t.Error("expected error or bytes32 not be assignable to bytes10:", err)
-	}
-
-	var bytes32 [32]byte
-	err = abi.Unpack(&bytes32, "bytes32", output)
-	if err != nil {
-		t.Error("didn't expect error:", err)
-	}
-	if !bytes.Equal(bytes32[:], output) {
-		t.Error("expected bytes32[31] to be 1 got", bytes32[31])
-	}
-
-	type (
-		B10 [10]byte
-		B32 [32]byte
-	)
-
-	var b10 B10
-	err = abi.Unpack(&b10, "bytes32", output)
-	if err == nil || err.Error() != "abi: cannot unmarshal src (len=32) in to dst (len=10)" {
-		t.Error("expected error or bytes32 not be assignable to bytes10:", err)
-	}
-
-	var b32 B32
-	err = abi.Unpack(&b32, "bytes32", output)
-	if err != nil {
-		t.Error("didn't expect error:", err)
-	}
-	if !bytes.Equal(b32[:], output) {
-		t.Error("expected bytes32[31] to be 1 got", bytes32[31])
-	}
-
-	output[10] = 1
-	var shortAssignLong [32]byte
-	err = abi.Unpack(&shortAssignLong, "bytes10", output)
-	if err != nil {
-		t.Error("didn't expect error:", err)
-	}
-	if !bytes.Equal(output, shortAssignLong[:]) {
-		t.Errorf("expected %x to be %x", shortAssignLong, output)
 	}
 }
 

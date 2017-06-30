@@ -196,7 +196,7 @@ func readFixedBytes(t Type, word []byte) (interface{}, error) {
 	array := reflect.New(t.Type).Elem()
 
 	reflect.Copy(array, reflect.ValueOf(word[0:t.Size]))
-	return array, nil
+	return array.Interface(), nil
 
 }
 
@@ -270,7 +270,7 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 	case HashTy:
 		return common.BytesToHash(returnOutput), nil
 	case BytesTy:
-		return returnOutput, nil
+		return output[i : i+j], nil
 	case FixedBytesTy:
 		return readFixedBytes(t, returnOutput)
 	case FunctionTy:
@@ -291,6 +291,8 @@ func lengthPrefixPointsTo(index int, output []byte) (start int, length int, err 
 		return 0, 0, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), offset+32+length)
 	}
 	start = offset + 32
+
+	//fmt.Printf("LENGTH PREFIX INFO: \nsize: %v\noffset: %v\nstart: %v\n", length, offset, start)
 	return
 }
 
