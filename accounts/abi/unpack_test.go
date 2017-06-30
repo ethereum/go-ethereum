@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func TestSimpleMethodUnpack(t *testing.T) {
+func TestSingleValueUnpack(t *testing.T) {
 	for i, test := range []struct {
 		def              string      // definition of the **output** ABI params
 		marshalledOutput []byte      // evm return data
@@ -127,6 +127,13 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			nil,
 			"fixedBytes32",
 			"abi: cannot unmarshal []uint8 in to [32]uint8",
+		},
+		{
+			`[ { "type": "bytes32" } ]`,
+			common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200100000000000000000000000000000000000000000000000000000000000000"),
+			nil,
+			"bytes",
+			"abi: cannot unmarshal [32]uint8 in to []uint8",
 		},
 		{
 			`[ { "type": "bytes32" } ]`,
@@ -238,7 +245,7 @@ func TestSimpleMethodUnpack(t *testing.T) {
 		}
 	}
 }
-func TestArraysAndSlicesUnpack(t *testing.T) {
+func TestSingleArraysAndSlicesUnpack(t *testing.T) {
 	for i, test := range []struct {
 		def              string      // definition of the **output** ABI params
 		marshalledOutput []byte      // evm return data
@@ -254,6 +261,14 @@ func TestArraysAndSlicesUnpack(t *testing.T) {
 			"",
 		},
 		{
+			`[ { "type": "uint8[2]" } ]`,
+			common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
+			[2]uint8{1, 2},
+			"[2]uint8",
+			"",
+		},
+		// multi dimensional, if these pass, all types that don't require length prefix should pass
+		{
 			`[ { "type": "uint8[][]" } ]`,
 			common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000E0000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
 			[][]uint8{{1, 2}, {1, 2}},
@@ -261,10 +276,24 @@ func TestArraysAndSlicesUnpack(t *testing.T) {
 			"",
 		},
 		{
-			`[ { "type": "uint8[2]" } ]`,
-			common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
-			[2]uint8{1, 2},
-			"[2]uint8",
+			`[ { "type": "uint8[2][2]" } ]`,
+			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
+			[2][2]uint8{{1, 2}, {1, 2}},
+			"[2][2]uint8",
+			"",
+		},
+		{
+			`[ { "type": "uint8[][2]" } ]`,
+			common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001"),
+			[2][]uint8{{1}, {1}},
+			"[2][]uint8",
+			"",
+		},
+		{
+			`[ { "type": "uint8[2][]" } ]`,
+			common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002"),
+			[][2]uint8{{1, 2}},
+			"[][2]uint8",
 			"",
 		},
 		{
@@ -394,8 +423,6 @@ func TestArraysAndSlicesUnpack(t *testing.T) {
 			"",
 		},
 	} {
-		//t.Log(test.marshalledOutput)
-
 		abiDefinition := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
 		abi, err := JSON(strings.NewReader(abiDefinition))
 		if err != nil {
@@ -407,6 +434,26 @@ func TestArraysAndSlicesUnpack(t *testing.T) {
 		switch test.outVar {
 		case "[][]uint8":
 			var v [][]uint8
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[2][2]uint8":
+			var v [2][2]uint8
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[][2]uint8":
+			var v [][2]uint8
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[2][]uint8":
+			var v [2][]uint8
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[2][2][2]uint8":
+			var v [2][2][2]uint8
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "[][][]uint8":
+			var v [][][]uint8
 			err = abi.Unpack(&v, "method", test.marshalledOutput)
 			outvar = v
 		case "[]uint8":

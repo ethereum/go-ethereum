@@ -25,12 +25,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// unpacker is a utility interface that enables us to have
+// abstraction between events and methods and also to properly
+// "unpack" them; e.g. events use Inputs, methods use Outputs.
 type unpacker interface {
 	tupleUnpack(v interface{}, output []byte) error
 	singleUnpack(v interface{}, output []byte) error
-	tupleReturn() bool
+	isTupleReturn() bool
 }
 
+// reads the integer based on its kind
 func readInteger(kind reflect.Kind, b []byte) interface{} {
 	switch kind {
 	case reflect.Uint8:
@@ -54,6 +58,7 @@ func readInteger(kind reflect.Kind, b []byte) interface{} {
 	}
 }
 
+// reads a bool
 func readBool(word []byte) (bool, error) {
 	if len(word) != 32 {
 		return false, fmt.Errorf("abi: fatal error: incorrect word length")
@@ -74,6 +79,8 @@ func readBool(word []byte) (bool, error) {
 	}
 }
 
+// A function type is simply the address with the function selection signature at the end.
+// This enforces that standard by always presenting it as a 24-array (address + sig = 24 bytes)
 func readFunctionType(t Type, word []byte) (funcTy [24]byte, err error) {
 	if t.T != FunctionTy {
 		return [24]byte{}, fmt.Errorf("abi: invalid type in call to make function type byte array.")
@@ -86,6 +93,7 @@ func readFunctionType(t Type, word []byte) (funcTy [24]byte, err error) {
 	return
 }
 
+// through reflection, creates a fixed array to be read from
 func readFixedBytes(t Type, word []byte) (interface{}, error) {
 	if t.T != FixedBytesTy {
 		return nil, fmt.Errorf("abi: invalid type in call to make fixed byte array.")
@@ -98,6 +106,7 @@ func readFixedBytes(t Type, word []byte) (interface{}, error) {
 
 }
 
+// iteratively unpack elements
 func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) {
 	if start+32*size > len(output) {
 		return nil, fmt.Errorf("abi: cannot marshal in to go array: offset %d would go over slice boundary (len=%d)", len(output), start+32*size)
@@ -106,6 +115,7 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 	// this value will become our slice or our array, depending on the type
 	var refSlice reflect.Value
 	slice := output[start : start+size*32]
+
 	if t.T == SliceTy {
 		// declare our slice
 		refSlice = reflect.MakeSlice(t.Type, size, size)
@@ -117,6 +127,10 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 	}
 
 	for i, j := start, 0; j*32 < len(slice); i, j = i+32, j+1 {
+		// this corrects the arrangement so that we get all the underlying array values
+		if t.Elem.T == ArrayTy && j != 0 {
+			i = start + t.Elem.Size*32*j
+		}
 		inter, err := toGoType(i, *t.Elem, output)
 		if err != nil {
 			return nil, err
@@ -129,36 +143,36 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 	return refSlice.Interface(), nil
 }
 
-// toGoType parses the input and casts it to the proper type defined by the ABI
-// argument in T.
+// toGoType parses the output bytes and recursively assigns the value of these bytes
+// into a go type with accordance with the ABI spec.
 func toGoType(index int, t Type, output []byte) (interface{}, error) {
 	if index+32 > len(output) {
 		return nil, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), index+32)
 	}
 
-	// Parse the given index output and check whether we need to read
-	// a different offset and length based on the type (i.e. string, bytes)
 	var (
 		returnOutput []byte
-		i, j         int
+		begin, end   int
 		err          error
 	)
 
+	// if we require a length prefix, find the beginning word and size returned.
 	if t.requiresLengthPrefix() {
-		i, j, err = lengthPrefixPointsTo(index, output)
+		begin, end, err = lengthPrefixPointsTo(index, output)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		returnOutput = output[index : index+32]
 	}
+
 	switch t.T {
 	case SliceTy:
-		return forEachUnpack(t, output, i, j)
+		return forEachUnpack(t, output, begin, end)
 	case ArrayTy:
-		return forEachUnpack(t, output, i, t.Size)
+		return forEachUnpack(t, output, index, t.Size)
 	case StringTy: // variable arrays are written at the end of the return bytes
-		return string(output[i : i+j]), nil
+		return string(output[begin : begin+end]), nil
 	case IntTy, UintTy:
 		return readInteger(t.Kind, returnOutput), nil
 	case BoolTy:
@@ -168,7 +182,7 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 	case HashTy:
 		return common.BytesToHash(returnOutput), nil
 	case BytesTy:
-		return output[i : i+j], nil
+		return output[begin : begin+end], nil
 	case FixedBytesTy:
 		return readFixedBytes(t, returnOutput)
 	case FunctionTy:
@@ -194,6 +208,7 @@ func lengthPrefixPointsTo(index int, output []byte) (start int, length int, err 
 	return
 }
 
+// checks for proper formatting of byte output
 func bytesAreProper(output []byte) error {
 	if len(output) == 0 {
 		return fmt.Errorf("abi: unmarshalling empty output")

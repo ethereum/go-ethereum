@@ -77,6 +77,7 @@ func (method Method) pack(args ...interface{}) ([]byte, error) {
 	return ret, nil
 }
 
+// unpacks a method return tuple into a struct of corresponding go types
 func (method Method) tupleUnpack(v interface{}, output []byte) error {
 	// make sure the passed value is a pointer
 	valueOf := reflect.ValueOf(v)
@@ -118,7 +119,7 @@ func (method Method) tupleUnpack(v interface{}, output []byte) error {
 	return nil
 }
 
-func (method Method) tupleReturn() bool { return len(method.Outputs) > 1 }
+func (method Method) isTupleReturn() bool { return len(method.Outputs) > 1 }
 
 func (method Method) singleUnpack(v interface{}, output []byte) error {
 	// make sure the passed value is a pointer
