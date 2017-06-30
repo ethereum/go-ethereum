@@ -725,12 +725,14 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB, accounts []common.A
 			pool.promoteTx(addr, hash, tx)
 		}
 		// Drop all transactions over the allowed limit
-		for _, tx := range list.Cap(int(pool.config.AccountQueue)) {
-			hash := tx.Hash()
-			delete(pool.all, hash)
-			pool.priced.Removed()
-			queuedRateLimitCounter.Inc(1)
-			log.Trace("Removed cap-exceeding queued transaction", "hash", hash)
+		if !pool.locals.containsAddress(addr) {
+			for _, tx := range list.Cap(int(pool.config.AccountQueue)) {
+				hash := tx.Hash()
+				delete(pool.all, hash)
+				pool.priced.Removed()
+				queuedRateLimitCounter.Inc(1)
+				log.Trace("Removed cap-exceeding queued transaction", "hash", hash)
+			}
 		}
 		queued += uint64(list.Len())
 
@@ -815,7 +817,10 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB, accounts []common.A
 		// Sort all accounts with queued transactions by heartbeat
 		addresses := make(addresssByHeartbeat, 0, len(pool.queue))
 		for addr := range pool.queue {
-			addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
+			// Don't drop locals
+			if !pool.locals.containsAddress(addr) {
+				addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
+			}
 		}
 		sort.Sort(addresses)
 
