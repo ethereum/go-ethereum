@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/ripemd160"
 )
@@ -76,14 +75,12 @@ func (c *ecrecover) Run(in []byte) ([]byte, error) {
 
 	// tighter sig s values in homestead only apply to tx sigs
 	if !allZero(in[32:63]) || !crypto.ValidateSignatureValues(v, r, s, false) {
-		log.Trace("ECRECOVER error: v, r or s value invalid")
 		return nil, nil
 	}
 	// v needs to be at the end for libsecp256k1
 	pubKey, err := crypto.Ecrecover(in[:32], append(in[64:128], v))
 	// make sure the public key is a valid one
 	if err != nil {
-		log.Trace("ECRECOVER failed", "err", err)
 		return nil, nil
 	}
 

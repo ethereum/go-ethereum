@@ -19,12 +19,10 @@ package vm
 import (
 	"fmt"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -122,18 +120,11 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 	)
 	contract.Input = input
 
-	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
 	defer func() {
 		if err != nil && in.cfg.Debug {
-			// XXX For debugging
-			//fmt.Printf("%04d: %8v    cost = %-8d stack = %-8d ERR = %v\n", pc, op, cost, stack.len(), err)
 			in.cfg.Tracer.CaptureState(in.evm, pc, op, contract.Gas, cost, mem, stack, contract, in.evm.depth, err)
 		}
 	}()
-
-	log.Debug("interpreter running contract", "hash", codehash[:])
-	tstart := time.Now()
-	defer log.Debug("interpreter finished running contract", "hash", codehash[:], "elapsed", time.Since(tstart))
 
 	// The Interpreter main run loop (contextual). This loop runs until either an
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
@@ -190,8 +181,6 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		if in.cfg.Debug {
 			in.cfg.Tracer.CaptureState(in.evm, pc, op, contract.Gas, cost, mem, stack, contract, in.evm.depth, err)
 		}
-		// XXX For debugging
-		//fmt.Printf("%04d: %8v    cost = %-8d stack = %-8d\n", pc, op, cost, stack.len())
 
 		// execute the operation
 		res, err := operation.execute(&pc, in.evm, contract, mem, stack)
