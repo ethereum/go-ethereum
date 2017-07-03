@@ -895,26 +895,13 @@ func (pc *peerConnection) RequestHeadersByNumber(origin uint64, amount int, skip
 	return nil
 }
 
-func (pc *peerConnection) RequestBodies(hashes []common.Hash) error {
-	panic("RequestBodies not supported in light client mode sync")
-
-}
-func (pc *peerConnection) RequestReceipts(hashes []common.Hash) error {
-	panic("RequestReceipts not supported in light client mode sync")
-
-}
-
-func (pc *peerConnection) RequestNodeData(hashes []common.Hash) error {
-	panic("RequestNodeData not supported in light client mode sync")
-}
-
 func (d *downloaderPeerNotify) registerPeer(p *peer) {
 	pm := (*ProtocolManager)(d)
 	pc := &peerConnection{
 		manager: pm,
 		peer:    p,
 	}
-	pm.downloader.RegisterPeer(p.id, ethVersion, pc)
+	pm.downloader.RegisterLightPeer(p.id, ethVersion, pc)
 }
 
 func (d *downloaderPeerNotify) unregisterPeer(p *peer) {

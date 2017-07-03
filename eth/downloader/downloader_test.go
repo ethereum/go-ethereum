@@ -288,7 +288,7 @@ func (dl *downloadTester) CurrentFastBlock() *types.Block {
 	return dl.genesis
 }
 
-// FastSynccommitHead manually sets the head block to a given hash.
+// FastSyncCommitHead manually sets the head block to a given hash.
 func (dl *downloadTester) FastSyncCommitHead(hash common.Hash) error {
 	// For now only check that the state trie is correct
 	if block := dl.GetBlockByHash(hash); block != nil {

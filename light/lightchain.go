@@ -389,21 +389,6 @@ func (self *LightChain) CurrentHeader() *types.Header {
 	return self.hc.CurrentHeader()
 }
 
-// CurrentBlock exists for interface compatibility and always returns nil
-func (self *LightChain) CurrentBlock() *types.Block {
-	return nil
-}
-
-// CurrentFastBlock exists for interface compatibility and always returns nil
-func (self *LightChain) CurrentFastBlock() *types.Block {
-	return nil
-}
-
-// FastSyncCommitHead exists for interface compatibility and does nothing
-func (self *LightChain) FastSyncCommitHead(h common.Hash) error {
-	return nil
-}
-
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
 func (self *LightChain) GetTd(hash common.Hash, number uint64) *big.Int {
