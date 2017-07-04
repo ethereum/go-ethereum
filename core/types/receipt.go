@@ -87,27 +87,42 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 	if err != nil {
 		return err
 	}
-	// Attempt to deserialize into a Metropolis format
-	var metro metropolisReceiptRLP
-	if err = rlp.DecodeBytes(raw, &metro); err == nil { // Keep the error in the outer scope!
+	list, _, err := rlp.SplitList(raw)
+	if err != nil {
+		return err
+	}
+	items, err := rlp.CountValues(list)
+	if err != nil {
+		return err
+	}
+	// Deserialize based on the number of content items
+	switch items {
+	case 3:
+		// Metropolis receipts have 3 components
+		var metro metropolisReceiptRLP
+		if err := rlp.DecodeBytes(raw, &metro); err != nil {
+			return err
+		}
 		r.CumulativeGasUsed = metro.CumulativeGasUsed
 		r.Bloom = metro.Bloom
 		r.Logs = metro.Logs
-
 		return nil
-	}
-	// Metropolis deserialization failed, attempt homestead
-	var home homesteadReceiptRLP
-	if err = rlp.DecodeBytes(raw, &home); err == nil { // Keep the error in the outer scope!
+
+	case 4:
+		// Homestead receipts have 4 components
+		var home homesteadReceiptRLP
+		if err := rlp.DecodeBytes(raw, &home); err != nil {
+			return err
+		}
 		r.PostState = home.PostState[:]
 		r.CumulativeGasUsed = home.CumulativeGasUsed
 		r.Bloom = home.Bloom
 		r.Logs = home.Logs
-
 		return nil
+
+	default:
+		return fmt.Errorf("invalid receipt components: %v", items)
 	}
-	// All decoders failed, return the last error
-	return err
 }
 
 // String implements the Stringer interface.
