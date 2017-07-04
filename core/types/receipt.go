@@ -48,6 +48,8 @@ type receiptMarshaling struct {
 	GasUsed           *hexutil.Big
 }
 
+// homesteadReceiptRLP contains the receipt's Homestead consensus fields, used
+// during RLP serialization.
 type homesteadReceiptRLP struct {
 	PostState         []byte
 	CumulativeGasUsed *big.Int
@@ -55,6 +57,8 @@ type homesteadReceiptRLP struct {
 	Logs              []*Log
 }
 
+// metropolisReceiptRLP contains the receipt's Metropolis consensus fields, used
+// during RLP serialization.
 type metropolisReceiptRLP struct {
 	CumulativeGasUsed *big.Int
 	Bloom             Bloom
@@ -67,34 +71,50 @@ func NewReceipt(root []byte, cumulativeGasUsed *big.Int) *Receipt {
 }
 
 // EncodeRLP implements rlp.Encoder, and flattens the consensus fields of a receipt
-// into an RLP stream.
+// into an RLP stream. If no post state is present, metropolis fork is assumed.
 func (r *Receipt) EncodeRLP(w io.Writer) error {
 	if r.PostState == nil {
 		return rlp.Encode(w, &metropolisReceiptRLP{r.CumulativeGasUsed, r.Bloom, r.Logs})
-	} else {
-		return rlp.Encode(w, &homesteadReceiptRLP{r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs})
 	}
+	return rlp.Encode(w, &homesteadReceiptRLP{r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs})
 }
 
 // DecodeRLP implements rlp.Decoder, and loads the consensus fields of a receipt
 // from an RLP stream.
 func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
+	// Load the raw bytes since we have multiple possible formats
 	raw, err := s.Raw()
 	if err != nil {
 		return err
 	}
-	var hr homesteadReceiptRLP
-	var mr metropolisReceiptRLP
-	if err = rlp.DecodeBytes(raw, &mr); err == nil {
-		r.CumulativeGasUsed, r.Bloom, r.Logs = mr.CumulativeGasUsed, mr.Bloom, mr.Logs
-	} else if err = rlp.DecodeBytes(raw, &hr); err == nil {
-		r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs = hr.PostState[:], hr.CumulativeGasUsed, hr.Bloom, hr.Logs
+	// Attempt to deserialize into a Metropolis format
+	var metro metropolisReceiptRLP
+	if err = rlp.DecodeBytes(raw, &metro); err == nil { // Keep the error in the outer scope!
+		r.CumulativeGasUsed = metro.CumulativeGasUsed
+		r.Bloom = metro.Bloom
+		r.Logs = metro.Logs
+
+		return nil
 	}
+	// Metropolis deserialization failed, attempt homestead
+	var home homesteadReceiptRLP
+	if err = rlp.DecodeBytes(raw, &home); err == nil { // Keep the error in the outer scope!
+		r.PostState = home.PostState[:]
+		r.CumulativeGasUsed = home.CumulativeGasUsed
+		r.Bloom = home.Bloom
+		r.Logs = home.Logs
+
+		return nil
+	}
+	// All decoders failed, return the last error
 	return err
 }
 
 // String implements the Stringer interface.
 func (r *Receipt) String() string {
+	if r.PostState == nil {
+		return fmt.Sprintf("receipt{cgas=%v bloom=%x logs=%v}", r.CumulativeGasUsed, r.Bloom, r.Logs)
+	}
 	return fmt.Sprintf("receipt{med=%x cgas=%v bloom=%x logs=%v}", r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs)
 }
 
