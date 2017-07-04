@@ -18,23 +18,29 @@ package params
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
+	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3") // Mainnet genesis hash to enforce below configs on
+	TestnetGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d") // Testnet genesis hash to enforce below configs on
+)
+
+var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		ChainId:         MainNetChainID,
-		HomesteadBlock:  MainNetHomesteadBlock,
-		DAOForkBlock:    MainNetDAOForkBlock,
+		ChainId:         big.NewInt(1),
+		HomesteadBlock:  big.NewInt(1150000),
+		DAOForkBlock:    big.NewInt(1920000),
 		DAOForkSupport:  true,
-		EIP150Block:     MainNetHomesteadGasRepriceBlock,
-		EIP150Hash:      MainNetHomesteadGasRepriceHash,
-		EIP155Block:     MainNetSpuriousDragon,
-		EIP158Block:     MainNetSpuriousDragon,
-		MetropolisBlock: MainNetMetropolisBlock,
+		EIP150Block:     big.NewInt(2463000),
+		EIP150Hash:      common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:     big.NewInt(2675000),
+		EIP158Block:     big.NewInt(2675000),
+		MetropolisBlock: big.NewInt(math.MaxInt64), // Don't enable yet
 
 		Ethash: new(EthashConfig),
 	}
@@ -49,7 +55,7 @@ var (
 		EIP150Hash:      common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 		EIP155Block:     big.NewInt(10),
 		EIP158Block:     big.NewInt(10),
-		MetropolisBlock: TestNetMetropolisBlock,
+		MetropolisBlock: big.NewInt(math.MaxInt64), // Don't enable yet
 
 		Ethash: new(EthashConfig),
 	}
@@ -64,7 +70,7 @@ var (
 		EIP150Hash:      common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
 		EIP155Block:     big.NewInt(3),
 		EIP158Block:     big.NewInt(3),
-		MetropolisBlock: TestNetMetropolisBlock,
+		MetropolisBlock: big.NewInt(math.MaxInt64), // Don't enable yet
 
 		Clique: &CliqueConfig{
 			Period: 15,
@@ -80,7 +86,7 @@ var (
 	// means that all fields must be set at all times. This forces
 	// anyone adding flags to the config to also have to set these
 	// fields.
-	AllProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), new(EthashConfig), nil}
+	AllProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(math.MaxInt64) /*disabled*/, new(EthashConfig), nil}
 	TestChainConfig    = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
 	TestRules          = TestChainConfig.Rules(new(big.Int))
 )
