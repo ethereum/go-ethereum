@@ -321,7 +321,8 @@ func (s *Server) StartMocker(w http.ResponseWriter, req *http.Request) {
 	mockerid := req.Context().Value("mock").(string)
 
 	if len(s.Mockers) == 0 {
-		http.Error(w, "mocker not configured", http.StatusInternalServerError)
+		//don't require a mocker to be present
+		s.JSON(w, http.StatusNotModified, "No mocker configured")
 		return
 	}
 
