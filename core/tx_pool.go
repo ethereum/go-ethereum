@@ -99,6 +99,8 @@ type stateFn func() (*state.StateDB, error)
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
 type TxPoolConfig struct {
+	NoLocals bool // Whether local transaction handling should be disabled
+
 	PriceLimit uint64 // Minimum gas price to enforce for acceptance into the pool
 	PriceBump  uint64 // Minimum price bump percentage to replace an already existing transaction (nonce)
 
@@ -394,7 +396,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Drop non-local transactions under our own minimal accepted gas price
 	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
-	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
+	if (!local || pool.config.NoLocals) && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrUnderpriced
 	}
 	// Ensure the transaction adheres to nonce ordering
@@ -480,7 +482,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if local {
+	if local && !pool.config.NoLocals {
 		pool.locals.add(from)
 	}
 	log.Trace("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To())
