@@ -63,7 +63,6 @@ type Ethereum struct {
 	stopDbUpgrade func()    // stop chain db sequential key upgrade
 	// Handlers
 	txPool          *core.TxPool
-	txMu            sync.Mutex
 	blockchain      *core.BlockChain
 	protocolManager *ProtocolManager
 	lesServer       LesServer

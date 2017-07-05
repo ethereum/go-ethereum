@@ -116,28 +116,18 @@ func (b *EthApiBackend) GetEVM(ctx context.Context, msg core.Message, state *sta
 }
 
 func (b *EthApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
 	return b.eth.txPool.AddLocal(signedTx)
 }
 
 func (b *EthApiBackend) RemoveTx(txHash common.Hash) {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
 	b.eth.txPool.Remove(txHash)
 }
 
 func (b *EthApiBackend) GetPoolTransactions() (types.Transactions, error) {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
 	pending, err := b.eth.txPool.Pending()
 	if err != nil {
 		return nil, err
 	}
-
 	var txs types.Transactions
 	for _, batch := range pending {
 		txs = append(txs, batch...)
@@ -146,30 +136,18 @@ func (b *EthApiBackend) GetPoolTransactions() (types.Transactions, error) {
 }
 
 func (b *EthApiBackend) GetPoolTransaction(hash common.Hash) *types.Transaction {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
 	return b.eth.txPool.Get(hash)
 }
 
 func (b *EthApiBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
 	return b.eth.txPool.State().GetNonce(addr), nil
 }
 
 func (b *EthApiBackend) Stats() (pending int, queued int) {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
 	return b.eth.txPool.Stats()
 }
 
 func (b *EthApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
 	return b.eth.TxPool().Content()
 }
 
