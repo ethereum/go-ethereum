@@ -133,8 +133,8 @@ public class AndroidTest extends InstrumentationTestCase {
 			Transaction postEIP155 = new Transaction(postEIP155RLP);
 
 			preEIP155.getFrom(null);           // Homestead should accept homestead
-			preEIP155.getFrom(new BigInt(4));  // EIP155 should accept homestead (missing chain ID)
-			postEIP155.getFrom(new BigInt(4)); // EIP155 should accept EIP 155
+			preEIP155.getFrom(new BigInt(4));  // Homestead should accept EIP155 (missing chain ID)
+			postEIP155.getFrom(new BigInt(4)); // EIP155 should accept EIP155
 
 			try {
 				postEIP155.getFrom(null);
