@@ -45,7 +45,7 @@ var (
 	errNotRegistered     = errors.New("peer is not registered")
 )
 
-// peer represents an active peer from which hashes and blocks are retrieved.
+// peerConnection represents an active peer from which hashes and blocks are retrieved.
 type peerConnection struct {
 	id string // Unique identifier of the peer
 
@@ -75,12 +75,14 @@ type peerConnection struct {
 	lock    sync.RWMutex
 }
 
+// LightPeer encapsulates the methods required to synchronise with a remote light peer.
 type LightPeer interface {
 	Head() (common.Hash, *big.Int)
 	RequestHeadersByHash(common.Hash, int, int, bool) error
 	RequestHeadersByNumber(uint64, int, int, bool) error
 }
 
+// Peer encapsulates the methods required to synchronise with a remote full peer.
 type Peer interface {
 	LightPeer
 	RequestBodies([]common.Hash) error
@@ -110,7 +112,7 @@ func (w *lightPeerWrapper) RequestNodeData([]common.Hash) error {
 	panic("RequestNodeData not supported in light client mode sync")
 }
 
-// newPeerConnection creates a new downloader peer
+// newPeerConnection creates a new downloader peer.
 func newPeerConnection(id string, version int, peer Peer, logger log.Logger) *peerConnection {
 	return &peerConnection{
 		id:      id,
