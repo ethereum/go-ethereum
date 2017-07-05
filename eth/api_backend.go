@@ -119,8 +119,7 @@ func (b *EthApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	b.eth.txMu.Lock()
 	defer b.eth.txMu.Unlock()
 
-	b.eth.txPool.SetLocal(signedTx)
-	return b.eth.txPool.Add(signedTx)
+	return b.eth.txPool.AddLocal(signedTx)
 }
 
 func (b *EthApiBackend) RemoveTx(txHash common.Hash) {
