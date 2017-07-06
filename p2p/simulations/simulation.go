@@ -39,9 +39,18 @@ func (s *Simulation) Run(ctx context.Context, step *Step) (result *StepResult) {
 	}
 
 	// wait for all node expectations to either pass, error or timeout
-	for len(result.Passes) < len(step.Expect.Nodes) {
+	nodes := make(map[discover.NodeID]struct{}, len(step.Expect.Nodes))
+	for _, id := range step.Expect.Nodes {
+		nodes[id] = struct{}{}
+	}
+	for len(result.Passes) < len(nodes) {
 		select {
 		case id := <-step.Trigger:
+			// skip if we aren't checking the node
+			if _, ok := nodes[id]; !ok {
+				continue
+			}
+
 			// skip if the node has already passed
 			if _, ok := result.Passes[id]; ok {
 				continue

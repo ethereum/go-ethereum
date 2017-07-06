@@ -20,6 +20,9 @@ import (
 type testService struct {
 	id discover.NodeID
 
+	// peerCount is incremented once a peer handshake has been performed
+	peerCount int64
+
 	// state stores []byte used to test creating and loading snapshots
 	state atomic.Value
 }
@@ -43,7 +46,10 @@ func (t *testService) APIs() []rpc.API {
 	return []rpc.API{{
 		Namespace: "test",
 		Version:   "1.0",
-		Service:   &TestAPI{state: &t.state},
+		Service: &TestAPI{
+			state:     &t.state,
+			peerCount: &t.peerCount,
+		},
 	}}
 }
 
@@ -56,6 +62,21 @@ func (t *testService) Stop() error {
 }
 
 func (t *testService) Run(_ *p2p.Peer, rw p2p.MsgReadWriter) error {
+	// perform a handshake using an empty struct
+	errc := make(chan error, 2)
+	go func() { errc <- p2p.Send(rw, 0, struct{}{}) }()
+	go func() { errc <- p2p.ExpectMsg(rw, 0, struct{}{}) }()
+	for i := 0; i < 2; i++ {
+		if err := <-errc; err != nil {
+			return err
+		}
+	}
+
+	// track the peer
+	atomic.AddInt64(&t.peerCount, 1)
+	defer atomic.AddInt64(&t.peerCount, -1)
+
+	// block until the peer is dropped
 	for {
 		_, err := rw.ReadMsg()
 		if err != nil {
@@ -68,12 +89,20 @@ func (t *testService) Snapshot() ([]byte, error) {
 	return t.state.Load().([]byte), nil
 }
 
-// TestAPI provides a simple API to get and increment a counter and to
-// subscribe to increment events
+// TestAPI provides a simple API to:
+// * get the peer count
+// * get and set an arbitrary state byte slice
+// * get and increment a counter
+// * subscribe to counter increment events
 type TestAPI struct {
-	state   *atomic.Value
-	counter int64
-	feed    event.Feed
+	state     *atomic.Value
+	peerCount *int64
+	counter   int64
+	feed      event.Feed
+}
+
+func (t *TestAPI) PeerCount() int64 {
+	return atomic.LoadInt64(t.peerCount)
 }
 
 func (t *TestAPI) Get() int64 {
