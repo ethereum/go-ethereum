@@ -477,7 +477,7 @@ func (l *txPricedList) Underpriced(tx *types.Transaction, local *accountSet) boo
 }
 
 // Discard finds a number of most underpriced transactions, removes them from the
-// priced list and returs them for further removal from the entire pool.
+// priced list and returns them for further removal from the entire pool.
 func (l *txPricedList) Discard(count int, local *accountSet) types.Transactions {
 	drop := make(types.Transactions, 0, count) // Remote underpriced transactions to drop
 	save := make(types.Transactions, 0, 64)    // Local underpriced transactions to keep

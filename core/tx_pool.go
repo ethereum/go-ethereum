@@ -716,7 +716,6 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB, accounts []common.A
 		}
 	}
 	// Iterate over all accounts and promote any executable transactions
-	queued := uint64(0)
 	for _, addr := range accounts {
 		list := pool.queue[addr]
 		if list == nil {
@@ -754,8 +753,6 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB, accounts []common.A
 				log.Trace("Removed cap-exceeding queued transaction", "hash", hash)
 			}
 		}
-		queued += uint64(list.Len())
-
 		// Delete the entire queue entry if it became empty.
 		if list.Empty() {
 			delete(pool.queue, addr)
@@ -833,19 +830,22 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB, accounts []common.A
 		pendingRateLimitCounter.Inc(int64(pendingBeforeCap - pending))
 	}
 	// If we've queued more transactions than the hard limit, drop oldest ones
+	queued := uint64(0)
+	for _, list := range pool.queue {
+		queued += uint64(list.Len())
+	}
 	if queued > pool.config.GlobalQueue {
 		// Sort all accounts with queued transactions by heartbeat
 		addresses := make(addresssByHeartbeat, 0, len(pool.queue))
 		for addr := range pool.queue {
-			// Don't drop locals
-			if !pool.locals.contains(addr) {
+			if !pool.locals.contains(addr) { // don't drop locals
 				addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
 			}
 		}
 		sort.Sort(addresses)
 
-		// Drop transactions until the total is below the limit
-		for drop := queued - pool.config.GlobalQueue; drop > 0; {
+		// Drop transactions until the total is below the limit or only locals remain
+		for drop := queued - pool.config.GlobalQueue; drop > 0 && len(addresses) > 0; {
 			addr := addresses[len(addresses)-1]
 			list := pool.queue[addr.address]
 
