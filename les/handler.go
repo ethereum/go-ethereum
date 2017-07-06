@@ -206,9 +206,7 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, network
 	}
 
 	if lightSync {
-		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, blockchain.HasHeader, nil, blockchain.GetHeaderByHash,
-			nil, blockchain.CurrentHeader, nil, nil, nil, blockchain.GetTdByHash,
-			blockchain.InsertHeaderChain, nil, nil, blockchain.Rollback, removePeer)
+		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, nil, blockchain, removePeer)
 		manager.peers.notify((*downloaderPeerNotify)(manager))
 		manager.fetcher = newLightFetcher(manager)
 	}
@@ -840,57 +838,70 @@ func (self *ProtocolManager) NodeInfo() *eth.EthNodeInfo {
 // downloaderPeerNotify implements peerSetNotify
 type downloaderPeerNotify ProtocolManager
 
+type peerConnection struct {
+	manager *ProtocolManager
+	peer    *peer
+}
+
+func (pc *peerConnection) Head() (common.Hash, *big.Int) {
+	return pc.peer.HeadAndTd()
+}
+
+func (pc *peerConnection) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
+	reqID := genReqID()
+	rq := &distReq{
+		getCost: func(dp distPeer) uint64 {
+			peer := dp.(*peer)
+			return peer.GetRequestCost(GetBlockHeadersMsg, amount)
+		},
+		canSend: func(dp distPeer) bool {
+			return dp.(*peer) == pc.peer
+		},
+		request: func(dp distPeer) func() {
+			peer := dp.(*peer)
+			cost := peer.GetRequestCost(GetBlockHeadersMsg, amount)
+			peer.fcServer.QueueRequest(reqID, cost)
+			return func() { peer.RequestHeadersByHash(reqID, cost, origin, amount, skip, reverse) }
+		},
+	}
+	_, ok := <-pc.manager.reqDist.queue(rq)
+	if !ok {
+		return ErrNoPeers
+	}
+	return nil
+}
+
+func (pc *peerConnection) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
+	reqID := genReqID()
+	rq := &distReq{
+		getCost: func(dp distPeer) uint64 {
+			peer := dp.(*peer)
+			return peer.GetRequestCost(GetBlockHeadersMsg, amount)
+		},
+		canSend: func(dp distPeer) bool {
+			return dp.(*peer) == pc.peer
+		},
+		request: func(dp distPeer) func() {
+			peer := dp.(*peer)
+			cost := peer.GetRequestCost(GetBlockHeadersMsg, amount)
+			peer.fcServer.QueueRequest(reqID, cost)
+			return func() { peer.RequestHeadersByNumber(reqID, cost, origin, amount, skip, reverse) }
+		},
+	}
+	_, ok := <-pc.manager.reqDist.queue(rq)
+	if !ok {
+		return ErrNoPeers
+	}
+	return nil
+}
+
 func (d *downloaderPeerNotify) registerPeer(p *peer) {
 	pm := (*ProtocolManager)(d)
-
-	requestHeadersByHash := func(origin common.Hash, amount int, skip int, reverse bool) error {
-		reqID := genReqID()
-		rq := &distReq{
-			getCost: func(dp distPeer) uint64 {
-				peer := dp.(*peer)
-				return peer.GetRequestCost(GetBlockHeadersMsg, amount)
-			},
-			canSend: func(dp distPeer) bool {
-				return dp.(*peer) == p
-			},
-			request: func(dp distPeer) func() {
-				peer := dp.(*peer)
-				cost := peer.GetRequestCost(GetBlockHeadersMsg, amount)
-				peer.fcServer.QueueRequest(reqID, cost)
-				return func() { peer.RequestHeadersByHash(reqID, cost, origin, amount, skip, reverse) }
-			},
-		}
-		_, ok := <-pm.reqDist.queue(rq)
-		if !ok {
-			return ErrNoPeers
-		}
-		return nil
+	pc := &peerConnection{
+		manager: pm,
+		peer:    p,
 	}
-	requestHeadersByNumber := func(origin uint64, amount int, skip int, reverse bool) error {
-		reqID := genReqID()
-		rq := &distReq{
-			getCost: func(dp distPeer) uint64 {
-				peer := dp.(*peer)
-				return peer.GetRequestCost(GetBlockHeadersMsg, amount)
-			},
-			canSend: func(dp distPeer) bool {
-				return dp.(*peer) == p
-			},
-			request: func(dp distPeer) func() {
-				peer := dp.(*peer)
-				cost := peer.GetRequestCost(GetBlockHeadersMsg, amount)
-				peer.fcServer.QueueRequest(reqID, cost)
-				return func() { peer.RequestHeadersByNumber(reqID, cost, origin, amount, skip, reverse) }
-			},
-		}
-		_, ok := <-pm.reqDist.queue(rq)
-		if !ok {
-			return ErrNoPeers
-		}
-		return nil
-	}
-
-	pm.downloader.RegisterPeer(p.id, ethVersion, p.HeadAndTd, requestHeadersByHash, requestHeadersByNumber, nil, nil, nil)
+	pm.downloader.RegisterLightPeer(p.id, ethVersion, pc)
 }
 
 func (d *downloaderPeerNotify) unregisterPeer(p *peer) {
