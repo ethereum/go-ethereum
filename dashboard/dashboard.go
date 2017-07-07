@@ -35,8 +35,8 @@ import (
 )
 
 const (
-	procSampleLimit = 200
-	memSampleLimit  = 200
+	processorSampleLimit = 200
+	memorySampleLimit    = 200
 )
 
 var (
@@ -50,10 +50,12 @@ type dashboard struct {
 	index    []byte    // Index page to serve up on the web
 	conns    []*client // Currently live websocket connections
 
-	mtrcs *mtrcs  `json:",omitempty"`
-	stats *status `json:",omitempty"`
+	Metrics *metricSamples `json:"metrics,omitempty"`
+	Stats   *status        `json:"stats,omitempty"`
 
 	lock sync.RWMutex // Lock protecting the dashboard's internals
+
+	quit chan struct{} // Channel used for graceful exit
 }
 
 type client struct {
@@ -61,27 +63,29 @@ type client struct {
 	logger log.Logger      // Logger for the particular live websocket connection
 }
 
-type mtrcs struct {
-	Processor []*data `json:"proc,omitempty"`
-	Memory    []*data `json:"mem,omitempty"`
+type metricSamples struct {
+	Processor []*data `json:"processor,omitempty"`
+	Memory    []*data `json:"memory,omitempty"`
 }
 
 type data struct {
-	T     int     `json:"time,omitempty"`
-	Value float64 `json:"value,omitempty"`
+	Time  time.Time `json:"time,omitempty"`
+	Value float64   `json:"value,omitempty"`
 }
 
 type status struct {
-	Peers int
-	Block int
+	Peers int `json:"peers,omitempty"`
+	Block int `json:"block,omitempty"`
 }
 
-func NewDashboard(config *Config) (*dashboard, error) {
-	log.Trace("NewDashboard() called")
+// New creates a new dashboard instance with the given configuration
+func New(config *Config) (*dashboard, error) {
+	//log.Trace("NewDashboard() called")
 
 	dashboard := &dashboard{
-		config: config,
-		mtrcs:  &mtrcs{},
+		config:  config,
+		Metrics: &metricSamples{},
+		quit:    make(chan struct{}),
 	}
 
 	if config.Assets == "" {
@@ -91,9 +95,10 @@ func NewDashboard(config *Config) (*dashboard, error) {
 		}
 
 		website := new(bytes.Buffer)
+		// set the sample limits for the client
 		if err = template.Must(template.New("").Parse(string(tmpl))).Execute(website, map[string]interface{}{
-			"procSampleLimit": procSampleLimit,
-			"memSampleLimit":  memSampleLimit,
+			"processorSampleLimit": processorSampleLimit,
+			"memorySampleLimit":    memorySampleLimit,
 		}); err != nil {
 			log.Crit("Failed to render the dashboard template", "err", err)
 		}
@@ -102,17 +107,20 @@ func NewDashboard(config *Config) (*dashboard, error) {
 		return dashboard, nil
 	}
 
-	//TODO case: DashboardAssetsFlag is set
+	//TODO (kurkomisi): case DashboardAssetsFlag is set
 	//dashboard.index = ioutil.ReadFile()
 	return dashboard, nil
 }
 
+// Protocols is a meaningless implementation of node.Service
 func (db *dashboard) Protocols() []p2p.Protocol { return nil }
 
+// APIs is a meaningless implementation of node.Service
 func (db *dashboard) APIs() []rpc.API { return nil }
 
+// Start implements node.Service, starting the data collection thread and the listening server of the dashboard
 func (db *dashboard) Start(server *p2p.Server) error {
-	log.Trace("Start() called", "config", db.config)
+	//log.Trace("Start() called", "config", db.config)
 
 	go db.collectData()
 
@@ -126,7 +134,7 @@ func (db *dashboard) Start(server *p2p.Server) error {
 	db.listener = listener
 
 	go func() {
-		log.Trace("Starting server...")
+		//log.Trace("Starting server...")
 
 		if err := http.Serve(listener, nil); err != nil {
 			log.Warn("Server failed", "err", err)
@@ -136,15 +144,20 @@ func (db *dashboard) Start(server *p2p.Server) error {
 	return nil
 }
 
+// Stop implements node.Service, stopping the data collection thread and the connection listener of the dashboard
 func (db *dashboard) Stop() error {
-	log.Trace("Terminating dashboard...")
+	//log.Trace("Terminating dashboard...")
 
 	var err error
 
+	// Close the connection listener
 	db.lock.Lock()
 	if err = db.listener.Close(); err != nil {
 		log.Warn("Failed to close listener", "err", err)
 	}
+
+	// Notifies collectData and apiHandler
+	close(db.quit)
 
 	for _, c := range db.conns {
 		if err := c.conn.Close(); err != nil {
@@ -159,15 +172,15 @@ func (db *dashboard) Stop() error {
 
 // webHandler handles all non-api requests, simply flattening and returning the dashboard website.
 func (db *dashboard) webHandler(w http.ResponseWriter, r *http.Request) {
-	log.Trace("webHandler() called")
+	//log.Trace("webHandler() called")
 
-	//TODO not only index
+	//TODO (kurkomisi): not only index
 	w.Write(db.index)
 }
 
 // apiHandler handles requests for dashboard
 func (db *dashboard) apiHandler(conn *websocket.Conn) {
-	log.Trace("apiHandler() called")
+	//log.Trace("apiHandler() called")
 
 	client := &client{
 		conn:   conn,
@@ -179,89 +192,97 @@ func (db *dashboard) apiHandler(conn *websocket.Conn) {
 	db.conns = append(db.conns, client)
 	db.lock.Unlock()
 
-	defer func() {
-		client.logger.Trace("Connection interrupted")
-
-		db.lock.Lock()
-		for i, c := range db.conns {
-			if c.conn == client.conn {
-				if err := c.conn.Close(); err != nil {
-					c.logger.Warn("Failed to close connection", "err", err)
-				}
-				db.conns = append(db.conns[:i], db.conns[i+1:]...)
-				break
-			}
-		}
-		db.lock.Unlock()
-	}()
-
 	db.sendHistory(client)
 
-	for {
-		var msg struct {
-			text string `json:"text"`
+	closed := make(chan bool)
+
+	go func() {
+		select {
+		case <-db.quit:
+			//client.logger.Trace("apiHandler closed")
+		case <-closed:
+			//client.logger.Trace("Connection interrupted")
+			db.lock.Lock()
+			for i, c := range db.conns {
+				if c.conn == client.conn {
+					db.conns = append(db.conns[:i], db.conns[i+1:]...)
+					break
+				}
+			}
+			db.lock.Unlock()
 		}
-		if err := websocket.JSON.Receive(conn, &msg); err != nil {
-			client.logger.Warn("Receive failed", "err", err)
+	}()
+
+	for {
+		fail := []byte{}
+		if _, err := conn.Read(fail); err != nil {
+			closed <- true
 			return
 		}
-		// Ignore any message
 	}
 }
 
 // collectData collects the required data to plot on the dashboard
 func (db *dashboard) collectData() {
-	log.Trace("collectData() called")
+	//log.Trace("collectData() called")
 
 	for {
-		now := time.Now().Second()
-		traffic := metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Rate1()
-		traffic = traffic * traffic
-		//if traffic != 0 {
-		//	traffic = math.Log(traffic)
-		//}
-		memInuse := metrics.DefaultRegistry.Get("system/memory/inuse").(metrics.Meter).Rate1()
-		//if memInuse != 0 {
-		//	memInuse = math.Log(memInuse)
-		//}
-		traff := &data{
-			T:     now,
-			Value: traffic,
-		}
-		mem := &data{
-			T:     now,
-			Value: memInuse,
-		}
+		select {
+		case <-db.quit:
+			//log.Trace("collectData closed")
+			return
+		case <-time.After(db.config.Refresh):
 
-		db.update(traff, mem)
+			now := time.Now()
+			traffic := metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Rate1()
+			traffic = traffic * traffic
+			//if traffic != 0 {
+			//	traffic = math.Log(traffic)
+			//}
+			memoryInuse := metrics.DefaultRegistry.Get("system/memory/inuse").(metrics.Meter).Rate1()
+			//if memoryInuse != 0 {
+			//	memoryInuse = math.Log(memoryInuse)
+			//}
+			traff := &data{
+				Time:  now,
+				Value: traffic,
+			}
+			memory := &data{
+				Time:  now,
+				Value: memoryInuse,
+			}
 
-		time.Sleep(db.config.Refresh)
+			//TODO (kurkomisi): do I need to ensure the correct order?
+			go db.update(traff, memory)
+		}
 	}
 }
 
 // update updates the dashboards through the live websocket connections
-func (db *dashboard) update(proc *data, mem *data) {
+func (db *dashboard) update(processor *data, memory *data) {
 	//log.Trace("update() called")
+
+	db.lock.Lock()
+	defer db.lock.Unlock()
 
 	// if the samples' # exceeds the limit, just remove the first element
 	first := 0
-	if len(db.mtrcs.Processor) == procSampleLimit {
+	if len(db.Metrics.Processor) == processorSampleLimit {
 		first = 1
 	}
-	db.mtrcs.Processor = append(db.mtrcs.Processor[first:], proc)
-
+	db.Metrics.Processor = append(db.Metrics.Processor[first:], processor)
 	first = 0
-	if len(db.mtrcs.Memory) == memSampleLimit {
+	if len(db.Metrics.Memory) == memorySampleLimit {
 		first = 1
 	}
-	db.mtrcs.Memory = append(db.mtrcs.Memory[first:], mem)
+	db.Metrics.Memory = append(db.Metrics.Memory[first:], memory)
 
 	for _, c := range db.conns {
 		//c.logger.Trace("Updating dashboard...")
 
 		msg := &map[string]interface{}{
-			"proc": proc,
-			"mem":  mem,
+			"processor": processor,
+			"memory":    memory,
 		}
 		if err := websocket.JSON.Send(c.conn, msg); err != nil {
 			c.logger.Warn("Failed to update dashboard", "msg", msg, "err", err)
@@ -270,10 +291,12 @@ func (db *dashboard) update(proc *data, mem *data) {
 
 }
 
+// sendHistory sends the past data through a newly registered websocket connection
 func (db *dashboard) sendHistory(c *client) {
-	c.logger.Trace("Sending history...")
+	//c.logger.Trace("Sending history...")
+
 	msg := &map[string]interface{}{
-		"mtrcs": db.mtrcs,
+		"metrics": db.Metrics,
 	}
 	if err := websocket.JSON.Send(c.conn, msg); err != nil {
 		c.logger.Warn("Failed to send history", "err", err)

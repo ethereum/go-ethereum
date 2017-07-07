@@ -23,10 +23,9 @@ var DefaultConfig = Config{
 	Host:    "localhost",
 	Port:    8080,
 	Refresh: time.Second,
-	Assets:  "",
 }
 
-//Config is the config of the dashboard
+// Config is the config of the dashboard
 type Config struct {
 	// Host is the host interface on which to start the dashboard server. If this
 	// field is empty, no dashboard will be started.
@@ -37,6 +36,10 @@ type Config struct {
 	// for ephemeral nodes).
 	Port int `toml:",omitempty"`
 
-	Refresh time.Duration
-	Assets  string
+	// Refresh is the refresh rate of the data updates, the data will be collected this often
+	Refresh time.Duration `toml:",omitempty"`
+
+	// Assets offers a possibility to manually set the dashboard website's location on the server side
+	// useful at debugging - avoids the repeated generation of the binary
+	Assets  string `toml:",omitempty"`
 }

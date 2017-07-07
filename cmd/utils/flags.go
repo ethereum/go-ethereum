@@ -1061,7 +1061,7 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 // RegisterDashboardService adds a dashboard to the stack.
 func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config) {
 	stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return dashboard.NewDashboard(cfg)
+		return dashboard.New(cfg)
 	})
 }
 
