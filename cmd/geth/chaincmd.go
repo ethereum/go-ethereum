@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os"
 	"runtime"
 	"strconv"
@@ -31,7 +32,9 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -71,7 +74,7 @@ It expects the genesis file as argument.`,
 The import command imports blocks from an RLP-encoded form. The form can be one file
 with several RLP-encoded blocks, or several files can be used.
 
-If only one file is used, import error will result in failure. If several files are used, 
+If only one file is used, import error will result in failure. If several files are used,
 processing will proceed even if an individual RLP-file import failure occurs.`,
 	}
 	exportCommand = cli.Command{
@@ -90,6 +93,21 @@ Requires a first argument of the file to write to.
 Optional second and third arguments control the first and
 last block to write. In this mode, the file will be appended
 if already existing.`,
+	}
+	copydbCommand = cli.Command{
+		Action:    utils.MigrateFlags(copyDb),
+		Name:      "copydb",
+		Usage:     "Copy from one chain DB into another using the downloader",
+		ArgsUsage: "<filename>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.SyncModeFlag,
+			utils.FakePoWFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+		Description: `
+The first argument must be the directory containing the blockchain to download from`,
 	}
 	removedbCommand = cli.Command{
 		Action:    utils.MigrateFlags(removeDB),
@@ -265,6 +283,182 @@ func exportChain(ctx *cli.Context) error {
 		utils.Fatalf("Export error: %v\n", err)
 	}
 	fmt.Printf("Export done in %v", time.Since(start))
+	return nil
+}
+
+type localPeer struct {
+	chainDb ethdb.Database
+	hc      *core.HeaderChain
+	dl      *downloader.Downloader
+}
+
+func (lp *localPeer) Head() (common.Hash, *big.Int) {
+	header := lp.hc.CurrentHeader()
+	return header.Hash(), header.Number
+}
+
+func (lp *localPeer) RequestHeadersByHash(hash common.Hash, amount int, skip int, reverse bool) error {
+	var (
+		headers []*types.Header
+		unknown bool
+	)
+
+	for !unknown && len(headers) < amount {
+		origin := lp.hc.GetHeaderByHash(hash)
+		if origin == nil {
+			break
+		}
+
+		number := origin.Number.Uint64()
+		headers = append(headers, origin)
+		if reverse {
+			for i := 0; i < int(skip)+1; i++ {
+				if header := lp.hc.GetHeader(hash, number); header != nil {
+					hash = header.ParentHash
+					number--
+				} else {
+					unknown = true
+					break
+				}
+			}
+		} else {
+			var (
+				current = origin.Number.Uint64()
+				next    = current + uint64(skip) + 1
+			)
+			if header := lp.hc.GetHeaderByNumber(next); header != nil {
+				if lp.hc.GetBlockHashesFromHash(header.Hash(), uint64(skip+1))[skip] == hash {
+					hash = header.Hash()
+				} else {
+					unknown = true
+				}
+			} else {
+				unknown = true
+			}
+		}
+	}
+
+	lp.dl.DeliverHeaders("local", headers)
+	return nil
+}
+
+func (lp *localPeer) RequestHeadersByNumber(num uint64, amount int, skip int, reverse bool) error {
+	var (
+		headers []*types.Header
+		unknown bool
+	)
+
+	for !unknown && len(headers) < amount {
+		origin := lp.hc.GetHeaderByNumber(num)
+		if origin == nil {
+			break
+		}
+
+		if reverse {
+			if num >= uint64(skip+1) {
+				num -= uint64(skip + 1)
+			} else {
+				unknown = true
+			}
+		} else {
+			num += uint64(skip + 1)
+		}
+		headers = append(headers, origin)
+	}
+
+	lp.dl.DeliverHeaders("local", headers)
+	return nil
+}
+
+func (lp *localPeer) RequestBodies(hashes []common.Hash) error {
+	var (
+		transactions [][]*types.Transaction
+		uncles       [][]*types.Header
+	)
+
+	for _, hash := range hashes {
+		block := core.GetBlock(lp.chainDb, hash, lp.hc.GetBlockNumber(hash))
+		transactions = append(transactions, block.Transactions())
+		uncles = append(uncles, block.Uncles())
+	}
+
+	lp.dl.DeliverBodies("local", transactions, uncles)
+	return nil
+}
+
+func (lp *localPeer) RequestReceipts(hashes []common.Hash) error {
+	var receipts [][]*types.Receipt
+
+	for _, hash := range hashes {
+		receipts = append(receipts, core.GetBlockReceipts(lp.chainDb, hash, lp.hc.GetBlockNumber(hash)))
+	}
+
+	lp.dl.DeliverReceipts("local", receipts)
+	return nil
+}
+
+func (lp *localPeer) RequestNodeData(hashes []common.Hash) error {
+	var data [][]byte
+
+	for _, hash := range hashes {
+		if entry, err := lp.chainDb.Get(hash.Bytes()); err == nil {
+			data = append(data, entry)
+		}
+	}
+
+	lp.dl.DeliverNodeData("local", data)
+	return nil
+}
+
+func copyDb(ctx *cli.Context) error {
+	if len(ctx.Args()) != 1 {
+		utils.Fatalf("This command requires an argument.")
+	}
+
+	stack := makeFullNode(ctx)
+	chain, chainDb := utils.MakeChain(ctx, stack)
+	start := time.Now()
+
+	syncmode := *utils.GlobalTextMarshaler(ctx, utils.SyncModeFlag.Name).(*downloader.SyncMode)
+	mux := new(event.TypeMux)
+	dl := downloader.New(syncmode, chainDb, mux, chain, nil, nil)
+
+	var err error
+	filename := ctx.Args().First()
+	cache := ctx.GlobalInt(utils.CacheFlag.Name)
+	handles := 256
+	localdb, err := ethdb.NewLDBDatabase(filename, cache, handles)
+	if err != nil {
+		return err
+	}
+
+	hc, err := core.NewHeaderChain(localdb, chain.Config(), chain.Engine(), func() bool { return false })
+	if err != nil {
+		return err
+	}
+
+	peer := &localPeer{localdb, hc, dl}
+	if err := dl.RegisterPeer("local", 63, peer); err != nil {
+		return err
+	}
+
+	currentHeader := hc.CurrentHeader()
+	if err := dl.Synchronise("local", currentHeader.Hash(), hc.GetTd(currentHeader.Hash(), currentHeader.Number.Uint64()), syncmode); err != nil {
+		return err
+	}
+	for dl.Synchronising() {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	fmt.Printf("Database copy done in %v", time.Since(start))
+
+	start = time.Now()
+	fmt.Println("Compacting entire database...")
+	if err = chainDb.(*ethdb.LDBDatabase).LDB().CompactRange(util.Range{}); err != nil {
+		utils.Fatalf("Compaction failed: %v", err)
+	}
+	fmt.Printf("Compaction done in %v.\n\n", time.Since(start))
+
 	return nil
 }
 
