@@ -19,7 +19,9 @@ package core
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -31,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -99,7 +102,9 @@ type stateFn func() (*state.StateDB, error)
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
 type TxPoolConfig struct {
-	NoLocals bool // Whether local transaction handling should be disabled
+	NoLocals  bool          // Whether local transaction handling should be disabled
+	Journal   string        // Journal of local transactions to survive node restarts
+	Rejournal time.Duration // Time interval to regenerate the local transaction journal
 
 	PriceLimit uint64 // Minimum gas price to enforce for acceptance into the pool
 	PriceBump  uint64 // Minimum price bump percentage to replace an already existing transaction (nonce)
@@ -115,6 +120,9 @@ type TxPoolConfig struct {
 // DefaultTxPoolConfig contains the default configurations for the transaction
 // pool.
 var DefaultTxPoolConfig = TxPoolConfig{
+	Journal:   "transactions.rlp",
+	Rejournal: time.Hour,
+
 	PriceLimit: 1,
 	PriceBump:  10,
 
@@ -130,6 +138,10 @@ var DefaultTxPoolConfig = TxPoolConfig{
 // unreasonable or unworkable.
 func (config *TxPoolConfig) sanitize() TxPoolConfig {
 	conf := *config
+	if conf.Rejournal < time.Second {
+		log.Warn("Sanitizing invalid txpool journal time", "provided", conf.Rejournal, "updated", time.Second)
+		conf.Rejournal = time.Second
+	}
 	if conf.PriceLimit < 1 {
 		log.Warn("Sanitizing invalid txpool price limit", "provided", conf.PriceLimit, "updated", DefaultTxPoolConfig.PriceLimit)
 		conf.PriceLimit = DefaultTxPoolConfig.PriceLimit
@@ -157,9 +169,11 @@ type TxPool struct {
 	gasPrice     *big.Int
 	eventMux     *event.TypeMux
 	events       *event.TypeMuxSubscription
-	locals       *accountSet
 	signer       types.Signer
 	mu           sync.RWMutex
+
+	locals  *accountSet    // Set of local transaction to exepmt from evicion rules
+	journal io.WriteCloser // Journal of local transaction to back up to disk
 
 	pending map[common.Address]*txList         // All currently processable transactions
 	queue   map[common.Address]*txList         // Queued but non-processable transactions
@@ -198,6 +212,9 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, eventMux *e
 	pool.priced = newTxPricedList(&pool.all)
 	pool.resetState()
 
+	if err := pool.rotateJournal(); err != nil {
+		log.Warn("Failed to load transaction journal", "err", err)
+	}
 	// Start the event loop and return
 	pool.wg.Add(1)
 	go pool.loop()
@@ -219,6 +236,9 @@ func (pool *TxPool) loop() {
 
 	evict := time.NewTicker(evictionInterval)
 	defer evict.Stop()
+
+	journal := time.NewTicker(pool.config.Rejournal)
+	defer journal.Stop()
 
 	// Keep waiting for and reacting to the various events
 	for {
@@ -271,6 +291,14 @@ func (pool *TxPool) loop() {
 				}
 			}
 			pool.mu.Unlock()
+
+		// Handle local transaction journal rotation
+		case <-journal.C:
+			pool.mu.Lock()
+			if err := pool.rotateJournal(); err != nil {
+				log.Warn("Failed to rotate local tx journal", "err", err)
+			}
+			pool.mu.Unlock()
 		}
 	}
 }
@@ -304,6 +332,9 @@ func (pool *TxPool) Stop() {
 	pool.events.Unsubscribe()
 	pool.wg.Wait()
 
+	if pool.journal != nil {
+		pool.journal.Close()
+	}
 	log.Info("Transaction pool stopped")
 }
 
@@ -494,13 +525,20 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 		log.Trace("Pooled new executable transaction", "hash", hash, "from", from, "to", tx.To())
 		return old != nil, nil
 	}
-	// New transaction isn't replacing a pending one, push into queue and potentially mark local
+	// New transaction isn't replacing a pending one, push into queue
 	replace, err := pool.enqueueTx(hash, tx)
 	if err != nil {
 		return false, err
 	}
+	// Mark local addresses and journal local transactions
+	local = local || pool.locals.contains(from)
 	if local {
 		pool.locals.add(from)
+		if pool.journal != nil {
+			if err := rlp.Encode(pool.journal, tx); err != nil {
+				log.Warn("Failed to journal local transaction", "err", err)
+			}
+		}
 	}
 	log.Trace("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To())
 	return replace, nil
@@ -927,6 +965,107 @@ func (pool *TxPool) demoteUnexecutables(state *state.StateDB) {
 	}
 }
 
+// rotateJournal regenerates the local transaction journal based on the current
+// contents of the transaction pool. If the pool doesn't have a journal opened,
+// it will first pull in the contents of any existing one from disk.
+func (pool *TxPool) rotateJournal() error {
+	// If local transactions or journaling are disabled, skip
+	if pool.config.NoLocals || pool.config.Journal == "" {
+		return nil
+	}
+	// If there's no journal open (first run), parse any existing one
+	if pool.journal == nil {
+		// Skip the parsing if the journal file doens't exist at all
+		if _, err := os.Stat(pool.config.Journal); !os.IsNotExist(err) {
+			// Open the journal for loading any past transactions
+			journal, err := os.Open(pool.config.Journal)
+			if err != nil {
+				return err
+			}
+			// Inject all transactions from the journal into the pool
+			stream := rlp.NewStream(journal, 0)
+			total, dropped := 0, 0
+
+			for {
+				tx := new(types.Transaction)
+				if err := stream.Decode(tx); err != nil {
+					if err == io.EOF {
+						break
+					}
+					return err
+				}
+				total++
+				if err := pool.addTx(tx, true); err != nil {
+					log.Debug("Failed to add journaled transaction", "err", err)
+					dropped++
+					continue
+				}
+			}
+			log.Info("Loaded local transaction journal", "transactions", total, "dropped", dropped)
+
+			// All transactions added, set the active journal
+			pool.journal = journal
+		}
+	}
+	// Close the current journal (if any is open)
+	if pool.journal != nil {
+		if err := pool.journal.Close(); err != nil {
+			return err
+		}
+		pool.journal = nil
+	}
+	// Generate a new journal with the contents of the current pool
+	replacement, err := os.OpenFile(pool.config.Journal+".new", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+	if err != nil {
+		return err
+	}
+	accounts, journaled := 0, 0
+	for addr := range pool.locals.accounts {
+		// Flatten and serialize all the local executable transactions
+		pending := pool.pending[addr]
+		if pending != nil {
+			txs := pending.Flatten()
+			for _, tx := range txs {
+				if err = rlp.Encode(replacement, tx); err != nil {
+					replacement.Close()
+					return err
+				}
+			}
+			journaled += len(txs)
+		}
+		// Flatten and serialize all the local non-executable transactions
+		queued := pool.queue[addr]
+		if queued != nil {
+			txs := queued.Flatten()
+			for _, tx := range txs {
+				if err = rlp.Encode(replacement, tx); err != nil {
+					replacement.Close()
+					return err
+				}
+			}
+			journaled += len(txs)
+		}
+		// Bump the address counter if we did have transactions
+		if pending != nil || queued != nil {
+			accounts++
+		}
+	}
+	replacement.Close()
+
+	// Replace the live journal with the newly generated one
+	if err = os.Rename(pool.config.Journal+".new", pool.config.Journal); err != nil {
+		return err
+	}
+	journal, err := os.OpenFile(pool.config.Journal, os.O_WRONLY|os.O_APPEND, 0755)
+	if err != nil {
+		return err
+	}
+	pool.journal = journal
+	log.Info("Regenerated local transaction journal", "transactions", journaled, "accounts", accounts)
+
+	return nil
+}
+
 // addressByHeartbeat is an account address tagged with its last activity timestamp.
 type addressByHeartbeat struct {
 	address   common.Address
@@ -939,7 +1078,7 @@ func (a addresssByHeartbeat) Len() int           { return len(a) }
 func (a addresssByHeartbeat) Less(i, j int) bool { return a[i].heartbeat.Before(a[j].heartbeat) }
 func (a addresssByHeartbeat) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
-// accountSet is simply a set of addresses to check for existance, and a signer
+// accountSet is simply a set of addresses to check for existence, and a signer
 // capable of deriving addresses from transactions.
 type accountSet struct {
 	accounts map[common.Address]struct{}
