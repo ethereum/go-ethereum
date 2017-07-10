@@ -399,7 +399,7 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 		hash := hasher.Sum(nil)
 		if !bytes.Equal(hash, key) {
 			s.delete(index.Idx, getIndexKey(key))
-			panic("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
+			log.Warn("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
 		}
 
 		chunk = &Chunk{

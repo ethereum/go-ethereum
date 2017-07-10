@@ -18,13 +18,14 @@ package whisperv5
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	mrand "math/rand"
 	"testing"
 	"time"
 )
 
 func TestWhisperBasic(t *testing.T) {
-	w := New()
+	w := New(&DefaultConfig)
 	p := w.Protocols()
 	shh := p[0]
 	if shh.Name != ProtocolName {
@@ -117,8 +118,39 @@ func TestWhisperBasic(t *testing.T) {
 	}
 }
 
+func TestWhisperAsymmetricKeyImport(t *testing.T) {
+	var (
+		w           = New(&DefaultConfig)
+		privateKeys []*ecdsa.PrivateKey
+	)
+
+	for i := 0; i < 50; i++ {
+		id, err := w.NewKeyPair()
+		if err != nil {
+			t.Fatalf("could not generate key: %v", err)
+		}
+
+		pk, err := w.GetPrivateKey(id)
+		if err != nil {
+			t.Fatalf("could not export private key: %v", err)
+		}
+
+		privateKeys = append(privateKeys, pk)
+
+		if !w.DeleteKeyPair(id) {
+			t.Fatalf("could not delete private key")
+		}
+	}
+
+	for _, pk := range privateKeys {
+		if _, err := w.AddKeyPair(pk); err != nil {
+			t.Fatalf("could not import private key: %v", err)
+		}
+	}
+}
+
 func TestWhisperIdentityManagement(t *testing.T) {
-	w := New()
+	w := New(&DefaultConfig)
 	id1, err := w.NewKeyPair()
 	if err != nil {
 		t.Fatalf("failed to generate new key pair: %s.", err)
@@ -240,7 +272,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 
 	var err error
 	var k1, k2 []byte
-	w := New()
+	w := New(&DefaultConfig)
 	id1 := string("arbitrary-string-1")
 	id2 := string("arbitrary-string-2")
 
@@ -443,7 +475,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 func TestExpiry(t *testing.T) {
 	InitSingleTest()
 
-	w := New()
+	w := New(&DefaultConfig)
 	w.SetMinimumPoW(0.0000001)
 	defer w.SetMinimumPoW(DefaultMinimumPoW)
 	w.Start(nil)
@@ -500,9 +532,9 @@ func TestExpiry(t *testing.T) {
 func TestCustomization(t *testing.T) {
 	InitSingleTest()
 
-	w := New()
+	w := New(&DefaultConfig)
 	defer w.SetMinimumPoW(DefaultMinimumPoW)
-	defer w.SetMaxMessageLength(DefaultMaxMessageLength)
+	defer w.SetMaxMessageSize(DefaultMaxMessageSize)
 	w.Start(nil)
 	defer w.Stop()
 
@@ -547,13 +579,13 @@ func TestCustomization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
-	w.SetMaxMessageLength(env.size() - 1)
+	w.SetMaxMessageSize(uint32(env.size() - 1))
 	err = w.Send(env)
 	if err == nil {
 		t.Fatalf("successfully sent oversized envelope (seed %d): false positive.", seed)
 	}
 
-	w.SetMaxMessageLength(DefaultMaxMessageLength)
+	w.SetMaxMessageSize(DefaultMaxMessageSize)
 	err = w.Send(env)
 	if err != nil {
 		t.Fatalf("failed to send second envelope with seed %d: %s.", seed, err)

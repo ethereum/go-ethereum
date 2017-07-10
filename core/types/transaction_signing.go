@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	ErrInvalidChainId = errors.New("invalid chaid id for signer")
+	ErrInvalidChainId = errors.New("invalid chain id for signer")
 
 	errAbstractSigner     = errors.New("abstract signer")
 	abstractSignerAddress = common.HexToAddress("ffffffffffffffffffffffffffffffffffffffff")

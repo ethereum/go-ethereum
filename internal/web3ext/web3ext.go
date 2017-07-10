@@ -208,8 +208,8 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'traceBlockByFile',
-			call: 'debug_traceBlockByFile',
+			name: 'traceBlockFromFile',
+			call: 'debug_traceBlockFromFile',
 			params: 1
 		}),
 		new web3._extend.Method({
@@ -527,10 +527,6 @@ web3._extend({
 	property: 'shh',
 	methods: [
 		new web3._extend.Method({
-			name: 'info',
-			call: 'shh_info'
-		}),
-		new web3._extend.Method({
 			name: 'setMaxMessageLength',
 			call: 'shh_setMaxMessageLength',
 			params: 1
@@ -541,8 +537,8 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'allowP2PMessagesFromPeer',
-			call: 'shh_allowP2PMessagesFromPeer',
+			name: 'markTrustedPeer',
+			call: 'shh_markTrustedPeer',
 			params: 1
 		}),
 		new web3._extend.Method({
@@ -570,38 +566,38 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'generateSymmetricKey',
-			call: 'shh_generateSymmetricKey',
+			name: 'newSymKey',
+			call: 'shh_newSymKey',
 		}),
 		new web3._extend.Method({
-			name: 'addSymmetricKeyDirect',
-			call: 'shh_addSymmetricKeyDirect',
+			name: 'addSymKey',
+			call: 'shh_addSymKey',
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'addSymmetricKeyFromPassword',
-			call: 'shh_addSymmetricKeyFromPassword',
+			name: 'generateSymKeyFromPassword',
+			call: 'shh_generateSymKeyFromPassword',
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'hasSymmetricKey',
-			call: 'shh_hasSymmetricKey',
+			name: 'hasSymKey',
+			call: 'shh_hasSymKey',
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'getSymmetricKey',
-			call: 'shh_getSymmetricKey',
+			name: 'getSymKey',
+			call: 'shh_getSymKey',
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'deleteSymmetricKey',
-			call: 'shh_deleteSymmetricKey',
+			name: 'deleteSymKey',
+			call: 'shh_deleteSymKey',
 			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'subscribe',
 			call: 'shh_subscribe',
-			params: 1
+			params: 2
 		}),
 		new web3._extend.Method({
 			name: 'unsubscribe',
@@ -609,18 +605,28 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'getNewSubscriptionMessages',
-			call: 'shh_getNewSubscriptionMessages',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'getFloatingMessages',
-			call: 'shh_getFloatingMessages',
-			params: 1
-		}),
-		new web3._extend.Method({
 			name: 'post',
 			call: 'shh_post',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'publicKey',
+			call: 'shh_getPublicKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getFilterMessages',
+			call: 'shh_getFilterMessages',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'deleteMessageFilter',
+			call: 'shh_deleteMessageFilter',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'newMessageFilter',
+			call: 'shh_newMessageFilter',
 			params: 1
 		})
 	],
@@ -630,7 +636,11 @@ web3._extend({
 			name: 'version',
 			getter: 'shh_version',
 			outputFormatter: web3._extend.utils.toDecimal
-		})
+		}),
+		new web3._extend.Property({
+			name: 'info',
+			getter: 'shh_info'
+		}),
 	]
 });
 `

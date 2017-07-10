@@ -204,7 +204,7 @@ func runBlockTest(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, test *Blo
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
 func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
-	statedb, err := state.New(common.Hash{}, db)
+	statedb, err := state.New(common.Hash{}, state.NewDatabase(db))
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +232,7 @@ func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
 		}
 	}
 
-	root, err := statedb.Commit(false)
+	root, err := statedb.CommitTo(db, false)
 	if err != nil {
 		return nil, fmt.Errorf("error writing state: %v", err)
 	}

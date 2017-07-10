@@ -17,6 +17,7 @@
 package abi
 
 import (
+	"math/big"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -59,8 +60,20 @@ func packElement(t Type, reflectValue reflect.Value) []byte {
 		if reflectValue.Kind() == reflect.Array {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}
-
 		return common.RightPadBytes(reflectValue.Bytes(), 32)
 	}
 	panic("abi: fatal error")
+}
+
+// packNum packs the given number (using the reflect value) and will cast it to appropriate number representation
+func packNum(value reflect.Value) []byte {
+	switch kind := value.Kind(); kind {
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return U256(new(big.Int).SetUint64(value.Uint()))
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return U256(big.NewInt(value.Int()))
+	case reflect.Ptr:
+		return U256(value.Interface().(*big.Int))
+	}
+	return nil
 }

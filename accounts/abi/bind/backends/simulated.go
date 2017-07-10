@@ -90,7 +90,7 @@ func (b *SimulatedBackend) Rollback() {
 func (b *SimulatedBackend) rollback() {
 	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), b.database, 1, func(int, *core.BlockGen) {})
 	b.pendingBlock = blocks[0]
-	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.database)
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), state.NewDatabase(b.database))
 }
 
 // CodeAt returns the code associated with a certain account in the blockchain.
@@ -279,7 +279,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 		block.AddTx(tx)
 	})
 	b.pendingBlock = blocks[0]
-	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.database)
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), state.NewDatabase(b.database))
 	return nil
 }
 

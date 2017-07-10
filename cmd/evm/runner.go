@@ -98,8 +98,8 @@ func runCmd(ctx *cli.Context) error {
 		_, statedb = gen.ToBlock()
 		chainConfig = gen.Config
 	} else {
-		var db, _ = ethdb.NewMemDatabase()
-		statedb, _ = state.New(common.Hash{}, db)
+		db, _ := ethdb.NewMemDatabase()
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(db))
 	}
 	if ctx.GlobalString(SenderFlag.Name) != "" {
 		sender = common.HexToAddress(ctx.GlobalString(SenderFlag.Name))
@@ -188,7 +188,7 @@ func runCmd(ctx *cli.Context) error {
 	execTime := time.Since(tstart)
 
 	if ctx.GlobalBool(DumpFlag.Name) {
-		statedb.Commit(true)
+		statedb.IntermediateRoot(true)
 		fmt.Println(string(statedb.Dump()))
 	}
 

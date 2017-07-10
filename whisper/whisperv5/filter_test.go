@@ -97,7 +97,7 @@ func TestInstallFilters(t *testing.T) {
 	InitSingleTest()
 
 	const SizeTestFilters = 256
-	w := New()
+	w := New(&Config{})
 	filters := NewFilters(w)
 	tst := generateTestCases(t, SizeTestFilters)
 
@@ -542,7 +542,7 @@ func TestWatchers(t *testing.T) {
 	var x, firstID string
 	var err error
 
-	w := New()
+	w := New(&Config{})
 	filters := NewFilters(w)
 	tst := generateTestCases(t, NumFilters)
 	for i = 0; i < NumFilters; i++ {
