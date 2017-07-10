@@ -521,6 +521,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 		}
 		pool.all[tx.Hash()] = tx
 		pool.priced.Put(tx)
+		pool.journalTx(from, tx)
 
 		log.Trace("Pooled new executable transaction", "hash", hash, "from", from, "to", tx.To())
 		return old != nil, nil
@@ -531,15 +532,11 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 		return false, err
 	}
 	// Mark local addresses and journal local transactions
-	local = local || pool.locals.contains(from)
 	if local {
 		pool.locals.add(from)
-		if pool.journal != nil {
-			if err := rlp.Encode(pool.journal, tx); err != nil {
-				log.Warn("Failed to journal local transaction", "err", err)
-			}
-		}
 	}
+	pool.journalTx(from, tx)
+
 	log.Trace("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To())
 	return replace, nil
 }
@@ -568,6 +565,18 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) (bool, er
 	pool.all[hash] = tx
 	pool.priced.Put(tx)
 	return old != nil, nil
+}
+
+// journalTx adds the specified transaction to the local disk journal if it is
+// deemed to have been sent from a local account.
+func (pool *TxPool) journalTx(from common.Address, tx *types.Transaction) {
+	// Only journal if it's enabled and the transaction is local
+	if pool.journal == nil || !pool.locals.contains(from) {
+		return
+	}
+	if err := rlp.Encode(pool.journal, tx); err != nil {
+		log.Warn("Failed to journal local transaction", "err", err)
+	}
 }
 
 // promoteTx adds a transaction to the pending (processable) list of transactions.
