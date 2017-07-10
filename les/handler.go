@@ -87,8 +87,8 @@ type BlockChain interface {
 }
 
 type txPool interface {
-	// AddTransactions should add the given transactions to the pool.
-	AddBatch([]*types.Transaction) error
+	// AddRemotes should add the given transactions to the pool.
+	AddRemotes([]*types.Transaction) error
 }
 
 type ProtocolManager struct {
@@ -801,7 +801,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrRequestRejected, "")
 		}
 
-		if err := pm.txpool.AddBatch(txs); err != nil {
+		if err := pm.txpool.AddRemotes(txs); err != nil {
 			return errResp(ErrUnexpectedResponse, "msg: %v", err)
 		}
 
