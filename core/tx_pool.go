@@ -167,8 +167,7 @@ type TxPool struct {
 	all     map[common.Hash]*types.Transaction // All transactions to allow lookups
 	priced  *txPricedList                      // All transactions sorted by price
 
-	wg   sync.WaitGroup // for shutdown sync
-	quit chan struct{}
+	wg sync.WaitGroup // for shutdown sync
 
 	homestead bool
 }
@@ -194,32 +193,34 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, eventMux *e
 		gasPrice:     new(big.Int).SetUint64(config.PriceLimit),
 		pendingState: nil,
 		events:       eventMux.Subscribe(ChainHeadEvent{}, RemovedTransactionEvent{}),
-		quit:         make(chan struct{}),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	pool.priced = newTxPricedList(&pool.all)
 	pool.resetState()
 
-	// Start the various events loops and return
-	pool.wg.Add(2)
-	go pool.eventLoop()
-	go pool.expirationLoop()
+	// Start the event loop and return
+	pool.wg.Add(1)
+	go pool.loop()
 
 	return pool
 }
 
-func (pool *TxPool) eventLoop() {
+// loop is the transaction pool's main event loop, waiting for and reacting to
+// outside blockchain events as well as for various reporting and transaction
+// eviction events.
+func (pool *TxPool) loop() {
 	defer pool.wg.Done()
 
-	// Start a ticker and keep track of interesting pool stats to report
+	// Start the stats reporting and transaction eviction tickers
 	var prevPending, prevQueued, prevStales int
 
 	report := time.NewTicker(statsReportInterval)
 	defer report.Stop()
 
-	// Track chain events. When a chain events occurs (new chain canon block)
-	// we need to know the new state. The new state will help us determine
-	// the nonces in the managed state
+	evict := time.NewTicker(evictionInterval)
+	defer evict.Stop()
+
+	// Keep waiting for and reacting to the various events
 	for {
 		select {
 		// Handle any events fired by the system
@@ -253,6 +254,23 @@ func (pool *TxPool) eventLoop() {
 				log.Debug("Transaction pool status report", "executable", pending, "queued", queued, "stales", stales)
 				prevPending, prevQueued, prevStales = pending, queued, stales
 			}
+
+		// Handle inactive account transaction eviction
+		case <-evict.C:
+			pool.mu.Lock()
+			for addr := range pool.queue {
+				// Skip local transactions from the eviction mechanism
+				if pool.locals.contains(addr) {
+					continue
+				}
+				// Any non-locals old enough should be removed
+				if time.Since(pool.beats[addr]) > pool.config.Lifetime {
+					for _, tx := range pool.queue[addr].Flatten() {
+						pool.removeTx(tx.Hash())
+					}
+				}
+			}
+			pool.mu.Unlock()
 		}
 	}
 }
@@ -284,7 +302,6 @@ func (pool *TxPool) resetState() {
 // Stop terminates the transaction pool.
 func (pool *TxPool) Stop() {
 	pool.events.Unsubscribe()
-	close(pool.quit)
 	pool.wg.Wait()
 
 	log.Info("Transaction pool stopped")
@@ -906,39 +923,6 @@ func (pool *TxPool) demoteUnexecutables(state *state.StateDB) {
 		if list.Empty() {
 			delete(pool.pending, addr)
 			delete(pool.beats, addr)
-		}
-	}
-}
-
-// expirationLoop is a loop that periodically iterates over all accounts with
-// queued transactions and drop all that have been inactive for a prolonged amount
-// of time.
-func (pool *TxPool) expirationLoop() {
-	defer pool.wg.Done()
-
-	evict := time.NewTicker(evictionInterval)
-	defer evict.Stop()
-
-	for {
-		select {
-		case <-evict.C:
-			pool.mu.Lock()
-			for addr := range pool.queue {
-				// Skip local transactions from the eviction mechanism
-				if pool.locals.contains(addr) {
-					continue
-				}
-				// Any non-locals old enough should be removed
-				if time.Since(pool.beats[addr]) > pool.config.Lifetime {
-					for _, tx := range pool.queue[addr].Flatten() {
-						pool.removeTx(tx.Hash())
-					}
-				}
-			}
-			pool.mu.Unlock()
-
-		case <-pool.quit:
-			return
 		}
 	}
 }
