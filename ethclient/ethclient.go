@@ -258,6 +258,19 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 
 // State Access
 
+// NetworkID returns the network ID (also known as the chain ID) for this chain.
+func (ec *Client) NetworkID(ctx context.Context) (version *big.Int, err error) {
+	version = big.NewInt(0)
+
+	var ver string
+	if err = ec.c.CallContext(ctx, &ver, "net_version"); err != nil {
+		return version, err
+	}
+
+	version.SetString(ver, 10)
+	return
+}
+
 // BalanceAt returns the wei balance of the given account.
 // The block number can be nil, in which case the balance is taken from the latest known block.
 func (ec *Client) BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
