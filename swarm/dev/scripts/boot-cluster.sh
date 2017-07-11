@@ -209,10 +209,12 @@ start_swarm_node() {
     --datadir      "${dir}"
     --identity     "${name}"
     --ens-api      "${GETH_RPC_URL}"
+    --httpaddr     "${ip}"
     --bzznetworkid "321"
     --bzzaccount   "${address}"
     --password     "${dir}/password"
     --verbosity    "6"
+    --debug
   )
 
   start_node "${name}" "${ip}" "$(which swarm)" ${args[@]}

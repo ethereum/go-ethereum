@@ -214,7 +214,7 @@ func newSyncer(
 		*/
 		if state.SessionAt == 0 {
 			log.Trace(fmt.Sprintf("syncer[%v]: nothing to sync", self.key.Log()))
-			return self, nil
+			//	return self, nil
 		}
 		log.Trace(fmt.Sprintf("syncer[%v]: start replaying stale requests from request db", self.key.Log()))
 		for p := priorities - 1; p >= 0; p-- {
@@ -369,7 +369,7 @@ func (self *syncer) sendUnsyncedKeys() {
 func (self *syncer) syncUnsyncedKeys() {
 	// send out new
 	var unsynced []*syncRequest
-	var more, justSynced bool
+	var more bool
 	var keyCount, historyCnt int
 
 	priority := High
@@ -426,9 +426,8 @@ LOOP:
 		// * batch full OR
 		// * all history have been consumed, synced)
 		if deliveryRequest == nil &&
-			(justSynced && len(unsynced) > 0 ||
+			(keys == nil && len(unsynced) > 0 ||
 				len(unsynced) == int(self.SyncBatchSize)) {
-			justSynced = false
 			// listen to requests
 			deliveryRequest = self.deliveryRequest
 			newUnsyncedKeys = nil // not care about data until next req comes in
@@ -455,7 +454,6 @@ LOOP:
 			if keys == history && !more {
 				log.Trace(fmt.Sprintf("syncer[%v]: syncing history segment complete", self.key.Log()))
 				// moved to closing of channel in syncHistory
-				justSynced = true
 
 				log.Trace(fmt.Sprintf("syncer[%v]: start synchronising history since last disconnect at %v up until session start at %v: %v", self.key.Log(), state.Last, state.SessionAt, state))
 
