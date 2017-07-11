@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rcrowley/go-metrics"
 	"golang.org/x/net/websocket"
-	"html/template"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -79,10 +78,8 @@ type status struct {
 	Block int `json:"block,omitempty"`
 }
 
-// New creates a new dashboard instance with the given configuration
+// New creates a new dashboard instance with the given configuration.
 func New(config *Config) (*dashboard, error) {
-	//log.Trace("NewDashboard() called")
-
 	return &dashboard{
 		config:  config,
 		Metrics: &metricSamples{},
@@ -90,16 +87,14 @@ func New(config *Config) (*dashboard, error) {
 	}, nil
 }
 
-// Protocols is a meaningless implementation of node.Service
+// Protocols is a meaningless implementation of node.Service.
 func (db *dashboard) Protocols() []p2p.Protocol { return nil }
 
-// APIs is a meaningless implementation of node.Service
+// APIs is a meaningless implementation of node.Service.
 func (db *dashboard) APIs() []rpc.API { return nil }
 
-// Start implements node.Service, starting the data collection thread and the listening server of the dashboard
+// Start implements node.Service, starting the data collection thread and the listening server of the dashboard.
 func (db *dashboard) Start(server *p2p.Server) error {
-	//log.Trace("Start() called", "config", db.config)
-
 	go db.collectData()
 
 	http.HandleFunc("/", db.webHandler)
@@ -112,8 +107,6 @@ func (db *dashboard) Start(server *p2p.Server) error {
 	db.listener = listener
 
 	go func() {
-		//log.Trace("Starting server...")
-
 		if err := http.Serve(listener, nil); err != nil {
 			log.Warn("Server failed", "err", err)
 		}
@@ -122,10 +115,8 @@ func (db *dashboard) Start(server *p2p.Server) error {
 	return nil
 }
 
-// Stop implements node.Service, stopping the data collection thread and the connection listener of the dashboard
+// Stop implements node.Service, stopping the data collection thread and the connection listener of the dashboard.
 func (db *dashboard) Stop() error {
-	//log.Trace("Terminating dashboard...")
-
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -149,7 +140,6 @@ func (db *dashboard) Stop() error {
 
 // webHandler handles all non-api requests, simply flattening and returning the dashboard website.
 func (db *dashboard) webHandler(w http.ResponseWriter, r *http.Request) {
-	//log.Trace("webHandler() called", "r.URL", r.URL)
 	log.Info("Request", "URL", r.URL)
 
 	path := r.URL.String()
@@ -185,38 +175,18 @@ func (db *dashboard) webHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Write(index)
-	case "/js/handlers.js":
-		tmpl, err := Asset("js/handlers.js")
-		if err != nil {
-			log.Warn("Failed to load the asset", "path", path, "err", err)
-			return
-		}
-		handlers := new(bytes.Buffer)
-		// TODO (kurkomisi): Save the generated template to avoid the repeated generation?
-		// set the sample limits for the client
-		if err = template.Must(template.New("").Parse(string(tmpl))).Execute(handlers, map[string]interface{}{
-			"processorSampleLimit": processorSampleLimit,
-			"memorySampleLimit":    memorySampleLimit,
-			"trafficSampleLimit":   trafficSampleLimit,
-		}); err != nil {
-			log.Warn("Failed to render the dashboard handlers template", "err", err)
-			return
-		}
-		w.Write(handlers.Bytes())
 	default:
-		website, err := Asset(path[1:])
+		webapp, err := Asset(path[1:])
 		if err != nil {
 			log.Warn("Failed to load the asset", "path", path, "err", err)
 			return
 		}
-		w.Write(website)
+		w.Write(webapp)
 	}
 }
 
-// apiHandler handles requests for dashboard
+// apiHandler handles requests for the dashboard.
 func (db *dashboard) apiHandler(conn *websocket.Conn) {
-	//log.Trace("apiHandler() called")
-
 	client := &client{
 		conn:   conn,
 		logger: log.New("id", atomic.AddUint32(&nextId, 1)),
@@ -234,9 +204,7 @@ func (db *dashboard) apiHandler(conn *websocket.Conn) {
 	go func() {
 		select {
 		case <-db.quit:
-			//client.logger.Trace("apiHandler closed")
 		case <-closed:
-			//client.logger.Trace("Connection interrupted")
 			db.lock.Lock()
 			for i, c := range db.conns {
 				if c.conn == client.conn {
@@ -258,26 +226,17 @@ func (db *dashboard) apiHandler(conn *websocket.Conn) {
 	}
 }
 
-// collectData collects the required data to plot on the dashboard
+// collectData collects the required data to plot on the dashboard.
 func (db *dashboard) collectData() {
-	//log.Trace("collectData() called")
-
 	for {
 		select {
 		case <-db.quit:
-			//log.Trace("collectData closed")
 			return
 		case <-time.After(db.config.Refresh):
 
 			now := time.Now()
 			traffic := metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Rate1()
-			//if traffic != 0 {
-			//	traffic = math.Log(traffic)
-			//}
 			memoryInUse := metrics.DefaultRegistry.Get("system/memory/inuse").(metrics.Meter).Rate1()
-			//if memoryInuse != 0 {
-			//	memoryInuse = math.Log(memoryInuse)
-			//}
 			traff := &data{
 				Time:  now,
 				Value: traffic,
@@ -294,10 +253,8 @@ func (db *dashboard) collectData() {
 	}
 }
 
-// update updates the dashboards through the live websocket connections
+// update updates the dashboards through the live websocket connections.
 func (db *dashboard) update(processor *data, memory *data) {
-	//log.Trace("update() called")
-
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -314,8 +271,6 @@ func (db *dashboard) update(processor *data, memory *data) {
 	db.Metrics.Memory = append(db.Metrics.Memory[first:], memory)
 
 	for _, c := range db.conns {
-		//c.logger.Trace("Updating dashboard...")
-
 		msg := &map[string]interface{}{
 			"processor": processor,
 			"memory":    memory,
@@ -327,10 +282,8 @@ func (db *dashboard) update(processor *data, memory *data) {
 
 }
 
-// sendHistory sends the past data through a newly registered websocket connection
+// sendHistory sends the past data through a newly registered websocket connection.
 func (db *dashboard) sendHistory(c *client) {
-	//c.logger.Trace("Sending history...")
-
 	msg := &map[string]interface{}{
 		"metrics": db.Metrics,
 	}
