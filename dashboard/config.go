@@ -36,10 +36,10 @@ type Config struct {
 	// for ephemeral nodes).
 	Port int `toml:",omitempty"`
 
-	// Refresh is the refresh rate of the data updates, the data will be collected this often
+	// Refresh is the refresh rate of the data updates, the data will be collected this often.
 	Refresh time.Duration `toml:",omitempty"`
 
-	// Assets offers a possibility to manually set the dashboard website's location on the server side
-	// useful for debugging - avoids the repeated generation of the binary
+	// Assets offers a possibility to manually set the dashboard website's location on the server side.
+	// It is useful for debugging, avoids the repeated generation of the binary.
 	Assets  string `toml:",omitempty"`
 }

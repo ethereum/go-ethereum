@@ -195,12 +195,12 @@ var (
 	}
 	DashboardRefreshFlag = cli.DurationFlag{
 		Name:  "dashboard.refresh",
-		Usage: "Dashboard refresh rate",
+		Usage: "Dashboard metrics collection refresh rate",
 		Value: dashboard.DefaultConfig.Refresh,
 	}
 	DashboardAssetsFlag = cli.StringFlag{
 		Name:  "dashboard.assets",
-		Usage: "Path of the dashboard assets, useful for debugging (default = \"\", in this case assets.go binary is used)",
+		Usage: "Developer flag to serve the dashboard from the local file system (default: \"\")",
 		Value: dashboard.DefaultConfig.Assets,
 	}
 	// Ethash settings
