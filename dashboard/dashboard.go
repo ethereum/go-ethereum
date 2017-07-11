@@ -16,7 +16,7 @@
 
 package dashboard
 
-//go:generate go-bindata -nometadata -o assets.go -prefix assets -pkg dashboard assets
+//go:generate go-bindata -nometadata -o assets.go -prefix assets -pkg dashboard assets/...
 
 import (
 	"bytes"
@@ -27,6 +27,7 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"golang.org/x/net/websocket"
 	"html/template"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"sync"
@@ -37,6 +38,7 @@ import (
 const (
 	processorSampleLimit = 200
 	memorySampleLimit    = 200
+	trafficSampleLimit   = 200
 )
 
 var (
@@ -47,7 +49,6 @@ type dashboard struct {
 	config *Config
 
 	listener net.Listener
-	index    []byte    // Index page to serve up on the web
 	conns    []*client // Currently live websocket connections
 
 	Metrics *metricSamples `json:"metrics,omitempty"`
@@ -82,34 +83,11 @@ type status struct {
 func New(config *Config) (*dashboard, error) {
 	//log.Trace("NewDashboard() called")
 
-	dashboard := &dashboard{
+	return &dashboard{
 		config:  config,
 		Metrics: &metricSamples{},
 		quit:    make(chan struct{}),
-	}
-
-	if config.Assets == "" {
-		tmpl, err := Asset("dashboard.html")
-		if err != nil {
-			return nil, err
-		}
-
-		website := new(bytes.Buffer)
-		// set the sample limits for the client
-		if err = template.Must(template.New("").Parse(string(tmpl))).Execute(website, map[string]interface{}{
-			"processorSampleLimit": processorSampleLimit,
-			"memorySampleLimit":    memorySampleLimit,
-		}); err != nil {
-			log.Crit("Failed to render the dashboard template", "err", err)
-		}
-
-		dashboard.index = website.Bytes()
-		return dashboard, nil
-	}
-
-	//TODO (kurkomisi): case DashboardAssetsFlag is set
-	//dashboard.index = ioutil.ReadFile()
-	return dashboard, nil
+	}, nil
 }
 
 // Protocols is a meaningless implementation of node.Service
@@ -148,16 +126,16 @@ func (db *dashboard) Start(server *p2p.Server) error {
 func (db *dashboard) Stop() error {
 	//log.Trace("Terminating dashboard...")
 
-	var err error
-
-	// Close the connection listener
 	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	var err error
+	// Close the connection listener
 	if err = db.listener.Close(); err != nil {
 		log.Warn("Failed to close listener", "err", err)
 	}
 
-	// Notifies collectData and apiHandler
-	close(db.quit)
+	close(db.quit) // Notifies collectData and apiHandler
 
 	for _, c := range db.conns {
 		if err := c.conn.Close(); err != nil {
@@ -165,17 +143,74 @@ func (db *dashboard) Stop() error {
 		}
 	}
 	db.conns = db.conns[:0]
-	db.lock.Unlock()
 
 	return err
 }
 
 // webHandler handles all non-api requests, simply flattening and returning the dashboard website.
 func (db *dashboard) webHandler(w http.ResponseWriter, r *http.Request) {
-	//log.Trace("webHandler() called")
+	//log.Trace("webHandler() called", "r.URL", r.URL)
+	log.Info("Request", "URL", r.URL)
 
-	//TODO (kurkomisi): not only index
-	w.Write(db.index)
+	path := r.URL.String()
+
+	// If the path of the assets is manually set
+	if db.config.Assets != "" {
+		// Create the filename for ReadFile
+		var buffer bytes.Buffer
+		buffer.WriteString(db.config.Assets)
+		switch path {
+		case "/":
+			buffer.WriteString("/dashboard.html")
+		default:
+			buffer.WriteString(path)
+		}
+
+		file, err := ioutil.ReadFile(buffer.String())
+		if err != nil {
+			// TODO (kurkomisi): Warn or Crit?
+			log.Warn("Failed to read file", "err", err)
+			// TODO (kurkomisi): Should I inform the client?
+			return
+		}
+		w.Write(file)
+		return
+	}
+
+	switch path {
+	case "/":
+		index, err := Asset("dashboard.html")
+		if err != nil {
+			log.Warn("Failed to load the index", "err", err)
+			return
+		}
+		w.Write(index)
+	case "/js/handlers.js":
+		tmpl, err := Asset("js/handlers.js")
+		if err != nil {
+			log.Warn("Failed to load the asset", "path", path, "err", err)
+			return
+		}
+		handlers := new(bytes.Buffer)
+		// TODO (kurkomisi): Save the generated template to avoid the repeated generation?
+		// set the sample limits for the client
+		if err = template.Must(template.New("").Parse(string(tmpl))).Execute(handlers, map[string]interface{}{
+			"processorSampleLimit": processorSampleLimit,
+			"memorySampleLimit":    memorySampleLimit,
+			"trafficSampleLimit":   trafficSampleLimit,
+		}); err != nil {
+			log.Warn("Failed to render the dashboard handlers template", "err", err)
+			return
+		}
+		w.Write(handlers.Bytes())
+	default:
+		website, err := Asset(path[1:])
+		if err != nil {
+			log.Warn("Failed to load the asset", "path", path, "err", err)
+			return
+		}
+		w.Write(website)
+	}
 }
 
 // apiHandler handles requests for dashboard
@@ -219,6 +254,7 @@ func (db *dashboard) apiHandler(conn *websocket.Conn) {
 			closed <- true
 			return
 		}
+		// Ignore all messages
 	}
 }
 
@@ -235,11 +271,10 @@ func (db *dashboard) collectData() {
 
 			now := time.Now()
 			traffic := metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Rate1()
-			traffic = traffic * traffic
 			//if traffic != 0 {
 			//	traffic = math.Log(traffic)
 			//}
-			memoryInuse := metrics.DefaultRegistry.Get("system/memory/inuse").(metrics.Meter).Rate1()
+			memoryInUse := metrics.DefaultRegistry.Get("system/memory/inuse").(metrics.Meter).Rate1()
 			//if memoryInuse != 0 {
 			//	memoryInuse = math.Log(memoryInuse)
 			//}
@@ -249,10 +284,11 @@ func (db *dashboard) collectData() {
 			}
 			memory := &data{
 				Time:  now,
-				Value: memoryInuse,
+				Value: memoryInUse,
 			}
 
-			//TODO (kurkomisi): do I need to ensure the correct order?
+			// TODO (kurkomisi): do I need to ensure the correct order?
+			// TODO (kurkomisi): do not mix traffic with processor!
 			go db.update(traff, memory)
 		}
 	}
