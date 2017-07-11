@@ -199,7 +199,6 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) error {
 	if root != common.Hash(post.Root) {
 		return fmt.Errorf("post state root mismatch: got %x, want %x", root, post.Root)
 	}
-	// TODO(fjl): check return data
 	return nil
 }
 
