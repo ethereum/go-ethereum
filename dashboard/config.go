@@ -25,7 +25,7 @@ var DefaultConfig = Config{
 	Refresh: time.Second,
 }
 
-// Config is the config of the dashboard
+// Config contains the configuration parameters of the dashboard.
 type Config struct {
 	// Host is the host interface on which to start the dashboard server. If this
 	// field is empty, no dashboard will be started.
@@ -40,6 +40,6 @@ type Config struct {
 	Refresh time.Duration `toml:",omitempty"`
 
 	// Assets offers a possibility to manually set the dashboard website's location on the server side
-	// useful at debugging - avoids the repeated generation of the binary
+	// useful for debugging - avoids the repeated generation of the binary
 	Assets  string `toml:",omitempty"`
 }

@@ -201,7 +201,7 @@ var (
 	}
 	DashboardAssetsFlag = cli.StringFlag{
 		Name:  "dashboard.assets",
-		Usage: "Directory of the dashboard assets, useful for debugging (default = assets.go binary)",
+		Usage: "Path of the dashboard assets, useful for debugging (default = \"\", in this case assets.go binary is used)",
 		Value: dashboard.DefaultConfig.Assets,
 	}
 	// Ethash settings
