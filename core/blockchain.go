@@ -140,7 +140,7 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, engine co
 	bc.SetProcessor(NewStateProcessor(config, bc, engine))
 
 	var err error
-	bc.hc, err = NewHeaderChain(chainDb, config, engine, bc.getProcInterrupt)
+	bc.hc, err = NewHeaderChain(chainDb, config, engine)
 	if err != nil {
 		return nil, err
 	}
@@ -167,10 +167,6 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, engine co
 	// Take ownership of this particular state
 	go bc.update()
 	return bc, nil
-}
-
-func (bc *BlockChain) getProcInterrupt() bool {
-	return atomic.LoadInt32(&bc.procInterrupt) == 1
 }
 
 // loadLastState loads the last known chain state from the database. This method
