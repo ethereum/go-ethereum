@@ -62,6 +62,7 @@ type Contract struct {
 	Args []byte
 
 	DelegateCall bool
+	Failed       bool // Used to identify the execution status of the current transaction
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
@@ -150,4 +151,13 @@ func (self *Contract) SetCallCode(addr *common.Address, hash common.Hash, code [
 	self.Code = code
 	self.CodeHash = hash
 	self.CodeAddr = addr
+}
+
+// MarkFailed mark current transaction's execution failed.
+func (self *Contract) MarkFailed() {
+	self.Failed = true
+	// affect parent recursively
+	if parent, ok := self.caller.(*Contract); ok {
+		parent.MarkFailed()
+	}
 }

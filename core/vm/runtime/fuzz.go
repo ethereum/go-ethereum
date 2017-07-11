@@ -23,7 +23,7 @@ package runtime
 // This returns 1 for valid parsable/runable code, 0
 // for invalid opcode.
 func Fuzz(input []byte) int {
-	_, _, err := Execute(input, input, &Config{
+	_, _, _, err := Execute(input, input, &Config{
 		GasLimit: 3000000,
 	})
 

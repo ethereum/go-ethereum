@@ -230,6 +230,6 @@ func RunVm(statedb *state.StateDB, env, exec map[string]string) ([]byte, []*type
 	vm.PrecompiledContracts = make(map[common.Address]vm.PrecompiledContract)
 
 	environment, _ := NewEVMEnvironment(true, chainConfig, statedb, env, exec)
-	ret, g, err := environment.Call(caller, to, data, gas.Uint64(), value)
+	ret, g, _, err := environment.Call(caller, to, data, gas.Uint64(), value)
 	return ret, statedb.Logs(), new(big.Int).SetUint64(g), err
 }
