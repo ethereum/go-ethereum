@@ -81,6 +81,7 @@ var (
 		utils.LightModeFlag,
 		utils.SyncModeFlag,
 		utils.LightServFlag,
+		utils.LightServStatsFlag,
 		utils.LightPeersFlag,
 		utils.LightKDFFlag,
 		utils.CacheFlag,
