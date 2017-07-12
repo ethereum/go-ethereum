@@ -19,9 +19,7 @@ package core
 import (
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
-	"os"
 	"sort"
 	"sync"
 	"time"
@@ -33,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -172,8 +169,8 @@ type TxPool struct {
 	signer       types.Signer
 	mu           sync.RWMutex
 
-	locals  *accountSet    // Set of local transaction to exepmt from evicion rules
-	journal io.WriteCloser // Journal of local transaction to back up to disk
+	locals  *accountSet // Set of local transaction to exepmt from evicion rules
+	journal *txJournal  // Journal of local transaction to back up to disk
 
 	pending map[common.Address]*txList         // All currently processable transactions
 	queue   map[common.Address]*txList         // Queued but non-processable transactions
@@ -212,8 +209,16 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, eventMux *e
 	pool.priced = newTxPricedList(&pool.all)
 	pool.resetState()
 
-	if err := pool.rotateJournal(); err != nil {
-		log.Warn("Failed to load transaction journal", "err", err)
+	// If local transactions and journaling is enabled, load from disk
+	if !config.NoLocals && config.Journal != "" {
+		pool.journal = newTxJournal(config.Journal)
+
+		if err := pool.journal.load(pool.AddLocal); err != nil {
+			log.Warn("Failed to load transaction journal", "err", err)
+		}
+		if err := pool.journal.rotate(pool.local()); err != nil {
+			log.Warn("Failed to rotate transaction journal", "err", err)
+		}
 	}
 	// Start the event loop and return
 	pool.wg.Add(1)
@@ -294,11 +299,11 @@ func (pool *TxPool) loop() {
 
 		// Handle local transaction journal rotation
 		case <-journal.C:
-			pool.mu.Lock()
-			if err := pool.rotateJournal(); err != nil {
-				log.Warn("Failed to rotate local tx journal", "err", err)
+			if pool.journal != nil {
+				if err := pool.journal.rotate(pool.local()); err != nil {
+					log.Warn("Failed to rotate local tx journal", "err", err)
+				}
 			}
-			pool.mu.Unlock()
 		}
 	}
 }
@@ -333,7 +338,7 @@ func (pool *TxPool) Stop() {
 	pool.wg.Wait()
 
 	if pool.journal != nil {
-		pool.journal.Close()
+		pool.journal.close()
 	}
 	log.Info("Transaction pool stopped")
 }
@@ -419,6 +424,22 @@ func (pool *TxPool) Pending() (map[common.Address]types.Transactions, error) {
 		pending[addr] = list.Flatten()
 	}
 	return pending, nil
+}
+
+// local retrieves all currently known local transactions, groupped by origin
+// account and sorted by nonce. The returned transaction set is a copy and can be
+// freely modified by calling code.
+func (pool *TxPool) local() map[common.Address]types.Transactions {
+	txs := make(map[common.Address]types.Transactions)
+	for addr := range pool.locals.accounts {
+		if pending := pool.pending[addr]; pending != nil {
+			txs[addr] = append(txs[addr], pending.Flatten()...)
+		}
+		if queued := pool.queue[addr]; queued != nil {
+			txs[addr] = append(txs[addr], queued.Flatten()...)
+		}
+	}
+	return txs
 }
 
 // validateTx checks whether a transaction is valid according to the consensus
@@ -574,7 +595,7 @@ func (pool *TxPool) journalTx(from common.Address, tx *types.Transaction) {
 	if pool.journal == nil || !pool.locals.contains(from) {
 		return
 	}
-	if err := rlp.Encode(pool.journal, tx); err != nil {
+	if err := pool.journal.insert(tx); err != nil {
 		log.Warn("Failed to journal local transaction", "err", err)
 	}
 }
@@ -972,107 +993,6 @@ func (pool *TxPool) demoteUnexecutables(state *state.StateDB) {
 			delete(pool.beats, addr)
 		}
 	}
-}
-
-// rotateJournal regenerates the local transaction journal based on the current
-// contents of the transaction pool. If the pool doesn't have a journal opened,
-// it will first pull in the contents of any existing one from disk.
-func (pool *TxPool) rotateJournal() error {
-	// If local transactions or journaling are disabled, skip
-	if pool.config.NoLocals || pool.config.Journal == "" {
-		return nil
-	}
-	// If there's no journal open (first run), parse any existing one
-	if pool.journal == nil {
-		// Skip the parsing if the journal file doens't exist at all
-		if _, err := os.Stat(pool.config.Journal); !os.IsNotExist(err) {
-			// Open the journal for loading any past transactions
-			journal, err := os.Open(pool.config.Journal)
-			if err != nil {
-				return err
-			}
-			// Inject all transactions from the journal into the pool
-			stream := rlp.NewStream(journal, 0)
-			total, dropped := 0, 0
-
-			for {
-				tx := new(types.Transaction)
-				if err := stream.Decode(tx); err != nil {
-					if err == io.EOF {
-						break
-					}
-					return err
-				}
-				total++
-				if err := pool.addTx(tx, true); err != nil {
-					log.Debug("Failed to add journaled transaction", "err", err)
-					dropped++
-					continue
-				}
-			}
-			log.Info("Loaded local transaction journal", "transactions", total, "dropped", dropped)
-
-			// All transactions added, set the active journal
-			pool.journal = journal
-		}
-	}
-	// Close the current journal (if any is open)
-	if pool.journal != nil {
-		if err := pool.journal.Close(); err != nil {
-			return err
-		}
-		pool.journal = nil
-	}
-	// Generate a new journal with the contents of the current pool
-	replacement, err := os.OpenFile(pool.config.Journal+".new", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
-	if err != nil {
-		return err
-	}
-	accounts, journaled := 0, 0
-	for addr := range pool.locals.accounts {
-		// Flatten and serialize all the local executable transactions
-		pending := pool.pending[addr]
-		if pending != nil {
-			txs := pending.Flatten()
-			for _, tx := range txs {
-				if err = rlp.Encode(replacement, tx); err != nil {
-					replacement.Close()
-					return err
-				}
-			}
-			journaled += len(txs)
-		}
-		// Flatten and serialize all the local non-executable transactions
-		queued := pool.queue[addr]
-		if queued != nil {
-			txs := queued.Flatten()
-			for _, tx := range txs {
-				if err = rlp.Encode(replacement, tx); err != nil {
-					replacement.Close()
-					return err
-				}
-			}
-			journaled += len(txs)
-		}
-		// Bump the address counter if we did have transactions
-		if pending != nil || queued != nil {
-			accounts++
-		}
-	}
-	replacement.Close()
-
-	// Replace the live journal with the newly generated one
-	if err = os.Rename(pool.config.Journal+".new", pool.config.Journal); err != nil {
-		return err
-	}
-	journal, err := os.OpenFile(pool.config.Journal, os.O_WRONLY|os.O_APPEND, 0755)
-	if err != nil {
-		return err
-	}
-	pool.journal = journal
-	log.Info("Regenerated local transaction journal", "transactions", journaled, "accounts", accounts)
-
-	return nil
 }
 
 // addressByHeartbeat is an account address tagged with its last activity timestamp.
