@@ -17,7 +17,6 @@
 package ethapi
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -35,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -835,7 +833,7 @@ func newRPCPendingTransaction(tx *types.Transaction) *RPCTransaction {
 	}
 }
 
-// newRPCTransaction returns a transaction that will serialize to the RPC representation.
+// newRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.
 func newRPCTransactionFromBlockIndex(b *types.Block, txIndex uint) (*RPCTransaction, error) {
 	if txIndex < uint(len(b.Transactions())) {
 		tx := b.Transactions()[txIndex]
@@ -872,18 +870,16 @@ func newRPCRawTransactionFromBlockIndex(b *types.Block, txIndex uint) (hexutil.B
 		tx := b.Transactions()[txIndex]
 		return rlp.EncodeToBytes(tx)
 	}
-
 	return nil, nil
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC representation.
-func newRPCTransaction(b *types.Block, txHash common.Hash) (*RPCTransaction, error) {
+func newRPCTransaction(b *types.Block, hash common.Hash) (*RPCTransaction, error) {
 	for idx, tx := range b.Transactions() {
-		if tx.Hash() == txHash {
+		if tx.Hash() == hash {
 			return newRPCTransactionFromBlockIndex(b, uint(idx))
 		}
 	}
-
 	return nil, nil
 }
 
@@ -896,24 +892,6 @@ type PublicTransactionPoolAPI struct {
 // NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
 func NewPublicTransactionPoolAPI(b Backend, nonceLock *AddrLocker) *PublicTransactionPoolAPI {
 	return &PublicTransactionPoolAPI{b, nonceLock}
-}
-
-func getTransaction(chainDb ethdb.Database, b Backend, txHash common.Hash) (*types.Transaction, bool, error) {
-	txData, err := chainDb.Get(txHash.Bytes())
-	isPending := false
-	tx := new(types.Transaction)
-
-	if err == nil && len(txData) > 0 {
-		if err := rlp.DecodeBytes(txData, tx); err != nil {
-			return nil, isPending, err
-		}
-	} else {
-		// pending transaction?
-		tx = b.GetPoolTransaction(txHash)
-		isPending = true
-	}
-
-	return tx, isPending, nil
 }
 
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
@@ -976,90 +954,45 @@ func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, addr
 	return (*hexutil.Uint64)(&nonce), state.Error()
 }
 
-// getTransactionBlockData fetches the meta data for the given transaction from the chain database. This is useful to
-// retrieve block information for a hash. It returns the block hash, block index and transaction index.
-func getTransactionBlockData(chainDb ethdb.Database, txHash common.Hash) (common.Hash, uint64, uint64, error) {
-	var txBlock struct {
-		BlockHash  common.Hash
-		BlockIndex uint64
-		Index      uint64
-	}
-
-	blockData, err := chainDb.Get(append(txHash.Bytes(), 0x0001))
-	if err != nil {
-		return common.Hash{}, uint64(0), uint64(0), err
-	}
-
-	reader := bytes.NewReader(blockData)
-	if err = rlp.Decode(reader, &txBlock); err != nil {
-		return common.Hash{}, uint64(0), uint64(0), err
-	}
-
-	return txBlock.BlockHash, txBlock.BlockIndex, txBlock.Index, nil
-}
-
 // GetTransactionByHash returns the transaction for the given hash
 func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, hash common.Hash) (*RPCTransaction, error) {
-	var tx *types.Transaction
-	var isPending bool
-	var err error
-
-	if tx, isPending, err = getTransaction(s.b.ChainDb(), s.b, hash); err != nil {
-		log.Debug("Failed to retrieve transaction", "hash", hash, "err", err)
-		return nil, nil
-	} else if tx == nil {
+	// Try to return an already finalized transaction
+	if blockHash, _, index := core.GetLookupEntry(s.b.ChainDb(), hash); blockHash != (common.Hash{}) {
+		if block, _ := s.b.GetBlock(ctx, blockHash); block != nil {
+			return newRPCTransactionFromBlockIndex(block, uint(index))
+		}
 		return nil, nil
 	}
-	if isPending {
+	// No finalized transaction, try to retrieve it from the pool
+	if tx := s.b.GetPoolTransaction(hash); tx != nil {
 		return newRPCPendingTransaction(tx), nil
 	}
-
-	blockHash, _, _, err := getTransactionBlockData(s.b.ChainDb(), hash)
-	if err != nil {
-		log.Debug("Failed to retrieve transaction block", "hash", hash, "err", err)
-		return nil, nil
-	}
-
-	if block, _ := s.b.GetBlock(ctx, blockHash); block != nil {
-		return newRPCTransaction(block, hash)
-	}
+	// Transaction unknown, return as such
 	return nil, nil
 }
 
 // GetRawTransactionByHash returns the bytes of the transaction for the given hash.
 func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
 	var tx *types.Transaction
-	var err error
 
-	if tx, _, err = getTransaction(s.b.ChainDb(), s.b, hash); err != nil {
-		log.Debug("Failed to retrieve transaction", "hash", hash, "err", err)
-		return nil, nil
-	} else if tx == nil {
-		return nil, nil
+	// Retrieve a finalized transaction, or a pooled otherwise
+	if tx, _, _, _ = core.GetTransaction(s.b.ChainDb(), hash); tx == nil {
+		if tx = s.b.GetPoolTransaction(hash); tx == nil {
+			// Transaction not found anywhere, abort
+			return nil, nil
+		}
 	}
-
+	// Serialize to RLP and return
 	return rlp.EncodeToBytes(tx)
 }
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
 func (s *PublicTransactionPoolAPI) GetTransactionReceipt(hash common.Hash) (map[string]interface{}, error) {
-	receipt := core.GetReceipt(s.b.ChainDb(), hash)
+	receipt, blockHash, blockNumber, index := core.GetReceipt(s.b.ChainDb(), hash)
 	if receipt == nil {
-		log.Debug("Receipt not found for transaction", "hash", hash)
 		return nil, nil
 	}
-
-	tx, _, err := getTransaction(s.b.ChainDb(), s.b, hash)
-	if err != nil {
-		log.Debug("Failed to retrieve transaction", "hash", hash, "err", err)
-		return nil, nil
-	}
-
-	txBlock, blockIndex, index, err := getTransactionBlockData(s.b.ChainDb(), hash)
-	if err != nil {
-		log.Debug("Failed to retrieve transaction block", "hash", hash, "err", err)
-		return nil, nil
-	}
+	tx, _, _, _ := core.GetTransaction(s.b.ChainDb(), hash)
 
 	var signer types.Signer = types.FrontierSigner{}
 	if tx.Protected() {
@@ -1069,8 +1002,8 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(hash common.Hash) (map[
 
 	fields := map[string]interface{}{
 		"root":              hexutil.Bytes(receipt.PostState),
-		"blockHash":         txBlock,
-		"blockNumber":       hexutil.Uint64(blockIndex),
+		"blockHash":         blockHash,
+		"blockNumber":       hexutil.Uint64(blockNumber),
 		"transactionHash":   hash,
 		"transactionIndex":  hexutil.Uint64(index),
 		"from":              from,

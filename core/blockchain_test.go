@@ -806,8 +806,8 @@ func TestChainTxReorgs(t *testing.T) {
 		if txn, _, _, _ := GetTransaction(db, tx.Hash()); txn != nil {
 			t.Errorf("drop %d: tx %v found while shouldn't have been", i, txn)
 		}
-		if GetReceipt(db, tx.Hash()) != nil {
-			t.Errorf("drop %d: receipt found while shouldn't have been", i)
+		if rcpt, _, _, _ := GetReceipt(db, tx.Hash()); rcpt != nil {
+			t.Errorf("drop %d: receipt %v found while shouldn't have been", i, rcpt)
 		}
 	}
 	// added tx
@@ -815,7 +815,7 @@ func TestChainTxReorgs(t *testing.T) {
 		if txn, _, _, _ := GetTransaction(db, tx.Hash()); txn == nil {
 			t.Errorf("add %d: expected tx to be found", i)
 		}
-		if GetReceipt(db, tx.Hash()) == nil {
+		if rcpt, _, _, _ := GetReceipt(db, tx.Hash()); rcpt == nil {
 			t.Errorf("add %d: expected receipt to be found", i)
 		}
 	}
@@ -824,7 +824,7 @@ func TestChainTxReorgs(t *testing.T) {
 		if txn, _, _, _ := GetTransaction(db, tx.Hash()); txn == nil {
 			t.Errorf("share %d: expected tx to be found", i)
 		}
-		if GetReceipt(db, tx.Hash()) == nil {
+		if rcpt, _, _, _ := GetReceipt(db, tx.Hash()); rcpt == nil {
 			t.Errorf("share %d: expected receipt to be found", i)
 		}
 	}
