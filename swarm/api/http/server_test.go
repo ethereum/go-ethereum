@@ -18,12 +18,16 @@ package http_test
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/swarm/api"
+	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
@@ -127,4 +131,62 @@ func TestBzzrGetPath(t *testing.T) {
 		}
 	}
 
+}
+
+// TestBzzRootRedirect tests that getting the root path of a manifest without
+// a trailing slash gets redirected to include the trailing slash so that
+// relative URLs work as expected.
+func TestBzzRootRedirect(t *testing.T) {
+	srv := testutil.NewTestSwarmServer(t)
+	defer srv.Close()
+
+	// create a manifest with some data at the root path
+	client := swarm.NewClient(srv.URL)
+	data := []byte("data")
+	file := &swarm.File{
+		ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
+		ManifestEntry: api.ManifestEntry{
+			Path:        "",
+			ContentType: "text/plain",
+			Size:        int64(len(data)),
+		},
+	}
+	hash, err := client.Upload(file, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// define a CheckRedirect hook which ensures there is only a single
+	// redirect to the correct URL
+	redirected := false
+	httpClient := http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if redirected {
+				return errors.New("too many redirects")
+			}
+			redirected = true
+			expectedPath := "/bzz:/" + hash + "/"
+			if req.URL.Path != expectedPath {
+				return fmt.Errorf("expected redirect to %q, got %q", expectedPath, req.URL.Path)
+			}
+			return nil
+		},
+	}
+
+	// perform the GET request and assert the response
+	res, err := httpClient.Get(srv.URL + "/bzz:/" + hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if !redirected {
+		t.Fatal("expected GET /bzz:/<hash> to redirect to /bzz:/<hash>/ but it didn't")
+	}
+	gotData, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(gotData, data) {
+		t.Fatalf("expected response to equal %q, got %q", data, gotData)
+	}
 }
