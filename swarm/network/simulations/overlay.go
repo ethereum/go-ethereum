@@ -143,6 +143,7 @@ func randomMocker(net *simulations.Network) {
 
 	for {
 		var lowid, highid int
+    var wg sync.WaitGroup
 		randWait := rand.Intn(5000) + 1000
 		rand1 := rand.Intn(9)
 		rand2 := rand.Intn(9)
@@ -158,16 +159,22 @@ func randomMocker(net *simulations.Network) {
 			} else if rand1 == 9 {
 				rand1 = 0
 			}
+      lowid = rand1
+      highid = rand2
 		}
+    var steps = highid - lowid
+    wg.Add(steps)
 		for i := lowid; i < highid; i++ {
-			log.Debug(fmt.Sprintf("node %v shutting down", ids[i]))
+			log.Info(fmt.Sprintf("node %v shutting down", ids[i]))
 			net.Stop(ids[i])
 			go func(id discover.NodeID) {
 				time.Sleep(time.Duration(randWait) * time.Millisecond)
 				net.Start(id)
+        wg.Done()
 			}(ids[i])
 			time.Sleep(time.Duration(randWait) * time.Millisecond)
 		}
+    wg.Wait()
 	}
 }
 
@@ -200,7 +207,7 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	s := NewSimulation()
 	services := adapters.Services{

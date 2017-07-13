@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+  "strconv"
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -346,6 +347,7 @@ func (s *Server) StartMocker(w http.ResponseWriter, req *http.Request) {
 
 // StreamNetworkEvents streams network events as a server-sent-events stream
 func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
+	activeMsgFilters := make(map[string][]uint64)
 	events := make(chan *Event)
 	sub := s.network.events.Subscribe(events)
 	defer sub.Unsubscribe()
@@ -410,9 +412,38 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	// check if filtering has been requested
+	if fp := req.URL.Query().Get("filterProtocol"); fp != ""{
+		if fc := req.URL.Query().Get("filterCode"); fc != ""{
+			strs := strings.Split(fc, ",")
+			uints := make([]uint64, len(strs))
+			for i := range uints {
+				u, err := strconv.ParseUint(strs[i], 10, 64)
+				if err != nil {
+					http.Error(w, "Invalid msg code for filtering provided", http.StatusBadRequest)
+					return
+				}
+        uints = append(uints, u)
+			}
+			activeMsgFilters[fp] = uints
+		} else {
+			//if no code has been provided, assume 0 to be the code
+			uints := make([]uint64, 1)
+      uints[0] = 0
+			activeMsgFilters[fp] = uints
+		}
+	}
+
 	for {
 		select {
 		case event := <-events:
+      //filtering events only works for messages
+			if event.Msg != nil {
+        //if the message does not pass filter, break handling
+        if !s.evalMsgFilter(activeMsgFilters, event) {
+          break
+        }
+			}
 			if err := writeEvent(event); err != nil {
 				writeErr(err)
 				return
@@ -421,6 +452,25 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
+}
+
+func (s *Server) evalMsgFilter(activeMsgFilters map[string][]uint64, event *Event)  bool{
+  matches := false
+  //client needs to at least pass "filterProtocol" to enable filtering
+  //if not, no messages will be delivered at all
+  if len(activeMsgFilters) > 0 {
+    //only allow the selected protocol
+    if v,ok := activeMsgFilters[event.Msg.Protocol]; ok {
+      for _, code := range v {
+        //only allow selected message codes
+        if code == event.Msg.Code {
+          matches = true
+          break
+        }
+      }
+    }
+  }
+  return matches
 }
 
 // CreateSnapshot creates a network snapshot

@@ -23,6 +23,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -80,7 +81,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 			MaxPeers:        math.MaxInt32,
 			NoDiscovery:     true,
 			Dialer:          s,
-			EnableMsgEvents: false,
+			EnableMsgEvents: true,
 		},
 		NoUSB: true,
 	})
@@ -152,7 +153,10 @@ type SimNode struct {
 
 // Addr returns the node's discovery address
 func (self *SimNode) Addr() []byte {
-	return []byte(self.Node().String())
+  log.Warn("Node.String(): %v", self.Node().String())
+  log.Warn("self.ID.String.(): %v", self.ID.String())
+  return []byte(self.ID.String())
+	//return []byte(self.Node().String())
 }
 
 // Node returns a discover.Node representing the SimNode

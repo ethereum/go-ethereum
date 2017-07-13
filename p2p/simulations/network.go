@@ -180,6 +180,7 @@ func (self *Conn) String() string {
 type Msg struct {
 	One          discover.NodeID `json:"one"`
 	Other        discover.NodeID `json:"other"`
+	Protocol     string          `json:"protocol"`
 	Code         uint64          `json:"code"`
 	Received     bool            `json:"received"`
 	controlFired bool
@@ -360,7 +361,7 @@ func (self *Network) watchPeerEvents(id discover.NodeID, events chan *p2p.PeerEv
 			case p2p.PeerEventTypeDrop:
 				self.DidDisconnect(id, peer)
 			case p2p.PeerEventTypeMsgSend:
-				self.DidSend(id, peer, *event.MsgCode)
+				self.DidSend(id, peer, *event.MsgCode, event.Protocol)
 			case p2p.PeerEventTypeMsgRecv:
 				self.DidReceive(peer, id, *event.MsgCode)
 			}
@@ -388,7 +389,7 @@ func (self *Network) Stop(id discover.NodeID) error {
 	node.Up = false
 	log.Info(fmt.Sprintf("stop node %v: %v", id, node.Up))
 
-	self.events.Send(ControlEvent(node))
+	self.events.Send(NewEvent(node))
 	return nil
 }
 
@@ -507,11 +508,12 @@ func (self *Network) Send(senderid, receiverid discover.NodeID, msgcode uint64, 
 	self.events.Send(ControlEvent(msg))
 }
 
-func (self *Network) DidSend(sender, receiver discover.NodeID, msgcode uint64) error {
+func (self *Network) DidSend(sender, receiver discover.NodeID, msgcode uint64, msgProtocol string) error {
 	msg := &Msg{
 		One:      sender,
 		Other:    receiver,
 		Code:     msgcode,
+    Protocol: msgProtocol,
 		Received: false,
 	}
 	self.events.Send(NewEvent(msg))
