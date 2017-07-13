@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -65,11 +64,11 @@ type Pss struct {
 	network.Overlay                                                         // we can get the overlayaddress from this
 	peerPool        map[pot.Address]map[whisper.TopicType]p2p.MsgReadWriter // keep track of all virtual p2p.Peers we are currently speaking to
 	fwdPool         map[discover.NodeID]*protocols.Peer                     // keep track of all peers sitting on the pssmsg routing layer
-	keyPool         map[pot.Address]ecdsa.PublicKey                         // keep track of all public keys so we can encrypt for our peers
-	reverseKeyPool  map[string]pot.Address                                  // as above but reverse lookup
-	handlers        map[whisper.TopicType]map[*Handler]bool                 // topic and version based pss payload handlers
-	fwdcache        map[pssDigest]pssCacheEntry                             // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
-	cachettl        time.Duration                                           // how long to keep messages in fwdcache
+	keyPool         map[pot.Address]map[whisper.TopicType]ecdsa.PublicKey   // keep track of all public keys so we can encrypt for our peers
+	reverseKeyPool  map[ecdsa.PublicKey]map[whisper.TopicType]pot.Address
+	handlers        map[whisper.TopicType]map[*Handler]bool // topic and version based pss payload handlers
+	fwdcache        map[pssDigest]pssCacheEntry             // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
+	cachettl        time.Duration                           // how long to keep messages in fwdcache
 	lock            sync.Mutex
 	dpa             *storage.DPA
 	privatekey      *ecdsa.PrivateKey
@@ -98,8 +97,8 @@ func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 		Overlay:        k,
 		peerPool:       make(map[pot.Address]map[whisper.TopicType]p2p.MsgReadWriter, PssPeerCapacity),
 		fwdPool:        make(map[discover.NodeID]*protocols.Peer),
-		keyPool:        make(map[pot.Address]ecdsa.PublicKey),
-		reverseKeyPool: make(map[string]pot.Address),
+		keyPool:        make(map[pot.Address]map[whisper.TopicType]ecdsa.PublicKey),
+		reverseKeyPool: make(map[ecdsa.PublicKey]map[whisper.TopicType]pot.Address),
 		handlers:       make(map[whisper.TopicType]map[*Handler]bool),
 		fwdcache:       make(map[pssDigest]pssCacheEntry),
 		cachettl:       params.Cachettl,
@@ -176,25 +175,45 @@ func (self *Pss) Register(topic *whisper.TopicType, handler Handler) func() {
 	return func() { self.deregister(topic, &handler) }
 }
 
-func (self *Pss) AddAddressKeyPair(addr pot.Address, pubkey ecdsa.PublicKey) {
+// Add a Public key address mapping
+// returns false if identical mapping already exists
+func (self *Pss) AddPublicKey(addr pot.Address, topic whisper.TopicType, pubkey ecdsa.PublicKey) bool {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	self.keyPool[addr] = pubkey
-	self.reverseKeyPool[common.ToHex(crypto.FromECDSAPub(&pubkey))] = addr
+	if len(self.keyPool[addr]) == 0 {
+		self.keyPool[addr] = make(map[whisper.TopicType]ecdsa.PublicKey)
+		self.reverseKeyPool[pubkey] = make(map[whisper.TopicType]pot.Address)
+	}
+	self.keyPool[addr][topic] = pubkey
+	self.reverseKeyPool[pubkey][topic] = addr
+	return true
 }
 
-// may need these later, please let them be
-////func (self *Pss) RemoveAddressKeyPair(addr pot.Address, pubkey ecdsa.PublicKey) {
-//	delete(self.reverseKeyPool, &self.keyPool[addr])
-//	delete(self.keyPool, addr)
-//}
-//
-//func (self *Pss) hasAddressKeyPair(addr pot.Address, pubkey ecdsa.PublicKey) bool {
-//	if self.keyPool[addr] != nil {
-//		return *self.keyPool[addr] == pubkey
-//	}
-//	return false
-//}
+func (self *Pss) RemovePublicKey(addr pot.Address, topic whisper.TopicType, pubkey ecdsa.PublicKey) bool {
+	if len(self.keyPool[addr]) == 0 {
+		return false
+	}
+	zeroKey := ecdsa.PublicKey{}
+	if self.keyPool[addr][topic] == zeroKey {
+		return false
+	}
+	delete(self.reverseKeyPool, pubkey)
+	self.keyPool[addr][topic] = zeroKey
+	return true
+}
+
+func (self *Pss) GetKeys(addr pot.Address) (keys []ecdsa.PublicKey) {
+outer:
+	for _, key := range self.keyPool[addr] {
+		for _, havekey := range keys {
+			if havekey == key {
+				continue outer
+			}
+		}
+		keys = append(keys, key)
+	}
+	return
+}
 
 func (self *Pss) deregister(topic *whisper.TopicType, h *Handler) {
 	self.lock.Lock()
@@ -300,9 +319,10 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 
 	nid, _ := discover.HexID("0x00")
 	p := p2p.NewPeer(nid, fmt.Sprintf("%x", recvmsg.Src), []p2p.Cap{})
-	addr := self.reverseKeyPool[common.ToHex(crypto.FromECDSAPub(recvmsg.Src))]
+	//addr := self.reverseKeyPool[common.ToHex(crypto.FromECDSAPub(recvmsg.Src))]
+	addr := self.reverseKeyPool[*recvmsg.Src][recvmsg.Topic]
 	log.Warn("recvkey", "key", *recvmsg.Src, "addr", addr)
-	if bytes.Equal([]byte{}, addr[:]) {
+	if addr.IsZero() {
 		return fmt.Errorf("unknown key", "addr", addr)
 	}
 
@@ -323,7 +343,7 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 func (self *Pss) SendAsym(to []byte, topic whisper.TopicType, msg []byte) error {
 	var potaddr pot.Address
 	copy(potaddr[:], to)
-	topubkey := self.keyPool[potaddr]
+	topubkey := self.keyPool[potaddr][topic]
 	log.Debug("using pubkey", "pubkey", topubkey)
 	wparams := &whisper.MessageParams{
 		TTL:      DefaultTTL,

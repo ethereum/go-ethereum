@@ -41,6 +41,10 @@ func NewAddressFromBytes(b []byte) Address {
 	return Address(h)
 }
 
+func (a Address) IsZero() bool {
+	return a.Bin() == zerosBin
+}
+
 func (a Address) String() string {
 	return fmt.Sprintf("%x", a[:])
 }
