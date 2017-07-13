@@ -82,12 +82,6 @@ func BenchmarkMipmaps(b *testing.B) {
 			gen.AddUncheckedReceipt(receipt)
 
 		}
-
-		// store the receipts
-		err := core.WriteReceipts(db, receipts)
-		if err != nil {
-			b.Fatal(err)
-		}
 		core.WriteMipmapBloom(db, uint64(i+1), receipts)
 	})
 	for i, block := range chain {
@@ -182,12 +176,6 @@ func TestFilters(t *testing.T) {
 			}
 			gen.AddUncheckedReceipt(receipt)
 			receipts = types.Receipts{receipt}
-		}
-
-		// store the receipts
-		err := core.WriteReceipts(db, receipts)
-		if err != nil {
-			t.Fatal(err)
 		}
 		// i is used as block number for the writes but since the i
 		// starts at 0 and block 0 (genesis) is already present increment

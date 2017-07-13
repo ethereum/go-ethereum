@@ -71,6 +71,14 @@ var (
 	preimageHitCounter = metrics.NewCounter("db/preimage/hits")
 )
 
+// lookupEntry is a positional metadata to help looking up the data content of
+// a transaction or receipt given only its hash.
+type lookupEntry struct {
+	BlockHash  common.Hash
+	BlockIndex uint64
+	Index      uint64
+}
+
 // encodeBlockNumber encodes a block number as big endian uint64
 func encodeBlockNumber(number uint64) []byte {
 	enc := make([]byte, 8)
@@ -258,23 +266,18 @@ func GetBlockReceipts(db ethdb.Database, hash common.Hash, number uint64) types.
 // GetLookupEntry retrieves the positional metadata associated with a transaction
 // hash to allow retrieving the transaction or receipt by hash.
 func GetLookupEntry(db ethdb.Database, hash common.Hash) (common.Hash, uint64, uint64) {
-	// Define the transaction positional metadata
-	var entry struct {
-		BlockHash  common.Hash
-		BlockIndex uint64
-		Index      uint64
-	}
-	// Retrieve the transaction metadata and resolve the transaction from the body
+	// Load the positional metadata from disk and bail if it fails
 	data, _ := db.Get(append(lookupPrefix, hash.Bytes()...))
-	if len(data) != 0 {
-		// New style transaction, retrieve contents from the block
-		if err := rlp.DecodeBytes(data, &entry); err != nil {
-			log.Error("Invalid lookup entry RLP", "hash", hash, "err", err)
-			return common.Hash{}, 0, 0
-		}
-		return entry.BlockHash, entry.BlockIndex, entry.Index
+	if len(data) == 0 {
+		return common.Hash{}, 0, 0
 	}
-	return common.Hash{}, 0, 0
+	// Parse and return the contents of the lookup entry
+	var entry lookupEntry
+	if err := rlp.DecodeBytes(data, &entry); err != nil {
+		log.Error("Invalid lookup entry RLP", "hash", hash, "err", err)
+		return common.Hash{}, 0, 0
+	}
+	return entry.BlockHash, entry.BlockIndex, entry.Index
 }
 
 // GetTransaction retrieves a specific transaction from the database, along with
@@ -286,7 +289,7 @@ func GetTransaction(db ethdb.Database, hash common.Hash) (*types.Transaction, co
 	if blockHash != (common.Hash{}) {
 		body := GetBody(db, blockHash, blockNumber)
 		if body == nil || len(body.Transactions) <= int(txIndex) {
-			log.Error("Transaction refereced missing", "number", blockNumber, "hash", blockHash, "index", txIndex)
+			log.Error("Transaction referenced missing", "number", blockNumber, "hash", blockHash, "index", txIndex)
 			return nil, common.Hash{}, 0, 0
 		}
 		return body.Transactions[txIndex], blockHash, blockNumber, txIndex
@@ -305,15 +308,11 @@ func GetTransaction(db ethdb.Database, hash common.Hash) (*types.Transaction, co
 	if len(data) == 0 {
 		return nil, common.Hash{}, 0, 0
 	}
-	var meta struct {
-		BlockHash  common.Hash
-		BlockIndex uint64
-		Index      uint64
-	}
-	if err := rlp.DecodeBytes(data, &meta); err != nil {
+	var entry lookupEntry
+	if err := rlp.DecodeBytes(data, &entry); err != nil {
 		return nil, common.Hash{}, 0, 0
 	}
-	return &tx, meta.BlockHash, meta.BlockIndex, meta.Index
+	return &tx, entry.BlockHash, entry.BlockIndex, entry.Index
 }
 
 // GetReceipt retrieves a specific transaction receipt from the database, along with
@@ -468,16 +467,12 @@ func WriteLookupEntries(db ethdb.Database, block *types.Block) error {
 
 	// Iterate over each transaction and encode its metadata
 	for i, tx := range block.Transactions() {
-		meta := struct {
-			BlockHash  common.Hash
-			BlockIndex uint64
-			Index      uint64
-		}{
+		entry := lookupEntry{
 			BlockHash:  block.Hash(),
 			BlockIndex: block.NumberU64(),
 			Index:      uint64(i),
 		}
-		data, err := rlp.EncodeToBytes(meta)
+		data, err := rlp.EncodeToBytes(entry)
 		if err != nil {
 			return err
 		}
