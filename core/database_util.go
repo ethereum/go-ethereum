@@ -53,15 +53,9 @@ var (
 
 	configPrefix = []byte("ethereum-config-") // config prefix for the db
 
-	// used by old (non-sequential keys) db, now only used for conversion
-	oldBlockPrefix         = []byte("block-")
-	oldHeaderSuffix        = []byte("-header")
-	oldTdSuffix            = []byte("-td") // headerPrefix + num (uint64 big endian) + hash + tdSuffix -> td
-	oldBodySuffix          = []byte("-body")
-	oldBlockNumPrefix      = []byte("block-num-")
-	oldBlockReceiptsPrefix = []byte("receipts-block-")
-	oldReceiptsPrefix      = []byte("receipts-")
-	oldTxMetaSuffix        = []byte{0x01}
+	// used by old db, now only used for conversion
+	oldReceiptsPrefix = []byte("receipts-")
+	oldTxMetaSuffix   = []byte{0x01}
 
 	ErrChainConfigNotFound = errors.New("ChainConfig not found") // general config not found error
 
@@ -90,10 +84,7 @@ func encodeBlockNumber(number uint64) []byte {
 func GetCanonicalHash(db ethdb.Database, number uint64) common.Hash {
 	data, _ := db.Get(append(append(headerPrefix, encodeBlockNumber(number)...), numSuffix...))
 	if len(data) == 0 {
-		data, _ = db.Get(append(oldBlockNumPrefix, big.NewInt(int64(number)).Bytes()...))
-		if len(data) == 0 {
-			return common.Hash{}
-		}
+		return common.Hash{}
 	}
 	return common.BytesToHash(data)
 }
@@ -107,15 +98,7 @@ const missingNumber = uint64(0xffffffffffffffff)
 func GetBlockNumber(db ethdb.Database, hash common.Hash) uint64 {
 	data, _ := db.Get(append(blockHashPrefix, hash.Bytes()...))
 	if len(data) != 8 {
-		data, _ := db.Get(append(append(oldBlockPrefix, hash.Bytes()...), oldHeaderSuffix...))
-		if len(data) == 0 {
-			return missingNumber
-		}
-		header := new(types.Header)
-		if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
-			log.Crit("Failed to decode block header", "err", err)
-		}
-		return header.Number.Uint64()
+		return missingNumber
 	}
 	return binary.BigEndian.Uint64(data)
 }
@@ -158,9 +141,6 @@ func GetHeadFastBlockHash(db ethdb.Database) common.Hash {
 // if the header's not found.
 func GetHeaderRLP(db ethdb.Database, hash common.Hash, number uint64) rlp.RawValue {
 	data, _ := db.Get(append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...))
-	if len(data) == 0 {
-		data, _ = db.Get(append(append(oldBlockPrefix, hash.Bytes()...), oldHeaderSuffix...))
-	}
 	return data
 }
 
@@ -182,9 +162,6 @@ func GetHeader(db ethdb.Database, hash common.Hash, number uint64) *types.Header
 // GetBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
 func GetBodyRLP(db ethdb.Database, hash common.Hash, number uint64) rlp.RawValue {
 	data, _ := db.Get(append(append(bodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...))
-	if len(data) == 0 {
-		data, _ = db.Get(append(append(oldBlockPrefix, hash.Bytes()...), oldBodySuffix...))
-	}
 	return data
 }
 
@@ -208,10 +185,7 @@ func GetBody(db ethdb.Database, hash common.Hash, number uint64) *types.Body {
 func GetTd(db ethdb.Database, hash common.Hash, number uint64) *big.Int {
 	data, _ := db.Get(append(append(append(headerPrefix, encodeBlockNumber(number)...), hash[:]...), tdSuffix...))
 	if len(data) == 0 {
-		data, _ = db.Get(append(append(oldBlockPrefix, hash.Bytes()...), oldTdSuffix...))
-		if len(data) == 0 {
-			return nil
-		}
+		return nil
 	}
 	td := new(big.Int)
 	if err := rlp.Decode(bytes.NewReader(data), td); err != nil {
@@ -246,10 +220,7 @@ func GetBlock(db ethdb.Database, hash common.Hash, number uint64) *types.Block {
 func GetBlockReceipts(db ethdb.Database, hash common.Hash, number uint64) types.Receipts {
 	data, _ := db.Get(append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash[:]...))
 	if len(data) == 0 {
-		data, _ = db.Get(append(oldBlockReceiptsPrefix, hash.Bytes()...))
-		if len(data) == 0 {
-			return nil
-		}
+		return nil
 	}
 	storageReceipts := []*types.ReceiptForStorage{}
 	if err := rlp.DecodeBytes(data, &storageReceipts); err != nil {
