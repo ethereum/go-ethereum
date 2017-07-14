@@ -94,7 +94,7 @@ func (mux *TypeMux) Post(ev interface{}) error {
 	subs := mux.subm[rtyp]
 	mux.mutex.RUnlock()
 	for _, sub := range subs {
-		sub.deliver(event)
+		go sub.deliver(event)
 	}
 	return nil
 }
