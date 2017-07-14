@@ -130,19 +130,6 @@ type txBlockData struct {
 	Index      uint64
 }
 
-// storeTxBlockData stores the block position of a mined tx in the local db
-func (pool *TxPool) storeTxBlockData(txh common.Hash, tbd txBlockData) {
-	//fmt.Println("storeTxBlockData", txh, tbd)
-	data, _ := rlp.EncodeToBytes(tbd)
-	pool.chainDb.Put(append(txh[:], byte(1)), data)
-}
-
-// removeTxBlockData removes the stored block position of a rolled back tx
-func (pool *TxPool) removeTxBlockData(txh common.Hash) {
-	//fmt.Println("removeTxBlockData", txh)
-	pool.chainDb.Delete(append(txh[:], byte(1)))
-}
-
 // txStateChanges stores the recent changes between pending/mined states of
 // transactions. True means mined, false means rolled back, no entry means no change
 type txStateChanges map[common.Hash]bool
@@ -172,59 +159,48 @@ func (txc txStateChanges) getLists() (mined []common.Hash, rollback []common.Has
 // checkMinedTxs checks newly added blocks for the currently pending transactions
 // and marks them as mined if necessary. It also stores block position in the db
 // and adds them to the received txStateChanges map.
-func (pool *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, idx uint64, txc txStateChanges) error {
-	//fmt.Println("checkMinedTxs")
+func (pool *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, number uint64, txc txStateChanges) error {
+	// If no transactions are pending, we don't care about anything
 	if len(pool.pending) == 0 {
 		return nil
 	}
-	//fmt.Println("len(pool) =", len(pool.pending))
-
-	block, err := GetBlock(ctx, pool.odr, hash, idx)
-	var receipts types.Receipts
+	block, err := GetBlock(ctx, pool.odr, hash, number)
 	if err != nil {
-		//fmt.Println(err)
 		return err
 	}
-	//fmt.Println("len(block.Transactions()) =", len(block.Transactions()))
-
+	// Gather all the local transaction mined in this block
 	list := pool.mined[hash]
-	for i, tx := range block.Transactions() {
-		txHash := tx.Hash()
-		//fmt.Println(" txHash:", txHash)
-		if tx, ok := pool.pending[txHash]; ok {
-			//fmt.Println("TX FOUND")
-			if receipts == nil {
-				receipts, err = GetBlockReceipts(ctx, pool.odr, hash, idx)
-				if err != nil {
-					return err
-				}
-				if len(receipts) != len(block.Transactions()) {
-					panic(nil) // should never happen if hashes did match
-				}
-				core.SetReceiptsData(pool.config, block, receipts)
-			}
-			//fmt.Println("WriteReceipt", receipts[i].TxHash)
-			core.WriteReceipt(pool.chainDb, receipts[i])
-			pool.storeTxBlockData(txHash, txBlockData{hash, idx, uint64(i)})
-			delete(pool.pending, txHash)
+	for _, tx := range block.Transactions() {
+		if _, ok := pool.pending[tx.Hash()]; ok {
 			list = append(list, tx)
-			txc.setState(txHash, true)
 		}
 	}
+	// If some transactions have been mined, write the needed data to disk and update
 	if list != nil {
+		// Retrieve all the receipts belonging to this block and write the loopup table
+		if _, err := GetBlockReceipts(ctx, pool.odr, hash, number); err != nil { // ODR caches, ignore results
+			return err
+		}
+		if err := core.WriteTxLookupEntries(pool.chainDb, block); err != nil {
+			return err
+		}
+		// Update the transaction pool's state
+		for _, tx := range list {
+			delete(pool.pending, tx.Hash())
+			txc.setState(tx.Hash(), true)
+		}
 		pool.mined[hash] = list
 	}
 	return nil
 }
 
 // rollbackTxs marks the transactions contained in recently rolled back blocks
-// as rolled back. It also removes block position info from the db and adds them
-// to the received txStateChanges map.
+// as rolled back. It also removes any positional lookup entries.
 func (pool *TxPool) rollbackTxs(hash common.Hash, txc txStateChanges) {
 	if list, ok := pool.mined[hash]; ok {
 		for _, tx := range list {
 			txHash := tx.Hash()
-			pool.removeTxBlockData(txHash)
+			core.DeleteTxLookupEntry(pool.chainDb, txHash)
 			pool.pending[txHash] = tx
 			txc.setState(txHash, false)
 		}

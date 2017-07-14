@@ -293,9 +293,7 @@ func (self *worker) wait() {
 				// check if canon block and write transactions
 				if stat == core.CanonStatTy {
 					// This puts transactions in a extra db for rpc
-					core.WriteTransactions(self.chainDb, block)
-					// store the receipts
-					core.WriteReceipts(self.chainDb, work.receipts)
+					core.WriteTxLookupEntries(self.chainDb, block)
 					// Write map map bloom filters
 					core.WriteMipmapBloom(self.chainDb, block.NumberU64(), work.receipts)
 					// implicit by posting ChainHeadEvent
