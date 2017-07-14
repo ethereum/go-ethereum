@@ -45,6 +45,14 @@ func (db *MemDatabase) Put(key []byte, value []byte) error {
 	return nil
 }
 
+func (db *MemDatabase) Has(key []byte) (bool, error) {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	_, ok := db.db[string(key)]
+	return ok, nil
+}
+
 func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
