@@ -734,7 +734,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				return
 			}
 			// Short circuit if the owner header is unknown
-			if !bc.HasHeader(block.Hash()) {
+			if !bc.HasHeader(block.Hash(), block.NumberU64()) {
 				errs[index] = fmt.Errorf("containing header #%d [%x…] unknown", block.Number(), block.Hash().Bytes()[:4])
 				atomic.AddInt32(&failed, 1)
 				return
@@ -1357,8 +1357,8 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 
 // HasHeader checks if a block header is present in the database or not, caching
 // it if present.
-func (bc *BlockChain) HasHeader(hash common.Hash) bool {
-	return bc.hc.HasHeader(hash)
+func (bc *BlockChain) HasHeader(hash common.Hash, number uint64) bool {
+	return bc.hc.HasHeader(hash, number)
 }
 
 // GetBlockHashesFromHash retrieves a number of block hashes starting at a given

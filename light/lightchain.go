@@ -418,8 +418,8 @@ func (self *LightChain) GetHeaderByHash(hash common.Hash) *types.Header {
 
 // HasHeader checks if a block header is present in the database or not, caching
 // it if present.
-func (bc *LightChain) HasHeader(hash common.Hash) bool {
-	return bc.hc.HasHeader(hash)
+func (bc *LightChain) HasHeader(hash common.Hash, number uint64) bool {
+	return bc.hc.HasHeader(hash, number)
 }
 
 // GetBlockHashesFromHash retrieves a number of block hashes starting at a given

@@ -217,7 +217,7 @@ func (dl *downloadTester) sync(id string, td *big.Int, mode SyncMode) error {
 }
 
 // HasHeader checks if a header is present in the testers canonical chain.
-func (dl *downloadTester) HasHeader(hash common.Hash) bool {
+func (dl *downloadTester) HasHeader(hash common.Hash, number uint64) bool {
 	return dl.GetHeaderByHash(hash) != nil
 }
 

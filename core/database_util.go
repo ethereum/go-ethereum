@@ -149,7 +149,7 @@ func GetHeadFastBlockHash(db DatabaseReader) common.Hash {
 // GetHeaderRLP retrieves a block header in its raw RLP database encoding, or nil
 // if the header's not found.
 func GetHeaderRLP(db DatabaseReader, hash common.Hash, number uint64) rlp.RawValue {
-	data, _ := db.Get(append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...))
+	data, _ := db.Get(headerKey(hash, number))
 	return data
 }
 
@@ -172,6 +172,10 @@ func GetHeader(db DatabaseReader, hash common.Hash, number uint64) *types.Header
 func GetBodyRLP(db DatabaseReader, hash common.Hash, number uint64) rlp.RawValue {
 	data, _ := db.Get(append(append(bodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...))
 	return data
+}
+
+func headerKey(hash common.Hash, number uint64) []byte {
+	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
 // GetBody retrieves the block body (transactons, uncles) corresponding to the
