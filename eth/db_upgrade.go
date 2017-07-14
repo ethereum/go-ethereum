@@ -53,7 +53,9 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 		// Create an iterator to read the entire database and covert old lookup entires
 		it := db.(*ethdb.LDBDatabase).NewIterator()
 		defer func() {
-			it.Release()
+			if it != nil {
+				it.Release()
+			}
 		}()
 
 		var (
@@ -119,6 +121,9 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 		} else {
 			log.Error("Database deduplication failed", "deduped", converted, "err", failed)
 		}
+		it.Release()
+		it = nil
+
 		errc := <-stop
 		errc <- failed
 	}()
