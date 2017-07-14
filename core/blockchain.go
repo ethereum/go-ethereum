@@ -696,20 +696,24 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
-	// Collect some import statistics to report on
-	stats := struct{ processed, ignored int32 }{}
-	start := time.Now()
-
-	batch := bc.chainDb.NewBatch()
-	for i := 0; i < len(blockChain); i++ {
-		block, receipts := blockChain[i], receiptChain[i]
-		if i > 0 && (block.NumberU64() != blockChain[i-1].NumberU64()+1 || block.ParentHash() != blockChain[i-1].Hash()) {
-			// Chain broke ancestry, log a messge (programming error) and skip insertion
-			log.Error("Non contiguous receipt insert", "number", block.Number(), "hash", block.Hash(), "parent", block.ParentHash(),
+	// Do a sanity check that the provided chain is actually ordered and linked
+	for i := 1; i < len(blockChain); i++ {
+		if blockChain[i].NumberU64() != blockChain[i-1].NumberU64()+1 || blockChain[i].ParentHash() != blockChain[i-1].Hash() {
+			log.Error("Non contiguous receipt insert", "number", blockChain[i].Number(), "hash", blockChain[i].Hash(), "parent", blockChain[i].ParentHash(),
 				"prevnumber", blockChain[i-1].Number(), "prevhash", blockChain[i-1].Hash())
 			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, blockChain[i-1].NumberU64(),
-				blockChain[i-1].Hash().Bytes()[:4], i, block.NumberU64(), block.Hash().Bytes()[:4], block.ParentHash().Bytes()[:4])
+				blockChain[i-1].Hash().Bytes()[:4], i, blockChain[i].NumberU64(), blockChain[i].Hash().Bytes()[:4], blockChain[i].ParentHash().Bytes()[:4])
 		}
+	}
+
+	var (
+		stats = struct{ processed, ignored int32 }{}
+		start = time.Now()
+		bytes = 0
+		batch = bc.chainDb.NewBatch()
+	)
+	for i, block := range blockChain {
+		receipts := receiptChain[i]
 		// Short circuit insertion if shutting down or processing failed
 		if atomic.LoadInt32(&bc.procInterrupt) == 1 {
 			return 0, nil
@@ -736,9 +740,20 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			return i, fmt.Errorf("failed to write lookup metadata: %v", err)
 		}
 		stats.processed++
+
+		if batch.ValueSize() >= ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				return 0, err
+			}
+			bytes += batch.ValueSize()
+			batch = bc.chainDb.NewBatch()
+		}
 	}
-	if err := batch.Write(); err != nil {
-		return 0, err
+	if batch.ValueSize() > 0 {
+		bytes += batch.ValueSize()
+		if err := batch.Write(); err != nil {
+			return 0, err
+		}
 	}
 
 	// Update the head fast sync block if better
@@ -754,8 +769,13 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	}
 	bc.mu.Unlock()
 
-	log.Info("Imported new block receipts", "count", stats.processed, "elapsed", common.PrettyDuration(time.Since(start)),
-		"number", head.Number(), "hash", head.Hash(), "ignored", stats.ignored)
+	log.Info("Imported new block receipts",
+		"count", stats.processed,
+		"elapsed", common.PrettyDuration(time.Since(start)),
+		"bytes", bytes,
+		"number", head.Number(),
+		"hash", head.Hash(),
+		"ignored", stats.ignored)
 	return 0, nil
 }
 
