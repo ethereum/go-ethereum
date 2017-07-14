@@ -181,7 +181,7 @@ func (pool *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, number 
 		if _, err := GetBlockReceipts(ctx, pool.odr, hash, number); err != nil { // ODR caches, ignore results
 			return err
 		}
-		if err := core.WriteLookupEntries(pool.chainDb, block); err != nil {
+		if err := core.WriteTxLookupEntries(pool.chainDb, block); err != nil {
 			return err
 		}
 		// Update the transaction pool's state
@@ -200,7 +200,7 @@ func (pool *TxPool) rollbackTxs(hash common.Hash, txc txStateChanges) {
 	if list, ok := pool.mined[hash]; ok {
 		for _, tx := range list {
 			txHash := tx.Hash()
-			core.DeleteLookupEntry(pool.chainDb, txHash)
+			core.DeleteTxLookupEntry(pool.chainDb, txHash)
 			pool.pending[txHash] = tx
 			txc.setState(txHash, false)
 		}

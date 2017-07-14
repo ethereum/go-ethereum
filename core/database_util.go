@@ -65,9 +65,9 @@ var (
 	preimageHitCounter = metrics.NewCounter("db/preimage/hits")
 )
 
-// lookupEntry is a positional metadata to help looking up the data content of
+// txLookupEntry is a positional metadata to help looking up the data content of
 // a transaction or receipt given only its hash.
-type lookupEntry struct {
+type txLookupEntry struct {
 	BlockHash  common.Hash
 	BlockIndex uint64
 	Index      uint64
@@ -234,16 +234,16 @@ func GetBlockReceipts(db ethdb.Database, hash common.Hash, number uint64) types.
 	return receipts
 }
 
-// GetLookupEntry retrieves the positional metadata associated with a transaction
+// GetTxLookupEntry retrieves the positional metadata associated with a transaction
 // hash to allow retrieving the transaction or receipt by hash.
-func GetLookupEntry(db ethdb.Database, hash common.Hash) (common.Hash, uint64, uint64) {
+func GetTxLookupEntry(db ethdb.Database, hash common.Hash) (common.Hash, uint64, uint64) {
 	// Load the positional metadata from disk and bail if it fails
 	data, _ := db.Get(append(lookupPrefix, hash.Bytes()...))
 	if len(data) == 0 {
 		return common.Hash{}, 0, 0
 	}
 	// Parse and return the contents of the lookup entry
-	var entry lookupEntry
+	var entry txLookupEntry
 	if err := rlp.DecodeBytes(data, &entry); err != nil {
 		log.Error("Invalid lookup entry RLP", "hash", hash, "err", err)
 		return common.Hash{}, 0, 0
@@ -255,7 +255,7 @@ func GetLookupEntry(db ethdb.Database, hash common.Hash) (common.Hash, uint64, u
 // its added positional metadata.
 func GetTransaction(db ethdb.Database, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
 	// Retrieve the lookup metadata and resolve the transaction from the body
-	blockHash, blockNumber, txIndex := GetLookupEntry(db, hash)
+	blockHash, blockNumber, txIndex := GetTxLookupEntry(db, hash)
 
 	if blockHash != (common.Hash{}) {
 		body := GetBody(db, blockHash, blockNumber)
@@ -279,7 +279,7 @@ func GetTransaction(db ethdb.Database, hash common.Hash) (*types.Transaction, co
 	if len(data) == 0 {
 		return nil, common.Hash{}, 0, 0
 	}
-	var entry lookupEntry
+	var entry txLookupEntry
 	if err := rlp.DecodeBytes(data, &entry); err != nil {
 		return nil, common.Hash{}, 0, 0
 	}
@@ -290,7 +290,7 @@ func GetTransaction(db ethdb.Database, hash common.Hash) (*types.Transaction, co
 // its added positional metadata.
 func GetReceipt(db ethdb.Database, hash common.Hash) (*types.Receipt, common.Hash, uint64, uint64) {
 	// Retrieve the lookup metadata and resolve the receipt from the receipts
-	blockHash, blockNumber, receiptIndex := GetLookupEntry(db, hash)
+	blockHash, blockNumber, receiptIndex := GetTxLookupEntry(db, hash)
 
 	if blockHash != (common.Hash{}) {
 		receipts := GetBlockReceipts(db, blockHash, blockNumber)
@@ -431,14 +431,14 @@ func WriteBlockReceipts(db ethdb.Database, hash common.Hash, number uint64, rece
 	return nil
 }
 
-// WriteLookupEntries stores a positional metadata for every transaction from
+// WriteTxLookupEntries stores a positional metadata for every transaction from
 // a block, enabling hash based transaction and receipt lookups.
-func WriteLookupEntries(db ethdb.Database, block *types.Block) error {
+func WriteTxLookupEntries(db ethdb.Database, block *types.Block) error {
 	batch := db.NewBatch()
 
 	// Iterate over each transaction and encode its metadata
 	for i, tx := range block.Transactions() {
-		entry := lookupEntry{
+		entry := txLookupEntry{
 			BlockHash:  block.Hash(),
 			BlockIndex: block.NumberU64(),
 			Index:      uint64(i),
@@ -492,8 +492,8 @@ func DeleteBlockReceipts(db ethdb.Database, hash common.Hash, number uint64) {
 	db.Delete(append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...))
 }
 
-// DeleteLookupEntry removes all transaction data associated with a hash.
-func DeleteLookupEntry(db ethdb.Database, hash common.Hash) {
+// DeleteTxLookupEntry removes all transaction data associated with a hash.
+func DeleteTxLookupEntry(db ethdb.Database, hash common.Hash) {
 	db.Delete(append(lookupPrefix, hash.Bytes()...))
 }
 

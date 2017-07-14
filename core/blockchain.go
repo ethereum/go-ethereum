@@ -759,7 +759,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				log.Crit("Failed to write log blooms", "err", err)
 				return
 			}
-			if err := WriteLookupEntries(bc.chainDb, block); err != nil {
+			if err := WriteTxLookupEntries(bc.chainDb, block); err != nil {
 				errs[index] = fmt.Errorf("failed to write lookup metadata: %v", err)
 				atomic.AddInt32(&failed, 1)
 				log.Crit("Failed to write lookup metadata", "err", err)
@@ -997,7 +997,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			events = append(events, ChainEvent{block, block.Hash(), logs})
 
 			// Write the positional metadata for transaction and receipt lookups
-			if err := WriteLookupEntries(bc.chainDb, block); err != nil {
+			if err := WriteTxLookupEntries(bc.chainDb, block); err != nil {
 				return i, err
 			}
 			// Write map map bloom filters
@@ -1158,7 +1158,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// insert the block in the canonical way, re-writing history
 		bc.insert(block)
 		// write lookup entries for hash based transaction/receipt searches
-		if err := WriteLookupEntries(bc.chainDb, block); err != nil {
+		if err := WriteTxLookupEntries(bc.chainDb, block); err != nil {
 			return err
 		}
 		// Write map map bloom filters
@@ -1174,7 +1174,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// When transactions get deleted from the database that means the
 	// receipts that were created in the fork must also be deleted
 	for _, tx := range diff {
-		DeleteLookupEntry(bc.chainDb, tx.Hash())
+		DeleteTxLookupEntry(bc.chainDb, tx.Hash())
 	}
 	// Must be posted in a goroutine because of the transaction pool trying
 	// to acquire the chain manager lock

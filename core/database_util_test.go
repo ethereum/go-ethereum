@@ -311,7 +311,7 @@ func TestLookupStorage(t *testing.T) {
 	if err := WriteBlock(db, block); err != nil {
 		t.Fatalf("failed to write block contents: %v", err)
 	}
-	if err := WriteLookupEntries(db, block); err != nil {
+	if err := WriteTxLookupEntries(db, block); err != nil {
 		t.Fatalf("failed to write transactions: %v", err)
 	}
 	for i, tx := range txs {
@@ -328,7 +328,7 @@ func TestLookupStorage(t *testing.T) {
 	}
 	// Delete the transactions and check purge
 	for i, tx := range txs {
-		DeleteLookupEntry(db, tx.Hash())
+		DeleteTxLookupEntry(db, tx.Hash())
 		if txn, _, _, _ := GetTransaction(db, tx.Hash()); txn != nil {
 			t.Fatalf("tx #%d [%x]: deleted transaction returned: %v", i, tx.Hash(), txn)
 		}
