@@ -203,8 +203,6 @@ func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*
 	if err == nil {
 		if r == nil {
 			return nil, ethereum.NotFound
-		} else if len(r.PostState) == 0 {
-			return nil, fmt.Errorf("server returned receipt without post state")
 		}
 	}
 	return r, err

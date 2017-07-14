@@ -91,6 +91,32 @@ func gasCalldataCopy(gt params.GasTable, evm *EVM, contract *Contract, stack *St
 	return gas, nil
 }
 
+func gasReturnDataCopy(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+
+	var overflow bool
+	if gas, overflow = math.SafeAdd(gas, GasFastestStep); overflow {
+		return 0, errGasUintOverflow
+	}
+
+	words, overflow := bigUint64(stack.Back(2))
+	if overflow {
+		return 0, errGasUintOverflow
+	}
+
+	if words, overflow = math.SafeMul(toWordSize(words), params.CopyGas); overflow {
+		return 0, errGasUintOverflow
+	}
+
+	if gas, overflow = math.SafeAdd(gas, words); overflow {
+		return 0, errGasUintOverflow
+	}
+	return gas, nil
+}
+
 func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
 		y, x = stack.Back(1), stack.Back(0)
@@ -397,6 +423,35 @@ func gasSuicide(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, 
 }
 
 func gasDelegateCall(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	var overflow bool
+	if gas, overflow = math.SafeAdd(gas, gt.Calls); overflow {
+		return 0, errGasUintOverflow
+	}
+
+	cg, err := callGas(gt, contract.Gas, gas, stack.Back(0))
+	if err != nil {
+		return 0, err
+	}
+	// Replace the stack item with the new gas calculation. This means that
+	// either the original item is left on the stack or the item is replaced by:
+	// (availableGas - gas) * 63 / 64
+	// We replace the stack item so that it's available when the opCall instruction is
+	// called.
+	stack.data[stack.len()-1] = new(big.Int).SetUint64(cg)
+
+	if gas, overflow = math.SafeAdd(gas, cg); overflow {
+		return 0, errGasUintOverflow
+	}
+	return gas, nil
+}
+
+func gasStaticCall(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	panic("verify this one")
+
 	gas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return 0, err
