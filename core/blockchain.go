@@ -23,7 +23,6 @@ import (
 	"io"
 	"math/big"
 	mrand "math/rand"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -693,20 +692,7 @@ func SetReceiptsData(config *params.ChainConfig, block *types.Block, receipts ty
 
 // InsertReceiptChain attempts to complete an already existing header chain with
 // transaction and receipt data.
-// XXX should this be moved to the test?
 func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain []types.Receipts) (int, error) {
-	// Do a sanity check that the provided chain is actually ordered and linked
-	for i := 1; i < len(blockChain); i++ {
-		if blockChain[i].NumberU64() != blockChain[i-1].NumberU64()+1 || blockChain[i].ParentHash() != blockChain[i-1].Hash() {
-			// Chain broke ancestry, log a messge (programming error) and skip insertion
-			log.Error("Non contiguous receipt insert", "number", blockChain[i].Number(), "hash", blockChain[i].Hash(), "parent", blockChain[i].ParentHash(),
-				"prevnumber", blockChain[i-1].Number(), "prevhash", blockChain[i-1].Hash())
-
-			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, blockChain[i-1].NumberU64(),
-				blockChain[i-1].Hash().Bytes()[:4], i, blockChain[i].NumberU64(), blockChain[i].Hash().Bytes()[:4], blockChain[i].ParentHash().Bytes()[:4])
-		}
-	}
-	// Pre-checks passed, start the block body and receipt imports
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
@@ -714,87 +700,50 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	stats := struct{ processed, ignored int32 }{}
 	start := time.Now()
 
-	// Create the block importing task queue and worker functions
-	tasks := make(chan int, len(blockChain))
-	for i := 0; i < len(blockChain) && i < len(receiptChain); i++ {
-		tasks <- i
-	}
-	close(tasks)
-
-	errs, failed := make([]error, len(tasks)), int32(0)
-	process := func(worker int) {
-		for index := range tasks {
-			block, receipts := blockChain[index], receiptChain[index]
-
-			// Short circuit insertion if shutting down or processing failed
-			if atomic.LoadInt32(&bc.procInterrupt) == 1 {
-				return
-			}
-			if atomic.LoadInt32(&failed) > 0 {
-				return
-			}
-			// Short circuit if the owner header is unknown
-			if !bc.HasHeader(block.Hash(), block.NumberU64()) {
-				errs[index] = fmt.Errorf("containing header #%d [%x…] unknown", block.Number(), block.Hash().Bytes()[:4])
-				atomic.AddInt32(&failed, 1)
-				return
-			}
-			// Skip if the entire data is already known
-			if bc.HasBlock(block.Hash()) {
-				atomic.AddInt32(&stats.ignored, 1)
-				continue
-			}
-			// Compute all the non-consensus fields of the receipts
-			SetReceiptsData(bc.config, block, receipts)
-			// Write all the data out into the database
-			if err := WriteBody(bc.chainDb, block.Hash(), block.NumberU64(), block.Body()); err != nil {
-				errs[index] = fmt.Errorf("failed to write block body: %v", err)
-				atomic.AddInt32(&failed, 1)
-				log.Crit("Failed to write block body", "err", err)
-				return
-			}
-			if err := WriteBlockReceipts(bc.chainDb, block.Hash(), block.NumberU64(), receipts); err != nil {
-				errs[index] = fmt.Errorf("failed to write block receipts: %v", err)
-				atomic.AddInt32(&failed, 1)
-				log.Crit("Failed to write block receipts", "err", err)
-				return
-			}
-			if err := WriteTxLookupEntries(bc.chainDb, block); err != nil {
-				errs[index] = fmt.Errorf("failed to write lookup metadata: %v", err)
-				atomic.AddInt32(&failed, 1)
-				log.Crit("Failed to write lookup metadata", "err", err)
-				return
-			}
-			atomic.AddInt32(&stats.processed, 1)
+	batch := bc.chainDb.NewBatch()
+	for i := 0; i < len(blockChain); i++ {
+		block, receipts := blockChain[i], receiptChain[i]
+		if i > 0 && (block.NumberU64() != blockChain[i-1].NumberU64()+1 || block.ParentHash() != blockChain[i-1].Hash()) {
+			// Chain broke ancestry, log a messge (programming error) and skip insertion
+			log.Error("Non contiguous receipt insert", "number", block.Number(), "hash", block.Hash(), "parent", block.ParentHash(),
+				"prevnumber", blockChain[i-1].Number(), "prevhash", blockChain[i-1].Hash())
+			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, blockChain[i-1].NumberU64(),
+				blockChain[i-1].Hash().Bytes()[:4], i, block.NumberU64(), block.Hash().Bytes()[:4], block.ParentHash().Bytes()[:4])
 		}
-	}
-	// Start as many worker threads as goroutines allowed
-	pending := new(sync.WaitGroup)
-	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
-		pending.Add(1)
-		go func(id int) {
-			defer pending.Done()
-			process(id)
-		}(i)
-	}
-	pending.Wait()
-
-	// If anything failed, report
-	if failed > 0 {
-		for i, err := range errs {
-			if err != nil {
-				return i, err
-			}
+		// Short circuit insertion if shutting down or processing failed
+		if atomic.LoadInt32(&bc.procInterrupt) == 1 {
+			return 0, nil
 		}
+		// Short circuit if the owner header is unknown
+		if !bc.HasHeader(block.Hash(), block.NumberU64()) {
+			return i, fmt.Errorf("containing header #%d [%x…] unknown", block.Number(), block.Hash().Bytes()[:4])
+		}
+		// Skip if the entire data is already known
+		if bc.HasBlock(block.Hash()) {
+			stats.ignored++
+			continue
+		}
+		// Compute all the non-consensus fields of the receipts
+		SetReceiptsData(bc.config, block, receipts)
+		// Write all the data out into the database
+		if err := WriteBody(batch, block.Hash(), block.NumberU64(), block.Body()); err != nil {
+			return i, fmt.Errorf("failed to write block body: %v", err)
+		}
+		if err := WriteBlockReceipts(batch, block.Hash(), block.NumberU64(), receipts); err != nil {
+			return i, fmt.Errorf("failed to write block receipts: %v", err)
+		}
+		if err := WriteTxLookupEntries(batch, block); err != nil {
+			return i, fmt.Errorf("failed to write lookup metadata: %v", err)
+		}
+		stats.processed++
 	}
-	if atomic.LoadInt32(&bc.procInterrupt) == 1 {
-		log.Debug("Premature abort during receipts processing")
-		return 0, nil
+	if err := batch.Write(); err != nil {
+		return 0, err
 	}
+
 	// Update the head fast sync block if better
 	bc.mu.Lock()
-
-	head := blockChain[len(errs)-1]
+	head := blockChain[len(blockChain)-1]
 	if td := bc.GetTd(head.Hash(), head.NumberU64()); td != nil { // Rewind may have occurred, skip in that case
 		if bc.GetTd(bc.currentFastBlock.Hash(), bc.currentFastBlock.NumberU64()).Cmp(td) < 0 {
 			if err := WriteHeadFastBlockHash(bc.chainDb, head.Hash()); err != nil {
@@ -805,11 +754,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	}
 	bc.mu.Unlock()
 
-	// Report some public statistics so the user has a clue what's going on
-	last := blockChain[len(blockChain)-1]
 	log.Info("Imported new block receipts", "count", stats.processed, "elapsed", common.PrettyDuration(time.Since(start)),
-		"number", last.Number(), "hash", last.Hash(), "ignored", stats.ignored)
-
+		"number", head.Number(), "hash", head.Hash(), "ignored", stats.ignored)
 	return 0, nil
 }
 
