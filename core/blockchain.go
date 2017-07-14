@@ -516,8 +516,12 @@ func (bc *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 
 // HasBlock checks if a block is fully present in the database or not, caching
 // it if present.
-func (bc *BlockChain) HasBlock(hash common.Hash) bool {
-	return bc.GetBlockByHash(hash) != nil
+func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
+	if bc.blockCache.Contains(hash) {
+		return true
+	}
+	ok, _ := bc.chainDb.Has(blockBodyKey(hash, number))
+	return ok
 }
 
 // HasBlockAndState checks if a block and associated state trie is fully present
@@ -723,7 +727,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			return i, fmt.Errorf("containing header #%d [%x…] unknown", block.Number(), block.Hash().Bytes()[:4])
 		}
 		// Skip if the entire data is already known
-		if bc.HasBlock(block.Hash()) {
+		if bc.HasBlock(block.Hash(), block.NumberU64()) {
 			stats.ignored++
 			continue
 		}
@@ -793,7 +797,7 @@ func (bc *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err er
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	if bc.HasBlock(block.Hash()) {
+	if bc.HasBlock(block.Hash(), block.NumberU64()) {
 		log.Trace("Block existed", "hash", block.Hash())
 		return
 	}

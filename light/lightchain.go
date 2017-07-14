@@ -252,8 +252,8 @@ func (self *LightChain) GetBodyRLP(ctx context.Context, hash common.Hash) (rlp.R
 
 // HasBlock checks if a block is fully present in the database or not, caching
 // it if present.
-func (bc *LightChain) HasBlock(hash common.Hash) bool {
-	blk, _ := bc.GetBlockByHash(NoOdr, hash)
+func (bc *LightChain) HasBlock(hash common.Hash, number uint64) bool {
+	blk, _ := bc.GetBlock(NoOdr, hash, number)
 	return blk != nil
 }
 
