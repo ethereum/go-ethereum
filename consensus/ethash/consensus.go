@@ -37,7 +37,6 @@ import (
 // Ethash proof-of-work protocol constants.
 var (
 	blockReward *big.Int = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
-	maxUncles            = 2                 // Maximum number of uncles allowed in a single block
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -172,7 +171,7 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 		return nil
 	}
 	// Verify that there are at most 2 uncles included in this block
-	if len(block.Uncles()) > maxUncles {
+	if len(block.Uncles()) > params.MaxUncles {
 		return errTooManyUncles
 	}
 	// Gather the set of past uncles and ancestors
