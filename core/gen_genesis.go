@@ -13,8 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-var _ = (*genesisSpecMarshaling)(nil)
-
 func (g Genesis) MarshalJSON() ([]byte, error) {
 	type Genesis struct {
 		Config     *params.ChainConfig                         `json:"config"`
@@ -26,7 +24,7 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 		Mixhash    common.Hash                                 `json:"mixHash"`
 		Coinbase   common.Address                              `json:"coinbase"`
 		Alloc      map[common.UnprefixedAddress]GenesisAccount `json:"alloc"      gencodec:"required"`
-		Number     uint64                                      `json:"number"`
+		Number     math.HexOrDecimal64                         `json:"number"`
 		GasUsed    math.HexOrDecimal64                         `json:"gasUsed"`
 		ParentHash common.Hash                                 `json:"parentHash"`
 	}
@@ -45,7 +43,7 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 			enc.Alloc[common.UnprefixedAddress(k)] = v
 		}
 	}
-	enc.Number = g.Number
+	enc.Number = math.HexOrDecimal64(g.Number)
 	enc.GasUsed = math.HexOrDecimal64(g.GasUsed)
 	enc.ParentHash = g.ParentHash
 	return json.Marshal(&enc)
@@ -62,7 +60,7 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		Mixhash    *common.Hash                                `json:"mixHash"`
 		Coinbase   *common.Address                             `json:"coinbase"`
 		Alloc      map[common.UnprefixedAddress]GenesisAccount `json:"alloc"      gencodec:"required"`
-		Number     *uint64                                     `json:"number"`
+		Number     *math.HexOrDecimal64                        `json:"number"`
 		GasUsed    *math.HexOrDecimal64                        `json:"gasUsed"`
 		ParentHash *common.Hash                                `json:"parentHash"`
 	}
@@ -104,7 +102,7 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		g.Alloc[common.Address(k)] = v
 	}
 	if dec.Number != nil {
-		g.Number = *dec.Number
+		g.Number = uint64(*dec.Number)
 	}
 	if dec.GasUsed != nil {
 		g.GasUsed = uint64(*dec.GasUsed)
