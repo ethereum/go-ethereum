@@ -279,8 +279,12 @@ func (tx *Transaction) GetTo() *Address {
 	return nil
 }
 
-func (tx *Transaction) WithSignature(sig []byte) (signedTx *Transaction, _ error) {
-	rawTx, err := tx.tx.WithSignature(types.HomesteadSigner{}, sig)
+func (tx *Transaction) WithSignature(sig []byte, chainID *BigInt) (signedTx *Transaction, _ error) {
+	var signer types.Signer = types.HomesteadSigner{}
+	if chainID != nil {
+		signer = types.NewEIP155Signer(chainID.bigint)
+	}
+	rawTx, err := tx.tx.WithSignature(signer, sig)
 	return &Transaction{rawTx}, err
 }
 
