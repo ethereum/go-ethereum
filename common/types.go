@@ -24,6 +24,7 @@ import (
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
 const (
@@ -163,7 +164,28 @@ func (a Address) Str() string   { return string(a[:]) }
 func (a Address) Bytes() []byte { return a[:] }
 func (a Address) Big() *big.Int { return new(big.Int).SetBytes(a[:]) }
 func (a Address) Hash() Hash    { return BytesToHash(a[:]) }
-func (a Address) Hex() string   { return hexutil.Encode(a[:]) }
+
+// Hex returns an EIP55-compliant hex string representation of the address.
+func (a Address) Hex() string {
+	unchecksummed := hex.EncodeToString(a[:])
+	sha := sha3.NewKeccak256()
+	sha.Write([]byte(unchecksummed))
+	hash := sha.Sum(nil)
+
+	result := []byte(unchecksummed)
+	for i := 0; i < len(result); i++ {
+		hashByte := hash[i/2]
+		if i%2 == 0 {
+			hashByte = hashByte >> 4
+		} else {
+			hashByte &= 0xf
+		}
+		if result[i] > '9' && hashByte > 7 {
+			result[i] -= 32
+		}
+	}
+	return "0x" + string(result)
+}
 
 // String implements the stringer interface and is used also by the logger.
 func (a Address) String() string {
