@@ -85,12 +85,12 @@ const (
 // PeerEvent is an event emitted when peers are either added or dropped from
 // a p2p.Server or when a message is sent or received on a peer connection
 type PeerEvent struct {
-	Type      PeerEventType   `json:"type"`
-	Peer      discover.NodeID `json:"peer"`
-	Error     string          `json:"error,omitempty"`
-  Protocol  string          `json:"protocol"`
-	MsgCode   *uint64         `json:"msg_code,omitempty"`
-	MsgSize   *uint32         `json:"msg_size,omitempty"`
+	Type     PeerEventType   `json:"type"`
+	Peer     discover.NodeID `json:"peer"`
+	Error    string          `json:"error,omitempty"`
+	Protocol string          `json:"protocol,omitempty"`
+	MsgCode  *uint64         `json:"msg_code,omitempty"`
+	MsgSize  *uint32         `json:"msg_size,omitempty"`
 }
 
 // Peer represents a connected remote node.
@@ -334,7 +334,7 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 		proto.werr = writeErr
 		var rw MsgReadWriter = proto
 		if p.events != nil {
-			rw =  NewMsgEventer(rw, p.events, p.ID(), proto.Name)
+			rw = NewMsgEventer(rw, p.events, p.ID(), proto.Name)
 		}
 		p.log.Trace(fmt.Sprintf("Starting protocol %s/%d", proto.Name, proto.Version))
 		go func() {

@@ -41,7 +41,6 @@ import (
 // separate Msg with a bytes.Reader as Payload for each send.
 type Msg struct {
 	Code       uint64
-  Protocol   string
 	Size       uint32 // size of the paylod
 	Payload    io.Reader
 	ReceivedAt time.Time
@@ -54,13 +53,13 @@ type Msg struct {
 func (msg Msg) Decode(val interface{}) error {
 	s := rlp.NewStream(msg.Payload, uint64(msg.Size))
 	if err := s.Decode(val); err != nil {
-		return newPeerError(errInvalidMsg, "%v: (code %x) (size %d) %v", msg.Protocol, msg.Code, msg.Size, err)
+		return newPeerError(errInvalidMsg, "(code %x) (size %d) %v", msg.Code, msg.Size, err)
 	}
 	return nil
 }
 
 func (msg Msg) String() string {
-	return fmt.Sprintf("msg %v: #%v (%v bytes)", msg.Protocol, msg.Code, msg.Size)
+	return fmt.Sprintf("msg #%v (%v bytes)", msg.Code, msg.Size)
 }
 
 // Discard reads any remaining payload data into a black hole.
@@ -280,17 +279,17 @@ func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
 type MsgEventer struct {
 	MsgReadWriter
 
-	feed   *event.Feed
-	peerID discover.NodeID
-  Protocol string
+	feed     *event.Feed
+	peerID   discover.NodeID
+	Protocol string
 }
 
 func NewMsgEventer(rw MsgReadWriter, feed *event.Feed, peerID discover.NodeID, proto string) *MsgEventer {
 	return &MsgEventer{
-		MsgReadWriter:  rw,
-		feed:           feed,
-		peerID:         peerID,
-    Protocol:       proto,
+		MsgReadWriter: rw,
+		feed:          feed,
+		peerID:        peerID,
+		Protocol:      proto,
 	}
 }
 
@@ -302,7 +301,7 @@ func (self *MsgEventer) ReadMsg() (Msg, error) {
 	self.feed.Send(&PeerEvent{
 		Type:     PeerEventTypeMsgRecv,
 		Peer:     self.peerID,
-    Protocol: self.Protocol,
+		Protocol: self.Protocol,
 		MsgCode:  &msg.Code,
 		MsgSize:  &msg.Size,
 	})
@@ -317,7 +316,7 @@ func (self *MsgEventer) WriteMsg(msg Msg) error {
 	self.feed.Send(&PeerEvent{
 		Type:     PeerEventTypeMsgSend,
 		Peer:     self.peerID,
-    Protocol: self.Protocol,
+		Protocol: self.Protocol,
 		MsgCode:  &msg.Code,
 		MsgSize:  &msg.Size,
 	})

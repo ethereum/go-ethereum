@@ -29,6 +29,7 @@ package simulations
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -37,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/pot"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -151,9 +151,32 @@ func (self *Node) String() string {
 }
 
 func (self *Node) NodeInfo() *p2p.NodeInfo {
-	info := self.Node.NodeInfo()
+	var info *p2p.NodeInfo
+	if self.Node == nil {
+		return nil
+	}
+	info = self.Node.NodeInfo()
 	info.Name = self.Config.Name
 	return info
+}
+
+//Node needs to explicitly implement the Marshalling interface
+//because this enables to send more information to the caller.
+//Specifically, a visualising front end can now get the overlay
+//address of the node in order to calculate distance
+//(the p2p package should be agnostic of the overlay network)
+func (self *Node) MarshalJSON() ([]byte, error) {
+	type JsonNode struct {
+		Info   *p2p.NodeInfo        `json:"info,omitempty"`
+		Config *adapters.NodeConfig `json:"config,omitempty"`
+		Up     bool                 `json:"up"`
+	}
+	info := &JsonNode{
+		Info:   self.NodeInfo(),
+		Config: self.Config,
+		Up:     self.Up,
+	}
+	return json.Marshal(info)
 }
 
 // active connections are represented by the Node entry object so that
@@ -167,8 +190,6 @@ type Conn struct {
 	Up bool `json:"up"`
 	// reverse is false by default (One dialled/dropped the Other)
 	Reverse bool `json:"reverse"`
-	// A scalar distance value denoting how "far" Other is from One (Kademlia table)
-	Distance int `json:"distance"`
 	// indicates if a ControlEvent has already been fired for this connection
 	controlFired bool
 }
@@ -256,13 +277,11 @@ func (self *Network) newConn(oneID, otherID discover.NodeID) (*Conn, error) {
 	if other == nil {
 		return nil, fmt.Errorf("other %v does not exist", other)
 	}
-	distance, _ := pot.DefaultPof(256)(one.Addr(), other.Addr(), 0)
 	return &Conn{
-		One:      oneID,
-		Other:    otherID,
-		one:      one,
-		other:    other,
-		Distance: distance,
+		One:   oneID,
+		Other: otherID,
+		one:   one,
+		other: other,
 	}, nil
 }
 
@@ -513,7 +532,7 @@ func (self *Network) DidSend(sender, receiver discover.NodeID, msgcode uint64, m
 		One:      sender,
 		Other:    receiver,
 		Code:     msgcode,
-    Protocol: msgProtocol,
+		Protocol: msgProtocol,
 		Received: false,
 	}
 	self.events.Send(NewEvent(msg))
@@ -637,8 +656,7 @@ type Snapshot struct {
 
 // NodeSnapshot represents the state of a node in the network
 type NodeSnapshot struct {
-	Node
-
+	Node Node `json:"node,omitempty"`
 	// Snapshot is arbitrary data gathered from calling node.Snapshots()
 	Snapshots map[string][]byte `json:"snapshots,omitempty"`
 }
@@ -669,14 +687,14 @@ func (self *Network) Snapshot() (*Snapshot, error) {
 }
 
 func (self *Network) Load(snap *Snapshot) error {
-	for _, node := range snap.Nodes {
-		if _, err := self.NewNodeWithConfig(node.Config); err != nil {
+	for _, n := range snap.Nodes {
+		if _, err := self.NewNodeWithConfig(n.Node.Config); err != nil {
 			return err
 		}
-		if !node.Up {
+		if !n.Node.Up {
 			continue
 		}
-		if err := self.startWithSnapshots(node.Config.ID, node.Snapshots); err != nil {
+		if err := self.startWithSnapshots(n.Node.Config.ID, n.Snapshots); err != nil {
 			return err
 		}
 	}
