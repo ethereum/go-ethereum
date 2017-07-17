@@ -265,10 +265,11 @@ func (tx *Transaction) GetSigHash() *Hash { return &Hash{tx.tx.SigHash(types.Hom
 func (tx *Transaction) GetCost() *BigInt  { return &BigInt{tx.tx.Cost()} }
 
 func (tx *Transaction) GetFrom(chainID *BigInt) (address *Address, _ error) {
-	if chainID == nil { // Null passed from mobile app
-		chainID = new(BigInt)
+	var signer types.Signer = types.HomesteadSigner{}
+	if chainID != nil {
+		signer = types.NewEIP155Signer(chainID.bigint)
 	}
-	from, err := types.Sender(types.NewEIP155Signer(chainID.bigint), tx.tx)
+	from, err := types.Sender(signer, tx.tx)
 	return &Address{from}, err
 }
 
@@ -279,8 +280,12 @@ func (tx *Transaction) GetTo() *Address {
 	return nil
 }
 
-func (tx *Transaction) WithSignature(sig []byte) (signedTx *Transaction, _ error) {
-	rawTx, err := tx.tx.WithSignature(types.HomesteadSigner{}, sig)
+func (tx *Transaction) WithSignature(sig []byte, chainID *BigInt) (signedTx *Transaction, _ error) {
+	var signer types.Signer = types.HomesteadSigner{}
+	if chainID != nil {
+		signer = types.NewEIP155Signer(chainID.bigint)
+	}
+	rawTx, err := tx.tx.WithSignature(signer, sig)
 	return &Transaction{rawTx}, err
 }
 
