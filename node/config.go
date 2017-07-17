@@ -316,8 +316,8 @@ func (c *Config) StaticNodes() []*discover.Node {
 	return c.parsePersistentNodes(c.resolvePath(datadirStaticNodes))
 }
 
-// TrusterNodes returns a list of node enode URLs configured as trusted nodes.
-func (c *Config) TrusterNodes() []*discover.Node {
+// TrustedNodes returns a list of node enode URLs configured as trusted nodes.
+func (c *Config) TrustedNodes() []*discover.Node {
 	return c.parsePersistentNodes(c.resolvePath(datadirTrustedNodes))
 }
 
