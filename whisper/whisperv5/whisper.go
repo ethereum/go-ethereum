@@ -99,6 +99,12 @@ func New(cfg *Config) *Whisper {
 		quit:         make(chan struct{}),
 	}
 
+	if cfg.TopicBloomSize == 0 {
+		whisper.topicBloomFilter = make([]byte, DefaultTopicBloomSize)
+	} else {
+		whisper.topicBloomFilter = make([]byte, cfg.TopicBloomSize)
+	}
+
 	whisper.filters = NewFilters(whisper)
 
 	whisper.settings.Store(minPowIdx, cfg.MinimumAcceptedPOW)

@@ -24,30 +24,26 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// Limit to less than 4MB for practicality. Limit to 4 or higher because you can't
-// get
-const BloomFilterLengthMax = 0x80000
-
 var (
 	errBloomFilterLength = errors.New("The length of the bloom filter must be a power of two between 2 bytes and 4MB")
 	errLengthMismatch    = errors.New("Length of topic and bloom filter don't match")
 	errInvalidTopic      = errors.New("Topic is not a 4 byte array")
 )
 
-// Creates a bloom filter of `nbytes` bytes with 3 bits set depending on the
-// Keccak256 hash of the topic.
+// CalculateBloomFilter ceates a bloom filter of `nbytes` bytes with 3 bits set
+// depending on the Keccak256 hash of the topic.
 func CalculateBloomFilter(topic []byte, nbytes uint) (output []byte, err error) {
 	var nbits uint = 0    // Number of bits set in the bloom filter
 	var bitsread uint = 0 // Number of bits read so far in the 256-bits hash
 
 	if nbytes == 0 || nbytes > BloomFilterLengthMax {
 		err = errBloomFilterLength
-		return
+		return nil, err
 	}
 
 	if len(topic) != 4 {
 		err = errInvalidTopic
-		return
+		return nil, err
 	}
 
 	// Check that nbytes is a power of two, as it is assumed by the rest of that
@@ -55,7 +51,7 @@ func CalculateBloomFilter(topic []byte, nbytes uint) (output []byte, err error) 
 	bitpitch := uint(math.Floor(math.Log(float64(nbytes*8))/math.Log(2.0) + .5))
 	if 8*nbytes != 1<<bitpitch {
 		err = errBloomFilterLength
-		return
+		return nil, err
 	}
 
 	output = make([]byte, nbytes)
@@ -79,7 +75,7 @@ func CalculateBloomFilter(topic []byte, nbytes uint) (output []byte, err error) 
 
 		// End as soon as 3 bits have been found.
 		if nbits == 3 {
-			return
+			return output, nil
 		} else {
 			// advance the read in order to find another bit
 			bitsread += bitpitch
@@ -93,16 +89,16 @@ func CalculateBloomFilter(topic []byte, nbytes uint) (output []byte, err error) 
 	}
 }
 
-// Test a filter to see if it "contains" all the topics that are passed.
-func bfContainsTopics(topics []byte, filter []byte) (found bool) {
-	if len(filter) != len(topics) {
+// bloomContainsTopics checks if a bloom filter "contains" all the topics that are passed.
+func bloomContainsTopics(bloomFilter []byte, topics []byte) (found bool) {
+	if len(bloomFilter) != len(topics) {
 		return false
 	}
 
 	// Go over every byte of topics and check its set bits are also present
 	// in the filter
 	for i, v := range topics {
-		if filter[i]&v != v {
+		if bloomFilter[i]&v != v {
 			return false
 		}
 	}
@@ -110,15 +106,15 @@ func bfContainsTopics(topics []byte, filter []byte) (found bool) {
 	return true
 }
 
-// Add a list of topics to a given filter
-func bfAddTopics(topics []byte, filter []byte) error {
-	if len(filter) != len(topics) {
+// bloomAddTopics adds a list of topics to a given Bloom filter
+func bloomAddTopics(bloomFilter []byte, topics []byte) error {
+	if len(bloomFilter) != len(topics) {
 		return errLengthMismatch
 	}
 
 	// Just set each bits that are set in v
 	for i, v := range topics {
-		filter[i] |= v
+		bloomFilter[i] |= v
 	}
 
 	return nil

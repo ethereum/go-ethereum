@@ -70,31 +70,44 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 	fs.watchers[id] = watcher
 	fs.mutex.Unlock()
 
+	// Aggregate the bloom filters for all topics and then only integrate add
+	// it to the main bloom filter if everything went fine.
+	topicBloomSize := uint(len(fs.whisper.topicBloomFilter))
+	aggregatedBlooms:= make([]byte, topicBloomSize)
 
 	for _, topic := range watcher.Topics {
 		// Calculate the bloom filter of that topic, skip it otherwise
-		if filter, ok := CalculateBloomFilter(topic, 64); ok == nil {
+		if bloom, err := CalculateBloomFilter(topic, topicBloomSize); err == nil {
 			// Add it to the "plausible deniability" topic
-			if bfAddTopics(filter, fs.whisper.topicBloomFilter) == nil {
+			if err = bloomAddTopics(aggregatedBlooms, bloom); err != nil {
 				delete(fs.watchers, id)
-				return "", fmt.Errorf("Could not add topics to whisper")
+				fmt.Println(len(fs.whisper.topicBloomFilter), topicBloomSize)
+				return "", fmt.Errorf("Could not add topics to whisper: %v", err)
 			}
 		}
+	}
+
+	// Finally merge the bloom filters for all topics to the central whisper one
+	if err := bloomAddTopics(fs.whisper.topicBloomFilter, aggregatedBlooms); err != nil {
+		delete(fs.watchers, id)
+		return "", fmt.Errorf("Could not add topics to whisper %v", err)
 	}
 
 	return id, err
 }
 
 func (fs *Filters) Uninstall(id string) bool {
+	topicBloomSize := uint(len(fs.whisper.topicBloomFilter))
+
 	// Topic removal: regenerate the entire bloom filter, save the topics of
 	// watcher `id`.
-	newBloom := make([]byte, len(fs.whisper.topicBloomFilter))
+	newBloom := make([]byte, topicBloomSize)
 	for wid, watcher := range fs.watchers {
 		if wid != id {
 			for _, topic := range watcher.Topics {
-				if filter, ok := CalculateBloomFilter(topic, 64); ok != nil {
-					if bfAddTopics(filter, newBloom) != nil {
-						return false
+				if bloom, err := CalculateBloomFilter(topic, topicBloomSize); err == nil {
+					if bloomAddTopics(newBloom, bloom) != nil {
+						fmt.Println("Unable to add topic %v, skipping", bloom)
 					}
 				}
 			}

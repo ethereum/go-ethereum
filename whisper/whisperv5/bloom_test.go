@@ -120,42 +120,42 @@ func TestBloomFilterReturns3BitsSetDifferentSize(t *testing.T) {
 
 // Test that two bloom filters with different lengths never match
 func TestBloomFilterContainsTopicsLengthMismatch(t *testing.T) {
-	if ok := bfContainsTopics([]byte{0x01}, []byte{0x02, 0x03}); ok {
+	if ok := bloomContainsTopics([]byte{0x02, 0x03}, []byte{0x01}); ok {
 		t.Fatal("Non-matching lengths reported as matching")
 	}
 }
 
 // Test that two bloom filters with different content don't match _a priori_
 func TestBloomFilterContainsTopicsContentMismatch(t *testing.T) {
-	if ok := bfContainsTopics([]byte{0x01}, []byte{0x02}); ok {
+	if ok := bloomContainsTopics([]byte{0x02}, []byte{0x01}); ok {
 		t.Fatal("Non-matching lengths reported as matching")
 	}
 }
 
 // Test that identical topics match
 func TestBloomFilterContainsTopicsEqual(t *testing.T) {
-	if ok := bfContainsTopics([]byte{0x01}, []byte{0x01}); !ok {
+	if ok := bloomContainsTopics([]byte{0x01}, []byte{0x01}); !ok {
 		t.Fatal("Identical topics didn't match")
 	}
 }
 
 // Test inclusion match`
 func TestBloomFilterContainsTopicsInclusion(t *testing.T) {
-	if ok := bfContainsTopics([]byte{0x03}, []byte{0x01}); ok {
+	if ok := bloomContainsTopics([]byte{0x01}, []byte{0x03}); ok {
 		t.Fatal("Included topics not found")
 	}
 }
 
 // Test that reverse-inclusion fails
 func TestBloomFilterContainsTopicsSwapInclusion(t *testing.T) {
-	if ok := bfContainsTopics([]byte{0x01}, []byte{0x03}); !ok {
+	if ok := bloomContainsTopics([]byte{0x03}, []byte{0x01}); !ok {
 		t.Fatal("Swapping filter and topics shouldn't match")
 	}
 }
 
 // Test that two bloom filters with different lengths can never be added
 func TestBloomFilterAddTopicsLengthMismatch(t *testing.T) {
-	if ok := bfAddTopics([]byte{0x01}, []byte{0x02, 0x03}); ok == nil {
+	if ok := bloomAddTopics([]byte{0x02, 0x03}, []byte{0x01}); ok == nil {
 		t.Fatal("Non-matching lengths where added")
 	}
 }
@@ -163,7 +163,7 @@ func TestBloomFilterAddTopicsLengthMismatch(t *testing.T) {
 // Test that two bloom filters with different lengths can never be added
 func TestBloomFilterAddTopicWorks(t *testing.T) {
 	filter := []byte{0x02}
-	if ok := bfAddTopics([]byte{0x01}, filter); ok == nil {
+	if ok := bloomAddTopics(filter, []byte{0x01}); ok == nil {
 		if filter[0] != 0x03 {
 			t.Fatal("Adding a topic creates an invalid bloom filter")
 		}

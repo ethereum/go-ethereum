@@ -19,6 +19,7 @@ package whisperv5
 type Config struct {
 	MaxMessageSize     uint32  `toml:",omitempty"`
 	MinimumAcceptedPOW float64 `toml:",omitempty"`
+	TopicBloomSize     uint32  `toml:",omitempty"`
 }
 
 var DefaultConfig = Config{

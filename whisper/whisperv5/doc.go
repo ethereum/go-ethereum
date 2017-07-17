@@ -59,14 +59,17 @@ const (
 	DefaultMaxMessageSize = uint32(1024 * 1024)
 	DefaultMinimumPoW     = 0.2
 
-	padSizeLimit      = 256 // just an arbitrary number, could be changed without breaking the protocol (must not exceed 2^24)
-	messageQueueLimit = 1024
+	padSizeLimit          = 256 // just an arbitrary number, could be changed without breaking the protocol (must not exceed 2^24)
+	messageQueueLimit     = 1024
 
-	expirationCycle   = time.Second
-	transmissionCycle = 300 * time.Millisecond
+	expirationCycle       = time.Second
+	transmissionCycle     = 300 * time.Millisecond
 
-	DefaultTTL     = 50 // seconds
-	SynchAllowance = 10 // seconds
+	DefaultTTL            = 50 // seconds
+	SynchAllowance        = 10 // seconds
+
+	DefaultTopicBloomSize = 64 // bytes
+	BloomFilterLengthMax  = 0x80000 // Limit to less than 512K for practicality.
 )
 
 type unknownVersionError uint64
