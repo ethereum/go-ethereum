@@ -452,7 +452,7 @@ func (self *worker) commitNewWork() {
 		badUncles []common.Hash
 	)
 	for hash, uncle := range self.possibleUncles {
-		if len(uncles) == 2 {
+		if len(uncles) == params.MaxUncles {
 			break
 		}
 		if err := self.commitUncle(work, uncle.Header()); err != nil {
