@@ -265,10 +265,11 @@ func (tx *Transaction) GetSigHash() *Hash { return &Hash{tx.tx.SigHash(types.Hom
 func (tx *Transaction) GetCost() *BigInt  { return &BigInt{tx.tx.Cost()} }
 
 func (tx *Transaction) GetFrom(chainID *BigInt) (address *Address, _ error) {
-	if chainID == nil { // Null passed from mobile app
-		chainID = new(BigInt)
+	var signer types.Signer = types.HomesteadSigner{}
+	if chainID != nil {
+		signer = types.NewEIP155Signer(chainID.bigint)
 	}
-	from, err := types.Sender(types.NewEIP155Signer(chainID.bigint), tx.tx)
+	from, err := types.Sender(signer, tx.tx)
 	return &Address{from}, err
 }
 
