@@ -78,6 +78,8 @@ type Whisper struct {
 	stats   Statistics // Statistics of whisper node
 
 	mailServer MailServer // MailServer interface
+
+	topicBloomFilter []byte // A Bloom filter representing topics registered on this node
 }
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.

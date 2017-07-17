@@ -34,8 +34,8 @@ type Filter struct {
 	AllowP2P   bool              // Indicates whether this filter is interested in direct peer-to-peer messages
 	SymKeyHash common.Hash       // The Keccak256Hash of the symmetric key, needed for optimization
 
-	Messages map[common.Hash]*ReceivedMessage
-	mutex    sync.RWMutex
+	Messages   map[common.Hash]*ReceivedMessage
+	mutex      sync.RWMutex
 }
 
 type Filters struct {
@@ -62,23 +62,54 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 	}
 
 	fs.mutex.Lock()
-	defer fs.mutex.Unlock()
 
 	if fs.watchers[id] != nil {
 		return "", fmt.Errorf("failed to generate unique ID")
 	}
 
 	fs.watchers[id] = watcher
+	fs.mutex.Unlock()
+
+
+	for _, topic := range watcher.Topics {
+		// Calculate the bloom filter of that topic, skip it otherwise
+		if filter, ok := CalculateBloomFilter(topic, 64); ok == nil {
+			// Add it to the "plausible deniability" topic
+			if bfAddTopics(filter, fs.whisper.topicBloomFilter) == nil {
+				delete(fs.watchers, id)
+				return "", fmt.Errorf("Could not add topics to whisper")
+			}
+		}
+	}
+
 	return id, err
 }
 
 func (fs *Filters) Uninstall(id string) bool {
+	// Topic removal: regenerate the entire bloom filter, save the topics of
+	// watcher `id`.
+	newBloom := make([]byte, len(fs.whisper.topicBloomFilter))
+	for wid, watcher := range fs.watchers {
+		if wid != id {
+			for _, topic := range watcher.Topics {
+				if filter, ok := CalculateBloomFilter(topic, 64); ok != nil {
+					if bfAddTopics(filter, newBloom) != nil {
+						return false
+					}
+				}
+			}
+		}
+	}
+
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 	if fs.watchers[id] != nil {
 		delete(fs.watchers, id)
 		return true
 	}
+
+	fs.whisper.topicBloomFilter = newBloom
+
 	return false
 }
 
