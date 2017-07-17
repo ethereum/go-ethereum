@@ -31,7 +31,7 @@ import (
 // Receipt represents the results of a transaction.
 type Receipt struct {
 	// Consensus fields
-	PostState         []byte   `json:"root"              gencodec:"required"`
+	PostState         []byte   `json:"root"`
 	CumulativeGasUsed *big.Int `json:"cumulativeGasUsed" gencodec:"required"`
 	Bloom             Bloom    `json:"logsBloom"         gencodec:"required"`
 	Logs              []*Log   `json:"logs"              gencodec:"required"`
@@ -48,6 +48,19 @@ type receiptMarshaling struct {
 	GasUsed           *hexutil.Big
 }
 
+type homesteadReceiptRLP struct {
+	PostState         []byte
+	CumulativeGasUsed *big.Int
+	Bloom             Bloom
+	Logs              []*Log
+}
+
+type metropolisReceiptRLP struct {
+	CumulativeGasUsed *big.Int
+	Bloom             Bloom
+	Logs              []*Log
+}
+
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
 func NewReceipt(root []byte, cumulativeGasUsed *big.Int) *Receipt {
 	return &Receipt{PostState: common.CopyBytes(root), CumulativeGasUsed: new(big.Int).Set(cumulativeGasUsed)}
@@ -56,23 +69,28 @@ func NewReceipt(root []byte, cumulativeGasUsed *big.Int) *Receipt {
 // EncodeRLP implements rlp.Encoder, and flattens the consensus fields of a receipt
 // into an RLP stream.
 func (r *Receipt) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs})
+	if r.PostState == nil {
+		return rlp.Encode(w, &metropolisReceiptRLP{r.CumulativeGasUsed, r.Bloom, r.Logs})
+	} else {
+		return rlp.Encode(w, &homesteadReceiptRLP{r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs})
+	}
 }
 
 // DecodeRLP implements rlp.Decoder, and loads the consensus fields of a receipt
 // from an RLP stream.
 func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
-	var receipt struct {
-		PostState         []byte
-		CumulativeGasUsed *big.Int
-		Bloom             Bloom
-		Logs              []*Log
-	}
-	if err := s.Decode(&receipt); err != nil {
+	raw, err := s.Raw()
+	if err != nil {
 		return err
 	}
-	r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs = receipt.PostState, receipt.CumulativeGasUsed, receipt.Bloom, receipt.Logs
-	return nil
+	var hr homesteadReceiptRLP
+	var mr metropolisReceiptRLP
+	if err = rlp.DecodeBytes(raw, &mr); err == nil {
+		r.CumulativeGasUsed, r.Bloom, r.Logs = mr.CumulativeGasUsed, mr.Bloom, mr.Logs
+	} else if err = rlp.DecodeBytes(raw, &hr); err == nil {
+		r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs = hr.PostState[:], hr.CumulativeGasUsed, hr.Bloom, hr.Logs
+	}
+	return err
 }
 
 // String implements the Stringer interface.

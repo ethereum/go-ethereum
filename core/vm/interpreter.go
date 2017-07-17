@@ -51,10 +51,9 @@ type Config struct {
 	JumpTable [256]operation
 }
 
-// Interpreter is used to run Ethereum based contracts and will utilise the
-// passed evmironment to query external sources for state information.
-// The Interpreter will run the byte code VM or JIT VM based on the passed
-// configuration.
+// Interpreter is capable of interpreting Ethereum Byte code and uses the passed
+// Ethereum Virtual Machine to query for auxiliary data such as state, block and
+// caller information.
 type Interpreter struct {
 	evm      *EVM
 	cfg      Config
@@ -62,6 +61,8 @@ type Interpreter struct {
 	intPool  *intPool
 
 	readonly bool
+	// returnData contains the last call's return data
+	returnData []byte
 }
 
 // NewInterpreter returns a new instance of the Interpreter.
@@ -71,6 +72,8 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 	// we'll set the default jump table.
 	if !cfg.JumpTable[STOP].valid {
 		switch {
+		case evm.ChainConfig().IsMetropolis(evm.BlockNumber):
+			cfg.JumpTable = metropolisInstructionSet
 		case evm.ChainConfig().IsHomestead(evm.BlockNumber):
 			cfg.JumpTable = homesteadInstructionSet
 		default:
@@ -87,6 +90,19 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 }
 
 func (in *Interpreter) enforceRestrictions(op OpCode, operation operation, stack *Stack) error {
+	if in.evm.chainRules.IsMetropolis {
+		if in.readonly {
+			// if the interpreter is operating in readonly mode, make sure no
+			// state-modifying operation is performed. The 4th stack item
+			// for a call operation is the value. Transfering value from one
+			// account to the others means the state is modified and should also
+			// return with an error.
+			if operation.writes ||
+				((op == CALL || op == CALLCODE) && stack.Back(3).BitLen() > 0) {
+				return errWriteProtection
+			}
+		}
+	}
 	return nil
 }
 
@@ -97,8 +113,12 @@ func (in *Interpreter) enforceRestrictions(op OpCode, operation operation, stack
 // considered a revert-and-consume-all-gas operation. No error specific checks
 // should be handled to reduce complexity and errors further down the in.
 func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret []byte, err error) {
+	// Increment the call depth which is restricted to 1024.
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
+	// Reset the previous call's return data. It's unimportant to preserve the old buffer
+	// as every returning call will return new data anyway.
+	in.returnData = nil
 
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
@@ -201,6 +221,11 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 			verifyIntegerPool(in.intPool)
 		}
 
+		// checks whether the operation should revert state.
+		if operation.reverts {
+			in.evm.StateDB.RevertToSnapshot(snapshot)
+		}
+
 		switch {
 		case err != nil:
 			return nil, err
@@ -209,10 +234,10 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		case !operation.jumps:
 			pc++
 		}
-		// if the operation returned a value make sure that is also set
-		// the last return data.
-		if res != nil {
-			mem.lastReturn = ret
+		// if the operation clears the return data (e.g. it has returning data)
+		// set the last return to the result of the operation.
+		if operation.clearsReturndata {
+			in.returnData = res
 		}
 	}
 	return nil, nil

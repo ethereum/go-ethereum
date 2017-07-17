@@ -53,12 +53,50 @@ type operation struct {
 	valid bool
 	// reverts determined whether the operation reverts state
 	reverts bool
+	// clearsReturndata determines whether the opertions clears the return data
+	clearsReturndata bool
 }
 
 var (
-	frontierInstructionSet  = NewFrontierInstructionSet()
-	homesteadInstructionSet = NewHomesteadInstructionSet()
+	frontierInstructionSet   = NewFrontierInstructionSet()
+	homesteadInstructionSet  = NewHomesteadInstructionSet()
+	metropolisInstructionSet = NewMetropolisInstructionSet()
 )
+
+// NewMetropolisInstructionSet returns the frontier, homestead and
+// metropolis instructions.
+func NewMetropolisInstructionSet() [256]operation {
+	// instructions that can be executed during the homestead phase.
+	instructionSet := NewHomesteadInstructionSet()
+	instructionSet[STATIC_CALL] = operation{
+		execute:       opStaticCall,
+		gasCost:       gasStaticCall,
+		validateStack: makeStackFunc(6, 1),
+		memorySize:    memoryStaticCall,
+		valid:         true,
+	}
+	instructionSet[REVERT] = operation{
+		execute:       opRevert,
+		gasCost:       constGasFunc(GasFastestStep),
+		validateStack: makeStackFunc(2, 0),
+		valid:         true,
+		reverts:       true,
+	}
+	instructionSet[RETURNDATASIZE] = operation{
+		execute:       opReturnDataSize,
+		gasCost:       constGasFunc(GasQuickStep),
+		validateStack: makeStackFunc(0, 1),
+		valid:         true,
+	}
+	instructionSet[RETURNDATACOPY] = operation{
+		execute:       opReturnDataCopy,
+		gasCost:       gasReturnDataCopy,
+		validateStack: makeStackFunc(3, 0),
+		memorySize:    memoryReturnDataCopy,
+		valid:         true,
+	}
+	return instructionSet
+}
 
 // NewHomesteadInstructionSet returns the frontier and homestead
 // instructions that can be executed during the homestead phase.
@@ -810,6 +848,7 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(2, 0),
 			memorySize:    memoryLog,
 			valid:         true,
+			writes:        true,
 		},
 		LOG1: {
 			execute:       makeLog(1),
@@ -817,6 +856,7 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(3, 0),
 			memorySize:    memoryLog,
 			valid:         true,
+			writes:        true,
 		},
 		LOG2: {
 			execute:       makeLog(2),
@@ -824,6 +864,7 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(4, 0),
 			memorySize:    memoryLog,
 			valid:         true,
+			writes:        true,
 		},
 		LOG3: {
 			execute:       makeLog(3),
@@ -831,6 +872,7 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(5, 0),
 			memorySize:    memoryLog,
 			valid:         true,
+			writes:        true,
 		},
 		LOG4: {
 			execute:       makeLog(4),
@@ -838,28 +880,41 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(6, 0),
 			memorySize:    memoryLog,
 			valid:         true,
-		},
-		CREATE: {
-			execute:       opCreate,
-			gasCost:       gasCreate,
-			validateStack: makeStackFunc(3, 1),
-			memorySize:    memoryCreate,
-			valid:         true,
 			writes:        true,
 		},
+		CREATE: {
+			execute:          opCreate,
+			gasCost:          gasCreate,
+			validateStack:    makeStackFunc(3, 1),
+			memorySize:       memoryCreate,
+			valid:            true,
+			writes:           true,
+			clearsReturndata: true,
+		},
+		CREATE2: {
+			execute:          opCreate2,
+			gasCost:          gasCreate,
+			validateStack:    makeStackFunc(4, 1),
+			memorySize:       memoryCreate2,
+			valid:            true,
+			writes:           true,
+			clearsReturndata: true,
+		},
 		CALL: {
-			execute:       opCall,
-			gasCost:       gasCall,
-			validateStack: makeStackFunc(7, 1),
-			memorySize:    memoryCall,
-			valid:         true,
+			execute:          opCall,
+			gasCost:          gasCall,
+			validateStack:    makeStackFunc(7, 1),
+			memorySize:       memoryCall,
+			valid:            true,
+			clearsReturndata: true,
 		},
 		CALLCODE: {
-			execute:       opCallCode,
-			gasCost:       gasCallCode,
-			validateStack: makeStackFunc(7, 1),
-			memorySize:    memoryCall,
-			valid:         true,
+			execute:          opCallCode,
+			gasCost:          gasCallCode,
+			validateStack:    makeStackFunc(7, 1),
+			memorySize:       memoryCall,
+			valid:            true,
+			clearsReturndata: true,
 		},
 		RETURN: {
 			execute:       opReturn,

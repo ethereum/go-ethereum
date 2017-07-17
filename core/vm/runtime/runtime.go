@@ -141,8 +141,11 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	)
 
 	// Call the code with the given configuration.
+	createAddressFn := vm.CreateAddressFn(vmenv.ChainConfig(), vmenv.BlockNumber, sender.Address(), vmenv.StateDB.GetNonce(sender.Address()), input)
+
 	code, address, leftOverGas, err := vmenv.Create(
 		sender,
+		createAddressFn,
 		input,
 		cfg.GasLimit,
 		cfg.Value,
