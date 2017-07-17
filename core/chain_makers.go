@@ -218,6 +218,7 @@ func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.St
 			Number:     parent.Number(),
 			Time:       new(big.Int).Sub(time, big.NewInt(10)),
 			Difficulty: parent.Difficulty(),
+			UncleHash:  parent.UncleHash(),
 		}),
 		GasLimit: CalcGasLimit(parent),
 		GasUsed:  new(big.Int),
