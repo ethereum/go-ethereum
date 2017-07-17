@@ -425,6 +425,11 @@ services:
       - "{{.Port}}:80"{{else}}
     environment:
       - VIRTUAL_HOST={{.VHost}}{{end}}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "10"
     restart: always
 `
 

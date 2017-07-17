@@ -60,6 +60,11 @@ services:
     environment:
       - WS_SECRET={{.Secret}}{{if .VHost}}
       - VIRTUAL_HOST={{.VHost}}{{end}}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "10"
     restart: always
 `
 
