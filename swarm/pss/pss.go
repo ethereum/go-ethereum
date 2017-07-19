@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -72,6 +73,10 @@ type Pss struct {
 	lock            sync.Mutex
 	dpa             *storage.DPA
 	privatekey      *ecdsa.PrivateKey
+}
+
+func (self *Pss) String() string {
+	return fmt.Sprintf("pss: addr %x, pubkey %v", self.BaseAddr(), common.ToHex(crypto.FromECDSAPub(&self.privatekey.PublicKey)))
 }
 
 func (self *Pss) storeMsg(msg *PssMsg) (pssDigest, error) {

@@ -19,7 +19,7 @@ const (
 	DefaultTTL             = 6000
 	defaultDigestCacheTTL  = time.Second
 	defaultWhisperWorkTime = 1
-	defaultWhisperPoW      = 0.01
+	defaultWhisperPoW      = 0.00000000001
 )
 
 // Pss configuration parameters

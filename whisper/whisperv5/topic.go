@@ -47,7 +47,7 @@ func (topic *TopicType) String() string {
 }
 
 // UnmarshalJSON parses a hex representation to a topic.
-func (t *TopicType) UnmarshalJSON_(input []byte) error {
+func (t *TopicType) UnmarshalJSON(input []byte) error {
 	length := len(input)
 	if length >= 2 && input[0] == '"' && input[length-1] == '"' {
 		input = input[1 : length-1]
@@ -60,7 +60,6 @@ func (t *TopicType) UnmarshalJSON_(input []byte) error {
 	if len(input) != TopicLength*2 {
 		return fmt.Errorf("unmarshalJSON failed: topic must be exactly %d bytes", TopicLength)
 	}
-
 	b := common.FromHex(string(input))
 	if b == nil {
 		return fmt.Errorf("unmarshalJSON failed: wrong topic format")
