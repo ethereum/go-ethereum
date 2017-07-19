@@ -25,6 +25,7 @@ type Config struct {
 var DefaultConfig = Config{
 	MaxMessageSize:     DefaultMaxMessageSize,
 	MinimumAcceptedPOW: DefaultMinimumPoW,
+	TopicBloomSize:     DefaultTopicBloomSize,
 }
 
 var ()
