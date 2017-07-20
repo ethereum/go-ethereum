@@ -54,7 +54,7 @@ type Overlay interface {
 
 	String() string
 	BaseAddr() []byte
-	Healthy([][]byte) bool
+	Healthy(*PeerPot) bool
 }
 
 // HiveParams holds the config options to hive
@@ -115,41 +115,44 @@ func (h *Hive) Start(server *p2p.Server) error {
 	h.more = make(chan bool, 1)
 	h.quit = make(chan bool)
 	// this loop is doing bootstrapping and maintains a healthy table
-	go h.keepAlive()
-	go func() {
-		// each iteration, ask kademlia about most preferred peer
-		for more := range h.more {
-			if !more {
-				// receiving false closes the loop while allowing parallel routines
-				// to attempt to write to more (remove Peer when shutting down)
-				return
-			}
-			log.Trace(fmt.Sprintf("%x: hive delegate to overlay driver: suggest addr to connect to", h.BaseAddr()[:4]))
-			// log.Trace("hive delegate to overlay driver: suggest addr to connect to")
-			addr, order, want := h.SuggestPeer()
-			if h.Discovery {
-				if addr != nil {
-					log.Trace(fmt.Sprintf("%x ========> connect to bee %x", h.BaseAddr()[:4], addr.Address()[:4]))
-					under, err := discover.ParseNode(string(addr.(Addr).Under()))
-					if err == nil {
-						server.AddPeer(under)
-					} else {
-						log.Error(fmt.Sprintf("%x ===X====> connect to bee %x failed: invalid node URL: %v", h.BaseAddr()[:4], addr.Address()[:4], err))
-					}
-				} else {
-					log.Trace(fmt.Sprintf("%x cannot suggest peers", h.BaseAddr()[:4]))
-				}
-
-				if want {
-					log.Trace(fmt.Sprintf("%x ========> request peers for PO%0d", h.BaseAddr()[:4], order))
-					RequestOrder(h.Overlay, uint8(order), h.PeersBroadcastSetSize, h.MaxPeersPerRequest)
-				}
-			}
-
-			log.Trace(fmt.Sprintf("%v", h))
-		}
-	}()
+	go h.connect(server)
 	return nil
+}
+
+func (h *Hive) connect(server *p2p.Server) {
+	ticker := time.NewTicker(h.KeepAliveInterval)
+	defer ticker.Stop()
+	// each iteration, ask kademlia about most preferred peer to connect to
+	for {
+		log.Trace(fmt.Sprintf("%08x: hive delegate to overlay driver: suggest addr to connect to", h.BaseAddr()[:4]))
+		log.Trace(fmt.Sprintf("%s", h))
+		addr, order, want := h.SuggestPeer()
+		if addr != nil {
+			under, err := discover.ParseNode(string(addr.(Addr).Under()))
+			if err != nil {
+				log.Error(fmt.Sprintf("%08x unable to connect to bee %08x: invalid node URL: %v", h.BaseAddr()[:4], addr.Address()[:4], err))
+			} else {
+				log.Trace(fmt.Sprintf("%08x ========> connect to bee %08x", h.BaseAddr()[:4], addr.Address()[:4]))
+				server.AddPeer(under)
+			}
+		} else {
+			log.Trace(fmt.Sprintf("%08x unable to suggest peers", h.BaseAddr()[:4]))
+		}
+
+		// if there is a need for more peers in some PO bin and discovery is enabled
+		// then request peers
+		if h.Discovery && want {
+			log.Trace(fmt.Sprintf("%08x ========> request peers for PO%0d", h.BaseAddr()[:4], order))
+			RequestOrder(h.Overlay, uint8(order), h.PeersBroadcastSetSize, h.MaxPeersPerRequest)
+		}
+
+		select {
+		case <-h.quit:
+			return
+		default:
+			// case <-ticker.C:
+		}
+	}
 }
 
 // Stop terminates the updateloop and saves the peers
@@ -166,8 +169,6 @@ func (h *Hive) Run(p *bzzPeer) error {
 	dp := newDiscovery(p, h)
 	log.Debug(fmt.Sprintf("to add new bee %v", p))
 	h.On(dp)
-	// h.wake()
-	// defer h.wake()
 	defer h.Off(dp)
 	return p.Run(dp.HandleMsg)
 }
@@ -178,7 +179,6 @@ func (h *Hive) NodeInfo() interface{} {
 	return h.String()
 }
 
-
 // PeerInfo function is used by the p2p.server RPC interface to display
 // protocol specific information any connected peer referred to by their NodeID
 func (h *Hive) PeerInfo(id discover.NodeID) interface{} {
@@ -186,21 +186,6 @@ func (h *Hive) PeerInfo(id discover.NodeID) interface{} {
 	defer h.lock.Unlock()
 	addr := NewAddrFromNodeID(id)
 	return interface{}(addr)
-}
-
-// Register j                                                                                                0000000000000000000000
-func (h *Hive) Register(peers chan OverlayAddr) error {
-	// defer h.wake()
-	return h.Overlay.Register(peers)
-}
-
-// wake triggers
-func  wake() {
-select {
-case h.more <- true:
-	case <-h.quit:
-	default:
-	}
 }
 
 // ToAddr returns the serialisable version of u
@@ -212,42 +197,6 @@ func ToAddr(pa OverlayPeer) *bzzAddr {
 		return p.bzzAddr
 	}
 	return pa.(*bzzPeer).bzzAddr
-}
-
-type hiveTicker interface {
-	Ch() <-chan time.Time
-	Stop()
-}
-
-type timeTicker struct {
-	*time.Ticker
-}
-
-func (t *timeTicker) Ch() <-chan time.Time {
-	return t.C
-}
-
-// keepAlive is a forever loop
-// in its awake state it periodically triggers connection attempts
-// by writing to h.more until Kademlia Table is saturated
-// wake state is toggled by writing to h.toggle
-// it goes to sleep mode if table is saturated
-// it restarts if the table becomes non-full again due to disconnections
-func (h *Hive) keepAlive() {
-	if h.tick == nil {
-		ticker := time.NewTicker(h.KeepAliveInterval)
-		defer ticker.Stop()
-		h.tick = ticker.C
-	}
-	for {
-		select {
-		case <-h.tick:
-			// h.wake()
-		case <-h.quit:
-			h.more <- false
-			return
-		}
-	}
 }
 
 // loadPeers, savePeer implement persistence callback/

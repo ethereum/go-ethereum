@@ -74,7 +74,7 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 		ID:             "0",
 		DefaultService: serviceName,
 	})
-	defer net.Shutdown()
+	// defer net.Shutdown()
 	trigger := make(chan discover.NodeID)
 	ids := make([]discover.NodeID, *nodeCount)
 	for i := 0; i < *nodeCount; i++ {
@@ -107,7 +107,15 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 		}
 		return nil
 	}
-	nnmap := network.NewPeerPot(testMinProxBinSize, ids...)
+	var addrs [][]byte
+	for _, id := range ids {
+		node := net.GetNode(id)
+		if node == nil {
+			continue
+		}
+		addrs = append(addrs, network.ToOverlayAddr(id.Bytes()))
+	}
+	ppmap := network.NewPeerPot(testMinProxBinSize, ids, addrs)
 	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
@@ -124,9 +132,10 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
 		var healthy bool
-		if err := client.Call(&healthy, "hive_healthy", nnmap[id]); err != nil {
+		if err := client.Call(&healthy, "hive_healthy", ppmap[id]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
+		log.Debug(fmt.Sprintf("node %4s healthy: %v", id, healthy))
 		return healthy, nil
 	}
 
@@ -194,7 +203,9 @@ func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id di
 		for {
 			select {
 			case <-events:
+				log.Debug("trigger peer event")
 				trigger <- id
+				log.Debug("trigger triggered")
 			case err := <-sub.Err():
 				if err != nil {
 					log.Error(fmt.Sprintf("error getting peer events for node %v", id), "err", err)
@@ -215,7 +226,7 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	kp.MinBinSize = 1
 	kp.MaxRetries = 1000
 	kp.RetryExponent = 2
-	kp.RetryInterval = 1000000
+	kp.RetryInterval = 1000000000
 	kad := network.NewKademlia(addr.Over(), kp)
 
 	hp := network.NewHiveParams()

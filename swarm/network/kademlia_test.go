@@ -456,7 +456,7 @@ func (k *testKademlia) checkNotifications(npeers []*testPeerNotification, nprox 
 		delete(k.notifications, key)
 	}
 	if len(k.notifications) > 0 {
-		return fmt.Errorf("%v unexpected notifications", len(k.notifications))
+		return fmt.Errorf("%v unexpected notifications: %v", len(k.notifications), k.notifications)
 	}
 	return nil
 }
@@ -470,6 +470,7 @@ func TestNotifications(t *testing.T) {
 	err := k.checkNotifications(
 		[]*testPeerNotification{
 			&testPeerNotification{"01000000", "00100000", 1},
+			&testPeerNotification{"00100000", "01000000", 1},
 		},
 		[]*testDepthNotification{
 			&testDepthNotification{"00100000", 0},
