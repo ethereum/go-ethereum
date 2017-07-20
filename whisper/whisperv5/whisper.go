@@ -756,6 +756,11 @@ func validatePrivateKey(k *ecdsa.PrivateKey) bool {
 	return ValidatePublicKey(&k.PublicKey)
 }
 
+// public accessor
+func ValidateSymmetricKey(k []byte) bool {
+	return validateSymmetricKey(k)
+}
+
 // validateSymmetricKey returns false if the key contains all zeros
 func validateSymmetricKey(k []byte) bool {
 	return len(k) > 0 && !containsOnlyZeros(k)
