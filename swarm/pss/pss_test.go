@@ -1,7 +1,7 @@
 package pss
 
 import (
-	// "bytes"
+	"bytes"
 	// "context"
 	// "crypto/ecdsa"
 	"encoding/hex"
@@ -70,7 +70,12 @@ func init() {
 	wapi = whisper.NewPublicWhisperAPI(w)
 }
 
+// tests:
+// sets public key for peer
+// set an outgoing symmetric key for peer
+// generate own symmetric key for incoming message from peer
 func TestKeys(t *testing.T) {
+	outkey := make([]byte, 32) // whisper aes symkeys are 32, if that changes this test will break
 	keys, err := wapi.NewKeyPair()
 	if err != nil {
 		t.Fatalf("create key fail")
@@ -79,8 +84,29 @@ func TestKeys(t *testing.T) {
 	ps := NewTestPss(privkey)
 	addr := network.RandomAddr().Over()
 	topic := NewTopic("foo", 42)
-	ps.AddPublicKey(pot.NewAddressFromBytes(addr), topic, privkey.PublicKey)
-	fmt.Printf("%v", ps)
+	ps.SetPublicKey(pot.NewAddressFromBytes(addr), topic, privkey.PublicKey)
+	copy(outkey, addr)
+	outkeyid, err := ps.SetOutgoingSymmetricKey(pot.NewAddressFromBytes(addr), topic, outkey)
+	inkeyid, err := ps.GenerateIncomingSymmetricKey(pot.NewAddressFromBytes(addr), topic)
+	outkeyback, err := ps.w.GetSymKey(outkeyid)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	inkey, err := ps.w.GetSymKey(inkeyid)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if !bytes.Equal(outkeyback, outkey) {
+		t.Fatalf("passed outgoing symkey doesnt equal stored: %x / %x", outkey, outkeyback)
+	}
+
+	t.Logf("symout: %v", outkeyback)
+	t.Logf("symin: %v", inkey)
+
+	var potaddr pot.Address
+	copy(potaddr[:], addr)
+	psp := ps.peerPool[potaddr][topic]
+	t.Logf("peer:\nrw: %v\npubkey: %v\nrecvsymkey: %v\nsendsymkey: %v\nsymkeyexp: %v", psp.rw, psp.pubkey, psp.recvsymkey, psp.sendsymkey, psp.symkeyexpires)
 }
 
 func TestCache(t *testing.T) {

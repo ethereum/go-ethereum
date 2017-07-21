@@ -74,10 +74,10 @@ func (pssapi *API) BaseAddr() ([]byte, error) {
 	return pssapi.Pss.BaseAddr(), nil
 }
 
-func (pssapi *API) AddPublicKey(addr []byte, topic whisper.TopicType, pubkey ecdsa.PublicKey) error {
+func (pssapi *API) SetPublicKey(addr []byte, topic whisper.TopicType, pubkey ecdsa.PublicKey) error {
 	var potaddr pot.Address
 	copy(potaddr[:], addr)
-	pssapi.Pss.AddPublicKey(potaddr, topic, pubkey)
+	pssapi.Pss.SetPublicKey(potaddr, topic, pubkey)
 	return nil
 }
 

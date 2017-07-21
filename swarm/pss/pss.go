@@ -197,7 +197,7 @@ func (self *Pss) Register(topic *whisper.TopicType, handler Handler) func() {
 
 // Add a Public key address mapping
 // this is needed to initiate handshakes
-func (self *Pss) AddPublicKey(addr pot.Address, topic whisper.TopicType, pubkey ecdsa.PublicKey) {
+func (self *Pss) SetPublicKey(addr pot.Address, topic whisper.TopicType, pubkey ecdsa.PublicKey) {
 	self.preparePeerTopic(addr, topic)
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -208,10 +208,14 @@ func (self *Pss) AddPublicKey(addr pot.Address, topic whisper.TopicType, pubkey 
 // Set the symmetric key for incoming communications
 // - key sent when initiating a pss handshake to the other side
 // - key sent as response to incoming handshake
-func (self *Pss) SetIncomingSymmetricKey(addr pot.Address, topic whisper.TopicType, key []byte) error {
-	keyid, err := self.w.AddSymKeyDirect(key)
+func (self *Pss) GenerateIncomingSymmetricKey(addr pot.Address, topic whisper.TopicType) (string, error) {
+	//	keyid, err := self.w.AddSymKeyDirect(key)
+	//	if err != nil {
+	//		return err
+	//	}
+	keyid, err := self.w.GenerateSymKey()
 	if err != nil {
-		return err
+		return "", err
 	}
 	self.preparePeerTopic(addr, topic)
 	self.lock.Lock()
@@ -224,16 +228,16 @@ func (self *Pss) SetIncomingSymmetricKey(addr pot.Address, topic whisper.TopicTy
 		self.reverseKeyPool[keyid] = make(map[whisper.TopicType]pot.Address)
 	}
 	self.reverseKeyPool[keyid][topic] = addr
-	return nil
+	return keyid, nil
 }
 
 // Set the symmetric key for outgoing communications
 // this is either:
 // - key received when receiving an incoming handshake
-func (self *Pss) SetOutgoingSymmetricKey(addr pot.Address, topic whisper.TopicType, key []byte) error {
+func (self *Pss) SetOutgoingSymmetricKey(addr pot.Address, topic whisper.TopicType, key []byte) (string, error) {
 	keyid, err := self.w.AddSymKeyDirect(key)
 	if err != nil {
-		return err
+		return "", err
 	}
 	self.preparePeerTopic(addr, topic)
 	self.lock.Lock()
@@ -241,7 +245,7 @@ func (self *Pss) SetOutgoingSymmetricKey(addr pot.Address, topic whisper.TopicTy
 	psp := self.peerPool[addr][topic]
 	psp.sendsymkey = keyid
 	psp.symkeyexpires = time.Now().Add(time.Hour * 24 * 365)
-	return nil
+	return keyid, nil
 }
 
 //func (self *Pss) RemovePublicKey(addr pot.Address, topic whisper.TopicType, pubkey ecdsa.PublicKey) bool {
@@ -395,7 +399,7 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 		}
 		copy(from[:], keymsg.From)
 		// need to handle / check for expired keys also here
-		err = self.SetOutgoingSymmetricKey(from, env.Topic, keymsg.Key)
+		_, err = self.SetOutgoingSymmetricKey(from, env.Topic, keymsg.Key)
 		if err != nil {
 			return fmt.Errorf("received invalid symkey in pss handshake for peer %x topic %x", keymsg.From, env.Topic)
 		}
@@ -403,17 +407,17 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 		// along with an encrypted secret so that it can tell that we received its key
 		// the encrypted secret will be our key encrypted with its key
 		if !self.isSecured(from, env.Topic) {
-			recvkeyid, err := self.w.GenerateSymKey()
+			//			recvkeyid, err := self.w.GenerateSymKey()
+			//			if err != nil {
+			//				return fmt.Errorf("could not generate outgoing symkey for peer %x topic %x: %v", keymsg.From, env.Topic, err)
+			//			}
+			recvkeyid, err := self.GenerateIncomingSymmetricKey(from, env.Topic)
 			if err != nil {
-				return fmt.Errorf("could not generate outgoing symkey for peer %x topic %x: %v", keymsg.From, env.Topic, err)
+				return fmt.Errorf("could not set recvkey for peer %x topic %x", keymsg.From, env.Topic)
 			}
 			recvkey, err := self.w.GetSymKey(recvkeyid)
 			if err != nil {
 				return fmt.Errorf("could not retreieve generated outgoing symkey for peer %x topic %x: %v", keymsg.From, env.Topic, err)
-			}
-			err = self.SetIncomingSymmetricKey(from, env.Topic, recvkey)
-			if err != nil {
-				return fmt.Errorf("could not set recvkey for peer %x topic %x", keymsg.From, env.Topic)
 			}
 			self.SendSym(keymsg.From, env.Topic, recvkey)
 		}
