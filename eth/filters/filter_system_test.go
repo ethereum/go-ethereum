@@ -144,10 +144,8 @@ func TestPendingTxFilter(t *testing.T) {
 	fid0 := api.NewPendingTransactionFilter()
 
 	time.Sleep(1 * time.Second)
-	for _, tx := range transactions {
-		ev := core.TxPreEvent{Tx: tx}
-		mux.Post(ev)
-	}
+	ev := core.TxPreEvent{Txs: transactions}
+	mux.Post(ev)
 
 	for {
 		results, err := api.GetFilterChanges(fid0)

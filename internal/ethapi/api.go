@@ -1153,6 +1153,23 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 	return tx.Hash().Hex(), nil
 }
 
+// SendRawTransactions will add the signed transactions to the transaction pool.
+// The sender is responsible for signing the transaction and using the correct nonce.
+func (s *PublicTransactionPoolAPI) SendRawTransactions(ctx context.Context, encodedTxs hexutil.Bytes) ([]string, error) {
+	var hashes []string
+	txs := new(types.Transactions)
+	if err := rlp.DecodeBytes(encodedTxs, txs); err != nil {
+		return hashes, err
+	}
+
+	if err := s.b.SendTxs(ctx, *txs); err != nil {
+		return hashes, err
+	}
+
+	log.Info("Submitted transactions", "len", len(*txs))
+	return hashes, nil
+}
+
 // Sign calculates an ECDSA signature for:
 // keccack256("\x19Ethereum Signed Message:\n" + len(message) + message).
 //

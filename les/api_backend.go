@@ -100,6 +100,12 @@ func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	return b.eth.txPool.Add(ctx, signedTx)
 }
 
+// do nothing
+func (b *LesApiBackend) SendTxs(ctx context.Context, signedTxs types.Transactions) error {
+	b.eth.txPool.AddBatch(ctx, signedTxs)
+	return nil
+}
+
 func (b *LesApiBackend) RemoveTx(txHash common.Hash) {
 	b.eth.txPool.RemoveTx(txHash)
 }

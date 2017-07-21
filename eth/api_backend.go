@@ -119,6 +119,10 @@ func (b *EthApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	return b.eth.txPool.AddLocal(signedTx)
 }
 
+func (b *EthApiBackend) SendTxs(ctx context.Context, signedTxs types.Transactions) error {
+	return b.eth.txPool.AddLocals(signedTxs)
+}
+
 func (b *EthApiBackend) RemoveTx(txHash common.Hash) {
 	b.eth.txPool.Remove(txHash)
 }

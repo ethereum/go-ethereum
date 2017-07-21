@@ -311,8 +311,10 @@ func (es *EventSystem) broadcast(filters filterIndex, ev *event.TypeMuxEvent) {
 		}
 	case core.TxPreEvent:
 		for _, f := range filters[PendingTransactionsSubscription] {
-			if ev.Time.After(f.created) {
-				f.hashes <- e.Tx.Hash()
+			for _, tx := range e.Txs {
+				if ev.Time.After(f.created) {
+					f.hashes <- tx.Hash()
+				}
 			}
 		}
 	case core.ChainEvent:

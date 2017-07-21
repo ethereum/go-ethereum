@@ -420,6 +420,15 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", common.ToHex(data))
 }
 
+func (ec *Client) SendTransactions(ctx context.Context, txs types.Transactions) error {
+	data, err := rlp.EncodeToBytes(txs)
+	if err != nil {
+		return err
+	}
+	err = ec.c.CallContext(ctx, nil, "eth_sendRawTransactions", common.ToHex(data))
+	return err
+}
+
 func toCallArg(msg ethereum.CallMsg) interface{} {
 	arg := map[string]interface{}{
 		"from": msg.From,

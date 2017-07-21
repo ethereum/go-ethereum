@@ -698,16 +698,16 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 	}
 }
 
-// BroadcastTx will propagate a transaction to all peers which are not known to
+// BroadcastTxs will propagate transactions to all peers which are not known to
 // already have the given transaction.
-func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) {
+func (pm *ProtocolManager) BroadcastTxs(txs types.Transactions) {
 	// Broadcast transaction to a batch of peers not knowing about it
-	peers := pm.peers.PeersWithoutTx(hash)
+	peers := pm.peers.PeersWithoutTxs(txs)
 	//FIXME include this again: peers = peers[:int(math.Sqrt(float64(len(peers))))]
-	for _, peer := range peers {
-		peer.SendTransactions(types.Transactions{tx})
+	for peer, ts := range peers {
+		peer.SendTransactions(ts)
 	}
-	log.Trace("Broadcast transaction", "hash", hash, "recipients", len(peers))
+	log.Trace("Broadcast transactions", "recipients", len(peers), "txs", len(txs))
 }
 
 // Mined broadcast loop
@@ -726,7 +726,7 @@ func (self *ProtocolManager) txBroadcastLoop() {
 	// automatically stops if unsubscribe
 	for obj := range self.txSub.Chan() {
 		event := obj.Data.(core.TxPreEvent)
-		self.BroadcastTx(event.Tx.Hash(), event.Tx)
+		self.BroadcastTxs(event.Txs)
 	}
 }
 
