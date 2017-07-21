@@ -53,7 +53,7 @@ var tmplSource = map[Lang]string{
 // based on.
 const tmplSourceGo = `
 // Code generated - DO NOT EDIT
-// This file is an automatically generated Go binding and any changes will be lost on regeneration.
+// This file is a generated binding and any manual changes will be lost.
 
 package {{.Package}}
 
