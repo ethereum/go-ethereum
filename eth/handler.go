@@ -444,11 +444,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			// Irrelevant of the fork checks, send the header to the fetcher just in case
 			headers = pm.fetcher.FilterHeaders(headers, time.Now())
 		}
-		if len(headers) > 0 || !filter {
-			err := pm.downloader.DeliverHeaders(p.id, headers)
-			if err != nil {
-				log.Debug("Failed to deliver headers", "err", err)
-			}
+		err := pm.downloader.DeliverHeaders(p.id, headers)
+		if err != nil {
+			log.Debug("Failed to deliver headers", "err", err)
 		}
 
 	case msg.Code == GetBlockBodiesMsg:
