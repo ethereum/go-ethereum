@@ -152,6 +152,11 @@ func (c *BoundContract) Transact(opts *TransactOpts, method string, params ...in
 	if err != nil {
 		return nil, err
 	}
+	// check to make sure method is payable and if not, make sure that there is no
+	// value being transported with this transaction
+	if !c.abi.Methods[method].Payable && 0 != opts.Value.Cmp(common.Big0) {
+		return nil, fmt.Errorf("bind: value %v sent to non payable method %v", opts.Value.String(), method)
+	}
 	return c.transact(opts, &c.address, input)
 }
 
