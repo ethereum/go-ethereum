@@ -8,7 +8,7 @@
 .PHONY: geth-darwin geth-darwin-386 geth-darwin-amd64
 .PHONY: geth-windows geth-windows-386 geth-windows-amd64
 
-GOBIN = build/bin
+GOBIN = $(pwd)/build/bin
 GO ?= latest
 
 geth:
