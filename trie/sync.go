@@ -55,7 +55,7 @@ type SyncResult struct {
 // syncMemBatch is an in-memory buffer of successfully downloaded but not yet
 // persisted data items.
 type syncMemBatch struct {
-	batch map[common.Hash][]byte // In-memory membatch of recently ocmpleted items
+	batch map[common.Hash][]byte // In-memory membatch of recently completed items
 	order []common.Hash          // Order of completion to prevent out-of-order data loss
 }
 
