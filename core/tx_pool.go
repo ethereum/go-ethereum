@@ -515,41 +515,48 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) (bool, er
 	return old != nil, nil
 }
 
-// promoteTx adds a transaction to the pending (processable) list of transactions.
+// promoteTxs adds transactions to the pending (processable) list of transactions.
 //
 // Note, this method assumes the pool lock is held!
-func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.Transaction) {
+func (pool *TxPool) promoteTxs(addr common.Address, txs types.Transactions) {
 	// Try to insert the transaction into the pending queue
 	if pool.pending[addr] == nil {
 		pool.pending[addr] = newTxList(true)
 	}
 	list := pool.pending[addr]
 
-	inserted, old := list.Add(tx, pool.config.PriceBump)
-	if !inserted {
-		// An older transaction was better, discard this
-		delete(pool.all, hash)
-		pool.priced.Removed()
+	var insertedTxs types.Transactions
+	for _, tx := range txs {
+		inserted, old := list.Add(tx, pool.config.PriceBump)
+		hash := tx.Hash()
+		if !inserted {
+			// An older transaction was better, discard this
+			delete(pool.all, hash)
+			pool.priced.Removed()
 
-		pendingDiscardCounter.Inc(1)
-		return
-	}
-	// Otherwise discard any previous transaction and mark this
-	if old != nil {
-		delete(pool.all, old.Hash())
-		pool.priced.Removed()
+			pendingDiscardCounter.Inc(1)
+			continue
+		}
+		// Otherwise discard any previous transaction and mark this
+		if old != nil {
+			delete(pool.all, old.Hash())
+			pool.priced.Removed()
 
-		pendingReplaceCounter.Inc(1)
+			pendingReplaceCounter.Inc(1)
+		}
+		// Failsafe to work around direct pending inserts (tests)
+		if pool.all[hash] == nil {
+			pool.all[hash] = tx
+			pool.priced.Put(tx)
+		}
+		// Set the potentially new pending nonce and notify any subsystems of the new tx
+		pool.beats[addr] = time.Now()
+		pool.pendingState.SetNonce(addr, tx.Nonce()+1)
+		insertedTxs = append(insertedTxs, tx)
 	}
-	// Failsafe to work around direct pending inserts (tests)
-	if pool.all[hash] == nil {
-		pool.all[hash] = tx
-		pool.priced.Put(tx)
+	if len(insertedTxs) > 0 {
+		go pool.eventMux.Post(TxPreEvent{insertedTxs})
 	}
-	// Set the potentially new pending nonce and notify any subsystems of the new tx
-	pool.beats[addr] = time.Now()
-	pool.pendingState.SetNonce(addr, tx.Nonce()+1)
-	go pool.eventMux.Post(TxPreEvent{tx})
 }
 
 // AddLocal enqueues a single transaction into the pool if it is valid, marking
@@ -738,10 +745,10 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB, accounts []common.A
 			queuedNofundsCounter.Inc(1)
 		}
 		// Gather all executable transactions and promote them
-		for _, tx := range list.Ready(pool.pendingState.GetNonce(addr)) {
-			hash := tx.Hash()
-			log.Trace("Promoting queued transaction", "hash", hash)
-			pool.promoteTx(addr, hash, tx)
+		txs := list.Ready(pool.pendingState.GetNonce(addr))
+		if len(txs) > 0 {
+			log.Trace("Promoting queued transactions", "txs", len(txs))
+			pool.promoteTxs(addr, txs)
 		}
 		// Drop all transactions over the allowed limit
 		if !pool.locals.contains(addr) {

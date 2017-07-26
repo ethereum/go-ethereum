@@ -372,19 +372,25 @@ func (ps *peerSet) PeersWithoutBlock(hash common.Hash) []*peer {
 	return list
 }
 
-// PeersWithoutTx retrieves a list of peers that do not have a given transaction
-// in their set of known hashes.
-func (ps *peerSet) PeersWithoutTx(hash common.Hash) []*peer {
+// PeersWithoutTxs retrieves a map of peers that do not have given transactions
+// in their set of known txs.
+func (ps *peerSet) PeersWithoutTxs(txs types.Transactions) map[*peer]types.Transactions {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	list := make([]*peer, 0, len(ps.peers))
+	peers := make(map[*peer]types.Transactions)
 	for _, p := range ps.peers {
-		if !p.knownTxs.Has(hash) {
-			list = append(list, p)
+		var ts types.Transactions
+		for _, tx := range txs {
+			if !p.knownTxs.Has(tx.Hash()) {
+				ts = append(ts, tx)
+			}
+		}
+		if len(ts) > 0 {
+			peers[p] = ts
 		}
 	}
-	return list
+	return peers
 }
 
 // BestPeer retrieves the known peer with the currently highest total difficulty.

@@ -259,7 +259,7 @@ func TestRemoveTx(t *testing.T) {
 	tx1 := transaction(0, big.NewInt(100), key)
 	tx2 := transaction(2, big.NewInt(100), key)
 
-	pool.promoteTx(addr, tx1.Hash(), tx1)
+	pool.promoteTxs(addr, types.Transactions{tx1})
 	pool.enqueueTx(tx2.Hash(), tx2)
 
 	if len(pool.queue) != 1 {
@@ -454,9 +454,7 @@ func TestTransactionDropping(t *testing.T) {
 		tx11 = transaction(11, big.NewInt(200), key)
 		tx12 = transaction(12, big.NewInt(300), key)
 	)
-	pool.promoteTx(account, tx0.Hash(), tx0)
-	pool.promoteTx(account, tx1.Hash(), tx1)
-	pool.promoteTx(account, tx2.Hash(), tx2)
+	pool.promoteTxs(account, types.Transactions{tx0, tx1, tx2})
 	pool.enqueueTx(tx10.Hash(), tx10)
 	pool.enqueueTx(tx11.Hash(), tx11)
 	pool.enqueueTx(tx12.Hash(), tx12)
@@ -549,7 +547,7 @@ func TestTransactionPostponing(t *testing.T) {
 		} else {
 			tx = transaction(uint64(i), big.NewInt(500), key)
 		}
-		pool.promoteTx(account, tx.Hash(), tx)
+		pool.promoteTxs(account, types.Transactions{tx})
 		txns = append(txns, tx)
 	}
 	// Check that pre and post validations leave the pool as is
@@ -1267,7 +1265,7 @@ func benchmarkPendingDemotion(b *testing.B, size int) {
 
 	for i := 0; i < size; i++ {
 		tx := transaction(uint64(i), big.NewInt(100000), key)
-		pool.promoteTx(account, tx.Hash(), tx)
+		pool.promoteTxs(account, types.Transactions{tx})
 	}
 	// Benchmark the speed of pool validation
 	b.ResetTimer()
