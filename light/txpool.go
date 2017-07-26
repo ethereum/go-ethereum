@@ -48,6 +48,8 @@ type TxPool struct {
 	quit     chan bool
 	eventMux *event.TypeMux
 	events   *event.TypeMuxSubscription
+	txFeed   event.Feed
+	scope    event.SubscriptionScope
 	mu       sync.RWMutex
 	chain    *LightChain
 	odr      OdrBackend
@@ -301,9 +303,17 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 
 // Stop stops the light transaction pool
 func (pool *TxPool) Stop() {
+	// Unsubscribe all subscriptions registered from txpool
+	pool.scope.Close()
 	close(pool.quit)
 	pool.events.Unsubscribe()
 	log.Info("Transaction pool stopped")
+}
+
+// SubscribeTxPreEvent registers a subscription of core.TxPreEvent and
+// starts sending event to the given channel.
+func (pool *TxPool) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
+	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
 // Stats returns the number of currently pending (locally created) transactions
@@ -388,7 +398,7 @@ func (self *TxPool) add(ctx context.Context, tx *types.Transaction) error {
 		// Notify the subscribers. This event is posted in a goroutine
 		// because it's possible that somewhere during the post "Remove transaction"
 		// gets called which will then wait for the global tx pool lock and deadlock.
-		go self.eventMux.Post(core.TxPreEvent{Tx: tx})
+		go self.txFeed.Send(core.TxPreEvent{Tx: tx})
 	}
 
 	// Print a log message if low enough level is set

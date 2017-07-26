@@ -41,6 +41,10 @@ import (
 const (
 	resultQueueSize  = 10
 	miningLogAtDepth = 5
+
+	// txChanSize is the size of channel listening to TxPreEvent.
+	// The number is referenced from the size of tx pool.
+	txChanSize = 4096
 )
 
 // Agent can register themself with the worker
@@ -89,6 +93,8 @@ type worker struct {
 	// update loop
 	mux    *event.TypeMux
 	events *event.TypeMuxSubscription
+	txCh   chan core.TxPreEvent
+	txSub  event.Subscription
 	wg     sync.WaitGroup
 
 	agents map[Agent]struct{}
@@ -123,6 +129,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		engine:         engine,
 		eth:            eth,
 		mux:            mux,
+		txCh:           make(chan core.TxPreEvent, txChanSize),
 		chainDb:        eth.ChainDb(),
 		recv:           make(chan *Result, resultQueueSize),
 		chain:          eth.BlockChain(),
@@ -133,7 +140,9 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
 		fullValidation: false,
 	}
-	worker.events = worker.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
+	worker.events = worker.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{})
+	// Subscribe TxPreEvent for tx pool
+	worker.txSub = eth.TxPool().SubscribeTxPreEvent(worker.txCh)
 	go worker.update()
 
 	go worker.wait()
@@ -225,20 +234,28 @@ func (self *worker) unregister(agent Agent) {
 }
 
 func (self *worker) update() {
-	for event := range self.events.Chan() {
+	for {
 		// A real event arrived, process interesting content
-		switch ev := event.Data.(type) {
-		case core.ChainHeadEvent:
-			self.commitNewWork()
-		case core.ChainSideEvent:
-			self.uncleMu.Lock()
-			self.possibleUncles[ev.Block.Hash()] = ev.Block
-			self.uncleMu.Unlock()
-		case core.TxPreEvent:
+		select {
+		case event, ok := <-self.events.Chan():
+			// System stopped
+			if !ok {
+				return
+			}
+			switch ev := event.Data.(type) {
+			case core.ChainHeadEvent:
+				self.commitNewWork()
+			case core.ChainSideEvent:
+				self.uncleMu.Lock()
+				self.possibleUncles[ev.Block.Hash()] = ev.Block
+				self.uncleMu.Unlock()
+			}
+
+		// Handle TxPreEvent
+		case ev := <-self.txCh:
 			// Apply transaction to the pending state if we're not mining
 			if atomic.LoadInt32(&self.mining) == 0 {
 				self.currentMu.Lock()
-
 				acc, _ := types.Sender(self.current.signer, ev.Tx)
 				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
 				txset := types.NewTransactionsByPriceAndNonce(txs)
@@ -246,6 +263,10 @@ func (self *worker) update() {
 				self.current.commitTransactions(self.mux, txset, self.chain, self.coinbase)
 				self.currentMu.Unlock()
 			}
+
+		// System stopped
+		case <-self.txSub.Err():
+			return
 		}
 	}
 }

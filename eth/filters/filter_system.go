@@ -54,6 +54,13 @@ const (
 	LastIndexSubscription
 )
 
+const (
+
+	// txChanSize is the size of channel listening to TxPreEvent.
+	// The number is referenced from the size of tx pool.
+	txChanSize = 4096
+)
+
 var (
 	ErrInvalidSubscriptionID = errors.New("invalid id")
 )
@@ -395,7 +402,10 @@ func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.
 func (es *EventSystem) eventLoop() {
 	var (
 		index = make(filterIndex)
-		sub   = es.mux.Subscribe(core.PendingLogsEvent{}, core.RemovedLogsEvent{}, []*types.Log{}, core.TxPreEvent{}, core.ChainEvent{})
+		sub   = es.mux.Subscribe(core.PendingLogsEvent{}, core.RemovedLogsEvent{}, []*types.Log{}, core.ChainEvent{})
+		// Subscribe TxPreEvent form txpool
+		txCh  = make(chan core.TxPreEvent, txChanSize)
+		txSub = es.backend.SubscribeTxPreEvent(txCh)
 	)
 
 	for i := UnknownSubscription; i < LastIndexSubscription; i++ {
@@ -409,6 +419,17 @@ func (es *EventSystem) eventLoop() {
 				return
 			}
 			es.broadcast(index, ev)
+
+		// Handle TxPreEvent
+		case txEvent := <-txCh:
+			ev := &event.TypeMuxEvent{
+				Time: time.Now(),
+				Data: txEvent,
+			}
+			es.broadcast(index, ev)
+		// System stopped
+		case <-txSub.Err():
+			return
 		case f := <-es.install:
 			if f.typ == MinedAndPendingLogsSubscription {
 				// the type are logs and pending logs subscriptions

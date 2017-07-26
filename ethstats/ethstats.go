@@ -44,9 +44,21 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-// historyUpdateRange is the number of blocks a node should report upon login or
-// history request.
-const historyUpdateRange = 50
+const (
+	// historyUpdateRange is the number of blocks a node should report upon login or
+	// history request.
+	historyUpdateRange = 50
+
+	// txChanSize is the size of channel listening to TxPreEvent.
+	// The number is referenced from the size of tx pool.
+	txChanSize = 4096
+)
+
+type txPool interface {
+	// SubscribeTxPreEvent should return an event subscription of
+	// TxPreEvent and send events to the given channel.
+	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
+}
 
 // Service implements an Ethereum netstats reporting daemon that pushes local
 // chain statistics up to a monitoring server.
@@ -119,15 +131,19 @@ func (s *Service) Stop() error {
 func (s *Service) loop() {
 	// Subscribe to chain events to execute updates on
 	var emux *event.TypeMux
+	var txpool txPool
 	if s.eth != nil {
 		emux = s.eth.EventMux()
+		txpool = s.eth.TxPool()
 	} else {
 		emux = s.les.EventMux()
+		txpool = s.les.TxPool()
 	}
 	headSub := emux.Subscribe(core.ChainHeadEvent{})
 	defer headSub.Unsubscribe()
 
-	txSub := emux.Subscribe(core.TxPreEvent{})
+	txEventCh := make(chan core.TxPreEvent, txChanSize)
+	txSub := txpool.SubscribeTxPreEvent(txEventCh)
 	defer txSub.Unsubscribe()
 
 	// Start a goroutine that exhausts the subsciptions to avoid events piling up
@@ -153,11 +169,7 @@ func (s *Service) loop() {
 				}
 
 			// Notify of new transaction events, but drop if too frequent
-			case _, ok := <-txSub.Chan():
-				if !ok { // node stopped
-					close(quitCh)
-					return
-				}
+			case <-txEventCh:
 				if time.Duration(mclock.Now()-lastTx) < time.Second {
 					continue
 				}
@@ -167,6 +179,11 @@ func (s *Service) loop() {
 				case txCh <- struct{}{}:
 				default:
 				}
+
+			// node stopped
+			case <-txSub.Err():
+				close(quitCh)
+				return
 			}
 		}
 	}()

@@ -34,6 +34,7 @@ type Backend interface {
 	EventMux() *event.TypeMux
 	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
+	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
 }
 
 // Filter can be used to retrieve and filter logs.
