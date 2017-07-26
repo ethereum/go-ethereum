@@ -136,7 +136,7 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			"",
 		},
 	} {
-		abiDefinition := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
+		abiDefinition := fmt.Sprintf(`[{ "name" : "method", "type": "function", "outputs": %s}]`, test.def)
 		abi, err := JSON(strings.NewReader(abiDefinition))
 		if err != nil {
 			t.Errorf("%d failed. %v", i, err)
@@ -286,7 +286,7 @@ func TestUnpackSetInterfaceArrayOutput(t *testing.T) {
 
 func TestMultiReturnWithStruct(t *testing.T) {
 	const definition = `[
-	{ "name" : "multi", "constant" : false, "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
+	{ "name" : "multi", "type": "function", "constant" : false, "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
 
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
@@ -339,7 +339,7 @@ func TestMultiReturnWithStruct(t *testing.T) {
 
 func TestMultiReturnWithSlice(t *testing.T) {
 	const definition = `[
-	{ "name" : "multi", "constant" : false, "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
+	{ "name" : "multi", "type": "function", "constant" : false, "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
 
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
@@ -375,8 +375,8 @@ func TestMultiReturnWithSlice(t *testing.T) {
 
 func TestMarshalArrays(t *testing.T) {
 	const definition = `[
-	{ "name" : "bytes32", "constant" : false, "outputs": [ { "type": "bytes32" } ] },
-	{ "name" : "bytes10", "constant" : false, "outputs": [ { "type": "bytes10" } ] }
+	{ "name" : "bytes32", "type": "function", "constant" : false, "outputs": [ { "type": "bytes32" } ] },
+	{ "name" : "bytes10", "type": "function", "constant" : false, "outputs": [ { "type": "bytes10" } ] }
 	]`
 
 	abi, err := JSON(strings.NewReader(definition))
@@ -434,15 +434,15 @@ func TestMarshalArrays(t *testing.T) {
 
 func TestUnmarshal(t *testing.T) {
 	const definition = `[
-	{ "name" : "int", "constant" : false, "outputs": [ { "type": "uint256" } ] },
-	{ "name" : "bool", "constant" : false, "outputs": [ { "type": "bool" } ] },
-	{ "name" : "bytes", "constant" : false, "outputs": [ { "type": "bytes" } ] },
-	{ "name" : "fixed", "constant" : false, "outputs": [ { "type": "bytes32" } ] },
-	{ "name" : "multi", "constant" : false, "outputs": [ { "type": "bytes" }, { "type": "bytes" } ] },
-	{ "name" : "intArraySingle", "constant" : false, "outputs": [ { "type": "uint256[3]" } ] },
-	{ "name" : "addressSliceSingle", "constant" : false, "outputs": [ { "type": "address[]" } ] },
-	{ "name" : "addressSliceDouble", "constant" : false, "outputs": [ { "name": "a", "type": "address[]" }, { "name": "b", "type": "address[]" } ] },
-	{ "name" : "mixedBytes", "constant" : true, "outputs": [ { "name": "a", "type": "bytes" }, { "name": "b", "type": "bytes32" } ] }]`
+	{ "name" : "int", "type": "function", "constant" : false, "outputs": [ { "type": "uint256" } ] },
+	{ "name" : "bool", "type": "function", "constant" : false, "outputs": [ { "type": "bool" } ] },
+	{ "name" : "bytes", "type": "function", "constant" : false, "outputs": [ { "type": "bytes" } ] },
+	{ "name" : "fixed", "type": "function", "constant" : false, "outputs": [ { "type": "bytes32" } ] },
+	{ "name" : "multi", "type": "function", "constant" : false, "outputs": [ { "type": "bytes" }, { "type": "bytes" } ] },
+	{ "name" : "intArraySingle", "type": "function", "constant" : false, "outputs": [ { "type": "uint256[3]" } ] },
+	{ "name" : "addressSliceSingle", "type": "function", "constant" : false, "outputs": [ { "type": "address[]" } ] },
+	{ "name" : "addressSliceDouble", "type": "function", "constant" : false, "outputs": [ { "name": "a", "type": "address[]" }, { "name": "b", "type": "address[]" } ] },
+	{ "name" : "mixedBytes", "type": "function", "constant" : true, "outputs": [ { "name": "a", "type": "bytes" }, { "name": "b", "type": "bytes32" } ] }]`
 
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {

@@ -203,14 +203,13 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			abi.Constructor = Method{
 				Inputs: field.Inputs,
 			}
-		// empty defaults to function according to the abi spec
 		case "function":
 			abi.Methods[field.Name] = Method{
 				Name:    field.Name,
 				Const:   field.Constant,
+				Payable: field.Payable,
 				Inputs:  field.Inputs,
 				Outputs: field.Outputs,
-				Payable: field.Payable,
 			}
 		case "event":
 			abi.Events[field.Name] = Event{
@@ -222,6 +221,8 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			abi.Fallback = Method{
 				Payable: field.Payable,
 			}
+		default:
+			return fmt.Errorf("abi: contract interaction type not referenced")
 		}
 	}
 

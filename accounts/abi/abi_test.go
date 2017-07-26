@@ -56,8 +56,8 @@ const jsondata = `
 
 const jsondata2 = `
 [
-	{ "type" : "function", "name" : "balance", "constant" : true },
-	{ "type" : "function", "name" : "send", "constant" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
+	{ "type" : "function", "name" : "balance", "constant" : true, "payable" : false },
+	{ "type" : "function", "name" : "send", "constant" : false, "payable" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
 	{ "type" : "function", "name" : "test", "constant" : false, "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
 	{ "type" : "function", "name" : "string", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "string" } ] },
 	{ "type" : "function", "name" : "bool", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "bool" } ] },
@@ -77,10 +77,10 @@ func TestReader(t *testing.T) {
 	exp := ABI{
 		Methods: map[string]Method{
 			"balance": {
-				"balance", true, nil, nil,
+				"balance", false, true, nil, nil,
 			},
 			"send": {
-				"send", false, []Argument{
+				"send", false, false, []Argument{
 					{"amount", Uint256, false},
 				}, nil,
 			},
@@ -180,7 +180,7 @@ func TestTestSlice(t *testing.T) {
 
 func TestMethodSignature(t *testing.T) {
 	String, _ := NewType("string")
-	m := Method{"foo", false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil}
+	m := Method{"foo", false, false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil}
 	exp := "foo(string,string)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
@@ -192,7 +192,7 @@ func TestMethodSignature(t *testing.T) {
 	}
 
 	uintt, _ := NewType("uint")
-	m = Method{"foo", false, []Argument{{"bar", uintt, false}}, nil}
+	m = Method{"foo", false, false, []Argument{{"bar", uintt, false}}, nil}
 	exp = "foo(uint256)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
@@ -364,19 +364,6 @@ func TestInputVariableInputLength(t *testing.T) {
 	str2pack = str2pack[4:]
 	if !bytes.Equal(str2pack, exp2) {
 		t.Errorf("expected %x, got %x\n", exp, str2pack)
-	}
-}
-
-func TestDefaultFunctionParsing(t *testing.T) {
-	const definition = `[{ "name" : "balance" }]`
-
-	abi, err := JSON(strings.NewReader(definition))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if _, ok := abi.Methods["balance"]; !ok {
-		t.Error("expected 'balance' to be present")
 	}
 }
 
