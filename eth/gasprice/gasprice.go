@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ var maxPrice = big.NewInt(500 * params.Shannon)
 type Config struct {
 	Blocks     int
 	Percentile int
-	Default    *big.Int
+	Default    *big.Int `toml:",omitempty"`
 }
 
 // Oracle recommends gas prices based on the content of recent

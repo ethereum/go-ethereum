@@ -22,12 +22,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/big"
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -66,9 +68,6 @@ func Keccak512(data ...[]byte) []byte {
 	return d.Sum(nil)
 }
 
-// Deprecated: For backward compatibility as other packages depend on these
-func Sha3Hash(data ...[]byte) common.Hash { return Keccak256Hash(data...) }
-
 // Creates an ethereum address given the bytes and the nonce
 func CreateAddress(b common.Address, nonce uint64) common.Address {
 	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})
@@ -76,23 +75,38 @@ func CreateAddress(b common.Address, nonce uint64) common.Address {
 }
 
 // ToECDSA creates a private key with the given D value.
-func ToECDSA(prv []byte) *ecdsa.PrivateKey {
-	if len(prv) == 0 {
-		return nil
-	}
+func ToECDSA(d []byte) (*ecdsa.PrivateKey, error) {
+	return toECDSA(d, true)
+}
 
-	priv := new(ecdsa.PrivateKey)
-	priv.PublicKey.Curve = S256()
-	priv.D = new(big.Int).SetBytes(prv)
-	priv.PublicKey.X, priv.PublicKey.Y = priv.PublicKey.Curve.ScalarBaseMult(prv)
+// ToECDSAUnsafe blidly converts a binary blob to a private key. It should almost
+// never be used unless you are sure the input is valid and want to avoid hitting
+// errors due to bad origin encoding (0 prefixes cut off).
+func ToECDSAUnsafe(d []byte) *ecdsa.PrivateKey {
+	priv, _ := toECDSA(d, false)
 	return priv
 }
 
-func FromECDSA(prv *ecdsa.PrivateKey) []byte {
-	if prv == nil {
+// toECDSA creates a private key with the given D value. The strict parameter
+// controls whether the key's length should be enforced at the curve size or
+// it can also accept legacy encodings (0 prefixes).
+func toECDSA(d []byte, strict bool) (*ecdsa.PrivateKey, error) {
+	priv := new(ecdsa.PrivateKey)
+	priv.PublicKey.Curve = S256()
+	if strict && 8*len(d) != priv.Params().BitSize {
+		return nil, fmt.Errorf("invalid length, need %d bits", priv.Params().BitSize)
+	}
+	priv.D = new(big.Int).SetBytes(d)
+	priv.PublicKey.X, priv.PublicKey.Y = priv.PublicKey.Curve.ScalarBaseMult(d)
+	return priv, nil
+}
+
+// FromECDSA exports a private key into a binary dump.
+func FromECDSA(priv *ecdsa.PrivateKey) []byte {
+	if priv == nil {
 		return nil
 	}
-	return prv.D.Bytes()
+	return math.PaddedBigBytes(priv.D, priv.Params().BitSize/8)
 }
 
 func ToECDSAPub(pub []byte) *ecdsa.PublicKey {
@@ -116,14 +130,10 @@ func HexToECDSA(hexkey string) (*ecdsa.PrivateKey, error) {
 	if err != nil {
 		return nil, errors.New("invalid hex string")
 	}
-	if len(b) != 32 {
-		return nil, errors.New("invalid length, need 256 bits")
-	}
-	return ToECDSA(b), nil
+	return ToECDSA(b)
 }
 
 // LoadECDSA loads a secp256k1 private key from the given file.
-// The key data is expected to be hex-encoded.
 func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 	buf := make([]byte, 64)
 	fd, err := os.Open(file)
@@ -139,8 +149,7 @@ func LoadECDSA(file string) (*ecdsa.PrivateKey, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	return ToECDSA(key), nil
+	return ToECDSA(key)
 }
 
 // SaveECDSA saves a secp256k1 private key to the given file with

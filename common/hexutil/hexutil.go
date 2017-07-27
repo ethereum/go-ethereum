@@ -32,7 +32,6 @@ package hexutil
 
 import (
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -41,16 +40,22 @@ import (
 const uintBits = 32 << (uint64(^uint(0)) >> 63)
 
 var (
-	ErrEmptyString   = errors.New("empty hex string")
-	ErrMissingPrefix = errors.New("missing 0x prefix for hex data")
-	ErrSyntax        = errors.New("invalid hex")
-	ErrEmptyNumber   = errors.New("hex number has no digits after 0x")
-	ErrLeadingZero   = errors.New("hex number has leading zero digits after 0x")
-	ErrOddLength     = errors.New("hex string has odd length")
-	ErrUint64Range   = errors.New("hex number does not fit into 64 bits")
-	ErrUintRange     = fmt.Errorf("hex number does not fit into %d bits", uintBits)
-	ErrBig256Range   = errors.New("hex number does not fit into 256 bits")
+	ErrEmptyString   = &decError{"empty hex string"}
+	ErrSyntax        = &decError{"invalid hex string"}
+	ErrMissingPrefix = &decError{"hex string without 0x prefix"}
+	ErrOddLength     = &decError{"hex string of odd length"}
+	ErrEmptyNumber   = &decError{"hex string \"0x\""}
+	ErrLeadingZero   = &decError{"hex number with leading zero digits"}
+	ErrUint64Range   = &decError{"hex number > 64 bits"}
+	ErrUintRange     = &decError{fmt.Sprintf("hex number > %d bits", uintBits)}
+	ErrBig256Range   = &decError{"hex number > 256 bits"}
 )
+
+type decError struct{ msg string }
+
+func (err decError) Error() string {
+	return string(err.msg)
+}
 
 // Decode decodes a hex string with 0x prefix.
 func Decode(input string) ([]byte, error) {

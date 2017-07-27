@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -240,17 +241,19 @@ func (b *bridge) Send(call otto.FunctionCall) (response otto.Value) {
 		throwJSException(err.Error())
 	}
 	var (
-		rawReq = []byte(reqVal.String())
+		rawReq = reqVal.String()
+		dec    = json.NewDecoder(strings.NewReader(rawReq))
 		reqs   []jsonrpcCall
 		batch  bool
 	)
+	dec.UseNumber() // avoid float64s
 	if rawReq[0] == '[' {
 		batch = true
-		json.Unmarshal(rawReq, &reqs)
+		dec.Decode(&reqs)
 	} else {
 		batch = false
 		reqs = make([]jsonrpcCall, 1)
-		json.Unmarshal(rawReq, &reqs[0])
+		dec.Decode(&reqs[0])
 	}
 
 	// Execute the requests.

@@ -21,6 +21,8 @@ package geth
 import (
 	"errors"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // A BigInt represents a signed multi-precision integer.
@@ -52,7 +54,7 @@ func (bi *BigInt) GetInt64() int64 {
 // SetBytes interprets buf as the bytes of a big-endian unsigned integer and sets
 // the big int to that value.
 func (bi *BigInt) SetBytes(buf []byte) {
-	bi.bigint.SetBytes(buf)
+	bi.bigint.SetBytes(common.CopyBytes(buf))
 }
 
 // SetInt64 sets the big int to x.

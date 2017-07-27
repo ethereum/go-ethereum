@@ -48,8 +48,8 @@ type peer struct {
 
 	rw p2p.MsgReadWriter
 
-	version int // Protocol version negotiated
-	network int // Network ID being on
+	version int    // Protocol version negotiated
+	network uint64 // Network ID being on
 
 	id string
 
@@ -69,7 +69,7 @@ type peer struct {
 	fcCosts        requestCostTable
 }
 
-func newPeer(version, network int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
+func newPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	id := p.ID()
 
 	return &peer{
@@ -166,9 +166,9 @@ func (p *peer) GetRequestCost(msgcode uint64, amount int) uint64 {
 // HasBlock checks if the peer has a given block
 func (p *peer) HasBlock(hash common.Hash, number uint64) bool {
 	p.lock.RLock()
-	hashBlock := p.hasBlock
+	hasBlock := p.hasBlock
 	p.lock.RUnlock()
-	return hashBlock != nil && hashBlock(hash, number)
+	return hasBlock != nil && hasBlock(hash, number)
 }
 
 // SendAnnounce announces the availability of a number of blocks through
@@ -384,16 +384,17 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	if rGenesis != genesis {
 		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", rGenesis[:8], genesis[:8])
 	}
-	if int(rNetwork) != p.network {
+	if rNetwork != p.network {
 		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", rNetwork, p.network)
 	}
 	if int(rVersion) != p.version {
 		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", rVersion, p.version)
 	}
 	if server != nil {
-		if recv.get("serveStateSince", nil) == nil {
+		// until we have a proper peer connectivity API, allow LES connection to other servers
+		/*if recv.get("serveStateSince", nil) == nil {
 			return errResp(ErrUselessPeer, "wanted client, got server")
-		}
+		}*/
 		p.fcClient = flowcontrol.NewClientNode(server.fcManager, server.defParams)
 	} else {
 		if recv.get("serveChainSince", nil) != nil {
@@ -432,18 +433,37 @@ func (p *peer) String() string {
 	)
 }
 
+// peerSetNotify is a callback interface to notify services about added or
+// removed peers
+type peerSetNotify interface {
+	registerPeer(*peer)
+	unregisterPeer(*peer)
+}
+
 // peerSet represents the collection of active peers currently participating in
 // the Light Ethereum sub-protocol.
 type peerSet struct {
-	peers  map[string]*peer
-	lock   sync.RWMutex
-	closed bool
+	peers      map[string]*peer
+	lock       sync.RWMutex
+	notifyList []peerSetNotify
+	closed     bool
 }
 
 // newPeerSet creates a new peer set to track the active participants.
 func newPeerSet() *peerSet {
 	return &peerSet{
 		peers: make(map[string]*peer),
+	}
+}
+
+// notify adds a service to be notified about added or removed peers
+func (ps *peerSet) notify(n peerSetNotify) {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	ps.notifyList = append(ps.notifyList, n)
+	for _, p := range ps.peers {
+		go n.registerPeer(p)
 	}
 }
 
@@ -461,11 +481,14 @@ func (ps *peerSet) Register(p *peer) error {
 	}
 	ps.peers[p.id] = p
 	p.sendQueue = newExecQueue(100)
+	for _, n := range ps.notifyList {
+		go n.registerPeer(p)
+	}
 	return nil
 }
 
 // Unregister removes a remote peer from the active set, disabling any further
-// actions to/from that particular entity.
+// actions to/from that particular entity. It also initiates disconnection at the networking layer.
 func (ps *peerSet) Unregister(id string) error {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
@@ -473,7 +496,11 @@ func (ps *peerSet) Unregister(id string) error {
 	if p, ok := ps.peers[id]; !ok {
 		return errNotRegistered
 	} else {
+		for _, n := range ps.notifyList {
+			go n.unregisterPeer(p)
+		}
 		p.sendQueue.quit()
+		p.Peer.Disconnect(p2p.DiscUselessPeer)
 	}
 	delete(ps.peers, id)
 	return nil

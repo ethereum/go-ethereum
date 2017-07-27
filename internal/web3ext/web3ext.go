@@ -20,6 +20,7 @@ package web3ext
 var Modules = map[string]string{
 	"admin":      Admin_JS,
 	"chequebook": Chequebook_JS,
+	"clique":     Clique_JS,
 	"debug":      Debug_JS,
 	"eth":        Eth_JS,
 	"miner":      Miner_JS,
@@ -63,6 +64,54 @@ web3._extend({
 });
 `
 
+const Clique_JS = `
+web3._extend({
+  property: 'clique',
+  methods:
+  [
+		new web3._extend.Method({
+			name: 'getSnapshot',
+			call: 'clique_getSnapshot',
+			params: 1,
+      inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'getSnapshotAtHash',
+			call: 'clique_getSnapshotAtHash',
+			params: 1
+		}),
+    new web3._extend.Method({
+      name: 'getSigners',
+      call: 'clique_getSigners',
+      params: 1,
+      inputFormatter: [null]
+    }),
+		new web3._extend.Method({
+			name: 'getSignersAtHash',
+			call: 'clique_getSignersAtHash',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'propose',
+			call: 'clique_propose',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'discard',
+			call: 'clique_discard',
+			params: 1
+		})
+  ],
+	properties:
+	[
+		new web3._extend.Property({
+			name: 'proposals',
+			getter: 'clique_proposals'
+		}),
+	]
+});
+`
+
 const Admin_JS = `
 web3._extend({
 	property: 'admin',
@@ -93,11 +142,6 @@ web3._extend({
 			name: 'sleepBlocks',
 			call: 'admin_sleepBlocks',
 			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'setSolc',
-			call: 'admin_setSolc',
-			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'startRPC',
@@ -164,8 +208,8 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'traceBlockByFile',
-			call: 'debug_traceBlockByFile',
+			name: 'traceBlockFromFile',
+			call: 'debug_traceBlockFromFile',
 			params: 1
 		}),
 		new web3._extend.Method({
@@ -300,6 +344,11 @@ web3._extend({
 			name: 'getBadBlocks',
 			call: 'debug_getBadBlocks',
 			params: 0,
+		}),
+		new web3._extend.Method({
+			name: 'storageRangeAt',
+			call: 'debug_storageRangeAt',
+			params: 5,
 		}),
 	],
 	properties: []
@@ -476,17 +525,126 @@ web3._extend({
 const Shh_JS = `
 web3._extend({
 	property: 'shh',
-	methods: [],
+	methods: [
+		new web3._extend.Method({
+			name: 'setMaxMessageLength',
+			call: 'shh_setMaxMessageLength',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'setMinimumPoW',
+			call: 'shh_setMinimumPoW',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'markTrustedPeer',
+			call: 'shh_markTrustedPeer',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'hasKeyPair',
+			call: 'shh_hasKeyPair',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'deleteKeyPair',
+			call: 'shh_deleteKeyPair',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'newKeyPair',
+			call: 'shh_newKeyPair'
+		}),
+		new web3._extend.Method({
+			name: 'getPublicKey',
+			call: 'shh_getPublicKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getPrivateKey',
+			call: 'shh_getPrivateKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'newSymKey',
+			call: 'shh_newSymKey',
+		}),
+		new web3._extend.Method({
+			name: 'addSymKey',
+			call: 'shh_addSymKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'generateSymKeyFromPassword',
+			call: 'shh_generateSymKeyFromPassword',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'hasSymKey',
+			call: 'shh_hasSymKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getSymKey',
+			call: 'shh_getSymKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'deleteSymKey',
+			call: 'shh_deleteSymKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'subscribe',
+			call: 'shh_subscribe',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'unsubscribe',
+			call: 'shh_unsubscribe',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'post',
+			call: 'shh_post',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'publicKey',
+			call: 'shh_getPublicKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getFilterMessages',
+			call: 'shh_getFilterMessages',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'deleteMessageFilter',
+			call: 'shh_deleteMessageFilter',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'newMessageFilter',
+			call: 'shh_newMessageFilter',
+			params: 1
+		})
+	],
 	properties:
 	[
 		new web3._extend.Property({
 			name: 'version',
 			getter: 'shh_version',
 			outputFormatter: web3._extend.utils.toDecimal
-		})
+		}),
+		new web3._extend.Property({
+			name: 'info',
+			getter: 'shh_info'
+		}),
 	]
 });
 `
+
 const SWARMFS_JS = `
 web3._extend({
 	property: 'swarmfs',

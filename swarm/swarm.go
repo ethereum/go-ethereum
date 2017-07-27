@@ -21,12 +21,14 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"net"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/chequebook"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -34,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
+	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -54,7 +57,7 @@ type Swarm struct {
 	corsString  string
 	swapEnabled bool
 	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
-	sfs         *api.SwarmFS        // need this to cleanup all the active mounts on node exit
+	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
 }
 
 type SwarmAPI struct {
@@ -73,7 +76,7 @@ func (self *Swarm) API() *SwarmAPI {
 
 // creates a new swarm service instance
 // implements node.Service
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config, swapEnabled, syncEnabled bool, cors string) (self *Swarm, err error) {
+func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *ethclient.Client, config *api.Config, swapEnabled, syncEnabled bool, cors string) (self *Swarm, err error) {
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
 	}
@@ -133,9 +136,13 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	// set up high level api
 	transactOpts := bind.NewKeyedTransactor(self.privateKey)
 
-	self.dns, err = ens.NewENS(transactOpts, config.EnsRoot, self.backend)
-	if err != nil {
-		return nil, err
+	if ensClient == nil {
+		log.Warn("No ENS, please specify non-empty --ens-api to use domain name resolution")
+	} else {
+		self.dns, err = ens.NewENS(transactOpts, config.EnsRoot, ensClient)
+		if err != nil {
+			return nil, err
+		}
 	}
 	log.Debug(fmt.Sprintf("-> Swarm Domain Name Registrar @ address %v", config.EnsRoot.Hex()))
 
@@ -143,7 +150,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 
-	self.sfs = api.NewSwarmFS(self.api)
+	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("-> Initializing Fuse file system")
 
 	return self, nil
@@ -160,13 +167,13 @@ Start is called when the stack is started
 * TODO: start subservices like sword, swear, swarmdns
 */
 // implements the node.Service interface
-func (self *Swarm) Start(net *p2p.Server) error {
+func (self *Swarm) Start(srv *p2p.Server) error {
 	connectPeer := func(url string) error {
 		node, err := discover.ParseNode(url)
 		if err != nil {
 			return fmt.Errorf("invalid node URL: %v", err)
 		}
-		net.AddPeer(node)
+		srv.AddPeer(node)
 		return nil
 	}
 	// set chequebook
@@ -183,8 +190,8 @@ func (self *Swarm) Start(net *p2p.Server) error {
 
 	log.Warn(fmt.Sprintf("Starting Swarm service"))
 	self.hive.Start(
-		discover.PubkeyID(&net.PrivateKey.PublicKey),
-		func() string { return net.ListenAddr },
+		discover.PubkeyID(&srv.PrivateKey.PublicKey),
+		func() string { return srv.ListenAddr },
 		connectPeer,
 	)
 	log.Info(fmt.Sprintf("Swarm network started on bzz address: %v", self.hive.Addr()))
@@ -194,17 +201,16 @@ func (self *Swarm) Start(net *p2p.Server) error {
 
 	// start swarm http proxy server
 	if self.config.Port != "" {
-		addr := ":" + self.config.Port
+		addr := net.JoinHostPort(self.config.ListenAddr, self.config.Port)
 		go httpapi.StartHttpServer(self.api, &httpapi.ServerConfig{
 			Addr:       addr,
 			CorsString: self.corsString,
 		})
-	}
+		log.Info(fmt.Sprintf("Swarm http proxy started on %v", addr))
 
-	log.Debug(fmt.Sprintf("Swarm http proxy started on port: %v", self.config.Port))
-
-	if self.corsString != "" {
-		log.Debug(fmt.Sprintf("Swarm http proxy started with corsdomain: %v", self.corsString))
+		if self.corsString != "" {
+			log.Debug(fmt.Sprintf("Swarm http proxy started with corsdomain: %v", self.corsString))
+		}
 	}
 
 	return nil
@@ -262,7 +268,7 @@ func (self *Swarm) APIs() []rpc.API {
 		},
 		{
 			Namespace: "swarmfs",
-			Version:   api.Swarmfs_Version,
+			Version:   fuse.Swarmfs_Version,
 			Service:   self.sfs,
 			Public:    false,
 		},

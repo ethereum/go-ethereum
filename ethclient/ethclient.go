@@ -167,11 +167,11 @@ func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *
 	} else if _, r, _ := tx.RawSignatureValues(); r == nil {
 		return nil, false, fmt.Errorf("server returned transaction without signature")
 	}
-	var block struct{ BlockHash *common.Hash }
+	var block struct{ BlockNumber *string }
 	if err := json.Unmarshal(raw, &block); err != nil {
 		return nil, false, err
 	}
-	return tx, block.BlockHash == nil, nil
+	return tx, block.BlockNumber == nil, nil
 }
 
 // TransactionCount returns the total number of transactions in the given block.
@@ -203,8 +203,6 @@ func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*
 	if err == nil {
 		if r == nil {
 			return nil, ethereum.NotFound
-		} else if len(r.PostState) == 0 {
-			return nil, fmt.Errorf("server returned receipt without post state")
 		}
 	}
 	return r, err

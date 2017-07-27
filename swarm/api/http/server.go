@@ -69,7 +69,6 @@ func StartHttpServer(api *api.Api, config *ServerConfig) {
 	hdlr := c.Handler(NewServer(api))
 
 	go http.ListenAndServe(config.Addr, hdlr)
-	log.Info(fmt.Sprintf("Swarm HTTP proxy started on localhost:%s", config.Addr))
 }
 
 func NewServer(api *api.Api) *Server {
@@ -523,6 +522,12 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
 // with the content of the file at <path> from the given <manifest>
 func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
+	// ensure the root path has a trailing slash so that relative URLs work
+	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
+		http.Redirect(w, &r.Request, r.URL.Path+"/", http.StatusMovedPermanently)
+		return
+	}
+
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
 		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))

@@ -17,17 +17,12 @@
 package core
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // TxPreEvent is posted when a transaction enters the transaction pool.
 type TxPreEvent struct{ Tx *types.Transaction }
-
-// TxPostEvent is posted when a transaction has been processed.
-type TxPostEvent struct{ Tx *types.Transaction }
 
 // PendingLogsEvent is posted pre mining and notifies of pending logs.
 type PendingLogsEvent struct {
@@ -43,14 +38,8 @@ type NewMinedBlockEvent struct{ Block *types.Block }
 // RemovedTransactionEvent is posted when a reorg happens
 type RemovedTransactionEvent struct{ Txs types.Transactions }
 
-// RemovedLogEvent is posted when a reorg happens
+// RemovedLogsEvent is posted when a reorg happens
 type RemovedLogsEvent struct{ Logs []*types.Log }
-
-// ChainSplit is posted when a new head is detected
-type ChainSplitEvent struct {
-	Block *types.Block
-	Logs  []*types.Log
-}
 
 type ChainEvent struct {
 	Block *types.Block
@@ -62,19 +51,4 @@ type ChainSideEvent struct {
 	Block *types.Block
 }
 
-type PendingBlockEvent struct {
-	Block *types.Block
-	Logs  []*types.Log
-}
-
-type ChainUncleEvent struct {
-	Block *types.Block
-}
-
 type ChainHeadEvent struct{ Block *types.Block }
-
-type GasPriceChanged struct{ Price *big.Int }
-
-// Mining operation events
-type StartMining struct{}
-type TopMining struct{}

@@ -119,7 +119,7 @@ func DeployContract(opts *TransactOpts, abiJSON string, bytecode []byte, client 
 	if err != nil {
 		return nil, err
 	}
-	addr, tx, bound, err := bind.DeployContract(&opts.opts, parsed, bytecode, client.client, args.objects...)
+	addr, tx, bound, err := bind.DeployContract(&opts.opts, parsed, common.CopyBytes(bytecode), client.client, args.objects...)
 	if err != nil {
 		return nil, err
 	}

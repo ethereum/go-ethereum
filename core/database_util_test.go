@@ -290,8 +290,8 @@ func TestHeadStorage(t *testing.T) {
 	}
 }
 
-// Tests that transactions and associated metadata can be stored and retrieved.
-func TestTransactionStorage(t *testing.T) {
+// Tests that positional lookup metadata can be stored and retrieved.
+func TestLookupStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), big.NewInt(1111), big.NewInt(11111), []byte{0x11, 0x11, 0x11})
@@ -308,7 +308,10 @@ func TestTransactionStorage(t *testing.T) {
 		}
 	}
 	// Insert all the transactions into the database, and verify contents
-	if err := WriteTransactions(db, block); err != nil {
+	if err := WriteBlock(db, block); err != nil {
+		t.Fatalf("failed to write block contents: %v", err)
+	}
+	if err := WriteTxLookupEntries(db, block); err != nil {
 		t.Fatalf("failed to write transactions: %v", err)
 	}
 	for i, tx := range txs {
@@ -325,68 +328,9 @@ func TestTransactionStorage(t *testing.T) {
 	}
 	// Delete the transactions and check purge
 	for i, tx := range txs {
-		DeleteTransaction(db, tx.Hash())
+		DeleteTxLookupEntry(db, tx.Hash())
 		if txn, _, _, _ := GetTransaction(db, tx.Hash()); txn != nil {
 			t.Fatalf("tx #%d [%x]: deleted transaction returned: %v", i, tx.Hash(), txn)
-		}
-	}
-}
-
-// Tests that receipts can be stored and retrieved.
-func TestReceiptStorage(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
-
-	receipt1 := &types.Receipt{
-		PostState:         []byte{0x01},
-		CumulativeGasUsed: big.NewInt(1),
-		Logs: []*types.Log{
-			{Address: common.BytesToAddress([]byte{0x11})},
-			{Address: common.BytesToAddress([]byte{0x01, 0x11})},
-		},
-		TxHash:          common.BytesToHash([]byte{0x11, 0x11}),
-		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
-		GasUsed:         big.NewInt(111111),
-	}
-	receipt2 := &types.Receipt{
-		PostState:         []byte{0x02},
-		CumulativeGasUsed: big.NewInt(2),
-		Logs: []*types.Log{
-			{Address: common.BytesToAddress([]byte{0x22})},
-			{Address: common.BytesToAddress([]byte{0x02, 0x22})},
-		},
-		TxHash:          common.BytesToHash([]byte{0x22, 0x22}),
-		ContractAddress: common.BytesToAddress([]byte{0x02, 0x22, 0x22}),
-		GasUsed:         big.NewInt(222222),
-	}
-	receipts := []*types.Receipt{receipt1, receipt2}
-
-	// Check that no receipt entries are in a pristine database
-	for i, receipt := range receipts {
-		if r := GetReceipt(db, receipt.TxHash); r != nil {
-			t.Fatalf("receipt #%d [%x]: non existent receipt returned: %v", i, receipt.TxHash, r)
-		}
-	}
-	// Insert all the receipts into the database, and verify contents
-	if err := WriteReceipts(db, receipts); err != nil {
-		t.Fatalf("failed to write receipts: %v", err)
-	}
-	for i, receipt := range receipts {
-		if r := GetReceipt(db, receipt.TxHash); r == nil {
-			t.Fatalf("receipt #%d [%x]: receipt not found", i, receipt.TxHash)
-		} else {
-			rlpHave, _ := rlp.EncodeToBytes(r)
-			rlpWant, _ := rlp.EncodeToBytes(receipt)
-
-			if !bytes.Equal(rlpHave, rlpWant) {
-				t.Fatalf("receipt #%d [%x]: receipt mismatch: have %v, want %v", i, receipt.TxHash, r, receipt)
-			}
-		}
-	}
-	// Delete the receipts and check purge
-	for i, receipt := range receipts {
-		DeleteReceipt(db, receipt.TxHash)
-		if r := GetReceipt(db, receipt.TxHash); r != nil {
-			t.Fatalf("receipt #%d [%x]: deleted receipt returned: %v", i, receipt.TxHash, r)
 		}
 	}
 }
@@ -530,10 +474,6 @@ func TestMipmapChain(t *testing.T) {
 		}
 
 		// store the receipts
-		err := WriteReceipts(db, receipts)
-		if err != nil {
-			t.Fatal(err)
-		}
 		WriteMipmapBloom(db, uint64(i+1), receipts)
 	})
 	for i, block := range chain {

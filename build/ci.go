@@ -74,42 +74,52 @@ var (
 		executablePath("bootnode"),
 		executablePath("evm"),
 		executablePath("geth"),
-		executablePath("swarm"),
+		executablePath("puppeth"),
 		executablePath("rlpdump"),
+		executablePath("swarm"),
+		executablePath("wnode"),
 	}
 
 	// A debian package is created for all executables listed here.
 	debExecutables = []debExecutable{
 		{
-			Name:        "geth",
-			Description: "Ethereum CLI client.",
+			Name:        "abigen",
+			Description: "Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages.",
 		},
 		{
 			Name:        "bootnode",
 			Description: "Ethereum bootnode.",
 		},
 		{
-			Name:        "rlpdump",
-			Description: "Developer utility tool that prints RLP structures.",
-		},
-		{
 			Name:        "evm",
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
+		},
+		{
+			Name:        "geth",
+			Description: "Ethereum CLI client.",
+		},
+		{
+			Name:        "puppeth",
+			Description: "Ethereum private network manager.",
+		},
+		{
+			Name:        "rlpdump",
+			Description: "Developer utility tool that prints RLP structures.",
 		},
 		{
 			Name:        "swarm",
 			Description: "Ethereum Swarm daemon and tools",
 		},
 		{
-			Name:        "abigen",
-			Description: "Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages.",
+			Name:        "wnode",
+			Description: "Ethereum Whisper diagnostic tool",
 		},
 	}
 
 	// Distros for which packages are created.
 	// Note: vivid is unsupported because there is no golang-1.6 package for it.
 	// Note: wily is unsupported because it was officially deprecated on lanchpad.
-	debDistros = []string{"trusty", "xenial", "yakkety"}
+	debDistros = []string{"trusty", "xenial", "yakkety", "zesty"}
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -165,7 +175,7 @@ func doInstall(cmdline []string) {
 
 	// Check Go version. People regularly open issues about compilation
 	// failure with outdated Go. This should save them the trouble.
-	if runtime.Version() < "go1.7" && !strings.HasPrefix(runtime.Version(), "devel") {
+	if runtime.Version() < "go1.7" && !strings.Contains(runtime.Version(), "devel") {
 		log.Println("You have Go version", runtime.Version())
 		log.Println("go-ethereum requires at least Go version 1.7 and cannot")
 		log.Println("be compiled with an earlier version. Please upgrade your Go installation.")
@@ -287,7 +297,8 @@ func doTest(cmdline []string) {
 	// Run analysis tools before the tests.
 	build.MustRun(goTool("vet", packages...))
 	if *misspell {
-		spellcheck(packages)
+		// TODO(karalabe): Reenable after false detection is fixed: https://github.com/client9/misspell/issues/105
+		// spellcheck(packages)
 	}
 	// Run the actual tests.
 	gotest := goTool("test", buildFlags(env)...)

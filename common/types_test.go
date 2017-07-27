@@ -21,8 +21,6 @@ import (
 	"math/big"
 	"strings"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func TestBytesConversion(t *testing.T) {
@@ -43,10 +41,10 @@ func TestHashJsonValidation(t *testing.T) {
 		Size   int
 		Error  string
 	}{
-		{"", 62, hexutil.ErrMissingPrefix.Error()},
-		{"0x", 66, "hex string has length 66, want 64 for Hash"},
-		{"0x", 63, hexutil.ErrOddLength.Error()},
-		{"0x", 0, "hex string has length 0, want 64 for Hash"},
+		{"", 62, "json: cannot unmarshal hex string without 0x prefix into Go value of type common.Hash"},
+		{"0x", 66, "hex string has length 66, want 64 for common.Hash"},
+		{"0x", 63, "json: cannot unmarshal hex string of odd length into Go value of type common.Hash"},
+		{"0x", 0, "hex string has length 0, want 64 for common.Hash"},
 		{"0x", 64, ""},
 		{"0X", 64, ""},
 	}

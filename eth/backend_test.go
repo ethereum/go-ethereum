@@ -33,24 +33,15 @@ func TestMipmapUpgrade(t *testing.T) {
 	genesis := new(core.Genesis).MustCommit(db)
 
 	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, db, 10, func(i int, gen *core.BlockGen) {
-		var receipts types.Receipts
 		switch i {
 		case 1:
 			receipt := types.NewReceipt(nil, new(big.Int))
 			receipt.Logs = []*types.Log{{Address: addr}}
 			gen.AddUncheckedReceipt(receipt)
-			receipts = types.Receipts{receipt}
 		case 2:
 			receipt := types.NewReceipt(nil, new(big.Int))
 			receipt.Logs = []*types.Log{{Address: addr}}
 			gen.AddUncheckedReceipt(receipt)
-			receipts = types.Receipts{receipt}
-		}
-
-		// store the receipts
-		err := core.WriteReceipts(db, receipts)
-		if err != nil {
-			t.Fatal(err)
 		}
 	})
 	for i, block := range chain {

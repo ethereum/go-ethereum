@@ -20,9 +20,11 @@ import (
 	"encoding/json"
 	"math/big"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -56,9 +58,9 @@ func (d *diffTest) UnmarshalJSON(b []byte) (err error) {
 }
 
 func TestCalcDifficulty(t *testing.T) {
-	file, err := os.Open("../../tests/files/BasicTests/difficulty.json")
+	file, err := os.Open(filepath.Join("..", "..", "tests", "testdata", "BasicTests", "difficulty.json"))
 	if err != nil {
-		t.Fatal(err)
+		t.Skip(err)
 	}
 	defer file.Close()
 
@@ -71,7 +73,11 @@ func TestCalcDifficulty(t *testing.T) {
 	config := &params.ChainConfig{HomesteadBlock: big.NewInt(1150000)}
 	for name, test := range tests {
 		number := new(big.Int).Sub(test.CurrentBlocknumber, big.NewInt(1))
-		diff := CalcDifficulty(config, test.CurrentTimestamp, test.ParentTimestamp, number, test.ParentDifficulty)
+		diff := CalcDifficulty(config, test.CurrentTimestamp, &types.Header{
+			Number:     number,
+			Time:       new(big.Int).SetUint64(test.ParentTimestamp),
+			Difficulty: test.ParentDifficulty,
+		})
 		if diff.Cmp(test.CurrentDifficulty) != 0 {
 			t.Error(name, "failed. Expected", test.CurrentDifficulty, "and calculated", diff)
 		}

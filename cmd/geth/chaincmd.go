@@ -40,80 +40,98 @@ import (
 
 var (
 	initCommand = cli.Command{
-		Action:    initGenesis,
+		Action:    utils.MigrateFlags(initGenesis),
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
 		ArgsUsage: "<genesisPath>",
-		Category:  "BLOCKCHAIN COMMANDS",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.LightModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The init command initializes a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
 participating.
-`,
+
+It expects the genesis file as argument.`,
 	}
 	importCommand = cli.Command{
-		Action:    importChain,
+		Action:    utils.MigrateFlags(importChain),
 		Name:      "import",
 		Usage:     "Import a blockchain file",
 		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
-		Category:  "BLOCKCHAIN COMMANDS",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.LightModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
-The import command imports blocks from an RLP-encoded form. The form can be one file 
-with several RLP-encoded blocks, or several files can be used. 
+The import command imports blocks from an RLP-encoded form. The form can be one file
+with several RLP-encoded blocks, or several files can be used.
+
 If only one file is used, import error will result in failure. If several files are used, 
-processing will proceed even if an individual RLP-file import failure occurs.   
-`,
+processing will proceed even if an individual RLP-file import failure occurs.`,
 	}
 	exportCommand = cli.Command{
-		Action:    exportChain,
+		Action:    utils.MigrateFlags(exportChain),
 		Name:      "export",
 		Usage:     "Export blockchain into file",
 		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
-		Category:  "BLOCKCHAIN COMMANDS",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.LightModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 Requires a first argument of the file to write to.
 Optional second and third arguments control the first and
 last block to write. In this mode, the file will be appended
-if already existing.
-`,
+if already existing.`,
 	}
 	removedbCommand = cli.Command{
-		Action:    removeDB,
+		Action:    utils.MigrateFlags(removeDB),
 		Name:      "removedb",
 		Usage:     "Remove blockchain and state databases",
 		ArgsUsage: " ",
-		Category:  "BLOCKCHAIN COMMANDS",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.LightModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
-TODO: Please write this
-`,
+Remove blockchain and state databases`,
 	}
 	dumpCommand = cli.Command{
-		Action:    dump,
+		Action:    utils.MigrateFlags(dump),
 		Name:      "dump",
 		Usage:     "Dump a specific block from storage",
 		ArgsUsage: "[<blockHash> | <blockNum>]...",
-		Category:  "BLOCKCHAIN COMMANDS",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.LightModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The arguments are interpreted as block numbers or hashes.
-Use "ethereum dump 0" to dump the genesis block.
-`,
+Use "ethereum dump 0" to dump the genesis block.`,
 	}
 )
 
 // initGenesis will initialise the given JSON format genesis file and writes it as
 // the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
 func initGenesis(ctx *cli.Context) error {
+	// Make sure we have a valid genesis JSON
 	genesisPath := ctx.Args().First()
 	if len(genesisPath) == 0 {
-		utils.Fatalf("must supply path to genesis JSON file")
+		utils.Fatalf("Must supply path to genesis JSON file")
 	}
-
-	stack := makeFullNode(ctx)
-	chaindb := utils.MakeChainDatabase(ctx, stack)
-
 	file, err := os.Open(genesisPath)
 	if err != nil {
-		utils.Fatalf("failed to read genesis file: %v", err)
+		utils.Fatalf("Failed to read genesis file: %v", err)
 	}
 	defer file.Close()
 
@@ -121,12 +139,19 @@ func initGenesis(ctx *cli.Context) error {
 	if err := json.NewDecoder(file).Decode(genesis); err != nil {
 		utils.Fatalf("invalid genesis file: %v", err)
 	}
-
-	_, hash, err := core.SetupGenesisBlock(chaindb, genesis)
-	if err != nil {
-		utils.Fatalf("failed to write genesis block: %v", err)
+	// Open an initialise both full and light databases
+	stack := makeFullNode(ctx)
+	for _, name := range []string{"chaindata", "lightchaindata"} {
+		chaindb, err := stack.OpenDatabase(name, 0, 0)
+		if err != nil {
+			utils.Fatalf("Failed to open database: %v", err)
+		}
+		_, hash, err := core.SetupGenesisBlock(chaindb, genesis)
+		if err != nil {
+			utils.Fatalf("Failed to write genesis block: %v", err)
+		}
+		log.Info("Successfully wrote genesis state", "database", name, "hash", hash)
 	}
-	log.Info("Successfully wrote genesis state", "hash", hash)
 	return nil
 }
 
@@ -244,25 +269,30 @@ func exportChain(ctx *cli.Context) error {
 }
 
 func removeDB(ctx *cli.Context) error {
-	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
-	dbdir := stack.ResolvePath(utils.ChainDbName(ctx))
-	if !common.FileExist(dbdir) {
-		fmt.Println(dbdir, "does not exist")
-		return nil
-	}
+	stack, _ := makeConfigNode(ctx)
 
-	fmt.Println(dbdir)
-	confirm, err := console.Stdin.PromptConfirm("Remove this database?")
-	switch {
-	case err != nil:
-		utils.Fatalf("%v", err)
-	case !confirm:
-		fmt.Println("Operation aborted")
-	default:
-		fmt.Println("Removing...")
-		start := time.Now()
-		os.RemoveAll(dbdir)
-		fmt.Printf("Removed in %v\n", time.Since(start))
+	for _, name := range []string{"chaindata", "lightchaindata"} {
+		// Ensure the database exists in the first place
+		logger := log.New("database", name)
+
+		dbdir := stack.ResolvePath(name)
+		if !common.FileExist(dbdir) {
+			logger.Info("Database doesn't exist, skipping", "path", dbdir)
+			continue
+		}
+		// Confirm removal and execute
+		fmt.Println(dbdir)
+		confirm, err := console.Stdin.PromptConfirm("Remove this database?")
+		switch {
+		case err != nil:
+			utils.Fatalf("%v", err)
+		case !confirm:
+			logger.Warn("Database deletion aborted")
+		default:
+			start := time.Now()
+			os.RemoveAll(dbdir)
+			logger.Info("Database successfully deleted", "elapsed", common.PrettyDuration(time.Since(start)))
+		}
 	}
 	return nil
 }
@@ -282,7 +312,7 @@ func dump(ctx *cli.Context) error {
 			fmt.Println("{}")
 			utils.Fatalf("block not found")
 		} else {
-			state, err := state.New(block.Root(), chainDb)
+			state, err := state.New(block.Root(), state.NewDatabase(chainDb))
 			if err != nil {
 				utils.Fatalf("could not create new state: %v", err)
 			}

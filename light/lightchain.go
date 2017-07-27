@@ -94,7 +94,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	if bc.genesisBlock == nil {
 		return nil, core.ErrNoGenesis
 	}
-	if bc.genesisBlock.Hash() == params.MainNetGenesisHash {
+	if bc.genesisBlock.Hash() == params.MainnetGenesisHash {
 		// add trusted CHT
 		WriteTrustedCht(bc.chainDb, TrustedCht{Number: 805, Root: common.HexToHash("85e4286fe0a730390245c49de8476977afdae0eb5530b277f62a52b12313d50f")})
 		log.Info("Added trusted CHT for mainnet")
@@ -180,11 +180,6 @@ func (self *LightChain) Status() (td *big.Int, currentBlock common.Hash, genesis
 	return self.GetTd(hash, header.Number.Uint64()), hash, self.genesisBlock.Hash()
 }
 
-// State returns a new mutable state based on the current HEAD block.
-func (self *LightChain) State() *LightState {
-	return NewLightState(StateTrieID(self.hc.CurrentHeader()), self.odr)
-}
-
 // Reset purges the entire blockchain, restoring it to its genesis state.
 func (bc *LightChain) Reset() {
 	bc.ResetWithGenesisBlock(bc.genesisBlock)
@@ -212,6 +207,9 @@ func (bc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 }
 
 // Accessors
+
+// Engine retrieves the light chain's consensus engine.
+func (bc *LightChain) Engine() consensus.Engine { return bc.engine }
 
 // Genesis returns the genesis block
 func (bc *LightChain) Genesis() *types.Block {
@@ -374,9 +372,6 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 		case core.SideStatTy:
 			log.Debug("Inserted forked header", "number", header.Number, "hash", header.Hash())
 			events = append(events, core.ChainSideEvent{Block: types.NewBlockWithHeader(header)})
-
-		case core.SplitStatTy:
-			events = append(events, core.ChainSplitEvent{Block: types.NewBlockWithHeader(header)})
 		}
 		return err
 	}

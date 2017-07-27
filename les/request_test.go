@@ -62,21 +62,22 @@ func tfCodeAccess(db ethdb.Database, bhash common.Hash, number uint64) light.Odr
 		return nil
 	}
 	sti := light.StateTrieID(header)
-	ci := light.StorageTrieID(sti, testContractAddr, common.Hash{})
+	ci := light.StorageTrieID(sti, crypto.Keccak256Hash(testContractAddr[:]), common.Hash{})
 	return &light.CodeRequest{Id: ci, Hash: crypto.Keccak256Hash(testContractCodeDeployed)}
 }
 
 func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	// Assemble the test environment
-	pm, db, _ := newTestProtocolManagerMust(t, false, 4, testChainGen)
-	lpm, ldb, odr := newTestProtocolManagerMust(t, true, 0, nil)
+	peers := newPeerSet()
+	dist := newRequestDistributor(peers, make(chan struct{}))
+	rm := newRetrieveManager(peers, dist, nil)
+	db, _ := ethdb.NewMemDatabase()
+	ldb, _ := ethdb.NewMemDatabase()
+	odr := NewLesOdr(ldb, rm)
+
+	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
+	lpm := newTestProtocolManagerMust(t, true, 0, nil, peers, odr, ldb)
 	_, err1, lpeer, err2 := newTestPeerPair("peer", protocol, pm, lpm)
-	pool := &testServerPool{}
-	lpm.reqDist = newRequestDistributor(pool.getAllPeers, lpm.quitSync)
-	odr.reqDist = lpm.reqDist
-	pool.setPeer(lpeer)
-	odr.serverPool = pool
-	lpeer.hasBlock = func(common.Hash, uint64) bool { return true }
 	select {
 	case <-time.After(time.Millisecond * 100):
 	case err := <-err1:
@@ -108,10 +109,16 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	}
 
 	// temporarily remove peer to test odr fails
-	pool.setPeer(nil)
+	peers.Unregister(lpeer.id)
+	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
 	// expect retrievals to fail (except genesis block) without a les peer
 	test(0)
-	pool.setPeer(lpeer)
+
+	peers.Register(lpeer)
+	time.Sleep(time.Millisecond * 10) // ensure that all peerSetNotify callbacks are executed
+	lpeer.lock.Lock()
+	lpeer.hasBlock = func(common.Hash, uint64) bool { return true }
+	lpeer.lock.Unlock()
 	// expect all retrievals to pass
 	test(5)
 }

@@ -49,7 +49,7 @@ import (
 // TODO(zelig): watch peer solvency and notify of bouncing cheques
 // TODO(zelig): enable paying with cheque by signing off
 
-// Some functionality require interacting with the blockchain:
+// Some functionality requires interacting with the blockchain:
 // * setting current balance on peer's chequebook
 // * sending the transaction to cash the cheque
 // * depositing ether to the chequebook
@@ -100,13 +100,13 @@ type Chequebook struct {
 	// persisted fields
 	balance      *big.Int                    // not synced with blockchain
 	contractAddr common.Address              // contract address
-	sent         map[common.Address]*big.Int //tallies for beneficiarys
+	sent         map[common.Address]*big.Int //tallies for beneficiaries
 
 	txhash    string   // tx hash of last deposit tx
 	threshold *big.Int // threshold that triggers autodeposit if not nil
 	buffer    *big.Int // buffer to keep on top of balance for fork protection
 
-	log log.Logger // contextual logger with the contrac address embedded
+	log log.Logger // contextual logger with the contract address embedded
 }
 
 func (self *Chequebook) String() string {
@@ -442,7 +442,7 @@ type Inbox struct {
 	maxUncashed *big.Int                    // threshold that triggers autocashing
 	cashed      *big.Int                    // cumulative amount cashed
 	cheque      *Cheque                     // last cheque, nil if none yet received
-	log         log.Logger                  // contextual logger with the contrac address embedded
+	log         log.Logger                  // contextual logger with the contract address embedded
 }
 
 // NewInbox creates an Inbox. An Inboxes is not persisted, the cumulative sum is updated
@@ -509,9 +509,8 @@ func (self *Inbox) AutoCash(cashInterval time.Duration, maxUncashed *big.Int) {
 	self.autoCash(cashInterval)
 }
 
-// autoCash starts a loop that periodically clears the last check
+// autoCash starts a loop that periodically clears the last cheque
 // if the peer is trusted. Clearing period could be 24h or a week.
-//
 // The caller must hold self.lock.
 func (self *Inbox) autoCash(cashInterval time.Duration) {
 	if self.quit != nil {
@@ -557,10 +556,10 @@ func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 
 	var sum *big.Int
 	if self.cheque == nil {
-		// the sum is checked against the blockchain once a check is received
+		// the sum is checked against the blockchain once a cheque is received
 		tally, err := self.session.Sent(self.beneficiary)
 		if err != nil {
-			return nil, fmt.Errorf("inbox: error 	calling backend to set amount: %v", err)
+			return nil, fmt.Errorf("inbox: error calling backend to set amount: %v", err)
 		}
 		sum = tally
 	} else {
