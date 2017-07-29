@@ -2,12 +2,13 @@ package pss
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/pot"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
@@ -74,10 +75,15 @@ func (pssapi *API) BaseAddr() ([]byte, error) {
 	return pssapi.Pss.BaseAddr(), nil
 }
 
-func (pssapi *API) SetPublicKey(addr []byte, topic whisper.TopicType, pubkey ecdsa.PublicKey) error {
+func (pssapi *API) GetPublicKey() []byte {
+	pubkey := pssapi.PublicKey()
+	return crypto.FromECDSAPub(&pubkey)
+}
+
+func (pssapi *API) SetPublicKey(addr []byte, topic whisper.TopicType, pubkey []byte) error {
 	var potaddr pot.Address
 	copy(potaddr[:], addr)
-	pssapi.Pss.SetPublicKey(potaddr, topic, pubkey)
+	pssapi.Pss.SetOutgoingPublicKey(potaddr, topic, crypto.ToECDSAPub(pubkey))
 	return nil
 }
 
@@ -91,4 +97,47 @@ type APITest struct {
 // Include these methods to the node.Service if test symbols should be used
 func NewAPITest(ps *Pss) *APITest {
 	return &APITest{Pss: ps}
+}
+
+func (self *APITest) GetSymKeys(to []byte, topic whisper.TopicType) ([]byte, error) {
+	var potaddr pot.Address
+	copy(potaddr[:], to)
+	sendsymkey, err := self.w.GetSymKey(self.peerPool[potaddr][topic].sendsymkey)
+	if err != nil {
+		return nil, fmt.Errorf("get send symkey fail (peer %v topic %v): %v", to, topic, err)
+	}
+	recvsymkey, err := self.w.GetSymKey(self.peerPool[potaddr][topic].recvsymkey)
+	if err != nil {
+		return nil, fmt.Errorf("get recv symkey fail (peer %v topic %v): %v", to, topic, err)
+	}
+	if len(recvsymkey) != len(sendsymkey) {
+		return nil, fmt.Errorf("symkey length mismatch: %d != %d", len(recvsymkey), len(sendsymkey))
+	}
+	returnbyte := make([]byte, len(recvsymkey)*2)
+	copy(returnbyte[:len(recvsymkey)], recvsymkey)
+	copy(returnbyte[len(recvsymkey):], sendsymkey)
+	return returnbyte, nil
+
+}
+
+func (self *APITest) SendSymKey(to []byte, topic whisper.TopicType) (string, error) {
+	var potaddr pot.Address
+	copy(potaddr[:], to)
+	symkeyid, err := self.GenerateIncomingSymmetricKey(potaddr, topic)
+	if err != nil {
+		return "", err
+	}
+	symkey, err := self.w.GetSymKey(symkeyid)
+	if err != nil {
+		return "", err
+	}
+	keymsg := &pssKeyMsg{
+		From: self.BaseAddr(),
+		Key:  symkey,
+	}
+	serialkeymsg, err := rlp.EncodeToBytes(keymsg)
+	if err != nil {
+		return "", err
+	}
+	return symkeyid, self.SendAsym(to, topic, serialkeymsg)
 }

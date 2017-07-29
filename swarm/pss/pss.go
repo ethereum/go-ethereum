@@ -49,7 +49,7 @@ type pssKeyMsg struct {
 
 type pssPeer struct {
 	rw            p2p.MsgReadWriter
-	pubkey        ecdsa.PublicKey
+	pubkey        *ecdsa.PublicKey
 	recvsymkey    string
 	sendsymkey    string
 	symkeyexpires time.Time // symkeys should be renewed at this time
@@ -132,6 +132,11 @@ func (self *Pss) BaseAddr() []byte {
 	return self.Overlay.BaseAddr()
 }
 
+// Debug accessor for own public key
+func (self *Pss) PublicKey() ecdsa.PublicKey {
+	return self.privatekey.PublicKey
+}
+
 // For node.Service implementation. Does nothing for now, but should be included in the code for backwards compatibility.
 func (self *Pss) Start(srv *p2p.Server) error {
 	return nil
@@ -174,6 +179,12 @@ func (self *Pss) APIs() []rpc.API {
 			Service:   NewAPI(self),
 			Public:    true,
 		},
+		rpc.API{
+			Namespace: "psstest",
+			Version:   "0.1",
+			Service:   NewAPITest(self),
+			Public:    true,
+		},
 	}
 	return apis
 }
@@ -197,7 +208,7 @@ func (self *Pss) Register(topic *whisper.TopicType, handler Handler) func() {
 
 // Add a Public key address mapping
 // this is needed to initiate handshakes
-func (self *Pss) SetPublicKey(addr pot.Address, topic whisper.TopicType, pubkey ecdsa.PublicKey) {
+func (self *Pss) SetOutgoingPublicKey(addr pot.Address, topic whisper.TopicType, pubkey *ecdsa.PublicKey) {
 	self.preparePeerTopic(addr, topic)
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -366,14 +377,19 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 	// try all our symkeys
 	// in order
 	// we could should these (by last used first?) to possible match quicker
-	for _, symkeyid := range self.recvsymkeys {
-		log.Debug("attempting symmetric decrypt with symkey %x", symkeyid)
-		symkey, err := w.GetSymKey(symkeyid)
-		if err == nil {
-			recvmsg, err = env.OpenSymmetric(symkey)
+	if len(env.AESNonce) > 0 { // see whisper.envelope.go.OpenSymmetric
+		for _, symkeyid := range self.recvsymkeys {
+			log.Debug("attempting symmetric decrypt", "symkey", symkeyid)
+			symkey, err := self.w.GetSymKey(symkeyid)
 			if err == nil {
-				from = self.reverseKeyPool[symkeyid][env.Topic]
-				break
+				recvmsg, err = env.OpenSymmetric(symkey)
+				if err == nil {
+					from = self.reverseKeyPool[symkeyid][env.Topic]
+					log.Trace("pss message sym enc", "from", from)
+					break
+				}
+			} else {
+				log.Debug("sym decrypt failed", "symkey", symkeyid, "err", err)
 			}
 		}
 	}
@@ -381,7 +397,6 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 	// if we couldn't open the msg with any of the symkeys
 	// it should be an asymmetrically encrypted handshake sending a symkey to us
 	if recvmsg == nil {
-		var keymsgraw interface{}
 		recvmsg, err := env.OpenAsymmetric(self.privatekey)
 		// if it's not asym either, can't do anything with the msg. Drop it like it's hot
 		if err != nil {
@@ -392,40 +407,44 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 		if !recvmsg.Validate() {
 			return fmt.Errorf("invalid signature")
 		}
-		keymsgraw = recvmsg.Payload
-		keymsg, ok := keymsgraw.(*pssKeyMsg)
-		if !ok {
-			return fmt.Errorf("invalid handshake msg")
-		}
-		copy(from[:], keymsg.From)
-		// need to handle / check for expired keys also here
-		_, err = self.SetOutgoingSymmetricKey(from, env.Topic, keymsg.Key)
-		if err != nil {
-			return fmt.Errorf("received invalid symkey in pss handshake for peer %x topic %x", keymsg.From, env.Topic)
-		}
-		// if we by now don't have keys for both in- and outgoing msgs, we need to make one for incoming and send it to the other
-		// along with an encrypted secret so that it can tell that we received its key
-		// the encrypted secret will be our key encrypted with its key
-		if !self.isSecured(from, env.Topic) {
-			//			recvkeyid, err := self.w.GenerateSymKey()
-			//			if err != nil {
-			//				return fmt.Errorf("could not generate outgoing symkey for peer %x topic %x: %v", keymsg.From, env.Topic, err)
-			//			}
-			recvkeyid, err := self.GenerateIncomingSymmetricKey(from, env.Topic)
+		keymsgraw := recvmsg.Payload
+		keymsg := &pssKeyMsg{}
+		err = rlp.DecodeBytes(keymsgraw, keymsg)
+		if err == nil {
+			log.Trace("have keymsg", "from", keymsg.From)
+			copy(from[:], keymsg.From)
+			// need to handle / check for expired keys also here
+			_, err = self.SetOutgoingSymmetricKey(from, env.Topic, keymsg.Key)
 			if err != nil {
-				return fmt.Errorf("could not set recvkey for peer %x topic %x", keymsg.From, env.Topic)
+				return fmt.Errorf("received invalid symkey in pss handshake for peer %x topic %x", keymsg.From, env.Topic)
 			}
-			recvkey, err := self.w.GetSymKey(recvkeyid)
-			if err != nil {
-				return fmt.Errorf("could not retreieve generated outgoing symkey for peer %x topic %x: %v", keymsg.From, env.Topic, err)
+			// if we by now don't have keys for both in- and outgoing msgs, we need to make one for incoming and send it to the other
+			// along with an encrypted secret so that it can tell that we received its key
+			// the encrypted secret will be our key encrypted with its key
+			if !self.isSecured(from, env.Topic) {
+				log.Trace("sending our symkey", "to", keymsg.From)
+				recvkeyid, err := self.GenerateIncomingSymmetricKey(from, env.Topic)
+				if err != nil {
+					return fmt.Errorf("set receive symkey fail (peer %x topic %x): %v", keymsg.From, env.Topic, err)
+				}
+				recvkey, err := self.w.GetSymKey(recvkeyid)
+				if err != nil {
+					return fmt.Errorf("get generated outgoing symkey fail (peer %x topic %x): %v", keymsg.From, env.Topic, err)
+				}
+				recvkeymsg := &pssKeyMsg{
+					From: self.BaseAddr(),
+					Key:  recvkey,
+				}
+				recvkeybytes, err := rlp.EncodeToBytes(recvkeymsg)
+				if err != nil {
+					return fmt.Errorf("rlp keymsg encode fail: %v", err)
+				}
+				err = self.SendAsym(keymsg.From, env.Topic, recvkeybytes)
+				if err != nil {
+					return err
+				}
 			}
-			self.SendSym(keymsg.From, env.Topic, recvkey)
 		}
-
-		// check if we have a symkey for sending to this peer already
-		// if not, then this message should be that key encrypted
-	} else if !self.isSecured(from, env.Topic) {
-
 	} else {
 
 		handlers := self.getHandlers(env.Topic)
@@ -484,7 +503,7 @@ func (self *Pss) SendAsym(to []byte, topic whisper.TopicType, msg []byte) error 
 	wparams := &whisper.MessageParams{
 		TTL:      DefaultTTL,
 		Src:      self.privatekey,
-		Dst:      &topubkey,
+		Dst:      topubkey,
 		Topic:    topic,
 		WorkTime: defaultWhisperWorkTime,
 		PoW:      defaultWhisperPoW,

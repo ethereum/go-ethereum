@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/pot"
 	// "github.com/ethereum/go-ethereum/p2p/protocols"
-	// "github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	// p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/network"
@@ -76,18 +76,29 @@ func init() {
 // generate own symmetric key for incoming message from peer
 func TestKeys(t *testing.T) {
 	outkey := make([]byte, 32) // whisper aes symkeys are 32, if that changes this test will break
-	keys, err := wapi.NewKeyPair()
+
+	// make our key and init pss with it
+	ourkeys, err := wapi.NewKeyPair()
+	theirkeys, err := wapi.NewKeyPair()
 	if err != nil {
 		t.Fatalf("create key fail")
 	}
-	privkey, err := w.GetPrivateKey(keys)
-	ps := NewTestPss(privkey)
+	ourprivkey, err := w.GetPrivateKey(ourkeys)
+	theirprivkey, err := w.GetPrivateKey(theirkeys)
+	ps := NewTestPss(ourprivkey)
+
+	// set up peer with mock address, mapped to mocked publicaddress and with mocked symkey
 	addr := network.RandomAddr().Over()
 	topic := NewTopic("foo", 42)
-	ps.SetPublicKey(pot.NewAddressFromBytes(addr), topic, privkey.PublicKey)
-	copy(outkey, addr)
+	ps.SetOutgoingPublicKey(pot.NewAddressFromBytes(addr), topic, &theirprivkey.PublicKey)
+	copy(outkey[:16], addr[16:])
+	copy(outkey[16:], addr[:16])
 	outkeyid, err := ps.SetOutgoingSymmetricKey(pot.NewAddressFromBytes(addr), topic, outkey)
+
+	// make a symmetric key that we will send to peer for encrypting messages to us
 	inkeyid, err := ps.GenerateIncomingSymmetricKey(pot.NewAddressFromBytes(addr), topic)
+
+	// get the key back from whisper, check that it's still the same
 	outkeyback, err := ps.w.GetSymKey(outkeyid)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -103,10 +114,95 @@ func TestKeys(t *testing.T) {
 	t.Logf("symout: %v", outkeyback)
 	t.Logf("symin: %v", inkey)
 
+	// check that the key is stored in the peerpool
 	var potaddr pot.Address
 	copy(potaddr[:], addr)
 	psp := ps.peerPool[potaddr][topic]
 	t.Logf("peer:\nrw: %v\npubkey: %v\nrecvsymkey: %v\nsendsymkey: %v\nsymkeyexp: %v", psp.rw, psp.pubkey, psp.recvsymkey, psp.sendsymkey, psp.symkeyexpires)
+}
+
+func TestKeysExchange(t *testing.T) {
+	topic := NewTopic("foo", 42)
+	adapter := adapters.NewSimAdapter(services)
+	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+		ID:             "0",
+		DefaultService: "bzz",
+	})
+	lnode, err := net.NewNodeWithConfig(&adapters.NodeConfig{
+		Services: []string{"bzz", "pss"},
+	})
+	if err != nil {
+		t.Fatalf("error creating node 1: %v", err)
+	}
+	rnode, err := net.NewNodeWithConfig(&adapters.NodeConfig{
+		Services: []string{"bzz", "pss"},
+	})
+	if err != nil {
+		t.Fatalf("error creating node 2: %v", err)
+	}
+	err = net.Start(lnode.ID())
+	if err != nil {
+		t.Fatalf("error starting node 1: %v", err)
+	}
+	err = net.Start(rnode.ID())
+	if err != nil {
+		t.Fatalf("error starting node 2: %v", err)
+	}
+	err = net.Connect(lnode.ID(), rnode.ID())
+	if err != nil {
+		t.Fatalf("error connecting nodes: %v", err)
+	}
+	lclient, err := lnode.Client()
+	if err != nil {
+		t.Fatalf("create node 1 rpc client fail: %v", err)
+	}
+	rclient, err := rnode.Client()
+	if err != nil {
+		t.Fatalf("create node 2 rpc client fail: %v", err)
+	}
+	loaddr := make([]byte, 32)
+	err = lclient.Call(&loaddr, "pss_baseAddr")
+	if err != nil {
+		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
+	}
+	roaddr := make([]byte, 32)
+	err = rclient.Call(&roaddr, "pss_baseAddr")
+	if err != nil {
+		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
+	}
+	lpubkey := make([]byte, 32)
+	err = lclient.Call(&lpubkey, "pss_getPublicKey")
+	if err != nil {
+		t.Fatalf("rpc get node 1 pubkey fail: %v", err)
+	}
+	rpubkey := make([]byte, 32)
+	err = rclient.Call(&rpubkey, "pss_getPublicKey")
+	if err != nil {
+		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
+	}
+	// replace with hive healthy code
+	time.Sleep(time.Second)
+	err = lclient.Call(nil, "pss_setPublicKey", roaddr, topic, rpubkey)
+	err = rclient.Call(nil, "pss_setPublicKey", loaddr, topic, lpubkey)
+	var symkeyid string
+	err = lclient.Call(&symkeyid, "psstest_sendSymKey", roaddr, topic)
+	t.Logf("lclient sym id: %s", symkeyid)
+	// replace with sim expect
+	time.Sleep(time.Second * 2)
+	tmpbytes := make([]byte, 64)
+	lrecvkey := make([]byte, 32)
+	lsendkey := make([]byte, 32)
+	err = lclient.Call(&tmpbytes, "psstest_getSymKeys", roaddr, topic)
+	copy(lrecvkey, tmpbytes[:32])
+	copy(lsendkey, tmpbytes[32:])
+	t.Logf("l: recv %x send %x", lrecvkey, lsendkey)
+	rrecvkey := make([]byte, 32)
+	rsendkey := make([]byte, 32)
+	err = rclient.Call(&tmpbytes, "psstest_getSymKeys", loaddr, topic)
+	copy(rrecvkey, tmpbytes[:32])
+	copy(rsendkey, tmpbytes[32:])
+	t.Logf("r: recv %x send %x", rrecvkey, rsendkey)
+
 }
 
 func TestCache(t *testing.T) {
@@ -574,7 +670,8 @@ func newServices() adapters.Services {
 			keys, err := wapi.NewKeyPair()
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewPssParams(privkey)
-			ps := NewPss(kademlia(ctx.Config.ID), dpa, pssp)
+			pskad := kademlia(ctx.Config.ID)
+			ps := NewPss(pskad, dpa, pssp)
 
 			ping := &Ping{
 				C: make(chan struct{}),

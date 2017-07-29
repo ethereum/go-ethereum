@@ -19,8 +19,8 @@
 package whisperv5
 
 import (
-	"fmt"
-	"strings"
+	//"fmt"
+	//"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -47,23 +47,23 @@ func (topic *TopicType) String() string {
 }
 
 // UnmarshalJSON parses a hex representation to a topic.
-func (t *TopicType) UnmarshalJSON(input []byte) error {
-	length := len(input)
-	if length >= 2 && input[0] == '"' && input[length-1] == '"' {
-		input = input[1 : length-1]
-	}
-	// strip "0x" for length check
-	if len(input) > 1 && strings.ToLower(string(input[:2])) == "0x" {
-		input = input[2:]
-	}
-	// validate the length of the input
-	if len(input) != TopicLength*2 {
-		return fmt.Errorf("unmarshalJSON failed: topic must be exactly %d bytes", TopicLength)
-	}
-	b := common.FromHex(string(input))
-	if b == nil {
-		return fmt.Errorf("unmarshalJSON failed: wrong topic format")
-	}
-	*t = BytesToTopic(b)
-	return nil
-}
+//func (t *TopicType) UnmarshalJSON(input []byte) error {
+//	length := len(input)
+//	if length >= 2 && input[0] == '"' && input[length-1] == '"' {
+//		input = input[1 : length-1]
+//	}
+//	// strip "0x" for length check
+//	if len(input) > 1 && strings.ToLower(string(input[:2])) == "0x" {
+//		input = input[2:]
+//	}
+//	// validate the length of the input
+//	if len(input) != TopicLength*2 {
+//		return fmt.Errorf("unmarshalJSON failed: topic must be exactly %d bytes", TopicLength)
+//	}
+//	b := common.FromHex(string(input))
+//	if b == nil {
+//		return fmt.Errorf("unmarshalJSON failed: wrong topic format")
+//	}
+//	*t = BytesToTopic(b)
+//	return nil
+//}
