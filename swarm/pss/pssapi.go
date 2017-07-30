@@ -65,7 +65,7 @@ func (pssapi *API) Receive(ctx context.Context, topic whisper.TopicType) (*rpc.S
 //
 // The method will pass on the error received from pss.
 func (pssapi *API) Send(topic whisper.TopicType, msg APIMsg) error {
-	return pssapi.SendAsym(msg.Addr, topic, msg.Msg)
+	return pssapi.SendSym(msg.Addr, topic, msg.Msg)
 }
 
 // BaseAddr returns the pss node's swarm overlay address

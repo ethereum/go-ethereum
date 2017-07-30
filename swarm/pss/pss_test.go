@@ -2,7 +2,7 @@ package pss
 
 import (
 	"bytes"
-	// "context"
+	"context"
 	// "crypto/ecdsa"
 	"encoding/hex"
 	// "encoding/json"
@@ -122,6 +122,9 @@ func TestKeys(t *testing.T) {
 }
 
 func TestKeysExchange(t *testing.T) {
+
+	// set up two nodes directly connected
+	// (we are not testing pss routing here)
 	topic := NewTopic("foo", 42)
 	adapter := adapters.NewSimAdapter(services)
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
@@ -170,6 +173,9 @@ func TestKeysExchange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
 	}
+
+	// retrieve public key from pss instance
+	// set this public key reciprocally
 	lpubkey := make([]byte, 32)
 	err = lclient.Call(&lpubkey, "pss_getPublicKey")
 	if err != nil {
@@ -180,29 +186,71 @@ func TestKeysExchange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
 	}
-	// replace with hive healthy code
-	time.Sleep(time.Second)
+	time.Sleep(time.Second) // replace with hive healthy code
 	err = lclient.Call(nil, "pss_setPublicKey", roaddr, topic, rpubkey)
 	err = rclient.Call(nil, "pss_setPublicKey", loaddr, topic, lpubkey)
+
+	// use api test method for generating and sending incoming symkey
+	// the peer should save it, then generate and send back its own
 	var symkeyid string
 	err = lclient.Call(&symkeyid, "psstest_sendSymKey", roaddr, topic)
 	t.Logf("lclient sym id: %s", symkeyid)
-	// replace with sim expect
-	time.Sleep(time.Second * 2)
-	tmpbytes := make([]byte, 64)
-	lrecvkey := make([]byte, 32)
-	lsendkey := make([]byte, 32)
-	err = lclient.Call(&tmpbytes, "psstest_getSymKeys", roaddr, topic)
-	copy(lrecvkey, tmpbytes[:32])
-	copy(lsendkey, tmpbytes[32:])
-	t.Logf("l: recv %x send %x", lrecvkey, lsendkey)
-	rrecvkey := make([]byte, 32)
-	rsendkey := make([]byte, 32)
-	err = rclient.Call(&tmpbytes, "psstest_getSymKeys", loaddr, topic)
-	copy(rrecvkey, tmpbytes[:32])
-	copy(rsendkey, tmpbytes[32:])
-	t.Logf("r: recv %x send %x", rrecvkey, rsendkey)
+	time.Sleep(time.Second * 2) // replace with sim expect logic
 
+	// after the exchange, the key for receiving on node 1
+	// should be the same as sending on node 2, and vice versa
+	tmpbytes := make([]byte, defaultSymKeyLength*2)
+	lrecvkey := make([]byte, defaultSymKeyLength)
+	lsendkey := make([]byte, defaultSymKeyLength)
+	err = lclient.Call(&tmpbytes, "psstest_getSymKeys", roaddr, topic)
+	copy(lrecvkey, tmpbytes[:defaultSymKeyLength])
+	copy(lsendkey, tmpbytes[defaultSymKeyLength:])
+	rrecvkey := make([]byte, defaultSymKeyLength)
+	rsendkey := make([]byte, defaultSymKeyLength)
+	err = rclient.Call(&tmpbytes, "psstest_getSymKeys", loaddr, topic)
+	copy(rrecvkey, tmpbytes[:defaultSymKeyLength])
+	copy(rsendkey, tmpbytes[defaultSymKeyLength:])
+	if !bytes.Equal(rrecvkey, lsendkey) {
+		t.Fatalf("node 2 receive symkey does not match node 1 send symkey: %x != %x", rrecvkey, lsendkey)
+	}
+	if !bytes.Equal(lrecvkey, rsendkey) {
+		t.Fatalf("node 2 send symkey does not match node 1 receive symkey: %x != %x", rsendkey, lrecvkey)
+	}
+
+	msgC := make(chan APIMsg)
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	sub, err := rclient.Subscribe(ctx, "pss", msgC, "receive", topic)
+	// at this point we've verified that symkeys are saved and match on each peer
+	// now try sending symmetrically encrypted message
+	apimsg := APIMsg{
+		Msg:  []byte("xyzzy"),
+		Addr: roaddr,
+	}
+	err = lclient.Call(nil, "pss_send", topic, apimsg)
+	select {
+	case recvmsg := <-msgC:
+		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
+			t.Fatalf("node 2 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg.Msg)
+		}
+	case cerr := <-ctx.Done():
+		t.Fatalf("test message timed out: %v", cerr)
+	}
+	sub.Unsubscribe()
+
+	ctx, _ = context.WithTimeout(context.Background(), time.Second)
+	sub, err = lclient.Subscribe(ctx, "pss", msgC, "receive", topic)
+	apimsg.Msg = []byte("plugh")
+	apimsg.Addr = loaddr
+	err = rclient.Call(nil, "pss_send", topic, apimsg)
+	select {
+	case recvmsg := <-msgC:
+		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
+			t.Fatalf("node 1 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg.Msg)
+		}
+	case cerr := <-ctx.Done():
+		t.Fatalf("test message timed out: %v", cerr)
+	}
+	sub.Unsubscribe()
 }
 
 func TestCache(t *testing.T) {

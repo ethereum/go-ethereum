@@ -18,8 +18,10 @@ const (
 	TopicLength            = 32
 	DefaultTTL             = 6000
 	defaultDigestCacheTTL  = time.Second
-	defaultWhisperWorkTime = 1
-	defaultWhisperPoW      = 0.00000000001
+	defaultWhisperWorkTime = 3
+	//defaultWhisperPoW      = 0.00000000001
+	defaultWhisperPoW   = 0.001
+	defaultSymKeyLength = 32
 )
 
 // Pss configuration parameters

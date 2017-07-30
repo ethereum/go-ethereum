@@ -384,8 +384,11 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 			if err == nil {
 				recvmsg, err = env.OpenSymmetric(symkey)
 				if err == nil {
+					if !recvmsg.Validate() {
+						return fmt.Errorf("validate sym enc msg fail")
+					}
 					from = self.reverseKeyPool[symkeyid][env.Topic]
-					log.Trace("pss message sym enc", "from", from)
+					log.Trace("pss message sym enc", "from", from, "payload", recvmsg.Payload)
 					break
 				}
 			} else {
@@ -451,7 +454,6 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 		if len(handlers) == 0 {
 			return fmt.Errorf("No registered handler for topic '%x'", env.Topic)
 		}
-
 		nid, _ := discover.HexID("0x00")
 		p := p2p.NewPeer(nid, fmt.Sprintf("%x", from), []p2p.Cap{})
 
@@ -486,6 +488,7 @@ func (self *Pss) SendSym(to []byte, topic whisper.TopicType, msg []byte) error {
 		WorkTime: defaultWhisperWorkTime,
 		PoW:      defaultWhisperPoW,
 		Payload:  msg,
+		Padding:  []byte("1234567890abcdef"),
 	}
 	return self.send(to, topic, msg, wparams)
 }
@@ -513,6 +516,7 @@ func (self *Pss) SendAsym(to []byte, topic whisper.TopicType, msg []byte) error 
 }
 
 func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, wparams *whisper.MessageParams) error {
+
 	// set up outgoing message container, which does encryption and envelope wrapping
 	woutmsg, err := whisper.NewSentMessage(wparams)
 	if err != nil {
@@ -525,7 +529,7 @@ func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, wparams *w
 	if err != nil {
 		return fmt.Errorf("%v: %s", errorWhisper, err)
 	}
-	log.Trace("pssmsg whisper done", "env", env)
+	log.Trace("pssmsg whisper done", "env", env, "wparams payloda", wparams.Payload)
 
 	pssmsg := &PssMsg{
 		To:      to,
