@@ -20,6 +20,7 @@ package ethclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -259,16 +260,17 @@ func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header)
 // State Access
 
 // NetworkID returns the network ID (also known as the chain ID) for this chain.
-func (ec *Client) NetworkID(ctx context.Context) (version *big.Int, err error) {
-	version = big.NewInt(0)
-
+func (ec *Client) NetworkID(ctx context.Context) (*big.Int, error) {
+	version := new(big.Int)
 	var ver string
-	if err = ec.c.CallContext(ctx, &ver, "net_version"); err != nil {
-		return version, err
+	if err := ec.c.CallContext(ctx, &ver, "net_version"); err != nil {
+		return nil, err
 	}
-
-	version.SetString(ver, 10)
-	return
+	_, succeeded := version.SetString(ver, 10)
+	if !succeeded {
+		return nil, errors.New("failed to convert net_version result to a network ID number")
+	}
+	return version, nil
 }
 
 // BalanceAt returns the wei balance of the given account.
