@@ -23,9 +23,13 @@
 package storage
 
 import (
+	"archive/tar"
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -258,6 +262,84 @@ func (s *DbStore) collectGarbage(ratio float32) {
 	// fmt.Println(s.entryCnt)
 
 	s.db.Put(keyGCPos, s.gcPos)
+}
+
+// Export writes all chunks from the store to a tar archive, returning the
+// number of chunks written.
+func (s *DbStore) Export(out io.Writer) (int64, error) {
+	tw := tar.NewWriter(out)
+	defer tw.Close()
+
+	it := s.db.NewIterator()
+	defer it.Release()
+	var count int64
+	for ok := it.Seek([]byte{kpIndex}); ok; ok = it.Next() {
+		key := it.Key()
+		if (key == nil) || (key[0] != kpIndex) {
+			break
+		}
+
+		var index dpaDBIndex
+		decodeIndex(it.Value(), &index)
+
+		data, err := s.db.Get(getDataKey(index.Idx))
+		if err != nil {
+			log.Warn(fmt.Sprintf("Chunk %x found but could not be accessed: %v", key[:], err))
+			continue
+		}
+
+		hdr := &tar.Header{
+			Name: hex.EncodeToString(key[1:]),
+			Mode: 0644,
+			Size: int64(len(data)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return count, err
+		}
+		if _, err := tw.Write(data); err != nil {
+			return count, err
+		}
+		count++
+	}
+
+	return count, nil
+}
+
+// Import reads chunks into the store from a tar archive, returning the number
+// of chunks read.
+func (s *DbStore) Import(in io.Reader) (int64, error) {
+	tr := tar.NewReader(in)
+
+	var count int64
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return count, err
+		}
+
+		if len(hdr.Name) != 64 {
+			log.Warn("ignoring non-chunk file", "name", hdr.Name)
+			continue
+		}
+
+		key, err := hex.DecodeString(hdr.Name)
+		if err != nil {
+			log.Warn("ignoring invalid chunk file", "name", hdr.Name, "err", err)
+			continue
+		}
+
+		data, err := ioutil.ReadAll(tr)
+		if err != nil {
+			return count, err
+		}
+
+		s.Put(&Chunk{Key: key, SData: data})
+		count++
+	}
+
+	return count, nil
 }
 
 func (s *DbStore) Cleanup() {
