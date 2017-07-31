@@ -63,7 +63,7 @@ func (a *Api) NewManifest() (storage.Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	return a.Store(bytes.NewReader(data), int64(len(data)), nil)
+	return a.Store(bytes.NewReader(data), int64(len(data)), &sync.WaitGroup{})
 }
 
 // ManifestWriter is used to add and remove entries from an underlying manifest
