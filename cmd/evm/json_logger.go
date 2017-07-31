@@ -37,10 +37,13 @@ func NewJSONLogger(cfg *vm.LogConfig, writer io.Writer) *JSONLogger {
 
 // CaptureState outputs state information on the logger.
 func (l *JSONLogger) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
+	if err == nil {
+		gas += cost
+	}
 	log := vm.StructLog{
 		Pc:         pc,
 		Op:         op,
-		Gas:        gas + cost,
+		Gas:        gas,
 		GasCost:    cost,
 		MemorySize: memory.Len(),
 		Storage:    nil,
