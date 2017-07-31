@@ -22,7 +22,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -232,28 +231,25 @@ func benchReadAll(reader LazySectionReader) {
 }
 
 func benchmarkJoin(n int, t *testing.B) {
+	chunker := NewTreeChunker(NewChunkerParams())
+	tester := &chunkerTester{t: t}
+	data := testDataReader(n)
+
+	chunkC := make(chan *Chunk, 1000)
+	swg := &sync.WaitGroup{}
+
+	key := tester.Split(chunker, data, int64(n), chunkC, swg, nil)
+
 	t.ReportAllocs()
+	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		chunker := NewTreeChunker(NewChunkerParams())
-		tester := &chunkerTester{t: t}
-		data := testDataReader(n)
-
-		chunkC := make(chan *Chunk, 1000)
-		swg := &sync.WaitGroup{}
-
-		key := tester.Split(chunker, data, int64(n), chunkC, swg, nil)
-		// t.StartTimer()
 		chunkC = make(chan *Chunk, 1000)
 		quitC := make(chan bool)
 		reader := tester.Join(chunker, key, i, chunkC, quitC)
 		benchReadAll(reader)
 		close(chunkC)
 		<-quitC
-		// t.StopTimer()
 	}
-	stats := new(runtime.MemStats)
-	runtime.ReadMemStats(stats)
-	fmt.Println(stats.Sys)
 }
 
 func benchmarkSplitTree(n int, t *testing.B) {
@@ -264,9 +260,6 @@ func benchmarkSplitTree(n int, t *testing.B) {
 		data := testDataReader(n)
 		tester.Split(chunker, data, int64(n), nil, nil, nil)
 	}
-	stats := new(runtime.MemStats)
-	runtime.ReadMemStats(stats)
-	fmt.Println(stats.Sys)
 }
 
 func benchmarkSplitPyramid(n int, t *testing.B) {
@@ -277,9 +270,6 @@ func benchmarkSplitPyramid(n int, t *testing.B) {
 		data := testDataReader(n)
 		tester.Split(splitter, data, int64(n), nil, nil, nil)
 	}
-	stats := new(runtime.MemStats)
-	runtime.ReadMemStats(stats)
-	fmt.Println(stats.Sys)
 }
 
 func BenchmarkJoin_2(t *testing.B) { benchmarkJoin(100, t) }
@@ -311,5 +301,3 @@ func BenchmarkSplitPyramid_5(t *testing.B)  { benchmarkSplitPyramid(100000, t) }
 func BenchmarkSplitPyramid_6(t *testing.B)  { benchmarkSplitPyramid(1000000, t) }
 func BenchmarkSplitPyramid_7(t *testing.B)  { benchmarkSplitPyramid(10000000, t) }
 func BenchmarkSplitPyramid_8(t *testing.B)  { benchmarkSplitPyramid(100000000, t) }
-
-// godep go test -bench ./swarm/storage -cpuprofile cpu.out -memprofile mem.out

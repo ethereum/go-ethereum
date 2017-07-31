@@ -326,7 +326,7 @@ func loadSync(record *kademlia.NodeRecord, node kademlia.Node) error {
 	}
 	if record.Meta == nil {
 		log.Debug(fmt.Sprintf("no sync state for node record %v setting default", record))
-		p.syncState = &syncState{DbSyncState: &storage.DbSyncState{}}
+		p.syncState = &syncState{}
 		return nil
 	}
 	state, err := decodeSync(record.Meta)

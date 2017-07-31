@@ -36,7 +36,7 @@ func testApi(t *testing.T, f func(*Api)) {
 	}
 	os.RemoveAll(datadir)
 	defer os.RemoveAll(datadir)
-	dpa, err := storage.NewLocalDPA(datadir)
+	dpa, err := storage.NewLocalDPA(datadir, nil)
 	if err != nil {
 		return
 	}

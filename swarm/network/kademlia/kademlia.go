@@ -241,6 +241,13 @@ func (self *Kademlia) setProxLimit(r int, on bool) {
 }
 
 /*
+returns the current proxLimit
+*/
+func (self *Kademlia) GetProxLimit() int {
+	return self.proxLimit
+}
+
+/*
 returns the list of nodes belonging to the same proximity bin
 as the target. The most proximate bin will be the union of the bins between
 proxLimit and MaxProx.

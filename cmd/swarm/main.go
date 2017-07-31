@@ -245,7 +245,25 @@ Removes a path from the manifest
 			Usage:     "Cleans database of corrupted entries",
 			ArgsUsage: " ",
 			Description: `
-Cleans database of corrupted entries.
+Cleans database of corrupted entries. needs account flag
+`,
+		},
+		{
+			Action:    dumpdb,
+			Name:      "dumpdb",
+			Usage:     "Dump hashes of all chunks",
+			ArgsUsage: " ",
+			Description: `
+Dump hashes of all chunks.
+`,
+		},
+		{
+			Action:    import_ldb,
+			Name:      "import",
+			Usage:     "Imports chunks from one datastore to another",
+			ArgsUsage: "<source-datadir> [source-bzzaccount]",
+			Description: `
+Imports chunks from one datastore to another
 `,
 		},
 	}

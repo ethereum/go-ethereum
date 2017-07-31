@@ -94,7 +94,8 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
 	hash := storage.MakeHashFunc(config.ChunkerParams.Hash)
-	self.lstore, err = storage.NewLocalStore(hash, config.StoreParams)
+	basehash := common.HexToHash(self.config.BzzKey)
+	self.lstore, err = storage.NewLocalStore(hash, config.StoreParams, basehash[:])
 	if err != nil {
 		return
 	}
@@ -320,7 +321,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 	}
 	config.Port = port
 
-	dpa, err := storage.NewLocalDPA(datadir)
+	dpa, err := storage.NewLocalDPA(datadir, storage.ZeroKey)
 	if err != nil {
 		return
 	}

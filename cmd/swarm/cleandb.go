@@ -17,22 +17,63 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"path"
+	"path/filepath"
+
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"gopkg.in/urfave/cli.v1"
 )
 
 func cleandb(ctx *cli.Context) {
-	args := ctx.Args()
-	if len(args) != 1 {
-		utils.Fatalf("Need path to chunks database as the first and only argument")
-	}
-
-	chunkDbPath := args[0]
-	hash := storage.MakeHashFunc("SHA3")
-	dbStore, err := storage.NewDbStore(chunkDbPath, hash, 10000000, 0)
+	dbStore, err := setupDb(ctx)
 	if err != nil {
 		utils.Fatalf("Cannot initialise dbstore: %v", err)
 	}
 	dbStore.Cleanup()
+}
+
+func dumpdb(ctx *cli.Context) {
+	dbStore, err := setupDb(ctx)
+	if err != nil {
+		utils.Fatalf("Cannot initialise dbstore: %v", err)
+	}
+	dbStore.Dump()
+}
+
+func setupDb(ctx *cli.Context) (*storage.DbStore, error) {
+	args := ctx.Args()
+	if len(args) != 0 {
+		utils.Fatalf("Takes no argument")
+	}
+
+	hash := storage.MakeHashFunc("SHA3")
+
+	var (
+		bzzaccount = ctx.GlobalString(SwarmAccountFlag.Name)
+		datadir    = ctx.GlobalString(utils.DataDirFlag.Name)
+	)
+
+	bzzdir := fmt.Sprintf("%s/swarm/bzz-%s", path.Clean(datadir), bzzaccount)
+
+	configdata, err := ioutil.ReadFile(bzzdir + "/config.json")
+	if err != nil {
+		utils.Fatalf("Could not open source config file '%s'", filepath.Join(bzzdir, "/config.json"))
+	}
+
+	var sourceconfig api.Config
+	err = json.Unmarshal(configdata, &sourceconfig)
+	if err != nil {
+		utils.Fatalf("Corrupt or invalid source config file '%s'", filepath.Join(bzzdir, "/config.json"))
+	}
+	log.Trace(fmt.Sprintf("bzzkey %v", sourceconfig.BzzKey))
+
+	basekey := common.HexToHash(sourceconfig.BzzKey[2:])
+	return storage.NewDbStore(filepath.Join(bzzdir, "chunks"), hash, 10000000, func(k storage.Key) (ret uint8) { return uint8(storage.Proximity(basekey[:], k[:])) })
 }
