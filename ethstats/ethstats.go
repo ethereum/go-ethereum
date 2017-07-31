@@ -52,12 +52,18 @@ const (
 	// txChanSize is the size of channel listening to TxPreEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
+	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
+	chainHeadChanSize = 10
 )
 
 type txPool interface {
 	// SubscribeTxPreEvent should return an event subscription of
 	// TxPreEvent and send events to the given channel.
 	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
+}
+
+type blockChain interface {
+	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 }
 
 // Service implements an Ethereum netstats reporting daemon that pushes local
@@ -130,16 +136,18 @@ func (s *Service) Stop() error {
 // until termination.
 func (s *Service) loop() {
 	// Subscribe to chain events to execute updates on
-	var emux *event.TypeMux
+	var blockchain blockChain
 	var txpool txPool
 	if s.eth != nil {
-		emux = s.eth.EventMux()
+		blockchain = s.eth.BlockChain()
 		txpool = s.eth.TxPool()
 	} else {
-		emux = s.les.EventMux()
+		blockchain = s.les.BlockChain()
 		txpool = s.les.TxPool()
 	}
-	headSub := emux.Subscribe(core.ChainHeadEvent{})
+
+	chainHeadCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
+	headSub := blockchain.SubscribeChainHeadEvent(chainHeadCh)
 	defer headSub.Unsubscribe()
 
 	txEventCh := make(chan core.TxPreEvent, txChanSize)
@@ -155,16 +163,13 @@ func (s *Service) loop() {
 	go func() {
 		var lastTx mclock.AbsTime
 
+	HandleLoop:
 		for {
 			select {
 			// Notify of chain head events, but drop if too frequent
-			case head, ok := <-headSub.Chan():
-				if !ok { // node stopped
-					close(quitCh)
-					return
-				}
+			case head := <-chainHeadCh:
 				select {
-				case headCh <- head.Data.(core.ChainHeadEvent).Block:
+				case headCh <- head.Block:
 				default:
 				}
 
@@ -182,10 +187,13 @@ func (s *Service) loop() {
 
 			// node stopped
 			case <-txSub.Err():
-				close(quitCh)
-				return
+				break HandleLoop
+			case <-headSub.Err():
+				break HandleLoop
 			}
 		}
+		close(quitCh)
+		return
 	}()
 	// Loop reporting until termination
 	for {
