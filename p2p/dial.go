@@ -47,9 +47,22 @@ const (
 	maxResolveDelay     = time.Hour
 )
 
+type NodeDialer interface {
+	Dial(*discover.Node) (net.Conn, error)
+}
+
+type TCPDialer struct {
+	*net.Dialer
+}
+
+func (t TCPDialer) Dial(dest *discover.Node) (net.Conn, error) {
+	addr := &net.TCPAddr{IP: dest.IP, Port: int(dest.TCP)}
+	return t.Dialer.Dial("tcp", addr.String())
+}
+
 // dialstate schedules dials and discovery lookups.
 // it get's a chance to compute new tasks on every iteration
-// of the main loop in Server.run.
+// of the main loop in server.run.
 type dialstate struct {
 	maxDynDials int
 	ntab        discoverTable
@@ -104,7 +117,7 @@ type discoverTask struct {
 }
 
 // A waitExpireTask is generated if there are no other tasks
-// to keep the loop in Server.run ticking.
+// to keep the loop in server.run ticking.
 type waitExpireTask struct {
 	time.Duration
 }
@@ -318,14 +331,13 @@ func (t *dialTask) resolve(srv *Server) bool {
 
 // dial performs the actual connection attempt.
 func (t *dialTask) dial(srv *Server, dest *discover.Node) bool {
-	addr := &net.TCPAddr{IP: dest.IP, Port: int(dest.TCP)}
-	fd, err := srv.Dialer.Dial("tcp", addr.String())
+	fd, err := srv.Dialer.Dial(dest)
 	if err != nil {
 		log.Trace("Dial error", "task", t, "err", err)
 		return false
 	}
 	mfd := newMeteredConn(fd, false)
-	srv.setupConn(mfd, t.flags, dest)
+	srv.SetupConn(mfd, t.flags, dest)
 	return true
 }
 

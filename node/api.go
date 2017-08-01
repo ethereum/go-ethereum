@@ -17,6 +17,7 @@
 package node
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -71,6 +73,44 @@ func (api *PrivateAdminAPI) RemovePeer(url string) (bool, error) {
 	}
 	server.RemovePeer(node)
 	return true, nil
+}
+
+// PeerEvents creates an RPC subscription which receives peer events from the
+// node's p2p.Server
+func (api *PrivateAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, error) {
+	// Make sure the server is running, fail otherwise
+	server := api.node.Server()
+	if server == nil {
+		return nil, ErrNodeStopped
+	}
+
+	// Create the subscription
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return nil, rpc.ErrNotificationsUnsupported
+	}
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		events := make(chan *p2p.PeerEvent)
+		sub := server.SubscribeEvents(events)
+		defer sub.Unsubscribe()
+
+		for {
+			select {
+			case event := <-events:
+				notifier.Notify(rpcSub.ID, event)
+			case <-sub.Err():
+				return
+			case <-rpcSub.Err():
+				return
+			case <-notifier.Closed():
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
 }
 
 // StartRPC starts the HTTP RPC API server.
@@ -163,7 +203,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 		}
 	}
 
-	if err := api.node.startWS(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, origins); err != nil {
+	if err := api.node.startWS(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, origins, api.node.config.WSExposeAll); err != nil {
 		return false, err
 	}
 	return true, nil

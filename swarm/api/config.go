@@ -1,4 +1,3 @@
-// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -45,7 +44,7 @@ type Config struct {
 	*storage.ChunkerParams
 	*network.HiveParams
 	Swap *swap.SwapParams
-	*network.SyncParams
+	//*network.SyncParams
 	Path       string
 	ListenAddr string
 	Port       string
@@ -71,8 +70,8 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, n
 	keyhex := crypto.Keccak256Hash(pubkey).Hex()
 
 	self = &Config{
-		SyncParams:    network.NewSyncParams(dirpath),
-		HiveParams:    network.NewHiveParams(dirpath),
+		//SyncParams:    network.NewSyncParams(dirpath),
+		HiveParams:    network.NewHiveParams(),
 		ChunkerParams: storage.NewChunkerParams(),
 		StoreParams:   storage.NewStoreParams(dirpath),
 		ListenAddr:    DefaultHTTPListenAddr,
@@ -88,7 +87,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, n
 
 	// if not set in function param, then set default for swarm network, will be overwritten by config file if present
 	if networkId == 0 {
-		self.NetworkId = network.NetworkId
+		self.NetworkId = network.NetworkID
 	}
 
 	if err != nil {

@@ -178,6 +178,14 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 	}
 }
 
+// NewClientWithConn creates an RPC client which uses the provided net.Conn.
+func NewClientWithConn(conn net.Conn) *Client {
+	client, _ := newClient(context.Background(), func(context.Context) (net.Conn, error) {
+		return conn, nil
+	})
+	return client
+}
+
 func newClient(initctx context.Context, connectFunc func(context.Context) (net.Conn, error)) (*Client, error) {
 	conn, err := connectFunc(initctx)
 	if err != nil {
@@ -401,13 +409,13 @@ func (c *Client) ShhSubscribe(ctx context.Context, channel interface{}, args ...
 // expected type of content returned by the subscription.
 //
 // The context argument cancels the RPC request that sets up the subscription but has no
-// effect on the subscription after EthSubscribe has returned.
+// effect on the subscription after Subscribe has returned.
 //
 // Slow subscribers will be dropped eventually. Client buffers up to 8000 notifications
 // before considering the subscriber dead. The subscription Err channel will receive
 // ErrSubscriptionQueueOverflow. Use a sufficiently large buffer on the channel or ensure
 // that the channel usually has at least one reader to prevent this issue.
-func (c *Client) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
+func (c *Client) Subscribe(ctx context.Context, namespace string, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
 	// Check type of channel first.
 	chanVal := reflect.ValueOf(channel)
 	if chanVal.Kind() != reflect.Chan || chanVal.Type().ChanDir()&reflect.SendDir == 0 {
@@ -420,14 +428,14 @@ func (c *Client) EthSubscribe(ctx context.Context, channel interface{}, args ...
 		return nil, ErrNotificationsUnsupported
 	}
 
-	msg, err := c.newMessage("eth"+subscribeMethodSuffix, args...)
+	msg, err := c.newMessage(namespace+subscribeMethodSuffix, args...)
 	if err != nil {
 		return nil, err
 	}
 	op := &requestOp{
 		ids:  []json.RawMessage{msg.ID},
 		resp: make(chan *jsonrpcMessage),
-		sub:  newClientSubscription(c, "eth", chanVal),
+		sub:  newClientSubscription(c, namespace, chanVal),
 	}
 
 	// Send the subscription request.

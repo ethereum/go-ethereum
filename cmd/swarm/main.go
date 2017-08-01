@@ -134,6 +134,10 @@ var (
 		Name:  "mime",
 		Usage: "force mime type",
 	}
+	PssEnabledFlag = cli.BoolFlag{
+		Name:  "pss",
+		Usage: "Enable pss (message passing over swarm)",
+	}
 	CorsStringFlag = cli.StringFlag{
 		Name:  "corsdomain",
 		Usage: "Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied separated by a ',')",
@@ -339,9 +343,18 @@ DEPRECATED: use 'swarm db clean'.
 		SwarmUploadDefaultPath,
 		SwarmUpFromStdinFlag,
 		SwarmUploadMimeType,
-		//deprecated flags
 		DeprecatedEthAPIFlag,
+		// pss flags
+		PssEnabledFlag,
 	}
+	rpcFlags := []cli.Flag{
+		utils.WSEnabledFlag,
+		utils.WSListenAddrFlag,
+		utils.WSPortFlag,
+		utils.WSApiFlag,
+		utils.WSAllowedOriginsFlag,
+	}
+	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
@@ -381,12 +394,14 @@ func bzzd(ctx *cli.Context) error {
 	}
 
 	cfg := defaultNodeConfig
+	if ctx.GlobalBool(PssEnabledFlag.Name) && ctx.GlobalBool(utils.WSEnabledFlag.Name) {
+		cfg.WSModules = append(cfg.WSModules, "pss")
+	}
 	utils.SetNodeConfig(ctx, &cfg)
 	stack, err := node.New(&cfg)
 	if err != nil {
 		utils.Fatalf("can't create node: %v", err)
 	}
-
 	registerBzzService(ctx, stack)
 	utils.StartNode(stack)
 
@@ -468,6 +483,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	}
 	swapEnabled := ctx.GlobalBool(SwarmSwapEnabledFlag.Name)
 	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabledFlag.Name)
+	pssEnabled := ctx.GlobalBool(PssEnabledFlag.Name)
 
 	swapapi := ctx.GlobalString(SwarmSwapAPIFlag.Name)
 	if swapEnabled && swapapi == "" {
@@ -510,7 +526,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 			}
 		}
 
-		return swarm.NewSwarm(ctx, swapClient, ensClient, bzzconfig, swapEnabled, syncEnabled, cors)
+		return swarm.NewSwarm(ctx, swapClient, ensClient, bzzconfig, swapEnabled, syncEnabled, cors, pssEnabled)
 	}
 	if err := stack.Register(boot); err != nil {
 		utils.Fatalf("Failed to register the Swarm service: %v", err)

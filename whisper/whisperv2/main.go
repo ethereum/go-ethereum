@@ -48,13 +48,15 @@ func main() {
 	shh := whisper.New()
 
 	// Create an Ethereum peer to communicate through
-	server := p2p.Server{
-		PrivateKey: key,
-		MaxPeers:   10,
-		Name:       name,
-		Protocols:  []p2p.Protocol{shh.Protocol()},
-		ListenAddr: ":30300",
-		NAT:        nat.Any(),
+	server := &p2p.Server{
+		Config: p2p.Config{
+			PrivateKey: key,
+			MaxPeers:   10,
+			Name:       name,
+			Protocols:  []p2p.Protocol{shh.Protocol()},
+			ListenAddr: ":30300",
+			NAT:        nat.Any(),
+		},
 	}
 	fmt.Println("Starting Ethereum peer...")
 	if err := server.Start(); err != nil {
