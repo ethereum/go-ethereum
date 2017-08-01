@@ -70,6 +70,53 @@ func init() {
 	wapi = whisper.NewPublicWhisperAPI(w)
 }
 
+func TestAddressMatch(t *testing.T) {
+
+	localaddr := network.RandomAddr().Over()
+	copy(localaddr[:8], []byte("deadbeef"))
+	remoteaddr := []byte("feedbeef")
+	kadparams := network.NewKadParams()
+	kad := network.NewKademlia(localaddr, kadparams)
+	keys, err := wapi.NewKeyPair()
+	if err != nil {
+		t.Fatalf("Could not generate private key: %v", err)
+	}
+	privkey, err := w.GetPrivateKey(keys)
+	pssp := NewPssParams(privkey)
+	ps := NewPss(kad, nil, pssp)
+
+	pssmsg := &PssMsg{
+		To:      remoteaddr,
+		Payload: &whisper.Envelope{},
+	}
+
+	// differ from first byte
+	if ps.isSelfRecipient(pssmsg) {
+		t.Fatalf("isSelfRecipient true but %x != %x", remoteaddr, localaddr)
+	}
+	if ps.isSelfPossibleRecipient(pssmsg) {
+		t.Fatalf("isSelfPossibleRecipient true but %x != %x", remoteaddr[:8], localaddr[:8])
+	}
+
+	// 8 first bytes same
+	copy(remoteaddr[:4], localaddr[:4])
+	if ps.isSelfRecipient(pssmsg) {
+		t.Fatalf("isSelfRecipient true but %x != %x", remoteaddr, localaddr)
+	}
+	if !ps.isSelfPossibleRecipient(pssmsg) {
+		t.Fatalf("isSelfPossibleRecipient false but %x == %x", remoteaddr[:8], localaddr[:8])
+	}
+
+	// all bytes same
+	pssmsg.To = localaddr
+	if !ps.isSelfRecipient(pssmsg) {
+		t.Fatalf("isSelfRecipient false but %x == %x", remoteaddr, localaddr)
+	}
+	if !ps.isSelfPossibleRecipient(pssmsg) {
+		t.Fatalf("isSelfPossibleRecipient false but %x == %x", remoteaddr[:8], localaddr[:8])
+	}
+}
+
 // tests:
 // sets public key for peer
 // set an outgoing symmetric key for peer
@@ -223,7 +270,8 @@ func TestKeysExchange(t *testing.T) {
 	// at this point we've verified that symkeys are saved and match on each peer
 	// now try sending symmetrically encrypted message
 	apimsg := APIMsg{
-		Msg:  []byte("xyzzy"),
+		Msg: []byte("xyzzy"),
+		//Addr: roaddr,
 		Addr: roaddr,
 	}
 	err = lclient.Call(nil, "pss_send", topic, apimsg)
@@ -240,6 +288,7 @@ func TestKeysExchange(t *testing.T) {
 	ctx, _ = context.WithTimeout(context.Background(), time.Second)
 	sub, err = lclient.Subscribe(ctx, "pss", msgC, "receive", topic)
 	apimsg.Msg = []byte("plugh")
+	//apimsg.Addr = loaddr
 	apimsg.Addr = loaddr
 	err = rclient.Call(nil, "pss_send", topic, apimsg)
 	select {

@@ -217,6 +217,7 @@ func (self *Pss) SetOutgoingPublicKey(addr pot.Address, topic whisper.TopicType,
 }
 
 // Set the symmetric key for incoming communications
+// this is either:
 // - key sent when initiating a pss handshake to the other side
 // - key sent as response to incoming handshake
 func (self *Pss) GenerateIncomingSymmetricKey(addr pot.Address, topic whisper.TopicType) (string, error) {
@@ -243,7 +244,6 @@ func (self *Pss) GenerateIncomingSymmetricKey(addr pot.Address, topic whisper.To
 }
 
 // Set the symmetric key for outgoing communications
-// this is either:
 // - key received when receiving an incoming handshake
 func (self *Pss) SetOutgoingSymmetricKey(addr pot.Address, topic whisper.TopicType, key []byte) (string, error) {
 	keyid, err := self.w.AddSymKeyDirect(key)
@@ -258,32 +258,6 @@ func (self *Pss) SetOutgoingSymmetricKey(addr pot.Address, topic whisper.TopicTy
 	psp.symkeyexpires = time.Now().Add(time.Hour * 24 * 365)
 	return keyid, nil
 }
-
-//func (self *Pss) RemovePublicKey(addr pot.Address, topic whisper.TopicType, pubkey ecdsa.PublicKey) bool {
-//	if len(self.keyPool[addr]) == 0 {
-//		return false
-//	}
-//	zeroKey := ecdsa.PublicKey{}
-//	if self.keyPool[addr][topic] == zeroKey {
-//		return false
-//	}
-//	delete(self.reverseKeyPool, pubkey)
-//	self.keyPool[addr][topic] = zeroKey
-//	return true
-//}
-
-//func (self *Pss) GetKeys(addr pot.Address) (keys []ecdsa.PublicKey) {
-//outer:
-//	for _, key := range self.keyPool[addr] {
-//		for _, havekey := range keys {
-//			if havekey == key {
-//				continue outer
-//			}
-//		}
-//		keys = append(keys, key)
-//	}
-//	return
-//}
 
 func (self *Pss) deregister(topic *whisper.TopicType, h *Handler) {
 	self.lock.Lock()
@@ -356,7 +330,7 @@ func (self *Pss) getHandlers(topic whisper.TopicType) map[*Handler]bool {
 func (self *Pss) handlePssMsg(msg interface{}) error {
 	pssmsg, ok := msg.(*PssMsg)
 	if ok {
-		if !self.isSelfRecipient(pssmsg) {
+		if !self.isSelfPossibleRecipient(pssmsg) {
 			log.Trace("pss was for someone else :'( ... forwarding")
 			return self.Forward(pssmsg)
 		}
@@ -463,7 +437,6 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 				return err
 			}
 		}
-
 	}
 
 	return nil
@@ -542,8 +515,9 @@ func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, wparams *w
 //
 // Handlers that are merely passing on the PssMsg to its final recipient should call this directly
 func (self *Pss) Forward(msg *PssMsg) error {
-
-	if self.isSelfRecipient(msg) {
+	to := msg.To
+	msg.To = msg.To[:defaultPartialAddressLength]
+	if self.isSelfPossibleRecipient(msg) {
 		//return errorForwardToSelf
 		return self.Process(msg)
 	}
@@ -565,14 +539,13 @@ func (self *Pss) Forward(msg *PssMsg) error {
 
 	// send with kademlia
 	// find the closest peer to the recipient and attempt to send
-	self.Overlay.EachConn(msg.To, 256, func(op network.OverlayConn, po int, isproxbin bool) bool {
+	self.Overlay.EachConn(to, 256, func(op network.OverlayConn, po int, isproxbin bool) bool {
 		sp, ok := op.(senderPeer)
 		if !ok {
 			log.Crit("Pss cannot use kademlia peer type")
 			return false
 		}
 		sendMsg := fmt.Sprintf("MSG %x TO %x FROM %x VIA %x", digest, common.ByteLabel(msg.To), common.ByteLabel(self.BaseAddr()), common.ByteLabel(op.Address()))
-		//sendMsg := fmt.Sprintf("TO %x FROM %x VIA %x", common.ByteLabel(msg.To), common.ByteLabel(self.BaseAddr()), common.ByteLabel(op.Address()))
 		pp := self.fwdPool[sp.ID()]
 		if self.checkFwdCache(op.Address(), digest) {
 			log.Info(fmt.Sprintf("%v: peer already forwarded to", sendMsg))
@@ -647,6 +620,11 @@ func (self *Pss) removePeerTopic(rw p2p.MsgReadWriter, topic whisper.TopicType) 
 
 func (self *Pss) isSelfRecipient(msg *PssMsg) bool {
 	return bytes.Equal(msg.To, self.Overlay.BaseAddr())
+}
+
+func (self *Pss) isSelfPossibleRecipient(msg *PssMsg) bool {
+	local := self.Overlay.BaseAddr()
+	return bytes.Equal(msg.To[:], local[:len(msg.To)])
 }
 
 func (self *Pss) isActive(id pot.Address, topic whisper.TopicType) bool {
