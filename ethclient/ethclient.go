@@ -266,9 +266,8 @@ func (ec *Client) NetworkID(ctx context.Context) (*big.Int, error) {
 	if err := ec.c.CallContext(ctx, &ver, "net_version"); err != nil {
 		return nil, err
 	}
-	_, succeeded := version.SetString(ver, 10)
-	if !succeeded {
-		return nil, errors.New("failed to convert net_version result to a network ID number")
+	if _, ok := version.SetString(ver, 10); !ok {
+		return nil, fmt.Errorf("invalid net_version result %q", ver)
 	}
 	return version, nil
 }
