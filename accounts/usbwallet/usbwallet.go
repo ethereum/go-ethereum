@@ -17,9 +17,18 @@
 // Package usbwallet implements support for USB hardware wallets.
 package usbwallet
 
+import "time"
+
 // deviceID is a combined vendor/product identifier to uniquely identify a USB
 // hardware device.
 type deviceID struct {
 	Vendor  uint16 // The Vendor identifer
 	Product uint16 // The Product identifier
 }
+
+// Maximum time between wallet health checks to detect USB unplugs.
+const heartbeatCycle = time.Second
+
+// Minimum time to wait between self derivation attempts, even it the user is
+// requesting accounts like crazy.
+const selfDeriveThrottling = time.Second

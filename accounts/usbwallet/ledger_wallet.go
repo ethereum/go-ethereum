@@ -41,13 +41,6 @@ import (
 	"github.com/karalabe/hid"
 )
 
-// Maximum time between wallet health checks to detect USB unplugs.
-const ledgerHeartbeatCycle = time.Second
-
-// Minimum time to wait between self derivation attempts, even it the user is
-// requesting accounts like crazy.
-const ledgerSelfDeriveThrottling = time.Second
-
 // ledgerOpcode is an enumeration encoding the supported Ledger opcodes.
 type ledgerOpcode byte
 
@@ -215,6 +208,8 @@ func (w *ledgerWallet) Open(passphrase string) error {
 	if w.version, err = w.ledgerVersion(); err != nil {
 		w.version = [3]byte{1, 0, 0} // Assume worst case, can't verify if v1.0.0 or v1.0.1
 	}
+	go w.hub.updateFeed.Send(accounts.WalletEvent{Wallet: w, Kind: accounts.WalletOpened})
+
 	return nil
 }
 
@@ -237,7 +232,7 @@ func (w *ledgerWallet) heartbeat() {
 		case errc = <-w.healthQuit:
 			// Termination requested
 			continue
-		case <-time.After(ledgerHeartbeatCycle):
+		case <-time.After(heartbeatCycle):
 			// Heartbeat time
 		}
 		// Execute a tiny data exchange to see responsiveness
@@ -465,7 +460,7 @@ func (w *ledgerWallet) selfDerive() {
 			select {
 			case errc = <-w.deriveQuit:
 				// Termination requested, abort
-			case <-time.After(ledgerSelfDeriveThrottling):
+			case <-time.After(selfDeriveThrottling):
 				// Waited enough, willing to self-derive again
 			}
 		}

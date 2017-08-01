@@ -28,25 +28,25 @@ import (
 	"github.com/karalabe/hid"
 )
 
-// LedgerScheme is the protocol scheme prefixing account and wallet URLs.
-var LedgerScheme = "ledger"
+// TrezorScheme is the protocol scheme prefixing account and wallet URLs.
+var TrezorScheme = "trezor"
 
-// ledgerDeviceIDs are the known device IDs that Ledger wallets use.
-var ledgerDeviceIDs = []deviceID{
-	{Vendor: 0x2c97, Product: 0x0000}, // Ledger Blue
-	{Vendor: 0x2c97, Product: 0x0001}, // Ledger Nano S
-}
+// trezorVendorID is the USB vendor ID for SatoshiLabs.
+var trezorVendorID = uint16(0x534c)
+
+// trezorDeviceID is the USB device ID for the Trezor 1.
+var trezorDeviceID = uint16(0x0001)
 
 // Maximum time between wallet refreshes (if USB hotplug notifications don't work).
-const ledgerRefreshCycle = time.Second
+const trezorRefreshCycle = time.Second
 
 // Minimum time between wallet refreshes to avoid USB trashing.
-const ledgerRefreshThrottling = 500 * time.Millisecond
+const trezorRefreshThrottling = 500 * time.Millisecond
 
-// LedgerHub is a accounts.Backend that can find and handle Ledger hardware wallets.
-type LedgerHub struct {
+// TrezorHub is a accounts.Backend that can find and handle Trezor hardware wallets.
+type TrezorHub struct {
 	refreshed   time.Time               // Time instance when the list of wallets was last refreshed
-	wallets     []accounts.Wallet       // List of Ledger devices currently tracking
+	wallets     []accounts.Wallet       // List of Trezor devices currently tracking
 	updateFeed  event.Feed              // Event feed to notify wallet additions/removals
 	updateScope event.SubscriptionScope // Subscription scope tracking current live listeners
 	updating    bool                    // Whether the event notification loop is running
@@ -60,12 +60,12 @@ type LedgerHub struct {
 	commsLock sync.Mutex // Lock protecting the pending counter and enumeration
 }
 
-// NewLedgerHub creates a new hardware wallet manager for Ledger devices.
-func NewLedgerHub() (*LedgerHub, error) {
+// NewTrezorHub creates a new hardware wallet manager for Trezor devices.
+func NewTrezorHub() (*TrezorHub, error) {
 	if !hid.Supported() {
 		return nil, errors.New("unsupported platform")
 	}
-	hub := &LedgerHub{
+	hub := &TrezorHub{
 		quit: make(chan chan error),
 	}
 	hub.refreshWallets()
@@ -73,8 +73,8 @@ func NewLedgerHub() (*LedgerHub, error) {
 }
 
 // Wallets implements accounts.Backend, returning all the currently tracked USB
-// devices that appear to be Ledger hardware wallets.
-func (hub *LedgerHub) Wallets() []accounts.Wallet {
+// devices that appear to be Trezor hardware wallets.
+func (hub *TrezorHub) Wallets() []accounts.Wallet {
 	// Make sure the list of wallets is up to date
 	hub.refreshWallets()
 
@@ -88,22 +88,22 @@ func (hub *LedgerHub) Wallets() []accounts.Wallet {
 
 // refreshWallets scans the USB devices attached to the machine and updates the
 // list of wallets based on the found devices.
-func (hub *LedgerHub) refreshWallets() {
+func (hub *TrezorHub) refreshWallets() {
 	// Don't scan the USB like crazy it the user fetches wallets in a loop
 	hub.stateLock.RLock()
 	elapsed := time.Since(hub.refreshed)
 	hub.stateLock.RUnlock()
 
-	if elapsed < ledgerRefreshThrottling {
+	if elapsed < trezorRefreshThrottling {
 		return
 	}
-	// Retrieve the current list of Ledger devices
-	var ledgers []hid.DeviceInfo
+	// Retrieve the current list of Trezor devices
+	var trezors []hid.DeviceInfo
 
 	if runtime.GOOS == "linux" {
 		// hidapi on Linux opens the device during enumeration to retrieve some infos,
-		// breaking the Ledger protocol if that is waiting for user confirmation. This
-		// is a bug acknowledged at Ledger, but it won't be fixed on old devices so we
+		// breaking the Trezor protocol if that is waiting for user confirmation. This
+		// is a bug acknowledged at Trezor, but it won't be fixed on old devices so we
 		// need to prevent concurrent comms ourselves. The more elegant solution would
 		// be to ditch enumeration in favor of hutplug events, but that don't work yet
 		// on Windows so if we need to hack it anyway, this is more elegant for now.
@@ -113,12 +113,9 @@ func (hub *LedgerHub) refreshWallets() {
 			return
 		}
 	}
-	for _, info := range hid.Enumerate(0, 0) { // Can't enumerate directly, one valid ID is the 0 wildcard
-		for _, id := range ledgerDeviceIDs {
-			if info.VendorID == id.Vendor && info.ProductID == id.Product {
-				ledgers = append(ledgers, info)
-				break
-			}
+	for _, info := range hid.Enumerate(trezorVendorID, trezorDeviceID) {
+		if info.Interface == 0 { // interface #1 is the debug link, skip it
+			trezors = append(trezors, info)
 		}
 	}
 	if runtime.GOOS == "linux" {
@@ -128,20 +125,20 @@ func (hub *LedgerHub) refreshWallets() {
 	// Transform the current list of wallets into the new one
 	hub.stateLock.Lock()
 
-	wallets := make([]accounts.Wallet, 0, len(ledgers))
+	wallets := make([]accounts.Wallet, 0, len(trezors))
 	events := []accounts.WalletEvent{}
 
-	for _, ledger := range ledgers {
-		url := accounts.URL{Scheme: LedgerScheme, Path: ledger.Path}
+	for _, trezor := range trezors {
+		url := accounts.URL{Scheme: TrezorScheme, Path: trezor.Path}
 
 		// Drop wallets in front of the next device or those that failed for some reason
-		for len(hub.wallets) > 0 && (hub.wallets[0].URL().Cmp(url) < 0 || hub.wallets[0].(*ledgerWallet).failed()) {
+		for len(hub.wallets) > 0 && (hub.wallets[0].URL().Cmp(url) < 0 || hub.wallets[0].(*trezorWallet).failed()) {
 			events = append(events, accounts.WalletEvent{Wallet: hub.wallets[0], Kind: accounts.WalletDropped})
 			hub.wallets = hub.wallets[1:]
 		}
 		// If there are no more wallets or the device is before the next, wrap new wallet
 		if len(hub.wallets) == 0 || hub.wallets[0].URL().Cmp(url) > 0 {
-			wallet := &ledgerWallet{hub: hub, url: &url, info: ledger, log: log.New("url", url)}
+			wallet := &trezorWallet{hub: hub, url: &url, info: trezor, log: log.New("url", url)}
 
 			events = append(events, accounts.WalletEvent{Wallet: wallet, Kind: accounts.WalletArrived})
 			wallets = append(wallets, wallet)
@@ -169,8 +166,8 @@ func (hub *LedgerHub) refreshWallets() {
 }
 
 // Subscribe implements accounts.Backend, creating an async subscription to
-// receive notifications on the addition or removal of Ledger wallets.
-func (hub *LedgerHub) Subscribe(sink chan<- accounts.WalletEvent) event.Subscription {
+// receive notifications on the addition or removal of Trezor wallets.
+func (hub *TrezorHub) Subscribe(sink chan<- accounts.WalletEvent) event.Subscription {
 	// We need the mutex to reliably start/stop the update loop
 	hub.stateLock.Lock()
 	defer hub.stateLock.Unlock()
@@ -191,12 +188,13 @@ func (hub *LedgerHub) Subscribe(sink chan<- accounts.WalletEvent) event.Subscrip
 // account change events from the underlying account cache, and also periodically
 // forces a manual refresh (only triggers for systems where the filesystem notifier
 // is not running).
-func (hub *LedgerHub) updater() {
+func (hub *TrezorHub) updater() {
 	for {
-		// TODO: Wait for a USB hotplug event (not supported yet) or a refresh timeout
-		// <-hub.changes
-		time.Sleep(ledgerRefreshCycle)
-
+		// Wait for a USB hotplug event (not supported yet) or a refresh timeout
+		select {
+		//case <-hub.changes: // reenable on hutplug implementation
+		case <-time.After(trezorRefreshCycle):
+		}
 		// Run the wallet refresher
 		hub.refreshWallets()
 

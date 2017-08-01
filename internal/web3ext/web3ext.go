@@ -493,6 +493,11 @@ web3._extend({
 			params: 2
 		}),
 		new web3._extend.Method({
+			name: 'openWallet',
+			call: 'personal_openWallet',
+			params: 2
+		}),
+		new web3._extend.Method({
 			name: 'deriveAccount',
 			call: 'personal_deriveAccount',
 			params: 3

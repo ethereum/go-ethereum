@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/robertkrimen/otto"
@@ -81,6 +82,54 @@ func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 		throwJSException(err.Error())
 	}
 	return ret
+}
+
+// OpenWallet is a wrapper around personal.openWallet which can interpret and
+// react to certain error messages, such as the Trezor PIN matrix request.
+func (b *bridge) OpenWallet(call otto.FunctionCall) (response otto.Value) {
+	// Make sure we have an wallet specified to open
+	if !call.Argument(0).IsString() {
+		throwJSException("first argument must be the wallet URL to open")
+	}
+	wallet := call.Argument(0)
+
+	var passwd otto.Value
+	if call.Argument(1).IsUndefined() || call.Argument(1).IsNull() {
+		passwd, _ = otto.ToValue("")
+	} else {
+		passwd = call.Argument(1)
+	}
+	// Open the wallet and return if successful in itself
+	val, err := call.Otto.Call("jeth.openWallet", nil, wallet, passwd)
+	if err == nil {
+		return val
+	}
+	// Wallet open failed, report error unless it's a PIN entry
+	if !strings.HasSuffix(err.Error(), usbwallet.ErrTrezorPINNeeded.Error()) {
+		throwJSException(err.Error())
+	}
+	// Trezor PIN matrix input requested, display the matrix to the user and fetch the data
+	fmt.Fprintf(b.printer, "Look at the device for number positions\n\n")
+	fmt.Fprintf(b.printer, "a | b | c\n")
+	fmt.Fprintf(b.printer, "--+---+--\n")
+	fmt.Fprintf(b.printer, "d | e | f\n")
+	fmt.Fprintf(b.printer, "--+---+--\n")
+	fmt.Fprintf(b.printer, "g | h | i\n\n")
+
+	if input, err := b.prompter.PromptPassword("Please enter current PIN: "); err != nil {
+		throwJSException(err.Error())
+	} else {
+		// Transform the alphabetical input to numbers
+		mapping := map[string]string{"a": "7", "b": "8", "c": "9", "d": "4", "e": "5", "f": "6", "g": "1", "h": "2", "i": "3"}
+		for from, to := range mapping {
+			input = strings.Replace(input, from, to, -1)
+		}
+		passwd, _ = otto.ToValue(input)
+	}
+	if val, err = call.Otto.Call("jeth.openWallet", nil, wallet, passwd); err != nil {
+		throwJSException(err.Error())
+	}
+	return val
 }
 
 // UnlockAccount is a wrapper around the personal.unlockAccount RPC method that

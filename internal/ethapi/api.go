@@ -246,6 +246,22 @@ func (s *PrivateAccountAPI) ListWallets() []rawWallet {
 	return wallets
 }
 
+// OpenWallet initiates a hardware wallet opening procedure, establishing a USB
+// connection and attempting to authenticate via the provided passphrase. Note,
+// the method may return an extra challenge requiring a second open (e.g. the
+// Trezor PIN matrix challenge).
+func (s *PrivateAccountAPI) OpenWallet(url string, passphrase *string) error {
+	wallet, err := s.am.Wallet(url)
+	if err != nil {
+		return err
+	}
+	pass := ""
+	if passphrase != nil {
+		pass = *passphrase
+	}
+	return wallet.Open(pass)
+}
+
 // DeriveAccount requests a HD wallet to derive a new account, optionally pinning
 // it for later reuse.
 func (s *PrivateAccountAPI) DeriveAccount(url string, path string, pin *bool) (accounts.Account, error) {
