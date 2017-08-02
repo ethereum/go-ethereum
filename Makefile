@@ -16,21 +16,6 @@ geth:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
-puppeth:
-	build/env.sh go run build/ci.go install ./cmd/puppeth
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/puppeth\" to launch puppeth."
-
-swarm:
-	build/env.sh go run build/ci.go install ./cmd/swarm
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/swarm\" to launch swarm."
-
-evm:
-	build/env.sh go run build/ci.go install ./cmd/evm
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/evm\" to start the evm."
-
 all:
 	build/env.sh go run build/ci.go install
 
