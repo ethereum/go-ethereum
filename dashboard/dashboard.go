@@ -41,26 +41,26 @@ const (
 )
 
 var (
-	nextId uint32 = 0 // Next connection id
+	nextId uint32 // Next connection id
 )
 
 type dashboard struct {
 	config *Config
 
 	listener net.Listener
-	conns    []*client // Currently live websocket connections
+	conns    []*client                 // Currently live websocket connections
+	Metrics  *metricSamples            `json:"metrics,omitempty"`
+	Stats    *status                   `json:"stats,omitempty"`
+	lock     sync.RWMutex              // Lock protecting the dashboard's internals
 
-	Metrics *metricSamples `json:"metrics,omitempty"`
-	Stats   *status        `json:"stats,omitempty"`
-
-	lock sync.RWMutex // Lock protecting the dashboard's internals
-
-	quit chan struct{} // Channel used for graceful exit
+	closing  map[*chan chan error]bool // Channels used for graceful exit
+	mapLock  sync.RWMutex              // Lock protecting the closing map's internals
 }
 
 type client struct {
-	conn   *websocket.Conn // Particular live websocket connection
-	logger log.Logger      // Logger for the particular live websocket connection
+	conn   *websocket.Conn              // Particular live websocket connection
+	msg    chan *map[string]interface{} // Message queue for the update messages
+	logger log.Logger                   // Logger for the particular live websocket connection
 }
 
 type metricSamples struct {
@@ -83,7 +83,7 @@ func New(config *Config) (*dashboard, error) {
 	return &dashboard{
 		config:  config,
 		Metrics: &metricSamples{},
-		quit:    make(chan struct{}),
+		closing: make(map[*chan chan error]bool),
 	}, nil
 }
 
@@ -126,7 +126,12 @@ func (db *dashboard) Stop() error {
 		log.Warn("Failed to close listener", "err", err)
 	}
 
-	close(db.quit) // Notifies collectData and apiHandler
+	errc := make(chan error)
+	for closing := range db.closing {
+		*closing <- errc
+		<-errc
+		close(*closing)
+	}
 
 	for _, c := range db.conns {
 		if err := c.conn.Close(); err != nil {
@@ -143,68 +148,86 @@ func (db *dashboard) webHandler(w http.ResponseWriter, r *http.Request) {
 	log.Info("Request", "URL", r.URL)
 
 	path := r.URL.String()
+	if path == "/" {
+		path = "/dashboard.html"
+	}
 
 	// If the path of the assets is manually set
 	if db.config.Assets != "" {
 		// Create the filename for ReadFile
 		var buffer bytes.Buffer
 		buffer.WriteString(db.config.Assets)
-		switch path {
-		case "/":
-			buffer.WriteString("/dashboard.html")
-		default:
-			buffer.WriteString(path)
-		}
+		buffer.WriteString(path)
 
 		file, err := ioutil.ReadFile(buffer.String())
 		if err != nil {
-			// TODO (kurkomisi): Warn or Crit?
 			log.Warn("Failed to read file", "err", err)
-			// TODO (kurkomisi): Should I inform the client?
+			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
 		w.Write(file)
 		return
 	}
-
-	switch path {
-	case "/":
-		index, err := Asset("dashboard.html")
-		if err != nil {
-			log.Warn("Failed to load the index", "err", err)
-			return
-		}
-		w.Write(index)
-	default:
-		webapp, err := Asset(path[1:])
-		if err != nil {
-			log.Warn("Failed to load the asset", "path", path, "err", err)
-			return
-		}
-		w.Write(webapp)
+	webapp, err := Asset(path[1:])
+	if err != nil {
+		log.Warn("Failed to load the asset", "path", path, "err", err)
+		http.Error(w, "not found", http.StatusNotFound)
+		return
 	}
+	w.Write(webapp)
 }
 
 // apiHandler handles requests for the dashboard.
 func (db *dashboard) apiHandler(conn *websocket.Conn) {
 	client := &client{
 		conn:   conn,
+		msg:    make(chan *map[string]interface{}, 128),
 		logger: log.New("id", atomic.AddUint32(&nextId, 1)),
 	}
 
-	// Start tracking the connection and drop at connection loss
+	loss := make(chan int)
+
+	// Start listening for messages to send.
+	go func() {
+		closing := db.addClosing()
+		defer db.removeClosing(closing)
+
+		for {
+			select {
+			case errc := <-*closing:
+				errc <- nil
+				return
+			case val := <-loss:
+				loss <- val - 1
+				return
+			case msg := <-client.msg:
+				if err := websocket.JSON.Send(client.conn, msg); err != nil {
+					client.logger.Warn("Failed to send the message", "msg", msg, "err", err)
+					// TODO (kurkomisi): Handle message loss
+				}
+			}
+		}
+	}()
+
+	// Send the past data.
+	client.msg <- &map[string]interface{}{
+		"metrics": db.Metrics,
+	}
+
+	// Start tracking the connection and drop at connection loss.
 	db.lock.Lock()
 	db.conns = append(db.conns, client)
 	db.lock.Unlock()
 
-	db.sendHistory(client)
-
-	closed := make(chan bool)
-
 	go func() {
+		closing := db.addClosing()
+		defer db.removeClosing(closing)
+
 		select {
-		case <-db.quit:
-		case <-closed:
+		case errc := <-*closing:
+			errc <- nil
+		case val := <-loss:
+			loss <- val - 1
 			db.lock.Lock()
 			for i, c := range db.conns {
 				if c.conn == client.conn {
@@ -219,7 +242,10 @@ func (db *dashboard) apiHandler(conn *websocket.Conn) {
 	for {
 		fail := []byte{}
 		if _, err := conn.Read(fail); err != nil {
-			closed <- true
+			loss <- 2
+			if val := <-loss; val > 0 {
+				loss <- val
+			}
 			return
 		}
 		// Ignore all messages
@@ -228,12 +254,15 @@ func (db *dashboard) apiHandler(conn *websocket.Conn) {
 
 // collectData collects the required data to plot on the dashboard.
 func (db *dashboard) collectData() {
+	closing := db.addClosing()
+	defer db.removeClosing(closing)
+
 	for {
 		select {
-		case <-db.quit:
+		case errc := <-*closing:
+			errc <- nil
 			return
 		case <-time.After(db.config.Refresh):
-
 			now := time.Now()
 			traffic := metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Rate1()
 			memoryInUse := metrics.DefaultRegistry.Get("system/memory/inuse").(metrics.Meter).Rate1()
@@ -246,9 +275,8 @@ func (db *dashboard) collectData() {
 				Value: memoryInUse,
 			}
 
-			// TODO (kurkomisi): do I need to ensure the correct order?
 			// TODO (kurkomisi): do not mix traffic with processor!
-			go db.update(traff, memory)
+			db.update(traff, memory)
 		}
 	}
 }
@@ -270,24 +298,30 @@ func (db *dashboard) update(processor *data, memory *data) {
 	}
 	db.Metrics.Memory = append(db.Metrics.Memory[first:], memory)
 
-	for _, c := range db.conns {
-		msg := &map[string]interface{}{
-			"processor": processor,
-			"memory":    memory,
-		}
-		if err := websocket.JSON.Send(c.conn, msg); err != nil {
-			c.logger.Warn("Failed to update dashboard", "msg", msg, "err", err)
-		}
+	msg := &map[string]interface{}{
+		"processor": processor,
+		"memory":    memory,
 	}
 
+	for _, c := range db.conns {
+		select {
+		case c.msg <- msg:
+		default:
+			c.logger.Warn("Client message queue is full")
+		}
+	}
 }
 
-// sendHistory sends the past data through a newly registered websocket connection.
-func (db *dashboard) sendHistory(c *client) {
-	msg := &map[string]interface{}{
-		"metrics": db.Metrics,
-	}
-	if err := websocket.JSON.Send(c.conn, msg); err != nil {
-		c.logger.Warn("Failed to send history", "err", err)
-	}
+func (db *dashboard) addClosing() *chan chan error {
+	closing := make(chan chan error)
+	db.mapLock.Lock()
+	db.closing[&closing] = true
+	db.mapLock.Unlock()
+	return &closing
+}
+
+func (db *dashboard) removeClosing(closing *chan chan error) {
+	db.mapLock.Lock()
+	delete(db.closing, closing)
+	db.mapLock.Unlock()
 }
