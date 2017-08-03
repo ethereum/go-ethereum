@@ -44,7 +44,7 @@ type Config struct {
 	// Enable recording of SHA3/keccak preimages
 	EnablePreimageRecording bool
 	// JumpTable contains the EVM instruction table. This
-	// may me left uninitialised and will be set the default
+	// may be left uninitialised and will be set to the default
 	// table.
 	JumpTable [256]operation
 }
