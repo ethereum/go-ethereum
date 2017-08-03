@@ -268,8 +268,6 @@ type Server struct {
 
 	router    *httprouter.Router
 	network   *Network
-	filters   map[MsgFilter]struct{}
-	wildcards map[string]struct{}
 }
 
 // NewServer returns a new simulation API server
@@ -374,6 +372,8 @@ type MsgFilter struct {
 
 // StreamNetworkEvents streams network events as a server-sent-events stream
 func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
+	filters   := make(map[MsgFilter]struct{})
+	wildcards := make(map[string]struct{})
 	events := make(chan *Event)
 	sub := s.network.events.Subscribe(events)
 	defer sub.Unsubscribe()
@@ -410,7 +410,7 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 
 	// check if filtering has been requested
 	if strfilter := req.URL.Query().Get("filter"); strfilter != "" {
-		if err := s.setupFilter(strfilter); err != nil {
+		if err := s.setupFilter(strfilter, filters, wildcards); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -451,7 +451,7 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 		case event := <-events:
 			//filtering events only works for messages
 			//if the message does not pass filter, break handling
-			if event.Msg != nil && !s.msgMatchesFilter(event) {
+			if event.Msg != nil && !s.msgMatchesFilter(event,filters,wildcards) {
 				continue
 			}
 			if err := writeEvent(event); err != nil {
@@ -471,9 +471,7 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 //they need to be separated by a '-'
 //PROTOCOL must be a valid protocol for this to work (no validation here)
 //A message-code of '*' or '-1' are considered wildcards
-func (s *Server) setupFilter(strfilter string) error {
-	s.filters = make(map[MsgFilter]struct{})
-	s.wildcards = make(map[string]struct{})
+func (s *Server) setupFilter(strfilter string,filters map[MsgFilter]struct{}, wildcards map[string]struct{}) error {
 	//split first all [PROTOCOL]:[MESSAGE-CODE] pairs into an array, separator being '-'
 	arrfilter := strings.Split(strfilter, "-")
 	//for each elem in array
@@ -491,7 +489,7 @@ func (s *Server) setupFilter(strfilter string) error {
 		for _, c := range strcodes {
 			//code part '*' or '-1' is considered a wildcard, thus passing all codes of that protocol
 			if fparts[1] == "*" || fparts[1] == "-1" {
-				s.wildcards[fparts[0]] = struct{}{}
+				wildcards[fparts[0]] = struct{}{}
 			} else {
 				//no wildcards, thus parse code value
 				code, err := strconv.ParseUint(c, 10, 64)
@@ -499,7 +497,7 @@ func (s *Server) setupFilter(strfilter string) error {
 					return fmt.Errorf("Invalid msg code for filtering provided", http.StatusBadRequest)
 				}
 				//we got all filter info, set the filter on the server
-				s.filters[MsgFilter{Proto: proto, Code: code}] = struct{}{}
+				filters[MsgFilter{Proto: proto, Code: code}] = struct{}{}
 			}
 		}
 	}
@@ -511,13 +509,13 @@ func (s *Server) setupFilter(strfilter string) error {
 //Returns true if the event matches the filter (= event should be sent to client)
 //or false if it doesn't match the filter (= event won't be sent to client)
 //If no filter has been set, no messages will be delivered at all
-func (s *Server) msgMatchesFilter(event *Event) bool {
+func (s *Server) msgMatchesFilter(event *Event, filters map[MsgFilter]struct{}, wildcards map[string]struct{}) bool {
 	//check if the Protocol matches a wildcard; in that case, don't even check for code;
 	//allow all (for that protocol)
-	_, ok := s.wildcards[event.Msg.Protocol]
+	_, ok := wildcards[event.Msg.Protocol]
 	if !ok {
 		//no wildcard matched; so check if this event matches protocol and specific code
-		_, ok = s.filters[MsgFilter{event.Msg.Protocol, event.Msg.Code}]
+		_, ok = filters[MsgFilter{event.Msg.Protocol, event.Msg.Code}]
 		// filter matches, send the event
 	}
 	//true if event matched filter, false if not
