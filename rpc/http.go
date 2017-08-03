@@ -27,8 +27,6 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/rs/cors"
 )
 
 const (
@@ -136,13 +134,6 @@ func (t *httpReadWriteNopCloser) Close() error {
 	return nil
 }
 
-// NewHTTPServer creates a new HTTP RPC server around an API provider.
-//
-// Deprecated: Server implements http.Handler
-func NewHTTPServer(cors []string, srv *Server) *http.Server {
-	return &http.Server{Handler: newCorsHandler(srv, cors)}
-}
-
 // ServeHTTP serves JSON-RPC requests over HTTP.
 func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.ContentLength > maxHTTPRequestContentLength {
@@ -159,19 +150,4 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	codec := NewJSONCodec(&httpReadWriteNopCloser{r.Body, w})
 	defer codec.Close()
 	srv.ServeSingleRequest(codec, OptionMethodInvocation)
-}
-
-func newCorsHandler(srv *Server, allowedOrigins []string) http.Handler {
-	// disable CORS support if user has not specified a custom CORS configuration
-	if len(allowedOrigins) == 0 {
-		return srv
-	}
-
-	c := cors.New(cors.Options{
-		AllowedOrigins: allowedOrigins,
-		AllowedMethods: []string{"POST", "GET"},
-		MaxAge:         600,
-		AllowedHeaders: []string{"*"},
-	})
-	return c.Handler(srv)
 }

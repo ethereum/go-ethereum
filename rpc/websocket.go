@@ -45,13 +45,6 @@ func (srv *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
 	}
 }
 
-// NewWSServer creates a new websocket RPC server around an API provider.
-//
-// Deprecated: use Server.WebsocketHandler
-func NewWSServer(allowedOrigins []string, srv *Server) *http.Server {
-	return &http.Server{Handler: srv.WebsocketHandler(allowedOrigins)}
-}
-
 // wsHandshakeValidator returns a handler that verifies the origin during the
 // websocket upgrade process. When a '*' is specified as an allowed origins all
 // connections are accepted.

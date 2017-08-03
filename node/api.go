@@ -78,10 +78,6 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
-	if api.node.httpHandler != nil {
-		return false, fmt.Errorf("HTTP RPC already running on %s", api.node.httpEndpoint)
-	}
-
 	if host == nil {
 		h := DefaultHTTPHost
 		if api.node.config.HTTPHost != "" {
@@ -101,7 +97,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		}
 	}
 
-	modules := api.node.httpWhitelist
+	modules := api.node.config.HTTPModules
 	if apis != nil {
 		modules = nil
 		for _, m := range strings.Split(*apis, ",") {
@@ -120,10 +116,7 @@ func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
-	if api.node.httpHandler == nil {
-		return false, fmt.Errorf("HTTP RPC not running")
-	}
-	api.node.stopHTTP()
+	api.node.stopAllHTTP()
 	return true, nil
 }
 
@@ -131,10 +124,6 @@ func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *string, apis *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
-
-	if api.node.wsHandler != nil {
-		return false, fmt.Errorf("WebSocket RPC already running on %s", api.node.wsEndpoint)
-	}
 
 	if host == nil {
 		h := DefaultWSHost
@@ -174,10 +163,8 @@ func (api *PrivateAdminAPI) StopWS() (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
-	if api.node.wsHandler == nil {
-		return false, fmt.Errorf("WebSocket RPC not running")
-	}
-	api.node.stopWS()
+	// TODO: stop ws only
+	api.node.stopAllHTTP()
 	return true, nil
 }
 
