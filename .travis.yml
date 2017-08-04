@@ -38,6 +38,31 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go test -coverage -misspell
 
+    # These are the release candidate Go versions.
+    - os: linux
+      dist: trusty
+      sudo: required
+      go: 1.9rc1
+      script:
+        - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install fuse
+        - sudo modprobe fuse
+        - sudo chmod 666 /dev/fuse
+        - sudo chown root:$USER /etc/fuse.conf
+        - export GOROOT=$(go env GOROOT) # https://github.com/golang/go/issues/21313
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage -misspell
+
+    - os: osx
+      go: 1.9rc1
+      sudo: required
+      script:
+        - brew update
+        - brew install caskroom/cask/brew-cask
+        - brew cask install osxfuse
+        - export GOROOT=$(go env GOROOT) # https://github.com/golang/go/issues/21313
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage -misspell
+
     # This builder does the Ubuntu PPA and Linux Azure uploads
     - os: linux
       dist: trusty
