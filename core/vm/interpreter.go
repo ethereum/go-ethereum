@@ -112,17 +112,21 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		op    OpCode        // current opcode
 		mem   = NewMemory() // bound memory
 		stack = newstack()  // local stack
+		stackCopy = newstack()
+		logged = bool(false)
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
 		// to be uint256. Practically much less so feasible.
 		pc   = uint64(0) // program counter
+		pcCopy = uint64(0)
+		gasCopy = uint64(0)
 		cost uint64
 	)
 	contract.Input = input
 
 	defer func() {
-		if err != nil && in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(in.evm, pc, op, contract.Gas, cost, mem, stack, contract, in.evm.depth, err)
+		if err != nil && !logged && in.cfg.Debug {
+			in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, mem, stackCopy, contract, in.evm.depth, err)
 		}
 	}()
 
@@ -133,11 +137,21 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 	for atomic.LoadInt32(&in.evm.abort) == 0 {
 		// Get the memory location of pc
 		op = contract.GetOp(pc)
+		logged = false
 
 		// get the operation from the jump table matching the opcode
 		operation := in.cfg.JumpTable[op]
 		if err := in.enforceRestrictions(op, operation, stack); err != nil {
 			return nil, err
+		}
+
+		if in.cfg.Debug {
+			pcCopy = uint64(pc)
+			gasCopy = uint64(contract.Gas)
+			stackCopy = newstack()
+			for _, val := range stack.data {
+				stackCopy.push(val)
+			}
 		}
 
 		// if the op is invalid abort the process and return an error
@@ -179,7 +193,9 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		}
 
 		if in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(in.evm, pc, op, contract.Gas, cost, mem, stack, contract, in.evm.depth, err)
+			// trace needs to be called before operation.execute for CALLs etc
+			in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, mem, stackCopy, contract, in.evm.depth, err)
+			logged = true
 		}
 
 		// execute the operation

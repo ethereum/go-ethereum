@@ -24,6 +24,7 @@ import (
 	"os"
 	"runtime/pprof"
 	"time"
+	"math/big"
 
 	goruntime "runtime"
 
@@ -83,6 +84,10 @@ func runCmd(ctx *cli.Context) error {
 		debugLogger *vm.StructLogger
 		statedb     *state.StateDB
 		chainConfig *params.ChainConfig
+		genCoinbase common.Address
+		genTimestamp uint64
+		genGasLimit uint64
+		genDifficulty *big.Int
 		sender      = common.StringToAddress("sender")
 		receiver    = common.StringToAddress("receiver")
 	)
@@ -98,6 +103,14 @@ func runCmd(ctx *cli.Context) error {
 		gen := readGenesis(ctx.GlobalString(GenesisFlag.Name))
 		_, statedb = gen.ToBlock()
 		chainConfig = gen.Config
+		genCoinbase = gen.Coinbase
+		genDifficulty = gen.Difficulty
+		genGasLimit = gen.GasLimit
+		genTimestamp = gen.Timestamp
+		fmt.Println("runner.go gen.Difficulty:", gen.Difficulty)
+		fmt.Println("runner.go gen.Coinbase:", gen.Coinbase)
+		fmt.Println("runner.go gen.Timestamp:", gen.Timestamp)
+		fmt.Println("runner.go chainConfig:", chainConfig)
 	} else {
 		db, _ := ethdb.NewMemDatabase()
 		statedb, _ = state.New(common.Hash{}, state.NewDatabase(db))
@@ -105,7 +118,8 @@ func runCmd(ctx *cli.Context) error {
 	if ctx.GlobalString(SenderFlag.Name) != "" {
 		sender = common.HexToAddress(ctx.GlobalString(SenderFlag.Name))
 	}
-	statedb.CreateAccount(sender)
+	// createAccount overwrites the nonce in the prestate. should only be used if no prestate provided
+	// statedb.CreateAccount(sender)
 
 	if ctx.GlobalString(ReceiverFlag.Name) != "" {
 		receiver = common.HexToAddress(ctx.GlobalString(ReceiverFlag.Name))
@@ -154,9 +168,13 @@ func runCmd(ctx *cli.Context) error {
 	initialGas := ctx.GlobalUint64(GasFlag.Name)
 	runtimeConfig := runtime.Config{
 		Origin:   sender,
+		Time:			new(big.Int).SetUint64(genTimestamp),
+		Coinbase: genCoinbase,
+		Difficulty: genDifficulty,
 		State:    statedb,
-		GasLimit: initialGas,
+		GasLimit: genGasLimit,
 		GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
+		TxGasLimit: initialGas,
 		Value:    utils.GlobalBig(ctx, ValueFlag.Name),
 		EVMConfig: vm.Config{
 			Tracer:             tracer,
@@ -183,15 +201,30 @@ func runCmd(ctx *cli.Context) error {
 	}
 	tstart := time.Now()
 	var leftOverGas uint64
+	
+	// sender prepays the gas fee
+	mgval := new(big.Int).Mul(new(big.Int).SetUint64(initialGas), runtimeConfig.GasPrice)
+	statedb.SubBalance(sender, mgval)
+
 	if ctx.GlobalBool(CreateFlag.Name) {
 		input := append(code, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name))...)
+		intrinsicGas := core.IntrinsicGas(input, ctx.GlobalBool(CreateFlag.Name), true)
+		initialGas -= intrinsicGas.Uint64()
+		runtimeConfig.TxGasLimit = initialGas
 		ret, _, leftOverGas, err = runtime.Create(input, &runtimeConfig)
 	} else {
 		if statedb.GetCodeSize(receiver) == 0 {
 			statedb.SetCode(receiver, code)
 		}
+		intrinsicGas := core.IntrinsicGas(common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), false, true)
+		initialGas -= intrinsicGas.Uint64()
+		runtimeConfig.TxGasLimit = initialGas
 		ret, leftOverGas, err = runtime.Call(receiver, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtimeConfig)
 	}
+
+	remainingEther := new(big.Int).Mul(new(big.Int).SetUint64(leftOverGas), runtimeConfig.GasPrice)
+	statedb.AddBalance(sender, remainingEther)
+	
 	execTime := time.Since(tstart)
 
 	if ctx.GlobalBool(DumpFlag.Name) {

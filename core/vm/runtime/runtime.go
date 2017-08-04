@@ -40,6 +40,7 @@ type Config struct {
 	Time        *big.Int
 	GasLimit    uint64
 	GasPrice    *big.Int
+	TxGasLimit  uint64
 	Value       *big.Int
 	DisableJit  bool // "disable" so it's enabled by default
 	Debug       bool
@@ -79,7 +80,7 @@ func setDefaults(cfg *Config) {
 		cfg.Value = new(big.Int)
 	}
 	if cfg.BlockNumber == nil {
-		cfg.BlockNumber = new(big.Int)
+		cfg.BlockNumber = big.NewInt(1)
 	}
 	if cfg.GetHashFn == nil {
 		cfg.GetHashFn = func(n uint64) common.Hash {
@@ -144,7 +145,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	code, address, leftOverGas, err := vmenv.Create(
 		sender,
 		input,
-		cfg.GasLimit,
+		cfg.TxGasLimit,
 		cfg.Value,
 	)
 	return code, address, leftOverGas, err
@@ -166,7 +167,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		sender,
 		address,
 		input,
-		cfg.GasLimit,
+		cfg.TxGasLimit,
 		cfg.Value,
 	)
 
