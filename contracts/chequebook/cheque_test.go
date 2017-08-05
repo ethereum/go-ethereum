@@ -193,7 +193,7 @@ func TestVerifyErrors(t *testing.T) {
 	received, err = chbox.Receive(ch1)
 	t.Logf("correct error: %v", err)
 	if err == nil {
-		t.Fatalf("expected receiver error, got none")
+		t.Fatalf("expected receiver error, got none and value %v", received)
 	}
 
 	ch2, err := chbook1.Issue(addr1, amount)
@@ -203,7 +203,7 @@ func TestVerifyErrors(t *testing.T) {
 	received, err = chbox.Receive(ch2)
 	t.Logf("correct error: %v", err)
 	if err == nil {
-		t.Fatalf("expected sender error, got none")
+		t.Fatalf("expected sender error, got none and value %v", received)
 	}
 
 	_, err = chbook1.Issue(addr1, new(big.Int).SetInt64(-1))
@@ -215,7 +215,7 @@ func TestVerifyErrors(t *testing.T) {
 	received, err = chbox.Receive(ch0)
 	t.Logf("correct error: %v", err)
 	if err == nil {
-		t.Fatalf("expected incorrect amount error, got none")
+		t.Fatalf("expected incorrect amount error, got none and value %v", received)
 	}
 
 }
