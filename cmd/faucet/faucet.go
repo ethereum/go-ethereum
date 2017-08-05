@@ -471,7 +471,7 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 
 		// Send an error if too frequent funding, othewise a success
 		if !fund {
-			websocket.JSON.Send(conn, map[string]string{"error": fmt.Sprintf("%s left until next allowance", common.PrettyDuration(timeout.Sub(time.Now())))})
+			websocket.JSON.Send(conn, map[string]string{"error": fmt.Sprintf("%s left until next allowance", common.PrettyDuration(time.Until(timeout)))})
 			continue
 		}
 		websocket.JSON.Send(conn, map[string]string{"success": fmt.Sprintf("Funding request accepted for %s into %s", gist.Owner.Login, address.Hex())})

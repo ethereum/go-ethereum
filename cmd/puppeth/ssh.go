@@ -122,7 +122,7 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 			}
 		}
 		// If a public key exists for this SSH server, check that it matches
-		if bytes.Compare(pubkey, key.Marshal()) == 0 {
+		if bytes.Equal(pubkey, key.Marshal()) {
 			return nil
 		}
 		// We have a mismatch, forbid connecting
