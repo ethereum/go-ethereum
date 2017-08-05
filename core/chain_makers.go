@@ -162,7 +162,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, db ethdb.Dat
 		config = params.TestChainConfig
 	}
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
-	genblock := func(i int, h *types.Header, statedb *state.StateDB) (*types.Block, types.Receipts) {
+	genblock := func(i int, h *types.Header, stateCache state.Database, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb, config: config}
 		// Mutate the state and block according to any hard-fork specs
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
@@ -181,7 +181,11 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, db ethdb.Dat
 			gen(i, b)
 		}
 		ethash.AccumulateRewards(statedb, h, b.uncles)
-		root, err := statedb.CommitTo(db, config.IsEIP158(h.Number))
+		root, err := statedb.CommitTo(db, config.IsEIP158(h.Number), h.Number.Uint64())
+		if err != nil {
+			panic(fmt.Sprintf("state write error: %v", err))
+		}
+		err = stateCache.WriteState(db, root)
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
 		}
@@ -189,12 +193,14 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, db ethdb.Dat
 		return types.NewBlock(h, b.txs, b.uncles, b.receipts), b.receipts
 	}
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(db))
+		stateCache := state.NewDatabase(db, 1)
+		statedb, err := state.New(parent.Root(), stateCache)
 		if err != nil {
 			panic(err)
 		}
+		stateCache.SetBlockNumber(uint64(i))
 		header := makeHeader(config, parent, statedb)
-		block, receipt := genblock(i, header, statedb)
+		block, receipt := genblock(i, header, stateCache, statedb)
 		blocks[i] = block
 		receipts[i] = receipt
 		parent = block

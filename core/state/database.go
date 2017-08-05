@@ -17,6 +17,8 @@
 package state
 
 import (
+	"container/heap"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -29,11 +31,9 @@ import (
 // Trie cache generation limit after which to evic trie nodes from memory.
 var MaxTrieCacheGen = uint16(120)
 
-const (
-	// Number of past tries to keep. This value is chosen such that
-	// reasonable chain reorg depths will hit an existing trie.
-	maxPastTries = 12
+var StateNotInCache = errors.New("State trie not in cache")
 
+const (
 	// Number of codehash->size associations to keep.
 	codeSizeCacheSize = 100000
 )
@@ -50,6 +50,8 @@ type Database interface {
 	ContractCodeSize(addrHash, codeHash common.Hash) (int, error)
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
+	SetBlockNumber(blockNumber uint64)
+	WriteState(trie.DatabaseWriter, common.Hash) error
 }
 
 // Trie is a Ethereum Merkle Trie.
@@ -65,26 +67,53 @@ type Trie interface {
 
 // NewDatabase creates a backing store for state. The returned database is safe for
 // concurrent use and retains cached trie nodes in memory.
-func NewDatabase(db ethdb.Database) Database {
+func NewDatabase(db ethdb.Database, cacheDuration uint64) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
-	return &cachingDB{db: db, codeSizeCache: csc}
+	return &cachingDB{db: db, pastTries: make(map[common.Hash]pastTrie), pastHeap: &pastTrieHeap{}, codeSizeCache: csc, cacheDuration: cacheDuration}
+}
+
+type pastTrie struct {
+	trie        *trie.SecureTrie
+	blockNumber uint64
+}
+
+type pastTrieHeap []pastTrie
+
+func (pt pastTrieHeap) Len() int { return len(pt) }
+
+func (pt pastTrieHeap) Less(i, j int) bool { return pt[i].blockNumber < pt[j].blockNumber }
+
+func (pt pastTrieHeap) Swap(i, j int) { pt[i], pt[j] = pt[j], pt[i] }
+
+func (pt *pastTrieHeap) Push(x interface{}) {
+	*pt = append(*pt, x.(pastTrie))
+}
+
+func (pt *pastTrieHeap) Pop() interface{} {
+	old := *pt
+	n := len(old)
+	x := old[n-1]
+	*pt = old[0 : n-1]
+	return x
 }
 
 type cachingDB struct {
 	db            ethdb.Database
 	mu            sync.Mutex
-	pastTries     []*trie.SecureTrie
+	pastTries     map[common.Hash]pastTrie
+	pastHeap      *pastTrieHeap
 	codeSizeCache *lru.Cache
+	blockNumber   uint64
+	cacheDuration uint64
 }
 
+// OpenTrie returns a trie with the specified root hash
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	for i := len(db.pastTries) - 1; i >= 0; i-- {
-		if db.pastTries[i].Hash() == root {
-			return cachedTrie{db.pastTries[i].Copy(), db}, nil
-		}
+	if pt, ok := db.pastTries[root]; ok {
+		return cachedTrie{pt.trie.Copy(), db}, nil
 	}
 	tr, err := trie.NewSecure(root, db.db, MaxTrieCacheGen)
 	if err != nil {
@@ -93,16 +122,34 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	return cachedTrie{tr, db}, nil
 }
 
-func (db *cachingDB) pushTrie(t *trie.SecureTrie) {
+func (db *cachingDB) SetBlockNumber(blockNumber uint64) {
+	db.blockNumber = blockNumber
+}
+
+// pushTrie adds the trie to the list of past tries with the specified block number
+func (db *cachingDB) pushTrie(t *trie.SecureTrie) common.Hash {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	if len(db.pastTries) >= maxPastTries {
-		copy(db.pastTries, db.pastTries[1:])
-		db.pastTries[len(db.pastTries)-1] = t
-	} else {
-		db.pastTries = append(db.pastTries, t)
+	for uint64(db.pastHeap.Len()) > db.cacheDuration {
+		it := heap.Pop(db.pastHeap).(pastTrie)
+		delete(db.pastTries, it.trie.Hash())
 	}
+
+	hash := t.Hash()
+	db.pastTries[hash] = pastTrie{t, db.blockNumber}
+	heap.Push(db.pastHeap, db.pastTries[hash])
+	return hash
+}
+
+// WriteState commits state to disk as of a specific block
+func (db *cachingDB) WriteState(dbw trie.DatabaseWriter, hash common.Hash) error {
+	trie, ok := db.pastTries[hash]
+	if !ok {
+		return StateNotInCache
+	}
+	_, err := trie.trie.CommitTo(dbw)
+	return err
 }
 
 func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
@@ -111,8 +158,6 @@ func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
 
 func (db *cachingDB) CopyTrie(t Trie) Trie {
 	switch t := t.(type) {
-	case cachedTrie:
-		return cachedTrie{t.SecureTrie.Copy(), db}
 	case *trie.SecureTrie:
 		return t.Copy()
 	default:
@@ -146,9 +191,5 @@ type cachedTrie struct {
 }
 
 func (m cachedTrie) CommitTo(dbw trie.DatabaseWriter) (common.Hash, error) {
-	root, err := m.SecureTrie.CommitTo(dbw)
-	if err == nil {
-		m.db.pushTrie(m.SecureTrie)
-	}
-	return root, err
+	return m.db.pushTrie(m.SecureTrie), nil
 }
