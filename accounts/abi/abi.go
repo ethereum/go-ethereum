@@ -22,8 +22,6 @@ import (
 	"io"
 	"reflect"
 	"strings"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // The ABI holds information about a contract's context and available
@@ -80,9 +78,6 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 // assignment.
 var (
 	r_interSlice = reflect.TypeOf([]interface{}{})
-	r_hash       = reflect.TypeOf(common.Hash{})
-	r_bytes      = reflect.TypeOf([]byte{})
-	r_byte       = reflect.TypeOf(byte(0))
 )
 
 // Unpack output in v according to the abi specification
