@@ -74,7 +74,6 @@ type subscription struct {
 // subscription which match the subscription criteria.
 type EventSystem struct {
 	mux       *event.TypeMux
-	sub       *event.TypeMuxSubscription
 	backend   Backend
 	lightMode bool
 	lastHead  *types.Header

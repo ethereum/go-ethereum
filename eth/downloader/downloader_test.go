@@ -403,8 +403,7 @@ func (dl *downloadTester) newSlowPeer(id string, version int, hashes []common.Ha
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
-	var err error
-	err = dl.downloader.RegisterPeer(id, version, &downloadTesterPeer{dl, id, delay})
+	var err = dl.downloader.RegisterPeer(id, version, &downloadTesterPeer{dl, id, delay})
 	if err == nil {
 		// Assign the owned hashes, headers and blocks to the peer (deep copy)
 		dl.peerHashes[id] = make([]common.Hash, len(hashes))
@@ -1381,7 +1380,7 @@ func testSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("peer-half", nil, mode); err != nil {
-			t.Fatalf("failed to synchronise blocks: %v", err)
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
 		}
 	}()
 	<-starting
@@ -1398,7 +1397,7 @@ func testSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("peer-full", nil, mode); err != nil {
-			t.Fatalf("failed to synchronise blocks: %v", err)
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
 		}
 	}()
 	<-starting
@@ -1454,7 +1453,7 @@ func testForkedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("fork A", nil, mode); err != nil {
-			t.Fatalf("failed to synchronise blocks: %v", err)
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
 		}
 	}()
 	<-starting
@@ -1474,7 +1473,7 @@ func testForkedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("fork B", nil, mode); err != nil {
-			t.Fatalf("failed to synchronise blocks: %v", err)
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
 		}
 	}()
 	<-starting
@@ -1535,7 +1534,7 @@ func testFailedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("faulty", nil, mode); err == nil {
-			t.Fatalf("succeeded faulty synchronisation")
+			panic("succeeded faulty synchronisation")
 		}
 	}()
 	<-starting
@@ -1552,7 +1551,7 @@ func testFailedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("valid", nil, mode); err != nil {
-			t.Fatalf("failed to synchronise blocks: %v", err)
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
 		}
 	}()
 	<-starting
@@ -1613,7 +1612,7 @@ func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("attack", nil, mode); err == nil {
-			t.Fatalf("succeeded attacker synchronisation")
+			panic("succeeded attacker synchronisation")
 		}
 	}()
 	<-starting
@@ -1630,7 +1629,7 @@ func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("valid", nil, mode); err != nil {
-			t.Fatalf("failed to synchronise blocks: %v", err)
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
 		}
 	}()
 	<-starting
