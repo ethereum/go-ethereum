@@ -20,7 +20,6 @@
 package les
 
 import (
-	"crypto/ecdsa"
 	"crypto/rand"
 	"math/big"
 	"sync"
@@ -140,7 +139,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 			Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
 		}
 		genesis = gspec.MustCommit(db)
-		chain       BlockChain
+		chain   BlockChain
 	)
 	if peers == nil {
 		peers = newPeerSet()
@@ -187,45 +186,6 @@ func newTestProtocolManagerMust(t *testing.T, lightSync bool, blocks int, genera
 		t.Fatalf("Failed to create protocol manager: %v", err)
 	}
 	return pm
-}
-
-// testTxPool is a fake, helper transaction pool for testing purposes
-type testTxPool struct {
-	pool  []*types.Transaction        // Collection of all transactions
-	added chan<- []*types.Transaction // Notification channel for new transactions
-
-	lock sync.RWMutex // Protects the transaction pool
-}
-
-// AddTransactions appends a batch of transactions to the pool, and notifies any
-// listeners if the addition channel is non nil
-func (p *testTxPool) AddBatch(txs []*types.Transaction) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	p.pool = append(p.pool, txs...)
-	if p.added != nil {
-		p.added <- txs
-	}
-}
-
-// GetTransactions returns all the transactions known to the pool
-func (p *testTxPool) GetTransactions() types.Transactions {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	txs := make([]*types.Transaction, len(p.pool))
-	copy(txs, p.pool)
-
-	return txs
-}
-
-// newTestTransaction create a new dummy transaction.
-func newTestTransaction(from *ecdsa.PrivateKey, nonce uint64, datasize int) *types.Transaction {
-	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), make([]byte, datasize))
-	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, from)
-
-	return tx
 }
 
 // testPeer is a simulated peer to allow testing direct network calls.

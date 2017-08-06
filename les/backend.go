@@ -70,8 +70,7 @@ type LightEthereum struct {
 	networkId     uint64
 	netRPCService *ethapi.PublicNetAPI
 
-	quitSync chan struct{}
-	wg       sync.WaitGroup
+	wg sync.WaitGroup
 }
 
 func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
