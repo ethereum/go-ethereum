@@ -63,8 +63,7 @@ func TestKDF(t *testing.T) {
 		t.FailNow()
 	}
 	if len(k) != 64 {
-		fmt.Printf("KDF: generated key is the wrong size (%d instead of 64\n",
-			len(k))
+		fmt.Printf("KDF: generated key is the wrong size (%d instead of 64\n", len(k))
 		t.FailNow()
 	}
 }
@@ -74,14 +73,9 @@ var ErrBadSharedKeys = fmt.Errorf("ecies: shared keys don't match")
 // cmpParams compares a set of ECIES parameters. We assume, as per the
 // docs, that AES is the only supported symmetric encryption algorithm.
 func cmpParams(p1, p2 *ECIESParams) bool {
-	if p1.hashAlgo != p2.hashAlgo {
-		return false
-	} else if p1.KeyLen != p2.KeyLen {
-		return false
-	} else if p1.BlockSize != p2.BlockSize {
-		return false
-	}
-	return true
+	return p1.hashAlgo == p2.hashAlgo &&
+		p1.KeyLen == p2.KeyLen &&
+		p1.BlockSize == p2.BlockSize
 }
 
 // cmpPublic returns true if the two public keys represent the same pojnt.
@@ -487,24 +481,24 @@ func TestMarshalEncryption(t *testing.T) {
 type testCase struct {
 	Curve    elliptic.Curve
 	Name     string
-	Expected bool
+	Expected *ECIESParams
 }
 
 var testCases = []testCase{
 	{
 		Curve:    elliptic.P256(),
 		Name:     "P256",
-		Expected: true,
+		Expected: ECIES_AES128_SHA256,
 	},
 	{
 		Curve:    elliptic.P384(),
 		Name:     "P384",
-		Expected: true,
+		Expected: ECIES_AES256_SHA384,
 	},
 	{
 		Curve:    elliptic.P521(),
 		Name:     "P521",
-		Expected: true,
+		Expected: ECIES_AES256_SHA512,
 	},
 }
 
@@ -519,10 +513,10 @@ func TestParamSelection(t *testing.T) {
 
 func testParamSelection(t *testing.T, c testCase) {
 	params := ParamsFromCurve(c.Curve)
-	if params == nil && c.Expected {
+	if params == nil && c.Expected != nil {
 		fmt.Printf("%s (%s)\n", ErrInvalidParams.Error(), c.Name)
 		t.FailNow()
-	} else if params != nil && !c.Expected {
+	} else if params != nil && !cmpParams(params, c.Expected) {
 		fmt.Printf("ecies: parameters should be invalid (%s)\n",
 			c.Name)
 		t.FailNow()
