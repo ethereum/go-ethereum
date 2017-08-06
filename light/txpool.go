@@ -124,12 +124,6 @@ func (pool *TxPool) GetNonce(ctx context.Context, addr common.Address) (uint64, 
 	return nonce, nil
 }
 
-type txBlockData struct {
-	BlockHash  common.Hash
-	BlockIndex uint64
-	Index      uint64
-}
-
 // txStateChanges stores the recent changes between pending/mined states of
 // transactions. True means mined, false means rolled back, no entry means no change
 type txStateChanges map[common.Hash]bool

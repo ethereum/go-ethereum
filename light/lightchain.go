@@ -52,7 +52,6 @@ type LightChain struct {
 
 	mu      sync.RWMutex
 	chainmu sync.RWMutex
-	procmu  sync.RWMutex
 
 	bodyCache    *lru.Cache // Cache for the most recent block bodies
 	bodyRLPCache *lru.Cache // Cache for the most recent block bodies in RLP encoded format
