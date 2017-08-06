@@ -25,11 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-func copyFromBuf(dst []byte, src []byte, beg int) int {
-	copy(dst, src[beg:])
-	return beg + len(dst)
-}
-
 func generateMessageParams() (*MessageParams, error) {
 	// set all the parameters except p.Dst and p.Padding
 
@@ -158,7 +153,7 @@ func TestMessageWrap(t *testing.T) {
 	params.TTL = 1000000
 	params.WorkTime = 1
 	params.PoW = 10000000.0
-	env, err = msg2.Wrap(params)
+	_, err = msg2.Wrap(params)
 	if err == nil {
 		t.Fatalf("unexpectedly reached the PoW target with seed %d.", seed)
 	}
