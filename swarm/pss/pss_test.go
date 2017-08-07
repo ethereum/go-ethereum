@@ -288,8 +288,7 @@ func TestKeysExchange(t *testing.T) {
 	// at this point we've verified that symkeys are saved and match on each peer
 	// now try sending symmetrically encrypted message
 	apimsg := APIMsg{
-		Msg: []byte("xyzzy"),
-		//Addr: roaddr,
+		Msg:  []byte("xyzzy"),
 		Addr: roaddr,
 	}
 	err = lclient.Call(nil, "pss_send", hextopic, apimsg)
@@ -404,7 +403,6 @@ func newServices() adapters.Services {
 		return kademlias[id]
 	}
 	return adapters.Services{
-		//"pss": func(id discover.NodeID, snapshot []byte) node.Service {
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			cachedir, err := ioutil.TempDir("", "pss-cache")
 			if err != nil {
@@ -432,7 +430,6 @@ func newServices() adapters.Services {
 
 			return ps, nil
 		},
-		//"bzz": func(id discover.NodeID, snapshot []byte) node.Service {
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			addr := network.NewAddrFromNodeID(ctx.Config.ID)
 			hp := network.NewHiveParams()
