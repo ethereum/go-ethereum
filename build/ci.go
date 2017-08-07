@@ -19,23 +19,21 @@
 /*
 The ci command is called from Continuous Integration scripts.
 
-Usage: go run ci.go <command> <command flags/arguments>
+Usage: go run build/ci.go <command> <command flags/arguments>
 
 Available commands are:
 
-   install    [ -arch architecture ] [ packages... ]                                           -- builds packages and executables
-   test       [ -coverage ] [ -misspell ] [ packages... ]                                      -- runs the tests
-   archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
-   importkeys                                                                                  -- imports signing keys from env
-   debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
-   nsis                                                                                        -- creates a Windows NSIS installer
-   aar        [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an Android archive
-   xcode      [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an iOS XCode framework
-   xgo        [ -alltools ] [ options ]                                                        -- cross builds according to options
-   purge      [ -store blobstore ] [ -days threshold ]                                         -- purges old archives from the blobstore
+   install    [ -arch architecture ] [ packages... ]        -- builds packages and executables
+   test       [ -coverage ] [ -misspell ] [ packages... ]   -- runs the tests
+   archive    [ -arch architecture ] [ -type zip|tar ]      -- archives build artefacts
+   importkeys                                               -- imports PGP signing keys from env
+   debsrc     [ -signer key-id ] [ -upload dest ]           -- creates a debian source package
+   nsis                                                     -- creates a Windows NSIS installer
+   aar        [ -local ] [ -signer key-id ] [-deploy repo]  -- creates an Android archive
+   xcode      [ -local ] [ -signer key-id ] [-deploy repo]  -- creates an iOS XCode framework
+   xgo        [ -alltools ] [ options ]                     -- cross builds according to options
 
 For all commands, -n prevents execution of external programs (dry run mode).
-
 */
 package main
 
@@ -158,8 +156,6 @@ func main() {
 		doXCodeFramework(os.Args[2:])
 	case "xgo":
 		doXgo(os.Args[2:])
-	case "purge":
-		doPurge(os.Args[2:])
 	default:
 		log.Fatal("unknown command ", os.Args[1])
 	}
@@ -345,11 +341,9 @@ func spellcheck(packages []string) {
 
 func doArchive(cmdline []string) {
 	var (
-		arch   = flag.String("arch", runtime.GOARCH, "Architecture cross packaging")
-		atype  = flag.String("type", "zip", "Type of archive to write (zip|tar)")
-		signer = flag.String("signer", "", `Environment variable holding the signing key (e.g. LINUX_SIGNING_KEY)`)
-		upload = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
-		ext    string
+		arch  = flag.String("arch", runtime.GOARCH, "Architecture cross packaging")
+		atype = flag.String("type", "zip", "Type of archive to write (zip|tar)")
+		ext   string
 	)
 	flag.CommandLine.Parse(cmdline)
 	switch *atype {
@@ -367,17 +361,12 @@ func doArchive(cmdline []string) {
 		geth     = "geth-" + base + ext
 		alltools = "geth-alltools-" + base + ext
 	)
-	maybeSkipArchive(env)
+	build.MaybeSkipArchive(env)
 	if err := build.WriteArchive(geth, gethArchiveFiles); err != nil {
 		log.Fatal(err)
 	}
 	if err := build.WriteArchive(alltools, allToolsArchiveFiles); err != nil {
 		log.Fatal(err)
-	}
-	for _, archive := range []string{geth, alltools} {
-		if err := archiveUpload(archive, *upload, *signer); err != nil {
-			log.Fatal(err)
-		}
 	}
 }
 
@@ -406,52 +395,6 @@ func archiveVersion(env build.Environment) string {
 	return version
 }
 
-func archiveUpload(archive string, blobstore string, signer string) error {
-	// If signing was requested, generate the signature files
-	if signer != "" {
-		pgpkey, err := base64.StdEncoding.DecodeString(os.Getenv(signer))
-		if err != nil {
-			return fmt.Errorf("invalid base64 %s", signer)
-		}
-		if err := build.PGPSignFile(archive, archive+".asc", string(pgpkey)); err != nil {
-			return err
-		}
-	}
-	// If uploading to Azure was requested, push the archive possibly with its signature
-	if blobstore != "" {
-		auth := build.AzureBlobstoreConfig{
-			Account:   strings.Split(blobstore, "/")[0],
-			Token:     os.Getenv("AZURE_BLOBSTORE_TOKEN"),
-			Container: strings.SplitN(blobstore, "/", 2)[1],
-		}
-		if err := build.AzureBlobstoreUpload(archive, filepath.Base(archive), auth); err != nil {
-			return err
-		}
-		if signer != "" {
-			if err := build.AzureBlobstoreUpload(archive+".asc", filepath.Base(archive+".asc"), auth); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// skips archiving for some build configurations.
-func maybeSkipArchive(env build.Environment) {
-	if env.IsPullRequest {
-		log.Printf("skipping because this is a PR build")
-		os.Exit(0)
-	}
-	if env.IsCronJob {
-		log.Printf("skipping because this is a cron job")
-		os.Exit(0)
-	}
-	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
-		log.Printf("skipping because branch %q, tag %q is not on the whitelist", env.Branch, env.Tag)
-		os.Exit(0)
-	}
-}
-
 // Debian Packaging
 
 func doDebianSource(cmdline []string) {
@@ -464,7 +407,7 @@ func doDebianSource(cmdline []string) {
 	flag.CommandLine.Parse(cmdline)
 	*workdir = makeWorkdir(*workdir)
 	env := build.Env()
-	maybeSkipArchive(env)
+	build.MaybeSkipArchive(env)
 
 	// Import the signing key.
 	if b64key := os.Getenv("PPA_SIGNING_KEY"); b64key != "" {
@@ -637,14 +580,12 @@ func doWindowsInstaller(cmdline []string) {
 	// Parse the flags and make skip installer generation on PRs
 	var (
 		arch    = flag.String("arch", runtime.GOARCH, "Architecture for cross build packaging")
-		signer  = flag.String("signer", "", `Environment variable holding the signing key (e.g. WINDOWS_SIGNING_KEY)`)
-		upload  = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
 		workdir = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
 	)
 	flag.CommandLine.Parse(cmdline)
 	*workdir = makeWorkdir(*workdir)
 	env := build.Env()
-	maybeSkipArchive(env)
+	build.MaybeSkipArchive(env)
 
 	// Aggregate binaries that are included in the installer
 	var (
@@ -695,11 +636,6 @@ func doWindowsInstaller(cmdline []string) {
 		"/DARCH="+*arch,
 		filepath.Join(*workdir, "geth.nsi"),
 	)
-
-	// Sign and publish installer.
-	if err := archiveUpload(installer, *upload, *signer); err != nil {
-		log.Fatal(err)
-	}
 }
 
 // Android archives
@@ -709,7 +645,6 @@ func doAndroidArchive(cmdline []string) {
 		local  = flag.Bool("local", false, `Flag whether we're only doing a local build (skip Maven artifacts)`)
 		signer = flag.String("signer", "", `Environment variable holding the signing key (e.g. ANDROID_SIGNING_KEY)`)
 		deploy = flag.String("deploy", "", `Destination to deploy the archive (usually "https://oss.sonatype.org")`)
-		upload = flag.String("upload", "", `Destination to upload the archive (usually "gethstore/builds")`)
 	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
@@ -735,15 +670,12 @@ func doAndroidArchive(cmdline []string) {
 	build.Render("build/mvn.pom", meta.Package+".pom", 0755, meta)
 
 	// Skip Maven deploy and Azure upload for PR builds
-	maybeSkipArchive(env)
+	build.MaybeSkipArchive(env)
 
 	// Sign and upload the archive to Azure
 	archive := "geth-" + archiveBasename("android", env) + ".aar"
 	os.Rename("geth.aar", archive)
 
-	if err := archiveUpload(archive, *upload, *signer); err != nil {
-		log.Fatal(err)
-	}
 	// Sign and upload all the artifacts to Maven Central
 	os.Rename(archive, meta.Package+".aar")
 	if *signer != "" && *deploy != "" {
@@ -834,9 +766,7 @@ func newMavenMetadata(env build.Environment) mavenMetadata {
 func doXCodeFramework(cmdline []string) {
 	var (
 		local  = flag.Bool("local", false, `Flag whether we're only doing a local build (skip Maven artifacts)`)
-		signer = flag.String("signer", "", `Environment variable holding the signing key (e.g. IOS_SIGNING_KEY)`)
 		deploy = flag.String("deploy", "", `Destination to deploy the archive (usually "trunk")`)
-		upload = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
 	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
@@ -860,14 +790,8 @@ func doXCodeFramework(cmdline []string) {
 	build.MustRun(bind)
 	build.MustRunCommand("tar", "-zcvf", archive+".tar.gz", archive)
 
-	// Skip CocoaPods deploy and Azure upload for PR builds
-	maybeSkipArchive(env)
-
-	// Sign and upload the framework to Azure
-	if err := archiveUpload(archive+".tar.gz", *upload, *signer); err != nil {
-		log.Fatal(err)
-	}
-	// Prepare and upload a PodSpec to CocoaPods
+	// Deploy to CocoaPods.
+	build.MaybeSkipArchive(env)
 	if *deploy != "" {
 		meta := newPodMetadata(env, archive)
 		build.Render("build/pod.podspec", "Geth.podspec", 0755, meta)
@@ -970,63 +894,4 @@ func xgoTool(args []string) *exec.Cmd {
 		cmd.Env = append(cmd.Env, e)
 	}
 	return cmd
-}
-
-// Binary distribution cleanups
-
-func doPurge(cmdline []string) {
-	var (
-		store = flag.String("store", "", `Destination from where to purge archives (usually "gethstore/builds")`)
-		limit = flag.Int("days", 30, `Age threshold above which to delete unstalbe archives`)
-	)
-	flag.CommandLine.Parse(cmdline)
-
-	if env := build.Env(); !env.IsCronJob {
-		log.Printf("skipping because not a cron job")
-		os.Exit(0)
-	}
-	// Create the azure authentication and list the current archives
-	auth := build.AzureBlobstoreConfig{
-		Account:   strings.Split(*store, "/")[0],
-		Token:     os.Getenv("AZURE_BLOBSTORE_TOKEN"),
-		Container: strings.SplitN(*store, "/", 2)[1],
-	}
-	blobs, err := build.AzureBlobstoreList(auth)
-	if err != nil {
-		log.Fatal(err)
-	}
-	// Iterate over the blobs, collect and sort all unstable builds
-	for i := 0; i < len(blobs); i++ {
-		if !strings.Contains(blobs[i].Name, "unstable") {
-			blobs = append(blobs[:i], blobs[i+1:]...)
-			i--
-		}
-	}
-	for i := 0; i < len(blobs); i++ {
-		for j := i + 1; j < len(blobs); j++ {
-			iTime, err := time.Parse(time.RFC1123, blobs[i].Properties.LastModified)
-			if err != nil {
-				log.Fatal(err)
-			}
-			jTime, err := time.Parse(time.RFC1123, blobs[j].Properties.LastModified)
-			if err != nil {
-				log.Fatal(err)
-			}
-			if iTime.After(jTime) {
-				blobs[i], blobs[j] = blobs[j], blobs[i]
-			}
-		}
-	}
-	// Filter out all archives more recent that the given threshold
-	for i, blob := range blobs {
-		timestamp, _ := time.Parse(time.RFC1123, blob.Properties.LastModified)
-		if time.Since(timestamp) < time.Duration(*limit)*24*time.Hour {
-			blobs = blobs[:i]
-			break
-		}
-	}
-	// Delete all marked as such and return
-	if err := build.AzureBlobstoreDelete(auth, blobs); err != nil {
-		log.Fatal(err)
-	}
 }
