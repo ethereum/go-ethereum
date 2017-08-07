@@ -15,6 +15,11 @@ if [ ! -L "$ethdir/go-ethereum" ]; then
     mkdir -p "$ethdir"
     cd "$ethdir"
     ln -s ../../../../../. go-ethereum
+    cd "$workspace/src/github.com"
+    ln -s ./ethereum/go-ethereum/vendor/github.com/Azure Azure
+    ln -s ./ethereum/go-ethereum/vendor/github.com/dgrijalva dgrijalva
+    cd "$workspace/src"
+    ln -s ./github.com/ethereum/go-ethereum/vendor/golang.org golang.org
     cd "$root"
 fi
 
