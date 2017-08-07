@@ -3,7 +3,6 @@ package pss
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -30,15 +29,9 @@ const (
 	DefaultTTL                  = 6000
 	defaultDigestCacheTTL       = time.Second
 	defaultWhisperWorkTime      = 3
-	//defaultWhisperPoW      = 0.00000000001
 	defaultWhisperPoW           = 0.001
 	defaultSymKeyLength         = 32
 	defaultPartialAddressLength = 8
-)
-
-var (
-	errorForwardToSelf = errors.New("forward to self")
-	errorWhisper       = errors.New("whisper backend")
 )
 
 // abstraction to enable access to p2p.protocols.Peer.Send
@@ -48,7 +41,7 @@ type senderPeer interface {
 	Send(interface{}) error
 }
 
-//
+// used to encapsulate symkey in asymmetric key exchange
 type pssKeyMsg struct {
 	From []byte
 	Key  []byte
@@ -80,7 +73,6 @@ type pssCacheEntry struct {
 type pssDigest [digestLength]byte
 
 // Toplevel pss object, taking care of message sending and receiving, message handler dispatchers and message forwarding.
-//
 // Implements node.Service
 type Pss struct {
 	network.Overlay                                                // we can get the overlayaddress from this
@@ -93,8 +85,7 @@ type Pss struct {
 	lock            sync.Mutex
 	dpa             *storage.DPA
 	privatekey      *ecdsa.PrivateKey
-	//recvsymkeys     []string // colletion of all stored INCOMING symkeys
-	w *whisper.Whisper
+	w               *whisper.Whisper
 }
 
 func (self *Pss) String() string {
@@ -235,11 +226,13 @@ func (self *Pss) GenerateIncomingSymmetricKey(addr pot.Address, topic whisper.To
 	self.preparePeerTopic(addr, topic)
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	//self.recvsymkeys = append(self.recvsymkeys, keyid)
+	if _, ok := self.peerPool[addr]; !ok {
+		return "", fmt.Errorf("no address entry %x in peerpool", addr)
+	}
 	psp := self.peerPool[addr][topic]
 	psp.recvsymkey = keyid
 	psp.symkeyexpires = time.Now().Add(time.Hour * 24 * 365)
-	if len(self.reverseKeyPool[keyid]) == 0 {
+	if _, ok := self.reverseKeyPool[keyid]; !ok {
 		self.reverseKeyPool[keyid] = make(map[whisper.TopicType]pot.Address)
 	}
 	self.reverseKeyPool[keyid][topic] = addr
@@ -322,7 +315,7 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 		return self.Process(pssmsg)
 	}
 
-	return fmt.Errorf("invalid message")
+	return fmt.Errorf("invalid message type. Expected *PssMsg, got %T ", msg)
 }
 
 // Entry point to processing a message for which the current node can be the intended recipient.
@@ -336,26 +329,25 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 		return fmt.Errorf("No registered handler for topic '%x'", env.Topic)
 	}
 
-	// try all our symkeys in order
-	// we could should these (by last used first?) to possibly match quicker
+	// TODO: consider keeping symkeys in lastseen order, recent are more likely to be the right ones
 	if len(env.AESNonce) > 0 { // see whisper.envelope.go.OpenSymmetric
-		//for _, symkeyid := range self.recvsymkeys {
-		for symkeyid, _ := range self.reverseKeyPool {
+		for symkeyid := range self.reverseKeyPool {
 			log.Trace("attempting symmetric decrypt", "symkey", symkeyid)
 			symkey, err := self.w.GetSymKey(symkeyid)
-			if err == nil {
-				recvmsg, err = env.OpenSymmetric(symkey)
-				if err == nil {
-					if !recvmsg.Validate() {
-						return fmt.Errorf("validate sym enc msg fail")
-					}
-					from = self.reverseKeyPool[symkeyid][env.Topic]
-					log.Debug("pss message sym enc", "from", from, "payload", recvmsg.Payload)
-					break
-				}
-			} else {
-				log.Trace("sym decrypt failed", "symkey", symkeyid, "err", err)
+			if err != nil {
+				log.Debug("could not retrieve whisper symkey id %v: %v", symkeyid, err)
+				continue
 			}
+			recvmsg, err = env.OpenSymmetric(symkey)
+			if err != nil {
+				log.Trace("sym decrypt failed", "symkey", symkeyid, "err", err)
+				continue
+			}
+			if !recvmsg.Validate() {
+				return fmt.Errorf("symmetrically encrypted message has invalid signature or is corrupt")
+			}
+			from = self.reverseKeyPool[symkeyid][env.Topic]
+			log.Debug("pss message sym enc", "from", from, "payload", recvmsg.Payload)
 		}
 	}
 
@@ -418,7 +410,7 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 		for f := range handlers {
 			err := (*f)(recvmsg.Payload, p, from.Bytes())
 			if err != nil {
-				return err
+				log.Warn("Pss handler %p failed: %v", err)
 			}
 		}
 	}
@@ -487,13 +479,13 @@ func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, wparams *w
 	// set up outgoing message container, which does encryption and envelope wrapping
 	woutmsg, err := whisper.NewSentMessage(wparams)
 	if err != nil {
-		return fmt.Errorf("%v: %s", errorWhisper, err)
+		return fmt.Errorf("failed to generate whisper message encapsulation: %v", err)
 	}
 	// performs encryption and PoW
 	// after this the message is ready for sending
 	env, err := woutmsg.Wrap(wparams)
 	if err != nil {
-		return fmt.Errorf("%v: %s", errorWhisper, err)
+		return fmt.Errorf("failed to perform whisper encryption: %v", err)
 	}
 	log.Trace("pssmsg whisper done", "env", env, "wparams payloda", wparams.Payload)
 	// prepare for devp2p transport
@@ -629,7 +621,10 @@ func (self *Pss) isActive(id pot.Address, topic whisper.TopicType) bool {
 
 // todo: maybe not enough to check that the symkey id strings are empty
 func (self *Pss) isSecured(id pot.Address, topic whisper.TopicType) bool {
-	if self.peerPool[id] == nil {
+	if _, ok := self.peerPool[id]; !ok {
+		return false
+	}
+	if _, ok := self.peerPool[id][topic]; !ok {
 		return false
 	}
 	if self.peerPool[id][topic].symkeyexpires.Before(time.Now()) {

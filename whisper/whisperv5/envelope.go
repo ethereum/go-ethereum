@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -98,7 +97,7 @@ func (e *Envelope) Ver() uint64 {
 // Seal closes the envelope by spending the requested amount of time as a proof
 // of work on hashing the data.
 func (e *Envelope) Seal(options *MessageParams) error {
-	var target, bestBit, iterations int
+	var target, bestBit int
 	if options.PoW == 0 {
 		// adjust for the duration of Seal() execution only if execution time is predefined unconditionally
 		e.Expiry += options.WorkTime
@@ -116,14 +115,12 @@ func (e *Envelope) Seal(options *MessageParams) error {
 	finish := time.Now().Add(time.Duration(options.WorkTime) * time.Second).UnixNano()
 	for nonce := uint64(0); time.Now().UnixNano() < finish; {
 		for i := 0; i < 1024; i++ {
-			iterations++
 			binary.BigEndian.PutUint64(buf[56:], nonce)
 			d := new(big.Int).SetBytes(crypto.Keccak256(buf))
 			firstBit := math.FirstBitSet(d)
 			if firstBit > bestBit {
 				e.EnvNonce, bestBit = nonce, firstBit
 				if target > 0 && bestBit >= target {
-					log.Debug("seal complete (premature)", "iteration", iterations)
 					return nil
 				}
 			}
@@ -135,7 +132,6 @@ func (e *Envelope) Seal(options *MessageParams) error {
 		return fmt.Errorf("failed to reach the PoW target, specified pow time (%d seconds) was insufficient", options.WorkTime)
 	}
 
-	log.Debug("seal complete", "iteration", iterations)
 	return nil
 }
 
