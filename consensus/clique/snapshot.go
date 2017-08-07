@@ -229,9 +229,9 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		// Tally up the new vote from the signer
 		var authorize bool
 		switch {
-		case bytes.Compare(header.Nonce[:], nonceAuthVote) == 0:
+		case bytes.Equal(header.Nonce[:], nonceAuthVote):
 			authorize = true
-		case bytes.Compare(header.Nonce[:], nonceDropVote) == 0:
+		case bytes.Equal(header.Nonce[:], nonceDropVote):
 			authorize = false
 		default:
 			return nil, errInvalidVote
