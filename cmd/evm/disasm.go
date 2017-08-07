@@ -46,8 +46,5 @@ func disasmCmd(ctx *cli.Context) error {
 
 	code := strings.TrimSpace(string(in[:]))
 	fmt.Printf("%v\n", code)
-	if err = asm.PrintDisassembled(code); err != nil {
-		return err
-	}
-	return nil
+	return asm.PrintDisassembled(code)
 }

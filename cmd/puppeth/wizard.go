@@ -160,6 +160,7 @@ func (w *wizard) readDefaultInt(def int) int {
 	}
 }
 
+/*
 // readFloat reads a single line from stdin, trimming if from spaces, enforcing it
 // to parse into a float.
 func (w *wizard) readFloat() float64 {
@@ -180,6 +181,7 @@ func (w *wizard) readFloat() float64 {
 		return val
 	}
 }
+*/
 
 // readDefaultFloat reads a single line from stdin, trimming if from spaces, enforcing
 // it to parse into a float. If an empty line is entered, the default value is returned.
