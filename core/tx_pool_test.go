@@ -235,6 +235,8 @@ func TestTransactionQueue(t *testing.T) {
 	}
 
 	pool, key = setupTxPool()
+	defer pool.Stop()
+
 	tx1 := transaction(0, big.NewInt(100), key)
 	tx2 := transaction(10, big.NewInt(100), key)
 	tx3 := transaction(11, big.NewInt(100), key)
@@ -848,6 +850,8 @@ func TestTransactionPendingLimitingEquivalency(t *testing.T) { testTransactionLi
 func testTransactionLimitingEquivalency(t *testing.T, origin uint64) {
 	// Add a batch of transactions to a pool one by one
 	pool1, key1 := setupTxPool()
+	defer pool1.Stop()
+
 	account1, _ := deriveSender(transaction(0, big.NewInt(0), key1))
 	state1, _ := pool1.currentState()
 	state1.AddBalance(account1, big.NewInt(1000000))
@@ -859,6 +863,8 @@ func testTransactionLimitingEquivalency(t *testing.T, origin uint64) {
 	}
 	// Add a batch of transactions to a pool in one big batch
 	pool2, key2 := setupTxPool()
+	defer pool2.Stop()
+
 	account2, _ := deriveSender(transaction(0, big.NewInt(0), key2))
 	state2, _ := pool2.currentState()
 	state2.AddBalance(account2, big.NewInt(1000000))
@@ -1356,6 +1362,7 @@ func testTransactionJournaling(t *testing.T, nolocals bool) {
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
+	pool.Stop()
 }
 
 // Benchmarks the speed of validating the contents of the pending queue of the
