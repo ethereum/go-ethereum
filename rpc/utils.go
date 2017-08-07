@@ -195,18 +195,12 @@ METHODS:
 		}
 
 		switch mtype.NumOut() {
-		case 0, 1:
-			break
-		case 2:
-			if h.errPos == -1 { // method must one return value and 1 error
+		case 0, 1, 2:
+			if mtype.NumOut() == 2 && h.errPos == -1 { // method must one return value and 1 error
 				continue METHODS
 			}
-			break
-		default:
-			continue METHODS
+			callbacks[mname] = &h
 		}
-
-		callbacks[mname] = &h
 	}
 
 	return callbacks, subscriptions
