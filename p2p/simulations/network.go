@@ -408,7 +408,7 @@ func (self *Network) Stop(id discover.NodeID) error {
 	node.Up = false
 	log.Info(fmt.Sprintf("stop node %v: %v", id, node.Up))
 
-	self.events.Send(NewEvent(node))
+	self.events.Send(ControlEvent(node))
 	return nil
 }
 

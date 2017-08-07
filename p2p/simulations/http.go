@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -266,8 +267,8 @@ type ServerConfig struct {
 type Server struct {
 	ServerConfig
 
-	router    *httprouter.Router
-	network   *Network
+	router  *httprouter.Router
+	network *Network
 }
 
 // NewServer returns a new simulation API server
@@ -372,7 +373,7 @@ type MsgFilter struct {
 
 // StreamNetworkEvents streams network events as a server-sent-events stream
 func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
-	filters   := make(map[MsgFilter]struct{})
+	filters := make(map[MsgFilter]struct{})
 	wildcards := make(map[string]struct{})
 	events := make(chan *Event)
 	sub := s.network.events.Subscribe(events)
@@ -451,7 +452,7 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 		case event := <-events:
 			//filtering events only works for messages
 			//if the message does not pass filter, break handling
-			if event.Msg != nil && !s.msgMatchesFilter(event,filters,wildcards) {
+			if event.Msg != nil && !s.msgMatchesFilter(event, filters, wildcards) {
 				continue
 			}
 			if err := writeEvent(event); err != nil {
@@ -471,7 +472,7 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 //they need to be separated by a '-'
 //PROTOCOL must be a valid protocol for this to work (no validation here)
 //A message-code of '*' or '-1' are considered wildcards
-func (s *Server) setupFilter(strfilter string,filters map[MsgFilter]struct{}, wildcards map[string]struct{}) error {
+func (s *Server) setupFilter(strfilter string, filters map[MsgFilter]struct{}, wildcards map[string]struct{}) error {
 	//split first all [PROTOCOL]:[MESSAGE-CODE] pairs into an array, separator being '-'
 	arrfilter := strings.Split(strfilter, "-")
 	//for each elem in array
@@ -480,7 +481,7 @@ func (s *Server) setupFilter(strfilter string,filters map[MsgFilter]struct{}, wi
 		fparts := strings.Split(f, ":")
 		//thus, fparts must be exactly 2 in length and each elem can't be empty
 		if len(fparts) != 2 || len(fparts[0]) == 0 || len(fparts[1]) == 0 {
-			return fmt.Errorf("Invalid msg filter format provided", http.StatusBadRequest)
+			return errors.New("Invalid msg filter format provided")
 		}
 		//get the protocol
 		proto := fparts[0]
@@ -494,7 +495,7 @@ func (s *Server) setupFilter(strfilter string,filters map[MsgFilter]struct{}, wi
 				//no wildcards, thus parse code value
 				code, err := strconv.ParseUint(c, 10, 64)
 				if err != nil {
-					return fmt.Errorf("Invalid msg code for filtering provided", http.StatusBadRequest)
+					return errors.New("Invalid msg code for filtering provided")
 				}
 				//we got all filter info, set the filter on the server
 				filters[MsgFilter{Proto: proto, Code: code}] = struct{}{}

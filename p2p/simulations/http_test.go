@@ -231,10 +231,7 @@ func TestHTTPNetwork(t *testing.T) {
 	// subscribe to events so we can check them later
 	client := NewClient(s.URL)
 	events := make(chan *Event, 100)
-	opts := SubscribeOpts{
-		Current: false,
-		Filter:  "",
-	}
+	var opts SubscribeOpts
 	sub, err := client.SubscribeNetwork(events, opts)
 	if err != nil {
 		t.Fatalf("error subscribing to network events: %s", err)
@@ -365,7 +362,8 @@ func (t *expectEvents) connEvent(one, other string, up bool) *Event {
 
 func (t *expectEvents) expectMsg(filters map[MsgFilter]struct{}, msgCount int) {
 	timeout := time.After(10 * time.Second)
-	for i := 0; i < msgCount; i++ {
+	count := 0
+	for {
 		select {
 		case event := <-t.events:
 
@@ -373,13 +371,17 @@ func (t *expectEvents) expectMsg(filters map[MsgFilter]struct{}, msgCount int) {
 				break
 			}
 
-			t.Logf("received %s event: %s", event.Type, event.Msg)
+			count += 1
+			t.Logf("received protocol: %s - type: %s - event: %s", event.Msg.Protocol, event.Type, event.Msg)
 
 			if event.Msg == nil {
 				t.Fatal("expected event.Msg to be set")
 			}
 			if _, ok := filters[MsgFilter{event.Msg.Protocol, event.Msg.Code}]; !ok {
 				t.Fatalf("expected event.Msg to match filter, got protocol '%s' with code '%d' while filter is '%v'", event.Msg.Protocol, event.Msg.Code, filters)
+			}
+			if count == msgCount {
+				return
 			}
 
 		case err := <-t.sub.Err():
@@ -557,10 +559,7 @@ func TestHTTPSnapshot(t *testing.T) {
 
 	// subscribe to events so we can check them later
 	events := make(chan *Event, 100)
-	opts := SubscribeOpts{
-		Current: false,
-		Filter:  "",
-	}
+	var opts SubscribeOpts
 	sub, err := client.SubscribeNetwork(events, opts)
 	if err != nil {
 		t.Fatalf("error subscribing to network events: %s", err)
@@ -634,9 +633,9 @@ func TestMsgFilterPassMultiple(t *testing.T) {
 	defer s.Close()
 
 	client := NewClient(s.URL)
-	events := make(chan *Event, 100)
+	events := make(chan *Event, 10)
 	//TODO: add more exhaustive unit tests for the filterstr
-	filterstr := "prb:0;test:0"
+	filterstr := "prb:0-test:0"
 	opts := SubscribeOpts{
 		Current: false,
 		Filter:  filterstr,
@@ -648,15 +647,16 @@ func TestMsgFilterPassMultiple(t *testing.T) {
 	defer sub.Unsubscribe()
 	// check we got all the events
 
-	nodeCount := 30
+	nodeCount := 2
 	startNetwork(network, client, t, nodeCount)
 	x := &expectEvents{t, events, sub}
 
 	filters := make(map[MsgFilter]struct{})
-	filters[MsgFilter{Proto: "prb", Code: 0}] = struct{}{}
-	filters[MsgFilter{Proto: "dum", Code: 1}] = struct{}{}
 	filters[MsgFilter{Proto: "test", Code: 0}] = struct{}{}
-	x.expectMsg(filters, 100)
+	filters[MsgFilter{Proto: "prb", Code: 0}] = struct{}{}
+	//send also "dum" events even if they won't be filtered
+	filters[MsgFilter{Proto: "dum", Code: 1}] = struct{}{}
+	x.expectMsg(filters, 4)
 }
 
 func TestMsgFilterPassWildcard(t *testing.T) {
@@ -665,7 +665,7 @@ func TestMsgFilterPassWildcard(t *testing.T) {
 	defer s.Close()
 
 	client := NewClient(s.URL)
-	events := make(chan *Event, 100)
+	events := make(chan *Event, 10)
 	filterstr := "prb:0,2-test:*"
 	opts := SubscribeOpts{
 		Current: false,
@@ -678,7 +678,7 @@ func TestMsgFilterPassWildcard(t *testing.T) {
 	defer sub.Unsubscribe()
 	// check we got all the events
 
-	nodeCount := 30
+	nodeCount := 2
 	startNetwork(network, client, t, nodeCount)
 	x := &expectEvents{t, events, sub}
 
@@ -688,7 +688,7 @@ func TestMsgFilterPassWildcard(t *testing.T) {
 	filters[MsgFilter{Proto: "test", Code: 0}] = struct{}{}
 	filters[MsgFilter{Proto: "test", Code: 1}] = struct{}{}
 	filters[MsgFilter{Proto: "test", Code: 2}] = struct{}{}
-	x.expectMsg(filters, 100)
+	x.expectMsg(filters, 8)
 }
 
 func TestMsgFilterPassSingle(t *testing.T) {
@@ -710,13 +710,13 @@ func TestMsgFilterPassSingle(t *testing.T) {
 	defer sub.Unsubscribe()
 	// check we got all the events
 
-	nodeCount := 10
+	nodeCount := 2
 	startNetwork(network, client, t, nodeCount)
 	x := &expectEvents{t, events, sub}
 
 	filters := make(map[MsgFilter]struct{})
 	filters[MsgFilter{Proto: "dum", Code: 0}] = struct{}{}
-	x.expectMsg(filters, 10)
+	x.expectMsg(filters, 2)
 }
 
 func TestMsgFilterFailBadParams(t *testing.T) {
