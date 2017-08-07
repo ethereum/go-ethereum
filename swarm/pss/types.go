@@ -3,26 +3,13 @@ package pss
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"encoding/binary"
 	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
-)
-
-const (
-	TopicLength            = 32
-	DefaultTTL             = 6000
-	defaultDigestCacheTTL  = time.Second
-	defaultWhisperWorkTime = 3
-	//defaultWhisperPoW      = 0.00000000001
-	defaultWhisperPoW           = 0.001
-	defaultSymKeyLength         = 32
-	defaultPartialAddressLength = 8
 )
 
 // Pss configuration parameters
@@ -97,25 +84,6 @@ func (self *APIMsg) String() string {
 //
 // Implementations of this type are passed to Pss.Register together with a topic,
 type Handler func(msg []byte, p *p2p.Peer, from []byte) error
-
-// String representation of Topic
-//func (self *Topic) String() string {
-//	return fmt.Sprintf("%x", self)
-//}
-
-// Constructs a new PssTopic from a given name and version.
-//
-// Analogous to the name and version members of p2p.Protocol.
-func NewTopic(s string, v int) (topic whisper.TopicType) {
-	h := sha3.NewKeccak256()
-	h.Write([]byte(s))
-	buf := make([]byte, TopicLength/8)
-	binary.PutUvarint(buf, uint64(v))
-	h.Write(buf)
-	//copy(topic[:], h.Sum(buf)[:])
-	topic = whisper.BytesToTopic(h.Sum(buf)[:4])
-	return topic
-}
 
 // For devp2p protocol integration only
 //

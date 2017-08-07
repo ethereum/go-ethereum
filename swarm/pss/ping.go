@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 type PingMsg struct {
@@ -40,7 +41,7 @@ var PingProtocol = &protocols.Spec{
 	},
 }
 
-var PingTopic = NewTopic(PingProtocol.Name, int(PingProtocol.Version))
+var PingTopic = whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", PingProtocol.Name, PingProtocol.Version)))
 
 func NewPingProtocol(handler func(interface{}) error) *p2p.Protocol {
 	return &p2p.Protocol{

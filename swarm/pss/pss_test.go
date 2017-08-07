@@ -136,7 +136,7 @@ func TestKeys(t *testing.T) {
 
 	// set up peer with mock address, mapped to mocked publicaddress and with mocked symkey
 	addr := network.RandomAddr().Over()
-	topic := NewTopic("foo", 42)
+	topic := whisper.BytesToTopic([]byte("foo:42"))
 	ps.SetOutgoingPublicKey(pot.NewAddressFromBytes(addr), topic, &theirprivkey.PublicKey)
 	copy(outkey[:16], addr[16:])
 	copy(outkey[16:], addr[:16])
@@ -172,7 +172,7 @@ func TestKeysExchange(t *testing.T) {
 
 	// set up two nodes directly connected
 	// (we are not testing pss routing here)
-	topic := NewTopic("foo", 42)
+	topic := whisper.BytesToTopic([]byte("foo:42"))
 	adapter := adapters.NewSimAdapter(services)
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",
@@ -233,7 +233,19 @@ func TestKeysExchange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
 	}
+
 	time.Sleep(time.Second) // replace with hive healthy code
+
+	lmsgC := make(chan APIMsg)
+	lctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+	lsub, err := lclient.Subscribe(lctx, "pss", lmsgC, "receive", topic)
+	log.Trace("lsub", "id", lsub)
+
+	rmsgC := make(chan APIMsg)
+	rctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+	rsub, err := rclient.Subscribe(rctx, "pss", rmsgC, "receive", topic)
+	log.Trace("rsub", "id", rsub)
+
 	err = lclient.Call(nil, "pss_setPublicKey", roaddr, topic, rpubkey)
 	err = rclient.Call(nil, "pss_setPublicKey", loaddr, topic, lpubkey)
 
@@ -264,9 +276,6 @@ func TestKeysExchange(t *testing.T) {
 		t.Fatalf("node 2 send symkey does not match node 1 receive symkey: %x != %x", rsendkey, lrecvkey)
 	}
 
-	msgC := make(chan APIMsg)
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
-	sub, err := rclient.Subscribe(ctx, "pss", msgC, "receive", topic)
 	// at this point we've verified that symkeys are saved and match on each peer
 	// now try sending symmetrically encrypted message
 	apimsg := APIMsg{
@@ -276,30 +285,26 @@ func TestKeysExchange(t *testing.T) {
 	}
 	err = lclient.Call(nil, "pss_send", topic, apimsg)
 	select {
-	case recvmsg := <-msgC:
+	case recvmsg := <-rmsgC:
 		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
 			t.Fatalf("node 2 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg.Msg)
 		}
-	case cerr := <-ctx.Done():
+	case cerr := <-rctx.Done():
 		t.Fatalf("test message timed out: %v", cerr)
 	}
-	sub.Unsubscribe()
-
-	ctx, _ = context.WithTimeout(context.Background(), time.Second)
-	sub, err = lclient.Subscribe(ctx, "pss", msgC, "receive", topic)
 	apimsg.Msg = []byte("plugh")
-	//apimsg.Addr = loaddr
 	apimsg.Addr = loaddr
 	err = rclient.Call(nil, "pss_send", topic, apimsg)
 	select {
-	case recvmsg := <-msgC:
+	case recvmsg := <-lmsgC:
 		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
 			t.Fatalf("node 1 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg.Msg)
 		}
-	case cerr := <-ctx.Done():
+	case cerr := <-lctx.Done():
 		t.Fatalf("test message timed out: %v", cerr)
 	}
-	sub.Unsubscribe()
+	lsub.Unsubscribe()
+	rsub.Unsubscribe()
 }
 
 func TestCache(t *testing.T) {
@@ -358,22 +363,8 @@ func TestCache(t *testing.T) {
 		t.Fatalf("different msgs return same crc: %d", digesttwo)
 	}
 
-	// check the sender cache
-	err = ps.addFwdCacheSender(fwdaddr.Over(), digest)
-	if err != nil {
-		t.Fatalf("write to pss sender cache failed: %v", err)
-	}
-
-	if !ps.checkFwdCache(fwdaddr.Over(), digest) {
-		t.Fatalf("message %v should have SENDER record in cache but checkCache returned false", msg)
-	}
-
-	if ps.checkFwdCache(fwdaddr.Over(), digesttwo) {
-		t.Fatalf("message %v should NOT have SENDER record in cache but checkCache returned true", msgtwo)
-	}
-
-	// check the expire cache
-	err = ps.addFwdCacheExpire(digest)
+	// check the cache
+	err = ps.addFwdCache(digest)
 	if err != nil {
 		t.Fatalf("write to pss expire cache failed: %v", err)
 	}
@@ -389,15 +380,6 @@ func TestCache(t *testing.T) {
 	time.Sleep(pp.Cachettl)
 	if ps.checkFwdCache(nil, digest) {
 		t.Fatalf("message %v should have expired from cache but checkCache returned true", msg)
-	}
-
-	err = ps.AddToCache(fwdaddr.Over(), msgtwo)
-	if err != nil {
-		t.Fatalf("public accessor cache write failed: %v", err)
-	}
-
-	if !ps.checkFwdCache(fwdaddr.Over(), digesttwo) {
-		t.Fatalf("message %v should have SENDER record in cache but checkCache returned false", msgtwo)
 	}
 }
 
