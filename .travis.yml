@@ -38,6 +38,21 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go test -coverage -misspell
 
+    # Race detector, slow, but should be helpful
+    - os: linux
+      dist: trusty
+      sudo: required
+      go: 1.8.3
+      env:
+        - race-detector
+      script:
+        - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install fuse
+        - sudo modprobe fuse
+        - sudo chmod 666 /dev/fuse
+        - sudo chown root:$USER /etc/fuse.conf
+        - go run build/ci.go install -race
+        - go run build/ci.go test -race -verbose
+
     # This builder does the Ubuntu PPA and Linux Azure uploads
     - os: linux
       dist: trusty
