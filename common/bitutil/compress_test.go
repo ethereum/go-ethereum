@@ -121,20 +121,20 @@ func TestCompression(t *testing.T) {
 	in := hexutil.MustDecode("0x4912385c0e7b64000000")
 	out := hexutil.MustDecode("0x80fe4912385c0e7b64")
 
-	if data := CompressBytes(in); bytes.Compare(data, out) != 0 {
+	if data := CompressBytes(in); !bytes.Equal(data, out) {
 		t.Errorf("encoding mismatch for sparse data: have %x, want %x", data, out)
 	}
-	if data, err := DecompressBytes(out, len(in)); err != nil || bytes.Compare(data, in) != 0 {
+	if data, err := DecompressBytes(out, len(in)); err != nil || !bytes.Equal(data, in) {
 		t.Errorf("decoding mismatch for sparse data: have %x, want %x, error %v", data, in, err)
 	}
 	// Check the the compression returns the input if the bitset encoding is longer
 	in = hexutil.MustDecode("0xdf7070533534333636313639343638373532313536346c1bc33339343837313070706336343035336336346c65fefb3930393233383838ac2f65fefb")
 	out = hexutil.MustDecode("0xdf7070533534333636313639343638373532313536346c1bc33339343837313070706336343035336336346c65fefb3930393233383838ac2f65fefb")
 
-	if data := CompressBytes(in); bytes.Compare(data, out) != 0 {
+	if data := CompressBytes(in); !bytes.Equal(data, out) {
 		t.Errorf("encoding mismatch for dense data: have %x, want %x", data, out)
 	}
-	if data, err := DecompressBytes(out, len(in)); err != nil || bytes.Compare(data, in) != 0 {
+	if data, err := DecompressBytes(out, len(in)); err != nil || !bytes.Equal(data, in) {
 		t.Errorf("decoding mismatch for dense data: have %x, want %x, error %v", data, in, err)
 	}
 	// Check that decompressing a longer input than the target fails
