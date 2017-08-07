@@ -73,6 +73,11 @@ func typeCheck(t Type, value reflect.Value) error {
 	return nil
 }
 
+// varErr returns a formatted error.
+func varErr(expected, got reflect.Kind) error {
+	return typeErr(expected, got)
+}
+
 // typeErr returns a formatted type casting error.
 func typeErr(expected, got interface{}) error {
 	return fmt.Errorf("abi: cannot use %v as type %v as argument", got, expected)
