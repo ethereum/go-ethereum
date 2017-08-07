@@ -197,11 +197,10 @@ func (hub *LedgerHub) Subscribe(sink chan<- accounts.WalletEvent) event.Subscrip
 // is not running).
 func (hub *LedgerHub) updater() {
 	for {
-		// Wait for a USB hotplug event (not supported yet) or a refresh timeout
-		select {
-		//case <-hub.changes: // reenable on hutplug implementation
-		case <-time.After(ledgerRefreshCycle):
-		}
+		// TODO: Wait for a USB hotplug event (not supported yet) or a refresh timeout
+		// <-hub.changes
+		time.Sleep(ledgerRefreshCycle)
+
 		// Run the wallet refresher
 		hub.refreshWallets()
 
