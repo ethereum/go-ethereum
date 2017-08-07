@@ -750,14 +750,14 @@ func TestTransactionQueueTimeLimitingNoLocals(t *testing.T) { testTransactionQue
 func testTransactionQueueTimeLimiting(t *testing.T, nolocals bool) {
 	// Reduce the eviction interval to a testable amount
 	defer func(old time.Duration) { evictionInterval = old }(evictionInterval)
-	evictionInterval = 250 * time.Millisecond
+	evictionInterval = time.Second
 
 	// Create the pool to test the non-expiration enforcement
 	db, _ := ethdb.NewMemDatabase()
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 
 	config := testTxPoolConfig
-	config.Lifetime = 250 * time.Millisecond
+	config.Lifetime = time.Second
 	config.NoLocals = nolocals
 
 	pool := NewTxPool(config, params.TestChainConfig, new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
