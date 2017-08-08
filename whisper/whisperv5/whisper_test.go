@@ -424,7 +424,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 
 	randomKey = make([]byte, aesKeyLength+1)
 	mrand.Read(randomKey)
-	id1, err = w.AddSymKeyDirect(randomKey)
+	_, err = w.AddSymKeyDirect(randomKey)
 	if err == nil {
 		t.Fatalf("added the key with wrong size, seed %d.", seed)
 	}
@@ -541,6 +541,9 @@ func TestCustomization(t *testing.T) {
 	const smallPoW = 0.00001
 
 	f, err := generateFilter(t, true)
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
 	params, err := generateMessageParams()
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
@@ -607,6 +610,9 @@ func TestCustomization(t *testing.T) {
 
 	// check w.messages()
 	id, err := w.Subscribe(f)
+	if err != nil {
+		t.Fatalf("failed subscribe with seed %d: %s.", seed, err)
+	}
 	time.Sleep(5 * time.Millisecond)
 	mail := f.Retrieve()
 	if len(mail) > 0 {
