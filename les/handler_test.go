@@ -327,7 +327,7 @@ func testGetProofs(t *testing.T, protocol int) {
 		for _, acc := range accounts {
 			req := ProofReq{
 				BHash: header.Hash(),
-				Key:   acc[:],
+				Key:   crypto.Keccak256(acc[:]),
 			}
 			proofreqs = append(proofreqs, req)
 
