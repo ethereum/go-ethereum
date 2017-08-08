@@ -18,6 +18,7 @@ package filters
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -439,15 +440,15 @@ func TestPendingLogsSubscription(t *testing.T) {
 			}
 
 			if len(fetched) != len(tt.expected) {
-				t.Fatalf("invalid number of logs for case %d, want %d log(s), got %d", i, len(tt.expected), len(fetched))
+				panic(fmt.Sprintf("invalid number of logs for case %d, want %d log(s), got %d", i, len(tt.expected), len(fetched)))
 			}
 
 			for l := range fetched {
 				if fetched[l].Removed {
-					t.Errorf("expected log not to be removed for log %d in case %d", l, i)
+					panic(fmt.Sprintf("expected log not to be removed for log %d in case %d", l, i))
 				}
 				if !reflect.DeepEqual(fetched[l], tt.expected[l]) {
-					t.Errorf("invalid log on index %d for case %d", l, i)
+					panic(fmt.Sprintf("invalid log on index %d for case %d", l, i))
 				}
 			}
 		}()
