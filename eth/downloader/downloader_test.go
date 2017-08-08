@@ -403,7 +403,7 @@ func (dl *downloadTester) newSlowPeer(id string, version int, hashes []common.Ha
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
-	var err = dl.downloader.RegisterPeer(id, version, &downloadTesterPeer{dl, id, delay})
+	var err = dl.downloader.RegisterPeer(id, version, NewDownloadTesterPeer(dl, id, delay))
 	if err == nil {
 		// Assign the owned hashes, headers and blocks to the peer (deep copy)
 		dl.peerHashes[id] = make([]common.Hash, len(hashes))
@@ -462,9 +462,20 @@ func (dl *downloadTester) dropPeer(id string) {
 }
 
 type downloadTesterPeer struct {
-	dl    *downloadTester
-	id    string
-	delay time.Duration
+	dl *downloadTester
+	id string
+
+	mx     sync.RWMutex
+	_delay time.Duration
+}
+
+// NewDownloadTesterPeer creates new downloader tester peer.
+func NewDownloadTesterPeer(dl *downloadTester, id string, delay time.Duration) *downloadTesterPeer {
+	return &downloadTesterPeer{
+		dl:     dl,
+		id:     id,
+		_delay: delay,
+	}
 }
 
 // Head constructs a function to retrieve a peer's current head hash
@@ -499,7 +510,7 @@ func (dlp *downloadTesterPeer) RequestHeadersByHash(origin common.Hash, amount i
 // origin; associated with a particular peer in the download tester. The returned
 // function can be used to retrieve batches of headers from the particular peer.
 func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
-	time.Sleep(dlp.delay)
+	time.Sleep(dlp.delay())
 
 	dlp.dl.lock.RLock()
 	defer dlp.dl.lock.RUnlock()
@@ -525,7 +536,7 @@ func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int,
 // peer in the download tester. The returned function can be used to retrieve
 // batches of block bodies from the particularly requested peer.
 func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash) error {
-	time.Sleep(dlp.delay)
+	time.Sleep(dlp.delay())
 
 	dlp.dl.lock.RLock()
 	defer dlp.dl.lock.RUnlock()
@@ -550,7 +561,7 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash) error {
 // peer in the download tester. The returned function can be used to retrieve
 // batches of block receipts from the particularly requested peer.
 func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash) error {
-	time.Sleep(dlp.delay)
+	time.Sleep(dlp.delay())
 
 	dlp.dl.lock.RLock()
 	defer dlp.dl.lock.RUnlock()
@@ -572,7 +583,7 @@ func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash) error {
 // peer in the download tester. The returned function can be used to retrieve
 // batches of node state data from the particularly requested peer.
 func (dlp *downloadTesterPeer) RequestNodeData(hashes []common.Hash) error {
-	time.Sleep(dlp.delay)
+	time.Sleep(dlp.delay())
 
 	dlp.dl.lock.RLock()
 	defer dlp.dl.lock.RUnlock()
@@ -588,6 +599,20 @@ func (dlp *downloadTesterPeer) RequestNodeData(hashes []common.Hash) error {
 	go dlp.dl.downloader.DeliverNodeData(dlp.id, results)
 
 	return nil
+}
+
+// delay is a concurrently-safe getter for delay value.
+func (dlp *downloadTesterPeer) delay() time.Duration {
+	dlp.mx.RLock()
+	defer dlp.mx.RUnlock()
+	return dlp._delay
+}
+
+// setDelay is a concurrently-safe getter for delay value.
+func (dlp *downloadTesterPeer) setDelay(d time.Duration) {
+	dlp.mx.Lock()
+	dlp._delay = d
+	dlp.mx.Unlock()
 }
 
 // assertOwnChain checks if the local chain contains the correct number of items
@@ -1746,7 +1771,7 @@ func testFastCriticalRestarts(t *testing.T, protocol int, progress bool) {
 	for i := 0; i < fsPivotInterval; i++ {
 		tester.peerMissingStates["peer"][headers[hashes[fsMinFullBlocks+i]].Root] = true
 	}
-	(tester.downloader.peers.peers["peer"].peer).(*downloadTesterPeer).delay = 500 * time.Millisecond // Enough to reach the critical section
+	(tester.downloader.peers.peers["peer"].peer).(*downloadTesterPeer).setDelay(500 * time.Millisecond) // Enough to reach the critical section
 
 	// Synchronise with the peer a few times and make sure they fail until the retry limit
 	for i := 0; i < int(fsCriticalTrials)-1; i++ {
@@ -1765,7 +1790,7 @@ func testFastCriticalRestarts(t *testing.T, protocol int, progress bool) {
 			tester.lock.Lock()
 			tester.peerHeaders["peer"][hashes[fsMinFullBlocks-1]] = headers[hashes[fsMinFullBlocks-1]]
 			tester.peerMissingStates["peer"] = map[common.Hash]bool{tester.downloader.fsPivotLock.Root: true}
-			(tester.downloader.peers.peers["peer"].peer).(*downloadTesterPeer).delay = 0
+			(tester.downloader.peers.peers["peer"].peer).(*downloadTesterPeer).setDelay(0)
 			tester.lock.Unlock()
 		}
 	}
