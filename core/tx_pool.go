@@ -207,7 +207,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, eventMux *e
 	}
 	pool.locals = newAccountSet(pool.signer)
 	pool.priced = newTxPricedList(&pool.all)
-	pool.resetState()
+	pool.reset()
 
 	// If local transactions and journaling is enabled, load from disk
 	if !config.NoLocals && config.Journal != "" {
@@ -261,7 +261,7 @@ func (pool *TxPool) loop() {
 						pool.homestead = true
 					}
 				}
-				pool.resetState()
+				pool.reset()
 				pool.mu.Unlock()
 
 			case RemovedTransactionEvent:
@@ -300,15 +300,28 @@ func (pool *TxPool) loop() {
 		// Handle local transaction journal rotation
 		case <-journal.C:
 			if pool.journal != nil {
+				pool.mu.Lock()
 				if err := pool.journal.rotate(pool.local()); err != nil {
 					log.Warn("Failed to rotate local tx journal", "err", err)
 				}
+				pool.mu.Unlock()
 			}
 		}
 	}
 }
 
-func (pool *TxPool) resetState() {
+// lockedReset is a wrapper around reset to allow calling it in a thread safe
+// manner. This method is only ever used in the tester!
+func (pool *TxPool) lockedReset() {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	pool.reset()
+}
+
+// reset retrieves the current state of the blockchain and ensures the content
+// of the transaction pool is valid with regard to the chain state.
+func (pool *TxPool) reset() {
 	currentState, err := pool.currentState()
 	if err != nil {
 		log.Error("Failed reset txpool state", "err", err)
