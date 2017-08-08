@@ -78,6 +78,8 @@ type Whisper struct {
 	stats   Statistics // Statistics of whisper node
 
 	mailServer MailServer // MailServer interface
+
+	topicBloomFilter []byte // A Bloom filter representing topics registered on this node
 }
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
@@ -95,6 +97,12 @@ func New(cfg *Config) *Whisper {
 		messageQueue: make(chan *Envelope, messageQueueLimit),
 		p2pMsgQueue:  make(chan *Envelope, messageQueueLimit),
 		quit:         make(chan struct{}),
+	}
+
+	if cfg.TopicBloomSize == 0 {
+		whisper.topicBloomFilter = make([]byte, DefaultTopicBloomSize)
+	} else {
+		whisper.topicBloomFilter = make([]byte, cfg.TopicBloomSize)
 	}
 
 	whisper.filters = NewFilters(whisper)

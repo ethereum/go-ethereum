@@ -34,8 +34,8 @@ type Filter struct {
 	AllowP2P   bool              // Indicates whether this filter is interested in direct peer-to-peer messages
 	SymKeyHash common.Hash       // The Keccak256Hash of the symmetric key, needed for optimization
 
-	Messages map[common.Hash]*ReceivedMessage
-	mutex    sync.RWMutex
+	Messages   map[common.Hash]*ReceivedMessage
+	mutex      sync.RWMutex
 }
 
 type Filters struct {
@@ -61,6 +61,25 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 		return "", err
 	}
 
+	// Aggregate the bloom filters for all topics and then only integrate add
+	// it to the main bloom filter if everything went fine.
+	topicBloomSize := uint(len(fs.whisper.topicBloomFilter))
+	aggregatedBlooms:= make([]byte, topicBloomSize)
+
+	for _, topic := range watcher.Topics {
+		// Calculate the bloom filter of that topic, skip it otherwise
+		if bloom, err := CalculateBloomFilter(topic, topicBloomSize); err == nil {
+			// Add it to the "plausible deniability" topic
+			if err = bloomAddTopics(aggregatedBlooms, bloom); err != nil {
+				delete(fs.watchers, id)
+				return "", fmt.Errorf("Could not add topics to whisper: %v", err)
+			}
+		} else {
+			delete(fs.watchers, id)
+			return "", fmt.Errorf("Could not generate topic to be added to whisper: %v", err)
+		}
+	}
+
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 
@@ -69,16 +88,53 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 	}
 
 	fs.watchers[id] = watcher
+
+	// Finally merge the bloom filters for all topics to the central whisper one
+	if err := bloomAddTopics(fs.whisper.topicBloomFilter, aggregatedBlooms); err != nil {
+		delete(fs.watchers, id)
+		return "", fmt.Errorf("Could not add topics to whisper %v", err)
+	}
+
 	return id, err
 }
 
 func (fs *Filters) Uninstall(id string) bool {
+	topicBloomSize := uint(len(fs.whisper.topicBloomFilter))
+	newBloom := make([]byte, topicBloomSize)
+	dontrebuild := false	// Set if an error occurs while rebuilding the bloom filter
+
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
+
+	// Topic removal: regenerate the entire bloom filter, save the topics of
+	// watcher `id`.
+	for wid, watcher := range fs.watchers {
+		if wid != id {
+			for _, topic := range watcher.Topics {
+				if bloom, err := CalculateBloomFilter(topic, topicBloomSize); err == nil {
+					if bloomAddTopics(newBloom, bloom) != nil {
+						fmt.Println("warning, could not add filter %v to whisper. The original list will be kept.", bloom)
+						dontrebuild = true
+						break
+					}
+				}
+			}
+
+			if dontrebuild {
+				break
+			}
+		}
+	}
+
 	if fs.watchers[id] != nil {
 		delete(fs.watchers, id)
 		return true
 	}
+
+	if !dontrebuild {
+		fs.whisper.topicBloomFilter = newBloom
+	}
+
 	return false
 }
 
