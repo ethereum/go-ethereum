@@ -241,25 +241,32 @@ func exportChain(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack := makeFullNode(ctx)
-	chain, _ := utils.MakeChain(ctx, stack)
+	chain, chainDb := utils.MakeChain(ctx, stack)
 	start := time.Now()
 
 	var err error
+	var first, last int64
 	fp := ctx.Args().First()
 	if len(ctx.Args()) < 3 {
-		err = utils.ExportChain(chain, fp)
+		first = 0
+		last = int64(chain.CurrentBlock().NumberU64())
 	} else {
 		// This can be improved to allow for numbers larger than 9223372036854775807
-		first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
-		last, lerr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
-		if ferr != nil || lerr != nil {
+		first, err = strconv.ParseInt(ctx.Args().Get(1), 10, 64)
+		if err != nil {
 			utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
 		}
+
+		last, err = strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+		if err != nil {
+			utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
+		}
+
 		if first < 0 || last < 0 {
 			utils.Fatalf("Export error: block number must be greater than 0\n")
 		}
-		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
 	}
+	err = utils.ExportChain(chain, chainDb, fp, uint64(first), uint64(last))
 
 	if err != nil {
 		utils.Fatalf("Export error: %v\n", err)

@@ -18,6 +18,7 @@
 package utils
 
 import (
+	"archive/zip"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -26,8 +27,11 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -171,29 +175,7 @@ func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
 	return true
 }
 
-func ExportChain(blockchain *core.BlockChain, fn string) error {
-	log.Info("Exporting blockchain", "file", fn)
-	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
-	if err != nil {
-		return err
-	}
-	defer fh.Close()
-
-	var writer io.Writer = fh
-	if strings.HasSuffix(fn, ".gz") {
-		writer = gzip.NewWriter(writer)
-		defer writer.(*gzip.Writer).Close()
-	}
-
-	if err := blockchain.Export(writer); err != nil {
-		return err
-	}
-	log.Info("Exported blockchain", "file", fn)
-
-	return nil
-}
-
-func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, last uint64) error {
+func ExportChain(blockchain *core.BlockChain, chainDb ethdb.Database, fn string, first uint64, last uint64) error {
 	log.Info("Exporting blockchain", "file", fn)
 	// TODO verify mode perms
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
@@ -208,9 +190,87 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 		defer writer.(*gzip.Writer).Close()
 	}
 
+	var z *zip.Writer
+	if strings.HasSuffix(fn, ".zip") {
+		z = zip.NewWriter(fh)
+		writer, err = z.Create("blocks.dat")
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Info("Writing blocks", "first", first, "last", last)
 	if err := blockchain.ExportN(writer, first, last); err != nil {
 		return err
 	}
+
+	if z != nil {
+		log.Info("Writing state", "blockNumber", last)
+		writer, err := z.Create("state.dat")
+		if err != nil {
+			return err
+		}
+		if err := exportState(blockchain, chainDb, writer, last); err != nil {
+			return err
+		}
+
+		log.Info("Writing receipts", "blockNumber", last)
+		writer, err = z.Create("receipts.dat")
+		if err != nil {
+			return err
+		}
+		if err := exportReceipts(blockchain, chainDb, writer, last); err != nil {
+			return err
+		}
+
+		err = z.Close()
+		if err != nil {
+			return err
+		}
+	}
+
 	log.Info("Exported blockchain to", "file", fn)
+	return nil
+}
+
+func exportState(blockchain *core.BlockChain, chainDb ethdb.Database, writer io.Writer, blocknum uint64) error {
+	sdb, err := blockchain.StateAt(blockchain.GetHeaderByNumber(blocknum).Root)
+	if err != nil {
+		return err
+	}
+
+	iter := state.NewNodeIterator(sdb)
+	nodes, hashnodes := 0, 0
+	for iter.Next() {
+		nodes += 1
+		if nodes%100000 == 0 {
+			log.Info("Exported nodes", "count", nodes, "hashnodes", hashnodes)
+		}
+		if iter.Hash != (common.Hash{}) {
+			hashnodes += 1
+			entry, err := chainDb.Get(iter.Hash.Bytes())
+			if err != nil {
+				return err
+			}
+			writer.Write(entry)
+		}
+	}
+
+	return nil
+}
+
+func exportReceipts(blockchain *core.BlockChain, chainDb ethdb.Database, writer io.Writer, blocknum uint64) error {
+	count := 0
+	var i uint64
+	for i = 0; i <= blocknum; i++ {
+		receipts := core.GetBlockReceipts(chainDb, blockchain.GetHeaderByNumber(i).Hash(), i)
+		count += len(receipts)
+		for _, receipt := range receipts {
+			receipt.EncodeRLP(writer)
+		}
+		if i%100000 == 0 {
+			log.Info("Exported receipts", "count", count, "blocknumber", i)
+		}
+	}
 	return nil
 }
