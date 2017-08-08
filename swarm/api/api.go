@@ -34,11 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var (
-	hashMatcher      = regexp.MustCompile("^[0-9A-Fa-f]{64}")
-	slashes          = regexp.MustCompile("/+")
-	domainAndVersion = regexp.MustCompile("[@:;,]+")
-)
+var hashMatcher = regexp.MustCompile("^[0-9A-Fa-f]{64}")
 
 type Resolver interface {
 	Resolve(string) (common.Hash, error)
@@ -335,7 +331,6 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 }
 
 func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storage.Key, manifestEntryMap map[string]*manifestTrieEntry, err error) {
-
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
 		return nil, nil, err
@@ -356,5 +351,8 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 		manifestEntryMap[suffix] = entry
 	})
 
+	if err != nil {
+		return nil, nil, fmt.Errorf("list with prefix failed %v: %v", key.String(), err)
+	}
 	return key, manifestEntryMap, nil
 }
