@@ -14,6 +14,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -29,8 +30,9 @@ const (
 )
 
 var (
-	snapshotfile string
-	debugflag    = flag.Bool("v", false, "verbose")
+	snapshotfile   string
+	debugflag      = flag.Bool("v", false, "verbose")
+	debugdebugflag = flag.Bool("vv", false, "veryverbose")
 
 	w    *whisper.Whisper
 	wapi *whisper.PublicWhisperAPI
@@ -48,9 +50,11 @@ func init() {
 
 	adapters.RegisterServices(services)
 
-	loglevel := log.LvlDebug
-	if *debugflag {
+	loglevel := log.LvlInfo
+	if *debugdebugflag {
 		loglevel = log.LvlTrace
+	} else if *debugflag {
+		loglevel = log.LvlDebug
 	}
 
 	psslogmain = log.New("psslog", "*")
@@ -381,6 +385,66 @@ func TestCache(t *testing.T) {
 	time.Sleep(pp.Cachettl)
 	if ps.checkFwdCache(nil, digest) {
 		t.Fatalf("message %v should have expired from cache but checkCache returned true", msg)
+	}
+}
+
+func BenchmarkSymkeyBruteforce_10(b *testing.B) {
+	benchmarkSymkeyBruteforce(b, 10)
+}
+func BenchmarkSymkeyBruteforce_100(b *testing.B) {
+	benchmarkSymkeyBruteforce(b, 100)
+}
+func BenchmarkSymkeyBruteforce_1000(b *testing.B) {
+	benchmarkSymkeyBruteforce(b, 1000)
+}
+func benchmarkSymkeyBruteforce(b *testing.B, keycount int) {
+	potaddr := make([]pot.Address, keycount)
+	var keyid string
+	keys, err := wapi.NewKeyPair()
+	privkey, err := w.GetPrivateKey(keys)
+	ps := NewTestPss(privkey)
+	topic := whisper.BytesToTopic([]byte("foo"))
+	for i := 0; i < keycount; i++ {
+		copy(potaddr[i][:], network.RandomAddr().Over())
+		keyid, err = ps.GenerateIncomingSymmetricKey(potaddr[i], topic)
+		if err != nil {
+			b.Fatalf("cant generate symkey #%d: %v", i, err)
+		}
+
+	}
+	symkey, err := ps.w.GetSymKey(keyid)
+	if err != nil {
+		b.Fatalf("could not retreive symkey %s: %v", keyid, err)
+	}
+	wparams := &whisper.MessageParams{
+		TTL:      DefaultTTL,
+		KeySym:   symkey,
+		Topic:    topic,
+		WorkTime: defaultWhisperWorkTime,
+		PoW:      defaultWhisperPoW,
+		Payload:  []byte("xyzzy"),
+		Padding:  []byte("1234567890abcdef"),
+	}
+	woutmsg, err := whisper.NewSentMessage(wparams)
+	if err != nil {
+		b.Fatalf("could not create whisper message: %v", err)
+	}
+	env, err := woutmsg.Wrap(wparams)
+	if err != nil {
+		b.Fatalf("could not generate whisper envelope: %v", err)
+	}
+	ps.Register(&topic, func(msg []byte, p *p2p.Peer, addr []byte) error {
+		return nil
+	})
+	pssmsg := &PssMsg{
+		To:      potaddr[len(potaddr)-1][:],
+		Payload: env,
+	}
+	for i := 0; i < b.N; i++ {
+		err := ps.Process(pssmsg)
+		if err != nil {
+			b.Fatalf("pss processing failed: %v", err)
+		}
 	}
 }
 
