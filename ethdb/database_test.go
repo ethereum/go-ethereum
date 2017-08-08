@@ -18,8 +18,11 @@ package ethdb_test
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -104,4 +107,71 @@ func testPutGet(db ethdb.Database, t *testing.T) {
 			t.Fatalf("got deleted value %q", v)
 		}
 	}
+}
+
+func TestLDB_ParallelPutGet(t *testing.T) {
+	db, remove := newTestLDB()
+	defer remove()
+	testParallelPutGet(db, t)
+}
+
+func TestMemoryDB_ParallelPutGet(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	testParallelPutGet(db, t)
+}
+
+func testParallelPutGet(db ethdb.Database, t *testing.T) {
+	const n = 8
+	var pending sync.WaitGroup
+
+	pending.Add(n)
+	for i := 0; i < n; i++ {
+		go func(key string) {
+			defer pending.Done()
+			err := db.Put([]byte(key), []byte("v"+key))
+			if err != nil {
+				panic("put failed: " + err.Error())
+			}
+		}(strconv.Itoa(i))
+	}
+	pending.Wait()
+
+	pending.Add(n)
+	for i := 0; i < n; i++ {
+		go func(key string) {
+			defer pending.Done()
+			data, err := db.Get([]byte(key))
+			if err != nil {
+				panic("get failed: " + err.Error())
+			}
+			if !bytes.Equal(data, []byte("v"+key)) {
+				panic(fmt.Sprintf("get failed, got %q expected %q", []byte(data), []byte("v"+key)))
+			}
+		}(strconv.Itoa(i))
+	}
+	pending.Wait()
+
+	pending.Add(n)
+	for i := 0; i < n; i++ {
+		go func(key string) {
+			defer pending.Done()
+			err := db.Delete([]byte(key))
+			if err != nil {
+				panic("delete failed: " + err.Error())
+			}
+		}(strconv.Itoa(i))
+	}
+	pending.Wait()
+
+	pending.Add(n)
+	for i := 0; i < n; i++ {
+		go func(key string) {
+			defer pending.Done()
+			_, err := db.Get([]byte(key))
+			if err == nil {
+				panic("get succeeded")
+			}
+		}(strconv.Itoa(i))
+	}
+	pending.Wait()
 }
