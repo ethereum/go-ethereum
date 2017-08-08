@@ -37,7 +37,6 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"testing"
 
@@ -206,118 +205,6 @@ func TestTooBigSharedKey(t *testing.T) {
 	}
 }
 
-// Ensure a public key can be successfully marshalled and unmarshalled, and
-// that the decoded key is the same as the original.
-func TestMarshalPublic(t *testing.T) {
-	prv, err := GenerateKey(rand.Reader, DefaultCurve, nil)
-	if err != nil {
-		t.Fatalf("GenerateKey error: %s", err)
-	}
-
-	out, err := MarshalPublic(&prv.PublicKey)
-	if err != nil {
-		t.Fatalf("MarshalPublic error: %s", err)
-	}
-
-	pub, err := UnmarshalPublic(out)
-	if err != nil {
-		t.Fatalf("UnmarshalPublic error: %s", err)
-	}
-
-	if !cmpPublic(prv.PublicKey, *pub) {
-		t.Fatal("ecies: failed to unmarshal public key")
-	}
-}
-
-// Ensure that a private key can be encoded into DER format, and that
-// the resulting key is properly parsed back into a public key.
-func TestMarshalPrivate(t *testing.T) {
-	prv, err := GenerateKey(rand.Reader, DefaultCurve, nil)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	out, err := MarshalPrivate(prv)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	if dumpEnc {
-		ioutil.WriteFile("test.out", out, 0644)
-	}
-
-	prv2, err := UnmarshalPrivate(out)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	if !cmpPrivate(prv, prv2) {
-		fmt.Println("ecdh: private key import failed")
-		t.FailNow()
-	}
-}
-
-// Ensure that a private key can be successfully encoded to PEM format, and
-// the resulting key is properly parsed back in.
-func TestPrivatePEM(t *testing.T) {
-	prv, err := GenerateKey(rand.Reader, DefaultCurve, nil)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	out, err := ExportPrivatePEM(prv)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	if dumpEnc {
-		ioutil.WriteFile("test.key", out, 0644)
-	}
-
-	prv2, err := ImportPrivatePEM(out)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	} else if !cmpPrivate(prv, prv2) {
-		fmt.Println("ecdh: import from PEM failed")
-		t.FailNow()
-	}
-}
-
-// Ensure that a public key can be successfully encoded to PEM format, and
-// the resulting key is properly parsed back in.
-func TestPublicPEM(t *testing.T) {
-	prv, err := GenerateKey(rand.Reader, DefaultCurve, nil)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	out, err := ExportPublicPEM(&prv.PublicKey)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	if dumpEnc {
-		ioutil.WriteFile("test.pem", out, 0644)
-	}
-
-	pub2, err := ImportPublicPEM(out)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	} else if !cmpPublic(prv.PublicKey, *pub2) {
-		fmt.Println("ecdh: import from PEM failed")
-		t.FailNow()
-	}
-}
-
 // Benchmark the generation of P256 keys.
 func BenchmarkGenerateKeyP256(b *testing.B) {
 	for i := 0; i < b.N; i++ {
@@ -429,53 +316,6 @@ func TestDecryptShared2(t *testing.T) {
 	if _, err = prv.Decrypt(rand.Reader, ct, nil, []byte("garbage")); err == nil {
 		t.Fatal("ecies: decrypting with incorrect shared data didn't fail")
 	}
-}
-
-// TestMarshalEncryption validates the encode/decode produces a valid
-// ECIES encryption key.
-func TestMarshalEncryption(t *testing.T) {
-	prv1, err := GenerateKey(rand.Reader, DefaultCurve, nil)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	out, err := MarshalPrivate(prv1)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	prv2, err := UnmarshalPrivate(out)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	message := []byte("Hello, world.")
-	ct, err := Encrypt(rand.Reader, &prv2.PublicKey, message, nil, nil)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	pt, err := prv2.Decrypt(rand.Reader, ct, nil, nil)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	if !bytes.Equal(pt, message) {
-		fmt.Println("ecies: plaintext doesn't match message")
-		t.FailNow()
-	}
-
-	_, err = prv1.Decrypt(rand.Reader, ct, nil, nil)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
 }
 
 type testCase struct {
