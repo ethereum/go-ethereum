@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-func newDb() (*ethdb.LDBDatabase, func()) {
+func newTestLDB() (*ethdb.LDBDatabase, func()) {
 	dirname, err := ioutil.TempDir(os.TempDir(), "ethdb_test_")
 	if err != nil {
 		panic("failed to create test file: " + err.Error())
@@ -43,11 +43,19 @@ func newDb() (*ethdb.LDBDatabase, func()) {
 
 var test_values = []string{"", "a", "1251", "\x00123\x00"}
 
-func TestPutGet(t *testing.T) {
-	t.Parallel()
-
-	db, remove := newDb()
+func TestLDB_PutGet(t *testing.T) {
+	db, remove := newTestLDB()
 	defer remove()
+	testPutGet(db, t)
+}
+
+func TestMemoryDB_PutGet(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	testPutGet(db, t)
+}
+
+func testPutGet(db ethdb.Database, t *testing.T) {
+	t.Parallel()
 
 	for _, v := range test_values {
 		err := db.Put([]byte(v), []byte(v))
@@ -62,7 +70,7 @@ func TestPutGet(t *testing.T) {
 			t.Fatalf("get failed: %v", err)
 		}
 		if !bytes.Equal(data, []byte(v)) {
-			t.Fatalf("get return wrong result, got %q expected %q", string(data), v)
+			t.Fatalf("get returned wrong result, got %q expected %q", string(data), v)
 		}
 	}
 
@@ -79,7 +87,21 @@ func TestPutGet(t *testing.T) {
 			t.Fatalf("get failed: %v", err)
 		}
 		if !bytes.Equal(data, []byte("?")) {
-			t.Fatalf("get return wrong result, got %q expected ?", string(data))
+			t.Fatalf("get returned wrong result, got %q expected ?", string(data))
+		}
+	}
+
+	for _, v := range test_values {
+		err := db.Delete([]byte(v))
+		if err != nil {
+			t.Fatalf("delete %q failed: %v", v, err)
+		}
+	}
+
+	for _, v := range test_values {
+		_, err := db.Get([]byte(v))
+		if err == nil {
+			t.Fatalf("got deleted value %q", v)
 		}
 	}
 }
