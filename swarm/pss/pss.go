@@ -181,7 +181,7 @@ func (self *Pss) APIs() []rpc.API {
 			Namespace: "psstest",
 			Version:   "0.1",
 			Service:   NewAPITest(self),
-			Public:    true,
+			Public:    false,
 		},
 	}
 	return apis
