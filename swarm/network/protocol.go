@@ -122,16 +122,21 @@ func (b *Bzz) UpdateLocalAddr(byteaddr []byte) *bzzAddr {
 	return b.localAddr
 }
 
+func (b *Bzz) NodeInfo() interface{} {
+	return b.localAddr.Address()
+}
+
 // Bzz implements the node.Service interface, offers Protocols
 // * handshake/hive
 // * discovery
 func (b *Bzz) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
-			Name:    BzzHandshakeSpec.Name,
-			Version: BzzHandshakeSpec.Version,
-			Length:  BzzHandshakeSpec.Length(),
-			Run:     b.runHandshake,
+			Name:     BzzHandshakeSpec.Name,
+			Version:  BzzHandshakeSpec.Version,
+			Length:   BzzHandshakeSpec.Length(),
+			Run:      b.runHandshake,
+			NodeInfo: b.NodeInfo,
 		},
 		{
 			Name:     DiscoverySpec.Name,

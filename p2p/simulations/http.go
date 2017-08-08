@@ -5,10 +5,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/event"
@@ -70,8 +72,25 @@ func (c *Client) LoadSnapshot(snap *Snapshot) error {
 // SubscribeNetwork subscribes to network events which are sent from the server
 // as a server-sent-events stream, optionally receiving events for existing
 // nodes and connections
-func (c *Client) SubscribeNetwork(events chan *Event, current bool) (event.Subscription, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/events?current=%t", c.URL, current), nil)
+
+//this struct specifies the behavior of the SubscribeNetwork function:
+type SubscribeOpts struct {
+	//send the existing network (nodes,conns) over the event stream first
+	Current bool
+	//filter string defining which messages to filter (empty string for unfiltered stream)
+	Filter string
+}
+
+func (c *Client) SubscribeNetwork(events chan *Event, opts SubscribeOpts) (event.Subscription, error) {
+	var url string
+	filter := opts.Filter
+	current := opts.Current
+	if filter != "" {
+		url = fmt.Sprintf("%s/events?current=%t&filter=%s", c.URL, current, filter)
+	} else {
+		url = fmt.Sprintf("%s/events?current=%t", c.URL, current)
+	}
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -344,8 +363,18 @@ func (s *Server) StartMocker(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+//This struct defines the filtering behavior
+type MsgFilter struct {
+	//the message protocol which will be filtered (allowed)
+	Proto string
+	//the message code which will be filtered
+	Code uint64
+}
+
 // StreamNetworkEvents streams network events as a server-sent-events stream
 func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
+	filters := make(map[MsgFilter]struct{})
+	wildcards := make(map[string]struct{})
 	events := make(chan *Event)
 	sub := s.network.events.Subscribe(events)
 	defer sub.Unsubscribe()
@@ -378,6 +407,14 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 	}
 	writeErr := func(err error) {
 		write("error", err.Error())
+	}
+
+	// check if filtering has been requested
+	if strfilter := req.URL.Query().Get("filter"); strfilter != "" {
+		if err := s.setupFilter(strfilter, filters, wildcards); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
@@ -413,6 +450,11 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 	for {
 		select {
 		case event := <-events:
+			//filtering events only works for messages
+			//if the message does not pass filter, break handling
+			if event.Msg != nil && !s.msgMatchesFilter(event, filters, wildcards) {
+				continue
+			}
 			if err := writeEvent(event); err != nil {
 				writeErr(err)
 				return
@@ -421,6 +463,64 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
+}
+
+//This function sets up filtering messages, if a non-empty filter string is provided
+//The filter string needs to be sent via the URL query string as 'filter=<strfilter>',
+//where strfilter has the format: [PROTOCOL]:[[MESSAGE-CODE],]
+//there needs to be at least one [PROTOCOL]:[MESSAGE-CODE] sequence; if multiple are present,
+//they need to be separated by a '-'
+//PROTOCOL must be a valid protocol for this to work (no validation here)
+//A message-code of '*' or '-1' are considered wildcards
+func (s *Server) setupFilter(strfilter string, filters map[MsgFilter]struct{}, wildcards map[string]struct{}) error {
+	//split first all [PROTOCOL]:[MESSAGE-CODE] pairs into an array, separator being '-'
+	arrfilter := strings.Split(strfilter, "-")
+	//for each elem in array
+	for _, f := range arrfilter {
+		//get the parts: [0] is the protocol, [1] the codes, separated by ','
+		fparts := strings.Split(f, ":")
+		//thus, fparts must be exactly 2 in length and each elem can't be empty
+		if len(fparts) != 2 || len(fparts[0]) == 0 || len(fparts[1]) == 0 {
+			return errors.New("Invalid msg filter format provided")
+		}
+		//get the protocol
+		proto := fparts[0]
+		//get the code(s), separated by ','
+		strcodes := strings.Split(fparts[1], ",")
+		for _, c := range strcodes {
+			//code part '*' or '-1' is considered a wildcard, thus passing all codes of that protocol
+			if fparts[1] == "*" || fparts[1] == "-1" {
+				wildcards[fparts[0]] = struct{}{}
+			} else {
+				//no wildcards, thus parse code value
+				code, err := strconv.ParseUint(c, 10, 64)
+				if err != nil {
+					return errors.New("Invalid msg code for filtering provided")
+				}
+				//we got all filter info, set the filter on the server
+				filters[MsgFilter{Proto: proto, Code: code}] = struct{}{}
+			}
+		}
+	}
+	return nil
+}
+
+//This function finally tries to match events to filters if filtering is enabled
+//It compares the event Msg Protocol first to wildcards, then to codes
+//Returns true if the event matches the filter (= event should be sent to client)
+//or false if it doesn't match the filter (= event won't be sent to client)
+//If no filter has been set, no messages will be delivered at all
+func (s *Server) msgMatchesFilter(event *Event, filters map[MsgFilter]struct{}, wildcards map[string]struct{}) bool {
+	//check if the Protocol matches a wildcard; in that case, don't even check for code;
+	//allow all (for that protocol)
+	_, ok := wildcards[event.Msg.Protocol]
+	if !ok {
+		//no wildcard matched; so check if this event matches protocol and specific code
+		_, ok = filters[MsgFilter{event.Msg.Protocol, event.Msg.Code}]
+		// filter matches, send the event
+	}
+	//true if event matched filter, false if not
+	return ok
 }
 
 // CreateSnapshot creates a network snapshot

@@ -279,15 +279,17 @@ func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
 type MsgEventer struct {
 	MsgReadWriter
 
-	feed   *event.Feed
-	peerID discover.NodeID
+	feed     *event.Feed
+	peerID   discover.NodeID
+	Protocol string
 }
 
-func NewMsgEventer(rw MsgReadWriter, feed *event.Feed, peerID discover.NodeID) *MsgEventer {
+func NewMsgEventer(rw MsgReadWriter, feed *event.Feed, peerID discover.NodeID, proto string) *MsgEventer {
 	return &MsgEventer{
 		MsgReadWriter: rw,
 		feed:          feed,
 		peerID:        peerID,
+		Protocol:      proto,
 	}
 }
 
@@ -297,10 +299,11 @@ func (self *MsgEventer) ReadMsg() (Msg, error) {
 		return msg, err
 	}
 	self.feed.Send(&PeerEvent{
-		Type:    PeerEventTypeMsgRecv,
-		Peer:    self.peerID,
-		MsgCode: &msg.Code,
-		MsgSize: &msg.Size,
+		Type:     PeerEventTypeMsgRecv,
+		Peer:     self.peerID,
+		Protocol: self.Protocol,
+		MsgCode:  &msg.Code,
+		MsgSize:  &msg.Size,
 	})
 	return msg, nil
 }
@@ -311,10 +314,11 @@ func (self *MsgEventer) WriteMsg(msg Msg) error {
 		return err
 	}
 	self.feed.Send(&PeerEvent{
-		Type:    PeerEventTypeMsgSend,
-		Peer:    self.peerID,
-		MsgCode: &msg.Code,
-		MsgSize: &msg.Size,
+		Type:     PeerEventTypeMsgSend,
+		Peer:     self.peerID,
+		Protocol: self.Protocol,
+		MsgCode:  &msg.Code,
+		MsgSize:  &msg.Size,
 	})
 	return nil
 }
