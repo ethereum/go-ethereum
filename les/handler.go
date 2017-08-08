@@ -69,8 +69,6 @@ func errResp(code errCode, format string, v ...interface{}) error {
 	return fmt.Errorf("%v - %v", code, fmt.Sprintf(format, v...))
 }
 
-type hashFetcherFn func(common.Hash) error
-
 type BlockChain interface {
 	HasHeader(hash common.Hash) bool
 	GetHeader(hash common.Hash, number uint64) *types.Header
@@ -118,10 +116,6 @@ type ProtocolManager struct {
 	newPeerCh   chan *peer
 	quitSync    chan struct{}
 	noMorePeers chan struct{}
-
-	syncMu   sync.Mutex
-	syncing  bool
-	syncDone chan struct{}
 
 	// wait group is used for graceful shutdowns during downloading
 	// and processing

@@ -44,7 +44,6 @@ type LesServer struct {
 	defParams       *flowcontrol.ServerParams
 	lesTopic        discv5.Topic
 	quitSync        chan struct{}
-	stopped         bool
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
@@ -116,16 +115,6 @@ func (list RequestCostList) decode() requestCostTable {
 		}
 	}
 	return table
-}
-
-func (table requestCostTable) encode() RequestCostList {
-	list := make(RequestCostList, len(table))
-	for idx, code := range reqList {
-		list[idx].MsgCode = code
-		list[idx].BaseCost = table[code].baseCost
-		list[idx].ReqCost = table[code].reqCost
-	}
-	return list
 }
 
 type linReg struct {
