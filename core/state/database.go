@@ -75,6 +75,7 @@ func NewDatabase(db ethdb.Database, cacheDuration uint64) Database {
 type pastTrie struct {
 	trie        *trie.SecureTrie
 	blockNumber uint64
+	hash        common.Hash
 }
 
 type pastTrieHeap []pastTrie
@@ -133,11 +134,11 @@ func (db *cachingDB) pushTrie(t *trie.SecureTrie) common.Hash {
 
 	for uint64(db.pastHeap.Len()) > db.cacheDuration {
 		it := heap.Pop(db.pastHeap).(pastTrie)
-		delete(db.pastTries, it.trie.Hash())
+		delete(db.pastTries, it.hash)
 	}
 
 	hash := t.Hash()
-	db.pastTries[hash] = pastTrie{t, db.blockNumber}
+	db.pastTries[hash] = pastTrie{t, db.blockNumber, hash}
 	heap.Push(db.pastHeap, db.pastTries[hash])
 	return hash
 }
