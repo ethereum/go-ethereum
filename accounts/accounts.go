@@ -42,8 +42,9 @@ type Wallet interface {
 	URL() URL
 
 	// Status returns a textual status to aid the user in the current state of the
-	// wallet.
-	Status() string
+	// wallet. It also returns an error indicating any failure the wallet might have
+	// encountered.
+	Status() (string, error)
 
 	// Open initializes access to a wallet instance. It is not meant to unlock or
 	// decrypt account keys, rather simply to establish a connection to hardware

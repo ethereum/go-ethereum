@@ -36,16 +36,16 @@ func (w *keystoreWallet) URL() accounts.URL {
 	return w.account.URL
 }
 
-// Status implements accounts.Wallet, always returning "open", since there is no
-// concept of open/close for plain keystore accounts.
-func (w *keystoreWallet) Status() string {
+// Status implements accounts.Wallet, returning whether the account held by the
+// keystore wallet is unlocked or not.
+func (w *keystoreWallet) Status() (string, error) {
 	w.keystore.mu.RLock()
 	defer w.keystore.mu.RUnlock()
 
 	if _, ok := w.keystore.unlocked[w.account.Address]; ok {
-		return "Unlocked"
+		return "Unlocked", nil
 	}
-	return "Locked"
+	return "Locked", nil
 }
 
 // Open implements accounts.Wallet, but is a noop for plain wallets since there

@@ -230,18 +230,25 @@ func (s *PrivateAccountAPI) ListAccounts() []common.Address {
 type rawWallet struct {
 	URL      string             `json:"url"`
 	Status   string             `json:"status"`
-	Accounts []accounts.Account `json:"accounts"`
+	Failure  string             `json:"failure,omitempty"`
+	Accounts []accounts.Account `json:"accounts,omitempty"`
 }
 
 // ListWallets will return a list of wallets this node manages.
 func (s *PrivateAccountAPI) ListWallets() []rawWallet {
 	wallets := make([]rawWallet, 0) // return [] instead of nil if empty
 	for _, wallet := range s.am.Wallets() {
-		wallets = append(wallets, rawWallet{
+		status, failure := wallet.Status()
+
+		raw := rawWallet{
 			URL:      wallet.URL().String(),
-			Status:   wallet.Status(),
+			Status:   status,
 			Accounts: wallet.Accounts(),
-		})
+		}
+		if failure != nil {
+			raw.Failure = failure.Error()
+		}
+		wallets = append(wallets, raw)
 	}
 	return wallets
 }

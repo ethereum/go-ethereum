@@ -251,7 +251,9 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 					log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
 				}
 			case accounts.WalletOpened:
-				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", event.Wallet.Status())
+				status, _ := event.Wallet.Status()
+				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
+
 				if event.Wallet.URL().Scheme == "ledger" {
 					event.Wallet.SelfDerive(accounts.DefaultLedgerBaseDerivationPath, stateReader)
 				} else {
