@@ -9,6 +9,8 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,11 +33,10 @@ const (
 
 var (
 	snapshotfile   string
-	debugflag      = flag.Bool("v", false, "verbose")
 	debugdebugflag = flag.Bool("vv", false, "veryverbose")
-
-	w    *whisper.Whisper
-	wapi *whisper.PublicWhisperAPI
+	debugflag      = flag.Bool("v", false, "verbose")
+	w              *whisper.Whisper
+	wapi           *whisper.PublicWhisperAPI
 
 	// custom logging
 	psslogmain log.Logger
@@ -51,10 +52,10 @@ func init() {
 	adapters.RegisterServices(services)
 
 	loglevel := log.LvlInfo
-	if *debugdebugflag {
-		loglevel = log.LvlTrace
-	} else if *debugflag {
+	if *debugflag {
 		loglevel = log.LvlDebug
+	} else if *debugdebugflag {
+		loglevel = log.LvlTrace
 	}
 
 	psslogmain = log.New("psslog", "*")
@@ -138,7 +139,7 @@ func TestKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve 'their' private key")
 	}
-	ps := NewTestPss(ourprivkey)
+	ps := NewTestPss(ourprivkey, nil)
 
 	// set up peer with mock address, mapped to mocked publicaddress and with mocked symkey
 	addr := network.RandomAddr().Over()
@@ -326,7 +327,7 @@ func TestCache(t *testing.T) {
 	keys, err := wapi.NewKeyPair()
 	privkey, err := w.GetPrivateKey(keys)
 
-	ps := NewTestPss(privkey)
+	ps := NewTestPss(privkey, nil)
 	pp := NewPssParams(privkey)
 	data := []byte("foo")
 	datatwo := []byte("bar")
@@ -388,23 +389,197 @@ func TestCache(t *testing.T) {
 	}
 }
 
-func BenchmarkSymkeyBruteforce_10(b *testing.B) {
-	benchmarkSymkeyBruteforce(b, 10)
+func BenchmarkSymkeySend(b *testing.B) {
+	b.Run(fmt.Sprintf("%d", 256), benchmarkSymKeySend)
+	b.Run(fmt.Sprintf("%d", 1024), benchmarkSymKeySend)
+	b.Run(fmt.Sprintf("%d", 1024*1024), benchmarkSymKeySend)
+	b.Run(fmt.Sprintf("%d", 1024*1024*10), benchmarkSymKeySend)
+	b.Run(fmt.Sprintf("%d", 1024*1024*100), benchmarkSymKeySend)
 }
-func BenchmarkSymkeyBruteforce_100(b *testing.B) {
-	benchmarkSymkeyBruteforce(b, 100)
+
+func benchmarkSymKeySend(b *testing.B) {
+	var potaddr pot.Address
+	msgsizestring := strings.Split(b.Name(), "/")
+	if len(msgsizestring) != 2 {
+		b.Fatalf("benchmark called without msgsize param")
+	}
+	msgsize, err := strconv.ParseInt(msgsizestring[1], 10, 0)
+	if err != nil {
+		b.Fatalf("benchmark called with invalid msgsize param '%s': %v", msgsizestring[1], err)
+	}
+	keys, err := wapi.NewKeyPair()
+	privkey, err := w.GetPrivateKey(keys)
+	ps := NewTestPss(privkey, nil)
+	msg := make([]byte, msgsize)
+	rand.Read(msg)
+	topic := whisper.BytesToTopic([]byte("foo"))
+	to := network.RandomAddr().Over()
+	copy(potaddr[:], to)
+	symkeyid, err := ps.GenerateIncomingSymmetricKey(potaddr, topic)
+	if err != nil {
+		b.Fatalf("could not generate symkey: %v", err)
+	}
+	symkey, err := ps.w.GetSymKey(symkeyid)
+	if err != nil {
+		b.Fatalf("could not retreive symkey: %v", err)
+	}
+	ps.SetOutgoingSymmetricKey(potaddr, topic, symkey)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ps.SendSym(to, topic, msg)
+	}
 }
-func BenchmarkSymkeyBruteforce_1000(b *testing.B) {
-	benchmarkSymkeyBruteforce(b, 1000)
+
+func BenchmarkAsymkeySend(b *testing.B) {
+	b.Run(fmt.Sprintf("%d", 256), benchmarkAsymKeySend)
+	b.Run(fmt.Sprintf("%d", 1024), benchmarkAsymKeySend)
+	b.Run(fmt.Sprintf("%d", 1024*1024), benchmarkAsymKeySend)
+	b.Run(fmt.Sprintf("%d", 1024*1024*10), benchmarkAsymKeySend)
+	b.Run(fmt.Sprintf("%d", 1024*1024*100), benchmarkAsymKeySend)
 }
-func benchmarkSymkeyBruteforce(b *testing.B, keycount int) {
+
+func benchmarkAsymKeySend(b *testing.B) {
+	var potaddr pot.Address
+	msgsizestring := strings.Split(b.Name(), "/")
+	if len(msgsizestring) != 2 {
+		b.Fatalf("benchmark called without msgsize param")
+	}
+	msgsize, err := strconv.ParseInt(msgsizestring[1], 10, 0)
+	if err != nil {
+		b.Fatalf("benchmark called with invalid msgsize param '%s': %v", msgsizestring[1], err)
+	}
+	keys, err := wapi.NewKeyPair()
+	privkey, err := w.GetPrivateKey(keys)
+	ps := NewTestPss(privkey, nil)
+	msg := make([]byte, msgsize)
+	rand.Read(msg)
+	topic := whisper.BytesToTopic([]byte("foo"))
+	to := network.RandomAddr().Over()
+	copy(potaddr[:], to)
+	ps.SetOutgoingPublicKey(potaddr, topic, &privkey.PublicKey)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ps.SendAsym(to, topic, msg)
+	}
+}
+func BenchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
+	for i := 100; i < 100000; i = i * 10 {
+		for j := 32; j < 10000; j = j * 8 {
+			b.Run(fmt.Sprintf("%d/%d", i, j), benchmarkSymkeyBruteforceChangeaddr)
+		}
+		//b.Run(fmt.Sprintf("%d", i), benchmarkSymkeyBruteforceChangeaddr)
+	}
+}
+
+func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
+	keycountstring := strings.Split(b.Name(), "/")
+	cachesize := int64(0)
+	var ps *Pss
+	if len(keycountstring) < 2 {
+		b.Fatalf("benchmark called without count param")
+	}
+	keycount, err := strconv.ParseInt(keycountstring[1], 10, 0)
+	if err != nil {
+		b.Fatalf("benchmark called with invalid count param '%s': %v", keycountstring[1], err)
+	}
+	if len(keycountstring) == 3 {
+		cachesize, err = strconv.ParseInt(keycountstring[2], 10, 0)
+		if err != nil {
+			b.Fatalf("benchmark called with invalid cachesize '%s': %v", keycountstring[2], err)
+		}
+	}
 	potaddr := make([]pot.Address, keycount)
+	pssmsgs := make([]*PssMsg, 0, keycount)
 	var keyid string
 	keys, err := wapi.NewKeyPair()
 	privkey, err := w.GetPrivateKey(keys)
-	ps := NewTestPss(privkey)
+	if cachesize > 0 {
+		ps = NewTestPss(privkey, &PssParams{SymKeyCacheCapacity: int(cachesize)})
+	} else {
+		ps = NewTestPss(privkey, nil)
+	}
 	topic := whisper.BytesToTopic([]byte("foo"))
-	for i := 0; i < keycount; i++ {
+	for i := 0; i < int(keycount); i++ {
+		copy(potaddr[i][:], network.RandomAddr().Over())
+		keyid, err = ps.GenerateIncomingSymmetricKey(potaddr[i], topic)
+		if err != nil {
+			b.Fatalf("cant generate symkey #%d: %v", i, err)
+		}
+		symkey, err := ps.w.GetSymKey(keyid)
+		if err != nil {
+			b.Fatalf("could not retreive symkey %s: %v", keyid, err)
+		}
+		wparams := &whisper.MessageParams{
+			TTL:      DefaultTTL,
+			KeySym:   symkey,
+			Topic:    topic,
+			WorkTime: defaultWhisperWorkTime,
+			PoW:      defaultWhisperPoW,
+			Payload:  []byte("xyzzy"),
+			Padding:  []byte("1234567890abcdef"),
+		}
+		woutmsg, err := whisper.NewSentMessage(wparams)
+		if err != nil {
+			b.Fatalf("could not create whisper message: %v", err)
+		}
+		env, err := woutmsg.Wrap(wparams)
+		if err != nil {
+			b.Fatalf("could not generate whisper envelope: %v", err)
+		}
+		ps.Register(&topic, func(msg []byte, p *p2p.Peer, addr []byte) error {
+			return nil
+		})
+		pssmsgs = append(pssmsgs, &PssMsg{
+			To:      potaddr[i][:],
+			Payload: env,
+		})
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := ps.Process(pssmsgs[len(pssmsgs)-(i%len(pssmsgs))-1])
+		if err != nil {
+			b.Fatalf("pss processing failed: %v", err)
+		}
+	}
+}
+
+func BenchmarkSymkeyBruteforceSameaddr(b *testing.B) {
+	for i := 100; i < 100000; i = i * 10 {
+		for j := 32; j < 10000; j = j * 8 {
+			b.Run(fmt.Sprintf("%d/%d", i, j), benchmarkSymkeyBruteforceSameaddr)
+		}
+	}
+}
+
+func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
+	var keyid string
+	var ps *Pss
+	cachesize := int64(0)
+	keycountstring := strings.Split(b.Name(), "/")
+	if len(keycountstring) < 2 {
+		b.Fatalf("benchmark called without count param")
+	}
+	keycount, err := strconv.ParseInt(keycountstring[1], 10, 0)
+	if err != nil {
+		b.Fatalf("benchmark called with invalid count param '%s': %v", keycountstring[1], err)
+	}
+	if len(keycountstring) == 3 {
+		cachesize, err = strconv.ParseInt(keycountstring[2], 10, 0)
+		if err != nil {
+			b.Fatalf("benchmark called with invalid cachesize '%s': %v", keycountstring[2], err)
+		}
+	}
+	potaddr := make([]pot.Address, keycount)
+	keys, err := wapi.NewKeyPair()
+	privkey, err := w.GetPrivateKey(keys)
+	if cachesize > 0 {
+		ps = NewTestPss(privkey, &PssParams{SymKeyCacheCapacity: int(cachesize)})
+	} else {
+		ps = NewTestPss(privkey, nil)
+	}
+	topic := whisper.BytesToTopic([]byte("foo"))
+	for i := 0; i < int(keycount); i++ {
 		copy(potaddr[i][:], network.RandomAddr().Over())
 		keyid, err = ps.GenerateIncomingSymmetricKey(potaddr[i], topic)
 		if err != nil {

@@ -27,9 +27,8 @@ const (
 	digestLength                = 32  // byte length of digest used for pss cache (currently same as swarm chunk hash)
 	digestCapacity              = 256 // cache entry limit (not implement)
 	DefaultTTL                  = 6000
-	defaultDigestCacheTTL       = time.Second
 	defaultWhisperWorkTime      = 3
-	defaultWhisperPoW           = 0.001
+	defaultWhisperPoW           = 0.0000000001
 	defaultSymKeyLength         = 32
 	defaultPartialAddressLength = 8
 )
@@ -75,17 +74,19 @@ type pssDigest [digestLength]byte
 // Toplevel pss object, taking care of message sending and receiving, message handler dispatchers and message forwarding.
 // Implements node.Service
 type Pss struct {
-	network.Overlay                                                // we can get the overlayaddress from this
-	peerPool        map[pot.Address]map[whisper.TopicType]*pssPeer // keep track of all virtual p2p.Peers we are currently speaking to
-	fwdPool         map[discover.NodeID]*protocols.Peer            // keep track of all peers sitting on the pssmsg routing layer
-	reverseKeyPool  map[string]map[whisper.TopicType]pot.Address   // reverse mapping of sentkeysymkeyids to peeraddr
-	handlers        map[whisper.TopicType]map[*Handler]bool        // topic and version based pss payload handlers
-	fwdcache        map[pssDigest]pssCacheEntry                    // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
-	cachettl        time.Duration                                  // how long to keep messages in fwdcache
-	lock            sync.Mutex
-	dpa             *storage.DPA
-	privatekey      *ecdsa.PrivateKey
-	w               *whisper.Whisper
+	network.Overlay                                                  // we can get the overlayaddress from this
+	peerPool          map[pot.Address]map[whisper.TopicType]*pssPeer // keep track of all virtual p2p.Peers we are currently speaking to
+	fwdPool           map[discover.NodeID]*protocols.Peer            // keep track of all peers sitting on the pssmsg routing layer
+	reverseKeyPool    map[string]map[whisper.TopicType]pot.Address   // reverse mapping of sentkeysymkeyids to peeraddr
+	handlers          map[whisper.TopicType]map[*Handler]bool        // topic and version based pss payload handlers
+	fwdcache          map[pssDigest]pssCacheEntry                    // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
+	cachettl          time.Duration                                  // how long to keep messages in fwdcache
+	lock              sync.Mutex
+	dpa               *storage.DPA
+	privatekey        *ecdsa.PrivateKey
+	w                 *whisper.Whisper
+	symkeycache       []*pssPeer
+	symkeycachecursor int
 }
 
 func (self *Pss) String() string {
@@ -122,6 +123,7 @@ func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 		dpa:            dpa,
 		privatekey:     params.privatekey,
 		w:              whisper.New(),
+		symkeycache:    make([]*pssPeer, params.SymKeyCacheCapacity),
 	}
 }
 
@@ -236,6 +238,8 @@ func (self *Pss) GenerateIncomingSymmetricKey(addr pot.Address, topic whisper.To
 		self.reverseKeyPool[keyid] = make(map[whisper.TopicType]pot.Address)
 	}
 	self.reverseKeyPool[keyid][topic] = addr
+	self.symkeycachecursor++
+	self.symkeycache[self.symkeycachecursor%cap(self.symkeycache)] = psp
 	return keyid, nil
 }
 
@@ -329,9 +333,9 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 		return fmt.Errorf("No registered handler for topic '%x'", env.Topic)
 	}
 
-	// TODO: consider keeping symkeys in lastseen order, recent are more likely to be the right ones
 	if len(env.AESNonce) > 0 { // see whisper.envelope.go.OpenSymmetric
-		for symkeyid := range self.reverseKeyPool {
+		for i := self.symkeycachecursor; i > self.symkeycachecursor-cap(self.symkeycache) && i > 0; i-- {
+			symkeyid := self.symkeycache[i%cap(self.symkeycache)].recvsymkey
 			log.Trace("attempting symmetric decrypt", "symkey", symkeyid)
 			symkey, err := self.w.GetSymKey(symkeyid)
 			if err != nil {
@@ -347,7 +351,9 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 				return fmt.Errorf("symmetrically encrypted message has invalid signature or is corrupt")
 			}
 			from = self.reverseKeyPool[symkeyid][env.Topic]
-			log.Debug("pss message sym enc", "from", from, "payload", recvmsg.Payload)
+			self.symkeycachecursor++
+			self.symkeycache[self.symkeycachecursor%cap(self.symkeycache)] = self.peerPool[from][env.Topic]
+			log.Debug("successfully decrypted symmetrically encrypted pss message", "symkeys tried", i, "from", from, "symkey cache insert", self.symkeycachecursor%cap(self.symkeycache))
 		}
 	}
 

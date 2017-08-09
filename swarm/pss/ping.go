@@ -57,7 +57,7 @@ func NewPingProtocol(handler func(interface{}) error) *p2p.Protocol {
 	}
 }
 
-func NewTestPss(privkey *ecdsa.PrivateKey) *Pss {
+func NewTestPss(privkey *ecdsa.PrivateKey, ppextra *PssParams) *Pss {
 
 	var nid discover.NodeID
 	copy(nid[:], crypto.FromECDSAPub(&privkey.PublicKey))
@@ -81,6 +81,9 @@ func NewTestPss(privkey *ecdsa.PrivateKey) *Pss {
 
 	// create pss
 	pp := NewPssParams(privkey)
+	if ppextra != nil {
+		pp.SymKeyCacheCapacity = ppextra.SymKeyCacheCapacity
+	}
 
 	overlay := network.NewKademlia(addr.Over(), kp)
 	ps := NewPss(overlay, dpa, pp)

@@ -12,17 +12,24 @@ import (
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
+const (
+	defaultSymKeyCacheCapacity = 512
+	defaultDigestCacheTTL      = time.Second
+)
+
 // Pss configuration parameters
 type PssParams struct {
-	Cachettl   time.Duration
-	privatekey *ecdsa.PrivateKey
+	Cachettl            time.Duration
+	privatekey          *ecdsa.PrivateKey
+	SymKeyCacheCapacity int
 }
 
 // Sane defaults for Pss
 func NewPssParams(privatekey *ecdsa.PrivateKey) *PssParams {
 	return &PssParams{
-		Cachettl:   defaultDigestCacheTTL,
-		privatekey: privatekey,
+		Cachettl:            defaultDigestCacheTTL,
+		privatekey:          privatekey,
+		SymKeyCacheCapacity: defaultSymKeyCacheCapacity,
 	}
 }
 
