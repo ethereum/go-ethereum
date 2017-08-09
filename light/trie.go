@@ -46,8 +46,6 @@ func (db *odrDatabase) OpenTrie(root common.Hash) (state.Trie, error) {
 	return &odrTrie{db: db, id: db.id}, nil
 }
 
-//func (db *odrDatabase) CommitTrie(trie state.Trie, blockNumber uint64)
-
 func (db *odrDatabase) OpenStorageTrie(addrHash, root common.Hash) (state.Trie, error) {
 	return &odrTrie{db: db, id: StorageTrieID(db.id, addrHash, root)}, nil
 }
@@ -66,13 +64,7 @@ func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
 	}
 }
 
-func (db *odrDatabase) CommitTrie(t state.Trie, blockNum uint64) common.Hash {
-	return t.Hash()
-}
-
 func (db *odrDatabase) SetBlockNumber(uint64) {}
-
-func (db *odrDatabase) RemoveOldTries(uint64) {}
 
 func (db *odrDatabase) WriteState(trie.DatabaseWriter, common.Hash) error { return nil }
 
