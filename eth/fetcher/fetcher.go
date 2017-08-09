@@ -338,7 +338,13 @@ func (f *Fetcher) loop() {
 			if _, ok := f.fetching[notification.hash]; ok {
 				break
 			}
+			if _, ok := f.fetched[notification.hash]; ok {
+				break
+			}
 			if _, ok := f.completing[notification.hash]; ok {
+				break
+			}
+			if _, ok := f.queued[notification.hash]; ok {
 				break
 			}
 			f.announces[notification.origin] = count
