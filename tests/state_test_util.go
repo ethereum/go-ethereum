@@ -37,37 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// This table defines supported forks and their chain config.
-var stateTestForks = map[string]*params.ChainConfig{
-	"Frontier": &params.ChainConfig{
-		ChainId: big.NewInt(1),
-	},
-	"Homestead": &params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
-		ChainId:        big.NewInt(1),
-	},
-	"EIP150": &params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
-		EIP150Block:    big.NewInt(0),
-		ChainId:        big.NewInt(1),
-	},
-	"EIP158": &params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
-		EIP150Block:    big.NewInt(0),
-		EIP155Block:    big.NewInt(0),
-		EIP158Block:    big.NewInt(0),
-		ChainId:        big.NewInt(1),
-	},
-	"Metropolis": &params.ChainConfig{
-		HomesteadBlock:  big.NewInt(0),
-		EIP150Block:     big.NewInt(0),
-		EIP155Block:     big.NewInt(0),
-		EIP158Block:     big.NewInt(0),
-		MetropolisBlock: big.NewInt(0),
-		ChainId:         big.NewInt(1),
-	},
-}
-
 // StateTest checks transaction processing without block context.
 // See https://github.com/ethereum/EIPs/issues/176 for the test format specification.
 type StateTest struct {
@@ -167,9 +136,9 @@ func (t *StateTest) Subtests() []StateSubtest {
 
 // Run executes a specific subtest.
 func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) error {
-	config, ok := stateTestForks[subtest.Fork]
+	config, ok := Forks[subtest.Fork]
 	if !ok {
-		return fmt.Errorf("no config for fork %q", subtest.Fork)
+		return UnsupportedForkError{subtest.Fork}
 	}
 	block, _ := t.genesis(config).ToBlock()
 	db, _ := ethdb.NewMemDatabase()

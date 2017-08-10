@@ -17,10 +17,7 @@
 package tests
 
 import (
-	"math/big"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestBlockchain(t *testing.T) {
@@ -30,51 +27,19 @@ func TestBlockchain(t *testing.T) {
 	// General state tests are 'exported' as blockchain tests, but we can run them natively.
 	bt.skipLoad(`^GeneralStateTests/`)
 	// Skip random failures due to selfish mining test.
-	bt.skipLoad(`bcForkUncle\.json/ForkUncle`)
-	bt.skipLoad(`^bcMultiChainTest\.json/ChainAtoChainB_blockorder`)
-	bt.skipLoad(`^bcTotalDifficultyTest\.json/(lotsOfLeafs|lotsOfBranches|sideChainWithMoreTransactions)$`)
-	bt.skipLoad(`^bcMultiChainTest\.json/CallContractFromNotBestBlock`)
+	bt.skipLoad(`^bcForgedTest/bcForkUncle\.json`)
+	bt.skipLoad(`^bcMultiChainTest/(ChainAtoChainB_blockorder|CallContractFromNotBestBlock)`)
+	bt.skipLoad(`^bcTotalDifficultyTest/(lotsOfLeafs|lotsOfBranches|sideChainWithMoreTransactions)`)
+	// Constantinople is not implemented yet.
+	bt.skipLoad(`(?i)(constantinople)`)
 	// Expected failures:
-	bt.fails(`(?i)metropolis`, "metropolis is not supported yet")
-	bt.fails(`^TestNetwork/bcTheDaoTest\.json/(DaoTransactions$|DaoTransactions_UncleExtradata$)`, "issue in test")
-
-	bt.config(`^TestNetwork/`, params.ChainConfig{
-		HomesteadBlock: big.NewInt(5),
-		DAOForkBlock:   big.NewInt(8),
-		DAOForkSupport: true,
-		EIP150Block:    big.NewInt(10),
-		EIP155Block:    big.NewInt(10),
-		EIP158Block:    big.NewInt(14),
-		// MetropolisBlock: big.NewInt(16),
-	})
-	bt.config(`^RandomTests/.*EIP150`, params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
-		EIP150Block:    big.NewInt(0),
-	})
-	bt.config(`^RandomTests/.*EIP158`, params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
-		EIP150Block:    big.NewInt(0),
-		EIP155Block:    big.NewInt(0),
-		EIP158Block:    big.NewInt(0),
-	})
-	bt.config(`^RandomTests/`, params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
-		EIP150Block:    big.NewInt(10),
-	})
-	bt.config(`^Homestead/`, params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
-	})
-	bt.config(`^EIP150/`, params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
-		EIP150Block:    big.NewInt(0),
-	})
-	bt.config(`^[^/]+\.json`, params.ChainConfig{
-		HomesteadBlock: big.NewInt(1000000),
-	})
+	bt.fails("^TransitionTests/bcEIP158ToByzantium", "byzantium not supported")
+	bt.fails(`^TransitionTests/bcHomesteadToDao/DaoTransactions(|_UncleExtradata|_EmptyTransactionAndForkBlocksAhead)\.json`, "issue in test")
+	bt.fails(`^bc(Exploit|Fork|Gas|Multi|Total|State|Random|Uncle|Valid|Wallet).*_Byzantium$`, "byzantium not supported")
+	bt.fails(`^bcBlockGasLimitTest/(BlockGasLimit2p63m1|TransactionGasHigherThanLimit2p63m1|SuicideTransaction|GasUsedHigherThanBlockGasLimitButNotWithRefundsSuicideFirst|TransactionGasHigherThanLimit2p63m1_2).*_Byzantium$`, "byzantium not supported")
 
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
-		cfg := bt.findConfig(name)
-		if err := bt.checkFailure(t, name, test.Run(cfg)); err != nil {
+		if err := bt.checkFailure(t, name, test.Run()); err != nil {
 			t.Error(err)
 		}
 	})
