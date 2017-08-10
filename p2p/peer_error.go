@@ -1,22 +1,23 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package p2p
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -51,6 +52,8 @@ func (self *peerError) Error() string {
 	return self.message
 }
 
+var errProtocolReturned = errors.New("protocol returned")
+
 type DiscReason uint
 
 const (
@@ -66,28 +69,28 @@ const (
 	DiscUnexpectedIdentity
 	DiscSelf
 	DiscReadTimeout
-	DiscSubprotocolError
+	DiscSubprotocolError = 0x10
 )
 
 var discReasonToString = [...]string{
-	DiscRequested:           "Disconnect requested",
-	DiscNetworkError:        "Network error",
-	DiscProtocolError:       "Breach of protocol",
-	DiscUselessPeer:         "Useless peer",
-	DiscTooManyPeers:        "Too many peers",
-	DiscAlreadyConnected:    "Already connected",
-	DiscIncompatibleVersion: "Incompatible P2P protocol version",
-	DiscInvalidIdentity:     "Invalid node identity",
-	DiscQuitting:            "Client quitting",
-	DiscUnexpectedIdentity:  "Unexpected identity",
-	DiscSelf:                "Connected to self",
-	DiscReadTimeout:         "Read timeout",
-	DiscSubprotocolError:    "Subprotocol error",
+	DiscRequested:           "disconnect requested",
+	DiscNetworkError:        "network error",
+	DiscProtocolError:       "breach of protocol",
+	DiscUselessPeer:         "useless peer",
+	DiscTooManyPeers:        "too many peers",
+	DiscAlreadyConnected:    "already connected",
+	DiscIncompatibleVersion: "incompatible p2p protocol version",
+	DiscInvalidIdentity:     "invalid node identity",
+	DiscQuitting:            "client quitting",
+	DiscUnexpectedIdentity:  "unexpected identity",
+	DiscSelf:                "connected to self",
+	DiscReadTimeout:         "read timeout",
+	DiscSubprotocolError:    "subprotocol error",
 }
 
 func (d DiscReason) String() string {
 	if len(discReasonToString) < int(d) {
-		return fmt.Sprintf("Unknown Reason(%d)", d)
+		return fmt.Sprintf("unknown disconnect reason %d", d)
 	}
 	return discReasonToString[d]
 }
@@ -99,6 +102,9 @@ func (d DiscReason) Error() string {
 func discReasonForError(err error) DiscReason {
 	if reason, ok := err.(DiscReason); ok {
 		return reason
+	}
+	if err == errProtocolReturned {
+		return DiscQuitting
 	}
 	peerError, ok := err.(*peerError)
 	if ok {

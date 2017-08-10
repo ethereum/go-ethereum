@@ -1,23 +1,25 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package rlp
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -33,7 +35,14 @@ type typeinfo struct {
 
 // represents struct tags
 type tags struct {
+	// rlp:"nil" controls whether empty input results in a nil pointer.
 	nilOK bool
+	// rlp:"tail" controls whether this field swallows additional list
+	// elements. It can only be set for the last field, which must be
+	// of slice type.
+	tail bool
+	// rlp:"-" ignores fields.
+	ignored bool
 }
 
 type typekey struct {
@@ -89,7 +98,13 @@ type field struct {
 func structFields(typ reflect.Type) (fields []field, err error) {
 	for i := 0; i < typ.NumField(); i++ {
 		if f := typ.Field(i); f.PkgPath == "" { // exported
-			tags := parseStructTag(f.Tag.Get("rlp"))
+			tags, err := parseStructTag(typ, i)
+			if err != nil {
+				return nil, err
+			}
+			if tags.ignored {
+				continue
+			}
 			info, err := cachedTypeInfo1(f.Type, tags)
 			if err != nil {
 				return nil, err
@@ -100,8 +115,29 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 	return fields, nil
 }
 
-func parseStructTag(tag string) tags {
-	return tags{nilOK: tag == "nil"}
+func parseStructTag(typ reflect.Type, fi int) (tags, error) {
+	f := typ.Field(fi)
+	var ts tags
+	for _, t := range strings.Split(f.Tag.Get("rlp"), ",") {
+		switch t = strings.TrimSpace(t); t {
+		case "":
+		case "-":
+			ts.ignored = true
+		case "nil":
+			ts.nilOK = true
+		case "tail":
+			ts.tail = true
+			if fi != typ.NumField()-1 {
+				return ts, fmt.Errorf(`rlp: invalid struct tag "tail" for %v.%s (must be on last field)`, typ, f.Name)
+			}
+			if f.Type.Kind() != reflect.Slice {
+				return ts, fmt.Errorf(`rlp: invalid struct tag "tail" for %v.%s (field type is not slice)`, typ, f.Name)
+			}
+		default:
+			return ts, fmt.Errorf("rlp: unknown struct tag %q on %v.%s", t, typ, f.Name)
+		}
+	}
+	return ts, nil
 }
 
 func genTypeInfo(typ reflect.Type, tags tags) (info *typeinfo, err error) {
@@ -109,7 +145,7 @@ func genTypeInfo(typ reflect.Type, tags tags) (info *typeinfo, err error) {
 	if info.decoder, err = makeDecoder(typ, tags); err != nil {
 		return nil, err
 	}
-	if info.writer, err = makeWriter(typ); err != nil {
+	if info.writer, err = makeWriter(typ, tags); err != nil {
 		return nil, err
 	}
 	return info, nil

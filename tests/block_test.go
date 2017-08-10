@@ -1,96 +1,81 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package tests
 
 import (
-	"path/filepath"
+	"math/big"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/params"
 )
 
-func TestBcValidBlockTests(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcValidBlockTest.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
+func TestBlockchain(t *testing.T) {
+	t.Parallel()
 
-func TestBcUncleTests(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcUncleTest.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = RunBlockTest(filepath.Join(blockTestDir, "bcBruncleTest.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
+	bt := new(testMatcher)
+	// General state tests are 'exported' as blockchain tests, but we can run them natively.
+	bt.skipLoad(`^GeneralStateTests/`)
+	// Skip random failures due to selfish mining test.
+	bt.skipLoad(`bcForkUncle\.json/ForkUncle`)
+	bt.skipLoad(`^bcMultiChainTest\.json/ChainAtoChainB_blockorder`)
+	bt.skipLoad(`^bcTotalDifficultyTest\.json/(lotsOfLeafs|lotsOfBranches|sideChainWithMoreTransactions)$`)
+	bt.skipLoad(`^bcMultiChainTest\.json/CallContractFromNotBestBlock`)
+	// Expected failures:
+	bt.fails(`(?i)metropolis`, "metropolis is not supported yet")
+	bt.fails(`^TestNetwork/bcTheDaoTest\.json/(DaoTransactions$|DaoTransactions_UncleExtradata$)`, "issue in test")
 
-func TestBcUncleHeaderValidityTests(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcUncleHeaderValiditiy.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
+	bt.config(`^TestNetwork/`, params.ChainConfig{
+		HomesteadBlock: big.NewInt(5),
+		DAOForkBlock:   big.NewInt(8),
+		DAOForkSupport: true,
+		EIP150Block:    big.NewInt(10),
+		EIP155Block:    big.NewInt(10),
+		EIP158Block:    big.NewInt(14),
+		// MetropolisBlock: big.NewInt(16),
+	})
+	bt.config(`^RandomTests/.*EIP150`, params.ChainConfig{
+		HomesteadBlock: big.NewInt(0),
+		EIP150Block:    big.NewInt(0),
+	})
+	bt.config(`^RandomTests/.*EIP158`, params.ChainConfig{
+		HomesteadBlock: big.NewInt(0),
+		EIP150Block:    big.NewInt(0),
+		EIP155Block:    big.NewInt(0),
+		EIP158Block:    big.NewInt(0),
+	})
+	bt.config(`^RandomTests/`, params.ChainConfig{
+		HomesteadBlock: big.NewInt(0),
+		EIP150Block:    big.NewInt(10),
+	})
+	bt.config(`^Homestead/`, params.ChainConfig{
+		HomesteadBlock: big.NewInt(0),
+	})
+	bt.config(`^EIP150/`, params.ChainConfig{
+		HomesteadBlock: big.NewInt(0),
+		EIP150Block:    big.NewInt(0),
+	})
+	bt.config(`^[^/]+\.json`, params.ChainConfig{
+		HomesteadBlock: big.NewInt(1000000),
+	})
 
-func TestBcInvalidHeaderTests(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcInvalidHeaderTest.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestBcInvalidRLPTests(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcInvalidRLPTest.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestBcRPCAPITests(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcRPC_API_Test.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestBcForkBlockTests(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcForkBlockTest.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestBcTotalDifficulty(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcTotalDifficultyTest.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestBcWallet(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcWalletTest.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestBcGasPricer(t *testing.T) {
-	err := RunBlockTest(filepath.Join(blockTestDir, "bcGasPricerTest.json"), BlockSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
+		cfg := bt.findConfig(name)
+		if err := bt.checkFailure(t, name, test.Run(cfg)); err != nil {
+			t.Error(err)
+		}
+	})
 }

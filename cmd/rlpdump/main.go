@@ -8,11 +8,11 @@
 //
 // go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 // rlpdump is a pretty-printer for RLP data.
 package main
@@ -32,6 +32,7 @@ import (
 var (
 	hexMode = flag.String("hex", "", "dump given hex data")
 	noASCII = flag.Bool("noascii", false, "don't print ASCII strings readably")
+	single  = flag.Bool("single", false, "print only the first element, discard the rest")
 )
 
 func init() {
@@ -82,6 +83,9 @@ func main() {
 			break
 		}
 		fmt.Println()
+		if *single {
+			break
+		}
 	}
 }
 

@@ -1,123 +1,37 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package tests
 
 import (
-	"path/filepath"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-// I've created a new function for each tests so it's easier to identify where the problem lies if any of them fail.
-func TestVMArithmetic(t *testing.T) {
-	fn := filepath.Join(vmTestDir, "vmArithmeticTest.json")
-	if err := RunVmTest(fn, VmSkipTests); err != nil {
-		t.Error(err)
-	}
-}
+func TestVM(t *testing.T) {
+	t.Parallel()
+	vmt := new(testMatcher)
+	vmt.fails("^vmSystemOperationsTest.json/createNameRegistrator$", "fails without parallel execution")
+	vmt.skipShortMode("^vmPerformanceTest.json")
+	vmt.skipShortMode("^vmInputLimits(Light)?.json")
 
-func TestBitwiseLogicOperation(t *testing.T) {
-	fn := filepath.Join(vmTestDir, "vmBitwiseLogicOperationTest.json")
-	if err := RunVmTest(fn, VmSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestBlockInfo(t *testing.T) {
-	fn := filepath.Join(vmTestDir, "vmBlockInfoTest.json")
-	if err := RunVmTest(fn, VmSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestEnvironmentalInfo(t *testing.T) {
-	fn := filepath.Join(vmTestDir, "vmEnvironmentalInfoTest.json")
-	if err := RunVmTest(fn, VmSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestFlowOperation(t *testing.T) {
-	fn := filepath.Join(vmTestDir, "vmIOandFlowOperationsTest.json")
-	if err := RunVmTest(fn, VmSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestLogTest(t *testing.T) {
-	fn := filepath.Join(vmTestDir, "vmLogTest.json")
-	if err := RunVmTest(fn, VmSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestPerformance(t *testing.T) {
-	fn := filepath.Join(vmTestDir, "vmPerformanceTest.json")
-	if err := RunVmTest(fn, VmSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestPushDupSwap(t *testing.T) {
-	fn := filepath.Join(vmTestDir, "vmPushDupSwapTest.json")
-	if err := RunVmTest(fn, VmSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestVMSha3(t *testing.T) {
-	fn := filepath.Join(vmTestDir, "vmSha3Test.json")
-	if err := RunVmTest(fn, VmSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestVm(t *testing.T) {
-	fn := filepath.Join(vmTestDir, "vmtests.json")
-	if err := RunVmTest(fn, VmSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestVmLog(t *testing.T) {
-	fn := filepath.Join(vmTestDir, "vmLogTest.json")
-	if err := RunVmTest(fn, VmSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestInputLimits(t *testing.T) {
-	fn := filepath.Join(vmTestDir, "vmInputLimits.json")
-	if err := RunVmTest(fn, VmSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestInputLimitsLight(t *testing.T) {
-	fn := filepath.Join(vmTestDir, "vmInputLimitsLight.json")
-	if err := RunVmTest(fn, VmSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestVMRandom(t *testing.T) {
-	fns, _ := filepath.Glob(filepath.Join(baseDir, "RandomTests", "*"))
-	for _, fn := range fns {
-		if err := RunVmTest(fn, VmSkipTests); err != nil {
-			t.Error(err)
-		}
-	}
+	vmt.walk(t, vmTestDir, func(t *testing.T, name string, test *VMTest) {
+		withTrace(t, test.json.Exec.GasLimit, func(vmconfig vm.Config) error {
+			return vmt.checkFailure(t, name, test.Run(vmconfig))
+		})
+	})
 }

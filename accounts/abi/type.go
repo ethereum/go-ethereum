@@ -1,18 +1,18 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package abi
 
@@ -21,186 +21,190 @@ import (
 	"reflect"
 	"regexp"
 	"strconv"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
 	IntTy byte = iota
 	UintTy
 	BoolTy
+	StringTy
 	SliceTy
 	AddressTy
-	RealTy
+	FixedBytesTy
+	BytesTy
+	HashTy
+	FixedPointTy
+	FunctionTy
 )
 
 // Type is the reflection of the supported argument type
 type Type struct {
-	Kind       reflect.Kind
-	Type       reflect.Type
-	Size       int
-	T          byte   // Our own type checking
+	IsSlice, IsArray bool
+	SliceSize        int
+
+	Elem *Type
+
+	Kind reflect.Kind
+	Type reflect.Type
+	Size int
+	T    byte // Our own type checking
+
 	stringKind string // holds the unparsed string for deriving signatures
 }
 
-// New type returns a fully parsed Type given by the input string or an error if it  can't be parsed.
-//
-// Strings can be in the format of:
-//
-// 	Input  = Type [ "[" [ Number ] "]" ] Name .
-// 	Type   = [ "u" ] "int" [ Number ] .
-//
-// Examples:
-//
-//      string     int       uint       real
-//      string32   int8      uint8      uint[]
-//      address    int256    uint256    real[2]
+var (
+	// fullTypeRegex parses the abi types
+	//
+	// Types can be in the format of:
+	//
+	// 	Input  = Type [ "[" [ Number ] "]" ] Name .
+	// 	Type   = [ "u" ] "int" [ Number ] [ x ] [ Number ].
+	//
+	// Examples:
+	//
+	//      string     int       uint       fixed
+	//      string32   int8      uint8      uint[]
+	//      address    int256    uint256    fixed128x128[2]
+	fullTypeRegex = regexp.MustCompile(`([a-zA-Z0-9]+)(\[([0-9]*)\])?`)
+	// typeRegex parses the abi sub types
+	typeRegex = regexp.MustCompile("([a-zA-Z]+)(([0-9]+)(x([0-9]+))?)?")
+)
+
+// NewType creates a new reflection type of abi type given in t.
 func NewType(t string) (typ Type, err error) {
-	// 1. full string 2. type 3. (opt.) is slice 4. (opt.) size
-	freg, err := regexp.Compile("([a-zA-Z0-9]+)(\\[([0-9]*)?\\])?")
-	if err != nil {
-		return Type{}, err
-	}
-	res := freg.FindAllStringSubmatch(t, -1)[0]
-	var (
-		isslice bool
-		size    int
-	)
+	res := fullTypeRegex.FindAllStringSubmatch(t, -1)[0]
+	// check if type is slice and parse type.
 	switch {
 	case res[3] != "":
 		// err is ignored. Already checked for number through the regexp
-		size, _ = strconv.Atoi(res[3])
-		isslice = true
+		typ.SliceSize, _ = strconv.Atoi(res[3])
+		typ.IsArray = true
 	case res[2] != "":
-		isslice = true
-		size = -1
+		typ.IsSlice, typ.SliceSize = true, -1
 	case res[0] == "":
-		return Type{}, fmt.Errorf("type parse error for `%s`", t)
+		return Type{}, fmt.Errorf("abi: type parse error: %s", t)
+	}
+	if typ.IsArray || typ.IsSlice {
+		sliceType, err := NewType(res[1])
+		if err != nil {
+			return Type{}, err
+		}
+		typ.Elem = &sliceType
+		typ.stringKind = sliceType.stringKind + t[len(res[1]):]
+		// Although we know that this is an array, we cannot return
+		// as we don't know the type of the element, however, if it
+		// is still an array, then don't determine the type.
+		if typ.Elem.IsArray || typ.Elem.IsSlice {
+			return typ, nil
+		}
 	}
 
-	treg, err := regexp.Compile("([a-zA-Z]+)([0-9]*)?")
-	if err != nil {
-		return Type{}, err
+	// parse the type and size of the abi-type.
+	parsedType := typeRegex.FindAllStringSubmatch(res[1], -1)[0]
+	// varSize is the size of the variable
+	var varSize int
+	if len(parsedType[3]) > 0 {
+		var err error
+		varSize, err = strconv.Atoi(parsedType[2])
+		if err != nil {
+			return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
+		}
 	}
-
-	parsedType := treg.FindAllStringSubmatch(res[1], -1)[0]
-	vsize, _ := strconv.Atoi(parsedType[2])
-	vtype := parsedType[1]
-	// substitute canonical representation
-	if vsize == 0 && (vtype == "int" || vtype == "uint") {
-		vsize = 256
+	// varType is the parsed abi type
+	varType := parsedType[1]
+	// substitute canonical integer
+	if varSize == 0 && (varType == "int" || varType == "uint") {
+		varSize = 256
 		t += "256"
 	}
 
-	if isslice {
-		typ.Kind = reflect.Slice
-		typ.Size = size
-		switch vtype {
-		case "int":
-			typ.Type = big_ts
-		case "uint":
-			typ.Type = ubig_ts
-		default:
-			return Type{}, fmt.Errorf("unsupported arg slice type: %s", t)
-		}
-	} else {
-		switch vtype {
-		case "int":
-			typ.Kind = reflect.Ptr
-			typ.Type = big_t
-			typ.Size = 256
-			typ.T = IntTy
-		case "uint":
-			typ.Kind = reflect.Ptr
-			typ.Type = ubig_t
-			typ.Size = 256
-			typ.T = UintTy
-		case "bool":
-			typ.Kind = reflect.Bool
-		case "real": // TODO
-			typ.Kind = reflect.Invalid
-		case "address":
-			typ.Kind = reflect.Slice
-			typ.Type = byte_ts
-			typ.Size = 20
-			typ.T = AddressTy
-		case "string":
-			typ.Kind = reflect.String
-			typ.Size = -1
-			if vsize > 0 {
-				typ.Size = 32
-			}
-		default:
-			return Type{}, fmt.Errorf("unsupported arg type: %s", t)
-		}
+	// only set stringKind if not array or slice, as for those,
+	// the correct string type has been set
+	if !(typ.IsArray || typ.IsSlice) {
+		typ.stringKind = t
 	}
-	typ.stringKind = t
+
+	switch varType {
+	case "int":
+		typ.Kind, typ.Type = reflectIntKindAndType(false, varSize)
+		typ.Size = varSize
+		typ.T = IntTy
+	case "uint":
+		typ.Kind, typ.Type = reflectIntKindAndType(true, varSize)
+		typ.Size = varSize
+		typ.T = UintTy
+	case "bool":
+		typ.Kind = reflect.Bool
+		typ.T = BoolTy
+	case "address":
+		typ.Kind = reflect.Array
+		typ.Type = address_t
+		typ.Size = 20
+		typ.T = AddressTy
+	case "string":
+		typ.Kind = reflect.String
+		typ.Size = -1
+		typ.T = StringTy
+	case "bytes":
+		sliceType, _ := NewType("uint8")
+		typ.Elem = &sliceType
+		if varSize == 0 {
+			typ.IsSlice = true
+			typ.T = BytesTy
+			typ.SliceSize = -1
+		} else {
+			typ.IsArray = true
+			typ.T = FixedBytesTy
+			typ.SliceSize = varSize
+		}
+	case "function":
+		sliceType, _ := NewType("uint8")
+		typ.Elem = &sliceType
+		typ.IsArray = true
+		typ.T = FunctionTy
+		typ.SliceSize = 24
+	default:
+		return Type{}, fmt.Errorf("unsupported arg type: %s", t)
+	}
 
 	return
 }
 
+// String implements Stringer
 func (t Type) String() (out string) {
 	return t.stringKind
 }
 
-// Test the given input parameter `v` and checks if it matches certain
-// criteria
-// * Big integers are checks for ptr types and if the given value is
-//   assignable
-// * Integer are checked for size
-// * Strings, addresses and bytes are checks for type and size
-func (t Type) pack(v interface{}) ([]byte, error) {
-	value := reflect.ValueOf(v)
-	switch kind := value.Kind(); kind {
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		if t.Type != ubig_t {
-			return nil, fmt.Errorf("type mismatch: %s for %T", t.Type, v)
-		}
-		return packNum(value, t.T), nil
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if t.Type != ubig_t {
-			return nil, fmt.Errorf("type mismatch: %s for %T", t.Type, v)
-		}
-		return packNum(value, t.T), nil
-	case reflect.Ptr:
-		// If the value is a ptr do a assign check (only used by
-		// big.Int for now)
-		if t.Type == ubig_t && value.Type() != ubig_t {
-			return nil, fmt.Errorf("type mismatch: %s for %T", t.Type, v)
-		}
-		return packNum(value, t.T), nil
-	case reflect.String:
-		if t.Size > -1 && value.Len() > t.Size {
-			return nil, fmt.Errorf("%v out of bound. %d for %d", value.Kind(), value.Len(), t.Size)
-		}
-		return []byte(common.LeftPadString(t.String(), 32)), nil
-	case reflect.Slice:
-		if t.Size > -1 && value.Len() > t.Size {
-			return nil, fmt.Errorf("%v out of bound. %d for %d", value.Kind(), value.Len(), t.Size)
-		}
+func (t Type) pack(v reflect.Value) ([]byte, error) {
+	// dereference pointer first if it's a pointer
+	v = indirect(v)
 
-		// Address is a special slice. The slice acts as one rather than a list of elements.
-		if t.T == AddressTy {
-			return common.LeftPadBytes(v.([]byte), 32), nil
-		}
+	if err := typeCheck(t, v); err != nil {
+		return nil, err
+	}
 
-		// Signed / Unsigned check
-		if (t.T != IntTy && isSigned(value)) || (t.T == UintTy && isSigned(value)) {
-			return nil, fmt.Errorf("slice of incompatible types.")
-		}
-
+	if (t.IsSlice || t.IsArray) && t.T != BytesTy && t.T != FixedBytesTy && t.T != FunctionTy {
 		var packed []byte
-		for i := 0; i < value.Len(); i++ {
-			packed = append(packed, packNum(value.Index(i), t.T)...)
+
+		for i := 0; i < v.Len(); i++ {
+			val, err := t.Elem.pack(v.Index(i))
+			if err != nil {
+				return nil, err
+			}
+			packed = append(packed, val...)
 		}
-		return packed, nil
-	case reflect.Bool:
-		if value.Bool() {
-			return common.LeftPadBytes(common.Big1.Bytes(), 32), nil
-		} else {
-			return common.LeftPadBytes(common.Big0.Bytes(), 32), nil
+		if t.IsSlice {
+			return packBytesSlice(packed, v.Len()), nil
+		} else if t.IsArray {
+			return packed, nil
 		}
 	}
 
-	panic("unreached")
+	return packElement(t, v), nil
+}
+
+// requireLengthPrefix returns whether the type requires any sort of length
+// prefixing.
+func (t Type) requiresLengthPrefix() bool {
+	return t.T != FixedBytesTy && (t.T == StringTy || t.T == BytesTy || t.IsSlice)
 }
