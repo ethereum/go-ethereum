@@ -95,6 +95,21 @@ func testPutGet(db ethdb.Database, t *testing.T) {
 	}
 
 	for _, v := range test_values {
+		orig, err := db.Get([]byte(v))
+		if err != nil {
+			t.Fatalf("get failed: %v", err)
+		}
+		orig[0] = byte(0xff)
+		data, err := db.Get([]byte(v))
+		if err != nil {
+			t.Fatalf("get failed: %v", err)
+		}
+		if !bytes.Equal(data, []byte("?")) {
+			t.Fatalf("get returned wrong result, got %q expected ?", string(data))
+		}
+	}
+
+	for _, v := range test_values {
 		err := db.Delete([]byte(v))
 		if err != nil {
 			t.Fatalf("delete %q failed: %v", v, err)

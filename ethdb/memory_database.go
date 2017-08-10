@@ -50,7 +50,7 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	defer db.lock.RUnlock()
 
 	if entry, ok := db.db[string(key)]; ok {
-		return entry, nil
+		return common.CopyBytes(entry), nil
 	}
 	return nil, errors.New("not found")
 }
