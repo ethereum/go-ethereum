@@ -22,7 +22,9 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/ripemd160"
 )
@@ -43,6 +45,19 @@ var PrecompiledContracts = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
+}
+
+// PrecompiledContractsMetropolis contains the default set of ethereum contracts
+// for metropolis hardfork
+var PrecompiledContractsMetropolis = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}): &ecrecover{},
+	common.BytesToAddress([]byte{2}): &sha256hash{},
+	common.BytesToAddress([]byte{3}): &ripemd160hash{},
+	common.BytesToAddress([]byte{4}): &dataCopy{},
+	common.BytesToAddress([]byte{5}): &bigModexp{},
+	common.BytesToAddress([]byte{6}): &bn256Add{},
+	common.BytesToAddress([]byte{7}): &bn256ScalarMul{},
+	common.BytesToAddress([]byte{8}): &pairing{},
 }
 
 // RunPrecompile runs and evaluate the output of a precompiled contract defined in contracts.go
@@ -131,4 +146,191 @@ func (c *dataCopy) RequiredGas(input []byte) uint64 {
 }
 func (c *dataCopy) Run(in []byte) ([]byte, error) {
 	return in, nil
+}
+
+// bigModexp implements a native big integer exponential modular operation.
+type bigModexp struct{}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+//
+// This method does not require any overflow checking as the input size gas costs
+// required for anything significant is so high it's impossible to pay for.
+func (c *bigModexp) RequiredGas(input []byte) uint64 {
+	// TODO reword required gas to have error reporting and convert arithmetic
+	// to uint64.
+	if len(input) < 3*32 {
+		input = append(input, make([]byte, 3*32-len(input))...)
+	}
+	var (
+		baseLen = new(big.Int).SetBytes(input[:31])
+		expLen  = math.BigMax(new(big.Int).SetBytes(input[32:64]), big.NewInt(1))
+		modLen  = new(big.Int).SetBytes(input[65:97])
+	)
+	x := new(big.Int).Set(math.BigMax(baseLen, modLen))
+	x.Mul(x, x)
+	x.Mul(x, expLen)
+	x.Div(x, new(big.Int).SetUint64(params.QuadCoeffDiv))
+
+	return x.Uint64()
+}
+
+func (c *bigModexp) Run(input []byte) ([]byte, error) {
+	if len(input) < 3*32 {
+		input = append(input, make([]byte, 3*32-len(input))...)
+	}
+	// why 32-byte? These values won't fit anyway
+	var (
+		baseLen = new(big.Int).SetBytes(input[:32]).Uint64()
+		expLen  = new(big.Int).SetBytes(input[32:64]).Uint64()
+		modLen  = new(big.Int).SetBytes(input[64:96]).Uint64()
+	)
+
+	input = input[96:]
+	if uint64(len(input)) < baseLen {
+		input = append(input, make([]byte, baseLen-uint64(len(input)))...)
+	}
+	base := new(big.Int).SetBytes(input[:baseLen])
+
+	input = input[baseLen:]
+	if uint64(len(input)) < expLen {
+		input = append(input, make([]byte, expLen-uint64(len(input)))...)
+	}
+	exp := new(big.Int).SetBytes(input[:expLen])
+
+	input = input[expLen:]
+	if uint64(len(input)) < modLen {
+		input = append(input, make([]byte, modLen-uint64(len(input)))...)
+	}
+	mod := new(big.Int).SetBytes(input[:modLen])
+
+	return common.LeftPadBytes(base.Exp(base, exp, mod).Bytes(), len(input[:modLen])), nil
+}
+
+type bn256Add struct{}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+//
+// This method does not require any overflow checking as the input size gas costs
+// required for anything significant is so high it's impossible to pay for.
+func (c *bn256Add) RequiredGas(input []byte) uint64 {
+	return 0 // TODO
+}
+
+func (c *bn256Add) Run(in []byte) ([]byte, error) {
+	in = common.RightPadBytes(in, 128)
+
+	x, onCurve := new(bn256.G1).Unmarshal(in[:64])
+	if !onCurve {
+		return nil, errNotOnCurve
+	}
+	gx, gy, _, _ := x.CurvePoints()
+	if gx.Cmp(bn256.P) >= 0 || gy.Cmp(bn256.P) >= 0 {
+		return nil, errInvalidCurvePoint
+	}
+
+	y, onCurve := new(bn256.G1).Unmarshal(in[64:128])
+	if !onCurve {
+		return nil, errNotOnCurve
+	}
+	gx, gy, _, _ = y.CurvePoints()
+	if gx.Cmp(bn256.P) >= 0 || gy.Cmp(bn256.P) >= 0 {
+		return nil, errInvalidCurvePoint
+	}
+	x.Add(x, y)
+
+	return x.Marshal(), nil
+}
+
+type bn256ScalarMul struct{}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+//
+// This method does not require any overflow checking as the input size gas costs
+// required for anything significant is so high it's impossible to pay for.
+func (c *bn256ScalarMul) RequiredGas(input []byte) uint64 {
+	return 0 // TODO
+}
+
+func (c *bn256ScalarMul) Run(in []byte) ([]byte, error) {
+	in = common.RightPadBytes(in, 96)
+
+	g1, onCurve := new(bn256.G1).Unmarshal(in[:64])
+	if !onCurve {
+		return nil, errNotOnCurve
+	}
+	x, y, _, _ := g1.CurvePoints()
+	if x.Cmp(bn256.P) >= 0 || y.Cmp(bn256.P) >= 0 {
+		return nil, errInvalidCurvePoint
+	}
+	g1.ScalarMult(g1, new(big.Int).SetBytes(in[64:96]))
+
+	return g1.Marshal(), nil
+}
+
+// pairing implements a pairing pre-compile for the bn256 curve
+type pairing struct{}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+//
+// This method does not require any overflow checking as the input size gas costs
+// required for anything significant is so high it's impossible to pay for.
+func (c *pairing) RequiredGas(input []byte) uint64 {
+	//return 0 // TODO
+	k := (len(input) + 191) / pairSize
+	return uint64(60000*k + 40000)
+}
+
+const pairSize = 192
+
+var (
+	true32Byte           = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+	fals32Byte           = make([]byte, 32)
+	errNotOnCurve        = errors.New("point not on elliptic curve")
+	errInvalidCurvePoint = errors.New("invalid elliptic curve point")
+)
+
+func (c *pairing) Run(in []byte) ([]byte, error) {
+	if len(in) == 0 {
+		return true32Byte, nil
+	}
+
+	if len(in)%pairSize > 0 {
+		return nil, errBadPrecompileInput
+	}
+
+	var (
+		g1s []*bn256.G1
+		g2s []*bn256.G2
+	)
+	for i := 0; i < len(in); i += pairSize {
+		g1, onCurve := new(bn256.G1).Unmarshal(in[i : i+64])
+		if !onCurve {
+			return nil, errNotOnCurve
+		}
+
+		x, y, _, _ := g1.CurvePoints()
+		if x.Cmp(bn256.P) >= 0 || y.Cmp(bn256.P) >= 0 {
+			return nil, errInvalidCurvePoint
+		}
+
+		g2, onCurve := new(bn256.G2).Unmarshal(in[i+64 : i+192])
+		if !onCurve {
+			return nil, errNotOnCurve
+		}
+		x2, y2, _, _ := g2.CurvePoints()
+		if x2.Real().Cmp(bn256.P) >= 0 || x2.Imag().Cmp(bn256.P) >= 0 ||
+			y2.Real().Cmp(bn256.P) >= 0 || y2.Imag().Cmp(bn256.P) >= 0 {
+			return nil, errInvalidCurvePoint
+		}
+
+		g1s = append(g1s, g1)
+		g2s = append(g2s, g2)
+	}
+
+	isOne := bn256.PairingCheck(g1s, g2s)
+	if isOne {
+		return true32Byte, nil
+	}
+
+	return fals32Byte, nil
 }

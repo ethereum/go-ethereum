@@ -37,6 +37,10 @@ type (
 func run(evm *EVM, snapshot int, contract *Contract, input []byte) ([]byte, error) {
 	if contract.CodeAddr != nil {
 		precompiledContracts := PrecompiledContracts
+		if evm.ChainConfig().IsMetropolis(evm.BlockNumber) {
+			precompiledContracts = PrecompiledContractsMetropolis
+		}
+
 		if p := precompiledContracts[*contract.CodeAddr]; p != nil {
 			return RunPrecompiledContract(p, input, contract)
 		}
@@ -100,8 +104,8 @@ type EVM struct {
 	abort int32
 }
 
-// NewEVM retutrns a new EVM evmironment. The returned EVM is not thread safe
-// and should only ever be used *once*.
+// NewEVM retutrns a new EVM . The returned EVM is not thread safe and should
+// only ever be used *once*.
 func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig Config) *EVM {
 	evm := &EVM{
 		Context:     ctx,
