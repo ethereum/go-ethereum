@@ -36,16 +36,14 @@ type (
 // run runs the given contract and takes care of running precompiles with a fallback to the byte code interpreter.
 func run(evm *EVM, snapshot int, contract *Contract, input []byte) ([]byte, error) {
 	if contract.CodeAddr != nil {
-		precompiledContracts := PrecompiledContracts
+		precompiles := PrecompiledContractsHomestead
 		if evm.ChainConfig().IsMetropolis(evm.BlockNumber) {
-			precompiledContracts = PrecompiledContractsMetropolis
+			precompiles = PrecompiledContractsMetropolis
 		}
-
-		if p := precompiledContracts[*contract.CodeAddr]; p != nil {
+		if p := precompiles[*contract.CodeAddr]; p != nil {
 			return RunPrecompiledContract(p, input, contract)
 		}
 	}
-
 	return evm.interpreter.Run(snapshot, contract, input)
 }
 
@@ -147,10 +145,13 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		snapshot = evm.StateDB.Snapshot()
 	)
 	if !evm.StateDB.Exist(addr) {
-		if PrecompiledContracts[addr] == nil && evm.ChainConfig().IsEIP158(evm.BlockNumber) && value.Sign() == 0 {
+		precompiles := PrecompiledContractsHomestead
+		if evm.ChainConfig().IsMetropolis(evm.BlockNumber) {
+			precompiles = PrecompiledContractsMetropolis
+		}
+		if precompiles[addr] == nil && evm.ChainConfig().IsEIP158(evm.BlockNumber) && value.Sign() == 0 {
 			return nil, gas, nil
 		}
-
 		evm.StateDB.CreateAccount(addr)
 	}
 	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
