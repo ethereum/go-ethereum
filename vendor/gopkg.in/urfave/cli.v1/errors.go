@@ -74,7 +74,7 @@ func (ee *ExitError) ExitCode() int {
 // HandleExitCoder checks if the error fulfills the ExitCoder interface, and if
 // so prints the error to stderr (if it is non-empty) and calls OsExiter with the
 // given exit code.  If the given error is a MultiError, then this func is
-// called on all members of the Errors slice.
+// called on all members of the Errors slice and calls OsExiter with the last exit code.
 func HandleExitCoder(err error) {
 	if err == nil {
 		return
@@ -93,18 +93,23 @@ func HandleExitCoder(err error) {
 	}
 
 	if multiErr, ok := err.(MultiError); ok {
-		for _, merr := range multiErr.Errors {
-			HandleExitCoder(merr)
-		}
+		code := handleMultiError(multiErr)
+		OsExiter(code)
 		return
 	}
+}
 
-	if err.Error() != "" {
-		if _, ok := err.(ErrorFormatter); ok {
-			fmt.Fprintf(ErrWriter, "%+v\n", err)
+func handleMultiError(multiErr MultiError) int {
+	code := 1
+	for _, merr := range multiErr.Errors {
+		if multiErr2, ok := merr.(MultiError); ok {
+			code = handleMultiError(multiErr2)
 		} else {
-			fmt.Fprintln(ErrWriter, err)
+			fmt.Fprintln(ErrWriter, merr)
+			if exitErr, ok := merr.(ExitCoder); ok {
+				code = exitErr.ExitCode()
+			}
 		}
 	}
-	OsExiter(1)
+	return code
 }

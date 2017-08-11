@@ -4,6 +4,49 @@
 
 ## [Unreleased]
 
+## 1.20.0 - 2017-08-10
+
+### Fixed
+
+* `HandleExitCoder` is now correctly iterates over all errors in
+  a `MultiError`. The exit code is the exit code of the last error or `1` if
+  there are no `ExitCoder`s in the `MultiError`.
+* Fixed YAML file loading on Windows (previously would fail validate the file path)
+* Subcommand `Usage`, `Description`, `ArgsUsage`, `OnUsageError` correctly
+  propogated
+* `ErrWriter` is now passed downwards through command structure to avoid the
+  need to redefine it
+* Pass `Command` context into `OnUsageError` rather than parent context so that
+  all fields are avaiable
+* Errors occuring in `Before` funcs are no longer double printed
+* Use `UsageText` in the help templates for commands and subcommands if
+  defined; otherwise build the usage as before (was previously ignoring this
+  field)
+* `IsSet` and `GlobalIsSet` now correctly return whether a flag is set if
+  a program calls `Set` or `GlobalSet` directly after flag parsing (would
+  previously only return `true` if the flag was set during parsing)
+
+### Changed
+
+* No longer exit the program on command/subcommand error if the error raised is
+  not an `OsExiter`. This exiting behavior was introduced in 1.19.0, but was
+  determined to be a regression in functionality. See [the
+  PR](https://github.com/urfave/cli/pull/595) for discussion.
+
+### Added
+
+* `CommandsByName` type was added to make it easy to sort `Command`s by name,
+  alphabetically
+* `altsrc` now handles loading of string and int arrays from TOML
+* Support for definition of custom help templates for `App` via
+  `CustomAppHelpTemplate`
+* Support for arbitrary key/value fields on `App` to be used with
+  `CustomAppHelpTemplate` via `ExtraInfo`
+* `HelpFlag`, `VersionFlag`, and `BashCompletionFlag` changed to explictly be
+  `cli.Flag`s allowing for the use of custom flags satisfying the `cli.Flag`
+  interface to be used.
+
+
 ## [1.19.1] - 2016-11-21
 
 ### Fixed

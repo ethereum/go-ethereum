@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -302,6 +303,7 @@ DEPRECATED: use 'swarm db clean'.
 `,
 		},
 	}
+	sort.Sort(cli.CommandsByName(app.Commands))
 
 	app.Flags = []cli.Flag{
 		utils.IdentityFlag,
