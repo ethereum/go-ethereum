@@ -39,14 +39,14 @@ func testDataReader(l int) (r io.Reader) {
 	return io.LimitReader(crand.Reader, int64(l))
 }
 
-func TestBMTHasherCorrectness(t *testing.T) {
-	err := testHasher(testBMTHasher)
+func TestHasherCorrectness(t *testing.T) {
+	err := testHasher(testBaseHasher)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func testHasher(f func(Hasher, []byte, int, int) error) error {
+func testHasher(f func(BaseHasher, []byte, int, int) error) error {
 	tdata := testDataReader(4128)
 	data := make([]byte, 4128)
 	tdata.Read(data)
@@ -58,9 +58,7 @@ func testHasher(f func(Hasher, []byte, int, int) error) error {
 	for _, count := range counts {
 		max := count * size
 		incr := max/size + 1
-		fmt.Println("max=", max, "incr=", incr)
 		for n := 0; n <= max+incr; n += incr {
-			fmt.Println("     ", "datalen=", len(data), "n=", n, "count=", count)
 			err = f(hasher, data, n, count)
 			if err != nil {
 				return err
@@ -70,19 +68,19 @@ func testHasher(f func(Hasher, []byte, int, int) error) error {
 	return nil
 }
 
-func TestBMTHasherReuseWithoutRelease(t *testing.T) {
-	testBMTHasherReuse(t)
+func TestHasherReuseWithoutRelease(t *testing.T) {
+	testHasherReuse(1, t)
 }
 
-func TestBMTHasherReuseWithRelease(t *testing.T) {
-	testBMTHasherReuse(t)
+func TestHasherReuseWithRelease(t *testing.T) {
+	testHasherReuse(maxproccnt, t)
 }
 
-func testBMTHasherReuse(t *testing.T) {
+func testHasherReuse(i int, t *testing.T) {
 	hasher := sha3.NewKeccak256
-	pool := NewBMTreePool(hasher, 128, 1)
+	pool := NewTreePool(hasher, 128, i)
 	defer pool.Drain(0)
-	bmt := NewBMTHasher(pool)
+	bmt := New(pool)
 
 	for i := 0; i < 500; i++ {
 		n := rand.Intn(4096)
@@ -90,16 +88,16 @@ func testBMTHasherReuse(t *testing.T) {
 		data := make([]byte, n)
 		tdata.Read(data)
 
-		err := testBMTHasherCorrectness(bmt, hasher, data, n, 128)
+		err := testHasherCorrectness(bmt, hasher, data, n, 128)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 }
 
-func TestBMTHasherConcurrency(t *testing.T) {
+func TestHasherConcurrency(t *testing.T) {
 	hasher := sha3.NewKeccak256
-	pool := NewBMTreePool(hasher, 128, maxproccnt)
+	pool := NewTreePool(hasher, 128, maxproccnt)
 	defer pool.Drain(0)
 	wg := sync.WaitGroup{}
 	cycles := 100
@@ -107,20 +105,20 @@ func TestBMTHasherConcurrency(t *testing.T) {
 	errc := make(chan error)
 
 	for p := 0; p < maxproccnt; p++ {
-		bmt := NewBMTHasher(pool)
-		go func() {
-			for i := 0; i < cycles; i++ {
+		for i := 0; i < cycles; i++ {
+			go func() {
+				bmt := New(pool)
 				n := rand.Intn(4096)
 				tdata := testDataReader(n)
 				data := make([]byte, n)
 				tdata.Read(data)
-				err := testBMTHasherCorrectness(bmt, hasher, data, n, 128)
+				err := testHasherCorrectness(bmt, hasher, data, n, 128)
 				wg.Done()
 				if err != nil {
 					errc <- err
 				}
-			}
-		}()
+			}()
+		}
 	}
 	go func() {
 		wg.Wait()
@@ -136,42 +134,33 @@ func TestBMTHasherConcurrency(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-func testBMTHasher(hasher Hasher, d []byte, n, count int) error {
-	pool := NewBMTreePool(hasher, count, 1)
+
+func testBaseHasher(hasher BaseHasher, d []byte, n, count int) error {
+	pool := NewTreePool(hasher, count, 1)
 	defer pool.Drain(0)
-	bmt := NewBMTHasher(pool)
-	return testBMTHasherCorrectness(bmt, hasher, d, n, count)
+	bmt := New(pool)
+	return testHasherCorrectness(bmt, hasher, d, n, count)
 }
 
-func testBMTHasherCorrectness(bmt hash.Hash, hasher Hasher, d []byte, n, count int) (err error) {
+func testHasherCorrectness(bmt hash.Hash, hasher BaseHasher, d []byte, n, count int) (err error) {
 	data := d[:n]
-	rbmt := NewRBMTHasher(hasher, count)
+	rbmt := NewRefHasher(hasher, count)
 	exp := rbmt.Hash(data)
 	timeout := time.NewTimer(time.Second)
 	c := make(chan error)
+
 	go func() {
 		bmt.Reset()
 		bmt.Write(data)
 		got := bmt.Sum(nil)
-		fmt.Printf("     result %x\n", got)
 		if !bytes.Equal(got, exp) {
-			var t string
-			node, ok := bmt.(*BMTHasher)
-			if ok && node.bmt != nil {
-				d := depth(n)
-				t = node.bmt.Draw(got, d)
-			}
-			c <- fmt.Errorf("wrong hash. expected %x, got %x\n%s\n", exp, got, t)
+			c <- fmt.Errorf("wrong hash: expected %x, got %x", exp, got)
 		}
-
 		close(c)
-
 	}()
 	select {
-	case _, ok := <-timeout.C:
-		if ok {
-			err = fmt.Errorf("BMT hash calculation timed out")
-		}
+	case <-timeout.C:
+		err = fmt.Errorf("BMT hash calculation timed out")
 	case err = <-c:
 	}
 	return err
@@ -191,26 +180,33 @@ func BenchmarkBMTBaseline_512b(t *testing.B) { benchmarkBMTBaseline(4096/8, t) }
 func BenchmarkBMTBaseline_256b(t *testing.B) { benchmarkBMTBaseline(4096/16, t) }
 func BenchmarkBMTBaseline_128b(t *testing.B) { benchmarkBMTBaseline(4096/32, t) }
 
-func BenchmarkRBMTHasher_4k(t *testing.B)   { benchmarkRBMTHasher(4096, t) }
-func BenchmarkRBMTHasher_2k(t *testing.B)   { benchmarkRBMTHasher(4096/2, t) }
-func BenchmarkRBMTHasher_1k(t *testing.B)   { benchmarkRBMTHasher(4096/4, t) }
-func BenchmarkRBMTHasher_512b(t *testing.B) { benchmarkRBMTHasher(4096/8, t) }
-func BenchmarkRBMTHasher_256b(t *testing.B) { benchmarkRBMTHasher(4096/16, t) }
-func BenchmarkRBMTHasher_128b(t *testing.B) { benchmarkRBMTHasher(4096/32, t) }
+func BenchmarkRefHasher_4k(t *testing.B)   { benchmarkRefHasher(4096, t) }
+func BenchmarkRefHasher_2k(t *testing.B)   { benchmarkRefHasher(4096/2, t) }
+func BenchmarkRefHasher_1k(t *testing.B)   { benchmarkRefHasher(4096/4, t) }
+func BenchmarkRefHasher_512b(t *testing.B) { benchmarkRefHasher(4096/8, t) }
+func BenchmarkRefHasher_256b(t *testing.B) { benchmarkRefHasher(4096/16, t) }
+func BenchmarkRefHasher_128b(t *testing.B) { benchmarkRefHasher(4096/32, t) }
 
-func BenchmarkBMTHasher_4k(t *testing.B)   { benchmarkBMTHasher(4096, t) }
-func BenchmarkBMTHasher_2k(t *testing.B)   { benchmarkBMTHasher(4096/2, t) }
-func BenchmarkBMTHasher_1k(t *testing.B)   { benchmarkBMTHasher(4096/4, t) }
-func BenchmarkBMTHasher_512b(t *testing.B) { benchmarkBMTHasher(4096/8, t) }
-func BenchmarkBMTHasher_256b(t *testing.B) { benchmarkBMTHasher(4096/16, t) }
-func BenchmarkBMTHasher_128b(t *testing.B) { benchmarkBMTHasher(4096/32, t) }
+func BenchmarkHasher_4k(t *testing.B)   { benchmarkHasher(4096, t) }
+func BenchmarkHasher_2k(t *testing.B)   { benchmarkHasher(4096/2, t) }
+func BenchmarkHasher_1k(t *testing.B)   { benchmarkHasher(4096/4, t) }
+func BenchmarkHasher_512b(t *testing.B) { benchmarkHasher(4096/8, t) }
+func BenchmarkHasher_256b(t *testing.B) { benchmarkHasher(4096/16, t) }
+func BenchmarkHasher_128b(t *testing.B) { benchmarkHasher(4096/32, t) }
 
-func BenchmarkBMTHasherReuse_4k(t *testing.B)   { benchmarkBMTHasherReuse(4096, t) }
-func BenchmarkBMTHasherReuse_2k(t *testing.B)   { benchmarkBMTHasherReuse(4096/2, t) }
-func BenchmarkBMTHasherReuse_1k(t *testing.B)   { benchmarkBMTHasherReuse(4096/4, t) }
-func BenchmarkBMTHasherReuse_512b(t *testing.B) { benchmarkBMTHasherReuse(4096/8, t) }
-func BenchmarkBMTHasherReuse_256b(t *testing.B) { benchmarkBMTHasherReuse(4096/16, t) }
-func BenchmarkBMTHasherReuse_128b(t *testing.B) { benchmarkBMTHasherReuse(4096/32, t) }
+func BenchmarkHasherNoReuse_4k(t *testing.B)   { benchmarkHasherReuse(1, 4096, t) }
+func BenchmarkHasherNoReuse_2k(t *testing.B)   { benchmarkHasherReuse(1, 4096/2, t) }
+func BenchmarkHasherNoReuse_1k(t *testing.B)   { benchmarkHasherReuse(1, 4096/4, t) }
+func BenchmarkHasherNoReuse_512b(t *testing.B) { benchmarkHasherReuse(1, 4096/8, t) }
+func BenchmarkHasherNoReuse_256b(t *testing.B) { benchmarkHasherReuse(1, 4096/16, t) }
+func BenchmarkHasherNoReuse_128b(t *testing.B) { benchmarkHasherReuse(1, 4096/32, t) }
+
+func BenchmarkHasherReuse_4k(t *testing.B)   { benchmarkHasherReuse(16, 4096, t) }
+func BenchmarkHasherReuse_2k(t *testing.B)   { benchmarkHasherReuse(16, 4096/2, t) }
+func BenchmarkHasherReuse_1k(t *testing.B)   { benchmarkHasherReuse(16, 4096/4, t) }
+func BenchmarkHasherReuse_512b(t *testing.B) { benchmarkHasherReuse(16, 4096/8, t) }
+func BenchmarkHasherReuse_256b(t *testing.B) { benchmarkHasherReuse(16, 4096/16, t) }
+func BenchmarkHasherReuse_128b(t *testing.B) { benchmarkHasherReuse(16, 4096/32, t) }
 
 // benchmarks the minimum hashing time for a balanced (for simplicity) BMT
 // by doing count/segmentsize parallel hashings of 2*segmentsize bytes
@@ -245,7 +241,7 @@ func benchmarkBMTBaseline(n int, t *testing.B) {
 	}
 }
 
-func benchmarkBMTHasher(n int, t *testing.B) {
+func benchmarkHasher(n int, t *testing.B) {
 	tdata := testDataReader(n)
 	data := make([]byte, n)
 	tdata.Read(data)
@@ -253,8 +249,8 @@ func benchmarkBMTHasher(n int, t *testing.B) {
 	size := 1
 	hasher := sha3.NewKeccak256
 	segmentCount := 128
-	pool := NewBMTreePool(hasher, segmentCount, size)
-	bmt := NewBMTHasher(pool)
+	pool := NewTreePool(hasher, segmentCount, size)
+	bmt := New(pool)
 
 	t.ReportAllocs()
 	t.ResetTimer()
@@ -265,23 +261,31 @@ func benchmarkBMTHasher(n int, t *testing.B) {
 	}
 }
 
-func benchmarkBMTHasherReuse(n int, t *testing.B) {
+func benchmarkHasherReuse(poolsize, n int, t *testing.B) {
 	tdata := testDataReader(n)
 	data := make([]byte, n)
 	tdata.Read(data)
 
-	size := 2
 	hasher := sha3.NewKeccak256
 	segmentCount := 128
-	pool := NewBMTreePool(hasher, segmentCount, size)
-	bmt := NewBMTHasher(pool)
+	pool := NewTreePool(hasher, segmentCount, poolsize)
+	cycles := 200
 
 	t.ReportAllocs()
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		bmt.Reset()
-		bmt.Write(data)
-		bmt.Sum(nil)
+		wg := sync.WaitGroup{}
+		wg.Add(cycles)
+		for j := 0; j < cycles; j++ {
+			bmt := New(pool)
+			go func() {
+				defer wg.Done()
+				bmt.Reset()
+				bmt.Write(data)
+				bmt.Sum(nil)
+			}()
+		}
+		wg.Wait()
 	}
 }
 
@@ -301,12 +305,12 @@ func benchmarkSHA3(n int, t *testing.B) {
 	}
 }
 
-func benchmarkRBMTHasher(n int, t *testing.B) {
+func benchmarkRefHasher(n int, t *testing.B) {
 	data := make([]byte, n)
 	tdata := testDataReader(n)
 	tdata.Read(data)
 	hasher := sha3.NewKeccak256
-	rbmt := NewRBMTHasher(hasher, 128)
+	rbmt := NewRefHasher(hasher, 128)
 
 	t.ReportAllocs()
 	t.ResetTimer()
