@@ -18,7 +18,6 @@ package vm
 
 import (
 	"crypto/sha256"
-	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -26,8 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/ripemd160"
 )
-
-var errBadPrecompileInput = errors.New("bad pre compile input")
 
 // Precompiled contract is the basic interface for native Go contracts. The implementation
 // requires a deterministic gas count based on the input size of the Run method of the
