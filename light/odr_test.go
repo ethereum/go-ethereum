@@ -79,7 +79,7 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 		t, _ := trie.New(req.Id.Root, odr.sdb)
 		nodes := NewNodeSet()
 		t.Prove(req.Key, 0, nodes)
-		req.Proof = nodes.NodeList()
+		req.Proof = nodes
 	case *CodeRequest:
 		req.Data, _ = odr.sdb.Get(req.Hash[:])
 	}

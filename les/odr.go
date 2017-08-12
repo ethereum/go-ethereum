@@ -51,7 +51,8 @@ const (
 	MsgBlockBodies = iota
 	MsgCode
 	MsgReceipts
-	MsgProofs
+	MsgProofsV1
+	MsgProofsV2
 	MsgHeaderProofs
 )
 

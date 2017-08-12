@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -199,7 +200,12 @@ func (p *peer) SendReceiptsRLP(reqID, bv uint64, receipts []rlp.RawValue) error 
 
 // SendProofs sends a batch of merkle proofs, corresponding to the ones requested.
 func (p *peer) SendProofs(reqID, bv uint64, proofs proofsData) error {
-	return sendResponse(p.rw, ProofsMsg, reqID, bv, proofs)
+	return sendResponse(p.rw, ProofsV1Msg, reqID, bv, proofs)
+}
+
+// SendProofsV2 sends a batch of merkle proofs, corresponding to the ones requested.
+func (p *peer) SendProofsV2(reqID, bv uint64, proofs light.NodeList) error {
+	return sendResponse(p.rw, ProofsV2Msg, reqID, bv, proofs)
 }
 
 // SendHeaderProofs sends a batch of header proofs, corresponding to the ones requested.
@@ -244,7 +250,15 @@ func (p *peer) RequestReceipts(reqID, cost uint64, hashes []common.Hash) error {
 // RequestProofs fetches a batch of merkle proofs from a remote node.
 func (p *peer) RequestProofs(reqID, cost uint64, reqs []*ProofReq) error {
 	p.Log().Debug("Fetching batch of proofs", "count", len(reqs))
-	return sendRequest(p.rw, GetProofsMsg, reqID, cost, reqs)
+	switch p.version {
+	case lpv1:
+		return sendRequest(p.rw, GetProofsV1Msg, reqID, cost, reqs)
+	case lpv2:
+		return sendRequest(p.rw, GetProofsV2Msg, reqID, cost, reqs)
+	default:
+		panic(nil)
+	}
+
 }
 
 // RequestHeaderProofs fetches a batch of header merkle proofs from a remote node.

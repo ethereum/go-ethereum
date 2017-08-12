@@ -29,13 +29,14 @@ import (
 // Constants to match up protocol versions and messages
 const (
 	lpv1 = 1
+	lpv2 = 2
 )
 
 // Supported versions of the les protocol (first is primary).
-var ProtocolVersions = []uint{lpv1}
+var ProtocolVersions = []uint{lpv1, lpv2}
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{15}
+var ProtocolLengths = []uint64{15, 19}
 
 const (
 	NetworkId          = 1
@@ -53,13 +54,18 @@ const (
 	BlockBodiesMsg     = 0x05
 	GetReceiptsMsg     = 0x06
 	ReceiptsMsg        = 0x07
-	GetProofsMsg       = 0x08
-	ProofsMsg          = 0x09
+	GetProofsV1Msg     = 0x08
+	ProofsV1Msg        = 0x09
 	GetCodeMsg         = 0x0a
 	CodeMsg            = 0x0b
 	SendTxMsg          = 0x0c
 	GetHeaderProofsMsg = 0x0d
 	HeaderProofsMsg    = 0x0e
+	// Protocol messages belonging to LPV2
+	GetProofsV2Msg  = 0x0f
+	ProofsV2Msg     = 0x10
+	GetPPTProofsMsg = 0x11
+	PPTProofsMsg    = 0x12
 )
 
 type errCode int

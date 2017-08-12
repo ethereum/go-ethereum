@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -80,23 +79,12 @@ type TrieRequest struct {
 	OdrRequest
 	Id    *TrieID
 	Key   []byte
-	Proof []rlp.RawValue
+	Proof *NodeSet
 }
 
 // StoreResult stores the retrieved data in local database
 func (req *TrieRequest) StoreResult(db ethdb.Database) {
-	storeProof(db, req.Proof)
-}
-
-// storeProof stores the new trie nodes obtained from a merkle proof in the database
-func storeProof(db ethdb.Database, proof []rlp.RawValue) {
-	for _, buf := range proof {
-		hash := crypto.Keccak256(buf)
-		val, _ := db.Get(hash)
-		if val == nil {
-			db.Put(hash, buf)
-		}
-	}
+	req.Proof.Store(db)
 }
 
 // CodeRequest is the ODR request type for retrieving contract code

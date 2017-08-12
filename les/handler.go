@@ -18,6 +18,7 @@
 package les
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -51,13 +52,13 @@ const (
 
 	ethVersion = 63 // equivalent eth version for the downloader
 
-	MaxHeaderFetch       = 192 // Amount of block headers to be fetched per retrieval request
-	MaxBodyFetch         = 32  // Amount of block bodies to be fetched per retrieval request
-	MaxReceiptFetch      = 128 // Amount of transaction receipts to allow fetching per request
-	MaxCodeFetch         = 64  // Amount of contract codes to allow fetching per request
-	MaxProofsFetch       = 64  // Amount of merkle proofs to be fetched per retrieval request
-	MaxHeaderProofsFetch = 64  // Amount of merkle proofs to be fetched per retrieval request
-	MaxTxSend            = 64  // Amount of transactions to be send per request
+	MaxHeaderFetch    = 192 // Amount of block headers to be fetched per retrieval request
+	MaxBodyFetch      = 32  // Amount of block bodies to be fetched per retrieval request
+	MaxReceiptFetch   = 128 // Amount of transaction receipts to allow fetching per request
+	MaxCodeFetch      = 64  // Amount of contract codes to allow fetching per request
+	MaxProofsFetch    = 64  // Amount of merkle proofs to be fetched per retrieval request
+	MaxPPTProofsFetch = 64  // Amount of merkle proofs to be fetched per retrieval request
+	MaxTxSend         = 64  // Amount of transactions to be send per request
 
 	disableClientRemovePeer = false
 )
@@ -316,7 +317,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}
 }
 
-var reqList = []uint64{GetBlockHeadersMsg, GetBlockBodiesMsg, GetCodeMsg, GetReceiptsMsg, GetProofsMsg, SendTxMsg, GetHeaderProofsMsg}
+var reqList = []uint64{GetBlockHeadersMsg, GetBlockBodiesMsg, GetCodeMsg, GetReceiptsMsg, GetProofsV1Msg, SendTxMsg, GetHeaderProofsMsg, GetProofsV2Msg, GetPPTProofsMsg}
 
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
@@ -656,7 +657,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			Obj:     resp.Receipts,
 		}
 
-	case GetProofsMsg:
+	case GetProofsV1Msg:
 		p.Log().Trace("Received proofs request")
 		// Decode the retrieval message
 		var req struct {
@@ -703,7 +704,67 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
 		return p.SendProofs(req.ReqID, bv, proofs)
 
-	case ProofsMsg:
+	case GetProofsV2Msg:
+		p.Log().Trace("Received les/2 proofs request")
+		// Decode the retrieval message
+		var req struct {
+			ReqID uint64
+			Reqs  []ProofReq
+		}
+		if err := msg.Decode(&req); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		// Gather state data until the fetch or network limits is reached
+		var (
+			lastBHash  common.Hash
+			lastAccKey []byte
+			tr, str    *trie.Trie
+		)
+		reqCnt := len(req.Reqs)
+		if reject(uint64(reqCnt), MaxProofsFetch) {
+			return errResp(ErrRequestRejected, "")
+		}
+
+		nodes := light.NewNodeSet()
+
+		for _, req := range req.Reqs {
+			if nodes.DataSize() >= softResponseLimit {
+				break
+			}
+			if tr == nil || req.BHash != lastBHash {
+				if header := core.GetHeader(pm.chainDb, req.BHash, core.GetBlockNumber(pm.chainDb, req.BHash)); header != nil {
+					tr, _ = trie.New(header.Root, pm.chainDb)
+				} else {
+					tr = nil
+				}
+				lastBHash = req.BHash
+				str = nil
+			}
+			if tr != nil {
+				if len(req.AccKey) > 0 {
+					if str == nil || !bytes.Equal(req.AccKey, lastAccKey) {
+						sdata := tr.Get(req.AccKey)
+						str = nil
+						var acc state.Account
+						if err := rlp.DecodeBytes(sdata, &acc); err == nil {
+							str, _ = trie.New(acc.Root, pm.chainDb)
+						}
+						lastAccKey = common.CopyBytes(req.AccKey)
+					}
+					if str != nil {
+						str.Prove(req.Key, req.FromLevel, nodes)
+					}
+				} else {
+					tr.Prove(req.Key, req.FromLevel, nodes)
+				}
+			}
+		}
+		proofs := nodes.NodeList()
+		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
+		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+		return p.SendProofsV2(req.ReqID, bv, proofs)
+
+	case ProofsV1Msg:
 		if pm.odr == nil {
 			return errResp(ErrUnexpectedResponse, "")
 		}
@@ -712,14 +773,35 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// A batch of merkle proofs arrived to one of our previous requests
 		var resp struct {
 			ReqID, BV uint64
-			Data      [][]rlp.RawValue
+			Data      []light.NodeList
 		}
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.GotReply(resp.ReqID, resp.BV)
 		deliverMsg = &Msg{
-			MsgType: MsgProofs,
+			MsgType: MsgProofsV1,
+			ReqID:   resp.ReqID,
+			Obj:     resp.Data,
+		}
+
+	case ProofsV2Msg:
+		if pm.odr == nil {
+			return errResp(ErrUnexpectedResponse, "")
+		}
+
+		p.Log().Trace("Received les/2 proofs response")
+		// A batch of merkle proofs arrived to one of our previous requests
+		var resp struct {
+			ReqID, BV uint64
+			Data      light.NodeList
+		}
+		if err := msg.Decode(&resp); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		p.fcServer.GotReply(resp.ReqID, resp.BV)
+		deliverMsg = &Msg{
+			MsgType: MsgProofsV2,
 			ReqID:   resp.ReqID,
 			Obj:     resp.Data,
 		}
@@ -740,7 +822,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			proofs []ChtResp
 		)
 		reqCnt := len(req.Reqs)
-		if reject(uint64(reqCnt), MaxHeaderProofsFetch) {
+		if reject(uint64(reqCnt), MaxPPTProofsFetch) {
 			return errResp(ErrRequestRejected, "")
 		}
 		for _, req := range req.Reqs {

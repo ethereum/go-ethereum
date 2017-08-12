@@ -338,9 +338,9 @@ func testGetProofs(t *testing.T, protocol int) {
 		}
 	}
 	// Send the proof request and verify the response
-	cost := peer.GetRequestCost(GetProofsMsg, len(proofreqs))
-	sendRequest(peer.app, GetProofsMsg, 42, cost, proofreqs)
-	if err := expectResponse(peer.app, ProofsMsg, 42, testBufLimit, proofs); err != nil {
+	cost := peer.GetRequestCost(GetProofsV1Msg, len(proofreqs))
+	sendRequest(peer.app, GetProofsV1Msg, 42, cost, proofreqs)
+	if err := expectResponse(peer.app, ProofsV1Msg, 42, testBufLimit, proofs); err != nil {
 		t.Errorf("proofs mismatch: %v", err)
 	}
 }

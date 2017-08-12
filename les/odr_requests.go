@@ -43,6 +43,7 @@ var (
 	errReceiptHashMismatch = errors.New("receipt hash mismatch")
 	errDataHashMismatch    = errors.New("data hash mismatch")
 	errCHTHashMismatch     = errors.New("cht hash mismatch")
+	errUselessNodes        = errors.New("useless nodes in merkle proof nodeset")
 )
 
 type LesOdrRequest interface {
@@ -186,7 +187,14 @@ type TrieRequest light.TrieRequest
 // GetCost returns the cost of the given ODR request according to the serving
 // peer's cost table (implementation of LesOdrRequest)
 func (r *TrieRequest) GetCost(peer *peer) uint64 {
-	return peer.GetRequestCost(GetProofsMsg, 1)
+	switch peer.version {
+	case lpv1:
+		return peer.GetRequestCost(GetProofsV1Msg, 1)
+	case lpv2:
+		return peer.GetRequestCost(GetProofsV2Msg, 1)
+	default:
+		panic(nil)
+	}
 }
 
 // CanSend tells if a certain peer is suitable for serving the given request
@@ -211,20 +219,38 @@ func (r *TrieRequest) Request(reqID uint64, peer *peer) error {
 func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	log.Debug("Validating trie proof", "root", r.Id.Root, "key", r.Key)
 
-	// Ensure we have a correct message with a single proof
-	if msg.MsgType != MsgProofs {
+	switch msg.MsgType {
+	case MsgProofsV1:
+		proofs := msg.Obj.([]light.NodeList)
+		if len(proofs) != 1 {
+			return errInvalidEntryCount
+		}
+		nodeSet := proofs[0].NodeSet()
+		// Verify the proof and store if checks out
+		if _, err, _ := trie.VerifyProof(r.Id.Root, r.Key, nodeSet); err != nil {
+			return fmt.Errorf("merkle proof verification failed: %v", err)
+		}
+		r.Proof = nodeSet
+		return nil
+
+	case MsgProofsV2:
+		proofs := msg.Obj.(light.NodeList)
+		// Verify the proof and store if checks out
+		pdb := proofs.NodeSet()
+		cdb := pdb.ReadCache()
+		if _, err, _ := trie.VerifyProof(r.Id.Root, r.Key, cdb); err != nil {
+			return fmt.Errorf("merkle proof verification failed: %v", err)
+		}
+		// check if all nodes have been read by VerifyProof
+		if pdb.KeyCount() != cdb.KeyCount() {
+			return errUselessNodes
+		}
+		r.Proof = pdb
+		return nil
+
+	default:
 		return errInvalidMessageType
 	}
-	proofs := msg.Obj.([][]rlp.RawValue)
-	if len(proofs) != 1 {
-		return errMultipleEntries
-	}
-	// Verify the proof and store if checks out
-	if _, err, _ := trie.VerifyProof(r.Id.Root, r.Key, light.NodeList(proofs[0]).NodeSet()); err != nil {
-		return fmt.Errorf("merkle proof verification failed: %v", err)
-	}
-	r.Proof = proofs[0]
-	return nil
 }
 
 type CodeReq struct {
