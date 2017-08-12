@@ -220,7 +220,7 @@ func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 		return errMultipleEntries
 	}
 	// Verify the proof and store if checks out
-	if _, err := trie.VerifyProof(r.Id.Root, r.Key, proofs[0]); err != nil {
+	if _, err, _ := trie.VerifyProof(r.Id.Root, r.Key, light.NodeList(proofs[0]).NodeSet()); err != nil {
 		return fmt.Errorf("merkle proof verification failed: %v", err)
 	}
 	r.Proof = proofs[0]
@@ -336,7 +336,7 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], r.BlockNum)
 
-	value, err := trie.VerifyProof(r.ChtRoot, encNumber[:], proof.Proof)
+	value, err, _ := trie.VerifyProof(r.ChtRoot, encNumber[:], light.NodeList(proof.Proof).NodeSet())
 	if err != nil {
 		return err
 	}

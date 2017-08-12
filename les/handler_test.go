@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -331,7 +332,8 @@ func testGetProofs(t *testing.T, protocol int) {
 			}
 			proofreqs = append(proofreqs, req)
 
-			proof := trie.Prove(crypto.Keccak256(acc[:]))
+			var proof light.NodeList
+			trie.Prove(crypto.Keccak256(acc[:]), 0, &proof)
 			proofs = append(proofs, proof)
 		}
 	}

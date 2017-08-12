@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -690,9 +691,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 						}
 					}
 					if tr != nil {
-						proof := tr.Prove(req.Key)
+						var proof light.NodeList
+						tr.Prove(req.Key, 0, &proof)
 						proofs = append(proofs, proof)
-						bytes += len(proof)
+						bytes += proof.DataSize()
 					}
 				}
 			}
@@ -751,9 +753,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					if tr, _ := trie.New(root, pm.chainDb); tr != nil {
 						var encNumber [8]byte
 						binary.BigEndian.PutUint64(encNumber[:], req.BlockNum)
-						proof := tr.Prove(encNumber[:])
+						var proof light.NodeList
+						tr.Prove(encNumber[:], 0, &proof)
 						proofs = append(proofs, ChtResp{Header: header, Proof: proof})
-						bytes += len(proof) + estHeaderRlpSize
+						bytes += proof.DataSize() + estHeaderRlpSize
 					}
 				}
 			}

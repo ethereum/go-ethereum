@@ -19,12 +19,13 @@ package trie
 import (
 	"bytes"
 	crand "crypto/rand"
+	"errors"
 	mrand "math/rand"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func init() {
@@ -35,13 +36,13 @@ func TestProof(t *testing.T) {
 	trie, vals := randomTrie(500)
 	root := trie.Hash()
 	for _, kv := range vals {
-		proof := trie.Prove(kv.k)
-		if proof == nil {
+		proofs := newTestProofDb()
+		if trie.Prove(kv.k, 0, proofs) != nil {
 			t.Fatalf("missing key %x while constructing proof", kv.k)
 		}
-		val, err := VerifyProof(root, kv.k, proof)
+		val, err, _ := VerifyProof(root, kv.k, proofs)
 		if err != nil {
-			t.Fatalf("VerifyProof error for key %x: %v\nraw proof: %x", kv.k, err, proof)
+			t.Fatalf("VerifyProof error for key %x: %v\nraw proof: %v", kv.k, err, proofs)
 		}
 		if !bytes.Equal(val, kv.v) {
 			t.Fatalf("VerifyProof returned wrong value for key %x: got %x, want %x", kv.k, val, kv.v)
@@ -52,16 +53,14 @@ func TestProof(t *testing.T) {
 func TestOneElementProof(t *testing.T) {
 	trie := new(Trie)
 	updateString(trie, "k", "v")
-	proof := trie.Prove([]byte("k"))
-	if proof == nil {
-		t.Fatal("nil proof")
-	}
-	if len(proof) != 1 {
+	proofs := newTestProofDb()
+	trie.Prove([]byte("k"), 0, proofs)
+	if len(proofs.db) != 1 {
 		t.Error("proof should have one element")
 	}
-	val, err := VerifyProof(trie.Hash(), []byte("k"), proof)
+	val, err, _ := VerifyProof(trie.Hash(), []byte("k"), proofs)
 	if err != nil {
-		t.Fatalf("VerifyProof error: %v\nraw proof: %x", err, proof)
+		t.Fatalf("VerifyProof error: %v\nraw proof: %v", err, proofs.db)
 	}
 	if !bytes.Equal(val, []byte("v")) {
 		t.Fatalf("VerifyProof returned wrong value: got %x, want 'k'", val)
@@ -72,12 +71,22 @@ func TestVerifyBadProof(t *testing.T) {
 	trie, vals := randomTrie(800)
 	root := trie.Hash()
 	for _, kv := range vals {
-		proof := trie.Prove(kv.k)
-		if proof == nil {
-			t.Fatal("nil proof")
+		proofs := newTestProofDb()
+		trie.Prove(kv.k, 0, proofs)
+		if len(proofs.db) == 0 {
+			t.Fatal("zero length proof")
 		}
-		mutateByte(proof[mrand.Intn(len(proof))])
-		if _, err := VerifyProof(root, kv.k, proof); err == nil {
+		idx := mrand.Intn(len(proofs.db))
+		for key, node := range proofs.db {
+			if idx == 0 {
+				delete(proofs.db, key)
+				mutateByte(node)
+				proofs.Put(crypto.Keccak256(node), node)
+				break
+			}
+			idx--
+		}
+		if _, err, _ := VerifyProof(root, kv.k, proofs); err == nil {
 			t.Fatalf("expected proof to fail for key %x", kv.k)
 		}
 	}
@@ -104,8 +113,9 @@ func BenchmarkProve(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		kv := vals[keys[i%len(keys)]]
-		if trie.Prove(kv.k) == nil {
-			b.Fatalf("nil proof for %x", kv.k)
+		proofs := newTestProofDb()
+		if trie.Prove(kv.k, 0, proofs); len(proofs.db) == 0 {
+			b.Fatalf("zero length proof for %x", kv.k)
 		}
 	}
 }
@@ -114,16 +124,18 @@ func BenchmarkVerifyProof(b *testing.B) {
 	trie, vals := randomTrie(100)
 	root := trie.Hash()
 	var keys []string
-	var proofs [][]rlp.RawValue
+	var proofs []*testProofDb
 	for k := range vals {
 		keys = append(keys, k)
-		proofs = append(proofs, trie.Prove([]byte(k)))
+		proof := newTestProofDb()
+		trie.Prove([]byte(k), 0, proof)
+		proofs = append(proofs, proof)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		im := i % len(keys)
-		if _, err := VerifyProof(root, []byte(keys[im]), proofs[im]); err != nil {
+		if _, err, _ := VerifyProof(root, []byte(keys[im]), proofs[im]); err != nil {
 			b.Fatalf("key %x: %v", keys[im], err)
 		}
 	}
@@ -152,4 +164,31 @@ func randBytes(n int) []byte {
 	r := make([]byte, n)
 	crand.Read(r)
 	return r
+}
+
+type testProofDb struct {
+	db map[string][]byte
+}
+
+func newTestProofDb() *testProofDb {
+	return &testProofDb{
+		db: make(map[string][]byte),
+	}
+}
+
+func (db *testProofDb) Put(key []byte, value []byte) error {
+	db.db[string(key)] = common.CopyBytes(value)
+	return nil
+}
+
+func (db *testProofDb) Get(key []byte) ([]byte, error) {
+	if entry, ok := db.db[string(key)]; ok {
+		return entry, nil
+	}
+	return nil, errors.New("not found")
+}
+
+func (db *testProofDb) Has(key []byte) (bool, error) {
+	_, err := db.Get(key)
+	return err == nil, nil
 }
