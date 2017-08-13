@@ -35,6 +35,9 @@ var NoOdr = context.Background()
 // OdrBackend is an interface to a backend service that handles ODR retrievals type
 type OdrBackend interface {
 	Database() ethdb.Database
+	ChtIndexer() *core.ChainIndexer
+	BltIndexer() *core.ChainIndexer
+	BloomIndexer() *core.ChainIndexer
 	Retrieve(ctx context.Context, req OdrRequest) error
 }
 
@@ -147,7 +150,8 @@ func (req *ChtRequest) StoreResult(db ethdb.Database) {
 // BloomRequest is the ODR request type for retrieving bloom filters from a CHT structure
 type BloomRequest struct {
 	OdrRequest
-	BltNum, BitIdx uint64
+	BltNum         uint64
+	BitIdx         uint
 	SectionIdxList []uint64
 	BltRoot        common.Hash
 	BloomBits      [][]byte
@@ -157,6 +161,11 @@ type BloomRequest struct {
 // StoreResult stores the retrieved data in local database
 func (req *BloomRequest) StoreResult(db ethdb.Database) {
 	for i, sectionIdx := range req.SectionIdxList {
-		core.StoreBloomBits(db, req.BitIdx, sectionIdx, req.BloomBits[i])
+		sectionHead := core.GetCanonicalHash(db, (sectionIdx+1)*BloomTrieFrequency-1)
+		// if we don't have the canonical hash stored for this section head number, we'll still store it under
+		// a key with a zero sectionHead. GetBloomBits will look there too if we still don't have the canonical
+		// hash. In the unlikely case we've retrieved the section head hash since then, we'll just retrieve the
+		// bit vector again from the network.
+		core.WriteBloomBits(db, req.BitIdx, sectionIdx, sectionHead, req.BloomBits[i])
 	}
 }

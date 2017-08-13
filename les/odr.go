@@ -19,6 +19,7 @@ package les
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -26,25 +27,46 @@ import (
 
 // LesOdr implements light.OdrBackend
 type LesOdr struct {
-	db        ethdb.Database
-	stop      chan struct{}
-	retriever *retrieveManager
+	db                                   ethdb.Database
+	chtIndexer, bltIndexer, bloomIndexer *core.ChainIndexer
+	retriever                            *retrieveManager
+	stop                                 chan struct{}
 }
 
-func NewLesOdr(db ethdb.Database, retriever *retrieveManager) *LesOdr {
+func NewLesOdr(db ethdb.Database, chtIndexer, bltIndexer, bloomIndexer *core.ChainIndexer, retriever *retrieveManager) *LesOdr {
 	return &LesOdr{
-		db:        db,
-		retriever: retriever,
-		stop:      make(chan struct{}),
+		db:           db,
+		chtIndexer:   chtIndexer,
+		bltIndexer:   bltIndexer,
+		bloomIndexer: bloomIndexer,
+		retriever:    retriever,
+		stop:         make(chan struct{}),
 	}
 }
 
+// Stop cancels all pending retrievals
 func (odr *LesOdr) Stop() {
 	close(odr.stop)
 }
 
+// Database returns the backing database
 func (odr *LesOdr) Database() ethdb.Database {
 	return odr.db
+}
+
+// ChtIndexer returns the CHT chain indexer
+func (odr *LesOdr) ChtIndexer() *core.ChainIndexer {
+	return odr.chtIndexer
+}
+
+// BltIndexer returns the bloom trie chain indexer
+func (odr *LesOdr) BltIndexer() *core.ChainIndexer {
+	return odr.bltIndexer
+}
+
+// BloomIndexer returns the bloombits chain indexer
+func (odr *LesOdr) BloomIndexer() *core.ChainIndexer {
+	return odr.bloomIndexer
 }
 
 const (

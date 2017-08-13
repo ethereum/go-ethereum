@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"math"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -34,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 type LesServer struct {
@@ -44,6 +42,8 @@ type LesServer struct {
 	defParams       *flowcontrol.ServerParams
 	lesTopic        discv5.Topic
 	quitSync        chan struct{}
+
+	chtIndexer, bltIndexer *core.ChainIndexer
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
@@ -58,7 +58,10 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		protocolManager: pm,
 		quitSync:        quitSync,
 		lesTopic:        lesTopic(eth.BlockChain().Genesis().Hash()),
+		chtIndexer:      light.NewChtIndexer(eth.ChainDb(), false),
+		bltIndexer:      light.NewBloomTrieIndexer(eth.ChainDb(), false),
 	}
+	srv.chtIndexer.Start(eth.BlockChain())
 	pm.server = srv
 
 	srv.defParams = &flowcontrol.ServerParams{
@@ -86,8 +89,14 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 	}()
 }
 
+func (s *LesServer) SetBloomBitsIndexer(bbIndexer *core.ChainIndexer) {
+	bbIndexer.AddChildIndexer(s.bltIndexer)
+}
+
 // Stop stops the LES service
 func (s *LesServer) Stop() {
+	s.chtIndexer.Close()
+	// bloom trie indexer is closed by parent bloombits indexer
 	s.fcCostStats.store()
 	s.fcManager.Stop()
 	go func() {
@@ -273,10 +282,7 @@ func (pm *ProtocolManager) blockLoop() {
 	pm.wg.Add(1)
 	headCh := make(chan core.ChainHeadEvent, 10)
 	headSub := pm.blockchain.SubscribeChainHeadEvent(headCh)
-	newCht := make(chan struct{}, 10)
-	newCht <- struct{}{}
 	go func() {
-		var mu sync.Mutex
 		var lastHead *types.Header
 		lastBroadcastTd := common.Big0
 		for {
@@ -308,17 +314,6 @@ func (pm *ProtocolManager) blockLoop() {
 						}
 					}
 				}
-				newCht <- struct{}{}
-			case <-newCht:
-				go func() {
-					mu.Lock()
-					more := makeCht(pm.chainDb)
-					mu.Unlock()
-					if more {
-						time.Sleep(time.Millisecond * 10)
-						newCht <- struct{}{}
-					}
-				}()
 			case <-pm.quitSync:
 				headSub.Unsubscribe()
 				pm.wg.Done()
@@ -326,87 +321,4 @@ func (pm *ProtocolManager) blockLoop() {
 			}
 		}
 	}()
-}
-
-var (
-	lastChtKey = []byte("LastChtNumber") // chtNum (uint64 big endian)
-	chtPrefix  = []byte("cht")           // chtPrefix + chtNum (uint64 big endian) -> trie root hash
-)
-
-func getChtRoot(db ethdb.Database, num uint64) common.Hash {
-	var encNumber [8]byte
-	binary.BigEndian.PutUint64(encNumber[:], num)
-	data, _ := db.Get(append(chtPrefix, encNumber[:]...))
-	return common.BytesToHash(data)
-}
-
-func storeChtRoot(db ethdb.Database, num uint64, root common.Hash) {
-	var encNumber [8]byte
-	binary.BigEndian.PutUint64(encNumber[:], num)
-	db.Put(append(chtPrefix, encNumber[:]...), root[:])
-}
-
-func makeCht(db ethdb.Database) bool {
-	headHash := core.GetHeadBlockHash(db)
-	headNum := core.GetBlockNumber(db, headHash)
-
-	var newChtNum uint64
-	if headNum > light.ChtConfirmations {
-		newChtNum = (headNum - light.ChtConfirmations) / light.ChtFrequency
-	}
-
-	var lastChtNum uint64
-	data, _ := db.Get(lastChtKey)
-	if len(data) == 8 {
-		lastChtNum = binary.BigEndian.Uint64(data[:])
-	}
-	if newChtNum <= lastChtNum {
-		return false
-	}
-
-	var t *trie.Trie
-	if lastChtNum > 0 {
-		var err error
-		t, err = trie.New(getChtRoot(db, lastChtNum), db)
-		if err != nil {
-			lastChtNum = 0
-		}
-	}
-	if lastChtNum == 0 {
-		t, _ = trie.New(common.Hash{}, db)
-	}
-
-	for num := lastChtNum * light.ChtFrequency; num < (lastChtNum+1)*light.ChtFrequency; num++ {
-		hash := core.GetCanonicalHash(db, num)
-		if hash == (common.Hash{}) {
-			panic("Canonical hash not found")
-		}
-		td := core.GetTd(db, hash, num)
-		if td == nil {
-			panic("TD not found")
-		}
-		var encNumber [8]byte
-		binary.BigEndian.PutUint64(encNumber[:], num)
-		var node light.ChtNode
-		node.Hash = hash
-		node.Td = td
-		data, _ := rlp.EncodeToBytes(node)
-		t.Update(encNumber[:], data)
-	}
-
-	root, err := t.Commit()
-	if err != nil {
-		lastChtNum = 0
-	} else {
-		lastChtNum++
-
-		log.Trace("Generated CHT", "number", lastChtNum, "root", root.Hex())
-
-		storeChtRoot(db, lastChtNum, root)
-		var data [8]byte
-		binary.BigEndian.PutUint64(data[:], lastChtNum)
-		db.Put(lastChtKey, data[:])
-	}
-
-	return newChtNum > lastChtNum
 }

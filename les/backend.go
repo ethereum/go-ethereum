@@ -61,6 +61,8 @@ type LightEthereum struct {
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
 
+	bbIndexer, chtIndexer, bltIndexer *core.ChainIndexer
+
 	ApiBackend *LesApiBackend
 
 	eventMux       *event.TypeMux
@@ -87,7 +89,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	peers := newPeerSet()
 	quitSync := make(chan struct{})
 
-	eth := &LightEthereum{
+	leth := &LightEthereum{
 		chainConfig:    chainConfig,
 		chainDb:        chainDb,
 		eventMux:       ctx.EventMux,
@@ -97,33 +99,38 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		engine:         eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb),
 		shutdownChan:   make(chan bool),
 		networkId:      config.NetworkId,
+		bbIndexer:      eth.NewBloomBitsProcessor(chainDb, light.BloomTrieFrequency),
+		chtIndexer:     light.NewChtIndexer(chainDb, true),
+		bltIndexer:     light.NewBloomTrieIndexer(chainDb, true),
 	}
 
-	eth.relay = NewLesTxRelay(peers, eth.reqDist)
-	eth.serverPool = newServerPool(chainDb, quitSync, &eth.wg)
-	eth.retriever = newRetrieveManager(peers, eth.reqDist, eth.serverPool)
-	eth.odr = NewLesOdr(chainDb, eth.retriever)
-	if eth.blockchain, err = light.NewLightChain(eth.odr, eth.chainConfig, eth.engine); err != nil {
+	leth.relay = NewLesTxRelay(peers, leth.reqDist)
+	leth.serverPool = newServerPool(chainDb, quitSync, &leth.wg)
+	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool)
+	leth.odr = NewLesOdr(chainDb, leth.chtIndexer, leth.bltIndexer, leth.bbIndexer, leth.retriever)
+	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine); err != nil {
 		return nil, err
 	}
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-		eth.blockchain.SetHead(compat.RewindTo)
+		leth.blockchain.SetHead(compat.RewindTo)
 		core.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 
-	eth.txPool = light.NewTxPool(eth.chainConfig, eth.blockchain, eth.relay)
-	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, true, config.NetworkId, eth.eventMux, eth.engine, eth.peers, eth.blockchain, nil, chainDb, eth.odr, eth.relay, quitSync, &eth.wg); err != nil {
+	//leth.bbIndexer.Start(leth.blockchain)
+
+	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
+	if leth.protocolManager, err = NewProtocolManager(leth.chainConfig, true, config.NetworkId, leth.eventMux, leth.engine, leth.peers, leth.blockchain, nil, chainDb, leth.odr, leth.relay, quitSync, &leth.wg); err != nil {
 		return nil, err
 	}
-	eth.ApiBackend = &LesApiBackend{eth, nil}
+	leth.ApiBackend = &LesApiBackend{leth, nil}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.GasPrice
 	}
-	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
-	return eth, nil
+	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
+	return leth, nil
 }
 
 func lesTopic(genesisHash common.Hash) discv5.Topic {
@@ -211,6 +218,9 @@ func (s *LightEthereum) Start(srvr *p2p.Server) error {
 // Ethereum protocol.
 func (s *LightEthereum) Stop() error {
 	s.odr.Stop()
+	s.bbIndexer.Close()
+	s.chtIndexer.Close()
+	s.bltIndexer.Close()
 	s.blockchain.Stop()
 	s.protocolManager.Stop()
 	s.txPool.Stop()
