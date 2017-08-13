@@ -847,6 +847,73 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
 		return p.SendHeaderProofs(req.ReqID, bv, proofs)
 
+	case GetPPTProofsMsg:
+		p.Log().Trace("Received PPT proof request")
+		// Decode the retrieval message
+		var req struct {
+			ReqID uint64
+			Reqs  []PPTReq
+		}
+		if err := msg.Decode(&req); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		// Gather state data until the fetch or network limits is reached
+		var (
+			auxBytes int
+			auxData  [][]byte
+		)
+		reqCnt := len(req.Reqs)
+		if reject(uint64(reqCnt), MaxPPTProofsFetch) {
+			return errResp(ErrRequestRejected, "")
+		}
+
+		var (
+			lastIdx   uint64
+			lastPPTId uint
+			root      common.Hash
+			tr        *trie.Trie
+		)
+
+		nodes := light.NewNodeSet()
+
+		for _, req := range req.Reqs {
+			if nodes.DataSize()+auxBytes >= softResponseLimit {
+				break
+			}
+			if tr == nil || req.PPTId != lastPPTId || req.TrieIdx != lastIdx {
+				var prefix string
+				root, prefix = pm.getPPT(req.PPTId, req.TrieIdx)
+				if root != (common.Hash{}) {
+					if t, err := trie.New(root, ethdb.NewTable(pm.chainDb, prefix)); err == nil {
+						tr = t
+					}
+				}
+				lastPPTId = req.PPTId
+				lastIdx = req.TrieIdx
+			}
+			if req.AuxReq == PPTAuxRoot {
+				var data []byte
+				if root != (common.Hash{}) {
+					data = root[:]
+				}
+				auxData = append(auxData, data)
+				auxBytes += len(data)
+			} else {
+				if tr != nil {
+					tr.Prove(req.Key, req.FromLevel, nodes)
+				}
+				if req.AuxReq != 0 {
+					data := pm.getPPTAuxData(req)
+					auxData = append(auxData, data)
+					auxBytes += len(data)
+				}
+			}
+		}
+		proofs := nodes.NodeList()
+		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
+		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+		return p.SendPPTProofs(req.ReqID, bv, PPTResps{Proofs: proofs, AuxData: auxData})
+
 	case HeaderProofsMsg:
 		if pm.odr == nil {
 			return errResp(ErrUnexpectedResponse, "")
@@ -863,6 +930,27 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		p.fcServer.GotReply(resp.ReqID, resp.BV)
 		deliverMsg = &Msg{
 			MsgType: MsgHeaderProofs,
+			ReqID:   resp.ReqID,
+			Obj:     resp.Data,
+		}
+
+	case PPTProofsMsg:
+		if pm.odr == nil {
+			return errResp(ErrUnexpectedResponse, "")
+		}
+
+		p.Log().Trace("Received PPT proof response")
+		var resp struct {
+			ReqID, BV uint64
+			Data      PPTResps
+		}
+		if err := msg.Decode(&resp); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+
+		p.fcServer.GotReply(resp.ReqID, resp.BV)
+		deliverMsg = &Msg{
+			MsgType: MsgPPTProofs,
 			ReqID:   resp.ReqID,
 			Obj:     resp.Data,
 		}
@@ -901,6 +989,30 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+// getPPT returns the post-processed trie root for the given trie ID and section index
+func (pm *ProtocolManager) getPPT(id uint, idx uint64) (common.Hash, string) {
+	switch id {
+	case PPTChain:
+		return light.GetChtRoot(pm.chainDb, idx), light.ChtTablePrefix
+	case PPTBloomBits:
+		return light.GetBloomTrieRoot(pm.chainDb, idx), light.BloomTrieTablePrefix
+	}
+	return common.Hash{}, ""
+}
+
+// getPPTAuxData returns requested auxiliary data for the given PPT request
+func (pm *ProtocolManager) getPPTAuxData(req PPTReq) []byte {
+	if req.PPTId == PPTChain && req.AuxReq == PPTChainAuxHeader {
+		if len(req.Key) != 8 {
+			return nil
+		}
+		blockNum := binary.BigEndian.Uint64(req.Key)
+		hash := core.GetCanonicalHash(pm.chainDb, blockNum)
+		return core.GetHeaderRLP(pm.chainDb, hash, blockNum)
 	}
 	return nil
 }

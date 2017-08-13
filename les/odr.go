@@ -54,6 +54,7 @@ const (
 	MsgProofsV1
 	MsgProofsV2
 	MsgHeaderProofs
+	MsgPPTProofs
 )
 
 // Msg encodes a LES message that delivers reply data for a request

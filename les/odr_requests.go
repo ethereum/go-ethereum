@@ -36,13 +36,14 @@ import (
 
 var (
 	errInvalidMessageType  = errors.New("invalid message type")
-	errMultipleEntries     = errors.New("multiple response entries")
+	errInvalidEntryCount   = errors.New("invalid number of response entries")
 	errHeaderUnavailable   = errors.New("header unavailable")
 	errTxHashMismatch      = errors.New("transaction hash mismatch")
 	errUncleHashMismatch   = errors.New("uncle hash mismatch")
 	errReceiptHashMismatch = errors.New("receipt hash mismatch")
 	errDataHashMismatch    = errors.New("data hash mismatch")
 	errCHTHashMismatch     = errors.New("cht hash mismatch")
+	errCHTNumberMismatch   = errors.New("cht number mismatch")
 	errUselessNodes        = errors.New("useless nodes in merkle proof nodeset")
 )
 
@@ -65,6 +66,8 @@ func LesRequest(req light.OdrRequest) LesOdrRequest {
 		return (*CodeRequest)(r)
 	case *light.ChtRequest:
 		return (*ChtRequest)(r)
+	case *light.BloomRequest:
+		return (*BloomRequest)(r)
 	default:
 		return nil
 	}
@@ -102,7 +105,7 @@ func (r *BlockRequest) Validate(db ethdb.Database, msg *Msg) error {
 	}
 	bodies := msg.Obj.([]*types.Body)
 	if len(bodies) != 1 {
-		return errMultipleEntries
+		return errInvalidEntryCount
 	}
 	body := bodies[0]
 
@@ -158,7 +161,7 @@ func (r *ReceiptsRequest) Validate(db ethdb.Database, msg *Msg) error {
 	}
 	receipts := msg.Obj.([]types.Receipts)
 	if len(receipts) != 1 {
-		return errMultipleEntries
+		return errInvalidEntryCount
 	}
 	receipt := receipts[0]
 
@@ -205,12 +208,12 @@ func (r *TrieRequest) CanSend(peer *peer) bool {
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (r *TrieRequest) Request(reqID uint64, peer *peer) error {
 	peer.Log().Debug("Requesting trie proof", "root", r.Id.Root, "key", r.Key)
-	req := &ProofReq{
+	req := ProofReq{
 		BHash:  r.Id.BlockHash,
 		AccKey: r.Id.AccKey,
 		Key:    r.Key,
 	}
-	return peer.RequestProofs(reqID, r.GetCost(peer), []*ProofReq{req})
+	return peer.RequestProofs(reqID, r.GetCost(peer), []ProofReq{req})
 }
 
 // Valid processes an ODR request reply message from the LES network
@@ -275,11 +278,11 @@ func (r *CodeRequest) CanSend(peer *peer) bool {
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (r *CodeRequest) Request(reqID uint64, peer *peer) error {
 	peer.Log().Debug("Requesting code data", "hash", r.Hash)
-	req := &CodeReq{
+	req := CodeReq{
 		BHash:  r.Id.BlockHash,
 		AccKey: r.Id.AccKey,
 	}
-	return peer.RequestCode(reqID, r.GetCost(peer), []*CodeReq{req})
+	return peer.RequestCode(reqID, r.GetCost(peer), []CodeReq{req})
 }
 
 // Valid processes an ODR request reply message from the LES network
@@ -294,7 +297,7 @@ func (r *CodeRequest) Validate(db ethdb.Database, msg *Msg) error {
 	}
 	reply := msg.Obj.([][]byte)
 	if len(reply) != 1 {
-		return errMultipleEntries
+		return errInvalidEntryCount
 	}
 	data := reply[0]
 
@@ -306,10 +309,33 @@ func (r *CodeRequest) Validate(db ethdb.Database, msg *Msg) error {
 	return nil
 }
 
-type ChtReq struct {
-	ChtNum, BlockNum, FromLevel uint64
+const (
+	PPTChain = iota
+	PPTBloomBits
+
+	PPTAuxRoot        = 1
+	PPTChainAuxHeader = 2
+)
+
+type PPTReq struct {
+	PPTId             uint
+	TrieIdx           uint64
+	Key               []byte
+	FromLevel, AuxReq uint
 }
 
+type PPTResps struct { // describes all responses, not just a single one
+	Proofs  light.NodeList
+	AuxData [][]byte
+}
+
+// legacy LES/1
+type ChtReq struct {
+	ChtNum, BlockNum uint64
+	FromLevel        uint
+}
+
+// legacy LES/1
 type ChtResp struct {
 	Header *types.Header
 	Proof  []rlp.RawValue
@@ -321,7 +347,14 @@ type ChtRequest light.ChtRequest
 // GetCost returns the cost of the given ODR request according to the serving
 // peer's cost table (implementation of LesOdrRequest)
 func (r *ChtRequest) GetCost(peer *peer) uint64 {
-	return peer.GetRequestCost(GetHeaderProofsMsg, 1)
+	switch peer.version {
+	case lpv1:
+		return peer.GetRequestCost(GetHeaderProofsMsg, 1)
+	case lpv2:
+		return peer.GetRequestCost(GetPPTProofsMsg, 1)
+	default:
+		panic(nil)
+	}
 }
 
 // CanSend tells if a certain peer is suitable for serving the given request
@@ -329,17 +362,21 @@ func (r *ChtRequest) CanSend(peer *peer) bool {
 	peer.lock.RLock()
 	defer peer.lock.RUnlock()
 
-	return r.ChtNum <= (peer.headInfo.Number-light.ChtConfirmations)/light.ChtFrequency
+	return peer.headInfo.Number >= light.ChtConfirmations && r.ChtNum <= (peer.headInfo.Number-light.ChtConfirmations)/light.ChtFrequency
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (r *ChtRequest) Request(reqID uint64, peer *peer) error {
 	peer.Log().Debug("Requesting CHT", "cht", r.ChtNum, "block", r.BlockNum)
-	req := &ChtReq{
-		ChtNum:   r.ChtNum,
-		BlockNum: r.BlockNum,
+	var encNum [8]byte
+	binary.BigEndian.PutUint64(encNum[:], r.BlockNum)
+	req := PPTReq{
+		PPTId:   PPTChain,
+		TrieIdx: r.ChtNum,
+		Key:     encNum[:],
+		AuxReq:  PPTChainAuxHeader,
 	}
-	return peer.RequestHeaderProofs(reqID, r.GetCost(peer), []*ChtReq{req})
+	return peer.RequestPPTProofs(reqID, r.GetCost(peer), []PPTReq{req})
 }
 
 // Valid processes an ODR request reply message from the LES network
@@ -348,35 +385,157 @@ func (r *ChtRequest) Request(reqID uint64, peer *peer) error {
 func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 	log.Debug("Validating CHT", "cht", r.ChtNum, "block", r.BlockNum)
 
-	// Ensure we have a correct message with a single proof element
-	if msg.MsgType != MsgHeaderProofs {
+	switch msg.MsgType {
+	case MsgHeaderProofs: // LES/1 backwards compatibility
+		proofs := msg.Obj.([]ChtResp)
+		if len(proofs) != 1 {
+			return errInvalidEntryCount
+		}
+		proof := proofs[0]
+
+		// Verify the CHT
+		var encNumber [8]byte
+		binary.BigEndian.PutUint64(encNumber[:], r.BlockNum)
+
+		value, err, _ := trie.VerifyProof(r.ChtRoot, encNumber[:], light.NodeList(proof.Proof).NodeSet())
+		if err != nil {
+			return err
+		}
+		var node light.ChtNode
+		if err := rlp.DecodeBytes(value, &node); err != nil {
+			return err
+		}
+		if node.Hash != proof.Header.Hash() {
+			return errCHTHashMismatch
+		}
+		// Verifications passed, store and return
+		r.Header = proof.Header
+		r.Proof = light.NodeList(proof.Proof).NodeSet()
+		r.Td = node.Td
+	case MsgPPTProofs:
+		resp := msg.Obj.(PPTResps)
+		if len(resp.AuxData) != 1 {
+			return errInvalidEntryCount
+		}
+		pdb := resp.Proofs.NodeSet()
+		headerEnc := resp.AuxData[0]
+		if len(headerEnc) == 0 {
+			return errHeaderUnavailable
+		}
+		header := new(types.Header)
+		if err := rlp.DecodeBytes(headerEnc, header); err != nil {
+			return errHeaderUnavailable
+		}
+
+		// Verify the CHT
+		var encNumber [8]byte
+		binary.BigEndian.PutUint64(encNumber[:], r.BlockNum)
+
+		cdb := pdb.ReadCache()
+		value, err, _ := trie.VerifyProof(r.ChtRoot, encNumber[:], cdb)
+		if err != nil {
+			return fmt.Errorf("merkle proof verification failed: %v", err)
+		}
+		if pdb.KeyCount() != cdb.KeyCount() {
+			return errUselessNodes
+		}
+
+		var node light.ChtNode
+		if err := rlp.DecodeBytes(value, &node); err != nil {
+			return err
+		}
+		if node.Hash != header.Hash() {
+			return errCHTHashMismatch
+		}
+		if r.BlockNum != header.Number.Uint64() {
+			return errCHTNumberMismatch
+		}
+		// Verifications passed, store and return
+		r.Header = header
+		r.Proof = pdb
+		r.Td = node.Td
+	default:
 		return errInvalidMessageType
 	}
-	proofs := msg.Obj.([]ChtResp)
-	if len(proofs) != 1 {
-		return errMultipleEntries
-	}
-	proof := proofs[0]
+	return nil
+}
 
-	// Verify the CHT
-	var encNumber [8]byte
-	binary.BigEndian.PutUint64(encNumber[:], r.BlockNum)
+type BloomReq struct {
+	BltNum, BitIdx, SectionIdx, FromLevel uint64
+}
 
-	value, err, _ := trie.VerifyProof(r.ChtRoot, encNumber[:], light.NodeList(proof.Proof).NodeSet())
-	if err != nil {
-		return err
-	}
-	var node light.ChtNode
-	if err := rlp.DecodeBytes(value, &node); err != nil {
-		return err
-	}
-	if node.Hash != proof.Header.Hash() {
-		return errCHTHashMismatch
-	}
-	// Verifications passed, store and return
-	r.Header = proof.Header
-	r.Proof = proof.Proof
-	r.Td = node.Td
+// ODR request type for requesting headers by Canonical Hash Trie, see LesOdrRequest interface
+type BloomRequest light.BloomRequest
 
+// GetCost returns the cost of the given ODR request according to the serving
+// peer's cost table (implementation of LesOdrRequest)
+func (r *BloomRequest) GetCost(peer *peer) uint64 {
+	return peer.GetRequestCost(GetPPTProofsMsg, len(r.SectionIdxList))
+}
+
+// CanSend tells if a certain peer is suitable for serving the given request
+func (r *BloomRequest) CanSend(peer *peer) bool {
+	peer.lock.RLock()
+	defer peer.lock.RUnlock()
+
+	if peer.version < lpv2 {
+		return false
+	}
+	return peer.headInfo.Number >= light.BloomTrieConfirmations && r.BltNum <= (peer.headInfo.Number-light.BloomTrieConfirmations)/light.BloomTrieFrequency
+}
+
+// Request sends an ODR request to the LES network (implementation of LesOdrRequest)
+func (r *BloomRequest) Request(reqID uint64, peer *peer) error {
+	peer.Log().Debug("Requesting BloomBits", "blt", r.BltNum, "bitIdx", r.BitIdx, "sections", r.SectionIdxList)
+	reqs := make([]PPTReq, len(r.SectionIdxList))
+
+	var encNumber [10]byte
+	binary.BigEndian.PutUint16(encNumber[0:2], uint16(r.BitIdx))
+
+	for i, sectionIdx := range r.SectionIdxList {
+		binary.BigEndian.PutUint64(encNumber[2:10], sectionIdx)
+		reqs[i] = PPTReq{
+			PPTId:   PPTBloomBits,
+			TrieIdx: r.BltNum,
+			Key:     common.CopyBytes(encNumber[:]),
+		}
+	}
+	return peer.RequestPPTProofs(reqID, r.GetCost(peer), reqs)
+}
+
+// Valid processes an ODR request reply message from the LES network
+// returns true and stores results in memory if the message was a valid reply
+// to the request (implementation of LesOdrRequest)
+func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
+	log.Debug("Validating BloomBits", "blt", r.BltNum, "bitIdx", r.BitIdx, "sections", r.SectionIdxList)
+
+	// Ensure we have a correct message with a single proof element
+	if msg.MsgType != MsgPPTProofs {
+		return errInvalidMessageType
+	}
+	resps := msg.Obj.(PPTResps)
+	proofs := resps.Proofs
+	pdb := proofs.NodeSet()
+	cdb := pdb.ReadCache()
+
+	r.BloomBits = make([][]byte, len(r.SectionIdxList))
+
+	// Verify the proofs
+	var encNumber [10]byte
+	binary.BigEndian.PutUint16(encNumber[0:2], uint16(r.BitIdx))
+
+	for i, idx := range r.SectionIdxList {
+		binary.BigEndian.PutUint64(encNumber[2:10], idx)
+		value, err, _ := trie.VerifyProof(r.BltRoot, encNumber[:], cdb)
+		if err != nil {
+			return err
+		}
+		r.BloomBits[i] = value
+	}
+
+	if pdb.KeyCount() != cdb.KeyCount() {
+		return errUselessNodes
+	}
+	r.Proofs = pdb
 	return nil
 }

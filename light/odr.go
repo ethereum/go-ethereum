@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // NoOdr is the default context passed to an ODR capable function when the ODR
@@ -126,14 +125,14 @@ func (req *ReceiptsRequest) StoreResult(db ethdb.Database) {
 	core.WriteBlockReceipts(db, req.Hash, req.Number, req.Receipts)
 }
 
-// TrieRequest is the ODR request type for state/storage trie entries
+// ChtRequest is the ODR request type for state/storage trie entries
 type ChtRequest struct {
 	OdrRequest
 	ChtNum, BlockNum uint64
 	ChtRoot          common.Hash
 	Header           *types.Header
 	Td               *big.Int
-	Proof            []rlp.RawValue
+	Proof            *NodeSet
 }
 
 // StoreResult stores the retrieved data in local database
@@ -143,5 +142,21 @@ func (req *ChtRequest) StoreResult(db ethdb.Database) {
 	hash, num := req.Header.Hash(), req.Header.Number.Uint64()
 	core.WriteTd(db, hash, num, req.Td)
 	core.WriteCanonicalHash(db, hash, num)
-	//storeProof(db, req.Proof)
+}
+
+// BloomRequest is the ODR request type for retrieving bloom filters from a CHT structure
+type BloomRequest struct {
+	OdrRequest
+	BltNum, BitIdx uint64
+	SectionIdxList []uint64
+	BltRoot        common.Hash
+	BloomBits      [][]byte
+	Proofs         *NodeSet
+}
+
+// StoreResult stores the retrieved data in local database
+func (req *BloomRequest) StoreResult(db ethdb.Database) {
+	for i, sectionIdx := range req.SectionIdxList {
+		core.StoreBloomBits(db, req.BitIdx, sectionIdx, req.BloomBits[i])
+	}
 }
