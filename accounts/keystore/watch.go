@@ -99,8 +99,9 @@ func (w *watcher) loop() {
 				hadEvent = true
 			}
 		case <-debounce.C:
+			accounts, err := w.ac.scan()
 			w.ac.mu.Lock()
-			w.ac.reload()
+			w.ac.handleScanResult(accounts, err)
 			w.ac.mu.Unlock()
 			if hadEvent {
 				debounce.Reset(debounceDuration)
