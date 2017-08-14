@@ -25,9 +25,11 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/api"
 )
 
 //templateMap holds a mapping of an HTTP error code to a template
@@ -51,18 +53,54 @@ func initErrHandling() {
 	//pages are saved as strings - get these strings
 	genErrPage := GetGenericErrorPage()
 	notFoundPage := GetNotFoundErrorPage()
+	multipleChoicesPage := GetMultipleChoicesErrorPage()
 	//map the codes to the available pages
 	tnames := map[int]string{
-		0:   genErrPage, //default
-		400: genErrPage,
-		404: notFoundPage,
-		500: genErrPage,
+		0: genErrPage, //default
+		http.StatusBadRequest:          genErrPage,
+		http.StatusNotFound:            notFoundPage,
+		http.StatusMultipleChoices:     multipleChoicesPage,
+		http.StatusInternalServerError: genErrPage,
 	}
 	templateMap = make(map[int]*template.Template)
 	for code, tname := range tnames {
 		//assign formatted HTML to the code
 		templateMap[code] = template.Must(template.New(fmt.Sprintf("%d", code)).Parse(tname))
 	}
+}
+
+//ShowMultipeChoices is used when a user requests a resource in a manifest which results
+//in ambiguous results. It returns a HTML page with clickable links of each of the entry
+//in the manifest which fits the request URI ambiguity.
+//For example, if the user requests bzz:/<hash>/read and that manifest containes entries
+//"readme.md" and "readinglist.txt", a HTML page is returned with this two links.
+//This only applies if the manifest has no default entry
+func ShowMultipleChoices(w http.ResponseWriter, r *http.Request, list api.ManifestList) {
+	msg := ""
+	if list.Entries == nil {
+		ShowError(w, r, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	//make links relative
+	//requestURI comes with the prefix of the ambiguous path, e.g. "read" for "readme.md" and "readinglist.txt"
+	//to get clickable links, need to remove the ambiguous path, i.e. "read"
+	idx := strings.LastIndex(r.RequestURI, "/")
+	if idx == -1 {
+		ShowError(w, r, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	//remove ambiguous part
+	base := r.RequestURI[:idx+1]
+	for _, e := range list.Entries {
+		//create clickable link for each entry
+		msg += "<a href='" + base + e.Path + "'>" + e.Path + "</a><br/>"
+	}
+	respond(w, r, &ErrorParams{
+		Code:      http.StatusMultipleChoices,
+		Details:   template.HTML(msg),
+		Timestamp: time.Now().Format(time.RFC1123),
+		template:  getTemplate(http.StatusMultipleChoices),
+	})
 }
 
 //ShowError is used to show an HTML error page to a client.
