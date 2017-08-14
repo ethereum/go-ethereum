@@ -17,7 +17,7 @@
 package rpc
 
 import (
-	"fmt"
+	"errors"
 	"math"
 	"reflect"
 	"strings"
@@ -124,6 +124,10 @@ const (
 	EarliestBlockNumber = BlockNumber(0)
 )
 
+var (
+	errBlockNumberTooHigh = errors.New("Blocknumber too high")
+)
+
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
 // - "latest", "earliest" or "pending" as string arguments
 // - the block number
@@ -153,7 +157,7 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	if blckNum > math.MaxInt64 {
-		return fmt.Errorf("Blocknumber too high")
+		return errBlockNumberTooHigh
 	}
 
 	*bn = BlockNumber(blckNum)

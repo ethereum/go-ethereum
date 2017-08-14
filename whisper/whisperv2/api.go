@@ -18,6 +18,7 @@ package whisperv2
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -243,6 +244,12 @@ func (args *PostArgs) UnmarshalJSON(data []byte) (err error) {
 	return nil
 }
 
+var (
+	errToNotAString   = errors.New("to is not a string")
+	errFromNotAString = errors.New("from is not a string")
+	errTopicsNotArray = errors.New("topics is not an array")
+)
+
 // UnmarshalJSON implements the json.Unmarshaler interface, invoked to convert a
 // JSON message blob into a WhisperFilterArgs structure.
 func (args *NewFilterArgs) UnmarshalJSON(b []byte) (err error) {
@@ -262,7 +269,7 @@ func (args *NewFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	} else {
 		argstr, ok := obj.To.(string)
 		if !ok {
-			return fmt.Errorf("to is not a string")
+			return errToNotAString
 		}
 		args.To = argstr
 	}
@@ -271,7 +278,7 @@ func (args *NewFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	} else {
 		argstr, ok := obj.From.(string)
 		if !ok {
-			return fmt.Errorf("from is not a string")
+			return errFromNotAString
 		}
 		args.From = argstr
 	}
@@ -280,7 +287,7 @@ func (args *NewFilterArgs) UnmarshalJSON(b []byte) (err error) {
 		// Make sure we have an actual topic array
 		list, ok := obj.Topics.([]interface{})
 		if !ok {
-			return fmt.Errorf("topics is not an array")
+			return errTopicsNotArray
 		}
 		// Iterate over each topic and handle nil, string or array
 		topics := make([][]string, len(list))

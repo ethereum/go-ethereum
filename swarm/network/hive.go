@@ -17,6 +17,7 @@
 package network
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"path/filepath"
@@ -317,12 +318,16 @@ func (self *peer) LastActive() time.Time {
 	return self.lastActive
 }
 
+var (
+	errInvalidType = errors.New("invalid type")
+)
+
 // reads the serialised form of sync state persisted as the 'Meta' attribute
 // and sets the decoded syncState on the online node
 func loadSync(record *kademlia.NodeRecord, node kademlia.Node) error {
 	p, ok := node.(*peer)
 	if !ok {
-		return fmt.Errorf("invalid type")
+		return errInvalidType
 	}
 	if record.Meta == nil {
 		log.Debug(fmt.Sprintf("no sync state for node record %v setting default", record))

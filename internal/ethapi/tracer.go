@@ -215,6 +215,11 @@ type JavascriptTracer struct {
 	err           error                  // Error, if one has occurred
 }
 
+var (
+	errTraceMustExposeFunctionStep   = errors.New("Trace object must expose a function step()")
+	errTraceMustExposeFunctionResult = errors.New("Trace object must expose a function result()")
+)
+
 // NewJavascriptTracer instantiates a new JavascriptTracer instance.
 // code specifies a Javascript snippet, which must evaluate to an expression
 // returning an object with 'step' and 'result' functions.
@@ -237,7 +242,7 @@ func NewJavascriptTracer(code string) (*JavascriptTracer, error) {
 		return nil, err
 	}
 	if !step.IsFunction() {
-		return nil, fmt.Errorf("Trace object must expose a function step()")
+		return nil, errTraceMustExposeFunctionStep
 	}
 
 	result, err := jstracer.Get("result")
@@ -245,7 +250,7 @@ func NewJavascriptTracer(code string) (*JavascriptTracer, error) {
 		return nil, err
 	}
 	if !result.IsFunction() {
-		return nil, fmt.Errorf("Trace object must expose a function result()")
+		return nil, errTraceMustExposeFunctionResult
 	}
 
 	// Create the persistent log object

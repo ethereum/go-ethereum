@@ -17,6 +17,7 @@
 package rlp
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -428,9 +429,13 @@ func writeBigIntNoPtr(val reflect.Value, w *encbuf) error {
 	return writeBigInt(&i, w)
 }
 
+var (
+	errRLPEncodeNegativeBigInt = errors.New("rlp: cannot encode negative *big.Int")
+)
+
 func writeBigInt(i *big.Int, w *encbuf) error {
 	if cmp := i.Cmp(big0); cmp == -1 {
-		return fmt.Errorf("rlp: cannot encode negative *big.Int")
+		return errRLPEncodeNegativeBigInt
 	} else if cmp == 0 {
 		w.str = append(w.str, 0x80)
 	} else {

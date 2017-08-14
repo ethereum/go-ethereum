@@ -20,6 +20,7 @@ package ethclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -94,16 +95,16 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	}
 	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
 	if head.UncleHash == types.EmptyUncleHash && len(body.UncleHashes) > 0 {
-		return nil, fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
+		return nil, errServerUnexpectedNonEmptyUncles
 	}
 	if head.UncleHash != types.EmptyUncleHash && len(body.UncleHashes) == 0 {
-		return nil, fmt.Errorf("server returned empty uncle list but block header indicates uncles")
+		return nil, errServerUnexpectedEmptyUncles
 	}
 	if head.TxHash == types.EmptyRootHash && len(body.Transactions) > 0 {
-		return nil, fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
+		return nil, errServerUnexpectedNonEmptyTransactions
 	}
 	if head.TxHash != types.EmptyRootHash && len(body.Transactions) == 0 {
-		return nil, fmt.Errorf("server returned empty transaction list but block header indicates transactions")
+		return nil, errServerUnexpectedEmptyTransactions
 	}
 	// Load uncles because they are not included in the block response.
 	var uncles []*types.Header
@@ -153,6 +154,14 @@ func (ec *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.H
 	return head, err
 }
 
+var (
+	errServerTxWithoutSignature             = errors.New("server returned transaction without signature")
+	errServerUnexpectedNonEmptyUncles       = errors.New("server returned non-empty uncle list but block header indicates no uncles")
+	errServerUnexpectedEmptyUncles          = errors.New("server returned empty uncle list but block header indicates uncles")
+	errServerUnexpectedNonEmptyTransactions = errors.New("server returned non-empty transaction list but block header indicates no transactions")
+	errServerUnexpectedEmptyTransactions    = errors.New("server returned empty transaction list but block header indicates transactions")
+)
+
 // TransactionByHash returns the transaction with the given hash.
 func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *types.Transaction, isPending bool, err error) {
 	var raw json.RawMessage
@@ -165,7 +174,7 @@ func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *
 	if err := json.Unmarshal(raw, &tx); err != nil {
 		return nil, false, err
 	} else if _, r, _ := tx.RawSignatureValues(); r == nil {
-		return nil, false, fmt.Errorf("server returned transaction without signature")
+		return nil, false, errServerTxWithoutSignature
 	}
 	var block struct{ BlockNumber *string }
 	if err := json.Unmarshal(raw, &block); err != nil {
@@ -189,7 +198,7 @@ func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash,
 		if tx == nil {
 			return nil, ethereum.NotFound
 		} else if _, r, _ := tx.RawSignatureValues(); r == nil {
-			return nil, fmt.Errorf("server returned transaction without signature")
+			return nil, errServerTxWithoutSignature
 		}
 	}
 	return tx, err

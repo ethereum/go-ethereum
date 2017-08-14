@@ -19,6 +19,7 @@ package utils
 
 import (
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -80,6 +81,8 @@ func StartNode(stack *node.Node) {
 	}()
 }
 
+var errInterrupted = errors.New("interrupted")
+
 func ImportChain(chain *core.BlockChain, fn string) error {
 	// Watch for Ctrl-C while the import is running.
 	// If a signal is received, the import will stop at the next batch.
@@ -125,7 +128,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	for batch := 0; ; batch++ {
 		// Load a batch of RLP blocks.
 		if checkInterrupt() {
-			return fmt.Errorf("interrupted")
+			return errInterrupted
 		}
 		i := 0
 		for ; i < importBatchSize; i++ {
@@ -148,7 +151,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 		}
 		// Import the batch.
 		if checkInterrupt() {
-			return fmt.Errorf("interrupted")
+			return errInterrupted
 		}
 		if hasAllBlocks(chain, blocks[:i]) {
 			log.Info("Skipping batch as all blocks present", "batch", batch, "first", blocks[0].Hash(), "last", blocks[i-1].Hash())

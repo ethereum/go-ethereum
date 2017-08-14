@@ -1079,6 +1079,11 @@ func countTransactions(chain []*types.Block) (c int) {
 	return c
 }
 
+var (
+	errInvalidOldChain = errors.New("Invalid old chain")
+	errInvalidNewChain = errors.New("Invalid new chain")
+)
+
 // reorgs takes two blocks, an old chain and a new chain and will reconstruct the blocks and inserts them
 // to be part of the new canonical chain and accumulates potential missing transactions and post an
 // event about them
@@ -1121,10 +1126,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 	}
 	if oldBlock == nil {
-		return fmt.Errorf("Invalid old chain")
+		return errInvalidOldChain
 	}
 	if newBlock == nil {
-		return fmt.Errorf("Invalid new chain")
+		return errInvalidNewChain
 	}
 
 	for {
@@ -1140,10 +1145,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 
 		oldBlock, newBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1), bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1)
 		if oldBlock == nil {
-			return fmt.Errorf("Invalid old chain")
+			return errInvalidOldChain
 		}
 		if newBlock == nil {
-			return fmt.Errorf("Invalid new chain")
+			return errInvalidNewChain
 		}
 	}
 	// Ensure the user sees large reorgs

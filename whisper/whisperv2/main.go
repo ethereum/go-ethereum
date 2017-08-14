@@ -22,6 +22,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -70,6 +71,8 @@ func main() {
 	}
 }
 
+var errMsgRecvTimedout = errors.New("failed to receive message in time")
+
 // SendSelf wraps a payload into a Whisper envelope and forwards it to itself.
 func selfSend(shh *whisper.Whisper, payload []byte) error {
 	ok := make(chan struct{})
@@ -100,7 +103,7 @@ func selfSend(shh *whisper.Whisper, payload []byte) error {
 	select {
 	case <-ok:
 	case <-time.After(time.Second):
-		return fmt.Errorf("failed to receive message in time")
+		return errMsgRecvTimedout
 	}
 	return nil
 }

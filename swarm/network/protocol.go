@@ -186,6 +186,11 @@ func (self *bzz) Drop() {
 	self.peer.Disconnect(p2p.DiscSubprotocolError)
 }
 
+var (
+	errProtocolHandlerNilReqKey = errors.New("protocol handler: req.Key == nil || req.Timeout == nil")
+	errNetworkWriteBlocked      = errors.New("network write blocked")
+)
+
 // one cycle of the main forever loop that handles and dispatches incoming messages
 func (self *bzz) handle() error {
 	msg, err := self.rw.ReadMsg()
@@ -233,7 +238,7 @@ func (self *bzz) handle() error {
 		if req.isLookup() {
 			log.Trace(fmt.Sprintf("self lookup for %v: responding with peers only...", req.from))
 		} else if req.Key == nil {
-			return fmt.Errorf("protocol handler: req.Key == nil || req.Timeout == nil")
+			return errProtocolHandlerNilReqKey
 		} else {
 			// swap accounting is done within netStore
 			self.storage.HandleRetrieveRequestMsg(&req, &peer{bzz: self})
@@ -502,7 +507,7 @@ func (self *bzz) peers(req *peersMsgData) error {
 
 func (self *bzz) send(msg uint64, data interface{}) error {
 	if self.hive.blockWrite {
-		return fmt.Errorf("network write blocked")
+		return errNetworkWriteBlocked
 	}
 	log.Trace(fmt.Sprintf("-> %v: %v (%T) to %v", msg, data, data, self))
 	err := p2p.Send(self.rw, msg, data)

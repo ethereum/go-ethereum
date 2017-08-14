@@ -1052,6 +1052,10 @@ func (net *Network) handle(n *Node, ev nodeEvent, pkt *ingressPacket) error {
 	return err
 }
 
+var (
+	errPongReplyMismatch = errors.New("pong reply token mismatch")
+)
+
 func (net *Network) checkPacket(n *Node, ev nodeEvent, pkt *ingressPacket) error {
 	// Replay prevention checks.
 	switch ev {
@@ -1061,7 +1065,7 @@ func (net *Network) checkPacket(n *Node, ev nodeEvent, pkt *ingressPacket) error
 	case pongPacket:
 		if !bytes.Equal(pkt.data.(*pong).ReplyTok, n.pingEcho) {
 			// fmt.Println("pong reply token mismatch")
-			return fmt.Errorf("pong reply token mismatch")
+			return errPongReplyMismatch
 		}
 		n.pingEcho = nil
 	}

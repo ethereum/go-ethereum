@@ -18,6 +18,7 @@ package api
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,6 +41,12 @@ type FileSystem struct {
 func NewFileSystem(api *Api) *FileSystem {
 	return &FileSystem{api}
 }
+
+var (
+	errPathTooShort     = errors.New("Path is too short")
+	errAborted          = errors.New("aborted")
+	errManifestNotFound = errors.New("Manifest not Found")
+)
 
 // Upload replicates a local directory as a manifest file and uploads it
 // using dpa store
@@ -69,7 +76,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 		err = filepath.Walk(localpath, func(path string, info os.FileInfo, err error) error {
 			if (err == nil) && !info.IsDir() {
 				if len(path) <= start {
-					return fmt.Errorf("Path is too short")
+					return errPathTooShort
 				}
 				if path[:start] != localpath {
 					return fmt.Errorf("Path prefix of '%s' does not match localpath '%s'", path, localpath)
@@ -86,7 +93,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 		dir := filepath.Dir(localpath)
 		start = len(dir)
 		if len(localpath) <= start {
-			return "", fmt.Errorf("Path is too short")
+			return "", errPathTooShort
 		}
 		if localpath[:start] != dir {
 			return "", fmt.Errorf("Path prefix of '%s' does not match dir '%s'", localpath, dir)
@@ -240,7 +247,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 		case done <- true:
 			wg.Add(1)
 		case <-quitC:
-			return fmt.Errorf("aborted")
+			return errAborted
 		}
 		go func(i int, entry *downloadListEntry) {
 			defer wg.Done()
@@ -263,7 +270,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	case err = <-errC:
 		return err
 	case <-quitC:
-		return fmt.Errorf("aborted")
+		return errAborted
 	}
 }
 

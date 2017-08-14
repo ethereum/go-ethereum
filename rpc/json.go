@@ -19,6 +19,7 @@ package rpc
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -134,11 +135,16 @@ func (c *jsonCodec) ReadRequestHeaders() ([]rpcRequest, bool, Error) {
 	return parseRequest(incomingMsg)
 }
 
+var (
+	errMissingRequestID = errors.New("missing request id")
+	errInvalidRequestID = errors.New("invalid request id")
+)
+
 // checkReqId returns an error when the given reqId isn't valid for RPC method calls.
 // valid id's are strings, numbers or null
 func checkReqId(reqId json.RawMessage) error {
 	if len(reqId) == 0 {
-		return fmt.Errorf("missing request id")
+		return errMissingRequestID
 	}
 	if _, err := strconv.ParseFloat(string(reqId), 64); err == nil {
 		return nil
@@ -147,7 +153,7 @@ func checkReqId(reqId json.RawMessage) error {
 	if err := json.Unmarshal(reqId, &str); err == nil {
 		return nil
 	}
-	return fmt.Errorf("invalid request id")
+	return errInvalidRequestID
 }
 
 // parseRequest will parse a single request from the given RawMessage. It will return

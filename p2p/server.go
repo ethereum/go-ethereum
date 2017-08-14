@@ -20,7 +20,6 @@ package p2p
 import (
 	"crypto/ecdsa"
 	"errors"
-	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -339,20 +338,25 @@ func (srv *Server) Stop() {
 	srv.loopWG.Wait()
 }
 
+var (
+	errNilServerPrivateKey  = errors.New("Server.PrivateKey must be set to a non-nil key")
+	errServerAlreadyRunning = errors.New("server already running")
+)
+
 // Start starts running the server.
 // Servers can not be re-used after stopping.
 func (srv *Server) Start() (err error) {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
 	if srv.running {
-		return errors.New("server already running")
+		return errServerAlreadyRunning
 	}
 	srv.running = true
 	log.Info("Starting P2P networking")
 
 	// static fields
 	if srv.PrivateKey == nil {
-		return fmt.Errorf("Server.PrivateKey must be set to a non-nil key")
+		return errNilServerPrivateKey
 	}
 	if srv.newTransport == nil {
 		srv.newTransport = newRLPX

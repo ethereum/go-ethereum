@@ -29,6 +29,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -443,11 +444,16 @@ type Inbox struct {
 	log         log.Logger                  // contextual logger with the contract address embedded
 }
 
+var (
+	errNilSigner     = errors.New("signer is null")
+	errInvalidAmount = errors.New("invalid amount")
+)
+
 // NewInbox creates an Inbox. An Inboxes is not persisted, the cumulative sum is updated
 // from blockchain when first cheque is received.
 func NewInbox(prvKey *ecdsa.PrivateKey, contractAddr, beneficiary common.Address, signer *ecdsa.PublicKey, abigen bind.ContractBackend) (self *Inbox, err error) {
 	if signer == nil {
-		return nil, fmt.Errorf("signer is null")
+		return nil, errNilSigner
 	}
 	chbook, err := contract.NewChequebook(contractAddr, abigen)
 	if err != nil {
@@ -584,7 +590,7 @@ func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 func (self *Cheque) Verify(signerKey *ecdsa.PublicKey, contract, beneficiary common.Address, sum *big.Int) (*big.Int, error) {
 	log.Trace("Verifying chequebook cheque", "cheque", self, "sum", sum)
 	if sum == nil {
-		return nil, fmt.Errorf("invalid amount")
+		return nil, errInvalidAmount
 	}
 
 	if self.Beneficiary != beneficiary {

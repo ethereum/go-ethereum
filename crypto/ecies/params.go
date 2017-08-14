@@ -39,7 +39,7 @@ import (
 	"crypto/elliptic"
 	"crypto/sha256"
 	"crypto/sha512"
-	"fmt"
+	"errors"
 	"hash"
 
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
@@ -47,8 +47,8 @@ import (
 
 var (
 	DefaultCurve                  = ethcrypto.S256()
-	ErrUnsupportedECDHAlgorithm   = fmt.Errorf("ecies: unsupported ECDH algorithm")
-	ErrUnsupportedECIESParameters = fmt.Errorf("ecies: unsupported ECIES parameters")
+	ErrUnsupportedECDHAlgorithm   = errors.New("ecies: unsupported ECDH algorithm")
+	ErrUnsupportedECIESParameters = errors.New("ecies: unsupported ECIES parameters")
 )
 
 type ECIESParams struct {

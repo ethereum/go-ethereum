@@ -18,7 +18,7 @@
 package les
 
 import (
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 
@@ -132,14 +132,16 @@ func lesTopic(genesisHash common.Hash) discv5.Topic {
 
 type LightDummyAPI struct{}
 
+var errNotSupported = errors.New("not supported")
+
 // Etherbase is the address that mining rewards will be send to
 func (s *LightDummyAPI) Etherbase() (common.Address, error) {
-	return common.Address{}, fmt.Errorf("not supported")
+	return common.Address{}, errNotSupported
 }
 
 // Coinbase is the address that mining rewards will be send to (alias for Etherbase)
 func (s *LightDummyAPI) Coinbase() (common.Address, error) {
-	return common.Address{}, fmt.Errorf("not supported")
+	return common.Address{}, errNotSupported
 }
 
 // Hashrate returns the POW hashrate

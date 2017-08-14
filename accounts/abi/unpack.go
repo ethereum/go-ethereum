@@ -18,6 +18,7 @@ package abi
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -160,9 +161,11 @@ func readInteger(kind reflect.Kind, b []byte) interface{} {
 	}
 }
 
+var errIncorrectWordLength = errors.New("abi: fatal error: incorrect word length")
+
 func readBool(word []byte) (bool, error) {
 	if len(word) != 32 {
-		return false, fmt.Errorf("abi: fatal error: incorrect word length")
+		return false, errIncorrectWordLength
 	}
 
 	for i, b := range word {

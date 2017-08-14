@@ -385,6 +385,15 @@ func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr c
 	return signature, nil
 }
 
+var (
+	err65ByteSignatureWanted         = errors.New("signature must be 65 bytes long")
+	errEthereumSignature27or28Wanted = errors.New("invalid Ethereum signature (V is not 27 or 28)")
+
+	errMissingTxNonceInSpec         = errors.New("missing transaction nonce in transaction spec")
+	errChainDBCompactNotForMemoryDB = errors.New("chaindbCompact does not work for memory databases")
+	errChainDBPropertyNotForMemoryDB = errors.New("chaindbProperty does not work for memory databases")
+)
+
 // EcRecover returns the address for the account that was used to create the signature.
 // Note, this function is compatible with eth_sign and personal_sign. As such it recovers
 // the address of:
@@ -397,10 +406,10 @@ func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr c
 // https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
 func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error) {
 	if len(sig) != 65 {
-		return common.Address{}, fmt.Errorf("signature must be 65 bytes long")
+		return common.Address{}, err65ByteSignatureWanted
 	}
 	if sig[64] != 27 && sig[64] != 28 {
-		return common.Address{}, fmt.Errorf("invalid Ethereum signature (V is not 27 or 28)")
+		return common.Address{}, errEthereumSignature27or28Wanted
 	}
 	sig[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
 
@@ -1211,7 +1220,7 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, err
 // the given transaction from the pool and reinsert it with the new gas price and limit.
 func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs SendTxArgs, gasPrice, gasLimit *hexutil.Big) (common.Hash, error) {
 	if sendArgs.Nonce == nil {
-		return common.Hash{}, fmt.Errorf("missing transaction nonce in transaction spec")
+		return common.Hash{}, errMissingTxNonceInSpec
 	}
 	if err := sendArgs.setDefaults(ctx, s.b); err != nil {
 		return common.Hash{}, err
@@ -1313,7 +1322,7 @@ func (api *PrivateDebugAPI) ChaindbProperty(property string) (string, error) {
 		LDB() *leveldb.DB
 	})
 	if !ok {
-		return "", fmt.Errorf("chaindbProperty does not work for memory databases")
+		return "", errChainDBPropertyNotForMemoryDB
 	}
 	if property == "" {
 		property = "leveldb.stats"
@@ -1328,7 +1337,7 @@ func (api *PrivateDebugAPI) ChaindbCompact() error {
 		LDB() *leveldb.DB
 	})
 	if !ok {
-		return fmt.Errorf("chaindbCompact does not work for memory databases")
+		return errChainDBCompactNotForMemoryDB
 	}
 	for b := byte(0); b < 255; b++ {
 		log.Info("Compacting chain database", "range", fmt.Sprintf("0x%0.2X-0x%0.2X", b, b+1))

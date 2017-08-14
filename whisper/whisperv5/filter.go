@@ -65,7 +65,7 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 	defer fs.mutex.Unlock()
 
 	if fs.watchers[id] != nil {
-		return "", fmt.Errorf("failed to generate unique ID")
+		return "", errFailedToGenerateUniqueID
 	}
 
 	fs.watchers[id] = watcher

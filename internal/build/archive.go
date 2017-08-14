@@ -20,6 +20,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -73,6 +74,10 @@ func AddFile(a Archive, file string) error {
 	return nil
 }
 
+var (
+	errUnknownArchiveExtension = errors.New("unknown archive extension")
+)
+
 // WriteArchive creates an archive containing the given files.
 func WriteArchive(name string, files []string) (err error) {
 	archfd, err := os.Create(name)
@@ -89,7 +94,7 @@ func WriteArchive(name string, files []string) (err error) {
 	}()
 	archive, basename := NewArchive(archfd)
 	if archive == nil {
-		return fmt.Errorf("unknown archive extension")
+		return errUnknownArchiveExtension
 	}
 	fmt.Println(name)
 	if err := archive.Directory(basename); err != nil {

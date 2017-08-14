@@ -21,7 +21,6 @@ package filters
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -56,6 +55,8 @@ const (
 
 var (
 	ErrInvalidSubscriptionID = errors.New("invalid id")
+
+	errInvalidFromToBlockCombination = errors.New("invalid from and to block combination: from > to")
 )
 
 type subscription struct {
@@ -182,7 +183,7 @@ func (es *EventSystem) SubscribeLogs(crit FilterCriteria, logs chan []*types.Log
 	if from >= 0 && to == rpc.LatestBlockNumber {
 		return es.subscribeLogs(crit, logs), nil
 	}
-	return nil, fmt.Errorf("invalid from and to block combination: from > to")
+	return nil, errInvalidFromToBlockCombination
 }
 
 // subscribeMinedPendingLogs creates a subscription that returned mined and
