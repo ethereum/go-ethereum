@@ -1093,6 +1093,10 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 					throttled = true
 					break
 				}
+				// Short circuit if there is no more available task.
+				if pending() == 0 {
+					break
+				}
 				// Reserve a chunk of fetches for a peer. A nil can mean either that
 				// no more headers are available, or that the peer is known not to
 				// have them.
