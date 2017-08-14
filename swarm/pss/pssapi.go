@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/pot"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
@@ -64,8 +63,12 @@ func (pssapi *API) Receive(ctx context.Context, topic whisper.TopicType) (*rpc.S
 // Wrapper method for the pss.SendRaw function.
 //
 // The method will pass on the error received from pss.
-func (pssapi *API) Send(topic whisper.TopicType, msg APIMsg) error {
-	return pssapi.SendSym(msg.Addr, topic, msg.Msg)
+func (pssapi *API) SendSym(topic whisper.TopicType, msg APIMsg) error {
+	return pssapi.Pss.SendSym(msg.Addr, topic, msg.Msg)
+}
+
+func (pssapi *API) SendAsym(topic whisper.TopicType, msg APIMsg) error {
+	return pssapi.Pss.SendAsym(msg.Addr, topic, msg.Msg)
 }
 
 // BaseAddr returns the pss node's swarm overlay address
@@ -83,7 +86,7 @@ func (pssapi *API) GetPublicKey() []byte {
 func (pssapi *API) SetPublicKey(addr []byte, topic whisper.TopicType, pubkey []byte) error {
 	var potaddr pot.Address
 	copy(potaddr[:], addr)
-	pssapi.Pss.SetOutgoingPublicKey(potaddr, topic, crypto.ToECDSAPub(pubkey))
+	pssapi.Pss.SetPeerPublicKey(potaddr, topic, crypto.ToECDSAPub(pubkey))
 	return nil
 }
 
@@ -117,27 +120,8 @@ func (self *APITest) GetSymKeys(to []byte, topic whisper.TopicType) ([]byte, err
 	copy(returnbyte[:len(recvsymkey)], recvsymkey)
 	copy(returnbyte[len(recvsymkey):], sendsymkey)
 	return returnbyte, nil
-
 }
 
 func (self *APITest) SendSymKey(to []byte, topic whisper.TopicType) (string, error) {
-	var potaddr pot.Address
-	copy(potaddr[:], to)
-	symkeyid, err := self.GenerateIncomingSymmetricKey(potaddr, topic)
-	if err != nil {
-		return "", err
-	}
-	symkey, err := self.w.GetSymKey(symkeyid)
-	if err != nil {
-		return "", err
-	}
-	keymsg := &pssKeyMsg{
-		From: self.BaseAddr(),
-		Key:  symkey,
-	}
-	serialkeymsg, err := rlp.EncodeToBytes(keymsg)
-	if err != nil {
-		return "", err
-	}
-	return symkeyid, self.SendAsym(to, topic, serialkeymsg)
+	return self.sendKey(to, &topic)
 }

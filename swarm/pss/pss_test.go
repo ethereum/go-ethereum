@@ -120,8 +120,6 @@ func TestAddressMatch(t *testing.T) {
 // set an outgoing symmetric key for peer
 // generate own symmetric key for incoming message from peer
 func TestKeys(t *testing.T) {
-	outkey := make([]byte, 32) // whisper aes symkeys are 32, if that changes this test will break
-
 	// make our key and init pss with it
 	ourkeys, err := wapi.NewKeyPair()
 	if err != nil {
@@ -143,10 +141,11 @@ func TestKeys(t *testing.T) {
 
 	// set up peer with mock address, mapped to mocked publicaddress and with mocked symkey
 	addr := network.RandomAddr().Over()
+	outkey := network.RandomAddr().Over()
 	topic := whisper.BytesToTopic([]byte("foo:42"))
-	ps.SetOutgoingPublicKey(pot.NewAddressFromBytes(addr), topic, &theirprivkey.PublicKey)
-	copy(outkey[:16], addr[16:])
-	copy(outkey[16:], addr[:16])
+	ps.SetPeerPublicKey(pot.NewAddressFromBytes(addr), topic, &theirprivkey.PublicKey)
+	//copy(outkey[:16], addr[16:])
+	//copy(outkey[16:], addr[:16])
 	outkeyid, err := ps.SetOutgoingSymmetricKey(pot.NewAddressFromBytes(addr), topic, outkey)
 	if err != nil {
 		t.Fatalf("failed to set 'our' outgoing symmetric key")
@@ -254,11 +253,12 @@ func TestKeysExchange(t *testing.T) {
 	lctx, _ := context.WithTimeout(context.Background(), time.Second*10)
 	lsub, err := lclient.Subscribe(lctx, "pss", lmsgC, "receive", hextopic)
 	log.Trace("lsub", "id", lsub)
-
+	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, _ := context.WithTimeout(context.Background(), time.Second*10)
 	rsub, err := rclient.Subscribe(rctx, "pss", rmsgC, "receive", hextopic)
 	log.Trace("rsub", "id", rsub)
+	defer rsub.Unsubscribe()
 
 	err = lclient.Call(nil, "pss_setPublicKey", roaddr, hextopic, rpubkey)
 	err = rclient.Call(nil, "pss_setPublicKey", loaddr, hextopic, lpubkey)
@@ -267,7 +267,6 @@ func TestKeysExchange(t *testing.T) {
 	// the peer should save it, then generate and send back its own
 	var symkeyid string
 	err = lclient.Call(&symkeyid, "psstest_sendSymKey", roaddr, hextopic)
-	t.Logf("lclient sym id: %s", symkeyid)
 	time.Sleep(time.Second * 2) // replace with sim expect logic
 
 	// after the exchange, the key for receiving on node 1
@@ -293,10 +292,23 @@ func TestKeysExchange(t *testing.T) {
 	// at this point we've verified that symkeys are saved and match on each peer
 	// now try sending symmetrically encrypted message
 	apimsg := APIMsg{
+		Msg:  []byte("plugh"),
+		Addr: loaddr,
+	}
+	err = rclient.Call(nil, "pss_sendSym", hextopic, apimsg)
+	select {
+	case recvmsg := <-lmsgC:
+		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
+			t.Fatalf("node 1 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg)
+		}
+	case cerr := <-lctx.Done():
+		t.Fatalf("test message timed out: %v", cerr)
+	}
+	apimsg = APIMsg{
 		Msg:  []byte("xyzzy"),
 		Addr: roaddr,
 	}
-	err = lclient.Call(nil, "pss_send", hextopic, apimsg)
+	err = lclient.Call(nil, "pss_sendSym", hextopic, apimsg)
 	select {
 	case recvmsg := <-rmsgC:
 		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
@@ -305,19 +317,6 @@ func TestKeysExchange(t *testing.T) {
 	case cerr := <-rctx.Done():
 		t.Fatalf("test message timed out: %v", cerr)
 	}
-	apimsg.Msg = []byte("plugh")
-	apimsg.Addr = loaddr
-	err = rclient.Call(nil, "pss_send", hextopic, apimsg)
-	select {
-	case recvmsg := <-lmsgC:
-		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
-			t.Fatalf("node 1 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg.Msg)
-		}
-	case cerr := <-lctx.Done():
-		t.Fatalf("test message timed out: %v", cerr)
-	}
-	lsub.Unsubscribe()
-	rsub.Unsubscribe()
 }
 
 func TestCache(t *testing.T) {
@@ -457,7 +456,7 @@ func benchmarkAsymKeySend(b *testing.B) {
 	topic := whisper.BytesToTopic([]byte("foo"))
 	to := network.RandomAddr().Over()
 	copy(potaddr[:], to)
-	ps.SetOutgoingPublicKey(potaddr, topic, &privkey.PublicKey)
+	ps.SetPeerPublicKey(potaddr, topic, &privkey.PublicKey)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ps.SendAsym(to, topic, msg)
