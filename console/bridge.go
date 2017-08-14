@@ -110,20 +110,15 @@ func (b *bridge) OpenWallet(call otto.FunctionCall) (response otto.Value) {
 	}
 	// Trezor PIN matrix input requested, display the matrix to the user and fetch the data
 	fmt.Fprintf(b.printer, "Look at the device for number positions\n\n")
-	fmt.Fprintf(b.printer, "a | b | c\n")
+	fmt.Fprintf(b.printer, "7 | 8 | 9\n")
 	fmt.Fprintf(b.printer, "--+---+--\n")
-	fmt.Fprintf(b.printer, "d | e | f\n")
+	fmt.Fprintf(b.printer, "4 | 5 | 6\n")
 	fmt.Fprintf(b.printer, "--+---+--\n")
-	fmt.Fprintf(b.printer, "g | h | i\n\n")
+	fmt.Fprintf(b.printer, "1 | 2 | 3\n\n")
 
 	if input, err := b.prompter.PromptPassword("Please enter current PIN: "); err != nil {
 		throwJSException(err.Error())
 	} else {
-		// Transform the alphabetical input to numbers
-		mapping := map[string]string{"a": "7", "b": "8", "c": "9", "d": "4", "e": "5", "f": "6", "g": "1", "h": "2", "i": "3"}
-		for from, to := range mapping {
-			input = strings.Replace(input, from, to, -1)
-		}
 		passwd, _ = otto.ToValue(input)
 	}
 	if val, err = call.Otto.Call("jeth.openWallet", nil, wallet, passwd); err != nil {
