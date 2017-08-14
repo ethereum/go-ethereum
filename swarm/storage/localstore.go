@@ -74,6 +74,4 @@ func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 }
 
 // Close local store
-func (self *LocalStore) Close() {
-	return
-}
+func (self *LocalStore) Close() {}

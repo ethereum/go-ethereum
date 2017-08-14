@@ -89,8 +89,8 @@ func TestClientUploadDownloadFiles(t *testing.T) {
 		if file.Size != int64(len(expected)) {
 			t.Fatalf("expected downloaded file to be %d bytes, got %d", len(expected), file.Size)
 		}
-		if file.ContentType != file.ContentType {
-			t.Fatalf("expected downloaded file to have type %q, got %q", file.ContentType, file.ContentType)
+		if file.ContentType != "text/plain" {
+			t.Fatalf("expected downloaded file to have type %q, got %q", "text/plain", file.ContentType)
 		}
 		data, err := ioutil.ReadAll(file)
 		if err != nil {
@@ -235,9 +235,7 @@ func TestClientFileList(t *testing.T) {
 			t.Fatal(err)
 		}
 		paths := make([]string, 0, len(list.CommonPrefixes)+len(list.Entries))
-		for _, prefix := range list.CommonPrefixes {
-			paths = append(paths, prefix)
-		}
+		paths = append(paths, list.CommonPrefixes...)
 		for _, entry := range list.Entries {
 			paths = append(paths, entry.Path)
 		}

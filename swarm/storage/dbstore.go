@@ -514,8 +514,7 @@ func (s *DbStore) setCapacity(c uint64) {
 	s.capacity = c
 
 	if s.entryCnt > c {
-		var ratio float32
-		ratio = float32(1.01) - float32(c)/float32(s.entryCnt)
+		ratio := float32(1.01) - float32(c)/float32(s.entryCnt)
 		if ratio < gcArrayFreeRatio {
 			ratio = gcArrayFreeRatio
 		}
@@ -526,10 +525,6 @@ func (s *DbStore) setCapacity(c uint64) {
 			s.collectGarbage(ratio)
 		}
 	}
-}
-
-func (s *DbStore) getEntryCnt() uint64 {
-	return s.entryCnt
 }
 
 func (s *DbStore) Close() {

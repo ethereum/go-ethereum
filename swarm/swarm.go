@@ -115,11 +115,11 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	log.Debug(fmt.Sprintf("Set up swarm network with Kademlia hive"))
 
 	// setup cloud storage backend
-	cloud := network.NewForwarder(self.hive)
+	self.cloud = network.NewForwarder(self.hive)
 	log.Debug(fmt.Sprintf("-> set swarm forwarder as cloud storage backend"))
-	// setup cloud storage internal access layer
 
-	self.storage = storage.NewNetStore(hash, self.lstore, cloud, config.StoreParams)
+	// setup cloud storage internal access layer
+	self.storage = storage.NewNetStore(hash, self.lstore, self.cloud, config.StoreParams)
 	log.Debug(fmt.Sprintf("-> swarm net store shared access layer to Swarm Chunk Store"))
 
 	// set up Depo (storage handler = cloud storage access layer for incoming remote requests)

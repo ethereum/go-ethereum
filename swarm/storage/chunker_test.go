@@ -43,13 +43,6 @@ type chunkerTester struct {
 	t      test
 }
 
-func (self *chunkerTester) checkChunks(t *testing.T, want int) {
-	l := len(self.chunks)
-	if l != want {
-		t.Errorf("expected %v chunks, got %v", want, l)
-	}
-}
-
 func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, chunkC chan *Chunk, swg *sync.WaitGroup, expectedError error) (key Key) {
 	// reset
 	self.chunks = make(map[string]*Chunk)
@@ -206,20 +199,6 @@ func TestRandomBrokenData(t *testing.T) {
 	for _, s := range sizes {
 		testRandomBrokenData(chunker, s, tester)
 		t.Logf("done size: %v", s)
-	}
-}
-
-func readAll(reader LazySectionReader, result []byte) {
-	size := int64(len(result))
-
-	var end int64
-	for pos := int64(0); pos < size; pos += 1000 {
-		if pos+1000 > size {
-			end = size
-		} else {
-			end = pos + 1000
-		}
-		reader.ReadAt(result[pos:end], pos)
 	}
 }
 

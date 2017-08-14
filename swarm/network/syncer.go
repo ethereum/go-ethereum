@@ -156,8 +156,7 @@ type syncer struct {
 	quit            chan bool       // signal to quit loops
 
 	// DB related fields
-	dbAccess *DbAccess            // access to dbStore
-	db       *storage.LDBDatabase // delivery msg db
+	dbAccess *DbAccess // access to dbStore
 
 	// native fields
 	queues     [priorities]*syncDb                   // in-memory cache / queues for sync reqs
