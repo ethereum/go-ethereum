@@ -42,9 +42,6 @@ func (st *Stack) push(d *big.Int) {
 	//st.data = append(st.data, stackItem)
 	st.data = append(st.data, d)
 }
-func (st *Stack) pushN(ds ...*big.Int) {
-	st.data = append(st.data, ds...)
-}
 
 func (st *Stack) pop() (ret *big.Int) {
 	ret = st.data[len(st.data)-1]
