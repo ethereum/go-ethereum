@@ -325,7 +325,7 @@ func TestPrecompiledBn256Pairing(t *testing.T) {
 }
 
 // Behcnmarks the sample inputs from the elliptic curve pairing check EIP 197.
-func BenchmarkPrecompiledPairing(bench *testing.B) {
+func BenchmarkPrecompiledBn256Pairing(bench *testing.B) {
 	for _, test := range bn256PairingTests {
 		benchmarkPrecompiled("08", test, bench)
 	}
