@@ -426,7 +426,9 @@ func (self *Pss) processAsym(envelope *whisper.Envelope) (recvmsg *whisper.Recei
 	if !recvmsg.Validate() {
 		return nil, nil, fmt.Errorf("invalid message")
 	}
-	from = self.reversePubKeyPool[common.ToHex(crypto.FromECDSAPub(recvmsg.Src))].Bytes()
+	pubkeyhex := common.ToHex(crypto.FromECDSAPub(recvmsg.Src))
+	log.Debug("successfully decrypted asymmetrically encrypted pss message", "from", from, "pubkey", pubkeyhex)
+	from = self.reversePubKeyPool[pubkeyhex].Bytes()
 	return recvmsg, from, nil
 }
 

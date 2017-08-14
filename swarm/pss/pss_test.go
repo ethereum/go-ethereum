@@ -290,7 +290,7 @@ func TestKeysExchange(t *testing.T) {
 	}
 
 	// at this point we've verified that symkeys are saved and match on each peer
-	// now try sending symmetrically encrypted message
+	// now try sending symmetrically encrypted message, both directions
 	apimsg := APIMsg{
 		Msg:  []byte("plugh"),
 		Addr: loaddr,
@@ -315,6 +315,30 @@ func TestKeysExchange(t *testing.T) {
 			t.Fatalf("node 2 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg.Msg)
 		}
 	case cerr := <-rctx.Done():
+		t.Fatalf("test message timed out: %v", cerr)
+	}
+
+	// then try asymmetric, both directions
+	err = lclient.Call(nil, "pss_sendAsym", hextopic, apimsg)
+	select {
+	case recvmsg := <-rmsgC:
+		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
+			t.Fatalf("node 2 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg.Msg)
+		}
+	case cerr := <-rctx.Done():
+		t.Fatalf("test message timed out: %v", cerr)
+	}
+	apimsg = APIMsg{
+		Msg:  []byte("plugh"),
+		Addr: loaddr,
+	}
+	err = rclient.Call(nil, "pss_sendAsym", hextopic, apimsg)
+	select {
+	case recvmsg := <-lmsgC:
+		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
+			t.Fatalf("node 1 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg)
+		}
+	case cerr := <-lctx.Done():
 		t.Fatalf("test message timed out: %v", cerr)
 	}
 }
