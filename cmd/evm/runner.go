@@ -116,39 +116,36 @@ func runCmd(ctx *cli.Context) error {
 		ret  []byte
 		err  error
 	)
-	if statedb.GetCodeSize(receiver) == 0 {
-		if fn := ctx.Args().First(); len(fn) > 0 {
-			src, err := ioutil.ReadFile(fn)
-			if err != nil {
-				return err
-			}
-
-			bin, err := compiler.Compile(fn, src, false)
-			if err != nil {
-				return err
-			}
-			code = common.Hex2Bytes(bin)
-		} else if ctx.GlobalString(CodeFlag.Name) != "" {
-			code = common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name))
-		} else {
-			var hexcode []byte
-			if ctx.GlobalString(CodeFileFlag.Name) != "" {
-				var err error
-				hexcode, err = ioutil.ReadFile(ctx.GlobalString(CodeFileFlag.Name))
-				if err != nil {
-					fmt.Printf("Could not load code from file: %v\n", err)
-					os.Exit(1)
-				}
-			} else {
-				var err error
-				hexcode, err = ioutil.ReadAll(os.Stdin)
-				if err != nil {
-					fmt.Printf("Could not load code from stdin: %v\n", err)
-					os.Exit(1)
-				}
-			}
-			code = common.Hex2Bytes(string(bytes.TrimRight(hexcode, "\n")))
+	// The '--code' or '--codefile' flag overrides code in state
+	if ctx.GlobalString(CodeFileFlag.Name) != "" {
+		// Codefile with hex assembly
+		hexcode, err := ioutil.ReadFile(ctx.GlobalString(CodeFileFlag.Name))
+		if err != nil {
+			fmt.Printf("Could not load code from file: %v\n", err)
+			os.Exit(1)
 		}
+		code = common.Hex2Bytes(string(bytes.TrimRight(hexcode, "\n")))
+	} else if ctx.GlobalString(CodeFlag.Name) != "" {
+		code = common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name))
+	} else if fn := ctx.Args().First(); len(fn) > 0 {
+		// Solidity-file to compile
+		src, err := ioutil.ReadFile(fn)
+		if err != nil {
+			return err
+		}
+		bin, err := compiler.Compile(fn, src, false)
+		if err != nil {
+			return err
+		}
+		code = common.Hex2Bytes(bin)
+	} else if statedb.GetCodeSize(receiver) == 0 {
+		//Try reading from stdin
+		hexcode, err := ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			fmt.Printf("Could not load code from stdin: %v\n", err)
+			os.Exit(1)
+		}
+		code = common.Hex2Bytes(string(bytes.TrimRight(hexcode, "\n")))
 	}
 
 	initialGas := ctx.GlobalUint64(GasFlag.Name)
@@ -187,7 +184,7 @@ func runCmd(ctx *cli.Context) error {
 		input := append(code, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name))...)
 		ret, _, leftOverGas, err = runtime.Create(input, &runtimeConfig)
 	} else {
-		if statedb.GetCodeSize(receiver) == 0 {
+		if len(code) > 0 {
 			statedb.SetCode(receiver, code)
 		}
 		ret, leftOverGas, err = runtime.Call(receiver, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtimeConfig)
