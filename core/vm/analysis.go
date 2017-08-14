@@ -25,7 +25,7 @@ import (
 // destinations stores one map per contract (keyed by hash of code).
 // The maps contain an entry for each location of a JUMPDEST
 // instruction.
-type destinations map[common.Hash][]byte
+type destinations map[common.Hash]bitvec
 
 // has checks whether code has a JUMPDEST at dest.
 func (d destinations) has(codehash common.Hash, code []byte, dest *big.Int) bool {
@@ -41,20 +41,25 @@ func (d destinations) has(codehash common.Hash, code []byte, dest *big.Int) bool
 		m = jumpdests(code)
 		d[codehash] = m
 	}
-	return OpCode(code[udest]) == JUMPDEST && (m[udest/8]&(0x80>>(udest%8))) == 0
+	return OpCode(code[udest]) == JUMPDEST && m.codeSegment(udest)
 	//	return (m[udest/8] & (1 << (udest % 8))) != 0
 }
 
-type bitvec struct {
-	m []byte
+// bitvec is a bit vector which maps bytes in a program
+// An unset bit means the byte is a code-segemnt, a set bit means it's data-segment
+type bitvec []byte
+
+func (bits *bitvec) set(pos uint64) {
+	(*bits)[pos/8] |= 0x80 >> (pos % 8)
+}
+func (bits *bitvec) set8(pos uint64) {
+	(*bits)[pos/8] |= 0xFF >> (pos % 8)
+	(*bits)[pos/8+1] |= ^(0xFF >> (pos % 8))
 }
 
-func (bits *bitvec) addone(pos uint64) {
-	bits.m[pos/8] |= 0x80 >> (pos % 8)
-}
-func (bits *bitvec) addOneByte(pos uint64) {
-	bits.m[pos/8] |= 0xFF >> (pos % 8)
-	bits.m[pos/8+1] |= ^(0xFF >> (pos % 8))
+// codeSegment checks if the position is in a code segment
+func (bits *bitvec) codeSegment(pos uint64) bool {
+	return ((*bits)[pos/8] & (0x80 >> (pos % 8))) == 0
 }
 
 // jumpdests creates a map that contains an entry for each
@@ -64,7 +69,7 @@ func jumpdests(code []byte) []byte {
 	// ends with a PUSH32, the algorithm will push zeroes onto the
 	// bitvector outside the bounds of the actual code.
 	m := make([]byte, len(code)/8+1+4)
-	bits := &bitvec{m}
+	bits := bitvec(m)
 	for pc := uint64(0); pc < uint64(len(code)); {
 		op := OpCode(code[pc])
 
@@ -72,16 +77,16 @@ func jumpdests(code []byte) []byte {
 			numbits := op - PUSH1 + 1
 			pc++
 			for ; numbits >= 8; numbits -= 8 {
-				bits.addOneByte(pc) // 8
+				bits.set8(pc) // 8
 				pc += 8
 			}
 			for ; numbits > 0; numbits-- {
-				bits.addone(pc)
+				bits.set(pc)
 				pc++
 			}
 		} else {
 			pc++
 		}
 	}
-	return bits.m
+	return bits
 }
