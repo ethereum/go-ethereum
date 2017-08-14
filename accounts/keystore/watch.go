@@ -99,6 +99,7 @@ func (w *watcher) loop() {
 				hadEvent = true
 			}
 		case <-debounce.C:
+			hadEvent = false
 			accounts, err := w.ac.scan()
 			w.ac.mu.Lock()
 			w.ac.handleScanResult(accounts, err)
