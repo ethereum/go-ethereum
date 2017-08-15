@@ -102,6 +102,10 @@ var (
 		Name:  "sender",
 		Usage: "The transaction origin",
 	}
+	ReceiverFlag = cli.StringFlag{
+		Name:  "receiver",
+		Usage: "The transaction receiver (execution context)",
+	}
 	DisableMemoryFlag = cli.BoolFlag{
 		Name:  "nomemory",
 		Usage: "disable memory output",
@@ -131,6 +135,7 @@ func init() {
 		GenesisFlag,
 		MachineFlag,
 		SenderFlag,
+		ReceiverFlag,
 		DisableMemoryFlag,
 		DisableStackFlag,
 	}
