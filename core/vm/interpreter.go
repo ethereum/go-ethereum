@@ -89,13 +89,12 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 func (in *Interpreter) enforceRestrictions(op OpCode, operation operation, stack *Stack) error {
 	if in.evm.chainRules.IsMetropolis {
 		if in.readonly {
-			// if the interpreter is operating in readonly mode, make sure no
-			// state-modifying operation is performed. The 4th stack item
+			// If the interpreter is operating in readonly mode, make sure no
+			// state-modifying operation is performed. The 3rd stack item
 			// for a call operation is the value. Transfering value from one
 			// account to the others means the state is modified and should also
 			// return with an error.
-			if operation.writes ||
-				((op == CALL || op == CALLCODE) && stack.Back(3).BitLen() > 0) {
+			if operation.writes || (op == CALL && stack.Back(2).BitLen() > 0) {
 				return errWriteProtection
 			}
 		}
