@@ -245,6 +245,51 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	return ret, contract.Gas, err
 }
 
+func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+	if evm.vmConfig.NoRecursion && evm.depth > 0 {
+		return nil, gas, nil
+	}
+
+	// Depth check execution. Fail if we're trying to execute above the
+	// limit.
+	if evm.depth > int(params.CallCreateDepth) {
+		return nil, gas, ErrDepth
+	}
+
+	// make sure the readonly is only set if we aren't in readonly yet
+	// this makes also sure that the readonly flag isn't removed for
+	// child calls.
+	if !evm.interpreter.readonly {
+		evm.interpreter.readonly = true
+		defer func() { evm.interpreter.readonly = false }()
+	}
+
+	var (
+		to       = AccountRef(addr)
+		snapshot = evm.StateDB.Snapshot()
+	)
+	if !evm.StateDB.Exist(addr) {
+		return nil, gas, nil
+	}
+
+	// initialise a new contract and set the code that is to be used by the
+	// EVM. The contract is a scoped evmironment for this execution context
+	// only.
+	contract := NewContract(caller, to, new(big.Int), gas)
+	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
+
+	ret, err = evm.interpreter.Run(snapshot, contract, input)
+	// When an error was returned by the EVM or when setting the creation code
+	// above we revert to the snapshot and consume any gas remaining. Additionally
+	// when we're in homestead this also counts for code storage gas errors.
+	if err != nil {
+		contract.UseGas(contract.Gas)
+
+		evm.StateDB.RevertToSnapshot(snapshot)
+	}
+	return ret, contract.Gas, err
+}
+
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {

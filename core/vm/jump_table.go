@@ -56,9 +56,25 @@ type operation struct {
 }
 
 var (
-	frontierInstructionSet  = NewFrontierInstructionSet()
-	homesteadInstructionSet = NewHomesteadInstructionSet()
+	frontierInstructionSet   = NewFrontierInstructionSet()
+	homesteadInstructionSet  = NewHomesteadInstructionSet()
+	metropolisInstructionSet = NewMetropolisInstructionSet()
 )
+
+// NewMetropolisInstructionSet returns the frontier, homestead and
+// metropolis instructions.
+func NewMetropolisInstructionSet() [256]operation {
+	// instructions that can be executed during the homestead phase.
+	instructionSet := NewHomesteadInstructionSet()
+	instructionSet[STATICCALL] = operation{
+		execute:       opStaticCall,
+		gasCost:       gasStaticCall,
+		validateStack: makeStackFunc(6, 1),
+		memorySize:    memoryStaticCall,
+		valid:         true,
+	}
+	return instructionSet
+}
 
 // NewHomesteadInstructionSet returns the frontier and homestead
 // instructions that can be executed during the homestead phase.
@@ -810,6 +826,7 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(2, 0),
 			memorySize:    memoryLog,
 			valid:         true,
+			writes:        true,
 		},
 		LOG1: {
 			execute:       makeLog(1),
@@ -817,6 +834,7 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(3, 0),
 			memorySize:    memoryLog,
 			valid:         true,
+			writes:        true,
 		},
 		LOG2: {
 			execute:       makeLog(2),
@@ -824,6 +842,7 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(4, 0),
 			memorySize:    memoryLog,
 			valid:         true,
+			writes:        true,
 		},
 		LOG3: {
 			execute:       makeLog(3),
@@ -831,6 +850,7 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(5, 0),
 			memorySize:    memoryLog,
 			valid:         true,
+			writes:        true,
 		},
 		LOG4: {
 			execute:       makeLog(4),
@@ -838,6 +858,7 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(6, 0),
 			memorySize:    memoryLog,
 			valid:         true,
+			writes:        true,
 		},
 		CREATE: {
 			execute:       opCreate,
