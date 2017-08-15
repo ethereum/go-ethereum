@@ -18,6 +18,7 @@ package compiler
 
 import (
 	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -30,6 +31,40 @@ contract test {
    }
 }
 `
+	librarySource = `
+library Set {
+  struct Data { mapping(uint => bool) flags; }
+  function insert(Data storage self, uint value)
+      returns (bool)
+  {
+      if (self.flags[value])
+          return false; // already there
+      self.flags[value] = true;
+      return true;
+  }
+
+  function remove(Data storage self, uint value)
+      returns (bool)
+  {
+      if (!self.flags[value])
+          return false; // not there
+      self.flags[value] = false;
+      return true;
+  }
+
+  function contains(Data storage self, uint value)
+      returns (bool)
+  {
+      return self.flags[value];
+  }
+}
+
+contract C {
+    Set.Data knownValues;
+    function register(uint value) {
+        require(Set.insert(knownValues, value));
+    }
+}`
 )
 
 func skipWithoutSolc(t *testing.T) {
@@ -74,4 +109,22 @@ func TestCompileError(t *testing.T) {
 		t.Errorf("error expected compiling source. got none. result %v", contracts)
 	}
 	t.Logf("error: %v", err)
+}
+
+func TestCompilerLinking(t *testing.T) {
+	skipWithoutSolc(t)
+
+	solc, err := SolidityVersion("")
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	solc.FlagOpts.ToLink = append(solc.FlagOpts.ToLink, "Set:0x692a70d2e424a56d2c6c27aa97d1a86395877b3a")
+
+	linkedLibraries := solc.linkLibraries()
+
+	testingCase1 := "--libraries Set:0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"
+	if strings.Compare(linkedLibraries, testingCase1) != 0 {
+		t.Errorf("expected %v, got %v", linkedLibraries, testingCase1)
+	}
 }

@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -52,6 +53,15 @@ type ContractInfo struct {
 type Solidity struct {
 	Path, Version, FullVersion string
 	Major, Minor, Patch        int
+	Files                      []string
+	FlagOpts                   SolcFlagOpts
+}
+
+type SolcFlagOpts struct {
+	Optimize     bool
+	CombinedJson []string
+	ToLink       []string
+	Version      string
 }
 
 // --combined-output format
@@ -136,6 +146,35 @@ func CompileSolidity(solc string, sourcefiles ...string) (map[string]*Contract, 
 	return s.run(cmd, source)
 }
 
+func (s *Solidity) GetFiles(sourcefiles ...string) error {
+	if len(sourcefiles) == 0 {
+		return errors.New("solc: no source files")
+	}
+
+	for _, file := range sourcefiles {
+		if _, err := os.Stat(file); os.IsNotExist(err) {
+			return fmt.Errorf("solc: could not find file %v", file)
+		}
+		s.Files = append(s.Files, file)
+	}
+	return nil
+}
+
+/*func (s *Solidity) Compile(flags ...func() string) (string, error) {
+	var command []string
+	for _, flag := range flags {
+		command := append(command, flag())
+	}
+	if len(s.FlagOpts.ToLink) > 0 {
+		command := append(command, s.linkLibraries())
+	}
+
+	finalCommand := strings.Join(command, "")
+
+	exec.Command("solc", finalCommand)
+
+}*/
+
 func (s *Solidity) run(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
 	var stderr, stdout bytes.Buffer
 	cmd.Stderr = &stderr
@@ -180,6 +219,10 @@ func (s *Solidity) run(cmd *exec.Cmd, source string) (map[string]*Contract, erro
 		}
 	}
 	return contracts, nil
+}
+
+func (s *Solidity) linkLibraries() string {
+	return "--libraries " + strings.Join(s.FlagOpts.ToLink, ",")
 }
 
 func slurpFiles(files []string) (string, error) {

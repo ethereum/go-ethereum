@@ -29,9 +29,10 @@ import (
 )
 
 var (
-	abiFlag = flag.String("abi", "", "Path to the Ethereum contract ABI json to bind")
-	binFlag = flag.String("bin", "", "Path to the Ethereum contract bytecode (generate deploy method)")
-	typFlag = flag.String("type", "", "Struct name for the binding (default = package name)")
+	abiFlag  = flag.String("abi", "", "Path to the Ethereum contract ABI json to bind")
+	binFlag  = flag.String("bin", "", "Path to the Ethereum contract bytecode (generate deploy method)")
+	typFlag  = flag.String("type", "", "Struct name for the binding (default = package name)")
+	linkFlag = flag.String("link", "", "Library flag linker for name to addresses in the code")
 
 	solFlag  = flag.String("sol", "", "Path to the Ethereum contract Solidity source to build and bind")
 	solcFlag = flag.String("solc", "solc", "Solidity compiler to use if source builds are requested")
