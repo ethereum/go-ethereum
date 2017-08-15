@@ -441,7 +441,7 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 		return err
 	}
 	go rpc.NewWSServer(wsOrigins, handler).Serve(listener)
-	log.Info(fmt.Sprintf("WebSocket endpoint opened: ws://%s", endpoint))
+	log.Info(fmt.Sprintf("WebSocket endpoint opened: ws://%s", listener.Addr()))
 
 	// All listeners booted successfully
 	n.wsEndpoint = endpoint
@@ -554,6 +554,17 @@ func (n *Node) Attach() (*rpc.Client, error) {
 		return nil, ErrNodeStopped
 	}
 	return rpc.DialInProc(n.inprocHandler), nil
+}
+
+// RPCHandler returns the in-process RPC request handler.
+func (n *Node) RPCHandler() (*rpc.Server, error) {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+
+	if n.inprocHandler == nil {
+		return nil, ErrNodeStopped
+	}
+	return n.inprocHandler, nil
 }
 
 // Server retrieves the currently running P2P network layer. This method is meant

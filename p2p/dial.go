@@ -342,7 +342,7 @@ func (t *dialTask) dial(srv *Server, dest *discover.Node) bool {
 		return false
 	}
 	mfd := newMeteredConn(fd, false)
-	srv.setupConn(mfd, t.flags, dest)
+	srv.SetupConn(mfd, t.flags, dest)
 	return true
 }
 
