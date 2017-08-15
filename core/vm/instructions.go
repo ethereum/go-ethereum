@@ -337,7 +337,7 @@ func opCallValue(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack
 }
 
 func opCalldataLoad(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(new(big.Int).SetBytes(getData(contract.Input, stack.pop(), common.Big32)))
+	stack.push(new(big.Int).SetBytes(getDataBig(contract.Input, stack.pop(), big32)))
 	return nil, nil
 }
 
@@ -352,7 +352,7 @@ func opCalldataCopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, st
 		cOff = stack.pop()
 		l    = stack.pop()
 	)
-	memory.Set(mOff.Uint64(), l.Uint64(), getData(contract.Input, cOff, l))
+	memory.Set(mOff.Uint64(), l.Uint64(), getDataBig(contract.Input, cOff, l))
 
 	evm.interpreter.intPool.put(mOff, cOff, l)
 	return nil, nil
@@ -380,7 +380,7 @@ func opCodeCopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack 
 		cOff = stack.pop()
 		l    = stack.pop()
 	)
-	codeCopy := getData(contract.Code, cOff, l)
+	codeCopy := getDataBig(contract.Code, cOff, l)
 
 	memory.Set(mOff.Uint64(), l.Uint64(), codeCopy)
 
@@ -395,7 +395,7 @@ func opExtCodeCopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, sta
 		cOff = stack.pop()
 		l    = stack.pop()
 	)
-	codeCopy := getData(evm.StateDB.GetCode(addr), cOff, l)
+	codeCopy := getDataBig(evm.StateDB.GetCode(addr), cOff, l)
 
 	memory.Set(mOff.Uint64(), l.Uint64(), codeCopy)
 

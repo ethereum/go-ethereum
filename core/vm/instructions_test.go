@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -64,197 +63,169 @@ func opBenchmark(bench *testing.B, op func(pc *uint64, evm *EVM, contract *Contr
 	}
 }
 
-func precompiledBenchmark(addr, input, expected string, gas uint64, bench *testing.B) {
-
-	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), gas)
-
-	p := PrecompiledContracts[common.HexToAddress(addr)]
-	in := common.Hex2Bytes(input)
-	var (
-		res []byte
-		err error
-	)
-	data := make([]byte, len(in))
-	bench.ResetTimer()
-	for i := 0; i < bench.N; i++ {
-		contract.Gas = gas
-		copy(data, in)
-		res, err = RunPrecompiledContract(p, data, contract)
-	}
-	bench.StopTimer()
-	//Check if it is correct
-	if err != nil {
-		bench.Error(err)
-		return
-	}
-	if common.Bytes2Hex(res) != expected {
-		bench.Error(fmt.Sprintf("Expected %v, got %v", expected, common.Bytes2Hex(res)))
-		return
-	}
-}
-
-func BenchmarkPrecompiledEcdsa(bench *testing.B) {
-	var (
-		addr = "01"
-		inp  = "38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e000000000000000000000000000000000000000000000000000000000000001b38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e789d1dd423d25f0772d2748d60f7e4b81bb14d086eba8e8e8efb6dcff8a4ae02"
-		exp  = "000000000000000000000000ceaccac640adf55b2028469bd36ba501f28b699d"
-		gas  = uint64(4000000)
-	)
-	precompiledBenchmark(addr, inp, exp, gas, bench)
-}
-func BenchmarkPrecompiledSha256(bench *testing.B) {
-	var (
-		addr = "02"
-		inp  = "38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e000000000000000000000000000000000000000000000000000000000000001b38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e789d1dd423d25f0772d2748d60f7e4b81bb14d086eba8e8e8efb6dcff8a4ae02"
-		exp  = "811c7003375852fabd0d362e40e68607a12bdabae61a7d068fe5fdd1dbbf2a5d"
-		gas  = uint64(4000000)
-	)
-	precompiledBenchmark(addr, inp, exp, gas, bench)
-}
-func BenchmarkPrecompiledRipeMD(bench *testing.B) {
-	var (
-		addr = "03"
-		inp  = "38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e000000000000000000000000000000000000000000000000000000000000001b38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e789d1dd423d25f0772d2748d60f7e4b81bb14d086eba8e8e8efb6dcff8a4ae02"
-		exp  = "0000000000000000000000009215b8d9882ff46f0dfde6684d78e831467f65e6"
-		gas  = uint64(4000000)
-	)
-	precompiledBenchmark(addr, inp, exp, gas, bench)
-}
-func BenchmarkPrecompiledIdentity(bench *testing.B) {
-	var (
-		addr = "04"
-		inp  = "38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e000000000000000000000000000000000000000000000000000000000000001b38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e789d1dd423d25f0772d2748d60f7e4b81bb14d086eba8e8e8efb6dcff8a4ae02"
-		exp  = "38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e000000000000000000000000000000000000000000000000000000000000001b38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e789d1dd423d25f0772d2748d60f7e4b81bb14d086eba8e8e8efb6dcff8a4ae02"
-		gas  = uint64(4000000)
-	)
-	precompiledBenchmark(addr, inp, exp, gas, bench)
-}
-func BenchmarkOpAdd(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+func BenchmarkOpAdd64(b *testing.B) {
+	x := "ffffffff"
+	y := "fd37f3e2bba2c4f"
 
 	opBenchmark(b, opAdd, x, y)
-
 }
-func BenchmarkOpSub(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+
+func BenchmarkOpAdd128(b *testing.B) {
+	x := "ffffffffffffffff"
+	y := "f5470b43c6549b016288e9a65629687"
+
+	opBenchmark(b, opAdd, x, y)
+}
+
+func BenchmarkOpAdd256(b *testing.B) {
+	x := "0802431afcbce1fc194c9eaa417b2fb67dc75a95db0bc7ec6b1c8af11df6a1da9"
+	y := "a1f5aac137876480252e5dcac62c354ec0d42b76b0642b6181ed099849ea1d57"
+
+	opBenchmark(b, opAdd, x, y)
+}
+
+func BenchmarkOpSub64(b *testing.B) {
+	x := "51022b6317003a9d"
+	y := "a20456c62e00753a"
 
 	opBenchmark(b, opSub, x, y)
-
 }
+
+func BenchmarkOpSub128(b *testing.B) {
+	x := "4dde30faaacdc14d00327aac314e915d"
+	y := "9bbc61f5559b829a0064f558629d22ba"
+
+	opBenchmark(b, opSub, x, y)
+}
+
+func BenchmarkOpSub256(b *testing.B) {
+	x := "4bfcd8bb2ac462735b48a17580690283980aa2d679f091c64364594df113ea37"
+	y := "97f9b1765588c4e6b69142eb00d20507301545acf3e1238c86c8b29be227d46e"
+
+	opBenchmark(b, opSub, x, y)
+}
+
 func BenchmarkOpMul(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opMul, x, y)
-
 }
-func BenchmarkOpDiv(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
+func BenchmarkOpDiv256(b *testing.B) {
+	x := "ff3f9014f20db29ae04af2c2d265de17"
+	y := "fe7fb0d1f59dfe9492ffbf73683fd1e870eec79504c60144cc7f5fc2bad1e611"
 	opBenchmark(b, opDiv, x, y)
-
 }
+
+func BenchmarkOpDiv128(b *testing.B) {
+	x := "fdedc7f10142ff97"
+	y := "fbdfda0e2ce356173d1993d5f70a2b11"
+	opBenchmark(b, opDiv, x, y)
+}
+
+func BenchmarkOpDiv64(b *testing.B) {
+	x := "fcb34eb3"
+	y := "f97180878e839129"
+	opBenchmark(b, opDiv, x, y)
+}
+
 func BenchmarkOpSdiv(b *testing.B) {
-	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
-	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
+	x := "ff3f9014f20db29ae04af2c2d265de17"
+	y := "fe7fb0d1f59dfe9492ffbf73683fd1e870eec79504c60144cc7f5fc2bad1e611"
 
 	opBenchmark(b, opSdiv, x, y)
-
 }
+
 func BenchmarkOpMod(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opMod, x, y)
-
 }
+
 func BenchmarkOpSmod(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opSmod, x, y)
-
 }
+
 func BenchmarkOpExp(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opExp, x, y)
-
 }
+
 func BenchmarkOpSignExtend(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opSignExtend, x, y)
-
 }
+
 func BenchmarkOpLt(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opLt, x, y)
-
 }
+
 func BenchmarkOpGt(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opGt, x, y)
-
 }
+
 func BenchmarkOpSlt(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opSlt, x, y)
-
 }
+
 func BenchmarkOpSgt(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opSgt, x, y)
-
 }
+
 func BenchmarkOpEq(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opEq, x, y)
-
 }
+
 func BenchmarkOpAnd(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opAnd, x, y)
-
 }
+
 func BenchmarkOpOr(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opOr, x, y)
-
 }
+
 func BenchmarkOpXor(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opXor, x, y)
-
 }
+
 func BenchmarkOpByte(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opByte, x, y)
-
 }
 
 func BenchmarkOpAddmod(b *testing.B) {
@@ -263,22 +234,12 @@ func BenchmarkOpAddmod(b *testing.B) {
 	z := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opAddmod, x, y, z)
-
 }
+
 func BenchmarkOpMulmod(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	z := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 
 	opBenchmark(b, opMulmod, x, y, z)
-
 }
-
-//func BenchmarkOpSha3(b *testing.B) {
-//	x := "0"
-//	y := "32"
-//
-//	opBenchmark(b,opSha3, x, y)
-//
-//
-//}
