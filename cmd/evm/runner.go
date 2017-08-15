@@ -118,17 +118,28 @@ func runCmd(ctx *cli.Context) error {
 	)
 	// The '--code' or '--codefile' flag overrides code in state
 	if ctx.GlobalString(CodeFileFlag.Name) != "" {
-		// Codefile with hex assembly
-		hexcode, err := ioutil.ReadFile(ctx.GlobalString(CodeFileFlag.Name))
-		if err != nil {
-			fmt.Printf("Could not load code from file: %v\n", err)
-			os.Exit(1)
+		var hexcode []byte
+		var err error
+		// If - is specified, it means that code comes from stdin
+		if ctx.GlobalString(CodeFileFlag.Name) == "-" {
+			//Try reading from stdin
+			if hexcode, err = ioutil.ReadAll(os.Stdin); err != nil {
+				fmt.Printf("Could not load code from stdin: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			// Codefile with hex assembly
+			if hexcode, err = ioutil.ReadFile(ctx.GlobalString(CodeFileFlag.Name)); err != nil {
+				fmt.Printf("Could not load code from file: %v\n", err)
+				os.Exit(1)
+			}
 		}
 		code = common.Hex2Bytes(string(bytes.TrimRight(hexcode, "\n")))
+
 	} else if ctx.GlobalString(CodeFlag.Name) != "" {
 		code = common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name))
 	} else if fn := ctx.Args().First(); len(fn) > 0 {
-		// Solidity-file to compile
+		// EASM-file to compile
 		src, err := ioutil.ReadFile(fn)
 		if err != nil {
 			return err
@@ -138,14 +149,6 @@ func runCmd(ctx *cli.Context) error {
 			return err
 		}
 		code = common.Hex2Bytes(bin)
-	} else if statedb.GetCodeSize(receiver) == 0 {
-		//Try reading from stdin
-		hexcode, err := ioutil.ReadAll(os.Stdin)
-		if err != nil {
-			fmt.Printf("Could not load code from stdin: %v\n", err)
-			os.Exit(1)
-		}
-		code = common.Hex2Bytes(string(bytes.TrimRight(hexcode, "\n")))
 	}
 
 	initialGas := ctx.GlobalUint64(GasFlag.Name)

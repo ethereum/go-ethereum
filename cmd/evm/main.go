@@ -53,7 +53,7 @@ var (
 	}
 	CodeFileFlag = cli.StringFlag{
 		Name:  "codefile",
-		Usage: "file containing EVM code",
+		Usage: "File containing EVM code. If '-' is specified, code is read from stdin ",
 	}
 	GasFlag = cli.Uint64Flag{
 		Name:  "gas",
