@@ -13,23 +13,26 @@ import (
 )
 
 const (
-	defaultSymKeyCacheCapacity = 512
-	defaultDigestCacheTTL      = time.Second
+	defaultSymKeyCacheCapacity    = 512
+	defaultDigestCacheTTL         = time.Second
+	defaultRecipientAddressLength = 4 // how many bytes to use for routing (the bytes will be unencrypted in transit)
 )
 
 // Pss configuration parameters
 type PssParams struct {
-	Cachettl            time.Duration
-	privatekey          *ecdsa.PrivateKey
-	SymKeyCacheCapacity int
+	Cachettl               time.Duration
+	privatekey             *ecdsa.PrivateKey
+	SymKeyCacheCapacity    int
+	RecipientAddressLength int
 }
 
 // Sane defaults for Pss
 func NewPssParams(privatekey *ecdsa.PrivateKey) *PssParams {
 	return &PssParams{
-		Cachettl:            defaultDigestCacheTTL,
-		privatekey:          privatekey,
-		SymKeyCacheCapacity: defaultSymKeyCacheCapacity,
+		Cachettl:               defaultDigestCacheTTL,
+		privatekey:             privatekey,
+		SymKeyCacheCapacity:    defaultSymKeyCacheCapacity,
+		RecipientAddressLength: defaultRecipientAddressLength,
 	}
 }
 

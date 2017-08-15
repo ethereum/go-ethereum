@@ -21,11 +21,8 @@ import (
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
-// TODO: remove topic from reverse lookup
-// TODO: add handling of incoming (nonhandshake) asym msgs
-// TODO: refactor handshake send to same function used for return and initiate (API)
-// TODO: refactor handler iterator to same function used for asym and sym incoming msg
-
+// TODO: proper padding generation for messages
+// TODO: continue forwarding even through node is recipient (subvert traffic analysis attack)
 const (
 	PssPeerCapacity             = 256 // limit of peers kept in cache. (not implemented)
 	PssPeerTopicDefaultCapacity = 8   // limit of topics kept per peer. (not implemented)
@@ -35,7 +32,6 @@ const (
 	defaultWhisperWorkTime      = 3
 	defaultWhisperPoW           = 0.0000000001
 	defaultSymKeyLength         = 32
-	defaultPartialAddressLength = 8
 )
 
 // abstraction to enable access to p2p.protocols.Peer.Send
@@ -79,20 +75,22 @@ type pssDigest [digestLength]byte
 // Toplevel pss object, taking care of message sending and receiving, message handler dispatchers and message forwarding.
 // Implements node.Service
 type Pss struct {
-	network.Overlay                                                  // we can get the overlayaddress from this
-	peerPool          map[pot.Address]map[whisper.TopicType]*pssPeer // keep track of all virtual p2p.Peers we are currently speaking to
-	fwdPool           map[discover.NodeID]*protocols.Peer            // keep track of all peers sitting on the pssmsg routing layer
-	reverseSymKeyPool map[string]pot.Address                         // reverse mapping of sentkeysymkeyids to peeraddr
-	reversePubKeyPool map[string]pot.Address                         // reverse mappling of sendkeysymkey to peeraddr
-	handlers          map[whisper.TopicType]map[*Handler]bool        // topic and version based pss payload handlers
-	fwdcache          map[pssDigest]pssCacheEntry                    // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
-	cachettl          time.Duration                                  // how long to keep messages in fwdcache
-	lock              sync.Mutex
-	dpa               *storage.DPA
-	privatekey        *ecdsa.PrivateKey
-	w                 *whisper.Whisper
-	symkeycache       []*pssPeer // fast lookup of recently used symkeys; last used is on top of stack
-	symkeycachecursor int        // modular cursor pointing to last used, wraps on symkeycache array
+	network.Overlay                                                              // we can get the overlayaddress from this
+	peerPool                      map[pot.Address]map[whisper.TopicType]*pssPeer // keep track of all virtual p2p.Peers we are currently speaking to
+	fwdPool                       map[discover.NodeID]*protocols.Peer            // keep track of all peers sitting on the pssmsg routing layer
+	reverseSymKeyPool             map[string]pot.Address                         // reverse mapping of sentkeysymkeyids to peeraddr
+	reversePubKeyPool             map[string]pot.Address                         // reverse mappling of sendkeysymkey to peeraddr
+	handlers                      map[whisper.TopicType]map[*Handler]bool        // topic and version based pss payload handlers
+	fwdcache                      map[pssDigest]pssCacheEntry                    // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
+	cachettl                      time.Duration                                  // how long to keep messages in fwdcache
+	lock                          sync.Mutex
+	dpa                           *storage.DPA
+	privatekey                    *ecdsa.PrivateKey
+	w                             *whisper.Whisper
+	symkeycache                   []*pssPeer // fast lookup of recently used symkeys; last used is on top of stack
+	symkeycachecursor             int        // modular cursor pointing to last used, wraps on symkeycache array
+	recipientAddressLength        int        // this value will be used to truncate recipient addresses
+	defaultRecipientAddressLength int        // the original value, use for revert after temporary change
 }
 
 func (self *Pss) String() string {
@@ -119,18 +117,20 @@ func (self *Pss) storeMsg(msg *PssMsg) (pssDigest, error) {
 // Needs a swarm network overlay, a DPA storage for message cache storage.
 func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 	return &Pss{
-		Overlay:           k,
-		peerPool:          make(map[pot.Address]map[whisper.TopicType]*pssPeer, PssPeerCapacity),
-		fwdPool:           make(map[discover.NodeID]*protocols.Peer),
-		reverseSymKeyPool: make(map[string]pot.Address),
-		reversePubKeyPool: make(map[string]pot.Address),
-		handlers:          make(map[whisper.TopicType]map[*Handler]bool),
-		fwdcache:          make(map[pssDigest]pssCacheEntry),
-		cachettl:          params.Cachettl,
-		dpa:               dpa,
-		privatekey:        params.privatekey,
-		w:                 whisper.New(),
-		symkeycache:       make([]*pssPeer, params.SymKeyCacheCapacity),
+		Overlay:                       k,
+		peerPool:                      make(map[pot.Address]map[whisper.TopicType]*pssPeer, PssPeerCapacity),
+		fwdPool:                       make(map[discover.NodeID]*protocols.Peer),
+		reverseSymKeyPool:             make(map[string]pot.Address),
+		reversePubKeyPool:             make(map[string]pot.Address),
+		handlers:                      make(map[whisper.TopicType]map[*Handler]bool),
+		fwdcache:                      make(map[pssDigest]pssCacheEntry),
+		cachettl:                      params.Cachettl,
+		dpa:                           dpa,
+		privatekey:                    params.privatekey,
+		w:                             whisper.New(),
+		symkeycache:                   make([]*pssPeer, params.SymKeyCacheCapacity),
+		recipientAddressLength:        params.RecipientAddressLength,
+		defaultRecipientAddressLength: params.RecipientAddressLength,
 	}
 }
 
@@ -213,10 +213,22 @@ func (self *Pss) Register(topic *whisper.TopicType, handler Handler) func() {
 	return func() { self.deregister(topic, &handler) }
 }
 
+// Set the amount of bytes that will be disclosed encrypted of recipient address
+//
+// 0 will equal whisper routing (forward to all, no unencrypted partial address)
+// -1 will return to default value
+func (self *Pss) SetRecipientAddressLength(l int) {
+	if l > 32 {
+		l = 32
+	} else if l < 0 {
+		l = self.defaultRecipientAddressLength
+	}
+	self.recipientAddressLength = l
+}
+
 // Add a Public key address mapping
 // this is needed to initiate handshakes
 func (self *Pss) SetPeerPublicKey(addr pot.Address, topic whisper.TopicType, pubkey *ecdsa.PublicKey) {
-	log.Debug("registering pubkey", "key", *pubkey)
 	self.preparePeerTopic(addr, topic)
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -368,14 +380,17 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 			// along with an encrypted secret so that it can tell that we received its key
 			// the encrypted secret will be our key encrypted with its key
 			if !self.isSecured(potfrom, envelope.Topic) {
-				// handle the asym msg thats not keymsg
 				_, err := self.sendKey(keymsg.From, &envelope.Topic)
 				return err
 			}
+			// if it's a keymsg we don't want to pass it on to the handler
 			return nil
 		}
 	}
 
+	// this condition checks if we either have a successfully decrypted asym msg that's not a pssKeyMsg
+	// OR a successfully decrypted sym msg
+	// if so we know for sure it's for this pss node
 	if recvmsg != nil {
 		handlers := self.getHandlers(envelope.Topic)
 		nid, _ := discover.HexID("0x00")
@@ -391,6 +406,7 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 	return nil
 }
 
+// attempt to decrypt, validate and unpack sym msg
 func (self *Pss) processSym(envelope *whisper.Envelope) (recvmsg *whisper.ReceivedMessage, frombytes []byte, err error) {
 	for i := self.symkeycachecursor; i > self.symkeycachecursor-cap(self.symkeycache) && i > 0; i-- {
 		symkeyid := self.symkeycache[i%cap(self.symkeycache)].recvsymkey
@@ -417,6 +433,7 @@ func (self *Pss) processSym(envelope *whisper.Envelope) (recvmsg *whisper.Receiv
 	return nil, nil, nil
 }
 
+// attempt to decrypt, validate and unpack asym msg
 func (self *Pss) processAsym(envelope *whisper.Envelope) (recvmsg *whisper.ReceivedMessage, from []byte, err error) {
 	recvmsg, err = envelope.OpenAsymmetric(self.privatekey)
 	if err != nil {
@@ -432,6 +449,7 @@ func (self *Pss) processAsym(envelope *whisper.Envelope) (recvmsg *whisper.Recei
 	return recvmsg, from, nil
 }
 
+// generate and send symkey to peer using asym send (handshake)
 func (self *Pss) sendKey(to []byte, topic *whisper.TopicType) (string, error) {
 	log.Trace("sending our symkey", "to", to)
 	var potaddr pot.Address
@@ -461,11 +479,9 @@ func (self *Pss) sendKey(to []byte, topic *whisper.TopicType) (string, error) {
 	return recvkeyid, nil
 }
 
-// Send a pss message using symmetric encryption
-// The method itself is payload agnostic, and will accept any arbitrary byte slice as the payload for a message.
-// It generates an whisper envelope for the specified recipient and topic, and wraps the message payload in it.
+// Prepares a msg for sending with symmetric encryption
+//
 // this can only succeed if there exist unexpired symmetric keys both for incoming and outgoing traffic. This will be the state after a asymmetric exchange of symmetric keys (handshake)
-// TODO: proper padding generation
 func (self *Pss) SendSym(to []byte, topic whisper.TopicType, msg []byte) error {
 	var potaddr pot.Address
 	copy(potaddr[:], to)
@@ -481,11 +497,9 @@ func (self *Pss) SendSym(to []byte, topic whisper.TopicType, msg []byte) error {
 	return self.send(to, topic, msg, nil, symkey)
 }
 
-// Sends asymmetric message to a given recipient
-// The method itself is payload agnostic, and will accept any arbitrary byte slice as the payload for a message.
-// It generates an whisper envelope for the specified recipient and topic, and wraps the message payload in it.
+// Prepares a msg for sending with asymmetric encryption
+//
 // Asymmetric send can be used to exchange symmetric keys (handshake)
-// TODO: proper padding generation
 func (self *Pss) SendAsym(to []byte, topic whisper.TopicType, msg []byte) error {
 	var potaddr pot.Address
 	copy(potaddr[:], to)
@@ -498,9 +512,10 @@ func (self *Pss) SendAsym(to []byte, topic whisper.TopicType, msg []byte) error 
 	return self.send(to, topic, msg, topubkey, nil)
 }
 
-// Wraps message in whisper envelope and sends it
+// Sends a pss message
 //
-// If to is nil, message will be sent "darkly" (whispered)
+// The method itself is payload agnostic, and will accept any arbitrary byte slice as the payload for a message.//
+// It generates an whisper envelope for the specified recipient and topic, and wraps the message payload in it.
 func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, pubkey *ecdsa.PublicKey, symkey []byte) error {
 	if pubkey != nil && symkey != nil {
 		return fmt.Errorf("Can only specify one of symkey and pubkey for send")
@@ -539,20 +554,21 @@ func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, pubkey *ec
 }
 
 // Forwards a pss message to the peer(s) closest to the to recipient address in the PssMsg struct
+//
+// The To-field in the PssMsg struct will be plaintext, unencrypted, and will be truncated to the magnitude set by SetRecipientAddressLength (PssParams.RecipientAddressLength by default).
+// If the recipientAddressLength value is 0, no bytes will be disclosed, and message will be forwarded to ALL devp2p peers
+//
 // Handlers that are merely passing on the PssMsg to its final recipient might call this directly
 func (self *Pss) Forward(msg *PssMsg) error {
 	to := msg.To
+	zeros := make([]byte, len(to)-int(self.recipientAddressLength))
 	// truncate part of the pssmsg recipient address
 	// this way noone can know for certain exactly who it's for
-	// we keep the full one address for the kademlia iterator below
-	msg.To = msg.To[:defaultPartialAddressLength]
-
-	// TODO
-	// we should still forward if it's for us
-	// but if we are forwarding we shouldnt accept incoming messages here?
-	//	if self.isSelfPossibleRecipient(msg) {
-	//		return self.Process(msg)
-	//	}
+	// the kademlia address will be same length
+	// but equivalent to truncated part will be overwritten by zeros
+	copy(to[self.recipientAddressLength:len(to)], zeros)
+	log.Trace("truncated recipient", "original", msg.To, "truncated", to)
+	msg.To = msg.To[:self.recipientAddressLength]
 
 	// cache the message
 	digest, err := self.storeMsg(msg)
@@ -577,7 +593,7 @@ func (self *Pss) Forward(msg *PssMsg) error {
 			log.Crit("Pss cannot use kademlia peer type")
 			return false
 		}
-		sendMsg := fmt.Sprintf("MSG %x TO %x FROM %x VIA %x", digest, common.ByteLabel(msg.To), common.ByteLabel(self.BaseAddr()), common.ByteLabel(op.Address()))
+		sendMsg := fmt.Sprintf("MSG %x TO %x FROM %x VIA %x", digest, common.ByteLabel(to), common.ByteLabel(self.BaseAddr()), common.ByteLabel(op.Address()))
 		pp := self.fwdPool[sp.ID()]
 		if self.checkFwdCache(op.Address(), digest) {
 			log.Info(fmt.Sprintf("%v: peer already forwarded to", sendMsg))
@@ -611,6 +627,8 @@ func (self *Pss) Forward(msg *PssMsg) error {
 // Links a remote peer and Topic to a dedicated p2p.MsgReadWriter in the pss peerpool, and runs the specificed protocol using these resources.
 //
 // The effect is that now we have a "virtual" protocol running on an artificial p2p.Peer, which can be looked up and piped to through Pss using swarm overlay address and topic
+//
+// The peer's encryption keys must be added separately.
 func (self *Pss) AddPeer(p *p2p.Peer, addr pot.Address, run func(*p2p.Peer, p2p.MsgReadWriter) error, topic whisper.TopicType, rw p2p.MsgReadWriter) error {
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -751,9 +769,11 @@ func RegisterPssProtocol(ps *Pss, topic *whisper.TopicType, spec *protocols.Spec
 
 // For devp2p protocol integration only.
 //
+// BROKEN! Implementation for pubkey lookup must be implemented
+//
 // Generic handler for initiating devp2p-like protocol connections
 //
-// This handler should be passed to Pss.Register with the associated ropic.
+// This handler should be passed to Pss.Register with the associated topic.
 func (self *PssProtocol) Handle(msg []byte, p *p2p.Peer, senderAddr []byte) error {
 	hashoaddr := pot.NewAddressFromBytes(senderAddr)
 	if !self.isActive(hashoaddr, *self.topic) {

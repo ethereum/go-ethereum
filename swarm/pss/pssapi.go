@@ -58,36 +58,62 @@ func (pssapi *API) Receive(ctx context.Context, topic whisper.TopicType) (*rpc.S
 	return psssub, nil
 }
 
-// Sends the message wrapped in APIMsg through pss
+// Sends the message wrapped in APIMsg through pss using symmetric encryption
 //
-// Wrapper method for the pss.SendRaw function.
-//
-// The method will pass on the error received from pss.
+// The method will pass on the error received from pss. It will fail if no symmetric key for the Pss peer has been added, or if the key has expired
 func (pssapi *API) SendSym(topic whisper.TopicType, msg APIMsg) error {
 	return pssapi.Pss.SendSym(msg.Addr, topic, msg.Msg)
 }
 
+// Sends the message wrapped in APIMsg through pss using symmetric encryption
+//
+// The method will pass on the error received from pss. It will fail if no public key for the Pss peer has been added
 func (pssapi *API) SendAsym(topic whisper.TopicType, msg APIMsg) error {
 	return pssapi.Pss.SendAsym(msg.Addr, topic, msg.Msg)
 }
 
-// BaseAddr returns the pss node's swarm overlay address
+// BaseAddr returns the local swarm overlay address of the Pss node
 //
 // Note that the overlay address is NOT inferable. To really know the node's overlay address it must reveal it itself.
 func (pssapi *API) BaseAddr() ([]byte, error) {
 	return pssapi.Pss.BaseAddr(), nil
 }
 
+// Returns the local public key of the Pss node
+//
+// Derived from the private key passed to the Pss constructor
 func (pssapi *API) GetPublicKey() []byte {
 	pubkey := pssapi.PublicKey()
 	return crypto.FromECDSAPub(&pubkey)
 }
 
-func (pssapi *API) SetPublicKey(addr []byte, topic whisper.TopicType, pubkey []byte) error {
+// Set Public key to associate with a particular Pss peer
+func (pssapi *API) SetPeerPublicKey(addr []byte, topic whisper.TopicType, pubkey []byte) error {
 	var potaddr pot.Address
 	copy(potaddr[:], addr)
 	pssapi.Pss.SetPeerPublicKey(potaddr, topic, crypto.ToECDSAPub(pubkey))
 	return nil
+}
+
+// Set current value of Pss peer recipient address bytes to reveal during transit
+//
+// Will also affect routing.
+//
+// A value of 0 means no bytes are revealed, and message is routed to all devp2p peers on every hop
+// A value of -1 reverts to default value set in PssParams
+func (pssapi *API) SetRecipientAddressLength(l int) error {
+	pssapi.Pss.SetRecipientAddressLength(l)
+	return nil
+}
+
+// Get current value of Pss peer recipient address bytes to reveal during transit
+func (pssapi *API) GetRecipientAddressLength(l int) (int, error) {
+	return pssapi.recipientAddressLength, nil
+}
+
+// Generate a new symkey for a Pss peer, and send requesting a key in return
+func (self *API) Handshake(to []byte, topic whisper.TopicType) (string, error) {
+	return self.sendKey(to, &topic)
 }
 
 // PssAPITest are temporary API calls for development use only
@@ -97,11 +123,12 @@ type APITest struct {
 	*Pss
 }
 
-// Include these methods to the node.Service if test symbols should be used
+// Only for debugging and tests!
 func NewAPITest(ps *Pss) *APITest {
 	return &APITest{Pss: ps}
 }
 
+// Returns incoming and outgoing symkey pair for a particular Pss peer
 func (self *APITest) GetSymKeys(to []byte, topic whisper.TopicType) ([]byte, error) {
 	var potaddr pot.Address
 	copy(potaddr[:], to)
@@ -120,8 +147,4 @@ func (self *APITest) GetSymKeys(to []byte, topic whisper.TopicType) ([]byte, err
 	copy(returnbyte[:len(recvsymkey)], recvsymkey)
 	copy(returnbyte[len(recvsymkey):], sendsymkey)
 	return returnbyte, nil
-}
-
-func (self *APITest) SendSymKey(to []byte, topic whisper.TopicType) (string, error) {
-	return self.sendKey(to, &topic)
 }
