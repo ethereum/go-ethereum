@@ -131,7 +131,7 @@ type Config struct {
 
 	// If Dialer is set to a non-nil value, the given Dialer
 	// is used to dial outbound peer connections.
-	Dialer *net.Dialer `toml:"-"`
+	Dialer NodeDialer `toml:"-"`
 
 	// If NoDial is true, the server will not dial any peers.
 	NoDial bool `toml:",omitempty"`
@@ -369,7 +369,7 @@ func (srv *Server) Start() (err error) {
 		srv.newTransport = newRLPX
 	}
 	if srv.Dialer == nil {
-		srv.Dialer = &net.Dialer{Timeout: defaultDialTimeout}
+		srv.Dialer = TCPDialer{&net.Dialer{Timeout: defaultDialTimeout}}
 	}
 	srv.quit = make(chan struct{})
 	srv.addpeer = make(chan *conn)
