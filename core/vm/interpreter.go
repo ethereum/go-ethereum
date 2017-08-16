@@ -59,9 +59,8 @@ type Interpreter struct {
 	gasTable params.GasTable
 	intPool  *intPool
 
-	readonly bool
-	// returnData contains the last call's return data
-	returnData []byte
+	readOnly   bool   // Whether to throw on stateful modifications
+	returnData []byte // Last CALL's return data for subsequent reuse
 }
 
 // NewInterpreter returns a new instance of the Interpreter.
@@ -90,7 +89,7 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 
 func (in *Interpreter) enforceRestrictions(op OpCode, operation operation, stack *Stack) error {
 	if in.evm.chainRules.IsMetropolis {
-		if in.readonly {
+		if in.readOnly {
 			// If the interpreter is operating in readonly mode, make sure no
 			// state-modifying operation is performed. The 3rd stack item
 			// for a call operation is the value. Transfering value from one
@@ -221,7 +220,7 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		}
 		// if the operation clears the return data (e.g. it has returning data)
 		// set the last return to the result of the operation.
-		if operation.clearsReturndata {
+		if operation.returns {
 			in.returnData = res
 		}
 	}

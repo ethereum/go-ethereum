@@ -261,9 +261,9 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// Make sure the readonly is only set if we aren't in readonly yet
 	// this makes also sure that the readonly flag isn't removed for
 	// child calls.
-	if !evm.interpreter.readonly {
-		evm.interpreter.readonly = true
-		defer func() { evm.interpreter.readonly = false }()
+	if !evm.interpreter.readOnly {
+		evm.interpreter.readOnly = true
+		defer func() { evm.interpreter.readOnly = false }()
 	}
 
 	var (
