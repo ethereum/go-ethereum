@@ -30,6 +30,10 @@ func memoryCalldataCopy(stack *Stack) *big.Int {
 	return calcMemSize(stack.Back(0), stack.Back(2))
 }
 
+func memoryReturnDataCopy(stack *Stack) *big.Int {
+	return calcMemSize(stack.Back(0), stack.Back(2))
+}
+
 func memoryCodeCopy(stack *Stack) *big.Int {
 	return calcMemSize(stack.Back(0), stack.Back(2))
 }

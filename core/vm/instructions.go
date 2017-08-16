@@ -31,6 +31,7 @@ import (
 var (
 	bigZero            = new(big.Int)
 	errWriteProtection = errors.New("evm: write protection")
+	errReadOutOfBound  = errors.New("evm: read out of bound")
 )
 
 func opAdd(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -357,6 +358,28 @@ func opCalldataCopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, st
 	memory.Set(mOff.Uint64(), l.Uint64(), getDataBig(contract.Input, cOff, l))
 
 	evm.interpreter.intPool.put(mOff, cOff, l)
+	return nil, nil
+}
+
+func opReturnDataSize(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	stack.push(evm.interpreter.intPool.get().SetUint64(uint64(len(evm.interpreter.returnData))))
+	return nil, nil
+}
+
+func opReturnDataCopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	var (
+		mOff = stack.pop()
+		cOff = stack.pop()
+		l    = stack.pop()
+	)
+	defer evm.interpreter.intPool.put(mOff, cOff, l)
+
+	cEnd := new(big.Int).Add(cOff, l)
+	if cEnd.BitLen() > 64 || uint64(len(evm.interpreter.returnData)) < cEnd.Uint64() {
+		return nil, errReadOutOfBound
+	}
+	memory.Set(mOff.Uint64(), l.Uint64(), evm.interpreter.returnData[cOff.Uint64():cEnd.Uint64()])
+
 	return nil, nil
 }
 

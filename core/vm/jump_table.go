@@ -53,6 +53,8 @@ type operation struct {
 	valid bool
 	// reverts determined whether the operation reverts state
 	reverts bool
+	// clearsReturndata determines whether the opertions clears the return data
+	clearsReturndata bool
 }
 
 var (
@@ -71,6 +73,19 @@ func NewMetropolisInstructionSet() [256]operation {
 		gasCost:       gasStaticCall,
 		validateStack: makeStackFunc(6, 1),
 		memorySize:    memoryStaticCall,
+		valid:         true,
+	}
+	instructionSet[RETURNDATASIZE] = operation{
+		execute:       opReturnDataSize,
+		gasCost:       constGasFunc(GasQuickStep),
+		validateStack: makeStackFunc(0, 1),
+		valid:         true,
+	}
+	instructionSet[RETURNDATACOPY] = operation{
+		execute:       opReturnDataCopy,
+		gasCost:       gasReturnDataCopy,
+		validateStack: makeStackFunc(3, 0),
+		memorySize:    memoryReturnDataCopy,
 		valid:         true,
 	}
 	return instructionSet
@@ -861,26 +876,29 @@ func NewFrontierInstructionSet() [256]operation {
 			writes:        true,
 		},
 		CREATE: {
-			execute:       opCreate,
-			gasCost:       gasCreate,
-			validateStack: makeStackFunc(3, 1),
-			memorySize:    memoryCreate,
-			valid:         true,
-			writes:        true,
+			execute:          opCreate,
+			gasCost:          gasCreate,
+			validateStack:    makeStackFunc(3, 1),
+			memorySize:       memoryCreate,
+			valid:            true,
+			writes:           true,
+			clearsReturndata: true,
 		},
 		CALL: {
-			execute:       opCall,
-			gasCost:       gasCall,
-			validateStack: makeStackFunc(7, 1),
-			memorySize:    memoryCall,
-			valid:         true,
+			execute:          opCall,
+			gasCost:          gasCall,
+			validateStack:    makeStackFunc(7, 1),
+			memorySize:       memoryCall,
+			valid:            true,
+			clearsReturndata: true,
 		},
 		CALLCODE: {
-			execute:       opCallCode,
-			gasCost:       gasCallCode,
-			validateStack: makeStackFunc(7, 1),
-			memorySize:    memoryCall,
-			valid:         true,
+			execute:          opCallCode,
+			gasCost:          gasCallCode,
+			validateStack:    makeStackFunc(7, 1),
+			memorySize:       memoryCall,
+			valid:            true,
+			clearsReturndata: true,
 		},
 		RETURN: {
 			execute:       opReturn,
