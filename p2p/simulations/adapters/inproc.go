@@ -262,6 +262,12 @@ func (self *SimNode) Start(snapshots map[string][]byte) error {
 }
 
 func (self *SimNode) Stop() error {
+	self.lock.Lock()
+	if self.client != nil {
+		self.client.Close()
+		self.client = nil
+	}
+	self.lock.Unlock()
 	return self.node.Stop()
 }
 
