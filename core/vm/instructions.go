@@ -32,6 +32,7 @@ var (
 	bigZero                  = new(big.Int)
 	errWriteProtection       = errors.New("evm: write protection")
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
+	errExecutionReverted     = errors.New("evm: execution reverted")
 )
 
 func opAdd(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -579,7 +580,7 @@ func opCreate(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	}
 
 	contract.UseGas(gas)
-	_, addr, returnGas, suberr := evm.Create(contract, input, gas, value)
+	res, addr, returnGas, suberr := evm.Create(contract, input, gas, value)
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
@@ -592,9 +593,11 @@ func opCreate(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 		stack.push(addr.Big())
 	}
 	contract.Gas += returnGas
-
 	evm.interpreter.intPool.put(value, offset, size)
 
+	if suberr == errExecutionReverted {
+		return res, nil
+	}
 	return nil, nil
 }
 
@@ -622,7 +625,8 @@ func opCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 		stack.push(new(big.Int))
 	} else {
 		stack.push(big.NewInt(1))
-
+	}
+	if err == nil || err == errExecutionReverted {
 		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	contract.Gas += returnGas
@@ -653,10 +657,10 @@ func opCallCode(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack 
 	ret, returnGas, err := evm.CallCode(contract, address, args, gas, value)
 	if err != nil {
 		stack.push(new(big.Int))
-
 	} else {
 		stack.push(big.NewInt(1))
-
+	}
+	if err == nil || err == errExecutionReverted {
 		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	contract.Gas += returnGas
@@ -676,6 +680,8 @@ func opDelegateCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, st
 		stack.push(new(big.Int))
 	} else {
 		stack.push(big.NewInt(1))
+	}
+	if err == nil || err == errExecutionReverted {
 		memory.Set(outOffset.Uint64(), outSize.Uint64(), ret)
 	}
 	contract.Gas += returnGas
@@ -704,7 +710,8 @@ func opStaticCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stac
 		stack.push(new(big.Int))
 	} else {
 		stack.push(big.NewInt(1))
-
+	}
+	if err == nil || err == errExecutionReverted {
 		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	contract.Gas += returnGas

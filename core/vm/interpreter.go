@@ -209,23 +209,21 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		if verifyPool {
 			verifyIntegerPool(in.intPool)
 		}
-		// checks whether the operation should revert state.
-		if operation.reverts {
-			in.evm.StateDB.RevertToSnapshot(snapshot)
+		// if the operation clears the return data (e.g. it has returning data)
+		// set the last return to the result of the operation.
+		if operation.returns {
+			in.returnData = res
 		}
 
 		switch {
 		case err != nil:
 			return nil, err
+		case operation.reverts:
+			return res, errExecutionReverted
 		case operation.halts:
 			return res, nil
 		case !operation.jumps:
 			pc++
-		}
-		// if the operation clears the return data (e.g. it has returning data)
-		// set the last return to the result of the operation.
-		if operation.returns {
-			in.returnData = res
 		}
 	}
 	return nil, nil
