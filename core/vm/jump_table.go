@@ -89,6 +89,13 @@ func NewMetropolisInstructionSet() [256]operation {
 		memorySize:    memoryReturnDataCopy,
 		valid:         true,
 	}
+	instructionSet[REVERT] = operation{
+		execute:       opRevert,
+		gasCost:       constGasFunc(GasFastestStep),
+		validateStack: makeStackFunc(2, 0),
+		valid:         true,
+		reverts:       true,
+	}
 	return instructionSet
 }
 

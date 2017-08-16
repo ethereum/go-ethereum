@@ -209,6 +209,10 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		if verifyPool {
 			verifyIntegerPool(in.intPool)
 		}
+		// checks whether the operation should revert state.
+		if operation.reverts {
+			in.evm.StateDB.RevertToSnapshot(snapshot)
+		}
 
 		switch {
 		case err != nil:

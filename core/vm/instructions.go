@@ -718,7 +718,14 @@ func opReturn(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	ret := memory.GetPtr(offset.Int64(), size.Int64())
 
 	evm.interpreter.intPool.put(offset, size)
+	return ret, nil
+}
 
+func opRevert(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	offset, size := stack.pop(), stack.pop()
+	ret := memory.GetPtr(offset.Int64(), size.Int64())
+
+	evm.interpreter.intPool.put(offset, size)
 	return ret, nil
 }
 
@@ -731,7 +738,6 @@ func opSuicide(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 	evm.StateDB.AddBalance(common.BigToAddress(stack.pop()), balance)
 
 	evm.StateDB.Suicide(contract.Address())
-
 	return nil, nil
 }
 
