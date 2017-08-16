@@ -26,7 +26,11 @@ func memorySha3(stack *Stack) *big.Int {
 	return calcMemSize(stack.Back(0), stack.Back(1))
 }
 
-func memoryCalldataCopy(stack *Stack) *big.Int {
+func memoryCallDataCopy(stack *Stack) *big.Int {
+	return calcMemSize(stack.Back(0), stack.Back(2))
+}
+
+func memoryReturnDataCopy(stack *Stack) *big.Int {
 	return calcMemSize(stack.Back(0), stack.Back(2))
 }
 
