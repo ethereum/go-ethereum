@@ -86,7 +86,7 @@ func (s *StructLog) OpName() string {
 // if you need to retain them beyond the current call.
 type Tracer interface {
 	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error
-	CaptureEnd(output []byte, gasUsed uint64, t time.Duration) error
+	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error
 }
 
 // StructLogger is an EVM state logger and implements Tracer.
@@ -183,8 +183,11 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	return nil
 }
 
-func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration) error {
+func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
 	fmt.Printf("0x%x", output)
+	if err != nil {
+		fmt.Printf(" error: %v\n", err)
+	}
 	return nil
 }
 

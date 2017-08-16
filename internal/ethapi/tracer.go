@@ -346,7 +346,7 @@ func (jst *JavascriptTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, 
 }
 
 // CaptureEnd is called after the call finishes
-func (jst *JavascriptTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration) error {
+func (jst *JavascriptTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
 	//TODO! @Arachnid please figure out of there's anything we can use this method for
 	return nil
 }
