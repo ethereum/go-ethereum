@@ -234,6 +234,8 @@ func (self *worker) update() {
 			self.uncleMu.Lock()
 			self.possibleUncles[ev.Block.Hash()] = ev.Block
 			self.uncleMu.Unlock()
+			// immediately include uncles
+			self.commitNewWork()
 		case core.TxPreEvent:
 			// Apply transaction to the pending state if we're not mining
 			if atomic.LoadInt32(&self.mining) == 0 {
