@@ -307,8 +307,9 @@ func (c *bn256Add) Run(input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	x.Add(x, y)
-	return x.Marshal(), nil
+	res := new(bn256.G1)
+	res.Add(x, y)
+	return res.Marshal(), nil
 }
 
 // bn256ScalarMul implements a native elliptic curve scalar multiplication.
@@ -324,8 +325,9 @@ func (c *bn256ScalarMul) Run(input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	p.ScalarMult(p, new(big.Int).SetBytes(getData(input, 64, 32)))
-	return p.Marshal(), nil
+	res := new(bn256.G1)
+	res.ScalarMult(p, new(big.Int).SetBytes(getData(input, 64, 32)))
+	return res.Marshal(), nil
 }
 
 var (
@@ -370,8 +372,7 @@ func (c *bn256Pairing) Run(input []byte) ([]byte, error) {
 		ts = append(ts, t)
 	}
 	// Execute the pairing checks and return the results
-	ok := bn256.PairingCheck(cs, ts)
-	if ok {
+	if bn256.PairingCheck(cs, ts) {
 		return true32Byte, nil
 	}
 	return false32Byte, nil
