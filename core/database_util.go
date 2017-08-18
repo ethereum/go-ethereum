@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -48,9 +47,6 @@ var (
 	lookupPrefix        = []byte("l")   // lookupPrefix + hash -> transaction/receipt lookup metadata
 	preimagePrefix      = "secure-key-" // preimagePrefix + hash -> preimage
 
-	mipmapPre    = []byte("mipmap-log-bloom-")
-	MIPMapLevels = []uint64{1000000, 500000, 100000, 50000, 1000}
-
 	configPrefix = []byte("ethereum-config-") // config prefix for the db
 
 	// used by old db, now only used for conversion
@@ -59,10 +55,10 @@ var (
 
 	ErrChainConfigNotFound = errors.New("ChainConfig not found") // general config not found error
 
-	mipmapBloomMu sync.Mutex // protect against race condition when updating mipmap blooms
-
 	preimageCounter    = metrics.NewCounter("db/preimage/total")
 	preimageHitCounter = metrics.NewCounter("db/preimage/hits")
+
+	bloomBitsPrefix = []byte("bloomBits-")
 )
 
 // txLookupEntry is a positional metadata to help looking up the data content of
@@ -497,48 +493,6 @@ func DeleteTxLookupEntry(db ethdb.Database, hash common.Hash) {
 	db.Delete(append(lookupPrefix, hash.Bytes()...))
 }
 
-// returns a formatted MIP mapped key by adding prefix, canonical number and level
-//
-// ex. fn(98, 1000) = (prefix || 1000 || 0)
-func mipmapKey(num, level uint64) []byte {
-	lkey := make([]byte, 8)
-	binary.BigEndian.PutUint64(lkey, level)
-	key := new(big.Int).SetUint64(num / level * level)
-
-	return append(mipmapPre, append(lkey, key.Bytes()...)...)
-}
-
-// WriteMipmapBloom writes each address included in the receipts' logs to the
-// MIP bloom bin.
-func WriteMipmapBloom(db ethdb.Database, number uint64, receipts types.Receipts) error {
-	mipmapBloomMu.Lock()
-	defer mipmapBloomMu.Unlock()
-
-	batch := db.NewBatch()
-	for _, level := range MIPMapLevels {
-		key := mipmapKey(number, level)
-		bloomDat, _ := db.Get(key)
-		bloom := types.BytesToBloom(bloomDat)
-		for _, receipt := range receipts {
-			for _, log := range receipt.Logs {
-				bloom.Add(log.Address.Big())
-			}
-		}
-		batch.Put(key, bloom.Bytes())
-	}
-	if err := batch.Write(); err != nil {
-		return fmt.Errorf("mipmap write fail for: %d: %v", number, err)
-	}
-	return nil
-}
-
-// GetMipmapBloom returns a bloom filter using the number and level as input
-// parameters. For available levels see MIPMapLevels.
-func GetMipmapBloom(db ethdb.Database, number, level uint64) types.Bloom {
-	bloomDat, _ := db.Get(mipmapKey(number, level))
-	return types.BytesToBloom(bloomDat)
-}
-
 // PreimageTable returns a Database instance with the key prefix for preimage entries.
 func PreimageTable(db ethdb.Database) ethdb.Database {
 	return ethdb.NewTable(db, preimagePrefix)
@@ -636,4 +590,23 @@ func FindCommonAncestor(db ethdb.Database, a, b *types.Header) *types.Header {
 		}
 	}
 	return a
+}
+
+// GetBloomBits reads the compressed bloomBits vector belonging to the given section and bit index from the db
+func GetBloomBits(db ethdb.Database, bitIdx, sectionIdx uint64, sectionHead common.Hash) ([]byte, error) {
+	var encKey [10]byte
+	binary.BigEndian.PutUint16(encKey[0:2], uint16(bitIdx))
+	binary.BigEndian.PutUint64(encKey[2:10], sectionIdx)
+	key := append(append(bloomBitsPrefix, encKey[:]...), sectionHead.Bytes()...)
+	bloomBits, err := db.Get(key)
+	return bloomBits, err
+}
+
+// StoreBloomBits writes the compressed bloomBits vector belonging to the given section and bit index to the db
+func StoreBloomBits(db ethdb.Database, bitIdx, sectionIdx uint64, sectionHead common.Hash, bloomBits []byte) {
+	var encKey [10]byte
+	binary.BigEndian.PutUint16(encKey[0:2], uint16(bitIdx))
+	binary.BigEndian.PutUint64(encKey[2:10], sectionIdx)
+	key := append(append(bloomBitsPrefix, encKey[:]...), sectionHead.Bytes()...)
+	db.Put(key, bloomBits)
 }

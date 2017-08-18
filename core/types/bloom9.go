@@ -106,6 +106,20 @@ func LogsBloom(logs []*Log) *big.Int {
 	return bin
 }
 
+type BloomIndexList [3]uint
+
+// BloomIndexes returns the bloom filter bit indexes belonging to the given key
+func BloomIndexes(b []byte) BloomIndexList {
+	b = crypto.Keccak256(b[:])
+
+	var r [3]uint
+	for i, _ := range r {
+		r[i] = (uint(b[i+i+1]) + (uint(b[i+i]) << 8)) & 2047
+	}
+
+	return r
+}
+
 func bloom9(b []byte) *big.Int {
 	b = crypto.Keccak256(b[:])
 

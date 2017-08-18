@@ -19,6 +19,7 @@ package les
 import (
 	"context"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -170,4 +172,20 @@ func (b *LesApiBackend) EventMux() *event.TypeMux {
 
 func (b *LesApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.accountManager
+}
+
+func (b *LesApiBackend) GetBloomBits(ctx context.Context, bitIdx uint64, sectionIdxList []uint64) ([][]byte, error) {
+	return nil, nil // implemented in a subsequent PR
+}
+
+func (b *LesApiBackend) BloomBitsSections() uint64 {
+	return 0
+}
+
+func (b *LesApiBackend) BloomBitsConfig() filters.BloomConfig {
+	return filters.BloomConfig{
+		SectionSize:    32768,
+		MaxRequestLen:  16,
+		MaxRequestWait: time.Microsecond * 100,
+	}
 }

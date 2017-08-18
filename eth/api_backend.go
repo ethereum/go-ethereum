@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -193,4 +194,30 @@ func (b *EthApiBackend) EventMux() *event.TypeMux {
 
 func (b *EthApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.AccountManager()
+}
+
+func (b *EthApiBackend) GetBloomBits(ctx context.Context, bitIdx uint64, sectionIdxList []uint64) ([][]byte, error) {
+	results := make([][]byte, len(sectionIdxList))
+	var err error
+	for i, sectionIdx := range sectionIdxList {
+		sectionHead := core.GetCanonicalHash(b.eth.chainDb, (sectionIdx+1)*bloomBitsSection-1)
+		results[i], err = core.GetBloomBits(b.eth.chainDb, bitIdx, sectionIdx, sectionHead)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return results, nil
+}
+
+func (b *EthApiBackend) BloomBitsSections() uint64 {
+	sections, _, _ := b.eth.bbIndexer.Sections()
+	return sections
+}
+
+func (b *EthApiBackend) BloomBitsConfig() filters.BloomConfig {
+	return filters.BloomConfig{
+		SectionSize:    bloomBitsSection,
+		MaxRequestLen:  16,
+		MaxRequestWait: 0,
+	}
 }

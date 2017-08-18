@@ -77,6 +77,8 @@ type Ethereum struct {
 	engine         consensus.Engine
 	accountManager *accounts.Manager
 
+	bbIndexer *core.ChainIndexer
+
 	ApiBackend *EthApiBackend
 
 	miner     *miner.Miner
@@ -125,11 +127,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		networkId:      config.NetworkId,
 		gasPrice:       config.GasPrice,
 		etherbase:      config.Etherbase,
+		bbIndexer:      NewBloomBitsProcessor(chainDb, bloomBitsSection),
 	}
 
-	if err := addMipmapBloomBins(chainDb); err != nil {
-		return nil, err
-	}
 	log.Info("Initialising Ethereum protocol", "versions", ProtocolVersions, "network", config.NetworkId)
 
 	if !config.SkipBcVersionCheck {
@@ -151,6 +151,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		eth.blockchain.SetHead(compat.RewindTo)
 		core.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
+	eth.bbIndexer.Start(eth.blockchain)
 
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = ctx.ResolvePath(config.TxPool.Journal)
@@ -260,7 +261,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.ApiBackend, false),
+			Service:   filters.NewPublicFilterAPI(s.ApiBackend, false, bloomBitsSection),
 			Public:    true,
 		}, {
 			Namespace: "admin",
@@ -389,6 +390,7 @@ func (s *Ethereum) Stop() error {
 	if s.stopDbUpgrade != nil {
 		s.stopDbUpgrade()
 	}
+	s.bbIndexer.Close()
 	s.blockchain.Stop()
 	s.protocolManager.Stop()
 	if s.lesServer != nil {

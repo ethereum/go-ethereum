@@ -51,24 +51,25 @@ type filter struct {
 // PublicFilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Ethereum protocol such als blocks, transactions and logs.
 type PublicFilterAPI struct {
-	backend   Backend
-	useMipMap bool
-	mux       *event.TypeMux
-	chainDb   ethdb.Database
-	events    *EventSystem
-	filtersMu sync.Mutex
-	filters   map[rpc.ID]*filter
+	backend          Backend
+	bloomBitsSection uint64
+	mux              *event.TypeMux
+	quit             chan struct{}
+	chainDb          ethdb.Database
+	events           *EventSystem
+	filtersMu        sync.Mutex
+	filters          map[rpc.ID]*filter
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
-func NewPublicFilterAPI(backend Backend, lightMode bool) *PublicFilterAPI {
+func NewPublicFilterAPI(backend Backend, lightMode bool, bloomBitsSection uint64) *PublicFilterAPI {
 	api := &PublicFilterAPI{
-		backend:   backend,
-		useMipMap: !lightMode,
-		mux:       backend.EventMux(),
-		chainDb:   backend.ChainDb(),
-		events:    NewEventSystem(backend.EventMux(), backend, lightMode),
-		filters:   make(map[rpc.ID]*filter),
+		backend:          backend,
+		bloomBitsSection: bloomBitsSection,
+		mux:              backend.EventMux(),
+		chainDb:          backend.ChainDb(),
+		events:           NewEventSystem(backend.EventMux(), backend, lightMode),
+		filters:          make(map[rpc.ID]*filter),
 	}
 
 	go api.timeoutLoop()
@@ -332,11 +333,7 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		crit.ToBlock = big.NewInt(rpc.LatestBlockNumber.Int64())
 	}
 
-	filter := New(api.backend, api.useMipMap)
-	filter.SetBeginBlock(crit.FromBlock.Int64())
-	filter.SetEndBlock(crit.ToBlock.Int64())
-	filter.SetAddresses(crit.Addresses)
-	filter.SetTopics(crit.Topics)
+	filter := New(api.backend, crit.FromBlock.Int64(), crit.ToBlock.Int64(), crit.Addresses, crit.Topics)
 
 	logs, err := filter.Find(ctx)
 	return returnLogs(logs), err
@@ -372,19 +369,18 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 		return nil, fmt.Errorf("filter not found")
 	}
 
-	filter := New(api.backend, api.useMipMap)
+	var begin, end int64
 	if f.crit.FromBlock != nil {
-		filter.SetBeginBlock(f.crit.FromBlock.Int64())
+		begin = f.crit.FromBlock.Int64()
 	} else {
-		filter.SetBeginBlock(rpc.LatestBlockNumber.Int64())
+		begin = rpc.LatestBlockNumber.Int64()
 	}
 	if f.crit.ToBlock != nil {
-		filter.SetEndBlock(f.crit.ToBlock.Int64())
+		end = f.crit.ToBlock.Int64()
 	} else {
-		filter.SetEndBlock(rpc.LatestBlockNumber.Int64())
+		end = rpc.LatestBlockNumber.Int64()
 	}
-	filter.SetAddresses(f.crit.Addresses)
-	filter.SetTopics(f.crit.Topics)
+	filter := New(api.backend, begin, end, f.crit.Addresses, f.crit.Topics)
 
 	logs, err := filter.Find(ctx)
 	if err != nil {

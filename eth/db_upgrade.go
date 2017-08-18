@@ -19,11 +19,13 @@ package eth
 
 import (
 	"bytes"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -135,45 +137,37 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 	}
 }
 
-func addMipmapBloomBins(db ethdb.Database) (err error) {
-	const mipmapVersion uint = 2
+// BloomBitsIndex implements ChainIndex
+type BloomBitsIndex struct {
+	db                   ethdb.Database
+	bc                   *bloombits.BloomBitsCreator
+	section, sectionSize uint64
+	sectionHead          common.Hash
+}
 
-	// check if the version is set. We ignore data for now since there's
-	// only one version so we can easily ignore it for now
-	var data []byte
-	data, _ = db.Get([]byte("setting-mipmap-version"))
-	if len(data) > 0 {
-		var version uint
-		if err := rlp.DecodeBytes(data, &version); err == nil && version == mipmapVersion {
-			return nil
-		}
-	}
+// number of confirmation blocks before a section is considered probably final and its bloom bits are calculated
+const bloomBitsConfirmations = 256
 
-	defer func() {
-		if err == nil {
-			var val []byte
-			val, err = rlp.EncodeToBytes(mipmapVersion)
-			if err == nil {
-				err = db.Put([]byte("setting-mipmap-version"), val)
-			}
-			return
-		}
-	}()
-	latestHash := core.GetHeadBlockHash(db)
-	latestBlock := core.GetBlock(db, latestHash, core.GetBlockNumber(db, latestHash))
-	if latestBlock == nil { // clean database
-		return
-	}
+// NewBloomBitsProcessor returns a chain processor that generates bloom bits data for the canonical chain
+func NewBloomBitsProcessor(db ethdb.Database, sectionSize uint64) *core.ChainIndexer {
+	backend := &BloomBitsIndex{db: db, sectionSize: sectionSize}
+	return core.NewChainIndexer(db, ethdb.NewTable(db, "bbIndex-"), backend, sectionSize, bloomBitsConfirmations, time.Millisecond*100, "bloombits")
+}
 
-	tstart := time.Now()
-	log.Warn("Upgrading db log bloom bins")
-	for i := uint64(0); i <= latestBlock.NumberU64(); i++ {
-		hash := core.GetCanonicalHash(db, i)
-		if (hash == common.Hash{}) {
-			return fmt.Errorf("chain db corrupted. Could not find block %d.", i)
-		}
-		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(db, hash, i))
+func (b *BloomBitsIndex) Reset(section uint64, lastSectionHead common.Hash) {
+	b.bc = bloombits.NewBloomBitsCreator(b.sectionSize)
+	b.section = section
+}
+
+func (b *BloomBitsIndex) Process(header *types.Header) {
+	b.bc.AddHeaderBloom(header.Bloom)
+	b.sectionHead = header.Hash()
+}
+
+func (b *BloomBitsIndex) Commit() error {
+	for i := 0; i < bloombits.BloomLength; i++ {
+		compVector := bitutil.CompressBytes(b.bc.GetBitVector(uint(i)))
+		core.StoreBloomBits(b.db, uint64(i), b.section, b.sectionHead, compVector)
 	}
-	log.Info("Bloom-bin upgrade completed", "elapsed", common.PrettyDuration(time.Since(tstart)))
 	return nil
 }

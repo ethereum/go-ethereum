@@ -36,6 +36,7 @@ import (
 type testBackend struct {
 	mux        *event.TypeMux
 	db         ethdb.Database
+	sections   uint64
 	txFeed     *event.Feed
 	rmLogsFeed *event.Feed
 	logsFeed   *event.Feed
@@ -84,6 +85,31 @@ func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 	return b.chainFeed.Subscribe(ch)
 }
 
+func (b *testBackend) GetBloomBits(ctx context.Context, bitIdx uint64, sectionIdxList []uint64) ([][]byte, error) {
+	results := make([][]byte, len(sectionIdxList))
+	var err error
+	for i, sectionIdx := range sectionIdxList {
+		sectionHead := core.GetCanonicalHash(b.db, (sectionIdx+1)*testBloomBitsSection-1)
+		results[i], err = core.GetBloomBits(b.db, bitIdx, sectionIdx, sectionHead)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return results, nil
+}
+
+func (b *testBackend) BloomBitsSections() uint64 {
+	return b.sections
+}
+
+func (b *testBackend) BloomBitsConfig() BloomConfig {
+	return BloomConfig{
+		SectionSize:    testBloomBitsSection,
+		MaxRequestLen:  16,
+		MaxRequestWait: 0,
+	}
+}
+
 // TestBlockSubscription tests if a block subscription returns block hashes for posted chain events.
 // It creates multiple subscriptions:
 // - one at the start and should receive all posted chain events and a second (blockHashes)
@@ -99,8 +125,8 @@ func TestBlockSubscription(t *testing.T) {
 		rmLogsFeed  = new(event.Feed)
 		logsFeed    = new(event.Feed)
 		chainFeed   = new(event.Feed)
-		backend     = &testBackend{mux, db, txFeed, rmLogsFeed, logsFeed, chainFeed}
-		api         = NewPublicFilterAPI(backend, false)
+		backend     = &testBackend{mux, db, 0, txFeed, rmLogsFeed, logsFeed, chainFeed}
+		api         = NewPublicFilterAPI(backend, false, 0)
 		genesis     = new(core.Genesis).MustCommit(db)
 		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, db, 10, func(i int, gen *core.BlockGen) {})
 		chainEvents = []core.ChainEvent{}
@@ -156,8 +182,8 @@ func TestPendingTxFilter(t *testing.T) {
 		rmLogsFeed = new(event.Feed)
 		logsFeed   = new(event.Feed)
 		chainFeed  = new(event.Feed)
-		backend    = &testBackend{mux, db, txFeed, rmLogsFeed, logsFeed, chainFeed}
-		api        = NewPublicFilterAPI(backend, false)
+		backend    = &testBackend{mux, db, 0, txFeed, rmLogsFeed, logsFeed, chainFeed}
+		api        = NewPublicFilterAPI(backend, false, 0)
 
 		transactions = []*types.Transaction{
 			types.NewTransaction(0, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), new(big.Int), new(big.Int), nil),
@@ -219,8 +245,8 @@ func TestLogFilterCreation(t *testing.T) {
 		rmLogsFeed = new(event.Feed)
 		logsFeed   = new(event.Feed)
 		chainFeed  = new(event.Feed)
-		backend    = &testBackend{mux, db, txFeed, rmLogsFeed, logsFeed, chainFeed}
-		api        = NewPublicFilterAPI(backend, false)
+		backend    = &testBackend{mux, db, 0, txFeed, rmLogsFeed, logsFeed, chainFeed}
+		api        = NewPublicFilterAPI(backend, false, 0)
 
 		testCases = []struct {
 			crit    FilterCriteria
@@ -268,8 +294,8 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 		rmLogsFeed = new(event.Feed)
 		logsFeed   = new(event.Feed)
 		chainFeed  = new(event.Feed)
-		backend    = &testBackend{mux, db, txFeed, rmLogsFeed, logsFeed, chainFeed}
-		api        = NewPublicFilterAPI(backend, false)
+		backend    = &testBackend{mux, db, 0, txFeed, rmLogsFeed, logsFeed, chainFeed}
+		api        = NewPublicFilterAPI(backend, false, 0)
 	)
 
 	// different situations where log filter creation should fail.
@@ -298,8 +324,8 @@ func TestLogFilter(t *testing.T) {
 		rmLogsFeed = new(event.Feed)
 		logsFeed   = new(event.Feed)
 		chainFeed  = new(event.Feed)
-		backend    = &testBackend{mux, db, txFeed, rmLogsFeed, logsFeed, chainFeed}
-		api        = NewPublicFilterAPI(backend, false)
+		backend    = &testBackend{mux, db, 0, txFeed, rmLogsFeed, logsFeed, chainFeed}
+		api        = NewPublicFilterAPI(backend, false, 0)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		secondAddr     = common.HexToAddress("0x2222222222222222222222222222222222222222")
@@ -415,8 +441,8 @@ func TestPendingLogsSubscription(t *testing.T) {
 		rmLogsFeed = new(event.Feed)
 		logsFeed   = new(event.Feed)
 		chainFeed  = new(event.Feed)
-		backend    = &testBackend{mux, db, txFeed, rmLogsFeed, logsFeed, chainFeed}
-		api        = NewPublicFilterAPI(backend, false)
+		backend    = &testBackend{mux, db, 0, txFeed, rmLogsFeed, logsFeed, chainFeed}
+		api        = NewPublicFilterAPI(backend, false, 0)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		secondAddr     = common.HexToAddress("0x2222222222222222222222222222222222222222")
