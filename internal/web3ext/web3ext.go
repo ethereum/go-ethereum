@@ -361,6 +361,11 @@ web3._extend({
 	methods:
 	[
 		new web3._extend.Method({
+			name: 'chainId',
+			call: 'eth_chainId',
+			params: 0
+		}),
+		new web3._extend.Method({
 			name: 'sign',
 			call: 'eth_sign',
 			params: 2,
