@@ -218,7 +218,7 @@ func testHasher(f func(BaseHasher, []byte, int, int) error) error {
 	var err error
 	for _, count := range counts {
 		max := count * size
-		incr := max/size + 1
+		incr := 1
 		for n := 0; n <= max+incr; n += incr {
 			err = f(hasher, data, n, count)
 			if err != nil {
