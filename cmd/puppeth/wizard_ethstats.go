@@ -60,6 +60,22 @@ func (w *wizard) deployEthstats() {
 		fmt.Printf("What should be the secret password for the API? (default = %s)\n", infos.secret)
 		infos.secret = w.readDefaultString(infos.secret)
 	}
+	// Gather any blacklists to ban from reporting
+	fmt.Println()
+	fmt.Printf("Keep existing IP %v blacklist (y/n)? (default = yes)\n", infos.banned)
+	if w.readDefaultString("y") != "y" {
+		infos.banned = nil
+
+		fmt.Println()
+		fmt.Println("Which IP addresses should be blacklisted?")
+		for {
+			if ip := w.readIPAddress(); ip != nil {
+				infos.banned = append(infos.banned, ip.String())
+				continue
+			}
+			break
+		}
+	}
 	// Try to deploy the ethstats server on the host
 	trusted := make([]string, 0, len(w.servers))
 	for _, client := range w.servers {
@@ -67,7 +83,7 @@ func (w *wizard) deployEthstats() {
 			trusted = append(trusted, client.address)
 		}
 	}
-	if out, err := deployEthstats(client, w.network, infos.port, infos.secret, infos.host, trusted); err != nil {
+	if out, err := deployEthstats(client, w.network, infos.port, infos.secret, infos.host, trusted, infos.banned); err != nil {
 		log.Error("Failed to deploy ethstats container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)
