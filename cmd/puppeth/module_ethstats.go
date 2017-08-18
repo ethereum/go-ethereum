@@ -42,7 +42,7 @@ RUN \
 WORKDIR /eth-netstats
 EXPOSE 3000
 
-RUN echo 'module.exports = {trusted: [{{.Trusted}}], banned: []};' > lib/utils/config.js
+RUN echo 'module.exports = {trusted: [{{.Trusted}}], banned: [{{.Banned}}]};' > lib/utils/config.js
 
 CMD ["npm", "start"]
 `
@@ -59,7 +59,8 @@ services:
       - "{{.Port}}:3000"{{end}}
     environment:
       - WS_SECRET={{.Secret}}{{if .VHost}}
-      - VIRTUAL_HOST={{.VHost}}{{end}}
+      - VIRTUAL_HOST={{.VHost}}{{end}}{{if .Banned}}
+      - BANNED={{.Banned}}{{end}}
     logging:
       driver: "json-file"
       options:
@@ -71,18 +72,24 @@ services:
 // deployEthstats deploys a new ethstats container to a remote machine via SSH,
 // docker and docker-compose. If an instance with the specified network name
 // already exists there, it will be overwritten!
-func deployEthstats(client *sshClient, network string, port int, secret string, vhost string, trusted []string) ([]byte, error) {
+func deployEthstats(client *sshClient, network string, port int, secret string, vhost string, trusted []string, banned []string) ([]byte, error) {
 	// Generate the content to upload to the server
 	workdir := fmt.Sprintf("%d", rand.Int63())
 	files := make(map[string][]byte)
 
+	trustedLabels := make([]string, len(trusted))
 	for i, address := range trusted {
-		trusted[i] = fmt.Sprintf("\"%s\"", address)
+		trustedLabels[i] = fmt.Sprintf("\"%s\"", address)
+	}
+	bannedLabels := make([]string, len(banned))
+	for i, address := range banned {
+		bannedLabels[i] = fmt.Sprintf("\"%s\"", address)
 	}
 
 	dockerfile := new(bytes.Buffer)
 	template.Must(template.New("").Parse(ethstatsDockerfile)).Execute(dockerfile, map[string]interface{}{
-		"Trusted": strings.Join(trusted, ", "),
+		"Trusted": strings.Join(trustedLabels, ", "),
+		"Banned":  strings.Join(bannedLabels, ", "),
 	})
 	files[filepath.Join(workdir, "Dockerfile")] = dockerfile.Bytes()
 
@@ -92,6 +99,7 @@ func deployEthstats(client *sshClient, network string, port int, secret string, 
 		"Port":    port,
 		"Secret":  secret,
 		"VHost":   vhost,
+		"Banned":  strings.Join(banned, ","),
 	})
 	files[filepath.Join(workdir, "docker-compose.yaml")] = composefile.Bytes()
 
@@ -112,11 +120,12 @@ type ethstatsInfos struct {
 	port   int
 	secret string
 	config string
+	banned []string
 }
 
 // String implements the stringer interface.
 func (info *ethstatsInfos) String() string {
-	return fmt.Sprintf("host=%s, port=%d, secret=%s", info.host, info.port, info.secret)
+	return fmt.Sprintf("host=%s, port=%d, secret=%s, banned=%v", info.host, info.port, info.secret, info.banned)
 }
 
 // checkEthstats does a health-check against an ethstats server to verify whether
@@ -150,6 +159,9 @@ func checkEthstats(client *sshClient, network string) (*ethstatsInfos, error) {
 	if port != 80 && port != 443 {
 		config += fmt.Sprintf(":%d", port)
 	}
+	// Retrieve the IP blacklist
+	banned := strings.Split(infos.envvars["BANNED"], ",")
+
 	// Run a sanity check to see if the port is reachable
 	if err = checkPort(host, port); err != nil {
 		log.Warn("Ethstats service seems unreachable", "server", host, "port", port, "err", err)
@@ -160,5 +172,6 @@ func checkEthstats(client *sshClient, network string) (*ethstatsInfos, error) {
 		port:   port,
 		secret: secret,
 		config: config,
+		banned: banned,
 	}, nil
 }
