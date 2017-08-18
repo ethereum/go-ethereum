@@ -35,6 +35,167 @@ const (
 	maxproccnt = 8
 )
 
+// TestRefHasher tests that the RefHasher computes the expected BMT hash for
+// all data lengths between 0 and 256 bytes
+func TestRefHasher(t *testing.T) {
+	hashFunc := sha3.NewKeccak256
+
+	sha3 := func(data ...[]byte) []byte {
+		h := hashFunc()
+		for _, v := range data {
+			h.Write(v)
+		}
+		return h.Sum(nil)
+	}
+
+	// the test struct is used to specify the expected BMT hash for data
+	// lengths between "from" and "to"
+	type test struct {
+		from     int64
+		to       int64
+		expected func([]byte) []byte
+	}
+
+	var tests []*test
+
+	// all lengths in [0,64] should be:
+	//
+	//   sha3(data)
+	//
+	tests = append(tests, &test{
+		from: 0,
+		to:   64,
+		expected: func(data []byte) []byte {
+			return sha3(data)
+		},
+	})
+
+	// all lengths in [65,96] should be:
+	//
+	//   sha3(
+	//     sha3(data[:64])
+	//     data[64:]
+	//   )
+	//
+	tests = append(tests, &test{
+		from: 65,
+		to:   96,
+		expected: func(data []byte) []byte {
+			return sha3(sha3(data[:64]), data[64:])
+		},
+	})
+
+	// all lengths in [97,128] should be:
+	//
+	//   sha3(
+	//     sha3(data[:64])
+	//     sha3(data[64:])
+	//   )
+	//
+	tests = append(tests, &test{
+		from: 97,
+		to:   128,
+		expected: func(data []byte) []byte {
+			return sha3(sha3(data[:64]), sha3(data[64:]))
+		},
+	})
+
+	// all lengths in [129,160] should be:
+	//
+	//   sha3(
+	//     sha3(
+	//       sha3(data[:64])
+	//       sha3(data[64:128])
+	//     )
+	//     data[128:]
+	//   )
+	//
+	tests = append(tests, &test{
+		from: 129,
+		to:   160,
+		expected: func(data []byte) []byte {
+			return sha3(sha3(sha3(data[:64]), sha3(data[64:128])), data[128:])
+		},
+	})
+
+	// all lengths in [161,192] should be:
+	//
+	//   sha3(
+	//     sha3(
+	//       sha3(data[:64])
+	//       sha3(data[64:128])
+	//     )
+	//     sha3(data[128:])
+	//   )
+	//
+	tests = append(tests, &test{
+		from: 161,
+		to:   192,
+		expected: func(data []byte) []byte {
+			return sha3(sha3(sha3(data[:64]), sha3(data[64:128])), sha3(data[128:]))
+		},
+	})
+
+	// all lengths in [193,224] should be:
+	//
+	//   sha3(
+	//     sha3(
+	//       sha3(data[:64])
+	//       sha3(data[64:128])
+	//     )
+	//     sha3(
+	//       sha3(data[128:192])
+	//       data[192:]
+	//     )
+	//   )
+	//
+	tests = append(tests, &test{
+		from: 193,
+		to:   224,
+		expected: func(data []byte) []byte {
+			return sha3(sha3(sha3(data[:64]), sha3(data[64:128])), sha3(sha3(data[128:192]), data[192:]))
+		},
+	})
+
+	// all lengths in [225,256] should be:
+	//
+	//   sha3(
+	//     sha3(
+	//       sha3(data[:64])
+	//       sha3(data[64:128])
+	//     )
+	//     sha3(
+	//       sha3(data[128:192])
+	//       sha3(data[192:])
+	//     )
+	//   )
+	//
+	tests = append(tests, &test{
+		from: 225,
+		to:   256,
+		expected: func(data []byte) []byte {
+			return sha3(sha3(sha3(data[:64]), sha3(data[64:128])), sha3(sha3(data[128:192]), sha3(data[192:])))
+		},
+	})
+
+	// run the tests
+	for _, x := range tests {
+		for length := x.from; length <= x.to; length++ {
+			t.Run(fmt.Sprintf("%d_bytes", length), func(t *testing.T) {
+				data := make([]byte, length)
+				if _, err := io.ReadFull(crand.Reader, data); err != nil && err != io.EOF {
+					t.Fatal(err)
+				}
+				expected := x.expected(data)
+				actual := NewRefHasher(hashFunc, 128).Hash(data)
+				if !bytes.Equal(actual, expected) {
+					t.Fatalf("expected %x, got %x", expected, actual)
+				}
+			})
+		}
+	}
+}
+
 func testDataReader(l int) (r io.Reader) {
 	return io.LimitReader(crand.Reader, int64(l))
 }
