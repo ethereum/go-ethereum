@@ -61,15 +61,17 @@ func (pssapi *API) Receive(ctx context.Context, topic whisper.TopicType) (*rpc.S
 // Sends the message wrapped in APIMsg through pss using symmetric encryption
 //
 // The method will pass on the error received from pss. It will fail if no symmetric key for the Pss peer has been added, or if the key has expired
-func (pssapi *API) SendSym(topic whisper.TopicType, msg APIMsg) error {
-	return pssapi.Pss.SendSym(msg.Addr, topic, msg.Msg)
+// The addresslength parameter decides how many bytes of the address to reveal in transit. -1 equals showing all. 0 means show none.
+func (pssapi *API) SendSym(topic whisper.TopicType, msg APIMsg, addresslength int8) error {
+	return pssapi.Pss.SendSym(msg.Addr, topic, msg.Msg, int(addresslength))
 }
 
 // Sends the message wrapped in APIMsg through pss using symmetric encryption
 //
 // The method will pass on the error received from pss. It will fail if no public key for the Pss peer has been added
-func (pssapi *API) SendAsym(topic whisper.TopicType, msg APIMsg) error {
-	return pssapi.Pss.SendAsym(msg.Addr, topic, msg.Msg)
+// The addresslength parameter decides how many bytes of the address to reveal it transit. -1 equals showing all. 0 means show none.
+func (pssapi *API) SendAsym(topic whisper.TopicType, msg APIMsg, addresslength int8) error {
+	return pssapi.Pss.SendAsym(msg.Addr, topic, msg.Msg, int(addresslength))
 }
 
 // BaseAddr returns the local swarm overlay address of the Pss node
@@ -95,25 +97,10 @@ func (pssapi *API) SetPeerPublicKey(addr []byte, topic whisper.TopicType, pubkey
 	return nil
 }
 
-// Set current value of Pss peer recipient address bytes to reveal during transit
-//
-// Will also affect routing.
-//
-// A value of 0 means no bytes are revealed, and message is routed to all devp2p peers on every hop
-// A value of -1 reverts to default value set in PssParams
-func (pssapi *API) SetRecipientAddressLength(l int) error {
-	pssapi.Pss.SetRecipientAddressLength(l)
-	return nil
-}
-
-// Get current value of Pss peer recipient address bytes to reveal during transit
-func (pssapi *API) GetRecipientAddressLength(l int) (int, error) {
-	return pssapi.recipientAddressLength, nil
-}
-
 // Generate a new symkey for a Pss peer, and send requesting a key in return
-func (self *API) Handshake(to []byte, topic whisper.TopicType) (string, error) {
-	return self.sendKey(to, &topic)
+// The addresslength parameter decides how many bytes of the address to reveal in transit. -1 equals showing all. 0 means show none.
+func (pssapi *API) Handshake(to []byte, topic whisper.TopicType, addresslength int8) (string, error) {
+	return pssapi.sendKey(to, &topic, int(addresslength))
 }
 
 // PssAPITest are temporary API calls for development use only

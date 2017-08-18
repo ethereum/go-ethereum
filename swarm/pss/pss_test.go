@@ -144,8 +144,6 @@ func TestKeys(t *testing.T) {
 	outkey := network.RandomAddr().Over()
 	topic := whisper.BytesToTopic([]byte("foo:42"))
 	ps.SetPeerPublicKey(pot.NewAddressFromBytes(addr), topic, &theirprivkey.PublicKey)
-	//copy(outkey[:16], addr[16:])
-	//copy(outkey[16:], addr[:16])
 	outkeyid, err := ps.SetOutgoingSymmetricKey(pot.NewAddressFromBytes(addr), topic, outkey)
 	if err != nil {
 		t.Fatalf("failed to set 'our' outgoing symmetric key")
@@ -266,7 +264,10 @@ func TestKeysExchange(t *testing.T) {
 	// use api test method for generating and sending incoming symkey
 	// the peer should save it, then generate and send back its own
 	var symkeyid string
-	err = lclient.Call(&symkeyid, "pss_handshake", roaddr, hextopic)
+	err = lclient.Call(&symkeyid, "pss_handshake", roaddr, hextopic, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
 	time.Sleep(time.Second * 2) // replace with sim expect logic
 
 	// after the exchange, the key for receiving on node 1
@@ -275,11 +276,17 @@ func TestKeysExchange(t *testing.T) {
 	lrecvkey := make([]byte, defaultSymKeyLength)
 	lsendkey := make([]byte, defaultSymKeyLength)
 	err = lclient.Call(&tmpbytes, "psstest_getSymKeys", roaddr, hextopic)
+	if err != nil {
+		t.Fatal(err)
+	}
 	copy(lrecvkey, tmpbytes[:defaultSymKeyLength])
 	copy(lsendkey, tmpbytes[defaultSymKeyLength:])
 	rrecvkey := make([]byte, defaultSymKeyLength)
 	rsendkey := make([]byte, defaultSymKeyLength)
 	err = rclient.Call(&tmpbytes, "psstest_getSymKeys", loaddr, hextopic)
+	if err != nil {
+		t.Fatal(err)
+	}
 	copy(rrecvkey, tmpbytes[:defaultSymKeyLength])
 	copy(rsendkey, tmpbytes[defaultSymKeyLength:])
 	if !bytes.Equal(rrecvkey, lsendkey) {
@@ -295,7 +302,10 @@ func TestKeysExchange(t *testing.T) {
 		Msg:  []byte("plugh"),
 		Addr: loaddr,
 	}
-	err = rclient.Call(nil, "pss_sendSym", hextopic, apimsg)
+	err = rclient.Call(nil, "pss_sendSym", hextopic, apimsg, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
 	select {
 	case recvmsg := <-lmsgC:
 		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
@@ -308,7 +318,10 @@ func TestKeysExchange(t *testing.T) {
 		Msg:  []byte("xyzzy"),
 		Addr: roaddr,
 	}
-	err = lclient.Call(nil, "pss_sendSym", hextopic, apimsg)
+	err = lclient.Call(nil, "pss_sendSym", hextopic, apimsg, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
 	select {
 	case recvmsg := <-rmsgC:
 		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
@@ -319,7 +332,10 @@ func TestKeysExchange(t *testing.T) {
 	}
 
 	// then try asymmetric, both directions
-	err = lclient.Call(nil, "pss_sendAsym", hextopic, apimsg)
+	err = lclient.Call(nil, "pss_sendAsym", hextopic, apimsg, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
 	select {
 	case recvmsg := <-rmsgC:
 		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
@@ -332,7 +348,10 @@ func TestKeysExchange(t *testing.T) {
 		Msg:  []byte("plugh"),
 		Addr: loaddr,
 	}
-	err = rclient.Call(nil, "pss_sendAsym", hextopic, apimsg)
+	err = rclient.Call(nil, "pss_sendAsym", hextopic, apimsg, 8)
+	if err != nil {
+		t.Fatal(err)
+	}
 	select {
 	case recvmsg := <-lmsgC:
 		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
@@ -343,8 +362,7 @@ func TestKeysExchange(t *testing.T) {
 	}
 
 	// then try dark asymmetric, both directions
-	rclient.Call(nil, "pss_setRecipientAddressLength", 0)
-	err = rclient.Call(nil, "pss_sendAsym", hextopic, apimsg)
+	err = rclient.Call(nil, "pss_sendAsym", hextopic, apimsg, 0)
 	if err != nil {
 		t.Fatalf("send fail: %v", err)
 	}
@@ -360,8 +378,7 @@ func TestKeysExchange(t *testing.T) {
 		Msg:  []byte("xyzzy"),
 		Addr: roaddr,
 	}
-	lclient.Call(nil, "pss_setRecipientAddressLength", 0)
-	err = lclient.Call(nil, "pss_sendAsym", hextopic, apimsg)
+	err = lclient.Call(nil, "pss_sendAsym", hextopic, apimsg, 0)
 	if err != nil {
 		t.Fatalf("send fail: %v", err)
 	}
@@ -422,7 +439,7 @@ func TestCache(t *testing.T) {
 	}
 
 	if digest == digesttwo {
-		t.Fatalf("different msgs return same crc: %d", digesttwo)
+		t.Fatalf("different msgs return same hash: %d", digesttwo)
 	}
 
 	// check the cache
@@ -483,7 +500,7 @@ func benchmarkSymKeySend(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ps.SendSym(to, topic, msg)
+		ps.SendSym(to, topic, msg, 8)
 	}
 }
 
@@ -516,7 +533,7 @@ func benchmarkAsymKeySend(b *testing.B) {
 	ps.SetPeerPublicKey(potaddr, topic, &privkey.PublicKey)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ps.SendAsym(to, topic, msg)
+		ps.SendAsym(to, topic, msg, 8)
 	}
 }
 func BenchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
@@ -717,7 +734,7 @@ func newServices() adapters.Services {
 			ping := &Ping{
 				C: make(chan struct{}),
 			}
-			ps.Register(&PingTopic, RegisterPssProtocol(ps, &PingTopic, PingProtocol, NewPingProtocol(ping.PingHandler)).Handle)
+			ps.Register(&PingTopic, RegisterPssProtocol(ps, &PingTopic, PingProtocol, NewPingProtocol(ping.PingHandler), false, 8).Handle)
 			if err != nil {
 				log.Error("Couldnt register pss protocol", "err", err)
 				os.Exit(1)
