@@ -34,6 +34,10 @@ const (
 	defaultSymKeyLength         = 32
 )
 
+var (
+	addressLength = len(pot.Address{})
+)
+
 // abstraction to enable access to p2p.protocols.Peer.Send
 type senderPeer interface {
 	ID() discover.NodeID
@@ -380,6 +384,16 @@ func (self *Pss) Process(pssmsg *PssMsg) error {
 	// OR a successfully decrypted sym msg
 	// if so we know for sure it's for this pss node
 	if recvmsg != nil {
+		// if we have partial address we need to keep forwarding
+		// so noone can deduce that the messages stopped with us
+		if len(pssmsg.To) < addressLength {
+			go func() {
+				err := self.Forward(pssmsg)
+				if err != nil {
+					log.Warn("Redundant forward fail: %v", err)
+				}
+			}()
+		}
 		handlers := self.getHandlers(envelope.Topic)
 		nid, _ := discover.HexID("0x00")
 		p := p2p.NewPeer(nid, fmt.Sprintf("%x", from), []p2p.Cap{})
@@ -549,8 +563,7 @@ func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, pubkey *ec
 //
 // Handlers that are merely passing on the PssMsg to its final recipient might call this directly
 func (self *Pss) Forward(msg *PssMsg) error {
-	var potaddr pot.Address // most authoritative data type for determining length of full address
-	to := make([]byte, len(potaddr))
+	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
 
 	// cache the message
@@ -571,17 +584,20 @@ func (self *Pss) Forward(msg *PssMsg) error {
 	sent := 0
 
 	self.Overlay.EachConn(to, 256, func(op network.OverlayConn, po int, isproxbin bool) bool {
+		sendMsg := fmt.Sprintf("MSG %x TO %x FROM %x VIA %x", digest, common.ByteLabel(to), common.ByteLabel(self.BaseAddr()), common.ByteLabel(op.Address()))
+		// we need p2p.protocols.Peer.Send
+		// cast and resolve
 		sp, ok := op.(senderPeer)
 		if !ok {
 			log.Crit("Pss cannot use kademlia peer type")
 			return false
 		}
-		sendMsg := fmt.Sprintf("MSG %x TO %x FROM %x VIA %x", digest, common.ByteLabel(to), common.ByteLabel(self.BaseAddr()), common.ByteLabel(op.Address()))
 		pp := self.fwdPool[sp.ID()]
 		if self.checkFwdCache(op.Address(), digest) {
 			log.Info(fmt.Sprintf("%v: peer already forwarded to", sendMsg))
 			return true
 		}
+		// attempt to send the message
 		err := pp.Send(msg)
 		if err != nil {
 			log.Warn(fmt.Sprintf("%v: failed forwarding: %v", sendMsg, err))
@@ -589,12 +605,22 @@ func (self *Pss) Forward(msg *PssMsg) error {
 		}
 		log.Debug(fmt.Sprintf("%v: successfully forwarded", sendMsg))
 		sent++
-		// if equality holds, p is always the first peer given in the iterator
-		if bytes.Equal(msg.To, op.Address()) || !isproxbin {
-			return false
+		// continue forwarding if:
+		// - if the peer is end recipient but the full address has not been disclosed
+		// - if the peer address matches the partial address fully
+		// - if the peer is in proxbin
+		if len(msg.To) < addressLength && bytes.Equal(msg.To, op.Address()[:len(msg.To)]) {
+			log.Trace(fmt.Sprintf("Pss keep forwarding: Partial address + full partial match"))
+			return true
+		} else if isproxbin {
+			log.Trace(fmt.Sprintf("%x is in proxbin, keep forwarding", common.ByteLabel(op.Address())))
+			return true
 		}
-		log.Trace(fmt.Sprintf("%x is in proxbin, keep forwarding", common.ByteLabel(op.Address())))
-		return true
+		// at this point we stop forwarding, and the state is as follows:
+		// - the peer is end recipient and we have full address
+		// - we are not in proxbin (directed routing)
+		// - partial addresses don't fully match
+		return false
 	})
 
 	if sent == 0 {
@@ -738,8 +764,8 @@ type PssProtocol struct {
 	proto         *p2p.Protocol
 	topic         *whisper.TopicType
 	spec          *protocols.Spec
-	addresslength int
 	asymmetric    bool
+	addresslength int
 }
 
 // For devp2p protocol integration only.
@@ -751,8 +777,8 @@ func RegisterPssProtocol(ps *Pss, topic *whisper.TopicType, spec *protocols.Spec
 		proto:         targetprotocol,
 		topic:         topic,
 		spec:          spec,
-		addresslength: addresslength,
 		asymmetric:    asymmetric,
+		addresslength: addresslength,
 	}
 	return pp
 }
