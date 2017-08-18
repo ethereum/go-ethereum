@@ -85,6 +85,8 @@ var (
 		utils.LightKDFFlag,
 		utils.CacheFlag,
 		utils.TrieCacheGenFlag,
+		utils.TrieWriteIntervalFlag,
+		utils.TrieWriteDelayFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,

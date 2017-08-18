@@ -24,6 +24,10 @@ type Database interface {
 	NewBatch() Batch
 }
 
+type VersionedDatabase interface {
+	Version(uint) Database
+}
+
 type Batch interface {
 	Put(key, value []byte) error
 	Write() error

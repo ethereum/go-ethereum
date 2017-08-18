@@ -269,7 +269,13 @@ func (self *worker) wait() {
 				}
 				go self.mux.Post(core.NewMinedBlockEvent{Block: block})
 			} else {
-				work.state.CommitTo(self.chainDb, self.config.IsEIP158(block.Number()))
+				_, err := work.state.CommitTo(self.chainDb, self.config.IsEIP158(block.Number()), block.NumberU64())
+				if err != nil {
+					log.Error("Failed writing trie", "err", err)
+				}
+				if err := work.state.WriteState(self.chainDb); err != nil {
+					log.Error("Failed writing trie", "err", err)
+				}
 				stat, err := self.chain.WriteBlock(block)
 				if err != nil {
 					log.Error("Failed writing block to chain", "err", err)

@@ -49,6 +49,9 @@ var (
 	blockInsertTimer = metrics.NewTimer("chain/inserts")
 
 	ErrNoGenesis = errors.New("Genesis not found in chain")
+
+	TrieWriteInterval = int64(1)
+	TrieWriteDelay    = int64(0)
 )
 
 const (
@@ -122,10 +125,16 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, engine co
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	badBlocks, _ := lru.New(badBlockLimit)
 
+	var statedb state.Database
+	if TrieWriteDelay > 12 {
+		statedb = state.NewDatabase(chainDb, uint64(TrieWriteDelay))
+	} else {
+		statedb = state.NewDatabase(chainDb, 12)
+	}
 	bc := &BlockChain{
 		config:       config,
 		chainDb:      chainDb,
-		stateCache:   state.NewDatabase(chainDb),
+		stateCache:   statedb,
 		eventMux:     mux,
 		quit:         make(chan struct{}),
 		bodyCache:    bodyCache,
@@ -457,8 +466,17 @@ func (bc *BlockChain) insert(block *types.Block) {
 	if err := WriteCanonicalHash(bc.chainDb, block.Hash(), block.NumberU64()); err != nil {
 		log.Crit("Failed to insert block number", "err", err)
 	}
-	if err := WriteHeadBlockHash(bc.chainDb, block.Hash()); err != nil {
-		log.Crit("Failed to insert head block hash", "err", err)
+	writeBlock := int64(block.NumberU64()) - TrieWriteDelay
+	var writeBlockHash common.Hash
+	if writeBlock > 0 && writeBlock%TrieWriteInterval == 0 {
+		writeBlockHash = block.Hash()
+		if TrieWriteDelay > 0 {
+			writeBlockHash = bc.hc.GetHeaderByNumber(uint64(writeBlock)).Hash()
+		}
+		log.Info("Writing head block hash to database", "blockNumber", writeBlock)
+		if err := WriteHeadBlockHash(bc.chainDb, writeBlockHash); err != nil {
+			log.Crit("Failed to insert head block hash", "err", err)
+		}
 	}
 	bc.currentBlock = block
 
@@ -466,8 +484,10 @@ func (bc *BlockChain) insert(block *types.Block) {
 	if updateHeads {
 		bc.hc.SetCurrentHeader(block.Header())
 
-		if err := WriteHeadFastBlockHash(bc.chainDb, block.Hash()); err != nil {
-			log.Crit("Failed to insert head fast block hash", "err", err)
+		if writeBlock > 0 && writeBlock%TrieWriteInterval == 0 {
+			if err := WriteHeadFastBlockHash(bc.chainDb, writeBlockHash); err != nil {
+				log.Crit("Failed to insert head fast block hash", "err", err)
+			}
 		}
 		bc.currentFastBlock = block
 	}
@@ -959,27 +979,38 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		} else {
 			parent = chain[i-1]
 		}
-		state, err := state.New(parent.Root(), bc.stateCache)
+		statedb, err := state.New(parent.Root(), bc.stateCache)
 		if err != nil {
 			return i, err
 		}
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
+		receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return i, err
 		}
 		// Validate the state using the default validator
-		err = bc.Validator().ValidateState(block, parent, state, receipts, usedGas)
+		err = bc.Validator().ValidateState(block, parent, statedb, receipts, usedGas)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return i, err
 		}
 		// Write state changes to database
-		if _, err = state.CommitTo(bc.chainDb, bc.config.IsEIP158(block.Number())); err != nil {
+		if _, err = statedb.CommitTo(bc.chainDb, bc.config.IsEIP158(block.Number()), block.NumberU64()); err != nil {
 			return i, err
 		}
-
+		writeBlock := int64(block.NumberU64()) - TrieWriteDelay
+		if writeBlock > 0 && writeBlock%TrieWriteInterval == 0 {
+			// Write the trie every n blocks, m blocks back
+			writeTrieRoot := block.Root()
+			if TrieWriteDelay > 0 {
+				writeTrieRoot = bc.hc.GetHeaderByNumber(uint64(writeBlock)).Root
+			}
+			if err := bc.stateCache.WriteState(bc.chainDb, writeTrieRoot); err != nil && err != state.StateNotInCache {
+				return i, err
+			}
+			log.Info("Wrote state for block", "block", writeBlock)
+		}
 		// coalesce logs for later processing
 		coalescedLogs = append(coalescedLogs, logs...)
 
@@ -1010,7 +1041,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 				return i, err
 			}
 			// Write hash preimages
-			if err := WritePreimages(bc.chainDb, block.NumberU64(), state.Preimages()); err != nil {
+			if err := WritePreimages(bc.chainDb, block.NumberU64(), statedb.Preimages()); err != nil {
 				return i, err
 			}
 		case SideStatTy:

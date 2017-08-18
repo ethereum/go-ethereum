@@ -264,6 +264,16 @@ var (
 		Usage: "Megabytes of memory allocated to internal caching (min 16MB / database forced)",
 		Value: 128,
 	}
+	TrieWriteIntervalFlag = cli.IntFlag{
+		Name:  "trie-write-interval",
+		Usage: "Number of blocks between flushing state tries to disk",
+		Value: int(core.TrieWriteInterval),
+	}
+	TrieWriteDelayFlag = cli.IntFlag{
+		Name:  "trie-write-delay",
+		Usage: "Number of blocks back to perform perioic trie writes",
+		Value: int(core.TrieWriteDelay),
+	}
 	TrieCacheGenFlag = cli.IntFlag{
 		Name:  "trie-cache-gens",
 		Usage: "Number of trie node generations to keep in memory",
@@ -999,6 +1009,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// TODO(fjl): move trie cache generations into config
 	if gen := ctx.GlobalInt(TrieCacheGenFlag.Name); gen > 0 {
 		state.MaxTrieCacheGen = uint16(gen)
+	}
+
+	if interval := ctx.GlobalInt(TrieWriteIntervalFlag.Name); interval > 0 {
+		core.TrieWriteInterval = int64(interval)
+	}
+
+	if delay := ctx.GlobalInt(TrieWriteDelayFlag.Name); delay > 0 {
+		core.TrieWriteDelay = int64(delay)
 	}
 }
 

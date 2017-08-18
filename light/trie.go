@@ -64,6 +64,10 @@ func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
 	}
 }
 
+func (db *odrDatabase) SetBlockNumber(uint64) {}
+
+func (db *odrDatabase) WriteState(trie.DatabaseWriter, common.Hash) error { return nil }
+
 func (db *odrDatabase) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
 	if codeHash == sha3_nil {
 		return nil, nil
