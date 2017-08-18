@@ -115,6 +115,30 @@ func (b *EthApiBackend) GetEVM(ctx context.Context, msg core.Message, state *sta
 	return vm.NewEVM(context, state, b.eth.chainConfig, vmCfg), vmError, nil
 }
 
+func (b *EthApiBackend) SubscribeRemovedTxEvent(ch chan<- core.RemovedTransactionEvent) event.Subscription {
+	return b.eth.BlockChain().SubscribeRemovedTxEvent(ch)
+}
+
+func (b *EthApiBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
+	return b.eth.BlockChain().SubscribeRemovedLogsEvent(ch)
+}
+
+func (b *EthApiBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
+	return b.eth.BlockChain().SubscribeChainEvent(ch)
+}
+
+func (b *EthApiBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
+	return b.eth.BlockChain().SubscribeChainHeadEvent(ch)
+}
+
+func (b *EthApiBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
+	return b.eth.BlockChain().SubscribeChainSideEvent(ch)
+}
+
+func (b *EthApiBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
+	return b.eth.BlockChain().SubscribeLogsEvent(ch)
+}
+
 func (b *EthApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	return b.eth.txPool.AddLocal(signedTx)
 }
@@ -149,6 +173,10 @@ func (b *EthApiBackend) Stats() (pending int, queued int) {
 
 func (b *EthApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
 	return b.eth.TxPool().Content()
+}
+
+func (b *EthApiBackend) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
+	return b.eth.TxPool().SubscribeTxPreEvent(ch)
 }
 
 func (b *EthApiBackend) Downloader() *downloader.Downloader {

@@ -82,6 +82,7 @@ type BlockChain interface {
 	GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash
 	LastBlockHash() common.Hash
 	Genesis() *types.Block
+	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 }
 
 type txPool interface {
