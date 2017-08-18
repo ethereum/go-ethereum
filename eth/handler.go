@@ -688,6 +688,7 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 			peer.SendNewBlock(block, td)
 		}
 		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
 	if pm.blockchain.HasBlock(hash) {
