@@ -99,7 +99,8 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		engine:         eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb),
 		shutdownChan:   make(chan bool),
 		networkId:      config.NetworkId,
-		bbIndexer:      eth.NewBloomBitsProcessor(chainDb, light.BloomTrieFrequency),
+		bloomRequests:  make(chan chan *bloombits.Retrieval),
+		bbIndexer:      eth.NewBloomIndexer(chainDb, light.BloomTrieFrequency),
 		chtIndexer:     light.NewChtIndexer(chainDb, true),
 		bltIndexer:     light.NewBloomTrieIndexer(chainDb, true),
 	}
@@ -118,10 +119,8 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		core.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 
-	//leth.bbIndexer.Start(leth.blockchain)
-
 	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
-	if leth.protocolManager, err = NewProtocolManager(leth.chainConfig, true, config.NetworkId, leth.eventMux, leth.engine, leth.peers, leth.blockchain, nil, chainDb, leth.odr, leth.relay, quitSync, &leth.wg); err != nil {
+	if leth.protocolManager, err = NewProtocolManager(leth.chainConfig, true, ClientProtocolVersions, config.NetworkId, leth.eventMux, leth.engine, leth.peers, leth.blockchain, nil, chainDb, leth.odr, leth.relay, quitSync, &leth.wg); err != nil {
 		return nil, err
 	}
 	leth.ApiBackend = &LesApiBackend{leth, nil}
@@ -133,8 +132,17 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	return leth, nil
 }
 
-func lesTopic(genesisHash common.Hash) discv5.Topic {
-	return discv5.Topic("LES@" + common.Bytes2Hex(genesisHash.Bytes()[0:8]))
+func lesTopic(genesisHash common.Hash, protocolVersion uint) discv5.Topic {
+	var name string
+	switch protocolVersion {
+	case lpv1:
+		name = "LES"
+	case lpv2:
+		name = "LES2"
+	default:
+		panic(nil)
+	}
+	return discv5.Topic(name + common.Bytes2Hex(genesisHash.Bytes()[0:8]))
 }
 
 type LightDummyAPI struct{}
@@ -209,7 +217,10 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 func (s *LightEthereum) Start(srvr *p2p.Server) error {
 	log.Warn("Light client mode is an experimental feature")
 	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.networkId)
-	s.serverPool.start(srvr, lesTopic(s.blockchain.Genesis().Hash()))
+	// search the topic belonging to the oldest supported protocol because
+	// servers always advertise all supported protocols
+	protocolVersion := ClientProtocolVersions[len(ClientProtocolVersions)-1]
+	s.serverPool.start(srvr, lesTopic(s.blockchain.Genesis().Hash(), protocolVersion))
 	s.protocolManager.Start()
 	return nil
 }
@@ -218,9 +229,15 @@ func (s *LightEthereum) Start(srvr *p2p.Server) error {
 // Ethereum protocol.
 func (s *LightEthereum) Stop() error {
 	s.odr.Stop()
-	s.bbIndexer.Close()
-	s.chtIndexer.Close()
-	s.bltIndexer.Close()
+	if s.bbIndexer != nil {
+		s.bbIndexer.Close()
+	}
+	if s.chtIndexer != nil {
+		s.chtIndexer.Close()
+	}
+	if s.bltIndexer != nil {
+		s.bltIndexer.Close()
+	}
 	s.blockchain.Stop()
 	s.protocolManager.Stop()
 	s.txPool.Stop()

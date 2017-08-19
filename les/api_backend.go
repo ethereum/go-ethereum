@@ -174,6 +174,9 @@ func (b *LesApiBackend) AccountManager() *accounts.Manager {
 }
 
 func (b *LesApiBackend) BloomStatus() (uint64, uint64) {
+	if b.eth.bbIndexer == nil {
+		return 0, 0
+	}
 	sections, _, _ := b.eth.bbIndexer.Sections()
 	return light.BloomTrieFrequency, sections
 }
