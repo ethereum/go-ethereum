@@ -17,7 +17,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -83,7 +82,7 @@ func main() {
 		}
 		solc, err := compiler.InitSolc(*solcFlag)
 
-		solReturn, err := solc.Compile(compiler.SolcFlagOpts{}, *solFlag)
+		solReturn, err := solc.Compile(compiler.FlagOpts{}, *solFlag)
 		if err != nil {
 			fmt.Printf("Failed to build Solidity contract: %v\n", err)
 			os.Exit(-1)
