@@ -121,6 +121,12 @@ library Set {
   }
 }`
 
+func skipWithoutSolc(t *testing.T) {
+	if _, err := exec.LookPath("solc"); err != nil {
+		t.Skip(err)
+	}
+}
+
 func writeToTempFile(tmpfile *os.File, content []byte) error {
 
 	if _, err := tmpfile.Write(content); err != nil {
@@ -133,6 +139,8 @@ func writeToTempFile(tmpfile *os.File, content []byte) error {
 }
 
 func TestSolcCompilerNormal(t *testing.T) {
+
+	skipWithoutSolc(t)
 
 	solc, err := InitSolc("solc")
 	if err != nil {
@@ -166,6 +174,9 @@ func TestSolcCompilerNormal(t *testing.T) {
 }
 
 func TestSolcCompilerError(t *testing.T) {
+
+	skipWithoutSolc(t)
+
 	solc, err := InitSolc("solc")
 	if err != nil {
 		t.Fatalf("Could not initialize solc: %v", err)
@@ -197,6 +208,8 @@ func TestSolcCompilerError(t *testing.T) {
 
 func TestSolcCompilerWarning(t *testing.T) {
 
+	skipWithoutSolc(t)
+
 	solc, err := InitSolc("solc")
 	if err != nil {
 		t.Fatalf("Could not initialize solc: %v", err)
@@ -227,6 +240,8 @@ func TestSolcCompilerWarning(t *testing.T) {
 }
 
 func TestLinkingBinaries(t *testing.T) {
+
+	skipWithoutSolc(t)
 
 	solc, err := InitSolc("solc")
 	if err != nil {
@@ -267,6 +282,8 @@ func TestLinkingBinaries(t *testing.T) {
 }
 
 func TestRemappings(t *testing.T) {
+
+	skipWithoutSolc(t)
 
 	solc, err := InitSolc("solc")
 	if err != nil {
