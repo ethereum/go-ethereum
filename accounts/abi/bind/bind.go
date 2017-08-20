@@ -41,6 +41,26 @@ const (
 	LangObjC
 )
 
+type BindOpts struct {
+	Abi string
+	Bin string
+	Typ string
+
+	Link       string
+	SolFiles   string
+	RemapPaths string
+	Compiler   string
+	Exec       string
+
+	Lang       Lang
+	Pkg        string
+	OutputFile string
+}
+
+func CompileAndBind(files ...string)
+
+func BindIndividualFiles(abis string, bytecodes string, pkg string, lang Lang)
+
 // Bind generates a Go wrapper around a contract ABI. This wrapper isn't meant
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention opposed to having to

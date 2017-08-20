@@ -29,14 +29,15 @@ import (
 )
 
 var (
-	abiFlag  = flag.String("abi", "", "Path to the Ethereum contract ABI json to bind")
-	binFlag  = flag.String("bin", "", "Path to the Ethereum contract bytecode (generate deploy method)")
-	typFlag  = flag.String("type", "", "Struct name for the binding (default = package name)")
-	linkFlag = flag.String("link", "", "Library flag linker for name to addresses in the code")
+	abiFlag = flag.String("abi", "", "Path to the Ethereum contract ABI json to bind")
+	binFlag = flag.String("bin", "", "Path to the Ethereum contract bytecode (generate deploy method)")
+	typFlag = flag.String("type", "", "Struct name for the binding (default = package name)")
 
-	solFlag  = flag.String("sol", "", "Path to the Ethereum contract Solidity source to build and bind")
-	solcFlag = flag.String("solc", "solc", "Solidity compiler to use if source builds are requested")
-	excFlag  = flag.String("exc", "", "Comma separated types to exclude from binding")
+	linkFlag  = flag.String("link", "", "Library flag linker for name to addresses in the code")
+	solFlag   = flag.String("sol", "", "Comma separated path(s) to Solidity source(s) to build and bind")
+	pathsFlag = flag.String("paths", "", "Comma separated path(s) in the form of solidity remappings (advanced only)")
+	solcFlag  = flag.String("compiler", "solc", "Compiler to use if source builds are requested (default = solc)")
+	execFlag  = flag.String("exec", "", "Execute compiler with user generated command, advanced only, use commas to represent spaces in one string")
 
 	pkgFlag  = flag.String("pkg", "", "Package name to generate the binding into")
 	outFlag  = flag.String("out", "", "Output file for the generated binding (default = stdout)")
@@ -52,6 +53,9 @@ func main() {
 		os.Exit(-1)
 	} else if (*abiFlag != "" || *binFlag != "" || *typFlag != "") && *solFlag != "" {
 		fmt.Printf("Contract ABI (--abi), bytecode (--bin) and type (--type) flags are mutually exclusive with the Solidity source (--sol) flag\n")
+		os.Exit(-1)
+	} else if (*binFlag == "" || *solFlag == "") && *linkFlag != "" {
+		fmt.Printf("No contract bytecode created through (--bin) or (--sol) options to use with (--link) option\n")
 		os.Exit(-1)
 	}
 	if *pkgFlag == "" {
@@ -77,21 +81,15 @@ func main() {
 		types []string
 	)
 	if *solFlag != "" {
-		// Generate the list of types to exclude from binding
-		exclude := make(map[string]bool)
-		for _, kind := range strings.Split(*excFlag, ",") {
-			exclude[strings.ToLower(kind)] = true
-		}
-		contracts, err := compiler.CompileSolidity(*solcFlag, *solFlag)
+		solc, err := compiler.InitSolc(*solcFlag)
 		if err != nil {
-			fmt.Printf("Failed to build Solidity contract: %v\n", err)
+			fmt.Printf("Failed to initialize Solidity compiler: %v\n", err)
 			os.Exit(-1)
 		}
+
+		solc.Compile(compiler.FlagOpts{}, strings.Split(*solFlag, ","))
 		// Gather all non-excluded contract for binding
 		for name, contract := range contracts {
-			if exclude[strings.ToLower(name)] {
-				continue
-			}
 			abi, _ := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
 			abis = append(abis, string(abi))
 			bins = append(bins, contract.Code)
