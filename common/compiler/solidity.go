@@ -22,9 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
-	"path"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -34,6 +32,22 @@ import (
 )
 
 var versionRegexp = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
+
+// Initialize a versioned Solc compiler.
+func InitSolc(command string) (Compiler, error) {
+	if command == "" {
+		command = "solc"
+	}
+	if _, err := exec.LookPath(command); err != nil {
+		return nil, fmt.Errorf("compiler: could not find %v in PATH", command)
+	}
+	s := &Solidity{NamedCmd: command}
+	if err := s.version(); err != nil {
+		return nil, err
+	}
+	return s, nil
+
+}
 
 //The following represents solidity outputs from the compiler that we're interested in
 type SolcReturn struct {
@@ -51,42 +65,15 @@ type SolcItems struct {
 	Metadata string `json:"metadata"`
 }
 
-// Custom UnmarshalJSON is needed for the sake of capturing the warnings that can pop up
-// in the compiler while still maintaining the results of the compilation.
-func (ret *SolcReturn) UnmarshalJSON(data []byte) (err error) {
-	trimmedOutput := bytes.TrimSpace(data)
-	jsonBeginsCertainly := bytes.Index(trimmedOutput, []byte(`{"contracts":`))
-
-	if jsonBeginsCertainly > 0 {
-		ret.Warning = string(trimmedOutput[:jsonBeginsCertainly])
-		trimmedOutput = trimmedOutput[jsonBeginsCertainly:]
-	}
-
-	err = json.Unmarshal(trimmedOutput, &ret)
-
-	return
-}
-
-func (ret SolcReturn) blend(other SolcReturn) (SolcReturn, error) {
-	for str, items := range other.Contracts {
-		if _, taken := ret.Contracts[str]; taken {
-			return SolcReturn{}, fmt.Errorf("solc: there was an issue in blending bin and sol files, please try them separately")
-		} else {
-			ret.Contracts[str] = items
-		}
-	}
-	return ret, nil
-}
-
 // Solidity contains information about the solidity compiler.
 type Solidity struct {
-	Path, Version, FullVersion string
-	Major, Minor, Patch        int
+	NamedCmd, Path, Version, FullVersion string
+	Major, Minor, Patch                  int
 }
 
 //This is a template to define our inputs for the compiler flags
 type SolcFlagOpts struct {
-	// (Optional) what to get in the output, can be any combination of [abi, bin, userdoc, devdoc, metadata]
+	// (Required) what to get in the output, can be any combination of [abi, bin, userdoc, devdoc, metadata]
 	// abi: application binary interface. Necessary for interaction with contracts.
 	// bin: binary bytecode. Necessary for creating and deploying and interacting with contracts.
 	// userdoc: natspec for users.
@@ -110,24 +97,10 @@ type SolcFlagOpts struct {
 	Exec string
 }
 
-func (s *Solidity) defaultFlagOpts() (f SolcFlagOpts) {
-	f = SolcFlagOpts{
-		CombinedOutput: []string{"bin", "abi", "userdoc", "devdoc"},
-		StdLib:         true,
-		Optimize:       true,
-	}
-
-	if s.Major >= 0 && s.Minor >= 4 && s.Patch > 6 {
-		f.CombinedOutput = append(f.CombinedOutput, "metadata")
-	}
-
-	return
-}
-
 // SolidityVersion runs solc and parses its version output.
 func (s *Solidity) version() error {
 	var out bytes.Buffer
-	cmd := exec.Command("solc", "--version")
+	cmd := exec.Command(s.NamedCmd, "--version")
 	cmd.Stdout = &out
 	err := cmd.Run()
 	if err != nil {
@@ -135,7 +108,7 @@ func (s *Solidity) version() error {
 	}
 	matches := versionRegexp.FindStringSubmatch(out.String())
 	if len(matches) != 4 {
-		return fmt.Errorf("can't parse solc version %q", out.String())
+		return fmt.Errorf("%v: can't parse version %q", s.NamedCmd, out.String())
 	}
 	s = &Solidity{Path: cmd.Path, FullVersion: out.String(), Version: matches[0]}
 	if s.Major, err = strconv.Atoi(matches[1]); err != nil {
@@ -151,62 +124,49 @@ func (s *Solidity) version() error {
 }
 
 // Compiles a series of files using the solidity compiler
-func (s *Solidity) Compile(files []string, flags FlagOpts) (Return, error) {
+func (s *Solidity) Compile(flags FlagOpts, files ...string) (Return, error) {
 
 	if reflect.DeepEqual(flags.SolcFlagOpts, (SolcFlagOpts{})) {
-		flags.SolcFlagOpts = s.defaultFlagOpts()
+		flags.defaultSolcFlagOpts(s)
 	}
 
-	//check files for .bin extension for linking addresses
-	//separate .sol and .bin files
-	//link .bins separately
-	solFiles, binFiles, err := s.sortAndValidateFiles(files)
-	if err != nil {
-		return Return{}, err
-	}
-
-	// assemble commands and execute
-	var binResults SolcReturn
-	if len(binFiles) > 0 {
-		solcExecute := flags.assembleSolcCommand(true, binFiles...)
-		binResults, err = s.executeSolc(solcExecute...)
-		if err != nil {
-			return Return{}, err
-		}
-	}
-
-	var solResults SolcReturn
-	if len(solFiles) > 0 {
-		solcExecute := flags.assembleSolcCommand(false, solFiles...)
-		solResults, err = s.executeSolc(solcExecute...)
-		if err != nil {
-			return Return{}, err
-		}
-	}
-
-	// blend the two results, even if one of them is empty (more efficient this way)
-	ret, err := solResults.blend(binResults)
-	return Return{SolcReturn: ret}, err
+	return s.execute(flags.assembleSolcCommand(files...)...)
 }
 
-func (f SolcFlagOpts) assembleSolcCommand(binary bool, files ...string) (command []string) {
-	stringifyLibs := func(libs map[string]common.Address) []string {
-		var combinedLibs []string
-		for x, y := range f.Libraries {
-			combinedLibs = append(combinedLibs, x+":"+y.String())
-		}
-		return combinedLibs
+func (s *Solidity) Link(libs map[string]common.Address, binary string) (string, error) {
+	var refinedBinary bytes.Buffer
+	var stderr bytes.Buffer
+
+	buf := bytes.NewBufferString(binary)
+	linkCmd := exec.Command("solc", "--link", "--libraries", stringifyLibs(libs))
+
+	linkCmd.Stdin = buf
+	linkCmd.Stderr = &stderr
+	linkCmd.Stdout = &refinedBinary
+
+	linkCmd.Start()
+	linkCmd.Wait()
+
+	if stderr.String() != "" {
+		return "", errors.New(stderr.String())
 	}
+
+	return refinedBinary.String(), nil
+}
+
+func stringifyLibs(libs map[string]common.Address) string {
+	var combinedLibs []string
+	for x, y := range libs {
+		combinedLibs = append(combinedLibs, x+":"+y.String())
+	}
+	return strings.Join(combinedLibs, ",")
+}
+
+func (f SolcFlagOpts) assembleSolcCommand(files ...string) (command []string) {
 
 	switch {
 	case f.Exec != "":
 		command = append(command, f.Exec)
-	case binary:
-		if len(f.Libraries) > 0 {
-			combinedLibs := stringifyLibs(f.Libraries)
-			command = append(command, "--link --libraries")
-			command = append(command, strings.Join(combinedLibs, ","))
-		}
 	default:
 		if len(f.Remappings) > 0 {
 			command = append(command, strings.Join(f.Remappings, " "))
@@ -215,9 +175,7 @@ func (f SolcFlagOpts) assembleSolcCommand(binary bool, files ...string) (command
 			command = append(command, "--combined-json", strings.Join(f.CombinedOutput, ","))
 		}
 		if len(f.Libraries) > 0 {
-			combinedLibs := stringifyLibs(f.Libraries)
-			command = append(command, "--link --libraries")
-			command = append(command, strings.Join(combinedLibs, ","))
+			command = append(command, []string{"--libraries", stringifyLibs(f.Libraries)}...)
 		}
 		if f.Optimize {
 			command = append(command, "--optimize")
@@ -232,43 +190,39 @@ func (f SolcFlagOpts) assembleSolcCommand(binary bool, files ...string) (command
 	return append(command, files...)
 }
 
-// A utility function to sort .sol and .bin files into separate slices
-func (s *Solidity) sortAndValidateFiles(files []string) ([]string, []string, error) {
-	var solFiles []string
-	var binFiles []string
-	if len(files) == 0 {
-		return nil, nil, errors.New("solc: no source files")
-	}
-	for _, file := range files {
-		if _, err := os.Stat(file); os.IsNotExist(err) {
-			return nil, nil, fmt.Errorf("solc: could not find file %v", file)
-		}
-		switch path.Ext(file) {
-		case ".sol":
-			solFiles = append(solFiles, file)
-		case ".bin":
-			binFiles = append(binFiles, file)
-		default:
-			return nil, nil, fmt.Errorf("solc: unexpected file extension found during compilation: %v", file)
-		}
-	}
-	return solFiles, binFiles, nil
-}
-
-func (s *Solidity) executeSolc(flagsAndFiles ...string) (output SolcReturn, err error) {
-	var stderr, stdout bytes.Buffer
-
-	cmd := exec.Command("solc", flagsAndFiles...)
-	cmd.Stderr = &stderr
-	cmd.Stdout = &stdout
-
-	if err = cmd.Run(); err != nil {
-		return SolcReturn{}, fmt.Errorf("solc: %v\n%s", err, stderr.Bytes())
+func (f *SolcFlagOpts) defaultSolcFlagOpts(s *Solidity) {
+	f = &SolcFlagOpts{
+		CombinedOutput: []string{"bin", "abi", "userdoc", "devdoc"},
+		StdLib:         true,
+		Optimize:       true,
 	}
 
-	if err = json.Unmarshal(stdout.Bytes(), &output); err != nil {
-		return SolcReturn{}, err
+	if s.Major >= 0 && s.Minor >= 4 && s.Patch > 6 {
+		f.CombinedOutput = append(f.CombinedOutput, "metadata")
 	}
 
 	return
+}
+
+func (s *Solidity) execute(flagsAndFiles ...string) (Return, error) {
+	var stderr, stdout bytes.Buffer
+	var output SolcReturn
+
+	cmd := exec.Command(s.NamedCmd, flagsAndFiles...)
+	cmd.Stderr = &stderr
+	cmd.Stdout = &stdout
+
+	if err := cmd.Run(); err != nil {
+		return Return{}, fmt.Errorf("%v: %v\n%s", s.NamedCmd, err, stderr.Bytes())
+	}
+
+	buf := stdout.Bytes()
+
+	if err := json.Unmarshal(buf, &output); err != nil {
+		return Return{}, err
+	}
+
+	output.Warning = string(stderr.Bytes())
+
+	return Return{Solc, output}, nil
 }

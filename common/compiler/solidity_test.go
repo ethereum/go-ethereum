@@ -26,13 +26,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-const solFile = `pragma solidity >= 0.0.0;
+const regularSolFile = `pragma solidity >= 0.0.0;
 	contract main {
-		uint a;
-		function f() {
-			a = 1;
-		}
-	}`
+
+		}`
 
 const faultySol = `pragma solidity >= 0.0.0;
 	contract main {
@@ -85,6 +82,17 @@ contract C {
 }`
 
 const solFile1 = `pragma solidity >=0.0.0;
+import "/somedir/set.sol";
+
+contract C {
+    Set.Data knownValues;
+    function register(uint value) {
+        if (!Set.insert(knownValues, value))
+            throw;
+    }
+}`
+
+const solFile2 = `pragma solidity >=0.0.0;
 
 library Set {
   struct Data { mapping(uint => bool) flags; }
@@ -113,259 +121,202 @@ library Set {
   }
 }`
 
-const solFile2 = `pragma solidity >=0.0.0;
-import "set.sol";
+func writeToTempFile(tmpfile *os.File, content []byte) error {
 
-contract C {
-    Set.Data knownValues;
-    function register(uint value) {
-        if (!Set.insert(knownValues, value))
-            throw;
-    }
-}`
+	if _, err := tmpfile.Write(content); err != nil {
+		return err
+	}
+	if err := tmpfile.Close(); err != nil {
+		return err
+	}
+	return nil
+}
 
 func TestSolcCompilerNormal(t *testing.T) {
-	solc, err := InitCompiler("solc")
+
+	solc, err := InitSolc("solc")
 	if err != nil {
-		t.Skip(err)
+		t.Fatalf("Could not initialize solc: %v", err)
 	}
-	solc = solc.(*Solidity)
-	file, err := os.Create("simpleContract.sol")
-	defer os.Remove("simpleContract.sol")
+
+	content := []byte(regularSolFile)
+	tmpfile, err := ioutil.TempFile("", "simpleContract.sol")
 	if err != nil {
 		t.Fatal(err)
 	}
-	file.WriteString(solFile)
+	defer os.Remove(tmpfile.Name()) // clean up
+
+	err = writeToTempFile(tmpfile, content)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	flags := SolcFlagOpts{
 		CombinedOutput: []string{"bin", "abi"},
 	}
 
-	solReturn, err := solc.Compile([]string{"simpleContract.sol"}, FlagOpts{SolcFlagOpts: flags})
+	solReturn, err := solc.Compile(FlagOpts{flags}, tmpfile.Name())
 	if err != nil {
-		t.Fatal(err)
+		t.Errorf("Expected no errors: %v", err)
 	}
 
-	if solReturn.Error != nil || solReturn.Warning != "" || len(solReturn.Contracts) != 1 {
-		t.Fatalf("Expected no errors or warnings and expected contract items. Got %v for errors, %v for warnings, and %v for contract items", solReturn.Error, solReturn.Warning, solReturn.Contracts)
+	if solReturn.Warning != "" || len(solReturn.Contracts) != 1 {
+		t.Fatalf("Expected no warnings and expected 1 contract item. Got %v for warnings, and %v for contract items", solReturn.Warning, len(solReturn.Contracts))
 	}
 }
 
 func TestSolcCompilerError(t *testing.T) {
-	solc, err := InitCompiler("solc")
+	solc, err := InitSolc("solc")
 	if err != nil {
-		t.Skip(err)
+		t.Fatalf("Could not initialize solc: %v", err)
 	}
-	solc = solc.(*Solidity)
-	file, err := os.Create("faultyContract.sol")
-	defer os.Remove("faultyContract.sol")
+	content := []byte(faultySol)
+	tmpfile, err := ioutil.TempFile("", "faultyContract.sol")
 	if err != nil {
 		t.Fatal(err)
 	}
-	file.WriteString(faultySol)
+	defer os.Remove(tmpfile.Name()) // clean up
+
+	err = writeToTempFile(tmpfile, content)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	flags := SolcFlagOpts{
 		CombinedOutput: []string{"bin", "abi"},
 	}
 
-	solReturn, err := solc.Compile([]string{"faultyContract.sol"}, FlagOpts{SolcFlagOpts: flags})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if solReturn.Error == nil {
+	_, err = solc.Compile(FlagOpts{SolcFlagOpts: flags}, tmpfile.Name())
+
+	if err == nil {
 		t.Fatal("Expected an error, got nil.")
+	} else if !strings.Contains(err.Error(), "solc") {
+		t.Fatal("Expected error to come directly from compiler, got err from elsewhere: %v", err)
 	}
 }
 
 func TestSolcCompilerWarning(t *testing.T) {
-	solc, err := InitCompiler("solc")
+
+	solc, err := InitSolc("solc")
 	if err != nil {
-		t.Skip(err)
+		t.Fatalf("Could not initialize solc: %v", err)
 	}
-	solc = solc.(*Solidity)
-	file, err := os.Create("simpleContract.sol")
-	defer os.Remove("simpleContract.sol")
+	content := []byte(solNoPragma)
+	tmpfile, err := ioutil.TempFile("", "warningContract.sol")
 	if err != nil {
 		t.Fatal(err)
 	}
-	file.WriteString(solNoPragma)
+	defer os.Remove(tmpfile.Name()) // clean up
+
+	err = writeToTempFile(tmpfile, content)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	flags := SolcFlagOpts{
 		CombinedOutput: []string{"bin", "abi"},
 	}
 
-	solReturn, err := solc.Compile([]string{"simpleContract.sol"}, FlagOpts{SolcFlagOpts: flags})
+	solReturn, err := solc.Compile(FlagOpts{SolcFlagOpts: flags}, tmpfile.Name())
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
 	if solReturn.Warning == "" {
-		t.Fatal("Expected a warning.")
+		t.Error("Expected a warning, got none.")
 	}
 }
 
 func TestLinkingBinaries(t *testing.T) {
-	solc, err := InitCompiler("solc")
+
+	solc, err := InitSolc("solc")
 	if err != nil {
-		t.Skip(err)
+		t.Fatalf("Could not initialize solc: %v", err)
 	}
-	solc = solc.(*Solidity)
-	file, err := os.Create("simpleLibrary.sol")
-	defer os.Remove("simpleLibrary.sol")
+	content := []byte(simplyLibrarySol)
+	tmpfile, err := ioutil.TempFile("", "libraryContracts.sol")
 	if err != nil {
 		t.Fatal(err)
 	}
-	file.WriteString(simplyLibrarySol)
+	defer os.Remove(tmpfile.Name()) // clean up
+
+	err = writeToTempFile(tmpfile, content)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	flags := SolcFlagOpts{
 		CombinedOutput: []string{"bin"},
 	}
 
-	solReturn, err := solc.Compile([]string{"simpleLibrary.sol"}, FlagOpts{SolcFlagOpts: flags})
+	solReturn, err := solc.Compile(FlagOpts{SolcFlagOpts: flags}, tmpfile.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if solReturn.Error != nil || solReturn.Warning != "" || len(solReturn.Contracts) != 2 {
-		t.Fatalf("Expected no errors or warnings and expected contract items. Got %v for errors, %v for warnings, and %v for contract items", solReturn.Error, solReturn.Warning, solReturn.Contracts)
-	}
-	// note: When solc upgrades to 0.4.10, will need to add "simpleLibrary.sol:" to beginning of this string
-	flags.Libraries = map[string]common.Address{"simpleLibrary.sol:Set": common.StringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a")}
-	binFile, err := os.Create("C.bin")
-	defer os.Remove("C.bin")
-	if err != nil {
-		t.Fatal(err)
+	if solReturn.Warning != "" || len(solReturn.Contracts) != 2 {
+		t.Fatalf("Expected no errors or warnings and expected contract items. Got %v for warnings, and %v for contract items", solReturn.Warning, solReturn.Contracts)
 	}
 
-	binFile.WriteString(solReturn.Contracts["simpleLibrary.sol:C"].Bin)
-	_, err = solc.(*Solidity).Compile([]string{"./C.bin"}, FlagOpts{SolcFlagOpts: flags})
+	output, err := solc.(*Solidity).Link(map[string]common.Address{"Set": common.StringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a")}, solReturn.Contracts["C"].Bin)
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
-	output, err := ioutil.ReadFile("C.bin")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if strings.Contains(string(output), "_") {
-		t.Fatal("Expected binaries to link, but they did not")
-	}
-}
-
-func TestLinkingBinariesAndNormalCompileMixed(t *testing.T) {
-	solc, err := InitCompiler("solc")
-	if err != nil {
-		t.Skip(err)
-	}
-	solc = solc.(*Solidity)
-	file, err := os.Create("simpleLibrary.sol")
-	defer os.Remove("simpleLibrary.sol")
-	if err != nil {
-		t.Fatal(err)
-	}
-	file.WriteString(simplyLibrarySol)
-	flags := SolcFlagOpts{
-		CombinedOutput: []string{"bin"},
-	}
-
-	solReturn, err := solc.Compile([]string{"simpleLibrary.sol"}, FlagOpts{SolcFlagOpts: flags})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if solReturn.Error != nil || solReturn.Warning != "" || len(solReturn.Contracts) != 2 {
-		t.Fatalf("Expected no errors or warnings and expected contract items. Got %v for errors, %v for warnings, and %v for contract items", solReturn.Error, solReturn.Warning, solReturn.Contracts)
-	}
-	// note: When solc upgrades to 0.4.10, will need to add "simpleLibrary.sol:" to beginning of this string
-	flags.Libraries = map[string]common.Address{"simpleLibrary.sol:Set": common.StringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a")}
-	binFile, err := os.Create("C.bin")
-	defer os.Remove("C.bin")
-	if err != nil {
-		t.Fatal(err)
-	}
-	binFile.WriteString(solReturn.Contracts["simpleLibrary.sol:C"].Bin)
-
-	solOutput, err := solc.Compile([]string{"./C.bin", "simpleLibrary.sol"}, FlagOpts{SolcFlagOpts: flags})
-	if err != nil {
-		t.Fatal(err)
-	}
-	binOutput, err := ioutil.ReadFile("C.bin")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if strings.Contains(string(binOutput), "_") {
-		t.Fatal("Expected binaries to link, but they did not")
-	}
-
-	if solOutput.Error != nil || solOutput.Warning != "" || len(solOutput.Contracts) != 2 {
-		t.Fatalf("Expected no errors or warnings and expected contract items. Got %v for errors, %v for warnings, and %v for contract items", solReturn.Error, solReturn.Warning, solReturn.Contracts)
-	}
-}
-
-func TestMultipleFilesCompiling(t *testing.T) {
-	solc, err := InitCompiler("solc")
-	if err != nil {
-		t.Skip(err)
-	}
-	solc = solc.(*Solidity)
-	set, err := os.Create("set.sol")
-	defer os.Remove("set.sol")
-	if err != nil {
-		t.Fatal(err)
-	}
-	set.WriteString(solFile1)
-
-	c, err := os.Create("C.sol")
-	defer os.Remove("C.sol")
-	if err != nil {
-		t.Fatal(err)
-	}
-	c.WriteString(solFile2)
-	flags := SolcFlagOpts{
-		CombinedOutput: []string{"bin", "abi"},
-	}
-
-	solReturn, err := solc.Compile([]string{"C.sol"}, FlagOpts{SolcFlagOpts: flags})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if solReturn.Error != nil || solReturn.Warning != "" || len(solReturn.Contracts) != 2 {
-		t.Fatalf("Expected no errors or warnings and expected contract items. Got %v for errors, %v for warnings, and %v for contract items", solReturn.Error, solReturn.Warning, solReturn.Contracts)
+	if strings.Contains(output, "_") {
+		t.Errorf("Expected binaries to link, but they did not")
 	}
 }
 
 func TestRemappings(t *testing.T) {
-	solc, err := InitCompiler("solc")
-	if err != nil {
-		t.Skip(err)
-	}
-	solc = solc.(*Solidity)
-	if err := os.MkdirAll("."+string(filepath.Separator)+"tempDir", 0777); err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll("." + string(filepath.Separator) + "tempDir")
-	os.Chdir("tempDir")
-	set, err := os.Create("set.sol")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Chdir("..")
-	set.WriteString(solFile1)
 
-	c, err := os.Create("C.sol")
-	defer os.Remove("C.sol")
+	solc, err := InitSolc("solc")
+	if err != nil {
+		t.Fatalf("Could not initialize solc: %v", err)
+	}
+
+	tmpfile1, err := ioutil.TempFile("", "C.sol")
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.WriteString(solFile2)
+	defer os.Remove(tmpfile1.Name()) // clean up
+
+	err = writeToTempFile(tmpfile1, []byte(solFile1))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dir, err := ioutil.TempDir("", "tempDir")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.RemoveAll(dir) // clean up
+
+	tmpfn := filepath.Join(dir, "set.sol")
+	if err := ioutil.WriteFile(tmpfn, []byte(solFile2), 0666); err != nil {
+		t.Fatal(err)
+	}
+
+	tmpfile2, err := ioutil.TempFile("", "main.sol")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpfile2.Name()) // clean up
+
+	err = writeToTempFile(tmpfile2, []byte(regularSolFile))
+	if err != nil {
+		t.Fatal(err)
+	}
 	flags := SolcFlagOpts{
 		CombinedOutput: []string{"bin", "abi"},
-		Remappings:     []string{`set.sol=./tempDir/set.sol`},
+		Remappings:     []string{`/somedir/=` + dir + "/"},
 	}
 
-	solReturn, err := solc.Compile([]string{"C.sol"}, FlagOpts{SolcFlagOpts: flags})
+	solReturn, err := solc.Compile(FlagOpts{SolcFlagOpts: flags}, tmpfile1.Name(), tmpfile2.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if solReturn.Error != nil || solReturn.Warning != "" || len(solReturn.Contracts) != 2 {
-		t.Fatalf("Expected no errors or warnings and expected contract items. Got %v for errors, %v for warnings, and %v for contract items", solReturn.Error, solReturn.Warning, solReturn.Contracts)
+	if solReturn.Warning != "" || len(solReturn.Contracts) != 3 {
+		t.Fatalf("Expected no warnings and expected %v contract items. Got %v for warnings, and %v for contract items", 3, solReturn.Warning, len(solReturn.Contracts))
 	}
 }
