@@ -191,7 +191,7 @@ func TestSolcCompilerError(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected an error, got nil.")
 	} else if !strings.Contains(err.Error(), "solc") {
-		t.Fatal("Expected error to come directly from compiler, got err from elsewhere: %v", err)
+		t.Fatalf("Expected error to come directly from compiler, got err from elsewhere: %v", err)
 	}
 }
 
