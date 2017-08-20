@@ -243,7 +243,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 		err         error
 	)
 
-	// user must specify either a symmetric or a asymmetric key
+	// user must specify either a symmetric or an asymmetric key
 	if (symKeyGiven && pubKeyGiven) || (!symKeyGiven && !pubKeyGiven) {
 		return false, ErrSymAsym
 	}
@@ -344,7 +344,7 @@ func (api *PublicWhisperAPI) Messages(ctx context.Context, crit Criteria) (*rpc.
 		return nil, rpc.ErrNotificationsUnsupported
 	}
 
-	// user must specify either a symmetric or a asymmetric key
+	// user must specify either a symmetric or an asymmetric key
 	if (symKeyGiven && pubKeyGiven) || (!symKeyGiven && !pubKeyGiven) {
 		return nil, ErrSymAsym
 	}
@@ -534,7 +534,7 @@ func (api *PublicWhisperAPI) NewMessageFilter(req Criteria) (string, error) {
 		err error
 	)
 
-	// user must specify either a symmetric or a asymmetric key
+	// user must specify either a symmetric or an asymmetric key
 	if (symKeyGiven && asymKeyGiven) || (!symKeyGiven && !asymKeyGiven) {
 		return "", ErrSymAsym
 	}
