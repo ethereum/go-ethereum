@@ -41,20 +41,13 @@ type operation struct {
 	validateStack stackValidationFunc
 	// memorySize returns the memory size required for the operation
 	memorySize memorySizeFunc
-	// halts indicates whether the operation shoult halt further execution
-	// and return
-	halts bool
-	// jumps indicates whether operation made a jump. This prevents the program
-	// counter from further incrementing.
-	jumps bool
-	// writes determines whether this a state modifying operation
-	writes bool
-	// valid is used to check whether the retrieved operation is valid and known
-	valid bool
-	// reverts determined whether the operation reverts state
-	reverts bool
-	// returns determines whether the opertions sets the return data
-	returns bool
+
+	halts   bool // indicates whether the operation shoult halt further execution
+	jumps   bool // indicates whether the program counter should not increment
+	writes  bool // determines whether this a state modifying operation
+	valid   bool // indication whether the retrieved operation is valid and known
+	reverts bool // determines whether the operation reverts state (implicitly halts)
+	returns bool // determines whether the opertions sets the return data content
 }
 
 var (
@@ -88,6 +81,15 @@ func NewMetropolisInstructionSet() [256]operation {
 		validateStack: makeStackFunc(3, 0),
 		memorySize:    memoryReturnDataCopy,
 		valid:         true,
+	}
+	instructionSet[REVERT] = operation{
+		execute:       opRevert,
+		gasCost:       gasRevert,
+		validateStack: makeStackFunc(2, 0),
+		memorySize:    memoryRevert,
+		valid:         true,
+		reverts:       true,
+		returns:       true,
 	}
 	return instructionSet
 }

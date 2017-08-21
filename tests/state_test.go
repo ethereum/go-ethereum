@@ -40,6 +40,9 @@ func TestState(t *testing.T) {
 	st.fails(`^stRevertTest/RevertDepthCreateAddressCollision\.json/EIP15[08]/[67]`, "bug in test")
 	st.fails(`^stRevertTest/RevertPrecompiledTouch\.json/EIP158`, "bug in test")
 	st.fails(`^stRevertTest/RevertPrefoundEmptyOOG\.json/EIP158`, "bug in test")
+	st.fails(`^stRevertTest/RevertDepthCreateAddressCollision\.json/Byzantium/[67]`, "bug in test")
+	st.fails(`^stRevertTest/RevertPrecompiledTouch\.json/Byzantium`, "bug in test")
+	st.fails(`^stRevertTest/RevertPrefoundEmptyOOG\.json/Byzantium`, "bug in test")
 
 	st.walk(t, stateTestDir, func(t *testing.T, name string, test *StateTest) {
 		for _, subtest := range test.Subtests() {

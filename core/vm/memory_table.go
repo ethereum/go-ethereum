@@ -89,6 +89,10 @@ func memoryReturn(stack *Stack) *big.Int {
 	return calcMemSize(stack.Back(0), stack.Back(1))
 }
 
+func memoryRevert(stack *Stack) *big.Int {
+	return calcMemSize(stack.Back(0), stack.Back(1))
+}
+
 func memoryLog(stack *Stack) *big.Int {
 	mSize, mStart := stack.Back(1), stack.Back(0)
 	return calcMemSize(mStart, mSize)

@@ -168,8 +168,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil {
-		contract.UseGas(contract.Gas)
 		evm.StateDB.RevertToSnapshot(snapshot)
+		if err != errExecutionReverted {
+			contract.UseGas(contract.Gas)
+		}
 	}
 	return ret, contract.Gas, err
 }
@@ -207,10 +209,11 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 	ret, err = run(evm, snapshot, contract, input)
 	if err != nil {
-		contract.UseGas(contract.Gas)
 		evm.StateDB.RevertToSnapshot(snapshot)
+		if err != errExecutionReverted {
+			contract.UseGas(contract.Gas)
+		}
 	}
-
 	return ret, contract.Gas, err
 }
 
@@ -239,10 +242,11 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 	ret, err = run(evm, snapshot, contract, input)
 	if err != nil {
-		contract.UseGas(contract.Gas)
 		evm.StateDB.RevertToSnapshot(snapshot)
+		if err != errExecutionReverted {
+			contract.UseGas(contract.Gas)
+		}
 	}
-
 	return ret, contract.Gas, err
 }
 
@@ -281,8 +285,10 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// when we're in Homestead this also counts for code storage gas errors.
 	ret, err = run(evm, snapshot, contract, input)
 	if err != nil {
-		contract.UseGas(contract.Gas)
 		evm.StateDB.RevertToSnapshot(snapshot)
+		if err != errExecutionReverted {
+			contract.UseGas(contract.Gas)
+		}
 	}
 	return ret, contract.Gas, err
 }
@@ -339,18 +345,12 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
-	if maxCodeSizeExceeded ||
-		(err != nil && (evm.ChainConfig().IsHomestead(evm.BlockNumber) || err != ErrCodeStoreOutOfGas)) {
-		contract.UseGas(contract.Gas)
+	if maxCodeSizeExceeded || (err != nil && (evm.ChainConfig().IsHomestead(evm.BlockNumber) || err != ErrCodeStoreOutOfGas)) {
 		evm.StateDB.RevertToSnapshot(snapshot)
+		if err != errExecutionReverted {
+			contract.UseGas(contract.Gas)
+		}
 	}
-	// If the vm returned with an error the return value should be set to nil.
-	// This isn't consensus critical but merely to for behaviour reasons such as
-	// tests, RPC calls, etc.
-	if err != nil {
-		ret = nil
-	}
-
 	return ret, contractAddr, contract.Gas, err
 }
 

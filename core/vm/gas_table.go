@@ -396,6 +396,10 @@ func gasReturn(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, m
 	return memoryGasCost(mem, memorySize)
 }
 
+func gasRevert(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return memoryGasCost(mem, memorySize)
+}
+
 func gasSuicide(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var gas uint64
 	// EIP150 homestead gas reprice fork:
