@@ -59,8 +59,7 @@ type StateTransition struct {
 	value      *big.Int
 	data       []byte
 	state      vm.StateDB
-
-	evm *vm.EVM
+	evm        *vm.EVM
 }
 
 // Message represents a message sent to a contract.
@@ -127,11 +126,11 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool) ([]byte, *big.Int, error) {
+func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool) ([]byte, *big.Int, bool, error) {
 	st := NewStateTransition(evm, msg, gp)
 
-	ret, _, gasUsed, err := st.TransitionDb()
-	return ret, gasUsed, err
+	ret, _, gasUsed, failed, err := st.TransitionDb()
+	return ret, gasUsed, failed, err
 }
 
 func (st *StateTransition) from() vm.AccountRef {
@@ -208,7 +207,7 @@ func (st *StateTransition) preCheck() error {
 // TransitionDb will transition the state by applying the current message and returning the result
 // including the required gas for the operation as well as the used gas. It returns an error if it
 // failed. An error indicates a consensus issue.
-func (st *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *big.Int, err error) {
+func (st *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *big.Int, failed bool, err error) {
 	if err = st.preCheck(); err != nil {
 		return
 	}
@@ -222,10 +221,10 @@ func (st *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *big
 	// TODO convert to uint64
 	intrinsicGas := IntrinsicGas(st.data, contractCreation, homestead)
 	if intrinsicGas.BitLen() > 64 {
-		return nil, nil, nil, vm.ErrOutOfGas
+		return nil, nil, nil, false, vm.ErrOutOfGas
 	}
 	if err = st.useGas(intrinsicGas.Uint64()); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, false, err
 	}
 
 	var (
@@ -248,7 +247,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *big
 		// sufficient balance to make the transfer happen. The first
 		// balance transfer may never fail.
 		if vmerr == vm.ErrInsufficientBalance {
-			return nil, nil, nil, vmerr
+			return nil, nil, nil, false, vmerr
 		}
 	}
 	requiredGas = new(big.Int).Set(st.gasUsed())
@@ -256,7 +255,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *big
 	st.refundGas()
 	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(st.gasUsed(), st.gasPrice))
 
-	return ret, requiredGas, st.gasUsed(), err
+	return ret, requiredGas, st.gasUsed(), vmerr != nil, err
 }
 
 func (st *StateTransition) refundGas() {

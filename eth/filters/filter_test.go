@@ -33,7 +33,7 @@ import (
 )
 
 func makeReceipt(addr common.Address) *types.Receipt {
-	receipt := types.NewReceipt(nil, new(big.Int))
+	receipt := types.NewReceipt(nil, false, new(big.Int))
 	receipt.Logs = []*types.Log{
 		{Address: addr},
 	}
@@ -145,7 +145,7 @@ func TestFilters(t *testing.T) {
 		var receipts types.Receipts
 		switch i {
 		case 1:
-			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt := types.NewReceipt(nil, false, new(big.Int))
 			receipt.Logs = []*types.Log{
 				{
 					Address: addr,
@@ -155,7 +155,7 @@ func TestFilters(t *testing.T) {
 			gen.AddUncheckedReceipt(receipt)
 			receipts = types.Receipts{receipt}
 		case 2:
-			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt := types.NewReceipt(nil, false, new(big.Int))
 			receipt.Logs = []*types.Log{
 				{
 					Address: addr,
@@ -165,7 +165,7 @@ func TestFilters(t *testing.T) {
 			gen.AddUncheckedReceipt(receipt)
 			receipts = types.Receipts{receipt}
 		case 998:
-			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt := types.NewReceipt(nil, false, new(big.Int))
 			receipt.Logs = []*types.Log{
 				{
 					Address: addr,
@@ -175,7 +175,7 @@ func TestFilters(t *testing.T) {
 			gen.AddUncheckedReceipt(receipt)
 			receipts = types.Receipts{receipt}
 		case 999:
-			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt := types.NewReceipt(nil, false, new(big.Int))
 			receipt.Logs = []*types.Log{
 				{
 					Address: addr,
