@@ -116,7 +116,7 @@ To get an idea how the file should look like you can use the `dumpconfig` subcom
 $ geth --your-favourite-flags dumpconfig
 ```
 
-*Note: This works only with geth v1.6.0 and above*
+*Note: This works only with geth v1.6.0 and above.*
 
 #### Docker quick start
 
