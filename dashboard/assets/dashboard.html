@@ -1,179 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <meta charset="utf-8">
+        <meta charset="UTF-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <title>Go Ethereum Dashboard</title>
-
         <link rel="shortcut icon" type="image/ico" href="https://ethereum.org/favicon.ico"/>
 
         <link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" />
         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" />
         <link href="https://cdnjs.cloudflare.com/ajax/libs/gentelella/1.3.0/css/custom.min.css" rel="stylesheet">
-    </head>
 
-    <body class="nav-md">
-        <div class="container body">
-            <div class="main_container">
-                <div class="col-md-3 left_col">
-                    <div class="left_col scroll-view">
-                        <div class="navbar nav_title" style="border: 0;">
-                            <a href="dashboard.html" class="site_title"><i class="fa fa-paw"></i> <span>Go Ethereum Dashboard</span></a>
-                        </div>
-
-                        <div class="clearfix"></div>
-
-                        <!-- sidebar menu -->
-                        <div id="sidebar-menu" class="main_menu_side hidden-print main_menu">
-                            <div class="menu_section">
-                                <ul class="nav side-menu">
-                                    <li><a><i class="fa fa-home"></i> Home <span class="fa fa-chevron-down"></span></a>
-                                        <ul class="nav child_menu">
-                                            <li><a href="dashboard.html">Dashboard1</a></li>
-                                            <li><a href="dashboard.html">Dashboard2</a></li>
-                                        </ul>
-                                    </li>
-                                    <li><a><i class="fa fa-edit"></i> Networking <span class="fa fa-chevron-down"></span></a>
-                                        <ul class="nav child_menu">
-                                            <li><a href="networking.html"></a>Networking1</li>
-                                            <li><a href="networking.html"></a>Networking2</li>
-                                        </ul>
-                                    </li>
-                                    <li><a><i class="fa fa-desktop"></i> Txpool <span class="fa fa-chevron-down"></span></a>
-                                        <ul class="nav child_menu">
-                                            <li><a href="txpool.html">Txpool1</a></li>
-                                            <li><a href="txpool.html">Txpool2</a></li>
-                                        </ul>
-                                    </li>
-                                    <li><a><i class="fa fa-table"></i> Logs <span class="fa fa-chevron-down"></span></a>
-                                        <ul class="nav child_menu">
-                                            <li><a href="logs.html">Logs1</a></li>
-                                            <li><a href="logs.html">Logs2</a></li>
-                                        </ul>
-                                    </li>
-                                    <li><a><i class="fa fa-bar-chart-o"></i> System <span class="fa fa-chevron-down"></span></a>
-                                        <ul class="nav child_menu">
-                                            <li><a href="system.html">System1</a></li>
-                                            <li><a href="system.html">System2</a></li>
-                                        </ul>
-                                    </li>
-                                    <li><a><i class="fa fa-clone"></i>Blockchain <span class="fa fa-chevron-down"></span></a>
-                                        <ul class="nav child_menu">
-                                            <li><a href="blockchain.html">Blockchain1</a></li>
-                                            <li><a href="blockchain.html">Blockchain2</a></li>
-                                        </ul>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                        <!-- /sidebar menu -->
-                    </div>
-                </div>
-
-                <!-- top navigation -->
-                <div class="top_nav">
-                    <div class="nav_menu">
-                        <nav class="" role="navigation">
-                            <div class="nav toggle">
-                                <a id="menu_toggle"><i class="fa fa-bars"></i></a>
-                            </div>
-                        </nav>
-                    </div>
-                </div>
-                <!-- /top navigation -->
-
-                <!-- page content -->
-                <div class="right_col" role="main">
-                    <div class="">
-                        <div class="page-title">
-                            <div class="title_left">
-                                <h3>Go Ethereum Dashboard <small>Statistics</small></h3>
-                            </div>
-                        </div>
-
-                        <div class="clearfix"></div>
-
-                        <div class="row">
-                            <div class="col-md-6 col-sm-6 col-xs-12">
-                                <div class="x_panel">
-                                    <div class="x_title">
-                                        <h2>Memory usage <small>system/memory/inuse</small></h2>
-                                        <ul class="nav navbar-right panel_toolbox">
-                                            <li><a class="collapse-link"><i class="fa fa-chevron-up"></i></a>
-                                            </li>
-                                            <li class="dropdown">
-                                                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false"><i class="fa fa-wrench"></i></a>
-                                                <ul class="dropdown-menu" role="menu">
-                                                    <li><a href="#">Settings 1</a>
-                                                    </li>
-                                                    <li><a href="#">Settings 2</a>
-                                                    </li>
-                                                </ul>
-                                            </li>
-                                            <li><a class="close-link"><i class="fa fa-close"></i></a>
-                                            </li>
-                                        </ul>
-                                        <div class="clearfix"></div>
-                                    </div>
-                                    <div class="x_content">
-                                        <canvas id="memoryLineChart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-md-6 col-sm-6 col-xs-12">
-                                <div class="x_panel">
-                                    <div class="x_title">
-                                        <h2>Inbound traffic <small>p2p/InboundTraffic</small></h2>
-                                        <ul class="nav navbar-right panel_toolbox">
-                                            <li><a class="collapse-link"><i class="fa fa-chevron-up"></i></a>
-                                            </li>
-                                            <li class="dropdown">
-                                                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false"><i class="fa fa-wrench"></i></a>
-                                                <ul class="dropdown-menu" role="menu">
-                                                    <li><a href="#">Settings 1</a>
-                                                    </li>
-                                                    <li><a href="#">Settings 2</a>
-                                                    </li>
-                                                </ul>
-                                            </li>
-                                            <li><a class="close-link"><i class="fa fa-close"></i></a>
-                                            </li>
-                                        </ul>
-                                        <div class="clearfix"></div>
-                                    </div>
-                                    <div class="x_content">
-                                        <canvas id="trafficLineChart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="clearfix"></div>
-                    </div>
-                </div>
-                <!-- /page content -->
-
-                <!-- footer content -->
-                <footer>
-                    <div class="pull-right">
-                        Gentelella - Bootstrap Admin Template by <a href="https://colorlib.com">Colorlib</a>
-                    </div>
-                    <div class="clearfix"></div>
-                </footer>
-                <!-- /footer content -->
-            </div>
-        </div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.26.0/babel.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/react/15.6.1/react.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/react/15.6.1/react-dom.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/react-router/4.1.2/react-router.min.js"></script>
 
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-noty/2.4.1/packaged/jquery.noty.packaged.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.0.0/Chart.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/flot/0.8.3/jquery.flot.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/gentelella/1.3.0/js/custom.min.js"></script>
 
-        <script src="js/handlers.js"></script>
+    </head>
+    <body>
+
+        <!--<script src="Something replacing babel plugin"></script>-->
+        <!--<script src="https://unpkg.com/inferno@3.7.0/dist/inferno.js"></script>-->
+        <!--<script src="https://unpkg.com/inferno-component@3.7.0/dist/inferno-component.js"></script>-->
+        <!--<script src="https://unpkg.com/inferno-router@3.7.0/dist/inferno-router.min.js"></script>-->
+
+        <div id="dashboard" class="nav-md"></div>
+
+        <script type="text/babel" src="components/dashboard.js"></script>
+        <script type="text/babel">
+            ReactDOM.render(<Dashboard/>, document.getElementById('dashboard'));
+        </script>
+
+        <!--<script type="text/babel">-->
+            <!--Inferno.render(<Dashboard/>, document.getElementById('dashboard'));-->
+        <!--</script>-->
+
+        <script type="text/babel" src="https://cdnjs.cloudflare.com/ajax/libs/gentelella/1.3.0/js/custom.min.js"></script>
+
     </body>
 </html>
