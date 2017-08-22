@@ -48,13 +48,13 @@ type dashboard struct {
 	config *Config
 
 	listener net.Listener
-	conns    []*client                 // Currently live websocket connections
-	Metrics  *metricSamples            `json:"metrics,omitempty"`
-	Stats    *status                   `json:"stats,omitempty"`
-	lock     sync.RWMutex              // Lock protecting the dashboard's internals
+	conns    map[uint32]*client // Currently live websocket connections
+	Metrics  *metricSamples     `json:"metrics,omitempty"`
+	Stats    *status            `json:"stats,omitempty"`
+	lock     sync.RWMutex       // Lock protecting the dashboard's internals
 
-	closing  map[*chan chan error]bool // Channels used for graceful exit
-	mapLock  sync.RWMutex              // Lock protecting the closing map's internals
+	closing chan chan error // Channel used for graceful exit
+	wg      sync.WaitGroup
 }
 
 type client struct {
@@ -81,9 +81,10 @@ type status struct {
 // New creates a new dashboard instance with the given configuration.
 func New(config *Config) (*dashboard, error) {
 	return &dashboard{
+		conns: make(map[uint32]*client),
 		config:  config,
 		Metrics: &metricSamples{},
-		closing: make(map[*chan chan error]bool),
+		closing: make(chan chan error),
 	}, nil
 }
 
@@ -95,6 +96,7 @@ func (db *dashboard) APIs() []rpc.API { return nil }
 
 // Start implements node.Service, starting the data collection thread and the listening server of the dashboard.
 func (db *dashboard) Start(server *p2p.Server) error {
+	db.wg.Add(1)
 	go db.collectData()
 
 	http.HandleFunc("/", db.webHandler)
@@ -106,20 +108,13 @@ func (db *dashboard) Start(server *p2p.Server) error {
 	}
 	db.listener = listener
 
-	go func() {
-		if err := http.Serve(listener, nil); err != nil {
-			log.Warn("Server failed", "err", err)
-		}
-	}()
+	go http.Serve(listener, nil)
 
 	return nil
 }
 
 // Stop implements node.Service, stopping the data collection thread and the connection listener of the dashboard.
 func (db *dashboard) Stop() error {
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
 	var err error
 	// Close the connection listener
 	if err = db.listener.Close(); err != nil {
@@ -127,18 +122,19 @@ func (db *dashboard) Stop() error {
 	}
 
 	errc := make(chan error)
-	for closing := range db.closing {
-		*closing <- errc
-		<-errc
-		close(*closing)
-	}
+	db.closing <- errc
+	<-errc
 
+	db.lock.Lock()
 	for _, c := range db.conns {
 		if err := c.conn.Close(); err != nil {
 			c.logger.Warn("Failed to close connection", "err", err)
 		}
 	}
-	db.conns = db.conns[:0]
+	db.lock.Unlock()
+
+	db.wg.Wait()
+	log.Info("Dashboard stopped")
 
 	return err
 }
@@ -179,31 +175,28 @@ func (db *dashboard) webHandler(w http.ResponseWriter, r *http.Request) {
 
 // apiHandler handles requests for the dashboard.
 func (db *dashboard) apiHandler(conn *websocket.Conn) {
+	id := atomic.AddUint32(&nextId, 1)
 	client := &client{
 		conn:   conn,
 		msg:    make(chan *map[string]interface{}, 128),
-		logger: log.New("id", atomic.AddUint32(&nextId, 1)),
+		logger: log.New("id", id),
 	}
 
-	loss := make(chan int)
+	loss := make(chan bool, 1) // Buffered channel as sender may exit early
 
 	// Start listening for messages to send.
+	db.wg.Add(1)
 	go func() {
-		closing := db.addClosing()
-		defer db.removeClosing(closing)
+		defer db.wg.Done()
 
 		for {
 			select {
-			case errc := <-*closing:
-				errc <- nil
-				return
-			case val := <-loss:
-				loss <- val - 1
+			case <-loss:
 				return
 			case msg := <-client.msg:
 				if err := websocket.JSON.Send(client.conn, msg); err != nil {
 					client.logger.Warn("Failed to send the message", "msg", msg, "err", err)
-					// TODO (kurkomisi): Handle message loss
+					return
 				}
 			}
 		}
@@ -216,36 +209,18 @@ func (db *dashboard) apiHandler(conn *websocket.Conn) {
 
 	// Start tracking the connection and drop at connection loss.
 	db.lock.Lock()
-	db.conns = append(db.conns, client)
+	db.conns[id] = client
 	db.lock.Unlock()
-
-	go func() {
-		closing := db.addClosing()
-		defer db.removeClosing(closing)
-
-		select {
-		case errc := <-*closing:
-			errc <- nil
-		case val := <-loss:
-			loss <- val - 1
-			db.lock.Lock()
-			for i, c := range db.conns {
-				if c.conn == client.conn {
-					db.conns = append(db.conns[:i], db.conns[i+1:]...)
-					break
-				}
-			}
-			db.lock.Unlock()
-		}
+	defer func() {
+		db.lock.Lock()
+		delete(db.conns, id)
+		db.lock.Unlock()
 	}()
 
 	for {
 		fail := []byte{}
 		if _, err := conn.Read(fail); err != nil {
-			loss <- 2
-			if val := <-loss; val > 0 {
-				loss <- val
-			}
+			loss <- true
 			return
 		}
 		// Ignore all messages
@@ -254,12 +229,11 @@ func (db *dashboard) apiHandler(conn *websocket.Conn) {
 
 // collectData collects the required data to plot on the dashboard.
 func (db *dashboard) collectData() {
-	closing := db.addClosing()
-	defer db.removeClosing(closing)
+	defer db.wg.Done()
 
 	for {
 		select {
-		case errc := <-*closing:
+		case errc := <-db.closing:
 			errc <- nil
 			return
 		case <-time.After(db.config.Refresh):
@@ -283,10 +257,7 @@ func (db *dashboard) collectData() {
 
 // update updates the dashboards through the live websocket connections.
 func (db *dashboard) update(processor *data, memory *data) {
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
-	// if the samples' # exceeds the limit, just remove the first element
+	// Remove the first elements in case the samples' amount exceeds the limit.
 	first := 0
 	if len(db.Metrics.Processor) == processorSampleLimit {
 		first = 1
@@ -303,6 +274,7 @@ func (db *dashboard) update(processor *data, memory *data) {
 		"memory":    memory,
 	}
 
+	db.lock.Lock()
 	for _, c := range db.conns {
 		select {
 		case c.msg <- msg:
@@ -310,18 +282,5 @@ func (db *dashboard) update(processor *data, memory *data) {
 			c.logger.Warn("Client message queue is full")
 		}
 	}
-}
-
-func (db *dashboard) addClosing() *chan chan error {
-	closing := make(chan chan error)
-	db.mapLock.Lock()
-	db.closing[&closing] = true
-	db.mapLock.Unlock()
-	return &closing
-}
-
-func (db *dashboard) removeClosing(closing *chan chan error) {
-	db.mapLock.Lock()
-	delete(db.closing, closing)
-	db.mapLock.Unlock()
+	db.lock.Unlock()
 }
