@@ -37,6 +37,13 @@ var stateTestCommand = cli.Command{
 	ArgsUsage: "<file>",
 }
 
+type StatetestResult struct {
+	Name  string `json:"name"`
+	Pass  bool   `json:"pass"`
+	Fork  string `json:"fork"`
+	Error string `json:"error,omitempty"`
+}
+
 func stateTestCmd(ctx *cli.Context) error {
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
@@ -52,7 +59,7 @@ func stateTestCmd(ctx *cli.Context) error {
 		//		chainConfig *params.ChainConfig
 	)
 	if ctx.GlobalBool(MachineFlag.Name) {
-		tracer = NewJSONLogger(logconfig, os.Stdout)
+		tracer = NewJSONLogger(logconfig, os.Stderr)
 	} else if ctx.GlobalBool(DebugFlag.Name) {
 		debugLogger = vm.NewStructLogger(logconfig)
 		tracer = debugLogger
@@ -75,32 +82,37 @@ func stateTestCmd(ctx *cli.Context) error {
 	if err = json.Unmarshal(src, &tests); err != nil {
 		return err
 	}
+
+	var results = make([]StatetestResult, 0, len(tests))
+
 	cfg := vm.Config{
 		Tracer: tracer,
 		Debug:  ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
 	}
 
-	for _, test := range tests {
+	for key, test := range tests {
 		for _, st := range test.Subtests() {
-			fmt.Printf("Test %v\n", st)
-			fmt.Printf("====================\n")
+			result := &StatetestResult{
+				Name: key,
+				Fork: st.Fork,
+				Pass: true,
+			}
 
 			if err = test.Run(st, cfg); err != nil {
-				fmt.Printf("FAIL : %v\n", err)
-			} else {
-				fmt.Printf("PASS\n")
+				result.Error = err.Error()
+				result.Pass = false
 			}
+			results = append(results, *result)
+
 			if ctx.GlobalBool(DebugFlag.Name) {
 				if debugLogger != nil {
 					fmt.Fprintln(os.Stderr, "#### TRACE ####")
 					vm.WriteTrace(os.Stderr, debugLogger.StructLogs())
 				}
 			}
-
-			fmt.Printf("====================\n")
 		}
-
 	}
+	json.NewEncoder(os.Stdout).Encode(results)
 
 	if err != nil {
 		return err
