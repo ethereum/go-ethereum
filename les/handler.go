@@ -365,11 +365,23 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	// Block header query, collect the requested headers and reply
 	case AnnounceMsg:
 		p.Log().Trace("Received announce message")
+		if p.requestAnnounceType == announceTypeNone {
+			return errResp(ErrUnexpectedResponse, "")
+		}
 
 		var req announceData
 		if err := msg.Decode(&req); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
+
+		if p.requestAnnounceType == announceTypeSigned {
+			if err := req.checkSignature(p.pubKey); err != nil {
+				p.Log().Trace("Invalid announcement signature", "err", err)
+				return err
+			}
+			p.Log().Trace("Valid announcement signature")
+		}
+
 		p.Log().Trace("Announce message content", "number", req.Number, "hash", req.Hash, "td", req.Td, "reorg", req.ReorgDepth)
 		if pm.fetcher != nil {
 			pm.fetcher.announce(p, &req)

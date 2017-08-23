@@ -18,6 +18,7 @@
 package les
 
 import (
+	"crypto/ecdsa"
 	"encoding/binary"
 	"math"
 	"sync"
@@ -41,6 +42,7 @@ type LesServer struct {
 	fcCostStats     *requestCostStats
 	defParams       *flowcontrol.ServerParams
 	lesTopics       []discv5.Topic
+	privateKey      *ecdsa.PrivateKey
 	quitSync        chan struct{}
 
 	chtIndexer, bltIndexer *core.ChainIndexer
@@ -52,7 +54,6 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	pm.blockLoop()
 
 	lesTopics := make([]discv5.Topic, len(ServerProtocolVersions))
 	for i, pv := range ServerProtocolVersions {
@@ -95,6 +96,8 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 			srvr.DiscV5.RegisterTopic(topic, s.quitSync)
 		}()
 	}
+	s.privateKey = srvr.PrivateKey
+	s.protocolManager.blockLoop()
 }
 
 func (s *LesServer) SetBloomBitsIndexer(bbIndexer *core.ChainIndexer) {
@@ -313,11 +316,33 @@ func (pm *ProtocolManager) blockLoop() {
 						log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)
 
 						announce := announceData{Hash: hash, Number: number, Td: td, ReorgDepth: reorg}
+						var (
+							signed         bool
+							signedAnnounce announceData
+						)
+
 						for _, p := range peers {
-							select {
-							case p.announceChn <- announce:
-							default:
-								pm.removePeer(p.id)
+							switch p.announceType {
+
+							case announceTypeSimple:
+								select {
+								case p.announceChn <- announce:
+								default:
+									pm.removePeer(p.id)
+								}
+
+							case announceTypeSigned:
+								if !signed {
+									signedAnnounce = announce
+									signedAnnounce.sign(pm.server.privateKey)
+									signed = true
+								}
+
+								select {
+								case p.announceChn <- signedAnnounce:
+								default:
+									pm.removePeer(p.id)
+								}
 							}
 						}
 					}

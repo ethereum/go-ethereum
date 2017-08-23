@@ -18,11 +18,17 @@
 package les
 
 import (
+	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -88,7 +94,7 @@ const (
 	ErrUnexpectedResponse
 	ErrInvalidResponse
 	ErrTooManyTimeouts
-	ErrHandshakeMissingKey
+	ErrMissingKey
 )
 
 func (e errCode) String() string {
@@ -110,7 +116,13 @@ var errorToString = map[int]string{
 	ErrUnexpectedResponse:      "Unexpected response",
 	ErrInvalidResponse:         "Invalid response",
 	ErrTooManyTimeouts:         "Too many request timeouts",
-	ErrHandshakeMissingKey:     "Key missing from handshake message",
+	ErrMissingKey:              "Key missing from list",
+}
+
+type announceBlock struct {
+	Hash   common.Hash // Hash of one particular block being announced
+	Number uint64      // Number of one particular block being announced
+	Td     *big.Int    // Total difficulty of one particular block being announced
 }
 
 // announceData is the network packet for the block announcements.
@@ -120,6 +132,32 @@ type announceData struct {
 	Td         *big.Int    // Total difficulty of one particular block being announced
 	ReorgDepth uint64
 	Update     keyValueList
+}
+
+// sign adds a signature to the block announcement by the given privKey
+func (a *announceData) sign(privKey *ecdsa.PrivateKey) {
+	rlp, _ := rlp.EncodeToBytes(announceBlock{a.Hash, a.Number, a.Td})
+	sig, _ := crypto.Sign(crypto.Keccak256(rlp), privKey)
+	a.Update = a.Update.add("sign", sig)
+}
+
+// checkSignature verifies if the block announcement has a valid signature by the given pubKey
+func (a *announceData) checkSignature(pubKey *ecdsa.PublicKey) error {
+	var sig []byte
+	if err := a.Update.decode().get("sign", &sig); err != nil {
+		return err
+	}
+	rlp, _ := rlp.EncodeToBytes(announceBlock{a.Hash, a.Number, a.Td})
+	recPubkey, err := secp256k1.RecoverPubkey(crypto.Keccak256(rlp), sig)
+	if err != nil {
+		return err
+	}
+	pbytes := elliptic.Marshal(pubKey.Curve, pubKey.X, pubKey.Y)
+	if bytes.Equal(pbytes, recPubkey) {
+		return nil
+	} else {
+		return errors.New("Wrong signature")
+	}
 }
 
 type blockInfo struct {
