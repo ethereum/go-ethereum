@@ -33,10 +33,11 @@ func TestBlockchain(t *testing.T) {
 	// Constantinople is not implemented yet.
 	bt.skipLoad(`(?i)(constantinople)`)
 	// Expected failures:
-	bt.fails("^TransitionTests/bcEIP158ToByzantium", "byzantium not supported")
 	bt.fails(`^TransitionTests/bcHomesteadToDao/DaoTransactions(|_UncleExtradata|_EmptyTransactionAndForkBlocksAhead)\.json`, "issue in test")
-	bt.fails(`^bc(Exploit|Fork|Gas|Multi|Total|State|Random|Uncle|Valid|Wallet).*_Byzantium$`, "byzantium not supported")
-	bt.fails(`^bcBlockGasLimitTest/(BlockGasLimit2p63m1|TransactionGasHigherThanLimit2p63m1|SuicideTransaction|GasUsedHigherThanBlockGasLimitButNotWithRefundsSuicideFirst|TransactionGasHigherThanLimit2p63m1_2).*_Byzantium$`, "byzantium not supported")
+
+	// Still failing tests
+	bt.skipLoad(`^bcWalletTest.*_Byzantium$`)
+	bt.skipLoad(`^bcStateTests/suicideCoinbase.json.*_Byzantium$`)
 
 	bt.walk(t, blockTestDir, func(t *testing.T, name string, test *BlockTest) {
 		if err := bt.checkFailure(t, name, test.Run()); err != nil {

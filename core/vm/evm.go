@@ -158,7 +158,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
 
 	// initialise a new contract and set the code that is to be used by the
-	// E The contract is a scoped evmironment for this execution context
+	// E The contract is a scoped environment for this execution context
 	// only.
 	contract := NewContract(caller, to, value, gas)
 	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
@@ -350,6 +350,10 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 		if err != errExecutionReverted {
 			contract.UseGas(contract.Gas)
 		}
+	}
+	// Assign err if contract code size exceeds the max while the err is still empty.
+	if maxCodeSizeExceeded && err == nil {
+		err = errMaxCodeSizeExceeded
 	}
 	return ret, contractAddr, contract.Gas, err
 }

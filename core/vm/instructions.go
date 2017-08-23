@@ -33,6 +33,7 @@ var (
 	errWriteProtection       = errors.New("evm: write protection")
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
 	errExecutionReverted     = errors.New("evm: execution reverted")
+	errMaxCodeSizeExceeded   = errors.New("evm: max code size exceeded")
 )
 
 func opAdd(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -619,7 +620,6 @@ func opCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 	if value.Sign() != 0 {
 		gas += params.CallStipend
 	}
-
 	ret, returnGas, err := evm.Call(contract, address, args, gas, value)
 	if err != nil {
 		stack.push(new(big.Int))
