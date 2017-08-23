@@ -108,14 +108,21 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 	}
 	// Deserialize based on the first component type.
 	switch {
-	case kind == rlp.Byte || kind == rlp.String && len(cnt) == 0:
-		// The first component of metropolis receipts is Byte
-		// or empty String(byte with 0x00 value).
+	case kind == rlp.Byte || (kind == rlp.String && len(cnt) == 0):
+		// The first component of metropolis receipts is Byte (0x01), or the empty
+		// string (0x80, decoded as a byte with 0x00 value).
 		var metro metropolisReceiptRLP
 		if err := rlp.DecodeBytes(raw, &metro); err != nil {
 			return err
 		}
-		r.Failed = metro.Status == receiptStatusFailed
+		switch metro.Status {
+		case receiptStatusSuccessful:
+			r.Failed = false
+		case receiptStatusFailed:
+			r.Failed = true
+		default:
+			return fmt.Errorf("invalid status byte: 0x%x", metro.Status)
+		}
 		r.CumulativeGasUsed = metro.CumulativeGasUsed
 		r.Bloom = metro.Bloom
 		r.Logs = metro.Logs
