@@ -280,7 +280,7 @@ func TestWalletNotifications(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	// Subscribe to the wallet feed
-	updates := make(chan accounts.WalletEvent, 1)
+	updates := make(chan accounts.WalletEvent, 100)
 	sub := ks.Subscribe(updates)
 	defer sub.Unsubscribe()
 
