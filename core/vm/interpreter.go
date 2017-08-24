@@ -137,12 +137,17 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		// to be uint256. Practically much less so feasible.
 		pc   = uint64(0) // program counter
 		cost uint64
+		// copies used by tracer
+		stackCopy = newstack() // stackCopy needed for Tracer since stack is mutated by 63/64 gas rule 
+		pcCopy uint64 // needed for the deferred Tracer
+		gasCopy uint64 // for Tracer to log gas remaining before execution
+		logged bool // deferred Tracer should ignore already logged steps
 	)
 	contract.Input = input
 
 	defer func() {
-		if err != nil && in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(in.evm, pc, op, contract.Gas, cost, mem, stack, contract, in.evm.depth, err)
+		if err != nil && !logged && in.cfg.Debug {
+			in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, mem, stackCopy, contract, in.evm.depth, err)
 		}
 	}()
 
@@ -153,6 +158,16 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 	for atomic.LoadInt32(&in.evm.abort) == 0 {
 		// Get the memory location of pc
 		op = contract.GetOp(pc)
+
+		if in.cfg.Debug {
+			logged = false
+			pcCopy = uint64(pc)
+			gasCopy = uint64(contract.Gas)
+			stackCopy = newstack()
+			for _, val := range stack.data {
+				stackCopy.push(val)
+			}
+		}
 
 		// get the operation from the jump table matching the opcode
 		operation := in.cfg.JumpTable[op]
@@ -199,7 +214,8 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		}
 
 		if in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(in.evm, pc, op, contract.Gas, cost, mem, stack, contract, in.evm.depth, err)
+			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, mem, stackCopy, contract, in.evm.depth, err)
+			logged = true
 		}
 
 		// execute the operation

@@ -40,7 +40,7 @@ func (l *JSONLogger) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cos
 	log := vm.StructLog{
 		Pc:         pc,
 		Op:         op,
-		Gas:        gas + cost,
+		Gas:        gas,
 		GasCost:    cost,
 		MemorySize: memory.Len(),
 		Storage:    nil,
