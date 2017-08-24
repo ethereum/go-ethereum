@@ -42,7 +42,6 @@ func (d destinations) has(codehash common.Hash, code []byte, dest *big.Int) bool
 		d[codehash] = m
 	}
 	return OpCode(code[udest]) == JUMPDEST && m.codeSegment(udest)
-	//	return (m[udest/8] & (1 << (udest % 8))) != 0
 }
 
 // bitvec is a bit vector which maps bytes in a program
@@ -68,8 +67,7 @@ func jumpdests(code []byte) []byte {
 	//The map is 4 bytes longer than necessary, in case the code
 	// ends with a PUSH32, the algorithm will push zeroes onto the
 	// bitvector outside the bounds of the actual code.
-	m := make([]byte, len(code)/8+1+4)
-	bits := bitvec(m)
+	bits := make(bitvec, len(code)/8+1+4)
 	for pc := uint64(0); pc < uint64(len(code)); {
 		op := OpCode(code[pc])
 
