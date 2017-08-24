@@ -106,7 +106,7 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 	// Update the state with pending changes
 	var root []byte
 	if config.IsMetropolis(header.Number) {
-		statedb.Finalise()
+		statedb.Finalise(true)
 	} else {
 		root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 	}
