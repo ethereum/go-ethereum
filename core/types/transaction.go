@@ -300,7 +300,7 @@ func (tx *Transaction) String() string {
 	Hex:      %x
 `,
 		tx.Hash(),
-		len(tx.data.Recipient) == 0,
+		tx.data.Recipient == nil,
 		from,
 		to,
 		tx.data.AccountNonce,
