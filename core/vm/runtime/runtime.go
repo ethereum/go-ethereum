@@ -40,6 +40,7 @@ type Config struct {
 	Time        *big.Int
 	GasLimit    uint64
 	GasPrice    *big.Int
+	TxGasLimit  uint64
 	Value       *big.Int
 	DisableJit  bool // "disable" so it's enabled by default
 	Debug       bool
@@ -95,6 +96,8 @@ func setDefaults(cfg *Config) {
 // the given code. It enabled the JIT by default and make sure that it's restored
 // to it's original state afterwards.
 func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
+	// TODO: remove Execute()?
+	// only used in runtime_example_test.go
 	if cfg == nil {
 		cfg = new(Config)
 	}
@@ -144,7 +147,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	code, address, leftOverGas, err := vmenv.Create(
 		sender,
 		input,
-		cfg.GasLimit,
+		cfg.TxGasLimit,
 		cfg.Value,
 	)
 	return code, address, leftOverGas, err
@@ -166,7 +169,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		sender,
 		address,
 		input,
-		cfg.GasLimit,
+		cfg.TxGasLimit,
 		cfg.Value,
 	)
 
