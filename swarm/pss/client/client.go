@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/pss"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 const (
@@ -27,8 +28,8 @@ type Client struct {
 	BaseAddr []byte
 
 	// peers
-	peerPool map[pss.Topic]map[pot.Address]*pssRPCRW
-	protos   map[pss.Topic]*p2p.Protocol
+	peerPool map[whisper.TopicType]map[pot.Address]*pssRPCRW
+	protos   map[whisper.TopicType]*p2p.Protocol
 
 	// rpc connections
 	rpc *rpc.Client
@@ -45,12 +46,12 @@ type Client struct {
 // implements p2p.MsgReadWriter
 type pssRPCRW struct {
 	*Client
-	topic *pss.Topic
+	topic *whisper.TopicType
 	msgC  chan []byte
 	addr  pot.Address
 }
 
-func (self *Client) newpssRPCRW(addr pot.Address, topic *pss.Topic) *pssRPCRW {
+func (self *Client) newpssRPCRW(addr pot.Address, topic *whisper.TopicType) *pssRPCRW {
 	return &pssRPCRW{
 		Client: self,
 		topic:  topic,
@@ -119,8 +120,8 @@ func newClient() (client *Client) {
 	client = &Client{
 		msgC:     make(chan pss.APIMsg),
 		quitC:    make(chan struct{}),
-		peerPool: make(map[pss.Topic]map[pot.Address]*pssRPCRW),
-		protos:   make(map[pss.Topic]*p2p.Protocol),
+		peerPool: make(map[whisper.TopicType]map[pot.Address]*pssRPCRW),
+		protos:   make(map[whisper.TopicType]*p2p.Protocol),
 	}
 	return
 }
@@ -131,7 +132,7 @@ func newClient() (client *Client) {
 //
 // when an incoming message is received from a peer that is not yet known to the client, this peer object is instantiated, and the protocol is run on it.
 func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error {
-	topic := pss.NewTopic(proto.Name, int(proto.Version))
+	topic := whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", proto.Name, proto.Version)))
 	msgC := make(chan pss.APIMsg)
 	self.peerPool[topic] = make(map[pot.Address]*pssRPCRW)
 	sub, err := self.rpc.Subscribe(ctx, "pss", msgC, "receive", topic)
@@ -173,7 +174,7 @@ func (self *Client) Stop() error {
 
 // Preemptively add a remote pss peer
 func (self *Client) AddPssPeer(addr pot.Address, spec *protocols.Spec) {
-	topic := pss.NewTopic(spec.Name, int(spec.Version))
+	topic := whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", spec.Name, spec.Version)))
 	if self.peerPool[topic] == nil {
 		log.Error("addpeer on unset topic")
 		return
@@ -190,6 +191,6 @@ func (self *Client) AddPssPeer(addr pot.Address, spec *protocols.Spec) {
 //
 // Note this doesn't actually currently drop the peer, but only remmoves the reference from the client's peer lookup table
 func (self *Client) RemovePssPeer(addr pot.Address, spec *protocols.Spec) {
-	topic := pss.NewTopic(spec.Name, int(spec.Version))
+	topic := whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", spec.Name, spec.Version)))
 	delete(self.peerPool[topic], addr)
 }

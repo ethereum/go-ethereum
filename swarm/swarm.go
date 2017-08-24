@@ -142,7 +142,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 
 	// Pss = postal service over swarm (devp2p over bzz)
 	if pssEnabled {
-		pssparams := pss.NewPssParams(false)
+		pssparams := pss.NewPssParams(self.privateKey)
 		self.pss = pss.NewPss(to, self.dpa, pssparams)
 	}
 

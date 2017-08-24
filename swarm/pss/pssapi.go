@@ -1,14 +1,15 @@
 package pss
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/pot"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/swarm/network"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 // Pss API services
@@ -25,25 +26,25 @@ func NewAPI(ps *Pss) *API {
 // A new handler is registered in pss for the supplied topic
 //
 // All incoming messages to the node matching this topic will be encapsulated in the APIMsg struct and sent to the subscriber
-func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription, error) {
+func (pssapi *API) Receive(ctx context.Context, topic whisper.TopicType) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return nil, fmt.Errorf("Subscribe not supported")
 	}
 
 	psssub := notifier.CreateSubscription()
+
 	handler := func(msg []byte, p *p2p.Peer, from []byte) error {
 		apimsg := &APIMsg{
 			Msg:  msg,
 			Addr: from,
 		}
 		if err := notifier.Notify(psssub.ID, apimsg); err != nil {
-			log.Warn(fmt.Sprintf("notification on pss sub topic %v rpc (sub %v) msg %v failed!", topic, psssub.ID, msg))
+			log.Warn(fmt.Sprintf("notification on pss sub topic rpc (sub %v) msg %v failed!", psssub.ID, msg))
 		}
 		return nil
 	}
 	deregf := pssapi.Register(&topic, handler)
-
 	go func() {
 		defer deregf()
 		select {
@@ -57,30 +58,49 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription,
 	return psssub, nil
 }
 
-// Sends the message wrapped in APIMsg through pss
+// Sends the message wrapped in APIMsg through pss using symmetric encryption
 //
-// Wrapper method for the pss.SendRaw function.
-//
-// The method will pass on the error received from pss.
-//
-// Note that normally pss will report an error if an attempt is made to send a pss to oneself. However, if the debug flag has been set, and the address specified in APIMsg is the node's own, this method implements a short-circuit which injects the message as an incoming message (using Pss.Process). This can be useful for testing purposes, when only operating with one node.
-func (pssapi *API) Send(topic Topic, msg APIMsg) error {
-	if pssapi.debug && bytes.Equal(msg.Addr, pssapi.Pss.BaseAddr()) {
-		log.Warn("Pss debug enabled; send to self shortcircuit", "apimsg", msg, "topic", topic)
-		env := NewEnvelope(msg.Addr, topic, msg.Msg)
-		return pssapi.Process(&PssMsg{
-			To:      pssapi.Pss.BaseAddr(),
-			Payload: env,
-		})
-	}
-	return pssapi.SendRaw(msg.Addr, topic, msg.Msg)
+// The method will pass on the error received from pss. It will fail if no symmetric key for the Pss peer has been added, or if the key has expired
+// The addresslength parameter decides how many bytes of the address to reveal in transit. -1 equals showing all. 0 means show none.
+func (pssapi *API) SendSym(topic whisper.TopicType, msg APIMsg, addresslength int8) error {
+	return pssapi.Pss.SendSym(msg.Addr, topic, msg.Msg, int(addresslength))
 }
 
-// BaseAddr returns the pss node's swarm overlay address
+// Sends the message wrapped in APIMsg through pss using symmetric encryption
+//
+// The method will pass on the error received from pss. It will fail if no public key for the Pss peer has been added
+// The addresslength parameter decides how many bytes of the address to reveal it transit. -1 equals showing all. 0 means show none.
+func (pssapi *API) SendAsym(topic whisper.TopicType, msg APIMsg, addresslength int8) error {
+	return pssapi.Pss.SendAsym(msg.Addr, topic, msg.Msg, int(addresslength))
+}
+
+// BaseAddr returns the local swarm overlay address of the Pss node
 //
 // Note that the overlay address is NOT inferable. To really know the node's overlay address it must reveal it itself.
 func (pssapi *API) BaseAddr() ([]byte, error) {
 	return pssapi.Pss.BaseAddr(), nil
+}
+
+// Returns the local public key of the Pss node
+//
+// Derived from the private key passed to the Pss constructor
+func (pssapi *API) GetPublicKey() []byte {
+	pubkey := pssapi.PublicKey()
+	return crypto.FromECDSAPub(&pubkey)
+}
+
+// Set Public key to associate with a particular Pss peer
+func (pssapi *API) SetPeerPublicKey(addr []byte, topic whisper.TopicType, pubkey []byte) error {
+	var potaddr pot.Address
+	copy(potaddr[:], addr)
+	pssapi.Pss.SetPeerPublicKey(potaddr, topic, crypto.ToECDSAPub(pubkey))
+	return nil
+}
+
+// Generate a new symkey for a Pss peer, and send requesting a key in return
+// The addresslength parameter decides how many bytes of the address to reveal in transit. -1 equals showing all. 0 means show none.
+func (pssapi *API) Handshake(to []byte, topic whisper.TopicType, addresslength int8) (string, error) {
+	return pssapi.sendKey(to, &topic, int(addresslength))
 }
 
 // PssAPITest are temporary API calls for development use only
@@ -90,24 +110,28 @@ type APITest struct {
 	*Pss
 }
 
-// Include these methods to the node.Service if test symbols should be used
+// Only for debugging and tests!
 func NewAPITest(ps *Pss) *APITest {
 	return &APITest{Pss: ps}
 }
 
-// Get the current nearest swarm node to the specified address
-//
-// (Can be used for diagnosing kademlia state)
-func (pssapitest *APITest) GetForwarder(addr []byte) (fwd struct {
-	Addr  []byte
-	Count int
-}) {
-	pssapitest.Overlay.EachConn(addr, 255, func(op network.OverlayConn, po int, isproxbin bool) bool {
-		if bytes.Equal(fwd.Addr, []byte{}) {
-			fwd.Addr = op.Address()
-		}
-		fwd.Count++
-		return true
-	})
-	return
+// Returns incoming and outgoing symkey pair for a particular Pss peer
+func (self *APITest) GetSymKeys(to []byte, topic whisper.TopicType) ([]byte, error) {
+	var potaddr pot.Address
+	copy(potaddr[:], to)
+	sendsymkey, err := self.w.GetSymKey(self.peerPool[potaddr][topic].sendsymkey)
+	if err != nil {
+		return nil, fmt.Errorf("get send symkey fail (peer %v topic %v): %v", to, topic, err)
+	}
+	recvsymkey, err := self.w.GetSymKey(self.peerPool[potaddr][topic].recvsymkey)
+	if err != nil {
+		return nil, fmt.Errorf("get recv symkey fail (peer %v topic %v): %v", to, topic, err)
+	}
+	if len(recvsymkey) != len(sendsymkey) {
+		return nil, fmt.Errorf("symkey length mismatch: %d != %d", len(recvsymkey), len(sendsymkey))
+	}
+	returnbyte := make([]byte, len(recvsymkey)*2)
+	copy(returnbyte[:len(recvsymkey)], recvsymkey)
+	copy(returnbyte[len(recvsymkey):], sendsymkey)
+	return returnbyte, nil
 }
