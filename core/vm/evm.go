@@ -33,6 +33,8 @@ type (
 	GetHashFunc func(uint64) common.Hash
 )
 
+const emptyNonce uint64 = 0
+
 // run runs the given contract and takes care of running precompiles with a fallback to the byte code interpreter.
 func run(evm *EVM, snapshot int, contract *Contract, input []byte) ([]byte, error) {
 	if contract.CodeAddr != nil {
@@ -314,7 +316,18 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 
 	snapshot := evm.StateDB.Snapshot()
 	contractAddr = crypto.CreateAddress(caller.Address(), nonce)
+
+	// When a contract creation is on an account with non-zero nonce or non-empty code,
+	// the creation fails as if init code execution resulted in an exceptional halt.
+	// This applies to contract creation triggered by a contract creation transaction
+	// and by CREATE instruction.
+	if evm.StateDB.GetNonce(contractAddr) > emptyNonce || evm.StateDB.GetCode(contractAddr) != nil {
+		// In case of address collision, all gas remained will been consumed.
+		return nil, common.Address{}, 0, errAddressCollision
+	}
+
 	evm.StateDB.CreateAccount(contractAddr)
+
 	if evm.ChainConfig().IsEIP158(evm.BlockNumber) {
 		evm.StateDB.SetNonce(contractAddr, 1)
 	}
