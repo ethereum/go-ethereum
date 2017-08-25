@@ -340,7 +340,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	receipt1 := &types.Receipt{
-		PostState:         []byte{0x01},
+		Failed:            true,
 		CumulativeGasUsed: big.NewInt(1),
 		Logs: []*types.Log{
 			{Address: common.BytesToAddress([]byte{0x11})},
@@ -351,7 +351,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 		GasUsed:         big.NewInt(111111),
 	}
 	receipt2 := &types.Receipt{
-		PostState:         []byte{0x02},
+		PostState:         common.Hash{2}.Bytes(),
 		CumulativeGasUsed: big.NewInt(2),
 		Logs: []*types.Log{
 			{Address: common.BytesToAddress([]byte{0x22})},
