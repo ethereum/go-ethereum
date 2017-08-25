@@ -27,7 +27,6 @@ func TestVM(t *testing.T) {
 	vmt := new(testMatcher)
 	vmt.fails("^vmSystemOperationsTest.json/createNameRegistrator$", "fails without parallel execution")
 
-	vmt.skipLoad(`^vmPerformanceTest.json`)     // log format broken
 	vmt.skipLoad(`^vmInputLimits(Light)?.json`) // log format broken
 
 	vmt.skipShortMode("^vmPerformanceTest.json")
