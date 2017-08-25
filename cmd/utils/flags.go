@@ -120,7 +120,7 @@ var (
 	}
 	NoUSBFlag = cli.BoolFlag{
 		Name:  "nousb",
-		Usage: "Disables monitoring for and managine USB hardware wallets",
+		Usage: "Disables monitoring for and managing USB hardware wallets",
 	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
