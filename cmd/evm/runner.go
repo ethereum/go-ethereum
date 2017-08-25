@@ -88,6 +88,7 @@ func runCmd(ctx *cli.Context) error {
 		genTimestamp uint64
 		genGasLimit uint64
 		genDifficulty *big.Int
+		genNumber   uint64
 		sender      = common.StringToAddress("sender")
 		receiver    = common.StringToAddress("receiver")
 	)
@@ -105,6 +106,7 @@ func runCmd(ctx *cli.Context) error {
 		genDifficulty = gen.Difficulty
 		genGasLimit = gen.GasLimit
 		genTimestamp = gen.Timestamp
+		genNumber = gen.Number
 		_, statedb = gen.ToBlock()
 		chainConfig = gen.Config
 	} else {
@@ -167,6 +169,7 @@ func runCmd(ctx *cli.Context) error {
 		Time:     new(big.Int).SetUint64(genTimestamp),
 		Coinbase: genCoinbase,
 		Difficulty: genDifficulty,
+		BlockNumber: new(big.Int).SetUint64(genNumber),
 		State:    statedb,
 		GasLimit: genGasLimit,
 		GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
