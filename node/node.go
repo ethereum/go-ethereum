@@ -58,14 +58,7 @@ type Node struct {
 	ipcListener net.Listener // IPC RPC listener socket to serve API requests
 	ipcHandler  *rpc.Server  // IPC RPC request handler to process the API requests
 
-	httpEndpoint  string       // HTTP endpoint (interface + port) to listen at (empty = HTTP disabled)
-	httpWhitelist []string     // HTTP RPC modules to allow through this endpoint
-	httpListener  net.Listener // HTTP RPC listener socket to server API requests
-	httpHandler   *rpc.Server  // HTTP RPC request handler to process the API requests
-
-	wsEndpoint string       // Websocket endpoint (interface + port) to listen at (empty = websocket disabled)
-	wsListener net.Listener // Websocket RPC listener socket to server API requests
-	wsHandler  *rpc.Server  // Websocket RPC request handler to process the API requests
+	httpServers map[int]*httpEndpoint // tracks all servers by port.
 
 	stop chan struct{} // Channel to wait for termination notifications
 	lock sync.RWMutex
@@ -109,8 +102,7 @@ func New(conf *Config) (*Node, error) {
 		config:            conf,
 		serviceFuncs:      []ServiceConstructor{},
 		ipcEndpoint:       conf.IPCEndpoint(),
-		httpEndpoint:      conf.HTTPEndpoint(),
-		wsEndpoint:        conf.WSEndpoint(),
+		httpServers:       make(map[int]*httpEndpoint),
 		eventmux:          new(event.TypeMux),
 	}, nil
 }
@@ -256,13 +248,13 @@ func (n *Node) startRPC(services map[reflect.Type]Service) error {
 		n.stopInProc()
 		return err
 	}
-	if err := n.startHTTP(n.httpEndpoint, apis, n.config.HTTPModules, n.config.HTTPCors); err != nil {
+	if err := n.startHTTP(n.config.HTTPEndpoint(), apis, n.config.HTTPModules, n.config.HTTPCors); err != nil {
 		n.stopIPC()
 		n.stopInProc()
 		return err
 	}
-	if err := n.startWS(n.wsEndpoint, apis, n.config.WSModules, n.config.WSOrigins); err != nil {
-		n.stopHTTP()
+	if err := n.startWS(n.config.WSEndpoint(), apis, n.config.WSModules, n.config.WSOrigins); err != nil {
+		n.stopAllHTTP()
 		n.stopIPC()
 		n.stopInProc()
 		return err
@@ -379,36 +371,13 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 		}
 	}
 	// All APIs registered, start the HTTP listener
-	var (
-		listener net.Listener
-		err      error
-	)
-	if listener, err = net.Listen("tcp", endpoint); err != nil {
+	ep, err := n.listenHTTP(endpoint)
+	if err != nil {
 		return err
 	}
-	go rpc.NewHTTPServer(cors, handler).Serve(listener)
+	ep.setHTTP(newCorsHandler(cors, handler))
 	log.Info(fmt.Sprintf("HTTP endpoint opened: http://%s", endpoint))
-
-	// All listeners booted successfully
-	n.httpEndpoint = endpoint
-	n.httpListener = listener
-	n.httpHandler = handler
-
 	return nil
-}
-
-// stopHTTP terminates the HTTP RPC endpoint.
-func (n *Node) stopHTTP() {
-	if n.httpListener != nil {
-		n.httpListener.Close()
-		n.httpListener = nil
-
-		log.Info(fmt.Sprintf("HTTP endpoint closed: http://%s", n.httpEndpoint))
-	}
-	if n.httpHandler != nil {
-		n.httpHandler.Stop()
-		n.httpHandler = nil
-	}
 }
 
 // startWS initializes and starts the websocket RPC endpoint.
@@ -433,36 +402,13 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 		}
 	}
 	// All APIs registered, start the HTTP listener
-	var (
-		listener net.Listener
-		err      error
-	)
-	if listener, err = net.Listen("tcp", endpoint); err != nil {
+	ep, err := n.listenHTTP(endpoint)
+	if err != nil {
 		return err
 	}
-	go rpc.NewWSServer(wsOrigins, handler).Serve(listener)
 	log.Info(fmt.Sprintf("WebSocket endpoint opened: ws://%s", endpoint))
-
-	// All listeners booted successfully
-	n.wsEndpoint = endpoint
-	n.wsListener = listener
-	n.wsHandler = handler
-
+	ep.setWS(handler.WebsocketHandler(wsOrigins))
 	return nil
-}
-
-// stopWS terminates the websocket RPC endpoint.
-func (n *Node) stopWS() {
-	if n.wsListener != nil {
-		n.wsListener.Close()
-		n.wsListener = nil
-
-		log.Info(fmt.Sprintf("WebSocket endpoint closed: ws://%s", n.wsEndpoint))
-	}
-	if n.wsHandler != nil {
-		n.wsHandler.Stop()
-		n.wsHandler = nil
-	}
 }
 
 // Stop terminates a running node along with all it's services. In the node was
@@ -477,8 +423,7 @@ func (n *Node) Stop() error {
 	}
 
 	// Terminate the API, services and the p2p server.
-	n.stopWS()
-	n.stopHTTP()
+	n.stopAllHTTP()
 	n.stopIPC()
 	n.rpcAPIs = nil
 	failure := &StopError{
@@ -603,16 +548,6 @@ func (n *Node) AccountManager() *accounts.Manager {
 // IPCEndpoint retrieves the current IPC endpoint used by the protocol stack.
 func (n *Node) IPCEndpoint() string {
 	return n.ipcEndpoint
-}
-
-// HTTPEndpoint retrieves the current HTTP endpoint used by the protocol stack.
-func (n *Node) HTTPEndpoint() string {
-	return n.httpEndpoint
-}
-
-// WSEndpoint retrieves the current WS endpoint used by the protocol stack.
-func (n *Node) WSEndpoint() string {
-	return n.wsEndpoint
 }
 
 // EventMux retrieves the event multiplexer used by all the network services in
