@@ -23,8 +23,8 @@ Usage: go run ci.go <command> <command flags/arguments>
 
 Available commands are:
 
-   install    [ -arch architecture ] [ packages... ]                                           -- builds packages and executables
-   test       [ -coverage ] [ -misspell ] [ packages... ]                                      -- runs the tests
+   install    [ -race ] [ -arch architecture ] [ packages... ]                                 -- builds packages and executables
+   test       [ -race ] [ -verbose ] [ -coverage ] [ -misspell ] [ packages... ]               -- runs the tests
    archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
    importkeys                                                                                  -- imports signing keys from env
    debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
@@ -169,6 +169,7 @@ func main() {
 
 func doInstall(cmdline []string) {
 	var (
+		race = flag.Bool("race", false, "Whether to build with race detection")
 		arch = flag.String("arch", "", "Architecture to cross build for")
 	)
 	flag.CommandLine.Parse(cmdline)
@@ -192,6 +193,9 @@ func doInstall(cmdline []string) {
 	if *arch == "" || *arch == runtime.GOARCH {
 		goinstall := goTool("install", buildFlags(env)...)
 		goinstall.Args = append(goinstall.Args, "-v")
+		if *race {
+			goinstall.Args = append(goinstall.Args, "-race")
+		}
 		goinstall.Args = append(goinstall.Args, packages...)
 		build.MustRun(goinstall)
 		return
@@ -280,6 +284,8 @@ func goToolArch(arch string, subcmd string, args ...string) *exec.Cmd {
 
 func doTest(cmdline []string) {
 	var (
+		race     = flag.Bool("race", false, "Whether to run the race detector")
+		verbose  = flag.Bool("verbose", false, "Whether to run with full verbosity")
 		misspell = flag.Bool("misspell", false, "Whether to run the spell checker")
 		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
 	)
@@ -303,6 +309,12 @@ func doTest(cmdline []string) {
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.
 	gotest.Args = append(gotest.Args, "-p", "1")
+	if *race {
+		gotest.Args = append(gotest.Args, "-race")
+	}
+	if *verbose {
+		gotest.Args = append(gotest.Args, "-v")
+	}
 	if *coverage {
 		gotest.Args = append(gotest.Args, "-covermode=atomic", "-cover")
 	}
