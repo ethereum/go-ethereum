@@ -17,12 +17,10 @@
 package tests
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"reflect"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,8 +31,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // StateTest checks transaction processing without block context.
@@ -63,7 +63,7 @@ type stJSON struct {
 
 type stPostState struct {
 	Root    common.UnprefixedHash `json:"hash"`
-	Logs    *[]stLog              `json:"logs"`
+	Logs    common.UnprefixedHash `json:"logs"`
 	Indexes struct {
 		Data  int `json:"data"`
 		Gas   int `json:"gas"`
@@ -108,21 +108,6 @@ type stTransactionMarshaling struct {
 	PrivateKey hexutil.Bytes
 }
 
-//go:generate gencodec -type stLog -field-override stLogMarshaling -out gen_stlog.go
-
-type stLog struct {
-	Address common.Address `json:"address"`
-	Data    []byte         `json:"data"`
-	Topics  []common.Hash  `json:"topics"`
-	Bloom   string         `json:"bloom"`
-}
-
-type stLogMarshaling struct {
-	Address common.UnprefixedAddress
-	Data    hexutil.Bytes
-	Topics  []common.UnprefixedHash
-}
-
 // Subtests returns all valid subtests of the test.
 func (t *StateTest) Subtests() []StateSubtest {
 	var sub []StateSubtest
@@ -159,10 +144,8 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) error {
 	if _, _, _, err := core.ApplyMessage(evm, msg, gaspool); err != nil {
 		statedb.RevertToSnapshot(snapshot)
 	}
-	if post.Logs != nil {
-		if err := checkLogs(statedb.Logs(), *post.Logs); err != nil {
-			return err
-		}
+	if logs := rlpHash(statedb.Logs()); logs != common.Hash(post.Logs) {
+		return fmt.Errorf("post state logs hash mismatch: got %x, want %x", logs, post.Logs)
 	}
 	root, _ := statedb.CommitTo(db, config.IsEIP158(block.Number()))
 	if root != common.Hash(post.Root) {
@@ -254,28 +237,9 @@ func (tx *stTransaction) toMessage(ps stPostState) (core.Message, error) {
 	return msg, nil
 }
 
-func checkLogs(have []*types.Log, want []stLog) error {
-	if len(have) != len(want) {
-		return fmt.Errorf("logs length mismatch: got %d, want %d", len(have), len(want))
-	}
-	for i := range have {
-		if have[i].Address != want[i].Address {
-			return fmt.Errorf("log address %d: got %x, want %x", i, have[i].Address, want[i].Address)
-		}
-		if !bytes.Equal(have[i].Data, want[i].Data) {
-			return fmt.Errorf("log data %d: got %x, want %x", i, have[i].Data, want[i].Data)
-		}
-		if !reflect.DeepEqual(have[i].Topics, want[i].Topics) {
-			return fmt.Errorf("log topics %d:\ngot  %x\nwant %x", i, have[i].Topics, want[i].Topics)
-		}
-		genBloom := math.PaddedBigBytes(types.LogsBloom([]*types.Log{have[i]}), 256)
-		var wantBloom types.Bloom
-		if err := hexutil.UnmarshalFixedUnprefixedText("Bloom", []byte(want[i].Bloom), wantBloom[:]); err != nil {
-			return fmt.Errorf("test log %d has invalid bloom: %v", i, err)
-		}
-		if !bytes.Equal(genBloom, wantBloom[:]) {
-			return fmt.Errorf("bloom mismatch")
-		}
-	}
-	return nil
+func rlpHash(x interface{}) (h common.Hash) {
+	hw := sha3.NewKeccak256()
+	rlp.Encode(hw, x)
+	hw.Sum(h[:0])
+	return h
 }

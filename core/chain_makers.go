@@ -179,7 +179,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, db ethdb.Dat
 		if gen != nil {
 			gen(i, b)
 		}
-		ethash.AccumulateRewards(statedb, h, b.uncles)
+		ethash.AccumulateRewards(config, statedb, h, b.uncles)
 		root, err := statedb.CommitTo(db, config.IsEIP158(h.Number))
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))

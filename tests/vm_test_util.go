@@ -44,14 +44,14 @@ func (t *VMTest) UnmarshalJSON(data []byte) error {
 }
 
 type vmJSON struct {
-	Env           stEnv                `json:"env"`
-	Exec          vmExec               `json:"exec"`
-	Logs          []stLog              `json:"logs"`
-	GasRemaining  *math.HexOrDecimal64 `json:"gas"`
-	Out           hexutil.Bytes        `json:"out"`
-	Pre           core.GenesisAlloc    `json:"pre"`
-	Post          core.GenesisAlloc    `json:"post"`
-	PostStateRoot common.Hash          `json:"postStateRoot"`
+	Env           stEnv                 `json:"env"`
+	Exec          vmExec                `json:"exec"`
+	Logs          common.UnprefixedHash `json:"logs"`
+	GasRemaining  *math.HexOrDecimal64  `json:"gas"`
+	Out           hexutil.Bytes         `json:"out"`
+	Pre           core.GenesisAlloc     `json:"pre"`
+	Post          core.GenesisAlloc     `json:"post"`
+	PostStateRoot common.Hash           `json:"postStateRoot"`
 }
 
 //go:generate gencodec -type vmExec -field-override vmExecMarshaling -out gen_vmexec.go
@@ -109,7 +109,10 @@ func (t *VMTest) Run(vmconfig vm.Config) error {
 	// if root := statedb.IntermediateRoot(false); root != t.json.PostStateRoot {
 	// 	return fmt.Errorf("post state root mismatch, got %x, want %x", root, t.json.PostStateRoot)
 	// }
-	return checkLogs(statedb.Logs(), t.json.Logs)
+	if logs := rlpHash(statedb.Logs()); logs != common.Hash(t.json.Logs) {
+		return fmt.Errorf("post state logs hash mismatch: got %x, want %x", logs, t.json.Logs)
+	}
+	return nil
 }
 
 func (t *VMTest) exec(statedb *state.StateDB, vmconfig vm.Config) ([]byte, uint64, error) {
