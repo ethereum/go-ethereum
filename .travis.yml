@@ -15,7 +15,6 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go test -coverage
 
-    # These are the latest Go versions.
     - os: linux
       dist: trusty
       sudo: required
@@ -26,10 +25,23 @@ matrix:
         - sudo chmod 666 /dev/fuse
         - sudo chown root:$USER /etc/fuse.conf
         - go run build/ci.go install
+        - go run build/ci.go test -coverage
+
+    # These are the latest Go versions.
+    - os: linux
+      dist: trusty
+      sudo: required
+      go: 1.9.0
+      script:
+        - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install fuse
+        - sudo modprobe fuse
+        - sudo chmod 666 /dev/fuse
+        - sudo chown root:$USER /etc/fuse.conf
+        - go run build/ci.go install
         - go run build/ci.go test -coverage -misspell
 
     - os: osx
-      go: 1.8.3
+      go: 1.9.0
       sudo: required
       script:
         - brew update
@@ -42,7 +54,7 @@ matrix:
     - os: linux
       dist: trusty
       sudo: required
-      go: 1.8.3
+      go: 1.9.0
       env:
         - ubuntu-ppa
         - azure-linux
@@ -81,7 +93,7 @@ matrix:
       sudo: required
       services:
         - docker
-      go: 1.8.3
+      go: 1.9.0
       env:
         - azure-linux-mips
       script:
@@ -121,7 +133,7 @@ matrix:
         - azure-android
         - maven-android
       before_install:
-        - curl https://storage.googleapis.com/golang/go1.8.3.linux-amd64.tar.gz | tar -xz
+        - curl https://storage.googleapis.com/golang/go1.9.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
@@ -138,7 +150,7 @@ matrix:
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
     - os: osx
-      go: 1.8.3
+      go: 1.9.0
       env:
         - azure-osx
         - azure-ios
@@ -164,7 +176,7 @@ matrix:
     - os: linux
       dist: trusty
       sudo: required
-      go: 1.8.3
+      go: 1.9.0
       env:
         - azure-purge
       script:
