@@ -171,13 +171,15 @@ func parseComplete(rawurl string) (*Node, error) {
 	if id, err = HexID(u.User.String()); err != nil {
 		return nil, fmt.Errorf("invalid node ID (%v)", err)
 	}
-	// Parse the IP address.
+	// Parse the host.
 	host, port, err := net.SplitHostPort(u.Host)
 	if err != nil {
 		return nil, fmt.Errorf("invalid host: %v", err)
 	}
-	if ip = net.ParseIP(host); ip == nil {
-		return nil, errors.New("invalid IP address")
+	if addrs, err := net.LookupIP(host); err == nil {
+		ip = addrs[0] // Take first address
+	} else {
+		return nil, errors.New("could not resolve host")
 	}
 	// Ensure the IP is 4 bytes long for IPv4 addresses.
 	if ipv4 := ip.To4(); ipv4 != nil {
