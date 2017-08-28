@@ -145,9 +145,7 @@ func (d *discPeer) handleSubPeersMsg(msg *subPeersMsg) error {
 		})
 		log.Warn(fmt.Sprintf("found initial %v peers not farther than %v", len(peers), d.depth))
 		if len(peers) > 0 {
-			if err := d.Send(&peersMsg{Peers: peers}); err != nil {
-				return err
-			}
+			go d.Send(&peersMsg{Peers: peers})
 		}
 	}
 	d.sentPeers = true
