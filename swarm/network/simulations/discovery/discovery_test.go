@@ -174,7 +174,8 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 }
 
 // triggerChecks triggers a simulation step check whenever a peer is added or
-// removed from the given node
+// removed from the given node, and also every second to avoid a race between
+// peer events and kademlia becoming healthy
 func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id discover.NodeID) error {
 	node := net.GetNode(id)
 	if node == nil {
@@ -191,9 +192,15 @@ func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id di
 	}
 	go func() {
 		defer sub.Unsubscribe()
+
+		tick := time.NewTicker(time.Second)
+		defer tick.Stop()
+
 		for {
 			select {
 			case <-events:
+				trigger <- id
+			case <-tick.C:
 				trigger <- id
 			case err := <-sub.Err():
 				if err != nil {
