@@ -22,10 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -135,39 +132,4 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 		stop <- errc
 		return <-errc
 	}
-}
-
-// BloomBitsIndex implements ChainIndex
-type BloomBitsIndex struct {
-	db                   ethdb.Database
-	bc                   *bloombits.BloomBitsCreator
-	section, sectionSize uint64
-	sectionHead          common.Hash
-}
-
-// number of confirmation blocks before a section is considered probably final and its bloom bits are calculated
-const bloomBitsConfirmations = 256
-
-// NewBloomBitsProcessor returns a chain processor that generates bloom bits data for the canonical chain
-func NewBloomBitsProcessor(db ethdb.Database, sectionSize uint64) *core.ChainIndexer {
-	backend := &BloomBitsIndex{db: db, sectionSize: sectionSize}
-	return core.NewChainIndexer(db, ethdb.NewTable(db, "bbIndex-"), backend, sectionSize, bloomBitsConfirmations, time.Millisecond*100, "bloombits")
-}
-
-func (b *BloomBitsIndex) Reset(section uint64, lastSectionHead common.Hash) {
-	b.bc = bloombits.NewBloomBitsCreator(b.sectionSize)
-	b.section = section
-}
-
-func (b *BloomBitsIndex) Process(header *types.Header) {
-	b.bc.AddHeaderBloom(header.Bloom)
-	b.sectionHead = header.Hash()
-}
-
-func (b *BloomBitsIndex) Commit() error {
-	for i := 0; i < bloombits.BloomLength; i++ {
-		compVector := bitutil.CompressBytes(b.bc.GetBitVector(uint(i)))
-		core.StoreBloomBits(b.db, uint64(i), b.section, b.sectionHead, compVector)
-	}
-	return nil
 }

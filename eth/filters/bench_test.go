@@ -31,82 +31,41 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/golang/snappy"
 )
 
 func BenchmarkBloomBits512(b *testing.B) {
-	benchmarkBloomBitsForSize(b, 512)
+	benchmarkBloomBits(b, 512)
 }
 
 func BenchmarkBloomBits1k(b *testing.B) {
-	benchmarkBloomBitsForSize(b, 1024)
+	benchmarkBloomBits(b, 1024)
 }
 
 func BenchmarkBloomBits2k(b *testing.B) {
-	benchmarkBloomBitsForSize(b, 2048)
+	benchmarkBloomBits(b, 2048)
 }
 
 func BenchmarkBloomBits4k(b *testing.B) {
-	benchmarkBloomBitsForSize(b, 4096)
+	benchmarkBloomBits(b, 4096)
 }
 
 func BenchmarkBloomBits8k(b *testing.B) {
-	benchmarkBloomBitsForSize(b, 8192)
+	benchmarkBloomBits(b, 8192)
 }
 
 func BenchmarkBloomBits16k(b *testing.B) {
-	benchmarkBloomBitsForSize(b, 16384)
+	benchmarkBloomBits(b, 16384)
 }
 
 func BenchmarkBloomBits32k(b *testing.B) {
-	benchmarkBloomBitsForSize(b, 32768)
-}
-
-func benchmarkBloomBitsForSize(b *testing.B, sectionSize uint64) {
-	benchmarkBloomBits(b, sectionSize, 0)
-	benchmarkBloomBits(b, sectionSize, 1)
-	benchmarkBloomBits(b, sectionSize, 2)
+	benchmarkBloomBits(b, 32768)
 }
 
 const benchFilterCnt = 2000
 
-func benchmarkBloomBits(b *testing.B, sectionSize uint64, comp int) {
+func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 	benchDataDir := node.DefaultDataDir() + "/geth/chaindata"
-	fmt.Println("Running bloombits benchmark   section size:", sectionSize, "  compression method:", comp)
-
-	var (
-		compressFn   func([]byte) []byte
-		decompressFn func([]byte, int) ([]byte, error)
-	)
-	switch comp {
-	case 0:
-		// no compression
-		compressFn = func(data []byte) []byte {
-			return data
-		}
-		decompressFn = func(data []byte, target int) ([]byte, error) {
-			if len(data) != target {
-				panic(nil)
-			}
-			return data, nil
-		}
-	case 1:
-		// bitutil/compress.go
-		compressFn = bitutil.CompressBytes
-		decompressFn = bitutil.DecompressBytes
-	case 2:
-		// go snappy
-		compressFn = func(data []byte) []byte {
-			return snappy.Encode(nil, data)
-		}
-		decompressFn = func(data []byte, target int) ([]byte, error) {
-			decomp, err := snappy.Decode(nil, data)
-			if err != nil || len(decomp) != target {
-				panic(err)
-			}
-			return decomp, nil
-		}
-	}
+	fmt.Println("Running bloombits benchmark   section size:", sectionSize)
 
 	db, err := ethdb.NewLDBDatabase(benchDataDir, 128, 1024)
 	if err != nil {
@@ -128,7 +87,10 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64, comp int) {
 	cnt := (headNum - 512) / sectionSize
 	var dataSize, compSize uint64
 	for sectionIdx := uint64(0); sectionIdx < cnt; sectionIdx++ {
-		bc := bloombits.NewBloomBitsCreator(sectionSize)
+		bc, err := bloombits.NewGenerator(uint(sectionSize))
+		if err != nil {
+			b.Fatalf("failed to create generator: %v", err)
+		}
 		var header *types.Header
 		for i := sectionIdx * sectionSize; i < (sectionIdx+1)*sectionSize; i++ {
 			hash := core.GetCanonicalHash(db, i)
@@ -136,15 +98,18 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64, comp int) {
 			if header == nil {
 				b.Fatalf("Error creating bloomBits data")
 			}
-			bc.AddHeaderBloom(header.Bloom)
+			bc.AddBloom(header.Bloom)
 		}
 		sectionHead := core.GetCanonicalHash(db, (sectionIdx+1)*sectionSize-1)
-		for i := 0; i < bloombits.BloomLength; i++ {
-			data := bc.GetBitVector(uint(i))
-			comp := compressFn(data)
+		for i := 0; i < types.BloomBitLength; i++ {
+			data, err := bc.Bitset(uint(i))
+			if err != nil {
+				b.Fatalf("failed to retrieve bitset: %v", err)
+			}
+			comp := bitutil.CompressBytes(data)
 			dataSize += uint64(len(data))
 			compSize += uint64(len(comp))
-			core.StoreBloomBits(db, uint64(i), sectionIdx, sectionHead, comp)
+			core.WriteBloomBits(db, uint(i), sectionIdx, sectionHead, comp)
 		}
 		//if sectionIdx%50 == 0 {
 		//	fmt.Println(" section", sectionIdx, "/", cnt)
@@ -171,8 +136,7 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64, comp int) {
 		addr[0] = byte(i)
 		addr[1] = byte(i / 256)
 		filter := New(backend, 0, int64(cnt*sectionSize-1), []common.Address{addr}, nil)
-		filter.decompress = decompressFn
-		if _, err := filter.Find(context.Background()); err != nil {
+		if _, err := filter.Logs(context.Background()); err != nil {
 			b.Error("filter.Find error:", err)
 		}
 	}
@@ -229,7 +193,7 @@ func BenchmarkNoBloomBits(b *testing.B) {
 	mux := new(event.TypeMux)
 	backend := &testBackend{mux, db, 0, new(event.Feed), new(event.Feed), new(event.Feed), new(event.Feed)}
 	filter := New(backend, 0, int64(headNum), []common.Address{common.Address{}}, nil)
-	filter.Find(context.Background())
+	filter.Logs(context.Background())
 	d := time.Since(start)
 	fmt.Println("Finished running filter benchmarks")
 	fmt.Println(" ", d, "total  ", d*time.Duration(1000000)/time.Duration(headNum+1), "per million blocks")

@@ -51,27 +51,24 @@ type filter struct {
 // PublicFilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Ethereum protocol such als blocks, transactions and logs.
 type PublicFilterAPI struct {
-	backend          Backend
-	bloomBitsSection uint64
-	mux              *event.TypeMux
-	quit             chan struct{}
-	chainDb          ethdb.Database
-	events           *EventSystem
-	filtersMu        sync.Mutex
-	filters          map[rpc.ID]*filter
+	backend   Backend
+	mux       *event.TypeMux
+	quit      chan struct{}
+	chainDb   ethdb.Database
+	events    *EventSystem
+	filtersMu sync.Mutex
+	filters   map[rpc.ID]*filter
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
-func NewPublicFilterAPI(backend Backend, lightMode bool, bloomBitsSection uint64) *PublicFilterAPI {
+func NewPublicFilterAPI(backend Backend, lightMode bool) *PublicFilterAPI {
 	api := &PublicFilterAPI{
-		backend:          backend,
-		bloomBitsSection: bloomBitsSection,
-		mux:              backend.EventMux(),
-		chainDb:          backend.ChainDb(),
-		events:           NewEventSystem(backend.EventMux(), backend, lightMode),
-		filters:          make(map[rpc.ID]*filter),
+		backend: backend,
+		mux:     backend.EventMux(),
+		chainDb: backend.ChainDb(),
+		events:  NewEventSystem(backend.EventMux(), backend, lightMode),
+		filters: make(map[rpc.ID]*filter),
 	}
-
 	go api.timeoutLoop()
 
 	return api
@@ -326,16 +323,20 @@ func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_getlogs
 func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*types.Log, error) {
+	// Convert the RPC block numbers into internal representations
 	if crit.FromBlock == nil {
 		crit.FromBlock = big.NewInt(rpc.LatestBlockNumber.Int64())
 	}
 	if crit.ToBlock == nil {
 		crit.ToBlock = big.NewInt(rpc.LatestBlockNumber.Int64())
 	}
-
+	// Create and run the filter to get all the logs
 	filter := New(api.backend, crit.FromBlock.Int64(), crit.ToBlock.Int64(), crit.Addresses, crit.Topics)
 
-	logs, err := filter.Find(ctx)
+	logs, err := filter.Logs(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return returnLogs(logs), err
 }
 
@@ -369,20 +370,18 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 		return nil, fmt.Errorf("filter not found")
 	}
 
-	var begin, end int64
+	begin := rpc.LatestBlockNumber.Int64()
 	if f.crit.FromBlock != nil {
 		begin = f.crit.FromBlock.Int64()
-	} else {
-		begin = rpc.LatestBlockNumber.Int64()
 	}
+	end := rpc.LatestBlockNumber.Int64()
 	if f.crit.ToBlock != nil {
 		end = f.crit.ToBlock.Int64()
-	} else {
-		end = rpc.LatestBlockNumber.Int64()
 	}
+	// Create and run the filter to get all the logs
 	filter := New(api.backend, begin, end, f.crit.Addresses, f.crit.Topics)
 
-	logs, err := filter.Find(ctx)
+	logs, err := filter.Logs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +389,7 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 }
 
 // GetFilterChanges returns the logs for the filter with the given id since
-// last time is was called. This can be used for polling.
+// last time it was called. This can be used for polling.
 //
 // For pending transaction and block filters the result is []common.Hash.
 // (pending)Log filters return []Log.
