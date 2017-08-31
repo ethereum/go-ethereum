@@ -650,10 +650,6 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 		// Quickly validate the header and propagate the block if it passes
 		switch err := f.verifyHeader(block.Header()); err {
 		case nil:
-			// All ok, quickly propagate to our peers
-			propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
-			go f.broadcastBlock(block, true)
-
 		case consensus.ErrFutureBlock:
 			// Weird future block, don't fail, but neither propagate
 
@@ -668,6 +664,11 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			log.Debug("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			return
 		}
+
+		// All ok, propagate to our peers
+		propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
+		go f.broadcastBlock(block, true)
+
 		// If import succeeded, broadcast the block
 		propAnnounceOutTimer.UpdateSince(block.ReceivedAt)
 		go f.broadcastBlock(block, false)
