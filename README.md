@@ -1,4 +1,4 @@
-## Go Ethereum
+## GG Coin
 
 Official golang implementation of the Ethereum protocol.
 
