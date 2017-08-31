@@ -324,7 +324,7 @@ func gasCall(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem
 		eip158         = evm.ChainConfig().IsEIP158(evm.BlockNumber)
 	)
 	if eip158 {
-		if evm.StateDB.Empty(address) && transfersValue {
+		if transfersValue && evm.StateDB.Empty(address)  {
 			gas += params.CallNewAccountGas
 		}
 	} else if !evm.StateDB.Exist(address) {
