@@ -88,7 +88,7 @@ func (h Hash) MarshalText() ([]byte, error) {
 	return hexutil.Bytes(h[:]).MarshalText()
 }
 
-// Sets the hash to the value of b. If b is larger than len(h) it will panic
+// Sets the hash to the value of b. If b is larger than len(h), 'b' will be cropped (from the left).
 func (h *Hash) SetBytes(b []byte) {
 	if len(b) > len(h) {
 		b = b[len(b)-HashLength:]
@@ -97,7 +97,7 @@ func (h *Hash) SetBytes(b []byte) {
 	copy(h[HashLength-len(b):], b)
 }
 
-// Set string `s` to h. If s is larger than len(h) it will panic
+// Set string `s` to h. If s is larger than len(h) s will be cropped (from left) to fit.
 func (h *Hash) SetString(s string) { h.SetBytes([]byte(s)) }
 
 // Sets h to other
