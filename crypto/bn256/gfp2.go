@@ -130,13 +130,13 @@ func (e *gfP2) Mul(a, b *gfP2, pool *bnPool) *gfP2 {
 	tx := pool.Get().Mul(a.x, b.y)
 	t := pool.Get().Mul(b.x, a.y)
 	tx.Add(tx, t)
-	tx.Mod(tx, P)
+
+	t.Mul(a.x, b.x)
+	e.x.Mod(tx, P)
 
 	ty := pool.Get().Mul(a.y, b.y)
-	t.Mul(a.x, b.x)
 	ty.Sub(ty, t)
 	e.y.Mod(ty, P)
-	e.x.Set(tx)
 
 	pool.Put(tx)
 	pool.Put(ty)
@@ -177,13 +177,12 @@ func (e *gfP2) Square(a *gfP2, pool *bnPool) *gfP2 {
 	t1 := pool.Get().Sub(a.y, a.x)
 	t2 := pool.Get().Add(a.x, a.y)
 	ty := pool.Get().Mul(t1, t2)
-	ty.Mod(ty, P)
 
 	t1.Mul(a.x, a.y)
 	t1.Lsh(t1, 1)
 
 	e.x.Mod(t1, P)
-	e.y.Set(ty)
+	e.y.Mod(ty, P)
 
 	pool.Put(t1)
 	pool.Put(t2)
@@ -205,11 +204,11 @@ func (e *gfP2) Invert(a *gfP2, pool *bnPool) *gfP2 {
 	inv.ModInverse(t, P)
 
 	e.x.Neg(a.x)
-	e.x.Mul(e.x, inv)
-	e.x.Mod(e.x, P)
+	t.Mul(e.x, inv)
+	e.x.Mod(t, P)
 
-	e.y.Mul(a.y, inv)
-	e.y.Mod(e.y, P)
+	t.Mul(a.y, inv)
+	e.y.Mod(t, P)
 
 	pool.Put(t)
 	pool.Put(t2)
