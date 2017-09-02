@@ -44,6 +44,7 @@ var errBlockNumberUnsupported = errors.New("SimulatedBackend cannot access block
 // SimulatedBackend implements bind.ContractBackend, simulating a blockchain in
 // the background. Its main purpose is to allow easily testing contract bindings.
 type SimulatedBackend struct {
+	timeOffset int64
 	database   ethdb.Database   // In memory database to store our testing data
 	blockchain *core.BlockChain // Ethereum blockchain to handle the consensus
 
@@ -281,6 +282,26 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	})
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), state.NewDatabase(b.database))
+	return nil
+}
+
+// JumpTimeInSeconds adds skip seconds to the clock
+func (b *SimulatedBackend) JumpTimeInSeconds(skip int64) error {
+	if skip < 0 {
+		return errors.New("time offset must be > zero")
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.timeOffset += skip
+	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), b.database, 1, func(number int, block *core.BlockGen) {
+		for _, tx := range b.pendingBlock.Transactions() {
+			block.AddTx(tx)
+		}
+		block.OffsetTime(b.timeOffset)
+	})
+	b.pendingBlock = blocks[0]
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), state.NewDatabase(b.database))
+
 	return nil
 }
 
