@@ -112,7 +112,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	}
 	// Figure out whether to allow fast sync or not
 	if mode == downloader.FastSync && blockchain.CurrentBlock().NumberU64() > 0 {
-		log.Warn("Blockchain not empty, fast sync disabled")
+		log.Warn("区块链非空,不能进行快速同步")
 		mode = downloader.FullSync
 	}
 	if mode == downloader.FastSync {
@@ -158,11 +158,13 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	}
 	// Construct the different synchronisation mechanisms
 	manager.downloader = downloader.New(mode, chaindb, manager.eventMux, blockchain, nil, manager.removePeer)
-
+	//log.Warn("here we downloader.new!")
 	validator := func(header *types.Header) error {
+		//	log.Warn("here we VerifyHeader!")
 		return engine.VerifyHeader(blockchain, header, true)
 	}
 	heighter := func() uint64 {
+		//	log.Info("here CurrentBlock!", blockchain.CurrentBlock().NumberU64())
 		return blockchain.CurrentBlock().NumberU64()
 	}
 	inserter := func(blocks types.Blocks) (int, error) {
@@ -172,8 +174,10 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 			return 0, nil
 		}
 		atomic.StoreUint32(&manager.acceptTxs, 1) // Mark initial sync done on any fetcher import
+		//	log.Info("here we manager.blockchain.InsertChain!", blocks)
 		return manager.blockchain.InsertChain(blocks)
 	}
+	//	log.Warn("here we fetcher.New!")
 	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer)
 
 	return manager, nil
@@ -212,7 +216,7 @@ func (pm *ProtocolManager) Start() {
 }
 
 func (pm *ProtocolManager) Stop() {
-	log.Info("Stopping Ethereum protocol")
+	log.Info("停运运行以太坊协议")
 
 	pm.txSub.Unsubscribe()         // quits txBroadcastLoop
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
@@ -233,7 +237,7 @@ func (pm *ProtocolManager) Stop() {
 	// Wait for all peer handler goroutines and the loops to come down.
 	pm.wg.Wait()
 
-	log.Info("Ethereum protocol stopped")
+	log.Info("以太坊协议已停止运行")
 }
 
 func (pm *ProtocolManager) newPeer(pv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {

@@ -149,8 +149,10 @@ func enableWhisper(ctx *cli.Context) bool {
 }
 
 func makeFullNode(ctx *cli.Context) *node.Node {
-	stack, cfg := makeConfigNode(ctx)
 
+	//log.Warn("Here to makeFullNode ,eth adn create one!")
+
+	stack, cfg := makeConfigNode(ctx)
 	utils.RegisterEthService(stack, &cfg.Eth)
 
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
@@ -185,7 +187,9 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	}); err != nil {
 		utils.Fatalf("Failed to register the Geth release oracle service: %v", err)
 	}
+	//log.Warn("Here to End makeFullNode!")
 	return stack
+
 }
 
 // dumpConfig is the dumpconfig command.

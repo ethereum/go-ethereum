@@ -66,7 +66,7 @@ func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
 	if handles < 16 {
 		handles = 16
 	}
-	logger.Info("Allocated cache and file handles", "cache", cache, "handles", handles)
+	logger.Info("分配缓存和文件句柄", "cache", cache, "handles", handles)
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, &opt.Options{
@@ -159,9 +159,9 @@ func (db *LDBDatabase) Close() {
 	}
 	err := db.db.Close()
 	if err == nil {
-		db.log.Info("Database closed")
+		db.log.Info("数据库关闭")
 	} else {
-		db.log.Error("Failed to close database", "err", err)
+		db.log.Error("数据库关闭失败", "err", err)
 	}
 }
 

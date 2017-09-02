@@ -104,18 +104,23 @@ func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan s
 		number  = header.Number.Uint64()
 		dataset = ethash.dataset(number)
 	)
+	//log.Info("Header参数", "header", header, "hash", hash, "target", target, "Diff", header.Difficulty)
+
 	// Start generating random nonces until we abort or find a good one
 	var (
 		attempts = int64(0)
 		nonce    = seed
 	)
 	logger := log.New("miner", id)
+	//log.Info("挖矿线程编号", "id", id, "共识种子数值", nonce)
 	logger.Trace("Started ethash search for new nonces", "seed", seed)
+	//log.Info("开始搜索新的共识数", "种子数值", seed)
 	for {
 		select {
 		case <-abort:
 			// Mining terminated, update stats and abort
 			logger.Trace("Ethash nonce search aborted", "attempts", nonce-seed)
+			//	log.Info("Ethash共识搜索中断", "已尝试计算次数", nonce-seed)
 			ethash.hashrate.Mark(attempts)
 			return
 
@@ -128,6 +133,8 @@ func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan s
 			}
 			// Compute the PoW value of this nonce
 			digest, result := hashimotoFull(dataset, hash, nonce)
+			//log.Info("HashimotoFuall函数", "result", result, "target", target)
+
 			if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
 				// Correct nonce found, create a new header with it
 				header = types.CopyHeader(header)
@@ -138,8 +145,10 @@ func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan s
 				select {
 				case found <- block.WithSeal(header):
 					logger.Trace("Ethash nonce found and reported", "attempts", nonce-seed, "nonce", nonce)
+					//		log.Info("共识随机数找到", "共识数值", nonce)
 				case <-abort:
 					logger.Trace("Ethash nonce found but discarded", "attempts", nonce-seed, "nonce", nonce)
+					//		log.Info("共识随机数找到但丢弃", "共识数值", nonce)
 				}
 				return
 			}

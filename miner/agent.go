@@ -100,11 +100,11 @@ done:
 
 func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
 	if result, err := self.engine.Seal(self.chain, work.Block, stop); result != nil {
-		log.Info("Successfully sealed new block", "number", result.Number(), "hash", result.Hash())
+		log.Info("新区块封装成功", "区块编号：", result.Number(), "哈希值", result.Hash())
 		self.returnCh <- &Result{work, result}
 	} else {
 		if err != nil {
-			log.Warn("Block sealing failed", "err", err)
+			log.Warn("区块封装失败", "err", err)
 		}
 		self.returnCh <- nil
 	}

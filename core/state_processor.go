@@ -78,6 +78,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
+	//log.Warn("Here we  use P.engine.Finalize")
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts)
 
 	return receipts, allLogs, totalUsedGas, nil
@@ -104,11 +105,17 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 	}
 
 	// Update the state with pending changes
+	var root []byte
+	if config.IsMetropolis(header.Number) {
+		statedb.Finalise()
+	} else {
+		root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
+	}
 	usedGas.Add(usedGas, gas)
+
 	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
 	// based on the eip phase, we're passing wether the root touch-delete accounts.
-	root := statedb.IntermediateRoot(config.IsEIP158(header.Number))
-	receipt := types.NewReceipt(root.Bytes(), usedGas)
+	receipt := types.NewReceipt(root, usedGas)
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = new(big.Int).Set(gas)
 	// if the transaction created a contract, store the creation address in the receipt.

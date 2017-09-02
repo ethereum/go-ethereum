@@ -221,9 +221,9 @@ func (bc *BlockChain) loadLastState() error {
 	blockTd := bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64())
 	fastTd := bc.GetTd(bc.currentFastBlock.Hash(), bc.currentFastBlock.NumberU64())
 
-	log.Info("Loaded most recent local header", "number", currentHeader.Number, "hash", currentHeader.Hash(), "td", headerTd)
-	log.Info("Loaded most recent local full block", "number", bc.currentBlock.Number(), "hash", bc.currentBlock.Hash(), "td", blockTd)
-	log.Info("Loaded most recent local fast block", "number", bc.currentFastBlock.Number(), "hash", bc.currentFastBlock.Hash(), "td", fastTd)
+	log.Info("加载最近的本地区块头", "number", currentHeader.Number, "hash", currentHeader.Hash(), "td", headerTd)
+	log.Info("加载最近的本地完全区块", "number", bc.currentBlock.Number(), "hash", bc.currentBlock.Hash(), "td", blockTd)
+	log.Info("加载最近的本地快速区块", "number", bc.currentFastBlock.Number(), "hash", bc.currentFastBlock.Hash(), "td", fastTd)
 
 	return nil
 }
@@ -297,7 +297,7 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	bc.currentBlock = block
 	bc.mu.Unlock()
 
-	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
+	log.Info("执行新的头区块", "number", block.Number(), "hash", hash)
 	return nil
 }
 
@@ -598,7 +598,7 @@ func (bc *BlockChain) Stop() {
 	atomic.StoreInt32(&bc.procInterrupt, 1)
 
 	bc.wg.Wait()
-	log.Info("Blockchain manager stopped")
+	log.Info("区块链管理器停止运行")
 }
 
 func (bc *BlockChain) procFutureBlocks() {
@@ -813,7 +813,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 	// Report some public statistics so the user has a clue what's going on
 	last := blockChain[len(blockChain)-1]
-	log.Info("Imported new block receipts", "count", stats.processed, "elapsed", common.PrettyDuration(time.Since(start)),
+	log.Info("导入新区块收据", "count", stats.processed, "elapsed", common.PrettyDuration(time.Since(start)),
 		"number", last.Number(), "hash", last.Hash(), "ignored", stats.ignored)
 
 	return 0, nil
@@ -832,6 +832,11 @@ func (bc *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err er
 	// Make sure no inconsistent state is leaked during insertion
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
+
+	if bc.HasBlock(block.Hash()) {
+		log.Trace("Block existed", "hash", block.Hash())
+		return
+	}
 
 	localTd := bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64())
 	externTd := new(big.Int).Add(block.Difficulty(), ptd)
@@ -1028,6 +1033,8 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		stats.processed++
 		stats.usedGas += usedGas.Uint64()
 		stats.report(chain, i)
+		//log.Info("Right here is to go", chain)
+
 	}
 	go bc.postChainEvents(events, coalescedLogs)
 
@@ -1061,9 +1068,9 @@ func (st *insertStats) report(chain []*types.Block, index int) {
 			txs = countTransactions(chain[st.lastIndex : index+1])
 		)
 		context := []interface{}{
-			"blocks", st.processed, "txs", txs, "mgas", float64(st.usedGas) / 1000000,
-			"elapsed", common.PrettyDuration(elapsed), "mgasps", float64(st.usedGas) * 1000 / float64(elapsed),
-			"number", end.Number(), "hash", end.Hash(),
+			"区块数", st.processed, "交易数", txs, "已耗燃料", float64(st.usedGas) / 1000000,
+			"已耗时间", common.PrettyDuration(elapsed), "每秒消耗燃料", float64(st.usedGas) * 1000 / float64(elapsed),
+			"区块号", end.Number(), "哈希值", end.Hash(),
 		}
 		if st.queued > 0 {
 			context = append(context, []interface{}{"queued", st.queued}...)
@@ -1071,7 +1078,7 @@ func (st *insertStats) report(chain []*types.Block, index int) {
 		if st.ignored > 0 {
 			context = append(context, []interface{}{"ignored", st.ignored}...)
 		}
-		log.Info("Imported new chain segment", context...)
+		log.Info("导入新的区块段", context...)
 
 		*st = insertStats{startTime: now, lastIndex: index + 1}
 	}
@@ -1227,6 +1234,8 @@ func (bc *BlockChain) postChainEvents(events []interface{}, logs []*types.Log) {
 		}
 		// Fire the insertion events individually too
 		bc.eventMux.Post(event)
+		//log.Info("这里一个测试事件", event)
+
 	}
 }
 

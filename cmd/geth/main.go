@@ -199,8 +199,11 @@ func main() {
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
 func geth(ctx *cli.Context) error {
+	//log.Warn("From Here to config node ,eth adn create one!")
 	node := makeFullNode(ctx)
+	//log.Warn("Here end the config and node as well as eth are already created!now to start node")
 	startNode(ctx, node)
+	//log.Warn("Here the node is already started!")
 	node.Wait()
 	return nil
 }
@@ -210,6 +213,7 @@ func geth(ctx *cli.Context) error {
 // miner.
 func startNode(ctx *cli.Context, stack *node.Node) {
 	// Start up the node itself
+	//log.Warn("Here we startNode!")
 	utils.StartNode(stack)
 
 	// Unlock any account specifically requested
@@ -276,7 +280,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		// Set the gas price to the limits from the CLI and start mining
 		ethereum.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
 		if err := ethereum.StartMining(true); err != nil {
-			utils.Fatalf("Failed to start mining: %v", err)
+			utils.Fatalf("挖矿启动失败: %v", err)
 		}
 	}
 }

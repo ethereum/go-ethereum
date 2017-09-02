@@ -85,7 +85,7 @@ out:
 			if self.Mining() {
 				self.Stop()
 				atomic.StoreInt32(&self.shouldStart, 1)
-				log.Info("Mining aborted due to sync")
+				log.Info("因区块同步退出挖矿")
 			}
 		case downloader.DoneEvent, downloader.FailedEvent:
 			shouldStart := atomic.LoadInt32(&self.shouldStart) == 1
@@ -109,12 +109,12 @@ func (self *Miner) Start(coinbase common.Address) {
 	self.coinbase = coinbase
 
 	if atomic.LoadInt32(&self.canStart) == 0 {
-		log.Info("Network syncing, will start miner afterwards")
+		log.Info("网络同步，稍后开始挖矿")
 		return
 	}
 	atomic.StoreInt32(&self.mining, 1)
 
-	log.Info("Starting mining operation")
+	log.Info("开始挖矿")
 	self.worker.start()
 	self.worker.commitNewWork()
 }
