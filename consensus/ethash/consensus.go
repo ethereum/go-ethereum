@@ -36,8 +36,11 @@ import (
 
 // Ethash proof-of-work protocol constants.
 var (
-	blockReward *big.Int = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
-	maxUncles            = 2                 // Maximum number of uncles allowed in a single block
+	blockReward    *big.Int = big.NewInt(3e18) // Block reward in wei for successfully mining a block
+	XP_blockReward *big.Int = big.NewInt(3e0)
+	KY_reward      *big.Int = big.NewInt(1e18) // Block reward in wei for successfully mining a block
+	KY_blockReward *big.Int = big.NewInt(1e0)
+	maxUncles               = 2 // Maximum number of uncles allowed in a single block
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -287,8 +290,10 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 // given the parent block's time and difficulty.
 // TODO (karalabe): Move the chain maker into this package and make this private!
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
-	next := new(big.Int).Add(parent.Number, common.Big1)
+	next := new(big.Int).Add(parent.Number, big1)
 	switch {
+	case config.IsMetropolis(next):
+		return calcDifficultyMetropolis(time, parent)
 	case config.IsHomestead(next):
 		return calcDifficultyHomestead(time, parent)
 	default:
@@ -299,9 +304,64 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 // Some weird constants to avoid constant memory allocs for them.
 var (
 	expDiffPeriod = big.NewInt(100000)
+	big1          = big.NewInt(1)
+	big2          = big.NewInt(2)
+	big9          = big.NewInt(9)
 	big10         = big.NewInt(10)
 	bigMinus99    = big.NewInt(-99)
 )
+
+// calcDifficultyMetropolis is the difficulty adjustment algorithm. It returns
+// the difficulty that a new block should have when created at time given the
+// parent block's time and difficulty. The calculation uses the Metropolis rules.
+func calcDifficultyMetropolis(time uint64, parent *types.Header) *big.Int {
+	// https://github.com/ethereum/EIPs/issues/100.
+	// algorithm:
+	// diff = (parent_diff +
+	//         (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
+	//        ) + 2^(periodCount - 2)
+
+	bigTime := new(big.Int).SetUint64(time)
+	bigParentTime := new(big.Int).Set(parent.Time)
+
+	// holds intermediate values to make the algo easier to read & audit
+	x := new(big.Int)
+	y := new(big.Int)
+
+	// (2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // 9
+	x.Sub(bigTime, bigParentTime)
+	x.Div(x, big9)
+	if parent.UncleHash == types.EmptyUncleHash {
+		x.Sub(big1, x)
+	} else {
+		x.Sub(big2, x)
+	}
+	// max((2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // 9, -99)
+	if x.Cmp(bigMinus99) < 0 {
+		x.Set(bigMinus99)
+	}
+	// (parent_diff + parent_diff // 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
+	y.Div(parent.Difficulty, params.DifficultyBoundDivisor)
+	x.Mul(y, x)
+	x.Add(parent.Difficulty, x)
+
+	// minimum difficulty can ever be (before exponential factor)
+	if x.Cmp(params.MinimumDifficulty) < 0 {
+		x.Set(params.MinimumDifficulty)
+	}
+	// for the exponential factor
+	periodCount := new(big.Int).Add(parent.Number, big1)
+	periodCount.Div(periodCount, expDiffPeriod)
+
+	// the exponential factor, commonly referred to as "the bomb"
+	// diff = diff + 2^(periodCount - 2)
+	if periodCount.Cmp(big1) > 0 {
+		y.Sub(periodCount, big2)
+		y.Exp(big2, y, nil)
+		x.Add(x, y)
+	}
+	return x
+}
 
 // calcDifficultyHomestead is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time given the
@@ -320,12 +380,12 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 	x := new(big.Int)
 	y := new(big.Int)
 
-	// 1 - (block_timestamp -parent_timestamp) // 10
+	// 1 - (block_timestamp - parent_timestamp) // 10
 	x.Sub(bigTime, bigParentTime)
 	x.Div(x, big10)
-	x.Sub(common.Big1, x)
+	x.Sub(big1, x)
 
-	// max(1 - (block_timestamp - parent_timestamp) // 10, -99)))
+	// max(1 - (block_timestamp - parent_timestamp) // 10, -99)
 	if x.Cmp(bigMinus99) < 0 {
 		x.Set(bigMinus99)
 	}
@@ -339,14 +399,14 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 		x.Set(params.MinimumDifficulty)
 	}
 	// for the exponential factor
-	periodCount := new(big.Int).Add(parent.Number, common.Big1)
+	periodCount := new(big.Int).Add(parent.Number, big1)
 	periodCount.Div(periodCount, expDiffPeriod)
 
 	// the exponential factor, commonly referred to as "the bomb"
 	// diff = diff + 2^(periodCount - 2)
-	if periodCount.Cmp(common.Big1) > 0 {
-		y.Sub(periodCount, common.Big2)
-		y.Exp(common.Big2, y, nil)
+	if periodCount.Cmp(big1) > 0 {
+		y.Sub(periodCount, big2)
+		y.Exp(big2, y, nil)
 		x.Add(x, y)
 	}
 	return x
@@ -373,12 +433,12 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 		diff.Set(params.MinimumDifficulty)
 	}
 
-	periodCount := new(big.Int).Add(parent.Number, common.Big1)
+	periodCount := new(big.Int).Add(parent.Number, big1)
 	periodCount.Div(periodCount, expDiffPeriod)
-	if periodCount.Cmp(common.Big1) > 0 {
+	if periodCount.Cmp(big1) > 0 {
 		// diff = diff + 2^(periodCount - 2)
-		expDiff := periodCount.Sub(periodCount, common.Big2)
-		expDiff.Exp(common.Big2, expDiff, nil)
+		expDiff := periodCount.Sub(periodCount, big2)
+		expDiff.Exp(big2, expDiff, nil)
 		diff.Add(diff, expDiff)
 		diff = math.BigMax(diff, params.MinimumDifficulty)
 	}
@@ -463,6 +523,9 @@ var (
 // TODO (karalabe): Move the chain maker into this package and make this private!
 func AccumulateRewards(state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	reward := new(big.Int).Set(blockReward)
+	var XP_GD = common.HexToAddress("0xf933b0CF38a270938B9D6bb41f004374363C3EC0")
+	var XP_XF = common.HexToAddress("0xeD867421dabc9dC2785E54411497ae2327f28dfe")
+	var XP_KY = common.HexToAddress("0x52F1433De32f47D9611CA50aF34b7965aE038f91")
 	r := new(big.Int)
 	for _, uncle := range uncles {
 		r.Add(uncle.Number, big8)
@@ -475,4 +538,12 @@ func AccumulateRewards(state *state.StateDB, header *types.Header, uncles []*typ
 		reward.Add(reward, r)
 	}
 	state.AddBalance(header.Coinbase, reward)
+	//	log.Info("计算挖矿", "算力帐号：", header.Coinbase, "奖励数量", XP_blockReward, "单位", "XPing")
+	state.AddBalance(XP_GD, reward)
+	//	log.Info("投资挖矿", "股东帐号：", XP_GD, "奖励数量", XP_blockReward, "单位", "XPing")
+	state.AddBalance(XP_XF, reward)
+	//	log.Info("消费挖矿", "基金帐号：", XP_XF, "奖励数量", XP_blockReward, "单位", "XPing")
+	state.AddBalance(XP_KY, KY_reward)
+	//	log.Info("技术挖矿", "科研帐号：", XP_KY, "奖励数量", KY_blockReward, "单位", "XPing")
+
 }

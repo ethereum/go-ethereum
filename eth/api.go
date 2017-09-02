@@ -454,7 +454,7 @@ func (api *PrivateDebugAPI) traceBlock(block *types.Block, logConfig *vm.LogConf
 	if err != nil {
 		return false, structLogger.StructLogs(), err
 	}
-
+	log.Warn("Here WE are in The TraceBlock and use processor.process")
 	receipts, _, usedGas, err := processor.Process(block, statedb, config)
 	if err != nil {
 		return false, structLogger.StructLogs(), err

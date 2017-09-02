@@ -94,7 +94,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 		if elapsed > 3*time.Second {
 			logFn = logger.Info
 		}
-		logFn("Generated ethash verification cache", "elapsed", common.PrettyDuration(elapsed))
+		logFn("哈希验证缓存已生成", "elapsed", common.PrettyDuration(elapsed))
 	}()
 	// Convert our destination slice to a byte buffer
 	header := *(*reflect.SliceHeader)(unsafe.Pointer(&dest))
@@ -118,7 +118,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 			case <-done:
 				return
 			case <-time.After(3 * time.Second):
-				logger.Info("Generating ethash verification cache", "percentage", atomic.LoadUint32(&progress)*100/uint32(rows)/4, "elapsed", common.PrettyDuration(time.Since(start)))
+				logger.Info("产生哈希校验缓存", "percentage", atomic.LoadUint32(&progress)*100/uint32(rows)/4, "elapsed", common.PrettyDuration(time.Since(start)))
 			}
 		}
 	}()
@@ -231,7 +231,7 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 		if elapsed > 3*time.Second {
 			logFn = logger.Info
 		}
-		logFn("Generated ethash verification cache", "elapsed", common.PrettyDuration(elapsed))
+		logFn("哈希验证缓存已生成", "elapsed", common.PrettyDuration(elapsed))
 	}()
 
 	// Figure out whether the bytes need to be swapped for the machine

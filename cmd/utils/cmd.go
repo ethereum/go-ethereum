@@ -67,12 +67,12 @@ func StartNode(stack *node.Node) {
 		signal.Notify(sigc, os.Interrupt)
 		defer signal.Stop(sigc)
 		<-sigc
-		log.Info("Got interrupt, shutting down...")
+		log.Info("获得中断指令，程序运行停止...")
 		go stack.Stop()
 		for i := 10; i > 0; i-- {
 			<-sigc
 			if i > 1 {
-				log.Warn("Already shutting down, interrupt more to panic.", "times", i-1)
+				log.Warn("程序已经停止运行，不需再发中止指令！", "times", i-1)
 			}
 		}
 		debug.Exit() // ensure trace and CPU profile data is flushed.

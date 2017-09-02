@@ -359,10 +359,10 @@ func New(cachedir string, cachesinmem, cachesondisk int, dagdir string, dagsinme
 		cachesinmem = 1
 	}
 	if cachedir != "" && cachesondisk > 0 {
-		log.Info("Disk storage enabled for ethash caches", "dir", cachedir, "count", cachesondisk)
+		log.Info("哈希计算存储目录", "dir", cachedir, "count", cachesondisk)
 	}
 	if dagdir != "" && dagsondisk > 0 {
-		log.Info("Disk storage enabled for ethash DAGs", "dir", dagdir, "count", dagsondisk)
+		log.Info("DAG哈希计算文件存储目录", "dir", dagdir, "count", dagsondisk)
 	}
 	return &Ethash{
 		cachedir:     cachedir,

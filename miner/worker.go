@@ -142,6 +142,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 	go worker.update()
 
 	go worker.wait()
+	//log.Warn("here we are in the NewWorker!")
 	worker.commitNewWork()
 
 	return worker
@@ -234,6 +235,7 @@ func (self *worker) update() {
 		// A real event arrived, process interesting content
 		switch ev := event.Data.(type) {
 		case core.ChainHeadEvent:
+			//log.Warn("here we are in the ChainHeadEvent!")
 			self.commitNewWork()
 		case core.ChainSideEvent:
 			self.uncleMu.Lock()
@@ -241,6 +243,7 @@ func (self *worker) update() {
 			self.uncleMu.Unlock()
 		case core.TxPreEvent:
 			// Apply transaction to the pending state if we're not mining
+			log.Warn("here we are in the TxPreEvent!")
 			if atomic.LoadInt32(&self.mining) == 0 {
 				self.currentMu.Lock()
 
@@ -393,7 +396,7 @@ func (self *worker) commitNewWork() {
 	// this will ensure we're not going off too far in the future
 	if now := time.Now().Unix(); tstamp > now+1 {
 		wait := time.Duration(tstamp-now) * time.Second
-		log.Info("Mining too far in the future", "wait", common.PrettyDuration(wait))
+		log.Info("挖矿时间离当前时太远", "等待", common.PrettyDuration(wait))
 		time.Sleep(wait)
 	}
 
@@ -471,13 +474,14 @@ func (self *worker) commitNewWork() {
 		delete(self.possibleUncles, hash)
 	}
 	// Create the new block to seal with the consensus engine
+	//log.Warn("Here we are in the CommitNewwork!")
 	if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
 		log.Error("Failed to finalize block for sealing", "err", err)
 		return
 	}
 	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {
-		log.Info("Commit new mining work", "number", work.Block.Number(), "txs", work.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
+		log.Info("执行新的挖矿任务", "区块编号", work.Block.Number(), "交易数", work.tcount, "叔区块数", len(uncles), "已耗时间", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}
 	self.push(work)

@@ -348,7 +348,7 @@ func (srv *Server) Start() (err error) {
 		return errors.New("server already running")
 	}
 	srv.running = true
-	log.Info("Starting P2P networking")
+	log.Info("启动P2P网络")
 
 	// static fields
 	if srv.PrivateKey == nil {
@@ -615,7 +615,7 @@ type tempError interface {
 // inbound connections.
 func (srv *Server) listenLoop() {
 	defer srv.loopWG.Done()
-	log.Info("RLPx listener up", "self", srv.makeSelf(srv.listener, srv.ntab))
+	log.Info("RLPx侦听服务启动", "self", srv.makeSelf(srv.listener, srv.ntab))
 
 	// This channel acts as a semaphore limiting
 	// active inbound connections that are lingering pre-handshake.

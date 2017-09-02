@@ -167,6 +167,7 @@ func New(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, broadcastBloc
 		chainHeight:    chainHeight,
 		insertChain:    insertChain,
 		dropPeer:       dropPeer,
+		//	log.Warn("here we are in fetcher.New Function!")
 	}
 }
 

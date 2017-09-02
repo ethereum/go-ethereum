@@ -445,5 +445,5 @@ func (s *stateSync) updateStats(processed, written, duplicate, unexpected int, d
 	s.d.syncStatsState.duplicate += uint64(duplicate)
 	s.d.syncStatsState.unexpected += uint64(unexpected)
 
-	log.Info("Imported new state entries", "count", processed, "flushed", written, "elapsed", common.PrettyDuration(duration), "processed", s.d.syncStatsState.processed, "pending", s.d.syncStatsState.pending, "retry", len(s.tasks), "duplicate", s.d.syncStatsState.duplicate, "unexpected", s.d.syncStatsState.unexpected)
+	log.Info("导入新的状态记录", "数量", processed, "已处理", written, "耗时", common.PrettyDuration(duration), "已处理", s.d.syncStatsState.processed, "等待处理", s.d.syncStatsState.pending, "重试", len(s.tasks), "删除", s.d.syncStatsState.duplicate, "意外", s.d.syncStatsState.unexpected)
 }

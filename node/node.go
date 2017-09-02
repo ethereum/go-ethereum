@@ -153,6 +153,7 @@ func (n *Node) Start() error {
 
 	// Initialize the p2p server. This creates the node key and
 	// discovery databases.
+	//log.Warn("here the node begin to start!")
 	n.serverConfig = n.config.P2P
 	n.serverConfig.PrivateKey = n.config.NodeKey()
 	n.serverConfig.Name = n.config.NodeName()
@@ -166,7 +167,7 @@ func (n *Node) Start() error {
 		n.serverConfig.NodeDatabase = n.config.NodeDB()
 	}
 	running := &p2p.Server{Config: n.serverConfig}
-	log.Info("Starting peer-to-peer node", "instance", n.serverConfig.Name)
+	log.Info("欢迎进入消品链网络", "instance", n.serverConfig.Name)
 
 	// Otherwise copy and specialize the P2P configuration
 	services := make(map[reflect.Type]Service)
@@ -182,6 +183,8 @@ func (n *Node) Start() error {
 			ctx.services[kind] = s
 		}
 		// Construct and save the service
+		//log.Warn("这里一个设置断点！111111111")
+
 		service, err := constructor(ctx)
 		if err != nil {
 			return err
@@ -192,6 +195,8 @@ func (n *Node) Start() error {
 		}
 		services[kind] = service
 	}
+	//log.Warn("这里一个设置断点！@@@@@@@@@@")
+
 	// Gather the protocols and start the freshly assembled P2P server
 	for _, service := range services {
 		running.Protocols = append(running.Protocols, service.Protocols()...)
@@ -202,6 +207,8 @@ func (n *Node) Start() error {
 		}
 		return err
 	}
+
+	//log.Warn("这里一个设置断点！2222222222222")
 	// Start each of the services
 	started := []reflect.Type{}
 	for kind, service := range services {
@@ -217,6 +224,7 @@ func (n *Node) Start() error {
 		// Mark the service started for potential cleanup
 		started = append(started, kind)
 	}
+	//log.Warn("这里一个设置断点！3333333")
 	// Lastly start the configured RPC interfaces
 	if err := n.startRPC(services); err != nil {
 		for _, service := range services {
@@ -229,7 +237,7 @@ func (n *Node) Start() error {
 	n.services = services
 	n.server = running
 	n.stop = make(chan struct{})
-
+	log.Warn("销品链网络初始化完成!")
 	return nil
 }
 
@@ -331,7 +339,7 @@ func (n *Node) startIPC(apis []rpc.API) error {
 		return err
 	}
 	go func() {
-		log.Info(fmt.Sprintf("IPC endpoint opened: %s", n.ipcEndpoint))
+		log.Info(fmt.Sprintf("IPC终端服务启动: %s", n.ipcEndpoint))
 
 		for {
 			conn, err := listener.Accept()
@@ -363,7 +371,7 @@ func (n *Node) stopIPC() {
 		n.ipcListener.Close()
 		n.ipcListener = nil
 
-		log.Info(fmt.Sprintf("IPC endpoint closed: %s", n.ipcEndpoint))
+		log.Info(fmt.Sprintf("IPC终端服务关闭: %s", n.ipcEndpoint))
 	}
 	if n.ipcHandler != nil {
 		n.ipcHandler.Stop()
@@ -401,7 +409,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 		return err
 	}
 	go rpc.NewHTTPServer(cors, handler).Serve(listener)
-	log.Info(fmt.Sprintf("HTTP endpoint opened: http://%s", endpoint))
+	log.Info(fmt.Sprintf("HTTP终端服务启动: http://%s", endpoint))
 
 	// All listeners booted successfully
 	n.httpEndpoint = endpoint
@@ -417,7 +425,7 @@ func (n *Node) stopHTTP() {
 		n.httpListener.Close()
 		n.httpListener = nil
 
-		log.Info(fmt.Sprintf("HTTP endpoint closed: http://%s", n.httpEndpoint))
+		log.Info(fmt.Sprintf("HTTP终端服务关闭: http://%s", n.httpEndpoint))
 	}
 	if n.httpHandler != nil {
 		n.httpHandler.Stop()
@@ -638,8 +646,10 @@ func (n *Node) EventMux() *event.TypeMux {
 // ephemeral, a memory database is returned.
 func (n *Node) OpenDatabase(name string, cache, handles int) (ethdb.Database, error) {
 	if n.config.DataDir == "" {
+
 		return ethdb.NewMemDatabase()
 	}
+	log.Warn("Here we are in node and creat NewDBdatabase")
 	return ethdb.NewLDBDatabase(n.config.resolvePath(name), cache, handles)
 }
 
