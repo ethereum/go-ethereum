@@ -976,7 +976,7 @@ func TestTransactionPendingGlobalLimiting(t *testing.T) {
 	}
 }
 
-// Tests that if transactions start being capped, transasctions are also removed from 'all'
+// Tests that if transactions start being capped, transactions are also removed from 'all'
 func TestTransactionCapClearsFromAll(t *testing.T) {
 	// Create the pool to test the limit enforcement with
 	db, _ := ethdb.NewMemDatabase()
@@ -1139,6 +1139,66 @@ func TestTransactionPoolRepricing(t *testing.T) {
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
+}
+
+// Tests that setting the transaction pool gas price to a higher value does not
+// remove local transactions.
+func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
+	// Create the pool to test the pricing enforcement with
+	db, _ := ethdb.NewMemDatabase()
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
+	blockchain := &testBlockChain{statedb, big.NewInt(1000000), new(event.Feed), new(event.Feed)}
+
+	pool := NewTxPool(testTxPoolConfig, params.TestChainConfig, blockchain)
+	defer pool.Stop()
+
+	// Create a number of test accounts and fund them
+	state, _ := pool.blockChain.State()
+
+	keys := make([]*ecdsa.PrivateKey, 3)
+	for i := 0; i < len(keys); i++ {
+		keys[i], _ = crypto.GenerateKey()
+		state.AddBalance(crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000*1000000))
+	}
+	// Create transaction (both pending and queued) with a linearly growing gasprice
+	for i := uint64(0); i < 500; i++ {
+		// Add pending
+		p_tx := pricedTransaction(i, big.NewInt(100000), big.NewInt(int64(i)), keys[2])
+		if err := pool.AddLocal(p_tx); err != nil {
+			t.Fatal(err)
+		}
+		// Add queued
+		q_tx := pricedTransaction(i+501, big.NewInt(100000), big.NewInt(int64(i)), keys[2])
+		if err := pool.AddLocal(q_tx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pending, queued := pool.Stats()
+	expPending, expQueued := 500, 500
+	validate := func() {
+		pending, queued = pool.Stats()
+		if pending != expPending {
+			t.Fatalf("pending transactions mismatched: have %d, want %d", pending, expPending)
+		}
+		if queued != expQueued {
+			t.Fatalf("queued transactions mismatched: have %d, want %d", queued, expQueued)
+		}
+
+		if err := validateTxPoolInternals(pool); err != nil {
+			t.Fatalf("pool internal state corrupted: %v", err)
+		}
+	}
+	validate()
+	
+	// Reprice the pool and check that nothing is dropped
+	pool.SetGasPrice(big.NewInt(2))
+	validate()
+	
+	pool.SetGasPrice(big.NewInt(2))
+	pool.SetGasPrice(big.NewInt(4))
+	pool.SetGasPrice(big.NewInt(8))
+	pool.SetGasPrice(big.NewInt(100))
+	validate()
 }
 
 // Tests that when the pool reaches its global transaction limit, underpriced

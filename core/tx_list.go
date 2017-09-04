@@ -435,6 +435,7 @@ func (l *txPricedList) Cap(threshold *big.Int, local *accountSet) types.Transact
 		}
 		// Stop the discards if we've reached the threshold
 		if tx.GasPrice().Cmp(threshold) >= 0 {
+			save = append(save, tx)
 			break
 		}
 		// Non stale transaction found, discard unless local
