@@ -385,7 +385,7 @@ func (t *udp) loop() {
 
 		case r := <-t.gotreply:
 			var matched bool
-			for el := plist.Front(); el != nil; el = el.Next() {
+			for el := plist.Front(); !matched && el != nil; el = el.Next() {
 				p := el.Value.(*pending)
 				if p.from == r.from && p.ptype == r.ptype {
 					matched = true
