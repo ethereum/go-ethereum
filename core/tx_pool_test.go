@@ -1143,7 +1143,6 @@ func TestTransactionPoolRepricing(t *testing.T) {
 
 // Tests that setting the transaction pool gas price to a higher value does not
 // remove local transactions.
-//
 func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
 	// Create the pool to test the pricing enforcement with
 	db, _ := ethdb.NewMemDatabase()
@@ -1161,20 +1160,15 @@ func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
 		keys[i], _ = crypto.GenerateKey()
 		state.AddBalance(crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000*1000000))
 	}
-	// Generate and queue a batch of transactions, both pending and queued
-
-	// Create transaction (both pending and queued)
-	// with a linearly growing gasprice.
-	var j uint64
-
-	for j = 0; j < 500; j++ {
+	// Create transaction (both pending and queued) with a linearly growing gasprice
+	for i := uint64(0); i < 500; i++ {
 		// Add pending
-		p_tx := pricedTransaction(j, big.NewInt(100000), big.NewInt(int64(j)), keys[2])
+		p_tx := pricedTransaction(i, big.NewInt(100000), big.NewInt(int64(i)), keys[2])
 		if err := pool.AddLocal(p_tx); err != nil {
 			t.Fatal(err)
 		}
 		// Add queued
-		q_tx := pricedTransaction(j+501, big.NewInt(100000), big.NewInt(int64(j)), keys[2])
+		q_tx := pricedTransaction(i+501, big.NewInt(100000), big.NewInt(int64(i)), keys[2])
 		if err := pool.AddLocal(q_tx); err != nil {
 			t.Fatal(err)
 		}
@@ -1193,18 +1187,18 @@ func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
 		if err := validateTxPoolInternals(pool); err != nil {
 			t.Fatalf("pool internal state corrupted: %v", err)
 		}
-
 	}
 	validate()
+	
 	// Reprice the pool and check that nothing is dropped
 	pool.SetGasPrice(big.NewInt(2))
 	validate()
+	
 	pool.SetGasPrice(big.NewInt(2))
 	pool.SetGasPrice(big.NewInt(4))
 	pool.SetGasPrice(big.NewInt(8))
 	pool.SetGasPrice(big.NewInt(100))
 	validate()
-
 }
 
 // Tests that when the pool reaches its global transaction limit, underpriced
