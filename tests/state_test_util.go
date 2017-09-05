@@ -120,10 +120,10 @@ func (t *StateTest) Subtests() []StateSubtest {
 }
 
 // Run executes a specific subtest.
-func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) error {
+func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) (*state.StateDB, error) {
 	config, ok := Forks[subtest.Fork]
 	if !ok {
-		return UnsupportedForkError{subtest.Fork}
+		return nil, UnsupportedForkError{subtest.Fork}
 	}
 	block, _ := t.genesis(config).ToBlock()
 	db, _ := ethdb.NewMemDatabase()
@@ -132,7 +132,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) error {
 	post := t.json.Post[subtest.Fork][subtest.Index]
 	msg, err := t.json.Tx.toMessage(post)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	context := core.NewEVMContext(msg, block.Header(), nil, &t.json.Env.Coinbase)
 	context.GetHash = vmTestBlockHash
@@ -145,13 +145,13 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) error {
 		statedb.RevertToSnapshot(snapshot)
 	}
 	if logs := rlpHash(statedb.Logs()); logs != common.Hash(post.Logs) {
-		return fmt.Errorf("post state logs hash mismatch: got %x, want %x", logs, post.Logs)
+		return statedb, fmt.Errorf("post state logs hash mismatch: got %x, want %x", logs, post.Logs)
 	}
 	root, _ := statedb.CommitTo(db, config.IsEIP158(block.Number()))
 	if root != common.Hash(post.Root) {
-		return fmt.Errorf("post state root mismatch: got %x, want %x", root, post.Root)
+		return statedb, fmt.Errorf("post state root mismatch: got %x, want %x", root, post.Root)
 	}
-	return nil
+	return statedb, nil
 }
 
 func (t *StateTest) gasLimit(subtest StateSubtest) uint64 {
