@@ -1,13 +1,15 @@
-FROM alpine:3.6
+# Build Geth in a stock Go builder container
+FROM golang:1.9-alpine as builder
+
+RUN apk add --no-cache make gcc musl-dev linux-headers
 
 ADD . /go-ethereum
-RUN \
-  apk add --no-cache git go make gcc musl-dev linux-headers && \
-  (cd go-ethereum && make geth)                             && \
-  cp go-ethereum/build/bin/geth /usr/local/bin/             && \
-  apk del git go make gcc musl-dev linux-headers            && \
-  rm -rf /go-ethereum
+RUN cd /go-ethereum && make geth
 
-EXPOSE 8545 30303 30303/udp
+# Pull Geth into a second stage deploy alpine container
+FROM alpine:latest
 
+COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
+
+EXPOSE 8545 8546 30303 30303/udp
 ENTRYPOINT ["geth"]
