@@ -51,7 +51,8 @@ data_{i} := size(subtree_{i}) || key_{j} || key_{j+1} .... || key_{j+n-1}
 */
 
 const (
-	defaultHash = "SHA3" // http://golang.org/pkg/hash/#Hash
+	defaultHash = "SHA3"
+	// defaultHash = "BMTSHA3" // http://golang.org/pkg/hash/#Hash
 	// defaultHash           = "SHA256" // http://golang.org/pkg/hash/#Hash
 	defaultBranches int64 = 128
 	// hashSize     int64 = hasherfunc.New().Size() // hasher knows about its own length in bytes
