@@ -49,21 +49,24 @@ func NewGenerator(sections uint) (*Generator, error) {
 
 // AddBloom takes a single bloom filter and sets the corresponding bit column
 // in memory accordingly.
-func (b *Generator) AddBloom(bloom types.Bloom) error {
+func (b *Generator) AddBloom(index uint, bloom types.Bloom) error {
 	// Make sure we're not adding more bloom filters than our capacity
 	if b.nextBit >= b.sections {
 		return errSectionOutOfBounds
 	}
+	if b.nextBit != index {
+		return errors.New("bloom filter with unexpected index")
+	}
 	// Rotate the bloom and insert into our collection
-	byteMask := b.nextBit / 8
+	byteIndex := b.nextBit / 8
 	bitMask := byte(1) << byte(7-b.nextBit%8)
 
 	for i := 0; i < types.BloomBitLength; i++ {
-		bloomByteMask := types.BloomByteLength - 1 - i/8
+		bloomByteIndex := types.BloomByteLength - 1 - i/8
 		bloomBitMask := byte(1) << byte(i%8)
 
-		if (bloom[bloomByteMask] & bloomBitMask) != 0 {
-			b.blooms[i][byteMask] |= bitMask
+		if (bloom[bloomByteIndex] & bloomBitMask) != 0 {
+			b.blooms[i][byteIndex] |= bitMask
 		}
 	}
 	b.nextBit++

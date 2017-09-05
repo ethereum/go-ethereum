@@ -98,7 +98,7 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 			if header == nil {
 				b.Fatalf("Error creating bloomBits data")
 			}
-			bc.AddBloom(header.Bloom)
+			bc.AddBloom(uint(i-sectionIdx*sectionSize), header.Bloom)
 		}
 		sectionHead := core.GetCanonicalHash(db, (sectionIdx+1)*sectionSize-1)
 		for i := 0; i < types.BloomBitLength; i++ {

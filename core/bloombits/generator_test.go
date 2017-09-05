@@ -44,7 +44,7 @@ func TestGenerator(t *testing.T) {
 		t.Fatalf("failed to create bloombit generator: %v", err)
 	}
 	for i, bloom := range input {
-		if err := gen.AddBloom(bloom); err != nil {
+		if err := gen.AddBloom(uint(i), bloom); err != nil {
 			t.Fatalf("bloom %d: failed to add: %v", i, err)
 		}
 	}
