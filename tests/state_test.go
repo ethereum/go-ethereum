@@ -50,7 +50,8 @@ func TestState(t *testing.T) {
 					t.Skip("constantinople not supported yet")
 				}
 				withTrace(t, test.gasLimit(subtest), func(vmconfig vm.Config) error {
-					return st.checkFailure(t, name, test.Run(subtest, vmconfig))
+					_, err := test.Run(subtest, vmconfig)
+					return st.checkFailure(t, name, err)
 				})
 			})
 		}
