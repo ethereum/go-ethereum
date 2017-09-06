@@ -94,10 +94,8 @@ func testMatcherBothModes(t *testing.T, filter [][]bloomIndexes, blocks uint64, 
 // number of requests made for cross validation between different modes.
 func testMatcher(t *testing.T, filter [][]bloomIndexes, blocks uint64, intermittent bool, retrievals uint32, maxReqCount int) uint32 {
 	// Create a new matcher an simulate our explicit random bitsets
-	matcher := NewMatcher(testSectionSize, nil, nil)
-
-	matcher.addresses = filter[0]
-	matcher.topics = filter[1:]
+	matcher := NewMatcher(testSectionSize, nil)
+	matcher.filters = filter
 
 	for _, rule := range filter {
 		for _, topic := range rule {

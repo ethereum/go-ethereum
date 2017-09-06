@@ -60,6 +60,23 @@ type Filter struct {
 // New creates a new filter which uses a bloom filter on blocks to figure out whether
 // a particular block is interesting or not.
 func New(backend Backend, begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
+	// Flatten the address and topic filter clauses into a single filter system
+	var filters [][][]byte
+	if len(addresses) > 0 {
+		filter := make([][]byte, len(addresses))
+		for i, address := range addresses {
+			filter[i] = address.Bytes()
+		}
+		filters = append(filters, filter)
+	}
+	for _, topicList := range topics {
+		filter := make([][]byte, len(topicList))
+		for i, topic := range topicList {
+			filter[i] = topic.Bytes()
+		}
+		filters = append(filters, filter)
+	}
+	// Assemble and return the filter
 	size, _ := backend.BloomStatus()
 
 	return &Filter{
@@ -69,7 +86,7 @@ func New(backend Backend, begin, end int64, addresses []common.Address, topics [
 		addresses: addresses,
 		topics:    topics,
 		db:        backend.ChainDb(),
-		matcher:   bloombits.NewMatcher(size, addresses, topics),
+		matcher:   bloombits.NewMatcher(size, filters),
 	}
 }
 
