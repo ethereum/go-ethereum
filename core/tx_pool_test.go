@@ -50,22 +50,22 @@ type testBlockChain struct {
 	chainHeadFeed *event.Feed
 }
 
-func (bc *testBlockChain) CurrentHeader() *types.Header {
-	return &types.Header{
+func (bc *testBlockChain) CurrentBlock() *types.Block {
+	return types.NewBlock(&types.Header{
 		GasLimit: bc.gasLimit,
-	}
-}
-
-func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
-	return bc.chainHeadFeed.Subscribe(ch)
+	}, nil, nil, nil)
 }
 
 func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
-	return types.NewBlock(bc.CurrentHeader(), nil, nil, nil)
+	return bc.CurrentBlock()
 }
 
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
 	return bc.statedb, nil
+}
+
+func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription {
+	return bc.chainHeadFeed.Subscribe(ch)
 }
 
 func transaction(nonce uint64, gaslimit *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
