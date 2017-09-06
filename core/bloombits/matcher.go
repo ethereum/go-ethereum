@@ -17,6 +17,7 @@
 package bloombits
 
 import (
+	"bytes"
 	"errors"
 	"math"
 	"sort"
@@ -171,15 +172,6 @@ func (m *Matcher) Start(begin, end uint64, results chan uint64) (*MatcherSession
 				}
 				// Iterate over all the blocks in the section and return the matching ones
 				for i := first; i <= last; i++ {
-					// If the bitset is nil, we're a special match-all cornercase
-					if res.bitset == nil {
-						select {
-						case <-session.quit:
-							return
-						case results <- i:
-						}
-						continue
-					}
 					// Skip the entire byte if no matches are found inside
 					next := res.bitset[(i-sectionStart)/8]
 					if next == 0 {
@@ -221,7 +213,7 @@ func (m *Matcher) run(begin, end uint64, buffer int, session *MatcherSession) ch
 			select {
 			case <-session.quit:
 				return
-			case source <- &partialMatches{i, nil}:
+			case source <- &partialMatches{i, bytes.Repeat([]byte{0xff}, int(m.sectionSize/8))}:
 			}
 		}
 	}()

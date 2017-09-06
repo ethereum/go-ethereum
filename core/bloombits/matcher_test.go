@@ -51,6 +51,11 @@ func TestMatcherRandom(t *testing.T) {
 	}
 }
 
+// Tests that matching on everything doesn't crash (special case internally).
+func TestWildcardMatcher(t *testing.T) {
+	testMatcherBothModes(t, nil, 10000, 0)
+}
+
 // makeRandomIndexes generates a random filter system, composed on multiple filter
 // criteria, each having one bloom list component for the address and arbitrarilly
 // many topic bloom list components.
