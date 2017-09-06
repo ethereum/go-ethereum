@@ -324,8 +324,6 @@ func (self *worker) wait() {
 				if stat == core.CanonStatTy {
 					// This puts transactions in a extra db for rpc
 					core.WriteTxLookupEntries(self.chainDb, block)
-					// Write map map bloom filters
-					core.WriteMipmapBloom(self.chainDb, block.NumberU64(), work.receipts)
 					// implicit by posting ChainHeadEvent
 					mustCommitNewWork = false
 				}

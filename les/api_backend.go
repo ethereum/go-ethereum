@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -170,4 +171,11 @@ func (b *LesApiBackend) EventMux() *event.TypeMux {
 
 func (b *LesApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.accountManager
+}
+
+func (b *LesApiBackend) BloomStatus() (uint64, uint64) {
+	return params.BloomBitsBlocks, 0
+}
+
+func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
 }

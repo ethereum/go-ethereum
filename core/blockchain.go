@@ -759,12 +759,6 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				log.Crit("Failed to write block receipts", "err", err)
 				return
 			}
-			if err := WriteMipmapBloom(bc.chainDb, block.NumberU64(), receipts); err != nil {
-				errs[index] = fmt.Errorf("failed to write log blooms: %v", err)
-				atomic.AddInt32(&failed, 1)
-				log.Crit("Failed to write log blooms", "err", err)
-				return
-			}
 			if err := WriteTxLookupEntries(bc.chainDb, block); err != nil {
 				errs[index] = fmt.Errorf("failed to write lookup metadata: %v", err)
 				atomic.AddInt32(&failed, 1)
@@ -1017,10 +1011,6 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			if err := WriteTxLookupEntries(bc.chainDb, block); err != nil {
 				return i, err
 			}
-			// Write map map bloom filters
-			if err := WriteMipmapBloom(bc.chainDb, block.NumberU64(), receipts); err != nil {
-				return i, err
-			}
 			// Write hash preimages
 			if err := WritePreimages(bc.chainDb, block.NumberU64(), state.Preimages()); err != nil {
 				return i, err
@@ -1176,11 +1166,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		bc.insert(block)
 		// write lookup entries for hash based transaction/receipt searches
 		if err := WriteTxLookupEntries(bc.chainDb, block); err != nil {
-			return err
-		}
-		// Write map map bloom filters
-		receipts := GetBlockReceipts(bc.chainDb, block.Hash(), block.NumberU64())
-		if err := WriteMipmapBloom(bc.chainDb, block.NumberU64(), receipts); err != nil {
 			return err
 		}
 		addedTxs = append(addedTxs, block.Transactions()...)

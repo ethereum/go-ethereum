@@ -42,9 +42,8 @@ type ChainIndexerBackend interface {
 	// will ensure a sequential order of headers.
 	Process(header *types.Header)
 
-	// Commit finalizes the section metadata and stores it into the database. This
-	// interface will usually be a batch writer.
-	Commit(db ethdb.Database) error
+	// Commit finalizes the section metadata and stores it into the database.
+	Commit() error
 }
 
 // ChainIndexer does a post-processing job for equally sized sections of the
@@ -102,9 +101,10 @@ func NewChainIndexer(chainDb, indexDb ethdb.Database, backend ChainIndexerBacken
 }
 
 // Start creates a goroutine to feed chain head events into the indexer for
-// cascading background processing.
-func (c *ChainIndexer) Start(currentHeader *types.Header, eventMux *event.TypeMux) {
-	go c.eventLoop(currentHeader, eventMux)
+// cascading background processing. Children do not need to be started, they
+// are notified about new events by their parents.
+func (c *ChainIndexer) Start(currentHeader *types.Header, chainEventer func(ch chan<- ChainEvent) event.Subscription) {
+	go c.eventLoop(currentHeader, chainEventer)
 }
 
 // Close tears down all goroutines belonging to the indexer and returns any error
@@ -125,6 +125,12 @@ func (c *ChainIndexer) Close() error {
 			errs = append(errs, err)
 		}
 	}
+	// Close all children
+	for _, child := range c.children {
+		if err := child.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	// Return any failures
 	switch {
 	case len(errs) == 0:
@@ -141,12 +147,12 @@ func (c *ChainIndexer) Close() error {
 // eventLoop is a secondary - optional - event loop of the indexer which is only
 // started for the outermost indexer to push chain head events into a processing
 // queue.
-func (c *ChainIndexer) eventLoop(currentHeader *types.Header, eventMux *event.TypeMux) {
+func (c *ChainIndexer) eventLoop(currentHeader *types.Header, chainEventer func(ch chan<- ChainEvent) event.Subscription) {
 	// Mark the chain indexer as active, requiring an additional teardown
 	atomic.StoreUint32(&c.active, 1)
 
-	// Subscribe to chain head events
-	sub := eventMux.Subscribe(ChainEvent{})
+	events := make(chan ChainEvent, 10)
+	sub := chainEventer(events)
 	defer sub.Unsubscribe()
 
 	// Fire the initial new head event to start any outstanding processing
@@ -163,14 +169,14 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, eventMux *event.Ty
 			errc <- nil
 			return
 
-		case ev, ok := <-sub.Chan():
+		case ev, ok := <-events:
 			// Received a new event, ensure it's not nil (closing) and update
 			if !ok {
 				errc := <-c.quit
 				errc <- nil
 				return
 			}
-			header := ev.Data.(ChainEvent).Block.Header()
+			header := ev.Block.Header()
 			if header.ParentHash != prevHash {
 				c.newHead(FindCommonAncestor(c.chainDb, prevHeader, header).Number.Uint64(), true)
 			}
@@ -226,8 +232,10 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 // updateLoop is the main event loop of the indexer which pushes chain segments
 // down into the processing backend.
 func (c *ChainIndexer) updateLoop() {
-	var updated time.Time
-
+	var (
+		updating bool
+		updated  time.Time
+	)
 	for {
 		select {
 		case errc := <-c.quit:
@@ -242,6 +250,7 @@ func (c *ChainIndexer) updateLoop() {
 				// Periodically print an upgrade log message to the user
 				if time.Since(updated) > 8*time.Second {
 					if c.knownSections > c.storedSections+1 {
+						updating = true
 						c.log.Info("Upgrading chain index", "percentage", c.storedSections*100/c.knownSections)
 					}
 					updated = time.Now()
@@ -255,12 +264,19 @@ func (c *ChainIndexer) updateLoop() {
 				// Process the newly defined section in the background
 				c.lock.Unlock()
 				newHead, err := c.processSection(section, oldHead)
+				if err != nil {
+					c.log.Error("Section processing failed", "error", err)
+				}
 				c.lock.Lock()
 
 				// If processing succeeded and no reorgs occcurred, mark the section completed
 				if err == nil && oldHead == c.sectionHead(section-1) {
 					c.setSectionHead(section, newHead)
 					c.setValidSections(section + 1)
+					if c.storedSections == c.knownSections && updating {
+						updating = false
+						c.log.Info("Finished upgrading chain index")
+					}
 
 					c.cascadedHead = c.storedSections*c.sectionSize - 1
 					for _, child := range c.children {
@@ -311,7 +327,8 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 		c.backend.Process(header)
 		lastHead = header.Hash()
 	}
-	if err := c.backend.Commit(c.chainDb); err != nil {
+	if err := c.backend.Commit(); err != nil {
+		c.log.Error("Section commit failed", "error", err)
 		return common.Hash{}, err
 	}
 	return lastHead, nil

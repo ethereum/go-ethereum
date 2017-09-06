@@ -19,7 +19,6 @@ package eth
 
 import (
 	"bytes"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -133,47 +132,4 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 		stop <- errc
 		return <-errc
 	}
-}
-
-func addMipmapBloomBins(db ethdb.Database) (err error) {
-	const mipmapVersion uint = 2
-
-	// check if the version is set. We ignore data for now since there's
-	// only one version so we can easily ignore it for now
-	var data []byte
-	data, _ = db.Get([]byte("setting-mipmap-version"))
-	if len(data) > 0 {
-		var version uint
-		if err := rlp.DecodeBytes(data, &version); err == nil && version == mipmapVersion {
-			return nil
-		}
-	}
-
-	defer func() {
-		if err == nil {
-			var val []byte
-			val, err = rlp.EncodeToBytes(mipmapVersion)
-			if err == nil {
-				err = db.Put([]byte("setting-mipmap-version"), val)
-			}
-			return
-		}
-	}()
-	latestHash := core.GetHeadBlockHash(db)
-	latestBlock := core.GetBlock(db, latestHash, core.GetBlockNumber(db, latestHash))
-	if latestBlock == nil { // clean database
-		return
-	}
-
-	tstart := time.Now()
-	log.Warn("Upgrading db log bloom bins")
-	for i := uint64(0); i <= latestBlock.NumberU64(); i++ {
-		hash := core.GetCanonicalHash(db, i)
-		if (hash == common.Hash{}) {
-			return fmt.Errorf("chain db corrupted. Could not find block %d.", i)
-		}
-		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(db, hash, i))
-	}
-	log.Info("Bloom-bin upgrade completed", "elapsed", common.PrettyDuration(time.Since(tstart)))
-	return nil
 }
