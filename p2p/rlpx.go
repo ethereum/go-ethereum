@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
 	mrand "math/rand"
 	"net"
 	"sync"
@@ -40,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/golang/snappy"
 )
 
 const (
@@ -127,6 +129,9 @@ func (t *rlpx) doProtoHandshake(our *protoHandshake) (their *protoHandshake, err
 	if err := <-werr; err != nil {
 		return nil, fmt.Errorf("write error: %v", err)
 	}
+	// If the protocol version supports Snappy encoding, upgrade immediately
+	t.rw.snappy = their.Version >= snappyProtocolVersion
+
 	return their, nil
 }
 
@@ -556,6 +561,8 @@ type rlpxFrameRW struct {
 	macCipher  cipher.Block
 	egressMAC  hash.Hash
 	ingressMAC hash.Hash
+
+	snappy bool
 }
 
 func newRLPXFrameRW(conn io.ReadWriter, s secrets) *rlpxFrameRW {
@@ -583,6 +590,14 @@ func newRLPXFrameRW(conn io.ReadWriter, s secrets) *rlpxFrameRW {
 func (rw *rlpxFrameRW) WriteMsg(msg Msg) error {
 	ptype, _ := rlp.EncodeToBytes(msg.Code)
 
+	// if snappy compression is needed, do it now
+	if rw.snappy {
+		payload, _ := ioutil.ReadAll(msg.Payload)
+		payload = snappy.Encode(nil, payload)
+
+		msg.Payload = bytes.NewReader(payload)
+		msg.Size = uint32(len(payload))
+	}
 	// write header
 	headbuf := make([]byte, 32)
 	fsize := uint32(len(ptype)) + msg.Size
@@ -668,7 +683,44 @@ func (rw *rlpxFrameRW) ReadMsg() (msg Msg, err error) {
 	}
 	msg.Size = uint32(content.Len())
 	msg.Payload = content
+
+	// if snappy compression was used, configure lazy decoder
+	if rw.snappy {
+		payload, err := ioutil.ReadAll(msg.Payload)
+		if err != nil {
+			return msg, err
+		}
+		size, err := snappy.DecodedLen(payload)
+		if err != nil {
+			return msg, err
+		}
+		msg.Size = uint32(size)
+		msg.Payload = &snappyReader{payload: bytes.NewReader(payload)}
+	}
 	return msg, nil
+}
+
+// snappyReader is a lazy decompressor that expands a snappy encoded stream
+// only upon first read request. This is useful to allow protocols to skip
+// large messages without having to decode them (DOS protection).
+type snappyReader struct {
+	payload io.Reader
+	decoded bool
+}
+
+func (r *snappyReader) Read(p []byte) (n int, err error) {
+	if !r.decoded {
+		payload, err := ioutil.ReadAll(r.payload)
+		if err != nil {
+			return 0, err
+		}
+		payload, err = snappy.Decode(nil, payload)
+		if err != nil {
+			return 0, err
+		}
+		r.payload, r.decoded = bytes.NewReader(payload), true
+	}
+	return r.payload.Read(p)
 }
 
 // updateMAC reseeds the given hash with encrypted seed.
