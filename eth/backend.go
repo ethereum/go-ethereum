@@ -57,15 +57,19 @@ type LesServer interface {
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
+	config      *Config
 	chainConfig *params.ChainConfig
+
 	// Channel for shutting down the service
 	shutdownChan  chan bool    // Channel for shutting down the ethereum
 	stopDbUpgrade func() error // stop chain db sequential key upgrade
+
 	// Handlers
 	txPool          *core.TxPool
 	blockchain      *core.BlockChain
 	protocolManager *ProtocolManager
 	lesServer       LesServer
+
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
 
@@ -98,7 +102,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
-
 	chainDb, err := CreateDB(ctx, config, "chaindata")
 	if err != nil {
 		return nil, err
@@ -111,6 +114,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
 	eth := &Ethereum{
+		config:         config,
 		chainDb:        chainDb,
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
@@ -153,21 +157,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain)
 
-	maxPeers := config.MaxPeers
-	if config.LightServ > 0 {
-		// if we are running a light server, limit the number of ETH peers so that we reserve some space for incoming LES connections
-		// temporary solution until the new peer connectivity API is finished
-		halfPeers := maxPeers / 2
-		maxPeers -= config.LightPeers
-		if maxPeers < halfPeers {
-			maxPeers = halfPeers
-		}
-	}
-
-	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, maxPeers, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
+	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
-
 	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine)
 	eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
@@ -376,7 +368,15 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 func (s *Ethereum) Start(srvr *p2p.Server) error {
 	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.NetVersion())
 
-	s.protocolManager.Start()
+	// Figure out a max peers count based on the server limits
+	maxPeers := srvr.MaxPeers
+	if s.config.LightServ > 0 {
+		maxPeers -= s.config.LightPeers
+		if maxPeers < srvr.MaxPeers/2 {
+			maxPeers = srvr.MaxPeers / 2
+		}
+	}
+	s.protocolManager.Start(maxPeers)
 	if s.lesServer != nil {
 		s.lesServer.Start(srvr)
 	}
