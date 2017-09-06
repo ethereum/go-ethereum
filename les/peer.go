@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
@@ -231,6 +232,11 @@ func (p *peer) SendPPTProofs(reqID, bv uint64, resp PPTResps) error {
 	return sendResponse(p.rw, PPTProofsMsg, reqID, bv, resp)
 }
 
+// SendTxStatus sends a batch of transaction status records, corresponding to the ones requested.
+func (p *peer) SendTxStatus(reqID, bv uint64, status []core.TxStatusData) error {
+	return sendResponse(p.rw, TxStatusMsg, reqID, bv, status)
+}
+
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
 func (p *peer) RequestHeadersByHash(reqID, cost uint64, origin common.Hash, amount int, skip int, reverse bool) error {
@@ -303,7 +309,14 @@ func (p *peer) RequestPPTProofs(reqID, cost uint64, reqs []PPTReq) error {
 
 func (p *peer) SendTxs(reqID, cost uint64, txs types.Transactions) error {
 	p.Log().Debug("Fetching batch of transactions", "count", len(txs))
-	return p2p.Send(p.rw, SendTxMsg, txs)
+	switch p.version {
+	case lpv1:
+		return p2p.Send(p.rw, SendTxMsg, txs) // old message format does not include reqID
+	case lpv2:
+		return sendRequest(p.rw, SendTxV2Msg, reqID, cost, txs)
+	default:
+		panic(nil)
+	}
 }
 
 type keyValueEntry struct {

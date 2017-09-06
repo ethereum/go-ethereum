@@ -45,7 +45,7 @@ var (
 )
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = map[uint]uint64{lpv1: 15, lpv2: 19}
+var ProtocolLengths = map[uint]uint64{lpv1: 15, lpv2: 22}
 
 const (
 	NetworkId          = 1
@@ -75,6 +75,9 @@ const (
 	ProofsV2Msg     = 0x10
 	GetPPTProofsMsg = 0x11
 	PPTProofsMsg    = 0x12
+	SendTxV2Msg     = 0x13
+	GetTxStatusMsg  = 0x14
+	TxStatusMsg     = 0x15
 )
 
 type errCode int

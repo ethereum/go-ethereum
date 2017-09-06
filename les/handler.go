@@ -59,6 +59,7 @@ const (
 	MaxProofsFetch    = 64  // Amount of merkle proofs to be fetched per retrieval request
 	MaxPPTProofsFetch = 64  // Amount of merkle proofs to be fetched per retrieval request
 	MaxTxSend         = 64  // Amount of transactions to be send per request
+	MaxTxStatus       = 256 // Amount of transactions to queried per request
 
 	disableClientRemovePeer = false
 )
@@ -88,8 +89,7 @@ type BlockChain interface {
 }
 
 type txPool interface {
-	// AddRemotes should add the given transactions to the pool.
-	AddRemotes([]*types.Transaction) error
+	AddOrGetTxStatus(txs []*types.Transaction, txHashes []common.Hash) []core.TxStatusData
 }
 
 type ProtocolManager struct {
@@ -318,7 +318,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}
 }
 
-var reqList = []uint64{GetBlockHeadersMsg, GetBlockBodiesMsg, GetCodeMsg, GetReceiptsMsg, GetProofsV1Msg, SendTxMsg, GetHeaderProofsMsg, GetProofsV2Msg, GetPPTProofsMsg}
+var reqList = []uint64{GetBlockHeadersMsg, GetBlockBodiesMsg, GetCodeMsg, GetReceiptsMsg, GetProofsV1Msg, SendTxMsg, SendTxV2Msg, GetTxStatusMsg, GetHeaderProofsMsg, GetProofsV2Msg, GetPPTProofsMsg}
 
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
@@ -972,7 +972,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	case SendTxMsg:
 		if pm.txpool == nil {
-			return errResp(ErrUnexpectedResponse, "")
+			return errResp(ErrRequestRejected, "")
 		}
 		// Transactions arrived, parse all of them and deliver to the pool
 		var txs []*types.Transaction
@@ -984,12 +984,81 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrRequestRejected, "")
 		}
 
-		if err := pm.txpool.AddRemotes(txs); err != nil {
-			return errResp(ErrUnexpectedResponse, "msg: %v", err)
+		txHashes := make([]common.Hash, len(txs))
+		for i, tx := range txs {
+			txHashes[i] = tx.Hash()
 		}
+		pm.addOrGetTxStatus(txs, txHashes)
 
 		_, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+
+	case SendTxV2Msg:
+		if pm.txpool == nil {
+			return errResp(ErrRequestRejected, "")
+		}
+		// Transactions arrived, parse all of them and deliver to the pool
+		var req struct {
+			ReqID uint64
+			Txs   []*types.Transaction
+		}
+		if err := msg.Decode(&req); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		reqCnt := len(req.Txs)
+		if reject(uint64(reqCnt), MaxTxSend) {
+			return errResp(ErrRequestRejected, "")
+		}
+
+		txHashes := make([]common.Hash, len(req.Txs))
+		for i, tx := range req.Txs {
+			txHashes[i] = tx.Hash()
+		}
+
+		res := pm.addOrGetTxStatus(req.Txs, txHashes)
+
+		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
+		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+		return p.SendTxStatus(req.ReqID, bv, res)
+
+	case GetTxStatusMsg:
+		if pm.txpool == nil {
+			return errResp(ErrUnexpectedResponse, "")
+		}
+		// Transactions arrived, parse all of them and deliver to the pool
+		var req struct {
+			ReqID    uint64
+			TxHashes []common.Hash
+		}
+		if err := msg.Decode(&req); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		reqCnt := len(req.TxHashes)
+		if reject(uint64(reqCnt), MaxTxStatus) {
+			return errResp(ErrRequestRejected, "")
+		}
+
+		res := pm.addOrGetTxStatus(nil, req.TxHashes)
+
+		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
+		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+		return p.SendTxStatus(req.ReqID, bv, res)
+
+	case TxStatusMsg:
+		if pm.odr == nil {
+			return errResp(ErrUnexpectedResponse, "")
+		}
+
+		p.Log().Trace("Received tx status response")
+		var resp struct {
+			ReqID, BV uint64
+			Status    []core.TxStatusData
+		}
+		if err := msg.Decode(&resp); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+
+		p.fcServer.GotReply(resp.ReqID, resp.BV)
 
 	default:
 		p.Log().Trace("Received unknown message", "code", msg.Code)
@@ -1032,6 +1101,21 @@ func (pm *ProtocolManager) getPPTAuxData(req PPTReq) []byte {
 		return core.GetHeaderRLP(pm.chainDb, hash, blockNum)
 	}
 	return nil
+}
+
+func (pm *ProtocolManager) addOrGetTxStatus(txs []*types.Transaction, txHashes []common.Hash) []core.TxStatusData {
+	status := pm.txpool.AddOrGetTxStatus(txs, txHashes)
+	for i, _ := range status {
+		blockHash, blockNum, txIndex := core.GetTxLookupEntry(pm.chainDb, txHashes[i])
+		if blockHash != (common.Hash{}) {
+			enc, err := rlp.EncodeToBytes(core.TxLookupEntry{BlockHash: blockHash, BlockIndex: blockNum, Index: txIndex})
+			if err != nil {
+				panic(err)
+			}
+			status[i] = core.TxStatusData{Status: core.TxStatusIncluded, Data: enc}
+		}
+	}
+	return status
 }
 
 // NodeInfo retrieves some protocol metadata about the running host node.

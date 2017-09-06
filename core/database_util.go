@@ -74,9 +74,9 @@ var (
 	preimageHitCounter = metrics.NewCounter("db/preimage/hits")
 )
 
-// txLookupEntry is a positional metadata to help looking up the data content of
+// TxLookupEntry is a positional metadata to help looking up the data content of
 // a transaction or receipt given only its hash.
-type txLookupEntry struct {
+type TxLookupEntry struct {
 	BlockHash  common.Hash
 	BlockIndex uint64
 	Index      uint64
@@ -260,7 +260,7 @@ func GetTxLookupEntry(db DatabaseReader, hash common.Hash) (common.Hash, uint64,
 		return common.Hash{}, 0, 0
 	}
 	// Parse and return the contents of the lookup entry
-	var entry txLookupEntry
+	var entry TxLookupEntry
 	if err := rlp.DecodeBytes(data, &entry); err != nil {
 		log.Error("Invalid lookup entry RLP", "hash", hash, "err", err)
 		return common.Hash{}, 0, 0
@@ -296,7 +296,7 @@ func GetTransaction(db DatabaseReader, hash common.Hash) (*types.Transaction, co
 	if len(data) == 0 {
 		return nil, common.Hash{}, 0, 0
 	}
-	var entry txLookupEntry
+	var entry TxLookupEntry
 	if err := rlp.DecodeBytes(data, &entry); err != nil {
 		return nil, common.Hash{}, 0, 0
 	}
@@ -464,7 +464,7 @@ func WriteBlockReceipts(db ethdb.Putter, hash common.Hash, number uint64, receip
 func WriteTxLookupEntries(db ethdb.Putter, block *types.Block) error {
 	// Iterate over each transaction and encode its metadata
 	for i, tx := range block.Transactions() {
-		entry := txLookupEntry{
+		entry := TxLookupEntry{
 			BlockHash:  block.Hash(),
 			BlockIndex: block.NumberU64(),
 			Index:      uint64(i),
