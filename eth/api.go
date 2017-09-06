@@ -68,8 +68,12 @@ func (api *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
 }
 
 // ChainId is the EIP-155 replay-protection chain id for the current ethereum chain config.
-func (api *PublicEthereumAPI) ChainId() *big.Int {
-	return api.e.chainConfig.ChainId
+func (api *PublicEthereumAPI) ChainId() hexutil.Uint {
+	chainID := new(big.Int)
+	if config := api.e.chainConfig; config.IsEIP155(api.e.blockchain.CurrentBlock().Number()) {
+		chainID = config.ChainId
+	}
+	return hexutil.Uint(chainID)
 }
 
 // PublicMinerAPI provides an API to control the miner.
