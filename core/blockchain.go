@@ -784,7 +784,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 }
 
 // WriteBlock writes the block to the chain.
-func (bc *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err error) {
+func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) (status WriteStatus, err error) {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
@@ -809,8 +809,16 @@ func (bc *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err er
 	if err := bc.hc.WriteTd(block.Hash(), block.NumberU64(), externTd); err != nil {
 		log.Crit("Failed to write block total difficulty", "err", err)
 	}
-	if err := WriteBlock(bc.chainDb, block); err != nil {
+	// Write other block data using a batch.
+	batch := bc.chainDb.NewBatch()
+	if err := WriteBlock(batch, block); err != nil {
 		log.Crit("Failed to write block contents", "err", err)
+	}
+	if _, err := state.CommitTo(batch, bc.config.IsEIP158(block.Number())); err != nil {
+		return NonStatTy, err
+	}
+	if err := WriteBlockReceipts(batch, block.Hash(), block.NumberU64(), receipts); err != nil {
+		return NonStatTy, err
 	}
 
 	// If the total difficulty is higher than our known, add it to the canonical chain
@@ -823,15 +831,28 @@ func (bc *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err er
 				return NonStatTy, err
 			}
 		}
-		bc.insert(block) // Insert the block as the new head of the chain
+		// Write the positional metadata for transaction and receipt lookups
+		if err := WriteTxLookupEntries(batch, block); err != nil {
+			return NonStatTy, err
+		}
+		// Write hash preimages
+		if err := WritePreimages(bc.chainDb, block.NumberU64(), state.Preimages()); err != nil {
+			return NonStatTy, err
+		}
 		status = CanonStatTy
 	} else {
 		status = SideStatTy
 	}
+	if err := batch.Write(); err != nil {
+		return NonStatTy, err
+	}
 
+	// Set new head.
+	if status == CanonStatTy {
+		bc.insert(block)
+	}
 	bc.futureBlocks.Remove(block.Hash())
-
-	return
+	return status, nil
 }
 
 // InsertChain will attempt to insert the given chain in to the canonical chain or, otherwise, create a fork. If an error is returned
@@ -945,29 +966,18 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			bc.reportBlock(block, receipts, err)
 			return i, err
 		}
-		// Write state changes to database
-		if _, err = state.CommitTo(bc.chainDb, bc.config.IsEIP158(block.Number())); err != nil {
-			return i, err
-		}
 
-		// coalesce logs for later processing
-		coalescedLogs = append(coalescedLogs, logs...)
-
-		if err = WriteBlockReceipts(bc.chainDb, block.Hash(), block.NumberU64(), receipts); err != nil {
-			return i, err
-		}
-
-		// write the block to the chain and get the status
-		status, err := bc.WriteBlock(block)
+		// Write the block to the chain and get the status.
+		status, err := bc.WriteBlockAndState(block, receipts, state)
 		if err != nil {
 			return i, err
 		}
-
 		switch status {
 		case CanonStatTy:
 			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(), "uncles", len(block.Uncles()),
 				"txs", len(block.Transactions()), "gas", block.GasUsed(), "elapsed", common.PrettyDuration(time.Since(bstart)))
-
+			// coalesce logs for later processing
+			coalescedLogs = append(coalescedLogs, logs...)
 			blockInsertTimer.UpdateSince(bstart)
 			events = append(events, ChainEvent{block, block.Hash(), logs})
 			// We need some control over the mining operation. Acquiring locks and waiting
@@ -975,15 +985,6 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			// even necessary.
 			if bc.LastBlockHash() == block.Hash() {
 				events = append(events, ChainHeadEvent{block})
-			}
-
-			// Write the positional metadata for transaction and receipt lookups
-			if err := WriteTxLookupEntries(bc.chainDb, block); err != nil {
-				return i, err
-			}
-			// Write hash preimages
-			if err := WritePreimages(bc.chainDb, block.NumberU64(), state.Preimages()); err != nil {
-				return i, err
 			}
 		case SideStatTy:
 			log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(), "diff", block.Difficulty(), "elapsed",

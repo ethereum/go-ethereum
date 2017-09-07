@@ -304,13 +304,8 @@ func (self *worker) wait() {
 				}
 				go self.mux.Post(core.NewMinedBlockEvent{Block: block})
 			} else {
-				work.state.CommitTo(self.chainDb, self.config.IsEIP158(block.Number()))
-				stat, err := self.chain.WriteBlock(block)
-				if err != nil {
-					log.Error("Failed writing block to chain", "err", err)
-					continue
-				}
-				// update block hash since it is now available and not when the receipt/log of individual transactions were created
+				// Update the block hash in all logs since it is now available and not when the
+				// receipt/log of individual transactions were created.
 				for _, r := range work.receipts {
 					for _, l := range r.Logs {
 						l.BlockHash = block.Hash()
@@ -319,15 +314,17 @@ func (self *worker) wait() {
 				for _, log := range work.state.Logs() {
 					log.BlockHash = block.Hash()
 				}
+				stat, err := self.chain.WriteBlockAndState(block, work.receipts, work.state)
+				if err != nil {
+					log.Error("Failed writing block to chain", "err", err)
+					continue
+				}
 
 				// check if canon block and write transactions
 				if stat == core.CanonStatTy {
-					// This puts transactions in a extra db for rpc
-					core.WriteTxLookupEntries(self.chainDb, block)
 					// implicit by posting ChainHeadEvent
 					mustCommitNewWork = false
 				}
-
 				// broadcast before waiting for validation
 				go func(block *types.Block, logs []*types.Log, receipts []*types.Receipt) {
 					self.mux.Post(core.NewMinedBlockEvent{Block: block})
@@ -336,16 +333,12 @@ func (self *worker) wait() {
 						coalescedLogs []*types.Log
 					)
 					events = append(events, core.ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
-
 					if stat == core.CanonStatTy {
 						events = append(events, core.ChainHeadEvent{Block: block})
 						coalescedLogs = logs
 					}
 					// post blockchain events
 					self.chain.PostChainEvents(events, coalescedLogs)
-					if err := core.WriteBlockReceipts(self.chainDb, block.Hash(), block.NumberU64(), receipts); err != nil {
-						log.Warn("Failed writing block receipts", "err", err)
-					}
 				}(block, work.state.Logs(), work.receipts)
 			}
 			// Insert the block into the set of pending ones to wait for confirmations
