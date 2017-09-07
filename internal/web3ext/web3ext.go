@@ -537,8 +537,8 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'setMinimumPoW',
-			call: 'shh_setMinimumPoW',
+			name: 'setMinPoW',
+			call: 'shh_setMinPoW',
 			params: 1
 		}),
 		new web3._extend.Method({
