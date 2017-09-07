@@ -78,6 +78,10 @@ var (
 	// than some meaningful limit a user might use. This is not a consensus error
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
+
+	// ErrStillSynching is returned if a fast-sync is in progress, and the state
+	// is not available to validate tx details.
+	ErrStillSynching = errors.New("sync in progress, state not available")
 )
 
 var (
@@ -567,6 +571,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrUnderpriced
 	}
+	if pool.currentState == nil {
+		return ErrStillSynching
+	}
 	// Ensure the transaction adheres to nonce ordering
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
 		return ErrNonceTooLow
@@ -866,6 +873,10 @@ func (pool *TxPool) removeTx(hash common.Hash) {
 // future queue to the set of pending transactions. During this process, all
 // invalidated transactions (low nonce, low balance) are deleted.
 func (pool *TxPool) promoteExecutables(accounts []common.Address) {
+	if pool.currentState == nil {
+		log.Warn("Still syncing, tx pool not usable")
+		return
+	}
 	// Gather all the accounts potentially needing updates
 	if accounts == nil {
 		accounts = make([]common.Address, 0, len(pool.queue))
@@ -1033,6 +1044,10 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 // executable/pending queue and any subsequent transactions that become unexecutable
 // are moved back into the future queue.
 func (pool *TxPool) demoteUnexecutables() {
+	if pool.currentState == nil {
+		log.Warn("Still syncing, tx pool not usable")
+		return
+	}
 	// Iterate over all accounts and demote any non-executable transactions
 	for addr, list := range pool.pending {
 		nonce := pool.currentState.GetNonce(addr)
