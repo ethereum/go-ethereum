@@ -363,7 +363,7 @@ func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
 
 // HasHeader checks if a block header is present in the database or not.
 func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
-	if _, ok := hc.headerCache.Get(hash); ok {
+	if hc.numberCache.Contains(hash) || hc.headerCache.Contains(hash) {
 		return true
 	}
 	ok, _ := hc.chainDb.Has(headerKey(hash, number))
