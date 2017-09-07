@@ -532,8 +532,8 @@ web3._extend({
 	property: 'shh',
 	methods: [
 		new web3._extend.Method({
-			name: 'setMaxMessageLength',
-			call: 'shh_setMaxMessageLength',
+			name: 'setMaxMessageSize',
+			call: 'shh_setMaxMessageSize',
 			params: 1
 		}),
 		new web3._extend.Method({
@@ -597,16 +597,6 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'deleteSymKey',
 			call: 'shh_deleteSymKey',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'subscribe',
-			call: 'shh_subscribe',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'unsubscribe',
-			call: 'shh_unsubscribe',
 			params: 1
 		}),
 		new web3._extend.Method({
