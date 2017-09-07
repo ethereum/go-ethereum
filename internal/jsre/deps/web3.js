@@ -5608,12 +5608,12 @@ module.exports = Personal;
 */
 /** @file shh.js
  * @authors:
- *   Marek Kotewicz <marek@ethdev.com>
- * @date 2015
+ *   Fabian Vogelsteller <fabian@ethereum.org>
+ *   Marek Kotewicz <marek@ethcore.io>
+ * @date 2017
  */
 
 var Method = require('../method');
-var formatters = require('../formatters');
 var Filter = require('../filter');
 var watches = require('./watches');
 
@@ -5628,49 +5628,107 @@ var Shh = function (web3) {
     });
 };
 
-Shh.prototype.filter = function (fil, callback) {
-    return new Filter(this._requestManager, fil, watches.shh(), formatters.outputPostFormatter, callback);
+Shh.prototype.newMessageFilter = function (options, callback, filterCreationErrorCallback) {
+    return new Filter(options, 'shh', this._requestManager, watches.shh(), null, callback, filterCreationErrorCallback);
 };
 
 var methods = function () { 
 
-    var post = new Method({
-        name: 'post', 
-        call: 'shh_post', 
-        params: 1,
-        inputFormatter: [formatters.inputPostFormatter]
-    });
-
-    var newIdentity = new Method({
-        name: 'newIdentity',
-        call: 'shh_newIdentity',
-        params: 0
-    });
-
-    var hasIdentity = new Method({
-        name: 'hasIdentity',
-        call: 'shh_hasIdentity',
-        params: 1
-    });
-
-    var newGroup = new Method({
-        name: 'newGroup',
-        call: 'shh_newGroup',
-        params: 0
-    });
-
-    var addToGroup = new Method({
-        name: 'addToGroup',
-        call: 'shh_addToGroup',
-        params: 0
-    });
-
     return [
-        post,
-        newIdentity,
-        hasIdentity,
-        newGroup,
-        addToGroup
+        new Method({
+            name: 'version',
+            call: 'shh_version',
+            params: 0
+        }),
+        new Method({
+            name: 'info',
+            call: 'shh_info',
+            params: 0
+        }),
+        new Method({
+            name: 'setMaxMessageSize',
+            call: 'shh_setMaxMessageSize',
+            params: 1
+        }),
+        new Method({
+            name: 'setMinPoW',
+            call: 'shh_setMinPoW',
+            params: 1
+        }),
+        new Method({
+            name: 'markTrustedPeer',
+            call: 'shh_markTrustedPeer',
+            params: 1
+        }),
+        new Method({
+            name: 'newKeyPair',
+            call: 'shh_newKeyPair',
+            params: 0
+        }),
+        new Method({
+            name: 'addPrivateKey',
+            call: 'shh_addPrivateKey',
+            params: 1
+        }),
+        new Method({
+            name: 'deleteKeyPair',
+            call: 'shh_deleteKeyPair',
+            params: 1
+        }),
+        new Method({
+            name: 'hasKeyPair',
+            call: 'shh_hasKeyPair',
+            params: 1
+        }),
+        new Method({
+            name: 'getPublicKey',
+            call: 'shh_getPublicKey',
+            params: 1
+        }),
+        new Method({
+            name: 'getPrivateKey',
+            call: 'shh_getPrivateKey',
+            params: 1
+        }),
+        new Method({
+            name: 'newSymKey',
+            call: 'shh_newSymKey',
+            params: 0
+        }),
+        new Method({
+            name: 'addSymKey',
+            call: 'shh_addSymKey',
+            params: 1
+        }),
+        new Method({
+            name: 'generateSymKeyFromPassword',
+            call: 'shh_generateSymKeyFromPassword',
+            params: 1
+        }),
+        new Method({
+            name: 'hasSymKey',
+            call: 'shh_hasSymKey',
+            params: 1
+        }),
+        new Method({
+            name: 'getSymKey',
+            call: 'shh_getSymKey',
+            params: 1
+        }),
+        new Method({
+            name: 'deleteSymKey',
+            call: 'shh_deleteSymKey',
+            params: 1
+        }),
+
+        // subscribe and unsubscribe are not implemented for whisper v5
+
+        new Method({
+            name: 'post',
+            call: 'shh_post',
+            params: 1,
+            inputFormatter: [null]
+        })
     ];
 };
 
