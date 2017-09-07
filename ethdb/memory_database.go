@@ -101,21 +101,14 @@ type kv struct{ k, v []byte }
 type memBatch struct {
 	db     *MemDatabase
 	writes []kv
-	lock   sync.RWMutex
 }
 
 func (b *memBatch) Put(key, value []byte) error {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
 	b.writes = append(b.writes, kv{common.CopyBytes(key), common.CopyBytes(value)})
 	return nil
 }
 
 func (b *memBatch) Write() error {
-	b.lock.RLock()
-	defer b.lock.RUnlock()
-
 	b.db.lock.Lock()
 	defer b.db.lock.Unlock()
 
