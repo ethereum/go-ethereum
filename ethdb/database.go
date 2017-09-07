@@ -280,17 +280,23 @@ func (db *LDBDatabase) NewBatch() Batch {
 }
 
 type ldbBatch struct {
-	db *leveldb.DB
-	b  *leveldb.Batch
+	db   *leveldb.DB
+	b    *leveldb.Batch
+	size int
 }
 
 func (b *ldbBatch) Put(key, value []byte) error {
 	b.b.Put(key, value)
+	b.size += len(value)
 	return nil
 }
 
 func (b *ldbBatch) Write() error {
 	return b.db.Write(b.b, nil)
+}
+
+func (b *ldbBatch) ValueSize() int {
+	return b.size
 }
 
 type table struct {
@@ -347,4 +353,8 @@ func (tb *tableBatch) Put(key, value []byte) error {
 
 func (tb *tableBatch) Write() error {
 	return tb.batch.Write()
+}
+
+func (tb *tableBatch) ValueSize() int {
+	return tb.batch.ValueSize()
 }

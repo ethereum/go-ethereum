@@ -39,5 +39,6 @@ type Database interface {
 // when Write is called. Batch cannot be used concurrently.
 type Batch interface {
 	Putter
+	ValueSize() int // amount of data in the batch
 	Write() error
 }
