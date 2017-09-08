@@ -132,6 +132,7 @@ func (self *Api) Put(content, contentType string) (storage.Key, error) {
 func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, err error) {
 	trie, err := loadManifest(self.dpa, key, nil)
 	if err != nil {
+		status = http.StatusNotFound
 		log.Warn(fmt.Sprintf("loadManifestTrie error: %v", err))
 		return
 	}
