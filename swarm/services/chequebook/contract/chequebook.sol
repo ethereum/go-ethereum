@@ -3,7 +3,7 @@ pragma solidity ^0.4.3;
 import "mortal.sol" as mortal;
 
 /// @title Chequebook for Ethereum micropayments
-/// @author Daniel A. Nagy <daniel@ethdev.com>
+/// @author Daniel A. Nagy <daniel@ethereum.org>
 contract chequebook is mortal {
     // Cumulative paid amount in wei to each beneficiary
     mapping (address => uint256) public sent;
@@ -37,10 +37,11 @@ contract chequebook is mortal {
         if(owner != ecrecover(hash, sig_v, sig_r, sig_s)) return;
         // Attempt sending the difference between the cumulative amount on the cheque
         // and the cumulative amount on the last cashed cheque to beneficiary.
-        if (amount - sent[beneficiary] >= this.balance) {
+	diff = amount - sent[beneficiary];
+        if (diff <= this.balance) {
 	    // update the cumulative amount before sending
             sent[beneficiary] = amount;
-            if (!beneficiary.send(amount - sent[beneficiary])) {
+            if (!beneficiary.send(diff)) {
                 // Upon failure to execute send, revert everything
                 throw;
             }
