@@ -38,7 +38,7 @@ func (d destinations) has(codehash common.Hash, code []byte, dest *big.Int) bool
 
 	m, analysed := d[codehash]
 	if !analysed {
-		m = jumpdests(code)
+		m = codeBitmap(code)
 		d[codehash] = m
 	}
 	return OpCode(code[udest]) == JUMPDEST && m.codeSegment(udest)
@@ -61,9 +61,9 @@ func (bits *bitvec) codeSegment(pos uint64) bool {
 	return ((*bits)[pos/8] & (0x80 >> (pos % 8))) == 0
 }
 
-// jumpdests creates a map that contains an entry for each
-// PC location that is a JUMPDEST instruction.
-func jumpdests(code []byte) []byte {
+// jumpdests creates a bitmap of the code, where 1 represents a DATA-segment,
+// and 0 represents code-segment
+func codeBitmap(code []byte) []byte {
 	//The map is 4 bytes longer than necessary, in case the code
 	// ends with a PUSH32, the algorithm will push zeroes onto the
 	// bitvector outside the bounds of the actual code.
