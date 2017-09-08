@@ -807,12 +807,12 @@ func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.R
 
 	// Irrelevant of the canonical status, write the block itself to the database
 	if err := bc.hc.WriteTd(block.Hash(), block.NumberU64(), externTd); err != nil {
-		log.Crit("Failed to write block total difficulty", "err", err)
+		return NonStatTy, err
 	}
 	// Write other block data using a batch.
 	batch := bc.chainDb.NewBatch()
 	if err := WriteBlock(batch, block); err != nil {
-		log.Crit("Failed to write block contents", "err", err)
+		return NonStatTy, err
 	}
 	if _, err := state.CommitTo(batch, bc.config.IsEIP158(block.Number())); err != nil {
 		return NonStatTy, err
