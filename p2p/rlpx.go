@@ -70,6 +70,10 @@ const (
 	discWriteTimeout = 1 * time.Second
 )
 
+// errPlainMessageTooLarge is returned if a decompressed message length exceeds
+// the allowed 24 bits (i.e. length >= 16MB).
+var errPlainMessageTooLarge = errors.New("message length >= 16MB")
+
 // rlpx is the transport protocol used by actual (non-test) connections.
 // It wraps the frame encoder with locks and read/write deadlines.
 type rlpx struct {
@@ -590,8 +594,11 @@ func newRLPXFrameRW(conn io.ReadWriter, s secrets) *rlpxFrameRW {
 func (rw *rlpxFrameRW) WriteMsg(msg Msg) error {
 	ptype, _ := rlp.EncodeToBytes(msg.Code)
 
-	// if snappy compression is needed, do it now
+	// if snappy is enabled, compress message now
 	if rw.snappy {
+		if msg.Size > maxUint24 {
+			return errPlainMessageTooLarge
+		}
 		payload, _ := ioutil.ReadAll(msg.Payload)
 		payload = snappy.Encode(nil, payload)
 
@@ -684,7 +691,7 @@ func (rw *rlpxFrameRW) ReadMsg() (msg Msg, err error) {
 	msg.Size = uint32(content.Len())
 	msg.Payload = content
 
-	// if snappy compression was used, configure lazy decoder
+	// if snappy is enabled, verify and decompress message
 	if rw.snappy {
 		payload, err := ioutil.ReadAll(msg.Payload)
 		if err != nil {
@@ -694,33 +701,16 @@ func (rw *rlpxFrameRW) ReadMsg() (msg Msg, err error) {
 		if err != nil {
 			return msg, err
 		}
-		msg.Size = uint32(size)
-		msg.Payload = &snappyReader{payload: bytes.NewReader(payload)}
-	}
-	return msg, nil
-}
-
-// snappyReader is a lazy decompressor that expands a snappy encoded stream
-// only upon first read request. This is useful to allow protocols to skip
-// large messages without having to decode them (DOS protection).
-type snappyReader struct {
-	payload io.Reader
-	decoded bool
-}
-
-func (r *snappyReader) Read(p []byte) (n int, err error) {
-	if !r.decoded {
-		payload, err := ioutil.ReadAll(r.payload)
-		if err != nil {
-			return 0, err
+		if size > int(maxUint24) {
+			return msg, errPlainMessageTooLarge
 		}
 		payload, err = snappy.Decode(nil, payload)
 		if err != nil {
-			return 0, err
+			return msg, err
 		}
-		r.payload, r.decoded = bytes.NewReader(payload), true
+		msg.Size, msg.Payload = uint32(size), bytes.NewReader(payload)
 	}
-	return r.payload.Read(p)
+	return msg, nil
 }
 
 // updateMAC reseeds the given hash with encrypted seed.
