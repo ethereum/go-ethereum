@@ -252,8 +252,8 @@ func (self *LightChain) GetBodyRLP(ctx context.Context, hash common.Hash) (rlp.R
 
 // HasBlock checks if a block is fully present in the database or not, caching
 // it if present.
-func (bc *LightChain) HasBlock(hash common.Hash) bool {
-	blk, _ := bc.GetBlockByHash(NoOdr, hash)
+func (bc *LightChain) HasBlock(hash common.Hash, number uint64) bool {
+	blk, _ := bc.GetBlock(NoOdr, hash, number)
 	return blk != nil
 }
 
@@ -418,8 +418,8 @@ func (self *LightChain) GetHeaderByHash(hash common.Hash) *types.Header {
 
 // HasHeader checks if a block header is present in the database or not, caching
 // it if present.
-func (bc *LightChain) HasHeader(hash common.Hash) bool {
-	return bc.hc.HasHeader(hash)
+func (bc *LightChain) HasHeader(hash common.Hash, number uint64) bool {
+	return bc.hc.HasHeader(hash, number)
 }
 
 // GetBlockHashesFromHash retrieves a number of block hashes starting at a given
