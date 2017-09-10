@@ -60,12 +60,8 @@ func readInteger(kind reflect.Kind, b []byte) interface{} {
 
 // reads a bool
 func readBool(word []byte) (bool, error) {
-	if len(word) != 32 {
-		return false, fmt.Errorf("abi: fatal error: incorrect word length")
-	}
-
-	for i, b := range word {
-		if b != 0 && i != 31 {
+	for _, b := range word[:31] {
+		if b != 0 {
 			return false, errBadBool
 		}
 	}
