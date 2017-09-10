@@ -44,8 +44,9 @@ func (d destinations) has(codehash common.Hash, code []byte, dest *big.Int) bool
 	return OpCode(code[udest]) == JUMPDEST && m.codeSegment(udest)
 }
 
-// bitvec is a bit vector which maps bytes in a program
-// An unset bit means the byte is a code-segemnt, a set bit means it's data-segment
+// bitvec is a bit vector which maps bytes in a program.
+// An unset bit means the byte is an opcode, a set bit means
+// it's data (i.e. argument of PUSHxx).
 type bitvec []byte
 
 func (bits *bitvec) set(pos uint64) {
@@ -56,15 +57,14 @@ func (bits *bitvec) set8(pos uint64) {
 	(*bits)[pos/8+1] |= ^(0xFF >> (pos % 8))
 }
 
-// codeSegment checks if the position is in a code segment
+// codeSegment checks if the position is in a code segment.
 func (bits *bitvec) codeSegment(pos uint64) bool {
 	return ((*bits)[pos/8] & (0x80 >> (pos % 8))) == 0
 }
 
-// jumpdests creates a bitmap of the code, where 1 represents a DATA-segment,
-// and 0 represents code-segment
-func codeBitmap(code []byte) []byte {
-	//The map is 4 bytes longer than necessary, in case the code
+// codeBitmap collects data locations in code.
+func codeBitmap(code []byte) bitvec {
+	// The bitmap is 4 bytes longer than necessary, in case the code
 	// ends with a PUSH32, the algorithm will push zeroes onto the
 	// bitvector outside the bounds of the actual code.
 	bits := make(bitvec, len(code)/8+1+4)
