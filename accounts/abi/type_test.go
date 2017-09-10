@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -86,7 +87,6 @@ func TestTypeRegexp(t *testing.T) {
 		{"address", Type{Kind: reflect.Array, Type: address_t, Size: 20, T: AddressTy, stringKind: "address"}},
 		{"address[]", Type{T: SliceTy, Kind: reflect.Slice, Type: reflect.TypeOf([]common.Address{}), Elem: &Type{Kind: reflect.Array, Type: address_t, Size: 20, T: AddressTy, stringKind: "address"}, stringKind: "address[]"}},
 		{"address[2]", Type{Kind: reflect.Array, T: ArrayTy, Size: 2, Type: reflect.TypeOf([2]common.Address{}), Elem: &Type{Kind: reflect.Array, Type: address_t, Size: 20, T: AddressTy, stringKind: "address"}, stringKind: "address[2]"}},
-
 		// TODO when fixed types are implemented properly
 		// {"fixed", Type{}},
 		// {"fixed128x128", Type{}},
@@ -95,13 +95,14 @@ func TestTypeRegexp(t *testing.T) {
 		// {"fixed128x128[]", Type{}},
 		// {"fixed128x128[2]", Type{}},
 	}
-	for i, tt := range tests {
+
+	for _, tt := range tests {
 		typ, err := NewType(tt.blob)
 		if err != nil {
-			t.Errorf("type %d: failed to parse type string: %v", i, err)
+			t.Errorf("type %q: failed to parse type string: %v", tt.blob, err)
 		}
 		if !reflect.DeepEqual(typ, tt.kind) {
-			t.Errorf("type %d: parsed type mismatch:\n  have %+v\n  want %+v.\n more details:\n have %v\n want %v\n have %v\n want %v\n ", i, typeWithoutStringer(typ), typeWithoutStringer(tt.kind), typeWithoutStringer(*typ.Elem), typeWithoutStringer(*tt.kind.Elem))
+			t.Errorf("type %q: parsed type mismatch:\nGOT %s\nWANT %s ", tt.blob, spew.Sdump(typeWithoutStringer(typ)), spew.Sdump(typeWithoutStringer(tt.kind)))
 		}
 	}
 }

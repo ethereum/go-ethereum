@@ -20,9 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"reflect"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // The ABI holds information about a contract's context and available
@@ -75,22 +72,11 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 	return append(method.Id(), arguments...), nil
 }
 
-// these variable are used to determine certain types during type assertion for
-// assignment.
-var (
-	r_interSlice = reflect.TypeOf([]interface{}{})
-	r_hash       = reflect.TypeOf(common.Hash{})
-	r_bytes      = reflect.TypeOf([]byte{})
-	r_byte       = reflect.TypeOf(byte(0))
-)
-
 // Unpack output in v according to the abi specification
 func (abi ABI) Unpack(v interface{}, name string, output []byte) (err error) {
-
 	if err = bytesAreProper(output); err != nil {
 		return err
 	}
-
 	// since there can't be naming collisions with contracts and events,
 	// we need to decide whether we're calling a method or an event
 	var unpack unpacker
