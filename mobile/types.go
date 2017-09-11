@@ -267,6 +267,7 @@ func (tx *Transaction) GetCost() *BigInt { return &BigInt{tx.tx.Cost()} }
 // Deprecated: GetSigHash cannot know which signer to use.
 func (tx *Transaction) GetSigHash() *Hash { return &Hash{types.HomesteadSigner{}.Hash(tx.tx)} }
 
+// Deprecated: use EthereumClient.TransactionSender
 func (tx *Transaction) GetFrom(chainID *BigInt) (address *Address, _ error) {
 	var signer types.Signer = types.HomesteadSigner{}
 	if chainID != nil {

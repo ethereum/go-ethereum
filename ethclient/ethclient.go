@@ -153,25 +153,57 @@ func (ec *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.H
 	return head, err
 }
 
+type rpcTransaction struct {
+	tx *types.Transaction
+	txExtraInfo
+}
+
+type txExtraInfo struct {
+	BlockNumber *string
+	From        common.Address
+}
+
+func (tx *rpcTransaction) UnmarshalJSON(msg []byte) error {
+	if err := json.Unmarshal(msg, &tx.tx); err != nil {
+		return err
+	}
+	return json.Unmarshal(msg, &tx.txExtraInfo)
+}
+
 // TransactionByHash returns the transaction with the given hash.
 func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *types.Transaction, isPending bool, err error) {
-	var raw json.RawMessage
-	err = ec.c.CallContext(ctx, &raw, "eth_getTransactionByHash", hash)
+	var json *rpcTransaction
+	err = ec.c.CallContext(ctx, &json, "eth_getTransactionByHash", hash)
 	if err != nil {
 		return nil, false, err
-	} else if len(raw) == 0 {
+	} else if json == nil {
 		return nil, false, ethereum.NotFound
-	}
-	if err := json.Unmarshal(raw, &tx); err != nil {
-		return nil, false, err
-	} else if _, r, _ := tx.RawSignatureValues(); r == nil {
+	} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
 		return nil, false, fmt.Errorf("server returned transaction without signature")
 	}
-	var block struct{ BlockNumber *string }
-	if err := json.Unmarshal(raw, &block); err != nil {
-		return nil, false, err
+	setSenderFromServer(json.tx, json.From)
+	return json.tx, json.BlockNumber == nil, nil
+}
+
+// TransactionSender returns the sender address of the given transaction. The transaction
+// must be known to the remote node. The sender is the one derived by the protocol at the
+// time of inclusion.
+//
+// There is a fast-path for transactions retrieved by TransactionByHash and
+// TransactionInBlock. Getting their sender address can be done without an RPC interaction.
+func (ec *Client) TransactionSender(ctx context.Context, tx *types.Transaction) (common.Address, error) {
+	// Try to load the address from the cache.
+	sender, err := types.Sender((*senderFromServer)(nil), tx)
+	if err == nil {
+		return sender, nil
 	}
-	return tx, block.BlockNumber == nil, nil
+	// TODO It'd better to use GetTransactionByBlockHashAndIndex because it works with the
+	// light client. This will be even more important with EIP 208 because there can be
+	// multiple inclusions of the same tx. The downside is that users would need to supply
+	// the inclusion block.
+	var meta struct{ From common.Address }
+	err = ec.c.CallContext(ctx, &meta, "eth_getTransactionByHash", tx.Hash())
+	return meta.From, err
 }
 
 // TransactionCount returns the total number of transactions in the given block.
@@ -183,16 +215,17 @@ func (ec *Client) TransactionCount(ctx context.Context, blockHash common.Hash) (
 
 // TransactionInBlock returns a single transaction at index in the given block.
 func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash, index uint) (*types.Transaction, error) {
-	var tx *types.Transaction
-	err := ec.c.CallContext(ctx, &tx, "eth_getTransactionByBlockHashAndIndex", blockHash, hexutil.Uint64(index))
+	var json *rpcTransaction
+	err := ec.c.CallContext(ctx, &json, "eth_getTransactionByBlockHashAndIndex", blockHash, hexutil.Uint64(index))
 	if err == nil {
-		if tx == nil {
+		if json == nil {
 			return nil, ethereum.NotFound
-		} else if _, r, _ := tx.RawSignatureValues(); r == nil {
+		} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
 			return nil, fmt.Errorf("server returned transaction without signature")
 		}
 	}
-	return tx, err
+	setSenderFromServer(json.tx, json.From)
+	return json.tx, err
 }
 
 // TransactionReceipt returns the receipt of a transaction by transaction hash.
