@@ -268,6 +268,11 @@ web3._extend({
 			params: 0,
 		}),
 		new web3._extend.Method({
+			name: 'setGCPercent',
+			call: 'debug_setGCPercent',
+			params: 1,
+		}),
+		new web3._extend.Method({
 			name: 'memStats',
 			call: 'debug_memStats',
 			params: 0,
