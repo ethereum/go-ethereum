@@ -181,6 +181,12 @@ func (*HandlerT) FreeOSMemory() {
 	debug.FreeOSMemory()
 }
 
+// SetGCPercent sets the garbage collection target percentage. It returns the previous
+// setting. A negative value disables GC.
+func (*HandlerT) SetGCPercent(v int) int {
+	return debug.SetGCPercent(v)
+}
+
 func writeProfile(name, file string) error {
 	p := pprof.Lookup(name)
 	log.Info("Writing profile records", "count", p.Count(), "type", name, "dump", file)
