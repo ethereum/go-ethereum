@@ -176,6 +176,11 @@ func (*HandlerT) Stacks() string {
 	return string(buf)
 }
 
+// FreeOSMemory returns unused memory to the OS.
+func (*HandlerT) FreeOSMemory() {
+	debug.FreeOSMemory()
+}
+
 func writeProfile(name, file string) error {
 	p := pprof.Lookup(name)
 	log.Info("Writing profile records", "count", p.Count(), "type", name, "dump", file)
