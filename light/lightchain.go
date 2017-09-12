@@ -97,8 +97,13 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	}
 	if bc.genesisBlock.Hash() == params.MainnetGenesisHash {
 		// add trusted CHT
-		WriteTrustedCht(bc.chainDb, TrustedCht{Number: 805, Root: common.HexToHash("85e4286fe0a730390245c49de8476977afdae0eb5530b277f62a52b12313d50f")})
+		WriteTrustedCht(bc.chainDb, TrustedCht{Number: 1040, Root: common.HexToHash("bb4fb4076cbe6923c8a8ce8f158452bbe19564959313466989fda095a60884ca")})
 		log.Info("Added trusted CHT for mainnet")
+	}
+	if bc.genesisBlock.Hash() == params.TestnetGenesisHash {
+		// add trusted CHT
+		WriteTrustedCht(bc.chainDb, TrustedCht{Number: 400, Root: common.HexToHash("2a4befa19e4675d939c3dc22dca8c6ae9fcd642be1f04b06bd6e4203cc304660")})
+		log.Info("Added trusted CHT for ropsten testnet")
 	}
 
 	if err := bc.loadLastState(); err != nil {
