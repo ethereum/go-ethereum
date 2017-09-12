@@ -81,7 +81,7 @@ type status struct {
 // New creates a new dashboard instance with the given configuration.
 func New(config *Config) (*dashboard, error) {
 	return &dashboard{
-		conns: make(map[uint32]*client),
+		conns:   make(map[uint32]*client),
 		config:  config,
 		Metrics: &metricSamples{},
 		closing: make(chan chan error),
