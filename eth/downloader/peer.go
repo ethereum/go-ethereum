@@ -349,9 +349,10 @@ func (p *peerConnection) Lacks(hash common.Hash) bool {
 // peerSet represents the collection of active peer participating in the chain
 // download procedure.
 type peerSet struct {
-	peers       map[string]*peerConnection
-	newPeerFeed event.Feed
-	lock        sync.RWMutex
+	peers        map[string]*peerConnection
+	newPeerFeed  event.Feed
+	peerDropFeed event.Feed
+	lock         sync.RWMutex
 }
 
 // newPeerSet creates a new peer set top track the active download sources.
@@ -361,8 +362,14 @@ func newPeerSet() *peerSet {
 	}
 }
 
+// SubscribeNewPeers subscribes to peer arrival events.
 func (ps *peerSet) SubscribeNewPeers(ch chan<- *peerConnection) event.Subscription {
 	return ps.newPeerFeed.Subscribe(ch)
+}
+
+// SubscribePeerDrops subscribes to peer departure events.
+func (ps *peerSet) SubscribePeerDrops(ch chan<- *peerConnection) event.Subscription {
+	return ps.peerDropFeed.Subscribe(ch)
 }
 
 // Reset iterates over the current peer set, and resets each of the known peers
@@ -419,12 +426,15 @@ func (ps *peerSet) Register(p *peerConnection) error {
 // actions to/from that particular entity.
 func (ps *peerSet) Unregister(id string) error {
 	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
-	if _, ok := ps.peers[id]; !ok {
+	p, ok := ps.peers[id]
+	if !ok {
+		defer ps.lock.Unlock()
 		return errNotRegistered
 	}
 	delete(ps.peers, id)
+	ps.lock.Unlock()
+
+	ps.peerDropFeed.Send(p)
 	return nil
 }
 
