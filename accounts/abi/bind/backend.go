@@ -50,6 +50,10 @@ type ContractCaller interface {
 	// ContractCall executes an Ethereum contract call with the specified data as the
 	// input.
 	CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error)
+	// SubscribeFilterLogs subscribes to the results of a streaming filter query.
+	SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error)
+	// FilterLogs executes a filter query.
+	FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]*types.Log, error)
 }
 
 // DeployBackend wraps the operations needed by WaitMined and WaitDeployed.

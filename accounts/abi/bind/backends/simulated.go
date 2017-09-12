@@ -40,6 +40,7 @@ import (
 var _ bind.ContractBackend = (*SimulatedBackend)(nil)
 
 var errBlockNumberUnsupported = errors.New("SimulatedBackend cannot access blocks other than the latest block")
+var errLogsUnsupported = errors.New("SimulatedBackend cannot query logs")
 
 // SimulatedBackend implements bind.ContractBackend, simulating a blockchain in
 // the background. Its main purpose is to allow easily testing contract bindings.
@@ -282,6 +283,16 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), state.NewDatabase(b.database))
 	return nil
+}
+
+//cannot query logs on simulated blockchain
+func (b *SimulatedBackend) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
+	return nil, errLogsUnsupported
+}
+
+//cannot query logs on simulated blockchain
+func (b *SimulatedBackend) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]*types.Log, error) {
+	return nil, errLogsUnsupported
 }
 
 // callmsg implements core.Message to allow passing it as a transaction simulator.

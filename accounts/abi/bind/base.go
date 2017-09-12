@@ -145,6 +145,33 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 	return c.abi.Unpack(result, method, output)
 }
 
+// SubscribeFilterLogs  query logs on blockchain with q.
+// it returns a channel which tell all the already happed logs and the logs that will happen.
+// you can cancel listen logs by Subscription's Unsubscribe
+func (c *BoundContract) SubscribeFilterLogs(opts *CallOpts, q ethereum.FilterQuery) (<-chan types.Log, ethereum.Subscription, error) {
+	if opts == nil {
+		opts = new(CallOpts)
+	}
+	var ctx = ensureContext(opts.Context)
+	q.Addresses = []common.Address{c.address}
+	//first get all happened logs on the blockchain.
+	logs, err := c.caller.FilterLogs(ctx, q)
+	if err != nil {
+		return nil, nil, err
+	}
+	var ch = make(chan types.Log, len(logs))
+	//subcribe logs that will happen.
+	sub, err := c.caller.SubscribeFilterLogs(ctx, q, ch)
+	if err != nil {
+		close(ch)
+		return nil, nil, err
+	}
+	for _, log := range logs {
+		ch <- *log
+	}
+	return ch, sub, err
+}
+
 // Transact invokes the (paid) contract method with params as input values.
 func (c *BoundContract) Transact(opts *TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
 	// Otherwise pack up the parameters and invoke the contract

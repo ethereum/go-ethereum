@@ -67,6 +67,9 @@ type Backend interface {
 	TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions)
 	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
 
+	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
+	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
+
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
 }

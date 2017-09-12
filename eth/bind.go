@@ -20,10 +20,12 @@ import (
 	"context"
 	"math/big"
 
+	"errors"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -40,6 +42,7 @@ type ContractBackend struct {
 	eapi  *ethapi.PublicEthereumAPI        // Wrapper around the Ethereum object to access metadata
 	bcapi *ethapi.PublicBlockChainAPI      // Wrapper around the blockchain to access chain data
 	txapi *ethapi.PublicTransactionPoolAPI // Wrapper around the transaction pool to access transaction data
+	fapi  *filters.PublicFilterAPI         //wrapper around the filter to filter logs
 }
 
 // NewContractBackend creates a new native contract backend using an existing
@@ -49,6 +52,7 @@ func NewContractBackend(apiBackend ethapi.Backend) *ContractBackend {
 		eapi:  ethapi.NewPublicEthereumAPI(apiBackend),
 		bcapi: ethapi.NewPublicBlockChainAPI(apiBackend),
 		txapi: ethapi.NewPublicTransactionPoolAPI(apiBackend, new(ethapi.AddrLocker)),
+		fapi:  filters.NewPublicFilterAPI(apiBackend, false),
 	}
 }
 
@@ -135,4 +139,18 @@ func (b *ContractBackend) SendTransaction(ctx context.Context, tx *types.Transac
 	raw, _ := rlp.EncodeToBytes(tx)
 	_, err := b.txapi.SendRawTransaction(ctx, raw)
 	return err
+}
+
+func (b *ContractBackend) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
+	return nil, errors.New("not support right now")
+}
+
+func (b *ContractBackend) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]*types.Log, error) {
+	crit := filters.FilterCriteria{
+		FromBlock: q.FromBlock,
+		ToBlock:   q.ToBlock,
+		Addresses: q.Addresses,
+		Topics:    q.Topics,
+	}
+	return b.fapi.GetLogs(ctx, crit)
 }
