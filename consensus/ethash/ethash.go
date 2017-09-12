@@ -576,3 +576,8 @@ func (ethash *Ethash) APIs(chain consensus.ChainReader) []rpc.API {
 func SeedHash(block uint64) []byte {
 	return seedHash(block)
 }
+
+// Protocol implements consensus.Engine.Protocol
+func (ethash *Ethash) Protocol() consensus.Protocol {
+	return consensus.EthProtocol
+}

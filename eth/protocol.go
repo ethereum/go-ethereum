@@ -28,21 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// Constants to match up protocol versions and messages
-const (
-	eth62 = 62
-	eth63 = 63
-)
-
-// Official short name of the protocol used during capability negotiation.
-var ProtocolName = "eth"
-
-// Supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{eth63, eth62}
-
-// Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{17, 8}
-
 const ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
 
 // eth protocol message codes
