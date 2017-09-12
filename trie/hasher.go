@@ -27,26 +27,39 @@ import (
 )
 
 type hasher struct {
-	tmp                  *bytes.Buffer
-	sha                  hash.Hash
 	cachegen, cachelimit uint16
-}
-
-// hashers live in a global pool.
-var hasherPool = sync.Pool{
-	New: func() interface{} {
-		return &hasher{tmp: new(bytes.Buffer), sha: sha3.NewKeccak256()}
-	},
+	mu                   sync.Mutex
 }
 
 func newHasher(cachegen, cachelimit uint16) *hasher {
-	h := hasherPool.Get().(*hasher)
-	h.cachegen, h.cachelimit = cachegen, cachelimit
+	h := &hasher{
+		cachegen:   cachegen,
+		cachelimit: cachelimit,
+	}
 	return h
 }
 
-func returnHasherToPool(h *hasher) {
-	hasherPool.Put(h)
+type calculator struct {
+	sha    hash.Hash
+	buffer *bytes.Buffer
+}
+
+// calculatorPool is a set of temporary calculators that may be individually saved and retrieved.
+var calculatorPool = sync.Pool{
+	New: func() interface{} {
+		return &calculator{buffer: new(bytes.Buffer), sha: sha3.NewKeccak256()}
+	},
+}
+
+func (h *hasher) newCalculator() *calculator {
+	calculator := calculatorPool.Get().(*calculator)
+	calculator.buffer.Reset()
+	calculator.sha.Reset()
+	return calculator
+}
+
+func (h *hasher) returnCalculator(calculator *calculator) {
+	calculatorPool.Put(calculator)
 }
 
 // hash collapses a node down into a hash node, also returning a copy of the
@@ -121,17 +134,26 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter) (node, node, err
 
 	case *fullNode:
 		// Hash the full node's children, caching the newly hashed subtrees
+		var wg sync.WaitGroup
 		collapsed, cached := n.copy(), n.copy()
-
 		for i := 0; i < 16; i++ {
 			if n.Children[i] != nil {
-				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, false)
-				if err != nil {
-					return original, original, err
-				}
+				wg.Add(1)
+				go func(i int) {
+					var herr error
+					collapsed.Children[i], cached.Children[i], herr = h.hash(n.Children[i], db, false)
+					if herr != nil {
+						err = herr
+					}
+					wg.Done()
+				}(i)
 			} else {
 				collapsed.Children[i] = valueNode(nil) // Ensure that nil children are encoded as empty strings.
 			}
+		}
+		wg.Wait()
+		if err != nil {
+			return original, original, err
 		}
 		cached.Children[16] = n.Children[16]
 		if collapsed.Children[16] == nil {
@@ -151,23 +173,27 @@ func (h *hasher) store(n node, db DatabaseWriter, force bool) (node, error) {
 		return n, nil
 	}
 	// Generate the RLP encoding of the node
-	h.tmp.Reset()
-	if err := rlp.Encode(h.tmp, n); err != nil {
+	calculator := h.newCalculator()
+	defer h.returnCalculator(calculator)
+	if err := rlp.Encode(calculator.buffer, n); err != nil {
 		panic("encode error: " + err.Error())
 	}
 
-	if h.tmp.Len() < 32 && !force {
+	if calculator.buffer.Len() < 32 && !force {
 		return n, nil // Nodes smaller than 32 bytes are stored inside their parent
 	}
 	// Larger nodes are replaced by their hash and stored in the database.
 	hash, _ := n.cache()
 	if hash == nil {
-		h.sha.Reset()
-		h.sha.Write(h.tmp.Bytes())
-		hash = hashNode(h.sha.Sum(nil))
+		calculator.sha.Write(calculator.buffer.Bytes())
+		hash = hashNode(calculator.sha.Sum(nil))
 	}
 	if db != nil {
-		return hash, db.Put(hash, h.tmp.Bytes())
+		// db is not concurrent safe here.
+		h.mu.Lock()
+		err := db.Put(hash, calculator.buffer.Bytes())
+		h.mu.Unlock()
+		return hash, err
 	}
 	return hash, nil
 }
