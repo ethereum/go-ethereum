@@ -91,11 +91,6 @@ func (ch suicideChange) undo(s *StateDB) {
 	if obj != nil {
 		obj.suicided = ch.prev
 		obj.setBalance(ch.prevbalance)
-		// if the object wasn't suicided before, remove
-		// it from the list of destructed objects as well.
-		if !obj.suicided {
-			delete(s.stateObjectsDestructed, *ch.account)
-		}
 	}
 }
 

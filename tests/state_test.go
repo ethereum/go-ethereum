@@ -37,10 +37,8 @@ func TestState(t *testing.T) {
 	// Expected failures:
 	st.fails(`^stCodeSizeLimit/codesizeOOGInvalidSize\.json/(Frontier|Homestead|EIP150)`,
 		"code size limit implementation is not conditional on fork")
-	st.fails(`^stRevertTest/RevertDepthCreateAddressCollision\.json/EIP15[08]/[67]`, "bug in test")
 	st.fails(`^stRevertTest/RevertPrecompiledTouch\.json/EIP158`, "bug in test")
 	st.fails(`^stRevertTest/RevertPrefoundEmptyOOG\.json/EIP158`, "bug in test")
-	st.fails(`^stRevertTest/RevertDepthCreateAddressCollision\.json/Byzantium/[67]`, "bug in test")
 	st.fails(`^stRevertTest/RevertPrecompiledTouch\.json/Byzantium`, "bug in test")
 	st.fails(`^stRevertTest/RevertPrefoundEmptyOOG\.json/Byzantium`, "bug in test")
 

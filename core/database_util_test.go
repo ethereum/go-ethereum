@@ -340,7 +340,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	receipt1 := &types.Receipt{
-		PostState:         []byte{0x01},
+		Failed:            true,
 		CumulativeGasUsed: big.NewInt(1),
 		Logs: []*types.Log{
 			{Address: common.BytesToAddress([]byte{0x11})},
@@ -351,7 +351,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 		GasUsed:         big.NewInt(111111),
 	}
 	receipt2 := &types.Receipt{
-		PostState:         []byte{0x02},
+		PostState:         common.Hash{2}.Bytes(),
 		CumulativeGasUsed: big.NewInt(2),
 		Logs: []*types.Log{
 			{Address: common.BytesToAddress([]byte{0x22})},
@@ -461,12 +461,12 @@ func TestMipmapChain(t *testing.T) {
 		var receipts types.Receipts
 		switch i {
 		case 1:
-			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt := types.NewReceipt(nil, false, new(big.Int))
 			receipt.Logs = []*types.Log{{Address: addr, Topics: []common.Hash{hash1}}}
 			gen.AddUncheckedReceipt(receipt)
 			receipts = types.Receipts{receipt}
 		case 1000:
-			receipt := types.NewReceipt(nil, new(big.Int))
+			receipt := types.NewReceipt(nil, false, new(big.Int))
 			receipt.Logs = []*types.Log{{Address: addr2}}
 			gen.AddUncheckedReceipt(receipt)
 			receipts = types.Receipts{receipt}
