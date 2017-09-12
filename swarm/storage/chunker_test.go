@@ -41,11 +41,14 @@ type chunkerTester struct {
 	inputs map[uint64][]byte
 	chunks map[string]*Chunk
 	t      test
+	lock   sync.Mutex
 }
 
 func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, chunkC chan *Chunk, swg *sync.WaitGroup, expectedError error) (key Key) {
 	// reset
+	self.lock.Lock()
 	self.chunks = make(map[string]*Chunk)
+	self.lock.Unlock()
 
 	if self.inputs == nil {
 		self.inputs = make(map[uint64][]byte)
@@ -63,7 +66,9 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 					return
 				case chunk := <-chunkC:
 					// self.chunks = append(self.chunks, chunk)
+					self.lock.Lock()
 					self.chunks[chunk.Key.String()] = chunk
+					self.lock.Unlock()
 					if chunk.wg != nil {
 						chunk.wg.Done()
 					}
@@ -78,9 +83,6 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 		self.t.Fatalf("Not receiving the correct error! Expected %v, received %v", expectedError, err)
 	}
 	if chunkC != nil {
-		if swg != nil {
-			swg.Wait()
-		}
 		close(quitC)
 	}
 	return
