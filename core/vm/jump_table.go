@@ -51,14 +51,14 @@ type operation struct {
 }
 
 var (
-	frontierInstructionSet   = NewFrontierInstructionSet()
-	homesteadInstructionSet  = NewHomesteadInstructionSet()
-	metropolisInstructionSet = NewMetropolisInstructionSet()
+	frontierInstructionSet  = NewFrontierInstructionSet()
+	homesteadInstructionSet = NewHomesteadInstructionSet()
+	byzantiumInstructionSet = NewByzantiumInstructionSet()
 )
 
-// NewMetropolisInstructionSet returns the frontier, homestead and
-// metropolis instructions.
-func NewMetropolisInstructionSet() [256]operation {
+// NewByzantiumInstructionSet returns the frontier, homestead and
+// byzantium instructions.
+func NewByzantiumInstructionSet() [256]operation {
 	// instructions that can be executed during the homestead phase.
 	instructionSet := NewHomesteadInstructionSet()
 	instructionSet[STATICCALL] = operation{
