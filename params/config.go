@@ -55,7 +55,7 @@ var (
 		EIP150Hash:     common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 		EIP155Block:    big.NewInt(10),
 		EIP158Block:    big.NewInt(10),
-		ByzantiumBlock: big.NewInt(math.MaxInt64), // Don't enable yet
+		ByzantiumBlock: big.NewInt(1700000),
 
 		Ethash: new(EthashConfig),
 	}
@@ -86,8 +86,8 @@ var (
 	// means that all fields must be set at all times. This forces
 	// anyone adding flags to the config to also have to set these
 	// fields.
-	AllProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(math.MaxInt64) /*disabled*/, new(EthashConfig), nil}
-	TestChainConfig    = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
+	AllProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), new(EthashConfig), nil}
+	TestChainConfig    = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), new(EthashConfig), nil}
 	TestRules          = TestChainConfig.Rules(new(big.Int))
 )
 
