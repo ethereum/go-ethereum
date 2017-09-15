@@ -6,7 +6,7 @@ set -e
 
 main() {
   if ! which p2psim &>/dev/null; then
-    fail "missing p2psim binary (you need to build p2p/simulations/cmd/p2psim and put it in \$PATH)"
+    fail "missing p2psim binary (you need to build cmd/p2psim and put it in \$PATH)"
   fi
 
   info "creating 10 nodes"

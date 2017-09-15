@@ -157,7 +157,7 @@ ID.
 ## Command line client
 
 `p2psim` is a command line client for the HTTP API, located in
-`p2p/simulations/cmd/p2psim`.
+`cmd/p2psim`.
 
 It provides the following commands:
 
