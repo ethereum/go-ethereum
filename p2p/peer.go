@@ -335,7 +335,7 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 		proto.werr = writeErr
 		var rw MsgReadWriter = proto
 		if p.events != nil {
-			rw = NewMsgEventer(rw, p.events, p.ID(), proto.Name)
+			rw = newMsgEventer(rw, p.events, p.ID(), proto.Name)
 		}
 		p.log.Trace(fmt.Sprintf("Starting protocol %s/%d", proto.Name, proto.Version))
 		go func() {

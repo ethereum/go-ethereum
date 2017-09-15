@@ -274,9 +274,9 @@ func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
 	return nil
 }
 
-// MsgEventer wraps a MsgReadWriter and sends events whenever a message is sent
+// msgEventer wraps a MsgReadWriter and sends events whenever a message is sent
 // or received
-type MsgEventer struct {
+type msgEventer struct {
 	MsgReadWriter
 
 	feed     *event.Feed
@@ -284,10 +284,10 @@ type MsgEventer struct {
 	Protocol string
 }
 
-// NewMsgEventer returns a MsgEventer which sends message events to the given
+// newMsgEventer returns a msgEventer which sends message events to the given
 // feed
-func NewMsgEventer(rw MsgReadWriter, feed *event.Feed, peerID discover.NodeID, proto string) *MsgEventer {
-	return &MsgEventer{
+func newMsgEventer(rw MsgReadWriter, feed *event.Feed, peerID discover.NodeID, proto string) *msgEventer {
+	return &msgEventer{
 		MsgReadWriter: rw,
 		feed:          feed,
 		peerID:        peerID,
@@ -297,7 +297,7 @@ func NewMsgEventer(rw MsgReadWriter, feed *event.Feed, peerID discover.NodeID, p
 
 // ReadMsg reads a message from the underlying MsgReadWriter and emits a
 // "message received" event
-func (self *MsgEventer) ReadMsg() (Msg, error) {
+func (self *msgEventer) ReadMsg() (Msg, error) {
 	msg, err := self.MsgReadWriter.ReadMsg()
 	if err != nil {
 		return msg, err
@@ -314,7 +314,7 @@ func (self *MsgEventer) ReadMsg() (Msg, error) {
 
 // WriteMsg writes a message to the underlying MsgReadWriter and emits a
 // "message sent" event
-func (self *MsgEventer) WriteMsg(msg Msg) error {
+func (self *msgEventer) WriteMsg(msg Msg) error {
 	err := self.MsgReadWriter.WriteMsg(msg)
 	if err != nil {
 		return err
@@ -331,7 +331,7 @@ func (self *MsgEventer) WriteMsg(msg Msg) error {
 
 // Close closes the underlying MsgReadWriter if it implements the io.Closer
 // interface
-func (self *MsgEventer) Close() error {
+func (self *msgEventer) Close() error {
 	if v, ok := self.MsgReadWriter.(io.Closer); ok {
 		return v.Close()
 	}
