@@ -32,4 +32,4 @@ profile.tmp
 profile.cov
 
 # dashboard
-/go-ethereum/dashboard/bundler/node_modules/
+/dashboard/bundler/node_modules/

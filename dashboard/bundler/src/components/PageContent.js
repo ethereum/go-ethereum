@@ -42,9 +42,7 @@ class ChartComponent extends Component {
                 </div>
                 <div className="x_content">
                     {/* The chart will be generated here after the component is mounted (this.componentDidMount). */}
-                    <canvas ref={data => {
-                        this.data = data
-                    }}/>
+                    <canvas ref={data => this.data = data}/>
                 </div>
             </div>
         </div>;
