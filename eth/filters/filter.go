@@ -135,7 +135,7 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 	// Create a matcher session and request servicing from the backend
 	matches := make(chan uint64, 64)
 
-	session, err := f.matcher.Start(uint64(f.begin), end, matches)
+	session, err := f.matcher.Start(ctx, uint64(f.begin), end, matches)
 	if err != nil {
 		return nil, err
 	}

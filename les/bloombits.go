@@ -17,7 +17,6 @@
 package les
 
 import (
-	"context"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/bitutil"
@@ -54,10 +53,8 @@ func (eth *LightEthereum) startBloomHandlers() {
 
 				case request := <-eth.bloomRequests:
 					task := <-request
-
 					task.Bitsets = make([][]byte, len(task.Sections))
-
-					compVectors, err := light.GetBloomBits(context.Background(), eth.odr, task.Bit, task.Sections)
+					compVectors, err := light.GetBloomBits(task.Context, eth.odr, task.Bit, task.Sections)
 					if err == nil {
 						for i, _ := range task.Sections {
 							if blob, err := bitutil.DecompressBytes(compVectors[i], int(light.BloomTrieFrequency/8)); err == nil {

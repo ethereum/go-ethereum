@@ -18,6 +18,7 @@ package bloombits
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"math"
 	"sort"
@@ -61,6 +62,7 @@ type Retrieval struct {
 	Sections []uint64
 	Bitsets  [][]byte
 	Error    error
+	Context  context.Context
 }
 
 // Matcher is a pipelined system of schedulers and logic matchers which perform
@@ -138,7 +140,7 @@ func (m *Matcher) addScheduler(idx uint) {
 // Start starts the matching process and returns a stream of bloom matches in
 // a given range of blocks. If there are no more matches in the range, the result
 // channel is closed.
-func (m *Matcher) Start(begin, end uint64, results chan uint64) (*MatcherSession, error) {
+func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uint64) (*MatcherSession, error) {
 	// Make sure we're not creating concurrent sessions
 	if atomic.SwapUint32(&m.running, 1) == 1 {
 		return nil, errors.New("matcher already running")
@@ -150,6 +152,7 @@ func (m *Matcher) Start(begin, end uint64, results chan uint64) (*MatcherSession
 		matcher: m,
 		quit:    make(chan struct{}),
 		kill:    make(chan struct{}),
+		ctx:     ctx,
 	}
 	for _, scheduler := range m.schedulers {
 		scheduler.reset()
@@ -505,6 +508,7 @@ type MatcherSession struct {
 
 	quit     chan struct{} // Quit channel to request pipeline termination
 	kill     chan struct{} // Term channel to signal non-graceful forced shutdown
+	ctx      context.Context
 	err      error
 	stopping bool
 	lock     sync.Mutex
@@ -647,7 +651,7 @@ func (s *MatcherSession) Multiplex(batch int, wait time.Duration, mux chan chan 
 
 		case mux <- request:
 			// Retrieval accepted, something must arrive before we're aborting
-			request <- &Retrieval{Bit: bit, Sections: sections}
+			request <- &Retrieval{Bit: bit, Sections: sections, Context: s.ctx}
 
 			result := <-request
 			if result.Error != nil {
