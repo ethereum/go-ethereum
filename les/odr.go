@@ -64,7 +64,7 @@ type Msg struct {
 
 // Retrieve tries to fetch an object from the LES network.
 // If the network retrieval was successful, it stores the object in local db.
-func (self *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err error) {
+func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err error) {
 	lreq := LesRequest(req)
 
 	reqID := genReqID()
@@ -84,9 +84,9 @@ func (self *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err err
 		},
 	}
 
-	if err = self.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(self.db, msg) }); err == nil {
+	if err = odr.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(odr.db, msg) }, odr.stop); err == nil {
 		// retrieved from network, store in db
-		req.StoreResult(self.db)
+		req.StoreResult(odr.db)
 	} else {
 		log.Debug("Failed to retrieve data from network", "err", err)
 	}
