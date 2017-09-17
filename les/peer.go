@@ -456,11 +456,15 @@ func newPeerSet() *peerSet {
 // notify adds a service to be notified about added or removed peers
 func (ps *peerSet) notify(n peerSetNotify) {
 	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
 	ps.notifyList = append(ps.notifyList, n)
+	peers := make([]*peer, 0, len(ps.peers))
 	for _, p := range ps.peers {
-		go n.registerPeer(p)
+		peers = append(peers, p)
+	}
+	ps.lock.Unlock()
+
+	for _, p := range peers {
+		n.registerPeer(p)
 	}
 }
 
@@ -468,8 +472,6 @@ func (ps *peerSet) notify(n peerSetNotify) {
 // peer is already known.
 func (ps *peerSet) Register(p *peer) error {
 	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
 	if ps.closed {
 		return errClosed
 	}
@@ -478,8 +480,12 @@ func (ps *peerSet) Register(p *peer) error {
 	}
 	ps.peers[p.id] = p
 	p.sendQueue = newExecQueue(100)
-	for _, n := range ps.notifyList {
-		go n.registerPeer(p)
+	peers := make([]peerSetNotify, len(ps.notifyList))
+	copy(peers, ps.notifyList)
+	ps.lock.Unlock()
+
+	for _, n := range peers {
+		n.registerPeer(p)
 	}
 	return nil
 }
@@ -488,19 +494,22 @@ func (ps *peerSet) Register(p *peer) error {
 // actions to/from that particular entity. It also initiates disconnection at the networking layer.
 func (ps *peerSet) Unregister(id string) error {
 	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
 	if p, ok := ps.peers[id]; !ok {
+		ps.lock.Unlock()
 		return errNotRegistered
 	} else {
-		for _, n := range ps.notifyList {
-			go n.unregisterPeer(p)
+		delete(ps.peers, id)
+		peers := make([]peerSetNotify, len(ps.notifyList))
+		copy(peers, ps.notifyList)
+		ps.lock.Unlock()
+
+		for _, n := range peers {
+			n.unregisterPeer(p)
 		}
 		p.sendQueue.quit()
 		p.Peer.Disconnect(p2p.DiscUselessPeer)
+		return nil
 	}
-	delete(ps.peers, id)
-	return nil
 }
 
 // AllPeerIDs returns a list of all registered peer IDs
