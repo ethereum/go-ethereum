@@ -58,7 +58,6 @@ func testChainIndexer(t *testing.T, count int) {
 		)
 		backends[i] = &testChainIndexBackend{t: t, processCh: make(chan uint64)}
 		backends[i].indexer = NewChainIndexer(db, ethdb.NewTable(db, string([]byte{byte(i)})), backends[i], sectionSize, confirmsReq, 0, fmt.Sprintf("indexer-%d", i))
-		defer backends[i].indexer.Close()
 
 		if sections, _, _ := backends[i].indexer.Sections(); sections != 0 {
 			t.Fatalf("Canonical section count mismatch: have %v, want %v", sections, 0)
@@ -67,6 +66,7 @@ func testChainIndexer(t *testing.T, count int) {
 			backends[i-1].indexer.AddChildIndexer(backends[i].indexer)
 		}
 	}
+	defer backends[0].indexer.Close() // parent indexer shuts down children
 	// notify pings the root indexer about a new head or reorg, then expect
 	// processed blocks if a section is processable
 	notify := func(headNum, failNum uint64, reorg bool) {
@@ -226,7 +226,7 @@ func (b *testChainIndexBackend) Process(header *types.Header) {
 	}
 }
 
-func (b *testChainIndexBackend) Commit(db ethdb.Database) error {
+func (b *testChainIndexBackend) Commit() error {
 	if b.headerCnt != b.indexer.sectionSize {
 		b.t.Error("Not enough headers processed")
 	}

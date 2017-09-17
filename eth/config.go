@@ -79,7 +79,6 @@ type Config struct {
 	// Light client options
 	LightServ  int `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
 	LightPeers int `toml:",omitempty"` // Maximum number of LES client peers
-	MaxPeers   int `toml:"-"`          // Maximum number of global peers
 
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`

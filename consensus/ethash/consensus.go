@@ -36,9 +36,9 @@ import (
 
 // Ethash proof-of-work protocol constants.
 var (
-	frontierBlockReward   *big.Int = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
-	metropolisBlockReward *big.Int = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Metropolis
-	maxUncles                      = 2                 // Maximum number of uncles allowed in a single block
+	frontierBlockReward  *big.Int = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
+	byzantiumBlockReward *big.Int = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
+	maxUncles                     = 2                 // Maximum number of uncles allowed in a single block
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -290,8 +290,8 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
-	case config.IsMetropolis(next):
-		return calcDifficultyMetropolis(time, parent)
+	case config.IsByzantium(next):
+		return calcDifficultyByzantium(time, parent)
 	case config.IsHomestead(next):
 		return calcDifficultyHomestead(time, parent)
 	default:
@@ -310,10 +310,10 @@ var (
 	big2999999    = big.NewInt(2999999)
 )
 
-// calcDifficultyMetropolis is the difficulty adjustment algorithm. It returns
+// calcDifficultyByzantium is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time given the
-// parent block's time and difficulty. The calculation uses the Metropolis rules.
-func calcDifficultyMetropolis(time uint64, parent *types.Header) *big.Int {
+// parent block's time and difficulty. The calculation uses the Byzantium rules.
+func calcDifficultyByzantium(time uint64, parent *types.Header) *big.Int {
 	// https://github.com/ethereum/EIPs/issues/100.
 	// algorithm:
 	// diff = (parent_diff +
@@ -530,8 +530,8 @@ var (
 func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
 	blockReward := frontierBlockReward
-	if config.IsMetropolis(header.Number) {
-		blockReward = metropolisBlockReward
+	if config.IsByzantium(header.Number) {
+		blockReward = byzantiumBlockReward
 	}
 	// Accumulate the rewards for the miner and any included uncles
 	reward := new(big.Int).Set(blockReward)
