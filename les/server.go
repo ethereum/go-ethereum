@@ -20,6 +20,7 @@ package les
 import (
 	"crypto/ecdsa"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"sync"
 
@@ -67,6 +68,28 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		chtIndexer:      light.NewChtIndexer(eth.ChainDb(), false),
 		bltIndexer:      light.NewBloomTrieIndexer(eth.ChainDb(), false),
 	}
+	logger := log.New()
+
+	chtV1SectionCount, _, _ := srv.chtIndexer.Sections() // indexer still uses LES/1 4k section size for backwards server compatibility
+	chtV2SectionCount := chtV1SectionCount / (light.ChtFrequency / light.ChtV1Frequency)
+	if chtV2SectionCount != 0 {
+		// convert to LES/2 section
+		chtLastSection := chtV2SectionCount - 1
+		// convert last LES/2 section index back to LES/1 index for chtIndexer.SectionHead
+		chtLastSectionV1 := (chtLastSection+1)*(light.ChtFrequency/light.ChtV1Frequency) - 1
+		chtSectionHead := srv.chtIndexer.SectionHead(chtLastSectionV1)
+		chtRoot := light.GetChtV2Root(pm.chainDb, chtLastSection, chtSectionHead)
+		logger.Info("CHT", "section", chtLastSection, "sectionHead", fmt.Sprintf("%064x", chtSectionHead), "root", fmt.Sprintf("%064x", chtRoot))
+	}
+
+	bltSectionCount, _, _ := srv.bltIndexer.Sections()
+	if bltSectionCount != 0 {
+		bltLastSection := bltSectionCount - 1
+		bltSectionHead := srv.bltIndexer.SectionHead(bltLastSection)
+		bltRoot := light.GetBloomTrieRoot(pm.chainDb, bltLastSection, bltSectionHead)
+		logger.Info("BloomTrie", "section", bltLastSection, "sectionHead", fmt.Sprintf("%064x", bltSectionHead), "root", fmt.Sprintf("%064x", bltRoot))
+	}
+
 	srv.chtIndexer.Start(eth.BlockChain())
 	pm.server = srv
 
