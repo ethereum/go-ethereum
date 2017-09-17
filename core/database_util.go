@@ -332,14 +332,13 @@ func GetReceipt(db DatabaseReader, hash common.Hash) (*types.Receipt, common.Has
 
 // GetBloomBits retrieves the compressed bloom bit vector belonging to the given
 // section and bit index from the.
-func GetBloomBits(db DatabaseReader, bit uint, section uint64, head common.Hash) []byte {
+func GetBloomBits(db DatabaseReader, bit uint, section uint64, head common.Hash) ([]byte, error) {
 	key := append(append(bloomBitsPrefix, make([]byte, 10)...), head.Bytes()...)
 
 	binary.BigEndian.PutUint16(key[1:], uint16(bit))
 	binary.BigEndian.PutUint64(key[3:], section)
 
-	bits, _ := db.Get(key)
-	return bits
+	return db.Get(key)
 }
 
 // WriteCanonicalHash stores the canonical hash for the given block number.

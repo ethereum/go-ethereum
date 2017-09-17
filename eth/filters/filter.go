@@ -19,7 +19,6 @@ package filters
 import (
 	"context"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -140,7 +139,7 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 	if err != nil {
 		return nil, err
 	}
-	defer session.Close(time.Second)
+	defer session.Close()
 
 	f.backend.ServiceFilter(ctx, session)
 
@@ -152,9 +151,13 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 		case number, ok := <-matches:
 			// Abort if all matches have been fulfilled
 			if !ok {
-				f.begin = int64(end) + 1
-				return logs, nil
+				err := session.Error()
+				if err == nil {
+					f.begin = int64(end) + 1
+				}
+				return logs, err
 			}
+			f.begin = int64(number) + 1
 			// Retrieve the suggested block and pull any truly matching logs
 			header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(number))
 			if header == nil || err != nil {

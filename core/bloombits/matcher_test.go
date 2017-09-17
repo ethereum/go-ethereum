@@ -163,7 +163,7 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, blocks uint64, intermitt
 			}
 			// If we're testing intermittent mode, abort and restart the pipeline
 			if intermittent {
-				session.Close(time.Second)
+				session.Close()
 				close(quit)
 
 				quit = make(chan struct{})
@@ -183,7 +183,7 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, blocks uint64, intermitt
 		t.Errorf("filter = %v  blocks = %v  intermittent = %v: expected closed channel, got #%v", filter, blocks, intermittent, match)
 	}
 	// Clean up the session and ensure we match the expected retrieval count
-	session.Close(time.Second)
+	session.Close()
 	close(quit)
 
 	if retrievals != 0 && requested != retrievals {

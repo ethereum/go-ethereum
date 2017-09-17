@@ -58,15 +58,18 @@ func (eth *Ethereum) startBloomHandlers() {
 
 				case request := <-eth.bloomRequests:
 					task := <-request
-
 					task.Bitsets = make([][]byte, len(task.Sections))
 					for i, section := range task.Sections {
 						head := core.GetCanonicalHash(eth.chainDb, (section+1)*params.BloomBitsBlocks-1)
-						blob, err := bitutil.DecompressBytes(core.GetBloomBits(eth.chainDb, task.Bit, section, head), int(params.BloomBitsBlocks)/8)
-						if err != nil {
-							panic(err)
+						if compVector, err := core.GetBloomBits(eth.chainDb, task.Bit, section, head); err == nil {
+							if blob, err := bitutil.DecompressBytes(compVector, int(params.BloomBitsBlocks)/8); err == nil {
+								task.Bitsets[i] = blob
+							} else {
+								task.Error = err
+							}
+						} else {
+							task.Error = err
 						}
-						task.Bitsets[i] = blob
 					}
 					request <- task
 				}
