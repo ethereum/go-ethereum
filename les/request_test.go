@@ -39,11 +39,15 @@ type accessTestFn func(db ethdb.Database, bhash common.Hash, number uint64) ligh
 
 func TestBlockAccessLes1(t *testing.T) { testAccess(t, 1, tfBlockAccess) }
 
+func TestBlockAccessLes2(t *testing.T) { testAccess(t, 2, tfBlockAccess) }
+
 func tfBlockAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	return &light.BlockRequest{Hash: bhash, Number: number}
 }
 
 func TestReceiptsAccessLes1(t *testing.T) { testAccess(t, 1, tfReceiptsAccess) }
+
+func TestReceiptsAccessLes2(t *testing.T) { testAccess(t, 2, tfReceiptsAccess) }
 
 func tfReceiptsAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	return &light.ReceiptsRequest{Hash: bhash, Number: number}
@@ -51,11 +55,15 @@ func tfReceiptsAccess(db ethdb.Database, bhash common.Hash, number uint64) light
 
 func TestTrieEntryAccessLes1(t *testing.T) { testAccess(t, 1, tfTrieEntryAccess) }
 
+func TestTrieEntryAccessLes2(t *testing.T) { testAccess(t, 2, tfTrieEntryAccess) }
+
 func tfTrieEntryAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	return &light.TrieRequest{Id: light.StateTrieID(core.GetHeader(db, bhash, core.GetBlockNumber(db, bhash))), Key: testBankSecureTrieKey}
 }
 
 func TestCodeAccessLes1(t *testing.T) { testAccess(t, 1, tfCodeAccess) }
+
+func TestCodeAccessLes2(t *testing.T) { testAccess(t, 2, tfCodeAccess) }
 
 func tfCodeAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	header := core.GetHeader(db, bhash, core.GetBlockNumber(db, bhash))

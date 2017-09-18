@@ -17,6 +17,7 @@
 package les
 
 import (
+	"bytes"
 	"math/rand"
 	"testing"
 
@@ -40,8 +41,28 @@ func expectResponse(r p2p.MsgReader, msgcode, reqID, bv uint64, data interface{}
 	return p2p.ExpectMsg(r, msgcode, resp{reqID, bv, data})
 }
 
+func testCheckProof(t *testing.T, exp *light.NodeSet, got light.NodeList) {
+	if exp.KeyCount() > len(got) {
+		t.Errorf("proof has fewer nodes than expected")
+		return
+	}
+	if exp.KeyCount() < len(got) {
+		t.Errorf("proof has more nodes than expected")
+		return
+	}
+	for _, node := range got {
+		n, _ := exp.Get(crypto.Keccak256(node))
+		if !bytes.Equal(n, node) {
+			t.Errorf("proof contents mismatch")
+			return
+		}
+	}
+}
+
 // Tests that block headers can be retrieved from a remote chain based on user queries.
 func TestGetBlockHeadersLes1(t *testing.T) { testGetBlockHeaders(t, 1) }
+
+func TestGetBlockHeadersLes2(t *testing.T) { testGetBlockHeaders(t, 2) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
 	db, _ := ethdb.NewMemDatabase()
@@ -172,6 +193,8 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 // Tests that block contents can be retrieved from a remote chain based on their hashes.
 func TestGetBlockBodiesLes1(t *testing.T) { testGetBlockBodies(t, 1) }
 
+func TestGetBlockBodiesLes2(t *testing.T) { testGetBlockBodies(t, 2) }
+
 func testGetBlockBodies(t *testing.T, protocol int) {
 	db, _ := ethdb.NewMemDatabase()
 	pm := newTestProtocolManagerMust(t, false, downloader.MaxBlockFetch+15, nil, nil, nil, db)
@@ -248,6 +271,8 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 // Tests that the contract codes can be retrieved based on account addresses.
 func TestGetCodeLes1(t *testing.T) { testGetCode(t, 1) }
 
+func TestGetCodeLes2(t *testing.T) { testGetCode(t, 2) }
+
 func testGetCode(t *testing.T, protocol int) {
 	// Assemble the test environment
 	db, _ := ethdb.NewMemDatabase()
@@ -281,6 +306,8 @@ func testGetCode(t *testing.T, protocol int) {
 // Tests that the transaction receipts can be retrieved based on hashes.
 func TestGetReceiptLes1(t *testing.T) { testGetReceipt(t, 1) }
 
+func TestGetReceiptLes2(t *testing.T) { testGetReceipt(t, 2) }
+
 func testGetReceipt(t *testing.T, protocol int) {
 	// Assemble the test environment
 	db, _ := ethdb.NewMemDatabase()
@@ -308,6 +335,8 @@ func testGetReceipt(t *testing.T, protocol int) {
 // Tests that trie merkle proofs can be retrieved
 func TestGetProofsLes1(t *testing.T) { testGetProofs(t, 1) }
 
+func TestGetProofsLes2(t *testing.T) { testGetProofs(t, 2) }
+
 func testGetProofs(t *testing.T, protocol int) {
 	// Assemble the test environment
 	db, _ := ethdb.NewMemDatabase()
@@ -316,8 +345,11 @@ func testGetProofs(t *testing.T, protocol int) {
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
 	defer peer.close()
 
-	var proofreqs []ProofReq
-	var proofs [][]rlp.RawValue
+	var (
+		proofreqs []ProofReq
+		proofsV1  [][]rlp.RawValue
+	)
+	proofsV2 := light.NewNodeSet()
 
 	accounts := []common.Address{testBankAddress, acc1Addr, acc2Addr, {}}
 	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
@@ -332,15 +364,47 @@ func testGetProofs(t *testing.T, protocol int) {
 			}
 			proofreqs = append(proofreqs, req)
 
-			var proof light.NodeList
-			trie.Prove(crypto.Keccak256(acc[:]), 0, &proof)
-			proofs = append(proofs, proof)
+			switch protocol {
+			case 1:
+				var proof light.NodeList
+				trie.Prove(crypto.Keccak256(acc[:]), 0, &proof)
+				proofsV1 = append(proofsV1, proof)
+			case 2:
+				trie.Prove(crypto.Keccak256(acc[:]), 0, proofsV2)
+			}
 		}
 	}
 	// Send the proof request and verify the response
-	cost := peer.GetRequestCost(GetProofsV1Msg, len(proofreqs))
-	sendRequest(peer.app, GetProofsV1Msg, 42, cost, proofreqs)
-	if err := expectResponse(peer.app, ProofsV1Msg, 42, testBufLimit, proofs); err != nil {
-		t.Errorf("proofs mismatch: %v", err)
+	switch protocol {
+	case 1:
+		cost := peer.GetRequestCost(GetProofsV1Msg, len(proofreqs))
+		sendRequest(peer.app, GetProofsV1Msg, 42, cost, proofreqs)
+		if err := expectResponse(peer.app, ProofsV1Msg, 42, testBufLimit, proofsV1); err != nil {
+			t.Errorf("proofs mismatch: %v", err)
+		}
+	case 2:
+		cost := peer.GetRequestCost(GetProofsV2Msg, len(proofreqs))
+		sendRequest(peer.app, GetProofsV2Msg, 42, cost, proofreqs)
+		msg, err := peer.app.ReadMsg()
+		if err != nil {
+			t.Errorf("Message read error: %v", err)
+		}
+		var resp struct {
+			ReqID, BV uint64
+			Data      light.NodeList
+		}
+		if err := msg.Decode(&resp); err != nil {
+			t.Errorf("reply decode error: %v", err)
+		}
+		if msg.Code != ProofsV2Msg {
+			t.Errorf("Message code mismatch")
+		}
+		if resp.ReqID != 42 {
+			t.Errorf("ReqID mismatch")
+		}
+		if resp.BV != testBufLimit {
+			t.Errorf("BV mismatch")
+		}
+		testCheckProof(t, proofsV2, resp.Data)
 	}
 }
