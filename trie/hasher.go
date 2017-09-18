@@ -76,7 +76,7 @@ func (h *hasher) hash(n node, db DatabaseWriter, force bool) (node, node, error)
 	if err != nil {
 		return hashNode{}, n, err
 	}
-	// Cache the hash of the ndoe for later reuse and remove
+	// Cache the hash of the node for later reuse and remove
 	// the dirty flag in commit mode. It's fine to assign these values directly
 	// without copying the node first because hashChildren copies it.
 	cachedHash, _ := hashed.(hashNode)
