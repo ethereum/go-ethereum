@@ -706,55 +706,65 @@ func (srv *Server) listenLoop() {
 // SetupConn runs the handshakes and attempts to add the connection
 // as a peer. It returns when the connection has been added as a peer
 // or the handshakes have failed.
-func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *discover.Node) {
+func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *discover.Node) error {
+	self := srv.Self()
+	if self == nil {
+		return errors.New("shutdown")
+	}
+	c := &conn{fd: fd, transport: srv.newTransport(fd), flags: flags, cont: make(chan error)}
+	err := srv.setupConn(c, flags, dialDest)
+	if err != nil {
+		c.close(err)
+		srv.log.Trace("Setting up connection failed", "id", c.id, "err", err)
+	}
+	return err
+}
+
+func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *discover.Node) error {
 	// Prevent leftover pending conns from entering the handshake.
 	srv.lock.Lock()
 	running := srv.running
 	srv.lock.Unlock()
-	c := &conn{fd: fd, transport: srv.newTransport(fd), flags: flags, cont: make(chan error)}
 	if !running {
-		c.close(errServerStopped)
-		return
+		return errServerStopped
 	}
 	// Run the encryption handshake.
 	var err error
 	if c.id, err = c.doEncHandshake(srv.PrivateKey, dialDest); err != nil {
 		srv.log.Trace("Failed RLPx handshake", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
-		c.close(err)
-		return
+		return err
 	}
-	clog := log.New("id", c.id, "addr", c.fd.RemoteAddr(), "conn", c.flags)
+	clog := srv.log.New("id", c.id, "addr", c.fd.RemoteAddr(), "conn", c.flags)
 	// For dialed connections, check that the remote public key matches.
 	if dialDest != nil && c.id != dialDest.ID {
-		c.close(DiscUnexpectedIdentity)
 		clog.Trace("Dialed identity mismatch", "want", c, dialDest.ID)
-		return
+		return DiscUnexpectedIdentity
 	}
-	if err := srv.checkpoint(c, srv.posthandshake); err != nil {
+	err = srv.checkpoint(c, srv.posthandshake)
+	if err != nil {
 		clog.Trace("Rejected peer before protocol handshake", "err", err)
-		c.close(err)
-		return
+		return err
 	}
 	// Run the protocol handshake
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 	if err != nil {
 		clog.Trace("Failed proto handshake", "err", err)
-		c.close(err)
-		return
+		return err
 	}
 	if phs.ID != c.id {
 		clog.Trace("Wrong devp2p handshake identity", "err", phs.ID)
-		c.close(DiscUnexpectedIdentity)
-		return
+		return DiscUnexpectedIdentity
 	}
 	c.caps, c.name = phs.Caps, phs.Name
-	if err := srv.checkpoint(c, srv.addpeer); err != nil {
+	err = srv.checkpoint(c, srv.addpeer)
+	if err != nil {
 		clog.Trace("Rejected peer", "err", err)
-		c.close(err)
-		return
+		return err
 	}
 	// If the checks completed successfully, runPeer has now been
 	// launched by run.
+	clog.Trace("connection set up", "inbound", dialDest == nil)
+	return nil
 }
 
 func truncateName(s string) string {
