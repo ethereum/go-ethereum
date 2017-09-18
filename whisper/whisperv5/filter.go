@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -66,6 +67,10 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 
 	if fs.watchers[id] != nil {
 		return "", fmt.Errorf("failed to generate unique ID")
+	}
+
+	if watcher.expectsSymmetricEncryption() {
+		watcher.SymKeyHash = crypto.Keccak256Hash(watcher.KeySym);
 	}
 
 	fs.watchers[id] = watcher
