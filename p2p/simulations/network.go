@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -29,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
+
+var dialBanTimeout = 200 * time.Millisecond
 
 // NetworkConfig defines configuration options for starting a Network
 type NetworkConfig struct {
@@ -95,6 +98,12 @@ func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error)
 		conf.PrivateKey = c.PrivateKey
 	}
 	id := conf.ID
+	if conf.Reachable == nil {
+		conf.Reachable = func(otherID discover.NodeID) bool {
+			_, err := self.InitConn(conf.ID, otherID)
+			return err == nil
+		}
+	}
 
 	// assign a name to the node if not set
 	if conf.Name == "" {
@@ -271,14 +280,8 @@ func (self *Network) Stop(id discover.NodeID) error {
 // method on the "one" node so that it connects to the "other" node
 func (self *Network) Connect(oneID, otherID discover.NodeID) error {
 	log.Debug(fmt.Sprintf("connecting %s to %s", oneID, otherID))
-	conn, err := self.GetOrCreateConn(oneID, otherID)
+	conn, err := self.InitConn(oneID, otherID)
 	if err != nil {
-		return err
-	}
-	if conn.Up {
-		return fmt.Errorf("%v and %v already connected", oneID, otherID)
-	}
-	if err := conn.nodesUp(); err != nil {
 		return err
 	}
 	client, err := conn.one.Client()
@@ -324,14 +327,15 @@ func (self *Network) DidConnect(one, other discover.NodeID) error {
 // DidDisconnect tracks the fact that the "one" node disconnected from the
 // "other" node
 func (self *Network) DidDisconnect(one, other discover.NodeID) error {
-	conn, err := self.GetOrCreateConn(one, other)
-	if err != nil {
+	conn := self.GetConn(one, other)
+	if conn == nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
 	}
 	if !conn.Up {
 		return fmt.Errorf("%v and %v already disconnected", one, other)
 	}
 	conn.Up = false
+	conn.initiated = time.Now().Add(-dialBanTimeout)
 	self.events.Send(NewEvent(conn))
 	return nil
 }
@@ -396,10 +400,13 @@ func (self *Network) getNodeByName(name string) *Node {
 }
 
 // GetNodes returns the existing nodes
-func (self *Network) GetNodes() []*Node {
+func (self *Network) GetNodes() (nodes []*Node) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	return self.Nodes
+	for _, node := range self.Nodes {
+		nodes = append(nodes, node)
+	}
+	return nodes
 }
 
 // GetConn returns the connection which exists between "one" and "other"
@@ -415,6 +422,10 @@ func (self *Network) GetConn(oneID, otherID discover.NodeID) *Conn {
 func (self *Network) GetOrCreateConn(oneID, otherID discover.NodeID) (*Conn, error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
+	return self.getOrCreateConn(oneID, otherID)
+}
+
+func (self *Network) getOrCreateConn(oneID, otherID discover.NodeID) (*Conn, error) {
 	if conn := self.getConn(oneID, otherID); conn != nil {
 		return conn, nil
 	}
@@ -446,6 +457,38 @@ func (self *Network) getConn(oneID, otherID discover.NodeID) *Conn {
 		return nil
 	}
 	return self.Conns[i]
+}
+
+// InitConn(one, other) retrieves the connectiton model for the connection between
+// peers one and other, or creates a new one if it does not exist
+// the order of nodes does not matter, i.e., Conn(i,j) == Conn(j, i)
+// it checks if the connection is already up, and if the nodes are running
+// NOTE:
+// it also checks whether there has been recent attempt to connect the peers
+// this is cheating as the simulation is used as an oracle and know about
+// remote peers attempt to connect to a node which will then not initiate the connection
+func (self *Network) InitConn(oneID, otherID discover.NodeID) (*Conn, error) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	if oneID == otherID {
+		return nil, fmt.Errorf("refusing to connect to self %v", oneID)
+	}
+	conn, err := self.getOrCreateConn(oneID, otherID)
+	if err != nil {
+		return nil, err
+	}
+	if time.Now().Sub(conn.initiated) < dialBanTimeout {
+		return nil, fmt.Errorf("connection between %v and %v recently attempted", oneID, otherID)
+	}
+	if conn.Up {
+		return nil, fmt.Errorf("%v and %v already connected", oneID, otherID)
+	}
+	err = conn.nodesUp()
+	if err != nil {
+		return nil, fmt.Errorf("nodes not up: %v", err)
+	}
+	conn.initiated = time.Now()
+	return conn, nil
 }
 
 // Shutdown stops all nodes in the network and closes the quit channel
@@ -516,6 +559,8 @@ type Conn struct {
 
 	// Up tracks whether or not the connection is active
 	Up bool `json:"up"`
+	// Registers when the connection was grabbed to dial
+	initiated time.Time
 
 	one   *Node
 	other *Node
