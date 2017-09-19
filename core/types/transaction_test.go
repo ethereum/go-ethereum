@@ -143,7 +143,7 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 		}
 	}
 	// Sort the transactions and cross check the nonce ordering
-	txset := NewTransactionsByPriceAndNonce(groups)
+	txset := NewTransactionsByPriceAndNonce(signer, groups)
 
 	txs := Transactions{}
 	for {

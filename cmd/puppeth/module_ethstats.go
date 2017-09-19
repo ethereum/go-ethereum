@@ -42,7 +42,7 @@ RUN \
 WORKDIR /eth-netstats
 EXPOSE 3000
 
-RUN echo 'module.exports = {trusted: [{{.Trusted}}], banned: [{{.Banned}}]};' > lib/utils/config.js
+RUN echo 'module.exports = {trusted: [{{.Trusted}}], banned: [{{.Banned}}], reserved: ["yournode"]};' > lib/utils/config.js
 
 CMD ["npm", "start"]
 `

@@ -125,8 +125,6 @@ type worker struct {
 	// atomic status counters
 	mining int32
 	atWork int32
-
-	fullValidation bool
 }
 
 func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux) *worker {
@@ -146,7 +144,6 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		coinbase:       coinbase,
 		agents:         make(map[Agent]struct{}),
 		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
-		fullValidation: false,
 	}
 	// Subscribe TxPreEvent for tx pool
 	worker.txSub = eth.TxPool().SubscribeTxPreEvent(worker.txCh)
@@ -268,7 +265,7 @@ func (self *worker) update() {
 				self.currentMu.Lock()
 				acc, _ := types.Sender(self.current.signer, ev.Tx)
 				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
-				txset := types.NewTransactionsByPriceAndNonce(txs)
+				txset := types.NewTransactionsByPriceAndNonce(self.current.signer, txs)
 
 				self.current.commitTransactions(self.mux, txset, self.chain, self.coinbase)
 				self.currentMu.Unlock()
@@ -297,57 +294,38 @@ func (self *worker) wait() {
 			block := result.Block
 			work := result.Work
 
-			if self.fullValidation {
-				if _, err := self.chain.InsertChain(types.Blocks{block}); err != nil {
-					log.Error("Mined invalid block", "err", err)
-					continue
+			// Update the block hash in all logs since it is now available and not when the
+			// receipt/log of individual transactions were created.
+			for _, r := range work.receipts {
+				for _, l := range r.Logs {
+					l.BlockHash = block.Hash()
 				}
-				go self.mux.Post(core.NewMinedBlockEvent{Block: block})
-			} else {
-				work.state.CommitTo(self.chainDb, self.config.IsEIP158(block.Number()))
-				stat, err := self.chain.WriteBlock(block)
-				if err != nil {
-					log.Error("Failed writing block to chain", "err", err)
-					continue
-				}
-				// update block hash since it is now available and not when the receipt/log of individual transactions were created
-				for _, r := range work.receipts {
-					for _, l := range r.Logs {
-						l.BlockHash = block.Hash()
-					}
-				}
-				for _, log := range work.state.Logs() {
-					log.BlockHash = block.Hash()
-				}
-
-				// check if canon block and write transactions
-				if stat == core.CanonStatTy {
-					// This puts transactions in a extra db for rpc
-					core.WriteTxLookupEntries(self.chainDb, block)
-					// implicit by posting ChainHeadEvent
-					mustCommitNewWork = false
-				}
-
-				// broadcast before waiting for validation
-				go func(block *types.Block, logs []*types.Log, receipts []*types.Receipt) {
-					self.mux.Post(core.NewMinedBlockEvent{Block: block})
-					var (
-						events        []interface{}
-						coalescedLogs []*types.Log
-					)
-					events = append(events, core.ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
-
-					if stat == core.CanonStatTy {
-						events = append(events, core.ChainHeadEvent{Block: block})
-						coalescedLogs = logs
-					}
-					// post blockchain events
-					self.chain.PostChainEvents(events, coalescedLogs)
-					if err := core.WriteBlockReceipts(self.chainDb, block.Hash(), block.NumberU64(), receipts); err != nil {
-						log.Warn("Failed writing block receipts", "err", err)
-					}
-				}(block, work.state.Logs(), work.receipts)
 			}
+			for _, log := range work.state.Logs() {
+				log.BlockHash = block.Hash()
+			}
+			stat, err := self.chain.WriteBlockAndState(block, work.receipts, work.state)
+			if err != nil {
+				log.Error("Failed writing block to chain", "err", err)
+				continue
+			}
+			// check if canon block and write transactions
+			if stat == core.CanonStatTy {
+				// implicit by posting ChainHeadEvent
+				mustCommitNewWork = false
+			}
+			// Broadcast the block and announce chain insertion event
+			self.mux.Post(core.NewMinedBlockEvent{Block: block})
+			var (
+				events []interface{}
+				logs   = work.state.Logs()
+			)
+			events = append(events, core.ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
+			if stat == core.CanonStatTy {
+				events = append(events, core.ChainHeadEvent{Block: block})
+			}
+			self.chain.PostChainEvents(events, logs)
+
 			// Insert the block into the set of pending ones to wait for confirmations
 			self.unconfirmed.Insert(block.NumberU64(), block.Hash())
 
@@ -471,7 +449,7 @@ func (self *worker) commitNewWork() {
 		log.Error("Failed to fetch pending transactions", "err", err)
 		return
 	}
-	txs := types.NewTransactionsByPriceAndNonce(pending)
+	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
 	work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
 
 	// compute uncles for the new block.

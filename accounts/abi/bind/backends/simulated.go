@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -281,6 +282,22 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	})
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), state.NewDatabase(b.database))
+	return nil
+}
+
+// JumpTimeInSeconds adds skip seconds to the clock
+func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), b.database, 1, func(number int, block *core.BlockGen) {
+		for _, tx := range b.pendingBlock.Transactions() {
+			block.AddTx(tx)
+		}
+		block.OffsetTime(int64(adjustment.Seconds()))
+	})
+	b.pendingBlock = blocks[0]
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), state.NewDatabase(b.database))
+
 	return nil
 }
 

@@ -928,14 +928,14 @@ func TestReorgSideEvent(t *testing.T) {
 	replacementBlocks, _ := GenerateChain(gspec.Config, genesis, db, 4, func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewContractCreation(gen.TxNonce(addr1), new(big.Int), big.NewInt(1000000), new(big.Int), nil), signer, key1)
 		if i == 2 {
-			gen.OffsetTime(-1)
+			gen.OffsetTime(-9)
 		}
 		if err != nil {
 			t.Fatalf("failed to create tx: %v", err)
 		}
 		gen.AddTx(tx)
 	})
-	chainSideCh := make(chan ChainSideEvent)
+	chainSideCh := make(chan ChainSideEvent, 64)
 	blockchain.SubscribeChainSideEvent(chainSideCh)
 	if _, err := blockchain.InsertChain(replacementBlocks); err != nil {
 		t.Fatalf("failed to insert chain: %v", err)
