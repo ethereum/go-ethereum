@@ -605,7 +605,7 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'publicKey',
+			name: 'getPublicKey',
 			call: 'shh_getPublicKey',
 			params: 1
 		}),
