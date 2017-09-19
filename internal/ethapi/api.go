@@ -1081,7 +1081,10 @@ func submitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	}
 	if tx.To() == nil {
 		signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number())
-		from, _ := types.Sender(signer, tx)
+		from, err := types.Sender(signer, tx)
+		if err != nil {
+			return common.Hash{}, err
+		}
 		addr := crypto.CreateAddress(from, tx.Nonce())
 		log.Info("Submitted contract creation", "fullhash", tx.Hash().Hex(), "contract", addr.Hex())
 	} else {
@@ -1135,23 +1138,9 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 		return "", err
 	}
 
-	if err := s.b.SendTx(ctx, tx); err != nil {
-		return "", err
-	}
+	txHash, err := submitTransaction(ctx, s.b, tx)
+	return txHash.Hex(), err
 
-	signer := types.MakeSigner(s.b.ChainConfig(), s.b.CurrentBlock().Number())
-	if tx.To() == nil {
-		from, err := types.Sender(signer, tx)
-		if err != nil {
-			return "", err
-		}
-		addr := crypto.CreateAddress(from, tx.Nonce())
-		log.Info("Submitted contract creation", "fullhash", tx.Hash().Hex(), "contract", addr.Hex())
-	} else {
-		log.Info("Submitted transaction", "fullhash", tx.Hash().Hex(), "recipient", tx.To())
-	}
-
-	return tx.Hash().Hex(), nil
 }
 
 // Sign calculates an ECDSA signature for:
