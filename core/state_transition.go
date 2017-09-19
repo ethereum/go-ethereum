@@ -150,9 +150,6 @@ func (st *StateTransition) to() vm.AccountRef {
 	}
 
 	reference := vm.AccountRef(*to)
-	if !st.state.Exist(*to) {
-		st.state.CreateAccount(*to)
-	}
 	return reference
 }
 

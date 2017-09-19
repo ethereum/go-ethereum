@@ -39,12 +39,6 @@ func TestState(t *testing.T) {
 	st.fails(`^stRevertTest/RevertPrefoundEmptyOOG\.json/EIP158`, "bug in test")
 	st.fails(`^stRevertTest/RevertPrecompiledTouch\.json/Byzantium`, "bug in test")
 	st.fails(`^stRevertTest/RevertPrefoundEmptyOOG\.json/Byzantium`, "bug in test")
-	st.fails( `^stRandom/randomStatetest645\.json/EIP150/.*`, "known bug #15119")
-	st.fails( `^stRandom/randomStatetest645\.json/Frontier/.*`, "known bug #15119")
-	st.fails( `^stRandom/randomStatetest645\.json/Homestead/.*`, "known bug #15119")
-	st.fails( `^stRandom/randomStatetest644\.json/EIP150/.*`, "known bug #15119")
-	st.fails( `^stRandom/randomStatetest644\.json/Frontier/.*`, "known bug #15119")
-	st.fails( `^stRandom/randomStatetest644\.json/Homestead/.*`, "known bug #15119")
 
 
 	st.walk(t, stateTestDir, func(t *testing.T, name string, test *StateTest) {
@@ -76,7 +70,7 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	}
 	t.Error(err)
 	if gasLimit > traceErrorLimit {
-		t.Log("gas limit too high for EVM trace")
+		//t.Log("gas limit too high for EVM trace")
 		return
 	}
 	tracer := vm.NewStructLogger(nil)
