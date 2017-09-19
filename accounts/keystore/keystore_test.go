@@ -272,82 +272,104 @@ func TestWalletNotifierLifecycle(t *testing.T) {
 	t.Errorf("wallet notifier didn't terminate after unsubscribe")
 }
 
+type walletEvent struct {
+	accounts.WalletEvent
+	a accounts.Account
+}
+
 // Tests that wallet notifications and correctly fired when accounts are added
 // or deleted from the keystore.
 func TestWalletNotifications(t *testing.T) {
-	// Create a temporary kesytore to test with
 	dir, ks := tmpKeyStore(t, false)
 	defer os.RemoveAll(dir)
 
-	// Subscribe to the wallet feed
-	updates := make(chan accounts.WalletEvent, 1)
-	sub := ks.Subscribe(updates)
+	// Subscribe to the wallet feed and collect events.
+	var (
+		events  []walletEvent
+		updates = make(chan accounts.WalletEvent)
+		sub     = ks.Subscribe(updates)
+	)
 	defer sub.Unsubscribe()
+	go func() {
+		for {
+			select {
+			case ev := <-updates:
+				events = append(events, walletEvent{ev, ev.Wallet.Accounts()[0]})
+			case <-sub.Err():
+				close(updates)
+				return
+			}
+		}
+	}()
 
-	// Randomly add and remove account and make sure events and wallets are in sync
-	live := make(map[common.Address]accounts.Account)
+	// Randomly add and remove accounts.
+	var (
+		live       = make(map[common.Address]accounts.Account)
+		wantEvents []walletEvent
+	)
 	for i := 0; i < 1024; i++ {
-		// Execute a creation or deletion and ensure event arrival
 		if create := len(live) == 0 || rand.Int()%4 > 0; create {
 			// Add a new account and ensure wallet notifications arrives
 			account, err := ks.NewAccount("")
 			if err != nil {
 				t.Fatalf("failed to create test account: %v", err)
 			}
-			select {
-			case event := <-updates:
-				if event.Kind != accounts.WalletArrived {
-					t.Errorf("non-arrival event on account creation")
-				}
-				if event.Wallet.Accounts()[0] != account {
-					t.Errorf("account mismatch on created wallet: have %v, want %v", event.Wallet.Accounts()[0], account)
-				}
-			default:
-				t.Errorf("wallet arrival event not fired on account creation")
-			}
 			live[account.Address] = account
+			wantEvents = append(wantEvents, walletEvent{accounts.WalletEvent{Kind: accounts.WalletArrived}, account})
 		} else {
-			// Select a random account to delete (crude, but works)
+			// Delete a random account.
 			var account accounts.Account
 			for _, a := range live {
 				account = a
 				break
 			}
-			// Remove an account and ensure wallet notifiaction arrives
 			if err := ks.Delete(account, ""); err != nil {
 				t.Fatalf("failed to delete test account: %v", err)
 			}
-			select {
-			case event := <-updates:
-				if event.Kind != accounts.WalletDropped {
-					t.Errorf("non-drop event on account deletion")
-				}
-				if event.Wallet.Accounts()[0] != account {
-					t.Errorf("account mismatch on deleted wallet: have %v, want %v", event.Wallet.Accounts()[0], account)
-				}
-			default:
-				t.Errorf("wallet departure event not fired on account creation")
-			}
 			delete(live, account.Address)
+			wantEvents = append(wantEvents, walletEvent{accounts.WalletEvent{Kind: accounts.WalletDropped}, account})
 		}
-		// Retrieve the list of wallets and ensure it matches with our required live set
-		liveList := make([]accounts.Account, 0, len(live))
-		for _, account := range live {
-			liveList = append(liveList, account)
-		}
-		sort.Sort(accountsByURL(liveList))
+	}
 
-		wallets := ks.Wallets()
-		if len(liveList) != len(wallets) {
-			t.Errorf("wallet list doesn't match required accounts: have %v, want %v", wallets, liveList)
-		} else {
-			for j, wallet := range wallets {
-				if accs := wallet.Accounts(); len(accs) != 1 {
-					t.Errorf("wallet %d: contains invalid number of accounts: have %d, want 1", j, len(accs))
-				} else if accs[0] != liveList[j] {
-					t.Errorf("wallet %d: account mismatch: have %v, want %v", j, accs[0], liveList[j])
-				}
+	// Shut down the event collector and check events.
+	sub.Unsubscribe()
+	<-updates
+	checkAccounts(t, live, ks.Wallets())
+	checkEvents(t, wantEvents, events)
+}
+
+// checkAccounts checks that all known live accounts are present in the wallet list.
+func checkAccounts(t *testing.T, live map[common.Address]accounts.Account, wallets []accounts.Wallet) {
+	if len(live) != len(wallets) {
+		t.Errorf("wallet list doesn't match required accounts: have %d, want %d", len(wallets), len(live))
+		return
+	}
+	liveList := make([]accounts.Account, 0, len(live))
+	for _, account := range live {
+		liveList = append(liveList, account)
+	}
+	sort.Sort(accountsByURL(liveList))
+	for j, wallet := range wallets {
+		if accs := wallet.Accounts(); len(accs) != 1 {
+			t.Errorf("wallet %d: contains invalid number of accounts: have %d, want 1", j, len(accs))
+		} else if accs[0] != liveList[j] {
+			t.Errorf("wallet %d: account mismatch: have %v, want %v", j, accs[0], liveList[j])
+		}
+	}
+}
+
+// checkEvents checks that all events in 'want' are present in 'have'. Events may be present multiple times.
+func checkEvents(t *testing.T, want []walletEvent, have []walletEvent) {
+	for _, wantEv := range want {
+		nmatch := 0
+		for ; len(have) > 0; nmatch++ {
+			if have[0].Kind != wantEv.Kind || have[0].a != wantEv.a {
+				break
 			}
+			have = have[1:]
+		}
+		if nmatch == 0 {
+			t.Fatalf("can't find event with Kind=%v for %x", wantEv.Kind, wantEv.a.Address)
 		}
 	}
 }

@@ -209,6 +209,12 @@ func (ac *accountCache) close() {
 // Callers must hold ac.mu.
 func (ac *accountCache) reload() {
 	accounts, err := ac.scan()
+	ac.handleScanResult(accounts, err)
+}
+
+// handleScanResult uses the result of a fs scan to update the account lists
+// This can be used to perform un-mutexed fs scans
+func (ac *accountCache) handleScanResult(accounts []accounts.Account, err error) {
 	if err != nil {
 		log.Debug("Failed to reload keystore contents", "err", err)
 	}

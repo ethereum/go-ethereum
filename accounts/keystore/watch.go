@@ -21,8 +21,10 @@ package keystore
 import (
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/rjeczalik/notify"
+	"sync/atomic"
 )
 
 type watcher struct {
@@ -82,9 +84,10 @@ func (w *watcher) loop() {
 	// When an event occurs, the reload call is delayed a bit so that
 	// multiple events arriving quickly only cause a single reload.
 	var (
-		debounce          = time.NewTimer(0)
-		debounceDuration  = 500 * time.Millisecond
-		inCycle, hadEvent bool
+		debounce         = time.NewTimer(0)
+		debounceDuration = 500 * time.Millisecond
+		unHandledEvents  = uint64(0)
+		inCycle          = uint64(0)
 	)
 	defer debounce.Stop()
 	for {
@@ -92,22 +95,28 @@ func (w *watcher) loop() {
 		case <-w.quit:
 			return
 		case <-w.ev:
-			if !inCycle {
+			// Count up the unhandled events
+			atomic.AddUint64(&unHandledEvents, 1)
+			// Trigger the scan (with delay), if not already triggered
+			if atomic.SwapUint64(&inCycle, 1) == 0 {
 				debounce.Reset(debounceDuration)
-				inCycle = true
-			} else {
-				hadEvent = true
 			}
 		case <-debounce.C:
-			w.ac.mu.Lock()
-			w.ac.reload()
-			w.ac.mu.Unlock()
-			if hadEvent {
-				debounce.Reset(debounceDuration)
-				inCycle, hadEvent = true, false
-			} else {
-				inCycle, hadEvent = false, false
+			//We're now handling the events, scan again as long as new
+			// events keep coming during our fs-scan
+			var (
+				accs []accounts.Account
+				err  error
+			)
+			// Scan again if more events occurred during scan
+			for atomic.SwapUint64(&unHandledEvents, 0) > 0 {
+				accs, err = w.ac.scan()
 			}
+			w.ac.mu.Lock()
+			w.ac.handleScanResult(accs, err)
+			w.ac.mu.Unlock()
+			// Signal we're finished with cycle
+			atomic.SwapUint64(&inCycle, 0)
 		}
 	}
 }
