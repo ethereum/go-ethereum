@@ -23,7 +23,6 @@ import (
 	
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/rjeczalik/notify"
-	"sync/atomic"
 )
 
 type watcher struct {
@@ -84,8 +83,7 @@ func (w *watcher) loop() {
 	var (
 		debounce         = time.NewTimer(0)
 		debounceDuration = 500 * time.Millisecond
-		unHandledEvents  = uint64(0)
-		inCycle          = uint64(0)
+		rescanTriggered  = false
 	)
 	defer debounce.Stop()
 	for {
@@ -93,23 +91,14 @@ func (w *watcher) loop() {
 		case <-w.quit:
 			return
 		case <-w.ev:
-			// Count up the unhandled events
-			atomic.AddUint64(&unHandledEvents, 1)
 			// Trigger the scan (with delay), if not already triggered
-			if atomic.SwapUint64(&inCycle, 1) == 0 {
+			if !rescanTriggered{
 				debounce.Reset(debounceDuration)
+				rescanTriggered = true
 			}
 		case <-debounce.C:
-			//We're now handling the events, scan again as long as new
-			// events keep coming during our fs-scan
-			atomic.SwapUint64(&unHandledEvents, 0)
 			w.ac.scanAccounts()
-			// Scan again if more events occurred during scan
-			for atomic.SwapUint64(&unHandledEvents, 0) > 0 {
-				w.ac.scanAccounts()
-			}
-			// Signal we're finished with cycle
-			atomic.SwapUint64(&inCycle, 0)
+			rescanTriggered = false
 		}
 	}
 }
