@@ -278,6 +278,7 @@ func NewServer(network *Network) *Server {
 	s.GET("/", s.GetNetwork)
 	s.POST("/start", s.StartNetwork)
 	s.POST("/stop", s.StopNetwork)
+	s.POST("/reset", s.ResetNetwork)
 	s.GET("/events", s.StreamNetworkEvents)
 	s.GET("/snapshot", s.CreateSnapshot)
 	s.POST("/snapshot", s.LoadSnapshot)
@@ -314,6 +315,13 @@ func (s *Server) StopNetwork(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// StopNetwork stops all nodes in the network
+func (s *Server) ResetNetwork(w http.ResponseWriter, req *http.Request) {
+	s.network.Reset()
 
 	w.WriteHeader(http.StatusOK)
 }

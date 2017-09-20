@@ -502,6 +502,19 @@ func (self *Network) Shutdown() {
 	close(self.quitc)
 }
 
+//Reset resets all network properties:
+//emtpies the nodes and the connection list
+func (self *Network) Reset() {
+	for k := range self.nodeMap {
+		delete(self.nodeMap, k)
+	}
+	for c := range self.connMap {
+		delete(self.connMap, c)
+	}
+	self.Nodes = nil
+	self.Conns = nil
+}
+
 // Node is a wrapper around adapters.Node which is used to track the status
 // of a node in the network
 type Node struct {
