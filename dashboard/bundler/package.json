@@ -1,0 +1,38 @@
+{
+  "jshintConfig": {
+    "esversion": 6
+  },
+  "eslintConfig": {
+    "parser": "babel-eslint"
+  },
+  "babel": {
+    "presets": [
+      ["es2015", {"loose": true, "modules": false}],
+      "stage-0"
+    ],
+    "plugins": [
+      "babel-plugin-syntax-jsx",
+      ["babel-plugin-inferno", {"imports": true}]
+    ]
+  },
+  "devDependencies": {
+    "babel-core": "^6.26.0",
+    "babel-eslint": "^7.2.3",
+    "babel-loader": "^7.1.2",
+    "babel-plugin-inferno": "^3.2.0",
+    "babel-plugin-syntax-jsx": "^6.18.0",
+    "babel-plugin-syntax-object-rest-spread": "^6.13.0",
+    "babel-plugin-transform-object-rest-spread": "^6.26.0",
+    "babel-preset-es2015": "^6.24.1",
+    "babel-preset-stage-0": "^6.24.1",
+    "eslint": "^4.5.0",
+    "eslint-config-inferno-app": "^4.2.0",
+    "eslint-loader": "^1.9.0",
+    "glob": "^7.1.2",
+    "inferno-devtools": "^3.8.2",
+    "path": "^0.12.7",
+    "url": "^0.11.0",
+    "webpack": "^3.5.5",
+    "webpack-dev-server": "^2.7.1"
+  }
+}

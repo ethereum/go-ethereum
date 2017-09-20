@@ -1,0 +1,1103 @@
+{
+  "errors": [],
+  "warnings": [],
+  "version": "3.5.6",
+  "hash": "61db9ea94c74f6edf66d",
+  "time": 1797,
+  "publicPath": "",
+  "assetsByChunkName": {
+    "main": "bundle.js"
+  },
+  "assets": [
+    {
+      "name": "bundle.js",
+      "size": 11158,
+      "chunks": [
+        0
+      ],
+      "chunkNames": [
+        "main"
+      ],
+      "emitted": true
+    }
+  ],
+  "filteredAssets": 0,
+  "entrypoints": {
+    "main": {
+      "chunks": [
+        0
+      ],
+      "assets": [
+        "bundle.js"
+      ]
+    }
+  },
+  "chunks": [
+    {
+      "id": 0,
+      "rendered": true,
+      "initial": true,
+      "entry": true,
+      "extraAsync": false,
+      "size": 19202,
+      "names": [
+        "main"
+      ],
+      "files": [
+        "bundle.js"
+      ],
+      "hash": "8753686cb4d0f5a5f650",
+      "parents": [],
+      "modules": [
+        {
+          "id": 0,
+          "identifier": "external \"Inferno\"",
+          "name": "external \"Inferno\"",
+          "index": 1,
+          "index2": 0,
+          "size": 42,
+          "cacheable": false,
+          "built": false,
+          "optional": false,
+          "prefetched": false,
+          "chunks": [
+            0
+          ],
+          "assets": [],
+          "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\index.js",
+          "issuerId": 3,
+          "issuerName": "./src/index.js",
+          "profile": {
+            "factory": 2,
+            "building": 1
+          },
+          "failed": false,
+          "errors": 0,
+          "warnings": 0,
+          "reasons": [
+            {
+              "moduleId": 1,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Common.js",
+              "module": "./src/components/Common.js",
+              "moduleName": "./src/components/Common.js",
+              "type": "harmony import",
+              "userRequest": "inferno",
+              "loc": "10:0-38"
+            },
+            {
+              "moduleId": 3,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\index.js",
+              "module": "./src/index.js",
+              "moduleName": "./src/index.js",
+              "type": "harmony import",
+              "userRequest": "inferno",
+              "loc": "1:0-30"
+            },
+            {
+              "moduleId": 3,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\index.js",
+              "module": "./src/index.js",
+              "moduleName": "./src/index.js",
+              "type": "harmony import",
+              "userRequest": "inferno",
+              "loc": "5:0-38"
+            },
+            {
+              "moduleId": 4,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+              "module": "./src/components/Dashboard.js",
+              "moduleName": "./src/components/Dashboard.js",
+              "type": "harmony import",
+              "userRequest": "inferno",
+              "loc": "17:0-38"
+            },
+            {
+              "moduleId": 5,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\SideBar.js",
+              "module": "./src/components/SideBar.js",
+              "moduleName": "./src/components/SideBar.js",
+              "type": "harmony import",
+              "userRequest": "inferno",
+              "loc": "11:0-38"
+            },
+            {
+              "moduleId": 6,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\TopNavigation.js",
+              "module": "./src/components/TopNavigation.js",
+              "moduleName": "./src/components/TopNavigation.js",
+              "type": "harmony import",
+              "userRequest": "inferno",
+              "loc": "1:0-38"
+            },
+            {
+              "moduleId": 7,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\PageContent.js",
+              "module": "./src/components/PageContent.js",
+              "moduleName": "./src/components/PageContent.js",
+              "type": "harmony import",
+              "userRequest": "inferno",
+              "loc": "12:0-38"
+            },
+            {
+              "moduleId": 8,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Footer.js",
+              "module": "./src/components/Footer.js",
+              "moduleName": "./src/components/Footer.js",
+              "type": "harmony import",
+              "userRequest": "inferno",
+              "loc": "4:0-38"
+            }
+          ],
+          "usedExports": [
+            "createVNode",
+            "default"
+          ],
+          "providedExports": null,
+          "optimizationBailout": [],
+          "depth": 1
+        },
+        {
+          "id": 1,
+          "identifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Common.js",
+          "name": "./src/components/Common.js",
+          "index": 4,
+          "index2": 2,
+          "size": 697,
+          "cacheable": true,
+          "built": true,
+          "optional": false,
+          "prefetched": false,
+          "chunks": [
+            0
+          ],
+          "assets": [],
+          "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+          "issuerId": 4,
+          "issuerName": "./src/components/Dashboard.js",
+          "profile": {
+            "factory": 7,
+            "building": 33,
+            "dependencies": 0
+          },
+          "failed": false,
+          "errors": 0,
+          "warnings": 0,
+          "reasons": [
+            {
+              "moduleId": 4,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+              "module": "./src/components/Dashboard.js",
+              "moduleName": "./src/components/Dashboard.js",
+              "type": "harmony import",
+              "userRequest": "./Common",
+              "loc": "8:0-66"
+            },
+            {
+              "moduleId": 5,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\SideBar.js",
+              "module": "./src/components/SideBar.js",
+              "moduleName": "./src/components/SideBar.js",
+              "type": "harmony import",
+              "userRequest": "./Common",
+              "loc": "8:0-68"
+            },
+            {
+              "moduleId": 7,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\PageContent.js",
+              "module": "./src/components/PageContent.js",
+              "moduleName": "./src/components/PageContent.js",
+              "type": "harmony import",
+              "userRequest": "./Common",
+              "loc": "8:0-68"
+            },
+            {
+              "moduleId": 8,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Footer.js",
+              "module": "./src/components/Footer.js",
+              "moduleName": "./src/components/Footer.js",
+              "type": "harmony import",
+              "userRequest": "./Common",
+              "loc": "1:0-36"
+            }
+          ],
+          "usedExports": [
+            "Clearfix",
+            "MEMORY_SAMPLE_LIMIT",
+            "isNullOrUndefined",
+            "mapChildren"
+          ],
+          "providedExports": [
+            "isNullOrUndefined",
+            "mapChildren",
+            "Clearfix",
+            "MEMORY_SAMPLE_LIMIT",
+            "TRAFFIC_SAMPLE_LIMIT"
+          ],
+          "optimizationBailout": [],
+          "depth": 2,
+          "source": "// isNullOrUndefined returns true if a variable is null or undefined.\nexport var isNullOrUndefined = function isNullOrUndefined(variable) {\n  return variable === null || typeof variable === 'undefined';\n};\n\nexport var mapChildren = function mapChildren(children, mapFunc) {\n  return !Array.isArray(children) || children.length < 1 || children.length === 1 ? mapFunc(children) : children.map(mapFunc);\n};\n\nimport { createVNode } from \"inferno\";\nexport var Clearfix = function Clearfix() {\n  return createVNode(2, \"div\", \"clearfix\");\n};\n\nexport var MEMORY_SAMPLE_LIMIT = 200; // Maximum number of memory data samples.\nexport var TRAFFIC_SAMPLE_LIMIT = 200; // Maximum number of traffic data samples."
+        },
+        {
+          "id": 2,
+          "identifier": "external \"Inferno.Component\"",
+          "name": "external \"Inferno.Component\"",
+          "index": 3,
+          "index2": 1,
+          "size": 42,
+          "cacheable": false,
+          "built": false,
+          "optional": false,
+          "prefetched": false,
+          "chunks": [
+            0
+          ],
+          "assets": [],
+          "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+          "issuerId": 4,
+          "issuerName": "./src/components/Dashboard.js",
+          "profile": {
+            "factory": 0,
+            "building": 0
+          },
+          "failed": false,
+          "errors": 0,
+          "warnings": 0,
+          "reasons": [
+            {
+              "moduleId": 4,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+              "module": "./src/components/Dashboard.js",
+              "moduleName": "./src/components/Dashboard.js",
+              "type": "harmony import",
+              "userRequest": "component",
+              "loc": "7:0-34"
+            },
+            {
+              "moduleId": 5,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\SideBar.js",
+              "module": "./src/components/SideBar.js",
+              "moduleName": "./src/components/SideBar.js",
+              "type": "harmony import",
+              "userRequest": "component",
+              "loc": "7:0-34"
+            },
+            {
+              "moduleId": 7,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\PageContent.js",
+              "module": "./src/components/PageContent.js",
+              "moduleName": "./src/components/PageContent.js",
+              "type": "harmony import",
+              "userRequest": "component",
+              "loc": "7:0-34"
+            }
+          ],
+          "usedExports": [
+            "default"
+          ],
+          "providedExports": null,
+          "optimizationBailout": [],
+          "depth": 2
+        },
+        {
+          "id": 3,
+          "identifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\index.js",
+          "name": "./src/index.js",
+          "index": 0,
+          "index2": 8,
+          "size": 232,
+          "cacheable": true,
+          "built": true,
+          "optional": false,
+          "prefetched": false,
+          "chunks": [
+            0
+          ],
+          "assets": [],
+          "issuer": null,
+          "issuerId": null,
+          "issuerName": null,
+          "profile": {
+            "factory": 31,
+            "building": 672
+          },
+          "failed": false,
+          "errors": 0,
+          "warnings": 0,
+          "reasons": [],
+          "usedExports": true,
+          "providedExports": [],
+          "optimizationBailout": [],
+          "depth": 0,
+          "source": "import Inferno from 'inferno';\nimport Dashboard from './components/Dashboard';\n\n// Renders the whole dashboard.\nimport { createVNode } from 'inferno';\nInferno.render(createVNode(16, Dashboard), document.getElementById('dashboard'));"
+        },
+        {
+          "id": 4,
+          "identifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+          "name": "./src/components/Dashboard.js",
+          "index": 2,
+          "index2": 7,
+          "size": 6933,
+          "cacheable": true,
+          "built": true,
+          "optional": false,
+          "prefetched": false,
+          "chunks": [
+            0
+          ],
+          "assets": [],
+          "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\index.js",
+          "issuerId": 3,
+          "issuerName": "./src/index.js",
+          "profile": {
+            "factory": 6,
+            "building": 346,
+            "dependencies": 1
+          },
+          "failed": false,
+          "errors": 0,
+          "warnings": 0,
+          "reasons": [
+            {
+              "moduleId": 3,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\index.js",
+              "module": "./src/index.js",
+              "moduleName": "./src/index.js",
+              "type": "harmony import",
+              "userRequest": "./components/Dashboard",
+              "loc": "2:0-47"
+            }
+          ],
+          "usedExports": [
+            "default"
+          ],
+          "providedExports": [
+            "default"
+          ],
+          "optimizationBailout": [],
+          "depth": 1,
+          "source": "function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError(\"Cannot call a class as a function\"); } }\n\nfunction _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError(\"this hasn't been initialised - super() hasn't been called\"); } return call && (typeof call === \"object\" || typeof call === \"function\") ? call : self; }\n\nfunction _inherits(subClass, superClass) { if (typeof superClass !== \"function\" && superClass !== null) { throw new TypeError(\"Super expression must either be null or a function, not \" + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }\n\nimport Component from 'component';\nimport { isNullOrUndefined, MEMORY_SAMPLE_LIMIT } from \"./Common\";\nimport { SideBar } from \"./SideBar\";\nimport { TopNavigation } from \"./TopNavigation\";\nimport PageContent from './PageContent';\nimport { Footer } from './Footer';\n\n// Dashboard is the main component, which renders the whole page,\n// makes connection with the server and listens for messages.\n// When there is an incoming message, updates the page's content correspondingly.\nimport { createVNode } from \"inferno\";\n\nvar Dashboard = function (_Component) {\n    _inherits(Dashboard, _Component);\n\n    function Dashboard(props) {\n        _classCallCheck(this, Dashboard);\n\n        var _this = _possibleConstructorReturn(this, _Component.call(this, props));\n\n        _this.updateCharts = function (msg) {\n            var memory = _this.state.charts.memory;\n            var traffic = _this.state.charts.traffic;\n\n            // Fill the dashboard with the past data. metrics is set only in the first msg,\n            // after the connection is established.\n            if (msg.metrics !== undefined) {\n                // Clear the arrays to prevent data confusion with the previous connection.\n                memory.labels = [];\n                traffic.labels = [];\n                memory.datasets[0].data = [];\n                traffic.datasets[0].data = [];\n\n                var mem = msg.metrics.memory;\n                var traff = msg.metrics.processor; // TODO (kurkomisi): !!!\n\n                // Put the past data to the beginning of the arrays. This prevents confusion with the next msg data,\n                // which goes to the end.\n                for (var i = mem.length - 1; i >= 0 && MEMORY_SAMPLE_LIMIT > memory.labels.length; --i) {\n                    memory.labels.unshift(mem[i].time.substring(mem[i].time.length - 5));\n                    traffic.labels.unshift(mem[i].time.substring(mem[i].time.length - 5));\n                    memory.datasets[0].data.unshift(mem[i].value);\n                    traffic.datasets[0].data.unshift(traff[i].value);\n                }\n\n                _this.setState({ charts: { memory: memory, traffic: traffic } }); // Update the components.\n                return;\n            }\n\n            // Put the new data to the end of the arrays.\n            if (msg.memory !== undefined) {\n                // Remove the first elements in case the samples' amount exceeds the limit.\n                if (memory.labels.length === MEMORY_SAMPLE_LIMIT) {\n                    memory.labels.shift();\n                    traffic.labels.shift();\n                    memory.datasets[0].data.shift();\n                    traffic.datasets[0].data.shift();\n                }\n                memory.labels.push(msg.memory.time.substring(msg.memory.time.length - 5));\n                traffic.labels.push(msg.memory.time.substring(msg.memory.time.length - 5));\n                memory.datasets[0].data.push(msg.memory.value);\n                traffic.datasets[0].data.push(msg.processor.value);\n\n                _this.setState({ charts: { memory: memory, traffic: traffic } }); // Update the components.\n            }\n        };\n\n        _this.reconnect = function () {\n            var server = new WebSocket(\"ws://\" + location.host + \"/api\");\n\n            server.onmessage = function (event) {\n                var msg = JSON.parse(event.data);\n                if (isNullOrUndefined(msg)) {\n                    return;\n                }\n                _this.updateCharts(msg);\n            };\n\n            server.onclose = function () {\n                return setTimeout(_this.reconnect, 3000);\n            };\n        };\n\n        _this.componentDidMount = function () {\n            return _this.reconnect();\n        };\n\n        _this.render = function () {\n            return createVNode(2, \"div\", \"container body\", createVNode(2, \"div\", \"main_container\", [createVNode(16, SideBar), createVNode(16, TopNavigation), createVNode(16, PageContent, null, null, {\n                \"charts\": _this.state.charts\n            }), createVNode(16, Footer)]));\n        };\n\n        _this.state = {\n            charts: { // Stores the state of the charts.\n                memory: {\n                    labels: [],\n                    datasets: [{\n                        label: \"system/memory/inuse\",\n                        backgroundColor: \"rgba(38, 185, 154, 0.31)\",\n                        borderColor: \"rgba(38, 185, 154, 0.7)\",\n                        pointBorderColor: \"rgba(38, 185, 154, 0.7)\",\n                        pointBackgroundColor: \"rgba(38, 185, 154, 0.7)\",\n                        pointHoverBackgroundColor: \"#fff\",\n                        pointHoverBorderColor: \"rgba(220,220,220,1)\",\n                        pointBorderWidth: 1,\n                        data: []\n                    }]\n                },\n                traffic: {\n                    labels: [],\n                    datasets: [{\n                        label: \"p2p/InboundTraffic\",\n                        backgroundColor: \"rgba(3, 88, 106, 0.3)\",\n                        borderColor: \"rgba(3, 88, 106, 0.70)\",\n                        pointBorderColor: \"rgba(3, 88, 106, 0.70)\",\n                        pointBackgroundColor: \"rgba(3, 88, 106, 0.70)\",\n                        pointHoverBackgroundColor: \"#fff\",\n                        pointHoverBorderColor: \"rgba(151,187,205,1)\",\n                        pointBorderWidth: 1,\n                        data: []\n                    }]\n                }\n            }\n        };\n        return _this;\n    }\n\n    // updateCharts Analyzes the incoming message, and updates the charts' content correspondingly.\n\n\n    // reconnect establishes a websocket connection with the server, listens for incoming messages\n    // and tries to reconnect on connection loss.\n\n\n    // componentDidMount initiates the establishment of the first websocket connection after the component is rendered.\n\n\n    // render renders the components of the dashboard.\n\n\n    return Dashboard;\n}(Component);\n\nexport default Dashboard;"
+        },
+        {
+          "id": 5,
+          "identifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\SideBar.js",
+          "name": "./src/components/SideBar.js",
+          "index": 5,
+          "index2": 3,
+          "size": 4613,
+          "cacheable": true,
+          "built": true,
+          "optional": false,
+          "prefetched": false,
+          "chunks": [
+            0
+          ],
+          "assets": [],
+          "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+          "issuerId": 4,
+          "issuerName": "./src/components/Dashboard.js",
+          "profile": {
+            "factory": 7,
+            "building": 173,
+            "dependencies": 0
+          },
+          "failed": false,
+          "errors": 0,
+          "warnings": 0,
+          "reasons": [
+            {
+              "moduleId": 4,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+              "module": "./src/components/Dashboard.js",
+              "moduleName": "./src/components/Dashboard.js",
+              "type": "harmony import",
+              "userRequest": "./SideBar",
+              "loc": "9:0-36"
+            }
+          ],
+          "usedExports": [
+            "SideBar"
+          ],
+          "providedExports": [
+            "SideBar"
+          ],
+          "optimizationBailout": [],
+          "depth": 2,
+          "source": "function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError(\"Cannot call a class as a function\"); } }\n\nfunction _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError(\"this hasn't been initialised - super() hasn't been called\"); } return call && (typeof call === \"object\" || typeof call === \"function\") ? call : self; }\n\nfunction _inherits(subClass, superClass) { if (typeof superClass !== \"function\" && superClass !== null) { throw new TypeError(\"Super expression must either be null or a function, not \" + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }\n\nimport Component from 'component';\nimport { isNullOrUndefined, mapChildren, Clearfix } from \"./Common\";\n\n// MenuItem renders an item for a Menu component and the belonging submenu items, if there is any.\nimport { createVNode } from \"inferno\";\n\nvar MenuItem = function (_Component) {\n    _inherits(MenuItem, _Component);\n\n    function MenuItem() {\n        var _temp, _this, _ret;\n\n        _classCallCheck(this, MenuItem);\n\n        for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {\n            args[_key] = arguments[_key];\n        }\n\n        return _ret = (_temp = (_this = _possibleConstructorReturn(this, _Component.call.apply(_Component, [this].concat(args))), _this), _this.render = function () {\n            return createVNode(2, \"li\", null, [createVNode(2, \"a\", null, [createVNode(2, \"i\", \"fa \" + _this.props.className), _this.props.text, createVNode(2, \"div\", \"fa fa-chevron-down\")]),\n            // Render dropdown menu only if there are children.\n            isNullOrUndefined(_this.props.children) || createVNode(2, \"ul\", \"nav child_menu\", mapChildren(_this.props.children, function (child) {\n                return createVNode(2, \"li\", null, child);\n            }))]);\n        }, _temp), _possibleConstructorReturn(_this, _ret);\n    }\n\n    return MenuItem;\n}(Component);\n\n// Menu renders a menu component.\n\n\nvar Menu = function Menu() {\n    return createVNode(2, \"ul\", \"nav side-menu\", [createVNode(16, MenuItem, null, null, {\n        \"className\": \"fa-home\",\n        \"text\": \"Home\",\n        children: [createVNode(2, \"a\", null, \"Dashboard1\", {\n            \"href\": \"dashboard1.html\"\n        }), createVNode(2, \"a\", null, \"Dashboard2\", {\n            \"href\": \"dashboard2.html\"\n        })]\n    }), createVNode(16, MenuItem, null, null, {\n        \"className\": \"fa-edit\",\n        \"text\": \"Networking\",\n        children: createVNode(2, \"a\", null, \"Networking\", {\n            \"href\": \"networking.html\"\n        })\n    }), createVNode(16, MenuItem, null, null, {\n        \"className\": \"fa-desktop\",\n        \"text\": \"Txpool\",\n        children: createVNode(2, \"a\", null, \"Txpool\", {\n            \"href\": \"txpool.html\"\n        })\n    }), createVNode(16, MenuItem, null, null, {\n        \"className\": \"fa-table\",\n        \"text\": \"Logs\",\n        children: createVNode(2, \"a\", null, \"Logs\", {\n            \"href\": \"logs.html\"\n        })\n    }), createVNode(16, MenuItem, null, null, {\n        \"className\": \"fa-clone\",\n        \"text\": \"Blockchain\",\n        children: [createVNode(2, \"a\", null, \"Blockchain1\", {\n            \"href\": \"blockchain1.html\"\n        }), createVNode(2, \"a\", null, \"Blockchain2\", {\n            \"href\": \"blockchain2.html\"\n        }), createVNode(2, \"a\", null, \"Blockchain3\", {\n            \"href\": \"blockchain3.html\"\n        }), createVNode(2, \"a\", null, \"Blockchain4\", {\n            \"href\": \"blockchain4.html\"\n        }), createVNode(2, \"a\", null, \"Blockchain5\", {\n            \"href\": \"blockchain5.html\"\n        })]\n    }), createVNode(16, MenuItem, null, null, {\n        \"className\": \"fa-bar-chart-o\",\n        \"text\": \"System\"\n    })]);\n};\n\n// SideBar renders a sidebar component.\nexport var SideBar = function SideBar() {\n    return createVNode(2, \"div\", \"col-md-3 left_col\", createVNode(2, \"div\", \"left_col scroll-view\", [createVNode(2, \"div\", \"navbar nav_title\", createVNode(2, \"a\", \"site_title\", [createVNode(2, \"i\", \"fa fa-paw\"), createVNode(2, \"span\", null, \"Go Ethereum Dashboard\")], {\n        \"href\": \"dashboard.html\"\n    }), {\n        \"style\": { border: 0 }\n    }), createVNode(16, Clearfix), createVNode(2, \"div\", \"main_menu_side hidden-print main_menu\", createVNode(2, \"div\", \"menu_section\", createVNode(16, Menu)), {\n        \"id\": \"sidebar-menu\"\n    })]));\n};"
+        },
+        {
+          "id": 6,
+          "identifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\TopNavigation.js",
+          "name": "./src/components/TopNavigation.js",
+          "index": 6,
+          "index2": 4,
+          "size": 443,
+          "cacheable": true,
+          "built": true,
+          "optional": false,
+          "prefetched": false,
+          "chunks": [
+            0
+          ],
+          "assets": [],
+          "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+          "issuerId": 4,
+          "issuerName": "./src/components/Dashboard.js",
+          "profile": {
+            "factory": 8,
+            "building": 183,
+            "dependencies": 0
+          },
+          "failed": false,
+          "errors": 0,
+          "warnings": 0,
+          "reasons": [
+            {
+              "moduleId": 4,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+              "module": "./src/components/Dashboard.js",
+              "moduleName": "./src/components/Dashboard.js",
+              "type": "harmony import",
+              "userRequest": "./TopNavigation",
+              "loc": "10:0-48"
+            }
+          ],
+          "usedExports": [
+            "TopNavigation"
+          ],
+          "providedExports": [
+            "TopNavigation"
+          ],
+          "optimizationBailout": [],
+          "depth": 2,
+          "source": "import { createVNode } from \"inferno\";\n// TopNavigation renders a top navigation component.\nexport var TopNavigation = function TopNavigation() {\n    return createVNode(2, \"div\", \"top_nav\", createVNode(2, \"div\", \"nav_menu\", createVNode(2, \"nav\", \"\", createVNode(2, \"div\", \"nav toggle\", createVNode(2, \"a\", null, [\" \", createVNode(2, \"i\", \"fa fa-bars\")], {\n        \"id\": \"_______menu_toggle\"\n    })), {\n        \"role\": \"navigation\"\n    })));\n};"
+        },
+        {
+          "id": 7,
+          "identifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\PageContent.js",
+          "name": "./src/components/PageContent.js",
+          "index": 7,
+          "index2": 5,
+          "size": 5892,
+          "cacheable": true,
+          "built": true,
+          "optional": false,
+          "prefetched": false,
+          "chunks": [
+            0
+          ],
+          "assets": [],
+          "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+          "issuerId": 4,
+          "issuerName": "./src/components/Dashboard.js",
+          "profile": {
+            "factory": 8,
+            "building": 346,
+            "dependencies": 2
+          },
+          "failed": false,
+          "errors": 0,
+          "warnings": 0,
+          "reasons": [
+            {
+              "moduleId": 4,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+              "module": "./src/components/Dashboard.js",
+              "moduleName": "./src/components/Dashboard.js",
+              "type": "harmony import",
+              "userRequest": "./PageContent",
+              "loc": "11:0-40"
+            }
+          ],
+          "usedExports": [
+            "default"
+          ],
+          "providedExports": [
+            "default"
+          ],
+          "optimizationBailout": [],
+          "depth": 2,
+          "source": "function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError(\"Cannot call a class as a function\"); } }\n\nfunction _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError(\"this hasn't been initialised - super() hasn't been called\"); } return call && (typeof call === \"object\" || typeof call === \"function\") ? call : self; }\n\nfunction _inherits(subClass, superClass) { if (typeof superClass !== \"function\" && superClass !== null) { throw new TypeError(\"Super expression must either be null or a function, not \" + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }\n\nimport Component from 'component';\nimport { isNullOrUndefined, mapChildren, Clearfix } from \"./Common\";\n\n// Chart name is already in use.\n// ChartComponent renders a chart component and updates it, when the related data changes.\nimport { createVNode } from \"inferno\";\n\nvar ChartComponent = function (_Component) {\n    _inherits(ChartComponent, _Component);\n\n    function ChartComponent(props) {\n        _classCallCheck(this, ChartComponent);\n\n        var _this = _possibleConstructorReturn(this, _Component.call(this, props));\n\n        _this.componentDidMount = function () {\n            return _this.state.chart = new Chart(_this.data, {\n                type: _this.props.type,\n                data: _this.props.data\n            });\n        };\n\n        _this.render = function () {\n            if (!isNullOrUndefined(_this.state.chart)) {\n                _this.state.chart.update();\n            }\n\n            return createVNode(2, \"div\", _this.props.className, createVNode(2, \"div\", \"x_panel\", [createVNode(2, \"div\", \"x_title\", [createVNode(2, \"h2\", null, _this.props.text), createVNode(2, \"ul\", \"nav navbar-right panel_toolbox\", [createVNode(2, \"li\", null, createVNode(2, \"a\", \"collapse-link\", createVNode(2, \"i\", \"fa fa-chevron-up\"))),\n            // Render dropdown menu only if there are children.\n            isNullOrUndefined(_this.props.children) || createVNode(2, \"li\", \"dropdown\", [createVNode(2, \"a\", \"dropdown-toggle\", createVNode(2, \"i\", \"fa fa-wrench\"), {\n                \"href\": \"#\",\n                \"data-toggle\": \"dropdown\",\n                \"role\": \"button\",\n                \"aria-expanded\": \"false\"\n            }), createVNode(2, \"ul\", \"dropdown-menu\", mapChildren(_this.props.children, function (child) {\n                return createVNode(2, \"li\", null, child);\n            }), {\n                \"role\": \"menu\"\n            })]), createVNode(2, \"li\", null, createVNode(2, \"a\", \"close-link\", createVNode(2, \"i\", \"fa fa-close\")))]), createVNode(16, Clearfix)]), createVNode(2, \"div\", \"x_content\", createVNode(2, \"canvas\", null, null, null, null, function (data) {\n                return _this.data = data;\n            }))]));\n        };\n\n        _this.state = {};\n        return _this;\n    }\n\n    return ChartComponent;\n}(Component);\n\n// Row renders a row component of charts only if there is any chart.\n\n\nvar Row = function (_Component2) {\n    _inherits(Row, _Component2);\n\n    function Row() {\n        var _temp, _this2, _ret;\n\n        _classCallCheck(this, Row);\n\n        for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {\n            args[_key] = arguments[_key];\n        }\n\n        return _ret = (_temp = (_this2 = _possibleConstructorReturn(this, _Component2.call.apply(_Component2, [this].concat(args))), _this2), _this2.render = function () {\n            return isNullOrUndefined(_this2.props.children) || createVNode(2, \"div\", \"row\", [\" \", _this2.props.children, \" \"]);\n        }, _temp), _possibleConstructorReturn(_this2, _ret);\n    }\n\n    return Row;\n}(Component);\n\n// PageContent renders a component for the page content.\n\n\nvar PageContent = function (_Component3) {\n    _inherits(PageContent, _Component3);\n\n    function PageContent() {\n        var _temp2, _this3, _ret2;\n\n        _classCallCheck(this, PageContent);\n\n        for (var _len2 = arguments.length, args = Array(_len2), _key2 = 0; _key2 < _len2; _key2++) {\n            args[_key2] = arguments[_key2];\n        }\n\n        return _ret2 = (_temp2 = (_this3 = _possibleConstructorReturn(this, _Component3.call.apply(_Component3, [this].concat(args))), _this3), _this3.render = function () {\n            return createVNode(2, \"div\", \"right_col\", createVNode(2, \"div\", \"\", [createVNode(2, \"div\", \"page-title\", createVNode(2, \"div\", \"title_left\", createVNode(2, \"h3\", null, [\"Go Ethereum Dashboard\", createVNode(2, \"small\", null, \"Statistics\")]))), createVNode(16, Clearfix), createVNode(16, Row, null, null, {\n                children: [createVNode(16, ChartComponent, null, null, {\n                    \"className\": \"col-md-6 col-sm-6 col-xs-12\",\n                    \"text\": \"Memory usage system/memory/inuse\",\n                    \"type\": \"line\",\n                    \"data\": _this3.props.charts.memory,\n                    children: [createVNode(2, \"a\", null, \"Settings 1\", {\n                        \"href\": \"#\"\n                    }), createVNode(2, \"a\", null, \"Settings 2\", {\n                        \"href\": \"#\"\n                    })]\n                }), createVNode(16, ChartComponent, null, null, {\n                    \"className\": \"col-md-6 col-sm-6 col-xs-12\",\n                    \"text\": \"Inbound traffic p2p/InboundTraffic\",\n                    \"type\": \"line\",\n                    \"data\": _this3.props.charts.traffic\n                })]\n            }), createVNode(16, Clearfix)]), {\n                \"role\": \"main\"\n            });\n        }, _temp2), _possibleConstructorReturn(_this3, _ret2);\n    }\n\n    return PageContent;\n}(Component);\n\nexport default PageContent;"
+        },
+        {
+          "id": 8,
+          "identifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Footer.js",
+          "name": "./src/components/Footer.js",
+          "index": 8,
+          "index2": 6,
+          "size": 308,
+          "cacheable": true,
+          "built": true,
+          "optional": false,
+          "prefetched": false,
+          "chunks": [
+            0
+          ],
+          "assets": [],
+          "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+          "issuerId": 4,
+          "issuerName": "./src/components/Dashboard.js",
+          "profile": {
+            "factory": 8,
+            "building": 203,
+            "dependencies": 1
+          },
+          "failed": false,
+          "errors": 0,
+          "warnings": 0,
+          "reasons": [
+            {
+              "moduleId": 4,
+              "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+              "module": "./src/components/Dashboard.js",
+              "moduleName": "./src/components/Dashboard.js",
+              "type": "harmony import",
+              "userRequest": "./Footer",
+              "loc": "12:0-34"
+            }
+          ],
+          "usedExports": [
+            "Footer"
+          ],
+          "providedExports": [
+            "Footer"
+          ],
+          "optimizationBailout": [],
+          "depth": 2,
+          "source": "import { Clearfix } from \"./Common\";\n\n// Footer renders a footer component.\nimport { createVNode } from \"inferno\";\nexport var Footer = function Footer() {\n    return createVNode(2, \"footer\", null, [createVNode(2, \"div\", \"pull-right\", \"Copyright 2017 The go-ethereum Authors\"), createVNode(16, Clearfix)]);\n};"
+        }
+      ],
+      "filteredModules": 0,
+      "origins": [
+        {
+          "moduleId": 3,
+          "module": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\index.js",
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\index.js",
+          "moduleName": "./src/index.js",
+          "loc": "",
+          "name": "main",
+          "reasons": []
+        }
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "id": 0,
+      "identifier": "external \"Inferno\"",
+      "name": "external \"Inferno\"",
+      "index": 1,
+      "index2": 0,
+      "size": 42,
+      "cacheable": false,
+      "built": false,
+      "optional": false,
+      "prefetched": false,
+      "chunks": [
+        0
+      ],
+      "assets": [],
+      "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\index.js",
+      "issuerId": 3,
+      "issuerName": "./src/index.js",
+      "profile": {
+        "factory": 2,
+        "building": 1
+      },
+      "failed": false,
+      "errors": 0,
+      "warnings": 0,
+      "reasons": [
+        {
+          "moduleId": 1,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Common.js",
+          "module": "./src/components/Common.js",
+          "moduleName": "./src/components/Common.js",
+          "type": "harmony import",
+          "userRequest": "inferno",
+          "loc": "10:0-38"
+        },
+        {
+          "moduleId": 3,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\index.js",
+          "module": "./src/index.js",
+          "moduleName": "./src/index.js",
+          "type": "harmony import",
+          "userRequest": "inferno",
+          "loc": "1:0-30"
+        },
+        {
+          "moduleId": 3,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\index.js",
+          "module": "./src/index.js",
+          "moduleName": "./src/index.js",
+          "type": "harmony import",
+          "userRequest": "inferno",
+          "loc": "5:0-38"
+        },
+        {
+          "moduleId": 4,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+          "module": "./src/components/Dashboard.js",
+          "moduleName": "./src/components/Dashboard.js",
+          "type": "harmony import",
+          "userRequest": "inferno",
+          "loc": "17:0-38"
+        },
+        {
+          "moduleId": 5,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\SideBar.js",
+          "module": "./src/components/SideBar.js",
+          "moduleName": "./src/components/SideBar.js",
+          "type": "harmony import",
+          "userRequest": "inferno",
+          "loc": "11:0-38"
+        },
+        {
+          "moduleId": 6,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\TopNavigation.js",
+          "module": "./src/components/TopNavigation.js",
+          "moduleName": "./src/components/TopNavigation.js",
+          "type": "harmony import",
+          "userRequest": "inferno",
+          "loc": "1:0-38"
+        },
+        {
+          "moduleId": 7,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\PageContent.js",
+          "module": "./src/components/PageContent.js",
+          "moduleName": "./src/components/PageContent.js",
+          "type": "harmony import",
+          "userRequest": "inferno",
+          "loc": "12:0-38"
+        },
+        {
+          "moduleId": 8,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Footer.js",
+          "module": "./src/components/Footer.js",
+          "moduleName": "./src/components/Footer.js",
+          "type": "harmony import",
+          "userRequest": "inferno",
+          "loc": "4:0-38"
+        }
+      ],
+      "usedExports": [
+        "createVNode",
+        "default"
+      ],
+      "providedExports": null,
+      "optimizationBailout": [],
+      "depth": 1
+    },
+    {
+      "id": 1,
+      "identifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Common.js",
+      "name": "./src/components/Common.js",
+      "index": 4,
+      "index2": 2,
+      "size": 697,
+      "cacheable": true,
+      "built": true,
+      "optional": false,
+      "prefetched": false,
+      "chunks": [
+        0
+      ],
+      "assets": [],
+      "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+      "issuerId": 4,
+      "issuerName": "./src/components/Dashboard.js",
+      "profile": {
+        "factory": 7,
+        "building": 33,
+        "dependencies": 0
+      },
+      "failed": false,
+      "errors": 0,
+      "warnings": 0,
+      "reasons": [
+        {
+          "moduleId": 4,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+          "module": "./src/components/Dashboard.js",
+          "moduleName": "./src/components/Dashboard.js",
+          "type": "harmony import",
+          "userRequest": "./Common",
+          "loc": "8:0-66"
+        },
+        {
+          "moduleId": 5,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\SideBar.js",
+          "module": "./src/components/SideBar.js",
+          "moduleName": "./src/components/SideBar.js",
+          "type": "harmony import",
+          "userRequest": "./Common",
+          "loc": "8:0-68"
+        },
+        {
+          "moduleId": 7,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\PageContent.js",
+          "module": "./src/components/PageContent.js",
+          "moduleName": "./src/components/PageContent.js",
+          "type": "harmony import",
+          "userRequest": "./Common",
+          "loc": "8:0-68"
+        },
+        {
+          "moduleId": 8,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Footer.js",
+          "module": "./src/components/Footer.js",
+          "moduleName": "./src/components/Footer.js",
+          "type": "harmony import",
+          "userRequest": "./Common",
+          "loc": "1:0-36"
+        }
+      ],
+      "usedExports": [
+        "Clearfix",
+        "MEMORY_SAMPLE_LIMIT",
+        "isNullOrUndefined",
+        "mapChildren"
+      ],
+      "providedExports": [
+        "isNullOrUndefined",
+        "mapChildren",
+        "Clearfix",
+        "MEMORY_SAMPLE_LIMIT",
+        "TRAFFIC_SAMPLE_LIMIT"
+      ],
+      "optimizationBailout": [],
+      "depth": 2,
+      "source": "// isNullOrUndefined returns true if a variable is null or undefined.\nexport var isNullOrUndefined = function isNullOrUndefined(variable) {\n  return variable === null || typeof variable === 'undefined';\n};\n\nexport var mapChildren = function mapChildren(children, mapFunc) {\n  return !Array.isArray(children) || children.length < 1 || children.length === 1 ? mapFunc(children) : children.map(mapFunc);\n};\n\nimport { createVNode } from \"inferno\";\nexport var Clearfix = function Clearfix() {\n  return createVNode(2, \"div\", \"clearfix\");\n};\n\nexport var MEMORY_SAMPLE_LIMIT = 200; // Maximum number of memory data samples.\nexport var TRAFFIC_SAMPLE_LIMIT = 200; // Maximum number of traffic data samples."
+    },
+    {
+      "id": 2,
+      "identifier": "external \"Inferno.Component\"",
+      "name": "external \"Inferno.Component\"",
+      "index": 3,
+      "index2": 1,
+      "size": 42,
+      "cacheable": false,
+      "built": false,
+      "optional": false,
+      "prefetched": false,
+      "chunks": [
+        0
+      ],
+      "assets": [],
+      "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+      "issuerId": 4,
+      "issuerName": "./src/components/Dashboard.js",
+      "profile": {
+        "factory": 0,
+        "building": 0
+      },
+      "failed": false,
+      "errors": 0,
+      "warnings": 0,
+      "reasons": [
+        {
+          "moduleId": 4,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+          "module": "./src/components/Dashboard.js",
+          "moduleName": "./src/components/Dashboard.js",
+          "type": "harmony import",
+          "userRequest": "component",
+          "loc": "7:0-34"
+        },
+        {
+          "moduleId": 5,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\SideBar.js",
+          "module": "./src/components/SideBar.js",
+          "moduleName": "./src/components/SideBar.js",
+          "type": "harmony import",
+          "userRequest": "component",
+          "loc": "7:0-34"
+        },
+        {
+          "moduleId": 7,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\PageContent.js",
+          "module": "./src/components/PageContent.js",
+          "moduleName": "./src/components/PageContent.js",
+          "type": "harmony import",
+          "userRequest": "component",
+          "loc": "7:0-34"
+        }
+      ],
+      "usedExports": [
+        "default"
+      ],
+      "providedExports": null,
+      "optimizationBailout": [],
+      "depth": 2
+    },
+    {
+      "id": 3,
+      "identifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\index.js",
+      "name": "./src/index.js",
+      "index": 0,
+      "index2": 8,
+      "size": 232,
+      "cacheable": true,
+      "built": true,
+      "optional": false,
+      "prefetched": false,
+      "chunks": [
+        0
+      ],
+      "assets": [],
+      "issuer": null,
+      "issuerId": null,
+      "issuerName": null,
+      "profile": {
+        "factory": 31,
+        "building": 672
+      },
+      "failed": false,
+      "errors": 0,
+      "warnings": 0,
+      "reasons": [],
+      "usedExports": true,
+      "providedExports": [],
+      "optimizationBailout": [],
+      "depth": 0,
+      "source": "import Inferno from 'inferno';\nimport Dashboard from './components/Dashboard';\n\n// Renders the whole dashboard.\nimport { createVNode } from 'inferno';\nInferno.render(createVNode(16, Dashboard), document.getElementById('dashboard'));"
+    },
+    {
+      "id": 4,
+      "identifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+      "name": "./src/components/Dashboard.js",
+      "index": 2,
+      "index2": 7,
+      "size": 6933,
+      "cacheable": true,
+      "built": true,
+      "optional": false,
+      "prefetched": false,
+      "chunks": [
+        0
+      ],
+      "assets": [],
+      "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\index.js",
+      "issuerId": 3,
+      "issuerName": "./src/index.js",
+      "profile": {
+        "factory": 6,
+        "building": 346,
+        "dependencies": 1
+      },
+      "failed": false,
+      "errors": 0,
+      "warnings": 0,
+      "reasons": [
+        {
+          "moduleId": 3,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\index.js",
+          "module": "./src/index.js",
+          "moduleName": "./src/index.js",
+          "type": "harmony import",
+          "userRequest": "./components/Dashboard",
+          "loc": "2:0-47"
+        }
+      ],
+      "usedExports": [
+        "default"
+      ],
+      "providedExports": [
+        "default"
+      ],
+      "optimizationBailout": [],
+      "depth": 1,
+      "source": "function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError(\"Cannot call a class as a function\"); } }\n\nfunction _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError(\"this hasn't been initialised - super() hasn't been called\"); } return call && (typeof call === \"object\" || typeof call === \"function\") ? call : self; }\n\nfunction _inherits(subClass, superClass) { if (typeof superClass !== \"function\" && superClass !== null) { throw new TypeError(\"Super expression must either be null or a function, not \" + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }\n\nimport Component from 'component';\nimport { isNullOrUndefined, MEMORY_SAMPLE_LIMIT } from \"./Common\";\nimport { SideBar } from \"./SideBar\";\nimport { TopNavigation } from \"./TopNavigation\";\nimport PageContent from './PageContent';\nimport { Footer } from './Footer';\n\n// Dashboard is the main component, which renders the whole page,\n// makes connection with the server and listens for messages.\n// When there is an incoming message, updates the page's content correspondingly.\nimport { createVNode } from \"inferno\";\n\nvar Dashboard = function (_Component) {\n    _inherits(Dashboard, _Component);\n\n    function Dashboard(props) {\n        _classCallCheck(this, Dashboard);\n\n        var _this = _possibleConstructorReturn(this, _Component.call(this, props));\n\n        _this.updateCharts = function (msg) {\n            var memory = _this.state.charts.memory;\n            var traffic = _this.state.charts.traffic;\n\n            // Fill the dashboard with the past data. metrics is set only in the first msg,\n            // after the connection is established.\n            if (msg.metrics !== undefined) {\n                // Clear the arrays to prevent data confusion with the previous connection.\n                memory.labels = [];\n                traffic.labels = [];\n                memory.datasets[0].data = [];\n                traffic.datasets[0].data = [];\n\n                var mem = msg.metrics.memory;\n                var traff = msg.metrics.processor; // TODO (kurkomisi): !!!\n\n                // Put the past data to the beginning of the arrays. This prevents confusion with the next msg data,\n                // which goes to the end.\n                for (var i = mem.length - 1; i >= 0 && MEMORY_SAMPLE_LIMIT > memory.labels.length; --i) {\n                    memory.labels.unshift(mem[i].time.substring(mem[i].time.length - 5));\n                    traffic.labels.unshift(mem[i].time.substring(mem[i].time.length - 5));\n                    memory.datasets[0].data.unshift(mem[i].value);\n                    traffic.datasets[0].data.unshift(traff[i].value);\n                }\n\n                _this.setState({ charts: { memory: memory, traffic: traffic } }); // Update the components.\n                return;\n            }\n\n            // Put the new data to the end of the arrays.\n            if (msg.memory !== undefined) {\n                // Remove the first elements in case the samples' amount exceeds the limit.\n                if (memory.labels.length === MEMORY_SAMPLE_LIMIT) {\n                    memory.labels.shift();\n                    traffic.labels.shift();\n                    memory.datasets[0].data.shift();\n                    traffic.datasets[0].data.shift();\n                }\n                memory.labels.push(msg.memory.time.substring(msg.memory.time.length - 5));\n                traffic.labels.push(msg.memory.time.substring(msg.memory.time.length - 5));\n                memory.datasets[0].data.push(msg.memory.value);\n                traffic.datasets[0].data.push(msg.processor.value);\n\n                _this.setState({ charts: { memory: memory, traffic: traffic } }); // Update the components.\n            }\n        };\n\n        _this.reconnect = function () {\n            var server = new WebSocket(\"ws://\" + location.host + \"/api\");\n\n            server.onmessage = function (event) {\n                var msg = JSON.parse(event.data);\n                if (isNullOrUndefined(msg)) {\n                    return;\n                }\n                _this.updateCharts(msg);\n            };\n\n            server.onclose = function () {\n                return setTimeout(_this.reconnect, 3000);\n            };\n        };\n\n        _this.componentDidMount = function () {\n            return _this.reconnect();\n        };\n\n        _this.render = function () {\n            return createVNode(2, \"div\", \"container body\", createVNode(2, \"div\", \"main_container\", [createVNode(16, SideBar), createVNode(16, TopNavigation), createVNode(16, PageContent, null, null, {\n                \"charts\": _this.state.charts\n            }), createVNode(16, Footer)]));\n        };\n\n        _this.state = {\n            charts: { // Stores the state of the charts.\n                memory: {\n                    labels: [],\n                    datasets: [{\n                        label: \"system/memory/inuse\",\n                        backgroundColor: \"rgba(38, 185, 154, 0.31)\",\n                        borderColor: \"rgba(38, 185, 154, 0.7)\",\n                        pointBorderColor: \"rgba(38, 185, 154, 0.7)\",\n                        pointBackgroundColor: \"rgba(38, 185, 154, 0.7)\",\n                        pointHoverBackgroundColor: \"#fff\",\n                        pointHoverBorderColor: \"rgba(220,220,220,1)\",\n                        pointBorderWidth: 1,\n                        data: []\n                    }]\n                },\n                traffic: {\n                    labels: [],\n                    datasets: [{\n                        label: \"p2p/InboundTraffic\",\n                        backgroundColor: \"rgba(3, 88, 106, 0.3)\",\n                        borderColor: \"rgba(3, 88, 106, 0.70)\",\n                        pointBorderColor: \"rgba(3, 88, 106, 0.70)\",\n                        pointBackgroundColor: \"rgba(3, 88, 106, 0.70)\",\n                        pointHoverBackgroundColor: \"#fff\",\n                        pointHoverBorderColor: \"rgba(151,187,205,1)\",\n                        pointBorderWidth: 1,\n                        data: []\n                    }]\n                }\n            }\n        };\n        return _this;\n    }\n\n    // updateCharts Analyzes the incoming message, and updates the charts' content correspondingly.\n\n\n    // reconnect establishes a websocket connection with the server, listens for incoming messages\n    // and tries to reconnect on connection loss.\n\n\n    // componentDidMount initiates the establishment of the first websocket connection after the component is rendered.\n\n\n    // render renders the components of the dashboard.\n\n\n    return Dashboard;\n}(Component);\n\nexport default Dashboard;"
+    },
+    {
+      "id": 5,
+      "identifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\SideBar.js",
+      "name": "./src/components/SideBar.js",
+      "index": 5,
+      "index2": 3,
+      "size": 4613,
+      "cacheable": true,
+      "built": true,
+      "optional": false,
+      "prefetched": false,
+      "chunks": [
+        0
+      ],
+      "assets": [],
+      "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+      "issuerId": 4,
+      "issuerName": "./src/components/Dashboard.js",
+      "profile": {
+        "factory": 7,
+        "building": 173,
+        "dependencies": 0
+      },
+      "failed": false,
+      "errors": 0,
+      "warnings": 0,
+      "reasons": [
+        {
+          "moduleId": 4,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+          "module": "./src/components/Dashboard.js",
+          "moduleName": "./src/components/Dashboard.js",
+          "type": "harmony import",
+          "userRequest": "./SideBar",
+          "loc": "9:0-36"
+        }
+      ],
+      "usedExports": [
+        "SideBar"
+      ],
+      "providedExports": [
+        "SideBar"
+      ],
+      "optimizationBailout": [],
+      "depth": 2,
+      "source": "function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError(\"Cannot call a class as a function\"); } }\n\nfunction _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError(\"this hasn't been initialised - super() hasn't been called\"); } return call && (typeof call === \"object\" || typeof call === \"function\") ? call : self; }\n\nfunction _inherits(subClass, superClass) { if (typeof superClass !== \"function\" && superClass !== null) { throw new TypeError(\"Super expression must either be null or a function, not \" + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }\n\nimport Component from 'component';\nimport { isNullOrUndefined, mapChildren, Clearfix } from \"./Common\";\n\n// MenuItem renders an item for a Menu component and the belonging submenu items, if there is any.\nimport { createVNode } from \"inferno\";\n\nvar MenuItem = function (_Component) {\n    _inherits(MenuItem, _Component);\n\n    function MenuItem() {\n        var _temp, _this, _ret;\n\n        _classCallCheck(this, MenuItem);\n\n        for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {\n            args[_key] = arguments[_key];\n        }\n\n        return _ret = (_temp = (_this = _possibleConstructorReturn(this, _Component.call.apply(_Component, [this].concat(args))), _this), _this.render = function () {\n            return createVNode(2, \"li\", null, [createVNode(2, \"a\", null, [createVNode(2, \"i\", \"fa \" + _this.props.className), _this.props.text, createVNode(2, \"div\", \"fa fa-chevron-down\")]),\n            // Render dropdown menu only if there are children.\n            isNullOrUndefined(_this.props.children) || createVNode(2, \"ul\", \"nav child_menu\", mapChildren(_this.props.children, function (child) {\n                return createVNode(2, \"li\", null, child);\n            }))]);\n        }, _temp), _possibleConstructorReturn(_this, _ret);\n    }\n\n    return MenuItem;\n}(Component);\n\n// Menu renders a menu component.\n\n\nvar Menu = function Menu() {\n    return createVNode(2, \"ul\", \"nav side-menu\", [createVNode(16, MenuItem, null, null, {\n        \"className\": \"fa-home\",\n        \"text\": \"Home\",\n        children: [createVNode(2, \"a\", null, \"Dashboard1\", {\n            \"href\": \"dashboard1.html\"\n        }), createVNode(2, \"a\", null, \"Dashboard2\", {\n            \"href\": \"dashboard2.html\"\n        })]\n    }), createVNode(16, MenuItem, null, null, {\n        \"className\": \"fa-edit\",\n        \"text\": \"Networking\",\n        children: createVNode(2, \"a\", null, \"Networking\", {\n            \"href\": \"networking.html\"\n        })\n    }), createVNode(16, MenuItem, null, null, {\n        \"className\": \"fa-desktop\",\n        \"text\": \"Txpool\",\n        children: createVNode(2, \"a\", null, \"Txpool\", {\n            \"href\": \"txpool.html\"\n        })\n    }), createVNode(16, MenuItem, null, null, {\n        \"className\": \"fa-table\",\n        \"text\": \"Logs\",\n        children: createVNode(2, \"a\", null, \"Logs\", {\n            \"href\": \"logs.html\"\n        })\n    }), createVNode(16, MenuItem, null, null, {\n        \"className\": \"fa-clone\",\n        \"text\": \"Blockchain\",\n        children: [createVNode(2, \"a\", null, \"Blockchain1\", {\n            \"href\": \"blockchain1.html\"\n        }), createVNode(2, \"a\", null, \"Blockchain2\", {\n            \"href\": \"blockchain2.html\"\n        }), createVNode(2, \"a\", null, \"Blockchain3\", {\n            \"href\": \"blockchain3.html\"\n        }), createVNode(2, \"a\", null, \"Blockchain4\", {\n            \"href\": \"blockchain4.html\"\n        }), createVNode(2, \"a\", null, \"Blockchain5\", {\n            \"href\": \"blockchain5.html\"\n        })]\n    }), createVNode(16, MenuItem, null, null, {\n        \"className\": \"fa-bar-chart-o\",\n        \"text\": \"System\"\n    })]);\n};\n\n// SideBar renders a sidebar component.\nexport var SideBar = function SideBar() {\n    return createVNode(2, \"div\", \"col-md-3 left_col\", createVNode(2, \"div\", \"left_col scroll-view\", [createVNode(2, \"div\", \"navbar nav_title\", createVNode(2, \"a\", \"site_title\", [createVNode(2, \"i\", \"fa fa-paw\"), createVNode(2, \"span\", null, \"Go Ethereum Dashboard\")], {\n        \"href\": \"dashboard.html\"\n    }), {\n        \"style\": { border: 0 }\n    }), createVNode(16, Clearfix), createVNode(2, \"div\", \"main_menu_side hidden-print main_menu\", createVNode(2, \"div\", \"menu_section\", createVNode(16, Menu)), {\n        \"id\": \"sidebar-menu\"\n    })]));\n};"
+    },
+    {
+      "id": 6,
+      "identifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\TopNavigation.js",
+      "name": "./src/components/TopNavigation.js",
+      "index": 6,
+      "index2": 4,
+      "size": 443,
+      "cacheable": true,
+      "built": true,
+      "optional": false,
+      "prefetched": false,
+      "chunks": [
+        0
+      ],
+      "assets": [],
+      "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+      "issuerId": 4,
+      "issuerName": "./src/components/Dashboard.js",
+      "profile": {
+        "factory": 8,
+        "building": 183,
+        "dependencies": 0
+      },
+      "failed": false,
+      "errors": 0,
+      "warnings": 0,
+      "reasons": [
+        {
+          "moduleId": 4,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+          "module": "./src/components/Dashboard.js",
+          "moduleName": "./src/components/Dashboard.js",
+          "type": "harmony import",
+          "userRequest": "./TopNavigation",
+          "loc": "10:0-48"
+        }
+      ],
+      "usedExports": [
+        "TopNavigation"
+      ],
+      "providedExports": [
+        "TopNavigation"
+      ],
+      "optimizationBailout": [],
+      "depth": 2,
+      "source": "import { createVNode } from \"inferno\";\n// TopNavigation renders a top navigation component.\nexport var TopNavigation = function TopNavigation() {\n    return createVNode(2, \"div\", \"top_nav\", createVNode(2, \"div\", \"nav_menu\", createVNode(2, \"nav\", \"\", createVNode(2, \"div\", \"nav toggle\", createVNode(2, \"a\", null, [\" \", createVNode(2, \"i\", \"fa fa-bars\")], {\n        \"id\": \"_______menu_toggle\"\n    })), {\n        \"role\": \"navigation\"\n    })));\n};"
+    },
+    {
+      "id": 7,
+      "identifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\PageContent.js",
+      "name": "./src/components/PageContent.js",
+      "index": 7,
+      "index2": 5,
+      "size": 5892,
+      "cacheable": true,
+      "built": true,
+      "optional": false,
+      "prefetched": false,
+      "chunks": [
+        0
+      ],
+      "assets": [],
+      "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+      "issuerId": 4,
+      "issuerName": "./src/components/Dashboard.js",
+      "profile": {
+        "factory": 8,
+        "building": 346,
+        "dependencies": 2
+      },
+      "failed": false,
+      "errors": 0,
+      "warnings": 0,
+      "reasons": [
+        {
+          "moduleId": 4,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+          "module": "./src/components/Dashboard.js",
+          "moduleName": "./src/components/Dashboard.js",
+          "type": "harmony import",
+          "userRequest": "./PageContent",
+          "loc": "11:0-40"
+        }
+      ],
+      "usedExports": [
+        "default"
+      ],
+      "providedExports": [
+        "default"
+      ],
+      "optimizationBailout": [],
+      "depth": 2,
+      "source": "function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError(\"Cannot call a class as a function\"); } }\n\nfunction _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError(\"this hasn't been initialised - super() hasn't been called\"); } return call && (typeof call === \"object\" || typeof call === \"function\") ? call : self; }\n\nfunction _inherits(subClass, superClass) { if (typeof superClass !== \"function\" && superClass !== null) { throw new TypeError(\"Super expression must either be null or a function, not \" + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }\n\nimport Component from 'component';\nimport { isNullOrUndefined, mapChildren, Clearfix } from \"./Common\";\n\n// Chart name is already in use.\n// ChartComponent renders a chart component and updates it, when the related data changes.\nimport { createVNode } from \"inferno\";\n\nvar ChartComponent = function (_Component) {\n    _inherits(ChartComponent, _Component);\n\n    function ChartComponent(props) {\n        _classCallCheck(this, ChartComponent);\n\n        var _this = _possibleConstructorReturn(this, _Component.call(this, props));\n\n        _this.componentDidMount = function () {\n            return _this.state.chart = new Chart(_this.data, {\n                type: _this.props.type,\n                data: _this.props.data\n            });\n        };\n\n        _this.render = function () {\n            if (!isNullOrUndefined(_this.state.chart)) {\n                _this.state.chart.update();\n            }\n\n            return createVNode(2, \"div\", _this.props.className, createVNode(2, \"div\", \"x_panel\", [createVNode(2, \"div\", \"x_title\", [createVNode(2, \"h2\", null, _this.props.text), createVNode(2, \"ul\", \"nav navbar-right panel_toolbox\", [createVNode(2, \"li\", null, createVNode(2, \"a\", \"collapse-link\", createVNode(2, \"i\", \"fa fa-chevron-up\"))),\n            // Render dropdown menu only if there are children.\n            isNullOrUndefined(_this.props.children) || createVNode(2, \"li\", \"dropdown\", [createVNode(2, \"a\", \"dropdown-toggle\", createVNode(2, \"i\", \"fa fa-wrench\"), {\n                \"href\": \"#\",\n                \"data-toggle\": \"dropdown\",\n                \"role\": \"button\",\n                \"aria-expanded\": \"false\"\n            }), createVNode(2, \"ul\", \"dropdown-menu\", mapChildren(_this.props.children, function (child) {\n                return createVNode(2, \"li\", null, child);\n            }), {\n                \"role\": \"menu\"\n            })]), createVNode(2, \"li\", null, createVNode(2, \"a\", \"close-link\", createVNode(2, \"i\", \"fa fa-close\")))]), createVNode(16, Clearfix)]), createVNode(2, \"div\", \"x_content\", createVNode(2, \"canvas\", null, null, null, null, function (data) {\n                return _this.data = data;\n            }))]));\n        };\n\n        _this.state = {};\n        return _this;\n    }\n\n    return ChartComponent;\n}(Component);\n\n// Row renders a row component of charts only if there is any chart.\n\n\nvar Row = function (_Component2) {\n    _inherits(Row, _Component2);\n\n    function Row() {\n        var _temp, _this2, _ret;\n\n        _classCallCheck(this, Row);\n\n        for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {\n            args[_key] = arguments[_key];\n        }\n\n        return _ret = (_temp = (_this2 = _possibleConstructorReturn(this, _Component2.call.apply(_Component2, [this].concat(args))), _this2), _this2.render = function () {\n            return isNullOrUndefined(_this2.props.children) || createVNode(2, \"div\", \"row\", [\" \", _this2.props.children, \" \"]);\n        }, _temp), _possibleConstructorReturn(_this2, _ret);\n    }\n\n    return Row;\n}(Component);\n\n// PageContent renders a component for the page content.\n\n\nvar PageContent = function (_Component3) {\n    _inherits(PageContent, _Component3);\n\n    function PageContent() {\n        var _temp2, _this3, _ret2;\n\n        _classCallCheck(this, PageContent);\n\n        for (var _len2 = arguments.length, args = Array(_len2), _key2 = 0; _key2 < _len2; _key2++) {\n            args[_key2] = arguments[_key2];\n        }\n\n        return _ret2 = (_temp2 = (_this3 = _possibleConstructorReturn(this, _Component3.call.apply(_Component3, [this].concat(args))), _this3), _this3.render = function () {\n            return createVNode(2, \"div\", \"right_col\", createVNode(2, \"div\", \"\", [createVNode(2, \"div\", \"page-title\", createVNode(2, \"div\", \"title_left\", createVNode(2, \"h3\", null, [\"Go Ethereum Dashboard\", createVNode(2, \"small\", null, \"Statistics\")]))), createVNode(16, Clearfix), createVNode(16, Row, null, null, {\n                children: [createVNode(16, ChartComponent, null, null, {\n                    \"className\": \"col-md-6 col-sm-6 col-xs-12\",\n                    \"text\": \"Memory usage system/memory/inuse\",\n                    \"type\": \"line\",\n                    \"data\": _this3.props.charts.memory,\n                    children: [createVNode(2, \"a\", null, \"Settings 1\", {\n                        \"href\": \"#\"\n                    }), createVNode(2, \"a\", null, \"Settings 2\", {\n                        \"href\": \"#\"\n                    })]\n                }), createVNode(16, ChartComponent, null, null, {\n                    \"className\": \"col-md-6 col-sm-6 col-xs-12\",\n                    \"text\": \"Inbound traffic p2p/InboundTraffic\",\n                    \"type\": \"line\",\n                    \"data\": _this3.props.charts.traffic\n                })]\n            }), createVNode(16, Clearfix)]), {\n                \"role\": \"main\"\n            });\n        }, _temp2), _possibleConstructorReturn(_this3, _ret2);\n    }\n\n    return PageContent;\n}(Component);\n\nexport default PageContent;"
+    },
+    {
+      "id": 8,
+      "identifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Footer.js",
+      "name": "./src/components/Footer.js",
+      "index": 8,
+      "index2": 6,
+      "size": 308,
+      "cacheable": true,
+      "built": true,
+      "optional": false,
+      "prefetched": false,
+      "chunks": [
+        0
+      ],
+      "assets": [],
+      "issuer": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+      "issuerId": 4,
+      "issuerName": "./src/components/Dashboard.js",
+      "profile": {
+        "factory": 8,
+        "building": 203,
+        "dependencies": 1
+      },
+      "failed": false,
+      "errors": 0,
+      "warnings": 0,
+      "reasons": [
+        {
+          "moduleId": 4,
+          "moduleIdentifier": "D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\node_modules\\babel-loader\\lib\\index.js!D:\\Go\\src\\github.com\\ethereum\\go-ethereum\\dashboard\\bundler\\src\\components\\Dashboard.js",
+          "module": "./src/components/Dashboard.js",
+          "moduleName": "./src/components/Dashboard.js",
+          "type": "harmony import",
+          "userRequest": "./Footer",
+          "loc": "12:0-34"
+        }
+      ],
+      "usedExports": [
+        "Footer"
+      ],
+      "providedExports": [
+        "Footer"
+      ],
+      "optimizationBailout": [],
+      "depth": 2,
+      "source": "import { Clearfix } from \"./Common\";\n\n// Footer renders a footer component.\nimport { createVNode } from \"inferno\";\nexport var Footer = function Footer() {\n    return createVNode(2, \"footer\", null, [createVNode(2, \"div\", \"pull-right\", \"Copyright 2017 The go-ethereum Authors\"), createVNode(16, Clearfix)]);\n};"
+    }
+  ],
+  "filteredModules": 0,
+  "children": []
+}
