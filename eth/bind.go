@@ -52,7 +52,6 @@ func NewContractBackend(apiBackend ethapi.Backend) *ContractBackend {
 		eapi:  ethapi.NewPublicEthereumAPI(apiBackend),
 		bcapi: ethapi.NewPublicBlockChainAPI(apiBackend),
 		txapi: ethapi.NewPublicTransactionPoolAPI(apiBackend, new(ethapi.AddrLocker)),
-		fapi:  filters.NewPublicFilterAPI(apiBackend, false),
 	}
 }
 
@@ -142,15 +141,9 @@ func (b *ContractBackend) SendTransaction(ctx context.Context, tx *types.Transac
 }
 
 func (b *ContractBackend) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
-	return nil, errors.New("not support right now")
+	return nil, errors.New("not support right now") //todo fix this need ethapi.Backend to modify and PublicFilterAPI export Logs func for local call.
 }
 
 func (b *ContractBackend) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]*types.Log, error) {
-	crit := filters.FilterCriteria{
-		FromBlock: q.FromBlock,
-		ToBlock:   q.ToBlock,
-		Addresses: q.Addresses,
-		Topics:    q.Topics,
-	}
-	return b.fapi.GetLogs(ctx, crit)
+	return nil, errors.New("not support right now")
 }
