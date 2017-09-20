@@ -20,8 +20,7 @@ package keystore
 
 import (
 	"time"
-
-	"github.com/ethereum/go-ethereum/accounts"
+	
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/rjeczalik/notify"
 	"sync/atomic"
@@ -72,7 +71,6 @@ func (w *watcher) loop() {
 		return
 	}
 	defer notify.Stop(w.ev)
-
 	logger.Trace("Started watching keystore folder")
 	defer logger.Trace("Stopped watching keystore folder")
 
@@ -104,17 +102,12 @@ func (w *watcher) loop() {
 		case <-debounce.C:
 			//We're now handling the events, scan again as long as new
 			// events keep coming during our fs-scan
-			var (
-				accs []accounts.Account
-				err  error
-			)
+			atomic.SwapUint64(&unHandledEvents, 0)
+			w.ac.scanAccounts()
 			// Scan again if more events occurred during scan
 			for atomic.SwapUint64(&unHandledEvents, 0) > 0 {
-				accs, err = w.ac.scan()
+				w.ac.scanAccounts()
 			}
-			w.ac.mu.Lock()
-			w.ac.handleScanResult(accs, err)
-			w.ac.mu.Unlock()
 			// Signal we're finished with cycle
 			atomic.SwapUint64(&inCycle, 0)
 		}
