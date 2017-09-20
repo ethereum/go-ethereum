@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -42,7 +41,6 @@ type ContractBackend struct {
 	eapi  *ethapi.PublicEthereumAPI        // Wrapper around the Ethereum object to access metadata
 	bcapi *ethapi.PublicBlockChainAPI      // Wrapper around the blockchain to access chain data
 	txapi *ethapi.PublicTransactionPoolAPI // Wrapper around the transaction pool to access transaction data
-	fapi  *filters.PublicFilterAPI         //wrapper around the filter to filter logs
 }
 
 // NewContractBackend creates a new native contract backend using an existing
