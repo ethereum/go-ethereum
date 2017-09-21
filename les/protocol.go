@@ -168,4 +168,4 @@ type CodeData []struct {
 	Value []byte
 }
 
-type proofsData [][]rlp.RawValue
+type proofsData [][][]byte

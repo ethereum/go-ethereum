@@ -36,7 +36,7 @@ import (
 // contains all nodes of the longest existing prefix of the key
 // (at least the root node), ending with the node that proves the
 // absence of the key.
-func (t *Trie) Prove(key []byte) []rlp.RawValue {
+func (t *Trie) Prove(key []byte) [][]byte {
 	// Collect all nodes on the path to key.
 	key = keybytesToHex(key)
 	nodes := []node{}
@@ -68,7 +68,7 @@ func (t *Trie) Prove(key []byte) []rlp.RawValue {
 		}
 	}
 	hasher := newHasher(0, 0)
-	proof := make([]rlp.RawValue, 0, len(nodes))
+	proof := make([][]byte, 0, len(nodes))
 	for i, n := range nodes {
 		// Don't bother checking for errors here since hasher panics
 		// if encoding doesn't work and we're not writing to any database.
@@ -88,7 +88,7 @@ func (t *Trie) Prove(key []byte) []rlp.RawValue {
 // value for key in a trie with the given root hash. VerifyProof
 // returns an error if the proof contains invalid trie nodes or the
 // wrong value.
-func VerifyProof(rootHash common.Hash, key []byte, proof []rlp.RawValue) (value []byte, err error) {
+func VerifyProof(rootHash common.Hash, key []byte, proof [][]byte) (value []byte, err error) {
 	key = keybytesToHex(key)
 	sha := sha3.NewKeccak256()
 	wantHash := rootHash.Bytes()
@@ -107,10 +107,8 @@ func VerifyProof(rootHash common.Hash, key []byte, proof []rlp.RawValue) (value 
 		case nil:
 			if i != len(proof)-1 {
 				return nil, fmt.Errorf("key mismatch at proof node %d", i)
-			} else {
-				// The trie doesn't contain the key.
-				return nil, nil
 			}
+			return nil, nil // The trie doesn't contain the key.
 		case hashNode:
 			key = keyrest
 			wantHash = cld

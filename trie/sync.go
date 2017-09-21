@@ -45,11 +45,15 @@ type request struct {
 	callback TrieSyncLeafCallback // Callback to invoke if a leaf node it reached on this branch
 }
 
-// SyncResult is a simple list to return missing nodes along with their request
-// hashes.
+// SyncResult represents a response to a trie node retrieval request. The result
+// data might be a simple binary blob if returning only a single node, or it may
+// be a batch of trie leaves (with associated merkle proofs) if returning batched
+// results.
 type SyncResult struct {
-	Hash common.Hash // Hash of the originally unknown trie node
-	Data []byte      // Data content of the retrieved node
+	Hash   common.Hash // Hash of the originally unknown trie node
+	Data   []byte      // Data content of the retrieved node, in node-sync mode
+	Leaves [][]byte    // Trie leaves rooted under the specified hash, in leaf-sync mode
+	Proofs [][]byte    // Proofs to validate the leaves, in leaf-sync mode, if leaves are partial
 }
 
 // syncMemBatch is an in-memory buffer of successfully downloaded but not yet

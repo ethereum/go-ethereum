@@ -120,7 +120,7 @@ func testIterativeTrieSync(t *testing.T, batch int) {
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
-			results[i] = SyncResult{hash, data}
+			results[i] = SyncResult{Hash: hash, Data: data}
 		}
 		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
@@ -153,7 +153,7 @@ func TestIterativeDelayedTrieSync(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
-			results[i] = SyncResult{hash, data}
+			results[i] = SyncResult{Hash: hash, Data: data}
 		}
 		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
@@ -193,7 +193,7 @@ func testIterativeRandomTrieSync(t *testing.T, batch int) {
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
-			results = append(results, SyncResult{hash, data})
+			results = append(results, SyncResult{Hash: hash, Data: data})
 		}
 		// Feed the retrieved results back and queue new tasks
 		if _, index, err := sched.Process(results); err != nil {
@@ -233,7 +233,7 @@ func TestIterativeRandomDelayedTrieSync(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
-			results = append(results, SyncResult{hash, data})
+			results = append(results, SyncResult{Hash: hash, Data: data})
 
 			if len(results) >= cap(results) {
 				break
@@ -282,7 +282,7 @@ func TestDuplicateAvoidanceTrieSync(t *testing.T) {
 			}
 			requested[hash] = struct{}{}
 
-			results[i] = SyncResult{hash, data}
+			results[i] = SyncResult{Hash: hash, Data: data}
 		}
 		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
@@ -316,7 +316,7 @@ func TestIncompleteTrieSync(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
-			results[i] = SyncResult{hash, data}
+			results[i] = SyncResult{Hash: hash, Data: data}
 		}
 		// Process each of the trie nodes
 		if _, index, err := sched.Process(results); err != nil {

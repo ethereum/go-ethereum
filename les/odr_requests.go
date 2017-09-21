@@ -215,7 +215,7 @@ func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if msg.MsgType != MsgProofs {
 		return errInvalidMessageType
 	}
-	proofs := msg.Obj.([][]rlp.RawValue)
+	proofs := msg.Obj.([][][]byte)
 	if len(proofs) != 1 {
 		return errMultipleEntries
 	}
@@ -286,7 +286,7 @@ type ChtReq struct {
 
 type ChtResp struct {
 	Header *types.Header
-	Proof  []rlp.RawValue
+	Proof  [][]byte
 }
 
 // ODR request type for requesting headers by Canonical Hash Trie, see LesOdrRequest interface

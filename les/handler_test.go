@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -316,7 +315,7 @@ func testGetProofs(t *testing.T, protocol int) {
 	defer peer.close()
 
 	var proofreqs []ProofReq
-	var proofs [][]rlp.RawValue
+	var proofs [][][]byte
 
 	accounts := []common.Address{testBankAddress, acc1Addr, acc2Addr, {}}
 	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
