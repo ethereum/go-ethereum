@@ -221,6 +221,96 @@ func TestInstallIdenticalFilters(t *testing.T) {
 	}
 }
 
+func TestSymmetricSendCycle(t *testing.T) {
+	InitSingleTest()
+	//mrand.Seed(1505987108)
+
+	w := New(&DefaultConfig)
+	defer w.SetMinimumPoW(DefaultMinimumPoW)
+	defer w.SetMaxMessageSize(DefaultMaxMessageSize)
+	w.Start(nil)
+	defer w.Stop()
+
+	filter1, err := generateFilter(t, true)
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+
+	// Copy the first filter since some of its fields
+	// are randomly gnerated.
+	filter2 := &Filter{
+		KeySym:   filter1.KeySym,
+		Topics:   filter1.Topics,
+		PoW:      filter1.PoW,
+		AllowP2P: filter1.AllowP2P,
+		Messages: make(map[common.Hash]*ReceivedMessage),
+	};
+
+	params, err := generateMessageParams()
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+
+	filter1.Src = &params.Src.PublicKey
+	filter2.Src = &params.Src.PublicKey
+
+	params.KeySym = filter1.KeySym
+	params.Topic = BytesToTopic(filter1.Topics[2])
+	params.PoW = filter1.PoW
+	params.WorkTime = 10
+	params.TTL = 50
+	msg, err := NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
+	env, err := msg.Wrap(params)
+	if err != nil {
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
+	}
+
+	_, err = w.Subscribe(filter1)
+	if err != nil {
+		t.Fatalf("failed subscribe 1 with seed %d: %s.", seed, err)
+	}
+
+	_, err = w.Subscribe(filter2)
+	if err != nil {
+		t.Fatalf("failed subscribe 2 with seed %d: %s.", seed, err)
+	}
+
+	err = w.Send(env)
+	if err != nil {
+		t.Fatalf("Failed sending envelope with PoW %.06f (seed %d): %s", env.PoW(), seed, err)
+	}
+
+	// wait till received or timeout
+	var received bool
+	for j := 0; j < 200; j++ {
+		time.Sleep(10 * time.Millisecond)
+		if len(w.Envelopes()) > 0 {
+			received = true
+			break
+		}
+	}
+
+	if !received {
+		t.Fatalf("did not receive the sent envelope, seed: %d.", seed)
+	}
+
+	// check w.messages()
+	time.Sleep(100 * time.Millisecond)
+	mail1 := filter1.Retrieve()
+
+	mail2 := filter2.Retrieve()
+	if len(mail2) == 0 {
+		t.Fatalf("did not receive any email for filter 2")
+	}
+	if len(mail1) == 0 {
+		t.Fatalf("did not receive any email for filter 1")
+	}
+
+}
+
 func TestComparePubKey(t *testing.T) {
 	InitSingleTest()
 
