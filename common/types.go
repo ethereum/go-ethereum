@@ -17,6 +17,7 @@
 package common
 
 import (
+	"database/sql/driver"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -118,6 +119,33 @@ func (h Hash) Generate(rand *rand.Rand, size int) reflect.Value {
 
 func EmptyHash(h Hash) bool {
 	return h == Hash{}
+}
+
+// Value converts the Hash into a SQL driver value which can be used to
+// directly use the HASH as parameter to a SQL query.
+func (h Hash) Value() (driver.Value, error) {
+	return h.Bytes(), nil
+}
+
+// Scan allows scanning from (byte slice) to *Hash
+func (h *Hash) Scan(src interface{}) error {
+	switch v := src.(type) {
+	case []byte:
+		return h.scan(v)
+	case string:
+		return h.scan([]byte(v))
+	default:
+		return fmt.Errorf("Scan: unable to scan type %T into Hash", v)
+	}
+}
+
+func (h *Hash) scan(b []byte) error {
+	if len(b) != HashLength {
+		return fmt.Errorf("Scan: unable to scan into Hash, wrong size %d", len(b))
+	}
+
+	*h = BytesToHash(b)
+	return nil
 }
 
 // UnprefixedHash allows marshaling a Hash without 0x prefix.
