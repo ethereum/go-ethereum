@@ -29,12 +29,12 @@ import (
 // Handler for storage/retrieval related protocol requests
 // implements the StorageHandler interface used by the bzz protocol
 type Depo struct {
-	hashfunc   storage.Hasher
+	hashfunc   storage.SwarmHasher
 	localStore storage.ChunkStore
 	netStore   storage.ChunkStore
 }
 
-func NewDepo(hash storage.Hasher, localStore, remoteStore storage.ChunkStore) *Depo {
+func NewDepo(hash storage.SwarmHasher, localStore, remoteStore storage.ChunkStore) *Depo {
 	return &Depo{
 		hashfunc:   hash,
 		localStore: localStore,

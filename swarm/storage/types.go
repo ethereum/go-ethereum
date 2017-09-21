@@ -24,12 +24,13 @@ import (
 	"io"
 	"sync"
 
-	// "github.com/ethereum/go-ethereum/bmt"
+	"github.com/ethereum/go-ethereum/bmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
 type Hasher func() hash.Hash
+type SwarmHasher func() SwarmHash
 
 // Peer is the recorded as Source on the chunk
 // should probably not be here? but network should wrap chunk object
@@ -78,12 +79,18 @@ func IsZeroKey(key Key) bool {
 
 var ZeroKey = Key(common.Hash{}.Bytes())
 
-func MakeHashFunc(hash string) Hasher {
+func MakeHashFunc(hash string) SwarmHasher {
 	switch hash {
 	case "SHA256":
-		return crypto.SHA256.New
+		return func() SwarmHash { return &HashWithLength{crypto.SHA256.New()} }
 	case "SHA3":
-		return sha3.NewKeccak256
+		return func() SwarmHash { return &HashWithLength{sha3.NewKeccak256()} }
+	case "BMT":
+		return func() SwarmHash {
+			hasher := sha3.NewKeccak256
+			pool := bmt.NewTreePool(hasher, bmt.DefaultSegmentCount, bmt.DefaultPoolSize)
+			return bmt.New(pool)
+		}
 	}
 	return nil
 }
@@ -192,6 +199,13 @@ type Splitter interface {
 	   A closed error signals process completion at which point the key can be considered final if there were no errors.
 	*/
 	Split(io.Reader, int64, chan *Chunk, *sync.WaitGroup, *sync.WaitGroup) (Key, error)
+
+	/* This is the first step in making files mutable (not chunks)..
+	   Append allows adding more data chunks to the end of the already existsing file.
+	   The key for the root chunk is supplied to load the respective tree.
+	   Rest of the parameters behave like Split.
+	*/
+	Append(Key, io.Reader, chan *Chunk, *sync.WaitGroup, *sync.WaitGroup) (Key, error)
 }
 
 type Joiner interface {
