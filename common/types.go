@@ -29,7 +29,9 @@ import (
 )
 
 const (
-	HashLength    = 32
+	// HashLength represents the byte length of a Hash
+	HashLength = 32
+	// AddressLength represents the byte length of an ethereum address
 	AddressLength = 20
 )
 
@@ -41,20 +43,33 @@ var (
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
 type Hash [HashLength]byte
 
+// BytesToHash will copy a byte slice to Hash
 func BytesToHash(b []byte) Hash {
 	var h Hash
 	h.SetBytes(b)
 	return h
 }
-func StringToHash(s string) Hash { return BytesToHash([]byte(s)) }
-func BigToHash(b *big.Int) Hash  { return BytesToHash(b.Bytes()) }
-func HexToHash(s string) Hash    { return BytesToHash(FromHex(s)) }
 
-// Get the string representation of the underlying hash
-func (h Hash) Str() string   { return string(h[:]) }
+// StringToHash will copy a string to a hash
+func StringToHash(s string) Hash { return BytesToHash([]byte(s)) }
+
+// BigToHash will copy a Big to a hash
+func BigToHash(b *big.Int) Hash { return BytesToHash(b.Bytes()) }
+
+// HexToHash will turn a hex string into a Hash
+func HexToHash(s string) Hash { return BytesToHash(FromHex(s)) }
+
+// Str gets the string representation of the underlying hash
+func (h Hash) Str() string { return string(h[:]) }
+
+// Bytes turns a hash into a byte slice
 func (h Hash) Bytes() []byte { return h[:] }
+
+// Big turns hash into a big.Int
 func (h Hash) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
-func (h Hash) Hex() string   { return hexutil.Encode(h[:]) }
+
+// Hex turn a hash into a hex string
+func (h Hash) Hex() string { return hexutil.Encode(h[:]) }
 
 // TerminalString implements log.TerminalStringer, formatting a string for console
 // output during logging.
@@ -89,7 +104,7 @@ func (h Hash) MarshalText() ([]byte, error) {
 	return hexutil.Bytes(h[:]).MarshalText()
 }
 
-// Sets the hash to the value of b. If b is larger than len(h), 'b' will be cropped (from the left).
+// SetBytes Sets the hash to the value of b. If b is larger than len(h), 'b' will be cropped (from the left).
 func (h *Hash) SetBytes(b []byte) {
 	if len(b) > len(h) {
 		b = b[len(b)-HashLength:]
@@ -98,10 +113,10 @@ func (h *Hash) SetBytes(b []byte) {
 	copy(h[HashLength-len(b):], b)
 }
 
-// Set string `s` to h. If s is larger than len(h) s will be cropped (from left) to fit.
+// SetString Set string `s` to h. If s is larger than len(h) s will be cropped (from left) to fit.
 func (h *Hash) SetString(s string) { h.SetBytes([]byte(s)) }
 
-// Sets h to other
+// Set Sets h to other
 func (h *Hash) Set(other Hash) {
 	for i, v := range other {
 		h[i] = v
@@ -117,6 +132,7 @@ func (h Hash) Generate(rand *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(h)
 }
 
+// EmptyHash returns if a hash is empty or not
 func EmptyHash(h Hash) bool {
 	return h == Hash{}
 }
@@ -166,14 +182,21 @@ func (h UnprefixedHash) MarshalText() ([]byte, error) {
 // Address represents the 20 byte address of an Ethereum account.
 type Address [AddressLength]byte
 
+// BytesToAddress will returns an address from a byte slice
 func BytesToAddress(b []byte) Address {
 	var a Address
 	a.SetBytes(b)
 	return a
 }
+
+// StringToAddress will turn a string into an address
 func StringToAddress(s string) Address { return BytesToAddress([]byte(s)) }
-func BigToAddress(b *big.Int) Address  { return BytesToAddress(b.Bytes()) }
-func HexToAddress(s string) Address    { return BytesToAddress(FromHex(s)) }
+
+// BigToAddress will turn a big.Int into an address
+func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
+
+// HexToAddress will turn an hex string into an address
+func HexToAddress(s string) Address { return BytesToAddress(FromHex(s)) }
 
 // IsHexAddress verifies whether a string can represent a valid hex-encoded
 // Ethereum address or not.
@@ -187,11 +210,17 @@ func IsHexAddress(s string) bool {
 	return false
 }
 
-// Get the string representation of the underlying address
-func (a Address) Str() string   { return string(a[:]) }
+// Str gets the string representation of the underlying address
+func (a Address) Str() string { return string(a[:]) }
+
+// Bytes will return a byte slice
 func (a Address) Bytes() []byte { return a[:] }
+
+// Big will return a *big.Int from an address
 func (a Address) Big() *big.Int { return new(big.Int).SetBytes(a[:]) }
-func (a Address) Hash() Hash    { return BytesToHash(a[:]) }
+
+// Hash will return a hash from an address
+func (a Address) Hash() Hash { return BytesToHash(a[:]) }
 
 // Hex returns an EIP55-compliant hex string representation of the address.
 func (a Address) Hex() string {
@@ -226,7 +255,7 @@ func (a Address) Format(s fmt.State, c rune) {
 	fmt.Fprintf(s, "%"+string(c), a[:])
 }
 
-// Sets the address to the value of b. If b is larger than len(a) it will panic
+// SetBytes Sets the address to the value of b. If b is larger than len(a) it will panic
 func (a *Address) SetBytes(b []byte) {
 	if len(b) > len(a) {
 		b = b[len(b)-AddressLength:]
@@ -234,10 +263,10 @@ func (a *Address) SetBytes(b []byte) {
 	copy(a[AddressLength-len(b):], b)
 }
 
-// Set string `s` to a. If s is larger than len(a) it will panic
+// SetString Set string `s` to a. If s is larger than len(a) it will panic
 func (a *Address) SetString(s string) { a.SetBytes([]byte(s)) }
 
-// Sets a to other
+// Set Sets a to other
 func (a *Address) Set(other Address) {
 	for i, v := range other {
 		a[i] = v
@@ -286,7 +315,7 @@ func (a *Address) scan(b []byte) error {
 	return nil
 }
 
-// UnprefixedHash allows marshaling an Address without 0x prefix.
+// UnprefixedAddress allows marshaling an Address without 0x prefix.
 type UnprefixedAddress Address
 
 // UnmarshalText decodes the address from hex. The 0x prefix is optional.
