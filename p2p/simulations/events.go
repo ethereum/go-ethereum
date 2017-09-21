@@ -101,7 +101,7 @@ func (e *Event) String() string {
 	case EventTypeConn:
 		return fmt.Sprintf("<conn-event> nodes: %s->%s up: %t", e.Conn.One.TerminalString(), e.Conn.Other.TerminalString(), e.Conn.Up)
 	case EventTypeMsg:
-		return fmt.Sprintf("<msg-event> nodes: %s->%s code: %d, received: %t", e.Msg.One.TerminalString(), e.Msg.Other.TerminalString(), e.Msg.Code, e.Msg.Received)
+		return fmt.Sprintf("<msg-event> nodes: %s->%s proto: %s, code: %d, received: %t", e.Msg.One.TerminalString(), e.Msg.Other.TerminalString(), e.Msg.Protocol, e.Msg.Code, e.Msg.Received)
 	default:
 		return ""
 	}

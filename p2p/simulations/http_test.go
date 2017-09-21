@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http/httptest"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -316,7 +317,7 @@ func TestHTTPNetwork(t *testing.T) {
 	nodeIDs := startTestNetwork(t, client)
 
 	// check we got all the events
-	x := &expectEvents{t, events, sub, false}
+	x := &expectEvents{t, events, sub}
 	x.expect(
 		x.nodeEvent(nodeIDs[0], false),
 		x.nodeEvent(nodeIDs[1], false),
@@ -334,7 +335,7 @@ func TestHTTPNetwork(t *testing.T) {
 		t.Fatalf("error subscribing to network events: %s", err)
 	}
 	defer sub.Unsubscribe()
-	x = &expectEvents{t, events, sub, false}
+	x = &expectEvents{t, events, sub}
 	x.expect(
 		x.nodeEvent(nodeIDs[0], true),
 		x.nodeEvent(nodeIDs[1], true),
@@ -399,9 +400,8 @@ func startTestNetwork(t *testing.T, client *Client) []string {
 type expectEvents struct {
 	*testing.T
 
-	events  chan *Event
-	sub     event.Subscription
-	msgOnly bool
+	events chan *Event
+	sub    event.Subscription
 }
 
 func (t *expectEvents) nodeEvent(id string, up bool) *Event {
@@ -427,28 +427,49 @@ func (t *expectEvents) connEvent(one, other string, up bool) *Event {
 	}
 }
 
-func (t *expectEvents) msgEvent(proto string, code uint64) *Event {
-	return &Event{
-		Type: EventTypeMsg,
-		Msg: &Msg{
-			Protocol: proto,
-			Code:     code,
-		},
-	}
-}
-
-func (t *expectEvents) expect(events ...*Event) {
+func (t *expectEvents) expectMsgs(expected map[MsgFilter]int) {
+	actual := make(map[MsgFilter]int)
 	timeout := time.After(10 * time.Second)
-	i := 0
 loop:
 	for {
 		select {
 		case event := <-t.events:
 			t.Logf("received %s event: %s", event.Type, event)
 
-			if t.msgOnly && (event.Type != EventTypeMsg || event.Msg.Received) {
+			if event.Type != EventTypeMsg || event.Msg.Received {
 				continue loop
 			}
+			if event.Msg == nil {
+				t.Fatal("expected event.Msg to be set")
+			}
+			filter := MsgFilter{
+				Proto: event.Msg.Protocol,
+				Code:  int64(event.Msg.Code),
+			}
+			actual[filter]++
+			if actual[filter] > expected[filter] {
+				t.Fatalf("received too many msgs for filter: %v", filter)
+			}
+			if reflect.DeepEqual(actual, expected) {
+				return
+			}
+
+		case err := <-t.sub.Err():
+			t.Fatalf("network stream closed unexpectedly: %s", err)
+
+		case <-timeout:
+			t.Fatal("timed out waiting for expected events")
+		}
+	}
+}
+
+func (t *expectEvents) expect(events ...*Event) {
+	timeout := time.After(10 * time.Second)
+	i := 0
+	for {
+		select {
+		case event := <-t.events:
+			t.Logf("received %s event: %s", event.Type, event)
 
 			expected := events[i]
 			if event.Type != expected.Type {
@@ -480,17 +501,6 @@ loop:
 				}
 				if event.Conn.Up != expected.Conn.Up {
 					t.Fatalf("expected conn event %d to have up=%t, got up=%t", i, expected.Conn.Up, event.Conn.Up)
-				}
-
-			case EventTypeMsg:
-				if event.Msg == nil {
-					t.Fatal("expected event.Msg to be set")
-				}
-				if event.Msg.Protocol != expected.Msg.Protocol {
-					t.Fatalf("expected msg event %d to have protocol %q, got %q", i, expected.Msg.Protocol, event.Msg.Protocol)
-				}
-				if event.Msg.Code != expected.Msg.Code {
-					t.Fatalf("expected msg event %d to have code %d, got %d", i, expected.Msg.Code, event.Msg.Code)
 				}
 
 			}
@@ -680,7 +690,7 @@ func TestHTTPSnapshot(t *testing.T) {
 	}
 
 	// check we got all the events
-	x := &expectEvents{t, events, sub, false}
+	x := &expectEvents{t, events, sub}
 	x.expect(
 		x.nodeEvent(nodes[0].ID, false),
 		x.nodeEvent(nodes[0].ID, true),
@@ -714,13 +724,11 @@ func TestMsgFilterPassMultiple(t *testing.T) {
 	startTestNetwork(t, client)
 
 	// check we got the expected events
-	x := &expectEvents{t, events, sub, true}
-	x.expect(
-		x.msgEvent("test", 0),
-		x.msgEvent("test", 0),
-		x.msgEvent("prb", 0),
-		x.msgEvent("prb", 0),
-	)
+	x := &expectEvents{t, events, sub}
+	x.expectMsgs(map[MsgFilter]int{
+		{"test", 0}: 2,
+		{"prb", 0}:  2,
+	})
 }
 
 // TestMsgFilterPassWildcard tests streaming message events using a filter
@@ -746,17 +754,13 @@ func TestMsgFilterPassWildcard(t *testing.T) {
 	startTestNetwork(t, client)
 
 	// check we got the expected events
-	x := &expectEvents{t, events, sub, true}
-	x.expect(
-		x.msgEvent("test", 2),
-		x.msgEvent("test", 2),
-		x.msgEvent("test", 1),
-		x.msgEvent("test", 1),
-		x.msgEvent("test", 0),
-		x.msgEvent("test", 0),
-		x.msgEvent("prb", 0),
-		x.msgEvent("prb", 0),
-	)
+	x := &expectEvents{t, events, sub}
+	x.expectMsgs(map[MsgFilter]int{
+		{"test", 2}: 2,
+		{"test", 1}: 2,
+		{"test", 0}: 2,
+		{"prb", 0}:  2,
+	})
 }
 
 // TestMsgFilterPassSingle tests streaming message events using a filter
@@ -782,11 +786,10 @@ func TestMsgFilterPassSingle(t *testing.T) {
 	startTestNetwork(t, client)
 
 	// check we got the expected events
-	x := &expectEvents{t, events, sub, true}
-	x.expect(
-		x.msgEvent("dum", 0),
-		x.msgEvent("dum", 0),
-	)
+	x := &expectEvents{t, events, sub}
+	x.expectMsgs(map[MsgFilter]int{
+		{"dum", 0}: 2,
+	})
 }
 
 // TestMsgFilterPassSingle tests streaming message events using an invalid
