@@ -453,11 +453,9 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-
 	if raw.From != nil {
 		args.FromBlock = big.NewInt(raw.From.Int64())
 	}
-
 	if raw.ToBlock != nil {
 		args.ToBlock = big.NewInt(raw.ToBlock.Int64())
 	}
@@ -493,12 +491,11 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	// topics is an array consisting of strings and/or arrays of strings.
 	// JSON null values are converted to common.Hash{} and ignored by the filter manager.
 	if len(raw.Topics) > 0 {
-		args.Topics = make([][]common.Hash, len(raw.Topics))
-		for i, t := range raw.Topics {
+		args.Topics = make([][]common.Hash, 0, len(raw.Topics))
+		for _, t := range raw.Topics {
 			switch topic := t.(type) {
 			case nil:
 				// ignore topic when matching logs
-				args.Topics[i] = []common.Hash{{}}
 
 			case string:
 				// match specific topic
@@ -506,28 +503,32 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 				if err != nil {
 					return err
 				}
-				args.Topics[i] = []common.Hash{top}
+				args.Topics = append(args.Topics, []common.Hash{top})
+
 			case []interface{}:
 				// or case e.g. [null, "topic0", "topic1"]
+				topics := make([]common.Hash, 0, 4)
+
 				for _, rawTopic := range topic {
 					if rawTopic == nil {
-						args.Topics[i] = append(args.Topics[i], common.Hash{})
+						continue
 					} else if topic, ok := rawTopic.(string); ok {
 						parsed, err := decodeTopic(topic)
 						if err != nil {
 							return err
 						}
-						args.Topics[i] = append(args.Topics[i], parsed)
+						topics = append(topics, parsed)
 					} else {
 						return fmt.Errorf("invalid topic(s)")
 					}
 				}
+				args.Topics = append(args.Topics, topics)
+
 			default:
 				return fmt.Errorf("invalid topic(s)")
 			}
 		}
 	}
-
 	return nil
 }
 
