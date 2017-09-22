@@ -18,6 +18,7 @@ package core
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -303,6 +304,10 @@ func (c *ChainIndexer) updateLoop() {
 	}
 }
 
+var (
+	errChainReorgedInProcessing = errors.New("chain reorged during section processing")
+)
+
 // processSection processes an entire section by calling backend functions while
 // ensuring the continuity of the passed headers. Since the chain mutex is not
 // held while processing, the continuity can be broken by a long reorg, in which
@@ -322,7 +327,7 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 		if header == nil {
 			return common.Hash{}, fmt.Errorf("block #%d [%x…] not found", number, hash[:4])
 		} else if header.ParentHash != lastHead {
-			return common.Hash{}, fmt.Errorf("chain reorged during section processing")
+			return common.Hash{}, errChainReorgedInProcessing
 		}
 		c.backend.Process(header)
 		lastHead = header.Hash()

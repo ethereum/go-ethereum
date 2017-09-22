@@ -17,6 +17,7 @@
 package kademlia
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -113,6 +114,10 @@ func (self *Kademlia) DBCount() int {
 	return self.db.count()
 }
 
+var (
+	errBucketFull = errors.New("bucket full")
+)
+
 // On is the entry point called when a new nodes is added
 // unsafe in that node is not checked to be already active node (to be called once)
 func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error) {
@@ -159,7 +164,7 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 	}
 	if replaced == nil {
 		log.Debug(fmt.Sprintf("all peers wanted, PO%03d bucket full", index))
-		return fmt.Errorf("bucket full")
+		return errBucketFull
 	}
 	log.Debug(fmt.Sprintf("node %v replaced by %v (idle for %v  > %v)", replaced, node, idle, self.MaxIdleInterval))
 	replaced.Drop()

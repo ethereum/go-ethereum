@@ -292,6 +292,10 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
+var (
+	errEtherbaseAddressWanted = errors.New("etherbase address must be explicitly specified")
+)
+
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	s.lock.RLock()
 	etherbase := s.etherbase
@@ -305,7 +309,7 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 			return accounts[0].Address, nil
 		}
 	}
-	return common.Address{}, fmt.Errorf("etherbase address must be explicitly specified")
+	return common.Address{}, errEtherbaseAddressWanted
 }
 
 // set in js console via admin interface or wrapper from cli flags

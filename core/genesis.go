@@ -39,7 +39,11 @@ import (
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
 //go:generate gencodec -type GenesisAccount -field-override genesisAccountMarshaling -out gen_genesis_account.go
 
-var errGenesisNoConfig = errors.New("genesis has no chain configuration")
+var (
+	errGenesisNoConfig              = errors.New("genesis has no chain configuration")
+	errMissingHeaderHashBlockNumber = errors.New("missing block number for head header hash")
+	errGenesisBlockNumberNonZero    = errors.New("can't commit genesis block with number > 0")
+)
 
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
@@ -198,7 +202,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 	// are returned to the caller unless we're already at block zero.
 	height := GetBlockNumber(db, GetHeadHeaderHash(db))
 	if height == missingNumber {
-		return newcfg, stored, fmt.Errorf("missing block number for head header hash")
+		return newcfg, stored, errMissingHeaderHashBlockNumber
 	}
 	compatErr := storedcfg.CheckCompatible(newcfg, height)
 	if compatErr != nil && height != 0 && compatErr.RewindTo != 0 {
@@ -260,7 +264,7 @@ func (g *Genesis) ToBlock() (*types.Block, *state.StateDB) {
 func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	block, statedb := g.ToBlock()
 	if block.Number().Sign() != 0 {
-		return nil, fmt.Errorf("can't commit genesis block with number > 0")
+		return nil, errGenesisBlockNumberNonZero
 	}
 	if _, err := statedb.CommitTo(db, false); err != nil {
 		return nil, fmt.Errorf("cannot write state: %v", err)

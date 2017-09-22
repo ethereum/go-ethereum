@@ -19,6 +19,7 @@ package network
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -230,13 +231,17 @@ func encodeSync(state *syncState) (*json.RawMessage, error) {
 	return &meta, nil
 }
 
+var (
+	errDecodeNilSyncState = errors.New("unable to deserialise sync state from <nil>")
+)
+
 func decodeSync(meta *json.RawMessage) (*syncState, error) {
 	if meta == nil {
-		return nil, fmt.Errorf("unable to deserialise sync state from <nil>")
+		return nil, errDecodeNilSyncState
 	}
 	data := []byte(*(meta))
 	if len(data) == 0 {
-		return nil, fmt.Errorf("unable to deserialise sync state from <nil>")
+		return nil, errDecodeNilSyncState
 	}
 	state := &syncState{DbSyncState: &storage.DbSyncState{}}
 	err := json.Unmarshal(data, state)

@@ -104,7 +104,7 @@ func (api *PublicWhisperAPI) Info(ctx context.Context) Info {
 	stats := api.w.Stats()
 	return Info{
 		Memory:         stats.memoryUsed,
-		Messages:        len(api.w.messageQueue) + len(api.w.p2pMsgQueue),
+		Messages:       len(api.w.messageQueue) + len(api.w.p2pMsgQueue),
 		MinPow:         api.w.MinPow(),
 		MaxMessageSize: api.w.MaxMessageSize(),
 	}
@@ -489,6 +489,10 @@ func toMessage(messages []*ReceivedMessage) []*Message {
 	return msgs
 }
 
+var (
+	errFilterNotFound = errors.New("filter not found")
+)
+
 // GetFilterMessages returns the messages that match the filter criteria and
 // are received between the last poll and now.
 func (api *PublicWhisperAPI) GetFilterMessages(id string) ([]*Message, error) {
@@ -496,7 +500,7 @@ func (api *PublicWhisperAPI) GetFilterMessages(id string) ([]*Message, error) {
 	f := api.w.GetFilter(id)
 	if f == nil {
 		api.mu.Unlock()
-		return nil, fmt.Errorf("filter not found")
+		return nil, errFilterNotFound
 	}
 	api.lastUsed[id] = time.Now()
 	api.mu.Unlock()

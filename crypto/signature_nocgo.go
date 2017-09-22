@@ -45,6 +45,10 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	return (*ecdsa.PublicKey)(pub), err
 }
 
+var (
+	errPrivKeyCurveNotSecp256k1 = errors.New("private key curve is not secp256k1")
+)
+
 // Sign calculates an ECDSA signature.
 //
 // This function is susceptible to chosen plaintext attacks that can leak
@@ -58,7 +62,7 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) ([]byte, error) {
 		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
 	}
 	if prv.Curve != btcec.S256() {
-		return nil, fmt.Errorf("private key curve is not secp256k1")
+		return nil, errPrivKeyCurveNotSecp256k1
 	}
 	sig, err := btcec.SignCompact(btcec.S256(), (*btcec.PrivateKey)(prv), hash, false)
 	if err != nil {

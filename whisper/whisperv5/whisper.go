@@ -236,6 +236,22 @@ func (w *Whisper) SendP2PDirect(peer *Peer, envelope *Envelope) error {
 	return p2p.Send(peer.ws, p2pCode, envelope)
 }
 
+var (
+	errInvalidID                = errors.New("invalid id")
+	errVeryOldMessage           = errors.New("very old message")
+	errFailedToGenerateUniqueID = errors.New("failed to generate unique ID")
+	errFailedToGenerateValidKey = errors.New("failed to generate valid key")
+	errFailedToAddEnvelope      = errors.New("failed to add envelope")
+	errNonExistentKeyID         = errors.New("non-existent key ID")
+	errUnsubscribeInvalidID     = errors.New("Unsubscribe: Invalid ID")
+	errInvalidP2PRequest        = errors.New("invalid p2p request")
+	errInvalidDirectMessage     = errors.New("invalid direct message")
+	errGenRandomIDRandomData    = errors.New("error in generateRandomID: crypto/rand failed to generate random data")
+
+	errGenSymKeyRandomData              = errors.New("error in GenerateSymKey: crypto/rand failed to generate random data")
+	errCriticalFailedToGenerateUniqueID = errors.New("critical error: failed to generate unique ID")
+)
+
 // NewKeyPair generates a new cryptographic identity for the client, and injects
 // it into the known identities for message decryption. Returns ID of the new key pair.
 func (w *Whisper) NewKeyPair() (string, error) {
@@ -247,7 +263,7 @@ func (w *Whisper) NewKeyPair() (string, error) {
 		return "", err
 	}
 	if !validatePrivateKey(key) {
-		return "", fmt.Errorf("failed to generate valid key")
+		return "", errFailedToGenerateValidKey
 	}
 
 	id, err := GenerateRandomID()
@@ -259,7 +275,7 @@ func (w *Whisper) NewKeyPair() (string, error) {
 	defer w.keyMu.Unlock()
 
 	if w.privateKeys[id] != nil {
-		return "", fmt.Errorf("failed to generate unique ID")
+		return "", errFailedToGenerateUniqueID
 	}
 	w.privateKeys[id] = key
 	return id, nil
@@ -305,7 +321,7 @@ func (w *Whisper) GetPrivateKey(id string) (*ecdsa.PrivateKey, error) {
 	defer w.keyMu.RUnlock()
 	key := w.privateKeys[id]
 	if key == nil {
-		return nil, fmt.Errorf("invalid id")
+		return nil, errInvalidID
 	}
 	return key, nil
 }
@@ -318,7 +334,7 @@ func (w *Whisper) GenerateSymKey() (string, error) {
 	if err != nil {
 		return "", err
 	} else if !validateSymmetricKey(key) {
-		return "", fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
+		return "", errGenSymKeyRandomData
 	}
 
 	id, err := GenerateRandomID()
@@ -330,7 +346,7 @@ func (w *Whisper) GenerateSymKey() (string, error) {
 	defer w.keyMu.Unlock()
 
 	if w.symKeys[id] != nil {
-		return "", fmt.Errorf("failed to generate unique ID")
+		return "", errFailedToGenerateUniqueID
 	}
 	w.symKeys[id] = key
 	return id, nil
@@ -351,7 +367,7 @@ func (w *Whisper) AddSymKeyDirect(key []byte) (string, error) {
 	defer w.keyMu.Unlock()
 
 	if w.symKeys[id] != nil {
-		return "", fmt.Errorf("failed to generate unique ID")
+		return "", errFailedToGenerateUniqueID
 	}
 	w.symKeys[id] = key
 	return id, nil
@@ -364,7 +380,7 @@ func (w *Whisper) AddSymKeyFromPassword(password string) (string, error) {
 		return "", fmt.Errorf("failed to generate ID: %s", err)
 	}
 	if w.HasSymKey(id) {
-		return "", fmt.Errorf("failed to generate unique ID")
+		return "", errFailedToGenerateUniqueID
 	}
 
 	derived, err := deriveKeyMaterial([]byte(password), EnvelopeVersion)
@@ -377,7 +393,7 @@ func (w *Whisper) AddSymKeyFromPassword(password string) (string, error) {
 
 	// double check is necessary, because deriveKeyMaterial() is very slow
 	if w.symKeys[id] != nil {
-		return "", fmt.Errorf("critical error: failed to generate unique ID")
+		return "", errCriticalFailedToGenerateUniqueID
 	}
 	w.symKeys[id] = derived
 	return id, nil
@@ -409,7 +425,7 @@ func (w *Whisper) GetSymKey(id string) ([]byte, error) {
 	if w.symKeys[id] != nil {
 		return w.symKeys[id], nil
 	}
-	return nil, fmt.Errorf("non-existent key ID")
+	return nil, errNonExistentKeyID
 }
 
 // Subscribe installs a new message handler used for filtering, decrypting
@@ -427,7 +443,7 @@ func (w *Whisper) GetFilter(id string) *Filter {
 func (w *Whisper) Unsubscribe(id string) error {
 	ok := w.filters.Uninstall(id)
 	if !ok {
-		return fmt.Errorf("Unsubscribe: Invalid ID")
+		return errUnsubscribeInvalidID
 	}
 	return nil
 }
@@ -440,7 +456,7 @@ func (w *Whisper) Send(envelope *Envelope) error {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("failed to add envelope")
+		return errFailedToAddEnvelope
 	}
 	return err
 }
@@ -535,7 +551,7 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				var envelope Envelope
 				if err := packet.Decode(&envelope); err != nil {
 					log.Warn("failed to decode direct message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
-					return errors.New("invalid direct message")
+					return errInvalidDirectMessage
 				}
 				wh.postEvent(&envelope, true)
 			}
@@ -545,7 +561,7 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				var request Envelope
 				if err := packet.Decode(&request); err != nil {
 					log.Warn("failed to decode p2p request message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
-					return errors.New("invalid p2p request")
+					return errInvalidP2PRequest
 				}
 				wh.mailServer.DeliverMail(p, &request)
 			}
@@ -576,7 +592,7 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 
 	if envelope.Expiry < now {
 		if envelope.Expiry+SynchAllowance*2 < now {
-			return false, fmt.Errorf("very old message")
+			return false, errVeryOldMessage
 		} else {
 			log.Debug("expired envelope dropped", "hash", envelope.Hash().Hex())
 			return false, nil // drop envelope without error
@@ -851,7 +867,7 @@ func GenerateRandomID() (id string, err error) {
 		return "", err
 	}
 	if !validateSymmetricKey(buf) {
-		return "", fmt.Errorf("error in generateRandomID: crypto/rand failed to generate random data")
+		return "", errGenRandomIDRandomData
 	}
 	id = common.Bytes2Hex(buf)
 	return id, err

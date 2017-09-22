@@ -357,6 +357,11 @@ func (api *PublicFilterAPI) UninstallFilter(id rpc.ID) bool {
 	return found
 }
 
+var (
+	errFilterNotFound = errors.New("filter not found")
+	errInvalidTopics  = errors.New("invalid topic(s)")
+)
+
 // GetFilterLogs returns the logs for the filter with the given id.
 // If the filter could not be found an empty array of logs is returned.
 //
@@ -367,7 +372,7 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 	api.filtersMu.Unlock()
 
 	if !found || f.typ != LogsSubscription {
-		return nil, fmt.Errorf("filter not found")
+		return nil, errFilterNotFound
 	}
 
 	begin := rpc.LatestBlockNumber.Int64()
@@ -419,7 +424,7 @@ func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 		}
 	}
 
-	return []interface{}{}, fmt.Errorf("filter not found")
+	return []interface{}{}, errFilterNotFound
 }
 
 // returnHashes is a helper that will return an empty hash array case the given hash array is nil,
@@ -519,11 +524,11 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 						}
 						args.Topics[i] = append(args.Topics[i], parsed)
 					} else {
-						return fmt.Errorf("invalid topic(s)")
+						return errInvalidTopics
 					}
 				}
 			default:
-				return fmt.Errorf("invalid topic(s)")
+				return errInvalidTopics
 			}
 		}
 	}

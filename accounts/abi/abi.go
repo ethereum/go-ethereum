@@ -18,6 +18,7 @@ package abi
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -85,12 +86,16 @@ var (
 	r_byte       = reflect.TypeOf(byte(0))
 )
 
+var (
+	errEmptyABIOutput = errors.New("abi: unmarshalling empty output")
+)
+
 // Unpack output in v according to the abi specification
 func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 	var method = abi.Methods[name]
 
 	if len(output) == 0 {
-		return fmt.Errorf("abi: unmarshalling empty output")
+		return errEmptyABIOutput
 	}
 
 	// make sure the passed value is a pointer

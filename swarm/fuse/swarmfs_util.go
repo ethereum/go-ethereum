@@ -20,11 +20,15 @@ package fuse
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os/exec"
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/log"
+)
+
+var (
+	errUnmountUnimplemented = errors.New("unmount: unimplemented")
 )
 
 func externalUnmount(mountPoint string) error {
@@ -42,7 +46,7 @@ func externalUnmount(mountPoint string) error {
 	case "linux":
 		return exec.CommandContext(ctx, "fusermount", "-u", mountPoint).Run()
 	default:
-		return fmt.Errorf("unmount: unimplemented")
+		return errUnmountUnimplemented
 	}
 }
 

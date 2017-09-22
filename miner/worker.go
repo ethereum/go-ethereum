@@ -18,6 +18,7 @@ package miner
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -487,10 +488,14 @@ func (self *worker) commitNewWork() {
 	self.push(work)
 }
 
+var (
+	errUncleNotUnique = errors.New("uncle not unique")
+)
+
 func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
 	hash := uncle.Hash()
 	if work.uncles.Has(hash) {
-		return fmt.Errorf("uncle not unique")
+		return errUncleNotUnique
 	}
 	if !work.ancestors.Has(uncle.ParentHash) {
 		return fmt.Errorf("uncle's parent unknown (%x)", uncle.ParentHash[0:4])

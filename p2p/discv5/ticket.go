@@ -19,6 +19,7 @@ package discv5
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -88,13 +89,15 @@ func (ref ticketRef) topicRegTime() mclock.AbsTime {
 	return ref.t.regTime[ref.idx]
 }
 
+var errBadTopicHash = errors.New("bad topic hash")
+
 func pongToTicket(localTime mclock.AbsTime, topics []Topic, node *Node, p *ingressPacket) (*ticket, error) {
 	wps := p.data.(*pong).WaitPeriods
 	if len(topics) != len(wps) {
 		return nil, fmt.Errorf("bad wait period list: got %d values, want %d", len(topics), len(wps))
 	}
 	if rlpHash(topics) != p.data.(*pong).TopicHash {
-		return nil, fmt.Errorf("bad topic hash")
+		return nil, errBadTopicHash
 	}
 	t := &ticket{
 		issueTime: localTime,

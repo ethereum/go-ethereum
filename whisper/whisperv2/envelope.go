@@ -22,6 +22,7 @@ package whisperv2
 import (
 	"crypto/ecdsa"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -84,6 +85,10 @@ func (self *Envelope) rlpWithoutNonce() []byte {
 	return enc
 }
 
+var (
+	errUnableToOpenEnvelope = errors.New("unable to open envelope. First bit set but len(data) < len(signature)")
+)
+
 // Open extracts the message contained within a potentially encrypted envelope.
 func (self *Envelope) Open(key *ecdsa.PrivateKey) (msg *Message, err error) {
 	// Split open the payload into a message construct
@@ -99,7 +104,7 @@ func (self *Envelope) Open(key *ecdsa.PrivateKey) (msg *Message, err error) {
 
 	if message.Flags&signatureFlag == signatureFlag {
 		if len(data) < signatureLength {
-			return nil, fmt.Errorf("unable to open envelope. First bit set but len(data) < len(signature)")
+			return nil, errUnableToOpenEnvelope
 		}
 		message.Signature, data = data[:signatureLength], data[signatureLength:]
 	}
