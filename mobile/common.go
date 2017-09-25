@@ -128,6 +128,61 @@ func (h *Hashes) Append(hash *Hash) {
 	h.hashes = append(h.hashes, hash.hash)
 }
 
+// NullableHashes represents a slice of hashes that can have the null value too.
+type NullableHashes struct{ hashes []*common.Hash }
+
+// NewNullableHashes creates a slice of uninitialized NullableHashes.
+func NewNullableHashes(size int) *NullableHashes {
+	return &NullableHashes{
+		hashes: make([]*common.Hash, size),
+	}
+}
+
+// NewNullableHashesEmpty creates an empty slice of NullableHashes values.
+func NewNullableHashesEmpty() *NullableHashes {
+	return NewNullableHashes(0)
+}
+
+// Size returns the number of hashes in the slice.
+func (h *NullableHashes) Size() int {
+	return len(h.hashes)
+}
+
+// Get returns the hash at the given index from the slice.
+func (h *NullableHashes) Get(index int) (hash *Hash, _ error) {
+	if index < 0 || index >= len(h.hashes) {
+		return nil, errors.New("index out of bounds")
+	}
+	if h.hashes[index] == nil {
+		return nil, nil
+	}
+	return &Hash{*h.hashes[index]}, nil
+}
+
+// Set sets the Hash at the given index in the slice.
+func (h *NullableHashes) Set(index int, hash *Hash) error {
+	if index < 0 || index >= len(h.hashes) {
+		return errors.New("index out of bounds")
+	}
+	if hash == nil {
+		h.hashes[index] = nil
+		return nil
+	}
+	copy := hash.hash
+	h.hashes[index] = &copy
+	return nil
+}
+
+// Append adds a new Hash element to the end of the slice.
+func (h *NullableHashes) Append(hash *Hash) {
+	if hash == nil {
+		h.hashes = append(h.hashes, nil)
+		return
+	}
+	copy := hash.hash
+	h.hashes = append(h.hashes, &copy)
+}
+
 // Address represents the 20 byte address of an Ethereum account.
 type Address struct {
 	address common.Address
