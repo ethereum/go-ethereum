@@ -237,12 +237,12 @@ type udp struct {
 }
 
 // ListenUDP returns a new table that listens for UDP packets on laddr.
-func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, nodeDBPath string, netrestrict *netutil.Netlist) (*Network, error) {
-	transport, err := listenUDP(priv, laddr)
+func ListenUDP(priv *ecdsa.PrivateKey, conn conn, realaddr *net.UDPAddr, nodeDBPath string, netrestrict *netutil.Netlist) (*Network, error) {
+	transport, err := listenUDP(priv, conn, realaddr)
 	if err != nil {
 		return nil, err
 	}
-	net, err := newNetwork(transport, priv.PublicKey, natm, nodeDBPath, netrestrict)
+	net, err := newNetwork(transport, priv.PublicKey, nodeDBPath, netrestrict)
 	if err != nil {
 		return nil, err
 	}
@@ -251,16 +251,8 @@ func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, nodeDBP
 	return net, nil
 }
 
-func listenUDP(priv *ecdsa.PrivateKey, laddr string) (*udp, error) {
-	addr, err := net.ResolveUDPAddr("udp", laddr)
-	if err != nil {
-		return nil, err
-	}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return nil, err
-	}
-	return &udp{conn: conn, priv: priv, ourEndpoint: makeEndpoint(addr, uint16(addr.Port))}, nil
+func listenUDP(priv *ecdsa.PrivateKey, conn conn, realaddr *net.UDPAddr) (*udp, error) {
+	return &udp{conn: conn, priv: priv, ourEndpoint: makeEndpoint(realaddr, uint16(realaddr.Port))}, nil
 }
 
 func (t *udp) localAddr() *net.UDPAddr {
@@ -376,6 +368,7 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) (p, hash 
 	// add the hash to the front. Note: this doesn't protect the
 	// packet in any way.
 	hash = crypto.Keccak256(packet[macSize:])
+	hash[0]++ // guarantee incompatibility between v4 and temporary v5 packet formats
 	copy(packet, hash)
 	return packet, hash, nil
 }
@@ -422,6 +415,7 @@ func decodePacket(buffer []byte, pkt *ingressPacket) error {
 	copy(buf, buffer)
 	hash, sig, sigdata := buf[:macSize], buf[macSize:headSize], buf[headSize:]
 	shouldhash := crypto.Keccak256(buf[macSize:])
+	shouldhash[0]++ // guarantee incompatibility between v4 and temporary v5 packet formats
 	if !bytes.Equal(hash, shouldhash) {
 		return errBadHash
 	}
