@@ -78,9 +78,6 @@ type Config struct {
 	// protocol should be started or not.
 	DiscoveryV5 bool `toml:",omitempty"`
 
-	// Listener address for the V5 discovery protocol UDP traffic.
-	DiscoveryV5Addr string `toml:",omitempty"`
-
 	// Name sets the node name of this server.
 	// Use common.MakeName to create a name that follows existing conventions.
 	Name string `toml:"-"`
