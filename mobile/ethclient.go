@@ -77,9 +77,10 @@ func (ec *EthereumClient) GetTransactionByHash(ctx *Context, hash *Hash) (tx *Tr
 	return &Transaction{rawTx}, err
 }
 
-// GetTransactionSender returns the sender address of a transaction.
-func (ec *EthereumClient) GetTransactionSender(ctx *Context, tx *Transaction) (sender *Address, _ error) {
-	addr, err := ec.client.TransactionSender(ctx.context, tx.tx)
+// GetTransactionSender returns the sender address of a transaction. The transaction must
+// be included in the blockchain.
+func (ec *EthereumClient) GetTransactionSender(ctx *Context, tx *Transaction, hash *Hash, index int) (sender *Address, _ error) {
+	addr, err := ec.client.TransactionSender(ctx.context, tx.tx, hash.hash, uint(index))
 	return &Address{addr}, err
 }
 
