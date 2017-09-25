@@ -28,23 +28,24 @@ import (
 // server. It is stored in the transaction's sender address cache to avoid an additional
 // request in TransactionSender.
 type senderFromServer struct {
-	addr common.Address
+	addr      common.Address
+	blockhash common.Hash
 }
 
 var errNotCached = errors.New("sender not cached")
 
-func setSenderFromServer(tx *types.Transaction, addr common.Address) {
+func setSenderFromServer(tx *types.Transaction, addr common.Address, block common.Hash) {
 	// Use types.Sender for side-effect to store our signer into the cache.
-	types.Sender(&senderFromServer{addr}, tx)
+	types.Sender(&senderFromServer{addr, block}, tx)
 }
 
 func (s *senderFromServer) Equal(other types.Signer) bool {
-	_, ok := other.(*senderFromServer)
-	return ok
+	os, ok := other.(*senderFromServer)
+	return ok && os.blockhash == s.blockhash
 }
 
 func (s *senderFromServer) Sender(tx *types.Transaction) (common.Address, error) {
-	if s == nil {
+	if s.blockhash == (common.Hash{}) {
 		return common.Address{}, errNotCached
 	}
 	return s.addr, nil
