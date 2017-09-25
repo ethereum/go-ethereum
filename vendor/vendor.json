@@ -183,6 +183,12 @@
 			"revisionTime": "2016-06-03T03:41:37Z"
 		},
 		{
+			"checksumSHA1": "gKyBj05YkfuLFruAyPZ4KV9nFp8=",
+			"path": "github.com/julienschmidt/httprouter",
+			"revision": "975b5c4c7c21c0e3d2764200bf2aa8e34657ae6e",
+			"revisionTime": "2017-04-30T22:20:11Z"
+		},
+		{
 			"checksumSHA1": "UpjhOUZ1+0zNt+iIvdtECSHXmTs=",
 			"path": "github.com/karalabe/hid",
 			"revision": "f00545f9f3748e591590be3732d913c77525b10f",

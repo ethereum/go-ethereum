@@ -261,7 +261,7 @@ func (n *Node) startRPC(services map[reflect.Type]Service) error {
 		n.stopInProc()
 		return err
 	}
-	if err := n.startWS(n.wsEndpoint, apis, n.config.WSModules, n.config.WSOrigins); err != nil {
+	if err := n.startWS(n.wsEndpoint, apis, n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
 		n.stopHTTP()
 		n.stopIPC()
 		n.stopInProc()
@@ -412,7 +412,7 @@ func (n *Node) stopHTTP() {
 }
 
 // startWS initializes and starts the websocket RPC endpoint.
-func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrigins []string) error {
+func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrigins []string, exposeAll bool) error {
 	// Short circuit if the WS endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
@@ -425,7 +425,7 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 	// Register all the APIs exposed by the services
 	handler := rpc.NewServer()
 	for _, api := range apis {
-		if whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
+		if exposeAll || whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
 			if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
 				return err
 			}
@@ -441,7 +441,7 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 		return err
 	}
 	go rpc.NewWSServer(wsOrigins, handler).Serve(listener)
-	log.Info(fmt.Sprintf("WebSocket endpoint opened: ws://%s", endpoint))
+	log.Info(fmt.Sprintf("WebSocket endpoint opened: ws://%s", listener.Addr()))
 
 	// All listeners booted successfully
 	n.wsEndpoint = endpoint
@@ -554,6 +554,17 @@ func (n *Node) Attach() (*rpc.Client, error) {
 		return nil, ErrNodeStopped
 	}
 	return rpc.DialInProc(n.inprocHandler), nil
+}
+
+// RPCHandler returns the in-process RPC request handler.
+func (n *Node) RPCHandler() (*rpc.Server, error) {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+
+	if n.inprocHandler == nil {
+		return nil, ErrNodeStopped
+	}
+	return n.inprocHandler, nil
 }
 
 // Server retrieves the currently running P2P network layer. This method is meant
