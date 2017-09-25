@@ -34,7 +34,6 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 		topic0                    = common.HexToHash("3ac225168df54212a25c1c01fd35bebfea408fdac2e31ddd6f80a4bbf9a5f1ca")
 		topic1                    = common.HexToHash("9084a792d2f8b16a62b882fd56f7860c07bf5fa91dd8a2ae7e809e5180fef0b3")
 		topic2                    = common.HexToHash("6ccae1c4af4152f460ff510e573399795dfab5dcf1fa60d1f33ac8fdc1e480ce")
-		nullTopic                 = common.Hash{}
 	)
 
 	// default values
@@ -109,7 +108,7 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	if len(test4.Topics[0]) != 1 {
 		t.Fatalf("expected len(topics[0]) to be 1, got %d", len(test4.Topics[0]))
 	}
-	if test4.Topics[0][0] != topic0 {
+	if *test4.Topics[0][0] != topic0 {
 		t.Fatalf("got %x, expected %x", test4.Topics[0][0], topic0)
 	}
 
@@ -125,13 +124,13 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	if len(test5.Topics[0]) != 1 {
 		t.Fatalf("expected 1 topic, got %d", len(test5.Topics[0]))
 	}
-	if test5.Topics[0][0] != topic0 {
+	if *test5.Topics[0][0] != topic0 {
 		t.Fatalf("got %x, expected %x", test5.Topics[0][0], topic0)
 	}
 	if len(test5.Topics[1]) != 1 {
 		t.Fatalf("expected 1 topic, got %d", len(test5.Topics[1]))
 	}
-	if test5.Topics[1][0] != topic1 {
+	if *test5.Topics[1][0] != topic1 {
 		t.Fatalf("got %x, expected %x", test5.Topics[1][0], topic1)
 	}
 
@@ -147,19 +146,19 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	if len(test6.Topics[0]) != 1 {
 		t.Fatalf("expected 1 topic, got %d", len(test6.Topics[0]))
 	}
-	if test6.Topics[0][0] != topic0 {
+	if *test6.Topics[0][0] != topic0 {
 		t.Fatalf("got %x, expected %x", test6.Topics[0][0], topic0)
 	}
 	if len(test6.Topics[1]) != 1 {
 		t.Fatalf("expected 1 topic, got %d", len(test6.Topics[1]))
 	}
-	if test6.Topics[1][0] != nullTopic {
+	if test6.Topics[1][0] != nil {
 		t.Fatalf("got %x, expected empty hash", test6.Topics[1][0])
 	}
 	if len(test6.Topics[2]) != 1 {
 		t.Fatalf("expected 1 topic, got %d", len(test6.Topics[2]))
 	}
-	if test6.Topics[2][0] != topic2 {
+	if *test6.Topics[2][0] != topic2 {
 		t.Fatalf("got %x, expected %x", test6.Topics[2][0], topic2)
 	}
 
@@ -175,7 +174,7 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	if len(test7.Topics[0]) != 2 {
 		t.Fatalf("expected 2 topics, got %d topics", len(test7.Topics[0]))
 	}
-	if test7.Topics[0][0] != topic0 || test7.Topics[0][1] != topic1 {
+	if *test7.Topics[0][0] != topic0 || *test7.Topics[0][1] != topic1 {
 		t.Fatalf("invalid topics expected [%x,%x], got [%x,%x]",
 			topic0, topic1, test7.Topics[0][0], test7.Topics[0][1],
 		)
@@ -183,15 +182,15 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	if len(test7.Topics[1]) != 1 {
 		t.Fatalf("expected 1 topic, got %d topics", len(test7.Topics[1]))
 	}
-	if test7.Topics[1][0] != nullTopic {
+	if test7.Topics[1][0] != nil {
 		t.Fatalf("expected empty hash, got %x", test7.Topics[1][0])
 	}
 	if len(test7.Topics[2]) != 2 {
 		t.Fatalf("expected 2 topics, got %d topics", len(test7.Topics[2]))
 	}
-	if test7.Topics[2][0] != topic2 || test7.Topics[2][1] != nullTopic {
-		t.Fatalf("invalid topics expected [%x,%x], got [%x,%x]",
-			topic2, nullTopic, test7.Topics[2][0], test7.Topics[2][1],
+	if *test7.Topics[2][0] != topic2 || test7.Topics[2][1] != nil {
+		t.Fatalf("invalid topics expected [%x,nil], got [%x,%x]",
+			topic2, test7.Topics[2][0], test7.Topics[2][1],
 		)
 	}
 }

@@ -52,15 +52,17 @@ type Filter struct {
 	db         ethdb.Database
 	begin, end int64
 	addresses  []common.Address
-	topics     [][]common.Hash
+	topics     [][]*common.Hash
 
 	matcher *bloombits.Matcher
 }
 
 // New creates a new filter which uses a bloom filter on blocks to figure out whether
 // a particular block is interesting or not.
-func New(backend Backend, begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
-	// Flatten the address and topic filter clauses into a single filter system
+func New(backend Backend, begin, end int64, addresses []common.Address, topics [][]*common.Hash) *Filter {
+	// Flatten the address and topic filter clauses into a single bloombits filter
+	// system. Since the bloombits are not positional, nil topics are permitted,
+	// which get flattened into a nil byte slice.
 	var filters [][][]byte
 	if len(addresses) > 0 {
 		filter := make([][]byte, len(addresses))
@@ -72,7 +74,9 @@ func New(backend Backend, begin, end int64, addresses []common.Address, topics [
 	for _, topicList := range topics {
 		filter := make([][]byte, len(topicList))
 		for i, topic := range topicList {
-			filter[i] = topic.Bytes()
+			if topic != nil {
+				filter[i] = topic.Bytes()
+			}
 		}
 		filters = append(filters, filter)
 	}
@@ -221,7 +225,7 @@ func includes(addresses []common.Address, a common.Address) bool {
 }
 
 // filterLogs creates a slice of logs matching the given criteria.
-func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
+func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]*common.Hash) []*types.Log {
 	var ret []*types.Log
 Logs:
 	for _, log := range logs {
@@ -235,10 +239,6 @@ Logs:
 		if len(addresses) > 0 && !includes(addresses, log.Address) {
 			continue
 		}
-
-		logTopics := make([]common.Hash, len(topics))
-		copy(logTopics, log.Topics)
-
 		// If the to filtered topics is greater than the amount of topics in logs, skip.
 		if len(topics) > len(log.Topics) {
 			continue Logs
@@ -247,24 +247,21 @@ Logs:
 		for i, topics := range topics {
 			var match bool
 			for _, topic := range topics {
-				// common.Hash{} is a match all (wildcard)
-				if (topic == common.Hash{}) || log.Topics[i] == topic {
+				if topic == nil || log.Topics[i] == *topic { // nil topic is a match all (wildcard)
 					match = true
 					break
 				}
 			}
-
 			if !match {
 				continue Logs
 			}
 		}
 		ret = append(ret, log)
 	}
-
 	return ret
 }
 
-func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]common.Hash) bool {
+func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]*common.Hash) bool {
 	if len(addresses) > 0 {
 		var included bool
 		for _, addr := range addresses {
@@ -273,7 +270,6 @@ func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]commo
 				break
 			}
 		}
-
 		if !included {
 			return false
 		}
@@ -282,7 +278,7 @@ func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]commo
 	for _, sub := range topics {
 		var included bool
 		for _, topic := range sub {
-			if (topic == common.Hash{}) || types.BloomLookup(bloom, topic) {
+			if topic == nil || types.BloomLookup(bloom, *topic) { // nil topic is a match all (wildcard)
 				included = true
 				break
 			}
@@ -291,6 +287,5 @@ func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]commo
 			return false
 		}
 	}
-
 	return true
 }
