@@ -132,6 +132,7 @@ func (ch addLogChange) undo(s *StateDB) {
 	} else {
 		s.logs[ch.txhash] = logs[:len(logs)-1]
 	}
+	s.logSize--
 }
 
 func (ch addPreimageChange) undo(s *StateDB) {
