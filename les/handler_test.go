@@ -18,7 +18,9 @@ package les
 
 import (
 	"bytes"
+	"math/big"
 	"math/rand"
+	"runtime"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -29,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -407,4 +410,81 @@ func testGetProofs(t *testing.T, protocol int) {
 		}
 		testCheckProof(t, proofsV2, resp.Data)
 	}
+}
+
+func TestTransactionStatusLes2(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	pm := newTestProtocolManagerMust(t, false, 0, nil, nil, nil, db)
+	chain := pm.blockchain.(*core.BlockChain)
+	txpool := core.NewTxPool(core.DefaultTxPoolConfig, params.TestChainConfig, chain)
+	pm.txpool = txpool
+	peer, _ := newTestPeer(t, "peer", 2, pm, true)
+	defer peer.close()
+
+	var reqID uint64
+
+	test := func(tx *types.Transaction, send bool, expStatus core.TxStatusData) {
+		reqID++
+		if send {
+			cost := peer.GetRequestCost(SendTxV2Msg, 1)
+			sendRequest(peer.app, SendTxV2Msg, reqID, cost, types.Transactions{tx})
+		} else {
+			cost := peer.GetRequestCost(GetTxStatusMsg, 1)
+			sendRequest(peer.app, GetTxStatusMsg, reqID, cost, []common.Hash{tx.Hash()})
+		}
+		if err := expectResponse(peer.app, TxStatusMsg, reqID, testBufLimit, []core.TxStatusData{expStatus}); err != nil {
+			t.Errorf("transaction status mismatch")
+		}
+	}
+
+	signer := types.HomesteadSigner{}
+
+	// test error status by sending an underpriced transaction
+	tx0, _ := types.SignTx(types.NewTransaction(0, acc1Addr, big.NewInt(10000), bigTxGas, nil, nil), signer, testBankKey)
+	test(tx0, true, core.TxStatusData{Status: core.TxStatusError, Data: []byte("transaction underpriced")})
+
+	tx1, _ := types.SignTx(types.NewTransaction(0, acc1Addr, big.NewInt(10000), bigTxGas, big.NewInt(100000000000), nil), signer, testBankKey)
+	test(tx1, false, core.TxStatusData{Status: core.TxStatusUnknown}) // query before sending, should be unknown
+	test(tx1, true, core.TxStatusData{Status: core.TxStatusPending})  // send valid processable tx, should return pending
+	test(tx1, true, core.TxStatusData{Status: core.TxStatusPending})  // adding it again should not return an error
+
+	tx2, _ := types.SignTx(types.NewTransaction(1, acc1Addr, big.NewInt(10000), bigTxGas, big.NewInt(100000000000), nil), signer, testBankKey)
+	tx3, _ := types.SignTx(types.NewTransaction(2, acc1Addr, big.NewInt(10000), bigTxGas, big.NewInt(100000000000), nil), signer, testBankKey)
+	// send transactions in the wrong order, tx3 should be queued
+	test(tx3, true, core.TxStatusData{Status: core.TxStatusQueued})
+	test(tx2, true, core.TxStatusData{Status: core.TxStatusPending})
+	// query again, now tx3 should be pending too
+	test(tx3, false, core.TxStatusData{Status: core.TxStatusPending})
+
+	// generate and add a block with tx1 and tx2 included
+	gchain, _ := core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), db, 1, func(i int, block *core.BlockGen) {
+		block.AddTx(tx1)
+		block.AddTx(tx2)
+	})
+	if _, err := chain.InsertChain(gchain); err != nil {
+		panic(err)
+	}
+
+	// check if their status is included now
+	block1hash := core.GetCanonicalHash(db, 1)
+	tx1pos, _ := rlp.EncodeToBytes(core.TxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 0})
+	tx2pos, _ := rlp.EncodeToBytes(core.TxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 1})
+	test(tx1, false, core.TxStatusData{Status: core.TxStatusIncluded, Data: tx1pos})
+	test(tx2, false, core.TxStatusData{Status: core.TxStatusIncluded, Data: tx2pos})
+
+	// create a reorg that rolls them back
+	gchain, _ = core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), db, 2, func(i int, block *core.BlockGen) {})
+	if _, err := chain.InsertChain(gchain); err != nil {
+		panic(err)
+	}
+	// wait until TxPool processes the reorg
+	for {
+		if pending, _ := txpool.Stats(); pending == 3 {
+			break
+		}
+		runtime.Gosched()
+	}
+	// check if their status is pending again
+	test(tx1, false, core.TxStatusData{Status: core.TxStatusPending})
+	test(tx2, false, core.TxStatusData{Status: core.TxStatusPending})
 }

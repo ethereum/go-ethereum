@@ -307,6 +307,13 @@ func (p *peer) RequestPPTProofs(reqID, cost uint64, reqs []PPTReq) error {
 	}
 }
 
+// RequestTxStatus fetches a batch of transaction status records from a remote node.
+func (p *peer) RequestTxStatus(reqID, cost uint64, txHashes []common.Hash) error {
+	p.Log().Debug("Requesting transaction status", "count", len(txHashes))
+	return sendRequest(p.rw, GetTxStatusMsg, reqID, cost, txHashes)
+}
+
+// SendTxStatus sends a batch of transactions to be added to the remote transaction pool.
 func (p *peer) SendTxs(reqID, cost uint64, txs types.Transactions) error {
 	p.Log().Debug("Fetching batch of transactions", "count", len(txs))
 	switch p.version {
