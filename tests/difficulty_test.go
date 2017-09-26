@@ -1,3 +1,20 @@
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+//
+
 package tests
 
 import (
@@ -35,22 +52,18 @@ type difficultyTestMarshaling struct {
 }
 
 var (
-	// Values taken from
-	// https://github.com/ethereum/cpp-ethereum/blob/6cb2c852700024daf79e7cb31e4c12ffb7d85537/test/unittests/libethcore/difficulty.cpp#L212
-	// and
-	// https://github.com/ethereum/cpp-ethereum/blob/develop/libethashseal/genesis/test/mainNetworkTest.cpp
-
-	customMainnetConfig = &params.ChainConfig{
+	mainnetChainConfig = &params.ChainConfig{
 		ChainId:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(0x118c30),
-		DAOForkBlock:   nil,
+		HomesteadBlock: big.NewInt(1150000),
+		DAOForkBlock:   big.NewInt(1920000),
 		DAOForkSupport: true,
-		EIP150Block:    big.NewInt(0x259518),
-		EIP155Block:    big.NewInt(0x259518),
-		EIP158Block:    big.NewInt(0x28d138),
-		ByzantiumBlock: big.NewInt(0x2dc6c0),
-	}
+		EIP150Block:    big.NewInt(2463000),
+		EIP150Hash:     common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:    big.NewInt(2675000),
+		EIP158Block:    big.NewInt(2675000),
+		ByzantiumBlock: big.NewInt(4370000), // Don't enable yet
 
+	}
 	homesteadConfig = &params.ChainConfig{
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
@@ -99,12 +112,10 @@ func TestDifficulty(t *testing.T) {
 	dt.skipLoad("difficultyCustomHomestead\\.json")
 	dt.skipLoad("difficultyMorden\\.json")
 	dt.skipLoad("difficultyOlimpic\\.json")
-	// Contains erroneously generated uncle-values : "0x01" -should be hashes
-	dt.skipLoad("difficultyCustomMainNetwork\\.json")
 
 	dt.walk(t, difficultyTestDir, func(t *testing.T, name string, test *difficultyTest) {
 		t.Run(name, func(t *testing.T) {
-			config := params.MainnetChainConfig
+			config := mainnetChainConfig
 
 			switch {
 			case strings.Contains(name, "Ropsten") || strings.Contains(name, "Morden"):
@@ -115,10 +126,11 @@ func TestDifficulty(t *testing.T) {
 				config = homesteadConfig
 			case strings.Contains(name, "Byzantium"):
 				config = byzantiumConfig
-			case strings.Contains(name, "CustomMainNetwork"):
-				config = customMainnetConfig
 			}
-
+			if test.ParentDifficulty.Cmp(params.MinimumDifficulty) < 0 {
+				t.Skip("difficulty below minimum")
+				return
+			}
 			parentNumber := big.NewInt(int64(test.CurrentBlockNumber - 1))
 			parent := &types.Header{
 				Difficulty: test.ParentDifficulty,
@@ -131,8 +143,7 @@ func TestDifficulty(t *testing.T) {
 			exp := test.CurrentDifficulty
 
 			if actual.Cmp(exp) != 0 {
-
-				t.Errorf("parent[time %v diff %v #uncles:%v] child[time %v number %v] diff %v != expected %v",
+				t.Errorf("parent[time %v diff %v unclehash:%x] child[time %v number %v] diff %v != expected %v",
 					test.ParentTimestamp, test.ParentDifficulty, test.UncleHash,
 					test.CurrentTimestamp, test.CurrentBlockNumber, actual, exp)
 			}
