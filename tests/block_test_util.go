@@ -65,7 +65,7 @@ type btBlock struct {
 
 type btHeader struct {
 	Bloom            types.Bloom
-	Coinbase         common.Address
+	Etherbase        common.Address
 	MixHash          common.Hash
 	Nonce            types.BlockNonce
 	Number           *big.Int
@@ -145,7 +145,7 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 		GasUsed:    t.json.Genesis.GasUsed.Uint64(),
 		Difficulty: t.json.Genesis.Difficulty,
 		Mixhash:    t.json.Genesis.MixHash,
-		Coinbase:   t.json.Genesis.Coinbase,
+		Etherbase:  t.json.Genesis.Etherbase,
 		Alloc:      t.json.Pre,
 	}
 }
@@ -201,8 +201,8 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	if h.Bloom != h2.Bloom {
 		return fmt.Errorf("Bloom: want: %x have: %x", h.Bloom, h2.Bloom)
 	}
-	if h.Coinbase != h2.Coinbase {
-		return fmt.Errorf("Coinbase: want: %x have: %x", h.Coinbase, h2.Coinbase)
+	if h.Etherbase != h2.Etherbase {
+		return fmt.Errorf("Etherbase: want: %x have: %x", h.Etherbase, h2.Etherbase)
 	}
 	if h.MixHash != h2.MixDigest {
 		return fmt.Errorf("MixHash: want: %x have: %x", h.MixHash, h2.MixDigest)

@@ -326,7 +326,7 @@ func testGetNodeData(t *testing.T, protocol int) {
 			block.AddTx(tx2)
 		case 2:
 			// Block 3 is empty but was mined by account #2.
-			block.SetCoinbase(acc2Addr)
+			block.SetEtherbase(acc2Addr)
 			block.SetExtra([]byte("yeehaw"))
 		case 3:
 			// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
@@ -418,7 +418,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 			block.AddTx(tx2)
 		case 2:
 			// Block 3 is empty but was mined by account #2.
-			block.SetCoinbase(acc2Addr)
+			block.SetEtherbase(acc2Addr)
 			block.SetExtra([]byte("yeehaw"))
 		case 3:
 			// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).

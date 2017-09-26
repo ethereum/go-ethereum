@@ -74,7 +74,7 @@ type stPostState struct {
 //go:generate gencodec -type stEnv -field-override stEnvMarshaling -out gen_stenv.go
 
 type stEnv struct {
-	Coinbase   common.Address `json:"currentCoinbase"   gencodec:"required"`
+	Etherbase  common.Address `json:"currentCoinbase"   gencodec:"required"`
 	Difficulty *big.Int       `json:"currentDifficulty" gencodec:"required"`
 	GasLimit   *big.Int       `json:"currentGasLimit"   gencodec:"required"`
 	Number     uint64         `json:"currentNumber"     gencodec:"required"`
@@ -82,7 +82,7 @@ type stEnv struct {
 }
 
 type stEnvMarshaling struct {
-	Coinbase   common.UnprefixedAddress
+	Etherbase  common.UnprefixedAddress
 	Difficulty *math.HexOrDecimal256
 	GasLimit   *math.HexOrDecimal256
 	Number     math.HexOrDecimal64
@@ -134,7 +134,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) (*state.StateD
 	if err != nil {
 		return nil, err
 	}
-	context := core.NewEVMContext(msg, block.Header(), nil, &t.json.Env.Coinbase)
+	context := core.NewEVMContext(msg, block.Header(), nil, &t.json.Env.Etherbase)
 	context.GetHash = vmTestBlockHash
 	evm := vm.NewEVM(context, statedb, config, vmconfig)
 
@@ -178,7 +178,7 @@ func makePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB 
 func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
 	return &core.Genesis{
 		Config:     config,
-		Coinbase:   t.json.Env.Coinbase,
+		Etherbase:  t.json.Env.Etherbase,
 		Difficulty: t.json.Env.Difficulty,
 		GasLimit:   t.json.Env.GasLimit.Uint64(),
 		Number:     t.json.Env.Number,

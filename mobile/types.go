@@ -105,7 +105,7 @@ func (h *Header) String() string {
 
 func (h *Header) GetParentHash() *Hash   { return &Hash{h.header.ParentHash} }
 func (h *Header) GetUncleHash() *Hash    { return &Hash{h.header.UncleHash} }
-func (h *Header) GetCoinbase() *Address  { return &Address{h.header.Coinbase} }
+func (h *Header) GetEtherbase() *Address { return &Address{h.header.Etherbase} }
 func (h *Header) GetRoot() *Hash         { return &Hash{h.header.Root} }
 func (h *Header) GetTxHash() *Hash       { return &Hash{h.header.TxHash} }
 func (h *Header) GetReceiptHash() *Hash  { return &Hash{h.header.ReceiptHash} }
@@ -182,7 +182,7 @@ func (b *Block) String() string {
 
 func (b *Block) GetParentHash() *Hash   { return &Hash{b.block.ParentHash()} }
 func (b *Block) GetUncleHash() *Hash    { return &Hash{b.block.UncleHash()} }
-func (b *Block) GetCoinbase() *Address  { return &Address{b.block.Coinbase()} }
+func (b *Block) GetEtherbase() *Address { return &Address{b.block.Etherbase()} }
 func (b *Block) GetRoot() *Hash         { return &Hash{b.block.Root()} }
 func (b *Block) GetTxHash() *Hash       { return &Hash{b.block.TxHash()} }
 func (b *Block) GetReceiptHash() *Hash  { return &Hash{b.block.ReceiptHash()} }

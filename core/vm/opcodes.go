@@ -89,7 +89,7 @@ const (
 const (
 	// 0x40 range - block operations
 	BLOCKHASH OpCode = 0x40 + iota
-	COINBASE
+	ETHERBASE
 	TIMESTAMP
 	NUMBER
 	DIFFICULTY
@@ -259,7 +259,7 @@ var opCodeToString = map[OpCode]string{
 
 	// 0x40 range - block operations
 	BLOCKHASH:  "BLOCKHASH",
-	COINBASE:   "COINBASE",
+	ETHERBASE:  "COINBASE",
 	TIMESTAMP:  "TIMESTAMP",
 	NUMBER:     "NUMBER",
 	DIFFICULTY: "DIFFICULTY",
@@ -421,7 +421,7 @@ var stringToOp = map[string]OpCode{
 	"RETURNDATASIZE": RETURNDATASIZE,
 	"RETURNDATACOPY": RETURNDATACOPY,
 	"BLOCKHASH":      BLOCKHASH,
-	"COINBASE":       COINBASE,
+	"COINBASE":       ETHERBASE,
 	"TIMESTAMP":      TIMESTAMP,
 	"NUMBER":         NUMBER,
 	"DIFFICULTY":     DIFFICULTY,

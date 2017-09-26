@@ -346,8 +346,8 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(1, 1),
 			valid:         true,
 		},
-		COINBASE: {
-			execute:       opCoinbase,
+		ETHERBASE: {
+			execute:       opEtherbase,
 			gasCost:       constGasFunc(GasQuickStep),
 			validateStack: makeStackFunc(0, 1),
 			valid:         true,

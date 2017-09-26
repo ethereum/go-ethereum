@@ -360,7 +360,7 @@ func makeBlockChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.B
 	var chain []*types.Block
 	for i, difficulty := range d {
 		header := &types.Header{
-			Coinbase:    common.Address{seed},
+			Etherbase:   common.Address{seed},
 			Number:      big.NewInt(int64(i + 1)),
 			Difficulty:  big.NewInt(int64(difficulty)),
 			UncleHash:   types.EmptyUncleHash,
@@ -589,7 +589,7 @@ func TestFastVsFullChains(t *testing.T) {
 		signer  = types.NewEIP155Signer(gspec.Config.ChainId)
 	)
 	blocks, receipts := GenerateChain(gspec.Config, genesis, gendb, 1024, func(i int, block *BlockGen) {
-		block.SetCoinbase(common.Address{0x00})
+		block.SetEtherbase(common.Address{0x00})
 
 		// If the block number is multiple of 3, send a few bonus transactions to the miner
 		if i%3 == 2 {

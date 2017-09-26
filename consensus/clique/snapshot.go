@@ -217,7 +217,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 
 		// Header authorized, discard any previous votes from the signer
 		for i, vote := range snap.Votes {
-			if vote.Signer == signer && vote.Address == header.Coinbase {
+			if vote.Signer == signer && vote.Address == header.Etherbase {
 				// Uncast the vote from the cached tally
 				snap.uncast(vote.Address, vote.Authorize)
 
@@ -236,20 +236,20 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		default:
 			return nil, errInvalidVote
 		}
-		if snap.cast(header.Coinbase, authorize) {
+		if snap.cast(header.Etherbase, authorize) {
 			snap.Votes = append(snap.Votes, &Vote{
 				Signer:    signer,
 				Block:     number,
-				Address:   header.Coinbase,
+				Address:   header.Etherbase,
 				Authorize: authorize,
 			})
 		}
 		// If the vote passed, update the list of signers
-		if tally := snap.Tally[header.Coinbase]; tally.Votes > len(snap.Signers)/2 {
+		if tally := snap.Tally[header.Etherbase]; tally.Votes > len(snap.Signers)/2 {
 			if tally.Authorize {
-				snap.Signers[header.Coinbase] = struct{}{}
+				snap.Signers[header.Etherbase] = struct{}{}
 			} else {
-				delete(snap.Signers, header.Coinbase)
+				delete(snap.Signers, header.Etherbase)
 
 				// Signer list shrunk, delete any leftover recent caches
 				if limit := uint64(len(snap.Signers)/2 + 1); number >= limit {
@@ -257,7 +257,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 				}
 				// Discard any previous votes the deauthorized signer cast
 				for i := 0; i < len(snap.Votes); i++ {
-					if snap.Votes[i].Signer == header.Coinbase {
+					if snap.Votes[i].Signer == header.Etherbase {
 						// Uncast the vote from the cached tally
 						snap.uncast(snap.Votes[i].Address, snap.Votes[i].Authorize)
 
@@ -270,12 +270,12 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			}
 			// Discard any previous votes around the just changed account
 			for i := 0; i < len(snap.Votes); i++ {
-				if snap.Votes[i].Address == header.Coinbase {
+				if snap.Votes[i].Address == header.Etherbase {
 					snap.Votes = append(snap.Votes[:i], snap.Votes[i+1:]...)
 					i--
 				}
 			}
-			delete(snap.Tally, header.Coinbase)
+			delete(snap.Tally, header.Etherbase)
 		}
 	}
 	snap.Number += uint64(len(headers))

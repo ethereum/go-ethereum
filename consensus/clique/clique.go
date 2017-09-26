@@ -143,7 +143,7 @@ func sigHash(header *types.Header) (hash common.Hash) {
 	rlp.Encode(hasher, []interface{}{
 		header.ParentHash,
 		header.UncleHash,
-		header.Coinbase,
+		header.Etherbase,
 		header.Root,
 		header.TxHash,
 		header.ReceiptHash,
@@ -274,7 +274,7 @@ func (c *Clique) verifyHeader(chain consensus.ChainReader, header *types.Header,
 	}
 	// Checkpoint blocks need to enforce zero beneficiary
 	checkpoint := (number % c.config.Epoch) == 0
-	if checkpoint && header.Coinbase != (common.Address{}) {
+	if checkpoint && header.Etherbase != (common.Address{}) {
 		return errInvalidCheckpointBeneficiary
 	}
 	// Nonces must be 0x00..0 or 0xff..f, zeroes enforced on checkpoints
@@ -499,7 +499,7 @@ func (c *Clique) verifySeal(chain consensus.ChainReader, header *types.Header, p
 // header for running the transactions on top.
 func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	// If the block isn't a checkpoint, cast a random vote (good enough for now)
-	header.Coinbase = common.Address{}
+	header.Etherbase = common.Address{}
 	header.Nonce = types.BlockNonce{}
 
 	number := header.Number.Uint64()
@@ -521,8 +521,8 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 		}
 		// If there's pending proposals, cast a vote on them
 		if len(addresses) > 0 {
-			header.Coinbase = addresses[rand.Intn(len(addresses))]
-			if c.proposals[header.Coinbase] {
+			header.Etherbase = addresses[rand.Intn(len(addresses))]
+			if c.proposals[header.Etherbase] {
 				copy(header.Nonce[:], nonceAuthVote)
 			} else {
 				copy(header.Nonce[:], nonceDropVote)

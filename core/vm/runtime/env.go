@@ -31,7 +31,7 @@ func NewEnv(cfg *Config) *vm.EVM {
 		GetHash:     func(uint64) common.Hash { return common.Hash{} },
 
 		Origin:      cfg.Origin,
-		Coinbase:    cfg.Coinbase,
+		Etherbase:   cfg.Etherbase,
 		BlockNumber: cfg.BlockNumber,
 		Time:        cfg.Time,
 		Difficulty:  cfg.Difficulty,

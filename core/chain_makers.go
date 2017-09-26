@@ -53,16 +53,16 @@ type BlockGen struct {
 	config *params.ChainConfig
 }
 
-// SetCoinbase sets the coinbase of the generated block.
+// SetEtherbase sets the etherbase of the generated block.
 // It can be called at most once.
-func (b *BlockGen) SetCoinbase(addr common.Address) {
+func (b *BlockGen) SetEtherbase(addr common.Address) {
 	if b.gasPool != nil {
 		if len(b.txs) > 0 {
-			panic("coinbase must be set before adding transactions")
+			panic("etherbase must be set before adding transactions")
 		}
-		panic("coinbase can only be set once")
+		panic("etherbase can only be set once")
 	}
-	b.header.Coinbase = addr
+	b.header.Etherbase = addr
 	b.gasPool = new(GasPool).AddGas(b.header.GasLimit)
 }
 
@@ -71,8 +71,8 @@ func (b *BlockGen) SetExtra(data []byte) {
 	b.header.Extra = data
 }
 
-// AddTx adds a transaction to the generated block. If no coinbase has
-// been set, the block's coinbase is set to the zero address.
+// AddTx adds a transaction to the generated block. If no etherbase has
+// been set, the block's etherbase is set to the zero address.
 //
 // AddTx panics if the transaction cannot be executed. In addition to
 // the protocol-imposed limitations (gas limit, etc.), there are some
@@ -81,10 +81,10 @@ func (b *BlockGen) SetExtra(data []byte) {
 // will panic during execution.
 func (b *BlockGen) AddTx(tx *types.Transaction) {
 	if b.gasPool == nil {
-		b.SetCoinbase(common.Address{})
+		b.SetEtherbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), common.Hash{}, len(b.txs))
-	receipt, _, err := ApplyTransaction(b.config, nil, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, b.header.GasUsed, vm.Config{})
+	receipt, _, err := ApplyTransaction(b.config, nil, &b.header.Etherbase, b.gasPool, b.statedb, b.header, tx, b.header.GasUsed, vm.Config{})
 	if err != nil {
 		panic(err)
 	}
@@ -151,7 +151,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // The generator function is called with a new block generator for
 // every block. Any transactions and uncles added to the generator
 // become part of the block. If gen is nil, the blocks will be empty
-// and their coinbase will be the zero address.
+// and their etherbase will be the zero address.
 //
 // Blocks created by GenerateChain do not contain valid proof of work
 // values. Inserting them into BlockChain requires use of FakePow or
@@ -212,7 +212,7 @@ func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.St
 	return &types.Header{
 		Root:       state.IntermediateRoot(config.IsEIP158(parent.Number())),
 		ParentHash: parent.Hash(),
-		Coinbase:   parent.Coinbase(),
+		Etherbase:  parent.Etherbase(),
 		Difficulty: ethash.CalcDifficulty(config, time.Uint64(), &types.Header{
 			Number:     parent.Number(),
 			Time:       new(big.Int).Sub(time, big.NewInt(10)),
@@ -265,7 +265,7 @@ func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) [
 // makeBlockChain creates a deterministic chain of blocks rooted at parent.
 func makeBlockChain(parent *types.Block, n int, db ethdb.Database, seed int) []*types.Block {
 	blocks, _ := GenerateChain(params.TestChainConfig, parent, db, n, func(i int, b *BlockGen) {
-		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
+		b.SetEtherbase(common.Address{0: byte(seed), 19: byte(i)})
 	})
 	return blocks
 }

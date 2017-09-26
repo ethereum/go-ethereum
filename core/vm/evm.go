@@ -67,7 +67,7 @@ type Context struct {
 	GasPrice *big.Int       // Provides information for GASPRICE
 
 	// Block information
-	Coinbase    common.Address // Provides information for COINBASE
+	Etherbase   common.Address // Provides information for ETHERBASE
 	GasLimit    *big.Int       // Provides information for GASLIMIT
 	BlockNumber *big.Int       // Provides information for NUMBER
 	Time        *big.Int       // Provides information for TIME

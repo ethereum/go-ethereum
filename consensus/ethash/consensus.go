@@ -58,10 +58,10 @@ var (
 	errInvalidPoW        = errors.New("invalid proof-of-work")
 )
 
-// Author implements consensus.Engine, returning the header's coinbase as the
+// Author implements consensus.Engine, returning the header's etherbase as the
 // proof-of-work verified author of the block.
 func (ethash *Ethash) Author(header *types.Header) (common.Address, error) {
-	return header.Coinbase, nil
+	return header.Etherbase, nil
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules of the
@@ -523,9 +523,9 @@ var (
 	big32 = big.NewInt(32)
 )
 
-// AccumulateRewards credits the coinbase of the given block with the mining
+// AccumulateRewards credits the etherbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
-// included uncles. The coinbase of each uncle block is also rewarded.
+// included uncles. The etherbase of each uncle block is also rewarded.
 // TODO (karalabe): Move the chain maker into this package and make this private!
 func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
@@ -541,10 +541,10 @@ func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		r.Sub(r, header.Number)
 		r.Mul(r, blockReward)
 		r.Div(r, big8)
-		state.AddBalance(uncle.Coinbase, r)
+		state.AddBalance(uncle.Etherbase, r)
 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
-	state.AddBalance(header.Coinbase, reward)
+	state.AddBalance(header.Etherbase, reward)
 }

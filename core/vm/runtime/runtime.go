@@ -35,7 +35,7 @@ type Config struct {
 	ChainConfig *params.ChainConfig
 	Difficulty  *big.Int
 	Origin      common.Address
-	Coinbase    common.Address
+	Etherbase   common.Address
 	BlockNumber *big.Int
 	Time        *big.Int
 	GasLimit    uint64
