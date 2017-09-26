@@ -32,9 +32,11 @@ import (
 )
 
 const (
-	baseProtocolVersion    = 4
+	baseProtocolVersion    = 5
 	baseProtocolLength     = uint64(16)
 	baseProtocolMaxMsgSize = 2 * 1024
+
+	snappyProtocolVersion = 5
 
 	pingInterval = 15 * time.Second
 )
