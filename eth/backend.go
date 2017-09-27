@@ -84,14 +84,14 @@ type Ethereum struct {
 
 	ApiBackend *EthApiBackend
 
-	miner     *miner.Miner
-	gasPrice  *big.Int
-	etherbase common.Address
+	miner    *miner.Miner
+	gasPrice *big.Int
+	coinbase common.Address
 
 	networkId     uint64
 	netRPCService *ethapi.PublicNetAPI
 
-	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
+	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and coinbase)
 }
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
@@ -130,7 +130,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		stopDbUpgrade:  stopDbUpgrade,
 		networkId:      config.NetworkId,
 		gasPrice:       config.GasPrice,
-		etherbase:      config.Etherbase,
+		coinbase:       config.Coinbase,
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks),
 	}
@@ -300,48 +300,49 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
-func (s *Ethereum) Etherbase() (eb common.Address, err error) {
+func (s *Ethereum) Coinbase() (eb common.Address, err error) {
 	s.lock.RLock()
-	etherbase := s.etherbase
+	coinbase := s.coinbase
 	s.lock.RUnlock()
 
-	if etherbase != (common.Address{}) {
-		return etherbase, nil
+	if coinbase != (common.Address{}) {
+		return coinbase, nil
 	}
 	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
 		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-			etherbase := accounts[0].Address
+			coinbase := accounts[0].Address
 
 			s.lock.Lock()
-			s.etherbase = etherbase
+			s.coinbase = coinbase
 			s.lock.Unlock()
 
-			log.Info("Etherbase automatically configured", "address", etherbase)
-			return etherbase, nil
+			log.Info("Coinbase automatically configured", "address", coinbase)
+			return coinbase, nil
 		}
 	}
-	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
+
+	return common.Address{}, fmt.Errorf("coinbase address must be explicitly specified")
 }
 
 // set in js console via admin interface or wrapper from cli flags
-func (self *Ethereum) SetEtherbase(etherbase common.Address) {
+func (self *Ethereum) SetCoinbase(coinbase common.Address) {
 	self.lock.Lock()
-	self.etherbase = etherbase
+	self.coinbase = coinbase
 	self.lock.Unlock()
 
-	self.miner.SetEtherbase(etherbase)
+	self.miner.SetCoinbase(coinbase)
 }
 
 func (s *Ethereum) StartMining(local bool) error {
-	eb, err := s.Etherbase()
+	eb, err := s.Coinbase()
 	if err != nil {
-		log.Error("Cannot start mining without etherbase", "err", err)
-		return fmt.Errorf("etherbase missing: %v", err)
+		log.Error("Cannot start mining without coinbase", "err", err)
+		return fmt.Errorf("coinbase missing: %v", err)
 	}
 	if clique, ok := s.engine.(*clique.Clique); ok {
 		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 		if wallet == nil || err != nil {
-			log.Error("Etherbase account unavailable locally", "err", err)
+			log.Error("Coinbase account unavailable locally", "err", err)
 			return fmt.Errorf("signer missing: %v", err)
 		}
 		clique.Authorize(eb, wallet.SignHash)
