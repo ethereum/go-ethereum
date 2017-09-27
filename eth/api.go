@@ -61,11 +61,6 @@ func (api *PublicEthereumAPI) Etherbase() (common.Address, error) {
 	return api.e.Etherbase()
 }
 
-// Coinbase is the address that mining rewards will be send to (alias for Etherbase)
-func (api *PublicEthereumAPI) Coinbase() (common.Address, error) {
-	return api.Etherbase()
-}
-
 // Hashrate returns the POW hashrate
 func (api *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
 	return hexutil.Uint64(api.e.Miner().HashRate())

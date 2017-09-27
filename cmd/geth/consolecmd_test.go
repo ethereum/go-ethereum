@@ -38,12 +38,12 @@ const (
 // Tests that a node embedded within a console can be started up properly and
 // then terminated by closing the input stream.
 func TestConsoleWelcome(t *testing.T) {
-	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	etherbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 
 	// Start a geth console, make sure it's cleaned up and terminate the console
 	geth := runGeth(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
-		"--etherbase", coinbase, "--shh",
+		"--etherbase", etherbase, "--shh",
 		"console")
 
 	// Gather all the infos the welcome message needs to contain
@@ -59,7 +59,7 @@ func TestConsoleWelcome(t *testing.T) {
 Welcome to the Geth JavaScript console!
 
 instance: Geth/v{{gethver}}/{{goos}}-{{goarch}}/{{gover}}
-coinbase: {{.Etherbase}}
+etherbase: {{.Etherbase}}
 at block: 0 ({{niltime}})
  datadir: {{.Datadir}}
  modules: {{apis}}
@@ -72,7 +72,7 @@ at block: 0 ({{niltime}})
 // Tests that a console can be attached to a running node via various means.
 func TestIPCAttachWelcome(t *testing.T) {
 	// Configure the instance for IPC attachement
-	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	etherbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	var ipc string
 	if runtime.GOOS == "windows" {
 		ipc = `\\.\pipe\geth` + strconv.Itoa(trulyRandInt(100000, 999999))
@@ -85,7 +85,7 @@ func TestIPCAttachWelcome(t *testing.T) {
 	// list of ipc modules and shh is included there.
 	geth := runGeth(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
-		"--etherbase", coinbase, "--shh", "--ipcpath", ipc)
+		"--etherbase", etherbase, "--shh", "--ipcpath", ipc)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, geth, "ipc:"+ipc, ipcAPIs)
@@ -95,11 +95,11 @@ func TestIPCAttachWelcome(t *testing.T) {
 }
 
 func TestHTTPAttachWelcome(t *testing.T) {
-	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	etherbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
 	geth := runGeth(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
-		"--etherbase", coinbase, "--rpc", "--rpcport", port)
+		"--etherbase", etherbase, "--rpc", "--rpcport", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, geth, "http://localhost:"+port, httpAPIs)
@@ -109,12 +109,12 @@ func TestHTTPAttachWelcome(t *testing.T) {
 }
 
 func TestWSAttachWelcome(t *testing.T) {
-	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	etherbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
 
 	geth := runGeth(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
-		"--etherbase", coinbase, "--ws", "--wsport", port)
+		"--etherbase", etherbase, "--ws", "--wsport", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, geth, "ws://localhost:"+port, httpAPIs)
@@ -145,7 +145,7 @@ func testAttachWelcome(t *testing.T, geth *testgeth, endpoint, apis string) {
 Welcome to the Geth JavaScript console!
 
 instance: Geth/v{{gethver}}/{{goos}}-{{goarch}}/{{gover}}
-coinbase: {{etherbase}}
+etherbase: {{etherbase}}
 at block: 0 ({{niltime}}){{if ipc}}
  datadir: {{datadir}}{{end}}
  modules: {{apis}}

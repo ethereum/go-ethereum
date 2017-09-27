@@ -38,7 +38,7 @@ var (
 // makeHeaderChain creates a deterministic chain of headers rooted at parent.
 func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) []*types.Header {
 	blocks, _ := core.GenerateChain(params.TestChainConfig, types.NewBlockWithHeader(parent), db, n, func(i int, b *core.BlockGen) {
-		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
+		b.SetEtherbase(common.Address{0: byte(seed), 19: byte(i)})
 	})
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
@@ -245,7 +245,7 @@ func makeHeaderChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.
 	var chain []*types.Header
 	for i, difficulty := range d {
 		header := &types.Header{
-			Coinbase:    common.Address{seed},
+			Etherbase:   common.Address{seed},
 			Number:      big.NewInt(int64(i + 1)),
 			Difficulty:  big.NewInt(int64(difficulty)),
 			UncleHash:   types.EmptyUncleHash,

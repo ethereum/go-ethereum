@@ -136,7 +136,7 @@ func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
 		Transfer:    transfer,
 		GetHash:     vmTestBlockHash,
 		Origin:      t.json.Exec.Origin,
-		Coinbase:    t.json.Env.Coinbase,
+		Etherbase:   t.json.Env.Etherbase,
 		BlockNumber: new(big.Int).SetUint64(t.json.Env.Number),
 		Time:        new(big.Int).SetUint64(t.json.Env.Timestamp),
 		GasLimit:    t.json.Env.GasLimit,
