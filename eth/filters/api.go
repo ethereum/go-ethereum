@@ -498,7 +498,6 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 			switch topic := t.(type) {
 			case nil:
 				// ignore topic when matching logs
-				args.Topics[i] = []common.Hash{{}}
 
 			case string:
 				// match specific topic
@@ -507,12 +506,16 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 					return err
 				}
 				args.Topics[i] = []common.Hash{top}
+
 			case []interface{}:
 				// or case e.g. [null, "topic0", "topic1"]
 				for _, rawTopic := range topic {
 					if rawTopic == nil {
-						args.Topics[i] = append(args.Topics[i], common.Hash{})
-					} else if topic, ok := rawTopic.(string); ok {
+						// null component, match all
+						args.Topics[i] = nil
+						break
+					}
+					if topic, ok := rawTopic.(string); ok {
 						parsed, err := decodeTopic(topic)
 						if err != nil {
 							return err
