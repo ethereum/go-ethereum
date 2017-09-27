@@ -10,10 +10,10 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
-var _ = (*difficultyTestMarshaling)(nil)
+var _ = (*DifficultyTestMarshaling)(nil)
 
-func (d difficultyTest) MarshalJSON() ([]byte, error) {
-	type difficultyTest struct {
+func (d DifficultyTest) MarshalJSON() ([]byte, error) {
+	type DifficultyTest struct {
 		ParentTimestamp    *math.HexOrDecimal256 `json:"parentTimestamp"`
 		ParentDifficulty   *math.HexOrDecimal256 `json:"parentDifficulty"`
 		UncleHash          common.Hash           `json:"parentUncles"`
@@ -21,7 +21,7 @@ func (d difficultyTest) MarshalJSON() ([]byte, error) {
 		CurrentBlockNumber math.HexOrDecimal64   `json:"currentBlockNumber"`
 		CurrentDifficulty  *math.HexOrDecimal256 `json:"currentDifficulty"`
 	}
-	var enc difficultyTest
+	var enc DifficultyTest
 	enc.ParentTimestamp = (*math.HexOrDecimal256)(d.ParentTimestamp)
 	enc.ParentDifficulty = (*math.HexOrDecimal256)(d.ParentDifficulty)
 	enc.UncleHash = d.UncleHash
@@ -31,8 +31,8 @@ func (d difficultyTest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&enc)
 }
 
-func (d *difficultyTest) UnmarshalJSON(input []byte) error {
-	type difficultyTest struct {
+func (d *DifficultyTest) UnmarshalJSON(input []byte) error {
+	type DifficultyTest struct {
 		ParentTimestamp    *math.HexOrDecimal256 `json:"parentTimestamp"`
 		ParentDifficulty   *math.HexOrDecimal256 `json:"parentDifficulty"`
 		UncleHash          *common.Hash          `json:"parentUncles"`
@@ -40,7 +40,7 @@ func (d *difficultyTest) UnmarshalJSON(input []byte) error {
 		CurrentBlockNumber *math.HexOrDecimal64  `json:"currentBlockNumber"`
 		CurrentDifficulty  *math.HexOrDecimal256 `json:"currentDifficulty"`
 	}
-	var dec difficultyTest
+	var dec DifficultyTest
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}

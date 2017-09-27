@@ -21,38 +21,12 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"math/big"
-	"strings"
 )
 
-type DifficultyTests map[string]difficultyTest
-
-//go:generate gencodec -type difficultyTest -field-override difficultyTestMarshaling -out gen_difficultytest.go
-
-type difficultyTest struct {
-	ParentTimestamp    *big.Int    `json:"parentTimestamp"`
-	ParentDifficulty   *big.Int    `json:"parentDifficulty"`
-	UncleHash          common.Hash `json:"parentUncles"`
-	CurrentTimestamp   *big.Int    `json:"currentTimestamp"`
-	CurrentBlockNumber uint64      `json:"currentBlockNumber"`
-	CurrentDifficulty  *big.Int    `json:"currentDifficulty"`
-}
-
-type difficultyTestMarshaling struct {
-	ParentTimestamp    *math.HexOrDecimal256
-	ParentDifficulty   *math.HexOrDecimal256
-	CurrentTimestamp   *math.HexOrDecimal256
-	CurrentDifficulty  *math.HexOrDecimal256
-	UncleHash          common.Hash
-	CurrentBlockNumber math.HexOrDecimal64
-}
-
 var (
-	mainnetChainConfig = &params.ChainConfig{
+	mainnetChainConfig = params.ChainConfig{
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(1150000),
 		DAOForkBlock:   big.NewInt(1920000),
@@ -61,38 +35,7 @@ var (
 		EIP150Hash:     common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
 		EIP155Block:    big.NewInt(2675000),
 		EIP158Block:    big.NewInt(2675000),
-		ByzantiumBlock: big.NewInt(4370000), // Don't enable yet
-
-	}
-	homesteadConfig = &params.ChainConfig{
-		ChainId:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(0),
-		DAOForkBlock:   nil,
-		DAOForkSupport: true,
-		EIP150Block:    big.NewInt(math.MaxInt64),
-		EIP155Block:    big.NewInt(math.MaxInt64),
-		EIP158Block:    big.NewInt(math.MaxInt64),
-		ByzantiumBlock: big.NewInt(math.MaxInt64),
-	}
-	frontierConfig = &params.ChainConfig{
-		ChainId:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(math.MaxInt64),
-		DAOForkBlock:   nil,
-		DAOForkSupport: true,
-		EIP150Block:    big.NewInt(math.MaxInt64),
-		EIP155Block:    big.NewInt(math.MaxInt64),
-		EIP158Block:    big.NewInt(math.MaxInt64),
-		ByzantiumBlock: big.NewInt(math.MaxInt64),
-	}
-	byzantiumConfig = &params.ChainConfig{
-		ChainId:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(0),
-		DAOForkBlock:   nil,
-		DAOForkSupport: true,
-		EIP150Block:    big.NewInt(0),
-		EIP155Block:    big.NewInt(0),
-		EIP158Block:    big.NewInt(0),
-		ByzantiumBlock: big.NewInt(0),
+		ByzantiumBlock: big.NewInt(4370000),
 	}
 )
 
@@ -100,7 +43,7 @@ func TestDifficulty(t *testing.T) {
 	t.Parallel()
 
 	dt := new(testMatcher)
-	// Not difficulty-testes
+	// Not difficulty-tests
 	dt.skipLoad("hexencodetest.*")
 	dt.skipLoad("crypto.*")
 	dt.skipLoad("blockgenesistest\\.json")
@@ -108,45 +51,36 @@ func TestDifficulty(t *testing.T) {
 	dt.skipLoad("keyaddrtest\\.json")
 	dt.skipLoad("txtest\\.json")
 
-	// files are 2 years old, strange values
+	// files are 2 years old, contains strange values
 	dt.skipLoad("difficultyCustomHomestead\\.json")
 	dt.skipLoad("difficultyMorden\\.json")
 	dt.skipLoad("difficultyOlimpic\\.json")
 
-	dt.walk(t, difficultyTestDir, func(t *testing.T, name string, test *difficultyTest) {
-		t.Run(name, func(t *testing.T) {
-			config := mainnetChainConfig
+	dt.config("Ropsten", *params.TestnetChainConfig)
+	dt.config("Morden", *params.TestnetChainConfig)
+	dt.config("Frontier", params.ChainConfig{})
 
-			switch {
-			case strings.Contains(name, "Ropsten") || strings.Contains(name, "Morden"):
-				config = params.TestnetChainConfig
-			case strings.Contains(name, "Frontier"):
-				config = frontierConfig
-			case strings.Contains(name, "Homestead"):
-				config = homesteadConfig
-			case strings.Contains(name, "Byzantium"):
-				config = byzantiumConfig
-			}
-			if test.ParentDifficulty.Cmp(params.MinimumDifficulty) < 0 {
-				t.Skip("difficulty below minimum")
-				return
-			}
-			parentNumber := big.NewInt(int64(test.CurrentBlockNumber - 1))
-			parent := &types.Header{
-				Difficulty: test.ParentDifficulty,
-				Time:       test.ParentTimestamp,
-				Number:     parentNumber,
-				UncleHash:  test.UncleHash,
-			}
+	dt.config("Homestead", params.ChainConfig{
+		HomesteadBlock: big.NewInt(0),
+	})
 
-			actual := ethash.CalcDifficulty(config, test.CurrentTimestamp.Uint64(), parent)
-			exp := test.CurrentDifficulty
+	dt.config("Byzantium", params.ChainConfig{
+		ByzantiumBlock: big.NewInt(0),
+	})
 
-			if actual.Cmp(exp) != 0 {
-				t.Errorf("parent[time %v diff %v unclehash:%x] child[time %v number %v] diff %v != expected %v",
-					test.ParentTimestamp, test.ParentDifficulty, test.UncleHash,
-					test.CurrentTimestamp, test.CurrentBlockNumber, actual, exp)
-			}
-		})
+	dt.config("Frontier", *params.TestnetChainConfig)
+	dt.config("MainNetwork", mainnetChainConfig)
+	dt.config("CustomMainNetwork", mainnetChainConfig)
+	dt.config("difficulty.json", mainnetChainConfig)
+
+	dt.walk(t, difficultyTestDir, func(t *testing.T, name string, test *DifficultyTest) {
+		cfg := dt.findConfig(name)
+		if test.ParentDifficulty.Cmp(params.MinimumDifficulty) < 0 {
+			t.Skip("difficulty below minimum")
+			return
+		}
+		if err := dt.checkFailure(t, name, test.Run(cfg)); err != nil {
+			t.Error(err)
+		}
 	})
 }
