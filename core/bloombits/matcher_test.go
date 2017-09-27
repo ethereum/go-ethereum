@@ -35,7 +35,9 @@ func TestMatcherWildcards(t *testing.T) {
 		[][]byte{common.Hash{0x01}.Bytes()},                              // Plain rule, sanity check
 		[][]byte{common.Hash{0x01}.Bytes(), nil},                         // Wildcard suffix, drop rule
 		[][]byte{nil, common.Hash{0x01}.Bytes()},                         // Wildcard prefix, drop rule
-		[][]byte{nil, nil},                                               // Wildcard rule, drop rule
+		[][]byte{nil, nil},                                               // Wildcard combo, drop rule
+		[][]byte{},                                                       // Inited wildcard rule, drop rule
+		nil,                                                              // Proper wildcard rule, drop rule
 	})
 	if len(matcher.filters) != 3 {
 		t.Fatalf("filter system size mismatch: have %d, want %d", len(matcher.filters), 3)

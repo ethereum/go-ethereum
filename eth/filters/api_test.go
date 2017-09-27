@@ -108,7 +108,7 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	if len(test4.Topics[0]) != 1 {
 		t.Fatalf("expected len(topics[0]) to be 1, got %d", len(test4.Topics[0]))
 	}
-	if *test4.Topics[0][0] != topic0 {
+	if test4.Topics[0][0] != topic0 {
 		t.Fatalf("got %x, expected %x", test4.Topics[0][0], topic0)
 	}
 
@@ -124,13 +124,13 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	if len(test5.Topics[0]) != 1 {
 		t.Fatalf("expected 1 topic, got %d", len(test5.Topics[0]))
 	}
-	if *test5.Topics[0][0] != topic0 {
+	if test5.Topics[0][0] != topic0 {
 		t.Fatalf("got %x, expected %x", test5.Topics[0][0], topic0)
 	}
 	if len(test5.Topics[1]) != 1 {
 		t.Fatalf("expected 1 topic, got %d", len(test5.Topics[1]))
 	}
-	if *test5.Topics[1][0] != topic1 {
+	if test5.Topics[1][0] != topic1 {
 		t.Fatalf("got %x, expected %x", test5.Topics[1][0], topic1)
 	}
 
@@ -146,19 +146,16 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	if len(test6.Topics[0]) != 1 {
 		t.Fatalf("expected 1 topic, got %d", len(test6.Topics[0]))
 	}
-	if *test6.Topics[0][0] != topic0 {
+	if test6.Topics[0][0] != topic0 {
 		t.Fatalf("got %x, expected %x", test6.Topics[0][0], topic0)
 	}
-	if len(test6.Topics[1]) != 1 {
-		t.Fatalf("expected 1 topic, got %d", len(test6.Topics[1]))
-	}
-	if test6.Topics[1][0] != nil {
-		t.Fatalf("got %x, expected empty hash", test6.Topics[1][0])
+	if len(test6.Topics[1]) != 0 {
+		t.Fatalf("expected 0 topic, got %d", len(test6.Topics[1]))
 	}
 	if len(test6.Topics[2]) != 1 {
 		t.Fatalf("expected 1 topic, got %d", len(test6.Topics[2]))
 	}
-	if *test6.Topics[2][0] != topic2 {
+	if test6.Topics[2][0] != topic2 {
 		t.Fatalf("got %x, expected %x", test6.Topics[2][0], topic2)
 	}
 
@@ -174,23 +171,15 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	if len(test7.Topics[0]) != 2 {
 		t.Fatalf("expected 2 topics, got %d topics", len(test7.Topics[0]))
 	}
-	if *test7.Topics[0][0] != topic0 || *test7.Topics[0][1] != topic1 {
+	if test7.Topics[0][0] != topic0 || test7.Topics[0][1] != topic1 {
 		t.Fatalf("invalid topics expected [%x,%x], got [%x,%x]",
 			topic0, topic1, test7.Topics[0][0], test7.Topics[0][1],
 		)
 	}
-	if len(test7.Topics[1]) != 1 {
-		t.Fatalf("expected 1 topic, got %d topics", len(test7.Topics[1]))
+	if len(test7.Topics[1]) != 0 {
+		t.Fatalf("expected 0 topic, got %d topics", len(test7.Topics[1]))
 	}
-	if test7.Topics[1][0] != nil {
-		t.Fatalf("expected empty hash, got %x", test7.Topics[1][0])
-	}
-	if len(test7.Topics[2]) != 2 {
-		t.Fatalf("expected 2 topics, got %d topics", len(test7.Topics[2]))
-	}
-	if *test7.Topics[2][0] != topic2 || test7.Topics[2][1] != nil {
-		t.Fatalf("invalid topics expected [%x,nil], got [%x,%x]",
-			topic2, test7.Topics[2][0], test7.Topics[2][1],
-		)
+	if len(test7.Topics[2]) != 0 {
+		t.Fatalf("expected 0 topics, got %d topics", len(test7.Topics[2]))
 	}
 }

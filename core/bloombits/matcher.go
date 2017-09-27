@@ -97,6 +97,9 @@ func NewMatcher(sectionSize uint64, filters [][][]byte) *Matcher {
 
 	for _, filter := range filters {
 		// Gather the bit indexes of the filter rule, special casing the nil filter
+		if len(filter) == 0 {
+			continue
+		}
 		bloomBits := make([]bloomIndexes, len(filter))
 		for i, clause := range filter {
 			if clause == nil {
