@@ -21,9 +21,37 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const testSectionSize = 4096
+
+// Tests that wildcard filter rules (nil) can be specified and are handled well.
+func TestMatcherWildcards(t *testing.T) {
+	matcher := NewMatcher(testSectionSize, [][][]byte{
+		[][]byte{common.Address{}.Bytes(), common.Address{0x01}.Bytes()}, // Default address is not a wildcard
+		[][]byte{common.Hash{}.Bytes(), common.Hash{0x01}.Bytes()},       // Default hash is not a wildcard
+		[][]byte{common.Hash{0x01}.Bytes()},                              // Plain rule, sanity check
+		[][]byte{common.Hash{0x01}.Bytes(), nil},                         // Wildcard suffix, drop rule
+		[][]byte{nil, common.Hash{0x01}.Bytes()},                         // Wildcard prefix, drop rule
+		[][]byte{nil, nil},                                               // Wildcard combo, drop rule
+		[][]byte{},                                                       // Inited wildcard rule, drop rule
+		nil,                                                              // Proper wildcard rule, drop rule
+	})
+	if len(matcher.filters) != 3 {
+		t.Fatalf("filter system size mismatch: have %d, want %d", len(matcher.filters), 3)
+	}
+	if len(matcher.filters[0]) != 2 {
+		t.Fatalf("address clause size mismatch: have %d, want %d", len(matcher.filters[0]), 2)
+	}
+	if len(matcher.filters[1]) != 2 {
+		t.Fatalf("combo topic clause size mismatch: have %d, want %d", len(matcher.filters[1]), 2)
+	}
+	if len(matcher.filters[2]) != 1 {
+		t.Fatalf("singletone topic clause size mismatch: have %d, want %d", len(matcher.filters[2]), 1)
+	}
+}
 
 // Tests the matcher pipeline on a single continuous workflow without interrupts.
 func TestMatcherContinuous(t *testing.T) {

@@ -80,7 +80,8 @@ type Matcher struct {
 }
 
 // NewMatcher creates a new pipeline for retrieving bloom bit streams and doing
-// address and topic filtering on them.
+// address and topic filtering on them. Setting a filter component to `nil` is
+// allowed and will result in that filter rule being skipped (OR 0x11...1).
 func NewMatcher(sectionSize uint64, filters [][][]byte) *Matcher {
 	// Create the matcher instance
 	m := &Matcher{
@@ -95,11 +96,22 @@ func NewMatcher(sectionSize uint64, filters [][][]byte) *Matcher {
 	m.filters = nil
 
 	for _, filter := range filters {
+		// Gather the bit indexes of the filter rule, special casing the nil filter
+		if len(filter) == 0 {
+			continue
+		}
 		bloomBits := make([]bloomIndexes, len(filter))
 		for i, clause := range filter {
+			if clause == nil {
+				bloomBits = nil
+				break
+			}
 			bloomBits[i] = calcBloomIndexes(clause)
 		}
-		m.filters = append(m.filters, bloomBits)
+		// Accumulate the filter rules if no nil rule was within
+		if bloomBits != nil {
+			m.filters = append(m.filters, bloomBits)
+		}
 	}
 	// For every bit, create a scheduler to load/download the bit vectors
 	for _, bloomIndexLists := range m.filters {
