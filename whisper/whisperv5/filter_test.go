@@ -149,7 +149,7 @@ func TestInstallSymKeyGeneratesHash(t *testing.T) {
 	_, err := filters.Install(filter)
 
 	if err != nil {
-		t.Fatalf("Error installing the filter: %v", err);
+		t.Fatalf("Error installing the filter: %s", err);
 	}
 
 	for i, b := range filter.SymKeyHash {
@@ -179,18 +179,18 @@ func TestInstallIdenticalFilters(t *testing.T) {
 	_, err := filters.Install(filter1)
 
 	if err != nil {
-		t.Fatalf("Error installing the first filter: %v", err);
+		t.Fatalf("Error installing the first filter with seed %d: %s", seed, err);
 	}
 
 	_, err = filters.Install(filter2)
 
 	if err != nil {
-		t.Fatalf("Error installing the second filter: %v", err);
+		t.Fatalf("Error installing the second filter with seed %d: %s", seed, err);
 	}
 
 	params, err := generateMessageParams()
 	if err != nil {
-		t.Fatal("Error generating message parameters: %v", err);
+		t.Fatalf("Error generating message parameters with seed %d: %s", seed, err);
 	}
 
 	params.KeySym = filter1.KeySym
