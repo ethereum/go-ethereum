@@ -85,12 +85,12 @@ func (p *SyncProgress) GetPulledStates() int64  { return int64(p.progress.Pulled
 func (p *SyncProgress) GetKnownStates() int64   { return int64(p.progress.KnownStates) }
 
 // Topics is a set of topic lists to filter events with.
-type Topics struct{ topics [][]*common.Hash }
+type Topics struct{ topics [][]common.Hash }
 
 // NewTopics creates a slice of uninitialized Topics.
 func NewTopics(size int) *Topics {
 	return &Topics{
-		topics: make([][]*common.Hash, size),
+		topics: make([][]common.Hash, size),
 	}
 }
 
@@ -105,15 +105,15 @@ func (t *Topics) Size() int {
 }
 
 // Get returns the topic list at the given index from the slice.
-func (t *Topics) Get(index int) (hashes *NullableHashes, _ error) {
+func (t *Topics) Get(index int) (hashes *Hashes, _ error) {
 	if index < 0 || index >= len(t.topics) {
 		return nil, errors.New("index out of bounds")
 	}
-	return &NullableHashes{t.topics[index]}, nil
+	return &Hashes{t.topics[index]}, nil
 }
 
 // Set sets the topic list at the given index in the slice.
-func (t *Topics) Set(index int, topics *NullableHashes) error {
+func (t *Topics) Set(index int, topics *Hashes) error {
 	if index < 0 || index >= len(t.topics) {
 		return errors.New("index out of bounds")
 	}
@@ -122,7 +122,7 @@ func (t *Topics) Set(index int, topics *NullableHashes) error {
 }
 
 // Append adds a new topic list to the end of the slice.
-func (t *Topics) Append(topics *NullableHashes) {
+func (t *Topics) Append(topics *Hashes) {
 	t.topics = append(t.topics, topics.hashes)
 }
 
