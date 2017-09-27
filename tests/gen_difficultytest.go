@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
-var _ = (*DifficultyTestMarshaling)(nil)
+var _ = (*difficultyTestMarshaling)(nil)
 
 func (d DifficultyTest) MarshalJSON() ([]byte, error) {
 	type DifficultyTest struct {

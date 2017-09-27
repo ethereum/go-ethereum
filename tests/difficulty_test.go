@@ -20,9 +20,10 @@ package tests
 import (
 	"testing"
 
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
-	"math/big"
 )
 
 var (

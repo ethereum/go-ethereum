@@ -19,17 +19,16 @@ package tests
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"math/big"
 )
 
-type DifficultyTests map[string]DifficultyTest
-
-//go:generate gencodec -type DifficultyTest -field-override DifficultyTestMarshaling -out gen_difficultytest.go
+//go:generate gencodec -type DifficultyTest -field-override difficultyTestMarshaling -out gen_difficultytest.go
 
 type DifficultyTest struct {
 	ParentTimestamp    *big.Int    `json:"parentTimestamp"`
@@ -40,7 +39,7 @@ type DifficultyTest struct {
 	CurrentDifficulty  *big.Int    `json:"currentDifficulty"`
 }
 
-type DifficultyTestMarshaling struct {
+type difficultyTestMarshaling struct {
 	ParentTimestamp    *math.HexOrDecimal256
 	ParentDifficulty   *math.HexOrDecimal256
 	CurrentTimestamp   *math.HexOrDecimal256
@@ -50,7 +49,6 @@ type DifficultyTestMarshaling struct {
 }
 
 func (test *DifficultyTest) Run(config *params.ChainConfig) error {
-
 	parentNumber := big.NewInt(int64(test.CurrentBlockNumber - 1))
 	parent := &types.Header{
 		Difficulty: test.ParentDifficulty,
