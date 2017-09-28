@@ -30,6 +30,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"io/ioutil"
 )
 
 var (
@@ -56,11 +57,11 @@ func TestWatchNewFile(t *testing.T) {
 	dir, ks := tmpKeyStore(t, false)
 	defer os.RemoveAll(dir)
 
-	// Ensure the watcher is started before adding any files.
+	// Ensure the watcher is started before adding any all.
 	ks.Accounts()
 	time.Sleep(200 * time.Millisecond)
 
-	// Move in the files.
+	// Move in the all.
 	wantAccounts := make([]accounts.Account, len(cachetestAccounts))
 	for i := range cachetestAccounts {
 		wantAccounts[i] = accounts.Account{
@@ -293,5 +294,103 @@ func TestCacheFind(t *testing.T) {
 			t.Errorf("test %d: result mismatch for query %v\ngot %v\nwant %v", i, test.Query, a, test.WantResult)
 			continue
 		}
+	}
+}
+
+func waitForAccounts(wantAccounts []accounts.Account, ks *KeyStore) error {
+	var list []accounts.Account
+	for d := 200 * time.Millisecond; d < 8*time.Second; d *= 2 {
+		list = ks.Accounts()
+		if reflect.DeepEqual(list, wantAccounts) {
+			// ks should have also received change notifications
+			select {
+			case <-ks.changes:
+			default:
+				return fmt.Errorf("wasn't notified of new accounts")
+			}
+			return nil
+		}
+		time.Sleep(d)
+	}
+	return fmt.Errorf("\ngot  %v\nwant %v", list, wantAccounts)
+}
+
+// TestUpdatedKeyfileContents tests that updating the contents of a keystore file
+// is noticed by the watcher, and the account cache is updated accordingly
+func TestUpdatedKeyfileContents(t *testing.T) {
+	// Create a temporary kesytore to test with
+	rand.Seed(time.Now().UnixNano())
+	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-watch-test-%d-%d", os.Getpid(), rand.Int()))
+	ks := NewKeyStore(dir, LightScryptN, LightScryptP)
+
+	list := ks.Accounts()
+	if len(list) > 0 {
+		t.Error("initial account list not empty:", list)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Create the directory and copy a key file into it.
+	os.MkdirAll(dir, 0700)
+	defer os.RemoveAll(dir)
+	file := filepath.Join(dir, "aaa")
+
+	// Place one of our testfiles in there
+	if err := cp.CopyFile(file, cachetestAccounts[0].URL.Path); err != nil {
+		t.Fatal(err)
+	}
+
+	// ks should see the account.
+	wantAccounts := []accounts.Account{cachetestAccounts[0]}
+	wantAccounts[0].URL = accounts.URL{Scheme: KeyStoreScheme, Path: file}
+	if err := waitForAccounts(wantAccounts, ks); err != nil {
+		t.Error(err)
+		return
+	}
+
+	copyContents := func(dst, src string) error {
+		data, err := ioutil.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		err = ioutil.WriteFile(dst, data, 0644)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	// Now replace file contents
+	if err := copyContents(file, cachetestAccounts[1].URL.Path); err != nil {
+		t.Fatal(err)
+		return
+	}
+	wantAccounts = []accounts.Account{cachetestAccounts[1]}
+	wantAccounts[0].URL = accounts.URL{Scheme: KeyStoreScheme, Path: file}
+	if err := waitForAccounts(wantAccounts, ks); err != nil {
+		t.Errorf("First replacement failed")
+		t.Error(err)
+		return
+	}
+
+	// Now replace file contents again
+	if err := copyContents(file, cachetestAccounts[2].URL.Path); err != nil {
+		t.Fatal(err)
+		return
+	}
+	wantAccounts = []accounts.Account{cachetestAccounts[2]}
+	wantAccounts[0].URL = accounts.URL{Scheme: KeyStoreScheme, Path: file}
+	if err := waitForAccounts(wantAccounts, ks); err != nil {
+		t.Errorf("Second replacement failed")
+		t.Error(err)
+		return
+	}
+	// Now replace file contents with crap
+	if err := ioutil.WriteFile(file, []byte("foo"), 0644); err != nil {
+		t.Fatal(err)
+		return
+	}
+	if err := waitForAccounts([]accounts.Account{}, ks); err != nil {
+		t.Errorf("Emptying account file failed")
+		t.Error(err)
+		return
 	}
 }

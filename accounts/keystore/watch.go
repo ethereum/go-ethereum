@@ -20,7 +20,7 @@ package keystore
 
 import (
 	"time"
-	
+
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/rjeczalik/notify"
 )
@@ -92,7 +92,7 @@ func (w *watcher) loop() {
 			return
 		case <-w.ev:
 			// Trigger the scan (with delay), if not already triggered
-			if !rescanTriggered{
+			if !rescanTriggered {
 				debounce.Reset(debounceDuration)
 				rescanTriggered = true
 			}
