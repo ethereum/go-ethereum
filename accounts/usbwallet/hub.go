@@ -133,10 +133,19 @@ func (hub *Hub) refreshWallets() {
 	}
 	for _, info := range hid.Enumerate(hub.vendorID, 0) {
 		for _, id := range hub.productIDs {
-			if info.ProductID == id && info.Interface == 0 {
-				devices = append(devices, info)
-				break
+			// The HID interface number is not available on windows and OSX
+			if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+				if info.ProductID == id && info.Interface == -1 {
+					devices = append(devices, info)
+					break
+				}
+			} else {
+				if info.ProductID == id && info.Interface == 0 {
+					devices = append(devices, info)
+					break
+				}
 			}
+
 		}
 	}
 	if runtime.GOOS == "linux" {
