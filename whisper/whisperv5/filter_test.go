@@ -216,6 +216,14 @@ func TestInstallIdenticalFilters(t *testing.T) {
 		t.Fatalf("failed matching with the first filter")
 	}
 
+	if ! filter2.MatchEnvelope(env) {
+		t.Fatalf("failed matching with the first filter")
+	}
+
+	if ! filter1.MatchMessage(msg) {
+		t.Fatalf("failed matching with the second filter")
+	}
+
 	if ! filter2.MatchMessage(msg) {
 		t.Fatalf("failed matching with the second filter")
 	}

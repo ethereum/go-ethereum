@@ -704,7 +704,7 @@ func TestSymmetricSendCycle(t *testing.T) {
 	}
 
 	// check w.messages()
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
 	mail1 := filter1.Retrieve()
 	mail2 := filter2.Retrieve()
 	if len(mail2) == 0 {
@@ -777,7 +777,7 @@ func TestSymmetricSendWithoutAKey(t *testing.T) {
 	}
 
 	// check w.messages()
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
 	mail := filter.Retrieve()
 	if len(mail) == 0 {
 		t.Fatalf("did not receive message in spite of not setting a public key")
@@ -843,7 +843,7 @@ func TestSymmetricSendKeyMismatch(t *testing.T) {
 	}
 
 	// check w.messages()
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
 	mail := filter.Retrieve()
 	if len(mail) > 0 {
 		t.Fatalf("received a message when keys weren't matching")
