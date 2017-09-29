@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"mime"
 	"net"
 	"net/http"
 	"sync"
@@ -151,6 +152,16 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.StatusRequestEntityTooLarge)
 		return
 	}
+
+	ct := r.Header.Get("content-type")
+	mt, _, err := mime.ParseMediaType(ct)
+	if err != nil || mt != "application/json" {
+		http.Error(w,
+			"invalid content type, only application/json is supported",
+			http.StatusUnsupportedMediaType)
+		return
+	}
+
 	w.Header().Set("content-type", "application/json")
 
 	// create a codec that reads direct from the request body until
