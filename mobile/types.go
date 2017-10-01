@@ -261,10 +261,13 @@ func (tx *Transaction) GetGasPrice() *BigInt { return &BigInt{tx.tx.GasPrice()} 
 func (tx *Transaction) GetValue() *BigInt    { return &BigInt{tx.tx.Value()} }
 func (tx *Transaction) GetNonce() int64      { return int64(tx.tx.Nonce()) }
 
-func (tx *Transaction) GetHash() *Hash    { return &Hash{tx.tx.Hash()} }
-func (tx *Transaction) GetSigHash() *Hash { return &Hash{tx.tx.SigHash(types.HomesteadSigner{})} }
-func (tx *Transaction) GetCost() *BigInt  { return &BigInt{tx.tx.Cost()} }
+func (tx *Transaction) GetHash() *Hash   { return &Hash{tx.tx.Hash()} }
+func (tx *Transaction) GetCost() *BigInt { return &BigInt{tx.tx.Cost()} }
 
+// Deprecated: GetSigHash cannot know which signer to use.
+func (tx *Transaction) GetSigHash() *Hash { return &Hash{types.HomesteadSigner{}.Hash(tx.tx)} }
+
+// Deprecated: use EthereumClient.TransactionSender
 func (tx *Transaction) GetFrom(chainID *BigInt) (address *Address, _ error) {
 	var signer types.Signer = types.HomesteadSigner{}
 	if chainID != nil {
