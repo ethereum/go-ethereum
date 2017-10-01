@@ -24,9 +24,40 @@ import (
 
 type journalEntry interface {
 	undo(*StateDB)
+	getAccount() *common.Address
 }
 
-type journal []journalEntry
+type journal struct {
+	entries        []journalEntry
+	dirtyOverrides []common.Address
+}
+
+func (j *journal) append(entry journalEntry) {
+	j.entries = append(j.entries, entry)
+}
+
+func (j *journal) flatten() map[common.Address]struct{} {
+
+	dirtyObjects := make(map[common.Address]struct{})
+	for _, journalEntry := range j.entries {
+		if addr := journalEntry.getAccount(); addr != nil {
+			dirtyObjects[*addr] = struct{}{}
+		}
+	}
+	for _, addr := range j.dirtyOverrides {
+		dirtyObjects[addr] = struct{}{}
+	}
+	return dirtyObjects
+}
+
+// Length returns the number of journal entries in the journal
+func (j *journal) Length() int {
+	return len(j.entries)
+}
+
+func (j *journal) dirtyOverride(address common.Address) {
+	j.dirtyOverrides = append(j.dirtyOverrides, address)
+}
 
 type (
 	// Changes to the account trie.
@@ -82,8 +113,16 @@ func (ch createObjectChange) undo(s *StateDB) {
 	delete(s.stateObjectsDirty, *ch.account)
 }
 
+func (ch createObjectChange) getAccount() *common.Address {
+	return ch.account
+}
+
 func (ch resetObjectChange) undo(s *StateDB) {
 	s.setStateObject(ch.prev)
+}
+
+func (ch resetObjectChange) getAccount() *common.Address {
+	return nil
 }
 
 func (ch suicideChange) undo(s *StateDB) {
@@ -93,36 +132,51 @@ func (ch suicideChange) undo(s *StateDB) {
 		obj.setBalance(ch.prevbalance)
 	}
 }
+func (ch suicideChange) getAccount() *common.Address {
+	return ch.account
+}
 
 var ripemd = common.HexToAddress("0000000000000000000000000000000000000003")
 
 func (ch touchChange) undo(s *StateDB) {
-	if !ch.prev && *ch.account != ripemd {
-		s.getStateObject(*ch.account).touched = ch.prev
-		if !ch.prevDirty {
-			delete(s.stateObjectsDirty, *ch.account)
-		}
-	}
+}
+func (ch touchChange) getAccount() *common.Address {
+	return ch.account
 }
 
 func (ch balanceChange) undo(s *StateDB) {
 	s.getStateObject(*ch.account).setBalance(ch.prev)
+}
+func (ch balanceChange) getAccount() *common.Address {
+	return ch.account
 }
 
 func (ch nonceChange) undo(s *StateDB) {
 	s.getStateObject(*ch.account).setNonce(ch.prev)
 }
 
+func (ch nonceChange) getAccount() *common.Address {
+	return ch.account
+}
 func (ch codeChange) undo(s *StateDB) {
 	s.getStateObject(*ch.account).setCode(common.BytesToHash(ch.prevhash), ch.prevcode)
+}
+func (ch codeChange) getAccount() *common.Address {
+	return ch.account
 }
 
 func (ch storageChange) undo(s *StateDB) {
 	s.getStateObject(*ch.account).setState(ch.key, ch.prevalue)
 }
+func (ch storageChange) getAccount() *common.Address {
+	return ch.account
+}
 
 func (ch refundChange) undo(s *StateDB) {
 	s.refund = ch.prev
+}
+func (ch refundChange) getAccount() *common.Address {
+	return nil
 }
 
 func (ch addLogChange) undo(s *StateDB) {
@@ -134,7 +188,14 @@ func (ch addLogChange) undo(s *StateDB) {
 	}
 	s.logSize--
 }
+func (ch addLogChange) getAccount() *common.Address {
+	return nil
+}
 
 func (ch addPreimageChange) undo(s *StateDB) {
 	delete(s.preimages, ch.hash)
+}
+
+func (ch addPreimageChange) getAccount() *common.Address {
+	return nil
 }
