@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package rpc
 
@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/burnout/go-burnout/log"
 )
 
 func TestClientRequest(t *testing.T) {
@@ -221,7 +221,7 @@ func TestClientSubscribeInvalidArg(t *testing.T) {
 }
 
 func TestClientSubscribe(t *testing.T) {
-	server := newTestServer("eth", new(NotificationTestService))
+	server := newTestServer("brn", new(NotificationTestService))
 	defer server.Stop()
 	client := DialInProc(server)
 	defer client.Close()
@@ -290,7 +290,7 @@ func TestClientSubscribeClose(t *testing.T) {
 		gotHangSubscriptionReq:  make(chan struct{}),
 		unblockHangSubscription: make(chan struct{}),
 	}
-	server := newTestServer("eth", service)
+	server := newTestServer("brn", service)
 	defer server.Stop()
 	client := DialInProc(server)
 	defer client.Close()
@@ -326,7 +326,7 @@ func TestClientSubscribeClose(t *testing.T) {
 // This test checks that Client doesn't lock up when a single subscriber
 // doesn't read subscription events.
 func TestClientNotificationStorm(t *testing.T) {
-	server := newTestServer("eth", new(NotificationTestService))
+	server := newTestServer("brn", new(NotificationTestService))
 	defer server.Stop()
 
 	doTest := func(count int, wantError bool) {
@@ -520,7 +520,7 @@ func httpTestClient(srv *Server, transport string, fl *flakeyListener) (*Client,
 
 func ipcTestClient(srv *Server, fl *flakeyListener) (*Client, net.Listener) {
 	// Listen on a random endpoint.
-	endpoint := fmt.Sprintf("go-ethereum-test-ipc-%d-%d", os.Getpid(), rand.Int63())
+	endpoint := fmt.Sprintf("go-burnout-test-ipc-%d-%d", os.Getpid(), rand.Int63())
 	if runtime.GOOS == "windows" {
 		endpoint = `\\.\pipe\` + endpoint
 	} else {

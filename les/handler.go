@@ -1,20 +1,20 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package les implements the Light Ethereum Subprotocol.
+// Package les implements the Light Burnout Subprotocol.
 package les
 
 import (
@@ -26,29 +26,29 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/consensus"
+	"github.com/burnout/go-burnout/core"
+	"github.com/burnout/go-burnout/core/state"
+	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnout/go-burnout/brn"
+	"github.com/burnout/go-burnout/brn/downloader"
+	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnout/go-burnout/event"
+	"github.com/burnout/go-burnout/log"
+	"github.com/burnout/go-burnout/p2p"
+	"github.com/burnout/go-burnout/p2p/discover"
+	"github.com/burnout/go-burnout/p2p/discv5"
+	"github.com/burnout/go-burnout/params"
+	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnout/go-burnout/trie"
 )
 
 const (
 	softResponseLimit = 2 * 1024 * 1024 // Target maximum size of returned blocks, headers or node data.
 	estHeaderRlpSize  = 500             // Approximate size of an RLP encoded block header
 
-	ethVersion = 63 // equivalent eth version for the downloader
+	ethVersion = 63 // equivalent brn version for the downloader
 
 	MaxHeaderFetch       = 192 // Amount of block headers to be fetched per retrieval request
 	MaxBodyFetch         = 32  // Amount of block bodies to be fetched per retrieval request
@@ -97,7 +97,7 @@ type ProtocolManager struct {
 	networkId   uint64
 	chainConfig *params.ChainConfig
 	blockchain  BlockChain
-	chainDb     ethdb.Database
+	chainDb     brndb.Database
 	odr         *LesOdr
 	server      *LesServer
 	serverPool  *serverPool
@@ -123,9 +123,9 @@ type ProtocolManager struct {
 	wg *sync.WaitGroup
 }
 
-// NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
-// with the ethereum network.
-func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, networkId uint64, mux *event.TypeMux, engine consensus.Engine, peers *peerSet, blockchain BlockChain, txpool txPool, chainDb ethdb.Database, odr *LesOdr, txrelay *LesTxRelay, quitSync chan struct{}, wg *sync.WaitGroup) (*ProtocolManager, error) {
+// NewProtocolManager returns a new burnout sub protocol manager. The Burnout sub protocol manages peers capable
+// with the burnout network.
+func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, networkId uint64, mux *event.TypeMux, engine consensus.Engine, peers *peerSet, blockchain BlockChain, txpool txPool, chainDb brndb.Database, odr *LesOdr, txrelay *LesTxRelay, quitSync chan struct{}, wg *sync.WaitGroup) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		lightSync:   lightSync,
@@ -228,7 +228,7 @@ func (pm *ProtocolManager) Start() {
 func (pm *ProtocolManager) Stop() {
 	// Showing a log message. During download / process this could actually
 	// take between 5 to 10 seconds and therefor feedback is required.
-	log.Info("Stopping light Ethereum protocol")
+	log.Info("Stopping light Burnout protocol")
 
 	// Quit the sync loop.
 	// After this send has completed, no new peers will be accepted.
@@ -245,7 +245,7 @@ func (pm *ProtocolManager) Stop() {
 	// Wait for any process action
 	pm.wg.Wait()
 
-	log.Info("Light Ethereum protocol stopped")
+	log.Info("Light Burnout protocol stopped")
 }
 
 func (pm *ProtocolManager) newPeer(pv int, nv uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -255,13 +255,13 @@ func (pm *ProtocolManager) newPeer(pv int, nv uint64, p *p2p.Peer, rw p2p.MsgRea
 // handle is the callback invoked to manage the life cycle of a les peer. When
 // this function terminates, the peer is disconnected.
 func (pm *ProtocolManager) handle(p *peer) error {
-	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
+	p.Log().Debug("Light Burnout peer connected", "name", p.Name())
 
 	// Execute the LES handshake
 	td, head, genesis := pm.blockchain.Status()
 	headNum := core.GetBlockNumber(pm.chainDb, head)
 	if err := p.Handshake(td, head, headNum, genesis, pm.server); err != nil {
-		p.Log().Debug("Light Ethereum handshake failed", "err", err)
+		p.Log().Debug("Light Burnout handshake failed", "err", err)
 		return err
 	}
 	if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
@@ -269,7 +269,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}
 	// Register the peer locally
 	if err := pm.peers.Register(p); err != nil {
-		p.Log().Error("Light Ethereum peer registration failed", "err", err)
+		p.Log().Error("Light Burnout peer registration failed", "err", err)
 		return err
 	}
 	defer func() {
@@ -309,7 +309,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// main loop. handle incoming messages.
 	for {
 		if err := pm.handleMsg(p); err != nil {
-			p.Log().Debug("Light Ethereum message handling failed", "err", err)
+			p.Log().Debug("Light Burnout message handling failed", "err", err)
 			return err
 		}
 	}
@@ -325,7 +325,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	if err != nil {
 		return err
 	}
-	p.Log().Trace("Light Ethereum message arrived", "code", msg.Code, "bytes", msg.Size)
+	p.Log().Trace("Light Burnout message arrived", "code", msg.Code, "bytes", msg.Size)
 
 	costs := p.fcCosts[msg.Code]
 	reject := func(reqCnt, maxCnt uint64) bool {
@@ -821,8 +821,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 }
 
 // NodeInfo retrieves some protocol metadata about the running host node.
-func (self *ProtocolManager) NodeInfo() *eth.EthNodeInfo {
-	return &eth.EthNodeInfo{
+func (self *ProtocolManager) NodeInfo() *brn.EthNodeInfo {
+	return &brn.EthNodeInfo{
 		Network:    self.networkId,
 		Difficulty: self.blockchain.GetTdByHash(self.blockchain.LastBlockHash()),
 		Genesis:    self.blockchain.Genesis().Hash(),

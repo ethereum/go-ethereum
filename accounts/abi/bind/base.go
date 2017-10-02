@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package bind
 
@@ -22,11 +22,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/burnout/go-burnout"
+	"github.com/burnout/go-burnout/accounts/abi"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnout/go-burnout/crypto"
 )
 
 // SignerFn is a signer function callback when a contract requires a method to
@@ -42,9 +42,9 @@ type CallOpts struct {
 }
 
 // TransactOpts is the collection of authorization data required to create a
-// valid Ethereum transaction.
+// valid Burnout transaction.
 type TransactOpts struct {
-	From   common.Address // Ethereum account to send the transaction from
+	From   common.Address // Burnout account to send the transaction from
 	Nonce  *big.Int       // Nonce to use for the transaction execution (nil = use pending state)
 	Signer SignerFn       // Method to use for signing the transaction (mandatory)
 
@@ -56,11 +56,11 @@ type TransactOpts struct {
 }
 
 // BoundContract is the base wrapper object that reflects a contract on the
-// Ethereum network. It contains a collection of methods that are used by the
+// Burnout network. It contains a collection of methods that are used by the
 // higher level contract bindings to operate.
 type BoundContract struct {
-	address    common.Address     // Deployment address of the contract on the Ethereum blockchain
-	abi        abi.ABI            // Reflect based ABI to access the correct Ethereum methods
+	address    common.Address     // Deployment address of the contract on the Burnout blockchain
+	abi        abi.ABI            // Reflect based ABI to access the correct Burnout methods
 	caller     ContractCaller     // Read interface to interact with the blockchain
 	transactor ContractTransactor // Write interface to interact with the blockchain
 }
@@ -76,7 +76,7 @@ func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller
 	}
 }
 
-// DeployContract deploys a contract onto the Ethereum blockchain and binds the
+// DeployContract deploys a contract onto the Burnout blockchain and binds the
 // deployment address with a Go wrapper.
 func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, params ...interface{}) (common.Address, *types.Transaction, *BoundContract, error) {
 	// Otherwise try to deploy the contract
@@ -109,7 +109,7 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 		return err
 	}
 	var (
-		msg    = ethereum.CallMsg{From: opts.From, To: &c.address, Data: input}
+		msg    = burnout.CallMsg{From: opts.From, To: &c.address, Data: input}
 		ctx    = ensureContext(opts.Context)
 		code   []byte
 		output []byte
@@ -199,7 +199,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 			}
 		}
 		// If the contract surely has code (or code is not needed), estimate the transaction
-		msg := ethereum.CallMsg{From: opts.From, To: contract, Value: value, Data: input}
+		msg := burnout.CallMsg{From: opts.From, To: contract, Value: value, Data: input}
 		gasLimit, err = c.transactor.EstimateGas(ensureContext(opts.Context), msg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to estimate gas needed: %v", err)

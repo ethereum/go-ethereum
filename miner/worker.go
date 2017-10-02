@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package miner
 
@@ -24,17 +24,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/consensus"
+	"github.com/burnout/go-burnout/consensus/misc"
+	"github.com/burnout/go-burnout/core"
+	"github.com/burnout/go-burnout/core/state"
+	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnout/go-burnout/core/vm"
+	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnout/go-burnout/event"
+	"github.com/burnout/go-burnout/log"
+	"github.com/burnout/go-burnout/params"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -106,10 +106,10 @@ type worker struct {
 	agents map[Agent]struct{}
 	recv   chan *Result
 
-	eth     Backend
+	brn     Backend
 	chain   *core.BlockChain
 	proc    core.Validator
-	chainDb ethdb.Database
+	chainDb brndb.Database
 
 	coinbase common.Address
 	extra    []byte
@@ -127,29 +127,29 @@ type worker struct {
 	atWork int32
 }
 
-func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux) *worker {
+func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, brn Backend, mux *event.TypeMux) *worker {
 	worker := &worker{
 		config:         config,
 		engine:         engine,
-		eth:            eth,
+		brn:            brn,
 		mux:            mux,
 		txCh:           make(chan core.TxPreEvent, txChanSize),
 		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
-		chainDb:        eth.ChainDb(),
+		chainDb:        brn.ChainDb(),
 		recv:           make(chan *Result, resultQueueSize),
-		chain:          eth.BlockChain(),
-		proc:           eth.BlockChain().Validator(),
+		chain:          brn.BlockChain(),
+		proc:           brn.BlockChain().Validator(),
 		possibleUncles: make(map[common.Hash]*types.Block),
 		coinbase:       coinbase,
 		agents:         make(map[Agent]struct{}),
-		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
+		unconfirmed:    newUnconfirmedBlocks(brn.BlockChain(), miningLogAtDepth),
 	}
 	// Subscribe TxPreEvent for tx pool
-	worker.txSub = eth.TxPool().SubscribeTxPreEvent(worker.txCh)
+	worker.txSub = brn.TxPool().SubscribeTxPreEvent(worker.txCh)
 	// Subscribe events for blockchain
-	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
-	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
+	worker.chainHeadSub = brn.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
+	worker.chainSideSub = brn.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
 	go worker.update()
 
 	go worker.wait()
@@ -444,7 +444,7 @@ func (self *worker) commitNewWork() {
 	if self.config.DAOForkSupport && self.config.DAOForkBlock != nil && self.config.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(work.state)
 	}
-	pending, err := self.eth.TxPool().Pending()
+	pending, err := self.brn.TxPool().Pending()
 	if err != nil {
 		log.Error("Failed to fetch pending transactions", "err", err)
 		return

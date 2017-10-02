@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2016 The go-burnout Authors
+// This file is part of go-burnout.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-burnout is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-burnout is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-burnout. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -27,12 +27,12 @@ import (
 	"time"
 
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/internal/cmdtest"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/swarm"
+	"github.com/burnout/go-burnout/accounts/keystore"
+	"github.com/burnout/go-burnout/internal/cmdtest"
+	"github.com/burnout/go-burnout/node"
+	"github.com/burnout/go-burnout/p2p"
+	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnout/go-burnout/swarm"
 )
 
 func init() {

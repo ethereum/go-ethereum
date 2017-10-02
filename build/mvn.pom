@@ -4,14 +4,14 @@
                       http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>org.ethereum</groupId>
+  <groupId>org.burnout</groupId>
   <artifactId>geth</artifactId>
   <version>{{.Version}}</version>
   <packaging>aar</packaging>
 
-  <name>Android Ethereum Client</name>
-  <description>Android port of the go-ethereum libraries and node</description>
-  <url>https://github.com/ethereum/go-ethereum</url>
+  <name>Android Burnout Client</name>
+  <description>Android port of the go-burnout libraries and node</description>
+  <url>https://github.com/burnout/go-burnout</url>
   <inceptionYear>2015</inceptionYear>
 
   <licenses>
@@ -23,8 +23,8 @@
   </licenses>
 
   <organization>
-    <name>Ethereum</name>
-    <url>https://ethereum.org</url>
+    <name>Burnout</name>
+    <url>https://burnout.org</url>
   </organization>
 
   <developers>
@@ -48,10 +48,10 @@
 
   <issueManagement>
     <system>GitHub Issues</system>
-    <url>https://github.com/ethereum/go-ethereum/issues/</url>
+    <url>https://github.com/burnout/go-burnout/issues/</url>
   </issueManagement>
 
   <scm>
-    <url>https://github.com/ethereum/go-ethereum</url>
+    <url>https://github.com/burnout/go-burnout</url>
   </scm>
 </project>

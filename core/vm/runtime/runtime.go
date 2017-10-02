@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package runtime
 
@@ -21,12 +21,12 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/core/state"
+	"github.com/burnout/go-burnout/core/vm"
+	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnout/go-burnout/params"
 )
 
 // Config is a basic type specifying certain configuration flags for running
@@ -101,7 +101,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		db, _ := ethdb.NewMemDatabase()
+		db, _ := brndb.NewMemDatabase()
 		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(db))
 	}
 	var (
@@ -132,7 +132,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		db, _ := ethdb.NewMemDatabase()
+		db, _ := brndb.NewMemDatabase()
 		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(db))
 	}
 	var (

@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package les
 
@@ -21,11 +21,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/light"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/core"
+	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnout/go-burnout/light"
 )
 
 var testBankSecureTrieKey = secAddr(testBankAddress)
@@ -34,29 +34,29 @@ func secAddr(addr common.Address) []byte {
 	return crypto.Keccak256(addr[:])
 }
 
-type accessTestFn func(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest
+type accessTestFn func(db brndb.Database, bhash common.Hash, number uint64) light.OdrRequest
 
 func TestBlockAccessLes1(t *testing.T) { testAccess(t, 1, tfBlockAccess) }
 
-func tfBlockAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
+func tfBlockAccess(db brndb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	return &light.BlockRequest{Hash: bhash, Number: number}
 }
 
 func TestReceiptsAccessLes1(t *testing.T) { testAccess(t, 1, tfReceiptsAccess) }
 
-func tfReceiptsAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
+func tfReceiptsAccess(db brndb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	return &light.ReceiptsRequest{Hash: bhash, Number: number}
 }
 
 func TestTrieEntryAccessLes1(t *testing.T) { testAccess(t, 1, tfTrieEntryAccess) }
 
-func tfTrieEntryAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
+func tfTrieEntryAccess(db brndb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	return &light.TrieRequest{Id: light.StateTrieID(core.GetHeader(db, bhash, core.GetBlockNumber(db, bhash))), Key: testBankSecureTrieKey}
 }
 
 func TestCodeAccessLes1(t *testing.T) { testAccess(t, 1, tfCodeAccess) }
 
-func tfCodeAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
+func tfCodeAccess(db brndb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	header := core.GetHeader(db, bhash, core.GetBlockNumber(db, bhash))
 	if header.Number.Uint64() < testContractDeployed {
 		return nil
@@ -71,8 +71,8 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	peers := newPeerSet()
 	dist := newRequestDistributor(peers, make(chan struct{}))
 	rm := newRetrieveManager(peers, dist, nil)
-	db, _ := ethdb.NewMemDatabase()
-	ldb, _ := ethdb.NewMemDatabase()
+	db, _ := brndb.NewMemDatabase()
+	ldb, _ := brndb.NewMemDatabase()
 	odr := NewLesOdr(ldb, rm)
 
 	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)

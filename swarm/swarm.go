@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package swarm
 
@@ -23,22 +23,22 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/contracts/chequebook"
-	"github.com/ethereum/go-ethereum/contracts/ens"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/swarm/api"
-	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
-	"github.com/ethereum/go-ethereum/swarm/fuse"
-	"github.com/ethereum/go-ethereum/swarm/network"
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/burnout/go-burnout/accounts/abi/bind"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/contracts/chequebook"
+	"github.com/burnout/go-burnout/contracts/ens"
+	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnout/go-burnout/brnclient"
+	"github.com/burnout/go-burnout/log"
+	"github.com/burnout/go-burnout/node"
+	"github.com/burnout/go-burnout/p2p"
+	"github.com/burnout/go-burnout/p2p/discover"
+	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnout/go-burnout/swarm/api"
+	httpapi "github.com/burnout/go-burnout/swarm/api/http"
+	"github.com/burnout/go-burnout/swarm/fuse"
+	"github.com/burnout/go-burnout/swarm/network"
+	"github.com/burnout/go-burnout/swarm/storage"
 )
 
 // the swarm stack
@@ -76,7 +76,7 @@ func (self *Swarm) API() *SwarmAPI {
 
 // creates a new swarm service instance
 // implements node.Service
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *ethclient.Client, config *api.Config, swapEnabled, syncEnabled bool, cors string) (self *Swarm, err error) {
+func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *brnclient.Client, config *api.Config, swapEnabled, syncEnabled bool, cors string) (self *Swarm, err error) {
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
 	}

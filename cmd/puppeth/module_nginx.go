@@ -1,18 +1,18 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2017 The go-burnout Authors
+// This file is part of go-burnout.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-burnout is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-burnout is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-burnout. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -23,7 +23,7 @@ import (
 	"math/rand"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/burnout/go-burnout/log"
 )
 
 // nginxDockerfile is theis the Dockerfile required to build an nginx reverse-
@@ -78,7 +78,7 @@ func deployNginx(client *sshClient, network string, port int) ([]byte, error) {
 	}
 	defer client.Run("rm -rf " + workdir)
 
-	// Build and deploy the ethstats service
+	// Build and deploy the brnstats service
 	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build", workdir, network))
 }
 

@@ -69,17 +69,17 @@ enum MessageType {
 	MessageType_SignIdentity = 53 [(wire_in) = true];
 	MessageType_SignedIdentity = 54 [(wire_out) = true];
 	MessageType_GetFeatures = 55 [(wire_in) = true];
-	MessageType_EthereumGetAddress = 56 [(wire_in) = true];
-	MessageType_EthereumAddress = 57 [(wire_out) = true];
-	MessageType_EthereumSignTx = 58 [(wire_in) = true];
-	MessageType_EthereumTxRequest = 59 [(wire_out) = true];
-	MessageType_EthereumTxAck = 60 [(wire_in) = true];
+	MessageType_BurnoutGetAddress = 56 [(wire_in) = true];
+	MessageType_BurnoutAddress = 57 [(wire_out) = true];
+	MessageType_BurnoutSignTx = 58 [(wire_in) = true];
+	MessageType_BurnoutTxRequest = 59 [(wire_out) = true];
+	MessageType_BurnoutTxAck = 60 [(wire_in) = true];
 	MessageType_GetECDHSessionKey = 61 [(wire_in) = true];
 	MessageType_ECDHSessionKey = 62 [(wire_out) = true];
 	MessageType_SetU2FCounter = 63 [(wire_in) = true];
-	MessageType_EthereumSignMessage = 64 [(wire_in) = true];
-	MessageType_EthereumVerifyMessage = 65 [(wire_in) = true];
-	MessageType_EthereumMessageSignature = 66 [(wire_out) = true];
+	MessageType_BurnoutSignMessage = 64 [(wire_in) = true];
+	MessageType_BurnoutVerifyMessage = 65 [(wire_in) = true];
+	MessageType_BurnoutMessageSignature = 66 [(wire_out) = true];
 	MessageType_DebugLinkDecision = 100 [(wire_debug_in) = true, (wire_tiny) = true];
 	MessageType_DebugLinkGetState = 101 [(wire_debug_in) = true];
 	MessageType_DebugLinkState = 102 [(wire_debug_out) = true];
@@ -316,12 +316,12 @@ message GetAddress {
 }
 
 /**
- * Request: Ask device for Ethereum address corresponding to address_n path
+ * Request: Ask device for Burnout address corresponding to address_n path
  * @next PassphraseRequest
- * @next EthereumAddress
+ * @next BurnoutAddress
  * @next Failure
  */
-message EthereumGetAddress {
+message BurnoutGetAddress {
 	repeated uint32 address_n = 1;			// BIP-32 path to derive the key from master node
 	optional bool show_display = 2;			// optionally show on display before sending the result
 }
@@ -335,11 +335,11 @@ message Address {
 }
 
 /**
- * Response: Contains an Ethereum address derived from device private seed
- * @prev EthereumGetAddress
+ * Response: Contains an Burnout address derived from device private seed
+ * @prev BurnoutGetAddress
  */
-message EthereumAddress {
-	required bytes address = 1;		// Coin address as an Ethereum 160 bit hash
+message BurnoutAddress {
+	required bytes address = 1;		// Coin address as an Burnout 160 bit hash
 }
 
 /**
@@ -640,10 +640,10 @@ message TxAck {
  * Note: the first at most 1024 bytes of data MUST be transmitted as part of this message.
  * @next PassphraseRequest
  * @next PinMatrixRequest
- * @next EthereumTxRequest
+ * @next BurnoutTxRequest
  * @next Failure
  */
-message EthereumSignTx {
+message BurnoutSignTx {
 	repeated uint32 address_n = 1;			// BIP-32 path to derive the key from master node
 	optional bytes nonce = 2;			// <=256 bit unsigned big endian
 	optional bytes gas_price = 3;			// <=256 bit unsigned big endian (in wei)
@@ -659,10 +659,10 @@ message EthereumSignTx {
  * Response: Device asks for more data from transaction payload, or returns the signature.
  * If data_length is set, device awaits that many more bytes of payload.
  * Otherwise, the signature_* fields contain the computed transaction signature. All three fields will be present.
- * @prev EthereumSignTx
- * @next EthereumTxAck
+ * @prev BurnoutSignTx
+ * @next BurnoutTxAck
  */
-message EthereumTxRequest {
+message BurnoutTxRequest {
 	optional uint32 data_length = 1;		// Number of bytes being requested (<= 1024)
 	optional uint32 signature_v = 2;		// Computed signature (recovery parameter, limited to 27 or 28)
 	optional bytes signature_r = 3;			// Computed signature R component (256 bit)
@@ -671,23 +671,23 @@ message EthereumTxRequest {
 
 /**
  * Request: Transaction payload data.
- * @prev EthereumTxRequest
- * @next EthereumTxRequest
+ * @prev BurnoutTxRequest
+ * @next BurnoutTxRequest
  */
-message EthereumTxAck {
+message BurnoutTxAck {
 	optional bytes data_chunk = 1;			// Bytes from transaction payload (<= 1024 bytes)
 }
 
 ////////////////////////////////////////
-// Ethereum: Message signing messages //
+// Burnout: Message signing messages //
 ////////////////////////////////////////
 
 /**
  * Request: Ask device to sign message
- * @next EthereumMessageSignature
+ * @next BurnoutMessageSignature
  * @next Failure
  */
-message EthereumSignMessage {
+message BurnoutSignMessage {
 	repeated uint32 address_n = 1;				// BIP-32 path to derive the key from master node
 	required bytes message = 2;				// message to be signed
 }
@@ -697,7 +697,7 @@ message EthereumSignMessage {
  * @next Success
  * @next Failure
  */
-message EthereumVerifyMessage {
+message BurnoutVerifyMessage {
 	optional bytes address = 1;				// address to verify
 	optional bytes signature = 2;				// signature to verify
 	optional bytes message = 3;				// message to verify
@@ -705,9 +705,9 @@ message EthereumVerifyMessage {
 
 /**
  * Response: Signed message
- * @prev EthereumSignMessage
+ * @prev BurnoutSignMessage
  */
-message EthereumMessageSignature {
+message BurnoutMessageSignature {
 	optional bytes address = 1;				// address used to sign the message
 	optional bytes signature = 2;				// signature of the message
 }

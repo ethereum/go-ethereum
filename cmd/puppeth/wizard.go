@@ -1,18 +1,18 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2017 The go-burnout Authors
+// This file is part of go-burnout.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-burnout is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-burnout is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-burnout. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -30,9 +30,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/core"
+	"github.com/burnout/go-burnout/log"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
@@ -43,7 +43,7 @@ type config struct {
 	genesis   *core.Genesis // Genesis block to cache for node deploys
 	bootFull  []string      // Bootnodes to always connect to by full nodes
 	bootLight []string      // Bootnodes to always connect to by light nodes
-	ethstats  string        // Ethstats settings to cache for node deploys
+	brnstats  string        // Ethstats settings to cache for node deploys
 
 	Servers map[string][]byte `json:"servers,omitempty"`
 }
@@ -74,7 +74,7 @@ type wizard struct {
 	conf    config // Configurations from previous runs
 
 	servers  map[string]*sshClient // SSH connections to servers to administer
-	services map[string][]string   // Ethereum services known to be running on servers
+	services map[string][]string   // Burnout services known to be running on servers
 
 	in *bufio.Reader // Wrapper around stdin to allow reading user input
 }
@@ -218,7 +218,7 @@ func (w *wizard) readPassword() string {
 }
 
 // readAddress reads a single line from stdin, trimming if from spaces and converts
-// it to an Ethereum address.
+// it to an Burnout address.
 func (w *wizard) readAddress() *common.Address {
 	for {
 		// Read the address from the user
@@ -242,7 +242,7 @@ func (w *wizard) readAddress() *common.Address {
 }
 
 // readDefaultAddress reads a single line from stdin, trimming if from spaces and
-// converts it to an Ethereum address. If an empty line is entered, the default
+// converts it to an Burnout address. If an empty line is entered, the default
 // value is returned.
 func (w *wizard) readDefaultAddress(def common.Address) common.Address {
 	for {

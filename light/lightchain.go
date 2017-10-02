@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package light
 
@@ -23,15 +23,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/consensus"
+	"github.com/burnout/go-burnout/core"
+	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnout/go-burnout/event"
+	"github.com/burnout/go-burnout/log"
+	"github.com/burnout/go-burnout/params"
+	"github.com/burnout/go-burnout/rlp"
 	"github.com/hashicorp/golang-lru"
 )
 
@@ -45,7 +45,7 @@ var (
 // interface. It only does header validation during chain insertion.
 type LightChain struct {
 	hc            *core.HeaderChain
-	chainDb       ethdb.Database
+	chainDb       brndb.Database
 	odr           OdrBackend
 	chainFeed     event.Feed
 	chainSideFeed event.Feed
@@ -70,7 +70,7 @@ type LightChain struct {
 }
 
 // NewLightChain returns a fully initialised light chain using information
-// available in the database. It initialises the default Ethereum header
+// available in the database. It initialises the default Burnout header
 // validator.
 func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine) (*LightChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)

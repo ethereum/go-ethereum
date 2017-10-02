@@ -1,18 +1,18 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2017 The go-burnout Authors
+// This file is part of go-burnout.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-burnout is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-burnout is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-burnout. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -25,12 +25,12 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/burnout/go-burnout/log"
 )
 
-// nodeDockerfile is the Dockerfile required to run an Ethereum node.
+// nodeDockerfile is the Dockerfile required to run an Burnout node.
 var nodeDockerfile = `
-FROM ethereum/client-go:latest
+FROM burnout/client-go:latest
 
 ADD genesis.json /genesis.json
 {{if .Unlock}}
@@ -39,14 +39,14 @@ ADD genesis.json /genesis.json
 {{end}}
 RUN \
   echo 'geth init /genesis.json' > geth.sh && \{{if .Unlock}}
-	echo 'mkdir -p /root/.ethereum/keystore/ && cp /signer.json /root/.ethereum/keystore/' >> geth.sh && \{{end}}
-	echo $'geth --networkid {{.NetworkID}} --cache 512 --port {{.Port}} --maxpeers {{.Peers}} {{.LightFlag}} --ethstats \'{{.Ethstats}}\' {{if .BootV4}}--bootnodesv4 {{.BootV4}}{{end}} {{if .BootV5}}--bootnodesv5 {{.BootV5}}{{end}} {{if .Etherbase}}--etherbase {{.Etherbase}} --mine{{end}}{{if .Unlock}}--unlock 0 --password /signer.pass --mine{{end}} --targetgaslimit {{.GasTarget}} --gasprice {{.GasPrice}}' >> geth.sh
+	echo 'mkdir -p /root/.burnout/keystore/ && cp /signer.json /root/.burnout/keystore/' >> geth.sh && \{{end}}
+	echo $'geth --networkid {{.NetworkID}} --cache 512 --port {{.Port}} --maxpeers {{.Peers}} {{.LightFlag}} --brnstats \'{{.Ethstats}}\' {{if .BootV4}}--bootnodesv4 {{.BootV4}}{{end}} {{if .BootV5}}--bootnodesv5 {{.BootV5}}{{end}} {{if .Etherbase}}--etherbase {{.Etherbase}} --mine{{end}}{{if .Unlock}}--unlock 0 --password /signer.pass --mine{{end}} --targetgaslimit {{.GasTarget}} --gasprice {{.GasPrice}}' >> geth.sh
 
 ENTRYPOINT ["/bin/sh", "geth.sh"]
 `
 
 // nodeComposefile is the docker-compose.yml file required to deploy and maintain
-// an Ethereum node (bootnode or miner for now).
+// an Burnout node (bootnode or miner for now).
 var nodeComposefile = `
 version: '2'
 services:
@@ -58,7 +58,7 @@ services:
       - "{{.FullPort}}:{{.FullPort}}/udp"{{if .Light}}
       - "{{.LightPort}}:{{.LightPort}}/udp"{{end}}
     volumes:
-      - {{.Datadir}}:/root/.ethereum
+      - {{.Datadir}}:/root/.burnout
     environment:
       - FULL_PORT={{.FullPort}}/tcp
       - LIGHT_PORT={{.LightPort}}/udp
@@ -76,7 +76,7 @@ services:
     restart: always
 `
 
-// deployNode deploys a new Ethereum node container to a remote machine via SSH,
+// deployNode deploys a new Burnout node container to a remote machine via SSH,
 // docker and docker-compose. If an instance with the specified network name
 // already exists there, it will be overwritten!
 func deployNode(client *sshClient, network string, bootv4, bootv5 []string, config *nodeInfos) ([]byte, error) {
@@ -102,7 +102,7 @@ func deployNode(client *sshClient, network string, bootv4, bootv5 []string, conf
 		"LightFlag": lightFlag,
 		"BootV4":    strings.Join(bootv4, ","),
 		"BootV5":    strings.Join(bootv5, ","),
-		"Ethstats":  config.ethstats,
+		"Ethstats":  config.brnstats,
 		"Etherbase": config.etherbase,
 		"GasTarget": uint64(1000000 * config.gasTarget),
 		"GasPrice":  uint64(1000000000 * config.gasPrice),
@@ -120,7 +120,7 @@ func deployNode(client *sshClient, network string, bootv4, bootv5 []string, conf
 		"Light":      config.peersLight > 0,
 		"LightPort":  config.portFull + 1,
 		"LightPeers": config.peersLight,
-		"Ethstats":   config.ethstats[:strings.Index(config.ethstats, ":")],
+		"Ethstats":   config.brnstats[:strings.Index(config.brnstats, ":")],
 		"Etherbase":  config.etherbase,
 		"GasTarget":  config.gasTarget,
 		"GasPrice":   config.gasPrice,
@@ -150,7 +150,7 @@ type nodeInfos struct {
 	genesis    []byte
 	network    int64
 	datadir    string
-	ethstats   string
+	brnstats   string
 	portFull   int
 	portLight  int
 	enodeFull  string
@@ -170,8 +170,8 @@ func (info *nodeInfos) String() string {
 	if info.peersLight > 0 {
 		discv5 = fmt.Sprintf(", portv5=%d", info.portLight)
 	}
-	return fmt.Sprintf("port=%d%s, datadir=%s, peers=%d, lights=%d, ethstats=%s, gastarget=%0.3f MGas, gasprice=%0.3f GWei",
-		info.portFull, discv5, info.datadir, info.peersTotal, info.peersLight, info.ethstats, info.gasTarget, info.gasPrice)
+	return fmt.Sprintf("port=%d%s, datadir=%s, peers=%d, lights=%d, brnstats=%s, gastarget=%0.3f MGas, gasprice=%0.3f GWei",
+		info.portFull, discv5, info.datadir, info.peersTotal, info.peersLight, info.brnstats, info.gasTarget, info.gasPrice)
 }
 
 // checkNode does a health-check against an boot or seal node server to verify
@@ -222,12 +222,12 @@ func checkNode(client *sshClient, network string, boot bool) (*nodeInfos, error)
 	// Assemble and return the useful infos
 	stats := &nodeInfos{
 		genesis:    genesis,
-		datadir:    infos.volumes["/root/.ethereum"],
+		datadir:    infos.volumes["/root/.burnout"],
 		portFull:   infos.portmap[infos.envvars["FULL_PORT"]],
 		portLight:  infos.portmap[infos.envvars["LIGHT_PORT"]],
 		peersTotal: totalPeers,
 		peersLight: lightPeers,
-		ethstats:   infos.envvars["STATS_NAME"],
+		brnstats:   infos.envvars["STATS_NAME"],
 		etherbase:  infos.envvars["MINER_NAME"],
 		keyJSON:    keyJSON,
 		keyPass:    keyPass,

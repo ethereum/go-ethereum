@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package node
 
@@ -22,11 +22,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/burnout/go-burnout/common/hexutil"
+	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnout/go-burnout/p2p"
+	"github.com/burnout/go-burnout/p2p/discover"
+	"github.com/burnout/go-burnout/rpc"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -378,7 +378,7 @@ func (s *PublicWeb3API) ClientVersion() string {
 	return s.stack.Server().Name
 }
 
-// Sha3 applies the ethereum sha3 implementation on the input.
+// Sha3 applies the burnout sha3 implementation on the input.
 // It assumes the input is hex encoded.
 func (s *PublicWeb3API) Sha3(input hexutil.Bytes) hexutil.Bytes {
 	return crypto.Keccak256(input)

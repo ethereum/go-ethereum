@@ -1,33 +1,33 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package light implements on-demand retrieval capable state and chain objects
-// for the Ethereum Light Client.
+// for the Burnout Light Client.
 package light
 
 import (
 	"context"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/core"
+	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnout/go-burnout/rlp"
 )
 
 // NoOdr is the default context passed to an ODR capable function when the ODR
@@ -36,13 +36,13 @@ var NoOdr = context.Background()
 
 // OdrBackend is an interface to a backend service that handles ODR retrievals type
 type OdrBackend interface {
-	Database() ethdb.Database
+	Database() brndb.Database
 	Retrieve(ctx context.Context, req OdrRequest) error
 }
 
 // OdrRequest is an interface for retrieval requests
 type OdrRequest interface {
-	StoreResult(db ethdb.Database)
+	StoreResult(db brndb.Database)
 }
 
 // TrieID identifies a state or account storage trie
@@ -84,12 +84,12 @@ type TrieRequest struct {
 }
 
 // StoreResult stores the retrieved data in local database
-func (req *TrieRequest) StoreResult(db ethdb.Database) {
+func (req *TrieRequest) StoreResult(db brndb.Database) {
 	storeProof(db, req.Proof)
 }
 
 // storeProof stores the new trie nodes obtained from a merkle proof in the database
-func storeProof(db ethdb.Database, proof []rlp.RawValue) {
+func storeProof(db brndb.Database, proof []rlp.RawValue) {
 	for _, buf := range proof {
 		hash := crypto.Keccak256(buf)
 		val, _ := db.Get(hash)
@@ -108,7 +108,7 @@ type CodeRequest struct {
 }
 
 // StoreResult stores the retrieved data in local database
-func (req *CodeRequest) StoreResult(db ethdb.Database) {
+func (req *CodeRequest) StoreResult(db brndb.Database) {
 	db.Put(req.Hash[:], req.Data)
 }
 
@@ -121,7 +121,7 @@ type BlockRequest struct {
 }
 
 // StoreResult stores the retrieved data in local database
-func (req *BlockRequest) StoreResult(db ethdb.Database) {
+func (req *BlockRequest) StoreResult(db brndb.Database) {
 	core.WriteBodyRLP(db, req.Hash, req.Number, req.Rlp)
 }
 
@@ -134,7 +134,7 @@ type ReceiptsRequest struct {
 }
 
 // StoreResult stores the retrieved data in local database
-func (req *ReceiptsRequest) StoreResult(db ethdb.Database) {
+func (req *ReceiptsRequest) StoreResult(db brndb.Database) {
 	core.WriteBlockReceipts(db, req.Hash, req.Number, req.Receipts)
 }
 
@@ -149,7 +149,7 @@ type ChtRequest struct {
 }
 
 // StoreResult stores the retrieved data in local database
-func (req *ChtRequest) StoreResult(db ethdb.Database) {
+func (req *ChtRequest) StoreResult(db brndb.Database) {
 	// if there is a canonical hash, there is a header too
 	core.WriteHeader(db, req.Header)
 	hash, num := req.Header.Hash(), req.Header.Number.Uint64()

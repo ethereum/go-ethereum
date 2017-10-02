@@ -1,20 +1,20 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package les implements the Light Ethereum Subprotocol.
+// Package les implements the Light Burnout Subprotocol.
 package les
 
 import (
@@ -22,29 +22,29 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/params"
-	rpc "github.com/ethereum/go-ethereum/rpc"
+	"github.com/burnout/go-burnout/accounts"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/common/hexutil"
+	"github.com/burnout/go-burnout/consensus"
+	"github.com/burnout/go-burnout/core"
+	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnout/go-burnout/brn"
+	"github.com/burnout/go-burnout/brn/downloader"
+	"github.com/burnout/go-burnout/brn/filters"
+	"github.com/burnout/go-burnout/brn/gasprice"
+	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnout/go-burnout/event"
+	"github.com/burnout/go-burnout/internal/ethapi"
+	"github.com/burnout/go-burnout/light"
+	"github.com/burnout/go-burnout/log"
+	"github.com/burnout/go-burnout/node"
+	"github.com/burnout/go-burnout/p2p"
+	"github.com/burnout/go-burnout/p2p/discv5"
+	"github.com/burnout/go-burnout/params"
+	rpc "github.com/burnout/go-burnout/rpc"
 )
 
-type LightEthereum struct {
+type LightBurnout struct {
 	odr         *LesOdr
 	relay       *LesTxRelay
 	chainConfig *params.ChainConfig
@@ -59,7 +59,7 @@ type LightEthereum struct {
 	reqDist         *requestDistributor
 	retriever       *retrieveManager
 	// DB interfaces
-	chainDb ethdb.Database // Block chain database
+	chainDb brndb.Database // Block chain database
 
 	ApiBackend *LesApiBackend
 
@@ -73,8 +73,8 @@ type LightEthereum struct {
 	wg sync.WaitGroup
 }
 
-func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
-	chainDb, err := eth.CreateDB(ctx, config, "lightchaindata")
+func New(ctx *node.ServiceContext, config *brn.Config) (*LightBurnout, error) {
+	chainDb, err := brn.CreateDB(ctx, config, "lightchaindata")
 	if err != nil {
 		return nil, err
 	}
@@ -87,43 +87,43 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	peers := newPeerSet()
 	quitSync := make(chan struct{})
 
-	eth := &LightEthereum{
+	brn := &LightBurnout{
 		chainConfig:    chainConfig,
 		chainDb:        chainDb,
 		eventMux:       ctx.EventMux,
 		peers:          peers,
 		reqDist:        newRequestDistributor(peers, quitSync),
 		accountManager: ctx.AccountManager,
-		engine:         eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb),
+		engine:         brn.CreateConsensusEngine(ctx, config, chainConfig, chainDb),
 		shutdownChan:   make(chan bool),
 		networkId:      config.NetworkId,
 	}
 
-	eth.relay = NewLesTxRelay(peers, eth.reqDist)
-	eth.serverPool = newServerPool(chainDb, quitSync, &eth.wg)
-	eth.retriever = newRetrieveManager(peers, eth.reqDist, eth.serverPool)
-	eth.odr = NewLesOdr(chainDb, eth.retriever)
-	if eth.blockchain, err = light.NewLightChain(eth.odr, eth.chainConfig, eth.engine); err != nil {
+	brn.relay = NewLesTxRelay(peers, brn.reqDist)
+	brn.serverPool = newServerPool(chainDb, quitSync, &brn.wg)
+	brn.retriever = newRetrieveManager(peers, brn.reqDist, brn.serverPool)
+	brn.odr = NewLesOdr(chainDb, brn.retriever)
+	if brn.blockchain, err = light.NewLightChain(brn.odr, brn.chainConfig, brn.engine); err != nil {
 		return nil, err
 	}
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-		eth.blockchain.SetHead(compat.RewindTo)
+		brn.blockchain.SetHead(compat.RewindTo)
 		core.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 
-	eth.txPool = light.NewTxPool(eth.chainConfig, eth.blockchain, eth.relay)
-	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, true, config.NetworkId, eth.eventMux, eth.engine, eth.peers, eth.blockchain, nil, chainDb, eth.odr, eth.relay, quitSync, &eth.wg); err != nil {
+	brn.txPool = light.NewTxPool(brn.chainConfig, brn.blockchain, brn.relay)
+	if brn.protocolManager, err = NewProtocolManager(brn.chainConfig, true, config.NetworkId, brn.eventMux, brn.engine, brn.peers, brn.blockchain, nil, chainDb, brn.odr, brn.relay, quitSync, &brn.wg); err != nil {
 		return nil, err
 	}
-	eth.ApiBackend = &LesApiBackend{eth, nil}
+	brn.ApiBackend = &LesApiBackend{brn, nil}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.GasPrice
 	}
-	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
-	return eth, nil
+	brn.ApiBackend.gpo = gasprice.NewOracle(brn.ApiBackend, gpoParams)
+	return brn, nil
 }
 
 func lesTopic(genesisHash common.Hash) discv5.Topic {
@@ -152,22 +152,22 @@ func (s *LightDummyAPI) Mining() bool {
 	return false
 }
 
-// APIs returns the collection of RPC services the ethereum package offers.
+// APIs returns the collection of RPC services the burnout package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
-func (s *LightEthereum) APIs() []rpc.API {
+func (s *LightBurnout) APIs() []rpc.API {
 	return append(ethapi.GetAPIs(s.ApiBackend), []rpc.API{
 		{
-			Namespace: "eth",
+			Namespace: "brn",
 			Version:   "1.0",
 			Service:   &LightDummyAPI{},
 			Public:    true,
 		}, {
-			Namespace: "eth",
+			Namespace: "brn",
 			Version:   "1.0",
 			Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
 			Public:    true,
 		}, {
-			Namespace: "eth",
+			Namespace: "brn",
 			Version:   "1.0",
 			Service:   filters.NewPublicFilterAPI(s.ApiBackend, true),
 			Public:    true,
@@ -180,26 +180,26 @@ func (s *LightEthereum) APIs() []rpc.API {
 	}...)
 }
 
-func (s *LightEthereum) ResetWithGenesisBlock(gb *types.Block) {
+func (s *LightBurnout) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
-func (s *LightEthereum) BlockChain() *light.LightChain      { return s.blockchain }
-func (s *LightEthereum) TxPool() *light.TxPool              { return s.txPool }
-func (s *LightEthereum) Engine() consensus.Engine           { return s.engine }
-func (s *LightEthereum) LesVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
-func (s *LightEthereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
-func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
+func (s *LightBurnout) BlockChain() *light.LightChain      { return s.blockchain }
+func (s *LightBurnout) TxPool() *light.TxPool              { return s.txPool }
+func (s *LightBurnout) Engine() consensus.Engine           { return s.engine }
+func (s *LightBurnout) LesVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
+func (s *LightBurnout) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
+func (s *LightBurnout) EventMux() *event.TypeMux           { return s.eventMux }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
-func (s *LightEthereum) Protocols() []p2p.Protocol {
+func (s *LightBurnout) Protocols() []p2p.Protocol {
 	return s.protocolManager.SubProtocols
 }
 
 // Start implements node.Service, starting all internal goroutines needed by the
-// Ethereum protocol implementation.
-func (s *LightEthereum) Start(srvr *p2p.Server) error {
+// Burnout protocol implementation.
+func (s *LightBurnout) Start(srvr *p2p.Server) error {
 	log.Warn("Light client mode is an experimental feature")
 	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.networkId)
 	s.serverPool.start(srvr, lesTopic(s.blockchain.Genesis().Hash()))
@@ -208,8 +208,8 @@ func (s *LightEthereum) Start(srvr *p2p.Server) error {
 }
 
 // Stop implements node.Service, terminating all internal goroutines used by the
-// Ethereum protocol.
-func (s *LightEthereum) Stop() error {
+// Burnout protocol.
+func (s *LightBurnout) Stop() error {
 	s.odr.Stop()
 	s.blockchain.Stop()
 	s.protocolManager.Stop()

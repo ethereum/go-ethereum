@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package light
 
@@ -21,12 +21,12 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/consensus/ethash"
+	"github.com/burnout/go-burnout/core"
+	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnout/go-burnout/params"
 )
 
 // So we can deterministically seed different blockchains
@@ -36,7 +36,7 @@ var (
 )
 
 // makeHeaderChain creates a deterministic chain of headers rooted at parent.
-func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) []*types.Header {
+func makeHeaderChain(parent *types.Header, n int, db brndb.Database, seed int) []*types.Header {
 	blocks, _ := core.GenerateChain(params.TestChainConfig, types.NewBlockWithHeader(parent), db, n, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
 	})
@@ -50,8 +50,8 @@ func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) [
 // newCanonical creates a chain database, and injects a deterministic canonical
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
-func newCanonical(n int) (ethdb.Database, *LightChain, error) {
-	db, _ := ethdb.NewMemDatabase()
+func newCanonical(n int) (brndb.Database, *LightChain, error) {
+	db, _ := brndb.NewMemDatabase()
 	gspec := core.Genesis{Config: params.TestChainConfig}
 	genesis := gspec.MustCommit(db)
 	blockchain, _ := NewLightChain(&dummyOdr{db: db}, gspec.Config, ethash.NewFaker())
@@ -68,7 +68,7 @@ func newCanonical(n int) (ethdb.Database, *LightChain, error) {
 
 // newTestLightChain creates a LightChain that doesn't validate anything.
 func newTestLightChain() *LightChain {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := brndb.NewMemDatabase()
 	gspec := &core.Genesis{
 		Difficulty: big.NewInt(1),
 		Config:     params.TestChainConfig,
@@ -264,10 +264,10 @@ func makeHeaderChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.
 
 type dummyOdr struct {
 	OdrBackend
-	db ethdb.Database
+	db brndb.Database
 }
 
-func (odr *dummyOdr) Database() ethdb.Database {
+func (odr *dummyOdr) Database() brndb.Database {
 	return odr.db
 }
 

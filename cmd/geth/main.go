@@ -1,20 +1,20 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2014 The go-burnout Authors
+// This file is part of go-burnout.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-burnout is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-burnout is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-burnout. If not, see <http://www.gnu.org/licenses/>.
 
-// geth is the official command-line client for Ethereum.
+// geth is the official command-line client for Burnout.
 package main
 
 import (
@@ -25,17 +25,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/burnout/go-burnout/accounts"
+	"github.com/burnout/go-burnout/accounts/keystore"
+	"github.com/burnout/go-burnout/cmd/utils"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/console"
+	"github.com/burnout/go-burnout/brn"
+	"github.com/burnout/go-burnout/brnclient"
+	"github.com/burnout/go-burnout/internal/debug"
+	"github.com/burnout/go-burnout/log"
+	"github.com/burnout/go-burnout/metrics"
+	"github.com/burnout/go-burnout/node"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -46,10 +46,10 @@ const (
 var (
 	// Git SHA1 commit hash of the release (set via linker flags)
 	gitCommit = ""
-	// Ethereum address of the Geth release oracle.
+	// Burnout address of the Geth release oracle.
 	relOracle = common.HexToAddress("0xfa7b9770ca4cb04296cac84f37736d4041251cdf")
 	// The app that holds all commands and flags.
-	app = utils.NewApp(gitCommit, "the go-ethereum command line interface")
+	app = utils.NewApp(gitCommit, "the go-burnout command line interface")
 	// flags that configure the node
 	nodeFlags = []cli.Flag{
 		utils.IdentityFlag,
@@ -140,7 +140,7 @@ func init() {
 	// Initialize the CLI app and start Geth
 	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright 2013-2017 The go-ethereum Authors"
+	app.Copyright = "Copyright 2013-2017 The go-burnout Authors"
 	app.Commands = []cli.Command{
 		// See chaincmd.go:
 		initCommand,
@@ -237,7 +237,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if err != nil {
 			utils.Fatalf("Failed to attach to self: %v", err)
 		}
-		stateReader := ethclient.NewClient(rpcClient)
+		stateReader := brnclient.NewClient(rpcClient)
 
 		// Open any wallets already attached
 		for _, wallet := range stack.AccountManager().Wallets() {
@@ -270,23 +270,23 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	}()
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		// Mining only makes sense if a full Ethereum node is running
-		var ethereum *eth.Ethereum
-		if err := stack.Service(&ethereum); err != nil {
-			utils.Fatalf("ethereum service not running: %v", err)
+		// Mining only makes sense if a full Burnout node is running
+		var burnout *brn.Burnout
+		if err := stack.Service(&burnout); err != nil {
+			utils.Fatalf("burnout service not running: %v", err)
 		}
 		// Use a reduced number of threads if requested
 		if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
 			type threaded interface {
 				SetThreads(threads int)
 			}
-			if th, ok := ethereum.Engine().(threaded); ok {
+			if th, ok := burnout.Engine().(threaded); ok {
 				th.SetThreads(threads)
 			}
 		}
 		// Set the gas price to the limits from the CLI and start mining
-		ethereum.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
-		if err := ethereum.StartMining(true); err != nil {
+		burnout.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
+		if err := burnout.StartMining(true); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}

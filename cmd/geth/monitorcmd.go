@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2015 The go-burnout Authors
+// This file is part of go-burnout.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-burnout is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-burnout is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-burnout. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/burnout/go-burnout/cmd/utils"
+	"github.com/burnout/go-burnout/node"
+	"github.com/burnout/go-burnout/rpc"
 	"github.com/gizak/termui"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -73,7 +73,7 @@ func monitor(ctx *cli.Context) error {
 		client *rpc.Client
 		err    error
 	)
-	// Attach to an Ethereum node over IPC or RPC
+	// Attach to an Burnout node over IPC or RPC
 	endpoint := ctx.String(monitorCommandAttachFlag.Name)
 	if client, err = dialRPC(endpoint); err != nil {
 		utils.Fatalf("Unable to attach to geth node: %v", err)

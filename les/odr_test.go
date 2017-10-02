@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package les
 
@@ -23,23 +23,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/common/math"
+	"github.com/burnout/go-burnout/core"
+	"github.com/burnout/go-burnout/core/state"
+	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnout/go-burnout/core/vm"
+	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnout/go-burnout/light"
+	"github.com/burnout/go-burnout/params"
+	"github.com/burnout/go-burnout/rlp"
 )
 
-type odrTestFn func(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte
+type odrTestFn func(ctx context.Context, db brndb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte
 
 func TestOdrGetBlockLes1(t *testing.T) { testOdr(t, 1, 1, odrGetBlock) }
 
-func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
+func odrGetBlock(ctx context.Context, db brndb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	var block *types.Block
 	if bc != nil {
 		block = bc.GetBlockByHash(bhash)
@@ -55,7 +55,7 @@ func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainCon
 
 func TestOdrGetReceiptsLes1(t *testing.T) { testOdr(t, 1, 1, odrGetReceipts) }
 
-func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
+func odrGetReceipts(ctx context.Context, db brndb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	var receipts types.Receipts
 	if bc != nil {
 		receipts = core.GetBlockReceipts(db, bhash, core.GetBlockNumber(db, bhash))
@@ -71,7 +71,7 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.Chain
 
 func TestOdrAccountsLes1(t *testing.T) { testOdr(t, 1, 1, odrAccounts) }
 
-func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
+func odrAccounts(ctx context.Context, db brndb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	dummyAddr := common.HexToAddress("1234567812345678123456781234567812345678")
 	acc := []common.Address{testBankAddress, acc1Addr, acc2Addr, dummyAddr}
 
@@ -106,7 +106,7 @@ type callmsg struct {
 
 func (callmsg) CheckNonce() bool { return false }
 
-func odrContractCall(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
+func odrContractCall(ctx context.Context, db brndb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	data := common.Hex2Bytes("60CD26850000000000000000000000000000000000000000000000000000000000000000")
 
 	var res []byte
@@ -152,8 +152,8 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	peers := newPeerSet()
 	dist := newRequestDistributor(peers, make(chan struct{}))
 	rm := newRetrieveManager(peers, dist, nil)
-	db, _ := ethdb.NewMemDatabase()
-	ldb, _ := ethdb.NewMemDatabase()
+	db, _ := brndb.NewMemDatabase()
+	ldb, _ := brndb.NewMemDatabase()
 	odr := NewLesOdr(ldb, rm)
 	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
 	lpm := newTestProtocolManagerMust(t, true, 0, nil, peers, odr, ldb)

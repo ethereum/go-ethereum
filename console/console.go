@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package console
 
@@ -27,9 +27,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/internal/jsre"
-	"github.com/ethereum/go-ethereum/internal/web3ext"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/burnout/go-burnout/internal/jsre"
+	"github.com/burnout/go-burnout/internal/web3ext"
+	"github.com/burnout/go-burnout/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
@@ -52,7 +52,7 @@ const DefaultPrompt = "> "
 type Config struct {
 	DataDir  string       // Data directory to store the console history at
 	DocRoot  string       // Filesystem path from where to load JavaScript files from
-	Client   *rpc.Client  // RPC client to execute Ethereum requests through
+	Client   *rpc.Client  // RPC client to execute Burnout requests through
 	Prompt   string       // Input prompt prefix string (defaults to DefaultPrompt)
 	Prompter UserPrompter // Input prompter to allow interactive user feedback (defaults to TerminalPrompter)
 	Printer  io.Writer    // Output writer to serialize any display strings to (defaults to os.Stdout)
@@ -63,7 +63,7 @@ type Config struct {
 // JavaScript console attached to a running node via an external or in-process RPC
 // client.
 type Console struct {
-	client   *rpc.Client  // RPC client to execute Ethereum requests through
+	client   *rpc.Client  // RPC client to execute Burnout requests through
 	jsre     *jsre.JSRE   // JavaScript runtime environment running the interpreter
 	prompt   string       // Input prompt prefix string
 	prompter UserPrompter // Input prompter to allow interactive user feedback
@@ -131,7 +131,7 @@ func (c *Console) init(preload []string) error {
 	if err != nil {
 		return fmt.Errorf("api modules: %v", err)
 	}
-	flatten := "var eth = web3.eth; var personal = web3.personal; "
+	flatten := "var brn = web3.brn; var personal = web3.personal; "
 	for api := range apis {
 		if api == "web3" {
 			continue // manually mapped or ignore
@@ -151,7 +151,7 @@ func (c *Console) init(preload []string) error {
 		return fmt.Errorf("namespace flattening: %v", err)
 	}
 	// Initialize the global name register (disabled for now)
-	//c.jsre.Run(`var GlobalRegistrar = eth.contract(` + registrar.GlobalRegistrarAbi + `);   registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
+	//c.jsre.Run(`var GlobalRegistrar = brn.contract(` + registrar.GlobalRegistrarAbi + `);   registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
 
 	// If the console is in interactive mode, instrument password related methods to query the user
 	if c.prompter != nil {
@@ -235,7 +235,7 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 		return "", nil, ""
 	}
 	// Chunck data to relevant part for autocompletion
-	// E.g. in case of nested lines eth.getBalance(eth.coinb<tab><tab>
+	// E.g. in case of nested lines brn.getBalance(brn.coinb<tab><tab>
 	start := pos - 1
 	for ; start > 0; start-- {
 		// Skip all methods and namespaces (i.e. including te dot)
@@ -261,8 +261,8 @@ func (c *Console) Welcome() {
 	fmt.Fprintf(c.printer, "Welcome to the Geth JavaScript console!\n\n")
 	c.jsre.Run(`
 		console.log("instance: " + web3.version.node);
-		console.log("coinbase: " + eth.coinbase);
-		console.log("at block: " + eth.blockNumber + " (" + new Date(1000 * eth.getBlock(eth.blockNumber).timestamp) + ")");
+		console.log("coinbase: " + brn.coinbase);
+		console.log("at block: " + brn.blockNumber + " (" + new Date(1000 * brn.getBlock(brn.blockNumber).timestamp) + ")");
 		console.log(" datadir: " + admin.datadir);
 	`)
 	// List all the supported modules for the user to call

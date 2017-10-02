@@ -1,18 +1,18 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2017 The go-burnout Authors
+// This file is part of go-burnout.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-burnout is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-burnout is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-burnout. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -24,22 +24,22 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/burnout/go-burnout/log"
 )
 
-// ethstatsDockerfile is the Dockerfile required to build an ethstats backend
+// ethstatsDockerfile is the Dockerfile required to build an brnstats backend
 // and associated monitoring site.
 var ethstatsDockerfile = `
 FROM mhart/alpine-node:latest
 
 RUN \
   apk add --update git                                         && \
-  git clone --depth=1 https://github.com/karalabe/eth-netstats && \
+  git clone --depth=1 https://github.com/karalabe/brn-netstats && \
 	apk del git && rm -rf /var/cache/apk/*                       && \
 	\
-  cd /eth-netstats && npm install && npm install -g grunt-cli && grunt
+  cd /brn-netstats && npm install && npm install -g grunt-cli && grunt
 
-WORKDIR /eth-netstats
+WORKDIR /brn-netstats
 EXPOSE 3000
 
 RUN echo 'module.exports = {trusted: [{{.Trusted}}], banned: [{{.Banned}}], reserved: ["yournode"]};' > lib/utils/config.js
@@ -48,13 +48,13 @@ CMD ["npm", "start"]
 `
 
 // ethstatsComposefile is the docker-compose.yml file required to deploy and
-// maintain an ethstats monitoring site.
+// maintain an brnstats monitoring site.
 var ethstatsComposefile = `
 version: '2'
 services:
-  ethstats:
+  brnstats:
     build: .
-    image: {{.Network}}/ethstats{{if not .VHost}}
+    image: {{.Network}}/brnstats{{if not .VHost}}
     ports:
       - "{{.Port}}:3000"{{end}}
     environment:
@@ -69,7 +69,7 @@ services:
     restart: always
 `
 
-// deployEthstats deploys a new ethstats container to a remote machine via SSH,
+// deployEthstats deploys a new brnstats container to a remote machine via SSH,
 // docker and docker-compose. If an instance with the specified network name
 // already exists there, it will be overwritten!
 func deployEthstats(client *sshClient, network string, port int, secret string, vhost string, trusted []string, banned []string) ([]byte, error) {
@@ -109,11 +109,11 @@ func deployEthstats(client *sshClient, network string, port int, secret string, 
 	}
 	defer client.Run("rm -rf " + workdir)
 
-	// Build and deploy the ethstats service
+	// Build and deploy the brnstats service
 	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build", workdir, network))
 }
 
-// ethstatsInfos is returned from an ethstats status check to allow reporting
+// ethstatsInfos is returned from an brnstats status check to allow reporting
 // various configuration parameters.
 type ethstatsInfos struct {
 	host   string
@@ -128,10 +128,10 @@ func (info *ethstatsInfos) String() string {
 	return fmt.Sprintf("host=%s, port=%d, secret=%s, banned=%v", info.host, info.port, info.secret, info.banned)
 }
 
-// checkEthstats does a health-check against an ethstats server to verify whether
+// checkEthstats does a health-check against an brnstats server to verify whether
 // it's running, and if yes, gathering a collection of useful infos about it.
 func checkEthstats(client *sshClient, network string) (*ethstatsInfos, error) {
-	// Inspect a possible ethstats container on the host
+	// Inspect a possible brnstats container on the host
 	infos, err := inspectContainer(client, fmt.Sprintf("%s_ethstats_1", network))
 	if err != nil {
 		return nil, err

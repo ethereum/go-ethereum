@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package les
 
@@ -20,15 +20,15 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/core"
+	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnout/go-burnout/brn/downloader"
+	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnout/go-burnout/p2p"
+	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnout/go-burnout/trie"
 )
 
 func expectResponse(r p2p.MsgReader, msgcode, reqID, bv uint64, data interface{}) error {
@@ -43,7 +43,7 @@ func expectResponse(r p2p.MsgReader, msgcode, reqID, bv uint64, data interface{}
 func TestGetBlockHeadersLes1(t *testing.T) { testGetBlockHeaders(t, 1) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := brndb.NewMemDatabase()
 	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
@@ -172,7 +172,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 func TestGetBlockBodiesLes1(t *testing.T) { testGetBlockBodies(t, 1) }
 
 func testGetBlockBodies(t *testing.T, protocol int) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := brndb.NewMemDatabase()
 	pm := newTestProtocolManagerMust(t, false, downloader.MaxBlockFetch+15, nil, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
@@ -249,7 +249,7 @@ func TestGetCodeLes1(t *testing.T) { testGetCode(t, 1) }
 
 func testGetCode(t *testing.T, protocol int) {
 	// Assemble the test environment
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := brndb.NewMemDatabase()
 	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
@@ -282,7 +282,7 @@ func TestGetReceiptLes1(t *testing.T) { testGetReceipt(t, 1) }
 
 func testGetReceipt(t *testing.T, protocol int) {
 	// Assemble the test environment
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := brndb.NewMemDatabase()
 	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
@@ -309,7 +309,7 @@ func TestGetProofsLes1(t *testing.T) { testGetProofs(t, 1) }
 
 func testGetProofs(t *testing.T, protocol int) {
 	// Assemble the test environment
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := brndb.NewMemDatabase()
 	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
 	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", protocol, pm, true)

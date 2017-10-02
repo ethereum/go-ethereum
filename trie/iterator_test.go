@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2014 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package trie
 
@@ -22,8 +22,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/burnout/go-burnout/common"
+	"github.com/burnout/go-burnout/brndb"
 )
 
 func TestIterator(t *testing.T) {
@@ -113,7 +113,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 			t.Errorf("failed to retrieve reported node %x: %v", hash, err)
 		}
 	}
-	for _, key := range db.(*ethdb.MemDatabase).Keys() {
+	for _, key := range db.(*brndb.MemDatabase).Keys() {
 		if _, ok := hashes[common.BytesToHash(key)]; !ok {
 			t.Errorf("state entry not reported %x", key)
 		}
@@ -279,7 +279,7 @@ func TestIteratorNoDups(t *testing.T) {
 
 // This test checks that nodeIterator.Next can be retried after inserting missing trie nodes.
 func TestIteratorContinueAfterError(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := brndb.NewMemDatabase()
 	tr, _ := New(common.Hash{}, db)
 	for _, val := range testdata1 {
 		tr.Update([]byte(val.k), []byte(val.v))
@@ -330,7 +330,7 @@ func TestIteratorContinueAfterError(t *testing.T) {
 // should retry seeking before returning true for the first time.
 func TestIteratorContinueAfterSeekError(t *testing.T) {
 	// Commit test trie to db, then remove the node containing "bars".
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := brndb.NewMemDatabase()
 	ctr, _ := New(common.Hash{}, db)
 	for _, val := range testdata1 {
 		ctr.Update([]byte(val.k), []byte(val.v))
