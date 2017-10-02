@@ -71,7 +71,7 @@ func (w *wizard) deployDashboard() {
 			var port int
 			switch service {
 			case "brnstats":
-				if infos, err := checkEthstats(client, w.network); err == nil {
+				if infos, err := checkBrnstats(client, w.network); err == nil {
 					port = infos.port
 				}
 			case "faucet":

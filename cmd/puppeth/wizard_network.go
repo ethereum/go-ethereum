@@ -171,7 +171,7 @@ func (w *wizard) deployComponent() {
 	// Print all the things we can deploy and wait or user choice
 	fmt.Println()
 	fmt.Println("What would you like to deploy? (recommended order)")
-	fmt.Println(" 1. Ethstats  - Network monitoring tool")
+	fmt.Println(" 1. Brnstats  - Network monitoring tool")
 	fmt.Println(" 2. Bootnode  - Entry point of the network")
 	fmt.Println(" 3. Sealer    - Full node minting new blocks")
 	fmt.Println(" 4. Wallet    - Browser wallet for quick sends (todo)")
@@ -180,7 +180,7 @@ func (w *wizard) deployComponent() {
 
 	switch w.read() {
 	case "1":
-		w.deployEthstats()
+		w.deployBrnstats()
 	case "2":
 		w.deployNode(true)
 	case "3":

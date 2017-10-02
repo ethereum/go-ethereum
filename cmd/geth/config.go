@@ -71,7 +71,7 @@ var tomlSettings = toml.Config{
 	},
 }
 
-type ethstatsConfig struct {
+type brnstatsConfig struct {
 	URL string `toml:",omitempty"`
 }
 
@@ -79,7 +79,7 @@ type gethConfig struct {
 	Eth      brn.Config
 	Shh      whisper.Config
 	Node     node.Config
-	Ethstats ethstatsConfig
+	Brnstats brnstatsConfig
 }
 
 func loadConfig(file string, cfg *gethConfig) error {
@@ -129,8 +129,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		utils.Fatalf("Failed to create the protocol stack: %v", err)
 	}
 	utils.SetEthConfig(ctx, stack, &cfg.Eth)
-	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
-		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
+	if ctx.GlobalIsSet(utils.BrnStatsURLFlag.Name) {
+		cfg.Brnstats.URL = ctx.GlobalString(utils.BrnStatsURLFlag.Name)
 	}
 
 	utils.SetShhConfig(ctx, stack, &cfg.Shh)
@@ -167,8 +167,8 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	}
 
 	// Add the Burnout Stats daemon if requested.
-	if cfg.Ethstats.URL != "" {
-		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
+	if cfg.Brnstats.URL != "" {
+		utils.RegisterBrnStatsService(stack, cfg.Brnstats.URL)
 	}
 
 	// Add the release oracle service so it boots along with node.

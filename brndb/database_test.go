@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
-package ethdb_test
+package brndb_test
 
 import (
 	"bytes"
@@ -29,7 +29,7 @@ import (
 )
 
 func newTestLDB() (*brndb.LDBDatabase, func()) {
-	dirname, err := ioutil.TempDir(os.TempDir(), "ethdb_test_")
+	dirname, err := ioutil.TempDir(os.TempDir(), "brndb_test_")
 	if err != nil {
 		panic("failed to create test file: " + err.Error())
 	}

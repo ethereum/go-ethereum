@@ -51,7 +51,7 @@ ADD account.pass /account.pass
 EXPOSE 8080
 
 CMD [ \
-	"/faucet", "--genesis", "/genesis.json", "--network", "{{.NetworkID}}", "--bootnodes", "{{.Bootnodes}}", "--brnstats", "{{.Ethstats}}", "--ethport", "{{.EthPort}}", \
+	"/faucet", "--genesis", "/genesis.json", "--network", "{{.NetworkID}}", "--bootnodes", "{{.Bootnodes}}", "--brnstats", "{{.Brnstats}}", "--ethport", "{{.EthPort}}", \
 	"--faucet.name", "{{.FaucetName}}", "--faucet.amount", "{{.FaucetAmount}}", "--faucet.minutes", "{{.FaucetMinutes}}", "--faucet.tiers", "{{.FaucetTiers}}",          \
 	"--github.user", "{{.GitHubUser}}", "--github.token", "{{.GitHubToken}}", "--account.json", "/account.json", "--account.pass", "/account.pass"                       \
 	{{if .CaptchaToken}}, "--captcha.token", "{{.CaptchaToken}}", "--captcha.secret", "{{.CaptchaSecret}}"{{end}}                                                        \
@@ -102,7 +102,7 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 	template.Must(template.New("").Parse(faucetDockerfile)).Execute(dockerfile, map[string]interface{}{
 		"NetworkID":     config.node.network,
 		"Bootnodes":     strings.Join(bootnodes, ","),
-		"Ethstats":      config.node.brnstats,
+		"Brnstats":      config.node.brnstats,
 		"EthPort":       config.node.portFull,
 		"GitHubUser":    config.githubUser,
 		"GitHubToken":   config.githubToken,

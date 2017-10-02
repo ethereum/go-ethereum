@@ -22,9 +22,9 @@ import (
 	"github.com/burnout/go-burnout/log"
 )
 
-// deployEthstats queries the user for various input on deploying an brnstats
+// deployBrnstats queries the user for various input on deploying an brnstats
 // monitoring server, after which it executes it.
-func (w *wizard) deployEthstats() {
+func (w *wizard) deployBrnstats() {
 	// Select the server to interact with
 	server := w.selectServer()
 	if server == "" {
@@ -33,9 +33,9 @@ func (w *wizard) deployEthstats() {
 	client := w.servers[server]
 
 	// Retrieve any active brnstats configurations from the server
-	infos, err := checkEthstats(client, w.network)
+	infos, err := checkBrnstats(client, w.network)
 	if err != nil {
-		infos = &ethstatsInfos{
+		infos = &brnstatsInfos{
 			port:   80,
 			host:   client.server,
 			secret: "",
@@ -83,7 +83,7 @@ func (w *wizard) deployEthstats() {
 			trusted = append(trusted, client.address)
 		}
 	}
-	if out, err := deployEthstats(client, w.network, infos.port, infos.secret, infos.host, trusted, infos.banned); err != nil {
+	if out, err := deployBrnstats(client, w.network, infos.port, infos.secret, infos.host, trusted, infos.banned); err != nil {
 		log.Error("Failed to deploy brnstats container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)

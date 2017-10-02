@@ -314,7 +314,7 @@ var (
 		Usage: "Record information useful for VM and contract debugging",
 	}
 	// Logging and debug settings
-	EthStatsURLFlag = cli.StringFlag{
+	BrnStatsURLFlag = cli.StringFlag{
 		Name:  "brnstats",
 		Usage: "Reporting URL of a brnstats service (nodename:secret@host:port)",
 	}
@@ -1028,9 +1028,9 @@ func RegisterShhService(stack *node.Node, cfg *whisper.Config) {
 	}
 }
 
-// RegisterEthStatsService configures the Burnout Stats daemon and adds it to
+// RegisterBrnStatsService configures the Burnout Stats daemon and adds it to
 // th egiven node.
-func RegisterEthStatsService(stack *node.Node, url string) {
+func RegisterBrnStatsService(stack *node.Node, url string) {
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		// Retrieve both brn and les services
 		var ethServ *brn.Burnout

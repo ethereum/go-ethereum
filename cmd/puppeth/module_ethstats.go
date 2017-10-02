@@ -27,9 +27,9 @@ import (
 	"github.com/burnout/go-burnout/log"
 )
 
-// ethstatsDockerfile is the Dockerfile required to build an brnstats backend
+// brnstatsDockerfile is the Dockerfile required to build an brnstats backend
 // and associated monitoring site.
-var ethstatsDockerfile = `
+var brnstatsDockerfile = `
 FROM mhart/alpine-node:latest
 
 RUN \
@@ -47,9 +47,9 @@ RUN echo 'module.exports = {trusted: [{{.Trusted}}], banned: [{{.Banned}}], rese
 CMD ["npm", "start"]
 `
 
-// ethstatsComposefile is the docker-compose.yml file required to deploy and
+// brnstatsComposefile is the docker-compose.yml file required to deploy and
 // maintain an brnstats monitoring site.
-var ethstatsComposefile = `
+var brnstatsComposefile = `
 version: '2'
 services:
   brnstats:
@@ -69,10 +69,10 @@ services:
     restart: always
 `
 
-// deployEthstats deploys a new brnstats container to a remote machine via SSH,
+// deployBrnstats deploys a new brnstats container to a remote machine via SSH,
 // docker and docker-compose. If an instance with the specified network name
 // already exists there, it will be overwritten!
-func deployEthstats(client *sshClient, network string, port int, secret string, vhost string, trusted []string, banned []string) ([]byte, error) {
+func deployBrnstats(client *sshClient, network string, port int, secret string, vhost string, trusted []string, banned []string) ([]byte, error) {
 	// Generate the content to upload to the server
 	workdir := fmt.Sprintf("%d", rand.Int63())
 	files := make(map[string][]byte)
@@ -87,14 +87,14 @@ func deployEthstats(client *sshClient, network string, port int, secret string, 
 	}
 
 	dockerfile := new(bytes.Buffer)
-	template.Must(template.New("").Parse(ethstatsDockerfile)).Execute(dockerfile, map[string]interface{}{
+	template.Must(template.New("").Parse(brnstatsDockerfile)).Execute(dockerfile, map[string]interface{}{
 		"Trusted": strings.Join(trustedLabels, ", "),
 		"Banned":  strings.Join(bannedLabels, ", "),
 	})
 	files[filepath.Join(workdir, "Dockerfile")] = dockerfile.Bytes()
 
 	composefile := new(bytes.Buffer)
-	template.Must(template.New("").Parse(ethstatsComposefile)).Execute(composefile, map[string]interface{}{
+	template.Must(template.New("").Parse(brnstatsComposefile)).Execute(composefile, map[string]interface{}{
 		"Network": network,
 		"Port":    port,
 		"Secret":  secret,
@@ -113,9 +113,9 @@ func deployEthstats(client *sshClient, network string, port int, secret string, 
 	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build", workdir, network))
 }
 
-// ethstatsInfos is returned from an brnstats status check to allow reporting
+// brnstatsInfos is returned from an brnstats status check to allow reporting
 // various configuration parameters.
-type ethstatsInfos struct {
+type brnstatsInfos struct {
 	host   string
 	port   int
 	secret string
@@ -124,15 +124,15 @@ type ethstatsInfos struct {
 }
 
 // String implements the stringer interface.
-func (info *ethstatsInfos) String() string {
+func (info *brnstatsInfos) String() string {
 	return fmt.Sprintf("host=%s, port=%d, secret=%s, banned=%v", info.host, info.port, info.secret, info.banned)
 }
 
-// checkEthstats does a health-check against an brnstats server to verify whether
+// checkBrnstats does a health-check against an brnstats server to verify whether
 // it's running, and if yes, gathering a collection of useful infos about it.
-func checkEthstats(client *sshClient, network string) (*ethstatsInfos, error) {
+func checkBrnstats(client *sshClient, network string) (*brnstatsInfos, error) {
 	// Inspect a possible brnstats container on the host
-	infos, err := inspectContainer(client, fmt.Sprintf("%s_ethstats_1", network))
+	infos, err := inspectContainer(client, fmt.Sprintf("%s_brnstats_1", network))
 	if err != nil {
 		return nil, err
 	}
@@ -164,10 +164,10 @@ func checkEthstats(client *sshClient, network string) (*ethstatsInfos, error) {
 
 	// Run a sanity check to see if the port is reachable
 	if err = checkPort(host, port); err != nil {
-		log.Warn("Ethstats service seems unreachable", "server", host, "port", port, "err", err)
+		log.Warn("Brnstats service seems unreachable", "server", host, "port", port, "err", err)
 	}
 	// Container available, assemble and return the useful infos
-	return &ethstatsInfos{
+	return &brnstatsInfos{
 		host:   host,
 		port:   port,
 		secret: secret,

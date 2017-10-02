@@ -74,7 +74,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.RinkebyFlag,
 			utils.DevModeFlag,
 			utils.SyncModeFlag,
-			utils.EthStatsURLFlag,
+			utils.BrnStatsURLFlag,
 			utils.IdentityFlag,
 			utils.LightServFlag,
 			utils.LightPeersFlag,

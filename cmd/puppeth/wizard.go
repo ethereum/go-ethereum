@@ -43,7 +43,7 @@ type config struct {
 	genesis   *core.Genesis // Genesis block to cache for node deploys
 	bootFull  []string      // Bootnodes to always connect to by full nodes
 	bootLight []string      // Bootnodes to always connect to by light nodes
-	brnstats  string        // Ethstats settings to cache for node deploys
+	brnstats  string        // Brnstats settings to cache for node deploys
 
 	Servers map[string][]byte `json:"servers,omitempty"`
 }
