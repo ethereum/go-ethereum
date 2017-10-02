@@ -18,6 +18,7 @@ package params
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -74,6 +75,24 @@ var (
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
+		},
+	}
+
+	// OttomanChainConfig contains the chain parameters to run a node on the Ottoman test network.
+	OttomanChainConfig = &ChainConfig{
+		ChainId:        big.NewInt(5),
+		HomesteadBlock: big.NewInt(1),
+		DAOForkBlock:   nil,
+		DAOForkSupport: true,
+		EIP150Block:    big.NewInt(2),
+		EIP150Hash:     common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
+		EIP155Block:    big.NewInt(3),
+		EIP158Block:    big.NewInt(3),
+		ByzantiumBlock: big.NewInt(math.MaxInt64), // Don't enable yet
+
+		Istanbul: &IstanbulConfig{
+			Epoch:          30000,
+			ProposerPolicy: 0,
 		},
 	}
 
