@@ -168,6 +168,15 @@ func (hub *Hub) refreshWallets() {
 			logger := log.New("url", url)
 			wallet := &wallet{hub: hub, driver: hub.makeDriver(logger), url: &url, info: device, log: logger}
 
+			if wallet.URL().Scheme == "ledger" {
+				wallet.Open("")
+				// Derive the account of the current ledger USB wallet
+				_, err := wallet.Derive(accounts.DefaultLedgerBaseDerivationPath, true)
+				if err != nil {
+					wallet.log.Debug("USB wallet account derivation failed", "err", err)
+				}
+			}
+			
 			events = append(events, accounts.WalletEvent{Wallet: wallet, Kind: accounts.WalletArrived})
 			wallets = append(wallets, wallet)
 			continue
