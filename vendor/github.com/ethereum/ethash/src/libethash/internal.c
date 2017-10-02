@@ -12,7 +12,7 @@
   GNU General Public License for more details.
 
   You should have received a copy of the GNU General Public License
-  along with cpp-ethereum.	If not, see <http://www.gnu.org/licenses/>.
+  along with cpp-burnout.	If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file internal.c
 * @author Tim Hughes <tim@twistedfury.com>

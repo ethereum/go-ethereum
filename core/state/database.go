@@ -1,18 +1,18 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2017 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package state
 
@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/trie"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -52,7 +52,7 @@ type Database interface {
 	CopyTrie(Trie) Trie
 }
 
-// Trie is a Ethereum Merkle Trie.
+// Trie is a Burnout Merkle Trie.
 type Trie interface {
 	TryGet(key []byte) ([]byte, error)
 	TryUpdate(key, value []byte) error
@@ -65,13 +65,13 @@ type Trie interface {
 
 // NewDatabase creates a backing store for state. The returned database is safe for
 // concurrent use and retains cached trie nodes in memory.
-func NewDatabase(db ethdb.Database) Database {
+func NewDatabase(db brndb.Database) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &cachingDB{db: db, codeSizeCache: csc}
 }
 
 type cachingDB struct {
-	db            ethdb.Database
+	db            brndb.Database
 	mu            sync.Mutex
 	pastTries     []*trie.SecureTrie
 	codeSizeCache *lru.Cache

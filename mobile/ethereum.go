@@ -1,20 +1,20 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
-// Contains all the wrappers from the go-ethereum root package.
+// Contains all the wrappers from the go-burnout root package.
 
 package geth
 
@@ -22,14 +22,14 @@ import (
 	"errors"
 	"math/big"
 
-	ethereum "github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/common"
+	burnoutcoin "github.com/burnoutcoin/go-burnout"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 // Subscription represents an event subscription where events are
 // delivered on a data channel.
 type Subscription struct {
-	sub ethereum.Subscription
+	sub burnoutcoin.Subscription
 }
 
 // Unsubscribe cancels the sending of events to the data channel
@@ -40,7 +40,7 @@ func (s *Subscription) Unsubscribe() {
 
 // CallMsg contains parameters for contract calls.
 type CallMsg struct {
-	msg ethereum.CallMsg
+	msg burnoutcoin.CallMsg
 }
 
 // NewCallMsg creates an empty contract call parameter list.
@@ -73,9 +73,9 @@ func (msg *CallMsg) SetTo(address *Address) {
 }
 
 // SyncProgress gives progress indications when the node is synchronising with
-// the Ethereum network.
+// the Burnout network.
 type SyncProgress struct {
-	progress ethereum.SyncProgress
+	progress burnoutcoin.SyncProgress
 }
 
 func (p *SyncProgress) GetStartingBlock() int64 { return int64(p.progress.StartingBlock) }
@@ -128,7 +128,7 @@ func (t *Topics) Append(topics *Hashes) {
 
 // FilterQuery contains options for contact log filtering.
 type FilterQuery struct {
-	query ethereum.FilterQuery
+	query burnoutcoin.FilterQuery
 }
 
 // NewFilterQuery creates an empty filter query for contact log filtering.

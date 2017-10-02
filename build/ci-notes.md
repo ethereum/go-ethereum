@@ -18,11 +18,11 @@ and installs the new version into the PPA repository. Launchpad requires a valid
 by a team member for source package uploads. The signing key is stored in an environment
 variable which Travis CI makes available to certain builds.
 
-We want to build go-ethereum with the most recent version of Go, irrespective of the Go
+We want to build go-burnout with the most recent version of Go, irrespective of the Go
 version that is available in the main Ubuntu repository. In order to make this possible,
 our PPA depends on the ~gophers/ubuntu/archive PPA. Our source package build-depends on
 golang-1.9, which is co-installable alongside the regular golang package. PPA dependencies
-can be edited at https://launchpad.net/%7Eethereum/+archive/ubuntu/ethereum/+edit-dependencies
+can be edited at https://launchpad.net/%7Eburnout/+archive/ubuntu/burnout/+edit-dependencies
 
 ## Building Packages Locally (for testing)
 
@@ -40,7 +40,7 @@ Create the source packages:
 
 Then go into the source package directory for your running distribution and build the package:
 
-    $ cd dist/ethereum-unstable-1.6.0+xenial
+    $ cd dist/burnout-unstable-1.6.0+xenial
     $ dpkg-buildpackage
 
 Built packages are placed in the dist/ directory.

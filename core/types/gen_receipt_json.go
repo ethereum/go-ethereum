@@ -7,8 +7,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
 )
 
 func (r Receipt) MarshalJSON() ([]byte, error) {

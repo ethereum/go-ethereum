@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 // Contains all the wrappers from the accounts package to support client side key
 // management on mobile platforms.
@@ -23,10 +23,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/accounts/keystore"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto"
 )
 
 const (
@@ -210,7 +210,7 @@ func (ks *KeyStore) ImportECDSAKey(key []byte, passphrase string) (account *Acco
 	return &Account{acc}, nil
 }
 
-// ImportPreSaleKey decrypts the given Ethereum presale wallet and stores
+// ImportPreSaleKey decrypts the given Burnout presale wallet and stores
 // a key file in the key directory. The key file is encrypted with the same passphrase.
 func (ks *KeyStore) ImportPreSaleKey(keyJSON []byte, passphrase string) (ccount *Account, _ error) {
 	account, err := ks.keystore.ImportPreSaleKey(common.CopyBytes(keyJSON), passphrase)

@@ -1,20 +1,20 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2015 The go-burnout Authors
+// This file is part of go-burnout.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-burnout is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-burnout is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-burnout. If not, see <http://www.gnu.org/licenses/>.
 
-// Package utils contains internal helper functions for go-ethereum commands.
+// Package utils contains internal helper functions for go-burnout commands.
 package utils
 
 import (
@@ -28,30 +28,30 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethstats"
-	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
-	"github.com/ethereum/go-ethereum/params"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/accounts/keystore"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/consensus/ethash"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/brn"
+	"github.com/burnoutcoin/go-burnout/brn/downloader"
+	"github.com/burnoutcoin/go-burnout/brn/gasprice"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/brnstats"
+	"github.com/burnoutcoin/go-burnout/les"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/metrics"
+	"github.com/burnoutcoin/go-burnout/node"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/p2p/discv5"
+	"github.com/burnoutcoin/go-burnout/p2p/nat"
+	"github.com/burnoutcoin/go-burnout/p2p/netutil"
+	"github.com/burnoutcoin/go-burnout/params"
+	whisper "github.com/burnoutcoin/go-burnout/whisper/whisperv5"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -125,7 +125,7 @@ var (
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
 		Usage: "Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby)",
-		Value: eth.DefaultConfig.NetworkId,
+		Value: brn.DefaultConfig.NetworkId,
 	}
 	TestnetFlag = cli.BoolFlag{
 		Name:  "testnet",
@@ -156,7 +156,7 @@ var (
 		Name:  "light",
 		Usage: "Enable light client mode",
 	}
-	defaultSyncMode = eth.DefaultConfig.SyncMode
+	defaultSyncMode = brn.DefaultConfig.SyncMode
 	SyncModeFlag    = TextMarshalerFlag{
 		Name:  "syncmode",
 		Usage: `Blockchain sync mode ("fast", "full", or "light")`,
@@ -185,27 +185,27 @@ var (
 	EthashCachesInMemoryFlag = cli.IntFlag{
 		Name:  "ethash.cachesinmem",
 		Usage: "Number of recent ethash caches to keep in memory (16MB each)",
-		Value: eth.DefaultConfig.EthashCachesInMem,
+		Value: brn.DefaultConfig.EthashCachesInMem,
 	}
 	EthashCachesOnDiskFlag = cli.IntFlag{
 		Name:  "ethash.cachesondisk",
 		Usage: "Number of recent ethash caches to keep on disk (16MB each)",
-		Value: eth.DefaultConfig.EthashCachesOnDisk,
+		Value: brn.DefaultConfig.EthashCachesOnDisk,
 	}
 	EthashDatasetDirFlag = DirectoryFlag{
 		Name:  "ethash.dagdir",
 		Usage: "Directory to store the ethash mining DAGs (default = inside home folder)",
-		Value: DirectoryString{eth.DefaultConfig.EthashDatasetDir},
+		Value: DirectoryString{brn.DefaultConfig.EthashDatasetDir},
 	}
 	EthashDatasetsInMemoryFlag = cli.IntFlag{
 		Name:  "ethash.dagsinmem",
 		Usage: "Number of recent ethash mining DAGs to keep in memory (1+GB each)",
-		Value: eth.DefaultConfig.EthashDatasetsInMem,
+		Value: brn.DefaultConfig.EthashDatasetsInMem,
 	}
 	EthashDatasetsOnDiskFlag = cli.IntFlag{
 		Name:  "ethash.dagsondisk",
 		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
-		Value: eth.DefaultConfig.EthashDatasetsOnDisk,
+		Value: brn.DefaultConfig.EthashDatasetsOnDisk,
 	}
 	// Transaction pool settings
 	TxPoolNoLocalsFlag = cli.BoolFlag{
@@ -225,37 +225,37 @@ var (
 	TxPoolPriceLimitFlag = cli.Uint64Flag{
 		Name:  "txpool.pricelimit",
 		Usage: "Minimum gas price limit to enforce for acceptance into the pool",
-		Value: eth.DefaultConfig.TxPool.PriceLimit,
+		Value: brn.DefaultConfig.TxPool.PriceLimit,
 	}
 	TxPoolPriceBumpFlag = cli.Uint64Flag{
 		Name:  "txpool.pricebump",
 		Usage: "Price bump percentage to replace an already existing transaction",
-		Value: eth.DefaultConfig.TxPool.PriceBump,
+		Value: brn.DefaultConfig.TxPool.PriceBump,
 	}
 	TxPoolAccountSlotsFlag = cli.Uint64Flag{
 		Name:  "txpool.accountslots",
 		Usage: "Minimum number of executable transaction slots guaranteed per account",
-		Value: eth.DefaultConfig.TxPool.AccountSlots,
+		Value: brn.DefaultConfig.TxPool.AccountSlots,
 	}
 	TxPoolGlobalSlotsFlag = cli.Uint64Flag{
 		Name:  "txpool.globalslots",
 		Usage: "Maximum number of executable transaction slots for all accounts",
-		Value: eth.DefaultConfig.TxPool.GlobalSlots,
+		Value: brn.DefaultConfig.TxPool.GlobalSlots,
 	}
 	TxPoolAccountQueueFlag = cli.Uint64Flag{
 		Name:  "txpool.accountqueue",
 		Usage: "Maximum number of non-executable transaction slots permitted per account",
-		Value: eth.DefaultConfig.TxPool.AccountQueue,
+		Value: brn.DefaultConfig.TxPool.AccountQueue,
 	}
 	TxPoolGlobalQueueFlag = cli.Uint64Flag{
 		Name:  "txpool.globalqueue",
 		Usage: "Maximum number of non-executable transaction slots for all accounts",
-		Value: eth.DefaultConfig.TxPool.GlobalQueue,
+		Value: brn.DefaultConfig.TxPool.GlobalQueue,
 	}
 	TxPoolLifetimeFlag = cli.DurationFlag{
 		Name:  "txpool.lifetime",
 		Usage: "Maximum amount of time non-executable transaction are queued",
-		Value: eth.DefaultConfig.TxPool.Lifetime,
+		Value: brn.DefaultConfig.TxPool.Lifetime,
 	}
 	// Performance tuning settings
 	CacheFlag = cli.IntFlag{
@@ -291,7 +291,7 @@ var (
 	GasPriceFlag = BigFlag{
 		Name:  "gasprice",
 		Usage: "Minimal gas price to accept for mining a transactions",
-		Value: eth.DefaultConfig.GasPrice,
+		Value: brn.DefaultConfig.GasPrice,
 	}
 	ExtraDataFlag = cli.StringFlag{
 		Name:  "extradata",
@@ -314,9 +314,9 @@ var (
 		Usage: "Record information useful for VM and contract debugging",
 	}
 	// Logging and debug settings
-	EthStatsURLFlag = cli.StringFlag{
-		Name:  "ethstats",
-		Usage: "Reporting URL of a ethstats service (nodename:secret@host:port)",
+	BrnStatsURLFlag = cli.StringFlag{
+		Name:  "brnstats",
+		Usage: "Reporting URL of a brnstats service (nodename:secret@host:port)",
 	}
 	MetricsEnabledFlag = cli.BoolFlag{
 		Name:  metrics.MetricsEnabledFlag,
@@ -464,12 +464,12 @@ var (
 	GpoBlocksFlag = cli.IntFlag{
 		Name:  "gpoblocks",
 		Usage: "Number of recent blocks to check for gas prices",
-		Value: eth.DefaultConfig.GPO.Blocks,
+		Value: brn.DefaultConfig.GPO.Blocks,
 	}
 	GpoPercentileFlag = cli.IntFlag{
 		Name:  "gpopercentile",
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices",
-		Value: eth.DefaultConfig.GPO.Percentile,
+		Value: brn.DefaultConfig.GPO.Percentile,
 	}
 	WhisperEnabledFlag = cli.BoolFlag{
 		Name:  "shh",
@@ -721,7 +721,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 
 // setEtherbase retrieves the etherbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
-func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *eth.Config) {
+func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *brn.Config) {
 	if ctx.GlobalIsSet(EtherbaseFlag.Name) {
 		account, err := MakeAddress(ks, ctx.GlobalString(EtherbaseFlag.Name))
 		if err != nil {
@@ -816,7 +816,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	case ctx.GlobalIsSet(DataDirFlag.Name):
 		cfg.DataDir = ctx.GlobalString(DataDirFlag.Name)
 	case ctx.GlobalBool(DevModeFlag.Name):
-		cfg.DataDir = filepath.Join(os.TempDir(), "ethereum_dev_mode")
+		cfg.DataDir = filepath.Join(os.TempDir(), "burnout_dev_mode")
 	case ctx.GlobalBool(TestnetFlag.Name):
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "testnet")
 	case ctx.GlobalBool(RinkebyFlag.Name):
@@ -876,7 +876,7 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 	}
 }
 
-func setEthash(ctx *cli.Context, cfg *eth.Config) {
+func setEthash(ctx *cli.Context, cfg *brn.Config) {
 	if ctx.GlobalIsSet(EthashCacheDirFlag.Name) {
 		cfg.EthashCacheDir = ctx.GlobalString(EthashCacheDirFlag.Name)
 	}
@@ -919,8 +919,8 @@ func SetShhConfig(ctx *cli.Context, stack *node.Node, cfg *whisper.Config) {
 	}
 }
 
-// SetEthConfig applies eth-related command line flags to the config.
-func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
+// SetEthConfig applies brn-related command line flags to the config.
+func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *brn.Config) {
 	// Avoid conflicting network flags
 	checkExclusive(ctx, DevModeFlag, TestnetFlag, RinkebyFlag)
 	checkExclusive(ctx, FastSyncFlag, LightModeFlag, SyncModeFlag)
@@ -997,8 +997,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	}
 }
 
-// RegisterEthService adds an Ethereum client to the stack.
-func RegisterEthService(stack *node.Node, cfg *eth.Config) {
+// RegisterEthService adds an Burnout client to the stack.
+func RegisterEthService(stack *node.Node, cfg *brn.Config) {
 	var err error
 	if cfg.SyncMode == downloader.LightSync {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
@@ -1006,7 +1006,7 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 		})
 	} else {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			fullNode, err := eth.New(ctx, cfg)
+			fullNode, err := brn.New(ctx, cfg)
 			if fullNode != nil && cfg.LightServ > 0 {
 				ls, _ := les.NewLesServer(fullNode, cfg)
 				fullNode.AddLesServer(ls)
@@ -1015,7 +1015,7 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 		})
 	}
 	if err != nil {
-		Fatalf("Failed to register the Ethereum service: %v", err)
+		Fatalf("Failed to register the Burnout service: %v", err)
 	}
 }
 
@@ -1028,20 +1028,20 @@ func RegisterShhService(stack *node.Node, cfg *whisper.Config) {
 	}
 }
 
-// RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
+// RegisterBrnStatsService configures the Burnout Stats daemon and adds it to
 // th egiven node.
-func RegisterEthStatsService(stack *node.Node, url string) {
+func RegisterBrnStatsService(stack *node.Node, url string) {
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		// Retrieve both eth and les services
-		var ethServ *eth.Ethereum
+		// Retrieve both brn and les services
+		var ethServ *brn.Burnout
 		ctx.Service(&ethServ)
 
-		var lesServ *les.LightEthereum
+		var lesServ *les.LightBurnout
 		ctx.Service(&lesServ)
 
-		return ethstats.New(url, ethServ, lesServ)
+		return brnstats.New(url, ethServ, lesServ)
 	}); err != nil {
-		Fatalf("Failed to register the Ethereum Stats service: %v", err)
+		Fatalf("Failed to register the Burnout Stats service: %v", err)
 	}
 }
 
@@ -1052,7 +1052,7 @@ func SetupNetwork(ctx *cli.Context) {
 }
 
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
-func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
+func MakeChainDatabase(ctx *cli.Context, stack *node.Node) brndb.Database {
 	var (
 		cache   = ctx.GlobalInt(CacheFlag.Name)
 		handles = makeDatabaseHandles()
@@ -1082,15 +1082,15 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 }
 
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
+func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb brndb.Database) {
 	var err error
 	chainDb = MakeChainDatabase(ctx, stack)
 
 	engine := ethash.NewFaker()
 	if !ctx.GlobalBool(FakePoWFlag.Name) {
 		engine = ethash.New(
-			stack.ResolvePath(eth.DefaultConfig.EthashCacheDir), eth.DefaultConfig.EthashCachesInMem, eth.DefaultConfig.EthashCachesOnDisk,
-			stack.ResolvePath(eth.DefaultConfig.EthashDatasetDir), eth.DefaultConfig.EthashDatasetsInMem, eth.DefaultConfig.EthashDatasetsOnDisk,
+			stack.ResolvePath(brn.DefaultConfig.EthashCacheDir), brn.DefaultConfig.EthashCachesInMem, brn.DefaultConfig.EthashCachesOnDisk,
+			stack.ResolvePath(brn.DefaultConfig.EthashDatasetDir), brn.DefaultConfig.EthashDatasetsInMem, brn.DefaultConfig.EthashDatasetsOnDisk,
 		)
 	}
 	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))

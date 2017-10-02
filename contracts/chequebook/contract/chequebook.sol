@@ -1,6 +1,6 @@
 import "mortal";
 
-/// @title Chequebook for Ethereum micropayments
+/// @title Chequebook for Burnout micropayments
 /// @author Daniel A. Nagy <daniel@ethdev.com>
 contract chequebook is mortal {
     // Cumulative paid amount in wei to each beneficiary

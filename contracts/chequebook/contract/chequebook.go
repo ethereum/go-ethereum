@@ -7,10 +7,10 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/burnoutcoin/go-burnout/accounts/abi"
+	"github.com/burnoutcoin/go-burnout/accounts/abi/bind"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 // ChequebookABI is the input ABI used to generate the binding from.
@@ -19,7 +19,7 @@ const ChequebookABI = `[{"constant":false,"inputs":[],"name":"kill","outputs":[]
 // ChequebookBin is the compiled bytecode used for deploying new contracts.
 const ChequebookBin = `0x606060405260008054600160a060020a031916331790556101ff806100246000396000f3606060405260e060020a600035046341c0e1b581146100315780637bf786f814610059578063fbf788d614610071575b005b61002f60005433600160a060020a03908116911614156100bd57600054600160a060020a0316ff5b6100ab60043560016020526000908152604090205481565b61002f600435602435604435606435608435600160a060020a03851660009081526001602052604081205485116100bf575b505050505050565b60408051918252519081900360200190f35b565b50604080516c0100000000000000000000000030600160a060020a0390811682028352881602601482015260288101869052815190819003604801812080825260ff861660208381019190915282840186905260608301859052925190926001926080818101939182900301816000866161da5a03f11561000257505060405151600054600160a060020a0390811691161461015a576100a3565b600160a060020a038681166000908152600160205260409020543090911631908603106101b357604060008181208790559051600160a060020a0388169190819081818181818881f1935050505015156100a357610002565b60005460408051600160a060020a03929092168252517f2250e2993c15843b32621c89447cc589ee7a9f049c026986e545d3c2c0c6f9789181900360200190a185600160a060020a0316ff`
 
-// DeployChequebook deploys a new Ethereum contract, binding an instance of Chequebook to it.
+// DeployChequebook deploys a new Burnout contract, binding an instance of Chequebook to it.
 func DeployChequebook(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *Chequebook, error) {
 	parsed, err := abi.JSON(strings.NewReader(ChequebookABI))
 	if err != nil {
@@ -32,23 +32,23 @@ func DeployChequebook(auth *bind.TransactOpts, backend bind.ContractBackend) (co
 	return address, tx, &Chequebook{ChequebookCaller: ChequebookCaller{contract: contract}, ChequebookTransactor: ChequebookTransactor{contract: contract}}, nil
 }
 
-// Chequebook is an auto generated Go binding around an Ethereum contract.
+// Chequebook is an auto generated Go binding around an Burnout contract.
 type Chequebook struct {
 	ChequebookCaller     // Read-only binding to the contract
 	ChequebookTransactor // Write-only binding to the contract
 }
 
-// ChequebookCaller is an auto generated read-only Go binding around an Ethereum contract.
+// ChequebookCaller is an auto generated read-only Go binding around an Burnout contract.
 type ChequebookCaller struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
 
-// ChequebookTransactor is an auto generated write-only Go binding around an Ethereum contract.
+// ChequebookTransactor is an auto generated write-only Go binding around an Burnout contract.
 type ChequebookTransactor struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
 
-// ChequebookSession is an auto generated Go binding around an Ethereum contract,
+// ChequebookSession is an auto generated Go binding around an Burnout contract,
 // with pre-set call and transact options.
 type ChequebookSession struct {
 	Contract     *Chequebook       // Generic contract binding to set the session for
@@ -56,31 +56,31 @@ type ChequebookSession struct {
 	TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session
 }
 
-// ChequebookCallerSession is an auto generated read-only Go binding around an Ethereum contract,
+// ChequebookCallerSession is an auto generated read-only Go binding around an Burnout contract,
 // with pre-set call options.
 type ChequebookCallerSession struct {
 	Contract *ChequebookCaller // Generic contract caller binding to set the session for
 	CallOpts bind.CallOpts     // Call options to use throughout this session
 }
 
-// ChequebookTransactorSession is an auto generated write-only Go binding around an Ethereum contract,
+// ChequebookTransactorSession is an auto generated write-only Go binding around an Burnout contract,
 // with pre-set transact options.
 type ChequebookTransactorSession struct {
 	Contract     *ChequebookTransactor // Generic contract transactor binding to set the session for
 	TransactOpts bind.TransactOpts     // Transaction auth options to use throughout this session
 }
 
-// ChequebookRaw is an auto generated low-level Go binding around an Ethereum contract.
+// ChequebookRaw is an auto generated low-level Go binding around an Burnout contract.
 type ChequebookRaw struct {
 	Contract *Chequebook // Generic contract binding to access the raw methods on
 }
 
-// ChequebookCallerRaw is an auto generated low-level read-only Go binding around an Ethereum contract.
+// ChequebookCallerRaw is an auto generated low-level read-only Go binding around an Burnout contract.
 type ChequebookCallerRaw struct {
 	Contract *ChequebookCaller // Generic read-only contract binding to access the raw methods on
 }
 
-// ChequebookTransactorRaw is an auto generated low-level write-only Go binding around an Ethereum contract.
+// ChequebookTransactorRaw is an auto generated low-level write-only Go binding around an Burnout contract.
 type ChequebookTransactorRaw struct {
 	Contract *ChequebookTransactor // Generic write-only contract binding to access the raw methods on
 }
@@ -233,7 +233,7 @@ const MortalABI = `[{"constant":false,"inputs":[],"name":"kill","outputs":[],"ty
 // MortalBin is the compiled bytecode used for deploying new contracts.
 const MortalBin = `0x606060405260008054600160a060020a03191633179055605c8060226000396000f3606060405260e060020a600035046341c0e1b58114601a575b005b60186000543373ffffffffffffffffffffffffffffffffffffffff90811691161415605a5760005473ffffffffffffffffffffffffffffffffffffffff16ff5b56`
 
-// DeployMortal deploys a new Ethereum contract, binding an instance of Mortal to it.
+// DeployMortal deploys a new Burnout contract, binding an instance of Mortal to it.
 func DeployMortal(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *Mortal, error) {
 	parsed, err := abi.JSON(strings.NewReader(MortalABI))
 	if err != nil {
@@ -246,23 +246,23 @@ func DeployMortal(auth *bind.TransactOpts, backend bind.ContractBackend) (common
 	return address, tx, &Mortal{MortalCaller: MortalCaller{contract: contract}, MortalTransactor: MortalTransactor{contract: contract}}, nil
 }
 
-// Mortal is an auto generated Go binding around an Ethereum contract.
+// Mortal is an auto generated Go binding around an Burnout contract.
 type Mortal struct {
 	MortalCaller     // Read-only binding to the contract
 	MortalTransactor // Write-only binding to the contract
 }
 
-// MortalCaller is an auto generated read-only Go binding around an Ethereum contract.
+// MortalCaller is an auto generated read-only Go binding around an Burnout contract.
 type MortalCaller struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
 
-// MortalTransactor is an auto generated write-only Go binding around an Ethereum contract.
+// MortalTransactor is an auto generated write-only Go binding around an Burnout contract.
 type MortalTransactor struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
 
-// MortalSession is an auto generated Go binding around an Ethereum contract,
+// MortalSession is an auto generated Go binding around an Burnout contract,
 // with pre-set call and transact options.
 type MortalSession struct {
 	Contract     *Mortal           // Generic contract binding to set the session for
@@ -270,31 +270,31 @@ type MortalSession struct {
 	TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session
 }
 
-// MortalCallerSession is an auto generated read-only Go binding around an Ethereum contract,
+// MortalCallerSession is an auto generated read-only Go binding around an Burnout contract,
 // with pre-set call options.
 type MortalCallerSession struct {
 	Contract *MortalCaller // Generic contract caller binding to set the session for
 	CallOpts bind.CallOpts // Call options to use throughout this session
 }
 
-// MortalTransactorSession is an auto generated write-only Go binding around an Ethereum contract,
+// MortalTransactorSession is an auto generated write-only Go binding around an Burnout contract,
 // with pre-set transact options.
 type MortalTransactorSession struct {
 	Contract     *MortalTransactor // Generic contract transactor binding to set the session for
 	TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session
 }
 
-// MortalRaw is an auto generated low-level Go binding around an Ethereum contract.
+// MortalRaw is an auto generated low-level Go binding around an Burnout contract.
 type MortalRaw struct {
 	Contract *Mortal // Generic contract binding to access the raw methods on
 }
 
-// MortalCallerRaw is an auto generated low-level read-only Go binding around an Ethereum contract.
+// MortalCallerRaw is an auto generated low-level read-only Go binding around an Burnout contract.
 type MortalCallerRaw struct {
 	Contract *MortalCaller // Generic read-only contract binding to access the raw methods on
 }
 
-// MortalTransactorRaw is an auto generated low-level write-only Go binding around an Ethereum contract.
+// MortalTransactorRaw is an auto generated low-level write-only Go binding around an Burnout contract.
 type MortalTransactorRaw struct {
 	Contract *MortalTransactor // Generic write-only contract binding to access the raw methods on
 }
@@ -400,7 +400,7 @@ const OwnedABI = `[{"inputs":[],"type":"constructor"}]`
 // OwnedBin is the compiled bytecode used for deploying new contracts.
 const OwnedBin = `0x606060405260008054600160a060020a0319163317905560068060226000396000f3606060405200`
 
-// DeployOwned deploys a new Ethereum contract, binding an instance of Owned to it.
+// DeployOwned deploys a new Burnout contract, binding an instance of Owned to it.
 func DeployOwned(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *Owned, error) {
 	parsed, err := abi.JSON(strings.NewReader(OwnedABI))
 	if err != nil {
@@ -413,23 +413,23 @@ func DeployOwned(auth *bind.TransactOpts, backend bind.ContractBackend) (common.
 	return address, tx, &Owned{OwnedCaller: OwnedCaller{contract: contract}, OwnedTransactor: OwnedTransactor{contract: contract}}, nil
 }
 
-// Owned is an auto generated Go binding around an Ethereum contract.
+// Owned is an auto generated Go binding around an Burnout contract.
 type Owned struct {
 	OwnedCaller     // Read-only binding to the contract
 	OwnedTransactor // Write-only binding to the contract
 }
 
-// OwnedCaller is an auto generated read-only Go binding around an Ethereum contract.
+// OwnedCaller is an auto generated read-only Go binding around an Burnout contract.
 type OwnedCaller struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
 
-// OwnedTransactor is an auto generated write-only Go binding around an Ethereum contract.
+// OwnedTransactor is an auto generated write-only Go binding around an Burnout contract.
 type OwnedTransactor struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
 
-// OwnedSession is an auto generated Go binding around an Ethereum contract,
+// OwnedSession is an auto generated Go binding around an Burnout contract,
 // with pre-set call and transact options.
 type OwnedSession struct {
 	Contract     *Owned            // Generic contract binding to set the session for
@@ -437,31 +437,31 @@ type OwnedSession struct {
 	TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session
 }
 
-// OwnedCallerSession is an auto generated read-only Go binding around an Ethereum contract,
+// OwnedCallerSession is an auto generated read-only Go binding around an Burnout contract,
 // with pre-set call options.
 type OwnedCallerSession struct {
 	Contract *OwnedCaller  // Generic contract caller binding to set the session for
 	CallOpts bind.CallOpts // Call options to use throughout this session
 }
 
-// OwnedTransactorSession is an auto generated write-only Go binding around an Ethereum contract,
+// OwnedTransactorSession is an auto generated write-only Go binding around an Burnout contract,
 // with pre-set transact options.
 type OwnedTransactorSession struct {
 	Contract     *OwnedTransactor  // Generic contract transactor binding to set the session for
 	TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session
 }
 
-// OwnedRaw is an auto generated low-level Go binding around an Ethereum contract.
+// OwnedRaw is an auto generated low-level Go binding around an Burnout contract.
 type OwnedRaw struct {
 	Contract *Owned // Generic contract binding to access the raw methods on
 }
 
-// OwnedCallerRaw is an auto generated low-level read-only Go binding around an Ethereum contract.
+// OwnedCallerRaw is an auto generated low-level read-only Go binding around an Burnout contract.
 type OwnedCallerRaw struct {
 	Contract *OwnedCaller // Generic read-only contract binding to access the raw methods on
 }
 
-// OwnedTransactorRaw is an auto generated low-level write-only Go binding around an Ethereum contract.
+// OwnedTransactorRaw is an auto generated low-level write-only Go binding around an Burnout contract.
 type OwnedTransactorRaw struct {
 	Contract *OwnedTransactor // Generic write-only contract binding to access the raw methods on
 }

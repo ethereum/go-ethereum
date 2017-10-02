@@ -1,21 +1,21 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
-// ReleaseOracle is an Ethereum contract to store the current and previous
-// versions of the go-ethereum implementation. Its goal is to allow Geth to
+// ReleaseOracle is an Burnout contract to store the current and previous
+// versions of the go-burnout implementation. Its goal is to allow Geth to
 // check for new releases automatically without the need to consult a central
 // repository.
 //
@@ -135,7 +135,7 @@ contract ReleaseOracle {
     updateRelease(0, 0, 0, 0, false);
   }
 
-  // updateSigner marks a vote for changing the status of an Ethereum user, either
+  // updateSigner marks a vote for changing the status of an Burnout user, either
   // for or against the user being an authorised signer.
   function updateSigner(address user, bool authorize) internal isSigner {
     // Gather the current votes and ensure we don't double vote

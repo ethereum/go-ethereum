@@ -1,20 +1,20 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2014 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package core implements the Ethereum consensus protocol.
+// Package core implements the Burnout consensus protocol.
 package core
 
 import (
@@ -27,20 +27,20 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/mclock"
+	"github.com/burnoutcoin/go-burnout/consensus"
+	"github.com/burnoutcoin/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/metrics"
+	"github.com/burnoutcoin/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/trie"
 	"github.com/hashicorp/golang-lru"
 )
 
@@ -79,7 +79,7 @@ type BlockChain struct {
 	config *params.ChainConfig // chain & network configuration
 
 	hc            *HeaderChain
-	chainDb       ethdb.Database
+	chainDb       brndb.Database
 	rmLogsFeed    event.Feed
 	chainFeed     event.Feed
 	chainSideFeed event.Feed
@@ -117,9 +117,9 @@ type BlockChain struct {
 }
 
 // NewBlockChain returns a fully initialised block chain using information
-// available in the database. It initialises the default Ethereum Validator and
+// available in the database. It initialises the default Burnout Validator and
 // Processor.
-func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
+func NewBlockChain(chainDb brndb.Database, config *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -568,7 +568,7 @@ func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 }
 
 // GetBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
-// [deprecated by eth/62]
+// [deprecated by brn/62]
 func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*types.Block) {
 	number := bc.hc.GetBlockNumber(hash)
 	for i := 0; i < n; i++ {
@@ -744,7 +744,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		}
 		stats.processed++
 
-		if batch.ValueSize() >= ethdb.IdealBatchSize {
+		if batch.ValueSize() >= brndb.IdealBatchSize {
 			if err := batch.Write(); err != nil {
 				return 0, err
 			}

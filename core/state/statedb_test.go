@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package state
 
@@ -30,16 +30,16 @@ import (
 
 	check "gopkg.in/check.v1"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/brndb"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
 // actually committing the state.
 func TestUpdateLeaks(t *testing.T) {
 	// Create an empty state database
-	db, _ := ethdb.NewMemDatabase()
+	db, _ := brndb.NewMemDatabase()
 	state, _ := New(common.Hash{}, NewDatabase(db))
 
 	// Update it with some accounts
@@ -66,8 +66,8 @@ func TestUpdateLeaks(t *testing.T) {
 // only the one right before the commit.
 func TestIntermediateLeaks(t *testing.T) {
 	// Create two state databases, one transitioning to the final state, the other final from the beginning
-	transDb, _ := ethdb.NewMemDatabase()
-	finalDb, _ := ethdb.NewMemDatabase()
+	transDb, _ := brndb.NewMemDatabase()
+	finalDb, _ := brndb.NewMemDatabase()
 	transState, _ := New(common.Hash{}, NewDatabase(transDb))
 	finalState, _ := New(common.Hash{}, NewDatabase(finalDb))
 
@@ -283,7 +283,7 @@ func (test *snapshotTest) String() string {
 func (test *snapshotTest) run() bool {
 	// Run all actions and create snapshots.
 	var (
-		db, _        = ethdb.NewMemDatabase()
+		db, _        = brndb.NewMemDatabase()
 		state, _     = New(common.Hash{}, NewDatabase(db))
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0

@@ -1,20 +1,20 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package les implements the Light Ethereum Subprotocol.
+// Package les implements the Light Burnout Subprotocol.
 package les
 
 import (
@@ -23,18 +23,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/les/flowcontrol"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/brn"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/les/flowcontrol"
+	"github.com/burnoutcoin/go-burnout/light"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/p2p/discv5"
+	"github.com/burnoutcoin/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/trie"
 )
 
 type LesServer struct {
@@ -46,9 +46,9 @@ type LesServer struct {
 	quitSync        chan struct{}
 }
 
-func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
+func NewLesServer(brn *brn.Burnout, config *brn.Config) (*LesServer, error) {
 	quitSync := make(chan struct{})
-	pm, err := NewProtocolManager(eth.BlockChain().Config(), false, config.NetworkId, eth.EventMux(), eth.Engine(), newPeerSet(), eth.BlockChain(), eth.TxPool(), eth.ChainDb(), nil, nil, quitSync, new(sync.WaitGroup))
+	pm, err := NewProtocolManager(brn.BlockChain().Config(), false, config.NetworkId, brn.EventMux(), brn.Engine(), newPeerSet(), brn.BlockChain(), brn.TxPool(), brn.ChainDb(), nil, nil, quitSync, new(sync.WaitGroup))
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	srv := &LesServer{
 		protocolManager: pm,
 		quitSync:        quitSync,
-		lesTopic:        lesTopic(eth.BlockChain().Genesis().Hash()),
+		lesTopic:        lesTopic(brn.BlockChain().Genesis().Hash()),
 	}
 	pm.server = srv
 
@@ -66,7 +66,7 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		MinRecharge: 50000,
 	}
 	srv.fcManager = flowcontrol.NewClientManager(uint64(config.LightServ), 10, 1000000000)
-	srv.fcCostStats = newCostStats(eth.ChainDb())
+	srv.fcCostStats = newCostStats(brn.ChainDb())
 	return srv, nil
 }
 
@@ -179,7 +179,7 @@ func linRegFromBytes(data []byte) *linReg {
 
 type requestCostStats struct {
 	lock  sync.RWMutex
-	db    ethdb.Database
+	db    brndb.Database
 	stats map[uint64]*linReg
 }
 
@@ -190,7 +190,7 @@ type requestCostStatsRlp []struct {
 
 var rcStatsKey = []byte("_requestCostStats")
 
-func newCostStats(db ethdb.Database) *requestCostStats {
+func newCostStats(db brndb.Database) *requestCostStats {
 	stats := make(map[uint64]*linReg)
 	for _, code := range reqList {
 		stats[code] = &linReg{cnt: 100}
@@ -333,20 +333,20 @@ var (
 	chtPrefix  = []byte("cht")           // chtPrefix + chtNum (uint64 big endian) -> trie root hash
 )
 
-func getChtRoot(db ethdb.Database, num uint64) common.Hash {
+func getChtRoot(db brndb.Database, num uint64) common.Hash {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], num)
 	data, _ := db.Get(append(chtPrefix, encNumber[:]...))
 	return common.BytesToHash(data)
 }
 
-func storeChtRoot(db ethdb.Database, num uint64, root common.Hash) {
+func storeChtRoot(db brndb.Database, num uint64, root common.Hash) {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], num)
 	db.Put(append(chtPrefix, encNumber[:]...), root[:])
 }
 
-func makeCht(db ethdb.Database) bool {
+func makeCht(db brndb.Database) bool {
 	headHash := core.GetHeadBlockHash(db)
 	headNum := core.GetBlockNumber(db, headHash)
 

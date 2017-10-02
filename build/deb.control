@@ -4,9 +4,9 @@ Priority: extra
 Maintainer: {{.Author}}
 Build-Depends: debhelper (>= 8.0.0), golang-1.9
 Standards-Version: 3.9.5
-Homepage: https://ethereum.org
-Vcs-Git: git://github.com/ethereum/go-ethereum.git
-Vcs-Browser: https://github.com/ethereum/go-ethereum
+Homepage: https://burnoutcoin.org
+Vcs-Git: git://github.com/burnoutcoin/go-burnout.git
+Vcs-Browser: https://github.com/burnoutcoin/go-burnout
 
 Package: {{.Name}}
 Architecture: any

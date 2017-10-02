@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
@@ -21,18 +21,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/burnoutcoin/go-burnout/consensus/ethash"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // Tests that simple header verification works, for both good and bad blocks.
 func TestHeaderVerification(t *testing.T) {
 	// Create a simple chain to verify
 	var (
-		testdb, _ = ethdb.NewMemDatabase()
+		testdb, _ = brndb.NewMemDatabase()
 		gspec     = &Genesis{Config: params.TestChainConfig}
 		genesis   = gspec.MustCommit(testdb)
 		blocks, _ = GenerateChain(params.TestChainConfig, genesis, testdb, 8, nil)
@@ -84,7 +84,7 @@ func TestHeaderConcurrentVerification32(t *testing.T) { testHeaderConcurrentVeri
 func testHeaderConcurrentVerification(t *testing.T, threads int) {
 	// Create a simple chain to verify
 	var (
-		testdb, _ = ethdb.NewMemDatabase()
+		testdb, _ = brndb.NewMemDatabase()
 		gspec     = &Genesis{Config: params.TestChainConfig}
 		genesis   = gspec.MustCommit(testdb)
 		blocks, _ = GenerateChain(params.TestChainConfig, genesis, testdb, 8, nil)
@@ -156,7 +156,7 @@ func TestHeaderConcurrentAbortion32(t *testing.T) { testHeaderConcurrentAbortion
 func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 	// Create a simple chain to verify
 	var (
-		testdb, _ = ethdb.NewMemDatabase()
+		testdb, _ = brndb.NewMemDatabase()
 		gspec     = &Genesis{Config: params.TestChainConfig}
 		genesis   = gspec.MustCommit(testdb)
 		blocks, _ = GenerateChain(params.TestChainConfig, genesis, testdb, 1024, nil)

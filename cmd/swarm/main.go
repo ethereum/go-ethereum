@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2016 The go-burnout Authors
+// This file is part of go-burnout.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-burnout is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-burnout is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-burnout. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -31,23 +31,23 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/contracts/ens"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/swarm"
-	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/accounts/keystore"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/console"
+	"github.com/burnoutcoin/go-burnout/contracts/ens"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/brnclient"
+	"github.com/burnoutcoin/go-burnout/internal/debug"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/node"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/swarm"
+	bzzapi "github.com/burnoutcoin/go-burnout/swarm/api"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -95,7 +95,7 @@ var (
 	}
 	SwarmSwapAPIFlag = cli.StringFlag{
 		Name:  "swap-api",
-		Usage: "URL of the Ethereum API provider to use to settle SWAP payments",
+		Usage: "URL of the Burnout API provider to use to settle SWAP payments",
 	}
 	SwarmSyncEnabledFlag = cli.BoolTFlag{
 		Name:  "sync",
@@ -103,7 +103,7 @@ var (
 	}
 	EnsAPIFlag = cli.StringFlag{
 		Name:  "ens-api",
-		Usage: "URL of the Ethereum API provider to use for ENS record lookups",
+		Usage: "URL of the Burnout API provider to use for ENS record lookups",
 		Value: node.DefaultIPCEndpoint("geth"),
 	}
 	EnsAddrFlag = cli.StringFlag{
@@ -159,13 +159,13 @@ func init() {
 	utils.ListenPortFlag.Value = 30399
 }
 
-var app = utils.NewApp(gitCommit, "Ethereum Swarm")
+var app = utils.NewApp(gitCommit, "Burnout Swarm")
 
 // This init function creates the cli.App.
 func init() {
 	app.Action = bzzd
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright 2013-2016 The go-ethereum Authors"
+	app.Copyright = "Copyright 2013-2016 The go-burnout Authors"
 	app.Commands = []cli.Command{
 		{
 			Action:    version,
@@ -256,12 +256,12 @@ Manage the local chunk database.
 					Description: `
 Export a local chunk database as a tar archive (use - to send to stdout).
 
-    swarm db export ~/.ethereum/swarm/bzz-KEY/chunks chunks.tar
+    swarm db export ~/.burnout/swarm/bzz-KEY/chunks chunks.tar
 
 The export may be quite large, consider piping the output through the Unix
 pv(1) tool to get a progress bar:
 
-    swarm db export ~/.ethereum/swarm/bzz-KEY/chunks - | pv > chunks.tar
+    swarm db export ~/.burnout/swarm/bzz-KEY/chunks - | pv > chunks.tar
 `,
 				},
 				{
@@ -272,12 +272,12 @@ pv(1) tool to get a progress bar:
 					Description: `
 Import chunks from a tar archive into a local chunk database (use - to read from stdin).
 
-    swarm db import ~/.ethereum/swarm/bzz-KEY/chunks chunks.tar
+    swarm db import ~/.burnout/swarm/bzz-KEY/chunks chunks.tar
 
 The import may be quite large, consider piping the input through the Unix
 pv(1) tool to get a progress bar:
 
-    pv chunks.tar | swarm db import ~/.ethereum/swarm/bzz-KEY/chunks -
+    pv chunks.tar | swarm db import ~/.burnout/swarm/bzz-KEY/chunks -
 `,
 				},
 				{
@@ -428,7 +428,7 @@ func detectEnsAddr(client *rpc.Client) (common.Address, error) {
 		return common.Address{}, err
 	}
 
-	block, err := ethclient.NewClient(client).BlockByNumber(ctx, big.NewInt(0))
+	block, err := brnclient.NewClient(client).BlockByNumber(ctx, big.NewInt(0))
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -482,23 +482,23 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	cors := ctx.GlobalString(CorsStringFlag.Name)
 
 	boot := func(ctx *node.ServiceContext) (node.Service, error) {
-		var swapClient *ethclient.Client
+		var swapClient *brnclient.Client
 		if swapapi != "" {
 			log.Info("connecting to SWAP API", "url", swapapi)
-			swapClient, err = ethclient.Dial(swapapi)
+			swapClient, err = brnclient.Dial(swapapi)
 			if err != nil {
 				return nil, fmt.Errorf("error connecting to SWAP API %s: %s", swapapi, err)
 			}
 		}
 
-		var ensClient *ethclient.Client
+		var ensClient *brnclient.Client
 		if ensapi != "" {
 			log.Info("connecting to ENS API", "url", ensapi)
 			client, err := rpc.Dial(ensapi)
 			if err != nil {
 				return nil, fmt.Errorf("error connecting to ENS API %s: %s", ensapi, err)
 			}
-			ensClient = ethclient.NewClient(client)
+			ensClient = brnclient.NewClient(client)
 
 			if ensAddr != "" {
 				bzzconfig.EnsRoot = common.HexToAddress(ensAddr)

@@ -1,37 +1,37 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2014 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package miner implements Ethereum block creation and mining.
+// Package miner implements Burnout block creation and mining.
 package miner
 
 import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/consensus"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/brn/downloader"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // Backend wraps all methods required for mining.
@@ -39,7 +39,7 @@ type Backend interface {
 	AccountManager() *accounts.Manager
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
-	ChainDb() ethdb.Database
+	ChainDb() brndb.Database
 }
 
 // Miner creates blocks and searches for proof-of-work values.
@@ -50,22 +50,22 @@ type Miner struct {
 
 	coinbase common.Address
 	mining   int32
-	eth      Backend
+	brn      Backend
 	engine   consensus.Engine
 
 	canStart    int32 // can start indicates whether we can start the mining operation
 	shouldStart int32 // should start indicates whether we should start after sync
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine) *Miner {
+func New(brn Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine) *Miner {
 	miner := &Miner{
-		eth:      eth,
+		brn:      brn,
 		mux:      mux,
 		engine:   engine,
-		worker:   newWorker(config, engine, common.Address{}, eth, mux),
+		worker:   newWorker(config, engine, common.Address{}, brn, mux),
 		canStart: 1,
 	}
-	miner.Register(NewCpuAgent(eth.BlockChain(), engine))
+	miner.Register(NewCpuAgent(brn.BlockChain(), engine))
 	go miner.update()
 
 	return miner

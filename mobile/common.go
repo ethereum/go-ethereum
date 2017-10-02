@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 // Contains all the wrappers from the common package.
 
@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
@@ -128,7 +128,7 @@ func (h *Hashes) Append(hash *Hash) {
 	h.hashes = append(h.hashes, hash.hash)
 }
 
-// Address represents the 20 byte address of an Ethereum account.
+// Address represents the 20 byte address of an Burnout account.
 type Address struct {
 	address common.Address
 }

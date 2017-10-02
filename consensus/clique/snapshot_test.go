@@ -1,18 +1,18 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2017 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package clique
 
@@ -22,12 +22,12 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 type testerVote struct {
@@ -37,7 +37,7 @@ type testerVote struct {
 }
 
 // testerAccountPool is a pool to maintain currently active tester accounts,
-// mapped from textual names used in the tests below to actual Ethereum private
+// mapped from textual names used in the tests below to actual Burnout private
 // keys capable of signing transactions.
 type testerAccountPool struct {
 	accounts map[string]*ecdsa.PrivateKey
@@ -64,14 +64,14 @@ func (ap *testerAccountPool) address(account string) common.Address {
 	if ap.accounts[account] == nil {
 		ap.accounts[account], _ = crypto.GenerateKey()
 	}
-	// Resolve and return the Ethereum address
+	// Resolve and return the Burnout address
 	return crypto.PubkeyToAddress(ap.accounts[account].PublicKey)
 }
 
 // testerChainReader implements consensus.ChainReader to access the genesis
 // block. All other methods and requests will panic.
 type testerChainReader struct {
-	db ethdb.Database
+	db brndb.Database
 }
 
 func (r *testerChainReader) Config() *params.ChainConfig                 { panic("not supported") }
@@ -351,7 +351,7 @@ func TestVoting(t *testing.T) {
 			copy(genesis.ExtraData[extraVanity+j*common.AddressLength:], signer[:])
 		}
 		// Create a pristine blockchain with the genesis injected
-		db, _ := ethdb.NewMemDatabase()
+		db, _ := brndb.NewMemDatabase()
 		genesis.Commit(db)
 
 		// Assemble a chain of headers from the cast votes

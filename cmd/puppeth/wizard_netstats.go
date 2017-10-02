@@ -1,18 +1,18 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2017 The go-burnout Authors
+// This file is part of go-burnout.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-burnout is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-burnout is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-burnout. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -22,8 +22,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/log"
 	"github.com/olekukonko/tablewriter"
 )
 
@@ -66,14 +66,14 @@ func (w *wizard) networkStats(tips bool) {
 		} else {
 			services["nginx"] = infos.String()
 		}
-		logger.Debug("Checking for ethstats availability")
-		if infos, err := checkEthstats(client, w.network); err != nil {
+		logger.Debug("Checking for brnstats availability")
+		if infos, err := checkBrnstats(client, w.network); err != nil {
 			if err != ErrServiceUnknown {
-				services["ethstats"] = err.Error()
+				services["brnstats"] = err.Error()
 			}
 		} else {
-			services["ethstats"] = infos.String()
-			protips.ethstats = infos.config
+			services["brnstats"] = infos.String()
+			protips.brnstats = infos.config
 		}
 		logger.Debug("Checking for bootnode availability")
 		if infos, err := checkNode(client, w.network, true); err != nil {
@@ -138,8 +138,8 @@ func (w *wizard) networkStats(tips bool) {
 			protips.network = genesis.Config.ChainId.Int64()
 		}
 	}
-	if protips.ethstats != "" {
-		w.conf.ethstats = protips.ethstats
+	if protips.brnstats != "" {
+		w.conf.brnstats = protips.brnstats
 	}
 	w.conf.bootFull = protips.bootFull
 	w.conf.bootLight = protips.bootLight
@@ -159,7 +159,7 @@ type protips struct {
 	network   int64
 	bootFull  []string
 	bootLight []string
-	ethstats  string
+	brnstats  string
 }
 
 // print analyzes the network information available and prints a collection of
@@ -171,13 +171,13 @@ func (p *protips) print(network string) {
 		fullinit = fmt.Sprintf("geth --datadir=$HOME/.%s init %s.json && ", network, network)
 		lightinit = fmt.Sprintf("geth --datadir=$HOME/.%s --light init %s.json && ", network, network)
 	}
-	// If an ethstats server is available, add the ethstats flag
+	// If an brnstats server is available, add the brnstats flag
 	statsflag := ""
-	if p.ethstats != "" {
-		if strings.Contains(p.ethstats, " ") {
-			statsflag = fmt.Sprintf(` --ethstats="yournode:%s"`, p.ethstats)
+	if p.brnstats != "" {
+		if strings.Contains(p.brnstats, " ") {
+			statsflag = fmt.Sprintf(` --brnstats="yournode:%s"`, p.brnstats)
 		} else {
-			statsflag = fmt.Sprintf(` --ethstats=yournode:%s`, p.ethstats)
+			statsflag = fmt.Sprintf(` --brnstats=yournode:%s`, p.brnstats)
 		}
 	}
 	// If bootnodes have been specified, add the bootnode flag

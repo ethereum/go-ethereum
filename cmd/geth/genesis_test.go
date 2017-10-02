@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2016 The go-burnout Authors
+// This file is part of go-burnout.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-burnout is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-burnout is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-burnout. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -41,7 +41,7 @@ var customGenesisTests = []struct {
 			"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"timestamp"  : "0x00"
 		}`,
-		query:  "eth.getBlock(0).nonce",
+		query:  "brn.getBlock(0).nonce",
 		result: "0x0000000000000042",
 	},
 	// Genesis file with an empty chain configuration (ensure missing fields work)
@@ -58,7 +58,7 @@ var customGenesisTests = []struct {
 			"timestamp"  : "0x00",
 			"config"     : {}
 		}`,
-		query:  "eth.getBlock(0).nonce",
+		query:  "brn.getBlock(0).nonce",
 		result: "0x0000000000000042",
 	},
 	// Genesis file with specific chain configurations
@@ -79,7 +79,7 @@ var customGenesisTests = []struct {
 				"daoForkSupport" : true
 			},
 		}`,
-		query:  "eth.getBlock(0).nonce",
+		query:  "brn.getBlock(0).nonce",
 		result: "0x0000000000000042",
 	},
 }

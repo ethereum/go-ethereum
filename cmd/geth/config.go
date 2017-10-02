@@ -1,18 +1,18 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2017 The go-burnout Authors
+// This file is part of go-burnout.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-burnout is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-burnout is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-burnout. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -28,12 +28,12 @@ import (
 
 	cli "gopkg.in/urfave/cli.v1"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/contracts/release"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
+	"github.com/burnoutcoin/go-burnout/contracts/release"
+	"github.com/burnoutcoin/go-burnout/brn"
+	"github.com/burnoutcoin/go-burnout/node"
+	"github.com/burnoutcoin/go-burnout/params"
+	whisper "github.com/burnoutcoin/go-burnout/whisper/whisperv5"
 	"github.com/naoina/toml"
 )
 
@@ -71,15 +71,15 @@ var tomlSettings = toml.Config{
 	},
 }
 
-type ethstatsConfig struct {
+type brnstatsConfig struct {
 	URL string `toml:",omitempty"`
 }
 
 type gethConfig struct {
-	Eth      eth.Config
+	Eth      brn.Config
 	Shh      whisper.Config
 	Node     node.Config
-	Ethstats ethstatsConfig
+	Brnstats brnstatsConfig
 }
 
 func loadConfig(file string, cfg *gethConfig) error {
@@ -101,8 +101,8 @@ func defaultNodeConfig() node.Config {
 	cfg := node.DefaultConfig
 	cfg.Name = clientIdentifier
 	cfg.Version = params.VersionWithCommit(gitCommit)
-	cfg.HTTPModules = append(cfg.HTTPModules, "eth", "shh")
-	cfg.WSModules = append(cfg.WSModules, "eth", "shh")
+	cfg.HTTPModules = append(cfg.HTTPModules, "brn", "shh")
+	cfg.WSModules = append(cfg.WSModules, "brn", "shh")
 	cfg.IPCPath = "geth.ipc"
 	return cfg
 }
@@ -110,7 +110,7 @@ func defaultNodeConfig() node.Config {
 func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	// Load defaults.
 	cfg := gethConfig{
-		Eth:  eth.DefaultConfig,
+		Eth:  brn.DefaultConfig,
 		Shh:  whisper.DefaultConfig,
 		Node: defaultNodeConfig(),
 	}
@@ -129,8 +129,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		utils.Fatalf("Failed to create the protocol stack: %v", err)
 	}
 	utils.SetEthConfig(ctx, stack, &cfg.Eth)
-	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
-		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
+	if ctx.GlobalIsSet(utils.BrnStatsURLFlag.Name) {
+		cfg.Brnstats.URL = ctx.GlobalString(utils.BrnStatsURLFlag.Name)
 	}
 
 	utils.SetShhConfig(ctx, stack, &cfg.Shh)
@@ -166,9 +166,9 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		utils.RegisterShhService(stack, &cfg.Shh)
 	}
 
-	// Add the Ethereum Stats daemon if requested.
-	if cfg.Ethstats.URL != "" {
-		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
+	// Add the Burnout Stats daemon if requested.
+	if cfg.Brnstats.URL != "" {
+		utils.RegisterBrnStatsService(stack, cfg.Brnstats.URL)
 	}
 
 	// Add the release oracle service so it boots along with node.

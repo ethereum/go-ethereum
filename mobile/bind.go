@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 // Contains all the wrappers from the bind package.
 
@@ -22,10 +22,10 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/burnoutcoin/go-burnout/accounts/abi"
+	"github.com/burnoutcoin/go-burnout/accounts/abi/bind"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 // Signer is an interaface defining the callback when a contract requires a
@@ -68,7 +68,7 @@ func (opts *CallOpts) SetGasLimit(limit int64)     { /* TODO(karalabe) */ }
 func (opts *CallOpts) SetContext(context *Context) { opts.opts.Context = context.context }
 
 // TransactOpts is the collection of authorization data required to create a
-// valid Ethereum transaction.
+// valid Burnout transaction.
 type TransactOpts struct {
 	opts bind.TransactOpts
 }
@@ -103,7 +103,7 @@ func (opts *TransactOpts) SetGasLimit(limit int64)     { opts.opts.GasLimit = bi
 func (opts *TransactOpts) SetContext(context *Context) { opts.opts.Context = context.context }
 
 // BoundContract is the base wrapper object that reflects a contract on the
-// Ethereum network. It contains a collection of methods that are used by the
+// Burnout network. It contains a collection of methods that are used by the
 // higher level contract bindings to operate.
 type BoundContract struct {
 	contract *bind.BoundContract
@@ -111,9 +111,9 @@ type BoundContract struct {
 	deployer *types.Transaction
 }
 
-// DeployContract deploys a contract onto the Ethereum blockchain and binds the
+// DeployContract deploys a contract onto the Burnout blockchain and binds the
 // deployment address with a wrapper.
-func DeployContract(opts *TransactOpts, abiJSON string, bytecode []byte, client *EthereumClient, args *Interfaces) (contract *BoundContract, _ error) {
+func DeployContract(opts *TransactOpts, abiJSON string, bytecode []byte, client *BurnoutClient, args *Interfaces) (contract *BoundContract, _ error) {
 	// Deploy the contract to the network
 	parsed, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
@@ -132,7 +132,7 @@ func DeployContract(opts *TransactOpts, abiJSON string, bytecode []byte, client 
 
 // BindContract creates a low level contract interface through which calls and
 // transactions may be made through.
-func BindContract(address *Address, abiJSON string, client *EthereumClient) (contract *BoundContract, _ error) {
+func BindContract(address *Address, abiJSON string, client *BurnoutClient) (contract *BoundContract, _ error) {
 	parsed, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
 		return nil, err

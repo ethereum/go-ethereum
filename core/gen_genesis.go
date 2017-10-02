@@ -7,10 +7,10 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 func (g Genesis) MarshalJSON() ([]byte, error) {

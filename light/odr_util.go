@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2016 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package light
 
@@ -22,12 +22,12 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 var sha3_nil = crypto.Keccak256Hash(nil)
@@ -51,7 +51,7 @@ type TrustedCht struct {
 	Root   common.Hash
 }
 
-func GetTrustedCht(db ethdb.Database) TrustedCht {
+func GetTrustedCht(db brndb.Database) TrustedCht {
 	data, _ := db.Get(trustedChtKey)
 	var res TrustedCht
 	if err := rlp.DecodeBytes(data, &res); err != nil {
@@ -60,12 +60,12 @@ func GetTrustedCht(db ethdb.Database) TrustedCht {
 	return res
 }
 
-func WriteTrustedCht(db ethdb.Database, cht TrustedCht) {
+func WriteTrustedCht(db brndb.Database, cht TrustedCht) {
 	data, _ := rlp.EncodeToBytes(cht)
 	db.Put(trustedChtKey, data)
 }
 
-func DeleteTrustedCht(db ethdb.Database) {
+func DeleteTrustedCht(db brndb.Database) {
 	db.Delete(trustedChtKey)
 }
 

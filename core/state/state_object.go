@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2014 The go-burnout Authors
+// This file is part of the go-burnout library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-burnout library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-burnout library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 package state
 
@@ -22,10 +22,10 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/trie"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -55,7 +55,7 @@ func (self Storage) Copy() Storage {
 	return cpy
 }
 
-// stateObject represents an Ethereum account which is being modified.
+// stateObject represents an Burnout account which is being modified.
 //
 // The usage pattern is as follows:
 // First you need to obtain a state object.
@@ -63,7 +63,7 @@ func (self Storage) Copy() Storage {
 // Finally, call CommitTrie to write the modified storage trie into a database.
 type stateObject struct {
 	address  common.Address
-	addrHash common.Hash // hash of ethereum address of the account
+	addrHash common.Hash // hash of burnout address of the account
 	data     Account
 	db       *StateDB
 
@@ -96,7 +96,7 @@ func (s *stateObject) empty() bool {
 	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash)
 }
 
-// Account is the Ethereum consensus representation of accounts.
+// Account is the Burnout consensus representation of accounts.
 // These objects are stored in the main account trie.
 type Account struct {
 	Nonce    uint64

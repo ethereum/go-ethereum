@@ -1,4 +1,4 @@
-// Ethereum Name Service contracts by Nick Johnson <nick@ethereum.org>
+// Burnout Name Service contracts by Nick Johnson <nick@burnout.org>
 // 
 // To the extent possible under law, the person who associated CC0 with
 // ENS contracts has waived all copyright and related or neighboring rights

@@ -42,9 +42,9 @@ It has these top-level messages:
 	GetPublicKey
 	PublicKey
 	GetAddress
-	EthereumGetAddress
+	BurnoutGetAddress
 	Address
-	EthereumAddress
+	BurnoutAddress
 	WipeDevice
 	LoadDevice
 	ResetDevice
@@ -69,12 +69,12 @@ It has these top-level messages:
 	SimpleSignTx
 	TxRequest
 	TxAck
-	EthereumSignTx
-	EthereumTxRequest
-	EthereumTxAck
-	EthereumSignMessage
-	EthereumVerifyMessage
-	EthereumMessageSignature
+	BurnoutSignTx
+	BurnoutTxRequest
+	BurnoutTxAck
+	BurnoutSignMessage
+	BurnoutVerifyMessage
+	BurnoutMessageSignature
 	SignIdentity
 	SignedIdentity
 	GetECDHSessionKey

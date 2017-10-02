@@ -1,18 +1,18 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2017 The go-burnout Authors
+// This file is part of go-burnout.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-burnout is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-burnout is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-burnout. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // manageServers displays a list of servers the user can disconnect from, and an
@@ -171,7 +171,7 @@ func (w *wizard) deployComponent() {
 	// Print all the things we can deploy and wait or user choice
 	fmt.Println()
 	fmt.Println("What would you like to deploy? (recommended order)")
-	fmt.Println(" 1. Ethstats  - Network monitoring tool")
+	fmt.Println(" 1. Brnstats  - Network monitoring tool")
 	fmt.Println(" 2. Bootnode  - Entry point of the network")
 	fmt.Println(" 3. Sealer    - Full node minting new blocks")
 	fmt.Println(" 4. Wallet    - Browser wallet for quick sends (todo)")
@@ -180,7 +180,7 @@ func (w *wizard) deployComponent() {
 
 	switch w.read() {
 	case "1":
-		w.deployEthstats()
+		w.deployBrnstats()
 	case "2":
 		w.deployNode(true)
 	case "3":
