@@ -44,10 +44,8 @@ import (
 )
 
 const (
-	defaultGas              = 90000
-	defaultGasPrice         = 50 * params.Shannon
-	receiptStatusSuccessful = 1
-	receiptStatusFailed     = 0
+	defaultGas      = 90000
+	defaultGasPrice = 50 * params.Shannon
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -1010,10 +1008,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(hash common.Hash) (map[
 	if len(receipt.PostState) > 0 {
 		fields["root"] = hexutil.Bytes(receipt.PostState)
 	} else {
-		fields["status"] = hexutil.Uint(receiptStatusSuccessful)
-		if receipt.Failed {
-			fields["status"] = hexutil.Uint(receiptStatusFailed)
-		}
+		fields["status"] = hexutil.Uint(receipt.Status)
 	}
 	if receipt.Logs == nil {
 		fields["logs"] = [][]*types.Log{}
