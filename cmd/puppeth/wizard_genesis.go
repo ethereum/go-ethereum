@@ -42,6 +42,7 @@ func (w *wizard) makeGenesis() {
 			EIP150Block:    big.NewInt(2),
 			EIP155Block:    big.NewInt(3),
 			EIP158Block:    big.NewInt(3),
+			ByzantiumBlock: big.NewInt(4),
 		},
 	}
 	// Figure out which consensus engine to choose

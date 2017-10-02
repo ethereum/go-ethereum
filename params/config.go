@@ -18,7 +18,6 @@ package params
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -40,7 +39,7 @@ var (
 		EIP150Hash:     common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
 		EIP155Block:    big.NewInt(2675000),
 		EIP158Block:    big.NewInt(2675000),
-		ByzantiumBlock: big.NewInt(math.MaxInt64), // Don't enable yet
+		ByzantiumBlock: big.NewInt(4370000),
 
 		Ethash: new(EthashConfig),
 	}
@@ -70,7 +69,7 @@ var (
 		EIP150Hash:     common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
 		EIP155Block:    big.NewInt(3),
 		EIP158Block:    big.NewInt(3),
-		ByzantiumBlock: big.NewInt(math.MaxInt64), // Don't enable yet
+		ByzantiumBlock: big.NewInt(1035301),
 
 		Clique: &CliqueConfig{
 			Period: 15,
