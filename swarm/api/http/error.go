@@ -27,7 +27,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 //templateMap holds a mapping of an HTTP error code to a template

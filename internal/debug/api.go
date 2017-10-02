@@ -33,7 +33,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // Handler is the global debugging handler.

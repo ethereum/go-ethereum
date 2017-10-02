@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 // typeWithoutStringer is a alias for the Type type which simply doesn't implement

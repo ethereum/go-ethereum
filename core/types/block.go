@@ -26,10 +26,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/hexutil"
-	"github.com/burnout/go-burnout/crypto/sha3"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/crypto/sha3"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 var (

@@ -28,9 +28,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/burnout/go-burnout/accounts"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // Minimum amount of time between cache reloads. This limit applies if the platform does

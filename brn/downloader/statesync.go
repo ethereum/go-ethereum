@@ -23,12 +23,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/state"
-	"github.com/burnout/go-burnout/crypto/sha3"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/trie"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/crypto/sha3"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/trie"
 )
 
 // stateReq represents a batch of state fetch requests groupped together into

@@ -25,13 +25,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/node"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/p2p/discover"
-	"github.com/burnout/go-burnout/p2p/simulations"
-	"github.com/burnout/go-burnout/p2p/simulations/adapters"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/node"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/p2p/simulations"
+	"github.com/burnoutcoin/go-burnout/p2p/simulations/adapters"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 var adapterType = flag.String("adapter", "sim", `node adapter to use (one of "sim", "exec" or "docker")`)

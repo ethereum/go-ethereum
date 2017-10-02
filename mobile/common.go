@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.

@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/mclock"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/mclock"
 )
 
 func TestTopicRadius(t *testing.T) {

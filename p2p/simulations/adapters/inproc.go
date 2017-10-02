@@ -23,11 +23,11 @@ import (
 	"net"
 	"sync"
 
-	"github.com/burnout/go-burnout/event"
-	"github.com/burnout/go-burnout/node"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/p2p/discover"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/node"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 // SimAdapter is a NodeAdapter which creates in-memory simulation nodes and

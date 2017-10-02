@@ -19,8 +19,8 @@ package vm
 import (
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 // StateDB is an EVM database for full state querying.

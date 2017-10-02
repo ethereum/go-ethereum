@@ -27,13 +27,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/burnout/go-burnout/common/mclock"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/p2p/discover"
-	"github.com/burnout/go-burnout/p2p/discv5"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/common/mclock"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/p2p/discv5"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 const (

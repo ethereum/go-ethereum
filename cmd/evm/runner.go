@@ -27,16 +27,16 @@ import (
 
 	goruntime "runtime"
 
-	"github.com/burnout/go-burnout/cmd/evm/internal/compiler"
-	"github.com/burnout/go-burnout/cmd/utils"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/core/state"
-	"github.com/burnout/go-burnout/core/vm"
-	"github.com/burnout/go-burnout/core/vm/runtime"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/cmd/evm/internal/compiler"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/core/vm/runtime"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/params"
 	cli "gopkg.in/urfave/cli.v1"
 )
 

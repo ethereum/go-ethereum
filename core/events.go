@@ -17,8 +17,8 @@
 package core
 
 import (
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 // TxPreEvent is posted when a transaction enters the transaction pool.

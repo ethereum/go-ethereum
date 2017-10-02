@@ -5,7 +5,7 @@ package whisperv5
 import (
 	"encoding/json"
 
-	"github.com/burnout/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
 )
 
 var _ = (*newMessageOverride)(nil)

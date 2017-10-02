@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.

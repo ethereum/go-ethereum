@@ -23,9 +23,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 // A Nonce is a 64-bit hash which proves (combined with the mix-hash) that

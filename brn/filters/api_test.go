@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 func TestUnmarshalJSONNewFilterArgs(t *testing.T) {

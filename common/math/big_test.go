@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 func TestHexOrDecimal256(t *testing.T) {

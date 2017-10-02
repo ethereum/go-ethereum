@@ -26,13 +26,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/burnout/go-burnout/accounts"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/event"
-	"github.com/burnout/go-burnout/internal/debug"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/internal/debug"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/rpc"
 	"github.com/prometheus/prometheus/util/flock"
 )
 

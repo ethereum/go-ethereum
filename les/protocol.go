@@ -22,8 +22,8 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 // Constants to match up protocol versions and messages

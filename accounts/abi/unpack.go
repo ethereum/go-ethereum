@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 // toGoSliceType parses the input and casts it to the proper slice defined by the ABI

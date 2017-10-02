@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/burnout/go-burnout/common/hexutil"
-	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/crypto"
 )
 
 type bytesBacked interface {

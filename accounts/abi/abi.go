@@ -23,7 +23,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 // The ABI holds information about a contract's context and available

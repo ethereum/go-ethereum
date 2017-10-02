@@ -21,10 +21,10 @@ import (
 	"io"
 	"os"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 // errNoActiveJournal is returned if a transaction is attempted to be inserted

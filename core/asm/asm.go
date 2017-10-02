@@ -21,7 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/burnout/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/core/vm"
 )
 
 // Iterator for disassembled EVM instructions

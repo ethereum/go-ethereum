@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/trie"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/trie"
 	lru "github.com/hashicorp/golang-lru"
 )
 

@@ -25,9 +25,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/hexutil"
-	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 // Tests that verification caches can be correctly generated.

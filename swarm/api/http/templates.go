@@ -20,7 +20,7 @@ import (
 	"html/template"
 	"path"
 
-	"github.com/burnout/go-burnout/swarm/api"
+	"github.com/burnoutcoin/go-burnout/swarm/api"
 )
 
 type htmlListData struct {

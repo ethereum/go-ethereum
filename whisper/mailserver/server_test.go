@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/crypto"
-	whisper "github.com/burnout/go-burnout/whisper/whisperv5"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	whisper "github.com/burnoutcoin/go-burnout/whisper/whisperv5"
 )
 
 const powRequirement = 0.00001

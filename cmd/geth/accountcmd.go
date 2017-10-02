@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/burnout/go-burnout/accounts"
-	"github.com/burnout/go-burnout/accounts/keystore"
-	"github.com/burnout/go-burnout/cmd/utils"
-	"github.com/burnout/go-burnout/console"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/accounts/keystore"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
+	"github.com/burnoutcoin/go-burnout/console"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/log"
 	"gopkg.in/urfave/cli.v1"
 )
 

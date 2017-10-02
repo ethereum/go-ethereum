@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/math"
-	"github.com/burnout/go-burnout/consensus/ethash"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/consensus/ethash"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 //go:generate gencodec -type DifficultyTest -field-override difficultyTestMarshaling -out gen_difficultytest.go

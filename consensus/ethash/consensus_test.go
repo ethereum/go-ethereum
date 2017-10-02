@@ -23,9 +23,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/burnout/go-burnout/common/math"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 type diffTest struct {

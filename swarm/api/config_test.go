@@ -23,8 +23,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto"
 )
 
 var (

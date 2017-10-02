@@ -17,7 +17,7 @@
 package api
 
 import (
-	"github.com/burnout/go-burnout/swarm/network"
+	"github.com/burnoutcoin/go-burnout/swarm/network"
 )
 
 type Control struct {

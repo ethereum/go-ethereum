@@ -19,9 +19,9 @@ package state
 import (
 	"bytes"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/rlp"
-	"github.com/burnout/go-burnout/trie"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/trie"
 )
 
 // NewStateSync create a new state trie download scheduler.

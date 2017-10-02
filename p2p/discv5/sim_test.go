@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 // In this test, nodes try to randomly resolve each other.

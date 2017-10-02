@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 func init() {

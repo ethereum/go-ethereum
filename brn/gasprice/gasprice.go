@@ -22,10 +22,10 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/internal/ethapi"
-	"github.com/burnout/go-burnout/params"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/internal/ethapi"
+	"github.com/burnoutcoin/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 var maxPrice = big.NewInt(500 * params.Shannon)

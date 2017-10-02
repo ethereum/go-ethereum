@@ -4,9 +4,9 @@ Priority: extra
 Maintainer: {{.Author}}
 Build-Depends: debhelper (>= 8.0.0), golang-1.9
 Standards-Version: 3.9.5
-Homepage: https://burnout.org
-Vcs-Git: git://github.com/burnout/go-burnout.git
-Vcs-Browser: https://github.com/burnout/go-burnout
+Homepage: https://burnoutcoin.org
+Vcs-Git: git://github.com/burnoutcoin/go-burnout.git
+Vcs-Browser: https://github.com/burnoutcoin/go-burnout
 
 Package: {{.Name}}
 Architecture: any

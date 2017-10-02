@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/crypto/sha3"
+	"github.com/burnoutcoin/go-burnout/crypto/sha3"
 )
 
 const (

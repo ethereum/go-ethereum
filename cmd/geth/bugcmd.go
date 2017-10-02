@@ -26,10 +26,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/burnout/go-burnout/cmd/internal/browser"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/cmd/internal/browser"
+	"github.com/burnoutcoin/go-burnout/params"
 
-	"github.com/burnout/go-burnout/cmd/utils"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -41,7 +41,7 @@ var bugCommand = cli.Command{
 	Category:  "MISCELLANEOUS COMMANDS",
 }
 
-const issueUrl = "https://github.com/burnout/go-burnout/issues/new"
+const issueUrl = "https://github.com/burnoutcoin/go-burnout/issues/new"
 
 // reportBug reports a bug by opening a new URL to the go-burnout GH issue
 // tracker and setting default values as the issue body.

@@ -19,9 +19,9 @@ package core
 import (
 	"math/big"
 
-	"github.com/burnout/go-burnout/core/state"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/core/vm"
 )
 
 // Validator is an interface which defines the standard for block validation. It

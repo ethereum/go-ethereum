@@ -22,12 +22,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/accounts/abi/bind"
-	"github.com/burnout/go-burnout/accounts/abi/bind/backends"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/accounts/abi/bind"
+	"github.com/burnoutcoin/go-burnout/accounts/abi/bind/backends"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/crypto"
 )
 
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")

@@ -20,7 +20,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 func TestSet(t *testing.T) {

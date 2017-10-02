@@ -24,8 +24,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/burnout/go-burnout/accounts/abi/bind"
-	"github.com/burnout/go-burnout/common/compiler"
+	"github.com/burnoutcoin/go-burnout/accounts/abi/bind"
+	"github.com/burnoutcoin/go-burnout/common/compiler"
 )
 
 var (

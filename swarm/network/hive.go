@@ -22,12 +22,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/p2p/discover"
-	"github.com/burnout/go-burnout/p2p/netutil"
-	"github.com/burnout/go-burnout/swarm/network/kademlia"
-	"github.com/burnout/go-burnout/swarm/storage"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/p2p/netutil"
+	"github.com/burnoutcoin/go-burnout/swarm/network/kademlia"
+	"github.com/burnoutcoin/go-burnout/swarm/storage"
 )
 
 // Hive is the logistic manager of the swarm

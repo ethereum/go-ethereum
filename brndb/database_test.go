@@ -25,7 +25,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/brndb"
 )
 
 func newTestLDB() (*brndb.LDBDatabase, func()) {

@@ -25,8 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/burnout/go-burnout/common/bitutil"
-	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/common/bitutil"
+	"github.com/burnoutcoin/go-burnout/crypto"
 )
 
 // bloomIndexes represents the bit indexes inside the bloom filter that belong

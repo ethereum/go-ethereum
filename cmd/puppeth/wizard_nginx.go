@@ -19,7 +19,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // ensureVirtualHost checks whether a reverse-proxy is running on the specified

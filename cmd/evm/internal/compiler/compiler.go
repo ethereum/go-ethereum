@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/burnout/go-burnout/core/asm"
+	"github.com/burnoutcoin/go-burnout/core/asm"
 )
 
 func Compile(fn string, src []byte, debug bool) (string, error) {

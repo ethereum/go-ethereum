@@ -19,8 +19,8 @@ package state
 import (
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/brndb"
 )
 
 var addr = common.BytesToAddress([]byte("test"))

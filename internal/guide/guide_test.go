@@ -30,8 +30,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/accounts/keystore"
-	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/accounts/keystore"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 // Tests that the account management snippets work correctly.

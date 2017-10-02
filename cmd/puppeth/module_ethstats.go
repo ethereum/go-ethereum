@@ -24,7 +24,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // brnstatsDockerfile is the Dockerfile required to build an brnstats backend

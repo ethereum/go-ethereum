@@ -27,13 +27,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	burnout "github.com/burnout/go-burnout"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/event"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/params"
+	burnoutcoin "github.com/burnoutcoin/go-burnout"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/params"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -240,7 +240,7 @@ func New(mode SyncMode, stateDb brndb.Database, mux *event.TypeMux, chain BlockC
 // In addition, during the state download phase of fast synchronisation the number
 // of processed and the total number of known states are also returned. Otherwise
 // these are zero.
-func (d *Downloader) Progress() burnout.SyncProgress {
+func (d *Downloader) Progress() burnoutcoin.SyncProgress {
 	// Lock the current stats and return the progress
 	d.syncStatsLock.RLock()
 	defer d.syncStatsLock.RUnlock()
@@ -254,7 +254,7 @@ func (d *Downloader) Progress() burnout.SyncProgress {
 	case LightSync:
 		current = d.lightchain.CurrentHeader().Number.Uint64()
 	}
-	return burnout.SyncProgress{
+	return burnoutcoin.SyncProgress{
 		StartingBlock: d.syncStatsChainOrigin,
 		CurrentBlock:  current,
 		HighestBlock:  d.syncStatsChainHeight,

@@ -42,7 +42,7 @@ import (
 	"fmt"
 	"hash"
 
-	ethcrypto "github.com/burnout/go-burnout/crypto"
+	ethcrypto "github.com/burnoutcoin/go-burnout/crypto"
 )
 
 var (

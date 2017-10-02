@@ -21,11 +21,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/crypto/sha3"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/crypto/sha3"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 // Tests block header storage and retrieval operations.

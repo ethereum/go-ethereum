@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/burnout/go-burnout/node"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/node"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 // SampleService is a trivial network service that can be attached to a node for

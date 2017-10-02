@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/crypto/ecies"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/crypto/ecies"
 )
 
 func TestEnvelopeOpen(t *testing.T) {

@@ -21,7 +21,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/burnout/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/event"
 )
 
 // Manager is an overarching account manager that can communicate with various

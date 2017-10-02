@@ -1,5 +1,5 @@
 language: go
-go_import_path: github.com/burnout/go-burnout
+go_import_path: github.com/burnoutcoin/go-burnout
 sudo: false
 matrix:
   include:
@@ -68,7 +68,7 @@ matrix:
             - fakeroot
       script:
         # Build for the primary platforms that Trusty can manage
-        - go run build/ci.go debsrc -signer "Go Burnout Linux Builder <geth-ci@burnout.org>" -upload ppa:burnout/burnout
+        - go run build/ci.go debsrc -signer "Go Burnout Linux Builder <geth-ci@burnoutcoin.org>" -upload ppa:burnout/burnout
         - go run build/ci.go install
         - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
         - go run build/ci.go install -arch 386

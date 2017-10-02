@@ -25,11 +25,11 @@ import (
 	"sync"
 	"time"
 
-	burnout "github.com/burnout/go-burnout"
-	"github.com/burnout/go-burnout/accounts"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/log"
+	burnoutcoin "github.com/burnoutcoin/go-burnout"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/log"
 	"github.com/karalabe/hid"
 )
 
@@ -84,7 +84,7 @@ type wallet struct {
 
 	deriveNextPath accounts.DerivationPath   // Next derivation path for account auto-discovery
 	deriveNextAddr common.Address            // Next derived account address for auto-discovery
-	deriveChain    burnout.ChainStateReader // Blockchain state reader to discover used account with
+	deriveChain    burnoutcoin.ChainStateReader // Blockchain state reader to discover used account with
 	deriveReq      chan chan struct{}        // Channel to request a self-derivation on
 	deriveQuit     chan chan error           // Channel to terminate the self-deriver with
 
@@ -484,7 +484,7 @@ func (w *wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 // user used previously (based on the chain state), but ones that he/she did not
 // explicitly pin to the wallet manually. To avoid chain head monitoring, self
 // derivation only runs during account listing (and even then throttled).
-func (w *wallet) SelfDerive(base accounts.DerivationPath, chain burnout.ChainStateReader) {
+func (w *wallet) SelfDerive(base accounts.DerivationPath, chain burnoutcoin.ChainStateReader) {
 	w.stateLock.Lock()
 	defer w.stateLock.Unlock()
 

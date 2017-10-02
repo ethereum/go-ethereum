@@ -32,8 +32,8 @@ import (
 	"io/ioutil"
 	"sync"
 
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 )

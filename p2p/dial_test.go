@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/burnout/go-burnout/p2p/discover"
-	"github.com/burnout/go-burnout/p2p/netutil"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/p2p/netutil"
 )
 
 func init() {

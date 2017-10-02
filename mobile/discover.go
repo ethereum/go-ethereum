@@ -22,7 +22,7 @@ package geth
 import (
 	"errors"
 
-	"github.com/burnout/go-burnout/p2p/discv5"
+	"github.com/burnoutcoin/go-burnout/p2p/discv5"
 )
 
 // Enode represents a host on the network.

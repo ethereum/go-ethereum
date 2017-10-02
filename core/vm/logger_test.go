@@ -20,8 +20,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 type dummyContractRef struct {

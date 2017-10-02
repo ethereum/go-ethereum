@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 // Tests that the node iterator indeed walks over the entire database contents.

@@ -4,14 +4,14 @@
                       http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>org.burnout</groupId>
+  <groupId>org.burnoutcoin</groupId>
   <artifactId>geth</artifactId>
   <version>{{.Version}}</version>
   <packaging>aar</packaging>
 
   <name>Android Burnout Client</name>
   <description>Android port of the go-burnout libraries and node</description>
-  <url>https://github.com/burnout/go-burnout</url>
+  <url>https://github.com/burnoutcoin/go-burnout</url>
   <inceptionYear>2015</inceptionYear>
 
   <licenses>
@@ -24,7 +24,7 @@
 
   <organization>
     <name>Burnout</name>
-    <url>https://burnout.org</url>
+    <url>https://burnoutcoin.org</url>
   </organization>
 
   <developers>
@@ -48,10 +48,10 @@
 
   <issueManagement>
     <system>GitHub Issues</system>
-    <url>https://github.com/burnout/go-burnout/issues/</url>
+    <url>https://github.com/burnoutcoin/go-burnout/issues/</url>
   </issueManagement>
 
   <scm>
-    <url>https://github.com/burnout/go-burnout</url>
+    <url>https://github.com/burnoutcoin/go-burnout</url>
   </scm>
 </project>

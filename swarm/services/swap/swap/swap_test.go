@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 type testInPayment struct {

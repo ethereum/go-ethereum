@@ -23,10 +23,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // Genesis block for nodes which don't care about the DAO fork (i.e. not configured)

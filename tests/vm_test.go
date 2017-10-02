@@ -19,7 +19,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/burnout/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/core/vm"
 )
 
 func TestVM(t *testing.T) {

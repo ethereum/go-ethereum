@@ -3,9 +3,9 @@ InstallDir "$InstDir"
 OutFile "${OUTPUTFILE}" # set through command line arguments
 
 # Links for "Add/Remove Programs"
-!define HELPURL "https://github.com/burnout/go-burnout/issues"
-!define UPDATEURL "https://github.com/burnout/go-burnout/releases"
-!define ABOUTURL "https://github.com/burnout/go-burnout#burnout-go"
+!define HELPURL "https://github.com/burnoutcoin/go-burnout/issues"
+!define UPDATEURL "https://github.com/burnoutcoin/go-burnout/releases"
+!define ABOUTURL "https://github.com/burnoutcoin/go-burnout#burnout-go"
 !define /date NOW "%Y%m%d"
 
 PageEx license

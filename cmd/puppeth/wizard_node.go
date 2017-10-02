@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/burnout/go-burnout/accounts/keystore"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/accounts/keystore"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // deployNode creates a new node configuration based on some user input.

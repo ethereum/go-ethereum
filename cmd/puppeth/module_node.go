@@ -25,7 +25,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // nodeDockerfile is the Dockerfile required to run an Burnout node.

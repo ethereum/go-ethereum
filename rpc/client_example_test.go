@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 // In this example, our client whishes to track the latest 'block number'

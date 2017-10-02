@@ -24,9 +24,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/p2p/discover"
-	"github.com/burnout/go-burnout/p2p/netutil"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/p2p/netutil"
 )
 
 const (

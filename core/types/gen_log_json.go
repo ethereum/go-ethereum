@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
 )
 
 func (l Log) MarshalJSON() ([]byte, error) {

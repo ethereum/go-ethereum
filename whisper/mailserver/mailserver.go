@@ -21,12 +21,12 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/burnout/go-burnout/cmd/utils"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/rlp"
-	whisper "github.com/burnout/go-burnout/whisper/whisperv5"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/rlp"
+	whisper "github.com/burnoutcoin/go-burnout/whisper/whisperv5"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )

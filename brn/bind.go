@@ -20,13 +20,13 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/burnout/go-burnout"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/hexutil"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/internal/ethapi"
-	"github.com/burnout/go-burnout/rlp"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/internal/ethapi"
+	"github.com/burnoutcoin/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 // ContractBackend implements bind.ContractBackend with direct calls to Burnout
@@ -65,7 +65,7 @@ func (b *ContractBackend) PendingCodeAt(ctx context.Context, contract common.Add
 // ContractCall implements bind.ContractCaller executing an Burnout contract
 // call with the specified data as the input. The pending flag requests execution
 // against the pending block, not the stable head of the chain.
-func (b *ContractBackend) CallContract(ctx context.Context, msg burnout.CallMsg, blockNum *big.Int) ([]byte, error) {
+func (b *ContractBackend) CallContract(ctx context.Context, msg burnoutcoin.CallMsg, blockNum *big.Int) ([]byte, error) {
 	out, err := b.bcapi.Call(ctx, toCallArgs(msg), toBlockNumber(blockNum))
 	return out, err
 }
@@ -73,12 +73,12 @@ func (b *ContractBackend) CallContract(ctx context.Context, msg burnout.CallMsg,
 // ContractCall implements bind.ContractCaller executing an Burnout contract
 // call with the specified data as the input. The pending flag requests execution
 // against the pending block, not the stable head of the chain.
-func (b *ContractBackend) PendingCallContract(ctx context.Context, msg burnout.CallMsg) ([]byte, error) {
+func (b *ContractBackend) PendingCallContract(ctx context.Context, msg burnoutcoin.CallMsg) ([]byte, error) {
 	out, err := b.bcapi.Call(ctx, toCallArgs(msg), rpc.PendingBlockNumber)
 	return out, err
 }
 
-func toCallArgs(msg burnout.CallMsg) ethapi.CallArgs {
+func toCallArgs(msg burnoutcoin.CallMsg) ethapi.CallArgs {
 	args := ethapi.CallArgs{
 		To:   msg.To,
 		From: msg.From,
@@ -124,7 +124,7 @@ func (b *ContractBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error)
 // the backend blockchain. There is no guarantee that this is the true gas limit
 // requirement as other transactions may be added or removed by miners, but it
 // should provide a basis for setting a reasonable default.
-func (b *ContractBackend) EstimateGas(ctx context.Context, msg burnout.CallMsg) (*big.Int, error) {
+func (b *ContractBackend) EstimateGas(ctx context.Context, msg burnoutcoin.CallMsg) (*big.Int, error) {
 	out, err := b.bcapi.EstimateGas(ctx, toCallArgs(msg))
 	return out.ToInt(), err
 }

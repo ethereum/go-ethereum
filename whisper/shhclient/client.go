@@ -19,10 +19,10 @@ package shhclient
 import (
 	"context"
 
-	"github.com/burnout/go-burnout"
-	"github.com/burnout/go-burnout/common/hexutil"
-	"github.com/burnout/go-burnout/rpc"
-	whisper "github.com/burnout/go-burnout/whisper/whisperv5"
+	"github.com/burnoutcoin/go-burnout"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/rpc"
+	whisper "github.com/burnoutcoin/go-burnout/whisper/whisperv5"
 )
 
 // Client defines typed wrappers for the Whisper v5 RPC API.
@@ -168,7 +168,7 @@ func (sc *Client) Post(ctx context.Context, message whisper.NewMessage) error {
 // SubscribeMessages subscribes to messages that match the given criteria. This method
 // is only supported on bi-directional connections such as websockets and IPC.
 // NewMessageFilter uses polling and is supported over HTTP.
-func (ec *Client) SubscribeMessages(ctx context.Context, criteria whisper.Criteria, ch chan<- *whisper.Message) (burnout.Subscription, error) {
+func (ec *Client) SubscribeMessages(ctx context.Context, criteria whisper.Criteria, ch chan<- *whisper.Message) (burnoutcoin.Subscription, error) {
 	return ec.c.ShhSubscribe(ctx, ch, "messages", criteria)
 }
 

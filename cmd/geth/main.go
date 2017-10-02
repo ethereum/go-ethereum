@@ -25,17 +25,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/burnout/go-burnout/accounts"
-	"github.com/burnout/go-burnout/accounts/keystore"
-	"github.com/burnout/go-burnout/cmd/utils"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/console"
-	"github.com/burnout/go-burnout/brn"
-	"github.com/burnout/go-burnout/brnclient"
-	"github.com/burnout/go-burnout/internal/debug"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/metrics"
-	"github.com/burnout/go-burnout/node"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/accounts/keystore"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/console"
+	"github.com/burnoutcoin/go-burnout/brn"
+	"github.com/burnoutcoin/go-burnout/brnclient"
+	"github.com/burnoutcoin/go-burnout/internal/debug"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/metrics"
+	"github.com/burnoutcoin/go-burnout/node"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -280,13 +280,13 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			type threaded interface {
 				SetThreads(threads int)
 			}
-			if th, ok := burnout.Engine().(threaded); ok {
+			if th, ok := burnoutcoin.Engine().(threaded); ok {
 				th.SetThreads(threads)
 			}
 		}
 		// Set the gas price to the limits from the CLI and start mining
-		burnout.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
-		if err := burnout.StartMining(true); err != nil {
+		burnoutcoin.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
+		if err := burnoutcoin.StartMining(true); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}

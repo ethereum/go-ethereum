@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // This table defines supported forks and their chain config.

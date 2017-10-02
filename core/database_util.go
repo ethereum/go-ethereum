@@ -24,13 +24,13 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/metrics"
-	"github.com/burnout/go-burnout/params"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/metrics"
+	"github.com/burnoutcoin/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 // DatabaseReader wraps the Get method of a backing data store.

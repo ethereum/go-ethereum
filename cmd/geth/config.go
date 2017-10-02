@@ -28,12 +28,12 @@ import (
 
 	cli "gopkg.in/urfave/cli.v1"
 
-	"github.com/burnout/go-burnout/cmd/utils"
-	"github.com/burnout/go-burnout/contracts/release"
-	"github.com/burnout/go-burnout/brn"
-	"github.com/burnout/go-burnout/node"
-	"github.com/burnout/go-burnout/params"
-	whisper "github.com/burnout/go-burnout/whisper/whisperv5"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
+	"github.com/burnoutcoin/go-burnout/contracts/release"
+	"github.com/burnoutcoin/go-burnout/brn"
+	"github.com/burnoutcoin/go-burnout/node"
+	"github.com/burnoutcoin/go-burnout/params"
+	whisper "github.com/burnoutcoin/go-burnout/whisper/whisperv5"
 	"github.com/naoina/toml"
 )
 

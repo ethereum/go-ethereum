@@ -25,12 +25,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/hexutil"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/event"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 var (

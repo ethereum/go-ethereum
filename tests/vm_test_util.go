@@ -22,15 +22,15 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/hexutil"
-	"github.com/burnout/go-burnout/common/math"
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/core/state"
-	"github.com/burnout/go-burnout/core/vm"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // VMTest checks EVM execution without block or transaction context.

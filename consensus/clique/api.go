@@ -17,10 +17,10 @@
 package clique
 
 import (
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/consensus"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/consensus"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting

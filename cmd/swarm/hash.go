@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/burnout/go-burnout/cmd/utils"
-	"github.com/burnout/go-burnout/swarm/storage"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
+	"github.com/burnoutcoin/go-burnout/swarm/storage"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -24,8 +24,8 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/burnout/go-burnout/common/math"
-	"github.com/burnout/go-burnout/crypto/randentropy"
+	"github.com/burnoutcoin/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/crypto/randentropy"
 )
 
 const TestCount = 1000

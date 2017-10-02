@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 const (

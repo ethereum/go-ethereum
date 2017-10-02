@@ -19,7 +19,7 @@ package vm
 import (
 	"fmt"
 
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 func makeStackFunc(pop, push int) stackValidationFunc {

@@ -26,11 +26,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/brn"
-	"github.com/burnout/go-burnout/internal/jsre"
-	"github.com/burnout/go-burnout/node"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/brn"
+	"github.com/burnoutcoin/go-burnout/internal/jsre"
+	"github.com/burnoutcoin/go-burnout/node"
 )
 
 const (

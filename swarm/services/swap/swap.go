@@ -26,14 +26,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/burnout/go-burnout/accounts/abi/bind"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/contracts/chequebook"
-	"github.com/burnout/go-burnout/contracts/chequebook/contract"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/swarm/services/swap/swap"
+	"github.com/burnoutcoin/go-burnout/accounts/abi/bind"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/contracts/chequebook"
+	"github.com/burnoutcoin/go-burnout/contracts/chequebook/contract"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/swarm/services/swap/swap"
 )
 
 // SwAP       Swarm Accounting Protocol with

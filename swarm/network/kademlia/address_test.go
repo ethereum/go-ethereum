@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 func (Address) Generate(rand *rand.Rand, size int) reflect.Value {

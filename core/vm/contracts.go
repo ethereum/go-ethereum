@@ -21,11 +21,11 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/math"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/crypto/bn256"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/crypto/bn256"
+	"github.com/burnoutcoin/go-burnout/params"
 	"golang.org/x/crypto/ripemd160"
 )
 

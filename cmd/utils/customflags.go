@@ -27,7 +27,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/burnout/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/common/math"
 	"gopkg.in/urfave/cli.v1"
 )
 

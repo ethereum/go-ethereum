@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/brndb"
 )
 
 // makeTestTrie create a sample test trie to test node-wise reconstruction.

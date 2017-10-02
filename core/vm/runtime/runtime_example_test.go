@@ -19,8 +19,8 @@ package runtime_test
 import (
 	"fmt"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/vm/runtime"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/vm/runtime"
 )
 
 func ExampleExecute() {

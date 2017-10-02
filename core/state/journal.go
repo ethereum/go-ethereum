@@ -19,7 +19,7 @@ package state
 import (
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 type journalEntry interface {

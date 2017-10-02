@@ -21,10 +21,10 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/trie"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/trie"
 )
 
 // testAccount is the data associated with an account used by the state tests.

@@ -25,11 +25,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/event"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 // Type determines the kind of filter and is used to put the filter in to

@@ -81,7 +81,7 @@ func Env() Environment {
 
 // LocalEnv returns build environment metadata gathered from git.
 func LocalEnv() Environment {
-	env := applyEnvFlags(Environment{Name: "local", Repo: "burnout/go-burnout"})
+	env := applyEnvFlags(Environment{Name: "local", Repo: "burnoutcoin/go-burnout"})
 	if _, err := os.Stat(".git"); err != nil {
 		return env
 	}

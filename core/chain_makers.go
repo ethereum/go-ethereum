@@ -20,14 +20,14 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/consensus/ethash"
-	"github.com/burnout/go-burnout/consensus/misc"
-	"github.com/burnout/go-burnout/core/state"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/core/vm"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/consensus/ethash"
+	"github.com/burnoutcoin/go-burnout/consensus/misc"
+	"github.com/burnoutcoin/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // So we can deterministically seed different blockchains

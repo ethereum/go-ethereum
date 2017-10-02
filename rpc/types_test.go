@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/burnout/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/common/math"
 )
 
 func TestBlockNumberJSONUnmarshal(t *testing.T) {

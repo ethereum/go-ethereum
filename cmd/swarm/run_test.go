@@ -27,12 +27,12 @@ import (
 	"time"
 
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/burnout/go-burnout/accounts/keystore"
-	"github.com/burnout/go-burnout/internal/cmdtest"
-	"github.com/burnout/go-burnout/node"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/rpc"
-	"github.com/burnout/go-burnout/swarm"
+	"github.com/burnoutcoin/go-burnout/accounts/keystore"
+	"github.com/burnoutcoin/go-burnout/internal/cmdtest"
+	"github.com/burnoutcoin/go-burnout/node"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/swarm"
 )
 
 func init() {

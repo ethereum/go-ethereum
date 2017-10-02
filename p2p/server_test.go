@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/crypto/sha3"
-	"github.com/burnout/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/crypto/sha3"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
 )
 
 func init() {

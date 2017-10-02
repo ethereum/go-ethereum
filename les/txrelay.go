@@ -19,8 +19,8 @@ package les
 import (
 	"sync"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 type ltrInfo struct {

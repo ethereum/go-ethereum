@@ -23,10 +23,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/burnout/go-burnout/cmd/utils"
-	"github.com/burnout/go-burnout/consensus/ethash"
-	"github.com/burnout/go-burnout/brn"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
+	"github.com/burnoutcoin/go-burnout/consensus/ethash"
+	"github.com/burnoutcoin/go-burnout/brn"
+	"github.com/burnoutcoin/go-burnout/params"
 	"gopkg.in/urfave/cli.v1"
 )
 

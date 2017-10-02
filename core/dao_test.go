@@ -20,10 +20,10 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/burnout/go-burnout/consensus/ethash"
-	"github.com/burnout/go-burnout/core/vm"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/consensus/ethash"
+	"github.com/burnoutcoin/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // Tests that DAO-fork enabled clients can properly filter out fork-commencing

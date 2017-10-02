@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/burnout/go-burnout/swarm/testutil"
+	"github.com/burnoutcoin/go-burnout/swarm/testutil"
 )
 
 func TestError(t *testing.T) {

@@ -23,13 +23,13 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/burnout/go-burnout/consensus/ethash"
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/core/state"
-	"github.com/burnout/go-burnout/core/vm"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/params"
-	"github.com/burnout/go-burnout/trie"
+	"github.com/burnoutcoin/go-burnout/consensus/ethash"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/trie"
 )
 
 func TestNodeIterator(t *testing.T) {

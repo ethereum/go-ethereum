@@ -19,7 +19,7 @@ package event_test
 import (
 	"fmt"
 
-	"github.com/burnout/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/event"
 )
 
 func ExampleNewSubscription() {

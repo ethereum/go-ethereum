@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 // Tests that batched bloom bits are correctly rotated from the input bloom

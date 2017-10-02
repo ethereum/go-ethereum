@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // CreateIPCListener creates an listener, on Unix platforms this is a unix socket, on

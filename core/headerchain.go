@@ -25,12 +25,12 @@ import (
 	mrand "math/rand"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/consensus"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/consensus"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/params"
 	"github.com/hashicorp/golang-lru"
 )
 

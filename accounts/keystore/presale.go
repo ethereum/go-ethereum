@@ -25,8 +25,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/burnout/go-burnout/accounts"
-	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/crypto"
 	"github.com/pborman/uuid"
 	"golang.org/x/crypto/pbkdf2"
 )

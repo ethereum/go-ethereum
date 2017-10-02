@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/burnout/go-burnout/common/math"
-	"github.com/burnout/go-burnout/consensus"
-	"github.com/burnout/go-burnout/core/state"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/consensus"
+	"github.com/burnoutcoin/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // BlockValidator is responsible for validating block headers, uncles and

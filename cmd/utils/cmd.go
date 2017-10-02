@@ -26,12 +26,12 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/internal/debug"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/node"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/internal/debug"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/node"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 const (

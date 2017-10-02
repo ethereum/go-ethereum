@@ -22,7 +22,7 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/burnout/go-burnout/core/asm"
+	"github.com/burnoutcoin/go-burnout/core/asm"
 	cli "gopkg.in/urfave/cli.v1"
 )
 

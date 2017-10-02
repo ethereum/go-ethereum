@@ -22,10 +22,10 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/consensus"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/consensus"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/log"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 

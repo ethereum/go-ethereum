@@ -15,15 +15,15 @@
 // along with the go-burnout library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package burnout defines interfaces for interacting with Burnout.
-package burnout
+package burnoutcoin
 
 import (
 	"context"
 	"errors"
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 // NotFound is returned by API methods if the requested item does not exist.

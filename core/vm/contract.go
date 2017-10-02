@@ -19,7 +19,7 @@ package vm
 import (
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 // ContractRef is a reference to the contract's backing object

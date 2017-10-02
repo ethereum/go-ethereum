@@ -22,8 +22,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/p2p/nat"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/p2p/nat"
 )
 
 const (

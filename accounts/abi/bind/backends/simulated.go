@@ -24,17 +24,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/burnout/go-burnout"
-	"github.com/burnout/go-burnout/accounts/abi/bind"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/math"
-	"github.com/burnout/go-burnout/consensus/ethash"
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/core/state"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/core/vm"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout"
+	"github.com/burnoutcoin/go-burnout/accounts/abi/bind"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/consensus/ethash"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // This nil assignment ensures compile time that SimulatedBackend implements bind.ContractBackend.
@@ -157,7 +157,7 @@ func (b *SimulatedBackend) PendingCodeAt(ctx context.Context, contract common.Ad
 }
 
 // CallContract executes a contract call.
-func (b *SimulatedBackend) CallContract(ctx context.Context, call burnout.CallMsg, blockNumber *big.Int) ([]byte, error) {
+func (b *SimulatedBackend) CallContract(ctx context.Context, call burnoutcoin.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -173,7 +173,7 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call burnout.CallMs
 }
 
 // PendingCallContract executes a contract call on the pending state.
-func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call burnout.CallMsg) ([]byte, error) {
+func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call burnoutcoin.CallMsg) ([]byte, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	defer b.pendingState.RevertToSnapshot(b.pendingState.Snapshot())
@@ -199,7 +199,7 @@ func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error
 
 // EstimateGas executes the requested code against the currently pending block/state and
 // returns the used amount of gas.
-func (b *SimulatedBackend) EstimateGas(ctx context.Context, call burnout.CallMsg) (*big.Int, error) {
+func (b *SimulatedBackend) EstimateGas(ctx context.Context, call burnoutcoin.CallMsg) (*big.Int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -235,7 +235,7 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call burnout.CallMsg
 
 // callContract implemens common code between normal and pending contract calls.
 // state is modified during execution, make sure to copy it if necessary.
-func (b *SimulatedBackend) callContract(ctx context.Context, call burnout.CallMsg, block *types.Block, statedb *state.StateDB) ([]byte, *big.Int, bool, error) {
+func (b *SimulatedBackend) callContract(ctx context.Context, call burnoutcoin.CallMsg, block *types.Block, statedb *state.StateDB) ([]byte, *big.Int, bool, error) {
 	// Ensure message is initialized properly.
 	if call.GasPrice == nil {
 		call.GasPrice = big.NewInt(1)
@@ -305,7 +305,7 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 
 // callmsg implements core.Message to allow passing it as a transaction simulator.
 type callmsg struct {
-	burnout.CallMsg
+	burnoutcoin.CallMsg
 }
 
 func (m callmsg) From() common.Address { return m.CallMsg.From }

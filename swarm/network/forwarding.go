@@ -21,8 +21,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/swarm/storage"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/swarm/storage"
 )
 
 const requesterCount = 3

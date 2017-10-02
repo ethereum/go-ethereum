@@ -21,11 +21,11 @@ import (
 	"net"
 	"time"
 
-	"github.com/burnout/go-burnout/contracts/chequebook"
-	"github.com/burnout/go-burnout/p2p/discover"
-	"github.com/burnout/go-burnout/swarm/network/kademlia"
-	"github.com/burnout/go-burnout/swarm/services/swap"
-	"github.com/burnout/go-burnout/swarm/storage"
+	"github.com/burnoutcoin/go-burnout/contracts/chequebook"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/swarm/network/kademlia"
+	"github.com/burnoutcoin/go-burnout/swarm/services/swap"
+	"github.com/burnoutcoin/go-burnout/swarm/storage"
 )
 
 /*

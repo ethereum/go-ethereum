@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // faucetDockerfile is the Dockerfile required to build an faucet container to
@@ -39,8 +39,8 @@ ENV GOPATH /go
 RUN \
   apk add --update git go make gcc musl-dev ca-certificates linux-headers                             && \
 	mkdir -p $GOPATH/src/github.com/burnout                                                            && \
-	(cd $GOPATH/src/github.com/burnout && git clone --depth=1 https://github.com/burnout/go-burnout) && \
-  go build -v github.com/burnout/go-burnout/cmd/faucet                                              && \
+	(cd $GOPATH/src/github.com/burnout && git clone --depth=1 https://github.com/burnoutcoin/go-burnout) && \
+  go build -v github.com/burnoutcoin/go-burnout/cmd/faucet                                              && \
   apk del git go make gcc musl-dev linux-headers                                                      && \
   rm -rf $GOPATH && rm -rf /var/cache/apk/*
 

@@ -26,11 +26,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/swarm/api"
-	swarm "github.com/burnout/go-burnout/swarm/api/client"
-	"github.com/burnout/go-burnout/swarm/storage"
-	"github.com/burnout/go-burnout/swarm/testutil"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/swarm/api"
+	swarm "github.com/burnoutcoin/go-burnout/swarm/api/client"
+	"github.com/burnoutcoin/go-burnout/swarm/storage"
+	"github.com/burnoutcoin/go-burnout/swarm/testutil"
 )
 
 func TestBzzrGetPath(t *testing.T) {

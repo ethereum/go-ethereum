@@ -21,11 +21,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/light"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/light"
 )
 
 var testBankSecureTrieKey = secAddr(testBankAddress)

@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/burnout/go-burnout/accounts/keystore"
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/accounts/keystore"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // deployFaucet queries the user for various input on deploying a faucet, after

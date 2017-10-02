@@ -22,11 +22,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/burnout/go-burnout"
-	"github.com/burnout/go-burnout/accounts/abi"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout"
+	"github.com/burnoutcoin/go-burnout/accounts/abi"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/crypto"
 )
 
 // SignerFn is a signer function callback when a contract requires a method to
@@ -109,7 +109,7 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 		return err
 	}
 	var (
-		msg    = burnout.CallMsg{From: opts.From, To: &c.address, Data: input}
+		msg    = burnoutcoin.CallMsg{From: opts.From, To: &c.address, Data: input}
 		ctx    = ensureContext(opts.Context)
 		code   []byte
 		output []byte
@@ -199,7 +199,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 			}
 		}
 		// If the contract surely has code (or code is not needed), estimate the transaction
-		msg := burnout.CallMsg{From: opts.From, To: contract, Value: value, Data: input}
+		msg := burnoutcoin.CallMsg{From: opts.From, To: contract, Value: value, Data: input}
 		gasLimit, err = c.transactor.EstimateGas(ensureContext(opts.Context), msg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to estimate gas needed: %v", err)

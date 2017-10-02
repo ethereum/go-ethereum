@@ -29,9 +29,9 @@ import (
 
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/swarm/api"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/swarm/api"
 )
 
 var (

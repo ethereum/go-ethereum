@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 

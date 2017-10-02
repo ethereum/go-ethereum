@@ -19,8 +19,8 @@ package trie
 import (
 	"fmt"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 var secureKeyPrefix = []byte("secure-key-")

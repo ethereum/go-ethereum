@@ -19,7 +19,7 @@ package ethapi
 import (
 	"sync"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 type AddrLocker struct {

@@ -16,19 +16,19 @@
 
 package brnclient
 
-import "github.com/burnout/go-burnout"
+import "github.com/burnoutcoin/go-burnout"
 
 // Verify that Client implements the burnout interfaces.
 var (
-	_ = burnout.ChainReader(&Client{})
-	_ = burnout.TransactionReader(&Client{})
-	_ = burnout.ChainStateReader(&Client{})
-	_ = burnout.ChainSyncReader(&Client{})
-	_ = burnout.ContractCaller(&Client{})
-	_ = burnout.GasEstimator(&Client{})
-	_ = burnout.GasPricer(&Client{})
-	_ = burnout.LogFilterer(&Client{})
-	_ = burnout.PendingStateReader(&Client{})
-	// _ = burnout.PendingStateEventer(&Client{})
-	_ = burnout.PendingContractCaller(&Client{})
+	_ = burnoutcoin.ChainReader(&Client{})
+	_ = burnoutcoin.TransactionReader(&Client{})
+	_ = burnoutcoin.ChainStateReader(&Client{})
+	_ = burnoutcoin.ChainSyncReader(&Client{})
+	_ = burnoutcoin.ContractCaller(&Client{})
+	_ = burnoutcoin.GasEstimator(&Client{})
+	_ = burnoutcoin.GasPricer(&Client{})
+	_ = burnoutcoin.LogFilterer(&Client{})
+	_ = burnoutcoin.PendingStateReader(&Client{})
+	// _ = burnoutcoin.PendingStateEventer(&Client{})
+	_ = burnoutcoin.PendingContractCaller(&Client{})
 )

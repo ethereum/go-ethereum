@@ -37,12 +37,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/burnout/go-burnout/contracts/chequebook"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/p2p"
-	bzzswap "github.com/burnout/go-burnout/swarm/services/swap"
-	"github.com/burnout/go-burnout/swarm/services/swap/swap"
-	"github.com/burnout/go-burnout/swarm/storage"
+	"github.com/burnoutcoin/go-burnout/contracts/chequebook"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	bzzswap "github.com/burnoutcoin/go-burnout/swarm/services/swap"
+	"github.com/burnoutcoin/go-burnout/swarm/services/swap/swap"
+	"github.com/burnoutcoin/go-burnout/swarm/storage"
 )
 
 const (

@@ -22,7 +22,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 // A BigInt represents a signed multi-precision integer.

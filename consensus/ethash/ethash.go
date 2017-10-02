@@ -32,9 +32,9 @@ import (
 	"unsafe"
 
 	mmap "github.com/edsrzf/mmap-go"
-	"github.com/burnout/go-burnout/consensus"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/consensus"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/rpc"
 	metrics "github.com/rcrowley/go-metrics"
 )
 

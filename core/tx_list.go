@@ -22,9 +22,9 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // nonceHeap is a heap.Interface implementation over 64bit unsigned integers for

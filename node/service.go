@@ -19,11 +19,11 @@ package node
 import (
 	"reflect"
 
-	"github.com/burnout/go-burnout/accounts"
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/event"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 // ServiceContext is a collection of service independent options inherited from

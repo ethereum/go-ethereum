@@ -29,8 +29,8 @@ import (
 	"testing/quick"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/brndb"
 )
 
 func init() {

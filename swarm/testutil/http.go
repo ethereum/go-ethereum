@@ -22,9 +22,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/burnout/go-burnout/swarm/api"
-	httpapi "github.com/burnout/go-burnout/swarm/api/http"
-	"github.com/burnout/go-burnout/swarm/storage"
+	"github.com/burnoutcoin/go-burnout/swarm/api"
+	httpapi "github.com/burnoutcoin/go-burnout/swarm/api/http"
+	"github.com/burnoutcoin/go-burnout/swarm/storage"
 )
 
 func NewTestSwarmServer(t *testing.T) *TestSwarmServer {

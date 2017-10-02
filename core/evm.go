@@ -19,10 +19,10 @@ package core
 import (
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/consensus"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/consensus"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/core/vm"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the

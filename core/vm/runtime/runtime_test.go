@@ -21,11 +21,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/burnout/go-burnout/accounts/abi"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/state"
-	"github.com/burnout/go-burnout/core/vm"
-	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/accounts/abi"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/brndb"
 )
 
 func TestDefaults(t *testing.T) {

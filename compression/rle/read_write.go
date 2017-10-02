@@ -21,7 +21,7 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/crypto"
 )
 
 const (

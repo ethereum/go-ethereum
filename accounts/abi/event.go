@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto"
 )
 
 // Event is an event potentially triggered by the EVM's LOG mechanism. The Event

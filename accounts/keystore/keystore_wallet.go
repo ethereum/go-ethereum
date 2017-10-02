@@ -19,9 +19,9 @@ package keystore
 import (
 	"math/big"
 
-	burnout "github.com/burnout/go-burnout"
-	"github.com/burnout/go-burnout/accounts"
-	"github.com/burnout/go-burnout/core/types"
+	burnoutcoin "github.com/burnoutcoin/go-burnout"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 // keystoreWallet implements the accounts.Wallet interface for the original
@@ -76,7 +76,7 @@ func (w *keystoreWallet) Derive(path accounts.DerivationPath, pin bool) (account
 
 // SelfDerive implements accounts.Wallet, but is a noop for plain wallets since
 // there is no notion of hierarchical account derivation for plain keystore accounts.
-func (w *keystoreWallet) SelfDerive(base accounts.DerivationPath, chain burnout.ChainStateReader) {}
+func (w *keystoreWallet) SelfDerive(base accounts.DerivationPath, chain burnoutcoin.ChainStateReader) {}
 
 // SignHash implements accounts.Wallet, attempting to sign the given hash with
 // the given account. If the wallet does not wrap this particular account, an

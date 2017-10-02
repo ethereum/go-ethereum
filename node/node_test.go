@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 var (

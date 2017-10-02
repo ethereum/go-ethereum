@@ -27,9 +27,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/burnout/go-burnout/internal/jsre"
-	"github.com/burnout/go-burnout/internal/web3ext"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/internal/jsre"
+	"github.com/burnoutcoin/go-burnout/internal/web3ext"
+	"github.com/burnoutcoin/go-burnout/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"

@@ -38,9 +38,9 @@ import (
 	"math/big"
 	"unsafe"
 
-	"github.com/burnout/go-burnout/core/state"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 type JitVm struct {

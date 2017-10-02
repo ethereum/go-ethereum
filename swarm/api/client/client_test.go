@@ -25,8 +25,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/burnout/go-burnout/swarm/api"
-	"github.com/burnout/go-burnout/swarm/testutil"
+	"github.com/burnoutcoin/go-burnout/swarm/api"
+	"github.com/burnoutcoin/go-burnout/swarm/testutil"
 )
 
 // TestClientUploadDownloadRaw test uploading and downloading raw data to swarm

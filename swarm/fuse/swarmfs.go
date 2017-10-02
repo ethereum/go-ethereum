@@ -17,7 +17,7 @@
 package fuse
 
 import (
-	"github.com/burnout/go-burnout/swarm/api"
+	"github.com/burnoutcoin/go-burnout/swarm/api"
 	"sync"
 	"time"
 )

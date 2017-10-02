@@ -24,17 +24,17 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/brn"
-	"github.com/burnout/go-burnout/brn/downloader"
-	"github.com/burnout/go-burnout/brnclient"
-	"github.com/burnout/go-burnout/brnstats"
-	"github.com/burnout/go-burnout/les"
-	"github.com/burnout/go-burnout/node"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/p2p/nat"
-	"github.com/burnout/go-burnout/params"
-	whisper "github.com/burnout/go-burnout/whisper/whisperv5"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/brn"
+	"github.com/burnoutcoin/go-burnout/brn/downloader"
+	"github.com/burnoutcoin/go-burnout/brnclient"
+	"github.com/burnoutcoin/go-burnout/brnstats"
+	"github.com/burnoutcoin/go-burnout/les"
+	"github.com/burnoutcoin/go-burnout/node"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/p2p/nat"
+	"github.com/burnoutcoin/go-burnout/params"
+	whisper "github.com/burnoutcoin/go-burnout/whisper/whisperv5"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Geth

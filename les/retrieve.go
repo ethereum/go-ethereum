@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/burnout/go-burnout/common/mclock"
+	"github.com/burnoutcoin/go-burnout/common/mclock"
 )
 
 var (

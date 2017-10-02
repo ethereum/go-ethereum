@@ -19,14 +19,14 @@ package core
 import (
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/consensus"
-	"github.com/burnout/go-burnout/consensus/misc"
-	"github.com/burnout/go-burnout/core/state"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/core/vm"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/consensus"
+	"github.com/burnoutcoin/go-burnout/consensus/misc"
+	"github.com/burnoutcoin/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning

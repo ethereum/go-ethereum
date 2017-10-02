@@ -20,9 +20,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/brn/downloader"
-	"github.com/burnout/go-burnout/light"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/brn/downloader"
+	"github.com/burnoutcoin/go-burnout/light"
 )
 
 const (

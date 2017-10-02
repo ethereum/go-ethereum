@@ -21,8 +21,8 @@ import (
 
 	"sync/atomic"
 
-	"github.com/burnout/go-burnout/consensus"
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/consensus"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 type CpuAgent struct {

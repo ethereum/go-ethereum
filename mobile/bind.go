@@ -22,10 +22,10 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/burnout/go-burnout/accounts/abi"
-	"github.com/burnout/go-burnout/accounts/abi/bind"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/accounts/abi"
+	"github.com/burnoutcoin/go-burnout/accounts/abi/bind"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 // Signer is an interaface defining the callback when a contract requires a

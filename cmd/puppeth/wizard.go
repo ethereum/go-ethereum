@@ -30,9 +30,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/log"
 	"golang.org/x/crypto/ssh/terminal"
 )
 

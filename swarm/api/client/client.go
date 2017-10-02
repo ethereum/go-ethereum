@@ -33,7 +33,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/burnout/go-burnout/swarm/api"
+	"github.com/burnoutcoin/go-burnout/swarm/api"
 )
 
 var (

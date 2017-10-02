@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/math"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // Config are the configuration options for the Interpreter

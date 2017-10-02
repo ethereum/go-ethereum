@@ -24,7 +24,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 type brokenLimitedReader struct {

@@ -27,12 +27,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/event"
-	"github.com/burnout/go-burnout/node"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/p2p/discover"
-	"github.com/burnout/go-burnout/p2p/simulations/adapters"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/node"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/p2p/simulations/adapters"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 // testService implements the node.Service interface and provides protocols

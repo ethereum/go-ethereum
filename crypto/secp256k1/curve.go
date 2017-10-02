@@ -37,7 +37,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/burnout/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/common/math"
 )
 
 /*

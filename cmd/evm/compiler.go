@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/burnout/go-burnout/cmd/evm/internal/compiler"
+	"github.com/burnoutcoin/go-burnout/cmd/evm/internal/compiler"
 
 	cli "gopkg.in/urfave/cli.v1"
 )

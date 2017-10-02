@@ -17,7 +17,7 @@
 // Package bind generates Burnout contract Go bindings.
 //
 // Detailed usage document and tutorial available on the go-burnout Wiki page:
-// https://github.com/burnout/go-burnout/wiki/Native-DApps:-Go-bindings-to-Burnout-contracts
+// https://github.com/burnoutcoin/go-burnout/wiki/Native-DApps:-Go-bindings-to-Burnout-contracts
 package bind
 
 import (
@@ -28,7 +28,7 @@ import (
 	"text/template"
 	"unicode"
 
-	"github.com/burnout/go-burnout/accounts/abi"
+	"github.com/burnoutcoin/go-burnout/accounts/abi"
 	"golang.org/x/tools/imports"
 )
 

@@ -24,7 +24,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 // RLPTest is the JSON structure of a single RLP test.

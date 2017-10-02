@@ -19,7 +19,7 @@
 package downloader
 
 import (
-	"github.com/burnout/go-burnout/metrics"
+	"github.com/burnoutcoin/go-burnout/metrics"
 )
 
 var (

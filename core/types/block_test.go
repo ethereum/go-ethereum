@@ -23,8 +23,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 // from bcValidBlockTest.json, "SimpleTx"

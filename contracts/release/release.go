@@ -25,15 +25,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/burnout/go-burnout/accounts/abi/bind"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/brn"
-	"github.com/burnout/go-burnout/internal/ethapi"
-	"github.com/burnout/go-burnout/les"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/node"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/accounts/abi/bind"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/brn"
+	"github.com/burnoutcoin/go-burnout/internal/ethapi"
+	"github.com/burnoutcoin/go-burnout/les"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/node"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 // Interval to check for new releases
@@ -64,11 +64,11 @@ func NewReleaseService(ctx *node.ServiceContext, config Config) (node.Service, e
 	var apiBackend ethapi.Backend
 	var burnout *brn.Burnout
 	if err := ctx.Service(&burnout); err == nil {
-		apiBackend = burnout.ApiBackend
+		apiBackend = burnoutcoin.ApiBackend
 	} else {
 		var burnout *les.LightBurnout
 		if err := ctx.Service(&burnout); err == nil {
-			apiBackend = burnout.ApiBackend
+			apiBackend = burnoutcoin.ApiBackend
 		} else {
 			return nil, err
 		}
@@ -149,7 +149,7 @@ func (r *ReleaseService) checkVersion() {
 
 		warning := fmt.Sprintf("Client v%d.%d.%d-%x seems older than the latest upstream release v%d.%d.%d-%x",
 			r.config.Major, r.config.Minor, r.config.Patch, r.config.Commit[:4], version.Major, version.Minor, version.Patch, version.Commit[:4])
-		howtofix := fmt.Sprintf("Please check https://github.com/burnout/go-burnout/releases for new releases")
+		howtofix := fmt.Sprintf("Please check https://github.com/burnoutcoin/go-burnout/releases for new releases")
 		separator := strings.Repeat("-", len(warning))
 
 		log.Warn(separator)

@@ -19,7 +19,7 @@ package params
 import (
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 // DAOForkBlockExtra is the block header extra-data field to set for the DAO fork

@@ -22,8 +22,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/log"
 	"github.com/olekukonko/tablewriter"
 )
 

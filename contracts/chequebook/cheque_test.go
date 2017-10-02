@@ -24,12 +24,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/accounts/abi/bind"
-	"github.com/burnout/go-burnout/accounts/abi/bind/backends"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/contracts/chequebook/contract"
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/accounts/abi/bind"
+	"github.com/burnoutcoin/go-burnout/accounts/abi/bind/backends"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/contracts/chequebook/contract"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/crypto"
 )
 
 var (

@@ -22,10 +22,10 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/rlp"
-	"github.com/burnout/go-burnout/trie"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/trie"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)

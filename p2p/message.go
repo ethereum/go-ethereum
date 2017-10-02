@@ -27,9 +27,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/burnout/go-burnout/event"
-	"github.com/burnout/go-burnout/p2p/discover"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 // Msg defines the structure of a p2p message.

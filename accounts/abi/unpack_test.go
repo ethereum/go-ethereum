@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 func TestSimpleMethodUnpack(t *testing.T) {

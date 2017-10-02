@@ -30,8 +30,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto"
 )
 
 // Node represents a host on the network.

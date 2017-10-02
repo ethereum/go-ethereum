@@ -22,9 +22,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/burnout/go-burnout/accounts"
-	"github.com/burnout/go-burnout/event"
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/log"
 	"github.com/karalabe/hid"
 )
 

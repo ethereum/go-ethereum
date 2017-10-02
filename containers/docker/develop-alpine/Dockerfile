@@ -2,7 +2,7 @@ FROM alpine:3.5
 
 RUN \
   apk add --update go git make gcc musl-dev linux-headers ca-certificates && \
-  git clone --depth 1 https://github.com/burnout/go-burnout && \
+  git clone --depth 1 https://github.com/burnoutcoin/go-burnout && \
   (cd go-burnout && make geth) && \
   cp go-burnout/build/bin/geth /geth && \
   apk del go git make gcc musl-dev linux-headers && \

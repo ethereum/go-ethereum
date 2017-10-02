@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/burnout/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/event"
 )
 
 // This example demonstrates how SubscriptionScope can be used to control the lifetime of

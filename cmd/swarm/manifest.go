@@ -24,9 +24,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/burnout/go-burnout/cmd/utils"
-	"github.com/burnout/go-burnout/swarm/api"
-	swarm "github.com/burnout/go-burnout/swarm/api/client"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
+	"github.com/burnoutcoin/go-burnout/swarm/api"
+	swarm "github.com/burnoutcoin/go-burnout/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
 )
 

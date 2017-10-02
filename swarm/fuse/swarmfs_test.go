@@ -27,8 +27,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/burnout/go-burnout/swarm/api"
-	"github.com/burnout/go-burnout/swarm/storage"
+	"github.com/burnoutcoin/go-burnout/swarm/api"
+	"github.com/burnoutcoin/go-burnout/swarm/storage"
 )
 
 type fileInfo struct {

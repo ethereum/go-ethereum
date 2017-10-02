@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // manageServers displays a list of servers the user can disconnect from, and an

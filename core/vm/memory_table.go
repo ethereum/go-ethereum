@@ -19,7 +19,7 @@ package vm
 import (
 	"math/big"
 
-	"github.com/burnout/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/common/math"
 )
 
 func memorySha3(stack *Stack) *big.Int {

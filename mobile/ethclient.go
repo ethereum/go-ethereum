@@ -21,8 +21,8 @@ package geth
 import (
 	"math/big"
 
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/brnclient"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/brnclient"
 )
 
 // BurnoutClient provides access to the Burnout APIs.

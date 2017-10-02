@@ -28,12 +28,12 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/burnout/go-burnout/accounts"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/hexutil"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 // ledgerOpcode is an enumeration encoding the supported Ledger opcodes.

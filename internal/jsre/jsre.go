@@ -26,8 +26,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/internal/jsre/deps"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/internal/jsre/deps"
 	"github.com/robertkrimen/otto"
 )
 

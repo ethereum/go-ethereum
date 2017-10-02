@@ -20,8 +20,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 // senderFromServer is a types.Signer that remembers the sender address returned by the RPC

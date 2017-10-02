@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/burnout/go-burnout/cmd/utils"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 

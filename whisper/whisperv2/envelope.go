@@ -26,11 +26,11 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/math"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/crypto/ecies"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/crypto/ecies"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 // Envelope represents a clear-text data packet to transmit through the Whisper

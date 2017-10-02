@@ -22,8 +22,8 @@ package node
 import (
 	"reflect"
 
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 // NoopService is a trivial implementation of the Service interface.

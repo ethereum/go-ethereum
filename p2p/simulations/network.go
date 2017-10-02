@@ -23,11 +23,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/burnout/go-burnout/event"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/p2p/discover"
-	"github.com/burnout/go-burnout/p2p/simulations/adapters"
+	"github.com/burnoutcoin/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/p2p/simulations/adapters"
 )
 
 // NetworkConfig defines configuration options for starting a Network

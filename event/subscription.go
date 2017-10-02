@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/burnout/go-burnout/common/mclock"
+	"github.com/burnoutcoin/go-burnout/common/mclock"
 )
 
 // Subscription represents a stream of events. The carrier of the events is typically a

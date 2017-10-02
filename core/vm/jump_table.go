@@ -20,7 +20,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 type (

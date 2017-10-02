@@ -24,12 +24,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/contracts/ens"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/swarm/network"
-	"github.com/burnout/go-burnout/swarm/services/swap"
-	"github.com/burnout/go-burnout/swarm/storage"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/contracts/ens"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/swarm/network"
+	"github.com/burnoutcoin/go-burnout/swarm/services/swap"
+	"github.com/burnoutcoin/go-burnout/swarm/storage"
 )
 
 const (

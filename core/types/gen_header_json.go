@@ -7,8 +7,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
 )
 
 func (h Header) MarshalJSON() ([]byte, error) {

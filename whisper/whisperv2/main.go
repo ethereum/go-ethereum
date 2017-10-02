@@ -27,12 +27,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/logger"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/p2p/nat"
-	"github.com/burnout/go-burnout/whisper"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/logger"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/p2p/nat"
+	"github.com/burnoutcoin/go-burnout/whisper"
 )
 
 func main() {

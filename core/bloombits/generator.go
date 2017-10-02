@@ -19,7 +19,7 @@ package bloombits
 import (
 	"errors"
 
-	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 // errSectionOutOfBounds is returned if the user tried to add more bloom filters

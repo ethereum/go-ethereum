@@ -22,8 +22,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/burnout/go-burnout/cmd/utils"
-	swarm "github.com/burnout/go-burnout/swarm/api/client"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
+	swarm "github.com/burnoutcoin/go-burnout/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -20,10 +20,10 @@ package accounts
 import (
 	"math/big"
 
-	burnout "github.com/burnout/go-burnout"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/event"
+	burnoutcoin "github.com/burnoutcoin/go-burnout"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/event"
 )
 
 // Account represents an Burnout account located at a specific location defined
@@ -85,7 +85,7 @@ type Wallet interface {
 	//
 	// You can disable automatic account discovery by calling SelfDerive with a nil
 	// chain state reader.
-	SelfDerive(base DerivationPath, chain burnout.ChainStateReader)
+	SelfDerive(base DerivationPath, chain burnoutcoin.ChainStateReader)
 
 	// SignHash requests the wallet to sign the given hash.
 	//

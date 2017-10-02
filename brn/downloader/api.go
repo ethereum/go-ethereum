@@ -20,9 +20,9 @@ import (
 	"context"
 	"sync"
 
-	burnout "github.com/burnout/go-burnout"
-	"github.com/burnout/go-burnout/event"
-	"github.com/burnout/go-burnout/rpc"
+	burnoutcoin "github.com/burnoutcoin/go-burnout"
+	"github.com/burnoutcoin/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/rpc"
 )
 
 // PublicDownloaderAPI provides an API which gives information about the current synchronisation status.
@@ -122,7 +122,7 @@ func (api *PublicDownloaderAPI) Syncing(ctx context.Context) (*rpc.Subscription,
 // SyncingResult provides information about the current synchronisation status for this node.
 type SyncingResult struct {
 	Syncing bool                  `json:"syncing"`
-	Status  burnout.SyncProgress `json:"status"`
+	Status  burnoutcoin.SyncProgress `json:"status"`
 }
 
 // uninstallSyncSubscriptionRequest uninstalles a syncing subscription in the API event loop.

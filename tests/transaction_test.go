@@ -20,7 +20,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 func TestTransaction(t *testing.T) {

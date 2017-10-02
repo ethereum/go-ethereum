@@ -22,13 +22,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/crypto/ecies"
-	"github.com/burnout/go-burnout/event/filter"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/crypto/ecies"
+	"github.com/burnoutcoin/go-burnout/event/filter"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/rpc"
 
 	"gopkg.in/fatih/set.v0"
 )

@@ -21,10 +21,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/crypto/sha3"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto/sha3"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 // Prove constructs a merkle proof for key. The result contains all

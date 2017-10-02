@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/brndb"
 )
 
 // Runs multiple tests with randomized parameters.

@@ -19,9 +19,9 @@ package misc
 import (
 	"fmt"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // VerifyForkHashes verifies that blocks conforming to network hard-forks do have

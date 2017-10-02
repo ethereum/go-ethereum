@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/burnout/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
 )
 
 type MyType [5]byte

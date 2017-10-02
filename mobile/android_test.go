@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/internal/build"
+	"github.com/burnoutcoin/go-burnout/internal/build"
 )
 
 // androidTestClass is a Java class to do some lightweight tests against the Android
@@ -40,7 +40,7 @@ import android.test.MoreAsserts;
 import java.math.BigInteger;
 import java.util.Arrays;
 
-import org.burnout.geth.*;
+import org.burnoutcoin.geth.*;
 
 public class AndroidTest extends InstrumentationTestCase {
 	public AndroidTest() {}
@@ -202,7 +202,7 @@ func TestAndroid(t *testing.T) {
 		}
 	}
 	// Generate the mobile bindings for Geth and add the tester class
-	gobind := exec.Command("gomobile", "bind", "-javapkg", "org.burnout", "github.com/burnout/go-burnout/mobile")
+	gobind := exec.Command("gomobile", "bind", "-javapkg", "org.burnout", "github.com/burnoutcoin/go-burnout/mobile")
 	if output, err := gobind.CombinedOutput(); err != nil {
 		t.Logf("%s", output)
 		t.Fatalf("failed to run gomobile bind: %v", err)
@@ -227,7 +227,7 @@ func TestAndroid(t *testing.T) {
 
 const androidManifest = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-          package="org.burnout.gethtest"
+          package="org.burnoutcoin.gethtest"
 	  android:versionCode="1"
 	  android:versionName="1.0">
 

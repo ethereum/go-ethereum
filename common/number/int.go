@@ -19,7 +19,7 @@ package number
 import (
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 var tt256 = new(big.Int).Lsh(big.NewInt(1), 256)

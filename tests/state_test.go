@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/burnout/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/core/vm"
 )
 
 func TestState(t *testing.T) {

@@ -30,9 +30,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/crypto/secp256k1"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/crypto/secp256k1"
 )
 
 const NodeIDBits = 512

@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
 )
 
 func startTestCluster(n int) []*Whisper {

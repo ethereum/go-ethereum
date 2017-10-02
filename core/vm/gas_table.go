@@ -19,9 +19,9 @@ package vm
 import (
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/math"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // memoryGasCosts calculates the quadratic gas for memory expansion. It does so

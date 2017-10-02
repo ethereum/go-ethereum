@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/metrics"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"

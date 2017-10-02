@@ -16,7 +16,7 @@
 
 package bind
 
-import "github.com/burnout/go-burnout/accounts/abi"
+import "github.com/burnoutcoin/go-burnout/accounts/abi"
 
 // tmplData is the data structure required to fill the binding template.
 type tmplData struct {
@@ -274,8 +274,8 @@ const tmplSourceJava = `
 
 package {{.Package}};
 
-import org.burnout.geth.*;
-import org.burnout.geth.internal.*;
+import org.burnoutcoin.geth.*;
+import org.burnoutcoin.geth.internal.*;
 
 {{range $contract := .Contracts}}
 	public class {{.Type}} {

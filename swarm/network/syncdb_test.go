@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/swarm/storage"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/swarm/storage"
 )
 
 func init() {

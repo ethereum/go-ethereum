@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/crypto"
 )
 
 // Callable method given a `Name` and whether the method is a constant.

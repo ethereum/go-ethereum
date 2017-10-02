@@ -22,7 +22,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -24,8 +24,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/p2p"
 )
 
 // Tests that datadirs can be successfully created, be them manually configured

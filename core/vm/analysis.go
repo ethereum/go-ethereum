@@ -19,7 +19,7 @@ package vm
 import (
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 // destinations stores one map per contract (keyed by hash of code).

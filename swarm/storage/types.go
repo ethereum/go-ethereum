@@ -24,9 +24,9 @@ import (
 	"io"
 	"sync"
 
-	"github.com/burnout/go-burnout/bmt"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/crypto/sha3"
+	"github.com/burnoutcoin/go-burnout/bmt"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto/sha3"
 )
 
 type Hasher func() hash.Hash

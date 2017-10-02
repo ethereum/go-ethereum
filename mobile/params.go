@@ -21,9 +21,9 @@ package geth
 import (
 	"encoding/json"
 
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/p2p/discv5"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/p2p/discv5"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // MainnetGenesis returns the JSON spec to use for the main Burnout network. It

@@ -23,8 +23,8 @@ import (
 	"math/rand"
 	"reflect"
 
-	"github.com/burnout/go-burnout/common/hexutil"
-	"github.com/burnout/go-burnout/crypto/sha3"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/crypto/sha3"
 )
 
 const (

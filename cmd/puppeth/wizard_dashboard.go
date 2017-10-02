@@ -19,7 +19,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // deployDashboard queries the user for various input on deploying a web-service

@@ -24,8 +24,8 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/log/term"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log/term"
 	colorable "github.com/mattn/go-colorable"
 	"gopkg.in/urfave/cli.v1"
 )

@@ -25,9 +25,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/mclock"
-	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/mclock"
+	"github.com/burnoutcoin/go-burnout/crypto"
 )
 
 const (

@@ -26,10 +26,10 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/crypto/ecies"
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/crypto/ecies"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // Message represents an end-user data packet to transmit through the Whisper

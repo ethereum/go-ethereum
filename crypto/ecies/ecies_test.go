@@ -40,7 +40,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/burnout/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/crypto"
 )
 
 var dumpEnc bool

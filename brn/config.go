@@ -23,12 +23,12 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/hexutil"
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/brn/downloader"
-	"github.com/burnout/go-burnout/brn/gasprice"
-	"github.com/burnout/go-burnout/params"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/brn/downloader"
+	"github.com/burnoutcoin/go-burnout/brn/gasprice"
+	"github.com/burnoutcoin/go-burnout/params"
 )
 
 // DefaultConfig contains default settings for use on the Burnout main net.

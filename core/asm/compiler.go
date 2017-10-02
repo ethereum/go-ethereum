@@ -23,8 +23,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/burnout/go-burnout/common/math"
-	"github.com/burnout/go-burnout/core/vm"
+	"github.com/burnoutcoin/go-burnout/common/math"
+	"github.com/burnoutcoin/go-burnout/core/vm"
 )
 
 // Compiler contains information about the parsed source

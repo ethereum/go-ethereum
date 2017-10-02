@@ -19,9 +19,9 @@ package les
 import (
 	"context"
 
-	"github.com/burnout/go-burnout/brndb"
-	"github.com/burnout/go-burnout/light"
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/brndb"
+	"github.com/burnoutcoin/go-burnout/light"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 // LesOdr implements light.OdrBackend

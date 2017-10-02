@@ -21,7 +21,7 @@ package whisperv2
 import (
 	"crypto/ecdsa"
 
-	"github.com/burnout/go-burnout/event/filter"
+	"github.com/burnoutcoin/go-burnout/event/filter"
 )
 
 // Filter is used to subscribe to specific types of whisper messages.

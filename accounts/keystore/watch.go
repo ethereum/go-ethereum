@@ -21,7 +21,7 @@ package keystore
 import (
 	"time"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 	"github.com/rjeczalik/notify"
 )
 

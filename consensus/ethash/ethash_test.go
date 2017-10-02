@@ -20,7 +20,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 // Tests that ethash works correctly in test mode.

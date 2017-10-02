@@ -20,7 +20,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/burnout/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common"
 )
 
 const Version = "1.0"

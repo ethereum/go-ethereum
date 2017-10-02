@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 	"golang.org/x/net/websocket"
 	"gopkg.in/fatih/set.v0"
 )

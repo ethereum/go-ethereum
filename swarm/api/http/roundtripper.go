@@ -20,17 +20,17 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 /*
 http roundtripper to register for bzz url scheme
-see https://github.com/burnout/go-burnout/issues/2040
+see https://github.com/burnoutcoin/go-burnout/issues/2040
 Usage:
 
 import (
- "github.com/burnout/go-burnout/common/httpclient"
- "github.com/burnout/go-burnout/swarm/api/http"
+ "github.com/burnoutcoin/go-burnout/common/httpclient"
+ "github.com/burnoutcoin/go-burnout/swarm/api/http"
 )
 client := httpclient.New()
 // for (private) swarm proxy running locally

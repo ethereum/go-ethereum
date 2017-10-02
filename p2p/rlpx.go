@@ -35,12 +35,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/crypto/ecies"
-	"github.com/burnout/go-burnout/crypto/secp256k1"
-	"github.com/burnout/go-burnout/crypto/sha3"
-	"github.com/burnout/go-burnout/p2p/discover"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/crypto/ecies"
+	"github.com/burnoutcoin/go-burnout/crypto/secp256k1"
+	"github.com/burnoutcoin/go-burnout/crypto/sha3"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/rlp"
 	"github.com/golang/snappy"
 )
 

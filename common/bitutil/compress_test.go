@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/burnout/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
 )
 
 // Tests that data bitset encoding and decoding works and is bijective.

@@ -19,8 +19,8 @@
 package whisperv5
 
 import (
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/common/hexutil"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/common/hexutil"
 )
 
 // Topic represents a cryptographically secure, probabilistic partial

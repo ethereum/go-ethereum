@@ -22,8 +22,8 @@ import (
 	"io"
 	"sort"
 
-	"github.com/burnout/go-burnout/cmd/utils"
-	"github.com/burnout/go-burnout/internal/debug"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
+	"github.com/burnoutcoin/go-burnout/internal/debug"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -34,8 +34,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/burnout/go-burnout/core"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/core"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 type allocItem struct{ Addr, Balance *big.Int }

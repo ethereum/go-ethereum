@@ -19,8 +19,8 @@ package miner
 import (
 	"testing"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/core/types"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/core/types"
 )
 
 // noopHeaderRetriever is an implementation of headerRetriever that always

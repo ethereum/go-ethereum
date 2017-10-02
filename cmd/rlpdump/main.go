@@ -26,7 +26,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 var (

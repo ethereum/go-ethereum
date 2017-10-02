@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/brn/downloader"
-	"github.com/burnout/go-burnout/p2p"
-	"github.com/burnout/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/brn/downloader"
+	"github.com/burnoutcoin/go-burnout/p2p"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
 )
 
 // Tests that fast sync gets disabled as soon as a real block is successfully

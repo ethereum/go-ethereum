@@ -1,4 +1,4 @@
-export ROOT="${GOPATH}/src/github.com/burnout/go-burnout"
+export ROOT="${GOPATH}/src/github.com/burnoutcoin/go-burnout"
 export PATH="${ROOT}/swarm/dev/bin:${PATH}"
 
 cd "${ROOT}/swarm/dev"

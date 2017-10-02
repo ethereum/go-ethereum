@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/burnout/go-burnout/accounts/usbwallet"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/rpc"
+	"github.com/burnoutcoin/go-burnout/accounts/usbwallet"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/rpc"
 	"github.com/robertkrimen/otto"
 )
 

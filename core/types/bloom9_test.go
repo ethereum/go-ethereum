@@ -54,7 +54,7 @@ func TestBloom(t *testing.T) {
 import (
 	"testing"
 
-	"github.com/burnout/go-burnout/core/state"
+	"github.com/burnoutcoin/go-burnout/core/state"
 )
 
 func TestBloom9(t *testing.T) {

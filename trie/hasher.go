@@ -21,9 +21,9 @@ import (
 	"hash"
 	"sync"
 
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/crypto/sha3"
-	"github.com/burnout/go-burnout/rlp"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/crypto/sha3"
+	"github.com/burnoutcoin/go-burnout/rlp"
 )
 
 type hasher struct {

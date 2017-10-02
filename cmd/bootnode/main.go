@@ -23,13 +23,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/burnout/go-burnout/cmd/utils"
-	"github.com/burnout/go-burnout/crypto"
-	"github.com/burnout/go-burnout/log"
-	"github.com/burnout/go-burnout/p2p/discover"
-	"github.com/burnout/go-burnout/p2p/discv5"
-	"github.com/burnout/go-burnout/p2p/nat"
-	"github.com/burnout/go-burnout/p2p/netutil"
+	"github.com/burnoutcoin/go-burnout/cmd/utils"
+	"github.com/burnoutcoin/go-burnout/crypto"
+	"github.com/burnoutcoin/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/p2p/discover"
+	"github.com/burnoutcoin/go-burnout/p2p/discv5"
+	"github.com/burnoutcoin/go-burnout/p2p/nat"
+	"github.com/burnoutcoin/go-burnout/p2p/netutil"
 )
 
 func main() {

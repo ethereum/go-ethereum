@@ -26,7 +26,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/burnout/go-burnout/log"
+	"github.com/burnoutcoin/go-burnout/log"
 )
 
 const (

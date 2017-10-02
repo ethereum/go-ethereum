@@ -26,9 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/burnout/go-burnout/accounts"
-	"github.com/burnout/go-burnout/common"
-	"github.com/burnout/go-burnout/event"
+	"github.com/burnoutcoin/go-burnout/accounts"
+	"github.com/burnoutcoin/go-burnout/common"
+	"github.com/burnoutcoin/go-burnout/event"
 )
 
 var testSigData = make([]byte, 32)
