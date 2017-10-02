@@ -336,7 +336,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	receipt1 := &types.Receipt{
-		Failed:            true,
+		Status:            types.ReceiptStatusFailed,
 		CumulativeGasUsed: big.NewInt(1),
 		Logs: []*types.Log{
 			{Address: common.BytesToAddress([]byte{0x11})},
