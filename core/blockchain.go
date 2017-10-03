@@ -796,11 +796,6 @@ func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.R
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	if bc.HasBlock(block.Hash(), block.NumberU64()) {
-		log.Trace("Block existed", "hash", block.Hash())
-		return
-	}
-
 	localTd := bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64())
 	externTd := new(big.Int).Add(block.Difficulty(), ptd)
 
