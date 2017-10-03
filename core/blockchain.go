@@ -792,14 +792,13 @@ func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.R
 	if ptd == nil {
 		return NonStatTy, consensus.ErrUnknownAncestor
 	}
+	// If the block is already known, skip it
+	if bc.HasBlockAndState(block.Hash()) {
+		return SideStatTy, nil
+	}
 	// Make sure no inconsistent state is leaked during insertion
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
-
-	if bc.HasBlock(block.Hash(), block.NumberU64()) {
-		log.Trace("Block existed", "hash", block.Hash())
-		return
-	}
 
 	localTd := bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64())
 	externTd := new(big.Int).Add(block.Difficulty(), ptd)
