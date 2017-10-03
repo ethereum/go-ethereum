@@ -104,7 +104,6 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 	conf.Stack.P2P.NoDiscovery = true
 	conf.Stack.P2P.NAT = nil
 	conf.Stack.NoUSB = true
-	conf.Stack.Logger = log.New("node.id", config.ID.String())
 
 	// listen on a random localhost port (we'll get the actual port after
 	// starting the node through the RPC admin.nodeInfo method)
@@ -360,6 +359,7 @@ func execP2PNode() {
 		log.Crit("error decoding _P2P_NODE_CONFIG", "err", err)
 	}
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
+	conf.Stack.Logger = log.New("node.id", conf.Node.ID.String())
 
 	// use explicit IP address in ListenAddr so that Enode URL is usable
 	externalIP := func() string {
