@@ -74,7 +74,7 @@ type testerChainReader struct {
 	db ethdb.Database
 }
 
-func (r *testerChainReader) Config() *params.ChainConfig                 { panic("not supported") }
+func (r *testerChainReader) Config() *params.ChainConfig                 { return params.AllProtocolChanges }
 func (r *testerChainReader) CurrentHeader() *types.Header                { panic("not supported") }
 func (r *testerChainReader) GetHeader(common.Hash, uint64) *types.Header { panic("not supported") }
 func (r *testerChainReader) GetBlock(common.Hash, uint64) *types.Block   { panic("not supported") }
