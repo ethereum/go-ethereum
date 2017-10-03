@@ -47,6 +47,8 @@ type Hub struct {
 	scheme     string                  // Protocol scheme prefixing account and wallet URLs.
 	vendorID   uint16                  // USB vendor identifier used for device discovery
 	productIDs []uint16                // USB product identifiers used for device discovery
+	usageID    uint16                  // USB usage page identifier used for macOS device discovery
+	endpointID int                     // USB endpoint identifier used for non-macOS device discovery
 	makeDriver func(log.Logger) driver // Factory method to construct a vendor specific driver
 
 	refreshed   time.Time               // Time instance when the list of wallets was last refreshed
@@ -66,16 +68,16 @@ type Hub struct {
 
 // NewLedgerHub creates a new hardware wallet manager for Ledger devices.
 func NewLedgerHub() (*Hub, error) {
-	return newHub(LedgerScheme, 0x2c97, []uint16{0x0000 /* Ledger Blue */, 0x0001 /* Ledger Nano S */}, newLedgerDriver)
+	return newHub(LedgerScheme, 0x2c97, []uint16{0x0000 /* Ledger Blue */, 0x0001 /* Ledger Nano S */}, 0xffa0, 0, newLedgerDriver)
 }
 
 // NewTrezorHub creates a new hardware wallet manager for Trezor devices.
 func NewTrezorHub() (*Hub, error) {
-	return newHub(TrezorScheme, 0x534c, []uint16{0x0001 /* Trezor 1 */}, newTrezorDriver)
+	return newHub(TrezorScheme, 0x534c, []uint16{0x0001 /* Trezor 1 */}, 0xff00, 0, newTrezorDriver)
 }
 
 // newHub creates a new hardware wallet manager for generic USB devices.
-func newHub(scheme string, vendorID uint16, productIDs []uint16, makeDriver func(log.Logger) driver) (*Hub, error) {
+func newHub(scheme string, vendorID uint16, productIDs []uint16, usageID uint16, endpointID int, makeDriver func(log.Logger) driver) (*Hub, error) {
 	if !hid.Supported() {
 		return nil, errors.New("unsupported platform")
 	}
@@ -83,6 +85,8 @@ func newHub(scheme string, vendorID uint16, productIDs []uint16, makeDriver func
 		scheme:     scheme,
 		vendorID:   vendorID,
 		productIDs: productIDs,
+		usageID:    usageID,
+		endpointID: endpointID,
 		makeDriver: makeDriver,
 		quit:       make(chan chan error),
 	}
@@ -133,7 +137,7 @@ func (hub *Hub) refreshWallets() {
 	}
 	for _, info := range hid.Enumerate(hub.vendorID, 0) {
 		for _, id := range hub.productIDs {
-			if info.ProductID == id && info.Interface == 0 {
+			if info.ProductID == id && (info.UsagePage == hub.usageID || info.Interface == hub.endpointID) {
 				devices = append(devices, info)
 				break
 			}
