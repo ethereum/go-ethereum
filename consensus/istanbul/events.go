@@ -16,23 +16,16 @@
 
 package istanbul
 
-type ProposerPolicy uint64
-
-const (
-	RoundRobin ProposerPolicy = iota
-	Sticky
-)
-
-type Config struct {
-	RequestTimeout uint64         `toml:",omitempty"` // The timeout for each Istanbul round in milliseconds.
-	BlockPeriod    uint64         `toml:",omitempty"` // Default minimum difference between two consecutive block's timestamps in second
-	ProposerPolicy ProposerPolicy `toml:",omitempty"` // The policy for proposer selection
-	Epoch          uint64         `toml:",omitempty"` // The number of blocks after which to checkpoint and reset the pending votes
+// RequestEvent is posted to propose a proposal
+type RequestEvent struct {
+	Proposal Proposal
 }
 
-var DefaultConfig = &Config{
-	RequestTimeout: 10000,
-	BlockPeriod:    1,
-	ProposerPolicy: RoundRobin,
-	Epoch:          30000,
+// MessageEvent is posted for Istanbul engine communication
+type MessageEvent struct {
+	Payload []byte
+}
+
+// FinalCommittedEvent is posted when a proposal is committed
+type FinalCommittedEvent struct {
 }
