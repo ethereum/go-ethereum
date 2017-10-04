@@ -161,6 +161,28 @@ func (w *wizard) readDefaultInt(def int) int {
 	}
 }
 
+// readDefaultBigInt reads a single line from stdin, trimming if from spaces,
+// enforcing it to parse into a big integer. If an empty line is entered, the
+// default value is returned.
+func (w *wizard) readDefaultBigInt(def *big.Int) *big.Int {
+	for {
+		fmt.Printf("> ")
+		text, err := w.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		if text = strings.TrimSpace(text); text == "" {
+			return def
+		}
+		val, ok := new(big.Int).SetString(text, 0)
+		if !ok {
+			log.Error("Invalid input, expected big integer")
+			continue
+		}
+		return val
+	}
+}
+
 /*
 // readFloat reads a single line from stdin, trimming if from spaces, enforcing it
 // to parse into a float.
