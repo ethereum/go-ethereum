@@ -138,7 +138,7 @@ func BindContract(address *Address, abiJSON string, client *EthereumClient) (con
 		return nil, err
 	}
 	return &BoundContract{
-		contract: bind.NewBoundContract(address.address, parsed, client.client, client.client),
+		contract: bind.NewBoundContract(address.address, parsed, client.client, client.client, client.client),
 		address:  address.address,
 	}, nil
 }

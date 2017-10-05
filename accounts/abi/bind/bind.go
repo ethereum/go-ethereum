@@ -67,6 +67,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 		var (
 			calls     = make(map[string]*tmplMethod)
 			transacts = make(map[string]*tmplMethod)
+			events    = make(map[string]*tmplEvent)
 		)
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
@@ -94,6 +95,16 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 				transacts[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original)}
 			}
 		}
+
+		for _, e := range evmABI.Events {
+			events[e.Name] = &tmplEvent{
+				Name:      e.Name,
+				Inputs:    e.Inputs,
+				ID:        fmt.Sprintf("%x", e.Id()),
+				Anonymous: e.Anonymous,
+			}
+		}
+
 		contracts[types[i]] = &tmplContract{
 			Type:        capitalise(types[i]),
 			InputABI:    strings.Replace(strippedABI, "\"", "\\\"", -1),
@@ -101,6 +112,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 			Constructor: evmABI.Constructor,
 			Calls:       calls,
 			Transacts:   transacts,
+			Events:      events, // TODO: add event subscription support to the java template
 		}
 	}
 	// Generate the contract template data content and render it
@@ -116,6 +128,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 		"capitalise":   capitalise,
 		"decapitalise": decapitalise,
 	}
+
 	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSource[lang]))
 	if err := tmpl.Execute(buffer, data); err != nil {
 		return "", err

@@ -16,7 +16,12 @@
 
 package bind
 
-import "github.com/ethereum/go-ethereum/accounts/abi"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+)
 
 // tmplData is the data structure required to fill the binding template.
 type tmplData struct {
@@ -32,6 +37,7 @@ type tmplContract struct {
 	Constructor abi.Method             // Contract constructor for deploy parametrization
 	Calls       map[string]*tmplMethod // Contract calls that only read state data
 	Transacts   map[string]*tmplMethod // Contract calls that write state data
+	Events      map[string]*tmplEvent  // Contract events
 }
 
 // tmplMethod is a wrapper around an abi.Method that contains a few preprocessed
@@ -40,6 +46,39 @@ type tmplMethod struct {
 	Original   abi.Method // Original method as parsed by the abi package
 	Normalized abi.Method // Normalized version of the parsed method (capitalized names, non-anonymous args/returns)
 	Structured bool       // Whether the returns should be accumulated into a contract
+}
+
+// tmplEvent is a wrapper around an abi.Event that contains a few preprocessed
+// and cached data fields.
+type tmplEvent struct {
+	Name      string
+	Inputs    []abi.Argument
+	ID        string
+	Anonymous bool
+}
+
+func (e tmplEvent) Canonical() string {
+	var (
+		args      []string
+		anonymous string
+	)
+
+	for _, a := range e.Inputs {
+		indexed := ""
+		if a.Indexed {
+			indexed = " indexed"
+		}
+		if a.Name != "" {
+			args = append(args, fmt.Sprintf("%s%s %s", a.Type, indexed, a.Name))
+		} else {
+			args = append(args, fmt.Sprintf("%s%s", a.Type, indexed))
+		}
+	}
+
+	if e.Anonymous {
+		anonymous = " anonymous"
+	}
+	return fmt.Sprintf("%s(%s)%s", e.Name, strings.Join(args, ", "), anonymous)
 }
 
 // tmplSource is language to template mapping containing all the supported
@@ -83,6 +122,7 @@ package {{.Package}}
 	type {{.Type}} struct {
 	  {{.Type}}Caller     // Read-only binding to the contract
 	  {{.Type}}Transactor // Write-only binding to the contract
+	  {{.Type}}Eventer    // Event listener binding to the contract
 	}
 
 	// {{.Type}}Caller is an auto generated read-only Go binding around an Ethereum contract.
@@ -93,6 +133,12 @@ package {{.Package}}
 	// {{.Type}}Transactor is an auto generated write-only Go binding around an Ethereum contract.
 	type {{.Type}}Transactor struct {
 	  contract *bind.BoundContract // Generic contract wrapper for the low level calls
+	}
+
+	// {{.Type}}Eventer is an auto generated write-only Go binding around an Ethereum contract.
+	type {{.Type}}Eventer struct {
+	  contract *bind.BoundContract // Generic contract wrapper for the low level calls
+	  address common.Address       // Contract address
 	}
 
 	// {{.Type}}Session is an auto generated Go binding around an Ethereum contract,
@@ -134,7 +180,7 @@ package {{.Package}}
 
 	// New{{.Type}} creates a new instance of {{.Type}}, bound to a specific deployed contract.
 	func New{{.Type}}(address common.Address, backend bind.ContractBackend) (*{{.Type}}, error) {
-	  contract, err := bind{{.Type}}(address, backend, backend)
+	  contract, err := bind{{.Type}}(address, backend, backend, backend)
 	  if err != nil {
 	    return nil, err
 	  }
@@ -143,7 +189,7 @@ package {{.Package}}
 
 	// New{{.Type}}Caller creates a new read-only instance of {{.Type}}, bound to a specific deployed contract.
 	func New{{.Type}}Caller(address common.Address, caller bind.ContractCaller) (*{{.Type}}Caller, error) {
-	  contract, err := bind{{.Type}}(address, caller, nil)
+	  contract, err := bind{{.Type}}(address, caller, nil, nil)
 	  if err != nil {
 	    return nil, err
 	  }
@@ -152,20 +198,29 @@ package {{.Package}}
 
 	// New{{.Type}}Transactor creates a new write-only instance of {{.Type}}, bound to a specific deployed contract.
 	func New{{.Type}}Transactor(address common.Address, transactor bind.ContractTransactor) (*{{.Type}}Transactor, error) {
-	  contract, err := bind{{.Type}}(address, nil, transactor)
+	  contract, err := bind{{.Type}}(address, nil, transactor, nil)
 	  if err != nil {
 	    return nil, err
 	  }
 	  return &{{.Type}}Transactor{contract: contract}, nil
 	}
 
+	// New{{.Type}}Eventer creates a new listen only instance of {{.Type}}, bound to a specific deployed contract.
+	func New{{.Type}}Eventer(address common.Address, eventer bind.ContractEventer) (*{{.Type}}Eventer, error) {
+	  contract, err := bind{{.Type}}(address, nil, nil, eventer)
+	  if err != nil {
+	    return nil, err
+	  }
+	  return &{{.Type}}Eventer{contract: contract, address: address}, nil
+	}
+
 	// bind{{.Type}} binds a generic wrapper to an already deployed contract.
-	func bind{{.Type}}(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
+	func bind{{.Type}}(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, eventer bind.ContractEventer) (*bind.BoundContract, error) {
 	  parsed, err := abi.JSON(strings.NewReader({{.Type}}ABI))
 	  if err != nil {
 	    return nil, err
 	  }
-	  return bind.NewBoundContract(address, parsed, caller, transactor), nil
+	  return bind.NewBoundContract(address, parsed, caller, transactor, eventer), nil
 	}
 
 	// Call invokes the (constant) contract method with params as input values and
@@ -261,6 +316,18 @@ package {{.Package}}
 		// Solidity: {{.Original.String}}
 		func (_{{$contract.Type}} *{{$contract.Type}}TransactorSession) {{.Normalized.Name}}({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type}} {{end}}) (*types.Transaction, error) {
 		  return _{{$contract.Type}}.Contract.{{.Normalized.Name}}(&_{{$contract.Type}}.TransactOpts {{range $i, $_ := .Normalized.Inputs}}, {{.Name}}{{end}})
+		}
+	{{end}}
+
+	{{range .Events}}
+		// Solidity: event {{.Canonical}}
+		//
+		// {{if not .Anonymous}}Note: this method will fill in the Event ID topic{{end}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Caller) Subscribe{{.Name}}(opts *bind.CallOpts, ch chan<- types.Log, topics ...[]common.Hash) (ethereum.Subscription, error) {
+			{{if not .Anonymous}}id := []common.Hash{common.HexToHash("{{.ID}}")}
+			topics = append([][]common.Hash{id}, topics...)
+			{{end}}
+			return _{{$contract.Type}}.contract.SubscribeFilterLogs(opts, topics, ch)
 		}
 	{{end}}
 {{end}}
