@@ -178,6 +178,100 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 	return nil
 }
 
+
+// Unpack output in v according to the abi specification
+func (abi ABI) UnpackEvent(v interface{}, name string, output []byte) error {
+	var event = abi.Events[name]
+
+	if len(output) == 0 {
+		return fmt.Errorf("abi: unmarshalling empty output")
+	}
+
+	// make sure the passed value is a pointer
+	valueOf := reflect.ValueOf(v)
+	if reflect.Ptr != valueOf.Kind() {
+		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
+	}
+
+	var (
+		value = valueOf.Elem()
+		typ   = value.Type()
+	)
+
+	if len(event.Inputs) > 1 {
+		switch value.Kind() {
+		// struct will match named return values to the struct's field
+		// names
+		case reflect.Struct:
+			for i := 0; i < len(event.Inputs); i++ {
+				marshalledValue, err := toGoType(i, event.Inputs[i], output)
+				if err != nil {
+					return err
+				}
+				reflectValue := reflect.ValueOf(marshalledValue)
+
+				for j := 0; j < typ.NumField(); j++ {
+					field := typ.Field(j)
+					// TODO read tags: `abi:"fieldName"`
+					if field.Name == strings.ToUpper(event.Inputs[i].Name[:1])+event.Inputs[i].Name[1:] {
+						if err := set(value.Field(j), reflectValue, event.Inputs[i]); err != nil {
+							return err
+						}
+					}
+				}
+			}
+		case reflect.Slice:
+			if !value.Type().AssignableTo(r_interSlice) {
+				return fmt.Errorf("abi: cannot marshal tuple in to slice %T (only []interface{} is supported)", v)
+			}
+
+			// if the slice already contains values, set those instead of the interface slice itself.
+			if value.Len() > 0 {
+				if len(event.Inputs) > value.Len() {
+					return fmt.Errorf("abi: cannot marshal in to slices of unequal size (require: %v, got: %v)", len(event.Inputs), value.Len())
+				}
+
+				for i := 0; i < len(event.Inputs); i++ {
+					marshalledValue, err := toGoType(i, event.Inputs[i], output)
+					if err != nil {
+						return err
+					}
+					reflectValue := reflect.ValueOf(marshalledValue)
+					if err := set(value.Index(i).Elem(), reflectValue, event.Inputs[i]); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+
+			// create a new slice and start appending the unmarshalled
+			// values to the new interface slice.
+			z := reflect.MakeSlice(typ, 0, len(event.Inputs))
+			for i := 0; i < len(event.Inputs); i++ {
+				marshalledValue, err := toGoType(i, event.Inputs[i], output)
+				if err != nil {
+					return err
+				}
+				z = reflect.Append(z, reflect.ValueOf(marshalledValue))
+			}
+			value.Set(z)
+		default:
+			return fmt.Errorf("abi: cannot unmarshal tuple in to %v", typ)
+		}
+
+	} else {
+		marshalledValue, err := toGoType(0, event.Inputs[0], output)
+		if err != nil {
+			return err
+		}
+		if err := set(value, reflect.ValueOf(marshalledValue), event.Inputs[0]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (abi *ABI) UnmarshalJSON(data []byte) error {
 	var fields []struct {
 		Type      string
