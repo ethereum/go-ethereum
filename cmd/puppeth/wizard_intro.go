@@ -98,7 +98,7 @@ func (w *wizard) run() {
 		if w.conf.genesis == nil {
 			fmt.Println(" 2. Configure new genesis")
 		} else {
-			fmt.Println(" 2. Save existing genesis")
+			fmt.Println(" 2. Manage existing genesis")
 		}
 		if len(w.servers) == 0 {
 			fmt.Println(" 3. Track new remote server")
@@ -118,18 +118,10 @@ func (w *wizard) run() {
 			w.networkStats(false)
 
 		case choice == "2":
-			// If we don't have a genesis, make one
 			if w.conf.genesis == nil {
 				w.makeGenesis()
 			} else {
-				// Otherwise just save whatever we currently have
-				fmt.Println()
-				fmt.Printf("Which file to save the genesis into? (default = %s.json)\n", w.network)
-				out, _ := json.MarshalIndent(w.conf.genesis, "", "  ")
-				if err := ioutil.WriteFile(w.readDefaultString(fmt.Sprintf("%s.json", w.network)), out, 0644); err != nil {
-					log.Error("Failed to save genesis file", "err", err)
-				}
-				log.Info("Exported existing genesis block")
+				w.manageGenesis()
 			}
 		case choice == "3":
 			if len(w.servers) == 0 {
