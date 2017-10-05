@@ -165,7 +165,7 @@ func (c *BoundContract) Call(opts *CallOpts, out *Interfaces, method string, arg
 
 // Transact invokes the (paid) contract method with params as input values.
 func (c *BoundContract) Transact(opts *TransactOpts, method string, args *Interfaces) (tx *Transaction, _ error) {
-	rawTx, err := c.contract.Transact(&opts.opts, method, args.objects)
+	rawTx, err := c.contract.Transact(&opts.opts, method, args.objects...)
 	if err != nil {
 		return nil, err
 	}
