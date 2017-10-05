@@ -3,10 +3,12 @@
 package liner
 
 import (
+	"bufio"
 	"container/ring"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -90,6 +92,10 @@ const (
 )
 
 func (s *State) refresh(prompt []rune, buf []rune, pos int) error {
+	if s.columns == 0 {
+		return ErrInternal
+	}
+
 	s.needRefresh = false
 	if s.multiLineMode {
 		return s.refreshMultiLine(prompt, buf, pos)
@@ -351,8 +357,8 @@ func (s *State) tabComplete(p []rune, line []rune, pos int) ([]rune, int, interf
 	}
 	hl := utf8.RuneCountInString(head)
 	if len(list) == 1 {
-		s.refresh(p, []rune(head+list[0]+tail), hl+utf8.RuneCountInString(list[0]))
-		return []rune(head + list[0] + tail), hl + utf8.RuneCountInString(list[0]), rune(esc), nil
+		err := s.refresh(p, []rune(head+list[0]+tail), hl+utf8.RuneCountInString(list[0]))
+		return []rune(head + list[0] + tail), hl + utf8.RuneCountInString(list[0]), rune(esc), err
 	}
 
 	direction := tabForward
@@ -366,7 +372,10 @@ func (s *State) tabComplete(p []rune, line []rune, pos int) ([]rune, int, interf
 		if err != nil {
 			return line, pos, rune(esc), err
 		}
-		s.refresh(p, []rune(head+pick+tail), hl+utf8.RuneCountInString(pick))
+		err = s.refresh(p, []rune(head+pick+tail), hl+utf8.RuneCountInString(pick))
+		if err != nil {
+			return line, pos, rune(esc), err
+		}
 
 		next, err := s.readNext()
 		if err != nil {
@@ -392,7 +401,10 @@ func (s *State) tabComplete(p []rune, line []rune, pos int) ([]rune, int, interf
 // reverse intelligent search, implements a bash-like history search.
 func (s *State) reverseISearch(origLine []rune, origPos int) ([]rune, int, interface{}, error) {
 	p := "(reverse-i-search)`': "
-	s.refresh([]rune(p), origLine, origPos)
+	err := s.refresh([]rune(p), origLine, origPos)
+	if err != nil {
+		return origLine, origPos, rune(esc), err
+	}
 
 	line := []rune{}
 	pos := 0
@@ -478,7 +490,10 @@ func (s *State) reverseISearch(origLine []rune, origPos int) ([]rune, int, inter
 		case action:
 			return []rune(foundLine), foundPos, next, err
 		}
-		s.refresh(getLine())
+		err = s.refresh(getLine())
+		if err != nil {
+			return []rune(foundLine), foundPos, rune(esc), err
+		}
 	}
 }
 
@@ -535,7 +550,10 @@ func (s *State) yank(p []rune, text []rune, pos int) ([]rune, int, interface{}, 
 		line = append(line, lineEnd...)
 
 		pos = len(lineStart) + len(value)
-		s.refresh(p, line, pos)
+		err := s.refresh(p, line, pos)
+		if err != nil {
+			return line, pos, 0, err
+		}
 
 		next, err := s.readNext()
 		if err != nil {
@@ -577,6 +595,11 @@ func (s *State) PromptWithSuggestion(prompt string, text string, pos int) (strin
 	if s.inputRedirected || !s.terminalSupported {
 		return s.promptUnsupported(prompt)
 	}
+	p := []rune(prompt)
+	const minWorkingSpace = 10
+	if s.columns < countGlyphs(p)+minWorkingSpace {
+		return s.tooNarrow(prompt)
+	}
 	if s.outputRedirected {
 		return "", ErrNotTerminalOutput
 	}
@@ -585,7 +608,6 @@ func (s *State) PromptWithSuggestion(prompt string, text string, pos int) (strin
 	defer s.historyMutex.RUnlock()
 
 	fmt.Print(prompt)
-	p := []rune(prompt)
 	var line = []rune(text)
 	historyEnd := ""
 	var historyPrefix []string
@@ -600,7 +622,10 @@ func (s *State) PromptWithSuggestion(prompt string, text string, pos int) (strin
 		pos = len(text)
 	}
 	if len(line) > 0 {
-		s.refresh(p, line, pos)
+		err := s.refresh(p, line, pos)
+		if err != nil {
+			return "", err
+		}
 	}
 
 restart:
@@ -624,7 +649,10 @@ mainLoop:
 			switch v {
 			case cr, lf:
 				if s.needRefresh {
-					s.refresh(p, line, pos)
+					err := s.refresh(p, line, pos)
+					if err != nil {
+						return "", err
+					}
 				}
 				if s.multiLineMode {
 					s.resetMultiLine(p, line, pos)
@@ -958,7 +986,10 @@ mainLoop:
 			s.needRefresh = true
 		}
 		if s.needRefresh && !s.inputWaiting() {
-			s.refresh(p, line, pos)
+			err := s.refresh(p, line, pos)
+			if err != nil {
+				return "", err
+			}
 		}
 		if !historyAction {
 			historyStale = true
@@ -978,7 +1009,7 @@ func (s *State) PasswordPrompt(prompt string) (string, error) {
 			return "", ErrInvalidPrompt
 		}
 	}
-	if !s.terminalSupported {
+	if !s.terminalSupported || s.columns == 0 {
 		return "", errors.New("liner: function not supported in this terminal")
 	}
 	if s.inputRedirected {
@@ -988,6 +1019,12 @@ func (s *State) PasswordPrompt(prompt string) (string, error) {
 		return "", ErrNotTerminalOutput
 	}
 
+	p := []rune(prompt)
+	const minWorkingSpace = 1
+	if s.columns < countGlyphs(p)+minWorkingSpace {
+		return s.tooNarrow(prompt)
+	}
+
 	defer s.stopPrompt()
 
 restart:
@@ -995,7 +1032,6 @@ restart:
 	s.getColumns()
 
 	fmt.Print(prompt)
-	p := []rune(prompt)
 	var line []rune
 	pos := 0
 
@@ -1014,7 +1050,10 @@ mainLoop:
 			switch v {
 			case cr, lf:
 				if s.needRefresh {
-					s.refresh(p, line, pos)
+					err := s.refresh(p, line, pos)
+					if err != nil {
+						return "", err
+					}
 				}
 				if s.multiLineMode {
 					s.resetMultiLine(p, line, pos)
@@ -1032,7 +1071,10 @@ mainLoop:
 				s.restartPrompt()
 			case ctrlL: // clear screen
 				s.eraseScreen()
-				s.refresh(p, []rune{}, 0)
+				err := s.refresh(p, []rune{}, 0)
+				if err != nil {
+					return "", err
+				}
 			case ctrlH, bs: // Backspace
 				if pos <= 0 {
 					fmt.Print(beep)
@@ -1067,4 +1109,21 @@ mainLoop:
 		}
 	}
 	return string(line), nil
+}
+
+func (s *State) tooNarrow(prompt string) (string, error) {
+	// Docker and OpenWRT and etc sometimes return 0 column width
+	// Reset mode temporarily. Restore baked mode in case the terminal
+	// is wide enough for the next Prompt attempt.
+	m, merr := TerminalMode()
+	s.origMode.ApplyMode()
+	if merr == nil {
+		defer m.ApplyMode()
+	}
+	if s.r == nil {
+		// Windows does not always set s.r
+		s.r = bufio.NewReader(os.Stdin)
+		defer func() { s.r = nil }()
+	}
+	return s.promptUnsupported(prompt)
 }
