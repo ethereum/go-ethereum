@@ -62,6 +62,7 @@ func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, li
 	}
 	protocol = strings.ToUpper(protocol)
 	lifetimeS := uint32(lifetime / time.Second)
+	n.DeleteMapping(protocol, extport, intport)
 	return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
 }
 
