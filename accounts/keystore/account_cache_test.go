@@ -57,11 +57,11 @@ func TestWatchNewFile(t *testing.T) {
 	dir, ks := tmpKeyStore(t, false)
 	defer os.RemoveAll(dir)
 
-	// Ensure the watcher is started before adding any all.
+	// Ensure the watcher is started before adding any files.
 	ks.Accounts()
 	time.Sleep(200 * time.Millisecond)
 
-	// Move in the all.
+	// Move in the files.
 	wantAccounts := make([]accounts.Account, len(cachetestAccounts))
 	for i := range cachetestAccounts {
 		wantAccounts[i] = accounts.Account{
