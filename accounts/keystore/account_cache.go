@@ -194,6 +194,7 @@ func (ac *accountCache) find(a accounts.Account) (accounts.Account, error) {
 	default:
 		err := &AmbiguousAddrError{Addr: a.Address, Matches: make([]accounts.Account, len(matches))}
 		copy(err.Matches, matches)
+		sort.Sort(accountsByURL(err.Matches))
 		return accounts.Account{}, err
 	}
 }
