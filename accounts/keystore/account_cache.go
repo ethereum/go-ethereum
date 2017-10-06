@@ -215,7 +215,7 @@ func (ac *accountCache) maybeReload() {
 			return // The cache was reloaded recently.
 		}
 	}
-	//
+	// No watcher running, start it.
 	ac.watcher.start()
 	ac.throttle.Reset(minReloadInterval)
 	ac.mu.Unlock()
