@@ -137,15 +137,15 @@ func (ac *accountCache) delete(removed accounts.Account) {
 	}
 }
 
-//deleteByFile removes an account referenced by the given path
+// deleteByFile removes an account referenced by the given path.
 func (ac *accountCache) deleteByFile(path string) {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
-	i := sort.Search(len(ac.all), func(i int) bool { return ac.all[i].URL.Path == path })
+	i := sort.Search(len(ac.all), func(i int) bool { return ac.all[i].URL.Path >= path })
 
-	if i < len(ac.all) {
+	if i < len(ac.all) && ac.all[i].URL.Path == path {
 		removed := ac.all[i]
-		ac.all = removeAccount(ac.all, removed)
+		ac.all = append(ac.all[:i], ac.all[i+1:]...)
 		if ba := removeAccount(ac.byAddr[removed.Address], removed); len(ba) == 0 {
 			delete(ac.byAddr, removed.Address)
 		} else {
