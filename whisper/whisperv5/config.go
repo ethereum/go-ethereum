@@ -25,5 +25,3 @@ var DefaultConfig = Config{
 	MaxMessageSize:     DefaultMaxMessageSize,
 	MinimumAcceptedPOW: DefaultMinimumPoW,
 }
-
-var ()
