@@ -77,8 +77,8 @@ type accountCache struct {
 
 // fileCache is a cache of files seen during scan of keystore
 type fileCache struct {
-	all   *set.SetNonTS //List of all files
-	mtime *time.Time    //Latest mtime seen
+	all   *set.SetNonTS // list of all files
+	mtime time.Time     // latest mtime seen
 	mu    sync.RWMutex
 }
 
@@ -87,10 +87,7 @@ func newAccountCache(keydir string) (*accountCache, chan struct{}) {
 		keydir: keydir,
 		byAddr: make(map[common.Address][]accounts.Account),
 		notify: make(chan struct{}, 1),
-		fileC: fileCache{
-			all:   set.NewNonTS(),
-			mtime: new(time.Time),
-		},
+		fileC:  fileCache{all: set.NewNonTS()},
 	}
 	ac.watcher = newWatcher(ac)
 	return ac, ac.notify
@@ -248,12 +245,12 @@ func (fc *fileCache) scanFiles(keyDir string) (set.Interface, set.Interface, set
 		return nil, nil, nil, err
 	}
 	fc.mu.RLock()
-	previous_mtime := fc.mtime
+	prevMtime := fc.mtime
 	fc.mu.RUnlock()
 
 	filesNow := set.NewNonTS()
 	moddedFiles := set.NewNonTS()
-	newMtime := new(time.Time)
+	var newMtime time.Time
 	for _, fi := range files {
 		modTime := fi.ModTime()
 		path := filepath.Join(keyDir, fi.Name())
@@ -262,11 +259,11 @@ func (fc *fileCache) scanFiles(keyDir string) (set.Interface, set.Interface, set
 			continue
 		}
 		filesNow.Add(path)
-		if modTime.After(*previous_mtime) {
+		if modTime.After(prevMtime) {
 			moddedFiles.Add(path)
 		}
-		if modTime.After(*newMtime) {
-			newMtime = &modTime
+		if modTime.After(newMtime) {
+			newMtime = modTime
 		}
 	}
 	t2 := time.Now()
@@ -289,7 +286,6 @@ func (fc *fileCache) scanFiles(keyDir string) (set.Interface, set.Interface, set
 // scanAccounts checks if any changes have occurred on the filesystem, and
 // updates the account cache accordingly
 func (ac *accountCache) scanAccounts() error {
-
 	newFiles, missingFiles, modified, err := ac.fileC.scanFiles(ac.keydir)
 	t1 := time.Now()
 	if err != nil {
