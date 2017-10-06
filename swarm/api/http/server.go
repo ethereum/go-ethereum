@@ -441,14 +441,37 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	walker, err := s.api.NewManifestWalker(key, nil)
+	list, err := s.getManifestList(key, r.uri.Path)
+
 	if err != nil {
 		s.Error(w, r, err)
 		return
 	}
 
-	var list api.ManifestList
-	prefix := r.uri.Path
+	// if the client wants HTML (e.g. a browser) then render the list as a
+	// HTML index with relative URLs
+	if strings.Contains(r.Header.Get("Accept"), "text/html") {
+		w.Header().Set("Content-Type", "text/html")
+		err := htmlListTemplate.Execute(w, &htmlListData{
+			URI:  r.uri,
+			List: &list,
+		})
+		if err != nil {
+			s.logError("error rendering list HTML: %s", err)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(&list)
+}
+
+func (s *Server) getManifestList(key storage.Key, prefix string) (list api.ManifestList, err error) {
+	walker, err := s.api.NewManifestWalker(key, nil)
+	if err != nil {
+		return
+	}
+
 	err = walker.Walk(func(entry *api.ManifestEntry) error {
 		// handle non-manifest files
 		if entry.ContentType != api.ManifestType {
@@ -495,27 +518,8 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 		// so just skip it
 		return api.SkipManifest
 	})
-	if err != nil {
-		s.Error(w, r, err)
-		return
-	}
 
-	// if the client wants HTML (e.g. a browser) then render the list as a
-	// HTML index with relative URLs
-	if strings.Contains(r.Header.Get("Accept"), "text/html") {
-		w.Header().Set("Content-Type", "text/html")
-		err := htmlListTemplate.Execute(w, &htmlListData{
-			URI:  r.uri,
-			List: &list,
-		})
-		if err != nil {
-			s.logError("error rendering list HTML: %s", err)
-		}
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(&list)
+	return list, nil
 }
 
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
@@ -541,6 +545,22 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		default:
 			s.Error(w, r, err)
 		}
+		return
+	}
+
+	//the request results in ambiguous files
+	//e.g. /read with readme.md and readinglist.txt available in manifest
+	if status == http.StatusMultipleChoices {
+		list, err := s.getManifestList(key, r.uri.Path)
+
+		if err != nil {
+			s.Error(w, r, err)
+			return
+		}
+
+		s.logDebug(fmt.Sprintf("Multiple choices! -->  %v", list))
+		//show a nice page links to available entries
+		ShowMultipleChoices(w, &r.Request, list)
 		return
 	}
 
