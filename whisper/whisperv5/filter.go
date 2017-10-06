@@ -70,7 +70,7 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 	}
 
 	if watcher.expectsSymmetricEncryption() {
-		watcher.SymKeyHash = crypto.Keccak256Hash(watcher.KeySym);
+		watcher.SymKeyHash = crypto.Keccak256Hash(watcher.KeySym)
 	}
 
 	fs.watchers[id] = watcher

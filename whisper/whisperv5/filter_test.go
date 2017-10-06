@@ -149,7 +149,7 @@ func TestInstallSymKeyGeneratesHash(t *testing.T) {
 	_, err := filters.Install(filter)
 
 	if err != nil {
-		t.Fatalf("Error installing the filter: %s", err);
+		t.Fatalf("Error installing the filter: %s", err)
 	}
 
 	for i, b := range filter.SymKeyHash {
@@ -174,30 +174,30 @@ func TestInstallIdenticalFilters(t *testing.T) {
 		PoW:      filter1.PoW,
 		AllowP2P: filter1.AllowP2P,
 		Messages: make(map[common.Hash]*ReceivedMessage),
-	};
+	}
 
 	_, err := filters.Install(filter1)
 
 	if err != nil {
-		t.Fatalf("Error installing the first filter with seed %d: %s", seed, err);
+		t.Fatalf("Error installing the first filter with seed %d: %s", seed, err)
 	}
 
 	_, err = filters.Install(filter2)
 
 	if err != nil {
-		t.Fatalf("Error installing the second filter with seed %d: %s", seed, err);
+		t.Fatalf("Error installing the second filter with seed %d: %s", seed, err)
 	}
 
 	params, err := generateMessageParams()
 	if err != nil {
-		t.Fatalf("Error generating message parameters with seed %d: %s", seed, err);
+		t.Fatalf("Error generating message parameters with seed %d: %s", seed, err)
 	}
 
 	params.KeySym = filter1.KeySym
 	params.Topic = BytesToTopic(filter1.Topics[0])
 
-	filter1.Src = &params.Src.PublicKey;
-	filter2.Src = &params.Src.PublicKey;
+	filter1.Src = &params.Src.PublicKey
+	filter2.Src = &params.Src.PublicKey
 
 	sentMessage, err := NewSentMessage(params)
 	if err != nil {
@@ -212,19 +212,19 @@ func TestInstallIdenticalFilters(t *testing.T) {
 		t.Fatalf("failed to Open with filter1")
 	}
 
-	if ! filter1.MatchEnvelope(env) {
+	if !filter1.MatchEnvelope(env) {
 		t.Fatalf("failed matching with the first filter")
 	}
 
-	if ! filter2.MatchEnvelope(env) {
+	if !filter2.MatchEnvelope(env) {
 		t.Fatalf("failed matching with the first filter")
 	}
 
-	if ! filter1.MatchMessage(msg) {
+	if !filter1.MatchMessage(msg) {
 		t.Fatalf("failed matching with the second filter")
 	}
 
-	if ! filter2.MatchMessage(msg) {
+	if !filter2.MatchMessage(msg) {
 		t.Fatalf("failed matching with the second filter")
 	}
 }

@@ -650,7 +650,7 @@ func TestSymmetricSendCycle(t *testing.T) {
 		PoW:      filter1.PoW,
 		AllowP2P: filter1.AllowP2P,
 		Messages: make(map[common.Hash]*ReceivedMessage),
-	};
+	}
 
 	params, err := generateMessageParams()
 	if err != nil {
