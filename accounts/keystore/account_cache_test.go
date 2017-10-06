@@ -18,6 +18,7 @@ package keystore
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -30,7 +31,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"io/ioutil"
 )
 
 var (
@@ -318,6 +318,8 @@ func waitForAccounts(wantAccounts []accounts.Account, ks *KeyStore) error {
 // TestUpdatedKeyfileContents tests that updating the contents of a keystore file
 // is noticed by the watcher, and the account cache is updated accordingly
 func TestUpdatedKeyfileContents(t *testing.T) {
+	t.Parallel()
+
 	// Create a temporary kesytore to test with
 	rand.Seed(time.Now().UnixNano())
 	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-watch-test-%d-%d", os.Getpid(), rand.Int()))
@@ -347,19 +349,8 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		return
 	}
 
-	copyContents := func(dst, src string) error {
-		data, err := ioutil.ReadFile(src)
-		if err != nil {
-			return err
-		}
-		err = ioutil.WriteFile(dst, data, 0644)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
 	// Now replace file contents
-	if err := copyContents(file, cachetestAccounts[1].URL.Path); err != nil {
+	if err := forceCopyFile(file, cachetestAccounts[1].URL.Path); err != nil {
 		t.Fatal(err)
 		return
 	}
@@ -372,7 +363,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	}
 
 	// Now replace file contents again
-	if err := copyContents(file, cachetestAccounts[2].URL.Path); err != nil {
+	if err := forceCopyFile(file, cachetestAccounts[2].URL.Path); err != nil {
 		t.Fatal(err)
 		return
 	}
@@ -393,4 +384,13 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		t.Error(err)
 		return
 	}
+}
+
+// forceCopyFile is like cp.CopyFile, but doesn't complain if the destination exists.
+func forceCopyFile(dst, src string) error {
+	data, err := ioutil.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(dst, data, 0644)
 }
