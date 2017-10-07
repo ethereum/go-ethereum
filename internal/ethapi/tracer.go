@@ -130,8 +130,8 @@ type dbWrapper struct {
 }
 
 // getBalance retrieves an account's balance
-func (dw *dbWrapper) getBalance(addr common.Address) *big.Int {
-	return dw.db.GetBalance(addr)
+func (dw *dbWrapper) getBalance(addr []byte) *big.Int {
+	return dw.db.GetBalance(common.BytesToAddress(addr))
 }
 
 // getNonce retrieves an account's nonce
