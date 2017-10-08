@@ -134,7 +134,7 @@ func (sf *SwarmFile) Write(ctx context.Context, req *fuse.WriteRequest, resp *fu
 		if err != nil {
 			return err
 		}
-		resp.Size = int(sf.fileSize)
+		resp.Size = len(req.Data)
 	} else {
 		log.Warn("Invalid write request size(%v) : off(%v)", sf.fileSize, req.Offset)
 		return errInvalidOffset
