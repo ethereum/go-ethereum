@@ -36,6 +36,7 @@ import (
 
 // Ethash proof-of-work protocol constants.
 var (
+	callistoBlockReward, _ = new(big.Int).SetString("10000000000000000000", 10) // Block reward in wei for successfully mining a block
 	frontierBlockReward  *big.Int = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
 	byzantiumBlockReward *big.Int = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
 	maxUncles                     = 2                 // Maximum number of uncles allowed in a single block
@@ -529,12 +530,16 @@ var (
 // TODO (karalabe): Move the chain maker into this package and make this private!
 func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
-	blockReward := frontierBlockReward
-	if config.IsByzantium(header.Number) {
-		blockReward = byzantiumBlockReward
-	}
-	// Accumulate the rewards for the miner and any included uncles
+	blockReward := callistoBlockReward
+	//if config.IsByzantium(header.Number) {
+	//	blockReward = byzantiumBlockReward
+	//}
+	treasuryPercent := getTreasuryPercent(header)
 	reward := new(big.Int).Set(blockReward)
+	treasuryReward := new(big.Int)
+	treasuryReward.Mul(reward, big.NewInt(treasuryPercent))
+	treasuryReward.Div(treasuryReward, big.NewInt(100))
+	// Accumulate the rewards for the miner and any included uncles
 	r := new(big.Int)
 	for _, uncle := range uncles {
 		r.Add(uncle.Number, big8)
@@ -546,5 +551,17 @@ func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
+	reward.Sub(reward, treasuryReward)
 	state.AddBalance(header.Coinbase, reward)
+	state.AddBalance(common.HexToAddress("SET ADDRESS IN SETTINGS"), treasuryReward)
+}
+
+
+// getTreasuryPercent computes the current block reward's percent will be for
+// dev subsidy.
+func getTreasuryPercent(header *types.Header) int64 {
+	factorReduction := new(big.Int).Set(header.Number)
+	factorReduction.Div(factorReduction, big.NewInt(2160000))
+
+	return 10 - (2 * factorReduction.Int64())
 }
