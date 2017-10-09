@@ -1,11 +1,12 @@
-// This file is an automatically generated Go binding. Do not modify as any
-// change will likely be lost upon the next re-generation!
+// Code generated - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
 
 package contract
 
 import (
 	"strings"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -13,10 +14,10 @@ import (
 )
 
 // ENSABI is the input ABI used to generate the binding from.
-const ENSABI = `[{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"resolver","outputs":[{"name":"","type":"address"}],"type":"function"},{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"owner","outputs":[{"name":"","type":"address"}],"type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"label","type":"bytes32"},{"name":"owner","type":"address"}],"name":"setSubnodeOwner","outputs":[],"type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"resolver","type":"address"}],"name":"setResolver","outputs":[],"type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"owner","type":"address"}],"name":"setOwner","outputs":[],"type":"function"},{"inputs":[{"name":"owner","type":"address"}],"type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":true,"name":"label","type":"bytes32"},{"indexed":false,"name":"owner","type":"address"}],"name":"NewOwner","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"owner","type":"address"}],"name":"Transfer","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"resolver","type":"address"}],"name":"NewResolver","type":"event"}]`
+const ENSABI = "[{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"}],\"name\":\"resolver\",\"outputs\":[{\"name\":\"\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"}],\"name\":\"owner\",\"outputs\":[{\"name\":\"\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"label\",\"type\":\"bytes32\"},{\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"setSubnodeOwner\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"resolver\",\"type\":\"address\"}],\"name\":\"setResolver\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"setOwner\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"owner\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"node\",\"type\":\"bytes32\"},{\"indexed\":true,\"name\":\"label\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"NewOwner\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"node\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"Transfer\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"node\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"resolver\",\"type\":\"address\"}],\"name\":\"NewResolver\",\"type\":\"event\"}]"
 
 // ENSBin is the compiled bytecode used for deploying new contracts.
-const ENSBin = `0x606060405260405160208061032683395060806040525160008080526020527fad3228b676f7d3cd4284a5443f17f1962b36e491b30a40b2405849e597ba5fb58054600160a060020a03191682179055506102c88061005e6000396000f3606060405260e060020a60003504630178b8bf811461004757806302571be31461006e57806306ab5923146100915780631896f70a146100c85780635b0fc9c3146100fc575b005b610130600435600081815260208190526040902060010154600160a060020a03165b919050565b610130600435600081815260208190526040902054600160a060020a0316610069565b6100456004356024356044356000838152602081905260408120548490600160a060020a0390811633919091161461014d57610002565b6100456004356024356000828152602081905260409020548290600160a060020a039081163391909116146101e757610002565b6100456004356024356000828152602081905260409020548290600160a060020a0390811633919091161461025957610002565b60408051600160a060020a03929092168252519081900360200190f35b60408051868152602081810187905282519182900383018220600160a060020a03871683529251929450869288927fce0457fe73731f824cc272376169235128c118b49d344817417c6d108d155e8292908290030190a382600060005060008460001916815260200190815260200160002060005060000160006101000a815481600160a060020a03021916908302179055505050505050565b60408051600160a060020a0384168152905184917f335721b01866dc23fbee8b6b2c7b1e14d6f05c28cd35a2c934239f94095602a0919081900360200190a2506000828152602081905260409020600101805473ffffffffffffffffffffffffffffffffffffffff1916821790555050565b60408051600160a060020a0384168152905184917fd4735d920b0f87494915f556dd9b54c8f309026070caea5c737245152564d266919081900360200190a2506000828152602081905260409020805473ffffffffffffffffffffffffffffffffffffffff191682179055505056`
+const ENSBin = `0x6060604052341561000f57600080fd5b6040516020806104068339810160405280805160008080526020527fad3228b676f7d3cd4284a5443f17f1962b36e491b30a40b2405849e597ba5fb58054600160a060020a03909216600160a060020a0319909216919091179055505061038b8061007b6000396000f300606060405263ffffffff7c01000000000000000000000000000000000000000000000000000000006000350416630178b8bf811461006857806302571be31461009a57806306ab5923146100b05780631896f70a146100d75780635b0fc9c3146100f957600080fd5b341561007357600080fd5b61007e60043561011b565b604051600160a060020a03909116815260200160405180910390f35b34156100a557600080fd5b61007e600435610139565b34156100bb57600080fd5b6100d5600435602435600160a060020a0360443516610154565b005b34156100e257600080fd5b6100d5600435600160a060020a0360243516610216565b341561010457600080fd5b6100d5600435600160a060020a03602435166102bc565b600090815260208190526040902060010154600160a060020a031690565b600090815260208190526040902054600160a060020a031690565b600083815260208190526040812054849033600160a060020a0390811691161461017d57600080fd5b8484604051918252602082015260409081019051908190039020915083857fce0457fe73731f824cc272376169235128c118b49d344817417c6d108d155e8285604051600160a060020a03909116815260200160405180910390a3506000908152602081905260409020805473ffffffffffffffffffffffffffffffffffffffff1916600160a060020a03929092169190911790555050565b600082815260208190526040902054829033600160a060020a0390811691161461023f57600080fd5b827f335721b01866dc23fbee8b6b2c7b1e14d6f05c28cd35a2c934239f94095602a083604051600160a060020a03909116815260200160405180910390a250600091825260208290526040909120600101805473ffffffffffffffffffffffffffffffffffffffff1916600160a060020a03909216919091179055565b600082815260208190526040902054829033600160a060020a039081169116146102e557600080fd5b827fd4735d920b0f87494915f556dd9b54c8f309026070caea5c737245152564d26683604051600160a060020a03909116815260200160405180910390a250600091825260208290526040909120805473ffffffffffffffffffffffffffffffffffffffff1916600160a060020a039092169190911790555600a165627a7a723058201688b733fec0724299316d2a5da097e557f512618a9391f556b1cd523512ed5a0029`
 
 // DeployENS deploys a new Ethereum contract, binding an instance of ENS to it.
 func DeployENS(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address) (common.Address, *types.Transaction, *ENS, error) {
@@ -35,6 +36,7 @@ func DeployENS(auth *bind.TransactOpts, backend bind.ContractBackend, owner comm
 type ENS struct {
 	ENSCaller     // Read-only binding to the contract
 	ENSTransactor // Write-only binding to the contract
+	ENSEventer    // Event listener binding to the contract
 }
 
 // ENSCaller is an auto generated read-only Go binding around an Ethereum contract.
@@ -45,6 +47,12 @@ type ENSCaller struct {
 // ENSTransactor is an auto generated write-only Go binding around an Ethereum contract.
 type ENSTransactor struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+}
+
+// ENSEventer is an auto generated write-only Go binding around an Ethereum contract.
+type ENSEventer struct {
+	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+	address  common.Address      // Contract address
 }
 
 // ENSSession is an auto generated Go binding around an Ethereum contract,
@@ -86,7 +94,7 @@ type ENSTransactorRaw struct {
 
 // NewENS creates a new instance of ENS, bound to a specific deployed contract.
 func NewENS(address common.Address, backend bind.ContractBackend) (*ENS, error) {
-	contract, err := bindENS(address, backend, backend)
+	contract, err := bindENS(address, backend, backend, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +103,7 @@ func NewENS(address common.Address, backend bind.ContractBackend) (*ENS, error) 
 
 // NewENSCaller creates a new read-only instance of ENS, bound to a specific deployed contract.
 func NewENSCaller(address common.Address, caller bind.ContractCaller) (*ENSCaller, error) {
-	contract, err := bindENS(address, caller, nil)
+	contract, err := bindENS(address, caller, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -104,20 +112,29 @@ func NewENSCaller(address common.Address, caller bind.ContractCaller) (*ENSCalle
 
 // NewENSTransactor creates a new write-only instance of ENS, bound to a specific deployed contract.
 func NewENSTransactor(address common.Address, transactor bind.ContractTransactor) (*ENSTransactor, error) {
-	contract, err := bindENS(address, nil, transactor)
+	contract, err := bindENS(address, nil, transactor, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &ENSTransactor{contract: contract}, nil
 }
 
+// NewENSEventer creates a new listen only instance of ENS, bound to a specific deployed contract.
+func NewENSEventer(address common.Address, eventer bind.ContractEventer) (*ENSEventer, error) {
+	contract, err := bindENS(address, nil, nil, eventer)
+	if err != nil {
+		return nil, err
+	}
+	return &ENSEventer{contract: contract, address: address}, nil
+}
+
 // bindENS binds a generic wrapper to an already deployed contract.
-func bindENS(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
+func bindENS(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, eventer bind.ContractEventer) (*bind.BoundContract, error) {
 	parsed, err := abi.JSON(strings.NewReader(ENSABI))
 	if err != nil {
 		return nil, err
 	}
-	return bind.NewBoundContract(address, parsed, caller, transactor), nil
+	return bind.NewBoundContract(address, parsed, caller, transactor, eventer), nil
 }
 
 // Call invokes the (constant) contract method with params as input values and
@@ -273,11 +290,41 @@ func (_ENS *ENSTransactorSession) SetSubnodeOwner(node [32]byte, label [32]byte,
 	return _ENS.Contract.SetSubnodeOwner(&_ENS.TransactOpts, node, label, owner)
 }
 
+// Solidity: event NewOwner(bytes32 indexed node, bytes32 indexed label, address owner)
+//
+// Note: this method will fill in the Event ID topic
+func (_ENS *ENSCaller) SubscribeNewOwner(opts *bind.CallOpts, ch chan<- types.Log, topics ...[]common.Hash) (ethereum.Subscription, error) {
+	id := []common.Hash{common.HexToHash("ce0457fe73731f824cc272376169235128c118b49d344817417c6d108d155e82")}
+	topics = append([][]common.Hash{id}, topics...)
+
+	return _ENS.contract.SubscribeFilterLogs(opts, topics, ch)
+}
+
+// Solidity: event NewResolver(bytes32 indexed node, address resolver)
+//
+// Note: this method will fill in the Event ID topic
+func (_ENS *ENSCaller) SubscribeNewResolver(opts *bind.CallOpts, ch chan<- types.Log, topics ...[]common.Hash) (ethereum.Subscription, error) {
+	id := []common.Hash{common.HexToHash("335721b01866dc23fbee8b6b2c7b1e14d6f05c28cd35a2c934239f94095602a0")}
+	topics = append([][]common.Hash{id}, topics...)
+
+	return _ENS.contract.SubscribeFilterLogs(opts, topics, ch)
+}
+
+// Solidity: event Transfer(bytes32 indexed node, address owner)
+//
+// Note: this method will fill in the Event ID topic
+func (_ENS *ENSCaller) SubscribeTransfer(opts *bind.CallOpts, ch chan<- types.Log, topics ...[]common.Hash) (ethereum.Subscription, error) {
+	id := []common.Hash{common.HexToHash("d4735d920b0f87494915f556dd9b54c8f309026070caea5c737245152564d266")}
+	topics = append([][]common.Hash{id}, topics...)
+
+	return _ENS.contract.SubscribeFilterLogs(opts, topics, ch)
+}
+
 // FIFSRegistrarABI is the input ABI used to generate the binding from.
-const FIFSRegistrarABI = `[{"constant":false,"inputs":[{"name":"subnode","type":"bytes32"},{"name":"owner","type":"address"}],"name":"register","outputs":[],"type":"function"},{"inputs":[{"name":"ensAddr","type":"address"},{"name":"node","type":"bytes32"}],"type":"constructor"}]`
+const FIFSRegistrarABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"subnode\",\"type\":\"bytes32\"},{\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"register\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"ensAddr\",\"type\":\"address\"},{\"name\":\"node\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"}]"
 
 // FIFSRegistrarBin is the compiled bytecode used for deploying new contracts.
-const FIFSRegistrarBin = `0x6060604081815280610620833960a090525160805160008054600160a060020a031916831790558160a0610367806100878339018082600160a060020a03168152602001915050604051809103906000f0600160006101000a815481600160a060020a0302191690830217905550806002600050819055505050610232806103ee6000396000f3606060405260405160208061036783395060806040525160008054600160a060020a0319168217905550610330806100376000396000f36060604052361561004b5760e060020a60003504632dff694181146100535780633b3b57de1461007557806341b9dc2b146100a0578063c3d014d614610139578063d5fa2b00146101b2575b61022b610002565b61022d6004356000818152600260205260408120549081141561027057610002565b61023f600435600081815260016020526040812054600160a060020a03169081141561027057610002565b61025c60043560243560007f6164647200000000000000000000000000000000000000000000000000000000821480156100f05750600083815260016020526040812054600160a060020a031614155b8061013257507f636f6e74656e740000000000000000000000000000000000000000000000000082148015610132575060008381526002602052604081205414155b9392505050565b61022b600435602435600080546040805160e060020a6302571be30281526004810186905290518593600160a060020a033381169416926302571be392602482810193602093839003909101908290876161da5a03f11561000257505060405151600160a060020a031691909114905061027557610002565b61022b600435602435600080546040805160e060020a6302571be30281526004810186905290518593600160a060020a033381169416926302571be392602482810193602093839003909101908290876161da5a03f11561000257505060405151600160a060020a03169190911490506102c157610002565b005b60408051918252519081900360200190f35b60408051600160a060020a03929092168252519081900360200190f35b604080519115158252519081900360200190f35b919050565b6000838152600260209081526040918290208490558151848152915185927f0424b6fe0d9c3bdbece0e7879dc241bb0c22e900be8b6c168b4ee08bd9bf83bc92908290030190a2505050565b600083815260016020908152604091829020805473ffffffffffffffffffffffffffffffffffffffff1916851790558151600160a060020a0385168152915185927f52d7d861f09ab3d26239d492e8968629f95e9e318cf0b73bfddc441522a15fd292908290030190a250505056606060405260e060020a6000350463d22057a9811461001b575b005b61001960043560243560025460408051918252602082810185905260008054835194859003840185207f02571be300000000000000000000000000000000000000000000000000000000865260048601819052935193949193600160a060020a03909116926302571be39260248181019391829003018187876161da5a03f11561000257505060405151915050600160a060020a0381166000148015906100d4575033600160a060020a031681600160a060020a031614155b156100de57610002565b60408051600080546002547f06ab592300000000000000000000000000000000000000000000000000000000845260048401526024830188905230600160a060020a03908116604485015293519316926306ab5923926064818101939291829003018183876161da5a03f11561000257505060008054600154604080517f1896f70a00000000000000000000000000000000000000000000000000000000815260048101889052600160a060020a0392831660248201529051929091169350631896f70a926044828101939192829003018183876161da5a03f11561000257505060008054604080517f5b0fc9c300000000000000000000000000000000000000000000000000000000815260048101879052600160a060020a0388811660248301529151929091169350635b0fc9c3926044828101939192829003018183876161da5a03f115610002575050505050505056`
+const FIFSRegistrarBin = `0x6060604052341561000f57600080fd5b6040516040806107aa833981016040528080519190602001805160008054600160a060020a031916600160a060020a03861617905591508290506100516100a0565b600160a060020a039091168152602001604051809103906000f080151561007757600080fd5b60018054600160a060020a031916600160a060020a0392909216919091179055600255506100b0565b6040516104528061035883390190565b610299806100bf6000396000f300606060405263ffffffff60e060020a600035041663d22057a9811461002357600080fd5b341561002e57600080fd5b610045600435600160a060020a0360243516610047565b005b6000806002548460405191825260208201526040908101905190819003902060008054919350600160a060020a03909116906302571be39084906040516020015260405160e060020a63ffffffff84160281526004810191909152602401602060405180830381600087803b15156100be57600080fd5b6102c65a03f115156100cf57600080fd5b5050506040518051915050600160a060020a03811615801590610104575033600160a060020a031681600160a060020a031614155b1561010e57600080fd5b600054600254600160a060020a03909116906306ab592390863060405160e060020a63ffffffff861602815260048101939093526024830191909152600160a060020a03166044820152606401600060405180830381600087803b151561017457600080fd5b6102c65a03f1151561018557600080fd5b5050600054600154600160a060020a039182169250631896f70a9185911660405160e060020a63ffffffff85160281526004810192909252600160a060020a03166024820152604401600060405180830381600087803b15156101e757600080fd5b6102c65a03f115156101f857600080fd5b5050600054600160a060020a03169050635b0fc9c3838560405160e060020a63ffffffff85160281526004810192909252600160a060020a03166024820152604401600060405180830381600087803b151561025357600080fd5b6102c65a03f1151561026457600080fd5b505050505050505600a165627a7a723058201e9755b9f5ff21d081d11be9376b988645d4d830325cbafb21d076dd6b8cbbd300296060604052341561000f57600080fd5b6040516020806104528339810160405280805160008054600160a060020a03909216600160a060020a031990921691909117905550506103fe806100546000396000f300606060405236156100515763ffffffff60e060020a6000350416632dff694181146100615780633b3b57de1461008957806341b9dc2b146100bb578063c3d014d6146100e8578063d5fa2b0014610103575b341561005c57600080fd5b600080fd5b341561006c57600080fd5b610077600435610125565b60405190815260200160405180910390f35b341561009457600080fd5b61009f600435610145565b604051600160a060020a03909116815260200160405180910390f35b34156100c657600080fd5b6100d4600435602435610169565b604051901515815260200160405180910390f35b34156100f357600080fd5b6101016004356024356101f9565b005b341561010e57600080fd5b610101600435600160a060020a03602435166102cf565b60008181526002602052604090205480151561014057600080fd5b919050565b600081815260016020526040902054600160a060020a031680151561014057600080fd5b60007f6164647200000000000000000000000000000000000000000000000000000000821480156101b05750600083815260016020526040902054600160a060020a031615155b806101f257507f636f6e74656e7400000000000000000000000000000000000000000000000000821480156101f2575060008381526002602052604090205415155b9392505050565b600080548391600160a060020a033381169216906302571be39084906040516020015260405160e060020a63ffffffff84160281526004810191909152602401602060405180830381600087803b151561025257600080fd5b6102c65a03f1151561026357600080fd5b50505060405180519050600160a060020a031614151561028257600080fd5b6000838152600260205260409081902083905583907f0424b6fe0d9c3bdbece0e7879dc241bb0c22e900be8b6c168b4ee08bd9bf83bc9084905190815260200160405180910390a2505050565b600080548391600160a060020a033381169216906302571be39084906040516020015260405160e060020a63ffffffff84160281526004810191909152602401602060405180830381600087803b151561032857600080fd5b6102c65a03f1151561033957600080fd5b50505060405180519050600160a060020a031614151561035857600080fd5b60008381526001602052604090819020805473ffffffffffffffffffffffffffffffffffffffff1916600160a060020a03851617905583907f52d7d861f09ab3d26239d492e8968629f95e9e318cf0b73bfddc441522a15fd290849051600160a060020a03909116815260200160405180910390a25050505600a165627a7a7230582033714cadfb6a68b1d60c392730668d3fd6da7e7e5cded2a84db2fa7cb7e955ad0029`
 
 // DeployFIFSRegistrar deploys a new Ethereum contract, binding an instance of FIFSRegistrar to it.
 func DeployFIFSRegistrar(auth *bind.TransactOpts, backend bind.ContractBackend, ensAddr common.Address, node [32]byte) (common.Address, *types.Transaction, *FIFSRegistrar, error) {
@@ -296,6 +343,7 @@ func DeployFIFSRegistrar(auth *bind.TransactOpts, backend bind.ContractBackend, 
 type FIFSRegistrar struct {
 	FIFSRegistrarCaller     // Read-only binding to the contract
 	FIFSRegistrarTransactor // Write-only binding to the contract
+	FIFSRegistrarEventer    // Event listener binding to the contract
 }
 
 // FIFSRegistrarCaller is an auto generated read-only Go binding around an Ethereum contract.
@@ -306,6 +354,12 @@ type FIFSRegistrarCaller struct {
 // FIFSRegistrarTransactor is an auto generated write-only Go binding around an Ethereum contract.
 type FIFSRegistrarTransactor struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+}
+
+// FIFSRegistrarEventer is an auto generated write-only Go binding around an Ethereum contract.
+type FIFSRegistrarEventer struct {
+	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+	address  common.Address      // Contract address
 }
 
 // FIFSRegistrarSession is an auto generated Go binding around an Ethereum contract,
@@ -347,7 +401,7 @@ type FIFSRegistrarTransactorRaw struct {
 
 // NewFIFSRegistrar creates a new instance of FIFSRegistrar, bound to a specific deployed contract.
 func NewFIFSRegistrar(address common.Address, backend bind.ContractBackend) (*FIFSRegistrar, error) {
-	contract, err := bindFIFSRegistrar(address, backend, backend)
+	contract, err := bindFIFSRegistrar(address, backend, backend, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +410,7 @@ func NewFIFSRegistrar(address common.Address, backend bind.ContractBackend) (*FI
 
 // NewFIFSRegistrarCaller creates a new read-only instance of FIFSRegistrar, bound to a specific deployed contract.
 func NewFIFSRegistrarCaller(address common.Address, caller bind.ContractCaller) (*FIFSRegistrarCaller, error) {
-	contract, err := bindFIFSRegistrar(address, caller, nil)
+	contract, err := bindFIFSRegistrar(address, caller, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -365,20 +419,29 @@ func NewFIFSRegistrarCaller(address common.Address, caller bind.ContractCaller) 
 
 // NewFIFSRegistrarTransactor creates a new write-only instance of FIFSRegistrar, bound to a specific deployed contract.
 func NewFIFSRegistrarTransactor(address common.Address, transactor bind.ContractTransactor) (*FIFSRegistrarTransactor, error) {
-	contract, err := bindFIFSRegistrar(address, nil, transactor)
+	contract, err := bindFIFSRegistrar(address, nil, transactor, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &FIFSRegistrarTransactor{contract: contract}, nil
 }
 
+// NewFIFSRegistrarEventer creates a new listen only instance of FIFSRegistrar, bound to a specific deployed contract.
+func NewFIFSRegistrarEventer(address common.Address, eventer bind.ContractEventer) (*FIFSRegistrarEventer, error) {
+	contract, err := bindFIFSRegistrar(address, nil, nil, eventer)
+	if err != nil {
+		return nil, err
+	}
+	return &FIFSRegistrarEventer{contract: contract, address: address}, nil
+}
+
 // bindFIFSRegistrar binds a generic wrapper to an already deployed contract.
-func bindFIFSRegistrar(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
+func bindFIFSRegistrar(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, eventer bind.ContractEventer) (*bind.BoundContract, error) {
 	parsed, err := abi.JSON(strings.NewReader(FIFSRegistrarABI))
 	if err != nil {
 		return nil, err
 	}
-	return bind.NewBoundContract(address, parsed, caller, transactor), nil
+	return bind.NewBoundContract(address, parsed, caller, transactor, eventer), nil
 }
 
 // Call invokes the (constant) contract method with params as input values and
@@ -441,10 +504,10 @@ func (_FIFSRegistrar *FIFSRegistrarTransactorSession) Register(subnode [32]byte,
 }
 
 // PublicResolverABI is the input ABI used to generate the binding from.
-const PublicResolverABI = `[{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"content","outputs":[{"name":"ret","type":"bytes32"}],"type":"function"},{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"addr","outputs":[{"name":"ret","type":"address"}],"type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"kind","type":"bytes32"}],"name":"has","outputs":[{"name":"","type":"bool"}],"type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"hash","type":"bytes32"}],"name":"setContent","outputs":[],"type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"addr","type":"address"}],"name":"setAddr","outputs":[],"type":"function"},{"inputs":[{"name":"ensAddr","type":"address"}],"type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"a","type":"address"}],"name":"AddrChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"hash","type":"bytes32"}],"name":"ContentChanged","type":"event"}]`
+const PublicResolverABI = "[{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"}],\"name\":\"content\",\"outputs\":[{\"name\":\"ret\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"}],\"name\":\"addr\",\"outputs\":[{\"name\":\"ret\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"kind\",\"type\":\"bytes32\"}],\"name\":\"has\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"hash\",\"type\":\"bytes32\"}],\"name\":\"setContent\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"setAddr\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"ensAddr\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"fallback\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"node\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"a\",\"type\":\"address\"}],\"name\":\"AddrChanged\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"node\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"hash\",\"type\":\"bytes32\"}],\"name\":\"ContentChanged\",\"type\":\"event\"}]"
 
 // PublicResolverBin is the compiled bytecode used for deploying new contracts.
-const PublicResolverBin = `0x606060405260405160208061036783395060806040525160008054600160a060020a0319168217905550610330806100376000396000f36060604052361561004b5760e060020a60003504632dff694181146100535780633b3b57de1461007557806341b9dc2b146100a0578063c3d014d614610139578063d5fa2b00146101b2575b61022b610002565b61022d6004356000818152600260205260408120549081141561027057610002565b61023f600435600081815260016020526040812054600160a060020a03169081141561027057610002565b61025c60043560243560007f6164647200000000000000000000000000000000000000000000000000000000821480156100f05750600083815260016020526040812054600160a060020a031614155b8061013257507f636f6e74656e740000000000000000000000000000000000000000000000000082148015610132575060008381526002602052604081205414155b9392505050565b61022b600435602435600080546040805160e060020a6302571be30281526004810186905290518593600160a060020a033381169416926302571be392602482810193602093839003909101908290876161da5a03f11561000257505060405151600160a060020a031691909114905061027557610002565b61022b600435602435600080546040805160e060020a6302571be30281526004810186905290518593600160a060020a033381169416926302571be392602482810193602093839003909101908290876161da5a03f11561000257505060405151600160a060020a03169190911490506102c157610002565b005b60408051918252519081900360200190f35b60408051600160a060020a03929092168252519081900360200190f35b604080519115158252519081900360200190f35b919050565b6000838152600260209081526040918290208490558151848152915185927f0424b6fe0d9c3bdbece0e7879dc241bb0c22e900be8b6c168b4ee08bd9bf83bc92908290030190a2505050565b600083815260016020908152604091829020805473ffffffffffffffffffffffffffffffffffffffff1916851790558151600160a060020a0385168152915185927f52d7d861f09ab3d26239d492e8968629f95e9e318cf0b73bfddc441522a15fd292908290030190a250505056`
+const PublicResolverBin = `0x6060604052341561000f57600080fd5b6040516020806104528339810160405280805160008054600160a060020a03909216600160a060020a031990921691909117905550506103fe806100546000396000f300606060405236156100515763ffffffff60e060020a6000350416632dff694181146100615780633b3b57de1461008957806341b9dc2b146100bb578063c3d014d6146100e8578063d5fa2b0014610103575b341561005c57600080fd5b600080fd5b341561006c57600080fd5b610077600435610125565b60405190815260200160405180910390f35b341561009457600080fd5b61009f600435610145565b604051600160a060020a03909116815260200160405180910390f35b34156100c657600080fd5b6100d4600435602435610169565b604051901515815260200160405180910390f35b34156100f357600080fd5b6101016004356024356101f9565b005b341561010e57600080fd5b610101600435600160a060020a03602435166102cf565b60008181526002602052604090205480151561014057600080fd5b919050565b600081815260016020526040902054600160a060020a031680151561014057600080fd5b60007f6164647200000000000000000000000000000000000000000000000000000000821480156101b05750600083815260016020526040902054600160a060020a031615155b806101f257507f636f6e74656e7400000000000000000000000000000000000000000000000000821480156101f2575060008381526002602052604090205415155b9392505050565b600080548391600160a060020a033381169216906302571be39084906040516020015260405160e060020a63ffffffff84160281526004810191909152602401602060405180830381600087803b151561025257600080fd5b6102c65a03f1151561026357600080fd5b50505060405180519050600160a060020a031614151561028257600080fd5b6000838152600260205260409081902083905583907f0424b6fe0d9c3bdbece0e7879dc241bb0c22e900be8b6c168b4ee08bd9bf83bc9084905190815260200160405180910390a2505050565b600080548391600160a060020a033381169216906302571be39084906040516020015260405160e060020a63ffffffff84160281526004810191909152602401602060405180830381600087803b151561032857600080fd5b6102c65a03f1151561033957600080fd5b50505060405180519050600160a060020a031614151561035857600080fd5b60008381526001602052604090819020805473ffffffffffffffffffffffffffffffffffffffff1916600160a060020a03851617905583907f52d7d861f09ab3d26239d492e8968629f95e9e318cf0b73bfddc441522a15fd290849051600160a060020a03909116815260200160405180910390a25050505600a165627a7a7230582033714cadfb6a68b1d60c392730668d3fd6da7e7e5cded2a84db2fa7cb7e955ad0029`
 
 // DeployPublicResolver deploys a new Ethereum contract, binding an instance of PublicResolver to it.
 func DeployPublicResolver(auth *bind.TransactOpts, backend bind.ContractBackend, ensAddr common.Address) (common.Address, *types.Transaction, *PublicResolver, error) {
@@ -463,6 +526,7 @@ func DeployPublicResolver(auth *bind.TransactOpts, backend bind.ContractBackend,
 type PublicResolver struct {
 	PublicResolverCaller     // Read-only binding to the contract
 	PublicResolverTransactor // Write-only binding to the contract
+	PublicResolverEventer    // Event listener binding to the contract
 }
 
 // PublicResolverCaller is an auto generated read-only Go binding around an Ethereum contract.
@@ -473,6 +537,12 @@ type PublicResolverCaller struct {
 // PublicResolverTransactor is an auto generated write-only Go binding around an Ethereum contract.
 type PublicResolverTransactor struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+}
+
+// PublicResolverEventer is an auto generated write-only Go binding around an Ethereum contract.
+type PublicResolverEventer struct {
+	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+	address  common.Address      // Contract address
 }
 
 // PublicResolverSession is an auto generated Go binding around an Ethereum contract,
@@ -514,7 +584,7 @@ type PublicResolverTransactorRaw struct {
 
 // NewPublicResolver creates a new instance of PublicResolver, bound to a specific deployed contract.
 func NewPublicResolver(address common.Address, backend bind.ContractBackend) (*PublicResolver, error) {
-	contract, err := bindPublicResolver(address, backend, backend)
+	contract, err := bindPublicResolver(address, backend, backend, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -523,7 +593,7 @@ func NewPublicResolver(address common.Address, backend bind.ContractBackend) (*P
 
 // NewPublicResolverCaller creates a new read-only instance of PublicResolver, bound to a specific deployed contract.
 func NewPublicResolverCaller(address common.Address, caller bind.ContractCaller) (*PublicResolverCaller, error) {
-	contract, err := bindPublicResolver(address, caller, nil)
+	contract, err := bindPublicResolver(address, caller, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -532,20 +602,29 @@ func NewPublicResolverCaller(address common.Address, caller bind.ContractCaller)
 
 // NewPublicResolverTransactor creates a new write-only instance of PublicResolver, bound to a specific deployed contract.
 func NewPublicResolverTransactor(address common.Address, transactor bind.ContractTransactor) (*PublicResolverTransactor, error) {
-	contract, err := bindPublicResolver(address, nil, transactor)
+	contract, err := bindPublicResolver(address, nil, transactor, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &PublicResolverTransactor{contract: contract}, nil
 }
 
+// NewPublicResolverEventer creates a new listen only instance of PublicResolver, bound to a specific deployed contract.
+func NewPublicResolverEventer(address common.Address, eventer bind.ContractEventer) (*PublicResolverEventer, error) {
+	contract, err := bindPublicResolver(address, nil, nil, eventer)
+	if err != nil {
+		return nil, err
+	}
+	return &PublicResolverEventer{contract: contract, address: address}, nil
+}
+
 // bindPublicResolver binds a generic wrapper to an already deployed contract.
-func bindPublicResolver(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
+func bindPublicResolver(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, eventer bind.ContractEventer) (*bind.BoundContract, error) {
 	parsed, err := abi.JSON(strings.NewReader(PublicResolverABI))
 	if err != nil {
 		return nil, err
 	}
-	return bind.NewBoundContract(address, parsed, caller, transactor), nil
+	return bind.NewBoundContract(address, parsed, caller, transactor, eventer), nil
 }
 
 // Call invokes the (constant) contract method with params as input values and
@@ -701,8 +780,28 @@ func (_PublicResolver *PublicResolverTransactorSession) SetContent(node [32]byte
 	return _PublicResolver.Contract.SetContent(&_PublicResolver.TransactOpts, node, hash)
 }
 
+// Solidity: event AddrChanged(bytes32 indexed node, address a)
+//
+// Note: this method will fill in the Event ID topic
+func (_PublicResolver *PublicResolverCaller) SubscribeAddrChanged(opts *bind.CallOpts, ch chan<- types.Log, topics ...[]common.Hash) (ethereum.Subscription, error) {
+	id := []common.Hash{common.HexToHash("52d7d861f09ab3d26239d492e8968629f95e9e318cf0b73bfddc441522a15fd2")}
+	topics = append([][]common.Hash{id}, topics...)
+
+	return _PublicResolver.contract.SubscribeFilterLogs(opts, topics, ch)
+}
+
+// Solidity: event ContentChanged(bytes32 indexed node, bytes32 hash)
+//
+// Note: this method will fill in the Event ID topic
+func (_PublicResolver *PublicResolverCaller) SubscribeContentChanged(opts *bind.CallOpts, ch chan<- types.Log, topics ...[]common.Hash) (ethereum.Subscription, error) {
+	id := []common.Hash{common.HexToHash("0424b6fe0d9c3bdbece0e7879dc241bb0c22e900be8b6c168b4ee08bd9bf83bc")}
+	topics = append([][]common.Hash{id}, topics...)
+
+	return _PublicResolver.contract.SubscribeFilterLogs(opts, topics, ch)
+}
+
 // ResolverABI is the input ABI used to generate the binding from.
-const ResolverABI = `[{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"content","outputs":[{"name":"ret","type":"bytes32"}],"type":"function"},{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"addr","outputs":[{"name":"ret","type":"address"}],"type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"kind","type":"bytes32"}],"name":"has","outputs":[{"name":"","type":"bool"}],"type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"a","type":"address"}],"name":"AddrChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"hash","type":"bytes32"}],"name":"ContentChanged","type":"event"}]`
+const ResolverABI = "[{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"}],\"name\":\"content\",\"outputs\":[{\"name\":\"ret\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"}],\"name\":\"addr\",\"outputs\":[{\"name\":\"ret\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"kind\",\"type\":\"bytes32\"}],\"name\":\"has\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"node\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"a\",\"type\":\"address\"}],\"name\":\"AddrChanged\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"node\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"hash\",\"type\":\"bytes32\"}],\"name\":\"ContentChanged\",\"type\":\"event\"}]"
 
 // ResolverBin is the compiled bytecode used for deploying new contracts.
 const ResolverBin = `0x`
@@ -724,6 +823,7 @@ func DeployResolver(auth *bind.TransactOpts, backend bind.ContractBackend) (comm
 type Resolver struct {
 	ResolverCaller     // Read-only binding to the contract
 	ResolverTransactor // Write-only binding to the contract
+	ResolverEventer    // Event listener binding to the contract
 }
 
 // ResolverCaller is an auto generated read-only Go binding around an Ethereum contract.
@@ -734,6 +834,12 @@ type ResolverCaller struct {
 // ResolverTransactor is an auto generated write-only Go binding around an Ethereum contract.
 type ResolverTransactor struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+}
+
+// ResolverEventer is an auto generated write-only Go binding around an Ethereum contract.
+type ResolverEventer struct {
+	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+	address  common.Address      // Contract address
 }
 
 // ResolverSession is an auto generated Go binding around an Ethereum contract,
@@ -775,7 +881,7 @@ type ResolverTransactorRaw struct {
 
 // NewResolver creates a new instance of Resolver, bound to a specific deployed contract.
 func NewResolver(address common.Address, backend bind.ContractBackend) (*Resolver, error) {
-	contract, err := bindResolver(address, backend, backend)
+	contract, err := bindResolver(address, backend, backend, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -784,7 +890,7 @@ func NewResolver(address common.Address, backend bind.ContractBackend) (*Resolve
 
 // NewResolverCaller creates a new read-only instance of Resolver, bound to a specific deployed contract.
 func NewResolverCaller(address common.Address, caller bind.ContractCaller) (*ResolverCaller, error) {
-	contract, err := bindResolver(address, caller, nil)
+	contract, err := bindResolver(address, caller, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -793,20 +899,29 @@ func NewResolverCaller(address common.Address, caller bind.ContractCaller) (*Res
 
 // NewResolverTransactor creates a new write-only instance of Resolver, bound to a specific deployed contract.
 func NewResolverTransactor(address common.Address, transactor bind.ContractTransactor) (*ResolverTransactor, error) {
-	contract, err := bindResolver(address, nil, transactor)
+	contract, err := bindResolver(address, nil, transactor, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &ResolverTransactor{contract: contract}, nil
 }
 
+// NewResolverEventer creates a new listen only instance of Resolver, bound to a specific deployed contract.
+func NewResolverEventer(address common.Address, eventer bind.ContractEventer) (*ResolverEventer, error) {
+	contract, err := bindResolver(address, nil, nil, eventer)
+	if err != nil {
+		return nil, err
+	}
+	return &ResolverEventer{contract: contract, address: address}, nil
+}
+
 // bindResolver binds a generic wrapper to an already deployed contract.
-func bindResolver(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
+func bindResolver(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, eventer bind.ContractEventer) (*bind.BoundContract, error) {
 	parsed, err := abi.JSON(strings.NewReader(ResolverABI))
 	if err != nil {
 		return nil, err
 	}
-	return bind.NewBoundContract(address, parsed, caller, transactor), nil
+	return bind.NewBoundContract(address, parsed, caller, transactor, eventer), nil
 }
 
 // Call invokes the (constant) contract method with params as input values and
@@ -918,4 +1033,24 @@ func (_Resolver *ResolverSession) Has(node [32]byte, kind [32]byte) (*types.Tran
 // Solidity: function has(node bytes32, kind bytes32) returns(bool)
 func (_Resolver *ResolverTransactorSession) Has(node [32]byte, kind [32]byte) (*types.Transaction, error) {
 	return _Resolver.Contract.Has(&_Resolver.TransactOpts, node, kind)
+}
+
+// Solidity: event AddrChanged(bytes32 indexed node, address a)
+//
+// Note: this method will fill in the Event ID topic
+func (_Resolver *ResolverCaller) SubscribeAddrChanged(opts *bind.CallOpts, ch chan<- types.Log, topics ...[]common.Hash) (ethereum.Subscription, error) {
+	id := []common.Hash{common.HexToHash("52d7d861f09ab3d26239d492e8968629f95e9e318cf0b73bfddc441522a15fd2")}
+	topics = append([][]common.Hash{id}, topics...)
+
+	return _Resolver.contract.SubscribeFilterLogs(opts, topics, ch)
+}
+
+// Solidity: event ContentChanged(bytes32 indexed node, bytes32 hash)
+//
+// Note: this method will fill in the Event ID topic
+func (_Resolver *ResolverCaller) SubscribeContentChanged(opts *bind.CallOpts, ch chan<- types.Log, topics ...[]common.Hash) (ethereum.Subscription, error) {
+	id := []common.Hash{common.HexToHash("0424b6fe0d9c3bdbece0e7879dc241bb0c22e900be8b6c168b4ee08bd9bf83bc")}
+	topics = append([][]common.Hash{id}, topics...)
+
+	return _Resolver.contract.SubscribeFilterLogs(opts, topics, ch)
 }
