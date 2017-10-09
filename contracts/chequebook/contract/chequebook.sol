@@ -1,4 +1,22 @@
-import "mortal";
+contract owned {
+    address owner;
+
+    function owned() {
+        owner = msg.sender;
+    }
+
+    modifier onlyowner() {
+        if (msg.sender == owner) {
+            _;
+        }
+    }
+}
+
+contract mortal is owned {
+    function kill() {
+        if (msg.sender == owner) suicide(owner);
+    }
+}
 
 /// @title Chequebook for Ethereum micropayments
 /// @author Daniel A. Nagy <daniel@ethdev.com>

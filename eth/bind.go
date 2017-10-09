@@ -142,7 +142,12 @@ func (b *ContractBackend) SendTransaction(ctx context.Context, tx *types.Transac
 
 // SubscribeFilterLogs emits logs that match the given criteria over the given channel.
 func (b *ContractBackend) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, logs chan<- types.Log) (ethereum.Subscription, error) {
-	f := filters.FilterCriteria{q.FromBlock, q.ToBlock, q.Addresses, q.Topics}
+	f := filters.FilterCriteria{
+		FromBlock: q.FromBlock,
+		ToBlock:   q.ToBlock,
+		Addresses: q.Addresses,
+		Topics:    q.Topics,
+	}
 	l := make(chan []*types.Log)
 
 	sub, err := b.es.SubscribeLogs(f, l)
