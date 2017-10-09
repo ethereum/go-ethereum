@@ -323,7 +323,7 @@ package {{.Package}}
 		// Solidity: event {{.Canonical}}
 		//
 		// {{if not .Anonymous}}Note: this method will fill in the Event ID topic{{end}}
-		func (_{{$contract.Type}} *{{$contract.Type}}Caller) Subscribe{{.Name}}(opts *bind.CallOpts, ch chan<- types.Log, topics ...[]common.Hash) (ethereum.Subscription, error) {
+		func (_{{$contract.Type}} *{{$contract.Type}}Eventer) Subscribe{{.Name}}(opts *bind.CallOpts, ch chan<- types.Log, topics ...[]common.Hash) (ethereum.Subscription, error) {
 			{{if not .Anonymous}}id := []common.Hash{common.HexToHash("{{.ID}}")}
 			topics = append([][]common.Hash{id}, topics...)
 			{{end}}
