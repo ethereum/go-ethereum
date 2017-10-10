@@ -221,7 +221,7 @@ func (f *Fetcher) Enqueue(peer string, block *types.Block) error {
 // FilterHeaders extracts all the headers that were explicitly requested by the fetcher,
 // returning those that should be handled differently.
 func (f *Fetcher) FilterHeaders(peer string, headers []*types.Header, time time.Time) []*types.Header {
-	log.Trace("Filtering headers", "headers", len(headers))
+	log.Trace("Filtering headers", "peer", peer, "headers", len(headers))
 
 	// Send the filter channel to the fetcher
 	filter := make(chan *headerFilterTask)
@@ -249,7 +249,7 @@ func (f *Fetcher) FilterHeaders(peer string, headers []*types.Header, time time.
 // FilterBodies extracts all the block bodies that were explicitly requested by
 // the fetcher, returning those that should be handled differently.
 func (f *Fetcher) FilterBodies(peer string, transactions [][]*types.Transaction, uncles [][]*types.Header, time time.Time) ([][]*types.Transaction, [][]*types.Header) {
-	log.Trace("Filtering bodies", "txs", len(transactions), "uncles", len(uncles))
+	log.Trace("Filtering bodies", "peer", peer, "txs", len(transactions), "uncles", len(uncles))
 
 	// Send the filter channel to the fetcher
 	filter := make(chan *bodyFilterTask)
