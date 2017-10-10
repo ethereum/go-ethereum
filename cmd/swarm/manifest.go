@@ -24,9 +24,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/swarm/api"
-	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+	"github.com/EthereumCommonwealth/go-callisto/cmd/utils"
+	"github.com/EthereumCommonwealth/go-callisto/swarm/api"
+	swarm "github.com/EthereumCommonwealth/go-callisto/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
 )
 

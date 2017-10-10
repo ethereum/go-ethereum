@@ -22,10 +22,10 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/EthereumCommonwealth/go-callisto/common"
+	"github.com/EthereumCommonwealth/go-callisto/internal/ethapi"
+	"github.com/EthereumCommonwealth/go-callisto/params"
+	"github.com/EthereumCommonwealth/go-callisto/rpc"
 )
 
 var maxPrice = big.NewInt(500 * params.Shannon)

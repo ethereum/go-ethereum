@@ -30,9 +30,9 @@ import (
 
 	check "gopkg.in/check.v1"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/EthereumCommonwealth/go-callisto/common"
+	"github.com/EthereumCommonwealth/go-callisto/core/types"
+	"github.com/EthereumCommonwealth/go-callisto/ethdb"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
