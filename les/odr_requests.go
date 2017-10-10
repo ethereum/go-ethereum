@@ -239,16 +239,16 @@ func (r *TrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	case MsgProofsV2:
 		proofs := msg.Obj.(light.NodeList)
 		// Verify the proof and store if checks out
-		pdb := proofs.NodeSet()
-		cdb := pdb.ReadCache()
-		if _, err, _ := trie.VerifyProof(r.Id.Root, r.Key, cdb); err != nil {
+		nodeSet := proofs.NodeSet()
+		reads := &readTraceDB{db: nodeSet}
+		if _, err, _ := trie.VerifyProof(r.Id.Root, r.Key, reads); err != nil {
 			return fmt.Errorf("merkle proof verification failed: %v", err)
 		}
 		// check if all nodes have been read by VerifyProof
-		if pdb.KeyCount() != cdb.KeyCount() {
+		if len(reads.reads) != nodeSet.KeyCount() {
 			return errUselessNodes
 		}
-		r.Proof = pdb
+		r.Proof = nodeSet
 		return nil
 
 	default:
@@ -417,7 +417,7 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 		if len(resp.AuxData) != 1 {
 			return errInvalidEntryCount
 		}
-		pdb := resp.Proofs.NodeSet()
+		nodeSet := resp.Proofs.NodeSet()
 		headerEnc := resp.AuxData[0]
 		if len(headerEnc) == 0 {
 			return errHeaderUnavailable
@@ -431,12 +431,12 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 		var encNumber [8]byte
 		binary.BigEndian.PutUint64(encNumber[:], r.BlockNum)
 
-		cdb := pdb.ReadCache()
-		value, err, _ := trie.VerifyProof(r.ChtRoot, encNumber[:], cdb)
+		reads := &readTraceDB{db: nodeSet}
+		value, err, _ := trie.VerifyProof(r.ChtRoot, encNumber[:], reads)
 		if err != nil {
 			return fmt.Errorf("merkle proof verification failed: %v", err)
 		}
-		if pdb.KeyCount() != cdb.KeyCount() {
+		if len(reads.reads) != nodeSet.KeyCount() {
 			return errUselessNodes
 		}
 
@@ -452,7 +452,7 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 		}
 		// Verifications passed, store and return
 		r.Header = header
-		r.Proof = pdb
+		r.Proof = nodeSet
 		r.Td = node.Td
 	default:
 		return errInvalidMessageType
@@ -515,8 +515,8 @@ func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
 	}
 	resps := msg.Obj.(PPTResps)
 	proofs := resps.Proofs
-	pdb := proofs.NodeSet()
-	cdb := pdb.ReadCache()
+	nodeSet := proofs.NodeSet()
+	reads := &readTraceDB{db: nodeSet}
 
 	r.BloomBits = make([][]byte, len(r.SectionIdxList))
 
@@ -526,16 +526,38 @@ func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
 
 	for i, idx := range r.SectionIdxList {
 		binary.BigEndian.PutUint64(encNumber[2:10], idx)
-		value, err, _ := trie.VerifyProof(r.BltRoot, encNumber[:], cdb)
+		value, err, _ := trie.VerifyProof(r.BltRoot, encNumber[:], reads)
 		if err != nil {
 			return err
 		}
 		r.BloomBits[i] = value
 	}
 
-	if pdb.KeyCount() != cdb.KeyCount() {
+	if len(reads.reads) != nodeSet.KeyCount() {
 		return errUselessNodes
 	}
-	r.Proofs = pdb
+	r.Proofs = nodeSet
 	return nil
+}
+
+// readTraceDB stores the keys of database reads. We use this to check that received node
+// sets contain only the trie nodes necessary to make proofs pass.
+type readTraceDB struct {
+	db    trie.DatabaseReader
+	reads map[string]struct{}
+}
+
+// Get returns a stored node
+func (db *readTraceDB) Get(k []byte) ([]byte, error) {
+	if db.reads == nil {
+		db.reads = make(map[string]struct{})
+	}
+	db.reads[string(k)] = struct{}{}
+	return db.db.Get(k)
+}
+
+// Has returns true if the node set contains the given key
+func (db *readTraceDB) Has(key []byte) (bool, error) {
+	_, err := db.Get(key)
+	return err == nil, nil
 }

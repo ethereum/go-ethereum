@@ -19,13 +19,13 @@ package trie
 import (
 	"bytes"
 	crand "crypto/rand"
-	"errors"
 	mrand "math/rand"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 func init() {
@@ -36,7 +36,7 @@ func TestProof(t *testing.T) {
 	trie, vals := randomTrie(500)
 	root := trie.Hash()
 	for _, kv := range vals {
-		proofs := newTestProofDb()
+		proofs, _ := ethdb.NewMemDatabase()
 		if trie.Prove(kv.k, 0, proofs) != nil {
 			t.Fatalf("missing key %x while constructing proof", kv.k)
 		}
@@ -53,14 +53,14 @@ func TestProof(t *testing.T) {
 func TestOneElementProof(t *testing.T) {
 	trie := new(Trie)
 	updateString(trie, "k", "v")
-	proofs := newTestProofDb()
+	proofs, _ := ethdb.NewMemDatabase()
 	trie.Prove([]byte("k"), 0, proofs)
-	if len(proofs.db) != 1 {
+	if len(proofs.Keys()) != 1 {
 		t.Error("proof should have one element")
 	}
 	val, err, _ := VerifyProof(trie.Hash(), []byte("k"), proofs)
 	if err != nil {
-		t.Fatalf("VerifyProof error: %v\nraw proof: %v", err, proofs.db)
+		t.Fatalf("VerifyProof error: %v\nproof hashes: %v", err, proofs.Keys())
 	}
 	if !bytes.Equal(val, []byte("v")) {
 		t.Fatalf("VerifyProof returned wrong value: got %x, want 'k'", val)
@@ -71,21 +71,17 @@ func TestVerifyBadProof(t *testing.T) {
 	trie, vals := randomTrie(800)
 	root := trie.Hash()
 	for _, kv := range vals {
-		proofs := newTestProofDb()
+		proofs, _ := ethdb.NewMemDatabase()
 		trie.Prove(kv.k, 0, proofs)
-		if len(proofs.db) == 0 {
+		if len(proofs.Keys()) == 0 {
 			t.Fatal("zero length proof")
 		}
-		idx := mrand.Intn(len(proofs.db))
-		for key, node := range proofs.db {
-			if idx == 0 {
-				delete(proofs.db, key)
-				mutateByte(node)
-				proofs.Put(crypto.Keccak256(node), node)
-				break
-			}
-			idx--
-		}
+		keys := proofs.Keys()
+		key := keys[mrand.Intn(len(keys))]
+		node, _ := proofs.Get(key)
+		proofs.Delete(key)
+		mutateByte(node)
+		proofs.Put(crypto.Keccak256(node), node)
 		if _, err, _ := VerifyProof(root, kv.k, proofs); err == nil {
 			t.Fatalf("expected proof to fail for key %x", kv.k)
 		}
@@ -113,8 +109,8 @@ func BenchmarkProve(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		kv := vals[keys[i%len(keys)]]
-		proofs := newTestProofDb()
-		if trie.Prove(kv.k, 0, proofs); len(proofs.db) == 0 {
+		proofs, _ := ethdb.NewMemDatabase()
+		if trie.Prove(kv.k, 0, proofs); len(proofs.Keys()) == 0 {
 			b.Fatalf("zero length proof for %x", kv.k)
 		}
 	}
@@ -124,10 +120,10 @@ func BenchmarkVerifyProof(b *testing.B) {
 	trie, vals := randomTrie(100)
 	root := trie.Hash()
 	var keys []string
-	var proofs []*testProofDb
+	var proofs []*ethdb.MemDatabase
 	for k := range vals {
 		keys = append(keys, k)
-		proof := newTestProofDb()
+		proof, _ := ethdb.NewMemDatabase()
 		trie.Prove([]byte(k), 0, proof)
 		proofs = append(proofs, proof)
 	}
@@ -164,31 +160,4 @@ func randBytes(n int) []byte {
 	r := make([]byte, n)
 	crand.Read(r)
 	return r
-}
-
-type testProofDb struct {
-	db map[string][]byte
-}
-
-func newTestProofDb() *testProofDb {
-	return &testProofDb{
-		db: make(map[string][]byte),
-	}
-}
-
-func (db *testProofDb) Put(key []byte, value []byte) error {
-	db.db[string(key)] = common.CopyBytes(value)
-	return nil
-}
-
-func (db *testProofDb) Get(key []byte) ([]byte, error) {
-	if entry, ok := db.db[string(key)]; ok {
-		return entry, nil
-	}
-	return nil, errors.New("not found")
-}
-
-func (db *testProofDb) Has(key []byte) (bool, error) {
-	_, err := db.Get(key)
-	return err == nil, nil
 }

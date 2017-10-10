@@ -29,11 +29,9 @@ import (
 // NodeSet stores a set of trie nodes. It implements trie.Database and can also
 // act as a cache for another trie.Database.
 type NodeSet struct {
-	db                                map[string][]byte
-	dataSize                          int
-	lock                              sync.RWMutex
-	fallback                          trie.Database
-	copyFromFallback, writeToFallback bool
+	db       map[string][]byte
+	dataSize int
+	lock     sync.RWMutex
 }
 
 // NewNodeSet creates an empty node set
@@ -41,25 +39,6 @@ func NewNodeSet() *NodeSet {
 	return &NodeSet{
 		db: make(map[string][]byte),
 	}
-}
-
-// SetFallback will add a fallback database, making this node set a cache for the backing database.
-// If copyFromFallback is true, it keeps any node it fetches from the fallback database.
-// If writeToFallback is true, it writes stored nodes to the fallback database too.
-func (db *NodeSet) SetFallback(fallback trie.Database, copyFromFallback, writeToFallback bool) {
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
-	db.fallback = fallback
-	db.copyFromFallback = copyFromFallback
-	db.writeToFallback = writeToFallback
-}
-
-// ReadCache returns a new read cache (copyFromFallback=true) for this node set
-func (db *NodeSet) ReadCache() *NodeSet {
-	cdb := NewNodeSet()
-	cdb.SetFallback(db, true, false)
-	return cdb
 }
 
 // Put stores a new node in the set
@@ -70,9 +49,6 @@ func (db *NodeSet) Put(key []byte, value []byte) error {
 	if _, ok := db.db[string(key)]; !ok {
 		db.db[string(key)] = common.CopyBytes(value)
 		db.dataSize += len(value)
-		if db.writeToFallback && db.fallback != nil {
-			db.fallback.Put(key, value)
-		}
 	}
 	return nil
 }
@@ -84,14 +60,6 @@ func (db *NodeSet) Get(key []byte) ([]byte, error) {
 
 	if entry, ok := db.db[string(key)]; ok {
 		return entry, nil
-	}
-	if db.fallback != nil {
-		value, err := db.fallback.Get(key)
-		if db.copyFromFallback && err == nil {
-			db.db[string(key)] = value
-			db.dataSize += len(value)
-		}
-		return value, err
 	}
 	return nil, errors.New("not found")
 }
