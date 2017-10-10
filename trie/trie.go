@@ -504,3 +504,40 @@ func (t *Trie) hashRoot(db DatabaseWriter) (node, node, error) {
 	defer returnHasherToPool(h)
 	return h.hash(t.root, db, true)
 }
+
+// FetchData retrieves synchronization data from the trie to send to remote
+// nodes.
+func (t *Trie) FetchData(hash common.Hash, limit common.StorageSize) (res *SyncResult, fail error) {
+	// If this method panics, hash points to a non-iterable trie; return individual node
+	defer func() {
+		if r := recover(); r != nil {
+			blob, err := t.db.Get(hash[:])
+			if err != nil {
+				fail = err
+			} else {
+				res = &SyncResult{Data: blob}
+			}
+		}
+	}()
+	// Try to gather the necessary data as key-value pairs
+	result := new(SyncResult)
+
+	trie, _ := New(hash, t.db)
+	it := NewIterator(trie.NodeIterator(nil))
+
+	size := common.StorageSize(0)
+	for size < limit && it.Next() {
+		result.Keys = append(result.Keys, common.CopyBytes(it.Key))
+		result.Values = append(result.Values, common.CopyBytes(it.Value))
+
+		size += common.StorageSize(len(it.Key) + len(it.Value))
+	}
+	// If we've went past our data allowance, prove the partial data
+	if size >= limit {
+		result.Proof = it.Prove()
+		if !it.Next() {
+			result.Proof = nil // Overflowing item was the last after all
+		}
+	}
+	return result, nil
+}

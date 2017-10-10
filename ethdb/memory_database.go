@@ -23,18 +23,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-/*
- * This is a test memory database. Do not use for any production it does not get persisted
- */
 type MemDatabase struct {
 	db   map[string][]byte
 	lock sync.RWMutex
 }
 
-func NewMemDatabase() (*MemDatabase, error) {
+func NewMemDatabase() *MemDatabase {
 	return &MemDatabase{
 		db: make(map[string][]byte),
-	}, nil
+	}
 }
 
 func (db *MemDatabase) Put(key []byte, value []byte) error {

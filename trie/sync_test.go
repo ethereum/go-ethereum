@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -27,7 +28,7 @@ import (
 // makeTestTrie create a sample test trie to test node-wise reconstruction.
 func makeTestTrie() (ethdb.Database, *Trie, map[string][]byte) {
 	// Create an empty trie
-	db, _ := ethdb.NewMemDatabase()
+	db := ethdb.NewMemDatabase()
 	trie, _ := New(common.Hash{}, db)
 
 	// Fill it with some arbitrary data
@@ -92,7 +93,7 @@ func TestEmptyTrieSync(t *testing.T) {
 	emptyB, _ := New(emptyRoot, nil)
 
 	for i, trie := range []*Trie{emptyA, emptyB} {
-		db, _ := ethdb.NewMemDatabase()
+		db := ethdb.NewMemDatabase()
 		if req := NewTrieSync(common.BytesToHash(trie.Root()), db, nil).Missing(1); len(req) != 0 {
 			t.Errorf("test %d: content requested for empty trie: %v", i, req)
 		}
@@ -109,21 +110,27 @@ func testIterativeTrieSync(t *testing.T, batch int) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb := ethdb.NewMemDatabase()
 	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
 
 	queue := append([]common.Hash{}, sched.Missing(batch)...)
 	for len(queue) > 0 {
-		results := make([]SyncResult, len(queue))
+		results := make([]*SyncResult, len(queue))
 		for i, hash := range queue {
-			data, err := srcDb.Get(hash.Bytes())
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			if rand.Int()%2 == 0 {
+				data, err := srcDb.Get(hash.Bytes())
+				if err != nil {
+					t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+				}
+				results[i] = &SyncResult{Data: data}
+			} else {
+				results[i], _ = srcTrie.FetchData(hash, 8192)
 			}
-			results[i] = SyncResult{Hash: hash, Data: data}
 		}
-		if _, index, err := sched.Process(results); err != nil {
-			t.Fatalf("failed to process result #%d: %v", index, err)
+		for index, result := range results {
+			if _, _, err := sched.Process(result); err != nil {
+				t.Fatalf("failed to process result #%d: %v", index, err)
+			}
 		}
 		if index, err := sched.Commit(dstDb); err != nil {
 			t.Fatalf("failed to commit data #%d: %v", index, err)
@@ -141,22 +148,28 @@ func TestIterativeDelayedTrieSync(t *testing.T) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb := ethdb.NewMemDatabase()
 	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
 
 	queue := append([]common.Hash{}, sched.Missing(10000)...)
 	for len(queue) > 0 {
 		// Sync only half of the scheduled nodes
-		results := make([]SyncResult, len(queue)/2+1)
+		results := make([]*SyncResult, len(queue)/2+1)
 		for i, hash := range queue[:len(results)] {
-			data, err := srcDb.Get(hash.Bytes())
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			if rand.Int()%2 == 0 {
+				data, err := srcDb.Get(hash.Bytes())
+				if err != nil {
+					t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+				}
+				results[i] = &SyncResult{Data: data}
+			} else {
+				results[i], _ = srcTrie.FetchData(hash, 8192)
 			}
-			results[i] = SyncResult{Hash: hash, Data: data}
 		}
-		if _, index, err := sched.Process(results); err != nil {
-			t.Fatalf("failed to process result #%d: %v", index, err)
+		for index, result := range results {
+			if _, _, err := sched.Process(result); err != nil {
+				t.Fatalf("failed to process result #%d: %v", index, err)
+			}
 		}
 		if index, err := sched.Commit(dstDb); err != nil {
 			t.Fatalf("failed to commit data #%d: %v", index, err)
@@ -178,7 +191,7 @@ func testIterativeRandomTrieSync(t *testing.T, batch int) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb := ethdb.NewMemDatabase()
 	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
 
 	queue := make(map[common.Hash]struct{})
@@ -187,17 +200,24 @@ func testIterativeRandomTrieSync(t *testing.T, batch int) {
 	}
 	for len(queue) > 0 {
 		// Fetch all the queued nodes in a random order
-		results := make([]SyncResult, 0, len(queue))
+		results := make([]*SyncResult, 0, len(queue))
 		for hash := range queue {
-			data, err := srcDb.Get(hash.Bytes())
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			if rand.Int()%2 == 0 {
+				data, err := srcDb.Get(hash.Bytes())
+				if err != nil {
+					t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+				}
+				results = append(results, &SyncResult{Data: data})
+			} else {
+				request, _ := srcTrie.FetchData(hash, 8192)
+				results = append(results, request)
 			}
-			results = append(results, SyncResult{Hash: hash, Data: data})
 		}
 		// Feed the retrieved results back and queue new tasks
-		if _, index, err := sched.Process(results); err != nil {
-			t.Fatalf("failed to process result #%d: %v", index, err)
+		for index, result := range results {
+			if _, _, err := sched.Process(result); err != nil {
+				t.Fatalf("failed to process result #%d: %v", index, err)
+			}
 		}
 		if index, err := sched.Commit(dstDb); err != nil {
 			t.Fatalf("failed to commit data #%d: %v", index, err)
@@ -218,7 +238,7 @@ func TestIterativeRandomDelayedTrieSync(t *testing.T) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb := ethdb.NewMemDatabase()
 	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
 
 	queue := make(map[common.Hash]struct{})
@@ -227,27 +247,32 @@ func TestIterativeRandomDelayedTrieSync(t *testing.T) {
 	}
 	for len(queue) > 0 {
 		// Sync only half of the scheduled nodes, even those in random order
-		results := make([]SyncResult, 0, len(queue)/2+1)
+		results := make([]*SyncResult, 0, len(queue)/2+1)
 		for hash := range queue {
-			data, err := srcDb.Get(hash.Bytes())
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			if rand.Int()%2 == 0 {
+				data, err := srcDb.Get(hash.Bytes())
+				if err != nil {
+					t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+				}
+				results = append(results, &SyncResult{Data: data})
+			} else {
+				request, _ := srcTrie.FetchData(hash, 8192)
+				results = append(results, request)
 			}
-			results = append(results, SyncResult{Hash: hash, Data: data})
-
 			if len(results) >= cap(results) {
 				break
 			}
 		}
 		// Feed the retrieved results back and queue new tasks
-		if _, index, err := sched.Process(results); err != nil {
-			t.Fatalf("failed to process result #%d: %v", index, err)
+		for index, result := range results {
+			_, hash, err := sched.Process(result)
+			if err != nil {
+				t.Fatalf("failed to process result #%d: %v", index, err)
+			}
+			delete(queue, hash)
 		}
 		if index, err := sched.Commit(dstDb); err != nil {
 			t.Fatalf("failed to commit data #%d: %v", index, err)
-		}
-		for _, result := range results {
-			delete(queue, result.Hash)
 		}
 		for _, hash := range sched.Missing(10000) {
 			queue[hash] = struct{}{}
@@ -264,28 +289,34 @@ func TestDuplicateAvoidanceTrieSync(t *testing.T) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb := ethdb.NewMemDatabase()
 	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
 
 	queue := append([]common.Hash{}, sched.Missing(0)...)
 	requested := make(map[common.Hash]struct{})
 
 	for len(queue) > 0 {
-		results := make([]SyncResult, len(queue))
+		results := make([]*SyncResult, len(queue))
 		for i, hash := range queue {
-			data, err := srcDb.Get(hash.Bytes())
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
-			}
 			if _, ok := requested[hash]; ok {
 				t.Errorf("hash %x already requested once", hash)
 			}
 			requested[hash] = struct{}{}
 
-			results[i] = SyncResult{Hash: hash, Data: data}
+			if rand.Int()%2 == 0 {
+				data, err := srcDb.Get(hash.Bytes())
+				if err != nil {
+					t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+				}
+				results[i] = &SyncResult{Data: data}
+			} else {
+				results[i], _ = srcTrie.FetchData(hash, 8192)
+			}
 		}
-		if _, index, err := sched.Process(results); err != nil {
-			t.Fatalf("failed to process result #%d: %v", index, err)
+		for index, result := range results {
+			if _, _, err := sched.Process(result); err != nil {
+				t.Fatalf("failed to process result #%d: %v", index, err)
+			}
 		}
 		if index, err := sched.Commit(dstDb); err != nil {
 			t.Fatalf("failed to commit data #%d: %v", index, err)
@@ -303,30 +334,35 @@ func TestIncompleteTrieSync(t *testing.T) {
 	srcDb, srcTrie, _ := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb := ethdb.NewMemDatabase()
 	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
 
 	added := []common.Hash{}
 	queue := append([]common.Hash{}, sched.Missing(1)...)
 	for len(queue) > 0 {
 		// Fetch a batch of trie nodes
-		results := make([]SyncResult, len(queue))
+		results := make([]*SyncResult, len(queue))
 		for i, hash := range queue {
-			data, err := srcDb.Get(hash.Bytes())
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			if rand.Int()%2 == 0 {
+				data, err := srcDb.Get(hash.Bytes())
+				if err != nil {
+					t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+				}
+				results[i] = &SyncResult{Data: data}
+			} else {
+				results[i], _ = srcTrie.FetchData(hash, 8192)
 			}
-			results[i] = SyncResult{Hash: hash, Data: data}
 		}
 		// Process each of the trie nodes
-		if _, index, err := sched.Process(results); err != nil {
-			t.Fatalf("failed to process result #%d: %v", index, err)
+		for index, result := range results {
+			_, hash, err := sched.Process(result)
+			if err != nil {
+				t.Fatalf("failed to process result #%d: %v", index, err)
+			}
+			added = append(added, hash)
 		}
 		if index, err := sched.Commit(dstDb); err != nil {
 			t.Fatalf("failed to commit data #%d: %v", index, err)
-		}
-		for _, result := range results {
-			added = append(added, result.Hash)
 		}
 		// Check that all known sub-tries in the synced trie are complete
 		for _, root := range added {

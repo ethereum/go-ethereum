@@ -18,14 +18,12 @@ package downloader
 
 import (
 	"fmt"
-	"hash"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
@@ -211,9 +209,8 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 type stateSync struct {
 	d *Downloader // Downloader instance to access and manage current peerset
 
-	sched  *trie.TrieSync             // State trie sync scheduler defining the tasks
-	keccak hash.Hash                  // Keccak256 hasher to verify deliveries with
-	tasks  map[common.Hash]*stateTask // Set of tasks currently queued for retrieval
+	sched *trie.TrieSync             // State trie sync scheduler defining the tasks
+	tasks map[common.Hash]*stateTask // Set of tasks currently queued for retrieval
 
 	numUncommitted   int
 	bytesUncommitted int
@@ -237,7 +234,6 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 	return &stateSync{
 		d:       d,
 		sched:   state.NewStateSync(root, d.stateDB),
-		keccak:  sha3.NewKeccak256(),
 		tasks:   make(map[common.Hash]*stateTask),
 		deliver: make(chan *stateReq),
 		cancel:  make(chan struct{}),
@@ -401,7 +397,7 @@ func (s *stateSync) process(req *stateReq) (bool, error) {
 	progress, stale := false, len(req.response) > 0
 
 	for _, blob := range req.response {
-		prog, hash, err := s.processNodeData(blob)
+		prog, hash, err := s.sched.Process(&trie.SyncResult{Data: blob})
 		switch err {
 		case nil:
 			s.numUncommitted++
@@ -444,18 +440,6 @@ func (s *stateSync) process(req *stateReq) (bool, error) {
 		s.tasks[hash] = task
 	}
 	return stale, nil
-}
-
-// processNodeData tries to inject a trie node data blob delivered from a remote
-// peer into the state trie, returning whether anything useful was written or any
-// error occurred.
-func (s *stateSync) processNodeData(blob []byte) (bool, common.Hash, error) {
-	res := trie.SyncResult{Data: blob}
-	s.keccak.Reset()
-	s.keccak.Write(blob)
-	s.keccak.Sum(res.Hash[:0])
-	committed, _, err := s.sched.Process([]trie.SyncResult{res})
-	return committed, res.Hash, err
 }
 
 // updateStats bumps the various state sync progress counters and displays a log
