@@ -354,6 +354,29 @@ func TestUnmarshal(t *testing.T) {
 	}
 	buff := new(bytes.Buffer)
 
+	// marshall mixed bytes (mixedBytes)
+	p0, p0Exp := []byte{}, common.Hex2Bytes("01020000000000000000")
+	p1, p1Exp := [32]byte{}, common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000ddeeff")
+	mixedBytes := []interface{}{&p0, &p1}
+
+	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000040"))
+	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000ddeeff"))
+	buff.Write(common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000000a"))
+	buff.Write(common.Hex2Bytes("0102000000000000000000000000000000000000000000000000000000000000"))
+
+	err = abi.Unpack(&mixedBytes, "mixedBytes", buff.Bytes())
+	if err !=nil {
+		t.Error(err)
+	} else {
+		if bytes.Compare(p0, p0Exp) != 0 {
+			t.Errorf("unexpected value unpacked: want %x, got %x", p0Exp, p0)
+		}
+
+		if bytes.Compare(p1[:], p1Exp) != 0 {
+			t.Errorf("unexpected value unpacked: want %x, got %x", p1Exp, p1)
+		}
+	}
+
 	// marshal int
 	var Int *big.Int
 	err = abi.Unpack(&Int, "int", common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"))
@@ -377,6 +400,7 @@ func TestUnmarshal(t *testing.T) {
 	}
 
 	// marshal dynamic bytes max length 32
+	buff.Reset()
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020"))
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020"))
 	bytesOut := common.RightPadBytes([]byte("hello"), 32)

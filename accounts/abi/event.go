@@ -46,6 +46,9 @@ func (e Event) Id() common.Hash {
 	return common.BytesToHash(crypto.Keccak256([]byte(fmt.Sprintf("%v(%v)", e.Name, strings.Join(types, ",")))))
 }
 
+// unpacks an event return tuple into a struct of corresponding go types
+//
+// Unpacking can be done into a struct or a slice/array.
 func (e Event) tupleUnpack(v interface{}, output []byte) error {
 	// make sure the passed value is a pointer
 	valueOf := reflect.ValueOf(v)
@@ -77,14 +80,32 @@ func (e Event) tupleUnpack(v interface{}, output []byte) error {
 			return err
 		}
 		reflectValue := reflect.ValueOf(marshalledValue)
-		for j := 0; j < typ.NumField(); j++ {
-			field := typ.Field(j)
-			// TODO read tags: `abi:"fieldName"`
-			if field.Name == strings.ToUpper(e.Inputs[i].Name[:1])+e.Inputs[i].Name[1:] {
-				if err := set(value.Field(j), reflectValue, e.Inputs[i]); err != nil {
-					return err
+
+		switch value.Kind() {
+		case reflect.Struct:
+			for j := 0; j < typ.NumField(); j++ {
+				field := typ.Field(j)
+				// TODO read tags: `abi:"fieldName"`
+				if field.Name == strings.ToUpper(e.Inputs[i].Name[:1])+e.Inputs[i].Name[1:] {
+					if err := set(value.Field(j), reflectValue, e.Inputs[i]); err != nil {
+						return err
+					}
 				}
 			}
+		case reflect.Slice, reflect.Array:
+			if value.Len() < i {
+				return fmt.Errorf("abi: insufficient number of arguments for unpack, want %d, got %d", len(e.Inputs), value.Len())
+			}
+			v := value.Index(i)
+			if v.Kind() != reflect.Ptr && v.Kind() != reflect.Interface {
+				return fmt.Errorf("abi: cannot unmarshal %v in to %v", v.Type(), reflectValue.Type())
+			}
+			reflectValue := reflect.ValueOf(marshalledValue)
+			if err := set(v.Elem(), reflectValue, e.Inputs[i]); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("abi: cannot unmarshal tuple in to %v", typ)
 		}
 	}
 	return nil
