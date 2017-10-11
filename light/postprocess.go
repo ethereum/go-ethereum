@@ -135,17 +135,15 @@ func NewChtIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer {
 }
 
 // Reset implements core.ChainIndexerBackend
-func (c *ChtIndexerBackend) Reset(section uint64, lastSectionHead common.Hash) {
+func (c *ChtIndexerBackend) Reset(section uint64, lastSectionHead common.Hash) error {
 	var root common.Hash
 	if section > 0 {
 		root = GetChtRoot(c.db, section-1, lastSectionHead)
 	}
 	var err error
 	c.trie, err = trie.New(root, c.cdb)
-	if err != nil {
-		panic(err)
-	}
 	c.section = section
+	return err
 }
 
 // Process implements core.ChainIndexerBackend
@@ -232,17 +230,15 @@ func NewBloomTrieIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer 
 }
 
 // Reset implements core.ChainIndexerBackend
-func (b *BloomTrieIndexerBackend) Reset(section uint64, lastSectionHead common.Hash) {
+func (b *BloomTrieIndexerBackend) Reset(section uint64, lastSectionHead common.Hash) error {
 	var root common.Hash
 	if section > 0 {
 		root = GetBloomTrieRoot(b.db, section-1, lastSectionHead)
 	}
 	var err error
 	b.trie, err = trie.New(root, b.cdb)
-	if err != nil {
-		panic(err)
-	}
 	b.section = section
+	return err
 }
 
 // Process implements core.ChainIndexerBackend

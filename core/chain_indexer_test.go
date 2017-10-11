@@ -209,9 +209,10 @@ func (b *testChainIndexBackend) reorg(headNum uint64) uint64 {
 	return b.stored * b.indexer.sectionSize
 }
 
-func (b *testChainIndexBackend) Reset(section uint64, lastSectionHead common.Hash) {
+func (b *testChainIndexBackend) Reset(section uint64, lastSectionHead common.Hash) error {
 	b.section = section
 	b.headerCnt = 0
+	return nil
 }
 
 func (b *testChainIndexBackend) Process(header *types.Header) {

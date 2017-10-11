@@ -114,12 +114,10 @@ func NewBloomIndexer(db ethdb.Database, size uint64) *core.ChainIndexer {
 
 // Reset implements core.ChainIndexerBackend, starting a new bloombits index
 // section.
-func (b *BloomIndexer) Reset(section uint64, lastSectionHead common.Hash) {
+func (b *BloomIndexer) Reset(section uint64, lastSectionHead common.Hash) error {
 	gen, err := bloombits.NewGenerator(uint(b.size))
-	if err != nil {
-		panic(err)
-	}
 	b.gen, b.section, b.head = gen, section, common.Hash{}
+	return err
 }
 
 // Process implements core.ChainIndexerBackend, adding a new header's bloom into
