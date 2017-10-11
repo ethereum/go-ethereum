@@ -202,11 +202,9 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, ch chan ChainEvent
 			}
 			header := ev.Block.Header()
 			if header.ParentHash != prevHash {
-				var rollbackNum uint64
 				if h := FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
-					rollbackNum = h.Number.Uint64()
+					c.newHead(h.Number.Uint64(), true)
 				}
-				c.newHead(rollbackNum, true)
 			}
 			c.newHead(header.Number.Uint64(), false)
 
