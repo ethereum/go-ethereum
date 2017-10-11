@@ -36,7 +36,7 @@ var NoOdr = context.Background()
 type OdrBackend interface {
 	Database() ethdb.Database
 	ChtIndexer() *core.ChainIndexer
-	BltIndexer() *core.ChainIndexer
+	BloomTrieIndexer() *core.ChainIndexer
 	BloomIndexer() *core.ChainIndexer
 	Retrieve(ctx context.Context, req OdrRequest) error
 }
@@ -150,10 +150,10 @@ func (req *ChtRequest) StoreResult(db ethdb.Database) {
 // BloomRequest is the ODR request type for retrieving bloom filters from a CHT structure
 type BloomRequest struct {
 	OdrRequest
-	BltNum         uint64
+	BloomTrieNum   uint64
 	BitIdx         uint
 	SectionIdxList []uint64
-	BltRoot        common.Hash
+	BloomTrieRoot  common.Hash
 	BloomBits      [][]byte
 	Proofs         *NodeSet
 }

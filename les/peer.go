@@ -227,9 +227,9 @@ func (p *peer) SendHeaderProofs(reqID, bv uint64, proofs []ChtResp) error {
 	return sendResponse(p.rw, HeaderProofsMsg, reqID, bv, proofs)
 }
 
-// SendPPTProofs sends a batch of PPT proofs, corresponding to the ones requested.
-func (p *peer) SendPPTProofs(reqID, bv uint64, resp PPTResps) error {
-	return sendResponse(p.rw, PPTProofsMsg, reqID, bv, resp)
+// SendHelperTrieProofs sends a batch of HelperTrie proofs, corresponding to the ones requested.
+func (p *peer) SendHelperTrieProofs(reqID, bv uint64, resp HelperTrieResps) error {
+	return sendResponse(p.rw, HelperTrieProofsMsg, reqID, bv, resp)
 }
 
 // SendTxStatus sends a batch of transaction status records, corresponding to the ones requested.
@@ -285,23 +285,23 @@ func (p *peer) RequestProofs(reqID, cost uint64, reqs []ProofReq) error {
 
 }
 
-// RequestPPTProofs fetches a batch of PPT merkle proofs from a remote node.
-func (p *peer) RequestPPTProofs(reqID, cost uint64, reqs []PPTReq) error {
-	p.Log().Debug("Fetching batch of PPT proofs", "count", len(reqs))
+// RequestHelperTrieProofs fetches a batch of HelperTrie merkle proofs from a remote node.
+func (p *peer) RequestHelperTrieProofs(reqID, cost uint64, reqs []HelperTrieReq) error {
+	p.Log().Debug("Fetching batch of HelperTrie proofs", "count", len(reqs))
 	switch p.version {
 	case lpv1:
 		reqsV1 := make([]ChtReq, len(reqs))
 		for i, req := range reqs {
-			if req.PPTId != PPTChain || req.AuxReq != PPTChainAuxHeader || len(req.Key) != 8 {
+			if req.HelperTrieType != htCanonical || req.AuxReq != auxHeader || len(req.Key) != 8 {
 				return fmt.Errorf("Request invalid in LES/1 mode")
 			}
 			blockNum := binary.BigEndian.Uint64(req.Key)
-			// convert PPT request to old CHT request
+			// convert HelperTrie request to old CHT request
 			reqsV1[i] = ChtReq{ChtNum: (req.TrieIdx+1)*(light.ChtFrequency/light.ChtV1Frequency) - 1, BlockNum: blockNum, FromLevel: req.FromLevel}
 		}
 		return sendRequest(p.rw, GetHeaderProofsMsg, reqID, cost, reqsV1)
 	case lpv2:
-		return sendRequest(p.rw, GetPPTProofsMsg, reqID, cost, reqs)
+		return sendRequest(p.rw, GetHelperTrieProofsMsg, reqID, cost, reqs)
 	default:
 		panic(nil)
 	}

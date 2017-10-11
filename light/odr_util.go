@@ -150,18 +150,18 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint, sectionIdxLi
 	)
 
 	var (
-		bltCount, sectionHeadNum uint64
-		sectionHead              common.Hash
+		bloomTrieCount, sectionHeadNum uint64
+		sectionHead                    common.Hash
 	)
-	if odr.BltIndexer() != nil {
-		bltCount, sectionHeadNum, sectionHead = odr.BltIndexer().Sections()
+	if odr.BloomTrieIndexer() != nil {
+		bloomTrieCount, sectionHeadNum, sectionHead = odr.BloomTrieIndexer().Sections()
 		canonicalHash := core.GetCanonicalHash(db, sectionHeadNum)
 		// if the BloomTrie was injected as a trusted checkpoint, we have no canonical hash yet so we accept zero hash too
-		for bltCount > 0 && canonicalHash != sectionHead && canonicalHash != (common.Hash{}) {
-			bltCount--
-			if bltCount > 0 {
-				sectionHeadNum = bltCount*BloomTrieFrequency - 1
-				sectionHead = odr.BltIndexer().SectionHead(bltCount - 1)
+		for bloomTrieCount > 0 && canonicalHash != sectionHead && canonicalHash != (common.Hash{}) {
+			bloomTrieCount--
+			if bloomTrieCount > 0 {
+				sectionHeadNum = bloomTrieCount*BloomTrieFrequency - 1
+				sectionHead = odr.BloomTrieIndexer().SectionHead(bloomTrieCount - 1)
 				canonicalHash = core.GetCanonicalHash(db, sectionHeadNum)
 			}
 		}
@@ -176,8 +176,8 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint, sectionIdxLi
 		if err == nil {
 			result[i] = bloomBits
 		} else {
-			if sectionIdx >= bltCount {
-				return nil, ErrNoTrustedBlt
+			if sectionIdx >= bloomTrieCount {
+				return nil, ErrNoTrustedBloomTrie
 			}
 			reqList = append(reqList, sectionIdx)
 			reqIdx = append(reqIdx, i)
@@ -187,7 +187,7 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint, sectionIdxLi
 		return result, nil
 	}
 
-	r := &BloomRequest{BltRoot: GetBloomTrieRoot(db, bltCount-1, sectionHead), BltNum: bltCount - 1, BitIdx: bitIdx, SectionIdxList: reqList}
+	r := &BloomRequest{BloomTrieRoot: GetBloomTrieRoot(db, bloomTrieCount-1, sectionHead), BloomTrieNum: bloomTrieCount - 1, BitIdx: bitIdx, SectionIdxList: reqList}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
 	} else {

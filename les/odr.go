@@ -28,16 +28,16 @@ import (
 // LesOdr implements light.OdrBackend
 type LesOdr struct {
 	db                                   ethdb.Database
-	chtIndexer, bltIndexer, bloomIndexer *core.ChainIndexer
+	chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer
 	retriever                            *retrieveManager
 	stop                                 chan struct{}
 }
 
-func NewLesOdr(db ethdb.Database, chtIndexer, bltIndexer, bloomIndexer *core.ChainIndexer, retriever *retrieveManager) *LesOdr {
+func NewLesOdr(db ethdb.Database, chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer, retriever *retrieveManager) *LesOdr {
 	return &LesOdr{
 		db:           db,
 		chtIndexer:   chtIndexer,
-		bltIndexer:   bltIndexer,
+		bloomTrieIndexer:   bloomTrieIndexer,
 		bloomIndexer: bloomIndexer,
 		retriever:    retriever,
 		stop:         make(chan struct{}),
@@ -59,9 +59,9 @@ func (odr *LesOdr) ChtIndexer() *core.ChainIndexer {
 	return odr.chtIndexer
 }
 
-// BltIndexer returns the bloom trie chain indexer
-func (odr *LesOdr) BltIndexer() *core.ChainIndexer {
-	return odr.bltIndexer
+// BloomTrieIndexer returns the bloom trie chain indexer
+func (odr *LesOdr) BloomTrieIndexer() *core.ChainIndexer {
+	return odr.bloomTrieIndexer
 }
 
 // BloomIndexer returns the bloombits chain indexer
@@ -76,7 +76,7 @@ const (
 	MsgProofsV1
 	MsgProofsV2
 	MsgHeaderProofs
-	MsgPPTProofs
+	MsgHelperTrieProofs
 )
 
 // Msg encodes a LES message that delivers reply data for a request

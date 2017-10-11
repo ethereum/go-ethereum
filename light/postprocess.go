@@ -35,36 +35,36 @@ import (
 )
 
 const (
-	ChtFrequency            = 32768
-	ChtV1Frequency          = 4096 // as long as we want to retain LES/1 compatibility, servers generate CHTs with the old, higher frequency
-	PPTConfirmations        = 2048 // number of confirmations before a server is expected to have the given PPT available
-	PPTProcessConfirmations = 256  // number of confirmations before a PPT is generated
+	ChtFrequency                   = 32768
+	ChtV1Frequency                 = 4096 // as long as we want to retain LES/1 compatibility, servers generate CHTs with the old, higher frequency
+	HelperTrieConfirmations        = 2048 // number of confirmations before a server is expected to have the given HelperTrie available
+	HelperTrieProcessConfirmations = 256  // number of confirmations before a HelperTrie is generated
 )
 
 // trustedCheckpoint represents a set of post-processed trie roots (CHT and BloomTrie) associated with
 // the appropriate section index and head hash. It is used to start light syncing from this checkpoint
 // and avoid downloading the entire header chain while still being able to securely access old headers/logs.
 type trustedCheckpoint struct {
-	name                          string
-	sectionIdx                    uint64
-	sectionHead, chtRoot, bltRoot common.Hash
+	name                                string
+	sectionIdx                          uint64
+	sectionHead, chtRoot, bloomTrieRoot common.Hash
 }
 
 var (
 	mainnetCheckpoint = trustedCheckpoint{
-		name:        "ETH mainnet",
-		sectionIdx:  129,
-		sectionHead: common.HexToHash("64100587c8ec9a76870056d07cb0f58622552d16de6253a59cac4b580c899501"),
-		chtRoot:     common.HexToHash("bb4fb4076cbe6923c8a8ce8f158452bbe19564959313466989fda095a60884ca"),
-		bltRoot:     common.HexToHash("0db524b2c4a2a9520a42fd842b02d2e8fb58ff37c75cf57bd0eb82daeace6716"),
+		name:          "ETH mainnet",
+		sectionIdx:    129,
+		sectionHead:   common.HexToHash("64100587c8ec9a76870056d07cb0f58622552d16de6253a59cac4b580c899501"),
+		chtRoot:       common.HexToHash("bb4fb4076cbe6923c8a8ce8f158452bbe19564959313466989fda095a60884ca"),
+		bloomTrieRoot: common.HexToHash("0db524b2c4a2a9520a42fd842b02d2e8fb58ff37c75cf57bd0eb82daeace6716"),
 	}
 
 	ropstenCheckpoint = trustedCheckpoint{
-		name:        "Ropsten testnet",
-		sectionIdx:  50,
-		sectionHead: common.HexToHash("00bd65923a1aa67f85e6b4ae67835784dd54be165c37f056691723c55bf016bd"),
-		chtRoot:     common.HexToHash("6f56dc61936752cc1f8c84b4addabdbe6a1c19693de3f21cb818362df2117f03"),
-		bltRoot:     common.HexToHash("aca7d7c504d22737242effc3fdc604a762a0af9ced898036b5986c3a15220208"),
+		name:          "Ropsten testnet",
+		sectionIdx:    50,
+		sectionHead:   common.HexToHash("00bd65923a1aa67f85e6b4ae67835784dd54be165c37f056691723c55bf016bd"),
+		chtRoot:       common.HexToHash("6f56dc61936752cc1f8c84b4addabdbe6a1c19693de3f21cb818362df2117f03"),
+		bloomTrieRoot: common.HexToHash("aca7d7c504d22737242effc3fdc604a762a0af9ced898036b5986c3a15220208"),
 	}
 )
 
@@ -75,11 +75,11 @@ var trustedCheckpoints = map[common.Hash]trustedCheckpoint{
 }
 
 var (
-	ErrNoTrustedCht = errors.New("No trusted canonical hash trie")
-	ErrNoTrustedBlt = errors.New("No trusted bloom trie")
-	ErrNoHeader     = errors.New("Header not found")
-	chtPrefix       = []byte("chtRoot-") // chtPrefix + chtNum (uint64 big endian) -> trie root hash
-	ChtTablePrefix  = "cht-"
+	ErrNoTrustedCht       = errors.New("No trusted canonical hash trie")
+	ErrNoTrustedBloomTrie = errors.New("No trusted bloom trie")
+	ErrNoHeader           = errors.New("Header not found")
+	chtPrefix             = []byte("chtRoot-") // chtPrefix + chtNum (uint64 big endian) -> trie root hash
+	ChtTablePrefix        = "cht-"
 )
 
 // ChtNode structures are stored in the Canonical Hash Trie in an RLP encoded format
@@ -126,10 +126,10 @@ func NewChtIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer {
 	var sectionSize, confirmReq uint64
 	if clientMode {
 		sectionSize = ChtFrequency
-		confirmReq = PPTConfirmations
+		confirmReq = HelperTrieConfirmations
 	} else {
 		sectionSize = ChtV1Frequency
-		confirmReq = PPTProcessConfirmations
+		confirmReq = HelperTrieProcessConfirmations
 	}
 	return core.NewChainIndexer(db, idb, &ChtIndexerBackend{db: db, cdb: cdb, sectionSize: sectionSize}, sectionSize, confirmReq, time.Millisecond*100, "cht")
 }
@@ -219,10 +219,10 @@ func NewBloomTrieIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer 
 	var confirmReq uint64
 	if clientMode {
 		backend.parentSectionSize = BloomTrieFrequency
-		confirmReq = PPTConfirmations
+		confirmReq = HelperTrieConfirmations
 	} else {
 		backend.parentSectionSize = ethBloomBitsSection
-		confirmReq = PPTProcessConfirmations
+		confirmReq = HelperTrieProcessConfirmations
 	}
 	backend.bloomTrieRatio = BloomTrieFrequency / backend.parentSectionSize
 	backend.sectionHeads = make([]common.Hash, backend.bloomTrieRatio)

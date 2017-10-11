@@ -52,14 +52,14 @@ const (
 
 	ethVersion = 63 // equivalent eth version for the downloader
 
-	MaxHeaderFetch    = 192 // Amount of block headers to be fetched per retrieval request
-	MaxBodyFetch      = 32  // Amount of block bodies to be fetched per retrieval request
-	MaxReceiptFetch   = 128 // Amount of transaction receipts to allow fetching per request
-	MaxCodeFetch      = 64  // Amount of contract codes to allow fetching per request
-	MaxProofsFetch    = 64  // Amount of merkle proofs to be fetched per retrieval request
-	MaxPPTProofsFetch = 64  // Amount of merkle proofs to be fetched per retrieval request
-	MaxTxSend         = 64  // Amount of transactions to be send per request
-	MaxTxStatus       = 256 // Amount of transactions to queried per request
+	MaxHeaderFetch           = 192 // Amount of block headers to be fetched per retrieval request
+	MaxBodyFetch             = 32  // Amount of block bodies to be fetched per retrieval request
+	MaxReceiptFetch          = 128 // Amount of transaction receipts to allow fetching per request
+	MaxCodeFetch             = 64  // Amount of contract codes to allow fetching per request
+	MaxProofsFetch           = 64  // Amount of merkle proofs to be fetched per retrieval request
+	MaxHelperTrieProofsFetch = 64  // Amount of merkle proofs to be fetched per retrieval request
+	MaxTxSend                = 64  // Amount of transactions to be send per request
+	MaxTxStatus              = 256 // Amount of transactions to queried per request
 
 	disableClientRemovePeer = false
 )
@@ -318,7 +318,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}
 }
 
-var reqList = []uint64{GetBlockHeadersMsg, GetBlockBodiesMsg, GetCodeMsg, GetReceiptsMsg, GetProofsV1Msg, SendTxMsg, SendTxV2Msg, GetTxStatusMsg, GetHeaderProofsMsg, GetProofsV2Msg, GetPPTProofsMsg}
+var reqList = []uint64{GetBlockHeadersMsg, GetBlockBodiesMsg, GetCodeMsg, GetReceiptsMsg, GetProofsV1Msg, SendTxMsg, SendTxV2Msg, GetTxStatusMsg, GetHeaderProofsMsg, GetProofsV2Msg, GetHelperTrieProofsMsg}
 
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
@@ -835,7 +835,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			proofs []ChtResp
 		)
 		reqCnt := len(req.Reqs)
-		if reject(uint64(reqCnt), MaxPPTProofsFetch) {
+		if reject(uint64(reqCnt), MaxHelperTrieProofsFetch) {
 			return errResp(ErrRequestRejected, "")
 		}
 		trieDb := ethdb.NewTable(pm.chainDb, light.ChtTablePrefix)
@@ -862,12 +862,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
 		return p.SendHeaderProofs(req.ReqID, bv, proofs)
 
-	case GetPPTProofsMsg:
-		p.Log().Trace("Received PPT proof request")
+	case GetHelperTrieProofsMsg:
+		p.Log().Trace("Received helper trie proof request")
 		// Decode the retrieval message
 		var req struct {
 			ReqID uint64
-			Reqs  []PPTReq
+			Reqs  []HelperTrieReq
 		}
 		if err := msg.Decode(&req); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
@@ -878,15 +878,15 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			auxData  [][]byte
 		)
 		reqCnt := len(req.Reqs)
-		if reject(uint64(reqCnt), MaxPPTProofsFetch) {
+		if reject(uint64(reqCnt), MaxHelperTrieProofsFetch) {
 			return errResp(ErrRequestRejected, "")
 		}
 
 		var (
-			lastIdx   uint64
-			lastPPTId uint
-			root      common.Hash
-			tr        *trie.Trie
+			lastIdx  uint64
+			lastType uint
+			root     common.Hash
+			tr       *trie.Trie
 		)
 
 		nodes := light.NewNodeSet()
@@ -895,18 +895,18 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			if nodes.DataSize()+auxBytes >= softResponseLimit {
 				break
 			}
-			if tr == nil || req.PPTId != lastPPTId || req.TrieIdx != lastIdx {
+			if tr == nil || req.HelperTrieType != lastType || req.TrieIdx != lastIdx {
 				var prefix string
-				root, prefix = pm.getPPT(req.PPTId, req.TrieIdx)
+				root, prefix = pm.getHelperTrie(req.HelperTrieType, req.TrieIdx)
 				if root != (common.Hash{}) {
 					if t, err := trie.New(root, ethdb.NewTable(pm.chainDb, prefix)); err == nil {
 						tr = t
 					}
 				}
-				lastPPTId = req.PPTId
+				lastType = req.HelperTrieType
 				lastIdx = req.TrieIdx
 			}
-			if req.AuxReq == PPTAuxRoot {
+			if req.AuxReq == auxRoot {
 				var data []byte
 				if root != (common.Hash{}) {
 					data = root[:]
@@ -918,7 +918,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					tr.Prove(req.Key, req.FromLevel, nodes)
 				}
 				if req.AuxReq != 0 {
-					data := pm.getPPTAuxData(req)
+					data := pm.getHelperTrieAuxData(req)
 					auxData = append(auxData, data)
 					auxBytes += len(data)
 				}
@@ -927,7 +927,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		proofs := nodes.NodeList()
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
-		return p.SendPPTProofs(req.ReqID, bv, PPTResps{Proofs: proofs, AuxData: auxData})
+		return p.SendHelperTrieProofs(req.ReqID, bv, HelperTrieResps{Proofs: proofs, AuxData: auxData})
 
 	case HeaderProofsMsg:
 		if pm.odr == nil {
@@ -949,15 +949,15 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			Obj:     resp.Data,
 		}
 
-	case PPTProofsMsg:
+	case HelperTrieProofsMsg:
 		if pm.odr == nil {
 			return errResp(ErrUnexpectedResponse, "")
 		}
 
-		p.Log().Trace("Received PPT proof response")
+		p.Log().Trace("Received helper trie proof response")
 		var resp struct {
 			ReqID, BV uint64
-			Data      PPTResps
+			Data      HelperTrieResps
 		}
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
@@ -965,7 +965,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		p.fcServer.GotReply(resp.ReqID, resp.BV)
 		deliverMsg = &Msg{
-			MsgType: MsgPPTProofs,
+			MsgType: MsgHelperTrieProofs,
 			ReqID:   resp.ReqID,
 			Obj:     resp.Data,
 		}
@@ -1077,22 +1077,22 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	return nil
 }
 
-// getPPT returns the post-processed trie root for the given trie ID and section index
-func (pm *ProtocolManager) getPPT(id uint, idx uint64) (common.Hash, string) {
+// getHelperTrie returns the post-processed trie root for the given trie ID and section index
+func (pm *ProtocolManager) getHelperTrie(id uint, idx uint64) (common.Hash, string) {
 	switch id {
-	case PPTChain:
+	case htCanonical:
 		sectionHead := core.GetCanonicalHash(pm.chainDb, (idx+1)*light.ChtFrequency-1)
 		return light.GetChtV2Root(pm.chainDb, idx, sectionHead), light.ChtTablePrefix
-	case PPTBloomBits:
+	case htBloomBits:
 		sectionHead := core.GetCanonicalHash(pm.chainDb, (idx+1)*light.BloomTrieFrequency-1)
 		return light.GetBloomTrieRoot(pm.chainDb, idx, sectionHead), light.BloomTrieTablePrefix
 	}
 	return common.Hash{}, ""
 }
 
-// getPPTAuxData returns requested auxiliary data for the given PPT request
-func (pm *ProtocolManager) getPPTAuxData(req PPTReq) []byte {
-	if req.PPTId == PPTChain && req.AuxReq == PPTChainAuxHeader {
+// getHelperTrieAuxData returns requested auxiliary data for the given HelperTrie request
+func (pm *ProtocolManager) getHelperTrieAuxData(req HelperTrieReq) []byte {
+	if req.HelperTrieType == htCanonical && req.AuxReq == auxHeader {
 		if len(req.Key) != 8 {
 			return nil
 		}

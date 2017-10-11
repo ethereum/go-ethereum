@@ -46,7 +46,7 @@ type LesServer struct {
 	privateKey      *ecdsa.PrivateKey
 	quitSync        chan struct{}
 
-	chtIndexer, bltIndexer *core.ChainIndexer
+	chtIndexer, bloomTrieIndexer *core.ChainIndexer
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
@@ -62,11 +62,11 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	}
 
 	srv := &LesServer{
-		protocolManager: pm,
-		quitSync:        quitSync,
-		lesTopics:       lesTopics,
-		chtIndexer:      light.NewChtIndexer(eth.ChainDb(), false),
-		bltIndexer:      light.NewBloomTrieIndexer(eth.ChainDb(), false),
+		protocolManager:  pm,
+		quitSync:         quitSync,
+		lesTopics:        lesTopics,
+		chtIndexer:       light.NewChtIndexer(eth.ChainDb(), false),
+		bloomTrieIndexer: light.NewBloomTrieIndexer(eth.ChainDb(), false),
 	}
 	logger := log.New()
 
@@ -82,12 +82,12 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		logger.Info("CHT", "section", chtLastSection, "sectionHead", fmt.Sprintf("%064x", chtSectionHead), "root", fmt.Sprintf("%064x", chtRoot))
 	}
 
-	bltSectionCount, _, _ := srv.bltIndexer.Sections()
-	if bltSectionCount != 0 {
-		bltLastSection := bltSectionCount - 1
-		bltSectionHead := srv.bltIndexer.SectionHead(bltLastSection)
-		bltRoot := light.GetBloomTrieRoot(pm.chainDb, bltLastSection, bltSectionHead)
-		logger.Info("BloomTrie", "section", bltLastSection, "sectionHead", fmt.Sprintf("%064x", bltSectionHead), "root", fmt.Sprintf("%064x", bltRoot))
+	bloomTrieSectionCount, _, _ := srv.bloomTrieIndexer.Sections()
+	if bloomTrieSectionCount != 0 {
+		bloomTrieLastSection := bloomTrieSectionCount - 1
+		bloomTrieSectionHead := srv.bloomTrieIndexer.SectionHead(bloomTrieLastSection)
+		bloomTrieRoot := light.GetBloomTrieRoot(pm.chainDb, bloomTrieLastSection, bloomTrieSectionHead)
+		logger.Info("BloomTrie", "section", bloomTrieLastSection, "sectionHead", fmt.Sprintf("%064x", bloomTrieSectionHead), "root", fmt.Sprintf("%064x", bloomTrieRoot))
 	}
 
 	srv.chtIndexer.Start(eth.BlockChain())
@@ -123,8 +123,8 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 	s.protocolManager.blockLoop()
 }
 
-func (s *LesServer) SetBloomBitsIndexer(bbIndexer *core.ChainIndexer) {
-	bbIndexer.AddChildIndexer(s.bltIndexer)
+func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
+	bloomIndexer.AddChildIndexer(s.bloomTrieIndexer)
 }
 
 // Stop stops the LES service

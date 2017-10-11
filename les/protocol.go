@@ -71,13 +71,13 @@ const (
 	GetHeaderProofsMsg = 0x0d
 	HeaderProofsMsg    = 0x0e
 	// Protocol messages belonging to LPV2
-	GetProofsV2Msg  = 0x0f
-	ProofsV2Msg     = 0x10
-	GetPPTProofsMsg = 0x11
-	PPTProofsMsg    = 0x12
-	SendTxV2Msg     = 0x13
-	GetTxStatusMsg  = 0x14
-	TxStatusMsg     = 0x15
+	GetProofsV2Msg         = 0x0f
+	ProofsV2Msg            = 0x10
+	GetHelperTrieProofsMsg = 0x11
+	HelperTrieProofsMsg    = 0x12
+	SendTxV2Msg            = 0x13
+	GetTxStatusMsg         = 0x14
+	TxStatusMsg            = 0x15
 )
 
 type errCode int

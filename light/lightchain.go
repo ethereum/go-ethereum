@@ -95,8 +95,8 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	if bc.genesisBlock == nil {
 		return nil, core.ErrNoGenesis
 	}
-	if ppt, ok := trustedCheckpoints[bc.genesisBlock.Hash()]; ok {
-		bc.addTrustedCheckpoint(ppt)
+	if cp, ok := trustedCheckpoints[bc.genesisBlock.Hash()]; ok {
+		bc.addTrustedCheckpoint(cp)
 	}
 
 	if err := bc.loadLastState(); err != nil {
@@ -114,19 +114,19 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 }
 
 // addTrustedCheckpoint adds a trusted checkpoint to the blockchain
-func (self *LightChain) addTrustedCheckpoint(ppt trustedCheckpoint) {
+func (self *LightChain) addTrustedCheckpoint(cp trustedCheckpoint) {
 	if self.odr.ChtIndexer() != nil {
-		StoreChtRoot(self.chainDb, ppt.sectionIdx, ppt.sectionHead, ppt.chtRoot)
-		self.odr.ChtIndexer().AddKnownSectionHead(ppt.sectionIdx, ppt.sectionHead)
+		StoreChtRoot(self.chainDb, cp.sectionIdx, cp.sectionHead, cp.chtRoot)
+		self.odr.ChtIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
 	}
-	if self.odr.BltIndexer() != nil {
-		StoreBloomTrieRoot(self.chainDb, ppt.sectionIdx, ppt.sectionHead, ppt.bltRoot)
-		self.odr.BltIndexer().AddKnownSectionHead(ppt.sectionIdx, ppt.sectionHead)
+	if self.odr.BloomTrieIndexer() != nil {
+		StoreBloomTrieRoot(self.chainDb, cp.sectionIdx, cp.sectionHead, cp.bloomTrieRoot)
+		self.odr.BloomTrieIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
 	}
 	if self.odr.BloomIndexer() != nil {
-		self.odr.BloomIndexer().AddKnownSectionHead(ppt.sectionIdx, ppt.sectionHead)
+		self.odr.BloomIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
 	}
-	log.Info("Added trusted PPT", "chain name", ppt.name)
+	log.Info("Added trusted checkpoint", "chain name", cp.name)
 }
 
 func (self *LightChain) getProcInterrupt() bool {

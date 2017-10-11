@@ -310,21 +310,24 @@ func (r *CodeRequest) Validate(db ethdb.Database, msg *Msg) error {
 }
 
 const (
-	PPTChain = iota
-	PPTBloomBits
+	// helper trie type constants
+	htCanonical = iota // Canonical hash trie
+	htBloomBits        // BloomBits trie
 
-	PPTAuxRoot        = 1
-	PPTChainAuxHeader = 2
+	// applicable for all helper trie requests
+	auxRoot = 1
+	// applicable for htCanonical
+	auxHeader = 2
 )
 
-type PPTReq struct {
-	PPTId             uint
+type HelperTrieReq struct {
+	HelperTrieType    uint
 	TrieIdx           uint64
 	Key               []byte
 	FromLevel, AuxReq uint
 }
 
-type PPTResps struct { // describes all responses, not just a single one
+type HelperTrieResps struct { // describes all responses, not just a single one
 	Proofs  light.NodeList
 	AuxData [][]byte
 }
@@ -351,7 +354,7 @@ func (r *ChtRequest) GetCost(peer *peer) uint64 {
 	case lpv1:
 		return peer.GetRequestCost(GetHeaderProofsMsg, 1)
 	case lpv2:
-		return peer.GetRequestCost(GetPPTProofsMsg, 1)
+		return peer.GetRequestCost(GetHelperTrieProofsMsg, 1)
 	default:
 		panic(nil)
 	}
@@ -362,7 +365,7 @@ func (r *ChtRequest) CanSend(peer *peer) bool {
 	peer.lock.RLock()
 	defer peer.lock.RUnlock()
 
-	return peer.headInfo.Number >= light.PPTConfirmations && r.ChtNum <= (peer.headInfo.Number-light.PPTConfirmations)/light.ChtFrequency
+	return peer.headInfo.Number >= light.HelperTrieConfirmations && r.ChtNum <= (peer.headInfo.Number-light.HelperTrieConfirmations)/light.ChtFrequency
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
@@ -370,13 +373,13 @@ func (r *ChtRequest) Request(reqID uint64, peer *peer) error {
 	peer.Log().Debug("Requesting CHT", "cht", r.ChtNum, "block", r.BlockNum)
 	var encNum [8]byte
 	binary.BigEndian.PutUint64(encNum[:], r.BlockNum)
-	req := PPTReq{
-		PPTId:   PPTChain,
-		TrieIdx: r.ChtNum,
-		Key:     encNum[:],
-		AuxReq:  PPTChainAuxHeader,
+	req := HelperTrieReq{
+		HelperTrieType: htCanonical,
+		TrieIdx:        r.ChtNum,
+		Key:            encNum[:],
+		AuxReq:         auxHeader,
 	}
-	return peer.RequestPPTProofs(reqID, r.GetCost(peer), []PPTReq{req})
+	return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), []HelperTrieReq{req})
 }
 
 // Valid processes an ODR request reply message from the LES network
@@ -412,8 +415,8 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 		r.Header = proof.Header
 		r.Proof = light.NodeList(proof.Proof).NodeSet()
 		r.Td = node.Td
-	case MsgPPTProofs:
-		resp := msg.Obj.(PPTResps)
+	case MsgHelperTrieProofs:
+		resp := msg.Obj.(HelperTrieResps)
 		if len(resp.AuxData) != 1 {
 			return errInvalidEntryCount
 		}
@@ -461,7 +464,7 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 }
 
 type BloomReq struct {
-	BltNum, BitIdx, SectionIdx, FromLevel uint64
+	BloomTrieNum, BitIdx, SectionIdx, FromLevel uint64
 }
 
 // ODR request type for requesting headers by Canonical Hash Trie, see LesOdrRequest interface
@@ -470,7 +473,7 @@ type BloomRequest light.BloomRequest
 // GetCost returns the cost of the given ODR request according to the serving
 // peer's cost table (implementation of LesOdrRequest)
 func (r *BloomRequest) GetCost(peer *peer) uint64 {
-	return peer.GetRequestCost(GetPPTProofsMsg, len(r.SectionIdxList))
+	return peer.GetRequestCost(GetHelperTrieProofsMsg, len(r.SectionIdxList))
 }
 
 // CanSend tells if a certain peer is suitable for serving the given request
@@ -481,39 +484,39 @@ func (r *BloomRequest) CanSend(peer *peer) bool {
 	if peer.version < lpv2 {
 		return false
 	}
-	return peer.headInfo.Number >= light.PPTConfirmations && r.BltNum <= (peer.headInfo.Number-light.PPTConfirmations)/light.BloomTrieFrequency
+	return peer.headInfo.Number >= light.HelperTrieConfirmations && r.BloomTrieNum <= (peer.headInfo.Number-light.HelperTrieConfirmations)/light.BloomTrieFrequency
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (r *BloomRequest) Request(reqID uint64, peer *peer) error {
-	peer.Log().Debug("Requesting BloomBits", "blt", r.BltNum, "bitIdx", r.BitIdx, "sections", r.SectionIdxList)
-	reqs := make([]PPTReq, len(r.SectionIdxList))
+	peer.Log().Debug("Requesting BloomBits", "bloomTrie", r.BloomTrieNum, "bitIdx", r.BitIdx, "sections", r.SectionIdxList)
+	reqs := make([]HelperTrieReq, len(r.SectionIdxList))
 
 	var encNumber [10]byte
 	binary.BigEndian.PutUint16(encNumber[0:2], uint16(r.BitIdx))
 
 	for i, sectionIdx := range r.SectionIdxList {
 		binary.BigEndian.PutUint64(encNumber[2:10], sectionIdx)
-		reqs[i] = PPTReq{
-			PPTId:   PPTBloomBits,
-			TrieIdx: r.BltNum,
-			Key:     common.CopyBytes(encNumber[:]),
+		reqs[i] = HelperTrieReq{
+			HelperTrieType: htBloomBits,
+			TrieIdx:        r.BloomTrieNum,
+			Key:            common.CopyBytes(encNumber[:]),
 		}
 	}
-	return peer.RequestPPTProofs(reqID, r.GetCost(peer), reqs)
+	return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), reqs)
 }
 
 // Valid processes an ODR request reply message from the LES network
 // returns true and stores results in memory if the message was a valid reply
 // to the request (implementation of LesOdrRequest)
 func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
-	log.Debug("Validating BloomBits", "blt", r.BltNum, "bitIdx", r.BitIdx, "sections", r.SectionIdxList)
+	log.Debug("Validating BloomBits", "bloomTrie", r.BloomTrieNum, "bitIdx", r.BitIdx, "sections", r.SectionIdxList)
 
 	// Ensure we have a correct message with a single proof element
-	if msg.MsgType != MsgPPTProofs {
+	if msg.MsgType != MsgHelperTrieProofs {
 		return errInvalidMessageType
 	}
-	resps := msg.Obj.(PPTResps)
+	resps := msg.Obj.(HelperTrieResps)
 	proofs := resps.Proofs
 	nodeSet := proofs.NodeSet()
 	reads := &readTraceDB{db: nodeSet}
@@ -526,7 +529,7 @@ func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
 
 	for i, idx := range r.SectionIdxList {
 		binary.BigEndian.PutUint64(encNumber[2:10], idx)
-		value, err, _ := trie.VerifyProof(r.BltRoot, encNumber[:], reads)
+		value, err, _ := trie.VerifyProof(r.BloomTrieRoot, encNumber[:], reads)
 		if err != nil {
 			return err
 		}

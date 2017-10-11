@@ -62,8 +62,8 @@ type LightEthereum struct {
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
 
-	bloomRequests                     chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
-	bbIndexer, chtIndexer, bltIndexer *core.ChainIndexer
+	bloomRequests                              chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
+	bloomIndexer, chtIndexer, bloomTrieIndexer *core.ChainIndexer
 
 	ApiBackend *LesApiBackend
 
@@ -92,29 +92,29 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	quitSync := make(chan struct{})
 
 	leth := &LightEthereum{
-		chainConfig:    chainConfig,
-		chainDb:        chainDb,
-		eventMux:       ctx.EventMux,
-		peers:          peers,
-		reqDist:        newRequestDistributor(peers, quitSync),
-		accountManager: ctx.AccountManager,
-		engine:         eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb),
-		shutdownChan:   make(chan bool),
-		networkId:      config.NetworkId,
-		bloomRequests:  make(chan chan *bloombits.Retrieval),
-		bbIndexer:      eth.NewBloomIndexer(chainDb, light.BloomTrieFrequency),
-		chtIndexer:     light.NewChtIndexer(chainDb, true),
-		bltIndexer:     light.NewBloomTrieIndexer(chainDb, true),
+		chainConfig:      chainConfig,
+		chainDb:          chainDb,
+		eventMux:         ctx.EventMux,
+		peers:            peers,
+		reqDist:          newRequestDistributor(peers, quitSync),
+		accountManager:   ctx.AccountManager,
+		engine:           eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb),
+		shutdownChan:     make(chan bool),
+		networkId:        config.NetworkId,
+		bloomRequests:    make(chan chan *bloombits.Retrieval),
+		bloomIndexer:     eth.NewBloomIndexer(chainDb, light.BloomTrieFrequency),
+		chtIndexer:       light.NewChtIndexer(chainDb, true),
+		bloomTrieIndexer: light.NewBloomTrieIndexer(chainDb, true),
 	}
 
 	leth.relay = NewLesTxRelay(peers, leth.reqDist)
 	leth.serverPool = newServerPool(chainDb, quitSync, &leth.wg)
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool)
-	leth.odr = NewLesOdr(chainDb, leth.chtIndexer, leth.bltIndexer, leth.bbIndexer, leth.retriever)
+	leth.odr = NewLesOdr(chainDb, leth.chtIndexer, leth.bloomTrieIndexer, leth.bloomIndexer, leth.retriever)
 	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine); err != nil {
 		return nil, err
 	}
-	leth.bbIndexer.Start(leth.blockchain)
+	leth.bloomIndexer.Start(leth.blockchain)
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
@@ -233,14 +233,14 @@ func (s *LightEthereum) Start(srvr *p2p.Server) error {
 // Ethereum protocol.
 func (s *LightEthereum) Stop() error {
 	s.odr.Stop()
-	if s.bbIndexer != nil {
-		s.bbIndexer.Close()
+	if s.bloomIndexer != nil {
+		s.bloomIndexer.Close()
 	}
 	if s.chtIndexer != nil {
 		s.chtIndexer.Close()
 	}
-	if s.bltIndexer != nil {
-		s.bltIndexer.Close()
+	if s.bloomTrieIndexer != nil {
+		s.bloomTrieIndexer.Close()
 	}
 	s.blockchain.Stop()
 	s.protocolManager.Stop()
