@@ -367,6 +367,56 @@ func TestInputVariableInputLength(t *testing.T) {
 	}
 }
 
+func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
+	const definition = `[
+	{ "type" : "function", "name" : "fixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr", "type" : "uint256[2]" } ] },
+	{ "type" : "function", "name" : "fixedArrBytes", "constant" : true, "inputs" : [ { "name" : "str", "type" : "bytes" }, { "name" : "fixedArr", "type" : "uint256[2]" } ] }
+	]`
+
+	abi, err := JSON(strings.NewReader(definition))
+	if err != nil {
+		t.Error(err)
+	}
+
+	// test fixed array of uint256 and a string
+	arrin := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	strin := "hello world"
+	fixedArrStrPack, err := abi.Pack("fixedArrStr", strin, arrin)
+	if err != nil {
+		t.Error(err)
+	}
+
+	offset := make([]byte, 32)
+	offset[31] = 96
+	length := make([]byte, 32)
+	length[31] = byte(len(strin))
+	strvalue := common.RightPadBytes([]byte(strin), 32)
+	arrinvalue1 := common.LeftPadBytes(arrin[0].Bytes(), 32)
+	arrinvalue2 := common.LeftPadBytes(arrin[1].Bytes(), 32)
+	exp := append(offset, arrinvalue1...)
+	exp = append(exp, arrinvalue2...)
+	exp = append(exp, append(length, strvalue...)...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	fixedArrStrPack = fixedArrStrPack[4:]
+	if !bytes.Equal(fixedArrStrPack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, fixedArrStrPack)
+	}
+
+	// test fixed array of uint256 and a byte array
+	bytesin := []byte(strin)
+	fixedArrBytesPack, err := abi.Pack("fixedArrBytes", bytesin, arrin)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	fixedArrBytesPack = fixedArrBytesPack[4:]
+	if !bytes.Equal(fixedArrBytesPack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, fixedArrBytesPack)
+	}
+}
+
 func TestDefaultFunctionParsing(t *testing.T) {
 	const definition = `[{ "name" : "balance" }]`
 
