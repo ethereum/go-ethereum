@@ -302,8 +302,10 @@ func (w *wizard) readJSON() string {
 }
 
 // readIPAddress reads a single line from stdin, trimming if from spaces and
-// converts it to a network IP address.
-func (w *wizard) readIPAddress() net.IP {
+// returning it if it's convertible to an IP address. The reason for keeping
+// the user input format instead of returning a Go net.IP is to match with
+// weird formats used by ethstats, which compares IPs textually, not by value.
+func (w *wizard) readIPAddress() string {
 	for {
 		// Read the IP address from the user
 		fmt.Printf("> ")
@@ -312,14 +314,13 @@ func (w *wizard) readIPAddress() net.IP {
 			log.Crit("Failed to read user input", "err", err)
 		}
 		if text = strings.TrimSpace(text); text == "" {
-			return nil
+			return ""
 		}
 		// Make sure it looks ok and return it if so
-		ip := net.ParseIP(text)
-		if ip == nil {
+		if ip := net.ParseIP(text); ip == nil {
 			log.Error("Invalid IP address, please retry")
 			continue
 		}
-		return ip
+		return text
 	}
 }
