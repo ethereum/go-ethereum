@@ -28,6 +28,7 @@ import (
 
 type hasher struct {
 	cachegen, cachelimit uint16
+	threaded             bool
 	mu                   sync.Mutex
 }
 
@@ -136,22 +137,40 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter) (node, node, err
 		// Hash the full node's children, caching the newly hashed subtrees
 		var wg sync.WaitGroup
 		collapsed, cached := n.copy(), n.copy()
-		for i := 0; i < 16; i++ {
-			if n.Children[i] != nil {
-				wg.Add(1)
-				go func(i int) {
+		if !h.threaded {
+			// Calculate children hash concurrently.
+			// Note. Avoid creating too much goroutines(which may hits GC),
+			// we only thread out on the topmost full node.
+			for i := 0; i < 16; i++ {
+				if n.Children[i] != nil {
+					wg.Add(1)
+					go func(i int) {
+						var herr error
+						collapsed.Children[i], cached.Children[i], herr = h.hash(n.Children[i], db, false)
+						if herr != nil {
+							err = herr
+						}
+						wg.Done()
+					}(i)
+				} else {
+					collapsed.Children[i] = valueNode(nil) // Ensure that nil children are encoded as empty strings.
+				}
+			}
+			wg.Wait()
+			h.threaded = true
+		} else {
+			for i := 0; i < 16; i++ {
+				if n.Children[i] != nil {
 					var herr error
 					collapsed.Children[i], cached.Children[i], herr = h.hash(n.Children[i], db, false)
 					if herr != nil {
 						err = herr
 					}
-					wg.Done()
-				}(i)
-			} else {
-				collapsed.Children[i] = valueNode(nil) // Ensure that nil children are encoded as empty strings.
+				} else {
+					collapsed.Children[i] = valueNode(nil) // Ensure that nil children are encoded as empty strings.
+				}
 			}
 		}
-		wg.Wait()
 		if err != nil {
 			return original, original, err
 		}
