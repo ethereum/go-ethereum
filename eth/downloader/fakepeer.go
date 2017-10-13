@@ -17,12 +17,18 @@
 package downloader
 
 import (
+	"fmt"
 	"math/big"
+	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
+	"github.com/golang/snappy"
 )
 
 // FakePeer is a mock downloader peer that operates on a local database instance
@@ -146,6 +152,18 @@ func (p *FakePeer) RequestReceipts(hashes []common.Hash) error {
 	return nil
 }
 
+var cnt int32
+var siz int32
+
+func init() {
+	go func() {
+		for {
+			time.Sleep(time.Second)
+			//fmt.Println("Packets:", atomic.LoadInt32(&cnt), "Bytes (snappy):", atomic.LoadInt32(&siz))
+		}
+	}()
+}
+
 // RequestNodeData implements downloader.Peer, returning a batch of state trie
 // nodes corresponding to the specified trie hashes.
 func (p *FakePeer) RequestNodeData(hashes []common.Hash) error {
@@ -155,6 +173,45 @@ func (p *FakePeer) RequestNodeData(hashes []common.Hash) error {
 			data = append(data, entry)
 		}
 	}
+
+	atomic.AddInt32(&cnt, 1)
+	blob, _ := rlp.EncodeToBytes(data)
+	atomic.AddInt32(&siz, int32(len(snappy.Encode(nil, blob))))
+
 	p.dl.DeliverNodeData(p.id, data)
+	return nil
+}
+
+// RequestTries implements downloader.Peer, returning the (potentially partial)
+// leaves of a state sub-trie.
+func (p *FakePeer) RequestTries(roots []common.Hash, limit common.StorageSize) error {
+	start := time.Now()
+
+	t, err := trie.New(common.Hash{}, p.db)
+	if err != nil {
+		return err
+	}
+	results := make([]*trie.SyncResult, 0, len(roots))
+	for _, root := range roots {
+		res, size, err := t.FetchData(root, limit, time.Second-time.Since(start))
+		if err != nil {
+			return err
+		}
+		results = append(results, res)
+
+		if size >= limit || time.Since(start) > time.Second {
+			break
+		}
+		limit -= size
+	}
+
+	atomic.AddInt32(&cnt, 1)
+	blob, _ := rlp.EncodeToBytes(results)
+	size := len(snappy.Encode(nil, blob))
+	atomic.AddInt32(&siz, int32(size))
+
+	fmt.Printf("Packet #%d: %d bytes (%d total) in %v\n", atomic.LoadInt32(&cnt), size, atomic.LoadInt32(&siz), time.Since(start))
+
+	p.dl.DeliverTries(p.id, results)
 	return nil
 }

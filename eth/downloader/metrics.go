@@ -40,4 +40,6 @@ var (
 
 	stateInMeter   = metrics.NewMeter("eth/downloader/states/in")
 	stateDropMeter = metrics.NewMeter("eth/downloader/states/drop")
+	trieInMeter    = metrics.NewMeter("eth/downloader/tries/in")
+	trieDropMeter  = metrics.NewMeter("eth/downloader/tries/drop")
 )

@@ -608,6 +608,23 @@ func (dlp *downloadTesterPeer) RequestNodeData(hashes []common.Hash) error {
 	return nil
 }
 
+// RequestTries constructs a getNodeData method associated with a particular
+// peer in the download tester. The returned function can be used to retrieve
+// batches of node state data from the particularly requested peer.
+func (dlp *downloadTesterPeer) RequestTries(roots []common.Hash, limit common.StorageSize) error {
+	dlp.waitDelay()
+
+	dlp.dl.lock.RLock()
+	defer dlp.dl.lock.RUnlock()
+
+	if data, err := dlp.dl.peerDb.Get(roots[0].Bytes()); err == nil {
+		if !dlp.dl.peerMissingStates[dlp.id][roots[0]] {
+			go dlp.dl.downloader.DeliverTries(dlp.id, []*trie.SyncResult{{Data: data}})
+		}
+	}
+	return nil
+}
+
 // assertOwnChain checks if the local chain contains the correct number of items
 // of the various chain components.
 func assertOwnChain(t *testing.T, tester *downloadTester, length int) {
@@ -1689,6 +1706,9 @@ func (ftp *floodingTestPeer) RequestReceipts(hashes []common.Hash) error {
 }
 func (ftp *floodingTestPeer) RequestNodeData(hashes []common.Hash) error {
 	return ftp.peer.RequestNodeData(hashes)
+}
+func (ftp *floodingTestPeer) RequestTries(roots []common.Hash, limit common.StorageSize) error {
+	return ftp.peer.RequestTries(roots, limit)
 }
 
 func (ftp *floodingTestPeer) RequestHeadersByNumber(from uint64, count, skip int, reverse bool) error {

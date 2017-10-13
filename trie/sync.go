@@ -21,6 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"math"
+	"reflect"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
@@ -89,6 +92,8 @@ type TrieSync struct {
 	requests map[common.Hash]*request // Pending requests pertaining to a key hash
 	queue    *prque.Prque             // Priority queue with the pending requests
 	keccak   hash.Hash                // Keccak256 hasher to verify deliveries with
+
+	nextId uint64 // Identifier component for the priority queue to split between same depths
 }
 
 // NewTrieSync creates a new trie data download scheduler.
@@ -133,7 +138,7 @@ func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, c
 		ancestor.deps++
 		req.parents = append(req.parents, ancestor)
 	}
-	s.schedule(req)
+	s.schedule(req, false)
 }
 
 // AddRawEntry schedules the direct retrieval of a state entry that should not be
@@ -166,7 +171,7 @@ func (s *TrieSync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) 
 		ancestor.deps++
 		req.parents = append(req.parents, ancestor)
 	}
-	s.schedule(req)
+	s.schedule(req, false)
 }
 
 // Missing retrieves the known missing nodes from the trie for retrieval.
@@ -174,20 +179,21 @@ func (s *TrieSync) Missing(max int) []common.Hash {
 	requests := []common.Hash{}
 	for !s.queue.Empty() && (max == 0 || len(requests) < max) {
 		hash := s.queue.PopItem().(common.Hash)
-		if s.requests[hash] != nil {
+		if req := s.requests[hash]; req != nil && req.data == nil {
 			requests = append(requests, hash)
+		} else {
+			fmt.Printf(".")
 		}
 	}
 	return requests
 }
 
-// Process injects a batch of retrieved trie nodes data, returning if something
-// was committed to the database and also the index of an entry if processing of
-// it failed.
-func (s *TrieSync) Process(result *SyncResult) (bool, common.Hash, error) {
+// Process injects a batch of retrieved trie data, returning the number of nodes
+// and bytes written, along with the hash of the node or sub-trie just processed.
+func (s *TrieSync) Process(result *SyncResult) (int, common.StorageSize, common.Hash, error) {
 	// If it's a plain or full sub-trie delivery, inject and return
 	if len(result.Keys) == 0 && len(result.Proof) == 0 {
-		return s.processNode(result.Data)
+		return s.processNode(common.Hash{}, result.Data, false)
 	}
 	if len(result.Proof) == 0 {
 		return s.processLeaves(result.Keys, result.Values)
@@ -201,93 +207,101 @@ func (s *TrieSync) Process(result *SyncResult) (bool, common.Hash, error) {
 
 // processNode verifies and processes a trie node, returning if anything was
 // committed and the hash of the node injected.
-func (s *TrieSync) processNode(blob []byte) (bool, common.Hash, error) {
+func (s *TrieSync) processNode(hash common.Hash, blob []byte, ready bool) (int, common.StorageSize, common.Hash, error) {
 	// Derive the hash of the result based on its content
-	var hash common.Hash
-
-	s.keccak.Reset()
-	s.keccak.Write(blob)
-	s.keccak.Sum(hash[:0])
-
+	if hash == (common.Hash{}) {
+		s.keccak.Reset()
+		s.keccak.Write(blob)
+		s.keccak.Sum(hash[:0])
+	}
 	// If the item was not requested, bail out
 	request := s.requests[hash]
 	if request == nil {
-		return false, hash, ErrNotRequested
+		return 0, 0, hash, nil //ErrNotRequested
 	}
 	if request.data != nil {
-		return false, hash, nil // TODO(karalabe): Why not ErrAlreadyProcessed
+		return 0, 0, hash, ErrAlreadyProcessed
 	}
 	// If the item is a raw entry request, commit directly
 	if request.raw {
 		request.data = blob
-		s.commit(request)
-		return true, hash, nil
+		items, bytes := s.commit(request)
+		return items, bytes, hash, nil
 	}
 	// Decode and inject into the trie
 	node, err := decodeNode(hash[:], blob, 0)
 	if err != nil {
-		return false, hash, err
+		return 0, 0, hash, err
 	}
 	request.data = blob
 
 	// Create and schedule a request for all the children nodes
 	requests, err := s.children(request, node)
 	if err != nil {
-		return false, hash, err
+		return 0, 0, hash, err
 	}
 	if len(requests) == 0 && request.deps == 0 {
-		s.commit(request)
-		return true, hash, nil
+		items, bytes := s.commit(request)
+		return items, bytes, hash, nil
 	}
 	request.deps += len(requests)
 	for _, child := range requests {
-		s.schedule(child)
+		s.schedule(child, ready)
 	}
-	return false, hash, nil
+	return 0, 0, hash, nil
 }
 
 // processLeaves reconstructs a sub-trie from the given key-value pairs, returning
-// the root of the sub-trie or an error on failure.
-func (s *TrieSync) processLeaves(keys [][]byte, values [][]byte) (bool, common.Hash, error) {
+// the number of nodes and bytes written, along with the hash of the sub-trie just
+// processed.
+func (s *TrieSync) processLeaves(keys [][]byte, values [][]byte) (int, common.StorageSize, common.Hash, error) {
 	// Inject all the leaves into a fresh trie and derive it's root hash
 	db := ethdb.NewMemDatabase()
 	trie, err := New(common.Hash{}, db)
 	if err != nil {
-		return false, common.Hash{}, err
+		return 0, 0, common.Hash{}, err
 	}
 	for j := 0; j < len(keys); j++ {
 		trie.Update(keys[j], values[j])
 	}
 	root, err := trie.Commit()
 	if err != nil {
-		return false, common.Hash{}, err
+		return 0, 0, common.Hash{}, err
 	}
 	// If the item was not requested, bail out
 	request := s.requests[root]
 	if request == nil {
-		return false, root, ErrNotRequested
+		return 0, 0, root, ErrNotRequested
 	}
 	if request.data != nil {
-		return false, root, ErrAlreadyProcessed
+		return 0, 0, root, ErrAlreadyProcessed
 	}
 	// Inject all key-values as is and complete the root
-	for _, key := range db.Keys() {
-		value, _ := db.Get(key)
-		if hash := common.BytesToHash(key); hash != root {
-			s.commitEntry(hash, value)
-		} else {
-			request.data = value
+	var (
+		items int
+		bytes common.StorageSize
+	)
+	it := trie.NodeIterator(nil)
+	for it.Next(true) {
+		if hash := it.Hash(); hash != (common.Hash{}) {
+			blob, _ := db.Get(hash[:])
+			count, size, _, err := s.processNode(hash, blob, true)
+
+			items += count
+			bytes += size
+
+			if err != nil {
+				return items, bytes, root, err
+			}
 		}
 	}
-	s.commit(request)
-
-	return true, root, nil
+	return items, bytes, root, nil
 }
 
 // processPartialLeaves reconstructs a sub-trie from the Merkle proof and the
 // available key-value pairs, commiting the available parts and scheduling the
 // missing items for future retrival.
-func (s *TrieSync) processPartialLeaves(keys [][]byte, values [][]byte, proof [][]byte) (bool, common.Hash, error) {
+func (s *TrieSync) processPartialLeaves(keys [][]byte, values [][]byte, proof [][]byte) (int, common.StorageSize, common.Hash, error) {
 	// Derive the hash of the topmost proof
 	var root common.Hash
 
@@ -298,29 +312,29 @@ func (s *TrieSync) processPartialLeaves(keys [][]byte, values [][]byte, proof []
 	// If the item was not requested, bail out
 	request := s.requests[root]
 	if request == nil {
-		return false, root, ErrNotRequested
+		return 0, 0, root, ErrNotRequested
 	}
 	if request.data != nil {
-		return false, root, ErrAlreadyProcessed
+		return 0, 0, root, ErrAlreadyProcessed
 	}
 	// Decode the root node and schedule missing children
 	node, err := decodeNode(root[:], proof[0], 0)
 	if err != nil {
-		return false, root, err
+		return 0, 0, root, err
 	}
 	request.data = proof[0]
 
 	requests, err := s.children(request, node)
 	if err != nil {
-		return false, root, err
+		return 0, 0, root, err
 	}
 	if len(requests) == 0 && request.deps == 0 {
-		s.commit(request)
-		return true, root, nil
+		items, bytes := s.commit(request)
+		return items, bytes, root, nil
 	}
 	request.deps += len(requests)
 	for _, child := range requests {
-		s.schedule(child)
+		s.schedule(child, false)
 	}
 	// Fulfill any children satisfied by the key-value pairs
 	switch node := (node).(type) {
@@ -328,15 +342,20 @@ func (s *TrieSync) processPartialLeaves(keys [][]byte, values [][]byte, proof []
 		// All keys must have the short node's path as a prefix
 		for i, key := range keys {
 			if !bytes.HasPrefix(key, node.Key) {
-				return false, root, fmt.Errorf("key mismatch at proof %x", proof[0])
+				return 0, 0, root, fmt.Errorf("key mismatch at proof %x", proof[0])
 			}
 			keys[i] = key[len(node.Key):]
 		}
 		// Recurse into the subtrie of the short node
-		commit, _, err := s.processPartialLeaves(keys, values, proof[1:])
-		return commit, root, err
+		items, bytes, _, err := s.processPartialLeaves(keys, values, proof[1:])
+		return items, bytes, root, err
 
 	case *fullNode:
+		// Track the number of items and bytes written
+		var (
+			items int
+			bytes common.StorageSize
+		)
 		// Split up the keyspace between the full node's children
 		for i := 0; i < 17; i++ {
 			if node.Children[i] != nil {
@@ -350,21 +369,26 @@ func (s *TrieSync) processPartialLeaves(keys [][]byte, values [][]byte, proof []
 				if _, ok := node.Children[i].(hashNode); !ok {
 					// If we're at the last node, process it as a partial trie
 					if split == len(keys) && len(proof) != 1 {
-						commit, _, err := s.processPartialLeaves(keys[:split], values[:split], proof[1:])
-						return commit, root, err
+						count, size, _, err := s.processPartialLeaves(keys[:split], values[:split], proof[1:])
+						return items + count, bytes + size, root, err
 					}
 					// Otherwise we have a full sub-trie, parse in its entirety (if not already contained within the full node)
-					commit, _, err := s.processLeaves(keys[:split], values[:split])
+					count, size, _, err := s.processLeaves(keys[:split], values[:split])
+
+					items += count
+					bytes += size
+
 					if err != nil {
-						return commit, root, err
+						return items, bytes, root, err
 					}
 				}
 				keys = keys[split:]
 				values = values[split:]
 			}
 		}
+		return items, bytes, root, nil
 	}
-	return false, root, nil
+	return 0, 0, root, fmt.Errorf("unexpected node type: %v", reflect.TypeOf(node))
 }
 
 // Commit flushes the data stored in the internal membatch out to persistent
@@ -391,14 +415,16 @@ func (s *TrieSync) Pending() int {
 // schedule inserts a new state retrieval request into the fetch queue. If there
 // is already a pending request for this node, the new request will be discarded
 // and only a parent reference added to the old one.
-func (s *TrieSync) schedule(req *request) {
+func (s *TrieSync) schedule(req *request, ready bool) {
 	// If we're already requesting this node, add a new reference and stop
 	if old, ok := s.requests[req.hash]; ok {
 		old.parents = append(old.parents, req.parents...)
 		return
 	}
 	// Schedule the request for future retrieval
-	s.queue.Push(req.hash, float32(req.depth))
+	if !ready {
+		s.queue.Push(req.hash, float32(req.depth)*math.MaxUint64+float32(math.MaxUint64-atomic.AddUint64(&s.nextId, 1)))
+	}
 	s.requests[req.hash] = req
 }
 
@@ -465,8 +491,13 @@ func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 
 // commit finalizes a retrieval request and stores it into the membatch. If any
 // of the referencing parent requests complete due to this commit, they are also
-// committed themselves.
-func (s *TrieSync) commit(req *request) (err error) {
+// committed themselves. The method returns the number of state items written to
+// the membatch as well as their total data size.
+func (s *TrieSync) commit(req *request) (int, common.StorageSize) {
+	var (
+		items = 1
+		bytes = common.StorageSize(len(req.data))
+	)
 	// Write the node content to the membatch
 	s.commitEntry(req.hash, req.data)
 	delete(s.requests, req.hash)
@@ -475,12 +506,13 @@ func (s *TrieSync) commit(req *request) (err error) {
 	for _, parent := range req.parents {
 		parent.deps--
 		if parent.deps == 0 {
-			if err := s.commit(parent); err != nil {
-				return err
-			}
+			count, size := s.commit(parent)
+
+			items += count
+			bytes += size
 		}
 	}
-	return nil
+	return items, bytes
 }
 
 // commitEntry injects a raw database entry into the memory batch to be flushed

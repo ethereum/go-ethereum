@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -124,11 +125,11 @@ func testIterativeTrieSync(t *testing.T, batch int) {
 				}
 				results[i] = &SyncResult{Data: data}
 			} else {
-				results[i], _ = srcTrie.FetchData(hash, 8192)
+				results[i], _, _ = srcTrie.FetchData(hash, 8192, 250*time.Millisecond)
 			}
 		}
 		for index, result := range results {
-			if _, _, err := sched.Process(result); err != nil {
+			if _, _, _, err := sched.Process(result); err != nil {
 				t.Fatalf("failed to process result #%d: %v", index, err)
 			}
 		}
@@ -163,11 +164,11 @@ func TestIterativeDelayedTrieSync(t *testing.T) {
 				}
 				results[i] = &SyncResult{Data: data}
 			} else {
-				results[i], _ = srcTrie.FetchData(hash, 8192)
+				results[i], _, _ = srcTrie.FetchData(hash, 8192, 250*time.Millisecond)
 			}
 		}
 		for index, result := range results {
-			if _, _, err := sched.Process(result); err != nil {
+			if _, _, _, err := sched.Process(result); err != nil {
 				t.Fatalf("failed to process result #%d: %v", index, err)
 			}
 		}
@@ -209,13 +210,13 @@ func testIterativeRandomTrieSync(t *testing.T, batch int) {
 				}
 				results = append(results, &SyncResult{Data: data})
 			} else {
-				request, _ := srcTrie.FetchData(hash, 8192)
+				request, _, _ := srcTrie.FetchData(hash, 8192, 250*time.Millisecond)
 				results = append(results, request)
 			}
 		}
 		// Feed the retrieved results back and queue new tasks
 		for index, result := range results {
-			if _, _, err := sched.Process(result); err != nil {
+			if _, _, _, err := sched.Process(result); err != nil {
 				t.Fatalf("failed to process result #%d: %v", index, err)
 			}
 		}
@@ -256,7 +257,7 @@ func TestIterativeRandomDelayedTrieSync(t *testing.T) {
 				}
 				results = append(results, &SyncResult{Data: data})
 			} else {
-				request, _ := srcTrie.FetchData(hash, 8192)
+				request, _, _ := srcTrie.FetchData(hash, 8192, 250*time.Millisecond)
 				results = append(results, request)
 			}
 			if len(results) >= cap(results) {
@@ -265,7 +266,7 @@ func TestIterativeRandomDelayedTrieSync(t *testing.T) {
 		}
 		// Feed the retrieved results back and queue new tasks
 		for index, result := range results {
-			_, hash, err := sched.Process(result)
+			_, _, hash, err := sched.Process(result)
 			if err != nil {
 				t.Fatalf("failed to process result #%d: %v", index, err)
 			}
@@ -310,11 +311,11 @@ func TestDuplicateAvoidanceTrieSync(t *testing.T) {
 				}
 				results[i] = &SyncResult{Data: data}
 			} else {
-				results[i], _ = srcTrie.FetchData(hash, 8192)
+				results[i], _, _ = srcTrie.FetchData(hash, 8192, 250*time.Millisecond)
 			}
 		}
 		for index, result := range results {
-			if _, _, err := sched.Process(result); err != nil {
+			if _, _, _, err := sched.Process(result); err != nil {
 				t.Fatalf("failed to process result #%d: %v", index, err)
 			}
 		}
@@ -350,12 +351,12 @@ func TestIncompleteTrieSync(t *testing.T) {
 				}
 				results[i] = &SyncResult{Data: data}
 			} else {
-				results[i], _ = srcTrie.FetchData(hash, 8192)
+				results[i], _, _ = srcTrie.FetchData(hash, 8192, 250*time.Millisecond)
 			}
 		}
 		// Process each of the trie nodes
 		for index, result := range results {
-			_, hash, err := sched.Process(result)
+			_, _, hash, err := sched.Process(result)
 			if err != nil {
 				t.Fatalf("failed to process result #%d: %v", index, err)
 			}

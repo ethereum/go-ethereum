@@ -222,6 +222,14 @@ func (p *peer) RequestNodeData(hashes []common.Hash) error {
 	return p2p.Send(p.rw, GetNodeDataMsg, hashes)
 }
 
+// RequestTries fetches a sub-trie from a node's known state data, corresponding
+// to the specified root hash.
+func (p *peer) RequestTries(roots []common.Hash, limit common.StorageSize) error {
+	p.Log().Debug("Fetching sub-trie", "roots", roots, "limit", limit)
+	panic("not implemented")
+	//return p2p.Send(p.rw, GetNodeDataMsg, hashes)
+}
+
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
 func (p *peer) RequestReceipts(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))

@@ -34,17 +34,20 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/rcrowley/go-metrics"
 )
 
 var (
-	MaxHashFetch    = 512 // Amount of hashes to be fetched per retrieval request
-	MaxBlockFetch   = 128 // Amount of blocks to be fetched per retrieval request
-	MaxHeaderFetch  = 192 // Amount of block headers to be fetched per retrieval request
-	MaxSkeletonSize = 128 // Number of header fetches to need for a skeleton assembly
-	MaxBodyFetch    = 128 // Amount of block bodies to be fetched per retrieval request
-	MaxReceiptFetch = 256 // Amount of transaction receipts to allow fetching per request
-	MaxStateFetch   = 384 // Amount of node state values to allow fetching per request
+	MaxHashFetch    = 512         // Amount of hashes to be fetched per retrieval request
+	MaxBlockFetch   = 128         // Amount of blocks to be fetched per retrieval request
+	MaxHeaderFetch  = 192         // Amount of block headers to be fetched per retrieval request
+	MaxSkeletonSize = 128         // Number of header fetches to need for a skeleton assembly
+	MaxBodyFetch    = 128         // Amount of block bodies to be fetched per retrieval request
+	MaxReceiptFetch = 256         // Amount of transaction receipts to allow fetching per request
+	MaxStateFetch   = 384         // Amount of node state values to allow fetching per request
+	MinTrieFetch    = 100 * 1024  // Amount of state leaf data to fetch at minimum per request
+	MaxTrieFetch    = 2048 * 1024 // Amount of state leaf data to allow fetching per request
 
 	MaxForkAncestry  = 3 * params.EpochDuration // Maximum chain reorganisation
 	rttMinEstimate   = 2 * time.Second          // Minimum round-trip time to target for download requests
@@ -57,7 +60,7 @@ var (
 	qosConfidenceCap = 10   // Number of peers above which not to modify RTT confidence
 	qosTuningImpact  = 0.25 // Impact that a new tuning target has on the previous value
 
-	maxQueuedHeaders  = 32 * 1024 // [eth/62] Maximum number of headers to queue for import (DOS protection)
+	maxQueuedHeaders  = 32 * 1024 // Maximum number of headers to queue for import (DOS protection)
 	maxHeadersProcess = 2048      // Number of header download results to import at once into the chain
 	maxResultsProcess = 2048      // Number of content download results to import at once into the chain
 
@@ -137,6 +140,7 @@ type Downloader struct {
 	stateSyncStart chan *stateSync
 	trackStateReq  chan *stateReq
 	stateCh        chan dataPack // [eth/63] Channel receiving inbound node state data
+	trieCh         chan dataPack // [eth/64] Channel receiving inbound state trie data
 
 	// Cancellation and termination
 	cancelPeer string        // Identifier of the peer currently being used as the master (cancel on drop)
@@ -225,6 +229,7 @@ func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, chain BlockC
 		headerProcCh:   make(chan []*types.Header, 1),
 		quitCh:         make(chan struct{}),
 		stateCh:        make(chan dataPack),
+		trieCh:         make(chan dataPack),
 		stateSyncStart: make(chan *stateSync),
 		trackStateReq:  make(chan *stateReq),
 	}
@@ -471,9 +476,9 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	}
 
 	fetchers := []func() error{
-		func() error { return d.fetchHeaders(p, origin+1) }, // Headers are always retrieved
-		func() error { return d.fetchBodies(origin + 1) },   // Bodies are retrieved during normal and fast sync
-		func() error { return d.fetchReceipts(origin + 1) }, // Receipts are retrieved during fast sync
+		//func() error { return d.fetchHeaders(p, origin+1) }, // Headers are always retrieved
+		//func() error { return d.fetchBodies(origin + 1) },   // Bodies are retrieved during normal and fast sync
+		//func() error { return d.fetchReceipts(origin + 1) }, // Receipts are retrieved during fast sync
 		func() error { return d.processHeaders(origin+1, td) },
 	}
 	if d.mode == FastSync {
@@ -1470,23 +1475,28 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 
 // DeliverHeaders injects a new batch of block headers received from a remote
 // node into the download schedule.
-func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) (err error) {
+func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) error {
 	return d.deliver(id, d.headerCh, &headerPack{id, headers}, headerInMeter, headerDropMeter)
 }
 
 // DeliverBodies injects a new batch of block bodies received from a remote node.
-func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header) (err error) {
+func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header) error {
 	return d.deliver(id, d.bodyCh, &bodyPack{id, transactions, uncles}, bodyInMeter, bodyDropMeter)
 }
 
 // DeliverReceipts injects a new batch of receipts received from a remote node.
-func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) (err error) {
+func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) error {
 	return d.deliver(id, d.receiptCh, &receiptPack{id, receipts}, receiptInMeter, receiptDropMeter)
 }
 
 // DeliverNodeData injects a new batch of node state data received from a remote node.
-func (d *Downloader) DeliverNodeData(id string, data [][]byte) (err error) {
+func (d *Downloader) DeliverNodeData(id string, data [][]byte) error {
 	return d.deliver(id, d.stateCh, &statePack{id, data}, stateInMeter, stateDropMeter)
+}
+
+// DeliverTrie injects a (possibly partial) sub-trie received from a remote node.
+func (d *Downloader) DeliverTries(id string, res []*trie.SyncResult) error {
+	return d.deliver(id, d.trieCh, &triePack{id, res}, trieInMeter, trieDropMeter)
 }
 
 // deliver injects a new batch of data received from a remote node.

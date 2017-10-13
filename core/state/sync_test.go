@@ -19,6 +19,7 @@ package state
 import (
 	"bytes"
 	"math/big"
+	"math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -146,16 +147,23 @@ func testIterativeStateSync(t *testing.T, batch int) {
 
 	queue := append([]common.Hash{}, sched.Missing(batch)...)
 	for len(queue) > 0 {
-		results := make([]trie.SyncResult, len(queue))
+		results := make([]*trie.SyncResult, len(queue))
 		for i, hash := range queue {
-			data, err := srcMem.Get(hash.Bytes())
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			if rand.Int()%2 == 0 {
+				data, err := srcMem.Get(hash.Bytes())
+				if err != nil {
+					t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+				}
+				results[i] = &trie.SyncResult{Data: data}
+			} else {
+				trie, _ := trie.New(common.Hash{}, srcMem)
+				results[i], _, _ = trie.FetchData(hash, 8192)
 			}
-			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
-		if _, index, err := sched.Process(results); err != nil {
-			t.Fatalf("failed to process result #%d: %v", index, err)
+		for index, result := range results {
+			if _, _, _, err := sched.Process(result); err != nil {
+				t.Fatalf("failed to process result #%d: %v", index, err)
+			}
 		}
 		if index, err := sched.Commit(dstDb); err != nil {
 			t.Fatalf("failed to commit data #%d: %v", index, err)
@@ -179,16 +187,23 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 	queue := append([]common.Hash{}, sched.Missing(0)...)
 	for len(queue) > 0 {
 		// Sync only half of the scheduled nodes
-		results := make([]trie.SyncResult, len(queue)/2+1)
+		results := make([]*trie.SyncResult, len(queue)/2+1)
 		for i, hash := range queue[:len(results)] {
-			data, err := srcMem.Get(hash.Bytes())
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			if rand.Int()%2 == 0 {
+				data, err := srcMem.Get(hash.Bytes())
+				if err != nil {
+					t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+				}
+				results[i] = &trie.SyncResult{Data: data}
+			} else {
+				trie, _ := trie.New(common.Hash{}, srcMem)
+				results[i], _, _ = trie.FetchData(hash, 8192)
 			}
-			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
-		if _, index, err := sched.Process(results); err != nil {
-			t.Fatalf("failed to process result #%d: %v", index, err)
+		for index, result := range results {
+			if _, _, _, err := sched.Process(result); err != nil {
+				t.Fatalf("failed to process result #%d: %v", index, err)
+			}
 		}
 		if index, err := sched.Commit(dstDb); err != nil {
 			t.Fatalf("failed to commit data #%d: %v", index, err)
@@ -219,17 +234,25 @@ func testIterativeRandomStateSync(t *testing.T, batch int) {
 	}
 	for len(queue) > 0 {
 		// Fetch all the queued nodes in a random order
-		results := make([]trie.SyncResult, 0, len(queue))
+		results := make([]*trie.SyncResult, 0, len(queue))
 		for hash := range queue {
-			data, err := srcMem.Get(hash.Bytes())
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			if rand.Int()%2 == 0 {
+				data, err := srcMem.Get(hash.Bytes())
+				if err != nil {
+					t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+				}
+				results = append(results, &trie.SyncResult{Data: data})
+			} else {
+				trie, _ := trie.New(common.Hash{}, srcMem)
+				request, _, _ := trie.FetchData(hash, 8192)
+				results = append(results, request)
 			}
-			results = append(results, trie.SyncResult{Hash: hash, Data: data})
 		}
 		// Feed the retrieved results back and queue new tasks
-		if _, index, err := sched.Process(results); err != nil {
-			t.Fatalf("failed to process result #%d: %v", index, err)
+		for index, result := range results {
+			if _, _, _, err := sched.Process(result); err != nil {
+				t.Fatalf("failed to process result #%d: %v", index, err)
+			}
 		}
 		if index, err := sched.Commit(dstDb); err != nil {
 			t.Fatalf("failed to commit data #%d: %v", index, err)
@@ -259,7 +282,7 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 	}
 	for len(queue) > 0 {
 		// Sync only half of the scheduled nodes, even those in random order
-		results := make([]trie.SyncResult, 0, len(queue)/2+1)
+		results := make([]*trie.SyncResult, 0, len(queue)/2+1)
 		for hash := range queue {
 			delete(queue, hash)
 
@@ -267,15 +290,17 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
-			results = append(results, trie.SyncResult{Hash: hash, Data: data})
+			results = append(results, &trie.SyncResult{Data: data})
 
 			if len(results) >= cap(results) {
 				break
 			}
 		}
 		// Feed the retrieved results back and queue new tasks
-		if _, index, err := sched.Process(results); err != nil {
-			t.Fatalf("failed to process result #%d: %v", index, err)
+		for index, result := range results {
+			if _, _, _, err := sched.Process(result); err != nil {
+				t.Fatalf("failed to process result #%d: %v", index, err)
+			}
 		}
 		if index, err := sched.Commit(dstDb); err != nil {
 			t.Fatalf("failed to commit data #%d: %v", index, err)
@@ -304,23 +329,24 @@ func TestIncompleteStateSync(t *testing.T) {
 	queue := append([]common.Hash{}, sched.Missing(1)...)
 	for len(queue) > 0 {
 		// Fetch a batch of state nodes
-		results := make([]trie.SyncResult, len(queue))
+		results := make([]*trie.SyncResult, len(queue))
 		for i, hash := range queue {
 			data, err := srcMem.Get(hash.Bytes())
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
-			results[i] = trie.SyncResult{Hash: hash, Data: data}
+			results[i] = &trie.SyncResult{Data: data}
 		}
 		// Process each of the state nodes
-		if _, index, err := sched.Process(results); err != nil {
-			t.Fatalf("failed to process result #%d: %v", index, err)
+		for index, result := range results {
+			_, _, hash, err := sched.Process(result)
+			if err != nil {
+				t.Fatalf("failed to process result #%d: %v", index, err)
+			}
+			added = append(added, hash)
 		}
 		if index, err := sched.Commit(dstDb); err != nil {
 			t.Fatalf("failed to commit data #%d: %v", index, err)
-		}
-		for _, result := range results {
-			added = append(added, result.Hash)
 		}
 		// Check that all known sub-tries added so far are complete or missing entirely.
 	checkSubtries:

@@ -20,10 +20,12 @@ package trie
 import (
 	"bytes"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -506,7 +508,17 @@ func (t *Trie) hashRoot(db DatabaseWriter) (node, node, error) {
 
 // FetchData retrieves synchronization data from the trie to send to remote
 // nodes.
-func (t *Trie) FetchData(hash common.Hash, limit common.StorageSize) (res *SyncResult, fail error) {
+func (t *Trie) FetchData(hash common.Hash, limit common.StorageSize, timeout time.Duration) (res *SyncResult, size common.StorageSize, fail error) {
+	// If we have a snapshot of this exact data, return without iteration
+	if blob, _ := t.db.Get(append([]byte("S"), hash[:]...)); blob != nil {
+		result := new(SyncResult)
+		if err := rlp.DecodeBytes(blob, result); err == nil {
+			return result, common.StorageSize(len(blob)), nil
+		}
+	}
+	// Start measuring the time to allow aborting if the storage limit is too generous
+	start := time.Now()
+
 	// If this method panics, hash points to a non-iterable trie; return individual node
 	defer func() {
 		if r := recover(); r != nil {
@@ -514,7 +526,7 @@ func (t *Trie) FetchData(hash common.Hash, limit common.StorageSize) (res *SyncR
 			if err != nil {
 				fail = err
 			} else {
-				res = &SyncResult{Data: blob}
+				res, size = &SyncResult{Data: blob}, common.StorageSize(len(blob))
 			}
 		}
 	}()
@@ -524,19 +536,26 @@ func (t *Trie) FetchData(hash common.Hash, limit common.StorageSize) (res *SyncR
 	trie, _ := New(hash, t.db)
 	it := NewIterator(trie.NodeIterator(nil))
 
-	size := common.StorageSize(0)
-	for size < limit && it.Next() {
+	size = common.StorageSize(0)
+	for size < limit && time.Since(start) < timeout && it.Next() {
 		result.Keys = append(result.Keys, common.CopyBytes(it.Key))
 		result.Values = append(result.Values, common.CopyBytes(it.Value))
 
 		size += common.StorageSize(len(it.Key) + len(it.Value))
 	}
 	// If we've went past our data allowance, prove the partial data
-	if size >= limit {
+	if size >= limit || time.Since(start) >= timeout {
 		result.Proof = it.Prove()
 		if !it.Next() {
 			result.Proof = nil // Overflowing item was the last after all
 		}
 	}
-	return result, nil
+	// If we have the entire storage-trie in memory, create a snapshot of it
+	if result.Proof == nil && len(result.Keys) > 0 && len(result.Keys[0]) == 32 {
+		if blob, err := rlp.EncodeToBytes(result); err == nil {
+			fmt.Printf(".")
+			t.db.Put(append([]byte("S"), hash[:]...), blob)
+		}
+	}
+	return result, size, nil
 }

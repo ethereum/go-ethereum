@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.
@@ -77,3 +78,14 @@ type statePack struct {
 func (p *statePack) PeerId() string { return p.peerId }
 func (p *statePack) Items() int     { return len(p.states) }
 func (p *statePack) Stats() string  { return fmt.Sprintf("%d", len(p.states)) }
+
+// triePack is a subtrie returned by a peer (or a single node if the hash does
+// not denote or properly define a state trie).
+type triePack struct {
+	peerId  string
+	results []*trie.SyncResult
+}
+
+func (p *triePack) PeerId() string { return p.peerId }
+func (p *triePack) Items() int     { return len(p.results) }
+func (p *triePack) Stats() string  { return fmt.Sprintf("%d", len(p.results)) }

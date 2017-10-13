@@ -53,11 +53,13 @@ type peerConnection struct {
 	blockIdle   int32 // Current block activity state of the peer (idle = 0, active = 1)
 	receiptIdle int32 // Current receipt activity state of the peer (idle = 0, active = 1)
 	stateIdle   int32 // Current node data activity state of the peer (idle = 0, active = 1)
+	trieIdle    int32 // Current trie activity state of the peer (idle = 0, active = 1)
 
 	headerThroughput  float64 // Number of headers measured to be retrievable per second
 	blockThroughput   float64 // Number of blocks (bodies) measured to be retrievable per second
 	receiptThroughput float64 // Number of receipts measured to be retrievable per second
 	stateThroughput   float64 // Number of node data pieces measured to be retrievable per second
+	trieThroughput    float64 // Amount of trie leaves measured to be retrievable per second
 
 	rtt time.Duration // Request round trip time to track responsiveness (QoS)
 
@@ -65,6 +67,7 @@ type peerConnection struct {
 	blockStarted   time.Time // Time instance when the last block (body) fetch was started
 	receiptStarted time.Time // Time instance when the last receipt fetch was started
 	stateStarted   time.Time // Time instance when the last node data fetch was started
+	trieStarted    time.Time // Time instance when the last node data fetch was started
 
 	lacking map[common.Hash]struct{} // Set of hashes not to request (didn't have previously)
 
@@ -88,6 +91,7 @@ type Peer interface {
 	RequestBodies([]common.Hash) error
 	RequestReceipts([]common.Hash) error
 	RequestNodeData([]common.Hash) error
+	RequestTries([]common.Hash, common.StorageSize) error
 }
 
 // lightPeerWrapper wraps a LightPeer struct, stubbing out the Peer-only methods.
@@ -110,6 +114,9 @@ func (w *lightPeerWrapper) RequestReceipts([]common.Hash) error {
 }
 func (w *lightPeerWrapper) RequestNodeData([]common.Hash) error {
 	panic("RequestNodeData not supported in light client mode sync")
+}
+func (w *lightPeerWrapper) RequestTries([]common.Hash, common.StorageSize) error {
+	panic("RequestTries not supported in light client mode sync")
 }
 
 // newPeerConnection creates a new downloader peer.
@@ -134,11 +141,13 @@ func (p *peerConnection) Reset() {
 	atomic.StoreInt32(&p.blockIdle, 0)
 	atomic.StoreInt32(&p.receiptIdle, 0)
 	atomic.StoreInt32(&p.stateIdle, 0)
+	atomic.StoreInt32(&p.trieIdle, 0)
 
 	p.headerThroughput = 0
 	p.blockThroughput = 0
 	p.receiptThroughput = 0
 	p.stateThroughput = 0
+	p.trieThroughput = 0
 
 	p.lacking = make(map[common.Hash]struct{})
 }
@@ -222,6 +231,23 @@ func (p *peerConnection) FetchNodeData(hashes []common.Hash) error {
 	return nil
 }
 
+// FetchTries sends a trie retrieval request to the remote peer.
+func (p *peerConnection) FetchTries(roots []common.Hash, limit common.StorageSize) error {
+	// Sanity check the protocol version
+	if p.version < 64 {
+		panic(fmt.Sprintf("trie fetch [eth/64+] requested on eth/%d", p.version))
+	}
+	// Short circuit if the peer is already fetching
+	if !atomic.CompareAndSwapInt32(&p.trieIdle, 0, 1) {
+		return errAlreadyFetching
+	}
+	p.trieStarted = time.Now()
+
+	go p.peer.RequestTries(roots, limit)
+
+	return nil
+}
+
 // SetHeadersIdle sets the peer to idle, allowing it to execute new header retrieval
 // requests. Its estimated header retrieval throughput is updated with that measured
 // just now.
@@ -257,6 +283,13 @@ func (p *peerConnection) SetNodeDataIdle(delivered int) {
 	p.setIdle(p.stateStarted, delivered, &p.stateThroughput, &p.stateIdle)
 }
 
+// SetTrieIdle sets the peer to idle, allowing it to execute new trie retrieval
+// requests. Its estimated state retrieval throughput is updated with that
+// measured just now.
+func (p *peerConnection) SetTrieIdle(delivered int) {
+	p.setIdle(p.trieStarted, delivered, &p.trieThroughput, &p.trieIdle)
+}
+
 // setIdle sets the peer to idle, allowing it to execute new retrieval requests.
 // Its estimated retrieval throughput is updated with that measured just now.
 func (p *peerConnection) setIdle(started time.Time, delivered int, throughput *float64, idle *int32) {
@@ -278,10 +311,17 @@ func (p *peerConnection) setIdle(started time.Time, delivered int, throughput *f
 	*throughput = (1-measurementImpact)*(*throughput) + measurementImpact*measured
 	p.rtt = time.Duration((1-measurementImpact)*float64(p.rtt) + measurementImpact*float64(elapsed))
 
-	p.log.Trace("Peer throughput measurements updated",
-		"hps", p.headerThroughput, "bps", p.blockThroughput,
-		"rps", p.receiptThroughput, "sps", p.stateThroughput,
-		"miss", len(p.lacking), "rtt", p.rtt)
+	if p.version <= 63 {
+		p.log.Trace("Peer throughput measurements updated",
+			"hps", p.headerThroughput, "bps", p.blockThroughput,
+			"rps", p.receiptThroughput, "sps", p.stateThroughput,
+			"miss", len(p.lacking), "rtt", p.rtt)
+	} else {
+		p.log.Trace("Peer throughput measurements updated",
+			"hps", p.headerThroughput, "bps", p.blockThroughput,
+			"rps", p.receiptThroughput, "tps", p.trieThroughput,
+			"miss", len(p.lacking), "rtt", p.rtt)
+	}
 }
 
 // HeaderCapacity retrieves the peers header download allowance based on its
@@ -318,6 +358,15 @@ func (p *peerConnection) NodeDataCapacity(targetRTT time.Duration) int {
 	defer p.lock.RUnlock()
 
 	return int(math.Min(1+math.Max(1, p.stateThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxStateFetch)))
+}
+
+// TrieCapacity retrieves the peers trie download allowance based on its
+// previously discovered throughput.
+func (p *peerConnection) TrieCapacity(targetRTT time.Duration) int {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	return int(math.Min(1+math.Max(1, p.trieThroughput*float64(targetRTT)/float64(time.Second)), float64(MaxTrieFetch)))
 }
 
 // MarkLacking appends a new entity to the set of items (blocks, receipts, states)
@@ -400,7 +449,7 @@ func (ps *peerSet) Register(p *peerConnection) error {
 		return errAlreadyRegistered
 	}
 	if len(ps.peers) > 0 {
-		p.headerThroughput, p.blockThroughput, p.receiptThroughput, p.stateThroughput = 0, 0, 0, 0
+		p.headerThroughput, p.blockThroughput, p.receiptThroughput, p.stateThroughput, p.trieThroughput = 0, 0, 0, 0, 0
 
 		for _, peer := range ps.peers {
 			peer.lock.RLock()
@@ -408,12 +457,14 @@ func (ps *peerSet) Register(p *peerConnection) error {
 			p.blockThroughput += peer.blockThroughput
 			p.receiptThroughput += peer.receiptThroughput
 			p.stateThroughput += peer.stateThroughput
+			p.trieThroughput += peer.trieThroughput
 			peer.lock.RUnlock()
 		}
 		p.headerThroughput /= float64(len(ps.peers))
 		p.blockThroughput /= float64(len(ps.peers))
 		p.receiptThroughput /= float64(len(ps.peers))
 		p.stateThroughput /= float64(len(ps.peers))
+		p.trieThroughput /= float64(len(ps.peers))
 	}
 	ps.peers[p.id] = p
 	ps.lock.Unlock()
@@ -519,7 +570,21 @@ func (ps *peerSet) NodeDataIdlePeers() ([]*peerConnection, int) {
 		defer p.lock.RUnlock()
 		return p.stateThroughput
 	}
-	return ps.idlePeers(63, 64, idle, throughput)
+	return ps.idlePeers(63, 63, idle, throughput)
+}
+
+// TrieIdlePeers retrieves a flat list of all the currently trie-idle
+// peers within the active peer set, ordered by their reputation.
+func (ps *peerSet) TrieIdlePeers() ([]*peerConnection, int) {
+	idle := func(p *peerConnection) bool {
+		return atomic.LoadInt32(&p.trieIdle) == 0
+	}
+	throughput := func(p *peerConnection) float64 {
+		p.lock.RLock()
+		defer p.lock.RUnlock()
+		return p.trieThroughput
+	}
+	return ps.idlePeers(64, 64, idle, throughput)
 }
 
 // idlePeers retrieves a flat list of all currently idle peers satisfying the

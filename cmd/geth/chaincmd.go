@@ -309,7 +309,7 @@ func copyDb(ctx *cli.Context) error {
 		return err
 	}
 	peer := downloader.NewFakePeer("local", db, hc, dl)
-	if err = dl.RegisterPeer("local", 63, peer); err != nil {
+	if err = dl.RegisterPeer("local", 64, peer); err != nil {
 		return err
 	}
 	// Synchronise with the simulated peer
