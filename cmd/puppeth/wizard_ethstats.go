@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -64,17 +65,37 @@ func (w *wizard) deployEthstats() {
 	fmt.Println()
 	fmt.Printf("Keep existing IP %v blacklist (y/n)? (default = yes)\n", infos.banned)
 	if w.readDefaultString("y") != "y" {
-		infos.banned = nil
-
+		// The user might want to clear the entire list, although generally probably not
 		fmt.Println()
-		fmt.Println("Which IP addresses should be blacklisted?")
+		fmt.Printf("Clear out blacklist and start over (y/n)? (default = no)\n")
+		if w.readDefaultString("n") != "n" {
+			infos.banned = nil
+		}
+		// Offer the user to explicitly add/remove certain IP addresses
+		fmt.Println()
+		fmt.Println("Which additional IP addresses should be blacklisted?")
 		for {
-			if ip := w.readIPAddress(); ip != nil {
-				infos.banned = append(infos.banned, ip.String())
+			if ip := w.readIPAddress(); ip != "" {
+				infos.banned = append(infos.banned, ip)
 				continue
 			}
 			break
 		}
+		fmt.Println()
+		fmt.Println("Which IP addresses should not be blacklisted?")
+		for {
+			if ip := w.readIPAddress(); ip != "" {
+				for i, addr := range infos.banned {
+					if ip == addr {
+						infos.banned = append(infos.banned[:i], infos.banned[i+1:]...)
+						break
+					}
+				}
+				continue
+			}
+			break
+		}
+		sort.Strings(infos.banned)
 	}
 	// Try to deploy the ethstats server on the host
 	trusted := make([]string, 0, len(w.servers))
