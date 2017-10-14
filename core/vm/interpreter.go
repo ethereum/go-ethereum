@@ -138,10 +138,10 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		pc   = uint64(0) // program counter
 		cost uint64
 		// copies used by tracer
-		stackCopy = newstack() // stackCopy needed for Tracer since stack is mutated by 63/64 gas rule 
-		pcCopy uint64 // needed for the deferred Tracer
-		gasCopy uint64 // for Tracer to log gas remaining before execution
-		logged bool // deferred Tracer should ignore already logged steps
+		stackCopy = newstack() // stackCopy needed for Tracer since stack is mutated by 63/64 gas rule
+		pcCopy    uint64       // needed for the deferred Tracer
+		gasCopy   uint64       // for Tracer to log gas remaining before execution
+		logged    bool         // deferred Tracer should ignore already logged steps
 	)
 	contract.Input = input
 
@@ -169,20 +169,17 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 			}
 		}
 
-		// get the operation from the jump table matching the opcode
+		// Get the operation from the jump table matching the opcode and validate the
+		// stack and make sure there enough stack items available to perform the operation
 		operation := in.cfg.JumpTable[op]
-		if err := in.enforceRestrictions(op, operation, stack); err != nil {
-			return nil, err
-		}
-
-		// if the op is invalid abort the process and return an error
 		if !operation.valid {
 			return nil, fmt.Errorf("invalid opcode 0x%x", int(op))
 		}
-
-		// validate the stack and make sure there enough stack items available
-		// to perform the operation
 		if err := operation.validateStack(stack); err != nil {
+			return nil, err
+		}
+		// If the operation is valid, enforce and write restrictions
+		if err := in.enforceRestrictions(op, operation, stack); err != nil {
 			return nil, err
 		}
 
