@@ -34,6 +34,7 @@ import (
 // Input specifies the required input parameters for this gives method.
 type Method struct {
 	Name    string
+	Payable bool
 	Const   bool
 	Inputs  []Argument
 	Outputs []Argument

@@ -30,6 +30,7 @@ type tmplContract struct {
 	InputABI    string                 // JSON ABI used as the input to generate the binding from
 	InputBin    string                 // Optional EVM bytecode used to denetare deploy code from
 	Constructor abi.Method             // Contract constructor for deploy parametrization
+	Fallback    abi.Method             // Contract fallback method for direct interaction with contract
 	Calls       map[string]*tmplMethod // Contract calls that only read state data
 	Transacts   map[string]*tmplMethod // Contract calls that write state data
 }

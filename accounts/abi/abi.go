@@ -33,6 +33,7 @@ type ABI struct {
 	Constructor Method
 	Methods     map[string]Method
 	Events      map[string]Event
+	Fallback    Method
 }
 
 // JSON returns a parsed ABI interface and error if it failed.
@@ -185,6 +186,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		Constant  bool
 		Indexed   bool
 		Anonymous bool
+		Payable   bool
 		Inputs    []Argument
 		Outputs   []Argument
 	}
@@ -201,11 +203,11 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			abi.Constructor = Method{
 				Inputs: field.Inputs,
 			}
-		// empty defaults to function according to the abi spec
-		case "function", "":
+		case "function":
 			abi.Methods[field.Name] = Method{
 				Name:    field.Name,
 				Const:   field.Constant,
+				Payable: field.Payable,
 				Inputs:  field.Inputs,
 				Outputs: field.Outputs,
 			}
@@ -215,6 +217,12 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 				Anonymous: field.Anonymous,
 				Inputs:    field.Inputs,
 			}
+		case "fallback":
+			abi.Fallback = Method{
+				Payable: field.Payable,
+			}
+		default:
+			return fmt.Errorf("abi: contract interaction type not referenced")
 		}
 	}
 

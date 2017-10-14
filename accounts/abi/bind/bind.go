@@ -67,6 +67,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 		var (
 			calls     = make(map[string]*tmplMethod)
 			transacts = make(map[string]*tmplMethod)
+			writes    = make(map[string]*tmplMethod)
 		)
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
@@ -90,8 +91,10 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 			// Append the methods to the call or transact lists
 			if original.Const {
 				calls[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original)}
-			} else {
+			} else if original.Payable {
 				transacts[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original)}
+			} else {
+				writes[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original)}
 			}
 		}
 		contracts[types[i]] = &tmplContract{
@@ -99,8 +102,10 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 			InputABI:    strings.Replace(strippedABI, "\"", "\\\"", -1),
 			InputBin:    strings.TrimSpace(bytecodes[i]),
 			Constructor: evmABI.Constructor,
+			Fallback:    evmABI.Fallback,
 			Calls:       calls,
 			Transacts:   transacts,
+			Writes:      writes,
 		}
 	}
 	// Generate the contract template data content and render it
