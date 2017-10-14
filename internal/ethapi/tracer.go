@@ -134,6 +134,11 @@ func (dw *dbWrapper) getBalance(addr common.Address) *big.Int {
 	return dw.db.GetBalance(addr)
 }
 
+// getBalance retrieves an account's balance
+func (dw *dbWrapper) getBalanceFromJs(addr []byte) *big.Int {
+	return dw.db.GetBalance(common.BytesToAddress(addr))
+}
+
 // getNonce retrieves an account's nonce
 func (dw *dbWrapper) getNonce(addr common.Address) uint64 {
 	return dw.db.GetNonce(addr)
@@ -159,6 +164,7 @@ func (dw *dbWrapper) toValue(vm *otto.Otto) otto.Value {
 	value, _ := vm.ToValue(dw)
 	obj := value.Object()
 	obj.Set("getBalance", dw.getBalance)
+	obj.Set("getBalanceFromJs", dw.getBalanceFromJs)
 	obj.Set("getNonce", dw.getNonce)
 	obj.Set("getCode", dw.getCode)
 	obj.Set("getState", dw.getState)
