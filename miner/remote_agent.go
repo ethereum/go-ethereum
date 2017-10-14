@@ -163,7 +163,7 @@ func (a *RemoteAgent) SubmitWork(nonce types.BlockNonce, mixDigest, hash common.
 }
 
 // loop monitors mining events on the work and quit channels, updating the internal
-// state of the rmeote miner until a termination is requested.
+// state of the remote miner until a termination is requested.
 //
 // Note, the reason the work and quit channels are passed as parameters is because
 // RemoteAgent.Start() constantly recreates these channels, so the loop code cannot
