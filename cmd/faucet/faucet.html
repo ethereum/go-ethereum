@@ -5,7 +5,7 @@
 		<meta http-equiv="X-UA-Compatible" content="IE=edge">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 
-		<title>{{.Network}}: GitHub Faucet</title>
+		<title>{{.Network}}: Authenticated Faucet</title>
 
 		<link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" />
 		<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" />
@@ -43,13 +43,13 @@
 			<div class="container">
 				<div class="row" style="margin-bottom: 16px;">
 					<div class="col-lg-12">
-						<h1 style="text-align: center;"><i class="fa fa-bath" aria-hidden="true"></i> {{.Network}} GitHub Authenticated Faucet <i class="fa fa-github-alt" aria-hidden="true"></i></h1>
+						<h1 style="text-align: center;"><i class="fa fa-bath" aria-hidden="true"></i> {{.Network}} Authenticated Faucet</h1>
 					</div>
 				</div>
 				<div class="row">
 					<div class="col-lg-8 col-lg-offset-2">
 						<div class="input-group">
-							<input id="gist" type="text" class="form-control" placeholder="GitHub Gist URL containing your Ethereum address...">
+							<input id="gist" type="text" class="form-control" placeholder="Social network URL containing your Ethereum address...">
 							<span class="input-group-btn">
 								<button class="btn btn-default dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">Give me Ether	<i class="fa fa-caret-down" aria-hidden="true"></i></button>
 				        <ul class="dropdown-menu dropdown-menu-right">{{range $idx, $amount := .Amounts}}
@@ -80,8 +80,21 @@
 				<div class="row" style="margin-top: 32px;">
 					<div class="col-lg-12">
 						<h3>How does this work?</h3>
-						<p>This Ether faucet is running on the {{.Network}} network. To prevent malicious actors from exhausting all available funds or accumulating enough Ether to mount long running spam attacks, requests are tied to GitHub accounts. Anyone having a GitHub account may request funds within the permitted limits.</p>
-						<p>To request funds, simply create a <a href="https://gist.github.com/" target="_about:blank">GitHub Gist</a> with your Ethereum address pasted into the contents (the file name doesn't matter), copy paste the gists URL into the above input box and fire away! You can track the current pending requests below the input field to see how much you have to wait until your turn comes.</p>
+						<p>This Ether faucet is running on the {{.Network}} network. To prevent malicious actors from exhausting all available funds or accumulating enough Ether to mount long running spam attacks, requests are tied to certain common 3rd party accounts. Anyone having a GitHub, Twitter, Google+ or Facebook account may request funds within the permitted limits.</p>
+						<dl class="dl-horizontal">
+						  <dt style="width: auto; margin-left: 40px;"><i class="fa fa-github-alt" aria-hidden="true" style="font-size: 36px;"></i></dt>
+							<dd style="margin-left: 88px; margin-bottom: 10px;"></i> To request funds via GitHub, create a <a href="https://gist.github.com/" target="_about:blank">gist</a> with your Ethereum address embedded into the content (the file name doesn't matter).<br/>Copy-paste the gists URL into the above input box and fire away!</dd>
+
+							<dt style="width: auto; margin-left: 40px;"><i class="fa fa-twitter" aria-hidden="true" style="font-size: 36px;"></i></dt>
+							<dd style="margin-left: 88px; margin-bottom: 10px;"></i> To request funds via Twitter, make a <a href="https://twitter.com/intent/tweet?text=Requesting%20faucet%20funds%20into%200x0000000000000000000000000000000000000000%20on%20the%20%23{{.Network}}%20%23Ethereum%20test%20network." target="_about:blank">tweet</a> with your Ethereum address pasted into the contents (surrounding text doesn't matter).<br/>Copy-paste the <a href="https://support.twitter.com/articles/80586" target="_about:blank">tweets URL</a> into the above input box and fire away!</dd>
+
+							<dt style="width: auto; margin-left: 40px;"><i class="fa fa-google-plus-official" aria-hidden="true" style="font-size: 36px;"></i></dt>
+							<dd style="margin-left: 88px; margin-bottom: 10px;"></i> To request funds via Google Plus, publish a new <strong>public</strong> post with your Ethereum address embedded into the content (surrounding text doesn't matter).<br/>Copy-paste the posts URL into the above input box and fire away!</dd>
+
+							<dt style="width: auto; margin-left: 40px;"><i class="fa fa-facebook" aria-hidden="true" style="font-size: 36px;"></i></dt>
+							<dd style="margin-left: 88px; margin-bottom: 10px;"></i> To request funds via Facebook, publish a new <strong>public</strong> post with your Ethereum address embedded into the content (surrounding text doesn't matter).<br/>Copy-paste the <a href="https://www.facebook.com/help/community/question/?id=282662498552845" target="_about:blank">posts URL</a> into the above input box and fire away!</dd>
+						</dl>
+						<p>You can track the current pending requests below the input field to see how much you have to wait until your turn comes.</p>
 						{{if .Recaptcha}}<em>The faucet is running invisible reCaptcha protection against bots.</em>{{end}}
 					</div>
 				</div>
@@ -135,7 +148,7 @@
 					if (msg.requests !== undefined && msg.requests !== null) {
 						var content = "";
 						for (var i=0; i<msg.requests.length; i++) {
-							content += "<tr><td><div style=\"background: url('https://github.com/" + msg.requests[i].username + ".png?size=64'); background-size: cover; width:32px; height: 32px; border-radius: 4px;\"></div></td><td><pre>" + msg.requests[i].account + "</pre></td><td style=\"width: 100%; text-align: center; vertical-align: middle;\">" + moment.duration(moment(msg.requests[i].time).unix()-moment().unix(), 'seconds').humanize(true) + "</td></tr>";
+							content += "<tr><td><div style=\"background: url('" + msg.requests[i].avatar + "'); background-size: cover; width:32px; height: 32px; border-radius: 4px;\"></div></td><td><pre>" + msg.requests[i].account + "</pre></td><td style=\"width: 100%; text-align: center; vertical-align: middle;\">" + moment.duration(moment(msg.requests[i].time).unix()-moment().unix(), 'seconds').humanize(true) + "</td></tr>";
 						}
 						$("#requests").html("<tbody>" + content + "</tbody>");
 					}
