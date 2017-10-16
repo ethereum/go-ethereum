@@ -90,7 +90,7 @@ func (h Hash) MarshalText() ([]byte, error) {
 
 // Sets the hash to the value of b. If b is larger than len(h), 'b' will be cropped (from the left).
 func (h *Hash) SetBytes(b []byte) {
-	if len(b) > len(h) {
+	if len(b) > HashLength {
 		b = b[len(b)-HashLength:]
 	}
 
@@ -200,7 +200,7 @@ func (a Address) Format(s fmt.State, c rune) {
 
 // Sets the address to the value of b. If b is larger than len(a) it will panic
 func (a *Address) SetBytes(b []byte) {
-	if len(b) > len(a) {
+	if len(b) > AddressLength {
 		b = b[len(b)-AddressLength:]
 	}
 	copy(a[AddressLength-len(b):], b)
