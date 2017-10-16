@@ -21,8 +21,10 @@ package main
 
 import (
 	"bytes"
+	"compress/zlib"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"html/template"
@@ -33,6 +35,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -181,10 +184,10 @@ func main() {
 
 // request represents an accepted funding request.
 type request struct {
-	Username string             `json:"username"` // GitHub user for displaying an avatar
-	Account  common.Address     `json:"account"`  // Ethereum address being funded
-	Time     time.Time          `json:"time"`     // Timestamp when te request was accepted
-	Tx       *types.Transaction `json:"tx"`       // Transaction funding the account
+	Avatar  string             `json:"avatar"`  // Avatar URL to make the UI nicer
+	Account common.Address     `json:"account"` // Ethereum address being funded
+	Time    time.Time          `json:"time"`    // Timestamp when te request was accepted
+	Tx      *types.Transaction `json:"tx"`      // Transaction funding the account
 }
 
 // faucet represents a crypto faucet backed by an Ethereum light client.
@@ -344,15 +347,16 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 		if err := websocket.JSON.Receive(conn, &msg); err != nil {
 			return
 		}
-		if !strings.HasPrefix(msg.URL, "https://gist.github.com/") {
-			websocket.JSON.Send(conn, map[string]string{"error": "URL doesn't link to GitHub Gists"})
+		if !strings.HasPrefix(msg.URL, "https://gist.github.com/") && !strings.HasPrefix(msg.URL, "https://twitter.com/") &&
+			!strings.HasPrefix(msg.URL, "https://plus.google.com/") && !strings.HasPrefix(msg.URL, "https://www.facebook.com/") {
+			websocket.JSON.Send(conn, map[string]string{"error": "URL doesn't link to supported services"})
 			continue
 		}
 		if msg.Tier >= uint(*tiersFlag) {
 			websocket.JSON.Send(conn, map[string]string{"error": "Invalid funding tier requested"})
 			continue
 		}
-		log.Info("Faucet funds requested", "gist", msg.URL, "tier", msg.Tier)
+		log.Info("Faucet funds requested", "url", msg.URL, "tier", msg.Tier)
 
 		// If captcha verifications are enabled, make sure we're not dealing with a robot
 		if *captchaToken != "" {
@@ -381,65 +385,37 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 				continue
 			}
 		}
-		// Retrieve the gist from the GitHub Gist APIs
-		parts := strings.Split(msg.URL, "/")
-		req, _ := http.NewRequest("GET", "https://api.github.com/gists/"+parts[len(parts)-1], nil)
-		if *githubUser != "" {
-			req.SetBasicAuth(*githubUser, *githubToken)
+		// Retrieve the Ethereum address to fund, the requesting user and a profile picture
+		var (
+			username string
+			avatar   string
+			address  common.Address
+		)
+		switch {
+		case strings.HasPrefix(msg.URL, "https://gist.github.com/"):
+			username, avatar, address, err = authGitHub(msg.URL)
+		case strings.HasPrefix(msg.URL, "https://twitter.com/"):
+			username, avatar, address, err = authTwitter(msg.URL)
+		case strings.HasPrefix(msg.URL, "https://plus.google.com/"):
+			username, avatar, address, err = authGooglePlus(msg.URL)
+		case strings.HasPrefix(msg.URL, "https://www.facebook.com/"):
+			username, avatar, address, err = authFacebook(msg.URL)
+		default:
+			err = errors.New("Something funky happened, please open an issue at https://github.com/ethereum/go-ethereum/issues")
 		}
-		res, err := http.DefaultClient.Do(req)
 		if err != nil {
 			websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
 			continue
 		}
-		var gist struct {
-			Owner struct {
-				Login string `json:"login"`
-			} `json:"owner"`
-			Files map[string]struct {
-				Content string `json:"content"`
-			} `json:"files"`
-		}
-		err = json.NewDecoder(res.Body).Decode(&gist)
-		res.Body.Close()
-		if err != nil {
-			websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
-			continue
-		}
-		if gist.Owner.Login == "" {
-			websocket.JSON.Send(conn, map[string]string{"error": "Anonymous Gists not allowed"})
-			continue
-		}
-		// Iterate over all the files and look for Ethereum addresses
-		var address common.Address
-		for _, file := range gist.Files {
-			content := strings.TrimSpace(file.Content)
-			if len(content) == 2+common.AddressLength*2 {
-				address = common.HexToAddress(content)
-			}
-		}
-		if address == (common.Address{}) {
-			websocket.JSON.Send(conn, map[string]string{"error": "No Ethereum address found to fund"})
-			continue
-		}
-		// Validate the user's existence since the API is unhelpful here
-		if res, err = http.Head("https://github.com/" + gist.Owner.Login); err != nil {
-			websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
-			continue
-		}
-		res.Body.Close()
+		log.Info("Faucet request valid", "url", msg.URL, "tier", msg.Tier, "user", username, "address", address)
 
-		if res.StatusCode != 200 {
-			websocket.JSON.Send(conn, map[string]string{"error": "Invalid user... boom!"})
-			continue
-		}
 		// Ensure the user didn't request funds too recently
 		f.lock.Lock()
 		var (
 			fund    bool
 			timeout time.Time
 		)
-		if timeout = f.timeouts[gist.Owner.Login]; time.Now().After(timeout) {
+		if timeout = f.timeouts[username]; time.Now().After(timeout) {
 			// User wasn't funded recently, create the funding transaction
 			amount := new(big.Int).Mul(big.NewInt(int64(*payoutFlag)), ether)
 			amount = new(big.Int).Mul(amount, new(big.Int).Exp(big.NewInt(5), big.NewInt(int64(msg.Tier)), nil))
@@ -459,12 +435,12 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 				continue
 			}
 			f.reqs = append(f.reqs, &request{
-				Username: gist.Owner.Login,
-				Account:  address,
-				Time:     time.Now(),
-				Tx:       signed,
+				Avatar:  avatar,
+				Account: address,
+				Time:    time.Now(),
+				Tx:      signed,
 			})
-			f.timeouts[gist.Owner.Login] = time.Now().Add(time.Duration(*minutesFlag*int(math.Pow(3, float64(msg.Tier)))) * time.Minute)
+			f.timeouts[username] = time.Now().Add(time.Duration(*minutesFlag*int(math.Pow(3, float64(msg.Tier)))) * time.Minute)
 			fund = true
 		}
 		f.lock.Unlock()
@@ -474,7 +450,7 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			websocket.JSON.Send(conn, map[string]string{"error": fmt.Sprintf("%s left until next allowance", common.PrettyDuration(timeout.Sub(time.Now())))})
 			continue
 		}
-		websocket.JSON.Send(conn, map[string]string{"success": fmt.Sprintf("Funding request accepted for %s into %s", gist.Owner.Login, address.Hex())})
+		websocket.JSON.Send(conn, map[string]string{"success": fmt.Sprintf("Funding request accepted for %s into %s", username, address.Hex())})
 		select {
 		case f.update <- struct{}{}:
 		default:
@@ -541,4 +517,163 @@ func (f *faucet) loop() {
 			f.lock.RUnlock()
 		}
 	}
+}
+
+// authGitHub tries to authenticate a faucet request using GitHub gists, returning
+// the username, avatar URL and Ethereum address to fund on success.
+func authGitHub(url string) (string, string, common.Address, error) {
+	// Retrieve the gist from the GitHub Gist APIs
+	parts := strings.Split(url, "/")
+	req, _ := http.NewRequest("GET", "https://api.github.com/gists/"+parts[len(parts)-1], nil)
+	if *githubUser != "" {
+		req.SetBasicAuth(*githubUser, *githubToken)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", "", common.Address{}, err
+	}
+	var gist struct {
+		Owner struct {
+			Login string `json:"login"`
+		} `json:"owner"`
+		Files map[string]struct {
+			Content string `json:"content"`
+		} `json:"files"`
+	}
+	err = json.NewDecoder(res.Body).Decode(&gist)
+	res.Body.Close()
+	if err != nil {
+		return "", "", common.Address{}, err
+	}
+	if gist.Owner.Login == "" {
+		return "", "", common.Address{}, errors.New("Anonymous Gists not allowed")
+	}
+	// Iterate over all the files and look for Ethereum addresses
+	var address common.Address
+	for _, file := range gist.Files {
+		content := strings.TrimSpace(file.Content)
+		if len(content) == 2+common.AddressLength*2 {
+			address = common.HexToAddress(content)
+		}
+	}
+	if address == (common.Address{}) {
+		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+	}
+	// Validate the user's existence since the API is unhelpful here
+	if res, err = http.Head("https://github.com/" + gist.Owner.Login); err != nil {
+		return "", "", common.Address{}, err
+	}
+	res.Body.Close()
+
+	if res.StatusCode != 200 {
+		return "", "", common.Address{}, errors.New("Invalid user... boom!")
+	}
+	// Everything passed validation, return the gathered infos
+	return gist.Owner.Login + "@github", fmt.Sprintf("https://github.com/%s.png?size=64", gist.Owner.Login), address, nil
+}
+
+// authTwitter tries to authenticate a faucet request using Twitter posts, returning
+// the username, avatar URL and Ethereum address to fund on success.
+func authTwitter(url string) (string, string, common.Address, error) {
+	// Ensure the user specified a meaningful URL, no fancy nonsense
+	parts := strings.Split(url, "/")
+	if len(parts) < 4 || parts[len(parts)-2] != "status" {
+		return "", "", common.Address{}, errors.New("Invalid Twitter status URL")
+	}
+	username := parts[len(parts)-3]
+
+	// Twitter's API isn't really friendly with direct links. Still, we don't
+	// want to do ask read permissions from users, so just load the public posts and
+	// scrape it for the Ethereum address and profile URL.
+	res, err := http.Get(url)
+	if err != nil {
+		return "", "", common.Address{}, err
+	}
+	defer res.Body.Close()
+
+	reader, err := zlib.NewReader(res.Body)
+	if err != nil {
+		return "", "", common.Address{}, err
+	}
+	body, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return "", "", common.Address{}, err
+	}
+	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
+	if address == (common.Address{}) {
+		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+	}
+	var avatar string
+	if parts = regexp.MustCompile("src=\"([^\"]+twimg.com/profile_images[^\"]+)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
+		avatar = parts[1]
+	}
+	return username + "@twitter", avatar, address, nil
+}
+
+// authGooglePlus tries to authenticate a faucet request using GooglePlus posts,
+// returning the username, avatar URL and Ethereum address to fund on success.
+func authGooglePlus(url string) (string, string, common.Address, error) {
+	// Ensure the user specified a meaningful URL, no fancy nonsense
+	parts := strings.Split(url, "/")
+	if len(parts) < 4 || parts[len(parts)-2] != "posts" {
+		return "", "", common.Address{}, errors.New("Invalid Google+ post URL")
+	}
+	username := parts[len(parts)-3]
+
+	// Google's API isn't really friendly with direct links. Still, we don't
+	// want to do ask read permissions from users, so just load the public posts and
+	// scrape it for the Ethereum address and profile URL.
+	res, err := http.Get(url)
+	if err != nil {
+		return "", "", common.Address{}, err
+	}
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return "", "", common.Address{}, err
+	}
+	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
+	if address == (common.Address{}) {
+		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+	}
+	var avatar string
+	if parts = regexp.MustCompile("src=\"([^\"]+googleusercontent.com[^\"]+photo.jpg)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
+		avatar = parts[1]
+	}
+	return username + "@google+", avatar, address, nil
+}
+
+// authFacebook tries to authenticate a faucet request using Facebook posts,
+// returning the username, avatar URL and Ethereum address to fund on success.
+func authFacebook(url string) (string, string, common.Address, error) {
+	// Ensure the user specified a meaningful URL, no fancy nonsense
+	parts := strings.Split(url, "/")
+	if len(parts) < 4 || parts[len(parts)-2] != "posts" {
+		return "", "", common.Address{}, errors.New("Invalid Facebook post URL")
+	}
+	username := parts[len(parts)-3]
+
+	// Facebook's Graph API isn't really friendly with direct links. Still, we don't
+	// want to do ask read permissions from users, so just load the public posts and
+	// scrape it for the Ethereum address and profile URL.
+	res, err := http.Get(url)
+	if err != nil {
+		return "", "", common.Address{}, err
+	}
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return "", "", common.Address{}, err
+	}
+	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
+	if address == (common.Address{}) {
+		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+	}
+	var avatar string
+	if parts = regexp.MustCompile("src=\"([^\"]+fbcdn.net[^\"]+)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
+		avatar = parts[1]
+	}
+	return username + "@facebook", avatar, address, nil
 }
