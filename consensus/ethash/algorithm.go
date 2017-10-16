@@ -53,7 +53,6 @@ type hasher func(dest []byte, data []byte)
 
 // makeHasher creates a repetitive hasher, allowing the same hash data structures
 // to be reused between hash runs instead of requiring new ones to be created.
-//
 // The returned function is not thread safe!
 func makeHasher(h hash.Hash) hasher {
 	return func(dest []byte, data []byte) {
@@ -82,7 +81,6 @@ func seedHash(block uint64) []byte {
 // memory, then performing two passes of Sergio Demian Lerner's RandMemoHash
 // algorithm from Strict Memory Hard Hashing Functions (2014). The output is a
 // set of 524288 64-byte values.
-//
 // This method places the result into dest in machine byte order.
 func generateCache(dest []uint32, epoch uint64, seed []byte) {
 	// Print some debug logs to allow analysis on low end devices
@@ -104,7 +102,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 	header.Cap *= 4
 	cache := *(*[]byte)(unsafe.Pointer(&header))
 
-	// Calculate the number of thoretical rows (we'll store in one buffer nonetheless)
+	// Calculate the number of theoretical rows (we'll store in one buffer nonetheless)
 	size := uint64(len(cache))
 	rows := int(size) / hashBytes
 
@@ -189,7 +187,7 @@ func fnvHash(mix []uint32, data []uint32) {
 // generateDatasetItem combines data from 256 pseudorandomly selected cache nodes,
 // and hashes that to compute a single dataset node.
 func generateDatasetItem(cache []uint32, index uint32, keccak512 hasher) []byte {
-	// Calculate the number of thoretical rows (we use one buffer nonetheless)
+	// Calculate the number of theoretical rows (we use one buffer nonetheless)
 	rows := uint32(len(cache) / hashWords)
 
 	// Initialize the mix
@@ -220,7 +218,6 @@ func generateDatasetItem(cache []uint32, index uint32, keccak512 hasher) []byte 
 }
 
 // generateDataset generates the entire ethash dataset for mining.
-//
 // This method places the result into dest in machine byte order.
 func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 	// Print some debug logs to allow analysis on low end devices
@@ -290,7 +287,7 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 // hashimoto aggregates data from the full dataset in order to produce our final
 // value for a particular header hash and nonce.
 func hashimoto(hash []byte, nonce uint64, size uint64, lookup func(index uint32) []uint32) ([]byte, []byte) {
-	// Calculate the number of thoretical rows (we use one buffer nonetheless)
+	// Calculate the number of theoretical rows (we use one buffer nonetheless)
 	rows := uint32(size / mixBytes)
 
 	// Combine header+nonce into a 64 byte seed

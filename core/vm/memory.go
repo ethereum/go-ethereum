@@ -22,7 +22,6 @@ import "fmt"
 type Memory struct {
 	store       []byte
 	lastGasCost uint64
-	lastReturn  []byte
 }
 
 func NewMemory() *Memory {

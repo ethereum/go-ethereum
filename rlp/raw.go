@@ -22,7 +22,7 @@ import (
 )
 
 // RawValue represents an encoded RLP value and can be used to delay
-// RLP decoding or precompute an encoding. Note that the decoder does
+// RLP decoding or to precompute an encoding. Note that the decoder does
 // not verify whether the content of RawValues is valid RLP.
 type RawValue []byte
 

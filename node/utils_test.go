@@ -41,12 +41,10 @@ func NewNoopService(*ServiceContext) (Service, error) { return new(NoopService),
 type NoopServiceA struct{ NoopService }
 type NoopServiceB struct{ NoopService }
 type NoopServiceC struct{ NoopService }
-type NoopServiceD struct{ NoopService }
 
 func NewNoopServiceA(*ServiceContext) (Service, error) { return new(NoopServiceA), nil }
 func NewNoopServiceB(*ServiceContext) (Service, error) { return new(NoopServiceB), nil }
 func NewNoopServiceC(*ServiceContext) (Service, error) { return new(NoopServiceC), nil }
-func NewNoopServiceD(*ServiceContext) (Service, error) { return new(NoopServiceD), nil }
 
 // InstrumentedService is an implementation of Service for which all interface
 // methods can be instrumented both return value as well as event hook wise.

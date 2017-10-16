@@ -19,8 +19,10 @@ package trie
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"math/rand"
 	"os"
 	"reflect"
@@ -29,12 +31,14 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 func init() {
 	spew.Config.Indent = "    "
-	spew.Config.DisableMethods = true
+	spew.Config.DisableMethods = false
 }
 
 // Used for testing
@@ -357,6 +361,7 @@ type randTestStep struct {
 	op    int
 	key   []byte // for opUpdate, opDelete, opGet
 	value []byte // for opUpdate
+	err   error  // for debugging
 }
 
 const (
@@ -406,7 +411,7 @@ func runRandTest(rt randTest) bool {
 	tr, _ := New(common.Hash{}, db)
 	values := make(map[string]string) // tracks content of the trie
 
-	for _, step := range rt {
+	for i, step := range rt {
 		switch step.op {
 		case opUpdate:
 			tr.Update(step.key, step.value)
@@ -418,23 +423,22 @@ func runRandTest(rt randTest) bool {
 			v := tr.Get(step.key)
 			want := values[string(step.key)]
 			if string(v) != want {
-				fmt.Printf("mismatch for key 0x%x, got 0x%x want 0x%x", step.key, v, want)
-				return false
+				rt[i].err = fmt.Errorf("mismatch for key 0x%x, got 0x%x want 0x%x", step.key, v, want)
 			}
 		case opCommit:
-			if _, err := tr.Commit(); err != nil {
-				panic(err)
-			}
+			_, rt[i].err = tr.Commit()
 		case opHash:
 			tr.Hash()
 		case opReset:
 			hash, err := tr.Commit()
 			if err != nil {
-				panic(err)
+				rt[i].err = err
+				return false
 			}
 			newtr, err := New(hash, db)
 			if err != nil {
-				panic(err)
+				rt[i].err = err
+				return false
 			}
 			tr = newtr
 		case opItercheckhash:
@@ -444,17 +448,20 @@ func runRandTest(rt randTest) bool {
 				checktr.Update(it.Key, it.Value)
 			}
 			if tr.Hash() != checktr.Hash() {
-				fmt.Println("hashes not equal")
-				return false
+				rt[i].err = fmt.Errorf("hash mismatch in opItercheckhash")
 			}
 		case opCheckCacheInvariant:
-			return checkCacheInvariant(tr.root, nil, tr.cachegen, false, 0)
+			rt[i].err = checkCacheInvariant(tr.root, nil, tr.cachegen, false, 0)
+		}
+		// Abort the test on error.
+		if rt[i].err != nil {
+			return false
 		}
 	}
 	return true
 }
 
-func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool, depth int) bool {
+func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool, depth int) error {
 	var children []node
 	var flag nodeFlag
 	switch n := n.(type) {
@@ -465,33 +472,34 @@ func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool
 		flag = n.flags
 		children = n.Children[:]
 	default:
-		return true
+		return nil
 	}
 
-	showerror := func() {
-		fmt.Printf("at depth %d node %s", depth, spew.Sdump(n))
-		fmt.Printf("parent: %s", spew.Sdump(parent))
+	errorf := func(format string, args ...interface{}) error {
+		msg := fmt.Sprintf(format, args...)
+		msg += fmt.Sprintf("\nat depth %d node %s", depth, spew.Sdump(n))
+		msg += fmt.Sprintf("parent: %s", spew.Sdump(parent))
+		return errors.New(msg)
 	}
 	if flag.gen > parentCachegen {
-		fmt.Printf("cache invariant violation: %d > %d\n", flag.gen, parentCachegen)
-		showerror()
-		return false
+		return errorf("cache invariant violation: %d > %d\n", flag.gen, parentCachegen)
 	}
 	if depth > 0 && !parentDirty && flag.dirty {
-		fmt.Printf("cache invariant violation: child is dirty but parent isn't\n")
-		showerror()
-		return false
+		return errorf("cache invariant violation: %d > %d\n", flag.gen, parentCachegen)
 	}
 	for _, child := range children {
-		if !checkCacheInvariant(child, n, flag.gen, flag.dirty, depth+1) {
-			return false
+		if err := checkCacheInvariant(child, n, flag.gen, flag.dirty, depth+1); err != nil {
+			return err
 		}
 	}
-	return true
+	return nil
 }
 
 func TestRandom(t *testing.T) {
 	if err := quick.Check(runRandTest, nil); err != nil {
+		if cerr, ok := err.(*quick.CheckError); ok {
+			t.Fatalf("random test iteration %d failed: %s", cerr.Count, spew.Sdump(cerr.In))
+		}
 		t.Fatal(err)
 	}
 }
@@ -500,8 +508,6 @@ func BenchmarkGet(b *testing.B)      { benchGet(b, false) }
 func BenchmarkGetDB(b *testing.B)    { benchGet(b, true) }
 func BenchmarkUpdateBE(b *testing.B) { benchUpdate(b, binary.BigEndian) }
 func BenchmarkUpdateLE(b *testing.B) { benchUpdate(b, binary.LittleEndian) }
-func BenchmarkHashBE(b *testing.B)   { benchHash(b, binary.BigEndian) }
-func BenchmarkHashLE(b *testing.B)   { benchHash(b, binary.LittleEndian) }
 
 const benchElemCount = 20000
 
@@ -544,18 +550,39 @@ func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 	return trie
 }
 
-func benchHash(b *testing.B, e binary.ByteOrder) {
-	trie := newEmpty()
-	k := make([]byte, 32)
-	for i := 0; i < benchElemCount; i++ {
-		e.PutUint64(k, uint64(i))
-		trie.Update(k, k)
-	}
+// Benchmarks the trie hashing. Since the trie caches the result of any operation,
+// we cannot use b.N as the number of hashing rouns, since all rounds apart from
+// the first one will be NOOP. As such, we'll use b.N as the number of account to
+// insert into the trie before measuring the hashing.
+func BenchmarkHash(b *testing.B) {
+	// Make the random benchmark deterministic
+	random := rand.New(rand.NewSource(0))
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		trie.Hash()
+	// Create a realistic account trie to hash
+	addresses := make([][20]byte, b.N)
+	for i := 0; i < len(addresses); i++ {
+		for j := 0; j < len(addresses[i]); j++ {
+			addresses[i][j] = byte(random.Intn(256))
+		}
 	}
+	accounts := make([][]byte, len(addresses))
+	for i := 0; i < len(accounts); i++ {
+		var (
+			nonce   = uint64(random.Int63())
+			balance = new(big.Int).Rand(random, new(big.Int).Exp(common.Big2, common.Big256, nil))
+			root    = emptyRoot
+			code    = crypto.Keccak256(nil)
+		)
+		accounts[i], _ = rlp.EncodeToBytes([]interface{}{nonce, balance, root, code})
+	}
+	// Insert the accounts into the trie and hash it
+	trie := newEmpty()
+	for i := 0; i < len(addresses); i++ {
+		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	trie.Hash()
 }
 
 func tempDB() (string, Database) {

@@ -156,6 +156,11 @@ func (t *SecureTrie) Root() []byte {
 	return t.trie.Root()
 }
 
+func (t *SecureTrie) Copy() *SecureTrie {
+	cpy := *t
+	return &cpy
+}
+
 // NodeIterator returns an iterator that returns nodes of the underlying trie. Iteration
 // starts at the key after the given start key.
 func (t *SecureTrie) NodeIterator(start []byte) NodeIterator {

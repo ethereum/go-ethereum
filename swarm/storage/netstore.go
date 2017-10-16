@@ -19,7 +19,6 @@ package storage
 import (
 	"fmt"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/expanse-org/go-expanse/log"
@@ -37,10 +36,9 @@ NetStore falls back to a backend (CloudStorage interface)
 implemented by bzz/network/forwarder. forwarder or IPFS or IPΞS
 */
 type NetStore struct {
-	hashfunc   Hasher
+	hashfunc   SwarmHasher
 	localStore *LocalStore
 	cloud      CloudStore
-	lock       sync.Mutex
 }
 
 // backend engine for cloud store
@@ -71,7 +69,7 @@ func NewStoreParams(path string) (self *StoreParams) {
 // netstore contructor, takes path argument that is used to initialise dbStore,
 // the persistent (disk) storage component of LocalStore
 // the second argument is the hive, the connection/logistics manager for the node
-func NewNetStore(hash Hasher, lstore *LocalStore, cloud CloudStore, params *StoreParams) *NetStore {
+func NewNetStore(hash SwarmHasher, lstore *LocalStore, cloud CloudStore, params *StoreParams) *NetStore {
 	return &NetStore{
 		hashfunc:   hash,
 		localStore: lstore,
@@ -134,6 +132,4 @@ func (self *NetStore) Get(key Key) (*Chunk, error) {
 }
 
 // Close netstore
-func (self *NetStore) Close() {
-	return
-}
+func (self *NetStore) Close() {}

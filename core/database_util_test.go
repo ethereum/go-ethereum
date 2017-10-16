@@ -18,17 +18,13 @@ package core
 
 import (
 	"bytes"
-	"io/ioutil"
 	"math/big"
-	"os"
 	"testing"
 
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/crypto/sha3"
 	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/rlp"
 )
 
@@ -290,8 +286,8 @@ func TestHeadStorage(t *testing.T) {
 	}
 }
 
-// Tests that transactions and associated metadata can be stored and retrieved.
-func TestTransactionStorage(t *testing.T) {
+// Tests that positional lookup metadata can be stored and retrieved.
+func TestLookupStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), big.NewInt(1111), big.NewInt(11111), []byte{0x11, 0x11, 0x11})
@@ -308,7 +304,10 @@ func TestTransactionStorage(t *testing.T) {
 		}
 	}
 	// Insert all the transactions into the database, and verify contents
-	if err := WriteTransactions(db, block); err != nil {
+	if err := WriteBlock(db, block); err != nil {
+		t.Fatalf("failed to write block contents: %v", err)
+	}
+	if err := WriteTxLookupEntries(db, block); err != nil {
 		t.Fatalf("failed to write transactions: %v", err)
 	}
 	for i, tx := range txs {
@@ -325,68 +324,9 @@ func TestTransactionStorage(t *testing.T) {
 	}
 	// Delete the transactions and check purge
 	for i, tx := range txs {
-		DeleteTransaction(db, tx.Hash())
+		DeleteTxLookupEntry(db, tx.Hash())
 		if txn, _, _, _ := GetTransaction(db, tx.Hash()); txn != nil {
 			t.Fatalf("tx #%d [%x]: deleted transaction returned: %v", i, tx.Hash(), txn)
-		}
-	}
-}
-
-// Tests that receipts can be stored and retrieved.
-func TestReceiptStorage(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
-
-	receipt1 := &types.Receipt{
-		PostState:         []byte{0x01},
-		CumulativeGasUsed: big.NewInt(1),
-		Logs: []*types.Log{
-			{Address: common.BytesToAddress([]byte{0x11})},
-			{Address: common.BytesToAddress([]byte{0x01, 0x11})},
-		},
-		TxHash:          common.BytesToHash([]byte{0x11, 0x11}),
-		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
-		GasUsed:         big.NewInt(111111),
-	}
-	receipt2 := &types.Receipt{
-		PostState:         []byte{0x02},
-		CumulativeGasUsed: big.NewInt(2),
-		Logs: []*types.Log{
-			{Address: common.BytesToAddress([]byte{0x22})},
-			{Address: common.BytesToAddress([]byte{0x02, 0x22})},
-		},
-		TxHash:          common.BytesToHash([]byte{0x22, 0x22}),
-		ContractAddress: common.BytesToAddress([]byte{0x02, 0x22, 0x22}),
-		GasUsed:         big.NewInt(222222),
-	}
-	receipts := []*types.Receipt{receipt1, receipt2}
-
-	// Check that no receipt entries are in a pristine database
-	for i, receipt := range receipts {
-		if r := GetReceipt(db, receipt.TxHash); r != nil {
-			t.Fatalf("receipt #%d [%x]: non existent receipt returned: %v", i, receipt.TxHash, r)
-		}
-	}
-	// Insert all the receipts into the database, and verify contents
-	if err := WriteReceipts(db, receipts); err != nil {
-		t.Fatalf("failed to write receipts: %v", err)
-	}
-	for i, receipt := range receipts {
-		if r := GetReceipt(db, receipt.TxHash); r == nil {
-			t.Fatalf("receipt #%d [%x]: receipt not found", i, receipt.TxHash)
-		} else {
-			rlpHave, _ := rlp.EncodeToBytes(r)
-			rlpWant, _ := rlp.EncodeToBytes(receipt)
-
-			if !bytes.Equal(rlpHave, rlpWant) {
-				t.Fatalf("receipt #%d [%x]: receipt mismatch: have %v, want %v", i, receipt.TxHash, r, receipt)
-			}
-		}
-	}
-	// Delete the receipts and check purge
-	for i, receipt := range receipts {
-		DeleteReceipt(db, receipt.TxHash)
-		if r := GetReceipt(db, receipt.TxHash); r != nil {
-			t.Fatalf("receipt #%d [%x]: deleted receipt returned: %v", i, receipt.TxHash, r)
 		}
 	}
 }
@@ -396,7 +336,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 
 	receipt1 := &types.Receipt{
-		PostState:         []byte{0x01},
+		Status:            types.ReceiptStatusFailed,
 		CumulativeGasUsed: big.NewInt(1),
 		Logs: []*types.Log{
 			{Address: common.BytesToAddress([]byte{0x11})},
@@ -407,7 +347,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 		GasUsed:         big.NewInt(111111),
 	}
 	receipt2 := &types.Receipt{
-		PostState:         []byte{0x02},
+		PostState:         common.Hash{2}.Bytes(),
 		CumulativeGasUsed: big.NewInt(2),
 		Logs: []*types.Log{
 			{Address: common.BytesToAddress([]byte{0x22})},
@@ -444,113 +384,5 @@ func TestBlockReceiptStorage(t *testing.T) {
 	DeleteBlockReceipts(db, hash, 0)
 	if rs := GetBlockReceipts(db, hash, 0); len(rs) != 0 {
 		t.Fatalf("deleted receipts returned: %v", rs)
-	}
-}
-
-func TestMipmapBloom(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
-
-	receipt1 := new(types.Receipt)
-	receipt1.Logs = []*types.Log{
-		{Address: common.BytesToAddress([]byte("test"))},
-		{Address: common.BytesToAddress([]byte("address"))},
-	}
-	receipt2 := new(types.Receipt)
-	receipt2.Logs = []*types.Log{
-		{Address: common.BytesToAddress([]byte("test"))},
-		{Address: common.BytesToAddress([]byte("address1"))},
-	}
-
-	WriteMipmapBloom(db, 1, types.Receipts{receipt1})
-	WriteMipmapBloom(db, 2, types.Receipts{receipt2})
-
-	for _, level := range MIPMapLevels {
-		bloom := GetMipmapBloom(db, 2, level)
-		if !bloom.Test(new(big.Int).SetBytes([]byte("address1"))) {
-			t.Error("expected test to be included on level:", level)
-		}
-	}
-
-	// reset
-	db, _ = ethdb.NewMemDatabase()
-	receipt := new(types.Receipt)
-	receipt.Logs = []*types.Log{
-		{Address: common.BytesToAddress([]byte("test"))},
-	}
-	WriteMipmapBloom(db, 999, types.Receipts{receipt1})
-
-	receipt = new(types.Receipt)
-	receipt.Logs = []*types.Log{
-		{Address: common.BytesToAddress([]byte("test 1"))},
-	}
-	WriteMipmapBloom(db, 1000, types.Receipts{receipt})
-
-	bloom := GetMipmapBloom(db, 1000, 1000)
-	if bloom.TestBytes([]byte("test")) {
-		t.Error("test should not have been included")
-	}
-}
-
-func TestMipmapChain(t *testing.T) {
-	dir, err := ioutil.TempDir("", "mipmap")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	var (
-		db, _   = ethdb.NewLDBDatabase(dir, 0, 0)
-		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		addr    = crypto.PubkeyToAddress(key1.PublicKey)
-		addr2   = common.BytesToAddress([]byte("jeff"))
-
-		hash1 = common.BytesToHash([]byte("topic1"))
-	)
-	defer db.Close()
-
-	gspec := &Genesis{
-		Config: params.TestChainConfig,
-		Alloc:  GenesisAlloc{addr: {Balance: big.NewInt(1000000)}},
-	}
-	genesis := gspec.MustCommit(db)
-	chain, receipts := GenerateChain(params.TestChainConfig, genesis, db, 1010, func(i int, gen *BlockGen) {
-		var receipts types.Receipts
-		switch i {
-		case 1:
-			receipt := types.NewReceipt(nil, new(big.Int))
-			receipt.Logs = []*types.Log{{Address: addr, Topics: []common.Hash{hash1}}}
-			gen.AddUncheckedReceipt(receipt)
-			receipts = types.Receipts{receipt}
-		case 1000:
-			receipt := types.NewReceipt(nil, new(big.Int))
-			receipt.Logs = []*types.Log{{Address: addr2}}
-			gen.AddUncheckedReceipt(receipt)
-			receipts = types.Receipts{receipt}
-
-		}
-
-		// store the receipts
-		err := WriteReceipts(db, receipts)
-		if err != nil {
-			t.Fatal(err)
-		}
-		WriteMipmapBloom(db, uint64(i+1), receipts)
-	})
-	for i, block := range chain {
-		WriteBlock(db, block)
-		if err := WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
-			t.Fatalf("failed to insert block number: %v", err)
-		}
-		if err := WriteHeadBlockHash(db, block.Hash()); err != nil {
-			t.Fatalf("failed to insert block number: %v", err)
-		}
-		if err := WriteBlockReceipts(db, block.Hash(), block.NumberU64(), receipts[i]); err != nil {
-			t.Fatal("error writing block receipts:", err)
-		}
-	}
-
-	bloom := GetMipmapBloom(db, 0, 1000)
-	if bloom.TestBytes(addr2[:]) {
-		t.Error("address was included in bloom and should not have")
 	}
 }

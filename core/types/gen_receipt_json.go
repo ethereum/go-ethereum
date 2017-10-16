@@ -13,7 +13,8 @@ import (
 
 func (r Receipt) MarshalJSON() ([]byte, error) {
 	type Receipt struct {
-		PostState         hexutil.Bytes  `json:"root"              gencodec:"required"`
+		PostState         hexutil.Bytes  `json:"root"`
+		Status            hexutil.Uint   `json:"status"`
 		CumulativeGasUsed *hexutil.Big   `json:"cumulativeGasUsed" gencodec:"required"`
 		Bloom             Bloom          `json:"logsBloom"         gencodec:"required"`
 		Logs              []*Log         `json:"logs"              gencodec:"required"`
@@ -23,6 +24,7 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 	}
 	var enc Receipt
 	enc.PostState = r.PostState
+	enc.Status = hexutil.Uint(r.Status)
 	enc.CumulativeGasUsed = (*hexutil.Big)(r.CumulativeGasUsed)
 	enc.Bloom = r.Bloom
 	enc.Logs = r.Logs
@@ -34,7 +36,8 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 
 func (r *Receipt) UnmarshalJSON(input []byte) error {
 	type Receipt struct {
-		PostState         hexutil.Bytes   `json:"root"              gencodec:"required"`
+		PostState         hexutil.Bytes   `json:"root"`
+		Status            *hexutil.Uint   `json:"status"`
 		CumulativeGasUsed *hexutil.Big    `json:"cumulativeGasUsed" gencodec:"required"`
 		Bloom             *Bloom          `json:"logsBloom"         gencodec:"required"`
 		Logs              []*Log          `json:"logs"              gencodec:"required"`
@@ -46,10 +49,12 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
-	if dec.PostState == nil {
-		return errors.New("missing required field 'root' for Receipt")
+	if dec.PostState != nil {
+		r.PostState = dec.PostState
 	}
-	r.PostState = dec.PostState
+	if dec.Status != nil {
+		r.Status = uint(*dec.Status)
+	}
 	if dec.CumulativeGasUsed == nil {
 		return errors.New("missing required field 'cumulativeGasUsed' for Receipt")
 	}

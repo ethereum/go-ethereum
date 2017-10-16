@@ -103,8 +103,8 @@ func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonr
 	if err := json.NewDecoder(respBody).Decode(&respmsgs); err != nil {
 		return err
 	}
-	for _, respmsg := range respmsgs {
-		op.resp <- &respmsg
+	for i := 0; i < len(respmsgs); i++ {
+		op.resp <- &respmsgs[i]
 	}
 	return nil
 }

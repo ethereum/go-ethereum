@@ -35,11 +35,7 @@ import (
 	"github.com/expanse-org/go-expanse/swarm/storage"
 )
 
-var (
-	hashMatcher      = regexp.MustCompile("^[0-9A-Fa-f]{64}")
-	slashes          = regexp.MustCompile("/+")
-	domainAndVersion = regexp.MustCompile("[@:;,]+")
-)
+var hashMatcher = regexp.MustCompile("^[0-9A-Fa-f]{64}")
 
 type Resolver interface {
 	Resolve(string) (common.Hash, error)
@@ -137,6 +133,7 @@ func (self *Api) Put(content, contentType string) (storage.Key, error) {
 func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, err error) {
 	trie, err := loadManifest(self.dpa, key, nil)
 	if err != nil {
+		status = http.StatusNotFound
 		log.Warn(fmt.Sprintf("loadManifestTrie error: %v", err))
 		return
 	}
@@ -148,9 +145,13 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 	if entry != nil {
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
-		mimeType = entry.ContentType
-		log.Trace(fmt.Sprintf("content lookup key: '%v' (%v)", key, mimeType))
-		reader = self.dpa.Retrieve(key)
+		if status == http.StatusMultipleChoices {
+			return
+		} else {
+			mimeType = entry.ContentType
+			log.Trace(fmt.Sprintf("content lookup key: '%v' (%v)", key, mimeType))
+			reader = self.dpa.Retrieve(key)
+		}
 	} else {
 		status = http.StatusNotFound
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
@@ -336,7 +337,6 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 }
 
 func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storage.Key, manifestEntryMap map[string]*manifestTrieEntry, err error) {
-
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
 		return nil, nil, err
@@ -357,5 +357,8 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 		manifestEntryMap[suffix] = entry
 	})
 
+	if err != nil {
+		return nil, nil, fmt.Errorf("list with prefix failed %v: %v", key.String(), err)
+	}
 	return key, manifestEntryMap, nil
 }

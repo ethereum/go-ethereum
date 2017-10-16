@@ -46,7 +46,7 @@ func (i *Interface) SetBool(b bool)                { i.object = &b }
 func (i *Interface) SetBools(bs []bool)            { i.object = &bs }
 func (i *Interface) SetString(str string)          { i.object = &str }
 func (i *Interface) SetStrings(strs *Strings)      { i.object = &strs.strs }
-func (i *Interface) SetBinary(binary []byte)       { i.object = &binary }
+func (i *Interface) SetBinary(binary []byte)       { b := common.CopyBytes(binary); i.object = &b }
 func (i *Interface) SetBinaries(binaries [][]byte) { i.object = &binaries }
 func (i *Interface) SetAddress(address *Address)   { i.object = &address.address }
 func (i *Interface) SetAddresses(addrs *Addresses) { i.object = &addrs.addresses }

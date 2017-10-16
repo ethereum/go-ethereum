@@ -53,7 +53,19 @@ func (self *CpuAgent) Work() chan<- *Work            { return self.workCh }
 func (self *CpuAgent) SetReturnCh(ch chan<- *Result) { self.returnCh = ch }
 
 func (self *CpuAgent) Stop() {
+	if !atomic.CompareAndSwapInt32(&self.isMining, 1, 0) {
+		return // agent already stopped
+	}
 	self.stop <- struct{}{}
+done:
+	// Empty work channel
+	for {
+		select {
+		case <-self.workCh:
+		default:
+			break done
+		}
+	}
 }
 
 func (self *CpuAgent) Start() {
@@ -85,17 +97,6 @@ out:
 			break out
 		}
 	}
-
-done:
-	// Empty work channel
-	for {
-		select {
-		case <-self.workCh:
-		default:
-			break done
-		}
-	}
-	atomic.StoreInt32(&self.isMining, 0)
 }
 
 func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {

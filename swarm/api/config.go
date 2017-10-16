@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 
 	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/contracts/ens"
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/swarm/network"
 	"github.com/expanse-org/go-expanse/swarm/services/swap"
@@ -34,10 +35,6 @@ import (
 const (
 	DefaultHTTPListenAddr = "127.0.0.1"
 	DefaultHTTPPort       = "8500"
-)
-
-var (
-	ensRootAddress = common.HexToAddress("0x112234455c3a32fd11230c42e7bccd4a84e02010")
 )
 
 // separate bzz directories
@@ -84,7 +81,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, n
 		Swap:          swap.DefaultSwapParams(contract, prvKey),
 		PublicKey:     pubkeyhex,
 		BzzKey:        keyhex,
-		EnsRoot:       ensRootAddress,
+		EnsRoot:       ens.TestNetAddress,
 		NetworkId:     networkId,
 	}
 	data, err = ioutil.ReadFile(confpath)
@@ -129,7 +126,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, n
 	self.Swap.SetKey(prvKey)
 
 	if (self.EnsRoot == common.Address{}) {
-		self.EnsRoot = ensRootAddress
+		self.EnsRoot = ens.TestNetAddress
 	}
 
 	return

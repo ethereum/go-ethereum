@@ -39,7 +39,7 @@ type Vote struct {
 // Tally is a simple vote tally to keep the current score of votes. Votes that
 // go against the proposal aren't counted since it's equivalent to not voting.
 type Tally struct {
-	Authorize bool `json:"authorize"` // Whether the vote it about authorizing or kicking someone
+	Authorize bool `json:"authorize"` // Whether the vote is about authorizing or kicking someone
 	Votes     int  `json:"votes"`     // Number of votes until now wanting to pass the proposal
 }
 
@@ -56,7 +56,7 @@ type Snapshot struct {
 	Tally   map[common.Address]Tally    `json:"tally"`   // Current vote tally to avoid recalculating
 }
 
-// newSnapshot create a new snapshot with the specified startup parameters. This
+// newSnapshot creates a new snapshot with the specified startup parameters. This
 // method does not initialize the set of recent signers, so only ever use if for
 // the genesis block.
 func newSnapshot(config *params.CliqueConfig, sigcache *lru.ARCCache, number uint64, hash common.Hash, signers []common.Address) *Snapshot {
@@ -126,11 +126,17 @@ func (s *Snapshot) copy() *Snapshot {
 	return cpy
 }
 
+// validVote returns whether it makes sense to cast the specified vote in the
+// given snapshot context (e.g. don't try to add an already authorized signer).
+func (s *Snapshot) validVote(address common.Address, authorize bool) bool {
+	_, signer := s.Signers[address]
+	return (signer && !authorize) || (!signer && authorize)
+}
+
 // cast adds a new vote into the tally.
 func (s *Snapshot) cast(address common.Address, authorize bool) bool {
 	// Ensure the vote is meaningful
-	_, signer := s.Signers[address]
-	if (signer && authorize) || (!signer && !authorize) {
+	if !s.validVote(address, authorize) {
 		return false
 	}
 	// Cast the vote into an existing or new tally
@@ -223,9 +229,9 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 		// Tally up the new vote from the signer
 		var authorize bool
 		switch {
-		case bytes.Compare(header.Nonce[:], nonceAuthVote) == 0:
+		case bytes.Equal(header.Nonce[:], nonceAuthVote):
 			authorize = true
-		case bytes.Compare(header.Nonce[:], nonceDropVote) == 0:
+		case bytes.Equal(header.Nonce[:], nonceDropVote):
 			authorize = false
 		default:
 			return nil, errInvalidVote

@@ -309,14 +309,14 @@ func (d *dataset) release() {
 
 // MakeCache generates a new ethash cache and optionally stores it to disk.
 func MakeCache(block uint64, dir string) {
-	c := cache{epoch: block/epochLength + 1}
+	c := cache{epoch: block / epochLength}
 	c.generate(dir, math.MaxInt32, false)
 	c.release()
 }
 
 // MakeDataset generates a new ethash dataset and optionally stores it to disk.
 func MakeDataset(block uint64, dir string) {
-	d := dataset{epoch: block/epochLength + 1}
+	d := dataset{epoch: block / epochLength}
 	d.generate(dir, math.MaxInt32, false)
 	d.release()
 }
@@ -356,7 +356,7 @@ type Ethash struct {
 // New creates a full sized ethash PoW scheme.
 func New(cachedir string, cachesinmem, cachesondisk int, dagdir string, dagsinmem, dagsondisk int) *Ethash {
 	if cachesinmem <= 0 {
-		log.Warn("One ethash cache must alwast be in memory", "requested", cachesinmem)
+		log.Warn("One ethash cache must always be in memory", "requested", cachesinmem)
 		cachesinmem = 1
 	}
 	if cachedir != "" && cachesondisk > 0 {
@@ -413,7 +413,7 @@ func NewFakeDelayer(delay time.Duration) *Ethash {
 	return &Ethash{fakeMode: true, fakeDelay: delay}
 }
 
-// NewFullFaker creates a ethash consensus engine with a full fake scheme that
+// NewFullFaker creates an ethash consensus engine with a full fake scheme that
 // accepts all blocks as valid, without checking any consensus rules whatsoever.
 func NewFullFaker() *Ethash {
 	return &Ethash{fakeMode: true, fakeFull: true}

@@ -1,15 +1,16 @@
-FROM alpine:3.5
+# Build Geth in a stock Go builder container
+FROM golang:1.9-alpine as builder
+
+RUN apk add --no-cache make gcc musl-dev linux-headers
 
 ADD . /go-expanse
-RUN \
-  apk add --update git go make gcc musl-dev linux-headers && \
-  (cd go-expanse && make gexp)                           && \
-  cp go-expanse/build/bin/gexp /usr/local/bin/           && \
-  apk del git go make gcc musl-dev linux-headers          && \
-  rm -rf /go-expanse && rm -rf /var/cache/apk/*
+RUN cd /go-expanse && make gexp
 
-EXPOSE 9656
-EXPOSE 42786
-EXPOSE 42786/udp
+# Pull Geth into a second stage deploy alpine container
+FROM alpine:latest
 
+RUN apk add --no-cache ca-certificates
+COPY --from=builder /go-expanse/build/bin/geth /usr/local/bin/
+
+EXPOSE 9656 9656 42786 42786/udp
 ENTRYPOINT ["gexp"]

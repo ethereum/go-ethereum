@@ -17,7 +17,6 @@
 package api
 
 import (
-	// "encoding/json"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -72,11 +71,21 @@ func TestGetEntry(t *testing.T) {
 	testGetEntry(t, "/a", "", "")
 	testGetEntry(t, "/a/b", "a/b", "a/b")
 	// longest/deepest math
-	testGetEntry(t, "a/b", "-", "a", "a/ba", "a/b/c")
+	testGetEntry(t, "read", "read", "readme.md", "readit.md")
+	testGetEntry(t, "rf", "-", "readme.md", "readit.md")
+	testGetEntry(t, "readme", "readme", "readme.md")
+	testGetEntry(t, "readme", "-", "readit.md")
+	testGetEntry(t, "readme.md", "readme.md", "readme.md")
+	testGetEntry(t, "readme.md", "-", "readit.md")
+	testGetEntry(t, "readmeAmd", "-", "readit.md")
+	testGetEntry(t, "readme.mdffff", "-", "readme.md")
+	testGetEntry(t, "ab", "ab", "ab/cefg", "ab/cedh", "ab/kkkkkk")
+	testGetEntry(t, "ab/ce", "ab/ce", "ab/cefg", "ab/cedh", "ab/ceuuuuuuuuuu")
+	testGetEntry(t, "abc", "abc", "abcd", "abczzzzef", "abc/def", "abc/e/g")
+	testGetEntry(t, "a/b", "a/b", "a", "a/bc", "a/ba", "a/b/c")
 	testGetEntry(t, "a/b", "a/b", "a", "a/b", "a/bb", "a/b/c")
 	testGetEntry(t, "//a//b//", "a/b", "a", "a/b", "a/bb", "a/b/c")
 }
-
 func TestDeleteEntry(t *testing.T) {
 
 }

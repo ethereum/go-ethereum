@@ -18,13 +18,16 @@ package whisperv5
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	mrand "math/rand"
 	"testing"
 	"time"
+
+	"github.com/expanse-org/go-expanse/common"
 )
 
 func TestWhisperBasic(t *testing.T) {
-	w := New()
+	w := New(&DefaultConfig)
 	p := w.Protocols()
 	shh := p[0]
 	if shh.Name != ProtocolName {
@@ -117,8 +120,39 @@ func TestWhisperBasic(t *testing.T) {
 	}
 }
 
+func TestWhisperAsymmetricKeyImport(t *testing.T) {
+	var (
+		w           = New(&DefaultConfig)
+		privateKeys []*ecdsa.PrivateKey
+	)
+
+	for i := 0; i < 50; i++ {
+		id, err := w.NewKeyPair()
+		if err != nil {
+			t.Fatalf("could not generate key: %v", err)
+		}
+
+		pk, err := w.GetPrivateKey(id)
+		if err != nil {
+			t.Fatalf("could not export private key: %v", err)
+		}
+
+		privateKeys = append(privateKeys, pk)
+
+		if !w.DeleteKeyPair(id) {
+			t.Fatalf("could not delete private key")
+		}
+	}
+
+	for _, pk := range privateKeys {
+		if _, err := w.AddKeyPair(pk); err != nil {
+			t.Fatalf("could not import private key: %v", err)
+		}
+	}
+}
+
 func TestWhisperIdentityManagement(t *testing.T) {
-	w := New()
+	w := New(&DefaultConfig)
 	id1, err := w.NewKeyPair()
 	if err != nil {
 		t.Fatalf("failed to generate new key pair: %s.", err)
@@ -240,7 +274,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 
 	var err error
 	var k1, k2 []byte
-	w := New()
+	w := New(&DefaultConfig)
 	id1 := string("arbitrary-string-1")
 	id2 := string("arbitrary-string-2")
 
@@ -392,7 +426,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 
 	randomKey = make([]byte, aesKeyLength+1)
 	mrand.Read(randomKey)
-	id1, err = w.AddSymKeyDirect(randomKey)
+	_, err = w.AddSymKeyDirect(randomKey)
 	if err == nil {
 		t.Fatalf("added the key with wrong size, seed %d.", seed)
 	}
@@ -443,7 +477,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 func TestExpiry(t *testing.T) {
 	InitSingleTest()
 
-	w := New()
+	w := New(&DefaultConfig)
 	w.SetMinimumPoW(0.0000001)
 	defer w.SetMinimumPoW(DefaultMinimumPoW)
 	w.Start(nil)
@@ -500,15 +534,18 @@ func TestExpiry(t *testing.T) {
 func TestCustomization(t *testing.T) {
 	InitSingleTest()
 
-	w := New()
+	w := New(&DefaultConfig)
 	defer w.SetMinimumPoW(DefaultMinimumPoW)
-	defer w.SetMaxMessageLength(DefaultMaxMessageLength)
+	defer w.SetMaxMessageSize(DefaultMaxMessageSize)
 	w.Start(nil)
 	defer w.Stop()
 
 	const smallPoW = 0.00001
 
 	f, err := generateFilter(t, true)
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
 	params, err := generateMessageParams()
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
@@ -547,13 +584,13 @@ func TestCustomization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
-	w.SetMaxMessageLength(env.size() - 1)
+	w.SetMaxMessageSize(uint32(env.size() - 1))
 	err = w.Send(env)
 	if err == nil {
 		t.Fatalf("successfully sent oversized envelope (seed %d): false positive.", seed)
 	}
 
-	w.SetMaxMessageLength(DefaultMaxMessageLength)
+	w.SetMaxMessageSize(DefaultMaxMessageSize)
 	err = w.Send(env)
 	if err != nil {
 		t.Fatalf("failed to send second envelope with seed %d: %s.", seed, err)
@@ -575,6 +612,9 @@ func TestCustomization(t *testing.T) {
 
 	// check w.messages()
 	id, err := w.Subscribe(f)
+	if err != nil {
+		t.Fatalf("failed subscribe with seed %d: %s.", seed, err)
+	}
 	time.Sleep(5 * time.Millisecond)
 	mail := f.Retrieve()
 	if len(mail) > 0 {
@@ -584,5 +624,228 @@ func TestCustomization(t *testing.T) {
 	mail = w.Messages(id)
 	if len(mail) != 2 {
 		t.Fatalf("failed to get whisper messages")
+	}
+}
+
+func TestSymmetricSendCycle(t *testing.T) {
+	InitSingleTest()
+
+	w := New(&DefaultConfig)
+	defer w.SetMinimumPoW(DefaultMinimumPoW)
+	defer w.SetMaxMessageSize(DefaultMaxMessageSize)
+	w.Start(nil)
+	defer w.Stop()
+
+	filter1, err := generateFilter(t, true)
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+	filter1.PoW = DefaultMinimumPoW
+
+	// Copy the first filter since some of its fields
+	// are randomly gnerated.
+	filter2 := &Filter{
+		KeySym:   filter1.KeySym,
+		Topics:   filter1.Topics,
+		PoW:      filter1.PoW,
+		AllowP2P: filter1.AllowP2P,
+		Messages: make(map[common.Hash]*ReceivedMessage),
+	}
+
+	params, err := generateMessageParams()
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+
+	filter1.Src = &params.Src.PublicKey
+	filter2.Src = &params.Src.PublicKey
+
+	params.KeySym = filter1.KeySym
+	params.Topic = BytesToTopic(filter1.Topics[2])
+	params.PoW = filter1.PoW
+	params.WorkTime = 10
+	params.TTL = 50
+	msg, err := NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
+	env, err := msg.Wrap(params)
+	if err != nil {
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
+	}
+
+	_, err = w.Subscribe(filter1)
+	if err != nil {
+		t.Fatalf("failed subscribe 1 with seed %d: %s.", seed, err)
+	}
+
+	_, err = w.Subscribe(filter2)
+	if err != nil {
+		t.Fatalf("failed subscribe 2 with seed %d: %s.", seed, err)
+	}
+
+	err = w.Send(env)
+	if err != nil {
+		t.Fatalf("Failed sending envelope with PoW %.06f (seed %d): %s", env.PoW(), seed, err)
+	}
+
+	// wait till received or timeout
+	var received bool
+	for j := 0; j < 200; j++ {
+		time.Sleep(10 * time.Millisecond)
+		if len(w.Envelopes()) > 0 {
+			received = true
+			break
+		}
+	}
+
+	if !received {
+		t.Fatalf("did not receive the sent envelope, seed: %d.", seed)
+	}
+
+	// check w.messages()
+	time.Sleep(5 * time.Millisecond)
+	mail1 := filter1.Retrieve()
+	mail2 := filter2.Retrieve()
+	if len(mail2) == 0 {
+		t.Fatalf("did not receive any email for filter 2")
+	}
+	if len(mail1) == 0 {
+		t.Fatalf("did not receive any email for filter 1")
+	}
+
+}
+
+func TestSymmetricSendWithoutAKey(t *testing.T) {
+	InitSingleTest()
+
+	w := New(&DefaultConfig)
+	defer w.SetMinimumPoW(DefaultMinimumPoW)
+	defer w.SetMaxMessageSize(DefaultMaxMessageSize)
+	w.Start(nil)
+	defer w.Stop()
+
+	filter, err := generateFilter(t, true)
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+	filter.PoW = DefaultMinimumPoW
+
+	params, err := generateMessageParams()
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+
+	filter.Src = nil
+
+	params.KeySym = filter.KeySym
+	params.Topic = BytesToTopic(filter.Topics[2])
+	params.PoW = filter.PoW
+	params.WorkTime = 10
+	params.TTL = 50
+	msg, err := NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
+	env, err := msg.Wrap(params)
+	if err != nil {
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
+	}
+
+	_, err = w.Subscribe(filter)
+	if err != nil {
+		t.Fatalf("failed subscribe 1 with seed %d: %s.", seed, err)
+	}
+
+	err = w.Send(env)
+	if err != nil {
+		t.Fatalf("Failed sending envelope with PoW %.06f (seed %d): %s", env.PoW(), seed, err)
+	}
+
+	// wait till received or timeout
+	var received bool
+	for j := 0; j < 200; j++ {
+		time.Sleep(10 * time.Millisecond)
+		if len(w.Envelopes()) > 0 {
+			received = true
+			break
+		}
+	}
+
+	if !received {
+		t.Fatalf("did not receive the sent envelope, seed: %d.", seed)
+	}
+
+	// check w.messages()
+	time.Sleep(5 * time.Millisecond)
+	mail := filter.Retrieve()
+	if len(mail) == 0 {
+		t.Fatalf("did not receive message in spite of not setting a public key")
+	}
+}
+
+func TestSymmetricSendKeyMismatch(t *testing.T) {
+	InitSingleTest()
+
+	w := New(&DefaultConfig)
+	defer w.SetMinimumPoW(DefaultMinimumPoW)
+	defer w.SetMaxMessageSize(DefaultMaxMessageSize)
+	w.Start(nil)
+	defer w.Stop()
+
+	filter, err := generateFilter(t, true)
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+	filter.PoW = DefaultMinimumPoW
+
+	params, err := generateMessageParams()
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+
+	params.KeySym = filter.KeySym
+	params.Topic = BytesToTopic(filter.Topics[2])
+	params.PoW = filter.PoW
+	params.WorkTime = 10
+	params.TTL = 50
+	msg, err := NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
+	env, err := msg.Wrap(params)
+	if err != nil {
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
+	}
+
+	_, err = w.Subscribe(filter)
+	if err != nil {
+		t.Fatalf("failed subscribe 1 with seed %d: %s.", seed, err)
+	}
+
+	err = w.Send(env)
+	if err != nil {
+		t.Fatalf("Failed sending envelope with PoW %.06f (seed %d): %s", env.PoW(), seed, err)
+	}
+
+	// wait till received or timeout
+	var received bool
+	for j := 0; j < 200; j++ {
+		time.Sleep(10 * time.Millisecond)
+		if len(w.Envelopes()) > 0 {
+			received = true
+			break
+		}
+	}
+
+	if !received {
+		t.Fatalf("did not receive the sent envelope, seed: %d.", seed)
+	}
+
+	// check w.messages()
+	time.Sleep(5 * time.Millisecond)
+	mail := filter.Retrieve()
+	if len(mail) > 0 {
+		t.Fatalf("received a message when keys weren't matching")
 	}
 }

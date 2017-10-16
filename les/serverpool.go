@@ -102,6 +102,8 @@ type serverPool struct {
 	wg     *sync.WaitGroup
 	connWg sync.WaitGroup
 
+	topic discv5.Topic
+
 	discSetPeriod chan time.Duration
 	discNodes     chan *discv5.Node
 	discLookups   chan bool
@@ -118,11 +120,9 @@ type serverPool struct {
 }
 
 // newServerPool creates a new serverPool instance
-func newServerPool(db ethdb.Database, dbPrefix []byte, server *p2p.Server, topic discv5.Topic, quit chan struct{}, wg *sync.WaitGroup) *serverPool {
+func newServerPool(db ethdb.Database, quit chan struct{}, wg *sync.WaitGroup) *serverPool {
 	pool := &serverPool{
 		db:           db,
-		dbKey:        append(dbPrefix, []byte(topic)...),
-		server:       server,
 		quit:         quit,
 		wg:           wg,
 		entries:      make(map[discover.NodeID]*poolEntry),
@@ -135,19 +135,25 @@ func newServerPool(db ethdb.Database, dbPrefix []byte, server *p2p.Server, topic
 	}
 	pool.knownQueue = newPoolEntryQueue(maxKnownEntries, pool.removeEntry)
 	pool.newQueue = newPoolEntryQueue(maxNewEntries, pool.removeEntry)
-	wg.Add(1)
-	pool.loadNodes()
-	pool.checkDial()
+	return pool
+}
 
+func (pool *serverPool) start(server *p2p.Server, topic discv5.Topic) {
+	pool.server = server
+	pool.topic = topic
+	pool.dbKey = append([]byte("serverPool/"), []byte(topic)...)
+	pool.wg.Add(1)
+	pool.loadNodes()
+
+	go pool.eventLoop()
+
+	pool.checkDial()
 	if pool.server.DiscV5 != nil {
 		pool.discSetPeriod = make(chan time.Duration, 1)
 		pool.discNodes = make(chan *discv5.Node, 100)
 		pool.discLookups = make(chan bool, 100)
-		go pool.server.DiscV5.SearchTopic(topic, pool.discSetPeriod, pool.discNodes, pool.discLookups)
+		go pool.server.DiscV5.SearchTopic(pool.topic, pool.discSetPeriod, pool.discNodes, pool.discLookups)
 	}
-
-	go pool.eventLoop()
-	return pool
 }
 
 // connect should be called upon any incoming connection. If the connection has been
@@ -485,7 +491,7 @@ func (pool *serverPool) checkDial() {
 
 // dial initiates a new connection
 func (pool *serverPool) dial(entry *poolEntry, knownSelected bool) {
-	if entry.state != psNotConnected {
+	if pool.server == nil || entry.state != psNotConnected {
 		return
 	}
 	entry.state = psDialed

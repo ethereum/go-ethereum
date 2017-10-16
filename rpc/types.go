@@ -48,7 +48,6 @@ type callback struct {
 // service represents a registered object
 type service struct {
 	name          string        // name for service
-	rcvr          reflect.Value // receiver of methods for the service
 	typ           reflect.Type  // receiver type
 	callbacks     callbacks     // registered handlers
 	subscriptions subscriptions // available subscriptions/notifications
@@ -58,23 +57,19 @@ type service struct {
 type serverRequest struct {
 	id            interface{}
 	svcname       string
-	rcvr          reflect.Value
 	callb         *callback
 	args          []reflect.Value
 	isUnsubscribe bool
 	err           Error
 }
 
-type serviceRegistry map[string]*service       // collection of services
-type callbacks map[string]*callback            // collection of RPC callbacks
-type subscriptions map[string]*callback        // collection of subscription callbacks
-type subscriptionRegistry map[string]*callback // collection of subscription callbacks
+type serviceRegistry map[string]*service // collection of services
+type callbacks map[string]*callback      // collection of RPC callbacks
+type subscriptions map[string]*callback  // collection of subscription callbacks
 
 // Server represents a RPC server
 type Server struct {
-	services       serviceRegistry
-	muSubcriptions sync.Mutex // protects subscriptions
-	subscriptions  subscriptionRegistry
+	services serviceRegistry
 
 	run      int32
 	codecsMu sync.Mutex

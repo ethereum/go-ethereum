@@ -23,9 +23,13 @@
 package storage
 
 import (
+	"archive/tar"
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"sync"
 
 	"github.com/expanse-org/go-expanse/log"
@@ -68,12 +72,12 @@ type DbStore struct {
 	gcPos, gcStartPos []byte
 	gcArray           []*gcItem
 
-	hashfunc Hasher
+	hashfunc SwarmHasher
 
 	lock sync.Mutex
 }
 
-func NewDbStore(path string, hash Hasher, capacity uint64, radius int) (s *DbStore, err error) {
+func NewDbStore(path string, hash SwarmHasher, capacity uint64, radius int) (s *DbStore, err error) {
 	s = new(DbStore)
 
 	s.hashfunc = hash
@@ -260,6 +264,84 @@ func (s *DbStore) collectGarbage(ratio float32) {
 	s.db.Put(keyGCPos, s.gcPos)
 }
 
+// Export writes all chunks from the store to a tar archive, returning the
+// number of chunks written.
+func (s *DbStore) Export(out io.Writer) (int64, error) {
+	tw := tar.NewWriter(out)
+	defer tw.Close()
+
+	it := s.db.NewIterator()
+	defer it.Release()
+	var count int64
+	for ok := it.Seek([]byte{kpIndex}); ok; ok = it.Next() {
+		key := it.Key()
+		if (key == nil) || (key[0] != kpIndex) {
+			break
+		}
+
+		var index dpaDBIndex
+		decodeIndex(it.Value(), &index)
+
+		data, err := s.db.Get(getDataKey(index.Idx))
+		if err != nil {
+			log.Warn(fmt.Sprintf("Chunk %x found but could not be accessed: %v", key[:], err))
+			continue
+		}
+
+		hdr := &tar.Header{
+			Name: hex.EncodeToString(key[1:]),
+			Mode: 0644,
+			Size: int64(len(data)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return count, err
+		}
+		if _, err := tw.Write(data); err != nil {
+			return count, err
+		}
+		count++
+	}
+
+	return count, nil
+}
+
+// Import reads chunks into the store from a tar archive, returning the number
+// of chunks read.
+func (s *DbStore) Import(in io.Reader) (int64, error) {
+	tr := tar.NewReader(in)
+
+	var count int64
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return count, err
+		}
+
+		if len(hdr.Name) != 64 {
+			log.Warn("ignoring non-chunk file", "name", hdr.Name)
+			continue
+		}
+
+		key, err := hex.DecodeString(hdr.Name)
+		if err != nil {
+			log.Warn("ignoring invalid chunk file", "name", hdr.Name, "err", err)
+			continue
+		}
+
+		data, err := ioutil.ReadAll(tr)
+		if err != nil {
+			return count, err
+		}
+
+		s.Put(&Chunk{Key: key, SData: data})
+		count++
+	}
+
+	return count, nil
+}
+
 func (s *DbStore) Cleanup() {
 	//Iterates over the database and checks that there are no faulty chunks
 	it := s.db.NewIterator()
@@ -399,7 +481,7 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 		hash := hasher.Sum(nil)
 		if !bytes.Equal(hash, key) {
 			s.delete(index.Idx, getIndexKey(key))
-			panic("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
+			log.Warn("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
 		}
 
 		chunk = &Chunk{
@@ -432,8 +514,7 @@ func (s *DbStore) setCapacity(c uint64) {
 	s.capacity = c
 
 	if s.entryCnt > c {
-		var ratio float32
-		ratio = float32(1.01) - float32(c)/float32(s.entryCnt)
+		ratio := float32(1.01) - float32(c)/float32(s.entryCnt)
 		if ratio < gcArrayFreeRatio {
 			ratio = gcArrayFreeRatio
 		}
@@ -444,10 +525,6 @@ func (s *DbStore) setCapacity(c uint64) {
 			s.collectGarbage(ratio)
 		}
 	}
-}
-
-func (s *DbStore) getEntryCnt() uint64 {
-	return s.entryCnt
 }
 
 func (s *DbStore) Close() {

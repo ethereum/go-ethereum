@@ -32,6 +32,7 @@ import (
 	"github.com/expanse-org/go-expanse/light"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/p2p/discv5"
 	"github.com/expanse-org/go-expanse/rlp"
 	"github.com/expanse-org/go-expanse/trie"
 )
@@ -41,17 +42,23 @@ type LesServer struct {
 	fcManager       *flowcontrol.ClientManager // nil if our node is client only
 	fcCostStats     *requestCostStats
 	defParams       *flowcontrol.ServerParams
-	stopped         bool
+	lesTopic        discv5.Topic
+	quitSync        chan struct{}
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
-	pm, err := NewProtocolManager(eth.BlockChain().Config(), false, config.NetworkId, eth.EventMux(), eth.Engine(), eth.BlockChain(), eth.TxPool(), eth.ChainDb(), nil, nil)
+	quitSync := make(chan struct{})
+	pm, err := NewProtocolManager(eth.BlockChain().Config(), false, config.NetworkId, eth.EventMux(), eth.Engine(), newPeerSet(), eth.BlockChain(), eth.TxPool(), eth.ChainDb(), nil, nil, quitSync, new(sync.WaitGroup))
 	if err != nil {
 		return nil, err
 	}
 	pm.blockLoop()
 
-	srv := &LesServer{protocolManager: pm}
+	srv := &LesServer{
+		protocolManager: pm,
+		quitSync:        quitSync,
+		lesTopic:        lesTopic(eth.BlockChain().Genesis().Hash()),
+	}
 	pm.server = srv
 
 	srv.defParams = &flowcontrol.ServerParams{
@@ -69,7 +76,14 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 
 // Start starts the LES server
 func (s *LesServer) Start(srvr *p2p.Server) {
-	s.protocolManager.Start(srvr)
+	s.protocolManager.Start()
+	go func() {
+		logger := log.New("topic", s.lesTopic)
+		logger.Info("Starting topic registration")
+		defer logger.Info("Terminated topic registration")
+
+		srvr.DiscV5.RegisterTopic(s.lesTopic, s.quitSync)
+	}()
 }
 
 // Stop stops the LES service
@@ -101,16 +115,6 @@ func (list RequestCostList) decode() requestCostTable {
 		}
 	}
 	return table
-}
-
-func (table requestCostTable) encode() RequestCostList {
-	list := make(RequestCostList, len(table))
-	for idx, code := range reqList {
-		list[idx].MsgCode = code
-		list[idx].BaseCost = table[code].baseCost
-		list[idx].ReqCost = table[code].reqCost
-	}
-	return list
 }
 
 type linReg struct {
@@ -267,7 +271,8 @@ func (s *requestCostStats) update(msgCode, reqCnt, cost uint64) {
 
 func (pm *ProtocolManager) blockLoop() {
 	pm.wg.Add(1)
-	sub := pm.eventMux.Subscribe(core.ChainHeadEvent{})
+	headCh := make(chan core.ChainHeadEvent, 10)
+	headSub := pm.blockchain.SubscribeChainHeadEvent(headCh)
 	newCht := make(chan struct{}, 10)
 	newCht <- struct{}{}
 	go func() {
@@ -276,10 +281,10 @@ func (pm *ProtocolManager) blockLoop() {
 		lastBroadcastTd := common.Big0
 		for {
 			select {
-			case ev := <-sub.Chan():
+			case ev := <-headCh:
 				peers := pm.peers.AllPeers()
 				if len(peers) > 0 {
-					header := ev.Data.(core.ChainHeadEvent).Block.Header()
+					header := ev.Block.Header()
 					hash := header.Hash()
 					number := header.Number.Uint64()
 					td := core.GetTd(pm.chainDb, hash, number)
@@ -315,7 +320,7 @@ func (pm *ProtocolManager) blockLoop() {
 					}
 				}()
 			case <-pm.quitSync:
-				sub.Unsubscribe()
+				headSub.Unsubscribe()
 				pm.wg.Done()
 				return
 			}

@@ -165,7 +165,7 @@ func TestNotifications(t *testing.T) {
 }
 
 func waitForMessages(t *testing.T, in *json.Decoder, successes chan<- jsonSuccessResponse,
-	failures chan<- jsonErrResponse, notifications chan<- jsonNotification) {
+	failures chan<- jsonErrResponse, notifications chan<- jsonNotification, errors chan<- error) {
 
 	// read and parse server messages
 	for {
@@ -177,12 +177,14 @@ func waitForMessages(t *testing.T, in *json.Decoder, successes chan<- jsonSucces
 		var responses []map[string]interface{}
 		if rmsg[0] == '[' {
 			if err := json.Unmarshal(rmsg, &responses); err != nil {
-				t.Fatalf("Received invalid message: %s", rmsg)
+				errors <- fmt.Errorf("Received invalid message: %s", rmsg)
+				return
 			}
 		} else {
 			var msg map[string]interface{}
 			if err := json.Unmarshal(rmsg, &msg); err != nil {
-				t.Fatalf("Received invalid message: %s", rmsg)
+				errors <- fmt.Errorf("Received invalid message: %s", rmsg)
+				return
 			}
 			responses = append(responses, msg)
 		}
@@ -216,7 +218,7 @@ func waitForMessages(t *testing.T, in *json.Decoder, successes chan<- jsonSucces
 				}
 				continue
 			}
-			t.Fatalf("Received invalid message: %s", msg)
+			errors <- fmt.Errorf("Received invalid message: %s", msg)
 		}
 	}
 }
@@ -235,6 +237,8 @@ func TestSubscriptionMultipleNamespaces(t *testing.T) {
 		successes     = make(chan jsonSuccessResponse)
 		failures      = make(chan jsonErrResponse)
 		notifications = make(chan jsonNotification)
+
+		errors = make(chan error, 10)
 	)
 
 	// setup and start server
@@ -248,7 +252,7 @@ func TestSubscriptionMultipleNamespaces(t *testing.T) {
 	defer server.Stop()
 
 	// wait for message and write them to the given channels
-	go waitForMessages(t, in, successes, failures, notifications)
+	go waitForMessages(t, in, successes, failures, notifications, errors)
 
 	// create subscriptions one by one
 	n := 3
@@ -297,6 +301,8 @@ func TestSubscriptionMultipleNamespaces(t *testing.T) {
 		}
 
 		select {
+		case err := <-errors:
+			t.Fatal(err)
 		case suc := <-successes: // subscription created
 			subids[namespaces[int(suc.Id.(float64))]] = suc.Result.(string)
 		case failure := <-failures:

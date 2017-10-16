@@ -95,7 +95,7 @@ func TestExecute(t *testing.T) {
 
 func TestCall(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	state, _ := state.New(common.Hash{}, db)
+	state, _ := state.New(common.Hash{}, state.NewDatabase(db))
 	address := common.HexToAddress("0x0a")
 	state.SetCode(address, []byte{
 		byte(vm.PUSH1), 10,
@@ -106,7 +106,7 @@ func TestCall(t *testing.T) {
 		byte(vm.RETURN),
 	})
 
-	ret, err := Call(address, nil, &Config{State: state})
+	ret, _, err := Call(address, nil, &Config{State: state})
 	if err != nil {
 		t.Fatal("didn't expect error", err)
 	}

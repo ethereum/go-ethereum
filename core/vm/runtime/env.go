@@ -21,11 +21,10 @@ import (
 
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/state"
 	"github.com/expanse-org/go-expanse/core/vm"
 )
 
-func NewEnv(cfg *Config, state *state.StateDB) *vm.EVM {
+func NewEnv(cfg *Config) *vm.EVM {
 	context := vm.Context{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
@@ -37,7 +36,7 @@ func NewEnv(cfg *Config, state *state.StateDB) *vm.EVM {
 		Time:        cfg.Time,
 		Difficulty:  cfg.Difficulty,
 		GasLimit:    new(big.Int).SetUint64(cfg.GasLimit),
-		GasPrice:    new(big.Int),
+		GasPrice:    cfg.GasPrice,
 	}
 
 	return vm.NewEVM(context, cfg.State, cfg.ChainConfig, cfg.EVMConfig)

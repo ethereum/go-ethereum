@@ -169,7 +169,9 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	}
 	// Register the Whisper protocol if requested
 	if config.WhisperEnabled {
-		if err := rawStack.Register(func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
+		if err := rawStack.Register(func(*node.ServiceContext) (node.Service, error) {
+			return whisper.New(&whisper.DefaultConfig), nil
+		}); err != nil {
 			return nil, fmt.Errorf("whisper init: %v", err)
 		}
 	}

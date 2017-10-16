@@ -47,7 +47,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.SyncMode = c.SyncMode
 	enc.LightServ = c.LightServ
 	enc.LightPeers = c.LightPeers
-	enc.MaxPeers = c.MaxPeers
 	enc.SkipBcVersionCheck = c.SkipBcVersionCheck
 	enc.DatabaseHandles = c.DatabaseHandles
 	enc.DatabaseCache = c.DatabaseCache
@@ -118,9 +117,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.LightPeers != nil {
 		c.LightPeers = *dec.LightPeers
-	}
-	if dec.MaxPeers != nil {
-		c.MaxPeers = *dec.MaxPeers
 	}
 	if dec.SkipBcVersionCheck != nil {
 		c.SkipBcVersionCheck = *dec.SkipBcVersionCheck

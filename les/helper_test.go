@@ -20,12 +20,10 @@
 package les
 
 import (
-	"crypto/ecdsa"
 	"crypto/rand"
 	"math/big"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/consensus/ethash"
@@ -132,25 +130,25 @@ func testRCL() RequestCostList {
 // newTestProtocolManager creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, and potential notification
 // channels for different events.
-func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *core.BlockGen)) (*ProtocolManager, ethdb.Database, *LesOdr, error) {
+func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *core.BlockGen), peers *peerSet, odr *LesOdr, db ethdb.Database) (*ProtocolManager, error) {
 	var (
 		evmux  = new(event.TypeMux)
 		engine = ethash.NewFaker()
-		db, _  = ethdb.NewMemDatabase()
 		gspec  = core.Genesis{
 			Config: params.TestChainConfig,
 			Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
 		}
 		genesis = gspec.MustCommit(db)
-		odr     *LesOdr
 		chain   BlockChain
 	)
+	if peers == nil {
+		peers = newPeerSet()
+	}
 
 	if lightSync {
-		odr = NewLesOdr(db)
-		chain, _ = light.NewLightChain(odr, gspec.Config, engine, evmux)
+		chain, _ = light.NewLightChain(odr, gspec.Config, engine)
 	} else {
-		blockchain, _ := core.NewBlockChain(db, gspec.Config, engine, evmux, vm.Config{})
+		blockchain, _ := core.NewBlockChain(db, gspec.Config, engine, vm.Config{})
 		gchain, _ := core.GenerateChain(gspec.Config, genesis, db, blocks, generator)
 		if _, err := blockchain.InsertChain(gchain); err != nil {
 			panic(err)
@@ -158,9 +156,9 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		chain = blockchain
 	}
 
-	pm, err := NewProtocolManager(gspec.Config, lightSync, NetworkId, evmux, engine, chain, nil, db, odr, nil)
+	pm, err := NewProtocolManager(gspec.Config, lightSync, NetworkId, evmux, engine, peers, chain, nil, db, odr, nil, make(chan struct{}), new(sync.WaitGroup))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	if !lightSync {
 		srv := &LesServer{protocolManager: pm}
@@ -174,59 +172,20 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		srv.fcManager = flowcontrol.NewClientManager(50, 10, 1000000000)
 		srv.fcCostStats = newCostStats(nil)
 	}
-	pm.Start(nil)
-	return pm, db, odr, nil
+	pm.Start()
+	return pm, nil
 }
 
 // newTestProtocolManagerMust creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, and potential notification
 // channels for different events. In case of an error, the constructor force-
 // fails the test.
-func newTestProtocolManagerMust(t *testing.T, lightSync bool, blocks int, generator func(int, *core.BlockGen)) (*ProtocolManager, ethdb.Database, *LesOdr) {
-	pm, db, odr, err := newTestProtocolManager(lightSync, blocks, generator)
+func newTestProtocolManagerMust(t *testing.T, lightSync bool, blocks int, generator func(int, *core.BlockGen), peers *peerSet, odr *LesOdr, db ethdb.Database) *ProtocolManager {
+	pm, err := newTestProtocolManager(lightSync, blocks, generator, peers, odr, db)
 	if err != nil {
 		t.Fatalf("Failed to create protocol manager: %v", err)
 	}
-	return pm, db, odr
-}
-
-// testTxPool is a fake, helper transaction pool for testing purposes
-type testTxPool struct {
-	pool  []*types.Transaction        // Collection of all transactions
-	added chan<- []*types.Transaction // Notification channel for new transactions
-
-	lock sync.RWMutex // Protects the transaction pool
-}
-
-// AddTransactions appends a batch of transactions to the pool, and notifies any
-// listeners if the addition channel is non nil
-func (p *testTxPool) AddBatch(txs []*types.Transaction) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	p.pool = append(p.pool, txs...)
-	if p.added != nil {
-		p.added <- txs
-	}
-}
-
-// GetTransactions returns all the transactions known to the pool
-func (p *testTxPool) GetTransactions() types.Transactions {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	txs := make([]*types.Transaction, len(p.pool))
-	copy(txs, p.pool)
-
-	return txs
-}
-
-// newTestTransaction create a new dummy transaction.
-func newTestTransaction(from *ecdsa.PrivateKey, nonce uint64, datasize int) *types.Transaction {
-	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), make([]byte, datasize))
-	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, from)
-
-	return tx
+	return pm
 }
 
 // testPeer is a simulated peer to allow testing direct network calls.
@@ -341,31 +300,4 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, headNu
 // manager of termination.
 func (p *testPeer) close() {
 	p.app.Close()
-}
-
-type testServerPool struct {
-	peer *peer
-	lock sync.RWMutex
-}
-
-func (p *testServerPool) setPeer(peer *peer) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	p.peer = peer
-}
-
-func (p *testServerPool) getAllPeers() map[distPeer]struct{} {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	m := make(map[distPeer]struct{})
-	if p.peer != nil {
-		m[p.peer] = struct{}{}
-	}
-	return m
-}
-
-func (p *testServerPool) adjustResponseTime(*poolEntry, time.Duration, bool) {
-
 }

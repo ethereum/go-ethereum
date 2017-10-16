@@ -377,15 +377,6 @@ func (w *whisperFilter) retrieve() (messages []WhisperMessage) {
 	return
 }
 
-// activity returns the last time instance when client requests were executed on
-// the filter.
-func (w *whisperFilter) activity() time.Time {
-	w.lock.RLock()
-	defer w.lock.RUnlock()
-
-	return w.update
-}
-
 // newWhisperFilter creates a new serialized, poll based whisper topic filter.
 func newWhisperFilter(id hexutil.Uint, ref *Whisper) *whisperFilter {
 	return &whisperFilter{

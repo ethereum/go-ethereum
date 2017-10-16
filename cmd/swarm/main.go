@@ -17,21 +17,26 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"os/signal"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/expanse-org/go-expanse/accounts"
 	"github.com/expanse-org/go-expanse/accounts/keystore"
 	"github.com/expanse-org/go-expanse/cmd/utils"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/console"
+	"github.com/expanse-org/go-expanse/contracts/ens"
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/ethclient"
 	"github.com/expanse-org/go-expanse/internal/debug"
@@ -40,6 +45,7 @@ import (
 	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/p2p/discover"
 	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/rpc"
 	"github.com/expanse-org/go-expanse/swarm"
 	bzzapi "github.com/expanse-org/go-expanse/swarm/api"
 	"gopkg.in/urfave/cli.v1"
@@ -87,14 +93,22 @@ var (
 		Name:  "swap",
 		Usage: "Swarm SWAP enabled (default false)",
 	}
+	SwarmSwapAPIFlag = cli.StringFlag{
+		Name:  "swap-api",
+		Usage: "URL of the Expanse API provider to use to settle SWAP payments",
+	}
 	SwarmSyncEnabledFlag = cli.BoolTFlag{
 		Name:  "sync",
 		Usage: "Swarm Syncing enabled (default true)",
 	}
-	EthAPIFlag = cli.StringFlag{
-		Name:  "ethapi",
-		Usage: "URL of the Expanse API provider",
+	EnsAPIFlag = cli.StringFlag{
+		Name:  "ens-api",
+		Usage: "URL of the Expanse API provider to use for ENS record lookups",
 		Value: node.DefaultIPCEndpoint("gexp"),
+	}
+	EnsAddrFlag = cli.StringFlag{
+		Name:  "ens-addr",
+		Usage: "ENS contract address (default is detected as testnet or mainnet using --ens-api)",
 	}
 	SwarmApiFlag = cli.StringFlag{
 		Name:  "bzzapi",
@@ -125,6 +139,12 @@ var (
 		Name:  "corsdomain",
 		Usage: "Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied separated by a ',')",
 	}
+
+	// the following flags are deprecated and should be removed in the future
+	DeprecatedEthAPIFlag = cli.StringFlag{
+		Name:  "ethapi",
+		Usage: "DEPRECATED: please use --ens-api and --swap-api",
+	}
 )
 
 var defaultNodeConfig = node.DefaultConfig
@@ -139,7 +159,7 @@ func init() {
 	utils.ListenPortFlag.Value = 30399
 }
 
-var app = utils.NewApp(gitCommit, "Ethereum Swarm")
+var app = utils.NewApp(gitCommit, "Expanse Swarm")
 
 // This init function creates the cli.App.
 func init() {
@@ -221,15 +241,69 @@ Removes a path from the manifest
 			},
 		},
 		{
-			Action:    cleandb,
+			Name:      "db",
+			Usage:     "manage the local chunk database",
+			ArgsUsage: "db COMMAND",
+			Description: `
+Manage the local chunk database.
+`,
+			Subcommands: []cli.Command{
+				{
+					Action:    dbExport,
+					Name:      "export",
+					Usage:     "export a local chunk database as a tar archive (use - to send to stdout)",
+					ArgsUsage: "<chunkdb> <file>",
+					Description: `
+Export a local chunk database as a tar archive (use - to send to stdout).
+
+    swarm db export ~/.ethereum/swarm/bzz-KEY/chunks chunks.tar
+
+The export may be quite large, consider piping the output through the Unix
+pv(1) tool to get a progress bar:
+
+    swarm db export ~/.ethereum/swarm/bzz-KEY/chunks - | pv > chunks.tar
+`,
+				},
+				{
+					Action:    dbImport,
+					Name:      "import",
+					Usage:     "import chunks from a tar archive into a local chunk database (use - to read from stdin)",
+					ArgsUsage: "<chunkdb> <file>",
+					Description: `
+Import chunks from a tar archive into a local chunk database (use - to read from stdin).
+
+    swarm db import ~/.ethereum/swarm/bzz-KEY/chunks chunks.tar
+
+The import may be quite large, consider piping the input through the Unix
+pv(1) tool to get a progress bar:
+
+    pv chunks.tar | swarm db import ~/.ethereum/swarm/bzz-KEY/chunks -
+`,
+				},
+				{
+					Action:    dbClean,
+					Name:      "clean",
+					Usage:     "remove corrupt entries from a local chunk database",
+					ArgsUsage: "<chunkdb>",
+					Description: `
+Remove corrupt entries from a local chunk database.
+`,
+				},
+			},
+		},
+		{
+			Action: func(ctx *cli.Context) {
+				utils.Fatalf("ERROR: 'swarm cleandb' has been removed, please use 'swarm db clean'.")
+			},
 			Name:      "cleandb",
-			Usage:     "Cleans database of corrupted entries",
+			Usage:     "DEPRECATED: use 'swarm db clean'",
 			ArgsUsage: " ",
 			Description: `
-Cleans database of corrupted entries.
+DEPRECATED: use 'swarm db clean'.
 `,
 		},
 	}
+	sort.Sort(cli.CommandsByName(app.Commands))
 
 	app.Flags = []cli.Flag{
 		utils.IdentityFlag,
@@ -249,9 +323,11 @@ Cleans database of corrupted entries.
 		utils.PasswordFileFlag,
 		// bzzd-specific flags
 		CorsStringFlag,
-		EthAPIFlag,
+		EnsAPIFlag,
+		EnsAddrFlag,
 		SwarmConfigPathFlag,
 		SwarmSwapEnabledFlag,
+		SwarmSwapAPIFlag,
 		SwarmSyncEnabledFlag,
 		SwarmListenAddrFlag,
 		SwarmPortFlag,
@@ -265,6 +341,8 @@ Cleans database of corrupted entries.
 		SwarmUploadDefaultPath,
 		SwarmUpFromStdinFlag,
 		SwarmUploadMimeType,
+		//deprecated flags
+		DeprecatedEthAPIFlag,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
@@ -299,6 +377,11 @@ func version(ctx *cli.Context) error {
 }
 
 func bzzd(ctx *cli.Context) error {
+	// exit if the deprecated --ethapi flag is set
+	if ctx.GlobalString(DeprecatedEthAPIFlag.Name) != "" {
+		utils.Fatalf("--ethapi is no longer a valid command line flag, please use --ens-api and/or --swap-api.")
+	}
+
 	cfg := defaultNodeConfig
 	utils.SetNodeConfig(ctx, &cfg)
 	stack, err := node.New(&cfg)
@@ -333,6 +416,38 @@ func bzzd(ctx *cli.Context) error {
 	return nil
 }
 
+// detectEnsAddr determines the ENS contract address by getting both the
+// version and genesis hash using the client and matching them to either
+// mainnet or testnet addresses
+func detectEnsAddr(client *rpc.Client) (common.Address, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var version string
+	if err := client.CallContext(ctx, &version, "net_version"); err != nil {
+		return common.Address{}, err
+	}
+
+	block, err := ethclient.NewClient(client).BlockByNumber(ctx, big.NewInt(0))
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	switch {
+
+	case version == "1" && block.Hash() == params.MainnetGenesisHash:
+		log.Info("using Mainnet ENS contract address", "addr", ens.MainNetAddress)
+		return ens.MainNetAddress, nil
+
+	case version == "3" && block.Hash() == params.TestnetGenesisHash:
+		log.Info("using Testnet ENS contract address", "addr", ens.TestNetAddress)
+		return ens.TestNetAddress, nil
+
+	default:
+		return common.Address{}, fmt.Errorf("unknown version and genesis hash: %s %s", version, block.Hash())
+	}
+}
+
 func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	prvkey := getAccount(ctx, stack)
 
@@ -356,20 +471,48 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	swapEnabled := ctx.GlobalBool(SwarmSwapEnabledFlag.Name)
 	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabledFlag.Name)
 
-	ethapi := ctx.GlobalString(EthAPIFlag.Name)
+	swapapi := ctx.GlobalString(SwarmSwapAPIFlag.Name)
+	if swapEnabled && swapapi == "" {
+		utils.Fatalf("SWAP is enabled but --swap-api is not set")
+	}
+
+	ensapi := ctx.GlobalString(EnsAPIFlag.Name)
+	ensAddr := ctx.GlobalString(EnsAddrFlag.Name)
+
 	cors := ctx.GlobalString(CorsStringFlag.Name)
 
 	boot := func(ctx *node.ServiceContext) (node.Service, error) {
-		var client *ethclient.Client
-		if len(ethapi) > 0 {
-			client, err = ethclient.Dial(ethapi)
+		var swapClient *ethclient.Client
+		if swapapi != "" {
+			log.Info("connecting to SWAP API", "url", swapapi)
+			swapClient, err = ethclient.Dial(swapapi)
 			if err != nil {
-				utils.Fatalf("Can't connect: %v", err)
+				return nil, fmt.Errorf("error connecting to SWAP API %s: %s", swapapi, err)
 			}
-		} else {
-			swapEnabled = false
 		}
-		return swarm.NewSwarm(ctx, client, bzzconfig, swapEnabled, syncEnabled, cors)
+
+		var ensClient *ethclient.Client
+		if ensapi != "" {
+			log.Info("connecting to ENS API", "url", ensapi)
+			client, err := rpc.Dial(ensapi)
+			if err != nil {
+				return nil, fmt.Errorf("error connecting to ENS API %s: %s", ensapi, err)
+			}
+			ensClient = ethclient.NewClient(client)
+
+			if ensAddr != "" {
+				bzzconfig.EnsRoot = common.HexToAddress(ensAddr)
+			} else {
+				ensAddr, err := detectEnsAddr(client)
+				if err == nil {
+					bzzconfig.EnsRoot = ensAddr
+				} else {
+					log.Warn(fmt.Sprintf("could not determine ENS contract address, using default %s", bzzconfig.EnsRoot), "err", err)
+				}
+			}
+		}
+
+		return swarm.NewSwarm(ctx, swapClient, ensClient, bzzconfig, swapEnabled, syncEnabled, cors)
 	}
 	if err := stack.Register(boot); err != nil {
 		utils.Fatalf("Failed to register the Swarm service: %v", err)

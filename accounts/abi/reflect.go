@@ -32,30 +32,30 @@ func indirect(v reflect.Value) reflect.Value {
 
 // reflectIntKind returns the reflect using the given size and
 // unsignedness.
-func reflectIntKind(unsigned bool, size int) reflect.Kind {
+func reflectIntKindAndType(unsigned bool, size int) (reflect.Kind, reflect.Type) {
 	switch size {
 	case 8:
 		if unsigned {
-			return reflect.Uint8
+			return reflect.Uint8, uint8_t
 		}
-		return reflect.Int8
+		return reflect.Int8, int8_t
 	case 16:
 		if unsigned {
-			return reflect.Uint16
+			return reflect.Uint16, uint16_t
 		}
-		return reflect.Int16
+		return reflect.Int16, int16_t
 	case 32:
 		if unsigned {
-			return reflect.Uint32
+			return reflect.Uint32, uint32_t
 		}
-		return reflect.Int32
+		return reflect.Int32, int32_t
 	case 64:
 		if unsigned {
-			return reflect.Uint64
+			return reflect.Uint64, uint64_t
 		}
-		return reflect.Int64
+		return reflect.Int64, int64_t
 	}
-	return reflect.Ptr
+	return reflect.Ptr, big_t
 }
 
 // mustArrayToBytesSlice creates a new byte slice with the exact same size as value

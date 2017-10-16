@@ -31,7 +31,9 @@ import (
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/state"
 	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/eth/downloader"
 	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/trie"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -90,6 +92,23 @@ Requires a first argument of the file to write to.
 Optional second and third arguments control the first and
 last block to write. In this mode, the file will be appended
 if already existing.`,
+	}
+	copydbCommand = cli.Command{
+		Action:    utils.MigrateFlags(copyDb),
+		Name:      "copydb",
+		Usage:     "Create a local chain from a target chaindata folder",
+		ArgsUsage: "<sourceChaindataDir>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.SyncModeFlag,
+			utils.FakePoWFlag,
+			utils.TestnetFlag,
+			utils.RinkebyFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+		Description: `
+The first argument must be the directory containing the blockchain to download from`,
 	}
 	removedbCommand = cli.Command{
 		Action:    utils.MigrateFlags(removeDB),
@@ -268,6 +287,54 @@ func exportChain(ctx *cli.Context) error {
 	return nil
 }
 
+func copyDb(ctx *cli.Context) error {
+	// Ensure we have a source chain directory to copy
+	if len(ctx.Args()) != 1 {
+		utils.Fatalf("Source chaindata directory path argument missing")
+	}
+	// Initialize a new chain for the running node to sync into
+	stack := makeFullNode(ctx)
+	chain, chainDb := utils.MakeChain(ctx, stack)
+
+	syncmode := *utils.GlobalTextMarshaler(ctx, utils.SyncModeFlag.Name).(*downloader.SyncMode)
+	dl := downloader.New(syncmode, chainDb, new(event.TypeMux), chain, nil, nil)
+
+	// Create a source peer to satisfy downloader requests from
+	db, err := ethdb.NewLDBDatabase(ctx.Args().First(), ctx.GlobalInt(utils.CacheFlag.Name), 256)
+	if err != nil {
+		return err
+	}
+	hc, err := core.NewHeaderChain(db, chain.Config(), chain.Engine(), func() bool { return false })
+	if err != nil {
+		return err
+	}
+	peer := downloader.NewFakePeer("local", db, hc, dl)
+	if err = dl.RegisterPeer("local", 63, peer); err != nil {
+		return err
+	}
+	// Synchronise with the simulated peer
+	start := time.Now()
+
+	currentHeader := hc.CurrentHeader()
+	if err = dl.Synchronise("local", currentHeader.Hash(), hc.GetTd(currentHeader.Hash(), currentHeader.Number.Uint64()), syncmode); err != nil {
+		return err
+	}
+	for dl.Synchronising() {
+		time.Sleep(10 * time.Millisecond)
+	}
+	fmt.Printf("Database copy done in %v\n", time.Since(start))
+
+	// Compact the entire database to remove any sync overhead
+	start = time.Now()
+	fmt.Println("Compacting entire database...")
+	if err = chainDb.(*ethdb.LDBDatabase).LDB().CompactRange(util.Range{}); err != nil {
+		utils.Fatalf("Compaction failed: %v", err)
+	}
+	fmt.Printf("Compaction done in %v.\n\n", time.Since(start))
+
+	return nil
+}
+
 func removeDB(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 
@@ -312,7 +379,7 @@ func dump(ctx *cli.Context) error {
 			fmt.Println("{}")
 			utils.Fatalf("block not found")
 		} else {
-			state, err := state.New(block.Root(), chainDb)
+			state, err := state.New(block.Root(), state.NewDatabase(chainDb))
 			if err != nil {
 				utils.Fatalf("could not create new state: %v", err)
 			}
