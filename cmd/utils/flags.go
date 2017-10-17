@@ -139,7 +139,11 @@ var (
 	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
-		Usage: "Developer mode: pre-configured private network with several debugging flags",
+		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
+	}
+	DeveloperPeriodFlag = cli.IntFlag{
+		Name:  "dev.period",
+		Usage: "Block period to use in developer mode (0 = mine only if transaction pending)",
 	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
@@ -995,7 +999,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 		log.Info("Created developer account", "address", faucet.Address)
 
-		cfg.Genesis = core.DefaultDeveloperGenesisBlock(faucet.Address)
+		cfg.Genesis = core.DefaultDeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), faucet.Address)
 		if !ctx.GlobalIsSet(GasPriceFlag.Name) {
 			cfg.GasPrice = big.NewInt(1)
 		}
