@@ -140,10 +140,10 @@
 						$("#block").text(parseInt(msg.number, 16));
 					}
 					if (msg.error !== undefined) {
-						noty({layout: 'topCenter', text: msg.error, type: 'error'});
+						noty({layout: 'topCenter', text: msg.error, type: 'error', timeout: 5000, progressBar: true});
 					}
 					if (msg.success !== undefined) {
-						noty({layout: 'topCenter', text: msg.success, type: 'success'});
+						noty({layout: 'topCenter', text: msg.success, type: 'success', timeout: 15000, progressBar: true});
 					}
 					if (msg.requests !== undefined && msg.requests !== null) {
 						var content = "";
