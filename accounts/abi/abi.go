@@ -110,7 +110,7 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 		// names
 		case reflect.Struct:
 			for i := 0; i < len(method.Outputs); i++ {
-				marshalledValue, err := toGoType(i, method.Outputs[i], output)
+				marshalledValue, err := ToGoType(i, method.Outputs[i], output)
 				if err != nil {
 					return err
 				}
@@ -138,7 +138,7 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 				}
 
 				for i := 0; i < len(method.Outputs); i++ {
-					marshalledValue, err := toGoType(i, method.Outputs[i], output)
+					marshalledValue, err := ToGoType(i, method.Outputs[i], output)
 					if err != nil {
 						return err
 					}
@@ -154,7 +154,7 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 			// values to the new interface slice.
 			z := reflect.MakeSlice(typ, 0, len(method.Outputs))
 			for i := 0; i < len(method.Outputs); i++ {
-				marshalledValue, err := toGoType(i, method.Outputs[i], output)
+				marshalledValue, err := ToGoType(i, method.Outputs[i], output)
 				if err != nil {
 					return err
 				}
@@ -166,7 +166,7 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 		}
 
 	} else {
-		marshalledValue, err := toGoType(0, method.Outputs[0], output)
+		marshalledValue, err := ToGoType(0, method.Outputs[0], output)
 		if err != nil {
 			return err
 		}

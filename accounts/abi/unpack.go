@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// toGoSliceType parses the input and casts it to the proper slice defined by the ABI
+// toGoSlice parses the input and casts it to the proper slice defined by the ABI
 // argument in T.
 func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 	index := i * 32
@@ -181,9 +181,9 @@ func readBool(word []byte) (bool, error) {
 
 }
 
-// toGoType parses the input and casts it to the proper type defined by the ABI
-// argument in T.
-func toGoType(i int, t Argument, output []byte) (interface{}, error) {
+// ToGoType parses the i-th input and casts it to the proper type defined by the ABI
+// argument `t`. `output` is the whole ABI-encoded data.
+func ToGoType(i int, t Argument, output []byte) (interface{}, error) {
 	// we need to treat slices differently
 	if (t.Type.IsSlice || t.Type.IsArray) && t.Type.T != BytesTy && t.Type.T != StringTy && t.Type.T != FixedBytesTy && t.Type.T != FunctionTy {
 		return toGoSlice(i, t, output)
