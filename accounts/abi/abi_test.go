@@ -29,25 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// formatSilceOutput add padding to the value and adds a size
-func formatSliceOutput(v ...[]byte) []byte {
-	off := common.LeftPadBytes(big.NewInt(int64(len(v))).Bytes(), 32)
-	output := append(off, make([]byte, 0, len(v)*32)...)
-
-	for _, value := range v {
-		output = append(output, common.LeftPadBytes(value, 32)...)
-	}
-	return output
-}
-
-// quick helper padding
-func pad(input []byte, size int, left bool) []byte {
-	if left {
-		return common.LeftPadBytes(input, size)
-	}
-	return common.RightPadBytes(input, size)
-}
-
 const jsondata = `
 [
 	{ "type" : "function", "name" : "balance", "constant" : true },
@@ -191,7 +172,7 @@ func TestMethodSignature(t *testing.T) {
 		t.Errorf("expected ids to match %x != %x", m.Id(), idexp)
 	}
 
-	uintt, _ := NewType("uint")
+	uintt, _ := NewType("uint256")
 	m = Method{"foo", false, []Argument{{"bar", uintt, false}}, nil}
 	exp = "foo(uint256)"
 	if m.Sig() != exp {
