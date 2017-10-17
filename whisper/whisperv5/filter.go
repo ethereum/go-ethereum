@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/log"
 )
 
@@ -66,6 +67,10 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 
 	if fs.watchers[id] != nil {
 		return "", fmt.Errorf("failed to generate unique ID")
+	}
+
+	if watcher.expectsSymmetricEncryption() {
+		watcher.SymKeyHash = crypto.Keccak256Hash(watcher.KeySym)
 	}
 
 	fs.watchers[id] = watcher
@@ -119,7 +124,9 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 
 		if match && msg != nil {
 			log.Trace("processing message: decrypted", "hash", env.Hash().Hex())
-			watcher.Trigger(msg)
+			if watcher.Src == nil || IsPubKeyEqual(msg.Src, watcher.Src) {
+				watcher.Trigger(msg)
+			}
 		}
 	}
 }
@@ -163,15 +170,13 @@ func (f *Filter) Retrieve() (all []*ReceivedMessage) {
 	for _, msg := range f.Messages {
 		all = append(all, msg)
 	}
+
 	f.Messages = make(map[common.Hash]*ReceivedMessage) // delete old messages
 	return all
 }
 
 func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 	if f.PoW > 0 && msg.PoW < f.PoW {
-		return false
-	}
-	if f.Src != nil && !IsPubKeyEqual(msg.Src, f.Src) {
 		return false
 	}
 

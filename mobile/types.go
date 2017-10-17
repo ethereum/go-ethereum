@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/rlp"
 )
@@ -68,7 +69,7 @@ func NewHeaderFromRLP(data []byte) (*Header, error) {
 	h := &Header{
 		header: new(types.Header),
 	}
-	if err := rlp.DecodeBytes(data, h.header); err != nil {
+	if err := rlp.DecodeBytes(common.CopyBytes(data), h.header); err != nil {
 		return nil, err
 	}
 	return h, nil
@@ -145,7 +146,7 @@ func NewBlockFromRLP(data []byte) (*Block, error) {
 	b := &Block{
 		block: new(types.Block),
 	}
-	if err := rlp.DecodeBytes(data, b.block); err != nil {
+	if err := rlp.DecodeBytes(common.CopyBytes(data), b.block); err != nil {
 		return nil, err
 	}
 	return b, nil
@@ -212,7 +213,7 @@ type Transaction struct {
 
 // NewTransaction creates a new transaction with the given properties.
 func NewTransaction(nonce int64, to *Address, amount, gasLimit, gasPrice *BigInt, data []byte) *Transaction {
-	return &Transaction{types.NewTransaction(uint64(nonce), to.address, amount.bigint, gasLimit.bigint, gasPrice.bigint, data)}
+	return &Transaction{types.NewTransaction(uint64(nonce), to.address, amount.bigint, gasLimit.bigint, gasPrice.bigint, common.CopyBytes(data))}
 }
 
 // NewTransactionFromRLP parses a transaction from an RLP data dump.
@@ -220,7 +221,7 @@ func NewTransactionFromRLP(data []byte) (*Transaction, error) {
 	tx := &Transaction{
 		tx: new(types.Transaction),
 	}
-	if err := rlp.DecodeBytes(data, tx.tx); err != nil {
+	if err := rlp.DecodeBytes(common.CopyBytes(data), tx.tx); err != nil {
 		return nil, err
 	}
 	return tx, nil
@@ -260,12 +261,19 @@ func (tx *Transaction) GetGasPrice() *BigInt { return &BigInt{tx.tx.GasPrice()} 
 func (tx *Transaction) GetValue() *BigInt    { return &BigInt{tx.tx.Value()} }
 func (tx *Transaction) GetNonce() int64      { return int64(tx.tx.Nonce()) }
 
-func (tx *Transaction) GetHash() *Hash    { return &Hash{tx.tx.Hash()} }
-func (tx *Transaction) GetSigHash() *Hash { return &Hash{tx.tx.SigHash(types.HomesteadSigner{})} }
-func (tx *Transaction) GetCost() *BigInt  { return &BigInt{tx.tx.Cost()} }
+func (tx *Transaction) GetHash() *Hash   { return &Hash{tx.tx.Hash()} }
+func (tx *Transaction) GetCost() *BigInt { return &BigInt{tx.tx.Cost()} }
 
-func (tx *Transaction) GetFrom() (address *Address, _ error) {
-	from, err := types.Sender(types.HomesteadSigner{}, tx.tx)
+// Deprecated: GetSigHash cannot know which signer to use.
+func (tx *Transaction) GetSigHash() *Hash { return &Hash{types.HomesteadSigner{}.Hash(tx.tx)} }
+
+// Deprecated: use EthereumClient.TransactionSender
+func (tx *Transaction) GetFrom(chainID *BigInt) (address *Address, _ error) {
+	var signer types.Signer = types.HomesteadSigner{}
+	if chainID != nil {
+		signer = types.NewEIP155Signer(chainID.bigint)
+	}
+	from, err := types.Sender(signer, tx.tx)
 	return &Address{from}, err
 }
 
@@ -276,8 +284,12 @@ func (tx *Transaction) GetTo() *Address {
 	return nil
 }
 
-func (tx *Transaction) WithSignature(sig []byte) (signedTx *Transaction, _ error) {
-	rawTx, err := tx.tx.WithSignature(types.HomesteadSigner{}, sig)
+func (tx *Transaction) WithSignature(sig []byte, chainID *BigInt) (signedTx *Transaction, _ error) {
+	var signer types.Signer = types.HomesteadSigner{}
+	if chainID != nil {
+		signer = types.NewEIP155Signer(chainID.bigint)
+	}
+	rawTx, err := tx.tx.WithSignature(signer, common.CopyBytes(sig))
 	return &Transaction{rawTx}, err
 }
 
@@ -307,7 +319,7 @@ func NewReceiptFromRLP(data []byte) (*Receipt, error) {
 	r := &Receipt{
 		receipt: new(types.Receipt),
 	}
-	if err := rlp.DecodeBytes(data, r.receipt); err != nil {
+	if err := rlp.DecodeBytes(common.CopyBytes(data), r.receipt); err != nil {
 		return nil, err
 	}
 	return r, nil

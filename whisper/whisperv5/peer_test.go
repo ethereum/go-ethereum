@@ -113,7 +113,7 @@ func initialize(t *testing.T) {
 
 	for i := 0; i < NumNodes; i++ {
 		var node TestNode
-		node.shh = New()
+		node.shh = New(&DefaultConfig)
 		node.shh.SetMinimumPoW(0.00000001)
 		node.shh.Start(nil)
 		topics := make([]TopicType, 0)

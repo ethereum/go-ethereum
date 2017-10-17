@@ -40,7 +40,6 @@ import (
 	"github.com/expanse-org/go-expanse/contracts/chequebook"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/p2p"
-	"github.com/expanse-org/go-expanse/p2p/discover"
 	bzzswap "github.com/expanse-org/go-expanse/swarm/services/swap"
 	"github.com/expanse-org/go-expanse/swarm/services/swap/swap"
 	"github.com/expanse-org/go-expanse/swarm/storage"
@@ -56,8 +55,6 @@ const (
 // bzz represents the swarm wire protocol
 // an instance is running on each peer
 type bzz struct {
-	selfID     discover.NodeID      // peer's node id used in peer advertising in handshake
-	key        storage.Key          // baseaddress as storage.Key
 	storage    StorageHandler       // handler storage/retrieval related requests coming via the bzz wire protocol
 	hive       *Hive                // the logistic manager, peerPool, routing service and peer handler
 	dbAccess   *DbAccess            // access to db storage counter and iterator for syncing

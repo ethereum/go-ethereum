@@ -82,6 +82,11 @@ services:
       - CAPTCHA_SECRET={{.CaptchaSecret}}{{if .VHost}}
       - VIRTUAL_HOST={{.VHost}}
       - VIRTUAL_PORT=8080{{end}}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "10"
     restart: always
 `
 

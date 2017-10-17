@@ -435,7 +435,7 @@ func TestServerSetupConn(t *testing.T) {
 			}
 		}
 		p1, _ := net.Pipe()
-		srv.setupConn(p1, test.flags, test.dialDest)
+		srv.SetupConn(p1, test.flags, test.dialDest)
 		if !reflect.DeepEqual(test.tt.closeErr, test.wantCloseErr) {
 			t.Errorf("test %d: close error mismatch: got %q, want %q", i, test.tt.closeErr, test.wantCloseErr)
 		}

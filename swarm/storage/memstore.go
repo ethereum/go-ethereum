@@ -130,10 +130,6 @@ func (s *MemStore) setCapacity(c uint) {
 	s.capacity = c
 }
 
-func (s *MemStore) getEntryCnt() uint {
-	return s.entryCnt
-}
-
 // entry (not its copy) is going to be in MemStore
 func (s *MemStore) Put(entry *Chunk) {
 	if s.capacity == 0 {
@@ -206,8 +202,6 @@ func (s *MemStore) Put(entry *Chunk) {
 	node.lastDBaccess = s.dbAccessCnt
 	node.updateAccess(s.accessCnt)
 	s.entryCnt++
-
-	return
 }
 
 func (s *MemStore) Get(hash Key) (chunk *Chunk, err error) {
@@ -323,6 +317,4 @@ func (s *MemStore) removeOldest() {
 }
 
 // Close memstore
-func (s *MemStore) Close() {
-	return
-}
+func (s *MemStore) Close() {}

@@ -38,10 +38,7 @@ var (
 	errNotRegistered     = errors.New("peer is not registered")
 )
 
-const (
-	maxHeadInfoLen    = 20
-	maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
-)
+const maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
 
 type peer struct {
 	*p2p.Peer
@@ -166,9 +163,9 @@ func (p *peer) GetRequestCost(msgcode uint64, amount int) uint64 {
 // HasBlock checks if the peer has a given block
 func (p *peer) HasBlock(hash common.Hash, number uint64) bool {
 	p.lock.RLock()
-	hashBlock := p.hasBlock
+	hasBlock := p.hasBlock
 	p.lock.RUnlock()
-	return hashBlock != nil && hashBlock(hash, number)
+	return hasBlock != nil && hasBlock(hash, number)
 }
 
 // SendAnnounce announces the availability of a number of blocks through
@@ -433,18 +430,37 @@ func (p *peer) String() string {
 	)
 }
 
+// peerSetNotify is a callback interface to notify services about added or
+// removed peers
+type peerSetNotify interface {
+	registerPeer(*peer)
+	unregisterPeer(*peer)
+}
+
 // peerSet represents the collection of active peers currently participating in
 // the Light Ethereum sub-protocol.
 type peerSet struct {
-	peers  map[string]*peer
-	lock   sync.RWMutex
-	closed bool
+	peers      map[string]*peer
+	lock       sync.RWMutex
+	notifyList []peerSetNotify
+	closed     bool
 }
 
 // newPeerSet creates a new peer set to track the active participants.
 func newPeerSet() *peerSet {
 	return &peerSet{
 		peers: make(map[string]*peer),
+	}
+}
+
+// notify adds a service to be notified about added or removed peers
+func (ps *peerSet) notify(n peerSetNotify) {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	ps.notifyList = append(ps.notifyList, n)
+	for _, p := range ps.peers {
+		go n.registerPeer(p)
 	}
 }
 
@@ -462,11 +478,14 @@ func (ps *peerSet) Register(p *peer) error {
 	}
 	ps.peers[p.id] = p
 	p.sendQueue = newExecQueue(100)
+	for _, n := range ps.notifyList {
+		go n.registerPeer(p)
+	}
 	return nil
 }
 
 // Unregister removes a remote peer from the active set, disabling any further
-// actions to/from that particular entity.
+// actions to/from that particular entity. It also initiates disconnection at the networking layer.
 func (ps *peerSet) Unregister(id string) error {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
@@ -474,7 +493,11 @@ func (ps *peerSet) Unregister(id string) error {
 	if p, ok := ps.peers[id]; !ok {
 		return errNotRegistered
 	} else {
+		for _, n := range ps.notifyList {
+			go n.unregisterPeer(p)
+		}
 		p.sendQueue.quit()
+		p.Peer.Disconnect(p2p.DiscUselessPeer)
 	}
 	delete(ps.peers, id)
 	return nil

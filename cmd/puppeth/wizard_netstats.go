@@ -129,7 +129,7 @@ func (w *wizard) networkStats(tips bool) {
 		}
 	}
 	// If a genesis block was found, load it into our configs
-	if protips.genesis != "" {
+	if protips.genesis != "" && w.conf.genesis == nil {
 		genesis := new(core.Genesis)
 		if err := json.Unmarshal([]byte(protips.genesis), genesis); err != nil {
 			log.Error("Failed to parse remote genesis", "err", err)

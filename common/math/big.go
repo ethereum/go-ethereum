@@ -130,6 +130,34 @@ func PaddedBigBytes(bigint *big.Int, n int) []byte {
 	return ret
 }
 
+// bigEndianByteAt returns the byte at position n,
+// in Big-Endian encoding
+// So n==0 returns the least significant byte
+func bigEndianByteAt(bigint *big.Int, n int) byte {
+	words := bigint.Bits()
+	// Check word-bucket the byte will reside in
+	i := n / wordBytes
+	if i >= len(words) {
+		return byte(0)
+	}
+	word := words[i]
+	// Offset of the byte
+	shift := 8 * uint(n%wordBytes)
+
+	return byte(word >> shift)
+}
+
+// Byte returns the byte at position n,
+// with the supplied padlength in Little-Endian encoding.
+// n==0 returns the MSB
+// Example: bigint '5', padlength 32, n=31 => 5
+func Byte(bigint *big.Int, padlength, n int) byte {
+	if n >= padlength {
+		return byte(0)
+	}
+	return bigEndianByteAt(bigint, padlength-1-n)
+}
+
 // ReadBits encodes the absolute value of bigint as big-endian bytes. Callers must ensure
 // that buf has enough space. If buf is too short the result will be incomplete.
 func ReadBits(bigint *big.Int, buf []byte) {

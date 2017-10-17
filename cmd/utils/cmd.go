@@ -164,7 +164,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 
 func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
 	for _, b := range bs {
-		if !chain.HasBlock(b.Hash()) {
+		if !chain.HasBlock(b.Hash(), b.NumberU64()) {
 			return false
 		}
 	}

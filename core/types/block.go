@@ -381,7 +381,7 @@ func (b *Block) Hash() common.Hash {
 	if hash := b.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
-	v := rlpHash(b.header)
+	v := b.header.Hash()
 	b.hash.Store(v)
 	return v
 }

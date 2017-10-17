@@ -22,7 +22,9 @@ import (
 	"math/big"
 
 	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/rlp"
 )
 
@@ -94,12 +96,16 @@ var errorToString = map[int]string{
 }
 
 type txPool interface {
-	// AddBatch should add the given transactions to the pool.
-	AddBatch([]*types.Transaction) error
+	// AddRemotes should add the given transactions to the pool.
+	AddRemotes([]*types.Transaction) error
 
 	// Pending should return pending transactions.
 	// The slice should be modifiable by the caller.
 	Pending() (map[common.Address]types.Transactions, error)
+
+	// SubscribeTxPreEvent should return an event subscription of
+	// TxPreEvent and send events to the given channel.
+	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
 }
 
 // statusData is the network packet for the status message.

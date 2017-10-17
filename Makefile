@@ -2,13 +2,13 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: gexp android ios gexp-cross evm all test clean
+.PHONY: gexp android ios gexp-cross swarm evm all test clean
 .PHONY: gexp-linux gexp-linux-386 gexp-linux-amd64 gexp-linux-mips64 gexp-linux-mips64le
 .PHONY: gexp-linux-arm gexp-linux-arm-5 gexp-linux-arm-6 gexp-linux-arm-7 gexp-linux-arm64
 .PHONY: gexp-darwin gexp-darwin-386 gexp-darwin-amd64
 .PHONY: gexp-windows gexp-windows-386 gexp-windows-amd64
 
-GOBIN = build/bin
+GOBIN = $(shell pwd)/build/bin
 GO ?= latest
 
 gexp:
@@ -16,10 +16,10 @@ gexp:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/gexp\" to launch gexp."
 
-evm:
-	build/env.sh go run build/ci.go install ./cmd/evm
+swarm:
+	build/env.sh go run build/ci.go install ./cmd/swarm
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/evm\" to start the evm."
+	@echo "Run \"$(GOBIN)/swarm\" to launch swarm."
 
 all:
 	build/env.sh go run build/ci.go install

@@ -393,6 +393,5 @@ func optimalAte(a *twistPoint, b *curvePoint, pool *bnPool) *gfP12 {
 	if a.IsInfinity() || b.IsInfinity() {
 		ret.SetOne()
 	}
-
 	return ret
 }

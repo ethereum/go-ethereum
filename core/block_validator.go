@@ -52,16 +52,10 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 // validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Check whether the block's known, and if not, that it's linkable
-	if v.bc.HasBlock(block.Hash()) {
-		if _, err := state.New(block.Root(), v.bc.chainDb); err == nil {
-			return ErrKnownBlock
-		}
+	if v.bc.HasBlockAndState(block.Hash()) {
+		return ErrKnownBlock
 	}
-	parent := v.bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
-	if parent == nil {
-		return consensus.ErrUnknownAncestor
-	}
-	if _, err := state.New(parent.Root(), v.bc.chainDb); err != nil {
+	if !v.bc.HasBlockAndState(block.ParentHash()) {
 		return consensus.ErrUnknownAncestor
 	}
 	// Header validity is known at this point, check the uncles and transactions

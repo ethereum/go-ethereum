@@ -88,7 +88,7 @@ func TestMailServer(t *testing.T) {
 	}
 
 	var server WMailServer
-	shh = whisper.New()
+	shh = whisper.New(&whisper.DefaultConfig)
 	shh.RegisterServer(&server)
 
 	server.Init(shh, dir, password, powRequirement)
@@ -168,7 +168,7 @@ func singleRequest(t *testing.T, server *WMailServer, env *whisper.Envelope, p *
 	src[0]++
 	ok, lower, upper, topic = server.validateRequest(src, request)
 	if ok {
-		t.Fatalf("request validation false positive, seed: %d.", seed)
+		t.Fatalf("request validation false positive, seed: %d (lower: %d, upper: %d).", seed, lower, upper)
 	}
 }
 

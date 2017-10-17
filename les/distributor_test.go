@@ -122,19 +122,13 @@ func testRequestDistributor(t *testing.T, resend bool) {
 	stop := make(chan struct{})
 	defer close(stop)
 
+	dist := newRequestDistributor(nil, stop)
 	var peers [testDistPeerCount]*testDistPeer
 	for i, _ := range peers {
 		peers[i] = &testDistPeer{}
 		go peers[i].worker(t, !resend, stop)
+		dist.registerTestPeer(peers[i])
 	}
-
-	dist := newRequestDistributor(func() map[distPeer]struct{} {
-		m := make(map[distPeer]struct{})
-		for _, peer := range peers {
-			m[peer] = struct{}{}
-		}
-		return m
-	}, stop)
 
 	var wg sync.WaitGroup
 

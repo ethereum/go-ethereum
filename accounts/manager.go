@@ -96,9 +96,10 @@ func (am *Manager) update() {
 		case event := <-am.updates:
 			// Wallet event arrived, update local cache
 			am.lock.Lock()
-			if event.Arrive {
+			switch event.Kind {
+			case WalletArrived:
 				am.wallets = merge(am.wallets, event.Wallet)
-			} else {
+			case WalletDropped:
 				am.wallets = drop(am.wallets, event.Wallet)
 			}
 			am.lock.Unlock()

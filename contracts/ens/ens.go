@@ -29,6 +29,11 @@ import (
 	"github.com/expanse-org/go-expanse/crypto"
 )
 
+var (
+	MainNetAddress = common.HexToAddress("0x2ecb508992f49c5c08ad954f19e8176eedce3e56")
+	TestNetAddress = common.HexToAddress("0x112234455c3a32fd11230c42e7bccd4a84e02010")
+)
+
 // swarm domain name registry and resolver
 type ENS struct {
 	*contract.ENSSession
@@ -52,7 +57,7 @@ func NewENS(transactOpts *bind.TransactOpts, contractAddr common.Address, contra
 	}, nil
 }
 
-// DeployENS deploys an instance of the ENS nameservice, with a 'first in first served' root registrar.
+// DeployENS deploys an instance of the ENS nameservice, with a 'first-in, first-served' root registrar.
 func DeployENS(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend) (*ENS, error) {
 	// Deploy the ENS registry
 	ensAddr, _, _, err := contract.DeployENS(transactOpts, contractBackend, transactOpts.From)

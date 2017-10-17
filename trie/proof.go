@@ -58,7 +58,7 @@ func (t *Trie) Prove(key []byte) []rlp.RawValue {
 			nodes = append(nodes, n)
 		case hashNode:
 			var err error
-			tn, err = t.resolveHash(n, nil, nil)
+			tn, err = t.resolveHash(n, nil)
 			if err != nil {
 				log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 				return nil
@@ -125,7 +125,7 @@ func VerifyProof(rootHash common.Hash, key []byte, proof []rlp.RawValue) (value 
 }
 
 func get(tn node, key []byte) ([]byte, node) {
-	for len(key) > 0 {
+	for {
 		switch n := tn.(type) {
 		case *shortNode:
 			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
@@ -140,9 +140,10 @@ func get(tn node, key []byte) ([]byte, node) {
 			return key, n
 		case nil:
 			return key, nil
+		case valueNode:
+			return nil, n
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
-	return nil, tn.(valueNode)
 }

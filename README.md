@@ -40,6 +40,7 @@ The go-expanse project comes with several wrappers/executables found in the `cmd
 | `gexprpctest` | Developer utility tool to support our [expanse/rpc-test](https://github.com/expanse-org/rpc-tests) test suite which validates baseline conformity to the [Expanse JSON RPC](https://github.com/expanse-org/wiki/wiki/JSON-RPC) specs. Please see the [test suite's readme](https://github.com/expanse-org/rpc-tests/blob/master/README.md) for details. |
 | `rlpdump` | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://github.com/expanse-org/wiki/wiki/RLP)) dumps (data encoding used by the Expanse protocol both network as well as consensus wise) to user friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`). |
 | `swarm`    | swarm daemon and tools. This is the entrypoint for the swarm network. `swarm --help` for command line options and subcommands. See https://swarm-guide.readthedocs.io for swarm documentation. |
+| `puppeth`    | a CLI wizard that aids in creating a new Ethereum network. |
 
 ## Running gexp
 
@@ -102,6 +103,22 @@ Specifying the `--testnet` flag however will reconfigure your Gexp instance a bi
 over between the main network and test network, you should make sure to always use separate accounts
 for play-money and real-money. Unless you manually move accounts, Gexp will by default correctly
 separate the two networks and will not make any accounts available between them.*
+
+### Configuration
+
+As an alternative to passing the numerous flags to the `geth` binary, you can also pass a configuration file via:
+
+```
+$ geth --config /path/to/your_config.toml
+```
+
+To get an idea how the file should look like you can use the `dumpconfig` subcommand to export your existing configuration:
+
+```
+$ geth --your-favourite-flags dumpconfig
+```
+
+*Note: This works only with geth v1.6.0 and above.*
 
 #### Docker quick start
 

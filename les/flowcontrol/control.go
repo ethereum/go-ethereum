@@ -157,9 +157,7 @@ func (peer *ServerNode) QueueRequest(reqID, maxCost uint64) {
 
 	peer.bufEstimate -= maxCost
 	peer.sumCost += maxCost
-	if reqID >= 0 {
-		peer.pending[reqID] = peer.sumCost
-	}
+	peer.pending[reqID] = peer.sumCost
 }
 
 // GotReply adjusts estimated buffer value according to the value included in

@@ -15,7 +15,7 @@ matrix:
         - go run build/ci.go install
 
     - os: osx
-      go: 1.8.3
+      go: 1.9.x
       sudo: required
       script:
         - brew update
