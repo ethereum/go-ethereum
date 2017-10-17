@@ -186,7 +186,7 @@ func main() {
 type request struct {
 	Avatar  string             `json:"avatar"`  // Avatar URL to make the UI nicer
 	Account common.Address     `json:"account"` // Ethereum address being funded
-	Time    time.Time          `json:"time"`    // Timestamp when te request was accepted
+	Time    time.Time          `json:"time"`    // Timestamp when the request was accepted
 	Tx      *types.Transaction `json:"tx"`      // Transaction funding the account
 }
 
