@@ -302,6 +302,8 @@ func (f *faucet) webHandler(w http.ResponseWriter, r *http.Request) {
 // apiHandler handles requests for Ether grants and transaction statuses.
 func (f *faucet) apiHandler(conn *websocket.Conn) {
 	// Start tracking the connection and drop at the end
+	defer conn.Close()
+
 	f.lock.Lock()
 	f.conns = append(f.conns, conn)
 	f.lock.Unlock()
@@ -316,25 +318,50 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 		}
 		f.lock.Unlock()
 	}()
-	// Send a few initial stats to the client
-	balance, _ := f.client.BalanceAt(context.Background(), f.account.Address, nil)
-	nonce, _ := f.client.NonceAt(context.Background(), f.account.Address, nil)
+	// Gather the initial stats from the network to report
+	var (
+		head    *types.Header
+		balance *big.Int
+		nonce   uint64
+		err     error
+	)
+	for {
+		// Attempt to retrieve the stats, may error on no faucet connectivity
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		head, err = f.client.HeaderByNumber(ctx, nil)
+		if err == nil {
+			balance, err = f.client.BalanceAt(ctx, f.account.Address, head.Number)
+			if err == nil {
+				nonce, err = f.client.NonceAt(ctx, f.account.Address, nil)
+			}
+		}
+		cancel()
 
-	websocket.JSON.Send(conn, map[string]interface{}{
+		// If stats retrieval failed, wait a bit and retry
+		if err != nil {
+			if err = sendError(conn, errors.New("Faucet offline: "+err.Error())); err != nil {
+				log.Warn("Failed to send faucet error to client", "err", err)
+				return
+			}
+			time.Sleep(3 * time.Second)
+			continue
+		}
+		// Initial stats reported successfully, proceed with user interaction
+		break
+	}
+	// Send over the initial stats and the latest header
+	if err = send(conn, map[string]interface{}{
 		"funds":    balance.Div(balance, ether),
 		"funded":   nonce,
 		"peers":    f.stack.Server().PeerCount(),
 		"requests": f.reqs,
-	})
-	// Send the initial block to the client
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	header, err := f.client.HeaderByNumber(ctx, nil)
-	cancel()
-
-	if err != nil {
-		log.Error("Failed to retrieve latest header", "err", err)
-	} else {
-		websocket.JSON.Send(conn, header)
+	}, 3*time.Second); err != nil {
+		log.Warn("Failed to send initial stats to client", "err", err)
+		return
+	}
+	if err = send(conn, head, 3*time.Second); err != nil {
+		log.Warn("Failed to send initial header to client", "err", err)
+		return
 	}
 	// Keep reading requests from the websocket until the connection breaks
 	for {
@@ -344,16 +371,22 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			Tier    uint   `json:"tier"`
 			Captcha string `json:"captcha"`
 		}
-		if err := websocket.JSON.Receive(conn, &msg); err != nil {
+		if err = websocket.JSON.Receive(conn, &msg); err != nil {
 			return
 		}
 		if !strings.HasPrefix(msg.URL, "https://gist.github.com/") && !strings.HasPrefix(msg.URL, "https://twitter.com/") &&
 			!strings.HasPrefix(msg.URL, "https://plus.google.com/") && !strings.HasPrefix(msg.URL, "https://www.facebook.com/") {
-			websocket.JSON.Send(conn, map[string]string{"error": "URL doesn't link to supported services"})
+			if err = sendError(conn, errors.New("URL doesn't link to supported services")); err != nil {
+				log.Warn("Failed to send URL error to client", "err", err)
+				return
+			}
 			continue
 		}
 		if msg.Tier >= uint(*tiersFlag) {
-			websocket.JSON.Send(conn, map[string]string{"error": "Invalid funding tier requested"})
+			if err = sendError(conn, errors.New("Invalid funding tier requested")); err != nil {
+				log.Warn("Failed to send tier error to client", "err", err)
+				return
+			}
 			continue
 		}
 		log.Info("Faucet funds requested", "url", msg.URL, "tier", msg.Tier)
@@ -366,7 +399,10 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 
 			res, err := http.PostForm("https://www.google.com/recaptcha/api/siteverify", form)
 			if err != nil {
-				websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
+				if err = sendError(conn, err); err != nil {
+					log.Warn("Failed to send captcha post error to client", "err", err)
+					return
+				}
 				continue
 			}
 			var result struct {
@@ -376,12 +412,18 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			err = json.NewDecoder(res.Body).Decode(&result)
 			res.Body.Close()
 			if err != nil {
-				websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
+				if err = sendError(conn, err); err != nil {
+					log.Warn("Failed to send captcha decode error to client", "err", err)
+					return
+				}
 				continue
 			}
 			if !result.Success {
 				log.Warn("Captcha verification failed", "err", string(result.Errors))
-				websocket.JSON.Send(conn, map[string]string{"error": "Beep-bop, you're a robot!"})
+				if err = sendError(conn, errors.New("Beep-bop, you're a robot!")); err != nil {
+					log.Warn("Failed to send captcha failure to client", "err", err)
+					return
+				}
 				continue
 			}
 		}
@@ -404,7 +446,10 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			err = errors.New("Something funky happened, please open an issue at https://github.com/ethereum/go-ethereum/issues")
 		}
 		if err != nil {
-			websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
+			if err = sendError(conn, err); err != nil {
+				log.Warn("Failed to send prefix error to client", "err", err)
+				return
+			}
 			continue
 		}
 		log.Info("Faucet request valid", "url", msg.URL, "tier", msg.Tier, "user", username, "address", address)
@@ -424,14 +469,20 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			tx := types.NewTransaction(f.nonce+uint64(len(f.reqs)), address, amount, big.NewInt(21000), f.price, nil)
 			signed, err := f.keystore.SignTx(f.account, tx, f.config.ChainId)
 			if err != nil {
-				websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
 				f.lock.Unlock()
+				if err = sendError(conn, err); err != nil {
+					log.Warn("Failed to send transaction creation error to client", "err", err)
+					return
+				}
 				continue
 			}
 			// Submit the transaction and mark as funded if successful
 			if err := f.client.SendTransaction(context.Background(), signed); err != nil {
-				websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
 				f.lock.Unlock()
+				if err = sendError(conn, err); err != nil {
+					log.Warn("Failed to send transaction transmission error to client", "err", err)
+					return
+				}
 				continue
 			}
 			f.reqs = append(f.reqs, &request{
@@ -447,10 +498,16 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 
 		// Send an error if too frequent funding, othewise a success
 		if !fund {
-			websocket.JSON.Send(conn, map[string]string{"error": fmt.Sprintf("%s left until next allowance", common.PrettyDuration(timeout.Sub(time.Now())))})
+			if err = sendError(conn, fmt.Errorf("%s left until next allowance", common.PrettyDuration(timeout.Sub(time.Now())))); err != nil {
+				log.Warn("Failed to send funding error to client", "err", err)
+				return
+			}
 			continue
 		}
-		websocket.JSON.Send(conn, map[string]string{"success": fmt.Sprintf("Funding request accepted for %s into %s", username, address.Hex())})
+		if err = sendSuccess(conn, fmt.Sprintf("Funding request accepted for %s into %s", username, address.Hex())); err != nil {
+			log.Warn("Failed to send funding success to client", "err", err)
+			return
+		}
 		select {
 		case f.update <- struct{}{}:
 		default:
@@ -473,11 +530,31 @@ func (f *faucet) loop() {
 		select {
 		case head := <-heads:
 			// New chain head arrived, query the current stats and stream to clients
-			balance, _ := f.client.BalanceAt(context.Background(), f.account.Address, nil)
-			balance = new(big.Int).Div(balance, ether)
+			var (
+				balance *big.Int
+				nonce   uint64
+				price   *big.Int
+				err     error
+			)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			balance, err = f.client.BalanceAt(ctx, f.account.Address, head.Number)
+			if err == nil {
+				nonce, err = f.client.NonceAt(ctx, f.account.Address, nil)
+				if err == nil {
+					price, err = f.client.SuggestGasPrice(ctx)
+				}
+			}
+			cancel()
 
-			price, _ := f.client.SuggestGasPrice(context.Background())
-			nonce, _ := f.client.NonceAt(context.Background(), f.account.Address, nil)
+			// If querying the data failed, try for the next block
+			if err != nil {
+				log.Warn("Failed to update faucet state", "block", head.Number, "hash", head.Hash(), "err", err)
+				continue
+			} else {
+				log.Info("Updated faucet state", "block", head.Number, "hash", head.Hash(), "balance", balance, "nonce", nonce, "price", price)
+			}
+			// Faucet state retrieved, update locally and send to clients
+			balance = new(big.Int).Div(balance, ether)
 
 			f.lock.Lock()
 			f.price, f.nonce = price, nonce
@@ -488,17 +565,17 @@ func (f *faucet) loop() {
 
 			f.lock.RLock()
 			for _, conn := range f.conns {
-				if err := websocket.JSON.Send(conn, map[string]interface{}{
+				if err := send(conn, map[string]interface{}{
 					"funds":    balance,
 					"funded":   f.nonce,
 					"peers":    f.stack.Server().PeerCount(),
 					"requests": f.reqs,
-				}); err != nil {
+				}, time.Second); err != nil {
 					log.Warn("Failed to send stats to client", "err", err)
 					conn.Close()
 					continue
 				}
-				if err := websocket.JSON.Send(conn, head); err != nil {
+				if err := send(conn, head, time.Second); err != nil {
 					log.Warn("Failed to send header to client", "err", err)
 					conn.Close()
 				}
@@ -509,7 +586,7 @@ func (f *faucet) loop() {
 			// Pending requests updated, stream to clients
 			f.lock.RLock()
 			for _, conn := range f.conns {
-				if err := websocket.JSON.Send(conn, map[string]interface{}{"requests": f.reqs}); err != nil {
+				if err := send(conn, map[string]interface{}{"requests": f.reqs}, time.Second); err != nil {
 					log.Warn("Failed to send requests to client", "err", err)
 					conn.Close()
 				}
@@ -517,6 +594,28 @@ func (f *faucet) loop() {
 			f.lock.RUnlock()
 		}
 	}
+}
+
+// sends transmits a data packet to the remote end of the websocket, but also
+// setting a write deadline to prevent waiting forever on the node.
+func send(conn *websocket.Conn, value interface{}, timeout time.Duration) error {
+	if timeout == 0 {
+		timeout = 60 * time.Second
+	}
+	conn.SetWriteDeadline(time.Now().Add(timeout))
+	return websocket.JSON.Send(conn, value)
+}
+
+// sendError transmits an error to the remote end of the websocket, also setting
+// the write deadline to 1 second to prevent waiting forever.
+func sendError(conn *websocket.Conn, err error) error {
+	return send(conn, map[string]string{"error": err.Error()}, time.Second)
+}
+
+// sendSuccess transmits a success message to the remote end of the websocket, also
+// setting the write deadline to 1 second to prevent waiting forever.
+func sendSuccess(conn *websocket.Conn, msg string) error {
+	return send(conn, map[string]string{"success": msg}, time.Second)
 }
 
 // authGitHub tries to authenticate a faucet request using GitHub gists, returning
