@@ -151,7 +151,7 @@ func (e *GenesisMismatchError) Error() string {
 // The returned chain configuration is never nil.
 func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
-		return params.AllProtocolChanges, common.Hash{}, errGenesisNoConfig
+		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
 
 	// Just commit the new block if there is no stored genesis block.
@@ -216,7 +216,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	case ghash == params.TestnetGenesisHash:
 		return params.TestnetChainConfig
 	default:
-		return params.AllProtocolChanges
+		return params.AllEthashProtocolChanges
 	}
 }
 
@@ -285,7 +285,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	}
 	config := g.Config
 	if config == nil {
-		config = params.AllProtocolChanges
+		config = params.AllEthashProtocolChanges
 	}
 	return block, WriteChainConfig(db, block.Hash(), config)
 }
@@ -342,14 +342,25 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 	}
 }
 
-// DevGenesisBlock returns the 'geth --dev' genesis block.
-func DevGenesisBlock() *Genesis {
+// DefaultDeveloperGenesisBlock returns the 'geth --dev' genesis block. Note, this
+// must be seeded with the
+func DefaultDeveloperGenesisBlock(faucet common.Address) *Genesis {
 	return &Genesis{
-		Config:     params.AllProtocolChanges,
-		Nonce:      42,
+		Config:     params.AllCliqueProtocolChanges,
+		ExtraData:  append(append(make([]byte, 32), faucet[:]...), make([]byte, 65)...),
 		GasLimit:   4712388,
-		Difficulty: big.NewInt(131072),
-		Alloc:      decodePrealloc(devAllocData),
+		Difficulty: big.NewInt(1),
+		Alloc: map[common.Address]GenesisAccount{
+			common.Address{1}: GenesisAccount{Balance: big.NewInt(1)}, // ECRecover
+			common.Address{2}: GenesisAccount{Balance: big.NewInt(1)}, // SHA256
+			common.Address{3}: GenesisAccount{Balance: big.NewInt(1)}, // RIPEMD
+			common.Address{4}: GenesisAccount{Balance: big.NewInt(1)}, // Identity
+			common.Address{5}: GenesisAccount{Balance: big.NewInt(1)}, // ModExp
+			common.Address{6}: GenesisAccount{Balance: big.NewInt(1)}, // ECAdd
+			common.Address{7}: GenesisAccount{Balance: big.NewInt(1)}, // ECScalarMul
+			common.Address{8}: GenesisAccount{Balance: big.NewInt(1)}, // ECPairing
+			faucet:            GenesisAccount{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))},
+		},
 	}
 }
 
