@@ -21,6 +21,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/log"
@@ -34,112 +35,143 @@ func (w *wizard) networkStats() {
 		log.Error("No remote machines to gather stats from")
 		return
 	}
-	protips := new(protips)
+	// Clear out some previous configs to refill from current scan
+	w.conf.ethstats = ""
+	w.conf.bootFull = w.conf.bootFull[:0]
+	w.conf.bootLight = w.conf.bootLight[:0]
 
 	// Iterate over all the specified hosts and check their status
+	var pend sync.WaitGroup
+
 	stats := make(serverStats)
-
 	for server, pubkey := range w.conf.Servers {
-		client := w.servers[server]
-		logger := log.New("server", server)
-		logger.Info("Starting remote server health-check")
+		pend.Add(1)
 
-		stat := &serverStat{
-			address:  client.address,
-			services: make(map[string]map[string]string),
-		}
-		stats[client.server] = stat
+		// Gather the service stats for each server concurrently
+		go func(server string, pubkey []byte) {
+			defer pend.Done()
 
-		if client == nil {
-			conn, err := dial(server, pubkey)
-			if err != nil {
-				logger.Error("Failed to establish remote connection", "err", err)
-				stat.failure = err.Error()
-				continue
-			}
-			client = conn
-		}
-		// Client connected one way or another, run health-checks
-		logger.Debug("Checking for nginx availability")
-		if infos, err := checkNginx(client, w.network); err != nil {
-			if err != ErrServiceUnknown {
-				stat.services["nginx"] = map[string]string{"offline": err.Error()}
-			}
-		} else {
-			stat.services["nginx"] = infos.Report()
-		}
-		logger.Debug("Checking for ethstats availability")
-		if infos, err := checkEthstats(client, w.network); err != nil {
-			if err != ErrServiceUnknown {
-				stat.services["ethstats"] = map[string]string{"offline": err.Error()}
-			}
-		} else {
-			stat.services["ethstats"] = infos.Report()
-			protips.ethstats = infos.config
-		}
-		logger.Debug("Checking for bootnode availability")
-		if infos, err := checkNode(client, w.network, true); err != nil {
-			if err != ErrServiceUnknown {
-				stat.services["bootnode"] = map[string]string{"offline": err.Error()}
-			}
-		} else {
-			stat.services["bootnode"] = infos.Report()
+			stat := w.gatherStats(server, pubkey, w.servers[server])
 
-			protips.genesis = string(infos.genesis)
-			protips.bootFull = append(protips.bootFull, infos.enodeFull)
-			if infos.enodeLight != "" {
-				protips.bootLight = append(protips.bootLight, infos.enodeLight)
+			// All status checks complete, report and check next server
+			w.lock.Lock()
+			defer w.lock.Unlock()
+
+			delete(w.services, server)
+			for service := range stat.services {
+				w.services[server] = append(w.services[server], service)
 			}
-		}
-		logger.Debug("Checking for sealnode availability")
-		if infos, err := checkNode(client, w.network, false); err != nil {
-			if err != ErrServiceUnknown {
-				stat.services["sealnode"] = map[string]string{"offline": err.Error()}
-			}
-		} else {
-			stat.services["sealnode"] = infos.Report()
-			protips.genesis = string(infos.genesis)
-		}
-		logger.Debug("Checking for faucet availability")
-		if infos, err := checkFaucet(client, w.network); err != nil {
-			if err != ErrServiceUnknown {
-				stat.services["faucet"] = map[string]string{"offline": err.Error()}
-			}
-		} else {
-			stat.services["faucet"] = infos.Report()
-		}
-		logger.Debug("Checking for dashboard availability")
-		if infos, err := checkDashboard(client, w.network); err != nil {
-			if err != ErrServiceUnknown {
-				stat.services["dashboard"] = map[string]string{"offline": err.Error()}
-			}
-		} else {
-			stat.services["dashboard"] = infos.Report()
-		}
-		// All status checks complete, report and check next server
-		delete(w.services, server)
-		for service := range stat.services {
-			w.services[server] = append(w.services[server], service)
-		}
+			stats[server] = stat
+		}(server, pubkey)
 	}
-	// If a genesis block was found, load it into our configs
-	if protips.genesis != "" && w.conf.genesis == nil {
-		genesis := new(core.Genesis)
-		if err := json.Unmarshal([]byte(protips.genesis), genesis); err != nil {
-			log.Error("Failed to parse remote genesis", "err", err)
-		} else {
-			w.conf.genesis = genesis
-			protips.network = genesis.Config.ChainId.Int64()
-		}
-	}
-	if protips.ethstats != "" {
-		w.conf.ethstats = protips.ethstats
-	}
-	w.conf.bootFull = protips.bootFull
-	w.conf.bootLight = protips.bootLight
+	pend.Wait()
 
 	// Print any collected stats and return
 	stats.render()
+}
+
+// gatherStats gathers service statistics for a particular remote server.
+func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *serverStat {
+	// Gather some global stats to feed into the wizard
+	var (
+		genesis   string
+		ethstats  string
+		bootFull  []string
+		bootLight []string
+	)
+	// Ensure a valid SSH connection to the remote server
+	logger := log.New("server", server)
+	logger.Info("Starting remote server health-check")
+
+	stat := &serverStat{
+		address:  client.address,
+		services: make(map[string]map[string]string),
+	}
+	if client == nil {
+		conn, err := dial(server, pubkey)
+		if err != nil {
+			logger.Error("Failed to establish remote connection", "err", err)
+			stat.failure = err.Error()
+			return stat
+		}
+		client = conn
+	}
+	// Client connected one way or another, run health-checks
+	logger.Debug("Checking for nginx availability")
+	if infos, err := checkNginx(client, w.network); err != nil {
+		if err != ErrServiceUnknown {
+			stat.services["nginx"] = map[string]string{"offline": err.Error()}
+		}
+	} else {
+		stat.services["nginx"] = infos.Report()
+	}
+	logger.Debug("Checking for ethstats availability")
+	if infos, err := checkEthstats(client, w.network); err != nil {
+		if err != ErrServiceUnknown {
+			stat.services["ethstats"] = map[string]string{"offline": err.Error()}
+		}
+	} else {
+		stat.services["ethstats"] = infos.Report()
+		ethstats = infos.config
+	}
+	logger.Debug("Checking for bootnode availability")
+	if infos, err := checkNode(client, w.network, true); err != nil {
+		if err != ErrServiceUnknown {
+			stat.services["bootnode"] = map[string]string{"offline": err.Error()}
+		}
+	} else {
+		stat.services["bootnode"] = infos.Report()
+
+		genesis = string(infos.genesis)
+		bootFull = append(bootFull, infos.enodeFull)
+		if infos.enodeLight != "" {
+			bootLight = append(bootLight, infos.enodeLight)
+		}
+	}
+	logger.Debug("Checking for sealnode availability")
+	if infos, err := checkNode(client, w.network, false); err != nil {
+		if err != ErrServiceUnknown {
+			stat.services["sealnode"] = map[string]string{"offline": err.Error()}
+		}
+	} else {
+		stat.services["sealnode"] = infos.Report()
+		genesis = string(infos.genesis)
+	}
+	logger.Debug("Checking for faucet availability")
+	if infos, err := checkFaucet(client, w.network); err != nil {
+		if err != ErrServiceUnknown {
+			stat.services["faucet"] = map[string]string{"offline": err.Error()}
+		}
+	} else {
+		stat.services["faucet"] = infos.Report()
+	}
+	logger.Debug("Checking for dashboard availability")
+	if infos, err := checkDashboard(client, w.network); err != nil {
+		if err != ErrServiceUnknown {
+			stat.services["dashboard"] = map[string]string{"offline": err.Error()}
+		}
+	} else {
+		stat.services["dashboard"] = infos.Report()
+	}
+	// Feed and newly discovered information into the wizard
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
+	if genesis != "" && w.conf.genesis == nil {
+		g := new(core.Genesis)
+		if err := json.Unmarshal([]byte(genesis), g); err != nil {
+			log.Error("Failed to parse remote genesis", "err", err)
+		} else {
+			w.conf.genesis = g
+		}
+	}
+	if ethstats != "" {
+		w.conf.ethstats = ethstats
+	}
+	w.conf.bootFull = append(w.conf.bootFull, bootFull...)
+	w.conf.bootLight = append(w.conf.bootLight, bootLight...)
+
+	return stat
 }
 
 // serverStat is a collection of service configuration parameters and health
@@ -205,6 +237,9 @@ func (stats serverStats) render() {
 		}
 		sort.Strings(services)
 
+		if len(services) == 0 {
+			table.Append([]string{server, stats[server].address, "", "", ""})
+		}
 		for j, service := range services {
 			// Add an empty line between all services
 			if j > 0 {
