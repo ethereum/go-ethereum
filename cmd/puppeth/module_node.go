@@ -42,7 +42,7 @@ ADD genesis.json /genesis.json
 RUN \
   echo 'geth init /genesis.json' > geth.sh && \{{if .Unlock}}
 	echo 'mkdir -p /root/.ethereum/keystore/ && cp /signer.json /root/.ethereum/keystore/' >> geth.sh && \{{end}}
-	echo $'geth --networkid {{.NetworkID}} --cache 512 --port {{.Port}} --maxpeers {{.Peers}} {{.LightFlag}} --ethstats \'{{.Ethstats}}\' {{if .BootV4}}--bootnodesv4 {{.BootV4}}{{end}} {{if .BootV5}}--bootnodesv5 {{.BootV5}}{{end}} {{if .Etherbase}}--etherbase {{.Etherbase}} --mine{{end}}{{if .Unlock}}--unlock 0 --password /signer.pass --mine{{end}} --targetgaslimit {{.GasTarget}} --gasprice {{.GasPrice}}' >> geth.sh
+	echo $'geth --networkid {{.NetworkID}} --cache 512 --port {{.Port}} --maxpeers {{.Peers}} {{.LightFlag}} --ethstats \'{{.Ethstats}}\' {{if .BootV4}}--bootnodesv4 {{.BootV4}}{{end}} {{if .BootV5}}--bootnodesv5 {{.BootV5}}{{end}} {{if .Etherbase}}--etherbase {{.Etherbase}} --mine --minerthreads 1{{end}} {{if .Unlock}}--unlock 0 --password /signer.pass --mine{{end}} --targetgaslimit {{.GasTarget}} --gasprice {{.GasPrice}}' >> geth.sh
 
 ENTRYPOINT ["/bin/sh", "geth.sh"]
 `
@@ -60,7 +60,8 @@ services:
       - "{{.FullPort}}:{{.FullPort}}/udp"{{if .Light}}
       - "{{.LightPort}}:{{.LightPort}}/udp"{{end}}
     volumes:
-      - {{.Datadir}}:/root/.ethereum
+      - {{.Datadir}}:/root/.ethereum{{if .Ethashdir}}
+      - {{.Ethashdir}}:/root/.ethash{{end}}
     environment:
       - FULL_PORT={{.FullPort}}/tcp
       - LIGHT_PORT={{.LightPort}}/udp
@@ -116,6 +117,7 @@ func deployNode(client *sshClient, network string, bootv4, bootv5 []string, conf
 	template.Must(template.New("").Parse(nodeComposefile)).Execute(composefile, map[string]interface{}{
 		"Type":       kind,
 		"Datadir":    config.datadir,
+		"Ethashdir":  config.ethashdir,
 		"Network":    network,
 		"FullPort":   config.portFull,
 		"TotalPeers": config.peersTotal,
@@ -155,6 +157,7 @@ type nodeInfos struct {
 	genesis    []byte
 	network    int64
 	datadir    string
+	ethashdir  string
 	ethstats   string
 	portFull   int
 	portLight  int
@@ -180,23 +183,29 @@ func (info *nodeInfos) Report() map[string]string {
 		"Ethstats username":          info.ethstats,
 	}
 	if info.peersLight > 0 {
+		// Light server enabled
 		report["Listener port (light nodes)"] = strconv.Itoa(info.portLight)
 	}
 	if info.gasTarget > 0 {
+		// Miner or signer node
 		report["Gas limit (baseline target)"] = fmt.Sprintf("%0.3f MGas", info.gasTarget)
 		report["Gas price (minimum accepted)"] = fmt.Sprintf("%0.3f GWei", info.gasPrice)
-	}
-	if info.etherbase != "" {
-		report["Miner account"] = info.etherbase
-	}
-	if info.keyJSON != "" {
-		var key struct {
-			Address string `json:"address"`
+
+		if info.etherbase != "" {
+			// Ethash proof-of-work miner
+			report["Ethash directory"] = info.ethashdir
+			report["Miner account"] = info.etherbase
 		}
-		if err := json.Unmarshal([]byte(info.keyJSON), &key); err == nil {
-			report["Signer account"] = common.HexToAddress(key.Address).Hex()
-		} else {
-			log.Error("Failed to retrieve signer address", "err", err)
+		if info.keyJSON != "" {
+			// Clique proof-of-authority signer
+			var key struct {
+				Address string `json:"address"`
+			}
+			if err := json.Unmarshal([]byte(info.keyJSON), &key); err == nil {
+				report["Signer account"] = common.HexToAddress(key.Address).Hex()
+			} else {
+				log.Error("Failed to retrieve signer address", "err", err)
+			}
 		}
 	}
 	return report
@@ -251,6 +260,7 @@ func checkNode(client *sshClient, network string, boot bool) (*nodeInfos, error)
 	stats := &nodeInfos{
 		genesis:    genesis,
 		datadir:    infos.volumes["/root/.ethereum"],
+		ethashdir:  infos.volumes["/root/.ethash"],
 		portFull:   infos.portmap[infos.envvars["FULL_PORT"]],
 		portLight:  infos.portmap[infos.envvars["LIGHT_PORT"]],
 		peersTotal: totalPeers,

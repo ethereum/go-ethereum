@@ -65,6 +65,16 @@ func (w *wizard) deployNode(boot bool) {
 		fmt.Printf("Where should data be stored on the remote machine? (default = %s)\n", infos.datadir)
 		infos.datadir = w.readDefaultString(infos.datadir)
 	}
+	if w.conf.genesis.Config.Ethash != nil {
+		fmt.Println()
+		if infos.ethashdir == "" {
+			fmt.Printf("Where should the ethash mining DAGs be stored on the remote machine?\n")
+			infos.ethashdir = w.readString()
+		} else {
+			fmt.Printf("Where should the ethash mining DAGs be stored on the remote machine? (default = %s)\n", infos.ethashdir)
+			infos.ethashdir = w.readDefaultString(infos.ethashdir)
+		}
+	}
 	// Figure out which port to listen on
 	fmt.Println()
 	fmt.Printf("Which TCP/UDP port to listen on? (default = %d)\n", infos.portFull)
