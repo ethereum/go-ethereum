@@ -86,9 +86,9 @@ type receiptStorageRLP struct {
 func NewReceipt(root []byte, failed bool, cumulativeGasUsed *big.Int) *Receipt {
 	r := &Receipt{PostState: common.CopyBytes(root), CumulativeGasUsed: new(big.Int).Set(cumulativeGasUsed)}
 	if failed {
-		r.Status = ReceiptStatusFailed
-	} else {
 		r.Status = ReceiptStatusSuccessful
+	} else {
+		r.Status = ReceiptStatusFailed
 	}
 	return r
 }
