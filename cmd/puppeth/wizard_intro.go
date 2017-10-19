@@ -88,7 +88,7 @@ func (w *wizard) run() {
 			}
 			w.servers[server] = client
 		}
-		w.networkStats(false)
+		w.networkStats()
 	}
 	// Basics done, loop ad infinitum about what to do
 	for {
@@ -110,12 +110,11 @@ func (w *wizard) run() {
 		} else {
 			fmt.Println(" 4. Manage network components")
 		}
-		//fmt.Println(" 5. ProTips for common usecases")
 
 		choice := w.read()
 		switch {
 		case choice == "" || choice == "1":
-			w.networkStats(false)
+			w.networkStats()
 
 		case choice == "2":
 			if w.conf.genesis == nil {
@@ -126,7 +125,7 @@ func (w *wizard) run() {
 		case choice == "3":
 			if len(w.servers) == 0 {
 				if w.makeServer() != "" {
-					w.networkStats(false)
+					w.networkStats()
 				}
 			} else {
 				w.manageServers()
@@ -137,9 +136,6 @@ func (w *wizard) run() {
 			} else {
 				w.manageComponents()
 			}
-
-		case choice == "5":
-			w.networkStats(true)
 
 		default:
 			log.Error("That's not something I can do")

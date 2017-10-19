@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"math/rand"
@@ -25,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -162,9 +164,31 @@ type faucetInfos struct {
 	captchaSecret string
 }
 
-// String implements the stringer interface.
-func (info *faucetInfos) String() string {
-	return fmt.Sprintf("host=%s, api=%d, eth=%d, amount=%d, minutes=%d, tiers=%d, github=%s, captcha=%v, ethstats=%s", info.host, info.port, info.node.portFull, info.amount, info.minutes, info.tiers, info.githubUser, info.captchaToken != "", info.node.ethstats)
+// Report converts the typed struct into a plain string->string map, cotnaining
+// most - but not all - fields for reporting to the user.
+func (info *faucetInfos) Report() map[string]string {
+	report := map[string]string{
+		"Website address":              info.host,
+		"Website listener port":        strconv.Itoa(info.port),
+		"Ethereum listener port":       strconv.Itoa(info.node.portFull),
+		"Funding amount (base tier)":   fmt.Sprintf("%d Ethers", info.amount),
+		"Funding cooldown (base tier)": fmt.Sprintf("%d mins", info.minutes),
+		"Funding tiers":                strconv.Itoa(info.tiers),
+		"Captha protection":            fmt.Sprintf("%v", info.captchaToken != ""),
+		"Ethstats username":            info.node.ethstats,
+		"GitHub authentication":        info.githubUser,
+	}
+	if info.node.keyJSON != "" {
+		var key struct {
+			Address string `json:"address"`
+		}
+		if err := json.Unmarshal([]byte(info.node.keyJSON), &key); err == nil {
+			report["Funding account"] = common.HexToAddress(key.Address).Hex()
+		} else {
+			log.Error("Failed to retrieve signer address", "err", err)
+		}
+	}
+	return report
 }
 
 // checkFaucet does a health-check against an faucet server to verify whether

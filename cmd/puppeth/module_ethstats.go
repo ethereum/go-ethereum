@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -123,9 +124,15 @@ type ethstatsInfos struct {
 	banned []string
 }
 
-// String implements the stringer interface.
-func (info *ethstatsInfos) String() string {
-	return fmt.Sprintf("host=%s, port=%d, secret=%s, banned=%v", info.host, info.port, info.secret, info.banned)
+// Report converts the typed struct into a plain string->string map, cotnaining
+// most - but not all - fields for reporting to the user.
+func (info *ethstatsInfos) Report() map[string]string {
+	return map[string]string{
+		"Website address":       info.host,
+		"Website listener port": strconv.Itoa(info.port),
+		"Login secret":          info.secret,
+		"Banned addresses":      fmt.Sprintf("%v", info.banned),
+	}
 }
 
 // checkEthstats does a health-check against an ethstats server to verify whether

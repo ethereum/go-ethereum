@@ -22,6 +22,7 @@ import (
 	"html/template"
 	"math/rand"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -499,9 +500,13 @@ type dashboardInfos struct {
 	port int
 }
 
-// String implements the stringer interface.
-func (info *dashboardInfos) String() string {
-	return fmt.Sprintf("host=%s, port=%d", info.host, info.port)
+// Report converts the typed struct into a plain string->string map, cotnaining
+// most - but not all - fields for reporting to the user.
+func (info *dashboardInfos) Report() map[string]string {
+	return map[string]string{
+		"Website address":       info.host,
+		"Website listener port": strconv.Itoa(info.port),
+	}
 }
 
 // checkDashboard does a health-check against a dashboard container to verify if

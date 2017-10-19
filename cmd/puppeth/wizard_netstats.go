@@ -18,8 +18,8 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -29,7 +29,7 @@ import (
 
 // networkStats verifies the status of network components and generates a protip
 // configuration set to give users hints on how to do various tasks.
-func (w *wizard) networkStats(tips bool) {
+func (w *wizard) networkStats() {
 	if len(w.servers) == 0 {
 		log.Error("No remote machines to gather stats from")
 		return
@@ -37,51 +37,53 @@ func (w *wizard) networkStats(tips bool) {
 	protips := new(protips)
 
 	// Iterate over all the specified hosts and check their status
-	stats := tablewriter.NewWriter(os.Stdout)
-	stats.SetHeader([]string{"Server", "IP", "Status", "Service", "Details"})
-	stats.SetColWidth(100)
+	stats := make(serverStats)
 
 	for server, pubkey := range w.conf.Servers {
 		client := w.servers[server]
 		logger := log.New("server", server)
 		logger.Info("Starting remote server health-check")
 
-		// If the server is not connected, try to connect again
+		stat := &serverStat{
+			address:  client.address,
+			services: make(map[string]map[string]string),
+		}
+		stats[client.server] = stat
+
 		if client == nil {
 			conn, err := dial(server, pubkey)
 			if err != nil {
 				logger.Error("Failed to establish remote connection", "err", err)
-				stats.Append([]string{server, "", err.Error(), "", ""})
+				stat.failure = err.Error()
 				continue
 			}
 			client = conn
 		}
 		// Client connected one way or another, run health-checks
-		services := make(map[string]string)
 		logger.Debug("Checking for nginx availability")
 		if infos, err := checkNginx(client, w.network); err != nil {
 			if err != ErrServiceUnknown {
-				services["nginx"] = err.Error()
+				stat.services["nginx"] = map[string]string{"offline": err.Error()}
 			}
 		} else {
-			services["nginx"] = infos.String()
+			stat.services["nginx"] = infos.Report()
 		}
 		logger.Debug("Checking for ethstats availability")
 		if infos, err := checkEthstats(client, w.network); err != nil {
 			if err != ErrServiceUnknown {
-				services["ethstats"] = err.Error()
+				stat.services["ethstats"] = map[string]string{"offline": err.Error()}
 			}
 		} else {
-			services["ethstats"] = infos.String()
+			stat.services["ethstats"] = infos.Report()
 			protips.ethstats = infos.config
 		}
 		logger.Debug("Checking for bootnode availability")
 		if infos, err := checkNode(client, w.network, true); err != nil {
 			if err != ErrServiceUnknown {
-				services["bootnode"] = err.Error()
+				stat.services["bootnode"] = map[string]string{"offline": err.Error()}
 			}
 		} else {
-			services["bootnode"] = infos.String()
+			stat.services["bootnode"] = infos.Report()
 
 			protips.genesis = string(infos.genesis)
 			protips.bootFull = append(protips.bootFull, infos.enodeFull)
@@ -92,40 +94,32 @@ func (w *wizard) networkStats(tips bool) {
 		logger.Debug("Checking for sealnode availability")
 		if infos, err := checkNode(client, w.network, false); err != nil {
 			if err != ErrServiceUnknown {
-				services["sealnode"] = err.Error()
+				stat.services["sealnode"] = map[string]string{"offline": err.Error()}
 			}
 		} else {
-			services["sealnode"] = infos.String()
+			stat.services["sealnode"] = infos.Report()
 			protips.genesis = string(infos.genesis)
 		}
 		logger.Debug("Checking for faucet availability")
 		if infos, err := checkFaucet(client, w.network); err != nil {
 			if err != ErrServiceUnknown {
-				services["faucet"] = err.Error()
+				stat.services["faucet"] = map[string]string{"offline": err.Error()}
 			}
 		} else {
-			services["faucet"] = infos.String()
+			stat.services["faucet"] = infos.Report()
 		}
 		logger.Debug("Checking for dashboard availability")
 		if infos, err := checkDashboard(client, w.network); err != nil {
 			if err != ErrServiceUnknown {
-				services["dashboard"] = err.Error()
+				stat.services["dashboard"] = map[string]string{"offline": err.Error()}
 			}
 		} else {
-			services["dashboard"] = infos.String()
+			stat.services["dashboard"] = infos.Report()
 		}
 		// All status checks complete, report and check next server
 		delete(w.services, server)
-		for service := range services {
+		for service := range stat.services {
 			w.services[server] = append(w.services[server], service)
-		}
-		server, address := client.server, client.address
-		for service, status := range services {
-			stats.Append([]string{server, address, "online", service, status})
-			server, address = "", ""
-		}
-		if len(services) == 0 {
-			stats.Append([]string{server, address, "online", "", ""})
 		}
 	}
 	// If a genesis block was found, load it into our configs
@@ -145,11 +139,97 @@ func (w *wizard) networkStats(tips bool) {
 	w.conf.bootLight = protips.bootLight
 
 	// Print any collected stats and return
-	if !tips {
-		stats.Render()
-	} else {
-		protips.print(w.network)
+	stats.render()
+}
+
+// serverStat is a collection of service configuration parameters and health
+// check reports to print to the user.
+type serverStat struct {
+	address  string
+	failure  string
+	services map[string]map[string]string
+}
+
+// serverStats is a collection of server stats for multiple hosts.
+type serverStats map[string]*serverStat
+
+// render converts the gathered statistics into a user friendly tabular report
+// and prints it to the standard output.
+func (stats serverStats) render() {
+	// Start gathering service statistics and config parameters
+	table := tablewriter.NewWriter(os.Stdout)
+
+	table.SetHeader([]string{"Server", "Address", "Service", "Config", "Value"})
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	table.SetColWidth(100)
+
+	// Find the longest lines for all columns for the hacked separator
+	separator := make([]string, 5)
+	for server, stat := range stats {
+		if len(server) > len(separator[0]) {
+			separator[0] = strings.Repeat("-", len(server))
+		}
+		if len(stat.address) > len(separator[1]) {
+			separator[1] = strings.Repeat("-", len(stat.address))
+		}
+		for service, configs := range stat.services {
+			if len(service) > len(separator[2]) {
+				separator[2] = strings.Repeat("-", len(service))
+			}
+			for config, value := range configs {
+				if len(config) > len(separator[3]) {
+					separator[3] = strings.Repeat("-", len(config))
+				}
+				if len(value) > len(separator[4]) {
+					separator[4] = strings.Repeat("-", len(value))
+				}
+			}
+		}
 	}
+	// Fill up the server report in alphabetical order
+	servers := make([]string, 0, len(stats))
+	for server := range stats {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for i, server := range servers {
+		// Add a separator between all servers
+		if i > 0 {
+			table.Append(separator)
+		}
+		// Fill up the service report in alphabetical order
+		services := make([]string, 0, len(stats[server].services))
+		for service := range stats[server].services {
+			services = append(services, service)
+		}
+		sort.Strings(services)
+
+		for j, service := range services {
+			// Add an empty line between all services
+			if j > 0 {
+				table.Append([]string{"", "", "", separator[3], separator[4]})
+			}
+			// Fill up the config report in alphabetical order
+			configs := make([]string, 0, len(stats[server].services[service]))
+			for service := range stats[server].services[service] {
+				configs = append(configs, service)
+			}
+			sort.Strings(configs)
+
+			for k, config := range configs {
+				switch {
+				case j == 0 && k == 0:
+					table.Append([]string{server, stats[server].address, service, config, stats[server].services[service][config]})
+				case k == 0:
+					table.Append([]string{"", "", service, config, stats[server].services[service][config]})
+				default:
+					table.Append([]string{"", "", "", config, stats[server].services[service][config]})
+				}
+			}
+		}
+	}
+	table.Render()
 }
 
 // protips contains a collection of network infos to report pro-tips
@@ -160,76 +240,4 @@ type protips struct {
 	bootFull  []string
 	bootLight []string
 	ethstats  string
-}
-
-// print analyzes the network information available and prints a collection of
-// pro tips for the user's consideration.
-func (p *protips) print(network string) {
-	// If a known genesis block is available, display it and prepend an init command
-	fullinit, lightinit := "", ""
-	if p.genesis != "" {
-		fullinit = fmt.Sprintf("geth --datadir=$HOME/.%s init %s.json && ", network, network)
-		lightinit = fmt.Sprintf("geth --datadir=$HOME/.%s --light init %s.json && ", network, network)
-	}
-	// If an ethstats server is available, add the ethstats flag
-	statsflag := ""
-	if p.ethstats != "" {
-		if strings.Contains(p.ethstats, " ") {
-			statsflag = fmt.Sprintf(` --ethstats="yournode:%s"`, p.ethstats)
-		} else {
-			statsflag = fmt.Sprintf(` --ethstats=yournode:%s`, p.ethstats)
-		}
-	}
-	// If bootnodes have been specified, add the bootnode flag
-	bootflagFull := ""
-	if len(p.bootFull) > 0 {
-		bootflagFull = fmt.Sprintf(` --bootnodes %s`, strings.Join(p.bootFull, ","))
-	}
-	bootflagLight := ""
-	if len(p.bootLight) > 0 {
-		bootflagLight = fmt.Sprintf(` --bootnodes %s`, strings.Join(p.bootLight, ","))
-	}
-	// Assemble all the known pro-tips
-	var tasks, tips []string
-
-	tasks = append(tasks, "Run an archive node with historical data")
-	tips = append(tips, fmt.Sprintf("%sgeth --networkid=%d --datadir=$HOME/.%s --cache=1024%s%s", fullinit, p.network, network, statsflag, bootflagFull))
-
-	tasks = append(tasks, "Run a full node with recent data only")
-	tips = append(tips, fmt.Sprintf("%sgeth --networkid=%d --datadir=$HOME/.%s --cache=512 --fast%s%s", fullinit, p.network, network, statsflag, bootflagFull))
-
-	tasks = append(tasks, "Run a light node with on demand retrievals")
-	tips = append(tips, fmt.Sprintf("%sgeth --networkid=%d --datadir=$HOME/.%s --light%s%s", lightinit, p.network, network, statsflag, bootflagLight))
-
-	tasks = append(tasks, "Run an embedded node with constrained memory")
-	tips = append(tips, fmt.Sprintf("%sgeth --networkid=%d --datadir=$HOME/.%s --cache=32 --light%s%s", lightinit, p.network, network, statsflag, bootflagLight))
-
-	// If the tips are short, display in a table
-	short := true
-	for _, tip := range tips {
-		if len(tip) > 100 {
-			short = false
-			break
-		}
-	}
-	fmt.Println()
-	if short {
-		howto := tablewriter.NewWriter(os.Stdout)
-		howto.SetHeader([]string{"Fun tasks for you", "Tips on how to"})
-		howto.SetColWidth(100)
-
-		for i := 0; i < len(tasks); i++ {
-			howto.Append([]string{tasks[i], tips[i]})
-		}
-		howto.Render()
-		return
-	}
-	// Meh, tips got ugly, split into many lines
-	for i := 0; i < len(tasks); i++ {
-		fmt.Println(tasks[i])
-		fmt.Println(strings.Repeat("-", len(tasks[i])))
-		fmt.Println(tips[i])
-		fmt.Println()
-		fmt.Println()
-	}
 }

@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"path/filepath"
@@ -25,6 +26,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -164,14 +166,37 @@ type nodeInfos struct {
 	gasPrice   float64
 }
 
-// String implements the stringer interface.
-func (info *nodeInfos) String() string {
-	discv5 := ""
-	if info.peersLight > 0 {
-		discv5 = fmt.Sprintf(", portv5=%d", info.portLight)
+// Report converts the typed struct into a plain string->string map, cotnaining
+// most - but not all - fields for reporting to the user.
+func (info *nodeInfos) Report() map[string]string {
+	report := map[string]string{
+		"Data directory":             info.datadir,
+		"Listener port (full nodes)": strconv.Itoa(info.portFull),
+		"Peer count (all total)":     strconv.Itoa(info.peersTotal),
+		"Peer count (light nodes)":   strconv.Itoa(info.peersLight),
+		"Ethstats username":          info.ethstats,
 	}
-	return fmt.Sprintf("port=%d%s, datadir=%s, peers=%d, lights=%d, ethstats=%s, gastarget=%0.3f MGas, gasprice=%0.3f GWei",
-		info.portFull, discv5, info.datadir, info.peersTotal, info.peersLight, info.ethstats, info.gasTarget, info.gasPrice)
+	if info.peersLight > 0 {
+		report["Listener port (light nodes)"] = strconv.Itoa(info.portLight)
+	}
+	if info.gasTarget > 0 {
+		report["Gas limit (baseline target)"] = fmt.Sprintf("%0.3f MGas", info.gasTarget)
+		report["Gas price (minimum accepted)"] = fmt.Sprintf("%0.3f GWei", info.gasPrice)
+	}
+	if info.etherbase != "" {
+		report["Miner account"] = info.etherbase
+	}
+	if info.keyJSON != "" {
+		var key struct {
+			Address string `json:"address"`
+		}
+		if err := json.Unmarshal([]byte(info.keyJSON), &key); err == nil {
+			report["Signer account"] = common.HexToAddress(key.Address).Hex()
+		} else {
+			log.Error("Failed to retrieve signer address", "err", err)
+		}
+	}
+	return report
 }
 
 // checkNode does a health-check against an boot or seal node server to verify

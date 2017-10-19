@@ -156,5 +156,5 @@ func (w *wizard) deployNode(boot bool) {
 	log.Info("Waiting for node to finish booting")
 	time.Sleep(3 * time.Second)
 
-	w.networkStats(false)
+	w.networkStats()
 }

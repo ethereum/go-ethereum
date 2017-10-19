@@ -53,12 +53,12 @@ func (w *wizard) manageServers() {
 		w.conf.flush()
 
 		log.Info("Disconnected existing server", "server", server)
-		w.networkStats(false)
+		w.networkStats()
 		return
 	}
 	// If the user requested connecting a new server, do it
 	if w.makeServer() != "" {
-		w.networkStats(false)
+		w.networkStats()
 	}
 }
 

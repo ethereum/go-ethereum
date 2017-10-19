@@ -22,6 +22,7 @@ import (
 	"html/template"
 	"math/rand"
 	"path/filepath"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -88,9 +89,12 @@ type nginxInfos struct {
 	port int
 }
 
-// String implements the stringer interface.
-func (info *nginxInfos) String() string {
-	return fmt.Sprintf("port=%d", info.port)
+// Report converts the typed struct into a plain string->string map, cotnaining
+// most - but not all - fields for reporting to the user.
+func (info *nginxInfos) Report() map[string]string {
+	return map[string]string{
+		"Shared listener port": strconv.Itoa(info.port),
+	}
 }
 
 // checkNginx does a health-check against an nginx reverse-proxy to verify whether

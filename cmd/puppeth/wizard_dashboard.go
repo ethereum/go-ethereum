@@ -128,5 +128,5 @@ func (w *wizard) deployDashboard() {
 		return
 	}
 	// All ok, run a network scan to pick any changes up
-	w.networkStats(false)
+	w.networkStats()
 }
