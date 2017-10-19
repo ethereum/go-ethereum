@@ -95,7 +95,7 @@ services:
 // deployFaucet deploys a new faucet container to a remote machine via SSH,
 // docker and docker-compose. If an instance with the specified network name
 // already exists there, it will be overwritten!
-func deployFaucet(client *sshClient, network string, bootnodes []string, config *faucetInfos) ([]byte, error) {
+func deployFaucet(client *sshClient, network string, bootnodes []string, config *faucetInfos, nocache bool) ([]byte, error) {
 	// Generate the content to upload to the server
 	workdir := fmt.Sprintf("%d", rand.Int63())
 	files := make(map[string][]byte)
@@ -146,7 +146,10 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 	defer client.Run("rm -rf " + workdir)
 
 	// Build and deploy the faucet service
-	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build", workdir, network))
+	if nocache {
+		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate", workdir, network, network))
+	}
+	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate", workdir, network))
 }
 
 // faucetInfos is returned from an faucet status check to allow reporting various

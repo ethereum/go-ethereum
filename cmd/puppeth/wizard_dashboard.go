@@ -120,7 +120,11 @@ func (w *wizard) deployDashboard() {
 		ethstats = w.readDefaultString("y") == "y"
 	}
 	// Try to deploy the dashboard container on the host
-	if out, err := deployDashboard(client, w.network, infos.port, infos.host, listing, &w.conf, ethstats); err != nil {
+	fmt.Println()
+	fmt.Printf("Should the dashboard be built from scratch (y/n)? (default = no)\n")
+	nocache := w.readDefaultString("n") != "n"
+
+	if out, err := deployDashboard(client, w.network, infos.port, infos.host, listing, &w.conf, ethstats, nocache); err != nil {
 		log.Error("Failed to deploy dashboard container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)

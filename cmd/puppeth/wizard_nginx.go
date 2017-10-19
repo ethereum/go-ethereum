@@ -41,7 +41,11 @@ func (w *wizard) ensureVirtualHost(client *sshClient, port int, def string) (str
 	fmt.Println()
 	fmt.Println("Allow sharing the port with other services (y/n)? (default = yes)")
 	if w.readDefaultString("y") == "y" {
-		if out, err := deployNginx(client, w.network, port); err != nil {
+		fmt.Println()
+		fmt.Printf("Should the reverse-proxy be rebuilt from scratch (y/n)? (default = no)\n")
+		nocache := w.readDefaultString("n") != "n"
+
+		if out, err := deployNginx(client, w.network, port, nocache); err != nil {
 			log.Error("Failed to deploy reverse-proxy", "err", err)
 			if len(out) > 0 {
 				fmt.Printf("%s\n", out)

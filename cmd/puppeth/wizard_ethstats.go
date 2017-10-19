@@ -98,13 +98,17 @@ func (w *wizard) deployEthstats() {
 		sort.Strings(infos.banned)
 	}
 	// Try to deploy the ethstats server on the host
+	fmt.Println()
+	fmt.Printf("Should the ethstats be built from scratch (y/n)? (default = no)\n")
+	nocache := w.readDefaultString("n") != "n"
+
 	trusted := make([]string, 0, len(w.servers))
 	for _, client := range w.servers {
 		if client != nil {
 			trusted = append(trusted, client.address)
 		}
 	}
-	if out, err := deployEthstats(client, w.network, infos.port, infos.secret, infos.host, trusted, infos.banned); err != nil {
+	if out, err := deployEthstats(client, w.network, infos.port, infos.secret, infos.host, trusted, infos.banned, nocache); err != nil {
 		log.Error("Failed to deploy ethstats container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)

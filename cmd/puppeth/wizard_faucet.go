@@ -190,7 +190,11 @@ func (w *wizard) deployFaucet() {
 		}
 	}
 	// Try to deploy the faucet server on the host
-	if out, err := deployFaucet(client, w.network, w.conf.bootLight, infos); err != nil {
+	fmt.Println()
+	fmt.Printf("Should the faucet be built from scratch (y/n)? (default = no)\n")
+	nocache := w.readDefaultString("n") != "n"
+
+	if out, err := deployFaucet(client, w.network, w.conf.bootLight, infos, nocache); err != nil {
 		log.Error("Failed to deploy faucet container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)

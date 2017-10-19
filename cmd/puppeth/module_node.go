@@ -81,7 +81,7 @@ services:
 // deployNode deploys a new Ethereum node container to a remote machine via SSH,
 // docker and docker-compose. If an instance with the specified network name
 // already exists there, it will be overwritten!
-func deployNode(client *sshClient, network string, bootv4, bootv5 []string, config *nodeInfos) ([]byte, error) {
+func deployNode(client *sshClient, network string, bootv4, bootv5 []string, config *nodeInfos, nocache bool) ([]byte, error) {
 	kind := "sealnode"
 	if config.keyJSON == "" && config.etherbase == "" {
 		kind = "bootnode"
@@ -143,7 +143,10 @@ func deployNode(client *sshClient, network string, bootv4, bootv5 []string, conf
 	defer client.Run("rm -rf " + workdir)
 
 	// Build and deploy the boot or seal node service
-	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build", workdir, network))
+	if nocache {
+		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate", workdir, network, network))
+	}
+	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate", workdir, network))
 }
 
 // nodeInfos is returned from a boot or seal node status check to allow reporting
