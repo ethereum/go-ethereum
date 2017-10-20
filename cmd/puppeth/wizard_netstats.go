@@ -137,6 +137,14 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 		stat.services["sealnode"] = infos.Report()
 		genesis = string(infos.genesis)
 	}
+	logger.Debug("Checking for explorer availability")
+	if infos, err := checkExplorer(client, w.network); err != nil {
+		if err != ErrServiceUnknown {
+			stat.services["explorer"] = map[string]string{"offline": err.Error()}
+		}
+	} else {
+		stat.services["explorer"] = infos.Report()
+	}
 	logger.Debug("Checking for faucet availability")
 	if infos, err := checkFaucet(client, w.network); err != nil {
 		if err != ErrServiceUnknown {

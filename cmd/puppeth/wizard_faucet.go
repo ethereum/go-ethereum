@@ -60,7 +60,7 @@ func (w *wizard) deployFaucet() {
 		log.Error("Failed to decide on faucet host", "err", err)
 		return
 	}
-	// Port and proxy settings retrieved, figure out the funcing amount per perdion configurations
+	// Port and proxy settings retrieved, figure out the funding amount per period configurations
 	fmt.Println()
 	fmt.Printf("How many Ethers to release per request? (default = %d)\n", infos.amount)
 	infos.amount = w.readDefaultInt(infos.amount)

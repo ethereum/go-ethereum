@@ -40,7 +40,7 @@ ADD genesis.json /genesis.json
 	ADD signer.pass /signer.pass
 {{end}}
 RUN \
-  echo 'geth init /genesis.json' > geth.sh && \{{if .Unlock}}
+  echo 'geth --cache 512 init /genesis.json' > geth.sh && \{{if .Unlock}}
 	echo 'mkdir -p /root/.ethereum/keystore/ && cp /signer.json /root/.ethereum/keystore/' >> geth.sh && \{{end}}
 	echo $'geth --networkid {{.NetworkID}} --cache 512 --port {{.Port}} --maxpeers {{.Peers}} {{.LightFlag}} --ethstats \'{{.Ethstats}}\' {{if .BootV4}}--bootnodesv4 {{.BootV4}}{{end}} {{if .BootV5}}--bootnodesv5 {{.BootV5}}{{end}} {{if .Etherbase}}--etherbase {{.Etherbase}} --mine --minerthreads 1{{end}} {{if .Unlock}}--unlock 0 --password /signer.pass --mine{{end}} --targetgaslimit {{.GasTarget}} --gasprice {{.GasPrice}}' >> geth.sh
 
@@ -131,9 +131,7 @@ func deployNode(client *sshClient, network string, bootv4, bootv5 []string, conf
 	})
 	files[filepath.Join(workdir, "docker-compose.yaml")] = composefile.Bytes()
 
-	//genesisfile, _ := json.MarshalIndent(config.genesis, "", "  ")
 	files[filepath.Join(workdir, "genesis.json")] = config.genesis
-
 	if config.keyJSON != "" {
 		files[filepath.Join(workdir, "signer.json")] = []byte(config.keyJSON)
 		files[filepath.Join(workdir, "signer.pass")] = []byte(config.keyPass)

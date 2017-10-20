@@ -34,9 +34,9 @@ var ethstatsDockerfile = `
 FROM mhart/alpine-node:latest
 
 RUN \
-  apk add --update git                                         && \
-  git clone --depth=1 https://github.com/karalabe/eth-netstats && \
-	apk del git && rm -rf /var/cache/apk/*                       && \
+  apk add --update git                                        && \
+  git clone --depth=1 https://github.com/puppeth/eth-netstats && \
+	apk del git && rm -rf /var/cache/apk/*                      && \
 	\
   cd /eth-netstats && npm install && npm install -g grunt-cli && grunt
 
