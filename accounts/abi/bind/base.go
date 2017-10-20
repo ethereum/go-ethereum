@@ -18,7 +18,6 @@ package bind
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -213,16 +212,20 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		rawTx = types.NewTransaction(nonce, c.address, value, gasLimit, gasPrice, input)
 	}
 	if opts.Signer == nil {
-		return nil, errors.New("no signer to authorize the transaction with")
+		if err := c.transactor.SendUnsignedTransaction(ensureContext(opts.Context), rawTx, opts.From); err != nil {
+			return nil, err
+		}
+		return rawTx, nil
+	} else {
+		signedTx, err := opts.Signer(types.HomesteadSigner{}, opts.From, rawTx)
+		if err != nil {
+			return nil, err
+		}
+		if err := c.transactor.SendTransaction(ensureContext(opts.Context), signedTx); err != nil {
+			return nil, err
+		}
+		return signedTx, nil
 	}
-	signedTx, err := opts.Signer(types.HomesteadSigner{}, opts.From, rawTx)
-	if err != nil {
-		return nil, err
-	}
-	if err := c.transactor.SendTransaction(ensureContext(opts.Context), signedTx); err != nil {
-		return nil, err
-	}
-	return signedTx, nil
 }
 
 func ensureContext(ctx context.Context) context.Context {

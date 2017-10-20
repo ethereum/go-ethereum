@@ -476,6 +476,12 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", common.ToHex(data))
 }
 
+// SendUnsignedTransaction injects an unsigned transaction into the pending pool
+// for execution, depending on the RPC server to calculate the signature.
+func (ec *Client) SendUnsignedTransaction(ctx context.Context, tx *types.Transaction, sender common.Address) error {
+	return ec.c.CallContext(ctx, nil, "eth_sendTransaction", toTransactArg(tx, sender))
+}
+
 func toCallArg(msg ethereum.CallMsg) interface{} {
 	arg := map[string]interface{}{
 		"from": msg.From,
@@ -493,5 +499,21 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	if msg.GasPrice != nil {
 		arg["gasPrice"] = (*hexutil.Big)(msg.GasPrice)
 	}
+	return arg
+}
+
+func toTransactArg(tx *types.Transaction, sender common.Address) interface{} {
+	arg := map[string]interface{}{
+		"from":     sender,
+		"to":       tx.To(),
+		"value":    (*hexutil.Big)(tx.Value()),
+		"gas":      (*hexutil.Big)(tx.Gas()),
+		"gasPrice": (*hexutil.Big)(tx.GasPrice()),
+	}
+
+	if len(tx.Data()) > 0 {
+		arg["data"] = hexutil.Bytes(tx.Data())
+	}
+
 	return arg
 }
