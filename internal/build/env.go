@@ -74,6 +74,13 @@ func Env() Environment {
 			IsPullRequest: os.Getenv("APPVEYOR_PULL_REQUEST_NUMBER") != "",
 			IsCronJob:     os.Getenv("APPVEYOR_SCHEDULED_BUILD") == "True",
 		}
+	case os.Getenv("GIT_COMMIT") != "":
+		return Environment{
+			Name:   "docker",
+			Commit: os.Getenv("GIT_COMMIT"),
+			Branch: os.Getenv("GIT_BRANCH"),
+			Tag:    os.Getenv("GIT_TAG"),
+		}
 	default:
 		return LocalEnv()
 	}

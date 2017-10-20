@@ -34,6 +34,13 @@ ios:
 	@echo "Done building."
 	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
 
+docker:
+	docker build \
+		--build-arg GIT_COMMIT=$(shell git rev-parse HEAD) \
+		--build-arg GIT_BRANCH=$(shell git rev-parse --abbrev-ref HEAD) \
+		--build-arg GIT_TAG=$(shell git tag -l --points-at HEAD) \
+		-t ethereum:$(shell git rev-parse --short HEAD) .
+
 test: all
 	build/env.sh go run build/ci.go test
 
