@@ -85,7 +85,7 @@ func TestWildcardMatcher(t *testing.T) {
 }
 
 // makeRandomIndexes generates a random filter system, composed on multiple filter
-// criteria, each having one bloom list component for the address and arbitrarilly
+// criteria, each having one bloom list component for the address and arbitrarily
 // many topic bloom list components.
 func makeRandomIndexes(lengths []int, max int) [][]bloomIndexes {
 	res := make([][]bloomIndexes, len(lengths))
