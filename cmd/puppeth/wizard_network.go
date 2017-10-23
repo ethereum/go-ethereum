@@ -189,6 +189,7 @@ func (w *wizard) deployComponent() {
 	case "4":
 		w.deployExplorer()
 	case "5":
+		w.deployWallet()
 	case "6":
 		w.deployFaucet()
 	case "7":

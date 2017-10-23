@@ -145,6 +145,14 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 	} else {
 		stat.services["explorer"] = infos.Report()
 	}
+	logger.Debug("Checking for wallet availability")
+	if infos, err := checkWallet(client, w.network); err != nil {
+		if err != ErrServiceUnknown {
+			stat.services["wallet"] = map[string]string{"offline": err.Error()}
+		}
+	} else {
+		stat.services["wallet"] = infos.Report()
+	}
 	logger.Debug("Checking for faucet availability")
 	if infos, err := checkFaucet(client, w.network); err != nil {
 		if err != ErrServiceUnknown {
