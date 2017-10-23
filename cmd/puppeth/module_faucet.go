@@ -53,10 +53,10 @@ ADD account.pass /account.pass
 EXPOSE 8080
 
 CMD [ \
-	"/faucet", "--genesis", "/genesis.json", "--network", "{{.NetworkID}}", "--bootnodes", "{{.Bootnodes}}", "--ethstats", "{{.Ethstats}}", "--ethport", "{{.EthPort}}", \
-	"--faucet.name", "{{.FaucetName}}", "--faucet.amount", "{{.FaucetAmount}}", "--faucet.minutes", "{{.FaucetMinutes}}", "--faucet.tiers", "{{.FaucetTiers}}",          \
-	"--github.user", "{{.GitHubUser}}", "--github.token", "{{.GitHubToken}}", "--account.json", "/account.json", "--account.pass", "/account.pass"                       \
-	{{if .CaptchaToken}}, "--captcha.token", "{{.CaptchaToken}}", "--captcha.secret", "{{.CaptchaSecret}}"{{end}}                                                        \
+	"/faucet", "--genesis", "/genesis.json", "--network", "{{.NetworkID}}", "--bootnodes", "{{.Bootnodes}}", "--ethstats", "{{.Ethstats}}", "--ethport", "{{.EthPort}}",    \
+	"--faucet.name", "{{.FaucetName}}", "--faucet.amount", "{{.FaucetAmount}}", "--faucet.minutes", "{{.FaucetMinutes}}", "--faucet.tiers", "{{.FaucetTiers}}",             \
+	{{if .GitHubUser}}"--github.user", "{{.GitHubUser}}", "--github.token", "{{.GitHubToken}}", {{end}}"--account.json", "/account.json", "--account.pass", "/account.pass" \
+	{{if .CaptchaToken}}, "--captcha.token", "{{.CaptchaToken}}", "--captcha.secret", "{{.CaptchaSecret}}"{{end}}{{if .NoAuth}}, "--noauth"{{end}}                          \
 ]`
 
 // faucetComposefile is the docker-compose.yml file required to deploy and maintain
@@ -81,7 +81,8 @@ services:
       - GITHUB_USER={{.GitHubUser}}
       - GITHUB_TOKEN={{.GitHubToken}}
       - CAPTCHA_TOKEN={{.CaptchaToken}}
-      - CAPTCHA_SECRET={{.CaptchaSecret}}{{if .VHost}}
+      - CAPTCHA_SECRET={{.CaptchaSecret}}
+      - NO_AUTH={{.NoAuth}}{{if .VHost}}
       - VIRTUAL_HOST={{.VHost}}
       - VIRTUAL_PORT=8080{{end}}
     logging:
@@ -114,6 +115,7 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 		"FaucetAmount":  config.amount,
 		"FaucetMinutes": config.minutes,
 		"FaucetTiers":   config.tiers,
+		"NoAuth":        config.noauth,
 	})
 	files[filepath.Join(workdir, "Dockerfile")] = dockerfile.Bytes()
 
@@ -132,6 +134,7 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 		"FaucetAmount":  config.amount,
 		"FaucetMinutes": config.minutes,
 		"FaucetTiers":   config.tiers,
+		"NoAuth":        config.noauth,
 	})
 	files[filepath.Join(workdir, "docker-compose.yaml")] = composefile.Bytes()
 
@@ -161,6 +164,7 @@ type faucetInfos struct {
 	amount        int
 	minutes       int
 	tiers         int
+	noauth        bool
 	githubUser    string
 	githubToken   string
 	captchaToken  string
@@ -179,7 +183,14 @@ func (info *faucetInfos) Report() map[string]string {
 		"Funding tiers":                strconv.Itoa(info.tiers),
 		"Captha protection":            fmt.Sprintf("%v", info.captchaToken != ""),
 		"Ethstats username":            info.node.ethstats,
-		"GitHub authentication":        info.githubUser,
+	}
+	if info.githubUser != "" {
+		report["GitHub authentication"] = info.githubUser
+	} else {
+		report["GitHub authentication"] = "disabled, rate-limited"
+	}
+	if info.noauth {
+		report["Debug mode (no auth)"] = "enabled"
 	}
 	if info.node.keyJSON != "" {
 		var key struct {
@@ -255,5 +266,6 @@ func checkFaucet(client *sshClient, network string) (*faucetInfos, error) {
 		githubToken:   infos.envvars["GITHUB_TOKEN"],
 		captchaToken:  infos.envvars["CAPTCHA_TOKEN"],
 		captchaSecret: infos.envvars["CAPTCHA_SECRET"],
+		noauth:        infos.envvars["NO_AUTH"] == "true",
 	}, nil
 }

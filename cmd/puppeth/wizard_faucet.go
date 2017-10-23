@@ -87,34 +87,38 @@ func (w *wizard) deployFaucet() {
 	if infos.githubUser == "" {
 		// No previous authorization (or new one requested)
 		fmt.Println()
-		fmt.Println("Which GitHub user to verify Gists through?")
-		infos.githubUser = w.readString()
+		fmt.Println("Which GitHub user to verify Gists through? (default = none = rate-limited API)")
+		infos.githubUser = w.readDefaultString("")
 
-		fmt.Println()
-		fmt.Println("What is the GitHub personal access token of the user? (won't be echoed)")
-		infos.githubToken = w.readPassword()
+		if infos.githubUser == "" {
+			log.Warn("Funding requests via GitHub will be heavily rate-limited")
+		} else {
+			fmt.Println()
+			fmt.Println("What is the GitHub personal access token of the user? (won't be echoed)")
+			infos.githubToken = w.readPassword()
 
-		// Do a sanity check query against github to ensure it's valid
-		req, _ := http.NewRequest("GET", "https://api.github.com/user", nil)
-		req.SetBasicAuth(infos.githubUser, infos.githubToken)
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			log.Error("Failed to verify GitHub authentication", "err", err)
-			return
-		}
-		defer res.Body.Close()
+			// Do a sanity check query against github to ensure it's valid
+			req, _ := http.NewRequest("GET", "https://api.github.com/user", nil)
+			req.SetBasicAuth(infos.githubUser, infos.githubToken)
+			res, err := http.DefaultClient.Do(req)
+			if err != nil {
+				log.Error("Failed to verify GitHub authentication", "err", err)
+				return
+			}
+			defer res.Body.Close()
 
-		var msg struct {
-			Login   string `json:"login"`
-			Message string `json:"message"`
-		}
-		if err = json.NewDecoder(res.Body).Decode(&msg); err != nil {
-			log.Error("Failed to decode authorization response", "err", err)
-			return
-		}
-		if msg.Login != infos.githubUser {
-			log.Error("GitHub authorization failed", "user", infos.githubUser, "message", msg.Message)
-			return
+			var msg struct {
+				Login   string `json:"login"`
+				Message string `json:"message"`
+			}
+			if err = json.NewDecoder(res.Body).Decode(&msg); err != nil {
+				log.Error("Failed to decode authorization response", "err", err)
+				return
+			}
+			if msg.Login != infos.githubUser {
+				log.Error("GitHub authorization failed", "user", infos.githubUser, "message", msg.Message)
+				return
+			}
 		}
 	}
 	// Accessing the reCaptcha service requires API authorizations, request it
@@ -129,7 +133,9 @@ func (w *wizard) deployFaucet() {
 		// No previous authorization (or old one discarded)
 		fmt.Println()
 		fmt.Println("Enable reCaptcha protection against robots (y/n)? (default = no)")
-		if w.readDefaultString("n") == "y" {
+		if w.readDefaultString("n") == "n" {
+			log.Warn("Users will be able to requests funds via automated scripts")
+		} else {
 			// Captcha protection explicitly requested, read the site and secret keys
 			fmt.Println()
 			fmt.Printf("What is the reCaptcha site key to authenticate human users?\n")
@@ -175,7 +181,7 @@ func (w *wizard) deployFaucet() {
 			}
 		}
 	}
-	if infos.node.keyJSON == "" {
+	for i := 0; i < 3 && infos.node.keyJSON == ""; i++ {
 		fmt.Println()
 		fmt.Println("Please paste the faucet's funding account key JSON:")
 		infos.node.keyJSON = w.readJSON()
@@ -186,9 +192,19 @@ func (w *wizard) deployFaucet() {
 
 		if _, err := keystore.DecryptKey([]byte(infos.node.keyJSON), infos.node.keyPass); err != nil {
 			log.Error("Failed to decrypt key with given passphrase")
-			return
+			infos.node.keyJSON = ""
+			infos.node.keyPass = ""
 		}
 	}
+	// Check if the user wants to run the faucet in debug mode (noauth)
+	noauth := "n"
+	if infos.noauth {
+		noauth = "y"
+	}
+	fmt.Println()
+	fmt.Printf("Permit non-authenticated funding requests (y/n)? (default = %v)\n", infos.noauth)
+	infos.noauth = w.readDefaultString(noauth) != "n"
+
 	// Try to deploy the faucet server on the host
 	fmt.Println()
 	fmt.Printf("Should the faucet be built from scratch (y/n)? (default = no)\n")

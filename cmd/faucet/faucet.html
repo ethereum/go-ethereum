@@ -93,6 +93,11 @@
 
 							<dt style="width: auto; margin-left: 40px;"><i class="fa fa-facebook" aria-hidden="true" style="font-size: 36px;"></i></dt>
 							<dd style="margin-left: 88px; margin-bottom: 10px;"></i> To request funds via Facebook, publish a new <strong>public</strong> post with your Ethereum address embedded into the content (surrounding text doesn't matter).<br/>Copy-paste the <a href="https://www.facebook.com/help/community/question/?id=282662498552845" target="_about:blank">posts URL</a> into the above input box and fire away!</dd>
+
+							{{if .NoAuth}}
+								<dt class="text-danger" style="width: auto; margin-left: 40px;"><i class="fa fa-unlock-alt" aria-hidden="true" style="font-size: 36px;"></i></dt>
+								<dd class="text-danger" style="margin-left: 88px; margin-bottom: 10px;"></i> To request funds <strong>without authentication</strong>, simply copy-paste your Ethereum address into the above input box (surrounding text doesn't matter) and fire away.<br/>This mode is susceptible to Byzantine attacks. Only use for debugging or private networks!</dd>
+							{{end}}
 						</dl>
 						<p>You can track the current pending requests below the input field to see how much you have to wait until your turn comes.</p>
 						{{if .Recaptcha}}<em>The faucet is running invisible reCaptcha protection against bots.</em>{{end}}
@@ -126,12 +131,7 @@
 			};
 			// Define a method to reconnect upon server loss
 			var reconnect = function() {
-				if (attempt % 2 == 0) {
-					server = new WebSocket("wss://" + location.host + "/api");
-				} else {
-					server = new WebSocket("ws://" + location.host + "/api");
-				}
-				attempt++;
+				server = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/api");
 
 				server.onmessage = function(event) {
 					var msg = JSON.parse(event.data);
