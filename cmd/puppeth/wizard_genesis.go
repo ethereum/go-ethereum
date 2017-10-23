@@ -37,7 +37,7 @@ func (w *wizard) makeGenesis() {
 	genesis := &core.Genesis{
 		Timestamp:  uint64(time.Now().Unix()),
 		GasLimit:   4700000,
-		Difficulty: big.NewInt(1048576),
+		Difficulty: big.NewInt(524288),
 		Alloc:      make(core.GenesisAlloc),
 		Config: &params.ChainConfig{
 			HomesteadBlock: big.NewInt(1),

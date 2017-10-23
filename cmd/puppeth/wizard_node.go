@@ -65,7 +65,7 @@ func (w *wizard) deployNode(boot bool) {
 		fmt.Printf("Where should data be stored on the remote machine? (default = %s)\n", infos.datadir)
 		infos.datadir = w.readDefaultString(infos.datadir)
 	}
-	if w.conf.genesis.Config.Ethash != nil {
+	if w.conf.genesis.Config.Ethash != nil && !boot {
 		fmt.Println()
 		if infos.ethashdir == "" {
 			fmt.Printf("Where should the ethash mining DAGs be stored on the remote machine?\n")
