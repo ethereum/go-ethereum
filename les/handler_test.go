@@ -464,6 +464,16 @@ func TestTransactionStatusLes2(t *testing.T) {
 	if _, err := chain.InsertChain(gchain); err != nil {
 		panic(err)
 	}
+	// wait until TxPool processes the inserted block
+	for i := 0; i < 10; i++ {
+		if pending, _ := txpool.Stats(); pending == 1 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if pending, _ := txpool.Stats(); pending != 1 {
+		t.Fatalf("pending count mismatch: have %d, want 1", pending)
+	}
 
 	// check if their status is included now
 	block1hash := core.GetCanonicalHash(db, 1)

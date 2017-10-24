@@ -104,7 +104,7 @@ var (
 )
 
 // TxStatus is the current status of a transaction as seen py the pool.
-type TxStatus int
+type TxStatus uint
 
 const (
 	TxStatusUnknown TxStatus = iota
