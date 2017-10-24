@@ -342,9 +342,9 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 	}
 }
 
-// DefaultDeveloperGenesisBlock returns the 'geth --dev' genesis block. Note, this
-// must be seeded with the
-func DefaultDeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
+// DeveloperGenesisBlock returns the 'geth --dev' genesis block. Note, this must
+// be seeded with the
+func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	// Override the default period to the user requested one
 	config := *params.AllCliqueProtocolChanges
 	config.Clique.Period = period
@@ -353,18 +353,18 @@ func DefaultDeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis
 	return &Genesis{
 		Config:     &config,
 		ExtraData:  append(append(make([]byte, 32), faucet[:]...), make([]byte, 65)...),
-		GasLimit:   4712388,
+		GasLimit:   6283185,
 		Difficulty: big.NewInt(1),
 		Alloc: map[common.Address]GenesisAccount{
-			common.Address{1}: GenesisAccount{Balance: big.NewInt(1)}, // ECRecover
-			common.Address{2}: GenesisAccount{Balance: big.NewInt(1)}, // SHA256
-			common.Address{3}: GenesisAccount{Balance: big.NewInt(1)}, // RIPEMD
-			common.Address{4}: GenesisAccount{Balance: big.NewInt(1)}, // Identity
-			common.Address{5}: GenesisAccount{Balance: big.NewInt(1)}, // ModExp
-			common.Address{6}: GenesisAccount{Balance: big.NewInt(1)}, // ECAdd
-			common.Address{7}: GenesisAccount{Balance: big.NewInt(1)}, // ECScalarMul
-			common.Address{8}: GenesisAccount{Balance: big.NewInt(1)}, // ECPairing
-			faucet:            GenesisAccount{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(8))},
+			common.BytesToAddress([]byte{1}): GenesisAccount{Balance: big.NewInt(1)}, // ECRecover
+			common.BytesToAddress([]byte{2}): GenesisAccount{Balance: big.NewInt(1)}, // SHA256
+			common.BytesToAddress([]byte{3}): GenesisAccount{Balance: big.NewInt(1)}, // RIPEMD
+			common.BytesToAddress([]byte{4}): GenesisAccount{Balance: big.NewInt(1)}, // Identity
+			common.BytesToAddress([]byte{5}): GenesisAccount{Balance: big.NewInt(1)}, // ModExp
+			common.BytesToAddress([]byte{6}): GenesisAccount{Balance: big.NewInt(1)}, // ECAdd
+			common.BytesToAddress([]byte{7}): GenesisAccount{Balance: big.NewInt(1)}, // ECScalarMul
+			common.BytesToAddress([]byte{8}): GenesisAccount{Balance: big.NewInt(1)}, // ECPairing
+			faucet: GenesisAccount{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
 		},
 	}
 }

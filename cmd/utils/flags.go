@@ -990,16 +990,25 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
-		faucet, err := ks.NewAccount("")
-		if err != nil {
-			Fatalf("Failed to create developer account: %v", err)
+		// Create new developer account or reuse existing one
+		var (
+			developer accounts.Account
+			err       error
+		)
+		if accs := ks.Accounts(); len(accs) > 0 {
+			developer = ks.Accounts()[0]
+		} else {
+			developer, err = ks.NewAccount("")
+			if err != nil {
+				Fatalf("Failed to create developer account: %v", err)
+			}
 		}
-		if err := ks.Unlock(faucet, ""); err != nil {
+		if err := ks.Unlock(developer, ""); err != nil {
 			Fatalf("Failed to unlock developer account: %v", err)
 		}
-		log.Info("Created developer account", "address", faucet.Address)
+		log.Info("Using developer account", "address", developer.Address)
 
-		cfg.Genesis = core.DefaultDeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), faucet.Address)
+		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), developer.Address)
 		if !ctx.GlobalIsSet(GasPriceFlag.Name) {
 			cfg.GasPrice = big.NewInt(1)
 		}
