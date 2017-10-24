@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -115,6 +116,7 @@ type ProtocolManager struct {
 
 	// channels for fetcher, syncer, txsyncLoop
 	newPeerCh   chan *peer
+	isClosed	*int32
 	quitSync    chan struct{}
 	noMorePeers chan struct{}
 
@@ -123,10 +125,16 @@ type ProtocolManager struct {
 	wg *sync.WaitGroup
 }
 
+const (
+	started int32 = iota
+	closed
+)
+
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
 func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, networkId uint64, mux *event.TypeMux, engine consensus.Engine, peers *peerSet, blockchain BlockChain, txpool txPool, chainDb ethdb.Database, odr *LesOdr, txrelay *LesTxRelay, quitSync chan struct{}, wg *sync.WaitGroup) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
+	isClosed := started
 	manager := &ProtocolManager{
 		lightSync:   lightSync,
 		eventMux:    mux,
@@ -139,6 +147,7 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, network
 		txrelay:     txrelay,
 		peers:       peers,
 		newPeerCh:   make(chan *peer),
+		isClosed:    &isClosed,
 		quitSync:    quitSync,
 		wg:          wg,
 		noMorePeers: make(chan struct{}),
@@ -242,7 +251,8 @@ func (pm *ProtocolManager) Stop() {
 	// will exit when they try to register.
 	pm.peers.Close()
 
-	// Wait for any process action
+	// Wait for any process action. Wait should be executed after all pm.wg.Add()
+	atomic.StoreInt32(pm.isClosed, closed)
 	pm.wg.Wait()
 
 	log.Info("Light Ethereum protocol stopped")
