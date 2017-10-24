@@ -109,7 +109,7 @@ func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 				for i, section := range task.Sections {
 					if rand.Int()%4 != 0 { // Handle occasional missing deliveries
 						head := core.GetCanonicalHash(b.db, (section+1)*params.BloomBitsBlocks-1)
-						task.Bitsets[i] = core.GetBloomBits(b.db, task.Bit, section, head)
+						task.Bitsets[i], _ = core.GetBloomBits(b.db, task.Bit, section, head)
 					}
 				}
 				request <- task
