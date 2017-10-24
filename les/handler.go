@@ -89,7 +89,8 @@ type BlockChain interface {
 }
 
 type txPool interface {
-	AddOrGetTxStatus(txs []*types.Transaction, txHashes []common.Hash) []core.TxStatusData
+	AddRemotes(txs []*types.Transaction) []error
+	Status(hashes []common.Hash) []core.TxStatus
 }
 
 type ProtocolManager struct {
@@ -983,12 +984,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if reject(uint64(reqCnt), MaxTxSend) {
 			return errResp(ErrRequestRejected, "")
 		}
-
-		txHashes := make([]common.Hash, len(txs))
-		for i, tx := range txs {
-			txHashes[i] = tx.Hash()
-		}
-		pm.addOrGetTxStatus(txs, txHashes)
+		pm.txpool.AddRemotes(txs)
 
 		_, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
@@ -1010,16 +1006,25 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrRequestRejected, "")
 		}
 
-		txHashes := make([]common.Hash, len(req.Txs))
+		hashes := make([]common.Hash, len(req.Txs))
 		for i, tx := range req.Txs {
-			txHashes[i] = tx.Hash()
+			hashes[i] = tx.Hash()
 		}
-
-		res := pm.addOrGetTxStatus(req.Txs, txHashes)
+		stats := pm.txStatus(hashes)
+		for i, stat := range stats {
+			if stat.Status == core.TxStatusUnknown {
+				if errs := pm.txpool.AddRemotes([]*types.Transaction{req.Txs[i]}); errs[0] != nil {
+					stats[i].Error = errs[0]
+					continue
+				}
+				stats[i] = pm.txStatus([]common.Hash{hashes[i]})[0]
+			}
+		}
 
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
-		return p.SendTxStatus(req.ReqID, bv, res)
+
+		return p.SendTxStatus(req.ReqID, bv, stats)
 
 	case GetTxStatusMsg:
 		if pm.txpool == nil {
@@ -1027,22 +1032,20 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		// Transactions arrived, parse all of them and deliver to the pool
 		var req struct {
-			ReqID    uint64
-			TxHashes []common.Hash
+			ReqID  uint64
+			Hashes []common.Hash
 		}
 		if err := msg.Decode(&req); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		reqCnt := len(req.TxHashes)
+		reqCnt := len(req.Hashes)
 		if reject(uint64(reqCnt), MaxTxStatus) {
 			return errResp(ErrRequestRejected, "")
 		}
-
-		res := pm.addOrGetTxStatus(nil, req.TxHashes)
-
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
-		return p.SendTxStatus(req.ReqID, bv, res)
+
+		return p.SendTxStatus(req.ReqID, bv, pm.txStatus(req.Hashes))
 
 	case TxStatusMsg:
 		if pm.odr == nil {
@@ -1052,7 +1055,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		p.Log().Trace("Received tx status response")
 		var resp struct {
 			ReqID, BV uint64
-			Status    []core.TxStatusData
+			Status    []core.TxStatus
 		}
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
@@ -1103,19 +1106,21 @@ func (pm *ProtocolManager) getHelperTrieAuxData(req HelperTrieReq) []byte {
 	return nil
 }
 
-func (pm *ProtocolManager) addOrGetTxStatus(txs []*types.Transaction, txHashes []common.Hash) []core.TxStatusData {
-	status := pm.txpool.AddOrGetTxStatus(txs, txHashes)
-	for i, _ := range status {
-		blockHash, blockNum, txIndex := core.GetTxLookupEntry(pm.chainDb, txHashes[i])
-		if blockHash != (common.Hash{}) {
-			enc, err := rlp.EncodeToBytes(core.TxLookupEntry{BlockHash: blockHash, BlockIndex: blockNum, Index: txIndex})
-			if err != nil {
-				panic(err)
+func (pm *ProtocolManager) txStatus(hashes []common.Hash) []txStatus {
+	stats := make([]txStatus, len(hashes))
+	for i, stat := range pm.txpool.Status(hashes) {
+		// Save the status we've got from the transaction pool
+		stats[i].Status = stat
+
+		// If the transaction is unknown to the pool, try looking it up locally
+		if stat == core.TxStatusUnknown {
+			if block, number, index := core.GetTxLookupEntry(pm.chainDb, hashes[i]); block != (common.Hash{}) {
+				stats[i].Status = core.TxStatusIncluded
+				stats[i].Lookup = &core.TxLookupEntry{BlockHash: block, BlockIndex: number, Index: index}
 			}
-			status[i] = core.TxStatusData{Status: core.TxStatusIncluded, Data: enc}
 		}
 	}
-	return status
+	return stats
 }
 
 // NodeInfo retrieves some protocol metadata about the running host node.
