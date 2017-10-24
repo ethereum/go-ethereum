@@ -384,13 +384,13 @@ func (h *priceHeap) Pop() interface{} {
 // txPricedList is a price-sorted heap to allow operating on transactions pool
 // contents in a price-incrementing way.
 type txPricedList struct {
-	all    *map[common.Hash]*types.Transaction // Pointer to the map of all transactions
-	items  *priceHeap                          // Heap of prices of all the stored transactions
-	stales int                                 // Number of stale price points to (re-heap trigger)
+	all    *map[common.Hash]txLookupRec // Pointer to the map of all transactions
+	items  *priceHeap                   // Heap of prices of all the stored transactions
+	stales int                          // Number of stale price points to (re-heap trigger)
 }
 
 // newTxPricedList creates a new price-sorted transaction heap.
-func newTxPricedList(all *map[common.Hash]*types.Transaction) *txPricedList {
+func newTxPricedList(all *map[common.Hash]txLookupRec) *txPricedList {
 	return &txPricedList{
 		all:   all,
 		items: new(priceHeap),
@@ -416,7 +416,7 @@ func (l *txPricedList) Removed() {
 
 	l.stales, l.items = 0, &reheap
 	for _, tx := range *l.all {
-		*l.items = append(*l.items, tx)
+		*l.items = append(*l.items, tx.tx)
 	}
 	heap.Init(l.items)
 }
