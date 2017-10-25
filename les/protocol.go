@@ -27,6 +27,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -219,3 +220,9 @@ type CodeData []struct {
 }
 
 type proofsData [][]rlp.RawValue
+
+type txStatus struct {
+	Status core.TxStatus
+	Lookup *core.TxLookupEntry
+	Error  error
+}
