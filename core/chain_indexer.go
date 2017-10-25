@@ -81,6 +81,8 @@ type ChainIndexer struct {
 	knownSections  uint64 // Number of sections known to be complete (block wise)
 	cascadedHead   uint64 // Block number of the last completed section cascaded to subindexers
 
+	checkpointHead common.Hash // light syncing from a checkpoint, header chain starts here
+
 	throttling time.Duration // Disk throttling to prevent a heavy upgrade from hogging resources
 
 	log  log.Logger
@@ -120,6 +122,7 @@ func (c *ChainIndexer) AddKnownSectionHead(section uint64, shead common.Hash) {
 	}
 	c.setSectionHead(section, shead)
 	c.setValidSections(section + 1)
+	c.checkpointHead = shead
 }
 
 // Start creates a goroutine to feed chain head events into the indexer for
@@ -201,10 +204,25 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainE
 			}
 			header := ev.Block.Header()
 			if header.ParentHash != prevHash {
-				// Reorg to the common ancestor (might not exist in light sync mode, skip reorg then)
-				// TODO(karalabe, zsfelfoldi): This seems a bit brittle, can we detect this case explicitly?
+				// Reorg to the common ancestor
 				if h := FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
 					c.newHead(h.Number.Uint64(), true)
+				} else {
+					// The only case when common ancestor should be missing is when starting light checkpoint syncing
+					h := header
+					c.lock.RLock()
+					checkpointHead := c.checkpointHead
+					c.lock.RUnlock()
+					// check if checkpoint head is equal to or an ancestor of new head, panic if not
+					for {
+						if h.Hash() == checkpointHead {
+							break
+						}
+						h = GetHeader(c.chainDb, h.ParentHash, h.Number.Uint64()-1)
+						if h == nil {
+							panic("common ancestor with previous head not found, header chain is broken")
+						}
+					}
 				}
 			}
 			c.newHead(header.Number.Uint64(), false)
