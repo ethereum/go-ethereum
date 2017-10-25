@@ -17,6 +17,7 @@
 package bloombits
 
 import (
+	"context"
 	"math/rand"
 	"sync/atomic"
 	"testing"
@@ -144,7 +145,7 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, blocks uint64, intermitt
 	quit := make(chan struct{})
 	matches := make(chan uint64, 16)
 
-	session, err := matcher.Start(0, blocks-1, matches)
+	session, err := matcher.Start(context.Background(), 0, blocks-1, matches)
 	if err != nil {
 		t.Fatalf("failed to stat matcher session: %v", err)
 	}
@@ -163,13 +164,13 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, blocks uint64, intermitt
 			}
 			// If we're testing intermittent mode, abort and restart the pipeline
 			if intermittent {
-				session.Close(time.Second)
+				session.Close()
 				close(quit)
 
 				quit = make(chan struct{})
 				matches = make(chan uint64, 16)
 
-				session, err = matcher.Start(i+1, blocks-1, matches)
+				session, err = matcher.Start(context.Background(), i+1, blocks-1, matches)
 				if err != nil {
 					t.Fatalf("failed to stat matcher session: %v", err)
 				}
@@ -183,7 +184,7 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, blocks uint64, intermitt
 		t.Errorf("filter = %v  blocks = %v  intermittent = %v: expected closed channel, got #%v", filter, blocks, intermittent, match)
 	}
 	// Clean up the session and ensure we match the expected retrieval count
-	session.Close(time.Second)
+	session.Close()
 	close(quit)
 
 	if retrievals != 0 && requested != retrievals {

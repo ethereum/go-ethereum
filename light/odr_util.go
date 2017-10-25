@@ -19,55 +19,15 @@ package light
 import (
 	"bytes"
 	"context"
-	"errors"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var sha3_nil = crypto.Keccak256Hash(nil)
-
-var (
-	ErrNoTrustedCht = errors.New("No trusted canonical hash trie")
-	ErrNoHeader     = errors.New("Header not found")
-
-	ChtFrequency     = uint64(4096)
-	ChtConfirmations = uint64(2048)
-	trustedChtKey    = []byte("TrustedCHT")
-)
-
-type ChtNode struct {
-	Hash common.Hash
-	Td   *big.Int
-}
-
-type TrustedCht struct {
-	Number uint64
-	Root   common.Hash
-}
-
-func GetTrustedCht(db ethdb.Database) TrustedCht {
-	data, _ := db.Get(trustedChtKey)
-	var res TrustedCht
-	if err := rlp.DecodeBytes(data, &res); err != nil {
-		return TrustedCht{0, common.Hash{}}
-	}
-	return res
-}
-
-func WriteTrustedCht(db ethdb.Database, cht TrustedCht) {
-	data, _ := rlp.EncodeToBytes(cht)
-	db.Put(trustedChtKey, data)
-}
-
-func DeleteTrustedCht(db ethdb.Database) {
-	db.Delete(trustedChtKey)
-}
 
 func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*types.Header, error) {
 	db := odr.Database()
@@ -81,12 +41,29 @@ func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*typ
 		return header, nil
 	}
 
-	cht := GetTrustedCht(db)
-	if number >= cht.Number*ChtFrequency {
+	var (
+		chtCount, sectionHeadNum uint64
+		sectionHead              common.Hash
+	)
+	if odr.ChtIndexer() != nil {
+		chtCount, sectionHeadNum, sectionHead = odr.ChtIndexer().Sections()
+		canonicalHash := core.GetCanonicalHash(db, sectionHeadNum)
+		// if the CHT was injected as a trusted checkpoint, we have no canonical hash yet so we accept zero hash too
+		for chtCount > 0 && canonicalHash != sectionHead && canonicalHash != (common.Hash{}) {
+			chtCount--
+			if chtCount > 0 {
+				sectionHeadNum = chtCount*ChtFrequency - 1
+				sectionHead = odr.ChtIndexer().SectionHead(chtCount - 1)
+				canonicalHash = core.GetCanonicalHash(db, sectionHeadNum)
+			}
+		}
+	}
+
+	if number >= chtCount*ChtFrequency {
 		return nil, ErrNoTrustedCht
 	}
 
-	r := &ChtRequest{ChtRoot: cht.Root, ChtNum: cht.Number, BlockNum: number}
+	r := &ChtRequest{ChtRoot: GetChtRoot(db, chtCount-1, sectionHead), ChtNum: chtCount - 1, BlockNum: number}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
 	} else {
@@ -161,4 +138,62 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		return nil, err
 	}
 	return r.Receipts, nil
+}
+
+// GetBloomBits retrieves a batch of compressed bloomBits vectors belonging to the given bit index and section indexes
+func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint, sectionIdxList []uint64) ([][]byte, error) {
+	db := odr.Database()
+	result := make([][]byte, len(sectionIdxList))
+	var (
+		reqList []uint64
+		reqIdx  []int
+	)
+
+	var (
+		bloomTrieCount, sectionHeadNum uint64
+		sectionHead                    common.Hash
+	)
+	if odr.BloomTrieIndexer() != nil {
+		bloomTrieCount, sectionHeadNum, sectionHead = odr.BloomTrieIndexer().Sections()
+		canonicalHash := core.GetCanonicalHash(db, sectionHeadNum)
+		// if the BloomTrie was injected as a trusted checkpoint, we have no canonical hash yet so we accept zero hash too
+		for bloomTrieCount > 0 && canonicalHash != sectionHead && canonicalHash != (common.Hash{}) {
+			bloomTrieCount--
+			if bloomTrieCount > 0 {
+				sectionHeadNum = bloomTrieCount*BloomTrieFrequency - 1
+				sectionHead = odr.BloomTrieIndexer().SectionHead(bloomTrieCount - 1)
+				canonicalHash = core.GetCanonicalHash(db, sectionHeadNum)
+			}
+		}
+	}
+
+	for i, sectionIdx := range sectionIdxList {
+		sectionHead := core.GetCanonicalHash(db, (sectionIdx+1)*BloomTrieFrequency-1)
+		// if we don't have the canonical hash stored for this section head number, we'll still look for
+		// an entry with a zero sectionHead (we store it with zero section head too if we don't know it
+		// at the time of the retrieval)
+		bloomBits, err := core.GetBloomBits(db, bitIdx, sectionIdx, sectionHead)
+		if err == nil {
+			result[i] = bloomBits
+		} else {
+			if sectionIdx >= bloomTrieCount {
+				return nil, ErrNoTrustedBloomTrie
+			}
+			reqList = append(reqList, sectionIdx)
+			reqIdx = append(reqIdx, i)
+		}
+	}
+	if reqList == nil {
+		return result, nil
+	}
+
+	r := &BloomRequest{BloomTrieRoot: GetBloomTrieRoot(db, bloomTrieCount-1, sectionHead), BloomTrieNum: bloomTrieCount - 1, BitIdx: bitIdx, SectionIdxList: reqList}
+	if err := odr.Retrieve(ctx, r); err != nil {
+		return nil, err
+	} else {
+		for i, idx := range reqIdx {
+			result[idx] = r.BloomBits[i]
+		}
+		return result, nil
+	}
 }
