@@ -608,7 +608,7 @@ func deployDashboard(client *sshClient, network string, conf *config, config *da
 	}
 	template.Must(template.New("").Parse(dashboardContent)).Execute(indexfile, map[string]interface{}{
 		"Network":            network,
-		"NetworkID":          conf.genesis.Config.ChainId,
+		"NetworkID":          conf.Genesis.Config.ChainId,
 		"NetworkTitle":       strings.Title(network),
 		"EthstatsPage":       config.ethstats,
 		"ExplorerPage":       config.explorer,
@@ -620,7 +620,7 @@ func deployDashboard(client *sshClient, network string, conf *config, config *da
 		"BootnodesFullFlat":  strings.Join(conf.bootFull, ","),
 		"BootnodesLightFlat": strings.Join(conf.bootLight, ","),
 		"Ethstats":           statsLogin,
-		"Ethash":             conf.genesis.Config.Ethash != nil,
+		"Ethash":             conf.Genesis.Config.Ethash != nil,
 		"CppGenesis":         network + "-cpp.json",
 		"CppBootnodes":       strings.Join(bootCpp, " "),
 		"HarmonyGenesis":     network + "-harmony.json",
@@ -628,36 +628,36 @@ func deployDashboard(client *sshClient, network string, conf *config, config *da
 		"ParityGenesis":      network + "-parity.json",
 		"PythonGenesis":      network + "-python.json",
 		"PythonBootnodes":    strings.Join(bootPython, ","),
-		"Homestead":          conf.genesis.Config.HomesteadBlock,
-		"Tangerine":          conf.genesis.Config.EIP150Block,
-		"Spurious":           conf.genesis.Config.EIP155Block,
-		"Byzantium":          conf.genesis.Config.ByzantiumBlock,
+		"Homestead":          conf.Genesis.Config.HomesteadBlock,
+		"Tangerine":          conf.Genesis.Config.EIP150Block,
+		"Spurious":           conf.Genesis.Config.EIP155Block,
+		"Byzantium":          conf.Genesis.Config.ByzantiumBlock,
 	})
 	files[filepath.Join(workdir, "index.html")] = indexfile.Bytes()
 
 	// Marshal the genesis spec files for go-ethereum and all the other clients
-	genesis, _ := conf.genesis.MarshalJSON()
+	genesis, _ := conf.Genesis.MarshalJSON()
 	files[filepath.Join(workdir, network+".json")] = genesis
 
-	if conf.genesis.Config.Ethash != nil {
-		cppSpec, err := newCppEthereumGenesisSpec(network, conf.genesis)
+	if conf.Genesis.Config.Ethash != nil {
+		cppSpec, err := newCppEthereumGenesisSpec(network, conf.Genesis)
 		if err != nil {
 			return nil, err
 		}
 		cppSpecJSON, _ := json.Marshal(cppSpec)
 		files[filepath.Join(workdir, network+"-cpp.json")] = cppSpecJSON
 
-		harmonySpecJSON, _ := conf.genesis.MarshalJSON()
+		harmonySpecJSON, _ := conf.Genesis.MarshalJSON()
 		files[filepath.Join(workdir, network+"-harmony.json")] = harmonySpecJSON
 
-		paritySpec, err := newParityChainSpec(network, conf.genesis, conf.bootFull)
+		paritySpec, err := newParityChainSpec(network, conf.Genesis, conf.bootFull)
 		if err != nil {
 			return nil, err
 		}
 		paritySpecJSON, _ := json.Marshal(paritySpec)
 		files[filepath.Join(workdir, network+"-parity.json")] = paritySpecJSON
 
-		pyethSpec, err := newPyEthereumGenesisSpec(network, conf.genesis)
+		pyethSpec, err := newPyEthereumGenesisSpec(network, conf.Genesis)
 		if err != nil {
 			return nil, err
 		}

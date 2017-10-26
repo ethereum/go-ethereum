@@ -107,7 +107,7 @@ func (w *wizard) run() {
 		fmt.Println()
 		fmt.Println("What would you like to do? (default = stats)")
 		fmt.Println(" 1. Show network stats")
-		if w.conf.genesis == nil {
+		if w.conf.Genesis == nil {
 			fmt.Println(" 2. Configure new genesis")
 		} else {
 			fmt.Println(" 2. Manage existing genesis")
@@ -129,7 +129,7 @@ func (w *wizard) run() {
 			w.networkStats()
 
 		case choice == "2":
-			if w.conf.genesis == nil {
+			if w.conf.Genesis == nil {
 				w.makeGenesis()
 			} else {
 				w.manageGenesis()

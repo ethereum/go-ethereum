@@ -29,7 +29,7 @@ import (
 // deployNode creates a new node configuration based on some user input.
 func (w *wizard) deployNode(boot bool) {
 	// Do some sanity check before the user wastes time on input
-	if w.conf.genesis == nil {
+	if w.conf.Genesis == nil {
 		log.Error("No genesis block configured")
 		return
 	}
@@ -53,8 +53,8 @@ func (w *wizard) deployNode(boot bool) {
 			infos = &nodeInfos{portFull: 30303, peersTotal: 50, peersLight: 0, gasTarget: 4.7, gasPrice: 18}
 		}
 	}
-	infos.genesis, _ = json.MarshalIndent(w.conf.genesis, "", "  ")
-	infos.network = w.conf.genesis.Config.ChainId.Int64()
+	infos.genesis, _ = json.MarshalIndent(w.conf.Genesis, "", "  ")
+	infos.network = w.conf.Genesis.Config.ChainId.Int64()
 
 	// Figure out where the user wants to store the persistent data
 	fmt.Println()
@@ -65,7 +65,7 @@ func (w *wizard) deployNode(boot bool) {
 		fmt.Printf("Where should data be stored on the remote machine? (default = %s)\n", infos.datadir)
 		infos.datadir = w.readDefaultString(infos.datadir)
 	}
-	if w.conf.genesis.Config.Ethash != nil && !boot {
+	if w.conf.Genesis.Config.Ethash != nil && !boot {
 		fmt.Println()
 		if infos.ethashdir == "" {
 			fmt.Printf("Where should the ethash mining DAGs be stored on the remote machine?\n")
@@ -101,7 +101,7 @@ func (w *wizard) deployNode(boot bool) {
 	}
 	// If the node is a miner/signer, load up needed credentials
 	if !boot {
-		if w.conf.genesis.Config.Ethash != nil {
+		if w.conf.Genesis.Config.Ethash != nil {
 			// Ethash based miners only need an etherbase to mine against
 			fmt.Println()
 			if infos.etherbase == "" {
@@ -116,7 +116,7 @@ func (w *wizard) deployNode(boot bool) {
 				fmt.Printf("What address should the miner user? (default = %s)\n", infos.etherbase)
 				infos.etherbase = w.readDefaultAddress(common.HexToAddress(infos.etherbase)).Hex()
 			}
-		} else if w.conf.genesis.Config.Clique != nil {
+		} else if w.conf.Genesis.Config.Clique != nil {
 			// If a previous signer was already set, offer to reuse it
 			if infos.keyJSON != "" {
 				if key, err := keystore.DecryptKey([]byte(infos.keyJSON), infos.keyPass); err != nil {

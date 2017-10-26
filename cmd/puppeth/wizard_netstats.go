@@ -32,7 +32,7 @@ import (
 // configuration set to give users hints on how to do various tasks.
 func (w *wizard) networkStats() {
 	if len(w.servers) == 0 {
-		log.Error("No remote machines to gather stats from")
+		log.Info("No remote machines to gather stats from")
 		return
 	}
 	// Clear out some previous configs to refill from current scan
@@ -173,12 +173,12 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	if genesis != "" && w.conf.genesis == nil {
+	if genesis != "" && w.conf.Genesis == nil {
 		g := new(core.Genesis)
 		if err := json.Unmarshal([]byte(genesis), g); err != nil {
 			log.Error("Failed to parse remote genesis", "err", err)
 		} else {
-			w.conf.genesis = g
+			w.conf.Genesis = g
 		}
 	}
 	if ethstats != "" {

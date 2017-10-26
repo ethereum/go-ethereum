@@ -27,7 +27,7 @@ import (
 // deployExplorer creates a new block explorer based on some user input.
 func (w *wizard) deployExplorer() {
 	// Do some sanity check before the user wastes time on input
-	if w.conf.genesis == nil {
+	if w.conf.Genesis == nil {
 		log.Error("No genesis block configured")
 		return
 	}
@@ -35,7 +35,7 @@ func (w *wizard) deployExplorer() {
 		log.Error("No ethstats server configured")
 		return
 	}
-	if w.conf.genesis.Config.Ethash == nil {
+	if w.conf.Genesis.Config.Ethash == nil {
 		log.Error("Only ethash network supported")
 		return
 	}
@@ -51,7 +51,7 @@ func (w *wizard) deployExplorer() {
 	if err != nil {
 		infos = &explorerInfos{nodePort: 30303, webPort: 80, webHost: client.server}
 	}
-	chainspec, err := newParityChainSpec(w.network, w.conf.genesis, w.conf.bootFull)
+	chainspec, err := newParityChainSpec(w.network, w.conf.Genesis, w.conf.bootFull)
 	if err != nil {
 		log.Error("Failed to create chain spec for explorer", "err", err)
 		return

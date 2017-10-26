@@ -39,12 +39,12 @@ import (
 // config contains all the configurations needed by puppeth that should be saved
 // between sessions.
 type config struct {
-	path      string        // File containing the configuration values
-	genesis   *core.Genesis // Genesis block to cache for node deploys
-	bootFull  []string      // Bootnodes to always connect to by full nodes
-	bootLight []string      // Bootnodes to always connect to by light nodes
-	ethstats  string        // Ethstats settings to cache for node deploys
+	path      string   // File containing the configuration values
+	bootFull  []string // Bootnodes to always connect to by full nodes
+	bootLight []string // Bootnodes to always connect to by light nodes
+	ethstats  string   // Ethstats settings to cache for node deploys
 
+	Genesis *core.Genesis     `json:"genesis,omitempty"` // Genesis block to cache for node deploys
 	Servers map[string][]byte `json:"servers,omitempty"`
 }
 

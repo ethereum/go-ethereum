@@ -27,7 +27,7 @@ import (
 // deployWallet creates a new web wallet based on some user input.
 func (w *wizard) deployWallet() {
 	// Do some sanity check before the user wastes time on input
-	if w.conf.genesis == nil {
+	if w.conf.Genesis == nil {
 		log.Error("No genesis block configured")
 		return
 	}
@@ -47,8 +47,8 @@ func (w *wizard) deployWallet() {
 	if err != nil {
 		infos = &walletInfos{nodePort: 30303, rpcPort: 8545, webPort: 80, webHost: client.server}
 	}
-	infos.genesis, _ = json.MarshalIndent(w.conf.genesis, "", "  ")
-	infos.network = w.conf.genesis.Config.ChainId.Int64()
+	infos.genesis, _ = json.MarshalIndent(w.conf.Genesis, "", "  ")
+	infos.network = w.conf.Genesis.Config.ChainId.Int64()
 
 	// Figure out which port to listen on
 	fmt.Println()
