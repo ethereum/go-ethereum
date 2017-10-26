@@ -64,7 +64,7 @@ func (w *wizard) run() {
 		for {
 			w.network = w.readString()
 			if !strings.Contains(w.network, " ") {
-				fmt.Printf("Sweet, you can set this via --network=%s next time!\n\n", w.network)
+				fmt.Printf("\nSweet, you can set this via --network=%s next time!\n\n", w.network)
 				break
 			}
 			log.Error("I also like to live dangerously, still no spaces")

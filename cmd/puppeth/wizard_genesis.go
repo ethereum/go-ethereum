@@ -118,21 +118,10 @@ func (w *wizard) makeGenesis() {
 	for i := int64(0); i < 256; i++ {
 		genesis.Alloc[common.BigToAddress(big.NewInt(i))] = core.GenesisAccount{Balance: big.NewInt(1)}
 	}
-	fmt.Println()
-
 	// Query the user for some custom extras
 	fmt.Println()
 	fmt.Println("Specify your chain/network ID if you want an explicit one (default = random)")
 	genesis.Config.ChainId = new(big.Int).SetUint64(uint64(w.readDefaultInt(rand.Intn(65536))))
-
-	fmt.Println()
-	fmt.Println("Anything fun to embed into the genesis block? (max 32 bytes)")
-
-	extra := w.read()
-	if len(extra) > 32 {
-		extra = extra[:32]
-	}
-	genesis.ExtraData = append([]byte(extra), genesis.ExtraData[len(extra):]...)
 
 	// All done, store the genesis and flush to disk
 	w.conf.genesis = genesis
