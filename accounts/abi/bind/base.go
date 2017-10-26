@@ -52,7 +52,8 @@ type TransactOpts struct {
 	GasPrice *big.Int // Gas price to use for the transaction execution (nil = gas price oracle)
 	GasLimit *big.Int // Gas limit to set for the transaction execution (nil = estimate + 10%)
 
-	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
+	Context   context.Context // Network context to support cancellation and timeouts (nil = no timeout)
+	DoNotSend bool            // Do not send the transaction; used for dry runs and offline transaction generation
 }
 
 // BoundContract is the base wrapper object that reflects a contract on the
@@ -219,8 +220,10 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if err != nil {
 		return nil, err
 	}
-	if err := c.transactor.SendTransaction(ensureContext(opts.Context), signedTx); err != nil {
-		return nil, err
+	if !opts.DoNotSend {
+		if err := c.transactor.SendTransaction(ensureContext(opts.Context), signedTx); err != nil {
+			return nil, err
+		}
 	}
 	return signedTx, nil
 }
