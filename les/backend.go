@@ -145,7 +145,7 @@ func lesTopic(genesisHash common.Hash, protocolVersion uint) discv5.Topic {
 	default:
 		panic(nil)
 	}
-	return discv5.Topic(name + common.Bytes2Hex(genesisHash.Bytes()[0:8]))
+	return discv5.Topic(name + "@" + common.Bytes2Hex(genesisHash.Bytes()[0:8]))
 }
 
 type LightDummyAPI struct{}
