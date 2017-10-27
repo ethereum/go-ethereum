@@ -534,7 +534,10 @@ func (s *MatcherSession) Close() {
 
 // Error returns any failure encountered during the matching session.
 func (s *MatcherSession) Error() error {
-	return s.err.Load().(error)
+	if err := s.err.Load(); err != nil {
+		return err.(error)
+	}
+	return nil
 }
 
 // AllocateRetrieval assigns a bloom bit index to a client process that can either
