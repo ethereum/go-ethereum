@@ -30,30 +30,15 @@ import (
 
 // explorerDockerfile is the Dockerfile required to run a block explorer.
 var explorerDockerfile = `
-FROM parity/parity:stable
-
-RUN \
-	apt-get update && apt-get install -y curl git npm make g++ --no-install-recommends && \
-  npm install -g n pm2 && n stable
-
-RUN \
-  git clone --depth=1 https://github.com/puppeth/eth-net-intelligence-api && \
-	cd eth-net-intelligence-api && npm install
-
-RUN \
-  git clone --depth=1 https://github.com/puppeth/etherchain-light --recursive && \
-	cd etherchain-light && npm install && mv config.js.example config.js        && \
-	sed -i '/this.bootstrapUrl/c\  this.bootstrapUrl = "https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css";' config.js
+FROM puppeth/explorer:latest
 
 ADD ethstats.json /ethstats.json
 ADD chain.json /chain.json
 
 RUN \
-  echo '(cd eth-net-intelligence-api && pm2 start /ethstats.json)' >  explorer.sh && \
-	echo '(cd etherchain-light && npm start &)'                      >> explorer.sh && \
+  echo '(cd ../eth-net-intelligence-api && pm2 start /ethstats.json)' >  explorer.sh && \
+	echo '(cd ../etherchain-light && npm start &)'                      >> explorer.sh && \
 	echo '/parity/parity --chain=/chain.json --port={{.NodePort}} --tracing=on --fat-db=on --pruning=archive' >> explorer.sh
-
-EXPOSE 3000
 
 ENTRYPOINT ["/bin/sh", "explorer.sh"]
 `

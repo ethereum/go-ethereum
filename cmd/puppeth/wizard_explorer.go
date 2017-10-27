@@ -47,9 +47,14 @@ func (w *wizard) deployExplorer() {
 	client := w.servers[server]
 
 	// Retrieve any active node configurations from the server
+	existed := true
+
 	infos, err := checkExplorer(client, w.network)
 	if err != nil {
-		infos = &explorerInfos{nodePort: 30303, webPort: 80, webHost: client.server}
+		infos = &explorerInfos{
+			nodePort: 30303, webPort: 80, webHost: client.server,
+		}
+		existed = false
 	}
 	chainspec, err := newParityChainSpec(w.network, w.conf.Genesis, w.conf.bootFull)
 	if err != nil {
@@ -92,10 +97,12 @@ func (w *wizard) deployExplorer() {
 		infos.ethstats = w.readDefaultString(infos.ethstats) + ":" + w.conf.ethstats
 	}
 	// Try to deploy the explorer on the host
-	fmt.Println()
-	fmt.Printf("Should the explorer be built from scratch (y/n)? (default = no)\n")
-	nocache := w.readDefaultString("n") != "n"
-
+	nocache := false
+	if existed {
+		fmt.Println()
+		fmt.Printf("Should the explorer be built from scratch (y/n)? (default = no)\n")
+		nocache = w.readDefaultString("n") != "n"
+	}
 	if out, err := deployExplorer(client, w.network, chain, infos, nocache); err != nil {
 		log.Error("Failed to deploy explorer container", "err", err)
 		if len(out) > 0 {

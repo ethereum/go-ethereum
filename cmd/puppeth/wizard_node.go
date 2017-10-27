@@ -45,6 +45,8 @@ func (w *wizard) deployNode(boot bool) {
 	client := w.servers[server]
 
 	// Retrieve any active node configurations from the server
+	existed := true
+
 	infos, err := checkNode(client, w.network, boot)
 	if err != nil {
 		if boot {
@@ -52,6 +54,7 @@ func (w *wizard) deployNode(boot bool) {
 		} else {
 			infos = &nodeInfos{portFull: 30303, peersTotal: 50, peersLight: 0, gasTarget: 4.7, gasPrice: 18}
 		}
+		existed = false
 	}
 	infos.genesis, _ = json.MarshalIndent(w.conf.Genesis, "", "  ")
 	infos.network = w.conf.Genesis.Config.ChainId.Int64()
@@ -155,10 +158,12 @@ func (w *wizard) deployNode(boot bool) {
 		infos.gasPrice = w.readDefaultFloat(infos.gasPrice)
 	}
 	// Try to deploy the full node on the host
-	fmt.Println()
-	fmt.Printf("Should the node be built from scratch (y/n)? (default = no)\n")
-	nocache := w.readDefaultString("n") != "n"
-
+	nocache := false
+	if existed {
+		fmt.Println()
+		fmt.Printf("Should the node be built from scratch (y/n)? (default = no)\n")
+		nocache = w.readDefaultString("n") != "n"
+	}
 	if out, err := deployNode(client, w.network, w.conf.bootFull, w.conf.bootLight, infos, nocache); err != nil {
 		log.Error("Failed to deploy Ethereum node container", "err", err)
 		if len(out) > 0 {

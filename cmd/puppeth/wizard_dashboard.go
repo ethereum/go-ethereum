@@ -33,12 +33,15 @@ func (w *wizard) deployDashboard() {
 	client := w.servers[server]
 
 	// Retrieve any active dashboard configurations from the server
+	existed := true
+
 	infos, err := checkDashboard(client, w.network)
 	if err != nil {
 		infos = &dashboardInfos{
 			port: 80,
 			host: client.server,
 		}
+		existed = false
 	}
 	// Figure out which port to listen on
 	fmt.Println()
@@ -138,10 +141,12 @@ func (w *wizard) deployDashboard() {
 		infos.trusted = w.readDefaultString("y") == "y"
 	}
 	// Try to deploy the dashboard container on the host
-	fmt.Println()
-	fmt.Printf("Should the dashboard be built from scratch (y/n)? (default = no)\n")
-	nocache := w.readDefaultString("n") != "n"
-
+	nocache := false
+	if existed {
+		fmt.Println()
+		fmt.Printf("Should the dashboard be built from scratch (y/n)? (default = no)\n")
+		nocache = w.readDefaultString("n") != "n"
+	}
 	if out, err := deployDashboard(client, w.network, &w.conf, infos, nocache); err != nil {
 		log.Error("Failed to deploy dashboard container", "err", err)
 		if len(out) > 0 {

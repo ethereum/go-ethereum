@@ -30,61 +30,7 @@ import (
 
 // walletDockerfile is the Dockerfile required to run a web wallet.
 var walletDockerfile = `
-FROM ethereum/client-go:latest
-
-RUN \
-	apk add --update git python make g++ libnotify nodejs-npm && \
-	npm install -g gulp-cli
-
-RUN \
-  git clone --depth=1 https://github.com/kvhnuke/etherwallet.git && \
-	(cd etherwallet && npm install)
-WORKDIR etherwallet
-
-RUN \
-	echo '"use strict";'                                                  > app/scripts/nodes.js && \
-	echo 'var nodes = function() {}'                                     >> app/scripts/nodes.js && \
-	echo 'nodes.customNode = require("./nodeHelpers/customNode");'       >> app/scripts/nodes.js && \
-	echo 'nodes.nodeTypes = {'                                           >> app/scripts/nodes.js && \
-  echo '	{{.Network}}: "{{.Denom}} ETH",'                             >> app/scripts/nodes.js && \
-	echo '	Custom: "CUSTOM ETH"'                                        >> app/scripts/nodes.js && \
-	echo '};'                                                            >> app/scripts/nodes.js && \
-	echo 'nodes.ensNodeTypes = [];'                                      >> app/scripts/nodes.js && \
-	echo 'nodes.customNodeObj = {'                                       >> app/scripts/nodes.js && \
-  echo '	"name": "CUS",'                                              >> app/scripts/nodes.js && \
-  echo '	"type": nodes.nodeTypes.Custom,'                             >> app/scripts/nodes.js && \
-  echo '	"eip155": false,'                                            >> app/scripts/nodes.js && \
-  echo '	"chainId": "",'                                              >> app/scripts/nodes.js && \
-	echo '	"tokenList": [],'                                            >> app/scripts/nodes.js && \
-	echo '	"abiList": [],'                                              >> app/scripts/nodes.js && \
-	echo '	"service": "Custom",'                                        >> app/scripts/nodes.js && \
-  echo '	"lib": null'                                                 >> app/scripts/nodes.js && \
-  echo '}'                                                             >> app/scripts/nodes.js && \
-	echo 'nodes.nodeList = {'                                            >> app/scripts/nodes.js && \
-  echo '	"eth_mew": {'                                                >> app/scripts/nodes.js && \
-  echo '		"name": "{{.Network}}",'                                   >> app/scripts/nodes.js && \
-  echo '		"type": nodes.nodeTypes.{{.Network}},'                     >> app/scripts/nodes.js && \
-  echo '		"eip155": true,'                                           >> app/scripts/nodes.js && \
-  echo '		"chainId": {{.NetworkID}},'                                >> app/scripts/nodes.js && \
-	echo '		"tokenList": [],'                                          >> app/scripts/nodes.js && \
-	echo '		"abiList": [],'                                            >> app/scripts/nodes.js && \
-	echo '		"service": "Go Ethereum",'                                 >> app/scripts/nodes.js && \
-  echo '		"lib": new nodes.customNode("http://{{.Host}}:{{.RPCPort}}", "")' >> app/scripts/nodes.js && \
-  echo '	}'                                                           >> app/scripts/nodes.js && \
-	echo '};'                                                            >> app/scripts/nodes.js && \
-	echo 'nodes.ethPrice = require("./nodeHelpers/ethPrice");'           >> app/scripts/nodes.js && \
-	echo 'module.exports = nodes;'                                       >> app/scripts/nodes.js
-
-RUN rm -rf dist && gulp prep && npm run dist
-
-RUN \
-	npm install connect serve-static && \
-	\
-	echo 'var connect = require("connect");'                                       > server.js && \
-	echo 'var serveStatic = require("serve-static");'                             >> server.js && \
-	echo 'connect().use(serveStatic("/etherwallet/dist")).listen(80, function(){' >> server.js && \
-	echo '    console.log("Server running on 80...");'                            >> server.js && \
-	echo '});'                                                                    >> server.js
+FROM puppeth/wallet:latest
 
 ADD genesis.json /genesis.json
 
@@ -93,7 +39,12 @@ RUN \
 	echo 'geth --cache 512 init /genesis.json' >> wallet.sh && \
 	echo $'geth --networkid {{.NetworkID}} --port {{.NodePort}} --bootnodes {{.Bootnodes}} --ethstats \'{{.Ethstats}}\' --cache=512 --rpc --rpcaddr=0.0.0.0 --rpccorsdomain "*"' >> wallet.sh
 
-EXPOSE 80 8545
+RUN \
+	sed -i 's/PuppethNetworkID/{{.NetworkID}}/g' dist/js/etherwallet-master.js && \
+	sed -i 's/PuppethNetwork/{{.Network}}/g'     dist/js/etherwallet-master.js && \
+	sed -i 's/PuppethDenom/{{.Denom}}/g'         dist/js/etherwallet-master.js && \
+	sed -i 's/PuppethHost/{{.Host}}/g'           dist/js/etherwallet-master.js && \
+	sed -i 's/PuppethRPCPort/{{.RPCPort}}/g'     dist/js/etherwallet-master.js
 
 ENTRYPOINT ["/bin/sh", "wallet.sh"]
 `

@@ -36,6 +36,8 @@ func (w *wizard) deployFaucet() {
 	client := w.servers[server]
 
 	// Retrieve any active faucet configurations from the server
+	existed := true
+
 	infos, err := checkFaucet(client, w.network)
 	if err != nil {
 		infos = &faucetInfos{
@@ -46,6 +48,7 @@ func (w *wizard) deployFaucet() {
 			minutes: 1440,
 			tiers:   3,
 		}
+		existed = false
 	}
 	infos.node.genesis, _ = json.MarshalIndent(w.conf.Genesis, "", "  ")
 	infos.node.network = w.conf.Genesis.Config.ChainId.Int64()
@@ -206,10 +209,12 @@ func (w *wizard) deployFaucet() {
 	infos.noauth = w.readDefaultString(noauth) != "n"
 
 	// Try to deploy the faucet server on the host
-	fmt.Println()
-	fmt.Printf("Should the faucet be built from scratch (y/n)? (default = no)\n")
-	nocache := w.readDefaultString("n") != "n"
-
+	nocache := false
+	if existed {
+		fmt.Println()
+		fmt.Printf("Should the faucet be built from scratch (y/n)? (default = no)\n")
+		nocache = w.readDefaultString("n") != "n"
+	}
 	if out, err := deployFaucet(client, w.network, w.conf.bootLight, infos, nocache); err != nil {
 		log.Error("Failed to deploy faucet container", "err", err)
 		if len(out) > 0 {

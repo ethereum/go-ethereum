@@ -31,21 +31,9 @@ import (
 // ethstatsDockerfile is the Dockerfile required to build an ethstats backend
 // and associated monitoring site.
 var ethstatsDockerfile = `
-FROM mhart/alpine-node:latest
-
-RUN \
-  apk add --update git                                        && \
-  git clone --depth=1 https://github.com/puppeth/eth-netstats && \
-	apk del git && rm -rf /var/cache/apk/*                      && \
-	\
-  cd /eth-netstats && npm install && npm install -g grunt-cli && grunt
-
-WORKDIR /eth-netstats
-EXPOSE 3000
+FROM puppeth/ethstats:latest
 
 RUN echo 'module.exports = {trusted: [{{.Trusted}}], banned: [{{.Banned}}], reserved: ["yournode"]};' > lib/utils/config.js
-
-CMD ["npm", "start"]
 `
 
 // ethstatsComposefile is the docker-compose.yml file required to deploy and

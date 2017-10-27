@@ -34,6 +34,8 @@ func (w *wizard) deployEthstats() {
 	client := w.servers[server]
 
 	// Retrieve any active ethstats configurations from the server
+	existed := true
+
 	infos, err := checkEthstats(client, w.network)
 	if err != nil {
 		infos = &ethstatsInfos{
@@ -41,6 +43,7 @@ func (w *wizard) deployEthstats() {
 			host:   client.server,
 			secret: "",
 		}
+		existed = false
 	}
 	// Figure out which port to listen on
 	fmt.Println()
@@ -62,46 +65,50 @@ func (w *wizard) deployEthstats() {
 		infos.secret = w.readDefaultString(infos.secret)
 	}
 	// Gather any blacklists to ban from reporting
-	fmt.Println()
-	fmt.Printf("Keep existing IP %v blacklist (y/n)? (default = yes)\n", infos.banned)
-	if w.readDefaultString("y") != "y" {
-		// The user might want to clear the entire list, although generally probably not
+	if existed {
 		fmt.Println()
-		fmt.Printf("Clear out blacklist and start over (y/n)? (default = no)\n")
-		if w.readDefaultString("n") != "n" {
-			infos.banned = nil
-		}
-		// Offer the user to explicitly add/remove certain IP addresses
-		fmt.Println()
-		fmt.Println("Which additional IP addresses should be blacklisted?")
-		for {
-			if ip := w.readIPAddress(); ip != "" {
-				infos.banned = append(infos.banned, ip)
-				continue
+		fmt.Printf("Keep existing IP %v blacklist (y/n)? (default = yes)\n", infos.banned)
+		if w.readDefaultString("y") != "y" {
+			// The user might want to clear the entire list, although generally probably not
+			fmt.Println()
+			fmt.Printf("Clear out blacklist and start over (y/n)? (default = no)\n")
+			if w.readDefaultString("n") != "n" {
+				infos.banned = nil
 			}
-			break
-		}
-		fmt.Println()
-		fmt.Println("Which IP addresses should not be blacklisted?")
-		for {
-			if ip := w.readIPAddress(); ip != "" {
-				for i, addr := range infos.banned {
-					if ip == addr {
-						infos.banned = append(infos.banned[:i], infos.banned[i+1:]...)
-						break
-					}
+			// Offer the user to explicitly add/remove certain IP addresses
+			fmt.Println()
+			fmt.Println("Which additional IP addresses should be blacklisted?")
+			for {
+				if ip := w.readIPAddress(); ip != "" {
+					infos.banned = append(infos.banned, ip)
+					continue
 				}
-				continue
+				break
 			}
-			break
+			fmt.Println()
+			fmt.Println("Which IP addresses should not be blacklisted?")
+			for {
+				if ip := w.readIPAddress(); ip != "" {
+					for i, addr := range infos.banned {
+						if ip == addr {
+							infos.banned = append(infos.banned[:i], infos.banned[i+1:]...)
+							break
+						}
+					}
+					continue
+				}
+				break
+			}
+			sort.Strings(infos.banned)
 		}
-		sort.Strings(infos.banned)
 	}
 	// Try to deploy the ethstats server on the host
-	fmt.Println()
-	fmt.Printf("Should the ethstats be built from scratch (y/n)? (default = no)\n")
-	nocache := w.readDefaultString("n") != "n"
-
+	nocache := false
+	if existed {
+		fmt.Println()
+		fmt.Printf("Should the ethstats be built from scratch (y/n)? (default = no)\n")
+		nocache = w.readDefaultString("n") != "n"
+	}
 	trusted := make([]string, 0, len(w.servers))
 	for _, client := range w.servers {
 		if client != nil {

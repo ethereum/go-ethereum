@@ -43,9 +43,14 @@ func (w *wizard) deployWallet() {
 	client := w.servers[server]
 
 	// Retrieve any active node configurations from the server
+	existed := true
+
 	infos, err := checkWallet(client, w.network)
 	if err != nil {
-		infos = &walletInfos{nodePort: 30303, rpcPort: 8545, webPort: 80, webHost: client.server}
+		infos = &walletInfos{
+			nodePort: 30303, rpcPort: 8545, webPort: 80, webHost: client.server,
+		}
+		existed = false
 	}
 	infos.genesis, _ = json.MarshalIndent(w.conf.Genesis, "", "  ")
 	infos.network = w.conf.Genesis.Config.ChainId.Int64()
@@ -75,7 +80,7 @@ func (w *wizard) deployWallet() {
 	infos.nodePort = w.readDefaultInt(infos.nodePort)
 
 	fmt.Println()
-	fmt.Printf("Which TCP/UDP port should the backing RPC API listen on? (default = %d)\n", infos.rpcPort)
+	fmt.Printf("Which port should the backing RPC API listen on? (default = %d)\n", infos.rpcPort)
 	infos.rpcPort = w.readDefaultInt(infos.rpcPort)
 
 	// Set a proper name to report on the stats page
@@ -88,10 +93,12 @@ func (w *wizard) deployWallet() {
 		infos.ethstats = w.readDefaultString(infos.ethstats) + ":" + w.conf.ethstats
 	}
 	// Try to deploy the wallet on the host
-	fmt.Println()
-	fmt.Printf("Should the wallet be built from scratch (y/n)? (default = no)\n")
-	nocache := w.readDefaultString("n") != "n"
-
+	nocache := false
+	if existed {
+		fmt.Println()
+		fmt.Printf("Should the wallet be built from scratch (y/n)? (default = no)\n")
+		nocache = w.readDefaultString("n") != "n"
+	}
 	if out, err := deployWallet(client, w.network, w.conf.bootFull, infos, nocache); err != nil {
 		log.Error("Failed to deploy wallet container", "err", err)
 		if len(out) > 0 {

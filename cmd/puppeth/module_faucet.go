@@ -33,27 +33,14 @@ import (
 // faucetDockerfile is the Dockerfile required to build an faucet container to
 // grant crypto tokens based on GitHub authentications.
 var faucetDockerfile = `
-FROM alpine:latest
-
-RUN mkdir /go
-ENV GOPATH /go
-
-RUN \
-  apk add --update git go make gcc musl-dev ca-certificates linux-headers                             && \
-	mkdir -p $GOPATH/src/github.com/ethereum                                                            && \
-	(cd $GOPATH/src/github.com/ethereum && git clone --depth=1 https://github.com/ethereum/go-ethereum) && \
-  go build -v github.com/ethereum/go-ethereum/cmd/faucet                                              && \
-  apk del git go make gcc musl-dev linux-headers                                                      && \
-  rm -rf $GOPATH && rm -rf /var/cache/apk/*
+FROM puppeth/faucet:latest
 
 ADD genesis.json /genesis.json
 ADD account.json /account.json
 ADD account.pass /account.pass
 
-EXPOSE 8080
-
-CMD [ \
-	"/faucet", "--genesis", "/genesis.json", "--network", "{{.NetworkID}}", "--bootnodes", "{{.Bootnodes}}", "--ethstats", "{{.Ethstats}}", "--ethport", "{{.EthPort}}",    \
+ENTRYPOINT [ \
+	"faucet", "--genesis", "/genesis.json", "--network", "{{.NetworkID}}", "--bootnodes", "{{.Bootnodes}}", "--ethstats", "{{.Ethstats}}", "--ethport", "{{.EthPort}}",     \
 	"--faucet.name", "{{.FaucetName}}", "--faucet.amount", "{{.FaucetAmount}}", "--faucet.minutes", "{{.FaucetMinutes}}", "--faucet.tiers", "{{.FaucetTiers}}",             \
 	{{if .GitHubUser}}"--github.user", "{{.GitHubUser}}", "--github.token", "{{.GitHubToken}}", {{end}}"--account.json", "/account.json", "--account.pass", "/account.pass" \
 	{{if .CaptchaToken}}, "--captcha.token", "{{.CaptchaToken}}", "--captcha.secret", "{{.CaptchaSecret}}"{{end}}{{if .NoAuth}}, "--noauth"{{end}}                          \
