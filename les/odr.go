@@ -19,6 +19,7 @@ package les
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
@@ -26,33 +27,56 @@ import (
 
 // LesOdr implements light.OdrBackend
 type LesOdr struct {
-	db        ethdb.Database
-	stop      chan struct{}
-	retriever *retrieveManager
+	db                                   ethdb.Database
+	chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer
+	retriever                            *retrieveManager
+	stop                                 chan struct{}
 }
 
-func NewLesOdr(db ethdb.Database, retriever *retrieveManager) *LesOdr {
+func NewLesOdr(db ethdb.Database, chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer, retriever *retrieveManager) *LesOdr {
 	return &LesOdr{
-		db:        db,
-		retriever: retriever,
-		stop:      make(chan struct{}),
+		db:           db,
+		chtIndexer:   chtIndexer,
+		bloomTrieIndexer:   bloomTrieIndexer,
+		bloomIndexer: bloomIndexer,
+		retriever:    retriever,
+		stop:         make(chan struct{}),
 	}
 }
 
+// Stop cancels all pending retrievals
 func (odr *LesOdr) Stop() {
 	close(odr.stop)
 }
 
+// Database returns the backing database
 func (odr *LesOdr) Database() ethdb.Database {
 	return odr.db
+}
+
+// ChtIndexer returns the CHT chain indexer
+func (odr *LesOdr) ChtIndexer() *core.ChainIndexer {
+	return odr.chtIndexer
+}
+
+// BloomTrieIndexer returns the bloom trie chain indexer
+func (odr *LesOdr) BloomTrieIndexer() *core.ChainIndexer {
+	return odr.bloomTrieIndexer
+}
+
+// BloomIndexer returns the bloombits chain indexer
+func (odr *LesOdr) BloomIndexer() *core.ChainIndexer {
+	return odr.bloomIndexer
 }
 
 const (
 	MsgBlockBodies = iota
 	MsgCode
 	MsgReceipts
-	MsgProofs
+	MsgProofsV1
+	MsgProofsV2
 	MsgHeaderProofs
+	MsgHelperTrieProofs
 )
 
 // Msg encodes a LES message that delivers reply data for a request
@@ -64,7 +88,7 @@ type Msg struct {
 
 // Retrieve tries to fetch an object from the LES network.
 // If the network retrieval was successful, it stores the object in local db.
-func (self *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err error) {
+func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err error) {
 	lreq := LesRequest(req)
 
 	reqID := genReqID()
@@ -84,9 +108,9 @@ func (self *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err err
 		},
 	}
 
-	if err = self.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(self.db, msg) }); err == nil {
+	if err = odr.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(odr.db, msg) }, odr.stop); err == nil {
 		// retrieved from network, store in db
-		req.StoreResult(self.db)
+		req.StoreResult(odr.db)
 	} else {
 		log.Debug("Failed to retrieve data from network", "err", err)
 	}
