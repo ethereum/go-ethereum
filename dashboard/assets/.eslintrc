@@ -1,0 +1,31 @@
+// React syntax style mostly according to https://github.com/airbnb/javascript/tree/master/react
+{
+  "plugins": [
+    "react"
+  ],
+  "parser": "babel-eslint",
+  "parserOptions": {
+    "ecmaFeatures": {
+      "jsx": true,
+      "modules": true
+    }
+  },
+  "rules": {
+    "react/prefer-es6-class": 2,
+    "react/prefer-stateless-function": 2,
+    "react/jsx-pascal-case": 2,
+    "react/jsx-closing-bracket-location": [1, {"selfClosing": "tag-aligned", "nonEmpty": "tag-aligned"}],
+    "react/jsx-closing-tag-location": 1,
+    "jsx-quotes": ["error", "prefer-double"],
+    "no-multi-spaces": "error",
+    "react/jsx-tag-spacing": 2,
+    "react/jsx-curly-spacing": [2, {"when": "never", "children": true}],
+    "react/jsx-boolean-value": 2,
+    "react/no-string-refs": 2,
+    "react/jsx-wrap-multilines": 2,
+    "react/self-closing-comp": 2,
+    "react/jsx-no-bind": 2,
+    "react/require-render-return": 2,
+    "react/no-is-mounted": 2
+  }
+}

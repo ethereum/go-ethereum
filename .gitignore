@@ -33,3 +33,6 @@ profile.cov
 
 # IdeaIDE
 .idea
+
+# dashboard
+/dashboard/assets/node_modules
