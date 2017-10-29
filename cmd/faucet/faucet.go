@@ -437,7 +437,11 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 		)
 		switch {
 		case strings.HasPrefix(msg.URL, "https://gist.github.com/"):
-			username, avatar, address, err = authGitHub(msg.URL)
+			if err = sendError(conn, errors.New("GitHub authentication discontinued at the official request of GitHub")); err != nil {
+				log.Warn("Failed to send GitHub deprecation to client", "err", err)
+				return
+			}
+			continue
 		case strings.HasPrefix(msg.URL, "https://twitter.com/"):
 			username, avatar, address, err = authTwitter(msg.URL)
 		case strings.HasPrefix(msg.URL, "https://plus.google.com/"):

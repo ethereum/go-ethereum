@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/log"
@@ -78,51 +77,6 @@ func (w *wizard) deployFaucet() {
 	if infos.tiers == 0 {
 		log.Error("At least one funding tier must be set")
 		return
-	}
-	// Accessing GitHub gists requires API authorization, retrieve it
-	if infos.githubUser != "" {
-		fmt.Println()
-		fmt.Printf("Reuse previous (%s) GitHub API authorization (y/n)? (default = yes)\n", infos.githubUser)
-		if w.readDefaultString("y") != "y" {
-			infos.githubUser, infos.githubToken = "", ""
-		}
-	}
-	if infos.githubUser == "" {
-		// No previous authorization (or new one requested)
-		fmt.Println()
-		fmt.Println("Which GitHub user to verify Gists through? (default = none = rate-limited API)")
-		infos.githubUser = w.readDefaultString("")
-
-		if infos.githubUser == "" {
-			log.Warn("Funding requests via GitHub will be heavily rate-limited")
-		} else {
-			fmt.Println()
-			fmt.Println("What is the GitHub personal access token of the user? (won't be echoed)")
-			infos.githubToken = w.readPassword()
-
-			// Do a sanity check query against github to ensure it's valid
-			req, _ := http.NewRequest("GET", "https://api.github.com/user", nil)
-			req.SetBasicAuth(infos.githubUser, infos.githubToken)
-			res, err := http.DefaultClient.Do(req)
-			if err != nil {
-				log.Error("Failed to verify GitHub authentication", "err", err)
-				return
-			}
-			defer res.Body.Close()
-
-			var msg struct {
-				Login   string `json:"login"`
-				Message string `json:"message"`
-			}
-			if err = json.NewDecoder(res.Body).Decode(&msg); err != nil {
-				log.Error("Failed to decode authorization response", "err", err)
-				return
-			}
-			if msg.Login != infos.githubUser {
-				log.Error("GitHub authorization failed", "user", infos.githubUser, "message", msg.Message)
-				return
-			}
-		}
 	}
 	// Accessing the reCaptcha service requires API authorizations, request it
 	if infos.captchaToken != "" {
