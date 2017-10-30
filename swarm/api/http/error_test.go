@@ -132,7 +132,7 @@ func TestJsonResponse(t *testing.T) {
 	}
 
 	if !isJSON(string(respbody)) {
-		t.Fatalf("Expected repsonse to be JSON, received invalid JSON: %s", string(respbody))
+		t.Fatalf("Expected response to be JSON, received invalid JSON: %s", string(respbody))
 	}
 
 }
