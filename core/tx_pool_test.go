@@ -1411,6 +1411,9 @@ func TestTransactionReplacement(t *testing.T) {
 	if err := pool.AddRemote(pricedTransaction(0, big.NewInt(100000), big.NewInt(price), key)); err != nil {
 		t.Fatalf("failed to add original proper pending transaction: %v", err)
 	}
+	if err := pool.AddRemote(pricedTransaction(0, big.NewInt(100001), big.NewInt(threshold-1), key)); err != ErrReplaceUnderpriced {
+		t.Fatalf("original cheap pending transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
+	}
 	if err := pool.AddRemote(pricedTransaction(0, big.NewInt(100000), big.NewInt(threshold), key)); err != nil {
 		t.Fatalf("failed to replace original proper pending transaction: %v", err)
 	}
@@ -1430,6 +1433,9 @@ func TestTransactionReplacement(t *testing.T) {
 
 	if err := pool.AddRemote(pricedTransaction(2, big.NewInt(100000), big.NewInt(price), key)); err != nil {
 		t.Fatalf("failed to add original queued transaction: %v", err)
+	}
+	if err := pool.AddRemote(pricedTransaction(2, big.NewInt(100001), big.NewInt(threshold-1), key)); err != ErrReplaceUnderpriced {
+		t.Fatalf("original cheap pending transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
 	}
 	if err := pool.AddRemote(pricedTransaction(2, big.NewInt(100000), big.NewInt(threshold), key)); err != nil {
 		t.Fatalf("failed to replace original queued transaction: %v", err)
