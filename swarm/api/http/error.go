@@ -72,7 +72,7 @@ func initErrHandling() {
 //ShowMultipeChoices is used when a user requests a resource in a manifest which results
 //in ambiguous results. It returns a HTML page with clickable links of each of the entry
 //in the manifest which fits the request URI ambiguity.
-//For example, if the user requests bzz:/<hash>/read and that manifest containes entries
+//For example, if the user requests bzz:/<hash>/read and that manifest contains entries
 //"readme.md" and "readinglist.txt", a HTML page is returned with this two links.
 //This only applies if the manifest has no default entry
 func ShowMultipleChoices(w http.ResponseWriter, r *http.Request, list api.ManifestList) {

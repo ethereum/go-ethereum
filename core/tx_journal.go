@@ -68,7 +68,7 @@ func (journal *txJournal) load(add func(*types.Transaction) error) error {
 	}
 	defer input.Close()
 
-	// Temporarilly discard any journal additions (don't double add on load)
+	// Temporarily discard any journal additions (don't double add on load)
 	journal.writer = new(devNull)
 	defer func() { journal.writer = nil }()
 
