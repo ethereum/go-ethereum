@@ -150,7 +150,18 @@ func (method Method) singleUnpack(v interface{}, output []byte) error {
 	if err != nil {
 		return err
 	}
-	if err := set(value, reflect.ValueOf(marshalledValue), method.Outputs[0]); err != nil {
+
+	// if we reach this part, there is only one output member from the contract method.
+	// for mobile, the result type is always a slice.
+	var firstValue reflect.Value
+	if reflect.Slice == value.Kind() {
+		// take the first element
+		firstValue = value.Index(0).Elem()
+	} else {
+		firstValue = value
+	}
+
+	if err := set(firstValue, reflect.ValueOf(marshalledValue), method.Outputs[0]); err != nil {
 		return err
 	}
 	return nil
