@@ -199,7 +199,7 @@ func (ec *EthereumClient) FilterLogs(ctx *Context, query *FilterQuery) (logs *Lo
 	// Temp hack due to vm.Logs being []*vm.Log
 	res := make([]*types.Log, len(rawLogs))
 	for i, log := range rawLogs {
-		res[i] = &log
+		res[i] = &rawLogs[i]
 	}
 	return &Logs{res}, nil
 }
