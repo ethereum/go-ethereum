@@ -182,8 +182,9 @@ type bintree struct {
 	Func     func() (*asset, error)
 	Children map[string]*bintree
 }
+
 var _bintree = &bintree{nil, map[string]*bintree{
-	"faucet.html": &bintree{faucetHtml, map[string]*bintree{}},
+	"faucet.html": {faucetHtml, map[string]*bintree{}},
 }}
 
 // RestoreAsset restores an asset under the given directory
@@ -232,4 +233,3 @@ func _filePath(dir, name string) string {
 	cannonicalName := strings.Replace(name, "\\", "/", -1)
 	return filepath.Join(append([]string{dir}, strings.Split(cannonicalName, "/")...)...)
 }
-

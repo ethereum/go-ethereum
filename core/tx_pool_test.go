@@ -105,7 +105,7 @@ func validateTxPoolInternals(pool *TxPool) error {
 	for addr, txs := range pool.pending {
 		// Find the last transaction
 		var last uint64
-		for nonce, _ := range txs.txs.items {
+		for nonce := range txs.txs.items {
 			if last < nonce {
 				last = nonce
 			}

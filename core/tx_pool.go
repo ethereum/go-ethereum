@@ -820,7 +820,7 @@ func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) []error {
 	// Only reprocess the internal state if something was actually added
 	if len(dirty) > 0 {
 		addrs := make([]common.Address, 0, len(dirty))
-		for addr, _ := range dirty {
+		for addr := range dirty {
 			addrs = append(addrs, addr)
 		}
 		pool.promoteExecutables(addrs)
@@ -907,7 +907,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 	// Gather all the accounts potentially needing updates
 	if accounts == nil {
 		accounts = make([]common.Address, 0, len(pool.queue))
-		for addr, _ := range pool.queue {
+		for addr := range pool.queue {
 			accounts = append(accounts, addr)
 		}
 	}

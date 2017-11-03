@@ -31,14 +31,14 @@ const testSectionSize = 4096
 // Tests that wildcard filter rules (nil) can be specified and are handled well.
 func TestMatcherWildcards(t *testing.T) {
 	matcher := NewMatcher(testSectionSize, [][][]byte{
-		[][]byte{common.Address{}.Bytes(), common.Address{0x01}.Bytes()}, // Default address is not a wildcard
-		[][]byte{common.Hash{}.Bytes(), common.Hash{0x01}.Bytes()},       // Default hash is not a wildcard
-		[][]byte{common.Hash{0x01}.Bytes()},                              // Plain rule, sanity check
-		[][]byte{common.Hash{0x01}.Bytes(), nil},                         // Wildcard suffix, drop rule
-		[][]byte{nil, common.Hash{0x01}.Bytes()},                         // Wildcard prefix, drop rule
-		[][]byte{nil, nil},                                               // Wildcard combo, drop rule
-		[][]byte{},                                                       // Inited wildcard rule, drop rule
-		nil,                                                              // Proper wildcard rule, drop rule
+		{common.Address{}.Bytes(), common.Address{0x01}.Bytes()}, // Default address is not a wildcard
+		{common.Hash{}.Bytes(), common.Hash{0x01}.Bytes()},       // Default hash is not a wildcard
+		{common.Hash{0x01}.Bytes()},                              // Plain rule, sanity check
+		{common.Hash{0x01}.Bytes(), nil},                         // Wildcard suffix, drop rule
+		{nil, common.Hash{0x01}.Bytes()},                         // Wildcard prefix, drop rule
+		{nil, nil},                                               // Wildcard combo, drop rule
+		{},                                                       // Inited wildcard rule, drop rule
+		nil,                                                      // Proper wildcard rule, drop rule
 	})
 	if len(matcher.filters) != 3 {
 		t.Fatalf("filter system size mismatch: have %d, want %d", len(matcher.filters), 3)
