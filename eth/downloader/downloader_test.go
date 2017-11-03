@@ -1675,7 +1675,7 @@ func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 // We use data driven subtests to manage this so that it will be parallel on its own
 // and not with the other tests, avoiding intermittent failures.
 func TestDeliverHeadersHang(t *testing.T) {
-	testCases :=[]struct {
+	testCases := []struct {
 		protocol int
 		syncMode SyncMode
 	}{
@@ -1765,7 +1765,7 @@ func testDeliverHeadersHang(t *testing.T, protocol int, mode SyncMode) {
 // We use data driven subtests to manage this so that it will be parallel on its own
 // and not with the other tests, avoiding intermittent failures.
 func TestFastCriticalRestarts(t *testing.T) {
-	testCases :=[]struct {
+	testCases := []struct {
 		protocol int
 		progress bool
 	}{
