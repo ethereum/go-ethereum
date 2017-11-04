@@ -1,4 +1,6 @@
-import "mortal";
+pragma solidity ^0.4.18;
+
+import "https://github.com/ethereum/solidity/std/mortal.sol";
 
 /// @title Chequebook for Ethereum micropayments
 /// @author Daniel A. Nagy <daniel@ethdev.com>
@@ -23,7 +25,7 @@ contract chequebook is mortal {
         // Only cheques that are more recent than the last cashed one are considered.
         if(amount <= sent[beneficiary]) return;
         // Check the digital signature of the cheque.
-        bytes32 hash = sha3(address(this), beneficiary, amount);
+        bytes32 hash = keccak256(address(this), beneficiary, amount);
         if(owner != ecrecover(hash, sig_v, sig_r, sig_s)) return;
         // Attempt sending the difference between the cumulative amount on the cheque
         // and the cumulative amount on the last cashed cheque to beneficiary.
@@ -40,7 +42,7 @@ contract chequebook is mortal {
             // owner.sendToDebtorsPrison();
             Overdraft(owner);
             // Compensate beneficiary.
-            suicide(beneficiary);
+            selfdestruct(beneficiary);
         }
     }
 }
