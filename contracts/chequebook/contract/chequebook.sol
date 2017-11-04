@@ -33,10 +33,7 @@ contract chequebook is mortal {
         if (diff <= this.balance) {
 	    // update the cumulative amount before sending
             sent[beneficiary] = amount;
-            if (!beneficiary.send(diff)) {
-                // Upon failure to execute send, revert everything
-                throw;
-            }
+            beneficiary.transfer(diff);
         } else {
             // Upon failure, punish owner for writing a bounced cheque.
             // owner.sendToDebtorsPrison();
