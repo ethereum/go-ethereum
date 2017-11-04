@@ -23,10 +23,10 @@ contract chequebook is mortal {
         uint8 sig_v, bytes32 sig_r, bytes32 sig_s) {
         // Check if the cheque is old.
         // Only cheques that are more recent than the last cashed one are considered.
-        if(amount <= sent[beneficiary]) return;
+        require(amount > sent[beneficiary]);
         // Check the digital signature of the cheque.
         bytes32 hash = keccak256(address(this), beneficiary, amount);
-        if(owner != ecrecover(hash, sig_v, sig_r, sig_s)) return;
+        require(owner == ecrecover(hash, sig_v, sig_r, sig_s));
         // Attempt sending the difference between the cumulative amount on the cheque
         // and the cumulative amount on the last cashed cheque to beneficiary.
         uint256 diff = amount - sent[beneficiary];
