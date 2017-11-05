@@ -320,7 +320,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 	}
 	config.Port = port
 
-	dpa, err := storage.NewLocalDPA(datadir)
+	dpa, err := storage.NewLocalDPA(datadir, "")
 	if err != nil {
 		return
 	}

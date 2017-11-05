@@ -63,9 +63,12 @@ type DPA struct {
 }
 
 // for testing locally
-func NewLocalDPA(datadir string) (*DPA, error) {
+func NewLocalDPA(datadir string, hashalgorithm string) (*DPA, error) {
 
-	hash := MakeHashFunc("SHA256")
+	if hashalgorithm == "" {
+		hashalgorithm = "SHA3"
+	}
+	hash := MakeHashFunc(hashalgorithm)
 
 	dbStore, err := NewDbStore(datadir, hash, singletonSwarmDbCapacity, 0)
 	if err != nil {
@@ -116,6 +119,7 @@ func (self *DPA) Start() {
 
 func (self *DPA) Stop() {
 	self.lock.Lock()
+	self.Close()
 	defer self.lock.Unlock()
 	if !self.running {
 		return
