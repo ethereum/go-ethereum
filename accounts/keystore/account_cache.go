@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -262,7 +261,7 @@ func (fc *fileCache) scanFiles(keyDir string) (set.Interface, set.Interface, set
 		}
 		filesNow.Add(path)
 		// on macOS, we get FS notifications before the actual modTime is updated
-		if modTime.After(prevMtime) || (modTime.Equal(prevMtime) && runtime.GOOS == "darwin") {
+		if modTime.After(prevMtime) || modTime.Equal(prevMtime) {
 			moddedFiles.Add(path)
 		}
 		if modTime.After(newMtime) {
