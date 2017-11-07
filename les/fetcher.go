@@ -20,7 +20,6 @@ package les
 import (
 	"math/big"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -118,21 +117,17 @@ func newLightFetcher(pm *ProtocolManager) *lightFetcher {
 		maxConfirmedTd: big.NewInt(0),
 	}
 	pm.peers.notify(f)
+
+	f.pm.wg.Add(1)
 	go f.syncLoop()
 	return f
 }
 
 // syncLoop is the main event loop of the light fetcher
 func (f *lightFetcher) syncLoop() {
-	once := true
 	requesting := false
+	defer f.pm.wg.Done()
 	for {
-		if once && atomic.LoadInt32(f.pm.isClosed) != closed {
-			once = false
-			f.pm.wg.Add(1)
-			defer f.pm.wg.Done()
-		}
-
 		select {
 		case <-f.pm.quitSync:
 			return
