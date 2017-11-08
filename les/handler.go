@@ -115,7 +115,6 @@ type ProtocolManager struct {
 
 	// channels for fetcher, syncer, txsyncLoop
 	newPeerCh   chan *peer
-	isClosed	*int32
 	quitSync    chan struct{}
 	noMorePeers chan struct{}
 
@@ -243,7 +242,7 @@ func (pm *ProtocolManager) Stop() {
 	// will exit when they try to register.
 	pm.peers.Close()
 
-	// Wait for any process action. Wait should be executed after all pm.wg.Add()
+	// Wait for any process action
 	pm.wg.Wait()
 
 	log.Info("Light Ethereum protocol stopped")
