@@ -123,7 +123,7 @@ type PyramidChunker struct {
 	hashSize    int64
 	branches    int64
 	workerCount int64
-	workerLock	sync.RWMutex
+	workerLock  sync.RWMutex
 }
 
 func NewPyramidChunker(params *ChunkerParams) (self *PyramidChunker) {

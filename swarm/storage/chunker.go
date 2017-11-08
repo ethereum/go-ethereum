@@ -50,7 +50,6 @@ data_{i} := size(subtree_{i}) || key_{j} || key_{j+1} .... || key_{j+n-1}
  The underlying hash function is configurable
 */
 
-
 /*
 Tree chunker is a concrete implementation of data chunking.
 This chunker works in a simple way, it builds a tree out of the document so that each node either represents a chunk of real data or a chunk of data representing an branching non-leaf node of the tree. In particular each such non-leaf chunk will represent is a concatenation of the hash of its respective children. This scheme simultaneously guarantees data integrity as well as self addressing. Abstract nodes are transparent since their represented size component is strictly greater than their maximum data size, since they encode a subtree.
@@ -61,17 +60,17 @@ The hashing itself does use extra copies and allocation though, since it does ne
 
 var (
 	errAppendOppNotSuported = errors.New("Append operation not supported")
-	errOperationTimedOut = errors.New("operation timed out")
+	errOperationTimedOut    = errors.New("operation timed out")
 )
 
 type TreeChunker struct {
 	branches int64
 	hashFunc SwarmHasher
 	// calculated
-	hashSize    int64 // self.hashFunc.New().Size()
-	chunkSize   int64 // hashSize* branches
-	workerCount int64 // the number of worker routines used
-	workerLock	sync.RWMutex // lock for the worker count
+	hashSize    int64        // self.hashFunc.New().Size()
+	chunkSize   int64        // hashSize* branches
+	workerCount int64        // the number of worker routines used
+	workerLock  sync.RWMutex // lock for the worker count
 }
 
 func NewTreeChunker(params *ChunkerParams) (self *TreeChunker) {
@@ -124,7 +123,6 @@ func (self *TreeChunker) Split(data io.Reader, size int64, chunkC chan *Chunk, s
 		panic("chunker must be initialised")
 	}
 
-
 	jobC := make(chan *hashJob, 2*ChunkProcessors)
 	wg := &sync.WaitGroup{}
 	errC := make(chan error)
@@ -164,7 +162,6 @@ func (self *TreeChunker) Split(data io.Reader, size int64, chunkC chan *Chunk, s
 		close(errC)
 	}()
 
-
 	defer close(quitC)
 	select {
 	case err := <-errC:
@@ -172,7 +169,7 @@ func (self *TreeChunker) Split(data io.Reader, size int64, chunkC chan *Chunk, s
 			return nil, err
 		}
 	case <-time.NewTimer(splitTimeout).C:
-		return nil,errOperationTimedOut
+		return nil, errOperationTimedOut
 	}
 
 	return key, nil

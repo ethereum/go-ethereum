@@ -365,7 +365,7 @@ func TestUnmarshal(t *testing.T) {
 	buff.Write(common.Hex2Bytes("0102000000000000000000000000000000000000000000000000000000000000"))
 
 	err = abi.Unpack(&mixedBytes, "mixedBytes", buff.Bytes())
-	if err !=nil {
+	if err != nil {
 		t.Error(err)
 	} else {
 		if bytes.Compare(p0, p0Exp) != 0 {
