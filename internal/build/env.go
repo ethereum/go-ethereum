@@ -19,6 +19,7 @@ package build
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 )
@@ -126,4 +127,21 @@ func applyEnvFlags(env Environment) Environment {
 		env.IsCronJob = true
 	}
 	return env
+}
+
+// MaybeSkipArchive exits the process when build results of the given env should
+// not be archived and uploaded.
+func MaybeSkipArchive(env Environment) {
+	if env.IsPullRequest {
+		log.Printf("skipping archive because this is a PR build")
+		os.Exit(0)
+	}
+	if env.IsCronJob {
+		log.Printf("skipping archive because this is a cron job")
+		os.Exit(0)
+	}
+	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
+		log.Printf("skipping archive because branch %q, tag %q is not on the whitelist", env.Branch, env.Tag)
+		os.Exit(0)
+	}
 }
