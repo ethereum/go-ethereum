@@ -38,7 +38,7 @@ matrix:
         - sudo chmod 666 /dev/fuse
         - sudo chown root:$USER /etc/fuse.conf
         - go run build/ci.go install
-        - go run build/ci.go test -coverage -misspell
+        - go run build/ci.go test -coverage
 
     - os: osx
       go: 1.9.x
@@ -48,7 +48,21 @@ matrix:
         - brew install caskroom/cask/brew-cask
         - brew cask install osxfuse
         - go run build/ci.go install
-        - go run build/ci.go test -coverage -misspell
+        - go run build/ci.go test -coverage
+
+    # This builder only tests code linters on latest version of Go
+    - os: linux
+      dist: trusty
+      sudo: required
+      go: 1.9.x
+      env:
+        - lint
+      script:
+        - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install fuse
+        - sudo modprobe fuse
+        - sudo chmod 666 /dev/fuse
+        - sudo chown root:$USER /etc/fuse.conf
+        - go run build/ci.go lint
 
     # This builder does the Ubuntu PPA and Linux Azure uploads
     - os: linux
