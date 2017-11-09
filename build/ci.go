@@ -322,7 +322,7 @@ func doLint(cmdline []string) {
 	build.MustRun(goTool("get", "gopkg.in/alecthomas/gometalinter.v1"))
 	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v1"), "--install")
 
-	configs := []string{"--vendor", "--disable-all", "--enable=vet"} // Add additional linters to the slice with "--enable=linter-name"
+	configs := []string{"--vendor", "--disable-all", "--enable=vet", "--enable=gofmt", "--enable=misspell"}
 
 	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v1"), append(configs, packages...)...)
 }
