@@ -65,13 +65,13 @@ func (e Event) tupleUnpack(v interface{}, output []byte) error {
 		return fmt.Errorf("abi: cannot unmarshal tuple in to %v", typ)
 	}
 
-	j := 0
-	for i := 0; i < len(e.Inputs); i++ {
-		input := e.Inputs[i]
+	i, j := -1, 0
+	for _, input := range e.Inputs {
 		if input.Indexed {
 			// can't read, continue
 			continue
 		}
+		i++
 		marshalledValue, err := toGoType((i+j)*32, input.Type, output)
 		if err != nil {
 			return err
@@ -88,22 +88,22 @@ func (e Event) tupleUnpack(v interface{}, output []byte) error {
 			for j := 0; j < typ.NumField(); j++ {
 				field := typ.Field(j)
 				// TODO read tags: `abi:"fieldName"`
-				if field.Name == strings.ToUpper(e.Inputs[i].Name[:1])+e.Inputs[i].Name[1:] {
-					if err := set(value.Field(j), reflectValue, e.Inputs[i]); err != nil {
+				if field.Name == strings.ToUpper(input.Name[:1])+input.Name[1:] {
+					if err := set(value.Field(j), reflectValue, input); err != nil {
 						return err
 					}
 				}
 			}
 		case reflect.Slice, reflect.Array:
 			if value.Len() < i {
-				return fmt.Errorf("abi: insufficient number of arguments for unpack, want %d, got %d", len(e.Inputs), value.Len())
+				return fmt.Errorf("abi: insufficient number of arguments for unpack, want %d, got %d", i, value.Len())
 			}
 			v := value.Index(i)
 			if v.Kind() != reflect.Ptr && v.Kind() != reflect.Interface {
 				return fmt.Errorf("abi: cannot unmarshal %v in to %v", v.Type(), reflectValue.Type())
 			}
 			reflectValue := reflect.ValueOf(marshalledValue)
-			if err := set(v.Elem(), reflectValue, e.Inputs[i]); err != nil {
+			if err := set(v.Elem(), reflectValue, input); err != nil {
 				return err
 			}
 		default:
