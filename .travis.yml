@@ -147,16 +147,16 @@ matrix:
         - azure-android
         - maven-android
       before_install:
-        - curl https://storage.googleapis.com/golang/go1.9.linux-amd64.tar.gz | tar -xz
+        - curl https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
       script:
         # Build the Android archive and upload it to Maven Central and Azure
-        - curl https://dl.google.com/android/repository/android-ndk-r14b-linux-x86_64.zip -o android-ndk-r14b.zip
-        - unzip -q android-ndk-r14b.zip && rm android-ndk-r14b.zip
-        - mv android-ndk-r14b $HOME
-        - export ANDROID_NDK=$HOME/android-ndk-r14b
+        - curl https://dl.google.com/android/repository/android-ndk-r15c-linux-x86_64.zip -o android-ndk-r15c.zip
+        - unzip -q android-ndk-r15c.zip && rm android-ndk-r15c.zip
+        - mv android-ndk-r15c $HOME
+        - export ANDROID_NDK=$HOME/android-ndk-r15c
 
         - mkdir -p $GOPATH/src/github.com/ethereum
         - ln -s `pwd` $GOPATH/src/github.com/ethereum
