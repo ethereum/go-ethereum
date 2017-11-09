@@ -24,8 +24,8 @@ Usage: go run ci.go <command> <command flags/arguments>
 Available commands are:
 
    install    [ -arch architecture ] [ packages... ]                                           -- builds packages and executables
-   test       [ -coverage ] [ packages... ]			                                           -- runs the tests
-   lint       													                               -- runs linters
+   test       [ -coverage ] [ packages... ]                                                    -- runs the tests
+   lint                                                                                        -- runs certain pre-selected linters
    archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
    importkeys                                                                                  -- imports signing keys from env
    debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
@@ -57,8 +57,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
-	"github.com/ethereum/go-ethereum/internal/build"
 
+	"github.com/ethereum/go-ethereum/internal/build"
 )
 
 var (
@@ -312,26 +312,19 @@ func doTest(cmdline []string) {
 
 // runs gometalinter on requested packages
 func doLint(cmdline []string) {
-
 	flag.CommandLine.Parse(cmdline)
 
 	packages := []string{"./..."}
-
 	if len(flag.CommandLine.Args()) > 0 {
 		packages = flag.CommandLine.Args()
-		for _, pkg := range packages {
-			packages = append(packages, fmt.Sprintf("%s/...", pkg));
-		}
 	}
-
-
-	//get metalinter and install linters
+	// Get metalinter and install all supported linters
 	build.MustRun(goTool("get", "gopkg.in/alecthomas/gometalinter.v1"))
-	build.MustRunCommand(filepath.Join(GOBIN,"gometalinter.v1"), "--install")
+	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v1"), "--install")
 
-	configs := []string{"--vendor", "--disable-all", "--enable=vet", "--enable=deadcode"} // Add additional linters to the slice with "--enable=linter-name"
+	configs := []string{"--vendor", "--disable-all", "--enable=vet"} // Add additional linters to the slice with "--enable=linter-name"
 
-	build.MustRunCommand(filepath.Join(GOBIN,"gometalinter.v1"), append(configs, packages...)...)
+	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v1"), append(configs, packages...)...)
 }
 
 // Release Packaging
