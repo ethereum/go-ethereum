@@ -1,5 +1,5 @@
-// This file is an automatically generated Go binding. Do not modify as any
-// change will likely be lost upon the next re-generation!
+// Code generated - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
 
 package contract
 
@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"strings"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -14,10 +15,10 @@ import (
 )
 
 // ChequebookABI is the input ABI used to generate the binding from.
-const ChequebookABI = `[{"constant":false,"inputs":[],"name":"kill","outputs":[],"type":"function"},{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"sent","outputs":[{"name":"","type":"uint256"}],"type":"function"},{"constant":false,"inputs":[{"name":"beneficiary","type":"address"},{"name":"amount","type":"uint256"},{"name":"sig_v","type":"uint8"},{"name":"sig_r","type":"bytes32"},{"name":"sig_s","type":"bytes32"}],"name":"cash","outputs":[],"type":"function"},{"anonymous":false,"inputs":[{"indexed":false,"name":"deadbeat","type":"address"}],"name":"Overdraft","type":"event"}]`
+const ChequebookABI = "[{\"constant\":false,\"inputs\":[],\"name\":\"kill\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"\",\"type\":\"address\"}],\"name\":\"sent\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"beneficiary\",\"type\":\"address\"},{\"name\":\"amount\",\"type\":\"uint256\"},{\"name\":\"sig_v\",\"type\":\"uint8\"},{\"name\":\"sig_r\",\"type\":\"bytes32\"},{\"name\":\"sig_s\",\"type\":\"bytes32\"}],\"name\":\"cash\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"deadbeat\",\"type\":\"address\"}],\"name\":\"Overdraft\",\"type\":\"event\"}]"
 
 // ChequebookBin is the compiled bytecode used for deploying new contracts.
-const ChequebookBin = `0x606060405260008054600160a060020a031916331790556101ff806100246000396000f3606060405260e060020a600035046341c0e1b581146100315780637bf786f814610059578063fbf788d614610071575b005b61002f60005433600160a060020a03908116911614156100bd57600054600160a060020a0316ff5b6100ab60043560016020526000908152604090205481565b61002f600435602435604435606435608435600160a060020a03851660009081526001602052604081205485116100bf575b505050505050565b60408051918252519081900360200190f35b565b50604080516c0100000000000000000000000030600160a060020a0390811682028352881602601482015260288101869052815190819003604801812080825260ff861660208381019190915282840186905260608301859052925190926001926080818101939182900301816000866161da5a03f11561000257505060405151600054600160a060020a0390811691161461015a576100a3565b600160a060020a038681166000908152600160205260409020543090911631908603106101b357604060008181208790559051600160a060020a0388169190819081818181818881f1935050505015156100a357610002565b60005460408051600160a060020a03929092168252517f2250e2993c15843b32621c89447cc589ee7a9f049c026986e545d3c2c0c6f9789181900360200190a185600160a060020a0316ff`
+const ChequebookBin = `0x606060405260008054600160a060020a033316600160a060020a03199091161790556102e8806100306000396000f300606060405263ffffffff7c010000000000000000000000000000000000000000000000000000000060003504166341c0e1b581146100525780637bf786f814610067578063fbf788d61461009857600080fd5b341561005d57600080fd5b6100656100c6565b005b341561007257600080fd5b610086600160a060020a03600435166100ed565b60405190815260200160405180910390f35b34156100a357600080fd5b610065600160a060020a036004351660243560ff604435166064356084356100ff565b60005433600160a060020a03908116911614156100eb57600054600160a060020a0316ff5b565b60016020526000908152604090205481565b600160a060020a03851660009081526001602052604081205481908611610125576102b3565b3087876040516c01000000000000000000000000600160a060020a03948516810282529290931690910260148301526028820152604801604051809103902091506001828686866040516000815260200160405260006040516020015260405193845260ff90921660208085019190915260408085019290925260608401929092526080909201915160208103908084039060008661646e5a03f115156101cb57600080fd5b505060206040510351600054600160a060020a039081169116146101ee576102b3565b50600160a060020a03808716600090815260016020526040902054860390301631811161025e57600160a060020a0387166000818152600160205260409081902088905582156108fc0290839051600060405180830381858888f19350505050151561025957600080fd5b6102b3565b6000547f2250e2993c15843b32621c89447cc589ee7a9f049c026986e545d3c2c0c6f97890600160a060020a0316604051600160a060020a03909116815260200160405180910390a186600160a060020a0316ff5b505050505050505600a165627a7a72305820b3a1c2bd4b98d782f1e6fec27acc9a5c750c36171ccaf44c9da72718e8dc1b3c0029`
 
 // DeployChequebook deploys a new Ethereum contract, binding an instance of Chequebook to it.
 func DeployChequebook(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *Chequebook, error) {
@@ -36,6 +37,7 @@ func DeployChequebook(auth *bind.TransactOpts, backend bind.ContractBackend) (co
 type Chequebook struct {
 	ChequebookCaller     // Read-only binding to the contract
 	ChequebookTransactor // Write-only binding to the contract
+	ChequebookEventer    // Event listener binding to the contract
 }
 
 // ChequebookCaller is an auto generated read-only Go binding around an Ethereum contract.
@@ -46,6 +48,12 @@ type ChequebookCaller struct {
 // ChequebookTransactor is an auto generated write-only Go binding around an Ethereum contract.
 type ChequebookTransactor struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+}
+
+// ChequebookEventer is an auto generated write-only Go binding around an Ethereum contract.
+type ChequebookEventer struct {
+	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+	address  common.Address      // Contract address
 }
 
 // ChequebookSession is an auto generated Go binding around an Ethereum contract,
@@ -87,7 +95,7 @@ type ChequebookTransactorRaw struct {
 
 // NewChequebook creates a new instance of Chequebook, bound to a specific deployed contract.
 func NewChequebook(address common.Address, backend bind.ContractBackend) (*Chequebook, error) {
-	contract, err := bindChequebook(address, backend, backend)
+	contract, err := bindChequebook(address, backend, backend, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +104,7 @@ func NewChequebook(address common.Address, backend bind.ContractBackend) (*Chequ
 
 // NewChequebookCaller creates a new read-only instance of Chequebook, bound to a specific deployed contract.
 func NewChequebookCaller(address common.Address, caller bind.ContractCaller) (*ChequebookCaller, error) {
-	contract, err := bindChequebook(address, caller, nil)
+	contract, err := bindChequebook(address, caller, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -105,20 +113,29 @@ func NewChequebookCaller(address common.Address, caller bind.ContractCaller) (*C
 
 // NewChequebookTransactor creates a new write-only instance of Chequebook, bound to a specific deployed contract.
 func NewChequebookTransactor(address common.Address, transactor bind.ContractTransactor) (*ChequebookTransactor, error) {
-	contract, err := bindChequebook(address, nil, transactor)
+	contract, err := bindChequebook(address, nil, transactor, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &ChequebookTransactor{contract: contract}, nil
 }
 
+// NewChequebookEventer creates a new listen only instance of Chequebook, bound to a specific deployed contract.
+func NewChequebookEventer(address common.Address, eventer bind.ContractEventer) (*ChequebookEventer, error) {
+	contract, err := bindChequebook(address, nil, nil, eventer)
+	if err != nil {
+		return nil, err
+	}
+	return &ChequebookEventer{contract: contract, address: address}, nil
+}
+
 // bindChequebook binds a generic wrapper to an already deployed contract.
-func bindChequebook(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
+func bindChequebook(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, eventer bind.ContractEventer) (*bind.BoundContract, error) {
 	parsed, err := abi.JSON(strings.NewReader(ChequebookABI))
 	if err != nil {
 		return nil, err
 	}
-	return bind.NewBoundContract(address, parsed, caller, transactor), nil
+	return bind.NewBoundContract(address, parsed, caller, transactor, eventer), nil
 }
 
 // Call invokes the (constant) contract method with params as input values and
@@ -227,11 +244,21 @@ func (_Chequebook *ChequebookTransactorSession) Kill() (*types.Transaction, erro
 	return _Chequebook.Contract.Kill(&_Chequebook.TransactOpts)
 }
 
+// Solidity: event Overdraft(address deadbeat)
+//
+// Note: this method will fill in the Event ID topic
+func (_Chequebook *ChequebookCaller) SubscribeOverdraft(opts *bind.CallOpts, ch chan<- types.Log, topics ...[]common.Hash) (ethereum.Subscription, error) {
+	id := []common.Hash{common.HexToHash("2250e2993c15843b32621c89447cc589ee7a9f049c026986e545d3c2c0c6f978")}
+	topics = append([][]common.Hash{id}, topics...)
+
+	return _Chequebook.contract.SubscribeFilterLogs(opts, topics, ch)
+}
+
 // MortalABI is the input ABI used to generate the binding from.
-const MortalABI = `[{"constant":false,"inputs":[],"name":"kill","outputs":[],"type":"function"}]`
+const MortalABI = "[{\"constant\":false,\"inputs\":[],\"name\":\"kill\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]"
 
 // MortalBin is the compiled bytecode used for deploying new contracts.
-const MortalBin = `0x606060405260008054600160a060020a03191633179055605c8060226000396000f3606060405260e060020a600035046341c0e1b58114601a575b005b60186000543373ffffffffffffffffffffffffffffffffffffffff90811691161415605a5760005473ffffffffffffffffffffffffffffffffffffffff16ff5b56`
+const MortalBin = `0x606060405260008054600160a060020a033316600160a060020a031990911617905560b98061002f6000396000f300606060405263ffffffff7c010000000000000000000000000000000000000000000000000000000060003504166341c0e1b58114603b57600080fd5b3415604557600080fd5b604b604d565b005b6000543373ffffffffffffffffffffffffffffffffffffffff90811691161415608b5760005473ffffffffffffffffffffffffffffffffffffffff16ff5b5600a165627a7a72305820867692aada3a78bdb36ad4ba0b9181a440566917df3e5416cc4de17ed0a633710029`
 
 // DeployMortal deploys a new Ethereum contract, binding an instance of Mortal to it.
 func DeployMortal(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *Mortal, error) {
@@ -250,6 +277,7 @@ func DeployMortal(auth *bind.TransactOpts, backend bind.ContractBackend) (common
 type Mortal struct {
 	MortalCaller     // Read-only binding to the contract
 	MortalTransactor // Write-only binding to the contract
+	MortalEventer    // Event listener binding to the contract
 }
 
 // MortalCaller is an auto generated read-only Go binding around an Ethereum contract.
@@ -260,6 +288,12 @@ type MortalCaller struct {
 // MortalTransactor is an auto generated write-only Go binding around an Ethereum contract.
 type MortalTransactor struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+}
+
+// MortalEventer is an auto generated write-only Go binding around an Ethereum contract.
+type MortalEventer struct {
+	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+	address  common.Address      // Contract address
 }
 
 // MortalSession is an auto generated Go binding around an Ethereum contract,
@@ -301,7 +335,7 @@ type MortalTransactorRaw struct {
 
 // NewMortal creates a new instance of Mortal, bound to a specific deployed contract.
 func NewMortal(address common.Address, backend bind.ContractBackend) (*Mortal, error) {
-	contract, err := bindMortal(address, backend, backend)
+	contract, err := bindMortal(address, backend, backend, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +344,7 @@ func NewMortal(address common.Address, backend bind.ContractBackend) (*Mortal, e
 
 // NewMortalCaller creates a new read-only instance of Mortal, bound to a specific deployed contract.
 func NewMortalCaller(address common.Address, caller bind.ContractCaller) (*MortalCaller, error) {
-	contract, err := bindMortal(address, caller, nil)
+	contract, err := bindMortal(address, caller, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -319,20 +353,29 @@ func NewMortalCaller(address common.Address, caller bind.ContractCaller) (*Morta
 
 // NewMortalTransactor creates a new write-only instance of Mortal, bound to a specific deployed contract.
 func NewMortalTransactor(address common.Address, transactor bind.ContractTransactor) (*MortalTransactor, error) {
-	contract, err := bindMortal(address, nil, transactor)
+	contract, err := bindMortal(address, nil, transactor, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &MortalTransactor{contract: contract}, nil
 }
 
+// NewMortalEventer creates a new listen only instance of Mortal, bound to a specific deployed contract.
+func NewMortalEventer(address common.Address, eventer bind.ContractEventer) (*MortalEventer, error) {
+	contract, err := bindMortal(address, nil, nil, eventer)
+	if err != nil {
+		return nil, err
+	}
+	return &MortalEventer{contract: contract, address: address}, nil
+}
+
 // bindMortal binds a generic wrapper to an already deployed contract.
-func bindMortal(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
+func bindMortal(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, eventer bind.ContractEventer) (*bind.BoundContract, error) {
 	parsed, err := abi.JSON(strings.NewReader(MortalABI))
 	if err != nil {
 		return nil, err
 	}
-	return bind.NewBoundContract(address, parsed, caller, transactor), nil
+	return bind.NewBoundContract(address, parsed, caller, transactor, eventer), nil
 }
 
 // Call invokes the (constant) contract method with params as input values and
@@ -395,10 +438,10 @@ func (_Mortal *MortalTransactorSession) Kill() (*types.Transaction, error) {
 }
 
 // OwnedABI is the input ABI used to generate the binding from.
-const OwnedABI = `[{"inputs":[],"type":"constructor"}]`
+const OwnedABI = "[{\"inputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"}]"
 
 // OwnedBin is the compiled bytecode used for deploying new contracts.
-const OwnedBin = `0x606060405260008054600160a060020a0319163317905560068060226000396000f3606060405200`
+const OwnedBin = `0x60606040523415600e57600080fd5b60008054600160a060020a033316600160a060020a031990911617905560358060386000396000f3006060604052600080fd00a165627a7a72305820e54b308f1b7c92d99b6f3d202299b9edb321527608e31a7d1829dbe638fc80c40029`
 
 // DeployOwned deploys a new Ethereum contract, binding an instance of Owned to it.
 func DeployOwned(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *Owned, error) {
@@ -417,6 +460,7 @@ func DeployOwned(auth *bind.TransactOpts, backend bind.ContractBackend) (common.
 type Owned struct {
 	OwnedCaller     // Read-only binding to the contract
 	OwnedTransactor // Write-only binding to the contract
+	OwnedEventer    // Event listener binding to the contract
 }
 
 // OwnedCaller is an auto generated read-only Go binding around an Ethereum contract.
@@ -427,6 +471,12 @@ type OwnedCaller struct {
 // OwnedTransactor is an auto generated write-only Go binding around an Ethereum contract.
 type OwnedTransactor struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+}
+
+// OwnedEventer is an auto generated write-only Go binding around an Ethereum contract.
+type OwnedEventer struct {
+	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+	address  common.Address      // Contract address
 }
 
 // OwnedSession is an auto generated Go binding around an Ethereum contract,
@@ -468,7 +518,7 @@ type OwnedTransactorRaw struct {
 
 // NewOwned creates a new instance of Owned, bound to a specific deployed contract.
 func NewOwned(address common.Address, backend bind.ContractBackend) (*Owned, error) {
-	contract, err := bindOwned(address, backend, backend)
+	contract, err := bindOwned(address, backend, backend, backend)
 	if err != nil {
 		return nil, err
 	}
@@ -477,7 +527,7 @@ func NewOwned(address common.Address, backend bind.ContractBackend) (*Owned, err
 
 // NewOwnedCaller creates a new read-only instance of Owned, bound to a specific deployed contract.
 func NewOwnedCaller(address common.Address, caller bind.ContractCaller) (*OwnedCaller, error) {
-	contract, err := bindOwned(address, caller, nil)
+	contract, err := bindOwned(address, caller, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -486,20 +536,29 @@ func NewOwnedCaller(address common.Address, caller bind.ContractCaller) (*OwnedC
 
 // NewOwnedTransactor creates a new write-only instance of Owned, bound to a specific deployed contract.
 func NewOwnedTransactor(address common.Address, transactor bind.ContractTransactor) (*OwnedTransactor, error) {
-	contract, err := bindOwned(address, nil, transactor)
+	contract, err := bindOwned(address, nil, transactor, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &OwnedTransactor{contract: contract}, nil
 }
 
+// NewOwnedEventer creates a new listen only instance of Owned, bound to a specific deployed contract.
+func NewOwnedEventer(address common.Address, eventer bind.ContractEventer) (*OwnedEventer, error) {
+	contract, err := bindOwned(address, nil, nil, eventer)
+	if err != nil {
+		return nil, err
+	}
+	return &OwnedEventer{contract: contract, address: address}, nil
+}
+
 // bindOwned binds a generic wrapper to an already deployed contract.
-func bindOwned(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
+func bindOwned(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, eventer bind.ContractEventer) (*bind.BoundContract, error) {
 	parsed, err := abi.JSON(strings.NewReader(OwnedABI))
 	if err != nil {
 		return nil, err
 	}
-	return bind.NewBoundContract(address, parsed, caller, transactor), nil
+	return bind.NewBoundContract(address, parsed, caller, transactor, eventer), nil
 }
 
 // Call invokes the (constant) contract method with params as input values and

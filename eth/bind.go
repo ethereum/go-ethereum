@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -40,15 +41,17 @@ type ContractBackend struct {
 	eapi  *ethapi.PublicEthereumAPI        // Wrapper around the Ethereum object to access metadata
 	bcapi *ethapi.PublicBlockChainAPI      // Wrapper around the blockchain to access chain data
 	txapi *ethapi.PublicTransactionPoolAPI // Wrapper around the transaction pool to access transaction data
+	es    *filters.EventSystem             // Enable log subscriptions
 }
 
 // NewContractBackend creates a new native contract backend using an existing
 // Ethereum object.
-func NewContractBackend(apiBackend ethapi.Backend) *ContractBackend {
+func NewContractBackend(apiBackend ethapi.Backend, filterBackend filters.Backend, lightMode bool) *ContractBackend {
 	return &ContractBackend{
 		eapi:  ethapi.NewPublicEthereumAPI(apiBackend),
 		bcapi: ethapi.NewPublicBlockChainAPI(apiBackend),
 		txapi: ethapi.NewPublicTransactionPoolAPI(apiBackend, new(ethapi.AddrLocker)),
+		es:    filters.NewEventSystem(apiBackend.EventMux(), filterBackend, lightMode),
 	}
 }
 
@@ -135,4 +138,38 @@ func (b *ContractBackend) SendTransaction(ctx context.Context, tx *types.Transac
 	raw, _ := rlp.EncodeToBytes(tx)
 	_, err := b.txapi.SendRawTransaction(ctx, raw)
 	return err
+}
+
+// SubscribeFilterLogs emits logs that match the given criteria over the given channel.
+func (b *ContractBackend) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, logs chan<- types.Log) (ethereum.Subscription, error) {
+	f := filters.FilterCriteria{
+		FromBlock: q.FromBlock,
+		ToBlock:   q.ToBlock,
+		Addresses: q.Addresses,
+		Topics:    q.Topics,
+	}
+	l := make(chan []*types.Log)
+
+	sub, err := b.es.SubscribeLogs(f, l)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: rewrite filters.EventSystem so SubscribeLogs
+	// accepts chan types.Log instead of chan []*type.Log
+	go func() {
+		for {
+			select {
+			case <-sub.Err():
+				close(l)
+				return
+			case ls := <-l:
+				for _, l := range ls {
+					logs <- *l
+				}
+			}
+		}
+	}()
+
+	return sub, nil
 }

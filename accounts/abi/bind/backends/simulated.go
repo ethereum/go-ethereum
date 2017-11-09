@@ -303,6 +303,13 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	return nil
 }
 
+// SubscribeFilterLogs emits logs that match the given criteria over the given channel.
+//
+// Note: it is currently not implemented.
+func (b *SimulatedBackend) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 // callmsg implements core.Message to allow passing it as a transaction simulator.
 type callmsg struct {
 	ethereum.CallMsg

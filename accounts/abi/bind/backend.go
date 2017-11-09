@@ -90,8 +90,14 @@ type ContractTransactor interface {
 	SendTransaction(ctx context.Context, tx *types.Transaction) error
 }
 
+// ContractEventer defines methods to listen for events raised by the contract.
+type ContractEventer interface {
+	SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error)
+}
+
 // ContractBackend defines the methods needed to work with contracts on a read-write basis.
 type ContractBackend interface {
 	ContractCaller
 	ContractTransactor
+	ContractEventer
 }

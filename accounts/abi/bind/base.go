@@ -63,16 +63,18 @@ type BoundContract struct {
 	abi        abi.ABI            // Reflect based ABI to access the correct Ethereum methods
 	caller     ContractCaller     // Read interface to interact with the blockchain
 	transactor ContractTransactor // Write interface to interact with the blockchain
+	eventer    ContractEventer    // Listen for events raised by the contract
 }
 
 // NewBoundContract creates a low level contract interface through which calls
 // and transactions may be made through.
-func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller, transactor ContractTransactor) *BoundContract {
+func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller, transactor ContractTransactor, eventer ContractEventer) *BoundContract {
 	return &BoundContract{
 		address:    address,
 		abi:        abi,
 		caller:     caller,
 		transactor: transactor,
+		eventer:    eventer,
 	}
 }
 
@@ -80,7 +82,7 @@ func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller
 // deployment address with a Go wrapper.
 func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, params ...interface{}) (common.Address, *types.Transaction, *BoundContract, error) {
 	// Otherwise try to deploy the contract
-	c := NewBoundContract(common.Address{}, abi, backend, backend)
+	c := NewBoundContract(common.Address{}, abi, backend, backend, backend)
 
 	input, err := c.abi.Pack("", params...)
 	if err != nil {
@@ -223,6 +225,18 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		return nil, err
 	}
 	return signedTx, nil
+}
+
+// SubscribeFilterLogs creates a log subscription that streams logs raised by this contract
+// with topics matching
+func (c *BoundContract) SubscribeFilterLogs(opts *CallOpts, topics [][]common.Hash, ch chan<- types.Log) (ethereum.Subscription, error) {
+	ctx := ensureContext(opts.Context)
+	q := ethereum.FilterQuery{
+		Addresses: []common.Address{c.address},
+		Topics: topics,
+	}
+
+	return c.eventer.SubscribeFilterLogs(ctx, q, ch)
 }
 
 func ensureContext(ctx context.Context) context.Context {

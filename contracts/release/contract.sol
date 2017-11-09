@@ -58,7 +58,7 @@ contract ReleaseOracle {
   // isSigner is a modifier to authorize contract transactions.
   modifier isSigner() {
     if (authorised[msg.sender]) {
-      _
+      _;
     }
   }
 
