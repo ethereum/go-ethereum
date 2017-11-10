@@ -119,8 +119,8 @@ func (self *DPA) Start() {
 
 func (self *DPA) Stop() {
 	self.lock.Lock()
-	self.Close()
 	defer self.lock.Unlock()
+	self.Close()
 	if !self.running {
 		return
 	}
