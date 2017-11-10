@@ -85,3 +85,11 @@ func set(dst, src reflect.Value, output Argument) error {
 	}
 	return nil
 }
+
+// requireAssignable assures that `dest` is a pointer and it's not an interface.
+func requireAssignable(dst, src reflect.Value) error {
+	if dst.Kind() != reflect.Ptr && dst.Kind() != reflect.Interface {
+		return fmt.Errorf("abi: cannot unmarshal %v into %v", src.Type(), dst.Type())
+	}
+	return nil
+}
