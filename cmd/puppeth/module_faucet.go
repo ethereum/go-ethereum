@@ -133,7 +133,7 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 	})
 	files[filepath.Join(workdir, "docker-compose.yaml")] = composefile.Bytes()
 
-	files[filepath.Join(workdir, "genesis.json")] = []byte(config.node.genesis)
+	files[filepath.Join(workdir, "genesis.json")] = config.node.genesis
 	files[filepath.Join(workdir, "account.json")] = []byte(config.node.keyJSON)
 	files[filepath.Join(workdir, "account.pass")] = []byte(config.node.keyPass)
 

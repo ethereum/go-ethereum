@@ -309,7 +309,7 @@ func (self *bzz) handleStatus() (err error) {
 		Version:   uint64(Version),
 		ID:        "honey",
 		Addr:      self.selfAddr(),
-		NetworkId: uint64(self.NetworkId),
+		NetworkId: self.NetworkId,
 		Swap: &bzzswap.SwapProfile{
 			Profile:    self.swapParams.Profile,
 			PayProfile: self.swapParams.PayProfile,
