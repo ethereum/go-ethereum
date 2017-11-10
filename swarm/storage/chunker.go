@@ -205,9 +205,9 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data io.Reade
 	}
 	// dept > 0
 	// intermediate chunk containing child nodes hashes
-	branchCnt := int64((size + treeSize - 1) / treeSize)
+	branchCnt := (size + treeSize - 1) / treeSize
 
-	var chunk []byte = make([]byte, branchCnt*self.hashSize+8)
+	var chunk = make([]byte, branchCnt*self.hashSize+8)
 	var pos, i int64
 
 	binary.LittleEndian.PutUint64(chunk[0:8], uint64(size))

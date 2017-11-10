@@ -327,7 +327,7 @@ func (self *PyramidChunker) loadTree(chunkLevel [][]*TreeEntry, key Key, chunkC 
 	// Add the root chunk entry
 	branchCount := int64(len(chunk.SData)-8) / self.hashSize
 	newEntry := &TreeEntry{
-		level:         int(depth - 1),
+		level:         depth - 1,
 		branchCount:   branchCount,
 		subtreeSize:   uint64(chunk.Size),
 		chunk:         chunk.SData,
@@ -352,7 +352,7 @@ func (self *PyramidChunker) loadTree(chunkLevel [][]*TreeEntry, key Key, chunkC 
 				}
 				bewBranchCount := int64(len(newChunk.SData)-8) / self.hashSize
 				newEntry := &TreeEntry{
-					level:         int(lvl - 1),
+					level:         lvl - 1,
 					branchCount:   bewBranchCount,
 					subtreeSize:   uint64(newChunk.Size),
 					chunk:         newChunk.SData,

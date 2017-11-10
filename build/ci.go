@@ -322,9 +322,15 @@ func doLint(cmdline []string) {
 	build.MustRun(goTool("get", "gopkg.in/alecthomas/gometalinter.v1"))
 	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v1"), "--install")
 
+	// Run fast linters batched together
 	configs := []string{"--vendor", "--disable-all", "--enable=vet", "--enable=gofmt", "--enable=misspell"}
-
 	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v1"), append(configs, packages...)...)
+
+	// Run slow linters one by one
+	for _, linter := range []string{"unconvert"} {
+		configs = []string{"--vendor", "--deadline=10m", "--disable-all", "--enable=" + linter}
+		build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v1"), append(configs, packages...)...)
+	}
 }
 
 // Release Packaging

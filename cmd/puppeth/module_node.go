@@ -128,7 +128,7 @@ func deployNode(client *sshClient, network string, bootv4, bootv5 []string, conf
 	files[filepath.Join(workdir, "docker-compose.yaml")] = composefile.Bytes()
 
 	//genesisfile, _ := json.MarshalIndent(config.genesis, "", "  ")
-	files[filepath.Join(workdir, "genesis.json")] = []byte(config.genesis)
+	files[filepath.Join(workdir, "genesis.json")] = config.genesis
 
 	if config.keyJSON != "" {
 		files[filepath.Join(workdir, "signer.json")] = []byte(config.keyJSON)

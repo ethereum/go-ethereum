@@ -231,7 +231,7 @@ func (w *wizard) readDefaultFloat(def float64) float64 {
 // line and returns it. The input will not be echoed.
 func (w *wizard) readPassword() string {
 	fmt.Printf("> ")
-	text, err := terminal.ReadPassword(int(syscall.Stdin))
+	text, err := terminal.ReadPassword(syscall.Stdin)
 	if err != nil {
 		log.Crit("Failed to read password", "err", err)
 	}
