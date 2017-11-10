@@ -59,16 +59,19 @@ func (e Event) tupleUnpack(v interface{}, output []byte) error {
 	var (
 		value = valueOf.Elem()
 		typ   = value.Type()
+		kind  = value.Kind()
 	)
-
-	if value.Kind() != reflect.Struct {
-		return fmt.Errorf("abi: cannot unmarshal tuple in to %v", typ)
+	if err := requireUnpackKind(value, typ, kind, e.Inputs, true); err != nil {
+		return err
 	}
 
+	// `i` counts the nonindexed arguments.
+	// `j` counts the number of complex types.
+	// both `i` and `j` are used to to correctly compute `data` offset.
 	i, j := -1, 0
 	for _, input := range e.Inputs {
 		if input.Indexed {
-			// can't read, continue
+			// Indexed arguments are not packed into data
 			continue
 		}
 		i++
@@ -83,7 +86,7 @@ func (e Event) tupleUnpack(v interface{}, output []byte) error {
 		}
 		reflectValue := reflect.ValueOf(marshalledValue)
 
-		switch value.Kind() {
+		switch kind {
 		case reflect.Struct:
 			for j := 0; j < typ.NumField(); j++ {
 				field := typ.Field(j)
@@ -95,19 +98,13 @@ func (e Event) tupleUnpack(v interface{}, output []byte) error {
 				}
 			}
 		case reflect.Slice, reflect.Array:
-			if value.Len() < i {
-				return fmt.Errorf("abi: insufficient number of arguments for unpack, want %d, got %d", i, value.Len())
-			}
 			v := value.Index(i)
-			if v.Kind() != reflect.Ptr && v.Kind() != reflect.Interface {
-				return fmt.Errorf("abi: cannot unmarshal %v in to %v", v.Type(), reflectValue.Type())
+			if err := requireAssignable(v, reflectValue); err != nil {
+				return err
 			}
-			reflectValue := reflect.ValueOf(marshalledValue)
 			if err := set(v.Elem(), reflectValue, input); err != nil {
 				return err
 			}
-		default:
-			return fmt.Errorf("abi: cannot unmarshal tuple in to %v", typ)
 		}
 	}
 	return nil

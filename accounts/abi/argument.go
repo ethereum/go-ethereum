@@ -49,3 +49,13 @@ func (a *Argument) UnmarshalJSON(data []byte) error {
 
 	return nil
 }
+
+func countNonIndexedArguments(args []Argument) int {
+	out := 0
+	for i := range args {
+		if !args[i].Indexed {
+			out++
+		}
+	}
+	return out
+}
