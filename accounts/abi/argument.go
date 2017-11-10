@@ -29,21 +29,32 @@ type Argument struct {
 	Indexed bool // indexed is only used by events
 }
 
+// Type only used for unmarshalling json argument types
+type unmarshalArg struct {
+	Name       string
+	Type       string
+	Components []unmarshalArg // used for tuples/structs
+	Indexed    bool
+}
+
 func (a *Argument) UnmarshalJSON(data []byte) error {
-	var extarg struct {
-		Name    string
-		Type    string
-		Indexed bool
-	}
+	var extarg unmarshalArg
+
 	err := json.Unmarshal(data, &extarg)
 	if err != nil {
 		return fmt.Errorf("argument json err: %v", err)
 	}
 
-	a.Type, err = NewType(extarg.Type)
+	if len(extarg.Components) > 0 {
+		a.Type, err = ParseStructType(extarg.Type, extarg.Components...)
+	} else {
+		a.Type, err = NewType(extarg.Type)
+	}
+
 	if err != nil {
 		return err
 	}
+
 	a.Name = extarg.Name
 	a.Indexed = extarg.Indexed
 
