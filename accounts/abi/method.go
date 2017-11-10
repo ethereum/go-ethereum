@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// Callable method given a `Name` and whether the method is a constant.
+// Method represents a callable given a `Name` and whether the method is a constant.
 // If the method is `Const` no transaction needs to be created for this
 // particular Method call. It can easily be simulated using a local VM.
 // For example a `Balance()` method only needs to retrieve something
@@ -91,7 +91,7 @@ func (method Method) pack(args ...interface{}) ([]byte, error) {
 // unpacks a method return tuple into a struct of corresponding go types
 //
 // Unpacking can be done into a struct or a slice/array.
-func (method Method) tupleUnpack(v interface{}, output []byte) error {
+func (method Method) tupleUnpack(v interface{}, outputSlice []byte) error {
 	// make sure the passed value is a pointer
 	valueOf := reflect.ValueOf(v)
 	if reflect.Ptr != valueOf.Kind() {
@@ -108,16 +108,15 @@ func (method Method) tupleUnpack(v interface{}, output []byte) error {
 	}
 
 	j := 0
-	for i := 0; i < len(method.Outputs); i++ {
-		toUnpack := method.Outputs[i]
-		marshalledValue, err := toGoType((i+j)*32, toUnpack.Type, output)
+	for i, output := range method.Outputs {
+		marshalledValue, err := toGoType((i+j)*32, ouptut.Type, outputSlice)
 		if err != nil {
 			return err
 		}
-		if toUnpack.Type.T == ArrayTy {
+		if output.Type.T == ArrayTy {
 			// combined index ('i' + 'j') need to be adjusted only by size of array, thus
 			// we need to decrement 'j' because 'i' was incremented
-			j += toUnpack.Type.Size - 1
+			j += output.Type.Size - 1
 		}
 		reflectValue := reflect.ValueOf(marshalledValue)
 
@@ -126,8 +125,8 @@ func (method Method) tupleUnpack(v interface{}, output []byte) error {
 			for j := 0; j < typ.NumField(); j++ {
 				field := typ.Field(j)
 				// TODO read tags: `abi:"fieldName"`
-				if field.Name == strings.ToUpper(method.Outputs[i].Name[:1])+method.Outputs[i].Name[1:] {
-					if err := set(value.Field(j), reflectValue, method.Outputs[i]); err != nil {
+				if field.Name == strings.ToUpper(output.Name[:1])+output.Name[1:] {
+					if err := set(value.Field(j), reflectValue, output); err != nil {
 						return err
 					}
 				}
@@ -137,7 +136,7 @@ func (method Method) tupleUnpack(v interface{}, output []byte) error {
 			if err := requireAssignable(v, reflectValue); err != nil {
 				return err
 			}
-			if err := set(v.Elem(), reflectValue, method.Outputs[i]); err != nil {
+			if err := set(v.Elem(), reflectValue, output); err != nil {
 				return err
 			}
 		}
@@ -160,10 +159,7 @@ func (method Method) singleUnpack(v interface{}, output []byte) error {
 	if err != nil {
 		return err
 	}
-	if err := set(value, reflect.ValueOf(marshalledValue), method.Outputs[0]); err != nil {
-		return err
-	}
-	return nil
+	return set(value, reflect.ValueOf(marshalledValue), method.Outputs[0])
 }
 
 // Sig returns the methods string signature according to the ABI spec.
@@ -173,35 +169,35 @@ func (method Method) singleUnpack(v interface{}, output []byte) error {
 //     function foo(uint32 a, int b)    =    "foo(uint32,int256)"
 //
 // Please note that "int" is substitute for its canonical representation "int256"
-func (m Method) Sig() string {
-	types := make([]string, len(m.Inputs))
+func (method Method) Sig() string {
+	types := make([]string, len(method.Inputs))
 	i := 0
-	for _, input := range m.Inputs {
+	for _, input := range method.Inputs {
 		types[i] = input.Type.String()
 		i++
 	}
-	return fmt.Sprintf("%v(%v)", m.Name, strings.Join(types, ","))
+	return fmt.Sprintf("%v(%v)", method.Name, strings.Join(types, ","))
 }
 
-func (m Method) String() string {
-	inputs := make([]string, len(m.Inputs))
-	for i, input := range m.Inputs {
+func (method Method) String() string {
+	inputs := make([]string, len(method.Inputs))
+	for i, input := range method.Inputs {
 		inputs[i] = fmt.Sprintf("%v %v", input.Name, input.Type)
 	}
-	outputs := make([]string, len(m.Outputs))
-	for i, output := range m.Outputs {
+	outputs := make([]string, len(method.Outputs))
+	for i, output := range method.Outputs {
 		if len(output.Name) > 0 {
 			outputs[i] = fmt.Sprintf("%v ", output.Name)
 		}
 		outputs[i] += output.Type.String()
 	}
 	constant := ""
-	if m.Const {
+	if method.Const {
 		constant = "constant "
 	}
-	return fmt.Sprintf("function %v(%v) %sreturns(%v)", m.Name, strings.Join(inputs, ", "), constant, strings.Join(outputs, ", "))
+	return fmt.Sprintf("function %v(%v) %sreturns(%v)", method.Name, strings.Join(inputs, ", "), constant, strings.Join(outputs, ", "))
 }
 
-func (m Method) Id() []byte {
-	return crypto.Keccak256([]byte(m.Sig()))[:4]
+func (method Method) Id() []byte {
+	return crypto.Keccak256([]byte(method.Sig()))[:4]
 }

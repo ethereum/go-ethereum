@@ -29,6 +29,7 @@ type Argument struct {
 	Indexed bool // indexed is only used by events
 }
 
+// UnmarshalJSON implements json.Unmarshaler interface
 func (a *Argument) UnmarshalJSON(data []byte) error {
 	var extarg struct {
 		Name    string
