@@ -25,6 +25,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -86,6 +87,15 @@ func RunGit(args ...string) string {
 		log.Fatal(strings.Join(cmd.Args, " "), ": ", err, "\n", stderr.String())
 	}
 	return strings.TrimSpace(stdout.String())
+}
+
+// ReadGitFile returns content of file in .git directory.
+func ReadGitFile(file string) string {
+	content, err := ioutil.ReadFile(path.Join(".git", file))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(content))
 }
 
 // Render renders the given template file into outputFile.
