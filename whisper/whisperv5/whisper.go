@@ -171,7 +171,7 @@ func (w *Whisper) SetMaxMessageSize(size uint32) error {
 	if size > MaxMessageSize {
 		return fmt.Errorf("message size too large [%d>%d]", size, MaxMessageSize)
 	}
-	w.settings.Store(maxMsgSizeIdx, uint32(size))
+	w.settings.Store(maxMsgSizeIdx, size)
 	return nil
 }
 

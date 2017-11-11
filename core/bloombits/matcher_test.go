@@ -17,6 +17,7 @@
 package bloombits
 
 import (
+	"context"
 	"math/rand"
 	"sync/atomic"
 	"testing"
@@ -30,14 +31,14 @@ const testSectionSize = 4096
 // Tests that wildcard filter rules (nil) can be specified and are handled well.
 func TestMatcherWildcards(t *testing.T) {
 	matcher := NewMatcher(testSectionSize, [][][]byte{
-		[][]byte{common.Address{}.Bytes(), common.Address{0x01}.Bytes()}, // Default address is not a wildcard
-		[][]byte{common.Hash{}.Bytes(), common.Hash{0x01}.Bytes()},       // Default hash is not a wildcard
-		[][]byte{common.Hash{0x01}.Bytes()},                              // Plain rule, sanity check
-		[][]byte{common.Hash{0x01}.Bytes(), nil},                         // Wildcard suffix, drop rule
-		[][]byte{nil, common.Hash{0x01}.Bytes()},                         // Wildcard prefix, drop rule
-		[][]byte{nil, nil},                                               // Wildcard combo, drop rule
-		[][]byte{},                                                       // Inited wildcard rule, drop rule
-		nil,                                                              // Proper wildcard rule, drop rule
+		{common.Address{}.Bytes(), common.Address{0x01}.Bytes()}, // Default address is not a wildcard
+		{common.Hash{}.Bytes(), common.Hash{0x01}.Bytes()},       // Default hash is not a wildcard
+		{common.Hash{0x01}.Bytes()},                              // Plain rule, sanity check
+		{common.Hash{0x01}.Bytes(), nil},                         // Wildcard suffix, drop rule
+		{nil, common.Hash{0x01}.Bytes()},                         // Wildcard prefix, drop rule
+		{nil, nil},                                               // Wildcard combo, drop rule
+		{},                                                       // Inited wildcard rule, drop rule
+		nil,                                                      // Proper wildcard rule, drop rule
 	})
 	if len(matcher.filters) != 3 {
 		t.Fatalf("filter system size mismatch: have %d, want %d", len(matcher.filters), 3)
@@ -85,7 +86,7 @@ func TestWildcardMatcher(t *testing.T) {
 }
 
 // makeRandomIndexes generates a random filter system, composed on multiple filter
-// criteria, each having one bloom list component for the address and arbitrarilly
+// criteria, each having one bloom list component for the address and arbitrarily
 // many topic bloom list components.
 func makeRandomIndexes(lengths []int, max int) [][]bloomIndexes {
 	res := make([][]bloomIndexes, len(lengths))
@@ -144,7 +145,7 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, blocks uint64, intermitt
 	quit := make(chan struct{})
 	matches := make(chan uint64, 16)
 
-	session, err := matcher.Start(0, blocks-1, matches)
+	session, err := matcher.Start(context.Background(), 0, blocks-1, matches)
 	if err != nil {
 		t.Fatalf("failed to stat matcher session: %v", err)
 	}
@@ -163,13 +164,13 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, blocks uint64, intermitt
 			}
 			// If we're testing intermittent mode, abort and restart the pipeline
 			if intermittent {
-				session.Close(time.Second)
+				session.Close()
 				close(quit)
 
 				quit = make(chan struct{})
 				matches = make(chan uint64, 16)
 
-				session, err = matcher.Start(i+1, blocks-1, matches)
+				session, err = matcher.Start(context.Background(), i+1, blocks-1, matches)
 				if err != nil {
 					t.Fatalf("failed to stat matcher session: %v", err)
 				}
@@ -183,7 +184,7 @@ func testMatcher(t *testing.T, filter [][]bloomIndexes, blocks uint64, intermitt
 		t.Errorf("filter = %v  blocks = %v  intermittent = %v: expected closed channel, got #%v", filter, blocks, intermittent, match)
 	}
 	// Clean up the session and ensure we match the expected retrieval count
-	session.Close(time.Second)
+	session.Close()
 	close(quit)
 
 	if retrievals != 0 && requested != retrievals {
