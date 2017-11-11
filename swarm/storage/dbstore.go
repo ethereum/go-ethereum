@@ -93,6 +93,8 @@ func NewDbStore(path string, hash SwarmHasher, capacity uint64, radius int) (s *
 	s.gcStartPos[0] = kpIndex
 	s.gcArray = make([]*gcItem, gcArraySize)
 
+	// the database closes with pointer to last entry stored
+	// we increment upon open so that the last entry doesn't get overwritten
 	data, _ := s.db.Get(keyEntryCnt)
 	s.entryCnt = BytesToU64(data)
 	if len(data) > 0 {
