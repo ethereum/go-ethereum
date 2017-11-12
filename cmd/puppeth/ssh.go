@@ -83,8 +83,7 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 			if err != nil {
 				log.Warn("Couldn't read password", "err", err)
 			}
-
-			key, err := ssh.ParsePrivateKeyWithPassphrase(buf, []byte(blob))
+			key, err := ssh.ParsePrivateKeyWithPassphrase(buf, blob)
 			if err != nil {
 				log.Warn("Failed to decrypt SSH key, falling back to passwords", "path", path, "err", err)
 			} else {
