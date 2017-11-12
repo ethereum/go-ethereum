@@ -82,14 +82,15 @@ func Env() Environment {
 // LocalEnv returns build environment metadata gathered from git.
 func LocalEnv() Environment {
 	env := applyEnvFlags(Environment{Name: "local", Repo: "ethereum/go-ethereum"})
-	head := ReadGitFile("HEAD")
+
+	head := readGitFile("HEAD")
 	if splits := strings.Split(head, " "); len(splits) == 2 {
 		head = splits[1]
 	} else {
 		return env
 	}
 	if env.Commit == "" {
-		env.Commit = ReadGitFile(head)
+		env.Commit = readGitFile(head)
 	}
 	if env.Branch == "" {
 		if head != "HEAD" {

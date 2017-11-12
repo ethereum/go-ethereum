@@ -89,8 +89,8 @@ func RunGit(args ...string) string {
 	return strings.TrimSpace(stdout.String())
 }
 
-// ReadGitFile returns content of file in .git directory.
-func ReadGitFile(file string) string {
+// readGitFile returns content of file in .git directory.
+func readGitFile(file string) string {
 	content, err := ioutil.ReadFile(path.Join(".git", file))
 	if err != nil {
 		return ""
