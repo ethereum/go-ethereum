@@ -133,15 +133,14 @@ func (e Event) singleUnpack(v interface{}, output []byte) error {
 
 	// if we reach this part, there is only one output member from the contract event.
 	// for mobile, the result type is always a slice.
-	var firstValue reflect.Value
-	if reflect.Slice == value.Kind() {
-		// take the first element
-		firstValue = value.Index(0).Elem()
-	} else {
-		firstValue = value
+	if reflect.Slice == value.Kind() && value.Len() >= 1 {
+		//check if it's not a byte slice
+		if reflect.TypeOf([]byte{}) != value.Type() {
+			value = value.Index(0).Elem()
+		}
 	}
 
-	if err := set(firstValue, reflect.ValueOf(marshalledValue), e.Inputs[0]); err != nil {
+	if err := set(value, reflect.ValueOf(marshalledValue), e.Inputs[0]); err != nil {
 		return err
 	}
 	return nil
