@@ -23,6 +23,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
+)
+
+const (
+	PendingBlockNumber = int(rpc.PendingBlockNumber)
+
+	LatestBlockNumber = int(rpc.LatestBlockNumber)
+
+	EarliestBlockNumber = int(rpc.EarliestBlockNumber)
 )
 
 // EthereumClient provides access to the Ethereum APIs.

@@ -10,6 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+var _ = (*logMarshaling)(nil)
+
 func (l Log) MarshalJSON() ([]byte, error) {
 	type Log struct {
 		Address     common.Address `json:"address" gencodec:"required"`
@@ -17,9 +19,9 @@ func (l Log) MarshalJSON() ([]byte, error) {
 		Data        hexutil.Bytes  `json:"data" gencodec:"required"`
 		BlockNumber hexutil.Uint64 `json:"blockNumber"`
 		TxHash      common.Hash    `json:"transactionHash" gencodec:"required"`
-		TxIndex     hexutil.Uint   `json:"transactionIndex" gencodec:"required"`
+		TxIndex     hexutil.Uint   `json:"transactionIndex"`
 		BlockHash   common.Hash    `json:"blockHash"`
-		Index       hexutil.Uint   `json:"logIndex" gencodec:"required"`
+		Index       hexutil.Uint   `json:"logIndex"`
 		Removed     bool           `json:"removed"`
 	}
 	var enc Log
@@ -42,9 +44,9 @@ func (l *Log) UnmarshalJSON(input []byte) error {
 		Data        hexutil.Bytes   `json:"data" gencodec:"required"`
 		BlockNumber *hexutil.Uint64 `json:"blockNumber"`
 		TxHash      *common.Hash    `json:"transactionHash" gencodec:"required"`
-		TxIndex     *hexutil.Uint   `json:"transactionIndex" gencodec:"required"`
+		TxIndex     *hexutil.Uint   `json:"transactionIndex"`
 		BlockHash   *common.Hash    `json:"blockHash"`
-		Index       *hexutil.Uint   `json:"logIndex" gencodec:"required"`
+		Index       *hexutil.Uint   `json:"logIndex"`
 		Removed     *bool           `json:"removed"`
 	}
 	var dec Log
@@ -70,17 +72,15 @@ func (l *Log) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'transactionHash' for Log")
 	}
 	l.TxHash = *dec.TxHash
-	if dec.TxIndex == nil {
-		return errors.New("missing required field 'transactionIndex' for Log")
+	if dec.TxIndex != nil {
+		l.TxIndex = uint(*dec.TxIndex)
 	}
-	l.TxIndex = uint(*dec.TxIndex)
 	if dec.BlockHash != nil {
 		l.BlockHash = *dec.BlockHash
 	}
-	if dec.Index == nil {
-		return errors.New("missing required field 'logIndex' for Log")
+	if dec.Index != nil {
+		l.Index = uint(*dec.Index)
 	}
-	l.Index = uint(*dec.Index)
 	if dec.Removed != nil {
 		l.Removed = *dec.Removed
 	}
