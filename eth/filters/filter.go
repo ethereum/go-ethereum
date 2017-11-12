@@ -206,7 +206,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) (logs [
 	}
 	var unfiltered []*types.Log
 	for _, receipt := range receipts {
-		unfiltered = append(unfiltered, ([]*types.Log)(receipt.Logs)...)
+		unfiltered = append(unfiltered, receipt.Logs...)
 	}
 	logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
 	if len(logs) > 0 {

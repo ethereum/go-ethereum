@@ -56,7 +56,7 @@ func (eth *LightEthereum) startBloomHandlers() {
 					task.Bitsets = make([][]byte, len(task.Sections))
 					compVectors, err := light.GetBloomBits(task.Context, eth.odr, task.Bit, task.Sections)
 					if err == nil {
-						for i, _ := range task.Sections {
+						for i := range task.Sections {
 							if blob, err := bitutil.DecompressBytes(compVectors[i], int(light.BloomTrieFrequency/8)); err == nil {
 								task.Bitsets[i] = blob
 							} else {

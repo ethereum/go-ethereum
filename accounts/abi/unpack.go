@@ -38,7 +38,7 @@ type unpacker interface {
 func readInteger(kind reflect.Kind, b []byte) interface{} {
 	switch kind {
 	case reflect.Uint8:
-		return uint8(b[len(b)-1])
+		return b[len(b)-1]
 	case reflect.Uint16:
 		return binary.BigEndian.Uint16(b[len(b)-2:])
 	case reflect.Uint32:

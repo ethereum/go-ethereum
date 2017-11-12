@@ -161,8 +161,8 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 
 		if in.cfg.Debug {
 			logged = false
-			pcCopy = uint64(pc)
-			gasCopy = uint64(contract.Gas)
+			pcCopy = pc
+			gasCopy = contract.Gas
 			stackCopy = newstack()
 			for _, val := range stack.data {
 				stackCopy.push(val)

@@ -62,7 +62,7 @@ func (p *FakePeer) RequestHeadersByHash(hash common.Hash, amount int, skip int, 
 		number := origin.Number.Uint64()
 		headers = append(headers, origin)
 		if reverse {
-			for i := 0; i < int(skip)+1; i++ {
+			for i := 0; i <= skip; i++ {
 				if header := p.hc.GetHeader(hash, number); header != nil {
 					hash = header.ParentHash
 					number--
