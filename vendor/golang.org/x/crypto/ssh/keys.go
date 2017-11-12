@@ -367,6 +367,17 @@ func (r *dsaPublicKey) Type() string {
 	return "ssh-dss"
 }
 
+func checkDSAParams(param *dsa.Parameters) error {
+	// SSH specifies FIPS 186-2, which only provided a single size
+	// (1024 bits) DSA key. FIPS 186-3 allows for larger key
+	// sizes, which would confuse SSH.
+	if l := param.P.BitLen(); l != 1024 {
+		return fmt.Errorf("ssh: unsupported DSA key size %d", l)
+	}
+
+	return nil
+}
+
 // parseDSA parses an DSA key according to RFC 4253, section 6.6.
 func parseDSA(in []byte) (out PublicKey, rest []byte, err error) {
 	var w struct {
@@ -377,13 +388,18 @@ func parseDSA(in []byte) (out PublicKey, rest []byte, err error) {
 		return nil, nil, err
 	}
 
+	param := dsa.Parameters{
+		P: w.P,
+		Q: w.Q,
+		G: w.G,
+	}
+	if err := checkDSAParams(&param); err != nil {
+		return nil, nil, err
+	}
+
 	key := &dsaPublicKey{
-		Parameters: dsa.Parameters{
-			P: w.P,
-			Q: w.Q,
-			G: w.G,
-		},
-		Y: w.Y,
+		Parameters: param,
+		Y:          w.Y,
 	}
 	return key, w.Rest, nil
 }
@@ -630,17 +646,26 @@ func (k *ecdsaPublicKey) CryptoPublicKey() crypto.PublicKey {
 }
 
 // NewSignerFromKey takes an *rsa.PrivateKey, *dsa.PrivateKey,
-// *ecdsa.PrivateKey or any other crypto.Signer and returns a corresponding
-// Signer instance. ECDSA keys must use P-256, P-384 or P-521.
+// *ecdsa.PrivateKey or any other crypto.Signer and returns a
+// corresponding Signer instance. ECDSA keys must use P-256, P-384 or
+// P-521. DSA keys must use parameter size L1024N160.
 func NewSignerFromKey(key interface{}) (Signer, error) {
 	switch key := key.(type) {
 	case crypto.Signer:
 		return NewSignerFromSigner(key)
 	case *dsa.PrivateKey:
-		return &dsaPrivateKey{key}, nil
+		return newDSAPrivateKey(key)
 	default:
 		return nil, fmt.Errorf("ssh: unsupported key type %T", key)
 	}
+}
+
+func newDSAPrivateKey(key *dsa.PrivateKey) (Signer, error) {
+	if err := checkDSAParams(&key.PublicKey.Parameters); err != nil {
+		return nil, err
+	}
+
+	return &dsaPrivateKey{key}, nil
 }
 
 type wrappedSigner struct {
@@ -756,6 +781,18 @@ func ParsePrivateKey(pemBytes []byte) (Signer, error) {
 	return NewSignerFromKey(key)
 }
 
+// ParsePrivateKeyWithPassphrase returns a Signer from a PEM encoded private
+// key and passphrase. It supports the same keys as
+// ParseRawPrivateKeyWithPassphrase.
+func ParsePrivateKeyWithPassphrase(pemBytes, passPhrase []byte) (Signer, error) {
+	key, err := ParseRawPrivateKeyWithPassphrase(pemBytes, passPhrase)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewSignerFromKey(key)
+}
+
 // encryptedBlock tells whether a private key is
 // encrypted by examining its Proc-Type header
 // for a mention of ENCRYPTED
@@ -785,6 +822,43 @@ func ParseRawPrivateKey(pemBytes []byte) (interface{}, error) {
 		return ParseDSAPrivateKey(block.Bytes)
 	case "OPENSSH PRIVATE KEY":
 		return parseOpenSSHPrivateKey(block.Bytes)
+	default:
+		return nil, fmt.Errorf("ssh: unsupported key type %q", block.Type)
+	}
+}
+
+// ParseRawPrivateKeyWithPassphrase returns a private key decrypted with
+// passphrase from a PEM encoded private key. If wrong passphrase, return
+// x509.IncorrectPasswordError.
+func ParseRawPrivateKeyWithPassphrase(pemBytes, passPhrase []byte) (interface{}, error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, errors.New("ssh: no key found")
+	}
+	buf := block.Bytes
+
+	if encryptedBlock(block) {
+		if x509.IsEncryptedPEMBlock(block) {
+			var err error
+			buf, err = x509.DecryptPEMBlock(block, passPhrase)
+			if err != nil {
+				if err == x509.IncorrectPasswordError {
+					return nil, err
+				}
+				return nil, fmt.Errorf("ssh: cannot decode encrypted private keys: %v", err)
+			}
+		}
+	}
+
+	switch block.Type {
+	case "RSA PRIVATE KEY":
+		return x509.ParsePKCS1PrivateKey(buf)
+	case "EC PRIVATE KEY":
+		return x509.ParseECPrivateKey(buf)
+	case "DSA PRIVATE KEY":
+		return ParseDSAPrivateKey(buf)
+	case "OPENSSH PRIVATE KEY":
+		return parseOpenSSHPrivateKey(buf)
 	default:
 		return nil, fmt.Errorf("ssh: unsupported key type %q", block.Type)
 	}
