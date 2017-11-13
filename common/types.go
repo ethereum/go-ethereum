@@ -165,6 +165,16 @@ func (a Address) Bytes() []byte { return a[:] }
 func (a Address) Big() *big.Int { return new(big.Int).SetBytes(a[:]) }
 func (a Address) Hash() Hash    { return BytesToHash(a[:]) }
 
+// Equals returns a boolean reporting whether a and b are the same addresses
+func (a Address) Equals(b Address) bool {
+	for i := 0; i < AddressLength; i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // Hex returns an EIP55-compliant hex string representation of the address.
 func (a Address) Hex() string {
 	unchecksummed := hex.EncodeToString(a[:])
