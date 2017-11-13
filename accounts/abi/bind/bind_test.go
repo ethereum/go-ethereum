@@ -399,7 +399,6 @@ var bindTests = []struct {
 			sim.Commit()
 
 			// Set the field with automatic estimation and check that it succeeds
-			auth.GasLimit = nil
 			if _, err := limiter.SetField(auth, "automatic"); err != nil {
 				t.Fatalf("Failed to call automatically gased transaction: %v", err)
 			}

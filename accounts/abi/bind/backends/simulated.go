@@ -200,7 +200,7 @@ func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error
 
 // EstimateGas executes the requested code against the currently pending block/state and
 // returns the used amount of gas.
-func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMsg) (*big.Int, error) {
+func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -210,16 +210,16 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 		hi  uint64
 		cap uint64
 	)
-	if call.Gas != nil && call.Gas.Uint64() >= params.TxGas {
-		hi = call.Gas.Uint64()
+	if call.Gas >= params.TxGas {
+		hi = call.Gas
 	} else {
-		hi = b.pendingBlock.GasLimit().Uint64()
+		hi = b.pendingBlock.GasLimit()
 	}
 	cap = hi
 
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) bool {
-		call.Gas = new(big.Int).SetUint64(gas)
+		call.Gas = gas
 
 		snapshot := b.pendingState.Snapshot()
 		_, _, failed, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
@@ -242,21 +242,21 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 	// Reject the transaction as invalid if it still fails at the highest allowance
 	if hi == cap {
 		if !executable(hi) {
-			return nil, errGasEstimationFailed
+			return 0, errGasEstimationFailed
 		}
 	}
-	return new(big.Int).SetUint64(hi), nil
+	return hi, nil
 }
 
 // callContract implemens common code between normal and pending contract calls.
 // state is modified during execution, make sure to copy it if necessary.
-func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, statedb *state.StateDB) ([]byte, *big.Int, bool, error) {
+func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, statedb *state.StateDB) ([]byte, uint64, bool, error) {
 	// Ensure message is initialized properly.
 	if call.GasPrice == nil {
 		call.GasPrice = big.NewInt(1)
 	}
-	if call.Gas == nil || call.Gas.Sign() == 0 {
-		call.Gas = big.NewInt(50000000)
+	if call.Gas == 0 {
+		call.Gas = 50000000
 	}
 	if call.Value == nil {
 		call.Value = new(big.Int)
@@ -271,9 +271,9 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEVM(evmContext, statedb, b.config, vm.Config{})
-	gaspool := new(core.GasPool).AddGas(math.MaxBig256)
-	ret, gasUsed, _, failed, err := core.NewStateTransition(vmenv, msg, gaspool).TransitionDb()
-	return ret, gasUsed, failed, err
+	gaspool := new(core.GasPool).AddGas(math.MaxUint64)
+
+	return core.NewStateTransition(vmenv, msg, gaspool).TransitionDb()
 }
 
 // SendTransaction updates the pending block to include the given transaction.
@@ -328,6 +328,6 @@ func (m callmsg) Nonce() uint64        { return 0 }
 func (m callmsg) CheckNonce() bool     { return false }
 func (m callmsg) To() *common.Address  { return m.CallMsg.To }
 func (m callmsg) GasPrice() *big.Int   { return m.CallMsg.GasPrice }
-func (m callmsg) Gas() *big.Int        { return m.CallMsg.Gas }
+func (m callmsg) Gas() uint64          { return m.CallMsg.Gas }
 func (m callmsg) Value() *big.Int      { return m.CallMsg.Value }
 func (m callmsg) Data() []byte         { return m.CallMsg.Data }

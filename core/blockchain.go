@@ -305,7 +305,7 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
-func (bc *BlockChain) GasLimit() *big.Int {
+func (bc *BlockChain) GasLimit() uint64 {
 	bc.mu.RLock()
 	defer bc.mu.RUnlock()
 
@@ -677,9 +677,9 @@ func SetReceiptsData(config *params.ChainConfig, block *types.Block, receipts ty
 		}
 		// The used gas can be calculated based on previous receipts
 		if j == 0 {
-			receipts[j].GasUsed = new(big.Int).Set(receipts[j].CumulativeGasUsed)
+			receipts[j].GasUsed = receipts[j].CumulativeGasUsed
 		} else {
-			receipts[j].GasUsed = new(big.Int).Sub(receipts[j].CumulativeGasUsed, receipts[j-1].CumulativeGasUsed)
+			receipts[j].GasUsed = receipts[j].CumulativeGasUsed - receipts[j-1].CumulativeGasUsed
 		}
 		// The derived log fields can simply be set from the block and transaction
 		for k := 0; k < len(receipts[j].Logs); k++ {
@@ -1002,7 +1002,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			events = append(events, ChainSideEvent{block})
 		}
 		stats.processed++
-		stats.usedGas += usedGas.Uint64()
+		stats.usedGas += usedGas
 		stats.report(chain, i)
 	}
 	// Append a single chain head event if we've progressed the chain
