@@ -162,6 +162,9 @@ Remove blockchain and state databases`,
 			utils.DataDirFlag,
 			utils.CacheFlag,
 			utils.SyncModeFlag,
+			utils.IterativeOutputFlag,
+			utils.ExcludeCodeFlag,
+			utils.ExcludeStorageFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -287,7 +290,7 @@ func importChain(ctx *cli.Context) error {
 	fmt.Printf("Allocations:   %.3f million\n", float64(mem.Mallocs)/1000000)
 	fmt.Printf("GC pause:      %v\n\n", time.Duration(mem.PauseTotalNs))
 
-	if ctx.GlobalIsSet(utils.NoCompactionFlag.Name) {
+	if ctx.GlobalBool(utils.NoCompactionFlag.Name) {
 		return nil
 	}
 
@@ -520,7 +523,13 @@ func dump(ctx *cli.Context) error {
 			if err != nil {
 				utils.Fatalf("could not create new state: %v", err)
 			}
-			fmt.Printf("%s\n", state.Dump())
+			excludeCode := ctx.GlobalBool(utils.ExcludeCodeFlag.Name)
+			excludeStorage := ctx.GlobalBool(utils.ExcludeStorageFlag.Name)
+			if ctx.GlobalBool(utils.IterativeOutputFlag.Name) {
+				state.IterativeDump(excludeCode, excludeStorage, json.NewEncoder(os.Stdout))
+			} else {
+				fmt.Printf("%s\n", state.Dump(excludeCode, excludeStorage))
+			}
 		}
 	}
 	chainDb.Close()

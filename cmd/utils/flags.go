@@ -196,6 +196,18 @@ var (
 		Name:  "ulc.trusted",
 		Usage: "List of trusted ULC servers",
 	}
+	IterativeOutputFlag = cli.BoolFlag{
+		Name:  "dump.iterative",
+		Usage: "Print streaming JSON iteratively as json objects, delimited by newlines",
+	}
+	ExcludeStorageFlag = cli.BoolFlag{
+		Name:  "dump.nostorage",
+		Usage: "When set, exclude storage entries (saves db lookups)",
+	}
+	ExcludeCodeFlag = cli.BoolFlag{
+		Name:  "dump.nocode",
+		Usage: "When set, exclude contract code (saves db lookups)",
+	}
 	defaultSyncMode = eth.DefaultConfig.SyncMode
 	SyncModeFlag    = TextMarshalerFlag{
 		Name:  "syncmode",

@@ -188,6 +188,12 @@ var (
 		utils.MetricsInfluxDBPasswordFlag,
 		utils.MetricsInfluxDBTagsFlag,
 	}
+
+	dumpFlags = []cli.Flag{
+		utils.IterativeOutputFlag,
+		utils.ExcludeCodeFlag,
+		utils.ExcludeStorageFlag,
+	}
 )
 
 func init() {
@@ -231,6 +237,7 @@ func init() {
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, whisperFlags...)
 	app.Flags = append(app.Flags, metricsFlags...)
+	app.Flags = append(app.Flags, dumpFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		logdir := ""
