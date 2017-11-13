@@ -32,6 +32,7 @@ type tmplContract struct {
 	Constructor abi.Method             // Contract constructor for deploy parametrization
 	Calls       map[string]*tmplMethod // Contract calls that only read state data
 	Transacts   map[string]*tmplMethod // Contract calls that write state data
+	Events      map[string]string      //all contract events except the anonymous events todo events's indexed argument information should be used to generate code.
 }
 
 // tmplMethod is a wrapper around an abi.Method that contains a few preprocessed
@@ -263,6 +264,56 @@ package {{.Package}}
 		  return _{{$contract.Type}}.Contract.{{.Normalized.Name}}(&_{{$contract.Type}}.TransactOpts {{range $i, $_ := .Normalized.Inputs}}, {{.Name}}{{end}})
 		}
 	{{end}}
+        func (_{{$contract.Type}} *{{$contract.Type}}Caller) EventSubscribe(opts *bind.CallOpts, fromBlock rpc.BlockNumber,
+            toBlock rpc.BlockNumber, eventName string) (<-chan types.Log, ethereum.Subscription, error) {
+            parsed, err := abi.JSON(strings.NewReader(MyTokenABI))
+            if err != nil {
+                return nil, nil, err
+            }
+            var q ethereum.FilterQuery
+            q.FromBlock = big.NewInt(int64(fromBlock))
+            if toBlock == rpc.LatestBlockNumber {
+                q.ToBlock = nil
+            } else {
+                q.ToBlock = big.NewInt(int64(toBlock))
+            }
+            q.Topics = [][]common.Hash{
+                {parsed.Events[eventName].Id()}, //event signature
+            }
+            return _{{$contract.Type}}.contract.SubscribeFilterLogs(opts, q)
+        }
+
+    {{range $name,$value := .Events}}
+    /*
+    get all event {{$name}} happened from [fromBlock] to [toBlock]
+    if [toBlock] is -1, you can get all the events that will happen later.
+    you can cancel event listenging through Subscription's Unsubscribe
+    */
+    func (t *{{$contract.Type}}Caller) Event{{$name}}Subscribe(opts *bind.CallOpts, fromBlock rpc.BlockNumber,
+    	toBlock rpc.BlockNumber) (<-chan types.Log, ethereum.Subscription, error) {
+    	return t.EventSubscribe(opts, fromBlock, toBlock, "{{$name}}")
+    }
+
+	/*
+   get all event {{$name}} happened from [fromBlock] to [toBlock]
+   if [toBlock] is -1, you can get all the events that will happen later.
+   you can cancel event listenging through Subscription's Unsubscribe
+	*/
+	func (t *{{$contract.Type}}Session) Event{{$name}}Subscribe(fromBlock rpc.BlockNumber,
+		toBlock rpc.BlockNumber) (<-chan types.Log, ethereum.Subscription, error) {
+		return t.Contract.Event{{$name}}Subscribe(&t.CallOpts, fromBlock, toBlock)
+	}
+
+	/*
+	   get all event {{$name}} happened from [fromBlock] to [toBlock]
+	   if [toBlock] is -1, you can get all the events that will happen later.
+	   you can cancel event listenging through Subscription's Unsubscribe
+	*/
+	func (t *{{$contract.Type}}CallerSession) Event{{$name}}Subscribe(opts *bind.CallOpts, fromBlock rpc.BlockNumber,
+		toBlock rpc.BlockNumber) (<-chan types.Log, ethereum.Subscription, error) {
+		return t.Contract.Event{{$name}}Subscribe(&t.CallOpts, fromBlock, toBlock)
+	}
+    {{end}}
 {{end}}
 `
 

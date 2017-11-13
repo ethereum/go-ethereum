@@ -20,6 +20,7 @@ import (
 	"context"
 	"math/big"
 
+	"errors"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -135,4 +136,12 @@ func (b *ContractBackend) SendTransaction(ctx context.Context, tx *types.Transac
 	raw, _ := rlp.EncodeToBytes(tx)
 	_, err := b.txapi.SendRawTransaction(ctx, raw)
 	return err
+}
+
+func (b *ContractBackend) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
+	return nil, errors.New("not support right now") //todo fix this need ethapi.Backend to modify and PublicFilterAPI export Logs func for local call.
+}
+
+func (b *ContractBackend) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]*types.Log, error) {
+	return nil, errors.New("not support right now")
 }

@@ -67,6 +67,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 		var (
 			calls     = make(map[string]*tmplMethod)
 			transacts = make(map[string]*tmplMethod)
+			events    = make(map[string]string)
 		)
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
@@ -94,6 +95,9 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 				transacts[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original)}
 			}
 		}
+		for _, ev := range evmABI.Events {
+			events[ev.Name] = ev.Name
+		}
 		contracts[types[i]] = &tmplContract{
 			Type:        capitalise(types[i]),
 			InputABI:    strings.Replace(strippedABI, "\"", "\\\"", -1),
@@ -101,6 +105,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 			Constructor: evmABI.Constructor,
 			Calls:       calls,
 			Transacts:   transacts,
+			Events:      events,
 		}
 	}
 	// Generate the contract template data content and render it

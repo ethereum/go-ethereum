@@ -349,8 +349,8 @@ func (ec *Client) NonceAt(ctx context.Context, account common.Address, blockNumb
 // Filters
 
 // FilterLogs executes a filter query.
-func (ec *Client) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
-	var result []types.Log
+func (ec *Client) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]*types.Log, error) {
+	var result []*types.Log
 	err := ec.c.CallContext(ctx, &result, "eth_getLogs", toFilterArg(q))
 	return result, err
 }
