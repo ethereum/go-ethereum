@@ -136,3 +136,21 @@ func (b *ContractBackend) SendTransaction(ctx context.Context, tx *types.Transac
 	_, err := b.txapi.SendRawTransaction(ctx, raw)
 	return err
 }
+
+// SendUnsignedTransaction implements bind.ContractTransactor injects an
+// unsigned transaction into the pending pool for execution
+func (b *ContractBackend) SendUnsignedTransaction(ctx context.Context, tx *types.Transaction, sender common.Address) error {
+	// Convert our transaction + sender into internal struct SendTxArgs
+	nonce := tx.Nonce()
+	args := ethapi.SendTxArgs{
+		From:     sender,
+		To:       tx.To(),
+		Gas:      (*hexutil.Big)(tx.Gas()),
+		GasPrice: (*hexutil.Big)(tx.GasPrice()),
+		Value:    (*hexutil.Big)(tx.Value()),
+		Data:     tx.Data(),
+		Nonce:    (*hexutil.Uint64)(&nonce),
+	}
+	_, err := b.txapi.SendTransaction(ctx, args)
+	return err
+}

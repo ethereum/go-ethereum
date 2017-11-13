@@ -287,6 +287,28 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	return nil
 }
 
+// SendUnsignedTransaction updates the pending block to include the given raw transaction.
+// It panics if the transaction is invalid.
+func (b *SimulatedBackend) SendUnsignedTransaction(ctx context.Context, tx *types.Transaction, sender common.Address) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	nonce := b.pendingState.GetNonce(sender)
+	if tx.Nonce() != nonce {
+		panic(fmt.Errorf("invalid transaction nonce: got %d, want %d", tx.Nonce(), nonce))
+	}
+
+	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), b.database, 1, func(number int, block *core.BlockGen) {
+		for _, tx := range b.pendingBlock.Transactions() {
+			block.AddTx(tx)
+		}
+		block.AddTx(tx)
+	})
+	b.pendingBlock = blocks[0]
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), state.NewDatabase(b.database))
+	return nil
+}
+
 // JumpTimeInSeconds adds skip seconds to the clock
 func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	b.mu.Lock()
