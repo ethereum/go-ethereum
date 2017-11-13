@@ -125,3 +125,24 @@ func BenchmarkAddressHex(b *testing.B) {
 		testAddr.Hex()
 	}
 }
+
+func TestAddressEquals(t *testing.T) {
+	var tests = []struct {
+		a1, a2 string
+		result bool
+	}{
+		{"0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", true},
+		{"0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", "0x5AAEB6053f3e94c9b9a09f33669435e7ef1beaed", true},
+		{"0x0", "0x0000000000000000000000000000000000000000", true},
+		{"0x1aaeb6053f3e94c9b9a09f33669435e7ef1beaed", "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", false},
+		{"0x0", "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", false},
+	}
+	for i, test := range tests {
+		a1 := HexToAddress(test.a1)
+		a2 := HexToAddress(test.a2)
+		if a1.Equals(a2) != test.result {
+			t.Errorf("test #%d: failed. Should (%s == %s) be %v",
+				i, test.a1, test.a2, test.result)
+		}
+	}
+}
