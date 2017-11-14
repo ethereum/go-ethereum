@@ -1,3 +1,19 @@
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 import React, {Component} from 'react';
 import PropTypes from 'prop-types';
 import {withStyles} from 'material-ui/styles';
@@ -12,18 +28,18 @@ import {TAGS, DRAWER_WIDTH} from './Common.jsx';
 const styles = theme => ({
     drawerPaper: {
         position: 'relative',
-        height: '100%',
-        width: DRAWER_WIDTH,
+        height:   '100%',
+        width:    DRAWER_WIDTH,
     },
     drawerHeader: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        padding: '0 8px',
+        display:            'flex',
+        alignItems:         'center',
+        justifyContent:     'flex-end',
+        padding:            '0 8px',
         ...theme.mixins.toolbar,
         transitionDuration: {
             enter: theme.transitions.duration.enteringScreen,
-            exit: theme.transitions.duration.leavingScreen,
+            exit:  theme.transitions.duration.leavingScreen,
         }
     },
 });
@@ -39,8 +55,9 @@ class SideBar extends Component {
         this.clickOn = {};
         for(let key in TAGS) {
             const id = TAGS[key].id;
-            this.clickOn[id] = e => {
-                e.preventDefault();
+            this.clickOn[id] = event => {
+                event.preventDefault();
+                console.log(event.target.key);
                 this.props.changeContent(id);
             };
         }
@@ -69,7 +86,7 @@ class SideBar extends Component {
                                     <ListItem button key={tag.id} onClick={this.clickOn[tag.id]}>
                                         <ListItemText primary={tag.title} />
                                     </ListItem>
-                                )
+                                );
                             })
                         }
                     </List>
@@ -80,9 +97,9 @@ class SideBar extends Component {
 }
 
 SideBar.propTypes = {
-    classes: PropTypes.object.isRequired,
-    opened: PropTypes.bool.isRequired,
-    close: PropTypes.func.isRequired,
+    classes:       PropTypes.object.isRequired,
+    opened:        PropTypes.bool.isRequired,
+    close:         PropTypes.func.isRequired,
     changeContent: PropTypes.func.isRequired,
 };
 

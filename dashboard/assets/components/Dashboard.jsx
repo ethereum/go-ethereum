@@ -1,3 +1,19 @@
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 import React, {Component} from 'react';
 import PropTypes from 'prop-types';
 import {withStyles} from 'material-ui/styles';
@@ -5,31 +21,31 @@ import {withStyles} from 'material-ui/styles';
 import SideBar from './SideBar.jsx';
 import Header from './Header.jsx';
 import Main from "./Main.jsx";
-import {isNullOrUndefined, defaultZero, MEMORY_SAMPLE_LIMIT, TAGS} from "./Common.jsx";
+import {isNullOrUndefined, LIMIT, TAGS, DATA_KEYS,} from "./Common.jsx";
 
 // Styles for the Dashboard component.
 const styles = theme => ({
     appFrame: {
-        position: 'relative',
-        display: 'flex',
-        width: '100%',
-        height: '100%',
-        background: '#303030',
+        position:   'relative',
+        display:    'flex',
+        width:      '100%',
+        height:     '100%',
+        background: theme.palette.background.default,
     },
 });
 
-// Dashboard is the main component, which renders the whole page,
-// makes connection with the server and listens for messages.
+// Dashboard is the main component, which renders the whole page, makes connection with the server and listens for messages.
 // When there is an incoming message, updates the page's content correspondingly.
 class Dashboard extends Component {
     constructor(props) {
         super(props);
         this.state = {
-            active: TAGS.home.id, // active menu
-            sideBar: true, // true if the sidebar is opened
-            memory: [],
-            traffic: [],
-            logs: [],
+            active:       TAGS.home.id, // active menu
+            sideBar:      true, // true if the sidebar is opened
+            memory:       [],
+            traffic:      [],
+            logs:         [],
+            shouldUpdate: {},
         };
     }
 
@@ -41,7 +57,7 @@ class Dashboard extends Component {
     // reconnect establishes a websocket connection with the server, listens for incoming messages
     // and tries to reconnect on connection loss.
     reconnect = () => {
-        const server = new WebSocket("ws://" + location.host + "/api");
+        const server = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/api");
 
         server.onmessage = event => {
             const msg = JSON.parse(event.data);
@@ -58,50 +74,56 @@ class Dashboard extends Component {
 
     // update analyzes the incoming message, and updates the charts' content correspondingly.
     update = msg => {
-        // (Re)initialize the state with the past data. metrics is set only in the first msg,
-        // after the connection is established.
-        if (!isNullOrUndefined(msg.metrics)) {
-            let memory = [];
-            let traffic = [];
-            if (!isNullOrUndefined(msg.metrics.memory)) {
-                memory = msg.metrics.memory.map(elem => ({memory: elem.value}));
-                traffic = msg.metrics.processor.map(elem => ({traffic: defaultZero(elem.value)})) // TODO (kurkomisi): traffic != processor!!!
+        console.log(msg);
+        this.setState(prevState => {
+            let newState = [];
+            newState.shouldUpdate = {};
+            const insert = (key, values, limit) => {
+                newState[key] = [...prevState[key], ...values];
+                while (newState[key].length > limit) {
+                    newState[key].shift();
+                }
+                newState.shouldUpdate[key] = true;
+            };
+            // (Re)initialize the state with the past data.
+            if (!isNullOrUndefined(msg.history)) {
+                const memory = DATA_KEYS.memory;
+                const traffic = DATA_KEYS.traffic;
+                newState[memory] = [];
+                newState[traffic] = [];
+                if (!isNullOrUndefined(msg.history.memorySamples)) {
+                    newState[memory] = msg.history.memorySamples.map(elem => isNullOrUndefined(elem.value) ? 0 : elem.value);
+                    while (newState[memory].length > LIMIT.memory) {
+                        newState[memory].shift();
+                    }
+                    newState.shouldUpdate[memory] = true;
+                }
+                if (!isNullOrUndefined(msg.history.trafficSamples)) {
+                    newState[traffic] = msg.history.trafficSamples.map(elem => isNullOrUndefined(elem.value) ? 0 : elem.value);
+                    while (newState[traffic].length > LIMIT.traffic) {
+                        newState[traffic].shift();
+                    }
+                    newState.shouldUpdate[traffic] = true;
+                }
             }
-            this.setState({
-                memory: memory,
-                traffic: traffic,
-                logs: [],
-            });
-        }
+            // Insert the new data samples.
+            if (!isNullOrUndefined(msg.memory)) {
+                insert(DATA_KEYS.memory, [isNullOrUndefined(msg.memory.value) ? 0 : msg.memory.value], LIMIT.memory);
+            }
+            if (!isNullOrUndefined(msg.traffic)) {
+                insert(DATA_KEYS.traffic, [isNullOrUndefined(msg.traffic.value) ? 0 : msg.traffic.value], LIMIT.traffic);
+            }
+            if (!isNullOrUndefined(msg.log)) {
+                insert(DATA_KEYS.logs, [msg.log], LIMIT.log);
+            }
 
-        // Insert the new data samples.
-        isNullOrUndefined(msg.memory) || this.setState(prevState => {
-            let memory = prevState.memory;
-            let traffic = prevState.traffic;
-            // Remove the first elements in case the samples' amount exceeds the limit.
-            if (memory.length === MEMORY_SAMPLE_LIMIT) {
-                memory.shift();
-                traffic.shift();
-            }
-            return ({
-                memory: [...memory, {memory: msg.memory.value}],
-                traffic: [...traffic, {traffic: defaultZero(msg.processor.value)}],
-            });
-        });
-
-        // Insert the new log.
-        isNullOrUndefined(msg.log) || this.setState(prevState => {
-            let logs = prevState.logs;
-            if(logs.length > 20) {
-                logs.shift();
-            }
-            return {logs: [...logs, msg.log]};
+            return newState;
         });
     };
 
     // The change of the active label on the SideBar component will trigger a new render in the Main component.
     changeContent = active => {
-        this.state.active === active || this.setState({active: active});
+        this.setState(prevState => prevState.active !== active ? {active: active} : {});
     };
 
     openSideBar = () => {
@@ -133,6 +155,7 @@ class Dashboard extends Component {
                     memory={this.state.memory}
                     traffic={this.state.traffic}
                     logs={this.state.logs}
+                    shouldUpdate={this.state.shouldUpdate}
                 />
             </div>
         );

@@ -206,7 +206,7 @@ var (
 	}
 	DashboardAssetsFlag = cli.StringFlag{
 		Name:  "dashboard.assets",
-		Usage: "Developer flag to serve the dashboard from the local file system (default: \"\")",
+		Usage: "Developer flag to serve the dashboard from the local file system",
 		Value: dashboard.DefaultConfig.Assets,
 	}
 	// Ethash settings

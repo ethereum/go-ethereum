@@ -30,6 +30,7 @@ import (
 
 // MetricsEnabledFlag is the CLI flag name to use to enable metrics collections.
 const MetricsEnabledFlag = "metrics"
+const DashboardEnabledFlag = "dashboard"
 
 // Enabled is the flag specifying if metrics are enable or not.
 var Enabled = false
@@ -39,7 +40,7 @@ var Enabled = false
 // and peek into the command line args for the metrics flag.
 func init() {
 	for _, arg := range os.Args {
-		if strings.TrimLeft(arg, "-") == MetricsEnabledFlag {
+		if flag := strings.TrimLeft(arg, "-"); flag == MetricsEnabledFlag || flag == DashboardEnabledFlag {
 			log.Info("Enabling metrics collection")
 			Enabled = true
 		}
