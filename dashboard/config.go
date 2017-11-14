@@ -41,5 +41,5 @@ type Config struct {
 
 	// Assets offers a possibility to manually set the dashboard website's location on the server side.
 	// It is useful for debugging, avoids the repeated generation of the binary.
-	Assets  string `toml:",omitempty"`
+	Assets string `toml:",omitempty"`
 }

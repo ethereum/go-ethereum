@@ -65,8 +65,8 @@ type message struct {
 // client represents active websocket connection with a remote browser.
 type client struct {
 	conn   *websocket.Conn // Particular live websocket connection
-	msg    chan message   // Message queue for the update messages
-	logger log.Logger     // Logger for the particular live websocket connection
+	msg    chan message    // Message queue for the update messages
+	logger log.Logger      // Logger for the particular live websocket connection
 }
 
 // charts contains the collected data samples.
