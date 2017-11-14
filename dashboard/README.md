@@ -1,35 +1,33 @@
 ## Go Ethereum Dashboard
 
-The dashboard is a data visualizer integrated into geth, intended to collect and visualize useful information of an Ethereum node. 
-Consists of two parts:
+The dashboard is a data visualizer integrated into geth, intended to collect and visualize useful information of an Ethereum node. It consists of two parts:
+
 * The client visualizes the collected data.
 * The server collects the data, and updates the clients.
 
-The client's UI uses [React][React] with JSX syntax, which is validated by the [ESLint][ESLint] linter 
-mostly according to the [Airbnb React/JSX Style Guide][Airbnb]. The style is defined in the `.eslintrc` configuration file.
-The resources are bundled into a single `bundle.js` file using [Webpack][Webpack], which relies on the `webpack.config.js`.
-The bundled file is referenced from `dashboard.html` and takes part in the `assets.go` too.
-The necessary dependencies for the module bundler are gathered by [Node.js][Node.js].
+The client's UI uses [React][React] with JSX syntax, which is validated by the [ESLint][ESLint] linter mostly according to the [Airbnb React/JSX Style Guide][Airbnb]. The style is defined in the `.eslintrc` configuration file. The resources are bundled into a single `bundle.js` file using [Webpack][Webpack], which relies on the `webpack.config.js`. The bundled file is referenced from `dashboard.html` and takes part in the `assets.go` too. The necessary dependencies for the module bundler are gathered by [Node.js][Node.js].
 
-### Install and run the server
+### Development and bundling
 
-1. `go generate ./dashboard && go install -v ./cmd/geth`.
-1. `geth --dashboard --vmodule=dashboard=5`.
+As the dashboard depends on certain NPM packages (which are not included in the go-ethereum repo), these need to be installed first:
 
-During the development use the `--dashboard.assets=<absolute path>` flag to set the assets' path 
-(e.g. `geth --rinkeby --dashboard --dashboard.assets="<path>/dashboard/assets/public" --vmodule=dashboard=5 console`).
-This way there is no need to stop and regenerate the server to modify the client.
+```
+$ (cd dashboard/assets && npm install)
+```
 
-### Install the module bundler
+Normally the dashboard assets are bundled into Geth via `go-bindata` to avoid external dependencies. Rebuilding Geth after each UI modification however is not feasible from a developer perspective. Instead, we can run `webpack` in watch mode to automatically rebundle the UI, and ask `geth` to use external assets to not rely on compiled resources:
 
-1. `cd dashboard/assets`
-1. `npm install`
+```
+$ (cd dashboard/assets && ./node_modules/.bin/webpack --watch)
+$ geth --dashboard --dashboard.assets=dashboard/assets/public --vmodule=dashboard=5
+```
 
-### Bundle the resources
+To bundle up the final UI into Geth, run `webpack` and `go generate`:
 
-1. `cd dashboard/assets`
-1. `./node_modules/.bin/webpack`
-1. Enter `localhost:8080` to check the result
+```
+$ (cd dashboard/assets && ./node_modules/.bin/webpack)
+$ go generate ./dashboard
+```
 
 ### Have fun
 

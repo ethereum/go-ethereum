@@ -20,11 +20,6 @@ package dashboard
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/rcrowley/go-metrics"
-	"golang.org/x/net/websocket"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -32,6 +27,12 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/rcrowley/go-metrics"
+	"golang.org/x/net/websocket"
 )
 
 const (
@@ -41,8 +42,8 @@ const (
 
 var nextId uint32 // Next connection id
 
-// dashboard contains the dashboard internals.
-type dashboard struct {
+// Dashboard contains the dashboard internals.
+type Dashboard struct {
 	config *Config
 
 	listener net.Listener
@@ -82,8 +83,8 @@ type chartEntry struct {
 }
 
 // New creates a new dashboard instance with the given configuration.
-func New(config *Config) (*dashboard, error) {
-	return &dashboard{
+func New(config *Config) (*Dashboard, error) {
+	return &Dashboard{
 		conns:  make(map[uint32]*client),
 		config: config,
 		quit:   make(chan chan error),
@@ -91,13 +92,13 @@ func New(config *Config) (*dashboard, error) {
 }
 
 // Protocols is a meaningless implementation of node.Service.
-func (db *dashboard) Protocols() []p2p.Protocol { return nil }
+func (db *Dashboard) Protocols() []p2p.Protocol { return nil }
 
 // APIs is a meaningless implementation of node.Service.
-func (db *dashboard) APIs() []rpc.API { return nil }
+func (db *Dashboard) APIs() []rpc.API { return nil }
 
 // Start implements node.Service, starting the data collection thread and the listening server of the dashboard.
-func (db *dashboard) Start(server *p2p.Server) error {
+func (db *Dashboard) Start(server *p2p.Server) error {
 	db.wg.Add(2)
 	go db.collectData()
 	go db.collectLogs() // In case of removing this line change 2 back to 1 in wg.Add.
@@ -117,7 +118,7 @@ func (db *dashboard) Start(server *p2p.Server) error {
 }
 
 // Stop implements node.Service, stopping the data collection thread and the connection listener of the dashboard.
-func (db *dashboard) Stop() error {
+func (db *Dashboard) Stop() error {
 	// Close the connection listener.
 	var errs []error
 	if err := db.listener.Close(); err != nil {
@@ -153,8 +154,8 @@ func (db *dashboard) Stop() error {
 }
 
 // webHandler handles all non-api requests, simply flattening and returning the dashboard website.
-func (db *dashboard) webHandler(w http.ResponseWriter, r *http.Request) {
-	log.Info("Request", "URL", r.URL)
+func (db *Dashboard) webHandler(w http.ResponseWriter, r *http.Request) {
+	log.Debug("Request", "URL", r.URL)
 
 	path := r.URL.String()
 	if path == "/" {
@@ -181,7 +182,7 @@ func (db *dashboard) webHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // apiHandler handles requests for the dashboard.
-func (db *dashboard) apiHandler(conn *websocket.Conn) {
+func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 	id := atomic.AddUint32(&nextId, 1)
 	client := &client{
 		conn:   conn,
@@ -232,7 +233,7 @@ func (db *dashboard) apiHandler(conn *websocket.Conn) {
 }
 
 // collectData collects the required data to plot on the dashboard.
-func (db *dashboard) collectData() {
+func (db *Dashboard) collectData() {
 	defer db.wg.Done()
 
 	for {
@@ -273,7 +274,7 @@ func (db *dashboard) collectData() {
 }
 
 // collectLogs collects and sends the logs to the active dashboards.
-func (db *dashboard) collectLogs() {
+func (db *Dashboard) collectLogs() {
 	defer db.wg.Done()
 
 	// TODO (kurkomisi): log collection comes here.
@@ -291,7 +292,7 @@ func (db *dashboard) collectLogs() {
 }
 
 // sendToAll sends the given message to the active dashboards.
-func (db *dashboard) sendToAll(msg *message) {
+func (db *Dashboard) sendToAll(msg *message) {
 	db.lock.Lock()
 	for _, c := range db.conns {
 		select {
