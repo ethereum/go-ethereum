@@ -649,12 +649,14 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNr r
 	return (hexutil.Bytes)(result), err
 }
 
-// EstimateGas returns an estimate of the amount of gas needed to execute the given transaction.
+// EstimateGas returns an estimate of the amount of gas needed to execute the
+// given transaction against the current pending block.
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (*hexutil.Big, error) {
-	// Binary search the gas requirement, as it may be higher than the amount used
+	// Determine the lowest and highest possible gas limits to binary search in between
 	var (
-		lo           uint64 = params.TxGas - 1
-		hi, gasLimit uint64
+		lo  uint64 = params.TxGas - 1
+		hi  uint64
+		cap uint64
 	)
 	if (*big.Int)(&args.Gas).Uint64() >= params.TxGas {
 		hi = (*big.Int)(&args.Gas).Uint64()
@@ -666,9 +668,10 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (*
 		}
 		hi = block.GasLimit().Uint64()
 	}
-	gasLimit = hi
+	cap = hi
 
-	estimate := func(gas uint64) bool {
+	// Create a helper to check if a gas allowance results in an executable transaction
+	executable := func(gas uint64) bool {
 		(*big.Int)(&args.Gas).SetUint64(gas)
 		_, _, failed, err := s.doCall(ctx, args, rpc.PendingBlockNumber, vm.Config{})
 		if err != nil || failed {
@@ -676,23 +679,19 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (*
 		}
 		return true
 	}
-
+	// Execute the binary search and hone in on an executable gas limit
 	for lo+1 < hi {
-		// Take a guess at the gas, and check transaction validity
 		mid := (hi + lo) / 2
-		if !estimate(mid) {
-			// If the transaction became invalid or execution failed, raise the gas limit
+		if !executable(mid) {
 			lo = mid
 		} else {
-			// Otherwise assume the transaction succeeded, lower the gas limit
 			hi = mid
 		}
 	}
-	if hi == gasLimit {
-		// Regard the transaction is invalid if the required gas exceeds block limit
-		// or simply a bad transaction. Since this type transaction will always fail.
-		if !estimate(hi) {
-			return nil, fmt.Errorf("gas required exceeds block limit or always failing transaction")
+	// Reject the transaction as invalid if it still fails at the highest allowance
+	if hi == cap {
+		if !executable(hi) {
+			return nil, fmt.Errorf("gas required exceeds allowance or always failing transaction")
 		}
 	}
 	return (*hexutil.Big)(new(big.Int).SetUint64(hi)), nil
