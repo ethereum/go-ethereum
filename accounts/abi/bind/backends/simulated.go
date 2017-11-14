@@ -41,6 +41,7 @@ import (
 var _ bind.ContractBackend = (*SimulatedBackend)(nil)
 
 var errBlockNumberUnsupported = errors.New("SimulatedBackend cannot access blocks other than the latest block")
+var errGasEstimationFailed = errors.New("gas required exceeds block limit or always failing transaction")
 
 // SimulatedBackend implements bind.ContractBackend, simulating a blockchain in
 // the background. Its main purpose is to allow easily testing contract bindings.
@@ -205,30 +206,46 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
-		lo uint64 = params.TxGas - 1
-		hi uint64
+		lo           uint64 = params.TxGas - 1
+		hi, gasLimit uint64
 	)
 	if call.Gas != nil && call.Gas.Uint64() >= params.TxGas {
 		hi = call.Gas.Uint64()
 	} else {
 		hi = b.pendingBlock.GasLimit().Uint64()
 	}
-	for lo+1 < hi {
-		// Take a guess at the gas, and check transaction validity
-		mid := (hi + lo) / 2
-		call.Gas = new(big.Int).SetUint64(mid)
+	gasLimit = hi
 
+	// Determine whether the gas is adequate based on the result of the execution.
+	estimate := func(gas uint64) bool {
+		call.Gas = new(big.Int).SetUint64(gas)
 		snapshot := b.pendingState.Snapshot()
 		_, _, failed, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
 		b.pendingState.RevertToSnapshot(snapshot)
-
-		// If the transaction became invalid or execution failed, raise the gas limit
 		if err != nil || failed {
-			lo = mid
-			continue
+			return false
 		}
-		// Otherwise assume the transaction succeeded, lower the gas limit
-		hi = mid
+		return true
+	}
+
+	for lo+1 < hi {
+		// Take a guess at the gas, and check transaction validity
+		mid := (hi + lo) / 2
+		if !estimate(mid) {
+			// If the transaction became invalid or execution failed, raise the gas limit
+			lo = mid
+		} else {
+			// Otherwise assume the transaction succeeded, lower the gas limit
+			hi = mid
+		}
+	}
+
+	if hi == gasLimit {
+		// Regard the transaction is invalid if the required gas exceeds block limit
+		// or simply a bad transaction. Since this type transaction will always fail.
+		if !estimate(hi) {
+			return nil, errGasEstimationFailed
+		}
 	}
 	return new(big.Int).SetUint64(hi), nil
 }

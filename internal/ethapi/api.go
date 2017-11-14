@@ -653,8 +653,8 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNr r
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (*hexutil.Big, error) {
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
-		lo uint64 = params.TxGas - 1
-		hi uint64
+		lo           uint64 = params.TxGas - 1
+		hi, gasLimit uint64
 	)
 	if (*big.Int)(&args.Gas).Uint64() >= params.TxGas {
 		hi = (*big.Int)(&args.Gas).Uint64()
@@ -666,20 +666,34 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (*
 		}
 		hi = block.GasLimit().Uint64()
 	}
+	gasLimit = hi
+
+	estimate := func(gas uint64) bool {
+		(*big.Int)(&args.Gas).SetUint64(gas)
+		_, _, failed, err := s.doCall(ctx, args, rpc.PendingBlockNumber, vm.Config{})
+		if err != nil || failed {
+			return false
+		}
+		return true
+	}
+
 	for lo+1 < hi {
 		// Take a guess at the gas, and check transaction validity
 		mid := (hi + lo) / 2
-		(*big.Int)(&args.Gas).SetUint64(mid)
-
-		_, _, failed, err := s.doCall(ctx, args, rpc.PendingBlockNumber, vm.Config{})
-
-		// If the transaction became invalid or execution failed, raise the gas limit
-		if err != nil || failed {
+		if !estimate(mid) {
+			// If the transaction became invalid or execution failed, raise the gas limit
 			lo = mid
-			continue
+		} else {
+			// Otherwise assume the transaction succeeded, lower the gas limit
+			hi = mid
 		}
-		// Otherwise assume the transaction succeeded, lower the gas limit
-		hi = mid
+	}
+	if hi == gasLimit {
+		// Regard the transaction is invalid if the required gas exceeds block limit
+		// or simply a bad transaction. Since this type transaction will always fail.
+		if !estimate(hi) {
+			return nil, fmt.Errorf("gas required exceeds block limit or always failing transaction")
+		}
 	}
 	return (*hexutil.Big)(new(big.Int).SetUint64(hi)), nil
 }
