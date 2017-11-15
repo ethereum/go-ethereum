@@ -77,7 +77,18 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 	} else {
 		key, err := ssh.ParsePrivateKey(buf)
 		if err != nil {
-			log.Warn("Bad SSH key, falling back to passwords", "path", path, "err", err)
+			fmt.Printf("What's the decryption password for %s? (won't be echoed)\n>", path)
+			blob, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+			fmt.Println()
+			if err != nil {
+				log.Warn("Couldn't read password", "err", err)
+			}
+			key, err := ssh.ParsePrivateKeyWithPassphrase(buf, blob)
+			if err != nil {
+				log.Warn("Failed to decrypt SSH key, falling back to passwords", "path", path, "err", err)
+			} else {
+				auths = append(auths, ssh.PublicKeys(key))
+			}
 		} else {
 			auths = append(auths, ssh.PublicKeys(key))
 		}

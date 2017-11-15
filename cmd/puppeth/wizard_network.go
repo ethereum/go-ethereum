@@ -71,7 +71,7 @@ func (w *wizard) makeServer() string {
 	fmt.Println()
 	fmt.Println("Please enter remote server's address:")
 
-	// Read and fial the server to ensure docker is present
+	// Read and dial the server to ensure docker is present
 	input := w.readString()
 
 	client, err := dial(input, nil)

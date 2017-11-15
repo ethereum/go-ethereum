@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/dashboard"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -182,6 +183,31 @@ var (
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
+	}
+	// Dashboard settings
+	DashboardEnabledFlag = cli.BoolFlag{
+		Name:  "dashboard",
+		Usage: "Enable the dashboard",
+	}
+	DashboardAddrFlag = cli.StringFlag{
+		Name:  "dashboard.addr",
+		Usage: "Dashboard listening interface",
+		Value: dashboard.DefaultConfig.Host,
+	}
+	DashboardPortFlag = cli.IntFlag{
+		Name:  "dashboard.host",
+		Usage: "Dashboard listening port",
+		Value: dashboard.DefaultConfig.Port,
+	}
+	DashboardRefreshFlag = cli.DurationFlag{
+		Name:  "dashboard.refresh",
+		Usage: "Dashboard metrics collection refresh rate",
+		Value: dashboard.DefaultConfig.Refresh,
+	}
+	DashboardAssetsFlag = cli.StringFlag{
+		Name:  "dashboard.assets",
+		Usage: "Developer flag to serve the dashboard from the local file system",
+		Value: dashboard.DefaultConfig.Assets,
 	}
 	// Ethash settings
 	EthashCacheDirFlag = DirectoryFlag{
@@ -1019,6 +1045,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	}
 }
 
+// SetDashboardConfig applies dashboard related command line flags to the config.
+func SetDashboardConfig(ctx *cli.Context, cfg *dashboard.Config) {
+	cfg.Host = ctx.GlobalString(DashboardAddrFlag.Name)
+	cfg.Port = ctx.GlobalInt(DashboardPortFlag.Name)
+	cfg.Refresh = ctx.GlobalDuration(DashboardRefreshFlag.Name)
+	cfg.Assets = ctx.GlobalString(DashboardAssetsFlag.Name)
+}
+
 // RegisterEthService adds an Ethereum client to the stack.
 func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 	var err error
@@ -1039,6 +1073,13 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
+}
+
+// RegisterDashboardService adds a dashboard to the stack.
+func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config) {
+	stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return dashboard.New(cfg)
+	})
 }
 
 // RegisterShhService configures Whisper and adds it to the given node.
