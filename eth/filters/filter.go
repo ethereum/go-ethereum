@@ -158,6 +158,7 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 				return logs, err
 			}
 			f.begin = int64(number) + 1
+
 			// Retrieve the suggested block and pull any truly matching logs
 			header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(number))
 			if header == nil || err != nil {
