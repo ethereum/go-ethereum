@@ -926,6 +926,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Avoid conflicting network flags
 	checkExclusive(ctx, DevModeFlag, TestnetFlag, RinkebyFlag)
 	checkExclusive(ctx, FastSyncFlag, LightModeFlag, SyncModeFlag)
+	checkExclusive(ctx, LightModeFlag, LightServFlag)
+	checkExclusive(ctx, LightModeFlag, LightPeersFlag)
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	setEtherbase(ctx, ks, cfg)
@@ -941,10 +943,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	case ctx.GlobalBool(LightModeFlag.Name):
 		cfg.SyncMode = downloader.LightSync
 	}
-	if ctx.GlobalIsSet(LightServFlag.Name) {
+	
+	if ctx.GlobalIsSet(LightServFlag.Name) && cfg.SyncMode != downloader.LightSync {
 		cfg.LightServ = ctx.GlobalInt(LightServFlag.Name)
 	}
-	if ctx.GlobalIsSet(LightPeersFlag.Name) {
+	if ctx.GlobalIsSet(LightPeersFlag.Name) && cfg.SyncMode != downloader.LightSync {
 		cfg.LightPeers = ctx.GlobalInt(LightPeersFlag.Name)
 	}
 	if ctx.GlobalIsSet(NetworkIdFlag.Name) {
