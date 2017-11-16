@@ -715,7 +715,7 @@ type StructLogRes struct {
 	Gas     uint64            `json:"gas"`
 	GasCost uint64            `json:"gasCost"`
 	Depth   int               `json:"depth"`
-	Error   error             `json:"error"`
+	Error   error             `json:"error,omitempty"`
 	Stack   []string          `json:"stack"`
 	Memory  []string          `json:"memory"`
 	Storage map[string]string `json:"storage"`
@@ -733,17 +733,15 @@ func FormatLogs(structLogs []vm.StructLog) []StructLogRes {
 			Depth:   trace.Depth,
 			Error:   trace.Err,
 			Stack:   make([]string, len(trace.Stack)),
+			Memory:  make([]string, 0, (len(trace.Memory)+31)/32),
 			Storage: make(map[string]string),
 		}
-
 		for i, stackValue := range trace.Stack {
 			formattedStructLogs[index].Stack[i] = fmt.Sprintf("%x", math.PaddedBigBytes(stackValue, 32))
 		}
-
 		for i := 0; i+32 <= len(trace.Memory); i += 32 {
 			formattedStructLogs[index].Memory = append(formattedStructLogs[index].Memory, fmt.Sprintf("%x", trace.Memory[i:i+32]))
 		}
-
 		for i, storageValue := range trace.Storage {
 			formattedStructLogs[index].Storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
 		}

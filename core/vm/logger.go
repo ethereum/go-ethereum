@@ -45,7 +45,6 @@ type LogConfig struct {
 	DisableMemory  bool // disable memory capture
 	DisableStack   bool // disable stack capture
 	DisableStorage bool // disable storage capture
-	FullStorage    bool // show full storage (slow)
 	Limit          int  // maximum length of output, but zero means unlimited
 }
 
@@ -157,20 +156,8 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	// the state object to query for all values (slow process).
 	var storage Storage
 	if !l.cfg.DisableStorage {
-		if l.cfg.FullStorage {
-			storage = make(Storage)
-			// Get the contract account and loop over each storage entry. This may involve looping over
-			// the trie and is a very expensive process.
-
-			env.StateDB.ForEachStorage(contract.Address(), func(key, value common.Hash) bool {
-				storage[key] = value
-				// Return true, indicating we'd like to continue.
-				return true
-			})
-		} else {
-			// copy a snapshot of the current storage to a new container.
-			storage = l.changedValues[contract.Address()].Copy()
-		}
+		// Copy a snapshot of the current storage to a new container.
+		storage = l.changedValues[contract.Address()].Copy()
 	}
 	// create a new snaptshot of the EVM.
 	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, storage, depth, err}
