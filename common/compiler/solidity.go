@@ -34,7 +34,7 @@ import (
 var versionRegexp = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
 
 // Initialize a versioned Solc compiler.
-func InitSolc(command string) (Compiler, error) {
+func InitSolc(command string) (*Solidity, error) {
 	if command == "" {
 		command = "solc"
 	}
@@ -124,7 +124,7 @@ func (s *Solidity) version() error {
 }
 
 // Compiles a series of files using the solidity compiler
-func (s *Solidity) Compile(flags FlagOpts, files ...string) (Return, error) {
+func (s *Solidity) Compile(flags SolcFlagOpts, files ...string) (Return, error) {
 
 	if reflect.DeepEqual(flags.SolcFlagOpts, (SolcFlagOpts{})) {
 		flags.defaultSolcFlagOpts(s)
@@ -204,7 +204,7 @@ func (f *SolcFlagOpts) defaultSolcFlagOpts(s *Solidity) {
 	return
 }
 
-func (s *Solidity) execute(flagsAndFiles ...string) (Return, error) {
+func (s *Solidity) execute(flagsAndFiles ...string) (SolcReturn, error) {
 	var stderr, stdout bytes.Buffer
 	var output SolcReturn
 
@@ -224,5 +224,5 @@ func (s *Solidity) execute(flagsAndFiles ...string) (Return, error) {
 
 	output.Warning = string(stderr.Bytes())
 
-	return Return{Solc, output}, nil
+	return output, nil
 }
