@@ -107,6 +107,40 @@ func TestTypeRegexp(t *testing.T) {
 	}
 }
 
+// Sample structs for struct parsing test
+
+type (
+	S struct {
+		A *big.Int
+		B []*big.Int
+		C []struct {
+			X *big.Int
+			Y *big.Int
+		}
+	}
+)
+
+func TestStructParse(t *testing.T) {
+
+	for i, test := range []struct {
+		input          unmarshalArg
+		expectedOutput Type
+	}{
+		{
+			unmarshalArg{Name: "s", Type: "tuple", Components: []unmarshalArg{unmarshalArg{Name: "a", Type: "uint256"}, unmarshalArg{Name: "b", Type: "uint256[]"}, unmarshalArg{Name: "c", Type: "tuple[]", Components: []unmarshalArg{unmarshalArg{Name: "x", Type: "uint256"}, unmarshalArg{Name: "y", Type: "uint256"}}}}},
+			Type{Kind: reflect.Struct, T: StructTy, Type: reflect.TypeOf(S{}), stringKind: "(uint256,uint256[],(uint256,uint256)[])"},
+		},
+	} {
+		newStruct, err := ParseStructType(test.input.Name, test.input.Components...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(newStruct, test.expectedOutput) {
+			t.Errorf("test %v: parsed type mismatch:\nGOT %v\nWANT %v ", i, newStruct, test.expectedOutput)
+		}
+	}
+}
+
 func TestTypeCheck(t *testing.T) {
 	for i, test := range []struct {
 		typ   string

@@ -141,22 +141,24 @@ func checkForSlices(t string, structComponents ...unmarshalArg) (typ Type, found
 
 	if strings.Count(t, "[") != 0 {
 		i := strings.LastIndex(t, "[")
-		// recursively embed the type
-		var embeddedType Type
-		if len(structComponents) > 0 {
-			embeddedType, err = ParseStructType(t, structComponents...)
-		} else {
-			embeddedType, err = NewType(t[:i])
-		}
-		if err != nil {
-			return Type{}, false, err
-		}
 		// grab the last cell and create a type from there
 		sliced := t[i:]
 		// grab the slice size with regexp
 		re := regexp.MustCompile("[0-9]+")
 		intz := re.FindAllString(sliced, -1)
 
+		// recursively embed the type
+		var embeddedType Type
+		if len(structComponents) > 0 {
+			embeddedType, err = ParseStructType(t[:i], structComponents...)
+			typ.stringKind = embeddedType.String() + sliced
+		} else {
+			embeddedType, err = NewType(t[:i])
+			typ.stringKind = t
+		}
+		if err != nil {
+			return Type{}, false, err
+		}
 		if len(intz) == 0 {
 			// is a slice
 			typ.T = SliceTy
@@ -188,12 +190,14 @@ func ParseStructType(t string, components ...unmarshalArg) (typ Type, err error)
 	if typ, found, err = checkForSlices(t, components...); found == true || err != nil {
 		return typ, err
 	}
-	typ.stringKind = t
+	// need to concatenate the different type strings together
+	//typ.stringKind = t
 	typ.T = StructTy
 	typ.Kind = reflect.Struct
 	// create the struct type
 	var fields []reflect.StructField
-	for i, component := range components {
+	var typeStrings []string
+	for _, component := range components {
 		// it's a embedded struct type
 		var fieldType Type
 
@@ -202,13 +206,14 @@ func ParseStructType(t string, components ...unmarshalArg) (typ Type, err error)
 		} else {
 			fieldType, err = NewType(component.Type)
 		}
-
 		if err != nil {
 			return Type{}, err
 		}
-		fields[i] = reflect.StructField{Name: component.Name, Type: fieldType.Type, Tag: reflect.StructTag(fmt.Sprintf(`json:"%v"`, component.Name))}
+		typeStrings = append(typeStrings, fieldType.String())
+		fields = append(fields, reflect.StructField{Name: strings.Title(component.Name), Type: fieldType.Type, Tag: reflect.StructTag(fmt.Sprintf(`json:"%v"`, component.Name))})
 	}
 	typ.Type = reflect.StructOf(fields)
+	typ.stringKind = "(" + strings.Join(typeStrings, ",") + ")"
 	return typ, nil
 }
 
