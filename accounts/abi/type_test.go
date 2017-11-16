@@ -197,7 +197,7 @@ func TestStructParse(t *testing.T) {
 			},
 		},
 	} {
-		newStruct, err := ParseStructType(test.input.Name, test.input.Components...)
+		newStruct, err := ParseStructType(test.input.Type, test.input.Components...)
 		if err != nil {
 			t.Fatal(err)
 		}
