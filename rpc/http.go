@@ -147,18 +147,22 @@ func NewHTTPServer(cors []string, srv *Server) *http.Server {
 
 // ServeHTTP serves JSON-RPC requests over HTTP.
 func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+  // Permit dumb empty requests for remote health-checks (AWS)
+	if r.Method == "GET" && r.ContentLength == 0 && r.URL.RawQuery == "" {
+		return
+  }
 	if responseCode, errorMessage := httpErrorResponse(r); responseCode != 0 {
 		http.Error(w, errorMessage, responseCode)
 		return
 	}
 
-	w.Header().Set("content-type", contentType)
-
-	// create a codec that reads direct from the request body until
-	// EOF and writes the response to w and order the server to process
-	// a single request.
+	// All checks passed, create a codec that reads direct from the request body
+	// untilEOF and writes the response to w and order the server to process a
+	// single request.
 	codec := NewJSONCodec(&httpReadWriteNopCloser{r.Body, w})
 	defer codec.Close()
+
+	w.Header().Set("content-type", "application/json")
 	srv.ServeSingleRequest(codec, OptionMethodInvocation)
 }
 
