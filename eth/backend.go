@@ -216,18 +216,18 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 	}
 	// Otherwise assume proof-of-work
 	switch {
-	case config.PowFake:
+	case config.Ethash.PowFake:
 		log.Warn("Ethash used in fake mode")
 		return ethash.NewFaker()
-	case config.PowTest:
+	case config.Ethash.PowTest:
 		log.Warn("Ethash used in test mode")
 		return ethash.NewTester()
-	case config.PowShared:
+	case config.Ethash.PowShared:
 		log.Warn("Ethash used in shared mode")
 		return ethash.NewShared()
 	default:
-		engine := ethash.New(ctx.ResolvePath(config.EthashCacheDir), config.EthashCachesInMem, config.EthashCachesOnDisk,
-			config.EthashDatasetDir, config.EthashDatasetsInMem, config.EthashDatasetsOnDisk)
+		engine := ethash.New(ctx.ResolvePath(config.Ethash.CacheDir), config.Ethash.CachesInMem, config.Ethash.CachesOnDisk,
+			config.Ethash.DatasetDir, config.Ethash.DatasetsInMem, config.Ethash.DatasetsOnDisk)
 		engine.SetThreads(-1) // Disable CPU mining
 		return engine
 	}

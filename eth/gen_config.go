@@ -54,19 +54,19 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.MinerThreads = c.MinerThreads
 	enc.ExtraData = c.ExtraData
 	enc.GasPrice = c.GasPrice
-	enc.EthashCacheDir = c.EthashCacheDir
-	enc.EthashCachesInMem = c.EthashCachesInMem
-	enc.EthashCachesOnDisk = c.EthashCachesOnDisk
-	enc.EthashDatasetDir = c.EthashDatasetDir
-	enc.EthashDatasetsInMem = c.EthashDatasetsInMem
-	enc.EthashDatasetsOnDisk = c.EthashDatasetsOnDisk
+	enc.EthashCacheDir = c.Ethash.CacheDir
+	enc.EthashCachesInMem = c.Ethash.CachesInMem
+	enc.EthashCachesOnDisk = c.Ethash.CachesOnDisk
+	enc.EthashDatasetDir = c.Ethash.DatasetDir
+	enc.EthashDatasetsInMem = c.Ethash.DatasetsInMem
+	enc.EthashDatasetsOnDisk = c.Ethash.DatasetsOnDisk
 	enc.TxPool = c.TxPool
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.DocRoot = c.DocRoot
-	enc.PowFake = c.PowFake
-	enc.PowTest = c.PowTest
-	enc.PowShared = c.PowShared
+	enc.PowFake = c.Ethash.PowFake
+	enc.PowTest = c.Ethash.PowTest
+	enc.PowShared = c.Ethash.PowShared
 	return &enc, nil
 }
 
@@ -140,22 +140,22 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		c.GasPrice = dec.GasPrice
 	}
 	if dec.EthashCacheDir != nil {
-		c.EthashCacheDir = *dec.EthashCacheDir
+		c.Ethash.CacheDir = *dec.EthashCacheDir
 	}
 	if dec.EthashCachesInMem != nil {
-		c.EthashCachesInMem = *dec.EthashCachesInMem
+		c.Ethash.CachesInMem = *dec.EthashCachesInMem
 	}
 	if dec.EthashCachesOnDisk != nil {
-		c.EthashCachesOnDisk = *dec.EthashCachesOnDisk
+		c.Ethash.CachesOnDisk = *dec.EthashCachesOnDisk
 	}
 	if dec.EthashDatasetDir != nil {
-		c.EthashDatasetDir = *dec.EthashDatasetDir
+		c.Ethash.DatasetDir = *dec.EthashDatasetDir
 	}
 	if dec.EthashDatasetsInMem != nil {
-		c.EthashDatasetsInMem = *dec.EthashDatasetsInMem
+		c.Ethash.DatasetsInMem = *dec.EthashDatasetsInMem
 	}
 	if dec.EthashDatasetsOnDisk != nil {
-		c.EthashDatasetsOnDisk = *dec.EthashDatasetsOnDisk
+		c.Ethash.DatasetsOnDisk = *dec.EthashDatasetsOnDisk
 	}
 	if dec.TxPool != nil {
 		c.TxPool = *dec.TxPool
@@ -170,13 +170,13 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		c.DocRoot = *dec.DocRoot
 	}
 	if dec.PowFake != nil {
-		c.PowFake = *dec.PowFake
+		c.Ethash.PowFake = *dec.PowFake
 	}
 	if dec.PowTest != nil {
-		c.PowTest = *dec.PowTest
+		c.Ethash.PowTest = *dec.PowTest
 	}
 	if dec.PowShared != nil {
-		c.PowShared = *dec.PowShared
+		c.Ethash.PowShared = *dec.PowShared
 	}
 	return nil
 }

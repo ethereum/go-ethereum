@@ -320,15 +320,25 @@ func MakeDataset(block uint64, dir string) {
 	d.release()
 }
 
+// EthashConfig are the configuration parameters of the ethash.
+type EthashConfig struct {
+	CacheDir       string
+	CachesInMem    int
+	CachesOnDisk   int
+	DatasetDir     string
+	DatasetsInMem  int
+	DatasetsOnDisk int
+
+	// Miscellaneous options
+	PowFake   bool
+	PowTest   bool
+	PowShared bool
+}
+
 // Ethash is a consensus engine based on proot-of-work implementing the ethash
 // algorithm.
 type Ethash struct {
-	cachedir     string // Data directory to store the verification caches
-	cachesinmem  int    // Number of caches to keep in memory
-	cachesondisk int    // Number of caches to keep on disk
-	dagdir       string // Data directory to store full mining datasets
-	dagsinmem    int    // Number of mining datasets to keep in memory
-	dagsondisk   int    // Number of mining datasets to keep on disk
+	EthashConfig
 
 	caches   map[uint64]*cache   // In memory caches to avoid regenerating too often
 	fcache   *cache              // Pre-generated cache for the estimated future epoch
@@ -365,16 +375,18 @@ func New(cachedir string, cachesinmem, cachesondisk int, dagdir string, dagsinme
 		log.Info("Disk storage enabled for ethash DAGs", "dir", dagdir, "count", dagsondisk)
 	}
 	return &Ethash{
-		cachedir:     cachedir,
-		cachesinmem:  cachesinmem,
-		cachesondisk: cachesondisk,
-		dagdir:       dagdir,
-		dagsinmem:    dagsinmem,
-		dagsondisk:   dagsondisk,
-		caches:       make(map[uint64]*cache),
-		datasets:     make(map[uint64]*dataset),
-		update:       make(chan struct{}),
-		hashrate:     metrics.NewMeter(),
+		EthashConfig: EthashConfig{
+			CacheDir:       cachedir,
+			CachesInMem:    cachesinmem,
+			CachesOnDisk:   cachesondisk,
+			DatasetDir:     dagdir,
+			DatasetsInMem:  dagsinmem,
+			DatasetsOnDisk: dagsondisk,
+		},
+		caches:   make(map[uint64]*cache),
+		datasets: make(map[uint64]*dataset),
+		update:   make(chan struct{}),
+		hashrate: metrics.NewMeter(),
 	}
 }
 
@@ -382,12 +394,14 @@ func New(cachedir string, cachesinmem, cachesondisk int, dagdir string, dagsinme
 // purposes.
 func NewTester() *Ethash {
 	return &Ethash{
-		cachesinmem: 1,
-		caches:      make(map[uint64]*cache),
-		datasets:    make(map[uint64]*dataset),
-		tester:      true,
-		update:      make(chan struct{}),
-		hashrate:    metrics.NewMeter(),
+		EthashConfig: EthashConfig{
+			CachesInMem: 1,
+		},
+		caches:   make(map[uint64]*cache),
+		datasets: make(map[uint64]*dataset),
+		tester:   true,
+		update:   make(chan struct{}),
+		hashrate: metrics.NewMeter(),
 	}
 }
 
@@ -436,7 +450,7 @@ func (ethash *Ethash) cache(block uint64) []uint32 {
 	current, future := ethash.caches[epoch], (*cache)(nil)
 	if current == nil {
 		// No in-memory cache, evict the oldest if the cache limit was reached
-		for len(ethash.caches) > 0 && len(ethash.caches) >= ethash.cachesinmem {
+		for len(ethash.caches) > 0 && len(ethash.caches) >= ethash.CachesInMem {
 			var evict *cache
 			for _, cache := range ethash.caches {
 				if evict == nil || evict.used.After(cache.used) {
@@ -473,7 +487,7 @@ func (ethash *Ethash) cache(block uint64) []uint32 {
 	ethash.lock.Unlock()
 
 	// Wait for generation finish, bump the timestamp and finalize the cache
-	current.generate(ethash.cachedir, ethash.cachesondisk, ethash.tester)
+	current.generate(ethash.CacheDir, ethash.CachesOnDisk, ethash.tester)
 
 	current.lock.Lock()
 	current.used = time.Now()
@@ -481,7 +495,7 @@ func (ethash *Ethash) cache(block uint64) []uint32 {
 
 	// If we exhausted the future cache, now's a good time to regenerate it
 	if future != nil {
-		go future.generate(ethash.cachedir, ethash.cachesondisk, ethash.tester)
+		go future.generate(ethash.CacheDir, ethash.CachesOnDisk, ethash.tester)
 	}
 	return current.cache
 }
@@ -498,7 +512,7 @@ func (ethash *Ethash) dataset(block uint64) []uint32 {
 	current, future := ethash.datasets[epoch], (*dataset)(nil)
 	if current == nil {
 		// No in-memory dataset, evict the oldest if the dataset limit was reached
-		for len(ethash.datasets) > 0 && len(ethash.datasets) >= ethash.dagsinmem {
+		for len(ethash.datasets) > 0 && len(ethash.datasets) >= ethash.DatasetsInMem {
 			var evict *dataset
 			for _, dataset := range ethash.datasets {
 				if evict == nil || evict.used.After(dataset.used) {
@@ -536,7 +550,7 @@ func (ethash *Ethash) dataset(block uint64) []uint32 {
 	ethash.lock.Unlock()
 
 	// Wait for generation finish, bump the timestamp and finalize the cache
-	current.generate(ethash.dagdir, ethash.dagsondisk, ethash.tester)
+	current.generate(ethash.DatasetDir, ethash.DatasetsOnDisk, ethash.tester)
 
 	current.lock.Lock()
 	current.used = time.Now()
@@ -544,7 +558,7 @@ func (ethash *Ethash) dataset(block uint64) []uint32 {
 
 	// If we exhausted the future dataset, now's a good time to regenerate it
 	if future != nil {
-		go future.generate(ethash.dagdir, ethash.dagsondisk, ethash.tester)
+		go future.generate(ethash.DatasetDir, ethash.DatasetsOnDisk, ethash.tester)
 	}
 	return current.dataset
 }
