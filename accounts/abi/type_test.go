@@ -115,15 +115,86 @@ func TestStructParse(t *testing.T) {
 	}{
 		{
 			unmarshalArg{Name: "s", Type: "tuple", Components: []unmarshalArg{unmarshalArg{Name: "a", Type: "uint256"}, unmarshalArg{Name: "b", Type: "uint256[]"}, unmarshalArg{Name: "c", Type: "tuple[]", Components: []unmarshalArg{unmarshalArg{Name: "x", Type: "uint256"}, unmarshalArg{Name: "y", Type: "uint256"}}}}},
-			Type{Kind: reflect.Struct, T: StructTy, Type: reflect.TypeOf(
-				struct {
-					A *big.Int   `json:"a"`
-					B []*big.Int `json:"b"`
-					C []struct {
-						X *big.Int `json:"x"`
-						Y *big.Int `json:"y"`
-					} `json:"c"`
-				}{}), stringKind: "(uint256,uint256[],(uint256,uint256)[])"},
+			Type{
+				Kind:       reflect.Struct,
+				T:          StructTy,
+				stringKind: "(uint256,uint256[],(uint256,uint256)[])",
+				Type: reflect.TypeOf(
+					struct {
+						A *big.Int   `json:"a"`
+						B []*big.Int `json:"b"`
+						C []struct {
+							X *big.Int `json:"x"`
+							Y *big.Int `json:"y"`
+						} `json:"c"`
+					}{},
+				),
+			},
+		},
+		{
+			unmarshalArg{Name: "s", Type: "tuple[]", Components: []unmarshalArg{unmarshalArg{Name: "a", Type: "string"}, unmarshalArg{Name: "b", Type: "bytes32"}, unmarshalArg{Name: "c", Type: "tuple[]", Components: []unmarshalArg{unmarshalArg{Name: "x", Type: "string"}, unmarshalArg{Name: "y", Type: "string"}}}}},
+			Type{
+				Kind:       reflect.Slice,
+				T:          SliceTy,
+				stringKind: "(string,bytes32,(string,string)[])[]",
+				Type: reflect.TypeOf(
+					[]struct {
+						A string   `json:"a"`
+						B [32]byte `json:"b"`
+						C []struct {
+							X string `json:"x"`
+							Y string `json:"y"`
+						} `json:"c"`
+					}{},
+				),
+				Elem: &Type{
+					Kind:       reflect.Struct,
+					T:          StructTy,
+					stringKind: "(string,bytes32,(string,string)[])",
+					Type: reflect.TypeOf(
+						struct {
+							A string   `json:"a"`
+							B [32]byte `json:"b"`
+							C []struct {
+								X string `json:"x"`
+								Y string `json:"y"`
+							} `json:"c"`
+						}{}),
+				},
+			},
+		},
+		{
+			unmarshalArg{Name: "s", Type: "tuple[3]", Components: []unmarshalArg{unmarshalArg{Name: "a", Type: "string"}, unmarshalArg{Name: "b", Type: "bytes32"}, unmarshalArg{Name: "c", Type: "tuple[]", Components: []unmarshalArg{unmarshalArg{Name: "x", Type: "string"}, unmarshalArg{Name: "y", Type: "string"}}}}},
+			Type{
+				Kind:       reflect.Array,
+				T:          ArrayTy,
+				Size:       3,
+				stringKind: "(string,bytes32,(string,string)[])[3]",
+				Type: reflect.TypeOf(
+					[3]struct {
+						A string   `json:"a"`
+						B [32]byte `json:"b"`
+						C []struct {
+							X string `json:"x"`
+							Y string `json:"y"`
+						} `json:"c"`
+					}{},
+				),
+				Elem: &Type{
+					Kind:       reflect.Struct,
+					T:          StructTy,
+					stringKind: "(string,bytes32,(string,string)[])",
+					Type: reflect.TypeOf(
+						struct {
+							A string   `json:"a"`
+							B [32]byte `json:"b"`
+							C []struct {
+								X string `json:"x"`
+								Y string `json:"y"`
+							} `json:"c"`
+						}{}),
+				},
+			},
 		},
 	} {
 		newStruct, err := ParseStructType(test.input.Name, test.input.Components...)
