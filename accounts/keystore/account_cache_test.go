@@ -349,6 +349,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		return
 	}
 
+	// needed so that modTime of `file` is different to its current value after forceCopyFile
 	time.Sleep(1000 * time.Millisecond)
 
 	// Now replace file contents
@@ -364,6 +365,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		return
 	}
 
+	// needed so that modTime of `file` is different to its current value after forceCopyFile
 	time.Sleep(1000 * time.Millisecond)
 
 	// Now replace file contents again
@@ -379,6 +381,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		return
 	}
 
+	// needed so that modTime of `file` is different to its current value after ioutil.WriteFile
 	time.Sleep(1000 * time.Millisecond)
 
 	// Now replace file contents with crap
