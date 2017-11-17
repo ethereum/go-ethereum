@@ -1,3 +1,19 @@
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package rpc
 
 import (
@@ -8,33 +24,31 @@ import (
 )
 
 func TestHTTPErrorResponseWithDelete(t *testing.T) {
-	httpErrorResponseTest(t, "DELETE", contentType, "", http.StatusMethodNotAllowed)
+	testHTTPErrorResponse(t, "DELETE", contentType, "", http.StatusMethodNotAllowed)
 }
 
 func TestHTTPErrorResponseWithPut(t *testing.T) {
-	httpErrorResponseTest(t, "PUT", contentType, "", http.StatusMethodNotAllowed)
+	testHTTPErrorResponse(t, "PUT", contentType, "", http.StatusMethodNotAllowed)
 }
 
 func TestHTTPErrorResponseWithMaxContentLength(t *testing.T) {
 	body := make([]rune, maxHTTPRequestContentLength+1, maxHTTPRequestContentLength+1)
-	httpErrorResponseTest(t,
+	testHTTPErrorResponse(t,
 		"POST", contentType, string(body), http.StatusRequestEntityTooLarge)
 }
 
 func TestHTTPErrorResponseWithEmptyContentType(t *testing.T) {
-	httpErrorResponseTest(t, "POST", "", "", http.StatusUnsupportedMediaType)
+	testHTTPErrorResponse(t, "POST", "", "", http.StatusUnsupportedMediaType)
 }
 
 func TestHTTPErrorResponseWithValidRequest(t *testing.T) {
-	httpErrorResponseTest(t, "POST", contentType, "", 0)
+	testHTTPErrorResponse(t, "POST", contentType, "", 0)
 }
 
-func httpErrorResponseTest(t *testing.T,
-	method, contentType, body string, expectedResponse int) {
-
+func testHTTPErrorResponse(t *testing.T, method, contentType, body string, expected int) {
 	request := httptest.NewRequest(method, "http://url.com", strings.NewReader(body))
 	request.Header.Set("content-type", contentType)
-	if response, _ := httpErrorResponse(request); response != expectedResponse {
-		t.Fatalf("response code should be %d not %d", expectedResponse, response)
+	if code, _ := validateRequest(request); code != expected {
+		t.Fatalf("response code should be %d not %d", expected, code)
 	}
 }
