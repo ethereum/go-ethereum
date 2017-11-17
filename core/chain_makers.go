@@ -39,11 +39,12 @@ var (
 // BlockGen creates blocks for testing.
 // See GenerateChain for a detailed explanation.
 type BlockGen struct {
-	i       int
-	parent  *types.Block
-	chain   []*types.Block
-	header  *types.Header
-	statedb *state.StateDB
+	i           int
+	parent      *types.Block
+	chain       []*types.Block
+	chainReader consensus.ChainReader
+	header      *types.Header
+	statedb     *state.StateDB
 
 	gasPool  *GasPool
 	txs      []*types.Transaction
@@ -142,9 +143,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	if b.header.Time.Cmp(b.parent.Header().Time) <= 0 {
 		panic("block time out of range")
 	}
-	if pow, ok := b.engine.(consensus.PoW); ok {
-		b.header.Difficulty = pow.CalcDifficulty(b.config, b.header.Time.Uint64(), b.parent.Header())
-	}
+	b.header.Difficulty = b.engine.CalcDifficulty(b.chainReader, b.header.Time.Uint64(), b.parent.Header())
 }
 
 // GenerateChain creates a chain of n blocks. The first block's
@@ -165,8 +164,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	}
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
-		b := &BlockGen{i: i, parent: parent, chain: blocks, statedb: statedb, config: config, engine: engine}
-		b.header = makeHeader(config, parent, statedb, b.engine)
+		blockchain, _ := NewBlockChain(db, config, engine, vm.Config{})
+		defer blockchain.Stop()
+		b := &BlockGen{i: i, parent: parent, chain: blocks, chainReader: blockchain, statedb: statedb, config: config, engine: engine}
+		b.header = makeHeader(b.chainReader, parent, statedb, b.engine)
 
 		// Mutate the state and block according to any hard-fork specs
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
@@ -185,16 +186,16 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			gen(i, b)
 		}
 
-		if pow, ok := b.engine.(consensus.PoW); ok {
-			pow.AccumulateRewards(config, statedb, b.header, b.uncles)
+		if b.engine != nil {
+			block, _ := b.engine.Finalize(b.chainReader, b.header, statedb, b.txs, b.uncles, b.receipts)
+			// Write state changes to db
+			_, err := statedb.CommitTo(db, config.IsEIP158(b.header.Number))
+			if err != nil {
+				panic(fmt.Sprintf("state write error: %v", err))
+			}
+			return block, b.receipts
 		}
-
-		root, err := statedb.CommitTo(db, config.IsEIP158(b.header.Number))
-		if err != nil {
-			panic(fmt.Sprintf("state write error: %v", err))
-		}
-		b.header.Root = root
-		return types.NewBlock(b.header, b.txs, b.uncles, b.receipts), b.receipts
+		return nil, nil
 	}
 	for i := 0; i < n; i++ {
 		statedb, err := state.New(parent.Root(), state.NewDatabase(db))
@@ -209,7 +210,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	return blocks, receipts
 }
 
-func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {
+func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {
 	var time *big.Int
 	if parent.Time() == nil {
 		time = big.NewInt(10)
@@ -217,26 +218,21 @@ func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.St
 		time = new(big.Int).Add(parent.Time(), big.NewInt(10)) // block time is fixed at 10 seconds
 	}
 
-	header := &types.Header{
-		Root:       state.IntermediateRoot(config.IsEIP158(parent.Number())),
+	return &types.Header{
+		Root:       state.IntermediateRoot(chain.Config().IsEIP158(parent.Number())),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		GasLimit:   CalcGasLimit(parent),
-		GasUsed:    new(big.Int),
-		Number:     new(big.Int).Add(parent.Number(), common.Big1),
-		Time:       time,
-	}
-
-	if pow, ok := engine.(consensus.PoW); ok {
-		header.Difficulty = pow.CalcDifficulty(config, time.Uint64(), &types.Header{
+		Difficulty: engine.CalcDifficulty(chain, time.Uint64(), &types.Header{
 			Number:     parent.Number(),
 			Time:       new(big.Int).Sub(time, big.NewInt(10)),
 			Difficulty: parent.Difficulty(),
 			UncleHash:  parent.UncleHash(),
-		})
+		}),
+		GasLimit: CalcGasLimit(parent),
+		GasUsed:  new(big.Int),
+		Number:   new(big.Int).Add(parent.Number(), common.Big1),
+		Time:     time,
 	}
-
-	return header
 }
 
 // newCanonical creates a chain database, and injects a deterministic canonical

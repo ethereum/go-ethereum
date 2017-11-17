@@ -89,6 +89,10 @@ type Engine interface {
 	// seal place on top.
 	Seal(chain ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error)
 
+	// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
+	// that a new block should have.
+	CalcDifficulty(chain ChainReader, time uint64, parent *types.Header) *big.Int
+
 	// APIs returns the RPC APIs this consensus engine provides.
 	APIs(chain ChainReader) []rpc.API
 }
@@ -99,13 +103,4 @@ type PoW interface {
 
 	// Hashrate returns the current mining hashrate of a PoW consensus engine.
 	Hashrate() float64
-
-	// CalcDifficulty returns the difficulty that a new block should have when created at time
-	// given the parent block's time and difficulty.
-	CalcDifficulty(*params.ChainConfig, uint64, *types.Header) *big.Int
-
-	// AccumulateRewards credits the coinbase of the given block with the mining
-	// reward. The total reward consists of the static block reward and rewards for
-	// included uncles. The coinbase of each uncle block is also rewarded.
-	AccumulateRewards(*params.ChainConfig, *state.StateDB, *types.Header, []*types.Header)
 }
