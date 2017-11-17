@@ -523,7 +523,7 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(context, statedb, api.config, vm.Config{Debug: true, Tracer: tracer})
-	ret, gas, failed, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
+	ret, gas, vmerr, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %v", err)
 	}
@@ -531,7 +531,7 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 	case *vm.StructLogger:
 		return &ethapi.ExecutionResult{
 			Gas:         gas,
-			Failed:      failed,
+			Failed:      vmerr != nil,
 			ReturnValue: fmt.Sprintf("%x", ret),
 			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
 		}, nil

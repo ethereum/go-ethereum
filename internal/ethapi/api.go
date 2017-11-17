@@ -580,12 +580,12 @@ type CallArgs struct {
 	Data     hexutil.Bytes   `json:"data"`
 }
 
-func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr rpc.BlockNumber, vmCfg vm.Config) ([]byte, *big.Int, bool, error) {
+func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr rpc.BlockNumber, vmCfg vm.Config) ([]byte, *big.Int, error, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
-		return nil, common.Big0, false, err
+		return nil, common.Big0, nil, err
 	}
 	// Set sender address or use a default if none specified
 	addr := args.From
@@ -623,7 +623,7 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	// Get a new instance of the EVM.
 	evm, vmError, err := s.b.GetEVM(ctx, msg, state, header, vmCfg)
 	if err != nil {
-		return nil, common.Big0, false, err
+		return nil, common.Big0, nil, err
 	}
 	// Wait for the context to be done and cancel the evm. Even if the
 	// EVM has finished, cancelling may be done (repeatedly)
@@ -635,11 +635,11 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	// Setup the gas pool (also for unmetered requests)
 	// and apply the message.
 	gp := new(core.GasPool).AddGas(math.MaxBig256)
-	res, gas, failed, err := core.ApplyMessage(evm, msg, gp)
+	res, gas, vmerr, err := core.ApplyMessage(evm, msg, gp)
 	if err := vmError(); err != nil {
-		return nil, common.Big0, false, err
+		return nil, common.Big0, nil, err
 	}
-	return res, gas, failed, err
+	return res, gas, vmerr, err
 }
 
 // Call executes the given transaction on the state for the given block number.
@@ -673,8 +673,8 @@ func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (*
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) bool {
 		(*big.Int)(&args.Gas).SetUint64(gas)
-		_, _, failed, err := s.doCall(ctx, args, rpc.PendingBlockNumber, vm.Config{})
-		if err != nil || failed {
+		_, _, vmerr, err := s.doCall(ctx, args, rpc.PendingBlockNumber, vm.Config{})
+		if err != nil || vmerr != nil {
 			return false
 		}
 		return true
