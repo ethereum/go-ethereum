@@ -38,6 +38,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
 
+// nolint: deadcode
 const (
 	defaultDbCapacity = 5000000
 	defaultRadius     = 0 // not yet used

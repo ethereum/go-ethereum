@@ -47,6 +47,7 @@ var (
 )
 
 // Timeouts
+// nolint: deadcode
 const (
 	respTimeout = 500 * time.Millisecond
 	sendTimeout = 500 * time.Millisecond

@@ -86,6 +86,7 @@ type Header struct {
 }
 
 // field type overrides for gencodec
+// nolint: deadcode
 type headerMarshaling struct {
 	Difficulty *hexutil.Big
 	Number     *hexutil.Big

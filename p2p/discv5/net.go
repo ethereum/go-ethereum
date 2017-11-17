@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// nolint: deadcode
 var (
 	errInvalidEvent = errors.New("invalid in current state")
 	errNoQuery      = errors.New("no pending query")
@@ -48,6 +49,7 @@ const (
 	lowPort               = 1024
 )
 
+// nolint: deadcode
 const testTopic = "foo"
 
 const (
@@ -825,12 +827,11 @@ type nodeEvent uint
 
 //go:generate stringer -type=nodeEvent
 
+//
 const (
-	invalidEvent nodeEvent = iota // zero is reserved
-
 	// Packet type events.
 	// These correspond to packet types in the UDP protocol.
-	pingPacket
+	pingPacket nodeEvent = iota + 1
 	pongPacket
 	findnodePacket
 	neighborsPacket

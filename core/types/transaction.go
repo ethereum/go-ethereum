@@ -32,6 +32,7 @@ import (
 
 //go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
 
+// nolint: deadcode
 var (
 	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
 	errNoSigner   = errors.New("missing signing methods")
@@ -71,6 +72,7 @@ type txdata struct {
 	Hash *common.Hash `json:"hash" rlp:"-"`
 }
 
+// nolint: deadcode
 type txdataMarshaling struct {
 	AccountNonce hexutil.Uint64
 	Price        *hexutil.Big

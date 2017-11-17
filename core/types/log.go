@@ -56,6 +56,7 @@ type Log struct {
 	Removed bool `json:"removed"`
 }
 
+// nolint: deadcode
 type logMarshaling struct {
 	Data        hexutil.Bytes
 	BlockNumber hexutil.Uint64

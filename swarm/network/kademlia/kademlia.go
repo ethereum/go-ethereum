@@ -307,6 +307,7 @@ type nodesByDistance struct {
 	target Address
 }
 
+// nolint: deadcode
 func sortedByDistanceTo(target Address, slice []Node) bool {
 	var last Address
 	for i, node := range slice {

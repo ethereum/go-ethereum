@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// nolint: deadcode
 const (
 	alpha      = 3  // Kademlia concurrency factor
 	bucketSize = 16 // Kademlia bucket size

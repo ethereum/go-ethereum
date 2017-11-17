@@ -267,6 +267,7 @@ func (err compileError) Error() string {
 	return fmt.Sprintf("%d syntax error: unexpected %v, expected %v", err.lineno, err.got, err.want)
 }
 
+// nolint: deadcode
 var (
 	errExpBol            = errors.New("expected beginning of line")
 	errExpElementOrLabel = errors.New("expected beginning of line")

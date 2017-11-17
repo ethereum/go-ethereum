@@ -13,4 +13,5 @@ var (
 	copyOutUnaligned = copyOutGeneric
 )
 
+// nolint: deadcode
 const xorImplementationUnaligned = "generic"

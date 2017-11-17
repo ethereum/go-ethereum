@@ -35,6 +35,7 @@ import (
 const Version = 4
 
 // Errors
+// nolint: deadcode
 var (
 	errPacketTooSmall   = errors.New("too small")
 	errBadHash          = errors.New("bad hash")
@@ -47,6 +48,7 @@ var (
 )
 
 // Timeouts
+// nolint: deadcode
 const (
 	respTimeout = 500 * time.Millisecond
 	sendTimeout = 500 * time.Millisecond

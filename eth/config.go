@@ -115,6 +115,7 @@ type Config struct {
 	PowShared bool   `toml:"-"`
 }
 
+// nolint: deadcode
 type configMarshaling struct {
 	ExtraData hexutil.Bytes
 }
