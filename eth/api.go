@@ -636,3 +636,33 @@ func storageRangeAt(st state.Trie, start []byte, maxResult int) StorageRangeResu
 	}
 	return result
 }
+
+func (api *PrivateDebugAPI) GetDirtyAccountsByNumber(startNum, endNum uint64) ([]common.Address, error) {
+	return api.getDirtyAccounts(api.eth.blockchain.GetBlockByNumber(startNum), api.eth.blockchain.GetBlockByNumber(endNum))
+}
+
+func (api *PrivateDebugAPI) GetDirtyAccountsByHash(startHash, endHash common.Hash) ([]common.Address, error) {
+	return api.getDirtyAccounts(
+		api.eth.blockchain.GetBlockByHash(startHash),
+		api.eth.blockchain.GetBlockByHash(endHash))
+}
+
+func (api *PrivateDebugAPI) getDirtyAccounts(startBlock, endBlock *types.Block) ([]common.Address, error) {
+	oldTrie, err := trie.NewSecure(startBlock.Root(), api.eth.chainDb, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	newTrie, err := trie.NewSecure(endBlock.Root(), api.eth.chainDb, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	diff, _ := trie.NewDifferenceIterator(oldTrie.NodeIterator([]byte{}), newTrie.NodeIterator([]byte{}))
+	iter := trie.NewIterator(diff)
+	var dirty []common.Address
+	for iter.Next() {
+		dirty = append(dirty, common.BytesToAddress(newTrie.GetKey(iter.Key)))
+	}
+	return dirty, nil
+}

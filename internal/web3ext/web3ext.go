@@ -354,6 +354,18 @@ web3._extend({
 			call: 'debug_storageRangeAt',
 			params: 5,
 		}),
+		new web3._extend.Method({
+			name: 'getDirtyAccountsByNumber',
+			call: 'debug_getDirtyAccountsByNumber',
+			params: 2,
+			inputFormatter: [null, null],
+		}),
+		new web3._extend.Method({
+			name: 'getDirtyAccountsByHash',
+			call: 'debug_getDirtyAccountsByHash',
+			params: 2,
+			inputFormatter:[web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter],
+		}),
 	],
 	properties: []
 });
