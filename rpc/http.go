@@ -33,6 +33,7 @@ import (
 )
 
 const (
+	contentType                 = "application/json"
 	maxHTTPRequestContentLength = 1024 * 128
 )
 
@@ -69,8 +70,8 @@ func DialHTTP(endpoint string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Accept", contentType)
 
 	initctx := context.Background()
 	return newClient(initctx, func(context.Context) (net.Conn, error) {
@@ -150,21 +151,11 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" && r.ContentLength == 0 && r.URL.RawQuery == "" {
 		return
 	}
-	// For meaningful requests, validate it's size and content type
-	if r.ContentLength > maxHTTPRequestContentLength {
-		http.Error(w,
-			fmt.Sprintf("content length too large (%d>%d)", r.ContentLength, maxHTTPRequestContentLength),
-			http.StatusRequestEntityTooLarge)
+	if responseCode, errorMessage := httpErrorResponse(r); responseCode != 0 {
+		http.Error(w, errorMessage, responseCode)
 		return
 	}
-	ct := r.Header.Get("content-type")
-	mt, _, err := mime.ParseMediaType(ct)
-	if err != nil || mt != "application/json" {
-		http.Error(w,
-			"invalid content type, only application/json is supported",
-			http.StatusUnsupportedMediaType)
-		return
-	}
+
 	// All checks passed, create a codec that reads direct from the request body
 	// untilEOF and writes the response to w and order the server to process a
 	// single request.
@@ -173,6 +164,28 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("content-type", "application/json")
 	srv.ServeSingleRequest(codec, OptionMethodInvocation)
+}
+
+// Returns a non-zero response code and error message if the request is invalid.
+func httpErrorResponse(r *http.Request) (int, string) {
+	if r.Method == "PUT" || r.Method == "DELETE" {
+		errorMessage := "method not allowed"
+		return http.StatusMethodNotAllowed, errorMessage
+	}
+
+	if r.ContentLength > maxHTTPRequestContentLength {
+		errorMessage := fmt.Sprintf("content length too large (%d>%d)", r.ContentLength, maxHTTPRequestContentLength)
+		return http.StatusRequestEntityTooLarge, errorMessage
+	}
+
+	ct := r.Header.Get("content-type")
+	mt, _, err := mime.ParseMediaType(ct)
+	if err != nil || mt != contentType {
+		errorMessage := fmt.Sprintf("invalid content type, only %s is supported", contentType)
+		return http.StatusUnsupportedMediaType, errorMessage
+	}
+
+	return 0, ""
 }
 
 func newCorsHandler(srv *Server, allowedOrigins []string) http.Handler {
