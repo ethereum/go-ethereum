@@ -31,6 +31,7 @@ import (
 )
 
 // So we can deterministically seed different blockchains
+// nolint: deadcode
 var (
 	canonicalSeed = 1
 	forkSeed      = 2
@@ -229,6 +230,7 @@ func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.St
 // newCanonical creates a chain database, and injects a deterministic canonical
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
+// nolint: deadcode
 func newCanonical(n int, full bool) (ethdb.Database, *BlockChain, error) {
 	// Initialize a fresh chain with only a genesis block
 	gspec := new(Genesis)

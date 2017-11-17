@@ -69,6 +69,7 @@ var (
 	fsCriticalTrials       = uint32(32) // Number of times to retry in the cricical section before bailing
 )
 
+// nolint: deadcode
 var (
 	errBusy                    = errors.New("busy")
 	errUnknownPeer             = errors.New("peer is unknown or unhealthy")

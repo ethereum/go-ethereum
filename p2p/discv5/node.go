@@ -413,6 +413,7 @@ func logdist(a, b common.Hash) int {
 }
 
 // hashAtDistance returns a random hash such that logdist(a, b) == n
+// nolint: deadcode
 func hashAtDistance(a common.Hash, n int) (b common.Hash) {
 	if n == 0 {
 		return a

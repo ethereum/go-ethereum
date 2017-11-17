@@ -41,6 +41,7 @@ const (
 	pingInterval = 15 * time.Second
 )
 
+// nolint: deadcode
 const (
 	// devp2p message codes
 	handshakeMsg = 0x00

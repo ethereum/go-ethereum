@@ -51,6 +51,7 @@ const (
 )
 
 // Clique proof-of-authority protocol constants.
+// nolint: deadcode
 var (
 	epochLength = uint64(30000) // Default number of blocks after which to checkpoint and reset the pending votes
 	blockPeriod = uint64(15)    // Default minimum difference between two consecutive block's timestamps

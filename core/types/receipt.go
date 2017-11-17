@@ -57,6 +57,7 @@ type Receipt struct {
 	GasUsed         *big.Int       `json:"gasUsed" gencodec:"required"`
 }
 
+// nolint: deadcode
 type receiptMarshaling struct {
 	PostState         hexutil.Bytes
 	Status            hexutil.Uint

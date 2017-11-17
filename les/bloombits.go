@@ -73,6 +73,7 @@ func (eth *LightEthereum) startBloomHandlers() {
 	}
 }
 
+// nolint: deadcode
 const (
 	// bloomConfirms is the number of confirmation blocks before a bloom section is
 	// considered probably final and its rotated bits are calculated.

@@ -47,6 +47,7 @@ type ledgerParam1 byte
 // specific opcodes. The same parameter values may be reused between opcodes.
 type ledgerParam2 byte
 
+// nolint: deadcode
 const (
 	ledgerOpRetrieveAddress  ledgerOpcode = 0x02 // Returns the public key and Ethereum address for a given BIP 32 path
 	ledgerOpSignTransaction  ledgerOpcode = 0x04 // Signs an Ethereum transaction after having the user validate the parameters

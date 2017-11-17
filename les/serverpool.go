@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// nolint: deadcode
 const (
 	// After a connection has been ended or timed out, there is a waiting period
 	// before it can be selected for connection again.

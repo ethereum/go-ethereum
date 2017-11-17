@@ -114,6 +114,7 @@ func SendItems(w MsgWriter, msgcode uint64, elems ...interface{}) error {
 
 // netWrapper wraps a MsgReadWriter with locks around
 // ReadMsg/WriteMsg and applies read/write deadlines.
+// nolint: deadcode
 type netWrapper struct {
 	rmu, wmu sync.Mutex
 

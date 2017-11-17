@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
+// nolint: deadcode
 const (
 	defaultDialTimeout      = 15 * time.Second
 	refreshPeersInterval    = 30 * time.Second

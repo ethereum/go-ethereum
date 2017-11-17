@@ -35,6 +35,7 @@ import (
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
+// nolint: deadcode
 const (
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10

@@ -104,6 +104,7 @@ func newTopicMatcher(topics ...[]Topic) *topicMatcher {
 }
 
 // newTopicMatcherFromBinary create a topic matcher from a list of binary conditions.
+// nolint: deadcode
 func newTopicMatcherFromBinary(data ...[][]byte) *topicMatcher {
 	topics := make([][]Topic, len(data))
 	for i, condition := range data {
@@ -114,6 +115,7 @@ func newTopicMatcherFromBinary(data ...[][]byte) *topicMatcher {
 
 // newTopicMatcherFromStrings creates a topic matcher from a list of textual
 // conditions.
+// nolint: deadcode
 func newTopicMatcherFromStrings(data ...[]string) *topicMatcher {
 	topics := make([][]Topic, len(data))
 	for i, condition := range data {

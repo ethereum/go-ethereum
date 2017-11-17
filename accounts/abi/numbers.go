@@ -50,6 +50,7 @@ func U256(n *big.Int) []byte {
 }
 
 // checks whether the given reflect value is signed. This also works for slices with a number type
+// nolint: deadcode
 func isSigned(v reflect.Value) bool {
 	switch v.Type() {
 	case int_ts, int8_ts, int16_ts, int32_ts, int64_ts, int_t, int8_t, int16_t, int32_t, int64_t:

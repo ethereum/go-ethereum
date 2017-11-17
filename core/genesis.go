@@ -86,6 +86,7 @@ type GenesisAccount struct {
 }
 
 // field type overrides for gencodec
+// nolint: deadcode
 type genesisSpecMarshaling struct {
 	Nonce      math.HexOrDecimal64
 	Timestamp  math.HexOrDecimal64

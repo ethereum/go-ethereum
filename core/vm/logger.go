@@ -66,6 +66,7 @@ type StructLog struct {
 }
 
 // overrides for gencodec
+// nolint: deadcode
 type structLogMarshaling struct {
 	Stack   []*math.HexOrDecimal256
 	Gas     math.HexOrDecimal64
