@@ -260,7 +260,8 @@ func (fc *fileCache) scanFiles(keyDir string) (set.Interface, set.Interface, set
 			continue
 		}
 		filesNow.Add(path)
-		if modTime.After(prevMtime) {
+		// on macOS, we get FS notifications before the actual modTime is updated
+		if modTime.After(prevMtime) || modTime.Equal(prevMtime) {
 			moddedFiles.Add(path)
 		}
 		if modTime.After(newMtime) {
