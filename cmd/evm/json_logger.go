@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/json"
 	"io"
+	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,6 +34,10 @@ type JSONLogger struct {
 
 func NewJSONLogger(cfg *vm.LogConfig, writer io.Writer) *JSONLogger {
 	return &JSONLogger{json.NewEncoder(writer), cfg}
+}
+
+func (l *JSONLogger) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error {
+	return nil
 }
 
 // CaptureState outputs state information on the logger.

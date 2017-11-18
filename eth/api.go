@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
@@ -488,21 +489,23 @@ func (t *timeoutError) Error() string {
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
 func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.Hash, config *TraceArgs) (interface{}, error) {
-	var tracer vm.Tracer
+	var (
+		tracer vm.Tracer
+		err    error
+	)
 	if config != nil && config.Tracer != nil {
 		timeout := defaultTraceTimeout
 		if config.Timeout != nil {
-			var err error
 			if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
 				return nil, err
 			}
 		}
-
-		var err error
+		if tracer, ok := tracers.Tracer(*config.Tracer); ok {
+			*config.Tracer = tracer
+		}
 		if tracer, err = ethapi.NewJavascriptTracer(*config.Tracer); err != nil {
 			return nil, err
 		}
-
 		// Handle timeouts and RPC cancellations
 		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
 		go func() {
