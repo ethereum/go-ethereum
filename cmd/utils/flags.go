@@ -938,16 +938,16 @@ func checkExclusive(ctx *cli.Context, args ...interface{}) {
 				if len(args) > i+1 {
 					switch option := args[i+1].(type) {
 					case cli.Flag:
-						set = append(set, `"--` + flag.GetName() + `"`)
+						set = append(set, `"--`+flag.GetName()+`"`)
 					case string:
 						if ctx.GlobalString(flag.GetName()) == option {
-							set = append(set, `"--` + flag.GetName() + ` ` + option + `"`)
+							set = append(set, `"--`+flag.GetName()+` `+option+`"`)
 						}
 					default:
 						Fatalf("Received wrong type in checkExclusive")
 					}
 				} else {
-					set = append(set, `"--` + flag.GetName() + `"`)
+					set = append(set, `"--`+flag.GetName()+`"`)
 				}
 			}
 		}
