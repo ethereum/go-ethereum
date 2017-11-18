@@ -130,28 +130,28 @@ type dbWrapper struct {
 }
 
 // getBalance retrieves an account's balance
-func (dw *dbWrapper) getBalance(addr common.Address) *big.Int {
-	return dw.db.GetBalance(addr)
+func (dw *dbWrapper) getBalance(addr []byte) *big.Int {
+	return dw.db.GetBalance(common.BytesToAddress(addr))
 }
 
 // getNonce retrieves an account's nonce
-func (dw *dbWrapper) getNonce(addr common.Address) uint64 {
-	return dw.db.GetNonce(addr)
+func (dw *dbWrapper) getNonce(addr []byte) uint64 {
+	return dw.db.GetNonce(common.BytesToAddress(addr))
 }
 
 // getCode retrieves an account's code
-func (dw *dbWrapper) getCode(addr common.Address) []byte {
-	return dw.db.GetCode(addr)
+func (dw *dbWrapper) getCode(addr []byte) []byte {
+	return dw.db.GetCode(common.BytesToAddress(addr))
 }
 
 // getState retrieves an account's state data for the given hash
-func (dw *dbWrapper) getState(addr common.Address, hash common.Hash) common.Hash {
-	return dw.db.GetState(addr, hash)
+func (dw *dbWrapper) getState(addr []byte, hash common.Hash) common.Hash {
+	return dw.db.GetState(common.BytesToAddress(addr), hash)
 }
 
 // exists returns true iff the account exists
-func (dw *dbWrapper) exists(addr common.Address) bool {
-	return dw.db.Exist(addr)
+func (dw *dbWrapper) exists(addr []byte) bool {
+	return dw.db.Exist(common.BytesToAddress(addr))
 }
 
 // toValue returns an otto.Value for the dbWrapper
