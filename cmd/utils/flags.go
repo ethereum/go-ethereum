@@ -929,11 +929,27 @@ func setEthash(ctx *cli.Context, cfg *eth.Config) {
 	}
 }
 
-func checkExclusive(ctx *cli.Context, flags ...cli.Flag) {
+func checkExclusive(ctx *cli.Context, args ...interface{}) {
 	set := make([]string, 0, 1)
-	for _, flag := range flags {
-		if ctx.GlobalIsSet(flag.GetName()) {
-			set = append(set, "--"+flag.GetName())
+	for i, arg := range args {
+		if flag, ok := arg.(cli.Flag); ok {
+			if ctx.GlobalIsSet(flag.GetName()) {
+				// Check if next arg extends current
+				if len(args) > i+1 {
+					switch option := args[i+1].(type) {
+					case cli.Flag:
+						set = append(set, `"--` + flag.GetName() + `"`)
+					case string:
+						if ctx.GlobalString(flag.GetName()) == option {
+							set = append(set, `"--` + flag.GetName() + ` ` + option + `"`)
+						}
+					default:
+						Fatalf("Received wrong type in checkExclusive")
+					}
+				} else {
+					set = append(set, `"--` + flag.GetName() + `"`)
+				}
+			}
 		}
 	}
 	if len(set) > 1 {
@@ -956,6 +972,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Avoid conflicting network flags
 	checkExclusive(ctx, DeveloperFlag, TestnetFlag, RinkebyFlag)
 	checkExclusive(ctx, FastSyncFlag, LightModeFlag, SyncModeFlag)
+	checkExclusive(ctx, LightServFlag, LightModeFlag)
+	checkExclusive(ctx, LightServFlag, SyncModeFlag, "light")
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	setEtherbase(ctx, ks, cfg)
