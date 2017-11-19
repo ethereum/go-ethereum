@@ -355,16 +355,16 @@ web3._extend({
 			params: 5,
 		}),
 		new web3._extend.Method({
-			name: 'getDirtyAccountsByNumber',
-			call: 'debug_getDirtyAccountsByNumber',
+			name: 'getModifiedAccountsByNumber',
+			call: 'debug_getModifiedAccountsByNumber',
 			params: 2,
 			inputFormatter: [null, null],
 		}),
 		new web3._extend.Method({
-			name: 'getDirtyAccountsByHash',
-			call: 'debug_getDirtyAccountsByHash',
+			name: 'getModifiedAccountsByHash',
+			call: 'debug_getModifiedAccountsByHash',
 			params: 2,
-			inputFormatter:[web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputAddressFormatter],
+			inputFormatter:[null, null],
 		}),
 	],
 	properties: []

@@ -637,17 +637,40 @@ func storageRangeAt(st state.Trie, start []byte, maxResult int) StorageRangeResu
 	return result
 }
 
-func (api *PrivateDebugAPI) GetDirtyAccountsByNumber(startNum, endNum uint64) ([]common.Address, error) {
-	return api.getDirtyAccounts(api.eth.blockchain.GetBlockByNumber(startNum), api.eth.blockchain.GetBlockByNumber(endNum))
+// GetModifiedAccountsByumber returns all accounts that have changed between the
+// two blocks specified. A change is defined as a difference in nonce, balance,
+// code hash, or storage hash.
+// With one parameter, returns the list of accounts modified in the specified block.
+func (api *PrivateDebugAPI) GetModifiedAccountsByNumber(startNum, endNum *uint64) ([]common.Address, error) {
+	// With one argument, compare x-1 with x
+	if endNum == nil {
+		return api.getModifiedAccounts(
+			api.eth.blockchain.GetBlockByNumber(*startNum - 1),
+			api.eth.blockchain.GetBlockByNumber(*startNum))
+	} else {
+		return api.getModifiedAccounts(
+			api.eth.blockchain.GetBlockByNumber(*startNum),
+			api.eth.blockchain.GetBlockByNumber(*endNum))
+	}
 }
 
-func (api *PrivateDebugAPI) GetDirtyAccountsByHash(startHash, endHash common.Hash) ([]common.Address, error) {
-	return api.getDirtyAccounts(
+// GetModifiedAccountsByHash returns all accounts that have changed between the
+// two blocks specified. A change is defined as a difference in nonce, balance,
+// code hash, or storage hash.
+func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash, endHash common.Hash) ([]common.Address, error) {
+	return api.getModifiedAccounts(
 		api.eth.blockchain.GetBlockByHash(startHash),
 		api.eth.blockchain.GetBlockByHash(endHash))
 }
 
-func (api *PrivateDebugAPI) getDirtyAccounts(startBlock, endBlock *types.Block) ([]common.Address, error) {
+func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]common.Address, error) {
+	if startBlock == nil || endBlock == nil {
+		return nil, fmt.Errorf("Both start block and end block are required")
+	}
+	if startBlock.Number().Uint64() >= endBlock.Number().Uint64() {
+		return nil, fmt.Errorf("Start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
+	}
+
 	oldTrie, err := trie.NewSecure(startBlock.Root(), api.eth.chainDb, 0)
 	if err != nil {
 		return nil, err
@@ -662,7 +685,11 @@ func (api *PrivateDebugAPI) getDirtyAccounts(startBlock, endBlock *types.Block) 
 	iter := trie.NewIterator(diff)
 	var dirty []common.Address
 	for iter.Next() {
-		dirty = append(dirty, common.BytesToAddress(newTrie.GetKey(iter.Key)))
+		key := newTrie.GetKey(iter.Key)
+		if(key == nil) {
+			return nil, fmt.Errorf("No preimage found for hash %x", iter.Key)
+		}
+		dirty = append(dirty, common.BytesToAddress(key))
 	}
 	return dirty, nil
 }
