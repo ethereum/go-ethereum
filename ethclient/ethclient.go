@@ -257,12 +257,11 @@ func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"
 	}
-	switch number.Int64() {
-	case rpc.PendingBlockNumber.Int64():
+	if number.Cmp(big.NewInt(rpc.PendingBlockNumber.Int64())) == 0 {
 		return "pending"
-	case rpc.LatestBlockNumber.Int64():
+	} else if number.Cmp(big.NewInt(rpc.LatestBlockNumber.Int64())) == 0 {
 		return "latest"
-	case rpc.EarliestBlockNumber.Int64():
+	} else if number.Cmp(big.NewInt(rpc.EarliestBlockNumber.Int64())) == 0 {
 		return "earliest"
 	}
 	return hexutil.EncodeBig(number)
