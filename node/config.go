@@ -360,7 +360,7 @@ func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 	return nodes
 }
 
-func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
+func MakeKeystoreBackend(conf *Config, loadKeys bool) (*keystore.KeyStore, string, error) {
 	scryptN := keystore.StandardScryptN
 	scryptP := keystore.StandardScryptP
 	if conf.UseLightweightKDF {
@@ -395,10 +395,21 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 	if err := os.MkdirAll(keydir, 0700); err != nil {
 		return nil, "", err
 	}
-	// Assemble the account manager and supported backends
-	backends := []accounts.Backend{
-		keystore.NewKeyStore(keydir, scryptN, scryptP),
+	if !loadKeys {
+		return keystore.NewUninitializedKeyStore(keydir, scryptN, scryptP), ephemeral, nil
 	}
+	return keystore.NewKeyStore(keydir, scryptN, scryptP), ephemeral, nil
+}
+
+func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
+
+	ks, ephemeral, err := MakeKeystoreBackend(conf, true)
+	if err != nil {
+		return nil, "", err
+	}
+	// Assemble the account manager and supported backends
+
+	backends := []accounts.Backend{ks}
 	if !conf.NoUSB {
 		// Start a USB hub for Ledger hardware wallets
 		if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {

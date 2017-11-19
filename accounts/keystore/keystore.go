@@ -412,12 +412,22 @@ func (ks *KeyStore) expire(addr common.Address, u *unlocked, timeout time.Durati
 	}
 }
 
-// NewAccount generates a new key and stores it into the key directory,
+// CreateNewAccount generates a new key and stores it into the key directory,
 // encrypting it with the passphrase.
-func (ks *KeyStore) NewAccount(passphrase string) (accounts.Account, error) {
+func (ks *KeyStore) CreateNewAccount(passphrase string) (accounts.Account, error) {
 	_, account, err := storeNewKey(ks.storage, crand.Reader, passphrase)
 	if err != nil {
 		return accounts.Account{}, err
+	}
+	return account, nil
+}
+
+// NewAccount generates a new key and stores it into the key directory,
+// encrypting it with the passphrase, and adds it to the cache
+func (ks *KeyStore) NewAccount(passphrase string) (accounts.Account, error) {
+	account, err := ks.CreateNewAccount(passphrase)
+	if err != nil {
+		return account, err
 	}
 	// Add the account to the cache immediately rather
 	// than waiting for file system notifications to pick it up.

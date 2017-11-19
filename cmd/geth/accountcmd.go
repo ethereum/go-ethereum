@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -292,17 +293,10 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) error {
 	cfg := createConfig(ctx)
-	scryptN := keystore.StandardScryptN
-	scryptP := keystore.StandardScryptP
+	ks, _, err := node.MakeKeystoreBackend(&cfg.Node, false)
 
-	if cfg.Node.UseLightweightKDF {
-		scryptN = keystore.LightScryptN
-		scryptP = keystore.LightScryptP
-	}
 	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
-	ks := keystore.NewUninitializedKeyStore(cfg.Node.KeyStoreDir, scryptN, scryptP)
-
-	account, err := ks.NewAccount(password)
+	account, err := ks.CreateNewAccount(password)
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
 	}
