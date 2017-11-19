@@ -291,10 +291,17 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
-	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
+	cfg := createConfig(ctx)
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
 
-	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	if cfg.Node.UseLightweightKDF {
+		scryptN = keystore.LightScryptN
+		scryptP = keystore.LightScryptP
+	}
+	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
+	ks := keystore.NewUninitializedKeyStore(cfg.Node.KeyStoreDir, scryptN, scryptP)
+
 	account, err := ks.NewAccount(password)
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)

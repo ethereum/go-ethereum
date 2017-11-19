@@ -75,10 +75,19 @@ type unlocked struct {
 	abort chan struct{}
 }
 
-// NewKeyStore creates a keystore for the given directory.
-func NewKeyStore(keydir string, scryptN, scryptP int) *KeyStore {
+// NewUninitializedKeyStore creates a keystore for the given directory, but does not load the existing keys
+func NewUninitializedKeyStore(keydir string, scryptN, scryptP int) *KeyStore {
 	keydir, _ = filepath.Abs(keydir)
 	ks := &KeyStore{storage: &keyStorePassphrase{keydir, scryptN, scryptP}}
+	// Initialize the set of unlocked keys and the account cache
+	ks.unlocked = make(map[common.Address]*unlocked)
+	ks.cache, ks.changes = newAccountCache(keydir)
+	return ks
+}
+
+// NewKeyStore creates a keystore for the given directory.
+func NewKeyStore(keydir string, scryptN, scryptP int) *KeyStore {
+	ks := NewUninitializedKeyStore(keydir, scryptN, scryptP)
 	ks.init(keydir)
 	return ks
 }
@@ -88,18 +97,18 @@ func NewKeyStore(keydir string, scryptN, scryptP int) *KeyStore {
 func NewPlaintextKeyStore(keydir string) *KeyStore {
 	keydir, _ = filepath.Abs(keydir)
 	ks := &KeyStore{storage: &keyStorePlain{keydir}}
+	// Initialize the set of unlocked keys and the account cache
+	ks.unlocked = make(map[common.Address]*unlocked)
+	ks.cache, ks.changes = newAccountCache(keydir)
 	ks.init(keydir)
 	return ks
 }
 
+// init initalizes the keystore by loading the accounts
 func (ks *KeyStore) init(keydir string) {
 	// Lock the mutex since the account cache might call back with events
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
-
-	// Initialize the set of unlocked keys and the account cache
-	ks.unlocked = make(map[common.Address]*unlocked)
-	ks.cache, ks.changes = newAccountCache(keydir)
 
 	// TODO: In order for this finalizer to work, there must be no references
 	// to ks. addressCache doesn't keep a reference but unlocked keys do,

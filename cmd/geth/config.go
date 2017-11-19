@@ -109,7 +109,7 @@ func defaultNodeConfig() node.Config {
 	return cfg
 }
 
-func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
+func createConfig(ctx *cli.Context) gethConfig {
 	// Load defaults.
 	cfg := gethConfig{
 		Eth:       eth.DefaultConfig,
@@ -124,9 +124,13 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 			utils.Fatalf("%v", err)
 		}
 	}
-
 	// Apply flags.
 	utils.SetNodeConfig(ctx, &cfg.Node)
+	return cfg
+}
+
+func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
+	cfg := createConfig(ctx)
 	stack, err := node.New(&cfg.Node)
 	if err != nil {
 		utils.Fatalf("Failed to create the protocol stack: %v", err)
