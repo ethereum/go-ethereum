@@ -192,10 +192,12 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 				}
 				// Iterate over all the blocks in the section and return the matching ones
 				for i := first; i <= last; i++ {
-					// Skip the entire byte if no matches are found inside
+					// Skip the entire byte if no matches are found inside (and we're processing an entire byte!)
 					next := res.bitset[(i-sectionStart)/8]
 					if next == 0 {
-						i += 7
+						if i%8 == 0 {
+							i += 7
+						}
 						continue
 					}
 					// Some bit it set, do the actual submatching

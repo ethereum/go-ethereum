@@ -333,7 +333,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 }
 
 // synchronise will select the peer and use it for synchronising. If an empty string is given
-// it will use the best peer possible and synchronize if it's TD is higher than our own. If any of the
+// it will use the best peer possible and synchronize if its TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
 func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode SyncMode) error {
 	// Mock out the synchronisation if testing
@@ -1003,8 +1003,8 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 			return errCancel
 
 		case packet := <-deliveryCh:
-			// If the peer was previously banned and failed to deliver it's pack
-			// in a reasonable time frame, ignore it's message.
+			// If the peer was previously banned and failed to deliver its pack
+			// in a reasonable time frame, ignore its message.
 			if peer := d.peers.Peer(packet.PeerId()); peer != nil {
 				// Deliver the received chunk of data and check chain validity
 				accepted, err := deliver(packet)
@@ -1205,8 +1205,8 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 					case <-d.cancelCh:
 					}
 				}
-				// If no headers were retrieved at all, the peer violated it's TD promise that it had a
-				// better chain compared to ours. The only exception is if it's promised blocks were
+				// If no headers were retrieved at all, the peer violated its TD promise that it had a
+				// better chain compared to ours. The only exception is if its promised blocks were
 				// already imported by other means (e.g. fecher):
 				//
 				// R <remote peer>, L <local node>: Both at block 10
