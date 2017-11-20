@@ -359,6 +359,36 @@ func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 	}
 	return nodes
 }
+// ResolveAccountConfig determines the settings for scrypt and keydirectory
+func ResolveAccountConfig(conf *Config) (int, int, string, error) {
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
+	if conf.UseLightweightKDF {
+		scryptN = keystore.LightScryptN
+		scryptP = keystore.LightScryptP
+	}
+
+	var (
+		keydir string
+		err    error
+	)
+	switch {
+	case filepath.IsAbs(conf.KeyStoreDir):
+		keydir = conf.KeyStoreDir
+	case conf.DataDir != "":
+		if conf.KeyStoreDir == "" {
+			keydir = filepath.Join(conf.DataDir, datadirDefaultKeyStore)
+		} else {
+			keydir, err = filepath.Abs(conf.KeyStoreDir)
+		}
+	case conf.KeyStoreDir != "":
+		keydir, err = filepath.Abs(conf.KeyStoreDir)
+	default:
+		// There is no datadir.
+		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
+	}
+	return scryptN, scryptP, keydir, err
+}
 
 func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 	scryptN := keystore.StandardScryptN

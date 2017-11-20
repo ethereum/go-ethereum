@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -291,15 +292,29 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) error {
-	stack, _ := makeConfigNode(ctx)
-	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
-	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-	account, err := ks.NewAccount(password)
+	cfg := gethConfig{}
+	// Load config file.
+	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
+		if err := loadConfig(file, &cfg); err != nil {
+			utils.Fatalf("%v", err)
+		}
+	}
+	utils.SetNodeConfig(ctx, &cfg.Node)
+	scryptN, scryptP, keydir, err := node.ResolveAccountConfig(&cfg.Node)
+
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
 	}
-	fmt.Printf("Address: {%x}\n", account.Address)
+
+	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
+
+	err, address := keystore.StoreKey(keydir, password, scryptN, scryptP)
+
+	if err != nil {
+		utils.Fatalf("Failed to create account: %v", err)
+	}
+	fmt.Printf("Address: {%x}\n", address)
 	return nil
 }
 

@@ -28,6 +28,7 @@ package keystore
 import (
 	"bytes"
 	"crypto/aes"
+	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -88,6 +89,23 @@ func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) 
 		return nil, fmt.Errorf("key content mismatch: have account %x, want %x", key.Address, addr)
 	}
 	return key, nil
+}
+
+func StoreKey(dir, auth string, scryptN, scryptP int) (error, common.Address) {
+	key, err := newKey(crand.Reader)
+	if err != nil {
+		return err, common.Address{}
+	}
+	keyjson, err := EncryptKey(key, auth, scryptN, scryptP)
+	if err != nil {
+		return err, common.Address{}
+	}
+	fullpath := filepath.Join(dir, keyFileName(key.Address))
+	err = writeKeyFile(fullpath, keyjson)
+	if err != nil {
+		return err, common.Address{}
+	}
+	return nil, key.Address
 }
 
 func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) error {
