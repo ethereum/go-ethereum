@@ -302,7 +302,7 @@ func accountCreate(ctx *cli.Context) error {
 	scryptN, scryptP, keydir, err := cfg.Node.AccountConfig()
 
 	if err != nil {
-		utils.Fatalf("Failed to create account: %v", err)
+		utils.Fatalf("Failed to read configuration: %v", err)
 	}
 
 	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
