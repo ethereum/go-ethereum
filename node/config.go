@@ -359,6 +359,7 @@ func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 	}
 	return nodes
 }
+
 // ResolveAccountConfig determines the settings for scrypt and keydirectory
 func ResolveAccountConfig(conf *Config) (int, int, string, error) {
 	scryptN := keystore.StandardScryptN
@@ -391,34 +392,8 @@ func ResolveAccountConfig(conf *Config) (int, int, string, error) {
 }
 
 func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
-	scryptN := keystore.StandardScryptN
-	scryptP := keystore.StandardScryptP
-	if conf.UseLightweightKDF {
-		scryptN = keystore.LightScryptN
-		scryptP = keystore.LightScryptP
-	}
+	scryptN, scryptP, keydir, err := ResolveAccountConfig(conf)
 
-	var (
-		keydir    string
-		ephemeral string
-		err       error
-	)
-	switch {
-	case filepath.IsAbs(conf.KeyStoreDir):
-		keydir = conf.KeyStoreDir
-	case conf.DataDir != "":
-		if conf.KeyStoreDir == "" {
-			keydir = filepath.Join(conf.DataDir, datadirDefaultKeyStore)
-		} else {
-			keydir, err = filepath.Abs(conf.KeyStoreDir)
-		}
-	case conf.KeyStoreDir != "":
-		keydir, err = filepath.Abs(conf.KeyStoreDir)
-	default:
-		// There is no datadir.
-		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
-		ephemeral = keydir
-	}
 	if err != nil {
 		return nil, "", err
 	}
@@ -443,5 +418,5 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 			backends = append(backends, trezorhub)
 		}
 	}
-	return accounts.NewManager(backends...), ephemeral, nil
+	return accounts.NewManager(backends...), keydir, nil
 }
