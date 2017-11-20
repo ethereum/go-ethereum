@@ -91,21 +91,10 @@ func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) 
 	return key, nil
 }
 
-func StoreKey(dir, auth string, scryptN, scryptP int) (error, common.Address) {
-	key, err := newKey(crand.Reader)
-	if err != nil {
-		return err, common.Address{}
-	}
-	keyjson, err := EncryptKey(key, auth, scryptN, scryptP)
-	if err != nil {
-		return err, common.Address{}
-	}
-	fullpath := filepath.Join(dir, keyFileName(key.Address))
-	err = writeKeyFile(fullpath, keyjson)
-	if err != nil {
-		return err, common.Address{}
-	}
-	return nil, key.Address
+// StoreKey generates a key, encrypts with 'auth' and stores in the given directory
+func StoreKey(dir, auth string, scryptN, scryptP int) (common.Address, error) {
+	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP}, crand.Reader, auth)
+	return a.Address, err
 }
 
 func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) error {

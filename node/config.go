@@ -360,11 +360,11 @@ func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 	return nodes
 }
 
-// ResolveAccountConfig determines the settings for scrypt and keydirectory
-func ResolveAccountConfig(conf *Config) (int, int, string, error) {
+// AccountConfig determines the settings for scrypt and keydirectory
+func (c *Config) AccountConfig() (int, int, string, error) {
 	scryptN := keystore.StandardScryptN
 	scryptP := keystore.StandardScryptP
-	if conf.UseLightweightKDF {
+	if c.UseLightweightKDF {
 		scryptN = keystore.LightScryptN
 		scryptP = keystore.LightScryptP
 	}
@@ -374,25 +374,28 @@ func ResolveAccountConfig(conf *Config) (int, int, string, error) {
 		err    error
 	)
 	switch {
-	case filepath.IsAbs(conf.KeyStoreDir):
-		keydir = conf.KeyStoreDir
-	case conf.DataDir != "":
-		if conf.KeyStoreDir == "" {
-			keydir = filepath.Join(conf.DataDir, datadirDefaultKeyStore)
+	case filepath.IsAbs(c.KeyStoreDir):
+		keydir = c.KeyStoreDir
+	case c.DataDir != "":
+		if c.KeyStoreDir == "" {
+			keydir = filepath.Join(c.DataDir, datadirDefaultKeyStore)
 		} else {
-			keydir, err = filepath.Abs(conf.KeyStoreDir)
+			keydir, err = filepath.Abs(c.KeyStoreDir)
 		}
-	case conf.KeyStoreDir != "":
-		keydir, err = filepath.Abs(conf.KeyStoreDir)
-	default:
-		// There is no datadir.
-		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
+	case c.KeyStoreDir != "":
+		keydir, err = filepath.Abs(c.KeyStoreDir)
 	}
 	return scryptN, scryptP, keydir, err
 }
 
 func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
-	scryptN, scryptP, keydir, err := ResolveAccountConfig(conf)
+	scryptN, scryptP, keydir, err := conf.AccountConfig()
+	var ephemeral string
+	if keydir == "" {
+		// There is no datadir.
+		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
+		ephemeral = keydir
+	}
 
 	if err != nil {
 		return nil, "", err
@@ -418,5 +421,5 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 			backends = append(backends, trezorhub)
 		}
 	}
-	return accounts.NewManager(backends...), keydir, nil
+	return accounts.NewManager(backends...), ephemeral, nil
 }
