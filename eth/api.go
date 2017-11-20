@@ -641,32 +641,57 @@ func storageRangeAt(st state.Trie, start []byte, maxResult int) StorageRangeResu
 // two blocks specified. A change is defined as a difference in nonce, balance,
 // code hash, or storage hash.
 // With one parameter, returns the list of accounts modified in the specified block.
-func (api *PrivateDebugAPI) GetModifiedAccountsByNumber(startNum, endNum *uint64) ([]common.Address, error) {
-	// With one argument, compare x-1 with x
-	if endNum == nil {
-		return api.getModifiedAccounts(
-			api.eth.blockchain.GetBlockByNumber(*startNum - 1),
-			api.eth.blockchain.GetBlockByNumber(*startNum))
-	} else {
-		return api.getModifiedAccounts(
-			api.eth.blockchain.GetBlockByNumber(*startNum),
-			api.eth.blockchain.GetBlockByNumber(*endNum))
+func (api *PrivateDebugAPI) GetModifiedAccountsByNumber(startNum uint64, endNum *uint64) ([]common.Address, error) {
+	var startBlock, endBlock *types.Block
+
+	startBlock = api.eth.blockchain.GetBlockByNumber(startNum)
+	if startBlock == nil {
+		return nil, fmt.Errorf("Start block %x not found", startNum)
 	}
+
+	if endNum == nil {
+		endBlock = startBlock
+		startBlock = api.eth.blockchain.GetBlockByHash(startBlock.ParentHash())
+		if startBlock == nil {
+			return nil, fmt.Errorf("Block %x has no parent", endBlock.Number())
+		}
+	} else {
+		endBlock = api.eth.blockchain.GetBlockByNumber(*endNum)
+		if endBlock == nil {
+			return nil, fmt.Errorf("End block %d not found", *endNum)
+		}
+	}
+
+	return api.getModifiedAccounts(startBlock, endBlock)
 }
 
 // GetModifiedAccountsByHash returns all accounts that have changed between the
 // two blocks specified. A change is defined as a difference in nonce, balance,
 // code hash, or storage hash.
-func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash, endHash common.Hash) ([]common.Address, error) {
-	return api.getModifiedAccounts(
-		api.eth.blockchain.GetBlockByHash(startHash),
-		api.eth.blockchain.GetBlockByHash(endHash))
+func (api *PrivateDebugAPI) GetModifiedAccountsByHash(startHash common.Hash, endHash *common.Hash) ([]common.Address, error) {
+	var startBlock, endBlock *types.Block
+	startBlock = api.eth.blockchain.GetBlockByHash(startHash)
+	if startBlock == nil {
+		return nil, fmt.Errorf("Start block %x not found", startHash)
+	}
+
+	if endHash == nil {
+		endBlock = startBlock
+		startBlock = api.eth.blockchain.GetBlockByHash(startBlock.ParentHash())
+		if startBlock == nil {
+			return nil, fmt.Errorf("Block %x has no parent", endBlock.Number())
+		}
+	} else {
+		endBlock = api.eth.blockchain.GetBlockByHash(*endHash)
+		if endBlock == nil {
+			return nil, fmt.Errorf("End block %x not found", *endHash)
+		}
+	}
+
+	return api.getModifiedAccounts(startBlock, endBlock)
 }
 
 func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Block) ([]common.Address, error) {
-	if startBlock == nil || endBlock == nil {
-		return nil, fmt.Errorf("Both start block and end block are required")
-	}
 	if startBlock.Number().Uint64() >= endBlock.Number().Uint64() {
 		return nil, fmt.Errorf("Start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
 	}
