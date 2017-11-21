@@ -416,7 +416,9 @@ func TestTransactionStatusLes2(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 	pm := newTestProtocolManagerMust(t, false, 0, nil, nil, nil, db)
 	chain := pm.blockchain.(*core.BlockChain)
-	txpool := core.NewTxPool(core.DefaultTxPoolConfig, params.TestChainConfig, chain)
+	config := core.DefaultTxPoolConfig
+	config.Journal = ""
+	txpool := core.NewTxPool(config, params.TestChainConfig, chain)
 	pm.txpool = txpool
 	peer, _ := newTestPeer(t, "peer", 2, pm, true)
 	defer peer.close()
