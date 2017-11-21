@@ -430,17 +430,18 @@ loop:
 			//fmt.Println("read", pkt.ev)
 			debugLog("<-net.read")
 			n := net.internNode(&pkt)
-			prestate := n.state
-			status := "ok"
-			if err := net.handle(n, pkt.ev, &pkt); err != nil {
-				status = err.Error()
+			if n.serialReplayFilter.accept(pkt.serialNo) {
+				prestate := n.state
+				status := "ok"
+				if err := net.handle(n, pkt.ev, &pkt); err != nil {
+					status = err.Error()
+				}
+				log.Trace("", "msg", log.Lazy{Fn: func() string {
+					return fmt.Sprintf("<<< (%d) %v from %x@%v: %v -> %v (%v)",
+						net.tab.count, pkt.ev, pkt.remoteID[:8], pkt.remoteAddr, prestate, n.state, status)
+				}})
+				// TODO: persist state if n.state goes >= known, delete if it goes <= known
 			}
-			log.Trace("", "msg", log.Lazy{Fn: func() string {
-				return fmt.Sprintf("<<< (%d) %v from %x@%v: %v -> %v (%v)",
-					net.tab.count, pkt.ev, pkt.remoteID[:8], pkt.remoteAddr, prestate, n.state, status)
-			}})
-			// TODO: persist state if n.state goes >= known, delete if it goes <= known
-
 		// State transition timeouts.
 		case timeout := <-net.timeout:
 			debugLog("<-net.timeout")
@@ -721,7 +722,7 @@ func (net *Network) internNode(pkt *ingressPacket) *Node {
 		n.TCP = uint16(pkt.remoteAddr.Port)
 		return n
 	}
-	n := NewNode(pkt.remoteID, pkt.remoteAddr.IP, uint16(pkt.remoteAddr.Port), uint16(pkt.remoteAddr.Port))
+	n := pkt.newNode
 	n.state = unknown
 	net.nodes[pkt.remoteID] = n
 	return n
@@ -780,6 +781,7 @@ type nodeNetGuts struct {
 	deferredQueries   []*findnodeQuery // queries that can't be sent yet
 	pendingNeighbours *findnodeQuery   // current query, waiting for reply
 	queryTimeouts     int
+	serialReplayFilter      serialReplayFilter
 }
 
 func (n *nodeNetGuts) deferQuery(q *findnodeQuery) {
@@ -1214,9 +1216,10 @@ func (net *Network) handleQueryEvent(n *Node, ev nodeEvent, pkt *ingressPacket) 
 
 func (net *Network) checkTopicRegister(data *topicRegister) (*pong, error) {
 	var pongpkt ingressPacket
-	if err := decodePacket(data.Pong, &pongpkt); err != nil {
+	panic(nil)
+	/*if err := decodePacket(data.Pong, &pongpkt); err != nil {
 		return nil, err
-	}
+	}*/
 	if pongpkt.ev != pongPacket {
 		return nil, errors.New("is not pong packet")
 	}

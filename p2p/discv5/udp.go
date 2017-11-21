@@ -19,6 +19,7 @@ package discv5
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
@@ -44,6 +45,8 @@ var (
 	errTimeout          = errors.New("RPC timeout")
 	errClockWarp        = errors.New("reply deadline too far in the future")
 	errClosed           = errors.New("socket closed")
+	errDecryptFailed    = errors.New("decryption failed")
+	errPacketReplay     = errors.New("packet replay")
 )
 
 // Timeouts
@@ -59,6 +62,30 @@ const (
 
 // RPC request structures
 type (
+	reconn struct{}
+
+	newping struct {
+		TimeStamp uint64
+	} // will be renamed to ping
+
+	update struct {
+		From          rpcEndpoint // will be replaced by ENR
+		ID            NodeID      // will be replaced by ENR
+		ReconnectHash common.Hash
+		TimeStamp     uint64
+	}
+
+	ack struct {
+		To        rpcEndpoint
+		ReplyTo   common.Hash // packetHash of ping/update/intro/reconn packet
+		TimeStamp uint64
+	}
+
+	accept struct {
+		ack
+		update
+	}
+
 	ping struct {
 		Version    uint
 		From, To   rpcEndpoint
@@ -146,9 +173,11 @@ type (
 )
 
 const (
-	macSize  = 256 / 8
-	sigSize  = 520 / 8
-	headSize = macSize + sigSize // space of packet frame data
+	macSize        = 256 / 8
+	sigSize        = 520 / 8
+	headSize       = macSize + sigSize // space of packet frame data
+	introPoWdiff   = 1000000
+	decryptPoWdiff = 10
 )
 
 // Neighbors replies are sent across multiple packets to
@@ -218,6 +247,8 @@ type ingressPacket struct {
 	hash       []byte
 	data       interface{} // one of the RPC structs
 	rawData    []byte
+	newNode    *Node
+	serialNo   uint64
 }
 
 type conn interface {
@@ -227,6 +258,10 @@ type conn interface {
 	LocalAddr() net.Addr
 }
 
+type nodeUDPfields struct {
+	symmEncryption symmEncryption
+}
+
 // udp implements the RPC protocol.
 type udp struct {
 	conn        conn
@@ -234,6 +269,13 @@ type udp struct {
 	ourEndpoint rpcEndpoint
 	nat         nat.Interface
 	net         *Network
+
+	addressLookup                      map[string]*Node
+	rpHashLookup                       map[common.Hash]*Node
+	introPow, decryptPow               pow
+	powProcessCh                       chan *powRequest
+	introHashFilter, generalHashFilter *hashReplayFilter
+	asymmEncryption                    asymmEncryption
 }
 
 // ListenUDP returns a new table that listens for UDP packets on laddr.
@@ -252,7 +294,19 @@ func ListenUDP(priv *ecdsa.PrivateKey, conn conn, realaddr *net.UDPAddr, nodeDBP
 }
 
 func listenUDP(priv *ecdsa.PrivateKey, conn conn, realaddr *net.UDPAddr) (*udp, error) {
-	return &udp{conn: conn, priv: priv, ourEndpoint: makeEndpoint(realaddr, uint16(realaddr.Port))}, nil
+	return &udp{
+		conn:              conn,
+		priv:              priv,
+		ourEndpoint:       makeEndpoint(realaddr, uint16(realaddr.Port)),
+		addressLookup:     make(map[string]*Node),
+		rpHashLookup:      make(map[common.Hash]*Node),
+		introPow:          newSimplePoW(introPoWdiff),
+		decryptPow:        newSimplePoW(decryptPoWdiff),
+		powProcessCh:      powProcessor(),
+		introHashFilter:   newHashReplayFilter(),
+		generalHashFilter: newHashReplayFilter(),
+		asymmEncryption:   newEciesEncryption(priv, 1280),
+	}, nil
 }
 
 func (t *udp) localAddr() *net.UDPAddr {
@@ -261,6 +315,7 @@ func (t *udp) localAddr() *net.UDPAddr {
 
 func (t *udp) Close() {
 	t.conn.Close()
+	close(t.powProcessCh)
 }
 
 func (t *udp) send(remote *Node, ptype nodeEvent, data interface{}) (hash []byte) {
@@ -397,7 +452,7 @@ func (t *udp) readLoop() {
 
 func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
 	pkt := ingressPacket{remoteAddr: from}
-	if err := decodePacket(buf, &pkt); err != nil {
+	if err := t.decodePacket(buf, &pkt); err != nil {
 		log.Debug(fmt.Sprintf("Bad packet from %v: %v", from, err))
 		//fmt.Println("bad packet", err)
 		return err
@@ -406,25 +461,70 @@ func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
 	return nil
 }
 
-func decodePacket(buffer []byte, pkt *ingressPacket) error {
-	if len(buffer) < headSize+1 {
+func (t *udp) decodePacket(buffer []byte, pkt *ingressPacket) error {
+	// calculate packet hash to check reconnect packet or PoW
+	targetHash := t.net.tab.self.sha
+	packetHash := crypto.Keccak256Hash(append(targetHash.Bytes(), buffer...))
+	pkt.hash = packetHash[:]
+	if node, ok := t.rpHashLookup[packetHash]; ok {
+		pkt.remoteID = node.ID
+		pkt.data = new(reconn)
+		delete(t.rpHashLookup, packetHash)
+		return nil
+	}
+
+	address := pkt.remoteAddr.String()
+	node := t.addressLookup[address]
+
+	if node != nil && t.decryptPow.valid(packetHash) {
+		if !t.generalHashFilter.accept(packetHash) {
+			return errPacketReplay
+		}
+		if packet := node.symmEncryption.decode(buffer[powSize:]); packet != nil {
+			pkt.remoteID = node.ID
+			return t.decodeDecryptedPacket(packet, pkt)
+		}
+	}
+	if t.introPow.valid(packetHash) {
+		if !t.introHashFilter.accept(packetHash) {
+			return errPacketReplay
+		}
+		if packet := t.asymmEncryption.decode(buffer[powSize:]); packet != nil {
+			if err := t.decodeDecryptedPacket(packet, pkt); err != nil {
+				return err
+			}
+			if u, ok := pkt.data.(*update); ok {
+				if node == nil {
+					remotePubKey, err := u.ID.Pubkey()
+					if err != nil {
+						return err
+					}
+					enc, err := newEcdhAes256Encryption(t.priv, remotePubKey, 1280)
+					if err != nil {
+						return err
+					}
+					pkt.remoteID = u.ID
+					node = NewNode(pkt.remoteID, pkt.remoteAddr.IP, uint16(pkt.remoteAddr.Port), uint16(pkt.remoteAddr.Port))
+					node.symmEncryption = enc
+					pkt.newNode = node
+					t.addressLookup[address] = node
+				}
+			} else {
+				return errDecryptFailed
+			}
+		}
+	}
+	return errUnknownNode
+}
+
+func (t *udp) decodeDecryptedPacket(buffer []byte, pkt *ingressPacket) error {
+	if len(buffer) < 9 {
 		return errPacketTooSmall
 	}
-	buf := make([]byte, len(buffer))
-	copy(buf, buffer)
-	hash, sig, sigdata := buf[:macSize], buf[macSize:headSize], buf[headSize:]
-	shouldhash := crypto.Keccak256(buf[macSize:])
-	if !bytes.Equal(hash, shouldhash) {
-		return errBadHash
-	}
-	fromID, err := recoverNodeID(crypto.Keccak256(buf[headSize:]), sig)
-	if err != nil {
-		return err
-	}
-	pkt.rawData = buf
-	pkt.hash = hash
-	pkt.remoteID = fromID
-	switch pkt.ev = nodeEvent(sigdata[0]); pkt.ev {
+
+	pkt.serialNo = binary.BigEndian.Uint64(buffer[:8])
+	pkt.rawData = buffer
+	switch pkt.ev = nodeEvent(buffer[8]); pkt.ev {
 	case pingPacket:
 		pkt.data = new(ping)
 	case pongPacket:
@@ -442,9 +542,8 @@ func decodePacket(buffer []byte, pkt *ingressPacket) error {
 	case topicNodesPacket:
 		pkt.data = new(topicNodes)
 	default:
-		return fmt.Errorf("unknown packet type: %d", sigdata[0])
+		return fmt.Errorf("unknown packet type: %d", buffer[0])
 	}
-	s := rlp.NewStream(bytes.NewReader(sigdata[1:]), 0)
-	err = s.Decode(pkt.data)
-	return err
+	s := rlp.NewStream(bytes.NewReader(buffer[9:]), 0)
+	return s.Decode(pkt.data)
 }

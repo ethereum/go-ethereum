@@ -377,7 +377,8 @@ func TestForwardCompatibility(t *testing.T) {
 			t.Fatalf("invalid hex: %s", test.input)
 		}
 		var pkt ingressPacket
-		if err := decodePacket(input, &pkt); err != nil {
+		var udp *udp //TODO fix this
+		if err := udp.decodePacket(input, &pkt); err != nil {
 			t.Errorf("did not accept packet %s\n%v", test.input, err)
 			continue
 		}
