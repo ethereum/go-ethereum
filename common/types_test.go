@@ -125,3 +125,217 @@ func BenchmarkAddressHex(b *testing.B) {
 		testAddr.Hex()
 	}
 }
+
+func TestHash_Scan(t *testing.T) {
+	tests := []struct {
+		name    string
+		src     interface{}
+		wantErr bool
+	}{
+		{
+			name: "working scan",
+			src: []byte{
+				0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
+				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+				0x10, 0x00,
+			},
+			wantErr: false,
+		},
+		{
+			name:    "non working scan, int",
+			src:     int64(1234567890),
+			wantErr: true,
+		},
+		{
+			name: "non working scan, wrong size",
+			src: []byte{
+				0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
+				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+				0x10,
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &Hash{}
+			if err := h.Scan(tt.src); (err != nil) != tt.wantErr {
+				t.Errorf("Hash.Scan() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if !tt.wantErr {
+				for i := range h {
+					if h[i] != tt.src.([]byte)[i] {
+						t.Errorf(
+							"Hash.Scan() didn't scan the %d src correctly (have %X, want %X)",
+							i, h[i], tt.src.([]byte)[i],
+						)
+					}
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkHash_Scan(b *testing.B) {
+	tst := []byte{
+		0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
+		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+		0x10, 0x00,
+	}
+	for i := 0; i < b.N; i++ {
+		h := &Hash{}
+		_ = h.Scan(tst)
+	}
+}
+
+func TestHash_Value(t *testing.T) {
+	tests := []struct {
+		name    string
+		h       Hash
+		wantErr bool
+	}{
+		{
+			name: "Working hash",
+			h: Hash([HashLength]byte{
+				0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
+				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+				0x10, 0x00,
+			}),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.h.Value()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Hash.Value() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			for i, gotI := range got.([]byte) {
+				if gotI != tt.h[i] {
+					t.Errorf("Hash.Value() non matching data")
+					return
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkHash_Value(b *testing.B) {
+	h := Hash([HashLength]byte{
+		0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
+		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+		0x10, 0x00,
+	})
+	for i := 0; i < b.N; i++ {
+		_, _ = h.Value()
+	}
+}
+
+func TestAddress_Scan(t *testing.T) {
+	tests := []struct {
+		name    string
+		src     interface{}
+		wantErr bool
+	}{
+		{
+			name: "working scan",
+			src: []byte{
+				0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
+				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+			},
+			wantErr: false,
+		},
+		{
+			name:    "non working scan, int",
+			src:     int64(1234567890),
+			wantErr: true,
+		},
+		{
+			name: "non working scan, wrong size",
+			src: []byte{
+				0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
+				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a,
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &Address{}
+			if err := a.Scan(tt.src); (err != nil) != tt.wantErr {
+				t.Errorf("Address.Scan() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if !tt.wantErr {
+				for i := range a {
+					if a[i] != tt.src.([]byte)[i] {
+						t.Errorf(
+							"Address.Scan() didn't scan the %d src correctly (have %X, want %X)",
+							i, a[i], tt.src.([]byte)[i],
+						)
+					}
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkAddress_Scan(b *testing.B) {
+	tst := []byte{
+		0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
+		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+	}
+	for i := 0; i < b.N; i++ {
+		a := &Address{}
+		_ = a.Scan(tst)
+	}
+}
+
+func TestAddress_Value(t *testing.T) {
+	tests := []struct {
+		name    string
+		a       Address
+		wantErr bool
+	}{
+		{
+			name: "Working Address",
+			a: Address([AddressLength]byte{
+				0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
+				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+			}),
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.a.Value()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Address.Value() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			for i, gotI := range got.([]byte) {
+				if gotI != tt.a[i] {
+					t.Errorf("Address.Value() non matching data")
+					return
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkAddress_Value(b *testing.B) {
+	a := Address([AddressLength]byte{
+		0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
+		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
+	})
+	for i := 0; i < b.N; i++ {
+		_, _ = a.Value()
+	}
+}
