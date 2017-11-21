@@ -199,7 +199,7 @@ func doInstall(cmdline []string) {
 		build.MustRun(goinstall)
 		return
 	}
-	// If we are cross compiling to ARMv5 ARMv6 or ARMv7, clean any prvious builds
+	// If we are cross compiling to ARMv5 ARMv6 or ARMv7, clean any previous builds
 	if *arch == "arm" {
 		os.RemoveAll(filepath.Join(runtime.GOROOT(), "pkg", runtime.GOOS+"_arm"))
 		for _, path := range filepath.SplitList(build.GOPATH()) {
