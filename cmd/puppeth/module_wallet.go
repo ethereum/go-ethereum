@@ -110,7 +110,7 @@ func deployWallet(client *sshClient, network string, bootnodes []string, config 
 	})
 	files[filepath.Join(workdir, "docker-compose.yaml")] = composefile.Bytes()
 
-	files[filepath.Join(workdir, "genesis.json")] = []byte(config.genesis)
+	files[filepath.Join(workdir, "genesis.json")] = config.genesis
 
 	// Upload the deployment files to the remote server (and clean up afterwards)
 	if out, err := client.Upload(files); err != nil {
