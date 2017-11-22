@@ -14,24 +14,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-import React from 'react';
-import {render} from 'react-dom';
+// faOnlyWoffLoader removes the .eot, .ttf, .svg dependencies of the FontAwesome, because they produce unused extra blobs.
+module.exports = function(content) {
+    content = content.replace(/src.*url(?!.*url.*(\.eot)).*(\.eot)[^;]*;/,'');
+    content = content.replace(/url(?!.*url.*(\.eot)).*(\.eot)[^,]*,/,'');
+    content = content.replace(/url(?!.*url.*(\.ttf)).*(\.ttf)[^,]*,/,'');
+    content = content.replace(/,[^,]*url(?!.*url.*(\.svg)).*(\.svg)[^;]*;/,';');
 
-import {createMuiTheme, MuiThemeProvider} from 'material-ui/styles';
-
-import Dashboard from './components/Dashboard.jsx';
-
-// Theme for the dashboard.
-const theme = createMuiTheme({
-    palette: {
-        type: 'dark',
-    },
-});
-
-// Renders the whole dashboard.
-render(
-    <MuiThemeProvider theme={theme}>
-        <Dashboard />
-    </MuiThemeProvider>,
-    document.getElementById('dashboard')
-);
+    return content;
+};

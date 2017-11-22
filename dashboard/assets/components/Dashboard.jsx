@@ -15,27 +15,29 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 import React, {Component} from 'react';
-import PropTypes from 'prop-types';
-import {withStyles} from 'material-ui/styles';
 
-import SideBar from './SideBar.jsx';
+import withStyles from 'material-ui/styles/withStyles';
+
 import Header from './Header.jsx';
-import Main from "./Main.jsx";
-import {isNullOrUndefined, LIMIT, TAGS, DATA_KEYS,} from "./Common.jsx";
+import Body from './Body.jsx';
+import {isNullOrUndefined, LIMIT, TAGS, DATA_KEYS} from "./Common.jsx";
 
 // Styles for the Dashboard component.
 const styles = theme => ({
-    appFrame: {
-        position:   'relative',
+    dashboard: {
         display:    'flex',
+        flexFlow:   'column',
         width:      '100%',
         height:     '100%',
         background: theme.palette.background.default,
+        zIndex:     1,
+        overflow:   'hidden',
     },
 });
 
 // Dashboard is the main component, which renders the whole page, makes connection with the server and listens for messages.
 // When there is an incoming message, updates the page's content correspondingly.
+@withStyles(styles)
 class Dashboard extends Component {
     constructor(props) {
         super(props);
@@ -45,7 +47,7 @@ class Dashboard extends Component {
             memory:       [],
             traffic:      [],
             logs:         [],
-            shouldUpdate: {},
+            shouldUpdate: {}, // contains the labels of the incoming sample types
         };
     }
 
@@ -74,7 +76,6 @@ class Dashboard extends Component {
 
     // update analyzes the incoming message, and updates the charts' content correspondingly.
     update = msg => {
-        console.log(msg);
         this.setState(prevState => {
             let newState = [];
             newState.shouldUpdate = {};
@@ -121,9 +122,9 @@ class Dashboard extends Component {
         });
     };
 
-    // The change of the active label on the SideBar component will trigger a new render in the Main component.
-    changeContent = active => {
-        this.setState(prevState => prevState.active !== active ? {active: active} : {});
+    // changeContent sets the active label, which is used at the content rendering.
+    changeContent = newActive => {
+        this.setState(prevState => prevState.active !== newActive ? {active: newActive} : {});
     };
 
     openSideBar = () => {
@@ -135,22 +136,18 @@ class Dashboard extends Component {
     };
 
     render() {
-        // The classes property is injected by withStyles().
-        const {classes} = this.props;
+        const {classes} = this.props; // The classes property is injected by withStyles().
 
         return (
-            <div className={classes.appFrame}>
+            <div className={classes.dashboard}>
                 <Header
                     opened={this.state.sideBar}
-                    open={this.openSideBar}
+                    openSideBar={this.openSideBar}
+                    closeSideBar={this.closeSideBar}
                 />
-                <SideBar
+                <Body
                     opened={this.state.sideBar}
-                    close={this.closeSideBar}
                     changeContent={this.changeContent}
-                />
-                <Main
-                    opened={this.state.sideBar}
                     active={this.state.active}
                     memory={this.state.memory}
                     traffic={this.state.traffic}
@@ -162,8 +159,4 @@ class Dashboard extends Component {
     }
 }
 
-Dashboard.propTypes = {
-    classes: PropTypes.object.isRequired,
-};
-
-export default withStyles(styles)(Dashboard);
+export default Dashboard;
