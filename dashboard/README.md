@@ -22,10 +22,9 @@ $ (cd dashboard/assets && ./node_modules/.bin/webpack --watch)
 $ geth --dashboard --dashboard.assets=dashboard/assets/public --vmodule=dashboard=5
 ```
 
-To bundle up the final UI into Geth, run `webpack` and `go generate`:
+To bundle up the final UI into Geth, run `go generate`:
 
 ```
-$ (cd dashboard/assets && ./node_modules/.bin/webpack)
 $ go generate ./dashboard
 ```
 

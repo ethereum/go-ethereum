@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+const webpack = require('webpack');
 const path = require('path');
 
 module.exports = {
@@ -22,14 +23,34 @@ module.exports = {
         path:     path.resolve(__dirname, 'public'),
         filename: 'bundle.js',
     },
+    plugins: [
+        new webpack.optimize.UglifyJsPlugin({
+            comments: false,
+            mangle:   false,
+            beautify: true,
+        }),
+    ],
     module: {
         loaders: [
             {
-                test: /\.jsx$/, // regexp for JSX files
-                loader: 'babel-loader', // The babel configuration is in the package.json.
-                query: {
-                    presets: ['env', 'react', 'stage-0']
-                }
+                test:   /\.jsx$/, // regexp for JSX files
+                loader: 'babel-loader',
+                query:  {
+                    plugins: ['transform-decorators-legacy'], // @withStyles, @withTheme
+                    presets: ['env', 'react', 'stage-0'],
+                },
+            },
+            {
+                test: /font-awesome\.css$/,
+                use:  [
+                    'style-loader',
+                    'css-loader',
+                    path.resolve(__dirname, './faOnlyWoffLoader.js'),
+                ],
+            },
+            {
+                test:   /\.woff2?$/,
+                loader: 'url-loader',
             },
         ],
     },

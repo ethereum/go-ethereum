@@ -22,15 +22,16 @@ export const LIMIT = {
     traffic: 200, // Maximum number of traffic data samples.
     log:     200, // Maximum number of logs.
 };
+
 // The sidebar menu and the main content are rendered based on these elements.
 export const TAGS = (() => {
     const T = {
-        home:         { title: "Home", },
-        chain:        { title: "Chain", },
-        transactions: { title: "Transactions", },
-        network:      { title: "Network", },
-        system:       { title: "System", },
-        logs:         { title: "Logs", },
+        home:         { title: "Home", icon: "home", },
+        chain:        { title: "Chain", icon: "link", },
+        transactions: { title: "Transactions", icon: "credit-card", },
+        network:      { title: "Network", icon: "globe", },
+        system:       { title: "System", icon: "tachometer", },
+        logs:         { title: "Logs", icon: "list", },
     };
     // Using the key is circumstantial in some cases, so it is better to insert it also as a value.
     // This way the mistyping is prevented.
@@ -48,5 +49,4 @@ export const DATA_KEYS = (() => {
     return DK;
 })();
 
-// Temporary - taken from Material-UI
-export const DRAWER_WIDTH = 240;
+export const DURATION = 200;
