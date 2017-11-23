@@ -138,7 +138,7 @@ type walletInfos struct {
 	webPort  int
 }
 
-// Report converts the typed struct into a plain string->string map, cotnaining
+// Report converts the typed struct into a plain string->string map, containing
 // most - but not all - fields for reporting to the user.
 func (info *walletInfos) Report() map[string]string {
 	report := map[string]string{

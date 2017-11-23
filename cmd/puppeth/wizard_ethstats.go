@@ -34,8 +34,6 @@ func (w *wizard) deployEthstats() {
 	client := w.servers[server]
 
 	// Retrieve any active ethstats configurations from the server
-	existed := true
-
 	infos, err := checkEthstats(client, w.network)
 	if err != nil {
 		infos = &ethstatsInfos{
@@ -43,8 +41,9 @@ func (w *wizard) deployEthstats() {
 			host:   client.server,
 			secret: "",
 		}
-		existed = false
 	}
+	existed := err == nil
+
 	// Figure out which port to listen on
 	fmt.Println()
 	fmt.Printf("Which port should ethstats listen on? (default = %d)\n", infos.port)

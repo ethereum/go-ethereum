@@ -33,16 +33,15 @@ func (w *wizard) deployDashboard() {
 	client := w.servers[server]
 
 	// Retrieve any active dashboard configurations from the server
-	existed := true
-
 	infos, err := checkDashboard(client, w.network)
 	if err != nil {
 		infos = &dashboardInfos{
 			port: 80,
 			host: client.server,
 		}
-		existed = false
 	}
+	existed := err == nil
+
 	// Figure out which port to listen on
 	fmt.Println()
 	fmt.Printf("Which port should the dashboard listen on? (default = %d)\n", infos.port)

@@ -35,8 +35,6 @@ func (w *wizard) deployFaucet() {
 	client := w.servers[server]
 
 	// Retrieve any active faucet configurations from the server
-	existed := true
-
 	infos, err := checkFaucet(client, w.network)
 	if err != nil {
 		infos = &faucetInfos{
@@ -47,8 +45,9 @@ func (w *wizard) deployFaucet() {
 			minutes: 1440,
 			tiers:   3,
 		}
-		existed = false
 	}
+	existed := err == nil
+
 	infos.node.genesis, _ = json.MarshalIndent(w.conf.Genesis, "", "  ")
 	infos.node.network = w.conf.Genesis.Config.ChainId.Int64()
 

@@ -43,15 +43,14 @@ func (w *wizard) deployWallet() {
 	client := w.servers[server]
 
 	// Retrieve any active node configurations from the server
-	existed := true
-
 	infos, err := checkWallet(client, w.network)
 	if err != nil {
 		infos = &walletInfos{
 			nodePort: 30303, rpcPort: 8545, webPort: 80, webHost: client.server,
 		}
-		existed = false
 	}
+	existed := err == nil
+
 	infos.genesis, _ = json.MarshalIndent(w.conf.Genesis, "", "  ")
 	infos.network = w.conf.Genesis.Config.ChainId.Int64()
 

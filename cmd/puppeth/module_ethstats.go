@@ -115,7 +115,7 @@ type ethstatsInfos struct {
 	banned []string
 }
 
-// Report converts the typed struct into a plain string->string map, cotnaining
+// Report converts the typed struct into a plain string->string map, containing
 // most - but not all - fields for reporting to the user.
 func (info *ethstatsInfos) Report() map[string]string {
 	return map[string]string{

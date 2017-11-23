@@ -47,15 +47,14 @@ func (w *wizard) deployExplorer() {
 	client := w.servers[server]
 
 	// Retrieve any active node configurations from the server
-	existed := true
-
 	infos, err := checkExplorer(client, w.network)
 	if err != nil {
 		infos = &explorerInfos{
 			nodePort: 30303, webPort: 80, webHost: client.server,
 		}
-		existed = false
 	}
+	existed := err == nil
+
 	chainspec, err := newParityChainSpec(w.network, w.conf.Genesis, w.conf.bootFull)
 	if err != nil {
 		log.Error("Failed to create chain spec for explorer", "err", err)

@@ -45,8 +45,6 @@ func (w *wizard) deployNode(boot bool) {
 	client := w.servers[server]
 
 	// Retrieve any active node configurations from the server
-	existed := true
-
 	infos, err := checkNode(client, w.network, boot)
 	if err != nil {
 		if boot {
@@ -54,8 +52,9 @@ func (w *wizard) deployNode(boot bool) {
 		} else {
 			infos = &nodeInfos{portFull: 30303, peersTotal: 50, peersLight: 0, gasTarget: 4.7, gasPrice: 18}
 		}
-		existed = false
 	}
+	existed := err == nil
+
 	infos.genesis, _ = json.MarshalIndent(w.conf.Genesis, "", "  ")
 	infos.network = w.conf.Genesis.Config.ChainId.Int64()
 

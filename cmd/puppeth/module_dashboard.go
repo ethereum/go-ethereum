@@ -696,7 +696,7 @@ type dashboardInfos struct {
 	faucet   string
 }
 
-// Report converts the typed struct into a plain string->string map, cotnaining
+// Report converts the typed struct into a plain string->string map, containing
 // most - but not all - fields for reporting to the user.
 func (info *dashboardInfos) Report() map[string]string {
 	return map[string]string{
