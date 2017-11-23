@@ -125,7 +125,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
-		engine:         CreateConsensusEngine(ctx, config, chainConfig, chainDb),
+		engine:         CreateConsensusEngine(ctx, &config.Ethash, chainConfig, chainDb),
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
 		networkId:      config.NetworkId,
@@ -209,25 +209,31 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 }
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
-func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
+func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
 	}
 	// Otherwise assume proof-of-work
 	switch {
-	case config.Ethash.PowFake:
+	case config.Fake:
 		log.Warn("Ethash used in fake mode")
 		return ethash.NewFaker()
-	case config.Ethash.PowTest:
+	case config.Test:
 		log.Warn("Ethash used in test mode")
 		return ethash.NewTester()
-	case config.Ethash.PowShared:
+	case config.Shared:
 		log.Warn("Ethash used in shared mode")
 		return ethash.NewShared()
 	default:
-		engine := ethash.New(ctx.ResolvePath(config.Ethash.CacheDir), config.Ethash.CachesInMem, config.Ethash.CachesOnDisk,
-			config.Ethash.DatasetDir, config.Ethash.DatasetsInMem, config.Ethash.DatasetsOnDisk)
+		engine := ethash.New(ethash.Config{
+			CacheDir:       ctx.ResolvePath(config.CacheDir),
+			CachesInMem:    config.CachesInMem,
+			CachesOnDisk:   config.CachesOnDisk,
+			DatasetDir:     config.DatasetDir,
+			DatasetsInMem:  config.DatasetsInMem,
+			DatasetsOnDisk: config.DatasetsOnDisk,
+		})
 		engine.SetThreads(-1) // Disable CPU mining
 		return engine
 	}

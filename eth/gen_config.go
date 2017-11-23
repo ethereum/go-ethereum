@@ -64,9 +64,9 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.DocRoot = c.DocRoot
-	enc.PowFake = c.Ethash.PowFake
-	enc.PowTest = c.Ethash.PowTest
-	enc.PowShared = c.Ethash.PowShared
+	enc.PowFake = c.Ethash.Fake
+	enc.PowTest = c.Ethash.Test
+	enc.PowShared = c.Ethash.Shared
 	return &enc, nil
 }
 
@@ -170,13 +170,13 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		c.DocRoot = *dec.DocRoot
 	}
 	if dec.PowFake != nil {
-		c.Ethash.PowFake = *dec.PowFake
+		c.Ethash.Fake = *dec.PowFake
 	}
 	if dec.PowTest != nil {
-		c.Ethash.PowTest = *dec.PowTest
+		c.Ethash.Test = *dec.PowTest
 	}
 	if dec.PowShared != nil {
-		c.Ethash.PowShared = *dec.PowShared
+		c.Ethash.Shared = *dec.PowShared
 	}
 	return nil
 }

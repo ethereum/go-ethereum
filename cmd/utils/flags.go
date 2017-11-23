@@ -1159,10 +1159,14 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	} else {
 		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {
-			engine = ethash.New(
-				stack.ResolvePath(eth.DefaultConfig.Ethash.CacheDir), eth.DefaultConfig.Ethash.CachesInMem, eth.DefaultConfig.Ethash.CachesOnDisk,
-				stack.ResolvePath(eth.DefaultConfig.Ethash.DatasetDir), eth.DefaultConfig.Ethash.DatasetsInMem, eth.DefaultConfig.Ethash.DatasetsOnDisk,
-			)
+			engine = ethash.New(ethash.Config{
+				CacheDir:       stack.ResolvePath(eth.DefaultConfig.Ethash.CacheDir),
+				CachesInMem:    eth.DefaultConfig.Ethash.CachesInMem,
+				CachesOnDisk:   eth.DefaultConfig.Ethash.CachesOnDisk,
+				DatasetDir:     stack.ResolvePath(eth.DefaultConfig.Ethash.DatasetDir),
+				DatasetsInMem:  eth.DefaultConfig.Ethash.DatasetsInMem,
+				DatasetsOnDisk: eth.DefaultConfig.Ethash.DatasetsOnDisk,
+			})
 		}
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
