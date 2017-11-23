@@ -19,7 +19,6 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"io"
 	"os"
@@ -29,6 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/log"
+	"net"
+	"fmt"
 )
 
 var (
@@ -41,19 +43,29 @@ func main() {
 
 	var (
 		server = rpc.NewServer()
-		api    = NewSignerAPI(*chainID, *ksLocation, true)
+		api    = NewSignerAPI(*chainID, *ksLocation, true, NewCommandlineUI())
+		listener net.Listener
+		err error
 	)
 
 	// register signer API with server
-	if err := server.RegisterName("account", api); err != nil {
+	if err = server.RegisterName("account", api); err != nil {
 		utils.Fatalf("Could not register signer API: %v", err)
 	}
 
-	// start server with in-/output connected to stdin/stdout
-	in, out := bufio.NewReader(os.Stdin), os.Stdout
-	codec := rpc.NewJSONCodec(&rwc{in, out})
-	server.ServeCodec(codec, rpc.OptionMethodInvocation|rpc.OptionSubscriptions)
+	endpoint := "localhost:8550"
+
+	if listener, err = net.Listen("tcp", endpoint); err != nil {
+		utils.Fatalf("Could not start http listener: %v", err)
+	}
+	log.Info(fmt.Sprintf("HTTP endpoint opened: http://%s", endpoint))
+	fmt.Printf("HTTP endpoint opened: http://%s\n", endpoint)
+	cors := []string{"*"}
+
+	rpc.NewHTTPServer(cors, server).Serve(listener)
 }
+// Create account
+// #curl -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_new","params":["test"],"id":67}' localhost:8550
 
 type rwc struct {
 	io.Reader
