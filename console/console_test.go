@@ -98,7 +98,7 @@ func newTester(t *testing.T, confOverride func(*eth.Config)) *tester {
 		Genesis:   core.DeveloperGenesisBlock(15, common.Address{}),
 		Etherbase: common.HexToAddress(testAddress),
 		Ethash: ethash.Config{
-			Test: true,
+			PowMode: ethash.Test,
 		},
 	}
 	if confOverride != nil {

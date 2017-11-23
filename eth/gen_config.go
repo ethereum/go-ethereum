@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -36,10 +37,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TxPool                  core.TxPoolConfig
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
-		DocRoot                 string `toml:"-"`
-		PowFake                 bool   `toml:"-"`
-		PowTest                 bool   `toml:"-"`
-		PowShared               bool   `toml:"-"`
+		DocRoot                 string      `toml:"-"`
+		PowMode                 ethash.Mode `toml:"-"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -64,9 +63,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.DocRoot = c.DocRoot
-	enc.PowFake = c.Ethash.Fake
-	enc.PowTest = c.Ethash.Test
-	enc.PowShared = c.Ethash.Shared
+	enc.PowMode = c.Ethash.PowMode
 	return &enc, nil
 }
 
@@ -94,10 +91,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		TxPool                  *core.TxPoolConfig
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
-		DocRoot                 *string `toml:"-"`
-		PowFake                 *bool   `toml:"-"`
-		PowTest                 *bool   `toml:"-"`
-		PowShared               *bool   `toml:"-"`
+		DocRoot                 *string      `toml:"-"`
+		PowMode                 *ethash.Mode `toml:"-"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -169,14 +164,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.DocRoot != nil {
 		c.DocRoot = *dec.DocRoot
 	}
-	if dec.PowFake != nil {
-		c.Ethash.Fake = *dec.PowFake
-	}
-	if dec.PowTest != nil {
-		c.Ethash.Test = *dec.PowTest
-	}
-	if dec.PowShared != nil {
-		c.Ethash.Shared = *dec.PowShared
+	if dec.PowMode != nil {
+		c.Ethash.PowMode = *dec.PowMode
 	}
 	return nil
 }
