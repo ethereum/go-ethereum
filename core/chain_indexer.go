@@ -230,7 +230,7 @@ func (c *ChainIndexer) newHead(head uint64, reorg bool) {
 		if changed < c.storedSections {
 			c.setValidSections(changed)
 		}
-		// Update the new head number to te finalized section end and notify children
+		// Update the new head number to the finalized section end and notify children
 		head = changed * c.sectionSize
 
 		if head < c.cascadedHead {
