@@ -63,7 +63,7 @@ func TestOn(t *testing.T) {
 	if !ok1 || !ok2 {
 		t.Errorf("oops")
 	}
-	kad := New(addr, NewKadParams())
+	kad := New(addr, NewDefaultKadParams())
 	err := kad.On(&testNode{addr: other}, nil)
 	_ = err
 }
@@ -72,7 +72,7 @@ func TestBootstrap(t *testing.T) {
 
 	test := func(test *bootstrapTest) bool {
 		// for any node kad.le, Target and N
-		params := NewKadParams()
+		params := NewDefaultKadParams()
 		params.MaxProx = test.MaxProx
 		params.BucketSize = test.BucketSize
 		params.ProxBinSize = test.BucketSize
@@ -127,7 +127,7 @@ func TestFindClosest(t *testing.T) {
 
 	test := func(test *FindClosestTest) bool {
 		// for any node kad.le, Target and N
-		params := NewKadParams()
+		params := NewDefaultKadParams()
 		params.MaxProx = 7
 		kad := New(test.Self, params)
 		var err error
@@ -198,7 +198,7 @@ var (
 func TestProxAdjust(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	self := gen(Address{}, r).(Address)
-	params := NewKadParams()
+	params := NewDefaultKadParams()
 	params.MaxProx = 7
 	kad := New(self, params)
 
@@ -232,7 +232,7 @@ func TestSaveLoad(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	addresses := gen([]Address{}, r).([]Address)
 	self := RandomAddress()
-	params := NewKadParams()
+	params := NewDefaultKadParams()
 	params.MaxProx = 7
 	kad := New(self, params)
 
