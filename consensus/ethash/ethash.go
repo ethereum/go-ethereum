@@ -45,7 +45,7 @@ var (
 	maxUint256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 
 	// sharedEthash is a full instance that can be shared between multiple users.
-	sharedEthash = New(Config{"", 3, 0, "", 1, 0, Normal})
+	sharedEthash = New(Config{"", 3, 0, "", 1, 0, ModeNormal})
 
 	// algorithmRevision is the data structure version used for file naming.
 	algorithmRevision = 23
@@ -320,14 +320,15 @@ func MakeDataset(block uint64, dir string) {
 	d.release()
 }
 
+// Mode defines the type and amount of PoW verification an ethash engine makes.
 type Mode uint
 
 const (
-	Normal Mode = iota
-	Shared
-	Test
-	Fake
-	FullFake
+	ModeNormal Mode = iota
+	ModeShared
+	ModeTest
+	ModeFake
+	ModeFullFake
 )
 
 // Config are the configuration parameters of the ethash.
@@ -392,7 +393,7 @@ func NewTester() *Ethash {
 	return &Ethash{
 		config: Config{
 			CachesInMem: 1,
-			PowMode:     Test,
+			PowMode:     ModeTest,
 		},
 		caches:   make(map[uint64]*cache),
 		datasets: make(map[uint64]*dataset),
@@ -407,7 +408,7 @@ func NewTester() *Ethash {
 func NewFaker() *Ethash {
 	return &Ethash{
 		config: Config{
-			PowMode: Fake,
+			PowMode: ModeFake,
 		},
 	}
 }
@@ -418,7 +419,7 @@ func NewFaker() *Ethash {
 func NewFakeFailer(fail uint64) *Ethash {
 	return &Ethash{
 		config: Config{
-			PowMode: Fake,
+			PowMode: ModeFake,
 		},
 		fakeFail: fail,
 	}
@@ -430,7 +431,7 @@ func NewFakeFailer(fail uint64) *Ethash {
 func NewFakeDelayer(delay time.Duration) *Ethash {
 	return &Ethash{
 		config: Config{
-			PowMode: Fake,
+			PowMode: ModeFake,
 		},
 		fakeDelay: delay,
 	}
@@ -441,7 +442,7 @@ func NewFakeDelayer(delay time.Duration) *Ethash {
 func NewFullFaker() *Ethash {
 	return &Ethash{
 		config: Config{
-			PowMode: FullFake,
+			PowMode: ModeFullFake,
 		},
 	}
 }
@@ -501,7 +502,7 @@ func (ethash *Ethash) cache(block uint64) []uint32 {
 	ethash.lock.Unlock()
 
 	// Wait for generation finish, bump the timestamp and finalize the cache
-	current.generate(ethash.config.CacheDir, ethash.config.CachesOnDisk, ethash.config.PowMode == Test)
+	current.generate(ethash.config.CacheDir, ethash.config.CachesOnDisk, ethash.config.PowMode == ModeTest)
 
 	current.lock.Lock()
 	current.used = time.Now()
@@ -509,7 +510,7 @@ func (ethash *Ethash) cache(block uint64) []uint32 {
 
 	// If we exhausted the future cache, now's a good time to regenerate it
 	if future != nil {
-		go future.generate(ethash.config.CacheDir, ethash.config.CachesOnDisk, ethash.config.PowMode == Test)
+		go future.generate(ethash.config.CacheDir, ethash.config.CachesOnDisk, ethash.config.PowMode == ModeTest)
 	}
 	return current.cache
 }
@@ -564,7 +565,7 @@ func (ethash *Ethash) dataset(block uint64) []uint32 {
 	ethash.lock.Unlock()
 
 	// Wait for generation finish, bump the timestamp and finalize the cache
-	current.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.PowMode == Test)
+	current.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.PowMode == ModeTest)
 
 	current.lock.Lock()
 	current.used = time.Now()
@@ -572,7 +573,7 @@ func (ethash *Ethash) dataset(block uint64) []uint32 {
 
 	// If we exhausted the future dataset, now's a good time to regenerate it
 	if future != nil {
-		go future.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.PowMode == Test)
+		go future.generate(ethash.config.DatasetDir, ethash.config.DatasetsOnDisk, ethash.config.PowMode == ModeTest)
 	}
 	return current.dataset
 }
