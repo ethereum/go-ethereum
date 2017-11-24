@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -114,7 +115,7 @@ type serverPool struct {
 	adjustStats          chan poolStatAdjust
 
 	knownQueue, newQueue       poolEntryQueue
-	knownSelect, newSelect     *weightedRandomSelect
+	knownSelect, newSelect     *common.WeightedRandomSelect
 	knownSelected, newSelected int
 	fastDiscover               bool
 }
@@ -129,8 +130,8 @@ func newServerPool(db ethdb.Database, quit chan struct{}, wg *sync.WaitGroup) *s
 		timeout:      make(chan *poolEntry, 1),
 		adjustStats:  make(chan poolStatAdjust, 100),
 		enableRetry:  make(chan *poolEntry, 1),
-		knownSelect:  newWeightedRandomSelect(),
-		newSelect:    newWeightedRandomSelect(),
+		knownSelect:  common.NewWeightedRandomSelect(),
+		newSelect:    common.NewWeightedRandomSelect(),
 		fastDiscover: true,
 	}
 	pool.knownQueue = newPoolEntryQueue(maxKnownEntries, pool.removeEntry)
@@ -183,8 +184,8 @@ func (pool *serverPool) connect(p *peer, ip net.IP, port uint16) *poolEntry {
 	entry.lastConnected = addr
 	entry.addr = make(map[string]*poolEntryAddress)
 	entry.addr[addr.strKey()] = addr
-	entry.addrSelect = *newWeightedRandomSelect()
-	entry.addrSelect.update(addr)
+	entry.addrSelect = *common.NewWeightedRandomSelect()
+	entry.addrSelect.Update(addr)
 	return entry
 }
 
@@ -352,7 +353,7 @@ func (pool *serverPool) findOrNewNode(id discover.NodeID, ip net.IP, port uint16
 		entry = &poolEntry{
 			id:         id,
 			addr:       make(map[string]*poolEntryAddress),
-			addrSelect: *newWeightedRandomSelect(),
+			addrSelect: *common.NewWeightedRandomSelect(),
 			shortRetry: shortRetryCnt,
 		}
 		pool.entries[id] = entry
@@ -373,7 +374,7 @@ func (pool *serverPool) findOrNewNode(id discover.NodeID, ip net.IP, port uint16
 		entry.addr[addr.strKey()] = addr
 	}
 	addr.lastSeen = now
-	entry.addrSelect.update(addr)
+	entry.addrSelect.Update(addr)
 	if !entry.known {
 		pool.newQueue.setLatest(entry)
 	}
@@ -400,7 +401,7 @@ func (pool *serverPool) loadNodes() {
 			"timeout", fmt.Sprintf("%v/%v", e.timeoutStats.avg, e.timeoutStats.weight))
 		pool.entries[e.id] = e
 		pool.knownQueue.setLatest(e)
-		pool.knownSelect.update((*knownEntry)(e))
+		pool.knownSelect.Update((*knownEntry)(e))
 	}
 }
 
@@ -421,8 +422,8 @@ func (pool *serverPool) saveNodes() {
 // Note that it is called by the new/known queues from which the entry has already
 // been removed so removing it from the queues is not necessary.
 func (pool *serverPool) removeEntry(entry *poolEntry) {
-	pool.newSelect.remove((*discoveredEntry)(entry))
-	pool.knownSelect.remove((*knownEntry)(entry))
+	pool.newSelect.Remove((*discoveredEntry)(entry))
+	pool.knownSelect.Remove((*knownEntry)(entry))
 	entry.removed = true
 	delete(pool.entries, entry.id)
 }
@@ -451,8 +452,8 @@ func (pool *serverPool) setRetryDial(entry *poolEntry) {
 // updateCheckDial is called when an entry can potentially be dialed again. It updates
 // its selection weights and checks if new dials can/should be made.
 func (pool *serverPool) updateCheckDial(entry *poolEntry) {
-	pool.newSelect.update((*discoveredEntry)(entry))
-	pool.knownSelect.update((*knownEntry)(entry))
+	pool.newSelect.Update((*discoveredEntry)(entry))
+	pool.knownSelect.Update((*knownEntry)(entry))
 	pool.checkDial()
 }
 
@@ -461,7 +462,7 @@ func (pool *serverPool) updateCheckDial(entry *poolEntry) {
 func (pool *serverPool) checkDial() {
 	fillWithKnownSelects := !pool.fastDiscover
 	for pool.knownSelected < targetKnownSelect {
-		entry := pool.knownSelect.choose()
+		entry := pool.knownSelect.Choose()
 		if entry == nil {
 			fillWithKnownSelects = false
 			break
@@ -469,7 +470,7 @@ func (pool *serverPool) checkDial() {
 		pool.dial((*poolEntry)(entry.(*knownEntry)), true)
 	}
 	for pool.knownSelected+pool.newSelected < targetServerCount {
-		entry := pool.newSelect.choose()
+		entry := pool.newSelect.Choose()
 		if entry == nil {
 			break
 		}
@@ -480,7 +481,7 @@ func (pool *serverPool) checkDial() {
 		// is over, we probably won't find more in the near future so select more
 		// known entries if possible
 		for pool.knownSelected < targetServerCount {
-			entry := pool.knownSelect.choose()
+			entry := pool.knownSelect.Choose()
 			if entry == nil {
 				break
 			}
@@ -501,7 +502,7 @@ func (pool *serverPool) dial(entry *poolEntry, knownSelected bool) {
 	} else {
 		pool.newSelected++
 	}
-	addr := entry.addrSelect.choose().(*poolEntryAddress)
+	addr := entry.addrSelect.Choose().(*poolEntryAddress)
 	log.Debug("Dialing new peer", "lesaddr", entry.id.String()+"@"+addr.strKey(), "set", len(entry.addr), "known", knownSelected)
 	entry.dialed = addr
 	go func() {
@@ -548,7 +549,7 @@ type poolEntry struct {
 	id                    discover.NodeID
 	addr                  map[string]*poolEntryAddress
 	lastConnected, dialed *poolEntryAddress
-	addrSelect            weightedRandomSelect
+	addrSelect            common.WeightedRandomSelect
 
 	lastDiscovered              mclock.AbsTime
 	known, knownSelected        bool
@@ -582,8 +583,8 @@ func (e *poolEntry) DecodeRLP(s *rlp.Stream) error {
 	e.id = entry.ID
 	e.addr = make(map[string]*poolEntryAddress)
 	e.addr[addr.strKey()] = addr
-	e.addrSelect = *newWeightedRandomSelect()
-	e.addrSelect.update(addr)
+	e.addrSelect = *common.NewWeightedRandomSelect()
+	e.addrSelect.Update(addr)
 	e.lastConnected = addr
 	e.connectStats = entry.CStat
 	e.delayStats = entry.DStat
