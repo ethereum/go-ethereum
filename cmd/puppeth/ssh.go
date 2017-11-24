@@ -216,8 +216,8 @@ func (client *sshClient) Stream(cmd string) error {
 	return session.Run(cmd)
 }
 
-// Upload copied the set of files to a remote server via SCP, creating any non-
-// existing folder in te mean time.
+// Upload copies the set of files to a remote server via SCP, creating any non-
+// existing folders in the mean time.
 func (client *sshClient) Upload(files map[string][]byte) ([]byte, error) {
 	// Establish a single command session
 	session, err := client.client.NewSession()
