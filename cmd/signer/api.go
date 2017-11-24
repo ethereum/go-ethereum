@@ -49,74 +49,113 @@ type Metadata struct {
 	scheme string
 }
 
-// The SignTxRequest contains info about a transaction tos sign
+type credPreference int
+
+const (
+	forgetPw credPreference = iota
+	rememberPwNow
+)
+
+type Credentials struct {
+	password string
+}
+
+// SignTxRequest contains info about a transaction to sign
 type SignTxRequest struct {
 	transaction *types.Transaction
 	from        accounts.Account
+}
+type SignTxResponse struct {
+	hash     common.Hash
+	approved bool
+	pw       string
 }
 
 type ExportRequest struct {
 	account accounts.Account
 	file    string
 }
+type ExportResponse struct {
+	approved bool
+}
+
 type ImportRequest struct {
 	account accounts.Account
 }
+
+type ImportResponse struct {
+	approved    bool
+	oldPassword string
+	newPassword string
+}
+
 type SignDataRequest struct {
 	account accounts.Account
 	rawdata hexutil.Bytes
 	message string
 	hash    hexutil.Bytes
 }
-type ApprovalStatus struct {
-	hash     common.Hash
+type SignDataResponse struct {
 	approved bool
 	pw       string
 }
 
 type NewAccountRequest struct{}
+type NewAccountResponse struct {
+	approved bool
+	pw       string
+}
 
 type ListRequest struct {
 	accounts []Account
 }
-type ListApproval struct {
+type ListResponse struct {
 	accounts []Account
 }
 
 // SignerUI specifies what method a UI needs to implement to be able to be used as a UI
 // for the signer
 type SignerUI interface {
-	ApproveTx(request *SignTxRequest, metadata Metadata, ch chan ApprovalStatus)
-	ApproveSignData(request *SignDataRequest, metadata Metadata, ch chan ApprovalStatus)
-	ApproveExport(request *ExportRequest, metadata Metadata, ch chan ApprovalStatus)
-	ApproveImport(request *ImportRequest, metadata Metadata, ch chan ApprovalStatus)
-	ApproveListing(request *ListRequest, metadata Metadata, ch chan ListApproval)
-	ApproveNewAccount(requst *NewAccountRequest, metadata Metadata, ch chan bool)
-	//	In case signing fails, bad password etc
+
+	// ApproveTx prompt the user for confirmation to request to sign transaction
+	ApproveTx(request *SignTxRequest, metadata Metadata, ch chan SignTxResponse)
+	// ApproveSignData prompt the user for confirmation to request to sign data
+	ApproveSignData(request *SignDataRequest, metadata Metadata, ch chan SignDataResponse)
+	// ApproveExport prompt the user for confirmation to export encrypted account json
+	ApproveExport(request *ExportRequest, metadata Metadata, ch chan ExportResponse)
+	// ApproveImport prompt the user for confirmation to import account json
+	ApproveImport(request *ImportRequest, metadata Metadata, ch chan ImportResponse)
+	// ApproveListing prompt the user for confirmation to list accounts
+	// the list of accounts to list can be modified by the ui
+	ApproveListing(request *ListRequest, metadata Metadata, ch chan ListResponse)
+	// ApproveNewAccount prompt the user for confirmation to create new account, and reveal to caller
+	ApproveNewAccount(requst *NewAccountRequest, metadata Metadata, ch chan NewAccountResponse)
+	// ShowError displays error message to user
 	ShowError(message string)
+	// ShowInfo displays info message to user
 	ShowInfo(message string)
 }
 
 type HeadlessUI struct {
 }
 
-func (ui *HeadlessUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch chan ApprovalStatus) {
-	ch <- ApprovalStatus{request.transaction.Hash(), true, ""}
+func (ui *HeadlessUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch chan SignTxResponse) {
+	ch <- SignTxResponse{request.transaction.Hash(), true, ""}
 }
-func (ui *HeadlessUI) ApproveSignData(request *SignDataRequest, metadata Metadata, ch chan ApprovalStatus) {
-	ch <- ApprovalStatus{common.Hash{}, true, ""}
+func (ui *HeadlessUI) ApproveSignData(request *SignDataRequest, metadata Metadata, ch chan SignDataResponse) {
+	ch <- SignDataResponse{true, ""}
 }
-func (ui *HeadlessUI) ApproveExport(request *ExportRequest, metadata Metadata, ch chan ApprovalStatus) {
-	ch <- ApprovalStatus{common.Hash{}, true, ""}
+func (ui *HeadlessUI) ApproveExport(request *ExportRequest, metadata Metadata, ch chan ExportResponse) {
+	ch <- ExportResponse{true}
 }
-func (ui *HeadlessUI) ApproveImport(request *ImportRequest, metadata Metadata, ch chan ApprovalStatus) {
-	ch <- ApprovalStatus{common.Hash{}, true, ""}
+func (ui *HeadlessUI) ApproveImport(request *ImportRequest, metadata Metadata, ch chan ImportResponse) {
+	ch <- ImportResponse{true, "", ""}
 }
-func (ui *HeadlessUI) ApproveListing(request *ListRequest, metadata Metadata, ch chan ListApproval) {
-	ch <- ListApproval{request.accounts}
+func (ui *HeadlessUI) ApproveListing(request *ListRequest, metadata Metadata, ch chan ListResponse) {
+	ch <- ListResponse{request.accounts}
 }
-func (ui *HeadlessUI) ApproveNewAccount(requst *NewAccountRequest, metadata Metadata, ch chan bool) {
-	ch <- true
+func (ui *HeadlessUI) ApproveNewAccount(requst *NewAccountRequest, metadata Metadata, ch chan ImportResponse) {
+	ch <- ImportResponse{true, "", ""}
 }
 func (ui *HeadlessUI) ShowError(message string) {
 	//stdout is used by communication
@@ -163,13 +202,13 @@ func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI) *Si
 func metaData(ctx context.Context) Metadata {
 	m := Metadata{"NA", "NA", "NA"}
 
-	if v := ctx.Value("remote"); v != nil{
+	if v := ctx.Value("remote"); v != nil {
 		m.remote = v.(string)
 	}
-	if v := ctx.Value("scheme"); v != nil{
+	if v := ctx.Value("scheme"); v != nil {
 		m.scheme = v.(string)
 	}
-	if v := ctx.Value("local"); v != nil{
+	if v := ctx.Value("local"); v != nil {
 		m.local = v.(string)
 	}
 	return m
@@ -179,7 +218,7 @@ func metaData(ctx context.Context) Metadata {
 // multiple accounts.
 func (api *SignerAPI) List(ctx context.Context) ([]Account, error) {
 
-	ch := make(chan ListApproval, 1)
+	ch := make(chan ListResponse, 1)
 
 	var accounts []Account
 	for _, wallet := range api.am.Wallets() {
@@ -204,10 +243,10 @@ func (api *SignerAPI) New(ctx context.Context, passphrase string) (accounts.Acco
 	if len(be) == 0 {
 		return accounts.Account{}, errors.New("password based accounts not supported")
 	}
-	ch := make(chan bool, 1)
+	ch := make(chan NewAccountResponse, 1)
 	api.ui.ApproveNewAccount(&NewAccountRequest{}, metaData(ctx), ch)
 
-	if <-ch {
+	if resp := <-ch; resp.approved {
 		return be[0].(*keystore.KeyStore).NewAccount(passphrase)
 	}
 	return accounts.Account{}, fmt.Errorf("Request denied")
@@ -230,7 +269,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 		tx = types.NewTransaction(uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
 	}
 
-	ch := make(chan ApprovalStatus, 1)
+	ch := make(chan SignTxResponse, 1)
 	api.ui.ApproveTx(&SignTxRequest{transaction: tx, from: acc}, metaData(ctx), ch)
 
 	if result := <-ch; result.approved {
@@ -266,10 +305,9 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.Address, passwd stri
 	if err != nil {
 		return nil, err
 	}
-	ch := make(chan ApprovalStatus, 1)
+	ch := make(chan SignDataResponse, 1)
 
-	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
-	sighash := crypto.Keccak256([]byte(msg))
+	sighash, msg := signHash(data)
 
 	api.ui.ApproveSignData(&SignDataRequest{account: account, rawdata: data, message: msg, hash: sighash}, metaData(ctx), ch)
 
@@ -306,7 +344,8 @@ func (api *SignerAPI) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (c
 	}
 	sig[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
 
-	rpk, err := crypto.Ecrecover(signHash(data), sig)
+	hash, _ := signHash(data)
+	rpk, err := crypto.Ecrecover(hash, sig)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -322,9 +361,9 @@ func (api *SignerAPI) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (c
 //   keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
 //
 // This gives context to the signed message and prevents signing of transactions.
-func signHash(data []byte) []byte {
+func signHash(data []byte) ([]byte, string) {
 	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
-	return crypto.Keccak256([]byte(msg))
+	return crypto.Keccak256([]byte(msg)), msg
 }
 
 // Export returns encrypted private key associated with the given address in web3 keystore format.
@@ -341,7 +380,7 @@ func (api *SignerAPI) Export(ctx context.Context, addr common.Address) (json.Raw
 	if url.Scheme != keystore.KeyStoreScheme {
 		return nil, fmt.Errorf("account is not a password protected account")
 	}
-	ch := make(chan ApprovalStatus, 1)
+	ch := make(chan ExportResponse, 1)
 
 	api.ui.ApproveExport(&ExportRequest{account: account, file: url.Path}, metaData(ctx), ch)
 
@@ -361,7 +400,7 @@ func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage, passp
 		return Account{}, errors.New("password based accounts not supported")
 	}
 
-	ch := make(chan ApprovalStatus, 1)
+	ch := make(chan ImportResponse, 1)
 
 	api.ui.ApproveImport(&ImportRequest{}, metaData(ctx), ch)
 	if resp := <-ch; resp.approved {

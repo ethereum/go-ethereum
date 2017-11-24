@@ -18,31 +18,64 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"os"
+	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 type CommandlineUI struct {
+	in *bufio.Reader
 }
 
 func NewCommandlineUI() *CommandlineUI {
-	return &CommandlineUI{}
+	return &CommandlineUI{bufio.NewReader(os.Stdin)}
 }
-func confirm() bool {
-	fmt.Printf("Type 'Yes' to approve\n$>")
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Scan()
-	answer := scanner.Text()
-	if answer == "Yes" {
+
+// readString reads a single line from stdin, trimming if from spaces, enforcing
+// non-emptyness.
+func (ui *CommandlineUI) readString() string {
+	for {
+		fmt.Printf("> ")
+		text, err := ui.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		if text = strings.TrimSpace(text); text != "" {
+			return text
+		}
+	}
+}
+
+// readPassword reads a single line from stdin, trimming it from the trailing new
+// line and returns it. The input will not be echoed.
+func (ui *CommandlineUI) readPassword() string {
+	fmt.Printf("> ")
+	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+	if err != nil {
+		log.Crit("Failed to read password", "err", err)
+	}
+	fmt.Println()
+	return string(text)
+}
+
+// confirm returns true if user enters 'Yes', otherwise false
+func (ui *CommandlineUI) confirm() bool {
+	fmt.Printf("Type 'Yes' to approve\n")
+	if ui.readString() == "Yes" {
 		return true
 	}
 	return false
 }
+
 func showMetadata(metadata Metadata) {
 	fmt.Printf("Request info: %v -> %v -> %v\n", metadata.remote, metadata.scheme, metadata.local)
 }
 
-func (ui *CommandlineUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch chan ApprovalStatus) {
+// ApproveTx prompt the user for confirmation to request to sign transaction
+func (ui *CommandlineUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch chan SignTxResponse) {
 
 	fmt.Printf("--------- Transaction request-------------\n")
 	fmt.Printf("to:    %v\n", request.transaction.To())
@@ -51,9 +84,11 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch
 	fmt.Printf("data:  %v\n", common.Bytes2Hex(request.transaction.Data()))
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(metadata)
-	ch <- ApprovalStatus{common.Hash{}, confirm(), ""}
+	ch <- SignTxResponse{request.transaction.Hash(), ui.confirm(), ""}
 }
-func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest, metadata Metadata, ch chan ApprovalStatus) {
+
+// ApproveSignData prompt the user for confirmation to request to sign data
+func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest, metadata Metadata, ch chan SignDataResponse) {
 
 	fmt.Printf("-------- Sign data request--------------\n")
 	fmt.Printf("account:  %x\n", request.account.Address)
@@ -62,9 +97,11 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest, metadata Meta
 	fmt.Printf("message hash:  %v\n", request.hash)
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(metadata)
-	ch <- ApprovalStatus{common.Hash{}, confirm(), ""}
+	ch <- SignDataResponse{ui.confirm(), ""}
 }
-func (ui *CommandlineUI) ApproveExport(request *ExportRequest, metadata Metadata, ch chan ApprovalStatus) {
+
+// ApproveExport prompt the user for confirmation to export encrypted account json
+func (ui *CommandlineUI) ApproveExport(request *ExportRequest, metadata Metadata, ch chan ExportResponse) {
 	fmt.Printf("-------- Export account request--------------\n")
 	fmt.Printf("A request has been made to export the (encrypted) keyfile\n")
 	fmt.Printf("Approving this operation means that the caller obtains the (encrypted) contents\n")
@@ -73,16 +110,21 @@ func (ui *CommandlineUI) ApproveExport(request *ExportRequest, metadata Metadata
 	fmt.Printf("keyfile:  \n%v\n", request.file)
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(metadata)
-	ch <- ApprovalStatus{common.Hash{}, confirm(), ""}
+	ch <- ExportResponse{ui.confirm()}
 }
-func (ui *CommandlineUI) ApproveImport(request *ImportRequest, metadata Metadata, ch chan ApprovalStatus) {
+
+// ApproveImport prompt the user for confirmation to import account json
+func (ui *CommandlineUI) ApproveImport(request *ImportRequest, metadata Metadata, ch chan ImportResponse) {
 	fmt.Printf("-------- Export account request--------------\n")
 	fmt.Printf("A request has been made to import an encrypted keyfile\n")
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(metadata)
-	ch <- ApprovalStatus{common.Hash{}, confirm(), ""}
+	ch <- ImportResponse{ui.confirm(), "", ""}
 }
-func (ui *CommandlineUI) ApproveListing(request *ListRequest, metadata Metadata, ch chan ListApproval) {
+
+// ApproveListing prompt the user for confirmation to list accounts
+// the list of accounts to list can be modified by the ui
+func (ui *CommandlineUI) ApproveListing(request *ListRequest, metadata Metadata, ch chan ListResponse) {
 
 	fmt.Printf("-------- List account request--------------\n")
 	fmt.Printf("A request has been made to list all accounts. \n")
@@ -92,26 +134,31 @@ func (ui *CommandlineUI) ApproveListing(request *ListRequest, metadata Metadata,
 	}
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(metadata)
-	if confirm() {
-		ch <- ListApproval{request.accounts}
+	if ui.confirm() {
+		ch <- ListResponse{request.accounts}
 	} else {
-		ch <- ListApproval{nil}
+		ch <- ListResponse{nil}
 	}
 }
-func (ui *CommandlineUI) ApproveNewAccount(requst *NewAccountRequest, metadata Metadata, ch chan bool) {
+
+// ApproveNewAccount prompt the user for confirmation to create new account, and reveal to caller
+func (ui *CommandlineUI) ApproveNewAccount(requst *NewAccountRequest, metadata Metadata, ch chan NewAccountResponse) {
 	fmt.Printf("-------- New account request--------------\n")
 	fmt.Printf("A request has been made to create a new. \n")
 	fmt.Printf("Approving this operation means that a new account is created,\n")
 	fmt.Printf("and the address show to the caller\n")
 	showMetadata(metadata)
-	ch <- confirm()
+	ch <- NewAccountResponse{ui.confirm(), ""}
 }
 
+// ShowError displays error message to user
 func (ui *CommandlineUI) ShowError(message string) {
-	//stdout is used by communication
+
 	fmt.Printf("ERROR: %v", message)
 }
+
+// ShowInfo displays info message to user
 func (ui *CommandlineUI) ShowInfo(message string) {
-	//stdout is used by communication
+
 	fmt.Printf("Info: %v", message)
 }
