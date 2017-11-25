@@ -22,7 +22,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-
 	"fmt"
 	"net"
 
@@ -55,14 +54,28 @@ func main() {
 			Value: filepath.Join(node.DefaultDataDir(), "keystore"),
 			Usage: "Directory for the keystore",
 		},
+		utils.NetworkIdFlag,
+		utils.LightKDFFlag,
+		utils.NoUSBFlag,
+		utils.RPCListenAddrFlag,
+		cli.IntFlag{
+			Name:  "rpcport",
+			Usage: "HTTP-RPC server listening port",
+			Value: node.DefaultHTTPPort+5,
+		},
 	}
+
 	app.Action = func(c *cli.Context) error {
 		// Set up the logger to print everything and the random generator
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int("loglevel")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
 		var (
 			server   = rpc.NewServer()
-			api      = NewSignerAPI(c.Int64("chainid"), c.String("keystore"), true, NewCommandlineUI())
+			api      = NewSignerAPI(
+						c.Int64(utils.NetworkIdFlag.Name),
+						c.String("keystore"),
+						c.Bool(utils.NoUSBFlag.Name),
+						NewCommandlineUI())
 			listener net.Listener
 			err      error
 		)
@@ -72,8 +85,8 @@ func main() {
 			utils.Fatalf("Could not register signer API: %v", err)
 		}
 
-		endpoint := "localhost:8550"
-
+		// start http server
+		endpoint := fmt.Sprintf("%s:%d", c.String(utils.RPCListenAddrFlag.Name), c.Int("rpcport"))
 		if listener, err = net.Listen("tcp", endpoint); err != nil {
 			utils.Fatalf("Could not start http listener: %v", err)
 		}
