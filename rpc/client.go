@@ -108,7 +108,6 @@ func (msg *jsonrpcMessage) String() string {
 type Client struct {
 	idCounter   uint32
 	connectFunc func(ctx context.Context) (net.Conn, error)
-	isHTTP      bool
 
 	// writeConn is only safe to access outside dispatch, with the
 	// write lock held. The write lock is taken by sending on
@@ -183,11 +182,9 @@ func newClient(initctx context.Context, connectFunc func(context.Context) (net.C
 	if err != nil {
 		return nil, err
 	}
-	_, isHTTP := conn.(*httpConn)
 
 	c := &Client{
 		writeConn:   conn,
-		isHTTP:      isHTTP,
 		connectFunc: connectFunc,
 		close:       make(chan struct{}),
 		didQuit:     make(chan struct{}),
@@ -199,9 +196,8 @@ func newClient(initctx context.Context, connectFunc func(context.Context) (net.C
 		respWait:    make(map[string]*requestOp),
 		subs:        make(map[string]*ClientSubscription),
 	}
-	if !isHTTP {
-		go c.dispatch(conn)
-	}
+
+	go c.dispatch(conn)
 	return c, nil
 }
 
@@ -222,9 +218,6 @@ func (c *Client) SupportedModules() (map[string]string, error) {
 
 // Close closes the client, aborting any in-flight requests.
 func (c *Client) Close() {
-	if c.isHTTP {
-		return
-	}
 	select {
 	case c.close <- struct{}{}:
 		<-c.didQuit
@@ -253,13 +246,7 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 		return err
 	}
 	op := &requestOp{ids: []json.RawMessage{msg.ID}, resp: make(chan *jsonrpcMessage, 1)}
-
-	if c.isHTTP {
-		err = c.sendHTTP(ctx, op, msg)
-	} else {
-		err = c.send(ctx, op, msg)
-	}
-	if err != nil {
+	if err := c.send(ctx, op, msg); err != nil {
 		return err
 	}
 
@@ -313,11 +300,7 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 	}
 
 	var err error
-	if c.isHTTP {
-		err = c.sendBatchHTTP(ctx, op, msgs)
-	} else {
-		err = c.send(ctx, op, msgs)
-	}
+	err = c.send(ctx, op, msgs)
 
 	// Wait for all responses to come back.
 	for n := 0; n < len(b) && err == nil; n++ {
@@ -379,9 +362,6 @@ func (c *Client) Subscribe(ctx context.Context, namespace string, channel interf
 	}
 	if chanVal.IsNil() {
 		panic("channel given to Subscribe must not be nil")
-	}
-	if c.isHTTP {
-		return nil, ErrNotificationsUnsupported
 	}
 
 	msg, err := c.newMessage(namespace+subscribeMethodSuffix, args...)
