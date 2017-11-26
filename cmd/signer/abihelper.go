@@ -102,6 +102,12 @@ func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
 		was := common.Bytes2Hex(calldata)
 		return nil, fmt.Errorf("WARNING: Supplied data is stuffed with extra data. %v \nWant %s\nHave %s", decoded,was, exp)
 	}
-
 	return &decoded, nil
+}
+
+func lookupABI(id []byte) (string, error){
+	if len(id) != 4{
+		return "", fmt.Errorf("Expected 4-byte id, got %d", len(id))
+	}
+	return `[{"type":"function","name":"send","inputs":[{"name":"a","type":"uint256"}]}]`, nil
 }

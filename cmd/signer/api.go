@@ -36,6 +36,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+//type Stringer interface  {String()}
+
+
 type SignerAPI struct {
 	chainID *big.Int
 	am      *accounts.Manager
@@ -64,6 +67,7 @@ type Credentials struct {
 type SignTxRequest struct {
 	transaction *types.Transaction
 	from        accounts.Account
+	callinfo    fmt.Stringer
 }
 type SignTxResponse struct {
 	hash     common.Hash
@@ -111,6 +115,13 @@ type ListRequest struct {
 }
 type ListResponse struct {
 	accounts []Account
+}
+type errorWrapper struct{
+	msg string
+	err error
+}
+func (ew errorWrapper) String() string{
+	return fmt.Sprintf("%s\n%s", ew.msg, ew.err)
 }
 
 // SignerUI specifies what method a UI needs to implement to be able to be used as a UI
@@ -269,8 +280,24 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 		tx = types.NewTransaction(uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
 	}
 
+	req := SignTxRequest{transaction: tx, from: acc}
+	if len(tx.Data()) > 3{
+		var abidef string
+
+		// Try to make sense of the data
+		abidef, err = lookupABI(tx.Data()[:4])
+		if err != nil{
+			req.callinfo = errorWrapper{"Warning! Could not locate ABI", err}
+		}else{
+			req.callinfo, err  = parseCallData(tx.Data(),abidef)
+			if err != nil{
+				req.callinfo = errorWrapper{"Warning! Could not validate ABI-data against calldata", err}
+			}
+		}
+	}
+
 	ch := make(chan SignTxResponse, 1)
-	api.ui.ApproveTx(&SignTxRequest{transaction: tx, from: acc}, metaData(ctx), ch)
+	api.ui.ApproveTx(&req, metaData(ctx), ch)
 
 	if result := <-ch; result.approved {
 		//Sanity check

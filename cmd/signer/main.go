@@ -105,6 +105,12 @@ func main() {
 
 // List accounts
 // curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_list","params":[""],"id":67}' http://localhost:8550/
+
+// Make transaction
+// send(0x12)
+// a52c101e0000000000000000000000000000000000000000000000000000000000000012
+// curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":["0x82A2A876D39022B3019932D30Cd9c97ad5616813","pw",{"gas":"0x333","gasPrice":"0x123","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x10", "input":"0xa52c101e0000000000000000000000000000000000000000000000000000000000000012"}],"id":67}' http://localhost:8550/
+
 type rwc struct {
 	io.Reader
 	io.Writer

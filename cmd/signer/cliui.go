@@ -71,19 +71,28 @@ func (ui *CommandlineUI) confirm() bool {
 }
 
 func showMetadata(metadata Metadata) {
-	fmt.Printf("Request info: %v -> %v -> %v\n", metadata.remote, metadata.scheme, metadata.local)
+	fmt.Printf("Request info:\n\t%v -> %v -> %v\n", metadata.remote, metadata.scheme, metadata.local)
 }
 
 // ApproveTx prompt the user for confirmation to request to sign transaction
 func (ui *CommandlineUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch chan SignTxResponse) {
 
+	weival := request.transaction.Value()
+
 	fmt.Printf("--------- Transaction request-------------\n")
-	fmt.Printf("to:    %v\n", request.transaction.To())
-	fmt.Printf("from:  %v\n", request.from)
-	fmt.Printf("value: %v\n", request.transaction.Value())
+	fmt.Printf("to:    %v\n", request.transaction.To().Hex())
+	fmt.Printf("from:  %v\n", request.from.Address.Hex())
+	fmt.Printf("value: %v wei\n", weival)
 	fmt.Printf("data:  %v\n", common.Bytes2Hex(request.transaction.Data()))
-	fmt.Printf("-------------------------------------------\n")
+	if request.callinfo != nil{
+		fmt.Printf("\nNote: This transaction contains data. Review abi-decoding info below:")
+		fmt.Printf("\nCall info:\n\t%v\n", request.callinfo.String())
+
+	}
+	fmt.Printf("\n")
 	showMetadata(metadata)
+	fmt.Printf("-------------------------------------------\n")
+
 	ch <- SignTxResponse{request.transaction.Hash(), ui.confirm(), ""}
 }
 
