@@ -584,6 +584,8 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.TestnetBootnodes
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		urls = params.RinkebyBootnodes
+	case cfg.BootstrapNodes != nil:
+		return // already set, don't apply defaults.
 	}
 
 	cfg.BootstrapNodes = make([]*discover.Node, 0, len(urls))
