@@ -69,6 +69,8 @@ func (e Event) tupleUnpack(v interface{}, output []byte) error {
 	for i := 0; i < len(e.Inputs); i++ {
 		input := e.Inputs[i]
 		if input.Indexed {
+			// indexed inputs are not available in log output
+			j--
 			// can't read, continue
 			continue
 		} else if input.Type.T == ArrayTy {
