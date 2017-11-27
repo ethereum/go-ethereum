@@ -1073,6 +1073,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+		if pm.server.influxDBLogger != nil {
+			pm.server.influxDBLogger.WriteData(msg.Code, uint64(reqCnt), rcost, mclock.Now(), p.id)
+		}
 
 		return p.SendTxStatus(req.ReqID, bv, pm.txStatus(req.Hashes))
 

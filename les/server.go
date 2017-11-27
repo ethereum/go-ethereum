@@ -45,9 +45,13 @@ type LesServer struct {
 	lesTopics       []discv5.Topic
 	privateKey      *ecdsa.PrivateKey
 	quitSync        chan struct{}
+<<<<<<< HEAD
 
 	chtIndexer, bloomTrieIndexer *core.ChainIndexer
 	influxDBLogger               *influxLogger
+=======
+	influxDBLogger  *influxLogger
+>>>>>>> f35c77a0584a4ab4d2d31ee8769406c6ad14bcfe
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {

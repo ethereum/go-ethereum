@@ -184,6 +184,7 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
+<<<<<<< HEAD
 	// Dashboard settings
 	DashboardEnabledFlag = cli.BoolFlag{
 		Name:  "dashboard",
@@ -209,6 +210,8 @@ var (
 		Usage: "Developer flag to serve the dashboard from the local file system",
 		Value: dashboard.DefaultConfig.Assets,
 	}
+=======
+>>>>>>> f35c77a0584a4ab4d2d31ee8769406c6ad14bcfe
 	LightServStatsFlag = cli.BoolFlag{
 		Name:  "lightservstats",
 		Usage: "Enables LES server to put data to influxdb database",
