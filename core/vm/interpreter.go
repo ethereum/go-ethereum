@@ -18,6 +18,7 @@ package vm
 
 import (
 	"fmt"
+	"math/big"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -137,17 +138,18 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		// to be uint256. Practically much less so feasible.
 		pc   = uint64(0) // program counter
 		cost uint64
+
 		// copies used by tracer
-		stackCopy = newstack() // stackCopy needed for Tracer since stack is mutated by 63/64 gas rule
-		pcCopy    uint64       // needed for the deferred Tracer
-		gasCopy   uint64       // for Tracer to log gas remaining before execution
-		logged    bool         // deferred Tracer should ignore already logged steps
+		pcCopy   uint64   // needed for the deferred Tracer
+		gasCopy  uint64   // for Tracer to log gas remaining before execution
+		stackTop *big.Int // top stack item in case CALL* gas calculation modifies it
+		logged   bool     // deferred Tracer should ignore already logged steps
 	)
 	contract.Input = input
 
 	defer func() {
 		if err != nil && !logged && in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, mem, stackCopy, contract, in.evm.depth, err)
+			in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
 		}
 	}()
 
@@ -159,16 +161,20 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		// Get the memory location of pc
 		op = contract.GetOp(pc)
 
+		// If the transaction is being traced, track some execution metadata
 		if in.cfg.Debug {
 			logged = false
+
 			pcCopy = pc
 			gasCopy = contract.Gas
-			stackCopy = newstack()
-			for _, val := range stack.data {
-				stackCopy.push(val)
+			stackTop = nil
+
+			if op == CALL || op == CALLCODE || op == DELEGATECALL || op == STATICCALL {
+				if len(stack.data) > 0 {
+					stackTop = new(big.Int).Set(stack.data[stack.len()-1])
+				}
 			}
 		}
-
 		// Get the operation from the jump table matching the opcode and validate the
 		// stack and make sure there enough stack items available to perform the operation
 		operation := in.cfg.JumpTable[op]
@@ -209,12 +215,19 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		if memorySize > 0 {
 			mem.Resize(memorySize)
 		}
-
+		// If the transaction is being traced, feed the opcode to the tracer before exec
 		if in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, mem, stackCopy, contract, in.evm.depth, err)
+			// The top stack item is modified for CALL*, temporarily replace if done so
+			if stackTop != nil {
+				stackTop, stack.data[stack.len()-1] = stack.data[stack.len()-1], stackTop
+			}
+			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
+
+			if stackTop != nil {
+				stackTop, stack.data[stack.len()-1] = stack.data[stack.len()-1], stackTop
+			}
 			logged = true
 		}
-
 		// execute the operation
 		res, err := operation.execute(&pc, in.evm, contract, mem, stack)
 		// verifyPool is a build flag. Pool verification makes sure the integrity
@@ -227,7 +240,6 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		if operation.returns {
 			in.returnData = res
 		}
-
 		switch {
 		case err != nil:
 			return nil, err
