@@ -36,9 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-//type Stringer interface  {String()}
-
-
 type SignerAPI struct {
 	chainID *big.Int
 	am      *accounts.Manager
@@ -52,75 +49,67 @@ type Metadata struct {
 	scheme string
 }
 
-type credPreference int
-
-const (
-	forgetPw credPreference = iota
-	rememberPwNow
+// types for the requests/response types
+type (
+	// SignTxRequest contains info about a transaction to sign
+	SignTxRequest struct {
+		transaction *types.Transaction
+		from        accounts.Account
+		callinfo    fmt.Stringer
+	}
+	// SignTxResponse result from SignTxRequest
+	SignTxResponse struct {
+		hash     common.Hash
+		approved bool
+		pw       string
+	}
+	// ExportRequest info about query to export accounts
+	ExportRequest struct {
+		account accounts.Account
+		file    string
+	}
+	// ExportResponse response to export-request
+	ExportResponse struct {
+		approved bool
+	}
+	// ImportRequest info about request to import an account
+	ImportRequest struct {
+		account accounts.Account
+	}
+	ImportResponse struct {
+		approved    bool
+		oldPassword string
+		newPassword string
+	}
+	SignDataRequest struct {
+		account accounts.Account
+		rawdata hexutil.Bytes
+		message string
+		hash    hexutil.Bytes
+	}
+	SignDataResponse struct {
+		approved bool
+		pw       string
+	}
+	NewAccountRequest  struct{}
+	NewAccountResponse struct {
+		approved bool
+		pw       string
+	}
+	ListRequest struct {
+		accounts []Account
+	}
+	ListResponse struct {
+		accounts []Account
+	}
 )
 
-type Credentials struct {
-	password string
-}
-
-// SignTxRequest contains info about a transaction to sign
-type SignTxRequest struct {
-	transaction *types.Transaction
-	from        accounts.Account
-	callinfo    fmt.Stringer
-}
-type SignTxResponse struct {
-	hash     common.Hash
-	approved bool
-	pw       string
-}
-
-type ExportRequest struct {
-	account accounts.Account
-	file    string
-}
-type ExportResponse struct {
-	approved bool
-}
-
-type ImportRequest struct {
-	account accounts.Account
-}
-
-type ImportResponse struct {
-	approved    bool
-	oldPassword string
-	newPassword string
-}
-
-type SignDataRequest struct {
-	account accounts.Account
-	rawdata hexutil.Bytes
-	message string
-	hash    hexutil.Bytes
-}
-type SignDataResponse struct {
-	approved bool
-	pw       string
-}
-
-type NewAccountRequest struct{}
-type NewAccountResponse struct {
-	approved bool
-	pw       string
-}
-
-type ListRequest struct {
-	accounts []Account
-}
-type ListResponse struct {
-	accounts []Account
-}
-type errorWrapper struct{
+type errorWrapper struct {
 	msg string
 	err error
 }
-func (ew errorWrapper) String() string{
+
+func (ew errorWrapper) String() string {
 	return fmt.Sprintf("%s\n%s", ew.msg, ew.err)
 }
 
@@ -281,16 +270,16 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 	}
 
 	req := SignTxRequest{transaction: tx, from: acc}
-	if len(tx.Data()) > 3{
+	if len(tx.Data()) > 3 {
 		var abidef string
 
 		// Try to make sense of the data
 		abidef, err = lookupABI(tx.Data()[:4])
-		if err != nil{
+		if err != nil {
 			req.callinfo = errorWrapper{"Warning! Could not locate ABI", err}
-		}else{
-			req.callinfo, err  = parseCallData(tx.Data(),abidef)
-			if err != nil{
+		} else {
+			req.callinfo, err = parseCallData(tx.Data(), abidef)
+			if err != nil {
 				req.callinfo = errorWrapper{"Warning! Could not validate ABI-data against calldata", err}
 			}
 		}

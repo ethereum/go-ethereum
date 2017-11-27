@@ -24,14 +24,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/crypto/ssh/terminal"
+	"sync"
 )
 
 type CommandlineUI struct {
 	in *bufio.Reader
+	mu sync.Mutex
 }
 
 func NewCommandlineUI() *CommandlineUI {
-	return &CommandlineUI{bufio.NewReader(os.Stdin)}
+	return &CommandlineUI{in: bufio.NewReader(os.Stdin)}
 }
 
 // readString reads a single line from stdin, trimming if from spaces, enforcing
@@ -76,15 +78,18 @@ func showMetadata(metadata Metadata) {
 
 // ApproveTx prompt the user for confirmation to request to sign transaction
 func (ui *CommandlineUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch chan SignTxResponse) {
-
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
 	weival := request.transaction.Value()
 
 	fmt.Printf("--------- Transaction request-------------\n")
 	fmt.Printf("to:    %v\n", request.transaction.To().Hex())
 	fmt.Printf("from:  %v\n", request.from.Address.Hex())
 	fmt.Printf("value: %v wei\n", weival)
-	fmt.Printf("data:  %v\n", common.Bytes2Hex(request.transaction.Data()))
-	if request.callinfo != nil{
+	if len(request.transaction.Data()) > 0{
+		fmt.Printf("data:  %v\n", common.Bytes2Hex(request.transaction.Data()))
+	}
+	if request.callinfo != nil {
 		fmt.Printf("\nNote: This transaction contains data. Review abi-decoding info below:")
 		fmt.Printf("\nCall info:\n\t%v\n", request.callinfo.String())
 
@@ -98,6 +103,8 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch
 
 // ApproveSignData prompt the user for confirmation to request to sign data
 func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest, metadata Metadata, ch chan SignDataResponse) {
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
 
 	fmt.Printf("-------- Sign data request--------------\n")
 	fmt.Printf("account:  %x\n", request.account.Address)
@@ -111,6 +118,9 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest, metadata Meta
 
 // ApproveExport prompt the user for confirmation to export encrypted account json
 func (ui *CommandlineUI) ApproveExport(request *ExportRequest, metadata Metadata, ch chan ExportResponse) {
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+
 	fmt.Printf("-------- Export account request--------------\n")
 	fmt.Printf("A request has been made to export the (encrypted) keyfile\n")
 	fmt.Printf("Approving this operation means that the caller obtains the (encrypted) contents\n")
@@ -124,6 +134,9 @@ func (ui *CommandlineUI) ApproveExport(request *ExportRequest, metadata Metadata
 
 // ApproveImport prompt the user for confirmation to import account json
 func (ui *CommandlineUI) ApproveImport(request *ImportRequest, metadata Metadata, ch chan ImportResponse) {
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+
 	fmt.Printf("-------- Export account request--------------\n")
 	fmt.Printf("A request has been made to import an encrypted keyfile\n")
 	fmt.Printf("-------------------------------------------\n")
@@ -134,6 +147,9 @@ func (ui *CommandlineUI) ApproveImport(request *ImportRequest, metadata Metadata
 // ApproveListing prompt the user for confirmation to list accounts
 // the list of accounts to list can be modified by the ui
 func (ui *CommandlineUI) ApproveListing(request *ListRequest, metadata Metadata, ch chan ListResponse) {
+
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
 
 	fmt.Printf("-------- List account request--------------\n")
 	fmt.Printf("A request has been made to list all accounts. \n")
@@ -152,6 +168,10 @@ func (ui *CommandlineUI) ApproveListing(request *ListRequest, metadata Metadata,
 
 // ApproveNewAccount prompt the user for confirmation to create new account, and reveal to caller
 func (ui *CommandlineUI) ApproveNewAccount(requst *NewAccountRequest, metadata Metadata, ch chan NewAccountResponse) {
+
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+
 	fmt.Printf("-------- New account request--------------\n")
 	fmt.Printf("A request has been made to create a new. \n")
 	fmt.Printf("Approving this operation means that a new account is created,\n")
