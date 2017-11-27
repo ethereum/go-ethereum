@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// Calculator calculator is a utility used by the hasher, used to calculate the hash value of the tree node.
+// calculator is a utility used by the hasher to calculate the hash value of the tree node.
 type calculator struct {
 	sha    hash.Hash
 	buffer *bytes.Buffer
@@ -41,9 +41,10 @@ var calculatorPool = sync.Pool{
 
 // hasher hasher is used to calculate the hash value of the whole tree.
 type hasher struct {
-	cachegen, cachelimit uint16
-	threaded             bool
-	mu                   sync.Mutex
+	cachegen   uint16
+	cachelimit uint16
+	threaded   bool
+	mu         sync.Mutex
 }
 
 func newHasher(cachegen, cachelimit uint16) *hasher {
@@ -62,6 +63,7 @@ func (h *hasher) newCalculator() *calculator {
 	return calculator
 }
 
+// returnCalculator returns a no longer used calculator to the pool.
 func (h *hasher) returnCalculator(calculator *calculator) {
 	calculatorPool.Put(calculator)
 }
@@ -140,34 +142,41 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter) (node, node, err
 		// Hash the full node's children, caching the newly hashed subtrees
 		collapsed, cached := n.copy(), n.copy()
 
+		// hashChild is a helper to hash a single child, which is called either on the
+		// same thread as the caller or in a goroutine for the toplevel branching.
 		hashChild := func(index int, wg *sync.WaitGroup) {
-			var herr error
-			if collapsed.Children[index] != nil {
-				collapsed.Children[index], cached.Children[index], herr = h.hash(n.Children[index], db, false)
-				if herr != nil {
-					h.mu.Lock()
-					err = herr
-					h.mu.Unlock()
-				}
-			} else {
-				collapsed.Children[index] = valueNode(nil) // Ensure that nil children are encoded as empty strings.
-			}
 			if wg != nil {
-				wg.Done()
+				defer wg.Done()
+			}
+			// Ensure that nil children are encoded as empty strings.
+			if collapsed.Children[index] == nil {
+				collapsed.Children[index] = valueNode(nil)
+				return
+			}
+			// Hash all other children properly
+			var herr error
+			collapsed.Children[index], cached.Children[index], herr = h.hash(n.Children[index], db, false)
+			if herr != nil {
+				h.mu.Lock() // rarely if ever locked, no congenstion
+				err = herr
+				h.mu.Unlock()
 			}
 		}
-
+		// If we're not running in threaded mode yet, span a goroutine for each child
 		if !h.threaded {
-			// Calculate children hash concurrently.
-			// Note. Avoid creating too much goroutines(which may hits GC),
-			// we only thread out on the topmost full node.
+			// Disable further threading
+			h.threaded = true
+
+			// Hash all the children concurrently
 			var wg sync.WaitGroup
 			for i := 0; i < 16; i++ {
 				wg.Add(1)
 				go hashChild(i, &wg)
 			}
 			wg.Wait()
-			h.threaded = true
+
+			// Reenable threading for subsequent hash calls
+			h.threaded = false
 		} else {
 			for i := 0; i < 16; i++ {
 				hashChild(i, nil)
@@ -195,11 +204,11 @@ func (h *hasher) store(n node, db DatabaseWriter, force bool) (node, error) {
 	}
 	calculator := h.newCalculator()
 	defer h.returnCalculator(calculator)
+
 	// Generate the RLP encoding of the node
 	if err := rlp.Encode(calculator.buffer, n); err != nil {
 		panic("encode error: " + err.Error())
 	}
-
 	if calculator.buffer.Len() < 32 && !force {
 		return n, nil // Nodes smaller than 32 bytes are stored inside their parent
 	}
@@ -210,10 +219,11 @@ func (h *hasher) store(n node, db DatabaseWriter, force bool) (node, error) {
 		hash = hashNode(calculator.sha.Sum(nil))
 	}
 	if db != nil {
-		// db is not concurrent safe here.
+		// db might be a leveldb batch, which is not safe for concurrent writes
 		h.mu.Lock()
 		err := db.Put(hash, calculator.buffer.Bytes())
 		h.mu.Unlock()
+
 		return hash, err
 	}
 	return hash, nil
