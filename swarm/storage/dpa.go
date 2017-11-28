@@ -63,20 +63,27 @@ type DPA struct {
 }
 
 // for testing locally
-func NewLocalDPA(datadir string, hashalgorithm string) (*DPA, error) {
+func NewLocalDPA(datadir string, hashalgorithm string, dbcapacity uint64, memcapacity uint) (*DPA, error) {
 
 	if hashalgorithm == "" {
 		hashalgorithm = "SHA3"
 	}
 	hash := MakeHashFunc(hashalgorithm)
 
-	dbStore, err := NewDbStore(datadir, hash, singletonSwarmDbCapacity, 0)
+	if dbcapacity == 0 {
+		dbcapacity = uint64(singletonSwarmDbCapacity)
+	}
+	if memcapacity == 0 {
+		memcapacity = uint(singletonSwarmCacheCapacity)
+	}
+
+	log.Debug("LocalDPA create", "dbcap", dbcapacity, "memcap", memcapacity)
+	dbStore, err := NewDbStore(datadir, hash, dbcapacity, 0)
 	if err != nil {
 		return nil, err
 	}
-
 	return NewDPA(&LocalStore{
-		NewMemStore(dbStore, singletonSwarmCacheCapacity),
+		NewMemStore(dbStore, memcapacity),
 		dbStore,
 	}, NewChunkerParams()), nil
 }

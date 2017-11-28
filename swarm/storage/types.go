@@ -29,6 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
+const (
+	CHUNKSIZE = 4096
+)
+
 type Hasher func() hash.Hash
 type SwarmHasher func() SwarmHash
 
