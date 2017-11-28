@@ -136,6 +136,10 @@ func (head *listhead) encode(buf []byte) []byte {
 	return buf[:puthead(buf, 0xC0, 0xF7, uint64(head.size))]
 }
 
+func LengthPrefix(buf []byte, size uint64) []byte {
+	return buf[:puthead(buf, 0xC0, 0xF7, size)]
+}
+
 // headsize returns the size of a list or string header
 // for a value of the given size.
 func headsize(size uint64) int {
