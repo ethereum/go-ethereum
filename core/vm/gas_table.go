@@ -352,7 +352,7 @@ func gasCall(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem
 	// We replace the stack item so that it's available when the opCall instruction is
 	// called. This information is otherwise lost due to the dependency on *current*
 	// available gas.
-	stack.data[stack.len()-1] = new(big.Int).SetUint64(cg)
+	stack.data[stack.len()-1].SetUint64(cg)
 
 	if gas, overflow = math.SafeAdd(gas, cg); overflow {
 		return 0, errGasUintOverflow
@@ -384,7 +384,7 @@ func gasCallCode(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack,
 	// We replace the stack item so that it's available when the opCall instruction is
 	// called. This information is otherwise lost due to the dependency on *current*
 	// available gas.
-	stack.data[stack.len()-1] = new(big.Int).SetUint64(cg)
+	stack.data[stack.len()-1].SetUint64(cg)
 
 	if gas, overflow = math.SafeAdd(gas, cg); overflow {
 		return 0, errGasUintOverflow
@@ -445,7 +445,7 @@ func gasDelegateCall(gt params.GasTable, evm *EVM, contract *Contract, stack *St
 	// (availableGas - gas) * 63 / 64
 	// We replace the stack item so that it's available when the opCall instruction is
 	// called.
-	stack.data[stack.len()-1] = new(big.Int).SetUint64(cg)
+	stack.data[stack.len()-1].SetUint64(cg)
 
 	if gas, overflow = math.SafeAdd(gas, cg); overflow {
 		return 0, errGasUintOverflow
@@ -472,7 +472,7 @@ func gasStaticCall(gt params.GasTable, evm *EVM, contract *Contract, stack *Stac
 	// (availableGas - gas) * 63 / 64
 	// We replace the stack item so that it's available when the opCall instruction is
 	// called.
-	stack.data[stack.len()-1] = new(big.Int).SetUint64(cg)
+	stack.data[stack.len()-1].SetUint64(cg)
 
 	if gas, overflow = math.SafeAdd(gas, cg); overflow {
 		return 0, errGasUintOverflow
