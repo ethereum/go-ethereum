@@ -47,7 +47,7 @@ const HistoryFile = "history"
 // DefaultPrompt is the default prompt line prefix to use for user input querying.
 const DefaultPrompt = "> "
 
-// Config is te collection of configurations to fine tune the behavior of the
+// Config is the collection of configurations to fine tune the behavior of the
 // JavaScript console.
 type Config struct {
 	DataDir  string       // Data directory to store the console history at
@@ -238,7 +238,7 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 	// E.g. in case of nested lines eth.getBalance(eth.coinb<tab><tab>
 	start := pos - 1
 	for ; start > 0; start-- {
-		// Skip all methods and namespaces (i.e. including te dot)
+		// Skip all methods and namespaces (i.e. including the dot)
 		if line[start] == '.' || (line[start] >= 'a' && line[start] <= 'z') || (line[start] >= 'A' && line[start] <= 'Z') {
 			continue
 		}

@@ -112,7 +112,7 @@ type stTransactionMarshaling struct {
 func (t *StateTest) Subtests() []StateSubtest {
 	var sub []StateSubtest
 	for fork, pss := range t.json.Post {
-		for i, _ := range pss {
+		for i := range pss {
 			sub = append(sub, StateSubtest{fork, i})
 		}
 	}

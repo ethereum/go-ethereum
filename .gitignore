@@ -33,3 +33,8 @@ profile.cov
 
 # IdeaIDE
 .idea
+
+# dashboard
+/dashboard/assets/node_modules
+/dashboard/assets/stats.json
+/dashboard/assets/public/bundle.js

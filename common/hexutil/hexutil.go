@@ -53,9 +53,7 @@ var (
 
 type decError struct{ msg string }
 
-func (err decError) Error() string {
-	return string(err.msg)
-}
+func (err decError) Error() string { return err.msg }
 
 // Decode decodes a hex string with 0x prefix.
 func Decode(input string) ([]byte, error) {

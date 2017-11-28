@@ -55,7 +55,7 @@ func (self *Depo) HandleUnsyncedKeysMsg(req *unsyncedKeysMsgData, p *peer) error
 	var err error
 	for _, req := range unsynced {
 		// skip keys that are found,
-		chunk, err = self.localStore.Get(storage.Key(req.Key[:]))
+		chunk, err = self.localStore.Get(req.Key[:])
 		if err != nil || chunk.SData == nil {
 			missing = append(missing, req)
 		}

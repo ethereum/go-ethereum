@@ -98,7 +98,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		peers:            peers,
 		reqDist:          newRequestDistributor(peers, quitSync),
 		accountManager:   ctx.AccountManager,
-		engine:           eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb),
+		engine:           eth.CreateConsensusEngine(ctx, &config.Ethash, chainConfig, chainDb),
 		shutdownChan:     make(chan bool),
 		networkId:        config.NetworkId,
 		bloomRequests:    make(chan chan *bloombits.Retrieval),
@@ -145,7 +145,7 @@ func lesTopic(genesisHash common.Hash, protocolVersion uint) discv5.Topic {
 	default:
 		panic(nil)
 	}
-	return discv5.Topic(name + common.Bytes2Hex(genesisHash.Bytes()[0:8]))
+	return discv5.Topic(name + "@" + common.Bytes2Hex(genesisHash.Bytes()[0:8]))
 }
 
 type LightDummyAPI struct{}

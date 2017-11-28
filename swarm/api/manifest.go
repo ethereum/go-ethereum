@@ -238,7 +238,7 @@ func (self *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 		return
 	}
 
-	b := byte(entry.Path[0])
+	b := entry.Path[0]
 	oldentry := self.entries[b]
 	if (oldentry == nil) || (oldentry.Path == entry.Path && oldentry.ContentType != ManifestType) {
 		self.entries[b] = entry
@@ -294,7 +294,7 @@ func (self *manifestTrie) deleteEntry(path string, quitC chan bool) {
 		return
 	}
 
-	b := byte(path[0])
+	b := path[0]
 	entry := self.entries[b]
 	if entry == nil {
 		return
@@ -425,7 +425,7 @@ func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *man
 	}
 
 	//see if first char is in manifest entries
-	b := byte(path[0])
+	b := path[0]
 	entry = self.entries[b]
 	if entry == nil {
 		return self.entries[256], 0
@@ -436,6 +436,16 @@ func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *man
 	if len(path) <= epl {
 		if entry.Path[:len(path)] == path {
 			if entry.ContentType == ManifestType {
+				err := self.loadSubTrie(entry, quitC)
+				if err == nil && entry.subtrie != nil {
+					subentries := entry.subtrie.entries
+					for i := 0; i < len(subentries); i++ {
+						sub := subentries[i]
+						if sub != nil && sub.Path == "" {
+							return sub, len(path)
+						}
+					}
+				}
 				entry.Status = http.StatusMultipleChoices
 			}
 			pos = len(path)

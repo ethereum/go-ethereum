@@ -400,7 +400,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 
 	var send keyValueList
 	send = send.add("protocolVersion", uint64(p.version))
-	send = send.add("networkId", uint64(p.network))
+	send = send.add("networkId", p.network)
 	send = send.add("headTd", td)
 	send = send.add("headHash", head)
 	send = send.add("headNum", headNum)

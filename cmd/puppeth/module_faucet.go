@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"math/rand"
@@ -25,36 +26,24 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
 // faucetDockerfile is the Dockerfile required to build an faucet container to
 // grant crypto tokens based on GitHub authentications.
 var faucetDockerfile = `
-FROM alpine:latest
-
-RUN mkdir /go
-ENV GOPATH /go
-
-RUN \
-  apk add --update git go make gcc musl-dev ca-certificates linux-headers                             && \
-	mkdir -p $GOPATH/src/github.com/ethereum                                                            && \
-	(cd $GOPATH/src/github.com/ethereum && git clone --depth=1 https://github.com/ethereum/go-ethereum) && \
-  go build -v github.com/ethereum/go-ethereum/cmd/faucet                                              && \
-  apk del git go make gcc musl-dev linux-headers                                                      && \
-  rm -rf $GOPATH && rm -rf /var/cache/apk/*
+FROM ethereum/client-go:alltools-latest
 
 ADD genesis.json /genesis.json
 ADD account.json /account.json
 ADD account.pass /account.pass
 
-EXPOSE 8080
-
-CMD [ \
-	"/faucet", "--genesis", "/genesis.json", "--network", "{{.NetworkID}}", "--bootnodes", "{{.Bootnodes}}", "--ethstats", "{{.Ethstats}}", "--ethport", "{{.EthPort}}", \
-	"--faucet.name", "{{.FaucetName}}", "--faucet.amount", "{{.FaucetAmount}}", "--faucet.minutes", "{{.FaucetMinutes}}", "--faucet.tiers", "{{.FaucetTiers}}",          \
-	"--github.user", "{{.GitHubUser}}", "--github.token", "{{.GitHubToken}}", "--account.json", "/account.json", "--account.pass", "/account.pass"                       \
-	{{if .CaptchaToken}}, "--captcha.token", "{{.CaptchaToken}}", "--captcha.secret", "{{.CaptchaSecret}}"{{end}}                                                        \
+ENTRYPOINT [ \
+	"faucet", "--genesis", "/genesis.json", "--network", "{{.NetworkID}}", "--bootnodes", "{{.Bootnodes}}", "--ethstats", "{{.Ethstats}}", "--ethport", "{{.EthPort}}",     \
+	"--faucet.name", "{{.FaucetName}}", "--faucet.amount", "{{.FaucetAmount}}", "--faucet.minutes", "{{.FaucetMinutes}}", "--faucet.tiers", "{{.FaucetTiers}}",             \
+	"--account.json", "/account.json", "--account.pass", "/account.pass"                                                                                                    \
+	{{if .CaptchaToken}}, "--captcha.token", "{{.CaptchaToken}}", "--captcha.secret", "{{.CaptchaSecret}}"{{end}}{{if .NoAuth}}, "--noauth"{{end}}                          \
 ]`
 
 // faucetComposefile is the docker-compose.yml file required to deploy and maintain
@@ -76,10 +65,9 @@ services:
       - FAUCET_AMOUNT={{.FaucetAmount}}
       - FAUCET_MINUTES={{.FaucetMinutes}}
       - FAUCET_TIERS={{.FaucetTiers}}
-      - GITHUB_USER={{.GitHubUser}}
-      - GITHUB_TOKEN={{.GitHubToken}}
       - CAPTCHA_TOKEN={{.CaptchaToken}}
-      - CAPTCHA_SECRET={{.CaptchaSecret}}{{if .VHost}}
+      - CAPTCHA_SECRET={{.CaptchaSecret}}
+      - NO_AUTH={{.NoAuth}}{{if .VHost}}
       - VIRTUAL_HOST={{.VHost}}
       - VIRTUAL_PORT=8080{{end}}
     logging:
@@ -93,7 +81,7 @@ services:
 // deployFaucet deploys a new faucet container to a remote machine via SSH,
 // docker and docker-compose. If an instance with the specified network name
 // already exists there, it will be overwritten!
-func deployFaucet(client *sshClient, network string, bootnodes []string, config *faucetInfos) ([]byte, error) {
+func deployFaucet(client *sshClient, network string, bootnodes []string, config *faucetInfos, nocache bool) ([]byte, error) {
 	// Generate the content to upload to the server
 	workdir := fmt.Sprintf("%d", rand.Int63())
 	files := make(map[string][]byte)
@@ -104,14 +92,13 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 		"Bootnodes":     strings.Join(bootnodes, ","),
 		"Ethstats":      config.node.ethstats,
 		"EthPort":       config.node.portFull,
-		"GitHubUser":    config.githubUser,
-		"GitHubToken":   config.githubToken,
 		"CaptchaToken":  config.captchaToken,
 		"CaptchaSecret": config.captchaSecret,
 		"FaucetName":    strings.Title(network),
 		"FaucetAmount":  config.amount,
 		"FaucetMinutes": config.minutes,
 		"FaucetTiers":   config.tiers,
+		"NoAuth":        config.noauth,
 	})
 	files[filepath.Join(workdir, "Dockerfile")] = dockerfile.Bytes()
 
@@ -123,17 +110,16 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 		"ApiPort":       config.port,
 		"EthPort":       config.node.portFull,
 		"EthName":       config.node.ethstats[:strings.Index(config.node.ethstats, ":")],
-		"GitHubUser":    config.githubUser,
-		"GitHubToken":   config.githubToken,
 		"CaptchaToken":  config.captchaToken,
 		"CaptchaSecret": config.captchaSecret,
 		"FaucetAmount":  config.amount,
 		"FaucetMinutes": config.minutes,
 		"FaucetTiers":   config.tiers,
+		"NoAuth":        config.noauth,
 	})
 	files[filepath.Join(workdir, "docker-compose.yaml")] = composefile.Bytes()
 
-	files[filepath.Join(workdir, "genesis.json")] = []byte(config.node.genesis)
+	files[filepath.Join(workdir, "genesis.json")] = config.node.genesis
 	files[filepath.Join(workdir, "account.json")] = []byte(config.node.keyJSON)
 	files[filepath.Join(workdir, "account.pass")] = []byte(config.node.keyPass)
 
@@ -144,7 +130,10 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 	defer client.Run("rm -rf " + workdir)
 
 	// Build and deploy the faucet service
-	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build", workdir, network))
+	if nocache {
+		return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s build --pull --no-cache && docker-compose -p %s up -d --force-recreate", workdir, network, network))
+	}
+	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate", workdir, network))
 }
 
 // faucetInfos is returned from an faucet status check to allow reporting various
@@ -156,15 +145,38 @@ type faucetInfos struct {
 	amount        int
 	minutes       int
 	tiers         int
-	githubUser    string
-	githubToken   string
+	noauth        bool
 	captchaToken  string
 	captchaSecret string
 }
 
-// String implements the stringer interface.
-func (info *faucetInfos) String() string {
-	return fmt.Sprintf("host=%s, api=%d, eth=%d, amount=%d, minutes=%d, tiers=%d, github=%s, captcha=%v, ethstats=%s", info.host, info.port, info.node.portFull, info.amount, info.minutes, info.tiers, info.githubUser, info.captchaToken != "", info.node.ethstats)
+// Report converts the typed struct into a plain string->string map, containing
+// most - but not all - fields for reporting to the user.
+func (info *faucetInfos) Report() map[string]string {
+	report := map[string]string{
+		"Website address":              info.host,
+		"Website listener port":        strconv.Itoa(info.port),
+		"Ethereum listener port":       strconv.Itoa(info.node.portFull),
+		"Funding amount (base tier)":   fmt.Sprintf("%d Ethers", info.amount),
+		"Funding cooldown (base tier)": fmt.Sprintf("%d mins", info.minutes),
+		"Funding tiers":                strconv.Itoa(info.tiers),
+		"Captha protection":            fmt.Sprintf("%v", info.captchaToken != ""),
+		"Ethstats username":            info.node.ethstats,
+	}
+	if info.noauth {
+		report["Debug mode (no auth)"] = "enabled"
+	}
+	if info.node.keyJSON != "" {
+		var key struct {
+			Address string `json:"address"`
+		}
+		if err := json.Unmarshal([]byte(info.node.keyJSON), &key); err == nil {
+			report["Funding account"] = common.HexToAddress(key.Address).Hex()
+		} else {
+			log.Error("Failed to retrieve signer address", "err", err)
+		}
+	}
+	return report
 }
 
 // checkFaucet does a health-check against an faucet server to verify whether
@@ -224,9 +236,8 @@ func checkFaucet(client *sshClient, network string) (*faucetInfos, error) {
 		amount:        amount,
 		minutes:       minutes,
 		tiers:         tiers,
-		githubUser:    infos.envvars["GITHUB_USER"],
-		githubToken:   infos.envvars["GITHUB_TOKEN"],
 		captchaToken:  infos.envvars["CAPTCHA_TOKEN"],
 		captchaSecret: infos.envvars["CAPTCHA_SECRET"],
+		noauth:        infos.envvars["NO_AUTH"] == "true",
 	}, nil
 }
