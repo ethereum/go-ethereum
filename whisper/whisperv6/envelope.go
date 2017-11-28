@@ -40,7 +40,6 @@ type Envelope struct {
 	Expiry   uint32
 	TTL      uint32
 	Topic    TopicType
-	AESNonce []byte
 	Data     []byte
 	Nonce    uint64
 
@@ -51,12 +50,12 @@ type Envelope struct {
 
 // size returns the size of envelope as it is sent (i.e. public fields only)
 func (e *Envelope) size() int {
-	return 20 + len(e.Version) + len(e.AESNonce) + len(e.Data)
+	return 20 + len(e.Version) + len(e.Data)
 }
 
 // rlpWithoutNonce returns the RLP encoded envelope contents, except the nonce.
 func (e *Envelope) rlpWithoutNonce() []byte {
-	res, _ := rlp.EncodeToBytes([]interface{}{e.Version, e.Expiry, e.TTL, e.Topic, e.AESNonce, e.Data})
+	res, _ := rlp.EncodeToBytes([]interface{}{e.Version, e.Expiry, e.TTL, e.Topic, e.Data})
 	return res
 }
 
@@ -80,14 +79,6 @@ func NewEnvelope(ttl uint32, topic TopicType, aesNonce []byte, msg *sentMessage)
 	}
 
 	return &env
-}
-
-func (e *Envelope) IsSymmetric() bool {
-	return len(e.AESNonce) > 0
-}
-
-func (e *Envelope) isAsymmetric() bool {
-	return !e.IsSymmetric()
 }
 
 func (e *Envelope) Ver() uint64 {
@@ -209,7 +200,7 @@ func (e *Envelope) OpenAsymmetric(key *ecdsa.PrivateKey) (*ReceivedMessage, erro
 // OpenSymmetric tries to decrypt an envelope, potentially encrypted with a particular key.
 func (e *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error) {
 	msg = &ReceivedMessage{Raw: e.Data}
-	err = msg.decryptSymmetric(key, e.AESNonce)
+	err = msg.decryptSymmetric(key)
 	if err != nil {
 		msg = nil
 	}
@@ -218,12 +209,17 @@ func (e *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error) {
 
 // Open tries to decrypt an envelope, and populates the message fields in case of success.
 func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
-	if e.isAsymmetric() {
+	// if the filter has some asymmetric key provided, it will
+	// attempt to open it asymmetrically. If this fails, then
+	// attempt to open it symmetrically.
+	if watcher.KeyAsym != nil {
 		msg, _ = e.OpenAsymmetric(watcher.KeyAsym)
 		if msg != nil {
 			msg.Dst = &watcher.KeyAsym.PublicKey
 		}
-	} else if e.IsSymmetric() {
+	}
+
+	if msg == nil {
 		msg, _ = e.OpenSymmetric(watcher.KeySym)
 		if msg != nil {
 			msg.SymKeyHash = crypto.Keccak256Hash(watcher.KeySym)

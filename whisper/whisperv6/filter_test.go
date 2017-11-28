@@ -312,12 +312,6 @@ func TestMatchEnvelope(t *testing.T) {
 		t.Fatalf("failed MatchEnvelope() symmetric with seed %d.", seed)
 	}
 
-	// asymmetric + matching topic: mismatch
-	match = fasym.MatchEnvelope(env)
-	if match {
-		t.Fatalf("failed MatchEnvelope() asymmetric with seed %d.", seed)
-	}
-
 	// symmetric + matching topic + insufficient PoW: mismatch
 	fsym.PoW = env.PoW() + 1.0
 	match = fsym.MatchEnvelope(env)

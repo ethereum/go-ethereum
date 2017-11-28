@@ -174,10 +174,8 @@ func TestMessageSeal(t *testing.T) {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
 	params.TTL = 1
-	aesnonce := make([]byte, 12)
-	mrand.Read(aesnonce)
 
-	env := NewEnvelope(params.TTL, params.Topic, aesnonce, msg)
+	env := NewEnvelope(params.TTL, params.Topic, msg)
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
