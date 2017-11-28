@@ -19,7 +19,7 @@
 /*
 The ci command is called from Continuous Integration scripts.
 
-Usage: go run ci.go <command> <command flags/arguments>
+Usage: go run build/ci.go <command> <command flags/arguments>
 
 Available commands are:
 
