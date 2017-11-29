@@ -81,10 +81,14 @@ func (w *watcher) loop() {
 	// When an event occurs, the reload call is delayed a bit so that
 	// multiple events arriving quickly only cause a single reload.
 	var (
-		debounce         = time.NewTimer(0)
 		debounceDuration = 500 * time.Millisecond
 		rescanTriggered  = false
+		debounce         = time.NewTimer(0)
 	)
+	// Ignore initial trigger
+	if !debounce.Stop() {
+		<-debounce.C
+	}
 	defer debounce.Stop()
 	for {
 		select {

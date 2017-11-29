@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"strings"
@@ -112,7 +113,11 @@ func localConsole(ctx *cli.Context) error {
 // console to it.
 func remoteConsole(ctx *cli.Context) error {
 	// Attach to a remotely running geth instance and start the JavaScript console
-	client, err := dialRPC(ctx.Args().First())
+	endpoint := ctx.Args().First()
+	if endpoint == "" && ctx.GlobalIsSet(utils.DataDirFlag.Name) {
+		endpoint = fmt.Sprintf("%s/geth.ipc", ctx.GlobalString(utils.DataDirFlag.Name))
+	}
+	client, err := dialRPC(endpoint)
 	if err != nil {
 		utils.Fatalf("Unable to attach to remote geth: %v", err)
 	}

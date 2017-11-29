@@ -1266,7 +1266,7 @@ func TestTransactionPoolRepricingKeepsLocals(t *testing.T) {
 
 // Tests that when the pool reaches its global transaction limit, underpriced
 // transactions are gradually shifted out for more expensive ones and any gapped
-// pending transactions are moved into te queue.
+// pending transactions are moved into the queue.
 //
 // Note, local transactions are never allowed to be dropped.
 func TestTransactionPoolUnderpricing(t *testing.T) {
