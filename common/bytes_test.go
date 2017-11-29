@@ -36,7 +36,7 @@ func (s *BytesSuite) TestCopyBytes(c *checker.C) {
 
 func (s *BytesSuite) TestIsHex(c *checker.C) {
 	data1 := "a9e67e"
-	exp1 := false
+	exp1 := true
 	res1 := IsHex(data1)
 	c.Assert(res1, checker.DeepEquals, exp1)
 
@@ -45,6 +45,15 @@ func (s *BytesSuite) TestIsHex(c *checker.C) {
 	res2 := IsHex(data2)
 	c.Assert(res2, checker.DeepEquals, exp2)
 
+	data3 := "0xa9e67e001"
+	exp3 := false
+	res3 := IsHex(data3)
+	c.Assert(res3, checker.DeepEquals, exp3)
+
+	data4 := "0xHELLO_MY_NAME_IS_STEVEN_@#$^&*"
+	exp4 := false
+	res4 := IsHex(data4)
+	c.Assert(res4, checker.DeepEquals, exp4)
 }
 
 func (s *BytesSuite) TestLeftPadBytes(c *checker.C) {
