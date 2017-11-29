@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/EthereumCommonwealth/go-callisto/params"
 )
 
 const (

@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/EthereumCommonwealth/go-callisto/common"
+	"github.com/EthereumCommonwealth/go-callisto/core/types"
+	"github.com/EthereumCommonwealth/go-callisto/log"
 )
 
 // WaitMined waits for tx to be mined on the blockchain.

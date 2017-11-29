@@ -25,12 +25,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/EthereumCommonwealth/go-callisto/common"
+	"github.com/EthereumCommonwealth/go-callisto/common/hexutil"
+	"github.com/EthereumCommonwealth/go-callisto/core/types"
+	"github.com/EthereumCommonwealth/go-callisto/ethdb"
+	"github.com/EthereumCommonwealth/go-callisto/event"
+	"github.com/EthereumCommonwealth/go-callisto/rpc"
 )
 
 var (

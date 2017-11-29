@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/EthereumCommonwealth/go-callisto/common"
 )
 
 const testSectionSize = 4096

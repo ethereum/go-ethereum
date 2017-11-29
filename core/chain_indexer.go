@@ -23,11 +23,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/EthereumCommonwealth/go-callisto/common"
+	"github.com/EthereumCommonwealth/go-callisto/core/types"
+	"github.com/EthereumCommonwealth/go-callisto/ethdb"
+	"github.com/EthereumCommonwealth/go-callisto/event"
+	"github.com/EthereumCommonwealth/go-callisto/log"
 )
 
 // ChainIndexerBackend defines the methods needed to process chain segments in

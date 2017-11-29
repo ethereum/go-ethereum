@@ -23,11 +23,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/EthereumCommonwealth/go-callisto/event"
+	"github.com/EthereumCommonwealth/go-callisto/log"
+	"github.com/EthereumCommonwealth/go-callisto/p2p"
+	"github.com/EthereumCommonwealth/go-callisto/p2p/discover"
+	"github.com/EthereumCommonwealth/go-callisto/p2p/simulations/adapters"
 )
 
 // NetworkConfig defines configuration options for starting a Network

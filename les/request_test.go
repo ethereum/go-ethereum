@@ -21,11 +21,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/light"
+	"github.com/EthereumCommonwealth/go-callisto/common"
+	"github.com/EthereumCommonwealth/go-callisto/core"
+	"github.com/EthereumCommonwealth/go-callisto/crypto"
+	"github.com/EthereumCommonwealth/go-callisto/ethdb"
+	"github.com/EthereumCommonwealth/go-callisto/light"
 )
 
 var testBankSecureTrieKey = secAddr(testBankAddress)

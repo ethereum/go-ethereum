@@ -25,11 +25,11 @@ import (
 	"sync"
 	"time"
 
-	ethereum "github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
+	ethereum "github.com/EthereumCommonwealth/go-callisto"
+	"github.com/EthereumCommonwealth/go-callisto/accounts"
+	"github.com/EthereumCommonwealth/go-callisto/common"
+	"github.com/EthereumCommonwealth/go-callisto/core/types"
+	"github.com/EthereumCommonwealth/go-callisto/log"
 	"github.com/karalabe/hid"
 )
 

@@ -23,13 +23,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/EthereumCommonwealth/go-callisto/common"
+	"github.com/EthereumCommonwealth/go-callisto/core"
+	"github.com/EthereumCommonwealth/go-callisto/core/types"
+	"github.com/EthereumCommonwealth/go-callisto/crypto"
+	"github.com/EthereumCommonwealth/go-callisto/ethdb"
+	"github.com/EthereumCommonwealth/go-callisto/event"
+	"github.com/EthereumCommonwealth/go-callisto/params"
 )
 
 func makeReceipt(addr common.Address) *types.Receipt {

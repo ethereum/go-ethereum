@@ -23,13 +23,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/EthereumCommonwealth/go-callisto/cmd/utils"
+	"github.com/EthereumCommonwealth/go-callisto/crypto"
+	"github.com/EthereumCommonwealth/go-callisto/log"
+	"github.com/EthereumCommonwealth/go-callisto/p2p/discover"
+	"github.com/EthereumCommonwealth/go-callisto/p2p/discv5"
+	"github.com/EthereumCommonwealth/go-callisto/p2p/nat"
+	"github.com/EthereumCommonwealth/go-callisto/p2p/netutil"
 )
 
 func main() {

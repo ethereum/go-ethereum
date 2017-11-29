@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/EthereumCommonwealth/go-callisto/log"
 )
 
 // faucetDockerfile is the Dockerfile required to build an faucet container to
@@ -39,8 +39,8 @@ ENV GOPATH /go
 RUN \
   apk add --update git go make gcc musl-dev ca-certificates linux-headers                             && \
 	mkdir -p $GOPATH/src/github.com/ethereum                                                            && \
-	(cd $GOPATH/src/github.com/ethereum && git clone --depth=1 https://github.com/ethereum/go-ethereum) && \
-  go build -v github.com/ethereum/go-ethereum/cmd/faucet                                              && \
+	(cd $GOPATH/src/github.com/ethereum && git clone --depth=1 https://github.com/EthereumCommonwealth/go-callisto) && \
+  go build -v github.com/EthereumCommonwealth/go-callisto/cmd/faucet                                              && \
   apk del git go make gcc musl-dev linux-headers                                                      && \
   rm -rf $GOPATH && rm -rf /var/cache/apk/*
 

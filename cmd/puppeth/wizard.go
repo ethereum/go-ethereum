@@ -30,9 +30,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/EthereumCommonwealth/go-callisto/common"
+	"github.com/EthereumCommonwealth/go-callisto/core"
+	"github.com/EthereumCommonwealth/go-callisto/log"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
