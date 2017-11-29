@@ -19,8 +19,6 @@
 package keystore
 
 import (
-	"time"
-
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/rjeczalik/notify"
 )
@@ -80,29 +78,33 @@ func (w *watcher) loop() {
 	// Wait for file system events and reload.
 	// When an event occurs, the reload call is delayed a bit so that
 	// multiple events arriving quickly only cause a single reload.
-	var (
-		debounceDuration = 500 * time.Millisecond
-		rescanTriggered  = false
-		debounce         = time.NewTimer(0)
-	)
+	//var (
+	//debounceDuration = 500 * time.Millisecond
+	//rescanTriggered  = false
+	//debounce         = time.NewTimer(0)
+	//)
 	// Ignore initial trigger
-	if !debounce.Stop() {
-		<-debounce.C
-	}
-	defer debounce.Stop()
+	//if !debounce.Stop() {
+	//	<-debounce.C
+	//}
+	//defer debounce.Stop()
 	for {
 		select {
 		case <-w.quit:
 			return
-		case <-w.ev:
+		case ei := <-w.ev:
+//			fmt.Printf("Event: %v\n", ei)
+			ei.Path()
+			w.ac.checkFile(ei.Path())
+			//			w.ac.scanAccounts()
 			// Trigger the scan (with delay), if not already triggered
-			if !rescanTriggered {
-				debounce.Reset(debounceDuration)
-				rescanTriggered = true
-			}
-		case <-debounce.C:
-			w.ac.scanAccounts()
-			rescanTriggered = false
+			//		if !rescanTriggered {
+			//			debounce.Reset(debounceDuration)
+			//			rescanTriggered = true
+			//		}
+			//	case <-debounce.C:
+			//		w.ac.scanAccounts()
+			//		rescanTriggered = false
 		}
 	}
 }
