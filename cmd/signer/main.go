@@ -19,11 +19,11 @@
 package main
 
 import (
+	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
-	"fmt"
-	"net"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
@@ -61,7 +61,17 @@ func main() {
 		cli.IntFlag{
 			Name:  "rpcport",
 			Usage: "HTTP-RPC server listening port",
-			Value: node.DefaultHTTPPort+5,
+			Value: node.DefaultHTTPPort + 5,
+		},
+		cli.StringFlag{
+			Name:  "4bytedb",
+			Usage: "File containing 4byte-identifiers",
+			Value: "./4byte.json",
+		},
+		cli.StringFlag{
+			Name:  "auditlog",
+			Usage: "File used to emit audit logs. Set to '' to disable",
+			Value: "audit.log",
 		},
 	}
 
@@ -69,15 +79,22 @@ func main() {
 		// Set up the logger to print everything and the random generator
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int("loglevel")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
+		db, err := NewAbiDBFromFile(c.String("4bytedb"))
+		if err != nil {
+			utils.Fatalf(err.Error())
+		}
+		log.Info("Loaded 4byte db", "signatures", db.Size(), "file", c.String("4bytedb"))
+
 		var (
-			server   = rpc.NewServer()
-			api      = NewSignerAPI(
-						c.Int64(utils.NetworkIdFlag.Name),
-						c.String("keystore"),
-						c.Bool(utils.NoUSBFlag.Name),
-						NewCommandlineUI())
+			server = rpc.NewServer()
+			api    = NewSignerAPI(
+				c.Int64(utils.NetworkIdFlag.Name),
+				c.String("keystore"),
+				c.Bool(utils.NoUSBFlag.Name),
+				NewCommandlineUI(), db,
+				c.String("auditlog"))
 			listener net.Listener
-			err      error
+			//err      error
 		)
 
 		// register signer API with server
@@ -107,9 +124,9 @@ func main() {
 // curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_list","params":[""],"id":67}' http://localhost:8550/
 
 // Make transaction
-// send(0x12)
-// a52c101e0000000000000000000000000000000000000000000000000000000000000012
-// curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":["0x82A2A876D39022B3019932D30Cd9c97ad5616813","pw",{"gas":"0x333","gasPrice":"0x123","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x10", "input":"0xa52c101e0000000000000000000000000000000000000000000000000000000000000012"}],"id":67}' http://localhost:8550/
+// safeSend(0x12)
+// 4401a6e40000000000000000000000000000000000000000000000000000000000000012
+// curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":["0x82A2A876D39022B3019932D30Cd9c97ad5616813","pw",{"gas":"0x333","gasPrice":"0x123","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x10", "input":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"}],"id":67}' http://localhost:8550/
 
 type rwc struct {
 	io.Reader

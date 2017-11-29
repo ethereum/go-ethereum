@@ -86,7 +86,7 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch
 	fmt.Printf("to:    %v\n", request.transaction.To().Hex())
 	fmt.Printf("from:  %v\n", request.from.Address.Hex())
 	fmt.Printf("value: %v wei\n", weival)
-	if len(request.transaction.Data()) > 0{
+	if len(request.transaction.Data()) > 0 {
 		fmt.Printf("data:  %v\n", common.Bytes2Hex(request.transaction.Data()))
 	}
 	if request.callinfo != nil {

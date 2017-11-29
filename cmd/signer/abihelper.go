@@ -17,11 +17,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"strings"
-	"bytes"
 	"github.com/ethereum/go-ethereum/common"
+	"io/ioutil"
+	"strings"
 )
 
 type decodedArgument struct {
@@ -97,17 +99,40 @@ func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
 	}
 	encoded, err = abispec.Pack(method.Name, gotypedArguments...)
 
-	if !bytes.Equal(encoded, calldata){
+	if !bytes.Equal(encoded, calldata) {
 		exp := common.Bytes2Hex(encoded)
 		was := common.Bytes2Hex(calldata)
-		return nil, fmt.Errorf("WARNING: Supplied data is stuffed with extra data. %v \nWant %s\nHave %s", decoded,was, exp)
+		return nil, fmt.Errorf("WARNING: Supplied data is stuffed with extra data. %v \nWant %s\nHave %s", decoded, was, exp)
 	}
 	return &decoded, nil
 }
 
-func lookupABI(id []byte) (string, error){
-	if len(id) != 4{
+type abiDb struct {
+	db map[string]string
+}
+
+func NewAbiDBFromFile(path string) (*abiDb, error) {
+	raw, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	db := new(abiDb)
+	json.Unmarshal(raw, &db.db)
+	return db, nil
+}
+
+// LookupABI checks the given 4byte-sequence against the known ABI methods.
+// OBS: This method does not validate the match, it's assumed the caller will do so
+func (db *abiDb) LookupABI(id []byte) (string, error) {
+	if len(id) != 4 {
 		return "", fmt.Errorf("Expected 4-byte id, got %d", len(id))
 	}
-	return `[{"type":"function","name":"send","inputs":[{"name":"a","type":"uint256"}]}]`, nil
+	sig := common.ToHex(id)
+	if key, exists := db.db[sig]; exists {
+		return key, nil
+	}
+	return "", fmt.Errorf("Signature %v not found", sig)
+}
+func (db *abiDb) Size() int{
+	return len(db.db)
 }

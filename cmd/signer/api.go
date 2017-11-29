@@ -40,6 +40,8 @@ type SignerAPI struct {
 	chainID *big.Int
 	am      *accounts.Manager
 	ui      SignerUI
+	abidb   abiDb
+	audit   *auditlogger
 }
 
 // Metadata about the request
@@ -171,7 +173,7 @@ func (ui *HeadlessUI) ShowInfo(message string) {
 // key that is generated when a new account is created.
 // noUSB disables USB support that is required to support hardware devices such as
 // ledger and trezor.
-func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI) *SignerAPI {
+func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abidb *abiDb, auditlog string) *SignerAPI {
 	var backends []accounts.Backend
 
 	// support password based accounts
@@ -195,8 +197,11 @@ func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI) *Si
 			log.Debug("Trezor support enabled")
 		}
 	}
-
-	return &SignerAPI{big.NewInt(chainID), accounts.NewManager(backends...), ui}
+	var al *auditlogger
+	if auditlog != ""{
+		al = &auditlogger{auditlog}
+	}
+	return &SignerAPI{big.NewInt(chainID), accounts.NewManager(backends...), ui, *abidb, al}
 }
 
 func metaData(ctx context.Context) Metadata {
@@ -220,15 +225,15 @@ func (api *SignerAPI) List(ctx context.Context) ([]Account, error) {
 
 	ch := make(chan ListResponse, 1)
 
-	var accounts []Account
+	var accs []Account
 	for _, wallet := range api.am.Wallets() {
 		for _, acc := range wallet.Accounts() {
 			acc := Account{Typ: "account", URL: wallet.URL(), Address: acc.Address}
-			accounts = append(accounts, acc)
+			accs = append(accs, acc)
 		}
 	}
 
-	api.ui.ApproveListing(&ListRequest{accounts: accounts}, metaData(ctx), ch)
+	api.ui.ApproveListing(&ListRequest{accounts: accs}, metaData(ctx), ch)
 	if result := <-ch; result.accounts != nil {
 		return result.accounts, nil
 	}
@@ -238,7 +243,7 @@ func (api *SignerAPI) List(ctx context.Context) ([]Account, error) {
 // New creates a new password protected account. The private key is protected with
 // the given password. Users are responsible to backup the private key that is stored
 // in the keystore location thas was specified when this API was created.
-func (api *SignerAPI) New(ctx context.Context, passphrase string) (accounts.Account, error) {
+func (api *SignerAPI) New(ctx context.Context) (accounts.Account, error) {
 	be := api.am.Backends(keystore.KeyStoreType)
 	if len(be) == 0 {
 		return accounts.Account{}, errors.New("password based accounts not supported")
@@ -247,14 +252,14 @@ func (api *SignerAPI) New(ctx context.Context, passphrase string) (accounts.Acco
 	api.ui.ApproveNewAccount(&NewAccountRequest{}, metaData(ctx), ch)
 
 	if resp := <-ch; resp.approved {
-		return be[0].(*keystore.KeyStore).NewAccount(passphrase)
+		return be[0].(*keystore.KeyStore).NewAccount(resp.pw)
 	}
 	return accounts.Account{}, fmt.Errorf("Request denied")
 }
 
 // SignTransaction signs the given transaction and returns it in an RLP encoded form
 // that can be posted to `eth_sendRawTransaction`.
-func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, passwd string, args TransactionArg) (hexutil.Bytes, error) {
+func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, args TransactionArg) (hexutil.Bytes, error) {
 	acc := accounts.Account{Address: from}
 
 	wallet, err := api.am.Find(acc)
@@ -274,7 +279,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 		var abidef string
 
 		// Try to make sense of the data
-		abidef, err = lookupABI(tx.Data()[:4])
+		abidef, err = api.abidb.LookupABI(tx.Data()[:4])
 		if err != nil {
 			req.callinfo = errorWrapper{"Warning! Could not locate ABI", err}
 		} else {
@@ -293,7 +298,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 		if result.hash != tx.Hash() {
 			return nil, fmt.Errorf("Transaction hash mismatch")
 		}
-		signedTx, err := wallet.SignTxWithPassphrase(acc, passwd, tx, api.chainID)
+		signedTx, err := wallet.SignTxWithPassphrase(acc, result.pw, tx, api.chainID)
 		if err != nil {
 			return nil, err
 		}
@@ -313,7 +318,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 // The key used to calculate the signature is decrypted with the given password.
 //
 // https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
-func (api *SignerAPI) Sign(ctx context.Context, addr common.Address, passwd string, data hexutil.Bytes) (hexutil.Bytes, error) {
+func (api *SignerAPI) Sign(ctx context.Context, addr common.Address, data hexutil.Bytes) (hexutil.Bytes, error) {
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: addr}
 
@@ -327,10 +332,10 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.Address, passwd stri
 
 	api.ui.ApproveSignData(&SignDataRequest{account: account, rawdata: data, message: msg, hash: sighash}, metaData(ctx), ch)
 
-	if (<-ch).approved {
+	if res := <-ch; res.approved {
 
 		// Assemble sign the data with the wallet
-		signature, err := wallet.SignHashWithPassphrase(account, passwd, sighash)
+		signature, err := wallet.SignHashWithPassphrase(account, res.pw, sighash)
 		if err != nil {
 			return nil, err
 		}
@@ -409,7 +414,7 @@ func (api *SignerAPI) Export(ctx context.Context, addr common.Address) (json.Raw
 // Imports tries to import the given keyJSON in the local keystore. The keyJSON data is expected to be
 // in web3 keystore format. It will decrypt the keyJSON with the given passphrase and on successful
 // decryption it will encrypt the key with the given newPassphrase and store it in the keystore.
-func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage, passphrase, newPassphrase string) (Account, error) {
+func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage) (Account, error) {
 	be := api.am.Backends(keystore.KeyStoreType)
 
 	if len(be) == 0 {
@@ -421,7 +426,7 @@ func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage, passp
 	api.ui.ApproveImport(&ImportRequest{}, metaData(ctx), ch)
 	if resp := <-ch; resp.approved {
 
-		acc, err := be[0].(*keystore.KeyStore).Import(keyJSON, passphrase, newPassphrase)
+		acc, err := be[0].(*keystore.KeyStore).Import(keyJSON, resp.oldPassword, resp.newPassword)
 		if err != nil {
 			return Account{}, err
 		}
