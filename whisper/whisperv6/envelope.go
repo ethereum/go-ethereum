@@ -211,14 +211,14 @@ func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
 	// if the filter has some asymmetric key provided, it will
 	// attempt to open it asymmetrically. If this fails, then
 	// attempt to open it symmetrically.
-	if watcher.KeyAsym != nil {
+	if watcher.expectsAsymmetricEncryption() {
 		msg, _ = e.OpenAsymmetric(watcher.KeyAsym)
 		if msg != nil {
 			msg.Dst = &watcher.KeyAsym.PublicKey
 		}
 	}
 
-	if msg == nil {
+	if msg == nil && watcher.expectsSymmetricEncryption() {
 		msg, _ = e.OpenSymmetric(watcher.KeySym)
 		if msg != nil {
 			msg.SymKeyHash = crypto.Keccak256Hash(watcher.KeySym)
