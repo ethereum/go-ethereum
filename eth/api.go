@@ -452,7 +452,12 @@ func (api *PrivateDebugAPI) traceBlock(block *types.Block, logConfig *vm.LogConf
 	}
 	statedb, err := blockchain.StateAt(blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1).Root())
 	if err != nil {
-		return false, structLogger.StructLogs(), err
+		switch err.(type) {  
+		case *trie.MissingNodeError:
+			return false, structLogger.StructLogs(), fmt.Errorf("required historical state unavailable")
+		default:
+			return false, structLogger.StructLogs(), err
+		} 
 	}
 
 	receipts, _, usedGas, err := processor.Process(block, statedb, config)
@@ -498,6 +503,7 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 			return nil, err
 		}
 
+		
 		// Handle timeouts and RPC cancellations
 		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
 		go func() {
@@ -518,9 +524,15 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 	}
 	msg, context, statedb, err := api.computeTxEnv(blockHash, int(txIndex))
 	if err != nil {
-		return nil, err
+		switch err.(type) {  
+		case *trie.MissingNodeError:
+			return nil, fmt.Errorf("required historical state unavailable")
+		default:
+			return nil, err
+		} 
 	}
 
+	
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(context, statedb, api.config, vm.Config{Debug: true, Tracer: tracer})
 	ret, gas, failed, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
