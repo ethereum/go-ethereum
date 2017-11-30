@@ -40,7 +40,7 @@ func calcBloomIndexes(b []byte) bloomIndexes {
 
 	var idxs bloomIndexes
 	for i := 0; i < len(idxs); i++ {
-		idxs[i] = (uint(b[2*i])<<8)&2047 + uint(b[2*i+1])
+		idxs[i] = ((uint(b[2*i]) << 8) + uint(b[2*i+1])) & 2047
 	}
 	return idxs
 }
