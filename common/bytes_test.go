@@ -74,7 +74,7 @@ func TestFromHex(t *testing.T) {
 	expected := []byte{1}
 	result := FromHex(input)
 	if !bytes.Equal(expected, result) {
-		t.Errorf("Expected % x got % x", expected, result)
+		t.Errorf("Expected %x got %x", expected, result)
 	}
 }
 
@@ -83,6 +83,15 @@ func TestFromHexOddLength(t *testing.T) {
 	expected := []byte{1}
 	result := FromHex(input)
 	if !bytes.Equal(expected, result) {
-		t.Errorf("Expected % x got % x", expected, result)
+		t.Errorf("Expected %x got %x", expected, result)
+	}
+}
+
+func TestNoPrefixShortHexOddLength(t *testing.T) {
+	input := "1"
+	expected := []byte{1}
+	result := FromHex(input)
+	if !bytes.Equal(expected, result) {
+		t.Errorf("Expected %x got %x", expected, result)
 	}
 }
