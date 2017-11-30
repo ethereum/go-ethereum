@@ -316,7 +316,7 @@ func (ac *accountCache) scanAccounts() error {
 	)
 
 	for _, p := range creates.List() {
-		if a := readAccount(p.(string),buf); a != nil {
+		if a := readAccount(p.(string), buf); a != nil {
 			ac.add(*a)
 		}
 	}

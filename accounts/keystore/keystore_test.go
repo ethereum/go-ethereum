@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"path/filepath"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
@@ -375,7 +377,15 @@ func checkEvents(t *testing.T, want []walletEvent, have []walletEvent) {
 }
 
 func tmpKeyStore(t *testing.T, encrypted bool) (string, *KeyStore) {
-	d, err := ioutil.TempDir("", "eth-keystore-test")
+	var (
+		d   string
+		err error
+	)
+	d, err = ioutil.TempDir("", "eth-keystore-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err = filepath.EvalSymlinks(d)
 	if err != nil {
 		t.Fatal(err)
 	}
