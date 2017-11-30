@@ -54,21 +54,37 @@ func (ui *CommandlineUI) readString() string {
 // readPassword reads a single line from stdin, trimming it from the trailing new
 // line and returns it. The input will not be echoed.
 func (ui *CommandlineUI) readPassword() string {
+	fmt.Printf("Enter password to approve:\n")
 	fmt.Printf("> ")
 	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
 	if err != nil {
 		log.Crit("Failed to read password", "err", err)
 	}
 	fmt.Println()
+	fmt.Println("-----------------------")
+	return string(text)
+}
+
+// readPassword reads a single line from stdin, trimming it from the trailing new
+// line and returns it. The input will not be echoed.
+func (ui *CommandlineUI) readPasswordText(inputstring string) string {
+	fmt.Printf("Enter %s:\n", inputstring)
+	fmt.Printf("> ")
+	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+	if err != nil {
+		log.Crit("Failed to read password", "err", err)
+	}
+	fmt.Println("-----------------------")
 	return string(text)
 }
 
 // confirm returns true if user enters 'Yes', otherwise false
 func (ui *CommandlineUI) confirm() bool {
-	fmt.Printf("Type 'Yes' to approve\n")
+	fmt.Printf("Type 'Yes' to approve:\n")
 	if ui.readString() == "Yes" {
 		return true
 	}
+	fmt.Println("-----------------------")
 	return false
 }
 
@@ -98,7 +114,7 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch
 	showMetadata(metadata)
 	fmt.Printf("-------------------------------------------\n")
 
-	ch <- SignTxResponse{request.transaction.Hash(), ui.confirm(), ""}
+	ch <- SignTxResponse{request.transaction.Hash(), true ,ui.readPassword()}
 }
 
 // ApproveSignData prompt the user for confirmation to request to sign data
@@ -113,7 +129,7 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest, metadata Meta
 	fmt.Printf("message hash:  %v\n", request.hash)
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(metadata)
-	ch <- SignDataResponse{ui.confirm(), ""}
+	ch <- SignDataResponse{true, ui.readPassword()}
 }
 
 // ApproveExport prompt the user for confirmation to export encrypted account json
@@ -141,7 +157,11 @@ func (ui *CommandlineUI) ApproveImport(request *ImportRequest, metadata Metadata
 	fmt.Printf("A request has been made to import an encrypted keyfile\n")
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(metadata)
-	ch <- ImportResponse{ui.confirm(), "", ""}
+	if ui.confirm(){
+		ch <- ImportResponse{true, ui.readPasswordText("Old password"), ui.readPasswordText("New password")}
+	}else{
+		ch <- ImportResponse{false, "", ""}
+	}
 }
 
 // ApproveListing prompt the user for confirmation to list accounts
@@ -177,17 +197,17 @@ func (ui *CommandlineUI) ApproveNewAccount(requst *NewAccountRequest, metadata M
 	fmt.Printf("Approving this operation means that a new account is created,\n")
 	fmt.Printf("and the address show to the caller\n")
 	showMetadata(metadata)
-	ch <- NewAccountResponse{ui.confirm(), ""}
+	ch <- NewAccountResponse{ui.confirm(), ui.readPassword()}
 }
 
 // ShowError displays error message to user
 func (ui *CommandlineUI) ShowError(message string) {
 
-	fmt.Printf("ERROR: %v", message)
+	fmt.Printf("ERROR: %v\n", message)
 }
 
 // ShowInfo displays info message to user
 func (ui *CommandlineUI) ShowInfo(message string) {
 
-	fmt.Printf("Info: %v", message)
+	fmt.Printf("Info: %v\n", message)
 }

@@ -11,13 +11,23 @@ synchronised with the chain or a particular Ethereum node that has no build in, 
   
 In its current form the signer is very limited and designed to work with Mist. It hasn't got a connection to an
 Ethereum node. This restriction imposed many limitations such as the lack of ability to keep track of nonces, balances
-or fetching additional information that can help the user to make a decision to sign a transaction or data. Currently
-the signer only supports password protected accounts. Support for hardware tokens such as Trezor and Legder is planned.
+or fetching additional information that can help the user to make a decision to sign a transaction or data. 
 
 ## Command line flags
 The signer accepts the following command line options:
-- keystore, the directory where the password protected keystore stores keyfiles. The default directory is within geth's datadir. It is OS dependand, use `signer -h` to see where the location is on your system.
-- chainid, the chain identifier. Default value is the Ethereum mainnet. See of a list of chain identifiers that are used https://github.com/ethereum/EIPs/blob/master/EIPS/eip-155.md.
+```
+   --chainid value    chain identifier (default: 1)
+   --loglevel value   log level to emit to the screen (default: 4)
+   --keystore value   Directory for the keystore (default: "/home/martin/.ethereum/keystore")
+   --networkid value  Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby) (default: 1)
+   --lightkdf         Reduce key-derivation RAM & CPU usage at some expense of KDF strength
+   --nousb            Disables monitoring for and managing USB hardware wallets
+   --rpcaddr value    HTTP-RPC server listening interface (default: "localhost")
+   --rpcport value    HTTP-RPC server listening port (default: 8550)
+   --4bytedb value    File containing 4byte-identifiers (default: "./4byte.json")
+   --help, -h         show help
+```
+
 
 Example:
 ```
@@ -25,7 +35,8 @@ signer -keystore /my/keystore -chainid 4
 ```
 
 ## Communicating
-The signer listens on stdin for incoming requests and sends responses on stdout. Messages are expected to follow the
+
+The signer listens to HTTP requests on `rpcaddr`:`rpcport`. The messages are expected to be JSON
 [jsonrpc 2.0 standard](http://www.jsonrpc.org/specification).
 
 Some of these call can require user interaction. Clients must be aware that responses may be deplayed significanlty or
@@ -50,7 +61,8 @@ The client is responsible for creating a backup of the keystore. If the keystore
 lost accounts.
 
 #### Arguments
-  - passphrase [string]: passphrase that is used to protect the private key that is stored within the keystore
+
+None
 
 #### Result
   - address [string]: account address that is derived from the generated key
@@ -83,7 +95,8 @@ lost accounts.
    List all accounts that this signer currently manages
 
 #### Arguments
-  none
+
+None
 
 #### Result
   - array with account records:
@@ -120,11 +133,10 @@ lost accounts.
 ### account_signTransaction
 
 #### Sign transactions
-   Signs a transactions and respons with the signed transaction in RLP encoded form.
+   Signs a transactions and responds with the signed transaction in RLP encoded form.
 
 #### Arguments
   - from [address]: account to send the transaction from
-  - passphrase [string]: passphrase to unlock the from account
   - Transaction object:
      - transaction.to [address]: receiver account
      - gas [number]: maximum amount of gas to burn
@@ -144,7 +156,6 @@ lost accounts.
   "method": "account_signTransaction",
   "params": [
     "0x1923f626bb8dc025849e00f99c25fe2b2f7fb0db",
-    "my password",
     {
       "gas": "0x55555",
       "gasPrice": "0x1234",
@@ -170,7 +181,6 @@ lost accounts.
 
 #### Arguments
   - account [address]: account to sign with
-  - passphrase [string]: passphrase to unlock the account
   - data [data]: data to sign
 
 #### Result
@@ -184,7 +194,6 @@ lost accounts.
   "method": "account_sign",
   "params": [
     "0x1923f626bb8dc025849e00f99c25fe2b2f7fb0db",
-    "my password",
     "0xaabbccdd"
   ]
 }
@@ -236,8 +245,6 @@ lost accounts.
    
 #### Arguments
   - account [object]: key in [web3 keystore format](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) (retrieved with account_export) 
-  - passphrase [string]: password to decrypt the given account
-  - newPassphrase [string]: password to encrypt the imported key in the keystore with 
 
 #### Result
   - imported key [object]:
@@ -273,8 +280,6 @@ lost accounts.
       "id": "09bccb61-b8d3-4e93-bf4f-205a8194f0b9",
       "version": 3
     },
-    "my password",
-    "my password"
   ]
 }
 {

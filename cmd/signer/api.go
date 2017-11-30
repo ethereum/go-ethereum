@@ -41,7 +41,6 @@ type SignerAPI struct {
 	am      *accounts.Manager
 	ui      SignerUI
 	abidb   abiDb
-	audit   *auditlogger
 }
 
 // Metadata about the request
@@ -173,7 +172,7 @@ func (ui *HeadlessUI) ShowInfo(message string) {
 // key that is generated when a new account is created.
 // noUSB disables USB support that is required to support hardware devices such as
 // ledger and trezor.
-func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abidb *abiDb, auditlog string) *SignerAPI {
+func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abidb *abiDb) *SignerAPI {
 	var backends []accounts.Backend
 
 	// support password based accounts
@@ -197,11 +196,7 @@ func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abi
 			log.Debug("Trezor support enabled")
 		}
 	}
-	var al *auditlogger
-	if auditlog != ""{
-		al = &auditlogger{auditlog}
-	}
-	return &SignerAPI{big.NewInt(chainID), accounts.NewManager(backends...), ui, *abidb, al}
+	return &SignerAPI{big.NewInt(chainID), accounts.NewManager(backends...), ui, *abidb}
 }
 
 func metaData(ctx context.Context) Metadata {
@@ -300,6 +295,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 		}
 		signedTx, err := wallet.SignTxWithPassphrase(acc, result.pw, tx, api.chainID)
 		if err != nil {
+			api.ui.ShowError(err.Error())
 			return nil, err
 		}
 		return rlp.EncodeToBytes(signedTx)
@@ -337,6 +333,7 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.Address, data hexuti
 		// Assemble sign the data with the wallet
 		signature, err := wallet.SignHashWithPassphrase(account, res.pw, sighash)
 		if err != nil {
+			api.ui.ShowError(err.Error())
 			return nil, err
 		}
 		signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
@@ -414,7 +411,8 @@ func (api *SignerAPI) Export(ctx context.Context, addr common.Address) (json.Raw
 // Imports tries to import the given keyJSON in the local keystore. The keyJSON data is expected to be
 // in web3 keystore format. It will decrypt the keyJSON with the given passphrase and on successful
 // decryption it will encrypt the key with the given newPassphrase and store it in the keystore.
-func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage) (Account, error) {
+func (api *SignerAPI) Import(ctx context.Context, string, keyJSON json.RawMessage) (Account, error) {
+
 	be := api.am.Backends(keystore.KeyStoreType)
 
 	if len(be) == 0 {
@@ -424,10 +422,12 @@ func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage) (Acco
 	ch := make(chan ImportResponse, 1)
 
 	api.ui.ApproveImport(&ImportRequest{}, metaData(ctx), ch)
+
 	if resp := <-ch; resp.approved {
 
 		acc, err := be[0].(*keystore.KeyStore).Import(keyJSON, resp.oldPassword, resp.newPassword)
 		if err != nil {
+			api.ui.ShowError(err.Error())
 			return Account{}, err
 		}
 

@@ -91,8 +91,7 @@ func main() {
 				c.Int64(utils.NetworkIdFlag.Name),
 				c.String("keystore"),
 				c.Bool(utils.NoUSBFlag.Name),
-				NewCommandlineUI(), db,
-				c.String("auditlog"))
+				NewCommandlineUI(), db)
 			listener net.Listener
 			//err      error
 		)
