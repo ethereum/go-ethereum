@@ -379,21 +379,21 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 		}
 	}
 	// All APIs registered, start the HTTP listener
-	var (
-		listener net.Listener
-		err      error
-	)
-	if listener, err = net.Listen("tcp", endpoint); err != nil {
+	listener, err := net.Listen("tcp", endpoint)
+	if err != nil {
 		return err
 	}
-	go rpc.NewHTTPServer(cors, handler).Serve(listener)
+	go func() {
+		if err := rpc.NewHTTPServer(listener, cors, handler); err != nil {
+			panic(err)
+		}
+	}()
 	log.Info(fmt.Sprintf("HTTP endpoint opened: http://%s", endpoint))
 
 	// All listeners booted successfully
 	n.httpEndpoint = endpoint
 	n.httpListener = listener
 	n.httpHandler = handler
-
 	return nil
 }
 
