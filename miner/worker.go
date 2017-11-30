@@ -81,6 +81,10 @@ type Work struct {
 	createdAt time.Time
 }
 
+func (work Work) GetCreateTime() time.Time {
+	return work.createdAt
+}
+
 type Result struct {
 	Work  *Work
 	Block *types.Block
