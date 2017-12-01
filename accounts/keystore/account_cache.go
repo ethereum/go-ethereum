@@ -228,6 +228,7 @@ func (ac *accountCache) close() {
 	ac.mu.Unlock()
 }
 
+// readAccount is a helper-function to read an encrypted keyfile
 func readAccount(path string, buf *bufio.Reader) *accounts.Account {
 
 	var key struct {
@@ -298,7 +299,6 @@ func (ac *accountCache) checkFile(path string) error {
 
 // scanAccounts checks if any changes have occurred on the filesystem, and
 // updates the account cache accordingly
-
 func (ac *accountCache) scanAccounts() error {
 	// Scan the entire folder metadata for file changes
 	creates, deletes, updates, err := ac.fileC.scan(ac.keydir)
