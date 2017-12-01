@@ -537,7 +537,7 @@ func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		blockReward = callistoBlockReward
 	}
 
-	if config.IsByzantium(header.Number) {
+	if config.IsByzantium(header.Number) && !config.IsCallisto(header.Number) {
 		blockReward = ByzantiumBlockReward
 	}
 
