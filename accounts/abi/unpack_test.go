@@ -337,6 +337,11 @@ func TestMethodMultiReturn(t *testing.T) {
 		"",
 		"Can unpack into a slice",
 	}, {
+		&[2]interface{}{&bigint, new(string)},
+		&[2]interface{}{&expected.Int, &expected.String},
+		"",
+		"Can unpack into an array",
+	}, {
 		&[]interface{}{new(int), new(int)},
 		&[]interface{}{&expected.Int, &expected.String},
 		"abi: cannot unmarshal *big.Int in to int",

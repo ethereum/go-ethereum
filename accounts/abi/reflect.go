@@ -86,6 +86,27 @@ func set(dst, src reflect.Value, output Argument) error {
 	return nil
 }
 
+// requireUnpackKind verifies preconditions for unpacking `args` into `kind`
+func requireUnpackKind(v reflect.Value, t reflect.Type, k reflect.Kind,
+	args []Argument, ignoreIndexed bool) error {
+
+	switch k {
+	case reflect.Struct:
+	case reflect.Slice, reflect.Array:
+		minLen := len(args)
+		if ignoreIndexed {
+			minLen = countNonIndexedArguments(args)
+		}
+		if v.Len() < minLen {
+			return fmt.Errorf("abi: insufficient number of elements in the list/array for unpack, want %d, got %d",
+				minLen, v.Len())
+		}
+	default:
+		return fmt.Errorf("abi: cannot unmarshal tuple into %v", t)
+	}
+	return nil
+}
+
 // requireAssignable assures that `dest` is a pointer and it's not an interface.
 func requireAssignable(dst, src reflect.Value) error {
 	if dst.Kind() != reflect.Ptr && dst.Kind() != reflect.Interface {

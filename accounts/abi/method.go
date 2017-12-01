@@ -98,7 +98,7 @@ func (method Method) tupleUnpack(v interface{}, outputSlice []byte) error {
 
 	j := 0
 	for i, output := range method.Outputs {
-		marshalledValue, err := toGoType((i+j)*32, ouptut.Type, outputSlice)
+		marshalledValue, err := toGoType((i+j)*32, output.Type, outputSlice)
 		if err != nil {
 			return err
 		}
