@@ -50,7 +50,7 @@ type Envelope struct {
 
 // size returns the size of envelope as it is sent (i.e. public fields only)
 func (e *Envelope) size() int {
-	return 20 + len(e.Version) + len(e.Data)
+	return EnvelopeHeaderLength + len(e.Version) + len(e.Data)
 }
 
 // rlpWithoutNonce returns the RLP encoded envelope contents, except the nonce.
