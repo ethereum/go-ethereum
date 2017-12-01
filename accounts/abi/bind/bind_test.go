@@ -463,7 +463,7 @@ func TestBindings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed check for goimports symlink bug: %v", err)
 	}
-	if !strings.Contains(string(linkTestDeps), "go-ethereum") {
+	if !strings.Contains(string(linkTestDeps), "go-callisto") {
 		t.Skip("symlinked environment doesn't support bind (https://github.com/golang/go/issues/14845)")
 	}
 	// Create a temporary workspace for the test suite
