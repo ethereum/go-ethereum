@@ -135,7 +135,20 @@ func (r *Record) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 
-	err = r.verifySignature()
+	sigcontent, err := r.serialisedContent()
+	if err != nil {
+		return err
+	}
+
+	// update r.raw
+	blob, err := rlp.EncodeToBytes(r.signature)
+	if err != nil {
+		return err
+	}
+
+	r.raw = append(blob, sigcontent...)
+
+	err = r.verifySignature(sigcontent)
 	if err != nil {
 		return err
 	}
@@ -161,11 +174,11 @@ func (r Record) Equal(o Record) (bool, error) {
 		return false, nil
 	}
 
-	if err := r.verifySignature(); err != nil {
+	if err := r.verifySignature(rr); err != nil {
 		return false, err
 	}
 
-	if err := o.verifySignature(); err != nil {
+	if err := o.verifySignature(oo); err != nil {
 		return false, err
 	}
 
@@ -241,7 +254,7 @@ func (r *Record) signAndEncode(privkey *ecdsa.PrivateKey) error {
 	return nil
 }
 
-func (r *Record) verifySignature() error {
+func (r Record) verifySignature(sigcontent []byte) error {
 	var id ID
 	_, err := r.Load(&id)
 	if err != nil {
@@ -254,18 +267,13 @@ func (r *Record) verifySignature() error {
 	}
 
 	// get publickey from record
-	var blob Secp256k1
-	_, err = r.Load(&blob)
+	var secp256k1 Secp256k1
+	_, err = r.Load(&secp256k1)
 	if err != nil {
 		return err
 	}
 
-	pk, err := btcec.ParsePubKey(blob, btcec.S256())
-	if err != nil {
-		return err
-	}
-
-	sigcontent, err := r.serialisedContent()
+	pk, err := btcec.ParsePubKey(secp256k1, btcec.S256())
 	if err != nil {
 		return err
 	}

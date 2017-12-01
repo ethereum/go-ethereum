@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"net"
+	"reflect"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec"
@@ -182,9 +183,17 @@ func TestSignEncodeAndDecode(t *testing.T) {
 		t.Errorf("records not equal ; got\n%#v, expected\n%#v", r2, r)
 	}
 
-	_, err = rlp.EncodeToBytes(r2)
+	if !reflect.DeepEqual(r, r2) {
+		t.Errorf("records not deep equal ; got\n%#v, expected\n%#v", r2, r)
+	}
+
+	blob2, err := rlp.EncodeToBytes(r2)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if bytes.Compare(blob, blob2) != 0 {
+		t.Errorf("serialised records not equal ; got\n%#v, expected\n%#v", blob2, blob)
 	}
 }
 
