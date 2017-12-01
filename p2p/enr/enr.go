@@ -34,7 +34,6 @@ var ()
 
 // The maximum encoded size of a node record is 300 bytes. Implementations should reject records larger than this size.
 const (
-	RECORD_MAX_SIZE     = 300
 	ID_SECP256k1_KECCAK = "secp256k1-keccak" // "secp256k1-keccak" identity scheme identifier
 )
 
@@ -266,7 +265,6 @@ func (r *Record) verifySignature() error {
 		return err
 	}
 
-	// get publickey from message and signature
 	sigcontent, err := r.serialisedContent()
 	if err != nil {
 		return err
