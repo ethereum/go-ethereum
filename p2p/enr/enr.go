@@ -20,9 +20,8 @@ package enr
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"encoding/binary"
 	"errors"
-	"net"
+	"io"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -31,202 +30,92 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 )
 
+var ()
+
 // The maximum encoded size of a node record is 300 bytes. Implementations should reject records larger than this size.
 const (
 	RECORD_MAX_SIZE     = 300
 	ID_SECP256k1_KECCAK = "secp256k1-keccak" // "secp256k1-keccak" identity scheme identifier
 )
 
-// Pseudo-const identifiers for pre-defined keys
-var (
-	ID        = []byte(`id`)        // name of identity scheme, e.g. "secp256k1-keccak"
-	SECP256K1 = []byte(`secp256k1`) // compressed secp256k1 public key
-	IP4       = []byte(`ip4`)       // IPv4 address, 4 bytes
-	IP6       = []byte(`ip6`)       // IPv6 address, 16 bytes
-	DISCV5    = []byte(`discv5`)    // UDP port for discovery v5
-)
+// Key is implemented by known node record key types.
+//
+// To define a new key that is to be included in a node record,
+// create a Go type that satisfies this interface. The type should
+// also implement rlp.Decoder if additional checks are needed on the value.
+type Key interface {
+	ENRKey() string
+}
 
-type record struct {
+type pair struct {
 	k []byte
 	v []byte
 }
 
-type ENR struct {
-	seq       uint32   // sequence number
-	signature []byte   // record's signature
-	raw       []byte   // RLP encoded record
-	records   []record // list of all key/value pairs, sorted prior to RLP encoding
-	dirty     bool     // keeps track if record was modified after it was signed and encoded
+type Record struct {
+	seq       uint32 // sequence number
+	signature []byte // record's signature
+	raw       []byte // RLP encoded record
+	pairs     []pair // list of all key/value pairs, sorted prior to RLP encoding
+	signed    bool   // keeps track if record was modified after it was signed and encoded
 }
 
-func NewENR() *ENR {
-	return &ENR{
-		dirty: true,
-	}
+func (r Record) Seq() uint32 {
+	return r.seq
 }
 
-func (e *ENR) GetID() (string, error) {
-	for _, r := range e.records {
-		if bytes.Compare(ID, r.k) == 0 {
-			return string(r.v), nil
+func (r *Record) SetSeq(s uint32) {
+	r.signed = false
+	r.seq = s
+}
+
+func (r *Record) Load(k Key) (bool, error) {
+	for _, p := range r.pairs {
+		if string(p.k) == k.ENRKey() {
+			err := rlp.DecodeBytes(p.v, k)
+			return true, err
 		}
 	}
 
-	return "", errors.New("id record does not exist")
+	return false, errors.New("record does not exist")
 }
 
-func (e *ENR) SetID(id string) {
-	e.dirty = true
-	e.records = append(e.records, record{ID, []byte(id)})
-}
-
-func (e *ENR) GetSecp256k1() ([]byte, error) {
-	for _, r := range e.records {
-		if bytes.Compare(SECP256K1, r.k) == 0 {
-			return r.v, nil
-		}
+func (r *Record) Set(k Key) error {
+	r.signed = false
+	blob, err := rlp.EncodeToBytes(k)
+	if err != nil {
+		return err
 	}
-
-	return nil, errors.New("secp256k1 record does not exist")
-}
-
-func (e *ENR) SetSecp256k1(pk []byte) {
-	e.dirty = true
-	e.records = append(e.records, record{SECP256K1, pk})
-}
-
-func (e *ENR) GetIPv4() (net.IP, error) {
-	for _, r := range e.records {
-		if bytes.Compare(IP4, r.k) == 0 {
-			if len(r.v) != net.IPv4len {
-				return nil, errors.New("wrong ipv4 record length")
-			}
-			return net.IP(r.v), nil
-		}
-	}
-
-	return nil, errors.New("ip4 record does not exist")
-}
-
-func (e *ENR) SetIPv4(ip net.IP) error {
-	e.dirty = true
-	ipv4 := ip.To4()
-	if ipv4 == nil {
-		return errors.New("param is not a valid ipv4 address")
-	}
-	e.records = append(e.records, record{IP4, ipv4})
+	r.pairs = append(r.pairs, pair{[]byte(k.ENRKey()), blob})
 	return nil
 }
 
-func (e *ENR) GetIPv6() (net.IP, error) {
-	for _, r := range e.records {
-		if bytes.Compare(IP6, r.k) == 0 {
-			if len(r.v) != net.IPv6len {
-				return nil, errors.New("wrong ipv6 record length")
-			}
-			return net.IP(r.v), nil
-		}
+func (r Record) EncodeRLP(w io.Writer) error {
+	if !r.signed {
+		return errors.New("record is not signed")
 	}
 
-	return nil, errors.New("ip6 record does not exist")
+	_, err := w.Write(r.raw)
+
+	return err
 }
 
-func (e *ENR) SetIPv6(ip net.IP) error {
-	if len(ip) != net.IPv6len {
-		return errors.New("param length is not equal to 16 bytes")
-	}
-	e.dirty = true
-	e.records = append(e.records, record{IP6, ip})
-	return nil
-}
+func (r *Record) DecodeRLP(s *rlp.Stream) error {
+	var err error
 
-func (e *ENR) GetDiscv5() (uint32, error) {
-	for _, r := range e.records {
-		if bytes.Compare(DISCV5, r.k) == 0 {
-			buf := bytes.NewBuffer(r.v)
-			var port uint32
-			err := binary.Read(buf, binary.BigEndian, &port)
-			if err != nil {
-				return 0, err
-			}
-
-			return port, nil
-		}
-	}
-
-	return 0, errors.New("secp256k1 record does not exist")
-}
-
-func (e *ENR) SetDiscv5(port uint32) error {
-	e.dirty = true
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, port)
+	r.signature, err = s.Bytes()
 	if err != nil {
 		return err
 	}
 
-	e.records = append(e.records, record{DISCV5, buf.Bytes()})
-
-	return nil
-}
-
-func (e *ENR) GetRaw(k []byte) ([]byte, error) {
-	for _, r := range e.records {
-		if bytes.Compare(r.k, k) == 0 {
-			return r.v, nil
-		}
-	}
-
-	return nil, errors.New("record does not exist")
-}
-
-func (e *ENR) SetRaw(k []byte, v []byte) {
-	e.dirty = true
-	e.records = append(e.records, record{k, v})
-}
-
-func (e *ENR) Encode() ([]byte, error) {
-	if e.dirty {
-		return nil, errors.New("record is not signed")
-	}
-	return e.raw, nil
-}
-
-func (e *ENR) NodeAddress() ([]byte, error) {
-	pk, err := e.GetSecp256k1()
-	if err != nil {
-		return nil, err
-	}
-
-	digest := crypto.Keccak256Hash(pk)
-
-	return digest.Bytes(), nil
-}
-
-func (e *ENR) Decode(data []byte) error {
-	if len(data) > RECORD_MAX_SIZE {
-		return errors.New("record is too big")
-	}
-
-	s := rlp.NewStream(bytes.NewReader(data), RECORD_MAX_SIZE)
-
-	signature, err := s.Bytes()
-	if err != nil {
-		return err
-	}
-
-	// consume the list prefix
 	_, err = s.List()
 	if err != nil {
 		return err
 	}
 
-	seq, err := s.Uint()
-	if err != nil {
+	if err := s.Decode(&r.seq); err != nil {
 		return err
 	}
-
-	var records []record
 
 	// read key/value pairs until we reach rlp.EOL
 	for _, _, err = s.Kind(); err == nil; _, _, err = s.Kind() {
@@ -240,115 +129,120 @@ func (e *ENR) Decode(data []byte) error {
 			return err2
 		}
 
-		records = append(records, record{k: key, v: value})
+		r.pairs = append(r.pairs, pair{k: key, v: value})
 	}
 
 	if err != rlp.EOL {
 		return err
 	}
 
-	e.signature = signature
-	e.raw = data
-	e.seq = uint32(seq)
-	e.records = records
-
-	err = e.verifySignature()
-	if err != nil {
-		return err
-	}
-
-	e.dirty = false
-
-	return nil
-}
-
-func (e *ENR) Sign(privkey *ecdsa.PrivateKey) error {
-	e.seq = e.seq + 1
-
-	e.SetID(ID_SECP256k1_KECCAK)
-
-	pk := (*btcec.PublicKey)(&privkey.PublicKey).SerializeCompressed()
-	e.SetSecp256k1(pk)
-
-	var err error
-	e.signature, e.raw, err = e.SignAndEncode(privkey)
+	err = r.verifySignature()
 	if err != nil {
 		return err
 	}
 
 	// mark record ready for encoding
-	e.dirty = false
+	r.signed = true
 
 	return nil
 }
 
-func (e *ENR) SignAndEncode(privkey *ecdsa.PrivateKey) ([]byte, []byte, error) {
-	content, err := e.SerialisedContent()
+func (r Record) Equal(o Record) (bool, error) {
+	rr, err := r.serialisedContent()
 	if err != nil {
-		return nil, nil, err
+		return false, err
 	}
 
-	digest := crypto.Keccak256Hash(content)
-
-	signature, err := crypto.Sign(digest.Bytes(), privkey)
+	oo, err := o.serialisedContent()
 	if err != nil {
-		return nil, nil, err
+		return false, err
 	}
 
-	blob, err := rlp.EncodeToBytes(signature)
-	if err != nil {
-		return nil, nil, err
+	if bytes.Compare(rr, oo) != 0 {
+		return false, nil
 	}
 
-	raw := append(blob, content...)
+	if err := r.verifySignature(); err != nil {
+		return false, err
+	}
 
-	return signature, raw, nil
+	if err := o.verifySignature(); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
-func (e *ENR) SerialisedContent() ([]byte, error) {
-	var buffer bytes.Buffer
+func (r *Record) NodeAddr() ([]byte, error) {
+	var secp256k1 Secp256k1
 
-	blob, err := rlp.EncodeToBytes(e.seq)
+	_, err := r.Load(&secp256k1)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = buffer.Write(blob)
-	if err != nil {
-		return nil, err
-	}
+	digest := crypto.Keccak256Hash(secp256k1)
 
-	sort.Slice(e.records, func(i, j int) bool {
-		return bytes.Compare(e.records[i].k, e.records[j].k) < 0
+	return digest.Bytes(), nil
+}
+
+func (r *Record) Sign(privkey *ecdsa.PrivateKey) error {
+	r.seq = r.seq + 1
+
+	id := ID(ID_SECP256k1_KECCAK)
+
+	r.Set(id)
+
+	pk := (*btcec.PublicKey)(&privkey.PublicKey).SerializeCompressed()
+	secp256k1 := Secp256k1(pk)
+	r.Set(secp256k1)
+
+	return r.signAndEncode(privkey)
+}
+
+func (r *Record) serialisedContent() ([]byte, error) {
+	sort.Slice(r.pairs, func(i, j int) bool {
+		return string(r.pairs[i].k) < string(r.pairs[j].k)
 	})
 
-	for _, r := range e.records {
-		kk, err := rlp.EncodeToBytes(r.k)
-		if err != nil {
-			return nil, err
-		}
+	list := []interface{}{r.seq}
 
-		_, err = buffer.Write(kk)
-		if err != nil {
-			return nil, err
-		}
-
-		vv, err := rlp.EncodeToBytes(r.v)
-		if err != nil {
-			return nil, err
-		}
-
-		_, err = buffer.Write(vv)
-		if err != nil {
-			return nil, err
-		}
+	for _, p := range r.pairs {
+		list = append(list, p.k, p.v)
 	}
 
-	return wrapList(buffer.Bytes()), nil
+	return rlp.EncodeToBytes(list)
 }
 
-func (e *ENR) verifySignature() error {
-	id, err := e.GetID()
+func (r *Record) signAndEncode(privkey *ecdsa.PrivateKey) error {
+	sigcontent, err := r.serialisedContent()
+	if err != nil {
+		return err
+	}
+
+	digest := crypto.Keccak256Hash(sigcontent)
+
+	r.signature, err = crypto.Sign(digest.Bytes(), privkey)
+	if err != nil {
+		return err
+	}
+
+	blob, err := rlp.EncodeToBytes(r.signature)
+	if err != nil {
+		return err
+	}
+
+	r.raw = append(blob, sigcontent...)
+
+	// mark record ready for encoding
+	r.signed = true
+
+	return nil
+}
+
+func (r *Record) verifySignature() error {
+	var id ID
+	_, err := r.Load(&id)
 	if err != nil {
 		return err
 	}
@@ -359,7 +253,8 @@ func (e *ENR) verifySignature() error {
 	}
 
 	// get publickey from record
-	blob, err := e.GetSecp256k1()
+	var blob Secp256k1
+	_, err = r.Load(&blob)
 	if err != nil {
 		return err
 	}
@@ -371,13 +266,14 @@ func (e *ENR) verifySignature() error {
 	pubkey1 := pk.SerializeUncompressed()
 
 	// get publickey from message and signature
-	content, err := e.SerialisedContent()
+	sigcontent, err := r.serialisedContent()
 	if err != nil {
 		return err
 	}
 
-	digest := crypto.Keccak256Hash(content)
-	pubkey2, err := crypto.Ecrecover(digest.Bytes(), e.signature)
+	digest := crypto.Keccak256Hash(sigcontent)
+
+	pubkey2, err := crypto.Ecrecover(digest.Bytes(), r.signature)
 	if err != nil {
 		return err
 	}
@@ -387,10 +283,4 @@ func (e *ENR) verifySignature() error {
 	}
 
 	return nil
-}
-
-func wrapList(c []byte) []byte {
-	head := make([]byte, 9)
-	res := rlp.LengthPrefix(head, uint64(len(c)))
-	return append(res, c...)
 }

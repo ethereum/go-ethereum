@@ -20,11 +20,11 @@ import (
 	"bytes"
 	"encoding/hex"
 	"net"
-	"reflect"
 	"testing"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -32,113 +32,119 @@ const (
 )
 
 func TestGetSetID(t *testing.T) {
-	id := "someid"
-	e := NewENR()
-	e.SetID(id)
+	id := ID("someid")
+	var r Record
+	r.Set(id)
 
-	got, err := e.GetID()
+	var id2 ID
+
+	_, err := r.Load(&id2)
 	if err != nil {
-		t.Fatalf("error: %#v", err)
+		t.Fatal(err)
 	}
 
-	if got != id {
-		t.Fatalf("got %#v, expected %#v", got, id)
+	if id != id2 {
+		t.Fatalf("got %#v, expected %#v", id2, id)
 	}
 }
 
 func TestGetSetIP4(t *testing.T) {
-	ip := net.IP{192, 168, 0, 3}
-	e := NewENR()
-	e.SetIPv4(ip)
+	ip := IP4(net.IP{192, 168, 0, 3})
+	var r Record
+	r.Set(ip)
 
-	got, err := e.GetIPv4()
+	var ip2 IP4
+
+	_, err := r.Load(&ip2)
 	if err != nil {
-		t.Fatalf("error: %#v", err)
+		t.Fatal(err)
 	}
 
-	if !got.Equal(ip) {
-		t.Fatalf("got %#v, expected %#v", got, ip)
+	if bytes.Compare(ip, ip2) != 0 {
+		t.Fatalf("got %#v, expected %#v", ip2, ip)
 	}
 }
 
 func TestGetSetIP6(t *testing.T) {
-	ip := net.IP{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68}
-	e := NewENR()
-	e.SetIPv6(ip)
+	ip := IP6(net.IP{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68})
+	var r Record
+	r.Set(ip)
 
-	got, err := e.GetIPv6()
+	var ip2 IP6
+
+	_, err := r.Load(&ip2)
 	if err != nil {
-		t.Fatalf("error: %#v", err)
+		t.Fatal(err)
 	}
 
-	if !got.Equal(ip) {
-		t.Fatalf("got %#v, expected %#v", got, ip)
+	if bytes.Compare(ip, ip2) != 0 {
+		t.Fatalf("got %#v, expected %#v", ip2, ip)
 	}
 }
 
 func TestGetSetDiscv5(t *testing.T) {
-	port := uint32(30309)
-	e := NewENR()
+	port := DiscV5(30309)
+	var r Record
+	r.Set(port)
 
-	err := e.SetDiscv5(port)
+	var port2 DiscV5
+
+	_, err := r.Load(&port2)
 	if err != nil {
-		t.Fatalf("error: %#v", err)
+		t.Fatal(err)
 	}
 
-	got, err := e.GetDiscv5()
-	if err != nil {
-		t.Fatalf("error: %#v", err)
-	}
-
-	if got != port {
-		t.Fatalf("got %#v, expected %#v", got, port)
+	if port != port2 {
+		t.Fatalf("got %#v, expected %#v", port2, port)
 	}
 }
 
 func TestGetSetSecp256k1(t *testing.T) {
 	privkey, err := crypto.HexToECDSA(privkeyHex)
 	if err != nil {
-		t.Fatalf("error: %#v", err)
+		t.Fatal(err)
 	}
 
-	e := NewENR()
+	var r Record
 
-	err = e.Sign(privkey)
+	err = r.Sign(privkey)
 	if err != nil {
-		t.Fatalf("error: %#v", err)
+		t.Fatal(err)
 	}
 
-	got, err := e.GetSecp256k1()
+	var pk Secp256k1
+
+	_, err = r.Load(&pk)
 	if err != nil {
-		t.Fatalf("error: %#v", err)
+		t.Fatal(err)
 	}
 
 	expected := (*btcec.PublicKey)(&privkey.PublicKey).SerializeCompressed()
-	if bytes.Compare(got, expected) != 0 {
-		t.Fatalf("got %#v, expected %#v", got, expected)
+	if bytes.Compare(pk, expected) != 0 {
+		t.Fatalf("got %#v, expected %#v", pk, expected)
 	}
 }
 
 func TestDirty(t *testing.T) {
 	privkey, err := crypto.HexToECDSA(privkeyHex)
 	if err != nil {
-		t.Fatalf("error: %#v", err)
+		t.Fatal(err)
 	}
 
-	e := NewENR()
+	var r Record
 
-	err = e.Sign(privkey)
+	err = r.Sign(privkey)
 	if err != nil {
-		t.Fatalf("error: %#v", err)
+		t.Fatal(err)
 	}
 
-	if _, err := e.Encode(); err != nil {
-		t.Fatalf("error: %#v", err)
+	if _, err := rlp.EncodeToBytes(r); err != nil {
+		t.Fatal(err)
 	}
 
-	e.SetRaw([]byte(`some key`), []byte(`some value`))
+	r.SetSeq(3)
 
-	if _, err := e.Encode(); err == nil {
+	if _, err := rlp.EncodeToBytes(r); err == nil {
 		t.Fatal("expected err, got nil")
 	}
 }
@@ -149,46 +155,36 @@ func TestSignEncodeAndDecode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	e := NewENR()
-	e.SetDiscv5(30303)
-	e.SetIPv4(net.ParseIP("127.0.0.1"))
+	var r Record
+	port := DiscV5(30303)
+	r.Set(port)
 
-	err = e.Sign(privkey)
+	ipv4 := IP4(net.ParseIP("127.0.0.1"))
+	r.Set(ipv4)
+
+	err = r.Sign(privkey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	record, err := e.Encode()
+	blob, err := rlp.EncodeToBytes(r)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	e2 := NewENR()
-
-	err = e2.Decode(record)
+	var r2 Record
+	err = rlp.DecodeBytes(blob, &r2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(e, e2) {
-		t.Errorf("got\n%#v, expected\n%#v", e2, e)
+	if ok, err := r.Equal(r2); err != nil || !ok {
+		t.Errorf("records not equal ; got\n%#v, expected\n%#v", r2, r)
 	}
 
-	expectedRecord := "b8415571f9a36b1e26c366745894656dd1565033cdeda18d330c9a9bac67dfc3e786556b0490e509372fa9db5abf418accd895467e8ff047bbdc147789bef71a2cc401f8560186646973637635840000765f82696490736563703235366b312d6b656363616b83697034847f00000189736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138"
-
-	got := hex.EncodeToString(record)
-	if got != expectedRecord {
-		t.Errorf("got\n%#v, expected\n%#v", got, expectedRecord)
-	}
-
-	blob, err := e2.Encode()
+	_, err = rlp.EncodeToBytes(r2)
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	got = hex.EncodeToString(blob)
-	if got != expectedRecord {
-		t.Errorf("got\n%#v, expected\n%#v", got, expectedRecord)
 	}
 }
 
@@ -198,14 +194,14 @@ func TestNodeAddress(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	e := NewENR()
+	var r Record
 
-	err = e.Sign(privkey)
+	err = r.Sign(privkey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	addr, err := e.NodeAddress()
+	addr, err := r.NodeAddr()
 	if err != nil {
 		t.Fatal(err)
 	}
