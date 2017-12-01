@@ -222,10 +222,12 @@ func (r *Record) signAndEncode(privkey *ecdsa.PrivateKey) error {
 
 	digest := crypto.Keccak256Hash(sigcontent)
 
-	r.signature, err = crypto.Sign(digest.Bytes(), privkey)
+	key := btcec.PrivateKey(*privkey)
+	signature, err := key.Sign(digest.Bytes())
 	if err != nil {
 		return err
 	}
+	r.signature = signature.Serialize()
 
 	blob, err := rlp.EncodeToBytes(r.signature)
 	if err != nil {
@@ -263,7 +265,6 @@ func (r *Record) verifySignature() error {
 	if err != nil {
 		return err
 	}
-	pubkey1 := pk.SerializeUncompressed()
 
 	// get publickey from message and signature
 	sigcontent, err := r.serialisedContent()
@@ -273,13 +274,13 @@ func (r *Record) verifySignature() error {
 
 	digest := crypto.Keccak256Hash(sigcontent)
 
-	pubkey2, err := crypto.Ecrecover(digest.Bytes(), r.signature)
+	sign, err := btcec.ParseSignature(r.signature, btcec.S256())
 	if err != nil {
 		return err
 	}
 
-	if bytes.Compare(pubkey1, pubkey2) != 0 {
-		return errors.New("public key mismatch")
+	if !sign.Verify(digest.Bytes(), pk) {
+		return errors.New("signature is not valid")
 	}
 
 	return nil
