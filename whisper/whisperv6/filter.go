@@ -53,6 +53,10 @@ func NewFilters(w *Whisper) *Filters {
 }
 
 func (fs *Filters) Install(watcher *Filter) (string, error) {
+	if watcher.KeySym != nil && watcher.KeyAsym != nil {
+		return "", fmt.Errorf("filters must choose between symmetric and asymmetric keys")
+	}
+
 	if watcher.Messages == nil {
 		watcher.Messages = make(map[common.Hash]*ReceivedMessage)
 	}

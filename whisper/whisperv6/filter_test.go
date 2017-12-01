@@ -229,6 +229,36 @@ func TestInstallIdenticalFilters(t *testing.T) {
 	}
 }
 
+func TestInstallFilterWithSymAndAsymKeys(t *testing.T) {
+	InitSingleTest()
+
+	w := New(&Config{})
+	filters := NewFilters(w)
+	filter1, _ := generateFilter(t, true)
+
+	asymKey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("Unable to create asymetric keys", err)
+	}
+
+	// Copy the first filter since some of its fields
+	// are randomly gnerated.
+	filter := &Filter{
+		KeySym:   filter1.KeySym,
+		KeyAsym:  asymKey,
+		Topics:   filter1.Topics,
+		PoW:      filter1.PoW,
+		AllowP2P: filter1.AllowP2P,
+		Messages: make(map[common.Hash]*ReceivedMessage),
+	}
+
+	_, err = filters.Install(filter)
+
+	if err == nil {
+		t.Fatalf("Error detecting that a filter had both an asymmetric and symmetric key, with seed %d", seed)
+	}
+}
+
 func TestComparePubKey(t *testing.T) {
 	InitSingleTest()
 

@@ -208,17 +208,18 @@ func (e *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error) {
 
 // Open tries to decrypt an envelope, and populates the message fields in case of success.
 func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
-	// if the filter has some asymmetric key provided, it will
-	// attempt to open it asymmetrically. If this fails, then
-	// attempt to open it symmetrically.
+	// The API interface forbids filters doing both symmetric and
+	// asymmetric encryption.
+	if watcher.expectsAsymmetricEncryption() && watcher.expectsSymmetricEncryption() {
+		return nil
+	}
+
 	if watcher.expectsAsymmetricEncryption() {
 		msg, _ = e.OpenAsymmetric(watcher.KeyAsym)
 		if msg != nil {
 			msg.Dst = &watcher.KeyAsym.PublicKey
 		}
-	}
-
-	if msg == nil && watcher.expectsSymmetricEncryption() {
+	} else if watcher.expectsSymmetricEncryption() {
 		msg, _ = e.OpenSymmetric(watcher.KeySym)
 		if msg != nil {
 			msg.SymKeyHash = crypto.Keccak256Hash(watcher.KeySym)

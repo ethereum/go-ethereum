@@ -240,7 +240,12 @@ func singleEnvelopeOpenTest(t *testing.T, symmetric bool) {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
 
-	f := Filter{KeyAsym: key, KeySym: params.KeySym}
+	var f Filter
+	if symmetric {
+		f = Filter{KeySym: params.KeySym}
+	} else {
+		f = Filter{KeyAsym: key}
+	}
 	decrypted := env.Open(&f)
 	if decrypted == nil {
 		t.Fatalf("failed to open with seed %d.", seed)
