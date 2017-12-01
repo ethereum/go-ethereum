@@ -83,7 +83,7 @@ func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http
 		if allowAllOrigins || origins.Has(origin) {
 			return nil
 		}
-		log.Debug(fmt.Sprintf("origin '%s' not allowed on WS-RPC interface\n", origin))
+		log.Warn(fmt.Sprintf("origin '%s' not allowed on WS-RPC interface\n", origin))
 		return fmt.Errorf("origin %s not allowed", origin)
 	}
 

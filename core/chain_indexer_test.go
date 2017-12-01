@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/EthereumCommonwealth/go-callisto/common"
 	"github.com/EthereumCommonwealth/go-callisto/core/types"
 	"github.com/EthereumCommonwealth/go-callisto/ethdb"
 )
@@ -208,9 +209,10 @@ func (b *testChainIndexBackend) reorg(headNum uint64) uint64 {
 	return b.stored * b.indexer.sectionSize
 }
 
-func (b *testChainIndexBackend) Reset(section uint64) {
+func (b *testChainIndexBackend) Reset(section uint64, prevHead common.Hash) error {
 	b.section = section
 	b.headerCnt = 0
+	return nil
 }
 
 func (b *testChainIndexBackend) Process(header *types.Header) {

@@ -379,7 +379,7 @@ func (s *Service) login(conn *websocket.Conn) error {
 		protocol = fmt.Sprintf("eth/%d", eth.ProtocolVersions[0])
 	} else {
 		network = fmt.Sprintf("%d", infos.Protocols["les"].(*eth.EthNodeInfo).Network)
-		protocol = fmt.Sprintf("les/%d", les.ProtocolVersions[0])
+		protocol = fmt.Sprintf("les/%d", les.ClientProtocolVersions[0])
 	}
 	auth := &authMsg{
 		Id: s.node,

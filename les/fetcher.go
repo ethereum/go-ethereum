@@ -117,16 +117,16 @@ func newLightFetcher(pm *ProtocolManager) *lightFetcher {
 		maxConfirmedTd: big.NewInt(0),
 	}
 	pm.peers.notify(f)
+
+	f.pm.wg.Add(1)
 	go f.syncLoop()
 	return f
 }
 
 // syncLoop is the main event loop of the light fetcher
 func (f *lightFetcher) syncLoop() {
-	f.pm.wg.Add(1)
-	defer f.pm.wg.Done()
-
 	requesting := false
+	defer f.pm.wg.Done()
 	for {
 		select {
 		case <-f.pm.quitSync:

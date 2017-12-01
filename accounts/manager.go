@@ -41,17 +41,17 @@ type Manager struct {
 // NewManager creates a generic account manager to sign transaction via various
 // supported backends.
 func NewManager(backends ...Backend) *Manager {
+	// Retrieve the initial list of wallets from the backends and sort by URL
+	var wallets []Wallet
+	for _, backend := range backends {
+		wallets = merge(wallets, backend.Wallets()...)
+	}
 	// Subscribe to wallet notifications from all backends
 	updates := make(chan WalletEvent, 4*len(backends))
 
 	subs := make([]event.Subscription, len(backends))
 	for i, backend := range backends {
 		subs[i] = backend.Subscribe(updates)
-	}
-	// Retrieve the initial list of wallets from the backends and sort by URL
-	var wallets []Wallet
-	for _, backend := range backends {
-		wallets = merge(wallets, backend.Wallets()...)
 	}
 	// Assemble the account manager and return
 	am := &Manager{

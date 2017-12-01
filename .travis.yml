@@ -38,7 +38,7 @@ matrix:
         - sudo chmod 666 /dev/fuse
         - sudo chown root:$USER /etc/fuse.conf
         - go run build/ci.go install
-        - go run build/ci.go test -coverage -misspell
+        - go run build/ci.go test -coverage
 
     - os: osx
       go: 1.9.x
@@ -48,7 +48,21 @@ matrix:
         - brew install caskroom/cask/brew-cask
         - brew cask install osxfuse
         - go run build/ci.go install
-        - go run build/ci.go test -coverage -misspell
+        - go run build/ci.go test -coverage
+
+    # This builder only tests code linters on latest version of Go
+    - os: linux
+      dist: trusty
+      sudo: required
+      go: 1.9.x
+      env:
+        - lint
+      script:
+        - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install fuse
+        - sudo modprobe fuse
+        - sudo chmod 666 /dev/fuse
+        - sudo chown root:$USER /etc/fuse.conf
+        - go run build/ci.go lint
 
     # This builder does the Ubuntu PPA and Linux Azure uploads
     - os: linux
@@ -133,16 +147,16 @@ matrix:
         - azure-android
         - maven-android
       before_install:
-        - curl https://storage.googleapis.com/golang/go1.9.linux-amd64.tar.gz | tar -xz
+        - curl https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
       script:
         # Build the Android archive and upload it to Maven Central and Azure
-        - curl https://dl.google.com/android/repository/android-ndk-r14b-linux-x86_64.zip -o android-ndk-r14b.zip
-        - unzip -q android-ndk-r14b.zip && rm android-ndk-r14b.zip
-        - mv android-ndk-r14b $HOME
-        - export ANDROID_NDK=$HOME/android-ndk-r14b
+        - curl https://dl.google.com/android/repository/android-ndk-r15c-linux-x86_64.zip -o android-ndk-r15c.zip
+        - unzip -q android-ndk-r15c.zip && rm android-ndk-r15c.zip
+        - mv android-ndk-r15c $HOME
+        - export ANDROID_NDK=$HOME/android-ndk-r15c
 
         - mkdir -p $GOPATH/src/github.com/ethereum
         - ln -s `pwd` $GOPATH/src/github.com/ethereum

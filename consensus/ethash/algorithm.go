@@ -102,7 +102,7 @@ func generateCache(dest []uint32, epoch uint64, seed []byte) {
 	header.Cap *= 4
 	cache := *(*[]byte)(unsafe.Pointer(&header))
 
-	// Calculate the number of thoretical rows (we'll store in one buffer nonetheless)
+	// Calculate the number of theoretical rows (we'll store in one buffer nonetheless)
 	size := uint64(len(cache))
 	rows := int(size) / hashBytes
 
@@ -187,7 +187,7 @@ func fnvHash(mix []uint32, data []uint32) {
 // generateDatasetItem combines data from 256 pseudorandomly selected cache nodes,
 // and hashes that to compute a single dataset node.
 func generateDatasetItem(cache []uint32, index uint32, keccak512 hasher) []byte {
-	// Calculate the number of thoretical rows (we use one buffer nonetheless)
+	// Calculate the number of theoretical rows (we use one buffer nonetheless)
 	rows := uint32(len(cache) / hashWords)
 
 	// Initialize the mix
@@ -287,7 +287,7 @@ func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 // hashimoto aggregates data from the full dataset in order to produce our final
 // value for a particular header hash and nonce.
 func hashimoto(hash []byte, nonce uint64, size uint64, lookup func(index uint32) []uint32) ([]byte, []byte) {
-	// Calculate the number of thoretical rows (we use one buffer nonetheless)
+	// Calculate the number of theoretical rows (we use one buffer nonetheless)
 	rows := uint32(size / mixBytes)
 
 	// Combine header+nonce into a 64 byte seed

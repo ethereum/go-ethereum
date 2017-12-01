@@ -174,8 +174,15 @@ func (b *LesApiBackend) AccountManager() *accounts.Manager {
 }
 
 func (b *LesApiBackend) BloomStatus() (uint64, uint64) {
-	return params.BloomBitsBlocks, 0
+	if b.eth.bloomIndexer == nil {
+		return 0, 0
+	}
+	sections, _, _ := b.eth.bloomIndexer.Sections()
+	return light.BloomTrieFrequency, sections
 }
 
 func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
+	for i := 0; i < bloomFilterThreads; i++ {
+		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
+	}
 }

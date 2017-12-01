@@ -97,7 +97,7 @@ type testTxPool struct {
 
 // AddRemotes appends a batch of transactions to the pool, and notifies any
 // listeners if the addition channel is non nil
-func (p *testTxPool) AddRemotes(txs []*types.Transaction) error {
+func (p *testTxPool) AddRemotes(txs []*types.Transaction) []error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -105,8 +105,7 @@ func (p *testTxPool) AddRemotes(txs []*types.Transaction) error {
 	if p.added != nil {
 		p.added <- txs
 	}
-
-	return nil
+	return make([]error, len(txs))
 }
 
 // Pending returns all the transactions known to the pool

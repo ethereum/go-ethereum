@@ -192,7 +192,7 @@ func BenchmarkNoBloomBits(b *testing.B) {
 	start := time.Now()
 	mux := new(event.TypeMux)
 	backend := &testBackend{mux, db, 0, new(event.Feed), new(event.Feed), new(event.Feed), new(event.Feed)}
-	filter := New(backend, 0, int64(headNum), []common.Address{common.Address{}}, nil)
+	filter := New(backend, 0, int64(headNum), []common.Address{{}}, nil)
 	filter.Logs(context.Background())
 	d := time.Since(start)
 	fmt.Println("Finished running filter benchmarks")

@@ -61,6 +61,11 @@ var (
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
 		utils.NoUSBFlag,
+		utils.DashboardEnabledFlag,
+		utils.DashboardAddrFlag,
+		utils.DashboardPortFlag,
+		utils.DashboardRefreshFlag,
+		utils.DashboardAssetsFlag,
 		utils.EthashCacheDirFlag,
 		utils.EthashCachesInMemoryFlag,
 		utils.EthashCachesOnDiskFlag,
@@ -99,7 +104,8 @@ var (
 		utils.NetrestrictFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
-		utils.DevModeFlag,
+		utils.DeveloperFlag,
+		utils.DeveloperPeriodFlag,
 		utils.TestnetFlag,
 		utils.RinkebyFlag,
 		utils.VMEnableDebugFlag,
@@ -146,6 +152,7 @@ func init() {
 		initCommand,
 		importCommand,
 		exportCommand,
+		copydbCommand,
 		removedbCommand,
 		dumpCommand,
 		// See monitorcmd.go:
@@ -269,7 +276,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		}
 	}()
 	// Start auxiliary services if enabled
-	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
+	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
 		// Mining only makes sense if a full Ethereum node is running
 		var ethereum *eth.Ethereum
 		if err := stack.Service(&ethereum); err != nil {

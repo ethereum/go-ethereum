@@ -235,7 +235,7 @@ func newCanonical(n int, full bool) (ethdb.Database, *BlockChain, error) {
 	db, _ := ethdb.NewMemDatabase()
 	genesis := gspec.MustCommit(db)
 
-	blockchain, _ := NewBlockChain(db, params.AllProtocolChanges, ethash.NewFaker(), vm.Config{})
+	blockchain, _ := NewBlockChain(db, params.AllEthashProtocolChanges, ethash.NewFaker(), vm.Config{})
 	// Create and inject the requested chain
 	if n == 0 {
 		return db, blockchain, nil

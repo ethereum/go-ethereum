@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/EthereumCommonwealth/go-callisto/common"
+	"github.com/EthereumCommonwealth/go-callisto/consensus/ethash"
 	"github.com/EthereumCommonwealth/go-callisto/core"
 	"github.com/EthereumCommonwealth/go-callisto/eth"
 	"github.com/EthereumCommonwealth/go-callisto/internal/jsre"
@@ -94,9 +95,11 @@ func newTester(t *testing.T, confOverride func(*eth.Config)) *tester {
 		t.Fatalf("failed to create node: %v", err)
 	}
 	ethConf := &eth.Config{
-		Genesis:   core.DevGenesisBlock(),
+		Genesis:   core.DeveloperGenesisBlock(15, common.Address{}),
 		Etherbase: common.HexToAddress(testAddress),
-		PowTest:   true,
+		Ethash: ethash.Config{
+			PowMode: ethash.ModeTest,
+		},
 	}
 	if confOverride != nil {
 		confOverride(ethConf)

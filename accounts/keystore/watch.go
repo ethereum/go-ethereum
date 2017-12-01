@@ -70,7 +70,6 @@ func (w *watcher) loop() {
 		return
 	}
 	defer notify.Stop(w.ev)
-
 	logger.Trace("Started watching keystore folder")
 	defer logger.Trace("Stopped watching keystore folder")
 
@@ -82,32 +81,28 @@ func (w *watcher) loop() {
 	// When an event occurs, the reload call is delayed a bit so that
 	// multiple events arriving quickly only cause a single reload.
 	var (
-		debounce          = time.NewTimer(0)
-		debounceDuration  = 500 * time.Millisecond
-		inCycle, hadEvent bool
+		debounceDuration = 500 * time.Millisecond
+		rescanTriggered  = false
+		debounce         = time.NewTimer(0)
 	)
+	// Ignore initial trigger
+	if !debounce.Stop() {
+		<-debounce.C
+	}
 	defer debounce.Stop()
 	for {
 		select {
 		case <-w.quit:
 			return
 		case <-w.ev:
-			if !inCycle {
+			// Trigger the scan (with delay), if not already triggered
+			if !rescanTriggered {
 				debounce.Reset(debounceDuration)
-				inCycle = true
-			} else {
-				hadEvent = true
+				rescanTriggered = true
 			}
 		case <-debounce.C:
-			w.ac.mu.Lock()
-			w.ac.reload()
-			w.ac.mu.Unlock()
-			if hadEvent {
-				debounce.Reset(debounceDuration)
-				inCycle, hadEvent = true, false
-			} else {
-				inCycle, hadEvent = false, false
-			}
+			w.ac.scanAccounts()
+			rescanTriggered = false
 		}
 	}
 }

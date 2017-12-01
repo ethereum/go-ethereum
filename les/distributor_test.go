@@ -124,7 +124,7 @@ func testRequestDistributor(t *testing.T, resend bool) {
 
 	dist := newRequestDistributor(nil, stop)
 	var peers [testDistPeerCount]*testDistPeer
-	for i, _ := range peers {
+	for i := range peers {
 		peers[i] = &testDistPeer{}
 		go peers[i].worker(t, !resend, stop)
 		dist.registerTestPeer(peers[i])

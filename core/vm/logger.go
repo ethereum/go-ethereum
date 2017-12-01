@@ -45,7 +45,6 @@ type LogConfig struct {
 	DisableMemory  bool // disable memory capture
 	DisableStack   bool // disable stack capture
 	DisableStorage bool // disable storage capture
-	FullStorage    bool // show full storage (slow)
 	Limit          int  // maximum length of output, but zero means unlimited
 }
 
@@ -136,14 +135,13 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		)
 		l.changedValues[contract.Address()][address] = value
 	}
-	// copy a snapstot of the current memory state to a new buffer
+	// Copy a snapstot of the current memory state to a new buffer
 	var mem []byte
 	if !l.cfg.DisableMemory {
 		mem = make([]byte, len(memory.Data()))
 		copy(mem, memory.Data())
 	}
-
-	// copy a snapshot of the current stack state to a new buffer
+	// Copy a snapshot of the current stack state to a new buffer
 	var stck []*big.Int
 	if !l.cfg.DisableStack {
 		stck = make([]*big.Int, len(stack.Data()))
@@ -151,26 +149,10 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 			stck[i] = new(big.Int).Set(item)
 		}
 	}
-
-	// Copy the storage based on the settings specified in the log config. If full storage
-	// is disabled (default) we can use the simple Storage.Copy method, otherwise we use
-	// the state object to query for all values (slow process).
+	// Copy a snapshot of the current storage to a new container
 	var storage Storage
 	if !l.cfg.DisableStorage {
-		if l.cfg.FullStorage {
-			storage = make(Storage)
-			// Get the contract account and loop over each storage entry. This may involve looping over
-			// the trie and is a very expensive process.
-
-			env.StateDB.ForEachStorage(contract.Address(), func(key, value common.Hash) bool {
-				storage[key] = value
-				// Return true, indicating we'd like to continue.
-				return true
-			})
-		} else {
-			// copy a snapshot of the current storage to a new container.
-			storage = l.changedValues[contract.Address()].Copy()
-		}
+		storage = l.changedValues[contract.Address()].Copy()
 	}
 	// create a new snaptshot of the EVM.
 	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, storage, depth, err}

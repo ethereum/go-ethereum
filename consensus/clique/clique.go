@@ -29,6 +29,7 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/common"
 	"github.com/EthereumCommonwealth/go-callisto/common/hexutil"
 	"github.com/EthereumCommonwealth/go-callisto/consensus"
+	"github.com/EthereumCommonwealth/go-callisto/consensus/misc"
 	"github.com/EthereumCommonwealth/go-callisto/core/state"
 	"github.com/EthereumCommonwealth/go-callisto/core/types"
 	"github.com/EthereumCommonwealth/go-callisto/crypto"
@@ -124,6 +125,11 @@ var (
 
 	// errUnauthorized is returned if a header is signed by a non-authorized entity.
 	errUnauthorized = errors.New("unauthorized")
+
+	// errWaitTransactions is returned if an empty block is attempted to be sealed
+	// on an instant chain (0 second period). It's important to refuse these as the
+	// block reward is zero, so an empty block just bloats the chain... fast.
+	errWaitTransactions = errors.New("waiting for transactions")
 )
 
 // SignerFn is a signer callback function to request a hash to be signed by a
@@ -209,9 +215,6 @@ func New(config *params.CliqueConfig, db ethdb.Database) *Clique {
 	conf := *config
 	if conf.Epoch == 0 {
 		conf.Epoch = epochLength
-	}
-	if conf.Period == 0 {
-		conf.Period = blockPeriod
 	}
 	// Allocate the snapshot caches and create the engine
 	recents, _ := lru.NewARC(inmemorySnapshots)
@@ -312,6 +315,10 @@ func (c *Clique) verifyHeader(chain consensus.ChainReader, header *types.Header,
 		if header.Difficulty == nil || (header.Difficulty.Cmp(diffInTurn) != 0 && header.Difficulty.Cmp(diffNoTurn) != 0) {
 			return errInvalidDifficulty
 		}
+	}
+	// If all checks passed, validate any special fields for hard forks
+	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
+		return err
 	}
 	// All basic checks passed, verify cascading fields
 	return c.verifyCascadingFields(chain, header, parents)
@@ -593,6 +600,10 @@ func (c *Clique) Seal(chain consensus.ChainReader, block *types.Block, stop <-ch
 	number := header.Number.Uint64()
 	if number == 0 {
 		return nil, errUnknownBlock
+	}
+	// For 0-period chains, refuse to seal empty blocks (no reward but would spin sealing)
+	if c.config.Period == 0 && len(block.Transactions()) == 0 {
+		return nil, errWaitTransactions
 	}
 	// Don't hold the signer fields for the entire sealing procedure
 	c.lock.RLock()

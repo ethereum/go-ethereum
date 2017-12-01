@@ -25,26 +25,26 @@ import (
 
 // This table defines supported forks and their chain config.
 var Forks = map[string]*params.ChainConfig{
-	"Frontier": &params.ChainConfig{
+	"Frontier": {
 		ChainId: big.NewInt(1),
 	},
-	"Homestead": &params.ChainConfig{
+	"Homestead": {
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 	},
-	"EIP150": &params.ChainConfig{
+	"EIP150": {
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(0),
 	},
-	"EIP158": &params.ChainConfig{
+	"EIP158": {
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(0),
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
 	},
-	"Byzantium": &params.ChainConfig{
+	"Byzantium": {
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(0),
@@ -53,22 +53,22 @@ var Forks = map[string]*params.ChainConfig{
 		DAOForkBlock:   big.NewInt(0),
 		ByzantiumBlock: big.NewInt(0),
 	},
-	"FrontierToHomesteadAt5": &params.ChainConfig{
+	"FrontierToHomesteadAt5": {
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(5),
 	},
-	"HomesteadToEIP150At5": &params.ChainConfig{
+	"HomesteadToEIP150At5": {
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(5),
 	},
-	"HomesteadToDaoAt5": &params.ChainConfig{
+	"HomesteadToDaoAt5": {
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		DAOForkBlock:   big.NewInt(5),
 		DAOForkSupport: true,
 	},
-	"EIP158ToByzantiumAt5": &params.ChainConfig{
+	"EIP158ToByzantiumAt5": {
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(0),

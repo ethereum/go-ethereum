@@ -58,15 +58,18 @@ func (eth *Ethereum) startBloomHandlers() {
 
 				case request := <-eth.bloomRequests:
 					task := <-request
-
 					task.Bitsets = make([][]byte, len(task.Sections))
 					for i, section := range task.Sections {
 						head := core.GetCanonicalHash(eth.chainDb, (section+1)*params.BloomBitsBlocks-1)
-						blob, err := bitutil.DecompressBytes(core.GetBloomBits(eth.chainDb, task.Bit, section, head), int(params.BloomBitsBlocks)/8)
-						if err != nil {
-							panic(err)
+						if compVector, err := core.GetBloomBits(eth.chainDb, task.Bit, section, head); err == nil {
+							if blob, err := bitutil.DecompressBytes(compVector, int(params.BloomBitsBlocks)/8); err == nil {
+								task.Bitsets[i] = blob
+							} else {
+								task.Error = err
+							}
+						} else {
+							task.Error = err
 						}
-						task.Bitsets[i] = blob
 					}
 					request <- task
 				}
@@ -111,12 +114,10 @@ func NewBloomIndexer(db ethdb.Database, size uint64) *core.ChainIndexer {
 
 // Reset implements core.ChainIndexerBackend, starting a new bloombits index
 // section.
-func (b *BloomIndexer) Reset(section uint64) {
+func (b *BloomIndexer) Reset(section uint64, lastSectionHead common.Hash) error {
 	gen, err := bloombits.NewGenerator(uint(b.size))
-	if err != nil {
-		panic(err)
-	}
 	b.gen, b.section, b.head = gen, section, common.Hash{}
+	return err
 }
 
 // Process implements core.ChainIndexerBackend, adding a new header's bloom into
