@@ -17,11 +17,9 @@
 package main
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"os"
 	"os/signal"
 	"runtime"
@@ -29,14 +27,13 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
+	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -45,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm"
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
 	"gopkg.in/urfave/cli.v1"
@@ -100,6 +96,10 @@ var (
 	SwarmSyncEnabledFlag = cli.BoolTFlag{
 		Name:  "sync",
 		Usage: "Swarm Syncing enabled (default true)",
+	}
+	EnsEndpointsFlag = cli.StringSliceFlag{
+		Name:  "ens-endpoint",
+		Usage: "ENS API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url",
 	}
 	EnsAPIFlag = cli.StringFlag{
 		Name:  "ens-api",
@@ -323,6 +323,7 @@ DEPRECATED: use 'swarm db clean'.
 		utils.PasswordFileFlag,
 		// bzzd-specific flags
 		CorsStringFlag,
+		EnsEndpointsFlag,
 		EnsAPIFlag,
 		EnsAddrFlag,
 		SwarmConfigPathFlag,
@@ -416,38 +417,6 @@ func bzzd(ctx *cli.Context) error {
 	return nil
 }
 
-// detectEnsAddr determines the ENS contract address by getting both the
-// version and genesis hash using the client and matching them to either
-// mainnet or testnet addresses
-func detectEnsAddr(client *rpc.Client) (common.Address, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	var version string
-	if err := client.CallContext(ctx, &version, "net_version"); err != nil {
-		return common.Address{}, err
-	}
-
-	block, err := ethclient.NewClient(client).BlockByNumber(ctx, big.NewInt(0))
-	if err != nil {
-		return common.Address{}, err
-	}
-
-	switch {
-
-	case version == "1" && block.Hash() == params.MainnetGenesisHash:
-		log.Info("using Mainnet ENS contract address", "addr", ens.MainNetAddress)
-		return ens.MainNetAddress, nil
-
-	case version == "3" && block.Hash() == params.TestnetGenesisHash:
-		log.Info("using Testnet ENS contract address", "addr", ens.TestNetAddress)
-		return ens.TestNetAddress, nil
-
-	default:
-		return common.Address{}, fmt.Errorf("unknown version and genesis hash: %s %s", version, block.Hash())
-	}
-}
-
 func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	prvkey := getAccount(ctx, stack)
 
@@ -476,6 +445,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 		utils.Fatalf("SWAP is enabled but --swap-api is not set")
 	}
 
+	ensEndpoints := ctx.GlobalStringSlice(EnsEndpointsFlag.Name)
 	ensapi := ctx.GlobalString(EnsAPIFlag.Name)
 	ensAddr := ctx.GlobalString(EnsAddrFlag.Name)
 
@@ -491,31 +461,56 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 			}
 		}
 
-		var ensClient *ethclient.Client
+		ensClientConfigs := []swarm.ENSClientConfig{}
 		if ensapi != "" {
-			log.Info("connecting to ENS API", "url", ensapi)
-			client, err := rpc.Dial(ensapi)
-			if err != nil {
-				return nil, fmt.Errorf("error connecting to ENS API %s: %s", ensapi, err)
-			}
-			ensClient = ethclient.NewClient(client)
-
-			if ensAddr != "" {
-				bzzconfig.EnsRoot = common.HexToAddress(ensAddr)
-			} else {
-				ensAddr, err := detectEnsAddr(client)
-				if err == nil {
-					bzzconfig.EnsRoot = ensAddr
-				} else {
-					log.Warn(fmt.Sprintf("could not determine ENS contract address, using default %s", bzzconfig.EnsRoot), "err", err)
+			ensClientConfigs = append(ensClientConfigs, swarm.ENSClientConfig{
+				Endpoint:        ensapi,
+				ContractAddress: ensAddr,
+			})
+		}
+		if ensEndpoints != nil {
+			for _, s := range ensEndpoints {
+				if s != "" {
+					ensClientConfigs = append(ensClientConfigs, parseFlagEnsEndpoint(s))
 				}
 			}
 		}
+		if len(ensClientConfigs) == 0 {
+			log.Warn("No ENS, please specify non-empty --ens-api or --ens-endpoint to use domain name resolution")
+		}
 
-		return swarm.NewSwarm(ctx, swapClient, ensClient, bzzconfig, swapEnabled, syncEnabled, cors)
+		return swarm.NewSwarm(ctx, swapClient, ensClientConfigs, bzzconfig, swapEnabled, syncEnabled, cors)
 	}
 	if err := stack.Register(boot); err != nil {
 		utils.Fatalf("Failed to register the Swarm service: %v", err)
+	}
+}
+
+func parseFlagEnsEndpoint(s string) swarm.ENSClientConfig {
+	isAllLetterString := func(s string) bool {
+		for _, r := range s {
+			if !unicode.IsLetter(r) {
+				return false
+			}
+		}
+		return true
+	}
+	endpoint := s
+	var addr, tld string
+	if i := strings.Index(endpoint, ":"); i > 0 {
+		if isAllLetterString(endpoint[:i]) && len(endpoint) > i+2 && endpoint[i+1:i+3] != "//" {
+			tld = endpoint[:i]
+			endpoint = endpoint[i+1:]
+		}
+	}
+	if i := strings.Index(endpoint, "@"); i > 0 {
+		addr = endpoint[:i]
+		endpoint = endpoint[i+1:]
+	}
+	return swarm.ENSClientConfig{
+		Endpoint:        endpoint,
+		ContractAddress: addr,
+		TLD:             tld,
 	}
 }
 
