@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
-	"os"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -105,6 +104,8 @@ type (
 	}
 )
 
+var ErrRequestDenied = errors.New("Request denied")
+
 type errorWrapper struct {
 	msg string
 	err error
@@ -137,47 +138,21 @@ type SignerUI interface {
 	ShowInfo(message string)
 }
 
-type HeadlessUI struct {
-}
-
-func (ui *HeadlessUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch chan SignTxResponse) {
-	ch <- SignTxResponse{request.transaction.Hash(), true, ""}
-}
-func (ui *HeadlessUI) ApproveSignData(request *SignDataRequest, metadata Metadata, ch chan SignDataResponse) {
-	ch <- SignDataResponse{true, ""}
-}
-func (ui *HeadlessUI) ApproveExport(request *ExportRequest, metadata Metadata, ch chan ExportResponse) {
-	ch <- ExportResponse{true}
-}
-func (ui *HeadlessUI) ApproveImport(request *ImportRequest, metadata Metadata, ch chan ImportResponse) {
-	ch <- ImportResponse{true, "", ""}
-}
-func (ui *HeadlessUI) ApproveListing(request *ListRequest, metadata Metadata, ch chan ListResponse) {
-	ch <- ListResponse{request.accounts}
-}
-func (ui *HeadlessUI) ApproveNewAccount(requst *NewAccountRequest, metadata Metadata, ch chan ImportResponse) {
-	ch <- ImportResponse{true, "", ""}
-}
-func (ui *HeadlessUI) ShowError(message string) {
-	//stdout is used by communication
-	fmt.Fprint(os.Stderr, message)
-}
-func (ui *HeadlessUI) ShowInfo(message string) {
-	//stdout is used by communication
-	fmt.Fprint(os.Stderr, message)
-}
-
 // NewSignerAPI creates a new API that can be used for account management.
 // ksLocation specifies the directory where to store the password protected private
 // key that is generated when a new account is created.
 // noUSB disables USB support that is required to support hardware devices such as
 // ledger and trezor.
-func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abidb *abiDb) *SignerAPI {
+func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abidb *abiDb, lightKDF bool) *SignerAPI {
 	var backends []accounts.Backend
 
+	n, p := keystore.StandardScryptN, keystore.StandardScryptP
+	if lightKDF {
+		n, p = keystore.LightScryptN, keystore.LightScryptP
+	}
 	// support password based accounts
 	if len(ksLocation) > 0 {
-		backends = append(backends, keystore.NewKeyStore(ksLocation, keystore.StandardScryptN, keystore.StandardScryptP))
+		backends = append(backends, keystore.NewKeyStore(ksLocation, n, p))
 	}
 
 	if !noUSB {
@@ -216,10 +191,9 @@ func metaData(ctx context.Context) Metadata {
 
 // List returns the set of wallet this signer manages. Each wallet can contain
 // multiple accounts.
-func (api *SignerAPI) List(ctx context.Context) ([]Account, error) {
+func (api *SignerAPI) List(ctx context.Context) (Accounts, error) {
 
 	ch := make(chan ListResponse, 1)
-
 	var accs []Account
 	for _, wallet := range api.am.Wallets() {
 		for _, acc := range wallet.Accounts() {
@@ -232,7 +206,7 @@ func (api *SignerAPI) List(ctx context.Context) ([]Account, error) {
 	if result := <-ch; result.accounts != nil {
 		return result.accounts, nil
 	}
-	return nil, fmt.Errorf("Listing denied")
+	return nil, ErrRequestDenied
 }
 
 // New creates a new password protected account. The private key is protected with
@@ -248,13 +222,14 @@ func (api *SignerAPI) New(ctx context.Context) (accounts.Account, error) {
 
 	if resp := <-ch; resp.approved {
 		return be[0].(*keystore.KeyStore).NewAccount(resp.pw)
+
 	}
-	return accounts.Account{}, fmt.Errorf("Request denied")
+	return accounts.Account{}, ErrRequestDenied
 }
 
 // SignTransaction signs the given transaction and returns it in an RLP encoded form
 // that can be posted to `eth_sendRawTransaction`.
-func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, args TransactionArg) (hexutil.Bytes, error) {
+func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, args TransactionArg, methodSig *string) (hexutil.Bytes, error) {
 	acc := accounts.Account{Address: from}
 
 	wallet, err := api.am.Find(acc)
@@ -271,14 +246,18 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 
 	req := SignTxRequest{transaction: tx, from: acc}
 	if len(tx.Data()) > 3 {
-		var abidef string
-
 		// Try to make sense of the data
-		abidef, err = api.abidb.LookupABI(tx.Data()[:4])
-		if err != nil {
-			req.callinfo = errorWrapper{"Warning! Could not locate ABI", err}
+		var abidata string
+		if methodSig == nil {
+			abidata, err = api.abidb.LookupABI(tx.Data()[:4])
+			if err != nil {
+				req.callinfo = errorWrapper{"Warning! Could not locate ABI", err}
+			}
 		} else {
-			req.callinfo, err = parseCallData(tx.Data(), abidef)
+			abidata = *methodSig
+		}
+		if abidata != "" {
+			req.callinfo, err = parseCallData(tx.Data(), abidata)
 			if err != nil {
 				req.callinfo = errorWrapper{"Warning! Could not validate ABI-data against calldata", err}
 			}
@@ -301,7 +280,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 		return rlp.EncodeToBytes(signedTx)
 	}
 
-	return nil, fmt.Errorf("Transaction rejected")
+	return nil, ErrRequestDenied
 
 }
 
@@ -340,7 +319,7 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.Address, data hexuti
 		return signature, nil
 
 	}
-	return nil, fmt.Errorf("Signing rejected")
+	return nil, ErrRequestDenied
 }
 
 // EcRecover returns the address for the account that was used to create the signature.
@@ -405,7 +384,7 @@ func (api *SignerAPI) Export(ctx context.Context, addr common.Address) (json.Raw
 	if (<-ch).approved {
 		return ioutil.ReadFile(url.Path)
 	}
-	return nil, fmt.Errorf("Export rejected")
+	return nil, ErrRequestDenied
 }
 
 // Imports tries to import the given keyJSON in the local keystore. The keyJSON data is expected to be
@@ -433,6 +412,6 @@ func (api *SignerAPI) Import(ctx context.Context, string, keyJSON json.RawMessag
 
 		return Account{Typ: "account", URL: acc.URL, Address: acc.Address}, nil
 	}
-	return Account{}, fmt.Errorf("Import rejected")
+	return Account{}, ErrRequestDenied
 
 }
