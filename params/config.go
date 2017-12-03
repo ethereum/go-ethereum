@@ -59,6 +59,25 @@ var (
 		Ethash: new(EthashConfig),
 	}
 
+	// CallistoTestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
+	CallistoTestnetChainConfig = &ChainConfig{
+		ChainId:        big.NewInt(7919),
+		HomesteadBlock: big.NewInt(0),
+		DAOForkBlock:   big.NewInt(0),
+		DAOForkSupport: false,
+		EIP150Block:    big.NewInt(0),
+		EIP150Hash:     common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		EIP155Block:    big.NewInt(3),
+		EIP158Block:    big.NewInt(0),
+		ByzantiumBlock: big.NewInt(4),
+		CallistoBlock:  big.NewInt(1),
+
+		Clique: &CliqueConfig{
+			Period: 15,
+			Epoch:  30000,
+		},
+	}
+
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
 	RinkebyChainConfig = &ChainConfig{
 		ChainId:        big.NewInt(4),
