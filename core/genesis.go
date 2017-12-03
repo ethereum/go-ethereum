@@ -330,6 +330,17 @@ func DefaultTestnetGenesisBlock() *Genesis {
 	}
 }
 
+// DefaultCallistoTestnetGenesisBlock
+func DefaultCallistoTestnetGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.CallistoTestnetChainConfig,
+		ExtraData:  hexutil.MustDecode("0x000000000000000000000000000000000000000000000000000000000000000073dcf82e65a05dab02da9d899ae472487dfc99bb0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+		GasLimit:   4700000,
+		Difficulty: big.NewInt(1),
+		Alloc:      decodePrealloc(callistoTestnetAllocData),
+	}
+}
+
 // DefaultRinkebyGenesisBlock returns the Rinkeby network genesis block.
 func DefaultRinkebyGenesisBlock() *Genesis {
 	return &Genesis{
