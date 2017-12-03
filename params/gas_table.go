@@ -72,4 +72,17 @@ var (
 
 		CreateBySuicide: 25000,
 	}
+
+	GasTableCallisto = GasTable{
+		ExtcodeSize: 7000,
+		ExtcodeCopy: 7000,
+		Balance:     4000,
+		SLoad:       2000,
+		Calls:       7000,
+		Suicide:     50000,
+		ExpByte:     100,
+
+		CreateBySuicide: 250000,
+	}
+
 )

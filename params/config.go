@@ -200,6 +200,7 @@ func (c *ChainConfig) IsCallisto(num *big.Int) bool {
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
 //
 // The returned GasTable's fields shouldn't, under any circumstances, be changed.
+// Callisto has a 10x more cost in gas
 func (c *ChainConfig) GasTable(num *big.Int) GasTable {
 	if num == nil {
 		return GasTableHomestead
@@ -209,6 +210,8 @@ func (c *ChainConfig) GasTable(num *big.Int) GasTable {
 		return GasTableEIP158
 	case c.IsEIP150(num):
 		return GasTableEIP150
+	case c.IsCallisto(num):
+		return GasTableCallisto
 	default:
 		return GasTableHomestead
 	}
