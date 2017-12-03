@@ -17,15 +17,35 @@
 package main
 
 import (
+	"encoding/json"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"strings"
 )
+
+type Accounts []Account
+
+func (as Accounts) String() string{
+	var output []string
+	for _,a := range as{
+		output = append(output, a.String())
+	}
+	return strings.Join(output, "\n")
+}
 
 type Account struct {
 	Typ     string         `json:"type"`
 	URL     accounts.URL   `json:"url"`
 	Address common.Address `json:"address"`
+}
+
+func (a Account) String() string {
+	s, err := json.Marshal(a)
+	if err == nil {
+		return string(s)
+	}
+	return err.Error()
 }
 
 // TransactionArg represents a transaction for the signer.
@@ -36,4 +56,12 @@ type TransactionArg struct {
 	Value    *hexutil.Big    `json:"value"`
 	Data     hexutil.Bytes   `json:"data"`
 	Nonce    *hexutil.Uint64 `json:"nonce"`
+}
+
+func (t TransactionArg) String() string {
+	s, err := json.Marshal(t)
+	if err == nil {
+		return string(s)
+	}
+	return err.Error()
 }

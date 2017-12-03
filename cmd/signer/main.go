@@ -80,6 +80,7 @@ func main() {
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int("loglevel")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
 		db, err := NewAbiDBFromFile(c.String("4bytedb"))
+
 		if err != nil {
 			utils.Fatalf(err.Error())
 		}
@@ -91,7 +92,8 @@ func main() {
 				c.Int64(utils.NetworkIdFlag.Name),
 				c.String("keystore"),
 				c.Bool(utils.NoUSBFlag.Name),
-				NewCommandlineUI(), db)
+				NewCommandlineUI(), db,
+				c.Bool(utils.LightKDFFlag.Name))
 			listener net.Listener
 			//err      error
 		)
