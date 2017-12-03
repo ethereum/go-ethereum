@@ -34,7 +34,7 @@ func MainnetGenesis() string {
 
 // TestnetGenesis returns the JSON spec to use for the Ethereum test network.
 func TestnetGenesis() string {
-	enc, err := json.Marshal(core.DefaultTestnetGenesisBlock())
+	enc, err := json.Marshal(core.DefaultCallistoTestnetGenesisBlock())
 	if err != nil {
 		panic(err)
 	}
