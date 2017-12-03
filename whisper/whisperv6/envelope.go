@@ -42,7 +42,7 @@ type Envelope struct {
 	Topic    TopicType
 	AESNonce []byte
 	Data     []byte
-	EnvNonce uint64
+	Nonce    uint64
 
 	pow  float64     // Message-specific PoW as described in the Whisper specification.
 	hash common.Hash // Cached hash of the envelope to avoid rehashing every time.
@@ -70,7 +70,7 @@ func NewEnvelope(ttl uint32, topic TopicType, aesNonce []byte, msg *sentMessage)
 		Topic:    topic,
 		AESNonce: aesNonce,
 		Data:     msg.Raw,
-		EnvNonce: 0,
+		Nonce:    0,
 	}
 
 	if EnvelopeVersion < 256 {
@@ -119,7 +119,7 @@ func (e *Envelope) Seal(options *MessageParams) error {
 			d := new(big.Int).SetBytes(crypto.Keccak256(buf))
 			firstBit := math.FirstBitSet(d)
 			if firstBit > bestBit {
-				e.EnvNonce, bestBit = nonce, firstBit
+				e.Nonce, bestBit = nonce, firstBit
 				if target > 0 && bestBit >= target {
 					return nil
 				}
@@ -146,7 +146,7 @@ func (e *Envelope) calculatePoW(diff uint32) {
 	buf := make([]byte, 64)
 	h := crypto.Keccak256(e.rlpWithoutNonce())
 	copy(buf[:32], h)
-	binary.BigEndian.PutUint64(buf[56:], e.EnvNonce)
+	binary.BigEndian.PutUint64(buf[56:], e.Nonce)
 	d := new(big.Int).SetBytes(crypto.Keccak256(buf))
 	firstBit := math.FirstBitSet(d)
 	x := gmath.Pow(2, float64(firstBit))

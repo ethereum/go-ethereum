@@ -160,6 +160,11 @@ func (p *Peer) String() string {
 	return fmt.Sprintf("Peer %x %v", p.rw.id[:8], p.RemoteAddr())
 }
 
+// Inbound returns true if the peer is an inbound connection
+func (p *Peer) Inbound() bool {
+	return p.rw.flags&inboundConn != 0
+}
+
 func newPeer(conn *conn, protocols []Protocol) *Peer {
 	protomap := matchProtocols(protocols, conn.caps, conn)
 	p := &Peer{

@@ -704,6 +704,7 @@ func TestThrottling64Full(t *testing.T) { testThrottling(t, 64, FullSync) }
 func TestThrottling64Fast(t *testing.T) { testThrottling(t, 64, FastSync) }
 
 func testThrottling(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
 	tester := newTester()
 	defer tester.terminate()
 
@@ -1166,6 +1167,8 @@ func TestShiftedHeaderAttack64Fast(t *testing.T)  { testShiftedHeaderAttack(t, 6
 func TestShiftedHeaderAttack64Light(t *testing.T) { testShiftedHeaderAttack(t, 64, LightSync) }
 
 func testShiftedHeaderAttack(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	tester := newTester()
 	defer tester.terminate()
 
@@ -1198,6 +1201,8 @@ func TestInvalidHeaderRollback64Fast(t *testing.T)  { testInvalidHeaderRollback(
 func TestInvalidHeaderRollback64Light(t *testing.T) { testInvalidHeaderRollback(t, 64, LightSync) }
 
 func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	tester := newTester()
 	defer tester.terminate()
 
@@ -1310,6 +1315,8 @@ func TestBlockHeaderAttackerDropping63(t *testing.T) { testBlockHeaderAttackerDr
 func TestBlockHeaderAttackerDropping64(t *testing.T) { testBlockHeaderAttackerDropping(t, 64) }
 
 func testBlockHeaderAttackerDropping(t *testing.T, protocol int) {
+	t.Parallel()
+
 	// Define the disconnection requirement for individual hash fetch errors
 	tests := []struct {
 		result error
@@ -1665,12 +1672,26 @@ func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 
 // This test reproduces an issue where unexpected deliveries would
 // block indefinitely if they arrived at the right time.
-func TestDeliverHeadersHang62(t *testing.T)      { testDeliverHeadersHang(t, 62, FullSync) }
-func TestDeliverHeadersHang63Full(t *testing.T)  { testDeliverHeadersHang(t, 63, FullSync) }
-func TestDeliverHeadersHang63Fast(t *testing.T)  { testDeliverHeadersHang(t, 63, FastSync) }
-func TestDeliverHeadersHang64Full(t *testing.T)  { testDeliverHeadersHang(t, 64, FullSync) }
-func TestDeliverHeadersHang64Fast(t *testing.T)  { testDeliverHeadersHang(t, 64, FastSync) }
-func TestDeliverHeadersHang64Light(t *testing.T) { testDeliverHeadersHang(t, 64, LightSync) }
+// We use data driven subtests to manage this so that it will be parallel on its own
+// and not with the other tests, avoiding intermittent failures.
+func TestDeliverHeadersHang(t *testing.T) {
+	testCases := []struct {
+		protocol int
+		syncMode SyncMode
+	}{
+		{62, FullSync},
+		{63, FullSync},
+		{63, FastSync},
+		{64, FullSync},
+		{64, FastSync},
+		{64, LightSync},
+	}
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("protocol %d mode %v", tc.protocol, tc.syncMode), func(t *testing.T) {
+			testDeliverHeadersHang(t, tc.protocol, tc.syncMode)
+		})
+	}
+}
 
 type floodingTestPeer struct {
 	peer   Peer
@@ -1703,7 +1724,7 @@ func (ftp *floodingTestPeer) RequestHeadersByNumber(from uint64, count, skip int
 	// Deliver the actual requested headers.
 	go ftp.peer.RequestHeadersByNumber(from, count, skip, reverse)
 	// None of the extra deliveries should block.
-	timeout := time.After(15 * time.Second)
+	timeout := time.After(60 * time.Second)
 	for i := 0; i < cap(deliveriesDone); i++ {
 		select {
 		case <-deliveriesDone:
@@ -1732,7 +1753,6 @@ func testDeliverHeadersHang(t *testing.T, protocol int, mode SyncMode) {
 			tester.downloader.peers.peers["peer"].peer,
 			tester,
 		}
-
 		if err := tester.sync("peer", nil, mode); err != nil {
 			t.Errorf("sync failed: %v", err)
 		}
@@ -1742,12 +1762,28 @@ func testDeliverHeadersHang(t *testing.T, protocol int, mode SyncMode) {
 
 // Tests that if fast sync aborts in the critical section, it can restart a few
 // times before giving up.
-func TestFastCriticalRestartsFail63(t *testing.T) { testFastCriticalRestarts(t, 63, false) }
-func TestFastCriticalRestartsFail64(t *testing.T) { testFastCriticalRestarts(t, 64, false) }
-func TestFastCriticalRestartsCont63(t *testing.T) { testFastCriticalRestarts(t, 63, true) }
-func TestFastCriticalRestartsCont64(t *testing.T) { testFastCriticalRestarts(t, 64, true) }
+// We use data driven subtests to manage this so that it will be parallel on its own
+// and not with the other tests, avoiding intermittent failures.
+func TestFastCriticalRestarts(t *testing.T) {
+	testCases := []struct {
+		protocol int
+		progress bool
+	}{
+		{63, false},
+		{64, false},
+		{63, true},
+		{64, true},
+	}
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("protocol %d progress %v", tc.protocol, tc.progress), func(t *testing.T) {
+			testFastCriticalRestarts(t, tc.protocol, tc.progress)
+		})
+	}
+}
 
 func testFastCriticalRestarts(t *testing.T, protocol int, progress bool) {
+	t.Parallel()
+
 	tester := newTester()
 	defer tester.terminate()
 
@@ -1776,6 +1812,7 @@ func testFastCriticalRestarts(t *testing.T, protocol int, progress bool) {
 
 		// If it's the first failure, pivot should be locked => reenable all others to detect pivot changes
 		if i == 0 {
+			time.Sleep(150 * time.Millisecond) // Make sure no in-flight requests remain
 			if tester.downloader.fsPivotLock == nil {
 				time.Sleep(400 * time.Millisecond) // Make sure the first huge timeout expires too
 				t.Fatalf("pivot block not locked in after critical section failure")

@@ -83,6 +83,9 @@ type NodeConfig struct {
 	// stack to encrypt communications
 	PrivateKey *ecdsa.PrivateKey
 
+	// Enable peer events for Msgs
+	EnableMsgEvents bool
+
 	// Name is a human friendly name for the node like "node01"
 	Name string
 
@@ -91,6 +94,9 @@ type NodeConfig struct {
 	// contained in SimAdapter.services, for other nodes it should be
 	// services registered by calling the RegisterService function)
 	Services []string
+
+	// function to sanction or prevent suggesting a peer
+	Reachable func(id discover.NodeID) bool
 }
 
 // nodeConfigJSON is used to encode and decode NodeConfig as JSON by encoding

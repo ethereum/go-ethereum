@@ -135,6 +135,9 @@ type Config struct {
 	// *WARNING* Only set this if the node is running in a trusted network, exposing
 	// private APIs to untrusted users is a major security risk.
 	WSExposeAll bool `toml:",omitempty"`
+
+	// Logger is a custom logger to use with the p2p.Server.
+	Logger log.Logger
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into

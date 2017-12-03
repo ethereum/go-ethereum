@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/EthereumCommonwealth/go-callisto/event"
+	"github.com/EthereumCommonwealth/go-callisto/log"
 	"github.com/EthereumCommonwealth/go-callisto/node"
 	"github.com/EthereumCommonwealth/go-callisto/p2p"
 	"github.com/EthereumCommonwealth/go-callisto/p2p/discover"
@@ -82,7 +83,8 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 			Dialer:          s,
 			EnableMsgEvents: true,
 		},
-		NoUSB: true,
+		NoUSB:  true,
+		Logger: log.New("node.id", id.String()),
 	})
 	if err != nil {
 		return nil, err

@@ -27,9 +27,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/docker/docker/pkg/reexec"
+	"github.com/EthereumCommonwealth/go-callisto/log"
 	"github.com/EthereumCommonwealth/go-callisto/node"
 	"github.com/EthereumCommonwealth/go-callisto/p2p/discover"
+	"github.com/docker/docker/pkg/reexec"
 )
 
 // DockerAdapter is a NodeAdapter which runs simulation nodes inside Docker
@@ -94,6 +95,7 @@ func (d *DockerAdapter) NewNode(config *NodeConfig) (Node, error) {
 	conf.Stack.P2P.NoDiscovery = true
 	conf.Stack.P2P.NAT = nil
 	conf.Stack.NoUSB = true
+	conf.Stack.Logger = log.New("node.id", config.ID.String())
 
 	node := &DockerNode{
 		ExecNode: ExecNode{
