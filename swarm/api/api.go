@@ -82,7 +82,7 @@ func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
 // the Hash from the the first one which does not return error
 // will be returned.
 func (m MultiResolver) Resolve(addr string) (h common.Hash, err error) {
-	rs, _ := m.resolvers[""]
+	rs := m.resolvers[""]
 	if i := strings.LastIndex(addr, "."); i >= 0 {
 		rstld, ok := m.resolvers[addr[i+1:]]
 		if ok {
