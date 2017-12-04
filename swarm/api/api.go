@@ -69,7 +69,7 @@ func MultiResolverOptionWithResolver(r Resolver, tld string) MultiResolverOption
 // NewMultiResolver creates a new instance of MultiResolver.
 func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
 	m = &MultiResolver{
-		resolvers: map[string][]Resolver{},
+		resolvers: make(map[string][]Resolver),
 	}
 	for _, o := range opts {
 		o(m)
