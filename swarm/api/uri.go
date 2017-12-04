@@ -30,8 +30,6 @@ type URI struct {
 	// * bzzr - raw swarm content
 	// * bzzi - immutable URI of an entry in a swarm manifest
 	//          (address is not resolved)
-	// * bzzh - hash of swarm content
-	//
 	Scheme string
 
 	// Addr is either a hexadecimal storage key or it an address which
@@ -62,7 +60,7 @@ func Parse(rawuri string) (*URI, error) {
 
 	// check the scheme is valid
 	switch uri.Scheme {
-	case "bzz", "bzzi", "bzzr", "bzzh":
+	case "bzz", "bzzi", "bzzr":
 	default:
 		return nil, fmt.Errorf("unknown scheme %q", u.Scheme)
 	}
@@ -91,10 +89,6 @@ func (u *URI) Raw() bool {
 
 func (u *URI) Immutable() bool {
 	return u.Scheme == "bzzi"
-}
-
-func (u *URI) Hash() bool {
-	return u.Scheme == "bzzh"
 }
 
 func (u *URI) String() string {
