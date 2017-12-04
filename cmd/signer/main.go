@@ -20,7 +20,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -70,8 +69,13 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:  "auditlog",
-			Usage: "File used to emit audit logs. Set to '' to disable",
+			Usage: "File used to emit audit logs. Set to \"\" to disable",
 			Value: "audit.log",
+		},
+		cli.StringFlag{
+			Name:  "requestfile",
+			Usage: "File containing requests to handle",
+			Value: "",
 		},
 	}
 
@@ -88,19 +92,32 @@ func main() {
 
 		var (
 			server = rpc.NewServer()
-			api    = NewSignerAPI(
+
+			api = NewSignerAPI(
 				c.Int64(utils.NetworkIdFlag.Name),
 				c.String("keystore"),
 				c.Bool(utils.NoUSBFlag.Name),
 				NewCommandlineUI(), db,
 				c.Bool(utils.LightKDFFlag.Name))
 			listener net.Listener
-			//err      error
 		)
-
+		if logfile := c.String("auditlog"); logfile != "" {
+			f, err := os.OpenFile(logfile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+			if err != nil {
+				utils.Fatalf("Could not open %v for audit logging", logfile)
+			}
+			server.SetAuditLogger(NewAuditLogger(f))
+			log.Info("Writing audit logs to %v", logfile)
+		}
 		// register signer API with server
 		if err = server.RegisterName("account", api); err != nil {
 			utils.Fatalf("Could not register signer API: %v", err)
+		}
+
+		// Import from file
+		if rfile := c.String("requestfile"); rfile != "" {
+			//Each line of file represents one request
+			log.Warn("Import from file not yet implemented")
 		}
 
 		// start http server
@@ -112,6 +129,7 @@ func main() {
 		cors := []string{"*"}
 
 		rpc.NewHTTPServer(cors, server).Serve(listener)
+
 		return nil
 	}
 	app.Run(os.Args)
@@ -127,16 +145,11 @@ func main() {
 // Make transaction
 // safeSend(0x12)
 // 4401a6e40000000000000000000000000000000000000000000000000000000000000012
-// curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":["0x82A2A876D39022B3019932D30Cd9c97ad5616813","pw",{"gas":"0x333","gasPrice":"0x123","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x10", "input":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"}],"id":67}' http://localhost:8550/
 
-type rwc struct {
-	io.Reader
-	io.Writer
-}
+/*
 
-func (r *rwc) Close() error {
-	if err := os.Stdin.Close(); err != nil {
-		return err
-	}
-	return os.Stdout.Close()
-}
+curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":["0x82A2A876D39022B3019932D30Cd9c97ad5616813",{"gas":"0x333","gasPrice":"0x123","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x10", "input":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"}],"id":67}' http://localhost:8550/
+
+
+curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":["0x82A2A876D39022B3019932D30Cd9c97ad5616813",{"gas":"0x333","gasPrice":"0x123","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x10", "input":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"},"test"],"id":67}' http://localhost:8550/
+*/

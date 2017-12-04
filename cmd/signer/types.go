@@ -26,9 +26,9 @@ import (
 
 type Accounts []Account
 
-func (as Accounts) String() string{
+func (as Accounts) String() string {
 	var output []string
-	for _,a := range as{
+	for _, a := range as {
 		output = append(output, a.String())
 	}
 	return strings.Join(output, "\n")

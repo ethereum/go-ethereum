@@ -133,6 +133,6 @@ func (db *abiDb) LookupABI(id []byte) (string, error) {
 	}
 	return "", fmt.Errorf("Signature %v not found", sig)
 }
-func (db *abiDb) Size() int{
+func (db *abiDb) Size() int {
 	return len(db.db)
 }

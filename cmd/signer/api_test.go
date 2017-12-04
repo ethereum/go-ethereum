@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -21,10 +23,17 @@ type HeadlessUI struct {
 }
 
 func (ui *HeadlessUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch chan SignTxResponse) {
-	if "Y" == <-ui.controller {
-		ch <- SignTxResponse{request.transaction.Hash(), true, <-ui.controller}
-	} else {
-		ch <- SignTxResponse{request.transaction.Hash(), false, ""}
+
+	switch <-ui.controller {
+	case "Y":
+		ch <- SignTxResponse{request.transaction, true, <-ui.controller}
+	case "M": //Modify
+		old := request.transaction
+		newVal := big.NewInt(0).Add(old.Value(), big.NewInt(1))
+		tx := types.NewTransaction(old.Nonce(), *old.To(), newVal, old.Gas(), old.GasPrice(), old.Data())
+		ch <- SignTxResponse{*tx, true, <-ui.controller}
+	default:
+		ch <- SignTxResponse{request.transaction, false, ""}
 	}
 }
 func (ui *HeadlessUI) ApproveSignData(request *SignDataRequest, metadata Metadata, ch chan SignDataResponse) {
@@ -250,10 +259,18 @@ func mkTestTx() TransactionArg {
 }
 
 func TestSignTx(t *testing.T) {
+
+	var (
+		list Accounts
+		h    []byte
+		h2   []byte
+		err  error
+	)
+
 	api, control := setup(t)
 	createAccount(control, api, t)
 	control <- "A"
-	list, err := api.List(context.Background())
+	list, err = api.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +281,7 @@ func TestSignTx(t *testing.T) {
 
 	control <- "Y"
 	control <- "wrongpassword"
-	h, err := api.SignTransaction(context.Background(), a, tx, &methodSig)
+	h, err = api.SignTransaction(context.Background(), a, tx, &methodSig)
 	if h != nil {
 		t.Errorf("Expected nil-data, got %h", h)
 	}
@@ -291,4 +308,28 @@ func TestSignTx(t *testing.T) {
 	if h == nil || len(h) != 118 {
 		t.Errorf("Expected 181 byte rlp-data (got %d bytes)", len(h))
 	}
+	//The tx is NOT modified by the UI
+	control <- "Y"
+	control <- "apassword"
+
+	h2, err = api.SignTransaction(context.Background(), a, tx, &methodSig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(h, h2) {
+		t.Error("Expected tx to be unmodified by UI")
+	}
+
+	//The tx is modified by the UI
+	control <- "M"
+	control <- "apassword"
+
+	h2, err = api.SignTransaction(context.Background(), a, tx, &methodSig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(h, h2) {
+		t.Error("Expected tx to be modified by UI")
+	}
+
 }

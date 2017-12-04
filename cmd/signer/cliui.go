@@ -56,10 +56,13 @@ func (ui *CommandlineUI) readString() string {
 func (ui *CommandlineUI) readPassword() string {
 	fmt.Printf("Enter password to approve:\n")
 	fmt.Printf("> ")
-	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
-	if err != nil {
-		log.Crit("Failed to read password", "err", err)
-	}
+	//TODO; remove this, only for debuggging within IDE
+	text := "foobar"
+	//TODO: Use this
+	//	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+	//if err != nil {
+	//	log.Crit("Failed to read password", "err", err)
+	//}
 	fmt.Println()
 	fmt.Println("-----------------------")
 	return string(text)
@@ -114,7 +117,7 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch
 	showMetadata(metadata)
 	fmt.Printf("-------------------------------------------\n")
 
-	ch <- SignTxResponse{request.transaction.Hash(), true ,ui.readPassword()}
+	ch <- SignTxResponse{request.transaction, true, ui.readPassword()}
 }
 
 // ApproveSignData prompt the user for confirmation to request to sign data
@@ -157,9 +160,9 @@ func (ui *CommandlineUI) ApproveImport(request *ImportRequest, metadata Metadata
 	fmt.Printf("A request has been made to import an encrypted keyfile\n")
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(metadata)
-	if ui.confirm(){
+	if ui.confirm() {
 		ch <- ImportResponse{true, ui.readPasswordText("Old password"), ui.readPasswordText("New password")}
-	}else{
+	} else {
 		ch <- ImportResponse{false, "", ""}
 	}
 }

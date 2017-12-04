@@ -53,15 +53,16 @@ type Metadata struct {
 type (
 	// SignTxRequest contains info about a transaction to sign
 	SignTxRequest struct {
-		transaction *types.Transaction
+		transaction types.Transaction
 		from        accounts.Account
 		callinfo    fmt.Stringer
 	}
 	// SignTxResponse result from SignTxRequest
 	SignTxResponse struct {
-		hash     common.Hash
-		approved bool
-		pw       string
+		//The UI may make changes to the TX
+		transaction types.Transaction
+		approved    bool
+		pw          string
 	}
 	// ExportRequest info about query to export accounts
 	ExportRequest struct {
@@ -244,7 +245,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 		tx = types.NewTransaction(uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
 	}
 
-	req := SignTxRequest{transaction: tx, from: acc}
+	req := SignTxRequest{transaction: *tx, from: acc}
 	if len(tx.Data()) > 3 {
 		// Try to make sense of the data
 		var abidata string
@@ -269,10 +270,11 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 
 	if result := <-ch; result.approved {
 		//Sanity check
-		if result.hash != tx.Hash() {
-			return nil, fmt.Errorf("Transaction hash mismatch")
+		if result.transaction.Hash() != tx.Hash() {
+			api.ui.ShowInfo("Transaction modified by UI")
 		}
-		signedTx, err := wallet.SignTxWithPassphrase(acc, result.pw, tx, api.chainID)
+		// The one to sign is the one that was returned from the UI
+		signedTx, err := wallet.SignTxWithPassphrase(acc, result.pw, &result.transaction, api.chainID)
 		if err != nil {
 			api.ui.ShowError(err.Error())
 			return nil, err
