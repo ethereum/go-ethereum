@@ -120,9 +120,10 @@ func TestGetSetSecp256k1(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	got := (*btcec.PublicKey)(&pk).SerializeCompressed()
 	expected := (*btcec.PublicKey)(&privkey.PublicKey).SerializeCompressed()
-	if bytes.Compare(pk, expected) != 0 {
-		t.Fatalf("got %#v, expected %#v", pk, expected)
+	if bytes.Compare(got, expected) != 0 {
+		t.Fatalf("got %#v, expected %#v", got, expected)
 	}
 }
 

@@ -17,25 +17,37 @@
 package enr
 
 import (
+	"crypto/ecdsa"
 	"io"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-type Secp256k1 []byte
+type Secp256k1 ecdsa.PublicKey
 
 func (Secp256k1) ENRKey() string {
 	return "secp256k1"
 }
 
 func (v Secp256k1) EncodeRLP(w io.Writer) error {
-	blob := []byte(v)
-	return rlp.Encode(w, blob)
+	pk := btcec.PublicKey(v)
+
+	return rlp.Encode(w, pk.SerializeCompressed())
 }
 
 func (v *Secp256k1) DecodeRLP(s *rlp.Stream) error {
-	if err := s.Decode((*[]byte)(v)); err != nil {
+	buf := make([]byte, 33)
+	if err := s.Decode(&buf); err != nil {
 		return err
 	}
+
+	pk, err := btcec.ParsePubKey(buf, btcec.S256())
+	if err != nil {
+		return err
+	}
+
+	*v = (Secp256k1)(*pk)
+
 	return nil
 }

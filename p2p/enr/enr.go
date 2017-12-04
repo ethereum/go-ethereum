@@ -193,7 +193,9 @@ func (r *Record) NodeAddr() ([]byte, error) {
 		return nil, err
 	}
 
-	digest := crypto.Keccak256Hash(secp256k1)
+	pk := btcec.PublicKey(secp256k1)
+
+	digest := crypto.Keccak256Hash(pk.SerializeCompressed())
 
 	return digest.Bytes(), nil
 }
@@ -203,8 +205,8 @@ func (r *Record) Sign(privkey *ecdsa.PrivateKey) error {
 
 	r.Set(ID(ID_SECP256k1_KECCAK))
 
-	pk := (*btcec.PublicKey)(&privkey.PublicKey).SerializeCompressed()
-	secp256k1 := Secp256k1(pk)
+	pk := (*btcec.PublicKey)(&privkey.PublicKey)
+	secp256k1 := Secp256k1(*pk)
 	r.Set(secp256k1)
 
 	return r.signAndEncode(privkey)
@@ -271,11 +273,6 @@ func (r Record) verifySignature(sigcontent []byte) error {
 		return err
 	}
 
-	pk, err := btcec.ParsePubKey(secp256k1, btcec.S256())
-	if err != nil {
-		return err
-	}
-
 	digest := crypto.Keccak256Hash(sigcontent)
 
 	sign, err := btcec.ParseSignature(r.signature, btcec.S256())
@@ -283,7 +280,7 @@ func (r Record) verifySignature(sigcontent []byte) error {
 		return err
 	}
 
-	if !sign.Verify(digest.Bytes(), pk) {
+	if !sign.Verify(digest.Bytes(), (*btcec.PublicKey)(&secp256k1)) {
 		return errors.New("signature is not valid")
 	}
 
