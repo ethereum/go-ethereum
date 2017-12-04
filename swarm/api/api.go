@@ -62,9 +62,6 @@ type MultiResolverOption func(*MultiResolver)
 // of addresses which do not have their TLD resolver specified.
 func MultiResolverOptionWithResolver(r Resolver, tld string) MultiResolverOption {
 	return func(m *MultiResolver) {
-		if _, ok := m.resolvers[tld]; !ok {
-			m.resolvers[tld] = []Resolver{}
-		}
 		m.resolvers[tld] = append(m.resolvers[tld], r)
 	}
 }
