@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
 	"regexp"
 	"strings"
 	"sync"
@@ -83,8 +84,8 @@ func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
 // will be returned.
 func (m MultiResolver) Resolve(addr string) (h common.Hash, err error) {
 	rs := m.resolvers[""]
-	if i := strings.LastIndex(addr, "."); i >= 0 {
-		rstld, ok := m.resolvers[addr[i+1:]]
+	if ext := path.Ext(addr); ext != "" {
+		rstld, ok := m.resolvers[ext[1:]]
 		if ok {
 			rs = rstld
 		}
