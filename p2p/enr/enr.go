@@ -47,7 +47,7 @@ type Key interface {
 }
 
 type pair struct {
-	k []byte
+	k string
 	v []byte
 }
 
@@ -70,7 +70,7 @@ func (r *Record) SetSeq(s uint32) {
 
 func (r *Record) Load(k Key) (bool, error) {
 	for _, p := range r.pairs {
-		if string(p.k) == k.ENRKey() {
+		if p.k == k.ENRKey() {
 			err := rlp.DecodeBytes(p.v, k)
 			return true, err
 		}
@@ -85,7 +85,7 @@ func (r *Record) Set(k Key) error {
 	if err != nil {
 		return err
 	}
-	r.pairs = append(r.pairs, pair{[]byte(k.ENRKey()), blob})
+	r.pairs = append(r.pairs, pair{k.ENRKey(), blob})
 	return nil
 }
 
@@ -128,7 +128,7 @@ func (r *Record) DecodeRLP(s *rlp.Stream) error {
 			return err2
 		}
 
-		r.pairs = append(r.pairs, pair{k: key, v: value})
+		r.pairs = append(r.pairs, pair{k: string(key), v: value})
 	}
 
 	if err != rlp.EOL {
@@ -201,9 +201,7 @@ func (r *Record) NodeAddr() ([]byte, error) {
 func (r *Record) Sign(privkey *ecdsa.PrivateKey) error {
 	r.seq = r.seq + 1
 
-	id := ID(ID_SECP256k1_KECCAK)
-
-	r.Set(id)
+	r.Set(ID(ID_SECP256k1_KECCAK))
 
 	pk := (*btcec.PublicKey)(&privkey.PublicKey).SerializeCompressed()
 	secp256k1 := Secp256k1(pk)
@@ -214,7 +212,7 @@ func (r *Record) Sign(privkey *ecdsa.PrivateKey) error {
 
 func (r *Record) serialisedContent() ([]byte, error) {
 	sort.Slice(r.pairs, func(i, j int) bool {
-		return string(r.pairs[i].k) < string(r.pairs[j].k)
+		return r.pairs[i].k < r.pairs[j].k
 	})
 
 	list := []interface{}{r.seq}

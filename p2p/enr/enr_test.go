@@ -83,12 +83,12 @@ func TestGetSetIP6(t *testing.T) {
 	}
 }
 
-func TestGetSetDiscv5(t *testing.T) {
-	port := DiscV5(30309)
+func TestGetSetDiscPort(t *testing.T) {
+	port := DiscPort(30309)
 	var r Record
 	r.Set(port)
 
-	var port2 DiscV5
+	var port2 DiscPort
 
 	_, err := r.Load(&port2)
 	if err != nil {
@@ -157,7 +157,7 @@ func TestSignEncodeAndDecode(t *testing.T) {
 	}
 
 	var r Record
-	port := DiscV5(30303)
+	port := DiscPort(30303)
 	r.Set(port)
 
 	ipv4 := IP4(net.ParseIP("127.0.0.1"))
