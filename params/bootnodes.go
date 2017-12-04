@@ -54,13 +54,12 @@ var RinkebyV5Bootnodes = []string{
 // DiscoveryV5Bootnodes are the enode URLs of the P2P bootstrap nodes for the
 // experimental RLPx v5 topic-discovery network.
 var DiscoveryV5Bootnodes = []string{
-	"enode://0cc5f5ffb5d9098c8b8c62325f3797f56509bff942704687b6530992ac706e2cb946b90a34f1f19548cd3c7baccbcaea354531e5983c7d1bc0dee16ce4b6440b@40.118.3.223:30305",
-	"enode://1c7a64d76c0334b0418c004af2f67c50e36a3be60b5e4790bdac0439d21603469a85fad36f2473c9a80eb043ae60936df905fa28f1ff614c3e5dc34f15dcd2dc@40.118.3.223:30308",
-	"enode://85c85d7143ae8bb96924f2b54f1b3e70d8c4d367af305325d30a61385a432f247d2c75c45c6b4a60335060d072d7f5b35dd1d4c45f76941f62a4f83b6e75daaf@40.118.3.223:30309",
+	//"enode://ecaebb39dafa9c1d811c4a2544b21a1bf604325f74c568f36ac7a9a5bb91c1b74d3378b059169fb56586735ff8b03533ac1748bec1edd07ea278bb2c40565e4f@52.161.13.240:30303",
 }
 
 // CallistoTestnetBootnodes are the enode URLs of the P2P bootstrap nodes for the
 // Callisto tes network.
 var CallistoTestnetBootnodes = []string{
-	"enode://ecaebb39dafa9c1d811c4a2544b21a1bf604325f74c568f36ac7a9a5bb91c1b74d3378b059169fb56586735ff8b03533ac1748bec1edd07ea278bb2c40565e4f@52.161.13.240:30303",
+	"enode://588489cbfcfa3766965845d2d376f257d078fd0bb320be886d79d919a595aa32374ec1aff1162f53cf692655c9138e35e5d39c5d9f1fd255e125959dfc9cc50f@138.197.90.157:30303",
+	"enode://e62eb26790e6d4e93df0503aa56735df92c279ebec4013d79f934a4f22566eade20c0b6c29249a3f1e56f99c042acd63569642db1abfcf973e8dfd64ddec61a0@104.131.103.14:30303",
 }
