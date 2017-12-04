@@ -101,10 +101,6 @@ var (
 		Name:  "ens-api",
 		Usage: "ENS API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url",
 	}
-	EnsAddrFlag = cli.StringFlag{
-		Name:  "ens-addr",
-		Usage: "ENS contract address (default is detected as testnet or mainnet using --ens-api)",
-	}
 	SwarmApiFlag = cli.StringFlag{
 		Name:  "bzzapi",
 		Usage: "Swarm HTTP endpoint",
@@ -139,6 +135,10 @@ var (
 	DeprecatedEthAPIFlag = cli.StringFlag{
 		Name:  "ethapi",
 		Usage: "DEPRECATED: please use --ens-api and --swap-api",
+	}
+	DeprecatedEnsAddrFlag = cli.StringFlag{
+		Name:  "ens-addr",
+		Usage: "DEPRECATED: ENS contract address, please use --ens-api with contract address according to its format",
 	}
 )
 
@@ -319,7 +319,6 @@ DEPRECATED: use 'swarm db clean'.
 		// bzzd-specific flags
 		CorsStringFlag,
 		EnsAPIFlag,
-		EnsAddrFlag,
 		SwarmConfigPathFlag,
 		SwarmSwapEnabledFlag,
 		SwarmSwapAPIFlag,
@@ -338,6 +337,7 @@ DEPRECATED: use 'swarm db clean'.
 		SwarmUploadMimeType,
 		//deprecated flags
 		DeprecatedEthAPIFlag,
+		DeprecatedEnsAddrFlag,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
@@ -440,7 +440,11 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	}
 
 	ensAPIs := ctx.GlobalStringSlice(EnsAPIFlag.Name)
-	ensAddr := ctx.GlobalString(EnsAddrFlag.Name)
+	ensAddr := ctx.GlobalString(DeprecatedEnsAddrFlag.Name)
+
+	if ensAddr != "" {
+		log.Warn("--ens-addr is no longer a valid command line flag, please use --ens-api to specify contract address.")
+	}
 
 	cors := ctx.GlobalString(CorsStringFlag.Name)
 
