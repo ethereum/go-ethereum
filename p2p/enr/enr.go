@@ -69,11 +69,10 @@ func (r *Record) SetSeq(s uint32) {
 }
 
 func (r *Record) Load(k Key) (bool, error) {
-	for _, p := range r.pairs {
-		if p.k == k.ENRKey() {
-			err := rlp.DecodeBytes(p.v, k)
-			return true, err
-		}
+	i := sort.Search(len(r.pairs), func(i int) bool { return r.pairs[i].k >= k.ENRKey() })
+
+	if i < len(r.pairs) && r.pairs[i].k == k.ENRKey() {
+		return true, rlp.DecodeBytes(r.pairs[i].v, k)
 	}
 
 	return false, errors.New("record does not exist")
@@ -85,7 +84,29 @@ func (r *Record) Set(k Key) error {
 	if err != nil {
 		return err
 	}
-	r.pairs = append(r.pairs, pair{k.ENRKey(), blob})
+	var inserted bool
+	for i, p := range r.pairs {
+		if p.k == k.ENRKey() {
+			// replace value of pair
+			r.pairs[i].v = blob
+			inserted = true
+
+			break
+		} else if p.k > k.ENRKey() {
+			// insert pair before i-th elem
+			el := pair{k.ENRKey(), blob}
+
+			r.pairs = append(r.pairs, pair{})
+			copy(r.pairs[i+1:], r.pairs[i:])
+			r.pairs[i] = el
+
+			inserted = true
+			break
+		}
+	}
+	if !inserted {
+		r.pairs = append(r.pairs, pair{k.ENRKey(), blob})
+	}
 	return nil
 }
 
@@ -213,10 +234,6 @@ func (r *Record) Sign(privkey *ecdsa.PrivateKey) error {
 }
 
 func (r *Record) serialisedContent() ([]byte, error) {
-	sort.Slice(r.pairs, func(i, j int) bool {
-		return r.pairs[i].k < r.pairs[j].k
-	})
-
 	list := []interface{}{r.seq}
 
 	for _, p := range r.pairs {

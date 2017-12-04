@@ -151,6 +151,27 @@ func TestDirty(t *testing.T) {
 	}
 }
 
+func TestGetSetOverwrite(t *testing.T) {
+	var r Record
+
+	ip := IP4(net.IP{192, 168, 0, 3})
+	r.Set(ip)
+
+	ip2 := IP4(net.IP{192, 168, 0, 4})
+	r.Set(ip2)
+
+	var ip3 IP4
+
+	_, err := r.Load(&ip3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if bytes.Compare(ip2, ip3) != 0 {
+		t.Fatalf("got %#v, expected %#v", ip2, ip3)
+	}
+}
+
 func TestSignEncodeAndDecode(t *testing.T) {
 	privkey, err := crypto.HexToECDSA(privkeyHex)
 	if err != nil {
