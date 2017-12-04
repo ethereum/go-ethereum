@@ -81,7 +81,7 @@ func TestIsHex(t *testing.T) {
 	}
 	for _, test := range tests {
 		if ok := isHex(test.input); ok != test.ok {
-			t.Error("isHex(%q) = %v, want %v", test.input, ok, test.ok)
+			t.Errorf("isHex(%q) = %v, want %v", test.input, ok, test.ok)
 		}
 	}
 }
