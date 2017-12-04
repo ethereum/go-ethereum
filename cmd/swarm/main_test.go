@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm"
 )
 
-func TestParseFlagEnsEndpoint(t *testing.T) {
+func TestParseFlagEnsAPI(t *testing.T) {
 	for _, x := range []struct {
 		description string
 		value       string
@@ -126,7 +126,7 @@ func TestParseFlagEnsEndpoint(t *testing.T) {
 		},
 	} {
 		t.Run(x.description, func(t *testing.T) {
-			config := parseFlagEnsEndpoint(x.value)
+			config := parseFlagEnsAPI(x.value)
 			if config.Endpoint != x.config.Endpoint {
 				t.Errorf("expected Endpoint %q, got %q", x.config.Endpoint, config.Endpoint)
 			}
