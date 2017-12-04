@@ -464,7 +464,6 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 		case 1:
 			// Check if only one --ens-api is specified in order to use --ens-addr value
 			// to preserve the backward compatibility with single --ens-api flag.
-			// Multiple
 			c := parseFlagEnsAPI(ensAPIs[0])
 			if ensAddr != "" {
 				// If contract address is specified in both cases, check for conflict.
@@ -498,6 +497,9 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	}
 }
 
+// parseFlagEnsAPI parses EnsAPIFlag according to format
+// [tld:][contract-addr@]url and returns ENSClientConfig structure
+// with endpoint, contract address and TLD.
 func parseFlagEnsAPI(s string) swarm.ENSClientConfig {
 	isAllLetterString := func(s string) bool {
 		for _, r := range s {
