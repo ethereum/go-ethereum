@@ -104,19 +104,53 @@ func TestBzzrGetPath(t *testing.T) {
 		}
 	}
 
-	nonhashtests := []string{
+	// test hash requests
+	for k, v := range testrequests {
+		var resp *http.Response
+		var respbody []byte
+
+		url := srv.URL + "/bzz:/"
+		if k[:] != "" {
+			url += common.ToHex(key[0])[2:] + "/" + k[1:] + "?swarm.hash=true"
+		}
+		resp, err = http.Get(url)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+		defer resp.Body.Close()
+		respbody, err = ioutil.ReadAll(resp.Body)
+
+		if string(respbody) != key[v].String() {
+			isexpectedfailrequest := false
+
+			for _, r := range expectedfailrequests {
+				if k[:] == r {
+					isexpectedfailrequest = true
+				}
+			}
+			if !isexpectedfailrequest {
+				t.Fatalf("Response body does not match, expected: %v, got %v", key[v], string(respbody))
+			}
+		}
+	}
+
+	errorTests := []string{
 		srv.URL + "/bzz:/name",
 		srv.URL + "/bzzi:/nonhash",
 		srv.URL + "/bzzr:/nonhash",
+		srv.URL + "/bzz:/nonhash?swarm.hash=true",
+		srv.URL + "/bzz:/a?swarm.hash=true&list=true",
 	}
 
-	nonhashresponses := []string{
+	errorResponses := []string{
 		"error resolving name: no DNS to resolve name: &#34;name&#34;",
 		"error resolving nonhash: immutable address not a content hash: &#34;nonhash&#34;",
 		"error resolving nonhash: no DNS to resolve name: &#34;nonhash&#34;",
+		"error resolving nonhash: no DNS to resolve name: &#34;nonhash&#34;",
+		"query parameters list and hash can not be requested at the same time",
 	}
 
-	for i, url := range nonhashtests {
+	for i, url := range errorTests {
 		var resp *http.Response
 		var respbody []byte
 
@@ -130,8 +164,8 @@ func TestBzzrGetPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ReadAll failed: %v", err)
 		}
-		if !strings.Contains(string(respbody), nonhashresponses[i]) {
-			t.Fatalf("Non-Hash response body does not match, expected: %v, got: %v", nonhashresponses[i], string(respbody))
+		if !strings.Contains(string(respbody), errorResponses[i]) {
+			t.Fatalf("Non-Hash response body does not match, expected: %v, got: %v", errorResponses[i], string(respbody))
 		}
 	}
 
