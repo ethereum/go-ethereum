@@ -18,12 +18,78 @@ package enr
 
 import (
 	"crypto/ecdsa"
+	"fmt"
 	"io"
+	"net"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// DiscPort represents an UDP port for discovery v5.
+type DiscPort uint16
+
+func (DiscPort) ENRKey() string {
+	return "discv5"
+}
+
+// ID is the name of identity scheme, e.g. "secp256k1-keccak".
+type ID string
+
+func (ID) ENRKey() string {
+	return "id"
+}
+
+// IP4 represents an 4-byte IPv4 address in a node record.
+type IP4 net.IP
+
+// ENRKey returns the node record key for an IPv4 address.
+func (IP4) ENRKey() string {
+	return "ip4"
+}
+
+func (v IP4) EncodeRLP(w io.Writer) error {
+	ip4 := net.IP(v).To4()
+	if ip4 == nil {
+		return fmt.Errorf("invalid IPv4 address: %v", v)
+	}
+	return rlp.Encode(w, ip4)
+}
+
+func (v *IP4) DecodeRLP(s *rlp.Stream) error {
+	if err := s.Decode((*net.IP)(v)); err != nil {
+		return err
+	}
+	if len(*v) != 4 {
+		return fmt.Errorf("invalid IPv4 address, want 4 bytes: %v", *v)
+	}
+	return nil
+}
+
+// IP6 represents an 16-byte IPv6 address in a node record.
+type IP6 net.IP
+
+// ENRKey returns the node record key for an IPv6 address.
+func (IP6) ENRKey() string {
+	return "ip6"
+}
+
+func (v IP6) EncodeRLP(w io.Writer) error {
+	ip6 := net.IP(v)
+	return rlp.Encode(w, ip6)
+}
+
+func (v *IP6) DecodeRLP(s *rlp.Stream) error {
+	if err := s.Decode((*net.IP)(v)); err != nil {
+		return err
+	}
+	if len(*v) != 16 {
+		return fmt.Errorf("invalid IPv6 address, want 16 bytes: %v", *v)
+	}
+	return nil
+}
+
+// Secp256k1 is compressed secp256k1 public key.
 type Secp256k1 ecdsa.PublicKey
 
 func (Secp256k1) ENRKey() string {
