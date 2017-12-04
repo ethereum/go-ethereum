@@ -462,6 +462,10 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 				ContractAddress: ensAddr,
 			})
 		case 1:
+			// Check if "--ens-api ''" is specified in order to disable ENS.
+			if ensAPIs[0] == "" {
+				break
+			}
 			// Check if only one --ens-api is specified in order to use --ens-addr value
 			// to preserve the backward compatibility with single --ens-api flag.
 			c := parseFlagEnsAPI(ensAPIs[0])
