@@ -157,7 +157,7 @@ func (s *dialstate) removeStatic(n *discover.Node) {
 }
 
 func (s *dialstate) newTasks(nRunning int, peers map[discover.NodeID]*Peer, now time.Time) []task {
-	if s.start == (time.Time{}) {
+	if s.start.IsZero() {
 		s.start = now
 	}
 
