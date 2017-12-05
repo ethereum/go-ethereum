@@ -237,8 +237,6 @@ func (r *Record) verifySignature() error {
 	var secp256k1 Secp256k1
 	if ok, err := r.Load(&id); err != nil {
 		return err
-	} else if !ok {
-		return fmt.Errorf("can't verify signature: missing %q key", id.ENRKey())
 	} else if id != ID_SECP256k1_KECCAK {
 		return errNoID
 	}
