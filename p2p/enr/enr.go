@@ -220,8 +220,8 @@ func (r *Record) signAndEncode(privkey *ecdsa.PrivateKey) error {
 	// Put signature in front.
 	r.signature = encodeCompactSignature(sig)
 	list[0] = r.signature
-	r.raw, _ = rlp.EncodeToBytes(list)
-	return nil
+	r.raw, err = rlp.EncodeToBytes(list)
+	return err
 }
 
 func (r *Record) verifySignature() error {
