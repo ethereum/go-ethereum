@@ -235,7 +235,7 @@ func (r *Record) verifySignature() error {
 	// Get identity scheme, public key, signature.
 	var id ID
 	var secp256k1 Secp256k1
-	if ok, err := r.Load(&id); err != nil {
+	if _, err := r.Load(&id); err != nil {
 		return err
 	} else if id != ID_SECP256k1_KECCAK {
 		return errNoID
