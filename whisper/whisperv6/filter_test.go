@@ -238,7 +238,7 @@ func TestInstallFilterWithSymAndAsymKeys(t *testing.T) {
 
 	asymKey, err := crypto.GenerateKey()
 	if err != nil {
-		t.Fatalf("Unable to create asymetric keys", err)
+		t.Fatalf("Unable to create asymetric keys: %d", err)
 	}
 
 	// Copy the first filter since some of its fields
