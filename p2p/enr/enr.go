@@ -89,29 +89,21 @@ func (r *Record) Set(k Key) error {
 	if err != nil {
 		return err
 	}
-	var inserted bool
 	for i, p := range r.pairs {
 		if p.k == k.ENRKey() {
 			// replace value of pair
 			r.pairs[i].v = blob
-			inserted = true
-
-			break
+			return nil
 		} else if p.k > k.ENRKey() {
 			// insert pair before i-th elem
 			el := pair{k.ENRKey(), blob}
-
 			r.pairs = append(r.pairs, pair{})
 			copy(r.pairs[i+1:], r.pairs[i:])
 			r.pairs[i] = el
-
-			inserted = true
-			break
+			return nil
 		}
 	}
-	if !inserted {
-		r.pairs = append(r.pairs, pair{k.ENRKey(), blob})
-	}
+	r.pairs = append(r.pairs, pair{k.ENRKey(), blob})
 	return nil
 }
 
