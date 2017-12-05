@@ -83,28 +83,29 @@ func (r *Record) Load(k Key) (bool, error) {
 	return false, errors.New("record does not exist")
 }
 
-func (r *Record) Set(k Key) error {
+// Set adds or updates the given key in the record.
+// It panics if the value can't be encoded.
+func (r *Record) Set(k Key) {
 	r.signature = nil
 	blob, err := rlp.EncodeToBytes(k)
 	if err != nil {
-		return err
+		panic(fmt.Errorf("enr: can't encode %s: %v", k.ENRKey(), err))
 	}
 	for i, p := range r.pairs {
 		if p.k == k.ENRKey() {
 			// replace value of pair
 			r.pairs[i].v = blob
-			return nil
+			return
 		} else if p.k > k.ENRKey() {
 			// insert pair before i-th elem
 			el := pair{k.ENRKey(), blob}
 			r.pairs = append(r.pairs, pair{})
 			copy(r.pairs[i+1:], r.pairs[i:])
 			r.pairs[i] = el
-			return nil
+			return
 		}
 	}
 	r.pairs = append(r.pairs, pair{k.ENRKey(), blob})
-	return nil
 }
 
 func (r Record) EncodeRLP(w io.Writer) error {
