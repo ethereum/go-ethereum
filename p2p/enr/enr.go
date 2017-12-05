@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"sort"
@@ -28,12 +29,17 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
 	errNoID           = errors.New("unknown or unspecified identity scheme")
 	errInvalidSigsize = errors.New("invalid signature size")
+	errInvalidSig     = errors.New("invalid signature")
+	errNotSorted      = errors.New("record key/value pairs are not sorted by key")
+	errDuplicateKey   = errors.New("record contains duplicate key")
+	errIncompletePair = errors.New("record contains incomplete k/v pair")
 )
 
 // Key is implemented by known node record key types.
@@ -45,17 +51,17 @@ type Key interface {
 	ENRKey() string
 }
 
+// pair is a key/value pair in a record.
 type pair struct {
 	k string
-	v []byte
+	v rlp.RawValue
 }
 
 type Record struct {
 	seq       uint32 // sequence number
 	signature []byte // record's signature
 	raw       []byte // RLP encoded record
-	pairs     []pair // list of all key/value pairs, sorted prior to RLP encoding
-	signed    bool   // keeps track if record was modified after it was signed and encoded
+	pairs     []pair // sorted list of all key/value pairs
 }
 
 func (r Record) Seq() uint32 {
@@ -63,7 +69,7 @@ func (r Record) Seq() uint32 {
 }
 
 func (r *Record) SetSeq(s uint32) {
-	r.signed = false
+	r.signature = nil
 	r.seq = s
 }
 
@@ -78,7 +84,7 @@ func (r *Record) Load(k Key) (bool, error) {
 }
 
 func (r *Record) Set(k Key) error {
-	r.signed = false
+	r.signature = nil
 	blob, err := rlp.EncodeToBytes(k)
 	if err != nil {
 		return err
@@ -110,99 +116,68 @@ func (r *Record) Set(k Key) error {
 }
 
 func (r Record) EncodeRLP(w io.Writer) error {
-	if !r.signed {
+	if r.signature == nil {
 		return errors.New("record is not signed")
 	}
-
 	_, err := w.Write(r.raw)
-
 	return err
 }
 
 func (r *Record) DecodeRLP(s *rlp.Stream) error {
-	var err error
-
-	r.signature, err = s.Bytes()
+	raw, err := s.Raw()
 	if err != nil {
 		return err
 	}
 
-	_, err = s.List()
-	if err != nil {
+	// Decode the RLP container.
+	dec := Record{raw: raw}
+	s = rlp.NewStream(bytes.NewReader(raw), 0)
+	if _, err := s.List(); err != nil {
 		return err
 	}
-
-	if err := s.Decode(&r.seq); err != nil {
+	if err = s.Decode(&dec.signature); err != nil {
 		return err
 	}
-
-	// read key/value pairs until we reach rlp.EOL
-	for _, _, err = s.Kind(); err == nil; _, _, err = s.Kind() {
-		key, err2 := s.Bytes()
-		if err2 != nil {
-			return err2
+	if err = s.Decode(&dec.seq); err != nil {
+		return err
+	}
+	// The rest of the record contains sorted k/v pairs.
+	var prevkey string
+	for i := 0; ; i++ {
+		var kv pair
+		if err := s.Decode(&kv.k); err != nil {
+			if err == rlp.EOL {
+				break
+			}
+			return err
 		}
-
-		value, err2 := s.Bytes()
-		if err2 != nil {
-			return err2
+		if err := s.Decode(&kv.v); err != nil {
+			if err == rlp.EOL {
+				return errIncompletePair
+			}
+			return err
 		}
-
-		r.pairs = append(r.pairs, pair{k: string(key), v: value})
+		if i > 0 {
+			if kv.k == prevkey {
+				return errDuplicateKey
+			}
+			if kv.k < prevkey {
+				return errNotSorted
+			}
+		}
+		dec.pairs = append(dec.pairs, kv)
+		prevkey = kv.k
 	}
-
-	if err != rlp.EOL {
+	if err := s.ListEnd(); err != nil {
 		return err
 	}
 
-	sigcontent, err := r.serialisedContent()
-	if err != nil {
+	// Verify signature.
+	if err = dec.verifySignature(); err != nil {
 		return err
 	}
-
-	// update r.raw
-	blob, err := rlp.EncodeToBytes(r.signature)
-	if err != nil {
-		return err
-	}
-
-	r.raw = append(blob, sigcontent...)
-
-	err = r.verifySignature(sigcontent)
-	if err != nil {
-		return err
-	}
-
-	// mark record ready for encoding
-	r.signed = true
-
+	*r = dec
 	return nil
-}
-
-func (r Record) Equal(o Record) (bool, error) {
-	rr, err := r.serialisedContent()
-	if err != nil {
-		return false, err
-	}
-
-	oo, err := o.serialisedContent()
-	if err != nil {
-		return false, err
-	}
-
-	if bytes.Compare(rr, oo) != 0 {
-		return false, nil
-	}
-
-	if err := r.verifySignature(rr); err != nil {
-		return false, err
-	}
-
-	if err := o.verifySignature(oo); err != nil {
-		return false, err
-	}
-
-	return true, nil
 }
 
 func (r *Record) NodeAddr() ([]byte, error) {
@@ -221,73 +196,69 @@ func (r *Record) NodeAddr() ([]byte, error) {
 }
 
 func (r *Record) Sign(privkey *ecdsa.PrivateKey) error {
-	r.seq = r.seq + 1
-
-	r.Set(ID(ID_SECP256k1_KECCAK))
-
 	pk := (*btcec.PublicKey)(&privkey.PublicKey)
-	secp256k1 := Secp256k1(*pk)
-	r.Set(secp256k1)
-
+	r.seq = r.seq + 1
+	r.Set(ID(ID_SECP256k1_KECCAK))
+	r.Set(Secp256k1(*pk))
 	return r.signAndEncode(privkey)
 }
 
-func (r *Record) serialisedContent() ([]byte, error) {
-	list := []interface{}{r.seq}
-
+func (r *Record) appendPairs(list []interface{}) []interface{} {
+	list = append(list, r.seq)
 	for _, p := range r.pairs {
 		list = append(list, p.k, p.v)
 	}
-
-	return rlp.EncodeToBytes(list)
+	return list
 }
 
 func (r *Record) signAndEncode(privkey *ecdsa.PrivateKey) error {
-	sigcontent, err := r.serialisedContent()
+	// Put record elements into a flat list. Leave room for the signature.
+	list := make([]interface{}, 1, len(r.pairs)*2+2)
+	list = r.appendPairs(list)
+
+	// Sign the tail of the list.
+	h := sha3.NewKeccak256()
+	rlp.Encode(h, list[1:])
+	sig, err := (*btcec.PrivateKey)(privkey).Sign(h.Sum(nil))
 	if err != nil {
 		return err
 	}
 
-	sig, err := (*btcec.PrivateKey)(privkey).Sign(crypto.Keccak256(sigcontent))
-	if err != nil {
-		return err
-	}
+	// Put signature in front.
 	r.signature = encodeCompactSignature(sig)
-
-	blob, err := rlp.EncodeToBytes(r.signature)
-	if err != nil {
-		return err
-	}
-
-	r.raw = append(blob, sigcontent...)
-
-	// mark record ready for encoding
-	r.signed = true
-
+	list[0] = r.signature
+	r.raw, _ = rlp.EncodeToBytes(list)
 	return nil
 }
 
-func (r *Record) verifySignature(sigcontent []byte) error {
-	// Get identity scheme, public key.
+func (r *Record) verifySignature() error {
+	// Get identity scheme, public key, signature.
 	var id ID
 	var secp256k1 Secp256k1
-	if _, err := r.Load(&id); err != nil {
+	if ok, err := r.Load(&id); err != nil {
 		return err
-	}
-	if id != ID_SECP256k1_KECCAK {
+	} else if !ok {
+		return fmt.Errorf("can't verify signature: missing %q key", id.ENRKey())
+	} else if id != ID_SECP256k1_KECCAK {
 		return errNoID
 	}
-	if _, err := r.Load(&secp256k1); err != nil {
+	if ok, err := r.Load(&secp256k1); err != nil {
 		return err
+	} else if !ok {
+		return fmt.Errorf("can't verify signature: missing %q key", secp256k1.ENRKey())
 	}
-
-	// Verify the signature.
 	sig, err := parseCompactSignature(r.signature)
 	if err != nil {
 		return err
 	}
-	if !sig.Verify(crypto.Keccak256(sigcontent), (*btcec.PublicKey)(&secp256k1)) {
-		return errors.New("signature is not valid")
+
+	// Verify the signature.
+	list := make([]interface{}, 0, len(r.pairs)*2+1)
+	list = r.appendPairs(list)
+	h := sha3.NewKeccak256()
+	rlp.Encode(h, list)
+	if !sig.Verify(h.Sum(nil), (*btcec.PublicKey)(&secp256k1)) {
+		return errInvalidSig
 	}
 	return nil
 }

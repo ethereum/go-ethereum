@@ -201,10 +201,6 @@ func TestSignEncodeAndDecode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if ok, err := r.Equal(r2); err != nil || !ok {
-		t.Errorf("records not equal ; got\n%#v, expected\n%#v", r2, r)
-	}
-
 	if !reflect.DeepEqual(r, r2) {
 		t.Errorf("records not deep equal ; got\n%#v, expected\n%#v", r2, r)
 	}
@@ -241,5 +237,34 @@ func TestNodeAddress(t *testing.T) {
 	got := hex.EncodeToString(addr)
 	if got != expected {
 		t.Errorf("got\n%#v, expected\n%#v", got, expected)
+	}
+}
+
+func TestPythonInterop(t *testing.T) {
+	enc, _ := hex.DecodeString("f896b840638a54215d80a6713c8d523a6adc4e6e73652d859103a36b700851cb0e61b66b8ebfc1a610c57d732ec6e0a8f06a9a7a28df5051ece514702ff9cdff0b11f454018664697363763582765f82696490736563703235366b312d6b656363616b83697034847f00000189736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
+	var r Record
+	if err := rlp.DecodeBytes(enc, &r); err != nil {
+		t.Fatalf("can't decode: %v", err)
+	}
+
+	var (
+		wantAddr, _  = hex.DecodeString("caaa1485d83b18b32ed9ad666026151bf0cae8a0a88c857ae2d4c5be2daa6726")
+		wantSeq      = uint32(1)
+		wantIP       = IP4(net.ParseIP("127.0.0.1").To4())
+		wantDiscport = DiscPort(30303)
+	)
+	if r.Seq() != wantSeq {
+		t.Errorf("wrong seq: got %d, want %d", r.Seq(), wantSeq)
+	}
+	if addr, _ := r.NodeAddr(); !bytes.Equal(addr, wantAddr) {
+		t.Errorf("wrong addr: got %x, want %x", addr, wantAddr)
+	}
+	want := map[Key]interface{}{new(IP4): &wantIP, new(DiscPort): &wantDiscport}
+	for k, v := range want {
+		if _, err := r.Load(k); err != nil {
+			t.Errorf("can't load %q: %v", k.ENRKey(), err)
+		} else if !reflect.DeepEqual(k, v) {
+			t.Errorf("wrong %q: got %v, want %v", k.ENRKey(), k, v)
+		}
 	}
 }
