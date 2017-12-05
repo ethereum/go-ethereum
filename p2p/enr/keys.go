@@ -33,7 +33,9 @@ func (DiscPort) ENRKey() string {
 	return "discv5"
 }
 
-// ID is the name of identity scheme, e.g. "secp256k1-keccak".
+const ID_SECP256k1_KECCAK = "secp256k1-keccak" // identity scheme identifier
+
+// ID is the name of the identity scheme, e.g. "secp256k1-keccak".
 type ID string
 
 func (ID) ENRKey() string {

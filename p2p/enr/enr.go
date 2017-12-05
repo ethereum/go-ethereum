@@ -22,19 +22,18 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"io"
+	"math/big"
 	"sort"
 
+	"github.com/btcsuite/btcd/btcec"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-
-	"github.com/btcsuite/btcd/btcec"
 )
 
-var ()
-
-// The maximum encoded size of a node record is 300 bytes. Implementations should reject records larger than this size.
-const (
-	ID_SECP256k1_KECCAK = "secp256k1-keccak" // "secp256k1-keccak" identity scheme identifier
+var (
+	errNoID           = errors.New("unknown or unspecified identity scheme")
+	errInvalidSigsize = errors.New("invalid signature size")
 )
 
 // Key is implemented by known node record key types.
@@ -249,14 +248,11 @@ func (r *Record) signAndEncode(privkey *ecdsa.PrivateKey) error {
 		return err
 	}
 
-	digest := crypto.Keccak256Hash(sigcontent)
-
-	key := btcec.PrivateKey(*privkey)
-	signature, err := key.Sign(digest.Bytes())
+	sig, err := (*btcec.PrivateKey)(privkey).Sign(crypto.Keccak256(sigcontent))
 	if err != nil {
 		return err
 	}
-	r.signature = signature.Serialize()
+	r.signature = encodeCompactSignature(sig)
 
 	blob, err := rlp.EncodeToBytes(r.signature)
 	if err != nil {
@@ -271,35 +267,41 @@ func (r *Record) signAndEncode(privkey *ecdsa.PrivateKey) error {
 	return nil
 }
 
-func (r Record) verifySignature(sigcontent []byte) error {
+func (r *Record) verifySignature(sigcontent []byte) error {
+	// Get identity scheme, public key.
 	var id ID
-	_, err := r.Load(&id)
-	if err != nil {
-		return err
-	}
-
-	// currently "secp256k1-keccak" is the only known identity scheme
-	if id != ID_SECP256k1_KECCAK {
-		return errors.New("unknown identity scheme")
-	}
-
-	// get publickey from record
 	var secp256k1 Secp256k1
-	_, err = r.Load(&secp256k1)
-	if err != nil {
+	if _, err := r.Load(&id); err != nil {
+		return err
+	}
+	if id != ID_SECP256k1_KECCAK {
+		return errNoID
+	}
+	if _, err := r.Load(&secp256k1); err != nil {
 		return err
 	}
 
-	digest := crypto.Keccak256Hash(sigcontent)
-
-	sign, err := btcec.ParseSignature(r.signature, btcec.S256())
+	// Verify the signature.
+	sig, err := parseCompactSignature(r.signature)
 	if err != nil {
 		return err
 	}
-
-	if !sign.Verify(digest.Bytes(), (*btcec.PublicKey)(&secp256k1)) {
+	if !sig.Verify(crypto.Keccak256(sigcontent), (*btcec.PublicKey)(&secp256k1)) {
 		return errors.New("signature is not valid")
 	}
-
 	return nil
+}
+
+func encodeCompactSignature(sig *btcec.Signature) []byte {
+	b := make([]byte, 64)
+	math.ReadBits(sig.R, b[:32])
+	math.ReadBits(sig.S, b[32:])
+	return b
+}
+
+func parseCompactSignature(sig []byte) (*btcec.Signature, error) {
+	if len(sig) != 64 {
+		return nil, errInvalidSigsize
+	}
+	return &btcec.Signature{R: new(big.Int).SetBytes(sig[:32]), S: new(big.Int).SetBytes(sig[32:])}, nil
 }
