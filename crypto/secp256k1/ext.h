@@ -48,7 +48,7 @@ static int secp256k1_ecdsa_recover_pubkey(
 
 // secp256k1_ecdsa_verify_enc verifies an encoded compact signature.
 //
-// Returns: 1: signature is valid was successful
+// Returns: 1: signature is valid
 //          0: signature is invalid
 // Args:    ctx:        pointer to a context object (cannot be NULL)
 //  In:     sigdata:    pointer to a 64-byte signature (cannot be NULL)
