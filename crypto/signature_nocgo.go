@@ -28,7 +28,7 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 )
 
-// Ecrecover returns the public key that created the given signature.
+// Ecrecover returns the uncompressed public key that created the given signature.
 func Ecrecover(hash, sig []byte) ([]byte, error) {
 	pub, err := SigToPub(hash, sig)
 	if err != nil {

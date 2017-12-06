@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
-// Ecrecover returns the public key that created the given signature.
+// Ecrecover returns the uncompressed public key that created the given signature.
 func Ecrecover(hash, sig []byte) ([]byte, error) {
 	return secp256k1.RecoverPubkey(hash, sig)
 }
@@ -61,7 +61,7 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 }
 
 // VerifySignature checks that the given public key created signature over hash.
-// The public key should be in compressed (33 bytes) or uncompressed (64 bytes) format.
+// The public key should be in compressed (33 bytes) or uncompressed (65 bytes) format.
 // The signature should have the 64 byte [R || S] format.
 func VerifySignature(pubkey, hash, signature []byte) bool {
 	return secp256k1.VerifySignature(pubkey, hash, signature)
