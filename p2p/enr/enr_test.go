@@ -34,6 +34,12 @@ const (
 	privkeyHex = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"
 )
 
+var rnd *rand.Rand
+
+func init() {
+	rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+}
+
 // TestGetSetID tests encoding/decoding and setting/getting of the enr.ID type
 func TestGetSetID(t *testing.T) {
 	id := ID("someid")
@@ -290,17 +296,17 @@ func TestRecordTooBig(t *testing.T) {
 
 	var r Record
 
-	key := string(randomByte(10))
+	key := randomString(10)
 
 	// set a big value for random key, expect error
-	r.Set(WithKey(key, randomByte(300)))
+	r.Set(WithKey(key, randomString(300)))
 	err = r.Sign(privkey)
 	if err != errTooBig {
 		t.Fatalf("expected to get errTooBig, got %#v", err)
 	}
 
 	// set an acceptable value for random key, expect no error
-	r.Set(WithKey(key, randomByte(100)))
+	r.Set(WithKey(key, randomString(100)))
 	err = r.Sign(privkey)
 	if err != nil {
 		t.Fatal(err)
@@ -316,13 +322,17 @@ func TestSignEncodeAndDecodeRandom(t *testing.T) {
 
 	var r Record
 
-	pairs := []Key{}
+	// random key/value pairs for testing
+	pairs := map[string]uint32{}
 
 	for i := 0; i < 10; i++ {
-		pair := WithKey(string(randomByte(7)), randomByte(7))
+		key := randomString(7)
+		value := rnd.Uint32()
+
+		pair := WithKey(key, &value)
 		r.Set(pair)
 
-		pairs = append(pairs, pair)
+		pairs[key] = value
 	}
 
 	if r.Sign(privkey); err != nil {
@@ -334,25 +344,25 @@ func TestSignEncodeAndDecodeRandom(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, p := range pairs {
-		buf := WithKey(p.ENRKey(), "")
+	for k, v := range pairs {
+		var got uint32
+		buf := WithKey(k, &got)
 
 		if ok, err := r.Load(buf); !ok || err != nil {
 			t.Fatal(ok, err)
 		}
 
-		if !reflect.DeepEqual(buf, p) {
-			t.Fatalf("expected %#v to equal %#v", buf, p)
+		if got != v {
+			t.Fatalf("got %#v, expected %#v", got, v)
 		}
 	}
 }
 
-func randomByte(strlen int) []byte {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+func randomString(strlen int) string {
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
 	result := make([]byte, strlen)
 	for i := range result {
-		result[i] = chars[r.Intn(len(chars))]
+		result[i] = chars[rnd.Intn(len(chars))]
 	}
-	return result
+	return string(result)
 }

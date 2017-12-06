@@ -40,7 +40,7 @@ func (g generic) EncodeRLP(w io.Writer) error {
 }
 
 func (g *generic) DecodeRLP(s *rlp.Stream) error {
-	return s.Decode(&g.value)
+	return s.Decode(g.value)
 }
 
 // WithKey returns a new Key that can be set in a Record.
