@@ -279,29 +279,68 @@ func TestRecordTooBig(t *testing.T) {
 
 	var r Record
 
-	key := randomString(10)
+	key := string(randomByte(10))
 
 	// set a big value for random key, expect error
-	r.Set(WithKey(key, randomString(300)))
+	r.Set(WithKey(key, randomByte(300)))
 	err = r.Sign(privkey)
 	if err != errTooBig {
 		t.Fatalf("expected to get errTooBig, got %#v", err)
 	}
 
 	// set an acceptable value for random key, expect no error
-	r.Set(WithKey(key, randomString(100)))
+	r.Set(WithKey(key, randomByte(100)))
 	err = r.Sign(privkey)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func randomString(strlen int) string {
+func TestSignEncodeAndDecodeRandom(t *testing.T) {
+	privkey, err := crypto.HexToECDSA(privkeyHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var r Record
+
+	pairs := []Key{}
+
+	for i := 0; i < 10; i++ {
+		pair := WithKey(string(randomByte(7)), randomByte(7))
+		r.Set(pair)
+
+		pairs = append(pairs, pair)
+	}
+
+	if r.Sign(privkey); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = rlp.EncodeToBytes(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, p := range pairs {
+		buf := WithKey(p.ENRKey(), "")
+
+		if ok, err := r.Load(buf); !ok || err != nil {
+			t.Fatal(ok, err)
+		}
+
+		if !reflect.DeepEqual(buf, p) {
+			t.Fatalf("expected %#v to equal %#v", buf, p)
+		}
+	}
+}
+
+func randomByte(strlen int) []byte {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
 	result := make([]byte, strlen)
 	for i := range result {
 		result[i] = chars[r.Intn(len(chars))]
 	}
-	return string(result)
+	return result
 }
