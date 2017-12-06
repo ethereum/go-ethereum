@@ -34,6 +34,7 @@ const (
 	privkeyHex = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"
 )
 
+// TestGetSetID tests encoding/decoding and setting/getting of the enr.ID type
 func TestGetSetID(t *testing.T) {
 	id := ID("someid")
 	var r Record
@@ -51,6 +52,7 @@ func TestGetSetID(t *testing.T) {
 	}
 }
 
+// TestGetSetIP4 tests encoding/decoding and setting/getting of the enr.IP4 type
 func TestGetSetIP4(t *testing.T) {
 	ip := IP4(net.IP{192, 168, 0, 3})
 	var r Record
@@ -68,6 +70,7 @@ func TestGetSetIP4(t *testing.T) {
 	}
 }
 
+// TestGetSetIP6 tests encoding/decoding and setting/getting of the enr.IP6 type
 func TestGetSetIP6(t *testing.T) {
 	ip := IP6(net.IP{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68})
 	var r Record
@@ -85,6 +88,7 @@ func TestGetSetIP6(t *testing.T) {
 	}
 }
 
+// TestGetSetDiscPort tests encoding/decoding and setting/getting of the enr.DiscPort type
 func TestGetSetDiscPort(t *testing.T) {
 	port := DiscPort(30309)
 	var r Record
@@ -102,6 +106,7 @@ func TestGetSetDiscPort(t *testing.T) {
 	}
 }
 
+// TestGetSetSecp256k1 tests encoding/decoding and setting/getting of the enr.Secp256k1 type
 func TestGetSetSecp256k1(t *testing.T) {
 	privkey, err := crypto.HexToECDSA(privkeyHex)
 	if err != nil {
@@ -129,6 +134,7 @@ func TestGetSetSecp256k1(t *testing.T) {
 	}
 }
 
+// TestDirty tests record signature removal on setting of new key/value pair in record.
 func TestDirty(t *testing.T) {
 	privkey, err := crypto.HexToECDSA(privkeyHex)
 	if err != nil {
@@ -153,6 +159,7 @@ func TestDirty(t *testing.T) {
 	}
 }
 
+// TestGetSetOverwrite tests value overwrite when setting a new value with an existing key in record.
 func TestGetSetOverwrite(t *testing.T) {
 	var r Record
 
@@ -174,6 +181,7 @@ func TestGetSetOverwrite(t *testing.T) {
 	}
 }
 
+// TestSignEncodeAndDecode tests signing, RLP encoding and RLP decoding of a record.
 func TestSignEncodeAndDecode(t *testing.T) {
 	privkey, err := crypto.HexToECDSA(privkeyHex)
 	if err != nil {
@@ -217,6 +225,7 @@ func TestSignEncodeAndDecode(t *testing.T) {
 	}
 }
 
+// TestNodeAddress tests that record returns correct node address - keccak256 hash of the public key.
 func TestNodeAddress(t *testing.T) {
 	privkey, err := crypto.HexToECDSA(privkeyHex)
 	if err != nil {
@@ -242,6 +251,7 @@ func TestNodeAddress(t *testing.T) {
 	}
 }
 
+// TestPythonInterop tests that Go implementation can successfully RLP decode a record produced by Python implementation.
 func TestPythonInterop(t *testing.T) {
 	enc, _ := hex.DecodeString("f896b840638a54215d80a6713c8d523a6adc4e6e73652d859103a36b700851cb0e61b66b8ebfc1a610c57d732ec6e0a8f06a9a7a28df5051ece514702ff9cdff0b11f454018664697363763582765f82696490736563703235366b312d6b656363616b83697034847f00000189736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
 	var r Record
@@ -271,6 +281,7 @@ func TestPythonInterop(t *testing.T) {
 	}
 }
 
+// TestRecordTooBig tests that records bigger than 300 bytes cannot be signed.
 func TestRecordTooBig(t *testing.T) {
 	privkey, err := crypto.HexToECDSA(privkeyHex)
 	if err != nil {
@@ -296,6 +307,7 @@ func TestRecordTooBig(t *testing.T) {
 	}
 }
 
+// TestSignEncodeAndDecodeRandom tests encoding/decoding of records containing random key/value pairs.
 func TestSignEncodeAndDecodeRandom(t *testing.T) {
 	privkey, err := crypto.HexToECDSA(privkeyHex)
 	if err != nil {

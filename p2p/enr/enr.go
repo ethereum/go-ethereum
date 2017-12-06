@@ -58,6 +58,7 @@ type pair struct {
 	v rlp.RawValue
 }
 
+// Record represents Ethereum Node Record
 type Record struct {
 	seq       uint32 // sequence number
 	signature []byte // record's signature
@@ -65,15 +66,20 @@ type Record struct {
 	pairs     []pair // sorted list of all key/value pairs
 }
 
+// Seq return record's sequence number
 func (r Record) Seq() uint32 {
 	return r.seq
 }
 
+// SetSeq update record's sequence number. Nodes should increase the number whenever the record changes.
 func (r *Record) SetSeq(s uint32) {
 	r.signature = nil
 	r.seq = s
 }
 
+// Load is loading a key/value pair based on provided key from the record.
+// It returns false if such key cannot be found.
+// It returns an error if there is a problem with RLP decoding of the pair.
 func (r *Record) Load(k Key) (bool, error) {
 	i := sort.Search(len(r.pairs), func(i int) bool { return r.pairs[i].k >= k.ENRKey() })
 
@@ -109,6 +115,8 @@ func (r *Record) Set(k Key) {
 	r.pairs = append(r.pairs, pair{k.ENRKey(), blob})
 }
 
+// EncodeRLP implements rlp.Encoder.
+// Sign must be called prior to calling rlp.Encode
 func (r Record) EncodeRLP(w io.Writer) error {
 	if r.signature == nil {
 		return errors.New("record is not signed")
@@ -117,6 +125,7 @@ func (r Record) EncodeRLP(w io.Writer) error {
 	return err
 }
 
+// DecodeRLP implements rlp.Decoder.
 func (r *Record) DecodeRLP(s *rlp.Stream) error {
 	raw, err := s.Raw()
 	if err != nil {
@@ -174,6 +183,7 @@ func (r *Record) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+// NodeAddr returns node's address - keccak256 hash of the public key.
 func (r *Record) NodeAddr() ([]byte, error) {
 	var secp256k1 Secp256k1
 
@@ -189,6 +199,9 @@ func (r *Record) NodeAddr() ([]byte, error) {
 	return digest.Bytes(), nil
 }
 
+// Sign signs the record with the provided private key.
+// It updates record's identity scheme and public key.
+// It returns an error if signed record is bigger than 300 bytes.
 func (r *Record) Sign(privkey *ecdsa.PrivateKey) error {
 	pk := (*btcec.PublicKey)(&privkey.PublicKey)
 	r.seq = r.seq + 1

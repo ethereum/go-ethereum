@@ -43,6 +43,8 @@ func (g *generic) DecodeRLP(s *rlp.Stream) error {
 	return s.Decode(&g.value)
 }
 
+// WithKey returns a new Key that can be set in a Record.
+// v must implement the rlp.Encoder and rlp.Decoder interface.
 func WithKey(k string, v interface{}) Key {
 	return &generic{key: k, value: v}
 }
@@ -50,6 +52,7 @@ func WithKey(k string, v interface{}) Key {
 // DiscPort represents an UDP port for discovery v5.
 type DiscPort uint16
 
+// ENRKey returns the node record key for an UDP port for discovery.
 func (DiscPort) ENRKey() string {
 	return "discv5"
 }
@@ -59,6 +62,7 @@ const ID_SECP256k1_KECCAK = "secp256k1-keccak" // identity scheme identifier
 // ID is the name of the identity scheme, e.g. "secp256k1-keccak".
 type ID string
 
+// ENRKey returns the node record key for its identity scheme.
 func (ID) ENRKey() string {
 	return "id"
 }
@@ -71,6 +75,7 @@ func (IP4) ENRKey() string {
 	return "ip4"
 }
 
+// EncodeRLP implements rlp.Encoder.
 func (v IP4) EncodeRLP(w io.Writer) error {
 	ip4 := net.IP(v).To4()
 	if ip4 == nil {
@@ -79,6 +84,7 @@ func (v IP4) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, ip4)
 }
 
+// DecodeRLP implements rlp.Decoder.
 func (v *IP4) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode((*net.IP)(v)); err != nil {
 		return err
@@ -97,11 +103,13 @@ func (IP6) ENRKey() string {
 	return "ip6"
 }
 
+// EncodeRLP implements rlp.Encoder.
 func (v IP6) EncodeRLP(w io.Writer) error {
 	ip6 := net.IP(v)
 	return rlp.Encode(w, ip6)
 }
 
+// DecodeRLP implements rlp.Decoder.
 func (v *IP6) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode((*net.IP)(v)); err != nil {
 		return err
@@ -115,16 +123,19 @@ func (v *IP6) DecodeRLP(s *rlp.Stream) error {
 // Secp256k1 is compressed secp256k1 public key.
 type Secp256k1 ecdsa.PublicKey
 
+// ENRKey returns the node record key for the secp256k1 public key.
 func (Secp256k1) ENRKey() string {
 	return "secp256k1"
 }
 
+// EncodeRLP implements rlp.Encoder.
 func (v Secp256k1) EncodeRLP(w io.Writer) error {
 	pk := btcec.PublicKey(v)
 
 	return rlp.Encode(w, pk.SerializeCompressed())
 }
 
+// DecodeRLP implements rlp.Decoder.
 func (v *Secp256k1) DecodeRLP(s *rlp.Stream) error {
 	buf := make([]byte, 33)
 	if err := s.Decode(&buf); err != nil {
