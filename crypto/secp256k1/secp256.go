@@ -38,6 +38,7 @@ import "C"
 
 import (
 	"errors"
+	"math/big"
 	"unsafe"
 )
 
@@ -55,6 +56,7 @@ var (
 	ErrInvalidSignatureLen = errors.New("invalid signature length")
 	ErrInvalidRecoveryID   = errors.New("invalid signature recovery id")
 	ErrInvalidKey          = errors.New("invalid private key")
+	ErrInvalidPubkey       = errors.New("invalid public key")
 	ErrSignFailed          = errors.New("signing failed")
 	ErrRecoverFailed       = errors.New("recovery failed")
 )
@@ -117,6 +119,33 @@ func RecoverPubkey(msg []byte, sig []byte) ([]byte, error) {
 		return nil, ErrRecoverFailed
 	}
 	return pubkey, nil
+}
+
+// VerifySignature checks that the given pubkey created signature over message.
+// The signature should be in [R || S] format.
+func VerifySignature(pubkey, msg, signature []byte) bool {
+	if len(msg) != 32 || len(signature) != 64 || len(pubkey) == 0 {
+		return false
+	}
+	sigdata := (*C.uchar)(unsafe.Pointer(&signature[0]))
+	msgdata := (*C.uchar)(unsafe.Pointer(&msg[0]))
+	keydata := (*C.uchar)(unsafe.Pointer(&pubkey[0]))
+	return C.secp256k1_ecdsa_verify_enc(context, sigdata, msgdata, keydata, C.size_t(len(pubkey))) != 0
+}
+
+// DecompressPubkey parses a public key in the 33-byte compressed format.
+// It returns non-nil coordinates if the public key is valid.
+func DecompressPubkey(pubkey []byte) (X, Y *big.Int) {
+	if len(pubkey) != 33 {
+		return nil, nil
+	}
+	buf := make([]byte, 65)
+	bufdata := (*C.uchar)(unsafe.Pointer(&buf[0]))
+	pubkeydata := (*C.uchar)(unsafe.Pointer(&pubkey[0]))
+	if C.secp256k1_decompress_pubkey(context, bufdata, pubkeydata) == 0 {
+		return nil, nil
+	}
+	return new(big.Int).SetBytes(buf[1:33]), new(big.Int).SetBytes(buf[33:])
 }
 
 func checkSignature(sig []byte) error {

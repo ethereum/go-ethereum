@@ -51,10 +51,10 @@
 			"revisionTime": "2017-02-10T01:56:32Z"
 		},
 		{
-			"checksumSHA1": "fIpm6Vr5a8kgr22gWkQx7vKUTyU=",
+			"checksumSHA1": "gZQ6HheWahvZzIc3phBnOwoWHjE=",
 			"path": "github.com/btcsuite/btcd/btcec",
-			"revision": "d06c0bb181529331be8f8d9350288c420d9e60e4",
-			"revisionTime": "2017-02-01T21:25:25Z"
+			"revision": "2e60448ffcc6bf78332d1fe590260095f554dd78",
+			"revisionTime": "2017-11-28T15:02:46Z"
 		},
 		{
 			"checksumSHA1": "cDMtzKmdTx4CcIpP4broa+16X9g=",
