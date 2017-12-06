@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -58,6 +59,12 @@ func TestVerifySignature(t *testing.T) {
 	if VerifySignature(testpubkey, testmsg, nil) {
 		t.Errorf("nil signature valid")
 	}
+	if VerifySignature(testpubkey, testmsg, append(common.CopyBytes(sig), 1, 2, 3)) {
+		t.Errorf("signature valid with extra bytes at the end")
+	}
+	if VerifySignature(testpubkey, testmsg, sig[:len(sig)-2]) {
+		t.Errorf("signature valid even though it's incomplete")
+	}
 }
 
 func TestDecompressPubkey(t *testing.T) {
@@ -67,6 +74,15 @@ func TestDecompressPubkey(t *testing.T) {
 	}
 	if uncompressed := FromECDSAPub(key); !bytes.Equal(uncompressed, testpubkey) {
 		t.Errorf("wrong public key result: got %x, want %x", uncompressed, testpubkey)
+	}
+	if _, err := DecompressPubkey(nil); err == nil {
+		t.Errorf("no error for nil pubkey")
+	}
+	if _, err := DecompressPubkey(testpubkeyc[:5]); err == nil {
+		t.Errorf("no error for incomplete pubkey")
+	}
+	if _, err := DecompressPubkey(append(common.CopyBytes(testpubkeyc), 1, 2, 3)); err == nil {
+		t.Errorf("no error for pubkey with extra bytes at the end")
 	}
 }
 
