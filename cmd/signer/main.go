@@ -30,13 +30,14 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
+	"io"
 )
 
 func main() {
 
 	app := cli.NewApp()
 	app.Name = "signer"
-	app.Usage = "Manage ethereum account operations"
+	app.Usage = "Manage ethereum Account operations"
 	app.Flags = []cli.Flag{
 		cli.Int64Flag{
 			Name:  "chainid",
@@ -77,12 +78,33 @@ func main() {
 			Usage: "File containing requests to handle",
 			Value: "",
 		},
+		cli.BoolFlag{
+			Name: "stdio-ui",
+			Usage: "Use STDIN/STDOUT as a channel for an external UI. " +
+				"This means that an STDIN/STDOUT is used for RPC-communication with a e.g. a graphical user " +
+				"interface, and can be used when the signer is started by an external process.",
+		},
 	}
 
 	app.Action = func(c *cli.Context) error {
-		// Set up the logger to print everything and the random generator
-		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int("loglevel")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 
+		var (
+			ui        SignerUI
+			logOutput io.Writer
+		)
+
+		if c.Bool("stdio-ui") {
+			logOutput = os.Stderr
+			ui = NewStdIOUI()
+		} else {
+			ui = NewCommandlineUI()
+			logOutput = os.Stdout
+		}
+		// Set up the logger to print everything
+		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int("loglevel")), log.StreamHandler(logOutput, log.TerminalFormat(true))))
+		if c.Bool("stdio-ui") {
+			log.Info("Using stdin/stdout as UI-channel")
+		}
 		db, err := NewAbiDBFromFile(c.String("4bytedb"))
 
 		if err != nil {
@@ -97,17 +119,18 @@ func main() {
 				c.Int64(utils.NetworkIdFlag.Name),
 				c.String("keystore"),
 				c.Bool(utils.NoUSBFlag.Name),
-				NewCommandlineUI(), db,
+				ui, db,
 				c.Bool(utils.LightKDFFlag.Name))
 			listener net.Listener
 		)
+		// Audit logging
 		if logfile := c.String("auditlog"); logfile != "" {
 			f, err := os.OpenFile(logfile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 			if err != nil {
 				utils.Fatalf("Could not open %v for audit logging", logfile)
 			}
 			server.SetAuditLogger(NewAuditLogger(f))
-			log.Info("Writing audit logs to %v", logfile)
+			log.Info("Audit logs configured", "file", logfile)
 		}
 		// register signer API with server
 		if err = server.RegisterName("account", api); err != nil {
@@ -125,24 +148,23 @@ func main() {
 		if listener, err = net.Listen("tcp", endpoint); err != nil {
 			utils.Fatalf("Could not start http listener: %v", err)
 		}
-		log.Info(fmt.Sprintf("HTTP endpoint opened: http://%s", endpoint))
+		log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%s", endpoint))
 		cors := []string{"*"}
 
 		rpc.NewHTTPServer(cors, server).Serve(listener)
-
 		return nil
 	}
 	app.Run(os.Args)
 
 }
 
-// Create account
+// Create Account
 // curl -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_new","params":["test"],"id":67}' localhost:8550
 
 // List accounts
 // curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_list","params":[""],"id":67}' http://localhost:8550/
 
-// Make transaction
+// Make Transaction
 // safeSend(0x12)
 // 4401a6e40000000000000000000000000000000000000000000000000000000000000012
 

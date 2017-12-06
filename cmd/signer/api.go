@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"math/big"
 
+	"bytes"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
@@ -51,57 +52,63 @@ type Metadata struct {
 
 // types for the requests/response types
 type (
-	// SignTxRequest contains info about a transaction to sign
+	// SignTxRequest contains info about a Transaction to sign
 	SignTxRequest struct {
-		transaction types.Transaction
-		from        accounts.Account
-		callinfo    fmt.Stringer
+		Transaction TransactionArg
+		From        common.Address
+		Callinfo    fmt.Stringer
+		Meta        Metadata
 	}
 	// SignTxResponse result from SignTxRequest
 	SignTxResponse struct {
 		//The UI may make changes to the TX
-		transaction types.Transaction
-		approved    bool
-		pw          string
+		Transaction TransactionArg
+		From        common.Address
+		Approved    bool
+		Password    string
 	}
 	// ExportRequest info about query to export accounts
 	ExportRequest struct {
-		account accounts.Account
-		file    string
+		Address common.Address
+		Meta    Metadata
 	}
 	// ExportResponse response to export-request
 	ExportResponse struct {
-		approved bool
+		Approved bool
 	}
-	// ImportRequest info about request to import an account
+	// ImportRequest info about request to import an Account
 	ImportRequest struct {
-		account accounts.Account
+		Meta Metadata
 	}
 	ImportResponse struct {
-		approved    bool
-		oldPassword string
-		newPassword string
+		Approved    bool
+		OldPassword string
+		NewPassword string
 	}
 	SignDataRequest struct {
-		account accounts.Account
-		rawdata hexutil.Bytes
-		message string
-		hash    hexutil.Bytes
+		Address common.Address
+		Rawdata hexutil.Bytes
+		Message string
+		Hash    hexutil.Bytes
+		Meta    Metadata
 	}
 	SignDataResponse struct {
-		approved bool
-		pw       string
+		Approved bool
+		Password string
 	}
-	NewAccountRequest  struct{}
+	NewAccountRequest struct {
+		Meta Metadata
+	}
 	NewAccountResponse struct {
-		approved bool
-		pw       string
+		Approved bool
+		Password string
 	}
 	ListRequest struct {
-		accounts []Account
+		Accounts []Account
+		Meta     Metadata
 	}
 	ListResponse struct {
-		accounts []Account
+		Accounts []Account
 	}
 )
 
@@ -120,28 +127,28 @@ func (ew errorWrapper) String() string {
 // for the signer
 type SignerUI interface {
 
-	// ApproveTx prompt the user for confirmation to request to sign transaction
-	ApproveTx(request *SignTxRequest, metadata Metadata, ch chan SignTxResponse)
+	// ApproveTx prompt the user for confirmation to request to sign Transaction
+	ApproveTx(request *SignTxRequest) (SignTxResponse, error)
 	// ApproveSignData prompt the user for confirmation to request to sign data
-	ApproveSignData(request *SignDataRequest, metadata Metadata, ch chan SignDataResponse)
-	// ApproveExport prompt the user for confirmation to export encrypted account json
-	ApproveExport(request *ExportRequest, metadata Metadata, ch chan ExportResponse)
-	// ApproveImport prompt the user for confirmation to import account json
-	ApproveImport(request *ImportRequest, metadata Metadata, ch chan ImportResponse)
+	ApproveSignData(request *SignDataRequest) (SignDataResponse, error)
+	// ApproveExport prompt the user for confirmation to export encrypted Account json
+	ApproveExport(request *ExportRequest) (ExportResponse, error)
+	// ApproveImport prompt the user for confirmation to import Account json
+	ApproveImport(request *ImportRequest) (ImportResponse, error)
 	// ApproveListing prompt the user for confirmation to list accounts
 	// the list of accounts to list can be modified by the ui
-	ApproveListing(request *ListRequest, metadata Metadata, ch chan ListResponse)
-	// ApproveNewAccount prompt the user for confirmation to create new account, and reveal to caller
-	ApproveNewAccount(requst *NewAccountRequest, metadata Metadata, ch chan NewAccountResponse)
+	ApproveListing(request *ListRequest) (ListResponse, error)
+	// ApproveNewAccount prompt the user for confirmation to create new Account, and reveal to caller
+	ApproveNewAccount(request *NewAccountRequest) (NewAccountResponse, error)
 	// ShowError displays error message to user
 	ShowError(message string)
 	// ShowInfo displays info message to user
 	ShowInfo(message string)
 }
 
-// NewSignerAPI creates a new API that can be used for account management.
+// NewSignerAPI creates a new API that can be used for Account management.
 // ksLocation specifies the directory where to store the password protected private
-// key that is generated when a new account is created.
+// key that is generated when a new Account is created.
 // noUSB disables USB support that is required to support hardware devices such as
 // ledger and trezor.
 func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abidb *abiDb, lightKDF bool) *SignerAPI {
@@ -194,23 +201,26 @@ func metaData(ctx context.Context) Metadata {
 // multiple accounts.
 func (api *SignerAPI) List(ctx context.Context) (Accounts, error) {
 
-	ch := make(chan ListResponse, 1)
 	var accs []Account
 	for _, wallet := range api.am.Wallets() {
 		for _, acc := range wallet.Accounts() {
-			acc := Account{Typ: "account", URL: wallet.URL(), Address: acc.Address}
+			acc := Account{Typ: "Account", URL: wallet.URL(), Address: acc.Address}
 			accs = append(accs, acc)
 		}
 	}
 
-	api.ui.ApproveListing(&ListRequest{accounts: accs}, metaData(ctx), ch)
-	if result := <-ch; result.accounts != nil {
-		return result.accounts, nil
+	result, err := api.ui.ApproveListing(&ListRequest{Accounts: accs, Meta: metaData(ctx)})
+	if err != nil {
+		return nil, err
 	}
-	return nil, ErrRequestDenied
+	if result.Accounts == nil {
+		return nil, ErrRequestDenied
+
+	}
+	return result.Accounts, nil
 }
 
-// New creates a new password protected account. The private key is protected with
+// New creates a new password protected Account. The private key is protected with
 // the given password. Users are responsible to backup the private key that is stored
 // in the keystore location thas was specified when this API was created.
 func (api *SignerAPI) New(ctx context.Context) (accounts.Account, error) {
@@ -218,72 +228,128 @@ func (api *SignerAPI) New(ctx context.Context) (accounts.Account, error) {
 	if len(be) == 0 {
 		return accounts.Account{}, errors.New("password based accounts not supported")
 	}
-	ch := make(chan NewAccountResponse, 1)
-	api.ui.ApproveNewAccount(&NewAccountRequest{}, metaData(ctx), ch)
+	resp, err := api.ui.ApproveNewAccount(&NewAccountRequest{metaData(ctx)})
 
-	if resp := <-ch; resp.approved {
-		return be[0].(*keystore.KeyStore).NewAccount(resp.pw)
-
+	if err != nil {
+		return accounts.Account{}, err
 	}
-	return accounts.Account{}, ErrRequestDenied
+	if !resp.Approved {
+		return accounts.Account{}, ErrRequestDenied
+	}
+	return be[0].(*keystore.KeyStore).NewAccount(resp.Password)
 }
 
-// SignTransaction signs the given transaction and returns it in an RLP encoded form
+func toTransaction(args *TransactionArg) *types.Transaction {
+	if args.To == nil {
+		return types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
+	} else {
+		return types.NewTransaction(uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
+	}
+}
+
+// logDiff logs the difference between the incoming (original) transaction and the one returned from the signer.
+// it also returns 'true' if the transaction was modified, to make it possible to configure the signer not to allow
+// UI-modifications to requests
+func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
+	modified := false
+	if f0, f1 := original.From, new.From; f0 != f1 {
+		modified = true
+		log.Info("Sender-account changed by UI", "was", f0, "is", f1)
+	}
+	if t0, t1 := original.Transaction.To, new.Transaction.To; t0 != t1 {
+		if t0 == nil || t1 == nil || !bytes.Equal(t0.Bytes(), t1.Bytes()) {
+			log.Info("Recipient-account changed by UI", "was", t0, "is", t1)
+			modified = true
+		}
+	}
+	if g0, g1 := (*big.Int)(original.Transaction.Gas), (*big.Int)(new.Transaction.Gas); g0 != g1 {
+		if g0 == nil || g1 == nil || g0.Cmp(g1) != 0 {
+			modified = true
+			log.Info("Gas changed by UI", "was", g0, "is", g1)
+		}
+	}
+	if g0, g1 := (*big.Int)(original.Transaction.GasPrice), (*big.Int)(new.Transaction.GasPrice); g0 != g1 {
+		if g0 == nil || g1 == nil || g0.Cmp(g1) != 0 {
+			modified = true
+			log.Info("GasPrice changed by UI", "was", g0, "is", g1)
+		}
+	}
+	if v0, v1 := (*big.Int)(original.Transaction.Value), (*big.Int)(new.Transaction.Value); v0 != v1 {
+		if v0 == nil || v1 == nil || v0.Cmp(v1) != 0 {
+			modified = true
+			log.Info("Value changed by UI", "was", v0, "is", v1)
+		}
+	}
+	if d0, d1 := original.Transaction.Data, new.Transaction.Data; !bytes.Equal(d0, d1) {
+		modified = true
+		log.Info("Data changed by UI", "was", common.ToHex(d0), "is", common.ToHex(d1))
+	}
+	if n0, n1 := original.Transaction.Nonce, new.Transaction.Nonce; n0 != n1 {
+
+		if n0 == nil || n1 == nil || (*n0) != (*n1) {
+			modified = true
+			log.Info("Nonce changed by UI", "was", n0, "is", n1)
+		}
+	}
+	return modified
+}
+
+// SignTransaction signs the given Transaction and returns it in an RLP encoded form
 // that can be posted to `eth_sendRawTransaction`.
 func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, args TransactionArg, methodSig *string) (hexutil.Bytes, error) {
-	acc := accounts.Account{Address: from}
 
-	wallet, err := api.am.Find(acc)
-	if err != nil {
-		return nil, err
-	}
+	var (
+		err    error
+		result SignTxResponse
+	)
 
-	var tx *types.Transaction
-	if args.To == nil {
-		tx = types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
-	} else {
-		tx = types.NewTransaction(uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
-	}
+	req := SignTxRequest{Transaction: args, From: from, Meta: metaData(ctx)}
 
-	req := SignTxRequest{transaction: *tx, from: acc}
-	if len(tx.Data()) > 3 {
+	data := args.Data
+	if len(data) > 3 {
 		// Try to make sense of the data
 		var abidata string
 		if methodSig == nil {
-			abidata, err = api.abidb.LookupABI(tx.Data()[:4])
+			abidata, err = api.abidb.LookupABI(data[:4])
 			if err != nil {
-				req.callinfo = errorWrapper{"Warning! Could not locate ABI", err}
+				req.Callinfo = errorWrapper{"Warning! Could not locate ABI", err}
 			}
 		} else {
 			abidata = *methodSig
 		}
 		if abidata != "" {
-			req.callinfo, err = parseCallData(tx.Data(), abidata)
+			req.Callinfo, err = parseCallData(data, abidata)
 			if err != nil {
-				req.callinfo = errorWrapper{"Warning! Could not validate ABI-data against calldata", err}
+				req.Callinfo = errorWrapper{"Warning! Could not validate ABI-data against calldata", err}
 			}
 		}
 	}
 
-	ch := make(chan SignTxResponse, 1)
-	api.ui.ApproveTx(&req, metaData(ctx), ch)
+	result, err = api.ui.ApproveTx(&req)
+	if err != nil {
+		return nil, err
+	}
+	if !result.Approved {
+		return nil, ErrRequestDenied
+	}
+	// Log changes made by the UI to the signing-request
+	logDiff(&req, &result)
 
-	if result := <-ch; result.approved {
-		//Sanity check
-		if result.transaction.Hash() != tx.Hash() {
-			api.ui.ShowInfo("Transaction modified by UI")
-		}
-		// The one to sign is the one that was returned from the UI
-		signedTx, err := wallet.SignTxWithPassphrase(acc, result.pw, &result.transaction, api.chainID)
-		if err != nil {
-			api.ui.ShowError(err.Error())
-			return nil, err
-		}
-		return rlp.EncodeToBytes(signedTx)
+	acc := accounts.Account{Address: result.From}
+	wallet, err := api.am.Find(acc)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, ErrRequestDenied
+	var tx = toTransaction(&result.Transaction)
 
+	// The one to sign is the one that was returned from the UI
+	signedTx, err := wallet.SignTxWithPassphrase(acc, result.Password, tx, api.chainID)
+	if err != nil {
+		api.ui.ShowError(err.Error())
+		return nil, err
+	}
+	return rlp.EncodeToBytes(signedTx)
 }
 
 // Sign calculates an Ethereum ECDSA signature for:
@@ -296,35 +362,39 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 //
 // https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
 func (api *SignerAPI) Sign(ctx context.Context, addr common.Address, data hexutil.Bytes) (hexutil.Bytes, error) {
+
+	sighash, msg := signHash(data)
+
+	// We make the request prior to looking up if we actually have the account, to prevent
+	// account-enumeration via the API
+	req := &SignDataRequest{Address: addr, Rawdata: data, Message: msg, Hash: sighash, Meta: metaData(ctx)}
+	res, err := api.ui.ApproveSignData(req)
+
+	if err != nil {
+		return nil, err
+	}
+	if !res.Approved {
+		return nil, ErrRequestDenied
+	}
+
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: addr}
-
 	wallet, err := api.am.Find(account)
 	if err != nil {
 		return nil, err
 	}
-	ch := make(chan SignDataResponse, 1)
-
-	sighash, msg := signHash(data)
-
-	api.ui.ApproveSignData(&SignDataRequest{account: account, rawdata: data, message: msg, hash: sighash}, metaData(ctx), ch)
-
-	if res := <-ch; res.approved {
-
-		// Assemble sign the data with the wallet
-		signature, err := wallet.SignHashWithPassphrase(account, res.pw, sighash)
-		if err != nil {
-			api.ui.ShowError(err.Error())
-			return nil, err
-		}
-		signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
-		return signature, nil
-
+	// Assemble sign the data with the wallet
+	signature, err := wallet.SignHashWithPassphrase(account, res.Password, sighash)
+	if err != nil {
+		api.ui.ShowError(err.Error())
+		return nil, err
 	}
-	return nil, ErrRequestDenied
+	signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
+	return signature, nil
+
 }
 
-// EcRecover returns the address for the account that was used to create the signature.
+// EcRecover returns the address for the Account that was used to create the signature.
 // Note, this function is compatible with eth_sign and personal_sign. As such it recovers
 // the address of:
 // hash = keccak256("\x19Ethereum Signed Message:\n"${message length}${message})
@@ -367,26 +437,27 @@ func signHash(data []byte) ([]byte, string) {
 
 // Export returns encrypted private key associated with the given address in web3 keystore format.
 func (api *SignerAPI) Export(ctx context.Context, addr common.Address) (json.RawMessage, error) {
-	// Look up the wallet containing the requested signer
-	account := accounts.Account{Address: addr}
 
-	wallet, err := api.am.Find(account)
+	res, err := api.ui.ApproveExport(&ExportRequest{Address: addr, Meta: metaData(ctx)})
+
+	if err != nil {
+		return nil, err
+	}
+	if !res.Approved {
+		return nil, ErrRequestDenied
+	}
+
+	// Look up the wallet containing the requested signer
+	wallet, err := api.am.Find(accounts.Account{Address: addr})
 	if err != nil {
 		return nil, err
 	}
 
-	url := wallet.URL()
-	if url.Scheme != keystore.KeyStoreScheme {
-		return nil, fmt.Errorf("account is not a password protected account")
+	if wallet.URL().Scheme != keystore.KeyStoreScheme {
+		return nil, fmt.Errorf("Account is not a keystore-account")
 	}
-	ch := make(chan ExportResponse, 1)
 
-	api.ui.ApproveExport(&ExportRequest{account: account, file: url.Path}, metaData(ctx), ch)
-
-	if (<-ch).approved {
-		return ioutil.ReadFile(url.Path)
-	}
-	return nil, ErrRequestDenied
+	return ioutil.ReadFile(wallet.URL().Path)
 }
 
 // Imports tries to import the given keyJSON in the local keystore. The keyJSON data is expected to be
@@ -400,20 +471,21 @@ func (api *SignerAPI) Import(ctx context.Context, string, keyJSON json.RawMessag
 		return Account{}, errors.New("password based accounts not supported")
 	}
 
-	ch := make(chan ImportResponse, 1)
+	res, err := api.ui.ApproveImport(&ImportRequest{Meta: metaData(ctx)})
 
-	api.ui.ApproveImport(&ImportRequest{}, metaData(ctx), ch)
-
-	if resp := <-ch; resp.approved {
-
-		acc, err := be[0].(*keystore.KeyStore).Import(keyJSON, resp.oldPassword, resp.newPassword)
-		if err != nil {
-			api.ui.ShowError(err.Error())
-			return Account{}, err
-		}
-
-		return Account{Typ: "account", URL: acc.URL, Address: acc.Address}, nil
+	if err != nil {
+		return Account{}, err
 	}
-	return Account{}, ErrRequestDenied
+	if !res.Approved {
+		return Account{}, ErrRequestDenied
+	}
+
+	acc, err := be[0].(*keystore.KeyStore).Import(keyJSON, res.OldPassword, res.NewPassword)
+	if err != nil {
+		api.ui.ShowError(err.Error())
+		return Account{}, err
+	}
+
+	return Account{Typ: "Account", URL: acc.URL, Address: acc.Address}, nil
 
 }

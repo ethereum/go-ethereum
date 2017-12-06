@@ -25,6 +25,7 @@ The signer accepts the following command line options:
    --rpcaddr value    HTTP-RPC server listening interface (default: "localhost")
    --rpcport value    HTTP-RPC server listening port (default: 8550)
    --4bytedb value    File containing 4byte-identifiers (default: "./4byte.json")
+   --stdio-ui         Use STDIN/STDOUT as a channel for an external UI. This means that an STDIN/STDOUT is used for RPC-communication with a e.g. a graphical user interface, and can be used when the signer is started by an external process.
    --help, -h         show help
 ```
 
@@ -34,15 +35,39 @@ Example:
 signer -keystore /my/keystore -chainid 4
 ```
 
-## Communicating
+## Communication
 
-The signer listens to HTTP requests on `rpcaddr`:`rpcport`. The messages are expected to be JSON
-[jsonrpc 2.0 standard](http://www.jsonrpc.org/specification).
+### External API
 
-Some of these call can require user interaction. Clients must be aware that responses may be deplayed significanlty or
-may never be received if a users decideds to ignore the confirmation request.
+The signer listens to HTTP requests on `rpcaddr`:`rpcport`. The messages are
+expected to be JSON [jsonrpc 2.0 standard](http://www.jsonrpc.org/specification).
 
-## API
+Some of these call can require user interaction. Clients must be aware that responses
+may be deplayed significanlty or may never be received if a users decideds to ignore the confirmation request.
+
+The External API is **untrusted** : it does not accept credentials over this api, nor does it expect
+that requests have any authority.
+
+### UI API
+
+The signer has one native console-based UI, for operation without any standalone tools.
+However, there is also an API to communicate with an external UI. To enable that UI,
+the signer needs to be executed with the `--stdio-ui` option, which allocates the
+`stdin`/`stdout` for the UI-api.
+
+An example (insecure) proof-of-concept of has been implemented in `pythonsigner.py`.
+
+The model is as follows:
+
+* The user starts the UI app (`pythonsigner.py`).
+* The UI app starts the `signer` with `--stdio-ui`, and listens to the
+process output for confirmation-requests.
+* The `signer` opens the external http api.
+* When the `signer` receives requests, it sends a `jsonrpc` request via `stdout`.
+* The UI app prompts the user accordingly, and responds to the `signer`
+* The `signer` signs (or not), and responds to the original request.
+
+## External API
 
 ### Encoding
 - number: positive integers that are hex encoded
@@ -348,3 +373,8 @@ None
 
 
 
+## UI API
+
+These methods needs to be implemented by a UI listener.
+
+still work in progress

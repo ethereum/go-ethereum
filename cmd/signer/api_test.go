@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -22,70 +21,57 @@ type HeadlessUI struct {
 	controller chan string
 }
 
-func (ui *HeadlessUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch chan SignTxResponse) {
+func (ui *HeadlessUI) ApproveTx(request *SignTxRequest) (SignTxResponse, error) {
 
 	switch <-ui.controller {
 	case "Y":
-		ch <- SignTxResponse{request.transaction, true, <-ui.controller}
+		return SignTxResponse{request.Transaction, request.From, true, <-ui.controller}, nil
 	case "M": //Modify
-		old := request.transaction
-		newVal := big.NewInt(0).Add(old.Value(), big.NewInt(1))
-		tx := types.NewTransaction(old.Nonce(), *old.To(), newVal, old.Gas(), old.GasPrice(), old.Data())
-		ch <- SignTxResponse{*tx, true, <-ui.controller}
+		old := (*big.Int)(request.Transaction.Value)
+		newVal := big.NewInt(0).Add(old, big.NewInt(1))
+		request.Transaction.Value = (*hexutil.Big)(newVal)
+		return SignTxResponse{request.Transaction, request.From, true, <-ui.controller}, nil
 	default:
-		ch <- SignTxResponse{request.transaction, false, ""}
+		return SignTxResponse{request.Transaction, request.From, false, ""}, nil
 	}
 }
-func (ui *HeadlessUI) ApproveSignData(request *SignDataRequest, metadata Metadata, ch chan SignDataResponse) {
-	switch <-ui.controller {
-	case "Y":
-		ch <- SignDataResponse{true, <-ui.controller}
-	default:
-		ch <- SignDataResponse{false, ""}
+func (ui *HeadlessUI) ApproveSignData(request *SignDataRequest) (SignDataResponse, error) {
+	if "Y" == <-ui.controller {
+		return SignDataResponse{true, <-ui.controller}, nil
 	}
+	return SignDataResponse{false, ""}, nil
 }
-func (ui *HeadlessUI) ApproveExport(request *ExportRequest, metadata Metadata, ch chan ExportResponse) {
+func (ui *HeadlessUI) ApproveExport(request *ExportRequest) (ExportResponse, error) {
 
-	switch <-ui.controller {
-	case "Y":
-		ch <- ExportResponse{true}
-	default:
-		ch <- ExportResponse{false}
-	}
+	return ExportResponse{<-ui.controller == "Y"}, nil
 
 }
-func (ui *HeadlessUI) ApproveImport(request *ImportRequest, metadata Metadata, ch chan ImportResponse) {
+func (ui *HeadlessUI) ApproveImport(request *ImportRequest) (ImportResponse, error) {
 
-	switch <-ui.controller {
-	case "Y":
-		ch <- ImportResponse{true, <-ui.controller, <-ui.controller}
-	default:
-		ch <- ImportResponse{false, "", ""}
+	if "Y" == <-ui.controller {
+		return ImportResponse{true, <-ui.controller, <-ui.controller}, nil
 	}
-
+	return ImportResponse{false, "", ""}, nil
 }
-func (ui *HeadlessUI) ApproveListing(request *ListRequest, metadata Metadata, ch chan ListResponse) {
+func (ui *HeadlessUI) ApproveListing(request *ListRequest) (ListResponse, error) {
 
 	switch <-ui.controller {
 	case "A":
-		ch <- ListResponse{request.accounts}
+		return ListResponse{request.Accounts}, nil
 	case "1":
 		l := make([]Account, 1)
-		l[0] = request.accounts[1]
-		ch <- ListResponse{l}
+		l[0] = request.Accounts[1]
+		return ListResponse{l}, nil
 	default:
-		ch <- ListResponse{nil}
+		return ListResponse{nil}, nil
 	}
-
 }
-func (ui *HeadlessUI) ApproveNewAccount(requst *NewAccountRequest, metadata Metadata, ch chan NewAccountResponse) {
+func (ui *HeadlessUI) ApproveNewAccount(request *NewAccountRequest) (NewAccountResponse, error) {
 
-	switch <-ui.controller {
-	case "Y":
-		ch <- NewAccountResponse{true, <-ui.controller}
-	default:
-		ch <- NewAccountResponse{false, ""}
+	if "Y" == <-ui.controller {
+		return NewAccountResponse{true, <-ui.controller}, nil
 	}
+	return NewAccountResponse{false, ""}, nil
 }
 func (ui *HeadlessUI) ShowError(message string) {
 	//stdout is used by communication
@@ -179,14 +165,14 @@ func TestNewAcc(t *testing.T) {
 	verifyNum(4)
 
 	// Testing listing:
-	// Listing one account
+	// Listing one Account
 	control <- "1"
 	list, err := api.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(list) != 1 {
-		t.Fatalf("List should only show one account")
+		t.Fatalf("List should only show one Account")
 	}
 	// Listing denied
 	control <- "Nope"
@@ -333,3 +319,31 @@ func TestSignTx(t *testing.T) {
 	}
 
 }
+
+/*
+func TestAsyncronousResponses(t *testing.T){
+
+	//Set up one account
+	api, control := setup(t)
+	createAccount(control, api, t)
+
+	// Two transactions, the second one with larger value than the first
+	tx1 := mkTestTx()
+	newVal := big.NewInt(0).Add((*big.Int) (tx1.Value), big.NewInt(1))
+	tx2 := mkTestTx()
+	tx2.Value = (*hexutil.Big)(newVal)
+
+	control <- "W" //wait
+	control <- "Y" //
+	control <- "apassword"
+	control <- "Y" //
+	control <- "apassword"
+
+	var err error
+
+	h1, err := api.SignTransaction(context.Background(), common.HexToAddress("1111"), tx1, nil)
+	h2, err := api.SignTransaction(context.Background(), common.HexToAddress("2222"), tx2, nil)
+
+
+	}
+*/

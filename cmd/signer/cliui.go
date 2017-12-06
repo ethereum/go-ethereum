@@ -56,13 +56,11 @@ func (ui *CommandlineUI) readString() string {
 func (ui *CommandlineUI) readPassword() string {
 	fmt.Printf("Enter password to approve:\n")
 	fmt.Printf("> ")
-	//TODO; remove this, only for debuggging within IDE
-	text := "foobar"
-	//TODO: Use this
-	//	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
-	//if err != nil {
-	//	log.Crit("Failed to read password", "err", err)
-	//}
+
+	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+	if err != nil {
+		log.Crit("Failed to read password", "err", err)
+	}
 	fmt.Println()
 	fmt.Println("-----------------------")
 	return string(text)
@@ -95,112 +93,110 @@ func showMetadata(metadata Metadata) {
 	fmt.Printf("Request info:\n\t%v -> %v -> %v\n", metadata.remote, metadata.scheme, metadata.local)
 }
 
-// ApproveTx prompt the user for confirmation to request to sign transaction
-func (ui *CommandlineUI) ApproveTx(request *SignTxRequest, metadata Metadata, ch chan SignTxResponse) {
+// ApproveTx prompt the user for confirmation to request to sign Transaction
+func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, error) {
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
-	weival := request.transaction.Value()
+	weival := request.Transaction.Value
 
 	fmt.Printf("--------- Transaction request-------------\n")
-	fmt.Printf("to:    %v\n", request.transaction.To().Hex())
-	fmt.Printf("from:  %v\n", request.from.Address.Hex())
+	fmt.Printf("to:    %v\n", request.Transaction.To.Hex())
+	fmt.Printf("from:  %v\n", request.From.Hex())
 	fmt.Printf("value: %v wei\n", weival)
-	if len(request.transaction.Data()) > 0 {
-		fmt.Printf("data:  %v\n", common.Bytes2Hex(request.transaction.Data()))
+	if len(request.Transaction.Data) > 0 {
+		fmt.Printf("data:  %v\n", common.Bytes2Hex(request.Transaction.Data))
 	}
-	if request.callinfo != nil {
-		fmt.Printf("\nNote: This transaction contains data. Review abi-decoding info below:")
-		fmt.Printf("\nCall info:\n\t%v\n", request.callinfo.String())
+	if request.Callinfo != nil {
+		fmt.Printf("\nNote: This Transaction contains data. Review abi-decoding info below:")
+		fmt.Printf("\nCall info:\n\t%v\n", request.Callinfo.String())
 
 	}
 	fmt.Printf("\n")
-	showMetadata(metadata)
+	showMetadata(request.Meta)
 	fmt.Printf("-------------------------------------------\n")
 
-	ch <- SignTxResponse{request.transaction, true, ui.readPassword()}
+	return SignTxResponse{request.Transaction, request.From, true, ui.readPassword()}, nil
 }
 
 // ApproveSignData prompt the user for confirmation to request to sign data
-func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest, metadata Metadata, ch chan SignDataResponse) {
+func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResponse, error) {
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 
 	fmt.Printf("-------- Sign data request--------------\n")
-	fmt.Printf("account:  %x\n", request.account.Address)
-	fmt.Printf("message:  \n%v\n", request.message)
-	fmt.Printf("raw data: \n%v\n", request.rawdata)
-	fmt.Printf("message hash:  %v\n", request.hash)
+	fmt.Printf("Account:  %x\n", request.Address)
+	fmt.Printf("message:  \n%v\n", request.Message)
+	fmt.Printf("raw data: \n%v\n", request.Rawdata)
+	fmt.Printf("message hash:  %v\n", request.Hash)
 	fmt.Printf("-------------------------------------------\n")
-	showMetadata(metadata)
-	ch <- SignDataResponse{true, ui.readPassword()}
+	showMetadata(request.Meta)
+	return SignDataResponse{true, ui.readPassword()}, nil
 }
 
-// ApproveExport prompt the user for confirmation to export encrypted account json
-func (ui *CommandlineUI) ApproveExport(request *ExportRequest, metadata Metadata, ch chan ExportResponse) {
+// ApproveExport prompt the user for confirmation to export encrypted Account json
+func (ui *CommandlineUI) ApproveExport(request *ExportRequest) (ExportResponse, error) {
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 
-	fmt.Printf("-------- Export account request--------------\n")
+	fmt.Printf("-------- Export Account request--------------\n")
 	fmt.Printf("A request has been made to export the (encrypted) keyfile\n")
 	fmt.Printf("Approving this operation means that the caller obtains the (encrypted) contents\n")
 	fmt.Printf("\n")
-	fmt.Printf("account:  %x\n", request.account.Address)
-	fmt.Printf("keyfile:  \n%v\n", request.file)
+	fmt.Printf("Account:  %x\n", request.Address)
+	//fmt.Printf("keyfile:  \n%v\n", request.file)
 	fmt.Printf("-------------------------------------------\n")
-	showMetadata(metadata)
-	ch <- ExportResponse{ui.confirm()}
+	showMetadata(request.Meta)
+	return ExportResponse{ui.confirm()}, nil
 }
 
-// ApproveImport prompt the user for confirmation to import account json
-func (ui *CommandlineUI) ApproveImport(request *ImportRequest, metadata Metadata, ch chan ImportResponse) {
+// ApproveImport prompt the user for confirmation to import Account json
+func (ui *CommandlineUI) ApproveImport(request *ImportRequest) (ImportResponse, error) {
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 
-	fmt.Printf("-------- Export account request--------------\n")
+	fmt.Printf("-------- Export Account request--------------\n")
 	fmt.Printf("A request has been made to import an encrypted keyfile\n")
 	fmt.Printf("-------------------------------------------\n")
-	showMetadata(metadata)
-	if ui.confirm() {
-		ch <- ImportResponse{true, ui.readPasswordText("Old password"), ui.readPasswordText("New password")}
-	} else {
-		ch <- ImportResponse{false, "", ""}
+	showMetadata(request.Meta)
+	if !ui.confirm() {
+		return ImportResponse{false, "", ""}, nil
 	}
+	return ImportResponse{true, ui.readPasswordText("Old password"), ui.readPasswordText("New password")}, nil
 }
 
 // ApproveListing prompt the user for confirmation to list accounts
 // the list of accounts to list can be modified by the ui
-func (ui *CommandlineUI) ApproveListing(request *ListRequest, metadata Metadata, ch chan ListResponse) {
+func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, error) {
 
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 
-	fmt.Printf("-------- List account request--------------\n")
+	fmt.Printf("-------- List Account request--------------\n")
 	fmt.Printf("A request has been made to list all accounts. \n")
 	fmt.Printf("You can select which accounts the caller can see\n")
-	for _, account := range request.accounts {
+	for _, account := range request.Accounts {
 		fmt.Printf("\t[x] %v\n", account.Address.Hex())
 	}
 	fmt.Printf("-------------------------------------------\n")
-	showMetadata(metadata)
-	if ui.confirm() {
-		ch <- ListResponse{request.accounts}
-	} else {
-		ch <- ListResponse{nil}
+	showMetadata(request.Meta)
+	if !ui.confirm() {
+		return ListResponse{nil}, nil
 	}
+	return ListResponse{request.Accounts}, nil
 }
 
-// ApproveNewAccount prompt the user for confirmation to create new account, and reveal to caller
-func (ui *CommandlineUI) ApproveNewAccount(requst *NewAccountRequest, metadata Metadata, ch chan NewAccountResponse) {
+// ApproveNewAccount prompt the user for confirmation to create new Account, and reveal to caller
+func (ui *CommandlineUI) ApproveNewAccount(request *NewAccountRequest) (NewAccountResponse, error) {
 
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 
-	fmt.Printf("-------- New account request--------------\n")
+	fmt.Printf("-------- New Account request--------------\n")
 	fmt.Printf("A request has been made to create a new. \n")
-	fmt.Printf("Approving this operation means that a new account is created,\n")
+	fmt.Printf("Approving this operation means that a new Account is created,\n")
 	fmt.Printf("and the address show to the caller\n")
-	showMetadata(metadata)
-	ch <- NewAccountResponse{ui.confirm(), ui.readPassword()}
+	showMetadata(request.Meta)
+	return NewAccountResponse{ui.confirm(), ui.readPassword()}, nil
 }
 
 // ShowError displays error message to user

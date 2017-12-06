@@ -48,7 +48,7 @@ func (a Account) String() string {
 	return err.Error()
 }
 
-// TransactionArg represents a transaction for the signer.
+// TransactionArg represents a Transaction for the signer.
 type TransactionArg struct {
 	To       *common.Address `json:"to"`
 	Gas      *hexutil.Big    `json:"gas"`
