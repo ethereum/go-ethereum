@@ -34,6 +34,8 @@ import (
 )
 
 const (
+	// SizeLimit is the maximum encoded size of a node record in bytes.
+	// Implementations should reject records larger than this size.
 	SizeLimit = 300
 )
 
