@@ -95,13 +95,14 @@ func (method Method) tupleUnpack(v interface{}, output []byte) error {
 	j := 0
 	for i := 0; i < len(method.Outputs); i++ {
 		toUnpack := method.Outputs[i]
-		if toUnpack.Type.T == ArrayTy {
-			// need to move this up because they read sequentially
-			j += toUnpack.Type.Size
-		}
 		marshalledValue, err := toGoType((i+j)*32, toUnpack.Type, output)
 		if err != nil {
 			return err
+		}
+		if toUnpack.Type.T == ArrayTy {
+			// combined index ('i' + 'j') need to be adjusted only by size of array, thus
+			// we need to decrement 'j' because 'i' was incremented
+			j += toUnpack.Type.Size - 1
 		}
 		reflectValue := reflect.ValueOf(marshalledValue)
 

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -261,25 +262,27 @@ var unpackTests = []unpackTest{
 
 func TestUnpack(t *testing.T) {
 	for i, test := range unpackTests {
-		def := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
-		abi, err := JSON(strings.NewReader(def))
-		if err != nil {
-			t.Fatalf("invalid ABI definition %s: %v", def, err)
-		}
-		encb, err := hex.DecodeString(test.enc)
-		if err != nil {
-			t.Fatalf("invalid hex: %s" + test.enc)
-		}
-		outptr := reflect.New(reflect.TypeOf(test.want))
-		err = abi.Unpack(outptr.Interface(), "method", encb)
-		if err := test.checkError(err); err != nil {
-			t.Errorf("test %d (%v) failed: %v", i, test.def, err)
-			continue
-		}
-		out := outptr.Elem().Interface()
-		if !reflect.DeepEqual(test.want, out) {
-			t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, test.want, out)
-		}
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			def := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
+			abi, err := JSON(strings.NewReader(def))
+			if err != nil {
+				t.Fatalf("invalid ABI definition %s: %v", def, err)
+			}
+			encb, err := hex.DecodeString(test.enc)
+			if err != nil {
+				t.Fatalf("invalid hex: %s" + test.enc)
+			}
+			outptr := reflect.New(reflect.TypeOf(test.want))
+			err = abi.Unpack(outptr.Interface(), "method", encb)
+			if err := test.checkError(err); err != nil {
+				t.Errorf("test %d (%v) failed: %v", i, test.def, err)
+				return
+			}
+			out := outptr.Elem().Interface()
+			if !reflect.DeepEqual(test.want, out) {
+				t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, test.want, out)
+			}
+		})
 	}
 }
 
@@ -333,6 +336,29 @@ func TestMultiReturnWithStruct(t *testing.T) {
 
 	if reversed.String != stringOut {
 		t.Error("expected String to be", stringOut, "got", reversed.String)
+	}
+}
+
+func TestMultiReturnWithArray(t *testing.T) {
+	const definition = `[{"name" : "multi", "outputs": [{"type": "uint64[3]"}, {"type": "uint64"}]}]`
+	abi, err := JSON(strings.NewReader(definition))
+	if err != nil {
+		t.Fatal(err)
+	}
+	buff := new(bytes.Buffer)
+	buff.Write(common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000000900000000000000000000000000000000000000000000000000000000000000090000000000000000000000000000000000000000000000000000000000000009"))
+	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000008"))
+
+	ret1, ret1Exp := new([3]uint64), [3]uint64{9, 9, 9}
+	ret2, ret2Exp := new(uint64), uint64(8)
+	if err := abi.Unpack(&[]interface{}{ret1, ret2}, "multi", buff.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(*ret1, ret1Exp) {
+		t.Error("array result", *ret1, "!= Expected", ret1Exp)
+	}
+	if *ret2 != ret2Exp {
+		t.Error("int result", *ret2, "!= Expected", ret2Exp)
 	}
 }
 
