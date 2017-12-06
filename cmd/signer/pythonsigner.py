@@ -34,60 +34,117 @@ class PipeTransport(ServerTransport):
 
     def receive_message(self):
         data = self.input.readline()
-        print("IN  ->\n{}".format( data))
+        #print(">> {}".format( data))
         return None, urlparse.unquote(data)
 
     def send_reply(self, context, reply):
-        print("OUT <-\n{}".format( reply))
+        #print("<< {}".format( reply))
         self.output.write(reply)
         self.output.write("\n")
 
 dispatcher = RPCDispatcher()
 
 @dispatcher.public
-def ApproveTx(Transaction = None, From = None, Callinfo = None, Meta = None):
+def ApproveTx(transaction = None, fromaccount = None, call_info = None, meta = None):
+    """
+    Example request:
+    
+    {"jsonrpc":"2.0","method":"ApproveTx","params":{"transaction":{"to":null,"gas":null,"gasPrice":null,"value":null,"data":"0x","nonce":null},"from":"0x0000000000000000000000000000000000000000","call_info":null,"meta":{"remote":"signer binary","local":"main","scheme":"in-proc"}},"id":2}
+
+    :param transaction: transaction info
+    :param call_info: info abou the call, e.g. if ABI info could not be
+    :param meta: metadata about the request, e.g. where the call comes from
+    :return: 
+    """
     return {
-        "Approved" : True,
-        "Transaction" : Transaction,
-        "From" : From,
-        "Password" : None,
+        "approved" : False,
+        "transaction" : None,
+        "fromaccount" : fromaccount,
+        "password" : None,
     }
 
 @dispatcher.public
-def ApproveSignData():
-    return {"Approved": False,
-            "Password" : None}
+def ApproveSignData(address=None, raw_data = None, message = None, hash = None, meta = None):
+    """ Example request
+
+    {"jsonrpc":"2.0","method":"ApproveSignData","params":{"address":"0x0000000000000000000000000000000000000000","raw_data":"0x01020304","message":"\u0019Ethereum Signed Message:\n4\u0001\u0002\u0003\u0004","hash":"0x7e3a4e7a9d1744bc5c675c25e1234ca8ed9162bd17f78b9085e48047c15ac310","meta":{"remote":"signer binary","local":"main","scheme":"in-proc"}},"id":3}
+
+
+    """
+    return {"approved": False,
+            "password" : None}
 
 @dispatcher.public
-def ApproveExport():
-    return {"Approved" : False}
+def ApproveExport(address = None, meta = None):
+    """ Example request
+
+    {"jsonrpc":"2.0","method":"ApproveExport","params":{"address":"0x0000000000000000000000000000000000000000","meta":{"remote":"signer binary","local":"main","scheme":"in-proc"}},"id":5}
+
+    """
+    return {"approved" : False}
 
 @dispatcher.public
-def ApproveImport():
-    return {"Approved" : False, "OldPassword": "", "NewPassword": ""}
+def ApproveImport(meta = None):
+    """ Example request
+
+    {"jsonrpc":"2.0","method":"ApproveImport","params":{"Meta":{}},"id":4}
+
+    """
+    return {"approved" : False, "old_password": "", "new_password": ""}
 
 @dispatcher.public
-def ApproveListing():
-    return []
+def ApproveListing(accounts=None, meta = None):
+    """ Example request
+
+    {"jsonrpc":"2.0","method":"ApproveListing","params":{"accounts":[{"type":"Account","url":"keystore:///home/user/ethereum/keystore/file","address":"0x010101010101010010101010101abcdef0001337"}],"Meta":{}},"id":2}
+    """
+    return {'accounts': []}
 
 @dispatcher.public
-def ApproveNewAccount():
-    return {"Approved": False, "Password": ""}
+def ApproveNewAccount(meta = None):
+    """
+    Example request
+
+    {"jsonrpc":"2.0","method":"ApproveNewAccount","params":{"meta":{"remote":"signer binary","local":"main","scheme":"in-proc"}},"id":5}
+
+    :return:
+    """
+    return {"approved": False, "password": ""}
 
 @dispatcher.public
-def ShowError(text = ""):
-    sys.err.println("Error: %s", text)
+def ShowError(message = ""):
+    """
+    Example request:
+
+    {"jsonrpc":"2.0","method":"ShowInfo","params":{"message":"Testing 'ShowError'"},"id":1}
+
+    :param text: to show
+    :return: nothing
+    """
+    sys.stderr.write("Error: {}\n".format( message))
     return
 
 @dispatcher.public
-def ShowInfo(text = ""):
-    sys.err.println("Info: %s", text)
+def ShowInfo(message = ""):
+    """
+    Example request
+    {"jsonrpc":"2.0","method":"ShowInfo","params":{"message":"Testing 'ShowInfo'"},"id":0}
+
+    :param text: to display
+    :return:nothing
+    """
+    sys.stdout.write("Info: {}\n".format( message))
     return
 
 
-def main():
+def main(args):
+
+    cmd = ["./signer", "--stdio-ui"]
+    if len(args) > 0 and args[0] == "test":
+        cmd.extend(["--stdio-ui-test"])
+    print("cmd: {}".format(" ".join(cmd)))
     # line buffered
-    p = subprocess.Popen(["./signer", "--stdio-ui"], bufsize=1, universal_newlines=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p = subprocess.Popen(cmd, bufsize=1, universal_newlines=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     transport = PipeTransport(p.stdout, p.stdin)
     rpc_server = RPCServer(
         transport,
@@ -97,4 +154,4 @@ def main():
     rpc_server.serve_forever()
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])

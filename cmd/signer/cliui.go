@@ -90,7 +90,7 @@ func (ui *CommandlineUI) confirm() bool {
 }
 
 func showMetadata(metadata Metadata) {
-	fmt.Printf("Request info:\n\t%v -> %v -> %v\n", metadata.remote, metadata.scheme, metadata.local)
+	fmt.Printf("Request info:\n\t%v -> %v -> %v\n", metadata.Remote, metadata.Scheme, metadata.Local)
 }
 
 // ApproveTx prompt the user for confirmation to request to sign Transaction
@@ -100,7 +100,7 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	weival := request.Transaction.Value
 
 	fmt.Printf("--------- Transaction request-------------\n")
-	fmt.Printf("to:    %v\n", request.Transaction.To.Hex())
+	fmt.Printf("to:    %v\n", request.Transaction.To)
 	fmt.Printf("from:  %v\n", request.From.Hex())
 	fmt.Printf("value: %v wei\n", weival)
 	if len(request.Transaction.Data) > 0 {
@@ -125,7 +125,7 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 
 	fmt.Printf("-------- Sign data request--------------\n")
 	fmt.Printf("Account:  %x\n", request.Address)
-	fmt.Printf("message:  \n%v\n", request.Message)
+	fmt.Printf("message:  \n%q\n", request.Message)
 	fmt.Printf("raw data: \n%v\n", request.Rawdata)
 	fmt.Printf("message hash:  %v\n", request.Hash)
 	fmt.Printf("-------------------------------------------\n")
@@ -154,7 +154,7 @@ func (ui *CommandlineUI) ApproveImport(request *ImportRequest) (ImportResponse, 
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 
-	fmt.Printf("-------- Export Account request--------------\n")
+	fmt.Printf("-------- Import Account request--------------\n")
 	fmt.Printf("A request has been made to import an encrypted keyfile\n")
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)

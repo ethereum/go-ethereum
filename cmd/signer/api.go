@@ -45,70 +45,73 @@ type SignerAPI struct {
 
 // Metadata about the request
 type Metadata struct {
-	remote string
-	local  string
-	scheme string
+	Remote string `json:"remote"`
+	Local  string `json:"local"`
+	Scheme string `json:"scheme"`
 }
 
 // types for the requests/response types
 type (
 	// SignTxRequest contains info about a Transaction to sign
 	SignTxRequest struct {
-		Transaction TransactionArg
-		From        common.Address
-		Callinfo    fmt.Stringer
-		Meta        Metadata
+		Transaction TransactionArg `json:"transaction"`
+		From        common.Address `json:"fromaccount"`
+		Callinfo    fmt.Stringer   `json:"call_info"`
+		Meta        Metadata       `json:"meta"`
 	}
 	// SignTxResponse result from SignTxRequest
 	SignTxResponse struct {
 		//The UI may make changes to the TX
 		Transaction TransactionArg
 		From        common.Address
-		Approved    bool
-		Password    string
+		Approved    bool   `json:"approved"`
+		Password    string `json:"password"`
 	}
 	// ExportRequest info about query to export accounts
 	ExportRequest struct {
-		Address common.Address
-		Meta    Metadata
+		Address common.Address `json:"address"`
+		Meta    Metadata       `json:"meta"`
 	}
 	// ExportResponse response to export-request
 	ExportResponse struct {
-		Approved bool
+		Approved bool `json:"approved"`
 	}
 	// ImportRequest info about request to import an Account
 	ImportRequest struct {
-		Meta Metadata
+		Meta Metadata `json:"meta"`
 	}
 	ImportResponse struct {
-		Approved    bool
-		OldPassword string
-		NewPassword string
+		Approved    bool   `json:"approved"`
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
 	}
 	SignDataRequest struct {
-		Address common.Address
-		Rawdata hexutil.Bytes
-		Message string
-		Hash    hexutil.Bytes
-		Meta    Metadata
+		Address common.Address `json:"address"`
+		Rawdata hexutil.Bytes  `json:"raw_data"`
+		Message string         `json:"message"`
+		Hash    hexutil.Bytes  `json:"hash"`
+		Meta    Metadata       `json:"meta"`
 	}
 	SignDataResponse struct {
-		Approved bool
+		Approved bool `json:"approved"`
 		Password string
 	}
 	NewAccountRequest struct {
-		Meta Metadata
+		Meta Metadata `json:"meta"`
 	}
 	NewAccountResponse struct {
-		Approved bool
-		Password string
+		Approved bool   `json:"approved"`
+		Password string `json:"password"`
 	}
 	ListRequest struct {
-		Accounts []Account
-		Meta     Metadata
+		Accounts []Account `json:"accounts"`
+		Meta     Metadata  `json:"meta"`
 	}
 	ListResponse struct {
-		Accounts []Account
+		Accounts []Account `json:"accounts"`
+	}
+	Message struct {
+		Message string `json:"message"`
 	}
 )
 
@@ -186,13 +189,13 @@ func metaData(ctx context.Context) Metadata {
 	m := Metadata{"NA", "NA", "NA"}
 
 	if v := ctx.Value("remote"); v != nil {
-		m.remote = v.(string)
+		m.Remote = v.(string)
 	}
 	if v := ctx.Value("scheme"); v != nil {
-		m.scheme = v.(string)
+		m.Scheme = v.(string)
 	}
 	if v := ctx.Value("local"); v != nil {
-		m.local = v.(string)
+		m.Local = v.(string)
 	}
 	return m
 }
@@ -463,7 +466,7 @@ func (api *SignerAPI) Export(ctx context.Context, addr common.Address) (json.Raw
 // Imports tries to import the given keyJSON in the local keystore. The keyJSON data is expected to be
 // in web3 keystore format. It will decrypt the keyJSON with the given passphrase and on successful
 // decryption it will encrypt the key with the given newPassphrase and store it in the keystore.
-func (api *SignerAPI) Import(ctx context.Context, string, keyJSON json.RawMessage) (Account, error) {
+func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage) (Account, error) {
 
 	be := api.am.Backends(keystore.KeyStoreType)
 

@@ -24,7 +24,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"context"
+	"encoding/json"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -84,6 +87,10 @@ func main() {
 				"This means that an STDIN/STDOUT is used for RPC-communication with a e.g. a graphical user " +
 				"interface, and can be used when the signer is started by an external process.",
 		},
+		cli.BoolFlag{
+			Name:  "stdio-ui-test",
+			Usage: "Mechanism to test interface between signer and UI. Requires 'stdio-ui'.",
+		},
 	}
 
 	app.Action = func(c *cli.Context) error {
@@ -136,6 +143,7 @@ func main() {
 		if err = server.RegisterName("account", api); err != nil {
 			utils.Fatalf("Could not register signer API: %v", err)
 		}
+		//server.ListServices()
 
 		// Import from file
 		if rfile := c.String("requestfile"); rfile != "" {
@@ -151,10 +159,60 @@ func main() {
 		log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%s", endpoint))
 		cors := []string{"*"}
 
+		if c.Bool("stdio-ui-test") {
+			log.Info("Performing UI test")
+			go testExternalUI(api)
+		}
+
 		rpc.NewHTTPServer(cors, server).Serve(listener)
+
 		return nil
 	}
 	app.Run(os.Args)
+
+}
+
+func testExternalUI(api *SignerAPI) {
+
+	ctx := context.WithValue(context.Background(), "remote", "signer binary")
+	ctx = context.WithValue(ctx, "scheme", "in-proc")
+	ctx = context.WithValue(ctx, "local", "main")
+
+	errs := make([]string, 0)
+
+	api.ui.ShowInfo("Testing 'ShowInfo'")
+	api.ui.ShowError("Testing 'ShowError'")
+
+	checkErr:= func(method string, err error){
+		if err != nil && err != ErrRequestDenied{
+			errs = append(errs, fmt.Sprintf("%v: %v", method, err.Error()))
+		}
+	}
+	var err error
+
+	_, err = api.SignTransaction(ctx, common.Address{}, TransactionArg{}, nil);
+	checkErr("SignTransaction", err)
+	_, err = api.Sign(ctx, common.Address{}, common.Hex2Bytes("01020304"))
+	checkErr("Sign", err)
+	_, err =api.List(ctx)
+	checkErr("List", err)
+	_, err = api.New(ctx)
+	checkErr("New", err)
+	_, err = api.Export(ctx, common.Address{})
+	checkErr("Export", err)
+	_, err = api.Import(ctx, json.RawMessage{})
+	checkErr("Import", err)
+
+	api.ui.ShowInfo("Tests completed")
+
+	if len(errs) > 0 {
+		log.Error("Got errors")
+		for _, e := range errs {
+			log.Error(e)
+		}
+	}else{
+		log.Info("No errors")
+	}
 
 }
 
