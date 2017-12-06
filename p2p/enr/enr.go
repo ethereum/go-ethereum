@@ -33,6 +33,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+const (
+	SizeLimit = 300
+)
+
 var (
 	errNoID           = errors.New("unknown or unspecified identity scheme")
 	errInvalidSigsize = errors.New("invalid signature size")
@@ -40,7 +44,7 @@ var (
 	errNotSorted      = errors.New("record key/value pairs are not sorted by key")
 	errDuplicateKey   = errors.New("record contains duplicate key")
 	errIncompletePair = errors.New("record contains incomplete k/v pair")
-	errTooBig         = errors.New("record bigger than 300 bytes")
+	errTooBig         = fmt.Errorf("record bigger than %d bytes", SizeLimit)
 )
 
 // Key is implemented by known node record key types.
@@ -201,7 +205,7 @@ func (r *Record) NodeAddr() ([]byte, error) {
 
 // Sign signs the record with the provided private key.
 // It updates record's identity scheme and public key.
-// It returns an error if signed record is bigger than 300 bytes.
+// It returns an error if signed record is bigger than SizeLimit bytes.
 func (r *Record) Sign(privkey *ecdsa.PrivateKey) error {
 	pk := (*btcec.PublicKey)(&privkey.PublicKey)
 	r.seq = r.seq + 1
@@ -239,7 +243,7 @@ func (r *Record) signAndEncode(privkey *ecdsa.PrivateKey) error {
 		return err
 	}
 
-	if len(r.raw) > 300 {
+	if len(r.raw) > SizeLimit {
 		return errTooBig
 	}
 

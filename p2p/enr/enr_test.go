@@ -281,7 +281,7 @@ func TestPythonInterop(t *testing.T) {
 	}
 }
 
-// TestRecordTooBig tests that records bigger than 300 bytes cannot be signed.
+// TestRecordTooBig tests that records bigger than SizeLimit bytes cannot be signed.
 func TestRecordTooBig(t *testing.T) {
 	privkey, err := crypto.HexToECDSA(privkeyHex)
 	if err != nil {
