@@ -20,12 +20,10 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/hex"
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -44,13 +42,9 @@ func TestKeccak256Hash(t *testing.T) {
 
 func BenchmarkSha3(b *testing.B) {
 	a := []byte("hello world")
-	amount := 1000000
-	start := time.Now()
-	for i := 0; i < amount; i++ {
+	for i := 0; i < b.N; i++ {
 		Keccak256(a)
 	}
-
-	fmt.Println(amount, ":", time.Since(start))
 }
 
 func TestSign(t *testing.T) {
