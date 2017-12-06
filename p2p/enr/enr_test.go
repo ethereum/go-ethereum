@@ -76,6 +76,48 @@ func TestGetSetIP4(t *testing.T) {
 	}
 }
 
+// TestSortedGetAndSet tests that Set produced a sorted pairs slice.
+func TestSortedGetAndSet(t *testing.T) {
+	type pair struct {
+		k string
+		v uint32
+	}
+
+	for _, tt := range []struct {
+		input []pair
+		want  []pair
+	}{
+		{
+			input: []pair{{"a", 1}, {"c", 2}, {"b", 3}},
+			want:  []pair{{"a", 1}, {"b", 3}, {"c", 2}},
+		},
+		{
+			input: []pair{{"a", 1}, {"c", 2}, {"b", 3}, {"d", 4}, {"a", 5}, {"bb", 6}},
+			want:  []pair{{"a", 5}, {"b", 3}, {"bb", 6}, {"c", 2}, {"d", 4}},
+		},
+		{
+			input: []pair{{"c", 2}, {"b", 3}, {"d", 4}, {"a", 5}, {"bb", 6}},
+			want:  []pair{{"a", 5}, {"b", 3}, {"bb", 6}, {"c", 2}, {"d", 4}},
+		},
+	} {
+		var r Record
+		for _, i := range tt.input {
+			r.Set(WithKey(i.k, &i.v))
+		}
+		for i, w := range tt.want {
+			// set got's key from r.pair[i], so that we preserve order of pairs
+			got := pair{k: r.pairs[i].k}
+			if ok, err := r.Load(WithKey(w.k, &got.v)); !ok || err != nil {
+				t.Fatal(err)
+			}
+
+			if got != w {
+				t.Fatalf("expected %#v, got %#v", w, got)
+			}
+		}
+	}
+}
+
 // TestGetSetIP6 tests encoding/decoding and setting/getting of the enr.IP6 type
 func TestGetSetIP6(t *testing.T) {
 	ip := IP6(net.IP{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68})

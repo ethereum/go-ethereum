@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package discover implements the Ethereum Node Record as per https://github.com/ethereum/EIPs/pull/778
+// Package enr implements the Ethereum Node Record as per https://github.com/ethereum/EIPs/pull/778
 package enr
 
 import (
@@ -104,20 +104,23 @@ func (r *Record) Set(k Key) {
 	if err != nil {
 		panic(fmt.Errorf("enr: can't encode %s: %v", k.ENRKey(), err))
 	}
-	for i, p := range r.pairs {
-		if p.k == k.ENRKey() {
-			// replace value of pair
-			r.pairs[i].v = blob
-			return
-		} else if p.k > k.ENRKey() {
-			// insert pair before i-th elem
-			el := pair{k.ENRKey(), blob}
-			r.pairs = append(r.pairs, pair{})
-			copy(r.pairs[i+1:], r.pairs[i:])
-			r.pairs[i] = el
-			return
-		}
+
+	i := sort.Search(len(r.pairs), func(i int) bool { return r.pairs[i].k >= k.ENRKey() })
+
+	if i < len(r.pairs) && r.pairs[i].k == k.ENRKey() {
+		// element is present at r.pairs[i]
+		r.pairs[i].v = blob
+		return
+	} else if i < len(r.pairs) {
+		// insert pair before i-th elem
+		el := pair{k.ENRKey(), blob}
+		r.pairs = append(r.pairs, pair{})
+		copy(r.pairs[i+1:], r.pairs[i:])
+		r.pairs[i] = el
+		return
 	}
+
+	// element should be placed at the end of r.pairs
 	r.pairs = append(r.pairs, pair{k.ENRKey(), blob})
 }
 
