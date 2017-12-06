@@ -20,9 +20,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
@@ -79,6 +81,35 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
+	updateChtFromPeer(pm, peer, ctx)
 	pm.blockchain.(*light.LightChain).SyncCht(ctx)
 	pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), downloader.LightSync)
+}
+
+// Status.im issue 320: Use GetHeaderProofs to download the latest CHT from a peer.
+func updateChtFromPeer(pm *ProtocolManager, peer *peer, ctx context.Context) {
+	log.Info("Downloading latest CHT root from peer", "peer.headBlockInfo", peer.headBlockInfo())
+
+	// Formula from lightchain.go:SyncCht: num := cht.Number*ChtFrequency – 1
+	var hbl = peer.headBlockInfo()
+	var peerHeadBlockNum = hbl.Number
+	log.Debug("UpdateChtFromPeer", "peerHeadBlockNum", peerHeadBlockNum)
+
+	var sectionIdx uint64 = ((peerHeadBlockNum + 1) / light.ChtFrequency) - 1
+	log.Debug("Retrieving checkpoint with: ", "sectionIdx", sectionIdx)
+
+	req := &light.CheckpointRequest{SectionIdx: uint64(sectionIdx)}
+	pm.odr.Retrieve(ctx, req)
+	log.Info("Retrieved checkpoint from peer: ",
+		"SectionHead=", common.ToHex(req.SectionHead.Bytes()),
+		"ChtRoot", common.ToHex(req.ChtRoot.Bytes()),
+		"BloomTrieRoot", common.ToHex(req.BloomRoot.Bytes()))
+
+	pm.blockchain.(*light.LightChain).AddTrustedCheckpoint("live", sectionIdx, req.SectionHead, req.ChtRoot, req.BloomRoot)
+	log.Debug("Added checkpoint to LightChain")
+
+	log.Info("Sanity check: can download some very old header?")
+	var sanityBlock uint64 = hbl.Number / 100
+	sanityHeader, err := pm.blockchain.(*light.LightChain).GetHeaderByNumberOdr(ctx, sanityBlock)
+	log.Info("Sanity check result:", "sanityHeader", sanityHeader, "err", err)
 }

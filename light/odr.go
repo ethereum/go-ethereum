@@ -169,3 +169,16 @@ func (req *BloomRequest) StoreResult(db ethdb.Database) {
 		core.WriteBloomBits(db, req.BitIdx, sectionIdx, sectionHead, req.BloomBits[i])
 	}
 }
+
+// CheckpointRequest is the ODR request type for retrieving a CHT+BloomRoot checkpoint
+type CheckpointRequest struct {
+	OdrRequest
+	SectionIdx  uint64
+	SectionHead common.Hash
+	ChtRoot     common.Hash
+	BloomRoot   common.Hash
+}
+
+// StoreResult stores the retrieved data in local database
+func (req *CheckpointRequest) StoreResult(db ethdb.Database) {
+}

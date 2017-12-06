@@ -325,6 +325,25 @@ func (p *peer) SendTxs(reqID, cost uint64, txs types.Transactions) error {
 	}
 }
 
+// RequestCheckpoint a checkpoint at the specified section index from a remote node.
+func (p *peer) RequestCheckpoint(reqID, cost uint64, req CheckpointReq) error {
+	p.Log().Debug("Fetching checkpoint", "req", req, "p.version", p.version, "lpv1", lpv1)
+	switch p.version {
+	case lpv1:
+		p.Log().Info("RequestCheckpoint: lpv1 so doing nothing")
+		return nil
+	case lpv2:
+		return sendRequest(p.rw, GetCheckpointMsg, reqID, cost, req)
+	default:
+		panic(nil)
+	}
+}
+
+// SendCheckpoint sends a checkpoint, corresponding to the one requested.
+func (p *peer) SendCheckpoint(reqID, bv uint64, roots [3]common.Hash) error {
+	return sendResponse(p.rw, CheckpointMsg, reqID, bv, roots)
+}
+
 type keyValueEntry struct {
 	Key   string
 	Value rlp.RawValue

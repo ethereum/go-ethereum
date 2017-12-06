@@ -319,7 +319,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}
 }
 
-var reqList = []uint64{GetBlockHeadersMsg, GetBlockBodiesMsg, GetCodeMsg, GetReceiptsMsg, GetProofsV1Msg, SendTxMsg, SendTxV2Msg, GetTxStatusMsg, GetHeaderProofsMsg, GetProofsV2Msg, GetHelperTrieProofsMsg}
+var reqList = []uint64{GetBlockHeadersMsg, GetBlockBodiesMsg, GetCodeMsg, GetReceiptsMsg, GetProofsV1Msg, SendTxMsg, SendTxV2Msg, GetTxStatusMsg, GetHeaderProofsMsg, GetProofsV2Msg, GetHelperTrieProofsMsg, GetCheckpointMsg}
 
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
@@ -1062,6 +1062,63 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 		p.fcServer.GotReply(resp.ReqID, resp.BV)
+
+	case GetCheckpointMsg:
+		p.Log().Debug("Received GetCheckpointMsg", "msg", msg)
+		// Decode the retrieval message
+		var req struct {
+			ReqID uint64
+			Req   CheckpointReq
+		}
+		if err := msg.Decode(&req); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		p.Log().Debug("Got CheckpointReq", "req", req)
+
+		sectionHead := pm.server.chtIndexer.SectionHead(req.Req.SectionIdx)
+
+		var chtRoot common.Hash
+		var prefix string
+		chtRoot, prefix = pm.getHelperTrie(0, req.Req.SectionIdx)
+		p.Log().Debug("Got chtRoot, prefix=", "chtRoot", chtRoot, "prefix", prefix)
+
+		var bloomRoot common.Hash
+		var prefix2 string
+		bloomRoot, prefix2 = pm.getHelperTrie(1, req.Req.SectionIdx)
+		p.Log().Debug("Got bloomRoot, prefix=", "bloomRoot", bloomRoot, "prefix2", prefix2)
+
+		var roots [3]common.Hash
+		roots[0] = sectionHead
+		roots[1] = chtRoot
+		roots[2] = bloomRoot
+
+		reqCnt := 1
+		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
+		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+		result := p.SendCheckpoint(req.ReqID, bv, roots)
+		p.Log().Debug("Called SendCheckpoint ok with ", "result", result)
+		return result
+
+	case CheckpointMsg:
+		if pm.odr == nil {
+			return errResp(ErrUnexpectedResponse, "")
+		}
+
+		p.Log().Debug("Received CheckpointMsg response", "msg", msg)
+		var resp struct {
+			ReqID, BV uint64
+			Roots     [3]common.Hash
+		}
+		if err := msg.Decode(&resp); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+
+		p.fcServer.GotReply(resp.ReqID, resp.BV)
+		deliverMsg = &Msg{
+			MsgType: MsgCheckpoint,
+			ReqID:   resp.ReqID,
+			Obj:     resp.Roots,
+		}
 
 	default:
 		p.Log().Trace("Received unknown message", "code", msg.Code)

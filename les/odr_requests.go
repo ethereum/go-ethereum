@@ -68,6 +68,8 @@ func LesRequest(req light.OdrRequest) LesOdrRequest {
 		return (*ChtRequest)(r)
 	case *light.BloomRequest:
 		return (*BloomRequest)(r)
+	case *light.CheckpointRequest:
+		return (*CheckpointRequest)(r)
 	default:
 		return nil
 	}
@@ -542,6 +544,61 @@ func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
 	r.Proofs = nodeSet
 	return nil
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// status.im request 320
+
+type CheckpointReq struct {
+	SectionIdx uint64
+}
+
+// ODR request type for requesting a non-trusted checkpoint (CHT and Bloom hash values)
+type CheckpointRequest light.CheckpointRequest
+
+// GetCost returns the cost of the given ODR request according to the serving
+// peer's cost table (implementation of LesOdrRequest)
+func (r *CheckpointRequest) GetCost(peer *peer) uint64 {
+	return peer.GetRequestCost(GetCheckpointMsg, 1)
+}
+
+// CanSend tells if a certain peer is suitable for serving the given request
+func (r *CheckpointRequest) CanSend(peer *peer) bool {
+	log.Debug("CheckpointRequest.CanSend", "peer", peer)
+	peer.lock.RLock()
+	defer peer.lock.RUnlock()
+
+	if peer.version < lpv2 {
+		return false
+	} else {
+		return true
+	}
+}
+
+// Request sends an ODR request to the LES network (implementation of LesOdrRequest)
+func (r *CheckpointRequest) Request(reqID uint64, peer *peer) error {
+	peer.Log().Debug("Requesting Checkpoint", "SectionIdx", r.SectionIdx)
+	req := CheckpointReq{SectionIdx: r.SectionIdx}
+	return peer.RequestCheckpoint(reqID, r.GetCost(peer), req)
+}
+
+// Validate processes an ODR request reply message from the LES network
+// returns true and stores results in memory if the message was a valid reply
+// to the request (implementation of LesOdrRequest)
+func (r *CheckpointRequest) Validate(db ethdb.Database, msg *Msg) error {
+	// Ensure we have a correct message
+	if msg.MsgType != MsgCheckpoint {
+		return errInvalidMessageType
+	}
+
+	log.Debug("Got GetCheckpoint response: ", "msg", msg)
+	hashes := msg.Obj.([3]common.Hash)
+	r.SectionHead = hashes[0]
+	r.ChtRoot = hashes[1]
+	r.BloomRoot = hashes[2]
+	return nil
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////
 
 // readTraceDB stores the keys of database reads. We use this to check that received node
 // sets contain only the trie nodes necessary to make proofs pass.

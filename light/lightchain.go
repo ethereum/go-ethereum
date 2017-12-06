@@ -91,6 +91,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	if err != nil {
 		return nil, err
 	}
+
 	bc.genesisBlock, _ = bc.GetBlockByNumber(NoOdr, 0)
 	if bc.genesisBlock == nil {
 		return nil, core.ErrNoGenesis
@@ -111,6 +112,13 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		}
 	}
 	return bc, nil
+}
+
+func (self *LightChain) AddTrustedCheckpoint(name string, sectionIdx uint64,
+	sectionHead common.Hash,
+	chtRoot common.Hash, bloomTrieRoot common.Hash) {
+	cp := trustedCheckpoint{name, sectionIdx, sectionHead, chtRoot, bloomTrieRoot}
+	self.addTrustedCheckpoint(cp)
 }
 
 // addTrustedCheckpoint adds a trusted checkpoint to the blockchain
