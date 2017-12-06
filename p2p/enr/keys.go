@@ -26,6 +26,27 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+type generic struct {
+	key   string
+	value interface{}
+}
+
+func (g generic) ENRKey() string {
+	return g.key
+}
+
+func (g generic) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, g.value)
+}
+
+func (g *generic) DecodeRLP(s *rlp.Stream) error {
+	return s.Decode(&g.value)
+}
+
+func WithKey(k string, v interface{}) Key {
+	return &generic{key: k, value: v}
+}
+
 // DiscPort represents an UDP port for discovery v5.
 type DiscPort uint16
 

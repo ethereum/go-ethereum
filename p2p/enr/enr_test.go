@@ -19,9 +19,11 @@ package enr
 import (
 	"bytes"
 	"encoding/hex"
+	"math/rand"
 	"net"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -267,4 +269,39 @@ func TestPythonInterop(t *testing.T) {
 			t.Errorf("wrong %q: got %v, want %v", k.ENRKey(), k, v)
 		}
 	}
+}
+
+func TestRecordTooBig(t *testing.T) {
+	privkey, err := crypto.HexToECDSA(privkeyHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var r Record
+
+	key := randomString(10)
+
+	// set a big value for random key, expect error
+	r.Set(WithKey(key, randomString(300)))
+	err = r.Sign(privkey)
+	if err != errTooBig {
+		t.Fatalf("expected to get errTooBig, got %#v", err)
+	}
+
+	// set an acceptable value for random key, expect no error
+	r.Set(WithKey(key, randomString(100)))
+	err = r.Sign(privkey)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func randomString(strlen int) string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+	result := make([]byte, strlen)
+	for i := range result {
+		result[i] = chars[r.Intn(len(chars))]
+	}
+	return string(result)
 }

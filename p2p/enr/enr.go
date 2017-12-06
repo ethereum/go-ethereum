@@ -40,6 +40,7 @@ var (
 	errNotSorted      = errors.New("record key/value pairs are not sorted by key")
 	errDuplicateKey   = errors.New("record contains duplicate key")
 	errIncompletePair = errors.New("record contains incomplete k/v pair")
+	errTooBig         = errors.New("record bigger than 300 bytes")
 )
 
 // Key is implemented by known node record key types.
@@ -221,7 +222,15 @@ func (r *Record) signAndEncode(privkey *ecdsa.PrivateKey) error {
 	r.signature = encodeCompactSignature(sig)
 	list[0] = r.signature
 	r.raw, err = rlp.EncodeToBytes(list)
-	return err
+	if err != nil {
+		return err
+	}
+
+	if len(r.raw) > 300 {
+		return errTooBig
+	}
+
+	return nil
 }
 
 func (r *Record) verifySignature() error {
