@@ -36,12 +36,12 @@ import (
 // Envelope represents a clear-text data packet to transmit through the Whisper
 // network. Its contents may or may not be encrypted and signed.
 type Envelope struct {
-	Version  []byte
-	Expiry   uint32
-	TTL      uint32
-	Topic    TopicType
-	Data     []byte
-	Nonce    uint64
+	Version []byte
+	Expiry  uint32
+	TTL     uint32
+	Topic   TopicType
+	Data    []byte
+	Nonce   uint64
 
 	pow  float64     // Message-specific PoW as described in the Whisper specification.
 	hash common.Hash // Cached hash of the envelope to avoid rehashing every time.
@@ -63,12 +63,12 @@ func (e *Envelope) rlpWithoutNonce() []byte {
 // included into an envelope for network forwarding.
 func NewEnvelope(ttl uint32, topic TopicType, msg *sentMessage) *Envelope {
 	env := Envelope{
-		Version:  make([]byte, 1),
-		Expiry:   uint32(time.Now().Add(time.Second * time.Duration(ttl)).Unix()),
-		TTL:      ttl,
-		Topic:    topic,
-		Data:     msg.Raw,
-		Nonce:    0,
+		Version: make([]byte, 1),
+		Expiry:  uint32(time.Now().Add(time.Second * time.Duration(ttl)).Unix()),
+		TTL:     ttl,
+		Topic:   topic,
+		Data:    msg.Raw,
+		Nonce:   0,
 	}
 
 	if EnvelopeVersion < 256 {
