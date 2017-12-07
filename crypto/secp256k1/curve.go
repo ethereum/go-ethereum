@@ -34,7 +34,6 @@ package secp256k1
 import (
 	"crypto/elliptic"
 	"math/big"
-	"sync"
 	"unsafe"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -285,24 +284,21 @@ func (BitCurve *BitCurve) Unmarshal(data []byte) (x, y *big.Int) {
 	return
 }
 
-var (
-	initonce sync.Once
-	theCurve *BitCurve
-)
+var theCurve = new(BitCurve)
 
-// S256 returns a BitCurve which implements secp256k1 (see SEC 2 section 2.7.1)
+func init() {
+	// See SEC 2 section 2.7.1
+	// curve parameters taken from:
+	// http://www.secg.org/collateral/sec2_final.pdf
+	theCurve.P, _ = new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F", 16)
+	theCurve.N, _ = new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16)
+	theCurve.B, _ = new(big.Int).SetString("0000000000000000000000000000000000000000000000000000000000000007", 16)
+	theCurve.Gx, _ = new(big.Int).SetString("79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798", 16)
+	theCurve.Gy, _ = new(big.Int).SetString("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8", 16)
+	theCurve.BitSize = 256
+}
+
+// S256 returns a BitCurve which implements secp256k1.
 func S256() *BitCurve {
-	initonce.Do(func() {
-		// See SEC 2 section 2.7.1
-		// curve parameters taken from:
-		// http://www.secg.org/collateral/sec2_final.pdf
-		theCurve = new(BitCurve)
-		theCurve.P, _ = new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F", 16)
-		theCurve.N, _ = new(big.Int).SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16)
-		theCurve.B, _ = new(big.Int).SetString("0000000000000000000000000000000000000000000000000000000000000007", 16)
-		theCurve.Gx, _ = new(big.Int).SetString("79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798", 16)
-		theCurve.Gy, _ = new(big.Int).SetString("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8", 16)
-		theCurve.BitSize = 256
-	})
 	return theCurve
 }
