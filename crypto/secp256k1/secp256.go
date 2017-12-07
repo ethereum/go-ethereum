@@ -135,17 +135,17 @@ func VerifySignature(pubkey, msg, signature []byte) bool {
 
 // DecompressPubkey parses a public key in the 33-byte compressed format.
 // It returns non-nil coordinates if the public key is valid.
-func DecompressPubkey(pubkey []byte) (X, Y *big.Int) {
+func DecompressPubkey(pubkey []byte) (x, y *big.Int) {
 	if len(pubkey) != 33 {
 		return nil, nil
 	}
-	buf := make([]byte, 65)
-	bufdata := (*C.uchar)(unsafe.Pointer(&buf[0]))
+	out := make([]byte, 65)
+	outdata := (*C.uchar)(unsafe.Pointer(&out[0]))
 	pubkeydata := (*C.uchar)(unsafe.Pointer(&pubkey[0]))
 	if C.secp256k1_ext_decompress_pubkey(context, outdata, pubkeydata) == 0 {
 		return nil, nil
 	}
-	return new(big.Int).SetBytes(buf[1:33]), new(big.Int).SetBytes(buf[33:])
+	return new(big.Int).SetBytes(out[1:33]), new(big.Int).SetBytes(out[33:])
 }
 
 func checkSignature(sig []byte) error {
