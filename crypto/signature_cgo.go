@@ -27,10 +27,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
+// Ecrecover returns the uncompressed public key that created the given signature.
 func Ecrecover(hash, sig []byte) ([]byte, error) {
 	return secp256k1.RecoverPubkey(hash, sig)
 }
 
+// SigToPub returns the public key that created the given signature.
 func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	s, err := Ecrecover(hash, sig)
 	if err != nil {
@@ -56,6 +58,22 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 	seckey := math.PaddedBigBytes(prv.D, prv.Params().BitSize/8)
 	defer zeroBytes(seckey)
 	return secp256k1.Sign(hash, seckey)
+}
+
+// VerifySignature checks that the given public key created signature over hash.
+// The public key should be in compressed (33 bytes) or uncompressed (65 bytes) format.
+// The signature should have the 64 byte [R || S] format.
+func VerifySignature(pubkey, hash, signature []byte) bool {
+	return secp256k1.VerifySignature(pubkey, hash, signature)
+}
+
+// DecompressPubkey parses a public key in the 33-byte compressed format.
+func DecompressPubkey(pubkey []byte) (*ecdsa.PublicKey, error) {
+	x, y := secp256k1.DecompressPubkey(pubkey)
+	if x == nil {
+		return nil, fmt.Errorf("invalid public key")
+	}
+	return &ecdsa.PublicKey{X: x, Y: y, Curve: S256()}, nil
 }
 
 // S256 returns an instance of the secp256k1 curve.

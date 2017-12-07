@@ -21,11 +21,14 @@ package crypto
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/btcsuite/btcd/btcec"
 )
 
+// Ecrecover returns the uncompressed public key that created the given signature.
 func Ecrecover(hash, sig []byte) ([]byte, error) {
 	pub, err := SigToPub(hash, sig)
 	if err != nil {
@@ -35,6 +38,7 @@ func Ecrecover(hash, sig []byte) ([]byte, error) {
 	return bytes, err
 }
 
+// SigToPub returns the public key that created the given signature.
 func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	// Convert to btcec input format with 'recovery id' v at the beginning.
 	btcsig := make([]byte, 65)
@@ -69,6 +73,33 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) ([]byte, error) {
 	copy(sig, sig[1:])
 	sig[64] = v
 	return sig, nil
+}
+
+// VerifySignature checks that the given public key created signature over hash.
+// The public key should be in compressed (33 bytes) or uncompressed (65 bytes) format.
+// The signature should have the 64 byte [R || S] format.
+func VerifySignature(pubkey, hash, signature []byte) bool {
+	if len(signature) != 64 {
+		return false
+	}
+	sig := &btcec.Signature{R: new(big.Int).SetBytes(signature[:32]), S: new(big.Int).SetBytes(signature[32:])}
+	key, err := btcec.ParsePubKey(pubkey, btcec.S256())
+	if err != nil {
+		return false
+	}
+	return sig.Verify(hash, key)
+}
+
+// DecompressPubkey parses a public key in the 33-byte compressed format.
+func DecompressPubkey(pubkey []byte) (*ecdsa.PublicKey, error) {
+	if len(pubkey) != 33 {
+		return nil, errors.New("invalid compressed public key length")
+	}
+	key, err := btcec.ParsePubKey(pubkey, btcec.S256())
+	if err != nil {
+		return nil, err
+	}
+	return key.ToECDSA(), nil
 }
 
 // S256 returns an instance of the secp256k1 curve.
