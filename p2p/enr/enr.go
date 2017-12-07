@@ -33,11 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const (
-	// SizeLimit is the maximum encoded size of a node record in bytes.
-	// Implementations should reject records larger than this size.
-	SizeLimit = 300
-)
+const SizeLimit = 300 // maximum encoded size of a node record in bytes
 
 var (
 	errNoID           = errors.New("unknown or unspecified identity scheme")
@@ -139,6 +135,9 @@ func (r *Record) DecodeRLP(s *rlp.Stream) error {
 	raw, err := s.Raw()
 	if err != nil {
 		return err
+	}
+	if len(raw) > SizeLimit {
+		return errTooBig
 	}
 
 	// Decode the RLP container.
