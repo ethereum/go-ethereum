@@ -263,14 +263,10 @@ func (BitCurve *BitCurve) ScalarBaseMult(k []byte) (*big.Int, *big.Int) {
 // X9.62.
 func (BitCurve *BitCurve) Marshal(x, y *big.Int) []byte {
 	byteLen := (BitCurve.BitSize + 7) >> 3
-
 	ret := make([]byte, 1+2*byteLen)
-	ret[0] = 4 // uncompressed point
-
-	xBytes := x.Bytes()
-	copy(ret[1+byteLen-len(xBytes):], xBytes)
-	yBytes := y.Bytes()
-	copy(ret[1+2*byteLen-len(yBytes):], yBytes)
+	ret[0] = 4 // uncompressed point flag
+	math.ReadBits(x, ret[1:1+byteLen])
+	math.ReadBits(y, ret[1+byteLen:])
 	return ret
 }
 
