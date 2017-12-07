@@ -19,7 +19,7 @@ static secp256k1_context* secp256k1_context_create_sign_verify() {
 	return secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
 }
 
-// secp256k1_ecdsa_recover_pubkey recovers the public key of an encoded compact signature.
+// secp256k1_ext_ecdsa_recover recovers the public key of an encoded compact signature.
 //
 // Returns: 1: recovery was successful
 //          0: recovery was not successful
@@ -27,7 +27,7 @@ static secp256k1_context* secp256k1_context_create_sign_verify() {
 //  Out:    pubkey_out: the serialized 65-byte public key of the signer (cannot be NULL)
 //  In:     sigdata:    pointer to a 65-byte signature with the recovery id at the end (cannot be NULL)
 //          msgdata:    pointer to a 32-byte message (cannot be NULL)
-static int secp256k1_ecdsa_recover_pubkey(
+static int secp256k1_ext_ecdsa_recover(
 	const secp256k1_context* ctx,
 	unsigned char *pubkey_out,
 	const unsigned char *sigdata,
@@ -46,7 +46,7 @@ static int secp256k1_ecdsa_recover_pubkey(
 	return secp256k1_ec_pubkey_serialize(ctx, pubkey_out, &outputlen, &pubkey, SECP256K1_EC_UNCOMPRESSED);
 }
 
-// secp256k1_ecdsa_verify_enc verifies an encoded compact signature.
+// secp256k1_ext_ecdsa_verify verifies an encoded compact signature.
 //
 // Returns: 1: signature is valid
 //          0: signature is invalid
@@ -55,7 +55,7 @@ static int secp256k1_ecdsa_recover_pubkey(
 //          msgdata:    pointer to a 32-byte message (cannot be NULL)
 //          pubkeydata: pointer to public key data (cannot be NULL)
 //          pubkeylen:  length of pubkeydata
-static int secp256k1_ecdsa_verify_enc(
+static int secp256k1_ext_ecdsa_verify(
 	const secp256k1_context* ctx,
 	const unsigned char *sigdata,
 	const unsigned char *msgdata,
@@ -74,14 +74,14 @@ static int secp256k1_ecdsa_verify_enc(
 	return secp256k1_ecdsa_verify(ctx, &sig, msgdata, &pubkey);
 }
 
-// secp256k1_decompress_pubkey decompresses a public key.
+// secp256k1_ext_decompress_pubkey decompresses a public key.
 //
 // Returns: 1: public key is valid
 //          0: public key is invalid
 // Args:    ctx:        pointer to a context object (cannot be NULL)
 //  Out:    pubkey_out: the serialized 65-byte public key (cannot be NULL)
 //  In:     pubkeydata: pointer to 33 bytes of compressed public key data (cannot be NULL)
-static int secp256k1_decompress_pubkey(
+static int secp256k1_ext_decompress_pubkey(
 	const secp256k1_context* ctx,
 	unsigned char *pubkey_out,
 	const unsigned char *pubkeydata
@@ -95,7 +95,7 @@ static int secp256k1_decompress_pubkey(
 	return secp256k1_ec_pubkey_serialize(ctx, pubkey_out, &outputlen, &pubkey, SECP256K1_EC_UNCOMPRESSED);
 }
 
-// secp256k1_pubkey_scalar_mul multiplies a point by a scalar in constant time.
+// secp256k1_ext_scalar_mul multiplies a point by a scalar in constant time.
 //
 // Returns: 1: multiplication was successful
 //          0: scalar was invalid (zero or overflow)
@@ -104,7 +104,7 @@ static int secp256k1_decompress_pubkey(
 //  In:     point:    pointer to a 64-byte public point,
 //                    encoded as two 256bit big-endian numbers.
 //          scalar:   a 32-byte scalar with which to multiply the point
-int secp256k1_pubkey_scalar_mul(const secp256k1_context* ctx, unsigned char *point, const unsigned char *scalar) {
+int secp256k1_ext_scalar_mul(const secp256k1_context* ctx, unsigned char *point, const unsigned char *scalar) {
 	int ret = 0;
 	int overflow = 0;
 	secp256k1_fe feX, feY;
