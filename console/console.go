@@ -217,11 +217,10 @@ func (c *Console) init(preload []string) error {
 	return nil
 }
 
-func (c *Console) clearHistory() {
+func (c *Console) clearHistory() (err error) {
 	c.history = nil
 	c.prompter.ClearHistory()
-	os.Remove(c.histPath)
-	fmt.Fprintf(c.printer, "history cleared\n")
+	return os.Remove(c.histPath)
 }
 
 // consoleOutput is an override for the console.log and console.error methods to
