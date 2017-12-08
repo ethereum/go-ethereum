@@ -41,6 +41,12 @@ var (
 
 var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
 
+func randomString(strlen int) string {
+	b := make([]byte, strlen)
+	rnd.Read(b)
+	return string(b)
+}
+
 // TestGetSetID tests encoding/decoding and setting/getting of the ID key.
 func TestGetSetID(t *testing.T) {
 	id := ID("someid")
@@ -112,10 +118,10 @@ func TestLoadErrors(t *testing.T) {
 
 	// Check error for invalid keys.
 	var list []uint
-	err = r.Load(WithKey(IP4{}.ENRKey(), &list))
+	err = r.Load(WithKey(ip4.ENRKey(), &list))
 	kerr, ok := err.(*KeyError)
 	if !ok {
-		t.Fatal("expected KeyError, got %T", err)
+		t.Fatalf("expected KeyError, got %T", err)
 	}
 	assert.Equal(t, kerr.Key, ip4.ENRKey())
 	assert.Error(t, kerr.Err)
@@ -184,7 +190,7 @@ func TestDirty(t *testing.T) {
 		t.Error("Signed returned true for modified record")
 	}
 	if _, err := rlp.EncodeToBytes(r); err != errEncodeUnsigned {
-		t.Errorf("expected errEncodeUnsigned, got %#v")
+		t.Errorf("expected errEncodeUnsigned, got %#v", err)
 	}
 }
 
@@ -192,10 +198,10 @@ func TestDirty(t *testing.T) {
 func TestGetSetOverwrite(t *testing.T) {
 	var r Record
 
-	ip := IP4(net.IP{192, 168, 0, 3})
+	ip := IP4{192, 168, 0, 3}
 	r.Set(ip)
 
-	ip2 := IP4(net.IP{192, 168, 0, 4})
+	ip2 := IP4{192, 168, 0, 4}
 	r.Set(ip2)
 
 	var ip3 IP4
@@ -207,21 +213,18 @@ func TestGetSetOverwrite(t *testing.T) {
 func TestSignEncodeAndDecode(t *testing.T) {
 	var r Record
 	r.Set(DiscPort(30303))
-	r.Set(IP4(net.ParseIP("127.0.0.1")))
+	r.Set(IP4{127, 0, 0, 1})
 	require.NoError(t, r.Sign(privkey))
+
 	blob, err := rlp.EncodeToBytes(r)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	var r2 Record
 	require.NoError(t, rlp.DecodeBytes(blob, &r2))
 	assert.Equal(t, r, r2)
 
 	blob2, err := rlp.EncodeToBytes(r2)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	assert.Equal(t, blob, blob2)
 }
 
@@ -306,10 +309,4 @@ func TestSignEncodeAndDecodeRandom(t *testing.T) {
 		require.NoError(t, r.Load(buf), desc)
 		require.Equal(t, v, got, desc)
 	}
-}
-
-func randomString(strlen int) string {
-	b := make([]byte, strlen)
-	rnd.Read(b)
-	return string(b)
 }
