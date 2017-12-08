@@ -20,7 +20,7 @@
 // Records contain named keys. To store and retrieve keys in a record, use the Key
 // interface.
 //
-// Records must signed before transmitting them to another node. Decoding a record verifies
+// Records must be signed before transmitting them to another node. Decoding a record verifies
 // its signature. When creating a record, set the keys you want, then call Sign to add the
 // signature. Modifying a record invalidates the signature.
 //
@@ -61,7 +61,7 @@ var (
 
 // Record represents a node record. The zero value is an empty record.
 type Record struct {
-	seq       uint32 // sequence number
+	seq       uint64 // sequence number
 	signature []byte // the signature
 	raw       []byte // RLP encoded record
 	pairs     []pair // sorted list of all key/value pairs
@@ -79,19 +79,19 @@ func (r *Record) Signed() bool {
 }
 
 // Seq returns the sequence number.
-func (r *Record) Seq() uint32 {
+func (r *Record) Seq() uint64 {
 	return r.seq
 }
 
 // SetSeq updates the record sequence number. This invalidates any signature on the record.
 // Calling SetSeq is usually not required because signing the redord increments the
 // sequence number.
-func (r *Record) SetSeq(s uint32) {
+func (r *Record) SetSeq(s uint64) {
 	r.signature = nil
 	r.seq = s
 }
 
-// Load retrieves the valud of a key/value pair. The given Key must be a pointer and will
+// Load retrieves the value of a key/value pair. The given Key must be a pointer and will
 // be set to the value of the key in the record.
 //
 // Errors returned by Load are wrapped in KeyError. You can distinguish decoding errors

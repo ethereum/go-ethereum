@@ -247,7 +247,7 @@ func TestPythonInterop(t *testing.T) {
 
 	var (
 		wantAddr, _  = hex.DecodeString("caaa1485d83b18b32ed9ad666026151bf0cae8a0a88c857ae2d4c5be2daa6726")
-		wantSeq      = uint32(1)
+		wantSeq      = uint64(1)
 		wantIP       = IP4(net.ParseIP("127.0.0.1").To4())
 		wantDiscport = DiscPort(30303)
 	)
