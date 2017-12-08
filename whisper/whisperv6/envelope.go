@@ -36,12 +36,11 @@ import (
 // Envelope represents a clear-text data packet to transmit through the Whisper
 // network. Its contents may or may not be encrypted and signed.
 type Envelope struct {
-	Version []byte
-	Expiry  uint32
-	TTL     uint32
-	Topic   TopicType
-	Data    []byte
-	Nonce   uint64
+	Expiry uint32
+	TTL    uint32
+	Topic  TopicType
+	Data   []byte
+	Nonce  uint64
 
 	pow  float64     // Message-specific PoW as described in the Whisper specification.
 	hash common.Hash // Cached hash of the envelope to avoid rehashing every time.
@@ -50,12 +49,12 @@ type Envelope struct {
 
 // size returns the size of envelope as it is sent (i.e. public fields only)
 func (e *Envelope) size() int {
-	return EnvelopeHeaderLength + len(e.Version) + len(e.Data)
+	return EnvelopeHeaderLength + len(e.Data)
 }
 
 // rlpWithoutNonce returns the RLP encoded envelope contents, except the nonce.
 func (e *Envelope) rlpWithoutNonce() []byte {
-	res, _ := rlp.EncodeToBytes([]interface{}{e.Version, e.Expiry, e.TTL, e.Topic, e.Data})
+	res, _ := rlp.EncodeToBytes([]interface{}{e.Expiry, e.TTL, e.Topic, e.Data})
 	return res
 }
 
@@ -63,25 +62,14 @@ func (e *Envelope) rlpWithoutNonce() []byte {
 // included into an envelope for network forwarding.
 func NewEnvelope(ttl uint32, topic TopicType, msg *sentMessage) *Envelope {
 	env := Envelope{
-		Version: make([]byte, 1),
-		Expiry:  uint32(time.Now().Add(time.Second * time.Duration(ttl)).Unix()),
-		TTL:     ttl,
-		Topic:   topic,
-		Data:    msg.Raw,
-		Nonce:   0,
-	}
-
-	if EnvelopeVersion < 256 {
-		env.Version[0] = byte(EnvelopeVersion)
-	} else {
-		panic("please increase the size of Envelope.Version before releasing this version")
+		Expiry: uint32(time.Now().Add(time.Second * time.Duration(ttl)).Unix()),
+		TTL:    ttl,
+		Topic:  topic,
+		Data:   msg.Raw,
+		Nonce:  0,
 	}
 
 	return &env
-}
-
-func (e *Envelope) Ver() uint64 {
-	return bytesToUintLittleEndian(e.Version)
 }
 
 // Seal closes the envelope by spending the requested amount of time as a proof
@@ -236,7 +224,6 @@ func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
 		msg.TTL = e.TTL
 		msg.Sent = e.Expiry - e.TTL
 		msg.EnvelopeHash = e.Hash()
-		msg.EnvelopeVersion = e.Ver()
 	}
 	return msg
 }

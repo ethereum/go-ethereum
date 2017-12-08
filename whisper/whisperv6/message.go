@@ -70,9 +70,8 @@ type ReceivedMessage struct {
 	Dst   *ecdsa.PublicKey // Message recipient (identity used to decode the message)
 	Topic TopicType
 
-	SymKeyHash      common.Hash // The Keccak256Hash of the key, associated with the Topic
-	EnvelopeHash    common.Hash // Message envelope hash to act as a unique id
-	EnvelopeVersion uint64
+	SymKeyHash   common.Hash // The Keccak256Hash of the key, associated with the Topic
+	EnvelopeHash common.Hash // Message envelope hash to act as a unique id
 }
 
 func isMessageSigned(flags byte) bool {

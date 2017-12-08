@@ -19,11 +19,13 @@ package whisperv6
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/sha256"
 	mrand "math/rand"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 func TestWhisperBasic(t *testing.T) {
@@ -79,14 +81,7 @@ func TestWhisperBasic(t *testing.T) {
 	}
 
 	var derived []byte
-	ver := uint64(0xDEADBEEF)
-	if _, err := deriveKeyMaterial(peerID, ver); err != unknownVersionError(ver) {
-		t.Fatalf("failed deriveKeyMaterial with param = %v: %s.", peerID, err)
-	}
-	derived, err = deriveKeyMaterial(peerID, 0)
-	if err != nil {
-		t.Fatalf("failed second deriveKeyMaterial with param = %v: %s.", peerID, err)
-	}
+	derived = pbkdf2.Key([]byte(peerID), nil, 65356, aesKeyLength, sha256.New)
 	if !validateSymmetricKey(derived) {
 		t.Fatalf("failed validateSymmetricKey with param = %v.", derived)
 	}

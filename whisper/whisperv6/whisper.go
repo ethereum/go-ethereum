@@ -367,7 +367,9 @@ func (w *Whisper) AddSymKeyFromPassword(password string) (string, error) {
 		return "", fmt.Errorf("failed to generate unique ID")
 	}
 
-	derived, err := deriveKeyMaterial([]byte(password), EnvelopeVersion)
+	// kdf should run no less than 0.1 seconds on an average computer,
+	// because it's an once in a session experience
+	derived := pbkdf2.Key([]byte(password), nil, 65356, aesKeyLength, sha256.New)
 	if err != nil {
 		return "", err
 	}
@@ -587,10 +589,6 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 		return false, fmt.Errorf("huge messages are not allowed [%x]", envelope.Hash())
 	}
 
-	if len(envelope.Version) > 4 {
-		return false, fmt.Errorf("oversized version [%x]", envelope.Hash())
-	}
-
 	if envelope.PoW() < wh.MinPow() {
 		log.Debug("envelope with low PoW dropped", "PoW", envelope.PoW(), "hash", envelope.Hash().Hex())
 		return false, nil // drop envelope without error
@@ -628,16 +626,11 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 
 // postEvent queues the message for further processing.
 func (w *Whisper) postEvent(envelope *Envelope, isP2P bool) {
-	// if the version of incoming message is higher than
-	// currently supported version, we can not decrypt it,
-	// and therefore just ignore this message
-	if envelope.Ver() <= EnvelopeVersion {
-		if isP2P {
-			w.p2pMsgQueue <- envelope
-		} else {
-			w.checkOverflow()
-			w.messageQueue <- envelope
-		}
+	if isP2P {
+		w.p2pMsgQueue <- envelope
+	} else {
+		w.checkOverflow()
+		w.messageQueue <- envelope
 	}
 }
 
@@ -821,19 +814,6 @@ func BytesToUintBigEndian(b []byte) (res uint64) {
 		res += uint64(b[i])
 	}
 	return res
-}
-
-// deriveKeyMaterial derives symmetric key material from the key or password.
-// pbkdf2 is used for security, in case people use password instead of randomly generated keys.
-func deriveKeyMaterial(key []byte, version uint64) (derivedKey []byte, err error) {
-	if version == 0 {
-		// kdf should run no less than 0.1 seconds on average compute,
-		// because it's a once in a session experience
-		derivedKey := pbkdf2.Key(key, nil, 65356, aesKeyLength, sha256.New)
-		return derivedKey, nil
-	} else {
-		return nil, unknownVersionError(version)
-	}
 }
 
 // GenerateRandomID generates a random string, which is then returned to be used as a key id
