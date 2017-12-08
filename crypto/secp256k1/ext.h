@@ -99,7 +99,7 @@ static int secp256k1_ext_reencode_pubkey(
 	}
 	unsigned int flag = (outlen == 33) ? SECP256K1_EC_COMPRESSED : SECP256K1_EC_UNCOMPRESSED;
 	return secp256k1_ec_pubkey_serialize(ctx, out, &outlen, &pubkey, flag);
-}i
+}
 
 // secp256k1_ext_scalar_mul multiplies a point by a scalar in constant time.
 //
