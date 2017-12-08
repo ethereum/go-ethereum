@@ -19,6 +19,7 @@ package crypto
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -97,6 +98,24 @@ func TestCompressPubkey(t *testing.T) {
 	compressed := CompressPubkey(key)
 	if !bytes.Equal(compressed, testpubkeyc) {
 		t.Errorf("wrong public key result: got %x, want %x", compressed, testpubkeyc)
+	}
+}
+
+func TestPubkeyRandom(t *testing.T) {
+	const runs = 200
+
+	for i := 0; i < runs; i++ {
+		key, err := GenerateKey()
+		if err != nil {
+			t.Fatalf("iteration %d: %v", i, err)
+		}
+		pubkey2, err := DecompressPubkey(CompressPubkey(&key.PublicKey))
+		if err != nil {
+			t.Fatalf("iteration %d: %v", i, err)
+		}
+		if !reflect.DeepEqual(key.PublicKey, *pubkey2) {
+			t.Fatalf("iteration %d: keys not equal", i)
+		}
 	}
 }
 
