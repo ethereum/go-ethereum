@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/rand"
-	"net"
 	"testing"
 	"time"
 
@@ -251,7 +250,7 @@ func TestPythonInterop(t *testing.T) {
 	var (
 		wantAddr, _  = hex.DecodeString("caaa1485d83b18b32ed9ad666026151bf0cae8a0a88c857ae2d4c5be2daa6726")
 		wantSeq      = uint64(1)
-		wantIP       = IP4(net.ParseIP("127.0.0.1").To4())
+		wantIP       = IP4{127, 0, 0, 1}
 		wantDiscport = DiscPort(30303)
 	)
 	if r.Seq() != wantSeq {
