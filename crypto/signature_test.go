@@ -68,6 +68,11 @@ func TestVerifySignature(t *testing.T) {
 	if VerifySignature(testpubkey, testmsg, sig[:len(sig)-2]) {
 		t.Errorf("signature valid even though it's incomplete")
 	}
+	wrongkey := common.CopyBytes(testpubkey)
+	wrongkey[10]++
+	if VerifySignature(wrongkey, testmsg, sig) {
+		t.Errorf("signature valid with with wrong public key")
+	}
 }
 
 func TestDecompressPubkey(t *testing.T) {
