@@ -21,12 +21,12 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEventId(t *testing.T) {
@@ -89,63 +89,61 @@ func (tc testCase) encoded(intType, arrayType Type) []byte {
 	return b.Bytes()
 }
 
-func TestEventUnpack(t *testing.T) {
-	intType, _ := NewType("uint256")
-	arrayType, _ := NewType("uint256[2]")
-	definitionTemplate := `[{"anonymous":false,"inputs":[
-{"indexed":%t,"name":"value1","type":"%s"},
-{"indexed":%t,"name":"values","type":"%s"},
-{"indexed":%t,"name":"value2","type":"%s"}],
-"name":"test","type":"event"}]`
-	table := []testCase{
-		{
-			// value1 is indexed
-			definition: fmt.Sprintf(definitionTemplate, true, intType, false, arrayType, false, intType),
-			want:       testResult{Value2: big.NewInt(10), Values: [2]*big.Int{big.NewInt(10), big.NewInt(11)}},
-		},
-		{
-			// only values field (array) is indexed
-			definition: fmt.Sprintf(definitionTemplate, false, intType, true, arrayType, false, intType),
-			want:       testResult{Value1: big.NewInt(100), Value2: big.NewInt(1)},
-		},
-		{
-			// values and value2 are indexed
-			definition: fmt.Sprintf(definitionTemplate, false, intType, true, arrayType, true, intType),
-			want:       testResult{Value1: big.NewInt(100)},
-		},
-		{
-			// value1 and values are not indexed
-			definition: fmt.Sprintf(definitionTemplate, false, intType, false, arrayType, true, intType),
-			want:       testResult{Value1: big.NewInt(10), Values: [2]*big.Int{big.NewInt(10), big.NewInt(11)}},
-		},
+// TestEventUnpackIndexed verifies that indexed field will be skipped by event decoder.
+func TestEventUnpackIndexed(t *testing.T) {
+	definition := `[{"name": "test", "type": "event", "inputs": [{"indexed": true, "name":"value1", "type":"uint8"},{"indexed": false, "name":"value2", "type":"uint8"}]}]`
+	type testStruct struct {
+		Value1 uint8
+		Value2 uint8
 	}
-	for i, row := range table {
-		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
-			encoded := row.encoded(intType, arrayType)
-			t.Logf("unpacking definition %s, expected %v", row.definition, row.want)
-			abi, err := JSON(strings.NewReader(row.definition))
-			if err != nil {
-				t.Fatal(err)
-			}
-			var rst testResult
-			if err := abi.Unpack(&rst, "test", encoded); err != nil {
-				t.Fatalf("error unpacking %s: %v", row.definition, err)
-			}
-			if row.want.Value1 != nil && rst.Value1.Cmp(row.want.Value1) != 0 {
-				t.Errorf("result value1 %v is not equal to expected %v", rst.Value1, row.want.Value1)
-			}
-			if row.want.Value2 != nil && rst.Value2.Cmp(row.want.Value2) != 0 {
-				t.Errorf("result value2 %v is not equal to expected %v", rst.Value2, row.want.Value2)
-			}
-			if len(row.want.Values) != len(rst.Values) {
-				t.Errorf("result values %v are not equal to expected %v", rst.Values, row.want.Values)
-			} else {
-				for i, val := range rst.Values {
-					if exp := row.want.Values[i]; exp != nil && exp.Cmp(val) != 0 {
-						t.Errorf("value %d: %v is not equal to expected %v", i, val, exp)
-					}
-				}
-			}
-		})
+	abi, err := JSON(strings.NewReader(definition))
+	require.NoError(t, err)
+	var b bytes.Buffer
+	b.Write(packNum(reflect.ValueOf(uint8(8))))
+	var rst testStruct
+	require.NoError(t, abi.Unpack(&rst, "test", b.Bytes()))
+	require.Equal(t, uint8(0), rst.Value1)
+	require.Equal(t, uint8(8), rst.Value2)
+}
+
+// TestEventMultiValueWithArrayUnpack verifies that array fields will be counted after parsing array.
+func TestEventMultiValueWithArrayUnpack(t *testing.T) {
+	definition := `[{"name": "test", "type": "event", "inputs": [{"indexed": false, "name":"value1", "type":"uint8[2]"},{"indexed": false, "name":"value2", "type":"uint8"}]}]`
+	type testStruct struct {
+		Value1 [2]uint8
+		Value2 uint8
 	}
+	abi, err := JSON(strings.NewReader(definition))
+	require.NoError(t, err)
+	var b bytes.Buffer
+	var i uint8 = 1
+	for ; i <= 3; i++ {
+		b.Write(packNum(reflect.ValueOf(i)))
+	}
+	var rst testStruct
+	require.NoError(t, abi.Unpack(&rst, "test", b.Bytes()))
+	require.Equal(t, [2]uint8{1, 2}, rst.Value1)
+	require.Equal(t, uint8(3), rst.Value2)
+}
+
+// TestEventIndexedWithArrayUnpack verifies that decoder will not overlow when static array is indexed input.
+func TestEventIndexedWithArrayUnpack(t *testing.T) {
+	definition := `[{"name": "test", "type": "event", "inputs": [{"indexed": true, "name":"value1", "type":"uint8[2]"},{"indexed": false, "name":"value2", "type":"string"}]}]`
+	type testStruct struct {
+		Value1 [2]uint8
+		Value2 string
+	}
+	abi, err := JSON(strings.NewReader(definition))
+	require.NoError(t, err)
+	var b bytes.Buffer
+	stringOut := "abc"
+	// number of fields that will be encoded * 32
+	b.Write(packNum(reflect.ValueOf(32)))
+	b.Write(packNum(reflect.ValueOf(len(stringOut))))
+	b.Write(common.RightPadBytes([]byte(stringOut), 32))
+	fmt.Println(b.Bytes())
+	var rst testStruct
+	require.NoError(t, abi.Unpack(&rst, "test", b.Bytes()))
+	require.Equal(t, [2]uint8{0, 0}, rst.Value1)
+	require.Equal(t, stringOut, rst.Value2)
 }
