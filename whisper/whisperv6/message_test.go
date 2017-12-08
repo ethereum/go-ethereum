@@ -416,3 +416,27 @@ func TestPadding(t *testing.T) {
 		singlePaddingTest(t, n)
 	}
 }
+
+func TestPaddingAppendedToSymMessages(t *testing.T) {
+	params := &MessageParams{
+		Payload: make([]byte, 246),
+		KeySym:  make([]byte, aesKeyLength),
+	}
+
+	// Simulate a message with a payload just under 256 so that
+	// payload + flag + aesnonce > 256. Check that the result
+	// is padded on the next 256 boundary.
+	msg := sentMessage{}
+	msg.Raw = make([]byte, len(params.Payload)+1+AESNonceLength)
+
+	err := msg.appendPadding(params)
+
+	if err != nil {
+		t.Fatalf("Error appending padding to message %v", err)
+		return
+	}
+
+	if len(msg.Raw) != 512 {
+		t.Errorf("Invalid size %d != 512", len(msg.Raw))
+	}
+}
