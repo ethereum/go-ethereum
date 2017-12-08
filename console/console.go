@@ -217,10 +217,14 @@ func (c *Console) init(preload []string) error {
 	return nil
 }
 
-func (c *Console) clearHistory() (err error) {
+func (c *Console) clearHistory() {
 	c.history = nil
 	c.prompter.ClearHistory()
-	return os.Remove(c.histPath)
+	if err := os.Remove(c.histPath); err != nil {
+		fmt.Fprintln(c.printer, "can't delete history file:", err)
+	} else {
+		fmt.Fprintln(c.printer, "history file deleted")
+	}
 }
 
 // consoleOutput is an override for the console.log and console.error methods to
