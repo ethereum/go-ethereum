@@ -14,7 +14,17 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package enr implements the Ethereum Node Record as per https://github.com/ethereum/EIPs/pull/778
+// Package enr implements Ethereum Node Records as defined in EIP-778. A node record holds
+// arbitrary information about a node on the peer-to-peer network.
+//
+// Records contain named keys. To store and retrieve keys in a record, use the Key
+// interface.
+//
+// Records must signed before transmitting them to another node. Decoding a record verifies
+// its signature. When creating a record, set the keys you want, then call Sign to add the
+// signature. Modifying a record invalidates the signature.
+//
+// Package enr supports the "secp256k1-keccak" identity scheme.
 package enr
 
 import (
@@ -35,6 +45,8 @@ import (
 
 const SizeLimit = 300 // maximum encoded size of a node record in bytes
 
+const ID_SECP256k1_KECCAK = ID("secp256k1-keccak") // the default identity scheme
+
 var (
 	errNoID           = errors.New("unknown or unspecified identity scheme")
 	errInvalidSigsize = errors.New("invalid signature size")
@@ -43,15 +55,16 @@ var (
 	errDuplicateKey   = errors.New("record contains duplicate key")
 	errIncompletePair = errors.New("record contains incomplete k/v pair")
 	errTooBig         = fmt.Errorf("record bigger than %d bytes", SizeLimit)
+	errEncodeUnsigned = errors.New("can't encode unsigned record")
+	errNotFound       = errors.New("no such key in record")
 )
 
-// Key is implemented by known node record key types.
-//
-// To define a new key that is to be included in a node record,
-// create a Go type that satisfies this interface. The type should
-// also implement rlp.Decoder if additional checks are needed on the value.
-type Key interface {
-	ENRKey() string
+// Record represents a node record. The zero value is an empty record.
+type Record struct {
+	seq       uint32 // sequence number
+	signature []byte // the signature
+	raw       []byte // RLP encoded record
+	pairs     []pair // sorted list of all key/value pairs
 }
 
 // pair is a key/value pair in a record.
@@ -60,36 +73,38 @@ type pair struct {
 	v rlp.RawValue
 }
 
-// Record represents Ethereum Node Record
-type Record struct {
-	seq       uint32 // sequence number
-	signature []byte // record's signature
-	raw       []byte // RLP encoded record
-	pairs     []pair // sorted list of all key/value pairs
+// Signed reports whether the record has a valid signature.
+func (r *Record) Signed() bool {
+	return r.signature != nil
 }
 
-// Seq return record's sequence number
-func (r Record) Seq() uint32 {
+// Seq returns the sequence number.
+func (r *Record) Seq() uint32 {
 	return r.seq
 }
 
-// SetSeq update record's sequence number. Nodes should increase the number whenever the record changes.
+// SetSeq updates the record sequence number. This invalidates any signature on the record.
+// Calling SetSeq is usually not required because signing the redord increments the
+// sequence number.
 func (r *Record) SetSeq(s uint32) {
 	r.signature = nil
 	r.seq = s
 }
 
-// Load is loading a key/value pair based on provided key from the record.
-// It returns false if such key cannot be found.
-// It returns an error if there is a problem with RLP decoding of the pair.
-func (r *Record) Load(k Key) (bool, error) {
+// Load retrieves the valud of a key/value pair. The given Key must be a pointer and will
+// be set to the value of the key in the record.
+//
+// Errors returned by Load are wrapped in KeyError. You can distinguish decoding errors
+// from missing keys using the IsNotFound function.
+func (r *Record) Load(k Key) error {
 	i := sort.Search(len(r.pairs), func(i int) bool { return r.pairs[i].k >= k.ENRKey() })
-
 	if i < len(r.pairs) && r.pairs[i].k == k.ENRKey() {
-		return true, rlp.DecodeBytes(r.pairs[i].v, k)
+		if err := rlp.DecodeBytes(r.pairs[i].v, k); err != nil {
+			return &KeyError{Key: k.ENRKey(), Err: err}
+		}
+		return nil
 	}
-
-	return false, errors.New("record does not exist")
+	return &KeyError{Key: k.ENRKey(), Err: errNotFound}
 }
 
 // Set adds or updates the given key in the record.
@@ -120,17 +135,17 @@ func (r *Record) Set(k Key) {
 	r.pairs = append(r.pairs, pair{k.ENRKey(), blob})
 }
 
-// EncodeRLP implements rlp.Encoder.
-// Sign must be called prior to calling rlp.Encode
+// EncodeRLP implements rlp.Encoder. Encoding fails if
+// the record is unsigned.
 func (r Record) EncodeRLP(w io.Writer) error {
-	if r.signature == nil {
-		return errors.New("record is not signed")
+	if !r.Signed() {
+		return errEncodeUnsigned
 	}
 	_, err := w.Write(r.raw)
 	return err
 }
 
-// DecodeRLP implements rlp.Decoder.
+// DecodeRLP implements rlp.Decoder. Decoding verifies the signature.
 func (r *Record) DecodeRLP(s *rlp.Stream) error {
 	raw, err := s.Raw()
 	if err != nil {
@@ -191,29 +206,24 @@ func (r *Record) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// NodeAddr returns node's address - keccak256 hash of the public key.
-func (r *Record) NodeAddr() ([]byte, error) {
+// NodeAddr returns the node address. The return value will be nil if the record is
+// unsigned.
+func (r *Record) NodeAddr() []byte {
 	var secp256k1 Secp256k1
-
-	_, err := r.Load(&secp256k1)
-	if err != nil {
-		return nil, err
+	if r.Load(&secp256k1) != nil {
+		return nil
 	}
-
 	pk := btcec.PublicKey(secp256k1)
-
-	digest := crypto.Keccak256Hash(pk.SerializeCompressed())
-
-	return digest.Bytes(), nil
+	return crypto.Keccak256(pk.SerializeCompressed())
 }
 
-// Sign signs the record with the provided private key.
-// It updates record's identity scheme and public key.
-// It returns an error if signed record is bigger than SizeLimit bytes.
+// Sign signs the record with the given private key. It updates the record's identity
+// scheme, public key and increments the sequence number. Sign returns an error if the
+// encoded record is larger than the size limit.
 func (r *Record) Sign(privkey *ecdsa.PrivateKey) error {
 	pk := (*btcec.PublicKey)(&privkey.PublicKey)
 	r.seq = r.seq + 1
-	r.Set(ID(ID_SECP256k1_KECCAK))
+	r.Set(ID_SECP256k1_KECCAK)
 	r.Set(Secp256k1(*pk))
 	return r.signAndEncode(privkey)
 }
@@ -246,11 +256,9 @@ func (r *Record) signAndEncode(privkey *ecdsa.PrivateKey) error {
 	if err != nil {
 		return err
 	}
-
 	if len(r.raw) > SizeLimit {
 		return errTooBig
 	}
-
 	return nil
 }
 
@@ -258,15 +266,13 @@ func (r *Record) verifySignature() error {
 	// Get identity scheme, public key, signature.
 	var id ID
 	var secp256k1 Secp256k1
-	if _, err := r.Load(&id); err != nil {
+	if err := r.Load(&id); err != nil {
 		return err
 	} else if id != ID_SECP256k1_KECCAK {
 		return errNoID
 	}
-	if ok, err := r.Load(&secp256k1); err != nil {
+	if err := r.Load(&secp256k1); err != nil {
 		return err
-	} else if !ok {
-		return fmt.Errorf("can't verify signature: missing %q key", secp256k1.ENRKey())
 	}
 	sig, err := parseCompactSignature(r.signature)
 	if err != nil {

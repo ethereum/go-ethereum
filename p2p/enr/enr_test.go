@@ -19,60 +19,108 @@ package enr
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"math/rand"
 	"net"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-const (
-	privkeyHex = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"
+var (
+	privkeyHex     = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"
+	privkey, _     = crypto.HexToECDSA(privkeyHex)
+	pubkeyBytes, _ = hex.DecodeString("03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
+	pubkey, _      = btcec.ParsePubKey(pubkeyBytes, btcec.S256())
 )
 
-var rnd *rand.Rand
+var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-func init() {
-	rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
-}
-
-// TestGetSetID tests encoding/decoding and setting/getting of the enr.ID type
+// TestGetSetID tests encoding/decoding and setting/getting of the ID key.
 func TestGetSetID(t *testing.T) {
 	id := ID("someid")
 	var r Record
 	r.Set(id)
 
 	var id2 ID
-
-	_, err := r.Load(&id2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if id != id2 {
-		t.Fatalf("got %#v, expected %#v", id2, id)
-	}
+	require.NoError(t, r.Load(&id2))
+	assert.Equal(t, id, id2)
 }
 
-// TestGetSetIP4 tests encoding/decoding and setting/getting of the enr.IP4 type
+// TestGetSetIP4 tests encoding/decoding and setting/getting of the IP4 key.
 func TestGetSetIP4(t *testing.T) {
-	ip := IP4(net.IP{192, 168, 0, 3})
+	ip := IP4{192, 168, 0, 3}
 	var r Record
 	r.Set(ip)
 
 	var ip2 IP4
+	require.NoError(t, r.Load(&ip2))
+	assert.Equal(t, ip, ip2)
+}
 
-	_, err := r.Load(&ip2)
-	if err != nil {
+// TestGetSetIP6 tests encoding/decoding and setting/getting of the IP6 key.
+func TestGetSetIP6(t *testing.T) {
+	ip := IP6{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68}
+	var r Record
+	r.Set(ip)
+
+	var ip2 IP6
+	require.NoError(t, r.Load(&ip2))
+	assert.Equal(t, ip, ip2)
+}
+
+// TestGetSetDiscPort tests encoding/decoding and setting/getting of the DiscPort key.
+func TestGetSetDiscPort(t *testing.T) {
+	port := DiscPort(30309)
+	var r Record
+	r.Set(port)
+
+	var port2 DiscPort
+	require.NoError(t, r.Load(&port2))
+	assert.Equal(t, port, port2)
+}
+
+// TestGetSetSecp256k1 tests encoding/decoding and setting/getting of the Secp256k1 key.
+func TestGetSetSecp256k1(t *testing.T) {
+	var r Record
+	if err := r.Sign(privkey); err != nil {
 		t.Fatal(err)
 	}
 
-	if bytes.Compare(ip, ip2) != 0 {
-		t.Fatalf("got %#v, expected %#v", ip2, ip)
+	var pk Secp256k1
+	require.NoError(t, r.Load(&pk))
+	assert.EqualValues(t, pubkey, &pk)
+}
+
+func TestLoadErrors(t *testing.T) {
+	var r Record
+	ip4 := IP4{127, 0, 0, 1}
+	r.Set(ip4)
+
+	// Check error for missing keys.
+	var ip6 IP6
+	err := r.Load(&ip6)
+	if !IsNotFound(err) {
+		t.Error("IsNotFound should return true for missing key")
+	}
+	assert.Equal(t, &KeyError{Key: ip6.ENRKey(), Err: errNotFound}, err)
+
+	// Check error for invalid keys.
+	var list []uint
+	err = r.Load(WithKey(IP4{}.ENRKey(), &list))
+	kerr, ok := err.(*KeyError)
+	if !ok {
+		t.Fatal("expected KeyError, got %T", err)
+	}
+	assert.Equal(t, kerr.Key, ip4.ENRKey())
+	assert.Error(t, kerr.Err)
+	if IsNotFound(err) {
+		t.Error("IsNotFound should return false for decoding errors")
 	}
 }
 
@@ -107,103 +155,36 @@ func TestSortedGetAndSet(t *testing.T) {
 		for i, w := range tt.want {
 			// set got's key from r.pair[i], so that we preserve order of pairs
 			got := pair{k: r.pairs[i].k}
-			if ok, err := r.Load(WithKey(w.k, &got.v)); !ok || err != nil {
-				t.Fatal(err)
-			}
-
-			if got != w {
-				t.Fatalf("expected %#v, got %#v", w, got)
-			}
+			assert.NoError(t, r.Load(WithKey(w.k, &got.v)))
+			assert.Equal(t, w, got)
 		}
-	}
-}
-
-// TestGetSetIP6 tests encoding/decoding and setting/getting of the enr.IP6 type
-func TestGetSetIP6(t *testing.T) {
-	ip := IP6(net.IP{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68})
-	var r Record
-	r.Set(ip)
-
-	var ip2 IP6
-
-	_, err := r.Load(&ip2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if bytes.Compare(ip, ip2) != 0 {
-		t.Fatalf("got %#v, expected %#v", ip2, ip)
-	}
-}
-
-// TestGetSetDiscPort tests encoding/decoding and setting/getting of the enr.DiscPort type
-func TestGetSetDiscPort(t *testing.T) {
-	port := DiscPort(30309)
-	var r Record
-	r.Set(port)
-
-	var port2 DiscPort
-
-	_, err := r.Load(&port2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if port != port2 {
-		t.Fatalf("got %#v, expected %#v", port2, port)
-	}
-}
-
-// TestGetSetSecp256k1 tests encoding/decoding and setting/getting of the enr.Secp256k1 type
-func TestGetSetSecp256k1(t *testing.T) {
-	privkey, err := crypto.HexToECDSA(privkeyHex)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var r Record
-
-	err = r.Sign(privkey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var pk Secp256k1
-
-	_, err = r.Load(&pk)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	got := (*btcec.PublicKey)(&pk).SerializeCompressed()
-	expected := (*btcec.PublicKey)(&privkey.PublicKey).SerializeCompressed()
-	if bytes.Compare(got, expected) != 0 {
-		t.Fatalf("got %#v, expected %#v", got, expected)
 	}
 }
 
 // TestDirty tests record signature removal on setting of new key/value pair in record.
 func TestDirty(t *testing.T) {
-	privkey, err := crypto.HexToECDSA(privkeyHex)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	var r Record
 
-	err = r.Sign(privkey)
-	if err != nil {
-		t.Fatal(err)
+	if r.Signed() {
+		t.Error("Signed returned true for zero record")
+	}
+	if _, err := rlp.EncodeToBytes(r); err != errEncodeUnsigned {
+		t.Errorf("expected errEncodeUnsigned, got %#v", err)
 	}
 
-	if _, err := rlp.EncodeToBytes(r); err != nil {
-		t.Fatal(err)
+	require.NoError(t, r.Sign(privkey))
+	if !r.Signed() {
+		t.Error("Signed return false for signed record")
 	}
+	_, err := rlp.EncodeToBytes(r)
+	assert.NoError(t, err)
 
 	r.SetSeq(3)
-
-	if _, err := rlp.EncodeToBytes(r); err == nil {
-		t.Fatal("expected err, got nil")
+	if r.Signed() {
+		t.Error("Signed returned true for modified record")
+	}
+	if _, err := rlp.EncodeToBytes(r); err != errEncodeUnsigned {
+		t.Errorf("expected errEncodeUnsigned, got %#v")
 	}
 }
 
@@ -218,88 +199,45 @@ func TestGetSetOverwrite(t *testing.T) {
 	r.Set(ip2)
 
 	var ip3 IP4
-
-	_, err := r.Load(&ip3)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if bytes.Compare(ip2, ip3) != 0 {
-		t.Fatalf("got %#v, expected %#v", ip2, ip3)
-	}
+	require.NoError(t, r.Load(&ip3))
+	assert.Equal(t, ip2, ip3)
 }
 
 // TestSignEncodeAndDecode tests signing, RLP encoding and RLP decoding of a record.
 func TestSignEncodeAndDecode(t *testing.T) {
-	privkey, err := crypto.HexToECDSA(privkeyHex)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	var r Record
-	port := DiscPort(30303)
-	r.Set(port)
-
-	ipv4 := IP4(net.ParseIP("127.0.0.1"))
-	r.Set(ipv4)
-
-	err = r.Sign(privkey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	r.Set(DiscPort(30303))
+	r.Set(IP4(net.ParseIP("127.0.0.1")))
+	require.NoError(t, r.Sign(privkey))
 	blob, err := rlp.EncodeToBytes(r)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var r2 Record
-	err = rlp.DecodeBytes(blob, &r2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !reflect.DeepEqual(r, r2) {
-		t.Errorf("records not deep equal ; got\n%#v, expected\n%#v", r2, r)
-	}
+	require.NoError(t, rlp.DecodeBytes(blob, &r2))
+	assert.Equal(t, r, r2)
 
 	blob2, err := rlp.EncodeToBytes(r2)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	if bytes.Compare(blob, blob2) != 0 {
-		t.Errorf("serialised records not equal ; got\n%#v, expected\n%#v", blob2, blob)
-	}
+	assert.Equal(t, blob, blob2)
 }
 
-// TestNodeAddress tests that record returns correct node address - keccak256 hash of the public key.
-func TestNodeAddress(t *testing.T) {
-	privkey, err := crypto.HexToECDSA(privkeyHex)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+func TestNodeAddr(t *testing.T) {
 	var r Record
-
-	err = r.Sign(privkey)
-	if err != nil {
-		t.Fatal(err)
+	if addr := r.NodeAddr(); addr != nil {
+		t.Errorf("wrong address on empty record: got %v, want %v", addr, nil)
 	}
 
-	addr, err := r.NodeAddr()
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(t, r.Sign(privkey))
 	expected := "caaa1485d83b18b32ed9ad666026151bf0cae8a0a88c857ae2d4c5be2daa6726"
-	got := hex.EncodeToString(addr)
-	if got != expected {
-		t.Errorf("got\n%#v, expected\n%#v", got, expected)
-	}
+	assert.Equal(t, expected, hex.EncodeToString(r.NodeAddr()))
 }
 
-// TestPythonInterop tests that Go implementation can successfully RLP decode a record produced by Python implementation.
+// TestPythonInterop checks that we can decode and verify a record produced by the Python
+// implementation.
 func TestPythonInterop(t *testing.T) {
 	enc, _ := hex.DecodeString("f896b840638a54215d80a6713c8d523a6adc4e6e73652d859103a36b700851cb0e61b66b8ebfc1a610c57d732ec6e0a8f06a9a7a28df5051ece514702ff9cdff0b11f454018664697363763582765f82696490736563703235366b312d6b656363616b83697034847f00000189736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
 	var r Record
@@ -316,95 +254,62 @@ func TestPythonInterop(t *testing.T) {
 	if r.Seq() != wantSeq {
 		t.Errorf("wrong seq: got %d, want %d", r.Seq(), wantSeq)
 	}
-	if addr, _ := r.NodeAddr(); !bytes.Equal(addr, wantAddr) {
+	if addr := r.NodeAddr(); !bytes.Equal(addr, wantAddr) {
 		t.Errorf("wrong addr: got %x, want %x", addr, wantAddr)
 	}
 	want := map[Key]interface{}{new(IP4): &wantIP, new(DiscPort): &wantDiscport}
 	for k, v := range want {
-		if _, err := r.Load(k); err != nil {
-			t.Errorf("can't load %q: %v", k.ENRKey(), err)
-		} else if !reflect.DeepEqual(k, v) {
-			t.Errorf("wrong %q: got %v, want %v", k.ENRKey(), k, v)
+		desc := fmt.Sprintf("loading key %q", k.ENRKey())
+		if assert.NoError(t, r.Load(k), desc) {
+			assert.Equal(t, k, v, desc)
 		}
 	}
 }
 
 // TestRecordTooBig tests that records bigger than SizeLimit bytes cannot be signed.
 func TestRecordTooBig(t *testing.T) {
-	privkey, err := crypto.HexToECDSA(privkeyHex)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	var r Record
-
 	key := randomString(10)
 
 	// set a big value for random key, expect error
 	r.Set(WithKey(key, randomString(300)))
-	err = r.Sign(privkey)
-	if err != errTooBig {
+	if err := r.Sign(privkey); err != errTooBig {
 		t.Fatalf("expected to get errTooBig, got %#v", err)
 	}
 
 	// set an acceptable value for random key, expect no error
 	r.Set(WithKey(key, randomString(100)))
-	err = r.Sign(privkey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, r.Sign(privkey))
 }
 
 // TestSignEncodeAndDecodeRandom tests encoding/decoding of records containing random key/value pairs.
 func TestSignEncodeAndDecodeRandom(t *testing.T) {
-	privkey, err := crypto.HexToECDSA(privkeyHex)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	var r Record
 
 	// random key/value pairs for testing
 	pairs := map[string]uint32{}
-
 	for i := 0; i < 10; i++ {
 		key := randomString(7)
 		value := rnd.Uint32()
-
-		pair := WithKey(key, &value)
-		r.Set(pair)
-
 		pairs[key] = value
+		r.Set(WithKey(key, &value))
 	}
 
-	if r.Sign(privkey); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = rlp.EncodeToBytes(r)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, r.Sign(privkey))
+	_, err := rlp.EncodeToBytes(r)
+	require.NoError(t, err)
 
 	for k, v := range pairs {
+		desc := fmt.Sprintf("key %q", k)
 		var got uint32
 		buf := WithKey(k, &got)
-
-		if ok, err := r.Load(buf); !ok || err != nil {
-			t.Fatal(ok, err)
-		}
-
-		if got != v {
-			t.Fatalf("got %#v, expected %#v", got, v)
-		}
+		require.NoError(t, r.Load(buf), desc)
+		require.Equal(t, v, got, desc)
 	}
 }
 
 func randomString(strlen int) string {
-	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-	result := make([]byte, strlen)
-	for i := range result {
-		result[i] = chars[rnd.Intn(len(chars))]
-	}
-	return string(result)
+	b := make([]byte, strlen)
+	rnd.Read(b)
+	return string(b)
 }

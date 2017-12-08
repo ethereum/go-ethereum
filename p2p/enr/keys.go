@@ -26,14 +26,21 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// Key is implemented by known node record key types.
+//
+// To define a new key that is to be included in a node record,
+// create a Go type that satisfies this interface. The type should
+// also implement rlp.Decoder if additional checks are needed on the value.
+type Key interface {
+	ENRKey() string
+}
+
 type generic struct {
 	key   string
 	value interface{}
 }
 
-func (g generic) ENRKey() string {
-	return g.key
-}
+func (g generic) ENRKey() string { return g.key }
 
 func (g generic) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, g.value)
@@ -43,37 +50,27 @@ func (g *generic) DecodeRLP(s *rlp.Stream) error {
 	return s.Decode(g.value)
 }
 
-// WithKey returns a new Key that can be set in a Record.
-// v must implement the rlp.Encoder and rlp.Decoder interface.
+// WithKey wraps any value with a key name. It can be used to set and load arbitrary values
+// in a record. The value v must be supported by rlp. To use WithKey with Load, the value
+// must be a pointer.
 func WithKey(k string, v interface{}) Key {
 	return &generic{key: k, value: v}
 }
 
-// DiscPort represents an UDP port for discovery v5.
+// DiscPort is the "discv5" key, which holds the UDP port for discovery v5.
 type DiscPort uint16
 
-// ENRKey returns the node record key for an UDP port for discovery.
-func (DiscPort) ENRKey() string {
-	return "discv5"
-}
+func (v DiscPort) ENRKey() string { return "discv5" }
 
-const ID_SECP256k1_KECCAK = "secp256k1-keccak" // identity scheme identifier
-
-// ID is the name of the identity scheme, e.g. "secp256k1-keccak".
+// ID is the "id" key, which holds the name of the identity scheme.
 type ID string
 
-// ENRKey returns the node record key for its identity scheme.
-func (ID) ENRKey() string {
-	return "id"
-}
+func (v ID) ENRKey() string { return "id" }
 
-// IP4 represents an 4-byte IPv4 address in a node record.
+// IP4 is the "ip4" key, which holds a 4-byte IPv4 address.
 type IP4 net.IP
 
-// ENRKey returns the node record key for an IPv4 address.
-func (IP4) ENRKey() string {
-	return "ip4"
-}
+func (v IP4) ENRKey() string { return "ip4" }
 
 // EncodeRLP implements rlp.Encoder.
 func (v IP4) EncodeRLP(w io.Writer) error {
@@ -95,13 +92,10 @@ func (v *IP4) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// IP6 represents an 16-byte IPv6 address in a node record.
+// IP6 is the "ip6" key, which holds a 16-byte IPv6 address.
 type IP6 net.IP
 
-// ENRKey returns the node record key for an IPv6 address.
-func (IP6) ENRKey() string {
-	return "ip6"
-}
+func (v IP6) ENRKey() string { return "ip6" }
 
 // EncodeRLP implements rlp.Encoder.
 func (v IP6) EncodeRLP(w io.Writer) error {
@@ -120,13 +114,10 @@ func (v *IP6) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// Secp256k1 is compressed secp256k1 public key.
+// Secp256k1 is the "secp256k1" key, which holds a public key.
 type Secp256k1 ecdsa.PublicKey
 
-// ENRKey returns the node record key for the secp256k1 public key.
-func (Secp256k1) ENRKey() string {
-	return "secp256k1"
-}
+func (v Secp256k1) ENRKey() string { return "secp256k1" }
 
 // EncodeRLP implements rlp.Encoder.
 func (v Secp256k1) EncodeRLP(w io.Writer) error {
@@ -150,4 +141,25 @@ func (v *Secp256k1) DecodeRLP(s *rlp.Stream) error {
 	*v = (Secp256k1)(*pk)
 
 	return nil
+}
+
+// KeyError is an error related to a key.
+type KeyError struct {
+	Key string
+	Err error
+}
+
+// Error implements error.
+func (err *KeyError) Error() string {
+	if err.Err == errNotFound {
+		return fmt.Sprintf("missing ENR key %q", err.Key)
+	}
+	return fmt.Sprintf("ENR key %q: %v", err.Key, err.Err)
+}
+
+// IsNotFound reports whether the given error means that a key/value pair is
+// missing from a record.
+func IsNotFound(err error) bool {
+	kerr, ok := err.(*KeyError)
+	return ok && kerr.Err == errNotFound
 }
