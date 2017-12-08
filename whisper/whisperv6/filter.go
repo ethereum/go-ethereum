@@ -53,6 +53,10 @@ func NewFilters(w *Whisper) *Filters {
 }
 
 func (fs *Filters) Install(watcher *Filter) (string, error) {
+	if watcher.KeySym != nil && watcher.KeyAsym != nil {
+		return "", fmt.Errorf("filters must choose between symmetric and asymmetric keys")
+	}
+
 	if watcher.Messages == nil {
 		watcher.Messages = make(map[common.Hash]*ReceivedMessage)
 	}
@@ -175,6 +179,9 @@ func (f *Filter) Retrieve() (all []*ReceivedMessage) {
 	return all
 }
 
+// MatchMessage checks if the filter matches an already decrypted
+// message (i.e. a Message that has already been handled by
+// MatchEnvelope when checked by a previous filter)
 func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 	if f.PoW > 0 && msg.PoW < f.PoW {
 		return false
@@ -188,17 +195,15 @@ func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 	return false
 }
 
+// MatchEvelope checks if it's worth decrypting the message. If
+// it returns `true`, client code is expected to attempt decrypting
+// the message and subsequently call MatchMessage.
 func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
 	if f.PoW > 0 && envelope.pow < f.PoW {
 		return false
 	}
 
-	if f.expectsAsymmetricEncryption() && envelope.isAsymmetric() {
-		return f.MatchTopic(envelope.Topic)
-	} else if f.expectsSymmetricEncryption() && envelope.IsSymmetric() {
-		return f.MatchTopic(envelope.Topic)
-	}
-	return false
+	return f.MatchTopic(envelope.Topic)
 }
 
 func (f *Filter) MatchTopic(topic TopicType) bool {

@@ -36,13 +36,12 @@ import (
 // Envelope represents a clear-text data packet to transmit through the Whisper
 // network. Its contents may or may not be encrypted and signed.
 type Envelope struct {
-	Version  []byte
-	Expiry   uint32
-	TTL      uint32
-	Topic    TopicType
-	AESNonce []byte
-	Data     []byte
-	Nonce    uint64
+	Version []byte
+	Expiry  uint32
+	TTL     uint32
+	Topic   TopicType
+	Data    []byte
+	Nonce   uint64
 
 	pow  float64     // Message-specific PoW as described in the Whisper specification.
 	hash common.Hash // Cached hash of the envelope to avoid rehashing every time.
@@ -51,26 +50,25 @@ type Envelope struct {
 
 // size returns the size of envelope as it is sent (i.e. public fields only)
 func (e *Envelope) size() int {
-	return 20 + len(e.Version) + len(e.AESNonce) + len(e.Data)
+	return EnvelopeHeaderLength + len(e.Version) + len(e.Data)
 }
 
 // rlpWithoutNonce returns the RLP encoded envelope contents, except the nonce.
 func (e *Envelope) rlpWithoutNonce() []byte {
-	res, _ := rlp.EncodeToBytes([]interface{}{e.Version, e.Expiry, e.TTL, e.Topic, e.AESNonce, e.Data})
+	res, _ := rlp.EncodeToBytes([]interface{}{e.Version, e.Expiry, e.TTL, e.Topic, e.Data})
 	return res
 }
 
 // NewEnvelope wraps a Whisper message with expiration and destination data
 // included into an envelope for network forwarding.
-func NewEnvelope(ttl uint32, topic TopicType, aesNonce []byte, msg *sentMessage) *Envelope {
+func NewEnvelope(ttl uint32, topic TopicType, msg *sentMessage) *Envelope {
 	env := Envelope{
-		Version:  make([]byte, 1),
-		Expiry:   uint32(time.Now().Add(time.Second * time.Duration(ttl)).Unix()),
-		TTL:      ttl,
-		Topic:    topic,
-		AESNonce: aesNonce,
-		Data:     msg.Raw,
-		Nonce:    0,
+		Version: make([]byte, 1),
+		Expiry:  uint32(time.Now().Add(time.Second * time.Duration(ttl)).Unix()),
+		TTL:     ttl,
+		Topic:   topic,
+		Data:    msg.Raw,
+		Nonce:   0,
 	}
 
 	if EnvelopeVersion < 256 {
@@ -80,14 +78,6 @@ func NewEnvelope(ttl uint32, topic TopicType, aesNonce []byte, msg *sentMessage)
 	}
 
 	return &env
-}
-
-func (e *Envelope) IsSymmetric() bool {
-	return len(e.AESNonce) > 0
-}
-
-func (e *Envelope) isAsymmetric() bool {
-	return !e.IsSymmetric()
 }
 
 func (e *Envelope) Ver() uint64 {
@@ -209,7 +199,7 @@ func (e *Envelope) OpenAsymmetric(key *ecdsa.PrivateKey) (*ReceivedMessage, erro
 // OpenSymmetric tries to decrypt an envelope, potentially encrypted with a particular key.
 func (e *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error) {
 	msg = &ReceivedMessage{Raw: e.Data}
-	err = msg.decryptSymmetric(key, e.AESNonce)
+	err = msg.decryptSymmetric(key)
 	if err != nil {
 		msg = nil
 	}
@@ -218,12 +208,18 @@ func (e *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error) {
 
 // Open tries to decrypt an envelope, and populates the message fields in case of success.
 func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
-	if e.isAsymmetric() {
+	// The API interface forbids filters doing both symmetric and
+	// asymmetric encryption.
+	if watcher.expectsAsymmetricEncryption() && watcher.expectsSymmetricEncryption() {
+		return nil
+	}
+
+	if watcher.expectsAsymmetricEncryption() {
 		msg, _ = e.OpenAsymmetric(watcher.KeyAsym)
 		if msg != nil {
 			msg.Dst = &watcher.KeyAsym.PublicKey
 		}
-	} else if e.IsSymmetric() {
+	} else if watcher.expectsSymmetricEncryption() {
 		msg, _ = e.OpenSymmetric(watcher.KeySym)
 		if msg != nil {
 			msg.SymKeyHash = crypto.Keccak256Hash(watcher.KeySym)

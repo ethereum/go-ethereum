@@ -591,13 +591,6 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 		return false, fmt.Errorf("oversized version [%x]", envelope.Hash())
 	}
 
-	aesNonceSize := len(envelope.AESNonce)
-	if aesNonceSize != 0 && aesNonceSize != AESNonceLength {
-		// the standard AES GCM nonce size is 12 bytes,
-		// but constant gcmStandardNonceSize cannot be accessed (not exported)
-		return false, fmt.Errorf("wrong size of AESNonce: %d bytes [env: %x]", aesNonceSize, envelope.Hash())
-	}
-
 	if envelope.PoW() < wh.MinPow() {
 		log.Debug("envelope with low PoW dropped", "PoW", envelope.PoW(), "hash", envelope.Hash().Hex())
 		return false, nil // drop envelope without error

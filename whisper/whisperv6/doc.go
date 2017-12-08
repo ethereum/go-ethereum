@@ -36,15 +36,15 @@ import (
 
 const (
 	EnvelopeVersion    = uint64(0)
-	ProtocolVersion    = uint64(5)
-	ProtocolVersionStr = "5.0"
+	ProtocolVersion    = uint64(6)
+	ProtocolVersionStr = "6.0"
 	ProtocolName       = "shh"
 
 	statusCode           = 0 // used by whisper protocol
 	messagesCode         = 1 // normal whisper message
 	p2pCode              = 2 // peer-to-peer message (to be consumed by the peer, but not forwarded any further)
 	p2pRequestCode       = 3 // peer-to-peer message, used by Dapp protocol
-	NumberOfMessageCodes = 64
+	NumberOfMessageCodes = 128
 
 	paddingMask   = byte(3)
 	signatureFlag = byte(4)
@@ -67,6 +67,8 @@ const (
 
 	DefaultTTL     = 50 // seconds
 	SynchAllowance = 10 // seconds
+
+	EnvelopeHeaderLength = 20
 )
 
 type unknownVersionError uint64

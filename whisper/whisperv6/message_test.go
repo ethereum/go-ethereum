@@ -174,10 +174,8 @@ func TestMessageSeal(t *testing.T) {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
 	params.TTL = 1
-	aesnonce := make([]byte, 12)
-	mrand.Read(aesnonce)
 
-	env := NewEnvelope(params.TTL, params.Topic, aesnonce, msg)
+	env := NewEnvelope(params.TTL, params.Topic, msg)
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -242,7 +240,12 @@ func singleEnvelopeOpenTest(t *testing.T, symmetric bool) {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
 
-	f := Filter{KeyAsym: key, KeySym: params.KeySym}
+	var f Filter
+	if symmetric {
+		f = Filter{KeySym: params.KeySym}
+	} else {
+		f = Filter{KeyAsym: key}
+	}
 	decrypted := env.Open(&f)
 	if decrypted == nil {
 		t.Fatalf("failed to open with seed %d.", seed)
