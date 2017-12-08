@@ -68,6 +68,7 @@ func (p *hookedPrompter) PromptConfirm(prompt string) (bool, error) {
 }
 func (p *hookedPrompter) SetHistory(history []string)              {}
 func (p *hookedPrompter) AppendHistory(command string)             {}
+func (p *hookedPrompter) ClearHistory()                            {}
 func (p *hookedPrompter) SetWordCompleter(completer WordCompleter) {}
 
 // tester is a console test environment for the console tests to operate on.
