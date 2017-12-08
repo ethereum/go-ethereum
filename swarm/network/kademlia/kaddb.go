@@ -330,7 +330,7 @@ func (self *KadDb) load(path string, cb func(*NodeRecord, Node) error) (err erro
 				}
 			}
 			n++
-			if (node.After == time.Time{}) {
+			if node.After.IsZero() {
 				node.After = time.Now()
 			}
 			self.index[node.Addr] = node

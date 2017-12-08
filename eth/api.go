@@ -615,14 +615,18 @@ func (api *PrivateDebugAPI) StorageRangeAt(ctx context.Context, blockHash common
 	if st == nil {
 		return StorageRangeResult{}, fmt.Errorf("account %x doesn't exist", contractAddress)
 	}
-	return storageRangeAt(st, keyStart, maxResult), nil
+	return storageRangeAt(st, keyStart, maxResult)
 }
 
-func storageRangeAt(st state.Trie, start []byte, maxResult int) StorageRangeResult {
+func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeResult, error) {
 	it := trie.NewIterator(st.NodeIterator(start))
 	result := StorageRangeResult{Storage: storageMap{}}
 	for i := 0; i < maxResult && it.Next(); i++ {
-		e := storageEntry{Value: common.BytesToHash(it.Value)}
+		_, content, _, err := rlp.Split(it.Value)
+		if err != nil {
+			return StorageRangeResult{}, err
+		}
+		e := storageEntry{Value: common.BytesToHash(content)}
 		if preimage := st.GetKey(it.Key); preimage != nil {
 			preimage := common.BytesToHash(preimage)
 			e.Key = &preimage
@@ -634,7 +638,7 @@ func storageRangeAt(st state.Trie, start []byte, maxResult int) StorageRangeResu
 		next := common.BytesToHash(it.Key)
 		result.NextKey = &next
 	}
-	return result
+	return result, nil
 }
 
 // GetModifiedAccountsByumber returns all accounts that have changed between the
