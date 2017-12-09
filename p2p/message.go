@@ -1,18 +1,18 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package p2p
 
@@ -27,6 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -268,6 +270,70 @@ func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
 		if !bytes.Equal(actualContent, contentEnc) {
 			return fmt.Errorf("message payload mismatch:\ngot:  %x\nwant: %x", actualContent, contentEnc)
 		}
+	}
+	return nil
+}
+
+// msgEventer wraps a MsgReadWriter and sends events whenever a message is sent
+// or received
+type msgEventer struct {
+	MsgReadWriter
+
+	feed     *event.Feed
+	peerID   discover.NodeID
+	Protocol string
+}
+
+// newMsgEventer returns a msgEventer which sends message events to the given
+// feed
+func newMsgEventer(rw MsgReadWriter, feed *event.Feed, peerID discover.NodeID, proto string) *msgEventer {
+	return &msgEventer{
+		MsgReadWriter: rw,
+		feed:          feed,
+		peerID:        peerID,
+		Protocol:      proto,
+	}
+}
+
+// ReadMsg reads a message from the underlying MsgReadWriter and emits a
+// "message received" event
+func (self *msgEventer) ReadMsg() (Msg, error) {
+	msg, err := self.MsgReadWriter.ReadMsg()
+	if err != nil {
+		return msg, err
+	}
+	self.feed.Send(&PeerEvent{
+		Type:     PeerEventTypeMsgRecv,
+		Peer:     self.peerID,
+		Protocol: self.Protocol,
+		MsgCode:  &msg.Code,
+		MsgSize:  &msg.Size,
+	})
+	return msg, nil
+}
+
+// WriteMsg writes a message to the underlying MsgReadWriter and emits a
+// "message sent" event
+func (self *msgEventer) WriteMsg(msg Msg) error {
+	err := self.MsgReadWriter.WriteMsg(msg)
+	if err != nil {
+		return err
+	}
+	self.feed.Send(&PeerEvent{
+		Type:     PeerEventTypeMsgSend,
+		Peer:     self.peerID,
+		Protocol: self.Protocol,
+		MsgCode:  &msg.Code,
+		MsgSize:  &msg.Size,
+	})
+	return nil
+}
+
+// Close closes the underlying MsgReadWriter if it implements the io.Closer
+// interface
+func (self *msgEventer) Close() error {
+	if v, ok := self.MsgReadWriter.(io.Closer); ok {
+		return v.Close()
 	}
 	return nil
 }

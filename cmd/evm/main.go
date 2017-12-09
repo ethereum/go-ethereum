@@ -8,162 +8,148 @@
 //
 // go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 // evm executes EVM code snippets.
 package main
 
 import (
-	"flag"
 	"fmt"
-	"log"
 	"math/big"
 	"os"
-	"runtime"
-	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"gopkg.in/urfave/cli.v1"
 )
+
+var gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)
 
 var (
-	code     = flag.String("code", "", "evm code")
-	loglevel = flag.Int("log", 4, "log level")
-	gas      = flag.String("gas", "1000000000", "gas amount")
-	price    = flag.String("price", "0", "gas price")
-	value    = flag.String("value", "0", "tx value")
-	dump     = flag.Bool("dump", false, "dump state after run")
-	data     = flag.String("data", "", "data")
+	app = utils.NewApp(gitCommit, "the evm command line interface")
+
+	DebugFlag = cli.BoolFlag{
+		Name:  "debug",
+		Usage: "output full trace logs",
+	}
+	MemProfileFlag = cli.StringFlag{
+		Name:  "memprofile",
+		Usage: "creates a memory profile at the given path",
+	}
+	CPUProfileFlag = cli.StringFlag{
+		Name:  "cpuprofile",
+		Usage: "creates a CPU profile at the given path",
+	}
+	StatDumpFlag = cli.BoolFlag{
+		Name:  "statdump",
+		Usage: "displays stack and heap memory information",
+	}
+	CodeFlag = cli.StringFlag{
+		Name:  "code",
+		Usage: "EVM code",
+	}
+	CodeFileFlag = cli.StringFlag{
+		Name:  "codefile",
+		Usage: "File containing EVM code. If '-' is specified, code is read from stdin ",
+	}
+	GasFlag = cli.Uint64Flag{
+		Name:  "gas",
+		Usage: "gas limit for the evm",
+		Value: 10000000000,
+	}
+	PriceFlag = utils.BigFlag{
+		Name:  "price",
+		Usage: "price set for the evm",
+		Value: new(big.Int),
+	}
+	ValueFlag = utils.BigFlag{
+		Name:  "value",
+		Usage: "value set for the evm",
+		Value: new(big.Int),
+	}
+	DumpFlag = cli.BoolFlag{
+		Name:  "dump",
+		Usage: "dumps the state after the run",
+	}
+	InputFlag = cli.StringFlag{
+		Name:  "input",
+		Usage: "input for the EVM",
+	}
+	VerbosityFlag = cli.IntFlag{
+		Name:  "verbosity",
+		Usage: "sets the verbosity level",
+	}
+	CreateFlag = cli.BoolFlag{
+		Name:  "create",
+		Usage: "indicates the action should be create rather than call",
+	}
+	DisableGasMeteringFlag = cli.BoolFlag{
+		Name:  "nogasmetering",
+		Usage: "disable gas metering",
+	}
+	GenesisFlag = cli.StringFlag{
+		Name:  "prestate",
+		Usage: "JSON file with prestate (genesis) config",
+	}
+	MachineFlag = cli.BoolFlag{
+		Name:  "json",
+		Usage: "output trace logs in machine readable format (json)",
+	}
+	SenderFlag = cli.StringFlag{
+		Name:  "sender",
+		Usage: "The transaction origin",
+	}
+	ReceiverFlag = cli.StringFlag{
+		Name:  "receiver",
+		Usage: "The transaction receiver (execution context)",
+	}
+	DisableMemoryFlag = cli.BoolFlag{
+		Name:  "nomemory",
+		Usage: "disable memory output",
+	}
+	DisableStackFlag = cli.BoolFlag{
+		Name:  "nostack",
+		Usage: "disable stack output",
+	}
 )
 
-func perr(v ...interface{}) {
-	fmt.Println(v...)
-	//os.Exit(1)
+func init() {
+	app.Flags = []cli.Flag{
+		CreateFlag,
+		DebugFlag,
+		VerbosityFlag,
+		CodeFlag,
+		CodeFileFlag,
+		GasFlag,
+		PriceFlag,
+		ValueFlag,
+		DumpFlag,
+		InputFlag,
+		DisableGasMeteringFlag,
+		MemProfileFlag,
+		CPUProfileFlag,
+		StatDumpFlag,
+		GenesisFlag,
+		MachineFlag,
+		SenderFlag,
+		ReceiverFlag,
+		DisableMemoryFlag,
+		DisableStackFlag,
+	}
+	app.Commands = []cli.Command{
+		compileCommand,
+		disasmCommand,
+		runCommand,
+		stateTestCommand,
+	}
 }
 
 func main() {
-	flag.Parse()
-
-	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.LogLevel(*loglevel)))
-
-	vm.Debug = true
-	db, _ := ethdb.NewMemDatabase()
-	statedb := state.New(common.Hash{}, db)
-	sender := statedb.CreateAccount(common.StringToAddress("sender"))
-	receiver := statedb.CreateAccount(common.StringToAddress("receiver"))
-	receiver.SetCode(common.Hex2Bytes(*code))
-
-	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(*value))
-
-	tstart := time.Now()
-
-	ret, e := vmenv.Call(sender, receiver.Address(), common.Hex2Bytes(*data), common.Big(*gas), common.Big(*price), common.Big(*value))
-
-	logger.Flush()
-	if e != nil {
-		perr(e)
+	if err := app.Run(os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
-
-	if *dump {
-		fmt.Println(string(statedb.Dump()))
-	}
-
-	vm.StdErrFormat(vmenv.StructLogs())
-
-	var mem runtime.MemStats
-	runtime.ReadMemStats(&mem)
-	fmt.Printf("vm took %v\n", time.Since(tstart))
-	fmt.Printf(`alloc:      %d
-tot alloc:  %d
-no. malloc: %d
-heap alloc: %d
-heap objs:  %d
-num gc:     %d
-`, mem.Alloc, mem.TotalAlloc, mem.Mallocs, mem.HeapAlloc, mem.HeapObjects, mem.NumGC)
-
-	fmt.Printf("%x\n", ret)
-}
-
-type VMEnv struct {
-	state *state.StateDB
-	block *types.Block
-
-	transactor *common.Address
-	value      *big.Int
-
-	depth int
-	Gas   *big.Int
-	time  uint64
-	logs  []vm.StructLog
-}
-
-func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int) *VMEnv {
-	return &VMEnv{
-		state:      state,
-		transactor: &transactor,
-		value:      value,
-		time:       uint64(time.Now().Unix()),
-	}
-}
-
-func (self *VMEnv) State() *state.StateDB    { return self.state }
-func (self *VMEnv) Origin() common.Address   { return *self.transactor }
-func (self *VMEnv) BlockNumber() *big.Int    { return common.Big0 }
-func (self *VMEnv) Coinbase() common.Address { return *self.transactor }
-func (self *VMEnv) Time() uint64             { return self.time }
-func (self *VMEnv) Difficulty() *big.Int     { return common.Big1 }
-func (self *VMEnv) BlockHash() []byte        { return make([]byte, 32) }
-func (self *VMEnv) Value() *big.Int          { return self.value }
-func (self *VMEnv) GasLimit() *big.Int       { return big.NewInt(1000000000) }
-func (self *VMEnv) VmType() vm.Type          { return vm.StdVmTy }
-func (self *VMEnv) Depth() int               { return 0 }
-func (self *VMEnv) SetDepth(i int)           { self.depth = i }
-func (self *VMEnv) GetHash(n uint64) common.Hash {
-	if self.block.Number().Cmp(big.NewInt(int64(n))) == 0 {
-		return self.block.Hash()
-	}
-	return common.Hash{}
-}
-func (self *VMEnv) AddStructLog(log vm.StructLog) {
-	self.logs = append(self.logs, log)
-}
-func (self *VMEnv) StructLogs() []vm.StructLog {
-	return self.logs
-}
-func (self *VMEnv) AddLog(log *state.Log) {
-	self.state.AddLog(log)
-}
-func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) error {
-	return vm.Transfer(from, to, amount)
-}
-
-func (self *VMEnv) vm(addr *common.Address, data []byte, gas, price, value *big.Int) *core.Execution {
-	return core.NewExecution(self, addr, data, gas, price, value)
-}
-
-func (self *VMEnv) Call(caller vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	exe := self.vm(&addr, data, gas, price, value)
-	ret, err := exe.Call(addr, caller)
-	self.Gas = exe.Gas
-
-	return ret, err
-}
-func (self *VMEnv) CallCode(caller vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	a := caller.Address()
-	exe := self.vm(&a, data, gas, price, value)
-	return exe.Call(addr, caller)
-}
-
-func (self *VMEnv) Create(caller vm.ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
-	exe := self.vm(nil, data, gas, price, value)
-	return exe.Create(caller)
 }

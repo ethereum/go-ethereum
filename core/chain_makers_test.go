@@ -1,18 +1,18 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -39,22 +40,27 @@ func ExampleGenerateChain() {
 	)
 
 	// Ensure that key1 has some funds in the genesis block.
-	genesis := GenesisBlockForTesting(db, addr1, big.NewInt(1000000))
+	gspec := &Genesis{
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
+		Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
+	}
+	genesis := gspec.MustCommit(db)
 
 	// This call generates a chain of 5 blocks. The function runs for
 	// each block and adds different features to gen based on the
 	// block index.
-	chain := GenerateChain(genesis, db, 5, func(i int, gen *BlockGen) {
+	signer := types.HomesteadSigner{}
+	chain, _ := GenerateChain(gspec.Config, genesis, db, 5, func(i int, gen *BlockGen) {
 		switch i {
 		case 0:
 			// In block 1, addr1 sends addr2 some ether.
-			tx, _ := types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(key1)
+			tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(10000), bigTxGas, nil, nil), signer, key1)
 			gen.AddTx(tx)
 		case 1:
 			// In block 2, addr1 sends some more ether to addr2.
 			// addr2 passes it on to addr3.
-			tx1, _ := types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key1)
-			tx2, _ := types.NewTransaction(gen.TxNonce(addr2), addr3, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key2)
+			tx1, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), addr2, big.NewInt(1000), bigTxGas, nil, nil), signer, key1)
+			tx2, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr2), addr3, big.NewInt(1000), bigTxGas, nil, nil), signer, key2)
 			gen.AddTx(tx1)
 			gen.AddTx(tx2)
 		case 2:
@@ -73,16 +79,16 @@ func ExampleGenerateChain() {
 	})
 
 	// Import the chain. This runs all block validation rules.
-	evmux := &event.TypeMux{}
-	chainman, _ := NewChainManager(genesis, db, db, db, FakePow{}, evmux)
-	chainman.SetProcessor(NewBlockProcessor(db, db, FakePow{}, chainman, evmux))
-	if i, err := chainman.InsertChain(chain); err != nil {
-		fmt.Printf("insert error (block %d): %v\n", i, err)
+	blockchain, _ := NewBlockChain(db, gspec.Config, ethash.NewFaker(), vm.Config{})
+	defer blockchain.Stop()
+
+	if i, err := blockchain.InsertChain(chain); err != nil {
+		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
 		return
 	}
 
-	state := chainman.State()
-	fmt.Printf("last block: #%d\n", chainman.CurrentBlock().Number())
+	state, _ := blockchain.State()
+	fmt.Printf("last block: #%d\n", blockchain.CurrentBlock().Number())
 	fmt.Println("balance of addr1:", state.GetBalance(addr1))
 	fmt.Println("balance of addr2:", state.GetBalance(addr2))
 	fmt.Println("balance of addr3:", state.GetBalance(addr3))
@@ -90,5 +96,5 @@ func ExampleGenerateChain() {
 	// last block: #5
 	// balance of addr1: 989000
 	// balance of addr2: 10000
-	// balance of addr3: 5906250000000001000
+	// balance of addr3: 19687500000000001000
 }

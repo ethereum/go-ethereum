@@ -45,9 +45,20 @@ var (
 	// paths with any of these prefixes will be skipped
 	skipPrefixes = []string{
 		// boring stuff
-		"Godeps/", "tests/files/", "build/",
-		// don't relicense vendored packages
-		"crypto/sha3/", "crypto/ecies/", "logger/glog/",
+		"vendor/", "tests/testdata/", "build/",
+		// don't relicense vendored sources
+		"cmd/internal/browser",
+		"consensus/ethash/xor.go",
+		"crypto/bn256/",
+		"crypto/ecies/",
+		"crypto/secp256k1/curve.go",
+		"crypto/sha3/",
+		"internal/jsre/deps",
+		"log/",
+		// don't license generated files
+		"contracts/chequebook/contract/",
+		"contracts/ens/contract/",
+		"contracts/release/contract.go",
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.
@@ -65,20 +76,20 @@ var (
 // its input is an info structure.
 var licenseT = template.Must(template.New("").Parse(`
 // Copyright {{.Year}} The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of {{.Whole false}}.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// {{.Whole true}} is free software: you can redistribute it and/or modify
 // it under the terms of the GNU {{.License}} as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// {{.Whole true}} is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU {{.License}} for more details.
 //
 // You should have received a copy of the GNU {{.License}}
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with {{.Whole false}}. If not, see <http://www.gnu.org/licenses/>.
 
 `[1:]))
 
@@ -90,17 +101,25 @@ type info struct {
 func (i info) License() string {
 	if i.gpl() {
 		return "General Public License"
-	} else {
-		return "Lesser General Public License"
 	}
+	return "Lesser General Public License"
 }
 
 func (i info) ShortLicense() string {
 	if i.gpl() {
 		return "GPL"
-	} else {
-		return "LGPL"
 	}
+	return "LGPL"
+}
+
+func (i info) Whole(startOfSentence bool) string {
+	if i.gpl() {
+		return "go-ethereum"
+	}
+	if startOfSentence {
+		return "The go-ethereum library"
+	}
+	return "the go-ethereum library"
 }
 
 func (i info) gpl() bool {
@@ -141,14 +160,24 @@ func main() {
 	writeLicenses(infoc)
 }
 
+func skipFile(path string) bool {
+	if strings.Contains(path, "/testdata/") {
+		return true
+	}
+	for _, p := range skipPrefixes {
+		if strings.HasPrefix(path, p) {
+			return true
+		}
+	}
+	return false
+}
+
 func getFiles() []string {
 	cmd := exec.Command("git", "ls-tree", "-r", "--name-only", "HEAD")
 	var files []string
 	err := doLines(cmd, func(line string) {
-		for _, p := range skipPrefixes {
-			if strings.HasPrefix(line, p) {
-				return
-			}
+		if skipFile(line) {
+			return
 		}
 		ext := filepath.Ext(line)
 		for _, wantExt := range extensions {
@@ -161,7 +190,7 @@ func getFiles() []string {
 		files = append(files, line)
 	})
 	if err != nil {
-		log.Fatalf("error getting files:", err)
+		log.Fatal("error getting files:", err)
 	}
 	return files
 }
@@ -260,6 +289,9 @@ func getInfo(files <-chan string, out chan<- *info, wg *sync.WaitGroup) {
 		if !stat.Mode().IsRegular() {
 			continue
 		}
+		if isGenerated(file) {
+			continue
+		}
 		info, err := fileInfo(file)
 		if err != nil {
 			fmt.Printf("ERROR %s: %v\n", file, err)
@@ -270,10 +302,27 @@ func getInfo(files <-chan string, out chan<- *info, wg *sync.WaitGroup) {
 	wg.Done()
 }
 
-// fileInfo finds the lowest year in which the given file was commited.
+func isGenerated(file string) bool {
+	fd, err := os.Open(file)
+	if err != nil {
+		return false
+	}
+	defer fd.Close()
+	buf := make([]byte, 2048)
+	n, _ := fd.Read(buf)
+	buf = buf[:n]
+	for _, l := range bytes.Split(buf, []byte("\n")) {
+		if bytes.HasPrefix(l, []byte("// Code generated")) {
+			return true
+		}
+	}
+	return false
+}
+
+// fileInfo finds the lowest year in which the given file was committed.
 func fileInfo(file string) (*info, error) {
 	info := &info{file: file, Year: int64(time.Now().Year())}
-	cmd := exec.Command("git", "log", "--follow", "--find-copies", "--pretty=format:%ai", "--", file)
+	cmd := exec.Command("git", "log", "--follow", "--find-renames=80", "--find-copies=80", "--pretty=format:%ai", "--", file)
 	err := doLines(cmd, func(line string) {
 		y, err := strconv.ParseInt(line[:4], 10, 64)
 		if err != nil {

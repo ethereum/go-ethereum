@@ -1,0 +1,38 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+require 'yaml'
+
+VAGRANTFILE_API_VERSION = 2
+VM_RAM = 2048
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+
+  config.vm.define "ubuntu", :primary => true do |ubuntu| 
+    ubuntu.vm.box = "ubuntu/trusty64"
+    ubuntu.vm.provision "shell", :path => "provisioners/shell/ubuntu.sh"
+  end
+
+  config.vm.define "debian", :primary => true do |debian|
+    debian.vm.box = "debian/jessie64"
+    debian.vm.provision "shell", :path => "provisioners/shell/debian.sh"
+  end
+  
+  config.vm.define "centos", :autostart => false do |centos| 
+    centos.vm.box = "centos/7"
+    centos.vm.provision "shell", :path => "provisioners/shell/centos.sh"
+  end
+  
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = VM_RAM
+  end
+
+  config.vm.provider "libvirt" do |lv|
+    lv.memory = VM_RAM
+
+    config.vm.synced_folder ".", "/home/vagrant/sync", :disabled => true
+  end
+  
+  config.vm.synced_folder ".", "/vagrant", :disabled => true
+  config.vm.synced_folder "../../", "/home/vagrant/go/src/github.com/ethereum/go-ethereum"
+end
