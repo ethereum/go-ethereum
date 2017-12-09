@@ -23,6 +23,8 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // ErrNoPeers is returned if no peers capable of serving a queued request are available
@@ -161,7 +163,7 @@ func (d *requestDistributor) loop() {
 	}
 }
 
-// selectPeerItem represents a peer to be selected for a request by weightedRandomSelect
+// selectPeerItem represents a peer to be selected for a request by WeightedRandomSelect
 type selectPeerItem struct {
 	peer   distPeer
 	req    *distReq
@@ -182,7 +184,7 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 		bestPeer distPeer
 		bestReq  *distReq
 		bestWait time.Duration
-		sel      *weightedRandomSelect
+		sel      *common.WeightedRandomSelect
 	)
 
 	d.peerLock.RLock()
@@ -198,9 +200,9 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 				wait, bufRemain := peer.waitBefore(cost)
 				if wait == 0 {
 					if sel == nil {
-						sel = newWeightedRandomSelect()
+						sel = common.NewWeightedRandomSelect()
 					}
-					sel.update(selectPeerItem{peer: peer, req: req, weight: int64(bufRemain*1000000) + 1})
+					sel.Update(selectPeerItem{peer: peer, req: req, weight: int64(bufRemain*1000000) + 1})
 				} else {
 					if bestReq == nil || wait < bestWait {
 						bestPeer = peer
@@ -220,7 +222,7 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 	}
 
 	if sel != nil {
-		c := sel.choose().(selectPeerItem)
+		c := sel.Choose().(selectPeerItem)
 		return c.peer, c.req, 0
 	}
 	return bestPeer, bestReq, bestWait

@@ -78,9 +78,6 @@ type Config struct {
 	// protocol should be started or not.
 	DiscoveryV5 bool `toml:",omitempty"`
 
-	// Listener address for the V5 discovery protocol UDP traffic.
-	DiscoveryV5Addr string `toml:",omitempty"`
-
 	// Name sets the node name of this server.
 	// Use common.MakeName to create a name that follows existing conventions.
 	Name string `toml:"-"`
@@ -354,6 +351,32 @@ func (srv *Server) Stop() {
 	srv.loopWG.Wait()
 }
 
+// sharedUDPConn implements a shared connection. Write sends messages to the underlying connection while read returns
+// messages that were found unprocessable and sent to the unhandled channel by the primary listener.
+type sharedUDPConn struct {
+	*net.UDPConn
+	unhandled chan discover.ReadPacket
+}
+
+// ReadFromUDP implements discv5.conn
+func (s *sharedUDPConn) ReadFromUDP(b []byte) (n int, addr *net.UDPAddr, err error) {
+	packet, ok := <-s.unhandled
+	if !ok {
+		return 0, nil, fmt.Errorf("Connection was closed")
+	}
+	l := len(packet.Data)
+	if l > len(b) {
+		l = len(b)
+	}
+	copy(b[:l], packet.Data[:l])
+	return l, packet.Addr, nil
+}
+
+// Close implements discv5.conn
+func (s *sharedUDPConn) Close() error {
+	return nil
+}
+
 // Start starts running the server.
 // Servers can not be re-used after stopping.
 func (srv *Server) Start() (err error) {
@@ -388,9 +411,43 @@ func (srv *Server) Start() (err error) {
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
 
+	var (
+		conn      *net.UDPConn
+		sconn     *sharedUDPConn
+		realaddr  *net.UDPAddr
+		unhandled chan discover.ReadPacket
+	)
+
+	if !srv.NoDiscovery || srv.DiscoveryV5 {
+		addr, err := net.ResolveUDPAddr("udp", srv.ListenAddr)
+		if err != nil {
+			return err
+		}
+		conn, err = net.ListenUDP("udp", addr)
+		if err != nil {
+			return err
+		}
+
+		realaddr = conn.LocalAddr().(*net.UDPAddr)
+		if srv.NAT != nil {
+			if !realaddr.IP.IsLoopback() {
+				go nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+			}
+			// TODO: react to external IP changes over time.
+			if ext, err := srv.NAT.ExternalIP(); err == nil {
+				realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
+			}
+		}
+	}
+
+	if !srv.NoDiscovery && srv.DiscoveryV5 {
+		unhandled = make(chan discover.ReadPacket, 100)
+		sconn = &sharedUDPConn{conn, unhandled}
+	}
+
 	// node table
 	if !srv.NoDiscovery {
-		ntab, err := discover.ListenUDP(srv.PrivateKey, srv.ListenAddr, srv.NAT, srv.NodeDatabase, srv.NetRestrict)
+		ntab, err := discover.ListenUDP(srv.PrivateKey, conn, realaddr, unhandled, srv.NodeDatabase, srv.NetRestrict)
 		if err != nil {
 			return err
 		}
@@ -401,7 +458,15 @@ func (srv *Server) Start() (err error) {
 	}
 
 	if srv.DiscoveryV5 {
-		ntab, err := discv5.ListenUDP(srv.PrivateKey, srv.DiscoveryV5Addr, srv.NAT, "", srv.NetRestrict) //srv.NodeDatabase)
+		var (
+			ntab *discv5.Network
+			err  error
+		)
+		if sconn != nil {
+			ntab, err = discv5.ListenUDP(srv.PrivateKey, sconn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
+		} else {
+			ntab, err = discv5.ListenUDP(srv.PrivateKey, conn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
+		}
 		if err != nil {
 			return err
 		}

@@ -45,6 +45,8 @@ type Node struct {
 	// These fields are not supposed to be used off the
 	// Network.loop goroutine.
 	nodeNetGuts
+
+	nodeUDPfields
 }
 
 // NewNode creates a new node. It is mostly meant to be used for
@@ -430,4 +432,37 @@ func hashAtDistance(a common.Hash, n int) (b common.Hash) {
 		b[i] = byte(rand.Intn(255))
 	}
 	return b
+}
+
+// serialReplayFilter belongs to known connections and filters decrypted incoming
+// packets by serial number. Since UDP does not guarantee to keep the ordering of
+// packets, it does not require serial numbers to arrive in a strictly monotonic
+// order. bitMask & (2**(highest-serialNo)) is set if serialNo has already been
+// received. Serials older than highest-63 are always rejected.
+// Note: a new introduction packet can reset the sender's serial number and the
+// recipient should accept it even if it still remembers the sender.
+type serialReplayFilter struct {
+	highest, bitMask uint64
+}
+
+func (f *serialReplayFilter) accept(sn uint64) bool {
+	if sn > f.highest {
+		shift := sn - f.highest
+		if shift < 64 {
+			f.bitMask = (f.bitMask << shift) + 1
+		} else {
+			f.bitMask = 1
+		}
+		f.highest = sn
+		return true
+	}
+	shift := f.highest - sn
+	if shift < 64 {
+		bit := (uint64(1) << shift)
+		if (f.bitMask & bit) == 0 {
+			f.bitMask += bit
+			return true
+		}
+	}
+	return false
 }

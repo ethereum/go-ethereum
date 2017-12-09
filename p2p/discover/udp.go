@@ -210,17 +210,15 @@ type reply struct {
 	matched chan<- bool
 }
 
+// ReadPacket is sent to the unhandled channel when it could not be processed
+type ReadPacket struct {
+	Data []byte
+	Addr *net.UDPAddr
+}
+
 // ListenUDP returns a new table that listens for UDP packets on laddr.
-func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, nodeDBPath string, netrestrict *netutil.Netlist) (*Table, error) {
-	addr, err := net.ResolveUDPAddr("udp", laddr)
-	if err != nil {
-		return nil, err
-	}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return nil, err
-	}
-	tab, _, err := newUDP(priv, conn, natm, nodeDBPath, netrestrict)
+func ListenUDP(priv *ecdsa.PrivateKey, conn conn, realaddr *net.UDPAddr, unhandled chan ReadPacket, nodeDBPath string, netrestrict *netutil.Netlist) (*Table, error) {
+	tab, _, err := newUDP(priv, conn, realaddr, unhandled, nodeDBPath, netrestrict)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +226,7 @@ func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, nodeDBP
 	return tab, nil
 }
 
-func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, nodeDBPath string, netrestrict *netutil.Netlist) (*Table, *udp, error) {
+func newUDP(priv *ecdsa.PrivateKey, c conn, realaddr *net.UDPAddr, unhandled chan ReadPacket, nodeDBPath string, netrestrict *netutil.Netlist) (*Table, *udp, error) {
 	udp := &udp{
 		conn:        c,
 		priv:        priv,
@@ -236,16 +234,6 @@ func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, nodeDBPath strin
 		closing:     make(chan struct{}),
 		gotreply:    make(chan reply),
 		addpending:  make(chan *pending),
-	}
-	realaddr := c.LocalAddr().(*net.UDPAddr)
-	if natm != nil {
-		if !realaddr.IP.IsLoopback() {
-			go nat.Map(natm, udp.closing, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
-		}
-		// TODO: react to external IP changes over time.
-		if ext, err := natm.ExternalIP(); err == nil {
-			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
-		}
 	}
 	// TODO: separate TCP port
 	udp.ourEndpoint = makeEndpoint(realaddr, uint16(realaddr.Port))
@@ -256,7 +244,7 @@ func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, nodeDBPath strin
 	udp.Table = tab
 
 	go udp.loop()
-	go udp.readLoop()
+	go udp.readLoop(unhandled)
 	return udp.Table, udp, nil
 }
 
@@ -492,8 +480,11 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, 
 }
 
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
-func (t *udp) readLoop() {
+func (t *udp) readLoop(unhandled chan ReadPacket) {
 	defer t.conn.Close()
+	if unhandled != nil {
+		defer close(unhandled)
+	}
 	// Discovery packets are defined to be no larger than 1280 bytes.
 	// Packets larger than this size will be cut at the end and treated
 	// as invalid because their hash won't match.
@@ -509,7 +500,12 @@ func (t *udp) readLoop() {
 			log.Debug("UDP read error", "err", err)
 			return
 		}
-		t.handlePacket(from, buf[:nbytes])
+		if t.handlePacket(from, buf[:nbytes]) != nil && unhandled != nil {
+			select {
+			case unhandled <- ReadPacket{buf[:nbytes], from}:
+			default:
+			}
+		}
 	}
 }
 
