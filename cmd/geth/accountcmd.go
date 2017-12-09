@@ -17,6 +17,7 @@
 package main
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
 
@@ -165,14 +166,15 @@ changing your password is only possible interactively.
 					utils.PasswordFileFlag,
 					utils.LightKDFFlag,
 				},
-				ArgsUsage: "<keyFile>",
+				ArgsUsage: "[<keyFile>]",
 				Description: `
-    geth account import <keyfile>
+    geth account import [<keyfile>]
 
-Imports an unencrypted private key from <keyfile> and creates a new account.
-Prints the address.
+Imports an unencrypted private key in hexadecimal format and creates a new
+account, then prints the address.
 
-The keyfile is assumed to contain an unencrypted private key in hexadecimal format.
+The key will be read from <keyfile> if specified, otherwise you are prompted
+for the key interactively.
 
 The account is saved in encrypted format, you are prompted for a passphrase.
 
@@ -359,10 +361,17 @@ func importWallet(ctx *cli.Context) error {
 
 func accountImport(ctx *cli.Context) error {
 	keyfile := ctx.Args().First()
+	var key *ecdsa.PrivateKey
+	var err error
 	if len(keyfile) == 0 {
-		utils.Fatalf("keyfile must be given as argument")
+		keystr, prompterr := console.Stdin.PromptInput("Key: ")
+		if prompterr != nil {
+			utils.Fatalf("Error reading private key %v", err)
+		}
+		key, err = crypto.HexToECDSA(keystr)
+	} else {
+		key, err = crypto.LoadECDSA(keyfile)
 	}
-	key, err := crypto.LoadECDSA(keyfile)
 	if err != nil {
 		utils.Fatalf("Failed to load the private key: %v", err)
 	}
