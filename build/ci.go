@@ -937,6 +937,7 @@ func doXgo(cmdline []string) {
 	args := append(buildFlags(env), flag.Args()...)
 
 	if *alltools {
+		args = args[:len(args)-1]
 		args = append(args, []string{"--dest", GOBIN}...)
 		for _, res := range allToolsArchiveFiles {
 			if strings.HasPrefix(res, GOBIN) {
