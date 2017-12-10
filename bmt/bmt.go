@@ -260,8 +260,7 @@ func NewTree(hasher BaseHasher, segmentSize, segmentCount int) *Tree {
 	for d := 1; d <= depth(segmentCount); d++ {
 		nodes := make([]*Node, count)
 		for i := 0; i < len(nodes); i++ {
-			var parent *Node
-			parent = prevlevel[i/2]
+			parent := prevlevel[i/2]
 			t := NewNode(level, i, parent)
 			nodes[i] = t
 		}
