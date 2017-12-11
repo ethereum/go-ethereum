@@ -98,7 +98,7 @@ func readKind(buf []byte) (k Kind, tagsize, contentsize uint64, err error) {
 		tagsize = 1
 		contentsize = uint64(b - 0x80)
 		// Reject strings that should've been single bytes.
-		if contentsize == 1 && buf[1] < 128 {
+		if contentsize == 1 && len(buf) > 1 && buf[1] < 128 {
 			return 0, 0, 0, ErrCanonSize
 		}
 	case b < 0xC0:
