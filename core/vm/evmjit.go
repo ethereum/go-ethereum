@@ -29,6 +29,7 @@ static const struct evm_context_fn_table* get_context_fn_table()
 	void get_balance(void*, void*, void*);
 	size_t get_code(unsigned char**, void*, void*);
 	void selfdestruct(void*, void*, void*);
+	void call(struct evm_result*, void*, struct evm_message*);
 	void getTxCtx(void*, void*);
 	void getBlockHash(void*, void*, long long);
 	void set_logs(void*, void*, void*, size_t, void*, size_t);
@@ -40,7 +41,7 @@ static const struct evm_context_fn_table* get_context_fn_table()
 		(evm_get_balance_fn) get_balance,
 		(evm_get_code_fn) get_code,
 		(evm_selfdestruct_fn) selfdestruct,
-		NULL,
+		(evm_call_fn) call,
 		(evm_get_tx_context_fn) getTxCtx,
 		(evm_get_block_hash_fn) getBlockHash,
 		(evm_log_fn) set_logs
@@ -136,6 +137,11 @@ func getCtx(idx int) *EVMCContext {
 func getEnv(pCtx unsafe.Pointer) *EVM {
 	ctxWrapper := (*ContextWrapper)(pCtx)
 	return getCtx(ctxWrapper.index).env
+}
+
+func getContract(pCtx unsafe.Pointer) *Contract {
+	ctxWrapper := (*ContextWrapper)(pCtx)
+	return getCtx(ctxWrapper.index).contract
 }
 
 func HashToEvmc(hash common.Hash) C.struct_evm_uint256be {
@@ -328,85 +334,100 @@ func set_logs(pCtx unsafe.Pointer, pAddr unsafe.Pointer, pData unsafe.Pointer, d
 }
 
 //export call
-func call(
-	pCtx unsafe.Pointer,
-	kind int32,
-	gas int64,
-	pAddr unsafe.Pointer,
-	pValue unsafe.Pointer,
-	pInput unsafe.Pointer,
-	inputSize C.size_t,
-	pOutput unsafe.Pointer,
-	outputSize C.size_t) int64 {
+func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_message) {
 	fmt.Printf("CALL\n")
 
-	ctxWrapper := (*ContextWrapper)(pCtx)
-	ctx := getCtx(ctxWrapper.index)
-	address := *(*[20]byte)(pAddr)
-	value := (*(*common.Hash)(pValue)).Big()
-	input := GoByteSlice(pInput, inputSize)
-	output := GoByteSlice(pOutput, outputSize)
+	env := getEnv(pCtx)
+	contract := getContract(pCtx)
+
+	addr := *(*common.Address)(unsafe.Pointer(&msg.address))
+	value := (*(*common.Hash)(unsafe.Pointer(&msg.value))).Big()
+	input := GoByteSlice(unsafe.Pointer(msg.input), msg.input_size)
+	// output := GoByteSlice(pOutput, outputSize)
+	gas := int64(msg.gas)
 	bigGas := new(big.Int).SetInt64(gas)
 
 	// TODO: For some reason C.EVM_CALL_FAILURE "constant" is not visible
 	// by go linker. This probably should be reported as cgo bug.
 	const callFailureFlag int64 = -(1 << 63);
 
-	switch kind {
+	switch msg.kind {
 	case C.EVM_CALL:
-		// fmt.Printf("CALL(gas %d, %x)\n", bigGas, address)
-		ctx.contract.Gas.SetInt64(0)
-		ret, err := ctx.env.Call(ctx.contract, address, input, bigGas, value)
-		gasLeft := ctx.contract.Gas.Int64()
+		fmt.Printf("CALL(gas %d, %x)\n", bigGas, addr)
+		contract.Gas.SetInt64(0)
+		ret, err := env.Call(contract, addr, input, bigGas, value)
+		gasLeft := contract.Gas.Int64()
 		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-		// fmt.Printf("Gas left %d\n", gasLeft)
+		fmt.Printf("Gas left %d\n", gasLeft)
+		result.gas_left = C.int64_t(gasLeft)
 		if err == nil {
-			copy(output, ret)
-			assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-			return gasLeft
+			result.status_code = C.EVM_SUCCESS
+			coutput := C.CBytes(ret)
+			result.output_data = (*C.uint8_t)(coutput)
+			result.output_size = C.size_t(len(ret))
+			// FIXME: free output
+			return
 		}
-		return gasLeft | callFailureFlag
+		result.status_code = C.EVM_FAILURE
+		return
+
 	case C.EVM_CALLCODE:
-		// fmt.Printf("CALLCODE(gas %d, %x, value %d)\n", bigGas, address, value)
-		ctx.contract.Gas.SetInt64(0)
-		ret, err := ctx.env.CallCode(ctx.contract, address, input, bigGas, value)
-		gasLeft := ctx.contract.Gas.Int64()
+		fmt.Printf("CALLCODE(gas %d, %x, value %d)\n", bigGas, addr, value)
+		contract.Gas.SetInt64(0)
+		ret, err := env.CallCode(contract, addr, input, bigGas, value)
+		gasLeft := contract.Gas.Int64()
 		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-		// fmt.Printf("Gas left %d\n", gasLeft)
+		fmt.Printf("Gas left %d\n", gasLeft)
+		result.gas_left = C.int64_t(gasLeft)
 		if err == nil {
-			copy(output, ret)
-			return gasLeft
-		} else {
-			// fmt.Printf("Error: %v\n", err)
+			result.status_code = C.EVM_SUCCESS
+			coutput := C.CBytes(ret)
+			result.output_data = (*C.uint8_t)(coutput)
+			result.output_size = C.size_t(len(ret))
+			// FIXME: free output
+			return
 		}
-		return gasLeft | callFailureFlag
+		result.status_code = C.EVM_FAILURE
+		return
+
 	case C.EVM_DELEGATECALL:
-		// fmt.Printf("DELEGATECALL(gas %d, %x)\n", bigGas, address)
-		ctx.contract.Gas.SetInt64(0)
-		ret, err := ctx.env.DelegateCall(ctx.contract, address, input, bigGas)
-		gasLeft := ctx.contract.Gas.Int64()
+		fmt.Printf("DELEGATECALL(gas %d, %x)\n", bigGas, addr)
+		contract.Gas.SetInt64(0)
+		ret, err := env.DelegateCall(contract, addr, input, bigGas)
+		gasLeft := contract.Gas.Int64()
 		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-		// fmt.Printf("Gas left %d\n", gasLeft)
+		fmt.Printf("Gas left %d\n", gasLeft)
+		result.gas_left = C.int64_t(gasLeft)
 		if err == nil {
-			copy(output, ret)
-			return gasLeft
+			result.status_code = C.EVM_SUCCESS
+			coutput := C.CBytes(ret)
+			result.output_data = (*C.uint8_t)(coutput)
+			result.output_size = C.size_t(len(ret))
+			// FIXME: free output
+			return
 		}
-		return gasLeft | callFailureFlag
+		result.status_code = C.EVM_FAILURE
+		return
+
 	case C.EVM_CREATE:
-		// fmt.Printf("DELEGATECALL(gas %d, %x)\n", bigGas, address)
-		ctx.contract.Gas.SetInt64(0)
-		_, addr, err := ctx.env.Create(ctx.contract, input, bigGas, value)
-		gasLeft := ctx.contract.Gas.Int64()
+		fmt.Printf("CREATE(gas %d, %x)\n", bigGas, addr)
+		contract.Gas.SetInt64(0)
+		_, createAddr, err := env.Create(contract, input, bigGas, value)
+		gasLeft := contract.Gas.Int64()
 		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-		if (ctx.env.ChainConfig().IsHomestead(ctx.env.BlockNumber) && err == ErrCodeStoreOutOfGas) ||
+		fmt.Printf("Gas left %d\n", gasLeft)
+		result.gas_left = C.int64_t(gasLeft)
+		result.status_code = C.EVM_FAILURE
+		if (env.ChainConfig().IsHomestead(env.BlockNumber) && err == ErrCodeStoreOutOfGas) ||
 			(err != nil && err != ErrCodeStoreOutOfGas) {
-			return callFailureFlag
+			return
 		} else {
-			copy(output, addr[:])
-			return gasLeft
+			result.status_code = C.EVM_SUCCESS
+			ca := GoByteSlice(unsafe.Pointer(&result.create_address.bytes), 20)
+			copy(ca, createAddr[:])
 		}
+		return
 	}
-	return 0
 }
 
 func ptr(bytes []byte) *C.uint8_t {
