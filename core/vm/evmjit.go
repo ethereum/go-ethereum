@@ -190,12 +190,13 @@ func account_exists(pCtx unsafe.Pointer, pAddr unsafe.Pointer) C.int {
 	} else if env.StateDB.Exist(addr) {
 		exist = 1
 	}
-	// fmt.Printf("EXISTS? %x : %v\n", addr, exist)
+	fmt.Printf("EXISTS? %x : %v\n", addr, exist)
 	return exist
 }
 
 //export get_storage
 func get_storage(pResult *C.struct_evm_uint256be, pCtx unsafe.Pointer, pAddr unsafe.Pointer, pArg *C.struct_evm_uint256be) {
+	fmt.Printf("SLOAD\n")
 	result := EvmcHashToSlice(pResult)
 	env := getEnv(pCtx)
 
@@ -205,10 +206,12 @@ func get_storage(pResult *C.struct_evm_uint256be, pCtx unsafe.Pointer, pAddr uns
 	arg := *(*[32]byte)(unsafe.Pointer(pArg))
 	val := env.StateDB.GetState(addr, arg)
 	copy(result, val[:])
+	fmt.Printf("SLOAD %x : %v\n", addr, val)
 }
 
 //export set_storage
 func set_storage(pCtx unsafe.Pointer, pAddr unsafe.Pointer, pArg1 unsafe.Pointer, pArg2 unsafe.Pointer) {
+	fmt.Printf("SSTORE\n")
 	env := getEnv(pCtx)
 
 	var addr common.Address
@@ -221,11 +224,12 @@ func set_storage(pCtx unsafe.Pointer, pAddr unsafe.Pointer, pArg1 unsafe.Pointer
 	if !common.EmptyHash(oldVal) && common.EmptyHash(newVal) {
 		env.StateDB.AddRefund(params.SstoreRefundGas)
 	}
-	// fmt.Printf("EVMJIT STORE %x : %x [%x, %d]\n", arg1, arg2, ctx.contract.Address(), int(uintptr(pEnv)))
+	fmt.Printf("EVMJIT STORE %x : %x [%x]\n", key, newVal, addr)
 }
 
 //export get_balance
 func get_balance(pResult unsafe.Pointer, pCtx unsafe.Pointer, pAddr unsafe.Pointer) {
+	fmt.Printf("BALANCE\n")
 	result := GoByteSlice(pResult, 32)
 	env := getEnv(pCtx)
 
@@ -234,6 +238,7 @@ func get_balance(pResult unsafe.Pointer, pCtx unsafe.Pointer, pAddr unsafe.Point
 	balance := env.StateDB.GetBalance(addr)
 	val := common.BigToHash(balance)
 	copy(result, val[:])
+	fmt.Printf("BALANCE %x : %v\n", addr, balance)
 }
 
 //export get_code
@@ -324,15 +329,16 @@ func set_logs(pCtx unsafe.Pointer, pAddr unsafe.Pointer, pData unsafe.Pointer, d
 
 //export call
 func call(
-pCtx unsafe.Pointer,
-kind int32,
-gas int64,
-pAddr unsafe.Pointer,
-pValue unsafe.Pointer,
-pInput unsafe.Pointer,
-inputSize C.size_t,
-pOutput unsafe.Pointer,
-outputSize C.size_t) int64 {
+	pCtx unsafe.Pointer,
+	kind int32,
+	gas int64,
+	pAddr unsafe.Pointer,
+	pValue unsafe.Pointer,
+	pInput unsafe.Pointer,
+	inputSize C.size_t,
+	pOutput unsafe.Pointer,
+	outputSize C.size_t) int64 {
+	fmt.Printf("CALL\n")
 
 	ctxWrapper := (*ContextWrapper)(pCtx)
 	ctx := getCtx(ctxWrapper.index)
@@ -442,7 +448,6 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 	codeSize := C.size_t(len(code))
 	gas := C.int64_t(contract.Gas.Int64())
 	rev := getRevision(evm.env)
-	// fmt.Printf("EVMJIT pre Run (gas %d %d mode: %d, env: %d) %x\n", contract.Gas, gas, mode, env, evm.contract.Address())
 
 	// Create context for this execution.
 	wrapper := ContextWrapper{}
@@ -457,13 +462,16 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 	msg.input_size = C.size_t(len(input))
 	msg.gas = gas
 	msg.depth = C.int32_t(evm.env.depth - 1)
-	msg.code_hash = HashToEvmc(crypto.Keccak256Hash(code))
+	codeHash := crypto.Keccak256Hash(code)
+	msg.code_hash = HashToEvmc(codeHash)
+
+	fmt.Printf("EVMJIT pre Run (gas %d %d mode: %d, env: %d) %x %x\n", contract.Gas, gas, rev, wrapper.index, codeHash, contract.Address())
 
 	r := C.evm_execute(evm.jit, &wrapper.c, rev, &msg, codePtr, codeSize)
 
 	unpinCtx(wrapper.index)
 
-	// fmt.Printf("EVMJIT Run %d %d %x\n", r.code, r.gas_left, evm.contract.Address())
+	fmt.Printf("EVMJIT Run %d %d %x\n", r.status_code, r.gas_left, contract.Address())
 	if r.gas_left > gas {
 		panic("OOPS")
 	}
