@@ -44,7 +44,7 @@ func LookupMocker(mockerType string) func(net *Network, quit chan struct{}, node
 //Useful for frontend to build available mocker selection
 func GetMockerList() []string {
 	list := make([]string, 0, len(mockerList))
-	for k, _ := range mockerList {
+	for k := range mockerList {
 		list = append(list, k)
 	}
 	return list
@@ -73,24 +73,24 @@ func startStop(net *Network, quit chan struct{}, nodeCount int) {
 			return
 		case <-tick.C:
 			id := nodes[rand.Intn(len(nodes))]
-      log.Info("stopping node", "id", id)
-      if err := net.Stop(id); err != nil {
-        log.Error("error stopping node", "id", id, "err", err)
-        return
-      }
+			log.Info("stopping node", "id", id)
+			if err := net.Stop(id); err != nil {
+				log.Error("error stopping node", "id", id, "err", err)
+				return
+			}
 
-      select {
-      case <-quit:
-        log.Info("Terminating simulation loop")
-        return
-      case <-time.After(3 * time.Second):
-      }
+			select {
+			case <-quit:
+				log.Info("Terminating simulation loop")
+				return
+			case <-time.After(3 * time.Second):
+			}
 
-      log.Debug("starting node", "id", id)
-      if err := net.Start(id); err != nil {
-        log.Error("error starting node", "id", id, "err", err)
-        return
-      }
+			log.Debug("starting node", "id", id)
+			if err := net.Start(id); err != nil {
+				log.Error("error starting node", "id", id, "err", err)
+				return
+			}
 		}
 	}
 }

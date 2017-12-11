@@ -53,10 +53,10 @@ func TestMocker(t *testing.T) {
 
 	//get the list of available mocker types
 	resp, err := http.Get(s.URL + "/mocker")
-	defer resp.Body.Close()
 	if err != nil {
 		t.Fatalf("Could not get mocker list: %s", err)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		t.Fatalf("Invalid Status Code received, expected 200, got %d", resp.StatusCode)
