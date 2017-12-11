@@ -80,7 +80,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
-	// "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -457,6 +457,7 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 	msg.input_size = C.size_t(len(input))
 	msg.gas = gas
 	msg.depth = C.int32_t(evm.env.depth - 1)
+	msg.code_hash = HashToEvmc(crypto.Keccak256Hash(code))
 
 	r := C.evm_execute(evm.jit, &wrapper.c, rev, &msg, codePtr, codeSize)
 
@@ -475,6 +476,9 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 		err = ErrOutOfGas
 	}
 
-	C.evm_release_result(&r)
+	if r.release != nil {
+		C.evm_release_result(&r)
+	}
+
 	return output, err
 }
