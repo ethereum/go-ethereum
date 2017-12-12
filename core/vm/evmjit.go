@@ -202,7 +202,6 @@ func account_exists(pCtx unsafe.Pointer, pAddr unsafe.Pointer) C.int {
 
 //export get_storage
 func get_storage(pResult *C.struct_evm_uint256be, pCtx unsafe.Pointer, pAddr unsafe.Pointer, pArg *C.struct_evm_uint256be) {
-	fmt.Printf("SLOAD\n")
 	result := EvmcHashToSlice(pResult)
 	env := getEnv(pCtx)
 
@@ -212,12 +211,11 @@ func get_storage(pResult *C.struct_evm_uint256be, pCtx unsafe.Pointer, pAddr uns
 	arg := *(*[32]byte)(unsafe.Pointer(pArg))
 	val := env.StateDB.GetState(addr, arg)
 	copy(result, val[:])
-	fmt.Printf("SLOAD %x : %v\n", addr, val)
+	fmt.Printf("SLOAD %x: %x\n", addr, val)
 }
 
 //export set_storage
 func set_storage(pCtx unsafe.Pointer, pAddr unsafe.Pointer, pArg1 unsafe.Pointer, pArg2 unsafe.Pointer) {
-	fmt.Printf("SSTORE\n")
 	env := getEnv(pCtx)
 
 	var addr common.Address
@@ -230,12 +228,11 @@ func set_storage(pCtx unsafe.Pointer, pAddr unsafe.Pointer, pArg1 unsafe.Pointer
 	if !common.EmptyHash(oldVal) && common.EmptyHash(newVal) {
 		env.StateDB.AddRefund(params.SstoreRefundGas)
 	}
-	fmt.Printf("EVMJIT STORE %x : %x [%x]\n", key, newVal, addr)
+	fmt.Printf("EVMJIT STORE %x: %x := %x\n", addr, key, newVal)
 }
 
 //export get_balance
 func get_balance(pResult unsafe.Pointer, pCtx unsafe.Pointer, pAddr unsafe.Pointer) {
-	fmt.Printf("BALANCE\n")
 	result := GoByteSlice(pResult, 32)
 	env := getEnv(pCtx)
 
@@ -335,8 +332,6 @@ func set_logs(pCtx unsafe.Pointer, pAddr unsafe.Pointer, pData unsafe.Pointer, d
 
 //export call
 func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_message) {
-	fmt.Printf("CALL\n")
-
 	env := getEnv(pCtx)
 	contract := getContract(pCtx)
 
@@ -347,9 +342,11 @@ func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_me
 	gas := int64(msg.gas)
 	bigGas := new(big.Int).SetInt64(gas)
 
-	// TODO: For some reason C.EVM_CALL_FAILURE "constant" is not visible
-	// by go linker. This probably should be reported as cgo bug.
-	const callFailureFlag int64 = -(1 << 63);
+	// Prepare result with default values.
+	result.release = nil
+	result.status_code = C.EVM_FAILURE
+	result.output_data = nil
+	result.output_size = 0
 
 	switch msg.kind {
 	case C.EVM_CALL:
@@ -358,9 +355,10 @@ func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_me
 		ret, err := env.Call(contract, addr, input, bigGas, value)
 		gasLeft := contract.Gas.Int64()
 		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-		fmt.Printf("Gas left %d\n", gasLeft)
+		fmt.Printf("Gas left %d, err: %s\n", gasLeft, err)
 		result.gas_left = C.int64_t(gasLeft)
 		if err == nil {
+			fmt.Printf("Output: %x\n", ret)
 			result.status_code = C.EVM_SUCCESS
 			coutput := C.CBytes(ret)
 			result.output_data = (*C.uint8_t)(coutput)
@@ -377,7 +375,7 @@ func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_me
 		ret, err := env.CallCode(contract, addr, input, bigGas, value)
 		gasLeft := contract.Gas.Int64()
 		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-		fmt.Printf("Gas left %d\n", gasLeft)
+		fmt.Printf("Gas left %d, err: %s\n", gasLeft, err)
 		result.gas_left = C.int64_t(gasLeft)
 		if err == nil {
 			result.status_code = C.EVM_SUCCESS
@@ -396,7 +394,7 @@ func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_me
 		ret, err := env.DelegateCall(contract, addr, input, bigGas)
 		gasLeft := contract.Gas.Int64()
 		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-		fmt.Printf("Gas left %d\n", gasLeft)
+		fmt.Printf("Gas left %d, err: %s\n", gasLeft, err)
 		result.gas_left = C.int64_t(gasLeft)
 		if err == nil {
 			result.status_code = C.EVM_SUCCESS
@@ -415,7 +413,7 @@ func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_me
 		_, createAddr, err := env.Create(contract, input, bigGas, value)
 		gasLeft := contract.Gas.Int64()
 		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-		fmt.Printf("Gas left %d\n", gasLeft)
+		fmt.Printf("Gas left %d, err: %s\n", gasLeft, err)
 		result.gas_left = C.int64_t(gasLeft)
 		result.status_code = C.EVM_FAILURE
 		if (env.ChainConfig().IsHomestead(env.BlockNumber) && err == ErrCodeStoreOutOfGas) ||
@@ -506,6 +504,7 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 	}
 
 	if r.release != nil {
+		fmt.Printf("Releasing result with %p\n", r.release)
 		C.evm_release_result(&r)
 	}
 
