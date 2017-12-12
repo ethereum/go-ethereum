@@ -55,7 +55,7 @@ type Decoder interface {
 // To decode into a pointer, Decode will decode into the value pointed
 // to. If the pointer is nil, a new value of the pointer's element
 // type is allocated. If the pointer is non-nil, the existing value
-// will reused.
+// will be reused.
 //
 // To decode into a struct, Decode expects the input to be an RLP
 // list. The decoded elements of the list are assigned to each public
@@ -63,12 +63,16 @@ type Decoder interface {
 // must contain an element for each decoded field. Decode returns an
 // error if there are too few or too many elements.
 //
-// The decoding of struct fields honours two struct tags, "tail" and
-// "nil". For an explanation of "tail", see the example.
-// The "nil" tag applies to pointer-typed fields and changes the
-// decoding rules for the field such that input values of size zero
-// decode as a nil pointer. This tag can be useful when decoding
-// recursive types.
+// The decoding of struct fields honours certain struct tags, "tail",
+// "nil" and "-".
+//
+// The "-" tag ignores fields.
+//
+// For an explanation of "tail", see the example.
+//
+// The "nil" tag applies to pointer-typed fields and changes the decoding
+// rules for the field such that input values of size zero decode as a nil
+// pointer. This tag can be useful when decoding recursive types.
 //
 //     type StructWithEmptyOK struct {
 //         Foo *[20]byte `rlp:"nil"`
@@ -286,7 +290,7 @@ func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
 		}
 	case tag.tail:
 		// A slice with "tail" tag can occur as the last field
-		// of a struct and is upposed to swallow all remaining
+		// of a struct and is supposed to swallow all remaining
 		// list elements. The struct decoder already called s.List,
 		// proceed directly to decoding the elements.
 		dec = func(s *Stream, val reflect.Value) error {
@@ -689,7 +693,7 @@ func (s *Stream) Raw() ([]byte, error) {
 		return nil, err
 	}
 	if kind == String {
-		puthead(buf, 0x80, 0xB8, size)
+		puthead(buf, 0x80, 0xB7, size)
 	} else {
 		puthead(buf, 0xC0, 0xF7, size)
 	}
@@ -737,7 +741,7 @@ func (s *Stream) uint(maxbits int) (uint64, error) {
 }
 
 // Bool reads an RLP string of up to 1 byte and returns its contents
-// as an boolean. If the input does not contain an RLP string, the
+// as a boolean. If the input does not contain an RLP string, the
 // returned error will be ErrExpectedString.
 func (s *Stream) Bool() (bool, error) {
 	num, err := s.uint(8)

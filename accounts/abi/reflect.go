@@ -24,7 +24,7 @@ import (
 // indirect recursively dereferences the value until it either gets the value
 // or finds a big.Int
 func indirect(v reflect.Value) reflect.Value {
-	if v.Kind() == reflect.Ptr && v.Elem().Type() != big_t {
+	if v.Kind() == reflect.Ptr && v.Elem().Type() != derefbig_t {
 		return indirect(v.Elem())
 	}
 	return v
@@ -32,30 +32,30 @@ func indirect(v reflect.Value) reflect.Value {
 
 // reflectIntKind returns the reflect using the given size and
 // unsignedness.
-func reflectIntKind(unsigned bool, size int) reflect.Kind {
+func reflectIntKindAndType(unsigned bool, size int) (reflect.Kind, reflect.Type) {
 	switch size {
 	case 8:
 		if unsigned {
-			return reflect.Uint8
+			return reflect.Uint8, uint8_t
 		}
-		return reflect.Int8
+		return reflect.Int8, int8_t
 	case 16:
 		if unsigned {
-			return reflect.Uint16
+			return reflect.Uint16, uint16_t
 		}
-		return reflect.Int16
+		return reflect.Int16, int16_t
 	case 32:
 		if unsigned {
-			return reflect.Uint32
+			return reflect.Uint32, uint32_t
 		}
-		return reflect.Int32
+		return reflect.Int32, int32_t
 	case 64:
 		if unsigned {
-			return reflect.Uint64
+			return reflect.Uint64, uint64_t
 		}
-		return reflect.Int64
+		return reflect.Int64, int64_t
 	}
-	return reflect.Ptr
+	return reflect.Ptr, big_t
 }
 
 // mustArrayToBytesSlice creates a new byte slice with the exact same size as value
@@ -73,15 +73,9 @@ func mustArrayToByteSlice(value reflect.Value) reflect.Value {
 func set(dst, src reflect.Value, output Argument) error {
 	dstType := dst.Type()
 	srcType := src.Type()
-
 	switch {
-	case dstType.AssignableTo(src.Type()):
+	case dstType.AssignableTo(srcType):
 		dst.Set(src)
-	case dstType.Kind() == reflect.Array && srcType.Kind() == reflect.Slice:
-		if dst.Len() < output.Type.SliceSize {
-			return fmt.Errorf("abi: cannot unmarshal src (len=%d) in to dst (len=%d)", output.Type.SliceSize, dst.Len())
-		}
-		reflect.Copy(dst, src)
 	case dstType.Kind() == reflect.Interface:
 		dst.Set(src)
 	case dstType.Kind() == reflect.Ptr:

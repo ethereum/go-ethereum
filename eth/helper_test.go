@@ -28,10 +28,12 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -41,34 +43,34 @@ import (
 
 var (
 	testBankKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testBank       = core.GenesisAccount{
-		Address: crypto.PubkeyToAddress(testBankKey.PublicKey),
-		Balance: big.NewInt(1000000),
-	}
+	testBank       = crypto.PubkeyToAddress(testBankKey.PublicKey)
 )
 
 // newTestProtocolManager creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, and potential notification
 // channels for different events.
-func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) (*ProtocolManager, error) {
+func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) (*ProtocolManager, error) {
 	var (
-		evmux         = new(event.TypeMux)
-		pow           = new(core.FakePow)
-		db, _         = ethdb.NewMemDatabase()
-		genesis       = core.WriteGenesisBlockForTesting(db, testBank)
-		chainConfig   = &params.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
-		blockchain, _ = core.NewBlockChain(db, chainConfig, pow, evmux, vm.Config{})
+		evmux  = new(event.TypeMux)
+		engine = ethash.NewFaker()
+		db, _  = ethdb.NewMemDatabase()
+		gspec  = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc:  core.GenesisAlloc{testBank: {Balance: big.NewInt(1000000)}},
+		}
+		genesis       = gspec.MustCommit(db)
+		blockchain, _ = core.NewBlockChain(db, gspec.Config, engine, vm.Config{})
 	)
-	chain, _ := core.GenerateChain(chainConfig, genesis, db, blocks, generator)
+	chain, _ := core.GenerateChain(gspec.Config, genesis, db, blocks, generator)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)
 	}
 
-	pm, err := NewProtocolManager(chainConfig, fastSync, NetworkId, 1000, evmux, &testTxPool{added: newtx}, pow, blockchain, db)
+	pm, err := NewProtocolManager(gspec.Config, mode, DefaultConfig.NetworkId, evmux, &testTxPool{added: newtx}, engine, blockchain, db)
 	if err != nil {
 		return nil, err
 	}
-	pm.Start()
+	pm.Start(1000)
 	return pm, nil
 }
 
@@ -76,8 +78,8 @@ func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core
 // with the given number of blocks already known, and potential notification
 // channels for different events. In case of an error, the constructor force-
 // fails the test.
-func newTestProtocolManagerMust(t *testing.T, fastSync bool, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) *ProtocolManager {
-	pm, err := newTestProtocolManager(fastSync, blocks, generator, newtx)
+func newTestProtocolManagerMust(t *testing.T, mode downloader.SyncMode, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) *ProtocolManager {
+	pm, err := newTestProtocolManager(mode, blocks, generator, newtx)
 	if err != nil {
 		t.Fatalf("Failed to create protocol manager: %v", err)
 	}
@@ -86,15 +88,16 @@ func newTestProtocolManagerMust(t *testing.T, fastSync bool, blocks int, generat
 
 // testTxPool is a fake, helper transaction pool for testing purposes
 type testTxPool struct {
-	pool  []*types.Transaction        // Collection of all transactions
-	added chan<- []*types.Transaction // Notification channel for new transactions
+	txFeed event.Feed
+	pool   []*types.Transaction        // Collection of all transactions
+	added  chan<- []*types.Transaction // Notification channel for new transactions
 
 	lock sync.RWMutex // Protects the transaction pool
 }
 
-// AddBatch appends a batch of transactions to the pool, and notifies any
+// AddRemotes appends a batch of transactions to the pool, and notifies any
 // listeners if the addition channel is non nil
-func (p *testTxPool) AddBatch(txs []*types.Transaction) error {
+func (p *testTxPool) AddRemotes(txs []*types.Transaction) []error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -102,8 +105,7 @@ func (p *testTxPool) AddBatch(txs []*types.Transaction) error {
 	if p.added != nil {
 		p.added <- txs
 	}
-
-	return nil
+	return make([]error, len(txs))
 }
 
 // Pending returns all the transactions known to the pool
@@ -120,6 +122,10 @@ func (p *testTxPool) Pending() (map[common.Address]types.Transactions, error) {
 		sort.Sort(types.TxByNonce(batch))
 	}
 	return batches, nil
+}
+
+func (p *testTxPool) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
+	return p.txFeed.Subscribe(ch)
 }
 
 // newTestTransaction create a new dummy transaction.
@@ -171,7 +177,7 @@ func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*te
 func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, genesis common.Hash) {
 	msg := &statusData{
 		ProtocolVersion: uint32(p.version),
-		NetworkId:       uint32(NetworkId),
+		NetworkId:       DefaultConfig.NetworkId,
 		TD:              td,
 		CurrentBlock:    head,
 		GenesisBlock:    genesis,

@@ -21,57 +21,32 @@ import (
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 var (
-	big_t     = reflect.TypeOf(big.Int{})
-	ubig_t    = reflect.TypeOf(big.Int{})
-	byte_t    = reflect.TypeOf(byte(0))
-	byte_ts   = reflect.TypeOf([]byte(nil))
-	uint_t    = reflect.TypeOf(uint(0))
-	uint8_t   = reflect.TypeOf(uint8(0))
-	uint16_t  = reflect.TypeOf(uint16(0))
-	uint32_t  = reflect.TypeOf(uint32(0))
-	uint64_t  = reflect.TypeOf(uint64(0))
-	int_t     = reflect.TypeOf(int(0))
-	int8_t    = reflect.TypeOf(int8(0))
-	int16_t   = reflect.TypeOf(int16(0))
-	int32_t   = reflect.TypeOf(int32(0))
-	int64_t   = reflect.TypeOf(int64(0))
-	hash_t    = reflect.TypeOf(common.Hash{})
-	address_t = reflect.TypeOf(common.Address{})
-
-	uint_ts   = reflect.TypeOf([]uint(nil))
-	uint8_ts  = reflect.TypeOf([]uint8(nil))
-	uint16_ts = reflect.TypeOf([]uint16(nil))
-	uint32_ts = reflect.TypeOf([]uint32(nil))
-	uint64_ts = reflect.TypeOf([]uint64(nil))
-	ubig_ts   = reflect.TypeOf([]*big.Int(nil))
-
-	int_ts   = reflect.TypeOf([]int(nil))
-	int8_ts  = reflect.TypeOf([]int8(nil))
-	int16_ts = reflect.TypeOf([]int16(nil))
-	int32_ts = reflect.TypeOf([]int32(nil))
-	int64_ts = reflect.TypeOf([]int64(nil))
-	big_ts   = reflect.TypeOf([]*big.Int(nil))
+	big_t      = reflect.TypeOf(&big.Int{})
+	derefbig_t = reflect.TypeOf(big.Int{})
+	uint8_t    = reflect.TypeOf(uint8(0))
+	uint16_t   = reflect.TypeOf(uint16(0))
+	uint32_t   = reflect.TypeOf(uint32(0))
+	uint64_t   = reflect.TypeOf(uint64(0))
+	int_t      = reflect.TypeOf(int(0))
+	int8_t     = reflect.TypeOf(int8(0))
+	int16_t    = reflect.TypeOf(int16(0))
+	int32_t    = reflect.TypeOf(int32(0))
+	int64_t    = reflect.TypeOf(int64(0))
+	address_t  = reflect.TypeOf(common.Address{})
+	int_ts     = reflect.TypeOf([]int(nil))
+	int8_ts    = reflect.TypeOf([]int8(nil))
+	int16_ts   = reflect.TypeOf([]int16(nil))
+	int32_ts   = reflect.TypeOf([]int32(nil))
+	int64_ts   = reflect.TypeOf([]int64(nil))
 )
 
 // U256 converts a big Int into a 256bit EVM number.
 func U256(n *big.Int) []byte {
-	return common.LeftPadBytes(common.U256(n).Bytes(), 32)
-}
-
-// packNum packs the given number (using the reflect value) and will cast it to appropriate number representation
-func packNum(value reflect.Value) []byte {
-	switch kind := value.Kind(); kind {
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return U256(new(big.Int).SetUint64(value.Uint()))
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return U256(big.NewInt(value.Int()))
-	case reflect.Ptr:
-		return U256(value.Interface().(*big.Int))
-	}
-	return nil
+	return math.PaddedBigBytes(math.U256(n), 32)
 }
 
 // checks whether the given reflect value is signed. This also works for slices with a number type

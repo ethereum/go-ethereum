@@ -17,11 +17,11 @@
 package rpc
 
 import (
+	"context"
+	"fmt"
 	"net"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"golang.org/x/net/context"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // CreateIPCListener creates an listener, on Unix platforms this is a unix socket, on
@@ -37,7 +37,7 @@ func (srv *Server) ServeListener(l net.Listener) error {
 		if err != nil {
 			return err
 		}
-		glog.V(logger.Detail).Infoln("accepted conn", conn.RemoteAddr())
+		log.Trace(fmt.Sprint("accepted conn", conn.RemoteAddr()))
 		go srv.ServeCodec(NewJSONCodec(conn), OptionMethodInvocation|OptionSubscriptions)
 	}
 }

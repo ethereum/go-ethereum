@@ -29,7 +29,7 @@ func initDbStore(t *testing.T) *DbStore {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := NewDbStore(dir, MakeHashFunc(defaultHash), defaultDbCapacity, defaultRadius)
+	m, err := NewDbStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, defaultRadius)
 	if err != nil {
 		t.Fatal("can't create store:", err)
 	}
@@ -38,7 +38,7 @@ func initDbStore(t *testing.T) *DbStore {
 
 func testDbStore(l int64, branches int64, t *testing.T) {
 	m := initDbStore(t)
-	defer m.close()
+	defer m.Close()
 	testStore(m, l, branches, t)
 }
 
@@ -64,7 +64,7 @@ func TestDbStore2_100_(t *testing.T) {
 
 func TestDbStoreNotFound(t *testing.T) {
 	m := initDbStore(t)
-	defer m.close()
+	defer m.Close()
 	_, err := m.Get(ZeroKey)
 	if err != notFound {
 		t.Errorf("Expected notFound, got %v", err)
@@ -73,7 +73,7 @@ func TestDbStoreNotFound(t *testing.T) {
 
 func TestDbStoreSyncIterator(t *testing.T) {
 	m := initDbStore(t)
-	defer m.close()
+	defer m.Close()
 	keys := []Key{
 		Key(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")),
 		Key(common.Hex2Bytes("4000000000000000000000000000000000000000000000000000000000000000")),

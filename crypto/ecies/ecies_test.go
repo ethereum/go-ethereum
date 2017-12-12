@@ -31,18 +31,16 @@ package ecies
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var dumpEnc bool
@@ -64,8 +62,7 @@ func TestKDF(t *testing.T) {
 		t.FailNow()
 	}
 	if len(k) != 64 {
-		fmt.Printf("KDF: generated key is the wrong size (%d instead of 64\n",
-			len(k))
+		fmt.Printf("KDF: generated key is the wrong size (%d instead of 64\n", len(k))
 		t.FailNow()
 	}
 }
@@ -75,14 +72,9 @@ var ErrBadSharedKeys = fmt.Errorf("ecies: shared keys don't match")
 // cmpParams compares a set of ECIES parameters. We assume, as per the
 // docs, that AES is the only supported symmetric encryption algorithm.
 func cmpParams(p1, p2 *ECIESParams) bool {
-	if p1.hashAlgo != p2.hashAlgo {
-		return false
-	} else if p1.KeyLen != p2.KeyLen {
-		return false
-	} else if p1.BlockSize != p2.BlockSize {
-		return false
-	}
-	return true
+	return p1.hashAlgo == p2.hashAlgo &&
+		p1.KeyLen == p2.KeyLen &&
+		p1.BlockSize == p2.BlockSize
 }
 
 // cmpPublic returns true if the two public keys represent the same pojnt.
@@ -150,7 +142,7 @@ func TestSharedKey(t *testing.T) {
 func TestSharedKeyPadding(t *testing.T) {
 	// sanity checks
 	prv0 := hexKey("1adf5c18167d96a1f9a0b1ef63be8aa27eaf6032c233b2b38f7850cf5b859fd9")
-	prv1 := hexKey("97a076fc7fcd9208240668e31c9abee952cbb6e375d1b8febc7499d6e16f1a")
+	prv1 := hexKey("0097a076fc7fcd9208240668e31c9abee952cbb6e375d1b8febc7499d6e16f1a")
 	x0, _ := new(big.Int).SetString("1a8ed022ff7aec59dc1b440446bdda5ff6bcb3509a8b109077282b361efffbd8", 16)
 	x1, _ := new(big.Int).SetString("6ab3ac374251f638d0abb3ef596d1dc67955b507c104e5f2009724812dc027b8", 16)
 	y0, _ := new(big.Int).SetString("e040bd480b1deccc3bc40bd5b1fdcb7bfd352500b477cb9471366dbd4493f923", 16)
@@ -213,118 +205,6 @@ func TestTooBigSharedKey(t *testing.T) {
 	}
 }
 
-// Ensure a public key can be successfully marshalled and unmarshalled, and
-// that the decoded key is the same as the original.
-func TestMarshalPublic(t *testing.T) {
-	prv, err := GenerateKey(rand.Reader, DefaultCurve, nil)
-	if err != nil {
-		t.Fatalf("GenerateKey error: %s", err)
-	}
-
-	out, err := MarshalPublic(&prv.PublicKey)
-	if err != nil {
-		t.Fatalf("MarshalPublic error: %s", err)
-	}
-
-	pub, err := UnmarshalPublic(out)
-	if err != nil {
-		t.Fatalf("UnmarshalPublic error: %s", err)
-	}
-
-	if !cmpPublic(prv.PublicKey, *pub) {
-		t.Fatal("ecies: failed to unmarshal public key")
-	}
-}
-
-// Ensure that a private key can be encoded into DER format, and that
-// the resulting key is properly parsed back into a public key.
-func TestMarshalPrivate(t *testing.T) {
-	prv, err := GenerateKey(rand.Reader, DefaultCurve, nil)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	out, err := MarshalPrivate(prv)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	if dumpEnc {
-		ioutil.WriteFile("test.out", out, 0644)
-	}
-
-	prv2, err := UnmarshalPrivate(out)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	if !cmpPrivate(prv, prv2) {
-		fmt.Println("ecdh: private key import failed")
-		t.FailNow()
-	}
-}
-
-// Ensure that a private key can be successfully encoded to PEM format, and
-// the resulting key is properly parsed back in.
-func TestPrivatePEM(t *testing.T) {
-	prv, err := GenerateKey(rand.Reader, DefaultCurve, nil)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	out, err := ExportPrivatePEM(prv)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	if dumpEnc {
-		ioutil.WriteFile("test.key", out, 0644)
-	}
-
-	prv2, err := ImportPrivatePEM(out)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	} else if !cmpPrivate(prv, prv2) {
-		fmt.Println("ecdh: import from PEM failed")
-		t.FailNow()
-	}
-}
-
-// Ensure that a public key can be successfully encoded to PEM format, and
-// the resulting key is properly parsed back in.
-func TestPublicPEM(t *testing.T) {
-	prv, err := GenerateKey(rand.Reader, DefaultCurve, nil)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	out, err := ExportPublicPEM(&prv.PublicKey)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	if dumpEnc {
-		ioutil.WriteFile("test.pem", out, 0644)
-	}
-
-	pub2, err := ImportPublicPEM(out)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	} else if !cmpPublic(prv.PublicKey, *pub2) {
-		fmt.Println("ecdh: import from PEM failed")
-		t.FailNow()
-	}
-}
-
 // Benchmark the generation of P256 keys.
 func BenchmarkGenerateKeyP256(b *testing.B) {
 	for i := 0; i < b.N; i++ {
@@ -354,7 +234,7 @@ func BenchmarkGenSharedKeyP256(b *testing.B) {
 
 // Benchmark the generation of S256 shared keys.
 func BenchmarkGenSharedKeyS256(b *testing.B) {
-	prv, err := GenerateKey(rand.Reader, secp256k1.S256(), nil)
+	prv, err := GenerateKey(rand.Reader, crypto.S256(), nil)
 	if err != nil {
 		fmt.Println(err.Error())
 		b.FailNow()
@@ -438,74 +318,27 @@ func TestDecryptShared2(t *testing.T) {
 	}
 }
 
-// TestMarshalEncryption validates the encode/decode produces a valid
-// ECIES encryption key.
-func TestMarshalEncryption(t *testing.T) {
-	prv1, err := GenerateKey(rand.Reader, DefaultCurve, nil)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	out, err := MarshalPrivate(prv1)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	prv2, err := UnmarshalPrivate(out)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	message := []byte("Hello, world.")
-	ct, err := Encrypt(rand.Reader, &prv2.PublicKey, message, nil, nil)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	pt, err := prv2.Decrypt(rand.Reader, ct, nil, nil)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-	if !bytes.Equal(pt, message) {
-		fmt.Println("ecies: plaintext doesn't match message")
-		t.FailNow()
-	}
-
-	_, err = prv1.Decrypt(rand.Reader, ct, nil, nil)
-	if err != nil {
-		fmt.Println(err.Error())
-		t.FailNow()
-	}
-
-}
-
 type testCase struct {
 	Curve    elliptic.Curve
 	Name     string
-	Expected bool
+	Expected *ECIESParams
 }
 
 var testCases = []testCase{
 	{
 		Curve:    elliptic.P256(),
 		Name:     "P256",
-		Expected: true,
+		Expected: ECIES_AES128_SHA256,
 	},
 	{
 		Curve:    elliptic.P384(),
 		Name:     "P384",
-		Expected: true,
+		Expected: ECIES_AES256_SHA384,
 	},
 	{
 		Curve:    elliptic.P521(),
 		Name:     "P521",
-		Expected: true,
+		Expected: ECIES_AES256_SHA512,
 	},
 }
 
@@ -520,10 +353,10 @@ func TestParamSelection(t *testing.T) {
 
 func testParamSelection(t *testing.T, c testCase) {
 	params := ParamsFromCurve(c.Curve)
-	if params == nil && c.Expected {
+	if params == nil && c.Expected != nil {
 		fmt.Printf("%s (%s)\n", ErrInvalidParams.Error(), c.Name)
 		t.FailNow()
-	} else if params != nil && !c.Expected {
+	} else if params != nil && !cmpParams(params, c.Expected) {
 		fmt.Printf("ecies: parameters should be invalid (%s)\n",
 			c.Name)
 		t.FailNow()
@@ -597,6 +430,29 @@ func TestBasicKeyValidation(t *testing.T) {
 	}
 }
 
+func TestBox(t *testing.T) {
+	prv1 := hexKey("4b50fa71f5c3eeb8fdc452224b2395af2fcc3d125e06c32c82e048c0559db03f")
+	prv2 := hexKey("d0b043b4c5d657670778242d82d68a29d25d7d711127d17b8e299f156dad361a")
+	pub2 := &prv2.PublicKey
+
+	message := []byte("Hello, world.")
+	ct, err := Encrypt(rand.Reader, pub2, message, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pt, err := prv2.Decrypt(rand.Reader, ct, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(pt, message) {
+		t.Fatal("ecies: plaintext doesn't match message")
+	}
+	if _, err = prv1.Decrypt(rand.Reader, ct, nil, nil); err == nil {
+		t.Fatal("ecies: encryption should not have succeeded")
+	}
+}
+
 // Verify GenerateShared against static values - useful when
 // debugging changes in underlying libs
 func TestSharedKeyStatic(t *testing.T) {
@@ -628,11 +484,10 @@ func TestSharedKeyStatic(t *testing.T) {
 	}
 }
 
-// TODO: remove after refactoring packages crypto and crypto/ecies
 func hexKey(prv string) *PrivateKey {
-	priv := new(ecdsa.PrivateKey)
-	priv.PublicKey.Curve = secp256k1.S256()
-	priv.D, _ = new(big.Int).SetString(prv, 16)
-	priv.PublicKey.X, priv.PublicKey.Y = secp256k1.S256().ScalarBaseMult(priv.D.Bytes())
-	return ImportECDSA(priv)
+	key, err := crypto.HexToECDSA(prv)
+	if err != nil {
+		panic(err)
+	}
+	return ImportECDSA(key)
 }

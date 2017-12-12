@@ -22,9 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // SwAP Swarm Accounting Protocol with
@@ -121,16 +119,16 @@ func (self *Swap) SetRemote(remote *Profile) {
 	self.lock.Lock()
 
 	self.remote = remote
-	if self.Sells && (remote.BuyAt.Cmp(common.Big0) <= 0 || self.local.SellAt.Cmp(common.Big0) <= 0 || remote.BuyAt.Cmp(self.local.SellAt) < 0) {
+	if self.Sells && (remote.BuyAt.Sign() <= 0 || self.local.SellAt.Sign() <= 0 || remote.BuyAt.Cmp(self.local.SellAt) < 0) {
 		self.Out.Stop()
 		self.Sells = false
 	}
-	if self.Buys && (remote.SellAt.Cmp(common.Big0) <= 0 || self.local.BuyAt.Cmp(common.Big0) <= 0 || self.local.BuyAt.Cmp(self.remote.SellAt) < 0) {
+	if self.Buys && (remote.SellAt.Sign() <= 0 || self.local.BuyAt.Sign() <= 0 || self.local.BuyAt.Cmp(self.remote.SellAt) < 0) {
 		self.In.Stop()
 		self.Buys = false
 	}
 
-	glog.V(logger.Debug).Infof("<%v> remote profile set: pay at: %v, drop at: %v, buy at: %v, sell at: %v", self.proto, remote.PayAt, remote.DropAt, remote.BuyAt, remote.SellAt)
+	log.Debug(fmt.Sprintf("<%v> remote profile set: pay at: %v, drop at: %v, buy at: %v, sell at: %v", self.proto, remote.PayAt, remote.DropAt, remote.BuyAt, remote.SellAt))
 
 }
 
@@ -148,15 +146,15 @@ func (self *Swap) setParams(local *Params) {
 
 	if self.Sells {
 		self.In.AutoCash(local.AutoCashInterval, local.AutoCashThreshold)
-		glog.V(logger.Info).Infof("<%v> set autocash to every %v, max uncashed limit: %v", self.proto, local.AutoCashInterval, local.AutoCashThreshold)
+		log.Info(fmt.Sprintf("<%v> set autocash to every %v, max uncashed limit: %v", self.proto, local.AutoCashInterval, local.AutoCashThreshold))
 	} else {
-		glog.V(logger.Info).Infof("<%v> autocash off (not selling)", self.proto)
+		log.Info(fmt.Sprintf("<%v> autocash off (not selling)", self.proto))
 	}
 	if self.Buys {
 		self.Out.AutoDeposit(local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer)
-		glog.V(logger.Info).Infof("<%v> set autodeposit to every %v, pay at: %v, buffer: %v", self.proto, local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer)
+		log.Info(fmt.Sprintf("<%v> set autodeposit to every %v, pay at: %v, buffer: %v", self.proto, local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer))
 	} else {
-		glog.V(logger.Info).Infof("<%v> autodeposit off (not buying)", self.proto)
+		log.Info(fmt.Sprintf("<%v> autodeposit off (not buying)", self.proto))
 	}
 }
 
@@ -168,16 +166,16 @@ func (self *Swap) Add(n int) error {
 	self.lock.Lock()
 	self.balance += n
 	if !self.Sells && self.balance > 0 {
-		glog.V(logger.Detail).Infof("<%v> remote peer cannot have debt (balance: %v)", self.proto, self.balance)
+		log.Trace(fmt.Sprintf("<%v> remote peer cannot have debt (balance: %v)", self.proto, self.balance))
 		self.proto.Drop()
 		return fmt.Errorf("[SWAP] <%v> remote peer cannot have debt (balance: %v)", self.proto, self.balance)
 	}
 	if !self.Buys && self.balance < 0 {
-		glog.V(logger.Detail).Infof("<%v> we cannot have debt (balance: %v)", self.proto, self.balance)
+		log.Trace(fmt.Sprintf("<%v> we cannot have debt (balance: %v)", self.proto, self.balance))
 		return fmt.Errorf("[SWAP] <%v> we cannot have debt (balance: %v)", self.proto, self.balance)
 	}
 	if self.balance >= int(self.local.DropAt) {
-		glog.V(logger.Detail).Infof("<%v> remote peer has too much debt (balance: %v, disconnect threshold: %v)", self.proto, self.balance, self.local.DropAt)
+		log.Trace(fmt.Sprintf("<%v> remote peer has too much debt (balance: %v, disconnect threshold: %v)", self.proto, self.balance, self.local.DropAt))
 		self.proto.Drop()
 		return fmt.Errorf("[SWAP] <%v> remote peer has too much debt (balance: %v, disconnect threshold: %v)", self.proto, self.balance, self.local.DropAt)
 	} else if self.balance <= -int(self.remote.PayAt) {
@@ -201,9 +199,9 @@ func (self *Swap) send() {
 		amount.Mul(amount, self.remote.SellAt)
 		promise, err := self.Out.Issue(amount)
 		if err != nil {
-			glog.V(logger.Warn).Infof("<%v> cannot issue cheque (amount: %v, channel: %v): %v", self.proto, amount, self.Out, err)
+			log.Warn(fmt.Sprintf("<%v> cannot issue cheque (amount: %v, channel: %v): %v", self.proto, amount, self.Out, err))
 		} else {
-			glog.V(logger.Warn).Infof("<%v> cheque issued (amount: %v, channel: %v)", self.proto, amount, self.Out)
+			log.Warn(fmt.Sprintf("<%v> cheque issued (amount: %v, channel: %v)", self.proto, amount, self.Out))
 			self.proto.Pay(-self.balance, promise)
 			self.balance = 0
 		}
@@ -229,13 +227,13 @@ func (self *Swap) Receive(units int, promise Promise) error {
 		return fmt.Errorf("invalid amount: %v = %v * %v (units sent in msg * agreed sale unit price) != %v (signed in cheque)", price, units, self.local.SellAt, amount)
 	}
 	if err != nil {
-		glog.V(logger.Detail).Infof("<%v> invalid promise (amount: %v, channel: %v): %v", self.proto, amount, self.In, err)
+		log.Trace(fmt.Sprintf("<%v> invalid promise (amount: %v, channel: %v): %v", self.proto, amount, self.In, err))
 		return err
 	}
 
 	// credit remote peer with units
 	self.Add(-units)
-	glog.V(logger.Detail).Infof("<%v> received promise (amount: %v, channel: %v): %v", self.proto, amount, self.In, promise)
+	log.Trace(fmt.Sprintf("<%v> received promise (amount: %v, channel: %v): %v", self.proto, amount, self.In, promise))
 
 	return nil
 }

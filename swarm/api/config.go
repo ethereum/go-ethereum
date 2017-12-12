@@ -18,25 +18,23 @@ package api
 
 import (
 	"crypto/ecdsa"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
-	port = "8500"
-)
-
-var (
-	ensRootAddress = common.HexToAddress("0x112234455c3a32fd11230c42e7bccd4a84e02010")
+	DefaultHTTPListenAddr = "127.0.0.1"
+	DefaultHTTPPort       = "8500"
 )
 
 // separate bzz directories
@@ -48,85 +46,68 @@ type Config struct {
 	*network.HiveParams
 	Swap *swap.SwapParams
 	*network.SyncParams
-	Path      string
-	Port      string
-	PublicKey string
-	BzzKey    string
-	EnsRoot   common.Address
-	NetworkId uint64
+	Contract    common.Address
+	EnsRoot     common.Address
+	EnsApi      string
+	Path        string
+	ListenAddr  string
+	Port        string
+	PublicKey   string
+	BzzKey      string
+	NetworkId   uint64
+	SwapEnabled bool
+	SyncEnabled bool
+	SwapApi     string
+	Cors        string
+	BzzAccount  string
+	BootNodes   string
 }
 
-// config is agnostic to where private key is coming from
-// so managing accounts is outside swarm and left to wrappers
-func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, networkId uint64) (self *Config, err error) {
-	address := crypto.PubkeyToAddress(prvKey.PublicKey) // default beneficiary address
-	dirpath := filepath.Join(path, "bzz-"+common.Bytes2Hex(address.Bytes()))
-	err = os.MkdirAll(dirpath, os.ModePerm)
-	if err != nil {
-		return
-	}
-	confpath := filepath.Join(dirpath, "config.json")
-	var data []byte
-	pubkey := crypto.FromECDSAPub(&prvKey.PublicKey)
-	pubkeyhex := common.ToHex(pubkey)
-	keyhex := crypto.Keccak256Hash(pubkey).Hex()
+//create a default config with all parameters to set to defaults
+func NewDefaultConfig() (self *Config) {
 
 	self = &Config{
-		SyncParams:    network.NewSyncParams(dirpath),
-		HiveParams:    network.NewHiveParams(dirpath),
+		StoreParams:   storage.NewDefaultStoreParams(),
 		ChunkerParams: storage.NewChunkerParams(),
-		StoreParams:   storage.NewStoreParams(dirpath),
-		Port:          port,
-		Path:          dirpath,
-		Swap:          swap.DefaultSwapParams(contract, prvKey),
-		PublicKey:     pubkeyhex,
-		BzzKey:        keyhex,
-		EnsRoot:       ensRootAddress,
-		NetworkId:     networkId,
-	}
-	data, err = ioutil.ReadFile(confpath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return
-		}
-		// file does not exist
-		// write out config file
-		err = self.Save()
-		if err != nil {
-			err = fmt.Errorf("error writing config: %v", err)
-		}
-		return
-	}
-	// file exists, deserialise
-	err = json.Unmarshal(data, self)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse config: %v", err)
-	}
-	// check public key
-	if pubkeyhex != self.PublicKey {
-		return nil, fmt.Errorf("public key does not match the one in the config file %v != %v", pubkeyhex, self.PublicKey)
-	}
-	if keyhex != self.BzzKey {
-		return nil, fmt.Errorf("bzz key does not match the one in the config file %v != %v", keyhex, self.BzzKey)
-	}
-	self.Swap.SetKey(prvKey)
-
-	if (self.EnsRoot == common.Address{}) {
-		self.EnsRoot = ensRootAddress
+		HiveParams:    network.NewDefaultHiveParams(),
+		SyncParams:    network.NewDefaultSyncParams(),
+		Swap:          swap.NewDefaultSwapParams(),
+		ListenAddr:    DefaultHTTPListenAddr,
+		Port:          DefaultHTTPPort,
+		Path:          node.DefaultDataDir(),
+		EnsApi:        node.DefaultIPCEndpoint("geth"),
+		EnsRoot:       ens.TestNetAddress,
+		NetworkId:     network.NetworkId,
+		SwapEnabled:   false,
+		SyncEnabled:   true,
+		SwapApi:       "",
+		BootNodes:     "",
 	}
 
 	return
 }
 
-func (self *Config) Save() error {
-	data, err := json.MarshalIndent(self, "", "    ")
+//some config params need to be initialized after the complete
+//config building phase is completed (e.g. due to overriding flags)
+func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
+
+	address := crypto.PubkeyToAddress(prvKey.PublicKey)
+	self.Path = filepath.Join(self.Path, "bzz-"+common.Bytes2Hex(address.Bytes()))
+	err := os.MkdirAll(self.Path, os.ModePerm)
 	if err != nil {
-		return err
+		log.Error(fmt.Sprintf("Error creating root swarm data directory: %v", err))
+		return
 	}
-	err = os.MkdirAll(self.Path, os.ModePerm)
-	if err != nil {
-		return err
-	}
-	confpath := filepath.Join(self.Path, "config.json")
-	return ioutil.WriteFile(confpath, data, os.ModePerm)
+
+	pubkey := crypto.FromECDSAPub(&prvKey.PublicKey)
+	pubkeyhex := common.ToHex(pubkey)
+	keyhex := crypto.Keccak256Hash(pubkey).Hex()
+
+	self.PublicKey = pubkeyhex
+	self.BzzKey = keyhex
+
+	self.Swap.Init(self.Contract, prvKey)
+	self.SyncParams.Init(self.Path)
+	self.HiveParams.Init(self.Path)
+	self.StoreParams.Init(self.Path)
 }

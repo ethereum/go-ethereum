@@ -21,11 +21,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-func NewEnv(cfg *Config, state *state.StateDB) *vm.EVM {
+func NewEnv(cfg *Config) *vm.EVM {
 	context := vm.Context{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
@@ -36,8 +35,8 @@ func NewEnv(cfg *Config, state *state.StateDB) *vm.EVM {
 		BlockNumber: cfg.BlockNumber,
 		Time:        cfg.Time,
 		Difficulty:  cfg.Difficulty,
-		GasLimit:    cfg.GasLimit,
-		GasPrice:    new(big.Int),
+		GasLimit:    new(big.Int).SetUint64(cfg.GasLimit),
+		GasPrice:    cfg.GasPrice,
 	}
 
 	return vm.NewEVM(context, cfg.State, cfg.ChainConfig, cfg.EVMConfig)

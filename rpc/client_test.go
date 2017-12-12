@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"net"
@@ -30,9 +31,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"golang.org/x/net/context"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 func TestClientRequest(t *testing.T) {
@@ -147,10 +146,6 @@ func testClientCancel(transport string, t *testing.T) {
 	// You probably want to run with -parallel 1 or comment out
 	// the call to t.Parallel if you enable the logging.
 	t.Parallel()
-	// glog.SetV(6)
-	// glog.SetToStderr(true)
-	// defer glog.SetToStderr(false)
-	// glog.Infoln("testing ", transport)
 
 	// The actual test starts here.
 	var (
@@ -181,7 +176,7 @@ func testClientCancel(transport string, t *testing.T) {
 			// The key thing here is that no call will ever complete successfully.
 			err := client.CallContext(ctx, nil, "service_sleep", 2*maxContextCancelTimeout)
 			if err != nil {
-				glog.V(logger.Debug).Infoln("got expected error:", err)
+				log.Debug(fmt.Sprint("got expected error:", err))
 			} else {
 				t.Errorf("no error for call with %v wait time", timeout)
 			}
@@ -234,6 +229,38 @@ func TestClientSubscribe(t *testing.T) {
 	nc := make(chan int)
 	count := 10
 	sub, err := client.EthSubscribe(context.Background(), nc, "someSubscription", count, 0)
+	if err != nil {
+		t.Fatal("can't subscribe:", err)
+	}
+	for i := 0; i < count; i++ {
+		if val := <-nc; val != i {
+			t.Fatalf("value mismatch: got %d, want %d", val, i)
+		}
+	}
+
+	sub.Unsubscribe()
+	select {
+	case v := <-nc:
+		t.Fatal("received value after unsubscribe:", v)
+	case err := <-sub.Err():
+		if err != nil {
+			t.Fatalf("Err returned a non-nil error after explicit unsubscribe: %q", err)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatalf("subscription not closed within 1s after unsubscribe")
+	}
+}
+
+func TestClientSubscribeCustomNamespace(t *testing.T) {
+	namespace := "custom"
+	server := newTestServer(namespace, new(NotificationTestService))
+	defer server.Stop()
+	client := DialInProc(server)
+	defer client.Close()
+
+	nc := make(chan int)
+	count := 10
+	sub, err := client.Subscribe(context.Background(), namespace, nc, "someSubscription", count, 0)
 	if err != nil {
 		t.Fatal("can't subscribe:", err)
 	}
@@ -399,7 +426,7 @@ func TestClientReconnect(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		go http.Serve(l, srv.WebsocketHandler("*"))
+		go http.Serve(l, srv.WebsocketHandler([]string{"*"}))
 		return srv, l
 	}
 
@@ -471,7 +498,7 @@ func httpTestClient(srv *Server, transport string, fl *flakeyListener) (*Client,
 	var hs *httptest.Server
 	switch transport {
 	case "ws":
-		hs = httptest.NewUnstartedServer(srv.WebsocketHandler("*"))
+		hs = httptest.NewUnstartedServer(srv.WebsocketHandler([]string{"*"}))
 	case "http":
 		hs = httptest.NewUnstartedServer(srv)
 	default:
@@ -532,7 +559,7 @@ func (l *flakeyListener) Accept() (net.Conn, error) {
 	if err == nil {
 		timeout := time.Duration(rand.Int63n(int64(l.maxKillTimeout)))
 		time.AfterFunc(timeout, func() {
-			glog.V(logger.Debug).Infof("killing conn %v after %v", c.LocalAddr(), timeout)
+			log.Debug(fmt.Sprintf("killing conn %v after %v", c.LocalAddr(), timeout))
 			c.Close()
 		})
 	}

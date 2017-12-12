@@ -45,15 +45,20 @@ var (
 	// paths with any of these prefixes will be skipped
 	skipPrefixes = []string{
 		// boring stuff
-		"vendor/", "tests/files/", "build/",
+		"vendor/", "tests/testdata/", "build/",
 		// don't relicense vendored sources
-		"crypto/sha3/", "crypto/ecies/", "logger/glog/",
+		"cmd/internal/browser",
+		"consensus/ethash/xor.go",
+		"crypto/bn256/",
+		"crypto/ecies/",
 		"crypto/secp256k1/curve.go",
+		"crypto/sha3/",
+		"internal/jsre/deps",
+		"log/",
 		// don't license generated files
 		"contracts/chequebook/contract/",
 		"contracts/ens/contract/",
 		"contracts/release/contract.go",
-		"p2p/discv5/nodeevent_string.go",
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.
@@ -284,6 +289,9 @@ func getInfo(files <-chan string, out chan<- *info, wg *sync.WaitGroup) {
 		if !stat.Mode().IsRegular() {
 			continue
 		}
+		if isGenerated(file) {
+			continue
+		}
 		info, err := fileInfo(file)
 		if err != nil {
 			fmt.Printf("ERROR %s: %v\n", file, err)
@@ -292,6 +300,23 @@ func getInfo(files <-chan string, out chan<- *info, wg *sync.WaitGroup) {
 		out <- info
 	}
 	wg.Done()
+}
+
+func isGenerated(file string) bool {
+	fd, err := os.Open(file)
+	if err != nil {
+		return false
+	}
+	defer fd.Close()
+	buf := make([]byte, 2048)
+	n, _ := fd.Read(buf)
+	buf = buf[:n]
+	for _, l := range bytes.Split(buf, []byte("\n")) {
+		if bytes.HasPrefix(l, []byte("// Code generated")) {
+			return true
+		}
+	}
+	return false
 }
 
 // fileInfo finds the lowest year in which the given file was committed.

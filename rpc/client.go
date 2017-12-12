@@ -19,6 +19,7 @@ package rpc
 import (
 	"bytes"
 	"container/list"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,13 +27,12 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"golang.org/x/net/context"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -349,39 +349,49 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 	return err
 }
 
-// EthSubscribe calls the "eth_subscribe" method with the given arguments,
+// EthSubscribe registers a subscripion under the "eth" namespace.
+func (c *Client) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
+	return c.Subscribe(ctx, "eth", channel, args...)
+}
+
+// ShhSubscribe registers a subscripion under the "shh" namespace.
+func (c *Client) ShhSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
+	return c.Subscribe(ctx, "shh", channel, args...)
+}
+
+// Subscribe calls the "<namespace>_subscribe" method with the given arguments,
 // registering a subscription. Server notifications for the subscription are
 // sent to the given channel. The element type of the channel must match the
 // expected type of content returned by the subscription.
 //
 // The context argument cancels the RPC request that sets up the subscription but has no
-// effect on the subscription after EthSubscribe has returned.
+// effect on the subscription after Subscribe has returned.
 //
 // Slow subscribers will be dropped eventually. Client buffers up to 8000 notifications
 // before considering the subscriber dead. The subscription Err channel will receive
 // ErrSubscriptionQueueOverflow. Use a sufficiently large buffer on the channel or ensure
 // that the channel usually has at least one reader to prevent this issue.
-func (c *Client) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
+func (c *Client) Subscribe(ctx context.Context, namespace string, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
 	// Check type of channel first.
 	chanVal := reflect.ValueOf(channel)
 	if chanVal.Kind() != reflect.Chan || chanVal.Type().ChanDir()&reflect.SendDir == 0 {
-		panic("first argument to EthSubscribe must be a writable channel")
+		panic("first argument to Subscribe must be a writable channel")
 	}
 	if chanVal.IsNil() {
-		panic("channel given to EthSubscribe must not be nil")
+		panic("channel given to Subscribe must not be nil")
 	}
 	if c.isHTTP {
 		return nil, ErrNotificationsUnsupported
 	}
 
-	msg, err := c.newMessage(subscribeMethod, args...)
+	msg, err := c.newMessage(namespace+subscribeMethodSuffix, args...)
 	if err != nil {
 		return nil, err
 	}
 	op := &requestOp{
 		ids:  []json.RawMessage{msg.ID},
 		resp: make(chan *jsonrpcMessage),
-		sub:  newClientSubscription(c, chanVal),
+		sub:  newClientSubscription(c, namespace, chanVal),
 	}
 
 	// Send the subscription request.
@@ -408,9 +418,9 @@ func (c *Client) newMessage(method string, paramsIn ...interface{}) (*jsonrpcMes
 func (c *Client) send(ctx context.Context, op *requestOp, msg interface{}) error {
 	select {
 	case c.requestOp <- op:
-		if glog.V(logger.Detail) {
-			glog.Info("sending ", msg)
-		}
+		log.Trace("", "msg", log.Lazy{Fn: func() string {
+			return fmt.Sprint("sending ", msg)
+		}})
 		err := c.write(ctx, msg)
 		c.sendDone <- err
 		return err
@@ -445,7 +455,7 @@ func (c *Client) write(ctx context.Context, msg interface{}) error {
 func (c *Client) reconnect(ctx context.Context) error {
 	newconn, err := c.connectFunc(ctx)
 	if err != nil {
-		glog.V(logger.Detail).Infof("reconnect failed: %v", err)
+		log.Trace(fmt.Sprintf("reconnect failed: %v", err))
 		return err
 	}
 	select {
@@ -496,31 +506,31 @@ func (c *Client) dispatch(conn net.Conn) {
 			for _, msg := range batch {
 				switch {
 				case msg.isNotification():
-					if glog.V(logger.Detail) {
-						glog.Info("<-readResp: notification ", msg)
-					}
+					log.Trace("", "msg", log.Lazy{Fn: func() string {
+						return fmt.Sprint("<-readResp: notification ", msg)
+					}})
 					c.handleNotification(msg)
 				case msg.isResponse():
-					if glog.V(logger.Detail) {
-						glog.Info("<-readResp: response ", msg)
-					}
+					log.Trace("", "msg", log.Lazy{Fn: func() string {
+						return fmt.Sprint("<-readResp: response ", msg)
+					}})
 					c.handleResponse(msg)
 				default:
-					if glog.V(logger.Debug) {
-						glog.Error("<-readResp: dropping weird message", msg)
-					}
+					log.Debug("", "msg", log.Lazy{Fn: func() string {
+						return fmt.Sprint("<-readResp: dropping weird message", msg)
+					}})
 					// TODO: maybe close
 				}
 			}
 
 		case err := <-c.readErr:
-			glog.V(logger.Debug).Infof("<-readErr: %v", err)
+			log.Debug(fmt.Sprintf("<-readErr: %v", err))
 			c.closeRequestOps(err)
 			conn.Close()
 			reading = false
 
 		case newconn := <-c.reconnected:
-			glog.V(logger.Debug).Infof("<-reconnected: (reading=%t) %v", reading, conn.RemoteAddr())
+			log.Debug(fmt.Sprintf("<-reconnected: (reading=%t) %v", reading, conn.RemoteAddr()))
 			if reading {
 				// Wait for the previous read loop to exit. This is a rare case.
 				conn.Close()
@@ -576,8 +586,8 @@ func (c *Client) closeRequestOps(err error) {
 }
 
 func (c *Client) handleNotification(msg *jsonrpcMessage) {
-	if msg.Method != notificationMethod {
-		glog.V(logger.Debug).Info("dropping non-subscription message: ", msg)
+	if !strings.HasSuffix(msg.Method, notificationMethodSuffix) {
+		log.Debug(fmt.Sprint("dropping non-subscription message: ", msg))
 		return
 	}
 	var subResult struct {
@@ -585,7 +595,7 @@ func (c *Client) handleNotification(msg *jsonrpcMessage) {
 		Result json.RawMessage `json:"result"`
 	}
 	if err := json.Unmarshal(msg.Params, &subResult); err != nil {
-		glog.V(logger.Debug).Info("dropping invalid subscription message: ", msg)
+		log.Debug(fmt.Sprint("dropping invalid subscription message: ", msg))
 		return
 	}
 	if c.subs[subResult.ID] != nil {
@@ -596,7 +606,7 @@ func (c *Client) handleNotification(msg *jsonrpcMessage) {
 func (c *Client) handleResponse(msg *jsonrpcMessage) {
 	op := c.respWait[string(msg.ID)]
 	if op == nil {
-		glog.V(logger.Debug).Infof("unsolicited response %v", msg)
+		log.Debug(fmt.Sprintf("unsolicited response %v", msg))
 		return
 	}
 	delete(c.respWait, string(msg.ID))
@@ -654,11 +664,12 @@ func (c *Client) read(conn net.Conn) error {
 
 // A ClientSubscription represents a subscription established through EthSubscribe.
 type ClientSubscription struct {
-	client  *Client
-	etype   reflect.Type
-	channel reflect.Value
-	subid   string
-	in      chan json.RawMessage
+	client    *Client
+	etype     reflect.Type
+	channel   reflect.Value
+	namespace string
+	subid     string
+	in        chan json.RawMessage
 
 	quitOnce sync.Once     // ensures quit is closed once
 	quit     chan struct{} // quit is closed when the subscription exits
@@ -666,14 +677,15 @@ type ClientSubscription struct {
 	err      chan error
 }
 
-func newClientSubscription(c *Client, channel reflect.Value) *ClientSubscription {
+func newClientSubscription(c *Client, namespace string, channel reflect.Value) *ClientSubscription {
 	sub := &ClientSubscription{
-		client:  c,
-		etype:   channel.Type().Elem(),
-		channel: channel,
-		quit:    make(chan struct{}),
-		err:     make(chan error, 1),
-		in:      make(chan json.RawMessage),
+		client:    c,
+		namespace: namespace,
+		etype:     channel.Type().Elem(),
+		channel:   channel,
+		quit:      make(chan struct{}),
+		err:       make(chan error, 1),
+		in:        make(chan json.RawMessage),
 	}
 	return sub
 }
@@ -682,7 +694,7 @@ func newClientSubscription(c *Client, channel reflect.Value) *ClientSubscription
 // resubscription when the client connection is closed unexpectedly.
 //
 // The error channel receives a value when the subscription has ended due
-// to an error. The received error is ErrClientQuit if Close has been called
+// to an error. The received error is nil if Close has been called
 // on the underlying client and no other error has occurred.
 //
 // The error channel is closed when Unsubscribe is called on the subscription.
@@ -707,6 +719,9 @@ func (sub *ClientSubscription) quitWithError(err error, unsubscribeServer bool) 
 			sub.requestUnsubscribe()
 		}
 		if err != nil {
+			if err == ErrClientQuit {
+				err = nil // Adhere to subscription semantics.
+			}
 			sub.err <- err
 		}
 	})
@@ -772,5 +787,5 @@ func (sub *ClientSubscription) unmarshal(result json.RawMessage) (interface{}, e
 
 func (sub *ClientSubscription) requestUnsubscribe() error {
 	var result interface{}
-	return sub.client.Call(&result, unsubscribeMethod, sub.subid)
+	return sub.client.Call(&result, sub.namespace+unsubscribeMethodSuffix, sub.subid)
 }

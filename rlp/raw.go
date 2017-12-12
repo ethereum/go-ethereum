@@ -22,7 +22,7 @@ import (
 )
 
 // RawValue represents an encoded RLP value and can be used to delay
-// RLP decoding or precompute an encoding. Note that the decoder does
+// RLP decoding or to precompute an encoding. Note that the decoder does
 // not verify whether the content of RawValues is valid RLP.
 type RawValue []byte
 
@@ -98,7 +98,7 @@ func readKind(buf []byte) (k Kind, tagsize, contentsize uint64, err error) {
 		tagsize = 1
 		contentsize = uint64(b - 0x80)
 		// Reject strings that should've been single bytes.
-		if contentsize == 1 && buf[1] < 128 {
+		if contentsize == 1 && len(buf) > 1 && buf[1] < 128 {
 			return 0, 0, 0, ErrCanonSize
 		}
 	case b < 0xC0:

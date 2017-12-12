@@ -247,6 +247,21 @@ func (c *Color) Println(a ...interface{}) (n int, err error) {
 	return fmt.Fprintln(Output, a...)
 }
 
+// Sprint is just like Print, but returns a string instead of printing it.
+func (c *Color) Sprint(a ...interface{}) string {
+	return c.wrap(fmt.Sprint(a...))
+}
+
+// Sprintln is just like Println, but returns a string instead of printing it.
+func (c *Color) Sprintln(a ...interface{}) string {
+	return c.wrap(fmt.Sprintln(a...))
+}
+
+// Sprintf is just like Printf, but returns a string instead of printing it.
+func (c *Color) Sprintf(format string, a ...interface{}) string {
+	return c.wrap(fmt.Sprintf(format, a...))
+}
+
 // FprintFunc returns a new function that prints the passed arguments as
 // colorized with color.Fprint().
 func (c *Color) FprintFunc() func(w io.Writer, a ...interface{}) {

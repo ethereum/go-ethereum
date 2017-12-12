@@ -218,6 +218,22 @@ type RawSockaddrCAN struct {
 	Addr      [8]byte
 }
 
+type RawSockaddrALG struct {
+	Family uint16
+	Type   [14]uint8
+	Feat   uint32
+	Mask   uint32
+	Name   [64]uint8
+}
+
+type RawSockaddrVM struct {
+	Family    uint16
+	Reserved1 uint16
+	Port      uint32
+	Cid       uint32
+	Zero      [4]uint8
+}
+
 type RawSockaddr struct {
 	Family uint16
 	Data   [14]int8
@@ -343,6 +359,8 @@ const (
 	SizeofSockaddrNetlink   = 0xc
 	SizeofSockaddrHCI       = 0x6
 	SizeofSockaddrCAN       = 0x10
+	SizeofSockaddrALG       = 0x58
+	SizeofSockaddrVM        = 0x10
 	SizeofLinger            = 0x8
 	SizeofIPMreq            = 0x8
 	SizeofIPMreqn           = 0xc
@@ -583,12 +601,12 @@ type Sysinfo_t struct {
 }
 
 type Utsname struct {
-	Sysname    [65]int8
-	Nodename   [65]int8
-	Release    [65]int8
-	Version    [65]int8
-	Machine    [65]int8
-	Domainname [65]int8
+	Sysname    [65]byte
+	Nodename   [65]byte
+	Release    [65]byte
+	Version    [65]byte
+	Machine    [65]byte
+	Domainname [65]byte
 }
 
 type Ustat_t struct {
@@ -633,8 +651,6 @@ const (
 type Sigset_t struct {
 	X__val [16]uint64
 }
-
-const _SC_PAGESIZE = 0x1e
 
 type Termios struct {
 	Iflag  uint32

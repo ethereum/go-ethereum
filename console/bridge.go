@@ -20,10 +20,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/accounts/usbwallet"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/robertkrimen/otto"
 )
@@ -81,6 +82,49 @@ func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 		throwJSException(err.Error())
 	}
 	return ret
+}
+
+// OpenWallet is a wrapper around personal.openWallet which can interpret and
+// react to certain error messages, such as the Trezor PIN matrix request.
+func (b *bridge) OpenWallet(call otto.FunctionCall) (response otto.Value) {
+	// Make sure we have an wallet specified to open
+	if !call.Argument(0).IsString() {
+		throwJSException("first argument must be the wallet URL to open")
+	}
+	wallet := call.Argument(0)
+
+	var passwd otto.Value
+	if call.Argument(1).IsUndefined() || call.Argument(1).IsNull() {
+		passwd, _ = otto.ToValue("")
+	} else {
+		passwd = call.Argument(1)
+	}
+	// Open the wallet and return if successful in itself
+	val, err := call.Otto.Call("jeth.openWallet", nil, wallet, passwd)
+	if err == nil {
+		return val
+	}
+	// Wallet open failed, report error unless it's a PIN entry
+	if !strings.HasSuffix(err.Error(), usbwallet.ErrTrezorPINNeeded.Error()) {
+		throwJSException(err.Error())
+	}
+	// Trezor PIN matrix input requested, display the matrix to the user and fetch the data
+	fmt.Fprintf(b.printer, "Look at the device for number positions\n\n")
+	fmt.Fprintf(b.printer, "7 | 8 | 9\n")
+	fmt.Fprintf(b.printer, "--+---+--\n")
+	fmt.Fprintf(b.printer, "4 | 5 | 6\n")
+	fmt.Fprintf(b.printer, "--+---+--\n")
+	fmt.Fprintf(b.printer, "1 | 2 | 3\n\n")
+
+	if input, err := b.prompter.PromptPassword("Please enter current PIN: "); err != nil {
+		throwJSException(err.Error())
+	} else {
+		passwd, _ = otto.ToValue(input)
+	}
+	if val, err = call.Otto.Call("jeth.openWallet", nil, wallet, passwd); err != nil {
+		throwJSException(err.Error())
+	}
+	return val
 }
 
 // UnlockAccount is a wrapper around the personal.unlockAccount RPC method that
@@ -241,17 +285,19 @@ func (b *bridge) Send(call otto.FunctionCall) (response otto.Value) {
 		throwJSException(err.Error())
 	}
 	var (
-		rawReq = []byte(reqVal.String())
+		rawReq = reqVal.String()
+		dec    = json.NewDecoder(strings.NewReader(rawReq))
 		reqs   []jsonrpcCall
 		batch  bool
 	)
+	dec.UseNumber() // avoid float64s
 	if rawReq[0] == '[' {
 		batch = true
-		json.Unmarshal(rawReq, &reqs)
+		dec.Decode(&reqs)
 	} else {
 		batch = false
 		reqs = make([]jsonrpcCall, 1)
-		json.Unmarshal(rawReq, &reqs[0])
+		dec.Decode(&reqs[0])
 	}
 
 	// Execute the requests.
@@ -306,7 +352,7 @@ func setError(resp *otto.Object, code int, msg string) {
 func throwJSException(msg interface{}) otto.Value {
 	val, err := otto.ToValue(msg)
 	if err != nil {
-		glog.V(logger.Error).Infof("Failed to serialize JavaScript exception %v: %v", msg, err)
+		log.Error("Failed to serialize JavaScript exception", "exception", msg, "err", err)
 	}
 	panic(val)
 }

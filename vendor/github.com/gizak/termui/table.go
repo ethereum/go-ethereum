@@ -1,10 +1,32 @@
+// Copyright 2017 Zack Guo <zack.y.guo@gmail.com>. All rights reserved.
+// Use of this source code is governed by a MIT license that can
+// be found in the LICENSE file.
+
 package termui
 
 import "strings"
 
-/*
+/* Table is like:
+
+┌Awesome Table ────────────────────────────────────────────────┐
+│  Col0          | Col1 | Col2 | Col3  | Col4  | Col5  | Col6  |
+│──────────────────────────────────────────────────────────────│
+│  Some Item #1  | AAA  | 123  | CCCCC | EEEEE | GGGGG | IIIII |
+│──────────────────────────────────────────────────────────────│
+│  Some Item #2  | BBB  | 456  | DDDDD | FFFFF | HHHHH | JJJJJ |
+└──────────────────────────────────────────────────────────────┘
+
+Datapoints are a two dimensional array of strings: [][]string
+
+Example:
+	data := [][]string{
+		{"Col0", "Col1", "Col3", "Col4", "Col5", "Col6"},
+		{"Some Item #1", "AAA", "123", "CCCCC", "EEEEE", "GGGGG", "IIIII"},
+		{"Some Item #2", "BBB", "456", "DDDDD", "FFFFF", "HHHHH", "JJJJJ"},
+	}
+
 	table := termui.NewTable()
-	table.Rows = rows
+	table.Rows = data  // type [][]string
 	table.FgColor = termui.ColorWhite
 	table.BgColor = termui.ColorDefault
 	table.Height = 7
@@ -14,6 +36,7 @@ import "strings"
 	table.Border = true
 */
 
+// Table tracks all the attributes of a Table instance
 type Table struct {
 	Block
 	Rows      [][]string
@@ -22,22 +45,34 @@ type Table struct {
 	BgColor   Attribute
 	FgColors  []Attribute
 	BgColors  []Attribute
-	Seperator bool
+	Separator bool
 	TextAlign Align
 }
 
+// NewTable returns a new Table instance
 func NewTable() *Table {
 	table := &Table{Block: *NewBlock()}
 	table.FgColor = ColorWhite
 	table.BgColor = ColorDefault
-	table.Seperator = true
+	table.Separator = true
 	return table
 }
 
-func (table *Table) Analysis() {
+// CellsWidth calculates the width of a cell array and returns an int
+func cellsWidth(cells []Cell) int {
+	width := 0
+	for _, c := range cells {
+		width += c.Width()
+	}
+	return width
+}
+
+// Analysis generates and returns an array of []Cell that represent all columns in the Table
+func (table *Table) Analysis() [][]Cell {
+	var rowCells [][]Cell
 	length := len(table.Rows)
 	if length < 1 {
-		return
+		return rowCells
 	}
 
 	if len(table.FgColors) == 0 {
@@ -47,121 +82,101 @@ func (table *Table) Analysis() {
 		table.BgColors = make([]Attribute, len(table.Rows))
 	}
 
-	row_width := len(table.Rows[0])
-	cellWidthes := make([]int, row_width)
+	cellWidths := make([]int, len(table.Rows[0]))
 
-	for index, row := range table.Rows {
-		for i, str := range row {
-			if cellWidthes[i] < len(str) {
-				cellWidthes[i] = len(str)
+	for y, row := range table.Rows {
+		if table.FgColors[y] == 0 {
+			table.FgColors[y] = table.FgColor
+		}
+		if table.BgColors[y] == 0 {
+			table.BgColors[y] = table.BgColor
+		}
+		for x, str := range row {
+			cells := DefaultTxBuilder.Build(str, table.FgColors[y], table.BgColors[y])
+			cw := cellsWidth(cells)
+			if cellWidths[x] < cw {
+				cellWidths[x] = cw
 			}
-		}
-
-		if table.FgColors[index] == 0 {
-			table.FgColors[index] = table.FgColor
-		}
-
-		if table.BgColors[index] == 0 {
-			table.BgColors[index] = table.BgColor
+			rowCells = append(rowCells, cells)
 		}
 	}
-
-	table.CellWidth = cellWidthes
-
-	//width_sum := 2
-	//for i, width := range cellWidthes {
-	//	width_sum += (width + 2)
-	//	for u, row := range table.Rows {
-	//		switch table.TextAlign {
-	//		case "right":
-	//			row[i] = fmt.Sprintf(" %*s ", width, table.Rows[u][i])
-	//		case "center":
-	//			word_width := len(table.Rows[u][i])
-	//			offset := (width - word_width) / 2
-	//			row[i] = fmt.Sprintf(" %*s ", width, fmt.Sprintf("%-*s", offset+word_width, table.Rows[u][i]))
-	//		default: // left
-	//			row[i] = fmt.Sprintf(" %-*s ", width, table.Rows[u][i])
-	//		}
-	//	}
-	//}
-
-	//if table.Width == 0 {
-	//	table.Width = width_sum
-	//}
+	table.CellWidth = cellWidths
+	return rowCells
 }
 
+// SetSize calculates the table size and sets the internal value
 func (table *Table) SetSize() {
 	length := len(table.Rows)
-	if table.Seperator {
+	if table.Separator {
 		table.Height = length*2 + 1
 	} else {
 		table.Height = length + 2
 	}
 	table.Width = 2
 	if length != 0 {
-		for _, cell_width := range table.CellWidth {
-			table.Width += cell_width + 3
+		for _, cellWidth := range table.CellWidth {
+			table.Width += cellWidth + 3
 		}
 	}
 }
 
-func (table *Table) CalculatePosition(x int, y int, x_coordinate *int, y_coordibate *int, cell_beginning *int) {
-	if table.Seperator {
-		*y_coordibate = table.innerArea.Min.Y + y*2
+// CalculatePosition ...
+func (table *Table) CalculatePosition(x int, y int, coordinateX *int, coordinateY *int, cellStart *int) {
+	if table.Separator {
+		*coordinateY = table.innerArea.Min.Y + y*2
 	} else {
-		*y_coordibate = table.innerArea.Min.Y + y
+		*coordinateY = table.innerArea.Min.Y + y
 	}
 	if x == 0 {
-		*cell_beginning = table.innerArea.Min.X
+		*cellStart = table.innerArea.Min.X
 	} else {
-		*cell_beginning += table.CellWidth[x-1] + 3
+		*cellStart += table.CellWidth[x-1] + 3
 	}
 
 	switch table.TextAlign {
 	case AlignRight:
-		*x_coordinate = *cell_beginning + (table.CellWidth[x] - len(table.Rows[y][x])) + 2
+		*coordinateX = *cellStart + (table.CellWidth[x] - len(table.Rows[y][x])) + 2
 	case AlignCenter:
-		*x_coordinate = *cell_beginning + (table.CellWidth[x]-len(table.Rows[y][x]))/2 + 2
+		*coordinateX = *cellStart + (table.CellWidth[x]-len(table.Rows[y][x]))/2 + 2
 	default:
-		*x_coordinate = *cell_beginning + 2
+		*coordinateX = *cellStart + 2
 	}
 }
 
+// Buffer ...
 func (table *Table) Buffer() Buffer {
 	buffer := table.Block.Buffer()
-	table.Analysis()
-
-	pointer_x := table.innerArea.Min.X + 2
-	pointer_y := table.innerArea.Min.Y
-	border_pointer_x := table.innerArea.Min.X
+	rowCells := table.Analysis()
+	pointerX := table.innerArea.Min.X + 2
+	pointerY := table.innerArea.Min.Y
+	borderPointerX := table.innerArea.Min.X
 	for y, row := range table.Rows {
-		for x, cell := range row {
-			table.CalculatePosition(x, y, &pointer_x, &pointer_y, &border_pointer_x)
-			backgraound := DefaultTxBuilder.Build(strings.Repeat(" ", table.CellWidth[x]+3), table.BgColors[y], table.BgColors[y])
-			cells := DefaultTxBuilder.Build(cell, table.FgColors[y], table.BgColors[y])
-
-			for i, back := range backgraound {
-				buffer.Set(border_pointer_x+i, pointer_y, back)
+		for x := range row {
+			table.CalculatePosition(x, y, &pointerX, &pointerY, &borderPointerX)
+			background := DefaultTxBuilder.Build(strings.Repeat(" ", table.CellWidth[x]+3), table.BgColors[y], table.BgColors[y])
+			cells := rowCells[y*len(row)+x]
+			for i, back := range background {
+				buffer.Set(borderPointerX+i, pointerY, back)
 			}
 
-			coordinate_x := pointer_x
+			coordinateX := pointerX
 			for _, printer := range cells {
-				buffer.Set(coordinate_x, pointer_y, printer)
-				coordinate_x += printer.Width()
+				buffer.Set(coordinateX, pointerY, printer)
+				coordinateX += printer.Width()
 			}
 
 			if x != 0 {
-				devidors := DefaultTxBuilder.Build("|", table.FgColors[y], table.BgColors[y])
-				for _, devidor := range devidors {
-					buffer.Set(border_pointer_x, pointer_y, devidor)
+				dividors := DefaultTxBuilder.Build("|", table.FgColors[y], table.BgColors[y])
+				for _, dividor := range dividors {
+					buffer.Set(borderPointerX, pointerY, dividor)
 				}
 			}
 		}
 
-		if table.Seperator {
+		if table.Separator {
 			border := DefaultTxBuilder.Build(strings.Repeat("─", table.Width-2), table.FgColor, table.BgColor)
 			for i, cell := range border {
-				buffer.Set(i+1, pointer_y+1, cell)
+				buffer.Set(i+1, pointerY+1, cell)
 			}
 		}
 	}

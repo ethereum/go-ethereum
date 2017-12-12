@@ -18,22 +18,19 @@ package core
 
 import (
 	crand "crypto/rand"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
 	mrand "math/rand"
-	"runtime"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/pow"
 	"github.com/hashicorp/golang-lru"
 )
 
@@ -63,18 +60,15 @@ type HeaderChain struct {
 
 	procInterrupt func() bool
 
-	rand         *mrand.Rand
-	getValidator getHeaderValidatorFn
+	rand   *mrand.Rand
+	engine consensus.Engine
 }
-
-// getHeaderValidatorFn returns a HeaderValidator interface
-type getHeaderValidatorFn func() HeaderValidator
 
 // NewHeaderChain creates a new HeaderChain structure.
 //  getValidator should return the parent's validator
 //  procInterrupt points to the parent's interrupt semaphore
 //  wg points to the parent's shutdown wait group
-func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, getValidator getHeaderValidatorFn, procInterrupt func() bool) (*HeaderChain, error) {
+func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine consensus.Engine, procInterrupt func() bool) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	tdCache, _ := lru.New(tdCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
@@ -93,17 +87,12 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, getValid
 		numberCache:   numberCache,
 		procInterrupt: procInterrupt,
 		rand:          mrand.New(mrand.NewSource(seed.Int64())),
-		getValidator:  getValidator,
+		engine:        engine,
 	}
 
 	hc.genesisHeader = hc.GetHeaderByNumber(0)
 	if hc.genesisHeader == nil {
-		genesisBlock, err := WriteDefaultGenesisBlock(chainDb)
-		if err != nil {
-			return nil, err
-		}
-		glog.V(logger.Info).Infoln("WARNING: Wrote default ethereum genesis block")
-		hc.genesisHeader = genesisBlock.Header()
+		return nil, ErrNoGenesis
 	}
 
 	hc.currentHeader = hc.genesisHeader
@@ -148,19 +137,18 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 	// Calculate the total difficulty of the header
 	ptd := hc.GetTd(header.ParentHash, number-1)
 	if ptd == nil {
-		return NonStatTy, ParentError(header.ParentHash)
+		return NonStatTy, consensus.ErrUnknownAncestor
 	}
 	localTd := hc.GetTd(hc.currentHeaderHash, hc.currentHeader.Number.Uint64())
 	externTd := new(big.Int).Add(header.Difficulty, ptd)
 
 	// Irrelevant of the canonical status, write the td and header to the database
 	if err := hc.WriteTd(hash, number, externTd); err != nil {
-		glog.Fatalf("failed to write header total difficulty: %v", err)
+		log.Crit("Failed to write header total difficulty", "err", err)
 	}
 	if err := WriteHeader(hc.chainDb, header); err != nil {
-		glog.Fatalf("failed to write header contents: %v", err)
+		log.Crit("Failed to write header content", "err", err)
 	}
-
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
@@ -186,15 +174,13 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 			headNumber = headHeader.Number.Uint64() - 1
 			headHeader = hc.GetHeader(headHash, headNumber)
 		}
-
 		// Extend the canonical chain with the new header
 		if err := WriteCanonicalHash(hc.chainDb, hash, number); err != nil {
-			glog.Fatalf("failed to insert header number: %v", err)
+			log.Crit("Failed to insert header number", "err", err)
 		}
 		if err := WriteHeadHeaderHash(hc.chainDb, hash); err != nil {
-			glog.Fatalf("failed to insert head header hash: %v", err)
+			log.Crit("Failed to insert head header hash", "err", err)
 		}
-
 		hc.currentHeaderHash, hc.currentHeader = hash, types.CopyHeader(header)
 
 		status = CanonStatTy
@@ -215,6 +201,53 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 // header writes should be protected by the parent chain mutex individually.
 type WhCallback func(*types.Header) error
 
+func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+	// Do a sanity check that the provided chain is actually ordered and linked
+	for i := 1; i < len(chain); i++ {
+		if chain[i].Number.Uint64() != chain[i-1].Number.Uint64()+1 || chain[i].ParentHash != chain[i-1].Hash() {
+			// Chain broke ancestry, log a messge (programming error) and skip insertion
+			log.Error("Non contiguous header insert", "number", chain[i].Number, "hash", chain[i].Hash(),
+				"parent", chain[i].ParentHash, "prevnumber", chain[i-1].Number, "prevhash", chain[i-1].Hash())
+
+			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, chain[i-1].Number,
+				chain[i-1].Hash().Bytes()[:4], i, chain[i].Number, chain[i].Hash().Bytes()[:4], chain[i].ParentHash[:4])
+		}
+	}
+
+	// Generate the list of seal verification requests, and start the parallel verifier
+	seals := make([]bool, len(chain))
+	for i := 0; i < len(seals)/checkFreq; i++ {
+		index := i*checkFreq + hc.rand.Intn(checkFreq)
+		if index >= len(seals) {
+			index = len(seals) - 1
+		}
+		seals[index] = true
+	}
+	seals[len(seals)-1] = true // Last should always be verified to avoid junk
+
+	abort, results := hc.engine.VerifyHeaders(hc, chain, seals)
+	defer close(abort)
+
+	// Iterate over the headers and ensure they all check out
+	for i, header := range chain {
+		// If the chain is terminating, stop processing blocks
+		if hc.procInterrupt() {
+			log.Debug("Premature abort during headers verification")
+			return 0, errors.New("aborted")
+		}
+		// If the header is a banned one, straight out abort
+		if BadHashes[header.Hash()] {
+			return i, ErrBlacklistedHash
+		}
+		// Otherwise wait for headers checks and ensure they pass
+		if err := <-results; err != nil {
+			return i, err
+		}
+	}
+
+	return 0, nil
+}
+
 // InsertHeaderChain attempts to insert the given header chain in to the local
 // chain, possibly creating a reorg. If an error is returned, it will return the
 // index number of the failing header as well an error describing what went wrong.
@@ -223,107 +256,18 @@ type WhCallback func(*types.Header) error
 // should be done or not. The reason behind the optional check is because some
 // of the header retrieval mechanisms already need to verfy nonces, as well as
 // because nonces can be verified sparsely, not needing to check each.
-func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, checkFreq int, writeHeader WhCallback) (int, error) {
-	// Do a sanity check that the provided chain is actually ordered and linked
-	for i := 1; i < len(chain); i++ {
-		if chain[i].Number.Uint64() != chain[i-1].Number.Uint64()+1 || chain[i].ParentHash != chain[i-1].Hash() {
-			// Chain broke ancestry, log a messge (programming error) and skip insertion
-			failure := fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])",
-				i-1, chain[i-1].Number.Uint64(), chain[i-1].Hash().Bytes()[:4], i, chain[i].Number.Uint64(), chain[i].Hash().Bytes()[:4], chain[i].ParentHash.Bytes()[:4])
-
-			glog.V(logger.Error).Info(failure.Error())
-			return 0, failure
-		}
-	}
+func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, writeHeader WhCallback, start time.Time) (int, error) {
 	// Collect some import statistics to report on
 	stats := struct{ processed, ignored int }{}
-	start := time.Now()
-
-	// Generate the list of headers that should be POW verified
-	verify := make([]bool, len(chain))
-	for i := 0; i < len(verify)/checkFreq; i++ {
-		index := i*checkFreq + hc.rand.Intn(checkFreq)
-		if index >= len(verify) {
-			index = len(verify) - 1
-		}
-		verify[index] = true
-	}
-	verify[len(verify)-1] = true // Last should always be verified to avoid junk
-
-	// Create the header verification task queue and worker functions
-	tasks := make(chan int, len(chain))
-	for i := 0; i < len(chain); i++ {
-		tasks <- i
-	}
-	close(tasks)
-
-	errs, failed := make([]error, len(tasks)), int32(0)
-	process := func(worker int) {
-		for index := range tasks {
-			header, hash := chain[index], chain[index].Hash()
-
-			// Short circuit insertion if shutting down or processing failed
-			if hc.procInterrupt() {
-				return
-			}
-			if atomic.LoadInt32(&failed) > 0 {
-				return
-			}
-			// Short circuit if the header is bad or already known
-			if BadHashes[hash] {
-				errs[index] = BadHashError(hash)
-				atomic.AddInt32(&failed, 1)
-				return
-			}
-			if hc.HasHeader(hash) {
-				continue
-			}
-			// Verify that the header honors the chain parameters
-			checkPow := verify[index]
-
-			var err error
-			if index == 0 {
-				err = hc.getValidator().ValidateHeader(header, hc.GetHeader(header.ParentHash, header.Number.Uint64()-1), checkPow)
-			} else {
-				err = hc.getValidator().ValidateHeader(header, chain[index-1], checkPow)
-			}
-			if err != nil {
-				errs[index] = err
-				atomic.AddInt32(&failed, 1)
-				return
-			}
-		}
-	}
-	// Start as many worker threads as goroutines allowed
-	pending := new(sync.WaitGroup)
-	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
-		pending.Add(1)
-		go func(id int) {
-			defer pending.Done()
-			process(id)
-		}(i)
-	}
-	pending.Wait()
-
-	// If anything failed, report
-	if failed > 0 {
-		for i, err := range errs {
-			if err != nil {
-				return i, err
-			}
-		}
-	}
 	// All headers passed verification, import them into the database
 	for i, header := range chain {
 		// Short circuit insertion if shutting down
 		if hc.procInterrupt() {
-			glog.V(logger.Debug).Infoln("premature abort during header chain processing")
-			break
+			log.Debug("Premature abort during headers import")
+			return i, errors.New("aborted")
 		}
-		hash := header.Hash()
-
 		// If the header's already known, skip it, otherwise store
-		if hc.HasHeader(hash) {
+		if hc.HasHeader(header.Hash(), header.Number.Uint64()) {
 			stats.ignored++
 			continue
 		}
@@ -333,13 +277,9 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, checkFreq int, w
 		stats.processed++
 	}
 	// Report some public statistics so the user has a clue what's going on
-	first, last := chain[0], chain[len(chain)-1]
-
-	ignored := ""
-	if stats.ignored > 0 {
-		ignored = fmt.Sprintf(" (%d ignored)", stats.ignored)
-	}
-	glog.V(logger.Info).Infof("imported %4d headers%s in %9v. #%v [%x… / %x…]", stats.processed, ignored, common.PrettyDuration(time.Since(start)), last.Number, first.Hash().Bytes()[:4], last.Hash().Bytes()[:4])
+	last := chain[len(chain)-1]
+	log.Info("Imported new block headers", "count", stats.processed, "elapsed", common.PrettyDuration(time.Since(start)),
+		"number", last.Number, "hash", last.Hash(), "ignored", stats.ignored)
 
 	return 0, nil
 }
@@ -360,7 +300,7 @@ func (hc *HeaderChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []co
 			break
 		}
 		chain = append(chain, next)
-		if header.Number.Cmp(common.Big0) == 0 {
+		if header.Number.Sign() == 0 {
 			break
 		}
 	}
@@ -421,10 +361,13 @@ func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	return hc.GetHeader(hash, hc.GetBlockNumber(hash))
 }
 
-// HasHeader checks if a block header is present in the database or not, caching
-// it if present.
-func (hc *HeaderChain) HasHeader(hash common.Hash) bool {
-	return hc.GetHeaderByHash(hash) != nil
+// HasHeader checks if a block header is present in the database or not.
+func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
+	if hc.numberCache.Contains(hash) || hc.headerCache.Contains(hash) {
+		return true
+	}
+	ok, _ := hc.chainDb.Has(headerKey(hash, number))
+	return ok
 }
 
 // GetHeaderByNumber retrieves a block header from the database by number,
@@ -446,7 +389,7 @@ func (hc *HeaderChain) CurrentHeader() *types.Header {
 // SetCurrentHeader sets the current head header of the canonical chain.
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) {
 	if err := WriteHeadHeaderHash(hc.chainDb, head.Hash()); err != nil {
-		glog.Fatalf("failed to insert head header hash: %v", err)
+		log.Crit("Failed to insert head header hash", "err", err)
 	}
 	hc.currentHeader = head
 	hc.currentHeaderHash = head.Hash()
@@ -489,7 +432,7 @@ func (hc *HeaderChain) SetHead(head uint64, delFn DeleteCallback) {
 	hc.currentHeaderHash = hc.currentHeader.Hash()
 
 	if err := WriteHeadHeaderHash(hc.chainDb, hc.currentHeaderHash); err != nil {
-		glog.Fatalf("failed to reset head header hash: %v", err)
+		log.Crit("Failed to reset head header hash", "err", err)
 	}
 }
 
@@ -498,35 +441,14 @@ func (hc *HeaderChain) SetGenesis(head *types.Header) {
 	hc.genesisHeader = head
 }
 
-// headerValidator is responsible for validating block headers
-//
-// headerValidator implements HeaderValidator.
-type headerValidator struct {
-	config *params.ChainConfig
-	hc     *HeaderChain // Canonical header chain
-	Pow    pow.PoW      // Proof of work used for validating
-}
+// Config retrieves the header chain's chain configuration.
+func (hc *HeaderChain) Config() *params.ChainConfig { return hc.config }
 
-// NewBlockValidator returns a new block validator which is safe for re-use
-func NewHeaderValidator(config *params.ChainConfig, chain *HeaderChain, pow pow.PoW) HeaderValidator {
-	return &headerValidator{
-		config: config,
-		Pow:    pow,
-		hc:     chain,
-	}
-}
+// Engine retrieves the header chain's consensus engine.
+func (hc *HeaderChain) Engine() consensus.Engine { return hc.engine }
 
-// ValidateHeader validates the given header and, depending on the pow arg,
-// checks the proof of work of the given header. Returns an error if the
-// validation failed.
-func (v *headerValidator) ValidateHeader(header, parent *types.Header, checkPow bool) error {
-	// Short circuit if the parent is missing.
-	if parent == nil {
-		return ParentError(header.ParentHash)
-	}
-	// Short circuit if the header's already known or its parent missing
-	if v.hc.HasHeader(header.Hash()) {
-		return nil
-	}
-	return ValidateHeader(v.config, v.Pow, header, parent, checkPow, false)
+// GetBlock implements consensus.ChainReader, and returns nil for every input as
+// a header chain does not have blocks available for retrieval.
+func (hc *HeaderChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+	return nil
 }

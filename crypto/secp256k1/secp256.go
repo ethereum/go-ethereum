@@ -42,17 +42,9 @@ import (
 	"unsafe"
 )
 
-var (
-	context *C.secp256k1_context
-	N       *big.Int
-	HalfN   *big.Int
-)
+var context *C.secp256k1_context
 
 func init() {
-	N, _ = new(big.Int).SetString("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
-	// N / 2 == 57896044618658097711785492504343953926418782139537452191302581570759080747168
-	HalfN, _ = new(big.Int).SetString("7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0", 16)
-
 	// around 20 ms on a modern CPU.
 	context = C.secp256k1_context_create_sign_verify()
 	C.secp256k1_context_set_illegal_callback(context, C.callbackFunc(C.secp256k1GoPanicIllegal), nil)
@@ -64,6 +56,7 @@ var (
 	ErrInvalidSignatureLen = errors.New("invalid signature length")
 	ErrInvalidRecoveryID   = errors.New("invalid signature recovery id")
 	ErrInvalidKey          = errors.New("invalid private key")
+	ErrInvalidPubkey       = errors.New("invalid public key")
 	ErrSignFailed          = errors.New("signing failed")
 	ErrRecoverFailed       = errors.New("recovery failed")
 )
@@ -128,6 +121,33 @@ func RecoverPubkey(msg []byte, sig []byte) ([]byte, error) {
 	return pubkey, nil
 }
 
+// VerifySignature checks that the given pubkey created signature over message.
+// The signature should be in [R || S] format.
+func VerifySignature(pubkey, msg, signature []byte) bool {
+	if len(msg) != 32 || len(signature) != 64 || len(pubkey) == 0 {
+		return false
+	}
+	sigdata := (*C.uchar)(unsafe.Pointer(&signature[0]))
+	msgdata := (*C.uchar)(unsafe.Pointer(&msg[0]))
+	keydata := (*C.uchar)(unsafe.Pointer(&pubkey[0]))
+	return C.secp256k1_ecdsa_verify_enc(context, sigdata, msgdata, keydata, C.size_t(len(pubkey))) != 0
+}
+
+// DecompressPubkey parses a public key in the 33-byte compressed format.
+// It returns non-nil coordinates if the public key is valid.
+func DecompressPubkey(pubkey []byte) (X, Y *big.Int) {
+	if len(pubkey) != 33 {
+		return nil, nil
+	}
+	buf := make([]byte, 65)
+	bufdata := (*C.uchar)(unsafe.Pointer(&buf[0]))
+	pubkeydata := (*C.uchar)(unsafe.Pointer(&pubkey[0]))
+	if C.secp256k1_decompress_pubkey(context, bufdata, pubkeydata) == 0 {
+		return nil, nil
+	}
+	return new(big.Int).SetBytes(buf[1:33]), new(big.Int).SetBytes(buf[33:])
+}
+
 func checkSignature(sig []byte) error {
 	if len(sig) != 65 {
 		return ErrInvalidSignatureLen
@@ -136,17 +156,4 @@ func checkSignature(sig []byte) error {
 		return ErrInvalidRecoveryID
 	}
 	return nil
-}
-
-// reads num into buf as big-endian bytes.
-func readBits(buf []byte, num *big.Int) {
-	const wordLen = int(unsafe.Sizeof(big.Word(0)))
-	i := len(buf)
-	for _, d := range num.Bits() {
-		for j := 0; j < wordLen && i > 0; j++ {
-			i--
-			buf[i] = byte(d)
-			d >>= 8
-		}
-	}
 }

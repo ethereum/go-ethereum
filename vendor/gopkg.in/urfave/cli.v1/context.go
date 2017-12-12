@@ -39,11 +39,13 @@ func (c *Context) NumFlags() int {
 
 // Set sets a context flag to a value.
 func (c *Context) Set(name, value string) error {
+	c.setFlags = nil
 	return c.flagSet.Set(name, value)
 }
 
 // GlobalSet sets a context flag to a value on the global flagset
 func (c *Context) GlobalSet(name, value string) error {
+	globalContext(c).setFlags = nil
 	return globalContext(c).flagSet.Set(name, value)
 }
 

@@ -18,25 +18,27 @@ package swarm
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"net"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/chequebook"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
+	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"golang.org/x/net/context"
 )
 
 // the swarm stack
@@ -54,6 +56,8 @@ type Swarm struct {
 	privateKey  *ecdsa.PrivateKey
 	corsString  string
 	swapEnabled bool
+	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
+	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
 }
 
 type SwarmAPI struct {
@@ -72,7 +76,7 @@ func (self *Swarm) API() *SwarmAPI {
 
 // creates a new swarm service instance
 // implements node.Service
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config, swapEnabled, syncEnabled bool, cors string) (self *Swarm, err error) {
+func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *ethclient.Client, config *api.Config, swapEnabled, syncEnabled bool, cors string) (self *Swarm, err error) {
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
 	}
@@ -87,19 +91,19 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		privateKey:  config.Swap.PrivateKey(),
 		corsString:  cors,
 	}
-	glog.V(logger.Debug).Infof("Setting up Swarm service components")
+	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
 	hash := storage.MakeHashFunc(config.ChunkerParams.Hash)
-	lstore, err := storage.NewLocalStore(hash, config.StoreParams)
+	self.lstore, err = storage.NewLocalStore(hash, config.StoreParams)
 	if err != nil {
 		return
 	}
 
 	// setup local store
-	glog.V(logger.Debug).Infof("Set up local storage")
+	log.Debug(fmt.Sprintf("Set up local storage"))
 
-	self.dbAccess = network.NewDbAccess(lstore)
-	glog.V(logger.Debug).Infof("Set up local db access (iterator/counter)")
+	self.dbAccess = network.NewDbAccess(self.lstore)
+	log.Debug(fmt.Sprintf("Set up local db access (iterator/counter)"))
 
 	// set up the kademlia hive
 	self.hive = network.NewHive(
@@ -108,39 +112,46 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		swapEnabled,                          // SWAP enabled
 		syncEnabled,                          // syncronisation enabled
 	)
-	glog.V(logger.Debug).Infof("Set up swarm network with Kademlia hive")
+	log.Debug(fmt.Sprintf("Set up swarm network with Kademlia hive"))
 
 	// setup cloud storage backend
-	cloud := network.NewForwarder(self.hive)
-	glog.V(logger.Debug).Infof("-> set swarm forwarder as cloud storage backend")
-	// setup cloud storage internal access layer
+	self.cloud = network.NewForwarder(self.hive)
+	log.Debug(fmt.Sprintf("-> set swarm forwarder as cloud storage backend"))
 
-	self.storage = storage.NewNetStore(hash, lstore, cloud, config.StoreParams)
-	glog.V(logger.Debug).Infof("-> swarm net store shared access layer to Swarm Chunk Store")
+	// setup cloud storage internal access layer
+	self.storage = storage.NewNetStore(hash, self.lstore, self.cloud, config.StoreParams)
+	log.Debug(fmt.Sprintf("-> swarm net store shared access layer to Swarm Chunk Store"))
 
 	// set up Depo (storage handler = cloud storage access layer for incoming remote requests)
-	self.depo = network.NewDepo(hash, lstore, self.storage)
-	glog.V(logger.Debug).Infof("-> REmote Access to CHunks")
+	self.depo = network.NewDepo(hash, self.lstore, self.storage)
+	log.Debug(fmt.Sprintf("-> REmote Access to CHunks"))
 
 	// set up DPA, the cloud storage local access layer
-	dpaChunkStore := storage.NewDpaChunkStore(lstore, self.storage)
-	glog.V(logger.Debug).Infof("-> Local Access to Swarm")
+	dpaChunkStore := storage.NewDpaChunkStore(self.lstore, self.storage)
+	log.Debug(fmt.Sprintf("-> Local Access to Swarm"))
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)
-	glog.V(logger.Debug).Infof("-> Content Store API")
+	log.Debug(fmt.Sprintf("-> Content Store API"))
 
 	// set up high level api
 	transactOpts := bind.NewKeyedTransactor(self.privateKey)
 
-	self.dns, err = ens.NewENS(transactOpts, config.EnsRoot, self.backend)
-	if err != nil {
-		return nil, err
+	if ensClient == nil {
+		log.Warn("No ENS, please specify non-empty --ens-api to use domain name resolution")
+	} else {
+		self.dns, err = ens.NewENS(transactOpts, config.EnsRoot, ensClient)
+		if err != nil {
+			return nil, err
+		}
 	}
-	glog.V(logger.Debug).Infof("-> Swarm Domain Name Registrar @ address %v", config.EnsRoot.Hex())
+	log.Debug(fmt.Sprintf("-> Swarm Domain Name Registrar @ address %v", config.EnsRoot.Hex()))
 
 	self.api = api.NewApi(self.dpa, self.dns)
 	// Manifests for Smart Hosting
-	glog.V(logger.Debug).Infof("-> Web3 virtual server API")
+	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
+
+	self.sfs = fuse.NewSwarmFS(self.api)
+	log.Debug("-> Initializing Fuse file system")
 
 	return self, nil
 }
@@ -156,13 +167,13 @@ Start is called when the stack is started
 * TODO: start subservices like sword, swear, swarmdns
 */
 // implements the node.Service interface
-func (self *Swarm) Start(net *p2p.Server) error {
+func (self *Swarm) Start(srv *p2p.Server) error {
 	connectPeer := func(url string) error {
 		node, err := discover.ParseNode(url)
 		if err != nil {
 			return fmt.Errorf("invalid node URL: %v", err)
 		}
-		net.AddPeer(node)
+		srv.AddPeer(node)
 		return nil
 	}
 	// set chequebook
@@ -172,32 +183,34 @@ func (self *Swarm) Start(net *p2p.Server) error {
 		if err != nil {
 			return fmt.Errorf("Unable to set chequebook for SWAP: %v", err)
 		}
-		glog.V(logger.Debug).Infof("-> cheque book for SWAP: %v", self.config.Swap.Chequebook())
+		log.Debug(fmt.Sprintf("-> cheque book for SWAP: %v", self.config.Swap.Chequebook()))
 	} else {
-		glog.V(logger.Debug).Infof("SWAP disabled: no cheque book set")
+		log.Debug(fmt.Sprintf("SWAP disabled: no cheque book set"))
 	}
 
-	glog.V(logger.Warn).Infof("Starting Swarm service")
+	log.Warn(fmt.Sprintf("Starting Swarm service"))
 	self.hive.Start(
-		discover.PubkeyID(&net.PrivateKey.PublicKey),
-		func() string { return net.ListenAddr },
+		discover.PubkeyID(&srv.PrivateKey.PublicKey),
+		func() string { return srv.ListenAddr },
 		connectPeer,
 	)
-	glog.V(logger.Info).Infof("Swarm network started on bzz address: %v", self.hive.Addr())
+	log.Info(fmt.Sprintf("Swarm network started on bzz address: %v", self.hive.Addr()))
 
 	self.dpa.Start()
-	glog.V(logger.Debug).Infof("Swarm DPA started")
+	log.Debug(fmt.Sprintf("Swarm DPA started"))
 
 	// start swarm http proxy server
 	if self.config.Port != "" {
-		addr := ":" + self.config.Port
-		go httpapi.StartHttpServer(self.api, &httpapi.Server{Addr: addr, CorsString: self.corsString})
-	}
+		addr := net.JoinHostPort(self.config.ListenAddr, self.config.Port)
+		go httpapi.StartHttpServer(self.api, &httpapi.ServerConfig{
+			Addr:       addr,
+			CorsString: self.corsString,
+		})
+		log.Info(fmt.Sprintf("Swarm http proxy started on %v", addr))
 
-	glog.V(logger.Debug).Infof("Swarm http proxy started on port: %v", self.config.Port)
-
-	if self.corsString != "" {
-		glog.V(logger.Debug).Infof("Swarm http proxy started with corsdomain:", self.corsString)
+		if self.corsString != "" {
+			log.Debug(fmt.Sprintf("Swarm http proxy started with corsdomain: %v", self.corsString))
+		}
 	}
 
 	return nil
@@ -207,12 +220,17 @@ func (self *Swarm) Start(net *p2p.Server) error {
 // stops all component services.
 func (self *Swarm) Stop() error {
 	self.dpa.Stop()
-	self.hive.Stop()
+	err := self.hive.Stop()
 	if ch := self.config.Swap.Chequebook(); ch != nil {
 		ch.Stop()
 		ch.Save()
 	}
-	return self.config.Save()
+
+	if self.lstore != nil {
+		self.lstore.DbStore.Close()
+	}
+	self.sfs.Stop()
+	return err
 }
 
 // implements the node.Service interface
@@ -232,21 +250,10 @@ func (self *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "bzz",
 			Version:   "0.1",
-			Service:   api.NewStorage(self.api),
-			Public:    true,
-		},
-		{
-			Namespace: "bzz",
-			Version:   "0.1",
 			Service:   &Info{self.config, chequebook.ContractParams},
 			Public:    true,
 		},
 		// admin APIs
-		{
-			Namespace: "bzz",
-			Version:   "0.1",
-			Service:   api.NewFileSystem(self.api),
-			Public:    false},
 		{
 			Namespace: "bzz",
 			Version:   "0.1",
@@ -257,6 +264,26 @@ func (self *Swarm) APIs() []rpc.API {
 			Namespace: "chequebook",
 			Version:   chequebook.Version,
 			Service:   chequebook.NewApi(self.config.Swap.Chequebook),
+			Public:    false,
+		},
+		{
+			Namespace: "swarmfs",
+			Version:   fuse.Swarmfs_Version,
+			Service:   self.sfs,
+			Public:    false,
+		},
+		// storage APIs
+		// DEPRECATED: Use the HTTP API instead
+		{
+			Namespace: "bzz",
+			Version:   "0.1",
+			Service:   api.NewStorage(self.api),
+			Public:    true,
+		},
+		{
+			Namespace: "bzz",
+			Version:   "0.1",
+			Service:   api.NewFileSystem(self.api),
 			Public:    false,
 		},
 		// {Namespace, Version, api.NewAdmin(self), false},
@@ -273,8 +300,7 @@ func (self *Swarm) SetChequebook(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	glog.V(logger.Info).Infof("new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract.Hex())
-	self.config.Save()
+	log.Info(fmt.Sprintf("new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract.Hex()))
 	self.hive.DropAll()
 	return nil
 }
@@ -287,10 +313,9 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 		return
 	}
 
-	config, err := api.NewConfig(datadir, common.Address{}, prvKey, network.NetworkId)
-	if err != nil {
-		return
-	}
+	config := api.NewDefaultConfig()
+	config.Path = datadir
+	config.Init(prvKey)
 	config.Port = port
 
 	dpa, err := storage.NewLocalDPA(datadir)

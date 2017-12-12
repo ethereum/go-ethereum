@@ -28,13 +28,6 @@ func BenchmarkDeriveKeyMaterial(b *testing.B) {
 	}
 }
 
-func BenchmarkDeriveOneTimeKey(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		DeriveOneTimeKey([]byte("test value 1"), []byte("test value 2"), 0)
-	}
-}
-
-//func TestEncryptionSym(b *testing.T) {
 func BenchmarkEncryptionSym(b *testing.B) {
 	InitSingleTest()
 
@@ -44,7 +37,7 @@ func BenchmarkEncryptionSym(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		msg := NewSentMessage(params)
+		msg, _ := NewSentMessage(params)
 		_, err := msg.Wrap(params)
 		if err != nil {
 			b.Errorf("failed Wrap with seed %d: %s.", seed, err)
@@ -69,7 +62,7 @@ func BenchmarkEncryptionAsym(b *testing.B) {
 	params.Dst = &key.PublicKey
 
 	for i := 0; i < b.N; i++ {
-		msg := NewSentMessage(params)
+		msg, _ := NewSentMessage(params)
 		_, err := msg.Wrap(params)
 		if err != nil {
 			b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
@@ -84,7 +77,7 @@ func BenchmarkDecryptionSymValid(b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
-	msg := NewSentMessage(params)
+	msg, _ := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
 		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
@@ -106,7 +99,7 @@ func BenchmarkDecryptionSymInvalid(b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
-	msg := NewSentMessage(params)
+	msg, _ := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
 		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
@@ -135,7 +128,7 @@ func BenchmarkDecryptionAsymValid(b *testing.B) {
 	f := Filter{KeyAsym: key}
 	params.KeySym = nil
 	params.Dst = &key.PublicKey
-	msg := NewSentMessage(params)
+	msg, _ := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
 		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
@@ -162,7 +155,7 @@ func BenchmarkDecryptionAsymInvalid(b *testing.B) {
 	}
 	params.KeySym = nil
 	params.Dst = &key.PublicKey
-	msg := NewSentMessage(params)
+	msg, _ := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
 		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
@@ -178,6 +171,36 @@ func BenchmarkDecryptionAsymInvalid(b *testing.B) {
 		msg := env.Open(&f)
 		if msg != nil {
 			b.Fatalf("opened envelope with invalid key, seed: %d.", seed)
+		}
+	}
+}
+
+func increment(x []byte) {
+	for i := 0; i < len(x); i++ {
+		x[i]++
+		if x[i] != 0 {
+			break
+		}
+	}
+}
+
+func BenchmarkPoW(b *testing.B) {
+	InitSingleTest()
+
+	params, err := generateMessageParams()
+	if err != nil {
+		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+	params.Payload = make([]byte, 32)
+	params.PoW = 10.0
+	params.TTL = 1
+
+	for i := 0; i < b.N; i++ {
+		increment(params.Payload)
+		msg, _ := NewSentMessage(params)
+		_, err := msg.Wrap(params)
+		if err != nil {
+			b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 		}
 	}
 }

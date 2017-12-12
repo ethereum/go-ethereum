@@ -169,7 +169,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy an interaction tester contract and call a transaction on it
 			_, _, interactor, err := DeployInteractor(auth, sim, "Deploy string")
@@ -210,7 +210,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a tuple tester contract and execute a structured call on it
 			_, _, getter, err := DeployGetter(auth, sim)
@@ -242,7 +242,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a tuple tester contract and execute a structured call on it
 			_, _, tupler, err := DeployTupler(auth, sim)
@@ -284,7 +284,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a slice tester contract and execute a n array call on it
 			_, _, slicer, err := DeploySlicer(auth, sim)
@@ -318,7 +318,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a default method invoker contract and execute its default method
 			_, _, defaulter, err := DeployDefaulter(auth, sim)
@@ -351,7 +351,7 @@ var bindTests = []struct {
 		`[{"constant":true,"inputs":[],"name":"String","outputs":[{"name":"","type":"string"}],"type":"function"}]`,
 		`
 			// Create a simulator and wrap a non-deployed contract
-			sim := backends.NewSimulatedBackend()
+			sim := backends.NewSimulatedBackend(nil)
 
 			nonexistent, err := NewNonExistent(common.Address{}, sim)
 			if err != nil {
@@ -387,7 +387,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a funky gas pattern contract
 			_, _, limiter, err := DeployFunkyGasPattern(auth, sim)
@@ -408,6 +408,45 @@ var bindTests = []struct {
 			}
 		`,
 	},
+	// Test that constant functions can be called from an (optional) specified address
+	{
+		`CallFrom`,
+		`
+			contract CallFrom {
+				function callFrom() constant returns(address) {
+					return msg.sender;
+				}
+			}
+		`, `6060604052346000575b6086806100176000396000f300606060405263ffffffff60e060020a60003504166349f8e98281146022575b6000565b34600057602c6055565b6040805173ffffffffffffffffffffffffffffffffffffffff9092168252519081900360200190f35b335b905600a165627a7a72305820aef6b7685c0fa24ba6027e4870404a57df701473fe4107741805c19f5138417c0029`,
+		`[{"constant":true,"inputs":[],"name":"callFrom","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"}]`,
+		`
+			// Generate a new random account and a funded simulator
+			key, _ := crypto.GenerateKey()
+			auth := bind.NewKeyedTransactor(key)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
+
+			// Deploy a sender tester contract and execute a structured call on it
+			_, _, callfrom, err := DeployCallFrom(auth, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy sender contract: %v", err)
+			}
+			sim.Commit()
+
+			if res, err := callfrom.CallFrom(nil); err != nil {
+				t.Errorf("Failed to call constant function: %v", err)
+			} else if res != (common.Address{}) {
+				t.Errorf("Invalid address returned, want: %x, got: %x", (common.Address{}), res)
+			}
+
+			for _, addr := range []common.Address{common.Address{}, common.Address{1}, common.Address{2}} {
+				if res, err := callfrom.CallFrom(&bind.CallOpts{From: addr}); err != nil {
+					t.Fatalf("Failed to call constant function: %v", err)
+				} else if res != addr {
+					t.Fatalf("Invalid address returned, want: %x, got: %x", addr, res)
+				}
+			}
+		`,
+	},
 }
 
 // Tests that packages generated by the binder can be successfully compiled and
@@ -419,8 +458,8 @@ func TestBindings(t *testing.T) {
 		t.Skip("go sdk not found for testing")
 	}
 	// Skip the test if the go-ethereum sources are symlinked (https://github.com/golang/go/issues/14845)
-	linkTestCode := fmt.Sprintf("package linktest\nfunc CheckSymlinks(){\nfmt.Println(backends.NewSimulatedBackend())\n}")
-	linkTestDeps, err := imports.Process("", []byte(linkTestCode), nil)
+	linkTestCode := fmt.Sprintf("package linktest\nfunc CheckSymlinks(){\nfmt.Println(backends.NewSimulatedBackend(nil))\n}")
+	linkTestDeps, err := imports.Process(os.TempDir(), []byte(linkTestCode), nil)
 	if err != nil {
 		t.Fatalf("failed check for goimports symlink bug: %v", err)
 	}

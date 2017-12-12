@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -24,10 +25,9 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"golang.org/x/net/context"
+	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/net/websocket"
 	"gopkg.in/fatih/set.v0"
 )
@@ -36,9 +36,9 @@ import (
 //
 // allowedOrigins should be a comma-separated list of allowed origin URLs.
 // To allow connections with any origin, pass "*".
-func (srv *Server) WebsocketHandler(allowedOrigins string) http.Handler {
+func (srv *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
 	return websocket.Server{
-		Handshake: wsHandshakeValidator(strings.Split(allowedOrigins, ",")),
+		Handshake: wsHandshakeValidator(allowedOrigins),
 		Handler: func(conn *websocket.Conn) {
 			srv.ServeCodec(NewJSONCodec(conn), OptionMethodInvocation|OptionSubscriptions)
 		},
@@ -48,7 +48,7 @@ func (srv *Server) WebsocketHandler(allowedOrigins string) http.Handler {
 // NewWSServer creates a new websocket RPC server around an API provider.
 //
 // Deprecated: use Server.WebsocketHandler
-func NewWSServer(allowedOrigins string, srv *Server) *http.Server {
+func NewWSServer(allowedOrigins []string, srv *Server) *http.Server {
 	return &http.Server{Handler: srv.WebsocketHandler(allowedOrigins)}
 }
 
@@ -76,14 +76,14 @@ func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http
 		}
 	}
 
-	glog.V(logger.Debug).Infof("Allowed origin(s) for WS RPC interface %v\n", origins.List())
+	log.Debug(fmt.Sprintf("Allowed origin(s) for WS RPC interface %v\n", origins.List()))
 
 	f := func(cfg *websocket.Config, req *http.Request) error {
 		origin := strings.ToLower(req.Header.Get("Origin"))
 		if allowAllOrigins || origins.Has(origin) {
 			return nil
 		}
-		glog.V(logger.Debug).Infof("origin '%s' not allowed on WS-RPC interface\n", origin)
+		log.Warn(fmt.Sprintf("origin '%s' not allowed on WS-RPC interface\n", origin))
 		return fmt.Errorf("origin %s not allowed", origin)
 	}
 
@@ -149,4 +149,19 @@ func wsDialAddress(location *url.URL) string {
 		}
 	}
 	return location.Host
+}
+
+func dialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	d := &net.Dialer{KeepAlive: tcpKeepAliveInterval}
+	return d.DialContext(ctx, network, addr)
+}
+
+func contextDialer(ctx context.Context) *net.Dialer {
+	dialer := &net.Dialer{Cancel: ctx.Done(), KeepAlive: tcpKeepAliveInterval}
+	if deadline, ok := ctx.Deadline(); ok {
+		dialer.Deadline = deadline
+	} else {
+		dialer.Deadline = time.Now().Add(defaultDialTimeout)
+	}
+	return dialer
 }
