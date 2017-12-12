@@ -290,51 +290,16 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, newKey)
 }
 
-// HandleGetRaw handles a GET request to bzzr://<key> and responds with
-// the raw content stored at the given storage key
-func (s *Server) HandleGetRaw(w http.ResponseWriter, r *Request) {
-	_, reader, ok := s.handleGet(w, r)
-	if !ok {
-		return
-	}
-
-	// allow the request to overwrite the content type using a query
-	// parameter
-	contentType := "application/octet-stream"
-	if typ := r.URL.Query().Get("content_type"); typ != "" {
-		contentType = typ
-	}
-	w.Header().Set("Content-Type", contentType)
-
-	http.ServeContent(w, &r.Request, "", time.Now(), reader)
-}
-
-// HandleGetHash handles a GET request to bzz://<key> with query parameter
-// hash=true, and responds with the hash of the content stored
-// at the given storage key as a application/bzz-hash response
-func (s *Server) HandleGetHash(w http.ResponseWriter, r *Request) {
-	key, _, ok := s.handleGet(w, r)
-	if !ok {
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/bzz-hash")
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, key)
-}
-
-// handleGet is a handler that is used in HandleGetRaw and HandleGetHash methods
-// to provide storage Key and LazySectionReader for the requested path.
-//
-// This method accepts http.ResponseWriter to respond errors and in case of
-// errors, the third returned value will be false, indicating that the request
-// is not valid, error is written to the response and nothing more should be
-// written.
-func (s *Server) handleGet(w http.ResponseWriter, r *Request) (key storage.Key, reader storage.LazySectionReader, ok bool) {
+// HandleGet handles a GET request to
+// - bzzr://<key> and responds with the raw content stored at the
+//   given storage key
+// - bzzh://<key> and responds with the hash of the content stored
+//   at the given storage key as a text/plain response
+func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
 		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
-		return nil, nil, false
+		return
 	}
 
 	// if path is set, interpret <key> as a manifest and return the
@@ -343,7 +308,7 @@ func (s *Server) handleGet(w http.ResponseWriter, r *Request) (key storage.Key, 
 		walker, err := s.api.NewManifestWalker(key, nil)
 		if err != nil {
 			s.BadRequest(w, r, fmt.Sprintf("%s is not a manifest", key))
-			return nil, nil, false
+			return
 		}
 		var entry *api.ManifestEntry
 		walker.Walk(func(e *api.ManifestEntry) error {
@@ -371,18 +336,34 @@ func (s *Server) handleGet(w http.ResponseWriter, r *Request) (key storage.Key, 
 		})
 		if entry == nil {
 			s.NotFound(w, r, fmt.Errorf("Manifest entry could not be loaded"))
-			return nil, nil, false
+			return
 		}
 		key = storage.Key(common.Hex2Bytes(entry.Hash))
 	}
 
 	// check the root chunk exists by retrieving the file's size
-	reader = s.api.Retrieve(key)
+	reader := s.api.Retrieve(key)
 	if _, err := reader.Size(nil); err != nil {
 		s.NotFound(w, r, fmt.Errorf("Root chunk not found %s: %s", key, err))
 		return
 	}
-	return key, reader, true
+
+	switch {
+	case r.uri.Raw():
+		// allow the request to overwrite the content type using a query
+		// parameter
+		contentType := "application/octet-stream"
+		if typ := r.URL.Query().Get("content_type"); typ != "" {
+			contentType = typ
+		}
+		w.Header().Set("Content-Type", contentType)
+
+		http.ServeContent(w, &r.Request, "", time.Now(), reader)
+	case r.uri.Hash():
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, key)
+	}
 }
 
 // HandleGetFiles handles a GET request to bzz:/<manifest> with an Accept
@@ -645,8 +626,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.HandleDelete(w, req)
 
 	case "GET":
-		if uri.Raw() {
-			s.HandleGetRaw(w, req)
+		if uri.Raw() || uri.Hash() {
+			s.HandleGet(w, req)
 			return
 		}
 
@@ -655,21 +636,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		getList := r.URL.Query().Get("list") == "true"
-		getHash := r.URL.Query().Get("swarm.hash") == "true"
-
-		if getList && getHash {
-			s.BadRequest(w, req, "query parameters list and hash can not be requested at the same time")
-			return
-		}
-
-		if getList {
+		if r.URL.Query().Get("list") == "true" {
 			s.HandleGetList(w, req)
-			return
-		}
-
-		if getHash {
-			s.HandleGetHash(w, req)
 			return
 		}
 
