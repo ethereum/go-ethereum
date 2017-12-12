@@ -51,6 +51,9 @@ type UserPrompter interface {
 	// if and only if the prompt to append was a valid command.
 	AppendHistory(command string)
 
+	// ClearHistory clears the entire history
+	ClearHistory()
+
 	// SetWordCompleter sets the completion function that the prompter will call to
 	// fetch completion candidates when the user presses tab.
 	SetWordCompleter(completer WordCompleter)
@@ -156,6 +159,11 @@ func (p *terminalPrompter) SetHistory(history []string) {
 // if and only if the prompt to append was a valid command.
 func (p *terminalPrompter) AppendHistory(command string) {
 	p.State.AppendHistory(command)
+}
+
+// ClearHistory clears the entire history
+func (p *terminalPrompter) ClearHistory() {
+	p.State.ClearHistory()
 }
 
 // SetWordCompleter sets the completion function that the prompter will call to
