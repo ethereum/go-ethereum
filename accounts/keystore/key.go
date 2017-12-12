@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pborman/uuid"
+	"github.com/status-im/status-go/extkeys"
 )
 
 const (
@@ -46,6 +47,10 @@ type Key struct {
 	// we only store privkey as pubkey/address can be derived from it
 	// privkey in this struct is always in plaintext
 	PrivateKey *ecdsa.PrivateKey
+	// extended key is the root node for new hardened children i.e. sub-accounts
+	ExtendedKey *extkeys.ExtendedKey
+	// next index to be used for sub-account child derivation
+	SubAccountIndex uint32
 }
 
 type keyStore interface {
@@ -65,10 +70,12 @@ type plainKeyJSON struct {
 }
 
 type encryptedKeyJSONV3 struct {
-	Address string     `json:"address"`
-	Crypto  cryptoJSON `json:"crypto"`
-	Id      string     `json:"id"`
-	Version int        `json:"version"`
+	Address         string     `json:"address"`
+	Crypto          cryptoJSON `json:"crypto"`
+	Id              string     `json:"id"`
+	Version         int        `json:"version"`
+	ExtendedKey     cryptoJSON `json:"extendedkey"`
+	SubAccountIndex uint32     `json:"subaccountindex"`
 }
 
 type encryptedKeyJSONV1 struct {
@@ -135,6 +142,40 @@ func newKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
 		PrivateKey: privateKeyECDSA,
 	}
 	return key
+}
+
+func newKeyFromExtendedKey(extKey *extkeys.ExtendedKey) (*Key, error) {
+	var (
+		extChild1, extChild2 *extkeys.ExtendedKey
+		err                  error
+	)
+
+	if extKey.Depth == 0 { // we are dealing with master key
+		// CKD#1 - main account
+		extChild1, err = extKey.BIP44Child(extkeys.CoinTypeETH, 0)
+		if err != nil {
+			return &Key{}, err
+		}
+
+		// CKD#2 - sub-accounts root
+		extChild2, err = extKey.BIP44Child(extkeys.CoinTypeETH, 1)
+		if err != nil {
+			return &Key{}, err
+		}
+	} else { // we are dealing with non-master key, so it is safe to persist and extend from it
+		extChild1 = extKey
+		extChild2 = extKey
+	}
+
+	privateKeyECDSA := extChild1.ToECDSA()
+	id := uuid.NewRandom()
+	key := &Key{
+		Id:          id,
+		Address:     crypto.PubkeyToAddress(privateKeyECDSA.PublicKey),
+		PrivateKey:  privateKeyECDSA,
+		ExtendedKey: extChild2,
+	}
+	return key, nil
 }
 
 // NewKeyForDirectICAP generates a key whose address fits into < 155 bits so it can fit

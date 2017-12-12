@@ -32,6 +32,9 @@ package whisperv5
 import (
 	"fmt"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common/message"
+	"github.com/ethereum/go-ethereum/p2p"
 )
 
 const (
@@ -57,7 +60,7 @@ const (
 
 	MaxMessageSize        = uint32(10 * 1024 * 1024) // maximum accepted size of a message.
 	DefaultMaxMessageSize = uint32(1024 * 1024)
-	DefaultMinimumPoW     = 0.2
+	DefaultMinimumPoW     = 0.001
 
 	padSizeLimit      = 256 // just an arbitrary number, could be changed without breaking the protocol (must not exceed 2^24)
 	messageQueueLimit = 1024
@@ -84,4 +87,36 @@ func (e unknownVersionError) Error() string {
 type MailServer interface {
 	Archive(env *Envelope)
 	DeliverMail(whisperPeer *Peer, request *Envelope)
+}
+
+// NotificationServer represents a notification server,
+// capable of screening incoming envelopes for special
+// topics, and once located, subscribe client nodes as
+// recipients to notifications (push notifications atm)
+type NotificationServer interface {
+	// Start initializes notification sending loop
+	Start(server *p2p.Server) error
+
+	// Stop stops notification sending loop, releasing related resources
+	Stop() error
+}
+
+// MessageState holds the current delivery status of a whisper p2p message.
+type MessageState struct {
+	IsP2P     bool              `json:"is_p2p"`
+	Reason    error             `json:"reason"`
+	Envelope  Envelope          `json:"envelope"`
+	Timestamp time.Time         `json:"timestamp"`
+	Source    NewMessage        `json:"source"`
+	Status    message.Status    `json:"status"`
+	Direction message.Direction `json:"direction"`
+	Received  ReceivedMessage   `json:"received"`
+}
+
+// DeliveryServer represents a small message status
+// notification system where a message delivery status
+// update event is delivered to it's underline system
+// for both rpc messages and p2p messages.
+type DeliveryServer interface {
+	SendState(MessageState)
 }

@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/message"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -238,13 +239,17 @@ type newMessageOverride struct {
 // Post a message on the Whisper network.
 func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, error) {
 	var (
-		symKeyGiven = len(req.SymKeyID) > 0
-		pubKeyGiven = len(req.PublicKey) > 0
-		err         error
+		symKeyGiven  = len(req.SymKeyID) > 0
+		pubKeyGiven  = len(req.PublicKey) > 0
+		isP2PMessage = len(req.TargetPeer) > 0
+		err          error
 	)
+
+	api.w.traceOutgoingDelivery(isP2PMessage, message.PendingStatus, &req, nil, nil, nil)
 
 	// user must specify either a symmetric or an asymmetric key
 	if (symKeyGiven && pubKeyGiven) || (!symKeyGiven && !pubKeyGiven) {
+		api.w.traceOutgoingDelivery(isP2PMessage, message.RejectedStatus, &req, nil, nil, ErrSymAsym)
 		return false, ErrSymAsym
 	}
 
@@ -260,6 +265,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 	// Set key that is used to sign the message
 	if len(req.Sig) > 0 {
 		if params.Src, err = api.w.GetPrivateKey(req.Sig); err != nil {
+			api.w.traceOutgoingDelivery(isP2PMessage, message.RejectedStatus, &req, nil, nil, err)
 			return false, err
 		}
 	}
@@ -267,12 +273,15 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 	// Set symmetric key that is used to encrypt the message
 	if symKeyGiven {
 		if params.Topic == (TopicType{}) { // topics are mandatory with symmetric encryption
+			api.w.traceOutgoingDelivery(isP2PMessage, message.RejectedStatus, &req, nil, nil, ErrNoTopics)
 			return false, ErrNoTopics
 		}
 		if params.KeySym, err = api.w.GetSymKey(req.SymKeyID); err != nil {
+			api.w.traceOutgoingDelivery(isP2PMessage, message.RejectedStatus, &req, nil, nil, err)
 			return false, err
 		}
 		if !validateSymmetricKey(params.KeySym) {
+			api.w.traceOutgoingDelivery(isP2PMessage, message.RejectedStatus, &req, nil, nil, ErrInvalidSymmetricKey)
 			return false, ErrInvalidSymmetricKey
 		}
 	}
@@ -281,6 +290,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 	if pubKeyGiven {
 		params.Dst = crypto.ToECDSAPub(req.PublicKey)
 		if !ValidatePublicKey(params.Dst) {
+			api.w.traceOutgoingDelivery(isP2PMessage, message.RejectedStatus, &req, nil, nil, ErrInvalidPublicKey)
 			return false, ErrInvalidPublicKey
 		}
 	}
@@ -288,11 +298,13 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 	// encrypt and sent message
 	whisperMsg, err := NewSentMessage(params)
 	if err != nil {
+		api.w.traceOutgoingDelivery(isP2PMessage, message.RejectedStatus, &req, nil, nil, err)
 		return false, err
 	}
 
 	env, err := whisperMsg.Wrap(params)
 	if err != nil {
+		api.w.traceOutgoingDelivery(isP2PMessage, message.RejectedStatus, &req, nil, nil, err)
 		return false, err
 	}
 
@@ -300,17 +312,39 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 	if len(req.TargetPeer) > 0 {
 		n, err := discover.ParseNode(req.TargetPeer)
 		if err != nil {
+			api.w.traceOutgoingDelivery(isP2PMessage, message.RejectedStatus, &req, env, nil, err)
 			return false, fmt.Errorf("failed to parse target peer: %s", err)
 		}
-		return true, api.w.SendP2PMessage(n.ID[:], env)
+
+		api.w.traceOutgoingDelivery(isP2PMessage, message.SentStatus, &req, env, nil, nil)
+
+		if err := api.w.SendP2PMessage(n.ID[:], env); err != nil {
+			api.w.traceOutgoingDelivery(isP2PMessage, message.RejectedStatus, &req, env, nil, err)
+			return true, err
+		}
+
+		api.w.traceOutgoingDelivery(isP2PMessage, message.DeliveredStatus, &req, env, nil, err)
+		return true, nil
 	}
 
 	// ensure that the message PoW meets the node's minimum accepted PoW
 	if req.PowTarget < api.w.MinPow() {
+		api.w.traceOutgoingDelivery(isP2PMessage, message.RejectedStatus, &req, env, nil, ErrTooLowPoW)
 		return false, ErrTooLowPoW
 	}
 
+	api.w.traceOutgoingDelivery(isP2PMessage, message.SentStatus, &req, env, nil, nil)
 	return true, api.w.Send(env)
+}
+
+// UninstallFilter is alias for Unsubscribe
+func (api *PublicWhisperAPI) UninstallFilter(id string) {
+	api.w.Unsubscribe(id)
+}
+
+// Unsubscribe disables and removes an existing filter.
+func (api *PublicWhisperAPI) Unsubscribe(id string) {
+	api.w.Unsubscribe(id)
 }
 
 //go:generate gencodec -type Criteria -field-override criteriaOverride -out gen_criteria_json.go

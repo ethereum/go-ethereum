@@ -18,10 +18,12 @@ package whisperv5
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/message"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -115,15 +117,20 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 			if match {
 				msg = env.Open(watcher)
 				if msg == nil {
+					err := errors.New("Envelope failed to be opened")
+					fs.whisper.traceIncomingDelivery(p2pMessage, message.RejectedStatus, nil, env, nil, err)
 					log.Trace("processing message: failed to open", "message", env.Hash().Hex(), "filter", i)
 				}
 			} else {
+				err := errors.New("processing message: does not match")
+				fs.whisper.traceIncomingDelivery(p2pMessage, message.RejectedStatus, nil, env, nil, err)
 				log.Trace("processing message: does not match", "message", env.Hash().Hex(), "filter", i)
 			}
 		}
 
 		if match && msg != nil {
 			log.Trace("processing message: decrypted", "hash", env.Hash().Hex())
+			fs.whisper.traceIncomingDelivery(p2pMessage, message.DeliveredStatus, nil, env, msg, nil)
 			if watcher.Src == nil || IsPubKeyEqual(msg.Src, watcher.Src) {
 				watcher.Trigger(msg)
 			}

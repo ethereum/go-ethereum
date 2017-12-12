@@ -1,3 +1,8 @@
+# Go Ethereum (Status fork)
+
+This is a forked version of the official `go-ethereum` repository. For detailed information on patches applied, see [https://github.com/status-im/status-go/geth-patches/](https://github.com/status-im/status-go/geth-patches/).
+
+# Original README
 ## Go Ethereum
 
 Official golang implementation of the Ethereum protocol.
