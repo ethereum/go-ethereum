@@ -24,25 +24,25 @@ import (
 )
 
 func TestHTTPErrorResponseWithDelete(t *testing.T) {
-	testHTTPErrorResponse(t, "DELETE", contentType, "", http.StatusMethodNotAllowed)
+	testHTTPErrorResponse(t, http.MethodDelete, contentType, "", http.StatusMethodNotAllowed)
 }
 
 func TestHTTPErrorResponseWithPut(t *testing.T) {
-	testHTTPErrorResponse(t, "PUT", contentType, "", http.StatusMethodNotAllowed)
+	testHTTPErrorResponse(t, http.MethodPut, contentType, "", http.StatusMethodNotAllowed)
 }
 
 func TestHTTPErrorResponseWithMaxContentLength(t *testing.T) {
 	body := make([]rune, maxHTTPRequestContentLength+1)
 	testHTTPErrorResponse(t,
-		"POST", contentType, string(body), http.StatusRequestEntityTooLarge)
+		http.MethodPost, contentType, string(body), http.StatusRequestEntityTooLarge)
 }
 
 func TestHTTPErrorResponseWithEmptyContentType(t *testing.T) {
-	testHTTPErrorResponse(t, "POST", "", "", http.StatusUnsupportedMediaType)
+	testHTTPErrorResponse(t, http.MethodPost, "", "", http.StatusUnsupportedMediaType)
 }
 
 func TestHTTPErrorResponseWithValidRequest(t *testing.T) {
-	testHTTPErrorResponse(t, "POST", contentType, "", 0)
+	testHTTPErrorResponse(t, http.MethodPost, contentType, "", 0)
 }
 
 func testHTTPErrorResponse(t *testing.T, method, contentType, body string, expected int) {
