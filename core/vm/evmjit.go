@@ -358,13 +358,17 @@ func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_me
 	var gasLeft uint64
 	var err error
 
-	staticCall := (msg.flags & C.EVM_STATIC) != 0
-	assert(!staticCall, "static call?")
-
 	switch msg.kind {
 	case C.EVM_CALL:
-		fmt.Printf("CALL(gas %d, %x)\n", gas, addr)
-		output, gasLeft, err = env.Call(contract, addr, input, gas, value)
+		staticCall := (msg.flags & C.EVM_STATIC) != 0
+		if staticCall {
+			fmt.Printf("STATICCALL(gas %d, %x)\n", gas, addr)
+			output, gasLeft, err = env.StaticCall(contract, addr, input, gas)
+		} else {
+			fmt.Printf("CALL(gas %d, %x)\n", gas, addr)
+			output, gasLeft, err = env.Call(contract, addr, input, gas, value)
+		}
+
 
 	case C.EVM_CALLCODE:
 		fmt.Printf("CALLCODE(gas %d, %x, value %d)\n", gas, addr, value)
@@ -468,8 +472,11 @@ func (evm *EVMJIT) Run(snapshot int, contract *Contract, input []byte) (ret []by
 	msg.depth = C.int32_t(evm.env.depth - 1)
 	codeHash := crypto.Keccak256Hash(code)
 	msg.code_hash = HashToEvmc(codeHash)
-	assert(evm.readOnly == false, "read only?")
-	msg.flags = 0
+	if evm.readOnly {
+		msg.flags = C.EVM_STATIC
+	} else {
+		msg.flags = 0
+	}
 
 	// fmt.Printf("EVMJIT pre Run (gas %d %d mode: %d, env: %d) %x %x\n", contract.Gas, gas, rev, wrapper.index, codeHash, contract.Address())
 
