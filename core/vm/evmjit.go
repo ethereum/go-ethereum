@@ -237,7 +237,7 @@ func set_storage(pCtx unsafe.Pointer, pAddr unsafe.Pointer, pArg1 unsafe.Pointer
 	oldVal := env.StateDB.GetState(addr, key)
 	env.StateDB.SetState(addr, key, newVal)
 	if !common.EmptyHash(oldVal) && common.EmptyHash(newVal) {
-		env.StateDB.AddRefund(params.SstoreRefundGas)
+		env.StateDB.AddRefund(new(big.Int).SetUint64(params.SstoreRefundGas))
 	}
 	// fmt.Printf("EVMJIT STORE %x: %x := %x\n", addr, key, newVal)
 }
@@ -284,7 +284,7 @@ func selfdestruct(pCtx unsafe.Pointer, pAddr unsafe.Pointer, pArg unsafe.Pointer
 
 	db := env.StateDB
 	if !db.HasSuicided(addr) {
-		db.AddRefund(params.SuicideRefundGas)
+		db.AddRefund(new(big.Int).SetUint64(params.SuicideRefundGas))
 	}
 	balance := db.GetBalance(addr)
 	db.AddBalance(beneficiary, balance)
@@ -349,31 +349,29 @@ func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_me
 	addr := *(*common.Address)(unsafe.Pointer(&msg.address))
 	value := (*(*common.Hash)(unsafe.Pointer(&msg.value))).Big()
 	input := GoByteSlice(unsafe.Pointer(msg.input), msg.input_size)
-	gas := int64(msg.gas)
-	bigGas := new(big.Int).SetInt64(gas)
-
-	contract.Gas.SetInt64(0)
+	gas := uint64(msg.gas)
 
 	var output []byte
+	var gasLeft uint64
 	var err error
 
 	switch msg.kind {
 	case C.EVM_CALL:
-		fmt.Printf("CALL(gas %d, %x)\n", bigGas, addr)
-		output, err = env.Call(contract, addr, input, bigGas, value)
+		fmt.Printf("CALL(gas %d, %x)\n", gas, addr)
+		output, gasLeft, err = env.Call(contract, addr, input, gas, value)
 
 	case C.EVM_CALLCODE:
-		fmt.Printf("CALLCODE(gas %d, %x, value %d)\n", bigGas, addr, value)
-		output, err = env.CallCode(contract, addr, input, bigGas, value)
+		fmt.Printf("CALLCODE(gas %d, %x, value %d)\n", gas, addr, value)
+		output, gasLeft, err = env.CallCode(contract, addr, input, gas, value)
 
 	case C.EVM_DELEGATECALL:
-		fmt.Printf("DELEGATECALL(gas %d, %x)\n", bigGas, addr)
-		output, err = env.DelegateCall(contract, addr, input, bigGas)
+		fmt.Printf("DELEGATECALL(gas %d, %x)\n", gas, addr)
+		output, gasLeft, err = env.DelegateCall(contract, addr, input, gas)
 
 	case C.EVM_CREATE:
-		fmt.Printf("CREATE(gas %d, %x)\n", bigGas, addr)
+		fmt.Printf("CREATE(gas %d, %x)\n", gas, addr)
 		var createAddr common.Address
-		_, createAddr, err = env.Create(contract, input, bigGas, value)
+		_, createAddr, gasLeft, err = env.Create(contract, input, gas, value)
 		isHomestead := env.ChainConfig().IsHomestead(env.BlockNumber)
 		if !isHomestead && err == ErrCodeStoreOutOfGas {
 			err = nil
@@ -385,7 +383,6 @@ func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_me
 		}
 	}
 
-	gasLeft := contract.Gas.Int64()
 	assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
 	fmt.Printf("Gas left %d, err: %s\n", gasLeft, err)
 	result.gas_left = C.int64_t(gasLeft)
@@ -435,12 +432,6 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 	evm.env.depth++
 	defer func() { evm.env.depth-- }()
 
-	if contract.CodeAddr != nil {
-		if p := PrecompiledContracts[*contract.CodeAddr]; p != nil {
-			return RunPrecompiledContract(p, input, contract)
-		}
-	}
-
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
 		return nil, nil
@@ -449,7 +440,7 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 	code := contract.Code
 	codePtr := (*C.uint8_t)(unsafe.Pointer(&code[0]))
 	codeSize := C.size_t(len(code))
-	gas := C.int64_t(contract.Gas.Int64())
+	gas := C.int64_t(contract.Gas)
 	rev := getRevision(evm.env)
 
 	// Create context for this execution.
@@ -478,7 +469,7 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 	if r.gas_left > gas {
 		panic("OOPS")
 	}
-	contract.Gas.SetInt64(int64(r.gas_left))
+	contract.Gas = uint64(r.gas_left)
 	// fmt.Printf("Gas left: %d\n", contract.Gas)
 	output := C.GoBytes(unsafe.Pointer(r.output_data), C.int(r.output_size))
 
