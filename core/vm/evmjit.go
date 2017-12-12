@@ -423,6 +423,9 @@ func ptr(bytes []byte) *C.uint8_t {
 
 func getRevision(env *EVM) C.enum_evm_revision {
 	n := env.BlockNumber
+	if env.ChainConfig().IsByzantium(n) {
+		return C.EVM_BYZANTIUM
+	}
 	if env.ChainConfig().IsEIP158(n) {
 		return C.EVM_SPURIOUS_DRAGON
 	}
@@ -482,7 +485,9 @@ func (evm *EVMJIT) Run(snapshot int, contract *Contract, input []byte) (ret []by
 	// fmt.Printf("Gas left: %d\n", contract.Gas)
 	output := C.GoBytes(unsafe.Pointer(r.output_data), C.int(r.output_size))
 
-	if r.status_code != 0 {
+	if r.status_code == C.EVM_REVERT {
+		evm.env.StateDB.RevertToSnapshot(snapshot)
+	} else if r.status_code != C.EVM_SUCCESS {
 		// EVMJIT does not informs about the kind of the EVM expection.
 		err = ErrOutOfGas
 	}
