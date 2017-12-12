@@ -56,6 +56,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"gopkg.in/urfave/cli.v1"
+	"encoding/json"
 )
 
 var (
@@ -162,6 +163,10 @@ var (
 	LightModeFlag = cli.BoolFlag{
 		Name:  "light",
 		Usage: "Enable light client mode",
+	}
+	ULCModeConfigFlag = cli.StringFlag{
+		Name:  "ulcconfig",
+		Usage: "Config file to use for ULC mode",
 	}
 	defaultSyncMode = eth.DefaultConfig.SyncMode
 	SyncModeFlag    = TextMarshalerFlag{
@@ -715,6 +720,42 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 		cfg.IPCPath = ""
 	case ctx.GlobalIsSet(IPCPathFlag.Name):
 		cfg.IPCPath = ctx.GlobalString(IPCPathFlag.Name)
+	}
+}
+
+// SetULC setup ULC config from file if given.
+func SetULC(ctx *cli.Context, cfg *eth.Config, p2pCfg *p2p.Config) {
+	path := ctx.GlobalString(ULCModeConfigFlag.Name)
+	if path == "" {
+		return
+	}
+
+	cfgData, err := ioutil.ReadFile(path)
+	if err != nil {
+		Fatalf("Failed to read ULC config file: %v", err)
+	}
+
+	err = json.Unmarshal(cfgData, &cfg.ULC)
+	if err != nil {
+		Fatalf(err.Error())
+	}
+
+	if len(cfg.ULC.TrustedNodes) == 0 {
+		return
+	}
+
+	if cfg.ULC.MinTrustedFraction <= 0 || cfg.ULC.MinTrustedFraction > 100 {
+		cfg.ULC.MinTrustedFraction = eth.DefaultConfig.ULC.MinTrustedFraction
+	}
+
+	p2pCfg.TrustedNodes = make([]*discover.Node, 0, len(cfg.ULC.TrustedNodes))
+	for _, url := range cfg.ULC.TrustedNodes {
+		node, err := discover.ParseNode(url)
+		if err != nil {
+			log.Error("Trusted node URL invalid", "enode", url, "err", err)
+			continue
+		}
+		p2pCfg.TrustedNodes = append(p2pCfg.TrustedNodes, node)
 	}
 }
 
