@@ -19,6 +19,7 @@ package vm
 /*
 
 #include <evmjit.h>
+#include <stdlib.h>
 
 
 static const struct evm_context_fn_table* get_context_fn_table()
@@ -65,6 +66,16 @@ static struct evm_result evm_execute(
 static void evm_release_result(struct evm_result* result)
 {
 	result->release(result);
+}
+
+static void free_result_output(const struct evm_result* result)
+{
+	free((void*)result->output_data);
+}
+
+static void add_result_releaser(struct evm_result* result)
+{
+	result->release = free_result_output;
 }
 
 #cgo CFLAGS:  -I/home/chfast/Projects/ethereum/evmjit/include
@@ -390,8 +401,10 @@ func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_me
 		cOutput := C.CBytes(output)
 		result.output_data = (*C.uint8_t)(cOutput)
 		result.output_size = C.size_t(len(output))
-		// FIXME: free output
-		result.release = nil
+		// We can use result.release = C.release_result_output, but there are
+		// some problems with linking. Probably definition of
+		// release_result_output() must be in different C file.
+		C.add_result_releaser(result)
 	} else {
 		result.output_data = nil
 		result.output_size = 0
