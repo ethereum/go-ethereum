@@ -267,7 +267,7 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	}
 
 	//EnsApi can be set to "", so can't check for empty string, as it is allowed
-	if ensapi, exists := os.LookupEnv(SWARM_ENV_ENS_API); exists == true {
+	if ensapi, exists := os.LookupEnv(SWARM_ENV_ENS_API); exists {
 		currentConfig.EnsApi = ensapi
 	}
 
