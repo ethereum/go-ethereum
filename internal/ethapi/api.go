@@ -1071,7 +1071,7 @@ type SendTxArgs struct {
 	Nonce    *hexutil.Uint64 `json:"nonce"`
 }
 
-// prepareSendTxArgs is a helper function that fills in default values for unspecified tx fields.
+// setDefaults is a helper function that fills in default values for unspecified tx fields.
 func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 	if args.Gas == nil {
 		args.Gas = (*hexutil.Big)(big.NewInt(defaultGas))
