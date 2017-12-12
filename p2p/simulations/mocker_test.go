@@ -91,7 +91,7 @@ func TestMocker(t *testing.T) {
 			select {
 			case event := <-events:
 				//if the event is a node Up event only
-				if event.Node != nil && event.Node.Up == true {
+				if event.Node != nil && event.Node.Up {
 					//add the correspondent node ID to the map
 					nodemap[event.Node.Config.ID] = true
 					//this means all nodes got a nodeUp event, so we can continue the test
