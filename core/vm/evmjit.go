@@ -338,93 +338,64 @@ func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_me
 	addr := *(*common.Address)(unsafe.Pointer(&msg.address))
 	value := (*(*common.Hash)(unsafe.Pointer(&msg.value))).Big()
 	input := GoByteSlice(unsafe.Pointer(msg.input), msg.input_size)
-	// output := GoByteSlice(pOutput, outputSize)
 	gas := int64(msg.gas)
 	bigGas := new(big.Int).SetInt64(gas)
 
-	// Prepare result with default values.
-	result.release = nil
-	result.status_code = C.EVM_FAILURE
-	result.output_data = nil
-	result.output_size = 0
+	contract.Gas.SetInt64(0)
+
+	var output []byte
+	var err error
 
 	switch msg.kind {
 	case C.EVM_CALL:
 		fmt.Printf("CALL(gas %d, %x)\n", bigGas, addr)
-		contract.Gas.SetInt64(0)
-		ret, err := env.Call(contract, addr, input, bigGas, value)
-		gasLeft := contract.Gas.Int64()
-		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-		fmt.Printf("Gas left %d, err: %s\n", gasLeft, err)
-		result.gas_left = C.int64_t(gasLeft)
-		if err == nil {
-			fmt.Printf("Output: %x\n", ret)
-			result.status_code = C.EVM_SUCCESS
-			coutput := C.CBytes(ret)
-			result.output_data = (*C.uint8_t)(coutput)
-			result.output_size = C.size_t(len(ret))
-			// FIXME: free output
-			return
-		}
-		result.status_code = C.EVM_FAILURE
-		return
+		output, err = env.Call(contract, addr, input, bigGas, value)
 
 	case C.EVM_CALLCODE:
 		fmt.Printf("CALLCODE(gas %d, %x, value %d)\n", bigGas, addr, value)
-		contract.Gas.SetInt64(0)
-		ret, err := env.CallCode(contract, addr, input, bigGas, value)
-		gasLeft := contract.Gas.Int64()
-		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-		fmt.Printf("Gas left %d, err: %s\n", gasLeft, err)
-		result.gas_left = C.int64_t(gasLeft)
-		if err == nil {
-			result.status_code = C.EVM_SUCCESS
-			coutput := C.CBytes(ret)
-			result.output_data = (*C.uint8_t)(coutput)
-			result.output_size = C.size_t(len(ret))
-			// FIXME: free output
-			return
-		}
-		result.status_code = C.EVM_FAILURE
-		return
+		output, err = env.CallCode(contract, addr, input, bigGas, value)
 
 	case C.EVM_DELEGATECALL:
 		fmt.Printf("DELEGATECALL(gas %d, %x)\n", bigGas, addr)
-		contract.Gas.SetInt64(0)
-		ret, err := env.DelegateCall(contract, addr, input, bigGas)
-		gasLeft := contract.Gas.Int64()
-		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-		fmt.Printf("Gas left %d, err: %s\n", gasLeft, err)
-		result.gas_left = C.int64_t(gasLeft)
-		if err == nil {
-			result.status_code = C.EVM_SUCCESS
-			coutput := C.CBytes(ret)
-			result.output_data = (*C.uint8_t)(coutput)
-			result.output_size = C.size_t(len(ret))
-			// FIXME: free output
-			return
-		}
-		result.status_code = C.EVM_FAILURE
-		return
+		output, err = env.DelegateCall(contract, addr, input, bigGas)
 
 	case C.EVM_CREATE:
 		fmt.Printf("CREATE(gas %d, %x)\n", bigGas, addr)
-		contract.Gas.SetInt64(0)
-		_, createAddr, err := env.Create(contract, input, bigGas, value)
-		gasLeft := contract.Gas.Int64()
-		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-		fmt.Printf("Gas left %d, err: %s\n", gasLeft, err)
-		result.gas_left = C.int64_t(gasLeft)
-		result.status_code = C.EVM_FAILURE
-		if (env.ChainConfig().IsHomestead(env.BlockNumber) && err == ErrCodeStoreOutOfGas) ||
-			(err != nil && err != ErrCodeStoreOutOfGas) {
-			return
-		} else {
-			result.status_code = C.EVM_SUCCESS
+		var createAddr common.Address
+		_, createAddr, err = env.Create(contract, input, bigGas, value)
+		isHomestead := env.ChainConfig().IsHomestead(env.BlockNumber)
+		if !isHomestead && err == ErrCodeStoreOutOfGas {
+			err = nil
+		}
+		if err == nil {
+			// Copy create address to result.
 			ca := GoByteSlice(unsafe.Pointer(&result.create_address.bytes), 20)
 			copy(ca, createAddr[:])
 		}
-		return
+	}
+
+	gasLeft := contract.Gas.Int64()
+	assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
+	fmt.Printf("Gas left %d, err: %s\n", gasLeft, err)
+	result.gas_left = C.int64_t(gasLeft)
+
+	// Map error to status code.
+	if err == nil {
+		result.status_code = C.EVM_SUCCESS
+	} else {
+		result.status_code = C.EVM_FAILURE
+	}
+
+	if len(output) > 0 {
+		cOutput := C.CBytes(output)
+		result.output_data = (*C.uint8_t)(cOutput)
+		result.output_size = C.size_t(len(output))
+		// FIXME: free output
+		result.release = nil
+	} else {
+		result.output_data = nil
+		result.output_size = 0
+		result.release = nil
 	}
 }
 
