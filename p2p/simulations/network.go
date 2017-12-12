@@ -501,6 +501,20 @@ func (self *Network) Shutdown() {
 	close(self.quitc)
 }
 
+//Reset resets all network properties:
+//emtpies the nodes and the connection list
+func (self *Network) Reset() {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
+	//re-initialize the maps
+	self.connMap = make(map[string]int)
+	self.nodeMap = make(map[discover.NodeID]int)
+
+	self.Nodes = nil
+	self.Conns = nil
+}
+
 // Node is a wrapper around adapters.Node which is used to track the status
 // of a node in the network
 type Node struct {
@@ -664,6 +678,12 @@ func (self *Network) Load(snap *Snapshot) error {
 		}
 	}
 	for _, conn := range snap.Conns {
+
+		if !self.GetNode(conn.One).Up || !self.GetNode(conn.Other).Up {
+			//in this case, at least one of the nodes of a connection is not up,
+			//so it would result in the snapshot `Load` to fail
+			continue
+		}
 		if err := self.Connect(conn.One, conn.Other); err != nil {
 			return err
 		}
