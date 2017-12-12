@@ -207,7 +207,7 @@ func account_exists(pCtx unsafe.Pointer, pAddr unsafe.Pointer) C.int {
 	} else if env.StateDB.Exist(addr) {
 		exist = 1
 	}
-	fmt.Printf("EXISTS? %x : %v\n", addr, exist)
+	// fmt.Printf("EXISTS? %x : %v\n", addr, exist)
 	return exist
 }
 
@@ -222,7 +222,7 @@ func get_storage(pResult *C.struct_evm_uint256be, pCtx unsafe.Pointer, pAddr uns
 	arg := *(*[32]byte)(unsafe.Pointer(pArg))
 	val := env.StateDB.GetState(addr, arg)
 	copy(result, val[:])
-	fmt.Printf("SLOAD %x: %x\n", addr, val)
+	// fmt.Printf("SLOAD %x: %x\n", addr, val)
 }
 
 //export set_storage
@@ -239,7 +239,7 @@ func set_storage(pCtx unsafe.Pointer, pAddr unsafe.Pointer, pArg1 unsafe.Pointer
 	if !common.EmptyHash(oldVal) && common.EmptyHash(newVal) {
 		env.StateDB.AddRefund(params.SstoreRefundGas)
 	}
-	fmt.Printf("EVMJIT STORE %x: %x := %x\n", addr, key, newVal)
+	// fmt.Printf("EVMJIT STORE %x: %x := %x\n", addr, key, newVal)
 }
 
 //export get_balance
@@ -468,7 +468,7 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 	codeHash := crypto.Keccak256Hash(code)
 	msg.code_hash = HashToEvmc(codeHash)
 
-	fmt.Printf("EVMJIT pre Run (gas %d %d mode: %d, env: %d) %x %x\n", contract.Gas, gas, rev, wrapper.index, codeHash, contract.Address())
+	// fmt.Printf("EVMJIT pre Run (gas %d %d mode: %d, env: %d) %x %x\n", contract.Gas, gas, rev, wrapper.index, codeHash, contract.Address())
 
 	r := C.evm_execute(evm.jit, &wrapper.c, rev, &msg, codePtr, codeSize)
 
@@ -488,7 +488,7 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 	}
 
 	if r.release != nil {
-		fmt.Printf("Releasing result with %p\n", r.release)
+		// fmt.Printf("Releasing result with %p\n", r.release)
 		C.evm_release_result(&r)
 	}
 
