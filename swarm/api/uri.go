@@ -52,7 +52,7 @@ type URI struct {
 // * <scheme>://<addr>
 // * <scheme>://<addr>/<path>
 //
-// with scheme one of bzz, bzzr or bzzi
+// with scheme one of bzz, bzzr, bzzi or bzzh
 func Parse(rawuri string) (*URI, error) {
 	u, err := url.Parse(rawuri)
 	if err != nil {
