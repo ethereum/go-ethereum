@@ -99,6 +99,9 @@ import (
 type EVMJIT struct {
 	jit  *C.struct_evm_instance
 	env  *EVM
+	intPool  *intPool
+	readOnly   bool
+	returnData []byte // Last CALL's return data for subsequent reuse
 }
 
 type EVMCContext struct {
@@ -113,7 +116,7 @@ type ContextWrapper struct {
 
 func NewJit(env *EVM, cfg Config) *EVMJIT {
 	// FIXME: Destroy the jit later.
-	return &EVMJIT{C.evmjit_create(), env}
+	return &EVMJIT{C.evmjit_create(), env, nil, false, nil}
 }
 
 
@@ -428,7 +431,7 @@ func getRevision(env *EVM) C.enum_evm_revision {
 	return C.EVM_FRONTIER
 }
 
-func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error) {
+func (evm *EVMJIT) Run(snapshot int, contract *Contract, input []byte) (ret []byte, err error) {
 	evm.env.depth++
 	defer func() { evm.env.depth-- }()
 
