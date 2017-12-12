@@ -391,7 +391,7 @@ func (self *PyramidChunker) prepareChunks(isAppend bool, chunkLevel [][]*TreeEnt
 	parent := NewTreeEntry(self)
 	var unFinishedChunk *Chunk
 
-	if isAppend == true && len(chunkLevel[0]) != 0 {
+	if isAppend && len(chunkLevel[0]) != 0 {
 
 		lastIndex := len(chunkLevel[0]) - 1
 		ent := chunkLevel[0][lastIndex]
@@ -512,7 +512,7 @@ func (self *PyramidChunker) buildTree(isAppend bool, chunkLevel [][]*TreeEntry, 
 		}
 	}
 
-	if compress == false && last == false {
+	if !compress && !last {
 		return
 	}
 
@@ -522,7 +522,7 @@ func (self *PyramidChunker) buildTree(isAppend bool, chunkLevel [][]*TreeEntry, 
 	for lvl := int64(ent.level); lvl < endLvl; lvl++ {
 
 		lvlCount := int64(len(chunkLevel[lvl]))
-		if lvlCount == 1 && last == true {
+		if lvlCount == 1 && last {
 			copy(rootKey, chunkLevel[lvl][0].key)
 			return
 		}
@@ -540,7 +540,7 @@ func (self *PyramidChunker) buildTree(isAppend bool, chunkLevel [][]*TreeEntry, 
 				nextLvlCount = int64(len(chunkLevel[lvl+1]) - 1)
 				tempEntry = chunkLevel[lvl+1][nextLvlCount]
 			}
-			if isAppend == true && tempEntry != nil && tempEntry.updatePending == true {
+			if isAppend && tempEntry != nil && tempEntry.updatePending {
 				updateEntry := &TreeEntry{
 					level:         int(lvl + 1),
 					branchCount:   0,
@@ -585,9 +585,9 @@ func (self *PyramidChunker) buildTree(isAppend bool, chunkLevel [][]*TreeEntry, 
 
 		}
 
-		if isAppend == false {
+		if !isAppend {
 			chunkWG.Wait()
-			if compress == true {
+			if compress {
 				chunkLevel[lvl] = nil
 			}
 		}
@@ -599,7 +599,7 @@ func (self *PyramidChunker) enqueueTreeChunk(chunkLevel [][]*TreeEntry, ent *Tre
 	if ent != nil {
 
 		// wait for data chunks to get over before processing the tree chunk
-		if last == true {
+		if last {
 			chunkWG.Wait()
 		}
 
@@ -612,7 +612,7 @@ func (self *PyramidChunker) enqueueTreeChunk(chunkLevel [][]*TreeEntry, ent *Tre
 		}
 
 		// Update or append based on weather it is a new entry or being reused
-		if ent.updatePending == true {
+		if ent.updatePending {
 			chunkWG.Wait()
 			chunkLevel[ent.level][ent.index] = ent
 		} else {

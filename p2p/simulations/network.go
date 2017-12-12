@@ -403,9 +403,8 @@ func (self *Network) getNodeByName(name string) *Node {
 func (self *Network) GetNodes() (nodes []*Node) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	for _, node := range self.Nodes {
-		nodes = append(nodes, node)
-	}
+
+	nodes = append(nodes, self.Nodes...)
 	return nodes
 }
 
@@ -477,7 +476,7 @@ func (self *Network) InitConn(oneID, otherID discover.NodeID) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	if time.Now().Sub(conn.initiated) < dialBanTimeout {
+	if time.Since(conn.initiated) < dialBanTimeout {
 		return nil, fmt.Errorf("connection between %v and %v recently attempted", oneID, otherID)
 	}
 	if conn.Up {
