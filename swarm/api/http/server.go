@@ -424,14 +424,13 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 	}
 }
 
-// HandleGetList handles a GET request to bzz:/<manifest>/<path> which has
-// the "list" query parameter set to "true" and returns a list of all files
-// contained in <manifest> under <path> grouped into common prefixes using
-// "/" as a delimiter
+// HandleGetList handles a GET request to bzz-list:/<manifest>/<path> and returns
+// a list of all files contained in <manifest> under <path> grouped into
+// common prefixes using "/" as a delimiter
 func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	// ensure the root path has a trailing slash so that relative URLs work
 	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
-		http.Redirect(w, &r.Request, r.URL.Path+"/?list=true", http.StatusMovedPermanently)
+		http.Redirect(w, &r.Request, r.URL.Path+"/", http.StatusMovedPermanently)
 		return
 	}
 
@@ -453,7 +452,11 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	if strings.Contains(r.Header.Get("Accept"), "text/html") {
 		w.Header().Set("Content-Type", "text/html")
 		err := htmlListTemplate.Execute(w, &htmlListData{
-			URI:  r.uri,
+			URI: &api.URI{
+				Scheme: "bzz",
+				Addr:   r.uri.Addr,
+				Path:   r.uri.Path,
+			},
 			List: &list,
 		})
 		if err != nil {
@@ -621,13 +624,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if r.Header.Get("Accept") == "application/x-tar" {
-			s.HandleGetFiles(w, req)
+		if uri.List() {
+			s.HandleGetList(w, req)
 			return
 		}
 
-		if r.URL.Query().Get("list") == "true" {
-			s.HandleGetList(w, req)
+		if r.Header.Get("Accept") == "application/x-tar" {
+			s.HandleGetFiles(w, req)
 			return
 		}
 

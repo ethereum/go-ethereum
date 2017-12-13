@@ -269,7 +269,7 @@ func (c *Client) DownloadManifest(hash string) (*api.Manifest, error) {
 //
 // where entries ending with "/" are common prefixes.
 func (c *Client) List(hash, prefix string) (*api.ManifestList, error) {
-	res, err := http.DefaultClient.Get(c.Gateway + "/bzz:/" + hash + "/" + prefix + "?list=true")
+	res, err := http.DefaultClient.Get(c.Gateway + "/bzz-list:/" + hash + "/" + prefix)
 	if err != nil {
 		return nil, err
 	}

@@ -28,6 +28,7 @@ func TestParseURI(t *testing.T) {
 		expectErr       bool
 		expectRaw       bool
 		expectImmutable bool
+		expectList      bool
 	}
 	tests := []test{
 		{
@@ -95,6 +96,16 @@ func TestParseURI(t *testing.T) {
 			uri:       "bzz://abc123/path/to/entry",
 			expectURI: &URI{Scheme: "bzz", Addr: "abc123", Path: "path/to/entry"},
 		},
+		{
+			uri:        "bzz-list:",
+			expectURI:  &URI{Scheme: "bzz-list"},
+			expectList: true,
+		},
+		{
+			uri:        "bzz-list:/",
+			expectURI:  &URI{Scheme: "bzz-list"},
+			expectList: true,
+		},
 	}
 	for _, x := range tests {
 		actual, err := Parse(x.uri)
@@ -115,6 +126,9 @@ func TestParseURI(t *testing.T) {
 		}
 		if actual.Immutable() != x.expectImmutable {
 			t.Fatalf("expected %s immutable to be %t, got %t", x.uri, x.expectImmutable, actual.Immutable())
+		}
+		if actual.List() != x.expectList {
+			t.Fatalf("expected %s list to be %t, got %t", x.uri, x.expectList, actual.List())
 		}
 	}
 }
