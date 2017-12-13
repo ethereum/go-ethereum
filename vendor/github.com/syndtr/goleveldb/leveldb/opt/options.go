@@ -41,6 +41,7 @@ var (
 	DefaultWriteBuffer                   = 4 * MiB
 	DefaultWriteL0PauseTrigger           = 12
 	DefaultWriteL0SlowdownTrigger        = 8
+	DefaultSuspendedWriteStatSize        = 100
 )
 
 // Cacher is a caching algorithm.
@@ -357,6 +358,11 @@ type Options struct {
 	//
 	// The default value is 8.
 	WriteL0SlowdownTrigger int
+
+	// SuspendedWriteStatSize defines the upper limit of the cached suspended write operation statistics.
+	//
+	// The default value is 100.
+	SuspendedWriteStatSize int
 }
 
 func (o *Options) GetAltFilters() []filter.Filter {
@@ -607,6 +613,13 @@ func (o *Options) GetWriteL0SlowdownTrigger() int {
 		return DefaultWriteL0SlowdownTrigger
 	}
 	return o.WriteL0SlowdownTrigger
+}
+
+func (o *Options) GetSuspendedWriteStatSize() int {
+	if o == nil || o.SuspendedWriteStatSize == 0 {
+		return DefaultSuspendedWriteStatSize
+	}
+	return o.SuspendedWriteStatSize
 }
 
 // ReadOptions holds the optional parameters for 'read operation'. The

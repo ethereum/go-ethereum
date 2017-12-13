@@ -321,7 +321,7 @@ func recoverTable(s *session, o *opt.Options) error {
 			}
 		}
 		err = iter.Error()
-		if err != nil {
+		if err != nil && !errors.IsCorrupted(err) {
 			return
 		}
 		err = tw.Close()
@@ -392,7 +392,7 @@ func recoverTable(s *session, o *opt.Options) error {
 			}
 			imax = append(imax[:0], key...)
 		}
-		if err := iter.Error(); err != nil {
+		if err := iter.Error(); err != nil && !errors.IsCorrupted(err) {
 			iter.Release()
 			return err
 		}
