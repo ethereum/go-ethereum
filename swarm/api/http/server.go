@@ -293,7 +293,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 // HandleGet handles a GET request to
 // - bzzr://<key> and responds with the raw content stored at the
 //   given storage key
-// - bzzh://<key> and responds with the hash of the content stored
+// - bzz-hash://<key> and responds with the hash of the content stored
 //   at the given storage key as a text/plain response
 func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	key, err := s.api.Resolve(r.uri)

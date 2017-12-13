@@ -108,7 +108,7 @@ func TestBzzGetPath(t *testing.T) {
 		var resp *http.Response
 		var respbody []byte
 
-		url := srv.URL + "/bzzh:/"
+		url := srv.URL + "/bzz-hash:/"
 		if k[:] != "" {
 			url += common.ToHex(key[0])[2:] + "/" + k[1:]
 		}
@@ -137,7 +137,7 @@ func TestBzzGetPath(t *testing.T) {
 		srv.URL + "/bzz:/name",
 		srv.URL + "/bzzi:/nonhash",
 		srv.URL + "/bzzr:/nonhash",
-		srv.URL + "/bzzh:/nonhash",
+		srv.URL + "/bzz-hash:/nonhash",
 	}
 
 	nonhashresponses := []string{

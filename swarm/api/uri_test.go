@@ -97,13 +97,13 @@ func TestParseURI(t *testing.T) {
 			expectURI: &URI{Scheme: "bzz", Addr: "abc123", Path: "path/to/entry"},
 		},
 		{
-			uri:        "bzzh:",
-			expectURI:  &URI{Scheme: "bzzh"},
+			uri:        "bzz-hash:",
+			expectURI:  &URI{Scheme: "bzz-hash"},
 			expectHash: true,
 		},
 		{
-			uri:        "bzzh:/",
-			expectURI:  &URI{Scheme: "bzzh"},
+			uri:        "bzz-hash:/",
+			expectURI:  &URI{Scheme: "bzz-hash"},
 			expectHash: true,
 		},
 	}
