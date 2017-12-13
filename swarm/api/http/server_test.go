@@ -70,7 +70,7 @@ func TestBzzrGetPath(t *testing.T) {
 		wg.Wait()
 	}
 
-	_, err = http.Get(srv.URL + "/bzzr:/" + common.ToHex(key[0])[2:] + "/a")
+	_, err = http.Get(srv.URL + "/bzz-raw:/" + common.ToHex(key[0])[2:] + "/a")
 	if err != nil {
 		t.Fatalf("Failed to connect to proxy: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestBzzrGetPath(t *testing.T) {
 		var resp *http.Response
 		var respbody []byte
 
-		url := srv.URL + "/bzzr:/"
+		url := srv.URL + "/bzz-raw:/"
 		if k[:] != "" {
 			url += common.ToHex(key[0])[2:] + "/" + k[1:] + "?content_type=text/plain"
 		}
@@ -194,8 +194,8 @@ func TestBzzrGetPath(t *testing.T) {
 
 	nonhashtests := []string{
 		srv.URL + "/bzz:/name",
-		srv.URL + "/bzzi:/nonhash",
-		srv.URL + "/bzzr:/nonhash",
+		srv.URL + "/bzz-immutable:/nonhash",
+		srv.URL + "/bzz-raw:/nonhash",
 		srv.URL + "/bzz-list:/nonhash",
 	}
 

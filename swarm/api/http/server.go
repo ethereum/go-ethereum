@@ -86,7 +86,7 @@ type Request struct {
 	uri *api.URI
 }
 
-// HandlePostRaw handles a POST request to a raw bzzr:/ URI, stores the request
+// HandlePostRaw handles a POST request to a raw bzz-raw:/ URI, stores the request
 // body in swarm and returns the resulting storage key as a text/plain response
 func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 	if r.uri.Path != "" {
@@ -290,7 +290,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, newKey)
 }
 
-// HandleGetRaw handles a GET request to bzzr://<key> and responds with
+// HandleGetRaw handles a GET request to bzz-raw://<key> and responds with
 // the raw content stored at the given storage key
 func (s *Server) HandleGetRaw(w http.ResponseWriter, r *Request) {
 	key, err := s.api.Resolve(r.uri)
@@ -592,7 +592,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "POST":
-		if uri.Raw() {
+		if uri.Raw() || uri.DeprecatedRaw() {
 			s.HandlePostRaw(w, req)
 		} else {
 			s.HandlePostFiles(w, req)
@@ -604,7 +604,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		//   new manifest leaving the existing one intact, so it isn't
 		//   strictly a traditional PUT request which replaces content
 		//   at a URI, and POST is more ubiquitous)
-		if uri.Raw() {
+		if uri.Raw() || uri.DeprecatedRaw() {
 			ShowError(w, r, fmt.Sprintf("No PUT to %s allowed.", uri), http.StatusBadRequest)
 			return
 		} else {
@@ -612,14 +612,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "DELETE":
-		if uri.Raw() {
+		if uri.Raw() || uri.DeprecatedRaw() {
 			ShowError(w, r, fmt.Sprintf("No DELETE to %s allowed.", uri), http.StatusBadRequest)
 			return
 		}
 		s.HandleDelete(w, req)
 
 	case "GET":
-		if uri.Raw() {
+		if uri.Raw() || uri.DeprecatedRaw() {
 			s.HandleGetRaw(w, req)
 			return
 		}

@@ -46,7 +46,7 @@ main() {
 }
 
 do_random_upload() {
-  curl -fsSL -X POST --data-binary "$(random_data)" "http://${addr}/bzzr:/"
+  curl -fsSL -X POST --data-binary "$(random_data)" "http://${addr}/bzz-raw:/"
 }
 
 random_data() {
