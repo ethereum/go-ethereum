@@ -266,7 +266,7 @@ instance for mining, run it with all your usual flags, extended by:
 $ geth <usual-flags> --mine --minerthreads=1 --etherbase=0x0000000000000000000000000000000000000000
 ```
 
-Which will start mining bocks and transactions on a single CPU thread, crediting all proceedings to
+Which will start mining blocks and transactions on a single CPU thread, crediting all proceedings to
 the account specified by `--etherbase`. You can further tune the mining by changing the default gas
 limit blocks converge to (`--targetgaslimit`) and the price transactions are accepted at (`--gasprice`).
 

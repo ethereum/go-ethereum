@@ -77,7 +77,7 @@ contract ReleaseOracle {
     }
   }
 
-  // signers is an accessor method to retrieve all te signers (public accessor
+  // signers is an accessor method to retrieve all the signers (public accessor
   // generates an indexed one, not a retrieve-all version).
   function signers() constant returns(address[]) {
     return voters;

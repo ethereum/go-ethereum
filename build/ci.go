@@ -19,7 +19,7 @@
 /*
 The ci command is called from Continuous Integration scripts.
 
-Usage: go run ci.go <command> <command flags/arguments>
+Usage: go run build/ci.go <command> <command flags/arguments>
 
 Available commands are:
 
@@ -199,7 +199,7 @@ func doInstall(cmdline []string) {
 		build.MustRun(goinstall)
 		return
 	}
-	// If we are cross compiling to ARMv5 ARMv6 or ARMv7, clean any prvious builds
+	// If we are cross compiling to ARMv5 ARMv6 or ARMv7, clean any previous builds
 	if *arch == "arm" {
 		os.RemoveAll(filepath.Join(runtime.GOROOT(), "pkg", runtime.GOOS+"_arm"))
 		for _, path := range filepath.SplitList(build.GOPATH()) {
@@ -323,11 +323,19 @@ func doLint(cmdline []string) {
 	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v1"), "--install")
 
 	// Run fast linters batched together
-	configs := []string{"--vendor", "--disable-all", "--enable=vet", "--enable=gofmt", "--enable=misspell"}
+	configs := []string{
+		"--vendor",
+		"--disable-all",
+		"--enable=vet",
+		"--enable=gofmt",
+		"--enable=misspell",
+		"--enable=goconst",
+		"--min-occurrences=6", // for goconst
+	}
 	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v1"), append(configs, packages...)...)
 
 	// Run slow linters one by one
-	for _, linter := range []string{"unconvert"} {
+	for _, linter := range []string{"unconvert", "gosimple"} {
 		configs = []string{"--vendor", "--deadline=10m", "--disable-all", "--enable=" + linter}
 		build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v1"), append(configs, packages...)...)
 	}

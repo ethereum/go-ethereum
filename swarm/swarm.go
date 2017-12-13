@@ -23,7 +23,9 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -79,7 +81,7 @@ func (self *Swarm) API() *SwarmAPI {
 
 // creates a new swarm service instance
 // implements node.Service
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClientConfigs []ENSClientConfig, config *api.Config, swapEnabled, syncEnabled bool, cors string) (self *Swarm, err error) {
+func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config) (self *Swarm, err error) {
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
 	}
@@ -89,10 +91,10 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClientCon
 
 	self = &Swarm{
 		config:      config,
-		swapEnabled: swapEnabled,
+		swapEnabled: config.SwapEnabled,
 		backend:     backend,
 		privateKey:  config.Swap.PrivateKey(),
-		corsString:  cors,
+		corsString:  config.Cors,
 	}
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
@@ -112,8 +114,8 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClientCon
 	self.hive = network.NewHive(
 		common.HexToHash(self.config.BzzKey), // key to hive (kademlia base address)
 		config.HiveParams,                    // configuration parameters
-		swapEnabled,                          // SWAP enabled
-		syncEnabled,                          // syncronisation enabled
+		config.SwapEnabled,                   // SWAP enabled
+		config.SyncEnabled,                   // syncronisation enabled
 	)
 	log.Debug(fmt.Sprintf("Set up swarm network with Kademlia hive"))
 
@@ -136,21 +138,26 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClientCon
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)
 	log.Debug(fmt.Sprintf("-> Content Store API"))
 
-	if len(ensClientConfigs) == 1 {
-		self.dns, err = newEnsClient(ensClientConfigs[0].Endpoint, ensClientConfigs[0].ContractAddress, config)
-		if err != nil {
-			return nil, err
-		}
-	} else if len(ensClientConfigs) > 1 {
-		opts := []api.MultiResolverOption{}
-		for _, c := range ensClientConfigs {
-			r, err := newEnsClient(c.Endpoint, c.ContractAddress, config)
+	if !config.EnsDisabled {
+		if len(config.EnsAPIs) == 0 {
+			// ENS is enabled and has no specific configuration,
+			// use defaults
+			self.dns, err = newEnsClient(node.DefaultIPCEndpoint("geth"), config.EnsRoot, config)
 			if err != nil {
 				return nil, err
 			}
-			opts = append(opts, api.MultiResolverOptionWithResolver(r, c.TLD))
+		} else {
+			opts := []api.MultiResolverOption{}
+			for _, c := range config.EnsAPIs {
+				tld, endpoint, addr := parseEnsAPIAddress(c)
+				r, err := newEnsClient(endpoint, addr, config)
+				if err != nil {
+					return nil, err
+				}
+				opts = append(opts, api.MultiResolverOptionWithResolver(r, tld))
+			}
+			self.dns = api.NewMultiResolver(opts...)
 		}
-		self.dns = api.NewMultiResolver(opts...)
 	}
 
 	self.api = api.NewApi(self.dpa, self.dns)
@@ -163,19 +170,36 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClientCon
 	return self, nil
 }
 
-// ENSClientConfig holds information to construct ENS resolver. If TLD is non-empty,
-// the resolver will be used only for that TLD. If ContractAddress is empty,
-// it will be discovered by the client, or used one from the configuration.
-type ENSClientConfig struct {
-	Endpoint        string
-	ContractAddress string
-	TLD             string
+// parseEnsAPIAddress parses string according to format
+// [tld:][contract-addr@]url and returns ENSClientConfig structure
+// with endpoint, contract address and TLD.
+func parseEnsAPIAddress(s string) (tld, endpoint string, addr common.Address) {
+	isAllLetterString := func(s string) bool {
+		for _, r := range s {
+			if !unicode.IsLetter(r) {
+				return false
+			}
+		}
+		return true
+	}
+	endpoint = s
+	if i := strings.Index(endpoint, ":"); i > 0 {
+		if isAllLetterString(endpoint[:i]) && len(endpoint) > i+2 && endpoint[i+1:i+3] != "//" {
+			tld = endpoint[:i]
+			endpoint = endpoint[i+1:]
+		}
+	}
+	if i := strings.Index(endpoint, "@"); i > 0 {
+		addr = common.HexToAddress(endpoint[:i])
+		endpoint = endpoint[i+1:]
+	}
+	return
 }
 
 // newEnsClient creates a new ENS client for that is a consumer of
 // a ENS API on a specific endpoint. It is used as a helper function
 // for creating multiple resolvers in NewSwarm function.
-func newEnsClient(endpoint, addr string, config *api.Config) (*ens.ENS, error) {
+func newEnsClient(endpoint string, addr common.Address, config *api.Config) (*ens.ENS, error) {
 	log.Info("connecting to ENS API", "url", endpoint)
 	client, err := rpc.Dial(endpoint)
 	if err != nil {
@@ -184,8 +208,8 @@ func newEnsClient(endpoint, addr string, config *api.Config) (*ens.ENS, error) {
 	ensClient := ethclient.NewClient(client)
 
 	ensRoot := config.EnsRoot
-	if addr != "" {
-		ensRoot = common.HexToAddress(addr)
+	if addr != (common.Address{}) {
+		ensRoot = addr
 	} else {
 		a, err := detectEnsAddr(client)
 		if err == nil {
@@ -299,7 +323,7 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 // stops all component services.
 func (self *Swarm) Stop() error {
 	self.dpa.Stop()
-	self.hive.Stop()
+	err := self.hive.Stop()
 	if ch := self.config.Swap.Chequebook(); ch != nil {
 		ch.Stop()
 		ch.Save()
@@ -309,7 +333,7 @@ func (self *Swarm) Stop() error {
 		self.lstore.DbStore.Close()
 	}
 	self.sfs.Stop()
-	return self.config.Save()
+	return err
 }
 
 // implements the node.Service interface
@@ -380,7 +404,6 @@ func (self *Swarm) SetChequebook(ctx context.Context) error {
 		return err
 	}
 	log.Info(fmt.Sprintf("new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract.Hex()))
-	self.config.Save()
 	self.hive.DropAll()
 	return nil
 }
@@ -393,10 +416,9 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 		return
 	}
 
-	config, err := api.NewConfig(datadir, common.Address{}, prvKey, network.NetworkId)
-	if err != nil {
-		return
-	}
+	config := api.NewDefaultConfig()
+	config.Path = datadir
+	config.Init(prvKey)
 	config.Port = port
 
 	dpa, err := storage.NewLocalDPA(datadir)
