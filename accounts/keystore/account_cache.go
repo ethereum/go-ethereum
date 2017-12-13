@@ -230,7 +230,6 @@ func (ac *accountCache) close() {
 
 // readAccount is a helper-function to read an encrypted keyfile
 func readAccount(path string, buf *bufio.Reader) *accounts.Account {
-
 	var key struct {
 		Address string `json:"address"`
 	}
@@ -254,14 +253,12 @@ func readAccount(path string, buf *bufio.Reader) *accounts.Account {
 		return &accounts.Account{Address: addr, URL: accounts.URL{Scheme: KeyStoreScheme, Path: path}}
 	}
 	return nil
-
 }
 
 // checkFile can be used when a file notification triggered some kind of change on a file
 // in the keystore directory. The method checks what happened (change/delete/remove/nothing) and
 // updates the keystore accordingly
 func (ac *accountCache) checkFile(path string) error {
-
 	start := time.Now()
 	created, deleted, updated, err := ac.fileC.checkFile(path)
 
