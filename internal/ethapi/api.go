@@ -1006,6 +1006,9 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(hash common.Hash) (map[
 		return nil, nil
 	}
 	receipt, _, _, _ := core.GetReceipt(s.b.ChainDb(), hash) // Old receipts don't have the lookup data available
+	if receipt == nil {
+		return nil, nil
+	}
 
 	var signer types.Signer = types.FrontierSigner{}
 	if tx.Protected() {
