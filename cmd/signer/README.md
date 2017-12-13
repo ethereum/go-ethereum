@@ -378,3 +378,60 @@ None
 These methods needs to be implemented by a UI listener.
 
 still work in progress
+
+### Rules for UI apis
+
+A UI should conform to the following rules.
+
+* A UI MUST NOT load any external resources that were not embedded/part of the UI package.
+  * For example, not load icons, stylesheets from the internet
+  * Not load files from the filesystem, unless they reside in the same local directory (e.g. config files)
+* A UI MUST NOT open any ports or services
+  * The signer opens the public port
+* A UI SHOULD verify the permissions on the signer binary, and refuse to execute or warn if permissions allow non-user write.
+* A UI SHOULD inform the user about the `SHA256` or `MD5` hash of the binary being executed
+* A UI SHOULD NOT maintain a secondary storage of data, e.g. list of accounts
+  * The signer provides accounts
+* A UI SHOULD, to the best extent possible, use static linking / bundling, so that requried libraries are bundled
+along with the UI.
+
+
+## TODOs
+
+Some snags and todos
+
+* Currently, the API does not make it possible for the signer to forward data about the
+checksum, since the addresses are common.Address, and not String. This should be changed upstream,
+so that they are some more complex form with both common.Address and the original string (?)
+
+* The JSON communication relies on an external library, which has not been vendored in. We could probably
+reuse the jsoncodec by adding some fields for clientcodec, but it's a bit messy.
+
+* The audit-log perhaps leave some things to be desired. I have not found a perfect way to save an audit log of events.
+
+* Some more fields should be added to calldata, e.g http-header `Origin`.
+
+* The signer should also generate the identicon for the addresses, and pass to the UI as a base64 string.
+    * based on https://github.com/ethereum/blockies
+    * Maybe actually need to be in the UI, at least in UI:s allowing the user to change the address
+
+* The signer should take a startup param "--no-change", for UI:s that do not contain the capability
+   to perform changes to things, only approve/deny. Such a UI should be able to start the signer in
+   a more secure mode by telling it that it only wants approve/deny capabilities.
+
+* It would be nice if the signer could collect new 4byte-id:s/method selectors, and have a
+secondary database for those (`4byte_custom.json`). Users could then (optionally) submit their collections for
+inclusion upstream.
+
+* It should be possible to configure the signer to check if an account is indeed known to it, before
+passing on to the UI. The reason it currently does not, is that it would make it possible to enumerate
+accounts if it immediately returned "unknown account". Similarly, it should be possible to configure
+the signer to auto-allow listing (certain) accounts, instead of asking every time.
+
+* Upon startup, the signer should spit out some info to the caller (particularly important when executed in `stdio-ui`-mode),
+invoking methods with the following info:
+  * Version info about the signer
+  * Address of API (http/ipc)
+    * This makes it posible for the UI to use the api for creating transactions
+  * List of known accounts
+  
