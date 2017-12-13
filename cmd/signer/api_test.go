@@ -8,6 +8,8 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -291,10 +293,12 @@ func TestSignTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if h == nil || len(h) != 118 {
-		t.Errorf("Expected 181 byte rlp-data (got %d bytes)", len(h))
+	parsedTx := &types.Transaction{}
+	rlp.Decode(bytes.NewReader(h), parsedTx)
+	//The tx should NOT be modified by the UI
+	if parsedTx.Value().Cmp(tx.Value.ToInt()) != 0 {
+		t.Errorf("Expected value to be unchanged, expected %v got %v", tx.Value, parsedTx.Value())
 	}
-	//The tx is NOT modified by the UI
 	control <- "Y"
 	control <- "apassword"
 
@@ -314,6 +318,14 @@ func TestSignTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	parsedTx2 := &types.Transaction{}
+	rlp.Decode(bytes.NewReader(h), parsedTx2)
+	//The tx should NOT be modified by the UI
+	if parsedTx2.Value().Cmp(tx.Value.ToInt()) != 0 {
+		t.Errorf("Expected value to be changed, got %v", parsedTx.Value())
+	}
+
 	if bytes.Equal(h, h2) {
 		t.Error("Expected tx to be modified by UI")
 	}

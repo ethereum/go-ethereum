@@ -183,18 +183,18 @@ func testExternalUI(api *SignerAPI) {
 	api.ui.ShowInfo("Testing 'ShowInfo'")
 	api.ui.ShowError("Testing 'ShowError'")
 
-	checkErr:= func(method string, err error){
-		if err != nil && err != ErrRequestDenied{
+	checkErr := func(method string, err error) {
+		if err != nil && err != ErrRequestDenied {
 			errs = append(errs, fmt.Sprintf("%v: %v", method, err.Error()))
 		}
 	}
 	var err error
 
-	_, err = api.SignTransaction(ctx, common.Address{}, TransactionArg{}, nil);
+	_, err = api.SignTransaction(ctx, common.Address{}, TransactionArg{}, nil)
 	checkErr("SignTransaction", err)
 	_, err = api.Sign(ctx, common.Address{}, common.Hex2Bytes("01020304"))
 	checkErr("Sign", err)
-	_, err =api.List(ctx)
+	_, err = api.List(ctx)
 	checkErr("List", err)
 	_, err = api.New(ctx)
 	checkErr("New", err)
@@ -210,7 +210,7 @@ func testExternalUI(api *SignerAPI) {
 		for _, e := range errs {
 			log.Error(e)
 		}
-	}else{
+	} else {
 		log.Info("No errors")
 	}
 

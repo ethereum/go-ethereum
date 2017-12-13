@@ -111,7 +111,7 @@ func (ui StdIOUI) ApproveNewAccount(request *NewAccountRequest) (NewAccountRespo
 func (ui StdIOUI) ShowError(message string) {
 	err := ui.dispatch("ShowError", &Message{message}, nil)
 	if err != nil {
-		log.Info("Error calling 'ShowError'", "exc", err.Error(),"msg", message)
+		log.Info("Error calling 'ShowError'", "exc", err.Error(), "msg", message)
 	}
 }
 

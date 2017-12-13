@@ -24,10 +24,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"io/ioutil"
 	"strings"
+
+	"regexp"
 )
 
 type decodedArgument struct {
-	soltype string
+	soltype abi.Argument
 	value   interface{}
 }
 type decodedCallData struct {
@@ -36,9 +38,19 @@ type decodedCallData struct {
 	inputs    []decodedArgument
 }
 
+// String implements stringer interface, tries to use the underlying value-type
 func (arg decodedArgument) String() string {
-	return fmt.Sprintf("%v: %v", arg.soltype, arg.value)
+	var value string
+	switch arg.value.(type) {
+	case fmt.Stringer:
+		value = arg.value.(fmt.Stringer).String()
+	default:
+		value = fmt.Sprintf("%v", arg.value)
+	}
+	return fmt.Sprintf("%v: %v", arg.soltype.Type.String(), value)
 }
+
+// String implements stringer interface for decodedCallData
 func (cd decodedCallData) String() string {
 	args := make([]string, len(cd.inputs))
 	for i, arg := range cd.inputs {
@@ -55,14 +67,14 @@ func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
 		return nil, fmt.Errorf("Invalid ABI-data, incomplete method signature of (%d bytes)", len(calldata))
 	}
 
-	abispec, err := abi.JSON(strings.NewReader(abidata))
-	if err != nil {
-		return nil, fmt.Errorf("Failed parsing JSON ABI: %v", err)
-	}
-
 	sigdata, argdata := calldata[:4], calldata[4:]
 	if len(argdata)%32 != 0 {
 		return nil, fmt.Errorf("Not ABI-encoded data; length should be a multiple of 32 (was %d)", len(argdata))
+	}
+
+	abispec, err := abi.JSON(strings.NewReader(abidata))
+	if err != nil {
+		return nil, fmt.Errorf("Failed parsing JSON ABI: %v, abidata: %v", err, abidata)
 	}
 
 	method := abispec.MethodById(sigdata)
@@ -79,7 +91,7 @@ func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
 			return nil, fmt.Errorf("Failed to decode argument %d (signature %v): %v", n, method.Sig(), err)
 		} else {
 			decodedArg := decodedArgument{
-				soltype: argument.Type.String(),
+				soltype: argument,
 				value:   value,
 			}
 			decoded.inputs = append(decoded.inputs, decodedArg)
@@ -102,15 +114,50 @@ func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
 	if !bytes.Equal(encoded, calldata) {
 		exp := common.Bytes2Hex(encoded)
 		was := common.Bytes2Hex(calldata)
-		return nil, fmt.Errorf("WARNING: Supplied data is stuffed with extra data. %v \nWant %s\nHave %s", decoded, was, exp)
+		return nil, fmt.Errorf("WARNING: Supplied data is stuffed with extra data. \nWant %s\nHave %s\nfor method %v", exp, was, method.Sig())
 	}
 	return &decoded, nil
+}
+
+// MethodSelectorToAbi converts a method selector into an ABI struct. The returned data is a valid json string
+// which can be consumed by the standard abi package.
+func MethodSelectorToAbi(selector string) ([]byte, error) {
+
+	re := regexp.MustCompile("^([^\\)]+)\\(([a-z0-9,\\[\\]]*)\\)")
+
+	type fakeArg struct {
+		Type string `json:"type"`
+	}
+	type fakeABI struct {
+		Name   string    `json:"name"`
+		Type   string    `json:"type"`
+		Inputs []fakeArg `json:"inputs"`
+	}
+	groups := re.FindStringSubmatch(selector)
+	if len(groups) != 3 {
+		return nil, fmt.Errorf("Did not match: %v (%v matches)", selector, len(groups))
+	}
+	name := groups[1]
+	args := groups[2]
+	arguments := make([]fakeArg, 0)
+	if len(args) > 0 {
+		for _, arg := range strings.Split(args, ",") {
+			arguments = append(arguments, fakeArg{arg})
+		}
+	}
+	abicheat := fakeABI{
+		name, "function", arguments,
+	}
+	return json.Marshal([]fakeABI{abicheat})
+
 }
 
 type abiDb struct {
 	db map[string]string
 }
 
+// NewAbiDBFromFile loads signature database from file, and
+// errors if the file is not valid json. Does no other validation of contents
 func NewAbiDBFromFile(path string) (*abiDb, error) {
 	raw, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -121,9 +168,9 @@ func NewAbiDBFromFile(path string) (*abiDb, error) {
 	return db, nil
 }
 
-// LookupABI checks the given 4byte-sequence against the known ABI methods.
+// LookupMethodSelector checks the given 4byte-sequence against the known ABI methods.
 // OBS: This method does not validate the match, it's assumed the caller will do so
-func (db *abiDb) LookupABI(id []byte) (string, error) {
+func (db *abiDb) LookupMethodSelector(id []byte) (string, error) {
 	if len(id) != 4 {
 		return "", fmt.Errorf("Expected 4-byte id, got %d", len(id))
 	}

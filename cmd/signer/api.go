@@ -56,7 +56,7 @@ type (
 	SignTxRequest struct {
 		Transaction TransactionArg `json:"transaction"`
 		From        common.Address `json:"fromaccount"`
-		Callinfo    fmt.Stringer   `json:"call_info"`
+		Callinfo    string         `json:"call_info"`
 		Meta        Metadata       `json:"meta"`
 	}
 	// SignTxResponse result from SignTxRequest
@@ -299,7 +299,7 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 
 // SignTransaction signs the given Transaction and returns it in an RLP encoded form
 // that can be posted to `eth_sendRawTransaction`.
-func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, args TransactionArg, methodSig *string) (hexutil.Bytes, error) {
+func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, args TransactionArg, methodSelector *string) (hexutil.Bytes, error) {
 
 	var (
 		err    error
@@ -311,19 +311,27 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 	data := args.Data
 	if len(data) > 3 {
 		// Try to make sense of the data
-		var abidata string
-		if methodSig == nil {
-			abidata, err = api.abidb.LookupABI(data[:4])
+		var selector string
+		if methodSelector == nil {
+			selector, err = api.abidb.LookupMethodSelector(data[:4])
 			if err != nil {
-				req.Callinfo = errorWrapper{"Warning! Could not locate ABI", err}
+				req.Callinfo = errorWrapper{"Warning! Could not locate ABI", err}.String()
 			}
 		} else {
-			abidata = *methodSig
+			selector = *methodSelector
 		}
-		if abidata != "" {
-			req.Callinfo, err = parseCallData(data, abidata)
+		if selector != "" {
+			abidata, err := MethodSelectorToAbi(selector)
 			if err != nil {
-				req.Callinfo = errorWrapper{"Warning! Could not validate ABI-data against calldata", err}
+				req.Callinfo = errorWrapper{"Warning! Could not validate ABI-data against calldata", err}.String()
+			} else {
+				var info *decodedCallData
+				info, err = parseCallData(data, string(abidata))
+				if err != nil {
+					req.Callinfo = errorWrapper{"Warning! Could not validate ABI-data against calldata", err}.String()
+				} else {
+					req.Callinfo = info.String()
+				}
 			}
 		}
 	}
@@ -338,8 +346,12 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 	// Log changes made by the UI to the signing-request
 	logDiff(&req, &result)
 
-	acc := accounts.Account{Address: result.From}
-	wallet, err := api.am.Find(acc)
+	var (
+		acc    accounts.Account
+		wallet accounts.Wallet
+	)
+	acc = accounts.Account{Address: result.From}
+	wallet, err = api.am.Find(acc)
 	if err != nil {
 		return nil, err
 	}

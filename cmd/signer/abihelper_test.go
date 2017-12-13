@@ -17,7 +17,10 @@
 package main
 
 import (
+	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"strings"
 	"testing"
 )
 
@@ -83,4 +86,37 @@ func TestCalldataDecoding(t *testing.T) {
 			t.Errorf("Unexpected failure on input %s:\n %v (%d bytes) ", hexdata, err, len(common.Hex2Bytes(hexdata)))
 		}
 	}
+}
+
+func TestSelectorUnmarshalling(t *testing.T) {
+	var (
+		db        *abiDb
+		err       error
+		abistring []byte
+		abistruct abi.ABI
+	)
+
+	db, err = NewAbiDBFromFile("4byte.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Printf("DB size %v\n", db.Size())
+	for id, selector := range db.db {
+
+		abistring, err = MethodSelectorToAbi(selector)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		abistruct, err = abi.JSON(strings.NewReader(string(abistring)))
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		m := abistruct.MethodById(common.Hex2Bytes(id[2:]))
+		if m.Sig() != selector {
+			t.Errorf("Expected equality: %v != %v", m.Sig(), selector)
+		}
+	}
+
 }

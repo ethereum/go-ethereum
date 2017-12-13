@@ -97,24 +97,29 @@ func showMetadata(metadata Metadata) {
 func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, error) {
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
-	weival := request.Transaction.Value
-
+	weival := request.Transaction.Value.ToInt()
+	toval := ""
+	if request.Transaction.To != nil {
+		toval = request.Transaction.To.Hex()
+	}
 	fmt.Printf("--------- Transaction request-------------\n")
-	fmt.Printf("to:    %v\n", request.Transaction.To)
+	fmt.Printf("to:    %v\n", toval)
 	fmt.Printf("from:  %v\n", request.From.Hex())
 	fmt.Printf("value: %v wei\n", weival)
 	if len(request.Transaction.Data) > 0 {
 		fmt.Printf("data:  %v\n", common.Bytes2Hex(request.Transaction.Data))
 	}
-	if request.Callinfo != nil {
+	if request.Callinfo != "" {
 		fmt.Printf("\nNote: This Transaction contains data. Review abi-decoding info below:")
-		fmt.Printf("\nCall info:\n\t%v\n", request.Callinfo.String())
+		fmt.Printf("\nCall info:\n\t%v\n", request.Callinfo)
 
 	}
 	fmt.Printf("\n")
 	showMetadata(request.Meta)
 	fmt.Printf("-------------------------------------------\n")
-
+	if !ui.confirm() {
+		return SignTxResponse{request.Transaction, request.From, false, ""}, nil
+	}
 	return SignTxResponse{request.Transaction, request.From, true, ui.readPassword()}, nil
 }
 
@@ -130,6 +135,9 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 	fmt.Printf("message hash:  %v\n", request.Hash)
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)
+	if !ui.confirm() {
+		return SignDataResponse{false, ""}, nil
+	}
 	return SignDataResponse{true, ui.readPassword()}, nil
 }
 
@@ -196,7 +204,10 @@ func (ui *CommandlineUI) ApproveNewAccount(request *NewAccountRequest) (NewAccou
 	fmt.Printf("Approving this operation means that a new Account is created,\n")
 	fmt.Printf("and the address show to the caller\n")
 	showMetadata(request.Meta)
-	return NewAccountResponse{ui.confirm(), ui.readPassword()}, nil
+	if !ui.confirm() {
+		return NewAccountResponse{false, ""}, nil
+	}
+	return NewAccountResponse{true, ui.readPassword()}, nil
 }
 
 // ShowError displays error message to user
