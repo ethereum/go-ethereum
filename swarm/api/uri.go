@@ -31,6 +31,11 @@ type URI struct {
 	// * bzz-immutable - immutable URI of an entry in a swarm manifest
 	//                   (address is not resolved)
 	// * bzz-list      -  list of all files contained in a swarm manifest
+	//
+	// Deprecated Schemes:
+	// * bzzr - raw swarm content
+	// * bzzi - immutable URI of an entry in a swarm manifest
+	//          (address is not resolved)
 	Scheme string
 
 	// Addr is either a hexadecimal storage key or it an address which
@@ -52,6 +57,7 @@ type URI struct {
 // * <scheme>://<addr>/<path>
 //
 // with scheme one of bzz, bzz-raw, bzz-immutable or bzz-list
+// or deprecated ones bzzr and bzzi
 func Parse(rawuri string) (*URI, error) {
 	u, err := url.Parse(rawuri)
 	if err != nil {
@@ -61,7 +67,7 @@ func Parse(rawuri string) (*URI, error) {
 
 	// check the scheme is valid
 	switch uri.Scheme {
-	case "bzz", "bzz-raw", "bzz-immutable", "bzz-list":
+	case "bzz", "bzz-raw", "bzz-immutable", "bzz-list", "bzzr", "bzzi":
 	default:
 		return nil, fmt.Errorf("unknown scheme %q", u.Scheme)
 	}
@@ -94,6 +100,14 @@ func (u *URI) Immutable() bool {
 
 func (u *URI) List() bool {
 	return u.Scheme == "bzz-list"
+}
+
+func (u *URI) DeprecatedRaw() bool {
+	return u.Scheme == "bzzr"
+}
+
+func (u *URI) DeprecatedImmutable() bool {
+	return u.Scheme == "bzzi"
 }
 
 func (u *URI) String() string {

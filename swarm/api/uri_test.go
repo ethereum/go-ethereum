@@ -23,12 +23,14 @@ import (
 
 func TestParseURI(t *testing.T) {
 	type test struct {
-		uri             string
-		expectURI       *URI
-		expectErr       bool
-		expectRaw       bool
-		expectImmutable bool
-		expectList      bool
+		uri                       string
+		expectURI                 *URI
+		expectErr                 bool
+		expectRaw                 bool
+		expectImmutable           bool
+		expectList                bool
+		expectDeprecatedRaw       bool
+		expectDeprecatedImmutable bool
 	}
 	tests := []test{
 		{
@@ -106,6 +108,26 @@ func TestParseURI(t *testing.T) {
 			expectURI:  &URI{Scheme: "bzz-list"},
 			expectList: true,
 		},
+		{
+			uri:                 "bzzr:",
+			expectURI:           &URI{Scheme: "bzzr"},
+			expectDeprecatedRaw: true,
+		},
+		{
+			uri:                 "bzzr:/",
+			expectURI:           &URI{Scheme: "bzzr"},
+			expectDeprecatedRaw: true,
+		},
+		{
+			uri:                       "bzzi:",
+			expectURI:                 &URI{Scheme: "bzzi"},
+			expectDeprecatedImmutable: true,
+		},
+		{
+			uri:                       "bzzi:/",
+			expectURI:                 &URI{Scheme: "bzzi"},
+			expectDeprecatedImmutable: true,
+		},
 	}
 	for _, x := range tests {
 		actual, err := Parse(x.uri)
@@ -129,6 +151,12 @@ func TestParseURI(t *testing.T) {
 		}
 		if actual.List() != x.expectList {
 			t.Fatalf("expected %s list to be %t, got %t", x.uri, x.expectList, actual.List())
+		}
+		if actual.DeprecatedRaw() != x.expectDeprecatedRaw {
+			t.Fatalf("expected %s deprecated raw to be %t, got %t", x.uri, x.expectDeprecatedRaw, actual.DeprecatedRaw())
+		}
+		if actual.DeprecatedImmutable() != x.expectDeprecatedImmutable {
+			t.Fatalf("expected %s deprecated immutable to be %t, got %t", x.uri, x.expectDeprecatedImmutable, actual.DeprecatedImmutable())
 		}
 	}
 }

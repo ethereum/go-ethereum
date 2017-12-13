@@ -592,7 +592,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "POST":
-		if uri.Raw() {
+		if uri.Raw() || uri.DeprecatedRaw() {
 			s.HandlePostRaw(w, req)
 		} else {
 			s.HandlePostFiles(w, req)
@@ -604,7 +604,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		//   new manifest leaving the existing one intact, so it isn't
 		//   strictly a traditional PUT request which replaces content
 		//   at a URI, and POST is more ubiquitous)
-		if uri.Raw() {
+		if uri.Raw() || uri.DeprecatedRaw() {
 			ShowError(w, r, fmt.Sprintf("No PUT to %s allowed.", uri), http.StatusBadRequest)
 			return
 		} else {
@@ -612,14 +612,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "DELETE":
-		if uri.Raw() {
+		if uri.Raw() || uri.DeprecatedRaw() {
 			ShowError(w, r, fmt.Sprintf("No DELETE to %s allowed.", uri), http.StatusBadRequest)
 			return
 		}
 		s.HandleDelete(w, req)
 
 	case "GET":
-		if uri.Raw() {
+		if uri.Raw() || uri.DeprecatedRaw() {
 			s.HandleGetRaw(w, req)
 			return
 		}
