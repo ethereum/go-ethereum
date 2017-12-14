@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-func TestBzzrGetPath(t *testing.T) {
+func TestBzzGetPath(t *testing.T) {
 
 	var err error
 
@@ -104,15 +104,46 @@ func TestBzzrGetPath(t *testing.T) {
 		}
 	}
 
+	for k, v := range testrequests {
+		var resp *http.Response
+		var respbody []byte
+
+		url := srv.URL + "/bzz-hash:/"
+		if k[:] != "" {
+			url += common.ToHex(key[0])[2:] + "/" + k[1:]
+		}
+		resp, err = http.Get(url)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+		defer resp.Body.Close()
+		respbody, err = ioutil.ReadAll(resp.Body)
+
+		if string(respbody) != key[v].String() {
+			isexpectedfailrequest := false
+
+			for _, r := range expectedfailrequests {
+				if k[:] == r {
+					isexpectedfailrequest = true
+				}
+			}
+			if !isexpectedfailrequest {
+				t.Fatalf("Response body does not match, expected: %v, got %v", key[v], string(respbody))
+			}
+		}
+	}
+
 	nonhashtests := []string{
 		srv.URL + "/bzz:/name",
 		srv.URL + "/bzzi:/nonhash",
 		srv.URL + "/bzzr:/nonhash",
+		srv.URL + "/bzz-hash:/nonhash",
 	}
 
 	nonhashresponses := []string{
 		"error resolving name: no DNS to resolve name: &#34;name&#34;",
 		"error resolving nonhash: immutable address not a content hash: &#34;nonhash&#34;",
+		"error resolving nonhash: no DNS to resolve name: &#34;nonhash&#34;",
 		"error resolving nonhash: no DNS to resolve name: &#34;nonhash&#34;",
 	}
 
