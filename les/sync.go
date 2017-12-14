@@ -98,7 +98,7 @@ func updateChtFromPeer(pm *ProtocolManager, peer *peer, ctx context.Context) {
 	var sectionIdx uint64 = ((peerHeadBlockNum + 1) / light.ChtFrequency) - 1
 	log.Debug("Retrieving checkpoint with: ", "sectionIdx", sectionIdx)
 
-	req := &light.CheckpointRequest{SectionIdx: uint64(sectionIdx)}
+	req := &light.CheckpointRequest{SectionIdx: sectionIdx}
 	pm.odr.Retrieve(ctx, req)
 	log.Info("Retrieved checkpoint from peer: ",
 		"SectionHead=", common.ToHex(req.SectionHead.Bytes()),
