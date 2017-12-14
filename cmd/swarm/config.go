@@ -69,6 +69,7 @@ const (
 	SWARM_ENV_ENS_ADDR        = "SWARM_ENS_ADDR"
 	SWARM_ENV_CORS            = "SWARM_CORS"
 	SWARM_ENV_BOOTNODES       = "SWARM_BOOTNODES"
+	SWARM_ENV_PSS_ENABLE      = "SWARM_PSS_ENABLE"
 	GETH_ENV_DATADIR          = "GETH_DATADIR"
 )
 
@@ -94,7 +95,7 @@ func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
 	//check for deprecated flags
 	checkDeprecated(ctx)
 	//start by creating a default config
-	config = bzzapi.NewDefaultConfig()
+	config = bzzapi.NewConfig()
 	//first load settings from config file (if provided)
 	config, err = configFileOverride(config, ctx)
 	//override settings provided by environment variables
@@ -211,6 +212,10 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.BootNodes = ctx.GlobalString(utils.BootnodesFlag.Name)
 	}
 
+	if ctx.GlobalIsSet(SwarmPssEnabledFlag.Name) {
+		currentConfig.PssEnabled = true
+	}
+
 	return currentConfig
 
 }
@@ -281,6 +286,12 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 
 	if bootnodes := os.Getenv(SWARM_ENV_BOOTNODES); bootnodes != "" {
 		currentConfig.BootNodes = bootnodes
+	}
+
+	if pssenable := os.Getenv(SWARM_ENV_PSS_ENABLE); pssenable != "" {
+		if ps, err := strconv.ParseBool(pssenable); err != nil {
+			currentConfig.PssEnabled = ps
+		}
 	}
 
 	return currentConfig
