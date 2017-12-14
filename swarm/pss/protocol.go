@@ -222,6 +222,7 @@ func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter
 		if _, ok := self.Pss.symKeyPool[key]; !ok {
 			return nil, fmt.Errorf("symkey does not exist: %s", key)
 		}
+		self.Pss.symKeyPoolMu.Unlock()
 		self.symKeyRWPool[key] = rw
 	}
 	go func() {
