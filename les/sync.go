@@ -96,7 +96,7 @@ func updateCheckpointFromPeer(pm *ProtocolManager, peer *peer, ctx context.Conte
 	log.Debug("updateCheckpointFromPeer", "peerHeadBlockNum", peerHeadBlockNum)
 
 	if peerHeadBlockNum+1 < light.ChtFrequency {
-		log.Info("Peer has no fully processed sections, so no checkpoint to download")
+		log.Info("Peer has no fully processed sections; so no checkpoint to download")
 		return
 	}
 
