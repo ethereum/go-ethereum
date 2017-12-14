@@ -94,25 +94,29 @@ type Pss struct {
 	auxAPIs         []rpc.API         // builtins (handshake, test) can add APIs
 
 	// sending and forwarding
-	fwdPool         map[string]*protocols.Peer  // keep track of all peers sitting on the pssmsg routing layer
+	fwdPool         map[string]*protocols.Peer // keep track of all peers sitting on the pssmsg routing layer
+	fwdPoolMu       sync.Mutex
 	fwdCache        map[pssDigest]pssCacheEntry // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
-	cacheTTL        time.Duration               // how long to keep messages in fwdCache (not implemented)
+	fwdCacheMu      sync.Mutex
+	cacheTTL        time.Duration // how long to keep messages in fwdCache (not implemented)
 	msgTTL          time.Duration
 	paddingByteSize int
 	capstring       string
 
 	// keys and peers
 	pubKeyPool                 map[string]map[Topic]*pssPeer // mapping of hex public keys to peer address by topic.
+	pubKeyPoolMu               sync.Mutex
 	symKeyPool                 map[string]map[Topic]*pssPeer // mapping of symkeyids to peer address by topic.
-	symKeyDecryptCache         []*string                     // fast lookup of symkeys recently used for decryption; last used is on top of stack
-	symKeyDecryptCacheCursor   int                           // modular cursor pointing to last used, wraps on symKeyDecryptCache array
-	symKeyDecryptCacheCapacity int                           // max amount of symkeys to keep.
+	symKeyPoolMu               sync.Mutex
+	symKeyDecryptCache         []*string // fast lookup of symkeys recently used for decryption; last used is on top of stack
+	symKeyDecryptCacheCursor   int       // modular cursor pointing to last used, wraps on symKeyDecryptCache array
+	symKeyDecryptCacheCapacity int       // max amount of symkeys to keep.
 
 	// message handling
-	handlers map[Topic]map[*Handler]bool // topic and version based pss payload handlers. See pss.Handle()
+	handlers   map[Topic]map[*Handler]bool // topic and version based pss payload handlers. See pss.Handle()
+	handlersMu sync.Mutex
 
 	// process
-	lock  sync.Mutex
 	quitC chan struct{}
 }
 
@@ -197,7 +201,9 @@ func (self *Pss) Protocols() []p2p.Protocol {
 
 func (self *Pss) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	pp := protocols.NewPeer(p, rw, pssSpec)
+	self.fwdPoolMu.Lock()
 	self.fwdPool[p.Info().ID] = pp
+	self.fwdPoolMu.Unlock()
 	return pp.Run(self.handlePssMsg)
 }
 
@@ -246,8 +252,8 @@ func (self *Pss) PublicKey() *ecdsa.PublicKey {
 // Returns a deregister function which needs to be called to
 // deregister the handler,
 func (self *Pss) Register(topic *Topic, handler Handler) func() {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+	self.handlersMu.Lock()
+	defer self.handlersMu.Unlock()
 	handlers := self.handlers[*topic]
 	if handlers == nil {
 		handlers = make(map[*Handler]bool)
@@ -257,8 +263,8 @@ func (self *Pss) Register(topic *Topic, handler Handler) func() {
 	return func() { self.deregister(topic, &handler) }
 }
 func (self *Pss) deregister(topic *Topic, h *Handler) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+	self.handlersMu.Lock()
+	defer self.handlersMu.Unlock()
 	handlers := self.handlers[*topic]
 	if len(handlers) == 1 {
 		delete(self.handlers, *topic)
@@ -269,8 +275,8 @@ func (self *Pss) deregister(topic *Topic, h *Handler) {
 
 // get all registered handlers for respective topics
 func (self *Pss) getHandlers(topic Topic) map[*Handler]bool {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+	self.handlersMu.Lock()
+	defer self.handlersMu.Unlock()
 	return self.handlers[topic]
 }
 
@@ -374,8 +380,6 @@ func (self *Pss) isSelfPossibleRecipient(msg *PssMsg) bool {
 // The value in `address` will be used as a routing hint for the
 // public key / topic association
 func (self *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address *PssAddress) error {
-	self.lock.Lock()
-	defer self.lock.Unlock()
 	pubkeybytes := crypto.FromECDSAPub(pubkey)
 	if len(pubkeybytes) == 0 {
 		return fmt.Errorf("invalid public key: %v", pubkey)
@@ -384,10 +388,12 @@ func (self *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address 
 	psp := &pssPeer{
 		address: address,
 	}
+	self.pubKeyPoolMu.Lock()
 	if _, ok := self.pubKeyPool[pubkeyid]; ok == false {
 		self.pubKeyPool[pubkeyid] = make(map[Topic]*pssPeer)
 	}
 	self.pubKeyPool[pubkeyid][topic] = psp
+	self.pubKeyPoolMu.Unlock()
 	log.Trace("added pubkey", "pubkeyid", pubkeyid, "topic", topic, "address", common.ToHex(*address))
 	return nil
 }
@@ -427,15 +433,15 @@ func (self *Pss) SetSymmetricKey(key []byte, topic Topic, address *PssAddress, a
 // to the collection of keys used to attempt symmetric decryption of
 // incoming messages
 func (self *Pss) addSymmetricKeyToPool(keyid string, topic Topic, address *PssAddress, addtocache bool) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
 	psp := &pssPeer{
 		address: address,
 	}
+	self.symKeyPoolMu.Lock()
 	if _, ok := self.symKeyPool[keyid]; !ok {
 		self.symKeyPool[keyid] = make(map[Topic]*pssPeer)
 	}
 	self.symKeyPool[keyid][topic] = psp
+	self.symKeyPoolMu.Unlock()
 	if addtocache {
 		self.symKeyDecryptCacheCursor++
 		self.symKeyDecryptCache[self.symKeyDecryptCacheCursor%cap(self.symKeyDecryptCache)] = &keyid
@@ -476,7 +482,9 @@ func (self *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessag
 		if !recvmsg.Validate() {
 			return nil, "", nil, fmt.Errorf("symmetrically encrypted message has invalid signature or is corrupt")
 		}
+		self.symKeyPoolMu.Lock()
 		from := self.symKeyPool[*symkeyid][Topic(envelope.Topic)].address
+		self.symKeyPoolMu.Unlock()
 		self.symKeyDecryptCacheCursor++
 		self.symKeyDecryptCache[self.symKeyDecryptCacheCursor%cap(self.symKeyDecryptCache)] = symkeyid
 		return recvmsg, *symkeyid, from, nil
@@ -501,9 +509,11 @@ func (self *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessa
 	}
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(recvmsg.Src))
 	var from *PssAddress
+	self.pubKeyPoolMu.Lock()
 	if self.pubKeyPool[pubkeyid][Topic(envelope.Topic)] != nil {
 		from = self.pubKeyPool[pubkeyid][Topic(envelope.Topic)].address
 	}
+	self.pubKeyPoolMu.Unlock()
 	return recvmsg, pubkeyid, from, nil
 }
 
@@ -533,8 +543,10 @@ func (self *Pss) cleanKeys() (count int) {
 			}
 		}
 		for _, topic := range expiredtopics {
+			self.symKeyPoolMu.Lock()
 			delete(self.symKeyPool[keyid], topic)
 			log.Trace("symkey cleanup deletion", "symkeyid", keyid, "topic", topic, "val", self.symKeyPool[keyid])
+			self.symKeyPoolMu.Unlock()
 			count++
 		}
 	}
@@ -553,7 +565,9 @@ func (self *Pss) SendSym(symkeyid string, topic Topic, msg []byte) error {
 	if err != nil {
 		return fmt.Errorf("missing valid send symkey %s: %v", symkeyid, err)
 	}
+	self.symKeyPoolMu.Lock()
 	psp, ok := self.symKeyPool[symkeyid][topic]
+	self.symKeyPoolMu.Unlock()
 	if !ok {
 		return fmt.Errorf("invalid topic '%s' for symkey '%s'", topic, symkeyid)
 	} else if psp.address == nil {
@@ -567,18 +581,21 @@ func (self *Pss) SendSym(symkeyid string, topic Topic, msg []byte) error {
 //
 // Fails if the key id does not match any in of the stored public keys
 func (self *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
-	//pubkey := self.pubKeyIndex[pubkeyid]
 	pubkey := crypto.ToECDSAPub(common.FromHex(pubkeyid))
 	if pubkey == nil {
 		return fmt.Errorf("Invalid public key id %x", pubkey)
 	}
+	self.pubKeyPoolMu.Lock()
 	psp, ok := self.pubKeyPool[pubkeyid][topic]
+	self.pubKeyPoolMu.Unlock()
 	if !ok {
 		return fmt.Errorf("invalid topic '%s' for pubkey '%s'", topic, pubkeyid)
 	} else if psp.address == nil {
 		return fmt.Errorf("no address hint for topic '%s' pubkey '%s'", topic, pubkeyid)
 	}
-	self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
+	go func() {
+		self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
+	}()
 	return nil
 }
 
@@ -688,11 +705,12 @@ func (self *Pss) forward(msg *PssMsg) error {
 			return true
 		}
 		// attempt to send the message
-		err := pp.Send(msg)
-		if err != nil {
-			log.Debug(fmt.Sprintf("%v: failed forwarding: %v", sendMsg, err))
-			return true
-		}
+		go func() {
+			err := pp.Send(msg)
+			if err != nil {
+				log.Debug(fmt.Sprintf("%v: failed forwarding: %v", sendMsg, err))
+			}
+		}()
 		log.Trace(fmt.Sprintf("%v: successfully forwarded", sendMsg))
 		sent++
 		// continue forwarding if:
@@ -728,8 +746,8 @@ func (self *Pss) forward(msg *PssMsg) error {
 
 // add a message to the cache
 func (self *Pss) addFwdCache(digest pssDigest) error {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+	self.fwdCacheMu.Lock()
+	defer self.fwdCacheMu.Unlock()
 	var entry pssCacheEntry
 	var ok bool
 	if entry, ok = self.fwdCache[digest]; !ok {
@@ -742,8 +760,8 @@ func (self *Pss) addFwdCache(digest pssDigest) error {
 
 // check if message is in the cache
 func (self *Pss) checkFwdCache(addr []byte, digest pssDigest) bool {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+	self.fwdCacheMu.Lock()
+	defer self.fwdCacheMu.Unlock()
 	entry, ok := self.fwdCache[digest]
 	if ok {
 		if entry.expiresAt.After(time.Now()) {
