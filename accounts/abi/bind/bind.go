@@ -164,7 +164,14 @@ var bindType = map[Lang]func(kind abi.Type) string{
 	LangJava: bindTypeJava,
 }
 
-
+// Helper function for the binding generators.
+// It reads the unmatched characters after the inner type-match,
+//  (since the inner type is a prefix of the total type declaration),
+//  looks for valid arrays (possibly a dynamic one) wrapping the inner type,
+//  and returns the sizes of these arrays.
+//
+// Returned array sizes are in the same order as solidity signatures; inner array size first.
+// Array sizes may also be "", indicating a dynamic array.
 func wrapArray(stringKind string, innerLen int, innerMapping string) (string, []string) {
 	remainder := stringKind[innerLen:]
 	if len(remainder) > 0 {
@@ -190,6 +197,8 @@ func wrapArray(stringKind string, innerLen int, innerMapping string) (string, []
 	}
 }
 
+// Translates the array sizes to a Go-lang declaration of a (nested) array of the inner type.
+// Simply returns the inner type if arraySizes is empty.
 func arrayBindingGo(inner string, arraySizes []string) string {
 	out := ""
 	//prepend all array sizes, from outer (end arraySizes) to inner (start arraySizes)
@@ -241,10 +250,12 @@ func bindUnnestedTypeGo(stringKind string) (int, string) {
 	}
 }
 
-
+// Translates the array sizes to a Java declaration of a (nested) array of the inner type.
+// Simply returns the inner type if arraySizes is empty.
 func arrayBindingJava(inner string, arraySizes []string) string {
 	out := inner
 	//append a "[]" for each array size.
+	// (Full arraySizes is used in signature for consistency with the go-lang version)
 	for i := 0; i < len(arraySizes); i++ {
 		//normally, like with Go, you could declare an array size. Not in Java.
 		out += "[]"
