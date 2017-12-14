@@ -1003,9 +1003,12 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 func (s *PublicTransactionPoolAPI) GetTransactionReceipt(hash common.Hash) (map[string]interface{}, error) {
 	tx, blockHash, blockNumber, index := core.GetTransaction(s.b.ChainDb(), hash)
 	if tx == nil {
-		return nil, nil
+		return nil, errors.New("unknown transaction")
 	}
 	receipt, _, _, _ := core.GetReceipt(s.b.ChainDb(), hash) // Old receipts don't have the lookup data available
+	if receipt == nil {
+		return nil, errors.New("unknown receipt")
+	}
 
 	var signer types.Signer = types.FrontierSigner{}
 	if tx.Protected() {
