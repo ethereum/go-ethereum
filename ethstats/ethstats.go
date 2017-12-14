@@ -381,11 +381,13 @@ func (s *Service) login(conn *websocket.Conn) error {
 		network = fmt.Sprintf("%d", infos.Protocols["les"].(*eth.EthNodeInfo).Network)
 		protocol = fmt.Sprintf("les/%d", les.ClientProtocolVersions[0])
 	}
+	node := strings.Replace(infos.Name, "Geth", "Geth+EVMJIT", 1)
+	log.Warn("Node name: " + node)
 	auth := &authMsg{
 		Id: s.node,
 		Info: nodeInfo{
 			Name:     s.node,
-			Node:     infos.Name,
+			Node:     node,
 			Port:     infos.Ports.Listener,
 			Network:  network,
 			Protocol: protocol,
