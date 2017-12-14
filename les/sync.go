@@ -81,19 +81,19 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
-	updateChtFromPeer(pm, peer, ctx)
+	updateCheckpointFromPeer(pm, peer, ctx)
 	pm.blockchain.(*light.LightChain).SyncCht(ctx)
 	pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), downloader.LightSync)
 }
 
-// Status.im issue 320: Use GetHeaderProofs to download the latest CHT from a peer.
-func updateChtFromPeer(pm *ProtocolManager, peer *peer, ctx context.Context) {
-	log.Info("Downloading latest CHT root from peer", "peer.headBlockInfo", peer.headBlockInfo())
+// Status.im issue 320: Use GetCheckpoint to download the latest checkpoint from a peer.
+func updateCheckpointFromPeer(pm *ProtocolManager, peer *peer, ctx context.Context) {
+	log.Info("Downloading latest checkpoint from peer", "peer.headBlockInfo", peer.headBlockInfo())
 
 	// Formula from lightchain.go:SyncCht: num := cht.Number*ChtFrequency – 1
 	var hbl = peer.headBlockInfo()
 	var peerHeadBlockNum = hbl.Number
-	log.Debug("UpdateChtFromPeer", "peerHeadBlockNum", peerHeadBlockNum)
+	log.Debug("updateCheckpointFromPeer", "peerHeadBlockNum", peerHeadBlockNum)
 
 	var sectionIdx uint64 = ((peerHeadBlockNum + 1) / light.ChtFrequency) - 1
 	log.Debug("Retrieving checkpoint with: ", "sectionIdx", sectionIdx)

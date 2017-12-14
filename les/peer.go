@@ -325,7 +325,7 @@ func (p *peer) SendTxs(reqID, cost uint64, txs types.Transactions) error {
 	}
 }
 
-// RequestCheckpoint a checkpoint at the specified section index from a remote node.
+// RequestCheckpoint requests a checkpoint at the specified section index from a remote node.
 func (p *peer) RequestCheckpoint(reqID, cost uint64, req CheckpointReq) error {
 	p.Log().Debug("Fetching checkpoint", "req", req, "p.version", p.version, "lpv1", lpv1)
 	switch p.version {

@@ -545,9 +545,7 @@ func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
 	return nil
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
-// status.im request 320
-
+// For status.im request 320
 type CheckpointReq struct {
 	SectionIdx uint64
 }
@@ -597,8 +595,6 @@ func (r *CheckpointRequest) Validate(db ethdb.Database, msg *Msg) error {
 	r.BloomRoot = hashes[2]
 	return nil
 }
-
-///////////////////////////////////////////////////////////////////////////////////////////////
 
 // readTraceDB stores the keys of database reads. We use this to check that received node
 // sets contain only the trie nodes necessary to make proofs pass.
