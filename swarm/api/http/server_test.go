@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-func TestBzzGetPath(t *testing.T) {
+func TestBzzrGetPath(t *testing.T) {
 
 	var err error
 
@@ -100,35 +100,6 @@ func TestBzzGetPath(t *testing.T) {
 			}
 			if !isexpectedfailrequest {
 				t.Fatalf("Response body does not match, expected: %v, got %v", testmanifest[v], string(respbody))
-			}
-		}
-	}
-
-	for k, v := range testrequests {
-		var resp *http.Response
-		var respbody []byte
-
-		url := srv.URL + "/bzz-hash:/"
-		if k[:] != "" {
-			url += common.ToHex(key[0])[2:] + "/" + k[1:]
-		}
-		resp, err = http.Get(url)
-		if err != nil {
-			t.Fatalf("Request failed: %v", err)
-		}
-		defer resp.Body.Close()
-		respbody, err = ioutil.ReadAll(resp.Body)
-
-		if string(respbody) != key[v].String() {
-			isexpectedfailrequest := false
-
-			for _, r := range expectedfailrequests {
-				if k[:] == r {
-					isexpectedfailrequest = true
-				}
-			}
-			if !isexpectedfailrequest {
-				t.Fatalf("Response body does not match, expected: %v, got %v", key[v], string(respbody))
 			}
 		}
 	}
@@ -223,5 +194,65 @@ func TestBzzRootRedirect(t *testing.T) {
 	}
 	if !bytes.Equal(gotData, data) {
 		t.Fatalf("expected response to equal %q, got %q", data, gotData)
+	}
+}
+
+// TestBzzHash tests if requests with bzz-hash:// scheme
+// return the hash of the swarm content.
+func TestBzzHash(t *testing.T) {
+	srv := testutil.NewTestSwarmServer(t)
+	defer srv.Close()
+
+	client := swarm.NewClient(srv.URL)
+
+	for _, c := range []struct {
+		data string
+		path string
+	}{
+		{
+			data: "test root",
+			path: "",
+		},
+		{
+			data: "test /a",
+			path: "a",
+		},
+		{
+			data: "test /a/b",
+			path: "a/b",
+		},
+	} {
+		t.Run("path "+c.path, func(t *testing.T) {
+			hash, err := client.Upload(&swarm.File{
+				ReadCloser: ioutil.NopCloser(strings.NewReader(c.data)),
+				ManifestEntry: api.ManifestEntry{
+					Path:        "",
+					ContentType: "text/plain",
+					Size:        int64(len(c.data)),
+				},
+			}, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			manifest, err := client.DownloadManifest(hash)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			res, err := http.Get(srv.URL + "/bzz-hash:/" + hash + "/")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer res.Body.Close()
+
+			body, err := ioutil.ReadAll(res.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(body) != manifest.Entries[0].Hash {
+				t.Fatalf("expected response to equal %q, got %q", manifest.Entries[0].Hash, string(body))
+			}
+		})
 	}
 }

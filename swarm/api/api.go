@@ -130,6 +130,15 @@ func (self *Api) Put(content, contentType string) (storage.Key, error) {
 // to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status and an error
 func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, err error) {
+	reader, _, mimeType, status, err = self.GetHash(key, path)
+	return
+}
+
+// GetHash extends the Get method to return the hash of the content,
+// it uses iterative manifest retrieval and prefix matching
+// to resolve basePath to content using dpa retrieve
+// it returns a section reader, hash, mimeType, status and an error
+func (self *Api) GetHash(key storage.Key, path string) (reader storage.LazySectionReader, hash storage.Key, mimeType string, status int, err error) {
 	trie, err := loadManifest(self.dpa, key, nil)
 	if err != nil {
 		status = http.StatusNotFound
@@ -142,14 +151,14 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 	entry, _ := trie.getEntry(path)
 
 	if entry != nil {
-		key = common.Hex2Bytes(entry.Hash)
+		hash = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
 			return
 		} else {
 			mimeType = entry.ContentType
-			log.Trace(fmt.Sprintf("content lookup key: '%v' (%v)", key, mimeType))
-			reader = self.dpa.Retrieve(key)
+			log.Trace(fmt.Sprintf("content lookup key: '%v' (%v)", hash, mimeType))
+			reader = self.dpa.Retrieve(hash)
 		}
 	} else {
 		status = http.StatusNotFound
