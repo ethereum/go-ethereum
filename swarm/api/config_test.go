@@ -36,7 +36,7 @@ func TestConfig(t *testing.T) {
 	one := NewDefaultConfig()
 	two := NewDefaultConfig()
 
-	if equal := reflect.DeepEqual(one, two); equal == false {
+	if equal := reflect.DeepEqual(one, two); !equal {
 		t.Fatal("Two default configs are not equal")
 	}
 
