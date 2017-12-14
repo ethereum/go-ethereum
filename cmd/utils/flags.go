@@ -19,6 +19,7 @@ package utils
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -56,7 +57,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"gopkg.in/urfave/cli.v1"
-	"encoding/json"
 )
 
 var (
