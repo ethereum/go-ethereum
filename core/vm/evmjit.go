@@ -493,7 +493,7 @@ func (evm *EVMJIT) Run(snapshot int, contract *Contract, input []byte) (ret []by
 	output := C.GoBytes(unsafe.Pointer(r.output_data), C.int(r.output_size))
 
 	if r.status_code == C.EVM_REVERT {
-		evm.env.StateDB.RevertToSnapshot(snapshot)
+		err = errExecutionReverted
 	} else if r.status_code != C.EVM_SUCCESS {
 		// EVMJIT does not informs about the kind of the EVM expection.
 		err = ErrOutOfGas
