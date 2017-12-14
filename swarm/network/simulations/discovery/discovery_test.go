@@ -100,7 +100,8 @@ func TestDiscoverySimulationSimAdapter(t *testing.T) {
 }
 
 func testDiscoverySimulationSimAdapter(t *testing.T, nodes, conns int) {
-	testDiscoverySimulation(t, nodes, conns, adapters.NewSimAdapter(services))
+	testDiscoverySimulation(t, nodes, conns, adapters.NewSocketAdapter(services))
+	// testDiscoverySimulation(t, nodes, conns, adapters.NewSimAdapter(services))
 }
 
 func testDiscoverySimulation(t *testing.T, nodes, conns int, adapter adapters.NodeAdapter) {
@@ -310,7 +311,7 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	kad := network.NewKademlia(addr.Over(), kp)
 
 	hp := network.NewHiveParams()
-	hp.KeepAliveInterval = 500 * time.Millisecond
+	hp.KeepAliveInterval = 200 * time.Millisecond
 
 	config := &network.BzzConfig{
 		OverlayAddr:  addr.Over(),

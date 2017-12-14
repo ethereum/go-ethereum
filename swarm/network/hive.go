@@ -79,7 +79,7 @@ func NewHiveParams() *HiveParams {
 type Hive struct {
 	*HiveParams                      // settings
 	Overlay                          // the overlay connectiviy driver
-	store       StateStore           // storage interface to save peers across sessions
+	Store       StateStore           // storage interface to save peers across sessions
 	addPeer     func(*discover.Node) // server callback to connect to a peer
 	// bookkeeping
 	lock   sync.Mutex
@@ -94,7 +94,7 @@ func NewHive(params *HiveParams, overlay Overlay, store StateStore) *Hive {
 	return &Hive{
 		HiveParams: params,
 		Overlay:    overlay,
-		store:      store,
+		Store:      store,
 	}
 }
 
@@ -104,7 +104,7 @@ func NewHive(params *HiveParams, overlay Overlay, store StateStore) *Hive {
 func (h *Hive) Start(server *p2p.Server) error {
 	log.Trace(fmt.Sprintf("%08x hive starting", h.BaseAddr()[:4]))
 	// if state store is specified, load peers to prepopulate the overlay address book
-	if h.store != nil {
+	if h.Store != nil {
 		if err := h.loadPeers(); err != nil {
 			return err
 		}
@@ -122,7 +122,7 @@ func (h *Hive) Start(server *p2p.Server) error {
 func (h *Hive) Stop() error {
 	log.Info(fmt.Sprintf("%08x hive stopping, saving peers", h.BaseAddr()[:4]))
 	h.ticker.Stop()
-	if h.store != nil {
+	if h.Store != nil {
 		return h.savePeers()
 	}
 	log.Info(fmt.Sprintf("%08x hive stopped, dropping peers", h.BaseAddr()[:4]))
@@ -196,7 +196,7 @@ func ToAddr(pa OverlayPeer) *BzzAddr {
 
 // loadPeers, savePeer implement persistence callback/
 func (h *Hive) loadPeers() error {
-	data, err := h.store.Load("peers")
+	data, err := h.Store.Load("peers")
 	if err != nil {
 		return err
 	}
@@ -233,7 +233,7 @@ func (h *Hive) savePeers() error {
 	if err != nil {
 		return fmt.Errorf("could not encode peers: %v", err)
 	}
-	if err := h.store.Save("peers", data); err != nil {
+	if err := h.Store.Save("peers", data); err != nil {
 		return fmt.Errorf("could not save peers: %v", err)
 	}
 	return nil
