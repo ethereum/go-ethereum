@@ -95,6 +95,11 @@ func updateCheckpointFromPeer(pm *ProtocolManager, peer *peer, ctx context.Conte
 	var peerHeadBlockNum = hbl.Number
 	log.Debug("updateCheckpointFromPeer", "peerHeadBlockNum", peerHeadBlockNum)
 
+	if peerHeadBlockNum+1 < light.ChtFrequency {
+		log.Info("Peer has no fully processed blocks, nothing to do")
+		return
+	}
+
 	var sectionIdx uint64 = ((peerHeadBlockNum + 1) / light.ChtFrequency) - 1
 	log.Debug("Retrieving checkpoint with: ", "sectionIdx", sectionIdx)
 
