@@ -59,12 +59,14 @@ var (
 var services = newServices()
 
 func init() {
-
 	flag.Parse()
 	rand.Seed(time.Now().Unix())
 
 	adapters.RegisterServices(services)
+	initTest()
+}
 
+func initTest() {
 	initOnce.Do(
 		func() {
 			loglevel := log.LvlInfo
@@ -609,94 +611,84 @@ func testAsymSend(t *testing.T) {
 	}
 }
 
-type networkParams struct {
-	snapshotFile string
-	numMessages  int
-	addressSize  int
-	adapterType  string
-	messageDelay int
+type Job struct {
+	Msg      []byte
+	SendNode discover.NodeID
+	RecvNode discover.NodeID
 }
 
-func (n *networkParams) String() string {
-	return fmt.Sprintf(":%s:%d:%d:%d:%s", n.snapshotFile, n.numMessages, n.addressSize, n.messageDelay, n.adapterType)
+func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubkeys map[discover.NodeID]string, topic string) {
+	for j := range jobs {
+		rpcs[j.SendNode].Call(nil, "pss_sendAsym", pubkeys[j.RecvNode], topic, hexutil.Encode(j.Msg))
+	}
 }
 
-// Tests random message sending in network snapshots
-//
 // params in run name:
-// #nodes/#msgs/#addrbytes/adaptertype
+// nodes/msgs/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork(t *testing.T) {
-	var tests []*networkParams
-	if *snapshotflag != "" {
-		if *addresssizeflag < 0 || *addresssizeflag > 32 {
-			t.Fatal("invalid address size")
-		}
-		_, err := os.Stat(*snapshotflag)
-		if err != nil {
-			t.Fatal(err)
-		}
-		tests = append(tests, &networkParams{
-			snapshotFile: *snapshotflag,
-			numMessages:  *messagesflag,
-			addressSize:  *addresssizeflag,
-			adapterType:  *adaptertypeflag,
-			messageDelay: *messagedelayflag,
-		})
-	} else {
-		tests = append(tests, &networkParams{
-			snapshotFile: "testdata/snapshot_8.json",
-			numMessages:  2,
-			addressSize:  2,
-			adapterType:  "sim",
-			messageDelay: 1000,
-		})
-	}
-	for _, p := range tests {
-		t.Run(p.String(), testNetwork)
-	}
+	t.Run("3/2000/4/sock", testNetwork)
+	t.Run("4/2000/4/sock", testNetwork)
+	t.Run("8/2000/4/sock", testNetwork)
+	t.Run("16/2000/4/sock", testNetwork)
+	t.Run("32/2000/4/sock", testNetwork)
+	t.Run("64/2000/4/sim", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
-
-	lock := &sync.Mutex{}
 	type msgnotifyC struct {
 		id     discover.NodeID
 		msgIdx int
 	}
 
-	paramstring := strings.Split(t.Name(), ":")
+	paramstring := strings.Split(t.Name(), "/")
+	nodecount, _ := strconv.ParseInt(paramstring[1], 10, 0)
 	msgcount, _ := strconv.ParseInt(paramstring[2], 10, 0)
 	addrsize, _ := strconv.ParseInt(paramstring[3], 10, 0)
-	messagedelaymax, _ := strconv.ParseInt(paramstring[4], 10, 0)
-	log.Info("network test", "snapshot", paramstring[1], "msgcount", msgcount, "addrhintsize", addrsize, "messagedelay", messagedelaymax)
+	adapter := paramstring[4]
+
+	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount, "addrhintsize", addrsize)
+
+	nodes := make([]discover.NodeID, nodecount)
+	bzzaddrs := make(map[discover.NodeID]string, nodecount)
+	rpcs := make(map[discover.NodeID]*rpc.Client, nodecount)
+	pubkeys := make(map[discover.NodeID]string, nodecount)
 
 	sentmsgs := make([][]byte, msgcount)
 	recvmsgs := make([]bool, msgcount)
+	nodemsgcount := make(map[discover.NodeID]int, nodecount)
+
 	trigger := make(chan discover.NodeID)
 
-	var adapter adapters.NodeAdapter
-	if paramstring[5] == "exec" {
+	var a adapters.NodeAdapter
+	if adapter == "exec" {
 		dirname, err := ioutil.TempDir(".", "")
-		defer os.RemoveAll(dirname)
 		if err != nil {
 			t.Fatal(err)
 		}
-		adapter = adapters.NewExecAdapter(dirname)
-	} else {
-		adapter = adapters.NewSimAdapter(services)
+		a = adapters.NewExecAdapter(dirname)
+	} else if adapter == "sock" {
+		a = adapters.NewSocketAdapter(services)
+	} else if adapter == "tcp" {
+		a = adapters.NewTCPAdapter(services)
+	} else if adapter == "sim" {
+		a = adapters.NewSimAdapter(services)
 	}
-	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+	net := simulations.NewNetwork(a, &simulations.NetworkConfig{
 		ID: "0",
 	})
 	defer net.Shutdown()
 
-	f, err := os.Open(paramstring[1])
+	f, err := os.Open(fmt.Sprintf("testdata/snapshot_%d.json", nodecount))
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonbyte, err := ioutil.ReadAll(f)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var snap simulations.Snapshot
-	err = json.NewDecoder(f).Decode(&snap)
+	err = json.Unmarshal(jsonbyte, &snap)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -704,12 +696,6 @@ func testNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	nodes := make([]discover.NodeID, len(snap.Nodes))
-	bzzaddrs := make(map[discover.NodeID]string, len(snap.Nodes))
-	rpcs := make(map[discover.NodeID]*rpc.Client, len(snap.Nodes))
-	pubkeys := make(map[discover.NodeID]string, len(snap.Nodes))
-	nodemsgcount := make(map[discover.NodeID]int, len(snap.Nodes))
 
 	triggerChecks := func(trigger chan discover.NodeID, id discover.NodeID, rpcclient *rpc.Client, topic string) error {
 		msgC := make(chan APIMsg)
@@ -725,13 +711,11 @@ func testNetwork(t *testing.T) {
 				select {
 				case recvmsg := <-msgC:
 					idx, _ := binary.Uvarint(recvmsg.Msg)
-					lock.Lock()
 					if recvmsgs[idx] == false {
 						log.Debug("msg recv", "idx", idx, "id", id)
 						recvmsgs[idx] = true
 						trigger <- id
 					}
-					lock.Unlock()
 				case <-sub.Err():
 					return
 				}
@@ -771,10 +755,15 @@ func testNetwork(t *testing.T) {
 		}
 	}
 
-	messagedelayhigh := 0
+	// setup workers
+	jobs := make(chan Job, 10)
+	for w := 1; w <= 10; w++ {
+		go worker(w, jobs, rpcs, pubkeys, topic)
+	}
+
 	for i := 0; i < int(msgcount); i++ {
-		sendnodeidx := rand.Intn(int(len(snap.Nodes)))
-		recvnodeidx := rand.Intn(int(len(snap.Nodes) - 1))
+		sendnodeidx := rand.Intn(int(nodecount))
+		recvnodeidx := rand.Intn(int(nodecount - 1))
 		if recvnodeidx >= sendnodeidx {
 			recvnodeidx++
 		}
@@ -784,38 +773,23 @@ func testNetwork(t *testing.T) {
 		if c == 0 {
 			t.Fatal("0 byte message")
 		}
+		if err != nil {
+			t.Fatal(err)
+		}
 		err = rpcs[nodes[sendnodeidx]].Call(nil, "pss_setPeerPublicKey", pubkeys[nodes[recvnodeidx]], topic, bzzaddrs[nodes[recvnodeidx]])
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = rpcs[nodes[recvnodeidx]].Call(nil, "pss_setPeerPublicKey", pubkeys[nodes[sendnodeidx]], topic, bzzaddrs[nodes[sendnodeidx]])
-		if err != nil {
-			t.Fatal(err)
-		}
-		messagedelay := rand.Intn(int(messagedelaymax))
-		if messagedelay > messagedelayhigh {
-			messagedelayhigh = messagedelay
-		}
-		messagedelayduration, err := time.ParseDuration(fmt.Sprintf("%dus", messagedelay))
-		if err != nil {
-			t.Fatal(err)
-		}
-		go func(rpcclient *rpc.Client, pubkey string, msg []byte) {
-			time.Sleep(messagedelayduration)
-			err = rpcclient.Call(nil, "pss_sendAsym", pubkey, topic, hexutil.Encode(msg))
-			if err != nil {
-				log.Error("Send asym rpc fail", "pubkey", pubkey, "topic", topic, "err", err)
-			}
-		}(rpcs[nodes[sendnodeidx]], pubkeys[nodes[recvnodeidx]], sentmsgs[i])
-	}
 
-	timeout, err := time.ParseDuration(fmt.Sprintf("%dus", 60000000+messagedelayhigh))
-	if err != nil {
-		t.Fatal(err)
+		jobs <- Job{
+			Msg:      sentmsgs[i],
+			SendNode: nodes[sendnodeidx],
+			RecvNode: nodes[recvnodeidx],
+		}
 	}
 
 	finalmsgcount := 0
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 outer:
 	for i := 0; i < int(msgcount); i++ {
@@ -996,7 +970,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if !ps.process(pssmsgs[len(pssmsgs)-(i%len(pssmsgs))-1]) {
-			b.Fatalf("pss processing failed")
+			b.Fatalf("pss processing failed: %v", err)
 		}
 	}
 }
@@ -1153,6 +1127,9 @@ func newServices() adapters.Services {
 			if err != nil {
 				return nil, fmt.Errorf("local dpa creation failed", "error", err)
 			}
+
+			// execadapter does not exec init()
+			initTest()
 
 			ctxlocal, _ := context.WithTimeout(context.Background(), time.Second)
 			keys, err := wapi.NewKeyPair(ctxlocal)
