@@ -172,3 +172,8 @@ func (p *Peer) ID() []byte {
 	id := p.peer.ID()
 	return id[:]
 }
+
+func (p *Peer) notifyAboutPowRequirementChange(pow float64) error {
+	val := float32(pow)
+	return p2p.Send(p.ws, powRequirementCode, val)
+}

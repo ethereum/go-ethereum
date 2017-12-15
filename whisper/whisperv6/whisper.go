@@ -181,7 +181,23 @@ func (w *Whisper) SetMinimumPoW(val float64) error {
 		return fmt.Errorf("invalid PoW: %f", val)
 	}
 	w.settings.Store(minPowIdx, val)
+	w.notifyPeersAboutPowRequirementChange(val)
 	return nil
+}
+
+func (w *Whisper) notifyPeersAboutPowRequirementChange(pow float64) {
+	w.peerMu.Lock()
+	defer w.peerMu.Unlock()
+	for p := range w.peers {
+		err := p.notifyAboutPowRequirementChange(pow)
+		if err != nil {
+			// allow one retry
+			err = p.notifyAboutPowRequirementChange(pow)
+		}
+		if err != nil {
+			fmt.Errorf("Error sending PoW notification to peer [%x]: %s", p.ID(), err)
+		}
+	}
 }
 
 // getPeer retrieves peer by ID
@@ -233,7 +249,7 @@ func (w *Whisper) SendP2PMessage(peerID []byte, envelope *Envelope) error {
 
 // SendP2PDirect sends a peer-to-peer message to a specific peer.
 func (w *Whisper) SendP2PDirect(peer *Peer, envelope *Envelope) error {
-	return p2p.Send(peer.ws, p2pCode, envelope)
+	return p2p.Send(peer.ws, p2pMessageCode, envelope)
 }
 
 // NewKeyPair generates a new cryptographic identity for the client, and injects
@@ -528,7 +544,7 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			if cached {
 				p.mark(&envelope)
 			}
-		case p2pCode:
+		case p2pMessageCode:
 			// peer-to-peer message, sent directly to peer bypassing PoW checks, etc.
 			// this message is not supposed to be forwarded to other peers, and
 			// therefore might not satisfy the PoW, expiry and other requirements.
