@@ -93,7 +93,8 @@ var expectedMessage []byte = []byte("per rectum ad astra")
 // 2. installs the filters with shared (predefined) parameters,
 // 3. each node sends a number of random (undecryptable) messages,
 // 4. first node sends one expected (decryptable) message,
-// 5. checks if each node have received and decrypted exactly one message.
+// 5. checks if each node have received and decrypted exactly one message,
+// 6. sends protocol-level messages (powRequirementCode) and checks the new PoW requirement values.
 func TestSimulation(t *testing.T) {
 	initialize(t)
 
@@ -103,6 +104,7 @@ func TestSimulation(t *testing.T) {
 
 	sendMsg(t, true, 0)
 	checkPropagation(t)
+	powReqExchange(t)
 	stopServers()
 }
 
@@ -302,5 +304,35 @@ func TestPeerBasic(t *testing.T) {
 	p.mark(env)
 	if !p.marked(env) {
 		t.Fatalf("failed mark with seed %d.", seed)
+	}
+}
+
+func powReqExchange(t *testing.T) {
+	for i, node := range nodes {
+		for peer, _ := range node.shh.peers {
+			if peer.powRequirement > 1000.0 {
+				t.Fatalf("node %d: one of the peers' pow requirement is too big (%f).", i, peer.powRequirement)
+			}
+		}
+	}
+
+	const pow float64 = 7777777.0
+	nodes[0].shh.SetMinimumPoW(pow, true)
+	time.Sleep(5 * time.Millisecond)
+
+	cnt := 0
+	for i, node := range nodes {
+		for peer, _ := range node.shh.peers {
+			if peer.peer.ID() == discover.PubkeyID(&nodes[0].id.PublicKey) {
+				cnt++
+				if peer.powRequirement != pow {
+					t.Fatalf("node %d: failed to set the new pow requirement.", i)
+				}
+			}
+		}
+	}
+
+	if cnt == 0 {
+		t.Fatalf("no matching peers found.")
 	}
 }
