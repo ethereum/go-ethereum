@@ -40,17 +40,17 @@ type LDBDatabase struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
 
-	getTimer        gometrics.Timer // Timer for measuring the database get request counts and latencies
-	putTimer        gometrics.Timer // Timer for measuring the database put request counts and latencies
-	delTimer        gometrics.Timer // Timer for measuring the database delete request counts and latencies
-	writeDelayTimer gometrics.Timer // Timer for measuring the write delay duration due to database compaction
-	missMeter       gometrics.Meter // Meter for measuring the missed database get requests
-	readMeter       gometrics.Meter // Meter for measuring the database get request data usage
-	writeMeter      gometrics.Meter // Meter for measuring the database put request data usage
-	writeDelayMeter gometrics.Meter // Meter for measuring the write delay number due to database compaction
-	compTimeMeter   gometrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter   gometrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter  gometrics.Meter // Meter for measuring the data written during compaction
+	getTimer         gometrics.Timer // Timer for measuring the database get request counts and latencies
+	putTimer         gometrics.Timer // Timer for measuring the database put request counts and latencies
+	delTimer         gometrics.Timer // Timer for measuring the database delete request counts and latencies
+	missMeter        gometrics.Meter // Meter for measuring the missed database get requests
+	readMeter        gometrics.Meter // Meter for measuring the database get request data usage
+	writeMeter       gometrics.Meter // Meter for measuring the database put request data usage
+	writeDelayNMeter gometrics.Meter // Meter for measuring the write delay number due to database compaction
+	writeDelayMeter  gometrics.Meter // Meter for measuring the write delay duration due to database compaction
+	compTimeMeter    gometrics.Meter // Meter for measuring the total time spent in database compaction
+	compReadMeter    gometrics.Meter // Meter for measuring the data read during compaction
+	compWriteMeter   gometrics.Meter // Meter for measuring the data written during compaction
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -190,8 +190,8 @@ func (db *LDBDatabase) Meter(prefix string) {
 	db.readMeter = metrics.NewMeter(prefix + "user/reads")
 	db.writeMeter = metrics.NewMeter(prefix + "user/writes")
 
-	db.writeDelayTimer = metrics.NewTimer(prefix + "compact/writedelay/duration")
-	db.writeDelayMeter = metrics.NewMeter(prefix + "compact/writedelay/counter")
+	db.writeDelayMeter = metrics.NewMeter(prefix + "compact/writedelay/duration")
+	db.writeDelayNMeter = metrics.NewMeter(prefix + "compact/writedelay/counter")
 	db.compTimeMeter = metrics.NewMeter(prefix + "compact/time")
 	db.compReadMeter = metrics.NewMeter(prefix + "compact/input")
 	db.compWriteMeter = metrics.NewMeter(prefix + "compact/output")
@@ -275,15 +275,29 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			db.log.Error("Failed to read database write delay statistic", "err", err)
 			return
 		}
-		if n, err := fmt.Sscanf(writeDelay, "DelayN: %f Delay(sec):%.5f", &counters[i%2][3], &counters[i%2][4]); n != 2 || err != nil {
+		var (
+			delayN        int32
+			delayDuration string
+			duration      time.Duration
+		)
+		if n, err := fmt.Sscanf(writeDelay, "DelayN:%d Delay:%s", &delayN, &delayDuration); n != 2 || err != nil {
 			db.log.Error("Write delay statistic not found")
 			return
 		}
-		if db.writeDelayTimer != nil {
-			db.writeDelayTimer.Update(time.Duration(int64((counters[i%2][4] - counters[(i-1)%2][4]) * 1000 * 1000 * 1000)))
+		duration, err = time.ParseDuration(delayDuration)
+		if err != nil {
+			db.log.Error("Failed to parse delay duration", "err", err)
+			return
 		}
+
+		counters[i%2][3], counters[i%2][4] = float64(delayN), float64(duration.Nanoseconds())
+
+		if db.writeDelayNMeter != nil {
+			db.writeDelayNMeter.Mark(int64((counters[i%2][3] - counters[(i-1)%2][3])))
+		}
+
 		if db.writeDelayMeter != nil {
-			db.writeDelayMeter.Mark(int64((counters[i%2][3] - counters[(i-1)%2][3])))
+			db.writeDelayMeter.Mark(int64((counters[i%2][4] - counters[(i-1)%2][4])))
 		}
 		// Sleep a bit, then repeat the stats collection
 		select {
