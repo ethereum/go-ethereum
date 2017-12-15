@@ -181,17 +181,22 @@ func (w *Whisper) SetMaxMessageSize(size uint32) error {
 }
 
 // SetMinimumPoW sets the minimal PoW required by this node
-func (w *Whisper) SetMinimumPoW(val float64) error {
+func (w *Whisper) SetMinimumPoW(val float64, testMode bool) error {
 	if val <= 0.0 {
 		return fmt.Errorf("invalid PoW: %f", val)
 	}
+
 	w.notifyPeersAboutPowRequirementChange(val)
 
-	go func() {
-		// allow some time before all the peers have processed the notification
-		time.Sleep(time.Duration(w.reactionAllowance) * time.Second)
+	if testMode {
 		w.settings.Store(minPowIdx, val)
-	}()
+	} else {
+		go func() {
+			//	// allow some time before all the peers have processed the notification
+			time.Sleep(time.Duration(w.reactionAllowance) * time.Second)
+			w.settings.Store(minPowIdx, val)
+		}()
+	}
 
 	return nil
 }
