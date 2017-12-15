@@ -44,6 +44,20 @@ var (
 		Ethash: new(EthashConfig),
 	}
 
+	// CallistoMainnetChainConfig contains the chain parameters to run a node on the Callisto Main network.
+	CallistoMainnetChainConfig = &ChainConfig{
+		ChainId:        big.NewInt(104729),
+		HomesteadBlock: big.NewInt(0),
+		DAOForkBlock:   big.NewInt(0),
+		DAOForkSupport: false,
+		EIP150Block:    big.NewInt(0),
+		EIP150Hash:     common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		EIP155Block:    big.NewInt(3),
+		EIP158Block:    big.NewInt(0),
+		ByzantiumBlock: big.NewInt(4),
+		CallistoBlock:  big.NewInt(1),
+	}
+
 	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
 	TestnetChainConfig = &ChainConfig{
 		ChainId:        big.NewInt(3),
@@ -59,7 +73,7 @@ var (
 		Ethash: new(EthashConfig),
 	}
 
-	// CallistoTestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
+	// CallistoTestnetChainConfig contains the chain parameters to run a node on the Callisto test network.
 	CallistoTestnetChainConfig = &ChainConfig{
 		ChainId:        big.NewInt(7919),
 		HomesteadBlock: big.NewInt(0),
@@ -101,16 +115,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(EthashConfig), nil}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, new(EthashConfig), nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, &CliqueConfig{Period: 0, Epoch: 30000}}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{},nil, &CliqueConfig{Period: 0, Epoch: 30000}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(EthashConfig), nil}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, new(EthashConfig), nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -137,6 +151,7 @@ type ChainConfig struct {
 	ByzantiumBlock *big.Int `json:"byzantiumBlock,omitempty"` // Byzantium switch block (nil = no fork, 0 = already on byzantium)
 
 	CallistoBlock *big.Int `json:"callistoBlock,omitempty"`
+	CallistoTreasuryAddress common.Address  `json:"callistoTreasuryAddress,omitempty"`
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
@@ -172,7 +187,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Callisto: %v Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Callisto: %v Callisto Treasury Address: %v Engine: %v}",
 		c.ChainId,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -182,6 +197,7 @@ func (c *ChainConfig) String() string {
 		c.EIP158Block,
 		c.ByzantiumBlock,
 		c.CallistoBlock,
+		c.CallistoTreasuryAddress,
 		engine,
 	)
 }
@@ -225,6 +241,8 @@ func (c *ChainConfig) GasTable(num *big.Int) GasTable {
 		return GasTableHomestead
 	}
 	switch {
+	case c.IsCallisto(num):
+		return GasTableCallisto
 	case c.IsEIP158(num):
 		return GasTableEIP158
 	case c.IsEIP150(num):
