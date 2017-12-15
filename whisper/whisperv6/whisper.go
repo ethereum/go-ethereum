@@ -22,6 +22,7 @@ import (
 	crand "crypto/rand"
 	"crypto/sha256"
 	"fmt"
+	"math"
 	"runtime"
 	"sync"
 	"time"
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"golang.org/x/crypto/pbkdf2"
@@ -74,6 +76,8 @@ type Whisper struct {
 
 	settings syncmap.Map // holds configuration settings that can be dynamically changed
 
+	reactionAllowance int // maximum time in seconds allowed to process the whisper-related messages
+
 	statsMu sync.Mutex // guard stats
 	stats   Statistics // Statistics of whisper node
 
@@ -87,14 +91,15 @@ func New(cfg *Config) *Whisper {
 	}
 
 	whisper := &Whisper{
-		privateKeys:  make(map[string]*ecdsa.PrivateKey),
-		symKeys:      make(map[string][]byte),
-		envelopes:    make(map[common.Hash]*Envelope),
-		expirations:  make(map[uint32]*set.SetNonTS),
-		peers:        make(map[*Peer]struct{}),
-		messageQueue: make(chan *Envelope, messageQueueLimit),
-		p2pMsgQueue:  make(chan *Envelope, messageQueueLimit),
-		quit:         make(chan struct{}),
+		privateKeys:       make(map[string]*ecdsa.PrivateKey),
+		symKeys:           make(map[string][]byte),
+		envelopes:         make(map[common.Hash]*Envelope),
+		expirations:       make(map[uint32]*set.SetNonTS),
+		peers:             make(map[*Peer]struct{}),
+		messageQueue:      make(chan *Envelope, messageQueueLimit),
+		p2pMsgQueue:       make(chan *Envelope, messageQueueLimit),
+		quit:              make(chan struct{}),
+		reactionAllowance: SynchAllowance,
 	}
 
 	whisper.filters = NewFilters(whisper)
@@ -180,8 +185,14 @@ func (w *Whisper) SetMinimumPoW(val float64) error {
 	if val <= 0.0 {
 		return fmt.Errorf("invalid PoW: %f", val)
 	}
-	w.settings.Store(minPowIdx, val)
 	w.notifyPeersAboutPowRequirementChange(val)
+
+	go func() {
+		// allow some time before all the peers have processed the notification
+		time.Sleep(time.Duration(w.reactionAllowance) * time.Second)
+		w.settings.Store(minPowIdx, val)
+	}()
+
 	return nil
 }
 
@@ -544,6 +555,21 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			if cached {
 				p.mark(&envelope)
 			}
+		case powRequirementCode:
+			s := rlp.NewStream(packet.Payload, uint64(packet.Size))
+			i, err := s.Uint()
+			if err != nil {
+				log.Warn("failed to decode powRequirementCode message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
+				return errors.New("invalid powRequirementCode message")
+			}
+			f := math.Float64frombits(i)
+			if math.IsInf(f, 0) || math.IsNaN(f) {
+				log.Warn("invalid value in powRequirementCode message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
+				return errors.New("invalid value in powRequirementCode message")
+			}
+			p.powRequirement = float64(f)
+		case bloomFilterExCode:
+			// to be implemented
 		case p2pMessageCode:
 			// peer-to-peer message, sent directly to peer bypassing PoW checks, etc.
 			// this message is not supposed to be forwarded to other peers, and
