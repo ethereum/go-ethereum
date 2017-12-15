@@ -434,4 +434,8 @@ invoking methods with the following info:
   * Address of API (http/ipc)
     * This makes it posible for the UI to use the api for creating transactions
   * List of known accounts
-  
+
+* The signer should pass the `Origin` header as call-info to the UI. As of right now, the way that info about the request is
+put together is a bit of a hack into the http server. This could probably be greatly improved
+
+* The signer

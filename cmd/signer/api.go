@@ -62,8 +62,8 @@ type (
 	// SignTxResponse result from SignTxRequest
 	SignTxResponse struct {
 		//The UI may make changes to the TX
-		Transaction TransactionArg
-		From        common.Address
+		Transaction TransactionArg `json:"transaction"`
+		From        common.Address `json:"fromaccount"`
 		Approved    bool   `json:"approved"`
 		Password    string `json:"password"`
 	}
