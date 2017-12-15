@@ -292,6 +292,8 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
+	case config.IsCallisto(next):
+		return calcDifficultyCallisto(time, parent)
 	case config.IsByzantium(next):
 		return calcDifficultyByzantium(time, parent)
 	case config.IsHomestead(next):
@@ -304,6 +306,7 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 // Some weird constants to avoid constant memory allocs for them.
 var (
 	expDiffPeriod = big.NewInt(100000)
+	expDiffPeriodCallisto = big.NewInt(300000)
 	big1          = big.NewInt(1)
 	big2          = big.NewInt(2)
 	big9          = big.NewInt(9)
@@ -311,6 +314,54 @@ var (
 	bigMinus99    = big.NewInt(-99)
 	big2999999    = big.NewInt(2999999)
 )
+
+// calcDifficultyCallisto is the difficulty adjustment algorithm. It returns
+// the difficulty that a new block should have when created at time given the
+// parent block's time and difficulty. No bomb.
+func calcDifficultyCallisto(time uint64, parent *types.Header) *big.Int {
+	// For Callisto the periodCount is modified each 300k blocks
+	// diff = (parent_diff +
+	//         (parent_diff / 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
+	//        ) + 2^(periodCount - 2)
+
+	bigTime := new(big.Int).SetUint64(time)
+	bigParentTime := new(big.Int).Set(parent.Time)
+
+	// holds intermediate values to make the algo easier to read & audit
+	x := new(big.Int)
+	y := new(big.Int)
+
+	// 1 - (block_timestamp - parent_timestamp) // 10
+	x.Sub(bigTime, bigParentTime)
+	x.Div(x, big10)
+	x.Sub(big1, x)
+
+	// max(1 - (block_timestamp - parent_timestamp) // 10, -99)
+	if x.Cmp(bigMinus99) < 0 {
+		x.Set(bigMinus99)
+	}
+	// (parent_diff + parent_diff // 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
+	y.Div(parent.Difficulty, params.DifficultyBoundDivisor)
+	x.Mul(y, x)
+	x.Add(parent.Difficulty, x)
+
+	// minimum difficulty can ever be (before exponential factor)
+	if x.Cmp(params.MinimumDifficulty) < 0 {
+		x.Set(params.MinimumDifficulty)
+	}
+	// for the exponential factor
+	periodCount := new(big.Int).Add(parent.Number, big1)
+	periodCount.Div(periodCount, expDiffPeriodCallisto)
+
+	// the exponential factor, commonly referred to as "the bomb"
+	// diff = diff + 2^(periodCount - 2)
+	if periodCount.Cmp(big1) > 0 {
+		y.Sub(periodCount, big2)
+		y.Exp(big2, y, nil)
+		x.Add(x, y)
+	}
+	return x
+}
 
 // calcDifficultyByzantium is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time given the
@@ -561,7 +612,7 @@ func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	if config.IsCallisto(header.Number) {
 		reward.Sub(reward, treasuryReward)
-		state.AddBalance(common.HexToAddress("SET ADDRESS IN SETTINGS"), treasuryReward)
+		state.AddBalance(config.CallistoTreasuryAddress, treasuryReward)
 	}
 
 	state.AddBalance(header.Coinbase, reward)
