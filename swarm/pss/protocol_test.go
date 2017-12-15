@@ -73,11 +73,13 @@ func testProtocol(t *testing.T) {
 	time.Sleep(time.Millisecond * 1000) // replace with hive healthy code
 
 	lmsgC := make(chan APIMsg)
-	lctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+	lctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
 	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
-	rctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+	rctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
 	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
 	defer rsub.Unsubscribe()
 

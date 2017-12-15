@@ -137,7 +137,7 @@ func benchmarkDiscovery(b *testing.B, nodes, conns int) {
 	for i := 0; i < b.N; i++ {
 		result, err := discoverySimulation(nodes, conns, adapters.NewSimAdapter(services))
 		if err != nil {
-			b.Fatalf("setting up simulation failed", result)
+			b.Fatalf("setting up simulation failed: %v", err)
 		}
 		if result.Error != nil {
 			b.Logf("simulation failed: %s", result.Error)
