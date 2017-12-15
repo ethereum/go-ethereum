@@ -24,14 +24,12 @@ import (
 	"math/big"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
@@ -39,8 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 )
-
-const defaultTraceTimeout = 5 * time.Second
 
 // PublicEthereumAPI provides an API to access Ethereum full node-related
 // information.
@@ -343,13 +339,6 @@ type PrivateDebugAPI struct {
 // private debug methods of the Ethereum service.
 func NewPrivateDebugAPI(config *params.ChainConfig, eth *Ethereum) *PrivateDebugAPI {
 	return &PrivateDebugAPI{config: config, eth: eth}
-}
-
-// TraceArgs holds extra parameters to trace functions
-type TraceArgs struct {
-	*vm.LogConfig
-	Tracer  *string
-	Timeout *string
 }
 
 // Preimage is a debug API function that returns the preimage for a sha3 hash, if known.

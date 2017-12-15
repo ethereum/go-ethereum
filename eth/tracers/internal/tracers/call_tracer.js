@@ -10,6 +10,12 @@
 
 	// step is invoked for every opcode that the VM executes.
 	step: function(log, db) {
+		// Capture any errors immediately
+		var error = log.getError();
+		if (error !== undefined) {
+			this.fault(log, db);
+			return;
+		}
 		// We only care about system opcodes, faster if we pre-check once
 		var syscall = (log.op.toNumber() & 0xf0) == 0xf0;
 		if (syscall) {
@@ -39,9 +45,7 @@
 			if (this.callstack[left-1].calls === undefined) {
 				this.callstack[left-1].calls = [];
 			}
-			this.callstack[left-1].calls.push({
-				type:    op,
-			});
+			this.callstack[left-1].calls.push({type: op});
 			return
 		}
 		// If a new method invocation is being done, add to the call stack
@@ -89,7 +93,7 @@
 		}
 		// If an existing call is returning, pop off the call stack
 		if (syscall && op == 'REVERT') {
-			this.callstack[this.callstack.length - 1].revert = true;
+			this.callstack[this.callstack.length - 1].error = "execution reverted";
 			return;
 		}
 		if (log.getDepth() == this.callstack.length - 1) {
@@ -105,21 +109,22 @@
 				if (!ret.equals(0)) {
 					call.to     = toHex(toAddress(ret.toString(16)));
 					call.output = toHex(db.getCode(toAddress(ret.toString(16))));
-				} else {
-					call.revert = true;
+				} else if (call.error === undefined) {
+					call.error = "internal failure"; // TODO(karalabe): surface these faults somehow
 				}
 			} else {
-				// If the call was a CALL*, retrieve the output code
+				// If the call was a contract call, retrieve the gas usage and output
 				if (call.gas !== undefined) {
 					call.gasUsed = '0x' + bigInt(call.gasIn - call.gasCost + call.gas - log.getGas()).toString(16);
-					delete call.gasIn; delete call.gasCost;
+
+					var ret = log.stack.peek(0);
+					if (!ret.equals(0)) {
+						call.output = toHex(log.memory.slice(call.outOff, call.outOff + call.outLen));
+					} else if (call.error === undefined) {
+						call.error = "internal failure"; // TODO(karalabe): surface these faults somehow
+					}
 				}
-				var ret = log.stack.peek(0);
-				if (!ret.equals(0)) {
-					call.output = toHex(log.memory.slice(call.outOff, call.outOff + call.outLen));
-				} else {
-					call.revert = true;
-				}
+				delete call.gasIn; delete call.gasCost;
 				delete call.outOff; delete call.outLen;
 			}
 			if (call.gas !== undefined) {
@@ -132,6 +137,37 @@
 			}
 			this.callstack[left-1].calls.push(call);
 		}
+	},
+
+	// fault is invoked when the actual execution of an opcode fails.
+	fault: function(log, db) {
+		// If the topmost call already reverted, don't handle the additional fault again
+		if (this.callstack[this.callstack.length - 1].error !== undefined) {
+			return;
+		}
+		// Pop off the just failed call
+		var call = this.callstack.pop();
+		call.error = log.getError();
+
+		// Consume all available gas and clean any leftovers
+		if (call.gas !== undefined) {
+			call.gas = '0x' + bigInt(call.gas).toString(16);
+			call.gasUsed = call.gas
+		}
+		delete call.gasIn; delete call.gasCost;
+		delete call.outOff; delete call.outLen;
+
+		// Flatten the failed call into its parent
+		var left = this.callstack.length;
+		if (left > 0) {
+			if (this.callstack[left-1].calls === undefined) {
+				this.callstack[left-1].calls = [];
+			}
+			this.callstack[left-1].calls.push(call);
+			return;
+		}
+		// Last call failed too, leave it in the stack
+		this.callstack.push(call);
 	},
 
 	// result is invoked when all the opcodes have been iterated over and returns
@@ -151,13 +187,44 @@
 		if (this.callstack[0].calls !== undefined) {
 			result.calls = this.callstack[0].calls;
 		}
-		if (ctx.error !== undefined) {
+		if (this.callstack[0].error !== undefined) {
+			result.error = this.callstack[0].error;
+		} else if (ctx.error !== undefined) {
 			result.error = ctx.error;
+		}
+		if (result.error !== undefined) {
 			delete result.output;
 		}
-		if (this.callstack[0].revert) {
-			result.revert = true;
+		return this.finalize(result);
+	},
+
+	// finalize recreates a call object using the final desired field oder for json
+	// serialization. This is a nicety feature to pass meaningfully ordered results
+	// to users who don't interpret it, just display it.
+	finalize: function(call) {
+		var sorted = {
+			type:    call.type,
+			from:    call.from,
+			to:      call.to,
+			value:   call.value,
+			gas:     call.gas,
+			gasUsed: call.gasUsed,
+			input:   call.input,
+			output:  call.output,
+			error:   call.error,
+			time:    call.time,
+			calls:   call.calls,
 		}
-		return result;
+		for (var key in sorted) {
+			if (sorted[key] === undefined) {
+				delete sorted[key];
+			}
+		}
+		if (sorted.calls !== undefined) {
+			for (var i=0; i<sorted.calls.length; i++) {
+				sorted.calls[i] = this.finalize(sorted.calls[i]);
+			}
+		}
+		return sorted;
 	}
 }

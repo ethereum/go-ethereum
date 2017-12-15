@@ -42,6 +42,24 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+const (
+	// defaultTraceTimeout is the amount of time a single transaction can execute
+	// by default before being forcefully aborted.
+	defaultTraceTimeout = 5 * time.Second
+
+	// defaultTraceRewind is the number of blocks the tracer is willing to rewind
+	// and regenerate to produce the state necessary to run a specific transaction.
+	defaultTraceRewind = uint64(128)
+)
+
+// TraceConfig holds extra parameters to trace functions.
+type TraceConfig struct {
+	*vm.LogConfig
+	Tracer  *string
+	Timeout *string
+	Rewind  *uint64
+}
+
 // txTraceResult is the result of a single transaction trace.
 type txTraceResult struct {
 	Result interface{} `json:"result,omitempty"` // Trace results procuded by the tracer
@@ -124,7 +142,7 @@ func (db *ephemeralDatabase) Prune(root common.Hash) {
 
 // TraceChain returns the structured logs created during the execution of EVM
 // between two blocks (excluding start) and returns them as a JSON object.
-func (api *PrivateDebugAPI) TraceChain(ctx context.Context, start, end rpc.BlockNumber, config *TraceArgs) (*rpc.Subscription, error) {
+func (api *PrivateDebugAPI) TraceChain(ctx context.Context, start, end rpc.BlockNumber, config *TraceConfig) (*rpc.Subscription, error) {
 	// Fetch the block interval that we want to trace
 	var from, to *types.Block
 
@@ -157,7 +175,7 @@ func (api *PrivateDebugAPI) TraceChain(ctx context.Context, start, end rpc.Block
 // traceChain configures a new tracer according to the provided configuration, and
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requestd tracer.
-func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Block, config *TraceArgs) (*rpc.Subscription, error) {
+func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Block, config *TraceConfig) (*rpc.Subscription, error) {
 	// Tracing a chain is a **long** operation, only do with subscriptions
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -166,6 +184,8 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 	sub := notifier.CreateSubscription()
 
 	// Ensure we have a valid starting state before doing any work
+	origin := start.NumberU64()
+
 	memdb, _ := ethdb.NewMemDatabase()
 	db := &ephemeralDatabase{
 		diskdb: api.eth.ChainDb(),
@@ -173,10 +193,28 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 	}
 	statedb, err := state.New(start.Root(), state.NewDatabase(db))
 	if err != nil {
-		return nil, err
+		// If the starting state is missing, allow some number of blocks to be rewound
+		rewind := defaultTraceRewind
+		if config.Rewind != nil {
+			rewind = *config.Rewind
+		}
+		// Find the most recent block that has the state available
+		for i := uint64(0); i < rewind; i++ {
+			start = api.eth.blockchain.GetBlock(start.ParentHash(), start.NumberU64()-1)
+			if start == nil {
+				break
+			}
+			if statedb, err = state.New(start.Root(), state.NewDatabase(db)); err == nil {
+				break
+			}
+		}
+		// If we still don't have the state available, bail out
+		if err != nil {
+			return nil, err
+		}
 	}
 	// Execute all the transaction contained within the chain concurrently for each block
-	blocks := int(end.NumberU64() - start.NumberU64())
+	blocks := int(end.NumberU64() - origin)
 
 	threads := runtime.NumCPU()
 	if threads > blocks {
@@ -204,6 +242,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 					res, err := api.traceTx(ctx, msg, vmctx, task.statedb, config)
 					if err != nil {
 						task.results[i] = &txTraceResult{Error: err.Error()}
+						log.Warn("Tracing failed", "err", err)
 						break
 					}
 					task.statedb.DeleteSuicides()
@@ -254,7 +293,11 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 			}
 			// Print progress logs if long enough time elapsed
 			if time.Since(logged) > 8*time.Second {
-				log.Info("Tracing chain segment", "start", start.NumberU64(), "end", end.NumberU64(), "current", number, "transactions", traced, "elapsed", time.Since(begin))
+				if number > origin {
+					log.Info("Tracing chain segment", "start", origin, "end", end.NumberU64(), "current", number, "transactions", traced, "elapsed", time.Since(begin))
+				} else {
+					log.Info("Preparing state for chain trace", "block", number, "start", origin, "elapsed", time.Since(begin))
+				}
 				logged = time.Now()
 			}
 			// Retrieve the next block to trace
@@ -263,16 +306,19 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				failed = fmt.Errorf("block #%d not found", number)
 				break
 			}
-			// Send the block over to the concurrent tracers
-			txs := block.Transactions()
+			// Send the block over to the concurrent tracers (if not in the rewind phase)
+			if number > origin {
+				txs := block.Transactions()
 
-			select {
-			case tasks <- &blockTraceTask{statedb: statedb.Copy(), block: block, results: make([]*txTraceResult, len(txs))}:
-			case <-notifier.Closed():
-				return
+				select {
+				case tasks <- &blockTraceTask{statedb: statedb.Copy(), block: block, results: make([]*txTraceResult, len(txs))}:
+				case <-notifier.Closed():
+					return
+				}
+				traced += uint64(len(txs))
+			} else {
+				atomic.StoreUint64(&complete, number)
 			}
-			traced += uint64(len(txs))
-
 			// Generate the next state snapshot fast without tracing
 			_, _, _, err := api.eth.blockchain.Processor().Process(block, statedb, vm.Config{})
 			if err != nil {
@@ -314,7 +360,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 	go func() {
 		var (
 			done = make(map[uint64]*blockTraceResult)
-			next = start.NumberU64() + 1
+			next = origin + 1
 		)
 		for res := range results {
 			// Queue up next received result
@@ -341,7 +387,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 
 // TraceBlockByNumber returns the structured logs created during the execution of
 // EVM and returns them as a JSON object.
-func (api *PrivateDebugAPI) TraceBlockByNumber(ctx context.Context, number rpc.BlockNumber, config *TraceArgs) ([]*txTraceResult, error) {
+func (api *PrivateDebugAPI) TraceBlockByNumber(ctx context.Context, number rpc.BlockNumber, config *TraceConfig) ([]*txTraceResult, error) {
 	// Fetch the block that we want to trace
 	var block *types.Block
 
@@ -362,7 +408,7 @@ func (api *PrivateDebugAPI) TraceBlockByNumber(ctx context.Context, number rpc.B
 
 // TraceBlockByHash returns the structured logs created during the execution of
 // EVM and returns them as a JSON object.
-func (api *PrivateDebugAPI) TraceBlockByHash(ctx context.Context, hash common.Hash, config *TraceArgs) ([]*txTraceResult, error) {
+func (api *PrivateDebugAPI) TraceBlockByHash(ctx context.Context, hash common.Hash, config *TraceConfig) ([]*txTraceResult, error) {
 	block := api.eth.blockchain.GetBlockByHash(hash)
 	if block == nil {
 		return nil, fmt.Errorf("block #%x not found", hash)
@@ -372,7 +418,7 @@ func (api *PrivateDebugAPI) TraceBlockByHash(ctx context.Context, hash common.Ha
 
 // TraceBlock returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
-func (api *PrivateDebugAPI) TraceBlock(ctx context.Context, blob []byte, config *TraceArgs) ([]*txTraceResult, error) {
+func (api *PrivateDebugAPI) TraceBlock(ctx context.Context, blob []byte, config *TraceConfig) ([]*txTraceResult, error) {
 	block := new(types.Block)
 	if err := rlp.Decode(bytes.NewReader(blob), block); err != nil {
 		return nil, fmt.Errorf("could not decode block: %v", err)
@@ -382,7 +428,7 @@ func (api *PrivateDebugAPI) TraceBlock(ctx context.Context, blob []byte, config 
 
 // TraceBlockFromFile returns the structured logs created during the execution of
 // EVM and returns them as a JSON object.
-func (api *PrivateDebugAPI) TraceBlockFromFile(ctx context.Context, file string, config *TraceArgs) ([]*txTraceResult, error) {
+func (api *PrivateDebugAPI) TraceBlockFromFile(ctx context.Context, file string, config *TraceConfig) ([]*txTraceResult, error) {
 	blob, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("could not read file: %v", err)
@@ -393,7 +439,7 @@ func (api *PrivateDebugAPI) TraceBlockFromFile(ctx context.Context, file string,
 // traceBlock configures a new tracer according to the provided configuration, and
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requestd tracer.
-func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, config *TraceArgs) ([]*txTraceResult, error) {
+func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, config *TraceConfig) ([]*txTraceResult, error) {
 	// Create the parent state database
 	if err := api.eth.engine.VerifyHeader(api.eth.blockchain, block.Header(), true); err != nil {
 		return nil, err
@@ -469,7 +515,7 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
-func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceArgs) (interface{}, error) {
+func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
 	// Retrieve the transaction and assemble its EVM context
 	tx, blockHash, _, index := core.GetTransaction(api.eth.ChainDb(), hash)
 	if tx == nil {
@@ -486,7 +532,7 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 // traceTx configures a new tracer according to the provided configuration, and
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
-func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, vmctx vm.Context, statedb *state.StateDB, config *TraceArgs) (interface{}, error) {
+func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, vmctx vm.Context, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
 	// Assemble the structured logger or the JavaScript tracer
 	var (
 		tracer vm.Tracer

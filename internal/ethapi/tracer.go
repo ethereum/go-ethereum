@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"reflect"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -38,6 +37,10 @@ const bigIntegerJS = `var bigInt=function(undefined){"use strict";var BASE=1e7,L
 
 // makeSlice convert an unsafe memory pointer with the given type into a Go byte
 // slice.
+//
+// Note, the returned slice uses the same memory area as the input arguments.
+// If those are duktape stack items, popping them off **will** make the slice
+// contents change.
 func makeSlice(ptr unsafe.Pointer, size uint) []byte {
 	var sl = struct {
 		addr uintptr
@@ -50,7 +53,7 @@ func makeSlice(ptr unsafe.Pointer, size uint) []byte {
 
 // popSlice pops a buffer off the JavaScript stack and returns it as a slice.
 func popSlice(ctx *duktape.Context) []byte {
-	blob := makeSlice(ctx.GetBuffer(-1))
+	blob := common.CopyBytes(makeSlice(ctx.GetBuffer(-1)))
 	ctx.Pop()
 	return blob
 }
@@ -292,9 +295,8 @@ type JavascriptTracer struct {
 	depthValue *uint   // Swappable depth value wrapped by a log accessor
 	errorValue *string // Swappable error value wrapped by a log accessor
 
-	ctx    map[string]interface{} // Transaction context gathered throughout execution
-	err    error                  // Error, if one has occurred
-	result interface{}            // Final result to return to the user
+	ctx map[string]interface{} // Transaction context gathered throughout execution
+	err error                  // Error, if one has occurred
 
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
@@ -319,28 +321,22 @@ func NewJavascriptTracer(code string) (*JavascriptTracer, error) {
 	}
 	// Set up builtins for this environment
 	tracer.vm.PushGlobalGoFunction("toHex", func(ctx *duktape.Context) int {
-		arg := makeSlice(ctx.GetBuffer(-1))
-		ctx.Pop()
-
-		ctx.PushString(hexutil.Encode(arg))
+		ctx.PushString(hexutil.Encode(popSlice(ctx)))
 		return 1
 	})
 	tracer.vm.PushGlobalGoFunction("toAddress", func(ctx *duktape.Context) int {
-		// Try interpreting the argument as a binary blob
-		ptr, size := ctx.GetBuffer(-1)
-		if ptr != nil {
-			ctx.Pop()
-			copy(makeSlice(ctx.PushFixedBuffer(20), 20), makeSlice(ptr, size))
-			return 1
+		var addr common.Address
+		if ptr, size := ctx.GetBuffer(-1); ptr != nil {
+			addr = common.BytesToAddress(makeSlice(ptr, size))
+		} else {
+			addr = common.HexToAddress(ctx.GetString(-1))
 		}
-		// Nope, not a binary blob, interpret as a hex string
-		addr := common.HexToAddress(ctx.GetString(-1))
 		ctx.Pop()
 		copy(makeSlice(ctx.PushFixedBuffer(20), 20), addr[:])
 		return 1
 	})
 	tracer.vm.PushGlobalGoFunction("isPrecompiled", func(ctx *duktape.Context) int {
-		_, ok := vm.PrecompiledContractsByzantium[common.BytesToAddress(makeSlice(ctx.GetBuffer(0)))]
+		_, ok := vm.PrecompiledContractsByzantium[common.BytesToAddress(popSlice(ctx))]
 		ctx.PushBoolean(ok)
 		return 1
 	})
@@ -353,6 +349,11 @@ func NewJavascriptTracer(code string) (*JavascriptTracer, error) {
 
 	if !tracer.vm.GetPropString(tracer.tracerObject, "step") {
 		return nil, fmt.Errorf("Trace object must expose a function step()")
+	}
+	tracer.vm.Pop()
+
+	if !tracer.vm.GetPropString(tracer.tracerObject, "fault") {
+		return nil, fmt.Errorf("Trace object must expose a function fault()")
 	}
 	tracer.vm.Pop()
 
@@ -402,7 +403,7 @@ func NewJavascriptTracer(code string) (*JavascriptTracer, error) {
 		}
 		return 1
 	})
-	tracer.vm.PutPropString(logObject, "error")
+	tracer.vm.PutPropString(logObject, "getError")
 
 	tracer.vm.PutPropString(tracer.stateObject, "log")
 
@@ -420,7 +421,7 @@ func (jst *JavascriptTracer) Stop(err error) {
 
 // call executes a method on a JS object, catching any errors, formatting and
 // returning them as error objects.
-func (jst *JavascriptTracer) call(method string, args ...string) (ret interface{}, err error) {
+func (jst *JavascriptTracer) call(method string, args ...string) (json.RawMessage, error) {
 	// Execute the JavaScript call and return any error
 	jst.vm.PushString(method)
 	for _, arg := range args {
@@ -434,17 +435,7 @@ func (jst *JavascriptTracer) call(method string, args ...string) (ret interface{
 		return nil, errors.New(err)
 	}
 	// No error occurred, extract return value and return
-	if jst.vm.IsUndefined(-1) {
-		return nil, nil
-	}
-	out := []byte(jst.vm.JsonEncode(-1))
-
-	for _, res := range []interface{}{new(bool), new(int), new(float64), new(string), new([]bool), new([]int), new([]float64), new([]string), new([]interface{}), new(map[string]interface{}), new(interface{})} {
-		if err := json.Unmarshal(out, res); err == nil {
-			return reflect.ValueOf(res).Elem().Interface(), nil
-		}
-	}
-	panic("failed to unmarshal result")
+	return json.RawMessage(jst.vm.JsonEncode(-1)), nil
 }
 
 func wrapError(context string, err error) error {
@@ -508,6 +499,22 @@ func (jst *JavascriptTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, 
 	return nil
 }
 
+// CaptureFault implements the Tracer interface to trace an execution fault
+// while running an opcode.
+func (jst *JavascriptTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
+	if jst.err == nil {
+		// Apart from the error, everything matches the previous invocation
+		jst.errorValue = new(string)
+		*jst.errorValue = err.Error()
+
+		_, err := jst.call("fault", "log", "db")
+		if err != nil {
+			jst.err = wrapError("fault", err)
+		}
+	}
+	return nil
+}
+
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (jst *JavascriptTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
 	jst.ctx["output"] = output
@@ -521,7 +528,7 @@ func (jst *JavascriptTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Du
 }
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
-func (jst *JavascriptTracer) GetResult() (result interface{}, err error) {
+func (jst *JavascriptTracer) GetResult() (json.RawMessage, error) {
 	// Transform the context into a JavaScript object and inject into the state
 	obj := jst.vm.PushObject()
 
@@ -552,7 +559,7 @@ func (jst *JavascriptTracer) GetResult() (result interface{}, err error) {
 	jst.vm.PutPropString(jst.stateObject, "ctx")
 
 	// Finalize the trace and return the results
-	jst.result, err = jst.call("result", "ctx", "db")
+	result, err := jst.call("result", "ctx", "db")
 	if err != nil {
 		jst.err = wrapError("result", err)
 	}
@@ -560,5 +567,5 @@ func (jst *JavascriptTracer) GetResult() (result interface{}, err error) {
 	jst.vm.DestroyHeap()
 	jst.vm.Destroy()
 
-	return jst.result, jst.err
+	return result, jst.err
 }

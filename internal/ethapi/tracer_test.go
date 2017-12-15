@@ -17,9 +17,10 @@
 package ethapi
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"math/big"
-	"reflect"
 	"testing"
 	"time"
 
@@ -42,7 +43,7 @@ func (account) ReturnGas(*big.Int)                                  {}
 func (account) SetCode(common.Hash, []byte)                         {}
 func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
 
-func runTrace(tracer *JavascriptTracer) (interface{}, error) {
+func runTrace(tracer *JavascriptTracer) (json.RawMessage, error) {
 	env := vm.NewEVM(vm.Context{BlockNumber: big.NewInt(1)}, nil, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 
 	contract := vm.NewContract(account{}, account{}, big.NewInt(0), 10000)
@@ -56,7 +57,7 @@ func runTrace(tracer *JavascriptTracer) (interface{}, error) {
 }
 
 func TestTracing(t *testing.T) {
-	tracer, err := NewJavascriptTracer("{count: 0, step: function() { this.count += 1; }, result: function() { return this.count; }}")
+	tracer, err := NewJavascriptTracer("{count: 0, step: function() { this.count += 1; }, fault: function() {}, result: function() { return this.count; }}")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,18 +66,13 @@ func TestTracing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	value, ok := ret.(int)
-	if !ok {
-		t.Errorf("Expected return value to be float64, was %T", ret)
-	}
-	if value != 3 {
-		t.Errorf("Expected return value to be 3, got %v", value)
+	if !bytes.Equal(ret, []byte("3")) {
+		t.Errorf("Expected return value to be 3, got %s", string(ret))
 	}
 }
 
 func TestStack(t *testing.T) {
-	tracer, err := NewJavascriptTracer("{depths: [], step: function(log) { this.depths.push(log.stack.length()); }, result: function() { return this.depths; }}")
+	tracer, err := NewJavascriptTracer("{depths: [], step: function(log) { this.depths.push(log.stack.length()); }, fault: function() {}, result: function() { return this.depths; }}")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,15 +81,13 @@ func TestStack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	expected := []int{0, 1, 2}
-	if !reflect.DeepEqual(ret, expected) {
-		t.Errorf("Expected return value to be %#v, got %#v", expected, ret)
+	if !bytes.Equal(ret, []byte("[0,1,2]")) {
+		t.Errorf("Expected return value to be [0,1,2], got %s", string(ret))
 	}
 }
 
 func TestOpcodes(t *testing.T) {
-	tracer, err := NewJavascriptTracer("{opcodes: [], step: function(log) { this.opcodes.push(log.op.toString()); }, result: function() { return this.opcodes; }}")
+	tracer, err := NewJavascriptTracer("{opcodes: [], step: function(log) { this.opcodes.push(log.op.toString()); }, fault: function() {}, result: function() { return this.opcodes; }}")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,10 +96,8 @@ func TestOpcodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	expected := []string{"PUSH1", "PUSH1", "STOP"}
-	if !reflect.DeepEqual(ret, expected) {
-		t.Errorf("Expected return value to be %#v, got %#v", expected, ret)
+	if !bytes.Equal(ret, []byte("[\"PUSH1\",\"PUSH1\",\"STOP\"]")) {
+		t.Errorf("Expected return value to be [\"PUSH1\",\"PUSH1\",\"STOP\"], got %s", string(ret))
 	}
 }
 
@@ -129,7 +121,7 @@ func TestHalt(t *testing.T) {
 }
 
 func TestHaltBetweenSteps(t *testing.T) {
-	tracer, err := NewJavascriptTracer("{step: function() {}, result: function() { return null; }}")
+	tracer, err := NewJavascriptTracer("{step: function() {}, fault: function() {}, result: function() { return null; }}")
 	if err != nil {
 		t.Fatal(err)
 	}
