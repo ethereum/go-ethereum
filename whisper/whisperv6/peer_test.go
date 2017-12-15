@@ -323,7 +323,9 @@ func powReqExchange(t *testing.T) {
 
 	const pow float64 = 7777777.0
 	nodes[0].shh.SetMinimumPoW(pow, true)
-	time.Sleep(5 * time.Millisecond)
+
+	// wait until all the messages are delivered
+	time.Sleep(64 * time.Millisecond)
 
 	cnt := 0
 	for i, node := range nodes {
