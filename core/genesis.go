@@ -159,7 +159,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 	if (stored == common.Hash{}) {
 		if genesis == nil {
 			log.Info("Writing default main-net genesis block")
-			genesis = DefaultGenesisBlock()
+			genesis = DefaultCallistoMainnetGenesisBlock()
 		} else {
 			log.Info("Writing custom genesis block")
 		}
@@ -315,6 +315,17 @@ func DefaultGenesisBlock() *Genesis {
 		GasLimit:   5000,
 		Difficulty: big.NewInt(17179869184),
 		Alloc:      decodePrealloc(mainnetAllocData),
+	}
+}
+
+// DefaultCallistoMainnetGenesisBlock
+func DefaultCallistoMainnetGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.CallistoMainnetChainConfig,
+		ExtraData:  hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		GasLimit:   8000000,
+		Difficulty: big.NewInt(4000000),
+		Alloc:      decodePrealloc(callistoMainnetAllocData),
 	}
 }
 
