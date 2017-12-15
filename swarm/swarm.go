@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"net"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -175,10 +176,10 @@ Start is called when the stack is started
 * TODO: start subservices like sword, swear, swarmdns
 */
 // implements the node.Service interface
-func (self *Swarm) Start(net *p2p.Server) error {
+func (self *Swarm) Start(srv *p2p.Server) error {
 
 	// update uaddr to correct enode
-	newaddr := self.bzz.UpdateLocalAddr([]byte(net.Self().String()))
+	newaddr := self.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
 	log.Warn("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%x", newaddr.UAddr))
 
 	// set chequebook
@@ -195,7 +196,7 @@ func (self *Swarm) Start(net *p2p.Server) error {
 
 	log.Warn(fmt.Sprintf("Starting Swarm service"))
 
-	err := self.bzz.Start(net)
+	err := self.bzz.Start(srv)
 	if err != nil {
 		log.Error("bzz failed", "err", err)
 		return err
@@ -203,7 +204,7 @@ func (self *Swarm) Start(net *p2p.Server) error {
 	log.Info(fmt.Sprintf("Swarm network started on bzz address: %x", self.bzz.Hive.Overlay.BaseAddr()))
 
 	if self.ps != nil {
-		self.ps.Start(net)
+		self.ps.Start(srv)
 		log.Info("Pss started")
 	}
 
@@ -212,7 +213,7 @@ func (self *Swarm) Start(net *p2p.Server) error {
 
 	// start swarm http proxy server
 	if self.config.Port != "" {
-		addr := ":" + self.config.Port
+		addr := net.JoinHostPort(self.config.ListenAddr, self.config.Port)
 		go httpapi.StartHttpServer(self.api, &httpapi.ServerConfig{
 			Addr:       addr,
 			CorsString: self.corsString,
@@ -232,7 +233,6 @@ func (self *Swarm) Start(net *p2p.Server) error {
 // stops all component services.
 func (self *Swarm) Stop() error {
 	self.dpa.Stop()
-	self.bzz.Stop()
 	if self.ps != nil {
 		self.ps.Stop()
 	}
@@ -245,7 +245,7 @@ func (self *Swarm) Stop() error {
 		self.lstore.DbStore.Close()
 	}
 	self.sfs.Stop()
-	return nil
+	return self.bzz.Stop()
 }
 
 // implements the node.Service interface
@@ -256,7 +256,6 @@ func (self *Swarm) Protocols() (protos []p2p.Protocol) {
 	}
 
 	if self.ps != nil {
-		log.Warn("adding pss protos")
 		for _, p := range self.ps.Protocols() {
 			protos = append(protos, p)
 		}
