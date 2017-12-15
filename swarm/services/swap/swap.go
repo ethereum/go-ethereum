@@ -80,17 +80,10 @@ type PayProfile struct {
 	lock        sync.RWMutex
 }
 
-func DefaultSwapParams(contract common.Address, prvkey *ecdsa.PrivateKey) *SwapParams {
-	pubkey := &prvkey.PublicKey
+//create params with default values
+func NewDefaultSwapParams() *SwapParams {
 	return &SwapParams{
-		PayProfile: &PayProfile{
-			PublicKey:   common.ToHex(crypto.FromECDSAPub(pubkey)),
-			Contract:    contract,
-			Beneficiary: crypto.PubkeyToAddress(*pubkey),
-			privateKey:  prvkey,
-			publicKey:   pubkey,
-			owner:       crypto.PubkeyToAddress(*pubkey),
-		},
+		PayProfile: &PayProfile{},
 		Params: &swap.Params{
 			Profile: &swap.Profile{
 				BuyAt:  buyAt,
@@ -106,6 +99,21 @@ func DefaultSwapParams(contract common.Address, prvkey *ecdsa.PrivateKey) *SwapP
 				AutoDepositBuffer:    autoDepositBuffer,
 			},
 		},
+	}
+}
+
+//this can only finally be set after all config options (file, cmd line, env vars)
+//have been evaluated
+func (self *SwapParams) Init(contract common.Address, prvkey *ecdsa.PrivateKey) {
+	pubkey := &prvkey.PublicKey
+
+	self.PayProfile = &PayProfile{
+		PublicKey:   common.ToHex(crypto.FromECDSAPub(pubkey)),
+		Contract:    contract,
+		Beneficiary: crypto.PubkeyToAddress(*pubkey),
+		privateKey:  prvkey,
+		publicKey:   pubkey,
+		owner:       crypto.PubkeyToAddress(*pubkey),
 	}
 }
 

@@ -746,6 +746,12 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	if err != nil || index < 0 {
 		return accounts.Account{}, fmt.Errorf("invalid account address or index %q", account)
 	}
+	log.Warn("-------------------------------------------------------------------")
+	log.Warn("Referring to accounts by order in the keystore folder is dangerous!")
+	log.Warn("This functionality is deprecated and will be removed in the future!")
+	log.Warn("Please use explicit addresses! (can search via `geth account list`)")
+	log.Warn("-------------------------------------------------------------------")
+
 	accs := ks.Accounts()
 	if len(accs) <= index {
 		return accounts.Account{}, fmt.Errorf("index %d higher than number of accounts %d", index, len(accs))
@@ -762,15 +768,6 @@ func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *eth.Config) {
 			Fatalf("Option %q: %v", EtherbaseFlag.Name, err)
 		}
 		cfg.Etherbase = account.Address
-		return
-	}
-	accounts := ks.Accounts()
-	if (cfg.Etherbase == common.Address{}) {
-		if len(accounts) > 0 {
-			cfg.Etherbase = accounts[0].Address
-		} else {
-			log.Warn("No etherbase set and no accounts found as default")
-		}
 	}
 }
 

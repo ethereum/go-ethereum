@@ -77,7 +77,7 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 
 	key, err = chunker.Split(data, size, chunkC, swg, nil)
 	if err != nil && expectedError == nil {
-		err = errors.New(fmt.Sprintf("Split error: %v", err))
+		err = fmt.Errorf("Split error: %v", err)
 	}
 
 	if chunkC != nil {
@@ -123,7 +123,7 @@ func (self *chunkerTester) Append(chunker Splitter, rootKey Key, data io.Reader,
 
 	key, err = chunker.Append(rootKey, data, chunkC, swg, nil)
 	if err != nil && expectedError == nil {
-		err = errors.New(fmt.Sprintf("Append error: %v", err))
+		err = fmt.Errorf("Append error: %v", err)
 	}
 
 	if chunkC != nil {

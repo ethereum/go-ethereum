@@ -80,8 +80,7 @@ func TestWhisperBasic(t *testing.T) {
 		t.Fatalf("failed w.Messages.")
 	}
 
-	var derived []byte
-	derived = pbkdf2.Key([]byte(peerID), nil, 65356, aesKeyLength, sha256.New)
+	derived := pbkdf2.Key([]byte(peerID), nil, 65356, aesKeyLength, sha256.New)
 	if !validateSymmetricKey(derived) {
 		t.Fatalf("failed validateSymmetricKey with param = %v.", derived)
 	}

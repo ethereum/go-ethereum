@@ -124,6 +124,10 @@ func (msg *sentMessage) appendPadding(params *MessageParams) error {
 	if params.Src != nil {
 		rawSize += signatureLength
 	}
+
+	if params.KeySym != nil {
+		rawSize += AESNonceLength
+	}
 	odd := rawSize % padSizeLimit
 
 	if len(params.Padding) != 0 {

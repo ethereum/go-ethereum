@@ -26,7 +26,7 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/common"
 	"github.com/EthereumCommonwealth/go-callisto/core"
 	"github.com/EthereumCommonwealth/go-callisto/ethdb"
-	"github.com/EthereumCommonwealth/go-callisto/params"
+	//"github.com/EthereumCommonwealth/go-callisto/params"
 )
 
 // Genesis block for nodes which don't care about the DAO fork (i.e. not configured)
@@ -89,7 +89,7 @@ func TestDAOForkBlockNewChain(t *testing.T) {
 		expectVote  bool
 	}{
 		// Test DAO Default Mainnet
-		{"", params.MainnetChainConfig.DAOForkBlock, true},
+		//{"", params.MainnetChainConfig.DAOForkBlock, true},
 		// test DAO Init Old Privnet
 		{daoOldGenesis, nil, false},
 		// test DAO Default No Fork Privnet

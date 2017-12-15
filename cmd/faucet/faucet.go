@@ -506,7 +506,7 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 
 		// Send an error if too frequent funding, othewise a success
 		if !fund {
-			if err = sendError(conn, fmt.Errorf("%s left until next allowance", common.PrettyDuration(timeout.Sub(time.Now())))); err != nil {
+			if err = sendError(conn, fmt.Errorf("%s left until next allowance", common.PrettyDuration(timeout.Sub(time.Now())))); err != nil { // nolint: gosimple
 				log.Warn("Failed to send funding error to client", "err", err)
 				return
 			}

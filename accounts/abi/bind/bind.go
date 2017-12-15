@@ -129,7 +129,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 		return string(code), nil
 	}
 	// For all others just return as is for now
-	return string(buffer.Bytes()), nil
+	return buffer.String(), nil
 }
 
 // bindType is a set of type binders that convert Solidity types to some supported

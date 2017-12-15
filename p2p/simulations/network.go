@@ -403,9 +403,8 @@ func (self *Network) getNodeByName(name string) *Node {
 func (self *Network) GetNodes() (nodes []*Node) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	for _, node := range self.Nodes {
-		nodes = append(nodes, node)
-	}
+
+	nodes = append(nodes, self.Nodes...)
 	return nodes
 }
 
@@ -477,7 +476,7 @@ func (self *Network) InitConn(oneID, otherID discover.NodeID) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	if time.Now().Sub(conn.initiated) < dialBanTimeout {
+	if time.Since(conn.initiated) < dialBanTimeout {
 		return nil, fmt.Errorf("connection between %v and %v recently attempted", oneID, otherID)
 	}
 	if conn.Up {
@@ -500,6 +499,20 @@ func (self *Network) Shutdown() {
 		}
 	}
 	close(self.quitc)
+}
+
+//Reset resets all network properties:
+//emtpies the nodes and the connection list
+func (self *Network) Reset() {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
+	//re-initialize the maps
+	self.connMap = make(map[string]int)
+	self.nodeMap = make(map[discover.NodeID]int)
+
+	self.Nodes = nil
+	self.Conns = nil
 }
 
 // Node is a wrapper around adapters.Node which is used to track the status
@@ -665,6 +678,12 @@ func (self *Network) Load(snap *Snapshot) error {
 		}
 	}
 	for _, conn := range snap.Conns {
+
+		if !self.GetNode(conn.One).Up || !self.GetNode(conn.Other).Up {
+			//in this case, at least one of the nodes of a connection is not up,
+			//so it would result in the snapshot `Load` to fail
+			continue
+		}
 		if err := self.Connect(conn.One, conn.Other); err != nil {
 			return err
 		}
