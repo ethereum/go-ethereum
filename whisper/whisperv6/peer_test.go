@@ -156,12 +156,17 @@ func initialize(t *testing.T) {
 			},
 		}
 
-		err = node.server.Start()
-		if err != nil {
-			t.Fatalf("failed to start server %d.", i)
-		}
-
 		nodes[i] = &node
+	}
+
+	for i := 1; i < NumNodes; i++ {
+		go nodes[i].server.Start()
+	}
+
+	// we need to wait until the first node actually starts
+	err = nodes[0].server.Start()
+	if err != nil {
+		t.Fatalf("failed to start the fisrt server.")
 	}
 }
 
