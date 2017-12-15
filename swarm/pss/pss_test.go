@@ -627,6 +627,7 @@ func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubke
 // nodes/msgs/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork(t *testing.T) {
+	t.Skip("skip until proper local benchmark values for stress testing can be determined")
 	t.Run("3/2000/4/sock", testNetwork)
 	t.Run("4/2000/4/sock", testNetwork)
 	t.Run("8/2000/4/sock", testNetwork)
