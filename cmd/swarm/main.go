@@ -419,6 +419,12 @@ func bzzd(ctx *cli.Context) error {
 	}
 
 	cfg := defaultNodeConfig
+
+	//pss operates on ws
+	if bzzconfig.PssEnabled {
+		cfg.WSModules = append(cfg.WSModules, "pss")
+	}
+
 	//geth only supports --datadir via command line
 	//in order to be consistent within swarm, if we pass --datadir via environment variable
 	//or via config file, we get the same directory for geth and swarm
