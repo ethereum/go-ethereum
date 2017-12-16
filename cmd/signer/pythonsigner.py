@@ -49,7 +49,7 @@ def ApproveTx(transaction = None, fromaccount = None, call_info = None, meta = N
     """
     Example request:
     
-    {"jsonrpc":"2.0","method":"ApproveTx","params":{"transaction":{"to":null,"gas":null,"gasPrice":null,"value":null,"data":"0x","nonce":null},"from":"0x0000000000000000000000000000000000000000","call_info":null,"meta":{"remote":"signer binary","local":"main","scheme":"in-proc"}},"id":2}
+    {"jsonrpc":"2.0","method":"ApproveTx","params":{"transaction":{"to":null,"gas":null,"gasPrice":null,"value":null,"data":"0x","nonce":null},"fromaccount":"0x0000000000000000000000000000000000000000","call_info":null,"meta":{"remote":"signer binary","local":"main","scheme":"in-proc"}},"id":2}
 
     :param transaction: transaction info
     :param call_info: info abou the call, e.g. if ABI info could not be
@@ -59,7 +59,7 @@ def ApproveTx(transaction = None, fromaccount = None, call_info = None, meta = N
     return {
         "approved" : False,
         "transaction" : None,
-        "fromaccount" : fromaccount,
+#        "fromaccount" : fromaccount,
         "password" : None,
     }
 

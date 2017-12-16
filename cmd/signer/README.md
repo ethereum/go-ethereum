@@ -404,16 +404,10 @@ Some snags and todos
 checksum, since the addresses are common.Address, and not String. This should be changed upstream,
 so that they are some more complex form with both common.Address and the original string (?)
 
-* The JSON communication relies on an external library, which has not been vendored in. We could probably
-reuse the jsoncodec by adding some fields for clientcodec, but it's a bit messy.
 
 * The audit-log perhaps leave some things to be desired. I have not found a perfect way to save an audit log of events.
 
 * Some more fields should be added to calldata, e.g http-header `Origin`.
-
-* The signer should also generate the identicon for the addresses, and pass to the UI as a base64 string.
-    * based on https://github.com/ethereum/blockies
-    * Maybe actually need to be in the UI, at least in UI:s allowing the user to change the address
 
 * The signer should take a startup param "--no-change", for UI:s that do not contain the capability
    to perform changes to things, only approve/deny. Such a UI should be able to start the signer in
@@ -438,4 +432,13 @@ invoking methods with the following info:
 * The signer should pass the `Origin` header as call-info to the UI. As of right now, the way that info about the request is
 put together is a bit of a hack into the http server. This could probably be greatly improved
 
-* The signer
+* Geth relay
+    - Geth should be started in `geth --external_signer localhost:8550`.
+
+* Wallets / accounts. Add API methods for wallets.
+
+* Rules. In the future, it should be possible to specify rules, e.g. "Allow sending up to 1 eth per day to contract Y". Two problems:
+   * There needs to be a very good structure around rules. Either a full language (lua/js) or a limited but flexible syntax based on e.g. json/yaml. Kind of like a firewall ruleset.
+   * This implies that the signer would remember passwords, which is very problematic. However, a good UI implementation will want these things,
+   and it would be better to implement it once in the signer, than having UI:s develop their own remember-password logic.
+  

@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"os"
 )
 
 var (
@@ -171,11 +172,53 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 		return DialHTTP(rawurl)
 	case "ws", "wss":
 		return DialWebsocket(ctx, rawurl, "")
+	case "stdio":
+		return DialStdIO(ctx)
 	case "":
 		return DialIPC(ctx, rawurl)
 	default:
 		return nil, fmt.Errorf("no known transport for URL scheme %q", u.Scheme)
 	}
+}
+
+type StdIOConn struct{}
+
+func (io StdIOConn) Read(b []byte) (n int, err error) {
+	return os.Stdin.Read(b)
+}
+
+func (io StdIOConn) Write(b []byte) (n int, err error) {
+	return os.Stdout.Write(b)
+}
+
+func (io StdIOConn) Close() error {
+	return nil
+}
+
+func (io StdIOConn) LocalAddr() net.Addr {
+	return &net.UnixAddr{Name: "stdio", Net: "stdio"}
+}
+
+func (io StdIOConn) RemoteAddr() net.Addr {
+	return &net.UnixAddr{Name: "stdio", Net: "stdio"}
+}
+
+func (io StdIOConn) SetDeadline(t time.Time) error {
+	return &net.OpError{Op: "set", Net: "stdio", Source: nil, Addr: nil, Err: errors.New("deadline not supported")}
+}
+
+func (io StdIOConn) SetReadDeadline(t time.Time) error {
+	return &net.OpError{Op: "set", Net: "stdio", Source: nil, Addr: nil, Err: errors.New("deadline not supported")}
+}
+
+func (io StdIOConn) SetWriteDeadline(t time.Time) error {
+	return &net.OpError{Op: "set", Net: "stdio", Source: nil, Addr: nil, Err: errors.New("deadline not supported")}
+}
+func DialStdIO(ctx context.Context) (*Client, error) {
+
+	return newClient(ctx, func(_ context.Context) (net.Conn, error) {
+		return StdIOConn{}, nil
+	})
 }
 
 func newClient(initctx context.Context, connectFunc func(context.Context) (net.Conn, error)) (*Client, error) {

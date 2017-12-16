@@ -18,26 +18,32 @@
 package main
 
 import (
-	"bufio"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/powerman/rpc-codec/jsonrpc2"
+
+	"github.com/ethereum/go-ethereum/rpc"
 	"io"
 	"os"
 	"sync"
+
+	"context"
 )
 
 type StdIOUI struct {
-	client *jsonrpc2.Client
+	//client *jsonrpc2.Client
+	client rpc.Client
 	//	codec  rpc.ClientCodec
 	mu sync.Mutex
 }
 
 func NewStdIOUI() *StdIOUI {
-	in, out := bufio.NewReader(os.Stdin), os.Stdout
+	//	in, out := bufio.NewReader(os.Stdin), os.Stdout
+	client, err := rpc.DialContext(context.Background(), "stdio://")
+	if err != nil {
+		log.Crit("Could not create stdio client", "err", err)
+	}
+	return &StdIOUI{client: *client}
+	//return &StdIOUI{client: jsonrpc2.NewClient(&rwc{in, out})}
 
-	//codec := rpc2.NewJSONCodec()
-	return &StdIOUI{client: jsonrpc2.NewClient(&rwc{in, out})}
-	//return &StdIOUI{}
 }
 
 func (ui StdIOUI) dispatch(serviceMethod string, args interface{}, reply interface{}) error {
@@ -50,10 +56,12 @@ func (ui StdIOUI) dispatch(serviceMethod string, args interface{}, reply interfa
 	//	in, out := bufio.NewReader(os.Stdin), os.Stdout
 	//	codec := jsonrpc.NewClientCodec(&rwc{in, out})
 
-	//	c := rpc.NewClientWithCodec(codec)
+	// c := rpc.NewClientWithCodec(codec)
 	//	return c.Call(serviceMethod, args, &reply)
-
-	err := ui.client.Call(serviceMethod, args, &reply)
+	log.Info("Writing to client")
+	err := ui.client.Call(&reply, serviceMethod, args)
+	log.Info("Writing to client done")
+	//	err := ui.client.Call(serviceMethod, args, &reply)
 	if err != nil {
 		log.Info("Error", "exc", err.Error())
 	}
