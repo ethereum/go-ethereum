@@ -21,10 +21,11 @@ import (
 	"os"
 	"strings"
 
+	"sync"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/crypto/ssh/terminal"
-	"sync"
 )
 
 type CommandlineUI struct {
@@ -98,13 +99,16 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
 	weival := request.Transaction.Value.ToInt()
-	toval := ""
-	if request.Transaction.To != nil {
-		toval = request.Transaction.To.Hex()
-	}
 	fmt.Printf("--------- Transaction request-------------\n")
-	fmt.Printf("to:    %v\n", toval)
-	fmt.Printf("from:  %v\n", request.From.Hex())
+	if to := request.Transaction.To; to != nil {
+		fmt.Printf("to:    %v\n", to.Original())
+		if !to.ValidChecksum() {
+			fmt.Printf("\nWARNING: Invalid checksum on to-address!\n\n")
+		}
+	} else {
+		fmt.Printf("to:    <contact creation>\n")
+	}
+	fmt.Printf("from:  %v\n", request.From.String())
 	fmt.Printf("value: %v wei\n", weival)
 	if len(request.Transaction.Data) > 0 {
 		fmt.Printf("data:  %v\n", common.Bytes2Hex(request.Transaction.Data))

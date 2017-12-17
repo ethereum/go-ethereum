@@ -20,10 +20,9 @@ package main
 import (
 	"github.com/ethereum/go-ethereum/log"
 
-	"github.com/ethereum/go-ethereum/rpc"
-	"io"
-	"os"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/rpc"
 
 	"context"
 )
@@ -36,47 +35,33 @@ type StdIOUI struct {
 }
 
 func NewStdIOUI() *StdIOUI {
+	log.Info("NewStdIOUI")
 	//	in, out := bufio.NewReader(os.Stdin), os.Stdout
 	client, err := rpc.DialContext(context.Background(), "stdio://")
 	if err != nil {
 		log.Crit("Could not create stdio client", "err", err)
 	}
 	return &StdIOUI{client: *client}
-	//return &StdIOUI{client: jsonrpc2.NewClient(&rwc{in, out})}
-
 }
 
-func (ui StdIOUI) dispatch(serviceMethod string, args interface{}, reply interface{}) error {
-
-	//	ui.mu.Lock()
-	//	defer ui.mu.Unlock()
-	//This is not synchronized, which should not be necssary. Ideally, the UI should be able
-	// to get requests and send responses out-of-order -- thus the rpc has an ID.
-
-	//	in, out := bufio.NewReader(os.Stdin), os.Stdout
-	//	codec := jsonrpc.NewClientCodec(&rwc{in, out})
-
-	// c := rpc.NewClientWithCodec(codec)
-	//	return c.Call(serviceMethod, args, &reply)
-	log.Info("Writing to client")
+// dispatch sends a request over the stdio
+func (ui *StdIOUI) dispatch(serviceMethod string, args interface{}, reply interface{}) error {
 	err := ui.client.Call(&reply, serviceMethod, args)
-	log.Info("Writing to client done")
-	//	err := ui.client.Call(serviceMethod, args, &reply)
 	if err != nil {
 		log.Info("Error", "exc", err.Error())
 	}
 	return err
 }
 
-func (ui StdIOUI) ApproveTx(request *SignTxRequest) (SignTxResponse, error) {
-	result := SignTxResponse{}
+func (ui *StdIOUI) ApproveTx(request *SignTxRequest) (SignTxResponse, error) {
+	var result SignTxResponse
 	if err := ui.dispatch("ApproveTx", request, &result); err != nil {
 		return result, err
 	}
 	return result, nil
 }
 
-func (ui StdIOUI) ApproveSignData(request *SignDataRequest) (SignDataResponse, error) {
+func (ui *StdIOUI) ApproveSignData(request *SignDataRequest) (SignDataResponse, error) {
 	var result SignDataResponse
 	if err := ui.dispatch("ApproveSignData", request, &result); err != nil {
 		return result, err
@@ -84,7 +69,7 @@ func (ui StdIOUI) ApproveSignData(request *SignDataRequest) (SignDataResponse, e
 	return result, nil
 }
 
-func (ui StdIOUI) ApproveExport(request *ExportRequest) (ExportResponse, error) {
+func (ui *StdIOUI) ApproveExport(request *ExportRequest) (ExportResponse, error) {
 	var result ExportResponse
 	if err := ui.dispatch("ApproveExport", request, &result); err != nil {
 		return result, err
@@ -92,7 +77,7 @@ func (ui StdIOUI) ApproveExport(request *ExportRequest) (ExportResponse, error) 
 	return result, nil
 }
 
-func (ui StdIOUI) ApproveImport(request *ImportRequest) (ImportResponse, error) {
+func (ui *StdIOUI) ApproveImport(request *ImportRequest) (ImportResponse, error) {
 	var result ImportResponse
 	if err := ui.dispatch("ApproveImport", request, &result); err != nil {
 		return result, err
@@ -100,7 +85,7 @@ func (ui StdIOUI) ApproveImport(request *ImportRequest) (ImportResponse, error) 
 	return result, nil
 }
 
-func (ui StdIOUI) ApproveListing(request *ListRequest) (ListResponse, error) {
+func (ui *StdIOUI) ApproveListing(request *ListRequest) (ListResponse, error) {
 	var result ListResponse
 	if err := ui.dispatch("ApproveListing", request, &result); err != nil {
 		return result, err
@@ -108,7 +93,7 @@ func (ui StdIOUI) ApproveListing(request *ListRequest) (ListResponse, error) {
 	return result, nil
 }
 
-func (ui StdIOUI) ApproveNewAccount(request *NewAccountRequest) (NewAccountResponse, error) {
+func (ui *StdIOUI) ApproveNewAccount(request *NewAccountRequest) (NewAccountResponse, error) {
 	var result NewAccountResponse
 	if err := ui.dispatch("ApproveNewAccount", request, &result); err != nil {
 		return result, err
@@ -116,29 +101,16 @@ func (ui StdIOUI) ApproveNewAccount(request *NewAccountRequest) (NewAccountRespo
 	return result, nil
 }
 
-func (ui StdIOUI) ShowError(message string) {
+func (ui *StdIOUI) ShowError(message string) {
 	err := ui.dispatch("ShowError", &Message{message}, nil)
 	if err != nil {
 		log.Info("Error calling 'ShowError'", "exc", err.Error(), "msg", message)
 	}
 }
 
-func (ui StdIOUI) ShowInfo(message string) {
+func (ui *StdIOUI) ShowInfo(message string) {
 	err := ui.dispatch("ShowInfo", Message{message}, nil)
 	if err != nil {
 		log.Info("Error calling 'ShowInfo'", "exc", err.Error(), "msg", message)
 	}
-}
-
-type rwc struct {
-	io.Reader
-	io.Writer
-}
-
-func (r *rwc) Close() error {
-	if err := os.Stdin.Close(); err != nil {
-		return err
-	}
-	return os.Stdout.Close()
-	//return nil
 }

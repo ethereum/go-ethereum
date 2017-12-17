@@ -386,6 +386,8 @@ A UI should conform to the following rules.
 * A UI MUST NOT load any external resources that were not embedded/part of the UI package.
   * For example, not load icons, stylesheets from the internet
   * Not load files from the filesystem, unless they reside in the same local directory (e.g. config files)
+* A Graphical UI MUST show the blocky-identicon for ethereum addresses.
+* A UI MUST warn display approproate warning if the destination-account is formatted with invalid checksum.
 * A UI MUST NOT open any ports or services
   * The signer opens the public port
 * A UI SHOULD verify the permissions on the signer binary, and refuse to execute or warn if permissions allow non-user write.
@@ -400,14 +402,7 @@ along with the UI.
 
 Some snags and todos
 
-* Currently, the API does not make it possible for the signer to forward data about the
-checksum, since the addresses are common.Address, and not String. This should be changed upstream,
-so that they are some more complex form with both common.Address and the original string (?)
-
-
 * The audit-log perhaps leave some things to be desired. I have not found a perfect way to save an audit log of events.
-
-* Some more fields should be added to calldata, e.g http-header `Origin`.
 
 * The signer should take a startup param "--no-change", for UI:s that do not contain the capability
    to perform changes to things, only approve/deny. Such a UI should be able to start the signer in
@@ -434,6 +429,11 @@ put together is a bit of a hack into the http server. This could probably be gre
 
 * Geth relay
     - Geth should be started in `geth --external_signer localhost:8550`.
+* Geth checksum
+  - Currently, the Geth API:s use `common.Address` in the arguments to transaction submission (e.g `to` field). This
+  type is 20 `bytes`, and is incapable of carrying checksum information. The signer uses `common.MixedcaseAddress`, which
+  retains the original input.
+  - The Geth api should switch to use the same type, and relay `to`-account verbatim to the external api.
 
 * Wallets / accounts. Add API methods for wallets.
 
@@ -441,4 +441,4 @@ put together is a bit of a hack into the http server. This could probably be gre
    * There needs to be a very good structure around rules. Either a full language (lua/js) or a limited but flexible syntax based on e.g. json/yaml. Kind of like a firewall ruleset.
    * This implies that the signer would remember passwords, which is very problematic. However, a good UI implementation will want these things,
    and it would be better to implement it once in the signer, than having UI:s develop their own remember-password logic.
-  
+

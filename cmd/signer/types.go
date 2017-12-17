@@ -18,10 +18,11 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"strings"
 )
 
 type Accounts []Account
@@ -50,12 +51,12 @@ func (a Account) String() string {
 
 // TransactionArg represents a Transaction for the signer.
 type TransactionArg struct {
-	To       *common.Address `json:"to"`
-	Gas      *hexutil.Big    `json:"gas"`
-	GasPrice *hexutil.Big    `json:"gasPrice"`
-	Value    *hexutil.Big    `json:"value"`
-	Data     hexutil.Bytes   `json:"data"`
-	Nonce    *hexutil.Uint64 `json:"nonce"`
+	To       *common.MixedcaseAddress `json:"to"`
+	Gas      *hexutil.Big             `json:"gas"`
+	GasPrice *hexutil.Big             `json:"gasPrice"`
+	Value    *hexutil.Big             `json:"value"`
+	Data     hexutil.Bytes            `json:"data"`
+	Nonce    *hexutil.Uint64          `json:"nonce"`
 }
 
 func (t TransactionArg) String() string {

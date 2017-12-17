@@ -26,6 +26,7 @@ import (
 
 	"context"
 	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -33,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
-	"io"
 )
 
 func main() {
@@ -96,19 +96,20 @@ func main() {
 	app.Action = func(c *cli.Context) error {
 
 		var (
-			ui        SignerUI
-			logOutput io.Writer
+			ui SignerUI
 		)
-
+		// Set up the logger to print everything
+		logOutput := os.Stdout
 		if c.Bool("stdio-ui") {
 			logOutput = os.Stderr
+		}
+		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int("loglevel")), log.StreamHandler(logOutput, log.TerminalFormat(true))))
+
+		if c.Bool("stdio-ui") {
 			ui = NewStdIOUI()
 		} else {
 			ui = NewCommandlineUI()
-			logOutput = os.Stdout
 		}
-		// Set up the logger to print everything
-		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int("loglevel")), log.StreamHandler(logOutput, log.TerminalFormat(true))))
 		if c.Bool("stdio-ui") {
 			log.Info("Using stdin/stdout as UI-channel")
 		}
@@ -190,9 +191,9 @@ func testExternalUI(api *SignerAPI) {
 	}
 	var err error
 
-	_, err = api.SignTransaction(ctx, common.Address{}, TransactionArg{}, nil)
+	_, err = api.SignTransaction(ctx, common.MixedcaseAddress{}, TransactionArg{}, nil)
 	checkErr("SignTransaction", err)
-	_, err = api.Sign(ctx, common.Address{}, common.Hex2Bytes("01020304"))
+	_, err = api.Sign(ctx, common.MixedcaseAddress{}, common.Hex2Bytes("01020304"))
 	checkErr("Sign", err)
 	_, err = api.List(ctx)
 	checkErr("List", err)

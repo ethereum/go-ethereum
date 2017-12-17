@@ -3,9 +3,10 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/ethereum/go-ethereum/rpc"
 	"io"
 	"time"
+
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type AuditLogger struct {

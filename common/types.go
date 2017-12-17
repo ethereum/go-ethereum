@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"reflect"
 
+	"encoding/json"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
@@ -239,4 +240,57 @@ func (a *UnprefixedAddress) UnmarshalText(input []byte) error {
 // MarshalText encodes the address as hex.
 func (a UnprefixedAddress) MarshalText() ([]byte, error) {
 	return []byte(hex.EncodeToString(a[:])), nil
+}
+
+// MixedcaseAddress retains the original string, which may or may not be
+// correctly checksummed
+//
+// TODO! Should we really keep both addr and original, or _only_ original, and
+// always calculate addr on the fly? That would reduce the possibilities for errors
+// if some caller modifies the original at some point. NB: If we do so, we should still
+// parse the addr in UnmarshalJSON to ensure that the format is correct, e.g. correct size and
+// hex-encoded and such
+type MixedcaseAddress struct {
+	addr     Address
+	original string
+}
+// NewMixedcaseAddress constructor (mainly for testing)
+func NewMixedcaseAddress(addr Address) MixedcaseAddress {
+	return MixedcaseAddress{addr: addr, original: addr.Hex()}
+}
+
+// UnmarshalJSON parses MixedcaseAddress
+func (ma *MixedcaseAddress) UnmarshalJSON(input []byte) error {
+	if err := hexutil.UnmarshalFixedJSON(addressT, input, ma.addr[:]); err != nil {
+		return err
+	}
+	return json.Unmarshal(input, &ma.original)
+}
+
+// MarshalJSON marshals the original value
+func (ma *MixedcaseAddress) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ma.original)
+}
+
+// Address returns the address
+func (ma *MixedcaseAddress) Address() Address {
+	return ma.addr
+}
+
+// String implements fmt.Stringer
+func (ma *MixedcaseAddress) String() string {
+	if ma.ValidChecksum() {
+		return fmt.Sprintf("%s [chksum ok]", ma.original)
+	}
+	return fmt.Sprintf("%s [chksum INVALID]", ma.original)
+}
+
+// ValidChecksum returns true if the address has valid checksum
+func (ma *MixedcaseAddress) ValidChecksum() bool {
+	return ma.original == ma.addr.Hex()
+}
+
+// Original returns the mixed-case input string
+func (ma *MixedcaseAddress) Original() string {
+	return ma.original
 }

@@ -4,18 +4,19 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 //Used for testing
@@ -198,7 +199,7 @@ func TestSignData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := list[0].Address
+	a := common.NewMixedcaseAddress(list[0].Address)
 
 	control <- "Y"
 	control <- "wrongpassword"
@@ -231,7 +232,7 @@ func TestSignData(t *testing.T) {
 	}
 }
 func mkTestTx() TransactionArg {
-	to := common.HexToAddress("0x1337")
+	to := common.NewMixedcaseAddress(common.HexToAddress("0x1337"))
 	gas := (*hexutil.Big)(big.NewInt(21000))
 	gasPrice := (*hexutil.Big)(big.NewInt(2000000000))
 	value := (*hexutil.Big)(big.NewInt(1e18))
@@ -262,7 +263,7 @@ func TestSignTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := list[0].Address
+	a := common.NewMixedcaseAddress(list[0].Address)
 
 	methodSig := "test(uint)"
 	tx := mkTestTx()

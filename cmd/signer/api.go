@@ -25,6 +25,7 @@ import (
 	"math/big"
 
 	"bytes"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
@@ -54,18 +55,18 @@ type Metadata struct {
 type (
 	// SignTxRequest contains info about a Transaction to sign
 	SignTxRequest struct {
-		Transaction TransactionArg `json:"transaction"`
-		From        common.Address `json:"fromaccount"`
-		Callinfo    string         `json:"call_info"`
-		Meta        Metadata       `json:"meta"`
+		Transaction TransactionArg          `json:"transaction"`
+		From        common.MixedcaseAddress `json:"fromaccount"`
+		Callinfo    string                  `json:"call_info"`
+		Meta        Metadata                `json:"meta"`
 	}
 	// SignTxResponse result from SignTxRequest
 	SignTxResponse struct {
 		//The UI may make changes to the TX
-		Transaction TransactionArg `json:"transaction"`
-		From        common.Address `json:"fromaccount"`
-		Approved    bool   `json:"approved"`
-		Password    string `json:"password"`
+		Transaction TransactionArg          `json:"transaction"`
+		From        common.MixedcaseAddress `json:"fromaccount"`
+		Approved    bool                    `json:"approved"`
+		Password    string                  `json:"password"`
 	}
 	// ExportRequest info about query to export accounts
 	ExportRequest struct {
@@ -86,11 +87,11 @@ type (
 		NewPassword string `json:"new_password"`
 	}
 	SignDataRequest struct {
-		Address common.Address `json:"address"`
-		Rawdata hexutil.Bytes  `json:"raw_data"`
-		Message string         `json:"message"`
-		Hash    hexutil.Bytes  `json:"hash"`
-		Meta    Metadata       `json:"meta"`
+		Address common.MixedcaseAddress `json:"address"`
+		Rawdata hexutil.Bytes           `json:"raw_data"`
+		Message string                  `json:"message"`
+		Hash    hexutil.Bytes           `json:"hash"`
+		Meta    Metadata                `json:"meta"`
 	}
 	SignDataResponse struct {
 		Approved bool `json:"approved"`
@@ -111,7 +112,7 @@ type (
 		Accounts []Account `json:"accounts"`
 	}
 	Message struct {
-		Message string `json:"message"`
+		Text string `json:"text"`
 	}
 )
 
@@ -246,7 +247,7 @@ func toTransaction(args *TransactionArg) *types.Transaction {
 	if args.To == nil {
 		return types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
 	} else {
-		return types.NewTransaction(uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
+		return types.NewTransaction(uint64(*args.Nonce), args.To.Address(), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
 	}
 }
 
@@ -260,10 +261,8 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 		log.Info("Sender-account changed by UI", "was", f0, "is", f1)
 	}
 	if t0, t1 := original.Transaction.To, new.Transaction.To; t0 != t1 {
-		if t0 == nil || t1 == nil || !bytes.Equal(t0.Bytes(), t1.Bytes()) {
-			log.Info("Recipient-account changed by UI", "was", t0, "is", t1)
-			modified = true
-		}
+		log.Info("Recipient-account changed by UI", "was", t0, "is", t1)
+		modified = true
 	}
 	if g0, g1 := (*big.Int)(original.Transaction.Gas), (*big.Int)(new.Transaction.Gas); g0 != g1 {
 		if g0 == nil || g1 == nil || g0.Cmp(g1) != 0 {
@@ -299,7 +298,7 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 
 // SignTransaction signs the given Transaction and returns it in an RLP encoded form
 // that can be posted to `eth_sendRawTransaction`.
-func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, args TransactionArg, methodSelector *string) (hexutil.Bytes, error) {
+func (api *SignerAPI) SignTransaction(ctx context.Context, from common.MixedcaseAddress, args TransactionArg, methodSelector *string) (hexutil.Bytes, error) {
 
 	var (
 		err    error
@@ -350,7 +349,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 		acc    accounts.Account
 		wallet accounts.Wallet
 	)
-	acc = accounts.Account{Address: result.From}
+	acc = accounts.Account{Address: result.From.Address()}
 	wallet, err = api.am.Find(acc)
 	if err != nil {
 		return nil, err
@@ -376,7 +375,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Address, 
 // The key used to calculate the signature is decrypted with the given password.
 //
 // https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
-func (api *SignerAPI) Sign(ctx context.Context, addr common.Address, data hexutil.Bytes) (hexutil.Bytes, error) {
+func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error) {
 
 	sighash, msg := signHash(data)
 
@@ -393,7 +392,7 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.Address, data hexuti
 	}
 
 	// Look up the wallet containing the requested signer
-	account := accounts.Account{Address: addr}
+	account := accounts.Account{Address: addr.Address()}
 	wallet, err := api.am.Find(account)
 	if err != nil {
 		return nil, err
