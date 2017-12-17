@@ -151,7 +151,7 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 		}
 		r := &TrieRequest{Id: t.id, Key: key}
 		if err := t.db.backend.Retrieve(t.db.ctx, r); err != nil {
-			return fmt.Errorf("can't fetch trie key %x: %v", key, err)
+			return err
 		}
 	}
 }
