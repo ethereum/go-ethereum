@@ -55,16 +55,34 @@ type Notifier struct {
 	subMu    sync.RWMutex // guards active and inactive maps
 	active   map[ID]*Subscription
 	inactive map[ID]*Subscription
+	closed   chan interface{}
 }
 
 // newNotifier creates a new notifier that can be used to send subscription
 // notifications to the client.
 func newNotifier(codec ServerCodec) *Notifier {
-	return &Notifier{
+	n := &Notifier{
 		codec:    codec,
 		active:   make(map[ID]*Subscription),
 		inactive: make(map[ID]*Subscription),
+		closed:   make(chan interface{}),
 	}
+	in := n.codec.Closed()
+	go func() {
+		for e := range in {
+			n.closed <- e
+		}
+		n.subMu.Lock()
+		defer n.subMu.Unlock()
+		for _, subscription := range n.active {
+			close(subscription.err)
+		}
+		for _, subscription := range n.inactive {
+			close(subscription.err)
+		}
+		close(n.closed)
+	}()
+	return n
 }
 
 // NotifierFromContext returns the Notifier value stored in ctx, if any.
@@ -104,7 +122,7 @@ func (n *Notifier) Notify(id ID, data interface{}) error {
 
 // Closed returns a channel that is closed when the RPC connection is closed.
 func (n *Notifier) Closed() <-chan interface{} {
-	return n.codec.Closed()
+	return n.closed
 }
 
 // unsubscribe a subscription.

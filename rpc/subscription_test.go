@@ -72,16 +72,10 @@ func (s *NotificationTestService) SomeSubscription(ctx context.Context, n, val i
 			}
 		}
 
-		select {
-		case <-notifier.Closed():
-			s.mu.Lock()
-			s.unsubscribed = true
-			s.mu.Unlock()
-		case <-subscription.Err():
-			s.mu.Lock()
-			s.unsubscribed = true
-			s.mu.Unlock()
-		}
+		<-subscription.Err()
+		s.mu.Lock()
+		s.unsubscribed = true
+		s.mu.Unlock()
 	}()
 
 	return subscription, nil
