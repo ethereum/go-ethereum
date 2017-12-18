@@ -259,7 +259,7 @@ func TestMultiResolver(t *testing.T) {
 		{
 			desc: "No resolvers, returns error",
 			r:    NewMultiResolver(),
-			err:  errNoResolver,
+			err:  NewNoResolverError(""),
 		},
 		{
 			desc:   "One default resolver, returns resolved address",
@@ -331,6 +331,14 @@ func TestMultiResolver(t *testing.T) {
 			),
 			addr:   testAddr,
 			result: testHash,
+		},
+		{
+			desc: "One TLD resolver, no default resolver, returns error for different TLD",
+			r: NewMultiResolver(
+				MultiResolverOptionWithResolver(ethResolve, "eth"),
+			),
+			addr: testAddr,
+			err:  NewNoResolverError("test"),
 		},
 	}
 	for _, x := range tests {

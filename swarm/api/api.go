@@ -17,7 +17,6 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,9 +41,22 @@ type Resolver interface {
 	Resolve(string) (common.Hash, error)
 }
 
-// errNoResolver is returned by MultiResolver.Resolve if no resolver
+// NoResolverError is returned by MultiResolver.Resolve if no resolver
 // can be found for the address.
-var errNoResolver = errors.New("no resolver")
+type NoResolverError struct {
+	TLD string
+}
+
+func NewNoResolverError(tld string) *NoResolverError {
+	return &NoResolverError{TLD: tld}
+}
+
+func (e *NoResolverError) Error() string {
+	if e.TLD == "" {
+		return "no ENS resolver"
+	}
+	return fmt.Sprintf("no ENS endpoint configured to resolve .%s TLD names", e.TLD)
+}
 
 // MultiResolver is used to resolve URL addresses based on their TLDs.
 // Each TLD can have multiple resolvers, and the resoluton from the
@@ -84,14 +96,16 @@ func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
 // will be returned.
 func (m MultiResolver) Resolve(addr string) (h common.Hash, err error) {
 	rs := m.resolvers[""]
-	if ext := path.Ext(addr); ext != "" {
-		rstld, ok := m.resolvers[ext[1:]]
+	tld := path.Ext(addr)
+	if tld != "" {
+		tld = tld[1:]
+		rstld, ok := m.resolvers[tld]
 		if ok {
 			rs = rstld
 		}
 	}
 	if rs == nil {
-		return h, errNoResolver
+		return h, NewNoResolverError(tld)
 	}
 	for _, r := range rs {
 		h, err = r.Resolve(addr)
