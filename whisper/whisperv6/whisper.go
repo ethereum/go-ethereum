@@ -638,7 +638,10 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 
 	if envelope.PoW() < wh.MinPow() {
 		log.Debug("envelope with low PoW dropped", "PoW", envelope.PoW(), "hash", envelope.Hash().Hex())
-		return false, nil // drop envelope without error
+		return false, nil // drop envelope without error for now
+
+		// after the Status message will include the PoW requirement, it should return an error here:
+		//return false, fmt.Errorf("envelope with low PoW dropped: PoW=%f, hash=[%v]", envelope.PoW(), envelope.Hash().Hex())
 	}
 
 	hash := envelope.Hash()

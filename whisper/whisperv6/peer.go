@@ -156,7 +156,7 @@ func (p *Peer) broadcast() error {
 	var cnt int
 	envelopes := p.host.Envelopes()
 	for _, envelope := range envelopes {
-		if !p.marked(envelope) {
+		if !p.marked(envelope) && envelope.PoW() >= p.powRequirement {
 			err := p2p.Send(p.ws, messagesCode, envelope)
 			if err != nil {
 				return err
