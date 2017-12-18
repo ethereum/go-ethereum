@@ -74,6 +74,7 @@ type Server struct {
 	run      int32
 	codecsMu sync.Mutex
 	codecs   *set.Set
+	auditlog *RPCLogger
 }
 
 // rpcRequest represents a raw incoming RPC request
