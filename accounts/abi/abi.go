@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"bytes"
 )
 
 // The ABI holds information about a contract's context and available
@@ -135,5 +136,16 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		}
 	}
 
+	return nil
+}
+
+// methodById looks up a method by the 4-byte id
+// returns nil if none found
+func (abi *ABI) MethodById(sigdata []byte) *Method {
+	for _, method := range abi.Methods{
+		if bytes.Equal(method.Id(), sigdata) {
+			return &method
+		}
+	}
 	return nil
 }

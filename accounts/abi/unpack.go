@@ -127,7 +127,7 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 		if t.Elem.T == ArrayTy && j != 0 {
 			i = start + t.Elem.Size*32*j
 		}
-		inter, err := toGoType(i, *t.Elem, output)
+		inter, err := ToGoType(i, *t.Elem, output)
 		if err != nil {
 			return nil, err
 		}
@@ -139,9 +139,9 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 	return refSlice.Interface(), nil
 }
 
-// toGoType parses the output bytes and recursively assigns the value of these bytes
+// ToGoType parses the output bytes and recursively assigns the value of these bytes
 // into a go type with accordance with the ABI spec.
-func toGoType(index int, t Type, output []byte) (interface{}, error) {
+func ToGoType(index int, t Type, output []byte) (interface{}, error) {
 	if index+32 > len(output) {
 		return nil, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), index+32)
 	}
