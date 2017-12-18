@@ -195,17 +195,13 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		utils.Fatalf(SWARM_ERR_SWAP_SET_NO_API)
 	}
 
-	//EnsAPIs can be set to "", so can't check for empty string, as it is allowed!
 	if ctx.GlobalIsSet(EnsAPIFlag.Name) {
 		ensAPIs := ctx.GlobalStringSlice(EnsAPIFlag.Name)
-		// Disable ENS resolver if --ens-api="" is specified
+		// preserve backward compatibility to disable ENS with --ens-api=""
 		if len(ensAPIs) == 1 && ensAPIs[0] == "" {
-			currentConfig.EnsDisabled = true
-			currentConfig.EnsAPIs = nil
-		} else {
-			currentConfig.EnsDisabled = false
-			currentConfig.EnsAPIs = ensAPIs
+			ensAPIs = nil
 		}
+		currentConfig.EnsAPIs = ensAPIs
 	}
 
 	if ensaddr := ctx.GlobalString(DeprecatedEnsAddrFlag.Name); ensaddr != "" {
@@ -275,17 +271,8 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 		utils.Fatalf(SWARM_ERR_SWAP_SET_NO_API)
 	}
 
-	//EnsAPIs can be set to "", so can't check for empty string, as it is allowed
-	if ensapi, exists := os.LookupEnv(SWARM_ENV_ENS_API); exists {
-		ensAPIs := strings.Split(ensapi, ",")
-		// Disable ENS resolver if SWARM_ENS_API="" is specified
-		if len(ensAPIs) == 0 {
-			currentConfig.EnsDisabled = true
-			currentConfig.EnsAPIs = nil
-		} else {
-			currentConfig.EnsDisabled = false
-			currentConfig.EnsAPIs = ensAPIs
-		}
+	if ensapi := os.Getenv(SWARM_ENV_ENS_API); ensapi != "" {
+		currentConfig.EnsAPIs = strings.Split(ensapi, ",")
 	}
 
 	if ensaddr := os.Getenv(SWARM_ENV_ENS_ADDR); ensaddr != "" {

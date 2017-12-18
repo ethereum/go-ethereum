@@ -48,7 +48,6 @@ type Config struct {
 	*network.SyncParams
 	Contract    common.Address
 	EnsRoot     common.Address
-	EnsDisabled bool
 	EnsAPIs     []string
 	Path        string
 	ListenAddr  string
@@ -78,7 +77,6 @@ func NewDefaultConfig() (self *Config) {
 		Path:          node.DefaultDataDir(),
 		EnsAPIs:       nil,
 		EnsRoot:       ens.TestNetAddress,
-		EnsDisabled:   false,
 		NetworkId:     network.NetworkId,
 		SwapEnabled:   false,
 		SyncEnabled:   true,

@@ -138,26 +138,17 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)
 	log.Debug(fmt.Sprintf("-> Content Store API"))
 
-	if !config.EnsDisabled {
-		if len(config.EnsAPIs) == 0 {
-			// ENS is enabled and has no specific configuration,
-			// use defaults
-			self.dns, err = newEnsClient(node.DefaultIPCEndpoint("geth"), config.EnsRoot, config)
+	if len(config.EnsAPIs) > 0 {
+		opts := []api.MultiResolverOption{}
+		for _, c := range config.EnsAPIs {
+			tld, endpoint, addr := parseEnsAPIAddress(c)
+			r, err := newEnsClient(endpoint, addr, config)
 			if err != nil {
 				return nil, err
 			}
-		} else {
-			opts := []api.MultiResolverOption{}
-			for _, c := range config.EnsAPIs {
-				tld, endpoint, addr := parseEnsAPIAddress(c)
-				r, err := newEnsClient(endpoint, addr, config)
-				if err != nil {
-					return nil, err
-				}
-				opts = append(opts, api.MultiResolverOptionWithResolver(r, tld))
-			}
-			self.dns = api.NewMultiResolver(opts...)
+			opts = append(opts, api.MultiResolverOptionWithResolver(r, tld))
 		}
+		self.dns = api.NewMultiResolver(opts...)
 	}
 
 	self.api = api.NewApi(self.dpa, self.dns)
