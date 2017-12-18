@@ -88,6 +88,85 @@ func (method Method) pack(args ...interface{}) ([]byte, error) {
 	return ret, nil
 }
 
+// unpacks a method return tuple into a struct of corresponding go types
+//
+// Unpacking can be done into a struct or a slice/array.
+func (method Method) tupleUnpack(v interface{}, output []byte) error {
+	// make sure the passed value is a pointer
+	valueOf := reflect.ValueOf(v)
+	if reflect.Ptr != valueOf.Kind() {
+		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
+	}
+
+	var (
+		value = valueOf.Elem()
+		typ   = value.Type()
+	)
+
+	j := 0
+	for i := 0; i < len(method.Outputs); i++ {
+		toUnpack := method.Outputs[i]
+		if toUnpack.Type.T == ArrayTy {
+			// need to move this up because they read sequentially
+			j += toUnpack.Type.Size
+		}
+		marshalledValue, err := toGoType((i+j)*32, toUnpack.Type, output)
+		if err != nil {
+			return err
+		}
+		reflectValue := reflect.ValueOf(marshalledValue)
+
+		switch value.Kind() {
+		case reflect.Struct:
+			for j := 0; j < typ.NumField(); j++ {
+				field := typ.Field(j)
+				// TODO read tags: `abi:"fieldName"`
+				if field.Name == strings.ToUpper(method.Outputs[i].Name[:1])+method.Outputs[i].Name[1:] {
+					if err := set(value.Field(j), reflectValue, method.Outputs[i]); err != nil {
+						return err
+					}
+				}
+			}
+		case reflect.Slice, reflect.Array:
+			if value.Len() < i {
+				return fmt.Errorf("abi: insufficient number of arguments for unpack, want %d, got %d", len(method.Outputs), value.Len())
+			}
+			v := value.Index(i)
+			if v.Kind() != reflect.Ptr && v.Kind() != reflect.Interface {
+				return fmt.Errorf("abi: cannot unmarshal %v in to %v", v.Type(), reflectValue.Type())
+			}
+			reflectValue := reflect.ValueOf(marshalledValue)
+			if err := set(v.Elem(), reflectValue, method.Outputs[i]); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("abi: cannot unmarshal tuple in to %v", typ)
+		}
+	}
+	return nil
+}
+
+func (method Method) isTupleReturn() bool { return len(method.Outputs) > 1 }
+
+func (method Method) singleUnpack(v interface{}, output []byte) error {
+	// make sure the passed value is a pointer
+	valueOf := reflect.ValueOf(v)
+	if reflect.Ptr != valueOf.Kind() {
+		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
+	}
+
+	value := valueOf.Elem()
+
+	marshalledValue, err := toGoType(0, method.Outputs[0].Type, output)
+	if err != nil {
+		return err
+	}
+	if err := set(value, reflect.ValueOf(marshalledValue), method.Outputs[0]); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Sig returns the methods string signature according to the ABI spec.
 //
 // Example

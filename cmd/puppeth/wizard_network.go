@@ -53,12 +53,12 @@ func (w *wizard) manageServers() {
 		w.conf.flush()
 
 		log.Info("Disconnected existing server", "server", server)
-		w.networkStats(false)
+		w.networkStats()
 		return
 	}
 	// If the user requested connecting a new server, do it
 	if w.makeServer() != "" {
-		w.networkStats(false)
+		w.networkStats()
 	}
 }
 
@@ -71,7 +71,7 @@ func (w *wizard) makeServer() string {
 	fmt.Println()
 	fmt.Println("Please enter remote server's address:")
 
-	// Read and fial the server to ensure docker is present
+	// Read and dial the server to ensure docker is present
 	input := w.readString()
 
 	client, err := dial(input, nil)
@@ -174,9 +174,10 @@ func (w *wizard) deployComponent() {
 	fmt.Println(" 1. Ethstats  - Network monitoring tool")
 	fmt.Println(" 2. Bootnode  - Entry point of the network")
 	fmt.Println(" 3. Sealer    - Full node minting new blocks")
-	fmt.Println(" 4. Wallet    - Browser wallet for quick sends (todo)")
-	fmt.Println(" 5. Faucet    - Crypto faucet to give away funds")
-	fmt.Println(" 6. Dashboard - Website listing above web-services")
+	fmt.Println(" 4. Explorer  - Chain analysis webservice (ethash only)")
+	fmt.Println(" 5. Wallet    - Browser wallet for quick sends")
+	fmt.Println(" 6. Faucet    - Crypto faucet to give away funds")
+	fmt.Println(" 7. Dashboard - Website listing above web-services")
 
 	switch w.read() {
 	case "1":
@@ -186,9 +187,12 @@ func (w *wizard) deployComponent() {
 	case "3":
 		w.deployNode(false)
 	case "4":
+		w.deployExplorer()
 	case "5":
-		w.deployFaucet()
+		w.deployWallet()
 	case "6":
+		w.deployFaucet()
+	case "7":
 		w.deployDashboard()
 	default:
 		log.Error("That's not something I can do")

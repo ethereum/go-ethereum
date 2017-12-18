@@ -157,7 +157,7 @@ func (s *dialstate) removeStatic(n *discover.Node) {
 }
 
 func (s *dialstate) newTasks(nRunning int, peers map[discover.NodeID]*Peer, now time.Time) []task {
-	if s.start == (time.Time{}) {
+	if s.start.IsZero() {
 		s.start = now
 	}
 
@@ -291,11 +291,14 @@ func (t *dialTask) Do(srv *Server) {
 			return
 		}
 	}
-	success := t.dial(srv, t.dest)
-	// Try resolving the ID of static nodes if dialing failed.
-	if !success && t.flags&staticDialedConn != 0 {
-		if t.resolve(srv) {
-			t.dial(srv, t.dest)
+	err := t.dial(srv, t.dest)
+	if err != nil {
+		log.Trace("Dial error", "task", t, "err", err)
+		// Try resolving the ID of static nodes if dialing failed.
+		if _, ok := err.(*dialError); ok && t.flags&staticDialedConn != 0 {
+			if t.resolve(srv) {
+				t.dial(srv, t.dest)
+			}
 		}
 	}
 }
@@ -334,16 +337,18 @@ func (t *dialTask) resolve(srv *Server) bool {
 	return true
 }
 
+type dialError struct {
+	error
+}
+
 // dial performs the actual connection attempt.
-func (t *dialTask) dial(srv *Server, dest *discover.Node) bool {
+func (t *dialTask) dial(srv *Server, dest *discover.Node) error {
 	fd, err := srv.Dialer.Dial(dest)
 	if err != nil {
-		log.Trace("Dial error", "task", t, "err", err)
-		return false
+		return &dialError{err}
 	}
 	mfd := newMeteredConn(fd, false)
-	srv.SetupConn(mfd, t.flags, dest)
-	return true
+	return srv.SetupConn(mfd, t.flags, dest)
 }
 
 func (t *dialTask) String() string {

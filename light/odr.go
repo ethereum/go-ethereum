@@ -25,9 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // NoOdr is the default context passed to an ODR capable function when the ODR
@@ -37,6 +35,9 @@ var NoOdr = context.Background()
 // OdrBackend is an interface to a backend service that handles ODR retrievals type
 type OdrBackend interface {
 	Database() ethdb.Database
+	ChtIndexer() *core.ChainIndexer
+	BloomTrieIndexer() *core.ChainIndexer
+	BloomIndexer() *core.ChainIndexer
 	Retrieve(ctx context.Context, req OdrRequest) error
 }
 
@@ -80,23 +81,12 @@ type TrieRequest struct {
 	OdrRequest
 	Id    *TrieID
 	Key   []byte
-	Proof []rlp.RawValue
+	Proof *NodeSet
 }
 
 // StoreResult stores the retrieved data in local database
 func (req *TrieRequest) StoreResult(db ethdb.Database) {
-	storeProof(db, req.Proof)
-}
-
-// storeProof stores the new trie nodes obtained from a merkle proof in the database
-func storeProof(db ethdb.Database, proof []rlp.RawValue) {
-	for _, buf := range proof {
-		hash := crypto.Keccak256(buf)
-		val, _ := db.Get(hash)
-		if val == nil {
-			db.Put(hash, buf)
-		}
-	}
+	req.Proof.Store(db)
 }
 
 // CodeRequest is the ODR request type for retrieving contract code
@@ -138,14 +128,14 @@ func (req *ReceiptsRequest) StoreResult(db ethdb.Database) {
 	core.WriteBlockReceipts(db, req.Hash, req.Number, req.Receipts)
 }
 
-// TrieRequest is the ODR request type for state/storage trie entries
+// ChtRequest is the ODR request type for state/storage trie entries
 type ChtRequest struct {
 	OdrRequest
 	ChtNum, BlockNum uint64
 	ChtRoot          common.Hash
 	Header           *types.Header
 	Td               *big.Int
-	Proof            []rlp.RawValue
+	Proof            *NodeSet
 }
 
 // StoreResult stores the retrieved data in local database
@@ -155,5 +145,27 @@ func (req *ChtRequest) StoreResult(db ethdb.Database) {
 	hash, num := req.Header.Hash(), req.Header.Number.Uint64()
 	core.WriteTd(db, hash, num, req.Td)
 	core.WriteCanonicalHash(db, hash, num)
-	//storeProof(db, req.Proof)
+}
+
+// BloomRequest is the ODR request type for retrieving bloom filters from a CHT structure
+type BloomRequest struct {
+	OdrRequest
+	BloomTrieNum   uint64
+	BitIdx         uint
+	SectionIdxList []uint64
+	BloomTrieRoot  common.Hash
+	BloomBits      [][]byte
+	Proofs         *NodeSet
+}
+
+// StoreResult stores the retrieved data in local database
+func (req *BloomRequest) StoreResult(db ethdb.Database) {
+	for i, sectionIdx := range req.SectionIdxList {
+		sectionHead := core.GetCanonicalHash(db, (sectionIdx+1)*BloomTrieFrequency-1)
+		// if we don't have the canonical hash stored for this section head number, we'll still store it under
+		// a key with a zero sectionHead. GetBloomBits will look there too if we still don't have the canonical
+		// hash. In the unlikely case we've retrieved the section head hash since then, we'll just retrieve the
+		// bit vector again from the network.
+		core.WriteBloomBits(db, req.BitIdx, sectionIdx, sectionHead, req.BloomBits[i])
+	}
 }

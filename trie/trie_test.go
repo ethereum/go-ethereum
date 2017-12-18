@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"math/rand"
 	"os"
 	"reflect"
@@ -30,7 +31,9 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func init() {
@@ -505,8 +508,6 @@ func BenchmarkGet(b *testing.B)      { benchGet(b, false) }
 func BenchmarkGetDB(b *testing.B)    { benchGet(b, true) }
 func BenchmarkUpdateBE(b *testing.B) { benchUpdate(b, binary.BigEndian) }
 func BenchmarkUpdateLE(b *testing.B) { benchUpdate(b, binary.LittleEndian) }
-func BenchmarkHashBE(b *testing.B)   { benchHash(b, binary.BigEndian) }
-func BenchmarkHashLE(b *testing.B)   { benchHash(b, binary.LittleEndian) }
 
 const benchElemCount = 20000
 
@@ -549,18 +550,39 @@ func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 	return trie
 }
 
-func benchHash(b *testing.B, e binary.ByteOrder) {
-	trie := newEmpty()
-	k := make([]byte, 32)
-	for i := 0; i < benchElemCount; i++ {
-		e.PutUint64(k, uint64(i))
-		trie.Update(k, k)
-	}
+// Benchmarks the trie hashing. Since the trie caches the result of any operation,
+// we cannot use b.N as the number of hashing rouns, since all rounds apart from
+// the first one will be NOOP. As such, we'll use b.N as the number of account to
+// insert into the trie before measuring the hashing.
+func BenchmarkHash(b *testing.B) {
+	// Make the random benchmark deterministic
+	random := rand.New(rand.NewSource(0))
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		trie.Hash()
+	// Create a realistic account trie to hash
+	addresses := make([][20]byte, b.N)
+	for i := 0; i < len(addresses); i++ {
+		for j := 0; j < len(addresses[i]); j++ {
+			addresses[i][j] = byte(random.Intn(256))
+		}
 	}
+	accounts := make([][]byte, len(addresses))
+	for i := 0; i < len(accounts); i++ {
+		var (
+			nonce   = uint64(random.Int63())
+			balance = new(big.Int).Rand(random, new(big.Int).Exp(common.Big2, common.Big256, nil))
+			root    = emptyRoot
+			code    = crypto.Keccak256(nil)
+		)
+		accounts[i], _ = rlp.EncodeToBytes([]interface{}{nonce, balance, root, code})
+	}
+	// Insert the accounts into the trie and hash it
+	trie := newEmpty()
+	for i := 0; i < len(addresses); i++ {
+		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	trie.Hash()
 }
 
 func tempDB() (string, Database) {

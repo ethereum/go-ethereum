@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/dashboard"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -137,9 +138,13 @@ var (
 		Name:  "rinkeby",
 		Usage: "Rinkeby network: pre-configured proof-of-authority test network",
 	}
-	DevModeFlag = cli.BoolFlag{
+	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
-		Usage: "Developer mode: pre-configured private network with several debugging flags",
+		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
+	}
+	DeveloperPeriodFlag = cli.IntFlag{
+		Name:  "dev.period",
+		Usage: "Block period to use in developer mode (0 = mine only if transaction pending)",
 	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
@@ -179,6 +184,31 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
+	// Dashboard settings
+	DashboardEnabledFlag = cli.BoolFlag{
+		Name:  "dashboard",
+		Usage: "Enable the dashboard",
+	}
+	DashboardAddrFlag = cli.StringFlag{
+		Name:  "dashboard.addr",
+		Usage: "Dashboard listening interface",
+		Value: dashboard.DefaultConfig.Host,
+	}
+	DashboardPortFlag = cli.IntFlag{
+		Name:  "dashboard.host",
+		Usage: "Dashboard listening port",
+		Value: dashboard.DefaultConfig.Port,
+	}
+	DashboardRefreshFlag = cli.DurationFlag{
+		Name:  "dashboard.refresh",
+		Usage: "Dashboard metrics collection refresh rate",
+		Value: dashboard.DefaultConfig.Refresh,
+	}
+	DashboardAssetsFlag = cli.StringFlag{
+		Name:  "dashboard.assets",
+		Usage: "Developer flag to serve the dashboard from the local file system",
+		Value: dashboard.DefaultConfig.Assets,
+	}
 	// Ethash settings
 	EthashCacheDirFlag = DirectoryFlag{
 		Name:  "ethash.cachedir",
@@ -187,27 +217,27 @@ var (
 	EthashCachesInMemoryFlag = cli.IntFlag{
 		Name:  "ethash.cachesinmem",
 		Usage: "Number of recent ethash caches to keep in memory (16MB each)",
-		Value: eth.DefaultConfig.EthashCachesInMem,
+		Value: eth.DefaultConfig.Ethash.CachesInMem,
 	}
 	EthashCachesOnDiskFlag = cli.IntFlag{
 		Name:  "ethash.cachesondisk",
 		Usage: "Number of recent ethash caches to keep on disk (16MB each)",
-		Value: eth.DefaultConfig.EthashCachesOnDisk,
+		Value: eth.DefaultConfig.Ethash.CachesOnDisk,
 	}
 	EthashDatasetDirFlag = DirectoryFlag{
 		Name:  "ethash.dagdir",
 		Usage: "Directory to store the ethash mining DAGs (default = inside home folder)",
-		Value: DirectoryString{eth.DefaultConfig.EthashDatasetDir},
+		Value: DirectoryString{eth.DefaultConfig.Ethash.DatasetDir},
 	}
 	EthashDatasetsInMemoryFlag = cli.IntFlag{
 		Name:  "ethash.dagsinmem",
 		Usage: "Number of recent ethash mining DAGs to keep in memory (1+GB each)",
-		Value: eth.DefaultConfig.EthashDatasetsInMem,
+		Value: eth.DefaultConfig.Ethash.DatasetsInMem,
 	}
 	EthashDatasetsOnDiskFlag = cli.IntFlag{
 		Name:  "ethash.dagsondisk",
 		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
-		Value: eth.DefaultConfig.EthashDatasetsOnDisk,
+		Value: eth.DefaultConfig.Ethash.DatasetsOnDisk,
 	}
 	// Transaction pool settings
 	TxPoolNoLocalsFlag = cli.BoolFlag{
@@ -554,6 +584,8 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.TestnetBootnodes
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		urls = params.RinkebyBootnodes
+	case cfg.BootstrapNodes != nil:
+		return // already set, don't apply defaults.
 	}
 
 	cfg.BootstrapNodes = make([]*discover.Node, 0, len(urls))
@@ -714,6 +746,12 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	if err != nil || index < 0 {
 		return accounts.Account{}, fmt.Errorf("invalid account address or index %q", account)
 	}
+	log.Warn("-------------------------------------------------------------------")
+	log.Warn("Referring to accounts by order in the keystore folder is dangerous!")
+	log.Warn("This functionality is deprecated and will be removed in the future!")
+	log.Warn("Please use explicit addresses! (can search via `geth account list`)")
+	log.Warn("-------------------------------------------------------------------")
+
 	accs := ks.Accounts()
 	if len(accs) <= index {
 		return accounts.Account{}, fmt.Errorf("index %d higher than number of accounts %d", index, len(accs))
@@ -730,15 +768,6 @@ func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *eth.Config) {
 			Fatalf("Option %q: %v", EtherbaseFlag.Name, err)
 		}
 		cfg.Etherbase = account.Address
-		return
-	}
-	accounts := ks.Accounts()
-	if (cfg.Etherbase == common.Address{}) {
-		if len(accounts) > 0 {
-			cfg.Etherbase = accounts[0].Address
-		} else {
-			log.Warn("No etherbase set and no accounts found as default")
-		}
 	}
 }
 
@@ -796,7 +825,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		cfg.NetRestrict = list
 	}
 
-	if ctx.GlobalBool(DevModeFlag.Name) {
+	if ctx.GlobalBool(DeveloperFlag.Name) {
 		// --dev mode can't use p2p networking.
 		cfg.MaxPeers = 0
 		cfg.ListenAddr = ":0"
@@ -817,8 +846,8 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	switch {
 	case ctx.GlobalIsSet(DataDirFlag.Name):
 		cfg.DataDir = ctx.GlobalString(DataDirFlag.Name)
-	case ctx.GlobalBool(DevModeFlag.Name):
-		cfg.DataDir = filepath.Join(os.TempDir(), "ethereum_dev_mode")
+	case ctx.GlobalBool(DeveloperFlag.Name):
+		cfg.DataDir = "" // unless explicitly requested, use memory databases
 	case ctx.GlobalBool(TestnetFlag.Name):
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "testnet")
 	case ctx.GlobalBool(RinkebyFlag.Name):
@@ -880,34 +909,60 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 
 func setEthash(ctx *cli.Context, cfg *eth.Config) {
 	if ctx.GlobalIsSet(EthashCacheDirFlag.Name) {
-		cfg.EthashCacheDir = ctx.GlobalString(EthashCacheDirFlag.Name)
+		cfg.Ethash.CacheDir = ctx.GlobalString(EthashCacheDirFlag.Name)
 	}
 	if ctx.GlobalIsSet(EthashDatasetDirFlag.Name) {
-		cfg.EthashDatasetDir = ctx.GlobalString(EthashDatasetDirFlag.Name)
+		cfg.Ethash.DatasetDir = ctx.GlobalString(EthashDatasetDirFlag.Name)
 	}
 	if ctx.GlobalIsSet(EthashCachesInMemoryFlag.Name) {
-		cfg.EthashCachesInMem = ctx.GlobalInt(EthashCachesInMemoryFlag.Name)
+		cfg.Ethash.CachesInMem = ctx.GlobalInt(EthashCachesInMemoryFlag.Name)
 	}
 	if ctx.GlobalIsSet(EthashCachesOnDiskFlag.Name) {
-		cfg.EthashCachesOnDisk = ctx.GlobalInt(EthashCachesOnDiskFlag.Name)
+		cfg.Ethash.CachesOnDisk = ctx.GlobalInt(EthashCachesOnDiskFlag.Name)
 	}
 	if ctx.GlobalIsSet(EthashDatasetsInMemoryFlag.Name) {
-		cfg.EthashDatasetsInMem = ctx.GlobalInt(EthashDatasetsInMemoryFlag.Name)
+		cfg.Ethash.DatasetsInMem = ctx.GlobalInt(EthashDatasetsInMemoryFlag.Name)
 	}
 	if ctx.GlobalIsSet(EthashDatasetsOnDiskFlag.Name) {
-		cfg.EthashDatasetsOnDisk = ctx.GlobalInt(EthashDatasetsOnDiskFlag.Name)
+		cfg.Ethash.DatasetsOnDisk = ctx.GlobalInt(EthashDatasetsOnDiskFlag.Name)
 	}
 }
 
-func checkExclusive(ctx *cli.Context, flags ...cli.Flag) {
+// checkExclusive verifies that only a single isntance of the provided flags was
+// set by the user. Each flag might optionally be followed by a string type to
+// specialize it further.
+func checkExclusive(ctx *cli.Context, args ...interface{}) {
 	set := make([]string, 0, 1)
-	for _, flag := range flags {
+	for i := 0; i < len(args); i++ {
+		// Make sure the next argument is a flag and skip if not set
+		flag, ok := args[i].(cli.Flag)
+		if !ok {
+			panic(fmt.Sprintf("invalid argument, not cli.Flag type: %T", args[i]))
+		}
+		// Check if next arg extends current and expand its name if so
+		name := flag.GetName()
+
+		if i+1 < len(args) {
+			switch option := args[i+1].(type) {
+			case string:
+				// Extended flag, expand the name and shift the arguments
+				if ctx.GlobalString(flag.GetName()) == option {
+					name += "=" + option
+				}
+				i++
+
+			case cli.Flag:
+			default:
+				panic(fmt.Sprintf("invalid argument, not cli.Flag or string extension: %T", args[i+1]))
+			}
+		}
+		// Mark the flag if it's set
 		if ctx.GlobalIsSet(flag.GetName()) {
-			set = append(set, "--"+flag.GetName())
+			set = append(set, "--"+name)
 		}
 	}
 	if len(set) > 1 {
-		Fatalf("flags %v can't be used at the same time", strings.Join(set, ", "))
+		Fatalf("Flags %v can't be used at the same time", strings.Join(set, ", "))
 	}
 }
 
@@ -924,8 +979,10 @@ func SetShhConfig(ctx *cli.Context, stack *node.Node, cfg *whisper.Config) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Avoid conflicting network flags
-	checkExclusive(ctx, DevModeFlag, TestnetFlag, RinkebyFlag)
+	checkExclusive(ctx, DeveloperFlag, TestnetFlag, RinkebyFlag)
 	checkExclusive(ctx, FastSyncFlag, LightModeFlag, SyncModeFlag)
+	checkExclusive(ctx, LightServFlag, LightModeFlag)
+	checkExclusive(ctx, LightServFlag, SyncModeFlag, "light")
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	setEtherbase(ctx, ks, cfg)
@@ -985,18 +1042,42 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 			cfg.NetworkId = 4
 		}
 		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
-	case ctx.GlobalBool(DevModeFlag.Name):
-		cfg.Genesis = core.DevGenesisBlock()
-		if !ctx.GlobalIsSet(GasPriceFlag.Name) {
-			cfg.GasPrice = new(big.Int)
+	case ctx.GlobalBool(DeveloperFlag.Name):
+		// Create new developer account or reuse existing one
+		var (
+			developer accounts.Account
+			err       error
+		)
+		if accs := ks.Accounts(); len(accs) > 0 {
+			developer = ks.Accounts()[0]
+		} else {
+			developer, err = ks.NewAccount("")
+			if err != nil {
+				Fatalf("Failed to create developer account: %v", err)
+			}
 		}
-		cfg.PowTest = true
-	}
+		if err := ks.Unlock(developer, ""); err != nil {
+			Fatalf("Failed to unlock developer account: %v", err)
+		}
+		log.Info("Using developer account", "address", developer.Address)
 
+		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), developer.Address)
+		if !ctx.GlobalIsSet(GasPriceFlag.Name) {
+			cfg.GasPrice = big.NewInt(1)
+		}
+	}
 	// TODO(fjl): move trie cache generations into config
 	if gen := ctx.GlobalInt(TrieCacheGenFlag.Name); gen > 0 {
 		state.MaxTrieCacheGen = uint16(gen)
 	}
+}
+
+// SetDashboardConfig applies dashboard related command line flags to the config.
+func SetDashboardConfig(ctx *cli.Context, cfg *dashboard.Config) {
+	cfg.Host = ctx.GlobalString(DashboardAddrFlag.Name)
+	cfg.Port = ctx.GlobalInt(DashboardPortFlag.Name)
+	cfg.Refresh = ctx.GlobalDuration(DashboardRefreshFlag.Name)
+	cfg.Assets = ctx.GlobalString(DashboardAssetsFlag.Name)
 }
 
 // RegisterEthService adds an Ethereum client to the stack.
@@ -1019,6 +1100,13 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
+}
+
+// RegisterDashboardService adds a dashboard to the stack.
+func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config) {
+	stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return dashboard.New(cfg)
+	})
 }
 
 // RegisterShhService configures Whisper and adds it to the given node.
@@ -1077,8 +1165,8 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultTestnetGenesisBlock()
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		genesis = core.DefaultRinkebyGenesisBlock()
-	case ctx.GlobalBool(DevModeFlag.Name):
-		genesis = core.DevGenesisBlock()
+	case ctx.GlobalBool(DeveloperFlag.Name):
+		Fatalf("Developer chains are ephemeral")
 	}
 	return genesis
 }
@@ -1098,10 +1186,14 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	} else {
 		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {
-			engine = ethash.New(
-				stack.ResolvePath(eth.DefaultConfig.EthashCacheDir), eth.DefaultConfig.EthashCachesInMem, eth.DefaultConfig.EthashCachesOnDisk,
-				stack.ResolvePath(eth.DefaultConfig.EthashDatasetDir), eth.DefaultConfig.EthashDatasetsInMem, eth.DefaultConfig.EthashDatasetsOnDisk,
-			)
+			engine = ethash.New(ethash.Config{
+				CacheDir:       stack.ResolvePath(eth.DefaultConfig.Ethash.CacheDir),
+				CachesInMem:    eth.DefaultConfig.Ethash.CachesInMem,
+				CachesOnDisk:   eth.DefaultConfig.Ethash.CachesOnDisk,
+				DatasetDir:     stack.ResolvePath(eth.DefaultConfig.Ethash.DatasetDir),
+				DatasetsInMem:  eth.DefaultConfig.Ethash.DatasetsInMem,
+				DatasetsOnDisk: eth.DefaultConfig.Ethash.DatasetsOnDisk,
+			})
 		}
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}

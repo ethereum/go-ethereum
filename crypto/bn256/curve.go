@@ -20,7 +20,7 @@ var curveB = new(big.Int).SetInt64(3)
 // curveGen is the generator of G₁.
 var curveGen = &curvePoint{
 	new(big.Int).SetInt64(1),
-	new(big.Int).SetInt64(-2),
+	new(big.Int).SetInt64(2),
 	new(big.Int).SetInt64(1),
 	new(big.Int).SetInt64(1),
 }

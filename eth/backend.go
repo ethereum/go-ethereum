@@ -54,6 +54,7 @@ type LesServer interface {
 	Start(srvr *p2p.Server)
 	Stop()
 	Protocols() []p2p.Protocol
+	SetBloomBitsIndexer(bbIndexer *core.ChainIndexer)
 }
 
 // Ethereum implements the Ethereum full node service.
@@ -95,6 +96,7 @@ type Ethereum struct {
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
 	s.lesServer = ls
+	ls.SetBloomBitsIndexer(s.bloomIndexer)
 }
 
 // New creates a new Ethereum object (including the
@@ -123,7 +125,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
-		engine:         CreateConsensusEngine(ctx, config, chainConfig, chainDb),
+		engine:         CreateConsensusEngine(ctx, &config.Ethash, chainConfig, chainDb),
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
 		networkId:      config.NetworkId,
@@ -154,7 +156,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		eth.blockchain.SetHead(compat.RewindTo)
 		core.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
-	eth.bloomIndexer.Start(eth.blockchain.CurrentHeader(), eth.blockchain.SubscribeChainEvent)
+	eth.bloomIndexer.Start(eth.blockchain)
 
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = ctx.ResolvePath(config.TxPool.Journal)
@@ -207,25 +209,31 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 }
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
-func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
+func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
 	}
 	// Otherwise assume proof-of-work
 	switch {
-	case config.PowFake:
+	case config.PowMode == ethash.ModeFake:
 		log.Warn("Ethash used in fake mode")
 		return ethash.NewFaker()
-	case config.PowTest:
+	case config.PowMode == ethash.ModeTest:
 		log.Warn("Ethash used in test mode")
 		return ethash.NewTester()
-	case config.PowShared:
+	case config.PowMode == ethash.ModeShared:
 		log.Warn("Ethash used in shared mode")
 		return ethash.NewShared()
 	default:
-		engine := ethash.New(ctx.ResolvePath(config.EthashCacheDir), config.EthashCachesInMem, config.EthashCachesOnDisk,
-			config.EthashDatasetDir, config.EthashDatasetsInMem, config.EthashDatasetsOnDisk)
+		engine := ethash.New(ethash.Config{
+			CacheDir:       ctx.ResolvePath(config.CacheDir),
+			CachesInMem:    config.CachesInMem,
+			CachesOnDisk:   config.CachesOnDisk,
+			DatasetDir:     config.DatasetDir,
+			DatasetsInMem:  config.DatasetsInMem,
+			DatasetsOnDisk: config.DatasetsOnDisk,
+		})
 		engine.SetThreads(-1) // Disable CPU mining
 		return engine
 	}
@@ -302,10 +310,17 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	}
 	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
 		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-			return accounts[0].Address, nil
+			etherbase := accounts[0].Address
+
+			s.lock.Lock()
+			s.etherbase = etherbase
+			s.lock.Unlock()
+
+			log.Info("Etherbase automatically configured", "address", etherbase)
+			return etherbase, nil
 		}
 	}
-	return common.Address{}, fmt.Errorf("etherbase address must be explicitly specified")
+	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
 }
 
 // set in js console via admin interface or wrapper from cli flags

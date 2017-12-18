@@ -818,7 +818,12 @@ func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.R
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
-	if externTd.Cmp(localTd) > 0 || (externTd.Cmp(localTd) == 0 && mrand.Float64() < 0.5) {
+	reorg := externTd.Cmp(localTd) > 0
+	if !reorg && externTd.Cmp(localTd) == 0 {
+		// Split same-difficulty blocks by number, then at random
+		reorg = block.NumberU64() < bc.currentBlock.NumberU64() || (block.NumberU64() == bc.currentBlock.NumberU64() && mrand.Float64() < 0.5)
+	}
+	if reorg {
 		// Reorganise the chain if the parent is not the head block
 		if block.ParentHash() != bc.currentBlock.Hash() {
 			if err := bc.reorg(bc.currentBlock, block); err != nil {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -36,10 +37,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TxPool                  core.TxPoolConfig
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
-		DocRoot                 string `toml:"-"`
-		PowFake                 bool   `toml:"-"`
-		PowTest                 bool   `toml:"-"`
-		PowShared               bool   `toml:"-"`
+		DocRoot                 string      `toml:"-"`
+		PowMode                 ethash.Mode `toml:"-"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -54,19 +53,17 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.MinerThreads = c.MinerThreads
 	enc.ExtraData = c.ExtraData
 	enc.GasPrice = c.GasPrice
-	enc.EthashCacheDir = c.EthashCacheDir
-	enc.EthashCachesInMem = c.EthashCachesInMem
-	enc.EthashCachesOnDisk = c.EthashCachesOnDisk
-	enc.EthashDatasetDir = c.EthashDatasetDir
-	enc.EthashDatasetsInMem = c.EthashDatasetsInMem
-	enc.EthashDatasetsOnDisk = c.EthashDatasetsOnDisk
+	enc.EthashCacheDir = c.Ethash.CacheDir
+	enc.EthashCachesInMem = c.Ethash.CachesInMem
+	enc.EthashCachesOnDisk = c.Ethash.CachesOnDisk
+	enc.EthashDatasetDir = c.Ethash.DatasetDir
+	enc.EthashDatasetsInMem = c.Ethash.DatasetsInMem
+	enc.EthashDatasetsOnDisk = c.Ethash.DatasetsOnDisk
 	enc.TxPool = c.TxPool
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.DocRoot = c.DocRoot
-	enc.PowFake = c.PowFake
-	enc.PowTest = c.PowTest
-	enc.PowShared = c.PowShared
+	enc.PowMode = c.Ethash.PowMode
 	return &enc, nil
 }
 
@@ -94,10 +91,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		TxPool                  *core.TxPoolConfig
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
-		DocRoot                 *string `toml:"-"`
-		PowFake                 *bool   `toml:"-"`
-		PowTest                 *bool   `toml:"-"`
-		PowShared               *bool   `toml:"-"`
+		DocRoot                 *string      `toml:"-"`
+		PowMode                 *ethash.Mode `toml:"-"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -140,22 +135,22 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		c.GasPrice = dec.GasPrice
 	}
 	if dec.EthashCacheDir != nil {
-		c.EthashCacheDir = *dec.EthashCacheDir
+		c.Ethash.CacheDir = *dec.EthashCacheDir
 	}
 	if dec.EthashCachesInMem != nil {
-		c.EthashCachesInMem = *dec.EthashCachesInMem
+		c.Ethash.CachesInMem = *dec.EthashCachesInMem
 	}
 	if dec.EthashCachesOnDisk != nil {
-		c.EthashCachesOnDisk = *dec.EthashCachesOnDisk
+		c.Ethash.CachesOnDisk = *dec.EthashCachesOnDisk
 	}
 	if dec.EthashDatasetDir != nil {
-		c.EthashDatasetDir = *dec.EthashDatasetDir
+		c.Ethash.DatasetDir = *dec.EthashDatasetDir
 	}
 	if dec.EthashDatasetsInMem != nil {
-		c.EthashDatasetsInMem = *dec.EthashDatasetsInMem
+		c.Ethash.DatasetsInMem = *dec.EthashDatasetsInMem
 	}
 	if dec.EthashDatasetsOnDisk != nil {
-		c.EthashDatasetsOnDisk = *dec.EthashDatasetsOnDisk
+		c.Ethash.DatasetsOnDisk = *dec.EthashDatasetsOnDisk
 	}
 	if dec.TxPool != nil {
 		c.TxPool = *dec.TxPool
@@ -169,14 +164,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.DocRoot != nil {
 		c.DocRoot = *dec.DocRoot
 	}
-	if dec.PowFake != nil {
-		c.PowFake = *dec.PowFake
-	}
-	if dec.PowTest != nil {
-		c.PowTest = *dec.PowTest
-	}
-	if dec.PowShared != nil {
-		c.PowShared = *dec.PowShared
+	if dec.PowMode != nil {
+		c.Ethash.PowMode = *dec.PowMode
 	}
 	return nil
 }

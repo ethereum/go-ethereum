@@ -100,10 +100,6 @@ const (
 	// fieldPrimeWordOne is word one of the secp256k1 prime in the
 	// internal field representation.  It is used during negation.
 	fieldPrimeWordOne = 0x3ffffbf
-
-	// primeLowBits is the lower 2*fieldBase bits of the secp256k1 prime in
-	// its standard normalized form.  It is used during modular reduction.
-	primeLowBits = 0xffffefffffc2f
 )
 
 // fieldVal implements optimized fixed-precision arithmetic over the
@@ -250,39 +246,15 @@ func (f *fieldVal) SetHex(hexString string) *fieldVal {
 // performs fast modular reduction over the secp256k1 prime by making use of the
 // special form of the prime.
 func (f *fieldVal) Normalize() *fieldVal {
-	// The field representation leaves 6 bits of overflow in each
-	// word so intermediate calculations can be performed without needing
-	// to propagate the carry to each higher word during the calculations.
-	// In order to normalize, first we need to "compact" the full 256-bit
-	// value to the right and treat the additional 64 leftmost bits as
-	// the magnitude.
-	m := f.n[0]
-	t0 := m & fieldBaseMask
-	m = (m >> fieldBase) + f.n[1]
-	t1 := m & fieldBaseMask
-	m = (m >> fieldBase) + f.n[2]
-	t2 := m & fieldBaseMask
-	m = (m >> fieldBase) + f.n[3]
-	t3 := m & fieldBaseMask
-	m = (m >> fieldBase) + f.n[4]
-	t4 := m & fieldBaseMask
-	m = (m >> fieldBase) + f.n[5]
-	t5 := m & fieldBaseMask
-	m = (m >> fieldBase) + f.n[6]
-	t6 := m & fieldBaseMask
-	m = (m >> fieldBase) + f.n[7]
-	t7 := m & fieldBaseMask
-	m = (m >> fieldBase) + f.n[8]
-	t8 := m & fieldBaseMask
-	m = (m >> fieldBase) + f.n[9]
-	t9 := m & fieldMSBMask
-	m = m >> fieldMSBBits
-
-	// At this point, if the magnitude is greater than 0, the overall value
-	// is greater than the max possible 256-bit value.  In particular, it is
-	// "how many times larger" than the max value it is.  Since this field
-	// is doing arithmetic modulo the secp256k1 prime, we need to perform
-	// modular reduction over the prime.
+	// The field representation leaves 6 bits of overflow in each word so
+	// intermediate calculations can be performed without needing to
+	// propagate the carry to each higher word during the calculations.  In
+	// order to normalize, we need to "compact" the full 256-bit value to
+	// the right while propagating any carries through to the high order
+	// word.
+	//
+	// Since this field is doing arithmetic modulo the secp256k1 prime, we
+	// also need to perform modular reduction over the prime.
 	//
 	// Per [HAC] section 14.3.4: Reduction method of moduli of special form,
 	// when the modulus is of the special form m = b^t - c, highly efficient
@@ -298,98 +270,87 @@ func (f *fieldVal) Normalize() *fieldVal {
 	//
 	// The algorithm presented in the referenced section typically repeats
 	// until the quotient is zero.  However, due to our field representation
-	// we already know at least how many times we would need to repeat as
-	// it's the value currently in m.  Thus we can simply multiply the
-	// magnitude by the field representation of the prime and do a single
-	// iteration.  Notice that nothing will be changed when the magnitude is
-	// zero, so we could skip this in that case, however always running
-	// regardless allows it to run in constant time.
-	r := t0 + m*977
-	t0 = r & fieldBaseMask
-	r = (r >> fieldBase) + t1 + m*64
-	t1 = r & fieldBaseMask
-	r = (r >> fieldBase) + t2
-	t2 = r & fieldBaseMask
-	r = (r >> fieldBase) + t3
-	t3 = r & fieldBaseMask
-	r = (r >> fieldBase) + t4
-	t4 = r & fieldBaseMask
-	r = (r >> fieldBase) + t5
-	t5 = r & fieldBaseMask
-	r = (r >> fieldBase) + t6
-	t6 = r & fieldBaseMask
-	r = (r >> fieldBase) + t7
-	t7 = r & fieldBaseMask
-	r = (r >> fieldBase) + t8
-	t8 = r & fieldBaseMask
-	r = (r >> fieldBase) + t9
-	t9 = r & fieldMSBMask
+	// we already know to within one reduction how many times we would need
+	// to repeat as it's the uppermost bits of the high order word.  Thus we
+	// can simply multiply the magnitude by the field representation of the
+	// prime and do a single iteration.  After this step there might be an
+	// additional carry to bit 256 (bit 22 of the high order word).
+	t9 := f.n[9]
+	m := t9 >> fieldMSBBits
+	t9 = t9 & fieldMSBMask
+	t0 := f.n[0] + m*977
+	t1 := (t0 >> fieldBase) + f.n[1] + (m << 6)
+	t0 = t0 & fieldBaseMask
+	t2 := (t1 >> fieldBase) + f.n[2]
+	t1 = t1 & fieldBaseMask
+	t3 := (t2 >> fieldBase) + f.n[3]
+	t2 = t2 & fieldBaseMask
+	t4 := (t3 >> fieldBase) + f.n[4]
+	t3 = t3 & fieldBaseMask
+	t5 := (t4 >> fieldBase) + f.n[5]
+	t4 = t4 & fieldBaseMask
+	t6 := (t5 >> fieldBase) + f.n[6]
+	t5 = t5 & fieldBaseMask
+	t7 := (t6 >> fieldBase) + f.n[7]
+	t6 = t6 & fieldBaseMask
+	t8 := (t7 >> fieldBase) + f.n[8]
+	t7 = t7 & fieldBaseMask
+	t9 = (t8 >> fieldBase) + t9
+	t8 = t8 & fieldBaseMask
 
-	// At this point, the result will be in the range 0 <= result <=
-	// prime + (2^64 - c).  Therefore, one more subtraction of the prime
-	// might be needed if the current result is greater than or equal to the
-	// prime.  The following does the final reduction in constant time.
-	// Note that the if/else here intentionally does the bitwise OR with
-	// zero even though it won't change the value to ensure constant time
-	// between the branches.
-	var mask int32
-	lowBits := uint64(t1)<<fieldBase | uint64(t0)
-	if lowBits < primeLowBits {
-		mask |= -1
+	// At this point, the magnitude is guaranteed to be one, however, the
+	// value could still be greater than the prime if there was either a
+	// carry through to bit 256 (bit 22 of the higher order word) or the
+	// value is greater than or equal to the field characteristic.  The
+	// following determines if either or these conditions are true and does
+	// the final reduction in constant time.
+	//
+	// Note that the if/else statements here intentionally do the bitwise
+	// operators even when it won't change the value to ensure constant time
+	// between the branches.  Also note that 'm' will be zero when neither
+	// of the aforementioned conditions are true and the value will not be
+	// changed when 'm' is zero.
+	m = 1
+	if t9 == fieldMSBMask {
+		m &= 1
 	} else {
-		mask |= 0
+		m &= 0
 	}
-	if t2 < fieldBaseMask {
-		mask |= -1
+	if t2&t3&t4&t5&t6&t7&t8 == fieldBaseMask {
+		m &= 1
 	} else {
-		mask |= 0
+		m &= 0
 	}
-	if t3 < fieldBaseMask {
-		mask |= -1
+	if ((t0+977)>>fieldBase + t1 + 64) > fieldBaseMask {
+		m &= 1
 	} else {
-		mask |= 0
+		m &= 0
 	}
-	if t4 < fieldBaseMask {
-		mask |= -1
+	if t9>>fieldMSBBits != 0 {
+		m |= 1
 	} else {
-		mask |= 0
+		m |= 0
 	}
-	if t5 < fieldBaseMask {
-		mask |= -1
-	} else {
-		mask |= 0
-	}
-	if t6 < fieldBaseMask {
-		mask |= -1
-	} else {
-		mask |= 0
-	}
-	if t7 < fieldBaseMask {
-		mask |= -1
-	} else {
-		mask |= 0
-	}
-	if t8 < fieldBaseMask {
-		mask |= -1
-	} else {
-		mask |= 0
-	}
-	if t9 < fieldMSBMask {
-		mask |= -1
-	} else {
-		mask |= 0
-	}
-	lowBits -= ^uint64(mask) & primeLowBits
-	t0 = uint32(lowBits & fieldBaseMask)
-	t1 = uint32((lowBits >> fieldBase) & fieldBaseMask)
-	t2 = t2 & uint32(mask)
-	t3 = t3 & uint32(mask)
-	t4 = t4 & uint32(mask)
-	t5 = t5 & uint32(mask)
-	t6 = t6 & uint32(mask)
-	t7 = t7 & uint32(mask)
-	t8 = t8 & uint32(mask)
-	t9 = t9 & uint32(mask)
+	t0 = t0 + m*977
+	t1 = (t0 >> fieldBase) + t1 + (m << 6)
+	t0 = t0 & fieldBaseMask
+	t2 = (t1 >> fieldBase) + t2
+	t1 = t1 & fieldBaseMask
+	t3 = (t2 >> fieldBase) + t3
+	t2 = t2 & fieldBaseMask
+	t4 = (t3 >> fieldBase) + t4
+	t3 = t3 & fieldBaseMask
+	t5 = (t4 >> fieldBase) + t5
+	t4 = t4 & fieldBaseMask
+	t6 = (t5 >> fieldBase) + t6
+	t5 = t5 & fieldBaseMask
+	t7 = (t6 >> fieldBase) + t7
+	t6 = t6 & fieldBaseMask
+	t8 = (t7 >> fieldBase) + t8
+	t7 = t7 & fieldBaseMask
+	t9 = (t8 >> fieldBase) + t9
+	t8 = t8 & fieldBaseMask
+	t9 = t9 & fieldMSBMask // Remove potential multiple of 2^256.
 
 	// Finally, set the normalized and reduced words.
 	f.n[0] = t0

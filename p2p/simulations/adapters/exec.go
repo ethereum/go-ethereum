@@ -359,6 +359,7 @@ func execP2PNode() {
 		log.Crit("error decoding _P2P_NODE_CONFIG", "err", err)
 	}
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
+	conf.Stack.Logger = log.New("node.id", conf.Node.ID.String())
 
 	// use explicit IP address in ListenAddr so that Enode URL is usable
 	externalIP := func() string {

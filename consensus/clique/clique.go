@@ -125,6 +125,11 @@ var (
 
 	// errUnauthorized is returned if a header is signed by a non-authorized entity.
 	errUnauthorized = errors.New("unauthorized")
+
+	// errWaitTransactions is returned if an empty block is attempted to be sealed
+	// on an instant chain (0 second period). It's important to refuse these as the
+	// block reward is zero, so an empty block just bloats the chain... fast.
+	errWaitTransactions = errors.New("waiting for transactions")
 )
 
 // SignerFn is a signer callback function to request a hash to be signed by a
@@ -210,9 +215,6 @@ func New(config *params.CliqueConfig, db ethdb.Database) *Clique {
 	conf := *config
 	if conf.Epoch == 0 {
 		conf.Epoch = epochLength
-	}
-	if conf.Period == 0 {
-		conf.Period = blockPeriod
 	}
 	// Allocate the snapshot caches and create the engine
 	recents, _ := lru.NewARC(inmemorySnapshots)
@@ -599,6 +601,10 @@ func (c *Clique) Seal(chain consensus.ChainReader, block *types.Block, stop <-ch
 	if number == 0 {
 		return nil, errUnknownBlock
 	}
+	// For 0-period chains, refuse to seal empty blocks (no reward but would spin sealing)
+	if c.config.Period == 0 && len(block.Transactions()) == 0 {
+		return nil, errWaitTransactions
+	}
 	// Don't hold the signer fields for the entire sealing procedure
 	c.lock.RLock()
 	signer, signFn := c.signer, c.signFn
@@ -624,7 +630,7 @@ func (c *Clique) Seal(chain consensus.ChainReader, block *types.Block, stop <-ch
 		}
 	}
 	// Sweet, the protocol permits us to sign the block, wait for our time
-	delay := time.Unix(header.Time.Int64(), 0).Sub(time.Now())
+	delay := time.Unix(header.Time.Int64(), 0).Sub(time.Now()) // nolint: gosimple
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
 		wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime

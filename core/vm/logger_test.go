@@ -63,32 +63,8 @@ func TestStoreCapture(t *testing.T) {
 	if len(logger.changedValues[contract.Address()]) == 0 {
 		t.Fatalf("expected exactly 1 changed value on address %x, got %d", contract.Address(), len(logger.changedValues[contract.Address()]))
 	}
-
 	exp := common.BigToHash(big.NewInt(1))
 	if logger.changedValues[contract.Address()][index] != exp {
 		t.Errorf("expected %x, got %x", exp, logger.changedValues[contract.Address()][index])
-	}
-}
-
-func TestStorageCapture(t *testing.T) {
-	t.Skip("implementing this function is difficult. it requires all sort of interfaces to be implemented which isn't trivial. The value (the actual test) isn't worth it")
-	var (
-		ref      = &dummyContractRef{}
-		contract = NewContract(ref, ref, new(big.Int), 0)
-		env      = NewEVM(Context{}, dummyStateDB{ref: ref}, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
-		logger   = NewStructLogger(nil)
-		mem      = NewMemory()
-		stack    = newstack()
-	)
-
-	logger.CaptureState(env, 0, STOP, 0, 0, mem, stack, contract, 0, nil)
-	if ref.calledForEach {
-		t.Error("didn't expect for each to be called")
-	}
-
-	logger = NewStructLogger(&LogConfig{FullStorage: true})
-	logger.CaptureState(env, 0, STOP, 0, 0, mem, stack, contract, 0, nil)
-	if !ref.calledForEach {
-		t.Error("expected for each to be called")
 	}
 }

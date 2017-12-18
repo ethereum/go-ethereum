@@ -79,7 +79,7 @@ func ToECDSA(d []byte) (*ecdsa.PrivateKey, error) {
 	return toECDSA(d, true)
 }
 
-// ToECDSAUnsafe blidly converts a binary blob to a private key. It should almost
+// ToECDSAUnsafe blindly converts a binary blob to a private key. It should almost
 // never be used unless you are sure the input is valid and want to avoid hitting
 // errors due to bad origin encoding (0 prefixes cut off).
 func ToECDSAUnsafe(d []byte) *ecdsa.PrivateKey {
@@ -98,6 +98,9 @@ func toECDSA(d []byte, strict bool) (*ecdsa.PrivateKey, error) {
 	}
 	priv.D = new(big.Int).SetBytes(d)
 	priv.PublicKey.X, priv.PublicKey.Y = priv.PublicKey.Curve.ScalarBaseMult(d)
+	if priv.PublicKey.X == nil {
+		return nil, errors.New("invalid private key")
+	}
 	return priv, nil
 }
 

@@ -684,7 +684,7 @@ func (net *Network) refresh(done chan<- struct{}) {
 		seeds = net.nursery
 	}
 	if len(seeds) == 0 {
-		log.Trace(fmt.Sprint("no seed nodes found"))
+		log.Trace("no seed nodes found")
 		close(done)
 		return
 	}
