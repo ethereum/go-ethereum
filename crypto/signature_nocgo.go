@@ -87,6 +87,9 @@ func VerifySignature(pubkey, hash, signature []byte) bool {
 	if err != nil {
 		return false
 	}
+	if !ValidateSignatureValues(0, sig.R, sig.S, true) {
+		return false
+	}
 	return sig.Verify(hash, key)
 }
 
