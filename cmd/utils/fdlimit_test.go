@@ -27,10 +27,11 @@ import (
 func TestFileDescriptorLimits(t *testing.T) {
 	target := 4096
 	var limit syscall.Rlimit
-	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
+	hardlimit, err := getFdMaxLimit()
+	if err != nil {
 		t.Fatal(err)
 	}
-	if int(limit.Max) < target {
+	if hardlimit < target {
 		t.Skip(fmt.Sprintf("system limit is less than desired test target: %d < %d", limit.Max, target))
 	}
 

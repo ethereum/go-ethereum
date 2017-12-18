@@ -39,3 +39,7 @@ func getFdLimit() (int, error) {
 	// Please see raiseFdLimit for the reason why we use hard coded 16K as the limit
 	return 16384, nil
 }
+
+func getFdMaxLimit() (int, error) {
+	return getFdLimit()
+}
