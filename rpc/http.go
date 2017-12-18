@@ -67,7 +67,7 @@ func (hc *httpConn) Close() error {
 
 // DialHTTP creates a new RPC clients that connection to an RPC server over HTTP.
 func DialHTTP(endpoint string) (*Client, error) {
-	req, err := http.NewRequest("POST", endpoint, nil)
+	req, err := http.NewRequest(http.MethodPost, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func NewHTTPServer(cors []string, srv *Server) *http.Server {
 // ServeHTTP serves JSON-RPC requests over HTTP.
 func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Permit dumb empty requests for remote health-checks (AWS)
-	if r.Method == "GET" && r.ContentLength == 0 && r.URL.RawQuery == "" {
+	if r.Method == http.MethodGet && r.ContentLength == 0 && r.URL.RawQuery == "" {
 		return
 	}
 	if code, err := validateRequest(r); err != nil {
@@ -169,7 +169,7 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // validateRequest returns a non-zero response code and error message if the
 // request is invalid.
 func validateRequest(r *http.Request) (int, error) {
-	if r.Method == "PUT" || r.Method == "DELETE" {
+	if r.Method == http.MethodPut || r.Method == http.MethodDelete {
 		return http.StatusMethodNotAllowed, errors.New("method not allowed")
 	}
 	if r.ContentLength > maxHTTPRequestContentLength {
@@ -192,7 +192,7 @@ func newCorsHandler(srv *Server, allowedOrigins []string) http.Handler {
 
 	c := cors.New(cors.Options{
 		AllowedOrigins: allowedOrigins,
-		AllowedMethods: []string{"POST", "GET"},
+		AllowedMethods: []string{http.MethodPost, http.MethodGet},
 		MaxAge:         600,
 		AllowedHeaders: []string{"*"},
 	})
