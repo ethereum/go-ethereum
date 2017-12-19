@@ -98,6 +98,9 @@ func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
 	config = bzzapi.NewDefaultConfig()
 	//first load settings from config file (if provided)
 	config, err = configFileOverride(config, ctx)
+	if err != nil {
+		return nil, err
+	}
 	//override settings provided by environment variables
 	config = envVarsOverride(config)
 	//override settings provided by command line
