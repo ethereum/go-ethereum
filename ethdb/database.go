@@ -34,7 +34,10 @@ import (
 	gometrics "github.com/rcrowley/go-metrics"
 )
 
-var OpenFileLimit = 64
+const (
+	writeDelayNThreshold = 250
+	writeDelayThreshold  = 500 * time.Millisecond
+)
 
 type LDBDatabase struct {
 	fn string      // filename for reporting
@@ -178,23 +181,23 @@ func (db *LDBDatabase) LDB() *leveldb.DB {
 
 // Meter configures the database metrics collectors and
 func (db *LDBDatabase) Meter(prefix string) {
-	// Short circuit metering if the metrics system is disabled
-	if !metrics.Enabled {
-		return
-	}
-	// Initialize all the metrics collector at the requested prefix
-	db.getTimer = metrics.NewTimer(prefix + "user/gets")
-	db.putTimer = metrics.NewTimer(prefix + "user/puts")
-	db.delTimer = metrics.NewTimer(prefix + "user/dels")
-	db.missMeter = metrics.NewMeter(prefix + "user/misses")
-	db.readMeter = metrics.NewMeter(prefix + "user/reads")
-	db.writeMeter = metrics.NewMeter(prefix + "user/writes")
+	if metrics.Enabled {
+		// Initialize all database related metrics collector at the requested prefix
+		// if metric is enable.
+		db.getTimer = metrics.NewTimer(prefix + "user/gets")
+		db.putTimer = metrics.NewTimer(prefix + "user/puts")
+		db.delTimer = metrics.NewTimer(prefix + "user/dels")
+		db.missMeter = metrics.NewMeter(prefix + "user/misses")
+		db.readMeter = metrics.NewMeter(prefix + "user/reads")
+		db.writeMeter = metrics.NewMeter(prefix + "user/writes")
 
+		db.compTimeMeter = metrics.NewMeter(prefix + "compact/time")
+		db.compReadMeter = metrics.NewMeter(prefix + "compact/input")
+		db.compWriteMeter = metrics.NewMeter(prefix + "compact/output")
+	}
+	// Initialize essential write delay metrics no matter metric is enable or not.
 	db.writeDelayMeter = metrics.NewMeter(prefix + "compact/writedelay/duration")
 	db.writeDelayNMeter = metrics.NewMeter(prefix + "compact/writedelay/counter")
-	db.compTimeMeter = metrics.NewMeter(prefix + "compact/time")
-	db.compReadMeter = metrics.NewMeter(prefix + "compact/input")
-	db.compWriteMeter = metrics.NewMeter(prefix + "compact/output")
 
 	// Create a quit channel for the periodic collector and run it
 	db.quitLock.Lock()
@@ -223,53 +226,55 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 	}
 	// Iterate ad infinitum and collect the stats
 	for i := 1; ; i++ {
-		// Retrieve the database stats
-		stats, err := db.db.GetProperty("leveldb.stats")
-		if err != nil {
-			db.log.Error("Failed to read database stats", "err", err)
-			return
-		}
-		// Find the compaction table, skip the header
-		lines := strings.Split(stats, "\n")
-		for len(lines) > 0 && strings.TrimSpace(lines[0]) != "Compactions" {
-			lines = lines[1:]
-		}
-		if len(lines) <= 3 {
-			db.log.Error("Compaction table not found")
-			return
-		}
-		lines = lines[3:]
-
-		// Iterate over all the table rows, and accumulate the entries
-		for j := 0; j < len(counters[i%2]); j++ {
-			counters[i%2][j] = 0
-		}
-		for _, line := range lines {
-			parts := strings.Split(line, "|")
-			if len(parts) != 6 {
-				break
+		if metrics.Enabled {
+			// Retrieve the database stats
+			stats, err := db.db.GetProperty("leveldb.stats")
+			if err != nil {
+				db.log.Error("Failed to read database stats", "err", err)
+				return
 			}
-			for idx, counter := range parts[3:] {
-				value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64)
-				if err != nil {
-					db.log.Error("Compaction entry parsing failed", "err", err)
-					return
+			// Find the compaction table, skip the header
+			lines := strings.Split(stats, "\n")
+			for len(lines) > 0 && strings.TrimSpace(lines[0]) != "Compactions" {
+				lines = lines[1:]
+			}
+			if len(lines) <= 3 {
+				db.log.Error("Compaction table not found")
+				return
+			}
+			lines = lines[3:]
+
+			// Iterate over all the table rows, and accumulate the entries
+			for j := 0; j < len(counters[i%2]); j++ {
+				counters[i%2][j] = 0
+			}
+			for _, line := range lines {
+				parts := strings.Split(line, "|")
+				if len(parts) != 6 {
+					break
 				}
-				counters[i%2][idx] += value
+				for idx, counter := range parts[3:] {
+					value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64)
+					if err != nil {
+						db.log.Error("Compaction entry parsing failed", "err", err)
+						return
+					}
+					counters[i%2][idx] += value
+				}
+			}
+			// Update all the requested meters
+			if db.compTimeMeter != nil {
+				db.compTimeMeter.Mark(int64((counters[i%2][0] - counters[(i-1)%2][0]) * 1000 * 1000 * 1000))
+			}
+			if db.compReadMeter != nil {
+				db.compReadMeter.Mark(int64((counters[i%2][1] - counters[(i-1)%2][1]) * 1024 * 1024))
+			}
+			if db.compWriteMeter != nil {
+				db.compWriteMeter.Mark(int64((counters[i%2][2] - counters[(i-1)%2][2]) * 1024 * 1024))
 			}
 		}
-		// Update all the requested meters
-		if db.compTimeMeter != nil {
-			db.compTimeMeter.Mark(int64((counters[i%2][0] - counters[(i-1)%2][0]) * 1000 * 1000 * 1000))
-		}
-		if db.compReadMeter != nil {
-			db.compReadMeter.Mark(int64((counters[i%2][1] - counters[(i-1)%2][1]) * 1024 * 1024))
-		}
-		if db.compWriteMeter != nil {
-			db.compWriteMeter.Mark(int64((counters[i%2][2] - counters[(i-1)%2][2]) * 1024 * 1024))
-		}
 
-		// Stat write delay.
+		// Gather write delay statistic
 		writeDelay, err := db.db.GetProperty("leveldb.writedelay")
 		if err != nil {
 			db.log.Error("Failed to read database write delay statistic", "err", err)
@@ -294,11 +299,22 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 
 		if db.writeDelayNMeter != nil {
 			db.writeDelayNMeter.Mark(int64((counters[i%2][3] - counters[(i-1)%2][3])))
+			// If the write delay number been collected in the last minute exceeds the predefined threshold,
+			// print a warning log here.
+			if int(db.writeDelayNMeter.Rate1()) > writeDelayNThreshold {
+				db.log.Warn("Write delay number exceeds the threshold (250) in the last minute")
+			}
 		}
 
 		if db.writeDelayMeter != nil {
 			db.writeDelayMeter.Mark(int64((counters[i%2][4] - counters[(i-1)%2][4])))
+			// If the write delay duration been collected in the last minute exceeds the predefined threshold,
+			// print a warning log here.
+			if int64(db.writeDelayMeter.Rate1()) > writeDelayThreshold.Nanoseconds() {
+				db.log.Warn("Write delay duration exceeds the threshold (0.5sec) in the last minute")
+			}
 		}
+
 		// Sleep a bit, then repeat the stats collection
 		select {
 		case errc := <-db.quitChan:
