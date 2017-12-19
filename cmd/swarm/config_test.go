@@ -124,7 +124,7 @@ func TestCmdLineOverrides(t *testing.T) {
 		t.Fatalf("Expected network ID to be %d, got %d", 42, info.NetworkId)
 	}
 
-	if info.SyncEnabled != true {
+	if !info.SyncEnabled {
 		t.Fatal("Expected Sync to be enabled, but is false")
 	}
 
@@ -219,7 +219,7 @@ func TestFileOverrides(t *testing.T) {
 		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkId)
 	}
 
-	if info.SyncEnabled != true {
+	if !info.SyncEnabled {
 		t.Fatal("Expected Sync to be enabled, but is false")
 	}
 
@@ -334,7 +334,7 @@ func TestEnvVars(t *testing.T) {
 		t.Fatalf("Expected Cors flag to be set to %s, got %s", "*", info.Cors)
 	}
 
-	if info.SyncEnabled != true {
+	if !info.SyncEnabled {
 		t.Fatal("Expected Sync to be enabled, but is false")
 	}
 
@@ -431,7 +431,7 @@ func TestCmdLineOverridesFile(t *testing.T) {
 		t.Fatalf("Expected network ID to be %d, got %d", expectNetworkId, info.NetworkId)
 	}
 
-	if info.SyncEnabled != true {
+	if !info.SyncEnabled {
 		t.Fatal("Expected Sync to be enabled, but is false")
 	}
 

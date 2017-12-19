@@ -107,9 +107,9 @@ func (in *Interpreter) enforceRestrictions(op OpCode, operation operation, stack
 // the return byte-slice and an error if one occurred.
 //
 // It's important to note that any errors returned by the interpreter should be
-// considered a revert-and-consume-all-gas operation. No error specific checks
-// should be handled to reduce complexity and errors further down the in.
-func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret []byte, err error) {
+// considered a revert-and-consume-all-gas operation except for
+// errExecutionReverted which means revert-and-keep-gas-left.
+func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
