@@ -51,8 +51,8 @@ func (method Method) pack(args ...interface{}) ([]byte, error) {
 	// input offset is the bytes offset for packed output
 	inputOffset := 0
 	for _, input := range method.Inputs {
-		if input.Type.IsArray {
-			inputOffset += (32 * input.Type.SliceSize)
+		if input.Type.T == ArrayTy {
+			inputOffset += (32 * input.Type.Size)
 		} else {
 			inputOffset += 32
 		}
