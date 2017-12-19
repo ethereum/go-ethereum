@@ -58,7 +58,6 @@ type URI struct {
 // * <scheme>://<addr>
 // * <scheme>://<addr>/<path>
 //
-
 // with scheme one of bzz, bzz-raw, bzz-immutable, bzz-list or bzz-hash
 // or deprecated ones bzzr and bzzi
 func Parse(rawuri string) (*URI, error) {
