@@ -250,7 +250,7 @@ func get_balance(pResult unsafe.Pointer, pCtx unsafe.Pointer, pAddr unsafe.Point
 	balance := env.StateDB.GetBalance(addr)
 	val := common.BigToHash(balance)
 	copy(result, val[:])
-	fmt.Printf("BALANCE %x : %v\n", addr, balance)
+	// fmt.Printf("BALANCE %x : %v\n", addr, balance)
 }
 
 //export get_code
@@ -357,24 +357,24 @@ func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_me
 	case C.EVM_CALL:
 		staticCall := (msg.flags & C.EVM_STATIC) != 0
 		if staticCall {
-			fmt.Printf("STATICCALL(gas %d, %x)\n", gas, addr)
+			// fmt.Printf("STATICCALL(gas %d, %x)\n", gas, addr)
 			output, gasLeft, err = env.StaticCall(contract, addr, input, gas)
 		} else {
-			fmt.Printf("CALL(gas %d, %x)\n", gas, addr)
+			// fmt.Printf("CALL(gas %d, %x)\n", gas, addr)
 			output, gasLeft, err = env.Call(contract, addr, input, gas, value)
 		}
 
 
 	case C.EVM_CALLCODE:
-		fmt.Printf("CALLCODE(gas %d, %x, value %d)\n", gas, addr, value)
+		// fmt.Printf("CALLCODE(gas %d, %x, value %d)\n", gas, addr, value)
 		output, gasLeft, err = env.CallCode(contract, addr, input, gas, value)
 
 	case C.EVM_DELEGATECALL:
-		fmt.Printf("DELEGATECALL(gas %d, %x)\n", gas, addr)
+		// fmt.Printf("DELEGATECALL(gas %d, %x)\n", gas, addr)
 		output, gasLeft, err = env.DelegateCall(contract, addr, input, gas)
 
 	case C.EVM_CREATE:
-		fmt.Printf("CREATE(gas %d, %x)\n", gas, addr)
+		// fmt.Printf("CREATE(gas %d, %x)\n", gas, addr)
 		var createAddr common.Address
 		_, createAddr, gasLeft, err = env.Create(contract, input, gas, value)
 		isHomestead := env.ChainConfig().IsHomestead(env.BlockNumber)
@@ -389,7 +389,7 @@ func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_me
 	}
 
 	assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-	fmt.Printf("Gas left %d, err: %s\n", gasLeft, err)
+	// fmt.Printf("Gas left %d, err: %s\n", gasLeft, err)
 	result.gas_left = C.int64_t(gasLeft)
 
 	// Map error to status code.
@@ -412,7 +412,6 @@ func call(result *C.struct_evm_result, pCtx unsafe.Pointer, msg *C.struct_evm_me
 		result.output_size = 0
 		result.release = nil
 	}
-	fmt.Printf("CALL end\n")
 }
 
 func ptr(bytes []byte) *C.uint8_t {
@@ -487,7 +486,7 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 
 	unpinCtx(wrapper.index)
 
-	fmt.Printf("EVMJIT Run [%d]: %d %d %x\n", evm.env.depth - 1, r.status_code, r.gas_left, contract.Address())
+	// fmt.Printf("EVMJIT Run [%d]: %d %d %x\n", evm.env.depth - 1, r.status_code, r.gas_left, contract.Address())
 	if r.gas_left > gas {
 		panic("OOPS")
 	}
