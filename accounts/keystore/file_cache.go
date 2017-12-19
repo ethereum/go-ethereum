@@ -36,23 +36,18 @@ type fileCache struct {
 }
 
 func (fc *fileCache) checkFile(path string) (created, deleted, updated bool, err error) {
-
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 
 	created, deleted, updated, err = false, false, false, nil
-
 	previouslyKnown := fc.all.Has(path)
-
 	fi, err := os.Lstat(path)
-
 	if err != nil {
-		//A file has been deleted, but it can be a file which we
+		// A file has been deleted, but it can be a file which we
 		// were not previously watching.
 		deleted = previouslyKnown && os.IsNotExist(err)
 		return created, deleted, updated, err
 	}
-
 	if skipKeyFile(fi) {
 		log.Trace("Ignoring file on account scan", "path", path)
 		return created, deleted, updated, err
@@ -60,7 +55,6 @@ func (fc *fileCache) checkFile(path string) (created, deleted, updated bool, err
 
 	created = !previouslyKnown
 	updated = previouslyKnown
-
 	return created, deleted, updated, nil
 }
 
