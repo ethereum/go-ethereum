@@ -18,7 +18,6 @@ package utils
 
 import (
 	"fmt"
-	"syscall"
 	"testing"
 )
 
@@ -26,13 +25,12 @@ import (
 // per this process can be retrieved.
 func TestFileDescriptorLimits(t *testing.T) {
 	target := 4096
-	var limit syscall.Rlimit
 	hardlimit, err := getFdMaxLimit()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if hardlimit < target {
-		t.Skip(fmt.Sprintf("system limit is less than desired test target: %d < %d", limit.Max, target))
+		t.Skip(fmt.Sprintf("system limit is less than desired test target: %d < %d", hardlimit, target))
 	}
 
 	if limit, err := getFdLimit(); err != nil || limit <= 0 {
