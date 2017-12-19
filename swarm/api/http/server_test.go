@@ -118,6 +118,9 @@ func TestBzzGetPath(t *testing.T) {
 		}
 		defer resp.Body.Close()
 		respbody, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Read request body: %v", err)
+		}
 
 		if string(respbody) != key[v].String() {
 			isexpectedfailrequest := false
