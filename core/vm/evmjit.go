@@ -176,11 +176,6 @@ func assert(cond bool, msg string) {
 	}
 }
 
-type MemoryRef struct {
-	ptr *C.uint8_t
-	len int
-}
-
 func GoByteSlice(data unsafe.Pointer, size C.size_t) []byte {
 	var sliceHeader reflect.SliceHeader
 	sliceHeader.Data = uintptr(data)
@@ -466,8 +461,6 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 	msg.address = AddressToEvmc(contract.Address())
 	msg.sender = AddressToEvmc(contract.Caller())
 	msg.value = BigToEvmc(contract.value)
-	msg.input = ptr(input)
-	msg.input_size = C.size_t(len(input))
 	msg.gas = gas
 	msg.depth = C.int32_t(evm.env.depth - 1)
 	codeHash := crypto.Keccak256Hash(code)
@@ -478,9 +471,19 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 		msg.flags = 0
 	}
 
+	if len(input) > 0 {
+		cInput := C.CBytes(input)
+		msg.input = (*C.uint8_t)(cInput)
+		msg.input_size = C.size_t(len(input))
+		defer C.free(cInput)
+	} else {
+		msg.input = nil
+		msg.input_size = 0
+	}
+
 	// fmt.Printf("EVMJIT pre Run (gas %d %d mode: %d, env: %d) %x %x\n", contract.Gas, gas, rev, wrapper.index, codeHash, contract.Address())
 
-	r := C.evm_execute(evm.jit, &wrapper.c, rev, nil, codePtr, codeSize)
+	r := C.evm_execute(evm.jit, &wrapper.c, rev, &msg, codePtr, codeSize)
 
 	unpinCtx(wrapper.index)
 
