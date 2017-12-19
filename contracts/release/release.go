@@ -137,7 +137,7 @@ func (r *ReleaseService) checkVersion() {
 	if err != nil {
 		if err == bind.ErrNoCode {
 			log.Debug("Release oracle not found", "contract", r.config.Oracle)
-		} else {
+		} else if err != les.ErrNoPeers {
 			log.Error("Failed to retrieve current release", "err", err)
 		}
 		return
