@@ -92,6 +92,9 @@ func New(config Config) (*Console, error) {
 		printer:  config.Printer,
 		histPath: filepath.Join(config.DataDir, HistoryFile),
 	}
+	if err := os.MkdirAll(config.DataDir, 0700); err != nil {
+		return nil, err
+	}
 	if err := console.init(config.Preload); err != nil {
 		return nil, err
 	}
@@ -423,7 +426,7 @@ func (c *Console) Execute(path string) error {
 	return c.jsre.Exec(path)
 }
 
-// Stop cleans up the console and terminates the runtime envorinment.
+// Stop cleans up the console and terminates the runtime environment.
 func (c *Console) Stop(graceful bool) error {
 	if err := ioutil.WriteFile(c.histPath, []byte(strings.Join(c.history, "\n")), 0600); err != nil {
 		return err
