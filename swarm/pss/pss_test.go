@@ -634,13 +634,15 @@ func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubke
 // params in run name:
 // nodes/msgs/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
+//
+// ( some tests are commented out because of resource limitations on Travis)
 func TestNetwork(t *testing.T) {
 	t.Run("3/2000/4/sock", testNetwork)
 	t.Run("4/2000/4/sock", testNetwork)
-	t.Run("8/2000/4/sock", testNetwork)
-	t.Run("16/2000/4/sock", testNetwork)
-	t.Run("32/2000/4/sock", testNetwork)
-	t.Run("64/2000/4/sim", testNetwork)
+	//	t.Run("8/2000/4/sock", testNetwork)
+	//	t.Run("16/2000/4/sock", testNetwork)
+	//	t.Run("32/2000/4/sock", testNetwork)
+	//	t.Run("64/2000/4/sim", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
