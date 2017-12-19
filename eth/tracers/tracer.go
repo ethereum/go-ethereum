@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ethapi
+package tracers
 
 import (
 	"encoding/json"
@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	duktape "gopkg.in/olebedev/go-duktape.v3"
 )
@@ -273,9 +274,9 @@ func (cw *contractWrapper) pushObject(vm *duktape.Context) {
 	vm.PutPropString(obj, "getInput")
 }
 
-// JavascriptTracer provides an implementation of Tracer that evaluates a
-// Javascript function for each VM execution step.
-type JavascriptTracer struct {
+// Tracer provides an implementation of Tracer that evaluates a Javascript
+// function for each VM execution step.
+type Tracer struct {
 	inited bool // Flag whether the context was already inited from the EVM
 
 	vm *duktape.Context // Javascript VM instance
@@ -302,11 +303,15 @@ type JavascriptTracer struct {
 	reason    error  // Textual reason for the interruption
 }
 
-// NewJavascriptTracer instantiates a new JavascriptTracer instance.
-// code specifies a Javascript snippet, which must evaluate to an expression
-// returning an object with 'step' and 'result' functions.
-func NewJavascriptTracer(code string) (*JavascriptTracer, error) {
-	tracer := &JavascriptTracer{
+// New instantiates a new tracer instance. code specifies a Javascript snippet,
+// which must evaluate to an expression returning an object with 'step', 'fault'
+// and 'result' functions.
+func New(code string) (*Tracer, error) {
+	// Resolve any tracers by name and assemble the tracer object
+	if tracer, ok := tracer(code); ok {
+		code = tracer
+	}
+	tracer := &Tracer{
 		vm:              duktape.New(),
 		ctx:             make(map[string]interface{}),
 		opWrapper:       new(opWrapper),
@@ -324,6 +329,17 @@ func NewJavascriptTracer(code string) (*JavascriptTracer, error) {
 		ctx.PushString(hexutil.Encode(popSlice(ctx)))
 		return 1
 	})
+	tracer.vm.PushGlobalGoFunction("toWord", func(ctx *duktape.Context) int {
+		var word common.Hash
+		if ptr, size := ctx.GetBuffer(-1); ptr != nil {
+			word = common.BytesToHash(makeSlice(ptr, size))
+		} else {
+			word = common.HexToHash(ctx.GetString(-1))
+		}
+		ctx.Pop()
+		copy(makeSlice(ctx.PushFixedBuffer(32), 32), word[:])
+		return 1
+	})
 	tracer.vm.PushGlobalGoFunction("toAddress", func(ctx *duktape.Context) int {
 		var addr common.Address
 		if ptr, size := ctx.GetBuffer(-1); ptr != nil {
@@ -333,6 +349,20 @@ func NewJavascriptTracer(code string) (*JavascriptTracer, error) {
 		}
 		ctx.Pop()
 		copy(makeSlice(ctx.PushFixedBuffer(20), 20), addr[:])
+		return 1
+	})
+	tracer.vm.PushGlobalGoFunction("toContract", func(ctx *duktape.Context) int {
+		var from common.Address
+		if ptr, size := ctx.GetBuffer(-2); ptr != nil {
+			from = common.BytesToAddress(makeSlice(ptr, size))
+		} else {
+			from = common.HexToAddress(ctx.GetString(-2))
+		}
+		nonce := uint64(ctx.GetInt(-1))
+		ctx.Pop2()
+
+		contract := crypto.CreateAddress(from, nonce)
+		copy(makeSlice(ctx.PushFixedBuffer(20), 20), contract[:])
 		return 1
 	})
 	tracer.vm.PushGlobalGoFunction("isPrecompiled", func(ctx *duktape.Context) int {
@@ -414,14 +444,14 @@ func NewJavascriptTracer(code string) (*JavascriptTracer, error) {
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
-func (jst *JavascriptTracer) Stop(err error) {
+func (jst *Tracer) Stop(err error) {
 	jst.reason = err
 	atomic.StoreUint32(&jst.interrupt, 1)
 }
 
 // call executes a method on a JS object, catching any errors, formatting and
 // returning them as error objects.
-func (jst *JavascriptTracer) call(method string, args ...string) (json.RawMessage, error) {
+func (jst *Tracer) call(method string, args ...string) (json.RawMessage, error) {
 	// Execute the JavaScript call and return any error
 	jst.vm.PushString(method)
 	for _, arg := range args {
@@ -448,7 +478,7 @@ func wrapError(context string, err error) error {
 }
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
-func (jst *JavascriptTracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error {
+func (jst *Tracer) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error {
 	jst.ctx["type"] = "CALL"
 	if create {
 		jst.ctx["type"] = "CREATE"
@@ -463,7 +493,7 @@ func (jst *JavascriptTracer) CaptureStart(from common.Address, to common.Address
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution.
-func (jst *JavascriptTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
+func (jst *Tracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
 	if jst.err == nil {
 		// Initialize the context if it wasn't done yet
 		if !jst.inited {
@@ -501,7 +531,7 @@ func (jst *JavascriptTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, 
 
 // CaptureFault implements the Tracer interface to trace an execution fault
 // while running an opcode.
-func (jst *JavascriptTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
+func (jst *Tracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
 	if jst.err == nil {
 		// Apart from the error, everything matches the previous invocation
 		jst.errorValue = new(string)
@@ -516,7 +546,7 @@ func (jst *JavascriptTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, 
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (jst *JavascriptTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
+func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
 	jst.ctx["output"] = output
 	jst.ctx["gasUsed"] = gasUsed
 	jst.ctx["time"] = t.String()
@@ -528,7 +558,7 @@ func (jst *JavascriptTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Du
 }
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
-func (jst *JavascriptTracer) GetResult() (json.RawMessage, error) {
+func (jst *Tracer) GetResult() (json.RawMessage, error) {
 	// Transform the context into a JavaScript object and inject into the state
 	obj := jst.vm.PushObject()
 

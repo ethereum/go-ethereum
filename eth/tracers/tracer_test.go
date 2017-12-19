@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ethapi
+package tracers
 
 import (
 	"bytes"
@@ -43,7 +43,7 @@ func (account) ReturnGas(*big.Int)                                  {}
 func (account) SetCode(common.Hash, []byte)                         {}
 func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
 
-func runTrace(tracer *JavascriptTracer) (json.RawMessage, error) {
+func runTrace(tracer *Tracer) (json.RawMessage, error) {
 	env := vm.NewEVM(vm.Context{BlockNumber: big.NewInt(1)}, nil, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 
 	contract := vm.NewContract(account{}, account{}, big.NewInt(0), 10000)
@@ -57,7 +57,7 @@ func runTrace(tracer *JavascriptTracer) (json.RawMessage, error) {
 }
 
 func TestTracing(t *testing.T) {
-	tracer, err := NewJavascriptTracer("{count: 0, step: function() { this.count += 1; }, fault: function() {}, result: function() { return this.count; }}")
+	tracer, err := New("{count: 0, step: function() { this.count += 1; }, fault: function() {}, result: function() { return this.count; }}")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestTracing(t *testing.T) {
 }
 
 func TestStack(t *testing.T) {
-	tracer, err := NewJavascriptTracer("{depths: [], step: function(log) { this.depths.push(log.stack.length()); }, fault: function() {}, result: function() { return this.depths; }}")
+	tracer, err := New("{depths: [], step: function(log) { this.depths.push(log.stack.length()); }, fault: function() {}, result: function() { return this.depths; }}")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestStack(t *testing.T) {
 }
 
 func TestOpcodes(t *testing.T) {
-	tracer, err := NewJavascriptTracer("{opcodes: [], step: function(log) { this.opcodes.push(log.op.toString()); }, fault: function() {}, result: function() { return this.opcodes; }}")
+	tracer, err := New("{opcodes: [], step: function(log) { this.opcodes.push(log.op.toString()); }, fault: function() {}, result: function() { return this.opcodes; }}")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestHalt(t *testing.T) {
 	t.Skip("duktape doesn't support abortion")
 
 	timeout := errors.New("stahp")
-	tracer, err := NewJavascriptTracer("{step: function() { while(1); }, result: function() { return null; }}")
+	tracer, err := New("{step: function() { while(1); }, result: function() { return null; }}")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestHalt(t *testing.T) {
 }
 
 func TestHaltBetweenSteps(t *testing.T) {
-	tracer, err := NewJavascriptTracer("{step: function() {}, fault: function() {}, result: function() { return null; }}")
+	tracer, err := New("{step: function() {}, fault: function() {}, result: function() { return null; }}")
 	if err != nil {
 		t.Fatal(err)
 	}

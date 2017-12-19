@@ -1,5 +1,5 @@
 /**
-This tracer returns sufficent information from a trace to 
+This tracer returns sufficent information from a trace to
 perform evmdis-style disassembly
 
 @author Nick Johnson, Martin Swende

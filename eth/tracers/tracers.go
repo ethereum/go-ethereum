@@ -27,23 +27,25 @@ import (
 // all contains all the built in JavaScript tracers by name.
 var all = make(map[string]string)
 
+// camel converts a snake cased input string into a camel cased output.
+func camel(str string) string {
+	pieces := strings.Split(str, "_")
+	for i := 1; i < len(pieces); i++ {
+		pieces[i] = string(unicode.ToUpper(rune(pieces[i][0]))) + pieces[i][1:]
+	}
+	return strings.Join(pieces, "")
+}
+
 // init retrieves the JavaScript transaction tracers included in go-ethereum.
 func init() {
 	for _, file := range tracers.AssetNames() {
-		// Convert the underscored tracer file name into a camelcase tracer name
-		pieces := strings.Split(strings.TrimSuffix(file, ".js"), "_")
-		for i := 1; i < len(pieces); i++ {
-			pieces[i] = string(unicode.ToUpper(rune(pieces[i][0]))) + pieces[i][1:]
-		}
-		name := strings.Join(pieces, "")
-
-		// Retrieve and store the tracer
+		name := camel(strings.TrimSuffix(file, ".js"))
 		all[name] = string(tracers.MustAsset(file))
 	}
 }
 
-// Tracer retrieves a specific JavaScript tracer by name.
-func Tracer(name string) (string, bool) {
+// tracer retrieves a specific JavaScript tracer by name.
+func tracer(name string) (string, bool) {
 	if tracer, ok := all[name]; ok {
 		return tracer, true
 	}

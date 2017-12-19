@@ -172,7 +172,7 @@
 
 	// result is invoked when all the opcodes have been iterated over and returns
 	// the final result of the tracing.
-	result: function(ctx) {
+	result: function(ctx, db) {
 		var result = {
 			type:    ctx.type,
 			from:    toHex(ctx.from),
