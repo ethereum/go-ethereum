@@ -22,7 +22,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/btcsuite/btcd/btcec"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -121,25 +121,20 @@ func (v Secp256k1) ENRKey() string { return "secp256k1" }
 
 // EncodeRLP implements rlp.Encoder.
 func (v Secp256k1) EncodeRLP(w io.Writer) error {
-	pk := btcec.PublicKey(v)
-
-	return rlp.Encode(w, pk.SerializeCompressed())
+	return rlp.Encode(w, crypto.CompressPubkey((*ecdsa.PublicKey)(&v)))
 }
 
 // DecodeRLP implements rlp.Decoder.
 func (v *Secp256k1) DecodeRLP(s *rlp.Stream) error {
-	buf := make([]byte, 33)
-	if err := s.Decode(&buf); err != nil {
-		return err
-	}
-
-	pk, err := btcec.ParsePubKey(buf, btcec.S256())
+	buf, err := s.Bytes()
 	if err != nil {
 		return err
 	}
-
+	pk, err := crypto.DecompressPubkey(buf)
+	if err != nil {
+		return err
+	}
 	*v = (Secp256k1)(*pk)
-
 	return nil
 }
 

@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
@@ -32,10 +31,8 @@ import (
 )
 
 var (
-	privkeyHex     = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"
-	privkey, _     = crypto.HexToECDSA(privkeyHex)
-	pubkeyBytes, _ = hex.DecodeString("03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
-	pubkey, _      = btcec.ParsePubKey(pubkeyBytes, btcec.S256())
+	privkey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	pubkey     = &privkey.PublicKey
 )
 
 var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))

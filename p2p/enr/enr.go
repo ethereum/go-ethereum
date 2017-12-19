@@ -33,11 +33,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"sort"
 
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -206,25 +203,27 @@ func (r *Record) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+type s256raw []byte
+
+func (s256raw) ENRKey() string { return "secp256k1" }
+
 // NodeAddr returns the node address. The return value will be nil if the record is
 // unsigned.
 func (r *Record) NodeAddr() []byte {
-	var secp256k1 Secp256k1
-	if r.Load(&secp256k1) != nil {
+	var key s256raw
+	if r.Load(&key) != nil {
 		return nil
 	}
-	pk := btcec.PublicKey(secp256k1)
-	return crypto.Keccak256(pk.SerializeCompressed())
+	return crypto.Keccak256(key)
 }
 
 // Sign signs the record with the given private key. It updates the record's identity
 // scheme, public key and increments the sequence number. Sign returns an error if the
 // encoded record is larger than the size limit.
 func (r *Record) Sign(privkey *ecdsa.PrivateKey) error {
-	pk := (*btcec.PublicKey)(&privkey.PublicKey)
 	r.seq = r.seq + 1
 	r.Set(ID_SECP256k1_KECCAK)
-	r.Set(Secp256k1(*pk))
+	r.Set(Secp256k1(privkey.PublicKey))
 	return r.signAndEncode(privkey)
 }
 
@@ -244,14 +243,14 @@ func (r *Record) signAndEncode(privkey *ecdsa.PrivateKey) error {
 	// Sign the tail of the list.
 	h := sha3.NewKeccak256()
 	rlp.Encode(h, list[1:])
-	sig, err := (*btcec.PrivateKey)(privkey).Sign(h.Sum(nil))
+	sig, err := crypto.Sign(h.Sum(nil), privkey)
 	if err != nil {
 		return err
 	}
+	sig = sig[:len(sig)-1] // remove v
 
 	// Put signature in front.
-	r.signature = encodeCompactSignature(sig)
-	list[0] = r.signature
+	r.signature, list[0] = sig, sig
 	r.raw, err = rlp.EncodeToBytes(list)
 	if err != nil {
 		return err
@@ -265,18 +264,16 @@ func (r *Record) signAndEncode(privkey *ecdsa.PrivateKey) error {
 func (r *Record) verifySignature() error {
 	// Get identity scheme, public key, signature.
 	var id ID
-	var secp256k1 Secp256k1
+	var key s256raw
 	if err := r.Load(&id); err != nil {
 		return err
 	} else if id != ID_SECP256k1_KECCAK {
 		return errNoID
 	}
-	if err := r.Load(&secp256k1); err != nil {
+	if err := r.Load(&key); err != nil {
 		return err
-	}
-	sig, err := parseCompactSignature(r.signature)
-	if err != nil {
-		return err
+	} else if len(key) != 33 {
+		return fmt.Errorf("invalid public key")
 	}
 
 	// Verify the signature.
@@ -284,22 +281,11 @@ func (r *Record) verifySignature() error {
 	list = r.appendPairs(list)
 	h := sha3.NewKeccak256()
 	rlp.Encode(h, list)
-	if !sig.Verify(h.Sum(nil), (*btcec.PublicKey)(&secp256k1)) {
+	fmt.Printf("sig: %x\n", r.signature)
+	fmt.Printf("key: %x\n", key)
+	fmt.Printf("hash: %x\n", h.Sum(nil))
+	if !crypto.VerifySignature(key, h.Sum(nil), r.signature) {
 		return errInvalidSig
 	}
 	return nil
-}
-
-func encodeCompactSignature(sig *btcec.Signature) []byte {
-	b := make([]byte, 64)
-	math.ReadBits(sig.R, b[:32])
-	math.ReadBits(sig.S, b[32:])
-	return b
-}
-
-func parseCompactSignature(sig []byte) (*btcec.Signature, error) {
-	if len(sig) != 64 {
-		return nil, errInvalidSigsize
-	}
-	return &btcec.Signature{R: new(big.Int).SetBytes(sig[:32]), S: new(big.Int).SetBytes(sig[32:])}, nil
 }
