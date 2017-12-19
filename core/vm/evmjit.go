@@ -442,7 +442,7 @@ func getRevision(env *EVM) C.enum_evm_revision {
 	return C.EVM_FRONTIER
 }
 
-func (evm *EVMJIT) Run(snapshot int, contract *Contract, input []byte) (ret []byte, err error) {
+func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	evm.env.depth++
 	defer func() { evm.env.depth-- }()
 
@@ -480,7 +480,7 @@ func (evm *EVMJIT) Run(snapshot int, contract *Contract, input []byte) (ret []by
 
 	// fmt.Printf("EVMJIT pre Run (gas %d %d mode: %d, env: %d) %x %x\n", contract.Gas, gas, rev, wrapper.index, codeHash, contract.Address())
 
-	r := C.evm_execute(evm.jit, &wrapper.c, rev, &msg, codePtr, codeSize)
+	r := C.evm_execute(evm.jit, &wrapper.c, rev, nil, codePtr, codeSize)
 
 	unpinCtx(wrapper.index)
 
