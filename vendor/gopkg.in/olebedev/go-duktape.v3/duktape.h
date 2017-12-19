@@ -18,21 +18,21 @@
  *  ===============
  *  Duktape license
  *  ===============
- *  
+ *
  *  (http://opensource.org/licenses/MIT)
- *  
+ *
  *  Copyright (c) 2013-2017 by Duktape authors (see AUTHORS.rst)
- *  
+ *
  *  Permission is hereby granted, free of charge, to any person obtaining a copy
  *  of this software and associated documentation files (the "Software"), to deal
  *  in the Software without restriction, including without limitation the rights
  *  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  *  copies of the Software, and to permit persons to whom the Software is
  *  furnished to do so, subject to the following conditions:
- *  
+ *
  *  The above copyright notice and this permission notice shall be included in
  *  all copies or substantial portions of the Software.
- *  
+ *
  *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  *  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  *  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -47,24 +47,24 @@
  *  ===============
  *  Duktape authors
  *  ===============
- *  
+ *
  *  Copyright
  *  =========
- *  
+ *
  *  Duktape copyrights are held by its authors.  Each author has a copyright
  *  to their contribution, and agrees to irrevocably license the contribution
  *  under the Duktape ``LICENSE.txt``.
- *  
+ *
  *  Authors
  *  =======
- *  
+ *
  *  Please include an e-mail address, a link to your GitHub profile, or something
  *  similar to allow your contribution to be identified accurately.
- *  
+ *
  *  The following people have contributed code, website contents, or Wiki contents,
  *  and agreed to irrevocably license their contributions under the Duktape
  *  ``LICENSE.txt`` (in order of appearance):
- *  
+ *
  *  * Sami Vaarala <sami.vaarala@iki.fi>
  *  * Niki Dobrev
  *  * Andreas \u00d6man <andreas@lonelycoder.com>
@@ -92,13 +92,13 @@
  *  * Steven Don (https://github.com/shdon)
  *  * Simon Stone (https://github.com/sstone1)
  *  * \J. McC. (https://github.com/jmhmccr)
- *  
+ *
  *  Other contributions
  *  ===================
- *  
+ *
  *  The following people have contributed something other than code (e.g. reported
  *  bugs, provided ideas, etc; roughly in order of appearance):
- *  
+ *
  *  * Greg Burns
  *  * Anthony Rabine
  *  * Carlos Costa
@@ -130,7 +130,7 @@
  *  * https://github.com/chris-y
  *  * Laurent Zubiaur (https://github.com/lzubiaur)
  *  * Neil Kolban (https://github.com/nkolban)
- *  
+ *
  *  If you are accidentally missing from this list, send me an e-mail
  *  (``sami.vaarala@iki.fi``) and I'll fix the omission.
  */
@@ -284,7 +284,7 @@ struct duk_time_components {
 /* Indicates that a native function does not have a fixed number of args,
  * and the argument stack should not be capped/extended at all.
  */
-#define DUK_VARARGS                       ((duk_int_t) (-1))
+#define DUK_VARARGS                       ((duk_uint_t) (-1))
 
 /* Number of value stack entries (in addition to actual call arguments)
  * guaranteed to be allocated on entry to a Duktape/C function.

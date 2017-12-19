@@ -694,10 +694,10 @@
 			"revisionTime": "2016-06-21T03:49:01Z"
 		},
 		{
-			"checksumSHA1": "cz8LG9iHvnfRygm6Ely04ExfJks=",
+			"checksumSHA1": "yPC9KQ8FsgkXOW/asyYb3e342zM=",
 			"path": "gopkg.in/olebedev/go-duktape.v3",
-			"revision": "a9c7dcc419333b2c1fed2cb5dc55968e1fde04e6",
-			"revisionTime": "2017-11-09T03:10:00Z"
+			"revision": "ba35a085130ba4a40459f68bf64c30232c1da09a",
+			"revisionTime": "2017-12-16T04:10:41Z"
 		},
 		{
 			"checksumSHA1": "4BwmmgQUhWtizsR2soXND0nqZ1I=",
