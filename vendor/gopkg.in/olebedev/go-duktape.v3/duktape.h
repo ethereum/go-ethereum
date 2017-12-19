@@ -284,7 +284,7 @@ struct duk_time_components {
 /* Indicates that a native function does not have a fixed number of args,
  * and the argument stack should not be capped/extended at all.
  */
-#define DUK_VARARGS                       ((duk_uint_t) (-1))
+#define DUK_VARARGS                       ((duk_int_t) (-1))
 
 /* Number of value stack entries (in addition to actual call arguments)
  * guaranteed to be allocated on entry to a Duktape/C function.
