@@ -102,6 +102,8 @@ func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
 	config = envVarsOverride(config)
 	//override settings provided by command line
 	config = cmdLineOverride(config, ctx)
+	//validate configuration parameters
+	err = validateConfig(config)
 
 	return
 }
@@ -317,6 +319,39 @@ func checkDeprecated(ctx *cli.Context) {
 	if ctx.GlobalString(DeprecatedEnsAddrFlag.Name) != "" {
 		log.Warn("--ens-addr is no longer a valid command line flag, please use --ens-api to specify contract address.")
 	}
+}
+
+//validate configuration parameters
+func validateConfig(cfg *bzzapi.Config) (err error) {
+	for _, ensAPI := range cfg.EnsAPIs {
+		if ensAPI != "" {
+			if err := validateEnsAPIs(ensAPI); err != nil {
+				return fmt.Errorf("invalid format [tld:][contract-addr@]url for ENS API endpoint configuration %q: %v", ensAPI, err)
+			}
+		}
+	}
+	return nil
+}
+
+//validate EnsAPIs configuration parameter
+func validateEnsAPIs(s string) (err error) {
+	// missing contract address
+	if strings.HasPrefix(s, "@") {
+		return errors.New("missing contract address")
+	}
+	// missing url
+	if strings.HasSuffix(s, "@") {
+		return errors.New("missing url")
+	}
+	// missing tld
+	if strings.HasPrefix(s, ":") {
+		return errors.New("missing tld")
+	}
+	// missing url
+	if strings.HasSuffix(s, ":") {
+		return errors.New("missing url")
+	}
+	return nil
 }
 
 //print a Config as string
