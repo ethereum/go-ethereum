@@ -1,4 +1,10 @@
-# Duktape bindings for Go(Golang) [![wercker status](https://app.wercker.com/status/3a5bb2e639a4b4efaf4c8bf7cab7442d/s "wercker status")](https://app.wercker.com/project/bykey/3a5bb2e639a4b4efaf4c8bf7cab7442d) [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/olebedev/go-duktape?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+# Duktape bindings for Go(Golang)
+
+[![wercker status](https://app.wercker.com/status/3a5bb2e639a4b4efaf4c8bf7cab7442d/s "wercker status")](https://app.wercker.com/project/bykey/3a5bb2e639a4b4efaf4c8bf7cab7442d)
+[![Travis status](https://travis-ci.org/olebedev/go-duktape.svg?branch=v3)](https://travis-ci.org/olebedev/go-duktape)
+[![Appveyor status](https://ci.appveyor.com/api/projects/status/github/olebedev/go-duktape?branch=v3&svg=true)](https://ci.appveyor.com/project/olebedev/go-duktape/branch/v3)
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/olebedev/go-duktape?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+
 [Duktape](http://duktape.org/index.html) is a thin, embeddable javascript engine.
 Most of the [api](http://duktape.org/api.html) is implemented.
 The exceptions are listed [here](https://github.com/olebedev/go-duktape/blob/master/api.go#L1566).
@@ -21,7 +27,7 @@ func main() {
   result := ctx.GetNumber(-1)
   ctx.Pop()
   fmt.Println("result is:", result)
-  // To prevent memory leaks, don't forget to clean up after 
+  // To prevent memory leaks, don't forget to clean up after
   // yourself when you're done using a context.
   ctx.DestroyHeap()
 }
