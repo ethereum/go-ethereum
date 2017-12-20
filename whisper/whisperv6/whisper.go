@@ -521,20 +521,19 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				return errors.New("invalid envelopes")
 			}
 
-			var trouble error
+			trouble := false
 			for _, env := range envelopes {
 				cached, err := wh.add(env)
-				if err != nil && trouble == nil {
-					// only report the first occurring error
-					trouble = err
+				if err != nil {
+					trouble = true
+					log.Error("bad envelope received, peer will be disconnected", "peer", p.peer.ID(), "err", err)
 				}
 				if cached {
 					p.mark(env)
 				}
 			}
 
-			if trouble != nil {
-				log.Warn("bad envelope received, peer will be disconnected", "peer", p.peer.ID(), "err", trouble)
+			if trouble {
 				return errors.New("invalid envelope")
 			}
 		case p2pCode:
