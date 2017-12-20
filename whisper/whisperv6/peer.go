@@ -157,17 +157,17 @@ func (p *Peer) broadcast() error {
 		}
 	}
 
-	// transmit the unknown batch (potentially empty)
-	if err := p2p.Send(p.ws, messagesCode, bundle); err != nil {
-		return err
-	}
-
-	// mark envelopes only if they were successfully sent
-	for _, e := range bundle {
-		p.mark(e)
-	}
-
 	if len(bundle) > 0 {
+		// transmit the batch of envelopes
+		if err := p2p.Send(p.ws, messagesCode, bundle); err != nil {
+			return err
+		}
+
+		// mark envelopes only if they were successfully sent
+		for _, e := range bundle {
+			p.mark(e)
+		}
+
 		log.Trace("broadcast", "num. messages", len(bundle))
 	}
 	return nil
