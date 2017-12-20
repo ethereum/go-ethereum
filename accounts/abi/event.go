@@ -75,7 +75,7 @@ func (e Event) tupleUnpack(v interface{}, output []byte) error {
 			// need to move this up because they read sequentially
 			j += input.Type.Size
 		}
-		marshalledValue, err := toGoType((i+j)*32, input.Type, output)
+		marshalledValue, err := ToGoType((i+j)*32, input.Type, output)
 		if err != nil {
 			return err
 		}
@@ -126,7 +126,7 @@ func (e Event) singleUnpack(v interface{}, output []byte) error {
 
 	value := valueOf.Elem()
 
-	marshalledValue, err := toGoType(0, e.Inputs[0].Type, output)
+	marshalledValue, err := ToGoType(0, e.Inputs[0].Type, output)
 	if err != nil {
 		return err
 	}

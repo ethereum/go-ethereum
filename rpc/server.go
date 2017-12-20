@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/fatih/set.v0"
+	"time"
 )
 
 const MetadataApi = "rpc"
@@ -42,6 +43,19 @@ const (
 	OptionSubscriptions = 1 << iota // support pub sub
 )
 
+// RPCLogger is an interface for logging rpc requests and responses
+type RPCLogger interface {
+	Store(record *RPCInvocationRecord)
+}
+
+// RPCInvocationRecord captures an rpc request and response, for audit logging
+type RPCInvocationRecord struct {
+	Method   string
+	Args     []string
+	Time     time.Time
+	Response string
+}
+
 // NewServer will create a new server instance with no registered handlers.
 func NewServer() *Server {
 	server := &Server{
@@ -56,6 +70,10 @@ func NewServer() *Server {
 	server.RegisterName(MetadataApi, rpcService)
 
 	return server
+}
+
+func (s *Server) SetAuditLogger(logger RPCLogger) {
+	s.auditlog = &logger
 }
 
 // RPCService gives meta information about the server.
@@ -125,7 +143,7 @@ func (s *Server) RegisterName(name string, rcvr interface{}) error {
 // If singleShot is true it will process a single request, otherwise it will handle
 // requests until the codec returns an error when reading a request (in most cases
 // an EOF). It executes requests in parallel when singleShot is false.
-func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecOption) error {
+func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecOption, ctx context.Context) error {
 	var pend sync.WaitGroup
 
 	defer func() {
@@ -140,7 +158,8 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 		s.codecsMu.Unlock()
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	//	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	// if the codec supports notification include a notifier that callbacks can use
@@ -215,14 +234,14 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 // stopped. In either case the codec is closed.
 func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	defer codec.Close()
-	s.serveRequest(codec, false, options)
+	s.serveRequest(codec, false, options, context.Background())
 }
 
 // ServeSingleRequest reads and processes a single RPC request from the given codec. It will not
 // close the codec unless a non-recoverable error has occurred. Note, this method will return after
 // a single request has been processed!
-func (s *Server) ServeSingleRequest(codec ServerCodec, options CodecOption) {
-	s.serveRequest(codec, true, options)
+func (s *Server) ServeSingleRequest(codec ServerCodec, options CodecOption, ctx context.Context) {
+	s.serveRequest(codec, true, options, ctx)
 }
 
 // Stop will stop reading new requests, wait for stopPendingRequestTimeout to allow pending requests to finish,
@@ -251,6 +270,20 @@ func (s *Server) createSubscription(ctx context.Context, c ServerCodec, req *ser
 	}
 
 	return reply[0].Interface().(*Subscription).ID, nil
+}
+
+// vstring 'resolves' values into string-values
+func vstring(v reflect.Value) string {
+	// Resolve pointers (optional args)
+	if v.Kind() == reflect.Ptr && !v.IsNil() {
+		v = v.Elem()
+	}
+	if v.CanInterface() {
+		if str, ok := v.Interface().(fmt.Stringer); ok {
+			return str.String()
+		}
+	}
+	return v.String()
 }
 
 // handle executes a request and returns the response from the callback.
@@ -312,14 +345,22 @@ func (s *Server) handle(ctx context.Context, codec ServerCodec, req *serverReque
 	if len(reply) == 0 {
 		return codec.CreateResponse(req.id, nil), nil
 	}
+	record := RPCInvocationRecord{Method: req.callb.method.Name}
+	if s.auditlog != nil {
+		for _, a := range req.args {
+			record.Args = append(record.Args, vstring(a))
+		}
+		defer (*s.auditlog).Store(&record)
+	}
 
 	if req.callb.errPos >= 0 { // test if method returned an error
 		if !reply[req.callb.errPos].IsNil() {
 			e := reply[req.callb.errPos].Interface().(error)
-			res := codec.CreateErrorResponse(&req.id, &callbackError{e.Error()})
-			return res, nil
+			record.Response = e.Error()
+			return codec.CreateErrorResponse(&req.id, &callbackError{e.Error()}), nil
 		}
 	}
+	record.Response = vstring(reply[0])
 	return codec.CreateResponse(req.id, reply[0].Interface()), nil
 }
 
