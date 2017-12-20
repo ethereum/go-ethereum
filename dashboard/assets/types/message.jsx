@@ -16,26 +16,46 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-import React from 'react';
-import {render} from 'react-dom';
+export type Message = {
+    home?: HomeMessage,
+    chain?: ChainMessage,
+    txpool?: TxPoolMessage,
+    network?: NetworkMessage,
+    system?: SystemMessage,
+    logs?: LogsMessage,
+};
 
-import MuiThemeProvider from 'material-ui/styles/MuiThemeProvider';
-import createMuiTheme from 'material-ui/styles/createMuiTheme';
+export type HomeMessage = {
+    memory?: Chart,
+    traffic?: Chart,
+};
 
-import Dashboard from './components/Dashboard';
+export type Chart = {
+    history?: Array<ChartEntry>,
+    new?: ChartEntry,
+};
 
-const theme = createMuiTheme({
-    palette: {
-        type: 'dark',
-    },
-});
-const dashboard = document.getElementById('dashboard');
-if (dashboard) {
-    // Renders the whole dashboard.
-    render(
-        <MuiThemeProvider theme={theme}>
-            <Dashboard />
-        </MuiThemeProvider>,
-        dashboard,
-    );
-}
+export type ChartEntry = {
+    time: Date,
+    value: number,
+};
+
+export type ChainMessage = {
+    /* TODO (kurkomisi) */
+};
+
+export type TxPoolMessage = {
+    /* TODO (kurkomisi) */
+};
+
+export type NetworkMessage = {
+    /* TODO (kurkomisi) */
+};
+
+export type SystemMessage = {
+    /* TODO (kurkomisi) */
+};
+
+export type LogsMessage = {
+    log: string,
+};

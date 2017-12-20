@@ -1,3 +1,5 @@
+// @flow
+
 // Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -15,103 +17,106 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 import React, {Component} from 'react';
-import PropTypes from 'prop-types';
 
 import withStyles from 'material-ui/styles/withStyles';
 import List, {ListItem, ListItemIcon, ListItemText} from 'material-ui/List';
 import Icon from 'material-ui/Icon';
 import Transition from 'react-transition-group/Transition';
-import {Icon as FontAwesome} from 'react-fa'
+import {Icon as FontAwesome} from 'react-fa';
 
-import {TAGS, DURATION} from './Common.jsx';
+import {MENU, DURATION} from './Common';
 
 // menuDefault is the default style of the menu.
 const menuDefault = {
-    transition: `margin-left ${DURATION}ms`,
+	transition: `margin-left ${DURATION}ms`,
 };
-// menu Transition is the additional style of the menu corresponding to the transition's state.
+// menuTransition is the additional style of the menu corresponding to the transition's state.
 const menuTransition = {
-    entered: {marginLeft: -200},
+	entered: {marginLeft: -200},
 };
 // Styles for the SideBar component.
 const styles = theme => ({
-    list: {
-        background: theme.palette.background.appBar,
-    },
-    listItem: {
-        minWidth: theme.spacing.unit * 3,
-    },
-    icon: {
-        fontSize: theme.spacing.unit * 3,
-    },
+	list: {
+		background: theme.palette.background.appBar,
+	},
+	listItem: {
+		minWidth: theme.spacing.unit * 3,
+	},
+	icon: {
+		fontSize: theme.spacing.unit * 3,
+	},
 });
-
+export type Props = {
+	classes: Object,
+	opened: boolean,
+	changeContent: () => {},
+};
 // SideBar renders the sidebar of the dashboard.
-@withStyles(styles)
-class SideBar extends Component {
-    constructor(props) {
-        super(props);
+class SideBar extends Component<Props> {
+	constructor(props) {
+		super(props);
 
-        // clickOn contains onClick event functions for the menu items.
-        // Instantiate only once, and reuse the existing functions to prevent the creation of
-        // new function instances every time the render method is triggered.
-        this.clickOn = {};
-        for(let key in TAGS) {
-            const id = TAGS[key].id;
-            this.clickOn[id] = event => {
-                event.preventDefault();
-                props.changeContent(id);
-            };
-        }
-    }
+		// clickOn contains onClick event functions for the menu items.
+		// Instantiate only once, and reuse the existing functions to prevent the creation of
+		// new function instances every time the render method is triggered.
+		this.clickOn = {};
+		MENU.forEach((menu) => {
+			this.clickOn[menu.id] = (event) => {
+				event.preventDefault();
+				props.changeContent(menu.id);
+			};
+		});
+	}
 
-    shouldComponentUpdate(nextProps) {
-        return nextProps.opened !== this.props.opened;
-    }
+	shouldComponentUpdate(nextProps) {
+		return nextProps.opened !== this.props.opened;
+	}
 
-    // menu renders the list of the menu items.
-    menu = transitionState => {
-        const {classes} = this.props; // The classes property is injected by withStyles().
+	menuItems = (transitionState) => {
+		const {classes} = this.props;
+		const children = [];
+		MENU.forEach((menu) => {
+			children.push(
+				<ListItem button key={menu.id} onClick={this.clickOn[menu.id]} className={classes.listItem}>
+					<ListItemIcon>
+						<Icon className={classes.icon}>
+							<FontAwesome name={menu.icon} />
+						</Icon>
+					</ListItemIcon>
+					<ListItemText
+						primary={menu.title}
+						style={{
+							...menuDefault,
+							...menuTransition[transitionState],
+							padding: 0,
+						}}
+					/>
+				</ListItem>,
+			);
+		});
+		return children;
+	};
 
-        return (
-            <div className={classes.list}>
-                <List>
-                    {
-                        Object.values(TAGS).map(tag => (
-                            <ListItem button key={tag.id} onClick={this.clickOn[tag.id]} className={classes.listItem}>
-                                <ListItemIcon>
-                                    <Icon className={classes.icon}>
-                                        <FontAwesome name={tag.icon} />
-                                    </Icon>
-                                </ListItemIcon>
-                                <ListItemText
-                                    primary={tag.title}
-                                    style={{
-                                        ...menuDefault,
-                                        ...menuTransition[transitionState],
-                                        padding: 0,
-                                    }}
-                                />
-                            </ListItem>
-                        ))
-                    }
-                </List>
-            </div>
-        );
-    };
+	// menu renders the list of the menu items.
+	menu = (transitionState) => {
+		const {classes} = this.props; // The classes property is injected by withStyles().
 
-    render() {
-        return (
-            <Transition mountOnEnter in={this.props.opened} timeout={{enter: DURATION}}>
-                {this.menu}
-            </Transition>
-        );
-    }
+		return (
+			<div className={classes.list}>
+				<List>
+					{this.menuItems(transitionState)}
+				</List>
+			</div>
+		);
+	};
+
+	render() {
+		return (
+			<Transition mountOnEnter in={this.props.opened} timeout={{enter: DURATION}}>
+				{this.menu}
+			</Transition>
+		);
+	}
 }
 
-SideBar.propTypes = {
-    opened:        PropTypes.bool.isRequired,
-    changeContent: PropTypes.func.isRequired,
-};
-
-export default SideBar;
+export default withStyles(styles)(SideBar);

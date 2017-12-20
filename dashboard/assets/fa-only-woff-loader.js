@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// faOnlyWoffLoader removes the .eot, .ttf, .svg dependencies of the FontAwesome, because they produce unused extra blobs.
+// fa-only-woff-loader removes the .eot, .ttf, .svg dependencies of the FontAwesome library,
+// because they produce unused extra blobs.
 module.exports = function(content) {
-    content = content.replace(/src.*url(?!.*url.*(\.eot)).*(\.eot)[^;]*;/,'');
-    content = content.replace(/url(?!.*url.*(\.eot)).*(\.eot)[^,]*,/,'');
-    content = content.replace(/url(?!.*url.*(\.ttf)).*(\.ttf)[^,]*,/,'');
-    content = content.replace(/,[^,]*url(?!.*url.*(\.svg)).*(\.svg)[^;]*;/,';');
-
-    return content;
+	return content
+		.replace(/src.*url(?!.*url.*(\.eot)).*(\.eot)[^;]*;/,'')
+		.replace(/url(?!.*url.*(\.eot)).*(\.eot)[^,]*,/,'')
+		.replace(/url(?!.*url.*(\.ttf)).*(\.ttf)[^,]*,/,'')
+		.replace(/,[^,]*url(?!.*url.*(\.svg)).*(\.svg)[^;]*;/,';');
 };
