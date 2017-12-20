@@ -124,7 +124,7 @@ func initialize(t *testing.T) {
 	for i := 0; i < NumNodes; i++ {
 		var node TestNode
 		node.shh = New(&DefaultConfig)
-		node.shh.SetMinimumPoW(0.00000001, true)
+		node.shh.SetMinimumPowTest(0.00000001)
 		node.shh.Start(nil)
 		topics := make([]TopicType, 0)
 		topics = append(topics, sharedTopic)
@@ -342,7 +342,7 @@ func powReqExchange(t *testing.T) {
 	}
 
 	const pow float64 = 7777777.0
-	nodes[0].shh.SetMinimumPoW(pow, true)
+	nodes[0].shh.SetMinimumPoW(pow)
 
 	// wait until all the messages are delivered
 	time.Sleep(64 * time.Millisecond)

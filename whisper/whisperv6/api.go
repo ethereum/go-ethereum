@@ -118,7 +118,7 @@ func (api *PublicWhisperAPI) SetMaxMessageSize(ctx context.Context, size uint32)
 
 // SetMinPow sets the minimum PoW for a message before it is accepted.
 func (api *PublicWhisperAPI) SetMinPoW(ctx context.Context, pow float64) (bool, error) {
-	return true, api.w.SetMinimumPoW(pow, false)
+	return true, api.w.SetMinimumPoW(pow)
 }
 
 // MarkTrustedPeer marks a peer trusted. , which will allow it to send historic (expired) messages.

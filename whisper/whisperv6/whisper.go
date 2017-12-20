@@ -181,30 +181,40 @@ func (w *Whisper) SetMaxMessageSize(size uint32) error {
 }
 
 // SetMinimumPoW sets the minimal PoW required by this node
-func (w *Whisper) SetMinimumPoW(val float64, testMode bool) error {
-	if val <= 0.0 {
+func (w *Whisper) SetMinimumPoW(val float64) error {
+	if val < 0.0 {
 		return fmt.Errorf("invalid PoW: %f", val)
 	}
 
 	w.notifyPeersAboutPowRequirementChange(val)
 
-	if testMode {
+	go func() {
+		// allow some time before all the peers have processed the notification
+		time.Sleep(time.Duration(w.reactionAllowance) * time.Second)
 		w.settings.Store(minPowIdx, val)
-	} else {
-		go func() {
-			// allow some time before all the peers have processed the notification
-			time.Sleep(time.Duration(w.reactionAllowance) * time.Second)
-			w.settings.Store(minPowIdx, val)
-		}()
-	}
+	}()
 
 	return nil
 }
 
+// SetMinimumPoW sets the minimal PoW in test environment
+func (w *Whisper) SetMinimumPowTest(val float64) {
+	w.notifyPeersAboutPowRequirementChange(val)
+	w.settings.Store(minPowIdx, val)
+}
+
 func (w *Whisper) notifyPeersAboutPowRequirementChange(pow float64) {
+	arr := make([]*Peer, len(w.peers))
+	i := 0
+
 	w.peerMu.Lock()
-	defer w.peerMu.Unlock()
 	for p := range w.peers {
+		arr[i] = p
+		i++
+	}
+	w.peerMu.Unlock()
+
+	for _, p := range arr {
 		err := p.notifyAboutPowRequirementChange(pow)
 		if err != nil {
 			// allow one retry
