@@ -235,12 +235,13 @@ func TestNodeAddr(t *testing.T) {
 	assert.Equal(t, expected, hex.EncodeToString(r.NodeAddr()))
 }
 
+var pyRecord, _ = hex.DecodeString("f896b840954dc36583c1f4b69ab59b1375f362f06ee99f3723cd77e64b6de6d211c27d7870642a79d4516997f94091325d2a7ca6215376971455fb221d34f35b277149a1018664697363763582765f82696490736563703235366b312d6b656363616b83697034847f00000189736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
+
 // TestPythonInterop checks that we can decode and verify a record produced by the Python
 // implementation.
 func TestPythonInterop(t *testing.T) {
-	enc, _ := hex.DecodeString("f896b840954dc36583c1f4b69ab59b1375f362f06ee99f3723cd77e64b6de6d211c27d7870642a79d4516997f94091325d2a7ca6215376971455fb221d34f35b277149a1018664697363763582765f82696490736563703235366b312d6b656363616b83697034847f00000189736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
 	var r Record
-	if err := rlp.DecodeBytes(enc, &r); err != nil {
+	if err := rlp.DecodeBytes(pyRecord, &r); err != nil {
 		t.Fatalf("can't decode: %v", err)
 	}
 
@@ -305,4 +306,13 @@ func TestSignEncodeAndDecodeRandom(t *testing.T) {
 		require.NoError(t, r.Load(buf), desc)
 		require.Equal(t, v, got, desc)
 	}
+}
+
+func BenchmarkDecode(b *testing.B) {
+	var r Record
+	for i := 0; i < b.N; i++ {
+		rlp.DecodeBytes(pyRecord, &r)
+	}
+	b.StopTimer()
+	r.NodeAddr()
 }
