@@ -582,7 +582,7 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				log.Warn("invalid value in powRequirementCode message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
 				return errors.New("invalid value in powRequirementCode message")
 			}
-			p.powRequirement = float64(f)
+			p.powRequirement = f
 		case bloomFilterExCode:
 			// to be implemented
 		case p2pMessageCode:
