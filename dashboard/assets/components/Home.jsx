@@ -16,65 +16,48 @@
 
 import React, {Component} from 'react';
 import PropTypes from 'prop-types';
-import Grid from 'material-ui/Grid';
-import {LineChart, AreaChart, Area, YAxis, CartesianGrid, Line, ResponsiveContainer} from 'recharts';
-import {withTheme} from 'material-ui/styles';
 
+import withTheme from 'material-ui/styles/withTheme';
+import {LineChart, AreaChart, Area, YAxis, CartesianGrid, Line} from 'recharts';
+
+import ChartGrid from './ChartGrid.jsx';
 import {isNullOrUndefined, DATA_KEYS} from "./Common.jsx";
 
-// ChartGrid renders a grid container for responsive charts.
-// The children are Recharts components extended with the Material-UI's xs property.
-class ChartGrid extends Component {
-    render() {
-        return (
-            <Grid container spacing={this.props.spacing}>
-                {
-                    React.Children.map(this.props.children, child => (
-                        <Grid item xs={child.props.xs}>
-                            <ResponsiveContainer width="100%" height={child.props.height}>
-                                {React.cloneElement(child, {data: child.props.values.map(value => ({value: value}))})}
-                            </ResponsiveContainer>
-                        </Grid>
-                    ))
-                }
-            </Grid>
-        );
-    }
-}
-
-ChartGrid.propTypes = {
-    spacing: PropTypes.number.isRequired,
-};
-
-// Home renders the home component.
+// Home renders the home content.
+@withTheme()
 class Home extends Component {
+    constructor(props) {
+        super(props);
+        const {theme} = props; // The theme property is injected by withTheme().
+        this.memoryColor = theme.palette.primary[300];
+        this.trafficColor = theme.palette.secondary[300];
+    }
+
     shouldComponentUpdate(nextProps) {
         return !isNullOrUndefined(nextProps.shouldUpdate[DATA_KEYS.memory]) ||
             !isNullOrUndefined(nextProps.shouldUpdate[DATA_KEYS.traffic]);
     }
 
     render() {
-        const {theme} = this.props;
-        const memoryColor = theme.palette.primary[300];
-        const trafficColor = theme.palette.secondary[300];
+        const {memory, traffic} = this.props;
 
         return (
             <ChartGrid spacing={24}>
-                <AreaChart xs={6} height={300} values={this.props.memory}>
+                <AreaChart xs={6} height={300} values={memory}>
                     <YAxis />
-                    <Area type="monotone" dataKey="value" stroke={memoryColor} fill={memoryColor} />
+                    <Area type="monotone" dataKey="value" stroke={this.memoryColor} fill={this.memoryColor} />
                 </AreaChart>
-                <LineChart xs={6} height={300} values={this.props.traffic}>
-                    <Line type="monotone" dataKey="value" stroke={trafficColor} dot={false} />
+                <LineChart xs={6} height={300} values={traffic}>
+                    <Line type="monotone" dataKey="value" stroke={this.trafficColor} dot={false} />
                 </LineChart>
-                <LineChart xs={6} height={300} values={this.props.memory}>
+                <LineChart xs={6} height={300} values={memory}>
                     <YAxis />
                     <CartesianGrid stroke="#eee" strokeDasharray="5 5" />
-                    <Line type="monotone" dataKey="value" stroke={memoryColor} dot={false} />
+                    <Line type="monotone" dataKey="value" stroke={this.memoryColor} dot={false} />
                 </LineChart>
-                <AreaChart xs={6} height={300} values={this.props.traffic}>
+                <AreaChart xs={6} height={300} values={traffic}>
                     <CartesianGrid stroke="#eee" strokeDasharray="5 5" vertical={false} />
-                    <Area type="monotone" dataKey="value" stroke={trafficColor} fill={trafficColor} />
+                    <Area type="monotone" dataKey="value" stroke={this.trafficColor} fill={this.trafficColor} />
                 </AreaChart>
             </ChartGrid>
         );
@@ -82,8 +65,7 @@ class Home extends Component {
 }
 
 Home.propTypes = {
-    theme:        PropTypes.object.isRequired,
     shouldUpdate: PropTypes.object.isRequired,
 };
 
-export default withTheme()(Home);
+export default Home;

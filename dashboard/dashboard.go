@@ -16,7 +16,9 @@
 
 package dashboard
 
-//go:generate go-bindata -nometadata -o assets.go -prefix assets -pkg dashboard assets/public/...
+//go:generate ./assets/node_modules/.bin/webpack --config ./assets/webpack.config.js --context ./assets
+//go:generate gofmt -s -w .
+//go:generate go-bindata -nometadata -o assets.go -prefix assets -nocompress -pkg dashboard assets/public/...
 
 import (
 	"fmt"
@@ -277,6 +279,7 @@ func (db *Dashboard) collectData() {
 func (db *Dashboard) collectLogs() {
 	defer db.wg.Done()
 
+	id := 1
 	// TODO (kurkomisi): log collection comes here.
 	for {
 		select {
@@ -285,8 +288,9 @@ func (db *Dashboard) collectLogs() {
 			return
 		case <-time.After(db.config.Refresh / 2):
 			db.sendToAll(&message{
-				Log: "This is a fake log.",
+				Log: fmt.Sprint(id, ": This is a fake log."),
 			})
+			id++
 		}
 	}
 }
