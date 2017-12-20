@@ -192,7 +192,7 @@ func (w *Whisper) SetMinimumPoW(val float64, testMode bool) error {
 		w.settings.Store(minPowIdx, val)
 	} else {
 		go func() {
-			//	// allow some time before all the peers have processed the notification
+			// allow some time before all the peers have processed the notification
 			time.Sleep(time.Duration(w.reactionAllowance) * time.Second)
 			w.settings.Store(minPowIdx, val)
 		}()
@@ -211,7 +211,7 @@ func (w *Whisper) notifyPeersAboutPowRequirementChange(pow float64) {
 			err = p.notifyAboutPowRequirementChange(pow)
 		}
 		if err != nil {
-			fmt.Errorf("Error sending PoW notification to peer [%x]: %s", p.ID(), err)
+			log.Warn("oversized message received", "peer", p.ID(), "error", err)
 		}
 	}
 }
@@ -568,7 +568,7 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				return errors.New("invalid powRequirementCode message")
 			}
 			f := math.Float64frombits(i)
-			if math.IsInf(f, 0) || math.IsNaN(f) {
+			if math.IsInf(f, 0) || math.IsNaN(f) || f < 0.0 {
 				log.Warn("invalid value in powRequirementCode message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
 				return errors.New("invalid value in powRequirementCode message")
 			}
@@ -640,7 +640,7 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 		log.Debug("envelope with low PoW dropped", "PoW", envelope.PoW(), "hash", envelope.Hash().Hex())
 		return false, nil // drop envelope without error for now
 
-		// after the Status message will include the PoW requirement, it should return an error here:
+		// once the status message includes the PoW requirement, an error should be returned here:
 		//return false, fmt.Errorf("envelope with low PoW dropped: PoW=%f, hash=[%v]", envelope.PoW(), envelope.Hash().Hex())
 	}
 

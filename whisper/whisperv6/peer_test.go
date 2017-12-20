@@ -334,7 +334,7 @@ func TestPeerBasic(t *testing.T) {
 
 func powReqExchange(t *testing.T) {
 	for i, node := range nodes {
-		for peer, _ := range node.shh.peers {
+		for peer := range node.shh.peers {
 			if peer.powRequirement > 1000.0 {
 				t.Fatalf("node %d: one of the peers' pow requirement is too big (%f).", i, peer.powRequirement)
 			}
@@ -349,7 +349,7 @@ func powReqExchange(t *testing.T) {
 
 	cnt := 0
 	for i, node := range nodes {
-		for peer, _ := range node.shh.peers {
+		for peer := range node.shh.peers {
 			if peer.peer.ID() == discover.PubkeyID(&nodes[0].id.PublicKey) {
 				cnt++
 				if peer.powRequirement != pow {
