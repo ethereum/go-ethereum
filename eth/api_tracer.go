@@ -62,7 +62,7 @@ type TraceConfig struct {
 
 // txTraceResult is the result of a single transaction trace.
 type txTraceResult struct {
-	Result interface{} `json:"result,omitempty"` // Trace results procuded by the tracer
+	Result interface{} `json:"result,omitempty"` // Trace results produced by the tracer
 	Error  string      `json:"error,omitempty"`  // Trace failure produced by the tracer
 }
 
@@ -79,7 +79,7 @@ type blockTraceTask struct {
 type blockTraceResult struct {
 	Block  hexutil.Uint64   `json:"block"`  // Block number corresponding to this trace
 	Hash   common.Hash      `json:"hash"`   // Block hash corresponding to this trace
-	Traces []*txTraceResult `json:"traces"` // Trace results procuded by the task
+	Traces []*txTraceResult `json:"traces"` // Trace results produced by the task
 }
 
 // txTraceTask represents a single transaction trace task when an entire block
@@ -118,6 +118,8 @@ func (db *ephemeralDatabase) Get(key []byte) ([]byte, error) {
 }
 
 // Prune does a state sync into a new memory write layer and replaces the old one.
+// This allows us to discard entries that are no longer referenced from the current
+// state.
 func (db *ephemeralDatabase) Prune(root common.Hash) {
 	// Pull the still relevant state data into memory
 	sync := state.NewStateSync(root, db.diskdb)

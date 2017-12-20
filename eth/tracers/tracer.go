@@ -370,6 +370,23 @@ func New(code string) (*Tracer, error) {
 		ctx.PushBoolean(ok)
 		return 1
 	})
+	tracer.vm.PushGlobalGoFunction("slice", func(ctx *duktape.Context) int {
+		start, end := ctx.GetInt(-2), ctx.GetInt(-1)
+		ctx.Pop2()
+
+		blob := popSlice(ctx)
+		size := end - start
+
+		if start < 0 || start > end || end > len(blob) {
+			// TODO(karalabe): We can't js-throw from Go inside duktape inside Go. The Go
+			// runtime goes belly up https://github.com/golang/go/issues/15639.
+			log.Warn("Tracer accessed out of bound memory", "available", len(blob), "offset", start, "size", size)
+			ctx.PushFixedBuffer(0)
+			return 1
+		}
+		copy(makeSlice(ctx.PushFixedBuffer(size), uint(size)), blob[start:end])
+		return 1
+	})
 	// Push the JavaScript tracer as object #0 onto the JSVM stack and validate it
 	if err := tracer.vm.PevalString("(" + code + ")"); err != nil {
 		log.Warn("Failed to compile tracer", "err", err)
@@ -559,25 +576,11 @@ func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, er
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
 func (jst *Tracer) GetResult() (json.RawMessage, error) {
-	// Push all the data buffers into the stack first
-	keys := make([]string, 0, len(jst.ctx))
-	for key := range jst.ctx {
-		keys = append(keys, key)
-	}
-	buffers := 0
-	for _, key := range keys {
-		switch val := jst.ctx[key].(type) {
-		case []byte:
-			ptr := jst.vm.PushFixedBuffer(len(val))
-			copy(makeSlice(ptr, uint(len(val))), val[:])
-			buffers++
-		}
-	}
 	// Transform the context into a JavaScript object and inject into the state
 	obj := jst.vm.PushObject()
 
-	for _, key := range keys {
-		switch val := jst.ctx[key].(type) {
+	for key, val := range jst.ctx {
+		switch val := val.(type) {
 		case uint64:
 			jst.vm.PushUint(uint(val))
 
@@ -585,8 +588,8 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 			jst.vm.PushString(val)
 
 		case []byte:
-			jst.vm.PushBufferObject(-(buffers + 1), len(val), len(val), duktape.BufobjArraybuffer)
-			buffers--
+			ptr := jst.vm.PushFixedBuffer(len(val))
+			copy(makeSlice(ptr, uint(len(val))), val[:])
 
 		case common.Address:
 			ptr := jst.vm.PushFixedBuffer(20)

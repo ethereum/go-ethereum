@@ -79,7 +79,7 @@
 	result: function(ctx) {
 		// Save the outer calldata also
 		if (ctx.input.length > 4) {
-			this.store(ctx.input.slice(0, 4), ctx.input.length-4)
+			this.store(slice(ctx.input, 0, 4), ctx.input.length-4)
 		}
 		return this.ids;
 	},
