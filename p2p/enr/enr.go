@@ -281,9 +281,6 @@ func (r *Record) verifySignature() error {
 	list = r.appendPairs(list)
 	h := sha3.NewKeccak256()
 	rlp.Encode(h, list)
-	fmt.Printf("sig: %x\n", r.signature)
-	fmt.Printf("key: %x\n", key)
-	fmt.Printf("hash: %x\n", h.Sum(nil))
 	if !crypto.VerifySignature(key, h.Sum(nil), r.signature) {
 		return errInvalidSig
 	}
