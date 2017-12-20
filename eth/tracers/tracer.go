@@ -559,11 +559,25 @@ func (jst *Tracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, er
 
 // GetResult calls the Javascript 'result' function and returns its value, or any accumulated error
 func (jst *Tracer) GetResult() (json.RawMessage, error) {
+	// Push all the data buffers into the stack first
+	keys := make([]string, 0, len(jst.ctx))
+	for key := range jst.ctx {
+		keys = append(keys, key)
+	}
+	buffers := 0
+	for _, key := range keys {
+		switch val := jst.ctx[key].(type) {
+		case []byte:
+			ptr := jst.vm.PushFixedBuffer(len(val))
+			copy(makeSlice(ptr, uint(len(val))), val[:])
+			buffers++
+		}
+	}
 	// Transform the context into a JavaScript object and inject into the state
 	obj := jst.vm.PushObject()
 
-	for key, val := range jst.ctx {
-		switch val := val.(type) {
+	for _, key := range keys {
+		switch val := jst.ctx[key].(type) {
 		case uint64:
 			jst.vm.PushUint(uint(val))
 
@@ -571,8 +585,8 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 			jst.vm.PushString(val)
 
 		case []byte:
-			ptr := jst.vm.PushFixedBuffer(len(val))
-			copy(makeSlice(ptr, uint(len(val))), val[:])
+			jst.vm.PushBufferObject(-(buffers + 1), len(val), len(val), duktape.BufobjArraybuffer)
+			buffers--
 
 		case common.Address:
 			ptr := jst.vm.PushFixedBuffer(20)
