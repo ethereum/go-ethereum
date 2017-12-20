@@ -47,9 +47,10 @@ const (
 	// by default before being forcefully aborted.
 	defaultTraceTimeout = 5 * time.Second
 
-	// defaultTraceRewind is the number of blocks the tracer is willing to rewind
-	// and regenerate to produce the state necessary to run a specific transaction.
-	defaultTraceRewind = uint64(128)
+	// defaultTraceReexec is the number of blocks the tracer is willing to go back
+	// and reexecute to produce missing historical state necessary to run a specific
+	// trace.
+	defaultTraceReexec = uint64(128)
 )
 
 // TraceConfig holds extra parameters to trace functions.
@@ -57,7 +58,7 @@ type TraceConfig struct {
 	*vm.LogConfig
 	Tracer  *string
 	Timeout *string
-	Rewind  *uint64
+	Reexec  *uint64
 }
 
 // txTraceResult is the result of a single transaction trace.
@@ -99,7 +100,7 @@ type ephemeralDatabase struct {
 }
 
 func (db *ephemeralDatabase) Put(key []byte, value []byte) error { return db.memdb.Put(key, value) }
-func (db *ephemeralDatabase) Delete(key []byte) error            { panic("delete not supported") }
+func (db *ephemeralDatabase) Delete(key []byte) error            { return errors.New("delete not supported") }
 func (db *ephemeralDatabase) Close()                             { db.memdb.Close() }
 func (db *ephemeralDatabase) NewBatch() ethdb.Batch {
 	return db.memdb.NewBatch()
@@ -201,13 +202,13 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 	}
 	statedb, err := state.New(start.Root(), state.NewDatabase(db))
 	if err != nil {
-		// If the starting state is missing, allow some number of blocks to be rewound
-		rewind := defaultTraceRewind
-		if config.Rewind != nil {
-			rewind = *config.Rewind
+		// If the starting state is missing, allow some number of blocks to be reexecuted
+		reexec := defaultTraceReexec
+		if config.Reexec != nil {
+			reexec = *config.Reexec
 		}
 		// Find the most recent block that has the state available
-		for i := uint64(0); i < rewind; i++ {
+		for i := uint64(0); i < reexec; i++ {
 			start = api.eth.blockchain.GetBlock(start.ParentHash(), start.NumberU64()-1)
 			if start == nil {
 				break
@@ -319,7 +320,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				failed = fmt.Errorf("block #%d not found", number)
 				break
 			}
-			// Send the block over to the concurrent tracers (if not in the rewind phase)
+			// Send the block over to the concurrent tracers (if not in the fast-forward phase)
 			if number > origin {
 				txs := block.Transactions()
 
@@ -463,11 +464,11 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 	if parent == nil {
 		return nil, fmt.Errorf("parent %x not found", block.ParentHash())
 	}
-	rewind := defaultTraceRewind
-	if config.Rewind != nil {
-		rewind = *config.Rewind
+	reexec := defaultTraceReexec
+	if config.Reexec != nil {
+		reexec = *config.Reexec
 	}
-	statedb, err := api.computeStateDB(parent, rewind)
+	statedb, err := api.computeStateDB(parent, reexec)
 	if err != nil {
 		return nil, err
 	}
@@ -534,14 +535,14 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 
 // computeStateDB retrieves the state database associated with a certain block.
 // If no state is locally available for the given block, a number of blocks are
-// attempted to be rewound and replayed to regenerate the desired state.
-func (api *PrivateDebugAPI) computeStateDB(block *types.Block, rewind uint64) (*state.StateDB, error) {
+// attempted to be reexecuted to generate the desired state.
+func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*state.StateDB, error) {
 	// If we have the state fully available, use that
 	statedb, err := api.eth.blockchain.StateAt(block.Root())
 	if err == nil {
 		return statedb, nil
 	}
-	// Otherwise try to rewind blocks until we find a state or reach our limit
+	// Otherwise try to reexec blocks until we find a state or reach our limit
 	origin := block.NumberU64()
 
 	memdb, _ := ethdb.NewMemDatabase()
@@ -549,7 +550,7 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, rewind uint64) (*
 		diskdb: api.eth.ChainDb(),
 		memdb:  memdb,
 	}
-	for i := uint64(0); i < rewind; i++ {
+	for i := uint64(0); i < reexec; i++ {
 		block = api.eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
 		if block == nil {
 			break
@@ -617,11 +618,11 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 	if tx == nil {
 		return nil, fmt.Errorf("transaction %x not found", hash)
 	}
-	rewind := defaultTraceRewind
-	if config.Rewind != nil {
-		rewind = *config.Rewind
+	reexec := defaultTraceReexec
+	if config.Reexec != nil {
+		reexec = *config.Reexec
 	}
-	msg, vmctx, statedb, err := api.computeTxEnv(blockHash, int(index), rewind)
+	msg, vmctx, statedb, err := api.computeTxEnv(blockHash, int(index), reexec)
 	if err != nil {
 		return nil, err
 	}
@@ -691,7 +692,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 }
 
 // computeTxEnv returns the execution environment of a certain transaction.
-func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, rewind uint64) (core.Message, vm.Context, *state.StateDB, error) {
+func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, reexec uint64) (core.Message, vm.Context, *state.StateDB, error) {
 	// Create the parent state database
 	block := api.eth.blockchain.GetBlockByHash(blockHash)
 	if block == nil {
@@ -701,7 +702,7 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, rew
 	if parent == nil {
 		return nil, vm.Context{}, nil, fmt.Errorf("parent %x not found", block.ParentHash())
 	}
-	statedb, err := api.computeStateDB(parent, rewind)
+	statedb, err := api.computeStateDB(parent, reexec)
 	if err != nil {
 		return nil, vm.Context{}, nil, err
 	}
