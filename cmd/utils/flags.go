@@ -19,6 +19,7 @@ package utils
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -145,6 +146,10 @@ var (
 	DeveloperPeriodFlag = cli.IntFlag{
 		Name:  "dev.period",
 		Usage: "Block period to use in developer mode (0 = mine only if transaction pending)",
+	}
+	GenesisFlag = cli.StringFlag{
+		Name:  "prestate",
+		Usage: "JSON file with prestate (genesis) config",
 	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
@@ -518,6 +523,27 @@ var (
 		Value: whisper.DefaultMinimumPoW,
 	}
 )
+
+// readGenesis will read the given JSON format genesis file and return
+// the initialized Genesis structure
+func ReadGenesis(genesisPath string) *core.Genesis {
+	// Make sure we have a valid genesis JSON
+	//genesisPath := ctx.Args().First()
+	if len(genesisPath) == 0 {
+		Fatalf("Must supply path to genesis JSON file")
+	}
+	file, err := os.Open(genesisPath)
+	if err != nil {
+		Fatalf("Failed to read genesis file: %v", err)
+	}
+	defer file.Close()
+
+	genesis := new(core.Genesis)
+	if err := json.NewDecoder(file).Decode(genesis); err != nil {
+		Fatalf("invalid genesis file: %v", err)
+	}
+	return genesis
+}
 
 // MakeDataDir retrieves the currently requested data directory, terminating
 // if none (or the empty string) is specified. If the node is starting a testnet,
@@ -1036,12 +1062,20 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 3
 		}
-		cfg.Genesis = core.DefaultTestnetGenesisBlock()
+		if ctx.GlobalString(GenesisFlag.Name) != "" {
+			cfg.Genesis = ReadGenesis(ctx.GlobalString(GenesisFlag.Name))
+		} else {
+			cfg.Genesis = core.DefaultTestnetGenesisBlock()
+		}
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 4
 		}
-		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
+		if ctx.GlobalString(GenesisFlag.Name) != "" {
+			cfg.Genesis = ReadGenesis(ctx.GlobalString(GenesisFlag.Name))
+		} else {
+			cfg.Genesis = core.DefaultRinkebyGenesisBlock()
+		}
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		// Create new developer account or reuse existing one
 		var (
@@ -1161,6 +1195,8 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
 	switch {
+	case ctx.GlobalBool(GenesisFlag.Name):
+		genesis = ReadGenesis(ctx.GlobalString(GenesisFlag.Name))
 	case ctx.GlobalBool(TestnetFlag.Name):
 		genesis = core.DefaultTestnetGenesisBlock()
 	case ctx.GlobalBool(RinkebyFlag.Name):
