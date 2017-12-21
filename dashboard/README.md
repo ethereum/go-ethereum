@@ -9,10 +9,11 @@ The client's UI uses [React][React] with JSX syntax, which is validated by the [
 
 ### Development and bundling
 
-As the dashboard depends on certain NPM packages (which are not included in the go-ethereum repo), these need to be installed first:
+As the dashboard depends on certain NPM packages (which are not included in the `go-ethereum` repo), these need to be installed first:
 
 ```
 $ (cd dashboard/assets && npm install)
+$ (cd dashboard/assets && ./node_modules/.bin/flow-typed install)
 ```
 
 Normally the dashboard assets are bundled into Geth via `go-bindata` to avoid external dependencies. Rebuilding Geth after each UI modification however is not feasible from a developer perspective. Instead, we can run `webpack` in watch mode to automatically rebundle the UI, and ask `geth` to use external assets to not rely on compiled resources:
@@ -28,18 +29,13 @@ To bundle up the final UI into Geth, run `go generate`:
 $ go generate ./dashboard
 ```
 
-Since JavaScript doesn't provide type safety, [Flow][Flow] is used to introduce and check types. These types are only useful during the development, so at the end of the day Babel will strip them.
-To take advantage of types the IDE needs to be prepared for them.
-In case of [Atom][Atom] a configuration guide can be found [here][Atom config].
-Install the [Nuclide][Nuclide] package for Flow support, make sure it installs all of its support packages by enabling `Install Recommended Packages on Startup`, and set the path of the `flow-bin` which were installed previously by `npm`.
-For more IDE support install the `linter-eslint` package too, which finds the `.eslintrc` file, and provides real-time linting.
-Atom warns, that these two packages are incompatible, but they seem to work well together.
-For third-party library errors and their auto-complete [flow-typed][flow-typed] is used.
+### Static type checking
 
-To visualize the hidden elements (e.g. `node_modules`), uncheck the `Exclude VCS Ignored Path` in `Settings > Core`.
-To visualize the white spaces, check `Show invisibles` in `Settings > Editor`.
-To use Sublime-like minimap, install the `minimap` package.
-In case of trouble related to the Atom UI, run `atom --clear-window-state`.
+Since JavaScript doesn't provide type safety, [Flow][Flow] is used to check types. These are only useful during development, so at the end of the process Babel will strip them.
+
+To take advantage of static type checking, your IDE needs to be prepared for it. In case of [Atom][Atom] a configuration guide can be found [here][Atom config]: Install the [Nuclide][Nuclide] package for Flow support, making sure it installs all of its support packages by enabling `Install Recommended Packages on Startup`, and set the path of the `flow-bin` which were installed previously by `npm`.
+
+For more IDE support install the `linter-eslint` package too, which finds the `.eslintrc` file, and provides real-time linting. Atom warns, that these two packages are incompatible, but they seem to work well together. For third-party library errors and auto-completion [flow-typed][flow-typed] is used.
 
 ### Have fun
 

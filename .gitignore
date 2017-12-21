@@ -35,6 +35,7 @@ profile.cov
 .idea
 
 # dashboard
+/dashboard/assets/flow-typed
 /dashboard/assets/node_modules
 /dashboard/assets/stats.json
 /dashboard/assets/public/bundle.js

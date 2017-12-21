@@ -18,7 +18,8 @@ package dashboard
 
 //go:generate ./assets/node_modules/.bin/webpack --config ./assets/webpack.config.js --context ./assets
 //go:generate go-bindata -nometadata -o assets.go -prefix assets -nocompress -pkg dashboard assets/public/...
-//go:generate gofmt -s -w .
+//go:generate gofmt -s -w assets.go
+//go:generate sed -i "s#var _public#//nolint:misspell\\n&#" assets.go
 
 import (
 	"fmt"
