@@ -71,13 +71,15 @@ func (e Event) tupleUnpack(v interface{}, output []byte) error {
 		if input.Indexed {
 			// can't read, continue
 			continue
-		} else if input.Type.T == ArrayTy {
-			// need to move this up because they read sequentially
-			j += input.Type.Size
 		}
 		marshalledValue, err := toGoType((i+j)*32, input.Type, output)
 		if err != nil {
 			return err
+		}
+		if input.Type.T == ArrayTy {
+			// combined index ('i' + 'j') need to be adjusted only by size of array, thus
+			// we need to decrement 'j' because 'i' was incremented
+			j += input.Type.Size - 1
 		}
 		reflectValue := reflect.ValueOf(marshalledValue)
 

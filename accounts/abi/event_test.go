@@ -17,11 +17,14 @@
 package abi
 
 import (
+	"bytes"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEventId(t *testing.T) {
@@ -53,4 +56,24 @@ func TestEventId(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestEventMultiValueWithArrayUnpack verifies that array fields will be counted after parsing array.
+func TestEventMultiValueWithArrayUnpack(t *testing.T) {
+	definition := `[{"name": "test", "type": "event", "inputs": [{"indexed": false, "name":"value1", "type":"uint8[2]"},{"indexed": false, "name":"value2", "type":"uint8"}]}]`
+	type testStruct struct {
+		Value1 [2]uint8
+		Value2 uint8
+	}
+	abi, err := JSON(strings.NewReader(definition))
+	require.NoError(t, err)
+	var b bytes.Buffer
+	var i uint8 = 1
+	for ; i <= 3; i++ {
+		b.Write(packNum(reflect.ValueOf(i)))
+	}
+	var rst testStruct
+	require.NoError(t, abi.Unpack(&rst, "test", b.Bytes()))
+	require.Equal(t, [2]uint8{1, 2}, rst.Value1)
+	require.Equal(t, uint8(3), rst.Value2)
 }
