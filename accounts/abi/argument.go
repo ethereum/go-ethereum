@@ -34,7 +34,7 @@ type Argument struct {
 type Arguments []Argument
 
 // UnmarshalJSON implements json.Unmarshaler interface
-func (a *Argument) UnmarshalJSON(data []byte) error {
+func (argument *Argument) UnmarshalJSON(data []byte) error {
 	var extarg struct {
 		Name    string
 		Type    string
@@ -45,38 +45,43 @@ func (a *Argument) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("argument json err: %v", err)
 	}
 
-	a.Type, err = NewType(extarg.Type)
+	argument.Type, err = NewType(extarg.Type)
 	if err != nil {
 		return err
 	}
-	a.Name = extarg.Name
-	a.Indexed = extarg.Indexed
+	argument.Name = extarg.Name
+	argument.Indexed = extarg.Indexed
 
 	return nil
 }
 
-func countNonIndexedArguments(args []Argument) int {
+// LengthNonIndexed returns the number of arguments when not counting 'indexed' ones. Only events
+// can ever have 'indexed' arguments, it should always be false on arguments for method input/output
+func (arguments Arguments) LengthNonIndexed() int {
 	out := 0
-	for i := range args {
-		if !args[i].Indexed {
+	for _, arg := range arguments {
+		if !arg.Indexed {
 			out++
 		}
 	}
 	return out
 }
-func (a *Arguments) isTuple() bool {
-	return a != nil && len(*a) > 1
+
+// isTuple returns true for non-atomic constructs, like (uint,uint) or uint[]
+func (arguments Arguments) isTuple() bool {
+	return len(arguments) > 1
 }
 
-func (a *Arguments) Unpack(v interface{}, data []byte) error {
-	if a.isTuple() {
-		return a.unpackTuple(v, data)
+// Unpack performs the operation hexdata -> Go format
+func (arguments Arguments) Unpack(v interface{}, data []byte) error {
+	if arguments.isTuple() {
+		return arguments.unpackTuple(v, data)
 	}
-	return a.unpackAtomic(v, data)
+	return arguments.unpackAtomic(v, data)
 }
 
-func (a *Arguments) unpackTuple(v interface{}, output []byte) error {
-	// make sure the passed value is a pointer
+func (arguments Arguments) unpackTuple(v interface{}, output []byte) error {
+	// make sure the passed value is arguments pointer
 	valueOf := reflect.ValueOf(v)
 	if reflect.Ptr != valueOf.Kind() {
 		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
@@ -87,17 +92,16 @@ func (a *Arguments) unpackTuple(v interface{}, output []byte) error {
 		typ   = value.Type()
 		kind  = value.Kind()
 	)
-/* !TODO add this back
-	if err := requireUnpackKind(value, typ, kind, (*a), false); err != nil {
+
+	if err := requireUnpackKind(value, typ, kind, arguments); err != nil {
 		return err
 	}
-*/
 	// `i` counts the nonindexed arguments.
 	// `j` counts the number of complex types.
 	// both `i` and `j` are used to to correctly compute `data` offset.
 
 	i, j := -1, 0
-	for _, arg := range(*a) {
+	for _, arg := range arguments {
 
 		if arg.Indexed {
 			// can't read, continue
@@ -130,14 +134,16 @@ func (a *Arguments) unpackTuple(v interface{}, output []byte) error {
 			}
 		case reflect.Slice, reflect.Array:
 			if value.Len() < i {
-				return fmt.Errorf("abi: insufficient number of arguments for unpack, want %d, got %d", len(*a), value.Len())
+				return fmt.Errorf("abi: insufficient number of arguments for unpack, want %d, got %d", len(arguments), value.Len())
 			}
 			v := value.Index(i)
 			if err := requireAssignable(v, reflectValue); err != nil {
 				return err
 			}
-			reflectValue := reflect.ValueOf(marshalledValue)
-			return set(v.Elem(), reflectValue, arg)
+
+			if err := set(v.Elem(), reflectValue, arg); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("abi:[2] cannot unmarshal tuple in to %v", typ)
 		}
@@ -145,13 +151,14 @@ func (a *Arguments) unpackTuple(v interface{}, output []byte) error {
 	return nil
 }
 
-func (a *Arguments) unpackAtomic(v interface{}, output []byte) error {
-	// make sure the passed value is a pointer
+// unpackAtomic unpacks ( hexdata -> go ) a single value
+func (arguments Arguments) unpackAtomic(v interface{}, output []byte) error {
+	// make sure the passed value is arguments pointer
 	valueOf := reflect.ValueOf(v)
 	if reflect.Ptr != valueOf.Kind() {
 		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
 	}
-	arg := (*a)[0]
+	arg := arguments[0]
 	if arg.Indexed {
 		return fmt.Errorf("abi: attempting to unpack indexed variable into element.")
 	}
@@ -162,19 +169,13 @@ func (a *Arguments) unpackAtomic(v interface{}, output []byte) error {
 	if err != nil {
 		return err
 	}
-	if err := set(value, reflect.ValueOf(marshalledValue), arg); err != nil {
-		return err
-	}
-	return nil
+	return set(value, reflect.ValueOf(marshalledValue), arg)
 }
 
-func (arguments *Arguments) Pack(args ...interface{}) ([]byte, error) {
+// Unpack performs the operation Go format -> Hexdata
+func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 	// Make sure arguments match up and pack them
-	if arguments == nil {
-		return nil, fmt.Errorf("arguments are nil, programmer error!")
-	}
-
-	abiArgs := *arguments
+	abiArgs := arguments
 	if len(args) != len(abiArgs) {
 		return nil, fmt.Errorf("argument count mismatch: %d for %d", len(args), len(abiArgs))
 	}

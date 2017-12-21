@@ -225,7 +225,7 @@ func TestEventTupleUnpack(t *testing.T) {
 			err := unpackTestEventData(tc.dest, tc.data, tc.jsonLog, assert)
 			if tc.error == "" {
 				assert.Nil(err, "Should be able to unpack event data.")
-				assert.Equal(tc.expected, tc.dest)
+				assert.Equal(tc.expected, tc.dest, tc.name)
 			} else {
 				assert.EqualError(err, tc.error)
 			}
@@ -243,11 +243,10 @@ func unpackTestEventData(dest interface{}, hexData string, jsonEvent []byte, ass
 }
 
 /*
-!TODO enable these when the fix is in. Taken from
+Taken from
 https://github.com/ethereum/go-ethereum/pull/15568
-
 */
-/*
+
 type testResult struct {
 	Values [2]*big.Int
 	Value1 *big.Int
@@ -309,10 +308,9 @@ func TestEventIndexedWithArrayUnpack(t *testing.T) {
 	b.Write(packNum(reflect.ValueOf(32)))
 	b.Write(packNum(reflect.ValueOf(len(stringOut))))
 	b.Write(common.RightPadBytes([]byte(stringOut), 32))
-	fmt.Println(b.Bytes())
+
 	var rst testStruct
 	require.NoError(t, abi.Unpack(&rst, "test", b.Bytes()))
 	require.Equal(t, [2]uint8{0, 0}, rst.Value1)
 	require.Equal(t, stringOut, rst.Value2)
 }
-*/

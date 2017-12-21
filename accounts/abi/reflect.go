@@ -93,3 +93,20 @@ func requireAssignable(dst, src reflect.Value) error {
 	}
 	return nil
 }
+
+// requireUnpackKind verifies preconditions for unpacking `args` into `kind`
+func requireUnpackKind(v reflect.Value, t reflect.Type, k reflect.Kind,
+	args Arguments) error {
+
+	switch k {
+	case reflect.Struct:
+	case reflect.Slice, reflect.Array:
+		if minLen := args.LengthNonIndexed(); v.Len() < minLen {
+			return fmt.Errorf("abi: insufficient number of elements in the list/array for unpack, want %d, got %d",
+				minLen, v.Len())
+		}
+	default:
+		return fmt.Errorf("abi: cannot unmarshal tuple into %v", t)
+	}
+	return nil
+}
