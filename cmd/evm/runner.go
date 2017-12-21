@@ -48,27 +48,6 @@ var runCommand = cli.Command{
 	Description: `The run command runs arbitrary EVM code.`,
 }
 
-// readGenesis will read the given JSON format genesis file and return
-// the initialized Genesis structure
-func readGenesis(genesisPath string) *core.Genesis {
-	// Make sure we have a valid genesis JSON
-	//genesisPath := ctx.Args().First()
-	if len(genesisPath) == 0 {
-		utils.Fatalf("Must supply path to genesis JSON file")
-	}
-	file, err := os.Open(genesisPath)
-	if err != nil {
-		utils.Fatalf("Failed to read genesis file: %v", err)
-	}
-	defer file.Close()
-
-	genesis := new(core.Genesis)
-	if err := json.NewDecoder(file).Decode(genesis); err != nil {
-		utils.Fatalf("invalid genesis file: %v", err)
-	}
-	return genesis
-}
-
 func runCmd(ctx *cli.Context) error {
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
@@ -95,7 +74,7 @@ func runCmd(ctx *cli.Context) error {
 		debugLogger = vm.NewStructLogger(logconfig)
 	}
 	if ctx.GlobalString(GenesisFlag.Name) != "" {
-		gen := readGenesis(ctx.GlobalString(GenesisFlag.Name))
+		gen := utils.ReadGenesis(ctx.GlobalString(GenesisFlag.Name))
 		_, statedb = gen.ToBlock()
 		chainConfig = gen.Config
 	} else {
