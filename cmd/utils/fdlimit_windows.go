@@ -40,6 +40,8 @@ func getFdLimit() (int, error) {
 	return 16384, nil
 }
 
+// getFdMaxLimit retrieves the maximum number of file descriptors this process is
+// allowed to request for itself.
 func getFdMaxLimit() (int, error) {
 	return getFdLimit()
 }
