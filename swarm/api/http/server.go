@@ -290,9 +290,12 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, newKey)
 }
 
-// HandleGetRaw handles a GET request to bzz-raw://<key> and responds with
-// the raw content stored at the given storage key
-func (s *Server) HandleGetRaw(w http.ResponseWriter, r *Request) {
+// HandleGet handles a GET request to
+// - bzz-raw://<key> and responds with the raw content stored at the
+//   given storage key
+// - bzz-hash://<key> and responds with the hash of the content stored
+//   at the given storage key as a text/plain response
+func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
 		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
@@ -345,15 +348,22 @@ func (s *Server) HandleGetRaw(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	// allow the request to overwrite the content type using a query
-	// parameter
-	contentType := "application/octet-stream"
-	if typ := r.URL.Query().Get("content_type"); typ != "" {
-		contentType = typ
-	}
-	w.Header().Set("Content-Type", contentType)
+	switch {
+	case r.uri.Raw():
+		// allow the request to overwrite the content type using a query
+		// parameter
+		contentType := "application/octet-stream"
+		if typ := r.URL.Query().Get("content_type"); typ != "" {
+			contentType = typ
+		}
+		w.Header().Set("Content-Type", contentType)
 
-	http.ServeContent(w, &r.Request, "", time.Now(), reader)
+		http.ServeContent(w, &r.Request, "", time.Now(), reader)
+	case r.uri.Hash():
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, key)
+	}
 }
 
 // HandleGetFiles handles a GET request to bzz:/<manifest> with an Accept
@@ -619,8 +629,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.HandleDelete(w, req)
 
 	case "GET":
-		if uri.Raw() || uri.DeprecatedRaw() {
-			s.HandleGetRaw(w, req)
+		if uri.Raw() || uri.Hash() || uri.DeprecatedRaw() {
+			s.HandleGet(w, req)
 			return
 		}
 

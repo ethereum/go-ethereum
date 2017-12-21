@@ -29,6 +29,7 @@ func TestParseURI(t *testing.T) {
 		expectRaw                 bool
 		expectImmutable           bool
 		expectList                bool
+		expectHash                bool
 		expectDeprecatedRaw       bool
 		expectDeprecatedImmutable bool
 	}
@@ -99,6 +100,16 @@ func TestParseURI(t *testing.T) {
 			expectURI: &URI{Scheme: "bzz", Addr: "abc123", Path: "path/to/entry"},
 		},
 		{
+			uri:        "bzz-hash:",
+			expectURI:  &URI{Scheme: "bzz-hash"},
+			expectHash: true,
+		},
+		{
+			uri:        "bzz-hash:/",
+			expectURI:  &URI{Scheme: "bzz-hash"},
+			expectHash: true,
+		},
+		{
 			uri:        "bzz-list:",
 			expectURI:  &URI{Scheme: "bzz-list"},
 			expectList: true,
@@ -151,6 +162,9 @@ func TestParseURI(t *testing.T) {
 		}
 		if actual.List() != x.expectList {
 			t.Fatalf("expected %s list to be %t, got %t", x.uri, x.expectList, actual.List())
+		}
+		if actual.Hash() != x.expectHash {
+			t.Fatalf("expected %s hash to be %t, got %t", x.uri, x.expectHash, actual.Hash())
 		}
 		if actual.DeprecatedRaw() != x.expectDeprecatedRaw {
 			t.Fatalf("expected %s deprecated raw to be %t, got %t", x.uri, x.expectDeprecatedRaw, actual.DeprecatedRaw())
