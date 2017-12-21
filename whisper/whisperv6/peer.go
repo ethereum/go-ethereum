@@ -149,21 +149,26 @@ func (peer *Peer) expire() {
 // broadcast iterates over the collection of envelopes and transmits yet unknown
 // ones over the network.
 func (p *Peer) broadcast() error {
-	var cnt int
 	envelopes := p.host.Envelopes()
+	bundle := make([]*Envelope, 0, len(envelopes))
 	for _, envelope := range envelopes {
 		if !p.marked(envelope) {
-			err := p2p.Send(p.ws, messagesCode, envelope)
-			if err != nil {
-				return err
-			} else {
-				p.mark(envelope)
-				cnt++
-			}
+			bundle = append(bundle, envelope)
 		}
 	}
-	if cnt > 0 {
-		log.Trace("broadcast", "num. messages", cnt)
+
+	if len(bundle) > 0 {
+		// transmit the batch of envelopes
+		if err := p2p.Send(p.ws, messagesCode, bundle); err != nil {
+			return err
+		}
+
+		// mark envelopes only if they were successfully sent
+		for _, e := range bundle {
+			p.mark(e)
+		}
+
+		log.Trace("broadcast", "num. messages", len(bundle))
 	}
 	return nil
 }
