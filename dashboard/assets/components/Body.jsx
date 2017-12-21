@@ -20,49 +20,45 @@ import React, {Component} from 'react';
 
 import withStyles from 'material-ui/styles/withStyles';
 
-import Home from './Home';
-import {MENU} from './Common';
+import SideBar from './SideBar';
+import Main from './Main';
 import type {Content} from '../types/content';
 
-// Styles for the Content component.
-const styles = theme => ({
-	content: {
-		flexGrow:        1,
-		backgroundColor: theme.palette.background.default,
-		padding:         theme.spacing.unit * 3,
-		overflow:        'auto',
+// Styles for the Body component.
+const styles = () => ({
+	body: {
+		display: 'flex',
+		width:   '100%',
+		height:  '100%',
 	},
 });
 export type Props = {
 	classes: Object,
+	opened: boolean,
+	changeContent: () => {},
 	active: string,
 	content: Content,
 	shouldUpdate: Object,
 };
-// Main renders the chosen content.
-class Main extends Component<Props> {
+// Body renders the body of the dashboard.
+class Body extends Component<Props> {
 	render() {
-		const {
-			classes, active, content, shouldUpdate,
-		} = this.props;
+		const {classes} = this.props; // The classes property is injected by withStyles().
 
-		let children = null;
-		switch (active) {
-		case MENU.get('home').id:
-			children = <Home memory={content.home.memory} traffic={content.home.traffic} shouldUpdate={shouldUpdate} />;
-			break;
-		case MENU.get('chain').id:
-		case MENU.get('txpool').id:
-		case MENU.get('network').id:
-		case MENU.get('system').id:
-			children = <div>Work in progress.</div>;
-			break;
-		case MENU.get('logs').id:
-			children = <div>{content.logs.log.map((log, index) => <div key={index}>{log}</div>)}</div>;
-		}
-
-		return <div className={classes.content}>{children}</div>;
+		return (
+			<div className={classes.body}>
+				<SideBar
+					opened={this.props.opened}
+					changeContent={this.props.changeContent}
+				/>
+				<Main
+					active={this.props.active}
+					content={this.props.content}
+					shouldUpdate={this.props.shouldUpdate}
+				/>
+			</div>
+		);
 	}
 }
 
-export default withStyles(styles)(Main);
+export default withStyles(styles)(Body);
