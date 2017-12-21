@@ -349,6 +349,188 @@ func TestInputVariableInputLength(t *testing.T) {
 	}
 }
 
+func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
+	const definition = `[
+	{ "type" : "function", "name" : "fixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr", "type" : "uint256[2]" } ] },
+	{ "type" : "function", "name" : "fixedArrBytes", "constant" : true, "inputs" : [ { "name" : "str", "type" : "bytes" }, { "name" : "fixedArr", "type" : "uint256[2]" } ] },
+    { "type" : "function", "name" : "mixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr", "type": "uint256[2]" }, { "name" : "dynArr", "type": "uint256[]" } ] },
+    { "type" : "function", "name" : "doubleFixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr1", "type": "uint256[2]" }, { "name" : "fixedArr2", "type": "uint256[3]" } ] },
+    { "type" : "function", "name" : "multipleMixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr1", "type": "uint256[2]" }, { "name" : "dynArr", "type" : "uint256[]" }, { "name" : "fixedArr2", "type" : "uint256[3]" } ] }
+	]`
+
+	abi, err := JSON(strings.NewReader(definition))
+	if err != nil {
+		t.Error(err)
+	}
+
+	// test string, fixed array uint256[2]
+	strin := "hello world"
+	arrin := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	fixedArrStrPack, err := abi.Pack("fixedArrStr", strin, arrin)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// generate expected output
+	offset := make([]byte, 32)
+	offset[31] = 96
+	length := make([]byte, 32)
+	length[31] = byte(len(strin))
+	strvalue := common.RightPadBytes([]byte(strin), 32)
+	arrinvalue1 := common.LeftPadBytes(arrin[0].Bytes(), 32)
+	arrinvalue2 := common.LeftPadBytes(arrin[1].Bytes(), 32)
+	exp := append(offset, arrinvalue1...)
+	exp = append(exp, arrinvalue2...)
+	exp = append(exp, append(length, strvalue...)...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	fixedArrStrPack = fixedArrStrPack[4:]
+	if !bytes.Equal(fixedArrStrPack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, fixedArrStrPack)
+	}
+
+	// test byte array, fixed array uint256[2]
+	bytesin := []byte(strin)
+	arrin = [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	fixedArrBytesPack, err := abi.Pack("fixedArrBytes", bytesin, arrin)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// generate expected output
+	offset = make([]byte, 32)
+	offset[31] = 96
+	length = make([]byte, 32)
+	length[31] = byte(len(strin))
+	strvalue = common.RightPadBytes([]byte(strin), 32)
+	arrinvalue1 = common.LeftPadBytes(arrin[0].Bytes(), 32)
+	arrinvalue2 = common.LeftPadBytes(arrin[1].Bytes(), 32)
+	exp = append(offset, arrinvalue1...)
+	exp = append(exp, arrinvalue2...)
+	exp = append(exp, append(length, strvalue...)...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	fixedArrBytesPack = fixedArrBytesPack[4:]
+	if !bytes.Equal(fixedArrBytesPack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, fixedArrBytesPack)
+	}
+
+	// test string, fixed array uint256[2], dynamic array uint256[]
+	strin = "hello world"
+	fixedarrin := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	dynarrin := []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
+	mixedArrStrPack, err := abi.Pack("mixedArrStr", strin, fixedarrin, dynarrin)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// generate expected output
+	stroffset := make([]byte, 32)
+	stroffset[31] = 128
+	strlength := make([]byte, 32)
+	strlength[31] = byte(len(strin))
+	strvalue = common.RightPadBytes([]byte(strin), 32)
+	fixedarrinvalue1 := common.LeftPadBytes(fixedarrin[0].Bytes(), 32)
+	fixedarrinvalue2 := common.LeftPadBytes(fixedarrin[1].Bytes(), 32)
+	dynarroffset := make([]byte, 32)
+	dynarroffset[31] = byte(160 + ((len(strin)/32)+1)*32)
+	dynarrlength := make([]byte, 32)
+	dynarrlength[31] = byte(len(dynarrin))
+	dynarrinvalue1 := common.LeftPadBytes(dynarrin[0].Bytes(), 32)
+	dynarrinvalue2 := common.LeftPadBytes(dynarrin[1].Bytes(), 32)
+	dynarrinvalue3 := common.LeftPadBytes(dynarrin[2].Bytes(), 32)
+	exp = append(stroffset, fixedarrinvalue1...)
+	exp = append(exp, fixedarrinvalue2...)
+	exp = append(exp, dynarroffset...)
+	exp = append(exp, append(strlength, strvalue...)...)
+	dynarrarg := append(dynarrlength, dynarrinvalue1...)
+	dynarrarg = append(dynarrarg, dynarrinvalue2...)
+	dynarrarg = append(dynarrarg, dynarrinvalue3...)
+	exp = append(exp, dynarrarg...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	mixedArrStrPack = mixedArrStrPack[4:]
+	if !bytes.Equal(mixedArrStrPack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, mixedArrStrPack)
+	}
+
+	// test string, fixed array uint256[2], fixed array uint256[3]
+	strin = "hello world"
+	fixedarrin1 := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	fixedarrin2 := [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
+	doubleFixedArrStrPack, err := abi.Pack("doubleFixedArrStr", strin, fixedarrin1, fixedarrin2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// generate expected output
+	stroffset = make([]byte, 32)
+	stroffset[31] = 192
+	strlength = make([]byte, 32)
+	strlength[31] = byte(len(strin))
+	strvalue = common.RightPadBytes([]byte(strin), 32)
+	fixedarrin1value1 := common.LeftPadBytes(fixedarrin1[0].Bytes(), 32)
+	fixedarrin1value2 := common.LeftPadBytes(fixedarrin1[1].Bytes(), 32)
+	fixedarrin2value1 := common.LeftPadBytes(fixedarrin2[0].Bytes(), 32)
+	fixedarrin2value2 := common.LeftPadBytes(fixedarrin2[1].Bytes(), 32)
+	fixedarrin2value3 := common.LeftPadBytes(fixedarrin2[2].Bytes(), 32)
+	exp = append(stroffset, fixedarrin1value1...)
+	exp = append(exp, fixedarrin1value2...)
+	exp = append(exp, fixedarrin2value1...)
+	exp = append(exp, fixedarrin2value2...)
+	exp = append(exp, fixedarrin2value3...)
+	exp = append(exp, append(strlength, strvalue...)...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	doubleFixedArrStrPack = doubleFixedArrStrPack[4:]
+	if !bytes.Equal(doubleFixedArrStrPack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, doubleFixedArrStrPack)
+	}
+
+	// test string, fixed array uint256[2], dynamic array uint256[], fixed array uint256[3]
+	strin = "hello world"
+	fixedarrin1 = [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	dynarrin = []*big.Int{big.NewInt(1), big.NewInt(2)}
+	fixedarrin2 = [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
+	multipleMixedArrStrPack, err := abi.Pack("multipleMixedArrStr", strin, fixedarrin1, dynarrin, fixedarrin2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// generate expected output
+	stroffset = make([]byte, 32)
+	stroffset[31] = 224
+	strlength = make([]byte, 32)
+	strlength[31] = byte(len(strin))
+	strvalue = common.RightPadBytes([]byte(strin), 32)
+	fixedarrin1value1 = common.LeftPadBytes(fixedarrin1[0].Bytes(), 32)
+	fixedarrin1value2 = common.LeftPadBytes(fixedarrin1[1].Bytes(), 32)
+	dynarroffset = U256(big.NewInt(int64(256 + ((len(strin)/32)+1)*32)))
+	dynarrlength = make([]byte, 32)
+	dynarrlength[31] = byte(len(dynarrin))
+	dynarrinvalue1 = common.LeftPadBytes(dynarrin[0].Bytes(), 32)
+	dynarrinvalue2 = common.LeftPadBytes(dynarrin[1].Bytes(), 32)
+	fixedarrin2value1 = common.LeftPadBytes(fixedarrin2[0].Bytes(), 32)
+	fixedarrin2value2 = common.LeftPadBytes(fixedarrin2[1].Bytes(), 32)
+	fixedarrin2value3 = common.LeftPadBytes(fixedarrin2[2].Bytes(), 32)
+	exp = append(stroffset, fixedarrin1value1...)
+	exp = append(exp, fixedarrin1value2...)
+	exp = append(exp, dynarroffset...)
+	exp = append(exp, fixedarrin2value1...)
+	exp = append(exp, fixedarrin2value2...)
+	exp = append(exp, fixedarrin2value3...)
+	exp = append(exp, append(strlength, strvalue...)...)
+	dynarrarg = append(dynarrlength, dynarrinvalue1...)
+	dynarrarg = append(dynarrarg, dynarrinvalue2...)
+	exp = append(exp, dynarrarg...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	multipleMixedArrStrPack = multipleMixedArrStrPack[4:]
+	if !bytes.Equal(multipleMixedArrStrPack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, multipleMixedArrStrPack)
+	}
+}
+
 func TestDefaultFunctionParsing(t *testing.T) {
 	const definition = `[{ "name" : "balance" }]`
 

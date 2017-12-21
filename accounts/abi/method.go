@@ -48,6 +48,16 @@ func (method Method) pack(args ...interface{}) ([]byte, error) {
 	// output. This is used for strings and bytes types input.
 	var variableInput []byte
 
+	// input offset is the bytes offset for packed output
+	inputOffset := 0
+	for _, input := range method.Inputs {
+		if input.Type.T == ArrayTy {
+			inputOffset += (32 * input.Type.Size)
+		} else {
+			inputOffset += 32
+		}
+	}
+
 	var ret []byte
 	for i, a := range args {
 		input := method.Inputs[i]
@@ -60,7 +70,8 @@ func (method Method) pack(args ...interface{}) ([]byte, error) {
 		// check for a slice type (string, bytes, slice)
 		if input.Type.requiresLengthPrefix() {
 			// calculate the offset
-			offset := len(method.Inputs)*32 + len(variableInput)
+			offset := inputOffset + len(variableInput)
+
 			// set the offset
 			ret = append(ret, packNum(reflect.ValueOf(offset))...)
 			// Append the packed output to the variable input. The variable input
