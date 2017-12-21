@@ -114,7 +114,7 @@ func TestLoadErrors(t *testing.T) {
 
 	// Check error for invalid keys.
 	var list []uint
-	err = r.Load(WithKey(ip4.ENRKey(), &list))
+	err = r.Load(WithEntry(ip4.ENRKey(), &list))
 	kerr, ok := err.(*KeyError)
 	if !ok {
 		t.Fatalf("expected KeyError, got %T", err)
@@ -152,12 +152,12 @@ func TestSortedGetAndSet(t *testing.T) {
 	} {
 		var r Record
 		for _, i := range tt.input {
-			r.Set(WithKey(i.k, &i.v))
+			r.Set(WithEntry(i.k, &i.v))
 		}
 		for i, w := range tt.want {
 			// set got's key from r.pair[i], so that we preserve order of pairs
 			got := pair{k: r.pairs[i].k}
-			assert.NoError(t, r.Load(WithKey(w.k, &got.v)))
+			assert.NoError(t, r.Load(WithEntry(w.k, &got.v)))
 			assert.Equal(t, w, got)
 		}
 	}
@@ -257,7 +257,7 @@ func TestPythonInterop(t *testing.T) {
 	if addr := r.NodeAddr(); !bytes.Equal(addr, wantAddr) {
 		t.Errorf("wrong addr: got %x, want %x", addr, wantAddr)
 	}
-	want := map[Key]interface{}{new(IP4): &wantIP, new(DiscPort): &wantDiscport}
+	want := map[Entry]interface{}{new(IP4): &wantIP, new(DiscPort): &wantDiscport}
 	for k, v := range want {
 		desc := fmt.Sprintf("loading key %q", k.ENRKey())
 		if assert.NoError(t, r.Load(k), desc) {
@@ -272,13 +272,13 @@ func TestRecordTooBig(t *testing.T) {
 	key := randomString(10)
 
 	// set a big value for random key, expect error
-	r.Set(WithKey(key, randomString(300)))
+	r.Set(WithEntry(key, randomString(300)))
 	if err := r.Sign(privkey); err != errTooBig {
 		t.Fatalf("expected to get errTooBig, got %#v", err)
 	}
 
 	// set an acceptable value for random key, expect no error
-	r.Set(WithKey(key, randomString(100)))
+	r.Set(WithEntry(key, randomString(100)))
 	require.NoError(t, r.Sign(privkey))
 }
 
@@ -292,7 +292,7 @@ func TestSignEncodeAndDecodeRandom(t *testing.T) {
 		key := randomString(7)
 		value := rnd.Uint32()
 		pairs[key] = value
-		r.Set(WithKey(key, &value))
+		r.Set(WithEntry(key, &value))
 	}
 
 	require.NoError(t, r.Sign(privkey))
@@ -302,7 +302,7 @@ func TestSignEncodeAndDecodeRandom(t *testing.T) {
 	for k, v := range pairs {
 		desc := fmt.Sprintf("key %q", k)
 		var got uint32
-		buf := WithKey(k, &got)
+		buf := WithEntry(k, &got)
 		require.NoError(t, r.Load(buf), desc)
 		require.Equal(t, v, got, desc)
 	}

@@ -26,12 +26,12 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// Key is implemented by known node record key types.
+// Entry is implemented by known node record entry types.
 //
-// To define a new key that is to be included in a node record,
+// To define a new entry that is to be included in a node record,
 // create a Go type that satisfies this interface. The type should
 // also implement rlp.Decoder if additional checks are needed on the value.
-type Key interface {
+type Entry interface {
 	ENRKey() string
 }
 
@@ -50,10 +50,10 @@ func (g *generic) DecodeRLP(s *rlp.Stream) error {
 	return s.Decode(g.value)
 }
 
-// WithKey wraps any value with a key name. It can be used to set and load arbitrary values
-// in a record. The value v must be supported by rlp. To use WithKey with Load, the value
+// WithEntry wraps any value with a key name. It can be used to set and load arbitrary values
+// in a record. The value v must be supported by rlp. To use WithEntry with Load, the value
 // must be a pointer.
-func WithKey(k string, v interface{}) Key {
+func WithEntry(k string, v interface{}) Entry {
 	return &generic{key: k, value: v}
 }
 
