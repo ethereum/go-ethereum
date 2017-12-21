@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -75,9 +74,12 @@ func TestReader(t *testing.T) {
 	}
 
 	// deep equal fails for some reason
-	t.Skip()
-	if !reflect.DeepEqual(abi, exp) {
-		t.Errorf("\nabi: %v\ndoes not match exp: %v", abi, exp)
+	//t.Skip()
+	// Check with String() instead
+	expS := fmt.Sprintf("%v",exp)
+	gotS := fmt.Sprintf("%v", abi)
+	if expS != gotS {
+		t.Errorf("\nGot abi: \n%v\ndoes not match expected \n%v", abi, exp)
 	}
 }
 

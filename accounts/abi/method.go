@@ -18,7 +18,6 @@ package abi
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -35,131 +34,8 @@ import (
 type Method struct {
 	Name    string
 	Const   bool
-	Inputs  []Argument
-	Outputs []Argument
-}
-
-func (method Method) pack(args ...interface{}) ([]byte, error) {
-	// Make sure arguments match up and pack them
-	if len(args) != len(method.Inputs) {
-		return nil, fmt.Errorf("argument count mismatch: %d for %d", len(args), len(method.Inputs))
-	}
-	// variable input is the output appended at the end of packed
-	// output. This is used for strings and bytes types input.
-	var variableInput []byte
-
-	// input offset is the bytes offset for packed output
-	inputOffset := 0
-	for _, input := range method.Inputs {
-		if input.Type.T == ArrayTy {
-			inputOffset += (32 * input.Type.Size)
-		} else {
-			inputOffset += 32
-		}
-	}
-
-	var ret []byte
-	for i, a := range args {
-		input := method.Inputs[i]
-		// pack the input
-		packed, err := input.Type.pack(reflect.ValueOf(a))
-		if err != nil {
-			return nil, fmt.Errorf("`%s` %v", method.Name, err)
-		}
-
-		// check for a slice type (string, bytes, slice)
-		if input.Type.requiresLengthPrefix() {
-			// calculate the offset
-			offset := inputOffset + len(variableInput)
-
-			// set the offset
-			ret = append(ret, packNum(reflect.ValueOf(offset))...)
-			// Append the packed output to the variable input. The variable input
-			// will be appended at the end of the input.
-			variableInput = append(variableInput, packed...)
-		} else {
-			// append the packed value to the input
-			ret = append(ret, packed...)
-		}
-	}
-	// append the variable input at the end of the packed input
-	ret = append(ret, variableInput...)
-
-	return ret, nil
-}
-
-// unpacks a method return tuple into a struct of corresponding go types
-//
-// Unpacking can be done into a struct or a slice/array.
-func (method Method) tupleUnpack(v interface{}, outputSlice []byte) error {
-	// make sure the passed value is a pointer
-	valueOf := reflect.ValueOf(v)
-	if reflect.Ptr != valueOf.Kind() {
-		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
-	}
-
-	var (
-		value = valueOf.Elem()
-		typ   = value.Type()
-		kind  = value.Kind()
-	)
-	if err := requireUnpackKind(value, typ, kind, method.Outputs, false); err != nil {
-		return err
-	}
-
-	j := 0
-	for i, output := range method.Outputs {
-		marshalledValue, err := toGoType((i+j)*32, ouptut.Type, outputSlice)
-		if err != nil {
-			return err
-		}
-		if output.Type.T == ArrayTy {
-			// combined index ('i' + 'j') need to be adjusted only by size of array, thus
-			// we need to decrement 'j' because 'i' was incremented
-			j += output.Type.Size - 1
-		}
-		reflectValue := reflect.ValueOf(marshalledValue)
-
-		switch kind {
-		case reflect.Struct:
-			for j := 0; j < typ.NumField(); j++ {
-				field := typ.Field(j)
-				// TODO read tags: `abi:"fieldName"`
-				if field.Name == strings.ToUpper(output.Name[:1])+output.Name[1:] {
-					if err := set(value.Field(j), reflectValue, output); err != nil {
-						return err
-					}
-				}
-			}
-		case reflect.Slice, reflect.Array:
-			v := value.Index(i)
-			if err := requireAssignable(v, reflectValue); err != nil {
-				return err
-			}
-			if err := set(v.Elem(), reflectValue, output); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (method Method) isTupleReturn() bool { return len(method.Outputs) > 1 }
-
-func (method Method) singleUnpack(v interface{}, output []byte) error {
-	// make sure the passed value is a pointer
-	valueOf := reflect.ValueOf(v)
-	if reflect.Ptr != valueOf.Kind() {
-		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
-	}
-
-	value := valueOf.Elem()
-
-	marshalledValue, err := toGoType(0, method.Outputs[0].Type, output)
-	if err != nil {
-		return err
-	}
-	return set(value, reflect.ValueOf(marshalledValue), method.Outputs[0])
+	Inputs  Arguments
+	Outputs Arguments
 }
 
 // Sig returns the methods string signature according to the ABI spec.

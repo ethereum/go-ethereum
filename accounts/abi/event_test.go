@@ -241,3 +241,78 @@ func unpackTestEventData(dest interface{}, hexData string, jsonEvent []byte, ass
 	a := ABI{Events: map[string]Event{"e": e}}
 	return a.Unpack(dest, "e", data)
 }
+
+/*
+!TODO enable these when the fix is in. Taken from
+https://github.com/ethereum/go-ethereum/pull/15568
+
+*/
+/*
+type testResult struct {
+	Values [2]*big.Int
+	Value1 *big.Int
+	Value2 *big.Int
+}
+
+type testCase struct {
+	definition string
+	want       testResult
+}
+
+func (tc testCase) encoded(intType, arrayType Type) []byte {
+	var b bytes.Buffer
+	if tc.want.Value1 != nil {
+		val, _ := intType.pack(reflect.ValueOf(tc.want.Value1))
+		b.Write(val)
+	}
+
+	if !reflect.DeepEqual(tc.want.Values, [2]*big.Int{nil, nil}) {
+		val, _ := arrayType.pack(reflect.ValueOf(tc.want.Values))
+		b.Write(val)
+	}
+	if tc.want.Value2 != nil {
+		val, _ := intType.pack(reflect.ValueOf(tc.want.Value2))
+		b.Write(val)
+	}
+	return b.Bytes()
+}
+
+// TestEventUnpackIndexed verifies that indexed field will be skipped by event decoder.
+func TestEventUnpackIndexed(t *testing.T) {
+	definition := `[{"name": "test", "type": "event", "inputs": [{"indexed": true, "name":"value1", "type":"uint8"},{"indexed": false, "name":"value2", "type":"uint8"}]}]`
+	type testStruct struct {
+		Value1 uint8
+		Value2 uint8
+	}
+	abi, err := JSON(strings.NewReader(definition))
+	require.NoError(t, err)
+	var b bytes.Buffer
+	b.Write(packNum(reflect.ValueOf(uint8(8))))
+	var rst testStruct
+	require.NoError(t, abi.Unpack(&rst, "test", b.Bytes()))
+	require.Equal(t, uint8(0), rst.Value1)
+	require.Equal(t, uint8(8), rst.Value2)
+}
+
+// TestEventIndexedWithArrayUnpack verifies that decoder will not overlow when static array is indexed input.
+func TestEventIndexedWithArrayUnpack(t *testing.T) {
+	definition := `[{"name": "test", "type": "event", "inputs": [{"indexed": true, "name":"value1", "type":"uint8[2]"},{"indexed": false, "name":"value2", "type":"string"}]}]`
+	type testStruct struct {
+		Value1 [2]uint8
+		Value2 string
+	}
+	abi, err := JSON(strings.NewReader(definition))
+	require.NoError(t, err)
+	var b bytes.Buffer
+	stringOut := "abc"
+	// number of fields that will be encoded * 32
+	b.Write(packNum(reflect.ValueOf(32)))
+	b.Write(packNum(reflect.ValueOf(len(stringOut))))
+	b.Write(common.RightPadBytes([]byte(stringOut), 32))
+	fmt.Println(b.Bytes())
+	var rst testStruct
+	require.NoError(t, abi.Unpack(&rst, "test", b.Bytes()))
+	require.Equal(t, [2]uint8{0, 0}, rst.Value1)
+	require.Equal(t, stringOut, rst.Value2)
+}
+*/

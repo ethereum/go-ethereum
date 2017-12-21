@@ -25,15 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// unpacker is a utility interface that enables us to have
-// abstraction between events and methods and also to properly
-// "unpack" them; e.g. events use Inputs, methods use Outputs.
-type unpacker interface {
-	tupleUnpack(v interface{}, output []byte) error
-	singleUnpack(v interface{}, output []byte) error
-	isTupleReturn() bool
-}
-
 // reads the integer based on its kind
 func readInteger(kind reflect.Kind, b []byte) interface{} {
 	switch kind {
