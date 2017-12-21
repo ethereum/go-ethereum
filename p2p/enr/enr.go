@@ -85,6 +85,7 @@ func (r *Record) Seq() uint64 {
 // sequence number.
 func (r *Record) SetSeq(s uint64) {
 	r.signature = nil
+	r.raw = nil
 	r.seq = s
 }
 
@@ -108,6 +109,7 @@ func (r *Record) Load(k Key) error {
 // It panics if the value can't be encoded.
 func (r *Record) Set(k Key) {
 	r.signature = nil
+	r.raw = nil
 	blob, err := rlp.EncodeToBytes(k)
 	if err != nil {
 		panic(fmt.Errorf("enr: can't encode %s: %v", k.ENRKey(), err))
