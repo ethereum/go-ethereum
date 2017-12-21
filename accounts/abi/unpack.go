@@ -203,14 +203,3 @@ func lengthPrefixPointsTo(index int, output []byte) (start int, length int, err 
 	//fmt.Printf("LENGTH PREFIX INFO: \nsize: %v\noffset: %v\nstart: %v\n", length, offset, start)
 	return
 }
-
-// checks for proper formatting of byte output
-func bytesAreProper(output []byte) error {
-	if len(output) == 0 {
-		return fmt.Errorf("abi: unmarshalling empty output")
-	} else if len(output)%32 != 0 {
-		return fmt.Errorf("abi: improperly formatted output")
-	} else {
-		return nil
-	}
-}
