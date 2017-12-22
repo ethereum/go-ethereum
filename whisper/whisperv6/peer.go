@@ -36,6 +36,7 @@ type Peer struct {
 
 	trusted        bool
 	powRequirement float64
+	bloomFilter    []byte
 
 	known *set.Set // Messages already known by the peer to avoid wasting bandwidth
 
@@ -156,7 +157,7 @@ func (p *Peer) broadcast() error {
 	envelopes := p.host.Envelopes()
 	bundle := make([]*Envelope, 0, len(envelopes))
 	for _, envelope := range envelopes {
-		if !p.marked(envelope) && envelope.PoW() >= p.powRequirement {
+		if !p.marked(envelope) && envelope.PoW() >= p.powRequirement && p.bloomMatch(envelope) {
 			bundle = append(bundle, envelope)
 		}
 	}
@@ -185,4 +186,17 @@ func (p *Peer) ID() []byte {
 func (p *Peer) notifyAboutPowRequirementChange(pow float64) error {
 	i := math.Float64bits(pow)
 	return p2p.Send(p.ws, powRequirementCode, i)
+}
+
+func (p *Peer) notifyAboutBloomFilterChange(bloom []byte) error {
+	return p2p.Send(p.ws, bloomFilterExCode, bloom)
+}
+
+func (p *Peer) bloomMatch(env *Envelope) bool {
+	if p.bloomFilter == nil {
+		// no filter - full node, accepts all envelops
+		return true
+	}
+
+	return bloomFilterMatch(p.bloomFilter, env.Bloom())
 }

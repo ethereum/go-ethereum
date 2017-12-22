@@ -35,7 +35,6 @@ import (
 )
 
 const (
-	EnvelopeVersion    = uint64(0)
 	ProtocolVersion    = uint64(6)
 	ProtocolVersionStr = "6.0"
 	ProtocolName       = "shh"
@@ -57,6 +56,7 @@ const (
 	aesKeyLength    = 32
 	AESNonceLength  = 12
 	keyIdSize       = 32
+	bloomFilterSize = 64
 
 	MaxMessageSize        = uint32(10 * 1024 * 1024) // maximum accepted size of a message.
 	DefaultMaxMessageSize = uint32(1024 * 1024)
