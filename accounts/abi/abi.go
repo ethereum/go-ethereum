@@ -89,7 +89,7 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) (err error) {
 	} else if event, ok := abi.Events[name]; ok {
 		unpack = event
 	} else {
-		return fmt.Errorf("abi: could not locate named method or event.")
+		return fmt.Errorf("abi: could not locate named method or event")
 	}
 
 	// requires a struct to unpack into for a tuple return...
@@ -99,6 +99,7 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) (err error) {
 	return unpack.singleUnpack(v, output)
 }
 
+// UnmarshalJSON implements json.Unmarshaler interface
 func (abi *ABI) UnmarshalJSON(data []byte) error {
 	var fields []struct {
 		Type      string

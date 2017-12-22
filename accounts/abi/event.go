@@ -59,19 +59,22 @@ func (e Event) tupleUnpack(v interface{}, output []byte) error {
 	var (
 		value = valueOf.Elem()
 		typ   = value.Type()
+		kind  = value.Kind()
 	)
-
-	if value.Kind() != reflect.Struct {
-		return fmt.Errorf("abi: cannot unmarshal tuple in to %v", typ)
+	if err := requireUnpackKind(value, typ, kind, e.Inputs, true); err != nil {
+		return err
 	}
 
-	j := 0
-	for i := 0; i < len(e.Inputs); i++ {
-		input := e.Inputs[i]
+	// `i` counts the nonindexed arguments.
+	// `j` counts the number of complex types.
+	// both `i` and `j` are used to to correctly compute `data` offset.
+	i, j := -1, 0
+	for _, input := range e.Inputs {
 		if input.Indexed {
-			// can't read, continue
+			// Indexed arguments are not packed into data
 			continue
 		}
+		i++
 		marshalledValue, err := toGoType((i+j)*32, input.Type, output)
 		if err != nil {
 			return err
@@ -83,31 +86,25 @@ func (e Event) tupleUnpack(v interface{}, output []byte) error {
 		}
 		reflectValue := reflect.ValueOf(marshalledValue)
 
-		switch value.Kind() {
+		switch kind {
 		case reflect.Struct:
 			for j := 0; j < typ.NumField(); j++ {
 				field := typ.Field(j)
 				// TODO read tags: `abi:"fieldName"`
-				if field.Name == strings.ToUpper(e.Inputs[i].Name[:1])+e.Inputs[i].Name[1:] {
-					if err := set(value.Field(j), reflectValue, e.Inputs[i]); err != nil {
+				if field.Name == strings.ToUpper(input.Name[:1])+input.Name[1:] {
+					if err := set(value.Field(j), reflectValue, input); err != nil {
 						return err
 					}
 				}
 			}
 		case reflect.Slice, reflect.Array:
-			if value.Len() < i {
-				return fmt.Errorf("abi: insufficient number of arguments for unpack, want %d, got %d", len(e.Inputs), value.Len())
-			}
 			v := value.Index(i)
-			if v.Kind() != reflect.Ptr && v.Kind() != reflect.Interface {
-				return fmt.Errorf("abi: cannot unmarshal %v in to %v", v.Type(), reflectValue.Type())
-			}
-			reflectValue := reflect.ValueOf(marshalledValue)
-			if err := set(v.Elem(), reflectValue, e.Inputs[i]); err != nil {
+			if err := requireAssignable(v, reflectValue); err != nil {
 				return err
 			}
-		default:
-			return fmt.Errorf("abi: cannot unmarshal tuple in to %v", typ)
+			if err := set(v.Elem(), reflectValue, input); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -123,7 +120,7 @@ func (e Event) singleUnpack(v interface{}, output []byte) error {
 	}
 
 	if e.Inputs[0].Indexed {
-		return fmt.Errorf("abi: attempting to unpack indexed variable into element.")
+		return fmt.Errorf("abi: attempting to unpack indexed variable into element")
 	}
 
 	value := valueOf.Elem()
@@ -132,8 +129,5 @@ func (e Event) singleUnpack(v interface{}, output []byte) error {
 	if err != nil {
 		return err
 	}
-	if err := set(value, reflect.ValueOf(marshalledValue), e.Inputs[0]); err != nil {
-		return err
-	}
-	return nil
+	return set(value, reflect.ValueOf(marshalledValue), e.Inputs[0])
 }

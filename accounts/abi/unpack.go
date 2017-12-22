@@ -79,7 +79,7 @@ func readBool(word []byte) (bool, error) {
 // This enforces that standard by always presenting it as a 24-array (address + sig = 24 bytes)
 func readFunctionType(t Type, word []byte) (funcTy [24]byte, err error) {
 	if t.T != FunctionTy {
-		return [24]byte{}, fmt.Errorf("abi: invalid type in call to make function type byte array.")
+		return [24]byte{}, fmt.Errorf("abi: invalid type in call to make function type byte array")
 	}
 	if garbage := binary.BigEndian.Uint64(word[24:32]); garbage != 0 {
 		err = fmt.Errorf("abi: got improperly encoded function type, got %v", word)
@@ -92,7 +92,7 @@ func readFunctionType(t Type, word []byte) (funcTy [24]byte, err error) {
 // through reflection, creates a fixed array to be read from
 func readFixedBytes(t Type, word []byte) (interface{}, error) {
 	if t.T != FixedBytesTy {
-		return nil, fmt.Errorf("abi: invalid type in call to make fixed byte array.")
+		return nil, fmt.Errorf("abi: invalid type in call to make fixed byte array")
 	}
 	// convert
 	array := reflect.New(t.Type).Elem()

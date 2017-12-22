@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/require"
 )
 
 type unpackTest struct {
@@ -286,56 +287,83 @@ func TestUnpack(t *testing.T) {
 	}
 }
 
-func TestMultiReturnWithStruct(t *testing.T) {
+type methodMultiOutput struct {
+	Int    *big.Int
+	String string
+}
+
+func methodMultiReturn(require *require.Assertions) (ABI, []byte, methodMultiOutput) {
 	const definition = `[
 	{ "name" : "multi", "constant" : false, "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
+	var expected = methodMultiOutput{big.NewInt(1), "hello"}
 
 	abi, err := JSON(strings.NewReader(definition))
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(err)
 	// using buff to make the code readable
 	buff := new(bytes.Buffer)
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"))
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000040"))
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000005"))
-	stringOut := "hello"
-	buff.Write(common.RightPadBytes([]byte(stringOut), 32))
+	buff.Write(common.RightPadBytes([]byte(expected.String), 32))
+	return abi, buff.Bytes(), expected
+}
 
-	var inter struct {
-		Int    *big.Int
-		String string
-	}
-	err = abi.Unpack(&inter, "multi", buff.Bytes())
-	if err != nil {
-		t.Error(err)
-	}
-
-	if inter.Int == nil || inter.Int.Cmp(big.NewInt(1)) != 0 {
-		t.Error("expected Int to be 1 got", inter.Int)
-	}
-
-	if inter.String != stringOut {
-		t.Error("expected String to be", stringOut, "got", inter.String)
-	}
-
-	var reversed struct {
+func TestMethodMultiReturn(t *testing.T) {
+	type reversed struct {
 		String string
 		Int    *big.Int
 	}
 
-	err = abi.Unpack(&reversed, "multi", buff.Bytes())
-	if err != nil {
-		t.Error(err)
-	}
-
-	if reversed.Int == nil || reversed.Int.Cmp(big.NewInt(1)) != 0 {
-		t.Error("expected Int to be 1 got", reversed.Int)
-	}
-
-	if reversed.String != stringOut {
-		t.Error("expected String to be", stringOut, "got", reversed.String)
+	abi, data, expected := methodMultiReturn(require.New(t))
+	bigint := new(big.Int)
+	var testCases = []struct {
+		dest     interface{}
+		expected interface{}
+		error    string
+		name     string
+	}{{
+		&methodMultiOutput{},
+		&expected,
+		"",
+		"Can unpack into structure",
+	}, {
+		&reversed{},
+		&reversed{expected.String, expected.Int},
+		"",
+		"Can unpack into reversed structure",
+	}, {
+		&[]interface{}{&bigint, new(string)},
+		&[]interface{}{&expected.Int, &expected.String},
+		"",
+		"Can unpack into a slice",
+	}, {
+		&[2]interface{}{&bigint, new(string)},
+		&[2]interface{}{&expected.Int, &expected.String},
+		"",
+		"Can unpack into an array",
+	}, {
+		&[]interface{}{new(int), new(int)},
+		&[]interface{}{&expected.Int, &expected.String},
+		"abi: cannot unmarshal *big.Int in to int",
+		"Can not unpack into a slice with wrong types",
+	}, {
+		&[]interface{}{new(int)},
+		&[]interface{}{},
+		"abi: insufficient number of elements in the list/array for unpack, want 2, got 1",
+		"Can not unpack into a slice with wrong types",
+	}}
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			require := require.New(t)
+			err := abi.Unpack(tc.dest, "multi", data)
+			if tc.error == "" {
+				require.Nil(err, "Should be able to unpack method outputs.")
+				require.Equal(tc.expected, tc.dest)
+			} else {
+				require.EqualError(err, tc.error)
+			}
+		})
 	}
 }
 

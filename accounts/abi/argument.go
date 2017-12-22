@@ -29,6 +29,7 @@ type Argument struct {
 	Indexed bool // indexed is only used by events
 }
 
+// UnmarshalJSON implements json.Unmarshaler interface
 func (a *Argument) UnmarshalJSON(data []byte) error {
 	var extarg struct {
 		Name    string
@@ -48,4 +49,14 @@ func (a *Argument) UnmarshalJSON(data []byte) error {
 	a.Indexed = extarg.Indexed
 
 	return nil
+}
+
+func countNonIndexedArguments(args []Argument) int {
+	out := 0
+	for i := range args {
+		if !args[i].Indexed {
+			out++
+		}
+	}
+	return out
 }
