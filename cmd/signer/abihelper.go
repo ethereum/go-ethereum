@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"regexp"
+	"reflect"
 )
 
 type decodedArgument struct {
@@ -82,18 +83,29 @@ func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
 	if method == nil {
 		return nil, fmt.Errorf("Supplied ABI spec does not contain method signature in data: 0x%x", sigdata)
 	}
+	var v interface{}
+	method.Inputs.Unpack(v, argdata)
+
+	ref := reflect.ValueOf(v)
+	values := make([]interface{}, ref.NumField())
+
+	for i := 0; i < ref.NumField(); i++ {
+		values[i] = ref.Field(i).Interface()
+	}
+	fmt.Println(values)
+
+
 
 	decoded := decodedCallData{signature: method.Sig(), name: method.Name}
 
+/*
 	for n, argument := range method.Inputs {
-		value, err := abi.ToGoType(n*32, argument.Type, argdata)
-
 		if err != nil {
 			return nil, fmt.Errorf("Failed to decode argument %d (signature %v): %v", n, method.Sig(), err)
 		} else {
 			decodedArg := decodedArgument{
 				soltype: argument,
-				value:   value,
+				value: reflect.ValueOf(v,) ,
 			}
 			decoded.inputs = append(decoded.inputs, decodedArg)
 		}
@@ -103,20 +115,19 @@ func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
 	// original data. If we didn't do that, it would e.g. be possible to stuff extra data into the arguments, which
 	// is not detected by merely decoding the data.
 
+
 	var (
-		gotypedArguments = make([]interface{}, len(decoded.inputs))
 		encoded          []byte
 	)
-	for i, arg := range decoded.inputs {
-		gotypedArguments[i] = arg.value
-	}
-	encoded, err = abispec.Pack(method.Name, gotypedArguments...)
+	encoded, err = method.Inputs.Pack(v)
+
 
 	if !bytes.Equal(encoded, calldata) {
 		exp := common.Bytes2Hex(encoded)
 		was := common.Bytes2Hex(calldata)
 		return nil, fmt.Errorf("WARNING: Supplied data is stuffed with extra data. \nWant %s\nHave %s\nfor method %v", exp, was, method.Sig())
 	}
+*/
 	return &decoded, nil
 }
 

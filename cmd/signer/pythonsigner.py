@@ -48,71 +48,87 @@ class StdIOHandler():
         pass
 
     @public
-    def ApproveTx(self,transaction = None, fromaccount = None, call_info = None, meta = None):
+    def ApproveTx(self,req):
         """
         Example request:
-        
-        {"jsonrpc":"2.0","method":"ApproveTx","params":{"transaction":{"to":null,"gas":null,"gasPrice":null,"value":null,"data":"0x","nonce":null},"from":"0x0000000000000000000000000000000000000000","call_info":null,"meta":{"remote":"signer binary","local":"main","scheme":"in-proc"}},"id":2}
+        {
+            "jsonrpc": "2.0",
+            "method": "ApproveTx",
+            "params": [{
+                "transaction": {
+                    "to": "0xae967917c465db8578ca9024c205720b1a3651A9",
+                    "gas": "0x333",
+                    "gasPrice": "0x123",
+                    "value": "0x10",
+                    "data": "0xd7a5865800000000000000000000000000000000000000000000000000000000000000ff",
+                    "nonce": "0x0"
+                },
+                "from": "0xAe967917c465db8578ca9024c205720b1a3651A9",
+                "call_info": "Warning! Could not validate ABI-data against calldata\nSupplied ABI spec does not contain method signature in data: 0xd7a58658",
+                "meta": {
+                    "remote": "127.0.0.1:34572",
+                    "local": "localhost:8550",
+                    "scheme": "HTTP/1.1"
+                }
+            }],
+            "id": 1
+        }
 
         :param transaction: transaction info
         :param call_info: info abou the call, e.g. if ABI info could not be
         :param meta: metadata about the request, e.g. where the call comes from
         :return: 
         """
+        transaction = req.get('transaction')
+        _from       = req.get('from')
+        call_info   = req.get('call_info')
+        meta        = req.get('meta')
+
         return {
             "approved" : False,
-            "transaction" : None,
-            #"fromaccount" : fromaccount,
-            "password" : None,
+            "transaction" : transaction,
+            "from" : _from,
+#            "password" : None,
         }
 
     @public
-    def ApproveSignData(self,address=None, raw_data = None, message = None, hash = None, meta = None):
+    def ApproveSignData(self, req):
         """ Example request
-
-        {"jsonrpc":"2.0","method":"ApproveSignData","params":{"address":"0x0000000000000000000000000000000000000000","raw_data":"0x01020304","message":"\u0019Ethereum Signed Message:\n4\u0001\u0002\u0003\u0004","hash":"0x7e3a4e7a9d1744bc5c675c25e1234ca8ed9162bd17f78b9085e48047c15ac310","meta":{"remote":"signer binary","local":"main","scheme":"in-proc"}},"id":3}
-
 
         """
-        return {"approved": False,
-                "password" : None}
+        return {"approved": False, "password" : None}
 
     @public
-    def ApproveExport(self,address = None, meta = None):
+    def ApproveExport(self, req):
         """ Example request
-
-        {"jsonrpc":"2.0","method":"ApproveExport","params":{"address":"0x0000000000000000000000000000000000000000","meta":{"remote":"signer binary","local":"main","scheme":"in-proc"}},"id":5}
 
         """
         return {"approved" : False}
 
     @public
-    def ApproveImport(self,meta = None):
+    def ApproveImport(self, req):
         """ Example request
-
-        {"jsonrpc":"2.0","method":"ApproveImport","params":{"Meta":{}},"id":4}
 
         """
-        return {"approved" : False, "old_password": "", "new_password": ""}
+        return { "approved" : False, "old_password": "", "new_password": ""}
 
     @public
-    def ApproveListing(self,accounts=None, meta = None):
+    def ApproveListing(self, req):
         """ Example request
 
-        {"jsonrpc":"2.0","method":"ApproveListing","params":{"accounts":[{"type":"Account","url":"keystore:///home/user/ethereum/keystore/file","address":"0x010101010101010010101010101abcdef0001337"}],"Meta":{}},"id":2}
         """
         return {'accounts': []}
 
     @public
-    def ApproveNewAccount(self,meta = None):
+    def ApproveNewAccount(self, req):
         """
         Example request
 
-        {"jsonrpc":"2.0","method":"ApproveNewAccount","params":{"meta":{"remote":"signer binary","local":"main","scheme":"in-proc"}},"id":5}
-
         :return:
         """
-        return {"approved": False, "password": ""}
+        return {"approved": False,
+                #"password": ""
+                }
 
     @public
     def ShowError(self,message = {}):
@@ -137,6 +153,7 @@ class StdIOHandler():
         :param message: to display
         :return:nothing
         """
+
         if 'text' in message.keys():
             sys.stdout.write("Error: {}\n".format( message['text']))
         return

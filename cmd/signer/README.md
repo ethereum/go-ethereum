@@ -377,7 +377,175 @@ None
 
 These methods needs to be implemented by a UI listener.
 
-still work in progress
+
+By starting the signer with the switch `--stdio-ui-test`, the signer will invoke all known methods, and expect the UI to respond with
+denials. This can be used during development to ensure that the API is (at least somewhat) correctly implemented.
+See `pythonsigner`, which can be invoked via `python3 pythonsigner.py test` to perform the 'denial-handshake-test'.
+
+**work in progress**
+
+
+### ApproveTx
+
+Invoked when there's a transaction for approval.
+
+
+#### Sample call
+
+```json
+
+{
+	"jsonrpc": "2.0",
+	"method": "ApproveTx",
+	"params": [{
+		"transaction": {
+			"to": "0xae967917c465db8578ca9024c205720b1a3651A9",
+			"gas": "0x333",
+			"gasPrice": "0x123",
+			"value": "0x10",
+			"data": "0xd7a5865800000000000000000000000000000000000000000000000000000000000000ff",
+			"nonce": "0x0"
+		},
+		"fromaccount": "0xAe967917c465db8578ca9024c205720b1a3651A9",
+		"call_info": "Warning! Could not validate ABI-data against calldata\nSupplied ABI spec does not contain method signature in data: 0xd7a58658",
+		"meta": {
+			"remote": "127.0.0.1:34572",
+			"local": "localhost:8550",
+			"scheme": "HTTP/1.1"
+		}
+	}],
+	"id": 1
+}
+```
+
+### ApproveExport
+
+Invoked when a request to export an account has been made.
+
+#### Sample call
+
+```json
+
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "ApproveExport",
+  "params": [
+    {
+      "address": "0x0000000000000000000000000000000000000000",
+      "meta": {
+        "remote": "signer binary",
+        "local": "main",
+        "scheme": "in-proc"
+      }
+    }
+  ]
+}
+
+```
+
+### ApproveListing
+
+Invoked when a request for account listing has been made.
+
+#### Sample call
+
+```json
+
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "method": "ApproveListing",
+  "params": [
+    {
+      "accounts": [
+        {
+          "type": "Account",
+          "url": "keystore:///home/bazonk/.ethereum/keystore/UTC--2017-11-20T14-44-54.089682944Z--123409812340981234098123409812deadbeef42",
+          "address": "0x123409812340981234098123409812deadbeef42"
+        },
+        {
+          "type": "Account",
+          "url": "keystore:///home/bazonk/.ethereum/keystore/UTC--2017-11-23T21-59-03.199240693Z--cafebabedeadbeef34098123409812deadbeef42",
+          "address": "0xcafebabedeadbeef34098123409812deadbeef42"
+        }
+      ],
+      "meta": {
+        "remote": "signer binary",
+        "local": "main",
+        "scheme": "in-proc"
+      }
+    }
+  ]
+}
+
+```
+
+
+### ApproveSignData
+
+#### Sample call
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "ApproveSignData",
+  "params": [
+    {
+      "address": "0x123409812340981234098123409812deadbeef42",
+      "raw_data": "0x01020304",
+      "message": "\u0019Ethereum Signed Message:\n4\u0001\u0002\u0003\u0004",
+      "hash": "0x7e3a4e7a9d1744bc5c675c25e1234ca8ed9162bd17f78b9085e48047c15ac310",
+      "meta": {
+        "remote": "signer binary",
+        "local": "main",
+        "scheme": "in-proc"
+      }
+    }
+  ]
+}
+
+```
+
+### ShowInfo
+
+The UI should show the info to the user. Does not expect response.
+
+#### Sample call
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 9,
+  "method": "ShowInfo",
+  "params": [
+    {
+      "text": "Tests completed"
+    }
+  ]
+}
+
+```
+
+### ShowError
+
+The UI should show the info to the user. Does not expect response.
+
+```json
+
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "ShowError",
+  "params": [
+    {
+      "text": "Testing 'ShowError'"
+    }
+  ]
+}
+
+```
 
 ### Rules for UI apis
 
@@ -396,6 +564,9 @@ A UI should conform to the following rules.
   * The signer provides accounts
 * A UI SHOULD, to the best extent possible, use static linking / bundling, so that requried libraries are bundled
 along with the UI.
+
+
+
 
 
 ## TODOs

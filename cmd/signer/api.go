@@ -26,6 +26,8 @@ import (
 
 	"bytes"
 
+	"reflect"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
@@ -56,7 +58,7 @@ type (
 	// SignTxRequest contains info about a Transaction to sign
 	SignTxRequest struct {
 		Transaction TransactionArg          `json:"transaction"`
-		From        common.MixedcaseAddress `json:"fromaccount"`
+		From        common.MixedcaseAddress `json:"from"`
 		Callinfo    string                  `json:"call_info"`
 		Meta        Metadata                `json:"meta"`
 	}
@@ -64,7 +66,7 @@ type (
 	SignTxResponse struct {
 		//The UI may make changes to the TX
 		Transaction TransactionArg          `json:"transaction"`
-		From        common.MixedcaseAddress `json:"fromaccount"`
+		From        common.MixedcaseAddress `json:"from"`
 		Approved    bool                    `json:"approved"`
 		Password    string                  `json:"password"`
 	}
@@ -260,7 +262,7 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 		modified = true
 		log.Info("Sender-account changed by UI", "was", f0, "is", f1)
 	}
-	if t0, t1 := original.Transaction.To, new.Transaction.To; t0 != t1 {
+	if t0, t1 := original.Transaction.To, new.Transaction.To; !reflect.DeepEqual(t0, t1) {
 		log.Info("Recipient-account changed by UI", "was", t0, "is", t1)
 		modified = true
 	}
