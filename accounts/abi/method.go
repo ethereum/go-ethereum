@@ -162,6 +162,16 @@ func (method Method) singleUnpack(v interface{}, output []byte) error {
 	if err != nil {
 		return err
 	}
+
+	// if we reach this part, there is only one output member from the contract method.
+	// for mobile, the result type is always a slice.
+	if reflect.Slice == value.Kind() && value.Len() >= 1 {
+		//check if it's not a byte slice
+		if reflect.TypeOf([]byte{}) != value.Type() {
+			value = value.Index(0).Elem()
+		}
+	}
+
 	if err := set(value, reflect.ValueOf(marshalledValue), method.Outputs[0]); err != nil {
 		return err
 	}
