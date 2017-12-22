@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/miner/remote"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -68,12 +68,12 @@ func (api *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
 // It offers only methods that operate on data that pose no security risk when it is publicly accessible.
 type PublicMinerAPI struct {
 	e     *Ethereum
-	agent *miner.RemoteAgent
+	agent *remote.RemoteAgent
 }
 
 // NewPublicMinerAPI create a new PublicMinerAPI instance.
 func NewPublicMinerAPI(e *Ethereum) *PublicMinerAPI {
-	agent := miner.NewRemoteAgent(e.BlockChain(), e.Engine())
+	agent := remote.NewRemoteAgent(e.BlockChain(), e.Engine())
 	e.Miner().Register(agent)
 
 	return &PublicMinerAPI{e, agent}
