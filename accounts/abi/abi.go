@@ -17,6 +17,7 @@
 package abi
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -50,25 +51,25 @@ func JSON(reader io.Reader) (ABI, error) {
 // methods string signature. (signature = baz(uint32,string32))
 func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 	// Fetch the ABI of the requested method
-	var method Method
-
 	if name == "" {
-		method = abi.Constructor
-	} else {
-		m, exist := abi.Methods[name]
-		if !exist {
-			return nil, fmt.Errorf("method '%s' not found", name)
+		// constructor
+		arguments, err := abi.Constructor.Inputs.Pack(args...)
+		if err != nil {
+			return nil, err
 		}
-		method = m
+		return arguments, nil
+
 	}
-	arguments, err := method.pack(args...)
+	method, exist := abi.Methods[name]
+	if !exist {
+		return nil, fmt.Errorf("method '%s' not found", name)
+	}
+
+	arguments, err := method.Inputs.Pack(args...)
 	if err != nil {
 		return nil, err
 	}
 	// Pack up the method ID too if not a constructor and return
-	if name == "" {
-		return arguments, nil
-	}
 	return append(method.Id(), arguments...), nil
 }
 
@@ -77,28 +78,20 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) (err error) {
 	if len(output) == 0 {
 		return fmt.Errorf("abi: unmarshalling empty output")
 	}
-
 	// since there can't be naming collisions with contracts and events,
 	// we need to decide whether we're calling a method or an event
-	var unpack unpacker
 	if method, ok := abi.Methods[name]; ok {
 		if len(output)%32 != 0 {
 			return fmt.Errorf("abi: improperly formatted output")
 		}
-		unpack = method
+		return method.Outputs.Unpack(v, output)
 	} else if event, ok := abi.Events[name]; ok {
-		unpack = event
-	} else {
-		return fmt.Errorf("abi: could not locate named method or event.")
+		return event.Inputs.Unpack(v, output)
 	}
-
-	// requires a struct to unpack into for a tuple return...
-	if unpack.isTupleReturn() {
-		return unpack.tupleUnpack(v, output)
-	}
-	return unpack.singleUnpack(v, output)
+	return fmt.Errorf("abi: could not locate named method or event")
 }
 
+// UnmarshalJSON implements json.Unmarshaler interface
 func (abi *ABI) UnmarshalJSON(data []byte) error {
 	var fields []struct {
 		Type      string
@@ -139,5 +132,16 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		}
 	}
 
+	return nil
+}
+
+// MethodById looks up a method by the 4-byte id
+// returns nil if none found
+func (abi *ABI) MethodById(sigdata []byte) *Method {
+	for _, method := range abi.Methods {
+		if bytes.Equal(method.Id(), sigdata[:4]) {
+			return &method
+		}
+	}
 	return nil
 }

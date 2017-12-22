@@ -22,9 +22,10 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"reflect"
 	"strings"
 	"testing"
+
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -75,9 +76,24 @@ func TestReader(t *testing.T) {
 	}
 
 	// deep equal fails for some reason
-	t.Skip()
-	if !reflect.DeepEqual(abi, exp) {
-		t.Errorf("\nabi: %v\ndoes not match exp: %v", abi, exp)
+	for name, expM := range exp.Methods {
+		gotM, exist := abi.Methods[name]
+		if !exist {
+			t.Errorf("Missing expected method %v", name)
+		}
+		if !reflect.DeepEqual(gotM, expM) {
+			t.Errorf("\nGot abi method: \n%v\ndoes not match expected method\n%v", gotM, expM)
+		}
+	}
+
+	for name, gotM := range abi.Methods {
+		expM, exist := exp.Methods[name]
+		if !exist {
+			t.Errorf("Found extra method %v", name)
+		}
+		if !reflect.DeepEqual(gotM, expM) {
+			t.Errorf("\nGot abi method: \n%v\ndoes not match expected method\n%v", gotM, expM)
+		}
 	}
 }
 
@@ -640,4 +656,43 @@ func TestUnpackEvent(t *testing.T) {
 	} else {
 		t.Logf("len(data): %d; received event: %+v", len(data), ev)
 	}
+}
+
+func TestABI_MethodById(t *testing.T) {
+	const abiJSON = `[
+		{"type":"function","name":"receive","constant":false,"inputs":[{"name":"memo","type":"bytes"}],"outputs":[],"payable":true,"stateMutability":"payable"},
+		{"type":"event","name":"received","anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}]},
+		{"type":"function","name":"fixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr","type":"uint256[2]"}]},
+		{"type":"function","name":"fixedArrBytes","constant":true,"inputs":[{"name":"str","type":"bytes"},{"name":"fixedArr","type":"uint256[2]"}]},
+		{"type":"function","name":"mixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr","type":"uint256[2]"},{"name":"dynArr","type":"uint256[]"}]},
+		{"type":"function","name":"doubleFixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr1","type":"uint256[2]"},{"name":"fixedArr2","type":"uint256[3]"}]},
+		{"type":"function","name":"multipleMixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr1","type":"uint256[2]"},{"name":"dynArr","type":"uint256[]"},{"name":"fixedArr2","type":"uint256[3]"}]},
+		{"type":"function","name":"balance","constant":true},
+		{"type":"function","name":"send","constant":false,"inputs":[{"name":"amount","type":"uint256"}]},
+		{"type":"function","name":"test","constant":false,"inputs":[{"name":"number","type":"uint32"}]},
+		{"type":"function","name":"string","constant":false,"inputs":[{"name":"inputs","type":"string"}]},
+		{"type":"function","name":"bool","constant":false,"inputs":[{"name":"inputs","type":"bool"}]},
+		{"type":"function","name":"address","constant":false,"inputs":[{"name":"inputs","type":"address"}]},
+		{"type":"function","name":"uint64[2]","constant":false,"inputs":[{"name":"inputs","type":"uint64[2]"}]},
+		{"type":"function","name":"uint64[]","constant":false,"inputs":[{"name":"inputs","type":"uint64[]"}]},
+		{"type":"function","name":"foo","constant":false,"inputs":[{"name":"inputs","type":"uint32"}]},
+		{"type":"function","name":"bar","constant":false,"inputs":[{"name":"inputs","type":"uint32"},{"name":"string","type":"uint16"}]},
+		{"type":"function","name":"_slice","constant":false,"inputs":[{"name":"inputs","type":"uint32[2]"}]},
+		{"type":"function","name":"__slice256","constant":false,"inputs":[{"name":"inputs","type":"uint256[2]"}]},
+		{"type":"function","name":"sliceAddress","constant":false,"inputs":[{"name":"inputs","type":"address[]"}]},
+		{"type":"function","name":"sliceMultiAddress","constant":false,"inputs":[{"name":"a","type":"address[]"},{"name":"b","type":"address[]"}]}
+	]
+`
+	abi, err := JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, m := range abi.Methods {
+		a := fmt.Sprintf("%v", m)
+		b := fmt.Sprintf("%v", abi.MethodById(m.Id()))
+		if a != b {
+			t.Errorf("Method %v (id %v) not 'findable' by id in ABI", name, common.ToHex(m.Id()))
+		}
+	}
+
 }

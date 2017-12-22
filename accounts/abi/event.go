@@ -18,7 +18,6 @@ package abi
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -31,7 +30,7 @@ import (
 type Event struct {
 	Name      string
 	Anonymous bool
-	Inputs    []Argument
+	Inputs    Arguments
 }
 
 // Id returns the canonical representation of the event's signature used by the
@@ -44,96 +43,4 @@ func (e Event) Id() common.Hash {
 		i++
 	}
 	return common.BytesToHash(crypto.Keccak256([]byte(fmt.Sprintf("%v(%v)", e.Name, strings.Join(types, ",")))))
-}
-
-// unpacks an event return tuple into a struct of corresponding go types
-//
-// Unpacking can be done into a struct or a slice/array.
-func (e Event) tupleUnpack(v interface{}, output []byte) error {
-	// make sure the passed value is a pointer
-	valueOf := reflect.ValueOf(v)
-	if reflect.Ptr != valueOf.Kind() {
-		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
-	}
-
-	var (
-		value = valueOf.Elem()
-		typ   = value.Type()
-	)
-
-	if value.Kind() != reflect.Struct {
-		return fmt.Errorf("abi: cannot unmarshal tuple in to %v", typ)
-	}
-
-	j := 0
-	for i := 0; i < len(e.Inputs); i++ {
-		input := e.Inputs[i]
-		if input.Indexed {
-			// can't read, continue
-			continue
-		}
-		marshalledValue, err := toGoType((i+j)*32, input.Type, output)
-		if err != nil {
-			return err
-		}
-		if input.Type.T == ArrayTy {
-			// combined index ('i' + 'j') need to be adjusted only by size of array, thus
-			// we need to decrement 'j' because 'i' was incremented
-			j += input.Type.Size - 1
-		}
-		reflectValue := reflect.ValueOf(marshalledValue)
-
-		switch value.Kind() {
-		case reflect.Struct:
-			for j := 0; j < typ.NumField(); j++ {
-				field := typ.Field(j)
-				// TODO read tags: `abi:"fieldName"`
-				if field.Name == strings.ToUpper(e.Inputs[i].Name[:1])+e.Inputs[i].Name[1:] {
-					if err := set(value.Field(j), reflectValue, e.Inputs[i]); err != nil {
-						return err
-					}
-				}
-			}
-		case reflect.Slice, reflect.Array:
-			if value.Len() < i {
-				return fmt.Errorf("abi: insufficient number of arguments for unpack, want %d, got %d", len(e.Inputs), value.Len())
-			}
-			v := value.Index(i)
-			if v.Kind() != reflect.Ptr && v.Kind() != reflect.Interface {
-				return fmt.Errorf("abi: cannot unmarshal %v in to %v", v.Type(), reflectValue.Type())
-			}
-			reflectValue := reflect.ValueOf(marshalledValue)
-			if err := set(v.Elem(), reflectValue, e.Inputs[i]); err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("abi: cannot unmarshal tuple in to %v", typ)
-		}
-	}
-	return nil
-}
-
-func (e Event) isTupleReturn() bool { return len(e.Inputs) > 1 }
-
-func (e Event) singleUnpack(v interface{}, output []byte) error {
-	// make sure the passed value is a pointer
-	valueOf := reflect.ValueOf(v)
-	if reflect.Ptr != valueOf.Kind() {
-		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
-	}
-
-	if e.Inputs[0].Indexed {
-		return fmt.Errorf("abi: attempting to unpack indexed variable into element.")
-	}
-
-	value := valueOf.Elem()
-
-	marshalledValue, err := toGoType(0, e.Inputs[0].Type, output)
-	if err != nil {
-		return err
-	}
-	if err := set(value, reflect.ValueOf(marshalledValue), e.Inputs[0]); err != nil {
-		return err
-	}
-	return nil
 }
