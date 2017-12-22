@@ -291,6 +291,7 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainReader, time uint64, p
 	return CalcDifficulty(chain.Config(), time, parent)
 }
 
+// CalcDifficulty returns block difficulty according to the parent block's time and difficulty.
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {

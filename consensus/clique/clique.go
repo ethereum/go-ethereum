@@ -661,6 +661,7 @@ func (c *Clique) CalcDifficulty(chain consensus.ChainReader, time uint64, parent
 	return CalcDifficulty(snap, c.signer)
 }
 
+// CalcDifficulty returns block difficulty according to local signer is the inturn signer or not.
 func CalcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
 	if snap.inturn(snap.Number+1, signer) {
 		return new(big.Int).Set(diffInTurn)
