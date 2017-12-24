@@ -35,8 +35,9 @@ import (
 )
 
 const (
-	writeDelayNThreshold = 250
-	writeDelayThreshold  = 500 * time.Millisecond
+	writeDelayNThreshold       = 200
+	writeDelayThreshold        = 350 * time.Millisecond
+	writeDelayWarningThrottler = 1 * time.Minute
 )
 
 type LDBDatabase struct {
@@ -219,6 +220,10 @@ func (db *LDBDatabase) Meter(prefix string) {
 //      2   |        523 |    1000.37159 |       7.26059 |      66.86342 |      66.77884
 //      3   |        570 |    1113.18458 |       0.00000 |       0.00000 |       0.00000
 func (db *LDBDatabase) meter(refresh time.Duration) {
+	var (
+		lastWriteDelay  time.Time
+		lastWriteDelayN time.Time
+	)
 	// Create the counters to store current and previous values
 	counters := make([][]float64, 2)
 	for i := 0; i < 2; i++ {
@@ -301,8 +306,12 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			db.writeDelayNMeter.Mark(int64((counters[i%2][3] - counters[(i-1)%2][3])))
 			// If the write delay number been collected in the last minute exceeds the predefined threshold,
 			// print a warning log here.
-			if int(db.writeDelayNMeter.Rate1()) > writeDelayNThreshold {
-				db.log.Warn("Write delay number exceeds the threshold (250) in the last minute")
+			// If a warning that db performance is laggy has been displayed,
+			// any subsequent warnings will be withhold for 1 minute to don't overwhelm the user.
+			if int(db.writeDelayNMeter.Rate1()) > writeDelayNThreshold &&
+				time.Now().After(lastWriteDelayN.Add(writeDelayWarningThrottler)) {
+				db.log.Warn("Write delay number exceeds the threshold (200) in the last minute")
+				lastWriteDelayN = time.Now()
 			}
 		}
 
@@ -310,8 +319,12 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			db.writeDelayMeter.Mark(int64((counters[i%2][4] - counters[(i-1)%2][4])))
 			// If the write delay duration been collected in the last minute exceeds the predefined threshold,
 			// print a warning log here.
-			if int64(db.writeDelayMeter.Rate1()) > writeDelayThreshold.Nanoseconds() {
-				db.log.Warn("Write delay duration exceeds the threshold (0.5sec) in the last minute")
+			// If a warning that db performance is laggy has been displayed,
+			// any subsequent warnings will be withhold for 1 minute to don't overwhelm the user.
+			if int64(db.writeDelayMeter.Rate1()) > writeDelayThreshold.Nanoseconds() &&
+				time.Now().After(lastWriteDelay.Add(writeDelayWarningThrottler)) {
+				db.log.Warn("Write delay duration exceeds the threshold (0.35sec) in the last minute")
+				lastWriteDelay = time.Now()
 			}
 		}
 
