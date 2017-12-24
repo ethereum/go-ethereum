@@ -51,10 +51,10 @@
 			"revisionTime": "2017-02-10T01:56:32Z"
 		},
 		{
-			"checksumSHA1": "fIpm6Vr5a8kgr22gWkQx7vKUTyU=",
+			"checksumSHA1": "gZQ6HheWahvZzIc3phBnOwoWHjE=",
 			"path": "github.com/btcsuite/btcd/btcec",
-			"revision": "d06c0bb181529331be8f8d9350288c420d9e60e4",
-			"revisionTime": "2017-02-01T21:25:25Z"
+			"revision": "2e60448ffcc6bf78332d1fe590260095f554dd78",
+			"revisionTime": "2017-11-28T15:02:46Z"
 		},
 		{
 			"checksumSHA1": "cDMtzKmdTx4CcIpP4broa+16X9g=",
@@ -692,6 +692,12 @@
 			"path": "gopkg.in/natefinch/npipe.v2",
 			"revision": "c1b8fa8bdccecb0b8db834ee0b92fdbcfa606dd6",
 			"revisionTime": "2016-06-21T03:49:01Z"
+		},
+		{
+			"checksumSHA1": "YvuEbc0a032zr+BTp/YbBQojiuY=",
+			"path": "gopkg.in/olebedev/go-duktape.v3",
+			"revision": "9af39127cb024b355a6a0221769f6ddfe3f542e7",
+			"revisionTime": "2017-12-20T12:19:14Z"
 		},
 		{
 			"checksumSHA1": "4BwmmgQUhWtizsR2soXND0nqZ1I=",

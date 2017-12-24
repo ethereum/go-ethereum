@@ -92,6 +92,9 @@ func New(config Config) (*Console, error) {
 		printer:  config.Printer,
 		histPath: filepath.Join(config.DataDir, HistoryFile),
 	}
+	if err := os.MkdirAll(config.DataDir, 0700); err != nil {
+		return nil, err
+	}
 	if err := console.init(config.Preload); err != nil {
 		return nil, err
 	}
@@ -192,6 +195,7 @@ func (c *Console) init(preload []string) error {
 	if obj := admin.Object(); obj != nil { // make sure the admin api is enabled over the interface
 		obj.Set("sleepBlocks", bridge.SleepBlocks)
 		obj.Set("sleep", bridge.Sleep)
+		obj.Set("clearHistory", c.clearHistory)
 	}
 	// Preload any JavaScript files before starting the console
 	for _, path := range preload {
@@ -214,6 +218,16 @@ func (c *Console) init(preload []string) error {
 		c.prompter.SetWordCompleter(c.AutoCompleteInput)
 	}
 	return nil
+}
+
+func (c *Console) clearHistory() {
+	c.history = nil
+	c.prompter.ClearHistory()
+	if err := os.Remove(c.histPath); err != nil {
+		fmt.Fprintln(c.printer, "can't delete history file:", err)
+	} else {
+		fmt.Fprintln(c.printer, "history file deleted")
+	}
 }
 
 // consoleOutput is an override for the console.log and console.error methods to
@@ -412,7 +426,7 @@ func (c *Console) Execute(path string) error {
 	return c.jsre.Exec(path)
 }
 
-// Stop cleans up the console and terminates the runtime envorinment.
+// Stop cleans up the console and terminates the runtime environment.
 func (c *Console) Stop(graceful bool) error {
 	if err := ioutil.WriteFile(c.histPath, []byte(strings.Join(c.history, "\n")), 0600); err != nil {
 		return err

@@ -52,3 +52,13 @@ func getFdLimit() (int, error) {
 	}
 	return int(limit.Cur), nil
 }
+
+// getFdMaxLimit retrieves the maximum number of file descriptors this process is
+// allowed to request for itself.
+func getFdMaxLimit() (int, error) {
+	var limit syscall.Rlimit
+	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
+		return 0, err
+	}
+	return int(limit.Max), nil
+}

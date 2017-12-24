@@ -68,6 +68,7 @@ func (p *hookedPrompter) PromptConfirm(prompt string) (bool, error) {
 }
 func (p *hookedPrompter) SetHistory(history []string)              {}
 func (p *hookedPrompter) AppendHistory(command string)             {}
+func (p *hookedPrompter) ClearHistory()                            {}
 func (p *hookedPrompter) SetWordCompleter(completer WordCompleter) {}
 
 // tester is a console test environment for the console tests to operate on.
@@ -163,7 +164,7 @@ func TestWelcome(t *testing.T) {
 
 	tester.console.Welcome()
 
-	output := string(tester.output.Bytes())
+	output := tester.output.String()
 	if want := "Welcome"; !strings.Contains(output, want) {
 		t.Fatalf("console output missing welcome message: have\n%s\nwant also %s", output, want)
 	}
@@ -187,7 +188,7 @@ func TestEvaluate(t *testing.T) {
 	defer tester.Close(t)
 
 	tester.console.Evaluate("2 + 2")
-	if output := string(tester.output.Bytes()); !strings.Contains(output, "4") {
+	if output := tester.output.String(); !strings.Contains(output, "4") {
 		t.Fatalf("statement evaluation failed: have %s, want %s", output, "4")
 	}
 }
@@ -217,7 +218,7 @@ func TestInteractive(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatalf("secondary prompt timeout")
 	}
-	if output := string(tester.output.Bytes()); !strings.Contains(output, "4") {
+	if output := tester.output.String(); !strings.Contains(output, "4") {
 		t.Fatalf("statement evaluation failed: have %s, want %s", output, "4")
 	}
 }
@@ -229,7 +230,7 @@ func TestPreload(t *testing.T) {
 	defer tester.Close(t)
 
 	tester.console.Evaluate("preloaded")
-	if output := string(tester.output.Bytes()); !strings.Contains(output, "some-preloaded-string") {
+	if output := tester.output.String(); !strings.Contains(output, "some-preloaded-string") {
 		t.Fatalf("preloaded variable missing: have %s, want %s", output, "some-preloaded-string")
 	}
 }
@@ -242,7 +243,7 @@ func TestExecute(t *testing.T) {
 	tester.console.Execute("exec.js")
 
 	tester.console.Evaluate("execed")
-	if output := string(tester.output.Bytes()); !strings.Contains(output, "some-executed-string") {
+	if output := tester.output.String(); !strings.Contains(output, "some-executed-string") {
 		t.Fatalf("execed variable missing: have %s, want %s", output, "some-executed-string")
 	}
 }
@@ -274,7 +275,7 @@ func TestPrettyPrint(t *testing.T) {
   string: ` + two + `
 }
 `
-	if output := string(tester.output.Bytes()); output != want {
+	if output := tester.output.String(); output != want {
 		t.Fatalf("pretty print mismatch: have %s, want %s", output, want)
 	}
 }
@@ -286,7 +287,7 @@ func TestPrettyError(t *testing.T) {
 	tester.console.Evaluate("throw 'hello'")
 
 	want := jsre.ErrorColor("hello") + "\n"
-	if output := string(tester.output.Bytes()); output != want {
+	if output := tester.output.String(); output != want {
 		t.Fatalf("pretty error mismatch: have %s, want %s", output, want)
 	}
 }

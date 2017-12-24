@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-func TestBzzrGetPath(t *testing.T) {
+func TestBzzGetPath(t *testing.T) {
 
 	var err error
 
@@ -70,7 +70,7 @@ func TestBzzrGetPath(t *testing.T) {
 		wg.Wait()
 	}
 
-	_, err = http.Get(srv.URL + "/bzzr:/" + common.ToHex(key[0])[2:] + "/a")
+	_, err = http.Get(srv.URL + "/bzz-raw:/" + common.ToHex(key[0])[2:] + "/a")
 	if err != nil {
 		t.Fatalf("Failed to connect to proxy: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestBzzrGetPath(t *testing.T) {
 		var resp *http.Response
 		var respbody []byte
 
-		url := srv.URL + "/bzzr:/"
+		url := srv.URL + "/bzz-raw:/"
 		if k[:] != "" {
 			url += common.ToHex(key[0])[2:] + "/" + k[1:] + "?content_type=text/plain"
 		}
@@ -104,15 +104,139 @@ func TestBzzrGetPath(t *testing.T) {
 		}
 	}
 
+	for k, v := range testrequests {
+		var resp *http.Response
+		var respbody []byte
+
+		url := srv.URL + "/bzz-hash:/"
+		if k[:] != "" {
+			url += common.ToHex(key[0])[2:] + "/" + k[1:]
+		}
+		resp, err = http.Get(url)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
+		defer resp.Body.Close()
+		respbody, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Read request body: %v", err)
+		}
+
+		if string(respbody) != key[v].String() {
+			isexpectedfailrequest := false
+
+			for _, r := range expectedfailrequests {
+				if k[:] == r {
+					isexpectedfailrequest = true
+				}
+			}
+			if !isexpectedfailrequest {
+				t.Fatalf("Response body does not match, expected: %v, got %v", key[v], string(respbody))
+			}
+		}
+	}
+
+	for _, c := range []struct {
+		path string
+		json string
+		html string
+	}{
+		{
+			path: "/",
+			json: `{"common_prefixes":["a/"]}`,
+			html: "<!DOCTYPE html>\n<html>\n<head>\n  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>Swarm index of bzz:/262e5c08c03c2789b6daef487dfa14b4d132f5340d781a3ecb1d5122ab65640c/</title>\n</head>\n\n<body>\n  <h1>Swarm index of bzz:/262e5c08c03c2789b6daef487dfa14b4d132f5340d781a3ecb1d5122ab65640c/</h1>\n  <hr>\n  <table>\n    <thead>\n      <tr>\n\t<th>Path</th>\n\t<th>Type</th>\n\t<th>Size</th>\n      </tr>\n    </thead>\n\n    <tbody>\n      \n\t<tr>\n\t  <td><a href=\"a/\">a/</a></td>\n\t  <td>DIR</td>\n\t  <td>-</td>\n\t</tr>\n      \n\n      \n  </table>\n  <hr>\n</body>\n",
+		},
+		{
+			path: "/a/",
+			json: `{"common_prefixes":["a/b/"],"entries":[{"hash":"011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce","path":"a/a","mod_time":"0001-01-01T00:00:00Z"}]}`,
+			html: "<!DOCTYPE html>\n<html>\n<head>\n  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>Swarm index of bzz:/262e5c08c03c2789b6daef487dfa14b4d132f5340d781a3ecb1d5122ab65640c/a/</title>\n</head>\n\n<body>\n  <h1>Swarm index of bzz:/262e5c08c03c2789b6daef487dfa14b4d132f5340d781a3ecb1d5122ab65640c/a/</h1>\n  <hr>\n  <table>\n    <thead>\n      <tr>\n\t<th>Path</th>\n\t<th>Type</th>\n\t<th>Size</th>\n      </tr>\n    </thead>\n\n    <tbody>\n      \n\t<tr>\n\t  <td><a href=\"b/\">b/</a></td>\n\t  <td>DIR</td>\n\t  <td>-</td>\n\t</tr>\n      \n\n      \n\t<tr>\n\t  <td><a href=\"a\">a</a></td>\n\t  <td></td>\n\t  <td>0</td>\n\t</tr>\n      \n  </table>\n  <hr>\n</body>\n",
+		},
+		{
+			path: "/a/b/",
+			json: `{"entries":[{"hash":"011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce","path":"a/b/b","mod_time":"0001-01-01T00:00:00Z"},{"hash":"011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce","path":"a/b/c","mod_time":"0001-01-01T00:00:00Z"}]}`,
+			html: "<!DOCTYPE html>\n<html>\n<head>\n  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>Swarm index of bzz:/262e5c08c03c2789b6daef487dfa14b4d132f5340d781a3ecb1d5122ab65640c/a/b/</title>\n</head>\n\n<body>\n  <h1>Swarm index of bzz:/262e5c08c03c2789b6daef487dfa14b4d132f5340d781a3ecb1d5122ab65640c/a/b/</h1>\n  <hr>\n  <table>\n    <thead>\n      <tr>\n\t<th>Path</th>\n\t<th>Type</th>\n\t<th>Size</th>\n      </tr>\n    </thead>\n\n    <tbody>\n      \n\n      \n\t<tr>\n\t  <td><a href=\"b\">b</a></td>\n\t  <td></td>\n\t  <td>0</td>\n\t</tr>\n      \n\t<tr>\n\t  <td><a href=\"c\">c</a></td>\n\t  <td></td>\n\t  <td>0</td>\n\t</tr>\n      \n  </table>\n  <hr>\n</body>\n",
+		},
+		{
+			path: "/x",
+		},
+		{
+			path: "",
+		},
+	} {
+		k := c.path
+		url := srv.URL + "/bzz-list:/"
+		if k[:] != "" {
+			url += common.ToHex(key[0])[2:] + "/" + k[1:]
+		}
+		t.Run("json list "+c.path, func(t *testing.T) {
+			resp, err := http.Get(url)
+			if err != nil {
+				t.Fatalf("HTTP request: %v", err)
+			}
+			defer resp.Body.Close()
+			respbody, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("Read response body: %v", err)
+			}
+
+			body := strings.TrimSpace(string(respbody))
+			if body != c.json {
+				isexpectedfailrequest := false
+
+				for _, r := range expectedfailrequests {
+					if k[:] == r {
+						isexpectedfailrequest = true
+					}
+				}
+				if !isexpectedfailrequest {
+					t.Errorf("Response list body %q does not match, expected: %v, got %v", k, c.json, body)
+				}
+			}
+		})
+		t.Run("html list "+c.path, func(t *testing.T) {
+			req, err := http.NewRequest(http.MethodGet, url, nil)
+			if err != nil {
+				t.Fatalf("New request: %v", err)
+			}
+			req.Header.Set("Accept", "text/html")
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("HTTP request: %v", err)
+			}
+			defer resp.Body.Close()
+			respbody, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("Read response body: %v", err)
+			}
+
+			if string(respbody) != c.html {
+				isexpectedfailrequest := false
+
+				for _, r := range expectedfailrequests {
+					if k[:] == r {
+						isexpectedfailrequest = true
+					}
+				}
+				if !isexpectedfailrequest {
+					t.Errorf("Response list body %q does not match, expected: %q, got %q", k, c.html, string(respbody))
+				}
+			}
+		})
+	}
+
 	nonhashtests := []string{
 		srv.URL + "/bzz:/name",
-		srv.URL + "/bzzi:/nonhash",
-		srv.URL + "/bzzr:/nonhash",
+		srv.URL + "/bzz-immutable:/nonhash",
+		srv.URL + "/bzz-raw:/nonhash",
+		srv.URL + "/bzz-list:/nonhash",
+		srv.URL + "/bzz-hash:/nonhash",
 	}
 
 	nonhashresponses := []string{
 		"error resolving name: no DNS to resolve name: &#34;name&#34;",
 		"error resolving nonhash: immutable address not a content hash: &#34;nonhash&#34;",
+		"error resolving nonhash: no DNS to resolve name: &#34;nonhash&#34;",
+		"error resolving nonhash: no DNS to resolve name: &#34;nonhash&#34;",
 		"error resolving nonhash: no DNS to resolve name: &#34;nonhash&#34;",
 	}
 

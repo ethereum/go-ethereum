@@ -398,12 +398,12 @@ func (s *ticketStore) nextRegisterableTicket() (t *ticketRef, wait time.Duration
 			//s.removeExcessTickets(topic)
 			if len(tickets.buckets) != 0 {
 				empty = false
-				if list := tickets.buckets[bucket]; list != nil {
-					for _, ref := range list {
-						//debugLog(fmt.Sprintf(" nrt bucket = %d node = %x sn = %v wait = %v", bucket, ref.t.node.ID[:8], ref.t.serial, time.Duration(ref.topicRegTime()-now)))
-						if nextTicket.t == nil || ref.topicRegTime() < nextTicket.topicRegTime() {
-							nextTicket = ref
-						}
+
+				list := tickets.buckets[bucket]
+				for _, ref := range list {
+					//debugLog(fmt.Sprintf(" nrt bucket = %d node = %x sn = %v wait = %v", bucket, ref.t.node.ID[:8], ref.t.serial, time.Duration(ref.topicRegTime()-now)))
+					if nextTicket.t == nil || ref.topicRegTime() < nextTicket.topicRegTime() {
+						nextTicket = ref
 					}
 				}
 			}

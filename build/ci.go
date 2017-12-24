@@ -319,17 +319,25 @@ func doLint(cmdline []string) {
 		packages = flag.CommandLine.Args()
 	}
 	// Get metalinter and install all supported linters
-	build.MustRun(goTool("get", "gopkg.in/alecthomas/gometalinter.v1"))
-	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v1"), "--install")
+	build.MustRun(goTool("get", "gopkg.in/alecthomas/gometalinter.v2"))
+	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v2"), "--install")
 
 	// Run fast linters batched together
-	configs := []string{"--vendor", "--disable-all", "--enable=vet", "--enable=gofmt", "--enable=misspell"}
-	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v1"), append(configs, packages...)...)
+	configs := []string{
+		"--vendor",
+		"--disable-all",
+		"--enable=vet",
+		"--enable=gofmt",
+		"--enable=misspell",
+		"--enable=goconst",
+		"--min-occurrences=6", // for goconst
+	}
+	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v2"), append(configs, packages...)...)
 
 	// Run slow linters one by one
-	for _, linter := range []string{"unconvert"} {
+	for _, linter := range []string{"unconvert", "gosimple"} {
 		configs = []string{"--vendor", "--deadline=10m", "--disable-all", "--enable=" + linter}
-		build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v1"), append(configs, packages...)...)
+		build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v2"), append(configs, packages...)...)
 	}
 }
 
