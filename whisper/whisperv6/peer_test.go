@@ -88,21 +88,31 @@ var sharedKey []byte = []byte("some arbitrary data here")
 var sharedTopic TopicType = TopicType{0xF, 0x1, 0x2, 0}
 var expectedMessage []byte = []byte("per rectum ad astra")
 
-// This test does the following:
-// 1. creates a chain of whisper nodes,
-// 2. installs the filters with shared (predefined) parameters,
-// 3. each node sends a number of random (undecryptable) messages,
-// 4. first node sends one expected (decryptable) message,
-// 5. checks if each node have received and decrypted exactly one message.
 func TestSimulation(t *testing.T) {
+	// create a chain of whisper nodes,
+	// installs the filters with shared (predefined) parameters
 	initialize(t)
 
+	// each node sends a number of random (undecryptable) messages
 	for i := 0; i < NumNodes; i++ {
 		sendMsg(t, false, i)
 	}
 
+	// node #0 sends one expected (decryptable) message
 	sendMsg(t, true, 0)
-	checkPropagation(t)
+
+	// check if each node have received and decrypted exactly one message
+	checkPropagation(t, true)
+
+	// send protocol-level messages (powRequirementCode) and check the new PoW requirement values
+	powReqExchange(t)
+
+	// node #1 sends one expected (decryptable) message
+	sendMsg(t, true, 1)
+
+	// check if each node (except node #0) have received and decrypted exactly one message
+	checkPropagation(t, false)
+
 	stopServers()
 }
 
@@ -114,7 +124,7 @@ func initialize(t *testing.T) {
 	for i := 0; i < NumNodes; i++ {
 		var node TestNode
 		node.shh = New(&DefaultConfig)
-		node.shh.SetMinimumPoW(0.00000001)
+		node.shh.SetMinimumPowTest(0.00000001)
 		node.shh.Start(nil)
 		topics := make([]TopicType, 0)
 		topics = append(topics, sharedTopic)
@@ -154,12 +164,17 @@ func initialize(t *testing.T) {
 			},
 		}
 
-		err = node.server.Start()
-		if err != nil {
-			t.Fatalf("failed to start server %d.", i)
-		}
-
 		nodes[i] = &node
+	}
+
+	for i := 1; i < NumNodes; i++ {
+		go nodes[i].server.Start()
+	}
+
+	// we need to wait until the first node actually starts
+	err = nodes[0].server.Start()
+	if err != nil {
+		t.Fatalf("failed to start the fisrt server.")
 	}
 }
 
@@ -174,18 +189,21 @@ func stopServers() {
 	}
 }
 
-func checkPropagation(t *testing.T) {
+func checkPropagation(t *testing.T, includingNodeZero bool) {
 	if t.Failed() {
 		return
 	}
 
-	const cycle = 100
-	const iterations = 100
+	const cycle = 50
+	const iterations = 200
+
+	first := 0
+	if !includingNodeZero {
+		first = 1
+	}
 
 	for j := 0; j < iterations; j++ {
-		time.Sleep(cycle * time.Millisecond)
-
-		for i := 0; i < NumNodes; i++ {
+		for i := first; i < NumNodes; i++ {
 			f := nodes[i].shh.GetFilter(nodes[i].filerId)
 			if f == nil {
 				t.Fatalf("failed to get filterId %s from node %d.", nodes[i].filerId, i)
@@ -200,9 +218,18 @@ func checkPropagation(t *testing.T) {
 				return
 			}
 		}
+
+		time.Sleep(cycle * time.Millisecond)
 	}
 
 	t.Fatalf("Test was not complete: timeout %d seconds.", iterations*cycle/1000)
+
+	if !includingNodeZero {
+		f := nodes[0].shh.GetFilter(nodes[0].filerId)
+		if f != nil {
+			t.Fatalf("node zero received a message with low PoW.")
+		}
+	}
 }
 
 func validateMail(t *testing.T, index int, mail []*ReceivedMessage) bool {
@@ -302,5 +329,37 @@ func TestPeerBasic(t *testing.T) {
 	p.mark(env)
 	if !p.marked(env) {
 		t.Fatalf("failed mark with seed %d.", seed)
+	}
+}
+
+func powReqExchange(t *testing.T) {
+	for i, node := range nodes {
+		for peer := range node.shh.peers {
+			if peer.powRequirement > 1000.0 {
+				t.Fatalf("node %d: one of the peers' pow requirement is too big (%f).", i, peer.powRequirement)
+			}
+		}
+	}
+
+	const pow float64 = 7777777.0
+	nodes[0].shh.SetMinimumPoW(pow)
+
+	// wait until all the messages are delivered
+	time.Sleep(64 * time.Millisecond)
+
+	cnt := 0
+	for i, node := range nodes {
+		for peer := range node.shh.peers {
+			if peer.peer.ID() == discover.PubkeyID(&nodes[0].id.PublicKey) {
+				cnt++
+				if peer.powRequirement != pow {
+					t.Fatalf("node %d: failed to set the new pow requirement.", i)
+				}
+			}
+		}
+	}
+
+	if cnt == 0 {
+		t.Fatalf("no matching peers found.")
 	}
 }
