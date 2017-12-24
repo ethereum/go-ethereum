@@ -202,7 +202,7 @@ func (info *nodeInfos) Report() map[string]string {
 			if err := json.Unmarshal([]byte(info.keyJSON), &key); err == nil {
 				report["Signer account"] = common.HexToAddress(key.Address).Hex()
 			} else {
-				log.Error("Failed to retrieve signer address", "err", err)
+				log.Error("检索签名地址失败", "错误", err)
 			}
 		}
 	}

@@ -56,7 +56,7 @@ services:
 // HTTP services running on a single host. If an instance with the specified
 // network name already exists there, it will be overwritten!
 func deployNginx(client *sshClient, network string, port int, nocache bool) ([]byte, error) {
-	log.Info("Deploying nginx reverse-proxy", "server", client.server, "port", port)
+	log.Info("使用nginx解析代理", "服务器", client.server, "端口", port)
 
 	// Generate the content to upload to the server
 	workdir := fmt.Sprintf("%d", rand.Int63())

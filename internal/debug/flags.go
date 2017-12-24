@@ -131,7 +131,7 @@ func Setup(ctx *cli.Context) error {
 		go func() {
 			log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
 			if err := http.ListenAndServe(address, nil); err != nil {
-				log.Error("Failure in running pprof server", "err", err)
+				log.Error("运行pprof服务器失败", "错误", err)
 			}
 		}()
 	}

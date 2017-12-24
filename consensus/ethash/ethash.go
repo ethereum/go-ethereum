@@ -373,10 +373,10 @@ func New(config Config) *Ethash {
 		config.CachesInMem = 1
 	}
 	if config.CacheDir != "" && config.CachesOnDisk > 0 {
-		log.Info("Disk storage enabled for ethash caches", "dir", config.CacheDir, "count", config.CachesOnDisk)
+		log.Info("哈希计算缓存存储使能", "目录", config.CacheDir, "数量", config.CachesOnDisk)
 	}
 	if config.DatasetDir != "" && config.DatasetsOnDisk > 0 {
-		log.Info("Disk storage enabled for ethash DAGs", "dir", config.DatasetDir, "count", config.DatasetsOnDisk)
+		log.Info("DAG文件存储使能", "目录", config.DatasetDir, "数量", config.DatasetsOnDisk)
 	}
 	return &Ethash{
 		config:   config,

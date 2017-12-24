@@ -261,7 +261,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				}
 			case accounts.WalletOpened:
 				status, _ := event.Wallet.Status()
-				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
+				log.Info("出现新钱包", "url", event.Wallet.URL(), "状态", status)
 
 				if event.Wallet.URL().Scheme == "ledger" {
 					event.Wallet.SelfDerive(accounts.DefaultLedgerBaseDerivationPath, stateReader)
@@ -270,7 +270,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				}
 
 			case accounts.WalletDropped:
-				log.Info("Old wallet dropped", "url", event.Wallet.URL())
+				log.Info("旧钱包被删除", "url", event.Wallet.URL())
 				event.Wallet.Close()
 			}
 		}

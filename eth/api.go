@@ -148,7 +148,7 @@ func (api *PrivateMinerAPI) Start(threads *int) error {
 		SetThreads(threads int)
 	}
 	if th, ok := api.e.engine.(threaded); ok {
-		log.Info("Updated mining threads", "threads", *threads)
+		log.Info("更新挖矿线程", "线程数", *threads)
 		th.SetThreads(*threads)
 	}
 	// Start the miner and return

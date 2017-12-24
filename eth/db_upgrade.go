@@ -103,7 +103,7 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 				it = db.(*ethdb.LDBDatabase).NewIterator()
 				it.Seek(key)
 
-				log.Info("Deduplicating database entries", "deduped", converted)
+				log.Info("复制数据库条目", "已复制", converted)
 			}
 			// Check for termination, or continue after a bit of a timeout
 			select {
@@ -115,10 +115,10 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 		}
 		// Upgrade finished, mark a such and terminate
 		if failed == nil {
-			log.Info("Database deduplication successful", "deduped", converted)
+			log.Info("数据库复制成功", "已复制", converted)
 			db.Put(deduplicateData, []byte{42})
 		} else {
-			log.Error("Database deduplication failed", "deduped", converted, "err", failed)
+			log.Error("数据库复制失败", "已复制", converted, "错误", failed)
 		}
 		it.Release()
 		it = nil

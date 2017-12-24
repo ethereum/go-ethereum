@@ -65,11 +65,25 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 		threads = 0 // Allows disabling local mining without extra logic around local/remote
 	}
 	var pend sync.WaitGroup
+	var just_time *big.Int
+	var diff_just *big.Int
 	for i := 0; i < threads; i++ {
 		pend.Add(1)
 		go func(id int, nonce uint64) {
 			defer pend.Done()
-			ethash.mine(block, id, nonce, abort, found)
+			//此处传递的block中的header.Difficulty决定了后续的计算次数。
+			if block.Header().Tokentime.Cmp(big.NewInt(0)) == 0 {
+				just_time = big.NewInt(1)
+			} else {
+				just_time = block.Header().Tokentime
+			}
+			if just_time.Cmp(block.Header().Difficulty) > 0 {
+				diff_just = big.NewInt(1)
+			} else {
+				diff_just = new(big.Int).Div(block.Header().Difficulty, just_time)
+			}
+			ethash.mine(block, id, nonce, abort, found, diff_just)
+			//ethash.mine(block, id, nonce, abort, found)
 		}(i, uint64(ethash.rand.Int63()))
 	}
 	// Wait until sealing is terminated or a nonce is found
@@ -94,12 +108,14 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 
 // mine is the actual proof-of-work miner that searches for a nonce starting from
 // seed that results in correct final block difficulty.
-func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan struct{}, found chan *types.Block) {
+func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan struct{}, found chan *types.Block, diff_just *big.Int) {
 	// Extract some data from the header
 	var (
 		header = block.Header()
 		hash   = header.HashNoNonce().Bytes()
-		target = new(big.Int).Div(maxUint256, header.Difficulty)
+		//这个地方的header.Difficulty决定了此处的计算次数。难度越大，计算次数越多。
+		target = new(big.Int).Div(maxUint256, diff_just)
+		//target = new(big.Int).Div(maxUint256, header.Difficulty)
 
 		number  = header.Number.Uint64()
 		dataset = ethash.dataset(number)

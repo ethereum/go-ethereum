@@ -122,13 +122,13 @@ func (s *Service) Start(server *p2p.Server) error {
 	s.server = server
 	go s.loop()
 
-	log.Info("Stats daemon started")
+	log.Info("状态监视开始")
 	return nil
 }
 
 // Stop implements node.Service, terminating the monitoring and reporting daemon.
 func (s *Service) Stop() error {
-	log.Info("Stats daemon stopped")
+	log.Info("统计监视面板停止")
 	return nil
 }
 
@@ -342,7 +342,7 @@ func (s *Service) readLoop(conn *websocket.Conn) {
 			}
 		}
 		// Report anything else and continue
-		log.Info("Unknown stats message", "msg", msg)
+		log.Info("未知统计消息", "消息", msg)
 	}
 }
 

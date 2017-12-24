@@ -397,7 +397,7 @@ func bzzd(ctx *cli.Context) error {
 		signal.Notify(sigc, syscall.SIGTERM)
 		defer signal.Stop(sigc)
 		<-sigc
-		log.Info("Got sigterm, shutting swarm down...")
+		log.Info("获得签名条目, swarm下线...")
 		stack.Stop()
 	}()
 
@@ -436,11 +436,11 @@ func detectEnsAddr(client *rpc.Client) (common.Address, error) {
 	switch {
 
 	case version == "1" && block.Hash() == params.MainnetGenesisHash:
-		log.Info("using Mainnet ENS contract address", "addr", ens.MainNetAddress)
+		log.Info("使用主网络ENS合约地址", "地址", ens.MainNetAddress)
 		return ens.MainNetAddress, nil
 
 	case version == "3" && block.Hash() == params.TestnetGenesisHash:
-		log.Info("using Testnet ENS contract address", "addr", ens.TestNetAddress)
+		log.Info("使用测试网ENS合约地址", "地址", ens.TestNetAddress)
 		return ens.TestNetAddress, nil
 
 	default:
@@ -484,19 +484,19 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	boot := func(ctx *node.ServiceContext) (node.Service, error) {
 		var swapClient *ethclient.Client
 		if swapapi != "" {
-			log.Info("connecting to SWAP API", "url", swapapi)
+			log.Info("连接到SWAP API", "url", swapapi)
 			swapClient, err = ethclient.Dial(swapapi)
 			if err != nil {
-				return nil, fmt.Errorf("error connecting to SWAP API %s: %s", swapapi, err)
+				return nil, fmt.Errorf("错误连入SWAP API %s: %s", swapapi, err)
 			}
 		}
 
 		var ensClient *ethclient.Client
 		if ensapi != "" {
-			log.Info("connecting to ENS API", "url", ensapi)
+			log.Info("连入ENS API", "url", ensapi)
 			client, err := rpc.Dial(ensapi)
 			if err != nil {
-				return nil, fmt.Errorf("error connecting to ENS API %s: %s", ensapi, err)
+				return nil, fmt.Errorf("错误连入ENS API %s: %s", ensapi, err)
 			}
 			ensClient = ethclient.NewClient(client)
 
@@ -507,7 +507,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 				if err == nil {
 					bzzconfig.EnsRoot = ensAddr
 				} else {
-					log.Warn(fmt.Sprintf("could not determine ENS contract address, using default %s", bzzconfig.EnsRoot), "err", err)
+					log.Warn(fmt.Sprintf("不同决定ENS合约地址, 使用缺省 %s", bzzconfig.EnsRoot), "err", err)
 				}
 			}
 		}
@@ -527,7 +527,7 @@ func getAccount(ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 	}
 	// Try to load the arg as a hex key file.
 	if key, err := crypto.LoadECDSA(keyid); err == nil {
-		log.Info("Swarm account key loaded", "address", crypto.PubkeyToAddress(key.PublicKey))
+		log.Info("Swarm 帐号密钥加载", "地址", crypto.PubkeyToAddress(key.PublicKey))
 		return key
 	}
 	// Otherwise try getting it from the keystore.
@@ -546,7 +546,7 @@ func decryptStoreAccount(ks *keystore.KeyStore, account string, passwords []stri
 		if accounts := ks.Accounts(); len(accounts) > ix {
 			a = accounts[ix]
 		} else {
-			err = fmt.Errorf("index %d higher than number of accounts %d", ix, len(accounts))
+			err = fmt.Errorf("索引 %d 超出帐号数量 %d", ix, len(accounts))
 		}
 	} else {
 		utils.Fatalf("Can't find swarm account key %s", account)

@@ -194,14 +194,14 @@ func (self *Network) startWithSnapshots(id discover.NodeID, snapshots map[string
 		return err
 	}
 	node.Up = true
-	log.Info(fmt.Sprintf("started node %v: %v", id, node.Up))
+	log.Info(fmt.Sprintf("启动节点 %v: %v", id, node.Up))
 
 	self.events.Send(NewEvent(node))
 
 	// subscribe to peer events
 	client, err := node.Client()
 	if err != nil {
-		return fmt.Errorf("error getting rpc client  for node %v: %s", id, err)
+		return fmt.Errorf("节点获取rpc客户端错误 %v: %s", id, err)
 	}
 	events := make(chan *p2p.PeerEvent)
 	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
@@ -270,7 +270,7 @@ func (self *Network) Stop(id discover.NodeID) error {
 		return err
 	}
 	node.Up = false
-	log.Info(fmt.Sprintf("stop node %v: %v", id, node.Up))
+	log.Info(fmt.Sprintf("停止节点 %v: %v", id, node.Up))
 
 	self.events.Send(ControlEvent(node))
 	return nil

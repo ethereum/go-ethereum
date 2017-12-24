@@ -126,7 +126,7 @@ func (self *LightChain) addTrustedCheckpoint(cp trustedCheckpoint) {
 	if self.odr.BloomIndexer() != nil {
 		self.odr.BloomIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
 	}
-	log.Info("Added trusted checkpoint", "chain name", cp.name)
+	log.Info("加入信任节点检查点", "链名", cp.name)
 }
 
 func (self *LightChain) getProcInterrupt() bool {
@@ -153,7 +153,7 @@ func (self *LightChain) loadLastState() error {
 	// Issue a status log and return
 	header := self.hc.CurrentHeader()
 	headerTd := self.GetTd(header.Hash(), header.Number.Uint64())
-	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd)
+	log.Info("加载最新的本地区块头", "区块号", header.Number, "哈希", header.Hash(), "交易", headerTd)
 
 	return nil
 }
@@ -313,7 +313,7 @@ func (bc *LightChain) Stop() {
 	atomic.StoreInt32(&bc.procInterrupt, 1)
 
 	bc.wg.Wait()
-	log.Info("Blockchain manager stopped")
+	log.Info("消品链管理器停止工作")
 }
 
 // Rollback is designed to remove a chain of links from the database that aren't

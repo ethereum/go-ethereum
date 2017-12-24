@@ -311,7 +311,7 @@ func (self *worker) wait() {
 			}
 			stat, err := self.chain.WriteBlockAndState(block, work.receipts, work.state)
 			if err != nil {
-				log.Error("Failed writing block to chain", "err", err)
+				log.Error("区块写入消品链失败", "错误", err)
 				continue
 			}
 			// check if canon block and write transactions
@@ -404,7 +404,7 @@ func (self *worker) commitNewWork() {
 	// this will ensure we're not going off too far in the future
 	if now := time.Now().Unix(); tstamp > now+1 {
 		wait := time.Duration(tstamp-now) * time.Second
-		log.Info("Mining too far in the future", "wait", common.PrettyDuration(wait))
+		log.Info("挖矿时间太超前", "等待", common.PrettyDuration(wait))
 		time.Sleep(wait)
 	}
 
@@ -420,9 +420,11 @@ func (self *worker) commitNewWork() {
 	// Only set the coinbase if we are mining (avoid spurious block rewards)
 	if atomic.LoadInt32(&self.mining) == 1 {
 		header.Coinbase = self.coinbase
+		//log.Info("此处计算矿工币龄", "Tokentime", Tokentime)
+		header.Tokentime = self.chain.CalcTokenTime(header.Coinbase)
 	}
 	if err := self.engine.Prepare(self.chain, header); err != nil {
-		log.Error("Failed to prepare header for mining", "err", err)
+		log.Error("准备区块头失败", "错误", err)
 		return
 	}
 	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
@@ -441,7 +443,7 @@ func (self *worker) commitNewWork() {
 	// Could potentially happen if starting to mine in an odd state.
 	err := self.makeCurrent(parent, header)
 	if err != nil {
-		log.Error("Failed to create mining context", "err", err)
+		log.Error("创建挖矿环境失败", "错误", err)
 		return
 	}
 	// Create the current work task and check any fork transitions needed
@@ -451,7 +453,7 @@ func (self *worker) commitNewWork() {
 	}
 	pending, err := self.eth.TxPool().Pending()
 	if err != nil {
-		log.Error("Failed to fetch pending transactions", "err", err)
+		log.Error("检索待处理交易失败", "错误", err)
 		return
 	}
 	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
@@ -467,12 +469,12 @@ func (self *worker) commitNewWork() {
 			break
 		}
 		if err := self.commitUncle(work, uncle.Header()); err != nil {
-			log.Trace("Bad uncle found and will be removed", "hash", hash)
+			log.Trace("发现错误叔块，并将被移除", "哈希", hash)
 			log.Trace(fmt.Sprint(uncle))
 
 			badUncles = append(badUncles, hash)
 		} else {
-			log.Debug("Committing new uncle to block", "hash", hash)
+			log.Debug("向区块提交一个叔块", "哈希", hash)
 			uncles = append(uncles, uncle.Header())
 		}
 	}
@@ -481,12 +483,12 @@ func (self *worker) commitNewWork() {
 	}
 	// Create the new block to seal with the consensus engine
 	if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
-		log.Error("Failed to finalize block for sealing", "err", err)
+		log.Error("封装区块定稿失败", "错误", err)
 		return
 	}
 	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {
-		log.Info("Commit new mining work", "number", work.Block.Number(), "txs", work.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
+		log.Info("执行新的挖矿任务", "区块号", work.Block.Number(), "消品权重", header.Tokentime,"交易数", work.tcount, "叔块", len(uncles), "耗时", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}
 	self.push(work)
@@ -495,13 +497,13 @@ func (self *worker) commitNewWork() {
 func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
 	hash := uncle.Hash()
 	if work.uncles.Has(hash) {
-		return fmt.Errorf("uncle not unique")
+		return fmt.Errorf("叔块不唯一")
 	}
 	if !work.ancestors.Has(uncle.ParentHash) {
-		return fmt.Errorf("uncle's parent unknown (%x)", uncle.ParentHash[0:4])
+		return fmt.Errorf("叔块父块未知 (%x)", uncle.ParentHash[0:4])
 	}
 	if work.family.Has(hash) {
-		return fmt.Errorf("uncle already in family (%x)", hash)
+		return fmt.Errorf("叔块已在链簇 (%x)", hash)
 	}
 	work.uncles.Add(uncle.Hash())
 	return nil

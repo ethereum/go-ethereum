@@ -161,9 +161,9 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, engine co
 			headerByNumber := bc.GetHeaderByNumber(header.Number.Uint64())
 			// make sure the headerByNumber (if present) is in our current canonical chain
 			if headerByNumber != nil && headerByNumber.Hash() == header.Hash() {
-				log.Error("Found bad hash, rewinding chain", "number", header.Number, "hash", header.ParentHash)
+				log.Error("发现错误哈希,重置区块链", "区块号", header.Number, "哈希", header.ParentHash)
 				bc.SetHead(header.Number.Uint64() - 1)
-				log.Error("Chain rewind was successful, resuming normal operation")
+				log.Error("区块链重置成功, 恢复正常操作")
 			}
 		}
 	}
@@ -224,9 +224,9 @@ func (bc *BlockChain) loadLastState() error {
 	blockTd := bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64())
 	fastTd := bc.GetTd(bc.currentFastBlock.Hash(), bc.currentFastBlock.NumberU64())
 
-	log.Info("Loaded most recent local header", "number", currentHeader.Number, "hash", currentHeader.Hash(), "td", headerTd)
-	log.Info("Loaded most recent local full block", "number", bc.currentBlock.Number(), "hash", bc.currentBlock.Hash(), "td", blockTd)
-	log.Info("Loaded most recent local fast block", "number", bc.currentFastBlock.Number(), "hash", bc.currentFastBlock.Hash(), "td", fastTd)
+	log.Info("加载最近的本地区块头", "区块号", currentHeader.Number, "哈希码", currentHeader.Hash(), "交易", headerTd)
+	log.Info("加载最近的本地全区块", "区块号", bc.currentBlock.Number(), "哈希码", bc.currentBlock.Hash(), "交易", blockTd)
+	log.Info("加载最近的本地轻区块", "区块号", bc.currentFastBlock.Number(), "哈希码", bc.currentFastBlock.Hash(), "交易", fastTd)
 
 	return nil
 }
@@ -606,7 +606,7 @@ func (bc *BlockChain) Stop() {
 	atomic.StoreInt32(&bc.procInterrupt, 1)
 
 	bc.wg.Wait()
-	log.Info("Blockchain manager stopped")
+	log.Info("消品链管理器停止工作")
 }
 
 func (bc *BlockChain) procFutureBlocks() {
@@ -702,9 +702,9 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(blockChain); i++ {
 		if blockChain[i].NumberU64() != blockChain[i-1].NumberU64()+1 || blockChain[i].ParentHash() != blockChain[i-1].Hash() {
-			log.Error("Non contiguous receipt insert", "number", blockChain[i].Number(), "hash", blockChain[i].Hash(), "parent", blockChain[i].ParentHash(),
-				"prevnumber", blockChain[i-1].Number(), "prevhash", blockChain[i-1].Hash())
-			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, blockChain[i-1].NumberU64(),
+			log.Error("非连续收据插入", "区块号", blockChain[i].Number(), "哈希码", blockChain[i].Hash(), "父区块号", blockChain[i].ParentHash(),
+				"前一区块号", blockChain[i-1].Number(), "前一哈希值", blockChain[i-1].Hash())
+			return 0, fmt.Errorf("非连续插入: 项目  %d 是 #%d [%x…], 项目 %d 是 #%d [%x…] (父区块 [%x…])", i-1, blockChain[i-1].NumberU64(),
 				blockChain[i-1].Hash().Bytes()[:4], i, blockChain[i].NumberU64(), blockChain[i].Hash().Bytes()[:4], blockChain[i].ParentHash().Bytes()[:4])
 		}
 	}
@@ -772,13 +772,13 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	}
 	bc.mu.Unlock()
 
-	log.Info("Imported new block receipts",
-		"count", stats.processed,
-		"elapsed", common.PrettyDuration(time.Since(start)),
-		"bytes", bytes,
-		"number", head.Number(),
-		"hash", head.Hash(),
-		"ignored", stats.ignored)
+	log.Info("导入新的区块收据",
+		"数量", stats.processed,
+		"耗时", common.PrettyDuration(time.Since(start)),
+		"字节数", bytes,
+		"区块号", head.Number(),
+		"哈希值", head.Hash(),
+		"忽略数", stats.ignored)
 	return 0, nil
 }
 
@@ -854,6 +854,20 @@ func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.R
 	return status, nil
 }
 
+//计算币龄的函数，根据收币数量与时间计算当前币量的币龄,传入参数：待计算地址及起始时间
+func (bc *BlockChain) CalcTokenTime(Coinbase common.Address) (Tokentime *big.Int) {
+	//var sumToken *big.Int = big.NewInt(0)
+	//var Tokentime *big.Int = big.NewInt(0)
+	statedb, _ := state.New(bc.GetBlockByHash(bc.currentBlock.Hash()).Root(), bc.stateCache)
+
+	//bc, _ :=
+	//log.Error("所查帐号的余额为", "ETHER", statedb.GetBalance(common.HexToAddress("0x3656E9cE021f6454906687FF615915235f8E510f")))
+	//取出待查币龄值帐号的帐户余额
+	Tokentime = statedb.GetBalance(Coinbase)
+	Tokentime.Div(Tokentime, new(big.Int).Mul(big.NewInt(1), big.NewInt(1e18)))
+	return Tokentime
+}
+
 // InsertChain attempts to insert the given batch of blocks in to the canonical
 // chain or, otherwise, create a fork. If an error is returned it will return
 // the index number of the failing block as well an error describing what went
@@ -874,10 +888,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 	for i := 1; i < len(chain); i++ {
 		if chain[i].NumberU64() != chain[i-1].NumberU64()+1 || chain[i].ParentHash() != chain[i-1].Hash() {
 			// Chain broke ancestry, log a messge (programming error) and skip insertion
-			log.Error("Non contiguous block insert", "number", chain[i].Number(), "hash", chain[i].Hash(),
-				"parent", chain[i].ParentHash(), "prevnumber", chain[i-1].Number(), "prevhash", chain[i-1].Hash())
+			log.Error("非连续区块插入", "区块号", chain[i].Number(), "哈希", chain[i].Hash(),
+				"父区块", chain[i].ParentHash(), "前一区块号r", chain[i-1].Number(), "前一区块哈希", chain[i-1].Hash())
 
-			return 0, nil, nil, fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, chain[i-1].NumberU64(),
+			return 0, nil, nil, fmt.Errorf("非连续区块插入t: 项目 %d 是 #%d [%x…], 项目 %d 是 #%d [%x…] (夫区块 [%x…])", i-1, chain[i-1].NumberU64(),
 				chain[i-1].Hash().Bytes()[:4], i, chain[i].NumberU64(), chain[i].Hash().Bytes()[:4], chain[i].ParentHash().Bytes()[:4])
 		}
 	}
@@ -906,6 +920,24 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		seals[i] = true
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
+    //此处检查区块时间时帐号币龄
+   if new(big.Int).Sub(big.NewInt(time.Now().Unix()), bc.currentBlock.Time()).Cmp(big.NewInt(30)) < 0 {
+	   Tokentime := bc.CalcTokenTime(bc.currentBlock.Coinbase())
+	   // Tokentime2 := bc.CalcTokenTime(common.HexToAddress("0xac9d739c4d83e3501d824c4e308e7812aba8306d"))
+	   //Tokentime3 := bc.CalcTokenTime(common.HexToAddress("0xed867421dabc9dc2785e54411497ae2327f28dfe"))
+	   //log.Error("各帐号币权值", "帐号1币权", Tokentime, "帐号2币权", Tokentime2, "帐号3币权", Tokentime3)
+	   //验证区块登记币权与根据区块时间计算币权的差值的绝对值是否小于一个数100，若是则通过。
+       //log.Error("币权验证", "帐号1币权", bc.CalcTokenTime(bc.currentBlock.Coinbase()), "区块登记币权", bc.currentBlock.Header().Tokentime)
+	   if Tokentime.Cmp(bc.currentBlock.Header().Tokentime) < 0 {
+		   //log.Info("消品权重验证失败","区块号", bc.currentBlock.NumberU64,"消品权重",Tokentime,"区块封装难度",bc.currentBlock.Difficulty)
+		   abort := make(chan struct{})
+		   defer close(abort)
+
+	   } else {
+		   //log.Info("消品权重验证通过","区块号", bc.currentBlock.NumberU64, "消品权重",Tokentime,"区块封装难度",bc.currentBlock.Difficulty)
+	   }
+    }
+
 	defer close(abort)
 
 	// Iterate over the blocks and insert when the verifier permits
@@ -1039,17 +1071,17 @@ func (st *insertStats) report(chain []*types.Block, index int) {
 			txs = countTransactions(chain[st.lastIndex : index+1])
 		)
 		context := []interface{}{
-			"blocks", st.processed, "txs", txs, "mgas", float64(st.usedGas) / 1000000,
-			"elapsed", common.PrettyDuration(elapsed), "mgasps", float64(st.usedGas) * 1000 / float64(elapsed),
-			"number", end.Number(), "hash", end.Hash(),
+			"区块", st.processed, "交易", txs, "mgas", float64(st.usedGas) / 1000000,
+			"用时", common.PrettyDuration(elapsed), "mgasps", float64(st.usedGas) * 1000 / float64(elapsed),
+			"块号", end.Number(), "哈希", end.Hash(),
 		}
 		if st.queued > 0 {
-			context = append(context, []interface{}{"queued", st.queued}...)
+			context = append(context, []interface{}{"队列", st.queued}...)
 		}
 		if st.ignored > 0 {
-			context = append(context, []interface{}{"ignored", st.ignored}...)
+			context = append(context, []interface{}{"忽略", st.ignored}...)
 		}
-		log.Info("Imported new chain segment", context...)
+		log.Info("导入消品新链块", context...)
 
 		*st = insertStats{startTime: now, lastIndex: index + 1}
 	}
@@ -1138,7 +1170,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		logFn("Chain split detected", "number", commonBlock.Number(), "hash", commonBlock.Hash(),
 			"drop", len(oldChain), "dropfrom", oldChain[0].Hash(), "add", len(newChain), "addfrom", newChain[0].Hash())
 	} else {
-		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "newnum", newBlock.Number(), "newhash", newBlock.Hash())
+		log.Error("不可能的重组, 请编制一个发行文件", "旧区块号", oldBlock.Number(), "旧哈希", oldBlock.Hash(), "newnum", newBlock.Number(), "newhash", newBlock.Hash())
 	}
 	var addedTxs types.Transactions
 	// insert blocks. Order does not matter. Last block will be written in ImportChain itself which creates the new head properly
@@ -1239,14 +1271,14 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 		receiptString += fmt.Sprintf("\t%v\n", receipt)
 	}
 	log.Error(fmt.Sprintf(`
-########## BAD BLOCK #########
-Chain config: %v
+########## 不符合消品链规则的区块 #########
+区块链配置: %v
 
-Number: %v
-Hash: 0x%x
+区块编号: %v
+哈希值: 0x%x
 %v
 
-Error: %v
+错误: %v
 ##############################
 `, bc.config, block.Number(), block.Hash(), receiptString, err))
 }

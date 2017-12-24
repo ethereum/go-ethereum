@@ -110,7 +110,7 @@ func (h *HandlerT) StartCPUProfile(file string) error {
 	}
 	h.cpuW = f
 	h.cpuFile = file
-	log.Info("CPU profiling started", "dump", h.cpuFile)
+	log.Info("CPU 配置启动", "dump", h.cpuFile)
 	return nil
 }
 

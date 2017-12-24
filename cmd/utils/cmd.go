@@ -67,12 +67,12 @@ func StartNode(stack *node.Node) {
 		signal.Notify(sigc, os.Interrupt)
 		defer signal.Stop(sigc)
 		<-sigc
-		log.Info("Got interrupt, shutting down...")
+		log.Info("收到中断指令，准备下线...")
 		go stack.Stop()
 		for i := 10; i > 0; i-- {
 			<-sigc
 			if i > 1 {
-				log.Warn("Already shutting down, interrupt more to panic.", "times", i-1)
+				log.Warn("已经下线, 无需再发中断指令.", "次数", i-1)
 			}
 		}
 		debug.Exit() // ensure trace and CPU profile data is flushed.
@@ -90,7 +90,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	defer close(interrupt)
 	go func() {
 		if _, ok := <-interrupt; ok {
-			log.Info("Interrupted during import, stopping at next batch")
+			log.Info("导入期间中断, 在下一个批次停止")
 		}
 		close(stop)
 	}()
@@ -103,7 +103,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 		}
 	}
 
-	log.Info("Importing blockchain", "file", fn)
+	log.Info("导入区块链", "文件", fn)
 	fh, err := os.Open(fn)
 	if err != nil {
 		return err
@@ -151,7 +151,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 			return fmt.Errorf("interrupted")
 		}
 		if hasAllBlocks(chain, blocks[:i]) {
-			log.Info("Skipping batch as all blocks present", "batch", batch, "first", blocks[0].Hash(), "last", blocks[i-1].Hash())
+			log.Info("所有区块存在，跳过批处理", "批处理", batch, "第一个", blocks[0].Hash(), "最后一个", blocks[i-1].Hash())
 			continue
 		}
 
@@ -172,7 +172,7 @@ func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
 }
 
 func ExportChain(blockchain *core.BlockChain, fn string) error {
-	log.Info("Exporting blockchain", "file", fn)
+	log.Info("导出区块链", "文件", fn)
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return err
@@ -188,13 +188,13 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 	if err := blockchain.Export(writer); err != nil {
 		return err
 	}
-	log.Info("Exported blockchain", "file", fn)
+	log.Info("导出区块链", "文件", fn)
 
 	return nil
 }
 
 func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, last uint64) error {
-	log.Info("Exporting blockchain", "file", fn)
+	log.Info("正在导出区块链", "文件", fn)
 	// TODO verify mode perms
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
 	if err != nil {
@@ -211,6 +211,6 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 	if err := blockchain.ExportN(writer, first, last); err != nil {
 		return err
 	}
-	log.Info("Exported blockchain to", "file", fn)
+	log.Info("导出区块链到", "文件", fn)
 	return nil
 }

@@ -169,7 +169,7 @@ func initGenesis(ctx *cli.Context) error {
 		if err != nil {
 			utils.Fatalf("Failed to write genesis block: %v", err)
 		}
-		log.Info("Successfully wrote genesis state", "database", name, "hash", hash)
+		log.Info("创始块状态创建成功", "database", name, "hash", hash)
 	}
 	return nil
 }
@@ -207,7 +207,7 @@ func importChain(ctx *cli.Context) error {
 	} else {
 		for _, arg := range ctx.Args() {
 			if err := utils.ImportChain(chain, arg); err != nil {
-				log.Error("Import error", "file", arg, "err", err)
+				log.Error("导入错误", "文件", arg, "err", err)
 			}
 		}
 	}

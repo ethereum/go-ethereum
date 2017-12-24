@@ -110,7 +110,7 @@ func (w *wizard) deployExplorer() {
 		return
 	}
 	// All ok, run a network scan to pick any changes up
-	log.Info("Waiting for node to finish booting")
+	log.Info("等待节点完成启动")
 	time.Sleep(3 * time.Second)
 
 	w.networkStats()

@@ -212,6 +212,7 @@ func testExtendCanonical(t *testing.T, full bool) {
 	better := func(td1, td2 *big.Int) {
 		if td2.Cmp(td1) <= 0 {
 			t.Errorf("total difficulty mismatch: have %v, expected more than %v", td2, td1)
+		
 		}
 	}
 	// Start fork from current height

@@ -318,7 +318,7 @@ func (pool *TxPool) Stop() {
 	// Unsubscribe subscriptions registered from blockchain
 	pool.chainHeadSub.Unsubscribe()
 	close(pool.quit)
-	log.Info("Transaction pool stopped")
+	log.Info("交易池停止工作")
 }
 
 // SubscribeTxPreEvent registers a subscription of core.TxPreEvent and

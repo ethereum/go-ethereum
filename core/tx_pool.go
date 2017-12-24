@@ -360,7 +360,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 		newNum := newHead.Number.Uint64()
 
 		if depth := uint64(math.Abs(float64(oldNum) - float64(newNum))); depth > 64 {
-			log.Warn("Skipping deep transaction reorg", "depth", depth)
+			log.Warn("跳过深度交易重组织", "深度", depth)
 		} else {
 			// Reorg seems shallow enough to pull in all transactions into memory
 			var discarded, included types.Transactions
@@ -443,7 +443,7 @@ func (pool *TxPool) Stop() {
 	if pool.journal != nil {
 		pool.journal.close()
 	}
-	log.Info("Transaction pool stopped")
+	log.Info("交易池停止工作")
 }
 
 // SubscribeTxPreEvent registers a subscription of TxPreEvent and
@@ -470,7 +470,7 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 	for _, tx := range pool.priced.Cap(price, pool.locals) {
 		pool.removeTx(tx.Hash())
 	}
-	log.Info("Transaction pool price threshold updated", "price", price)
+	log.Info("交易池价格阀值更新", "价格（玮）", price)
 }
 
 // State returns the virtual managed state of the transaction pool.

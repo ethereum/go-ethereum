@@ -141,7 +141,7 @@ func (a *RemoteAgent) SubmitWork(nonce types.BlockNonce, mixDigest, hash common.
 	// Make sure the work submitted is present
 	work := a.work[hash]
 	if work == nil {
-		log.Info("Work submitted but none pending", "hash", hash)
+		log.Info("工作已提交但是没有待处理交易", "哈希", hash)
 		return false
 	}
 	// Make sure the Engine solutions is indeed valid
@@ -150,7 +150,7 @@ func (a *RemoteAgent) SubmitWork(nonce types.BlockNonce, mixDigest, hash common.
 	result.MixDigest = mixDigest
 
 	if err := a.engine.VerifySeal(a.chain, result); err != nil {
-		log.Warn("Invalid proof-of-work submitted", "hash", hash, "err", err)
+		log.Warn("I无效的POW提交工作", "哈希", hash, "错误", err)
 		return false
 	}
 	block := work.Block.WithSeal(result)

@@ -32,7 +32,7 @@ import (
 // configuration set to give users hints on how to do various tasks.
 func (w *wizard) networkStats() {
 	if len(w.servers) == 0 {
-		log.Info("No remote machines to gather stats from")
+		log.Info("没有远程设备收集统计数据")
 		return
 	}
 	// Clear out some previous configs to refill from current scan

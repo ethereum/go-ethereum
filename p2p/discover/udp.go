@@ -224,7 +224,7 @@ func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, nodeDBP
 	if err != nil {
 		return nil, err
 	}
-	log.Info("UDP listener up", "self", tab.self)
+	log.Info("UDP侦听器启动", "本节点地址", tab.self)
 	return tab, nil
 }
 

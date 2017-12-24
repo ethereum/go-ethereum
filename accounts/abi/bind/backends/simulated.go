@@ -314,7 +314,7 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	})
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), state.NewDatabase(b.database))
-
+    
 	return nil
 }
 

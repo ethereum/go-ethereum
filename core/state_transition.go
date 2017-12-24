@@ -210,6 +210,12 @@ func (st *StateTransition) preCheck() error {
 // including the required gas for the operation as well as the used gas. It returns an error if it
 // failed. An error indicates a consensus issue.
 func (st *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *big.Int, failed bool, err error) {
+	
+	//	var XP_GD = common.HexToAddress("0xf933b0CF38a270938B9D6bb41f004374363C3EC0")
+	var XP_XF = params.XP_XF
+	var XP_KY = params.XP_KY
+    	
+	
 	if err = st.preCheck(); err != nil {
 		return
 	}
@@ -255,7 +261,19 @@ func (st *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *big
 	requiredGas = new(big.Int).Set(st.gasUsed())
 
 	st.refundGas()
-	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(st.gasUsed(), st.gasPrice))
+    // 在算力、股东、消费、科研帐户之间分配交易费。
+    XP_gas := new(big.Int).Mul(st.gasUsed(), st.gasPrice)
+    XP_KYgas := new(big.Int).Div(XP_gas, big.NewInt(10))
+	XP_Minergas := new(big.Int).Mul(XP_KYgas, big.NewInt(6))
+	XP_XFgas := new(big.Int).Mul(XP_KYgas, big.NewInt(3))
+	st.state.AddBalance(st.evm.Coinbase, XP_Minergas) //为算力帐户支付交易费的60%
+    //st.state.AddBalance(XP_GD, XP_GDgas)           //为股东帐户支付交易费30%
+    st.state.AddBalance(XP_XF, XP_XFgas)           //为消费帐户支付交易费的30%
+    st.state.AddBalance(XP_KY, XP_KYgas)           //为科研帐户支付交易费的10%
+
+
+
+	//st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(st.gasUsed(), st.gasPrice))
 
 	return ret, requiredGas, st.gasUsed(), vmerr != nil, err
 }

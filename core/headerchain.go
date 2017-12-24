@@ -206,10 +206,10 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 	for i := 1; i < len(chain); i++ {
 		if chain[i].Number.Uint64() != chain[i-1].Number.Uint64()+1 || chain[i].ParentHash != chain[i-1].Hash() {
 			// Chain broke ancestry, log a messge (programming error) and skip insertion
-			log.Error("Non contiguous header insert", "number", chain[i].Number, "hash", chain[i].Hash(),
-				"parent", chain[i].ParentHash, "prevnumber", chain[i-1].Number, "prevhash", chain[i-1].Hash())
+			log.Error("非连区块头插入", "编号", chain[i].Number, "哈希", chain[i].Hash(),
+				"父区块", chain[i].ParentHash, "前一区块号", chain[i-1].Number, "前一哈希值", chain[i-1].Hash())
 
-			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, chain[i-1].Number,
+			return 0, fmt.Errorf("非连续区块插入: 项目 %d 是 #%d [%x…], 项目 %d 是 #%d [%x…] (父区块 [%x…])", i-1, chain[i-1].Number,
 				chain[i-1].Hash().Bytes()[:4], i, chain[i].Number, chain[i].Hash().Bytes()[:4], chain[i].ParentHash[:4])
 		}
 	}
@@ -278,8 +278,8 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, writeHeader WhCa
 	}
 	// Report some public statistics so the user has a clue what's going on
 	last := chain[len(chain)-1]
-	log.Info("Imported new block headers", "count", stats.processed, "elapsed", common.PrettyDuration(time.Since(start)),
-		"number", last.Number, "hash", last.Hash(), "ignored", stats.ignored)
+	log.Info("导入新的区块头", "数量", stats.processed, "耗时", common.PrettyDuration(time.Since(start)),
+		"区块号", last.Number, "哈希值", last.Hash(), "省略", stats.ignored)
 
 	return 0, nil
 }

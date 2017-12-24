@@ -124,7 +124,7 @@ func (w *wizard) makeGenesis() {
 	genesis.Config.ChainId = new(big.Int).SetUint64(uint64(w.readDefaultInt(rand.Intn(65536))))
 
 	// All done, store the genesis and flush to disk
-	log.Info("Configured new genesis block")
+	log.Info("配置新的创世区块")
 
 	w.conf.Genesis = genesis
 	w.conf.flush()
@@ -174,7 +174,7 @@ func (w *wizard) manageGenesis() {
 		if err := ioutil.WriteFile(w.readDefaultString(fmt.Sprintf("%s.json", w.network)), out, 0644); err != nil {
 			log.Error("Failed to save genesis file", "err", err)
 		}
-		log.Info("Exported existing genesis block")
+		log.Info("导出已存在的创世区块")
 
 	case choice == "3":
 		// Make sure we don't have any services running
@@ -182,12 +182,12 @@ func (w *wizard) manageGenesis() {
 			log.Error("Genesis reset requires all services and servers torn down")
 			return
 		}
-		log.Info("Genesis block destroyed")
+		log.Info("创世区块被破坏")
 
 		w.conf.Genesis = nil
 		w.conf.flush()
 
 	default:
-		log.Error("That's not something I can do")
+		log.Error("已超出能力范围")
 	}
 }

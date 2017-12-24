@@ -43,7 +43,7 @@ func (h *HandlerT) StartGoTrace(file string) error {
 	}
 	h.traceW = f
 	h.traceFile = file
-	log.Info("Go tracing started", "dump", h.traceFile)
+	log.Info("跟踪开始", "dump", h.traceFile)
 	return nil
 }
 

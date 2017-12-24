@@ -162,7 +162,7 @@ func GetHeader(db DatabaseReader, hash common.Hash, number uint64) *types.Header
 	}
 	header := new(types.Header)
 	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
-		log.Error("Invalid block header RLP", "hash", hash, "err", err)
+		log.Error("无效区块头RLP", "哈希", hash, "错误", err)
 		return nil
 	}
 	return header
@@ -191,7 +191,7 @@ func GetBody(db DatabaseReader, hash common.Hash, number uint64) *types.Body {
 	}
 	body := new(types.Body)
 	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
-		log.Error("Invalid block body RLP", "hash", hash, "err", err)
+		log.Error("无效的区块体RLP", "哈希", hash, "错误", err)
 		return nil
 	}
 	return body
@@ -206,7 +206,7 @@ func GetTd(db DatabaseReader, hash common.Hash, number uint64) *big.Int {
 	}
 	td := new(big.Int)
 	if err := rlp.Decode(bytes.NewReader(data), td); err != nil {
-		log.Error("Invalid block total difficulty RLP", "hash", hash, "err", err)
+		log.Error("无效的区块总难度RLP", "哈希", hash, "错误", err)
 		return nil
 	}
 	return td
@@ -241,7 +241,7 @@ func GetBlockReceipts(db DatabaseReader, hash common.Hash, number uint64) types.
 	}
 	storageReceipts := []*types.ReceiptForStorage{}
 	if err := rlp.DecodeBytes(data, &storageReceipts); err != nil {
-		log.Error("Invalid receipt array RLP", "hash", hash, "err", err)
+		log.Error("无效的收据数据RLP", "哈希", hash, "错误", err)
 		return nil
 	}
 	receipts := make(types.Receipts, len(storageReceipts))
@@ -262,7 +262,7 @@ func GetTxLookupEntry(db DatabaseReader, hash common.Hash) (common.Hash, uint64,
 	// Parse and return the contents of the lookup entry
 	var entry TxLookupEntry
 	if err := rlp.DecodeBytes(data, &entry); err != nil {
-		log.Error("Invalid lookup entry RLP", "hash", hash, "err", err)
+		log.Error("无效的查表条目RLP", "哈希", hash, "错误", err)
 		return common.Hash{}, 0, 0
 	}
 	return entry.BlockHash, entry.BlockIndex, entry.Index
@@ -277,7 +277,7 @@ func GetTransaction(db DatabaseReader, hash common.Hash) (*types.Transaction, co
 	if blockHash != (common.Hash{}) {
 		body := GetBody(db, blockHash, blockNumber)
 		if body == nil || len(body.Transactions) <= int(txIndex) {
-			log.Error("Transaction referenced missing", "number", blockNumber, "hash", blockHash, "index", txIndex)
+			log.Error("交易参照丢失", "区块号", blockNumber, "哈希", blockHash, "索引", txIndex)
 			return nil, common.Hash{}, 0, 0
 		}
 		return body.Transactions[txIndex], blockHash, blockNumber, txIndex
@@ -312,7 +312,7 @@ func GetReceipt(db DatabaseReader, hash common.Hash) (*types.Receipt, common.Has
 	if blockHash != (common.Hash{}) {
 		receipts := GetBlockReceipts(db, blockHash, blockNumber)
 		if len(receipts) <= int(receiptIndex) {
-			log.Error("Receipt refereced missing", "number", blockNumber, "hash", blockHash, "index", receiptIndex)
+			log.Error("收据参考丢失", "编号", blockNumber, "哈希", blockHash, "索引", receiptIndex)
 			return nil, common.Hash{}, 0, 0
 		}
 		return receipts[receiptIndex], blockHash, blockNumber, receiptIndex
@@ -325,7 +325,7 @@ func GetReceipt(db DatabaseReader, hash common.Hash) (*types.Receipt, common.Has
 	var receipt types.ReceiptForStorage
 	err := rlp.DecodeBytes(data, &receipt)
 	if err != nil {
-		log.Error("Invalid receipt RLP", "hash", hash, "err", err)
+		log.Error("无效的收据RLP", "哈希", hash, "错误", err)
 	}
 	return (*types.Receipt)(&receipt), common.Hash{}, 0, 0
 }

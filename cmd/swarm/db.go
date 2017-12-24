@@ -57,7 +57,7 @@ func dbExport(ctx *cli.Context) {
 		utils.Fatalf("error exporting local chunk database: %s", err)
 	}
 
-	log.Info(fmt.Sprintf("successfully exported %d chunks", count))
+	log.Info(fmt.Sprintf("成功导出 %d 区块", count))
 }
 
 func dbImport(ctx *cli.Context) {
@@ -89,7 +89,7 @@ func dbImport(ctx *cli.Context) {
 		utils.Fatalf("error importing local chunk database: %s", err)
 	}
 
-	log.Info(fmt.Sprintf("successfully imported %d chunks", count))
+	log.Info(fmt.Sprintf("成功导放 %d 区块", count))
 }
 
 func dbClean(ctx *cli.Context) {

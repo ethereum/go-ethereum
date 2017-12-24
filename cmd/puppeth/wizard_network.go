@@ -52,7 +52,7 @@ func (w *wizard) manageServers() {
 		delete(w.conf.Servers, server)
 		w.conf.flush()
 
-		log.Info("Disconnected existing server", "server", server)
+		log.Info("断开现有服务器", "服务器", server)
 		w.networkStats()
 		return
 	}
@@ -158,7 +158,7 @@ func (w *wizard) manageComponents() {
 				}
 			}
 		}
-		log.Info("Torn down existing component", "server", server, "service", service)
+		log.Info("停止现存组件", "服务器", server, "服务", service)
 		return
 	}
 	// If the user requested deploying a new component, do it

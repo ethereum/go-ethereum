@@ -66,7 +66,7 @@ func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
 	if handles < 16 {
 		handles = 16
 	}
-	logger.Info("Allocated cache and file handles", "cache", cache, "handles", handles)
+	logger.Info("分配缓存和文件句柄", "缓存", cache, "句柄", handles)
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, &opt.Options{
@@ -158,14 +158,14 @@ func (db *LDBDatabase) Close() {
 		errc := make(chan error)
 		db.quitChan <- errc
 		if err := <-errc; err != nil {
-			db.log.Error("Metrics collection failed", "err", err)
+			db.log.Error("计量单位检索失败", "错误", err)
 		}
 	}
 	err := db.db.Close()
 	if err == nil {
-		db.log.Info("Database closed")
+		db.log.Info("数据库已关闭")
 	} else {
-		db.log.Error("Failed to close database", "err", err)
+		db.log.Error("关闭数据库失败", "错误", err)
 	}
 }
 
@@ -220,7 +220,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		// Retrieve the database stats
 		stats, err := db.db.GetProperty("leveldb.stats")
 		if err != nil {
-			db.log.Error("Failed to read database stats", "err", err)
+			db.log.Error("读取数据库统计失败", "失败", err)
 			return
 		}
 		// Find the compaction table, skip the header
@@ -229,7 +229,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			lines = lines[1:]
 		}
 		if len(lines) <= 3 {
-			db.log.Error("Compaction table not found")
+			db.log.Error("压缩表未发现")
 			return
 		}
 		lines = lines[3:]
@@ -246,7 +246,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			for idx, counter := range parts[3:] {
 				value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64)
 				if err != nil {
-					db.log.Error("Compaction entry parsing failed", "err", err)
+					db.log.Error("压缩条目解析失败", "错误", err)
 					return
 				}
 				counters[i%2][idx] += value

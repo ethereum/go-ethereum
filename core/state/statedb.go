@@ -363,7 +363,7 @@ func (self *StateDB) getStateObject(addr common.Address) (stateObject *stateObje
 	}
 	var data Account
 	if err := rlp.DecodeBytes(enc, &data); err != nil {
-		log.Error("Failed to decode state object", "addr", addr, "err", err)
+		log.Error("解析状态对象失败", "地址", addr, "错误", err)
 		return nil
 	}
 	// Insert into the live set.

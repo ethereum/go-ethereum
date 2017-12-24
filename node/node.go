@@ -163,7 +163,7 @@ func (n *Node) Start() error {
 		n.serverConfig.NodeDatabase = n.config.NodeDB()
 	}
 	running := &p2p.Server{Config: n.serverConfig}
-	n.log.Info("Starting peer-to-peer node", "instance", n.serverConfig.Name)
+	n.log.Info("启动消品链P2P节点", "instance", n.serverConfig.Name)
 
 	// Otherwise copy and specialize the P2P configuration
 	services := make(map[reflect.Type]Service)
@@ -324,7 +324,7 @@ func (n *Node) startIPC(apis []rpc.API) error {
 		return err
 	}
 	go func() {
-		n.log.Info(fmt.Sprintf("IPC endpoint opened: %s", n.ipcEndpoint))
+		n.log.Info(fmt.Sprintf("IPC终端启动: %s", n.ipcEndpoint))
 
 		for {
 			conn, err := listener.Accept()
@@ -356,7 +356,7 @@ func (n *Node) stopIPC() {
 		n.ipcListener.Close()
 		n.ipcListener = nil
 
-		n.log.Info(fmt.Sprintf("IPC endpoint closed: %s", n.ipcEndpoint))
+		n.log.Info(fmt.Sprintf("IPC终端关闭: %s", n.ipcEndpoint))
 	}
 	if n.ipcHandler != nil {
 		n.ipcHandler.Stop()
@@ -394,7 +394,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 		return err
 	}
 	go rpc.NewHTTPServer(cors, handler).Serve(listener)
-	n.log.Info(fmt.Sprintf("HTTP endpoint opened: http://%s", endpoint))
+	n.log.Info(fmt.Sprintf("HTTP终端启动: http://%s", endpoint))
 
 	// All listeners booted successfully
 	n.httpEndpoint = endpoint
@@ -410,7 +410,7 @@ func (n *Node) stopHTTP() {
 		n.httpListener.Close()
 		n.httpListener = nil
 
-		n.log.Info(fmt.Sprintf("HTTP endpoint closed: http://%s", n.httpEndpoint))
+		n.log.Info(fmt.Sprintf("HTTP终端关闭: http://%s", n.httpEndpoint))
 	}
 	if n.httpHandler != nil {
 		n.httpHandler.Stop()
@@ -448,7 +448,7 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 		return err
 	}
 	go rpc.NewWSServer(wsOrigins, handler).Serve(listener)
-	n.log.Info(fmt.Sprintf("WebSocket endpoint opened: ws://%s", listener.Addr()))
+	n.log.Info(fmt.Sprintf("WebSocket终端启动: ws://%s", listener.Addr()))
 
 	// All listeners booted successfully
 	n.wsEndpoint = endpoint
@@ -464,7 +464,7 @@ func (n *Node) stopWS() {
 		n.wsListener.Close()
 		n.wsListener = nil
 
-		n.log.Info(fmt.Sprintf("WebSocket endpoint closed: ws://%s", n.wsEndpoint))
+		n.log.Info(fmt.Sprintf("WebSocket终端关闭: ws://%s", n.wsEndpoint))
 	}
 	if n.wsHandler != nil {
 		n.wsHandler.Stop()

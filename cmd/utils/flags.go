@@ -1059,7 +1059,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		if err := ks.Unlock(developer, ""); err != nil {
 			Fatalf("Failed to unlock developer account: %v", err)
 		}
-		log.Info("Using developer account", "address", developer.Address)
+		log.Info("使用开发者帐户", "地址", developer.Address)
 
 		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), developer.Address)
 		if !ctx.GlobalIsSet(GasPriceFlag.Name) {

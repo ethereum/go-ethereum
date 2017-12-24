@@ -279,7 +279,7 @@ func (c *ChainIndexer) updateLoop() {
 				if time.Since(updated) > 8*time.Second {
 					if c.knownSections > c.storedSections+1 {
 						updating = true
-						c.log.Info("Upgrading chain index", "percentage", c.storedSections*100/c.knownSections)
+						c.log.Info("更新消品链索引", "百分比", c.storedSections*100/c.knownSections)
 					}
 					updated = time.Now()
 				}
@@ -293,7 +293,7 @@ func (c *ChainIndexer) updateLoop() {
 				c.lock.Unlock()
 				newHead, err := c.processSection(section, oldHead)
 				if err != nil {
-					c.log.Error("Section processing failed", "error", err)
+					c.log.Error("分块处理失败", "错误", err)
 				}
 				c.lock.Lock()
 
@@ -303,7 +303,7 @@ func (c *ChainIndexer) updateLoop() {
 					c.setValidSections(section + 1)
 					if c.storedSections == c.knownSections && updating {
 						updating = false
-						c.log.Info("Finished upgrading chain index")
+						c.log.Info("完成消品链索引更新")
 					}
 
 					c.cascadedHead = c.storedSections*c.sectionSize - 1
@@ -336,7 +336,7 @@ func (c *ChainIndexer) updateLoop() {
 // held while processing, the continuity can be broken by a long reorg, in which
 // case the function returns with an error.
 func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (common.Hash, error) {
-	c.log.Trace("Processing new chain section", "section", section)
+	c.log.Trace("处理新的链分块", "分块", section)
 
 	// Reset and partial processing
 
@@ -348,19 +348,19 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 	for number := section * c.sectionSize; number < (section+1)*c.sectionSize; number++ {
 		hash := GetCanonicalHash(c.chainDb, number)
 		if hash == (common.Hash{}) {
-			return common.Hash{}, fmt.Errorf("canonical block #%d unknown", number)
+			return common.Hash{}, fmt.Errorf("主链块 #%d 未知", number)
 		}
 		header := GetHeader(c.chainDb, hash, number)
 		if header == nil {
-			return common.Hash{}, fmt.Errorf("block #%d [%x…] not found", number, hash[:4])
+			return common.Hash{}, fmt.Errorf("区块 #%d [%x…] 未找到", number, hash[:4])
 		} else if header.ParentHash != lastHead {
-			return common.Hash{}, fmt.Errorf("chain reorged during section processing")
+			return common.Hash{}, fmt.Errorf("在分片处理时进行链重组")
 		}
 		c.backend.Process(header)
 		lastHead = header.Hash()
 	}
 	if err := c.backend.Commit(); err != nil {
-		c.log.Error("Section commit failed", "error", err)
+		c.log.Error("分块提交失败", "错误", err)
 		return common.Hash{}, err
 	}
 	return lastHead, nil

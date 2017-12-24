@@ -81,6 +81,7 @@ type Header struct {
 	GasUsed     *big.Int       `json:"gasUsed"          gencodec:"required"`
 	Time        *big.Int       `json:"timestamp"        gencodec:"required"`
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
+	Tokentime   *big.Int       `json:"Tokentime"        gencodec:"required"`
 	MixDigest   common.Hash    `json:"mixHash"          gencodec:"required"`
 	Nonce       BlockNonce     `json:"nonce"            gencodec:"required"`
 }
@@ -252,6 +253,9 @@ func CopyHeader(h *Header) *Header {
 	if len(h.Extra) > 0 {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
+	}
+	if cpy.Tokentime = new(big.Int); h.Tokentime != nil {
+		cpy.Tokentime.Set(h.Tokentime)
 	}
 	return &cpy
 }

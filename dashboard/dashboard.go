@@ -143,7 +143,7 @@ func (db *Dashboard) Stop() error {
 
 	// Wait until every goroutine terminates.
 	db.wg.Wait()
-	log.Info("Dashboard stopped")
+	log.Info("监视面板集止")
 
 	var err error
 	if len(errs) > 0 {

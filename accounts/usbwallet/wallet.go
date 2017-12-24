@@ -385,7 +385,7 @@ func (w *wallet) selfDerive() {
 
 			// Display a log message to the user for new (or previously empty accounts)
 			if _, known := w.paths[nextAddr]; !known || (!empty && nextAddr == w.deriveNextAddr) {
-				w.log.Info("USB wallet discovered new account", "address", nextAddr, "path", path, "balance", balance, "nonce", nonce)
+				w.log.Info("USB钱包发现新帐号", "地址", nextAddr, "路径", path, "帐户", balance, "随机数", nonce)
 			}
 			// Fetch the next potential account
 			if !empty {

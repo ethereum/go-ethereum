@@ -70,7 +70,7 @@ func (w *wizard) run() {
 			log.Error("I also like to live dangerously, still no spaces")
 		}
 	}
-	log.Info("Administering Ethereum network", "name", w.network)
+	log.Info("管理消品网络", "名字", w.network)
 
 	// Load initial configurations and connect to all live servers
 	w.conf.path = filepath.Join(os.Getenv("HOME"), ".puppeth", w.network)
@@ -89,10 +89,10 @@ func (w *wizard) run() {
 			go func(server string, pubkey []byte) {
 				defer pend.Done()
 
-				log.Info("Dialing previously configured server", "server", server)
+				log.Info("接入以前所配置的服务器", "服务器", server)
 				client, err := dial(server, pubkey)
 				if err != nil {
-					log.Error("Previous server unreachable", "server", server, "err", err)
+					log.Error("以前的服务器不可接入", "服务器", server, "错误", err)
 				}
 				w.lock.Lock()
 				w.servers[server] = client
