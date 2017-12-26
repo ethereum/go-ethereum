@@ -498,7 +498,7 @@ func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool
 	}
 	// Create a block to reply to the challenge if no timeout is simulated
 	if !timeout {
-		blocks, _ := core.GenerateChain(&params.ChainConfig{}, genesis, db, 1, func(i int, block *core.BlockGen) {
+		blocks, _ := core.GenerateChain(&params.ChainConfig{}, genesis, ethash.NewFaker(), db, 1, func(i int, block *core.BlockGen) {
 			if remoteForked {
 				block.SetExtra(params.DAOForkBlockExtra)
 			}

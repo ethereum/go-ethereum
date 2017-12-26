@@ -6,9 +6,15 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
         <title>Go Ethereum Dashboard</title>
-        <link rel="shortcut icon" type="image/ico" href="https://ethereum.org/favicon.ico"/>
-
-        <!-- TODO (kurkomisi): Return to the external libraries to speed up the bundling during development -->
+        <link rel="shortcut icon" type="image/ico" href="https://ethereum.org/favicon.ico" />
+        <style>
+            ::-webkit-scrollbar {
+                width: 16px;
+            }
+            ::-webkit-scrollbar-thumb {
+                background: #212121;
+            }
+        </style>
     </head>
     <body style="height: 100%; margin: 0">
         <div id="dashboard" style="height: 100%"></div>

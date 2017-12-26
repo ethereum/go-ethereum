@@ -149,7 +149,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		chain, _ = light.NewLightChain(odr, gspec.Config, engine)
 	} else {
 		blockchain, _ := core.NewBlockChain(db, gspec.Config, engine, vm.Config{})
-		gchain, _ := core.GenerateChain(gspec.Config, genesis, db, blocks, generator)
+		gchain, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, blocks, generator)
 		if _, err := blockchain.InsertChain(gchain); err != nil {
 			panic(err)
 		}

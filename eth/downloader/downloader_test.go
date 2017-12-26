@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/EthereumCommonwealth/go-callisto/common"
+	"github.com/EthereumCommonwealth/go-callisto/consensus/ethash"
 	"github.com/EthereumCommonwealth/go-callisto/core"
 	"github.com/EthereumCommonwealth/go-callisto/core/state"
 	"github.com/EthereumCommonwealth/go-callisto/core/types"
@@ -107,7 +108,7 @@ func newTester() *downloadTester {
 // reassembly.
 func (dl *downloadTester) makeChain(n int, seed byte, parent *types.Block, parentReceipts types.Receipts, heavy bool) ([]common.Hash, map[common.Hash]*types.Header, map[common.Hash]*types.Block, map[common.Hash]types.Receipts) {
 	// Generate the block chain
-	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, dl.peerDb, n, func(i int, block *core.BlockGen) {
+	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), dl.peerDb, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 
 		// If a heavy chain is requested, delay blocks to raise difficulty

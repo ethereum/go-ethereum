@@ -86,7 +86,7 @@ type Request struct {
 	uri *api.URI
 }
 
-// HandlePostRaw handles a POST request to a raw bzzr:/ URI, stores the request
+// HandlePostRaw handles a POST request to a raw bzz-raw:/ URI, stores the request
 // body in swarm and returns the resulting storage key as a text/plain response
 func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 	if r.uri.Path != "" {
@@ -290,9 +290,12 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, newKey)
 }
 
-// HandleGetRaw handles a GET request to bzzr://<key> and responds with
-// the raw content stored at the given storage key
-func (s *Server) HandleGetRaw(w http.ResponseWriter, r *Request) {
+// HandleGet handles a GET request to
+// - bzz-raw://<key> and responds with the raw content stored at the
+//   given storage key
+// - bzz-hash://<key> and responds with the hash of the content stored
+//   at the given storage key as a text/plain response
+func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
 		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
@@ -345,15 +348,22 @@ func (s *Server) HandleGetRaw(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	// allow the request to overwrite the content type using a query
-	// parameter
-	contentType := "application/octet-stream"
-	if typ := r.URL.Query().Get("content_type"); typ != "" {
-		contentType = typ
-	}
-	w.Header().Set("Content-Type", contentType)
+	switch {
+	case r.uri.Raw():
+		// allow the request to overwrite the content type using a query
+		// parameter
+		contentType := "application/octet-stream"
+		if typ := r.URL.Query().Get("content_type"); typ != "" {
+			contentType = typ
+		}
+		w.Header().Set("Content-Type", contentType)
 
-	http.ServeContent(w, &r.Request, "", time.Now(), reader)
+		http.ServeContent(w, &r.Request, "", time.Now(), reader)
+	case r.uri.Hash():
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, key)
+	}
 }
 
 // HandleGetFiles handles a GET request to bzz:/<manifest> with an Accept
@@ -424,14 +434,13 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 	}
 }
 
-// HandleGetList handles a GET request to bzz:/<manifest>/<path> which has
-// the "list" query parameter set to "true" and returns a list of all files
-// contained in <manifest> under <path> grouped into common prefixes using
-// "/" as a delimiter
+// HandleGetList handles a GET request to bzz-list:/<manifest>/<path> and returns
+// a list of all files contained in <manifest> under <path> grouped into
+// common prefixes using "/" as a delimiter
 func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	// ensure the root path has a trailing slash so that relative URLs work
 	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
-		http.Redirect(w, &r.Request, r.URL.Path+"/?list=true", http.StatusMovedPermanently)
+		http.Redirect(w, &r.Request, r.URL.Path+"/", http.StatusMovedPermanently)
 		return
 	}
 
@@ -453,7 +462,11 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	if strings.Contains(r.Header.Get("Accept"), "text/html") {
 		w.Header().Set("Content-Type", "text/html")
 		err := htmlListTemplate.Execute(w, &htmlListData{
-			URI:  r.uri,
+			URI: &api.URI{
+				Scheme: "bzz",
+				Addr:   r.uri.Addr,
+				Path:   r.uri.Path,
+			},
 			List: &list,
 		})
 		if err != nil {
@@ -589,7 +602,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "POST":
-		if uri.Raw() {
+		if uri.Raw() || uri.DeprecatedRaw() {
 			s.HandlePostRaw(w, req)
 		} else {
 			s.HandlePostFiles(w, req)
@@ -601,7 +614,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		//   new manifest leaving the existing one intact, so it isn't
 		//   strictly a traditional PUT request which replaces content
 		//   at a URI, and POST is more ubiquitous)
-		if uri.Raw() {
+		if uri.Raw() || uri.DeprecatedRaw() {
 			ShowError(w, r, fmt.Sprintf("No PUT to %s allowed.", uri), http.StatusBadRequest)
 			return
 		} else {
@@ -609,25 +622,25 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "DELETE":
-		if uri.Raw() {
+		if uri.Raw() || uri.DeprecatedRaw() {
 			ShowError(w, r, fmt.Sprintf("No DELETE to %s allowed.", uri), http.StatusBadRequest)
 			return
 		}
 		s.HandleDelete(w, req)
 
 	case "GET":
-		if uri.Raw() {
-			s.HandleGetRaw(w, req)
+		if uri.Raw() || uri.Hash() || uri.DeprecatedRaw() {
+			s.HandleGet(w, req)
+			return
+		}
+
+		if uri.List() {
+			s.HandleGetList(w, req)
 			return
 		}
 
 		if r.Header.Get("Accept") == "application/x-tar" {
 			s.HandleGetFiles(w, req)
-			return
-		}
-
-		if r.URL.Query().Get("list") == "true" {
-			s.HandleGetList(w, req)
 			return
 		}
 

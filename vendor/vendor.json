@@ -694,6 +694,12 @@
 			"revisionTime": "2016-06-21T03:49:01Z"
 		},
 		{
+			"checksumSHA1": "YvuEbc0a032zr+BTp/YbBQojiuY=",
+			"path": "gopkg.in/olebedev/go-duktape.v3",
+			"revision": "9af39127cb024b355a6a0221769f6ddfe3f542e7",
+			"revisionTime": "2017-12-20T12:19:14Z"
+		},
+		{
 			"checksumSHA1": "4BwmmgQUhWtizsR2soXND0nqZ1I=",
 			"path": "gopkg.in/sourcemap.v1",
 			"revision": "6e83acea0053641eff084973fee085f0c193c61a",

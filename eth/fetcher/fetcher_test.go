@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/EthereumCommonwealth/go-callisto/common"
+	"github.com/EthereumCommonwealth/go-callisto/consensus/ethash"
 	"github.com/EthereumCommonwealth/go-callisto/core"
 	"github.com/EthereumCommonwealth/go-callisto/core/types"
 	"github.com/EthereumCommonwealth/go-callisto/crypto"
@@ -45,7 +46,7 @@ var (
 // contains a transaction and every 5th an uncle to allow testing correct block
 // reassembly.
 func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common.Hash]*types.Block) {
-	blocks, _ := core.GenerateChain(params.TestChainConfig, parent, testdb, n, func(i int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), testdb, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 
 		// If the block number is multiple of 3, send a bonus transaction to the miner

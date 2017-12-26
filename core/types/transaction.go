@@ -153,6 +153,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	return err
 }
 
+// MarshalJSON encodes the web3 RPC transaction format.
 func (tx *Transaction) MarshalJSON() ([]byte, error) {
 	hash := tx.Hash()
 	data := tx.data
@@ -168,8 +169,8 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	}
 	var V byte
 	if isProtectedV(dec.V) {
-		chainId := deriveChainId(dec.V).Uint64()
-		V = byte(dec.V.Uint64() - 35 - 2*chainId)
+		chainID := deriveChainId(dec.V).Uint64()
+		V = byte(dec.V.Uint64() - 35 - 2*chainID)
 	} else {
 		V = byte(dec.V.Uint64() - 27)
 	}
@@ -192,10 +193,9 @@ func (tx *Transaction) CheckNonce() bool   { return true }
 func (tx *Transaction) To() *common.Address {
 	if tx.data.Recipient == nil {
 		return nil
-	} else {
-		to := *tx.data.Recipient
-		return &to
 	}
+	to := *tx.data.Recipient
+	return &to
 }
 
 // Hash hashes the RLP encoding of tx.
@@ -315,22 +315,22 @@ func (tx *Transaction) String() string {
 	)
 }
 
-// Transaction slice type for basic sorting.
+// Transactions is a Transaction slice type for basic sorting.
 type Transactions []*Transaction
 
-// Len returns the length of s
+// Len returns the length of s.
 func (s Transactions) Len() int { return len(s) }
 
-// Swap swaps the i'th and the j'th element in s
+// Swap swaps the i'th and the j'th element in s.
 func (s Transactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
-// GetRlp implements Rlpable and returns the i'th element of s in rlp
+// GetRlp implements Rlpable and returns the i'th element of s in rlp.
 func (s Transactions) GetRlp(i int) []byte {
 	enc, _ := rlp.EncodeToBytes(s[i])
 	return enc
 }
 
-// Returns a new set t which is the difference between a to b
+// TxDifference returns a new set t which is the difference between a to b.
 func TxDifference(a, b Transactions) (keep Transactions) {
 	keep = make(Transactions, 0, len(a))
 
@@ -378,7 +378,7 @@ func (s *TxByPrice) Pop() interface{} {
 }
 
 // TransactionsByPriceAndNonce represents a set of transactions that can return
-// transactions in a profit-maximising sorted order, while supporting removing
+// transactions in a profit-maximizing sorted order, while supporting removing
 // entire batches of transactions for non-executable accounts.
 type TransactionsByPriceAndNonce struct {
 	txs    map[common.Address]Transactions // Per account nonce-sorted list of transactions

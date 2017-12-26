@@ -103,7 +103,7 @@ var (
 	underpricedTxCounter = metrics.NewCounter("txpool/underpriced")
 )
 
-// TxStatus is the current status of a transaction as seen py the pool.
+// TxStatus is the current status of a transaction as seen by the pool.
 type TxStatus uint
 
 const (
@@ -199,7 +199,7 @@ type TxPool struct {
 	pendingState  *state.ManagedState // Pending state tracking virtual nonces
 	currentMaxGas *big.Int            // Current gas limit for transaction caps
 
-	locals  *accountSet // Set of local transaction to exepmt from evicion rules
+	locals  *accountSet // Set of local transaction to exempt from eviction rules
 	journal *txJournal  // Journal of local transaction to back up to disk
 
 	pending map[common.Address]*txList         // All currently processable transactions
@@ -214,7 +214,7 @@ type TxPool struct {
 }
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
-// trnsactions from the network.
+// transactions from the network.
 func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
 	// Sanitize the input to ensure no vulnerable gas prices are set
 	config = (&config).sanitize()
@@ -360,7 +360,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 		newNum := newHead.Number.Uint64()
 
 		if depth := uint64(math.Abs(float64(oldNum) - float64(newNum))); depth > 64 {
-			log.Warn("Skipping deep transaction reorg", "depth", depth)
+			log.Debug("Skipping deep transaction reorg", "depth", depth)
 		} else {
 			// Reorg seems shallow enough to pull in all transactions into memory
 			var discarded, included types.Transactions
@@ -838,7 +838,7 @@ func (pool *TxPool) Status(hashes []common.Hash) []TxStatus {
 	for i, hash := range hashes {
 		if tx := pool.all[hash]; tx != nil {
 			from, _ := types.Sender(pool.signer, tx) // already validated
-			if pool.pending[from].txs.items[tx.Nonce()] != nil {
+			if pool.pending[from] != nil && pool.pending[from].txs.items[tx.Nonce()] != nil {
 				status[i] = TxStatusPending
 			} else {
 				status[i] = TxStatusQueued

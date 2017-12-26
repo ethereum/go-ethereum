@@ -18,6 +18,7 @@ package whisperv6
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/EthereumCommonwealth/go-callisto/common"
@@ -29,10 +30,12 @@ import (
 
 // peer represents a whisper protocol peer connection.
 type Peer struct {
-	host    *Whisper
-	peer    *p2p.Peer
-	ws      p2p.MsgReadWriter
-	trusted bool
+	host *Whisper
+	peer *p2p.Peer
+	ws   p2p.MsgReadWriter
+
+	trusted        bool
+	powRequirement float64
 
 	known *set.Set // Messages already known by the peer to avoid wasting bandwidth
 
@@ -42,12 +45,13 @@ type Peer struct {
 // newPeer creates a new whisper peer object, but does not run the handshake itself.
 func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	return &Peer{
-		host:    host,
-		peer:    remote,
-		ws:      rw,
-		trusted: false,
-		known:   set.New(),
-		quit:    make(chan struct{}),
+		host:           host,
+		peer:           remote,
+		ws:             rw,
+		trusted:        false,
+		powRequirement: 0.0,
+		known:          set.New(),
+		quit:           make(chan struct{}),
 	}
 }
 
@@ -149,21 +153,26 @@ func (peer *Peer) expire() {
 // broadcast iterates over the collection of envelopes and transmits yet unknown
 // ones over the network.
 func (p *Peer) broadcast() error {
-	var cnt int
 	envelopes := p.host.Envelopes()
+	bundle := make([]*Envelope, 0, len(envelopes))
 	for _, envelope := range envelopes {
-		if !p.marked(envelope) {
-			err := p2p.Send(p.ws, messagesCode, envelope)
-			if err != nil {
-				return err
-			} else {
-				p.mark(envelope)
-				cnt++
-			}
+		if !p.marked(envelope) && envelope.PoW() >= p.powRequirement {
+			bundle = append(bundle, envelope)
 		}
 	}
-	if cnt > 0 {
-		log.Trace("broadcast", "num. messages", cnt)
+
+	if len(bundle) > 0 {
+		// transmit the batch of envelopes
+		if err := p2p.Send(p.ws, messagesCode, bundle); err != nil {
+			return err
+		}
+
+		// mark envelopes only if they were successfully sent
+		for _, e := range bundle {
+			p.mark(e)
+		}
+
+		log.Trace("broadcast", "num. messages", len(bundle))
 	}
 	return nil
 }
@@ -171,4 +180,9 @@ func (p *Peer) broadcast() error {
 func (p *Peer) ID() []byte {
 	id := p.peer.ID()
 	return id[:]
+}
+
+func (p *Peer) notifyAboutPowRequirementChange(pow float64) error {
+	i := math.Float64bits(pow)
+	return p2p.Send(p.ws, powRequirementCode, i)
 }

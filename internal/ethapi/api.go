@@ -17,6 +17,7 @@
 package ethapi
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -1070,8 +1071,11 @@ type SendTxArgs struct {
 	Gas      *hexutil.Big    `json:"gas"`
 	GasPrice *hexutil.Big    `json:"gasPrice"`
 	Value    *hexutil.Big    `json:"value"`
-	Data     hexutil.Bytes   `json:"data"`
 	Nonce    *hexutil.Uint64 `json:"nonce"`
+	// We accept "data" and "input" for backwards-compatibility reasons. "input" is the
+	// newer name and should be preferred by clients.
+	Data  *hexutil.Bytes `json:"data"`
+	Input *hexutil.Bytes `json:"input"`
 }
 
 // setDefaults is a helper function that fills in default values for unspecified tx fields.
@@ -1096,14 +1100,23 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 		}
 		args.Nonce = (*hexutil.Uint64)(&nonce)
 	}
+	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
+		return errors.New(`Both "data" and "input" are set and not equal. Please use "input" to pass transaction call data.`)
+	}
 	return nil
 }
 
 func (args *SendTxArgs) toTransaction() *types.Transaction {
-	if args.To == nil {
-		return types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
+	var input []byte
+	if args.Data != nil {
+		input = *args.Data
+	} else if args.Input != nil {
+		input = *args.Input
 	}
-	return types.NewTransaction(uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
+	if args.To == nil {
+		return types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), input)
+	}
+	return types.NewTransaction(uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), input)
 }
 
 // submitTransaction is a helper function that submits tx to txPool and logs a message.

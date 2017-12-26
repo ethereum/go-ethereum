@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/EthereumCommonwealth/go-callisto/common"
+	"github.com/EthereumCommonwealth/go-callisto/consensus/ethash"
 	"github.com/EthereumCommonwealth/go-callisto/core"
 	"github.com/EthereumCommonwealth/go-callisto/core/bloombits"
 	"github.com/EthereumCommonwealth/go-callisto/core/types"
@@ -136,7 +137,7 @@ func TestBlockSubscription(t *testing.T) {
 		backend     = &testBackend{mux, db, 0, txFeed, rmLogsFeed, logsFeed, chainFeed}
 		api         = NewPublicFilterAPI(backend, false)
 		genesis     = new(core.Genesis).MustCommit(db)
-		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, db, 10, func(i int, gen *core.BlockGen) {})
+		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, 10, func(i int, gen *core.BlockGen) {})
 		chainEvents = []core.ChainEvent{}
 	)
 
