@@ -239,7 +239,7 @@ func (c *ChainConfig) IsCallisto(num *big.Int) bool {
 // Callisto has a 10x more cost in gas
 func (c *ChainConfig) GasTable(num *big.Int) GasTable {
 	if num == nil {
-		return GasTableHomestead
+		return GasTableCallisto
 	}
 	switch {
 	case c.IsCallisto(num):
@@ -248,8 +248,6 @@ func (c *ChainConfig) GasTable(num *big.Int) GasTable {
 		return GasTableEIP158
 	case c.IsEIP150(num):
 		return GasTableEIP150
-	case c.IsCallisto(num):
-		return GasTableCallisto
 	default:
 		return GasTableHomestead
 	}
