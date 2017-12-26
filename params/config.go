@@ -86,9 +86,10 @@ var (
 		EIP158Block:    big.NewInt(0),
 		ByzantiumBlock: big.NewInt(4),
 		CallistoBlock:  big.NewInt(1),
+		CallistoTreasuryAddress: common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"),
 
 		Clique: &CliqueConfig{
-			Period: 15,
+			Period: 10,
 			Epoch:  30000,
 		},
 	}
@@ -239,11 +240,11 @@ func (c *ChainConfig) IsCallisto(num *big.Int) bool {
 // Callisto has a 10x more cost in gas
 func (c *ChainConfig) GasTable(num *big.Int) GasTable {
 	if num == nil {
-		return GasTableCallisto
+		return GasTableEIP158
 	}
 	switch {
 	case c.IsCallisto(num):
-		return GasTableCallisto
+		return GasTableEIP158
 	case c.IsEIP158(num):
 		return GasTableEIP158
 	case c.IsEIP150(num):

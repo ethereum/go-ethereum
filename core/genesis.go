@@ -325,7 +325,7 @@ func DefaultCallistoMainnetGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.CallistoMainnetChainConfig,
 		ExtraData:  hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   470000000,
+		GasLimit:   4700000,
 		Difficulty: big.NewInt(4000000),
 		Alloc:      decodePrealloc(callistoMainnetAllocData),
 	}
@@ -348,7 +348,7 @@ func DefaultCallistoTestnetGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.CallistoTestnetChainConfig,
 		ExtraData:  hexutil.MustDecode("0x00000000000000000000000000000000000000000000000000000000000000004fd2dead40490e7efb256899289896c844280e3dceb6e1affb81eae90695efd61e9d2c214f72b8cf0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   470000000,
+		GasLimit:   5200000,
 		Difficulty: big.NewInt(1),
 		Alloc:      decodePrealloc(callistoTestnetAllocData),
 	}

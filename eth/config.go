@@ -45,7 +45,7 @@ var DefaultConfig = Config{
 	NetworkId:     1,
 	LightPeers:    20,
 	DatabaseCache: 128,
-	GasPrice:      big.NewInt(18 * params.Shannon),
+	GasPrice:      big.NewInt(1800 * params.Shannon),
 
 	TxPool: core.DefaultTxPoolConfig,
 	GPO: gasprice.Config{

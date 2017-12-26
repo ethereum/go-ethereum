@@ -40,6 +40,7 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/rlp"
 	"github.com/EthereumCommonwealth/go-callisto/rpc"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/EthereumCommonwealth/go-callisto/consensus/ethash"
 )
 
 const (
@@ -574,6 +575,7 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 // rewards given, and returns the final block.
 func (c *Clique) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
+	ethash.AccumulateRewards(chain.Config(), state, header, uncles)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
 
