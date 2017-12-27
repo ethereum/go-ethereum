@@ -304,8 +304,12 @@ var methodNormalizer = map[Lang]func(string) string{
 	LangJava: decapitalise,
 }
 
-// capitalise makes the first character of a string upper case.
+// capitalise makes the first character of a string upper case, also removing any
+// prefixing underscores from the variable names.
 func capitalise(input string) string {
+	for len(input) > 0 && input[0] == '_' {
+		input = input[1:]
+	}
 	return strings.ToUpper(input[:1]) + input[1:]
 }
 

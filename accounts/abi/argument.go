@@ -126,7 +126,8 @@ func (arguments Arguments) unpackTuple(v interface{}, output []byte) error {
 			for j := 0; j < typ.NumField(); j++ {
 				field := typ.Field(j)
 				// TODO read tags: `abi:"fieldName"`
-				if field.Name == strings.ToUpper(arg.Name[:1])+arg.Name[1:] {
+				trimmed := strings.TrimLeft(arg.Name, "_")
+				if field.Name == strings.ToUpper(trimmed[:1])+trimmed[1:] {
 					if err := set(value.Field(j), reflectValue, arg); err != nil {
 						return err
 					}
