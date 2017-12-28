@@ -104,7 +104,6 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 
 	// this value will become our slice or our array, depending on the type
 	var refSlice reflect.Value
-	slice := output[start : start+size*32]
 
 	if t.T == SliceTy {
 		// declare our slice
@@ -116,17 +115,25 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 		return nil, fmt.Errorf("abi: invalid type in array/slice unpacking stage")
 	}
 
-	for i, j := start, 0; j*32 < len(slice); i, j = i+32, j+1 {
-		// this corrects the arrangement so that we get all the underlying array values
-		if t.Elem.T == ArrayTy && j != 0 {
-			i = start + t.Elem.Size*32*j
-		}
+	for i, j := start, 0; j < size; j++ {
 		inter, err := toGoType(i, *t.Elem, output)
 		if err != nil {
 			return nil, err
 		}
+
+		reflectedInter := reflect.ValueOf(inter)
+
+		//Although we just did the reverse, pack it, to get the length of the actual element.
+		//Getting the length directly from the "toGoType" would be way better,
+		// but it requires some refactoring to get it return the *consumed* length.
+		interPacked, err  := t.Elem.pack(reflectedInter)
+		if err != nil {
+			return nil, err
+		}
+		i += len(interPacked)
+
 		// append the item to our reflect slice
-		refSlice.Index(j).Set(reflect.ValueOf(inter))
+		refSlice.Index(j).Set(reflectedInter)
 	}
 
 	// return the interface
