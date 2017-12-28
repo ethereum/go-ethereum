@@ -296,21 +296,26 @@ func bindUnnestedTypeJava(stringKind string) (int, string) {
 		return len(parts[0]), "byte[]"
 
 	case strings.HasPrefix(stringKind, "int") || strings.HasPrefix(stringKind, "uint"):
+		//Note that uint and int (without digits) are also matched,
+		// these are size 256, and will translate to BigInt (the default).
 		parts := regexp.MustCompile(`(u)?int([0-9]*)`).FindStringSubmatch(stringKind)
 		if len(parts) != 3 {
 			return len(stringKind), stringKind
 		}
-		switch parts[2] {
-		case "8":
-			return len(parts[0]), "byte"
-		case "16":
-			return len(parts[0]), "short"
-		case "32":
-			return len(parts[0]), "int"
-		case "64":
-			return len(parts[0]), "long"
+
+		namedSize := map[string]string{
+			"8": "byte",
+			"16": "short",
+			"32": "int",
+			"64": "long",
+		}[parts[2]]
+
+		//default to BigInt
+		if namedSize == "" {
+			namedSize = "BigInt"
 		}
-		return len(parts[0]), "BigInt"
+		return len(parts[0]), namedSize
+
 	case strings.HasPrefix(stringKind, "bool"):
 		return len("bool"), "boolean"
 
