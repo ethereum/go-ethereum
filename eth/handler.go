@@ -744,10 +744,10 @@ func (self *ProtocolManager) txBroadcastLoop() {
 	}
 }
 
-// EthNodeInfo represents a short summary of the Ethereum sub-protocol metadata known
-// about the host peer.
-type EthNodeInfo struct {
-	Network    uint64              `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3)
+// NodeInfo represents a short summary of the Ethereum sub-protocol metadata
+// known about the host peer.
+type NodeInfo struct {
+	Network    uint64              `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
 	Difficulty *big.Int            `json:"difficulty"` // Total difficulty of the host's blockchain
 	Genesis    common.Hash         `json:"genesis"`    // SHA3 hash of the host's genesis block
 	Config     *params.ChainConfig `json:"config"`     // Chain configuration for the fork rules
@@ -755,9 +755,9 @@ type EthNodeInfo struct {
 }
 
 // NodeInfo retrieves some protocol metadata about the running host node.
-func (self *ProtocolManager) NodeInfo() *EthNodeInfo {
+func (self *ProtocolManager) NodeInfo() *NodeInfo {
 	currentBlock := self.blockchain.CurrentBlock()
-	return &EthNodeInfo{
+	return &NodeInfo{
 		Network:    self.networkId,
 		Difficulty: self.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64()),
 		Genesis:    self.blockchain.Genesis().Hash(),

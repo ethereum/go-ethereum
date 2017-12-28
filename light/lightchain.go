@@ -457,6 +457,9 @@ func (self *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64)
 	return GetHeaderByNumber(ctx, self.odr, number)
 }
 
+// Config retrieves the header chain's chain configuration.
+func (self *LightChain) Config() *params.ChainConfig { return self.hc.Config() }
+
 func (self *LightChain) SyncCht(ctx context.Context) bool {
 	if self.odr.ChtIndexer() == nil {
 		return false
