@@ -17,7 +17,7 @@
 package main
 
 import (
-	"bytes"
+	//	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -26,8 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 
+	"bytes"
 	"regexp"
-	"reflect"
 )
 
 type decodedArgument struct {
@@ -79,33 +79,25 @@ func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
 		return nil, fmt.Errorf("Failed parsing JSON ABI: %v, abidata: %v", err, abidata)
 	}
 
-	method := abispec.MethodById(sigdata)
-	if method == nil {
-		return nil, fmt.Errorf("Supplied ABI spec does not contain method signature in data: 0x%x", sigdata)
+	method, err := abispec.MethodById(sigdata)
+	if err != nil {
+		return nil, err
 	}
-	var v interface{}
-	method.Inputs.Unpack(v, argdata)
 
-	ref := reflect.ValueOf(v)
-	values := make([]interface{}, ref.NumField())
-
-	for i := 0; i < ref.NumField(); i++ {
-		values[i] = ref.Field(i).Interface()
+	v, err := method.Inputs.UnpackValues(argdata)
+	if err != nil {
+		return nil, err
 	}
-	fmt.Println(values)
-
-
 
 	decoded := decodedCallData{signature: method.Sig(), name: method.Name}
 
-/*
 	for n, argument := range method.Inputs {
 		if err != nil {
 			return nil, fmt.Errorf("Failed to decode argument %d (signature %v): %v", n, method.Sig(), err)
 		} else {
 			decodedArg := decodedArgument{
 				soltype: argument,
-				value: reflect.ValueOf(v,) ,
+				value:   v[n],
 			}
 			decoded.inputs = append(decoded.inputs, decodedArg)
 		}
@@ -115,19 +107,20 @@ func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
 	// original data. If we didn't do that, it would e.g. be possible to stuff extra data into the arguments, which
 	// is not detected by merely decoding the data.
 
-
 	var (
-		encoded          []byte
+		encoded []byte
 	)
-	encoded, err = method.Inputs.Pack(v)
+	encoded, err = method.Inputs.PackValues(v)
 
+	if err != nil {
+		return nil, err
+	}
 
-	if !bytes.Equal(encoded, calldata) {
-		exp := common.Bytes2Hex(encoded)
-		was := common.Bytes2Hex(calldata)
+	if !bytes.Equal(encoded, argdata) {
+		was := common.Bytes2Hex(encoded)
+		exp := common.Bytes2Hex(argdata)
 		return nil, fmt.Errorf("WARNING: Supplied data is stuffed with extra data. \nWant %s\nHave %s\nfor method %v", exp, was, method.Sig())
 	}
-*/
 	return &decoded, nil
 }
 

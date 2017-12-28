@@ -23,7 +23,92 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	//	"reflect"
+	//	"math/big"
+	"math/big"
+	"reflect"
 )
+
+func verify(t *testing.T, jsondata, calldata string, exp []interface{}) {
+
+	abispec, err := abi.JSON(strings.NewReader(jsondata))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cd := common.Hex2Bytes(calldata)
+	sigdata, argdata := cd[:4], cd[4:]
+	method, err := abispec.MethodById(sigdata)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := method.Inputs.UnpackValues(argdata)
+
+	if len(data) != len(exp) {
+		t.Fatalf("Mismatched length, expected %d, got %d", len(exp), len(data))
+	}
+	for i, elem := range data {
+		if !reflect.DeepEqual(elem, exp[i]) {
+			t.Fatalf("Unpack error, arg %d, got %v, want %v", i, elem, exp[i])
+		}
+	}
+}
+func TestNewUnpacker(t *testing.T) {
+	type unpackTest struct {
+		jsondata string
+		calldata string
+		exp      []interface{}
+	}
+	testcases := []unpackTest{
+		{ // https://solidity.readthedocs.io/en/develop/abi-spec.html#use-of-dynamic-types
+			`[{"type":"function","name":"f", "inputs":[{"type":"uint256"},{"type":"uint32[]"},{"type":"bytes10"},{"type":"bytes"}]}]`,
+			// 0x123, [0x456, 0x789], "1234567890", "Hello, world!"
+			"8be65246" + "00000000000000000000000000000000000000000000000000000000000001230000000000000000000000000000000000000000000000000000000000000080313233343536373839300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000004560000000000000000000000000000000000000000000000000000000000000789000000000000000000000000000000000000000000000000000000000000000d48656c6c6f2c20776f726c642100000000000000000000000000000000000000",
+			[]interface{}{
+				big.NewInt(0x123),
+				[]uint32{0x456, 0x789},
+				[10]byte{49, 50, 51, 52, 53, 54, 55, 56, 57, 48},
+				common.Hex2Bytes("48656c6c6f2c20776f726c6421"),
+			},
+		}, { // https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI#examples
+			`[{"type":"function","name":"sam","inputs":[{"type":"bytes"},{"type":"bool"},{"type":"uint256[]"}]}]`,
+			//  "dave", true and [1,2,3]
+			"a5643bf20000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000464617665000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003",
+			[]interface{}{
+				[]byte{0x64, 0x61, 0x76, 0x65},
+				true,
+				[]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)},
+			},
+		}, {
+			`[{"type":"function","name":"send","inputs":[{"type":"uint256"}]}]`,
+			"a52c101e0000000000000000000000000000000000000000000000000000000000000012",
+			[]interface{}{big.NewInt(0x12)},
+		}, {
+			`[{"type":"function","name":"compareAndApprove","inputs":[{"type":"address"},{"type":"uint256"},{"type":"uint256"}]}]`,
+			"751e107900000000000000000000000000000133700000deadbeef00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+			[]interface{}{
+				common.HexToAddress("0x00000133700000deadbeef000000000000000000"),
+				new(big.Int).SetBytes([]byte{0x00}),
+				big.NewInt(0x1),
+			},
+		},
+	}
+	for _, c := range testcases {
+		verify(t, c.jsondata, c.calldata, c.exp)
+	}
+
+}
+
+/*
+func TestReflect(t *testing.T) {
+	a := big.NewInt(0)
+	b := new(big.Int).SetBytes([]byte{0x00})
+	if !reflect.DeepEqual(a, b) {
+		t.Fatalf("Nope, %v != %v", a, b)
+	}
+}
+ */
 
 func TestCalldataDecoding(t *testing.T) {
 
@@ -114,7 +199,11 @@ func TestSelectorUnmarshalling(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		m := abistruct.MethodById(common.Hex2Bytes(id[2:]))
+		m, err := abistruct.MethodById(common.Hex2Bytes(id[2:]))
+		if err != nil {
+			t.Error(err)
+			return
+		}
 		if m.Sig() != selector {
 			t.Errorf("Expected equality: %v != %v", m.Sig(), selector)
 		}
