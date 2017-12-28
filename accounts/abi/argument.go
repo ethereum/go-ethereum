@@ -67,6 +67,16 @@ func (arguments Arguments) LengthNonIndexed() int {
 	return out
 }
 
+func (arguments Arguments) NonIndexed() Arguments{
+	var ret []Argument
+	for _,arg := range arguments{
+		if !arg.Indexed{
+			ret = append(ret, arg)
+		}
+	}
+	return ret
+}
+
 // isTuple returns true for non-atomic constructs, like (uint,uint) or uint[]
 func (arguments Arguments) isTuple() bool {
 	return len(arguments) > 1
@@ -114,14 +124,9 @@ func (arguments Arguments) unpackTuple(v interface{}, output []byte) error {
 	// `j` counts the number of complex types.
 	// both `i` and `j` are used to to correctly compute `data` offset.
 
-	i, j := -1, 0
-	for _, arg := range arguments {
+	j := 0
+	for i, arg := range arguments.NonIndexed() {
 
-		if arg.Indexed {
-			// can't read, continue
-			continue
-		}
-		i++
 		marshalledValue, err := toGoType((i+j)*32, arg.Type, output)
 		if err != nil {
 			return err
@@ -178,7 +183,6 @@ func (arguments Arguments) unpackAtomic(v interface{}, output []byte) error {
 	}
 
 	value := valueOf.Elem()
-
 	marshalledValue, err := toGoType(0, arg.Type, output)
 	if err != nil {
 		return err
@@ -186,7 +190,44 @@ func (arguments Arguments) unpackAtomic(v interface{}, output []byte) error {
 	return set(value, reflect.ValueOf(marshalledValue), arg)
 }
 
-// Unpack performs the operation Go format -> Hexdata
+// UnpackValues can be used to unpack ABI-encoded hexdata according to the ABI-specification,
+// without supplying a struct to unpack into. Instead, this method returns a list containing the
+// values. An atomic argument will be a list with one element.
+func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error){
+
+	retval := make([]interface{},0,arguments.LengthNonIndexed())
+
+	virtualArgs := 0
+
+	for index,arg:= range arguments.NonIndexed(){
+
+		marshalledValue, err := toGoType((index + virtualArgs) * 32, arg.Type, data)
+
+		if arg.Type.T == ArrayTy {
+			//If we have a static array, like [3]uint256, these are coded as
+			// just like uint256,uint256,uint256.
+			// This means that we need to add two 'virtual' arguments when
+			// we count the index from now on
+
+			virtualArgs += arg.Type.Size - 1
+		}
+
+		if err != nil{
+			return nil, err
+		}
+		retval = append(retval, marshalledValue)
+	}
+	return retval, nil
+}
+
+// UnpackValues performs the operation Go format -> Hexdata
+// It is the semantic opposite of UnpackValues
+func (arguments Arguments) PackValues(args []interface{}) ([]byte, error) {
+	return arguments.Pack(args...)
+}
+
+
+// Pack performs the operation Go format -> Hexdata
 func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 	// Make sure arguments match up and pack them
 	abiArgs := arguments
