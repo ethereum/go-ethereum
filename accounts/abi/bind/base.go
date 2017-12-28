@@ -189,21 +189,22 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		}
 	}
 	gasLimit := opts.GasLimit
-	if gasLimit == nil {
-		// Gas estimation cannot succeed without code for method invocations
-		if contract != nil {
-			if code, err := c.transactor.PendingCodeAt(ensureContext(opts.Context), c.address); err != nil {
-				return nil, err
-			} else if len(code) == 0 {
-				return nil, ErrNoCode
-			}
+	// Gas estimation cannot succeed without code for method invocations
+	if contract != nil {
+		if code, err := c.transactor.PendingCodeAt(ensureContext(opts.Context), c.address); err != nil {
+			return nil, err
+		} else if len(code) == 0 {
+			return nil, ErrNoCode
 		}
-		// If the contract surely has code (or code is not needed), estimate the transaction
-		msg := ethereum.CallMsg{From: opts.From, To: contract, Value: value, Data: input}
-		gasLimit, err = c.transactor.EstimateGas(ensureContext(opts.Context), msg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to estimate gas needed: %v", err)
-		}
+	}
+	// If the contract surely has code (or code is not needed), estimate the transaction
+	msg := ethereum.CallMsg{From: opts.From, To: contract, Value: value, Data: input}
+	gasLimit, err = c.transactor.EstimateGas(ensureContext(opts.Context), msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to estimate gas needed: %v", err)
+	}
+	if opts.GasLimit != nil && opts.GasLimit.Cmp(gasLimit) < 0 {
+		return nil, fmt.Errorf("Gas required is %s, it exceeds limit: %s.  An important gas estimation might also be the sign of a problem in the contract code", gasLimit, opts.GasLimit)
 	}
 	// Create the transaction, sign it and schedule it for execution
 	var rawTx *types.Transaction
