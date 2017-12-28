@@ -637,11 +637,19 @@ func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubke
 //
 // ( some tests are commented out because of resource limitations on Travis)
 func TestNetwork(t *testing.T) {
-	t.Run("3/2000/4/sock", testNetwork)
-	t.Run("4/2000/4/sock", testNetwork)
-	//	t.Run("8/2000/4/sock", testNetwork)
-	//	t.Run("16/2000/4/sock", testNetwork)
-	//	t.Run("32/2000/4/sock", testNetwork)
+	//t.Run("3/2000/4/sock", testNetwork)
+	//t.Run("4/2000/4/sock", testNetwork)
+	t.Run("8/2000/4/sock", testNetwork)
+	t.Run("16/2000/4/sock", testNetwork)
+	t.Run("8/3000/4/sock", testNetwork)
+	t.Run("16/3000/4/sock", testNetwork)
+	//t.Run("32/2000/4/sock", testNetwork)
+
+	t.Run("8/2000/4/sim", testNetwork)
+	t.Run("16/2000/4/sim", testNetwork)
+	t.Run("8/3000/4/sim", testNetwork)
+	t.Run("16/3000/4/sim", testNetwork)
+	//t.Run("32/2000/4/sim", testNetwork)
 	//	t.Run("64/2000/4/sim", testNetwork)
 }
 
