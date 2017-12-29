@@ -319,15 +319,23 @@ func decapitalise(input string) string {
 }
 
 // structured checks whether a method has enough information to return a proper
-// Go struct ot if flat returns are needed.
+// Go struct or if flat returns are needed.
 func structured(method abi.Method) bool {
 	if len(method.Outputs) < 2 {
 		return false
 	}
+	exists := make(map[string]bool)
 	for _, out := range method.Outputs {
+		// If the name is anonymous, we can't organize into a struct
 		if out.Name == "" {
 			return false
 		}
+		// If the field name collides (var, Var, _var, _Var), we can't organize into a struct
+		field := capitalise(out.Name)
+		if exists[field] {
+			return false
+		}
+		exists[field] = true
 	}
 	return true
 }
