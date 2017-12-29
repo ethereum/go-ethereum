@@ -20,6 +20,7 @@ package geth
 
 import (
 	"github.com/ethereum/go-ethereum/whisper/shhclient"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 // WhisperClient provides access to the Ethereum APIs.
@@ -33,8 +34,173 @@ func NewWhisperClient(rawurl string) (client *WhisperClient, _ error) {
 	return &WhisperClient{rawClient}, err
 }
 
-// Version returns the Whisper sub-protocol version.
-func (ec *WhisperClient) Version(ctx *Context) (version string, _ error) {
-	rawVersion, err := ec.client.Version(ctx.context)
+// GetVersion returns the Whisper sub-protocol version.
+func (wc *WhisperClient) GetVersion(ctx *Context) (version string, _ error) {
+	rawVersion, err := wc.client.Version(ctx.context)
 	return string(rawVersion), err
+}
+
+// Info returns diagnostic information about the whisper node.
+func (wc *WhisperClient) GetInfo(ctx *Context) (info *Info, _ error) {
+	rawInfo, err := wc.client.Info(ctx.context)
+	return &Info{&rawInfo}, err
+}
+
+// SetMaxMessageSize sets the maximal message size allowed by this node. Incoming
+// and outgoing messages with a larger size will be rejected. Whisper message size
+// can never exceed the limit imposed by the underlying P2P protocol (10 Mb).
+func (wc *WhisperClient) SetMaxMessageSize(ctx *Context, size int32) error {
+	return wc.client.SetMaxMessageSize(ctx.context, uint32(size))
+}
+
+// SetMinimumPoW (experimental) sets the minimal PoW required by this node.
+
+// This experimental function was introduced for the future dynamic adjustment of
+// PoW requirement. If the node is overwhelmed with messages, it should raise the
+// PoW requirement and notify the peers. The new value should be set relative to
+// the old value (e.g. double). The old value could be obtained via shh_info call.
+func (wc *WhisperClient) SetMinimumPoW(ctx *Context, pow float64) error {
+	return wc.client.SetMinimumPoW(ctx.context, pow)
+}
+
+// Marks specific peer trusted, which will allow it to send historic (expired) messages.
+// Note This function is not adding new nodes, the node needs to exists as a peer.
+func (wc *WhisperClient) MarkTrustedPeer(ctx *Context, enode string) error {
+	return wc.client.MarkTrustedPeer(ctx.context, enode)
+}
+
+// NewKeyPair generates a new public and private key pair for message decryption and encryption.
+// It returns an identifier that can be used to refer to the key.
+func (wc *WhisperClient) NewKeyPair(ctx *Context) (string, error) {
+	rawNewKeyPair, err := wc.client.NewKeyPair(ctx.context)
+	return string(rawNewKeyPair), err
+}
+
+// AddPrivateKey stored the key pair, and returns its ID.
+func (wc *WhisperClient) AddPrivateKey(ctx *Context, key []byte) (string, error) {
+	rawAddPrivateKey, err := wc.client.AddPrivateKey(ctx.context, key)
+	return string(rawAddPrivateKey), err
+}
+
+// DeleteKeyPair delete the specifies key.
+func (wc *WhisperClient) DeleteKeyPair(ctx *Context, id string) (string, error) {
+	rawDeletePrivateKey, err := wc.client.DeleteKeyPair(ctx.context, id)
+	return string(rawDeletePrivateKey), err
+}
+
+// HasKeyPair returns an indication if the node has a private key or
+// key pair matching the given ID.
+func (wc *WhisperClient) HasKeyPair(ctx *Context, id string) (bool, error) {
+	rawHasKeyPair, err := wc.client.HasKeyPair(ctx.context, id)
+	return bool(rawHasKeyPair), err
+}
+
+// GetPublicKey return the public key for a key ID.
+func (wc *WhisperClient) GetPublicKey(ctx *Context, id string) ([]byte, error) {
+	return wc.client.PublicKey(ctx.context, id)
+}
+
+// GetPrivateKey return the private key for a key ID.
+func (wc *WhisperClient) GetPrivateKey(ctx *Context, id string) ([]byte, error) {
+	return wc.client.PrivateKey(ctx.context, id)
+}
+
+// NewSymmetricKey generates a random symmetric key and returns its identifier.
+// Can be used encrypting and decrypting messages where the key is known to both parties.
+func (wc *WhisperClient) NewSymmetricKey(ctx *Context) (string, error) {
+	rawNewSymmetricKey, err := wc.client.NewSymmetricKey(ctx.context)
+	return string(rawNewSymmetricKey), err
+}
+
+// AddSymmetricKey stores the key, and returns its identifier.
+func (wc *WhisperClient) AddSymmetricKey(ctx *Context, key []byte) (string, error) {
+	rawAddSymmetricKey, err := wc.client.AddSymmetricKey(ctx.context, key)
+	return string(rawAddSymmetricKey), err
+}
+
+// GenerateSymmetricKeyFromPassword generates the key from password, stores it, and returns its identifier.
+func (wc *WhisperClient) GenerateSymmetricKeyFromPassword(ctx *Context, passwd []byte) (string, error) {
+	rawVersion, err := wc.client.Version(ctx.context)
+	return string(rawVersion), err
+}
+
+// HasSymmetricKey returns an indication if the key associated with the given id is stored in the node.
+func (wc *WhisperClient) HasSymmetricKey(ctx *Context, id string) (bool, error) {
+	rawHasSymmetricKey, err := wc.client.HasSymmetricKey(ctx.context, id)
+	return bool(rawHasSymmetricKey), err
+}
+
+// GetSymmetricKey returns the symmetric key associated with the given identifier.
+func (wc *WhisperClient) GetSymmetricKey(ctx *Context, id string) ([]byte, error) {
+	return wc.client.GetSymmetricKey(ctx.context, id)
+}
+
+// DeleteSymmetricKey deletes the symmetric key associated with the given identifier.
+func (wc *WhisperClient) DeleteSymmetricKey(ctx *Context, id string) error {
+	return wc.client.DeleteSymmetricKey(ctx.context, id)
+}
+
+// Post a message onto the network.
+func (wc *WhisperClient) Post(ctx *Context, message *NewMessage) error {
+	return wc.client.Post(ctx.context, *message.newMessage)
+}
+
+// NewHeadHandler is a client-side subscription callback to invoke on events and
+// subscription failure.
+type NewMessageHandler interface {
+	OnNewMessage(message *Message)
+	OnError(failure string)
+}
+
+// SubscribeMessages subscribes to messages that match the given criteria. This method
+// is only supported on bi-directional connections such as websockets and IPC.
+// NewMessageFilter uses polling and is supported over HTTP.
+func (wc *WhisperClient) SubscribeMessages(ctx *Context, criteria *Criteria, handler NewMessageHandler, buffer int) (*Subscription, error) {
+	// Subscribe to the event internally
+	ch := make(chan *whisper.Message, buffer)
+	rawSub, err :=  wc.client.SubscribeMessages(ctx.context, *criteria.criteria, ch)
+	if err != nil {
+		return nil, err
+	}
+	// Start up a dispatcher to feed into the callback
+	go func() {
+		for {
+			select {
+			case message := <-ch:
+				handler.OnNewMessage(&Message{message})
+
+			case err := <-rawSub.Err():
+				handler.OnError(err.Error())
+				return
+			}
+		}
+	}()
+	return &Subscription{rawSub}, nil
+}
+
+// NewMessageFilter creates a filter within the node. This filter can be used to poll
+// for new messages (see FilterMessages) that satisfy the given criteria. A filter can
+// timeout when it was polled for in whisper.filterTimeout.
+func (wc *WhisperClient) NewMessageFilter(ctx *Context, criteria *Criteria) (string, error) {
+	rawNewMessageFilter, err := wc.client.NewMessageFilter(ctx.context, *criteria.criteria)
+	return string(rawNewMessageFilter), err
+}
+
+// DeleteMessageFilter removes the filter associated with the given id.
+func (wc *WhisperClient) DeleteMessageFilter(ctx *Context, id string) error {
+	return wc.client.DeleteMessageFilter(ctx.context, id)
+}
+
+// GetFilterMessages retrieves all messages that are received between the last call to
+// this function and match the criteria that where given when the filter was created.
+func (wc *WhisperClient) GetFilterMessages(ctx *Context, id string) (*Messages, error) {
+	rawFilterMessages, err := wc.client.FilterMessages(ctx.context, id)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]*Message, len(rawFilterMessages))
+	for i := range rawFilterMessages {
+		res[i] = &Message{rawFilterMessages[i]}
+	}
+	return &Messages{res}, nil
 }

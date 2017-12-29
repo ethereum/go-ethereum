@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 // A Nonce is a 64-bit hash which proves (combined with the mix-hash) that
@@ -360,3 +361,28 @@ func (r *Receipt) GetLogs() *Logs               { return &Logs{r.receipt.Logs} }
 func (r *Receipt) GetTxHash() *Hash             { return &Hash{r.receipt.TxHash} }
 func (r *Receipt) GetContractAddress() *Address { return &Address{r.receipt.ContractAddress} }
 func (r *Receipt) GetGasUsed() int64            { return int64(r.receipt.GasUsed) }
+
+// Info represents a diagnostic information about the whisper node.
+type Info struct {
+	info *whisper.Info
+}
+
+// NewMessage represents a new whisper message that is posted through the RPC.
+type NewMessage struct {
+	newMessage *whisper.NewMessage
+}
+
+// Message represents a whisper message.
+type Message struct {
+	message *whisper.Message
+}
+
+// Messagea represents an array of messages.
+type Messages struct {
+	messages []*Message
+}
+
+// Criteria holds various filter options for inbound messages.
+type Criteria struct {
+	criteria *whisper.Criteria
+}
