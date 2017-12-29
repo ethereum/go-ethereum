@@ -310,6 +310,9 @@ func capitalise(input string) string {
 	for len(input) > 0 && input[0] == '_' {
 		input = input[1:]
 	}
+	if len(input) == 0 {
+		return ""
+	}
 	return strings.ToUpper(input[:1]) + input[1:]
 }
 
@@ -330,9 +333,10 @@ func structured(method abi.Method) bool {
 		if out.Name == "" {
 			return false
 		}
-		// If the field name collides (var, Var, _var, _Var), we can't organize into a struct
+		// If the field name is empty when normalized or collides (var, Var, _var, _Var),
+		// we can't organize into a struct
 		field := capitalise(out.Name)
-		if exists[field] {
+		if field == "" || exists[field] {
 			return false
 		}
 		exists[field] = true

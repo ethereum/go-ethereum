@@ -101,6 +101,9 @@ func (arguments Arguments) unpackTuple(v interface{}, output []byte) error {
 		exists := make(map[string]bool)
 		for _, arg := range arguments {
 			field := capitalise(arg.Name)
+			if field == "" {
+				return fmt.Errorf("abi: purely underscored output cannot unpack to struct")
+			}
 			if exists[field] {
 				return fmt.Errorf("abi: multiple outputs mapping to the same struct field '%s'", field)
 			}
@@ -239,6 +242,9 @@ func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 func capitalise(input string) string {
 	for len(input) > 0 && input[0] == '_' {
 		input = input[1:]
+	}
+	if len(input) == 0 {
+		return ""
 	}
 	return strings.ToUpper(input[:1]) + input[1:]
 }

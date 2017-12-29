@@ -295,6 +295,15 @@ var unpackTests = []unpackTest{
 		}{},
 		err: "abi: multiple outputs mapping to the same struct field 'Int'",
 	},
+	{
+		def: `[{"name":"Int","type":"int256"},{"name":"_","type":"int256"}]`,
+		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		want: struct {
+			Int1 *big.Int
+			Int2 *big.Int
+		}{},
+		err: "abi: purely underscored output cannot unpack to struct",
+	},
 }
 
 func TestUnpack(t *testing.T) {
