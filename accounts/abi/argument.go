@@ -169,6 +169,16 @@ func (arguments Arguments) unpackAtomic(v interface{}, output []byte) error {
 	if err != nil {
 		return err
 	}
+
+	// if we reach this part, there is only one output member from the contract event.
+	// for mobile, the result type is always a slice.
+	if reflect.Slice == value.Kind() && value.Len() >= 1 {
+		//check if it's not a byte slice
+		if reflect.TypeOf([]byte{}) != value.Type() {
+			value = value.Index(0).Elem()
+		}
+	}
+
 	return set(value, reflect.ValueOf(marshalledValue), arg)
 }
 
