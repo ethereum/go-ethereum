@@ -126,6 +126,7 @@ var bindTests = []struct {
 				{"type":"function","name":"namedOutput","constant":true,"inputs":[],"outputs":[{"name":"str","type":"string"}]},
 				{"type":"function","name":"anonOutput","constant":true,"inputs":[],"outputs":[{"name":"","type":"string"}]},
 				{"type":"function","name":"namedOutputs","constant":true,"inputs":[],"outputs":[{"name":"str1","type":"string"},{"name":"str2","type":"string"}]},
+				{"type":"function","name":"collidingOutputs","constant":true,"inputs":[],"outputs":[{"name":"str","type":"string"},{"name":"Str","type":"string"}]},
 				{"type":"function","name":"anonOutputs","constant":true,"inputs":[],"outputs":[{"name":"","type":"string"},{"name":"","type":"string"}]},
 				{"type":"function","name":"mixedOutputs","constant":true,"inputs":[],"outputs":[{"name":"","type":"string"},{"name":"str","type":"string"}]}
 			]
@@ -140,6 +141,7 @@ var bindTests = []struct {
 			 str1, err        = b.NamedOutput(nil)
 			 str1, err        = b.AnonOutput(nil)
 			 res, _          := b.NamedOutputs(nil)
+			 str1, str2, err  = b.CollidingOutputs(nil)
 			 str1, str2, err  = b.AnonOutputs(nil)
 			 str1, str2, err  = b.MixedOutputs(nil)
 
@@ -445,6 +447,66 @@ var bindTests = []struct {
 					t.Fatalf("Invalid address returned, want: %x, got: %x", addr, res)
 				}
 			}
+		`,
+	},
+	{
+		`Underscorer`,
+		`
+		contract Underscorer {
+			function UnderscoredOutput() constant returns (int _int, string _string) {
+				return (314, "pi");
+			}
+			function LowerLowerCollision() constant returns (int _res, int res) {
+				return (1, 2);
+			}
+			function LowerUpperCollision() constant returns (int _res, int Res) {
+				return (1, 2);
+		  }
+			function UpperLowerCollision() constant returns (int _Res, int res) {
+				return (1, 2);
+			}
+			function UpperUpperCollision() constant returns (int _Res, int Res) {
+				return (1, 2);
+			}
+			function PurelyUnderscoredOutput() constant returns (int _, int res) {
+				return (1, 2);
+			}
+			function AllPurelyUnderscoredOutput() constant returns (int _, int __) {
+				return (1, 2);
+			}
+		}
+		`, `6060604052341561000f57600080fd5b6103498061001e6000396000f300606060405260043610610083576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806303a592131461008857806367e6633d146100b85780639df484851461014d578063af7486ab1461017d578063b564b34d146101ad578063e02ab24d146101dd578063e409ca451461020d575b600080fd5b341561009357600080fd5b61009b61023d565b604051808381526020018281526020019250505060405180910390f35b34156100c357600080fd5b6100cb610252565b6040518083815260200180602001828103825283818151815260200191508051906020019080838360005b838110156101115780820151818401526020810190506100f6565b50505050905090810190601f16801561013e5780820380516001836020036101000a031916815260200191505b50935050505060405180910390f35b341561015857600080fd5b6101606102a0565b604051808381526020018281526020019250505060405180910390f35b341561018857600080fd5b6101906102b5565b604051808381526020018281526020019250505060405180910390f35b34156101b857600080fd5b6101c06102ca565b604051808381526020018281526020019250505060405180910390f35b34156101e857600080fd5b6101f06102df565b604051808381526020018281526020019250505060405180910390f35b341561021857600080fd5b6102206102f4565b604051808381526020018281526020019250505060405180910390f35b60008060016002819150809050915091509091565b600061025c610309565b61013a8090506040805190810160405280600281526020017f7069000000000000000000000000000000000000000000000000000000000000815250915091509091565b60008060016002819150809050915091509091565b60008060016002819150809050915091509091565b60008060016002819150809050915091509091565b60008060016002819150809050915091509091565b60008060016002819150809050915091509091565b6020604051908101604052806000815250905600a165627a7a72305820c11dcfa136fc7d182ee4d34f0b12d988496228f7e2d02d2b5376d996ca1743d00029`,
+		`[{"constant":true,"inputs":[],"name":"LowerUpperCollision","outputs":[{"name":"_res","type":"int256"},{"name":"Res","type":"int256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"UnderscoredOutput","outputs":[{"name":"_int","type":"int256"},{"name":"_string","type":"string"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"PurelyUnderscoredOutput","outputs":[{"name":"_","type":"int256"},{"name":"res","type":"int256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"UpperLowerCollision","outputs":[{"name":"_Res","type":"int256"},{"name":"res","type":"int256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"AllPurelyUnderscoredOutput","outputs":[{"name":"_","type":"int256"},{"name":"__","type":"int256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"UpperUpperCollision","outputs":[{"name":"_Res","type":"int256"},{"name":"Res","type":"int256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"LowerLowerCollision","outputs":[{"name":"_res","type":"int256"},{"name":"res","type":"int256"}],"payable":false,"stateMutability":"view","type":"function"}]`,
+		`
+			// Generate a new random account and a funded simulator
+			key, _ := crypto.GenerateKey()
+			auth := bind.NewKeyedTransactor(key)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
+
+			// Deploy a underscorer tester contract and execute a structured call on it
+			_, _, underscorer, err := DeployUnderscorer(auth, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy underscorer contract: %v", err)
+			}
+			sim.Commit()
+
+			// Verify that underscored return values correctly parse into structs
+			if res, err := underscorer.UnderscoredOutput(nil); err != nil {
+				t.Errorf("Failed to call constant function: %v", err)
+			} else if res.Int.Cmp(big.NewInt(314)) != 0 || res.String != "pi" {
+				t.Errorf("Invalid result, want: {314, \"pi\"}, got: %+v", res)
+			}
+			// Verify that underscored and non-underscored name collisions force tuple outputs
+			var a, b *big.Int
+
+			a, b, _ = underscorer.LowerLowerCollision(nil)
+			a, b, _ = underscorer.LowerUpperCollision(nil)
+			a, b, _ = underscorer.UpperLowerCollision(nil)
+			a, b, _ = underscorer.UpperUpperCollision(nil)
+			a, b, _ = underscorer.PurelyUnderscoredOutput(nil)
+			a, b, _ = underscorer.AllPurelyUnderscoredOutput(nil)
+
+			fmt.Println(a, b, err)
 		`,
 	},
 }

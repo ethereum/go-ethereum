@@ -96,6 +96,20 @@ func (arguments Arguments) unpackTuple(v interface{}, output []byte) error {
 	if err := requireUnpackKind(value, typ, kind, arguments); err != nil {
 		return err
 	}
+	// If the output interface is a struct, make sure names don't collide
+	if kind == reflect.Struct {
+		exists := make(map[string]bool)
+		for _, arg := range arguments {
+			field := capitalise(arg.Name)
+			if field == "" {
+				return fmt.Errorf("abi: purely underscored output cannot unpack to struct")
+			}
+			if exists[field] {
+				return fmt.Errorf("abi: multiple outputs mapping to the same struct field '%s'", field)
+			}
+			exists[field] = true
+		}
+	}
 	// `i` counts the nonindexed arguments.
 	// `j` counts the number of complex types.
 	// both `i` and `j` are used to to correctly compute `data` offset.
@@ -123,10 +137,10 @@ func (arguments Arguments) unpackTuple(v interface{}, output []byte) error {
 
 		switch kind {
 		case reflect.Struct:
+			name := capitalise(arg.Name)
 			for j := 0; j < typ.NumField(); j++ {
-				field := typ.Field(j)
 				// TODO read tags: `abi:"fieldName"`
-				if field.Name == strings.ToUpper(arg.Name[:1])+arg.Name[1:] {
+				if typ.Field(j).Name == name {
 					if err := set(value.Field(j), reflectValue, arg); err != nil {
 						return err
 					}
@@ -221,4 +235,16 @@ func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 	ret = append(ret, variableInput...)
 
 	return ret, nil
+}
+
+// capitalise makes the first character of a string upper case, also removing any
+// prefixing underscores from the variable names.
+func capitalise(input string) string {
+	for len(input) > 0 && input[0] == '_' {
+		input = input[1:]
+	}
+	if len(input) == 0 {
+		return ""
+	}
+	return strings.ToUpper(input[:1]) + input[1:]
 }
