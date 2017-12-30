@@ -304,7 +304,7 @@ func bindUnnestedTypeJava(stringKind string) (int, string) {
 		}
 
 		namedSize := map[string]string{
-			"8": "byte",
+			"8":  "byte",
 			"16": "short",
 			"32": "int",
 			"64": "long",
