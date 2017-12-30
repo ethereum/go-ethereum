@@ -263,7 +263,10 @@ func goToolArch(arch string, subcmd string, args ...string) *exec.Cmd {
 	if subcmd == "build" || subcmd == "install" || subcmd == "test" {
 		// Go CGO has a Windows linker error prior to 1.8 (https://github.com/golang/go/issues/8756).
 		// Work around issue by allowing multiple definitions for <1.8 builds.
-		if runtime.GOOS == "windows" && runtime.Version() < "go1.8" {
+		var minor int
+		fmt.Sscanf(strings.TrimPrefix(runtime.Version(), "go1."), "%d", &minor)
+
+		if runtime.GOOS == "windows" && minor < 8 {
 			cmd.Args = append(cmd.Args, []string{"-ldflags", "-extldflags -Wl,--allow-multiple-definition"}...)
 		}
 	}
