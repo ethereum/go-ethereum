@@ -93,6 +93,17 @@ func readFixedBytes(t Type, word []byte) (interface{}, error) {
 
 }
 
+func getDeepSizeForType(t *Type) int {
+	//all other should be counted as 32 (slices have pointers to respective elements)
+	size := 32
+	//arrays wrap it, each element being the same size
+	for t.T == ArrayTy {
+		size *= t.Size
+		t = t.Elem
+	}
+	return size
+}
+
 // iteratively unpack elements
 func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) {
 	if size < 0 {
@@ -115,25 +126,20 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 		return nil, fmt.Errorf("abi: invalid type in array/slice unpacking stage")
 	}
 
-	for i, j := start, 0; j < size; j++ {
+	elemSize := 32
+	if t.T == ArrayTy {
+		elemSize = getDeepSizeForType(t.Elem)
+	}
+
+	for i, j := start, 0; j < size; i, j = i+elemSize, j+1 {
+
 		inter, err := toGoType(i, *t.Elem, output)
 		if err != nil {
 			return nil, err
 		}
 
-		reflectedInter := reflect.ValueOf(inter)
-
-		//Although we just did the reverse, pack it, to get the length of the actual element.
-		//Getting the length directly from the "toGoType" would be way better,
-		// but it requires some refactoring to get it return the *consumed* length.
-		interPacked, err  := t.Elem.pack(reflectedInter)
-		if err != nil {
-			return nil, err
-		}
-		i += len(interPacked)
-
 		// append the item to our reflect slice
-		refSlice.Index(j).Set(reflectedInter)
+		refSlice.Index(j).Set(reflect.ValueOf(inter))
 	}
 
 	// return the interface
