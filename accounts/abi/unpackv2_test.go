@@ -57,7 +57,6 @@ func TestUnpackV2(t *testing.T) {
 	}
 }
 
-
 func TestMultiReturnWithArrayV2(t *testing.T) {
 	const definition = `[{"name" : "multi", "outputs": [{"type": "uint64[3]"}, {"type": "uint64"}]}]`
 	abi, err := JSON(strings.NewReader(definition))
