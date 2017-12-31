@@ -103,8 +103,7 @@ func toECDSA(d []byte, strict bool) (*ecdsa.PrivateKey, error) {
 		return nil, fmt.Errorf("invalid private key, >=N")
 	}
 	// The priv.D must not be zero or negative.
-	zero := new(big.Int).SetInt64(0)
-	if priv.D.Cmp(zero) <= 0 {
+	if priv.D.Sign() <= 0 {
 		return nil, fmt.Errorf("invalid private key, zero or negative")
 	}
 
