@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	bv "github.com/ethereum/go-ethereum/swarm/network/bitvector"
-	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueues"
+	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
 )
 
 const (
@@ -34,7 +34,7 @@ const (
 	Mid
 	High
 	Top
-	PriorityQueues       // number of queues
+	PriorityQueue        // number of queues
 	PriorityQueueCap = 3 // queue capacity
 )
 
@@ -177,7 +177,7 @@ type IncomingStreamer interface {
 type StreamerPeer struct {
 	Peer
 	streamer     *Streamer
-	pq           *pq.PriorityQueues
+	pq           *pq.PriorityQueue
 	outgoingLock sync.RWMutex
 	incomingLock sync.RWMutex
 	outgoing     map[Stream]OutgoingStreamer
@@ -188,7 +188,7 @@ type StreamerPeer struct {
 // NewStreamerPeer is the constructor for StreamerPeer
 func NewStreamerPeer(p Peer, streamer *Streamer) *StreamerPeer {
 	self := &StreamerPeer{
-		pq:       pq.New(PriorityQueues, PriorityQueueCap),
+		pq:       pq.New(PriorityQueue, PriorityQueueCap),
 		streamer: streamer,
 		outgoing: make(map[Stream]OutgoingStreamer),
 		incoming: make(map[Stream]IncomingStreamer),
