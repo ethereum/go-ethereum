@@ -48,10 +48,12 @@ type Statistics struct {
 }
 
 const (
-	minPowIdx      = iota // Minimal PoW required by the whisper node
-	maxMsgSizeIdx  = iota // Maximal message length allowed by the whisper node
-	overflowIdx    = iota // Indicator of message queue overflow
-	bloomFilterIdx = iota // Bloom filter for topics of interest for this node
+	maxMsgSizeIdx           = iota // Maximal message length allowed by the whisper node
+	overflowIdx             = iota // Indicator of message queue overflow
+	minPowIdx               = iota // Minimal PoW required by the whisper node
+	minPowToleranceIdx      = iota // Minimal PoW tolerated by the whisper node for a limited time
+	bloomFilterIdx          = iota // Bloom filter for topics of interest for this node
+	bloomFilterToleranceIdx = iota // Bloom filter tolerated by the whisper node for a limited time
 )
 
 // Whisper represents a dark communication interface through the Ethereum
@@ -77,7 +79,7 @@ type Whisper struct {
 
 	settings syncmap.Map // holds configuration settings that can be dynamically changed
 
-	reactionAllowance int // maximum time in seconds allowed to process the whisper-related messages
+	syncAllowance int // maximum time in seconds allowed to process the whisper-related messages
 
 	statsMu sync.Mutex // guard stats
 	stats   Statistics // Statistics of whisper node
@@ -92,15 +94,15 @@ func New(cfg *Config) *Whisper {
 	}
 
 	whisper := &Whisper{
-		privateKeys:       make(map[string]*ecdsa.PrivateKey),
-		symKeys:           make(map[string][]byte),
-		envelopes:         make(map[common.Hash]*Envelope),
-		expirations:       make(map[uint32]*set.SetNonTS),
-		peers:             make(map[*Peer]struct{}),
-		messageQueue:      make(chan *Envelope, messageQueueLimit),
-		p2pMsgQueue:       make(chan *Envelope, messageQueueLimit),
-		quit:              make(chan struct{}),
-		reactionAllowance: SynchAllowance,
+		privateKeys:   make(map[string]*ecdsa.PrivateKey),
+		symKeys:       make(map[string][]byte),
+		envelopes:     make(map[common.Hash]*Envelope),
+		expirations:   make(map[uint32]*set.SetNonTS),
+		peers:         make(map[*Peer]struct{}),
+		messageQueue:  make(chan *Envelope, messageQueueLimit),
+		p2pMsgQueue:   make(chan *Envelope, messageQueueLimit),
+		quit:          make(chan struct{}),
+		syncAllowance: DefaultSyncAllowance,
 	}
 
 	whisper.filters = NewFilters(whisper)
@@ -129,11 +131,33 @@ func New(cfg *Config) *Whisper {
 
 func (w *Whisper) MinPow() float64 {
 	val, _ := w.settings.Load(minPowIdx)
+	if val == nil {
+		return DefaultMinimumPoW
+	}
+	return val.(float64)
+}
+
+func (w *Whisper) MinPowTolerance() float64 {
+	val, _ := w.settings.Load(minPowToleranceIdx)
+	if val == nil {
+		return DefaultMinimumPoW
+	}
 	return val.(float64)
 }
 
 func (w *Whisper) BloomFilter() []byte {
 	val, _ := w.settings.Load(bloomFilterIdx)
+	if val == nil {
+		return nil
+	}
+	return val.([]byte)
+}
+
+func (w *Whisper) BloomFilterTolerance() []byte {
+	val, _ := w.settings.Load(bloomFilterToleranceIdx)
+	if val == nil {
+		return nil
+	}
 	return val.([]byte)
 }
 
@@ -192,12 +216,13 @@ func (w *Whisper) SetBloomFilter(bloom []byte) error {
 		return fmt.Errorf("invalid bloom filter size: %d", len(bloom))
 	}
 
+	w.settings.Store(bloomFilterIdx, bloom)
 	w.notifyPeersAboutBloomFilterChange(bloom)
 
 	go func() {
 		// allow some time before all the peers have processed the notification
-		time.Sleep(time.Duration(w.reactionAllowance) * time.Second)
-		w.settings.Store(bloomFilterIdx, bloom)
+		time.Sleep(time.Duration(w.syncAllowance) * time.Second)
+		w.settings.Store(bloomFilterToleranceIdx, bloom)
 	}()
 
 	return nil
@@ -209,12 +234,13 @@ func (w *Whisper) SetMinimumPoW(val float64) error {
 		return fmt.Errorf("invalid PoW: %f", val)
 	}
 
+	w.settings.Store(minPowIdx, val)
 	w.notifyPeersAboutPowRequirementChange(val)
 
 	go func() {
 		// allow some time before all the peers have processed the notification
-		time.Sleep(time.Duration(w.reactionAllowance) * time.Second)
-		w.settings.Store(minPowIdx, val)
+		time.Sleep(time.Duration(w.syncAllowance) * time.Second)
+		w.settings.Store(minPowToleranceIdx, val)
 	}()
 
 	return nil
@@ -222,14 +248,16 @@ func (w *Whisper) SetMinimumPoW(val float64) error {
 
 // SetMinimumPoW sets the minimal PoW in test environment
 func (w *Whisper) SetMinimumPowTest(val float64) {
-	w.notifyPeersAboutPowRequirementChange(val)
 	w.settings.Store(minPowIdx, val)
+	w.notifyPeersAboutPowRequirementChange(val)
+	w.settings.Store(minPowToleranceIdx, val)
 }
 
 // SetBloomFilterTest sets the Bloom Filter in test environment
 func (w *Whisper) SetBloomFilterTest(bloom []byte) {
+	w.settings.Store(bloomFilterIdx, bloom)
 	w.notifyPeersAboutBloomFilterChange(bloom)
-	w.settings.Store(minPowIdx, bloom)
+	w.settings.Store(bloomFilterToleranceIdx, bloom)
 }
 
 func (w *Whisper) notifyPeersAboutPowRequirementChange(pow float64) {
@@ -505,7 +533,28 @@ func (w *Whisper) GetSymKey(id string) ([]byte, error) {
 // Subscribe installs a new message handler used for filtering, decrypting
 // and subsequent storing of incoming messages.
 func (w *Whisper) Subscribe(f *Filter) (string, error) {
-	return w.filters.Install(f)
+	s, err := w.filters.Install(f)
+	if err == nil {
+		w.updateBloomFilter(f)
+	}
+	return s, err
+}
+
+// updateBloomFilter recalculates the new value of bloom filter,
+// and informs the peers if necessary.
+func (w *Whisper) updateBloomFilter(f *Filter) {
+	aggregate := make([]byte, bloomFilterSize)
+	for _, t := range f.Topics {
+		top := BytesToTopic(t)
+		b := TopicToBloom(top)
+		aggregate = addBloom(aggregate, b)
+	}
+
+	if !bloomFilterMatch(w.BloomFilter(), aggregate) {
+		// existing bloom filter must be updated
+		aggregate = addBloom(w.BloomFilter(), aggregate)
+		w.SetBloomFilter(aggregate)
+	}
 }
 
 // GetFilter returns the filter by id.
@@ -693,7 +742,7 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 	sent := envelope.Expiry - envelope.TTL
 
 	if sent > now {
-		if sent-SynchAllowance > now {
+		if sent-DefaultSyncAllowance > now {
 			return false, fmt.Errorf("envelope created in the future [%x]", envelope.Hash())
 		} else {
 			// recalculate PoW, adjusted for the time difference, plus one second for latency
@@ -702,7 +751,7 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 	}
 
 	if envelope.Expiry < now {
-		if envelope.Expiry+SynchAllowance*2 < now {
+		if envelope.Expiry+DefaultSyncAllowance*2 < now {
 			return false, fmt.Errorf("very old message")
 		} else {
 			log.Debug("expired envelope dropped", "hash", envelope.Hash().Hex())
@@ -715,15 +764,23 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 	}
 
 	if envelope.PoW() < wh.MinPow() {
-		log.Debug("envelope with low PoW dropped", "PoW", envelope.PoW(), "hash", envelope.Hash().Hex())
-		return false, nil // drop envelope without error for now
+		// maybe the value was recently changed, and the peers did not adjust yet.
+		// some tolerance might be still allowed for a short period of adjustment time.
+		if envelope.PoW() < wh.MinPowTolerance() {
+			log.Debug("envelope with low PoW dropped", "PoW", envelope.PoW(), "hash", envelope.Hash().Hex())
+			return false, nil // drop envelope without error for now
+		}
 
 		// once the status message includes the PoW requirement, an error should be returned here:
 		//return false, fmt.Errorf("envelope with low PoW received: PoW=%f, hash=[%v]", envelope.PoW(), envelope.Hash().Hex())
 	}
 
 	if !bloomFilterMatch(wh.BloomFilter(), envelope.Bloom()) {
-		return false, fmt.Errorf("envelope does not match bloom filter, hash=[%v]", envelope.Hash().Hex())
+		// maybe the value was recently changed, and the peers did not adjust yet.
+		// some tolerance might be still allowed for a short period of adjustment time.
+		if !bloomFilterMatch(wh.BloomFilterTolerance(), envelope.Bloom()) {
+			return false, fmt.Errorf("envelope does not match bloom filter, hash=[%v]", envelope.Hash().Hex())
+		}
 	}
 
 	hash := envelope.Hash()
@@ -963,6 +1020,9 @@ func GenerateRandomID() (id string, err error) {
 }
 
 func isFulNode(bloom []byte) bool {
+	if bloom == nil {
+		return true
+	}
 	for _, b := range bloom {
 		if b != 255 {
 			return false
@@ -972,6 +1032,11 @@ func isFulNode(bloom []byte) bool {
 }
 
 func bloomFilterMatch(filter, sample []byte) bool {
+	if filter == nil {
+		// full node, accepts all messages
+		return true
+	}
+
 	for i := 0; i < bloomFilterSize; i++ {
 		f := filter[i]
 		s := sample[i]
@@ -981,4 +1046,12 @@ func bloomFilterMatch(filter, sample []byte) bool {
 	}
 
 	return true
+}
+
+func addBloom(a, b []byte) []byte {
+	c := make([]byte, bloomFilterSize)
+	for i := 0; i < bloomFilterSize; i++ {
+		c[i] = a[i] | b[i]
+	}
+	return c
 }

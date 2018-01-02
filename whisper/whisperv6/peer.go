@@ -36,7 +36,7 @@ type Peer struct {
 
 	trusted        bool
 	powRequirement float64
-	bloomFilter    []byte
+	bloomFilter    []byte // may contain nil in case of full node
 
 	known *set.Set // Messages already known by the peer to avoid wasting bandwidth
 

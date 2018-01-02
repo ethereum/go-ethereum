@@ -68,8 +68,8 @@ const (
 	expirationCycle   = time.Second
 	transmissionCycle = 300 * time.Millisecond
 
-	DefaultTTL     = 50 // seconds
-	SynchAllowance = 10 // seconds
+	DefaultTTL           = 50 // seconds
+	DefaultSyncAllowance = 10 // seconds
 
 	EnvelopeHeaderLength = 20
 )
