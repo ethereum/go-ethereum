@@ -19,6 +19,8 @@ package storage
 import (
 	"bytes"
 	"crypto"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"hash"
 	"io"
@@ -28,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
+
+const MaxPO = 7
 
 type Hasher func() hash.Hash
 type SwarmHasher func() SwarmHash
@@ -73,6 +77,26 @@ func (h Key) bits(i, j uint) uint {
 	return res
 }
 
+func Proximity(one, other []byte) (ret int) {
+	b := (MaxPO-1)/8 + 1
+	if b > len(one) {
+		b = len(one)
+	}
+	m := 8
+	for i := 0; i < b; i++ {
+		oxo := one[i] ^ other[i]
+		if i == b-1 {
+			m = MaxPO % 8
+		}
+		for j := 0; j < m; j++ {
+			if (uint8(oxo)>>uint8(7-j))&0x01 != 0 {
+				return i*8 + j
+			}
+		}
+	}
+	return MaxPO
+}
+
 func IsZeroKey(key Key) bool {
 	return len(key) == 0 || bytes.Equal(key, ZeroKey)
 }
@@ -100,10 +124,10 @@ func (key Key) Hex() string {
 }
 
 func (key Key) Log() string {
-	if len(key[:]) < 4 {
+	if len(key[:]) < 8 {
 		return fmt.Sprintf("%x", []byte(key[:]))
 	}
-	return fmt.Sprintf("%08x", []byte(key[:4]))
+	return fmt.Sprintf("%016x", []byte(key[:8]))
 }
 
 func (key Key) String() string {
@@ -120,6 +144,27 @@ func (key *Key) UnmarshalJSON(value []byte) error {
 	h := common.Hex2Bytes(s[1 : len(s)-1])
 	copy(*key, h)
 	return nil
+}
+
+type KeyCollection []Key
+
+func NewKeyCollection(l int) KeyCollection {
+	return make(KeyCollection, l)
+}
+
+func (c KeyCollection) Len() int {
+	return len(c)
+}
+
+func (c KeyCollection) Less(i, j int) bool {
+	if bytes.Compare(c[i], c[j]) == -1 {
+		return true
+	}
+	return false
+}
+
+func (c KeyCollection) Swap(i, j int) {
+	c[i], c[j] = c[j], c[i]
 }
 
 // each chunk when first requested opens a record associated with the request
@@ -161,6 +206,32 @@ type Chunk struct {
 
 func NewChunk(key Key, rs *RequestStatus) *Chunk {
 	return &Chunk{Key: key, Req: rs}
+}
+
+func FakeChunk(size int64, count int, chunks []Chunk) int {
+	var i int
+	hasher := MakeHashFunc(SHA3Hash)()
+	chunksize := getDefaultChunkSize()
+	if size > chunksize {
+		size = chunksize
+	}
+
+	for i = 0; i < count; i++ {
+		hasher.Reset()
+		chunks[i].SData = make([]byte, size)
+		rand.Read(chunks[i].SData)
+		binary.LittleEndian.PutUint64(chunks[i].SData[:8], uint64(size))
+		hasher.Write(chunks[i].SData)
+		chunks[i].Key = make([]byte, 32)
+		copy(chunks[i].Key, hasher.Sum(nil))
+	}
+
+	return i
+}
+
+func getDefaultChunkSize() int64 {
+	return DefaultBranches * int64(MakeHashFunc(SHA3Hash)().Size())
+
 }
 
 /*

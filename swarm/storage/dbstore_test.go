@@ -18,174 +18,174 @@ package storage
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
+	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 )
 
-func initDbStore(t *testing.T) *DbStore {
+type testDbStore struct {
+	*DbStore
+	dir string
+}
+
+func newTestDbStore() (*testDbStore, error) {
 	dir, err := ioutil.TempDir("", "bzz-storage-test")
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
-	m, err := NewDbStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, defaultRadius)
+	basekey := make([]byte, 32)
+	db, err := NewDbStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+
+	return &testDbStore{db, dir}, err
+}
+
+func (db *testDbStore) close() {
+	db.Close()
+	err := os.RemoveAll(db.dir)
 	if err != nil {
-		t.Fatal("can't create store:", err)
+		panic(err)
 	}
-	return m
 }
 
-func testDbStore(l int64, branches int64, t *testing.T) {
-	m := initDbStore(t)
-	defer m.Close()
-	testStore(m, l, branches, t)
+func testDbStoreRandom(n int, processors int, chunksize int, t *testing.T) {
+	db, err := newTestDbStore()
+	if err != nil {
+		t.Fatalf("init dbStore failed: %v", err)
+	}
+	defer db.close()
+	db.trusted = true
+	testStoreRandom(db, processors, n, chunksize, t)
 }
 
-func TestDbStore128_0x1000000(t *testing.T) {
-	testDbStore(0x1000000, 128, t)
+func testDbStoreCorrect(n int, processors int, chunksize int, t *testing.T) {
+	db, err := newTestDbStore()
+	if err != nil {
+		t.Fatalf("init dbStore failed: %v", err)
+	}
+	defer db.close()
+	testStoreCorrect(db, processors, n, chunksize, t)
 }
 
-func TestDbStore128_10000_(t *testing.T) {
-	testDbStore(10000, 128, t)
+func TestDbStoreRandom_1(t *testing.T) {
+	testDbStoreRandom(1, 1, 0, t)
 }
 
-func TestDbStore128_1000_(t *testing.T) {
-	testDbStore(1000, 128, t)
+func TestDbStoreCorrect_1(t *testing.T) {
+	testDbStoreCorrect(1, 1, 4096, t)
 }
 
-func TestDbStore128_100_(t *testing.T) {
-	testDbStore(100, 128, t)
+func TestDbStoreRandom_1_5k(t *testing.T) {
+	testDbStoreRandom(8, 5000, 0, t)
 }
 
-func TestDbStore2_100_(t *testing.T) {
-	testDbStore(100, 2, t)
+func TestDbStoreRandom_8_5k(t *testing.T) {
+	testDbStoreRandom(8, 5000, 0, t)
+}
+
+func TestDbStoreCorrect_1_5k(t *testing.T) {
+	testDbStoreCorrect(1, 5000, 4096, t)
+}
+
+func TestDbStoreCorrect_8_5k(t *testing.T) {
+	testDbStoreCorrect(8, 5000, 4096, t)
 }
 
 func TestDbStoreNotFound(t *testing.T) {
-	m := initDbStore(t)
-	defer m.Close()
-	_, err := m.Get(ZeroKey)
+	db, err := newTestDbStore()
+	if err != nil {
+		t.Fatalf("init dbStore failed: %v", err)
+	}
+	defer db.close()
+
+	_, err = db.Get(ZeroKey)
 	if err != notFound {
 		t.Errorf("Expected notFound, got %v", err)
 	}
 }
 
-func TestDbStoreSyncIterator(t *testing.T) {
-	m := initDbStore(t)
-	defer m.Close()
-	keys := []Key{
-		Key(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")),
-		Key(common.Hex2Bytes("4000000000000000000000000000000000000000000000000000000000000000")),
-		Key(common.Hex2Bytes("5000000000000000000000000000000000000000000000000000000000000000")),
-		Key(common.Hex2Bytes("3000000000000000000000000000000000000000000000000000000000000000")),
-		Key(common.Hex2Bytes("2000000000000000000000000000000000000000000000000000000000000000")),
-		Key(common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000")),
-	}
-	for _, key := range keys {
-		m.Put(NewChunk(key, nil))
-	}
-	it, err := m.NewSyncIterator(DbSyncState{
-		Start: Key(common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000")),
-		Stop:  Key(common.Hex2Bytes("4000000000000000000000000000000000000000000000000000000000000000")),
-		First: 2,
-		Last:  4,
-	})
+func TestIterator(t *testing.T) {
+	var chunkcount int = 32
+	var i int
+	var poc uint
+	chunkkeys := NewKeyCollection(chunkcount)
+	chunkkeys_results := NewKeyCollection(chunkcount)
+	chunks := make([]Chunk, chunkcount)
+
+	db, err := newTestDbStore()
 	if err != nil {
-		t.Fatalf("unexpected error creating NewSyncIterator")
+		t.Fatalf("init dbStore failed: %v", err)
+	}
+	defer db.close()
+
+	FakeChunk(getDefaultChunkSize(), chunkcount, chunks)
+
+	for i = 0; i < len(chunks); i++ {
+		db.Put(&chunks[i])
+		chunkkeys[i] = chunks[i].Key
 	}
 
-	var chunk Key
-	var res []Key
-	for {
-		chunk = it.Next()
-		if chunk == nil {
-			break
+	//testSplit(m, l, 128, chunkkeys, t)
+
+	for i = 0; i < len(chunkkeys); i++ {
+		log.Trace(fmt.Sprintf("Chunk array pos %d/%d: '%v'", i, chunkcount, chunkkeys[i]))
+	}
+
+	i = 0
+	for poc = 0; poc <= 255; poc++ {
+		err := db.SyncIterator(0, uint64(chunkkeys.Len()), uint8(poc), func(k Key, n uint64) bool {
+			log.Trace(fmt.Sprintf("Got key %v number %d poc %d", k, n, uint8(poc)))
+			chunkkeys_results[n] = k
+			i++
+			return true
+		})
+		if err != nil {
+			t.Fatalf("Iterator call failed: %v", err)
 		}
-		res = append(res, chunk)
-	}
-	if len(res) != 1 {
-		t.Fatalf("Expected 1 chunk, got %v: %v", len(res), res)
-	}
-	if !bytes.Equal(res[0][:], keys[3]) {
-		t.Fatalf("Expected %v chunk, got %v", keys[3], res[0])
 	}
 
+	for i = 0; i < chunkcount; i++ {
+		if bytes.Compare(chunkkeys[i], chunkkeys_results[i]) != 0 {
+			t.Fatalf("Chunk put #%d key '%v' does not match iterator's key '%v'", i, chunkkeys[i], chunkkeys_results[i])
+		}
+	}
+
+}
+
+func benchmarkDbStorePut(n int, processors int, chunksize int, b *testing.B) {
+	db, err := newTestDbStore()
 	if err != nil {
-		t.Fatalf("unexpected error creating NewSyncIterator")
+		b.Fatalf("init dbStore failed: %v", err)
 	}
+	defer db.close()
+	db.trusted = true
+	benchmarkStorePut(db, processors, n, chunksize, b)
+}
 
-	it, err = m.NewSyncIterator(DbSyncState{
-		Start: Key(common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000")),
-		Stop:  Key(common.Hex2Bytes("5000000000000000000000000000000000000000000000000000000000000000")),
-		First: 2,
-		Last:  4,
-	})
-
-	res = nil
-	for {
-		chunk = it.Next()
-		if chunk == nil {
-			break
-		}
-		res = append(res, chunk)
-	}
-	if len(res) != 2 {
-		t.Fatalf("Expected 2 chunk, got %v: %v", len(res), res)
-	}
-	if !bytes.Equal(res[0][:], keys[3]) {
-		t.Fatalf("Expected %v chunk, got %v", keys[3], res[0])
-	}
-	if !bytes.Equal(res[1][:], keys[2]) {
-		t.Fatalf("Expected %v chunk, got %v", keys[2], res[1])
-	}
-
+func benchmarkDbStoreGet(n int, processors int, chunksize int, b *testing.B) {
+	db, err := newTestDbStore()
 	if err != nil {
-		t.Fatalf("unexpected error creating NewSyncIterator")
+		b.Fatalf("init dbStore failed: %v", err)
 	}
+	defer db.close()
+	db.trusted = true
+	benchmarkStoreGet(db, processors, n, chunksize, b)
+}
 
-	it, _ = m.NewSyncIterator(DbSyncState{
-		Start: Key(common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000")),
-		Stop:  Key(common.Hex2Bytes("4000000000000000000000000000000000000000000000000000000000000000")),
-		First: 2,
-		Last:  5,
-	})
-	res = nil
-	for {
-		chunk = it.Next()
-		if chunk == nil {
-			break
-		}
-		res = append(res, chunk)
-	}
-	if len(res) != 2 {
-		t.Fatalf("Expected 2 chunk, got %v", len(res))
-	}
-	if !bytes.Equal(res[0][:], keys[4]) {
-		t.Fatalf("Expected %v chunk, got %v", keys[4], res[0])
-	}
-	if !bytes.Equal(res[1][:], keys[3]) {
-		t.Fatalf("Expected %v chunk, got %v", keys[3], res[1])
-	}
+func BenchmarkDbStorePut_1_5k(b *testing.B) {
+	benchmarkDbStorePut(5000, 1, 4096, b)
+}
 
-	it, _ = m.NewSyncIterator(DbSyncState{
-		Start: Key(common.Hex2Bytes("2000000000000000000000000000000000000000000000000000000000000000")),
-		Stop:  Key(common.Hex2Bytes("4000000000000000000000000000000000000000000000000000000000000000")),
-		First: 2,
-		Last:  5,
-	})
-	res = nil
-	for {
-		chunk = it.Next()
-		if chunk == nil {
-			break
-		}
-		res = append(res, chunk)
-	}
-	if len(res) != 1 {
-		t.Fatalf("Expected 1 chunk, got %v", len(res))
-	}
-	if !bytes.Equal(res[0][:], keys[3]) {
-		t.Fatalf("Expected %v chunk, got %v", keys[3], res[0])
-	}
+func BenchmarkDbStorePut_8_5k(b *testing.B) {
+	benchmarkDbStorePut(5000, 8, 4096, b)
+}
+
+func BenchmarkDbStoreGet_1_5k(b *testing.B) {
+	benchmarkDbStoreGet(5000, 1, 4096, b)
+}
+
+func BenchmarkDbStoreGet_8_5k(b *testing.B) {
+	benchmarkDbStoreGet(5000, 8, 4096, b)
 }
