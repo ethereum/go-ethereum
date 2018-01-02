@@ -43,9 +43,9 @@ func New(n int, l int) *PriorityQueue {
 func (pq *PriorityQueue) Run(ctx context.Context, f func(interface{})) {
 	top := len(pq.queues) - 1
 	p := top
-	q := pq.queues[p]
 READ:
 	for {
+		q := pq.queues[p]
 		select {
 		case <-ctx.Done():
 			return
