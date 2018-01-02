@@ -155,8 +155,7 @@ func (p *terminalPrompter) SetHistory(history []string) {
 	p.State.ReadHistory(strings.NewReader(strings.Join(history, "\n")))
 }
 
-// AppendHistory appends an entry to the scrollback history. It should be called
-// if and only if the prompt to append was a valid command.
+// AppendHistory appends an entry to the scrollback history.
 func (p *terminalPrompter) AppendHistory(command string) {
 	p.State.AppendHistory(command)
 }
