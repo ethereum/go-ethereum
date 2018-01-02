@@ -23,7 +23,7 @@ Usage: go run build/ci.go <command> <command flags/arguments>
 
 Available commands are:
 
-   install    [ -arch architecture ] [ packages... ]                                           -- builds packages and executables
+   install    [ -arch architecture ] [ -cc compiler ] [ packages... ]                          -- builds packages and executables
    test       [ -coverage ] [ packages... ]                                                    -- runs the tests
    lint                                                                                        -- runs certain pre-selected linters
    archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
@@ -173,6 +173,7 @@ func main() {
 func doInstall(cmdline []string) {
 	var (
 		arch = flag.String("arch", "", "Architecture to cross build for")
+		cc   = flag.String("cc", "", "C compiler to cross build with")
 	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
@@ -213,7 +214,7 @@ func doInstall(cmdline []string) {
 		}
 	}
 	// Seems we are cross compiling, work around forbidden GOBIN
-	goinstall := goToolArch(*arch, "install", buildFlags(env)...)
+	goinstall := goToolArch(*arch, *cc, "install", buildFlags(env)...)
 	goinstall.Args = append(goinstall.Args, "-v")
 	goinstall.Args = append(goinstall.Args, []string{"-buildmode", "archive"}...)
 	goinstall.Args = append(goinstall.Args, packages...)
@@ -227,7 +228,7 @@ func doInstall(cmdline []string) {
 			}
 			for name := range pkgs {
 				if name == "main" {
-					gobuild := goToolArch(*arch, "build", buildFlags(env)...)
+					gobuild := goToolArch(*arch, *cc, "build", buildFlags(env)...)
 					gobuild.Args = append(gobuild.Args, "-v")
 					gobuild.Args = append(gobuild.Args, []string{"-o", executablePath(cmd.Name())}...)
 					gobuild.Args = append(gobuild.Args, "."+string(filepath.Separator)+filepath.Join("cmd", cmd.Name()))
@@ -255,10 +256,10 @@ func buildFlags(env build.Environment) (flags []string) {
 }
 
 func goTool(subcmd string, args ...string) *exec.Cmd {
-	return goToolArch(runtime.GOARCH, subcmd, args...)
+	return goToolArch(runtime.GOARCH, os.Getenv("CC"), subcmd, args...)
 }
 
-func goToolArch(arch string, subcmd string, args ...string) *exec.Cmd {
+func goToolArch(arch string, cc string, subcmd string, args ...string) *exec.Cmd {
 	cmd := build.GoTool(subcmd, args...)
 	if subcmd == "build" || subcmd == "install" || subcmd == "test" {
 		// Go CGO has a Windows linker error prior to 1.8 (https://github.com/golang/go/issues/8756).
@@ -276,6 +277,9 @@ func goToolArch(arch string, subcmd string, args ...string) *exec.Cmd {
 	} else {
 		cmd.Env = append(cmd.Env, "CGO_ENABLED=1")
 		cmd.Env = append(cmd.Env, "GOARCH="+arch)
+	}
+	if cc != "" {
+		cmd.Env = append(cmd.Env, "CC="+cc)
 	}
 	for _, e := range os.Environ() {
 		if strings.HasPrefix(e, "GOPATH=") || strings.HasPrefix(e, "GOBIN=") {
