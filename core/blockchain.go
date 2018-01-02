@@ -1196,10 +1196,11 @@ func (bc *BlockChain) PostChainEvents(events []interface{}, logs []*types.Log) {
 }
 
 func (bc *BlockChain) update() {
-	futureTimer := time.Tick(5 * time.Second)
+	futureTimer := time.NewTicker(5 * time.Second)
+	defer futureTimer.Stop()
 	for {
 		select {
-		case <-futureTimer:
+		case <-futureTimer.C:
 			bc.procFutureBlocks()
 		case <-bc.quit:
 			return
