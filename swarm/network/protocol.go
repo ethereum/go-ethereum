@@ -103,6 +103,7 @@ type BzzConfig struct {
 
 // Bzz is the swarm protocol bundle
 type Bzz struct {
+	Streamer *Streamer
 	*Hive
 	localAddr  *BzzAddr
 	mtx        sync.Mutex
@@ -116,6 +117,7 @@ type Bzz struct {
 // * peer store
 func NewBzz(config *BzzConfig, kad Overlay, store StateStore) *Bzz {
 	return &Bzz{
+		Streamer:   NewStreamer(),
 		Hive:       NewHive(config.HiveParams, kad, store),
 		localAddr:  &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
 		handshakes: make(map[discover.NodeID]*HandshakeMsg),
@@ -156,6 +158,14 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 			Run:      b.RunProtocol(DiscoverySpec, b.Hive.Run),
 			NodeInfo: b.Hive.NodeInfo,
 			PeerInfo: b.Hive.PeerInfo,
+		},
+		{
+			Name:     StreamerSpec.Name,
+			Version:  StreamerSpec.Version,
+			Length:   StreamerSpec.Length(),
+			Run:      b.RunProtocol(StreamerSpec, b.Streamer.Run),
+			NodeInfo: b.Streamer.NodeInfo,
+			PeerInfo: b.Streamer.PeerInfo,
 		},
 	}
 }
