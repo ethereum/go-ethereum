@@ -179,11 +179,17 @@ func doInstall(cmdline []string) {
 
 	// Check Go version. People regularly open issues about compilation
 	// failure with outdated Go. This should save them the trouble.
-	if runtime.Version() < "go1.7" && !strings.Contains(runtime.Version(), "devel") {
-		log.Println("You have Go version", runtime.Version())
-		log.Println("go-ethereum requires at least Go version 1.7 and cannot")
-		log.Println("be compiled with an earlier version. Please upgrade your Go installation.")
-		os.Exit(1)
+	if !strings.Contains(runtime.Version(), "devel") {
+		// Figure out the minor version number since we can't textually compare (1.10 < 1.7)
+		var minor int
+		fmt.Sscanf(strings.TrimPrefix(runtime.Version(), "go1."), "%d", &minor)
+
+		if minor < 7 {
+			log.Println("You have Go version", runtime.Version())
+			log.Println("go-ethereum requires at least Go version 1.7 and cannot")
+			log.Println("be compiled with an earlier version. Please upgrade your Go installation.")
+			os.Exit(1)
+		}
 	}
 	// Compile packages given as arguments, or everything if there are no arguments.
 	packages := []string{"./..."}
@@ -257,7 +263,10 @@ func goToolArch(arch string, subcmd string, args ...string) *exec.Cmd {
 	if subcmd == "build" || subcmd == "install" || subcmd == "test" {
 		// Go CGO has a Windows linker error prior to 1.8 (https://github.com/golang/go/issues/8756).
 		// Work around issue by allowing multiple definitions for <1.8 builds.
-		if runtime.GOOS == "windows" && runtime.Version() < "go1.8" {
+		var minor int
+		fmt.Sscanf(strings.TrimPrefix(runtime.Version(), "go1."), "%d", &minor)
+
+		if runtime.GOOS == "windows" && minor < 8 {
 			cmd.Args = append(cmd.Args, []string{"-ldflags", "-extldflags -Wl,--allow-multiple-definition"}...)
 		}
 	}
