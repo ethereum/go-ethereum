@@ -19,7 +19,6 @@ package ens
 //go:generate abigen --sol contract/ens.sol --pkg contract --out contract/ens.go
 
 import (
-	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -163,7 +162,7 @@ func (self *ENS) Register(name string) (*types.Transaction, error) {
 	}
 
 	opts := self.TransactOpts
-	opts.GasLimit = big.NewInt(200000)
+	opts.GasLimit = 200000
 	return registrar.Contract.Register(&opts, label, self.TransactOpts.From)
 }
 
@@ -178,6 +177,6 @@ func (self *ENS) SetContentHash(name string, hash common.Hash) (*types.Transacti
 	}
 
 	opts := self.TransactOpts
-	opts.GasLimit = big.NewInt(200000)
+	opts.GasLimit = 200000
 	return resolver.Contract.SetContent(&opts, node, hash)
 }

@@ -56,8 +56,8 @@ import (
 // * watching incoming ether
 
 var (
-	gasToCash = big.NewInt(2000000) // gas cost of a cash transaction using chequebook
-	// gasToDeploy = big.NewInt(3000000)
+	gasToCash = uint64(2000000) // gas cost of a cash transaction using chequebook
+	// gasToDeploy = uint64(3000000)
 )
 
 // Backend wraps all methods required for chequebook operation.

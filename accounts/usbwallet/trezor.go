@@ -180,7 +180,7 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 		AddressN:   derivationPath,
 		Nonce:      new(big.Int).SetUint64(tx.Nonce()).Bytes(),
 		GasPrice:   tx.GasPrice().Bytes(),
-		GasLimit:   tx.Gas().Bytes(),
+		GasLimit:   new(big.Int).SetUint64(tx.Gas()).Bytes(),
 		Value:      tx.Value().Bytes(),
 		DataLength: &length,
 	}

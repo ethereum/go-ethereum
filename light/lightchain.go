@@ -169,7 +169,7 @@ func (bc *LightChain) SetHead(head uint64) {
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
-func (self *LightChain) GasLimit() *big.Int {
+func (self *LightChain) GasLimit() uint64 {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
