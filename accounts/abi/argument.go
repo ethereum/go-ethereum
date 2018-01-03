@@ -202,7 +202,7 @@ func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 	inputOffset := 0
 	for _, abiArg := range abiArgs {
 		if abiArg.Type.T == ArrayTy {
-			inputOffset += (32 * abiArg.Type.Size)
+			inputOffset += 32 * abiArg.Type.Size
 		} else {
 			inputOffset += 32
 		}

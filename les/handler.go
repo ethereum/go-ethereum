@@ -454,14 +454,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			case query.Reverse:
 				// Number based traversal towards the genesis block
 				if query.Origin.Number >= query.Skip+1 {
-					query.Origin.Number -= (query.Skip + 1)
+					query.Origin.Number -= query.Skip + 1
 				} else {
 					unknown = true
 				}
 
 			case !query.Reverse:
 				// Number based traversal towards the leaf block
-				query.Origin.Number += (query.Skip + 1)
+				query.Origin.Number += query.Skip + 1
 			}
 		}
 
