@@ -42,7 +42,7 @@ func NewStorage(api *Api) *Storage {
 //
 // DEPRECATED: Use the HTTP API instead
 func (self *Storage) Put(content, contentType string) (string, error) {
-	key, err := self.api.Put(content, contentType)
+	key, _, err := self.api.Put(content, contentType)
 	if err != nil {
 		return "", err
 	}

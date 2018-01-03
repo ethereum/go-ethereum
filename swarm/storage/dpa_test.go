@@ -21,7 +21,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"sync"
 	"testing"
 )
 
@@ -50,12 +49,11 @@ func TestDPArandom(t *testing.T) {
 	defer os.RemoveAll("/tmp/bzz")
 
 	reader, slice := testDataReaderAndSlice(testDataSize)
-	wg := &sync.WaitGroup{}
-	key, err := dpa.Store(reader, testDataSize, wg, nil)
+	key, wait, err := dpa.Store(reader, testDataSize)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
-	wg.Wait()
+	wait()
 	resultReader := dpa.Retrieve(key)
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)
@@ -106,12 +104,11 @@ func TestDPA_capacity(t *testing.T) {
 	}
 	dpa.Start()
 	reader, slice := testDataReaderAndSlice(testDataSize)
-	wg := &sync.WaitGroup{}
-	key, err := dpa.Store(reader, testDataSize, wg, nil)
+	key, wait, err := dpa.Store(reader, testDataSize)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
-	wg.Wait()
+	wait()
 	resultReader := dpa.Retrieve(key)
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)

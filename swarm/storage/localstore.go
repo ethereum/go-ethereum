@@ -42,7 +42,6 @@ func NewLocalStore(hash SwarmHasher, params *StoreParams, basekey []byte) (*Loca
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
-	chunk.dbStored = make(chan bool)
 	self.memStore.Put(chunk)
 	if chunk.wg != nil {
 		chunk.wg.Add(1)

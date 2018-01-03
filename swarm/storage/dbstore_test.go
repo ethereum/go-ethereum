@@ -112,7 +112,11 @@ func TestIterator(t *testing.T) {
 	var poc uint
 	chunkkeys := NewKeyCollection(chunkcount)
 	chunkkeys_results := NewKeyCollection(chunkcount)
-	chunks := make([]Chunk, chunkcount)
+	var chunks []*Chunk
+
+	for i := 0; i < chunkcount; i++ {
+		chunks = append(chunks, NewChunk(nil, nil))
+	}
 
 	db, err := newTestDbStore()
 	if err != nil {
@@ -123,7 +127,7 @@ func TestIterator(t *testing.T) {
 	FakeChunk(getDefaultChunkSize(), chunkcount, chunks)
 
 	for i = 0; i < len(chunks); i++ {
-		db.Put(&chunks[i])
+		db.Put(chunks[i])
 		chunkkeys[i] = chunks[i].Key
 	}
 

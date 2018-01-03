@@ -97,7 +97,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
 	hash := storage.MakeHashFunc(config.ChunkerParams.Hash)
-	self.lstore, err = storage.NewLocalStore(hash, config.StoreParams)
+	self.lstore, err = storage.NewLocalStore(hash, config.StoreParams, common.Hex2Bytes(config.BzzKey))
 	if err != nil {
 		return
 	}
@@ -344,32 +344,6 @@ func (self *Swarm) SetChequebook(ctx context.Context) error {
 	}
 	log.Info(fmt.Sprintf("new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract.Hex()))
 	return nil
-}
-
-// Local swarm without netStore
-func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
-
-	prvKey, err := crypto.GenerateKey()
-	if err != nil {
-		return
-	}
-
-	config := api.NewConfig()
-	config.Path = datadir
-	config.Port = port
-	config.Init(prvKey)
-
-	dpa, err := storage.NewLocalDPA(datadir)
-	if err != nil {
-		return
-	}
-
-	self = &Swarm{
-		api:    api.NewApi(dpa, nil),
-		config: config,
-	}
-
-	return
 }
 
 // serialisable info about swarm

@@ -17,8 +17,6 @@
 package network
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -54,19 +52,19 @@ testing chunk availability etc etc, we can indicate it by limiting the size here
 Request ID can be newly generated or kept from the request originator.
 
 */
-type retrieveRequestMsgData struct {
-	Key     storage.Key // target Key address of chunk to be retrieved
-	Id      uint64      // request id, request is a lookup if missing or zero
-	MaxSize uint64      // maximum size of delivery accepted
-	from    Peer        //
+type retrieveRequestMsg struct {
+	Key     storage.Key   // target Key address of chunk to be retrieved
+	Id      uint64        // request id, request is a lookup if missing or zero
+	MaxSize uint64        // maximum size of delivery accepted
+	from    *StreamerPeer //
 }
 
-func (self retrieveRequestMsgData) String() string {
+func (self retrieveRequestMsg) String() string {
 	var from string
 	if self.from == nil {
 		from = "ourselves"
 	} else {
-		from = fmt.Sprintf("%x", self.from.OverlayAddr())
+		from = fmt.Sprintf("%x", self.from.Over())
 	}
 	var target []byte
 	if len(self.Key) > 3 {
@@ -77,9 +75,9 @@ func (self retrieveRequestMsgData) String() string {
 
 // entrypoint for retrieve requests coming from the bzz wire protocol
 // checks swap balance - return if peer has no credit
-func (self *RequestHandler) handleRetrieveRequestMsg(msg interface{}, p Peer) error {
-	req := msg.(*retrieveRequestMsgData)
-	req.from = p
+func (self *StreamerPeer) handleRetrieveRequestMsg(msg interface{}) error {
+	req := msg.(*retrieveRequestMsg)
+	req.from = self
 	// TODO:
 	// swap - record credit for 1 request
 	// note that only charge actual reqsearches
@@ -90,15 +88,15 @@ func (self *RequestHandler) handleRetrieveRequestMsg(msg interface{}, p Peer) er
 	chunk, _ := self.netStore.Get(req.Key)
 	rs := chunk.Req
 	if rs != nil {
-		rs = storage.NewRequest()
-		self.addRequester(rs, req)
+		rs = storage.NewRequestStatus(req.Key)
+		addRequester(rs, req)
 		chunk.Req = rs
 	}
 
 	// check if we can immediately deliver
 	if chunk.SData != nil {
 		if req.MaxSize == 0 || int64(req.MaxSize) >= chunk.Size {
-			err := self.netStore.Deliver(chunk)
+			err := self.Deliver(chunk, Top)
 			if err != nil {
 				log.Trace(fmt.Sprintf("%v - content found, delivery error: %v", req.Key.Log(), err))
 				return nil
@@ -118,7 +116,7 @@ adds a new peer to an existing open request
 only add if less than requesterCount peers forwarded the same request id so far
 note this is done irrespective of status (searching or found)
 */
-func (self *RequestHandler) addRequester(rs *storage.RequestStatus, req *retrieveRequestMsgData) {
+func addRequester(rs *storage.RequestStatus, req *retrieveRequestMsg) {
 	log.Trace(fmt.Sprintf("Depo.addRequester: key %v - add peer to req.Id %v", req.Key.Log(), req.Id))
 	list := rs.Requesters[req.Id]
 	rs.Requesters[req.Id] = append(list, req)
@@ -128,19 +126,20 @@ func (self *RequestHandler) addRequester(rs *storage.RequestStatus, req *retriev
  store requests are put in netstore so they are stored and then
  forwarded to the peers in their kademlia proximity bin by the syncer
 */
-type storeRequestMsgData struct {
+type storeRequestMsg struct {
+	Key   storage.Key
 	SData []byte // the stored chunk Data (incl size)
 	// optional
 	Id   uint64 // request ID. if delivery, the ID is retrieve request ID
 	from Peer   // [not serialised] protocol registers the requester
 }
 
-func (self storeRequestMsgData) String() string {
+func (self storeRequestMsg) String() string {
 	var from string
 	if self.from == nil {
 		from = "self"
 	} else {
-		from = fmt.Sprintf("%x", self.from.OverlayAddr())
+		from = fmt.Sprintf("%x", self.from.Over())
 	}
 	end := len(self.SData)
 	if len(self.SData) > 10 {
@@ -153,12 +152,11 @@ func (self storeRequestMsgData) String() string {
 // if key found locally, return. otherwise
 // remote is untrusted, so hash is verified and chunk passed on to NetStore
 func (self *RequestHandler) handleStoreRequestMsg(msg interface{}, p Peer) error {
-	req := msg.(*storeRequestMsgData)
+	req := msg.(*storeRequestMsg)
 	req.from = p
-	chunk, err := storage.NewChunkFromData(req.SData)
-	if err != nil {
-		return err
-	}
+	// TODO: chunk validation
+	chunk := storage.NewChunk(req.Key, nil)
+	chunk.SData = req.SData
 	chunk.Source = p
 	self.netStore.Put(chunk)
 	log.Trace(fmt.Sprintf("delivery of %v from %v", chunk, p))

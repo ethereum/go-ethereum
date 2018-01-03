@@ -99,7 +99,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	key, err := s.api.Store(r.Body, r.ContentLength, nil)
+	key, _, err := s.api.Store(r.Body, r.ContentLength)
 	if err != nil {
 		s.Error(w, r, err)
 		return

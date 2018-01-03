@@ -81,7 +81,14 @@ func mput(store ChunkStore, processors int, n int, f func(i int) *Chunk) (hs []K
 		go func() {
 			defer wg.Done()
 			for chunk := range c {
-				store.Put(chunk)
+				wg.Add(1)
+				chunk := chunk
+				go func() {
+					defer wg.Done()
+
+					store.Put(chunk)
+					<-chunk.dbStored
+				}()
 			}
 		}()
 	}

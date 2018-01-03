@@ -118,23 +118,19 @@ func (self *TreeChunker) decrementWorkerCount() {
 	self.workerCount -= 1
 }
 
-func (self *TreeChunker) Split(data io.Reader, size int64, chunkC chan *Chunk, swg, wwg *sync.WaitGroup) (Key, error) {
+func (self *TreeChunker) Split(data io.Reader, size int64, chunkC chan *Chunk) (k Key, wait func(), err error) {
 	if self.chunkSize <= 0 {
 		panic("chunker must be initialised")
 	}
 
 	jobC := make(chan *hashJob, 2*ChunkProcessors)
 	wg := &sync.WaitGroup{}
+	storeWg := &sync.WaitGroup{}
 	errC := make(chan error)
 	quitC := make(chan bool)
 
-	// wwg = workers waitgroup keeps track of hashworkers spawned by this split call
-	if wwg != nil {
-		wwg.Add(1)
-	}
-
 	self.incrementWorkerCount()
-	go self.hashWorker(jobC, chunkC, errC, quitC, swg, wwg)
+	go self.hashWorker(jobC, chunkC, errC, quitC, storeWg)
 
 	depth := 0
 	treeSize := self.chunkSize
@@ -149,16 +145,12 @@ func (self *TreeChunker) Split(data io.Reader, size int64, chunkC chan *Chunk, s
 	// this waitgroup member is released after the root hash is calculated
 	wg.Add(1)
 	//launch actual recursive function passing the waitgroups
-	go self.split(depth, treeSize/self.branches, key, data, size, jobC, chunkC, errC, quitC, wg, swg, wwg)
+	go self.split(depth, treeSize/self.branches, key, data, size, jobC, chunkC, errC, quitC, wg, storeWg)
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
 		// waiting for all threads to finish
 		wg.Wait()
-		// if storage waitgroup is non-nil, we wait for storage to finish too
-		if swg != nil {
-			swg.Wait()
-		}
 		close(errC)
 	}()
 
@@ -166,16 +158,16 @@ func (self *TreeChunker) Split(data io.Reader, size int64, chunkC chan *Chunk, s
 	select {
 	case err := <-errC:
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	case <-time.NewTimer(splitTimeout).C:
-		return nil, errOperationTimedOut
+		return nil, nil, errOperationTimedOut
 	}
 
-	return key, nil
+	return key, storeWg.Wait, nil
 }
 
-func (self *TreeChunker) split(depth int, treeSize int64, key Key, data io.Reader, size int64, jobC chan *hashJob, chunkC chan *Chunk, errC chan error, quitC chan bool, parentWg, swg, wwg *sync.WaitGroup) {
+func (self *TreeChunker) split(depth int, treeSize int64, key Key, data io.Reader, size int64, jobC chan *hashJob, chunkC chan *Chunk, errC chan error, quitC chan bool, parentWg, storeWg *sync.WaitGroup) {
 
 	//
 
@@ -225,7 +217,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data io.Reade
 		subTreeKey := chunk[8+i*self.hashSize : 8+(i+1)*self.hashSize]
 
 		childrenWg.Add(1)
-		self.split(depth-1, treeSize/self.branches, subTreeKey, data, secSize, jobC, chunkC, errC, quitC, childrenWg, swg, wwg)
+		self.split(depth-1, treeSize/self.branches, subTreeKey, data, secSize, jobC, chunkC, errC, quitC, childrenWg, storeWg)
 
 		i++
 		pos += treeSize
@@ -237,11 +229,8 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data io.Reade
 
 	worker := self.getWorkerCount()
 	if int64(len(jobC)) > worker && worker < ChunkProcessors {
-		if wwg != nil {
-			wwg.Add(1)
-		}
 		self.incrementWorkerCount()
-		go self.hashWorker(jobC, chunkC, errC, quitC, swg, wwg)
+		go self.hashWorker(jobC, chunkC, errC, quitC, storeWg)
 
 	}
 	select {
@@ -250,13 +239,10 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data io.Reade
 	}
 }
 
-func (self *TreeChunker) hashWorker(jobC chan *hashJob, chunkC chan *Chunk, errC chan error, quitC chan bool, swg, wwg *sync.WaitGroup) {
+func (self *TreeChunker) hashWorker(jobC chan *hashJob, chunkC chan *Chunk, errC chan error, quitC chan bool, storeWg *sync.WaitGroup) {
 	defer self.decrementWorkerCount()
 
 	hasher := self.hashFunc()
-	if wwg != nil {
-		defer wwg.Done()
-	}
 	for {
 		select {
 
@@ -265,7 +251,7 @@ func (self *TreeChunker) hashWorker(jobC chan *hashJob, chunkC chan *Chunk, errC
 				return
 			}
 			// now we got the hashes in the chunk, then hash the chunks
-			self.hashChunk(hasher, job, chunkC, swg)
+			self.hashChunk(hasher, job, chunkC, storeWg)
 		case <-quitC:
 			return
 		}
@@ -275,34 +261,31 @@ func (self *TreeChunker) hashWorker(jobC chan *hashJob, chunkC chan *Chunk, errC
 // The treeChunkers own Hash hashes together
 // - the size (of the subtree encoded in the Chunk)
 // - the Chunk, ie. the contents read from the input reader
-func (self *TreeChunker) hashChunk(hasher SwarmHash, job *hashJob, chunkC chan *Chunk, swg *sync.WaitGroup) {
+func (self *TreeChunker) hashChunk(hasher SwarmHash, job *hashJob, chunkC chan *Chunk, storeWg *sync.WaitGroup) {
 	hasher.ResetWithLength(job.chunk[:8]) // 8 bytes of length
 	hasher.Write(job.chunk[8:])           // minus 8 []byte length
 	h := hasher.Sum(nil)
 
-	newChunk := &Chunk{
-		Key:   h,
-		SData: job.chunk,
-		Size:  job.size,
-		wg:    swg,
-	}
+	newChunk := NewChunk(h, nil)
+	newChunk.SData = job.chunk
+	newChunk.Size = job.size
 
 	// report hash of this chunk one level up (keys corresponds to the proper subslice of the parent chunk)
 	copy(job.key, h)
 	// send off new chunk to storage
-	if chunkC != nil {
-		if swg != nil {
-			swg.Add(1)
-		}
-	}
 	job.parentWg.Done()
 
 	if chunkC != nil {
 		chunkC <- newChunk
+		storeWg.Add(1)
+		go func() {
+			defer storeWg.Done()
+			<-newChunk.dbStored
+		}()
 	}
 }
 
-func (self *TreeChunker) Append(key Key, data io.Reader, chunkC chan *Chunk, swg, wwg *sync.WaitGroup) (Key, error) {
+func (self *TreeChunker) Append(key Key, data io.Reader, chunkC chan *Chunk) (Key, error) {
 	return nil, errAppendOppNotSuported
 }
 
@@ -456,10 +439,8 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 // block until they time out or arrive
 // abort if quitC is readable
 func retrieve(key Key, chunkC chan *Chunk, quitC chan bool) *Chunk {
-	chunk := &Chunk{
-		Key: key,
-		C:   make(chan bool), // close channel to signal data delivery
-	}
+	chunk := NewChunk(key, nil)
+	chunk.C = make(chan bool)
 	// submit chunk for retrieval
 	select {
 	case chunkC <- chunk: // submit retrieval request, someone should be listening on the other side (or we will time out globally)

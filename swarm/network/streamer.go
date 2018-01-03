@@ -18,13 +18,15 @@ package network
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	bv "github.com/ethereum/go-ethereum/swarm/network/bitvector"
 	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
@@ -43,9 +45,9 @@ type Stream string
 
 // Handover represents a statement that the upstream peer hands over the stream section
 type Handover struct {
-	Stream     Stream      // name of stream
-	Start, End uint64      // index of hashes
-	Root       common.Hash // Root hash for indexed segment inclusion proofs
+	Stream     Stream // name of stream
+	Start, End uint64 // index of hashes
+	Root       []byte // Root hash for indexed segment inclusion proofs
 }
 
 // HandoverProof represents a signed statement that the upstream peer handed over the stream section
@@ -70,7 +72,7 @@ type TakeoverProofMsg TakeoverProof
 
 // String pretty prints TakeoverProofMsg
 func (self TakeoverProofMsg) String() string {
-	return fmt.Sprintf("Stream: '%v' [%v-%v], Root: %x, Sig: %x", self.Stream, self.From, self.To, self.Root, self.Sig)
+	return fmt.Sprintf("Stream: '%v' [%v-%v], Root: %x, Sig: %x", self.Stream, self.Start, self.End, self.Root, self.Sig)
 }
 
 // SubcribeMsg is the protocol msg for requesting a stream(section)
@@ -138,37 +140,46 @@ func (self *Streamer) RegisterOutgoingStreamer(stream Stream, f func(*StreamerPe
 }
 
 // GetIncomingStreamer accessor for incoming streamer constructors
-func (self *Streamer) GetIncomingStreamer(stream Stream) func(*StreamerPeer) (IncomingStreamer, error) {
+func (self *Streamer) GetIncomingStreamer(stream Stream) (func(*StreamerPeer) (IncomingStreamer, error), error) {
 	self.incomingLock.RLock()
 	defer self.incomingLock.RUnlock()
 	f := self.incoming[stream]
 	if f == nil {
-		return nil, fmt.Errorf("stream %v not registered", s)
+		return nil, fmt.Errorf("stream %v not registered", stream)
 	}
 	return f, nil
 }
 
 // GetOutgoingStreamer accessor for incoming streamer constructors
-func (self *Streamer) GetOutgoingStreamer(stream Stream) func(*StreamerPeer) (OutgoingStreamer, error) {
+func (self *Streamer) GetOutgoingStreamer(stream Stream) (func(*StreamerPeer) (OutgoingStreamer, error), error) {
 	self.outgoingLock.RLock()
 	defer self.outgoingLock.RUnlock()
 	f := self.outgoing[stream]
 	if f == nil {
-		return nil, fmt.Errorf("stream %v not registered", s)
+		return nil, fmt.Errorf("stream %v not registered", stream)
 	}
+	return f, nil
+}
+
+func (self *Streamer) NodeInfo() interface{} {
+	return nil
+}
+
+func (self *Streamer) PeerInfo(id discover.NodeID) interface{} {
+	return nil
 }
 
 // OutgoingStreamer interface for outgoing peer Streamer
 type OutgoingStreamer interface {
 	CurrentBatch() []byte
-	SetNextBatch(uint64, uint64) ([]byte, uint64, uint64, *HandoverProof)
+	SetNextBatch(uint64, uint64) ([]byte, uint64, uint64, *HandoverProof, error)
 	GetData([]byte) []byte
 	Priority() int
 }
 
 // IncomingStreamer interface for incoming peer Streamer
 type IncomingStreamer interface {
-	NextBatch(uint64, uint64) (uint64, uint64)
+	NextBatch(uint64) (uint64, uint64)
 	NeedData([]byte) func()
 	Priority() int
 }
@@ -178,6 +189,7 @@ type StreamerPeer struct {
 	Peer
 	streamer     *Streamer
 	pq           *pq.PriorityQueue
+	netStore     storage.ChunkStore
 	outgoingLock sync.RWMutex
 	incomingLock sync.RWMutex
 	outgoing     map[Stream]OutgoingStreamer
@@ -249,7 +261,10 @@ func (self *StreamerPeer) Subscribe(s Stream, from, to uint64) error {
 	if err != nil {
 		return err
 	}
-	is := f(self)
+	is, err := f(self)
+	if err != nil {
+		return err
+	}
 	self.setIncomingStreamer(s, is)
 	msg := &SubscribeMsg{
 		Stream:   s,
@@ -257,20 +272,24 @@ func (self *StreamerPeer) Subscribe(s Stream, from, to uint64) error {
 		To:       to,
 		Priority: uint8(is.Priority()),
 	}
-	self.Send(msg, is.Priority())
+	self.SendPriority(msg, is.Priority())
+	return nil
 }
 
 func (self *StreamerPeer) handleSubscribeMsg(msg interface{}) error {
 	req := msg.(*SubscribeMsg)
-	f, err := self.streamer.getOutgoingStreamer(req.Stream)
+	f, err := self.streamer.GetOutgoingStreamer(req.Stream)
 	if err != nil {
 		return err
 	}
-	s := f(self)
+	s, err := f(self)
+	if err != nil {
+		return err
+	}
 	if err := self.setOutgoingStreamer(req.Stream, s); err != nil {
 		return nil
 	}
-	self.UnsyncedKeys(s, req.From, req.To)
+	self.SendUnsyncedKeys(s, req.From, req.To, int(req.Priority))
 	return nil
 }
 
@@ -278,13 +297,15 @@ func (self *StreamerPeer) handleSubscribeMsg(msg interface{}) error {
 // Filter method
 func (self *StreamerPeer) handleUnsyncedKeysMsg(msg interface{}) error {
 	req := msg.(*UnsyncedKeysMsg)
-	req.C = make(chan struct{})
 	s, err := self.getIncomingStreamer(req.Stream)
 	if err != nil {
 		return err
 	}
 	hashes := req.Hashes
-	want := bv.New(len(hashes) / HashSize)
+	want, err := bv.New(len(hashes) / HashSize)
+	if err != nil {
+		return err
+	}
 	wg := sync.WaitGroup{}
 	for i := 0; i < len(hashes)/HashSize; i += HashSize {
 		hash := hashes[i : i+HashSize]
@@ -298,24 +319,24 @@ func (self *StreamerPeer) handleUnsyncedKeysMsg(msg interface{}) error {
 			}(wait)
 		}
 	}
-	go func() {
-		wg.Wait()
-		msg := s.TakeoverProof(req.Stream, req.From, req.Hashes, req.Root)
-		self.Send(msg, s.Priority())
-	}()
+	// go func() {
+	// 	wg.Wait()
+	// 	msg := s.TakeoverProof(req.Stream, req.From, req.Hashes, req.Root)
+	// 	self.Send(msg, s.Priority())
+	// }()
 	// only send wantedKeysMsg if all missing chunks of the previous batch arrived
 	// except
-	from, to = s.NextBatch(from, to)
+	from, to := s.NextBatch(req.To)
 	if from == to {
 		return nil
 	}
 	msg = &WantedKeysMsg{
 		Stream: req.Stream,
-		Want:   want,
+		Want:   want.Bytes(),
 		From:   from,
 		To:     to,
 	}
-	self.Send(msg, s.Priority())
+	self.SendPriority(msg, s.Priority())
 	return nil
 }
 
@@ -330,17 +351,22 @@ func (self *StreamerPeer) handleWantedKeysMsg(msg interface{}) error {
 	}
 	hashes := s.CurrentBatch()
 	// launch in go routine since GetBatch blocks until new hashes arrive
-	go self.UnsyncedKeys(s, req.From, req.To)
+	go self.SendUnsyncedKeys(s, req.From, req.To, s.Priority())
 	l := len(hashes) / HashSize
-	want := bv.NewFromBytes(req.Want, l)
+	want, err := bv.NewFromBytes(req.Want, l)
+	if err != nil {
+		return err
+	}
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
 			hash := hashes[i*HashSize : (i+1)*HashSize]
 			data := s.GetData(hash)
 			if data == nil {
-				return errNotFound
+				return errors.New("not found")
 			}
-			if err := self.Deliver(data, s.Priority()); err != nil {
+			chunk := storage.NewChunk(hash, nil)
+			chunk.SData = data
+			if err := self.Deliver(chunk, s.Priority()); err != nil {
 				return err
 			}
 		}
@@ -350,7 +376,7 @@ func (self *StreamerPeer) handleWantedKeysMsg(msg interface{}) error {
 
 func (self *StreamerPeer) handleTakeoverProofMsg(msg interface{}) error {
 	req := msg.(*TakeoverProofMsg)
-	s, err := self.getOutgoingStreamer(req.Stream)
+	_, err := self.getOutgoingStreamer(req.Stream)
 	if err != nil {
 		return err
 	}
@@ -359,32 +385,36 @@ func (self *StreamerPeer) handleTakeoverProofMsg(msg interface{}) error {
 }
 
 // Deliver sends a storeRequestMsg protocol message to the peer
-func (self *StreamerPeer) Deliver(data []byte, priority int) error {
+func (self *StreamerPeer) Deliver(chunk *storage.Chunk, priority int) error {
 	msg := &storeRequestMsg{
-		SData: data,
+		Key:   chunk.Key,
+		SData: chunk.SData,
 	}
 	return self.pq.Push(nil, msg, priority)
 }
 
 // Deliver sends a storeRequestMsg protocol message to the peer
-func (self *StreamerPeer) Send(msg interface{}, priority int) error {
+func (self *StreamerPeer) SendPriority(msg interface{}, priority int) error {
 	return self.pq.Push(nil, msg, priority)
 }
 
 // UnsyncedKeys sends UnsyncedKeysMsg protocol msg
-func (self *StreamerPeer) SendUnsyncedKeys(s OutgoingStreamer, f, t uint64, priority int) {
-	hashes, from, to, proof := s.SetNextBatch(f, t)
+func (self *StreamerPeer) SendUnsyncedKeys(s OutgoingStreamer, f, t uint64, priority int) error {
+	hashes, from, to, proof, err := s.SetNextBatch(f, t)
+	if err != nil {
+		return err
+	}
 	msg := &UnsyncedKeysMsg{
 		HandoverProof: proof,
 		Hashes:        hashes,
 		From:          from,
 		To:            to,
 	}
-	self.Send(msg, s.Priority())
+	return self.SendPriority(msg, s.Priority())
 }
 
-// BzzSpec is the spec of the generic swarm handshake
-var StrSpec = &protocols.Spec{
+// StreamerSpec is the spec of the streamer protocol.
+var StreamerSpec = &protocols.Spec{
 	Name:       "stream",
 	Version:    1,
 	MaxMsgSize: 10 * 1024 * 1024,

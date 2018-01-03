@@ -180,7 +180,7 @@ type RequestStatus struct {
 	Requesters map[uint64][]interface{}
 }
 
-func newRequestStatus(key Key) *RequestStatus {
+func NewRequestStatus(key Key) *RequestStatus {
 	return &RequestStatus{
 		Key:        key,
 		Requesters: make(map[uint64][]interface{}),
@@ -205,10 +205,14 @@ type Chunk struct {
 }
 
 func NewChunk(key Key, rs *RequestStatus) *Chunk {
-	return &Chunk{Key: key, Req: rs}
+	return &Chunk{Key: key, Req: rs, dbStored: make(chan bool)}
 }
 
-func FakeChunk(size int64, count int, chunks []Chunk) int {
+func (c *Chunk) WaitToStore() {
+	<-c.dbStored
+}
+
+func FakeChunk(size int64, count int, chunks []*Chunk) int {
 	var i int
 	hasher := MakeHashFunc(SHA3Hash)()
 	chunksize := getDefaultChunkSize()
@@ -269,14 +273,14 @@ type Splitter interface {
 	   The caller gets returned an error channel, if an error is encountered during splitting, it is fed to errC error channel.
 	   A closed error signals process completion at which point the key can be considered final if there were no errors.
 	*/
-	Split(io.Reader, int64, chan *Chunk, *sync.WaitGroup, *sync.WaitGroup) (Key, error)
+	Split(io.Reader, int64, chan *Chunk) (Key, func(), error)
 
 	/* This is the first step in making files mutable (not chunks)..
 	   Append allows adding more data chunks to the end of the already existsing file.
 	   The key for the root chunk is supplied to load the respective tree.
 	   Rest of the parameters behave like Split.
 	*/
-	Append(Key, io.Reader, chan *Chunk, *sync.WaitGroup, *sync.WaitGroup) (Key, error)
+	Append(Key, io.Reader, chan *Chunk) (Key, error)
 }
 
 type Joiner interface {

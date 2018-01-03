@@ -97,8 +97,8 @@ func (self *DPA) Retrieve(key Key) LazySectionReader {
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (self *DPA) Store(data io.Reader, size int64, swg *sync.WaitGroup, wwg *sync.WaitGroup) (key Key, err error) {
-	return self.Chunker.Split(data, size, self.storeC, swg, wwg)
+func (self *DPA) Store(data io.Reader, size int64) (key Key, wait func(), err error) {
+	return self.Chunker.Split(data, size, self.storeC)
 }
 
 func (self *DPA) Start() {
@@ -163,12 +163,8 @@ func (self *DPA) storeLoop() {
 }
 
 func (self *DPA) storeWorker() {
-
 	for chunk := range self.storeC {
 		self.Put(chunk)
-		if chunk.wg != nil {
-			chunk.wg.Done()
-		}
 		select {
 		case <-self.quitC:
 			return
