@@ -273,13 +273,6 @@ func (w *Whisper) SetMinimumPowTest(val float64) {
 	w.settings.Store(minPowToleranceIdx, val)
 }
 
-// SetBloomFilterTest sets the Bloom Filter in test environment
-func (w *Whisper) SetBloomFilterTest(bloom []byte) {
-	w.settings.Store(bloomFilterIdx, bloom)
-	w.notifyPeersAboutBloomFilterChange(bloom)
-	w.settings.Store(bloomFilterToleranceIdx, bloom)
-}
-
 func (w *Whisper) notifyPeersAboutPowRequirementChange(pow float64) {
 	arr := w.getPeers()
 	for _, p := range arr {
