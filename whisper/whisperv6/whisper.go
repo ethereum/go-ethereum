@@ -130,32 +130,32 @@ func New(cfg *Config) *Whisper {
 }
 
 func (w *Whisper) MinPow() float64 {
-	val, _ := w.settings.Load(minPowIdx)
-	if val == nil {
+	val, exist := w.settings.Load(minPowIdx)
+	if !exist || val == nil {
 		return DefaultMinimumPoW
 	}
 	return val.(float64)
 }
 
 func (w *Whisper) MinPowTolerance() float64 {
-	val, _ := w.settings.Load(minPowToleranceIdx)
-	if val == nil {
+	val, exist := w.settings.Load(minPowToleranceIdx)
+	if !exist || val == nil {
 		return DefaultMinimumPoW
 	}
 	return val.(float64)
 }
 
 func (w *Whisper) BloomFilter() []byte {
-	val, _ := w.settings.Load(bloomFilterIdx)
-	if val == nil {
+	val, exist := w.settings.Load(bloomFilterIdx)
+	if !exist || val == nil {
 		return nil
 	}
 	return val.([]byte)
 }
 
 func (w *Whisper) BloomFilterTolerance() []byte {
-	val, _ := w.settings.Load(bloomFilterToleranceIdx)
-	if val == nil {
+	val, exist := w.settings.Load(bloomFilterToleranceIdx)
+	if !exist || val == nil {
 		return nil
 	}
 	return val.([]byte)
@@ -216,13 +216,16 @@ func (w *Whisper) SetBloomFilter(bloom []byte) error {
 		return fmt.Errorf("invalid bloom filter size: %d", len(bloom))
 	}
 
-	w.settings.Store(bloomFilterIdx, bloom)
-	w.notifyPeersAboutBloomFilterChange(bloom)
+	b := make([]byte, bloomFilterSize)
+	copy(b, bloom)
+
+	w.settings.Store(bloomFilterIdx, b)
+	w.notifyPeersAboutBloomFilterChange(b)
 
 	go func() {
 		// allow some time before all the peers have processed the notification
 		time.Sleep(time.Duration(w.syncAllowance) * time.Second)
-		w.settings.Store(bloomFilterToleranceIdx, bloom)
+		w.settings.Store(bloomFilterToleranceIdx, b)
 	}()
 
 	return nil
@@ -251,13 +254,6 @@ func (w *Whisper) SetMinimumPowTest(val float64) {
 	w.settings.Store(minPowIdx, val)
 	w.notifyPeersAboutPowRequirementChange(val)
 	w.settings.Store(minPowToleranceIdx, val)
-}
-
-// SetBloomFilterTest sets the Bloom Filter in test environment
-func (w *Whisper) SetBloomFilterTest(bloom []byte) {
-	w.settings.Store(bloomFilterIdx, bloom)
-	w.notifyPeersAboutBloomFilterChange(bloom)
-	w.settings.Store(bloomFilterToleranceIdx, bloom)
 }
 
 func (w *Whisper) notifyPeersAboutPowRequirementChange(pow float64) {
@@ -697,7 +693,7 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				log.Warn("failed to decode bloom filter exchange message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
 				return errors.New("invalid bloom filter exchange message")
 			}
-			if isFulNode(bloom) {
+			if isFullNode(bloom) {
 				p.bloomFilter = nil
 			} else {
 				p.bloomFilter = bloom
@@ -765,21 +761,20 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 
 	if envelope.PoW() < wh.MinPow() {
 		// maybe the value was recently changed, and the peers did not adjust yet.
-		// some tolerance might be still allowed for a short period of adjustment time.
+		// in this case the previous value is retrieved by MinPowTolerance()
+		// for a short period of peer synchronization.
 		if envelope.PoW() < wh.MinPowTolerance() {
-			log.Debug("envelope with low PoW dropped", "PoW", envelope.PoW(), "hash", envelope.Hash().Hex())
-			return false, nil // drop envelope without error for now
+			return false, fmt.Errorf("envelope with low PoW received: PoW=%f, hash=[%v]", envelope.PoW(), envelope.Hash().Hex())
 		}
-
-		// once the status message includes the PoW requirement, an error should be returned here:
-		//return false, fmt.Errorf("envelope with low PoW received: PoW=%f, hash=[%v]", envelope.PoW(), envelope.Hash().Hex())
 	}
 
 	if !bloomFilterMatch(wh.BloomFilter(), envelope.Bloom()) {
 		// maybe the value was recently changed, and the peers did not adjust yet.
-		// some tolerance might be still allowed for a short period of adjustment time.
+		// in this case the previous value is retrieved by BloomFilterTolerance()
+		// for a short period of peer synchronization.
 		if !bloomFilterMatch(wh.BloomFilterTolerance(), envelope.Bloom()) {
-			return false, fmt.Errorf("envelope does not match bloom filter, hash=[%v]", envelope.Hash().Hex())
+			return false, fmt.Errorf("envelope does not match bloom filter, hash=[%v], bloom: \n%x \n%x \n%x",
+				envelope.Hash().Hex(), wh.BloomFilter(), envelope.Bloom(), envelope.Topic)
 		}
 	}
 
@@ -1019,7 +1014,7 @@ func GenerateRandomID() (id string, err error) {
 	return id, err
 }
 
-func isFulNode(bloom []byte) bool {
+func isFullNode(bloom []byte) bool {
 	if bloom == nil {
 		return true
 	}

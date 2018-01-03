@@ -75,8 +75,12 @@ func (p *Peer) handshake() error {
 	// Send the handshake status message asynchronously
 	errc := make(chan error, 1)
 	go func() {
-		errc <- p2p.Send(p.ws, statusCode, ProtocolVersion)
+		pow := p.host.MinPow()
+		powConverted := math.Float64bits(pow)
+		bloom := p.host.BloomFilter()
+		errc <- p2p.SendItems(p.ws, statusCode, ProtocolVersion, powConverted, bloom)
 	}()
+
 	// Fetch the remote status packet and verify protocol match
 	packet, err := p.ws.ReadMsg()
 	if err != nil {
@@ -86,14 +90,42 @@ func (p *Peer) handshake() error {
 		return fmt.Errorf("peer [%x] sent packet %x before status packet", p.ID(), packet.Code)
 	}
 	s := rlp.NewStream(packet.Payload, uint64(packet.Size))
-	peerVersion, err := s.Uint()
+	_, err = s.List()
 	if err != nil {
 		return fmt.Errorf("peer [%x] sent bad status message: %v", p.ID(), err)
+	}
+	peerVersion, err := s.Uint()
+	if err != nil {
+		return fmt.Errorf("peer [%x] sent bad status message (unable to decode version): %v", p.ID(), err)
 	}
 	if peerVersion != ProtocolVersion {
 		return fmt.Errorf("peer [%x]: protocol version mismatch %d != %d", p.ID(), peerVersion, ProtocolVersion)
 	}
-	// Wait until out own status is consumed too
+
+	// only version is mandatory, subsequent parameters are optional
+	powRaw, err := s.Uint()
+	if err == nil {
+		pow := math.Float64frombits(powRaw)
+		if math.IsInf(pow, 0) || math.IsNaN(pow) || pow < 0.0 {
+			return fmt.Errorf("peer [%x] sent bad status message: invalid pow", p.ID())
+		}
+		p.powRequirement = pow
+
+		var bloom []byte
+		err = s.Decode(&bloom)
+		if err == nil {
+			sz := len(bloom)
+			if sz != bloomFilterSize && sz != 0 {
+				return fmt.Errorf("peer [%x] sent bad status message: wrong bloom filter size %d", p.ID(), sz)
+			}
+			if isFullNode(bloom) {
+				p.bloomFilter = nil
+			} else {
+				p.bloomFilter = bloom
+			}
+		}
+	}
+
 	if err := <-errc; err != nil {
 		return fmt.Errorf("peer [%x] failed to send status packet: %v", p.ID(), err)
 	}
