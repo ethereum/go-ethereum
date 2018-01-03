@@ -42,9 +42,11 @@ type Envelope struct {
 	Data   []byte
 	Nonce  uint64
 
-	pow  float64     // Message-specific PoW as described in the Whisper specification.
-	hash common.Hash // Cached hash of the envelope to avoid rehashing every time.
-	// Don't access hash directly, use Hash() function instead.
+	pow float64 // Message-specific PoW as described in the Whisper specification.
+
+	// the following variables should not be accessed directly, use the corresponding function instead: Hash(), Bloom()
+	hash  common.Hash // Cached hash of the envelope to avoid rehashing every time.
+	bloom []byte
 }
 
 // size returns the size of envelope as it is sent (i.e. public fields only)
@@ -226,4 +228,31 @@ func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
 		msg.EnvelopeHash = e.Hash()
 	}
 	return msg
+}
+
+// Bloom maps 4-bytes Topic into 64-byte bloom filter with 3 bits set (at most).
+func (e *Envelope) Bloom() []byte {
+	if e.bloom == nil {
+		e.bloom = TopicToBloom(e.Topic)
+	}
+	return e.bloom
+}
+
+func TopicToBloom(topic TopicType) []byte {
+	var powers = [...]byte{1, 2, 4, 8, 16, 32, 64, 128}
+	b := make([]byte, bloomFilterSize)
+	var index [3]int
+	for j := 0; j < 3; j++ {
+		index[j] = int(topic[j])
+		if (topic[3] & powers[j]) != 0 {
+			index[j] += 256
+		}
+	}
+
+	for j := 0; j < 3; j++ {
+		byteIndex := index[j] / 8
+		bitIndex := index[j] % 8
+		b[byteIndex] = powers[bitIndex]
+	}
+	return b
 }
