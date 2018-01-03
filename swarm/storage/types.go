@@ -280,7 +280,7 @@ type Splitter interface {
 	   The key for the root chunk is supplied to load the respective tree.
 	   Rest of the parameters behave like Split.
 	*/
-	Append(Key, io.Reader, chan *Chunk) (Key, error)
+	Append(Key, io.Reader, chan *Chunk) (Key, func(), error)
 }
 
 type Joiner interface {

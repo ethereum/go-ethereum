@@ -285,8 +285,8 @@ func (self *TreeChunker) hashChunk(hasher SwarmHash, job *hashJob, chunkC chan *
 	}
 }
 
-func (self *TreeChunker) Append(key Key, data io.Reader, chunkC chan *Chunk) (Key, error) {
-	return nil, errAppendOppNotSuported
+func (self *TreeChunker) Append(key Key, data io.Reader, chunkC chan *Chunk) (Key, func(), error) {
+	return nil, nil, errAppendOppNotSuported
 }
 
 // LazyChunkReader implements LazySectionReader
