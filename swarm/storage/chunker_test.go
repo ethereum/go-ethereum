@@ -467,18 +467,18 @@ func benchmarkAppendPyramid(n, m int, t *testing.B) {
 		data1 := testDataReader(m)
 
 		chunkC := make(chan *Chunk, 1000)
-		key, _, err := tester.Split(chunker, data, int64(n), chunkC, nil)
+		key, wait, err := tester.Split(chunker, data, int64(n), chunkC, nil)
 		if err != nil {
 			tester.t.Fatalf(err.Error())
 		}
-
+		wait()
 		chunkC = make(chan *Chunk, 1000)
 
-		_, _, err = tester.Append(chunker, key, data1, chunkC, nil)
+		_, wait, err = tester.Append(chunker, key, data1, chunkC, nil)
 		if err != nil {
 			tester.t.Fatalf(err.Error())
 		}
-
+		wait()
 		close(chunkC)
 	}
 }
