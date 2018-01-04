@@ -84,7 +84,7 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 	return func(i int, gen *BlockGen) {
 		toaddr := common.Address{}
 		data := make([]byte, nbytes)
-		gas := IntrinsicGas(data, false, false)
+		gas, _ := IntrinsicGas(data, false, false)
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(benchRootAddr), toaddr, big.NewInt(1), gas, nil, data), types.HomesteadSigner{}, benchRootKey)
 		gen.AddTx(tx)
 	}
@@ -93,7 +93,6 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 var (
 	ringKeys  = make([]*ecdsa.PrivateKey, 1000)
 	ringAddrs = make([]common.Address, len(ringKeys))
-	bigTxGas  = new(big.Int).SetUint64(params.TxGas)
 )
 
 func init() {
@@ -113,8 +112,8 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 	return func(i int, gen *BlockGen) {
 		gas := CalcGasLimit(gen.PrevBlock(i - 1))
 		for {
-			gas.Sub(gas, bigTxGas)
-			if gas.Cmp(bigTxGas) < 0 {
+			gas -= params.TxGas
+			if gas < params.TxGas {
 				break
 			}
 			to := (from + 1) % naccounts
@@ -122,7 +121,7 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 				gen.TxNonce(ringAddrs[from]),
 				ringAddrs[to],
 				benchRootFunds,
-				bigTxGas,
+				params.TxGas,
 				nil,
 				nil,
 			)
