@@ -168,13 +168,14 @@ func (self *PyramidChunker) Split(data io.Reader, size int64, chunkC chan *Chunk
 	jobC := make(chan *chunkJob, 2*ChunkProcessors)
 	wg := &sync.WaitGroup{}
 	storageWG := &sync.WaitGroup{}
+	storageWG.Add(1)
 	errC := make(chan error)
 	quitC := make(chan bool)
 	rootKey := make([]byte, self.hashSize)
 	chunkLevel := make([][]*TreeEntry, self.branches)
 
 	wg.Add(1)
-	go self.prepareChunks(false, chunkLevel, data, rootKey, quitC, wg, jobC, chunkC, errC, storageWG)
+	self.prepareChunks(false, chunkLevel, data, rootKey, quitC, wg, jobC, chunkC, errC, storageWG)
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
@@ -214,9 +215,10 @@ func (self *PyramidChunker) Append(key Key, data io.Reader, chunkC chan *Chunk) 
 	errC := make(chan error)
 
 	storageWG := &sync.WaitGroup{}
+	storageWG.Add(1)
 
 	wg.Add(1)
-	go self.prepareChunks(true, chunkLevel, data, rootKey, quitC, wg, jobC, chunkC, errC, storageWG)
+	self.prepareChunks(true, chunkLevel, data, rootKey, quitC, wg, jobC, chunkC, errC, storageWG)
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
@@ -242,7 +244,7 @@ func (self *PyramidChunker) Append(key Key, data io.Reader, chunkC chan *Chunk) 
 
 func (self *PyramidChunker) processor(id int64, jobC chan *chunkJob, chunkC chan *Chunk, errC chan error, quitC chan bool, storageWG *sync.WaitGroup) {
 	defer self.decrementWorkerCount()
-
+	defer storageWG.Done()
 	hasher := self.hashFunc()
 	for {
 		select {
@@ -370,6 +372,7 @@ func (self *PyramidChunker) prepareChunks(isAppend bool, chunkLevel [][]*TreeEnt
 	totalDataSize := 0
 
 	self.incrementWorkerCount()
+
 	go self.processor(self.workerCount, jobC, chunkC, errC, quitC, storageWG)
 
 	parent := NewTreeEntry(self)
@@ -471,6 +474,7 @@ func (self *PyramidChunker) prepareChunks(isAppend bool, chunkLevel [][]*TreeEnt
 		workers := self.getWorkerCount()
 		if int64(len(jobC)) > workers && workers < ChunkProcessors {
 			self.incrementWorkerCount()
+			storageWG.Add(1)
 			go self.processor(self.workerCount, jobC, chunkC, errC, quitC, storageWG)
 		}
 
