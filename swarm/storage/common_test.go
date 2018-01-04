@@ -87,13 +87,22 @@ func mput(store ChunkStore, processors int, n int, f func(i int) *Chunk) (hs []K
 					defer wg.Done()
 
 					store.Put(chunk)
+
 					<-chunk.dbStored
 				}()
 			}
 		}()
 	}
+	fa := f
+	if _, ok := store.(*MemStore); ok {
+		fa = func(i int) *Chunk {
+			chunk := f(i)
+			close(chunk.dbStored)
+			return chunk
+		}
+	}
 	for i := 0; i < n; i++ {
-		chunk := f(i)
+		chunk := fa(i)
 		hs = append(hs, chunk.Key)
 		c <- chunk
 	}

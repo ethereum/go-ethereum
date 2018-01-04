@@ -72,13 +72,16 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 		}()
 	}
 
-	key, wait, err = chunker.Split(data, size, chunkC)
+	var w func()
+	key, w, err = chunker.Split(data, size, chunkC)
 	if err != nil && expectedError == nil {
 		err = fmt.Errorf("Split error: %v", err)
 	}
-
 	if chunkC != nil {
-		close(quitC)
+		wait = func() {
+			w()
+			close(quitC)
+		}
 	} else {
 		wait = func() {}
 	}
@@ -102,6 +105,7 @@ func (self *chunkerTester) Append(chunker Splitter, rootKey Key, data io.Reader,
 						if !success {
 							// Requesting data
 							self.chunks[chunk.Key.String()] = chunk
+							close(chunk.dbStored)
 						} else {
 							// getting data
 							chunk.SData = stored.SData
@@ -114,14 +118,17 @@ func (self *chunkerTester) Append(chunker Splitter, rootKey Key, data io.Reader,
 			}
 		}()
 	}
-
-	key, wait, err = chunker.Append(rootKey, data, chunkC)
+	var w func()
+	key, w, err = chunker.Append(rootKey, data, chunkC)
 	if err != nil && expectedError == nil {
 		err = fmt.Errorf("Append error: %v", err)
 	}
 
 	if chunkC != nil {
-		close(quitC)
+		wait = func() {
+			w()
+			close(quitC)
+		}
 	} else {
 		wait = func() {}
 	}
@@ -198,12 +205,12 @@ func testRandomData(splitter Splitter, n int, tester *chunkerTester) Key {
 
 	chunkC := make(chan *Chunk, 1000)
 
-	key, _, err := tester.Split(splitter, data, int64(n), chunkC, nil)
+	key, wait, err := tester.Split(splitter, data, int64(n), chunkC, nil)
 	if err != nil {
 		tester.t.Fatalf(err.Error())
 	}
 	tester.t.Logf(" Key = %v\n", key)
-
+	wait()
 	chunkC = make(chan *Chunk, 1000)
 	quitC := make(chan bool)
 
@@ -315,8 +322,6 @@ func TestSha3ForCorrectness(t *testing.T) {
 }
 
 func TestDataAppend(t *testing.T) {
-	t.Skip("Skip until append chunks are fixed")
-
 	sizes := []int{1, 1, 1, 4095, 4096, 4097, 1, 1, 1, 123456, 2345678, 2345678}
 	appendSizes := []int{4095, 4096, 4097, 1, 1, 1, 8191, 8192, 8193, 9000, 3000, 5000}
 

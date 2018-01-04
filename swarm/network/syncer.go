@@ -247,7 +247,7 @@ func (self *IncomingSwarmSyncer) TakeoverProof(s Stream, from uint64, hashes []b
 	if self.chunker != nil {
 		if from > self.sessionAt { // for live syncing currentRoot is always updated
 			//expRoot, err := self.chunker.Append(self.currentRoot, bytes.NewReader(hashes), self.retrieveC, self.storeC)
-			expRoot, err := self.chunker.Append(self.currentRoot, bytes.NewReader(hashes), self.retrieveC)
+			expRoot, _, err := self.chunker.Append(self.currentRoot, bytes.NewReader(hashes), self.retrieveC)
 			if err != nil {
 				return nil, err
 			}

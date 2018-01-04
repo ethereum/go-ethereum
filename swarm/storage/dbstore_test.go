@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -126,9 +127,16 @@ func TestIterator(t *testing.T) {
 
 	FakeChunk(getDefaultChunkSize(), chunkcount, chunks)
 
+	wg := &sync.WaitGroup{}
+	wg.Add(len(chunks))
 	for i = 0; i < len(chunks); i++ {
 		db.Put(chunks[i])
 		chunkkeys[i] = chunks[i].Key
+		j := i
+		go func() {
+			defer wg.Done()
+			<-chunks[j].dbStored
+		}()
 	}
 
 	//testSplit(m, l, 128, chunkkeys, t)
@@ -136,12 +144,12 @@ func TestIterator(t *testing.T) {
 	for i = 0; i < len(chunkkeys); i++ {
 		log.Trace(fmt.Sprintf("Chunk array pos %d/%d: '%v'", i, chunkcount, chunkkeys[i]))
 	}
-
+	wg.Wait()
 	i = 0
 	for poc = 0; poc <= 255; poc++ {
 		err := db.SyncIterator(0, uint64(chunkkeys.Len()), uint8(poc), func(k Key, n uint64) bool {
 			log.Trace(fmt.Sprintf("Got key %v number %d poc %d", k, n, uint8(poc)))
-			chunkkeys_results[n] = k
+			chunkkeys_results[n-1] = k
 			i++
 			return true
 		})
