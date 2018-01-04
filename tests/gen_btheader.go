@@ -47,8 +47,8 @@ func (b btHeader) MarshalJSON() ([]byte, error) {
 	enc.UncleHash = b.UncleHash
 	enc.ExtraData = b.ExtraData
 	enc.Difficulty = (*math.HexOrDecimal256)(b.Difficulty)
-	enc.GasLimit = (math.HexOrDecimal64)(b.GasLimit)
-	enc.GasUsed = (math.HexOrDecimal64)(b.GasUsed)
+	enc.GasLimit = math.HexOrDecimal64(b.GasLimit)
+	enc.GasUsed = math.HexOrDecimal64(b.GasUsed)
 	enc.Timestamp = (*math.HexOrDecimal256)(b.Timestamp)
 	return json.Marshal(&enc)
 }
