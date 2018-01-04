@@ -18,6 +18,7 @@
 package main
 
 //go:generate go-bindata -nometadata -o website.go faucet.html
+//go:generate gofmt -w -s website.go
 
 import (
 	"bytes"
