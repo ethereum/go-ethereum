@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	bv "github.com/ethereum/go-ethereum/swarm/network/bitvector"
@@ -89,6 +90,18 @@ type UnsyncedKeysMsg struct {
 	From, To       uint64 // peer and db-specific entry count
 	Hashes         []byte // stream of hashes (128)
 	*HandoverProof        // HandoverProof
+}
+
+/*
+ store requests are put in netstore so they are stored and then
+ forwarded to the peers in their kademlia proximity bin by the syncer
+*/
+type ChunkDeliveryMsg struct {
+	Key   storage.Key
+	SData []byte // the stored chunk Data (incl size)
+	// optional
+	Id   uint64 // request ID. if delivery, the ID is retrieve request ID
+	from Peer   // [not serialised] protocol registers the requester
 }
 
 // String pretty prints UnsyncedKeysMsg
@@ -170,7 +183,7 @@ func (self *Streamer) PeerInfo(id discover.NodeID) interface{} {
 }
 
 // OutgoingStreamer interface for outgoing peer Streamer
-type OutgoingStreamer interface {
+type OutgoingStreamerBackend interface {
 	CurrentBatch() []byte
 	SetNextBatch(uint64, uint64) ([]byte, uint64, uint64, *HandoverProof, error)
 	GetData([]byte) []byte
@@ -178,7 +191,7 @@ type OutgoingStreamer interface {
 }
 
 // IncomingStreamer interface for incoming peer Streamer
-type IncomingStreamer interface {
+type IncomingStreamerBackend interface {
 	NextBatch(uint64) (uint64, uint64)
 	NeedData([]byte) func()
 	Priority() int
@@ -195,6 +208,16 @@ type StreamerPeer struct {
 	outgoing     map[Stream]OutgoingStreamer
 	incoming     map[Stream]IncomingStreamer
 	quit         chan struct{}
+}
+
+type IncomingStreamer struct {
+	priority uint8
+	peer     *StreamerPeer
+}
+
+type OutgoingStreamer struct {
+	priority uint8
+	peer     *StreamerPeer
 }
 
 // NewStreamerPeer is the constructor for StreamerPeer
@@ -253,6 +276,10 @@ func (self *StreamerPeer) setIncomingStreamer(s Stream, i IncomingStreamer) erro
 	}
 	self.incoming[s] = i
 	return nil
+}
+
+func (self *OutgoingStreamer) Subscribe(s Stream) OutgoingStreamerBackend {
+
 }
 
 // Subscribe initiates the streamer
@@ -384,6 +411,18 @@ func (self *StreamerPeer) handleTakeoverProofMsg(msg interface{}) error {
 	return nil
 }
 
+func (self *StreamerPeer) handleChunkDeliveryMsg(msg interface{}) error {
+	req := msg.(*chunkDeliveryMsg)
+	req.from = self
+	// TODO: chunk validation
+	chunk := storage.NewChunk(req.Key, nil)
+	chunk.SData = req.SData
+	chunk.Source = p
+	self.netStore.Put(chunk)
+	log.Trace(fmt.Sprintf("delivery of %v from %v", chunk, p))
+	return nil
+}
+
 // Deliver sends a storeRequestMsg protocol message to the peer
 func (self *StreamerPeer) Deliver(chunk *storage.Chunk, priority int) error {
 	msg := &storeRequestMsg{
@@ -450,6 +489,9 @@ func (self *StreamerPeer) HandleMsg(msg interface{}) error {
 
 	case *WantedKeysMsg:
 		return self.handleWantedKeysMsg(msg)
+
+	case *ChunkDeliveryMsg:
+		return self.handleChunkDeliveryMsg(msg)
 
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)

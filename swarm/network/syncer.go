@@ -148,6 +148,10 @@ type IncomingSwarmSyncer struct {
 	end, start    uint64
 }
 
+type {
+	Subscribe()
+}
+
 // NewIncomingSwarmSyncer is a contructor for provable data exchange syncer
 func NewIncomingSwarmSyncer(po uint8, priority int, intervals []uint64, p Peer, store storage.ChunkStore, chunker storage.Chunker) (*IncomingSwarmSyncer, error) {
 	self := &IncomingSwarmSyncer{

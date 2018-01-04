@@ -122,18 +122,6 @@ func addRequester(rs *storage.RequestStatus, req *retrieveRequestMsg) {
 	rs.Requesters[req.Id] = append(list, req)
 }
 
-/*
- store requests are put in netstore so they are stored and then
- forwarded to the peers in their kademlia proximity bin by the syncer
-*/
-type storeRequestMsg struct {
-	Key   storage.Key
-	SData []byte // the stored chunk Data (incl size)
-	// optional
-	Id   uint64 // request ID. if delivery, the ID is retrieve request ID
-	from Peer   // [not serialised] protocol registers the requester
-}
-
 func (self storeRequestMsg) String() string {
 	var from string
 	if self.from == nil {
@@ -146,19 +134,4 @@ func (self storeRequestMsg) String() string {
 		end = 10
 	}
 	return fmt.Sprintf("from: %v, ID: %v, SData %x", from, self.Id, self.SData[:end])
-}
-
-// the entrypoint for store requests coming from the bzz wire protocol
-// if key found locally, return. otherwise
-// remote is untrusted, so hash is verified and chunk passed on to NetStore
-func (self *RequestHandler) handleStoreRequestMsg(msg interface{}, p Peer) error {
-	req := msg.(*storeRequestMsg)
-	req.from = p
-	// TODO: chunk validation
-	chunk := storage.NewChunk(req.Key, nil)
-	chunk.SData = req.SData
-	chunk.Source = p
-	self.netStore.Put(chunk)
-	log.Trace(fmt.Sprintf("delivery of %v from %v", chunk, p))
-	return nil
 }
