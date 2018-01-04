@@ -220,6 +220,10 @@ func matchSingleTopic(topic TopicType, bt []byte) bool {
 		bt = bt[:4]
 	}
 
+	if len(bt) < 4 {
+		return false
+	}
+
 	for j, b := range bt {
 		if topic[j] != b {
 			return false
