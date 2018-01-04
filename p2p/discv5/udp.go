@@ -37,7 +37,7 @@ const Version = 4
 // Errors
 var (
 	errPacketTooSmall   = errors.New("too small")
-	errBadHash          = errors.New("bad hash")
+	errBadPrefix        = errors.New("bad prefix")
 	errExpired          = errors.New("expired")
 	errUnsolicitedReply = errors.New("unsolicited reply")
 	errUnknownNode      = errors.New("unknown node")
@@ -145,10 +145,11 @@ type (
 	}
 )
 
-const (
-	macSize  = 256 / 8
-	sigSize  = 520 / 8
-	headSize = macSize + sigSize // space of packet frame data
+var (
+	versionPrefix     = []byte("temporary discovery v5")
+	versionPrefixSize = len(versionPrefix)
+	sigSize           = 520 / 8
+	headSize          = versionPrefixSize + sigSize // space of packet frame data
 )
 
 // Neighbors replies are sent across multiple packets to
@@ -364,12 +365,9 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) (p, hash 
 		log.Error(fmt.Sprint("could not sign packet:", err))
 		return nil, nil, err
 	}
-	copy(packet[macSize:], sig)
-	// add the hash to the front. Note: this doesn't protect the
-	// packet in any way.
-	hash = crypto.Keccak256(packet[macSize:])
-	hash[0]++ // guarantee incompatibility between v4 and temporary v5 packet formats
-	copy(packet, hash)
+	copy(packet, versionPrefix)
+	copy(packet[versionPrefixSize:], sig)
+	hash = crypto.Keccak256(packet[versionPrefixSize:])
 	return packet, hash, nil
 }
 
@@ -413,18 +411,16 @@ func decodePacket(buffer []byte, pkt *ingressPacket) error {
 	}
 	buf := make([]byte, len(buffer))
 	copy(buf, buffer)
-	hash, sig, sigdata := buf[:macSize], buf[macSize:headSize], buf[headSize:]
-	shouldhash := crypto.Keccak256(buf[macSize:])
-	shouldhash[0]++ // guarantee incompatibility between v4 and temporary v5 packet formats
-	if !bytes.Equal(hash, shouldhash) {
-		return errBadHash
+	prefix, sig, sigdata := buf[:versionPrefixSize], buf[versionPrefixSize:headSize], buf[headSize:]
+	if !bytes.Equal(prefix, versionPrefix) {
+		return errBadPrefix
 	}
 	fromID, err := recoverNodeID(crypto.Keccak256(buf[headSize:]), sig)
 	if err != nil {
 		return err
 	}
 	pkt.rawData = buf
-	pkt.hash = hash
+	pkt.hash = crypto.Keccak256(buf[versionPrefixSize:])
 	pkt.remoteID = fromID
 	switch pkt.ev = nodeEvent(sigdata[0]); pkt.ev {
 	case pingPacket:
