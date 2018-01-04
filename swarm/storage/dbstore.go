@@ -509,59 +509,6 @@ func (s *DbStore) CurrentStorageIndex() uint64 {
 	return s.dataIdx
 }
 
-// TODO: remove the old code for Put
-// func (s *DbStore) Put(chunk *Chunk) {
-// 	s.lock.Lock()
-// 	defer s.lock.Unlock()
-
-// 	ikey := getIndexKey(chunk.Key)
-// 	var index dpaDBIndex
-
-// 	if s.tryAccessIdx(ikey, &index) {
-// 		if chunk.dbStored != nil {
-// 			close(chunk.dbStored)
-// 		}
-// 		log.Trace(fmt.Sprintf("Storing to DB: chunk already exists, only update access"))
-// 		return // already exists, only update access
-// 	}
-
-// 	data := encodeData(chunk)
-
-// 	if s.entryCnt >= s.capacity {
-// 		s.collectGarbage(gcArrayFreeRatio)
-// 	}
-
-// 	po := s.po(chunk.Key)
-// 	t_datakey := getDataKey(s.dataIdx, po)
-// 	s.batch.Put(t_datakey, data)
-
-// 	index.Idx = s.dataIdx
-// 	s.updateIndexAccess(&index)
-
-// 	idata := encodeIndex(&index)
-// 	s.batch.Put(ikey, idata)
-
-// 	s.batch.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
-// 	s.entryCnt++
-// 	s.batch.Put(keyDataIdx, U64ToBytes(s.dataIdx))
-// 	s.dataIdx++
-// 	accesscnt := make([]byte, 8)
-// 	binary.LittleEndian.PutUint64(accesscnt, s.accessCnt)
-// 	s.batch.Put(keyAccessCnt, accesscnt)
-// 	s.accessCnt++
-
-// 	s.bucketCnt[po]++
-// 	cntKey := make([]byte, 2)
-// 	cntKey[0] = keyDistanceCnt
-// 	cntKey[1] = po
-// 	s.batch.Put(cntKey, U64ToBytes(s.bucketCnt[po]))
-
-// 	if chunk.dbStored != nil {
-// 		close(chunk.dbStored)
-// 	}
-// 	log.Trace(fmt.Sprintf("DbStore.Put: %v. db storage counter: %v ", chunk.Key.Log(), s.dataIdx))
-// }
-
 func (s *DbStore) Put(chunk *Chunk) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
