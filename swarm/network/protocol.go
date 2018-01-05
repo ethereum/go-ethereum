@@ -252,7 +252,7 @@ type bzzPeer struct {
 	lastActive      time.Time // time is updated whenever mutexes are releasing
 }
 
-// Off returns the overlay peer record for offline persistance
+// Off returns the overlay peer record for offline persistence
 func (p *bzzPeer) Off() OverlayAddr {
 	return p.BzzAddr
 }

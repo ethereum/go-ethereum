@@ -254,7 +254,7 @@ func (self *HandshakeController) cleanHandshake(pubkeyid string, topic *Topic, i
 func (self *HandshakeController) clean() {
 	peerpubkeys := self.handshakes
 	for pubkeyid, peertopics := range peerpubkeys {
-		for topic, _ := range peertopics {
+		for topic := range peertopics {
 			self.cleanHandshake(pubkeyid, &topic, true, true)
 		}
 	}
@@ -475,7 +475,7 @@ func (self *HandshakeAPI) AddHandshake(topic Topic) error {
 	return nil
 }
 
-// Deactivate handshake functionalty on a topic
+// Deactivate handshake functionality on a topic
 func (self *HandshakeAPI) RemoveHandshake(topic *Topic) error {
 	if _, ok := self.ctrl.deregisterFuncs[*topic]; ok {
 		self.ctrl.deregisterFuncs[*topic]()

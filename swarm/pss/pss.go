@@ -418,7 +418,7 @@ func (self *Pss) generateSymmetricKey(topic Topic, address *PssAddress, addToCac
 // If addtocache is set to true, the key will be added to the cache of keys
 // used to attempt symmetric decryption of incoming messages.
 //
-// Returns a string id that can be used to retreive the key bytes
+// Returns a string id that can be used to retrieve the key bytes
 // from the whisper backend (see pss.GetSymmetricKey())
 func (self *Pss) SetSymmetricKey(key []byte, topic Topic, address *PssAddress, addtocache bool) (string, error) {
 	keyid, err := self.w.AddSymKeyDirect(key)
