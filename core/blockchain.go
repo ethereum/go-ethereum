@@ -921,7 +921,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 	}
 	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
     //此处检查区块时间时帐号币龄
-   if new(big.Int).Sub(big.NewInt(time.Now().Unix()), bc.currentBlock.Time()).Cmp(big.NewInt(30)) < 0 {
+   if new(big.Int).Sub(big.NewInt(time.Now().Unix()), bc.currentBlock.Time()).Cmp(big.NewInt(100)) < 0 {
 	   Tokentime := bc.CalcTokenTime(bc.currentBlock.Coinbase())
 	   // Tokentime2 := bc.CalcTokenTime(common.HexToAddress("0xac9d739c4d83e3501d824c4e308e7812aba8306d"))
 	   //Tokentime3 := bc.CalcTokenTime(common.HexToAddress("0xed867421dabc9dc2785e54411497ae2327f28dfe"))
@@ -933,11 +933,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		   abort := make(chan struct{})
 		   defer close(abort)
 
-	   } else {
-		   //log.Info("消品权重验证通过","区块号", bc.currentBlock.NumberU64, "消品权重",Tokentime,"区块封装难度",bc.currentBlock.Difficulty)
 	   }
+		//log.Info("矿工状态","矿工", bc.currentBlock.Coinbase(), "矿工权重",Tokentime,"区块难度",bc.currentBlock.Header().Difficulty)  //查看当前矿工状态
+	   
     }
-
 	defer close(abort)
 
 	// Iterate over the blocks and insert when the verifier permits

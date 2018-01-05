@@ -323,11 +323,11 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 	case errTimeout, errBadPeer, errStallingPeer,
 		errEmptyHeaderSet, errPeersUnavailable, errTooOld,
 		errInvalidAncestor, errInvalidChain:
-		log.Warn("Synchronisation failed, dropping peer", "peer", id, "err", err)
+		log.Warn("同步失败,删除该同步节点", "节点", id, "错误", err)
 		d.dropPeer(id)
 
 	default:
-		log.Warn("Synchronisation failed, retrying", "err", err)
+		log.Warn("同步失败, 重试", "错误", err)
 	}
 	return err
 }
@@ -654,7 +654,7 @@ func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, err
 			// Make sure the peer's reply conforms to the request
 			for i := 0; i < len(headers); i++ {
 				if number := headers[i].Number.Int64(); number != from+int64(i)*16 {
-					p.log.Warn("Head headers broke chain ordering", "index", i, "requested", from+int64(i)*16, "received", number)
+					p.log.Warn("区块头不符合链序", "索引号", i, "要求", from+int64(i)*16, "收到", number)
 					return 0, errInvalidChain
 				}
 			}
@@ -1167,10 +1167,10 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				curFastBlock = d.blockchain.CurrentFastBlock().Number()
 				curBlock = d.blockchain.CurrentBlock().Number()
 			}
-			log.Warn("Rolled back headers", "count", len(hashes),
-				"header", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.CurrentHeader().Number),
-				"fast", fmt.Sprintf("%d->%d", lastFastBlock, curFastBlock),
-				"block", fmt.Sprintf("%d->%d", lastBlock, curBlock))
+			log.Warn("回滚区块头", "数量", len(hashes),
+				"区块头", fmt.Sprintf("%d->%d", lastHeader, d.lightchain.CurrentHeader().Number),
+				"快区块", fmt.Sprintf("%d->%d", lastFastBlock, curFastBlock),
+				"完全块", fmt.Sprintf("%d->%d", lastBlock, curBlock))
 
 			// If we're already past the pivot point, this could be an attack, thread carefully
 			if rollback[len(rollback)-1].Number.Uint64() > pivot {
@@ -1178,7 +1178,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				if atomic.LoadUint32(&d.fsPivotFails) == 0 {
 					for _, header := range rollback {
 						if header.Number.Uint64() == pivot {
-							log.Warn("Fast-sync pivot locked in", "number", pivot, "hash", header.Hash())
+							log.Warn("快速同步点锁定在", "区块号", pivot, "哈希", header.Hash())
 							d.fsPivotLock = header
 						}
 					}
