@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 )
+
 type asset struct {
 	bytes []byte
 	info  os.FileInfo
@@ -45,6 +46,7 @@ func (fi bindataFileInfo) Sys() interface{} {
 	return nil
 }
 
+//nolint:misspell
 var _publicBundleJs = []byte((((((((((`!function(modules) {
     function __webpack_require__(moduleId) {
         if (installedModules[moduleId]) return installedModules[moduleId].exports;
@@ -42113,6 +42115,7 @@ func publicBundleJs() (*asset, error) {
 	return a, nil
 }
 
+//nolint:misspell
 var _publicDashboardHtml = []byte(`<!DOCTYPE html>
 <html lang="en" style="height: 100%">
     <head>
@@ -42205,7 +42208,7 @@ func AssetNames() []string {
 
 // _bindata is a table, holding each asset generator, mapped to its name.
 var _bindata = map[string]func() (*asset, error){
-	"public/bundle.js": publicBundleJs,
+	"public/bundle.js":      publicBundleJs,
 	"public/dashboard.html": publicDashboardHtml,
 }
 
@@ -42248,10 +42251,11 @@ type bintree struct {
 	Func     func() (*asset, error)
 	Children map[string]*bintree
 }
+
 var _bintree = &bintree{nil, map[string]*bintree{
-	"public": &bintree{nil, map[string]*bintree{
-		"bundle.js": &bintree{publicBundleJs, map[string]*bintree{}},
-		"dashboard.html": &bintree{publicDashboardHtml, map[string]*bintree{}},
+	"public": {nil, map[string]*bintree{
+		"bundle.js":      {publicBundleJs, map[string]*bintree{}},
+		"dashboard.html": {publicDashboardHtml, map[string]*bintree{}},
 	}},
 }}
 
@@ -42301,4 +42305,3 @@ func _filePath(dir, name string) string {
 	cannonicalName := strings.Replace(name, "\\", "/", -1)
 	return filepath.Join(append([]string{dir}, strings.Split(cannonicalName, "/")...)...)
 }
-
