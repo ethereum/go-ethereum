@@ -55,6 +55,16 @@ func (self *DbAccess) iterator(from uint64, to uint64, po uint8, f func(storage.
 	return self.db.SyncIterator(from, to, po, f)
 }
 
+// to obtain the chunks from key or request db entry only
+func (self *DbAccess) getOrCreateRequest(key storage.Key) (*storage.Chunk, bool) {
+	return self.loc.GetOrCreateRequest(key)
+}
+
+// to obtain the chunks from key or request db entry only
+func (self *DbAccess) put(chunk *storage.Chunk) {
+	self.loc.Put(chunk)
+}
+
 // OutgoingSwarmSyncer implements an OutgoingStreamer for history syncing on bins
 // offered streams:
 // * live request delivery with or without checkback
@@ -133,7 +143,6 @@ func (self *OutgoingSwarmSyncer) SetNextBatch(from, to uint64) ([]byte, uint64, 
 
 // IncomingSwarmSyncer
 type IncomingSwarmSyncer struct {
-	po            uint8
 	priority      int
 	sessionAt     uint64
 	nextC         chan struct{}
@@ -142,23 +151,19 @@ type IncomingSwarmSyncer struct {
 	sessionReader storage.LazySectionReader
 	retrieveC     chan *storage.Chunk
 	storeC        chan *storage.Chunk
-	store         storage.ChunkStore
+	dbAccess      *DbAccess
 	chunker       storage.Chunker
 	currentRoot   storage.Key
+	requestFunc   func(chunk *storage.Chunk)
 	end, start    uint64
 }
 
-type {
-	Subscribe()
-}
-
 // NewIncomingSwarmSyncer is a contructor for provable data exchange syncer
-func NewIncomingSwarmSyncer(po uint8, priority int, intervals []uint64, p Peer, store storage.ChunkStore, chunker storage.Chunker) (*IncomingSwarmSyncer, error) {
+func NewIncomingSwarmSyncer(priority int, intervals []uint64, p Peer, dbAccess *DbAccess, chunker storage.Chunker) (*IncomingSwarmSyncer, error) {
 	self := &IncomingSwarmSyncer{
-		po:        po,
 		priority:  priority,
 		intervals: intervals,
-		store:     store,
+		dbAccess:  dbAccess,
 		chunker:   chunker,
 	}
 	return self, nil
@@ -194,12 +199,12 @@ func RegisterIncomingSyncers(streamer *Streamer, db *DbAccess) {
 	for po := uint8(0); po < maxPO; po++ {
 		stream := Stream(fmt.Sprintf("SYNC-%02d-live", po))
 		streamer.RegisterIncomingStreamer(stream, func(p *StreamerPeer) (IncomingStreamer, error) {
-			return NewIncomingSwarmSyncer(po, High, nil, p, nil, nil)
+			return NewIncomingSwarmSyncer(High, nil, p, nil, nil)
 		})
 		stream = Stream(fmt.Sprintf("SYNC-%02d-history", po))
 		streamer.RegisterIncomingStreamer(stream, func(p *StreamerPeer) (IncomingStreamer, error) {
 			//intervals := loadIntervals(p, po, false)
-			return NewIncomingSwarmSyncer(po, Mid, nil, p, nil, nil)
+			return NewIncomingSwarmSyncer(Mid, nil, p, nil, nil)
 		})
 		// stream = fmt.Sprintf("SYNC-%02d-delete", po)
 		// streamer.RegisterIncomingStreamer(stream, func(p *StreamerPeer) (OutgoingStreamer, error) {
@@ -210,13 +215,11 @@ func RegisterIncomingSyncers(streamer *Streamer, db *DbAccess) {
 }
 
 // NeedData
-func (self *IncomingSwarmSyncer) NeedData(key []byte) func() {
-	chunk, err := self.store.Get(key)
-	if err == nil {
-		if chunk.SData == nil {
-			// send a request instead
-			return nil
-		}
+func (self *IncomingSwarmSyncer) NeedData(key []byte) (wait func()) {
+	chunk, created := self.dbAccess.getOrCreateRequest(key)
+	// TODO: we may want to request from this peer anyway even if the request exists
+	if chunk.ReqC == nil || !created {
+		return nil
 	}
 	// create request and wait until the chunk data arrives and is stored
 	return chunk.WaitToStore

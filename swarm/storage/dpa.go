@@ -179,53 +179,44 @@ func (self *DPA) storeWorker() {
 // access by calling network is blocking with a timeout
 
 type dpaChunkStore struct {
-	n          int
-	localStore ChunkStore
-	netStore   ChunkStore
+	localStore *LocalStore
+	retrieve   func(chunk *Chunk) error
 }
 
-func NewDpaChunkStore(localStore, netStore ChunkStore) *dpaChunkStore {
-	return &dpaChunkStore{0, localStore, netStore}
+func NewDpaChunkStore(localStore *LocalStore, retrieve func(chunk *Chunk) error) *dpaChunkStore {
+	return &dpaChunkStore{localStore, retrieve}
 }
 
 // Get is the entrypoint for local retrieve requests
 // waits for response or times out
 func (self *dpaChunkStore) Get(key Key) (chunk *Chunk, err error) {
-	chunk, err = self.netStore.Get(key)
-	if chunk.SData != nil {
+	var created bool
+	chunk, created = self.localStore.GetOrCreateRequest(key)
+	if chunk.ReqC == nil {
 		log.Trace(fmt.Sprintf("DPA.Get: %v found locally, %d bytes", key.Log(), len(chunk.SData)))
 		return
 	}
-	// TODO: use self.timer time.Timer and reset with defer disableTimer
-	timer := time.After(searchTimeout)
-	select {
-	case <-timer:
-		log.Trace(fmt.Sprintf("DPA.Get: %v request time out ", key.Log()))
-		err = notFound
-	case <-chunk.Req.C:
-		log.Trace(fmt.Sprintf("DPA.Get: %v retrieved, %d bytes (%p)", key.Log(), len(chunk.SData), chunk))
+
+	if created {
+		if err := self.retrieve(chunk); err != nil {
+			return nil, err
+		}
 	}
-	return
+	t := time.NewTicker(searchTimeout)
+	defer t.Stop()
+
+	select {
+	case <-t.C:
+		log.Trace(fmt.Sprintf("DPA.Get: %v request time out ", key.Log()))
+		return nil, notFound
+	case <-chunk.ReqC:
+	}
+	return chunk, nil
 }
 
 // Put is the entrypoint for local store requests coming from storeLoop
-func (self *dpaChunkStore) Put(entry *Chunk) {
-	chunk, err := self.localStore.Get(entry.Key)
-	if err != nil {
-		log.Trace(fmt.Sprintf("DPA.Put: %v new chunk. call netStore.Put", entry.Key.Log()))
-		chunk = entry
-	} else if chunk.SData == nil {
-		log.Trace(fmt.Sprintf("DPA.Put: %v request entry found", entry.Key.Log()))
-		chunk.SData = entry.SData
-		chunk.Size = entry.Size
-	} else {
-		log.Trace(fmt.Sprintf("DPA.Put: %v chunk already known", entry.Key.Log()))
-		return
-	}
-	// from this point on the storage logic is the same with network storage requests
-	log.Trace(fmt.Sprintf("DPA.Put %v: %v", self.n, chunk.Key.Log()))
-	self.n++
-	self.netStore.Put(chunk)
+func (self *dpaChunkStore) Put(chunk *Chunk) {
+	self.localStore.Put(chunk)
 }
 
 // Close chunk store

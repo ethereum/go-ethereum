@@ -168,8 +168,8 @@ func (s *MemStore) Put(entry *Chunk) {
 				entry.Size = node.entry.Size
 				entry.SData = node.entry.SData
 			}
-			if entry.Req == nil {
-				entry.Req = node.entry.Req
+			if entry.ReqC == nil {
+				entry.ReqC = node.entry.ReqC
 			}
 			entry.C = node.entry.C
 			node.entry = entry

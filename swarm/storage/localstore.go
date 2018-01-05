@@ -18,6 +18,9 @@ package storage
 
 import (
 	"encoding/binary"
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // LocalStore is a combination of inmemory db over a disk persisted db
@@ -64,6 +67,26 @@ func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	self.memStore.Put(chunk)
 	return
+}
+
+// retrieve logic common for local and network chunk retrieval requests
+func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool) {
+	var err error
+	chunk, err = self.Get(key)
+	if err == nil {
+		if chunk.ReqC == nil {
+			log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
+		} else {
+			log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request", key))
+			// no need to launch again
+		}
+		return chunk, false
+	}
+	// no data and no request status
+	log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v not found locally. open new request", key))
+	chunk = NewChunk(key, make(chan bool))
+	self.memStore.Put(chunk)
+	return chunk, true
 }
 
 // Close local store

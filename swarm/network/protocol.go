@@ -115,9 +115,9 @@ type Bzz struct {
 // * bzz config
 // * overlay driver
 // * peer store
-func NewBzz(config *BzzConfig, kad Overlay, store StateStore) *Bzz {
+func NewBzz(config *BzzConfig, kad Overlay, store StateStore, streamer *Streamer) *Bzz {
 	return &Bzz{
-		Streamer:   NewStreamer(),
+		Streamer:   streamer,
 		Hive:       NewHive(config.HiveParams, kad, store),
 		localAddr:  &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
 		handshakes: make(map[discover.NodeID]*HandshakeMsg),

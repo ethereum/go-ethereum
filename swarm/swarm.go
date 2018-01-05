@@ -49,10 +49,11 @@ type Swarm struct {
 	api    *api.Api     // high level api layer (fs/manifest)
 	dns    api.Resolver // DNS registrar
 	//dbAccess    *network.DbAccess      // access to local chunk db iterator and storage counter
-	storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
-	dpa     *storage.DPA       // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	//storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
+	dpa *storage.DPA // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	//depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
-	cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
+	streamer *network.Streamer
+	//cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
 	bzz         *network.Bzz       // the logistic manager
 	backend     chequebook.Backend // simple blockchain Backend
 	privateKey  *ecdsa.PrivateKey
@@ -114,8 +115,8 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	config.HiveParams.Discovery = true
 
 	// setup cloud storage internal access layer
-	self.cloud = &storage.Forwarder{}
-	self.storage = storage.NewNetStore(hash, self.lstore, self.cloud, config.StoreParams)
+	//self.cloud = &storage.Forwarder{}
+	//self.storage = storage.NewNetStore(hash, self.lstore, self.cloud, config.StoreParams)
 	log.Debug(fmt.Sprintf("-> swarm net store shared access layer to Swarm Chunk Store"))
 	nodeid := discover.PubkeyID(crypto.ToECDSAPub(common.FromHex(config.PublicKey)))
 	addr := network.NewAddrFromNodeID(nodeid)
@@ -124,10 +125,16 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 		UnderlayAddr: addr.UAddr,
 		HiveParams:   config.HiveParams,
 	}
-	self.bzz = network.NewBzz(bzzconfig, to, nil)
+
+	dbAccess := network.NewDbAccess(self.lstore)
+	self.streamer = network.NewStreamer(to, dbAccess)
+	network.RegisterOutgoingSyncers(self.streamer, dbAccess)
+	network.RegisterIncomingSyncers(self.streamer, dbAccess)
+
+	self.bzz = network.NewBzz(bzzconfig, to, nil, self.streamer)
 
 	// set up DPA, the cloud storage local access layer
-	dpaChunkStore := storage.NewDpaChunkStore(self.lstore, self.storage)
+	dpaChunkStore := storage.NewDpaChunkStore(self.lstore, self.streamer.Retrieve)
 	log.Debug(fmt.Sprintf("-> Local Access to Swarm"))
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)
