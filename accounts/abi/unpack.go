@@ -93,13 +93,13 @@ func readFixedBytes(t Type, word []byte) (interface{}, error) {
 
 }
 
-func getDeepSizeForType(t *Type) int {
+func getFullElemSize(elem *Type) int {
 	//all other should be counted as 32 (slices have pointers to respective elements)
 	size := 32
 	//arrays wrap it, each element being the same size
-	for t.T == ArrayTy {
-		size *= t.Size
-		t = t.Elem
+	for elem.T == ArrayTy {
+		size *= elem.Size
+		elem = elem.Elem
 	}
 	return size
 }
@@ -126,9 +126,11 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 		return nil, fmt.Errorf("abi: invalid type in array/slice unpacking stage")
 	}
 
+	// Arrays have packed elements, resulting in longer unpack steps.
+	// Slices have just 32 bytes per element (pointing to the contents).
 	elemSize := 32
 	if t.T == ArrayTy {
-		elemSize = getDeepSizeForType(t.Elem)
+		elemSize = getFullElemSize(t.Elem)
 	}
 
 	for i, j := start, 0; j < size; i, j = i+elemSize, j+1 {
