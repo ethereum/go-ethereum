@@ -174,27 +174,14 @@ var bindType = map[Lang]func(kind abi.Type) string{
 // Array sizes may also be "", indicating a dynamic array.
 func wrapArray(stringKind string, innerLen int, innerMapping string) (string, []string) {
 	remainder := stringKind[innerLen:]
-	if len(remainder) > 0 {
-		if remainder[0] != '[' {
-			//strange, expected an array bracket, default on what was recognized.
-			return innerMapping, nil
-		}
-		parts := strings.Split(remainder[1:], "[")
-		//fix elements, splitting made the "[" disappear, but not the "]"
-		for i := 0; i < len(parts); i++ {
-			v := parts[i]
-			//check validity; ending with "]"
-			if len(v) < 1 || v[len(v)-1] != ']' {
-				//format was not a valid array
-				return innerMapping, nil
-			}
-			//chop off "]"
-			parts[i] = v[:len(v)-1]
-		}
-		return innerMapping, parts
-	} else {
-		return innerMapping, nil
+	//find all the sizes
+	matches := regexp.MustCompile(`\[(\d*)\]`).FindAllStringSubmatch(remainder, -1)
+	parts := make([]string, 0, len(matches))
+	for _, match := range matches {
+		//get group 1 from the regex match
+		parts = append(parts, match[1])
 	}
+	return innerMapping, parts
 }
 
 // Translates the array sizes to a Go-lang declaration of a (nested) array of the inner type.
@@ -253,14 +240,8 @@ func bindUnnestedTypeGo(stringKind string) (int, string) {
 // Translates the array sizes to a Java declaration of a (nested) array of the inner type.
 // Simply returns the inner type if arraySizes is empty.
 func arrayBindingJava(inner string, arraySizes []string) string {
-	out := inner
-	//append a "[]" for each array size.
-	// (Full arraySizes is used in signature for consistency with the go-lang version)
-	for i := 0; i < len(arraySizes); i++ {
-		//normally, like with Go, you could declare an array size. Not in Java.
-		out += "[]"
-	}
-	return out
+	// Java array type declarations do not include the length.
+	return inner + strings.Repeat("[]", len(arraySizes))
 }
 
 // bindTypeJava converts a Solidity type to a Java one. Since there is no clear mapping
