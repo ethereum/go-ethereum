@@ -51,6 +51,7 @@ type Envelope struct {
 
 // size returns the size of envelope as it is sent (i.e. public fields only)
 func (e *Envelope) size() int {
+	const EnvelopeHeaderLength = 20
 	return EnvelopeHeaderLength + len(e.Data)
 }
 
