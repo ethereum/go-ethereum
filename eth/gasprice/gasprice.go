@@ -118,6 +118,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 		exp--
 		if res.price != nil {
 			blockPrices = append(blockPrices, res.price)
+			continue
 		}
 		if maxEmpty > 0 {
 			maxEmpty--
