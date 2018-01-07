@@ -17,6 +17,7 @@
 package accounts
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -132,4 +133,18 @@ func (path DerivationPath) String() string {
 		}
 	}
 	return result
+}
+
+func (path DerivationPath) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf("\"%s\"", path.String())), nil
+}
+
+func (dp *DerivationPath) UnmarshalJSON(b []byte) error {
+	var path string
+	var err error
+	if err = json.Unmarshal(b, &path); err != nil {
+		return err
+	}
+	*dp, err = ParseDerivationPath(path)
+	return err
 }
