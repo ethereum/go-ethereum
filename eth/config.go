@@ -50,7 +50,7 @@ var DefaultConfig = Config{
 	TxPool: core.DefaultTxPoolConfig,
 	GPO: gasprice.Config{
 		Blocks:     100,
-		Percentile: 35,
+		Percentile: 60,
 	},
 }
 
