@@ -101,7 +101,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	ch := make(chan getBlockPricesResult, gpo.checkBlocks)
 	sent := 0
 	exp := 0
-	var txPrices []*big.Int
+	var blockPrices []*big.Int
 	for sent < gpo.checkBlocks && blockNum > 0 {
 		go gpo.getBlockPrices(ctx, blockNum, ch)
 		sent++
@@ -115,9 +115,8 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 			return lastPrice, res.err
 		}
 		exp--
-		if len(res.prices) > 0 {
-			txPrices = append(txPrices, res.prices...)
-			continue
+		if res.price != nil {
+			blockPrices = append(blockPrices, res.price)
 		}
 		if maxEmpty > 0 {
 			maxEmpty--
@@ -131,9 +130,9 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 		}
 	}
 	price := lastPrice
-	if len(txPrices) > 0 {
-		sort.Sort(bigIntArray(txPrices))
-		price = txPrices[(len(txPrices)-1)*gpo.percentile/100]
+	if len(blockPrices) > 0 {
+		sort.Sort(bigIntArray(blockPrices))
+		price = blockPrices[(len(blockPrices)-1)*gpo.percentile/100]
 	}
 	if price.Cmp(maxPrice) > 0 {
 		price = new(big.Int).Set(maxPrice)
@@ -147,7 +146,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 }
 
 type getBlockPricesResult struct {
-	prices []*big.Int
+	price *big.Int
 	err    error
 }
 
@@ -160,11 +159,13 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, blockNum uint64, ch chan 
 		return
 	}
 	txs := block.Transactions()
-	prices := make([]*big.Int, len(txs))
-	for i, tx := range txs {
-		prices[i] = tx.GasPrice()
+	var minPrice *big.Int
+	for _, tx := range txs {
+		if minPrice == nil || tx.GasPrice().Cmp(minPrice) < 0 {
+			minPrice = tx.GasPrice()
+		}
 	}
-	ch <- getBlockPricesResult{prices, nil}
+	ch <- getBlockPricesResult{minPrice, nil}
 }
 
 type bigIntArray []*big.Int
