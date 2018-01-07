@@ -51,6 +51,7 @@ type Envelope struct {
 
 // size returns the size of envelope as it is sent (i.e. public fields only)
 func (e *Envelope) size() int {
+	const EnvelopeHeaderLength = 20
 	return EnvelopeHeaderLength + len(e.Data)
 }
 
@@ -238,13 +239,13 @@ func (e *Envelope) Bloom() []byte {
 	return e.bloom
 }
 
+// TopicToBloom converts the topic (4 bytes) to the bloom filter (64 bytes)
 func TopicToBloom(topic TopicType) []byte {
-	var powers = [...]byte{1, 2, 4, 8, 16, 32, 64, 128}
 	b := make([]byte, bloomFilterSize)
 	var index [3]int
 	for j := 0; j < 3; j++ {
 		index[j] = int(topic[j])
-		if (topic[3] & powers[j]) != 0 {
+		if (topic[3] & (1 << uint(j))) != 0 {
 			index[j] += 256
 		}
 	}
@@ -252,7 +253,7 @@ func TopicToBloom(topic TopicType) []byte {
 	for j := 0; j < 3; j++ {
 		byteIndex := index[j] / 8
 		bitIndex := index[j] % 8
-		b[byteIndex] = powers[bitIndex]
+		b[byteIndex] = (1 << uint(bitIndex))
 	}
 	return b
 }

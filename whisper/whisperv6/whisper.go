@@ -49,11 +49,11 @@ type Statistics struct {
 
 const (
 	maxMsgSizeIdx           = iota // Maximal message length allowed by the whisper node
-	overflowIdx             = iota // Indicator of message queue overflow
-	minPowIdx               = iota // Minimal PoW required by the whisper node
-	minPowToleranceIdx      = iota // Minimal PoW tolerated by the whisper node for a limited time
-	bloomFilterIdx          = iota // Bloom filter for topics of interest for this node
-	bloomFilterToleranceIdx = iota // Bloom filter tolerated by the whisper node for a limited time
+	overflowIdx                    // Indicator of message queue overflow
+	minPowIdx                      // Minimal PoW required by the whisper node
+	minPowToleranceIdx             // Minimal PoW tolerated by the whisper node for a limited time
+	bloomFilterIdx                 // Bloom filter for topics of interest for this node
+	bloomFilterToleranceIdx        // Bloom filter tolerated by the whisper node for a limited time
 )
 
 // Whisper represents a dark communication interface through the Ethereum
@@ -129,14 +129,23 @@ func New(cfg *Config) *Whisper {
 	return whisper
 }
 
+// MinPow returns the PoW value required by this node.
 func (w *Whisper) MinPow() float64 {
 	val, exist := w.settings.Load(minPowIdx)
 	if !exist || val == nil {
 		return DefaultMinimumPoW
 	}
-	return val.(float64)
+	v, ok := val.(float64)
+	if !ok {
+		log.Error("Error loading minPowIdx, using default")
+		return DefaultMinimumPoW
+	}
+	return v
 }
 
+// MinPowTolerance returns the value of minimum PoW which is tolerated for a limited
+// time after PoW was changed. If sufficient time have elapsed or no change of PoW
+// have ever occurred, the return value will be the same as return value of MinPow().
 func (w *Whisper) MinPowTolerance() float64 {
 	val, exist := w.settings.Load(minPowToleranceIdx)
 	if !exist || val == nil {
@@ -145,6 +154,10 @@ func (w *Whisper) MinPowTolerance() float64 {
 	return val.(float64)
 }
 
+// BloomFilter returns the aggregated bloom filter for all the topics of interest.
+// The nodes are required to send only messages that match the advertised bloom filter.
+// If a message does not match the bloom, it will tantamount to spam, and the peer will
+// be disconnected.
 func (w *Whisper) BloomFilter() []byte {
 	val, exist := w.settings.Load(bloomFilterIdx)
 	if !exist || val == nil {
@@ -153,6 +166,10 @@ func (w *Whisper) BloomFilter() []byte {
 	return val.([]byte)
 }
 
+// BloomFilterTolerance returns the bloom filter which is tolerated for a limited
+// time after new bloom was advertised to the peers. If sufficient time have elapsed
+// or no change of bloom filter have ever occurred, the return value will be the same
+// as return value of BloomFilter().
 func (w *Whisper) BloomFilterTolerance() []byte {
 	val, exist := w.settings.Load(bloomFilterToleranceIdx)
 	if !exist || val == nil {
@@ -1035,7 +1052,7 @@ func bloomFilterMatch(filter, sample []byte) bool {
 	for i := 0; i < bloomFilterSize; i++ {
 		f := filter[i]
 		s := sample[i]
-		if ((f | s) ^ f) != 0 {
+		if (f | s) != f {
 			return false
 		}
 	}
@@ -1049,4 +1066,13 @@ func addBloom(a, b []byte) []byte {
 		c[i] = a[i] | b[i]
 	}
 	return c
+}
+
+func isBloomFilterEqual(a, b []byte) bool {
+	for i := 0; i < bloomFilterSize; i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

@@ -428,12 +428,3 @@ func checkBloomFilterExchange(t *testing.T) {
 		}
 	}
 }
-
-func isBloomFilterEqual(a, b []byte) bool {
-	for i := 0; i < bloomFilterSize; i++ {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}

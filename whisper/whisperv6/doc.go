@@ -51,12 +51,12 @@ const (
 	paddingMask   = byte(3)
 	signatureFlag = byte(4)
 
-	TopicLength     = 4
-	signatureLength = 65
-	aesKeyLength    = 32
-	AESNonceLength  = 12
-	keyIdSize       = 32
-	bloomFilterSize = 64
+	TopicLength     = 4  // in bytes
+	signatureLength = 65 // in bytes
+	aesKeyLength    = 32 // in bytes
+	AESNonceLength  = 12 // in bytes
+	keyIdSize       = 32 // in bytes
+	bloomFilterSize = 64 // in bytes
 
 	MaxMessageSize        = uint32(10 * 1024 * 1024) // maximum accepted size of a message.
 	DefaultMaxMessageSize = uint32(1024 * 1024)
@@ -70,8 +70,6 @@ const (
 
 	DefaultTTL           = 50 // seconds
 	DefaultSyncAllowance = 10 // seconds
-
-	EnvelopeHeaderLength = 20
 )
 
 type unknownVersionError uint64
