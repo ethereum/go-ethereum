@@ -90,7 +90,7 @@ func singleMessageTest(t *testing.T, symmetric bool) {
 		t.Fatalf("failed to encrypt with seed %d: %s.", seed, err)
 	}
 
-	if !decrypted.Validate() {
+	if !decrypted.ValidateAndParse(symmetric) {
 		t.Fatalf("failed to validate with seed %d.", seed)
 	}
 
