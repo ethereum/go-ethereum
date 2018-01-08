@@ -19,36 +19,109 @@
 import React, {Component} from 'react';
 
 import withStyles from 'material-ui/styles/withStyles';
-import {lensPath, view, set} from 'ramda';
 
 import Header from './Header';
 import Body from './Body';
-import {MENU, SAMPLE} from './Common';
-import type {Message, HomeMessage, LogsMessage, Chart} from '../types/message';
+import Footer from './Footer';
+import {MENU} from './Common';
 import type {Content} from '../types/content';
 
-// appender appends an array (A) to the end of another array (B) in the state.
-// lens is the path of B in the state, samples is A, and limit is the maximum size of the changed array.
-//
-// appender retrieves a function, which overrides the state's value at lens, and returns with the overridden state.
-const appender = (lens, samples, limit) => (state) => {
-	const newSamples = [
-		...view(lens, state), // retrieves a specific value of the state at the given path (lens).
-		...samples,
-	];
-	// set is a function of ramda.js, which needs the path, the new value, the original state, and retrieves
-	// the altered state.
-	return set(
-		lens,
-		newSamples.slice(newSamples.length > limit ? newSamples.length - limit : 0),
-		state
-	);
+// deepCopy retrieves a copy of the given object, copying recursively in all depth.
+// It is used at the state update, because React doesn't handle the object nesting well.
+// References are prohibited, since the state needs to be immutable.
+// NOTE: maybe there is better solution.
+const deepCopy = (prev: mixed) => {
+	const copied = Array.isArray(prev) ? [] : {};
+	Object.keys(prev).forEach((key) => {
+		const c: mixed = prev[key]
+		copied[key] = typeof c === 'object' ? deepCopy(c) : c;
+	});
+
+	return copied;
 };
-// Lenses for specific data fields in the state, used for a clearer deep update.
-// NOTE: This solution will be changed very likely.
-const memoryLens = lensPath(['content', 'home', 'memory']);
-const trafficLens = lensPath(['content', 'home', 'traffic']);
-const logLens = lensPath(['content', 'logs', 'log']);
+
+// deepUpdate updates an object corresponding to the given update data, which has
+// the shape of the same structure as the original object. handler also has the same
+// structure, except that it contains functions where the original data needs to be
+// updated. These functions are used to handle the update.
+//
+// Since the messages have the same shape as the state content, this approach allows
+// the generalization of the message handling. The only necessary thing is to set a
+// handler function for every path of the state in order to maximalize the flexibility
+// of the update.
+const deepUpdate = (prev: mixed, update: mixed, handler: mixed) => {
+	if (typeof update === 'undefined') {
+		return deepCopy(prev);
+	}
+	if (typeof handler === 'function') {
+		return handler(prev, update);
+	}
+	const updated = Array.isArray(prev) ? [] : {};
+	Object.keys(prev).forEach((key) => {
+		if (typeof update[key] === 'undefined') {
+			updated[key] = deepCopy(prev[key]);
+		} else {
+			updated[key] = deepUpdate(prev[key], update[key], handler[key]);
+		}
+	});
+
+	return updated;
+};
+
+// shouldUpdate retrieves the structure of a message. It is used to prevent unnecessary render
+// method triggerings. In the affected component's shouldComponentUpdate method it can be checked
+// whether the involved data was changed or not by checking the message structure.
+const shouldUpdate = (msg: mixed, handler: mixed) => {
+	const su = {};
+	Object.keys(msg).forEach((key) => {
+		su[key] = typeof msg[key] === 'object' && typeof handler[key] !== 'function' ? shouldUpdate(msg[key], handler[key]) : true;
+	});
+	return su;
+};
+
+// appender is a state update generalization function, which appends the update data
+// to the existing data. limit defines the maximum allowed size of the created array.
+const appender = <T>(limit: number) => (prev: Array<T>, update: Array<T>) => [...prev, ...update].slice(-limit);
+// appender200 is an appender function with limit 200.
+const appender200 = appender(200);
+// replacer is a state update generalization function, which replaces the original data.
+const replacer = <T>(prev: T, update: T) => update;
+
+// defaultContent is the initial value of the state content.
+const defaultContent: Content = {
+	general: {
+		version: '-',
+	},
+	home: {
+		memory:  [],
+		traffic: [],
+	},
+	chain:   {},
+	txpool:  {},
+	network: {},
+	system:  {},
+	logs:    {
+		log: [],
+	},
+};
+// handlers contains the state update generalization functions for each path of the state.
+// TODO (kurkomisi): Define a tricky type which embraces the content and the handlers.
+const handlers = {
+	general: {
+		version: replacer,
+	},
+	home: {
+		memory:  appender200,
+		traffic: appender200,
+	},
+	chain:   null,
+	txpool:  null,
+	network: null,
+	system:  null,
+	logs:    {
+		log: appender200,
+	},
+};
 // styles retrieves the styles for the Dashboard component.
 const styles = theme => ({
 	dashboard: {
@@ -67,8 +140,8 @@ export type Props = {
 type State = {
 	active: string, // active menu
 	sideBar: boolean, // true if the sidebar is opened
-	content: $Shape<Content>, // the visualized data
-	shouldUpdate: Set<string> // labels for the components, which need to rerender based on the incoming message
+	content: Content, // the visualized data
+	shouldUpdate: Object // labels for the components, which need to rerender based on the incoming message
 };
 // Dashboard is the main component, which renders the whole page, makes connection with the server and
 // listens for messages. When there is an incoming message, updates the page's content correspondingly.
@@ -78,25 +151,22 @@ class Dashboard extends Component<Props, State> {
 		this.state = {
 			active:       MENU.get('home').id,
 			sideBar:      true,
-			content:      {home: {memory: [], traffic: []}, logs: {log: []}},
-			shouldUpdate: new Set(),
+			content:      defaultContent,
+			shouldUpdate: {},
 		};
 	}
 
 	// componentDidMount initiates the establishment of the first websocket connection after the component is rendered.
 	componentDidMount() {
-		this.reconnect();
+		this.connect();
 	}
 
-	// reconnect establishes a websocket connection with the server, listens for incoming messages
+	// connect establishes a websocket connection with the server, listens for incoming messages
 	// and tries to reconnect on connection loss.
-	reconnect = () => {
-		this.setState({
-			content: {home: {memory: [], traffic: []}, logs: {log: []}},
-		});
+	connect = () => {
 		const server = new WebSocket(`${((window.location.protocol === 'https:') ? 'wss://' : 'ws://') + window.location.host}/api`);
 		server.onmessage = (event) => {
-			const msg: Message = JSON.parse(event.data);
+			const msg: Content = JSON.parse(event.data);
 			if (!msg) {
 				return;
 			}
@@ -107,56 +177,18 @@ class Dashboard extends Component<Props, State> {
 		};
 	};
 
-	// samples retrieves the raw data of a chart field from the incoming message.
-	samples = (chart: Chart) => {
-		let s = [];
-		if (chart.history) {
-			s = chart.history.map(({value}) => (value || 0)); // traffic comes without value at the beginning
-		}
-		if (chart.new) {
-			s = [...s, chart.new.value || 0];
-		}
-		return s;
+	// reconnect clears the state before the connection establishment.
+	reconnect = () => {
+		this.setState({content: defaultContent, shouldUpdate: {}});
+		this.connect();
 	};
 
-	// handleHome changes the home-menu related part of the state.
-	handleHome = (home: HomeMessage) => {
-		this.setState((prevState) => {
-			let newState = prevState;
-			newState.shouldUpdate = new Set();
-			if (home.memory) {
-				newState = appender(memoryLens, this.samples(home.memory), SAMPLE.get('memory').limit)(newState);
-				newState.shouldUpdate.add('memory');
-			}
-			if (home.traffic) {
-				newState = appender(trafficLens, this.samples(home.traffic), SAMPLE.get('traffic').limit)(newState);
-				newState.shouldUpdate.add('traffic');
-			}
-			return newState;
-		});
-	};
-
-	// handleLogs changes the logs-menu related part of the state.
-	handleLogs = (logs: LogsMessage) => {
-		this.setState((prevState) => {
-			let newState = prevState;
-			newState.shouldUpdate = new Set();
-			if (logs.log) {
-				newState = appender(logLens, [logs.log], SAMPLE.get('logs').limit)(newState);
-				newState.shouldUpdate.add('logs');
-			}
-			return newState;
-		});
-	};
-
-	// update analyzes the incoming message, and updates the charts' content correspondingly.
-	update = (msg: Message) => {
-		if (msg.home) {
-			this.handleHome(msg.home);
-		}
-		if (msg.logs) {
-			this.handleLogs(msg.logs);
-		}
+	// update updates the content corresponding to the incoming message.
+	update = (msg: $Shape<Content>) => {
+		this.setState(prevState => ({
+			content:      deepUpdate(prevState.content, msg, handlers),
+			shouldUpdate: shouldUpdate(msg, handlers),
+		}));
 	};
 
 	// changeContent sets the active label, which is used at the content rendering.
@@ -189,6 +221,13 @@ class Dashboard extends Component<Props, State> {
 					changeContent={this.changeContent}
 					active={this.state.active}
 					content={this.state.content}
+					shouldUpdate={this.state.shouldUpdate}
+				/>
+				<Footer
+					opened={this.state.sideBar}
+					openSideBar={this.openSideBar}
+					closeSideBar={this.closeSideBar}
+					general={this.state.content.general}
 					shouldUpdate={this.state.shouldUpdate}
 				/>
 			</div>
