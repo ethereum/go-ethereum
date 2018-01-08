@@ -1,3 +1,5 @@
+// @flow
+
 // Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -15,155 +17,183 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 import React, {Component} from 'react';
-import PropTypes from 'prop-types';
-import {withStyles} from 'material-ui/styles';
 
-import SideBar from './SideBar.jsx';
-import Header from './Header.jsx';
-import Main from "./Main.jsx";
-import {isNullOrUndefined, LIMIT, TAGS, DATA_KEYS,} from "./Common.jsx";
+import withStyles from 'material-ui/styles/withStyles';
+import {lensPath, view, set} from 'ramda';
 
-// Styles for the Dashboard component.
-const styles = theme => ({
-    appFrame: {
-        position:   'relative',
-        display:    'flex',
-        width:      '100%',
-        height:     '100%',
-        background: theme.palette.background.default,
-    },
-});
+import Header from './Header';
+import Body from './Body';
+import {MENU, SAMPLE} from './Common';
+import type {Message, HomeMessage, LogsMessage, Chart} from '../types/message';
+import type {Content} from '../types/content';
 
-// Dashboard is the main component, which renders the whole page, makes connection with the server and listens for messages.
-// When there is an incoming message, updates the page's content correspondingly.
-class Dashboard extends Component {
-    constructor(props) {
-        super(props);
-        this.state = {
-            active:       TAGS.home.id, // active menu
-            sideBar:      true, // true if the sidebar is opened
-            memory:       [],
-            traffic:      [],
-            logs:         [],
-            shouldUpdate: {},
-        };
-    }
-
-    // componentDidMount initiates the establishment of the first websocket connection after the component is rendered.
-    componentDidMount() {
-        this.reconnect();
-    }
-
-    // reconnect establishes a websocket connection with the server, listens for incoming messages
-    // and tries to reconnect on connection loss.
-    reconnect = () => {
-        const server = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/api");
-
-        server.onmessage = event => {
-            const msg = JSON.parse(event.data);
-            if (isNullOrUndefined(msg)) {
-                return;
-            }
-            this.update(msg);
-        };
-
-        server.onclose = () => {
-            setTimeout(this.reconnect, 3000);
-        };
-    };
-
-    // update analyzes the incoming message, and updates the charts' content correspondingly.
-    update = msg => {
-        console.log(msg);
-        this.setState(prevState => {
-            let newState = [];
-            newState.shouldUpdate = {};
-            const insert = (key, values, limit) => {
-                newState[key] = [...prevState[key], ...values];
-                while (newState[key].length > limit) {
-                    newState[key].shift();
-                }
-                newState.shouldUpdate[key] = true;
-            };
-            // (Re)initialize the state with the past data.
-            if (!isNullOrUndefined(msg.history)) {
-                const memory = DATA_KEYS.memory;
-                const traffic = DATA_KEYS.traffic;
-                newState[memory] = [];
-                newState[traffic] = [];
-                if (!isNullOrUndefined(msg.history.memorySamples)) {
-                    newState[memory] = msg.history.memorySamples.map(elem => isNullOrUndefined(elem.value) ? 0 : elem.value);
-                    while (newState[memory].length > LIMIT.memory) {
-                        newState[memory].shift();
-                    }
-                    newState.shouldUpdate[memory] = true;
-                }
-                if (!isNullOrUndefined(msg.history.trafficSamples)) {
-                    newState[traffic] = msg.history.trafficSamples.map(elem => isNullOrUndefined(elem.value) ? 0 : elem.value);
-                    while (newState[traffic].length > LIMIT.traffic) {
-                        newState[traffic].shift();
-                    }
-                    newState.shouldUpdate[traffic] = true;
-                }
-            }
-            // Insert the new data samples.
-            if (!isNullOrUndefined(msg.memory)) {
-                insert(DATA_KEYS.memory, [isNullOrUndefined(msg.memory.value) ? 0 : msg.memory.value], LIMIT.memory);
-            }
-            if (!isNullOrUndefined(msg.traffic)) {
-                insert(DATA_KEYS.traffic, [isNullOrUndefined(msg.traffic.value) ? 0 : msg.traffic.value], LIMIT.traffic);
-            }
-            if (!isNullOrUndefined(msg.log)) {
-                insert(DATA_KEYS.logs, [msg.log], LIMIT.log);
-            }
-
-            return newState;
-        });
-    };
-
-    // The change of the active label on the SideBar component will trigger a new render in the Main component.
-    changeContent = active => {
-        this.setState(prevState => prevState.active !== active ? {active: active} : {});
-    };
-
-    openSideBar = () => {
-        this.setState({sideBar: true});
-    };
-
-    closeSideBar = () => {
-        this.setState({sideBar: false});
-    };
-
-    render() {
-        // The classes property is injected by withStyles().
-        const {classes} = this.props;
-
-        return (
-            <div className={classes.appFrame}>
-                <Header
-                    opened={this.state.sideBar}
-                    open={this.openSideBar}
-                />
-                <SideBar
-                    opened={this.state.sideBar}
-                    close={this.closeSideBar}
-                    changeContent={this.changeContent}
-                />
-                <Main
-                    opened={this.state.sideBar}
-                    active={this.state.active}
-                    memory={this.state.memory}
-                    traffic={this.state.traffic}
-                    logs={this.state.logs}
-                    shouldUpdate={this.state.shouldUpdate}
-                />
-            </div>
-        );
-    }
-}
-
-Dashboard.propTypes = {
-    classes: PropTypes.object.isRequired,
+// appender appends an array (A) to the end of another array (B) in the state.
+// lens is the path of B in the state, samples is A, and limit is the maximum size of the changed array.
+//
+// appender retrieves a function, which overrides the state's value at lens, and returns with the overridden state.
+const appender = (lens, samples, limit) => (state) => {
+	const newSamples = [
+		...view(lens, state), // retrieves a specific value of the state at the given path (lens).
+		...samples,
+	];
+	// set is a function of ramda.js, which needs the path, the new value, the original state, and retrieves
+	// the altered state.
+	return set(
+		lens,
+		newSamples.slice(newSamples.length > limit ? newSamples.length - limit : 0),
+		state
+	);
 };
+// Lenses for specific data fields in the state, used for a clearer deep update.
+// NOTE: This solution will be changed very likely.
+const memoryLens = lensPath(['content', 'home', 'memory']);
+const trafficLens = lensPath(['content', 'home', 'traffic']);
+const logLens = lensPath(['content', 'logs', 'log']);
+// styles retrieves the styles for the Dashboard component.
+const styles = theme => ({
+	dashboard: {
+		display:    'flex',
+		flexFlow:   'column',
+		width:      '100%',
+		height:     '100%',
+		background: theme.palette.background.default,
+		zIndex:     1,
+		overflow:   'hidden',
+	},
+});
+export type Props = {
+	classes: Object,
+};
+type State = {
+	active: string, // active menu
+	sideBar: boolean, // true if the sidebar is opened
+	content: $Shape<Content>, // the visualized data
+	shouldUpdate: Set<string> // labels for the components, which need to rerender based on the incoming message
+};
+// Dashboard is the main component, which renders the whole page, makes connection with the server and
+// listens for messages. When there is an incoming message, updates the page's content correspondingly.
+class Dashboard extends Component<Props, State> {
+	constructor(props: Props) {
+		super(props);
+		this.state = {
+			active:       MENU.get('home').id,
+			sideBar:      true,
+			content:      {home: {memory: [], traffic: []}, logs: {log: []}},
+			shouldUpdate: new Set(),
+		};
+	}
+
+	// componentDidMount initiates the establishment of the first websocket connection after the component is rendered.
+	componentDidMount() {
+		this.reconnect();
+	}
+
+	// reconnect establishes a websocket connection with the server, listens for incoming messages
+	// and tries to reconnect on connection loss.
+	reconnect = () => {
+		this.setState({
+			content: {home: {memory: [], traffic: []}, logs: {log: []}},
+		});
+		const server = new WebSocket(`${((window.location.protocol === 'https:') ? 'wss://' : 'ws://') + window.location.host}/api`);
+		server.onmessage = (event) => {
+			const msg: Message = JSON.parse(event.data);
+			if (!msg) {
+				return;
+			}
+			this.update(msg);
+		};
+		server.onclose = () => {
+			setTimeout(this.reconnect, 3000);
+		};
+	};
+
+	// samples retrieves the raw data of a chart field from the incoming message.
+	samples = (chart: Chart) => {
+		let s = [];
+		if (chart.history) {
+			s = chart.history.map(({value}) => (value || 0)); // traffic comes without value at the beginning
+		}
+		if (chart.new) {
+			s = [...s, chart.new.value || 0];
+		}
+		return s;
+	};
+
+	// handleHome changes the home-menu related part of the state.
+	handleHome = (home: HomeMessage) => {
+		this.setState((prevState) => {
+			let newState = prevState;
+			newState.shouldUpdate = new Set();
+			if (home.memory) {
+				newState = appender(memoryLens, this.samples(home.memory), SAMPLE.get('memory').limit)(newState);
+				newState.shouldUpdate.add('memory');
+			}
+			if (home.traffic) {
+				newState = appender(trafficLens, this.samples(home.traffic), SAMPLE.get('traffic').limit)(newState);
+				newState.shouldUpdate.add('traffic');
+			}
+			return newState;
+		});
+	};
+
+	// handleLogs changes the logs-menu related part of the state.
+	handleLogs = (logs: LogsMessage) => {
+		this.setState((prevState) => {
+			let newState = prevState;
+			newState.shouldUpdate = new Set();
+			if (logs.log) {
+				newState = appender(logLens, [logs.log], SAMPLE.get('logs').limit)(newState);
+				newState.shouldUpdate.add('logs');
+			}
+			return newState;
+		});
+	};
+
+	// update analyzes the incoming message, and updates the charts' content correspondingly.
+	update = (msg: Message) => {
+		if (msg.home) {
+			this.handleHome(msg.home);
+		}
+		if (msg.logs) {
+			this.handleLogs(msg.logs);
+		}
+	};
+
+	// changeContent sets the active label, which is used at the content rendering.
+	changeContent = (newActive: string) => {
+		this.setState(prevState => (prevState.active !== newActive ? {active: newActive} : {}));
+	};
+
+	// openSideBar opens the sidebar.
+	openSideBar = () => {
+		this.setState({sideBar: true});
+	};
+
+	// closeSideBar closes the sidebar.
+	closeSideBar = () => {
+		this.setState({sideBar: false});
+	};
+
+	render() {
+		const {classes} = this.props; // The classes property is injected by withStyles().
+
+		return (
+			<div className={classes.dashboard}>
+				<Header
+					opened={this.state.sideBar}
+					openSideBar={this.openSideBar}
+					closeSideBar={this.closeSideBar}
+				/>
+				<Body
+					opened={this.state.sideBar}
+					changeContent={this.changeContent}
+					active={this.state.active}
+					content={this.state.content}
+					shouldUpdate={this.state.shouldUpdate}
+				/>
+			</div>
+		);
+	}
+}
 
 export default withStyles(styles)(Dashboard);

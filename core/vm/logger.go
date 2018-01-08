@@ -84,7 +84,9 @@ func (s *StructLog) OpName() string {
 // Note that reference types are actual VM data structures; make copies
 // if you need to retain them beyond the current call.
 type Tracer interface {
+	CaptureStart(from common.Address, to common.Address, call bool, input []byte, gas uint64, value *big.Int) error
 	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error
+	CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error
 	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error
 }
 
@@ -98,6 +100,8 @@ type StructLogger struct {
 
 	logs          []StructLog
 	changedValues map[common.Address]Storage
+	output        []byte
+	err           error
 }
 
 // NewStructLogger returns a new logger
@@ -109,6 +113,10 @@ func NewStructLogger(cfg *LogConfig) *StructLogger {
 		logger.cfg = *cfg
 	}
 	return logger
+}
+
+func (l *StructLogger) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error {
+	return nil
 }
 
 // CaptureState logs a new structured log message and pushes it out to the environment
@@ -161,18 +169,24 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	return nil
 }
 
-func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
-	fmt.Printf("0x%x", output)
-	if err != nil {
-		fmt.Printf(" error: %v\n", err)
-	}
+func (l *StructLogger) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error {
 	return nil
 }
 
-// StructLogs returns a list of captured log entries
-func (l *StructLogger) StructLogs() []StructLog {
-	return l.logs
+func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
+	l.output = output
+	l.err = err
+	return nil
 }
+
+// StructLogs returns the captured log entries.
+func (l *StructLogger) StructLogs() []StructLog { return l.logs }
+
+// Error returns the VM error captured by the trace.
+func (l *StructLogger) Error() error { return l.err }
+
+// Output returns the VM return value captured by the trace.
+func (l *StructLogger) Output() []byte { return l.output }
 
 // WriteTrace writes a formatted trace to the given writer
 func WriteTrace(writer io.Writer, logs []StructLog) {

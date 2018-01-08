@@ -41,8 +41,8 @@ func TestBlockEncoding(t *testing.T) {
 		}
 	}
 	check("Difficulty", block.Difficulty(), big.NewInt(131072))
-	check("GasLimit", block.GasLimit(), big.NewInt(3141592))
-	check("GasUsed", block.GasUsed(), big.NewInt(21000))
+	check("GasLimit", block.GasLimit(), uint64(3141592))
+	check("GasUsed", block.GasUsed(), uint64(21000))
 	check("Coinbase", block.Coinbase(), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
 	check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
 	check("Root", block.Root(), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"))
@@ -51,7 +51,7 @@ func TestBlockEncoding(t *testing.T) {
 	check("Time", block.Time(), big.NewInt(1426516743))
 	check("Size", block.Size(), common.StorageSize(len(blockEnc)))
 
-	tx1 := NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(10), big.NewInt(50000), big.NewInt(10), nil)
+	tx1 := NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(10), 50000, big.NewInt(10), nil)
 
 	tx1, _ = tx1.WithSignature(HomesteadSigner{}, common.Hex2Bytes("9bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094f8a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b100"))
 	fmt.Println(block.Transactions()[0].Hash())

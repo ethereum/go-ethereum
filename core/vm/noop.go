@@ -55,8 +55,8 @@ func (NoopStateDB) GetCodeHash(common.Address) common.Hash                      
 func (NoopStateDB) GetCode(common.Address) []byte                                      { return nil }
 func (NoopStateDB) SetCode(common.Address, []byte)                                     {}
 func (NoopStateDB) GetCodeSize(common.Address) int                                     { return 0 }
-func (NoopStateDB) AddRefund(*big.Int)                                                 {}
-func (NoopStateDB) GetRefund() *big.Int                                                { return nil }
+func (NoopStateDB) AddRefund(uint64)                                                   {}
+func (NoopStateDB) GetRefund() uint64                                                  { return 0 }
 func (NoopStateDB) GetState(common.Address, common.Hash) common.Hash                   { return common.Hash{} }
 func (NoopStateDB) SetState(common.Address, common.Hash, common.Hash)                  {}
 func (NoopStateDB) Suicide(common.Address) bool                                        { return false }
