@@ -55,7 +55,7 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 		Op         *OpCode                     `json:"op"`
 		Gas        *math.HexOrDecimal64        `json:"gas"`
 		GasCost    *math.HexOrDecimal64        `json:"gasCost"`
-		Memory     hexutil.Bytes               `json:"memory"`
+		Memory     *hexutil.Bytes              `json:"memory"`
 		MemorySize *int                        `json:"memSize"`
 		Stack      []*math.HexOrDecimal256     `json:"stack"`
 		Storage    map[common.Hash]common.Hash `json:"-"`
@@ -79,7 +79,7 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 		s.GasCost = uint64(*dec.GasCost)
 	}
 	if dec.Memory != nil {
-		s.Memory = dec.Memory
+		s.Memory = *dec.Memory
 	}
 	if dec.MemorySize != nil {
 		s.MemorySize = *dec.MemorySize
