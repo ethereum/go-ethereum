@@ -406,6 +406,7 @@ func TestKademliaHiveString(t *testing.T) {
 	}
 	expH += "========================================================================="
 	if expH[100:] != h[100:] {
-		t.Fatalf("incorrect hive output. expected %v, got %v", expH, h)
+		t.Errorf("incorrect hive output. full - expected %v, got %v", expH, h)
+		t.Fatalf("incorrect hive output. substr - expected %v, got %v", expH[100:], h[100:])
 	}
 }
