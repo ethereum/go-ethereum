@@ -28,7 +28,7 @@ func (t ttTransaction) MarshalJSON() ([]byte, error) {
 	}
 	var enc ttTransaction
 	enc.Data = t.Data
-	enc.GasLimit = (math.HexOrDecimal64)(t.GasLimit)
+	enc.GasLimit = math.HexOrDecimal64(t.GasLimit)
 	enc.GasPrice = (*math.HexOrDecimal256)(t.GasPrice)
 	enc.Nonce = math.HexOrDecimal64(t.Nonce)
 	enc.Value = (*math.HexOrDecimal256)(t.Value)

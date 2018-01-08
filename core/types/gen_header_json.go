@@ -11,6 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+var _ = (*headerMarshaling)(nil)
+
 func (h Header) MarshalJSON() ([]byte, error) {
 	type Header struct {
 		ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
@@ -111,11 +113,11 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.GasLimit == nil {
 		return errors.New("missing required field 'gasLimit' for Header")
 	}
-	h.GasLimit = (uint64)(*dec.GasLimit)
+	h.GasLimit = uint64(*dec.GasLimit)
 	if dec.GasUsed == nil {
 		return errors.New("missing required field 'gasUsed' for Header")
 	}
-	h.GasUsed = (uint64)(*dec.GasUsed)
+	h.GasUsed = uint64(*dec.GasUsed)
 	if dec.Time == nil {
 		return errors.New("missing required field 'timestamp' for Header")
 	}
