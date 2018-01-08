@@ -18,15 +18,9 @@ package dashboard
 
 //go:generate npm --prefix ./assets install
 //go:generate ./assets/node_modules/.bin/webpack --config ./assets/webpack.config.js --context ./assets
-<<<<<<< HEAD
-//go:generate go-bindata -nometadata -o assets.go -prefix assets -nocompress -pkg dashboard assets/public/...
+//go:generate go-bindata -nometadata -o assets.go -prefix assets -nocompress -pkg dashboard assets/dashboard.html assets/bundle.js
 //go:generate sh -c "sed 's#var _public#//nolint:misspell\\\n&#' assets.go > assets.go.tmp && mv assets.go.tmp assets.go"
 //go:generate gofmt -w -s assets.go
-=======
-//go:generate go-bindata -nometadata -o assets.go -prefix assets -nocompress -pkg dashboard assets/dashboard.html assets/bundle.js
-//go:generate gofmt -s -w assets.go
-//go:generate sed -i "s#var _public#//nolint:misspell\\n&#" assets.go
->>>>>>> dashboard: footer, deep state update
 
 import (
 	"fmt"
@@ -169,7 +163,7 @@ func (db *Dashboard) webHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(blob)
 		return
 	}
-	blob, err := Asset(path)
+	blob, err := Asset(path[1:])
 	if err != nil {
 		log.Warn("Failed to load the asset", "path", path, "err", err)
 		http.Error(w, "not found", http.StatusNotFound)
