@@ -149,7 +149,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 
 type getBlockPricesResult struct {
 	price *big.Int
-	err    error
+	err   error
 }
 
 // getLowestPrice calculates the lowest transaction gas price in a given block
