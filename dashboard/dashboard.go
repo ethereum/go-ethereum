@@ -19,8 +19,12 @@ package dashboard
 //go:generate npm --prefix ./assets install
 //go:generate ./assets/node_modules/.bin/webpack --config ./assets/webpack.config.js --context ./assets
 //go:generate go-bindata -nometadata -o assets.go -prefix assets -nocompress -pkg dashboard assets/dashboard.html assets/bundle.js
+<<<<<<< HEAD
 //go:generate sh -c "sed 's#var _bundleJs#//nolint:misspell\\\n&#' assets.go > assets.go.tmp && mv assets.go.tmp assets.go"
 //go:generate sh -c "sed 's#var _dashboardHtml#//nolint:misspell\\\n&#' assets.go > assets.go.tmp && mv assets.go.tmp assets.go"
+=======
+//go:generate sh -c "sed 's#var _public#//nolint:misspell\\\n&#' assets.go > assets.go.tmp && mv assets.go.tmp assets.go"
+>>>>>>> dashboard: resolve asset path
 //go:generate gofmt -w -s assets.go
 
 import (
