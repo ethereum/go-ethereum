@@ -41,7 +41,7 @@ func (t ttTransaction) MarshalJSON() ([]byte, error) {
 
 func (t *ttTransaction) UnmarshalJSON(input []byte) error {
 	type ttTransaction struct {
-		Data     hexutil.Bytes         `gencodec:"required"`
+		Data     *hexutil.Bytes        `gencodec:"required"`
 		GasLimit *math.HexOrDecimal64  `gencodec:"required"`
 		GasPrice *math.HexOrDecimal256 `gencodec:"required"`
 		Nonce    *math.HexOrDecimal64  `gencodec:"required"`
@@ -58,7 +58,7 @@ func (t *ttTransaction) UnmarshalJSON(input []byte) error {
 	if dec.Data == nil {
 		return errors.New("missing required field 'data' for ttTransaction")
 	}
-	t.Data = dec.Data
+	t.Data = *dec.Data
 	if dec.GasLimit == nil {
 		return errors.New("missing required field 'gasLimit' for ttTransaction")
 	}

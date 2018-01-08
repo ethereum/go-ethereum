@@ -68,7 +68,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		DatabaseCache           *int
 		Etherbase               *common.Address `toml:",omitempty"`
 		MinerThreads            *int            `toml:",omitempty"`
-		ExtraData               hexutil.Bytes   `toml:",omitempty"`
+		ExtraData               *hexutil.Bytes  `toml:",omitempty"`
 		GasPrice                *big.Int
 		Ethash                  *ethash.Config
 		TxPool                  *core.TxPoolConfig
@@ -111,7 +111,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		c.MinerThreads = *dec.MinerThreads
 	}
 	if dec.ExtraData != nil {
-		c.ExtraData = dec.ExtraData
+		c.ExtraData = *dec.ExtraData
 	}
 	if dec.GasPrice != nil {
 		c.GasPrice = dec.GasPrice
