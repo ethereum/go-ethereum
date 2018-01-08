@@ -47,7 +47,7 @@ const deepCopy = (prev: mixed) => {
 //
 // Since the messages have the same shape as the state content, this approach allows
 // the generalization of the message handling. The only necessary thing is to set a
-// handler function for every path of the state in order to maximalize the flexibility
+// handler function for every path of the state in order to maximize the flexibility
 // of the update.
 const deepUpdate = (prev: mixed, update: mixed, handler: mixed) => {
 	if (typeof update === 'undefined') {
