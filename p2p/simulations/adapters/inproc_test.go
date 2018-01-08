@@ -25,7 +25,10 @@ import (
 )
 
 func TestSocketPipe(t *testing.T) {
-	c1, c2, _ := socketPipe()
+	c1, c2, err := socketPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	done := make(chan struct{})
 
@@ -67,7 +70,10 @@ func TestSocketPipe(t *testing.T) {
 }
 
 func TestSocketPipeBidirections(t *testing.T) {
-	c1, c2, _ := socketPipe()
+	c1, c2, err := socketPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	done := make(chan struct{})
 
@@ -124,7 +130,10 @@ func TestSocketPipeBidirections(t *testing.T) {
 }
 
 func TestTcpPipe(t *testing.T) {
-	c1, c2, _ := tcpPipe()
+	c1, c2, err := tcpPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	done := make(chan struct{})
 
@@ -166,7 +175,10 @@ func TestTcpPipe(t *testing.T) {
 }
 
 func TestTcpPipeBidirections(t *testing.T) {
-	c1, c2, _ := tcpPipe()
+	c1, c2, err := tcpPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	done := make(chan struct{})
 
@@ -226,7 +238,10 @@ func TestTcpPipeBidirections(t *testing.T) {
 }
 
 func TestNetPipe(t *testing.T) {
-	c1, c2, _ := netPipe()
+	c1, c2, err := netPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	done := make(chan struct{})
 
@@ -272,7 +287,10 @@ func TestNetPipe(t *testing.T) {
 }
 
 func TestNetPipeBidirections(t *testing.T) {
-	c1, c2, _ := netPipe()
+	c1, c2, err := netPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	done := make(chan struct{})
 
