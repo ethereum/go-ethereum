@@ -58,6 +58,8 @@ const (
 	keyIdSize       = 32 // in bytes
 	bloomFilterSize = 64 // in bytes
 
+	EnvelopeHeaderLength = 20
+
 	MaxMessageSize        = uint32(10 * 1024 * 1024) // maximum accepted size of a message.
 	DefaultMaxMessageSize = uint32(1024 * 1024)
 	DefaultMinimumPoW     = 0.2
