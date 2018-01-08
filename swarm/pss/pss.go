@@ -190,7 +190,7 @@ var pssSpec = &protocols.Spec{
 
 func (self *Pss) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
-		p2p.Protocol{
+		{
 			Name:    pssSpec.Name,
 			Version: pssSpec.Version,
 			Length:  pssSpec.Length(),
@@ -209,7 +209,7 @@ func (self *Pss) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 func (self *Pss) APIs() []rpc.API {
 	apis := []rpc.API{
-		rpc.API{
+		{
 			Namespace: "pss",
 			Version:   "1.0",
 			Service:   NewAPI(self),
