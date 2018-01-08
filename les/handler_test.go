@@ -443,16 +443,16 @@ func TestTransactionStatusLes2(t *testing.T) {
 	signer := types.HomesteadSigner{}
 
 	// test error status by sending an underpriced transaction
-	tx0, _ := types.SignTx(types.NewTransaction(0, acc1Addr, big.NewInt(10000), bigTxGas, nil, nil), signer, testBankKey)
+	tx0, _ := types.SignTx(types.NewTransaction(0, acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, testBankKey)
 	test(tx0, true, txStatus{Status: core.TxStatusUnknown, Error: core.ErrUnderpriced})
 
-	tx1, _ := types.SignTx(types.NewTransaction(0, acc1Addr, big.NewInt(10000), bigTxGas, big.NewInt(100000000000), nil), signer, testBankKey)
+	tx1, _ := types.SignTx(types.NewTransaction(0, acc1Addr, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, testBankKey)
 	test(tx1, false, txStatus{Status: core.TxStatusUnknown}) // query before sending, should be unknown
 	test(tx1, true, txStatus{Status: core.TxStatusPending})  // send valid processable tx, should return pending
 	test(tx1, true, txStatus{Status: core.TxStatusPending})  // adding it again should not return an error
 
-	tx2, _ := types.SignTx(types.NewTransaction(1, acc1Addr, big.NewInt(10000), bigTxGas, big.NewInt(100000000000), nil), signer, testBankKey)
-	tx3, _ := types.SignTx(types.NewTransaction(2, acc1Addr, big.NewInt(10000), bigTxGas, big.NewInt(100000000000), nil), signer, testBankKey)
+	tx2, _ := types.SignTx(types.NewTransaction(1, acc1Addr, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, testBankKey)
+	tx3, _ := types.SignTx(types.NewTransaction(2, acc1Addr, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, testBankKey)
 	// send transactions in the wrong order, tx3 should be queued
 	test(tx3, true, txStatus{Status: core.TxStatusQueued})
 	test(tx2, true, txStatus{Status: core.TxStatusPending})

@@ -88,7 +88,7 @@ func generateTestCases(t *testing.T, SizeTestFilters int) []FilterTestCase {
 	for i := 0; i < SizeTestFilters; i++ {
 		f, _ := generateFilter(t, true)
 		cases[i].f = f
-		cases[i].alive = (mrand.Int()&int(1) == 0)
+		cases[i].alive = mrand.Int()&int(1) == 0
 	}
 	return cases
 }
@@ -122,7 +122,7 @@ func TestInstallFilters(t *testing.T) {
 
 	for i, testCase := range tst {
 		fil := filters.Get(testCase.id)
-		exist := (fil != nil)
+		exist := fil != nil
 		if exist != testCase.alive {
 			t.Fatalf("seed %d: failed alive: %d, %v, %v", seed, i, exist, testCase.alive)
 		}

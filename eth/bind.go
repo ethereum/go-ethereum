@@ -83,9 +83,7 @@ func toCallArgs(msg ethereum.CallMsg) ethapi.CallArgs {
 		To:   msg.To,
 		From: msg.From,
 		Data: msg.Data,
-	}
-	if msg.Gas != nil {
-		args.Gas = hexutil.Big(*msg.Gas)
+		Gas:  hexutil.Uint64(msg.Gas),
 	}
 	if msg.GasPrice != nil {
 		args.GasPrice = hexutil.Big(*msg.GasPrice)
@@ -124,9 +122,9 @@ func (b *ContractBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error)
 // the backend blockchain. There is no guarantee that this is the true gas limit
 // requirement as other transactions may be added or removed by miners, but it
 // should provide a basis for setting a reasonable default.
-func (b *ContractBackend) EstimateGas(ctx context.Context, msg ethereum.CallMsg) (*big.Int, error) {
-	out, err := b.bcapi.EstimateGas(ctx, toCallArgs(msg))
-	return out.ToInt(), err
+func (b *ContractBackend) EstimateGas(ctx context.Context, msg ethereum.CallMsg) (uint64, error) {
+	gas, err := b.bcapi.EstimateGas(ctx, toCallArgs(msg))
+	return uint64(gas), err
 }
 
 // SendTransaction implements bind.ContractTransactor injects the transaction

@@ -57,7 +57,7 @@ type StateDB struct {
 	dbErr error
 
 	// The refund counter, also used by state transitioning.
-	refund *big.Int
+	refund uint64
 
 	thash, bhash common.Hash
 	txIndex      int
@@ -86,7 +86,6 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		trie:              tr,
 		stateObjects:      make(map[common.Address]*stateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
-		refund:            new(big.Int),
 		logs:              make(map[common.Hash][]*types.Log),
 		preimages:         make(map[common.Hash][]byte),
 	}, nil
@@ -161,9 +160,9 @@ func (self *StateDB) Preimages() map[common.Hash][]byte {
 	return self.preimages
 }
 
-func (self *StateDB) AddRefund(gas *big.Int) {
-	self.journal = append(self.journal, refundChange{prev: new(big.Int).Set(self.refund)})
-	self.refund.Add(self.refund, gas)
+func (self *StateDB) AddRefund(gas uint64) {
+	self.journal = append(self.journal, refundChange{prev: self.refund})
+	self.refund += gas
 }
 
 // Exist reports whether the given account address exists in the state.
@@ -456,7 +455,7 @@ func (self *StateDB) Copy() *StateDB {
 		trie:              self.db.CopyTrie(self.trie),
 		stateObjects:      make(map[common.Address]*stateObject, len(self.stateObjectsDirty)),
 		stateObjectsDirty: make(map[common.Address]struct{}, len(self.stateObjectsDirty)),
-		refund:            new(big.Int).Set(self.refund),
+		refund:            self.refund,
 		logs:              make(map[common.Hash][]*types.Log, len(self.logs)),
 		logSize:           self.logSize,
 		preimages:         make(map[common.Hash][]byte),
@@ -506,9 +505,7 @@ func (self *StateDB) RevertToSnapshot(revid int) {
 }
 
 // GetRefund returns the current value of the refund counter.
-// The return value must not be modified by the caller and will become
-// invalid at the next call to AddRefund.
-func (self *StateDB) GetRefund() *big.Int {
+func (self *StateDB) GetRefund() uint64 {
 	return self.refund
 }
 
@@ -568,7 +565,7 @@ func (s *StateDB) DeleteSuicides() {
 func (s *StateDB) clearJournalAndRefund() {
 	s.journal = nil
 	s.validRevisions = s.validRevisions[:0]
-	s.refund = new(big.Int)
+	s.refund = 0
 }
 
 // CommitTo writes the state to the given database.

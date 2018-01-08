@@ -132,7 +132,10 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 
 		// Send the next finished request to the current sync:
 		case deliverReqCh <- deliverReq:
-			finished = append(finished[:0], finished[1:]...)
+			// Shift out the first request, but also set the emptied slot to nil for GC
+			copy(finished, finished[1:])
+			finished[len(finished)-1] = nil
+			finished = finished[:len(finished)-1]
 
 		// Handle incoming state packs:
 		case pack := <-d.stateCh:

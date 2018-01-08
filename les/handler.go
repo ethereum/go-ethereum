@@ -32,7 +32,6 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/core"
 	"github.com/EthereumCommonwealth/go-callisto/core/state"
 	"github.com/EthereumCommonwealth/go-callisto/core/types"
-	"github.com/EthereumCommonwealth/go-callisto/eth"
 	"github.com/EthereumCommonwealth/go-callisto/eth/downloader"
 	"github.com/EthereumCommonwealth/go-callisto/ethdb"
 	"github.com/EthereumCommonwealth/go-callisto/event"
@@ -73,6 +72,7 @@ func errResp(code errCode, format string, v ...interface{}) error {
 }
 
 type BlockChain interface {
+	Config() *params.ChainConfig
 	HasHeader(hash common.Hash, number uint64) bool
 	GetHeader(hash common.Hash, number uint64) *types.Header
 	GetHeaderByHash(hash common.Hash) *types.Header
@@ -454,14 +454,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			case query.Reverse:
 				// Number based traversal towards the genesis block
 				if query.Origin.Number >= query.Skip+1 {
-					query.Origin.Number -= (query.Skip + 1)
+					query.Origin.Number -= query.Skip + 1
 				} else {
 					unknown = true
 				}
 
 			case !query.Reverse:
 				// Number based traversal towards the leaf block
-				query.Origin.Number += (query.Skip + 1)
+				query.Origin.Number += query.Skip + 1
 			}
 		}
 
@@ -1123,12 +1123,23 @@ func (pm *ProtocolManager) txStatus(hashes []common.Hash) []txStatus {
 	return stats
 }
 
+// NodeInfo represents a short summary of the Ethereum sub-protocol metadata
+// known about the host peer.
+type NodeInfo struct {
+	Network    uint64              `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
+	Difficulty *big.Int            `json:"difficulty"` // Total difficulty of the host's blockchain
+	Genesis    common.Hash         `json:"genesis"`    // SHA3 hash of the host's genesis block
+	Config     *params.ChainConfig `json:"config"`     // Chain configuration for the fork rules
+	Head       common.Hash         `json:"head"`       // SHA3 hash of the host's best owned block
+}
+
 // NodeInfo retrieves some protocol metadata about the running host node.
-func (self *ProtocolManager) NodeInfo() *eth.EthNodeInfo {
-	return &eth.EthNodeInfo{
+func (self *ProtocolManager) NodeInfo() *NodeInfo {
+	return &NodeInfo{
 		Network:    self.networkId,
 		Difficulty: self.blockchain.GetTdByHash(self.blockchain.LastBlockHash()),
 		Genesis:    self.blockchain.Genesis().Hash(),
+		Config:     self.blockchain.Config(),
 		Head:       self.blockchain.LastBlockHash(),
 	}
 }

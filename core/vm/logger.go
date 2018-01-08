@@ -100,6 +100,8 @@ type StructLogger struct {
 
 	logs          []StructLog
 	changedValues map[common.Address]Storage
+	output        []byte
+	err           error
 }
 
 // NewStructLogger returns a new logger
@@ -172,17 +174,19 @@ func (l *StructLogger) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost ui
 }
 
 func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
-	fmt.Printf("0x%x", output)
-	if err != nil {
-		fmt.Printf(" error: %v\n", err)
-	}
+	l.output = output
+	l.err = err
 	return nil
 }
 
-// StructLogs returns a list of captured log entries
-func (l *StructLogger) StructLogs() []StructLog {
-	return l.logs
-}
+// StructLogs returns the captured log entries.
+func (l *StructLogger) StructLogs() []StructLog { return l.logs }
+
+// Error returns the VM error captured by the trace.
+func (l *StructLogger) Error() error { return l.err }
+
+// Output returns the VM return value captured by the trace.
+func (l *StructLogger) Output() []byte { return l.output }
 
 // WriteTrace writes a formatted trace to the given writer
 func WriteTrace(writer io.Writer, logs []StructLog) {

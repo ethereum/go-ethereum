@@ -259,6 +259,51 @@ var unpackTests = []unpackTest{
 		enc:  "000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003",
 		want: [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)},
 	},
+	// struct outputs
+	{
+		def: `[{"name":"int1","type":"int256"},{"name":"int2","type":"int256"}]`,
+		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		want: struct {
+			Int1 *big.Int
+			Int2 *big.Int
+		}{big.NewInt(1), big.NewInt(2)},
+	},
+	{
+		def: `[{"name":"int","type":"int256"},{"name":"Int","type":"int256"}]`,
+		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		want: struct {
+			Int1 *big.Int
+			Int2 *big.Int
+		}{},
+		err: "abi: multiple outputs mapping to the same struct field 'Int'",
+	},
+	{
+		def: `[{"name":"int","type":"int256"},{"name":"_int","type":"int256"}]`,
+		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		want: struct {
+			Int1 *big.Int
+			Int2 *big.Int
+		}{},
+		err: "abi: multiple outputs mapping to the same struct field 'Int'",
+	},
+	{
+		def: `[{"name":"Int","type":"int256"},{"name":"_int","type":"int256"}]`,
+		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		want: struct {
+			Int1 *big.Int
+			Int2 *big.Int
+		}{},
+		err: "abi: multiple outputs mapping to the same struct field 'Int'",
+	},
+	{
+		def: `[{"name":"Int","type":"int256"},{"name":"_","type":"int256"}]`,
+		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		want: struct {
+			Int1 *big.Int
+			Int2 *big.Int
+		}{},
+		err: "abi: purely underscored output cannot unpack to struct",
+	},
 }
 
 func TestUnpack(t *testing.T) {

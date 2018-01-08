@@ -177,7 +177,7 @@ func validateRequest(r *http.Request) (int, error) {
 		return http.StatusRequestEntityTooLarge, err
 	}
 	mt, _, err := mime.ParseMediaType(r.Header.Get("content-type"))
-	if err != nil || mt != contentType {
+	if r.Method != http.MethodOptions && (err != nil || mt != contentType) {
 		err := fmt.Errorf("invalid content type, only %s is supported", contentType)
 		return http.StatusUnsupportedMediaType, err
 	}
