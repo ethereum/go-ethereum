@@ -207,6 +207,12 @@
 			"revisionTime": "2016-12-24T10:41:01Z"
 		},
 		{
+			"checksumSHA1": "6tNwbL5tUS0dxYzADKVZtI2d/lE=",
+			"path": "github.com/influxdata/influxdb/client",
+			"revision": "a55dd0f50edd14c9c798d3564189eb4f53914309",
+			"revisionTime": "2017-10-09T17:24:46Z"
+		},
+		{
 			"checksumSHA1": "vTGKMIfiMwz43y5bsgx9PrL+AVw=",
 			"path": "github.com/jackpal/go-nat-pmp",
 			"revision": "1fa385a6f45828c83361136b45b1a21a12139493",
@@ -268,6 +274,24 @@
 			"revisionTime": "2017-04-03T15:03:10Z"
 		},
 		{
+			"checksumSHA1": "riVL/YgVMMSXiGx4T84qkeYBt8M=",
+			"path": "github.com/nonsense/go-metrics",
+			"revision": "9551ad5c1c4abf784761d7752fb0e8cc8fbb2181",
+			"revisionTime": "2018-01-17T12:19:44Z"
+		},
+		{
+			"checksumSHA1": "imlKDfVfXiGUjNbWUrV+7bMkVPs=",
+			"path": "github.com/nonsense/go-metrics-influxdb",
+			"revision": "da50c4cc2e1531c45fc41f1392250ee3c86de7d2",
+			"revisionTime": "2018-01-17T12:28:20Z"
+		},
+		{
+			"checksumSHA1": "UoDEj2F+9i41oox2kyjP6/nWwYQ=",
+			"path": "github.com/nonsense/go-metrics/exp",
+			"revision": "9551ad5c1c4abf784761d7752fb0e8cc8fbb2181",
+			"revisionTime": "2018-01-17T12:19:44Z"
+		},
+		{
 			"checksumSHA1": "R1h9XHH3dTmLq7yKL9/uW0xFwfs=",
 			"path": "github.com/nsf/termbox-go",
 			"revision": "3540b76b9c77679aeffd0a47e00243fb0ce47133",
@@ -308,18 +332,6 @@
 			"path": "github.com/prometheus/prometheus/util/flock",
 			"revision": "3101606756c53221ed58ba94ecba6b26adf89dcc",
 			"revisionTime": "2017-08-14T17:01:13Z"
-		},
-		{
-			"checksumSHA1": "KAzbLjI9MzW2tjfcAsK75lVRp6I=",
-			"path": "github.com/rcrowley/go-metrics",
-			"revision": "1f30fe9094a513ce4c700b9a54458bbb0c96996c",
-			"revisionTime": "2016-11-28T21:05:44Z"
-		},
-		{
-			"checksumSHA1": "q/d9nXRQYKEJ/EWn+5y6jL8rPGs=",
-			"path": "github.com/rcrowley/go-metrics/exp",
-			"revision": "1f30fe9094a513ce4c700b9a54458bbb0c96996c",
-			"revisionTime": "2016-11-28T21:05:44Z"
 		},
 		{
 			"checksumSHA1": "1ESHllhZOIBg7MnlGHUdhz047bI=",

@@ -36,8 +36,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
+	metrics "github.com/ethersphere/go-metrics"
 	"github.com/hashicorp/golang-lru/simplelru"
-	metrics "github.com/rcrowley/go-metrics"
 )
 
 var ErrInvalidDumpMagic = errors.New("invalid dump magic")

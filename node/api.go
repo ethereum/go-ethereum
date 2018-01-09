@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/rcrowley/go-metrics"
+	"github.com/nonsense/go-metrics"
 )
 
 // PrivateAdminAPI is the collection of administrative API methods exposed only

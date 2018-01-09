@@ -42,10 +42,20 @@ t.Update(47)
 Register() is not threadsafe. For threadsafe metric registration use
 GetOrRegister:
 
-```
+```go
 t := metrics.GetOrRegisterTimer("account.create.latency", nil)
 t.Time(func() {})
 t.Update(47)
+```
+
+**NOTE:** Be sure to unregister short-lived meters and timers otherwise they will
+leak memory:
+
+```go
+// Will call Stop() on the Meter to allow for garbage collection
+metrics.Unregister("quux")
+// Or similarly for a Timer that embeds a Meter
+metrics.Unregister("bang")
 ```
 
 Periodically log every metric in human-readable form to standard error:
@@ -81,12 +91,13 @@ issues [#121](https://github.com/rcrowley/go-metrics/issues/121) and
 ```go
 import "github.com/vrischmann/go-metrics-influxdb"
 
-go influxdb.Influxdb(metrics.DefaultRegistry, 10e9, &influxdb.Config{
-    Host:     "127.0.0.1:8086",
-    Database: "metrics",
-    Username: "test",
-    Password: "test",
-})
+go influxdb.InfluxDB(metrics.DefaultRegistry,
+  10e9, 
+  "127.0.0.1:8086", 
+  "database-name", 
+  "username", 
+  "password"
+)
 ```
 
 Periodically upload every metric to Librato using the [Librato client](https://github.com/mihasya/go-metrics-librato):
@@ -146,8 +157,10 @@ Publishing Metrics
 
 Clients are available for the following destinations:
 
-* Librato - [https://github.com/mihasya/go-metrics-librato](https://github.com/mihasya/go-metrics-librato)
-* Graphite - [https://github.com/cyberdelia/go-metrics-graphite](https://github.com/cyberdelia/go-metrics-graphite)
-* InfluxDB - [https://github.com/vrischmann/go-metrics-influxdb](https://github.com/vrischmann/go-metrics-influxdb)
-* Ganglia - [https://github.com/appscode/metlia](https://github.com/appscode/metlia)
-* Prometheus - [https://github.com/deathowl/go-metrics-prometheus](https://github.com/deathowl/go-metrics-prometheus)
+* Librato - https://github.com/mihasya/go-metrics-librato
+* Graphite - https://github.com/cyberdelia/go-metrics-graphite
+* InfluxDB - https://github.com/vrischmann/go-metrics-influxdb
+* Ganglia - https://github.com/appscode/metlia
+* Prometheus - https://github.com/deathowl/go-metrics-prometheus
+* DataDog - https://github.com/syntaqx/go-metrics-datadog
+* SignalFX - https://github.com/pascallouisperez/go-metrics-signalfx
