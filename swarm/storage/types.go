@@ -273,7 +273,7 @@ type Joiner interface {
 	   The chunks are not meant to be validated by the chunker when joining. This
 	   is because it is left to the DPA to decide which sources are trusted.
 	*/
-	Join(key Key, chunkC chan *Chunk) LazySectionReader
+	Join(key Key, chunkC chan *Chunk, depth int) LazySectionReader
 }
 
 type Chunker interface {

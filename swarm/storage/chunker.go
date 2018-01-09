@@ -302,16 +302,18 @@ type LazyChunkReader struct {
 	chunkSize int64       // inherit from chunker
 	branches  int64       // inherit from chunker
 	hashSize  int64       // inherit from chunker
+	depth     int
 }
 
 // implements the Joiner interface
-func (self *TreeChunker) Join(key Key, chunkC chan *Chunk) LazySectionReader {
+func (self *TreeChunker) Join(key Key, chunkC chan *Chunk, depth int) LazySectionReader {
 	return &LazyChunkReader{
 		key:       key,
 		chunkC:    chunkC,
 		chunkSize: self.chunkSize,
 		branches:  self.branches,
 		hashSize:  self.hashSize,
+		depth:     depth,
 	}
 }
 
@@ -358,8 +360,13 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		depth++
 	}
 	wg := sync.WaitGroup{}
+	length := int64(len(b))
+	for d := 0; d < self.depth; d++ {
+		off *= self.chunkSize
+		length *= self.chunkSize
+	}
 	wg.Add(1)
-	go self.join(b, off, off+int64(len(b)), depth, treeSize/self.branches, self.chunk, &wg, errC, quitC)
+	go self.join(b, off, off+length, depth, treeSize/self.branches, self.chunk, &wg, errC, quitC)
 	go func() {
 		wg.Wait()
 		close(errC)
@@ -379,18 +386,14 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 
 func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeSize int64, chunk *Chunk, parentWg *sync.WaitGroup, errC chan error, quitC chan bool) {
 	defer parentWg.Done()
-	// return NewDPA(&LocalStore{})
-
-	// chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-
 	// find appropriate block level
-	for chunk.Size < treeSize && depth > 0 {
+	for chunk.Size < treeSize && depth > self.depth {
 		treeSize /= self.branches
 		depth--
 	}
 
 	// leaf chunk found
-	if depth == 0 {
+	if depth == self.depth {
 		extra := 8 + eoff - int64(len(chunk.SData))
 		if extra > 0 {
 			eoff -= extra

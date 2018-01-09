@@ -34,7 +34,7 @@ import (
 const (
 	HashSize = 32
 
-	Low int = iota
+	Low uint8 = iota
 	Mid
 	High
 	Top
@@ -80,6 +80,7 @@ func (self TakeoverProofMsg) String() string {
 // SubcribeMsg is the protocol msg for requesting a stream(section)
 type SubscribeMsg struct {
 	Stream   Stream
+	Key      []byte
 	From, To uint64
 	Priority uint8 // delivered on priority channel
 }
@@ -88,6 +89,7 @@ type SubscribeMsg struct {
 // stream section
 type UnsyncedKeysMsg struct {
 	Stream         Stream // name of Stream
+	Key            []byte // subtype or key
 	From, To       uint64 // peer and db-specific entry count
 	Hashes         []byte // stream of hashes (128)
 	*HandoverProof        // HandoverProof
@@ -114,6 +116,7 @@ func (self UnsyncedKeysMsg) String() string {
 // offered in UnsyncedKeysMsg downstream peer actually wants sent over
 type WantedKeysMsg struct {
 	Stream   Stream // name of stream
+	Key      []byte // subtype or key
 	Want     []byte // bitvector indicating which keys of the batch needed
 	From, To uint64 // next interval offset - empty if not to be continued
 }
@@ -127,8 +130,8 @@ func (self WantedKeysMsg) String() string {
 type Streamer struct {
 	incomingLock sync.RWMutex
 	outgoingLock sync.RWMutex
-	outgoing     map[Stream]func(*StreamerPeer) (OutgoingStreamer, error)
-	incoming     map[Stream]func(*StreamerPeer) (IncomingStreamer, error)
+	outgoing     map[Stream]func(*StreamerPeer, []byte) (OutgoingStreamer, error)
+	incoming     map[Stream]func(*StreamerPeer, []byte) (IncomingStreamer, error)
 
 	dbAccess *DbAccess
 	overlay  Overlay
@@ -138,8 +141,8 @@ type Streamer struct {
 // NewStreamer is Streamer constructor
 func NewStreamer(overlay Overlay, dbAccess *DbAccess) *Streamer {
 	return &Streamer{
-		outgoing: make(map[Stream]func(*StreamerPeer) (OutgoingStreamer, error)),
-		incoming: make(map[Stream]func(*StreamerPeer) (IncomingStreamer, error)),
+		outgoing: make(map[Stream]func(*StreamerPeer, []byte) (OutgoingStreamer, error)),
+		incoming: make(map[Stream]func(*StreamerPeer, []byte) (IncomingStreamer, error)),
 		dbAccess: dbAccess,
 		overlay:  overlay,
 		receiveC: make(chan *ChunkDeliveryMsg, 10),
@@ -147,21 +150,21 @@ func NewStreamer(overlay Overlay, dbAccess *DbAccess) *Streamer {
 }
 
 // RegisterIncomingStreamer registers an incoming streamer constructor
-func (self *Streamer) RegisterIncomingStreamer(stream Stream, f func(*StreamerPeer) (IncomingStreamer, error)) {
+func (self *Streamer) RegisterIncomingStreamer(stream Stream, f func(*StreamerPeer, []byte) (IncomingStreamer, error)) {
 	self.incomingLock.Lock()
 	defer self.incomingLock.Unlock()
 	self.incoming[stream] = f
 }
 
 // RegisterOutgoingStreamer registers an outgoing streamer constructor
-func (self *Streamer) RegisterOutgoingStreamer(stream Stream, f func(*StreamerPeer) (OutgoingStreamer, error)) {
+func (self *Streamer) RegisterOutgoingStreamer(stream Stream, f func(*StreamerPeer, []byte) (OutgoingStreamer, error)) {
 	self.outgoingLock.Lock()
 	defer self.outgoingLock.Unlock()
 	self.outgoing[stream] = f
 }
 
 // GetIncomingStreamer accessor for incoming streamer constructors
-func (self *Streamer) GetIncomingStreamer(stream Stream) (func(*StreamerPeer) (IncomingStreamer, error), error) {
+func (self *Streamer) GetIncomingStreamer(stream Stream) (func(*StreamerPeer, []byte) (IncomingStreamer, error), error) {
 	self.incomingLock.RLock()
 	defer self.incomingLock.RUnlock()
 	f := self.incoming[stream]
@@ -172,7 +175,7 @@ func (self *Streamer) GetIncomingStreamer(stream Stream) (func(*StreamerPeer) (I
 }
 
 // GetOutgoingStreamer accessor for incoming streamer constructors
-func (self *Streamer) GetOutgoingStreamer(stream Stream) (func(*StreamerPeer) (OutgoingStreamer, error), error) {
+func (self *Streamer) GetOutgoingStreamer(stream Stream) (func(*StreamerPeer, []byte) (OutgoingStreamer, error), error) {
 	self.outgoingLock.RLock()
 	defer self.outgoingLock.RUnlock()
 	f := self.outgoing[stream]
@@ -190,19 +193,30 @@ func (self *Streamer) PeerInfo(id discover.NodeID) interface{} {
 	return nil
 }
 
+type outgoingStreamer struct {
+	OutgoingStreamer
+	priority     uint8
+	currentBatch []byte
+}
+
 // OutgoingStreamer interface for outgoing peer Streamer
 type OutgoingStreamer interface {
-	CurrentBatch() []byte
 	SetNextBatch(uint64, uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error)
 	GetData([]byte) []byte
-	Priority() int
+}
+
+type incomingStreamer struct {
+	IncomingStreamer
+	priority uint8
+	quit     chan struct{}
+	next     chan struct{}
 }
 
 // IncomingStreamer interface for incoming peer Streamer
 type IncomingStreamer interface {
 	NextBatch(uint64) (uint64, uint64)
 	NeedData([]byte) func()
-	Priority() int
+	BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error)
 }
 
 // StreamerPeer is the Peer extention for the streaming protocol
@@ -214,8 +228,8 @@ type StreamerPeer struct {
 	dbAccess     *DbAccess
 	outgoingLock sync.RWMutex
 	incomingLock sync.RWMutex
-	outgoing     map[Stream]OutgoingStreamer
-	incoming     map[Stream]IncomingStreamer
+	outgoing     map[Stream]*outgoingStreamer
+	incoming     map[Stream]*incomingStreamer
 	quit         chan struct{}
 }
 
@@ -232,10 +246,10 @@ type StreamerPeer struct {
 // NewStreamerPeer is the constructor for StreamerPeer
 func NewStreamerPeer(p Peer, streamer *Streamer) *StreamerPeer {
 	self := &StreamerPeer{
-		pq:       pq.New(PriorityQueue, PriorityQueueCap),
+		pq:       pq.New(int(PriorityQueue), PriorityQueueCap),
 		streamer: streamer,
-		outgoing: make(map[Stream]OutgoingStreamer),
-		incoming: make(map[Stream]IncomingStreamer),
+		outgoing: make(map[Stream]*outgoingStreamer),
+		incoming: make(map[Stream]*incomingStreamer),
 		quit:     make(chan struct{}),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -247,38 +261,41 @@ func NewStreamerPeer(p Peer, streamer *Streamer) *StreamerPeer {
 	return self
 }
 
+// RetrieveRequestMsg is the protocol msg for chunk retrieve requests
 type RetrieveRequestMsg struct {
 	Key storage.Key
 }
 
 // RetrieveRequestStreamer implements OutgoingStreamer
 type RetrieveRequestStreamer struct {
-	deliveryC    chan *storage.Chunk
-	batchC       chan []byte
-	dbAccess     *DbAccess
-	currentBatch []byte
-	currentLen   uint64
+	deliveryC  chan *storage.Chunk
+	batchC     chan []byte
+	db         *DbAccess
+	currentLen uint64
 }
 
-func RegisterRequestStreamer(streamer *Streamer, dbAccess *DbAccess) {
-	streamer.RegisterOutgoingStreamer(retrieveRequestStream, func(_ *StreamerPeer) (OutgoingStreamer, error) {
-		return NewRetrieveRequestStreamer(dbAccess), nil
+// RegisterRequestStreamer registers outgoing and incoming streamers for request handling
+func RegisterRequestStreamer(streamer *Streamer, db *DbAccess) {
+	streamer.RegisterOutgoingStreamer(retrieveRequestStream, func(_ *StreamerPeer, t []byte) (OutgoingStreamer, error) {
+		return NewRetrieveRequestStreamer(db), nil
 	})
-	streamer.RegisterIncomingStreamer(retrieveRequestStream, func(p *StreamerPeer) (IncomingStreamer, error) {
-		return NewIncomingSwarmSyncer(Top, nil, p, dbAccess, nil)
+	streamer.RegisterIncomingStreamer(retrieveRequestStream, func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
+		return NewIncomingSwarmSyncer(nil, p, db, nil)
 	})
 }
 
-func NewRetrieveRequestStreamer(dbAccess *DbAccess) *RetrieveRequestStreamer {
+// NewRetrieveRequestStreamer is RetrieveRequestStreamer constructor
+func NewRetrieveRequestStreamer(db *DbAccess) *RetrieveRequestStreamer {
 	s := &RetrieveRequestStreamer{
 		deliveryC: make(chan *storage.Chunk),
 		batchC:    make(chan []byte),
-		dbAccess:  dbAccess,
+		db:        db,
 	}
 	go s.processDeliveries()
 	return s
 }
 
+// processDeliveries handles delivered chunk hashes
 func (s *RetrieveRequestStreamer) processDeliveries() {
 	var hashes []byte
 	for {
@@ -291,26 +308,19 @@ func (s *RetrieveRequestStreamer) processDeliveries() {
 	}
 }
 
-func (s *RetrieveRequestStreamer) CurrentBatch() []byte {
-	return s.currentBatch
-}
-
+// SetNextBatch
 func (s *RetrieveRequestStreamer) SetNextBatch(_, _ uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error) {
 	hashes = <-s.batchC
-	s.currentBatch = hashes
 	from = s.currentLen
 	s.currentLen += uint64(len(hashes))
 	to = s.currentLen
 	return
 }
 
+// GetData retrives chunk data from db store
 func (s *RetrieveRequestStreamer) GetData(key []byte) []byte {
-	chunk, _ := s.dbAccess.get(storage.Key(key))
+	chunk, _ := s.db.get(storage.Key(key))
 	return chunk.SData
-}
-
-func (s *RetrieveRequestStreamer) Priority() int {
-	return Top
 }
 
 const retrieveRequestStream = Stream("RETRIEVE_REQUEST")
@@ -321,7 +331,7 @@ func (self *StreamerPeer) handleRetrieveRequestMsg(req *RetrieveRequestMsg) erro
 	if err != nil {
 		return err
 	}
-	streamer := s.(*RetrieveRequestStreamer)
+	streamer := s.OutgoingStreamer.(*RetrieveRequestStreamer)
 	if chunk.ReqC != nil {
 		if created {
 			if err := self.streamer.Retrieve(chunk); err != nil {
@@ -349,10 +359,16 @@ func (self *StreamerPeer) handleRetrieveRequestMsg(req *RetrieveRequestMsg) erro
 	return nil
 }
 
+// Retrieve sends a chunk retrieve request to
 func (self *Streamer) Retrieve(chunk *storage.Chunk) error {
-	// TODO: using the overlay find the closes peer to send the retrieve
-	//       request to.
-	//       self.Overlay.EachConn(to, 256, func(op network.OverlayConn, po int, isproxbin bool) bool {})
+	self.overlay.EachConn(chunk.Key[:], 255, func(p OverlayConn, po int, nn bool) bool {
+		sp := p.(*StreamerPeer)
+		// TODO: skip light nodes that do not accept retrieve requests
+		sp.SendPriority(&RetrieveRequestMsg{
+			Key: chunk.Key[:],
+		}, Top)
+		return false
+	})
 	return nil
 }
 
@@ -383,7 +399,7 @@ func (self *Streamer) processReceivedChunks() {
 	}
 }
 
-func (self *StreamerPeer) getOutgoingStreamer(s Stream) (OutgoingStreamer, error) {
+func (self *StreamerPeer) getOutgoingStreamer(s Stream) (*outgoingStreamer, error) {
 	self.outgoingLock.RLock()
 	defer self.outgoingLock.RUnlock()
 	streamer := self.outgoing[s]
@@ -393,7 +409,7 @@ func (self *StreamerPeer) getOutgoingStreamer(s Stream) (OutgoingStreamer, error
 	return streamer, nil
 }
 
-func (self *StreamerPeer) getIncomingStreamer(s Stream) (IncomingStreamer, error) {
+func (self *StreamerPeer) getIncomingStreamer(s Stream) (*incomingStreamer, error) {
 	self.incomingLock.RLock()
 	defer self.incomingLock.RUnlock()
 	streamer := self.incoming[s]
@@ -403,44 +419,59 @@ func (self *StreamerPeer) getIncomingStreamer(s Stream) (IncomingStreamer, error
 	return streamer, nil
 }
 
-func (self *StreamerPeer) setOutgoingStreamer(s Stream, o OutgoingStreamer) error {
+func (self *StreamerPeer) setOutgoingStreamer(s Stream, o OutgoingStreamer, priority uint8) (*outgoingStreamer, error) {
 	self.outgoingLock.Lock()
 	defer self.outgoingLock.Unlock()
 	if self.outgoing[s] != nil {
-		return fmt.Errorf("stream %v already registered", s)
+		return nil, fmt.Errorf("stream %v already registered", s)
 	}
-	self.outgoing[s] = o
-	return nil
+	os := &outgoingStreamer{
+		OutgoingStreamer: o,
+		priority:         priority,
+	}
+	self.outgoing[s] = os
+	return os, nil
 }
 
-func (self *StreamerPeer) setIncomingStreamer(s Stream, i IncomingStreamer) error {
+func (self *StreamerPeer) setIncomingStreamer(s Stream, i IncomingStreamer, priority uint8) error {
 	self.incomingLock.Lock()
 	defer self.incomingLock.Unlock()
 	if self.incoming[s] != nil {
 		return fmt.Errorf("stream %v already registered", s)
 	}
-	self.incoming[s] = i
+	next := make(chan struct{}, 1)
+	self.incoming[s] = &incomingStreamer{
+		IncomingStreamer: i,
+		priority:         priority,
+		next:             next,
+	}
+	next <- struct{}{} // this is to allow wantedKeysMsg before first batch arrives
 	return nil
 }
 
 // Subscribe initiates the streamer
-func (self *StreamerPeer) Subscribe(s Stream, from, to uint64) error {
+func (self *StreamerPeer) Subscribe(s Stream, t []byte, from, to uint64, priority uint8) error {
 	f, err := self.streamer.GetIncomingStreamer(s)
 	if err != nil {
 		return err
 	}
-	is, err := f(self)
+	is, err := f(self, t)
 	if err != nil {
 		return err
 	}
-	self.setIncomingStreamer(s, is)
+	err = self.setIncomingStreamer(s, is, priority)
+	if err != nil {
+		return err
+	}
+
 	msg := &SubscribeMsg{
 		Stream:   s,
+		Key:      t,
 		From:     from,
 		To:       to,
-		Priority: uint8(is.Priority()),
+		Priority: priority,
 	}
-	self.SendPriority(msg, is.Priority())
+	self.SendPriority(msg, priority)
 	return nil
 }
 
@@ -449,14 +480,16 @@ func (self *StreamerPeer) handleSubscribeMsg(req *SubscribeMsg) error {
 	if err != nil {
 		return err
 	}
-	s, err := f(self)
+	s, err := f(self, req.Key)
 	if err != nil {
 		return err
 	}
-	if err := self.setOutgoingStreamer(req.Stream, s); err != nil {
+	key := string(req.Stream) + string(req.Key)
+	os, err := self.setOutgoingStreamer(Stream(key), s, req.Priority)
+	if err != nil {
 		return nil
 	}
-	self.SendUnsyncedKeys(s, req.From, req.To, int(req.Priority))
+	go self.SendUnsyncedKeys(os, req.From, req.To)
 	return nil
 }
 
@@ -485,11 +518,17 @@ func (self *StreamerPeer) handleUnsyncedKeysMsg(req *UnsyncedKeysMsg) error {
 			}(wait)
 		}
 	}
-	// go func() {
-	// 	wg.Wait()
-	// 	msg := s.TakeoverProof(req.Stream, req.From, req.Hashes, req.Root)
-	// 	self.Send(msg, s.Priority())
-	// }()
+	go func() {
+		wg.Wait()
+		if tf := s.BatchDone(req.Stream, req.From, hashes, req.Root); tf != nil {
+			tp, err := tf()
+			if err != nil {
+				return
+			}
+			self.SendPriority(tp, s.priority)
+		}
+		s.next <- struct{}{}
+	}()
 	// only send wantedKeysMsg if all missing chunks of the previous batch arrived
 	// except
 	from, to := s.NextBatch(req.To)
@@ -502,7 +541,14 @@ func (self *StreamerPeer) handleUnsyncedKeysMsg(req *UnsyncedKeysMsg) error {
 		From:   from,
 		To:     to,
 	}
-	self.SendPriority(msg, s.Priority())
+	go func() {
+		select {
+		case <-s.next:
+		case <-s.quit:
+			return
+		}
+		self.SendPriority(msg, s.priority)
+	}()
 	return nil
 }
 
@@ -514,9 +560,9 @@ func (self *StreamerPeer) handleWantedKeysMsg(req *WantedKeysMsg) error {
 	if err != nil {
 		return err
 	}
-	hashes := s.CurrentBatch()
+	hashes := s.currentBatch
 	// launch in go routine since GetBatch blocks until new hashes arrive
-	go self.SendUnsyncedKeys(s, req.From, req.To, s.Priority())
+	go self.SendUnsyncedKeys(s, req.From, req.To)
 	l := len(hashes) / HashSize
 	want, err := bv.NewFromBytes(req.Want, l)
 	if err != nil {
@@ -531,7 +577,7 @@ func (self *StreamerPeer) handleWantedKeysMsg(req *WantedKeysMsg) error {
 			}
 			chunk := storage.NewChunk(hash, nil)
 			chunk.SData = data
-			if err := self.Deliver(chunk, s.Priority()); err != nil {
+			if err := self.Deliver(chunk, s.priority); err != nil {
 				return err
 			}
 		}
@@ -549,32 +595,33 @@ func (self *StreamerPeer) handleTakeoverProofMsg(req *TakeoverProofMsg) error {
 }
 
 // Deliver sends a storeRequestMsg protocol message to the peer
-func (self *StreamerPeer) Deliver(chunk *storage.Chunk, priority int) error {
+func (self *StreamerPeer) Deliver(chunk *storage.Chunk, priority uint8) error {
 	msg := &ChunkDeliveryMsg{
 		Key:   chunk.Key,
 		SData: chunk.SData,
 	}
-	return self.pq.Push(nil, msg, priority)
+	return self.pq.Push(nil, msg, int(priority))
 }
 
 // Deliver sends a storeRequestMsg protocol message to the peer
-func (self *StreamerPeer) SendPriority(msg interface{}, priority int) error {
-	return self.pq.Push(nil, msg, priority)
+func (self *StreamerPeer) SendPriority(msg interface{}, priority uint8) error {
+	return self.pq.Push(nil, msg, int(priority))
 }
 
 // UnsyncedKeys sends UnsyncedKeysMsg protocol msg
-func (self *StreamerPeer) SendUnsyncedKeys(s OutgoingStreamer, f, t uint64, priority int) error {
+func (self *StreamerPeer) SendUnsyncedKeys(s *outgoingStreamer, f, t uint64) error {
 	hashes, from, to, proof, err := s.SetNextBatch(f, t)
 	if err != nil {
 		return err
 	}
+	s.currentBatch = hashes
 	msg := &UnsyncedKeysMsg{
 		HandoverProof: proof,
 		Hashes:        hashes,
 		From:          from,
 		To:            to,
 	}
-	return self.SendPriority(msg, s.Priority())
+	return self.SendPriority(msg, s.priority)
 }
 
 // StreamerSpec is the spec of the streamer protocol.
@@ -595,10 +642,13 @@ var StreamerSpec = &protocols.Spec{
 func (s *Streamer) Run(p *bzzPeer) error {
 	sp := NewStreamerPeer(p, s)
 	// load saved intervals
-	sp.handleSubscribeMsg(&SubscribeMsg{
-		Stream:   retrieveRequestStream,
-		Priority: uint8(Top),
-	})
+	// autosubscribe to request handler to serve request only for non-light nodes
+	// sp.handleSubscribeMsg(&SubscribeMsg{
+	// 	Stream:   retrieveRequestStream,
+	// 	Priority: uint8(Top),
+	// })
+	// subscribe to request handling ; only with non-light nodes
+	sp.Subscribe(retrieveRequestStream, nil, 0, 0, Top)
 	defer close(sp.quit)
 	return sp.Run(sp.HandleMsg)
 }

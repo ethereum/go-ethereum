@@ -70,19 +70,24 @@ func (self *DbAccess) put(chunk *storage.Chunk) {
 // * live request delivery with or without checkback
 // * (live/non-live historical) chunk syncing per proximity bin
 type OutgoingSwarmSyncer struct {
-	po           uint8
-	db           *DbAccess
-	sessionAt    uint64
-	currentBatch []byte
-	priority     int
+	po        uint8
+	db        *DbAccess
+	sessionAt uint64
+	start     uint64
 }
 
 // NewOutgoingSwarmSyncer is contructor for OutgoingSwarmSyncer
-func NewOutgoingSwarmSyncer(po uint8, db *DbAccess) (*OutgoingSwarmSyncer, error) {
+func NewOutgoingSwarmSyncer(live bool, po uint8, db *DbAccess) (*OutgoingSwarmSyncer, error) {
+	sessionAt := db.currentBucketStorageIndex(po)
+	var start uint64
+	if live {
+		start = sessionAt
+	}
 	self := &OutgoingSwarmSyncer{
 		po:        po,
 		db:        db,
-		sessionAt: db.currentBucketStorageIndex(po),
+		sessionAt: sessionAt,
+		start:     start,
 	}
 	return self, nil
 }
@@ -90,20 +95,22 @@ func NewOutgoingSwarmSyncer(po uint8, db *DbAccess) (*OutgoingSwarmSyncer, error
 const maxPO = 32
 
 func RegisterOutgoingSyncers(streamer *Streamer, db *DbAccess) {
-	for po := uint8(0); po < maxPO; po++ {
-		stream := Stream(fmt.Sprintf("SYNC-%02d-live", po))
-		streamer.RegisterOutgoingStreamer(stream, func(p *StreamerPeer) (OutgoingStreamer, error) {
-			return NewOutgoingSwarmSyncer(po, db)
-		})
-		stream = Stream(fmt.Sprintf("SYNC-%02d-history", po))
-		streamer.RegisterOutgoingStreamer(stream, func(p *StreamerPeer) (OutgoingStreamer, error) {
-			return NewOutgoingSwarmSyncer(po, db)
-		})
-		// stream = Stream(fmt.Sprintf("SYNC-%02d-delete", po))
-		// streamer.RegisterOutgoingStreamer(stream, func(p *StreamerPeer) (OutgoingStreamer, error) {
-		// 	return NewOutgoingProvableSwarmSyncer(po, db)
-		// })
-	}
+	stream := Stream("SYNC")
+	streamer.RegisterOutgoingStreamer(stream, func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
+		syncType, po := parseSyncLabel(t)
+		switch syncType {
+		case "LIVE":
+			return NewOutgoingSwarmSyncer(true, po, db)
+		case "HISTORY":
+			return NewOutgoingSwarmSyncer(false, po, db)
+		default:
+			return nil, errors.New("invalid sync type")
+		}
+	})
+	// stream = Stream(fmt.Sprintf("SYNC-%02d-delete", po))
+	// streamer.RegisterOutgoingStreamer(stream, func(p *StreamerPeer) (OutgoingStreamer, error) {
+	// 	return NewOutgoingProvableSwarmSyncer(po, db)
+	// })
 }
 
 // GetSection retrieves the actual chunk from localstore
@@ -115,18 +122,13 @@ func (self *OutgoingSwarmSyncer) GetData(key []byte) []byte {
 	return chunk.SData
 }
 
-func (self *OutgoingSwarmSyncer) CurrentBatch() []byte {
-	return self.currentBatch
-}
-
-func (self *OutgoingSwarmSyncer) Priority() int {
-	return self.priority
-}
-
 // GetBatch retrieves the next batch of hashes from the dbstore
 func (self *OutgoingSwarmSyncer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
 	var batch []byte
 	i := 0
+	if from == 0 {
+		from = self.start
+	}
 	err := self.db.iterator(from, to, self.po, func(key storage.Key, idx uint64) bool {
 		batch = append(batch, key[:]...)
 		i++
@@ -136,17 +138,15 @@ func (self *OutgoingSwarmSyncer) SetNextBatch(from, to uint64) ([]byte, uint64, 
 	if err != nil {
 		return nil, 0, 0, nil, err
 	}
-	self.currentBatch = batch
 	log.Debug("Swarm batch", "po", self.po, "len", i, "from", from, "to", to)
 	return batch, from, to, nil, nil
 }
 
 // IncomingSwarmSyncer
 type IncomingSwarmSyncer struct {
-	priority      int
 	sessionAt     uint64
 	nextC         chan struct{}
-	intervals     []uint64
+	intervals     *Intervals
 	sessionRoot   storage.Key
 	sessionReader storage.LazySectionReader
 	retrieveC     chan *storage.Chunk
@@ -159,18 +159,13 @@ type IncomingSwarmSyncer struct {
 }
 
 // NewIncomingSwarmSyncer is a contructor for provable data exchange syncer
-func NewIncomingSwarmSyncer(priority int, intervals []uint64, p Peer, dbAccess *DbAccess, chunker storage.Chunker) (*IncomingSwarmSyncer, error) {
+func NewIncomingSwarmSyncer(intervals *Intervals, p Peer, dbAccess *DbAccess, chunker storage.Chunker) (*IncomingSwarmSyncer, error) {
 	self := &IncomingSwarmSyncer{
-		priority:  priority,
 		intervals: intervals,
 		dbAccess:  dbAccess,
 		chunker:   chunker,
 	}
 	return self, nil
-}
-
-func (s *IncomingSwarmSyncer) Priority() int {
-	return s.priority
 }
 
 // // NewIncomingProvableSwarmSyncer is a contructor for provable data exchange syncer
@@ -195,30 +190,91 @@ func (s *IncomingSwarmSyncer) Priority() int {
 // 	return self
 // }
 
-func RegisterIncomingSyncers(streamer *Streamer, db *DbAccess) {
-	for po := uint8(0); po < maxPO; po++ {
-		stream := Stream(fmt.Sprintf("SYNC-%02d-live", po))
-		streamer.RegisterIncomingStreamer(stream, func(p *StreamerPeer) (IncomingStreamer, error) {
-			return NewIncomingSwarmSyncer(High, nil, p, nil, nil)
-		})
-		stream = Stream(fmt.Sprintf("SYNC-%02d-history", po))
-		streamer.RegisterIncomingStreamer(stream, func(p *StreamerPeer) (IncomingStreamer, error) {
-			//intervals := loadIntervals(p, po, false)
-			return NewIncomingSwarmSyncer(Mid, nil, p, nil, nil)
-		})
-		// stream = fmt.Sprintf("SYNC-%02d-delete", po)
-		// streamer.RegisterIncomingStreamer(stream, func(p *StreamerPeer) (OutgoingStreamer, error) {
-		// 	intervals := loadIntervals(p, po, true)
-		// 	return NewIncomingSwarmSyncer(po, Mid, sessionAt, intervals, p)
-		// })
+type Syncer struct {
+	intervals map[string][]uint64
+}
+
+func NewSyncer() *Syncer {
+	return &Syncer{}
+}
+
+type Intervals struct {
+	syncer *Syncer
+	key    []byte
+}
+
+func (s *Intervals) load() error {
+	return s.syncer.load(s.key)
+}
+
+func (s *Intervals) save() error {
+	return s.syncer.save(s.key)
+}
+
+func (s *Intervals) get() []uint64 {
+	return s.syncer.get(s.key)
+}
+
+func (s *Intervals) set(v []uint64) {
+	s.syncer.set(s.key, v)
+}
+
+func (s *Syncer) NewIntervals(key []byte) *Intervals {
+	return &Intervals{
+		syncer: s,
+		key:    key,
 	}
+}
+
+func newSyncLabel(typ string, po uint8) []byte {
+	t := []byte(typ)
+	t = append(t, byte(po))
+	return t
+}
+
+func parseSyncLabel(t []byte) (string, uint8) {
+	l := len(t) - 1
+	return sstring(t[:l]), uint8(t[l])
+}
+
+// StartSyncing is called on the StreamerPeer to start the syncing process
+// the idea is that it is called only after kademlia is close to healthy
+func StartSyncing(s *StreamerPeer, po uint8, nn bool) {
+	lastPO := po
+	if nn {
+		lastPO = maxPO
+	}
+	for i := po; i <= lastPO; i++ {
+		s.Subscribe(Stream("SYNC"), newSyncLabel("LIVE", po), 0, 0, High)
+		s.Subscribe(Stream("SYNC"), newSyncLabel("HISTORY", po), 0, 0, Mid)
+	}
+}
+
+func RegisterIncomingSyncers(streamer *Streamer, syncer *Syncer, db *DbAccess) {
+	stream := Stream("SYNC")
+	streamer.RegisterIncomingStreamer(stream, func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
+		syncType, po := parseSyncLabel(t)
+		switch syncType {
+		case "LIVE":
+			return NewIncomingSwarmSyncer(nil, p, nil, nil)
+		case "HISTORY":
+			intervals := syncer.NewIntervals(t)
+			return NewIncomingSwarmSyncer(intervals, p, nil, nil)
+		}
+		return nil, fmt.Errorf("unknown sync type %q", syncType)
+	})
+	// stream = fmt.Sprintf("SYNC-%02d-delete", po)
+	// streamer.RegisterIncomingStreamer(stream, func(p *StreamerPeer) (OutgoingStreamer, error) {
+	// 	intervals := loadIntervals(p, po, true)
+	// 	return NewIncomingSwarmSyncer(po, Mid, sessionAt, intervals, p)
+	// })
 }
 
 // NeedData
 func (self *IncomingSwarmSyncer) NeedData(key []byte) (wait func()) {
-	chunk, created := self.dbAccess.getOrCreateRequest(key)
+	chunk, _ := self.dbAccess.getOrCreateRequest(key)
 	// TODO: we may want to request from this peer anyway even if the request exists
-	if chunk.ReqC == nil || !created {
+	if chunk.ReqC == nil {
 		return nil
 	}
 	// create request and wait until the chunk data arrives and is stored
@@ -227,28 +283,37 @@ func (self *IncomingSwarmSyncer) NeedData(key []byte) (wait func()) {
 
 // NextBatch adjusts the indexes by inspecting the intervals
 func (self *IncomingSwarmSyncer) NextBatch(from uint64) (nextFrom uint64, nextTo uint64) {
-	if self.intervals[0] >= self.sessionAt { // live syncing
+	intervals := self.intervals.get()
+	if intervals[0] >= self.sessionAt { // live syncing
 		nextFrom = from
-		self.intervals[1] = from
+		intervals[1] = from
 	} else if from >= self.sessionAt { // history sync complete
-		self.intervals = nil
-	} else if len(self.intervals) > 2 && from >= self.intervals[2] { // filled a gap in the intervals
-		self.intervals = append(self.intervals[:1], self.intervals[3:]...)
-		nextFrom = self.intervals[1]
-		if len(self.intervals) > 2 {
-			nextTo = self.intervals[2]
+		intervals = nil
+	} else if len(intervals) > 2 && from >= intervals[2] { // filled a gap in the intervals
+		intervals = append(intervals[:1], intervals[3:]...)
+		nextFrom = intervals[1]
+		if len(intervals) > 2 {
+			nextTo = intervals[2]
 		} else {
 			nextTo = self.sessionAt
 		}
 	} else {
 		nextFrom = from
-		self.intervals[1] = from
+		intervals[1] = from
 		nextTo = self.sessionAt
 	}
+	self.intervals.set(intervals)
 	return nextFrom, nextTo
 }
 
-//
+// BatchDone
+func (self *IncomingSwarmSyncer) BatchDone(s Stream, from uint64, hashes []byte, root []byte) func() (*TakeoverProof, error) {
+	if self.chunker != nil {
+		return func() (*TakeoverProof, error) { return self.TakeoverProof(s, from, hashes, root) }
+	}
+	return nil
+}
+
 func (self *IncomingSwarmSyncer) TakeoverProof(s Stream, from uint64, hashes []byte, root storage.Key) (*TakeoverProof, error) {
 	// for provable syncer currentRoot is non-zero length
 	if self.chunker != nil {

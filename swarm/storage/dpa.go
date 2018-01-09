@@ -92,7 +92,7 @@ func NewDPA(store ChunkStore, params *ChunkerParams) *DPA {
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
 func (self *DPA) Retrieve(key Key) LazySectionReader {
-	return self.Chunker.Join(key, self.retrieveC)
+	return self.Chunker.Join(key, self.retrieveC, 0)
 }
 
 // Public API. Main entry point for document storage directly. Used by the
