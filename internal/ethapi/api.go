@@ -971,6 +971,17 @@ func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, addr
 	return (*hexutil.Uint64)(&nonce), state.Error()
 }
 
+// NextNonce returns the next nonce for the given address taking into account any pending transactions the address has
+func (s *PublicTransactionPoolAPI) NextNonce(ctx context.Context, address common.Address) (*hexutil.Uint64, error) {
+	// Ask transaction pool for the nonce which includes pending transactions
+	nonce, err := s.b.GetPoolNonce(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+
+	return (*hexutil.Uint64)(&nonce), nil
+}
+
 // GetTransactionByHash returns the transaction for the given hash
 func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, hash common.Hash) *RPCTransaction {
 	// Try to return an already finalized transaction
