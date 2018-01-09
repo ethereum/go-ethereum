@@ -152,7 +152,13 @@ type getBlockPricesResult struct {
 	err   error
 }
 
-// getLowestPrice calculates the lowest transaction gas price in a given block
+type transactionsByGasPrice []*types.Transaction
+
+func (t transactionsByGasPrice) Len() int { return len(t) }
+func (t transactionsByGasPrice) Swap(i, j int) { t[i], t[j] = t[j], t[i] }
+func (t transactionsByGasPrice) Less(i, j int) bool { return t[i].GasPrice().Cmp(t[j].GasPrice()) < 0 }
+
+// getBlockPrices calculates the lowest transaction gas price in a given block
 // and sends it to the result channel. If the block is empty, price is nil.
 func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, blockNum uint64, ch chan getBlockPricesResult) {
 	block, err := gpo.backend.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
@@ -160,18 +166,18 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, bloc
 		ch <- getBlockPricesResult{nil, err}
 		return
 	}
+
 	txs := block.Transactions()
-	var minPrice *big.Int
+	sort.Sort(transactionsByGasPrice(txs))
+
 	for _, tx := range txs {
 		sender, err := types.Sender(signer, tx)
-		if err != nil || sender == block.Coinbase() {
-			continue
-		}
-		if minPrice == nil || tx.GasPrice().Cmp(minPrice) < 0 {
-			minPrice = tx.GasPrice()
+		if err == nil && sender != block.Coinbase() {
+			ch <- getBlockPricesResult{tx.GasPrice(), nil}
+			return
 		}
 	}
-	ch <- getBlockPricesResult{minPrice, nil}
+	ch <- getBlockPricesResult{nil, nil}
 }
 
 type bigIntArray []*big.Int
