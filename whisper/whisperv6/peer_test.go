@@ -178,7 +178,7 @@ func initialize(t *testing.T) {
 		node.shh = New(&DefaultConfig)
 		node.shh.SetMinimumPoW(masterPow)
 		node.shh.SetBloomFilter(b)
-		if !isBloomFilterEqual(node.shh.BloomFilter(), masterBloomFilter) {
+		if !bytes.Equal(node.shh.BloomFilter(), masterBloomFilter) {
 			t.Fatalf("bloom mismatch on init.")
 		}
 		node.shh.Start(nil)
@@ -421,7 +421,7 @@ func checkPowExchange(t *testing.T) {
 func checkBloomFilterExchange(t *testing.T) {
 	for i, node := range nodes {
 		for peer := range node.shh.peers {
-			if !isBloomFilterEqual(peer.bloomFilter, masterBloomFilter) {
+			if !bytes.Equal(peer.bloomFilter, masterBloomFilter) {
 				t.Fatalf("node %d: failed to exchange bloom filter requirement in round %d. \n%x expected \n%x got",
 					i, round, masterBloomFilter, peer.bloomFilter)
 			}
