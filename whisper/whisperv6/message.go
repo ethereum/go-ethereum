@@ -101,21 +101,12 @@ func NewSentMessage(params *MessageParams) (*sentMessage, error) {
 // appendPayloadSizeField appends the auxiliary field containing the size of payload
 func (msg *sentMessage) addPayloadSizeField(payload []byte) {
 	fieldSize := getAuxFieldSize(payload)
-	field := make([]byte, fieldSize)
+	field := make([]byte, 4)
 	binary.LittleEndian.PutUint32(field, uint32(len(payload)))
+	field = field[:fieldSize]
 	msg.Raw = append(msg.Raw, field...)
 	msg.Raw[0] |= byte(fieldSize)
 }
-
-// getSizeOfLength returns the number of bytes necessary to encode the size of padding
-//func getAuxFieldSize(payload []byte) (sz int, err error) {
-//	sz = intSize(len(b))      // first iteration
-//	sz = intSize(len(b) + sz) // second iteration
-//	if sz > 3 {
-//		err = errors.New("oversized padding parameter")
-//	}
-//	return sz, err
-//}
 
 // getAuxFieldSize returns the number of bytes necessary to encode the size of payload
 func getAuxFieldSize(payload []byte) int {
@@ -144,29 +135,7 @@ func (msg *sentMessage) appendPadding(params *MessageParams) error {
 		rawSize += AESNonceLength
 	}
 	odd := rawSize % padSizeLimit
-
-	//if len(params.Padding) != 0 {
-	//	// padding data was provided by the Dapp, just use it as is
-	//	padSize := len(params.Padding)
-	//	padLengthSize, err := intSize(len(params.Padding))
-	//	if err != nil {
-	//		return err
-	//	}
-	//	totalPadSize := padSize + padLengthSize
-	//	buf := make([]byte, 8)
-	//	binary.LittleEndian.PutUint32(buf, uint32(totalPadSize))
-	//	buf = buf[:padLengthSize]
-	//	msg.Raw = append(msg.Raw, buf...)
-	//	msg.Raw = append(msg.Raw, params.Padding...)
-	//	msg.Raw[0] |= byte(padLengthSize) // number of bytes indicating the padding size
-	//} else if odd != 0 {
 	paddingSize := padSizeLimit - odd
-	//if totalPadSize > 255 {
-	//	// this algorithm is only valid if padSizeLimit < 256.
-	//	// if padSizeLimit will ever change, please fix the algorithm
-	//	// (please see also ReceivedMessage.extractPadding() function).
-	//	panic("please fix the padding algorithm before releasing new version")
-	//}
 	pad := make([]byte, paddingSize)
 	_, err := crand.Read(pad)
 	if err != nil {
@@ -175,10 +144,7 @@ func (msg *sentMessage) appendPadding(params *MessageParams) error {
 	if !validateSymmetricKey(pad) {
 		return errors.New("failed to generate random padding of size " + strconv.Itoa(paddingSize))
 	}
-	//buf[0] = byte(totalPadSize)
 	msg.Raw = append(msg.Raw, pad...)
-	//msg.Raw[0] |= byte(0x1) // number of bytes indicating the padding size
-	//}
 	return nil
 }
 
@@ -195,11 +161,10 @@ func (msg *sentMessage) sign(key *ecdsa.PrivateKey) error {
 	hash := crypto.Keccak256(msg.Raw)
 	signature, err := crypto.Sign(hash, key)
 	if err != nil {
-		msg.Raw[0] ^= signatureFlag // clear the flag
+		msg.Raw[0] &= (0xFF ^ signatureFlag) // clear the flag
 		return err
 	}
 	msg.Raw = append(msg.Raw, signature...)
-
 	return nil
 }
 
@@ -297,8 +262,7 @@ func (msg *sentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 // decryptSymmetric decrypts a message with a topic key, using AES-GCM-256.
 // nonce size should be 12 bytes (see cipher.gcmStandardNonceSize).
 func (msg *ReceivedMessage) decryptSymmetric(key []byte) error {
-	// In v6, symmetric messages are expected to contain the 12-byte
-	// "salt" at the end of the payload.
+	// symmetric messages are expected to contain the 12-byte nonce at the end of the payload
 	if len(msg.Raw) < AESNonceLength {
 		return errors.New("missing salt or invalid payload in symmetric message")
 	}
@@ -335,14 +299,10 @@ func (msg *ReceivedMessage) decryptAsymmetric(key *ecdsa.PrivateKey) error {
 }
 
 // Validate checks the message validity and extracts the fields in case of success.
-func (msg *ReceivedMessage) ValidateAndParse(symmetric bool) bool {
+func (msg *ReceivedMessage) ValidateAndParse() bool {
 	end := len(msg.Raw)
 	if end < 1 {
 		return false
-	}
-
-	if symmetric {
-		end -= AESNonceLength
 	}
 
 	if isMessageSigned(msg.Raw[0]) {
@@ -371,32 +331,8 @@ func (msg *ReceivedMessage) ValidateAndParse(symmetric bool) bool {
 
 	beg += payloadSize
 	msg.Padding = msg.Raw[beg:end]
-
-	//padSize, ok := msg.extractPadding(end)
-	//if !ok {
-	//	return false
-	//}
-	//msg.Payload = msg.Raw[1+padSize : end]
-
 	return true
 }
-
-// extractPadding extracts the padding from raw message.
-// although we don't support sending messages with padding size
-// exceeding 255 bytes, such messages are perfectly valid, and
-// can be successfully decrypted.
-//func (msg *ReceivedMessage) extractPadding(end int) (int, bool) {
-//	payloadSize := 0
-//	auxFieldSize := int(msg.Raw[0] & auxFieldSizeMask) // number of bytes indicating the size of payload
-//	if sz != 0 {
-//		paddingSize = int(bytesToUintLittleEndian(msg.Raw[1 : 1+sz]))
-//		if paddingSize < sz || paddingSize+1 > end {
-//			return 0, false
-//		}
-//		msg.Padding = msg.Raw[1+sz : 1+paddingSize]
-//	}
-//	return paddingSize, true
-//}
 
 // Recover retrieves the public key of the message signer.
 func (msg *ReceivedMessage) SigToPubKey() *ecdsa.PublicKey {

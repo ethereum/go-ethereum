@@ -90,8 +90,8 @@ func singleMessageTest(t *testing.T, symmetric bool) {
 		t.Fatalf("failed to encrypt with seed %d: %s.", seed, err)
 	}
 
-	if !decrypted.ValidateAndParse(symmetric) {
-		t.Fatalf("failed to validate with seed %d.", seed)
+	if !decrypted.ValidateAndParse() {
+		t.Fatalf("failed to validate with seed %d, symmetric = %v.", seed, symmetric)
 	}
 
 	if !bytes.Equal(text, decrypted.Payload) {
@@ -427,7 +427,7 @@ func TestPaddingAppendedToSymMessages(t *testing.T) {
 	// payload + flag + aesnonce > 256. Check that the result
 	// is padded on the next 256 boundary.
 	msg := sentMessage{}
-	msg.Raw = make([]byte, len(params.Payload)+1+AESNonceLength)
+	msg.Raw = make([]byte, 1+1+len(params.Payload))
 
 	err := msg.appendPadding(params)
 
@@ -436,7 +436,7 @@ func TestPaddingAppendedToSymMessages(t *testing.T) {
 		return
 	}
 
-	if len(msg.Raw) != 512 {
+	if len(msg.Raw) != 512-AESNonceLength {
 		t.Errorf("Invalid size %d != 512", len(msg.Raw))
 	}
 }
@@ -459,7 +459,7 @@ func TestPaddingAppendedToSymMessagesWithSignature(t *testing.T) {
 	// payload + flag + aesnonce > 256. Check that the result
 	// is padded on the next 256 boundary.
 	msg := sentMessage{}
-	msg.Raw = make([]byte, len(params.Payload)+1+AESNonceLength+signatureLength)
+	msg.Raw = make([]byte, 1+1+len(params.Payload))
 
 	err = msg.appendPadding(params)
 
@@ -468,7 +468,7 @@ func TestPaddingAppendedToSymMessagesWithSignature(t *testing.T) {
 		return
 	}
 
-	if len(msg.Raw) != 512 {
+	if len(msg.Raw) != 512-AESNonceLength-signatureLength {
 		t.Errorf("Invalid size %d != 512", len(msg.Raw))
 	}
 }
