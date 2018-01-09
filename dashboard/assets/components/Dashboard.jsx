@@ -158,15 +158,18 @@ class Dashboard extends Component<Props, State> {
 
 	// componentDidMount initiates the establishment of the first websocket connection after the component is rendered.
 	componentDidMount() {
-		this.connect();
+		this.reconnect();
 	}
 
-	// connect establishes a websocket connection with the server, listens for incoming messages
+	// reconnect establishes a websocket connection with the server, listens for incoming messages
 	// and tries to reconnect on connection loss.
-	connect = () => {
+	reconnect = () => {
 		const server = new WebSocket(`${((window.location.protocol === 'https:') ? 'wss://' : 'ws://') + window.location.host}/api`);
+		server.onopen = () => {
+			this.setState({content: defaultContent, shouldUpdate: {}});
+		};
 		server.onmessage = (event) => {
-			const msg: Content = JSON.parse(event.data);
+			const msg: $Shape<Content> = JSON.parse(event.data);
 			if (!msg) {
 				return;
 			}
@@ -175,12 +178,6 @@ class Dashboard extends Component<Props, State> {
 		server.onclose = () => {
 			setTimeout(this.reconnect, 3000);
 		};
-	};
-
-	// reconnect clears the state before the connection establishment.
-	reconnect = () => {
-		this.setState({content: defaultContent, shouldUpdate: {}});
-		this.connect();
 	};
 
 	// update updates the content corresponding to the incoming message.

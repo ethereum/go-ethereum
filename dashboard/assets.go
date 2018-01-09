@@ -26891,19 +26891,19 @@ var _bundleJs = []byte((((((((((`!function(modules) {
         function Dashboard(props) {
             _classCallCheck(this, Dashboard);
             var _this = _possibleConstructorReturn(this, (Dashboard.__proto__ || Object.getPrototypeOf(Dashboard)).call(this, props));
-            return _this.connect = function() {
+            return _this.reconnect = function() {
                 var server = new WebSocket(("https:" === window.location.protocol ? "wss://" : "ws://") + window.location.host + "/api");
-                server.onmessage = function(event) {
+                server.onopen = function() {
+                    _this.setState({
+                        content: defaultContent,
+                        shouldUpdate: {}
+                    });
+                }, server.onmessage = function(event) {
                     var msg = JSON.parse(event.data);
                     msg && _this.update(msg);
                 }, server.onclose = function() {
                     setTimeout(_this.reconnect, 3e3);
                 };
-            }, _this.reconnect = function() {
-                _this.setState({
-                    content: defaultContent,
-                    shouldUpdate: {}
-                }), _this.connect();
             }, _this.update = function(msg) {
                 _this.setState(function(prevState) {
                     return {
@@ -26935,7 +26935,7 @@ var _bundleJs = []byte((((((((((`!function(modules) {
         return _inherits(Dashboard, _Component), _createClass(Dashboard, [ {
             key: "componentDidMount",
             value: function() {
-                this.connect();
+                this.reconnect();
             }
         }, {
             key: "render",

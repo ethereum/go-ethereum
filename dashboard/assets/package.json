@@ -27,7 +27,6 @@
         "material-ui": "^1.0.0-beta.24",
         "material-ui-icons": "^1.0.0-beta.17",
         "path": "^0.12.7",
-        "ramda": "^0.25.0",
         "react": "^16.2.0",
         "react-dom": "^16.2.0",
         "react-fa": "^5.0.0",
