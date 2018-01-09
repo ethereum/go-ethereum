@@ -154,8 +154,8 @@ type getBlockPricesResult struct {
 
 type transactionsByGasPrice []*types.Transaction
 
-func (t transactionsByGasPrice) Len() int { return len(t) }
-func (t transactionsByGasPrice) Swap(i, j int) { t[i], t[j] = t[j], t[i] }
+func (t transactionsByGasPrice) Len() int           { return len(t) }
+func (t transactionsByGasPrice) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 func (t transactionsByGasPrice) Less(i, j int) bool { return t[i].GasPrice().Cmp(t[j].GasPrice()) < 0 }
 
 // getBlockPrices calculates the lowest transaction gas price in a given block
