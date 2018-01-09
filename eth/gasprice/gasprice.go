@@ -167,7 +167,9 @@ func (gpo *Oracle) getBlockPrices(ctx context.Context, signer types.Signer, bloc
 		return
 	}
 
-	txs := block.Transactions()
+	blockTxs := block.Transactions()
+	txs := make([]*types.Transaction, len(blockTxs))
+	copy(txs, blockTxs)
 	sort.Sort(transactionsByGasPrice(txs))
 
 	for _, tx := range txs {
