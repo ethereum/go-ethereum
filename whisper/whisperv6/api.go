@@ -113,29 +113,17 @@ func (api *PublicWhisperAPI) Info(ctx context.Context) Info {
 // SetMaxMessageSize sets the maximum message size that is accepted.
 // Upper limit is defined by MaxMessageSize.
 func (api *PublicWhisperAPI) SetMaxMessageSize(ctx context.Context, size uint32) (bool, error) {
-	err := api.w.SetMaxMessageSize(size)
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	return true, api.w.SetMaxMessageSize(size)
 }
 
 // SetMinPow sets the minimum PoW, and notifies the peers.
 func (api *PublicWhisperAPI) SetMinPoW(ctx context.Context, pow float64) (bool, error) {
-	err := api.w.SetMinimumPoW(pow)
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	return true, api.w.SetMinimumPoW(pow)
 }
 
 // SetBloomFilter sets the new value of bloom filter, and notifies the peers.
 func (api *PublicWhisperAPI) SetBloomFilter(ctx context.Context, bloom hexutil.Bytes) (bool, error) {
-	err := api.w.SetBloomFilter(bloom)
-	if err != nil {
-		return false, err
-	}
-	return true, nil
+	return true, api.w.SetBloomFilter(bloom)
 }
 
 // MarkTrustedPeer marks a peer trusted, which will allow it to send historic (expired) messages.
