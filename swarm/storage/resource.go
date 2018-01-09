@@ -562,7 +562,7 @@ type resourceChunkStore struct {
 func newResourceChunkStore(path string, hasher SwarmHasher, localStore *LocalStore, cloudStore CloudStore) *resourceChunkStore {
 	return &resourceChunkStore{
 		localStore: localStore,
-		netStore:   NewNetStore(hasher, localStore, cloudStore, NewStoreParams(path)),
+		netStore:   NewNetStore(hasher, localStore, cloudStore, NewDefaultStoreParams()),
 	}
 }
 
