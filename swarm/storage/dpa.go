@@ -65,7 +65,7 @@ type DPA struct {
 // for testing locally
 func NewLocalDPA(datadir string) (*DPA, error) {
 
-	hash := MakeHashFunc("SHA256")
+	hash := MakeHashFunc("SHA3")
 
 	dbStore, err := NewDbStore(datadir, hash, singletonSwarmDbCapacity, 0)
 	if err != nil {

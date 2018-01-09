@@ -476,12 +476,14 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 			return
 		}
 
-		hasher := s.hashfunc()
-		hasher.Write(data)
-		hash := hasher.Sum(nil)
-		if !bytes.Equal(hash, key) {
-			s.delete(index.Idx, getIndexKey(key))
-			log.Warn("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
+		if s.hashfunc != nil {
+			hasher := s.hashfunc()
+			hasher.Write(data)
+			hash := hasher.Sum(nil)
+			if !bytes.Equal(hash, key) {
+				s.delete(index.Idx, getIndexKey(key))
+				log.Warn("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
+			}
 		}
 
 		chunk = &Chunk{
