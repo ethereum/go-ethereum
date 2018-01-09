@@ -45,6 +45,7 @@ func (fi bindataFileInfo) Sys() interface{} {
 	return nil
 }
 
+//nolint:misspell
 var _dashboardHtml = []byte(`<!DOCTYPE html>
 <html lang="en" style="height: 100%">
     <head>
@@ -85,6 +86,7 @@ func dashboardHtml() (*asset, error) {
 	return a, nil
 }
 
+//nolint:misspell
 var _bundleJs = []byte((((((((((`!function(modules) {
     function __webpack_require__(moduleId) {
         if (installedModules[moduleId]) return installedModules[moduleId].exports;
