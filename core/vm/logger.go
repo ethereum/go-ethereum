@@ -62,20 +62,28 @@ type StructLog struct {
 	Stack      []*big.Int                  `json:"stack"`
 	Storage    map[common.Hash]common.Hash `json:"-"`
 	Depth      int                         `json:"depth"`
-	Err        error                       `json:"error"`
+	Err        error                       `json:"-"`
 }
 
 // overrides for gencodec
 type structLogMarshaling struct {
-	Stack   []*math.HexOrDecimal256
-	Gas     math.HexOrDecimal64
-	GasCost math.HexOrDecimal64
-	Memory  hexutil.Bytes
-	OpName  string `json:"opName"`
+	Stack       []*math.HexOrDecimal256
+	Gas         math.HexOrDecimal64
+	GasCost     math.HexOrDecimal64
+	Memory      hexutil.Bytes
+	OpName      string `json:"opName"` // adds call to OpName() in MarshalJSON
+	ErrorString string `json:"error"`  // adds call to ErrorString() in MarshalJSON
 }
 
 func (s *StructLog) OpName() string {
 	return s.Op.String()
+}
+
+func (s *StructLog) ErrorString() string {
+	if s.Err != nil {
+		return s.Err.Error()
+	}
+	return ""
 }
 
 // Tracer is used to collect execution traces from an EVM transaction
