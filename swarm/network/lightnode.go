@@ -50,14 +50,15 @@ func (r *RemoteSectionReader) NeedData(key []byte) func() {
 	if chunk.ReqC == nil || !created {
 		return nil
 	}
-	return func() {}
+	return func() {
+		select {
+		case <-chunk.ReqC:
+		case <-r.quit:
+		}
+	}
 }
 
-func (r *RemoteSectionReader) NextBatch(from uint64) (nextFrom uint64, nextTo uint64) {
-	return from, r.end
-}
-
-func (r *RemoteSectionReader) BatchDone(s Stream, from uint64, hashes []byte, root []byte) func() (*TakeoverProof, error) {
+func (r *RemoteSectionReader) BatchDone(s string, from uint64, hashes []byte, root []byte) func() (*TakeoverProof, error) {
 	r.hashes <- hashes
 	return nil
 }
@@ -113,16 +114,14 @@ func (r *RemoteSectionReader) Read(b []byte) (n int64, err error) {
 			hashes = hashes[i:]
 		}
 	}
-	return n, nil
 }
 
 // RemoteSectionServer implements OutgoingStreamer
 type RemoteSectionServer struct {
 	// quit chan struct{}
-	currentBatch []byte
-	root         []byte
-	db           *DbAccess
-	r            *storage.LazyChunkReader
+	root []byte
+	db   *DbAccess
+	r    *storage.LazyChunkReader
 }
 
 // NewRemoteReader is the constructor for RemoteReader
@@ -149,14 +148,12 @@ func (s *RemoteSectionServer) SetNextBatch(from, to uint64) ([]byte, uint64, uin
 	}
 	batch := make([]byte, (to-from)*HashSize)
 	s.r.ReadAt(batch, int64(from))
-	s.currentBatch = batch
 	return batch, from, to, nil, nil
 }
 
 // RegisterRemoteSectionReader registers RemoteSectionReader on light downstream node
 func RegisterRemoteSectionReader(s *Streamer, db *DbAccess) {
-	name := Stream("REMOTE_SECTION")
-	s.RegisterIncomingStreamer(name, func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
+	s.RegisterIncomingStreamer("REMOTE_SECTION", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
 		return NewRemoteSectionReader(t, db), nil
 	})
 }
@@ -164,8 +161,7 @@ func RegisterRemoteSectionReader(s *Streamer, db *DbAccess) {
 // RegisterRemoteSectionServer registers RemoteSectionServer outgoing streamer on
 // upstream light server node
 func RegisterRemoteSectionServer(s *Streamer, db *DbAccess, rf func([]byte) *storage.LazyChunkReader) {
-	name := Stream("REMOTE_SECTION")
-	s.RegisterOutgoingStreamer(name, func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
+	s.RegisterOutgoingStreamer("REMOTE_SECTION", func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
 		r := rf(t)
 		return NewRemoteSectionServer(db, r), nil
 	})
@@ -174,8 +170,7 @@ func RegisterRemoteSectionServer(s *Streamer, db *DbAccess, rf func([]byte) *sto
 // RegisterRemoteDownloader registers RemoteDownloader incoming streamer
 // on downstream light  node
 func RegisterRemoteDownloader(s *Streamer, db *DbAccess) {
-	name := Stream("REMOTE_DOWNLOADER")
-	s.RegisterIncomingStreamer(name, func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
+	s.RegisterIncomingStreamer("REMOTE_DOWNLOADER", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
 		return NewRemoteDownloader(t, db), nil
 	})
 }
@@ -183,9 +178,10 @@ func RegisterRemoteDownloader(s *Streamer, db *DbAccess) {
 // RegisterRemoteDownloadServer registers RemoteDownloadServer outgoing streamer on
 // upstream light server node
 func RegisterRemoteDownloadServer(s *Streamer, db *DbAccess, rf func([]byte) *storage.LazyChunkReader) {
-	name := Stream("REMOTE_DOWNLOADER")
-	s.RegisterOutgoingStreamer(name, func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
+	s.RegisterOutgoingStreamer("REMOTE_DOWNLOADER", func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
 		r := rf(t)
 		return NewRemoteDownloadServer(db, r), nil
 	})
 }
+
+func NewRemoteDownloader()

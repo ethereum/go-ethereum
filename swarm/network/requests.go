@@ -16,122 +16,93 @@
 
 package network
 
-// import (
-// 	"fmt"
+import "github.com/ethereum/go-ethereum/swarm/storage"
 
-// 	"github.com/ethereum/go-ethereum/log"
-// 	"github.com/ethereum/go-ethereum/swarm/storage"
-// )
+const retrieveRequestStream = "RETRIEVE_REQUEST"
 
-// /*
-//  Retrieve Request and store Request handling
-// */
+// Intervals is a stream specific history of downloaded intervals
+// for historical streams
+type Intervals struct {
+	streamer *Streamer
+	key      string
+}
 
-// // Handler for storage/retrieval related protocol requests
-// type RequestHandler struct {
-// 	netStore *storage.NetStore
-// }
+func (s *Intervals) load() error {
+	return s.streamer.load(s.key)
+}
 
-// // NewEwquestHandler creates a new RequestHandler
-// // netStore to
-// func NewRequestHandler(netStore *storage.NetStore) *RequestHandler {
-// 	return &RequestHandler{
-// 		netStore: netStore, // entrypoint internal
-// 	}
-// }
+func (s *Intervals) save() error {
+	return s.streamer.save(s.key)
+}
 
-// /*
-// Retrieve request
+func (s *Intervals) get() []uint64 {
+	return s.streamer.get(s.key)
+}
 
-// MaxSize specifies the maximum size that the peer will accept. This is useful in
-// particular if we allow storage and delivery of multichunk payload representing
-// the entire or partial subtree unfolding from the requested root key.
-// So when only interested in limited part of a stream (infinite trees) or only
-// testing chunk availability etc etc, we can indicate it by limiting the size here.
+func (s *Intervals) set(v []uint64) {
+	s.streamer.set(s.key, v)
+}
 
-// Request ID can be newly generated or kept from the request originator.
+func NewIntervals(key string, s *Streamer) *Intervals {
+	return &Intervals{
+		streamer: s,
+		key:      key,
+	}
+}
 
-// */
-// type retrieveRequestMsg struct {
-// 	Key     storage.Key   // target Key address of chunk to be retrieved
-// 	Id      uint64        // request id, request is a lookup if missing or zero
-// 	MaxSize uint64        // maximum size of delivery accepted
-// 	from    *StreamerPeer //
-// }
+// RetrieveRequestStreamer implements OutgoingStreamer
+type RetrieveRequestStreamer struct {
+	deliveryC  chan *storage.Chunk
+	batchC     chan []byte
+	db         *DbAccess
+	currentLen uint64
+}
 
-// func (self retrieveRequestMsg) String() string {
-// 	var from string
-// 	if self.from == nil {
-// 		from = "ourselves"
-// 	} else {
-// 		from = fmt.Sprintf("%x", self.from.Over())
-// 	}
-// 	var target []byte
-// 	if len(self.Key) > 3 {
-// 		target = self.Key[:4]
-// 	}
-// 	return fmt.Sprintf("Requester: %v, Key: %x; ID: %v, MaxSize: %v", from, target, self.Id, self.MaxSize)
-// }
+// RegisterRequestStreamer registers outgoing and incoming streamers for request handling
+func RegisterRequestStreamer(streamer *Streamer, db *DbAccess) {
+	streamer.RegisterOutgoingStreamer(retrieveRequestStream, func(_ *StreamerPeer, t []byte) (OutgoingStreamer, error) {
+		return NewRetrieveRequestStreamer(db), nil
+	})
+	streamer.RegisterIncomingStreamer(retrieveRequestStream, func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
+		return NewIncomingSwarmSyncer(p, db, nil)
+	})
+}
 
-// entrypoint for retrieve requests coming from the bzz wire protocol
-// checks swap balance - return if peer has no credit
-// func (self *StreamerPeer) handleRetrieveRequestMsg(msg interface{}) error {
-// 	req := msg.(*retrieveRequestMsg)
-// 	req.from = self
-// 	// TODO:
-// 	// swap - record credit for 1 request
-// 	// note that only charge actual reqsearches
+// NewRetrieveRequestStreamer is RetrieveRequestStreamer constructor
+func NewRetrieveRequestStreamer(db *DbAccess) *RetrieveRequestStreamer {
+	s := &RetrieveRequestStreamer{
+		deliveryC: make(chan *storage.Chunk),
+		batchC:    make(chan []byte),
+		db:        db,
+	}
+	go s.processDeliveries()
+	return s
+}
 
-// 	// call storage.NetStore#Get which
-// 	// blocks until local retrieval finished
-// 	// launches cloud retrieval
-// 	chunk, _ := self.netStore.Get(req.Key)
-// 	rs := chunk.Req
-// 	if rs != nil {
-// 		rs = storage.NewRequestStatus(req.Key)
-// 		addRequester(rs, req)
-// 		chunk.Req = rs
-// 	}
+// processDeliveries handles delivered chunk hashes
+func (s *RetrieveRequestStreamer) processDeliveries() {
+	var hashes []byte
+	for {
+		select {
+		case delivery := <-s.deliveryC:
+			hashes = append(hashes, delivery.Key[:]...)
+		case s.batchC <- hashes:
+			hashes = nil
+		}
+	}
+}
 
-// 	// check if we can immediately deliver
-// 	if chunk.SData != nil {
-// 		if req.MaxSize == 0 || int64(req.MaxSize) >= chunk.Size {
-// 			err := self.Deliver(chunk, Top)
-// 			if err != nil {
-// 				log.Trace(fmt.Sprintf("%v - content found, delivery error: %v", req.Key.Log(), err))
-// 				return nil
-// 			}
-// 			log.Trace(fmt.Sprintf("%v - content found, delivering...", req.Key.Log()))
-// 		} else {
-// 			log.Trace(fmt.Sprintf("%v - content found, not wanted", req.Key.Log()))
-// 		}
-// 	} else {
-// 		log.Trace(fmt.Sprintf("content not found locally, retrieve via bzz", req.Key.Log()))
-// 	}
-// 	return nil
-// }
+// SetNextBatch
+func (s *RetrieveRequestStreamer) SetNextBatch(_, _ uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error) {
+	hashes = <-s.batchC
+	from = s.currentLen
+	s.currentLen += uint64(len(hashes))
+	to = s.currentLen
+	return
+}
 
-// /*
-// adds a new peer to an existing open request
-// only add if less than requesterCount peers forwarded the same request id so far
-// note this is done irrespective of status (searching or found)
-// */
-// func addRequester(rs *storage.RequestStatus, req *retrieveRequestMsg) {
-// 	log.Trace(fmt.Sprintf("Depo.addRequester: key %v - add peer to req.Id %v", req.Key.Log(), req.Id))
-// 	list := rs.Requesters[req.Id]
-// 	rs.Requesters[req.Id] = append(list, req)
-// }
-
-// func (self storeRequestMsg) String() string {
-// 	var from string
-// 	if self.from == nil {
-// 		from = "self"
-// 	} else {
-// 		from = fmt.Sprintf("%x", self.from.Over())
-// 	}
-// 	end := len(self.SData)
-// 	if len(self.SData) > 10 {
-// 		end = 10
-// 	}
-// 	return fmt.Sprintf("from: %v, ID: %v, SData %x", from, self.Id, self.SData[:end])
-// }
+// GetData retrives chunk data from db store
+func (s *RetrieveRequestStreamer) GetData(key []byte) []byte {
+	chunk, _ := s.db.get(storage.Key(key))
+	return chunk.SData
+}
