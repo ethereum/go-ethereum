@@ -235,7 +235,7 @@ func initialize(t *testing.T) {
 	// we need to wait until the first node actually starts
 	err = nodes[0].server.Start()
 	if err != nil {
-		t.Fatalf("failed to start the fisrt server.")
+		t.Fatal("failed to start the first server: ", err)
 	}
 }
 
