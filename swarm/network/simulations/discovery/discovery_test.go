@@ -98,12 +98,7 @@ func testDiscoverySimulationExecAdapter(t *testing.T, nodes, conns int) {
 }
 
 func TestDiscoverySimulationSimAdapter(t *testing.T) {
-	testDiscoverySimulationSimAdapter(t, *nodeCount, *initCount)
-}
-
-func testDiscoverySimulationSimAdapter(t *testing.T, nodes, conns int) {
-	testDiscoverySimulation(t, nodes, conns, adapters.NewSocketAdapter(services))
-	// testDiscoverySimulation(t, nodes, conns, adapters.NewSimAdapter(services))
+	testDiscoverySimulation(t, *nodeCount, *initCount, adapters.NewSimAdapter(services))
 }
 
 func testDiscoverySimulation(t *testing.T, nodes, conns int, adapter adapters.NodeAdapter) {
