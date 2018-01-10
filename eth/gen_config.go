@@ -13,6 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 )
 
+var _ = (*configMarshaling)(nil)
+
 func (c Config) MarshalTOML() (interface{}, error) {
 	type Config struct {
 		Genesis                 *core.Genesis `toml:",omitempty"`
@@ -20,7 +22,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		SyncMode                downloader.SyncMode
 		LightServ               int  `toml:",omitempty"`
 		LightPeers              int  `toml:",omitempty"`
-		MaxPeers                int  `toml:"-"`
 		SkipBcVersionCheck      bool `toml:"-"`
 		DatabaseHandles         int  `toml:"-"`
 		DatabaseCache           int
@@ -28,17 +29,11 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		MinerThreads            int            `toml:",omitempty"`
 		ExtraData               hexutil.Bytes  `toml:",omitempty"`
 		GasPrice                *big.Int
-		EthashCacheDir          string
-		EthashCachesInMem       int
-		EthashCachesOnDisk      int
-		EthashDatasetDir        string
-		EthashDatasetsInMem     int
-		EthashDatasetsOnDisk    int
+		Ethash                  ethash.Config
 		TxPool                  core.TxPoolConfig
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
-		DocRoot                 string      `toml:"-"`
-		PowMode                 ethash.Mode `toml:"-"`
+		DocRoot                 string `toml:"-"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -53,17 +48,11 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.MinerThreads = c.MinerThreads
 	enc.ExtraData = c.ExtraData
 	enc.GasPrice = c.GasPrice
-	enc.EthashCacheDir = c.Ethash.CacheDir
-	enc.EthashCachesInMem = c.Ethash.CachesInMem
-	enc.EthashCachesOnDisk = c.Ethash.CachesOnDisk
-	enc.EthashDatasetDir = c.Ethash.DatasetDir
-	enc.EthashDatasetsInMem = c.Ethash.DatasetsInMem
-	enc.EthashDatasetsOnDisk = c.Ethash.DatasetsOnDisk
+	enc.Ethash = c.Ethash
 	enc.TxPool = c.TxPool
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.DocRoot = c.DocRoot
-	enc.PowMode = c.Ethash.PowMode
 	return &enc, nil
 }
 
@@ -74,25 +63,18 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		SyncMode                *downloader.SyncMode
 		LightServ               *int  `toml:",omitempty"`
 		LightPeers              *int  `toml:",omitempty"`
-		MaxPeers                *int  `toml:"-"`
 		SkipBcVersionCheck      *bool `toml:"-"`
 		DatabaseHandles         *int  `toml:"-"`
 		DatabaseCache           *int
 		Etherbase               *common.Address `toml:",omitempty"`
 		MinerThreads            *int            `toml:",omitempty"`
-		ExtraData               hexutil.Bytes   `toml:",omitempty"`
+		ExtraData               *hexutil.Bytes  `toml:",omitempty"`
 		GasPrice                *big.Int
-		EthashCacheDir          *string
-		EthashCachesInMem       *int
-		EthashCachesOnDisk      *int
-		EthashDatasetDir        *string
-		EthashDatasetsInMem     *int
-		EthashDatasetsOnDisk    *int
+		Ethash                  *ethash.Config
 		TxPool                  *core.TxPoolConfig
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
-		DocRoot                 *string      `toml:"-"`
-		PowMode                 *ethash.Mode `toml:"-"`
+		DocRoot                 *string `toml:"-"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -129,28 +111,13 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		c.MinerThreads = *dec.MinerThreads
 	}
 	if dec.ExtraData != nil {
-		c.ExtraData = dec.ExtraData
+		c.ExtraData = *dec.ExtraData
 	}
 	if dec.GasPrice != nil {
 		c.GasPrice = dec.GasPrice
 	}
-	if dec.EthashCacheDir != nil {
-		c.Ethash.CacheDir = *dec.EthashCacheDir
-	}
-	if dec.EthashCachesInMem != nil {
-		c.Ethash.CachesInMem = *dec.EthashCachesInMem
-	}
-	if dec.EthashCachesOnDisk != nil {
-		c.Ethash.CachesOnDisk = *dec.EthashCachesOnDisk
-	}
-	if dec.EthashDatasetDir != nil {
-		c.Ethash.DatasetDir = *dec.EthashDatasetDir
-	}
-	if dec.EthashDatasetsInMem != nil {
-		c.Ethash.DatasetsInMem = *dec.EthashDatasetsInMem
-	}
-	if dec.EthashDatasetsOnDisk != nil {
-		c.Ethash.DatasetsOnDisk = *dec.EthashDatasetsOnDisk
+	if dec.Ethash != nil {
+		c.Ethash = *dec.Ethash
 	}
 	if dec.TxPool != nil {
 		c.TxPool = *dec.TxPool
@@ -163,9 +130,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.DocRoot != nil {
 		c.DocRoot = *dec.DocRoot
-	}
-	if dec.PowMode != nil {
-		c.Ethash.PowMode = *dec.PowMode
 	}
 	return nil
 }

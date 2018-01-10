@@ -22,13 +22,13 @@ import withTheme from 'material-ui/styles/withTheme';
 import {LineChart, AreaChart, Area, YAxis, CartesianGrid, Line} from 'recharts';
 
 import ChartGrid from './ChartGrid';
-import type {ChartEntry} from '../types/message';
+import type {ChartEntry} from '../types/content';
 
 export type Props = {
     theme: Object,
     memory: Array<ChartEntry>,
     traffic: Array<ChartEntry>,
-    shouldUpdate: Object,
+	shouldUpdate: Object,
 };
 // Home renders the home content.
 class Home extends Component<Props> {
@@ -40,11 +40,16 @@ class Home extends Component<Props> {
 	}
 
 	shouldComponentUpdate(nextProps) {
-		return nextProps.shouldUpdate.has('memory') || nextProps.shouldUpdate.has('traffic');
+		return typeof nextProps.shouldUpdate.home !== 'undefined';
 	}
 
+	memoryColor: Object;
+	trafficColor: Object;
+
 	render() {
-		const {memory, traffic} = this.props;
+		let {memory, traffic} = this.props;
+		memory = memory.map(({value}) => (value || 0));
+		traffic = traffic.map(({value}) => (value || 0));
 
 		return (
 			<ChartGrid spacing={24}>
