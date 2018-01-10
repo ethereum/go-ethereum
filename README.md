@@ -7,9 +7,6 @@ https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/6874
 )](https://godoc.org/github.com/EthereumCommonwealth/go-callisto)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/EthereumCommonwealth/go-callisto?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-Automated builds are available for stable releases and the unstable master branch.
-Binary archives are published at https://geth.ethereum.org/downloads/.
-
 ## Building the source
 
 For prerequisites and detailed build instructions please read the
