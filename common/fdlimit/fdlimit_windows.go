@@ -18,9 +18,9 @@ package fdlimit
 
 import "errors"
 
-// RaiseFdLimit tries to maximize the file descriptor allowance of this process
+// Raise tries to maximize the file descriptor allowance of this process
 // to the maximum hard-limit allowed by the OS.
-func RaiseFdLimit(max uint64) error {
+func Raise(max uint64) error {
 	// This method is NOP by design:
 	//  * Linux/Darwin counterparts need to manually increase per process limits
 	//  * On Windows Go uses the CreateFile API, which is limited to 16K files, non
@@ -33,15 +33,15 @@ func RaiseFdLimit(max uint64) error {
 	return nil
 }
 
-// GetFdLimit retrieves the number of file descriptors allowed to be opened by this
+// Get retrieves the number of file descriptors allowed to be opened by this
 // process.
-func GetFdLimit() (int, error) {
-	// Please see RaiseFdLimit for the reason why we use hard coded 16K as the limit
+func Get() (int, error) {
+	// Please see Raise for the reason why we use hard coded 16K as the limit
 	return 16384, nil
 }
 
-// GetFdMaxLimit retrieves the maximum number of file descriptors this process is
+// GetMax retrieves the maximum number of file descriptors this process is
 // allowed to request for itself.
-func GetFdMaxLimit() (int, error) {
-	return GetFdLimit()
+func GetMax() (int, error) {
+	return Get()
 }

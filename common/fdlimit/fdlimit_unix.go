@@ -20,9 +20,9 @@ package fdlimit
 
 import "syscall"
 
-// RaiseFdLimit tries to maximize the file descriptor allowance of this process
+// Raise tries to maximize the file descriptor allowance of this process
 // to the maximum hard-limit allowed by the OS.
-func RaiseFdLimit(max uint64) error {
+func Raise(max uint64) error {
 	// Get the current limit
 	var limit syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
@@ -39,9 +39,9 @@ func RaiseFdLimit(max uint64) error {
 	return nil
 }
 
-// GetFdLimit retrieves the number of file descriptors allowed to be opened by this
+// Get retrieves the number of file descriptors allowed to be opened by this
 // process.
-func GetFdLimit() (int, error) {
+func Get() (int, error) {
 	var limit syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
 		return 0, err
@@ -49,9 +49,9 @@ func GetFdLimit() (int, error) {
 	return int(limit.Cur), nil
 }
 
-// GetFdMaxLimit retrieves the maximum number of file descriptors this process is
+// GetMax retrieves the maximum number of file descriptors this process is
 // allowed to request for itself.
-func GetFdMaxLimit() (int, error) {
+func GetMax() (int, error) {
 	var limit syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
 		return 0, err

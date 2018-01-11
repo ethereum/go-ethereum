@@ -25,7 +25,7 @@ import (
 // per this process can be retrieved.
 func TestFileDescriptorLimits(t *testing.T) {
 	target := 4096
-	hardlimit, err := GetFdMaxLimit()
+	hardlimit, err := GetMax()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,13 +33,13 @@ func TestFileDescriptorLimits(t *testing.T) {
 		t.Skip(fmt.Sprintf("system limit is less than desired test target: %d < %d", hardlimit, target))
 	}
 
-	if limit, err := GetFdLimit(); err != nil || limit <= 0 {
+	if limit, err := Get(); err != nil || limit <= 0 {
 		t.Fatalf("failed to retrieve file descriptor limit (%d): %v", limit, err)
 	}
-	if err := RaiseFdLimit(uint64(target)); err != nil {
+	if err := Raise(uint64(target)); err != nil {
 		t.Fatalf("failed to raise file allowance")
 	}
-	if limit, err := GetFdLimit(); err != nil || limit < target {
+	if limit, err := Get(); err != nil || limit < target {
 		t.Fatalf("failed to retrieve raised descriptor limit (have %v, want %v): %v", limit, target, err)
 	}
 }
