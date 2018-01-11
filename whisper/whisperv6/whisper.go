@@ -19,7 +19,6 @@ package whisperv6
 import (
 	"bytes"
 	"crypto/ecdsa"
-	crand "crypto/rand"
 	"crypto/sha256"
 	"fmt"
 	"math"
@@ -442,11 +441,10 @@ func (w *Whisper) GetPrivateKey(id string) (*ecdsa.PrivateKey, error) {
 // GenerateSymKey generates a random symmetric key and stores it under id,
 // which is then returned. Will be used in the future for session key exchange.
 func (w *Whisper) GenerateSymKey() (string, error) {
-	key := make([]byte, aesKeyLength)
-	_, err := crand.Read(key)
+	key, err := generateSecureRandomData(aesKeyLength)
 	if err != nil {
 		return "", err
-	} else if !validateSymmetricKey(key) {
+	} else if !validateRandomData(key, aesKeyLength) {
 		return "", fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
 	}
 
@@ -983,9 +981,10 @@ func validatePrivateKey(k *ecdsa.PrivateKey) bool {
 	return ValidatePublicKey(&k.PublicKey)
 }
 
-// validateSymmetricKey returns false if the key contains all zeros
-func validateSymmetricKey(k []byte) bool {
-	return len(k) > 0 && !containsOnlyZeros(k)
+// validateSymmetricKey returns false if the key contains all zeros,
+// which is a simplest and the most common bug.
+func validateRandomData(k []byte, expectedSize int) bool {
+	return len(k) == expectedSize && !containsOnlyZeros(k)
 }
 
 // containsOnlyZeros checks if the data contain only zeros.
@@ -1019,12 +1018,11 @@ func BytesToUintBigEndian(b []byte) (res uint64) {
 
 // GenerateRandomID generates a random string, which is then returned to be used as a key id
 func GenerateRandomID() (id string, err error) {
-	buf := make([]byte, keyIdSize)
-	_, err = crand.Read(buf)
+	buf, err := generateSecureRandomData(keyIdSize)
 	if err != nil {
 		return "", err
 	}
-	if !validateSymmetricKey(buf) {
+	if !validateRandomData(buf, keyIdSize) {
 		return "", fmt.Errorf("error in generateRandomID: crypto/rand failed to generate random data")
 	}
 	id = common.Bytes2Hex(buf)
