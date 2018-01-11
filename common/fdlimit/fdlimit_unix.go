@@ -14,19 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// +build freebsd
+// +build linux darwin netbsd openbsd solaris
 
-package utils
+package fdlimit
 
 import "syscall"
 
-// This file is largely identical to fdlimit_unix.go,
-// but Rlimit fields have type int64 on FreeBSD so it needs
-// an extra conversion.
-
-// raiseFdLimit tries to maximize the file descriptor allowance of this process
+// Raise tries to maximize the file descriptor allowance of this process
 // to the maximum hard-limit allowed by the OS.
-func raiseFdLimit(max uint64) error {
+func Raise(max uint64) error {
 	// Get the current limit
 	var limit syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
@@ -34,8 +30,8 @@ func raiseFdLimit(max uint64) error {
 	}
 	// Try to update the limit to the max allowance
 	limit.Cur = limit.Max
-	if limit.Cur > int64(max) {
-		limit.Cur = int64(max)
+	if limit.Cur > max {
+		limit.Cur = max
 	}
 	if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
 		return err
@@ -43,9 +39,9 @@ func raiseFdLimit(max uint64) error {
 	return nil
 }
 
-// getFdLimit retrieves the number of file descriptors allowed to be opened by this
+// Current retrieves the number of file descriptors allowed to be opened by this
 // process.
-func getFdLimit() (int, error) {
+func Current() (int, error) {
 	var limit syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
 		return 0, err
@@ -53,9 +49,9 @@ func getFdLimit() (int, error) {
 	return int(limit.Cur), nil
 }
 
-// getFdMaxLimit retrieves the maximum number of file descriptors this process is
+// Maximum retrieves the maximum number of file descriptors this process is
 // allowed to request for itself.
-func getFdMaxLimit() (int, error) {
+func Maximum() (int, error) {
 	var limit syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
 		return 0, err

@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-package utils
+package fdlimit
 
 import "errors"
 
-// raiseFdLimit tries to maximize the file descriptor allowance of this process
+// Raise tries to maximize the file descriptor allowance of this process
 // to the maximum hard-limit allowed by the OS.
-func raiseFdLimit(max uint64) error {
+func Raise(max uint64) error {
 	// This method is NOP by design:
 	//  * Linux/Darwin counterparts need to manually increase per process limits
 	//  * On Windows Go uses the CreateFile API, which is limited to 16K files, non
@@ -33,15 +33,15 @@ func raiseFdLimit(max uint64) error {
 	return nil
 }
 
-// getFdLimit retrieves the number of file descriptors allowed to be opened by this
+// Current retrieves the number of file descriptors allowed to be opened by this
 // process.
-func getFdLimit() (int, error) {
-	// Please see raiseFdLimit for the reason why we use hard coded 16K as the limit
+func Current() (int, error) {
+	// Please see Raise for the reason why we use hard coded 16K as the limit
 	return 16384, nil
 }
 
-// getFdMaxLimit retrieves the maximum number of file descriptors this process is
+// Maximum retrieves the maximum number of file descriptors this process is
 // allowed to request for itself.
-func getFdMaxLimit() (int, error) {
-	return getFdLimit()
+func Maximum() (int, error) {
+	return Current()
 }
