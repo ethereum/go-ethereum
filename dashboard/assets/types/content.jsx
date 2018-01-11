@@ -28,7 +28,7 @@ export type Content = {
 
 export type General = {
 	version: string,
-	gitCommit: string,
+	commit: string,
 };
 
 export type Home = {

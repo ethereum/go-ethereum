@@ -76,8 +76,8 @@ const replacer = <T>(prev: T, update: T) => update;
 // defaultContent is the initial value of the state content.
 const defaultContent: Content = {
 	general: {
-		version:   '-',
-		gitCommit: '-',
+		version: '-',
+		commit:  '-',
 	},
 	home: {
 		memory:  [],
@@ -96,8 +96,8 @@ const defaultContent: Content = {
 // TODO (kurkomisi): Define a tricky type which embraces the content and the handlers.
 const updaters = {
 	general: {
-		version:   replacer,
-		gitCommit: replacer,
+		version: replacer,
+		commit:  replacer,
 	},
 	home: {
 		memory:  appender(200),

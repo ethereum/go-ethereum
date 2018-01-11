@@ -29,8 +29,8 @@ type Message struct {
 }
 
 type GeneralMessage struct {
-	Version   string `json:"version,omitempty"`
-	GitCommit string `json:"gitCommit,omitempty"`
+	Version string `json:"version,omitempty"`
+	Commit  string `json:"commit,omitempty"`
 }
 
 type HomeMessage struct {

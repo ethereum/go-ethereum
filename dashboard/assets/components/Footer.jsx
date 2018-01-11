@@ -71,7 +71,7 @@ class Footer extends Component<Props> {
 						{this.props.general.version}
 					</Typography>
 					<Typography type="title" color="inherit" className={classes.mainText}>
-						{this.props.general.gitCommit}	
+						{this.props.general.commit}	
 					</Typography>
 				</Toolbar>
 			</AppBar>
