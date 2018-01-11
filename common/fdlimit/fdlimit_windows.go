@@ -33,15 +33,15 @@ func Raise(max uint64) error {
 	return nil
 }
 
-// Get retrieves the number of file descriptors allowed to be opened by this
+// Current retrieves the number of file descriptors allowed to be opened by this
 // process.
-func Get() (int, error) {
+func Current() (int, error) {
 	// Please see Raise for the reason why we use hard coded 16K as the limit
 	return 16384, nil
 }
 
-// GetMax retrieves the maximum number of file descriptors this process is
+// Maximum retrieves the maximum number of file descriptors this process is
 // allowed to request for itself.
-func GetMax() (int, error) {
-	return Get()
+func Maximum() (int, error) {
+	return Current()
 }

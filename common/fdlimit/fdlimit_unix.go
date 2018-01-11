@@ -39,9 +39,9 @@ func Raise(max uint64) error {
 	return nil
 }
 
-// Get retrieves the number of file descriptors allowed to be opened by this
+// Current retrieves the number of file descriptors allowed to be opened by this
 // process.
-func Get() (int, error) {
+func Current() (int, error) {
 	var limit syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
 		return 0, err
@@ -49,9 +49,9 @@ func Get() (int, error) {
 	return int(limit.Cur), nil
 }
 
-// GetMax retrieves the maximum number of file descriptors this process is
+// Maximum retrieves the maximum number of file descriptors this process is
 // allowed to request for itself.
-func GetMax() (int, error) {
+func Maximum() (int, error) {
 	var limit syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
 		return 0, err
