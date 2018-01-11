@@ -43,7 +43,7 @@ func TestRegisterAndConnect(t *testing.T) {
 	pp.Start(s.Server)
 	defer pp.Stop()
 	// retrieve and broadcast
-	s.TestExchanges(p2ptest.Exchange{
+	err := s.TestExchanges(p2ptest.Exchange{
 		Label: "getPeersMsg message",
 		Expects: []p2ptest.Expect{
 			p2ptest.Expect{
@@ -53,4 +53,8 @@ func TestRegisterAndConnect(t *testing.T) {
 			},
 		},
 	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
 }
