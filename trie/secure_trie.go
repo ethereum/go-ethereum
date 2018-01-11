@@ -23,9 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-var secureKeyPrefix = []byte("secure-key-")
-
-const secureKeyLength = 11 + 32 // Length of the above prefix + 32byte hash
+const secureKeyLength = 100 //???
 
 // SecureTrie wraps a trie with key hashing. In a secure trie, all
 // access operations hash the key using keccak256. This prevents
@@ -135,7 +133,7 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 	if key, ok := t.getSecKeyCache()[string(shaKey)]; ok {
 		return key
 	}
-	key, _ := t.trie.db.Get(t.secKey(shaKey))
+	key, _ := t.trie.db.Get(SecHashTreePos(shaKey), shaKey)
 	return key
 }
 
@@ -176,22 +174,14 @@ func (t *SecureTrie) NodeIterator(start []byte) NodeIterator {
 func (t *SecureTrie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
 	if len(t.getSecKeyCache()) > 0 {
 		for hk, key := range t.secKeyCache {
-			if err := db.Put(t.secKey([]byte(hk)), key); err != nil {
+			shaKey := []byte(hk)
+			if err := db.Put(SecHashTreePos(shaKey), shaKey, key); err != nil {
 				return common.Hash{}, err
 			}
 		}
 		t.secKeyCache = make(map[string][]byte)
 	}
 	return t.trie.CommitTo(db)
-}
-
-// secKey returns the database key for the preimage of key, as an ephemeral buffer.
-// The caller must not hold onto the return value because it will become
-// invalid on the next call to hashKey or secKey.
-func (t *SecureTrie) secKey(key []byte) []byte {
-	buf := append(t.secKeyBuf[:0], secureKeyPrefix...)
-	buf = append(buf, key...)
-	return buf
 }
 
 // hashKey returns the hash of key as an ephemeral buffer.

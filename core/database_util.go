@@ -25,12 +25,14 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // DatabaseReader wraps the Get method of a backing data store.
@@ -58,8 +60,7 @@ var (
 	lookupPrefix        = []byte("l") // lookupPrefix + hash -> transaction/receipt lookup metadata
 	bloomBitsPrefix     = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
 
-	preimagePrefix = "secure-key-"              // preimagePrefix + hash -> preimage
-	configPrefix   = []byte("ethereum-config-") // config prefix for the db
+	configPrefix = []byte("ethereum-config-") // config prefix for the db
 
 	// Chain index prefixes (use `i` + single byte to avoid mixing data types).
 	BloomBitsIndexPrefix = []byte("iB") // BloomBitsIndexPrefix is the data table of a chain indexer to track its progress
@@ -532,20 +533,20 @@ func DeleteTxLookupEntry(db DatabaseDeleter, hash common.Hash) {
 	db.Delete(append(lookupPrefix, hash.Bytes()...))
 }
 
-// PreimageTable returns a Database instance with the key prefix for preimage entries.
-func PreimageTable(db ethdb.Database) ethdb.Database {
-	return ethdb.NewTable(db, preimagePrefix)
+func GetPreimage(db ethdb.Database, hash common.Hash) ([]byte, error) {
+	return db.Get(append([]byte(state.DbPrefix), trie.SecHashTreePos(hash.Bytes())...))
 }
 
 // WritePreimages writes the provided set of preimages to the database. `number` is the
 // current block number, and is used for debug messages only.
 func WritePreimages(db ethdb.Database, number uint64, preimages map[common.Hash][]byte) error {
-	table := PreimageTable(db)
+	table := ethdb.NewTable(db, state.DbPrefix)
 	batch := table.NewBatch()
 	hitCount := 0
 	for hash, preimage := range preimages {
-		if _, err := table.Get(hash.Bytes()); err != nil {
-			batch.Put(hash.Bytes(), preimage)
+		key := trie.SecHashTreePos(hash.Bytes())
+		if _, err := table.Get(key); err != nil {
+			batch.Put(key, preimage)
 			hitCount++
 		}
 	}

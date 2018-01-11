@@ -18,12 +18,14 @@
 package state
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"sort"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/hashtree"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -569,9 +571,10 @@ func (s *StateDB) clearJournalAndRefund() {
 }
 
 // CommitTo writes the state to the given database.
-func (s *StateDB) CommitTo(dbw trie.DatabaseWriter, deleteEmptyObjects bool) (root common.Hash, err error) {
+func (s *StateDB) CommitTo(db hashtree.DatabaseWriter, blockNumber uint64, gc *hashtree.GarbageCollector, deleteEmptyObjects bool) (root common.Hash, err error) {
 	defer s.clearJournalAndRefund()
 
+	dbw := hashtree.NewWriter(db, DbPrefix, blockNumber, gc)
 	// Commit objects to the trie.
 	for addr, stateObject := range s.stateObjects {
 		_, isDirty := s.stateObjectsDirty[addr]
@@ -583,7 +586,7 @@ func (s *StateDB) CommitTo(dbw trie.DatabaseWriter, deleteEmptyObjects bool) (ro
 		case isDirty:
 			// Write any contract code associated with the state object
 			if stateObject.code != nil && stateObject.dirtyCode {
-				if err := dbw.Put(stateObject.CodeHash(), stateObject.code); err != nil {
+				if err := dbw.Put(contractCodePosition(stateObject.addrHash), stateObject.CodeHash(), stateObject.code); err != nil {
 					return common.Hash{}, err
 				}
 				stateObject.dirtyCode = false
@@ -601,4 +604,40 @@ func (s *StateDB) CommitTo(dbw trie.DatabaseWriter, deleteEmptyObjects bool) (ro
 	root, err = s.trie.CommitTo(dbw)
 	log.Debug("Trie cache stats after commit", "misses", trie.CacheMisses(), "unloads", trie.CacheUnloads())
 	return root, err
+}
+
+func HasDataCallback(root common.Hash, dbr hashtree.DatabaseReader) func(position, hash []byte) bool {
+	db := hashtree.NewReader(dbr, DbPrefix)
+	t, err := trie.New(root, db)
+	if err != nil {
+		panic(err)
+	}
+	return func(position, hash []byte) bool {
+		lp := len(position)
+		if lp < 33 || (lp == 33 && position[32] < 5) {
+			return t.HasData(position, hash)
+		}
+		addrHash := position[:32]
+		enc, err := t.TryGet(addrHash)
+		if len(enc) == 0 || err != nil {
+			return false
+		}
+
+		var data Account
+		if err := rlp.DecodeBytes(enc, &data); err != nil {
+			return false
+		}
+		if lp == 33 && position[32] == 5 {
+			return bytes.Equal(hash, data.CodeHash)
+		}
+		if position[32] != 6 {
+			return false
+		}
+
+		st, err := trie.New(data.Root, &storageTrieDb{dbr: db, addrHash: addrHash})
+		if err != nil {
+			return false
+		}
+		return st.HasData(position[33:], hash)
+	}
 }

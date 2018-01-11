@@ -21,13 +21,15 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/core/hashtree"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
 )
 
 // Trie cache generation limit after which to evic trie nodes from memory.
 var MaxTrieCacheGen = uint16(120)
+
+var DbPrefix = "s"
 
 const (
 	// Number of past tries to keep. This value is chosen such that
@@ -65,13 +67,13 @@ type Trie interface {
 
 // NewDatabase creates a backing store for state. The returned database is safe for
 // concurrent use and retains cached trie nodes in memory.
-func NewDatabase(db ethdb.Database) Database {
+func NewDatabase(db hashtree.DatabaseReader) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
-	return &cachingDB{db: db, codeSizeCache: csc}
+	return &cachingDB{db: hashtree.NewReader(db, DbPrefix), codeSizeCache: csc} //prefix
 }
 
 type cachingDB struct {
-	db            ethdb.Database
+	db            *hashtree.Reader
 	mu            sync.Mutex
 	pastTries     []*trie.SecureTrie
 	codeSizeCache *lru.Cache
@@ -106,7 +108,7 @@ func (db *cachingDB) pushTrie(t *trie.SecureTrie) {
 }
 
 func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
-	return trie.NewSecure(root, db.db, 0)
+	return trie.NewSecure(root, &storageTrieDb{dbr: db.db, addrHash: addrHash.Bytes()}, 0)
 }
 
 func (db *cachingDB) CopyTrie(t Trie) Trie {
@@ -121,7 +123,7 @@ func (db *cachingDB) CopyTrie(t Trie) Trie {
 }
 
 func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
-	code, err := db.db.Get(codeHash[:])
+	code, err := db.db.Get(contractCodePosition(addrHash), codeHash[:])
 	if err == nil {
 		db.codeSizeCache.Add(codeHash, len(code))
 	}
@@ -151,4 +153,35 @@ func (m cachedTrie) CommitTo(dbw trie.DatabaseWriter) (common.Hash, error) {
 		m.db.pushTrie(m.SecureTrie)
 	}
 	return root, err
+}
+
+type storageTrieDb struct {
+	dbr      trie.DatabaseReader
+	dbw      trie.DatabaseWriter
+	addrHash []byte
+}
+
+func (s *storageTrieDb) position(position []byte) []byte {
+	pos := make([]byte, len(position)+33)
+	copy(pos[:32], s.addrHash)
+	pos[32] = 6
+	copy(pos[33:], position)
+	return pos
+}
+
+func (s *storageTrieDb) Put(position, hash, data []byte) error {
+	return s.dbw.Put(s.position(position), hash, data)
+}
+
+func (s *storageTrieDb) Get(position, hash []byte) ([]byte, error) {
+	//fmt.Printf("GetStorage  %x  %x  %x\n", s.addrHash, position, hash)
+	return s.dbr.Get(s.position(position), hash)
+}
+
+func (s *storageTrieDb) Has(position, hash []byte) (bool, error) {
+	return s.dbr.Has(s.position(position), hash)
+}
+
+func contractCodePosition(addrHash common.Hash) []byte {
+	return append(addrHash.Bytes(), 5)
 }

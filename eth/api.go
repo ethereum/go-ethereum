@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/hashtree"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -343,8 +344,7 @@ func NewPrivateDebugAPI(config *params.ChainConfig, eth *Ethereum) *PrivateDebug
 
 // Preimage is a debug API function that returns the preimage for a sha3 hash, if known.
 func (api *PrivateDebugAPI) Preimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
-	db := core.PreimageTable(api.eth.ChainDb())
-	return db.Get(hash.Bytes())
+	return core.GetPreimage(api.eth.ChainDb(), hash)
 }
 
 // GetBadBLocks returns a list of the last 'bad blocks' that the client has seen on the network
@@ -462,11 +462,11 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
 	}
 
-	oldTrie, err := trie.NewSecure(startBlock.Root(), api.eth.chainDb, 0)
+	oldTrie, err := trie.NewSecure(startBlock.Root(), hashtree.NewReader(api.eth.chainDb, state.DbPrefix), 0)
 	if err != nil {
 		return nil, err
 	}
-	newTrie, err := trie.NewSecure(endBlock.Root(), api.eth.chainDb, 0)
+	newTrie, err := trie.NewSecure(endBlock.Root(), hashtree.NewReader(api.eth.chainDb, state.DbPrefix), 0)
 	if err != nil {
 		return nil, err
 	}

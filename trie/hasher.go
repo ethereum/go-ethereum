@@ -70,7 +70,7 @@ func (h *hasher) returnCalculator(calculator *calculator) {
 
 // hash collapses a node down into a hash node, also returning a copy of the
 // original node initialized with the computed hash to replace the original one.
-func (h *hasher) hash(n node, db DatabaseWriter, force bool) (node, node, error) {
+func (h *hasher) hash(n node, db DatabaseWriter, prefix []byte, force bool) (node, node, error) {
 	// If we're not storing the node, just hashing, use available cached data
 	if hash, dirty := n.cache(); hash != nil {
 		if db == nil {
@@ -87,11 +87,11 @@ func (h *hasher) hash(n node, db DatabaseWriter, force bool) (node, node, error)
 		}
 	}
 	// Trie not processed yet or needs storage, walk the children
-	collapsed, cached, err := h.hashChildren(n, db)
+	collapsed, cached, err := h.hashChildren(n, db, prefix)
 	if err != nil {
 		return hashNode{}, n, err
 	}
-	hashed, err := h.store(collapsed, db, force)
+	hashed, err := h.store(collapsed, db, prefix, force)
 	if err != nil {
 		return hashNode{}, n, err
 	}
@@ -117,7 +117,7 @@ func (h *hasher) hash(n node, db DatabaseWriter, force bool) (node, node, error)
 // hashChildren replaces the children of a node with their hashes if the encoded
 // size of the child is larger than a hash, returning the collapsed node as well
 // as a replacement for the original node with the child hashes cached in.
-func (h *hasher) hashChildren(original node, db DatabaseWriter) (node, node, error) {
+func (h *hasher) hashChildren(original node, db DatabaseWriter, prefix []byte) (node, node, error) {
 	var err error
 
 	switch n := original.(type) {
@@ -128,7 +128,7 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter) (node, node, err
 		cached.Key = common.CopyBytes(n.Key)
 
 		if _, ok := n.Val.(valueNode); !ok {
-			collapsed.Val, cached.Val, err = h.hash(n.Val, db, false)
+			collapsed.Val, cached.Val, err = h.hash(n.Val, db, append(prefix, n.Key...), false)
 			if err != nil {
 				return original, original, err
 			}
@@ -155,7 +155,11 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter) (node, node, err
 			}
 			// Hash all other children properly
 			var herr error
-			collapsed.Children[index], cached.Children[index], herr = h.hash(n.Children[index], db, false)
+			// copy prefix in order to be thread safe
+			childPrefix := make([]byte, len(prefix)+1)
+			copy(childPrefix[:len(prefix)], prefix)
+			childPrefix[len(prefix)] = byte(index)
+			collapsed.Children[index], cached.Children[index], herr = h.hash(n.Children[index], db, childPrefix, false)
 			if herr != nil {
 				h.mu.Lock() // rarely if ever locked, no congenstion
 				err = herr
@@ -197,7 +201,7 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter) (node, node, err
 	}
 }
 
-func (h *hasher) store(n node, db DatabaseWriter, force bool) (node, error) {
+func (h *hasher) store(n node, db DatabaseWriter, prefix []byte, force bool) (node, error) {
 	// Don't store hashes or empty nodes.
 	if _, isHash := n.(hashNode); n == nil || isHash {
 		return n, nil
@@ -221,7 +225,7 @@ func (h *hasher) store(n node, db DatabaseWriter, force bool) (node, error) {
 	if db != nil {
 		// db might be a leveldb batch, which is not safe for concurrent writes
 		h.mu.Lock()
-		err := db.Put(hash, calculator.buffer.Bytes())
+		err := db.Put(hexToHashTreePos(prefix), hash, calculator.buffer.Bytes())
 		h.mu.Unlock()
 
 		return hash, err

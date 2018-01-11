@@ -262,7 +262,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	if block.Number().Sign() != 0 {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
 	}
-	if _, err := statedb.CommitTo(db, false); err != nil {
+	if _, err := statedb.CommitTo(db, 0, nil, false); err != nil {
 		return nil, fmt.Errorf("cannot write state: %v", err)
 	}
 	if err := WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty); err != nil {

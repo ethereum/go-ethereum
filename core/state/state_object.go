@@ -113,10 +113,11 @@ func newObject(db *StateDB, address common.Address, data Account, onDirty func(a
 	if data.CodeHash == nil {
 		data.CodeHash = emptyCodeHash
 	}
+	addrHash := crypto.Keccak256Hash(address[:])
 	return &stateObject{
 		db:            db,
 		address:       address,
-		addrHash:      crypto.Keccak256Hash(address[:]),
+		addrHash:      addrHash,
 		data:          data,
 		cachedStorage: make(Storage),
 		dirtyStorage:  make(Storage),
@@ -243,7 +244,7 @@ func (self *stateObject) CommitTrie(db Database, dbw trie.DatabaseWriter) error 
 	if self.dbErr != nil {
 		return self.dbErr
 	}
-	root, err := self.trie.CommitTo(dbw)
+	root, err := self.trie.CommitTo(&storageTrieDb{dbw: dbw, addrHash: self.addrHash.Bytes()})
 	if err == nil {
 		self.data.Root = root
 	}

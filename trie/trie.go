@@ -65,8 +65,8 @@ type Database interface {
 
 // DatabaseReader wraps the Get method of a backing store for the trie.
 type DatabaseReader interface {
-	Get(key []byte) (value []byte, err error)
-	Has(key []byte) (bool, error)
+	Get(position, hash []byte) (value []byte, err error)
+	Has(position, hash []byte) (bool, error)
 }
 
 // DatabaseWriter wraps the Put method of a backing store for the trie.
@@ -74,7 +74,7 @@ type DatabaseWriter interface {
 	// Put stores the mapping key->value in the database.
 	// Implementations must not hold onto the value bytes, the trie
 	// will reuse the slice across calls to Put.
-	Put(key, value []byte) error
+	Put(position, hash, data []byte) error
 }
 
 // Trie is a Merkle Patricia Trie.
@@ -389,7 +389,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 				// shortNode{..., shortNode{...}}.  Since the entry
 				// might not be loaded yet, resolve it just for this
 				// check.
-				cnode, err := t.resolve(n.Children[pos], prefix)
+				cnode, err := t.resolve(n.Children[pos], append(prefix, byte(pos)))
 				if err != nil {
 					return false, nil, err
 				}
@@ -447,7 +447,7 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 	cacheMissCounter.Inc(1)
 
-	enc, err := t.db.Get(n)
+	enc, err := t.db.Get(hexToHashTreePos(prefix), n)
 	if err != nil || enc == nil {
 		return nil, &MissingNodeError{NodeHash: common.BytesToHash(n), Path: prefix}
 	}
@@ -501,5 +501,21 @@ func (t *Trie) hashRoot(db DatabaseWriter) (node, node, error) {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
 	h := newHasher(t.cachegen, t.cachelimit)
-	return h.hash(t.root, db, true)
+	return h.hash(t.root, db, nil, true)
+}
+
+func (t *Trie) HasData(position, hash []byte) bool {
+	hex := hashTreePosToHex(position)
+	//fmt.Println("pos", position, "hex", hex, "hash", hash)
+	n, err := t.ProveHexKey(hex, 0, nil)
+	if n == nil || err != nil {
+		return false
+	}
+	hasher := newHasher(0, 0)
+	n, _, _ = hasher.hashChildren(n, nil, nil)
+	hn, _ := hasher.store(n, nil, nil, false)
+	nodeHash, ok := hn.(hashNode)
+	eq := ok && bytes.Equal(nodeHash, hash)
+	//fmt.Println("eq", eq, ok, nodeHash, hash)
+	return eq
 }

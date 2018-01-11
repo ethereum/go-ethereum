@@ -147,7 +147,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) (*state.StateD
 	if logs := rlpHash(statedb.Logs()); logs != common.Hash(post.Logs) {
 		return statedb, fmt.Errorf("post state logs hash mismatch: got %x, want %x", logs, post.Logs)
 	}
-	root, _ := statedb.CommitTo(db, config.IsEIP158(block.Number()))
+	root, _ := statedb.CommitTo(db, block.NumberU64(), nil, config.IsEIP158(block.Number()))
 	if root != common.Hash(post.Root) {
 		return statedb, fmt.Errorf("post state root mismatch: got %x, want %x", root, post.Root)
 	}
@@ -170,7 +170,7 @@ func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB 
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, _ := statedb.CommitTo(db, false)
+	root, _ := statedb.CommitTo(db, 0, nil, false)
 	statedb, _ = state.New(root, sdb)
 	return statedb
 }

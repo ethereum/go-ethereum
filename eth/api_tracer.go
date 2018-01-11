@@ -123,24 +123,24 @@ func (db *ephemeralDatabase) Get(key []byte) ([]byte, error) {
 // state.
 func (db *ephemeralDatabase) Prune(root common.Hash) {
 	// Pull the still relevant state data into memory
-	sync := state.NewStateSync(root, db.diskdb)
-	for sync.Pending() > 0 {
-		hash := sync.Missing(1)[0]
+	/*	sync := state.NewStateSync(root, db.diskdb)
+		for sync.Pending() > 0 {
+			hash := sync.Missing(1)[0]
 
-		// Move the next trie node from the memory layer into a sync struct
-		node, err := db.memdb.Get(hash[:])
-		if err != nil {
-			panic(err) // memdb must have the data
+			// Move the next trie node from the memory layer into a sync struct
+			node, err := db.memdb.Get(hash[:])
+			if err != nil {
+				panic(err) // memdb must have the data
+			}
+			if _, _, err := sync.Process([]trie.SyncResult{{Hash: hash, Data: node}}); err != nil {
+				panic(err) // it's not possible to fail processing a node
+			}
 		}
-		if _, _, err := sync.Process([]trie.SyncResult{{Hash: hash, Data: node}}); err != nil {
-			panic(err) // it's not possible to fail processing a node
-		}
-	}
-	// Discard the old memory layer and write a new one
-	db.memdb, _ = ethdb.NewMemDatabaseWithCap(db.memdb.Len())
-	if _, err := sync.Commit(db); err != nil {
-		panic(err) // writing into a memdb cannot fail
-	}
+		// Discard the old memory layer and write a new one
+		db.memdb, _ = ethdb.NewMemDatabaseWithCap(db.memdb.Len())
+		if _, err := sync.Commit(db); err != nil {
+			panic(err) // writing into a memdb cannot fail
+		}*/
 }
 
 // TraceChain returns the structured logs created during the execution of EVM
@@ -340,7 +340,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				break
 			}
 			// Finalize the state so any modifications are written to the trie
-			root, err := statedb.CommitTo(db, true)
+			root, err := statedb.CommitTo(db, number, nil, true)
 			if err != nil {
 				failed = err
 				break
@@ -587,7 +587,7 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 			return nil, err
 		}
 		// Finalize the state so any modifications are written to the trie
-		root, err := statedb.CommitTo(db, true)
+		root, err := statedb.CommitTo(db, block.NumberU64(), nil, true)
 		if err != nil {
 			return nil, err
 		}

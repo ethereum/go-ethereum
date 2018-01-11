@@ -41,6 +41,7 @@ type request struct {
 	parents []*request // Parent state nodes referencing this entry (notify all upon completion)
 	depth   int        // Depth level within the trie the node is located to prioritise DFS
 	deps    int        // Number of dependencies before allowed to commit this node
+	prefix  []byte     // key prefix leading to the trie node
 
 	callback TrieSyncLeafCallback // Callback to invoke if a leaf node it reached on this branch
 }
@@ -104,7 +105,8 @@ func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, c
 		return
 	}
 	key := root.Bytes()
-	blob, _ := s.database.Get(key)
+	panic(nil) // add position
+	blob, _ := s.database.Get(nil, key)
 	if local, err := decodeNode(key, blob, 0); local != nil && err == nil {
 		return
 	}
@@ -138,7 +140,8 @@ func (s *TrieSync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) 
 	if _, ok := s.membatch.batch[hash]; ok {
 		return
 	}
-	if ok, _ := s.database.Has(hash.Bytes()); ok {
+	panic(nil) // add position
+	if ok, _ := s.database.Has(nil, hash.Bytes()); ok {
 		return
 	}
 	// Assemble the new sub-trie sync request
@@ -220,7 +223,8 @@ func (s *TrieSync) Process(results []SyncResult) (bool, int, error) {
 func (s *TrieSync) Commit(dbw DatabaseWriter) (int, error) {
 	// Dump the membatch into a database dbw
 	for i, key := range s.membatch.order {
-		if err := dbw.Put(key[:], s.membatch.batch[key]); err != nil {
+		panic(nil) // add position
+		if err := dbw.Put(nil, key[:], s.membatch.batch[key]); err != nil {
 			return i, err
 		}
 	}
@@ -296,7 +300,8 @@ func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 			if _, ok := s.membatch.batch[hash]; ok {
 				continue
 			}
-			if ok, _ := s.database.Has(node); ok {
+			panic(nil) // add position
+			if ok, _ := s.database.Has(req.prefix, node); ok {
 				continue
 			}
 			// Locally unknown node, schedule for retrieval

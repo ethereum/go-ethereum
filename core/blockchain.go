@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/hashtree"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -105,13 +106,17 @@ type BlockChain struct {
 	quit    chan struct{} // blockchain quit channel
 	running int32         // running must be called atomically
 	// procInterrupt must be atomically called
+	processing    int32
 	procInterrupt int32          // interrupt signaler for block processing
 	wg            sync.WaitGroup // chain processing wait group for shutting down
+	writeCounter  uint64
 
 	engine    consensus.Engine
 	processor Processor // block processor interface
 	validator Validator // block and state validator interface
 	vmConfig  vm.Config
+
+	gc *hashtree.GarbageCollector
 
 	badBlocks *lru.Cache // Bad block cache
 }
@@ -126,6 +131,7 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, engine co
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	badBlocks, _ := lru.New(badBlockLimit)
 
+	//hashtree.Print(chainDb, []byte(state.DbPrefix))
 	bc := &BlockChain{
 		config:       config,
 		chainDb:      chainDb,
@@ -167,9 +173,27 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, engine co
 			}
 		}
 	}
+
+	bc.gc = hashtree.NewGarbageCollector(chainDb, []byte(state.DbPrefix), bc.hasDataCallback)
+
+	/*headBlock := bc.currentBlock.NumberU64()
+	if headBlock > 1000 {
+		bc.gc.FullGC(headBlock - 1000)
+	}*/
+
+	bc.gc.BackgroundGC(bc.CurrentBlock, &bc.processing, &bc.procInterrupt, &bc.wg)
+
 	// Take ownership of this particular state
 	go bc.update()
 	return bc, nil
+}
+
+func (bc *BlockChain) hasDataCallback(version uint64) func(position, hash []byte) bool {
+	header := bc.GetHeaderByNumber(version)
+	if header == nil {
+		return nil
+	}
+	return state.HasDataCallback(header.Root, bc.chainDb)
 }
 
 func (bc *BlockChain) getProcInterrupt() bool {
@@ -292,7 +316,7 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	if block == nil {
 		return fmt.Errorf("non existent block [%x…]", hash[:4])
 	}
-	if _, err := trie.NewSecure(block.Root(), bc.chainDb, 0); err != nil {
+	if _, err := trie.NewSecure(block.Root(), hashtree.NewReader(bc.chainDb, state.DbPrefix), 0); err != nil {
 		return err
 	}
 	// If all checks out, manually set the head block
@@ -808,7 +832,7 @@ func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.R
 	if err := WriteBlock(batch, block); err != nil {
 		return NonStatTy, err
 	}
-	if _, err := state.CommitTo(batch, bc.config.IsEIP158(block.Number())); err != nil {
+	if _, err := state.CommitTo(batch, block.NumberU64(), bc.gc, bc.config.IsEIP158(block.Number())); err != nil {
 		return NonStatTy, err
 	}
 	if err := WriteBlockReceipts(batch, block.Hash(), block.NumberU64(), receipts); err != nil {
@@ -842,9 +866,13 @@ func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.R
 	} else {
 		status = SideStatTy
 	}
+
+	bc.gc.LockWrite()
 	if err := batch.Write(); err != nil {
+		bc.gc.UnlockWrite()
 		return NonStatTy, err
 	}
+	bc.gc.UnlockWrite()
 
 	// Set new head.
 	if status == CanonStatTy {
@@ -887,6 +915,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 
 	bc.chainmu.Lock()
 	defer bc.chainmu.Unlock()
+
+	atomic.StoreInt32(&bc.processing, 1)
+	defer atomic.StoreInt32(&bc.processing, 0)
 
 	// A queued approach to delivering events. This is generally
 	// faster than direct delivery and requires much less mutex

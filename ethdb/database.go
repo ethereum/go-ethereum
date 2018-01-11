@@ -347,6 +347,10 @@ func (dt *table) NewBatch() Batch {
 	return &tableBatch{dt.db.NewBatch(), dt.prefix}
 }
 
+func NewBatchTable(batch Batch, prefix string) Batch {
+	return &tableBatch{batch, prefix}
+}
+
 func (tb *tableBatch) Put(key, value []byte) error {
 	return tb.batch.Put(append([]byte(tb.prefix), key...), value)
 }

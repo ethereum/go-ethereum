@@ -192,7 +192,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if b.engine != nil {
 			block, _ := b.engine.Finalize(b.chainReader, b.header, statedb, b.txs, b.uncles, b.receipts)
 			// Write state changes to db
-			_, err := statedb.CommitTo(db, config.IsEIP158(b.header.Number))
+			_, err := statedb.CommitTo(db, b.header.Number.Uint64(), nil, config.IsEIP158(b.header.Number))
 			if err != nil {
 				panic(fmt.Sprintf("state write error: %v", err))
 			}

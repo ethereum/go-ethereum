@@ -112,3 +112,35 @@ func prefixLen(a, b []byte) int {
 func hasTerm(s []byte) bool {
 	return len(s) > 0 && s[len(s)-1] == 16
 }
+
+func hexToHashTreePos(hex []byte) []byte {
+	terminator := byte(0)
+	if hasTerm(hex) {
+		terminator = 2
+		hex = hex[:len(hex)-1]
+	}
+	buf := make([]byte, len(hex)/2+1)
+	if len(hex)&1 == 1 {
+		terminator += hex[len(hex)-1]<<4 + 1
+		hex = hex[:len(hex)-1]
+	}
+	decodeNibbles(hex, buf[:len(buf)-1])
+	buf[len(buf)-1] = terminator
+	return buf
+}
+
+func SecHashTreePos(hash []byte) []byte {
+	return append(hash, 4)
+}
+
+func hashTreePosToHex(pos []byte) []byte {
+	base := keybytesToHex(pos)
+	base = base[:len(base)-1]
+	term := base[len(base)-1]
+	base = base[:len(base)-2+int(term&1)]
+	// apply terminator flag
+	if term >= 2 {
+		base = append(base, 16)
+	}
+	return base
+}
