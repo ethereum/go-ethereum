@@ -984,7 +984,13 @@ func validatePrivateKey(k *ecdsa.PrivateKey) bool {
 // validateSymmetricKey returns false if the key contains all zeros,
 // which is a simplest and the most common bug.
 func validateRandomData(k []byte, expectedSize int) bool {
-	return len(k) == expectedSize && !containsOnlyZeros(k)
+	if len(k) != expectedSize {
+		return false
+	}
+	if expectedSize > 4 && containsOnlyZeros(k) {
+		return false
+	}
+	return true
 }
 
 // containsOnlyZeros checks if the data contain only zeros.
