@@ -194,8 +194,8 @@ func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *
 	return json.tx, json.BlockNumber == nil, nil
 }
 
-// BlockNumberByTransactionHash returns block number for the transaction with the given hash.
-func (ec *Client) BlockNumberByTransactionHash(ctx context.Context, hash common.Hash) (blockNumber uint64, err error) {
+// TransactionInclusionBlock returns block number for the transaction with the given hash.
+func (ec *Client) TransactionInclusionBlock(ctx context.Context, hash common.Hash) (blockNumber uint64, err error) {
 	var json *rpcTransaction
 	err = ec.c.CallContext(ctx, &json, "eth_getTransactionByHash", hash)
 	if err != nil {
