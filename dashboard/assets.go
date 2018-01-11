@@ -26819,37 +26819,28 @@ var _bundleJs = []byte((((((((((`!function(modules) {
             return protoProps && defineProperties(Constructor.prototype, protoProps), staticProps && defineProperties(Constructor, staticProps), 
             Constructor;
         };
-    }(), _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(obj) {
-        return typeof obj;
-    } : function(obj) {
-        return obj && "function" == typeof Symbol && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj;
-    }, _react = __webpack_require__(0), _react2 = _interopRequireDefault(_react), _withStyles = __webpack_require__(10), _withStyles2 = _interopRequireDefault(_withStyles), _Header = __webpack_require__(459), _Header2 = _interopRequireDefault(_Header), _Body = __webpack_require__(489), _Body2 = _interopRequireDefault(_Body), _Footer = __webpack_require__(805), _Footer2 = _interopRequireDefault(_Footer), _Common = __webpack_require__(77), deepCopy = function deepCopy(prev) {
-        var copied = Array.isArray(prev) ? [] : {};
+    }(), _react = __webpack_require__(0), _react2 = _interopRequireDefault(_react), _withStyles = __webpack_require__(10), _withStyles2 = _interopRequireDefault(_withStyles), _Header = __webpack_require__(459), _Header2 = _interopRequireDefault(_Header), _Body = __webpack_require__(489), _Body2 = _interopRequireDefault(_Body), _Footer = __webpack_require__(805), _Footer2 = _interopRequireDefault(_Footer), _Common = __webpack_require__(77), deepUpdate = function deepUpdate(prev, update, updater) {
+        if (void 0 === update) return prev;
+        if ("function" == typeof updater) return updater(prev, update);
+        var updated = {};
         return Object.keys(prev).forEach(function(key) {
-            var c = prev[key];
-            copied[key] = "object" === (void 0 === c ? "undefined" : _typeof(c)) ? deepCopy(c) : c;
-        }), copied;
-    }, deepUpdate = function deepUpdate(prev, update, handler) {
-        if (void 0 === update) return deepCopy(prev);
-        if ("function" == typeof handler) return handler(prev, update);
-        var updated = Array.isArray(prev) ? [] : {};
-        return Object.keys(prev).forEach(function(key) {
-            void 0 === update[key] ? updated[key] = deepCopy(prev[key]) : updated[key] = deepUpdate(prev[key], update[key], handler[key]);
+            updated[key] = deepUpdate(prev[key], update[key], updater[key]);
         }), updated;
-    }, shouldUpdate = function shouldUpdate(msg, handler) {
+    }, shouldUpdate = function shouldUpdate(msg, updater) {
         var su = {};
         return Object.keys(msg).forEach(function(key) {
-            su[key] = "object" !== _typeof(msg[key]) || "function" == typeof handler[key] || shouldUpdate(msg[key], handler[key]);
+            su[key] = "function" == typeof updater[key] || shouldUpdate(msg[key], updater[key]);
         }), su;
-    }, appender200 = function(limit) {
+    }, appender = function(limit) {
         return function(prev, update) {
             return [].concat(_toConsumableArray(prev), _toConsumableArray(update)).slice(-limit);
         };
-    }(200), replacer = function(prev, update) {
+    }, replacer = function(prev, update) {
         return update;
     }, defaultContent = {
         general: {
-            version: "-"
+            version: "-",
+            gitCommit: "-"
         },
         home: {
             memory: [],
@@ -26862,20 +26853,21 @@ var _bundleJs = []byte((((((((((`!function(modules) {
         logs: {
             log: []
         }
-    }, handlers = {
+    }, updaters = {
         general: {
-            version: replacer
+            version: replacer,
+            gitCommit: replacer
         },
         home: {
-            memory: appender200,
-            traffic: appender200
+            memory: appender(200),
+            traffic: appender(200)
         },
         chain: null,
         txpool: null,
         network: null,
         system: null,
         logs: {
-            log: appender200
+            log: appender(200)
         }
     }, styles = function(theme) {
         return {
@@ -26902,15 +26894,16 @@ var _bundleJs = []byte((((((((((`!function(modules) {
                     });
                 }, server.onmessage = function(event) {
                     var msg = JSON.parse(event.data);
-                    msg && _this.update(msg);
+                    if (!msg) return void console.error("Incoming message is " + msg);
+                    console.log(msg), _this.update(msg);
                 }, server.onclose = function() {
                     setTimeout(_this.reconnect, 3e3);
                 };
             }, _this.update = function(msg) {
                 _this.setState(function(prevState) {
                     return {
-                        content: deepUpdate(prevState.content, msg, handlers),
-                        shouldUpdate: shouldUpdate(msg, handlers)
+                        content: deepUpdate(prevState.content, msg, updaters),
+                        shouldUpdate: shouldUpdate(msg, updaters)
                     };
                 });
             }, _this.changeContent = function(newActive) {
@@ -38146,13 +38139,7 @@ var _bundleJs = []byte((((((((((`!function(modules) {
     Object.defineProperty(exports, "__esModule", {
         value: !0
     });
-    var _extends = Object.assign || function(target) {
-        for (var i = 1; i < arguments.length; i++) {
-            var source = arguments[i];
-            for (var key in source) Object.prototype.hasOwnProperty.call(source, key) && (target[key] = source[key]);
-        }
-        return target;
-    }, _createClass = function() {
+    var _createClass = function() {
         function defineProperties(target, props) {
             for (var i = 0; i < props.length; i++) {
                 var descriptor = props[i];
@@ -38164,13 +38151,9 @@ var _bundleJs = []byte((((((((((`!function(modules) {
             return protoProps && defineProperties(Constructor.prototype, protoProps), staticProps && defineProperties(Constructor, staticProps), 
             Constructor;
         };
-    }(), _react = __webpack_require__(0), _react2 = _interopRequireDefault(_react), _withStyles = __webpack_require__(10), _withStyles2 = _interopRequireDefault(_withStyles), _AppBar = __webpack_require__(235), _AppBar2 = _interopRequireDefault(_AppBar), _Toolbar = __webpack_require__(236), _Toolbar2 = _interopRequireDefault(_Toolbar), _Transition = __webpack_require__(76), _Transition2 = _interopRequireDefault(_Transition), _IconButton = __webpack_require__(237), _IconButton2 = _interopRequireDefault(_IconButton), _Typography = __webpack_require__(158), _Typography2 = _interopRequireDefault(_Typography), _ChevronLeft = __webpack_require__(244), _ChevronLeft2 = _interopRequireDefault(_ChevronLeft), _Common = __webpack_require__(77), arrowDefault = {
-        transition: "transform " + _Common.DURATION + "ms"
-    }, arrowTransition = {
-        entered: {
-            transform: "rotate(180deg)"
-        }
-    }, styles = function(theme) {
+    }(), _react = __webpack_require__(0), _react2 = _interopRequireDefault(_react), _withStyles = __webpack_require__(10), _withStyles2 = _interopRequireDefault(_withStyles), _AppBar = __webpack_require__(235), _AppBar2 = _interopRequireDefault(_AppBar), _Toolbar = __webpack_require__(236), _Toolbar2 = _interopRequireDefault(_Toolbar), _Transition = __webpack_require__(76), _IconButton = (_interopRequireDefault(_Transition), 
+    __webpack_require__(237)), _Typography = (_interopRequireDefault(_IconButton), __webpack_require__(158)), _Typography2 = _interopRequireDefault(_Typography), _ChevronLeft = __webpack_require__(244), _Common = (_interopRequireDefault(_ChevronLeft), 
+    __webpack_require__(77)), styles = (_Common.DURATION, function(theme) {
         return {
             header: {
                 backgroundColor: theme.palette.background.appBar,
@@ -38185,21 +38168,9 @@ var _bundleJs = []byte((((((((((`!function(modules) {
                 paddingLeft: theme.spacing.unit
             }
         };
-    }, Footer = function(_Component) {
+    }), Footer = function(_Component) {
         function Footer() {
-            var _ref, _temp, _this, _ret;
-            _classCallCheck(this, Footer);
-            for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) args[_key] = arguments[_key];
-            return _temp = _this = _possibleConstructorReturn(this, (_ref = Footer.__proto__ || Object.getPrototypeOf(Footer)).call.apply(_ref, [ this ].concat(args))), 
-            _this.changeSideBar = function() {
-                _this.props.opened ? _this.props.closeSideBar() : _this.props.openSideBar();
-            }, _this.arrowButton = function(transitionState) {
-                return _react2.default.createElement(_IconButton2.default, {
-                    onClick: _this.changeSideBar
-                }, _react2.default.createElement(_ChevronLeft2.default, {
-                    style: _extends({}, arrowDefault, arrowTransition[transitionState])
-                }));
-            }, _ret = _temp, _possibleConstructorReturn(_this, _ret);
+            return _classCallCheck(this, Footer), _possibleConstructorReturn(this, (Footer.__proto__ || Object.getPrototypeOf(Footer)).apply(this, arguments));
         }
         return _inherits(Footer, _Component), _createClass(Footer, [ {
             key: "shouldComponentUpdate",
@@ -38209,24 +38180,21 @@ var _bundleJs = []byte((((((((((`!function(modules) {
         }, {
             key: "render",
             value: function() {
-                var _props = this.props, classes = _props.classes, opened = _props.opened;
+                var classes = this.props.classes;
                 return _react2.default.createElement(_AppBar2.default, {
                     position: "static",
                     className: classes.header
                 }, _react2.default.createElement(_Toolbar2.default, {
                     className: classes.toolbar
-                }, _react2.default.createElement(_Transition2.default, {
-                    mountOnEnter: !0,
-                    in: opened,
-                    timeout: {
-                        enter: _Common.DURATION
-                    }
-                }, this.arrowButton), _react2.default.createElement(_Typography2.default, {
+                }, _react2.default.createElement(_Typography2.default, {
                     type: "title",
                     color: "inherit",
-                    noWrap: !0,
                     className: classes.mainText
-                }, this.props.general.version)));
+                }, this.props.general.version), _react2.default.createElement(_Typography2.default, {
+                    type: "title",
+                    color: "inherit",
+                    className: classes.mainText
+                }, this.props.general.gitCommit)));
             }
         } ]), Footer;
     }(_react.Component);
