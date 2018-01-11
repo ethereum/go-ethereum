@@ -377,9 +377,9 @@ type Message struct {
 	message *whisper.Message
 }
 
-// Messagea represents an array of messages.
+// Messages represents an array of messages.
 type Messages struct {
-	messages []*Message
+	messages []*whisper.Message
 }
 
 // Criteria holds various filter options for inbound messages.

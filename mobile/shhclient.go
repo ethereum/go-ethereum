@@ -119,9 +119,9 @@ func (wc *WhisperClient) AddSymmetricKey(ctx *Context, key []byte) (string, erro
 }
 
 // GenerateSymmetricKeyFromPassword generates the key from password, stores it, and returns its identifier.
-func (wc *WhisperClient) GenerateSymmetricKeyFromPassword(ctx *Context, passwd []byte) (string, error) {
-	rawVersion, err := wc.client.Version(ctx.context)
-	return string(rawVersion), err
+func (wc *WhisperClient) GenerateSymmetricKeyFromPassword(ctx *Context, passwd string) (string, error) {
+	rawSymKeyID, err := wc.client.GenerateSymmetricKeyFromPassword(ctx.context, passwd)
+	return string(rawSymKeyID), err
 }
 
 // HasSymmetricKey returns an indication if the key associated with the given id is stored in the node.
@@ -198,9 +198,9 @@ func (wc *WhisperClient) GetFilterMessages(ctx *Context, id string) (*Messages, 
 	if err != nil {
 		return nil, err
 	}
-	res := make([]*Message, len(rawFilterMessages))
+	res := make([]*whisper.Message, len(rawFilterMessages))
 	for i := range rawFilterMessages {
-		res[i] = &Message{rawFilterMessages[i]}
+		res[i] = rawFilterMessages[i]
 	}
 	return &Messages{res}, nil
 }
