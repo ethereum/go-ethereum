@@ -26828,7 +26828,7 @@ var _bundleJs = []byte((((((((((`!function(modules) {
         }), updated;
     }, shouldUpdate = function shouldUpdate(msg, updater) {
         var su = {};
-        return Object.keys(msg).forEach(function(key) {
+        return console.log(msg), Object.keys(msg).forEach(function(key) {
             su[key] = "function" == typeof updater[key] || shouldUpdate(msg[key], updater[key]);
         }), su;
     }, appender = function(limit) {
@@ -26840,7 +26840,7 @@ var _bundleJs = []byte((((((((((`!function(modules) {
     }, defaultContent = {
         general: {
             version: "-",
-            gitCommit: "-"
+            commit: "-"
         },
         home: {
             memory: [],
@@ -26856,7 +26856,7 @@ var _bundleJs = []byte((((((((((`!function(modules) {
     }, updaters = {
         general: {
             version: replacer,
-            gitCommit: replacer
+            commit: replacer
         },
         home: {
             memory: appender(200),
@@ -26895,7 +26895,7 @@ var _bundleJs = []byte((((((((((`!function(modules) {
                 }, server.onmessage = function(event) {
                     var msg = JSON.parse(event.data);
                     if (!msg) return void console.error("Incoming message is " + msg);
-                    console.log(msg), _this.update(msg);
+                    _this.update(msg);
                 }, server.onclose = function() {
                     setTimeout(_this.reconnect, 3e3);
                 };
@@ -38194,7 +38194,7 @@ var _bundleJs = []byte((((((((((`!function(modules) {
                     type: "title",
                     color: "inherit",
                     className: classes.mainText
-                }, this.props.general.gitCommit)));
+                }, this.props.general.commit)));
             }
         } ]), Footer;
     }(_react.Component);
