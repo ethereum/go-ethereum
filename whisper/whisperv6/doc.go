@@ -54,7 +54,7 @@ const (
 	TopicLength     = 4  // in bytes
 	signatureLength = 65 // in bytes
 	aesKeyLength    = 32 // in bytes
-	AESNonceLength  = 12 // in bytes; also returned by aesgcm.NonceSize()
+	aesNonceLength  = 12 // in bytes; for more info please see cipher.gcmStandardNonceSize & aesgcm.NonceSize()
 	keyIdSize       = 32 // in bytes
 	bloomFilterSize = 64 // in bytes
 
