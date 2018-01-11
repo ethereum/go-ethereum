@@ -372,17 +372,82 @@ type NewMessage struct {
 	newMessage *whisper.NewMessage
 }
 
+func NewNewMessage() (*NewMessage) {
+	nm := &NewMessage{
+		newMessage: new(whisper.NewMessage),
+	}
+	return nm
+}
+
+func (nm *NewMessage) GetSymKeyID() string             { return nm.newMessage.SymKeyID }
+func (nm *NewMessage) SetSymKeyID(symKeyID string)     { nm.newMessage.SymKeyID = symKeyID }
+func (nm *NewMessage) GetPublicKey() []byte            { return nm.newMessage.PublicKey }
+func (nm *NewMessage) SetPublicKey(publicKey []byte)   { nm.newMessage.PublicKey = publicKey }
+func (nm *NewMessage) GetSig() string                  { return nm.newMessage.Sig }
+func (nm *NewMessage) SetSig(sig string)               { nm.newMessage.Sig = sig }
+func (nm *NewMessage) GetTTL() int32                   { return int32(nm.newMessage.TTL) }
+func (nm *NewMessage) SetTTL(ttl int32)                { nm.newMessage.TTL = uint32(ttl) }
+func (nm *NewMessage) GetPayload() []byte              { return nm.newMessage.Payload }
+func (nm *NewMessage) SetPayload(payload []byte)       { nm.newMessage.Payload = payload }
+func (nm *NewMessage) GetPowTime() int32               { return int32(nm.newMessage.PowTime) }
+func (nm *NewMessage) SetPowTime(powTime int32)        { nm.newMessage.PowTime = uint32(powTime) }
+func (nm *NewMessage) GetPowTarget() float64           { return nm.newMessage.PowTarget }
+func (nm *NewMessage) SetPowTarget(powTarget float64)  { nm.newMessage.PowTarget = powTarget }
+func (nm *NewMessage) GetTargetPeer() string           { return nm.newMessage.TargetPeer }
+func (nm *NewMessage) SetTargetPeer(targetPeer string) { nm.newMessage.TargetPeer = targetPeer }
+func (nm *NewMessage) GetTopic() []byte                { return nm.newMessage.Topic[:] }
+func (nm *NewMessage) SetTopic(topic []byte)           { nm.newMessage.Topic = whisper.BytesToTopic(topic) }
+
 // Message represents a whisper message.
 type Message struct {
 	message *whisper.Message
 }
+
+func (m *Message) GetSig() []byte             { return m.message.Sig }
+func (m *Message) GetTTL() int32              { return int32(m.message.TTL) }
+func (m *Message) GetTimestamp() int32        { return int32(m.message.Timestamp) }
+func (m *Message) GetPayload() []byte         { return m.message.Payload }
+func (m *Message) GetPoW() float64            { return m.message.PoW }
+func (m *Message) GetHash() []byte            { return m.message.Hash }
+func (m *Message) GetDst() []byte             { return m.message.Dst }
 
 // Messages represents an array of messages.
 type Messages struct {
 	messages []*whisper.Message
 }
 
+// Size returns the number of messages in the slice.
+func (m *Messages) Size() int {
+	return len(m.messages)
+}
+
+// Get returns the message at the given index from the slice.
+func (m *Messages) Get(index int) (message *Message, _ error) {
+	if index < 0 || index >= len(m.messages) {
+		return nil, errors.New("index out of bounds")
+	}
+	return &Message{m.messages[index]}, nil
+}
+
 // Criteria holds various filter options for inbound messages.
 type Criteria struct {
 	criteria *whisper.Criteria
 }
+
+func NewCriteria(topic []byte) (*Criteria) {
+	c := &Criteria{
+		criteria: new(whisper.Criteria),
+	}
+	encodedTopic := whisper.BytesToTopic(topic)
+	c.criteria.Topics = []whisper.TopicType{ encodedTopic }
+	return c
+}
+
+func (c *Criteria) GetSymKeyID() string                  { return c.criteria.SymKeyID }
+func (c *Criteria) SetSymKeyID(symKeyID string)          { c.criteria.SymKeyID = symKeyID }
+func (c *Criteria) GetPrivateKeyID() string              { return c.criteria.PrivateKeyID }
+func (c *Criteria) SetPrivateKeyID(privateKeyID string)  { c.criteria.PrivateKeyID = privateKeyID }
+func (c *Criteria) GetSig() []byte                       { return c.criteria.Sig }
+func (c *Criteria) SetSig(sig []byte)                    { c.criteria.Sig = sig }
+func (c *Criteria) GetMinPow() float64                   { return c.criteria.MinPow }
+func (c *Criteria) SetMinPow(pow float64)                { c.criteria.MinPow = pow }
