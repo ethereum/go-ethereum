@@ -592,6 +592,17 @@ func (bc *BlockChain) Stop() {
 	atomic.StoreInt32(&bc.procInterrupt, 1)
 
 	bc.wg.Wait()
+
+	// Ensure the state of the latest block is also stored to disk
+	root := bc.CurrentHeader().Root
+
+	batch := bc.chainDb.NewBatch()
+	if err := bc.trieMemPool.Commit(root, batch); err != nil {
+		log.Error("Failed to commit latest state trie", "err", err)
+	}
+	if err := batch.Write(); err != nil {
+		log.Error("Failed to write latest state trie", "err", err)
+	}
 	log.Info("Blockchain manager stopped")
 }
 

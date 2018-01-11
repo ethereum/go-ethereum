@@ -132,13 +132,15 @@ func (pool *MemPool) dereference(node common.Hash, parent common.Hash) {
 
 // Commit iterates over all the children of a particular node, writes them out
 // to disk, forcefully tearing down all references in both directions.
-func (pool *MemPool) Commit(node common.Hash, db DatabaseWriter) {
+func (pool *MemPool) Commit(node common.Hash, db DatabaseWriter) error {
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 
 	nodes, storage, start := len(pool.cache), pool.size, time.Now()
-	pool.commit(node, db)
-
+	if err := pool.commit(node, db); err != nil {
+		log.Error("Failed to commit trie from mempool", "err", err)
+		return err
+	}
 	log.Debug("Committed trie from memory pool", "nodes", nodes-len(pool.cache), "size", storage-pool.size, "time", time.Since(start),
 		"gcnodes", pool.gcnodes, "gcsize", pool.gcsize, "gctime", pool.gctime, "livenodes", len(pool.cache), "livesize", pool.size)
 
@@ -152,23 +154,28 @@ func (pool *MemPool) Commit(node common.Hash, db DatabaseWriter) {
 			break
 		}
 	}
+	return nil
 }
 
 // commit is the private locked version of Commit.
-func (pool *MemPool) commit(node common.Hash, db DatabaseWriter) {
+func (pool *MemPool) commit(node common.Hash, db DatabaseWriter) error {
 	// If the node does not exist, it's a previously comitted node.
 	blob, ok := pool.cache[node]
 	if !ok {
-		return
+		return nil
 	}
 	for child := range pool.children[node] {
-		pool.commit(child, db)
+		if err := pool.commit(child, db); err != nil {
+			return err
+		}
 	}
-	db.Put(node[:], blob)
-
+	if err := db.Put(node[:], blob); err != nil {
+		return err
+	}
 	delete(pool.cache, node)
 	delete(pool.parents, node)
 	delete(pool.children, node)
 
 	pool.size -= common.StorageSize(common.HashLength + len(blob))
+	return nil
 }
