@@ -55,11 +55,11 @@ type SecureTrie struct {
 // Loaded nodes are kept around until their 'cache generation' expires.
 // A new cache generation is created by each call to Commit.
 // cachelimit sets the number of past cache generations to keep.
-func NewSecure(root common.Hash, db Database, cachelimit uint16) (*SecureTrie, error) {
+func NewSecure(root common.Hash, db Database, pool *MemPool, cachelimit uint16) (*SecureTrie, error) {
 	if db == nil {
 		panic("NewSecure called with nil database")
 	}
-	trie, err := New(root, db)
+	trie, err := New(root, db, pool)
 	if err != nil {
 		return nil, err
 	}

@@ -39,7 +39,7 @@ type testAccount struct {
 func makeTestState() (Database, *ethdb.MemDatabase, common.Hash, []*testAccount) {
 	// Create an empty state
 	mem, _ := ethdb.NewMemDatabase()
-	db := NewDatabase(mem)
+	db := NewDatabase(mem, trie.NewMemPool())
 	state, _ := New(common.Hash{}, db)
 
 	// Fill it with some arbitrary data
@@ -71,7 +71,7 @@ func makeTestState() (Database, *ethdb.MemDatabase, common.Hash, []*testAccount)
 // account array.
 func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accounts []*testAccount) {
 	// Check root availability and state contents
-	state, err := New(root, NewDatabase(db))
+	state, err := New(root, NewDatabase(db, trie.NewMemPool()))
 	if err != nil {
 		t.Fatalf("failed to create state trie at %x: %v", root, err)
 	}
@@ -96,7 +96,7 @@ func checkTrieConsistency(db ethdb.Database, root common.Hash) error {
 	if v, _ := db.Get(root[:]); v == nil {
 		return nil // Consider a non existent state consistent.
 	}
-	trie, err := trie.New(root, db)
+	trie, err := trie.New(root, db, trie.NewMemPool())
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func checkStateConsistency(db ethdb.Database, root common.Hash) error {
 	if _, err := db.Get(root.Bytes()); err != nil {
 		return nil // Consider a non existent state consistent.
 	}
-	state, err := New(root, NewDatabase(db))
+	state, err := New(root, NewDatabase(db, trie.NewMemPool()))
 	if err != nil {
 		return err
 	}

@@ -200,7 +200,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 			return nil, fmt.Errorf("parent block #%d not found", number-1)
 		}
 	}
-	statedb, err := state.New(start.Root(), state.NewDatabase(db))
+	statedb, err := state.New(start.Root(), state.NewDatabase(db, nil))
 	if err != nil {
 		// If the starting state is missing, allow some number of blocks to be reexecuted
 		reexec := defaultTraceReexec
@@ -213,7 +213,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 			if start == nil {
 				break
 			}
-			if statedb, err = state.New(start.Root(), state.NewDatabase(db)); err == nil {
+			if statedb, err = state.New(start.Root(), state.NewDatabase(db, nil)); err == nil {
 				break
 			}
 		}
@@ -367,7 +367,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				db.Prune(root)
 				log.Info("Pruned tracer state entries", "deleted", nodes-db.memdb.Len(), "left", db.memdb.Len(), "elapsed", time.Since(start))
 
-				statedb, _ = state.New(root, state.NewDatabase(db))
+				statedb, _ = state.New(root, state.NewDatabase(db, nil))
 			}
 		}
 	}()
@@ -555,7 +555,7 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 		if block == nil {
 			break
 		}
-		if statedb, err = state.New(block.Root(), state.NewDatabase(db)); err == nil {
+		if statedb, err = state.New(block.Root(), state.NewDatabase(db, nil)); err == nil {
 			break
 		}
 	}
@@ -603,7 +603,7 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 			db.Prune(root)
 			log.Info("Pruned tracer state entries", "deleted", nodes-db.memdb.Len(), "left", db.memdb.Len(), "elapsed", time.Since(begin))
 
-			statedb, _ = state.New(root, state.NewDatabase(db))
+			statedb, _ = state.New(root, state.NewDatabase(db, nil))
 		}
 	}
 	log.Info("Historical state regenerated", "block", block.NumberU64(), "elapsed", time.Since(start))

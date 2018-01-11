@@ -96,6 +96,7 @@ type BlockChain struct {
 	currentBlock     *types.Block // Current head of the block chain
 	currentFastBlock *types.Block // Current head of the fast-sync chain (may be above the block chain!)
 
+	trieMemPool  *trie.MemPool  // Trie node memory pool to avoid storing everything to disk
 	stateCache   state.Database // State database to reuse between imports (contains state cache)
 	bodyCache    *lru.Cache     // Cache for the most recent block bodies
 	bodyRLPCache *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
@@ -120,6 +121,7 @@ type BlockChain struct {
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
 func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
+	trieMemPool := trie.NewMemPool()
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -129,7 +131,8 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, engine co
 	bc := &BlockChain{
 		config:       config,
 		chainDb:      chainDb,
-		stateCache:   state.NewDatabase(chainDb),
+		trieMemPool:  trieMemPool,
+		stateCache:   state.NewDatabase(chainDb, trieMemPool),
 		quit:         make(chan struct{}),
 		bodyCache:    bodyCache,
 		bodyRLPCache: bodyRLPCache,
@@ -292,7 +295,7 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	if block == nil {
 		return fmt.Errorf("non existent block [%x…]", hash[:4])
 	}
-	if _, err := trie.NewSecure(block.Root(), bc.chainDb, 0); err != nil {
+	if _, err := trie.NewSecure(block.Root(), bc.chainDb, nil, 0); err != nil {
 		return err
 	}
 	// If all checks out, manually set the head block
@@ -791,8 +794,17 @@ func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.R
 	if err := WriteBlock(batch, block); err != nil {
 		return NonStatTy, err
 	}
-	if _, err := state.CommitTo(batch, bc.config.IsEIP158(block.Number())); err != nil {
+	root, err := state.CommitTo(batch, bc.config.IsEIP158(block.Number()))
+	if err != nil {
 		return NonStatTy, err
+	}
+	bc.trieMemPool.Reference(root, common.Hash{})
+	if number := block.NumberU64(); number > 192 {
+		if (number-192)%128 == 0 {
+			bc.trieMemPool.Commit(root, batch)
+		}
+		header := bc.GetHeaderByNumber(block.NumberU64() - 192)
+		bc.trieMemPool.Dereference(header.Root, common.Hash{})
 	}
 	if err := WriteBlockReceipts(batch, block.Hash(), block.NumberU64(), receipts); err != nil {
 		return NonStatTy, err

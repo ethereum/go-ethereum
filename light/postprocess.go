@@ -141,7 +141,7 @@ func (c *ChtIndexerBackend) Reset(section uint64, lastSectionHead common.Hash) e
 		root = GetChtRoot(c.db, section-1, lastSectionHead)
 	}
 	var err error
-	c.trie, err = trie.New(root, c.cdb)
+	c.trie, err = trie.New(root, c.cdb, nil)
 	c.section = section
 	return err
 }
@@ -236,7 +236,7 @@ func (b *BloomTrieIndexerBackend) Reset(section uint64, lastSectionHead common.H
 		root = GetBloomTrieRoot(b.db, section-1, lastSectionHead)
 	}
 	var err error
-	b.trie, err = trie.New(root, b.cdb)
+	b.trie, err = trie.New(root, b.cdb, nil)
 	b.section = section
 	return err
 }

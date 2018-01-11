@@ -100,7 +100,7 @@ func runCmd(ctx *cli.Context) error {
 		chainConfig = gen.Config
 	} else {
 		db, _ := ethdb.NewMemDatabase()
-		statedb, _ = state.New(common.Hash{}, state.NewDatabase(db))
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(db, nil))
 	}
 	if ctx.GlobalString(SenderFlag.Name) != "" {
 		sender = common.HexToAddress(ctx.GlobalString(SenderFlag.Name))

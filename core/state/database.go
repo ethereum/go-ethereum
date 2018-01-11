@@ -40,14 +40,18 @@ const (
 
 // Database wraps access to tries and contract code.
 type Database interface {
-	// Accessing tries:
 	// OpenTrie opens the main account trie.
-	// OpenStorageTrie opens the storage trie of an account.
 	OpenTrie(root common.Hash) (Trie, error)
+
+	// OpenStorageTrie opens the storage trie of an account.
 	OpenStorageTrie(addrHash, root common.Hash) (Trie, error)
-	// Accessing contract code:
+
+	// ContractCode retrieves a particular contract's code.
 	ContractCode(addrHash, codeHash common.Hash) ([]byte, error)
+
+	// ContractCode retrieves a particular contracts code's size.
 	ContractCodeSize(addrHash, codeHash common.Hash) (int, error)
+
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
 }
@@ -65,13 +69,14 @@ type Trie interface {
 
 // NewDatabase creates a backing store for state. The returned database is safe for
 // concurrent use and retains cached trie nodes in memory.
-func NewDatabase(db ethdb.Database) Database {
+func NewDatabase(db ethdb.Database, pool *trie.MemPool) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
-	return &cachingDB{db: db, codeSizeCache: csc}
+	return &cachingDB{db: db, pool: pool, codeSizeCache: csc}
 }
 
 type cachingDB struct {
 	db            ethdb.Database
+	pool          *trie.MemPool
 	mu            sync.Mutex
 	pastTries     []*trie.SecureTrie
 	codeSizeCache *lru.Cache
@@ -86,7 +91,7 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 			return cachedTrie{db.pastTries[i].Copy(), db}, nil
 		}
 	}
-	tr, err := trie.NewSecure(root, db.db, MaxTrieCacheGen)
+	tr, err := trie.NewSecure(root, db.db, db.pool, MaxTrieCacheGen)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +111,7 @@ func (db *cachingDB) pushTrie(t *trie.SecureTrie) {
 }
 
 func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
-	return trie.NewSecure(root, db.db, 0)
+	return trie.NewSecure(root, db.db, db.pool, 0)
 }
 
 func (db *cachingDB) CopyTrie(t Trie) Trie {

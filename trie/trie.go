@@ -85,6 +85,7 @@ type DatabaseWriter interface {
 type Trie struct {
 	root         node
 	db           Database
+	pool         *MemPool
 	originalRoot common.Hash
 
 	// Cache generation values.
@@ -111,8 +112,8 @@ func (t *Trie) newFlag() nodeFlag {
 // trie is initially empty and does not require a database. Otherwise,
 // New will panic if db is nil and returns a MissingNodeError if root does
 // not exist in the database. Accessing the trie loads nodes from db on demand.
-func New(root common.Hash, db Database) (*Trie, error) {
-	trie := &Trie{db: db, originalRoot: root}
+func New(root common.Hash, db Database, pool *MemPool) (*Trie, error) {
+	trie := &Trie{db: db, pool: pool, originalRoot: root}
 	if (root != common.Hash{}) && root != emptyRoot {
 		if db == nil {
 			panic("trie.New: cannot use existing root without a database")
@@ -447,12 +448,19 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 	cacheMissCounter.Inc(1)
 
+	// Try to load the node from the recent mempool
+	hash := common.BytesToHash(n)
+	if t.pool != nil {
+		if enc := t.pool.Fetch(hash); enc != nil {
+			return mustDecodeNode(n, enc, t.cachegen), nil
+		}
+	}
+	// Node not in the mempool, load it from disk
 	enc, err := t.db.Get(n)
 	if err != nil || enc == nil {
-		return nil, &MissingNodeError{NodeHash: common.BytesToHash(n), Path: prefix}
+		return nil, &MissingNodeError{NodeHash: hash, Path: prefix}
 	}
-	dec := mustDecodeNode(n, enc, t.cachegen)
-	return dec, nil
+	return mustDecodeNode(n, enc, t.cachegen), nil
 }
 
 // Root returns the root hash of the trie.
@@ -487,7 +495,22 @@ func (t *Trie) Commit() (root common.Hash, err error) {
 // the changes made to db are written back to the trie's attached
 // database before using the trie.
 func (t *Trie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
-	hash, cached, err := t.hashRoot(db)
+	// Retrieve the intermedia trie node memory cache if really writing
+	var pool *MemPool
+	if db != nil {
+		if pool = t.pool; pool == nil {
+			// If the trie has no intermediate memory pool, but actual database write was
+			// nonetheless requested, store into an emphemeral pool and flush out to disk.
+			pool = NewMemPool()
+			defer func() {
+				for hash, blob := range pool.cache {
+					db.Put(hash[:], blob)
+				}
+			}()
+		}
+	}
+	// Calculate the root hash and store in the mempool if requested
+	hash, cached, err := t.hashRoot(pool)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -496,11 +519,11 @@ func (t *Trie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
 	return common.BytesToHash(hash.(hashNode)), nil
 }
 
-func (t *Trie) hashRoot(db DatabaseWriter) (node, node, error) {
+func (t *Trie) hashRoot(pool *MemPool) (node, node, error) {
 	if t.root == nil {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
 	h := newHasher(t.cachegen, t.cachelimit)
 	defer returnHasherToPool(h)
-	return h.hash(t.root, db, true)
+	return h.hash(t.root, pool, true)
 }

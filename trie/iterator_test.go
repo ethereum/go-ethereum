@@ -280,7 +280,9 @@ func TestIteratorNoDups(t *testing.T) {
 // This test checks that nodeIterator.Next can be retried after inserting missing trie nodes.
 func TestIteratorContinueAfterError(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	tr, _ := New(common.Hash{}, db)
+	mp := NewMemPool()
+
+	tr, _ := New(common.Hash{}, db, mp)
 	for _, val := range testdata1 {
 		tr.Update([]byte(val.k), []byte(val.v))
 	}
@@ -291,7 +293,7 @@ func TestIteratorContinueAfterError(t *testing.T) {
 
 	for i := 0; i < 20; i++ {
 		// Create trie that will load all nodes from DB.
-		tr, _ := New(tr.Hash(), db)
+		tr, _ := New(tr.Hash(), db, mp)
 
 		// Remove a random node from the database. It can't be the root node
 		// because that one is already loaded.
@@ -331,7 +333,9 @@ func TestIteratorContinueAfterError(t *testing.T) {
 func TestIteratorContinueAfterSeekError(t *testing.T) {
 	// Commit test trie to db, then remove the node containing "bars".
 	db, _ := ethdb.NewMemDatabase()
-	ctr, _ := New(common.Hash{}, db)
+	mp := NewMemPool()
+
+	ctr, _ := New(common.Hash{}, db, mp)
 	for _, val := range testdata1 {
 		ctr.Update([]byte(val.k), []byte(val.v))
 	}
@@ -342,7 +346,7 @@ func TestIteratorContinueAfterSeekError(t *testing.T) {
 
 	// Create a new iterator that seeks to "bars". Seeking can't proceed because
 	// the node is missing.
-	tr, _ := New(root, db)
+	tr, _ := New(root, db, mp)
 	it := tr.NodeIterator([]byte("bars"))
 	missing, ok := it.Error().(*MissingNodeError)
 	if !ok {

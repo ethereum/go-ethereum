@@ -28,7 +28,7 @@ import (
 func makeTestTrie() (ethdb.Database, *Trie, map[string][]byte) {
 	// Create an empty trie
 	db, _ := ethdb.NewMemDatabase()
-	trie, _ := New(common.Hash{}, db)
+	trie, _ := New(common.Hash{}, db, nil)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
@@ -59,7 +59,7 @@ func makeTestTrie() (ethdb.Database, *Trie, map[string][]byte) {
 // content map.
 func checkTrieContents(t *testing.T, db Database, root []byte, content map[string][]byte) {
 	// Check root availability and trie contents
-	trie, err := New(common.BytesToHash(root), db)
+	trie, err := New(common.BytesToHash(root), db, nil)
 	if err != nil {
 		t.Fatalf("failed to create trie at %x: %v", root, err)
 	}
@@ -76,7 +76,7 @@ func checkTrieContents(t *testing.T, db Database, root []byte, content map[strin
 // checkTrieConsistency checks that all nodes in a trie are indeed present.
 func checkTrieConsistency(db Database, root common.Hash) error {
 	// Create and iterate a trie rooted in a subnode
-	trie, err := New(root, db)
+	trie, err := New(root, db, nil)
 	if err != nil {
 		return nil // Consider a non existent state consistent
 	}
@@ -88,8 +88,8 @@ func checkTrieConsistency(db Database, root common.Hash) error {
 
 // Tests that an empty trie is not scheduled for syncing.
 func TestEmptyTrieSync(t *testing.T) {
-	emptyA, _ := New(common.Hash{}, nil)
-	emptyB, _ := New(emptyRoot, nil)
+	emptyA, _ := New(common.Hash{}, nil, nil)
+	emptyB, _ := New(emptyRoot, nil, nil)
 
 	for i, trie := range []*Trie{emptyA, emptyB} {
 		db, _ := ethdb.NewMemDatabase()
