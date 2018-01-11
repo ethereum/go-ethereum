@@ -53,9 +53,6 @@ const styles = theme => ({
 });
 export type Props = {
 	classes: Object,
-	opened: boolean,
-	openSideBar: () => {},
-	closeSideBar: () => {},
 };
 // TODO (kurkomisi): If the structure is appropriate, make an abstraction of the common parts with the Header.
 // Footer renders the header of the dashboard.
@@ -64,38 +61,17 @@ class Footer extends Component<Props> {
 		return typeof nextProps.shouldUpdate.logs !== 'undefined';
 	}
 
-	// changeSideBar opens or closes the sidebar corresponding to the previous state.
-	changeSideBar = () => {
-		if (this.props.opened) {
-			this.props.closeSideBar();
-		} else {
-			this.props.openSideBar();
-		}
-	};
-
-	// arrowButton is connected to the sidebar; changes its state.
-	arrowButton = (transitionState: string) => (
-		<IconButton onClick={this.changeSideBar}>
-			<ChevronLeftIcon
-				style={{
-					...arrowDefault,
-					...arrowTransition[transitionState],
-				}}
-			/>
-		</IconButton>
-	);
-
 	render() {
-		const {classes, opened} = this.props; // The classes property is injected by withStyles().
+		const {classes} = this.props; // The classes property is injected by withStyles().
 
 		return (
 			<AppBar position="static" className={classes.header}>
 				<Toolbar className={classes.toolbar}>
-					<Transition mountOnEnter in={opened} timeout={{enter: DURATION}}>
-						{this.arrowButton}
-					</Transition>
-					<Typography type="title" color="inherit" noWrap className={classes.mainText}>
+					<Typography type="title" color="inherit" className={classes.mainText}>
 						{this.props.general.version}
+					</Typography>
+					<Typography type="title" color="inherit" className={classes.mainText}>
+						{this.props.general.gitCommit}	
 					</Typography>
 				</Toolbar>
 			</AppBar>

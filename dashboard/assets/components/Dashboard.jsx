@@ -26,22 +26,8 @@ import Footer from './Footer';
 import {MENU} from './Common';
 import type {Content} from '../types/content';
 
-// deepCopy retrieves a copy of the given object, copying recursively in all depth.
-// It is used at the state update, because React doesn't handle the object nesting well.
-// References are prohibited, since the state needs to be immutable.
-// NOTE: maybe there is better solution.
-const deepCopy = (prev: mixed) => {
-	const copied = Array.isArray(prev) ? [] : {};
-	Object.keys(prev).forEach((key) => {
-		const c: mixed = prev[key]
-		copied[key] = typeof c === 'object' ? deepCopy(c) : c;
-	});
-
-	return copied;
-};
-
 // deepUpdate updates an object corresponding to the given update data, which has
-// the shape of the same structure as the original object. handler also has the same
+// the shape of the same structure as the original object. updater also has the same
 // structure, except that it contains functions where the original data needs to be
 // updated. These functions are used to handle the update.
 //
@@ -49,48 +35,49 @@ const deepCopy = (prev: mixed) => {
 // the generalization of the message handling. The only necessary thing is to set a
 // handler function for every path of the state in order to maximize the flexibility
 // of the update.
-const deepUpdate = (prev: mixed, update: mixed, handler: mixed) => {
+const deepUpdate = (prev: Object, update: Object, updater: Object) => {
 	if (typeof update === 'undefined') {
-		return deepCopy(prev);
+		// TODO (kurkomisi): originally this was deep copy, investigate it.
+		return prev;
 	}
-	if (typeof handler === 'function') {
-		return handler(prev, update);
+	if (typeof updater === 'function') {
+		return updater(prev, update);
 	}
-	const updated = Array.isArray(prev) ? [] : {};
+	const updated = {};
 	Object.keys(prev).forEach((key) => {
-		if (typeof update[key] === 'undefined') {
-			updated[key] = deepCopy(prev[key]);
-		} else {
-			updated[key] = deepUpdate(prev[key], update[key], handler[key]);
-		}
+		updated[key] = deepUpdate(prev[key], update[key], updater[key]);
 	});
 
 	return updated;
 };
 
-// shouldUpdate retrieves the structure of a message. It is used to prevent unnecessary render
+// shouldUpdate returns the structure of a message. It is used to prevent unnecessary render
 // method triggerings. In the affected component's shouldComponentUpdate method it can be checked
 // whether the involved data was changed or not by checking the message structure.
-const shouldUpdate = (msg: mixed, handler: mixed) => {
+//
+// We could return the message itself too, but it's safer not to give access to it.
+const shouldUpdate = (msg: Object, updater: Object) => {
 	const su = {};
+	console.log(msg);
 	Object.keys(msg).forEach((key) => {
-		su[key] = typeof msg[key] === 'object' && typeof handler[key] !== 'function' ? shouldUpdate(msg[key], handler[key]) : true;
+		su[key] = typeof updater[key] !== 'function' ? shouldUpdate(msg[key], updater[key]) : true;
 	});
+
 	return su;
 };
 
 // appender is a state update generalization function, which appends the update data
 // to the existing data. limit defines the maximum allowed size of the created array.
 const appender = <T>(limit: number) => (prev: Array<T>, update: Array<T>) => [...prev, ...update].slice(-limit);
-// appender200 is an appender function with limit 200.
-const appender200 = appender(200);
+
 // replacer is a state update generalization function, which replaces the original data.
 const replacer = <T>(prev: T, update: T) => update;
 
 // defaultContent is the initial value of the state content.
 const defaultContent: Content = {
 	general: {
-		version: '-',
+		version:   '-',
+		gitCommit: '-',
 	},
 	home: {
 		memory:  [],
@@ -104,25 +91,28 @@ const defaultContent: Content = {
 		log: [],
 	},
 };
-// handlers contains the state update generalization functions for each path of the state.
+
+// updaters contains the state update generalization functions for each path of the state.
 // TODO (kurkomisi): Define a tricky type which embraces the content and the handlers.
-const handlers = {
+const updaters = {
 	general: {
-		version: replacer,
+		version:   replacer,
+		gitCommit: replacer,
 	},
 	home: {
-		memory:  appender200,
-		traffic: appender200,
+		memory:  appender(200),
+		traffic: appender(200),
 	},
 	chain:   null,
 	txpool:  null,
 	network: null,
 	system:  null,
 	logs:    {
-		log: appender200,
+		log: appender(200),
 	},
 };
-// styles retrieves the styles for the Dashboard component.
+
+// styles returns the styles for the Dashboard component.
 const styles = theme => ({
 	dashboard: {
 		display:    'flex',
@@ -134,15 +124,18 @@ const styles = theme => ({
 		overflow:   'hidden',
 	},
 });
+
 export type Props = {
 	classes: Object,
 };
+
 type State = {
 	active: string, // active menu
 	sideBar: boolean, // true if the sidebar is opened
 	content: Content, // the visualized data
 	shouldUpdate: Object // labels for the components, which need to rerender based on the incoming message
 };
+
 // Dashboard is the main component, which renders the whole page, makes connection with the server and
 // listens for messages. When there is an incoming message, updates the page's content correspondingly.
 class Dashboard extends Component<Props, State> {
@@ -171,6 +164,7 @@ class Dashboard extends Component<Props, State> {
 		server.onmessage = (event) => {
 			const msg: $Shape<Content> = JSON.parse(event.data);
 			if (!msg) {
+				console.error(`Incoming message is ${msg}`);
 				return;
 			}
 			this.update(msg);
@@ -183,8 +177,8 @@ class Dashboard extends Component<Props, State> {
 	// update updates the content corresponding to the incoming message.
 	update = (msg: $Shape<Content>) => {
 		this.setState(prevState => ({
-			content:      deepUpdate(prevState.content, msg, handlers),
-			shouldUpdate: shouldUpdate(msg, handlers),
+			content:      deepUpdate(prevState.content, msg, updaters),
+			shouldUpdate: shouldUpdate(msg, updaters),
 		}));
 	};
 

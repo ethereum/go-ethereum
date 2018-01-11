@@ -52,10 +52,11 @@ var nextID uint32 // Next connection id
 type Dashboard struct {
 	config *Config
 
-	listener net.Listener
-	conns    map[uint32]*client // Currently live websocket connections
-	charts   *HomeMessage
-	lock     sync.RWMutex // Lock protecting the dashboard's internals
+	listener  net.Listener
+	conns     map[uint32]*client // Currently live websocket connections
+	charts    *HomeMessage
+	gitCommit string
+	lock      sync.RWMutex // Lock protecting the dashboard's internals
 
 	quit chan chan error // Channel used for graceful exit
 	wg   sync.WaitGroup
@@ -69,7 +70,7 @@ type client struct {
 }
 
 // New creates a new dashboard instance with the given configuration.
-func New(config *Config) (*Dashboard, error) {
+func New(config *Config, gitCommit string) (*Dashboard, error) {
 	return &Dashboard{
 		conns:  make(map[uint32]*client),
 		config: config,
@@ -78,6 +79,7 @@ func New(config *Config) (*Dashboard, error) {
 			Memory:  ChartEntries{},
 			Traffic: ChartEntries{},
 		},
+		gitCommit: gitCommit,
 	}, nil
 }
 
@@ -201,10 +203,16 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 			}
 		}
 	}()
+
+	versionMeta := ""
+	if len(params.VersionMeta) > 0 {
+		versionMeta = fmt.Sprintf(" (%s)", params.VersionMeta)
+	}
 	// Send the past data.
 	client.msg <- Message{
 		General: &GeneralMessage{
-			Version: params.Version,
+			Version:   fmt.Sprintf("Geth v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
+			GitCommit: fmt.Sprintf("Commit %s", db.gitCommit),
 		},
 		Home: &HomeMessage{
 			Memory:  db.charts.Memory,
