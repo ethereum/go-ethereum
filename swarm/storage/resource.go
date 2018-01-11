@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/binary"
 	"fmt"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -109,19 +108,9 @@ type ResourceHandler struct {
 }
 
 // Create or open resource update chunk store
-func NewResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore CloudStore, ethapi *rpc.Client) (*ResourceHandler, error) {
-	path := filepath.Join(datadir, "resource")
-	dbStore, err := NewDbStore(datadir, nil, singletonSwarmDbCapacity, 0)
-	if err != nil {
-		return nil, err
-	}
-	localStore := &LocalStore{
-		memStore: NewMemStore(dbStore, singletonSwarmDbCapacity),
-		DbStore:  dbStore,
-	}
-	hasher := MakeHashFunc("SHA3")
+func NewResourceHandler(privKey *ecdsa.PrivateKey, hasher SwarmHasher, chunkStore ChunkStore, ethapi *rpc.Client) (*ResourceHandler, error) {
 	return &ResourceHandler{
-		ChunkStore:   newResourceChunkStore(path, hasher, localStore, cloudStore),
+		ChunkStore:   chunkStore,
 		ethapi:       ethapi,
 		resources:    make(map[string]*resource),
 		hasher:       hasher(),
@@ -552,48 +541,6 @@ func (self *ResourceHandler) verifyContent(chunkdata []byte) error {
 	}
 	log.Warn("ens owner lookup not implemented, verify will return true in all cases", "address", address)
 	return nil
-}
-
-type resourceChunkStore struct {
-	localStore ChunkStore
-	netStore   ChunkStore
-}
-
-func newResourceChunkStore(path string, hasher SwarmHasher, localStore *LocalStore, cloudStore CloudStore) *resourceChunkStore {
-	return &resourceChunkStore{
-		localStore: localStore,
-		netStore:   NewNetStore(hasher, localStore, cloudStore, NewDefaultStoreParams()),
-	}
-}
-
-func (r *resourceChunkStore) Get(key Key) (*Chunk, error) {
-	chunk, err := r.netStore.Get(key)
-	if err != nil {
-		return nil, err
-	}
-	// if the chunk has to be remotely retrieved, we define a timeout of how long to wait for it before failing.
-	// sadly due to the nature of swarm, the error will never be conclusive as to whether it was a network issue
-	// that caused the failure or that the chunk doesn't exist.
-	if chunk.Req == nil {
-		return chunk, nil
-	}
-	t := time.NewTimer(time.Second * 1)
-	select {
-	case <-t.C:
-		return nil, fmt.Errorf("timeout")
-	case <-chunk.C:
-		log.Trace("Received resource update chunk", "peer", chunk.Req.Source)
-	}
-	return chunk, nil
-}
-
-func (r *resourceChunkStore) Put(chunk *Chunk) {
-	r.netStore.Put(chunk)
-}
-
-func (r *resourceChunkStore) Close() {
-	r.netStore.Close()
-	r.localStore.Close()
 }
 
 func getNextBlock(start uint64, current uint64, frequency uint64) uint64 {

@@ -17,7 +17,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -25,10 +24,6 @@ var (
 	blockCount = uint64(4200)
 	cleanF     func()
 )
-
-func init() {
-	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
-}
 
 type FakeRPC struct {
 	blockcount *uint64
@@ -109,7 +104,7 @@ func TestResourceHandler(t *testing.T) {
 
 	// check that the new resource is stored correctly
 	namehash := ens.EnsNode(resourcevalidname)
-	chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(namehash[:]))
+	chunk, err := rh.ChunkStore.Get(Key(namehash[:]))
 	if err != nil {
 		teardownTest(t, err)
 	} else if len(chunk.SData) < 16 {
@@ -159,7 +154,10 @@ func TestResourceHandler(t *testing.T) {
 	// it will match on second iteration startblocknumber + (resourcefrequency * 3)
 	blockCount = startblocknumber + (resourcefrequency * 4)
 
-	rh2, err := NewResourceHandler(privkey, datadir, &testCloudStore{}, rh.ethapi)
+	rh2, err := newTestResourceHandler(datadir, privkey, rh.ethapi)
+	if err != nil {
+		teardownTest(t, err)
+	}
 	_, err = rh2.LookupLatest(resourcename, true)
 	if err != nil {
 		teardownTest(t, err)
@@ -273,7 +271,8 @@ func setupTest() (rh *ResourceHandler, privkey *ecdsa.PrivateKey, datadir string
 		return
 	}
 
-	rh, err = NewResourceHandler(privkey, datadir, &testCloudStore{}, rpcclient)
+	rh, err = newTestResourceHandler(datadir, privkey, rpcclient)
+
 	teardown = func(t *testing.T, err error) {
 		cleanF()
 		if err != nil {
@@ -284,21 +283,18 @@ func setupTest() (rh *ResourceHandler, privkey *ecdsa.PrivateKey, datadir string
 	return
 }
 
-//func teardownTest(t *testing.T, errstr string) {
-//	cleanF()
-//	if errstr != "" {
-//		t.Fatal(errstr)
-//	}
-//}
+func newTestResourceHandler(datadir string, privkey *ecdsa.PrivateKey, rpcclient *rpc.Client) (*ResourceHandler, error) {
+	path := filepath.Join(datadir, "resource")
+	basekey := make([]byte, 32)
+	hasher := MakeHashFunc("SHA3")
+	dbStore, err := NewDbStore(path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+	if err != nil {
+		return nil, err
+	}
+	localStore := &LocalStore{
+		memStore: NewMemStore(dbStore, singletonSwarmDbCapacity),
+		DbStore:  dbStore,
+	}
 
-type testCloudStore struct {
-}
-
-func (c *testCloudStore) Store(*Chunk) {
-}
-
-func (c *testCloudStore) Deliver(*Chunk) {
-}
-
-func (c *testCloudStore) Retrieve(*Chunk) {
+	return NewResourceHandler(privkey, hasher, localStore, rpcclient)
 }
