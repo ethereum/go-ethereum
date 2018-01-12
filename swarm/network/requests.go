@@ -58,16 +58,6 @@ type RetrieveRequestStreamer struct {
 	currentLen uint64
 }
 
-// RegisterRequestStreamer registers outgoing and incoming streamers for request handling
-func RegisterRequestStreamer(streamer *Streamer, db *DbAccess) {
-	streamer.RegisterOutgoingStreamer(retrieveRequestStream, func(_ *StreamerPeer, t []byte) (OutgoingStreamer, error) {
-		return NewRetrieveRequestStreamer(db), nil
-	})
-	streamer.RegisterIncomingStreamer(retrieveRequestStream, func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
-		return NewIncomingSwarmSyncer(p, db, nil)
-	})
-}
-
 // NewRetrieveRequestStreamer is RetrieveRequestStreamer constructor
 func NewRetrieveRequestStreamer(db *DbAccess) *RetrieveRequestStreamer {
 	s := &RetrieveRequestStreamer{

@@ -147,6 +147,13 @@ func NewStreamer(overlay Overlay, dbAccess *DbAccess) *Streamer {
 		receiveC: make(chan *ChunkDeliveryMsg, 10),
 		peers:    make(map[discover.NodeID]*StreamerPeer),
 	}
+	streamer.RegisterOutgoingStreamer(retrieveRequestStream, func(_ *StreamerPeer, t []byte) (OutgoingStreamer, error) {
+		return NewRetrieveRequestStreamer(dbAccess), nil
+	})
+	streamer.RegisterIncomingStreamer(retrieveRequestStream, func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
+		return NewIncomingSwarmSyncer(p, dbAccess, nil)
+	})
+	return streamer
 }
 
 // RegisterIncomingStreamer registers an incoming streamer constructor
