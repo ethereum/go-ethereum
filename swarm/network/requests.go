@@ -72,11 +72,13 @@ func NewRetrieveRequestStreamer(db *DbAccess) *RetrieveRequestStreamer {
 // processDeliveries handles delivered chunk hashes
 func (s *RetrieveRequestStreamer) processDeliveries() {
 	var hashes []byte
+	var batchC chan []byte
 	for {
 		select {
 		case delivery := <-s.deliveryC:
 			hashes = append(hashes, delivery.Key[:]...)
-		case s.batchC <- hashes:
+			batchC = s.batchC
+		case batchC <- hashes:
 			hashes = nil
 		}
 	}
