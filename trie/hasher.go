@@ -52,7 +52,7 @@ func returnHasherToPool(h *hasher) {
 
 // hash collapses a node down into a hash node, also returning a copy of the
 // original node initialized with the computed hash to replace the original one.
-func (h *hasher) hash(n node, pool *MemPool, force bool) (node, node, error) {
+func (h *hasher) hash(n node, pool *NodePool, force bool) (node, node, error) {
 	// If we're not storing the node, just hashing, use available cached data
 	if hash, dirty := n.cache(); hash != nil {
 		if pool == nil {
@@ -99,7 +99,7 @@ func (h *hasher) hash(n node, pool *MemPool, force bool) (node, node, error) {
 // hashChildren replaces the children of a node with their hashes if the encoded
 // size of the child is larger than a hash, returning the collapsed node as well
 // as a replacement for the original node with the child hashes cached in.
-func (h *hasher) hashChildren(original node, pool *MemPool) (node, node, []common.Hash, error) {
+func (h *hasher) hashChildren(original node, pool *NodePool) (node, node, []common.Hash, error) {
 	var err error
 
 	switch n := original.(type) {
@@ -181,7 +181,10 @@ func (h *hasher) externals(n node) []common.Hash {
 	return []common.Hash{account.Root}
 }
 
-func (h *hasher) store(n node, refs []common.Hash, pool *MemPool, force bool) (node, []common.Hash, error) {
+// store hashes the node n and if we have a storage layer specified, it writes
+// the key/value pair to it and tracks any node->child references as well as any
+// node->external trie references.
+func (h *hasher) store(n node, refs []common.Hash, pool *NodePool, force bool) (node, []common.Hash, error) {
 	// Don't store hashes or empty nodes.
 	if _, isHash := n.(hashNode); n == nil || isHash {
 		return n, refs, nil

@@ -44,7 +44,7 @@ func init() {
 // Used for testing
 func newEmpty() *Trie {
 	db, _ := ethdb.NewMemDatabase()
-	trie, _ := New(common.Hash{}, db, NewMemPool())
+	trie, _ := New(common.Hash{}, db, NewNodePool())
 	return trie
 }
 
@@ -69,7 +69,7 @@ func TestNull(t *testing.T) {
 
 func TestMissingRoot(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), db, NewMemPool())
+	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), db, NewNodePool())
 	if trie != nil {
 		t.Error("New returned non-nil trie for invalid root")
 	}
@@ -78,72 +78,75 @@ func TestMissingRoot(t *testing.T) {
 	}
 }
 
-func TestMissingNode(t *testing.T) {
-	db, _ := ethdb.NewMemDatabase()
-	mp := NewMemPool()
+func TestMissingNodeDirect(t *testing.T) { testMissingNode(t, false) }
+func TestMissingNodePooled(t *testing.T) { testMissingNode(t, true) }
 
-	trie, _ := New(common.Hash{}, db, mp)
+func testMissingNode(t *testing.T, pooled bool) {
+	var pool *NodePool
+	if pooled {
+		pool = NewNodePool()
+	}
+	db, _ := ethdb.NewMemDatabase()
+
+	trie, _ := New(common.Hash{}, db, pool)
 	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
 	root, _ := trie.Commit()
 
-	trie, _ = New(root, db, mp)
+	trie, _ = New(root, db, pool)
 	_, err := trie.TryGet([]byte("120000"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-
-	trie, _ = New(root, db, mp)
+	trie, _ = New(root, db, pool)
 	_, err = trie.TryGet([]byte("120099"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-
-	trie, _ = New(root, db, mp)
+	trie, _ = New(root, db, pool)
 	_, err = trie.TryGet([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-
-	trie, _ = New(root, db, mp)
+	trie, _ = New(root, db, pool)
 	err = trie.TryUpdate([]byte("120099"), []byte("zxcvzxcvzxcvzxcvzxcvzxcvzxcvzxcv"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-
-	trie, _ = New(root, db, mp)
+	trie, _ = New(root, db, pool)
 	err = trie.TryDelete([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
-	db.Delete(common.FromHex("e1d943cc8f061a0c0b98162830b970395ac9315654824bf21b73b891365262f9"))
+	hash := common.HexToHash("0xe1d943cc8f061a0c0b98162830b970395ac9315654824bf21b73b891365262f9")
+	if pooled {
+		delete(pool.cache, hash)
+	} else {
+		db.Delete(hash[:])
+	}
 
-	trie, _ = New(root, db, mp)
+	trie, _ = New(root, db, pool)
 	_, err = trie.TryGet([]byte("120000"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
-
-	trie, _ = New(root, db, mp)
+	trie, _ = New(root, db, pool)
 	_, err = trie.TryGet([]byte("120099"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
-
-	trie, _ = New(root, db, mp)
+	trie, _ = New(root, db, pool)
 	_, err = trie.TryGet([]byte("123456"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-
-	trie, _ = New(root, db, mp)
+	trie, _ = New(root, db, pool)
 	err = trie.TryUpdate([]byte("120099"), []byte("zxcv"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
 	}
-
-	trie, _ = New(root, db, mp)
+	trie, _ = New(root, db, pool)
 	err = trie.TryDelete([]byte("123456"))
 	if _, ok := err.(*MissingNodeError); !ok {
 		t.Errorf("Wrong error: %v", err)
@@ -410,7 +413,7 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 
 func runRandTest(rt randTest) bool {
 	db, _ := ethdb.NewMemDatabase()
-	mp := NewMemPool()
+	mp := NewNodePool()
 
 	tr, _ := New(common.Hash{}, db, mp)
 	values := make(map[string]string) // tracks content of the trie

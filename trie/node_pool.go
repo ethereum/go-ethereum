@@ -24,10 +24,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// MemPool is an intermediate write layer between the trie data structures and
+// NodePool is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
-type MemPool struct {
+type NodePool struct {
 	cache map[common.Hash][]byte // Cached data blocks of the trie nodes
 
 	parents  map[common.Hash]int                      // Number of live nodes referencing a given one
@@ -41,10 +41,10 @@ type MemPool struct {
 	lock sync.RWMutex
 }
 
-// NewMemPool creates a new memory pool to store ephemeral trie nodes before they
+// NewNodePool creates a new memory pool to store ephemeral trie nodes before they
 // are written out to disk or garbage collected.
-func NewMemPool() *MemPool {
-	pool := &MemPool{
+func NewNodePool() *NodePool {
+	pool := &NodePool{
 		cache:    make(map[common.Hash][]byte),
 		parents:  make(map[common.Hash]int),
 		children: make(map[common.Hash]map[common.Hash]struct{}),
@@ -57,7 +57,7 @@ func NewMemPool() *MemPool {
 // will make a copy of the slice.
 //
 // Note, this method assumes that the pool's lock is held!
-func (pool *MemPool) insert(hash common.Hash, blob []byte) {
+func (pool *NodePool) insert(hash common.Hash, blob []byte) {
 	if _, ok := pool.cache[hash]; ok {
 		return
 	}
@@ -69,15 +69,29 @@ func (pool *MemPool) insert(hash common.Hash, blob []byte) {
 
 // Fetch retrieves a cached trie node from memory, or returns nil if the pool
 // does not have this particular piece of data.
-func (pool *MemPool) Fetch(hash common.Hash) []byte {
+func (pool *NodePool) Fetch(hash common.Hash) []byte {
 	pool.lock.RLock()
 	defer pool.lock.RUnlock()
 
 	return pool.cache[hash]
 }
 
+// Nodes retrieves the hashes of all the nodes cached within the node pool. This
+// method is extremely expensive and should only be used in test code to validate
+// internal states.
+func (pool *NodePool) Nodes() []common.Hash {
+	pool.lock.RLock()
+	defer pool.lock.RUnlock()
+
+	var hashes = make([]common.Hash, 0, len(pool.cache))
+	for hash := range pool.cache {
+		hashes = append(hashes, hash)
+	}
+	return hashes
+}
+
 // Reference adds a new reference from parent to node.
-func (pool *MemPool) Reference(node common.Hash, parent common.Hash) {
+func (pool *NodePool) Reference(node common.Hash, parent common.Hash) {
 	pool.lock.RLock()
 	defer pool.lock.RUnlock()
 
@@ -85,7 +99,7 @@ func (pool *MemPool) Reference(node common.Hash, parent common.Hash) {
 }
 
 // reference is the private locked version of Reference.
-func (pool *MemPool) reference(node common.Hash, parent common.Hash) {
+func (pool *NodePool) reference(node common.Hash, parent common.Hash) {
 	// If the node does not exist, it's a node pulled from disk, skip
 	if _, ok := pool.cache[node]; !ok {
 		return
@@ -95,7 +109,7 @@ func (pool *MemPool) reference(node common.Hash, parent common.Hash) {
 }
 
 // Dereference removes an existing reference from parent to node.
-func (pool *MemPool) Dereference(node common.Hash, parent common.Hash) {
+func (pool *NodePool) Dereference(node common.Hash, parent common.Hash) {
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 
@@ -108,7 +122,7 @@ func (pool *MemPool) Dereference(node common.Hash, parent common.Hash) {
 }
 
 // dereference is the private locked version of Dereference.
-func (pool *MemPool) dereference(node common.Hash, parent common.Hash) {
+func (pool *NodePool) dereference(node common.Hash, parent common.Hash) {
 	// If the node does not exist, it's a previously comitted node.
 	blob, ok := pool.cache[node]
 	if !ok {
@@ -132,7 +146,7 @@ func (pool *MemPool) dereference(node common.Hash, parent common.Hash) {
 
 // Commit iterates over all the children of a particular node, writes them out
 // to disk, forcefully tearing down all references in both directions.
-func (pool *MemPool) Commit(node common.Hash, db DatabaseWriter) error {
+func (pool *NodePool) Commit(node common.Hash, db DatabaseWriter) error {
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 
@@ -158,7 +172,7 @@ func (pool *MemPool) Commit(node common.Hash, db DatabaseWriter) error {
 }
 
 // commit is the private locked version of Commit.
-func (pool *MemPool) commit(node common.Hash, db DatabaseWriter) error {
+func (pool *NodePool) commit(node common.Hash, db DatabaseWriter) error {
 	// If the node does not exist, it's a previously comitted node.
 	blob, ok := pool.cache[node]
 	if !ok {

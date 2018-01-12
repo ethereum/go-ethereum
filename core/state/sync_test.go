@@ -39,7 +39,7 @@ type testAccount struct {
 func makeTestState() (Database, *ethdb.MemDatabase, common.Hash, []*testAccount) {
 	// Create an empty state
 	mem, _ := ethdb.NewMemDatabase()
-	db := NewDatabase(mem, trie.NewMemPool())
+	db := NewDatabase(mem, trie.NewNodePool())
 	state, _ := New(common.Hash{}, db)
 
 	// Fill it with some arbitrary data
@@ -71,7 +71,7 @@ func makeTestState() (Database, *ethdb.MemDatabase, common.Hash, []*testAccount)
 // account array.
 func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accounts []*testAccount) {
 	// Check root availability and state contents
-	state, err := New(root, NewDatabase(db, trie.NewMemPool()))
+	state, err := New(root, NewDatabase(db, trie.NewNodePool()))
 	if err != nil {
 		t.Fatalf("failed to create state trie at %x: %v", root, err)
 	}
@@ -96,7 +96,7 @@ func checkTrieConsistency(db ethdb.Database, root common.Hash) error {
 	if v, _ := db.Get(root[:]); v == nil {
 		return nil // Consider a non existent state consistent.
 	}
-	trie, err := trie.New(root, db, trie.NewMemPool())
+	trie, err := trie.New(root, db, trie.NewNodePool())
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func checkStateConsistency(db ethdb.Database, root common.Hash) error {
 	if _, err := db.Get(root.Bytes()); err != nil {
 		return nil // Consider a non existent state consistent.
 	}
-	state, err := New(root, NewDatabase(db, trie.NewMemPool()))
+	state, err := New(root, NewDatabase(db, trie.NewNodePool()))
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func TestIterativeStateSyncBatched(t *testing.T)    { testIterativeStateSync(t, 
 
 func testIterativeStateSync(t *testing.T, batch int) {
 	// Create a random state to copy
-	_, srcMem, srcRoot, srcAccounts := makeTestState()
+	srcDb, srcMem, srcRoot, srcAccounts := makeTestState()
 
 	// Create a destination state and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
@@ -148,9 +148,14 @@ func testIterativeStateSync(t *testing.T, batch int) {
 	for len(queue) > 0 {
 		results := make([]trie.SyncResult, len(queue))
 		for i, hash := range queue {
-			data, err := srcMem.Get(hash.Bytes())
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			var (
+				data = srcDb.NodePool().Fetch(hash)
+				err  error
+			)
+			if data == nil {
+				if data, err = srcMem.Get(hash.Bytes()); err != nil {
+					t.Fatalf("failed to retrieve node data for %x", hash)
+				}
 			}
 			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
@@ -170,7 +175,7 @@ func testIterativeStateSync(t *testing.T, batch int) {
 // partial results are returned, and the others sent only later.
 func TestIterativeDelayedStateSync(t *testing.T) {
 	// Create a random state to copy
-	_, srcMem, srcRoot, srcAccounts := makeTestState()
+	srcDb, srcMem, srcRoot, srcAccounts := makeTestState()
 
 	// Create a destination state and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
@@ -181,9 +186,14 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 		// Sync only half of the scheduled nodes
 		results := make([]trie.SyncResult, len(queue)/2+1)
 		for i, hash := range queue[:len(results)] {
-			data, err := srcMem.Get(hash.Bytes())
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			var (
+				data = srcDb.NodePool().Fetch(hash)
+				err  error
+			)
+			if data == nil {
+				if data, err = srcMem.Get(hash.Bytes()); err != nil {
+					t.Fatalf("failed to retrieve node data for %x", hash)
+				}
 			}
 			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
@@ -207,7 +217,7 @@ func TestIterativeRandomStateSyncBatched(t *testing.T)    { testIterativeRandomS
 
 func testIterativeRandomStateSync(t *testing.T, batch int) {
 	// Create a random state to copy
-	_, srcMem, srcRoot, srcAccounts := makeTestState()
+	srcDb, srcMem, srcRoot, srcAccounts := makeTestState()
 
 	// Create a destination state and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
@@ -221,9 +231,14 @@ func testIterativeRandomStateSync(t *testing.T, batch int) {
 		// Fetch all the queued nodes in a random order
 		results := make([]trie.SyncResult, 0, len(queue))
 		for hash := range queue {
-			data, err := srcMem.Get(hash.Bytes())
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			var (
+				data = srcDb.NodePool().Fetch(hash)
+				err  error
+			)
+			if data == nil {
+				if data, err = srcMem.Get(hash.Bytes()); err != nil {
+					t.Fatalf("failed to retrieve node data for %x", hash)
+				}
 			}
 			results = append(results, trie.SyncResult{Hash: hash, Data: data})
 		}
@@ -247,7 +262,7 @@ func testIterativeRandomStateSync(t *testing.T, batch int) {
 // partial results are returned (Even those randomly), others sent only later.
 func TestIterativeRandomDelayedStateSync(t *testing.T) {
 	// Create a random state to copy
-	_, srcMem, srcRoot, srcAccounts := makeTestState()
+	srcDb, srcMem, srcRoot, srcAccounts := makeTestState()
 
 	// Create a destination state and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
@@ -263,9 +278,14 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 		for hash := range queue {
 			delete(queue, hash)
 
-			data, err := srcMem.Get(hash.Bytes())
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			var (
+				data = srcDb.NodePool().Fetch(hash)
+				err  error
+			)
+			if data == nil {
+				if data, err = srcMem.Get(hash.Bytes()); err != nil {
+					t.Fatalf("failed to retrieve node data for %x", hash)
+				}
 			}
 			results = append(results, trie.SyncResult{Hash: hash, Data: data})
 
@@ -292,7 +312,7 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 // the database.
 func TestIncompleteStateSync(t *testing.T) {
 	// Create a random state to copy
-	_, srcMem, srcRoot, srcAccounts := makeTestState()
+	srcDb, srcMem, srcRoot, srcAccounts := makeTestState()
 
 	checkTrieConsistency(srcMem, srcRoot)
 
@@ -306,9 +326,14 @@ func TestIncompleteStateSync(t *testing.T) {
 		// Fetch a batch of state nodes
 		results := make([]trie.SyncResult, len(queue))
 		for i, hash := range queue {
-			data, err := srcMem.Get(hash.Bytes())
-			if err != nil {
-				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			var (
+				data = srcDb.NodePool().Fetch(hash)
+				err  error
+			)
+			if data == nil {
+				if data, err = srcMem.Get(hash.Bytes()); err != nil {
+					t.Fatalf("failed to retrieve node data for %x", hash)
+				}
 			}
 			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}

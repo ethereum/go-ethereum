@@ -39,11 +39,17 @@ func TestNodeIteratorCoverage(t *testing.T) {
 			hashes[it.Hash] = struct{}{}
 		}
 	}
-
-	// Cross check the hashes and the database itself
+	// Cross check the iterated hashes and the database/nodepool content
 	for hash := range hashes {
-		if _, err := mem.Get(hash.Bytes()); err != nil {
-			t.Errorf("failed to retrieve reported node %x: %v", hash, err)
+		if db.NodePool().Fetch(hash) == nil {
+			if _, err := mem.Get(hash.Bytes()); err != nil {
+				t.Errorf("failed to retrieve reported node %x", hash)
+			}
+		}
+	}
+	for _, hash := range db.NodePool().Nodes() {
+		if _, ok := hashes[hash]; !ok {
+			t.Errorf("state entry not reported %x", hash)
 		}
 	}
 	for _, key := range mem.Keys() {

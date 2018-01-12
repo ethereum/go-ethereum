@@ -41,7 +41,7 @@ import (
 func TestUpdateLeaks(t *testing.T) {
 	// Create an empty state database
 	db, _ := ethdb.NewMemDatabase()
-	state, _ := New(common.Hash{}, NewDatabase(db, trie.NewMemPool()))
+	state, _ := New(common.Hash{}, NewDatabase(db, trie.NewNodePool()))
 
 	// Update it with some accounts
 	for i := byte(0); i < 255; i++ {
@@ -69,8 +69,8 @@ func TestIntermediateLeaks(t *testing.T) {
 	// Create two state databases, one transitioning to the final state, the other final from the beginning
 	transDb, _ := ethdb.NewMemDatabase()
 	finalDb, _ := ethdb.NewMemDatabase()
-	transState, _ := New(common.Hash{}, NewDatabase(transDb, trie.NewMemPool()))
-	finalState, _ := New(common.Hash{}, NewDatabase(finalDb, trie.NewMemPool()))
+	transState, _ := New(common.Hash{}, NewDatabase(transDb, trie.NewNodePool()))
+	finalState, _ := New(common.Hash{}, NewDatabase(finalDb, trie.NewNodePool()))
 
 	modify := func(state *StateDB, addr common.Address, i, tweak byte) {
 		state.SetBalance(addr, big.NewInt(int64(11*i)+int64(tweak)))
@@ -124,7 +124,7 @@ func TestIntermediateLeaks(t *testing.T) {
 func TestCopy(t *testing.T) {
 	// Create a random state test to copy and modify "independently"
 	mem, _ := ethdb.NewMemDatabase()
-	orig, _ := New(common.Hash{}, NewDatabase(mem, trie.NewMemPool()))
+	orig, _ := New(common.Hash{}, NewDatabase(mem, trie.NewNodePool()))
 
 	for i := byte(0); i < 255; i++ {
 		obj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
@@ -336,8 +336,8 @@ func (test *snapshotTest) run() bool {
 	// Run all actions and create snapshots.
 	var (
 		db, _        = ethdb.NewMemDatabase()
-		mp           = trie.NewMemPool()
-		state, _     = New(common.Hash{}, NewDatabase(db, trie.NewMemPool()))
+		mp           = trie.NewNodePool()
+		state, _     = New(common.Hash{}, NewDatabase(db, trie.NewNodePool()))
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0
 	)

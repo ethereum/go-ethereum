@@ -83,6 +83,10 @@ func (db *odrDatabase) ContractCodeSize(addrHash, codeHash common.Hash) (int, er
 	return len(code), err
 }
 
+func (db *odrDatabase) NodePool() *trie.NodePool {
+	return nil
+}
+
 type odrTrie struct {
 	db   *odrDatabase
 	id   *TrieID
