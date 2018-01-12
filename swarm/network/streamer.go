@@ -32,14 +32,13 @@ import (
 )
 
 const (
-	HashSize = 32
-
 	Low uint8 = iota
 	Mid
 	High
 	Top
 	PriorityQueue        // number of queues
 	PriorityQueueCap = 3 // queue capacity
+	HashSize         = 32
 )
 
 // Handover represents a statement that the upstream peer hands over the stream section
