@@ -19,8 +19,11 @@ import (
 )
 
 const (
-	signatureLength = 65
-	indexSize       = 24
+	signatureLength            = 65
+	dataPrefixHeaderLengthSize = 2
+	dataPrefixVersionSize      = 4
+	dataPrefixPeriodSize       = 4
+	indexSize                  = 24
 )
 
 // Encapsulates an actual resource update. When synced it contains the most recent
@@ -29,9 +32,9 @@ type resource struct {
 	name       string
 	ensName    common.Hash
 	startBlock uint64
-	lastBlock  uint64
+	lastPeriod uint32
 	frequency  uint64
-	version    uint64
+	version    uint32
 	data       []byte
 	updated    time.Time
 }
@@ -168,7 +171,7 @@ func NewResource(name string, startBlock uint64, frequency uint64) (*resource, e
 	}, nil
 }
 
-// Creates a new root entry for a resource update identified by `name` with the specified `frequency`.
+// Creates a new root entry for a mutable resource identified by `name` with the specified `frequency`.
 //
 // The start block of the resource update will be the actual current block height of the connected network.
 func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resource, error) {
@@ -258,12 +261,12 @@ func (self *ResourceHandler) SetResource(rsrc *resource, allowOverwrite bool) er
 // root chunk.
 // It is the callers responsibility to make sure that this chunk exists (if the resource
 // update root data was retrieved externally, it typically doesn't)
-func (self *ResourceHandler) LookupVersion(name string, nextblock uint64, version uint64, refresh bool) (*resource, error) {
+func (self *ResourceHandler) LookupVersion(name string, period uint32, version uint32, refresh bool) (*resource, error) {
 	rsrc, err := self.loadResource(name, refresh)
 	if err != nil {
 		return nil, err
 	}
-	return self.lookup(rsrc, name, nextblock, version, refresh)
+	return self.lookup(rsrc, name, period, version, refresh)
 }
 
 // Retrieves the latest version of the resource update identified by `name`
@@ -274,12 +277,12 @@ func (self *ResourceHandler) LookupVersion(name string, nextblock uint64, versio
 // and returned.
 //
 // See also (*ResourceHandler).LookupVersion
-func (self *ResourceHandler) LookupHistorical(name string, nextblock uint64, refresh bool) (*resource, error) {
+func (self *ResourceHandler) LookupHistorical(name string, period uint32, refresh bool) (*resource, error) {
 	rsrc, err := self.loadResource(name, refresh)
 	if err != nil {
 		return nil, err
 	}
-	return self.lookup(rsrc, name, nextblock, 0, refresh)
+	return self.lookup(rsrc, name, period, 0, refresh)
 }
 
 // Retrieves the latest version of the resource update identified by `name`
@@ -303,15 +306,15 @@ func (self *ResourceHandler) LookupLatest(name string, refresh bool) (*resource,
 	if err != nil {
 		return nil, err
 	}
-	nextblock := getNextBlock(rsrc.startBlock, currentblock, rsrc.frequency)
-	return self.lookup(rsrc, name, nextblock, 0, refresh)
+	nextperiod := getNextPeriod(rsrc.startBlock, currentblock, rsrc.frequency)
+	return self.lookup(rsrc, name, nextperiod, 0, refresh)
 }
 
 // base code for public lookup methods
-func (self *ResourceHandler) lookup(rsrc *resource, name string, nextblock uint64, version uint64, refresh bool) (*resource, error) {
+func (self *ResourceHandler) lookup(rsrc *resource, name string, period uint32, version uint32, refresh bool) (*resource, error) {
 
-	if nextblock == 0 {
-		return nil, fmt.Errorf("blocknumber must be >0")
+	if period == 0 {
+		return nil, fmt.Errorf("period must be >0")
 	}
 
 	// start from the last possible block period, and iterate previous ones until we find a match
@@ -323,29 +326,29 @@ func (self *ResourceHandler) lookup(rsrc *resource, name string, nextblock uint6
 		version = 1
 	}
 
-	for nextblock > rsrc.startBlock {
-		key := self.resourceHash(rsrc.ensName, nextblock, version)
+	for period > 0 {
+		key := self.resourceHash(rsrc.ensName, period, version)
 		chunk, err := self.Get(key)
 		if err == nil {
 			if specificversion {
-				return self.updateResourceIndex(rsrc, chunk, nextblock, version, &name)
+				return self.updateResourceIndex(rsrc, chunk, period, version, &name)
 			}
 			// check if we have versions > 1. If a version fails, the previous version is used and returned.
-			log.Trace("rsrc update version 1 found, checking for version updates", "nextblock", nextblock, "key", key)
+			log.Trace("rsrc update version 1 found, checking for version updates", "period", period, "key", key)
 			for {
 				newversion := version + 1
-				key := self.resourceHash(rsrc.ensName, nextblock, newversion)
+				key := self.resourceHash(rsrc.ensName, period, newversion)
 				newchunk, err := self.Get(key)
 				if err != nil {
-					return self.updateResourceIndex(rsrc, chunk, nextblock, version, &name)
+					return self.updateResourceIndex(rsrc, chunk, period, version, &name)
 				}
-				log.Trace("version update found, checking next", "version", version, "block", nextblock, "key", key)
+				log.Trace("version update found, checking next", "version", version, "period", period, "key", key)
 				chunk = newchunk
 				version = newversion
 			}
 		}
-		log.Trace("rsrc update not found, checking previous period", "block", nextblock, "key", key)
-		nextblock -= rsrc.frequency
+		log.Trace("rsrc update not found, checking previous period", "period", period, "key", key)
+		period--
 	}
 	return nil, fmt.Errorf("no updates found")
 }
@@ -397,7 +400,7 @@ func (self *ResourceHandler) loadResource(name string, refresh bool) (*resource,
 }
 
 // update mutable resource index map with specified content
-func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk, nextblock uint64, version uint64, indexname *string) (*resource, error) {
+func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk, period uint32, version uint32, indexname *string) (*resource, error) {
 
 	// rsrc update data chunks are total hacks
 	// and have no size prefix :D
@@ -407,12 +410,12 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk, n
 	}
 
 	// update our rsrcs entry map
-	rsrc.lastBlock = nextblock
+	rsrc.lastPeriod = period
 	rsrc.version = version
 	rsrc.data = make([]byte, len(chunk.SData)-signatureLength)
 	rsrc.updated = time.Now()
 	copy(rsrc.data, chunk.SData[signatureLength:])
-	log.Debug("Resource synced", "name", rsrc.name, "key", chunk.Key, "block", nextblock, "version", version)
+	log.Debug("Resource synced", "name", rsrc.name, "key", chunk.Key, "period", rsrc.lastPeriod, "version", rsrc.version)
 	self.resourceLock.Lock()
 	self.resources[*indexname] = rsrc
 	self.resourceLock.Unlock()
@@ -447,17 +450,38 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	nextblock := getNextBlock(resource.startBlock, currentblock, resource.frequency)
+	//nextblock := getNextBlock(resource.startBlock, currentblock, resource.frequency)
+	nextperiod := getNextPeriod(resource.startBlock, currentblock, resource.frequency)
 
 	// if we already have an update for this block then increment version
-	var version uint64
-	if nextblock == resource.lastBlock {
+	var version uint32
+	if self.hasUpdate(name, nextperiod) {
 		version = resource.version
 	}
 	version++
 
+	// prepend version and period to allow reverse lookups
+	// data header length does NOT include the header length prefix bytes themselves
+	headerlength := uint16(len(resource.ensName) + dataPrefixVersionSize + dataPrefixPeriodSize + len(data))
+	fulldata := make([]byte, headerlength+dataPrefixHeaderLengthSize)
+
+	cursor := 0
+	binary.LittleEndian.PutUint16(fulldata, headerlength)
+	cursor += dataPrefixHeaderLengthSize
+
+	binary.LittleEndian.PutUint32(fulldata[cursor:], nextperiod)
+	cursor += dataPrefixPeriodSize
+
+	binary.LittleEndian.PutUint32(fulldata[cursor:], version)
+	cursor += dataPrefixVersionSize
+
+	copy(fulldata[cursor:], resource.ensName[:])
+	cursor += len(resource.ensName)
+
+	copy(fulldata[cursor:], data)
+
 	// create the update chunk and send it
-	key := self.resourceHash(resource.ensName, nextblock, version)
+	key := self.resourceHash(resource.ensName, nextperiod, version)
 	chunk := NewChunk(key, nil)
 	chunk.SData, err = self.signContent(data)
 	if err != nil {
@@ -465,10 +489,10 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 	}
 	chunk.Size = int64(len(data))
 	self.Put(chunk)
-	log.Trace("resource update", "name", resource.name, "key", key, "currentblock", currentblock, "lastBlock", nextblock, "version", version)
+	log.Trace("resource update", "name", resource.name, "key", key, "currentblock", currentblock, "lastperiod", nextperiod, "version", version)
 
 	// update our resources map entry and return the new key
-	resource.lastBlock = nextblock
+	resource.lastPeriod = nextperiod
 	resource.version = version
 	resource.data = make([]byte, len(data))
 	copy(resource.data, data)
@@ -494,20 +518,31 @@ func (self *ResourceHandler) getBlock() (uint64, error) {
 	return strconv.ParseUint(currentblock, 10, 64)
 }
 
-func (self *ResourceHandler) resourceHash(namehash common.Hash, blockheight uint64, version uint64) Key {
-	// format is: hash(namehash|blockheight|version)
+func (self *ResourceHandler) BlockToPeriod(name string, blocknumber uint64) uint32 {
+	blockdiff := blocknumber - self.resources[name].startBlock
+	periodfloor := blockdiff / self.resources[name].frequency
+	if blockdiff%self.resources[name].frequency > 0 {
+		periodfloor++
+	}
+	return uint32(periodfloor)
+}
+
+func (self *ResourceHandler) PeriodToBlock(name string, period uint32) uint64 {
+	return self.resources[name].startBlock + (uint64(period) * self.resources[name].frequency)
+}
+
+func (self *ResourceHandler) resourceHash(namehash common.Hash, period uint32, version uint32) Key {
+	// format is: hash(namehash|period|version)
 	self.hashLock.Lock()
 	defer self.hashLock.Unlock()
 	self.hasher.Reset()
 	self.hasher.Write(namehash[:])
-	b := make([]byte, 8)
-	c := binary.PutUvarint(b, blockheight)
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, period)
+	//c := binary.PutUvarint(b, blockheight)
 	self.hasher.Write(b)
-	// PutUvarint only overwrites first c bytes
-	for i := 0; i < c; i++ {
-		b[i] = 0
-	}
-	c = binary.PutUvarint(b, version)
+	binary.LittleEndian.PutUint32(b, period)
+	//c = binary.PutUvarint(b, version)
 	self.hasher.Write(b)
 	return self.hasher.Sum(nil)
 }
@@ -554,6 +589,13 @@ func (self *ResourceHandler) verifyContent(chunkdata []byte) error {
 	return nil
 }
 
+func (self *ResourceHandler) hasUpdate(name string, period uint32) bool {
+	if self.resources[name].lastPeriod == period {
+		return true
+	}
+	return false
+}
+
 type resourceChunkStore struct {
 	localStore ChunkStore
 	netStore   ChunkStore
@@ -596,8 +638,13 @@ func (r *resourceChunkStore) Close() {
 	r.localStore.Close()
 }
 
-func getNextBlock(start uint64, current uint64, frequency uint64) uint64 {
+//func getNextBlock(start uint64, current uint64, frequency uint64) uint64 {
+//	blockdiff := current - start
+//	periods := (blockdiff / frequency) + 1
+//	return start + (frequency * periods)
+//}
+
+func getNextPeriod(start uint64, current uint64, frequency uint64) uint32 {
 	blockdiff := current - start
-	periods := (blockdiff / frequency) + 1
-	return start + (frequency * periods)
+	return uint32(blockdiff / frequency)
 }

@@ -172,8 +172,8 @@ func TestResourceHandler(t *testing.T) {
 	if rh2.resources[resourcename].version != 2 {
 		teardownTest(t, fmt.Errorf("resource version was %d, expected 2", rh2.resources[resourcename].version))
 	}
-	if rh2.resources[resourcename].lastBlock != startblocknumber+(resourcefrequency*3) {
-		teardownTest(t, fmt.Errorf("resource blockheight was %d, expected %d", rh2.resources[resourcename].lastBlock, startblocknumber+(resourcefrequency*3)))
+	if rh2.resources[resourcename].lastPeriod != 3 {
+		teardownTest(t, fmt.Errorf("resource period was %d, expected 3", rh2.resources[resourcename].lastPeriod))
 	}
 
 	rsrc, err := NewResource(resourcename, startblocknumber, resourcefrequency)
@@ -197,7 +197,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// specific block, latest version
-	resource, err = rh2.LookupHistorical(resourcename, startblocknumber+(resourcefrequency*3), true)
+	resource, err = rh2.LookupHistorical(resourcename, 3, true)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -208,7 +208,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// specific block, specific version
-	resource, err = rh2.LookupVersion(resourcename, startblocknumber+(resourcefrequency*3), 1, true)
+	resource, err = rh2.LookupVersion(resourcename, 3, 1, true)
 	if err != nil {
 		teardownTest(t, err)
 	}
