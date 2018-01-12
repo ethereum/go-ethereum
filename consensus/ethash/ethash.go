@@ -610,10 +610,14 @@ func (ethash *Ethash) Hashrate() float64 {
 	return ethash.hashrate.Rate1()
 }
 
-// APIs implements consensus.Engine, returning the user facing RPC APIs. Currently
-// that is empty.
+// APIs implements consensus.Engine, returning the user facing RPC APIs.
 func (ethash *Ethash) APIs(chain consensus.ChainReader) []rpc.API {
-	return nil
+	return []rpc.API{{
+		Namespace: "ethash",
+		Version:   "1.0",
+		Service:   &API{ethash},
+		Public:    true,
+	}}
 }
 
 // SeedHash is the seed to use for generating a verification cache and the mining
