@@ -38191,7 +38191,7 @@ var _bundleJs = []byte((((((((((`!function(modules) {
         }, {
             key: "render",
             value: function() {
-                var _props = this.props, classes = _props.classes, general = _props.general, geth = general.version ? this.info("Geth", general.version) : null, commit = general.commit ? this.info("Commit", general.commit) : null;
+                var _props = this.props, classes = _props.classes, general = _props.general, geth = general.version ? this.info("Geth", general.version) : null, commit = general.commit ? this.info("Commit", general.commit.substring(0, 7)) : null;
                 return _react2.default.createElement(_AppBar2.default, {
                     position: "static",
                     className: classes.footer
