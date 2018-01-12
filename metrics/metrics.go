@@ -38,6 +38,15 @@ func init() {
 	//exp.Exp(DefaultRegistry)
 }
 
+// NewGauge creates a new metrics Gauge, either a real one of a NOP stub depending
+// on the metrics flag.
+func NewGauge(name string) metrics.Gauge {
+	if !Enabled {
+		return new(metrics.NilGauge)
+	}
+	return metrics.GetOrRegisterGauge(name, metrics.DefaultRegistry)
+}
+
 // CollectProcessMetrics periodically collects various metrics about the running
 // process.
 func CollectProcessMetrics(refresh time.Duration) {

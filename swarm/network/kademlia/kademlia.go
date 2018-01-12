@@ -24,6 +24,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+//metrics variables
+var (
+	bucketOnIndexGauge  = metrics.NewGauge("network.kademlia.bucket.onindex")
+	bucketOffIndexGauge = metrics.NewGauge("network.kademlia.bucket.offindex")
 )
 
 const (
@@ -138,6 +145,7 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 	// TODO: give priority to peers with active traffic
 	if len(bucket) < self.BucketSize { // >= allows us to add peers beyond the bucketsize limitation
 		self.buckets[index] = append(bucket, node)
+		bucketOnIndexGauge.Update(int64(index))
 		log.Debug(fmt.Sprintf("add node %v to table", node))
 		self.setProxLimit(index, true)
 		record.node = node
@@ -178,6 +186,7 @@ func (self *Kademlia) Off(node Node, cb func(*NodeRecord, Node)) (err error) {
 	defer self.lock.Unlock()
 
 	index := self.proximityBin(node.Addr())
+	bucketOffIndexGauge.Update(int64(index))
 	bucket := self.buckets[index]
 	for i := 0; i < len(bucket); i++ {
 		if node.Addr() == bucket[i].Addr() {
