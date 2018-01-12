@@ -17,6 +17,7 @@
 package network
 
 import (
+	"errors"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -113,22 +114,28 @@ func TestStreamerRegisterIncoming(t *testing.T) {
 		}, nil
 	})
 
-	tick := time.NewTicker(10 * time.Millisecond)
-	timeout := time.NewTimer(1 * time.Second)
-WAIT:
-	for {
-		select {
-		case <-tick.C:
-			if len(streamer.peers) > 0 {
-				break WAIT
-			}
-		case <-timeout.C:
-			t.Fatal("timeout")
-		}
+	err = waitForPeers(streamer, 1*time.Second)
+	if err != nil {
+		t.Fatal("timeout: peer is not created")
 	}
 
 	err = streamer.Subscribe(tester.IDs[0], "foo", nil, 0, 0, Top, true)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
+	}
+}
+
+func waitForPeers(streamer *Streamer, timeout time.Duration) error {
+	ticker := time.NewTicker(10 * time.Millisecond)
+	timeoutTimer := time.NewTimer(timeout)
+	for {
+		select {
+		case <-ticker.C:
+			if len(streamer.peers) > 0 {
+				return nil
+			}
+		case <-timeoutTimer.C:
+			return errors.New("timeout")
+		}
 	}
 }
