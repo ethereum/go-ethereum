@@ -138,7 +138,7 @@ type Streamer struct {
 
 // NewStreamer is Streamer constructor
 func NewStreamer(overlay Overlay, dbAccess *DbAccess) *Streamer {
-	return &Streamer{
+	streamer := &Streamer{
 		outgoing: make(map[string]func(*StreamerPeer, []byte) (OutgoingStreamer, error)),
 		incoming: make(map[string]func(*StreamerPeer, []byte) (IncomingStreamer, error)),
 		dbAccess: dbAccess,
@@ -233,7 +233,6 @@ type StreamerPeer struct {
 	streamer *Streamer
 	pq       *pq.PriorityQueue
 	//netStore     storage.ChunkStore
-	dbAccess     *DbAccess
 	outgoingLock sync.RWMutex
 	incomingLock sync.RWMutex
 	outgoing     map[string]*outgoingStreamer
@@ -266,7 +265,7 @@ type RetrieveRequestMsg struct {
 }
 
 func (self *StreamerPeer) handleRetrieveRequestMsg(req *RetrieveRequestMsg) error {
-	chunk, created := self.dbAccess.getOrCreateRequest(req.Key)
+	chunk, created := self.streamer.dbAccess.getOrCreateRequest(req.Key)
 	s, err := self.getOutgoingStreamer(retrieveRequestStream)
 	if err != nil {
 		return err
@@ -337,7 +336,7 @@ func (self *Streamer) deletePeer(peer *StreamerPeer) {
 }
 
 func (self *StreamerPeer) handleChunkDeliveryMsg(req *ChunkDeliveryMsg) error {
-	chunk, err := self.dbAccess.get(req.Key)
+	chunk, err := self.streamer.dbAccess.get(req.Key)
 	if err != nil {
 		return err
 	}
