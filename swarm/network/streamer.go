@@ -306,6 +306,30 @@ func (self *Streamer) Retrieve(chunk *storage.Chunk) error {
 	return nil
 }
 
+func (self *Streamer) getPeer(peerId discover.NodeID) *StreamerPeer {
+	if self.peers == nil {
+		return nil
+	}
+	self.peersLock.RLock()
+	defer self.peersLock.RUnlock()
+	return self.peers[peerId]
+}
+
+func (self *Streamer) setPeer(peer *StreamerPeer) {
+	if self.peers == nil {
+		self.peers = make(map[discover.NodeID]*StreamerPeer)
+	}
+	self.peersLock.Lock()
+	self.peers[peer.ID()] = peer
+	self.peersLock.Unlock()
+}
+
+func (self *Streamer) deletePeer(peer *StreamerPeer) {
+	self.peersLock.Lock()
+	delete(self.peers, peer.ID())
+	self.peersLock.Unlock()
+}
+
 func (self *StreamerPeer) handleChunkDeliveryMsg(req *ChunkDeliveryMsg) error {
 	chunk, err := self.dbAccess.get(req.Key)
 	if err != nil {
@@ -426,9 +450,7 @@ func (self *Streamer) Subscribe(peerId discover.NodeID, s string, t []byte, from
 		return err
 	}
 
-	self.peersLock.RLock()
-	peer := self.peers[peerId]
-	self.peersLock.RUnlock()
+	peer := self.getPeer(peerId)
 	if peer == nil {
 		return fmt.Errorf("peer not found %v", peerId)
 	}
@@ -630,15 +652,9 @@ func (s *Streamer) Run(p *bzzPeer) error {
 	// })
 	// subscribe to request handling ; only with non-light nodes
 
-	s.peersLock.Lock()
-	s.peers[sp.ID()] = sp
-	s.peersLock.Unlock()
+	s.setPeer(sp)
 
-	defer func() {
-		s.peersLock.Lock()
-		delete(s.peers, sp.ID())
-		s.peersLock.Unlock()
-	}()
+	defer s.deletePeer(sp)
 
 	s.Subscribe(sp.ID(), retrieveRequestStream, nil, 0, 0, Top, true)
 	defer close(sp.quit)
