@@ -84,11 +84,11 @@ type SubscribeMsg struct {
 // OfferedHashesMsg is the protocol msg for offering to hand over a
 // stream section
 type OfferedHashesMsg struct {
-	Stream         string // name of Stream
-	Key            []byte // subtype or key
-	From, To       uint64 // peer and db-specific entry count
-	Hashes         []byte // stream of hashes (128)
-	*HandoverProof        // HandoverProof
+	Stream         string      // name of Stream
+	Key            []byte      // subtype or key
+	From, To       uint64      // peer and db-specific entry count
+	Hashes         []byte      // stream of hashes (128)
+	*HandoverProof `rlp:"nil"` // HandoverProof
 }
 
 /*
