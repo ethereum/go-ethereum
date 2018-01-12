@@ -370,17 +370,17 @@ func (self *StreamerPeer) setIncomingStreamer(s string, i IncomingStreamer, prio
 		return fmt.Errorf("stream %v already registered", s)
 	}
 	next := make(chan struct{}, 1)
-	var intervals *Intervals
-	if !live {
-		key := s + self.ID().String()
-		intervals = NewIntervals(key, self.streamer)
-	}
+	// var intervals *Intervals
+	// if !live {
+	// key := s + self.ID().String()
+	// intervals = NewIntervals(key, self.streamer)
+	// }
 	self.incoming[s] = &incomingStreamer{
 		IncomingStreamer: i,
-		intervals:        intervals,
-		live:             live,
-		priority:         priority,
-		next:             next,
+		// intervals:        intervals,
+		live:     live,
+		priority: priority,
+		next:     next,
 	}
 	next <- struct{}{} // this is to allow wantedKeysMsg before first batch arrives
 	return nil
@@ -388,7 +388,7 @@ func (self *StreamerPeer) setIncomingStreamer(s string, i IncomingStreamer, prio
 
 // NextBatch adjusts the indexes by inspecting the intervals
 func (self *incomingStreamer) nextBatch(from uint64) (nextFrom uint64, nextTo uint64) {
-	intervals := self.intervals.get()
+	var intervals []uint64
 	if self.live {
 		if len(intervals) == 0 {
 			intervals = []uint64{self.sessionAt, from}
@@ -411,7 +411,7 @@ func (self *incomingStreamer) nextBatch(from uint64) (nextFrom uint64, nextTo ui
 		intervals[1] = from
 		nextTo = self.sessionAt
 	}
-	self.intervals.set(intervals)
+	// self.intervals.set(intervals)
 	return nextFrom, nextTo
 }
 

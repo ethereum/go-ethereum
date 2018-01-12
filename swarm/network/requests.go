@@ -27,28 +27,28 @@ type Intervals struct {
 	key      string
 }
 
-func (s *Intervals) load() error {
-	return s.streamer.load(s.key)
-}
-
-func (s *Intervals) save() error {
-	return s.streamer.save(s.key)
-}
-
-func (s *Intervals) get() []uint64 {
-	return s.streamer.get(s.key)
-}
-
-func (s *Intervals) set(v []uint64) {
-	s.streamer.set(s.key, v)
-}
-
-func NewIntervals(key string, s *Streamer) *Intervals {
-	return &Intervals{
-		streamer: s,
-		key:      key,
-	}
-}
+// func (s *Intervals) load() error {
+// 	return s.streamer.load(s.key)
+// }
+//
+// func (s *Intervals) save() error {
+// 	return s.streamer.save(s.key)
+// }
+//
+// func (s *Intervals) get() []uint64 {
+// 	return s.streamer.get(s.key)
+// }
+//
+// func (s *Intervals) set(v []uint64) {
+// 	s.streamer.set(s.key, v)
+// }
+//
+// func NewIntervals(key string, s *Streamer) *Intervals {
+// 	return &Intervals{
+// 		streamer: s,
+// 		key:      key,
+// 	}
+// }
 
 // RetrieveRequestStreamer implements OutgoingStreamer
 type RetrieveRequestStreamer struct {
