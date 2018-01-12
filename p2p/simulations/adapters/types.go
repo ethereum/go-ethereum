@@ -163,9 +163,8 @@ func RandomNodeConfig() *NodeConfig {
 	if err != nil {
 		panic("unable to generate key")
 	}
-	var id discover.NodeID
-	pubkey := crypto.FromECDSAPub(&key.PublicKey)
-	copy(id[:], pubkey[1:])
+
+	id := discover.PubkeyID(&key.PublicKey)
 	return &NodeConfig{
 		ID:         id,
 		PrivateKey: key,
