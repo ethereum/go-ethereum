@@ -181,7 +181,7 @@ func (lru *lru) get(epoch uint64) (item, future interface{}) {
 		}
 		log.Trace("Requiring new ethash "+lru.what, "epoch", epoch)
 		item = lru.new(epoch)
-		lru.cache.Add(epoch, current)
+		lru.cache.Add(epoch, item)
 	}
 	// Update the 'future item' if epoch is larger than previously seen.
 	if epoch < maxEpoch-1 && lru.future < epoch+1 {
@@ -190,7 +190,7 @@ func (lru *lru) get(epoch uint64) (item, future interface{}) {
 		lru.future = epoch + 1
 		lru.futureItem = future
 	}
-	return current, future
+	return item, future
 }
 
 // cache wraps an ethash cache with some metadata to allow easier concurrent use.
@@ -209,16 +209,12 @@ func newCache(epoch uint64) interface{} {
 // generate ensures that the cache content is generated before use.
 func (c *cache) generate(dir string, limit int, test bool) {
 	c.once.Do(func() {
-		// If we have a testing cache, generate and return
-		if test {
-			c.cache = make([]uint32, 1024/4)
-			generateCache(c.cache, c.epoch, seedHash(c.epoch*epochLength+1))
-			return
-		}
-		// If we don't store anything on disk, generate and return
 		size := cacheSize(c.epoch*epochLength + 1)
 		seed := seedHash(c.epoch*epochLength + 1)
-
+		if test {
+			size = 1024
+		}
+		// If we don't store anything on disk, generate and return.
 		if dir == "" {
 			c.cache = make([]uint32, size/4)
 			generateCache(c.cache, c.epoch, seed)
@@ -287,21 +283,14 @@ func newDataset(epoch uint64) interface{} {
 // generate ensures that the dataset content is generated before use.
 func (d *dataset) generate(dir string, limit int, test bool) {
 	d.once.Do(func() {
-		// If we have a testing dataset, generate and return
-		if test {
-			cache := make([]uint32, 1024/4)
-			generateCache(cache, d.epoch, seedHash(d.epoch*epochLength+1))
-
-			d.dataset = make([]uint32, 32*1024/4)
-			generateDataset(d.dataset, d.epoch, cache)
-
-			return
-		}
-		// If we don't store anything on disk, generate and return
 		csize := cacheSize(d.epoch*epochLength + 1)
 		dsize := datasetSize(d.epoch*epochLength + 1)
 		seed := seedHash(d.epoch*epochLength + 1)
-
+		if test {
+			csize = 1024
+			dsize = 32 * 1024
+		}
+		// If we don't store anything on disk, generate and return
 		if dir == "" {
 			cache := make([]uint32, csize/4)
 			generateCache(cache, d.epoch, seed)

@@ -43,19 +43,18 @@ func TestTestMode(t *testing.T) {
 	}
 }
 
+// This test checks that cache lru logic doesn't crash under load.
 func TestCacheFileEvict(t *testing.T) {
 	tmpdir, err := ioutil.TempDir("", "ethash-test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpdir)
-	e := New(Config{CachesInMem: 3, CachesOnDisk: 10, CacheDir: tmpdir})
+	e := New(Config{CachesInMem: 3, CachesOnDisk: 10, CacheDir: tmpdir, PowMode: ModeTest})
 
-	var (
-		workers = 4
-		epochs  = 20
-		wg      sync.WaitGroup
-	)
+	workers := 8
+	epochs := 100
+	var wg sync.WaitGroup
 	wg.Add(workers)
 	for i := 0; i < workers; i++ {
 		go verifyTest(&wg, e, i, epochs)
