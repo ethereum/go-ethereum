@@ -169,19 +169,17 @@ func RegisterRemoteSectionServer(s *Streamer, db *DbAccess, rf func([]byte) *sto
 
 // RegisterRemoteDownloader registers RemoteDownloader incoming streamer
 // on downstream light  node
-func RegisterRemoteDownloader(s *Streamer, db *DbAccess) {
-	s.RegisterIncomingStreamer("REMOTE_DOWNLOADER", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
-		return NewRemoteDownloader(t, db), nil
-	})
-}
-
-// RegisterRemoteDownloadServer registers RemoteDownloadServer outgoing streamer on
-// upstream light server node
-func RegisterRemoteDownloadServer(s *Streamer, db *DbAccess, rf func([]byte) *storage.LazyChunkReader) {
-	s.RegisterOutgoingStreamer("REMOTE_DOWNLOADER", func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
-		r := rf(t)
-		return NewRemoteDownloadServer(db, r), nil
-	})
-}
-
-func NewRemoteDownloader()
+// func RegisterRemoteDownloader(s *Streamer, db *DbAccess) {
+// 	s.RegisterIncomingStreamer("REMOTE_DOWNLOADER", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
+// 		return NewRemoteDownloader(t, db), nil
+// 	})
+// }
+//
+// // RegisterRemoteDownloadServer registers RemoteDownloadServer outgoing streamer on
+// // upstream light server node
+// func RegisterRemoteDownloadServer(s *Streamer, db *DbAccess, rf func([]byte) *storage.LazyChunkReader) {
+// 	s.RegisterOutgoingStreamer("REMOTE_DOWNLOADER", func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
+// 		r := rf(t)
+// 		return NewRemoteDownloadServer(db, r), nil
+// 	})
+// }
