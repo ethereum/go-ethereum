@@ -554,7 +554,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 
 	// create the landing page
 	// !! need to serve home node template page !!
-		
+
 
 	// return the whole response
 		return
@@ -609,6 +609,15 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.logDebug("HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, r.URL.Host, r.URL.Path, r.Referer(), r.Header.Get("Accept"))
 
+	if r.RequestURI == "/" && strings.Contains(r.Header.Get("Accept"), "text/html") {
+
+		err := landingPageTemplate.Execute(w, nil)
+		if err != nil {
+			s.logError("error rendering landing page: %s", err)
+		}
+		return
+	}
+
 	uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
 	req := &Request{Request: *r, uri: uri}
 	if err != nil {
@@ -661,6 +670,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.HandleGetFiles(w, req)
 			return
 		}
+
+
 
 		s.HandleGetFile(w, req)
 
