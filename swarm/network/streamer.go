@@ -82,9 +82,9 @@ type SubscribeMsg struct {
 	Priority uint8 // delivered on priority channel
 }
 
-// UnsyncedKeysMsg is the protocol msg for offering to hand over a
+// OfferedHashesMsg is the protocol msg for offering to hand over a
 // stream section
-type UnsyncedKeysMsg struct {
+type OfferedHashesMsg struct {
 	Stream         string // name of Stream
 	Key            []byte // subtype or key
 	From, To       uint64 // peer and db-specific entry count
@@ -104,22 +104,22 @@ type ChunkDeliveryMsg struct {
 	from Peer   // [not serialised] protocol registers the requester
 }
 
-// String pretty prints UnsyncedKeysMsg
-func (self UnsyncedKeysMsg) String() string {
+// String pretty prints OfferedHashesMsg
+func (self OfferedHashesMsg) String() string {
 	return fmt.Sprintf("Stream '%v' [%v-%v] (%v)", self.Stream, self.From, self.To, len(self.Hashes)/HashSize)
 }
 
-// WantedKeysMsg is the protocol msg data for signaling which hashes
-// offered in UnsyncedKeysMsg downstream peer actually wants sent over
-type WantedKeysMsg struct {
+// WantedHashesMsg is the protocol msg data for signaling which hashes
+// offered in OfferedHashesMsg downstream peer actually wants sent over
+type WantedHashesMsg struct {
 	Stream   string // name of stream
 	Key      []byte // subtype or key
 	Want     []byte // bitvector indicating which keys of the batch needed
 	From, To uint64 // next interval offset - empty if not to be continued
 }
 
-// String pretty prints WantedKeysMsg
-func (self WantedKeysMsg) String() string {
+// String pretty prints WantedHashesMsg
+func (self WantedHashesMsg) String() string {
 	return fmt.Sprintf("Stream '%v', Want: %x, Next: [%v-%v]", self.Stream, self.Want, self.From, self.To)
 }
 
@@ -410,7 +410,7 @@ func (self *StreamerPeer) setIncomingStreamer(s string, i IncomingStreamer, prio
 		priority: priority,
 		next:     next,
 	}
-	next <- struct{}{} // this is to allow wantedKeysMsg before first batch arrives
+	next <- struct{}{} // this is to allow wantedHashesMsg before first batch arrives
 	return nil
 }
 
@@ -489,13 +489,13 @@ func (self *StreamerPeer) handleSubscribeMsg(req *SubscribeMsg) error {
 	if err != nil {
 		return nil
 	}
-	go self.SendUnsyncedKeys(os, req.From, req.To)
+	go self.SendOfferedHashes(os, req.From, req.To)
 	return nil
 }
 
-// handleUnsyncedKeysMsg protocol msg handler calls the incoming streamer interface
+// handleOfferedHashesMsg protocol msg handler calls the incoming streamer interface
 // Filter method
-func (self *StreamerPeer) handleUnsyncedKeysMsg(req *UnsyncedKeysMsg) error {
+func (self *StreamerPeer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	s, err := self.getIncomingStreamer(req.Stream)
 	if err != nil {
 		return err
@@ -529,7 +529,7 @@ func (self *StreamerPeer) handleUnsyncedKeysMsg(req *UnsyncedKeysMsg) error {
 		}
 		s.next <- struct{}{}
 	}()
-	// only send wantedKeysMsg if all missing chunks of the previous batch arrived
+	// only send wantedHashesMsg if all missing chunks of the previous batch arrived
 	// except
 	if s.live {
 		s.sessionAt = req.From
@@ -538,7 +538,7 @@ func (self *StreamerPeer) handleUnsyncedKeysMsg(req *UnsyncedKeysMsg) error {
 	if from == to {
 		return nil
 	}
-	msg := &WantedKeysMsg{
+	msg := &WantedHashesMsg{
 		Stream: req.Stream,
 		Want:   want.Bytes(),
 		From:   from,
@@ -555,17 +555,17 @@ func (self *StreamerPeer) handleUnsyncedKeysMsg(req *UnsyncedKeysMsg) error {
 	return nil
 }
 
-// handleWantedKeysMsg protocol msg handler
+// handleWantedHashesMsg protocol msg handler
 // * sends the next batch of unsynced keys
-// * sends the actual data chunks as per WantedKeysMsg
-func (self *StreamerPeer) handleWantedKeysMsg(req *WantedKeysMsg) error {
+// * sends the actual data chunks as per WantedHashesMsg
+func (self *StreamerPeer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	s, err := self.getOutgoingStreamer(req.Stream)
 	if err != nil {
 		return err
 	}
 	hashes := s.currentBatch
 	// launch in go routine since GetBatch blocks until new hashes arrive
-	go self.SendUnsyncedKeys(s, req.From, req.To)
+	go self.SendOfferedHashes(s, req.From, req.To)
 	l := len(hashes) / HashSize
 	want, err := bv.NewFromBytes(req.Want, l)
 	if err != nil {
@@ -611,14 +611,14 @@ func (self *StreamerPeer) SendPriority(msg interface{}, priority uint8) error {
 	return self.pq.Push(nil, msg, int(priority))
 }
 
-// UnsyncedKeys sends UnsyncedKeysMsg protocol msg
-func (self *StreamerPeer) SendUnsyncedKeys(s *outgoingStreamer, f, t uint64) error {
+// OfferedHashes sends OfferedHashesMsg protocol msg
+func (self *StreamerPeer) SendOfferedHashes(s *outgoingStreamer, f, t uint64) error {
 	hashes, from, to, proof, err := s.SetNextBatch(f, t)
 	if err != nil {
 		return err
 	}
 	s.currentBatch = hashes
-	msg := &UnsyncedKeysMsg{
+	msg := &OfferedHashesMsg{
 		HandoverProof: proof,
 		Hashes:        hashes,
 		From:          from,
@@ -634,8 +634,8 @@ var StreamerSpec = &protocols.Spec{
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		HandshakeMsg{},
-		UnsyncedKeysMsg{},
-		WantedKeysMsg{},
+		OfferedHashesMsg{},
+		WantedHashesMsg{},
 		TakeoverProofMsg{},
 		SubscribeMsg{},
 	},
@@ -668,14 +668,14 @@ func (self *StreamerPeer) HandleMsg(msg interface{}) error {
 	case *SubscribeMsg:
 		return self.handleSubscribeMsg(msg)
 
-	case *UnsyncedKeysMsg:
-		return self.handleUnsyncedKeysMsg(msg)
+	case *OfferedHashesMsg:
+		return self.handleOfferedHashesMsg(msg)
 
 	case *TakeoverProofMsg:
 		return self.handleTakeoverProofMsg(msg)
 
-	case *WantedKeysMsg:
-		return self.handleWantedKeysMsg(msg)
+	case *WantedHashesMsg:
+		return self.handleWantedHashesMsg(msg)
 
 	case *ChunkDeliveryMsg:
 		return self.handleChunkDeliveryMsg(msg)
