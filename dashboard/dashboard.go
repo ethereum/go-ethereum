@@ -211,8 +211,8 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 	// Send the past data.
 	client.msg <- Message{
 		General: &GeneralMessage{
-			Version: fmt.Sprintf("Geth v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
-			Commit:  fmt.Sprintf("Commit %s", db.commit),
+			Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
+			Commit:  db.commit,
 		},
 		Home: &HomeMessage{
 			Memory:  db.charts.Memory,

@@ -27,8 +27,8 @@ export type Content = {
 };
 
 export type General = {
-	version: string,
-	commit: string,
+	version: ?string,
+	commit: ?string,
 };
 
 export type Home = {

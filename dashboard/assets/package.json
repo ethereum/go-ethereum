@@ -33,6 +33,7 @@
         "react-transition-group": "^2.2.1",
         "recharts": "^1.0.0-beta.7",
         "style-loader": "^0.19.1",
+        "typeface-roboto": "^0.0.50",
         "url": "^0.11.0",
         "url-loader": "^0.6.2",
         "webpack": "^3.10.0"

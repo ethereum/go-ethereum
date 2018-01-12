@@ -21,37 +21,29 @@ import React, {Component} from 'react';
 import withStyles from 'material-ui/styles/withStyles';
 import AppBar from 'material-ui/AppBar';
 import Toolbar from 'material-ui/Toolbar';
-import Transition from 'react-transition-group/Transition';
-import IconButton from 'material-ui/IconButton';
 import Typography from 'material-ui/Typography';
-import ChevronLeftIcon from 'material-ui-icons/ChevronLeft';
 
-import {DURATION} from './Common';
+import type {General} from '../types/content';
 
-// arrowDefault is the default style of the arrow button.
-const arrowDefault = {
-	transition: `transform ${DURATION}ms`,
-};
-// arrowTransition is the additional style of the arrow button corresponding to the transition's state.
-const arrowTransition = {
-	entered: {transform: 'rotate(180deg)'},
-};
-// Styles for the Header component.
+// styles contains styles for the Header component.
 const styles = theme => ({
-	header: {
+	footer: {
 		backgroundColor: theme.palette.background.appBar,
 		color:           theme.palette.getContrastText(theme.palette.background.appBar),
 		zIndex:          theme.zIndex.appBar,
 	},
 	toolbar: {
-		paddingLeft:  theme.spacing.unit,
-		paddingRight: theme.spacing.unit,
+		paddingLeft:    theme.spacing.unit,
+		paddingRight:   theme.spacing.unit,
+		display:        'flex',
+		justifyContent: 'flex-end',
 	},
-	mainText: {
-		paddingLeft: theme.spacing.unit,
+	light: {
+		color: 'rgba(255, 255, 255, 0.54)',
 	},
 });
 export type Props = {
+	general: General,
 	classes: Object,
 };
 // TODO (kurkomisi): If the structure is appropriate, make an abstraction of the common parts with the Header.
@@ -61,18 +53,24 @@ class Footer extends Component<Props> {
 		return typeof nextProps.shouldUpdate.logs !== 'undefined';
 	}
 
+	info = (about: string, data: string) => (
+		<Typography type="caption" color="inherit">
+			<span className={this.props.classes.light}>{about}</span> {data}
+		</Typography>
+	);
+
 	render() {
-		const {classes} = this.props; // The classes property is injected by withStyles().
+		const {classes, general} = this.props; // The classes property is injected by withStyles().
+		const geth = general.version ? this.info('Geth', general.version) : null;
+		const commit = general.commit ? this.info('Commit', general.commit) : null;
 
 		return (
-			<AppBar position="static" className={classes.header}>
+			<AppBar position="static" className={classes.footer}>
 				<Toolbar className={classes.toolbar}>
-					<Typography type="title" color="inherit" className={classes.mainText}>
-						{this.props.general.version}
-					</Typography>
-					<Typography type="title" color="inherit" className={classes.mainText}>
-						{this.props.general.commit}	
-					</Typography>
+					<div>
+						{geth}
+						{commit}
+					</div>
 				</Toolbar>
 			</AppBar>
 		);
