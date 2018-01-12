@@ -62,7 +62,7 @@ class Footer extends Component<Props> {
 	render() {
 		const {classes, general} = this.props; // The classes property is injected by withStyles().
 		const geth = general.version ? this.info('Geth', general.version) : null;
-		const commit = general.commit ? this.info('Commit', general.commit) : null;
+		const commit = general.commit ? this.info('Commit', general.commit.substring(0, 7)) : null;
 
 		return (
 			<AppBar position="static" className={classes.footer}>
