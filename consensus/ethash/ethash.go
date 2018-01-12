@@ -145,13 +145,15 @@ func memoryMapAndGenerate(path string, size uint64, generator func(buffer []uint
 }
 
 // lru tracks caches or datasets by their last use time, keeping at most N of them.
-// Whenever an item is requested through get, lru ensures that the next item is also
-// present.
 type lru struct {
-	what  string
-	new   func(epoch uint64) interface{}
-	mu    sync.Mutex
-	cache *simplelru.LRU
+	what string
+	new  func(epoch uint64) interface{}
+	mu   sync.Mutex
+	// Items are kept in a LRU cache, but there is a special case:
+	// We always keep an item for (highest seen epoch) + 1 as the 'future item'.
+	cache      *simplelru.LRU
+	future     uint64
+	futureItem interface{}
 }
 
 func newlru(what string, maxItems int, new func(epoch uint64) interface{}) *lru {
@@ -164,22 +166,29 @@ func newlru(what string, maxItems int, new func(epoch uint64) interface{}) *lru 
 	return &lru{what: what, new: new, cache: cache}
 }
 
-func (lru *lru) get(epoch uint64) (current, future interface{}) {
+// get retrieves or creates an item for the given epoch. The first return value is always
+// non-nil. The second return value is non-nil if lru thinks that an item will be useful in
+// the near future.
+func (lru *lru) get(epoch uint64) (item, future interface{}) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
 	// Get or create the item for the requested epoch.
-	current, ok := lru.cache.Get(epoch)
+	item, ok := lru.cache.Get(epoch)
 	if !ok {
+		if lru.future > 0 && lru.future == epoch {
+			return lru.futureItem, nil
+		}
 		log.Trace("Requiring new ethash "+lru.what, "epoch", epoch)
-		current = lru.new(epoch)
+		item = lru.new(epoch)
 		lru.cache.Add(epoch, current)
 	}
-	// Ensure that there is an item for the next epoch.
-	if epoch < maxEpoch-1 && !lru.cache.Contains(epoch+1) {
+	// Update the 'future item' if epoch is larger than previously seen.
+	if epoch < maxEpoch-1 && lru.future < epoch+1 {
 		log.Trace("Requiring new future ethash "+lru.what, "epoch", epoch+1)
 		future = lru.new(epoch + 1)
-		lru.cache.Add(epoch, future)
+		lru.future = epoch + 1
+		lru.futureItem = future
 	}
 	return current, future
 }
