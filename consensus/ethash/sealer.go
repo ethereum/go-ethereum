@@ -24,10 +24,17 @@ import (
 	"runtime"
 	"sync"
 
+	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+)
+
+var (
+	errNoSealWork         = errors.New("No work available yet, don't panic.")
+	errInvalidSealResult  = errors.New("Invalid proof-of-work solution.")
+	errNonDefinedRemoteOp = errors.New("Non-defined remote mining operation.")
 )
 
 // Seal implements consensus.Engine, attempting to find a nonce that satisfies
@@ -43,9 +50,9 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 	if ethash.shared != nil {
 		return ethash.shared.Seal(chain, block, stop)
 	}
+
 	// Create a runner and the multiple search threads it directs
 	abort := make(chan struct{})
-	found := make(chan *types.Block)
 
 	ethash.lock.Lock()
 	threads := ethash.threads
@@ -64,12 +71,25 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 	if threads < 0 {
 		threads = 0 // Allows disabling local mining without extra logic around local/remote
 	}
+
+	// Clear up result channel before new round mining start
+	for empty := false; !empty; {
+		select {
+		case <-ethash.resultCh:
+		default:
+			empty = true
+		}
+	}
+
+	// Push new work to remote sealer
+	ethash.workCh <- block
+
 	var pend sync.WaitGroup
 	for i := 0; i < threads; i++ {
 		pend.Add(1)
 		go func(id int, nonce uint64) {
 			defer pend.Done()
-			ethash.mine(block, id, nonce, abort, found)
+			ethash.mine(block, id, nonce, abort, ethash.resultCh)
 		}(i, uint64(ethash.rand.Int63()))
 	}
 	// Wait until sealing is terminated or a nonce is found
@@ -78,7 +98,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 	case <-stop:
 		// Outside abort, stop all miner threads
 		close(abort)
-	case result = <-found:
+	case result = <-ethash.resultCh:
 		// One of the threads found a block, abort all others
 		close(abort)
 	case <-ethash.update:
@@ -149,4 +169,99 @@ search:
 	// Datasets are unmapped in a finalizer. Ensure that the dataset stays live
 	// during sealing so it's not unmapped while being read.
 	runtime.KeepAlive(dataset)
+}
+
+// remote starts a standalone goroutine to handle remote mining related stuff.
+func (ethash *Ethash) remote(resultCh chan *types.Block) {
+	var (
+		works       = make(map[common.Hash]*types.Block)
+		currentWork *types.Block
+	)
+
+	// makeWork returns a work package for external sealer. The work package consists of 3 strings
+	// result[0], 32 bytes hex encoded current block header pow-hash
+	// result[1], 32 bytes hex encoded seed hash used for DAG
+	// result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
+	makeWork := func() ([3]string, error) {
+		var res [3]string
+		if currentWork == nil {
+			return res, errNoSealWork
+		}
+		res[0] = currentWork.HashNoNonce().Hex()
+		res[1] = common.BytesToHash(SeedHash(currentWork.NumberU64())).Hex()
+		// Calculate the "target" to be returned to the external sealer
+		n := big.NewInt(1)
+		n.Lsh(n, 255)
+		n.Div(n, currentWork.Difficulty())
+		n.Lsh(n, 1)
+		res[2] = common.BytesToHash(n.Bytes()).Hex()
+		works[currentWork.HashNoNonce()] = currentWork
+		return res, nil
+	}
+
+	// verifyWork verifies the submitted pow solution, returning
+	// whether the solution was accepted or not (not can be both a bad pow as well as
+	// any other error, like no work pending).
+	verifyWork := func(result sealResult) bool {
+		// Make sure the work submitted is present
+		block := works[result.hash]
+		if block == nil {
+			log.Info("Work submitted but none pending", "hash", result.hash)
+			return false
+		}
+		// Make sure the Engine solutions is indeed valid
+		header := block.Header()
+		header.Nonce = result.nonce
+		header.MixDigest = result.mixDigest
+
+		if err := ethash.VerifySeal(nil, header); err != nil {
+			log.Warn("Invalid proof-of-work submitted", "hash", result.hash, "err", err)
+			return false
+		}
+
+		// Solutions seems to be valid, return to the miner and notify acceptance
+		resultCh <- block.WithSeal(header)
+		delete(works, result.hash)
+		return true
+	}
+
+running:
+	for {
+		select {
+		case block := <-ethash.workCh:
+			if block.ParentHash() != currentWork.ParentHash() {
+				// Start new round mining, throw out all previous work.
+				works = make(map[common.Hash]*types.Block)
+			}
+			// Update current work with new received block
+			currentWork = block
+
+		case op := <-ethash.remoteOp:
+			switch op.typ {
+			case getWork:
+				// Push current mining work to return channel
+				work, err := makeWork()
+				if err != nil {
+					op.errCh <- err
+				} else {
+					op.workCh <- work
+					close(op.errCh)
+				}
+			case submitWork:
+				// Verify submitted PoW solution based on maintained mining blocks
+				if verifyWork(op.result) {
+					close(op.errCh)
+				} else {
+					op.errCh <- errInvalidSealResult
+				}
+			default:
+				op.errCh <- errNonDefinedRemoteOp
+			}
+
+		case <-ethash.exitCh:
+			// Exit remote loop if ethash object is cleared by GC
+			break running
+		}
+	}
+	log.Trace("Ethash remote sealer is exiting")
 }

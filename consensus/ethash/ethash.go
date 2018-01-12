@@ -33,7 +33,9 @@ import (
 	"unsafe"
 
 	mmap "github.com/edsrzf/mmap-go"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -389,6 +391,29 @@ type Config struct {
 	PowMode        Mode
 }
 
+// remoteOpType defines all the types of operations related to remote sealer.
+type remoteOpType uint
+
+const (
+	getWork remoteOpType = iota
+	submitWork
+)
+
+// sealResult wraps the pow solution parameters for the specified block.
+type sealResult struct {
+	nonce     types.BlockNonce
+	mixDigest common.Hash
+	hash      common.Hash
+}
+
+// remoteOp wraps a mining operation sent by remote miner.
+type remoteOp struct {
+	typ    remoteOpType
+	result sealResult
+	errCh  chan error
+	workCh chan [3]string
+}
+
 // Ethash is a consensus engine based on proof-of-work implementing the ethash
 // algorithm.
 type Ethash struct {
@@ -397,11 +422,18 @@ type Ethash struct {
 	caches   *lru // In memory caches to avoid regenerating too often
 	datasets *lru // In memory datasets to avoid regenerating too often
 
+	exitCh chan struct{} // Notification channel to exiting backend threads
+
 	// Mining related fields
 	rand     *rand.Rand    // Properly seeded random source for nonces
 	threads  int           // Number of threads to mine on if mining
 	update   chan struct{} // Notification channel to update mining parameters
 	hashrate metrics.Meter // Meter tracking the average hashrate
+
+	// Remote sealer related fields
+	workCh   chan *types.Block // Notification channel to push new work to remote sealer
+	resultCh chan *types.Block // Channel used by mining threads to return result
+	remoteOp chan *remoteOp    // Channel used to receive all mining operations from api
 
 	// The fields below are hooks for testing
 	shared    *Ethash       // Shared PoW verifier to avoid cache regeneration
@@ -423,13 +455,20 @@ func New(config Config) *Ethash {
 	if config.DatasetDir != "" && config.DatasetsOnDisk > 0 {
 		log.Info("Disk storage enabled for ethash DAGs", "dir", config.DatasetDir, "count", config.DatasetsOnDisk)
 	}
-	return &Ethash{
+	ethash := &Ethash{
 		config:   config,
 		caches:   newlru("cache", config.CachesInMem, newCache),
 		datasets: newlru("dataset", config.DatasetsInMem, newDataset),
 		update:   make(chan struct{}),
 		hashrate: metrics.NewMeter(),
+		exitCh:   make(chan struct{}),
+		workCh:   make(chan *types.Block),
+		resultCh: make(chan *types.Block),
+		remoteOp: make(chan *remoteOp),
 	}
+	go ethash.remote(ethash.resultCh)
+	runtime.SetFinalizer(ethash, (*Ethash).close)
+	return ethash
 }
 
 // NewTester creates a small sized ethash PoW scheme useful only for testing
@@ -487,6 +526,12 @@ func NewFullFaker() *Ethash {
 // in the same process.
 func NewShared() *Ethash {
 	return &Ethash{shared: sharedEthash}
+}
+
+// close closes the exit channel to notify all backend threads exiting.
+func (ethash *Ethash) close() {
+	runtime.SetFinalizer(ethash, nil)
+	close(ethash.exitCh)
 }
 
 // cache tries to retrieve a verification cache for the specified block number
