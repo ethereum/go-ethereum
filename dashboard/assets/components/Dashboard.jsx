@@ -58,7 +58,6 @@ const deepUpdate = (prev: Object, update: Object, updater: Object) => {
 // We could return the message itself too, but it's safer not to give access to it.
 const shouldUpdate = (msg: Object, updater: Object) => {
 	const su = {};
-	console.log(msg);
 	Object.keys(msg).forEach((key) => {
 		su[key] = typeof updater[key] !== 'function' ? shouldUpdate(msg[key], updater[key]) : true;
 	});
