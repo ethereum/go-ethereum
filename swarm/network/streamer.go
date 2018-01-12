@@ -511,10 +511,10 @@ func (self *StreamerPeer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 		return err
 	}
 	wg := sync.WaitGroup{}
-	for i := 0; i < len(hashes)/HashSize; i += HashSize {
+	for i := 0; i < len(hashes); i += HashSize {
 		hash := hashes[i : i+HashSize]
 		if wait := s.NeedData(hash); wait != nil {
-			want.Set(i, true)
+			want.Set(i/HashSize, true)
 			wg.Add(1)
 			// create request and wait until the chunk data arrives and is stored
 			go func(w func()) {
