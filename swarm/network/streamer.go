@@ -643,6 +643,7 @@ var StreamerSpec = &protocols.Spec{
 		WantedHashesMsg{},
 		TakeoverProofMsg{},
 		SubscribeMsg{},
+		RetrieveRequestMsg{},
 	},
 }
 
@@ -684,6 +685,9 @@ func (self *StreamerPeer) HandleMsg(msg interface{}) error {
 
 	case *ChunkDeliveryMsg:
 		return self.handleChunkDeliveryMsg(msg)
+
+	case *RetrieveRequestMsg:
+		return self.handleRetrieveRequestMsg(msg)
 
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)
