@@ -208,11 +208,15 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 	if len(params.VersionMeta) > 0 {
 		versionMeta = fmt.Sprintf(" (%s)", params.VersionMeta)
 	}
+	commit := db.commit
+	if len(commit) > 7 {
+		commit = commit[:7]
+	}
 	// Send the past data.
 	client.msg <- Message{
 		General: &GeneralMessage{
 			Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
-			Commit:  db.commit,
+			Commit:  commit,
 		},
 		Home: &HomeMessage{
 			Memory:  db.charts.Memory,
