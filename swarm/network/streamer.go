@@ -203,6 +203,7 @@ type outgoingStreamer struct {
 	OutgoingStreamer
 	priority     uint8
 	currentBatch []byte
+	stream       string
 }
 
 // OutgoingStreamer interface for outgoing peer Streamer
@@ -640,6 +641,9 @@ func (self *StreamerPeer) SendOfferedHashes(s *outgoingStreamer, f, t uint64) er
 		Hashes:        hashes,
 		From:          from,
 		To:            to,
+		Stream:        s.stream,
+		// TODO: use real key here
+		Key: []byte{},
 	}
 	return self.SendPriority(msg, s.priority)
 }
