@@ -415,7 +415,7 @@ func (self *StreamerPeer) setIncomingStreamer(s string, i IncomingStreamer, prio
 		priority: priority,
 		next:     next,
 	}
-	next <- struct{}{} // this is to allow wantedHashesMsg before first batch arrives
+	next <- struct{}{} // this is to allow wantedKeysMsg before first batch arrives
 	return nil
 }
 
@@ -534,7 +534,7 @@ func (self *StreamerPeer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 		}
 		s.next <- struct{}{}
 	}()
-	// only send wantedHashesMsg if all missing chunks of the previous batch arrived
+	// only send wantedKeysMsg if all missing chunks of the previous batch arrived
 	// except
 	if s.live {
 		s.sessionAt = req.From
