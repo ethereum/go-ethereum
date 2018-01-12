@@ -158,7 +158,7 @@ type NewMessageHandler interface {
 func (wc *WhisperClient) SubscribeMessages(ctx *Context, criteria *Criteria, handler NewMessageHandler, buffer int) (*Subscription, error) {
 	// Subscribe to the event internally
 	ch := make(chan *whisper.Message, buffer)
-	rawSub, err :=  wc.client.SubscribeMessages(ctx.context, *criteria.criteria, ch)
+	rawSub, err := wc.client.SubscribeMessages(ctx.context, *criteria.criteria, ch)
 	if err != nil {
 		return nil, err
 	}
