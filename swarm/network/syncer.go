@@ -23,6 +23,7 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -199,20 +200,21 @@ func parseSyncLabel(t []byte) (string, uint8) {
 
 // StartSyncing is called on the StreamerPeer to start the syncing process
 // the idea is that it is called only after kademlia is close to healthy
-func StartSyncing(s *StreamerPeer, po uint8, nn bool) {
+func StartSyncing(s *Streamer, peerId discover.NodeID, po uint8, nn bool) {
 	lastPO := po
 	if nn {
 		lastPO = maxPO
 	}
+
 	for i := po; i <= lastPO; i++ {
-		s.Subscribe("SYNC", newSyncLabel("LIVE", po), 0, 0, High, true)
-		s.Subscribe("SYNC", newSyncLabel("HISTORY", po), 0, 0, Mid, false)
+		s.Subscribe(peerId, "SYNC", newSyncLabel("LIVE", po), 0, 0, High, true)
+		s.Subscribe(peerId, "SYNC", newSyncLabel("HISTORY", po), 0, 0, Mid, false)
 	}
 }
 
 func RegisterIncomingSyncers(streamer *Streamer, db *DbAccess) {
 	streamer.RegisterIncomingStreamer("SYNC", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
-		syncType, po := parseSyncLabel(t)
+		syncType, _ := parseSyncLabel(t)
 		switch syncType {
 		case "LIVE":
 			return NewIncomingSwarmSyncer(p, nil, nil)

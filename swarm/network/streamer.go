@@ -127,12 +127,14 @@ func (self WantedKeysMsg) String() string {
 type Streamer struct {
 	incomingLock sync.RWMutex
 	outgoingLock sync.RWMutex
+	peersLock    sync.RWMutex
 	outgoing     map[string]func(*StreamerPeer, []byte) (OutgoingStreamer, error)
 	incoming     map[string]func(*StreamerPeer, []byte) (IncomingStreamer, error)
 
 	dbAccess *DbAccess
 	overlay  Overlay
 	receiveC chan *ChunkDeliveryMsg
+	peers    map[discover.NodeID]*StreamerPeer
 }
 
 // NewStreamer is Streamer constructor
@@ -143,6 +145,7 @@ func NewStreamer(overlay Overlay, dbAccess *DbAccess) *Streamer {
 		dbAccess: dbAccess,
 		overlay:  overlay,
 		receiveC: make(chan *ChunkDeliveryMsg, 10),
+		peers:    make(map[discover.NodeID]*StreamerPeer),
 	}
 }
 
@@ -235,6 +238,7 @@ type StreamerPeer struct {
 // NewStreamerPeer is the constructor for StreamerPeer
 func NewStreamerPeer(p Peer, streamer *Streamer) *StreamerPeer {
 	self := &StreamerPeer{
+		Peer:     p,
 		pq:       pq.New(int(PriorityQueue), PriorityQueueCap),
 		streamer: streamer,
 		outgoing: make(map[string]*outgoingStreamer),
@@ -416,16 +420,24 @@ func (self *incomingStreamer) nextBatch(from uint64) (nextFrom uint64, nextTo ui
 }
 
 // Subscribe initiates the streamer
-func (self *StreamerPeer) Subscribe(s string, t []byte, from, to uint64, priority uint8, live bool) error {
-	f, err := self.streamer.GetIncomingStreamer(s)
+func (self *Streamer) Subscribe(peerId discover.NodeID, s string, t []byte, from, to uint64, priority uint8, live bool) error {
+	f, err := self.GetIncomingStreamer(s)
 	if err != nil {
 		return err
 	}
-	is, err := f(self, t)
+
+	self.peersLock.RLock()
+	peer := self.peers[peerId]
+	self.peersLock.RUnlock()
+	if peer == nil {
+		return fmt.Errorf("peer not found %v", peerId)
+	}
+
+	is, err := f(peer, t)
 	if err != nil {
 		return err
 	}
-	err = self.setIncomingStreamer(s, is, priority, live)
+	err = peer.setIncomingStreamer(s, is, priority, live)
 	if err != nil {
 		return err
 	}
@@ -437,7 +449,7 @@ func (self *StreamerPeer) Subscribe(s string, t []byte, from, to uint64, priorit
 		To:       to,
 		Priority: priority,
 	}
-	self.SendPriority(msg, priority)
+	peer.SendPriority(msg, priority)
 	return nil
 }
 
@@ -617,7 +629,18 @@ func (s *Streamer) Run(p *bzzPeer) error {
 	// 	Priority: uint8(Top),
 	// })
 	// subscribe to request handling ; only with non-light nodes
-	sp.Subscribe(retrieveRequestStream, nil, 0, 0, Top, true)
+
+	s.peersLock.Lock()
+	s.peers[sp.ID()] = sp
+	s.peersLock.Unlock()
+
+	defer func() {
+		s.peersLock.Lock()
+		delete(s.peers, sp.ID())
+		s.peersLock.Unlock()
+	}()
+
+	s.Subscribe(sp.ID(), retrieveRequestStream, nil, 0, 0, Top, true)
 	defer close(sp.quit)
 	return sp.Run(sp.HandleMsg)
 }
