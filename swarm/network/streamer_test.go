@@ -92,11 +92,23 @@ type testIncomingStreamer struct {
 	t []byte
 }
 
+type testOutgoingStreamer struct {
+	t []byte
+}
+
 func (self *testIncomingStreamer) NeedData([]byte) func() {
 	return nil
 }
 
 func (self *testIncomingStreamer) BatchDone(string, uint64, []byte, []byte) func() (*TakeoverProof, error) {
+	return nil
+}
+
+func (self *testOutgoingStreamer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
+	return make([]byte, HashSize), from + 1, to + 1, nil, nil
+}
+
+func (self *testOutgoingStreamer) GetData([]byte) []byte {
 	return nil
 }
 
@@ -119,9 +131,87 @@ func TestStreamerRegisterIncoming(t *testing.T) {
 		t.Fatal("timeout: peer is not created")
 	}
 
-	err = streamer.Subscribe(tester.IDs[0], "foo", nil, 0, 0, Top, true)
+	peerId := tester.IDs[0]
+
+	err = streamer.Subscribe(peerId, "foo", []byte{}, 5, 8, Top, true)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	err = tester.TestExchanges(p2ptest.Exchange{
+		Label: "Subscribe message",
+		Expects: []p2ptest.Expect{
+			p2ptest.Expect{
+				Code: 4,
+				Msg: &SubscribeMsg{
+					Stream:   "foo",
+					Key:      []byte{},
+					From:     5,
+					To:       8,
+					Priority: Top,
+				},
+				Peer: peerId,
+			},
+		},
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStreamerRegisterOutgoing(t *testing.T) {
+	// TODO: we only need streamer
+	tester, streamer, teardown, err := newStreamerTester(t)
+	defer teardown()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	streamer.RegisterOutgoingStreamer("foo", func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
+		return &testOutgoingStreamer{
+			t: t,
+		}, nil
+	})
+
+	err = waitForPeers(streamer, 1*time.Second)
+	if err != nil {
+		t.Fatal("timeout: peer is not created")
+	}
+
+	peerId := tester.IDs[0]
+
+	err = tester.TestExchanges(p2ptest.Exchange{
+		Label: "Subscribe message",
+		Triggers: []p2ptest.Trigger{
+			p2ptest.Trigger{
+				Code: 4,
+				Msg: &SubscribeMsg{
+					Stream:   "foo",
+					Key:      []byte{},
+					From:     5,
+					To:       8,
+					Priority: Top,
+				},
+				Peer: peerId,
+			},
+		},
+		Expects: []p2ptest.Expect{
+			p2ptest.Expect{
+				Code: 1,
+				Msg: &OfferedHashesMsg{
+					HandoverProof: nil,
+					Hashes:        make([]byte, HashSize),
+					From:          6,
+					To:            9,
+				},
+				Peer: peerId,
+			},
+		},
+	})
+
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
