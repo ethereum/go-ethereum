@@ -273,8 +273,8 @@ func (self *StreamerPeer) handleRetrieveRequestMsg(req *RetrieveRequestMsg) erro
 	streamer := s.OutgoingStreamer.(*RetrieveRequestStreamer)
 	if chunk.ReqC != nil {
 		if created {
-			if err := self.streamer.Retrieve(chunk); err != nil {
-				return err
+			if err := self.streamer.Retrieve(chunk, self.ID()); err != nil {
+				return nil
 			}
 		}
 		go func() {
@@ -299,16 +299,27 @@ func (self *StreamerPeer) handleRetrieveRequestMsg(req *RetrieveRequestMsg) erro
 }
 
 // Retrieve sends a chunk retrieve request to
-func (self *Streamer) Retrieve(chunk *storage.Chunk) error {
+func (self *Streamer) Retrieve(chunk *storage.Chunk, peersToSkip ...discover.NodeID) error {
+	var success bool
 	self.overlay.EachConn(chunk.Key[:], 255, func(p OverlayConn, po int, nn bool) bool {
-		sp := p.(*StreamerPeer)
+		spId := p.(Peer).ID()
+		for _, p := range peersToSkip {
+			if p == spId {
+				return true
+			}
+		}
+		sp := self.getPeer(spId)
 		// TODO: skip light nodes that do not accept retrieve requests
 		sp.SendPriority(&RetrieveRequestMsg{
 			Key: chunk.Key[:],
 		}, Top)
+		success = true
 		return false
 	})
-	return nil
+	if success {
+		return nil
+	}
+	return errors.New("no peer found")
 }
 
 func (self *Streamer) getPeer(peerId discover.NodeID) *StreamerPeer {
@@ -391,6 +402,7 @@ func (self *StreamerPeer) setOutgoingStreamer(s string, o OutgoingStreamer, prio
 	os := &outgoingStreamer{
 		OutgoingStreamer: o,
 		priority:         priority,
+		stream:           s,
 	}
 	self.outgoing[s] = os
 	return os, nil
