@@ -395,23 +395,34 @@ type Config struct {
 type remoteOpType uint
 
 const (
-	getWork remoteOpType = iota
-	submitWork
+	opGetWork remoteOpType = iota
+	opSubmitWork
+	opHashrate
 )
 
-// sealResult wraps the pow solution parameters for the specified block.
-type sealResult struct {
+// mineResult wraps the pow solution parameters for the specified block.
+type mineResult struct {
 	nonce     types.BlockNonce
 	mixDigest common.Hash
 	hash      common.Hash
 }
 
+type hashrate struct {
+	id   common.Hash
+	ping time.Time
+	rate uint64
+}
+
+type hashrateOp func(map[common.Hash]hashrate)
+
 // remoteOp wraps a mining operation sent by remote miner.
 type remoteOp struct {
 	typ    remoteOpType
-	result sealResult
+	result mineResult
 	errCh  chan error
 	workCh chan [3]string
+
+	rateOp hashrateOp
 }
 
 // Ethash is a consensus engine based on proof-of-work implementing the ethash
@@ -434,7 +445,6 @@ type Ethash struct {
 	workCh   chan *types.Block // Notification channel to push new work to remote sealer
 	resultCh chan *types.Block // Channel used by mining threads to return result
 	remoteOp chan *remoteOp    // Channel used to receive all mining operations from api
-
 	// The fields below are hooks for testing
 	shared    *Ethash       // Shared PoW verifier to avoid cache regeneration
 	fakeFail  uint64        // Block number which fails PoW check even in fake mode
@@ -474,7 +484,20 @@ func New(config Config) *Ethash {
 // NewTester creates a small sized ethash PoW scheme useful only for testing
 // purposes.
 func NewTester() *Ethash {
-	return New(Config{CachesInMem: 1, PowMode: ModeTest})
+	ethash := &Ethash{
+		config: Config{PowMode: ModeTest},
+		caches:   newlru("cache", 1, newCache),
+		datasets: newlru("dataset", 1, newDataset),
+		update:   make(chan struct{}),
+		hashrate: metrics.NewMeter(),
+		exitCh:   make(chan struct{}),
+		workCh:   make(chan *types.Block),
+		resultCh: make(chan *types.Block),
+		remoteOp: make(chan *remoteOp),
+	}
+	go ethash.remote(ethash.resultCh)
+	runtime.SetFinalizer(ethash, (*Ethash).close)
+	return ethash
 }
 
 // NewFaker creates a ethash consensus engine with a fake PoW scheme that accepts
@@ -606,14 +629,36 @@ func (ethash *Ethash) SetThreads(threads int) {
 
 // Hashrate implements PoW, returning the measured rate of the search invocations
 // per second over the last minute.
+// Note the returned hashrate includes local hashrate, but also includes the total
+// hashrate of all remote miner.
 func (ethash *Ethash) Hashrate() float64 {
-	return ethash.hashrate.Rate1()
+	var (
+		total uint64
+		errCh = make(chan error)
+	)
+	// getHashrate gathers all remote miner's hashrate.
+	getHashrate := func(hashrate map[common.Hash]hashrate) {
+		for _, rate := range hashrate {
+			// this could overflow
+			total += rate.rate
+		}
+		return
+	}
+	op := &remoteOp{
+		typ:    opHashrate,
+		rateOp: getHashrate,
+		errCh:  errCh,
+	}
+	ethash.remoteOp <- op
+	<-errCh
+
+	return ethash.hashrate.Rate1() + float64(total)
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC APIs.
 func (ethash *Ethash) APIs(chain consensus.ChainReader) []rpc.API {
 	return []rpc.API{{
-		Namespace: "ethash",
+		Namespace: "eth",
 		Version:   "1.0",
 		Service:   &API{ethash},
 		Public:    true,

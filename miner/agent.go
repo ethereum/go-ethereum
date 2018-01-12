@@ -18,7 +18,6 @@ package miner
 
 import (
 	"sync"
-
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/consensus"
@@ -109,11 +108,4 @@ func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
 		}
 		self.returnCh <- nil
 	}
-}
-
-func (self *CpuAgent) GetHashRate() int64 {
-	if pow, ok := self.engine.(consensus.PoW); ok {
-		return int64(pow.Hashrate())
-	}
-	return 0
 }

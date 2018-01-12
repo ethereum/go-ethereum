@@ -24,6 +24,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -69,11 +71,55 @@ func verifyTest(wg *sync.WaitGroup, e *Ethash, workerIndex, epochs int) {
 	const wiggle = 4 * epochLength
 	r := rand.New(rand.NewSource(int64(workerIndex)))
 	for epoch := 0; epoch < epochs; epoch++ {
-		block := int64(epoch)*epochLength - wiggle/2 + r.Int63n(wiggle)
+		block := int64(epoch) * epochLength - wiggle / 2 + r.Int63n(wiggle)
 		if block < 0 {
 			block = 0
 		}
 		head := &types.Header{Number: big.NewInt(block), Difficulty: big.NewInt(100)}
 		e.VerifySeal(nil, head)
+	}
+}
+
+func TestRemoteSealer(t *testing.T) {
+	ethash := NewTester()
+	api := &API{ethash}
+	if _, err := api.GetWork(); err != errNoMineWork {
+		t.Error("expected to return an error indicate there is no mining work")
+	}
+
+	head := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(100)}
+	block := types.NewBlockWithHeader(head)
+	// Push new work
+	ethash.Seal(nil, block, nil)
+
+	var (
+		work [3]string
+		err  error
+	)
+	if work, err = api.GetWork(); err != nil || work[0] != block.HashNoNonce().Hex() {
+		t.Error("expected to return a mining work has same hash")
+	}
+
+	if res := api.SubmitWork(types.BlockNonce{}, block.HashNoNonce(), common.Hash{}); res {
+		t.Error("expected to return false when submit a fake solution")
+	}
+}
+
+func TestHashRate(t *testing.T) {
+	var (
+		ethash   = NewTester()
+		api      = &API{ethash}
+		hashrate = []hexutil.Uint64{100, 200, 300}
+		expect   uint64
+		ids      = []common.Hash{common.HexToHash("a"), common.HexToHash("b"), common.HexToHash("c")}
+	)
+	for i := 0; i < len(hashrate); i += 1 {
+		if res := api.SubmitHashRate(hashrate[i], ids[i]); !res {
+			t.Error("remote miner submit hashrate failed")
+		}
+		expect += uint64(hashrate[i])
+	}
+	if tot := ethash.Hashrate(); tot != float64(expect) {
+		t.Error("expect total hashrate should be same")
 	}
 }

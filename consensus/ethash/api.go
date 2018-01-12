@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -16,7 +16,10 @@
 package ethash
 
 import (
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -35,13 +38,12 @@ func (s *API) GetWork() ([3]string, error) {
 		errCh  = make(chan error)
 	)
 	op := &remoteOp{
-		typ:    getWork,
+		typ:    opGetWork,
 		workCh: workCh,
 		errCh:  errCh,
 	}
 	s.ethash.remoteOp <- op
-	err := <-errCh
-	if err == nil {
+	if err := <-errCh; err == nil {
 		return <-workCh, nil
 	} else {
 		return [3]string{}, err
@@ -52,15 +54,14 @@ func (s *API) GetWork() ([3]string, error) {
 // accepted. Note, this is not an indication if the provided work was valid!
 func (s *API) SubmitWork(nonce types.BlockNonce, solution, digest common.Hash) bool {
 	var errCh = make(chan error)
-	result := sealResult{
-		nonce:     nonce,
-		mixDigest: digest,
-		hash:      solution,
-	}
 	op := &remoteOp{
-		typ:    submitWork,
-		result: result,
-		errCh:  errCh,
+		typ: opSubmitWork,
+		result: mineResult{
+			nonce:     nonce,
+			mixDigest: digest,
+			hash:      solution,
+		},
+		errCh: errCh,
 	}
 	s.ethash.remoteOp <- op
 	if err := <-errCh; err == nil {
@@ -68,4 +69,22 @@ func (s *API) SubmitWork(nonce types.BlockNonce, solution, digest common.Hash) b
 	} else {
 		return false
 	}
+}
+
+// SubmitHashrate can be used for remote miners to submit their hash rate. This enables the node to report the combined
+// hash rate of all miners which submit work through this node. It accepts the miner hash rate and an identifier which
+// must be unique between nodes.
+func (s *API) SubmitHashRate(r hexutil.Uint64, id common.Hash) bool {
+	submit := func(rate map[common.Hash]hashrate) {
+		rate[id] = hashrate{rate: uint64(r), ping: time.Now()}
+	}
+	errCh := make(chan error)
+	op := &remoteOp{
+		typ:    opHashrate,
+		rateOp: submit,
+		errCh:  errCh,
+	}
+	s.ethash.remoteOp <- op
+	<-errCh
+	return true
 }

@@ -18,13 +18,14 @@ package ethash
 
 import (
 	crand "crypto/rand"
+	"errors"
 	"math"
 	"math/big"
 	"math/rand"
 	"runtime"
 	"sync"
+	"time"
 
-	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -32,9 +33,9 @@ import (
 )
 
 var (
-	errNoSealWork         = errors.New("No work available yet, don't panic.")
-	errInvalidSealResult  = errors.New("Invalid proof-of-work solution.")
-	errNonDefinedRemoteOp = errors.New("Non-defined remote mining operation.")
+	errNoMineWork        = errors.New("No mining work available yet, don't panic.")
+	errInvalidSealResult = errors.New("Invalid or stale proof-of-work solution.")
+	errUndefinedRemoteOp = errors.New("Undefined remote mining operation.")
 )
 
 // Seal implements consensus.Engine, attempting to find a nonce that satisfies
@@ -70,15 +71,6 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 	}
 	if threads < 0 {
 		threads = 0 // Allows disabling local mining without extra logic around local/remote
-	}
-
-	// Clear up result channel before new round mining start
-	for empty := false; !empty; {
-		select {
-		case <-ethash.resultCh:
-		default:
-			empty = true
-		}
 	}
 
 	// Push new work to remote sealer
@@ -175,17 +167,18 @@ search:
 func (ethash *Ethash) remote(resultCh chan *types.Block) {
 	var (
 		works       = make(map[common.Hash]*types.Block)
+		hashrate    = make(map[common.Hash]hashrate)
 		currentWork *types.Block
 	)
 
-	// makeWork returns a work package for external sealer. The work package consists of 3 strings
+	// getWork returns a work package for external miner. The work package consists of 3 strings
 	// result[0], 32 bytes hex encoded current block header pow-hash
 	// result[1], 32 bytes hex encoded seed hash used for DAG
 	// result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
-	makeWork := func() ([3]string, error) {
+	getWork := func() ([3]string, error) {
 		var res [3]string
 		if currentWork == nil {
-			return res, errNoSealWork
+			return res, errNoMineWork
 		}
 		res[0] = currentWork.HashNoNonce().Hex()
 		res[1] = common.BytesToHash(SeedHash(currentWork.NumberU64())).Hex()
@@ -199,10 +192,10 @@ func (ethash *Ethash) remote(resultCh chan *types.Block) {
 		return res, nil
 	}
 
-	// verifyWork verifies the submitted pow solution, returning
+	// submitWork verifies the submitted pow solution, returning
 	// whether the solution was accepted or not (not can be both a bad pow as well as
 	// any other error, like no work pending).
-	verifyWork := func(result sealResult) bool {
+	submitWork := func(result mineResult) bool {
 		// Make sure the work submitted is present
 		block := works[result.hash]
 		if block == nil {
@@ -220,42 +213,65 @@ func (ethash *Ethash) remote(resultCh chan *types.Block) {
 		}
 
 		// Solutions seems to be valid, return to the miner and notify acceptance
-		resultCh <- block.WithSeal(header)
-		delete(works, result.hash)
-		return true
+		select {
+		case resultCh <- block.WithSeal(header):
+			delete(works, result.hash)
+			return true
+		default:
+			log.Info("Work submitted is stale", "hash", result.hash)
+			return false
+		}
 	}
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
 
 running:
 	for {
 		select {
 		case block := <-ethash.workCh:
-			if block.ParentHash() != currentWork.ParentHash() {
+			if currentWork != nil && block.ParentHash() != currentWork.ParentHash() {
 				// Start new round mining, throw out all previous work.
 				works = make(map[common.Hash]*types.Block)
 			}
 			// Update current work with new received block
+			// Note same work can be past twice, happens when changing CPU threads.
 			currentWork = block
 
 		case op := <-ethash.remoteOp:
 			switch op.typ {
-			case getWork:
-				// Push current mining work to return channel
-				work, err := makeWork()
+			case opGetWork:
+				// Return current mining work to remote miner
+				work, err := getWork()
 				if err != nil {
 					op.errCh <- err
 				} else {
-					op.workCh <- work
 					close(op.errCh)
+					op.workCh <- work
 				}
-			case submitWork:
+			case opSubmitWork:
 				// Verify submitted PoW solution based on maintained mining blocks
-				if verifyWork(op.result) {
+				if submitWork(op.result) {
 					close(op.errCh)
 				} else {
 					op.errCh <- errInvalidSealResult
 				}
+			case opHashrate:
+				// This case is used by remote miner hashrate operation
+				if op.rateOp != nil {
+					op.rateOp(hashrate)
+					close(op.errCh)
+				}
 			default:
-				op.errCh <- errNonDefinedRemoteOp
+				op.errCh <- errUndefinedRemoteOp
+			}
+
+		case <-ticker.C:
+			// Clear stale submited hashrate
+			for id, rate := range hashrate {
+				if time.Since(rate.ping) > 10*time.Second {
+					delete(hashrate, id)
+				}
 			}
 
 		case <-ethash.exitCh:
