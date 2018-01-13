@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	sha3 "github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
@@ -68,7 +68,6 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Streamer, *stora
 		to.On(bzzPeer)
 		return streamer.Run(bzzPeer)
 	}
-
 	protocolTester := p2ptest.NewProtocolTester(t, NewNodeIDFromAddr(addr), 1, run)
 	return protocolTester, streamer, localStore, teardown, nil
 }
@@ -226,6 +225,7 @@ func TestStreamerUpstreamSubscribeMsgExchange(t *testing.T) {
 			p2ptest.Expect{
 				Code: 1,
 				Msg: &OfferedHashesMsg{
+					Stream:        "foo",
 					HandoverProof: nil,
 					Hashes:        make([]byte, HashSize),
 					From:          6,
@@ -380,181 +380,6 @@ func TestRetrieveRequest(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
-	}
-}
-
-func TestUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
-	// TODO: we only need streamer
-	tester, streamer, _, teardown, err := newStreamerTester(t)
-	defer teardown()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// streamer.RegisterOutgoingStreamer("foo", func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
-	// 	return &testOutgoingStreamer{
-	// 		t: t,
-	// 	}, nil
-	// })
-
-	err = waitForPeers(streamer, 1*time.Second)
-	if err != nil {
-		t.Fatal("timeout: peer is not created")
-	}
-
-	peerId := tester.IDs[0]
-
-	err = tester.TestExchanges(p2ptest.Exchange{
-		Label: "SubscribeMsg",
-		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
-				Code: 4,
-				Msg: &SubscribeMsg{
-					Stream:   retrieveRequestStream,
-					Key:      nil,
-					From:     0,
-					To:       0,
-					Priority: Top,
-				},
-				Peer: peerId,
-			},
-		},
-	})
-
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-
-	chunk := storage.NewChunk(storage.Key(hash0[:]), nil)
-
-	peer := streamer.getPeer(peerId)
-
-	peer.handleSubscribeMsg(&SubscribeMsg{
-		Stream:   retrieveRequestStream,
-		Key:      nil,
-		From:     0,
-		To:       0,
-		Priority: Top,
-	})
-
-	err = tester.TestExchanges(p2ptest.Exchange{
-		Label: "RetrieveRequestMsg",
-		Triggers: []p2ptest.Trigger{
-			p2ptest.Trigger{
-				Code: 5,
-				Msg: &RetrieveRequestMsg{
-					Key: chunk.Key[:],
-				},
-				Peer: peerId,
-			},
-		},
-		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
-				Code: 1,
-				Msg: &OfferedHashesMsg{
-					HandoverProof: nil,
-					Hashes:        nil,
-					From:          0,
-					To:            0,
-				},
-				Peer: peerId,
-			},
-		},
-	})
-
-	expectedError := "exchange 0: 'RetrieveRequestMsg' timed out"
-	if err == nil || err.Error() != expectedError {
-		t.Fatalf("Expected error %v, got %v", expectedError, err)
-	}
-}
-
-func TestUpstreamRetrieveRequestMsgExchange(t *testing.T) {
-	// TODO: we only need streamer
-	tester, streamer, localStore, teardown, err := newStreamerTester(t)
-	defer teardown()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// streamer.RegisterOutgoingStreamer("foo", func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
-	// 	return &testOutgoingStreamer{
-	// 		t: t,
-	// 	}, nil
-	// })
-
-	err = waitForPeers(streamer, 1*time.Second)
-	if err != nil {
-		t.Fatal("timeout: peer is not created")
-	}
-
-	peerId := tester.IDs[0]
-
-	err = tester.TestExchanges(p2ptest.Exchange{
-		Label: "SubscribeMsg",
-		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
-				Code: 4,
-				Msg: &SubscribeMsg{
-					Stream:   retrieveRequestStream,
-					Key:      nil,
-					From:     0,
-					To:       0,
-					Priority: Top,
-				},
-				Peer: peerId,
-			},
-		},
-	})
-
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-
-	chunk := storage.NewChunk(storage.Key(hash0[:]), nil)
-
-	peer := streamer.getPeer(peerId)
-
-	peer.handleSubscribeMsg(&SubscribeMsg{
-		Stream:   retrieveRequestStream,
-		Key:      nil,
-		From:     0,
-		To:       0,
-		Priority: Top,
-	})
-
-	chunk.SData = hash0[:]
-	localStore.Put(chunk)
-
-	err = tester.TestExchanges(p2ptest.Exchange{
-		Label: "RetrieveRequestMsg",
-		Triggers: []p2ptest.Trigger{
-			p2ptest.Trigger{
-				Code: 5,
-				Msg: &RetrieveRequestMsg{
-					Key: chunk.Key[:],
-				},
-				Peer: peerId,
-			},
-		},
-		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
-				Code: 1,
-				Msg: &OfferedHashesMsg{
-					HandoverProof: nil,
-					Hashes:        chunk.Key[:],
-					From:          0,
-					// TODO: why is this 32???
-					To:     32,
-					Key:    []byte{},
-					Stream: retrieveRequestStream,
-				},
-				Peer: peerId,
-			},
-		},
-	})
-
-	if err != nil {
-		t.Fatal(err)
 	}
 }
 

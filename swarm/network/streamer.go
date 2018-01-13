@@ -667,18 +667,10 @@ var StreamerSpec = &protocols.Spec{
 func (s *Streamer) Run(p *bzzPeer) error {
 	sp := NewStreamerPeer(p, s)
 	// load saved intervals
-	// autosubscribe to request handler to serve request only for non-light nodes
-	// sp.handleSubscribeMsg(&SubscribeMsg{
-	// 	Stream:   retrieveRequeststring,
-	// 	Priority: uint8(Top),
-	// })
-	// subscribe to request handling ; only with non-light nodes
 
 	s.setPeer(sp)
 
 	defer s.deletePeer(sp)
-
-	s.Subscribe(sp.ID(), retrieveRequestStream, nil, 0, 0, Top, true)
 	defer close(sp.quit)
 	return sp.Run(sp.HandleMsg)
 }
