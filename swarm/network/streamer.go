@@ -21,9 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	bv "github.com/ethereum/go-ethereum/swarm/network/bitvector"
@@ -91,18 +89,6 @@ type OfferedHashesMsg struct {
 	*HandoverProof `rlp:"nil"` // HandoverProof
 }
 
-/*
- store requests are put in netstore so they are stored and then
- forwarded to the peers in their kademlia proximity bin by the syncer
-*/
-type ChunkDeliveryMsg struct {
-	Key   storage.Key
-	SData []byte // the stored chunk Data (incl size)
-	// optional
-	Id   uint64 // request ID. if delivery, the ID is retrieve request ID
-	from Peer   // [not serialised] protocol registers the requester
-}
-
 // String pretty prints OfferedHashesMsg
 func (self OfferedHashesMsg) String() string {
 	return fmt.Sprintf("Stream '%v' [%v-%v] (%v)", self.Stream, self.From, self.To, len(self.Hashes)/HashSize)
@@ -129,28 +115,24 @@ type Streamer struct {
 	peersLock    sync.RWMutex
 	outgoing     map[string]func(*StreamerPeer, []byte) (OutgoingStreamer, error)
 	incoming     map[string]func(*StreamerPeer, []byte) (IncomingStreamer, error)
-
-	dbAccess *DbAccess
-	overlay  Overlay
-	receiveC chan *ChunkDeliveryMsg
-	peers    map[discover.NodeID]*StreamerPeer
+	peers        map[discover.NodeID]*StreamerPeer
+	delivery     *Delivery
 }
 
 // NewStreamer is Streamer constructor
-func NewStreamer(overlay Overlay, dbAccess *DbAccess) *Streamer {
+func NewStreamer(delivery *Delivery) *Streamer {
 	streamer := &Streamer{
 		outgoing: make(map[string]func(*StreamerPeer, []byte) (OutgoingStreamer, error)),
 		incoming: make(map[string]func(*StreamerPeer, []byte) (IncomingStreamer, error)),
-		dbAccess: dbAccess,
-		overlay:  overlay,
-		receiveC: make(chan *ChunkDeliveryMsg, 10),
 		peers:    make(map[discover.NodeID]*StreamerPeer),
+		delivery: delivery,
 	}
+	delivery.getPeer = streamer.getPeer
 	streamer.RegisterOutgoingStreamer(retrieveRequestStream, func(_ *StreamerPeer, t []byte) (OutgoingStreamer, error) {
-		return NewRetrieveRequestStreamer(dbAccess), nil
+		return NewRetrieveRequestStreamer(delivery.dbAccess), nil
 	})
 	streamer.RegisterIncomingStreamer(retrieveRequestStream, func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
-		return NewIncomingSwarmSyncer(p, dbAccess, nil)
+		return NewIncomingSwarmSyncer(p, delivery.dbAccess, nil)
 	})
 	return streamer
 }
@@ -215,7 +197,6 @@ type OutgoingStreamer interface {
 type incomingStreamer struct {
 	IncomingStreamer
 	priority  uint8
-	intervals *Intervals
 	sessionAt uint64
 	live      bool
 	quit      chan struct{}
@@ -260,82 +241,13 @@ func NewStreamerPeer(p Peer, streamer *Streamer) *StreamerPeer {
 	return self
 }
 
-// RetrieveRequestMsg is the protocol msg for chunk retrieve requests
-type RetrieveRequestMsg struct {
-	Key storage.Key
-}
-
-func (self *StreamerPeer) handleRetrieveRequestMsg(req *RetrieveRequestMsg) error {
-	chunk, created := self.streamer.dbAccess.getOrCreateRequest(req.Key)
-	s, err := self.getOutgoingStreamer(retrieveRequestStream)
-	if err != nil {
-		return err
-	}
-	streamer := s.OutgoingStreamer.(*RetrieveRequestStreamer)
-	if chunk.ReqC != nil {
-		if created {
-			if err := self.streamer.Retrieve(chunk, self.ID()); err != nil {
-				return nil
-			}
-		}
-		go func() {
-			t := time.NewTicker(3 * time.Minute)
-			defer t.Stop()
-
-			select {
-			case <-chunk.ReqC:
-			case <-self.quit:
-				return
-			case <-t.C:
-				return
-			}
-
-			streamer.deliveryC <- chunk
-		}()
-		return nil
-	}
-	// TODO: call the retrieve function of the outgoing syncer
-	streamer.deliveryC <- chunk
-	return nil
-}
-
-// Retrieve sends a chunk retrieve request to
-func (self *Streamer) Retrieve(chunk *storage.Chunk, peersToSkip ...discover.NodeID) error {
-	var success bool
-	self.overlay.EachConn(chunk.Key[:], 255, func(p OverlayConn, po int, nn bool) bool {
-		spId := p.(Peer).ID()
-		for _, p := range peersToSkip {
-			if p == spId {
-				return true
-			}
-		}
-		sp := self.getPeer(spId)
-		// TODO: skip light nodes that do not accept retrieve requests
-		sp.SendPriority(&RetrieveRequestMsg{
-			Key: chunk.Key[:],
-		}, Top)
-		success = true
-		return false
-	})
-	if success {
-		return nil
-	}
-	return errors.New("no peer found")
-}
-
 func (self *Streamer) getPeer(peerId discover.NodeID) *StreamerPeer {
-	if self.peers == nil {
-		return nil
-	}
 	self.peersLock.RLock()
 	defer self.peersLock.RUnlock()
 	return self.peers[peerId]
 }
 
 func (self *Streamer) setPeer(peer *StreamerPeer) {
-	if self.peers == nil {
-		self.peers = make(map[discover.NodeID]*StreamerPeer)
-	}
 	self.peersLock.Lock()
 	self.peers[peer.ID()] = peer
 	self.peersLock.Unlock()
@@ -345,33 +257,6 @@ func (self *Streamer) deletePeer(peer *StreamerPeer) {
 	self.peersLock.Lock()
 	delete(self.peers, peer.ID())
 	self.peersLock.Unlock()
-}
-
-func (self *StreamerPeer) handleChunkDeliveryMsg(req *ChunkDeliveryMsg) error {
-	chunk, err := self.streamer.dbAccess.get(req.Key)
-	if err != nil {
-		return err
-	}
-
-	self.streamer.receiveC <- req
-
-	log.Trace(fmt.Sprintf("delivery of %v from %v", chunk, self))
-	return nil
-}
-
-func (self *Streamer) processReceivedChunks() {
-	for {
-		select {
-		case req := <-self.receiveC:
-			chunk, err := self.dbAccess.get(req.Key)
-			if err != nil {
-				continue
-			}
-			chunk.SData = req.SData
-			self.dbAccess.put(chunk)
-			close(chunk.ReqC)
-		}
-	}
 }
 
 func (self *StreamerPeer) getOutgoingStreamer(s string) (*outgoingStreamer, error) {
@@ -660,6 +545,7 @@ var StreamerSpec = &protocols.Spec{
 		TakeoverProofMsg{},
 		SubscribeMsg{},
 		RetrieveRequestMsg{},
+		ChunkDeliveryMsg{},
 	},
 }
 
@@ -692,10 +578,10 @@ func (self *StreamerPeer) HandleMsg(msg interface{}) error {
 		return self.handleWantedHashesMsg(msg)
 
 	case *ChunkDeliveryMsg:
-		return self.handleChunkDeliveryMsg(msg)
+		return self.streamer.delivery.handleChunkDeliveryMsg(msg)
 
 	case *RetrieveRequestMsg:
-		return self.handleRetrieveRequestMsg(msg)
+		return self.streamer.delivery.handleRetrieveRequestMsg(self, msg)
 
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)

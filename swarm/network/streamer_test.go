@@ -57,8 +57,8 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Streamer, *stora
 	}
 
 	dbAccess := NewDbAccess(localStore)
-	streamer := NewStreamer(to, dbAccess)
-
+	delivery := NewDelivery(to, dbAccess)
+	streamer := NewStreamer(delivery)
 	run := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		bzzPeer := &bzzPeer{
 			Peer:      protocols.NewPeer(p, rw, StreamerSpec),
@@ -69,6 +69,12 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Streamer, *stora
 		return streamer.Run(bzzPeer)
 	}
 	protocolTester := p2ptest.NewProtocolTester(t, NewNodeIDFromAddr(addr), 1, run)
+
+	err = waitForPeers(streamer, 1*time.Second)
+	if err != nil {
+		return nil, nil, nil, nil, errors.New("timeout: peer is not created")
+	}
+
 	return protocolTester, streamer, localStore, teardown, nil
 }
 
@@ -151,14 +157,9 @@ func TestStreamerDownstreamSubscribeMsgExchange(t *testing.T) {
 		}, nil
 	})
 
-	err = waitForPeers(streamer, 1*time.Second)
-	if err != nil {
-		t.Fatal("timeout: peer is not created")
-	}
+	peerID := tester.IDs[0]
 
-	peerId := tester.IDs[0]
-
-	err = streamer.Subscribe(peerId, "foo", []byte{}, 5, 8, Top, true)
+	err = streamer.Subscribe(peerID, "foo", []byte{}, 5, 8, Top, true)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -175,7 +176,7 @@ func TestStreamerDownstreamSubscribeMsgExchange(t *testing.T) {
 					To:       8,
 					Priority: Top,
 				},
-				Peer: peerId,
+				Peer: peerID,
 			},
 		},
 	})
@@ -199,12 +200,7 @@ func TestStreamerUpstreamSubscribeMsgExchange(t *testing.T) {
 		}, nil
 	})
 
-	err = waitForPeers(streamer, 1*time.Second)
-	if err != nil {
-		t.Fatal("timeout: peer is not created")
-	}
-
-	peerId := tester.IDs[0]
+	peerID := tester.IDs[0]
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
@@ -218,7 +214,7 @@ func TestStreamerUpstreamSubscribeMsgExchange(t *testing.T) {
 					To:       8,
 					Priority: Top,
 				},
-				Peer: peerId,
+				Peer: peerID,
 			},
 		},
 		Expects: []p2ptest.Expect{
@@ -231,7 +227,7 @@ func TestStreamerUpstreamSubscribeMsgExchange(t *testing.T) {
 					From:          6,
 					To:            9,
 				},
-				Peer: peerId,
+				Peer: peerID,
 			},
 		},
 	})
@@ -256,14 +252,9 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 		}, nil
 	})
 
-	err = waitForPeers(streamer, 1*time.Second)
-	if err != nil {
-		t.Fatal("timeout: peer is not created")
-	}
+	peerID := tester.IDs[0]
 
-	peerId := tester.IDs[0]
-
-	err = streamer.Subscribe(peerId, "foo", []byte{}, 5, 8, Top, true)
+	err = streamer.Subscribe(peerID, "foo", []byte{}, 5, 8, Top, true)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -280,7 +271,7 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 					To:       8,
 					Priority: Top,
 				},
-				Peer: peerId,
+				Peer: peerID,
 			},
 		},
 	},
@@ -298,7 +289,7 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 						To:     8,
 						Stream: "foo",
 					},
-					Peer: peerId,
+					Peer: peerID,
 				},
 			},
 			Expects: []p2ptest.Expect{
@@ -310,7 +301,7 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 						From:   8,
 						To:     0,
 					},
-					Peer: peerId,
+					Peer: peerID,
 				},
 			},
 		})
@@ -344,43 +335,6 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 		t.Fatal("timeout waiting batchdone call")
 	}
 
-}
-
-func TestRetrieveRequest(t *testing.T) {
-	// TODO: we only need streamer
-	tester, streamer, _, teardown, err := newStreamerTester(t)
-	defer teardown()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = waitForPeers(streamer, 1*time.Second)
-	if err != nil {
-		t.Fatal("timeout: peer is not created")
-	}
-
-	peerId := tester.IDs[0]
-
-	chunk := storage.NewChunk(storage.Key(hash0[:]), nil)
-
-	streamer.Retrieve(chunk)
-
-	err = tester.TestExchanges(p2ptest.Exchange{
-		Label: "RetrieveRequestMsg",
-		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
-				Code: 5,
-				Msg: &RetrieveRequestMsg{
-					Key: chunk.Key[:],
-				},
-				Peer: peerId,
-			},
-		},
-	})
-
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
 }
 
 func waitForPeers(streamer *Streamer, timeout time.Duration) error {

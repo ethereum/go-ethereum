@@ -16,54 +16,48 @@
 
 package network
 
-import "github.com/ethereum/go-ethereum/swarm/storage"
+import (
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/swarm/storage"
+)
 
 const retrieveRequestStream = "RETRIEVE_REQUEST"
 
-// Intervals is a stream specific history of downloaded intervals
-// for historical streams
-type Intervals struct {
-	streamer *Streamer
-	key      string
+type Delivery struct {
+	dbAccess *DbAccess
+	overlay  Overlay
+	receiveC chan *ChunkDeliveryMsg
+	getPeer  func(discover.NodeID) *StreamerPeer
+	quit     chan struct{}
 }
 
-// func (s *Intervals) load() error {
-// 	return s.streamer.load(s.key)
-// }
-//
-// func (s *Intervals) save() error {
-// 	return s.streamer.save(s.key)
-// }
-//
-// func (s *Intervals) get() []uint64 {
-// 	return s.streamer.get(s.key)
-// }
-//
-// func (s *Intervals) set(v []uint64) {
-// 	s.streamer.set(s.key, v)
-// }
-//
-// func NewIntervals(key string, s *Streamer) *Intervals {
-// 	return &Intervals{
-// 		streamer: s,
-// 		key:      key,
-// 	}
-// }
+func NewDelivery(overlay Overlay, dbAccess *DbAccess) *Delivery {
+	return &Delivery{
+		dbAccess: dbAccess,
+		overlay:  overlay,
+		receiveC: make(chan *ChunkDeliveryMsg, 10),
+	}
+}
 
 // RetrieveRequestStreamer implements OutgoingStreamer
 type RetrieveRequestStreamer struct {
 	deliveryC  chan *storage.Chunk
 	batchC     chan []byte
-	db         *DbAccess
+	dbAccess   *DbAccess
 	currentLen uint64
 }
 
 // NewRetrieveRequestStreamer is RetrieveRequestStreamer constructor
-func NewRetrieveRequestStreamer(db *DbAccess) *RetrieveRequestStreamer {
+func NewRetrieveRequestStreamer(dbAccess *DbAccess) *RetrieveRequestStreamer {
 	s := &RetrieveRequestStreamer{
 		deliveryC: make(chan *storage.Chunk),
 		batchC:    make(chan []byte),
-		db:        db,
+		dbAccess:  dbAccess,
 	}
 	go s.processDeliveries()
 	return s
@@ -95,6 +89,108 @@ func (s *RetrieveRequestStreamer) SetNextBatch(_, _ uint64) (hashes []byte, from
 
 // GetData retrives chunk data from db store
 func (s *RetrieveRequestStreamer) GetData(key []byte) []byte {
-	chunk, _ := s.db.get(storage.Key(key))
+	chunk, _ := s.dbAccess.get(storage.Key(key))
 	return chunk.SData
+}
+
+// RetrieveRequestMsg is the protocol msg for chunk retrieve requests
+type RetrieveRequestMsg struct {
+	Key       storage.Key
+	SkipCheck bool
+}
+
+func (self *Delivery) handleRetrieveRequestMsg(sp *StreamerPeer, req *RetrieveRequestMsg) error {
+	s, err := sp.getOutgoingStreamer(retrieveRequestStream)
+	if err != nil {
+		return err
+	}
+	streamer := s.OutgoingStreamer.(*RetrieveRequestStreamer)
+	chunk, created := self.dbAccess.getOrCreateRequest(req.Key)
+	if chunk.ReqC != nil {
+		if created {
+			if err := self.RequestFromPeers(chunk.Key[:], false, sp.ID()); err != nil {
+				return nil
+			}
+		}
+		go func() {
+			t := time.NewTimer(3 * time.Minute)
+			defer t.Stop()
+
+			select {
+			case <-chunk.ReqC:
+			case <-self.quit:
+				return
+			case <-t.C:
+				return
+			}
+
+			if req.SkipCheck {
+				sp.Deliver(chunk, s.priority)
+				return
+			}
+			streamer.deliveryC <- chunk
+		}()
+		return nil
+	}
+	// TODO: call the retrieve function of the outgoing syncer
+	if req.SkipCheck {
+		sp.Deliver(chunk, s.priority)
+		return nil
+	}
+	streamer.deliveryC <- chunk
+	return nil
+}
+
+type ChunkDeliveryMsg struct {
+	Key   storage.Key
+	SData []byte // the stored chunk Data (incl size)
+}
+
+func (self *Delivery) handleChunkDeliveryMsg(req *ChunkDeliveryMsg) error {
+	chunk, err := self.dbAccess.get(req.Key)
+	if err != nil {
+		return err
+	}
+
+	self.receiveC <- req
+
+	log.Trace(fmt.Sprintf("delivery of %v from %v", chunk, self))
+	return nil
+}
+
+func (self *Delivery) processReceivedChunks() {
+	for req := range self.receiveC {
+		chunk, err := self.dbAccess.get(req.Key)
+		if err != nil {
+			continue
+		}
+		chunk.SData = req.SData
+		self.dbAccess.put(chunk)
+		close(chunk.ReqC)
+	}
+}
+
+// RequestFromPeers sends a chunk retrieve request to
+func (self *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...discover.NodeID) error {
+	var success bool
+	self.overlay.EachConn(hash, 255, func(p OverlayConn, po int, nn bool) bool {
+		spId := p.(Peer).ID()
+		for _, p := range peersToSkip {
+			if p == spId {
+				return true
+			}
+		}
+		sp := self.getPeer(spId)
+		// TODO: skip light nodes that do not accept retrieve requests
+		sp.SendPriority(&RetrieveRequestMsg{
+			Key:       hash,
+			SkipCheck: skipCheck,
+		}, Top)
+		success = true
+		return false
+	})
+	if success {
+		return nil
+	}
+	return errors.New("no peer found")
 }
