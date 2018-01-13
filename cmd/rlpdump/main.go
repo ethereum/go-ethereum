@@ -32,6 +32,7 @@ import (
 var (
 	hexMode = flag.String("hex", "", "dump given hex data")
 	noASCII = flag.Bool("noascii", false, "don't print ASCII strings readably")
+	single  = flag.Bool("single", false, "print only the first element, discard the rest")
 )
 
 func init() {
@@ -50,7 +51,7 @@ func main() {
 	var r io.Reader
 	switch {
 	case *hexMode != "":
-		data, err := hex.DecodeString(*hexMode)
+		data, err := hex.DecodeString(strings.TrimPrefix(*hexMode, "0x"))
 		if err != nil {
 			die(err)
 		}
@@ -82,6 +83,9 @@ func main() {
 			break
 		}
 		fmt.Println()
+		if *single {
+			break
+		}
 	}
 }
 

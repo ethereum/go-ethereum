@@ -17,27 +17,38 @@
 package tests
 
 import (
-	"path/filepath"
+	"math/big"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/params"
 )
 
-func TestTransactions(t *testing.T) {
-	err := RunTransactionTests(filepath.Join(transactionTestDir, "ttTransactionTest.json"), TransSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
+func TestTransaction(t *testing.T) {
+	t.Parallel()
 
-func TestWrongRLPTransactions(t *testing.T) {
-	err := RunTransactionTests(filepath.Join(transactionTestDir, "ttWrongRLPTransaction.json"), TransSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
+	txt := new(testMatcher)
+	txt.config(`^Homestead/`, params.ChainConfig{
+		HomesteadBlock: big.NewInt(0),
+	})
+	txt.config(`^EIP155/`, params.ChainConfig{
+		HomesteadBlock: big.NewInt(0),
+		EIP150Block:    big.NewInt(0),
+		EIP155Block:    big.NewInt(0),
+		EIP158Block:    big.NewInt(0),
+		ChainId:        big.NewInt(1),
+	})
+	txt.config(`^Byzantium/`, params.ChainConfig{
+		HomesteadBlock: big.NewInt(0),
+		EIP150Block:    big.NewInt(0),
+		EIP155Block:    big.NewInt(0),
+		EIP158Block:    big.NewInt(0),
+		ByzantiumBlock: big.NewInt(0),
+	})
 
-func Test10MBtx(t *testing.T) {
-	err := RunTransactionTests(filepath.Join(transactionTestDir, "tt10mbDataField.json"), TransSkipTests)
-	if err != nil {
-		t.Fatal(err)
-	}
+	txt.walk(t, transactionTestDir, func(t *testing.T, name string, test *TransactionTest) {
+		cfg := txt.findConfig(name)
+		if err := txt.checkFailure(t, name, test.Run(cfg)); err != nil {
+			t.Error(err)
+		}
+	})
 }

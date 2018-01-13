@@ -1,0 +1,34 @@
+os: Visual Studio 2015
+
+clone_folder: C:\gopath\src\gopkg.in/olebedev/go-duktape.v3
+clone_depth: 5
+version: "{branch}.{build}"
+environment:
+  global:
+    GOPATH: C:\gopath
+    CC: gcc.exe
+  matrix:
+    - DUKTAPE_ARCH: amd64
+      MSYS2_ARCH: x86_64
+      MSYS2_BITS: 64
+      MSYSTEM: MINGW64
+      PATH: C:\msys64\mingw64\bin\;C:\Program Files (x86)\NSIS\;%PATH%
+    - DUKTAPE_ARCH: 386
+      MSYS2_ARCH: i686
+      MSYS2_BITS: 32
+      MSYSTEM: MINGW32
+      PATH: C:\msys64\mingw32\bin\;C:\Program Files (x86)\NSIS\;%PATH%
+
+install:
+  - rmdir C:\go /s /q
+  - appveyor DownloadFile https://storage.googleapis.com/golang/go1.9.2.windows-%DUKTAPE_ARCH%.zip
+  - 7z x go1.9.2.windows-%DUKTAPE_ARCH%.zip -y -oC:\ > NUL
+  - go version
+  - gcc --version
+
+build_script:
+  - go get -t
+  - go install ./...
+
+test_script:
+  - go test ./...

@@ -27,12 +27,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 func init() {
-	// glog.SetV(6)
-	// glog.SetToStderr(true)
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 }
 
 type testTransport struct {
@@ -67,11 +67,14 @@ func (c *testTransport) close(err error) {
 }
 
 func startTestServer(t *testing.T, id discover.NodeID, pf func(*Peer)) *Server {
+	config := Config{
+		Name:       "test",
+		MaxPeers:   10,
+		ListenAddr: "127.0.0.1:0",
+		PrivateKey: newkey(),
+	}
 	server := &Server{
-		Name:         "test",
-		MaxPeers:     10,
-		ListenAddr:   "127.0.0.1:0",
-		PrivateKey:   newkey(),
+		Config:       config,
 		newPeerHook:  pf,
 		newTransport: func(fd net.Conn) transport { return newTestTransport(id, fd) },
 	}
@@ -123,7 +126,7 @@ func TestServerDial(t *testing.T) {
 	// run a one-shot TCP server to handle the connection.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("could not setup listener: %v")
+		t.Fatalf("could not setup listener: %v", err)
 	}
 	defer listener.Close()
 	accepted := make(chan net.Conn)
@@ -200,10 +203,11 @@ func TestServerTaskScheduling(t *testing.T) {
 	// The Server in this test isn't actually running
 	// because we're only interested in what run does.
 	srv := &Server{
-		MaxPeers: 10,
-		quit:     make(chan struct{}),
-		ntab:     fakeTable{},
-		running:  true,
+		Config:  Config{MaxPeers: 10},
+		quit:    make(chan struct{}),
+		ntab:    fakeTable{},
+		running: true,
+		log:     log.New(),
 	}
 	srv.loopWG.Add(1)
 	go func() {
@@ -235,6 +239,61 @@ func TestServerTaskScheduling(t *testing.T) {
 	}
 }
 
+// This test checks that Server doesn't drop tasks,
+// even if newTasks returns more than the maximum number of tasks.
+func TestServerManyTasks(t *testing.T) {
+	alltasks := make([]task, 300)
+	for i := range alltasks {
+		alltasks[i] = &testTask{index: i}
+	}
+
+	var (
+		srv = &Server{
+			quit:    make(chan struct{}),
+			ntab:    fakeTable{},
+			running: true,
+			log:     log.New(),
+		}
+		done       = make(chan *testTask)
+		start, end = 0, 0
+	)
+	defer srv.Stop()
+	srv.loopWG.Add(1)
+	go srv.run(taskgen{
+		newFunc: func(running int, peers map[discover.NodeID]*Peer) []task {
+			start, end = end, end+maxActiveDialTasks+10
+			if end > len(alltasks) {
+				end = len(alltasks)
+			}
+			return alltasks[start:end]
+		},
+		doneFunc: func(tt task) {
+			done <- tt.(*testTask)
+		},
+	})
+
+	doneset := make(map[int]bool)
+	timeout := time.After(2 * time.Second)
+	for len(doneset) < len(alltasks) {
+		select {
+		case tt := <-done:
+			if doneset[tt.index] {
+				t.Errorf("task %d got done more than once", tt.index)
+			} else {
+				doneset[tt.index] = true
+			}
+		case <-timeout:
+			t.Errorf("%d of %d tasks got done within 2s", len(doneset), len(alltasks))
+			for i := 0; i < len(alltasks); i++ {
+				if !doneset[i] {
+					t.Logf("task %d not done", i)
+				}
+			}
+			return
+		}
+	}
+}
+
 type taskgen struct {
 	newFunc  func(running int, peers map[discover.NodeID]*Peer) []task
 	doneFunc func(task)
@@ -247,6 +306,8 @@ func (tg taskgen) taskDone(t task, now time.Time) {
 	tg.doneFunc(t)
 }
 func (tg taskgen) addStatic(*discover.Node) {
+}
+func (tg taskgen) removeStatic(*discover.Node) {
 }
 
 type testTask struct {
@@ -264,10 +325,12 @@ func (t *testTask) Do(srv *Server) {
 func TestServerAtCap(t *testing.T) {
 	trustedID := randomID()
 	srv := &Server{
-		PrivateKey:   newkey(),
-		MaxPeers:     10,
-		NoDial:       true,
-		TrustedNodes: []*discover.Node{{ID: trustedID}},
+		Config: Config{
+			PrivateKey:   newkey(),
+			MaxPeers:     10,
+			NoDial:       true,
+			TrustedNodes: []*discover.Node{{ID: trustedID}},
+		},
 	}
 	if err := srv.Start(); err != nil {
 		t.Fatalf("could not start: %v", err)
@@ -365,11 +428,14 @@ func TestServerSetupConn(t *testing.T) {
 
 	for i, test := range tests {
 		srv := &Server{
-			PrivateKey:   srvkey,
-			MaxPeers:     10,
-			NoDial:       true,
-			Protocols:    []Protocol{discard},
+			Config: Config{
+				PrivateKey: srvkey,
+				MaxPeers:   10,
+				NoDial:     true,
+				Protocols:  []Protocol{discard},
+			},
 			newTransport: func(fd net.Conn) transport { return test.tt },
+			log:          log.New(),
 		}
 		if !test.dontstart {
 			if err := srv.Start(); err != nil {
@@ -377,7 +443,7 @@ func TestServerSetupConn(t *testing.T) {
 			}
 		}
 		p1, _ := net.Pipe()
-		srv.setupConn(p1, test.flags, test.dialDest)
+		srv.SetupConn(p1, test.flags, test.dialDest)
 		if !reflect.DeepEqual(test.tt.closeErr, test.wantCloseErr) {
 			t.Errorf("test %d: close error mismatch: got %q, want %q", i, test.tt.closeErr, test.wantCloseErr)
 		}

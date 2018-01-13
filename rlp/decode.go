@@ -55,7 +55,7 @@ type Decoder interface {
 // To decode into a pointer, Decode will decode into the value pointed
 // to. If the pointer is nil, a new value of the pointer's element
 // type is allocated. If the pointer is non-nil, the existing value
-// will reused.
+// will be reused.
 //
 // To decode into a struct, Decode expects the input to be an RLP
 // list. The decoded elements of the list are assigned to each public
@@ -63,11 +63,16 @@ type Decoder interface {
 // must contain an element for each decoded field. Decode returns an
 // error if there are too few or too many elements.
 //
-// The decoding of struct fields honours one particular struct tag,
-// "nil". This tag applies to pointer-typed fields and changes the
-// decoding rules for the field such that input values of size zero
-// decode as a nil pointer. This tag can be useful when decoding recursive
-// types.
+// The decoding of struct fields honours certain struct tags, "tail",
+// "nil" and "-".
+//
+// The "-" tag ignores fields.
+//
+// For an explanation of "tail", see the example.
+//
+// The "nil" tag applies to pointer-typed fields and changes the decoding
+// rules for the field such that input values of size zero decode as a nil
+// pointer. This tag can be useful when decoding recursive types.
 //
 //     type StructWithEmptyOK struct {
 //         Foo *[20]byte `rlp:"nil"`
@@ -173,6 +178,8 @@ var (
 func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 	kind := typ.Kind()
 	switch {
+	case typ == rawValueType:
+		return decodeRawValue, nil
 	case typ.Implements(decoderInterface):
 		return decodeDecoder, nil
 	case kind != reflect.Ptr && reflect.PtrTo(typ).Implements(decoderInterface):
@@ -183,10 +190,12 @@ func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 		return decodeBigIntNoPtr, nil
 	case isUint(kind):
 		return decodeUint, nil
+	case kind == reflect.Bool:
+		return decodeBool, nil
 	case kind == reflect.String:
 		return decodeString, nil
 	case kind == reflect.Slice || kind == reflect.Array:
-		return makeListDecoder(typ)
+		return makeListDecoder(typ, tags)
 	case kind == reflect.Struct:
 		return makeStructDecoder(typ)
 	case kind == reflect.Ptr:
@@ -201,6 +210,15 @@ func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 	}
 }
 
+func decodeRawValue(s *Stream, val reflect.Value) error {
+	r, err := s.Raw()
+	if err != nil {
+		return err
+	}
+	val.SetBytes(r)
+	return nil
+}
+
 func decodeUint(s *Stream, val reflect.Value) error {
 	typ := val.Type()
 	num, err := s.uint(typ.Bits())
@@ -208,6 +226,15 @@ func decodeUint(s *Stream, val reflect.Value) error {
 		return wrapStreamError(err, val.Type())
 	}
 	val.SetUint(num)
+	return nil
+}
+
+func decodeBool(s *Stream, val reflect.Value) error {
+	b, err := s.Bool()
+	if err != nil {
+		return wrapStreamError(err, val.Type())
+	}
+	val.SetBool(b)
 	return nil
 }
 
@@ -242,7 +269,7 @@ func decodeBigInt(s *Stream, val reflect.Value) error {
 	return nil
 }
 
-func makeListDecoder(typ reflect.Type) (decoder, error) {
+func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
 	etype := typ.Elem()
 	if etype.Kind() == reflect.Uint8 && !reflect.PtrTo(etype).Implements(decoderInterface) {
 		if typ.Kind() == reflect.Array {
@@ -255,15 +282,26 @@ func makeListDecoder(typ reflect.Type) (decoder, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	isArray := typ.Kind() == reflect.Array
-	return func(s *Stream, val reflect.Value) error {
-		if isArray {
+	var dec decoder
+	switch {
+	case typ.Kind() == reflect.Array:
+		dec = func(s *Stream, val reflect.Value) error {
 			return decodeListArray(s, val, etypeinfo.decoder)
-		} else {
+		}
+	case tag.tail:
+		// A slice with "tail" tag can occur as the last field
+		// of a struct and is supposed to swallow all remaining
+		// list elements. The struct decoder already called s.List,
+		// proceed directly to decoding the elements.
+		dec = func(s *Stream, val reflect.Value) error {
+			return decodeSliceElems(s, val, etypeinfo.decoder)
+		}
+	default:
+		dec = func(s *Stream, val reflect.Value) error {
 			return decodeListSlice(s, val, etypeinfo.decoder)
 		}
-	}, nil
+	}
+	return dec, nil
 }
 
 func decodeListSlice(s *Stream, val reflect.Value, elemdec decoder) error {
@@ -275,7 +313,13 @@ func decodeListSlice(s *Stream, val reflect.Value, elemdec decoder) error {
 		val.Set(reflect.MakeSlice(val.Type(), 0, 0))
 		return s.ListEnd()
 	}
+	if err := decodeSliceElems(s, val, elemdec); err != nil {
+		return err
+	}
+	return s.ListEnd()
+}
 
+func decodeSliceElems(s *Stream, val reflect.Value, elemdec decoder) error {
 	i := 0
 	for ; ; i++ {
 		// grow slice if necessary
@@ -301,12 +345,11 @@ func decodeListSlice(s *Stream, val reflect.Value, elemdec decoder) error {
 	if i < val.Len() {
 		val.SetLen(i)
 	}
-	return s.ListEnd()
+	return nil
 }
 
 func decodeListArray(s *Stream, val reflect.Value, elemdec decoder) error {
-	_, err := s.List()
-	if err != nil {
+	if _, err := s.List(); err != nil {
 		return wrapStreamError(err, val.Type())
 	}
 	vlen := val.Len()
@@ -376,11 +419,11 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 		return nil, err
 	}
 	dec := func(s *Stream, val reflect.Value) (err error) {
-		if _, err = s.List(); err != nil {
+		if _, err := s.List(); err != nil {
 			return wrapStreamError(err, typ)
 		}
 		for _, f := range fields {
-			err = f.info.decoder(s, val.Field(f.index))
+			err := f.info.decoder(s, val.Field(f.index))
 			if err == EOL {
 				return &decodeError{msg: "too few elements", typ: typ}
 			} else if err != nil {
@@ -650,7 +693,7 @@ func (s *Stream) Raw() ([]byte, error) {
 		return nil, err
 	}
 	if kind == String {
-		puthead(buf, 0x80, 0xB8, size)
+		puthead(buf, 0x80, 0xB7, size)
 	} else {
 		puthead(buf, 0xC0, 0xF7, size)
 	}
@@ -694,6 +737,24 @@ func (s *Stream) uint(maxbits int) (uint64, error) {
 		}
 	default:
 		return 0, ErrExpectedString
+	}
+}
+
+// Bool reads an RLP string of up to 1 byte and returns its contents
+// as a boolean. If the input does not contain an RLP string, the
+// returned error will be ErrExpectedString.
+func (s *Stream) Bool() (bool, error) {
+	num, err := s.uint(8)
+	if err != nil {
+		return false, err
+	}
+	switch num {
+	case 0:
+		return false, nil
+	case 1:
+		return true, nil
+	default:
+		return false, fmt.Errorf("rlp: invalid boolean value: %d", num)
 	}
 }
 

@@ -16,6 +16,40 @@
 
 package types
 
+import (
+	"math/big"
+	"testing"
+)
+
+func TestBloom(t *testing.T) {
+	positive := []string{
+		"testtest",
+		"test",
+		"hallo",
+		"other",
+	}
+	negative := []string{
+		"tes",
+		"lo",
+	}
+
+	var bloom Bloom
+	for _, data := range positive {
+		bloom.Add(new(big.Int).SetBytes([]byte(data)))
+	}
+
+	for _, data := range positive {
+		if !bloom.TestBytes([]byte(data)) {
+			t.Error("expected", data, "to test true")
+		}
+	}
+	for _, data := range negative {
+		if bloom.TestBytes([]byte(data)) {
+			t.Error("did not expect", data, "to test true")
+		}
+	}
+}
+
 /*
 import (
 	"testing"
@@ -39,7 +73,7 @@ func TestBloom9(t *testing.T) {
 func TestAddress(t *testing.T) {
 	block := &Block{}
 	block.Coinbase = common.Hex2Bytes("22341ae42d6dd7384bc8584e50419ea3ac75b83f")
-	fmt.Printf("%x\n", crypto.Sha3(block.Coinbase))
+	fmt.Printf("%x\n", crypto.Keccak256(block.Coinbase))
 
 	bin := CreateBloom(block)
 	fmt.Printf("bin = %x\n", common.LeftPadBytes(bin, 64))

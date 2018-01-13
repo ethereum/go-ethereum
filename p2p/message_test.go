@@ -58,7 +58,7 @@ loop:
 			if err := SendItems(rw1, 1); err == nil {
 				t.Error("EncodeMsg returned nil error")
 			} else if err != ErrPipeClosed {
-				t.Error("EncodeMsg returned wrong error: got %v, want %v", err, ErrPipeClosed)
+				t.Errorf("EncodeMsg returned wrong error: got %v, want %v", err, ErrPipeClosed)
 			}
 			close(done)
 		}()
@@ -143,7 +143,8 @@ func TestEOFSignal(t *testing.T) {
 }
 
 func unhex(str string) []byte {
-	b, err := hex.DecodeString(strings.Replace(str, "\n", "", -1))
+	r := strings.NewReplacer("\t", "", " ", "", "\n", "")
+	b, err := hex.DecodeString(r.Replace(str))
 	if err != nil {
 		panic(fmt.Sprintf("invalid hex string: %q", str))
 	}

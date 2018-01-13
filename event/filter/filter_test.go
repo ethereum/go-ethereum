@@ -21,35 +21,40 @@ import (
 	"time"
 )
 
+// Simple test to check if baseline matching/mismatching filtering works.
 func TestFilters(t *testing.T) {
-	var success bool
-	var failure bool
-
 	fm := New()
 	fm.Start()
+
+	// Register two filters to catch posted data
+	first := make(chan struct{})
 	fm.Install(Generic{
 		Str1: "hello",
 		Fn: func(data interface{}) {
-			success = data.(bool)
+			first <- struct{}{}
 		},
 	})
+	second := make(chan struct{})
 	fm.Install(Generic{
 		Str1: "hello1",
 		Str2: "hello",
 		Fn: func(data interface{}) {
-			failure = true
+			second <- struct{}{}
 		},
 	})
+	// Post an event that should only match the first filter
 	fm.Notify(Generic{Str1: "hello"}, true)
 	fm.Stop()
 
-	time.Sleep(10 * time.Millisecond) // yield to the notifier
-
-	if !success {
-		t.Error("expected 'hello' to be posted")
+	// Ensure only the mathcing filters fire
+	select {
+	case <-first:
+	case <-time.After(100 * time.Millisecond):
+		t.Error("matching filter timed out")
 	}
-
-	if failure {
-		t.Error("hello1 was triggered")
+	select {
+	case <-second:
+		t.Error("mismatching filter fired")
+	case <-time.After(100 * time.Millisecond):
 	}
 }

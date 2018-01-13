@@ -16,29 +16,13 @@
 
 package vm
 
-import (
-	"errors"
-	"fmt"
+import "errors"
 
-	"github.com/ethereum/go-ethereum/params"
+var (
+	ErrOutOfGas                 = errors.New("out of gas")
+	ErrCodeStoreOutOfGas        = errors.New("contract creation code storage out of gas")
+	ErrDepth                    = errors.New("max call depth exceeded")
+	ErrTraceLimitReached        = errors.New("the number of logs reached the specified limit")
+	ErrInsufficientBalance      = errors.New("insufficient balance for transfer")
+	ErrContractAddressCollision = errors.New("contract address collision")
 )
-
-var OutOfGasError = errors.New("Out of gas")
-var DepthError = fmt.Errorf("Max call depth exceeded (%d)", params.CallCreateDepth)
-
-type StackError struct {
-	req, has int
-}
-
-func StackErr(req, has int) StackError {
-	return StackError{req, has}
-}
-
-func (self StackError) Error() string {
-	return fmt.Sprintf("stack error! require %v, have %v", self.req, self.has)
-}
-
-func IsStackErr(err error) bool {
-	_, ok := err.(StackError)
-	return ok
-}

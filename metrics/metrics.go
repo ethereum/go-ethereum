@@ -23,33 +23,44 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/rcrowley/go-metrics"
+	"github.com/rcrowley/go-metrics/exp"
 )
 
 // MetricsEnabledFlag is the CLI flag name to use to enable metrics collections.
-var MetricsEnabledFlag = "metrics"
+const MetricsEnabledFlag = "metrics"
+const DashboardEnabledFlag = "dashboard"
 
-// enabled is the flag specifying if metrics are enable or not.
-var enabled = false
+// Enabled is the flag specifying if metrics are enable or not.
+var Enabled = false
 
 // Init enables or disables the metrics system. Since we need this to run before
 // any other code gets to create meters and timers, we'll actually do an ugly hack
 // and peek into the command line args for the metrics flag.
 func init() {
 	for _, arg := range os.Args {
-		if strings.TrimLeft(arg, "-") == MetricsEnabledFlag {
-			glog.V(logger.Info).Infof("Enabling metrics collection")
-			enabled = true
+		if flag := strings.TrimLeft(arg, "-"); flag == MetricsEnabledFlag || flag == DashboardEnabledFlag {
+			log.Info("Enabling metrics collection")
+			Enabled = true
 		}
 	}
+	exp.Exp(metrics.DefaultRegistry)
+}
+
+// NewCounter create a new metrics Counter, either a real one of a NOP stub depending
+// on the metrics flag.
+func NewCounter(name string) metrics.Counter {
+	if !Enabled {
+		return new(metrics.NilCounter)
+	}
+	return metrics.GetOrRegisterCounter(name, metrics.DefaultRegistry)
 }
 
 // NewMeter create a new metrics Meter, either a real one of a NOP stub depending
 // on the metrics flag.
 func NewMeter(name string) metrics.Meter {
-	if !enabled {
+	if !Enabled {
 		return new(metrics.NilMeter)
 	}
 	return metrics.GetOrRegisterMeter(name, metrics.DefaultRegistry)
@@ -58,7 +69,7 @@ func NewMeter(name string) metrics.Meter {
 // NewTimer create a new metrics Timer, either a real one of a NOP stub depending
 // on the metrics flag.
 func NewTimer(name string) metrics.Timer {
-	if !enabled {
+	if !Enabled {
 		return new(metrics.NilTimer)
 	}
 	return metrics.GetOrRegisterTimer(name, metrics.DefaultRegistry)
@@ -68,7 +79,7 @@ func NewTimer(name string) metrics.Timer {
 // process.
 func CollectProcessMetrics(refresh time.Duration) {
 	// Short circuit if the metrics system is disabled
-	if !enabled {
+	if !Enabled {
 		return
 	}
 	// Create the various data collectors
@@ -91,7 +102,7 @@ func CollectProcessMetrics(refresh time.Duration) {
 		diskWrites = metrics.GetOrRegisterMeter("system/disk/writecount", metrics.DefaultRegistry)
 		diskWriteBytes = metrics.GetOrRegisterMeter("system/disk/writedata", metrics.DefaultRegistry)
 	} else {
-		glog.V(logger.Debug).Infof("failed to read disk metrics: %v", err)
+		log.Debug("Failed to read disk metrics", "err", err)
 	}
 	// Iterate loading the different stats and updating the meters
 	for i := 1; ; i++ {
@@ -102,10 +113,10 @@ func CollectProcessMetrics(refresh time.Duration) {
 		memPauses.Mark(int64(memstats[i%2].PauseTotalNs - memstats[(i-1)%2].PauseTotalNs))
 
 		if ReadDiskStats(diskstats[i%2]) == nil {
-			diskReads.Mark(int64(diskstats[i%2].ReadCount - diskstats[(i-1)%2].ReadCount))
-			diskReadBytes.Mark(int64(diskstats[i%2].ReadBytes - diskstats[(i-1)%2].ReadBytes))
-			diskWrites.Mark(int64(diskstats[i%2].WriteCount - diskstats[(i-1)%2].WriteCount))
-			diskWriteBytes.Mark(int64(diskstats[i%2].WriteBytes - diskstats[(i-1)%2].WriteBytes))
+			diskReads.Mark(diskstats[i%2].ReadCount - diskstats[(i-1)%2].ReadCount)
+			diskReadBytes.Mark(diskstats[i%2].ReadBytes - diskstats[(i-1)%2].ReadBytes)
+			diskWrites.Mark(diskstats[i%2].WriteCount - diskstats[(i-1)%2].WriteCount)
+			diskWriteBytes.Mark(diskstats[i%2].WriteBytes - diskstats[(i-1)%2].WriteBytes)
 		}
 		time.Sleep(refresh)
 	}

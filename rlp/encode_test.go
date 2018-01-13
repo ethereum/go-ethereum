@@ -23,6 +23,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/big"
+	"sync"
 	"testing"
 )
 
@@ -71,6 +72,10 @@ type encTest struct {
 }
 
 var encTests = []encTest{
+	// booleans
+	{val: true, output: "01"},
+	{val: false, output: "80"},
+
 	// integers
 	{val: uint32(0), output: "80"},
 	{val: uint32(127), output: "7F"},
@@ -199,11 +204,21 @@ var encTests = []encTest{
 		output: "F90200CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376",
 	},
 
+	// RawValue
+	{val: RawValue(unhex("01")), output: "01"},
+	{val: RawValue(unhex("82FFFF")), output: "82FFFF"},
+	{val: []RawValue{unhex("01"), unhex("02")}, output: "C20102"},
+
 	// structs
 	{val: simplestruct{}, output: "C28080"},
 	{val: simplestruct{A: 3, B: "foo"}, output: "C50383666F6F"},
 	{val: &recstruct{5, nil}, output: "C205C0"},
 	{val: &recstruct{5, &recstruct{4, &recstruct{3, nil}}}, output: "C605C404C203C0"},
+	{val: &tailRaw{A: 1, Tail: []RawValue{unhex("02"), unhex("03")}}, output: "C3010203"},
+	{val: &tailRaw{A: 1, Tail: []RawValue{unhex("02")}}, output: "C20102"},
+	{val: &tailRaw{A: 1, Tail: []RawValue{}}, output: "C101"},
+	{val: &tailRaw{A: 1, Tail: nil}, output: "C101"},
+	{val: &hasIgnoredField{A: 1, B: 2, C: 3}, output: "C20103"},
 
 	// nil
 	{val: (*uint)(nil), output: "80"},
@@ -301,4 +316,26 @@ func TestEncodeToReaderPiecewise(t *testing.T) {
 		}
 		return output, nil
 	})
+}
+
+// This is a regression test verifying that encReader
+// returns its encbuf to the pool only once.
+func TestEncodeToReaderReturnToPool(t *testing.T) {
+	buf := make([]byte, 50)
+	wg := new(sync.WaitGroup)
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			for i := 0; i < 1000; i++ {
+				_, r, _ := EncodeToReader("foo")
+				ioutil.ReadAll(r)
+				r.Read(buf)
+				r.Read(buf)
+				r.Read(buf)
+				r.Read(buf)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }

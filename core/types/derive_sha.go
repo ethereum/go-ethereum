@@ -17,8 +17,9 @@
 package types
 
 import (
+	"bytes"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -29,12 +30,12 @@ type DerivableList interface {
 }
 
 func DeriveSha(list DerivableList) common.Hash {
-	db, _ := ethdb.NewMemDatabase()
-	trie := trie.New(nil, db)
+	keybuf := new(bytes.Buffer)
+	trie := new(trie.Trie)
 	for i := 0; i < list.Len(); i++ {
-		key, _ := rlp.EncodeToBytes(uint(i))
-		trie.Update(key, list.GetRlp(i))
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(i))
+		trie.Update(keybuf.Bytes(), list.GetRlp(i))
 	}
-
-	return common.BytesToHash(trie.Root())
+	return trie.Hash()
 }

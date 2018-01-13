@@ -1,237 +1,192 @@
-// Copyright 2013 The Go Authors. All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are
-// met:
-//
-//    * Redistributions of source code must retain the above copyright
-// notice, this list of conditions and the following disclaimer.
-//    * Redistributions in binary form must reproduce the above
-// copyright notice, this list of conditions and the following disclaimer
-// in the documentation and/or other materials provided with the
-// distribution.
-//    * Neither the name of Google Inc. nor the names of its
-// contributors may be used to endorse or promote products derived from
-// this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// Copyright 2014 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 
-// Package sha3 implements the SHA3 hash algorithm (formerly called Keccak) chosen by NIST in 2012.
-// This file provides a SHA3 implementation which implements the standard hash.Hash interface.
-// Writing input data, including padding, and reading output data are computed in this file.
-// Note that the current implementation can compute the hash of an integral number of bytes only.
-// This is a consequence of the hash interface in which a buffer of bytes is passed in.
-// The internals of the Keccak-f function are computed in keccakf.go.
-// For the detailed specification, refer to the Keccak web site (http://keccak.noekeon.org/).
 package sha3
 
-import (
-	"encoding/binary"
-	"hash"
+// spongeDirection indicates the direction bytes are flowing through the sponge.
+type spongeDirection int
+
+const (
+	// spongeAbsorbing indicates that the sponge is absorbing input.
+	spongeAbsorbing spongeDirection = iota
+	// spongeSqueezing indicates that the sponge is being squeezed.
+	spongeSqueezing
 )
 
-// laneSize is the size in bytes of each "lane" of the internal state of SHA3 (5 * 5 * 8).
-// Note that changing this size would requires using a type other than uint64 to store each lane.
-const laneSize = 8
+const (
+	// maxRate is the maximum size of the internal buffer. SHAKE-256
+	// currently needs the largest buffer.
+	maxRate = 168
+)
 
-// sliceSize represents the dimensions of the internal state, a square matrix of
-// sliceSize ** 2 lanes. This is the size of both the "rows" and "columns" dimensions in the
-// terminology of the SHA3 specification.
-const sliceSize = 5
+type state struct {
+	// Generic sponge components.
+	a    [25]uint64 // main state of the hash
+	buf  []byte     // points into storage
+	rate int        // the number of bytes of state to use
 
-// numLanes represents the total number of lanes in the state.
-const numLanes = sliceSize * sliceSize
+	// dsbyte contains the "domain separation" bits and the first bit of
+	// the padding. Sections 6.1 and 6.2 of [1] separate the outputs of the
+	// SHA-3 and SHAKE functions by appending bitstrings to the message.
+	// Using a little-endian bit-ordering convention, these are "01" for SHA-3
+	// and "1111" for SHAKE, or 00000010b and 00001111b, respectively. Then the
+	// padding rule from section 5.1 is applied to pad the message to a multiple
+	// of the rate, which involves adding a "1" bit, zero or more "0" bits, and
+	// a final "1" bit. We merge the first "1" bit from the padding into dsbyte,
+	// giving 00000110b (0x06) and 00011111b (0x1f).
+	// [1] http://csrc.nist.gov/publications/drafts/fips-202/fips_202_draft.pdf
+	//     "Draft FIPS 202: SHA-3 Standard: Permutation-Based Hash and
+	//      Extendable-Output Functions (May 2014)"
+	dsbyte  byte
+	storage [maxRate]byte
 
-// stateSize is the size in bytes of the internal state of SHA3 (5 * 5 * WSize).
-const stateSize = laneSize * numLanes
-
-// digest represents the partial evaluation of a checksum.
-// Note that capacity, and not outputSize, is the critical security parameter, as SHA3 can output
-// an arbitrary number of bytes for any given capacity. The Keccak proposal recommends that
-// capacity = 2*outputSize to ensure that finding a collision of size outputSize requires
-// O(2^{outputSize/2}) computations (the birthday lower bound). Future standards may modify the
-// capacity/outputSize ratio to allow for more output with lower cryptographic security.
-type digest struct {
-	a          [numLanes]uint64 // main state of the hash
-	outputSize int              // desired output size in bytes
-	capacity   int              // number of bytes to leave untouched during squeeze/absorb
-	absorbed   int              // number of bytes absorbed thus far
+	// Specific to SHA-3 and SHAKE.
+	outputLen int             // the default output size in bytes
+	state     spongeDirection // whether the sponge is absorbing or squeezing
 }
 
-// minInt returns the lesser of two integer arguments, to simplify the absorption routine.
-func minInt(v1, v2 int) int {
-	if v1 <= v2 {
-		return v1
-	}
-	return v2
-}
+// BlockSize returns the rate of sponge underlying this hash function.
+func (d *state) BlockSize() int { return d.rate }
 
-// rate returns the number of bytes of the internal state which can be absorbed or squeezed
-// in between calls to the permutation function.
-func (d *digest) rate() int {
-	return stateSize - d.capacity
-}
+// Size returns the output size of the hash function in bytes.
+func (d *state) Size() int { return d.outputLen }
 
-// Reset clears the internal state by zeroing bytes in the state buffer.
-// This can be skipped for a newly-created hash state; the default zero-allocated state is correct.
-func (d *digest) Reset() {
-	d.absorbed = 0
+// Reset clears the internal state by zeroing the sponge state and
+// the byte buffer, and setting Sponge.state to absorbing.
+func (d *state) Reset() {
+	// Zero the permutation's state.
 	for i := range d.a {
 		d.a[i] = 0
 	}
+	d.state = spongeAbsorbing
+	d.buf = d.storage[:0]
 }
 
-// BlockSize, required by the hash.Hash interface, does not have a standard intepretation
-// for a sponge-based construction like SHA3. We return the data rate: the number of bytes which
-// can be absorbed per invocation of the permutation function. For Merkle-Damgård based hashes
-// (ie SHA1, SHA2, MD5) the output size of the internal compression function is returned.
-// We consider this to be roughly equivalent because it represents the number of bytes of output
-// produced per cryptographic operation.
-func (d *digest) BlockSize() int { return d.rate() }
-
-// Size returns the output size of the hash function in bytes.
-func (d *digest) Size() int {
-	return d.outputSize
-}
-
-// unalignedAbsorb is a helper function for Write, which absorbs data that isn't aligned with an
-// 8-byte lane. This requires shifting the individual bytes into position in a uint64.
-func (d *digest) unalignedAbsorb(p []byte) {
-	var t uint64
-	for i := len(p) - 1; i >= 0; i-- {
-		t <<= 8
-		t |= uint64(p[i])
+func (d *state) clone() *state {
+	ret := *d
+	if ret.state == spongeAbsorbing {
+		ret.buf = ret.storage[:len(ret.buf)]
+	} else {
+		ret.buf = ret.storage[d.rate-cap(d.buf) : d.rate]
 	}
-	offset := (d.absorbed) % d.rate()
-	t <<= 8 * uint(offset%laneSize)
-	d.a[offset/laneSize] ^= t
-	d.absorbed += len(p)
+
+	return &ret
 }
 
-// Write "absorbs" bytes into the state of the SHA3 hash, updating as needed when the sponge
-// "fills up" with rate() bytes. Since lanes are stored internally as type uint64, this requires
-// converting the incoming bytes into uint64s using a little endian interpretation. This
-// implementation is optimized for large, aligned writes of multiples of 8 bytes (laneSize).
-// Non-aligned or uneven numbers of bytes require shifting and are slower.
-func (d *digest) Write(p []byte) (int, error) {
-	// An initial offset is needed if the we aren't absorbing to the first lane initially.
-	offset := d.absorbed % d.rate()
-	toWrite := len(p)
+// permute applies the KeccakF-1600 permutation. It handles
+// any input-output buffering.
+func (d *state) permute() {
+	switch d.state {
+	case spongeAbsorbing:
+		// If we're absorbing, we need to xor the input into the state
+		// before applying the permutation.
+		xorIn(d, d.buf)
+		d.buf = d.storage[:0]
+		keccakF1600(&d.a)
+	case spongeSqueezing:
+		// If we're squeezing, we need to apply the permutatin before
+		// copying more output.
+		keccakF1600(&d.a)
+		d.buf = d.storage[:d.rate]
+		copyOut(d, d.buf)
+	}
+}
 
-	// The first lane may need to absorb unaligned and/or incomplete data.
-	if (offset%laneSize != 0 || len(p) < 8) && len(p) > 0 {
-		toAbsorb := minInt(laneSize-(offset%laneSize), len(p))
-		d.unalignedAbsorb(p[:toAbsorb])
-		p = p[toAbsorb:]
-		offset = (d.absorbed) % d.rate()
+// pads appends the domain separation bits in dsbyte, applies
+// the multi-bitrate 10..1 padding rule, and permutes the state.
+func (d *state) padAndPermute(dsbyte byte) {
+	if d.buf == nil {
+		d.buf = d.storage[:0]
+	}
+	// Pad with this instance's domain-separator bits. We know that there's
+	// at least one byte of space in d.buf because, if it were full,
+	// permute would have been called to empty it. dsbyte also contains the
+	// first one bit for the padding. See the comment in the state struct.
+	d.buf = append(d.buf, dsbyte)
+	zerosStart := len(d.buf)
+	d.buf = d.storage[:d.rate]
+	for i := zerosStart; i < d.rate; i++ {
+		d.buf[i] = 0
+	}
+	// This adds the final one bit for the padding. Because of the way that
+	// bits are numbered from the LSB upwards, the final bit is the MSB of
+	// the last byte.
+	d.buf[d.rate-1] ^= 0x80
+	// Apply the permutation
+	d.permute()
+	d.state = spongeSqueezing
+	d.buf = d.storage[:d.rate]
+	copyOut(d, d.buf)
+}
 
-		// For every rate() bytes absorbed, the state must be permuted via the F Function.
-		if (d.absorbed)%d.rate() == 0 {
+// Write absorbs more data into the hash's state. It produces an error
+// if more data is written to the ShakeHash after writing
+func (d *state) Write(p []byte) (written int, err error) {
+	if d.state != spongeAbsorbing {
+		panic("sha3: write to sponge after read")
+	}
+	if d.buf == nil {
+		d.buf = d.storage[:0]
+	}
+	written = len(p)
+
+	for len(p) > 0 {
+		if len(d.buf) == 0 && len(p) >= d.rate {
+			// The fast path; absorb a full "rate" bytes of input and apply the permutation.
+			xorIn(d, p[:d.rate])
+			p = p[d.rate:]
 			keccakF1600(&d.a)
+		} else {
+			// The slow path; buffer the input until we can fill the sponge, and then xor it in.
+			todo := d.rate - len(d.buf)
+			if todo > len(p) {
+				todo = len(p)
+			}
+			d.buf = append(d.buf, p[:todo]...)
+			p = p[todo:]
+
+			// If the sponge is full, apply the permutation.
+			if len(d.buf) == d.rate {
+				d.permute()
+			}
 		}
 	}
 
-	// This loop should absorb the bulk of the data into full, aligned lanes.
-	// It will call the update function as necessary.
-	for len(p) > 7 {
-		firstLane := offset / laneSize
-		lastLane := minInt(d.rate()/laneSize, firstLane+len(p)/laneSize)
-
-		// This inner loop absorbs input bytes into the state in groups of 8, converted to uint64s.
-		for lane := firstLane; lane < lastLane; lane++ {
-			d.a[lane] ^= binary.LittleEndian.Uint64(p[:laneSize])
-			p = p[laneSize:]
-		}
-		d.absorbed += (lastLane - firstLane) * laneSize
-		// For every rate() bytes absorbed, the state must be permuted via the F Function.
-		if (d.absorbed)%d.rate() == 0 {
-			keccakF1600(&d.a)
-		}
-
-		offset = 0
-	}
-
-	// If there are insufficient bytes to fill the final lane, an unaligned absorption.
-	// This should always start at a correct lane boundary though, or else it would be caught
-	// by the uneven opening lane case above.
-	if len(p) > 0 {
-		d.unalignedAbsorb(p)
-	}
-
-	return toWrite, nil
+	return
 }
 
-// pad computes the SHA3 padding scheme based on the number of bytes absorbed.
-// The padding is a 1 bit, followed by an arbitrary number of 0s and then a final 1 bit, such that
-// the input bits plus padding bits are a multiple of rate(). Adding the padding simply requires
-// xoring an opening and closing bit into the appropriate lanes.
-func (d *digest) pad() {
-	offset := d.absorbed % d.rate()
-	// The opening pad bit must be shifted into position based on the number of bytes absorbed
-	padOpenLane := offset / laneSize
-	d.a[padOpenLane] ^= 0x0000000000000001 << uint(8*(offset%laneSize))
-	// The closing padding bit is always in the last position
-	padCloseLane := (d.rate() / laneSize) - 1
-	d.a[padCloseLane] ^= 0x8000000000000000
-}
-
-// finalize prepares the hash to output data by padding and one final permutation of the state.
-func (d *digest) finalize() {
-	d.pad()
-	keccakF1600(&d.a)
-}
-
-// squeeze outputs an arbitrary number of bytes from the hash state.
-// Squeezing can require multiple calls to the F function (one per rate() bytes squeezed),
-// although this is not the case for standard SHA3 parameters. This implementation only supports
-// squeezing a single time, subsequent squeezes may lose alignment. Future implementations
-// may wish to support multiple squeeze calls, for example to support use as a PRNG.
-func (d *digest) squeeze(in []byte, toSqueeze int) []byte {
-	// Because we read in blocks of laneSize, we need enough room to read
-	// an integral number of lanes
-	needed := toSqueeze + (laneSize-toSqueeze%laneSize)%laneSize
-	if cap(in)-len(in) < needed {
-		newIn := make([]byte, len(in), len(in)+needed)
-		copy(newIn, in)
-		in = newIn
+// Read squeezes an arbitrary number of bytes from the sponge.
+func (d *state) Read(out []byte) (n int, err error) {
+	// If we're still absorbing, pad and apply the permutation.
+	if d.state == spongeAbsorbing {
+		d.padAndPermute(d.dsbyte)
 	}
-	out := in[len(in) : len(in)+needed]
 
+	n = len(out)
+
+	// Now, do the squeezing.
 	for len(out) > 0 {
-		for i := 0; i < d.rate() && len(out) > 0; i += laneSize {
-			binary.LittleEndian.PutUint64(out[:], d.a[i/laneSize])
-			out = out[laneSize:]
-		}
-		if len(out) > 0 {
-			keccakF1600(&d.a)
+		n := copy(out, d.buf)
+		d.buf = d.buf[n:]
+		out = out[n:]
+
+		// Apply the permutation if we've squeezed the sponge dry.
+		if len(d.buf) == 0 {
+			d.permute()
 		}
 	}
-	return in[:len(in)+toSqueeze] // Re-slice in case we wrote extra data.
+
+	return
 }
 
-// Sum applies padding to the hash state and then squeezes out the desired nubmer of output bytes.
-func (d *digest) Sum(in []byte) []byte {
-	// Make a copy of the original hash so that caller can keep writing and summing.
-	dup := *d
-	dup.finalize()
-	return dup.squeeze(in, dup.outputSize)
+// Sum applies padding to the hash state and then squeezes out the desired
+// number of output bytes.
+func (d *state) Sum(in []byte) []byte {
+	// Make a copy of the original hash so that caller can keep writing
+	// and summing.
+	dup := d.clone()
+	hash := make([]byte, dup.outputLen)
+	dup.Read(hash)
+	return append(in, hash...)
 }
-
-// The NewKeccakX constructors enable initializing a hash in any of the four recommend sizes
-// from the Keccak specification, all of which set capacity=2*outputSize. Note that the final
-// NIST standard for SHA3 may specify different input/output lengths.
-// The output size is indicated in bits but converted into bytes internally.
-func NewKeccak224() hash.Hash { return &digest{outputSize: 224 / 8, capacity: 2 * 224 / 8} }
-func NewKeccak256() hash.Hash { return &digest{outputSize: 256 / 8, capacity: 2 * 256 / 8} }
-func NewKeccak384() hash.Hash { return &digest{outputSize: 384 / 8, capacity: 2 * 384 / 8} }
-func NewKeccak512() hash.Hash { return &digest{outputSize: 512 / 8, capacity: 2 * 512 / 8} }
