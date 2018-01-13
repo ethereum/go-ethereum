@@ -123,11 +123,6 @@ func TestSimulation(t *testing.T) {
 	// check if each node (except node #0) have received and decrypted exactly one message
 	checkPropagation(t, false)
 
-	for i := 1; i < NumNodes; i++ {
-		time.Sleep(20 * time.Millisecond)
-		sendMsg(t, true, i)
-	}
-
 	// check if corresponding protocol-level messages were correctly decoded
 	checkPowExchangeForNodeZero(t)
 	checkBloomFilterExchange(t)
@@ -419,13 +414,31 @@ func checkPowExchange(t *testing.T) {
 	}
 }
 
-func checkBloomFilterExchange(t *testing.T) {
+func checkBloomFilterExchangeOnce(t *testing.T, mustPass bool) bool {
 	for i, node := range nodes {
 		for peer := range node.shh.peers {
 			if !bytes.Equal(peer.bloomFilter, masterBloomFilter) {
-				t.Fatalf("node %d: failed to exchange bloom filter requirement in round %d. \n%x expected \n%x got",
-					i, round, masterBloomFilter, peer.bloomFilter)
+				if mustPass {
+					t.Fatalf("node %d: failed to exchange bloom filter requirement in round %d. \n%x expected \n%x got",
+						i, round, masterBloomFilter, peer.bloomFilter)
+				} else {
+					return false
+				}
 			}
 		}
+	}
+
+	return true
+}
+
+func checkBloomFilterExchange(t *testing.T) {
+	const iterations = 128
+	for j := 0; j < iterations; j++ {
+		lastCycle := (j == iterations-1)
+		ok := checkBloomFilterExchangeOnce(t, lastCycle)
+		if ok {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
