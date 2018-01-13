@@ -142,5 +142,5 @@ func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 			return &method, nil
 		}
 	}
-	return nil, fmt.Errorf("ABI spec does not contain method signature in data: 0x%x", sigdata[:4])
+	return nil, fmt.Errorf("no method with id: %#x", sigdata[:4])
 }

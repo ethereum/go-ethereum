@@ -691,7 +691,7 @@ func TestABI_MethodById(t *testing.T) {
 		a := fmt.Sprintf("%v", m)
 		m2, err := abi.MethodById(m.Id())
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("Failed to look up ABI method: %v", err)
 		}
 		b := fmt.Sprintf("%v", m2)
 		if a != b {
