@@ -105,7 +105,7 @@ func posProximity(one, other Address, pos int) (ret int, eq bool) {
 		if one[i] == other[i] {
 			continue
 		}
-		oxo := uint8(one[i] ^ other[i])
+		oxo := one[i] ^ other[i]
 		start := 0
 		if i == pos/8 {
 			start = pos % 8
