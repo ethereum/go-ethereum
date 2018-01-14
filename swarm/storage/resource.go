@@ -40,10 +40,6 @@ type resource struct {
 // The update scheme is built on swarm chunks with chunk keys following
 // a predictable, versionable pattern.
 //
-// The data of the chunk contains the content hash of the version in question.
-// In order to be valid, the hash is signed by the owner of the ENS record
-// of the mutable resource.
-//
 // Updates are defined to be periodic in nature, where periods are
 // expressed in terms of number of blocks.
 //
@@ -56,7 +52,7 @@ type resource struct {
 
 // The root entry tells the requester from when the mutable resource was
 // first added (block number) and in which block number to look for the
-// actual updates. Thus, a resource update for identifier "foo.bar"
+// actual updates. Thus, a resource update for identifier "føø.bar"
 // starting at block 4200 with frequency 42 will have updates on block 4242,
 // 4284, 4326 and so on.
 //
@@ -66,27 +62,28 @@ type resource struct {
 //
 // Note that the root entry is not required for the resource update scheme to
 // work. A normal chunk of the blocknumber/frequency data can also be created,
-// and pointed to by an actual ENS entry (or manifest entry) instead.
+// and pointed to by an external resource (ENS or manifest entry)
 //
 // Actual data updates are also made in the form of swarm chunks. The keys
 // of the updates are the hash of a concatenation of properties as follows:
 //
-// sha256(namehash|blocknumber|version)
+// sha256(namehash|period|version)
 //
-// The blocknumber here is the next block period after the current block
-// calculated from the start block and frequency of the resource update.
-// Using our previous example, this means that an update made at block 4285,
-// and even 4284, will have 4326 as the block number.
+// The period is (currentblock - startblock) / frequency
+//
+// Using our previous example, this means that a period 3 will have 4326 as
+// the block number.
 //
 // If more than one update is made to the same block number, incremental
 // version numbers are used successively.
 //
 // A lookup agent need only know the identifier name in order to get the versions
 //
-// the data itself is prefixed with a signed hash of the data. The sigining key
-// is used to verify the authenticity of the update, for example by looking
-// up the ownership of the namehash in ENS and comparing to the address derived
-// from it
+// the chunk data is: sign(resourcedata)|resourcedata
+// the resourcedata is: headerlength|period|version|name|data
+//
+// headerlength is a 16 bit value containing the byte length of period|version|name
+// period and version are both 32 bit values. name can have arbitrary length
 //
 // NOTE: the following is yet to be implemented
 // The resource update chunks will be stored in the swarm, but receive special
@@ -94,8 +91,6 @@ type resource struct {
 // stored using a separate store, and forwarding/syncing protocols carry per-chunk
 // flags to tell whether the chunk can be validated or not; if not it is to be
 // treated as a resource update chunk.
-//
-// TODO: signature validation
 type ResourceHandler interface {
 	ChunkStore
 	NewResource(name string, frequency uint64) (*resource, error)

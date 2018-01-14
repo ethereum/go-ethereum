@@ -41,6 +41,8 @@ func init() {
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 }
 
+// simulated backend does not have the blocknumber call
+// so we use this wrapper to fake returning the block count
 type fakeBackend struct {
 	*backends.SimulatedBackend
 	blocknumber uint64
@@ -317,14 +319,21 @@ func TestResourceHandler(t *testing.T) {
 
 }
 
-func TestResourceENS(t *testing.T) {
+func TestResourceENSNew(t *testing.T) {
 
-	// privkey for signing updates
+	// privkey for ens owner
 	privkey, err := crypto.GenerateKey()
 	if err != nil {
 		return
 	}
 
+	// privkey for signing updates
+	privkeytwo, err := crypto.GenerateKey()
+	if err != nil {
+		return
+	}
+
+	// set up ENS sim
 	domainparts := strings.Split(domainName, ".")
 	addr, contractbackend, err := setupENS(privkey, domainparts[0], domainparts[1])
 	if err != nil {
@@ -336,12 +345,29 @@ func TestResourceENS(t *testing.T) {
 		teardownTest(t, err)
 	}
 
+	// create new resource when we are owner = ok
 	_, err = rh.NewResource(domainName, 42)
 	if err != nil {
 		teardownTest(t, err)
 	}
 
+	// create new resource when we are NOT owner = !ok
+	rawrh := rh.(*ENSResourceHandler)
+	rawrh.privKey = privkeytwo
+	rawrh.addr = crypto.PubkeyToAddress(privkeytwo.PublicKey)
+	_, err = rawrh.NewResource(domainName, 42)
+	if err == nil {
+		teardownTest(t, fmt.Errorf("Expected resource create fail due to owner mismatch"))
+	}
+
 	teardownTest(t, nil)
+}
+
+// fast-forward blockheight
+func fwdBlocks(count int, backend *fakeBackend) {
+	for i := 0; i < count; i++ {
+		backend.Commit()
+	}
 }
 
 func setupTest(privkey *ecdsa.PrivateKey, contractbackend bind.ContractBackend, ensaddr common.Address) (rh ResourceHandler, datadir string, err error, teardown func(*testing.T, error)) {
@@ -394,8 +420,9 @@ func setupTest(privkey *ecdsa.PrivateKey, contractbackend bind.ContractBackend, 
 		return
 	}
 
+	// choose if with ens or not
 	if ensaddr != zeroAddr {
-		rh, err = NewENSResourceHandler(privkey, datadir, &testCloudStore{}, rpcclient, ensaddr)
+		rh, err = NewENSResourceHandler(privkey, datadir, &testCloudStore{}, rpcclient, contractbackend, ensaddr)
 	} else {
 		rh, err = NewRawResourceHandler(privkey, datadir, &testCloudStore{}, rpcclient, nil)
 	}
@@ -408,7 +435,11 @@ func setupTest(privkey *ecdsa.PrivateKey, contractbackend bind.ContractBackend, 
 
 	return
 }
+
+// Set up simulated ENS backend for use with ENSResourceHandler tests
 func setupENS(privkey *ecdsa.PrivateKey, sub string, top string) (common.Address, bind.ContractBackend, error) {
+
+	// create the domain hash values to pass to the ENS contract methods
 	var tophash [32]byte
 	var subhash [32]byte
 	hashfunc.Reset()
@@ -417,17 +448,22 @@ func setupENS(privkey *ecdsa.PrivateKey, sub string, top string) (common.Address
 	hashfunc.Reset()
 	hashfunc.Write([]byte(sub))
 	copy(subhash[:], hashfunc.Sum(nil))
+
+	// private key -> address is owner of domain
 	addr := crypto.PubkeyToAddress(privkey.PublicKey)
+
+	// initialize contract backend and deploy
+	transactOpts := bind.NewKeyedTransactor(privkey)
 	contractBackend := &fakeBackend{
 		SimulatedBackend: backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}),
 	}
-	transactOpts := bind.NewKeyedTransactor(privkey)
 
 	ensAddr, _, ensinstance, err := contract.DeployENS(transactOpts, contractBackend)
 	if err != nil {
 		return zeroAddr, nil, fmt.Errorf("can't deploy: %v", err)
 	}
 
+	// update the registry for the correct owner address
 	if _, err = ensinstance.SetOwner(transactOpts, [32]byte{}, addr); err != nil {
 		return zeroAddr, nil, fmt.Errorf("can't setowner: %v", err)
 	}
@@ -442,13 +478,6 @@ func setupENS(privkey *ecdsa.PrivateKey, sub string, top string) (common.Address
 		return zeroAddr, nil, fmt.Errorf("can't register top: %v", err)
 	}
 	contractBackend.Commit()
-
-	nodeowner, err := ensinstance.Owner(&bind.CallOpts{}, ens.EnsNode(strings.Join([]string{sub, top}, ".")))
-	if err != nil {
-		return zeroAddr, nil, fmt.Errorf("can't retrieve owner: %v", err)
-	} else if !bytes.Equal(nodeowner.Bytes(), addr.Bytes()) {
-		return zeroAddr, nil, fmt.Errorf("retrieved owner doesn't match; expected '%x', got '%x'", addr, nodeowner)
-	}
 
 	return ensAddr, contractBackend, nil
 }
