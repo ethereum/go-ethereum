@@ -19,6 +19,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/contracts/ens/contract"
 	"github.com/ethereum/go-ethereum/core"
@@ -29,26 +30,46 @@ import (
 )
 
 var (
+	zeroAddr   = common.Address{}
 	blockCount = uint64(4200)
 	cleanF     func()
 	hashfunc   = sha3.NewKeccak256()
+	domainName = "føø.bar"
 )
 
 func init() {
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 }
 
+type fakeBackend struct {
+	*backends.SimulatedBackend
+	blocknumber uint64
+}
+
+func (f *fakeBackend) Commit() {
+	if f.SimulatedBackend != nil {
+		f.SimulatedBackend.Commit()
+	}
+	f.blocknumber++
+}
+
 type FakeRPC struct {
-	blockcount *uint64
+	backend *fakeBackend
 }
 
 func (r *FakeRPC) BlockNumber() (string, error) {
-	return strconv.FormatUint(*r.blockcount, 10), nil
+	return strconv.FormatUint(r.backend.blocknumber, 10), nil
 }
 
 func TestResourceValidContent(t *testing.T) {
 
-	rh, privkey, _, err, teardownTest := setupTest()
+	// privkey for signing updates
+	privkey, err := crypto.GenerateKey()
+	if err != nil {
+		return
+	}
+
+	rh, _, err, teardownTest := setupTest(privkey, nil, zeroAddr)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -97,8 +118,14 @@ func TestResourceValidContent(t *testing.T) {
 }
 
 func TestResourceReverseLookup(t *testing.T) {
-	//rh, privkey, datadir, err, teardownTest := setupTest()
-	rh, _, _, err, teardownTest := setupTest()
+
+	// privkey for signing updates
+	privkey, err := crypto.GenerateKey()
+	if err != nil {
+		return
+	}
+
+	rh, _, err, teardownTest := setupTest(privkey, nil, zeroAddr)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -149,7 +176,13 @@ func TestResourceReverseLookup(t *testing.T) {
 
 func TestResourceHandler(t *testing.T) {
 
-	rh, privkey, datadir, err, teardownTest := setupTest()
+	// privkey for signing updates
+	privkey, err := crypto.GenerateKey()
+	if err != nil {
+		return
+	}
+
+	rh, datadir, err, teardownTest := setupTest(privkey, nil, zeroAddr)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -218,7 +251,7 @@ func TestResourceHandler(t *testing.T) {
 	// it will match on second iteration startblocknumber + (resourcefrequency * 3)
 	blockCount = startblocknumber + (resourcefrequency * 4)
 
-	rh2, err := NewResourceHandler(privkey, datadir, &testCloudStore{}, rh.ethapi)
+	rh2, err := NewResourceHandler(privkey, datadir, &testCloudStore{}, rh.rpcClient, ens.MainNetAddress)
 	_, err = rh2.LookupLatest(resourcename, true)
 	if err != nil {
 		teardownTest(t, err)
@@ -280,7 +313,33 @@ func TestResourceHandler(t *testing.T) {
 
 }
 
-func setupTest() (rh *ResourceHandler, privkey *ecdsa.PrivateKey, datadir string, err error, teardown func(*testing.T, error)) {
+func TestResourceENS(t *testing.T) {
+
+	// privkey for signing updates
+	privkey, err := crypto.GenerateKey()
+	if err != nil {
+		return
+	}
+
+	domainparts := strings.Split(domainName, ".")
+	addr, contractbackend, err := setupENS(privkey, domainparts[0], domainparts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rh, _, err, teardownTest := setupTest(privkey, contractbackend, addr)
+	if err != nil {
+		teardownTest(t, err)
+	}
+
+	_, err = rh.NewResource(domainName, 42)
+	if err != nil {
+		teardownTest(t, err)
+	}
+	teardownTest(t, nil)
+}
+
+func setupTest(privkey *ecdsa.PrivateKey, contractbackend bind.ContractBackend, ensaddr common.Address) (rh *ResourceHandler, datadir string, err error, teardown func(*testing.T, error)) {
 
 	var fsClean func()
 	var rpcClean func()
@@ -291,12 +350,6 @@ func setupTest() (rh *ResourceHandler, privkey *ecdsa.PrivateKey, datadir string
 		if rpcClean != nil {
 			rpcClean()
 		}
-	}
-
-	// privkey for signing updates
-	privkey, err = crypto.GenerateKey()
-	if err != nil {
-		return
 	}
 
 	// temp datadir
@@ -316,8 +369,12 @@ func setupTest() (rh *ResourceHandler, privkey *ecdsa.PrivateKey, datadir string
 		return
 	}
 	rpcserver := rpc.NewServer()
+	var fake *fakeBackend
+	if contractbackend != nil {
+		fake = contractbackend.(*fakeBackend)
+	}
 	rpcserver.RegisterName("eth", &FakeRPC{
-		blockcount: &blockCount,
+		backend: fake,
 	})
 	go func() {
 		rpcserver.ServeListener(ipcl)
@@ -332,7 +389,7 @@ func setupTest() (rh *ResourceHandler, privkey *ecdsa.PrivateKey, datadir string
 		return
 	}
 
-	rh, err = NewResourceHandler(privkey, datadir, &testCloudStore{}, rpcclient)
+	rh, err = NewResourceHandler(privkey, datadir, &testCloudStore{}, rpcclient, ensaddr)
 	teardown = func(t *testing.T, err error) {
 		cleanF()
 		if err != nil {
@@ -342,22 +399,7 @@ func setupTest() (rh *ResourceHandler, privkey *ecdsa.PrivateKey, datadir string
 
 	return
 }
-
-func TestResourceENS(t *testing.T) {
-	_, privkey, _, err, teardownTest := setupTest()
-	if err != nil {
-		teardownTest(t, err)
-	}
-	err = setupENS(privkey, "foo", "bar")
-	if err != nil {
-		teardownTest(t, err)
-	}
-	teardownTest(t, nil)
-}
-
-func setupENS(privkey *ecdsa.PrivateKey, sub string, top string) error {
-	// ens backend
-	//key := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+func setupENS(privkey *ecdsa.PrivateKey, sub string, top string) (common.Address, bind.ContractBackend, error) {
 	var tophash [32]byte
 	var subhash [32]byte
 	hashfunc.Reset()
@@ -367,45 +409,39 @@ func setupENS(privkey *ecdsa.PrivateKey, sub string, top string) error {
 	hashfunc.Write([]byte(sub))
 	copy(subhash[:], hashfunc.Sum(nil))
 	addr := crypto.PubkeyToAddress(privkey.PublicKey)
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
+	contractBackend := &fakeBackend{
+		SimulatedBackend: backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}),
+	}
 	transactOpts := bind.NewKeyedTransactor(privkey)
 
-	_, _, ensinstance, err := contract.DeployENS(transactOpts, contractBackend)
+	ensAddr, _, ensinstance, err := contract.DeployENS(transactOpts, contractBackend)
 	if err != nil {
-		return fmt.Errorf("can't deploy: %v", err)
+		return zeroAddr, nil, fmt.Errorf("can't deploy: %v", err)
 	}
 
-	// Deploy the registrar.
-	//	regAddr, _, reginstance, err := contract.DeployFIFSRegistrar(transactOpts, contractBackend, ensAddr, [32]byte{})
-	//	if err != nil {
-	//		return fmt.Errorf("can't deploy Registrar: %v", err)
-	//	}
-	//	contractBackend.Commit()
-	//
-	// Set the registrar as owner of the ENS root.
 	if _, err = ensinstance.SetOwner(transactOpts, [32]byte{}, addr); err != nil {
-		return fmt.Errorf("can't setowner: %v", err)
+		return zeroAddr, nil, fmt.Errorf("can't setowner: %v", err)
 	}
 	contractBackend.Commit()
 
 	if _, err = ensinstance.SetSubnodeOwner(transactOpts, [32]byte{}, tophash, addr); err != nil {
-		return fmt.Errorf("can't register top: %v", err)
+		return zeroAddr, nil, fmt.Errorf("can't register top: %v", err)
 	}
 	contractBackend.Commit()
 
 	if _, err = ensinstance.SetSubnodeOwner(transactOpts, ens.EnsNode(top), subhash, addr); err != nil {
-		return fmt.Errorf("can't register top: %v", err)
+		return zeroAddr, nil, fmt.Errorf("can't register top: %v", err)
 	}
 	contractBackend.Commit()
 
 	nodeowner, err := ensinstance.Owner(&bind.CallOpts{}, ens.EnsNode(strings.Join([]string{sub, top}, ".")))
 	if err != nil {
-		return fmt.Errorf("can't retrieve owner: %v", err)
+		return zeroAddr, nil, fmt.Errorf("can't retrieve owner: %v", err)
 	} else if !bytes.Equal(nodeowner.Bytes(), addr.Bytes()) {
-		return fmt.Errorf("retrieved owner doesn't match; expected '%x', got '%x'", addr, nodeowner)
+		return zeroAddr, nil, fmt.Errorf("retrieved owner doesn't match; expected '%x', got '%x'", addr, nodeowner)
 	}
 
-	return nil
+	return ensAddr, contractBackend, nil
 }
 
 type testCloudStore struct {

@@ -11,9 +11,11 @@ import (
 
 	"golang.org/x/net/idna"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -99,7 +101,9 @@ type resource struct {
 // TODO: signature validation
 type ResourceHandler struct {
 	ChunkStore
-	ethapi       *rpc.Client
+	ethapi       *ethclient.Client
+	rpcClient    *rpc.Client
+	ensapi       *ens.ENS
 	resources    map[string]*resource
 	hashLock     sync.Mutex
 	resourceLock sync.RWMutex
@@ -109,7 +113,7 @@ type ResourceHandler struct {
 }
 
 // Create or open resource update chunk store
-func NewResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore CloudStore, ethapi *rpc.Client) (*ResourceHandler, error) {
+func NewResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore CloudStore, rpcclient *rpc.Client, ensAddr common.Address) (*ResourceHandler, error) {
 	path := filepath.Join(datadir, "resource")
 	dbStore, err := NewDbStore(datadir, nil, singletonSwarmDbCapacity, 0)
 	if err != nil {
@@ -120,9 +124,17 @@ func NewResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore Cl
 		DbStore:  dbStore,
 	}
 	hasher := MakeHashFunc("SHA3")
+	transactOpts := bind.NewKeyedTransactor(privKey)
+	ethapi := ethclient.NewClient(rpcclient)
+	ensinstance, err := ens.NewENS(transactOpts, ensAddr, ethapi)
+	if err != nil {
+		return nil, err
+	}
 	return &ResourceHandler{
 		ChunkStore:   newResourceChunkStore(path, hasher, localStore, cloudStore),
-		ethapi:       ethapi,
+		ethapi:       ethclient.NewClient(rpcclient),
+		rpcClient:    rpcclient,
+		ensapi:       ensinstance,
 		resources:    make(map[string]*resource),
 		hasher:       hasher(),
 		privKey:      privKey,
@@ -519,7 +531,7 @@ func (self *ResourceHandler) Close() {
 func (self *ResourceHandler) getBlock() (uint64, error) {
 	// get the block height and convert to uint64
 	var currentblock string
-	err := self.ethapi.Call(&currentblock, "eth_blockNumber")
+	err := self.rpcClient.Call(&currentblock, "eth_blockNumber")
 	if err != nil {
 		return 0, err
 	}
