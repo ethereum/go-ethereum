@@ -129,7 +129,10 @@ func TestResourceReverseLookup(t *testing.T) {
 		return
 	}
 
-	rh, _, err, teardownTest := setupTest(privkey, nil, zeroAddr)
+	backend := &fakeBackend{
+		blocknumber: 4200,
+	}
+	rh, _, err, teardownTest := setupTest(privkey, backend, zeroAddr)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -143,7 +146,7 @@ func TestResourceReverseLookup(t *testing.T) {
 	}
 
 	// update data
-	blockCount += resourcefrequency + 1
+	fwdBlocks(int(resourcefrequency+1), backend)
 	data := []byte("foo")
 	resourcekey, err := rh.Update(resourcename, data)
 	if err != nil {
@@ -187,7 +190,10 @@ func TestResourceHandler(t *testing.T) {
 		return
 	}
 
-	rh, datadir, err, teardownTest := setupTest(privkey, nil, zeroAddr)
+	backend := &fakeBackend{
+		blocknumber: 4200,
+	}
+	rh, datadir, err, teardownTest := setupTest(privkey, backend, zeroAddr)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -205,8 +211,8 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// check that the new resource is stored correctly
-	namehash := ens.EnsNode(resourcevalidname)
 	rawrh := rh.(*RawResourceHandler)
+	namehash := rawrh.nameHashFunc(resourcevalidname)
 	chunk, err := rawrh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(namehash[:]))
 	if err != nil {
 		teardownTest(t, err)
@@ -215,8 +221,8 @@ func TestResourceHandler(t *testing.T) {
 	}
 	startblocknumber := binary.LittleEndian.Uint64(chunk.SData[8:16])
 	chunkfrequency := binary.LittleEndian.Uint64(chunk.SData[16:])
-	if startblocknumber != blockCount {
-		teardownTest(t, fmt.Errorf("stored block number %d does not match provided block number %d", startblocknumber, blockCount))
+	if startblocknumber != backend.blocknumber {
+		teardownTest(t, fmt.Errorf("stored block number %d does not match provided block number %d", startblocknumber, backend.blocknumber))
 	}
 	if chunkfrequency != resourcefrequency {
 		teardownTest(t, fmt.Errorf("stored frequency %d does not match provided frequency %d", chunkfrequency, resourcefrequency))
@@ -224,28 +230,32 @@ func TestResourceHandler(t *testing.T) {
 
 	// update halfway to first period
 	resourcekey := make(map[string]Key)
-	blockCount = startblocknumber + (resourcefrequency / 2)
+	//blockCount = startblocknumber + (resourcefrequency / 2)
+	fwdBlocks(int(resourcefrequency/2), backend)
 	resourcekey["blinky"], err = rh.Update(resourcename, []byte("blinky"))
 	if err != nil {
 		teardownTest(t, err)
 	}
 
 	// update on first period
-	blockCount = startblocknumber + resourcefrequency
+	//blockCount = startblocknumber + resourcefrequency
+	fwdBlocks(int(resourcefrequency/2), backend)
 	resourcekey["pinky"], err = rh.Update(resourcename, []byte("pinky"))
 	if err != nil {
 		teardownTest(t, err)
 	}
 
 	// update on second period
-	blockCount = startblocknumber + (resourcefrequency * 2)
+	//blockCount = startblocknumber + (resourcefrequency * 2)
+	fwdBlocks(int(resourcefrequency), backend)
 	resourcekey["inky"], err = rh.Update(resourcename, []byte("inky"))
 	if err != nil {
 		teardownTest(t, err)
 	}
 
 	// update just after second period
-	blockCount = startblocknumber + (resourcefrequency * 2) + 1
+	//blockCount = startblocknumber + (resourcefrequency * 2) + 1
+	fwdBlocks(1, backend)
 	resourcekey["clyde"], err = rh.Update(resourcename, []byte("clyde"))
 	if err != nil {
 		teardownTest(t, err)
@@ -256,6 +266,7 @@ func TestResourceHandler(t *testing.T) {
 	// check we can retrieve the updates after close
 	// it will match on second iteration startblocknumber + (resourcefrequency * 3)
 	blockCount = startblocknumber + (resourcefrequency * 4)
+	fwdBlocks(int(resourcefrequency*2)-1, backend)
 
 	rh2, err := NewRawResourceHandler(privkey, datadir, &testCloudStore{}, rawrh.rpcClient, nil)
 	_, err = rh2.LookupLatest(resourcename, true)
