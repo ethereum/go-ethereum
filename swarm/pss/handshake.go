@@ -444,7 +444,7 @@ func (self *HandshakeAPI) Handshake(pubkeyid string, topic Topic, sync bool, flu
 		keycount = self.ctrl.symKeyCapacity
 	} else {
 		validkeys := self.ctrl.validKeys(pubkeyid, &topic, false)
-		keycount = uint8(self.ctrl.symKeyCapacity - uint8(len(validkeys)))
+		keycount = self.ctrl.symKeyCapacity - uint8(len(validkeys))
 	}
 	if keycount == 0 {
 		return keys, errors.New("Incoming symmetric key store is already full")
