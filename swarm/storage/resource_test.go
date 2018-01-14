@@ -90,9 +90,10 @@ func TestResourceValidContent(t *testing.T) {
 	if err != nil {
 		teardownTest(t, err)
 	}
-	rh.hasher.Reset()
-	rh.hasher.Write(data)
-	datahash := rh.hasher.Sum(nil)
+	hasher := MakeHashFunc("SHA3")()
+	hasher.Reset()
+	hasher.Write(data)
+	datahash := hasher.Sum(nil)
 	sig, err := crypto.Sign(datahash, privkey)
 	if err != nil {
 		teardownTest(t, err)
@@ -105,7 +106,8 @@ func TestResourceValidContent(t *testing.T) {
 
 	// check that we can recover the owner account from the update chunk's signature
 	// TODO: change this to verifyContent on ENS integration
-	recoveredaddress, err := rh.getContentAccount(chunk.SData)
+	rawrh := rh.(*RawResourceHandler)
+	recoveredaddress, err := rawrh.getContentAccount(chunk.SData)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -145,7 +147,8 @@ func TestResourceReverseLookup(t *testing.T) {
 	if err != nil {
 		teardownTest(t, err)
 	}
-	chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(resourcekey))
+	rawrh := rh.(*RawResourceHandler)
+	chunk, err := rawrh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(resourcekey))
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -159,8 +162,8 @@ func TestResourceReverseLookup(t *testing.T) {
 	// get name, period, version from chunk and check
 	revperiod, revversion, revname, revdata, err := parseUpdate(chunk.SData[signatureLength:])
 
-	if !bytes.Equal(revname, rsrc.ensName.Bytes()) {
-		teardownTest(t, fmt.Errorf("Expected retrieved name from chunk data to be '%x', was '%x'", rsrc.ensName.Bytes(), revname))
+	if !bytes.Equal(revname, rsrc.nameHash.Bytes()) {
+		teardownTest(t, fmt.Errorf("Expected retrieved name from chunk data to be '%x', was '%x'", rsrc.nameHash.Bytes(), revname))
 	}
 	if !bytes.Equal(revdata, data) {
 		teardownTest(t, fmt.Errorf("Expected retrieved data from chunk data to be '%x', was '%x'", data, revdata))
@@ -201,7 +204,8 @@ func TestResourceHandler(t *testing.T) {
 
 	// check that the new resource is stored correctly
 	namehash := ens.EnsNode(resourcevalidname)
-	chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(namehash[:]))
+	rawrh := rh.(*RawResourceHandler)
+	chunk, err := rawrh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(namehash[:]))
 	if err != nil {
 		teardownTest(t, err)
 	} else if len(chunk.SData) < 16 {
@@ -251,7 +255,7 @@ func TestResourceHandler(t *testing.T) {
 	// it will match on second iteration startblocknumber + (resourcefrequency * 3)
 	blockCount = startblocknumber + (resourcefrequency * 4)
 
-	rh2, err := NewResourceHandler(privkey, datadir, &testCloudStore{}, rh.rpcClient, ens.MainNetAddress)
+	rh2, err := NewRawResourceHandler(privkey, datadir, &testCloudStore{}, rawrh.rpcClient, nil)
 	_, err = rh2.LookupLatest(resourcename, true)
 	if err != nil {
 		teardownTest(t, err)
@@ -268,7 +272,7 @@ func TestResourceHandler(t *testing.T) {
 		teardownTest(t, fmt.Errorf("resource period was %d, expected 3", rh2.resources[resourcename].lastPeriod))
 	}
 
-	rsrc, err := NewResource(resourcename, startblocknumber, resourcefrequency)
+	rsrc, err := NewResource(resourcename, startblocknumber, resourcefrequency, rh2.nameHashFunc)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -336,10 +340,11 @@ func TestResourceENS(t *testing.T) {
 	if err != nil {
 		teardownTest(t, err)
 	}
+
 	teardownTest(t, nil)
 }
 
-func setupTest(privkey *ecdsa.PrivateKey, contractbackend bind.ContractBackend, ensaddr common.Address) (rh *ResourceHandler, datadir string, err error, teardown func(*testing.T, error)) {
+func setupTest(privkey *ecdsa.PrivateKey, contractbackend bind.ContractBackend, ensaddr common.Address) (rh ResourceHandler, datadir string, err error, teardown func(*testing.T, error)) {
 
 	var fsClean func()
 	var rpcClean func()
@@ -389,7 +394,11 @@ func setupTest(privkey *ecdsa.PrivateKey, contractbackend bind.ContractBackend, 
 		return
 	}
 
-	rh, err = NewResourceHandler(privkey, datadir, &testCloudStore{}, rpcclient, ensaddr)
+	if ensaddr != zeroAddr {
+		rh, err = NewENSResourceHandler(privkey, datadir, &testCloudStore{}, rpcclient, ensaddr)
+	} else {
+		rh, err = NewRawResourceHandler(privkey, datadir, &testCloudStore{}, rpcclient, nil)
+	}
 	teardown = func(t *testing.T, err error) {
 		cleanF()
 		if err != nil {
