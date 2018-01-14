@@ -7,16 +7,23 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"golang.org/x/net/idna"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/contracts/ens"
+	"github.com/ethereum/go-ethereum/contracts/ens/contract"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -24,6 +31,7 @@ import (
 var (
 	blockCount = uint64(4200)
 	cleanF     func()
+	hashfunc   = sha3.NewKeccak256()
 )
 
 func init() {
@@ -333,6 +341,71 @@ func setupTest() (rh *ResourceHandler, privkey *ecdsa.PrivateKey, datadir string
 	}
 
 	return
+}
+
+func TestResourceENS(t *testing.T) {
+	_, privkey, _, err, teardownTest := setupTest()
+	if err != nil {
+		teardownTest(t, err)
+	}
+	err = setupENS(privkey, "foo", "bar")
+	if err != nil {
+		teardownTest(t, err)
+	}
+	teardownTest(t, nil)
+}
+
+func setupENS(privkey *ecdsa.PrivateKey, sub string, top string) error {
+	// ens backend
+	//key := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	var tophash [32]byte
+	var subhash [32]byte
+	hashfunc.Reset()
+	hashfunc.Write([]byte(top))
+	copy(tophash[:], hashfunc.Sum(nil))
+	hashfunc.Reset()
+	hashfunc.Write([]byte(sub))
+	copy(subhash[:], hashfunc.Sum(nil))
+	addr := crypto.PubkeyToAddress(privkey.PublicKey)
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
+	transactOpts := bind.NewKeyedTransactor(privkey)
+
+	_, _, ensinstance, err := contract.DeployENS(transactOpts, contractBackend)
+	if err != nil {
+		return fmt.Errorf("can't deploy: %v", err)
+	}
+
+	// Deploy the registrar.
+	//	regAddr, _, reginstance, err := contract.DeployFIFSRegistrar(transactOpts, contractBackend, ensAddr, [32]byte{})
+	//	if err != nil {
+	//		return fmt.Errorf("can't deploy Registrar: %v", err)
+	//	}
+	//	contractBackend.Commit()
+	//
+	// Set the registrar as owner of the ENS root.
+	if _, err = ensinstance.SetOwner(transactOpts, [32]byte{}, addr); err != nil {
+		return fmt.Errorf("can't setowner: %v", err)
+	}
+	contractBackend.Commit()
+
+	if _, err = ensinstance.SetSubnodeOwner(transactOpts, [32]byte{}, tophash, addr); err != nil {
+		return fmt.Errorf("can't register top: %v", err)
+	}
+	contractBackend.Commit()
+
+	if _, err = ensinstance.SetSubnodeOwner(transactOpts, ens.EnsNode(top), subhash, addr); err != nil {
+		return fmt.Errorf("can't register top: %v", err)
+	}
+	contractBackend.Commit()
+
+	nodeowner, err := ensinstance.Owner(&bind.CallOpts{}, ens.EnsNode(strings.Join([]string{sub, top}, ".")))
+	if err != nil {
+		return fmt.Errorf("can't retrieve owner: %v", err)
+	} else if !bytes.Equal(nodeowner.Bytes(), addr.Bytes()) {
+		return fmt.Errorf("retrieved owner doesn't match; expected '%x', got '%x'", addr, nodeowner)
+	}
+
+	return nil
 }
 
 type testCloudStore struct {
