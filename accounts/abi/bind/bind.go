@@ -26,7 +26,6 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
-	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"golang.org/x/tools/imports"
@@ -55,20 +54,22 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 		if err != nil {
 			return "", err
 		}
-		// Strip any whitespace from the JSON ABI
-		strippedABI := strings.Map(func(r rune) rune {
-			if unicode.IsSpace(r) {
-				return -1
-			}
-			return r
-		}, abis[i])
-
 		// Extract the call and transact methods, and sort them alphabetically
 		var (
 			calls     = make(map[string]*tmplMethod)
 			transacts = make(map[string]*tmplMethod)
 		)
 		for _, original := range evmABI.Methods {
+			skipMethodWithUserType := false
+			for _, input := range original.Inputs {
+				if input.Type.T == abi.UserTy {
+					skipMethodWithUserType = true
+					break
+				}
+			}
+			if skipMethodWithUserType {
+				continue //skip this method
+			}
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original
 			normalized.Name = methodNormalizer[lang](original.Name)
@@ -96,7 +97,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 		}
 		contracts[types[i]] = &tmplContract{
 			Type:        capitalise(types[i]),
-			InputABI:    strings.Replace(strippedABI, "\"", "\\\"", -1),
+			InputABI:    strings.Replace(abis[i], "\"", "\\\"", -1),
 			InputBin:    strings.TrimSpace(bytecodes[i]),
 			Constructor: evmABI.Constructor,
 			Calls:       calls,

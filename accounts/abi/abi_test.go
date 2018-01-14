@@ -55,6 +55,87 @@ const jsondata2 = `
 	{ "type" : "function", "name" : "sliceMultiAddress", "constant" : false, "inputs" : [ { "name" : "a", "type" : "address[]" }, { "name" : "b", "type" : "address[]" } ] }
 ]`
 
+const NettingChannelLibraryABI = `
+[
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "locked_encoded",
+				"type": "bytes"
+			},
+			{
+				"name": "merkle_proof",
+				"type": "bytes"
+			},
+			{
+				"name": "secret",
+				"type": "bytes32"
+			}
+		],
+		"name": "withdraw",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "self",
+				"type": "NettingChannelLibrary.Data storage"
+			},
+			{
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "deposit",
+		"outputs": [
+			{
+				"name": "success",
+				"type": "bool"
+			},
+			{
+				"name": "balance",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "contract_version",
+		"outputs": [
+			{
+				"name": "",
+				"type": "string"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	}
+]
+`
+
+func TestNewUserType(t *testing.T) {
+	_, err := NewType("NettingChannelLibrary.Data storage")
+	if err != nil {
+		t.Error(err)
+	}
+	abi, err := JSON(strings.NewReader(NettingChannelLibraryABI))
+	if err != nil {
+		t.Error(err)
+	}
+	if _, err := abi.Pack("withdraw", []byte{1, 2, 3}, []byte{1, 2, 3}, [32]byte{1, 2, 3}); err != nil {
+		t.Error(err)
+	}
+}
 func TestReader(t *testing.T) {
 	Uint256, _ := NewType("uint256")
 	exp := ABI{

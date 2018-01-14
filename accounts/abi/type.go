@@ -38,6 +38,7 @@ const (
 	HashTy
 	FixedPointTy
 	FunctionTy
+	UserTy
 )
 
 // Type is the reflection of the supported argument type
@@ -159,7 +160,13 @@ func NewType(t string) (typ Type, err error) {
 		typ.Size = 24
 		typ.Type = reflect.ArrayOf(24, reflect.TypeOf(byte(0)))
 	default:
-		return Type{}, fmt.Errorf("unsupported arg type: %s", t)
+		//user defined types
+		typ.Kind = reflect.Struct
+		typ.T = UserTy
+		typ.Size = -1
+		typ.Type = reflect.TypeOf(struct{}{})
+		//default:
+		//	return Type{}, fmt.Errorf("unsupported arg type: %s", t)
 	}
 
 	return
