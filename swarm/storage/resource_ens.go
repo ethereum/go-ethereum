@@ -46,12 +46,29 @@ func NewENSResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore
 }
 
 func (self *ENSResourceHandler) NewResource(name string, frequency uint64) (*resource, error) {
-	owneraddr, err := self.ensapi.Owner(self.RawResourceHandler.nameHashFunc(name))
+	ok, err := self.IsOwner(name)
 	if err != nil {
-		return nil, fmt.Errorf("ENS error: %v", err)
-	}
-	if owneraddr != self.addr {
-		return nil, fmt.Errorf("not owner")
+		return nil, err
+	} else if !ok {
+		return nil, fmt.Errorf("Not Owner")
 	}
 	return self.RawResourceHandler.NewResource(name, frequency)
+}
+
+func (self *ENSResourceHandler) Update(name string, data []byte) (Key, error) {
+	ok, err := self.IsOwner(name)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, fmt.Errorf("Not Owner")
+	}
+	return self.RawResourceHandler.Update(name, data)
+}
+
+func (self *ENSResourceHandler) IsOwner(name string) (bool, error) {
+	owneraddr, err := self.ensapi.Owner(self.RawResourceHandler.nameHashFunc(name))
+	if err != nil {
+		return false, fmt.Errorf("ENS error: %v", err)
+	}
+	return owneraddr == self.addr, nil
 }

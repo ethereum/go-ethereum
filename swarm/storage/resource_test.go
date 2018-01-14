@@ -328,7 +328,7 @@ func TestResourceHandler(t *testing.T) {
 }
 
 // create ENS enabled resource update, with and without valid owner
-func TestResourceENSNew(t *testing.T) {
+func TestResourceENSOwner(t *testing.T) {
 
 	// privkey for signing updates
 	privkey, err := crypto.GenerateKey()
@@ -361,6 +361,12 @@ func TestResourceENSNew(t *testing.T) {
 		teardownTest(t, err)
 	}
 
+	// update resource when we are owner = ok
+	_, err = rh.Update(domainName, []byte("foo"))
+	if err != nil {
+		teardownTest(t, err)
+	}
+
 	// create new resource when we are NOT owner = !ok
 	rawrh := rh.(*ENSResourceHandler)
 	rawrh.privKey = privkeytwo
@@ -368,6 +374,11 @@ func TestResourceENSNew(t *testing.T) {
 	_, err = rawrh.NewResource(domainName, 42)
 	if err == nil {
 		teardownTest(t, fmt.Errorf("Expected resource create fail due to owner mismatch"))
+	}
+	// update resource when we are owner = ok
+	_, err = rh.Update(domainName, []byte("foo"))
+	if err == nil {
+		teardownTest(t, fmt.Errorf("Expected resource update fail due to owner mismatch"))
 	}
 
 	teardownTest(t, nil)
