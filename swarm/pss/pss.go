@@ -22,7 +22,6 @@ import (
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
-// TODO: proper padding generation for messages
 const (
 	defaultPaddingByteSize     = 16
 	defaultMsgTTL              = time.Second * 8
