@@ -102,7 +102,7 @@ type ResourceHandler struct {
 	ethapi       *rpc.Client
 	resources    map[string]*resource
 	hashLock     sync.Mutex
-	resourceLock sync.Mutex
+	resourceLock sync.RWMutex
 	hasher       SwarmHash
 	privKey      *ecdsa.PrivateKey
 	maxChunkData int64
@@ -202,15 +202,15 @@ func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resour
 	self.Put(chunk)
 	log.Debug("new resource", "name", validname, "key", ensName, "startBlock", currentblock, "frequency", frequency)
 
-	self.resourceLock.Lock()
-	defer self.resourceLock.Unlock()
-	self.resources[name] = &resource{
+	rsrc := &resource{
 		name:       validname,
 		ensName:    ensName,
 		startBlock: currentblock,
 		frequency:  frequency,
 		updated:    time.Now(),
 	}
+	self.setResource(name, rsrc)
+
 	return self.resources[name], nil
 }
 
@@ -355,12 +355,9 @@ func (self *ResourceHandler) loadResource(name string, refresh bool) (*resource,
 	// if the resource is not known to this session we must load it
 	// if refresh is set, we force load
 
-	rsrc := &resource{}
-
-	self.resourceLock.Lock()
-	_, ok := self.resources[name]
-	self.resourceLock.Unlock()
-	if !ok || refresh {
+	rsrc := self.getResource(name)
+	if rsrc == nil || refresh {
+		rsrc = &resource{}
 		// make sure our ens identifier is idna safe
 		validname, err := idna.ToASCII(name)
 		if err != nil {
@@ -414,9 +411,7 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk, i
 	rsrc.data = make([]byte, len(data))
 	copy(rsrc.data, data)
 	log.Debug("Resource synced", "name", rsrc.name, "key", chunk.Key, "period", rsrc.lastPeriod, "version", rsrc.version)
-	self.resourceLock.Lock()
-	self.resources[*indexname] = rsrc
-	self.resourceLock.Unlock()
+	self.setResource(*indexname, rsrc)
 	return rsrc, nil
 }
 
@@ -540,6 +535,19 @@ func (self *ResourceHandler) BlockToPeriod(name string, blocknumber uint64) uint
 
 func (self *ResourceHandler) PeriodToBlock(name string, period uint32) uint64 {
 	return self.resources[name].startBlock + (uint64(period) * self.resources[name].frequency)
+}
+
+func (self *ResourceHandler) getResource(name string) *resource {
+	self.resourceLock.RLock()
+	defer self.resourceLock.RUnlock()
+	rsrc := self.resources[name]
+	return rsrc
+}
+
+func (self *ResourceHandler) setResource(name string, rsrc *resource) {
+	self.resourceLock.Lock()
+	defer self.resourceLock.Unlock()
+	self.resources[name] = rsrc
 }
 
 func (self *ResourceHandler) resourceHash(namehash common.Hash, period uint32, version uint32) Key {
