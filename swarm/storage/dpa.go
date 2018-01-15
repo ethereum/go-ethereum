@@ -80,7 +80,7 @@ func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
 }
 
 func NewDPA(store ChunkStore, params *ChunkerParams) *DPA {
-	chunker := NewTreeChunker(params)
+	chunker := NewPyramidChunker(params)
 	return &DPA{
 		Chunker:    chunker,
 		ChunkStore: store,

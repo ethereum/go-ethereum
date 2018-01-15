@@ -136,10 +136,11 @@ func NewPyramidChunker(params *ChunkerParams) (self *PyramidChunker) {
 	return
 }
 
-func (self *PyramidChunker) Join(key Key, chunkC chan *Chunk) LazySectionReader {
+func (self *PyramidChunker) Join(key Key, chunkC chan *Chunk, depth int) LazySectionReader {
 	return &LazyChunkReader{
 		key:       key,
 		chunkC:    chunkC,
+		depth:     depth,
 		chunkSize: self.chunkSize,
 		branches:  self.branches,
 		hashSize:  self.hashSize,
