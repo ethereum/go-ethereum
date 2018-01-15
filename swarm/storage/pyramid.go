@@ -414,14 +414,24 @@ func (self *PyramidChunker) prepareChunks(isAppend bool, chunkLevel [][]*TreeEnt
 		var n int
 		var err error
 		chunkData := make([]byte, self.chunkSize+8)
+		maxBuf := len(chunkData)
+		readBytes := 8
 		if unFinishedChunk != nil {
 			copy(chunkData, unFinishedChunk.SData)
-			n, err = data.Read(chunkData[8+unFinishedChunk.Size:])
-			n += int(unFinishedChunk.Size)
-			unFinishedChunk = nil
-		} else {
-			n, err = data.Read(chunkData[8:])
+			readBytes += int(unFinishedChunk.Size)
 		}
+		for readBytes < maxBuf {
+			n0, err0 := data.Read(chunkData[readBytes:])
+			readBytes += n0
+			n += n0
+			if err0 != nil {
+				if err0 != io.EOF || (n0 == 0 && maxBuf == readBytes) || n == 0 || n0 != 0 {
+					err = err0
+				}
+				break
+			}
+		}
+		unFinishedChunk = nil
 
 		totalDataSize += n
 		if err != nil {
