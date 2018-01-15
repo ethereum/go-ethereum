@@ -136,7 +136,10 @@ func (self *testIncomingStreamer) BatchDone(string, uint64, []byte, []byte) func
 }
 
 func (self *testOutgoingStreamer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
-	return make([]byte, HashSize), from + 1, to + 1, nil, nil
+	proof := &HandoverProof{
+		Handover: &Handover{},
+	}
+	return make([]byte, HashSize), from + 1, to + 1, proof, nil
 }
 
 func (self *testOutgoingStreamer) GetData([]byte) []byte {
@@ -221,11 +224,13 @@ func TestStreamerUpstreamSubscribeMsgExchange(t *testing.T) {
 			p2ptest.Expect{
 				Code: 1,
 				Msg: &OfferedHashesMsg{
-					Stream:        "foo",
-					HandoverProof: nil,
-					Hashes:        make([]byte, HashSize),
-					From:          6,
-					To:            9,
+					Stream: "foo",
+					HandoverProof: &HandoverProof{
+						Handover: &Handover{},
+					},
+					Hashes: make([]byte, HashSize),
+					From:   6,
+					To:     9,
 				},
 				Peer: peerID,
 			},
