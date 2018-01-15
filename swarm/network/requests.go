@@ -37,11 +37,14 @@ type Delivery struct {
 }
 
 func NewDelivery(overlay Overlay, dbAccess *DbAccess) *Delivery {
-	return &Delivery{
+	self := &Delivery{
 		dbAccess: dbAccess,
 		overlay:  overlay,
 		receiveC: make(chan *ChunkDeliveryMsg, 10),
 	}
+
+	go self.processReceivedChunks()
+	return self
 }
 
 // RetrieveRequestStreamer implements OutgoingStreamer
@@ -134,8 +137,7 @@ func (self *Delivery) handleRetrieveRequestMsg(sp *StreamerPeer, req *RetrieveRe
 	}
 	// TODO: call the retrieve function of the outgoing syncer
 	if req.SkipCheck {
-		sp.Deliver(chunk, s.priority)
-		return nil
+		return sp.Deliver(chunk, s.priority)
 	}
 	streamer.deliveryC <- chunk
 	return nil
@@ -182,11 +184,13 @@ func (self *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip 
 		}
 		sp := self.getPeer(spId)
 		// TODO: skip light nodes that do not accept retrieve requests
-		sp.SendPriority(&RetrieveRequestMsg{
+		err := sp.SendPriority(&RetrieveRequestMsg{
 			Key:       hash,
 			SkipCheck: skipCheck,
 		}, Top)
-		success = true
+		if err == nil {
+			success = true
+		}
 		return false
 	})
 	if success {

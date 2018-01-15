@@ -17,6 +17,7 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	crand "crypto/rand"
 	"errors"
@@ -221,6 +222,105 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	}
 }
 
+func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
+	// TODO: we only need streamer
+	tester, streamer, localStore, teardown, err := newStreamerTester(t)
+	defer teardown()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	streamer.RegisterIncomingStreamer("foo", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
+		return &testIncomingStreamer{
+			t: t,
+		}, nil
+	})
+
+	peerID := tester.IDs[0]
+
+	err = streamer.Subscribe(peerID, "foo", []byte{}, 5, 8, Top, true)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	chunkKey := hash0[:]
+	chunkData := hash1[:]
+	chunk, created := localStore.GetOrCreateRequest(chunkKey)
+
+	if !created {
+		t.Fatal("chunk already exists")
+	}
+	select {
+	case <-chunk.ReqC:
+		t.Fatal("chunk is already received")
+	default:
+	}
+
+	err = tester.TestExchanges(p2ptest.Exchange{
+		Label: "Subscribe message",
+		Expects: []p2ptest.Expect{
+			p2ptest.Expect{
+				Code: 4,
+				Msg: &SubscribeMsg{
+					Stream:   "foo",
+					Key:      []byte{},
+					From:     5,
+					To:       8,
+					Priority: Top,
+				},
+				Peer: peerID,
+			},
+		},
+	},
+		p2ptest.Exchange{
+			Label: "ChunkDeliveryRequest message",
+			Triggers: []p2ptest.Trigger{
+				p2ptest.Trigger{
+					Code: 6,
+					Msg: &ChunkDeliveryMsg{
+						Key:   chunkKey,
+						SData: chunkData,
+					},
+					Peer: peerID,
+				},
+			},
+			// Expects: []p2ptest.Expect{
+			// 	p2ptest.Expect{
+			// 		Code: 2,
+			// 		Msg: &WantedHashesMsg{
+			// 			Stream: "foo",
+			// 			Want:   []byte{5},
+			// 			From:   8,
+			// 			To:     0,
+			// 		},
+			// 		Peer: peerID,
+			// 	},
+			// },
+		})
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	timeout := time.NewTimer(1 * time.Second)
+
+	select {
+	case <-timeout.C:
+		t.Fatal("timeout receiving chunk")
+	case <-chunk.ReqC:
+	}
+
+	storedChunk, err := localStore.Get(chunkKey)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if !bytes.Equal(storedChunk.SData, chunkData) {
+		t.Fatal("Retrieved chunk has different data than original")
+	}
+
+}
+
 // serviceName is used with the exec adapter so the exec'd binary knows which
 // service to execute
 const serviceName = "delivery"
@@ -250,6 +350,7 @@ func (rrs *roundRobinStore) Get(key storage.Key) (*storage.Chunk, error) {
 }
 
 func (rrs *roundRobinStore) Put(chunk *storage.Chunk) {
+	log.Warn("chunksize", "size", chunk.Size, "sdata", len(chunk.SData))
 	i := atomic.AddUint32(&rrs.index, 1)
 	idx := int(i) % len(rrs.stores)
 	log.Trace(fmt.Sprintf("put %v into localstore %v", chunk.Key, idx))
@@ -367,7 +468,7 @@ func mustReadAll(dpa *storage.DPA, hash storage.Key) (int, error) {
 		n, err = r.ReadAt(buf, int64(total))
 		total += n
 	}
-	log.Warn(fmt.Sprintf("read %v bytes at offset %v", len(buf), total))
+	log.Warn(fmt.Sprintf("read %v bytes at offset %v error %v", len(buf), total, err))
 	if err != nil && err != io.EOF {
 		return total, err
 	}
@@ -376,7 +477,7 @@ func mustReadAll(dpa *storage.DPA, hash storage.Key) (int, error) {
 
 func testDeliveryFromNodes(adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
 	nodes := 2
-	conns := 0
+	conns := 1
 	size := 8100
 	skipCheck := true
 
@@ -385,6 +486,9 @@ func testDeliveryFromNodes(adapter adapters.NodeAdapter) (*simulations.StepResul
 		ticker := time.NewTicker(500 * time.Millisecond)
 		go func() {
 			defer ticker.Stop()
+			for i := 1; i < nodes; i++ {
+				triggerC <- net.Nodes[i].ID()
+			}
 			for range ticker.C {
 				triggerC <- net.Nodes[0].ID()
 			}
@@ -400,7 +504,7 @@ func testDeliveryFromNodes(adapter adapters.NodeAdapter) (*simulations.StepResul
 		dpa.Start()
 		return func(context.Context) error {
 			defer rrdpa.Stop()
-			hash, wait, err := rrdpa.Store(crand.Reader, int64(size))
+			hash, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size))
 			if err != nil {
 				return err
 			}
@@ -409,6 +513,7 @@ func testDeliveryFromNodes(adapter adapters.NodeAdapter) (*simulations.StepResul
 			go func() {
 				defer dpa.Stop()
 				log.Debug(fmt.Sprintf("retrieve %v", fileHash))
+				time.Sleep(2 * time.Second)
 				n, err := mustReadAll(dpa, fileHash)
 				log.Debug(fmt.Sprintf("retrieved %v", fileHash), "read", n, "err", err)
 			}()
@@ -418,6 +523,9 @@ func testDeliveryFromNodes(adapter adapters.NodeAdapter) (*simulations.StepResul
 
 	check := func(net *simulations.Network, dpa *storage.DPA) func(ctx context.Context, id discover.NodeID) (bool, error) {
 		return func(ctx context.Context, id discover.NodeID) (bool, error) {
+			if id != net.Nodes[0].ID() {
+				return true, nil
+			}
 			select {
 			case <-ctx.Done():
 				return false, ctx.Err()
@@ -486,10 +594,13 @@ func runSimulation(nodes, conns int, action func(*simulations.Network) func(cont
 	// for full peer discovery
 	var addrs [][]byte
 	wg := sync.WaitGroup{}
+	log.Warn("runSimulation 1")
 	for i := range ids {
+		log.Warn("runSimulation 2")
 		// collect the overlay addresses, to
 		addrs = append(addrs, ToOverlayAddr(ids[i].Bytes()))
 		for j := 0; j < conns; j++ {
+			log.Warn("runSimulation 3")
 			var k int
 			if j == 0 {
 				k = i - 1
@@ -497,15 +608,18 @@ func runSimulation(nodes, conns int, action func(*simulations.Network) func(cont
 				k = rand.Intn(len(ids))
 			}
 			if i > 0 {
+				log.Warn("runSimulation 4")
 				wg.Add(1)
 				go func(i, k int) {
 					defer wg.Done()
+					log.Warn("net.Connect")
 					net.Connect(ids[i], ids[k])
 				}(i, k)
 			}
 		}
 	}
 	wg.Wait()
+
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 
 	// 64 nodes ~ 1min
@@ -543,11 +657,18 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 			localAddr: addr,
 			BzzAddr:   NewAddrFromNodeID(p.ID()),
 		}
+		log.Warn("Run function kad On ", "local", id, "remote", p.ID())
 		kad.On(bzzPeer)
-		streamer.Subscribe(p.ID(), retrieveRequestStream, nil, 0, 0, Top, true)
+		go func() {
+			time.Sleep(1 * time.Second)
+			err := streamer.Subscribe(p.ID(), retrieveRequestStream, nil, 0, 0, Top, true)
+			if err != nil {
+				log.Warn("error in subscribe", "err", err)
+			}
+		}()
 		return streamer.Run(bzzPeer)
 	}
-
+	log.Warn("new service created")
 	return &testDeliveryService{
 		run: run,
 	}, nil
@@ -558,6 +679,7 @@ type testDeliveryService struct {
 }
 
 func (tds *testDeliveryService) Protocols() []p2p.Protocol {
+	log.Warn("Protocols function", "run", tds.run)
 	return []p2p.Protocol{
 		{
 			Name:    StreamerSpec.Name,
