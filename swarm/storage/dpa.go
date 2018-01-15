@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -211,6 +212,7 @@ func (self *dpaChunkStore) Get(key Key) (chunk *Chunk, err error) {
 		return nil, notFound
 	case <-chunk.ReqC:
 	}
+	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	return chunk, nil
 }
 
