@@ -109,9 +109,8 @@ type Downloader struct {
 	rttConfidence uint64 // Confidence in the estimated RTT (unit: millionths to allow atomic ops)
 
 	// Statistics
-	syncStatsChainOrigin uint64 // Origin block number where syncing started at
-	syncStatsChainHeight uint64 // Highest block number known when syncing started
-	syncStatsState       stateSyncStats
+	syncStatsChainOrigin uint64       // Origin block number where syncing started at
+	syncStatsChainHeight uint64       // Highest block number known when syncing started
 	syncStatsLock        sync.RWMutex // Lock protecting the sync stats fields
 
 	lightchain LightChain
@@ -132,11 +131,6 @@ type Downloader struct {
 	bodyWakeCh    chan bool            // [eth/62] Channel to signal the block body fetcher of new tasks
 	receiptWakeCh chan bool            // [eth/63] Channel to signal the receipt fetcher of new tasks
 	headerProcCh  chan []*types.Header // [eth/62] Channel to feed the header processor new tasks
-
-	// for stateFetcher
-	stateSyncStart chan *stateSync
-	trackStateReq  chan *stateReq
-	stateCh        chan dataPack // [eth/63] Channel receiving inbound node state data
 
 	// Cancellation and termination
 	cancelPeer string        // Identifier of the peer currently being used as the master (cancel on drop)
@@ -207,29 +201,25 @@ func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, chain BlockC
 	}
 
 	dl := &Downloader{
-		mode:           mode,
-		stateDB:        stateDb,
-		mux:            mux,
-		queue:          newQueue(),
-		peers:          newPeerSet(),
-		rttEstimate:    uint64(rttMaxEstimate),
-		rttConfidence:  uint64(1000000),
-		blockchain:     chain,
-		lightchain:     lightchain,
-		dropPeer:       dropPeer,
-		headerCh:       make(chan dataPack, 1),
-		bodyCh:         make(chan dataPack, 1),
-		receiptCh:      make(chan dataPack, 1),
-		bodyWakeCh:     make(chan bool, 1),
-		receiptWakeCh:  make(chan bool, 1),
-		headerProcCh:   make(chan []*types.Header, 1),
-		quitCh:         make(chan struct{}),
-		stateCh:        make(chan dataPack),
-		stateSyncStart: make(chan *stateSync),
-		trackStateReq:  make(chan *stateReq),
+		mode:          mode,
+		stateDB:       stateDb,
+		mux:           mux,
+		queue:         newQueue(),
+		peers:         newPeerSet(),
+		rttEstimate:   uint64(rttMaxEstimate),
+		rttConfidence: uint64(1000000),
+		blockchain:    chain,
+		lightchain:    lightchain,
+		dropPeer:      dropPeer,
+		headerCh:      make(chan dataPack, 1),
+		bodyCh:        make(chan dataPack, 1),
+		receiptCh:     make(chan dataPack, 1),
+		bodyWakeCh:    make(chan bool, 1),
+		receiptWakeCh: make(chan bool, 1),
+		headerProcCh:  make(chan []*types.Header, 1),
+		quitCh:        make(chan struct{}),
 	}
 	go dl.qosTuner()
-	go dl.stateFetcher()
 	return dl
 }
 
@@ -258,8 +248,6 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 		StartingBlock: d.syncStatsChainOrigin,
 		CurrentBlock:  current,
 		HighestBlock:  d.syncStatsChainHeight,
-		PulledStates:  d.syncStatsState.processed,
-		KnownStates:   d.syncStatsState.processed + d.syncStatsState.pending,
 	}
 }
 
@@ -1369,39 +1357,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 // processFastSyncContent takes fetch results from the queue and writes them to the
 // database. It also controls the synchronisation of state nodes of the pivot block.
 func (d *Downloader) processFastSyncContent(latest *types.Header) error {
-	// Start syncing state of the reported head block.
-	// This should get us most of the state of the pivot block.
-	stateSync := d.syncState(latest.Root)
-	defer stateSync.Cancel()
-	go func() {
-		if err := stateSync.Wait(); err != nil {
-			d.queue.Close() // wake up WaitResults
-		}
-	}()
-
-	pivot := d.queue.FastSyncPivot()
-	for {
-		results := d.queue.WaitResults()
-		if len(results) == 0 {
-			return stateSync.Cancel()
-		}
-		if d.chainInsertHook != nil {
-			d.chainInsertHook(results)
-		}
-		P, beforeP, afterP := splitAroundPivot(pivot, results)
-		if err := d.commitFastSyncData(beforeP, stateSync); err != nil {
-			return err
-		}
-		if P != nil {
-			stateSync.Cancel()
-			if err := d.commitPivotBlock(P); err != nil {
-				return err
-			}
-		}
-		if err := d.importBlockResults(afterP); err != nil {
-			return err
-		}
-	}
+	return nil
 }
 
 func splitAroundPivot(pivot uint64, results []*fetchResult) (p *fetchResult, before, after []*fetchResult) {
@@ -1419,48 +1375,10 @@ func splitAroundPivot(pivot uint64, results []*fetchResult) (p *fetchResult, bef
 	return p, before, after
 }
 
-func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *stateSync) error {
-	for len(results) != 0 {
-		// Check for any termination requests.
-		select {
-		case <-d.quitCh:
-			return errCancelContentProcessing
-		case <-stateSync.done:
-			if err := stateSync.Wait(); err != nil {
-				return err
-			}
-		default:
-		}
-		// Retrieve the a batch of results to import
-		items := int(math.Min(float64(len(results)), float64(maxResultsProcess)))
-		first, last := results[0].Header, results[items-1].Header
-		log.Debug("Inserting fast-sync blocks", "items", len(results),
-			"firstnum", first.Number, "firsthash", first.Hash(),
-			"lastnumn", last.Number, "lasthash", last.Hash(),
-		)
-		blocks := make([]*types.Block, items)
-		receipts := make([]types.Receipts, items)
-		for i, result := range results[:items] {
-			blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
-			receipts[i] = result.Receipts
-		}
-		if index, err := d.blockchain.InsertReceiptChain(blocks, receipts); err != nil {
-			log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
-			return errInvalidChain
-		}
-		// Shift the results to the next batch
-		results = results[items:]
-	}
-	return nil
-}
-
 func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	b := types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
 	// Sync the pivot block state. This should complete reasonably quickly because
 	// we've already synced up to the reported head block state earlier.
-	if err := d.syncState(b.Root()).Wait(); err != nil {
-		return err
-	}
 	log.Debug("Committing fast sync pivot as new head", "number", b.Number(), "hash", b.Hash())
 	if _, err := d.blockchain.InsertReceiptChain([]*types.Block{b}, []types.Receipts{result.Receipts}); err != nil {
 		return err
@@ -1486,7 +1404,7 @@ func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) (er
 
 // DeliverNodeData injects a new batch of node state data received from a remote node.
 func (d *Downloader) DeliverNodeData(id string, data [][]byte) (err error) {
-	return d.deliver(id, d.stateCh, &statePack{id, data}, stateInMeter, stateDropMeter)
+	return nil
 }
 
 // deliver injects a new batch of data received from a remote node.
