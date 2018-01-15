@@ -236,7 +236,7 @@ func (self *RawResourceHandler) NewResource(name string, frequency uint64) (*res
 //
 // Method will fail if resource is already registered in this session, unless
 // `allowOverwrite` is set
-func (self *RawResourceHandler) SetResource(rsrc *resource, allowOverwrite bool) error {
+func (self *RawResourceHandler) SetExternalResource(rsrc *resource, allowOverwrite bool) error {
 
 	utfname, err := idna.ToUnicode(rsrc.name)
 	if err != nil {
@@ -552,14 +552,14 @@ func (self *RawResourceHandler) PeriodToBlock(name string, period uint32) uint64
 	return self.resources[name].startBlock + (uint64(period) * self.resources[name].frequency)
 }
 
-func (self *ResourceHandler) getResource(name string) *resource {
+func (self *RawResourceHandler) getResource(name string) *resource {
 	self.resourceLock.RLock()
 	defer self.resourceLock.RUnlock()
 	rsrc := self.resources[name]
 	return rsrc
 }
 
-func (self *ResourceHandler) setResource(name string, rsrc *resource) {
+func (self *RawResourceHandler) setResource(name string, rsrc *resource) {
 	self.resourceLock.Lock()
 	defer self.resourceLock.Unlock()
 	self.resources[name] = rsrc

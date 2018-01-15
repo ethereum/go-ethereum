@@ -286,7 +286,7 @@ func TestResourceHandler(t *testing.T) {
 	if err != nil {
 		teardownTest(t, err)
 	}
-	err = rh2.SetResource(rsrc, true)
+	err = rh2.SetExternalResource(rsrc, true)
 	if err != nil {
 		teardownTest(t, err)
 	}
