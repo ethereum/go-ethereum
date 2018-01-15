@@ -177,10 +177,11 @@ func (lru *lru) get(epoch uint64) (item, future interface{}) {
 	item, ok := lru.cache.Get(epoch)
 	if !ok {
 		if lru.future > 0 && lru.future == epoch {
-			return lru.futureItem, nil
+			item = lru.future
+		} else {
+			log.Trace("Requiring new ethash "+lru.what, "epoch", epoch)
+			item = lru.new(epoch)
 		}
-		log.Trace("Requiring new ethash "+lru.what, "epoch", epoch)
-		item = lru.new(epoch)
 		lru.cache.Add(epoch, item)
 	}
 	// Update the 'future item' if epoch is larger than previously seen.
