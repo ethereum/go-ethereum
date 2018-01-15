@@ -88,6 +88,57 @@ func TestResourceValidContent(t *testing.T) {
 	teardownTest(t, nil)
 }
 
+func TestResourceReverseLookup(t *testing.T) {
+	//rh, privkey, datadir, err, teardownTest := setupTest()
+	rh, _, _, err, teardownTest := setupTest()
+	if err != nil {
+		teardownTest(t, err)
+	}
+
+	// create a new resource
+	resourcename := "føø.bar"
+	resourcefrequency := uint64(42)
+	rsrc, err := rh.NewResource(resourcename, resourcefrequency)
+	if err != nil {
+		teardownTest(t, err)
+	}
+
+	// update data
+	blockCount += resourcefrequency + 1
+	data := []byte("foo")
+	resourcekey, err := rh.Update(resourcename, data)
+	if err != nil {
+		teardownTest(t, err)
+	}
+	chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(resourcekey))
+	if err != nil {
+		teardownTest(t, err)
+	}
+
+	// check if data after header length offset is as expected
+	headerlength := binary.LittleEndian.Uint16(chunk.SData[signatureLength : signatureLength+2])
+	if !bytes.Equal(chunk.SData[signatureLength+headerlength+2:], data) {
+		teardownTest(t, fmt.Errorf("Expected chunk data with header length %d (pos %d) to match %x, but was %x", headerlength, signatureLength+headerlength+2, data, chunk.SData[signatureLength+headerlength+2:]))
+	}
+
+	// get name, period, version from chunk and check
+	revperiod, revversion, revname, revdata, err := parseUpdate(chunk.SData[signatureLength:])
+
+	if !bytes.Equal(revname, rsrc.ensName.Bytes()) {
+		teardownTest(t, fmt.Errorf("Expected retrieved name from chunk data to be '%x', was '%x'", rsrc.ensName.Bytes(), revname))
+	}
+	if !bytes.Equal(revdata, data) {
+		teardownTest(t, fmt.Errorf("Expected retrieved data from chunk data to be '%x', was '%x'", data, revdata))
+	}
+
+	if revperiod != 2 {
+		teardownTest(t, fmt.Errorf("Expected retrieved period from chunk data to be 1, was %d", revperiod))
+	}
+	if revversion != 1 {
+		teardownTest(t, fmt.Errorf("Expected retrieved version from chunk data to be 1, was %d", revversion))
+	}
+}
+
 func TestResourceHandler(t *testing.T) {
 
 	rh, privkey, datadir, err, teardownTest := setupTest()
@@ -172,8 +223,8 @@ func TestResourceHandler(t *testing.T) {
 	if rh2.resources[resourcename].version != 2 {
 		teardownTest(t, fmt.Errorf("resource version was %d, expected 2", rh2.resources[resourcename].version))
 	}
-	if rh2.resources[resourcename].lastBlock != startblocknumber+(resourcefrequency*3) {
-		teardownTest(t, fmt.Errorf("resource blockheight was %d, expected %d", rh2.resources[resourcename].lastBlock, startblocknumber+(resourcefrequency*3)))
+	if rh2.resources[resourcename].lastPeriod != 3 {
+		teardownTest(t, fmt.Errorf("resource period was %d, expected 3", rh2.resources[resourcename].lastPeriod))
 	}
 
 	rsrc, err := NewResource(resourcename, startblocknumber, resourcefrequency)
@@ -197,7 +248,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// specific block, latest version
-	resource, err = rh2.LookupHistorical(resourcename, startblocknumber+(resourcefrequency*3), true)
+	resource, err = rh2.LookupHistorical(resourcename, 3, true)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -208,7 +259,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// specific block, specific version
-	resource, err = rh2.LookupVersion(resourcename, startblocknumber+(resourcefrequency*3), 1, true)
+	resource, err = rh2.LookupVersion(resourcename, 3, 1, true)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -283,13 +334,6 @@ func setupTest() (rh *ResourceHandler, privkey *ecdsa.PrivateKey, datadir string
 
 	return
 }
-
-//func teardownTest(t *testing.T, errstr string) {
-//	cleanF()
-//	if errstr != "" {
-//		t.Fatal(errstr)
-//	}
-//}
 
 type testCloudStore struct {
 }
