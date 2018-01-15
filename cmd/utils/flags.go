@@ -43,8 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethstats"
-	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
@@ -1083,20 +1081,20 @@ func SetDashboardConfig(ctx *cli.Context, cfg *dashboard.Config) {
 // RegisterEthService adds an Ethereum client to the stack.
 func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 	var err error
-	if cfg.SyncMode == downloader.LightSync {
+	/*	if cfg.SyncMode == downloader.LightSync {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			return les.New(ctx, cfg)
 		})
-	} else {
-		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			fullNode, err := eth.New(ctx, cfg)
-			if fullNode != nil && cfg.LightServ > 0 {
-				ls, _ := les.NewLesServer(fullNode, cfg)
-				fullNode.AddLesServer(ls)
-			}
-			return fullNode, err
-		})
-	}
+	} else {*/
+	err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		fullNode, err := eth.New(ctx, cfg)
+		/*if fullNode != nil && cfg.LightServ > 0 {
+			ls, _ := les.NewLesServer(fullNode, cfg)
+			fullNode.AddLesServer(ls)
+		}*/
+		return fullNode, err
+	})
+	//}
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
@@ -1123,13 +1121,7 @@ func RegisterShhService(stack *node.Node, cfg *whisper.Config) {
 func RegisterEthStatsService(stack *node.Node, url string) {
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		// Retrieve both eth and les services
-		var ethServ *eth.Ethereum
-		ctx.Service(&ethServ)
-
-		var lesServ *les.LightEthereum
-		ctx.Service(&lesServ)
-
-		return ethstats.New(url, ethServ, lesServ)
+		return nil, nil
 	}); err != nil {
 		Fatalf("Failed to register the Ethereum Stats service: %v", err)
 	}

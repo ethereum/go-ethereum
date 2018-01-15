@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -66,12 +65,7 @@ func NewReleaseService(ctx *node.ServiceContext, config Config) (node.Service, e
 	if err := ctx.Service(&ethereum); err == nil {
 		apiBackend = ethereum.ApiBackend
 	} else {
-		var ethereum *les.LightEthereum
-		if err := ctx.Service(&ethereum); err == nil {
-			apiBackend = ethereum.ApiBackend
-		} else {
-			return nil, err
-		}
+		return nil, err
 	}
 	// Construct the release service
 	contract, err := NewReleaseOracle(config.Oracle, eth.NewContractBackend(apiBackend))
@@ -137,7 +131,7 @@ func (r *ReleaseService) checkVersion() {
 	if err != nil {
 		if err == bind.ErrNoCode {
 			log.Debug("Release oracle not found", "contract", r.config.Oracle)
-		} else if err != les.ErrNoPeers {
+		} else {
 			log.Error("Failed to retrieve current release", "err", err)
 		}
 		return
