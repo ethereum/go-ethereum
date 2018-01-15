@@ -18,6 +18,8 @@ package storage
 
 import (
 	"encoding/binary"
+
+	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
 // LocalStore is a combination of inmemory db over a disk persisted db
@@ -27,9 +29,10 @@ type LocalStore struct {
 	DbStore  ChunkStore
 }
 
-// This constructor uses MemStore and DbStore as components
-func NewLocalStore(hash SwarmHasher, params *StoreParams) (*LocalStore, error) {
-	dbStore, err := NewDbStore(params.ChunkDbPath, hash, params.DbCapacity, params.Radius)
+// This constructor uses MemStore and DbStore as components.
+// If mockStore is not nil, it will be used by DbStore to store chunk data.
+func NewLocalStore(hash SwarmHasher, params *StoreParams, mockStore mock.NodeStorer) (*LocalStore, error) {
+	dbStore, err := NewMockDbStore(params.ChunkDbPath, hash, params.DbCapacity, params.Radius, mockStore)
 	if err != nil {
 		return nil, err
 	}

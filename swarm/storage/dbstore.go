@@ -34,6 +34,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
@@ -75,12 +76,24 @@ type DbStore struct {
 	hashfunc SwarmHasher
 
 	lock sync.Mutex
+
+	// Functions putDataFunc and getFunc are used for
+	// saving and retreiving chunk data from the store.
+	// They must be set on DbStore initialization and must not be nil.
+	// They are used to bypass the default functionality of DbStore with
+	// mock.NodeStorer for testing purposes.
+	putDataFunc func(batch *leveldb.Batch, _ Key, data []byte)
+	getFunc     func(key Key) (chunk *Chunk, err error)
 }
 
 func NewDbStore(path string, hash SwarmHasher, capacity uint64, radius int) (s *DbStore, err error) {
 	s = new(DbStore)
 
 	s.hashfunc = hash
+
+	// associate put and get with default functionality
+	s.putDataFunc = s.dbPutDataFunc
+	s.getFunc = s.dbGetFunc
 
 	s.db, err = NewLDBDatabase(path)
 	if err != nil {
@@ -102,6 +115,22 @@ func NewDbStore(path string, hash SwarmHasher, capacity uint64, radius int) (s *
 	s.gcPos, _ = s.db.Get(keyGCPos)
 	if s.gcPos == nil {
 		s.gcPos = s.gcStartPos
+	}
+	return
+}
+
+// NewMockDbStore creates a new instance of DbStore with
+// mockStore set to a provided value. If mockStore argument is nil,
+// this function behaves exactly as NewDbStore.
+func NewMockDbStore(path string, hash SwarmHasher, capacity uint64, radius int, mockStore mock.NodeStorer) (s *DbStore, err error) {
+	s, err = NewDbStore(path, hash, capacity, radius)
+	if err != nil {
+		return nil, err
+	}
+	// replace put and get with mock store functionality
+	if mockStore != nil {
+		s.putDataFunc = newMockPutDataFunc(mockStore)
+		s.getFunc = newMockGetFunc(mockStore)
 	}
 	return
 }
@@ -418,7 +447,7 @@ func (s *DbStore) Put(chunk *Chunk) {
 
 	batch := new(leveldb.Batch)
 
-	batch.Put(getDataKey(s.dataIdx), data)
+	s.putDataFunc(batch, chunk.Key, data)
 
 	index.Idx = s.dataIdx
 	s.updateIndexAccess(&index)
@@ -438,6 +467,20 @@ func (s *DbStore) Put(chunk *Chunk) {
 		close(chunk.dbStored)
 	}
 	log.Trace(fmt.Sprintf("DbStore.Put: %v. db storage counter: %v ", chunk.Key.Log(), s.dataIdx))
+}
+
+func (s *DbStore) dbPutDataFunc(batch *leveldb.Batch, _ Key, data []byte) {
+	batch.Put(getDataKey(s.dataIdx), data)
+}
+
+// newMockPutDataFunc returns a function that stores the chunk data
+// to a mock store to bypass the default functionality of DbStore.
+func newMockPutDataFunc(mockStore mock.NodeStorer) func(_ *leveldb.Batch, key Key, data []byte) {
+	return func(_ *leveldb.Batch, key Key, data []byte) {
+		if err := mockStore.Put(key, data); err != nil {
+			log.Error(fmt.Sprintf("%T: Chunk %v put: %v", mockStore, key.Log(), err))
+		}
+	}
 }
 
 // try to find index; if found, update access cnt and return true
@@ -462,6 +505,12 @@ func (s *DbStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 }
 
 func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
+	return s.getFunc(key)
+}
+
+// dbGetFunc provides the default functionality for accessing
+// the chunk data from LevelDB.
+func (s *DbStore) dbGetFunc(key Key) (chunk *Chunk, err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -496,6 +545,27 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 
 	return
 
+}
+
+// newMockGetFunc returns a function that reads chunk data from
+// the mock database, which is used as the value for DbStore.getFunc
+// to bypass the default functionality of DbStore with a mock store.
+func newMockGetFunc(mockStore mock.NodeStorer) func(key Key) (chunk *Chunk, err error) {
+	return func(key Key) (chunk *Chunk, err error) {
+		data, err := mockStore.Get(key)
+		if err != nil {
+			if err == mock.ErrNotFound {
+				// preserve notFound error
+				err = notFound
+			}
+			return nil, err
+		}
+		chunk = &Chunk{
+			Key: key,
+		}
+		decodeData(data, chunk)
+		return chunk, nil
+	}
 }
 
 func (s *DbStore) updateAccessCnt(key Key) {

@@ -19,9 +19,12 @@ package storage
 import (
 	"bytes"
 	"io/ioutil"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
 )
 
 func initDbStore(t *testing.T) *DbStore {
@@ -187,5 +190,76 @@ func TestDbStoreSyncIterator(t *testing.T) {
 	}
 	if !bytes.Equal(res[0][:], keys[3]) {
 		t.Fatalf("Expected %v chunk, got %v", keys[3], res[0])
+	}
+}
+
+func initMockDbStore(t *testing.T, mockStore mock.NodeStorer) *DbStore {
+	dir, err := ioutil.TempDir("", "bzz-storage-test-mock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewMockDbStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, defaultRadius, mockStore)
+	if err != nil {
+		t.Fatal("can't create store:", err)
+	}
+	return m
+}
+
+func testMockDbStore(l int64, branches int64, t *testing.T) {
+	globalStore := mem.NewGlobalStore()
+	addr := common.HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")
+	mockStore := globalStore.NewNodeStore(addr)
+	m := initMockDbStore(t, mockStore)
+	defer m.Close()
+
+	key := Key(common.Hex2Bytes("fed1911825fc6a02ebfd19ab218a20455d8d7d275f8bf4d8244eb04364fae6f7"))
+	data := common.Hex2BytesFixed(strings.Repeat("1234567890abcdf", 10), 4096)
+
+	m.Put(&Chunk{
+		Key:   key,
+		SData: data,
+	})
+
+	_, err := globalStore.Get(addr, key)
+	if err != nil {
+		t.Errorf("unexpected error getting the data from global mock store: %v", err)
+	}
+
+	if !globalStore.HasKey(addr, key) {
+		t.Error("key not found in global store")
+	}
+
+	testStore(m, l, branches, t)
+
+}
+
+func TestMockDbStore128_0x1000000(t *testing.T) {
+	testMockDbStore(0x1000000, 128, t)
+}
+
+func TestMockDbStore128_10000_(t *testing.T) {
+	testMockDbStore(10000, 128, t)
+}
+
+func TestMockDbStore128_1000_(t *testing.T) {
+	testMockDbStore(1000, 128, t)
+}
+
+func TestMockDbStore128_100_(t *testing.T) {
+	testMockDbStore(100, 128, t)
+}
+
+func TestMockDbStore2_100_(t *testing.T) {
+	testMockDbStore(100, 2, t)
+}
+
+func TestMockDbStoreNotFound(t *testing.T) {
+	globalStore := mem.NewGlobalStore()
+	mockStore := globalStore.NewNodeStore(common.HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"))
+	m := initMockDbStore(t, mockStore)
+	defer m.Close()
+	_, err := m.Get(ZeroKey)
+	if err != notFound {
+		t.Errorf("Expected notFound, got %v", err)
 	}
 }
