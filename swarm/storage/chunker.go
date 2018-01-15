@@ -379,7 +379,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		return 0, err
 	}
 	if off+int64(len(b)) >= size {
-		return len(b), io.EOF
+		return int(size - int64(off)), io.EOF
 	}
 	return len(b), nil
 }
