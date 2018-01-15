@@ -1104,9 +1104,9 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 }
 
 // RegisterDashboardService adds a dashboard to the stack.
-func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config) {
+func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config, commit string) {
 	stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return dashboard.New(cfg)
+		return dashboard.New(cfg, commit)
 	})
 }
 

@@ -16,38 +16,49 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-import type {ChartEntry} from './message';
-
 export type Content = {
-    home: Home,
-    chain: Chain,
-    txpool: TxPool,
-    network: Network,
-    system: System,
-    logs: Logs,
+	general: General,
+	home: Home,
+	chain: Chain,
+	txpool: TxPool,
+	network: Network,
+	system: System,
+	logs: Logs,
+};
+
+export type General = {
+	version: ?string,
+	commit: ?string,
 };
 
 export type Home = {
-    memory: Array<ChartEntry>,
-    traffic: Array<ChartEntry>,
+	memory: ChartEntries,
+	traffic: ChartEntries,
+};
+
+export type ChartEntries = Array<ChartEntry>;
+
+export type ChartEntry = {
+	time: Date,
+	value: number,
 };
 
 export type Chain = {
-    /* TODO (kurkomisi) */
+	/* TODO (kurkomisi) */
 };
 
 export type TxPool = {
-    /* TODO (kurkomisi) */
+	/* TODO (kurkomisi) */
 };
 
 export type Network = {
-    /* TODO (kurkomisi) */
+	/* TODO (kurkomisi) */
 };
 
 export type System = {
-    /* TODO (kurkomisi) */
+	/* TODO (kurkomisi) */
 };
 
 export type Logs = {
-    log: Array<string>,
+	log: Array<string>,
 };

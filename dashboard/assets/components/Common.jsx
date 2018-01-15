@@ -62,32 +62,4 @@ export type MenuProp = {|...ProvidedMenuProp, id: string|};
 // This way the mistyping is prevented.
 export const MENU: Map<string, {...MenuProp}> = new Map(menuSkeletons.map(({id, menu}) => ([id, {id, ...menu}])));
 
-type ProvidedSampleProp = {|limit: number|};
-const sampleSkeletons: Array<{|id: string, sample: ProvidedSampleProp|}> = [
-	{
-		id:     'memory',
-		sample: {
-			limit: 200,
-		},
-	}, {
-		id:     'traffic',
-		sample: {
-			limit: 200,
-		},
-	}, {
-		id:     'logs',
-		sample: {
-			limit: 200,
-		},
-	},
-];
-export type SampleProp = {|...ProvidedSampleProp, id: string|};
-export const SAMPLE: Map<string, {...SampleProp}> = new Map(sampleSkeletons.map(({id, sample}) => ([id, {id, ...sample}])));
-
 export const DURATION = 200;
-
-export const LENS: Map<string, string> = new Map([
-	'content',
-	...menuSkeletons.map(({id}) => id),
-	...sampleSkeletons.map(({id}) => id),
-].map(lens => [lens, lens]));
