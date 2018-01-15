@@ -385,12 +385,12 @@ func (nm *NewMessage) GetPublicKey() []byte            { return nm.newMessage.Pu
 func (nm *NewMessage) SetPublicKey(publicKey []byte)   { nm.newMessage.PublicKey = publicKey }
 func (nm *NewMessage) GetSig() string                  { return nm.newMessage.Sig }
 func (nm *NewMessage) SetSig(sig string)               { nm.newMessage.Sig = sig }
-func (nm *NewMessage) GetTTL() int32                   { return int32(nm.newMessage.TTL) }
-func (nm *NewMessage) SetTTL(ttl int32)                { nm.newMessage.TTL = uint32(ttl) }
+func (nm *NewMessage) GetTTL() int64                   { return int64(nm.newMessage.TTL) }
+func (nm *NewMessage) SetTTL(ttl int64)                { nm.newMessage.TTL = uint32(ttl) }
 func (nm *NewMessage) GetPayload() []byte              { return nm.newMessage.Payload }
 func (nm *NewMessage) SetPayload(payload []byte)       { nm.newMessage.Payload = payload }
-func (nm *NewMessage) GetPowTime() int32               { return int32(nm.newMessage.PowTime) }
-func (nm *NewMessage) SetPowTime(powTime int32)        { nm.newMessage.PowTime = uint32(powTime) }
+func (nm *NewMessage) GetPowTime() int64               { return int64(nm.newMessage.PowTime) }
+func (nm *NewMessage) SetPowTime(powTime int64)        { nm.newMessage.PowTime = uint32(powTime) }
 func (nm *NewMessage) GetPowTarget() float64           { return nm.newMessage.PowTarget }
 func (nm *NewMessage) SetPowTarget(powTarget float64)  { nm.newMessage.PowTarget = powTarget }
 func (nm *NewMessage) GetTargetPeer() string           { return nm.newMessage.TargetPeer }
@@ -404,8 +404,8 @@ type Message struct {
 }
 
 func (m *Message) GetSig() []byte      { return m.message.Sig }
-func (m *Message) GetTTL() int32       { return int32(m.message.TTL) }
-func (m *Message) GetTimestamp() int32 { return int32(m.message.Timestamp) }
+func (m *Message) GetTTL() int64       { return int64(m.message.TTL) }
+func (m *Message) GetTimestamp() int64 { return int64(m.message.Timestamp) }
 func (m *Message) GetPayload() []byte  { return m.message.Payload }
 func (m *Message) GetPoW() float64     { return m.message.PoW }
 func (m *Message) GetHash() []byte     { return m.message.Hash }

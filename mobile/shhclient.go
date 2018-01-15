@@ -36,8 +36,7 @@ func NewWhisperClient(rawurl string) (client *WhisperClient, _ error) {
 
 // GetVersion returns the Whisper sub-protocol version.
 func (wc *WhisperClient) GetVersion(ctx *Context) (version string, _ error) {
-	rawVersion, err := wc.client.Version(ctx.context)
-	return string(rawVersion), err
+	return wc.client.Version(ctx.context)
 }
 
 // Info returns diagnostic information about the whisper node.
@@ -72,27 +71,23 @@ func (wc *WhisperClient) MarkTrustedPeer(ctx *Context, enode string) error {
 // NewKeyPair generates a new public and private key pair for message decryption and encryption.
 // It returns an identifier that can be used to refer to the key.
 func (wc *WhisperClient) NewKeyPair(ctx *Context) (string, error) {
-	rawNewKeyPair, err := wc.client.NewKeyPair(ctx.context)
-	return string(rawNewKeyPair), err
+	return wc.client.NewKeyPair(ctx.context)
 }
 
 // AddPrivateKey stored the key pair, and returns its ID.
 func (wc *WhisperClient) AddPrivateKey(ctx *Context, key []byte) (string, error) {
-	rawAddPrivateKey, err := wc.client.AddPrivateKey(ctx.context, key)
-	return string(rawAddPrivateKey), err
+	return wc.client.AddPrivateKey(ctx.context, key)
 }
 
 // DeleteKeyPair delete the specifies key.
 func (wc *WhisperClient) DeleteKeyPair(ctx *Context, id string) (string, error) {
-	rawDeletePrivateKey, err := wc.client.DeleteKeyPair(ctx.context, id)
-	return string(rawDeletePrivateKey), err
+	return wc.client.DeleteKeyPair(ctx.context, id)
 }
 
 // HasKeyPair returns an indication if the node has a private key or
 // key pair matching the given ID.
 func (wc *WhisperClient) HasKeyPair(ctx *Context, id string) (bool, error) {
-	rawHasKeyPair, err := wc.client.HasKeyPair(ctx.context, id)
-	return bool(rawHasKeyPair), err
+	return wc.client.HasKeyPair(ctx.context, id)
 }
 
 // GetPublicKey return the public key for a key ID.
@@ -108,26 +103,22 @@ func (wc *WhisperClient) GetPrivateKey(ctx *Context, id string) ([]byte, error) 
 // NewSymmetricKey generates a random symmetric key and returns its identifier.
 // Can be used encrypting and decrypting messages where the key is known to both parties.
 func (wc *WhisperClient) NewSymmetricKey(ctx *Context) (string, error) {
-	rawNewSymmetricKey, err := wc.client.NewSymmetricKey(ctx.context)
-	return string(rawNewSymmetricKey), err
+	return wc.client.NewSymmetricKey(ctx.context)
 }
 
 // AddSymmetricKey stores the key, and returns its identifier.
 func (wc *WhisperClient) AddSymmetricKey(ctx *Context, key []byte) (string, error) {
-	rawAddSymmetricKey, err := wc.client.AddSymmetricKey(ctx.context, key)
-	return string(rawAddSymmetricKey), err
+	return wc.client.AddSymmetricKey(ctx.context, key)
 }
 
 // GenerateSymmetricKeyFromPassword generates the key from password, stores it, and returns its identifier.
 func (wc *WhisperClient) GenerateSymmetricKeyFromPassword(ctx *Context, passwd string) (string, error) {
-	rawSymKeyID, err := wc.client.GenerateSymmetricKeyFromPassword(ctx.context, passwd)
-	return string(rawSymKeyID), err
+	return wc.client.GenerateSymmetricKeyFromPassword(ctx.context, passwd)
 }
 
 // HasSymmetricKey returns an indication if the key associated with the given id is stored in the node.
 func (wc *WhisperClient) HasSymmetricKey(ctx *Context, id string) (bool, error) {
-	rawHasSymmetricKey, err := wc.client.HasSymmetricKey(ctx.context, id)
-	return bool(rawHasSymmetricKey), err
+	return wc.client.HasSymmetricKey(ctx.context, id)
 }
 
 // GetSymmetricKey returns the symmetric key associated with the given identifier.
@@ -182,8 +173,7 @@ func (wc *WhisperClient) SubscribeMessages(ctx *Context, criteria *Criteria, han
 // for new messages (see FilterMessages) that satisfy the given criteria. A filter can
 // timeout when it was polled for in whisper.filterTimeout.
 func (wc *WhisperClient) NewMessageFilter(ctx *Context, criteria *Criteria) (string, error) {
-	rawNewMessageFilter, err := wc.client.NewMessageFilter(ctx.context, *criteria.criteria)
-	return string(rawNewMessageFilter), err
+	return wc.client.NewMessageFilter(ctx.context, *criteria.criteria)
 }
 
 // DeleteMessageFilter removes the filter associated with the given id.
@@ -199,8 +189,6 @@ func (wc *WhisperClient) GetFilterMessages(ctx *Context, id string) (*Messages, 
 		return nil, err
 	}
 	res := make([]*whisper.Message, len(rawFilterMessages))
-	for i := range rawFilterMessages {
-		res[i] = rawFilterMessages[i]
-	}
+	copy(res, rawFilterMessages)
 	return &Messages{res}, nil
 }
