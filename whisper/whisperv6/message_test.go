@@ -438,7 +438,8 @@ func TestPaddingAppendedToSymMessagesWithSignature(t *testing.T) {
 	// payload + flag + signature > 256. Check that the result
 	// is padded on the next 256 boundary.
 	msg := sentMessage{}
-	msg.Raw = make([]byte, 1+1+len(params.Payload))
+	const auxiliaryFieldMinSize = 1
+	msg.Raw = make([]byte, flagsLength+auxiliaryFieldMinSize+len(params.Payload))
 
 	err = msg.appendPadding(params)
 

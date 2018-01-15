@@ -81,7 +81,7 @@ func TestWhisperBasic(t *testing.T) {
 	}
 
 	derived := pbkdf2.Key([]byte(peerID), nil, 65356, aesKeyLength, sha256.New)
-	if !validateRandomData(derived, aesKeyLength) {
+	if !validateDataIntegrity(derived, aesKeyLength) {
 		t.Fatalf("failed validateSymmetricKey with param = %v.", derived)
 	}
 	if containsOnlyZeros(derived) {
@@ -448,7 +448,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	if !w.HasSymKey(id2) {
 		t.Fatalf("HasSymKey(id2) failed.")
 	}
-	if !validateRandomData(k2, aesKeyLength) {
+	if !validateDataIntegrity(k2, aesKeyLength) {
 		t.Fatalf("key validation failed.")
 	}
 	if !bytes.Equal(k1, k2) {

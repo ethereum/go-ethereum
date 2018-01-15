@@ -277,7 +277,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 		if params.KeySym, err = api.w.GetSymKey(req.SymKeyID); err != nil {
 			return false, err
 		}
-		if !validateRandomData(params.KeySym, aesKeyLength) {
+		if !validateDataIntegrity(params.KeySym, aesKeyLength) {
 			return false, ErrInvalidSymmetricKey
 		}
 	}
@@ -383,7 +383,7 @@ func (api *PublicWhisperAPI) Messages(ctx context.Context, crit Criteria) (*rpc.
 		if err != nil {
 			return nil, err
 		}
-		if !validateRandomData(key, aesKeyLength) {
+		if !validateDataIntegrity(key, aesKeyLength) {
 			return nil, ErrInvalidSymmetricKey
 		}
 		filter.KeySym = key
@@ -555,7 +555,7 @@ func (api *PublicWhisperAPI) NewMessageFilter(req Criteria) (string, error) {
 		if keySym, err = api.w.GetSymKey(req.SymKeyID); err != nil {
 			return "", err
 		}
-		if !validateRandomData(keySym, aesKeyLength) {
+		if !validateDataIntegrity(keySym, aesKeyLength) {
 			return "", ErrInvalidSymmetricKey
 		}
 	}

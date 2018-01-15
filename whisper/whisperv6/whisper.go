@@ -444,7 +444,7 @@ func (w *Whisper) GenerateSymKey() (string, error) {
 	key, err := generateSecureRandomData(aesKeyLength)
 	if err != nil {
 		return "", err
-	} else if !validateRandomData(key, aesKeyLength) {
+	} else if !validateDataIntegrity(key, aesKeyLength) {
 		return "", fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
 	}
 
@@ -981,13 +981,13 @@ func validatePrivateKey(k *ecdsa.PrivateKey) bool {
 	return ValidatePublicKey(&k.PublicKey)
 }
 
-// validateSymmetricKey returns false if the key contains all zeros,
-// which is a simplest and the most common bug.
-func validateRandomData(k []byte, expectedSize int) bool {
+// validateDataIntegrity returns false if the data have the wrong or contains all zeros,
+// which is the simplest and the most common bug.
+func validateDataIntegrity(k []byte, expectedSize int) bool {
 	if len(k) != expectedSize {
 		return false
 	}
-	if expectedSize > 4 && containsOnlyZeros(k) {
+	if expectedSize > 3 && containsOnlyZeros(k) {
 		return false
 	}
 	return true
@@ -1028,7 +1028,7 @@ func GenerateRandomID() (id string, err error) {
 	if err != nil {
 		return "", err
 	}
-	if !validateRandomData(buf, keyIdSize) {
+	if !validateDataIntegrity(buf, keyIdSize) {
 		return "", fmt.Errorf("error in generateRandomID: crypto/rand failed to generate random data")
 	}
 	id = common.Bytes2Hex(buf)

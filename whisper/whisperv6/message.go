@@ -90,17 +90,18 @@ func (msg *ReceivedMessage) isAsymmetricEncryption() bool {
 // NewMessage creates and initializes a non-signed, non-encrypted Whisper message.
 func NewSentMessage(params *MessageParams) (*sentMessage, error) {
 	msg := sentMessage{}
-	msg.Raw = make([]byte, 1, 5+len(params.Payload)+len(params.Padding)+signatureLength+padSizeLimit)
+	msg.Raw = make([]byte, 1,
+		flagsLength+auxiliaryFieldMaxSize+len(params.Payload)+len(params.Padding)+signatureLength+padSizeLimit)
 	msg.Raw[0] = 0 // set all the flags to zero
-	msg.addPayloadSizeField(params.Payload)
+	msg.addAuxiliaryField(params.Payload)
 	msg.Raw = append(msg.Raw, params.Payload...)
 	err := msg.appendPadding(params)
 	return &msg, err
 }
 
 // appendPayloadSizeField appends the auxiliary field containing the size of payload
-func (msg *sentMessage) addPayloadSizeField(payload []byte) {
-	fieldSize := getAuxFieldSize(payload)
+func (msg *sentMessage) addAuxiliaryField(payload []byte) {
+	fieldSize := getAuxiliaryFieldSize(payload)
 	field := make([]byte, 4)
 	binary.LittleEndian.PutUint32(field, uint32(len(payload)))
 	field = field[:fieldSize]
@@ -109,7 +110,7 @@ func (msg *sentMessage) addPayloadSizeField(payload []byte) {
 }
 
 // getAuxFieldSize returns the number of bytes necessary to encode the size of payload
-func getAuxFieldSize(payload []byte) int {
+func getAuxiliaryFieldSize(payload []byte) int {
 	s := 1
 	for i := len(payload); i >= 256; i /= 256 {
 		s++
@@ -126,8 +127,8 @@ func (msg *sentMessage) appendPadding(params *MessageParams) error {
 		return nil
 	}
 
-	auxFieldSize := getAuxFieldSize(params.Payload)
-	rawSize := 1 + auxFieldSize + len(params.Payload)
+	auxFieldSize := getAuxiliaryFieldSize(params.Payload)
+	rawSize := flagsLength + auxFieldSize + len(params.Payload)
 	if params.Src != nil {
 		rawSize += signatureLength
 	}
@@ -138,7 +139,7 @@ func (msg *sentMessage) appendPadding(params *MessageParams) error {
 	if err != nil {
 		return err
 	}
-	if !validateRandomData(pad, paddingSize) {
+	if !validateDataIntegrity(pad, paddingSize) {
 		return errors.New("failed to generate random padding of size " + strconv.Itoa(paddingSize))
 	}
 	msg.Raw = append(msg.Raw, pad...)
@@ -180,7 +181,7 @@ func (msg *sentMessage) encryptAsymmetric(key *ecdsa.PublicKey) error {
 // encryptSymmetric encrypts a message with a topic key, using AES-GCM-256.
 // nonce size should be 12 bytes (see cipher.gcmStandardNonceSize).
 func (msg *sentMessage) encryptSymmetric(key []byte) (err error) {
-	if !validateRandomData(key, aesKeyLength) {
+	if !validateDataIntegrity(key, aesKeyLength) {
 		return errors.New("invalid key provided for symmetric encryption, size: " + strconv.Itoa(len(key)))
 	}
 	block, err := aes.NewCipher(key)
@@ -213,19 +214,19 @@ func generateSecureRandomData(length int) ([]byte, error) {
 	_, err := crand.Read(x)
 	if err != nil {
 		return nil, err
-	} else if !validateRandomData(x, length) {
+	} else if !validateDataIntegrity(x, length) {
 		return nil, errors.New("crypto/rand failed to generate secure random data")
 	}
 	_, err = mrand.Read(y)
 	if err != nil {
 		return nil, err
-	} else if !validateRandomData(y, length) {
+	} else if !validateDataIntegrity(y, length) {
 		return nil, errors.New("math/rand failed to generate secure random data")
 	}
 	for i := 0; i < length; i++ {
 		res[i] = x[i] ^ y[i]
 	}
-	if !validateRandomData(res, length) {
+	if !validateDataIntegrity(res, length) {
 		return nil, errors.New("failed to generate secure random data")
 	}
 	return res, nil
@@ -294,7 +295,7 @@ func (msg *ReceivedMessage) decryptAsymmetric(key *ecdsa.PrivateKey) error {
 	return err
 }
 
-// Validate checks the message validity and extracts the fields in case of success.
+// ValidateAndParse checks the message validity and extracts the fields in case of success.
 func (msg *ReceivedMessage) ValidateAndParse() bool {
 	end := len(msg.Raw)
 	if end < 1 {
