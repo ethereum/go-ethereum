@@ -55,7 +55,7 @@ func TestSocketPipe(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(msg, out) != 0 {
+			if !bytes.Equal(msg, out) {
 				t.Fatalf("expected %#v, got %#v", msg, out)
 			}
 		}
@@ -96,7 +96,7 @@ func TestSocketPipeBidirections(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(out, []byte(`ping`)) == 0 {
+			if bytes.Equal(out, []byte(`ping`)) {
 				msg := []byte(`pong`)
 				_, err := c2.Write(msg)
 				if err != nil {
@@ -114,7 +114,7 @@ func TestSocketPipeBidirections(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(out, expected) != 0 {
+			if !bytes.Equal(out, expected) {
 				t.Fatalf("expected %#v, got %#v", expected, out)
 			}
 		}
@@ -160,7 +160,7 @@ func TestTcpPipe(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(msg, out) != 0 {
+			if !bytes.Equal(msg, out) {
 				t.Fatalf("expected %#v, got %#v", msg, out)
 			}
 		}
@@ -203,7 +203,7 @@ func TestTcpPipeBidirections(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(expected, out) != 0 {
+			if !bytes.Equal(expected, out) {
 				t.Fatalf("expected %#v, got %#v", out, expected)
 			} else {
 				msg := []byte(fmt.Sprintf("pong %02d", i))
@@ -223,7 +223,7 @@ func TestTcpPipeBidirections(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(expected, out) != 0 {
+			if !bytes.Equal(expected, out) {
 				t.Fatalf("expected %#v, got %#v", out, expected)
 			}
 		}
@@ -271,7 +271,7 @@ func TestNetPipe(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(msg, out) != 0 {
+			if !bytes.Equal(msg, out) {
 				t.Fatalf("expected %#v, got %#v", msg, out)
 			}
 		}
@@ -323,7 +323,7 @@ func TestNetPipeBidirections(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if bytes.Compare(expected, out) != 0 {
+				if !bytes.Equal(expected, out) {
 					t.Fatalf("expected %#v, got %#v", expected, out)
 				}
 			}
@@ -341,7 +341,7 @@ func TestNetPipeBidirections(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(expected, out) != 0 {
+			if !bytes.Equal(expected, out) {
 				t.Fatalf("expected %#v, got %#v", expected, out)
 			} else {
 				msg := []byte(fmt.Sprintf(pongTemplate, i))
