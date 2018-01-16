@@ -257,7 +257,7 @@ func (self *Swarm) Protocols() (protos []p2p.Protocol) {
 	protos = append(protos, self.bzz.Protocols()...)
 
 	if self.ps != nil {
-		protos = append(protos, self.ps.Protocols())
+		protos = append(protos, self.ps.Protocols()...)
 	}
 	return
 }
@@ -318,10 +318,10 @@ func (self *Swarm) APIs() []rpc.API {
 		// {Namespace, Version, api.NewAdmin(self), false},
 	}
 
-	apis = append(apis, self.bzz.APIs())
+	apis = append(apis, self.bzz.APIs()...)
 
 	if self.ps != nil {
-		apis = append(apis, self.ps.APIs())
+		apis = append(apis, self.ps.APIs()...)
 	}
 
 	return apis
