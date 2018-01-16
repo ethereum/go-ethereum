@@ -406,7 +406,7 @@ func (self *StreamerPeer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	hashes := req.Hashes
 	want, err := bv.New(len(hashes) / HashSize)
 	if err != nil {
-		return err
+		return fmt.Errorf("error initiaising bitvector of length %v: %v", len(hashes)/HashSize, err)
 	}
 	wg := sync.WaitGroup{}
 	for i := 0; i < len(hashes); i += HashSize {
@@ -472,7 +472,7 @@ func (self *StreamerPeer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	l := len(hashes) / HashSize
 	want, err := bv.NewFromBytes(req.Want, l)
 	if err != nil {
-		return err
+		return fmt.Errorf("error initiaising bitvector of length %v: %v", l, err)
 	}
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
@@ -514,11 +514,16 @@ func (self *StreamerPeer) SendPriority(msg interface{}, priority uint8) error {
 	return self.pq.Push(nil, msg, int(priority))
 }
 
-// OfferedHashes sends OfferedHashesMsg protocol msg
+// SendOfferedHashes sends OfferedHashesMsg protocol msg
 func (self *StreamerPeer) SendOfferedHashes(s *outgoingStreamer, f, t uint64) error {
 	hashes, from, to, proof, err := s.SetNextBatch(f, t)
 	if err != nil {
 		return err
+	}
+	if proof == nil {
+		proof = &HandoverProof{
+			Handover: &Handover{},
+		}
 	}
 	s.currentBatch = hashes
 	msg := &OfferedHashesMsg{

@@ -130,10 +130,7 @@ func (self *testIncomingStreamer) BatchDone(string, uint64, []byte, []byte) func
 }
 
 func (self *testOutgoingStreamer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
-	proof := &HandoverProof{
-		Handover: &Handover{},
-	}
-	return make([]byte, HashSize), from + 1, to + 1, proof, nil
+	return make([]byte, HashSize), from + 1, to + 1, nil, nil
 }
 
 func (self *testOutgoingStreamer) GetData([]byte) []byte {

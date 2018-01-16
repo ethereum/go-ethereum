@@ -49,7 +49,7 @@ func NewDelivery(overlay Overlay, dbAccess *DbAccess) *Delivery {
 
 // RetrieveRequestStreamer implements OutgoingStreamer
 type RetrieveRequestStreamer struct {
-	deliveryC  chan *storage.Chunk
+	deliveryC  chan []byte
 	batchC     chan []byte
 	dbAccess   *DbAccess
 	currentLen uint64
@@ -58,7 +58,7 @@ type RetrieveRequestStreamer struct {
 // NewRetrieveRequestStreamer is RetrieveRequestStreamer constructor
 func NewRetrieveRequestStreamer(dbAccess *DbAccess) *RetrieveRequestStreamer {
 	s := &RetrieveRequestStreamer{
-		deliveryC: make(chan *storage.Chunk),
+		deliveryC: make(chan []byte),
 		batchC:    make(chan []byte),
 		dbAccess:  dbAccess,
 	}
@@ -72,11 +72,12 @@ func (s *RetrieveRequestStreamer) processDeliveries() {
 	var batchC chan []byte
 	for {
 		select {
-		case delivery := <-s.deliveryC:
-			hashes = append(hashes, delivery.Key[:]...)
+		case hash := <-s.deliveryC:
+			hashes = append(hashes, hash...)
 			batchC = s.batchC
 		case batchC <- hashes:
 			hashes = nil
+			batchC = nil
 		}
 	}
 }
@@ -131,7 +132,7 @@ func (self *Delivery) handleRetrieveRequestMsg(sp *StreamerPeer, req *RetrieveRe
 				sp.Deliver(chunk, s.priority)
 				return
 			}
-			streamer.deliveryC <- chunk
+			streamer.deliveryC <- chunk.Key[:]
 		}()
 		return nil
 	}
@@ -139,7 +140,7 @@ func (self *Delivery) handleRetrieveRequestMsg(sp *StreamerPeer, req *RetrieveRe
 	if req.SkipCheck {
 		return sp.Deliver(chunk, s.priority)
 	}
-	streamer.deliveryC <- chunk
+	streamer.deliveryC <- chunk.Key[:]
 	return nil
 }
 

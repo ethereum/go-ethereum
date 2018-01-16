@@ -310,7 +310,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 const serviceName = "delivery"
 
 var services = adapters.Services{
-	serviceName: newService,
+	serviceName: newDeliveryService,
 }
 
 var (
@@ -405,7 +405,10 @@ func testSimulation(t *testing.T, simf func(adapters.NodeAdapter) (*simulations.
 }
 
 func TestDeliveryFromNodes(t *testing.T) {
-	testSimulation(t, testDeliveryFromNodes)
+	testSimulation(t, testDeliveryFromNodes(2, 1, 8100, true))
+	testSimulation(t, testDeliveryFromNodes(2, 1, 8100, false))
+	testSimulation(t, testDeliveryFromNodes(3, 1, 8100, true))
+	testSimulation(t, testDeliveryFromNodes(3, 1, 8100, false))
 }
 
 var (
@@ -459,94 +462,102 @@ func mustReadAll(dpa *storage.DPA, hash storage.Key) (int, error) {
 	return total, nil
 }
 
-func testDeliveryFromNodes(adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
-	nodes := 2
-	conns := 1
-	size := 8100
-	skipCheck := true
-
-	trigger := func(net *simulations.Network) chan discover.NodeID {
-		triggerC := make(chan discover.NodeID)
-		ticker := time.NewTicker(500 * time.Millisecond)
-		go func() {
-			defer ticker.Stop()
-			for i := 1; i < nodes; i++ {
-				triggerC <- net.Nodes[i].ID()
-			}
-			for range ticker.C {
-				triggerC <- net.Nodes[0].ID()
-			}
-		}()
-		return triggerC
-	}
-
-	action := func(net *simulations.Network) func(context.Context) error {
-		rrdpa := storage.NewDPA(newRoundRobinStore(localStores[1:]...), storage.NewChunkerParams())
-		rrdpa.Start()
-		dpacs := storage.NewDpaChunkStore(localStores[0].(*storage.LocalStore), func(chunk *storage.Chunk) error { return delivery.RequestFromPeers(chunk.Key[:], skipCheck) })
-		dpa := storage.NewDPA(dpacs, storage.NewChunkerParams())
-		dpa.Start()
-		return func(context.Context) error {
-			defer rrdpa.Stop()
-			hash, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size))
-			if err != nil {
-				return err
-			}
-			wait()
-			fileHash = hash
+func testDeliveryFromNodes(nodes, conns, size int, skipCheck bool) func(adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
+	return func(adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
+		trigger := func(net *simulations.Network) chan discover.NodeID {
+			triggerC := make(chan discover.NodeID)
+			ticker := time.NewTicker(500 * time.Millisecond)
 			go func() {
-				defer dpa.Stop()
-				log.Debug(fmt.Sprintf("retrieve %v", fileHash))
-				time.Sleep(2 * time.Second)
-				n, err := mustReadAll(dpa, fileHash)
-				log.Debug(fmt.Sprintf("retrieved %v", fileHash), "read", n, "err", err)
+				defer ticker.Stop()
+				// we are only testing the pivot node (net.Nodes[0]) but simulation needs
+				// all nodes to pass the check so we trigger each and the check function
+				// will trivially return true
+				for i := 1; i < nodes; i++ {
+					triggerC <- net.Nodes[i].ID()
+				}
+				for range ticker.C {
+					triggerC <- net.Nodes[0].ID()
+				}
 			}()
-			return nil
+			return triggerC
 		}
-	}
 
-	check := func(net *simulations.Network, dpa *storage.DPA) func(ctx context.Context, id discover.NodeID) (bool, error) {
-		return func(ctx context.Context, id discover.NodeID) (bool, error) {
-			if id != net.Nodes[0].ID() {
+		action := func(net *simulations.Network) func(context.Context) error {
+			// here we distribute chunks of a random file into localstores of nodes 1 to nodes
+			rrdpa := storage.NewDPA(newRoundRobinStore(localStores[1:]...), storage.NewChunkerParams())
+			rrdpa.Start()
+			// create a retriever dpa for the pivot node
+			dpacs := storage.NewDpaChunkStore(localStores[0].(*storage.LocalStore), func(chunk *storage.Chunk) error { return delivery.RequestFromPeers(chunk.Key[:], skipCheck) })
+			dpa := storage.NewDPA(dpacs, storage.NewChunkerParams())
+			dpa.Start()
+			return func(context.Context) error {
+				defer rrdpa.Stop()
+				// upload an actual random file of size size
+				hash, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size))
+				if err != nil {
+					return err
+				}
+				// wait until all chunks stored
+				wait()
+				// assign the fileHash to a global so that it is available for the check function
+				fileHash = hash
+				go func() {
+					defer dpa.Stop()
+					log.Debug(fmt.Sprintf("retrieve %v", fileHash))
+					// start the retrieval on the pivot node - this will spawn retrieve requests for missing chunks
+					// we must wait for the peer connections to have started before requesting
+					time.Sleep(2 * time.Second)
+					n, err := mustReadAll(dpa, fileHash)
+					log.Debug(fmt.Sprintf("retrieved %v", fileHash), "read", n, "err", err)
+				}()
+				return nil
+			}
+		}
+
+		check := func(net *simulations.Network, dpa *storage.DPA) func(ctx context.Context, id discover.NodeID) (bool, error) {
+			return func(ctx context.Context, id discover.NodeID) (bool, error) {
+				if id != net.Nodes[0].ID() {
+					return true, nil
+				}
+				select {
+				case <-ctx.Done():
+					return false, ctx.Err()
+				default:
+				}
+				// try to locally retrieve the file to check if retrieve requests have been successful
+				log.Warn(fmt.Sprintf("try to locally retrieve %v", fileHash))
+				total, err := mustReadAll(dpa, fileHash)
+				if err != nil || total != size {
+					log.Warn(fmt.Sprintf("number of bytes read %v/%v (error: %v)", total, size, err))
+					return false, nil
+				}
 				return true, nil
+				// node := net.GetNode(id)
+				// if node == nil {
+				// 	return false, fmt.Errorf("unknown node: %s", id)
+				// }
+				// client, err := node.Client()
+				// if err != nil {
+				// 	return false, fmt.Errorf("error getting node client: %s", err)
+				// }
+				// var response int
+				// if err := client.Call(&response, "test_haslocal", hash); err != nil {
+				// 	return false, fmt.Errorf("error getting bzz_has response: %s", err)
+				// }
+				// log.Debug(fmt.Sprintf("node has: %v\n%v", id, response))
+				// return response == 0, nil
 			}
-			select {
-			case <-ctx.Done():
-				return false, ctx.Err()
-			default:
-			}
-			log.Warn(fmt.Sprintf("try to locally retrieve %v", fileHash))
-			total, err := mustReadAll(dpa, fileHash)
-			if err != nil || total != size {
-				log.Warn(fmt.Sprintf("number of bytes read %v/%v (error: %v)", total, size, err))
-				return false, nil
-			}
-			return true, nil
-			// node := net.GetNode(id)
-			// if node == nil {
-			// 	return false, fmt.Errorf("unknown node: %s", id)
-			// }
-			// client, err := node.Client()
-			// if err != nil {
-			// 	return false, fmt.Errorf("error getting node client: %s", err)
-			// }
-			// var response int
-			// if err := client.Call(&response, "test_haslocal", hash); err != nil {
-			// 	return false, fmt.Errorf("error getting bzz_has response: %s", err)
-			// }
-			// log.Debug(fmt.Sprintf("node has: %v\n%v", id, response))
-			// return response == 0, nil
 		}
-	}
 
-	result, err := runSimulation(nodes, conns, action, trigger, check, adapter)
-	if err != nil {
-		return nil, fmt.Errorf("Setting up simulation failed: %v", err)
+		result, err := runSimulation(nodes, conns, action, trigger, check, adapter)
+		if err != nil {
+			return nil, fmt.Errorf("Setting up simulation failed: %v", err)
+		}
+		if result.Error != nil {
+			return nil, fmt.Errorf("Simulation failed: %s", result.Error)
+		}
+		return result, err
 	}
-	if result.Error != nil {
-		return nil, fmt.Errorf("Simulation failed: %s", result.Error)
-	}
-	return result, err
 }
 
 func runSimulation(nodes, conns int, action func(*simulations.Network) func(context.Context) error, trigger func(*simulations.Network) chan discover.NodeID, check func(*simulations.Network, *storage.DPA) func(context.Context, discover.NodeID) (bool, error), adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
@@ -556,6 +567,7 @@ func runSimulation(nodes, conns int, action func(*simulations.Network) func(cont
 		DefaultService: serviceName,
 	})
 	defer net.Shutdown()
+	// set nodes number of localstores globally available
 	teardown, err := setLocalStores(nodes)
 	defer teardown()
 	if err != nil {
@@ -563,6 +575,7 @@ func runSimulation(nodes, conns int, action func(*simulations.Network) func(cont
 	}
 	ids := make([]discover.NodeID, nodes)
 	nodeCount = 0
+	// start nodes
 	for i := 0; i < nodes; i++ {
 		node, err := net.NewNode()
 		if err != nil {
@@ -574,8 +587,7 @@ func runSimulation(nodes, conns int, action func(*simulations.Network) func(cont
 		ids[i] = node.ID()
 	}
 
-	// run a simulation which connects the 10 nodes in a ring and waits
-	// for full peer discovery
+	// run a simulation which connects the 10 nodes in a chain
 	var addrs [][]byte
 	wg := sync.WaitGroup{}
 	log.Warn("runSimulation 1")
@@ -606,10 +618,11 @@ func runSimulation(nodes, conns int, action func(*simulations.Network) func(cont
 
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 
-	// 64 nodes ~ 1min
-	// 128 nodes ~
+	// create an only locally retrieving dpa for the pivot node to test
+	// if retriee requests have arrived
 	dpa := storage.NewDPA(localStores[0], storage.NewChunkerParams())
 	dpa.Start()
+	defer dpa.Stop()
 	timeout := 300 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -624,7 +637,8 @@ func runSimulation(nodes, conns int, action func(*simulations.Network) func(cont
 	return result, nil
 }
 
-func newService(ctx *adapters.ServiceContext) (node.Service, error) {
+// newDeliveryService
+func newDeliveryService(ctx *adapters.ServiceContext) (node.Service, error) {
 	id := ctx.Config.ID
 	addr := NewAddrFromNodeID(id)
 	kad := NewKademlia(addr.Over(), NewKadParams())
@@ -632,34 +646,23 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	dbAccess := NewDbAccess(localStore.(*storage.LocalStore))
 	streamer := NewStreamer(NewDelivery(kad, dbAccess))
 	if nodeCount == 0 {
+		// the delivery service for the pivot node is assigned globally
+		// so that the simulation action call can use it for the
+		// swarm enabled dpa
 		delivery = streamer.delivery
 	}
 	nodeCount++
-	run := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-		bzzPeer := &bzzPeer{
-			Peer:      protocols.NewPeer(p, rw, StreamerSpec),
-			localAddr: addr,
-			BzzAddr:   NewAddrFromNodeID(p.ID()),
-		}
-		log.Warn("Run function kad On ", "local", id, "remote", p.ID())
-		kad.On(bzzPeer)
-		go func() {
-			time.Sleep(1 * time.Second)
-			err := streamer.Subscribe(p.ID(), retrieveRequestStream, nil, 0, 0, Top, true)
-			if err != nil {
-				log.Warn("error in subscribe", "err", err)
-			}
-		}()
-		return streamer.Run(bzzPeer)
-	}
+
 	log.Warn("new service created")
 	return &testDeliveryService{
-		run: run,
+		addr:     addr,
+		streamer: streamer,
 	}, nil
 }
 
 type testDeliveryService struct {
-	run func(p *p2p.Peer, rw p2p.MsgReadWriter) error
+	addr     *BzzAddr
+	streamer *Streamer
 }
 
 func (tds *testDeliveryService) Protocols() []p2p.Protocol {
@@ -686,4 +689,25 @@ func (b *testDeliveryService) Start(server *p2p.Server) error {
 
 func (b *testDeliveryService) Stop() error {
 	return nil
+}
+
+func (b *testDeliveryService) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	bzzPeer := &bzzPeer{
+		Peer:      protocols.NewPeer(p, rw, StreamerSpec),
+		localAddr: b.addr,
+		BzzAddr:   NewAddrFromNodeID(p.ID()),
+	}
+	b.streamer.delivery.overlay.On(bzzPeer)
+	defer b.streamer.delivery.overlay.Off(bzzPeer)
+	go func() {
+		// each node Subscribes to each other's retrieveRequestStream
+		// need to wait till an aynchronous process registers the peers in streamer.peers
+		// that is used by Subscribe
+		time.Sleep(1 * time.Second)
+		err := b.streamer.Subscribe(p.ID(), retrieveRequestStream, nil, 0, 0, Top, true)
+		if err != nil {
+			log.Warn("error in subscribe", "err", err)
+		}
+	}()
+	return b.streamer.Run(bzzPeer)
 }
