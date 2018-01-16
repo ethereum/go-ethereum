@@ -22,10 +22,15 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/test"
 )
 
+// TestDBStore is running test for a GlobalStore
+// using test.MockStore function.
 func TestMemStore(t *testing.T) {
 	test.MockStore(t, NewGlobalStore(), 100)
 }
 
+// TestImportExport is running tests for importing and
+// exporting data between two GlobalStores
+// using test.ImportExport function.
 func TestImportExport(t *testing.T) {
 	test.ImportExport(t, NewGlobalStore(), NewGlobalStore(), 100)
 }

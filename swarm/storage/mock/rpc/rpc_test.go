@@ -24,6 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/test"
 )
 
+// TestDBStore is running test for a GlobalStore
+// using test.MockStore function.
 func TestRPCStore(t *testing.T) {
 	serverStore := mem.NewGlobalStore()
 

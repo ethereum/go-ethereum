@@ -205,6 +205,8 @@ func initMockDbStore(t *testing.T, mockStore *mock.NodeStore) *DbStore {
 	return m
 }
 
+// testMockDbStore runs the same tests as testDbStore but with mock store configured.
+// It also verifies if mock global store is storing the chunk data.
 func testMockDbStore(l int64, branches int64, t *testing.T) {
 	globalStore := mem.NewGlobalStore()
 	addr := common.HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")

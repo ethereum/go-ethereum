@@ -24,6 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/test"
 )
 
+// TestDBStore is running a test.MockStore tests
+// using test.MockStore function.
 func TestDBStore(t *testing.T) {
 	dir, err := ioutil.TempDir("", "mock_"+t.Name())
 	if err != nil {
@@ -40,6 +42,8 @@ func TestDBStore(t *testing.T) {
 	test.MockStore(t, store, 100)
 }
 
+// TestImportExport is running a test.ImportExport tests
+// using test.MockStore function.
 func TestImportExport(t *testing.T) {
 	dir1, err := ioutil.TempDir("", "mock_"+t.Name()+"_exporter")
 	if err != nil {

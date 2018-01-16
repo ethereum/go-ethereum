@@ -102,10 +102,10 @@ func (s *GlobalStore) Import(r io.Reader) (n int, err error) {
 
 	for {
 		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
 		if err != nil {
+			if err == io.EOF {
+				break
+			}
 			return n, err
 		}
 
@@ -133,7 +133,7 @@ func (s *GlobalStore) Import(r io.Reader) (n int, err error) {
 }
 
 // Export writes to a writer a tar archive with all chunk data from
-// the store. It returns the number fo chunks exported and an error.
+// the store. It returns the number of chunks exported and an error.
 func (s *GlobalStore) Export(w io.Writer) (n int, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

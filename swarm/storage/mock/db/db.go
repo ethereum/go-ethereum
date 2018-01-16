@@ -66,7 +66,7 @@ func (s *GlobalStore) NewNodeStore(addr common.Address) *mock.NodeStore {
 func (s *GlobalStore) Get(addr common.Address, key []byte) (data []byte, err error) {
 	has, err := s.db.Has(nodeDBKey(addr, key), nil)
 	if err != nil {
-		has = false
+		return nil, mock.ErrNotFound
 	}
 	if !has {
 		return nil, mock.ErrNotFound
@@ -102,10 +102,10 @@ func (s *GlobalStore) Import(r io.Reader) (n int, err error) {
 
 	for {
 		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
 		if err != nil {
+			if err == io.EOF {
+				break
+			}
 			return n, err
 		}
 
