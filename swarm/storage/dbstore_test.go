@@ -193,7 +193,7 @@ func TestDbStoreSyncIterator(t *testing.T) {
 	}
 }
 
-func initMockDbStore(t *testing.T, mockStore mock.NodeStorer) *DbStore {
+func initMockDbStore(t *testing.T, mockStore *mock.NodeStore) *DbStore {
 	dir, err := ioutil.TempDir("", "bzz-storage-test-mock")
 	if err != nil {
 		t.Fatal(err)

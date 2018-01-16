@@ -31,7 +31,7 @@ type LocalStore struct {
 
 // This constructor uses MemStore and DbStore as components.
 // If mockStore is not nil, it will be used by DbStore to store chunk data.
-func NewLocalStore(hash SwarmHasher, params *StoreParams, mockStore mock.NodeStorer) (*LocalStore, error) {
+func NewLocalStore(hash SwarmHasher, params *StoreParams, mockStore *mock.NodeStore) (*LocalStore, error) {
 	dbStore, err := NewMockDbStore(params.ChunkDbPath, hash, params.DbCapacity, params.Radius, mockStore)
 	if err != nil {
 		return nil, err

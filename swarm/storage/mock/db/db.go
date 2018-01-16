@@ -57,11 +57,8 @@ func (s *GlobalStore) Close() error {
 
 // NewNodeStore returns a new instance of NodeStore that retrieves and stores
 // chunk data only for a node with address addr.
-func (s *GlobalStore) NewNodeStore(addr common.Address) mock.NodeStorer {
-	return &NodeStore{
-		store: s,
-		addr:  addr,
-	}
+func (s *GlobalStore) NewNodeStore(addr common.Address) *mock.NodeStore {
+	return mock.NewNodeStore(addr, s)
 }
 
 // Get returns chunk data if the chunk with key exists for node
@@ -215,25 +212,6 @@ func (s *GlobalStore) Export(w io.Writer) (n int, err error) {
 	}
 
 	return n, err
-}
-
-// NodeStore holds the node address and a reference to the GlobalStore
-// in order to access and store chunk data only for one node.
-type NodeStore struct {
-	store *GlobalStore
-	addr  common.Address
-}
-
-// Get returns chunk data for a key for a node that has the address
-// provided on NodeStore initialization.
-func (n *NodeStore) Get(key []byte) (data []byte, err error) {
-	return n.store.Get(n.addr, key)
-}
-
-// Put saves chunk data for a key for a node that has the address
-// provided on NodeStore initialization.
-func (n *NodeStore) Put(key []byte, data []byte) error {
-	return n.store.Put(n.addr, key, data)
 }
 
 var (

@@ -81,7 +81,7 @@ type DbStore struct {
 	// saving and retreiving chunk data from the store.
 	// They must be set on DbStore initialization and must not be nil.
 	// They are used to bypass the default functionality of DbStore with
-	// mock.NodeStorer for testing purposes.
+	// mock.NodeStore for testing purposes.
 	putDataFunc func(batch *leveldb.Batch, _ Key, data []byte)
 	getFunc     func(key Key) (chunk *Chunk, err error)
 }
@@ -122,7 +122,7 @@ func NewDbStore(path string, hash SwarmHasher, capacity uint64, radius int) (s *
 // NewMockDbStore creates a new instance of DbStore with
 // mockStore set to a provided value. If mockStore argument is nil,
 // this function behaves exactly as NewDbStore.
-func NewMockDbStore(path string, hash SwarmHasher, capacity uint64, radius int, mockStore mock.NodeStorer) (s *DbStore, err error) {
+func NewMockDbStore(path string, hash SwarmHasher, capacity uint64, radius int, mockStore *mock.NodeStore) (s *DbStore, err error) {
 	s, err = NewDbStore(path, hash, capacity, radius)
 	if err != nil {
 		return nil, err
@@ -475,7 +475,7 @@ func (s *DbStore) dbPutDataFunc(batch *leveldb.Batch, _ Key, data []byte) {
 
 // newMockPutDataFunc returns a function that stores the chunk data
 // to a mock store to bypass the default functionality of DbStore.
-func newMockPutDataFunc(mockStore mock.NodeStorer) func(_ *leveldb.Batch, key Key, data []byte) {
+func newMockPutDataFunc(mockStore *mock.NodeStore) func(_ *leveldb.Batch, key Key, data []byte) {
 	return func(_ *leveldb.Batch, key Key, data []byte) {
 		if err := mockStore.Put(key, data); err != nil {
 			log.Error(fmt.Sprintf("%T: Chunk %v put: %v", mockStore, key.Log(), err))
@@ -550,7 +550,7 @@ func (s *DbStore) dbGetFunc(key Key) (chunk *Chunk, err error) {
 // newMockGetFunc returns a function that reads chunk data from
 // the mock database, which is used as the value for DbStore.getFunc
 // to bypass the default functionality of DbStore with a mock store.
-func newMockGetFunc(mockStore mock.NodeStorer) func(key Key) (chunk *Chunk, err error) {
+func newMockGetFunc(mockStore *mock.NodeStore) func(key Key) (chunk *Chunk, err error) {
 	return func(key Key) (chunk *Chunk, err error) {
 		data, err := mockStore.Get(key)
 		if err != nil {

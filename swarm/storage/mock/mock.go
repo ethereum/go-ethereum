@@ -39,9 +39,36 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// ErrNotFound is in all NodeStorer implementations
-// to indicate that the chunk is not found.
+// ErrNotFound indicates that the chunk is not found.
 var ErrNotFound = errors.New("not found")
+
+// NodeStore holds the node address and a reference to the GlobalStore
+// in order to access and store chunk data only for one node.
+type NodeStore struct {
+	store GlobalStorer
+	addr  common.Address
+}
+
+// NewNodeStore creates a new instance of NodeStore that keeps
+// chunk data using GlobalStorer with a provided address.
+func NewNodeStore(addr common.Address, store GlobalStorer) *NodeStore {
+	return &NodeStore{
+		store: store,
+		addr:  addr,
+	}
+}
+
+// Get returns chunk data for a key for a node that has the address
+// provided on NodeStore initialization.
+func (n *NodeStore) Get(key []byte) (data []byte, err error) {
+	return n.store.Get(n.addr, key)
+}
+
+// Put saves chunk data for a key for a node that has the address
+// provided on NodeStore initialization.
+func (n *NodeStore) Put(key []byte, data []byte) error {
+	return n.store.Put(n.addr, key, data)
+}
 
 // GlobalStorer defines methods for mock db store
 // that stores chunk data for all swarm nodes.
@@ -51,19 +78,10 @@ type GlobalStorer interface {
 	Get(addr common.Address, key []byte) (data []byte, err error)
 	Put(addr common.Address, key []byte, data []byte) error
 	HasKey(addr common.Address, key []byte) bool
-	// NewNodeStore creates an instance of NodeStorer
+	// NewNodeStore creates an instance of NodeStore
 	// to be used by a single swarm node with
 	// address addr.
-	NewNodeStore(addr common.Address) NodeStorer
-}
-
-// NodeStorer defines methods that are required
-// for accessing and storing chunk data.
-// It is used for baypassing chunk data storing in
-// storage.DbStore.
-type NodeStorer interface {
-	Get(key []byte) (data []byte, err error)
-	Put(key []byte, data []byte) error
+	NewNodeStore(addr common.Address) *NodeStore
 }
 
 // Importer defines method for importing mock store data

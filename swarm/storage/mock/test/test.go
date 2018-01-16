@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package test provides functions that are used for testing
-// GlobalStorer and NodeStorer implementations.
+// GlobalStorer implementations.
 package test
 
 import (
@@ -30,10 +30,10 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
-// MockStore creates NodeStorer instances from provided GlobalStorer,
+// MockStore creates NodeStore instances from provided GlobalStorer,
 // each one with a unique address, stores different chunks on them
 // and checks if they are retrievable or not on all nodes.
-// Attribute n defines the number of NodeStorers that will be created.
+// Attribute n defines the number of NodeStores that will be created.
 func MockStore(t *testing.T, globalStore mock.GlobalStorer, n int) {
 	t.Run("GlobalStore", func(t *testing.T) {
 		addrs := make([]common.Address, n)
@@ -75,7 +75,7 @@ func MockStore(t *testing.T, globalStore mock.GlobalStorer, n int) {
 	})
 
 	t.Run("NodeStore", func(t *testing.T) {
-		nodes := make(map[common.Address]mock.NodeStorer)
+		nodes := make(map[common.Address]*mock.NodeStore)
 		for i := 0; i < n; i++ {
 			addr := common.HexToAddress(strconv.FormatInt(int64(i)+1, 16))
 			nodes[addr] = globalStore.NewNodeStore(addr)
