@@ -36,7 +36,6 @@ import (
 // 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlWarn, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 // }
 
-// TODO: extract newStreamer
 func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Streamer, *storage.LocalStore, func(), error) {
 	// setup
 	addr := RandomAddr() // tested peers peer address
@@ -77,11 +76,6 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Streamer, *stora
 
 	return protocolTester, streamer, localStore, teardown, nil
 }
-
-// TODO
-// func newStreamer() (*Streamer, error) {
-//
-// }
 
 func TestStreamerSubscribe(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(t)
@@ -147,7 +141,6 @@ func (self *testOutgoingStreamer) GetData([]byte) []byte {
 }
 
 func TestStreamerDownstreamSubscribeMsgExchange(t *testing.T) {
-	// TODO: we only need streamer
 	tester, streamer, _, teardown, err := newStreamerTester(t)
 	defer teardown()
 	if err != nil {
@@ -190,7 +183,6 @@ func TestStreamerDownstreamSubscribeMsgExchange(t *testing.T) {
 }
 
 func TestStreamerUpstreamSubscribeMsgExchange(t *testing.T) {
-	// TODO: we only need streamer
 	tester, streamer, _, teardown, err := newStreamerTester(t)
 	defer teardown()
 	if err != nil {
@@ -244,7 +236,6 @@ func TestStreamerUpstreamSubscribeMsgExchange(t *testing.T) {
 }
 
 func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
-	// TODO: we only need streamer
 	tester, streamer, _, teardown, err := newStreamerTester(t)
 	defer teardown()
 	if err != nil {
