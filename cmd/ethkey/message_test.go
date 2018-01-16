@@ -26,7 +26,7 @@ import (
 func TestMessageSignVerify(t *testing.T) {
 	tmpdir, err := ioutil.TempDir("", "ethkey-test")
 	if err != nil {
-		t.Fatal("Can't create temporary directory: %v")
+		t.Fatal("Can't create temporary directory:", err)
 	}
 	defer os.RemoveAll(tmpdir)
 
