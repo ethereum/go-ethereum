@@ -23,6 +23,7 @@ var commandInspect = cli.Command{
 	ArgsUsage: "<keyfile>",
 	Description: `
 Print various information about the keyfile.
+
 Private key information can be printed by using the --private flag;
 make sure to use this feature with great caution!`,
 	Flags: []cli.Flag{
