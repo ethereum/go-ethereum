@@ -128,8 +128,8 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 
 	dbAccess := network.NewDbAccess(self.lstore)
 	self.streamer = network.NewStreamer(to, dbAccess)
-	network.RegisterOutgoingSyncers(self.streamer, dbAccess)
-	network.RegisterIncomingSyncers(self.streamer, dbAccess)
+	network.RegisterOutgoingSyncer(self.streamer, dbAccess)
+	network.RegisterIncomingSyncer(self.streamer, dbAccess)
 
 	self.bzz = network.NewBzz(bzzconfig, to, nil, self.streamer)
 

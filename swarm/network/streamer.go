@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	bv "github.com/ethereum/go-ethereum/swarm/network/bitvector"
@@ -264,7 +265,7 @@ func (self *StreamerPeer) getOutgoingStreamer(s string) (*outgoingStreamer, erro
 	defer self.outgoingLock.RUnlock()
 	streamer := self.outgoing[s]
 	if streamer == nil {
-		return nil, fmt.Errorf("stream '%v' not provided", s)
+		return nil, fmt.Errorf("outgoing stream '%v' not provided to peer %v", s, self.ID())
 	}
 	return streamer, nil
 }
@@ -274,7 +275,7 @@ func (self *StreamerPeer) getIncomingStreamer(s string) (*incomingStreamer, erro
 	defer self.incomingLock.RUnlock()
 	streamer := self.incoming[s]
 	if streamer == nil {
-		return nil, fmt.Errorf("stream '%v' not provided", s)
+		return nil, fmt.Errorf("incoming stream '%v' not provided to peer %v", s, self.ID())
 	}
 	return streamer, nil
 }
@@ -348,6 +349,7 @@ func (self *incomingStreamer) nextBatch(from uint64) (nextFrom uint64, nextTo ui
 
 // Subscribe initiates the streamer
 func (self *Streamer) Subscribe(peerId discover.NodeID, s string, t []byte, from, to uint64, priority uint8, live bool) error {
+	log.Warn("!!!!!! Subscribe ", "peer", peerId)
 	f, err := self.GetIncomingStreamer(s)
 	if err != nil {
 		return err
@@ -362,7 +364,7 @@ func (self *Streamer) Subscribe(peerId discover.NodeID, s string, t []byte, from
 	if err != nil {
 		return err
 	}
-	err = peer.setIncomingStreamer(s, is, priority, live)
+	err = peer.setIncomingStreamer(s+string(t), is, priority, live)
 	if err != nil {
 		return err
 	}

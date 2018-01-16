@@ -305,12 +305,9 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 
 }
 
-// serviceName is used with the exec adapter so the exec'd binary knows which
-// service to execute
-const serviceName = "delivery"
-
 var services = adapters.Services{
-	serviceName: newDeliveryService,
+	"delivery": newDeliveryService,
+	"syncer":   newSyncerService,
 }
 
 var (
@@ -498,6 +495,7 @@ func testDeliveryFromNodes(nodes, conns, size int, skipCheck bool) func(adapter 
 					return err
 				}
 				// wait until all chunks stored
+				// TODO: is wait() necessary?
 				wait()
 				// assign the fileHash to a global so that it is available for the check function
 				fileHash = hash
@@ -549,7 +547,7 @@ func testDeliveryFromNodes(nodes, conns, size int, skipCheck bool) func(adapter 
 			}
 		}
 
-		result, err := runSimulation(nodes, conns, action, trigger, check, adapter)
+		result, err := runSimulation(nodes, conns, "delivery", action, trigger, check, adapter)
 		if err != nil {
 			return nil, fmt.Errorf("Setting up simulation failed: %v", err)
 		}
@@ -560,7 +558,7 @@ func testDeliveryFromNodes(nodes, conns, size int, skipCheck bool) func(adapter 
 	}
 }
 
-func runSimulation(nodes, conns int, action func(*simulations.Network) func(context.Context) error, trigger func(*simulations.Network) chan discover.NodeID, check func(*simulations.Network, *storage.DPA) func(context.Context, discover.NodeID) (bool, error), adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
+func runSimulation(nodes, conns int, serviceName string, action func(*simulations.Network) func(context.Context) error, trigger func(*simulations.Network) chan discover.NodeID, check func(*simulations.Network, *storage.DPA) func(context.Context, discover.NodeID) (bool, error), adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
 	// create network
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",
@@ -654,18 +652,21 @@ func newDeliveryService(ctx *adapters.ServiceContext) (node.Service, error) {
 	nodeCount++
 
 	log.Warn("new service created")
-	return &testDeliveryService{
+	self := &testStreamerService{
 		addr:     addr,
 		streamer: streamer,
-	}, nil
+	}
+	self.run = self.runDelivery
+	return self, nil
 }
 
-type testDeliveryService struct {
+type testStreamerService struct {
 	addr     *BzzAddr
 	streamer *Streamer
+	run      func(p *p2p.Peer, rw p2p.MsgReadWriter) error
 }
 
-func (tds *testDeliveryService) Protocols() []p2p.Protocol {
+func (tds *testStreamerService) Protocols() []p2p.Protocol {
 	log.Warn("Protocols function", "run", tds.run)
 	return []p2p.Protocol{
 		{
@@ -679,19 +680,19 @@ func (tds *testDeliveryService) Protocols() []p2p.Protocol {
 	}
 }
 
-func (b *testDeliveryService) APIs() []rpc.API {
+func (b *testStreamerService) APIs() []rpc.API {
 	return []rpc.API{}
 }
 
-func (b *testDeliveryService) Start(server *p2p.Server) error {
+func (b *testStreamerService) Start(server *p2p.Server) error {
 	return nil
 }
 
-func (b *testDeliveryService) Stop() error {
+func (b *testStreamerService) Stop() error {
 	return nil
 }
 
-func (b *testDeliveryService) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+func (b *testStreamerService) runDelivery(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	bzzPeer := &bzzPeer{
 		Peer:      protocols.NewPeer(p, rw, StreamerSpec),
 		localAddr: b.addr,

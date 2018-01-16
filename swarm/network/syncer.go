@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -58,6 +60,7 @@ func (self *DbAccess) iterator(from uint64, to uint64, po uint8, f func(storage.
 
 // to obtain the chunks from key or request db entry only
 func (self *DbAccess) getOrCreateRequest(key storage.Key) (*storage.Chunk, bool) {
+	log.Warn("getOrCreateRequest", "self", self)
 	return self.loc.GetOrCreateRequest(key)
 }
 
@@ -95,9 +98,11 @@ func NewOutgoingSwarmSyncer(live bool, po uint8, db *DbAccess) (*OutgoingSwarmSy
 
 const maxPO = 32
 
-func RegisterOutgoingSyncers(streamer *Streamer, db *DbAccess) {
+func RegisterOutgoingSyncer(streamer *Streamer, db *DbAccess) {
 	streamer.RegisterOutgoingStreamer("SYNC", func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
 		syncType, po := parseSyncLabel(t)
+		// TODO: make this work for HISTORY too
+		syncType = "LIVE"
 		switch syncType {
 		case "LIVE":
 			return NewOutgoingSwarmSyncer(true, po, db)
@@ -128,17 +133,29 @@ func (self *OutgoingSwarmSyncer) SetNextBatch(from, to uint64) ([]byte, uint64, 
 	if from == 0 {
 		from = self.start
 	}
-	err := self.db.iterator(from, to, self.po, func(key storage.Key, idx uint64) bool {
-		batch = append(batch, key[:]...)
-		i++
-		to = idx
-		return i < batchSize
-	})
-	if err != nil {
-		return nil, 0, 0, nil, err
+	if to <= from {
+		to = math.MaxUint64
 	}
+	log.Warn("!!!!!!!!!!!!! setNextBatch", "from", from, "to", to, "currentStoreCount", self.db.currentBucketStorageIndex(1))
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for range ticker.C {
+		err := self.db.iterator(from, to, self.po, func(key storage.Key, idx uint64) bool {
+			batch = append(batch, key[:]...)
+			i++
+			to = idx
+			return i < batchSize
+		})
+		if err != nil {
+			return nil, 0, 0, nil, err
+		}
+		if len(batch) > 0 {
+			break
+		}
+	}
+
 	log.Debug("Swarm batch", "po", self.po, "len", i, "from", from, "to", to)
-	return batch, from, to, nil, nil
+	return batch, from, to + 1, nil, nil
 }
 
 // IncomingSwarmSyncer
@@ -212,16 +229,9 @@ func StartSyncing(s *Streamer, peerId discover.NodeID, po uint8, nn bool) {
 	}
 }
 
-func RegisterIncomingSyncers(streamer *Streamer, db *DbAccess) {
+func RegisterIncomingSyncer(streamer *Streamer, db *DbAccess) {
 	streamer.RegisterIncomingStreamer("SYNC", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
-		syncType, _ := parseSyncLabel(t)
-		switch syncType {
-		case "LIVE":
-			return NewIncomingSwarmSyncer(p, nil, nil)
-		case "HISTORY":
-			return NewIncomingSwarmSyncer(p, nil, nil)
-		}
-		return nil, fmt.Errorf("unknown sync type %q", syncType)
+		return NewIncomingSwarmSyncer(p, db, nil)
 	})
 	// stream = fmt.Sprintf("SYNC-%02d-delete", po)
 	// streamer.RegisterIncomingStreamer(stream, func(p *StreamerPeer) (OutgoingStreamer, error) {
