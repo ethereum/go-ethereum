@@ -776,6 +776,7 @@ func TestWatchers(t *testing.T) {
 func TestVariableTopics(t *testing.T) {
 	InitSingleTest()
 
+	const lastTopicByte = 3
 	var match bool
 	params, err := generateMessageParams()
 	if err != nil {
@@ -802,7 +803,7 @@ func TestVariableTopics(t *testing.T) {
 			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
 		}
 
-		f.Topics[i][1]++
+		f.Topics[i][lastTopicByte]++
 		match = f.MatchEnvelope(env)
 		if match {
 			t.Fatalf("MatchEnvelope symmetric with seed %d, step %d: false positive.", seed, i)
