@@ -70,7 +70,7 @@ var htmlListTemplate = template.Must(template.New("html-list").Funcs(template.Fu
 </body>
 `[1:]))
 
-vvar landingPageTemplate = template.Must(template.New("landing-page").Parse(`
+var landingPageTemplate = template.Must(template.New("landingPage").Parse(`
 <html>
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
@@ -78,19 +78,23 @@ vvar landingPageTemplate = template.Must(template.New("landing-page").Parse(`
     <meta http-equiv="X-UA-Compatible" ww="chrome=1">
     <meta name="description" content="Ethereum/Swarm Landing page">
     <meta property="og:url" content="https://swarm-gateways.net/bzz:/theswarm.eth">
-    <style>
+		<style>
+
       body, div, header, footer {
         margin: 0;
         padding: 0;
       }
+
       body {
         overflow: hidden;
       }
+
       .container {
         min-width: 100%;
         min-height: 100%;
         max-height: 100%;
       }
+
       header {
         display: flex;
         align-items: center;
@@ -98,17 +102,21 @@ vvar landingPageTemplate = template.Must(template.New("landing-page").Parse(`
         /* height: 20vh; */
         padding: 5px;
       }
+
       .header-left, .header-right {
         width: 20%;
       }
+
       .header-left {
         padding-left: 40px;
         float: left;
       }
+
       .header-right {
         padding-right: 40px;
         float: right;
       }
+
       .page-title {
         /* margin-top: 4.5vh; */
         text-align: center;
@@ -116,36 +124,43 @@ vvar landingPageTemplate = template.Must(template.New("landing-page").Parse(`
         width:      60%;
         color:      white;
       }
+
       content-body {
         display: block;
-        margin: auto;
+        margin: 0 auto;
 				text-align: center;
         /* width: 50%; */
-        min-height: 30vh;
+        min-height: 60vh;
         max-height: 60vh;
-        padding-top: 50px;
+        padding: 50px 20px;
         opacity: 0.6;
         background-color: #A9F5BF;
       }
+
       table {
         font-size: 1.2em;
         margin: 0 auto;
       }
+
       tr {
         height: 60px;
       }
+
       td {
         text-align: center;
       }
+
       .key {
         color: #111;
         font-weight: bold;
         width: 200px;
       }
+
       .value {
         color: red;
         font-weight: bold
       }
+
       footer {
         height: 20vh;
         background-color: #ffa500;
@@ -153,8 +168,9 @@ vvar landingPageTemplate = template.Must(template.New("landing-page").Parse(`
         text-align: center;
         padding: 20px;
       }
+
     </style>
-    <title>Swarm:: Welcome to Swarm</title>
+    <title>Swarm :: Welcome to Swarm</title>
   </head>
   <body>
 
