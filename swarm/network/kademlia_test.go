@@ -284,7 +284,7 @@ func TestSuggestPeerRetries(t *testing.T) {
 	// 2 row gap, unsaturated proxbin, no callables -> want PO 0
 	k := newTestKademlia("00000000")
 	cycle := time.Second
-	k.RetryInterval = int(cycle)
+	k.RetryInterval = uint(cycle)
 	k.MaxRetries = 50
 	k.RetryExponent = 2
 	sleep := func(n int) {
