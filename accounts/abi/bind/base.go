@@ -18,7 +18,6 @@ package bind
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -44,9 +43,10 @@ type CallOpts struct {
 // TransactOpts is the collection of authorization data required to create a
 // valid Ethereum transaction.
 type TransactOpts struct {
-	From   common.Address // Ethereum account to send the transaction from
-	Nonce  *big.Int       // Nonce to use for the transaction execution (nil = use pending state)
-	Signer SignerFn       // Method to use for signing the transaction (mandatory)
+	From      common.Address // Ethereum account to send the transaction from
+	Nonce     *big.Int       // Nonce to use for the transaction execution (nil = use pending state)
+	Signer    SignerFn       // Method to use for signing the transaction
+	DoNotSend bool           // If true then return the transaction without sending it
 
 	Value    *big.Int // Funds to transfer along along the transaction (nil = 0 = no funds)
 	GasPrice *big.Int // Gas price to use for the transaction execution (nil = gas price oracle)
@@ -205,7 +205,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 			return nil, fmt.Errorf("failed to estimate gas needed: %v", err)
 		}
 	}
-	// Create the transaction, sign it and schedule it for execution
+	// Create the transaction
 	var rawTx *types.Transaction
 	if contract == nil {
 		rawTx = types.NewContractCreation(nonce, value, gasLimit, gasPrice, input)
@@ -213,12 +213,19 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		rawTx = types.NewTransaction(nonce, c.address, value, gasLimit, gasPrice, input)
 	}
 	if opts.Signer == nil {
-		return nil, errors.New("no signer to authorize the transaction with")
+		return rawTx, nil
 	}
+
+	// Sign the transaction
 	signedTx, err := opts.Signer(types.HomesteadSigner{}, opts.From, rawTx)
 	if err != nil {
 		return nil, err
 	}
+	if opts.DoNotSend {
+		return signedTx, nil
+	}
+
+	// Send the transaction
 	if err := c.transactor.SendTransaction(ensureContext(opts.Context), signedTx); err != nil {
 		return nil, err
 	}
