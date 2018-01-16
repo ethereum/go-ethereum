@@ -385,20 +385,37 @@ func TestPeerBasic(t *testing.T) {
 }
 
 func checkPowExchangeForNodeZero(t *testing.T) {
+	const iterations = 200
+	for j := 0; j < iterations; j++ {
+		lastCycle := (j == iterations-1)
+		ok := checkPowExchangeForNodeZeroOnce(t, lastCycle)
+		if ok {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func checkPowExchangeForNodeZeroOnce(t *testing.T, mustPass bool) bool {
 	cnt := 0
 	for i, node := range nodes {
 		for peer := range node.shh.peers {
 			if peer.peer.ID() == discover.PubkeyID(&nodes[0].id.PublicKey) {
 				cnt++
 				if peer.powRequirement != masterPow {
-					t.Fatalf("node %d: failed to set the new pow requirement.", i)
+					if mustPass {
+						t.Fatalf("node %d: failed to set the new pow requirement for node zero.", i)
+					} else {
+						return false
+					}
 				}
 			}
 		}
 	}
 	if cnt == 0 {
-		t.Fatalf("no matching peers found.")
+		t.Fatalf("looking for node zero: no matching peers found.")
 	}
+	return true
 }
 
 func checkPowExchange(t *testing.T) {
@@ -432,7 +449,7 @@ func checkBloomFilterExchangeOnce(t *testing.T, mustPass bool) bool {
 }
 
 func checkBloomFilterExchange(t *testing.T) {
-	const iterations = 128
+	const iterations = 200
 	for j := 0; j < iterations; j++ {
 		lastCycle := (j == iterations-1)
 		ok := checkBloomFilterExchangeOnce(t, lastCycle)

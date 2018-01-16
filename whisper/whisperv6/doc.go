@@ -48,17 +48,16 @@ const (
 	p2pMessageCode       = 127 // peer-to-peer message (to be consumed by the peer, but not forwarded any further)
 	NumberOfMessageCodes = 128
 
-	auxFieldSizeMask = byte(3) // mask used to extract the size of auxiliary field from the flags
-	signatureFlag    = byte(4)
+	SizeMask      = byte(3) // mask used to extract the size of payload size field from the flags
+	signatureFlag = byte(4)
 
-	TopicLength           = 4  // in bytes
-	signatureLength       = 65 // in bytes
-	aesKeyLength          = 32 // in bytes
-	aesNonceLength        = 12 // in bytes; for more info please see cipher.gcmStandardNonceSize & aesgcm.NonceSize()
-	keyIdSize             = 32 // in bytes
-	bloomFilterSize       = 64 // in bytes
-	flagsLength           = 1
-	auxiliaryFieldMaxSize = 4
+	TopicLength     = 4  // in bytes
+	signatureLength = 65 // in bytes
+	aesKeyLength    = 32 // in bytes
+	aesNonceLength  = 12 // in bytes; for more info please see cipher.gcmStandardNonceSize & aesgcm.NonceSize()
+	keyIdSize       = 32 // in bytes
+	bloomFilterSize = 64 // in bytes
+	flagsLength     = 1
 
 	EnvelopeHeaderLength = 20
 

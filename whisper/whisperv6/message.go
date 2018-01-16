@@ -89,19 +89,20 @@ func (msg *ReceivedMessage) isAsymmetricEncryption() bool {
 
 // NewMessage creates and initializes a non-signed, non-encrypted Whisper message.
 func NewSentMessage(params *MessageParams) (*sentMessage, error) {
+	const payloadSizeFieldMaxSize = 4
 	msg := sentMessage{}
 	msg.Raw = make([]byte, 1,
-		flagsLength+auxiliaryFieldMaxSize+len(params.Payload)+len(params.Padding)+signatureLength+padSizeLimit)
+		flagsLength+payloadSizeFieldMaxSize+len(params.Payload)+len(params.Padding)+signatureLength+padSizeLimit)
 	msg.Raw[0] = 0 // set all the flags to zero
-	msg.addAuxiliaryField(params.Payload)
+	msg.addPayloadSizeField(params.Payload)
 	msg.Raw = append(msg.Raw, params.Payload...)
 	err := msg.appendPadding(params)
 	return &msg, err
 }
 
-// appendPayloadSizeField appends the auxiliary field containing the size of payload
-func (msg *sentMessage) addAuxiliaryField(payload []byte) {
-	fieldSize := getAuxiliaryFieldSize(payload)
+// addPayloadSizeField appends the auxiliary field containing the size of payload
+func (msg *sentMessage) addPayloadSizeField(payload []byte) {
+	fieldSize := getSizeOfPayloadSizeField(payload)
 	field := make([]byte, 4)
 	binary.LittleEndian.PutUint32(field, uint32(len(payload)))
 	field = field[:fieldSize]
@@ -109,8 +110,8 @@ func (msg *sentMessage) addAuxiliaryField(payload []byte) {
 	msg.Raw[0] |= byte(fieldSize)
 }
 
-// getAuxFieldSize returns the number of bytes necessary to encode the size of payload
-func getAuxiliaryFieldSize(payload []byte) int {
+// getSizeOfPayloadSizeField returns the number of bytes necessary to encode the size of payload
+func getSizeOfPayloadSizeField(payload []byte) int {
 	s := 1
 	for i := len(payload); i >= 256; i /= 256 {
 		s++
@@ -127,8 +128,7 @@ func (msg *sentMessage) appendPadding(params *MessageParams) error {
 		return nil
 	}
 
-	auxFieldSize := getAuxiliaryFieldSize(params.Payload)
-	rawSize := flagsLength + auxFieldSize + len(params.Payload)
+	rawSize := flagsLength + getSizeOfPayloadSizeField(params.Payload) + len(params.Payload)
 	if params.Src != nil {
 		rawSize += signatureLength
 	}
@@ -316,13 +316,13 @@ func (msg *ReceivedMessage) ValidateAndParse() bool {
 
 	beg := 1
 	payloadSize := 0
-	auxFieldSize := int(msg.Raw[0] & auxFieldSizeMask) // number of bytes indicating the size of payload
-	if auxFieldSize != 0 {
-		payloadSize = int(bytesToUintLittleEndian(msg.Raw[beg : beg+auxFieldSize]))
+	sizeOfPayloadSizeField := int(msg.Raw[0] & SizeMask) // number of bytes indicating the size of payload
+	if sizeOfPayloadSizeField != 0 {
+		payloadSize = int(bytesToUintLittleEndian(msg.Raw[beg : beg+sizeOfPayloadSizeField]))
 		if payloadSize+1 > end {
 			return false
 		}
-		beg += auxFieldSize
+		beg += sizeOfPayloadSizeField
 		msg.Payload = msg.Raw[beg : beg+payloadSize]
 	}
 
@@ -343,7 +343,7 @@ func (msg *ReceivedMessage) SigToPubKey() *ecdsa.PublicKey {
 	return pub
 }
 
-// hash calculates the SHA3 checksum of the message flags, auxiliary field, payload and padding.
+// hash calculates the SHA3 checksum of the message flags, payload size field, payload and padding.
 func (msg *ReceivedMessage) hash() []byte {
 	if isMessageSigned(msg.Raw[0]) {
 		sz := len(msg.Raw) - signatureLength
