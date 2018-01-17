@@ -1,6 +1,4 @@
-// @flow
-
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -16,46 +14,28 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-export type Message = {
-    home?: HomeMessage,
-    chain?: ChainMessage,
-    txpool?: TxPoolMessage,
-    network?: NetworkMessage,
-    system?: SystemMessage,
-    logs?: LogsMessage,
-};
+package rpc
 
-export type HomeMessage = {
-    memory?: Chart,
-    traffic?: Chart,
-};
+import (
+	"testing"
 
-export type Chart = {
-    history?: Array<ChartEntry>,
-    new?: ChartEntry,
-};
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock/test"
+)
 
-export type ChartEntry = {
-    time: Date,
-    value: number,
-};
+// TestDBStore is running test for a GlobalStore
+// using test.MockStore function.
+func TestRPCStore(t *testing.T) {
+	serverStore := mem.NewGlobalStore()
 
-export type ChainMessage = {
-    /* TODO (kurkomisi) */
-};
+	server := rpc.NewServer()
+	if err := server.RegisterName("mockStore", serverStore); err != nil {
+		t.Fatal(err)
+	}
 
-export type TxPoolMessage = {
-    /* TODO (kurkomisi) */
-};
+	store := NewGlobalStore(rpc.DialInProc(server))
+	defer store.Close()
 
-export type NetworkMessage = {
-    /* TODO (kurkomisi) */
-};
-
-export type SystemMessage = {
-    /* TODO (kurkomisi) */
-};
-
-export type LogsMessage = {
-    log: string,
-};
+	test.MockStore(t, store, 100)
+}

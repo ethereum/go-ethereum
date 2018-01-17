@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-package utils
+package fdlimit
 
 import (
 	"fmt"
@@ -25,7 +25,7 @@ import (
 // per this process can be retrieved.
 func TestFileDescriptorLimits(t *testing.T) {
 	target := 4096
-	hardlimit, err := getFdMaxLimit()
+	hardlimit, err := Maximum()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,13 +33,13 @@ func TestFileDescriptorLimits(t *testing.T) {
 		t.Skip(fmt.Sprintf("system limit is less than desired test target: %d < %d", hardlimit, target))
 	}
 
-	if limit, err := getFdLimit(); err != nil || limit <= 0 {
+	if limit, err := Current(); err != nil || limit <= 0 {
 		t.Fatalf("failed to retrieve file descriptor limit (%d): %v", limit, err)
 	}
-	if err := raiseFdLimit(uint64(target)); err != nil {
+	if err := Raise(uint64(target)); err != nil {
 		t.Fatalf("failed to raise file allowance")
 	}
-	if limit, err := getFdLimit(); err != nil || limit < target {
+	if limit, err := Current(); err != nil || limit < target {
 		t.Fatalf("failed to retrieve raised descriptor limit (have %v, want %v): %v", limit, target, err)
 	}
 }
