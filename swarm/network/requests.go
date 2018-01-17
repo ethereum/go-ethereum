@@ -168,8 +168,12 @@ func (self *Delivery) processReceivedChunks() {
 			continue
 		}
 		chunk.SData = req.SData
-		self.dbAccess.put(chunk)
-		close(chunk.ReqC)
+		select {
+		case <-chunk.ReqC:
+		default:
+			self.dbAccess.put(chunk)
+			close(chunk.ReqC)
+		}
 	}
 }
 

@@ -18,64 +18,12 @@ package network
 
 import (
 	"bytes"
-	"errors"
-	"io/ioutil"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 )
-
-//
-// func init() {
-// 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlWarn, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
-// }
-
-func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Streamer, *storage.LocalStore, func(), error) {
-	// setup
-	addr := RandomAddr() // tested peers peer address
-	to := NewKademlia(addr.OAddr, NewKadParams())
-
-	// temp datadir
-	datadir, err := ioutil.TempDir("", "streamer")
-	if err != nil {
-		return nil, nil, nil, func() {}, err
-	}
-	teardown := func() {
-		os.RemoveAll(datadir)
-	}
-
-	localStore, err := storage.NewTestLocalStore(datadir)
-	if err != nil {
-		return nil, nil, nil, teardown, err
-	}
-
-	dbAccess := NewDbAccess(localStore)
-	delivery := NewDelivery(to, dbAccess)
-	streamer := NewStreamer(delivery)
-	run := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-		bzzPeer := &bzzPeer{
-			Peer:      protocols.NewPeer(p, rw, StreamerSpec),
-			localAddr: addr,
-			BzzAddr:   NewAddrFromNodeID(p.ID()),
-		}
-		to.On(bzzPeer)
-		return streamer.Run(bzzPeer)
-	}
-	protocolTester := p2ptest.NewProtocolTester(t, NewNodeIDFromAddr(addr), 1, run)
-
-	err = waitForPeers(streamer, 1*time.Second)
-	if err != nil {
-		return nil, nil, nil, nil, errors.New("timeout: peer is not created")
-	}
-
-	return protocolTester, streamer, localStore, teardown, nil
-}
 
 func TestStreamerSubscribe(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(t)
@@ -214,6 +162,7 @@ func TestStreamerUpstreamSubscribeMsgExchange(t *testing.T) {
 				Code: 1,
 				Msg: &OfferedHashesMsg{
 					Stream: "foo",
+					Key:    []byte{},
 					HandoverProof: &HandoverProof{
 						Handover: &Handover{},
 					},
@@ -328,19 +277,4 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 		t.Fatal("timeout waiting batchdone call")
 	}
 
-}
-
-func waitForPeers(streamer *Streamer, timeout time.Duration) error {
-	ticker := time.NewTicker(10 * time.Millisecond)
-	timeoutTimer := time.NewTimer(timeout)
-	for {
-		select {
-		case <-ticker.C:
-			if len(streamer.peers) > 0 {
-				return nil
-			}
-		case <-timeoutTimer.C:
-			return errors.New("timeout")
-		}
-	}
 }

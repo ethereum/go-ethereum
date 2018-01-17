@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -109,6 +110,14 @@ func (self WantedHashesMsg) String() string {
 	return fmt.Sprintf("Stream '%v', Want: %x, Next: [%v-%v]", self.Stream, self.Want, self.From, self.To)
 }
 
+func keyToString(key []byte) string {
+	l := len(key)
+	if l == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s-%d", string(key[:l-1]), uint8(key[l-1]))
+}
+
 // Streamer registry for outgoing and incoming streamer constructors
 type Streamer struct {
 	incomingLock sync.RWMutex
@@ -187,6 +196,7 @@ type outgoingStreamer struct {
 	priority     uint8
 	currentBatch []byte
 	stream       string
+	key          []byte
 }
 
 // OutgoingStreamer interface for outgoing peer Streamer
@@ -200,6 +210,8 @@ type incomingStreamer struct {
 	priority  uint8
 	sessionAt uint64
 	live      bool
+	stream    string
+	key       []byte
 	quit      chan struct{}
 	next      chan struct{}
 }
@@ -280,26 +292,30 @@ func (self *StreamerPeer) getIncomingStreamer(s string) (*incomingStreamer, erro
 	return streamer, nil
 }
 
-func (self *StreamerPeer) setOutgoingStreamer(s string, o OutgoingStreamer, priority uint8) (*outgoingStreamer, error) {
+func (self *StreamerPeer) setOutgoingStreamer(s string, key []byte, o OutgoingStreamer, priority uint8) (*outgoingStreamer, error) {
 	self.outgoingLock.Lock()
 	defer self.outgoingLock.Unlock()
-	if self.outgoing[s] != nil {
-		return nil, fmt.Errorf("stream %v already registered", s)
+	sk := s + keyToString(key)
+	if self.outgoing[sk] != nil {
+		return nil, fmt.Errorf("stream %v already registered", sk)
 	}
 	os := &outgoingStreamer{
 		OutgoingStreamer: o,
 		priority:         priority,
 		stream:           s,
+		key:              key,
 	}
-	self.outgoing[s] = os
+	self.outgoing[sk] = os
 	return os, nil
 }
 
-func (self *StreamerPeer) setIncomingStreamer(s string, i IncomingStreamer, priority uint8, live bool) error {
+func (self *StreamerPeer) setIncomingStreamer(s string, key []byte, i IncomingStreamer, priority uint8, live bool) error {
 	self.incomingLock.Lock()
 	defer self.incomingLock.Unlock()
-	if self.incoming[s] != nil {
-		return fmt.Errorf("stream %v already registered", s)
+
+	sk := s + keyToString(key)
+	if self.incoming[sk] != nil {
+		return fmt.Errorf("stream %v already registered", sk)
 	}
 	next := make(chan struct{}, 1)
 	// var intervals *Intervals
@@ -307,12 +323,14 @@ func (self *StreamerPeer) setIncomingStreamer(s string, i IncomingStreamer, prio
 	// key := s + self.ID().String()
 	// intervals = NewIntervals(key, self.streamer)
 	// }
-	self.incoming[s] = &incomingStreamer{
+	self.incoming[sk] = &incomingStreamer{
 		IncomingStreamer: i,
 		// intervals:        intervals,
 		live:     live,
 		priority: priority,
 		next:     next,
+		stream:   s,
+		key:      key,
 	}
 	next <- struct{}{} // this is to allow wantedKeysMsg before first batch arrives
 	return nil
@@ -330,6 +348,8 @@ func (self *incomingStreamer) nextBatch(from uint64) (nextFrom uint64, nextTo ui
 		nextFrom = from
 	} else if from >= self.sessionAt { // history sync complete
 		intervals = nil
+		nextFrom = from
+		nextTo = math.MaxUint64
 	} else if len(intervals) > 2 && from >= intervals[2] { // filled a gap in the intervals
 		intervals = append(intervals[:1], intervals[3:]...)
 		nextFrom = intervals[1]
@@ -349,7 +369,6 @@ func (self *incomingStreamer) nextBatch(from uint64) (nextFrom uint64, nextTo ui
 
 // Subscribe initiates the streamer
 func (self *Streamer) Subscribe(peerId discover.NodeID, s string, t []byte, from, to uint64, priority uint8, live bool) error {
-	log.Warn("!!!!!! Subscribe ", "peer", peerId)
 	f, err := self.GetIncomingStreamer(s)
 	if err != nil {
 		return err
@@ -364,18 +383,21 @@ func (self *Streamer) Subscribe(peerId discover.NodeID, s string, t []byte, from
 	if err != nil {
 		return err
 	}
-	err = peer.setIncomingStreamer(s+string(t), is, priority, live)
+	err = peer.setIncomingStreamer(s, t, is, priority, live)
 	if err != nil {
 		return err
 	}
 
 	msg := &SubscribeMsg{
-		Stream:   s,
-		Key:      t,
+		Stream: s,
+		Key:    t,
+		// Live:     live,
 		From:     from,
 		To:       to,
 		Priority: priority,
 	}
+	log.Debug("Subscribe ", "peer", peerId, "stream", s, "key", t, "from", from, "to", to)
+
 	peer.SendPriority(msg, priority)
 	return nil
 }
@@ -389,11 +411,11 @@ func (self *StreamerPeer) handleSubscribeMsg(req *SubscribeMsg) error {
 	if err != nil {
 		return err
 	}
-	key := req.Stream + string(req.Key)
-	os, err := self.setOutgoingStreamer(key, s, req.Priority)
+	os, err := self.setOutgoingStreamer(req.Stream, req.Key, s, req.Priority)
 	if err != nil {
 		return nil
 	}
+	log.Debug("received subscription", "stream", req.Stream, "Key", req.Key, "from", req.From, "to", req.To)
 	go self.SendOfferedHashes(os, req.From, req.To)
 	return nil
 }
@@ -401,7 +423,9 @@ func (self *StreamerPeer) handleSubscribeMsg(req *SubscribeMsg) error {
 // handleOfferedHashesMsg protocol msg handler calls the incoming streamer interface
 // Filter method
 func (self *StreamerPeer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
-	s, err := self.getIncomingStreamer(req.Stream)
+	sk := req.Stream
+	sk += keyToString(req.Key)
+	s, err := self.getIncomingStreamer(sk)
 	if err != nil {
 		return err
 	}
@@ -440,11 +464,14 @@ func (self *StreamerPeer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 		s.sessionAt = req.From
 	}
 	from, to := s.nextBatch(req.To)
+	log.Debug("received batch", "stream", req.Stream, "Key", req.Key, "from", req.From, "to", req.To)
 	if from == to {
 		return nil
 	}
+
 	msg := &WantedHashesMsg{
 		Stream: req.Stream,
+		Key:    req.Key,
 		Want:   want.Bytes(),
 		From:   from,
 		To:     to,
@@ -455,6 +482,7 @@ func (self *StreamerPeer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 		case <-s.quit:
 			return
 		}
+		log.Debug("want batch", "stream", msg.Stream, "Key", msg.Key, "from", msg.From, "to", msg.To)
 		self.SendPriority(msg, s.priority)
 	}()
 	return nil
@@ -464,8 +492,10 @@ func (self *StreamerPeer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 // * sends the next batch of unsynced keys
 // * sends the actual data chunks as per WantedHashesMsg
 func (self *StreamerPeer) handleWantedHashesMsg(req *WantedHashesMsg) error {
-	s, err := self.getOutgoingStreamer(req.Stream)
+	log.Debug("received wanted batch", "stream", req.Stream, "Key", req.Key, "from", req.From, "to", req.To)
+	s, err := self.getOutgoingStreamer(req.Stream + keyToString(req.Key))
 	if err != nil {
+		log.Debug(err.Error())
 		return err
 	}
 	hashes := s.currentBatch
@@ -534,9 +564,9 @@ func (self *StreamerPeer) SendOfferedHashes(s *outgoingStreamer, f, t uint64) er
 		From:          from,
 		To:            to,
 		Stream:        s.stream,
-		// TODO: use real key here
-		Key: []byte{},
+		Key:           s.key,
 	}
+	log.Debug("Swarm syncer offer batch", "stream", s.stream, "key", s.key, "len", len(hashes), "from", from, "to", to)
 	return self.SendPriority(msg, s.priority)
 }
 

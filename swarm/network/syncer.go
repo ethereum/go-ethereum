@@ -25,12 +25,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
-	batchSize = 128
+	batchSize = 2
+	// batchSize = 128
 )
 
 // wrapper of db-s to provide mockable custom local chunk store access to syncer
@@ -60,7 +60,6 @@ func (self *DbAccess) iterator(from uint64, to uint64, po uint8, f func(storage.
 
 // to obtain the chunks from key or request db entry only
 func (self *DbAccess) getOrCreateRequest(key storage.Key) (*storage.Chunk, bool) {
-	log.Warn("getOrCreateRequest", "self", self)
 	return self.loc.GetOrCreateRequest(key)
 }
 
@@ -100,17 +99,9 @@ const maxPO = 32
 
 func RegisterOutgoingSyncer(streamer *Streamer, db *DbAccess) {
 	streamer.RegisterOutgoingStreamer("SYNC", func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
-		syncType, po := parseSyncLabel(t)
+		po := uint8(t[0])
 		// TODO: make this work for HISTORY too
-		syncType = "LIVE"
-		switch syncType {
-		case "LIVE":
-			return NewOutgoingSwarmSyncer(true, po, db)
-		case "HISTORY":
-			return NewOutgoingSwarmSyncer(false, po, db)
-		default:
-			return nil, errors.New("invalid sync type")
-		}
+		return NewOutgoingSwarmSyncer(false, po, db)
 	})
 	// streamer.RegisterOutgoingStreamer(stream, func(p *StreamerPeer) (OutgoingStreamer, error) {
 	// 	return NewOutgoingProvableSwarmSyncer(po, db)
@@ -133,10 +124,9 @@ func (self *OutgoingSwarmSyncer) SetNextBatch(from, to uint64) ([]byte, uint64, 
 	if from == 0 {
 		from = self.start
 	}
-	if to <= from {
+	if to <= from || from >= self.sessionAt {
 		to = math.MaxUint64
 	}
-	log.Warn("!!!!!!!!!!!!! setNextBatch", "from", from, "to", to, "currentStoreCount", self.db.currentBucketStorageIndex(1))
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 	for range ticker.C {
@@ -154,7 +144,7 @@ func (self *OutgoingSwarmSyncer) SetNextBatch(from, to uint64) ([]byte, uint64, 
 		}
 	}
 
-	log.Debug("Swarm batch", "po", self.po, "len", i, "from", from, "to", to)
+	log.Debug("Swarm syncer offer batch", "po", self.po, "len", i, "from", from, "to", to, "current store count", self.db.currentBucketStorageIndex(self.po))
 	return batch, from, to + 1, nil, nil
 }
 
@@ -204,40 +194,24 @@ func NewIncomingSwarmSyncer(p Peer, dbAccess *DbAccess, chunker storage.Chunker)
 // 	return self
 // }
 
-func newSyncLabel(typ string, po uint8) []byte {
-	t := []byte(typ)
-	t = append(t, byte(po))
-	return t
-}
-
-func parseSyncLabel(t []byte) (string, uint8) {
-	l := len(t) - 1
-	return string(t[:l]), uint8(t[l])
-}
-
-// StartSyncing is called on the StreamerPeer to start the syncing process
-// the idea is that it is called only after kademlia is close to healthy
-func StartSyncing(s *Streamer, peerId discover.NodeID, po uint8, nn bool) {
-	lastPO := po
-	if nn {
-		lastPO = maxPO
-	}
-
-	for i := po; i <= lastPO; i++ {
-		s.Subscribe(peerId, "SYNC", newSyncLabel("LIVE", po), 0, 0, High, true)
-		s.Subscribe(peerId, "SYNC", newSyncLabel("HISTORY", po), 0, 0, Mid, false)
-	}
-}
+// // StartSyncing is called on the StreamerPeer to start the syncing process
+// // the idea is that it is called only after kademlia is close to healthy
+// func StartSyncing(s *Streamer, peerId discover.NodeID, po uint8, nn bool) {
+// 	lastPO := po
+// 	if nn {
+// 		lastPO = maxPO
+// 	}
+//
+// 	for i := po; i <= lastPO; i++ {
+// 		s.Subscribe(peerId, "SYNC", newSyncLabel("LIVE", po), 0, 0, High, true)
+// 		s.Subscribe(peerId, "SYNC", newSyncLabel("HISTORY", po), 0, 0, Mid, false)
+// 	}
+// }
 
 func RegisterIncomingSyncer(streamer *Streamer, db *DbAccess) {
 	streamer.RegisterIncomingStreamer("SYNC", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
 		return NewIncomingSwarmSyncer(p, db, nil)
 	})
-	// stream = fmt.Sprintf("SYNC-%02d-delete", po)
-	// streamer.RegisterIncomingStreamer(stream, func(p *StreamerPeer) (OutgoingStreamer, error) {
-	// 	intervals := loadIntervals(p, po, true)
-	// 	return NewIncomingSwarmSyncer(po, Mid, sessionAt, intervals, p)
-	// })
 }
 
 // NeedData
@@ -287,9 +261,10 @@ func (self *IncomingSwarmSyncer) TakeoverProof(s string, from uint64, hashes []b
 	self.end += uint64(len(hashes)) / HashSize
 	takeover := &Takeover{
 		Stream: s,
-		Start:  self.start,
-		End:    self.end,
-		Root:   root,
+		// Key:    self.Key,
+		Start: self.start,
+		End:   self.end,
+		Root:  root,
 	}
 	// serialise and sign
 	return &TakeoverProof{

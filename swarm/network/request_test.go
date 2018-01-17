@@ -20,15 +20,8 @@ import (
 	"bytes"
 	"context"
 	crand "crypto/rand"
-	"errors"
-	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"math/rand"
-	"os"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -40,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -167,9 +159,11 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 			p2ptest.Expect{
 				Code: 1,
 				Msg: &OfferedHashesMsg{
-					HandoverProof: nil,
-					Hashes:        hash,
-					From:          0,
+					HandoverProof: &HandoverProof{
+						Handover: &Handover{},
+					},
+					Hashes: hash,
+					From:   0,
 					// TODO: why is this 32???
 					To:     32,
 					Key:    []byte{},
@@ -305,158 +299,11 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 
 }
 
-var services = adapters.Services{
-	"delivery": newDeliveryService,
-	"syncer":   newSyncerService,
-}
-
-var (
-	adapter  = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
-	loglevel = flag.Int("loglevel", 5, "verbosity of logs")
-)
-
-type roundRobinStore struct {
-	index  uint32
-	stores []storage.ChunkStore
-}
-
-func newRoundRobinStore(stores ...storage.ChunkStore) *roundRobinStore {
-	return &roundRobinStore{
-		stores: stores,
-	}
-}
-
-func (rrs *roundRobinStore) Get(key storage.Key) (*storage.Chunk, error) {
-	return nil, errors.New("get not well defined on round robin store")
-}
-
-func (rrs *roundRobinStore) Put(chunk *storage.Chunk) {
-	log.Warn("chunksize", "size", chunk.Size, "sdata", len(chunk.SData))
-	i := atomic.AddUint32(&rrs.index, 1)
-	idx := int(i) % len(rrs.stores)
-	log.Trace(fmt.Sprintf("put %v into localstore %v", chunk.Key, idx))
-	rrs.stores[idx].Put(chunk)
-}
-
-func (rrs *roundRobinStore) Close() {
-	for _, store := range rrs.stores {
-		store.Close()
-	}
-}
-
-func init() {
-	flag.Parse()
-	// register the Delivery service which will run as a devp2p
-	// protocol when using the exec adapter
-	adapters.RegisterServices(services)
-
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
-}
-
-func testSimulation(t *testing.T, simf func(adapters.NodeAdapter) (*simulations.StepResult, error)) {
-	var err error
-	var result *simulations.StepResult
-	startedAt := time.Now()
-
-	switch *adapter {
-	case "sim":
-		t.Logf("simadapter")
-		result, err = simf(adapters.NewSimAdapter(services))
-	case "socket":
-		result, err = simf(adapters.NewSocketAdapter(services))
-	case "exec":
-		baseDir, err0 := ioutil.TempDir("", "swarm-test")
-		if err0 != nil {
-			t.Fatal(err0)
-		}
-		defer os.RemoveAll(baseDir)
-		result, err = simf(adapters.NewExecAdapter(baseDir))
-	case "docker":
-		adapter, err0 := adapters.NewDockerAdapter()
-		if err0 != nil {
-			t.Fatal(err0)
-		}
-		result, err = simf(adapter)
-	default:
-		t.Fatal("adapter needs to be one of sim, socket, exec, docker")
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("Simulation with %d nodes passed in %s", len(result.Passes), result.FinishedAt.Sub(result.StartedAt))
-	var min, max time.Duration
-	var sum int
-	for _, pass := range result.Passes {
-		duration := pass.Sub(result.StartedAt)
-		if sum == 0 || duration < min {
-			min = duration
-		}
-		if duration > max {
-			max = duration
-		}
-		sum += int(duration.Nanoseconds())
-	}
-	t.Logf("Min: %s, Max: %s, Average: %s", min, max, time.Duration(sum/len(result.Passes))*time.Nanosecond)
-	finishedAt := time.Now()
-	t.Logf("Setup: %s, shutdown: %s", result.StartedAt.Sub(startedAt), finishedAt.Sub(result.FinishedAt))
-}
-
 func TestDeliveryFromNodes(t *testing.T) {
 	testSimulation(t, testDeliveryFromNodes(2, 1, 8100, true))
 	testSimulation(t, testDeliveryFromNodes(2, 1, 8100, false))
 	testSimulation(t, testDeliveryFromNodes(3, 1, 8100, true))
 	testSimulation(t, testDeliveryFromNodes(3, 1, 8100, false))
-}
-
-var (
-	delivery    *Delivery
-	localStores []storage.ChunkStore
-	fileHash    storage.Key
-	nodeCount   int
-)
-
-func setLocalStores(n int) (func(), error) {
-	var datadirs []string
-	localStores = make([]storage.ChunkStore, n)
-	var err error
-	for i := 0; i < n; i++ {
-		// TODO: remove temp datadir after test
-		var datadir string
-		datadir, err = ioutil.TempDir("", "streamer")
-		if err != nil {
-			break
-		}
-		var localStore *storage.LocalStore
-		localStore, err = storage.NewTestLocalStore(datadir)
-		if err != nil {
-			break
-		}
-		datadirs = append(datadirs, datadir)
-		localStores[i] = localStore
-	}
-	teardown := func() {
-		for _, datadir := range datadirs {
-			os.RemoveAll(datadir)
-		}
-	}
-	return teardown, err
-}
-
-func mustReadAll(dpa *storage.DPA, hash storage.Key) (int, error) {
-	r := dpa.Retrieve(fileHash)
-	buf := make([]byte, 1024)
-	var n, total int
-	var err error
-	for (total == 0 || n > 0) && err == nil {
-		log.Warn(fmt.Sprintf("reading %v bytes at offset %v", len(buf), total))
-		n, err = r.ReadAt(buf, int64(total))
-		total += n
-	}
-	log.Warn(fmt.Sprintf("read %v bytes at offset %v error %v", len(buf), total, err))
-	if err != nil && err != io.EOF {
-		return total, err
-	}
-	return total, nil
 }
 
 func testDeliveryFromNodes(nodes, conns, size int, skipCheck bool) func(adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
@@ -466,12 +313,7 @@ func testDeliveryFromNodes(nodes, conns, size int, skipCheck bool) func(adapter 
 			ticker := time.NewTicker(500 * time.Millisecond)
 			go func() {
 				defer ticker.Stop()
-				// we are only testing the pivot node (net.Nodes[0]) but simulation needs
-				// all nodes to pass the check so we trigger each and the check function
-				// will trivially return true
-				for i := 1; i < nodes; i++ {
-					triggerC <- net.Nodes[i].ID()
-				}
+				// we are only testing the pivot node (net.Nodes[0])
 				for range ticker.C {
 					triggerC <- net.Nodes[0].ID()
 				}
@@ -523,10 +365,9 @@ func testDeliveryFromNodes(nodes, conns, size int, skipCheck bool) func(adapter 
 				default:
 				}
 				// try to locally retrieve the file to check if retrieve requests have been successful
-				log.Warn(fmt.Sprintf("try to locally retrieve %v", fileHash))
 				total, err := mustReadAll(dpa, fileHash)
+				log.Debug(fmt.Sprintf("check if %08x is available locally: number of bytes read %v/%v (error: %v)", fileHash, total, size, err))
 				if err != nil || total != size {
-					log.Warn(fmt.Sprintf("number of bytes read %v/%v (error: %v)", total, size, err))
 					return false, nil
 				}
 				return true, nil
@@ -547,7 +388,7 @@ func testDeliveryFromNodes(nodes, conns, size int, skipCheck bool) func(adapter 
 			}
 		}
 
-		result, err := runSimulation(nodes, conns, "delivery", action, trigger, check, adapter)
+		result, err := runSimulation(nodes, conns, "delivery", NewAddrFromNodeID, action, trigger, check, adapter)
 		if err != nil {
 			return nil, fmt.Errorf("Setting up simulation failed: %v", err)
 		}
@@ -556,83 +397,6 @@ func testDeliveryFromNodes(nodes, conns, size int, skipCheck bool) func(adapter 
 		}
 		return result, err
 	}
-}
-
-func runSimulation(nodes, conns int, serviceName string, action func(*simulations.Network) func(context.Context) error, trigger func(*simulations.Network) chan discover.NodeID, check func(*simulations.Network, *storage.DPA) func(context.Context, discover.NodeID) (bool, error), adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
-	// create network
-	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
-		ID:             "0",
-		DefaultService: serviceName,
-	})
-	defer net.Shutdown()
-	// set nodes number of localstores globally available
-	teardown, err := setLocalStores(nodes)
-	defer teardown()
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]discover.NodeID, nodes)
-	nodeCount = 0
-	// start nodes
-	for i := 0; i < nodes; i++ {
-		node, err := net.NewNode()
-		if err != nil {
-			return nil, fmt.Errorf("error starting node: %s", err)
-		}
-		if err := net.Start(node.ID()); err != nil {
-			return nil, fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
-		}
-		ids[i] = node.ID()
-	}
-
-	// run a simulation which connects the 10 nodes in a chain
-	var addrs [][]byte
-	wg := sync.WaitGroup{}
-	log.Warn("runSimulation 1")
-	for i := range ids {
-		log.Warn("runSimulation 2")
-		// collect the overlay addresses, to
-		addrs = append(addrs, ToOverlayAddr(ids[i].Bytes()))
-		for j := 0; j < conns; j++ {
-			log.Warn("runSimulation 3")
-			var k int
-			if j == 0 {
-				k = i - 1
-			} else {
-				k = rand.Intn(len(ids))
-			}
-			if i > 0 {
-				log.Warn("runSimulation 4")
-				wg.Add(1)
-				go func(i, k int) {
-					defer wg.Done()
-					log.Warn("net.Connect")
-					net.Connect(ids[i], ids[k])
-				}(i, k)
-			}
-		}
-	}
-	wg.Wait()
-
-	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
-
-	// create an only locally retrieving dpa for the pivot node to test
-	// if retriee requests have arrived
-	dpa := storage.NewDPA(localStores[0], storage.NewChunkerParams())
-	dpa.Start()
-	defer dpa.Stop()
-	timeout := 300 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
-		Action:  action(net),
-		Trigger: trigger(net),
-		Expect: &simulations.Expectation{
-			Nodes: ids,
-			Check: check(net, dpa),
-		},
-	})
-	return result, nil
 }
 
 // newDeliveryService
@@ -649,47 +413,13 @@ func newDeliveryService(ctx *adapters.ServiceContext) (node.Service, error) {
 		// swarm enabled dpa
 		delivery = streamer.delivery
 	}
-	nodeCount++
-
-	log.Warn("new service created")
 	self := &testStreamerService{
 		addr:     addr,
 		streamer: streamer,
 	}
 	self.run = self.runDelivery
+	nodeCount++
 	return self, nil
-}
-
-type testStreamerService struct {
-	addr     *BzzAddr
-	streamer *Streamer
-	run      func(p *p2p.Peer, rw p2p.MsgReadWriter) error
-}
-
-func (tds *testStreamerService) Protocols() []p2p.Protocol {
-	log.Warn("Protocols function", "run", tds.run)
-	return []p2p.Protocol{
-		{
-			Name:    StreamerSpec.Name,
-			Version: StreamerSpec.Version,
-			Length:  StreamerSpec.Length(),
-			Run:     tds.run,
-			// NodeInfo: ,
-			// PeerInfo: ,
-		},
-	}
-}
-
-func (b *testStreamerService) APIs() []rpc.API {
-	return []rpc.API{}
-}
-
-func (b *testStreamerService) Start(server *p2p.Server) error {
-	return nil
-}
-
-func (b *testStreamerService) Stop() error {
-	return nil
 }
 
 func (b *testStreamerService) runDelivery(p *p2p.Peer, rw p2p.MsgReadWriter) error {
