@@ -21,13 +21,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
 )
 
@@ -36,12 +34,22 @@ type testDbStore struct {
 	dir string
 }
 
-func newTestDbStore() (*testDbStore, error) {
+func newTestDbStore(mock bool) (*testDbStore, error) {
 	dir, err := ioutil.TempDir("", "bzz-storage-test")
 	if err != nil {
 		return nil, err
 	}
-	db, err := NewDbStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, testPoFunc)
+
+	var db *DbStore
+	if mock {
+		globalStore := mem.NewGlobalStore()
+		addr := common.HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")
+		mockStore := globalStore.NewNodeStore(addr)
+
+		db, err = NewMockDbStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, testPoFunc, mockStore)
+	} else {
+		db, err = NewDbStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, testPoFunc)
+	}
 
 	return &testDbStore{db, dir}, err
 }
@@ -59,8 +67,8 @@ func (db *testDbStore) close() {
 	}
 }
 
-func testDbStoreRandom(n int, processors int, chunksize int, t *testing.T) {
-	db, err := newTestDbStore()
+func testDbStoreRandom(n int, processors int, chunksize int, mock bool, t *testing.T) {
+	db, err := newTestDbStore(mock)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
@@ -69,8 +77,8 @@ func testDbStoreRandom(n int, processors int, chunksize int, t *testing.T) {
 	testStoreRandom(db, processors, n, chunksize, t)
 }
 
-func testDbStoreCorrect(n int, processors int, chunksize int, t *testing.T) {
-	db, err := newTestDbStore()
+func testDbStoreCorrect(n int, processors int, chunksize int, mock bool, t *testing.T) {
+	db, err := newTestDbStore(mock)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
@@ -79,31 +87,55 @@ func testDbStoreCorrect(n int, processors int, chunksize int, t *testing.T) {
 }
 
 func TestDbStoreRandom_1(t *testing.T) {
-	testDbStoreRandom(1, 1, 0, t)
+	testDbStoreRandom(1, 1, 0, false, t)
 }
 
 func TestDbStoreCorrect_1(t *testing.T) {
-	testDbStoreCorrect(1, 1, 4096, t)
+	testDbStoreCorrect(1, 1, 4096, false, t)
 }
 
 func TestDbStoreRandom_1_5k(t *testing.T) {
-	testDbStoreRandom(8, 5000, 0, t)
+	testDbStoreRandom(8, 5000, 0, false, t)
 }
 
 func TestDbStoreRandom_8_5k(t *testing.T) {
-	testDbStoreRandom(8, 5000, 0, t)
+	testDbStoreRandom(8, 5000, 0, false, t)
 }
 
 func TestDbStoreCorrect_1_5k(t *testing.T) {
-	testDbStoreCorrect(1, 5000, 4096, t)
+	testDbStoreCorrect(1, 5000, 4096, false, t)
 }
 
 func TestDbStoreCorrect_8_5k(t *testing.T) {
-	testDbStoreCorrect(8, 5000, 4096, t)
+	testDbStoreCorrect(8, 5000, 4096, false, t)
 }
 
-func TestDbStoreNotFound(t *testing.T) {
-	db, err := newTestDbStore()
+func TestMockDbStoreRandom_1(t *testing.T) {
+	testDbStoreRandom(1, 1, 0, true, t)
+}
+
+func TestMockDbStoreCorrect_1(t *testing.T) {
+	testDbStoreCorrect(1, 1, 4096, true, t)
+}
+
+func TestMockDbStoreRandom_1_5k(t *testing.T) {
+	testDbStoreRandom(8, 5000, 0, true, t)
+}
+
+func TestMockDbStoreRandom_8_5k(t *testing.T) {
+	testDbStoreRandom(8, 5000, 0, true, t)
+}
+
+func TestMockDbStoreCorrect_1_5k(t *testing.T) {
+	testDbStoreCorrect(1, 5000, 4096, true, t)
+}
+
+func TestMockDbStoreCorrect_8_5k(t *testing.T) {
+	testDbStoreCorrect(8, 5000, 4096, true, t)
+}
+
+func testDbStoreNotFound(t *testing.T, mock bool) {
+	db, err := newTestDbStore(mock)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
@@ -115,7 +147,14 @@ func TestDbStoreNotFound(t *testing.T) {
 	}
 }
 
-func TestIterator(t *testing.T) {
+func TestDbStoreNotFound(t *testing.T) {
+	testDbStoreNotFound(t, false)
+}
+func TestMockDbStoreNotFound(t *testing.T) {
+	testDbStoreNotFound(t, true)
+}
+
+func testIterator(t *testing.T, mock bool) {
 	var chunkcount int = 32
 	var i int
 	var poc uint
@@ -127,7 +166,7 @@ func TestIterator(t *testing.T) {
 		chunks = append(chunks, NewChunk(nil, nil))
 	}
 
-	db, err := newTestDbStore()
+	db, err := newTestDbStore(mock)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
@@ -174,8 +213,15 @@ func TestIterator(t *testing.T) {
 
 }
 
-func benchmarkDbStorePut(n int, processors int, chunksize int, b *testing.B) {
-	db, err := newTestDbStore()
+func TestIterator(t *testing.T) {
+	testIterator(t, false)
+}
+func TestMockIterator(t *testing.T) {
+	testIterator(t, true)
+}
+
+func benchmarkDbStorePut(n int, processors int, chunksize int, mock bool, b *testing.B) {
+	db, err := newTestDbStore(mock)
 	if err != nil {
 		b.Fatalf("init dbStore failed: %v", err)
 	}
@@ -184,8 +230,8 @@ func benchmarkDbStorePut(n int, processors int, chunksize int, b *testing.B) {
 	benchmarkStorePut(db, processors, n, chunksize, b)
 }
 
-func benchmarkDbStoreGet(n int, processors int, chunksize int, b *testing.B) {
-	db, err := newTestDbStore()
+func benchmarkDbStoreGet(n int, processors int, chunksize int, mock bool, b *testing.B) {
+	db, err := newTestDbStore(mock)
 	if err != nil {
 		b.Fatalf("init dbStore failed: %v", err)
 	}
@@ -195,91 +241,33 @@ func benchmarkDbStoreGet(n int, processors int, chunksize int, b *testing.B) {
 }
 
 func BenchmarkDbStorePut_1_5k(b *testing.B) {
-	benchmarkDbStorePut(5000, 1, 4096, b)
+	benchmarkDbStorePut(5000, 1, 4096, false, b)
 }
 
 func BenchmarkDbStorePut_8_5k(b *testing.B) {
-	benchmarkDbStorePut(5000, 8, 4096, b)
+	benchmarkDbStorePut(5000, 8, 4096, false, b)
 }
 
 func BenchmarkDbStoreGet_1_5k(b *testing.B) {
-	benchmarkDbStoreGet(5000, 1, 4096, b)
+	benchmarkDbStoreGet(5000, 1, 4096, false, b)
 }
 
 func BenchmarkDbStoreGet_8_5k(b *testing.B) {
-	benchmarkDbStoreGet(5000, 8, 4096, b)
+	benchmarkDbStoreGet(5000, 8, 4096, false, b)
 }
 
-func initMockDbStore(t *testing.T, mockStore *mock.NodeStore) *DbStore {
-	dir, err := ioutil.TempDir("", "bzz-storage-test-mock")
-	if err != nil {
-		t.Fatal(err)
-	}
-	m, err := NewMockDbStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, testPoFunc, mockStore)
-	if err != nil {
-		t.Fatal("can't create store:", err)
-	}
-	return m
+func BenchmarkMockDbStorePut_1_5k(b *testing.B) {
+	benchmarkDbStorePut(5000, 1, 4096, true, b)
 }
 
-// testMockDbStore runs the same tests as testDbStore but with mock store configured.
-// It also verifies if mock global store is storing the chunk data.
-func testMockDbStore(l int64, branches int64, t *testing.T) {
-	globalStore := mem.NewGlobalStore()
-	addr := common.HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")
-	mockStore := globalStore.NewNodeStore(addr)
-	m := initMockDbStore(t, mockStore)
-	defer m.Close()
-
-	key := Key(common.Hex2Bytes("fed1911825fc6a02ebfd19ab218a20455d8d7d275f8bf4d8244eb04364fae6f7"))
-	data := common.Hex2BytesFixed(strings.Repeat("1234567890abcdf", 10), 4096)
-
-	m.Put(&Chunk{
-		Key:   key,
-		SData: data,
-	})
-
-	_, err := globalStore.Get(addr, key)
-	if err != nil {
-		t.Errorf("unexpected error getting the data from global mock store: %v", err)
-	}
-
-	if !globalStore.HasKey(addr, key) {
-		t.Error("key not found in global store")
-	}
-
-	// TODO: fix this!
-	// testStoreRandom(m, 8, l, chunk.S, t)
-
+func BenchmarkMockDbStorePut_8_5k(b *testing.B) {
+	benchmarkDbStorePut(5000, 8, 4096, true, b)
 }
 
-// func TestMockDbStore128_0x1000000(t *testing.T) {
-// 	testMockDbStore(0x1000000, 128, t)
-// }
-//
-// func TestMockDbStore128_10000_(t *testing.T) {
-// 	testMockDbStore(10000, 128, t)
-// }
-//
-// func TestMockDbStore128_1000_(t *testing.T) {
-// 	testMockDbStore(1000, 128, t)
-// }
-//
-// func TestMockDbStore128_100_(t *testing.T) {
-// 	testMockDbStore(100, 128, t)
-// }
-//
-// func TestMockDbStore2_100_(t *testing.T) {
-// 	testMockDbStore(100, 2, t)
-// }
-//
-// func TestMockDbStoreNotFound(t *testing.T) {
-// 	globalStore := mem.NewGlobalStore()
-// 	mockStore := globalStore.NewNodeStore(common.HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"))
-// 	m := initMockDbStore(t, mockStore)
-// 	defer m.Close()
-// 	_, err := m.Get(ZeroKey)
-// 	if err != notFound {
-// 		t.Errorf("Expected notFound, got %v", err)
-// 	}
-// }
+func BenchmarkMockDbStoreGet_1_5k(b *testing.B) {
+	benchmarkDbStoreGet(5000, 1, 4096, true, b)
+}
+
+func BenchmarkMockDbStoreGet_8_5k(b *testing.B) {
+	benchmarkDbStoreGet(5000, 8, 4096, true, b)
+}

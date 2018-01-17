@@ -628,10 +628,10 @@ func (s *DbStore) writeBatch(b *leveldb.Batch, entryCnt, dataIdx, accessCnt uint
 // not need to store the data, but still need to create the index.
 func newMockEncodeDataFunc(mockStore *mock.NodeStore) func(chunk *Chunk) []byte {
 	return func(chunk *Chunk) []byte {
-		if err := mockStore.Put(chunk.Key, chunk.SData); err != nil {
+		if err := mockStore.Put(chunk.Key, encodeData(chunk)); err != nil {
 			log.Error(fmt.Sprintf("%T: Chunk %v put: %v", mockStore, chunk.Key.Log(), err))
 		}
-		return nil
+		return chunk.Key[:]
 	}
 }
 

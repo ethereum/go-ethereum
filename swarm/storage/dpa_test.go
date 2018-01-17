@@ -27,7 +27,7 @@ import (
 const testDataSize = 0x1000000
 
 func TestDPArandom(t *testing.T) {
-	tdb, err := newTestDbStore()
+	tdb, err := newTestDbStore(false)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestDPArandom(t *testing.T) {
 }
 
 func TestDPA_capacity(t *testing.T) {
-	tdb, err := newTestDbStore()
+	tdb, err := newTestDbStore(false)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
