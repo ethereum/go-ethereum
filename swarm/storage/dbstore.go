@@ -542,10 +542,11 @@ func (s *DbStore) doPut(chunk *Chunk, ikey []byte, index *dpaDBIndex, po uint8) 
 	data := encodeData(chunk)
 	s.batch.Put(getDataKey(s.dataIdx, po), data)
 	index.Idx = s.dataIdx
+	s.bucketCnt[po] = s.dataIdx
 	s.entryCnt++
 	s.dataIdx++
 
-	s.bucketCnt[po]++
+	// s.bucketCnt[po]++
 	cntKey := make([]byte, 2)
 	cntKey[0] = keyDistanceCnt
 	cntKey[1] = po
