@@ -19,7 +19,6 @@ package trie
 import (
 	"bytes"
 	"hash"
-	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -28,21 +27,23 @@ import (
 )
 
 type hasher struct {
-	tmp                  *bytes.Buffer
-	sha                  hash.Hash
-	cachegen, cachelimit uint16
+	tmp        *bytes.Buffer
+	sha        hash.Hash
+	cachegen   uint16
+	cachelimit uint16
+	onleaf     LeafCallback
 }
 
-// hashers live in a global pool.
+// hashers live in a global db.
 var hasherPool = sync.Pool{
 	New: func() interface{} {
 		return &hasher{tmp: new(bytes.Buffer), sha: sha3.NewKeccak256()}
 	},
 }
 
-func newHasher(cachegen, cachelimit uint16) *hasher {
+func newHasher(cachegen, cachelimit uint16, onleaf LeafCallback) *hasher {
 	h := hasherPool.Get().(*hasher)
-	h.cachegen, h.cachelimit = cachegen, cachelimit
+	h.cachegen, h.cachelimit, h.onleaf = cachegen, cachelimit, onleaf
 	return h
 }
 
@@ -52,10 +53,10 @@ func returnHasherToPool(h *hasher) {
 
 // hash collapses a node down into a hash node, also returning a copy of the
 // original node initialized with the computed hash to replace the original one.
-func (h *hasher) hash(n node, pool *NodePool, force bool) (node, node, error) {
+func (h *hasher) hash(n node, db *Database, force bool) (node, node, error) {
 	// If we're not storing the node, just hashing, use available cached data
 	if hash, dirty := n.cache(); hash != nil {
-		if pool == nil {
+		if db == nil {
 			return hash, n, nil
 		}
 		if n.canUnload(h.cachegen, h.cachelimit) {
@@ -69,11 +70,11 @@ func (h *hasher) hash(n node, pool *NodePool, force bool) (node, node, error) {
 		}
 	}
 	// Trie not processed yet or needs storage, walk the children
-	collapsed, cached, refs, err := h.hashChildren(n, pool)
+	collapsed, cached, err := h.hashChildren(n, db)
 	if err != nil {
 		return hashNode{}, n, err
 	}
-	hashed, refs, err := h.store(collapsed, refs, pool, force)
+	hashed, err := h.store(collapsed, db, force)
 	if err != nil {
 		return hashNode{}, n, err
 	}
@@ -84,12 +85,12 @@ func (h *hasher) hash(n node, pool *NodePool, force bool) (node, node, error) {
 	switch cn := cached.(type) {
 	case *shortNode:
 		cn.flags.hash = cachedHash
-		if pool != nil {
+		if db != nil {
 			cn.flags.dirty = false
 		}
 	case *fullNode:
 		cn.flags.hash = cachedHash
-		if pool != nil {
+		if db != nil {
 			cn.flags.dirty = false
 		}
 	}
@@ -99,7 +100,7 @@ func (h *hasher) hash(n node, pool *NodePool, force bool) (node, node, error) {
 // hashChildren replaces the children of a node with their hashes if the encoded
 // size of the child is larger than a hash, returning the collapsed node as well
 // as a replacement for the original node with the child hashes cached in.
-func (h *hasher) hashChildren(original node, pool *NodePool) (node, node, []common.Hash, error) {
+func (h *hasher) hashChildren(original node, db *Database) (node, node, error) {
 	var err error
 
 	switch n := original.(type) {
@@ -110,15 +111,15 @@ func (h *hasher) hashChildren(original node, pool *NodePool) (node, node, []comm
 		cached.Key = common.CopyBytes(n.Key)
 
 		if _, ok := n.Val.(valueNode); !ok {
-			collapsed.Val, cached.Val, err = h.hash(n.Val, pool, false)
+			collapsed.Val, cached.Val, err = h.hash(n.Val, db, false)
 			if err != nil {
-				return original, original, nil, err
+				return original, original, err
 			}
 		}
 		if collapsed.Val == nil {
 			collapsed.Val = valueNode(nil) // Ensure that nil children are encoded as empty strings.
 		}
-		return collapsed, cached, h.externals(collapsed.Val), nil
+		return collapsed, cached, nil
 
 	case *fullNode:
 		// Hash the full node's children, caching the newly hashed subtrees
@@ -126,9 +127,9 @@ func (h *hasher) hashChildren(original node, pool *NodePool) (node, node, []comm
 
 		for i := 0; i < 16; i++ {
 			if n.Children[i] != nil {
-				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], pool, false)
+				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, false)
 				if err != nil {
-					return original, original, nil, err
+					return original, original, err
 				}
 			} else {
 				collapsed.Children[i] = valueNode(nil) // Ensure that nil children are encoded as empty strings.
@@ -138,65 +139,29 @@ func (h *hasher) hashChildren(original node, pool *NodePool) (node, node, []comm
 		if collapsed.Children[16] == nil {
 			collapsed.Children[16] = valueNode(nil)
 		}
-		var refs []common.Hash
-		for i := 0; i < 16; i++ {
-			refs = append(refs, h.externals(collapsed.Children[i])...)
-		}
-		return collapsed, cached, refs, nil
+		return collapsed, cached, nil
 
 	default:
 		// Value and hash nodes don't have children so they're left as were
-		return n, original, h.externals(n), nil
+		return n, original, nil
 	}
-}
-
-// externals returns any external nodes referenced by a particular node. The only
-// current case for it is when an account trie references its storage trie.
-func (h *hasher) externals(n node) []common.Hash {
-	// Only value nodes can reference external nodes
-	val, ok := n.(valueNode)
-	if !ok {
-		return nil
-	}
-	// Account nodes have very specific sizes, discard anything else
-	// TODO(karalabe): Seriously? Dafuq man?!
-	if size := len(val); size < 70 || size > 102 {
-		return nil
-	}
-	// Only account nodes can reference external storage tries
-	var account struct {
-		Nonce    uint64
-		Balance  *big.Int
-		Root     common.Hash
-		CodeHash []byte
-	}
-	if err := rlp.DecodeBytes(val, &account); err != nil {
-		//fmt.Printf(".")
-		return nil
-	}
-	// Empty tries are not referenced
-	if account.Root == emptyState {
-		return nil
-	}
-	return []common.Hash{account.Root}
 }
 
 // store hashes the node n and if we have a storage layer specified, it writes
 // the key/value pair to it and tracks any node->child references as well as any
 // node->external trie references.
-func (h *hasher) store(n node, refs []common.Hash, pool *NodePool, force bool) (node, []common.Hash, error) {
+func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 	// Don't store hashes or empty nodes.
 	if _, isHash := n.(hashNode); n == nil || isHash {
-		return n, refs, nil
+		return n, nil
 	}
 	// Generate the RLP encoding of the node
 	h.tmp.Reset()
 	if err := rlp.Encode(h.tmp, n); err != nil {
 		panic("encode error: " + err.Error())
 	}
-
 	if h.tmp.Len() < 32 && !force {
-		return n, refs, nil // Nodes smaller than 32 bytes are stored inside their parent
+		return n, nil // Nodes smaller than 32 bytes are stored inside their parent
 	}
 	// Larger nodes are replaced by their hash and stored in the database.
 	hash, _ := n.cache()
@@ -205,31 +170,43 @@ func (h *hasher) store(n node, refs []common.Hash, pool *NodePool, force bool) (
 		h.sha.Write(h.tmp.Bytes())
 		hash = hashNode(h.sha.Sum(nil))
 	}
-	if pool != nil {
+	if db != nil {
 		// We are pooling the trie nodes into an intermediate memory cache
-		pool.lock.Lock()
-		defer pool.lock.Unlock()
+		db.lock.Lock()
 
 		hash := common.BytesToHash(hash)
-		pool.insert(hash, h.tmp.Bytes())
+		db.insert(hash, h.tmp.Bytes())
 
 		// Track all direct parent->child node references
 		switch n := n.(type) {
 		case *shortNode:
 			if child, ok := n.Val.(hashNode); ok {
-				pool.reference(common.BytesToHash(child), hash)
+				db.reference(common.BytesToHash(child), hash)
 			}
 		case *fullNode:
 			for i := 0; i < 16; i++ {
 				if child, ok := n.Children[i].(hashNode); ok {
-					pool.reference(common.BytesToHash(child), hash)
+					db.reference(common.BytesToHash(child), hash)
 				}
 			}
 		}
+		db.lock.Unlock()
+
 		// Track external references from account->storage trie
-		for _, ext := range refs {
-			pool.reference(ext, hash)
+		if h.onleaf != nil {
+			switch n := n.(type) {
+			case *shortNode:
+				if child, ok := n.Val.(valueNode); ok {
+					h.onleaf(child, hash)
+				}
+			case *fullNode:
+				for i := 0; i < 16; i++ {
+					if child, ok := n.Children[i].(valueNode); ok {
+						h.onleaf(child, hash)
+					}
+				}
+			}
 		}
 	}
-	return hash, nil, nil
+	return hash, nil
 }

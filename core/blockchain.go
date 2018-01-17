@@ -102,6 +102,8 @@ type BlockChain struct {
 	blockCache   *lru.Cache     // Cache for the most recent entire blocks
 	futureBlocks *lru.Cache     // future blocks are blocks added for later processing
 
+	procTime time.Duration // Accumulator for measuring total block processing for the trie node dumping
+
 	quit    chan struct{} // blockchain quit channel
 	running int32         // running must be called atomically
 	// procInterrupt must be atomically called
@@ -129,7 +131,7 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, engine co
 	bc := &BlockChain{
 		config:       config,
 		chainDb:      chainDb,
-		stateCache:   state.NewDatabase(chainDb, trie.NewNodePool()),
+		stateCache:   state.NewDatabase(trie.NewDatabase(chainDb)),
 		quit:         make(chan struct{}),
 		bodyCache:    bodyCache,
 		bodyRLPCache: bodyRLPCache,
@@ -292,7 +294,7 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	if block == nil {
 		return fmt.Errorf("non existent block [%x…]", hash[:4])
 	}
-	if _, err := trie.NewSecure(block.Root(), bc.chainDb, nil, 0); err != nil {
+	if _, err := trie.NewSecure(block.Root(), bc.stateCache.TrieDB(), 0); err != nil {
 		return err
 	}
 	// If all checks out, manually set the head block
@@ -594,7 +596,7 @@ func (bc *BlockChain) Stop() {
 	root := bc.CurrentHeader().Root
 
 	batch := bc.chainDb.NewBatch()
-	if err := bc.stateCache.NodePool().Commit(root, batch); err != nil {
+	if err := bc.stateCache.TrieDB().Commit(root, batch); err != nil {
 		log.Error("Failed to commit latest state trie", "err", err)
 	}
 	if err := batch.Write(); err != nil {
@@ -776,6 +778,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	return 0, nil
 }
 
+var lastWrite uint64
+
 // WriteBlock writes the block to the chain.
 func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) (status WriteStatus, err error) {
 	bc.wg.Add(1)
@@ -802,18 +806,37 @@ func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.R
 	if err := WriteBlock(batch, block); err != nil {
 		return NonStatTy, err
 	}
-	root, err := state.CommitTo(batch, bc.config.IsEIP158(block.Number()))
+	root, err := state.Commit(bc.config.IsEIP158(block.Number()))
 	if err != nil {
 		return NonStatTy, err
 	}
-	pool := bc.stateCache.NodePool()
-	pool.Reference(root, common.Hash{}) // metadata reference to keep trie alive
-	if number := block.NumberU64(); number > 192 {
-		if (number-192)%128 == 0 {
-			pool.Commit(root, batch)
+	db := bc.stateCache.TrieDB()
+
+	var (
+		writeRetention  = uint64(128)                          // Number of trie nodes we need to retain in memory
+		memoryAllowance = common.StorageSize(64 * 1024 * 1024) // Memory allowance below which to avoid writing to disk
+		timeAllowance   = 3 * time.Minute                      // Time allowance below which to avoid writing to disk
+	)
+	db.Reference(root, common.Hash{}) // metadata reference to keep trie alive
+
+	if current := block.NumberU64(); current > writeRetention {
+		// Find the next state trie we need to get rid of or commit
+		header := bc.GetHeaderByNumber(current - writeRetention)
+		chosen := header.Number.Uint64()
+
+		// Only write to disk if we exceeded our memory allowance *and* also have at
+		// least a given number of tries gapped.
+		if (db.Size() > memoryAllowance || bc.procTime > timeAllowance) && chosen >= lastWrite+writeRetention {
+			db.Commit(header.Root, batch)
+			lastWrite = chosen
+			bc.procTime = 0
 		}
-		header := bc.GetHeaderByNumber(block.NumberU64() - 192)
-		pool.Dereference(header.Root, common.Hash{})
+		// Garbage collect anything below our required write retention
+		db.Dereference(header.Root, common.Hash{})
+
+		if current%10000 == 0 {
+			log.Warn("Current trie pruning state", "size", db.Size(), "elapsed", bc.procTime)
+		}
 	}
 	if err := WriteBlockReceipts(batch, block.Hash(), block.NumberU64(), receipts); err != nil {
 		return NonStatTy, err
@@ -983,6 +1006,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			bc.reportBlock(block, receipts, err)
 			return i, events, coalescedLogs, err
 		}
+		bc.procTime += time.Since(bstart)
+
 		// Write the block to the chain and get the status.
 		status, err := bc.WriteBlockAndState(block, receipts, state)
 		if err != nil {
