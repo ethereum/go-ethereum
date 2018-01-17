@@ -20,7 +20,7 @@ Normally the dashboard assets are bundled into Geth via `go-bindata` to avoid ex
 
 ```
 $ (cd dashboard/assets && ./node_modules/.bin/webpack --watch)
-$ geth --dashboard --dashboard.assets=dashboard/assets/public --vmodule=dashboard=5
+$ geth --dashboard --dashboard.assets=dashboard/assets --vmodule=dashboard=5
 ```
 
 To bundle up the final UI into Geth, run `go generate`:

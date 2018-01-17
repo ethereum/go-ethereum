@@ -19,6 +19,7 @@ package dashboard
 import "time"
 
 type Message struct {
+	General *GeneralMessage `json:"general,omitempty"`
 	Home    *HomeMessage    `json:"home,omitempty"`
 	Chain   *ChainMessage   `json:"chain,omitempty"`
 	TxPool  *TxPoolMessage  `json:"txpool,omitempty"`
@@ -27,15 +28,17 @@ type Message struct {
 	Logs    *LogsMessage    `json:"logs,omitempty"`
 }
 
-type HomeMessage struct {
-	Memory  *Chart `json:"memory,omitempty"`
-	Traffic *Chart `json:"traffic,omitempty"`
+type GeneralMessage struct {
+	Version string `json:"version,omitempty"`
+	Commit  string `json:"commit,omitempty"`
 }
 
-type Chart struct {
-	History []*ChartEntry `json:"history,omitempty"`
-	New     *ChartEntry   `json:"new,omitempty"`
+type HomeMessage struct {
+	Memory  ChartEntries `json:"memory,omitempty"`
+	Traffic ChartEntries `json:"traffic,omitempty"`
 }
+
+type ChartEntries []*ChartEntry
 
 type ChartEntry struct {
 	Time  time.Time `json:"time,omitempty"`
@@ -59,5 +62,5 @@ type SystemMessage struct {
 }
 
 type LogsMessage struct {
-	Log string `json:"log,omitempty"`
+	Log []string `json:"log,omitempty"`
 }
