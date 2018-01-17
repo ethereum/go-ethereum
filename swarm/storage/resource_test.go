@@ -74,7 +74,7 @@ func TestResourceSignature(t *testing.T) {
 	}
 
 	// set up rpc and create resourcehandler
-	rh, _, err, teardownTest := setupTest(privkey, nil, zeroAddr)
+	rh, _, err, teardownTest := setupTest(privkey, nil, nil)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -110,8 +110,7 @@ func TestResourceSignature(t *testing.T) {
 
 	// check that we can recover the owner account from the update chunk's signature
 	// TODO: change this to verifyContent on ENS integration
-	rawrh := rh.(*RawResourceHandler)
-	recoveredaddress, err := rawrh.getContentAccount(chunk.SData)
+	recoveredaddress, err := rh.getContentAccount(chunk.SData)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -136,7 +135,7 @@ func TestResourceReverseLookup(t *testing.T) {
 	backend := &fakeBackend{
 		blocknumber: startBlock,
 	}
-	rh, _, err, teardownTest := setupTest(privkey, backend, zeroAddr)
+	rh, _, err, teardownTest := setupTest(privkey, backend, nil)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -154,8 +153,7 @@ func TestResourceReverseLookup(t *testing.T) {
 	if err != nil {
 		teardownTest(t, err)
 	}
-	rawrh := rh.(*RawResourceHandler)
-	chunk, err := rawrh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(resourcekey))
+	chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(resourcekey))
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -197,7 +195,7 @@ func TestResourceHandler(t *testing.T) {
 	backend := &fakeBackend{
 		blocknumber: startBlock,
 	}
-	rh, datadir, err, teardownTest := setupTest(privkey, backend, zeroAddr)
+	rh, datadir, err, teardownTest := setupTest(privkey, backend, nil)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -213,9 +211,8 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// check that the new resource is stored correctly
-	rawrh := rh.(*RawResourceHandler)
-	namehash := rawrh.nameHashFunc(resourcevalidname)
-	chunk, err := rawrh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(namehash[:]))
+	namehash := rh.validator.nameHash(resourcevalidname)
+	chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(namehash[:]))
 	if err != nil {
 		teardownTest(t, err)
 	} else if len(chunk.SData) < 16 {
@@ -265,7 +262,7 @@ func TestResourceHandler(t *testing.T) {
 	// it will match on second iteration startblocknumber + (resourceFrequency * 3)
 	fwdBlocks(int(resourceFrequency*2)-1, backend)
 
-	rh2, err := NewRawResourceHandler(privkey, datadir, &testCloudStore{}, rawrh.rpcClient, nil)
+	rh2, err := NewResourceHandler(privkey, datadir, &testCloudStore{}, rh.rpcClient, nil)
 	_, err = rh2.LookupLatest(domainName, true)
 	if err != nil {
 		teardownTest(t, err)
@@ -282,7 +279,7 @@ func TestResourceHandler(t *testing.T) {
 		teardownTest(t, fmt.Errorf("resource period was %d, expected 3", rh2.resources[domainName].lastPeriod))
 	}
 
-	rsrc, err := NewResource(domainName, startblocknumber, resourceFrequency, rh2.nameHashFunc)
+	rsrc, err := NewResource(domainName, startblocknumber, resourceFrequency, rh2.validator.nameHash)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -342,15 +339,24 @@ func TestResourceENSOwner(t *testing.T) {
 		return
 	}
 
+	// ens address and transact options
+	addr := crypto.PubkeyToAddress(privkey.PublicKey)
+	transactOpts := bind.NewKeyedTransactor(privkey)
+
 	// set up ENS sim
 	domainparts := strings.Split(domainName, ".")
-	addr, contractbackend, err := setupENS(privkey, domainparts[0], domainparts[1])
+	contractAddr, contractbackend, err := setupENS(addr, transactOpts, domainparts[0], domainparts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	validator, err := NewENSValidator(addr, contractAddr, contractbackend, transactOpts)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// set up rpc and create resourcehandler with ENS sim backend
-	rh, _, err, teardownTest := setupTest(privkey, contractbackend, addr)
+	rh, _, err, teardownTest := setupTest(privkey, contractbackend, validator)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -358,20 +364,20 @@ func TestResourceENSOwner(t *testing.T) {
 	// create new resource when we are owner = ok
 	_, err = rh.NewResource(domainName, 42)
 	if err != nil {
-		teardownTest(t, err)
+		teardownTest(t, fmt.Errorf("Create resource fail: %v", err))
 	}
 
 	// update resource when we are owner = ok
 	_, err = rh.Update(domainName, []byte("foo"))
 	if err != nil {
-		teardownTest(t, err)
+		teardownTest(t, fmt.Errorf("Update resource fail: %v", err))
 	}
 
 	// create new resource when we are NOT owner = !ok
-	rawrh := rh.(*ENSResourceHandler)
-	rawrh.privKey = privkeytwo
-	rawrh.addr = crypto.PubkeyToAddress(privkeytwo.PublicKey)
-	_, err = rawrh.NewResource(domainName, 42)
+	addrtwo := crypto.PubkeyToAddress(privkeytwo.PublicKey)
+	validator.owner = addrtwo
+
+	_, err = rh.NewResource(domainName, 42)
 	if err == nil {
 		teardownTest(t, fmt.Errorf("Expected resource create fail due to owner mismatch"))
 	}
@@ -392,7 +398,7 @@ func fwdBlocks(count int, backend *fakeBackend) {
 }
 
 // create rpc and resourcehandler
-func setupTest(privkey *ecdsa.PrivateKey, contractbackend bind.ContractBackend, ensaddr common.Address) (rh ResourceHandler, datadir string, err error, teardown func(*testing.T, error)) {
+func setupTest(privkey *ecdsa.PrivateKey, contractbackend bind.ContractBackend, validator ResourceValidator) (rh *ResourceHandler, datadir string, err error, teardown func(*testing.T, error)) {
 
 	var fsClean func()
 	var rpcClean func()
@@ -443,11 +449,7 @@ func setupTest(privkey *ecdsa.PrivateKey, contractbackend bind.ContractBackend, 
 	}
 
 	// choose if with ens or not
-	if ensaddr != zeroAddr {
-		rh, err = NewENSResourceHandler(privkey, datadir, &testCloudStore{}, rpcclient, contractbackend, ensaddr)
-	} else {
-		rh, err = NewRawResourceHandler(privkey, datadir, &testCloudStore{}, rpcclient, nil)
-	}
+	rh, err = NewResourceHandler(privkey, datadir, &testCloudStore{}, rpcclient, validator)
 	teardown = func(t *testing.T, err error) {
 		cleanF()
 		if err != nil {
@@ -459,7 +461,7 @@ func setupTest(privkey *ecdsa.PrivateKey, contractbackend bind.ContractBackend, 
 }
 
 // Set up simulated ENS backend for use with ENSResourceHandler tests
-func setupENS(privkey *ecdsa.PrivateKey, sub string, top string) (common.Address, bind.ContractBackend, error) {
+func setupENS(addr common.Address, transactOpts *bind.TransactOpts, sub string, top string) (common.Address, bind.ContractBackend, error) {
 
 	// create the domain hash values to pass to the ENS contract methods
 	var tophash [32]byte
@@ -472,16 +474,12 @@ func setupENS(privkey *ecdsa.PrivateKey, sub string, top string) (common.Address
 	hasher.Write([]byte(sub))
 	copy(subhash[:], hasher.Sum(nil))
 
-	// private key -> address is owner of domain
-	addr := crypto.PubkeyToAddress(privkey.PublicKey)
-
 	// initialize contract backend and deploy
-	transactOpts := bind.NewKeyedTransactor(privkey)
 	contractBackend := &fakeBackend{
 		SimulatedBackend: backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}),
 	}
 
-	ensAddr, _, ensinstance, err := contract.DeployENS(transactOpts, contractBackend)
+	contractAddress, _, ensinstance, err := contract.DeployENS(transactOpts, contractBackend)
 	if err != nil {
 		return zeroAddr, nil, fmt.Errorf("can't deploy: %v", err)
 	}
@@ -502,7 +500,7 @@ func setupENS(privkey *ecdsa.PrivateKey, sub string, top string) (common.Address
 	}
 	contractBackend.Commit()
 
-	return ensAddr, contractBackend, nil
+	return contractAddress, contractBackend, nil
 }
 
 type testCloudStore struct {

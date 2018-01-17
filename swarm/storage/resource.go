@@ -91,15 +91,15 @@ type resource struct {
 // stored using a separate store, and forwarding/syncing protocols carry per-chunk
 // flags to tell whether the chunk can be validated or not; if not it is to be
 // treated as a resource update chunk.
-type ResourceHandler interface {
-	ChunkStore
-	NewResource(name string, frequency uint64) (*resource, error)
-	Update(name string, data []byte) (Key, error)
-	resourceHash(namehash common.Hash, period uint32, version uint32) Key
+
+type ResourceValidator interface {
+	isOwner(string) (bool, error)
+	nameHash(string) common.Hash
 }
 
-type RawResourceHandler struct {
+type ResourceHandler struct {
 	ChunkStore
+	validator    ResourceValidator
 	rpcClient    *rpc.Client
 	resources    map[string]*resource
 	hashLock     sync.Mutex
@@ -107,11 +107,10 @@ type RawResourceHandler struct {
 	hasher       SwarmHash
 	privKey      *ecdsa.PrivateKey
 	maxChunkData int64
-	nameHashFunc func(string) common.Hash
 }
 
 // Create or open resource update chunk store
-func NewRawResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore CloudStore, rpcClient *rpc.Client, nameHashFunc func(string) common.Hash) (*RawResourceHandler, error) {
+func NewResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore CloudStore, rpcClient *rpc.Client, validator ResourceValidator) (*ResourceHandler, error) {
 	path := filepath.Join(datadir, "resource")
 	dbStore, err := NewDbStore(datadir, nil, singletonSwarmDbCapacity, 0)
 	if err != nil {
@@ -123,7 +122,7 @@ func NewRawResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore
 	}
 	hasher := MakeHashFunc("SHA3")
 
-	rh := &RawResourceHandler{
+	rh := &ResourceHandler{
 		ChunkStore:   newResourceChunkStore(path, hasher, localStore, cloudStore),
 		rpcClient:    rpcClient,
 		resources:    make(map[string]*resource),
@@ -132,14 +131,16 @@ func NewRawResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore
 		maxChunkData: DefaultBranches * int64(hasher().Size()),
 	}
 
-	if nameHashFunc == nil {
-		rh.nameHashFunc = func(name string) common.Hash {
+	if validator != nil {
+		rh.validator = validator
+	} else {
+		rh.validator = NewGenericValidator(func(name string) common.Hash {
 			rh.hashLock.Lock()
 			defer rh.hashLock.Unlock()
 			rh.hasher.Reset()
 			rh.hasher.Write([]byte(name))
 			return common.BytesToHash(rh.hasher.Sum(nil))
-		}
+		})
 	}
 
 	return rh, nil
@@ -186,14 +187,21 @@ func NewResource(name string, startBlock uint64, frequency uint64, nameHashFunc 
 // Creates a new root entry for a mutable resource identified by `name` with the specified `frequency`.
 //
 // The start block of the resource update will be the actual current block height of the connected network.
-func (self *RawResourceHandler) NewResource(name string, frequency uint64) (*resource, error) {
+func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resource, error) {
+
+	ok, err := self.validator.isOwner(name)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, fmt.Errorf("Not owner of '%s'", name)
+	}
 
 	validname, err := validateInput(name, frequency)
 	if err != nil {
 		return nil, err
 	}
 
-	nameHash := self.nameHashFunc(validname)
+	nameHash := self.validator.nameHash(validname)
 
 	// get our blockheight at this time
 	currentblock, err := self.getBlock()
@@ -236,7 +244,7 @@ func (self *RawResourceHandler) NewResource(name string, frequency uint64) (*res
 //
 // Method will fail if resource is already registered in this session, unless
 // `allowOverwrite` is set
-func (self *RawResourceHandler) SetExternalResource(rsrc *resource, allowOverwrite bool) error {
+func (self *ResourceHandler) SetExternalResource(rsrc *resource, allowOverwrite bool) error {
 
 	utfname, err := idna.ToUnicode(rsrc.name)
 	if err != nil {
@@ -273,7 +281,7 @@ func (self *RawResourceHandler) SetExternalResource(rsrc *resource, allowOverwri
 // root chunk.
 // It is the callers responsibility to make sure that this chunk exists (if the resource
 // update root data was retrieved externally, it typically doesn't)
-func (self *RawResourceHandler) LookupVersion(name string, period uint32, version uint32, refresh bool) (*resource, error) {
+func (self *ResourceHandler) LookupVersion(name string, period uint32, version uint32, refresh bool) (*resource, error) {
 	rsrc, err := self.loadResource(name, refresh)
 	if err != nil {
 		return nil, err
@@ -289,7 +297,7 @@ func (self *RawResourceHandler) LookupVersion(name string, period uint32, versio
 // and returned.
 //
 // See also (*ResourceHandler).LookupVersion
-func (self *RawResourceHandler) LookupHistorical(name string, period uint32, refresh bool) (*resource, error) {
+func (self *ResourceHandler) LookupHistorical(name string, period uint32, refresh bool) (*resource, error) {
 	rsrc, err := self.loadResource(name, refresh)
 	if err != nil {
 		return nil, err
@@ -307,7 +315,7 @@ func (self *RawResourceHandler) LookupHistorical(name string, period uint32, ref
 // Version iteration is done as in (*ResourceHandler).LookupHistorical
 //
 // See also (*ResourceHandler).LookupHistorical
-func (self *RawResourceHandler) LookupLatest(name string, refresh bool) (*resource, error) {
+func (self *ResourceHandler) LookupLatest(name string, refresh bool) (*resource, error) {
 
 	// get our blockheight at this time and the next block of the update period
 	rsrc, err := self.loadResource(name, refresh)
@@ -323,7 +331,7 @@ func (self *RawResourceHandler) LookupLatest(name string, refresh bool) (*resour
 }
 
 // base code for public lookup methods
-func (self *RawResourceHandler) lookup(rsrc *resource, name string, period uint32, version uint32, refresh bool) (*resource, error) {
+func (self *ResourceHandler) lookup(rsrc *resource, name string, period uint32, version uint32, refresh bool) (*resource, error) {
 
 	if period == 0 {
 		return nil, fmt.Errorf("period must be >0")
@@ -366,7 +374,7 @@ func (self *RawResourceHandler) lookup(rsrc *resource, name string, period uint3
 }
 
 // load existing mutable resource into resource struct
-func (self *RawResourceHandler) loadResource(name string, refresh bool) (*resource, error) {
+func (self *ResourceHandler) loadResource(name string, refresh bool) (*resource, error) {
 	// if the resource is not known to this session we must load it
 	// if refresh is set, we force load
 
@@ -379,7 +387,7 @@ func (self *RawResourceHandler) loadResource(name string, refresh bool) (*resour
 			return nil, err
 		}
 		rsrc.name = validname
-		rsrc.nameHash = self.nameHashFunc(validname)
+		rsrc.nameHash = self.validator.nameHash(validname)
 
 		// get the root info chunk and update the cached value
 		chunk, err := self.Get(Key(rsrc.nameHash[:]))
@@ -409,7 +417,7 @@ func (self *RawResourceHandler) loadResource(name string, refresh bool) (*resour
 }
 
 // update mutable resource index map with specified content
-func (self *RawResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk, indexname *string) (*resource, error) {
+func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk, indexname *string) (*resource, error) {
 
 	// rsrc update data chunks are total hacks
 	// and have no size prefix :D
@@ -455,7 +463,14 @@ func parseUpdate(blob []byte) (period uint32, version uint32, ensname []byte, da
 // It is the caller's responsibility to make sure that this data is not stale.
 //
 // A resource update cannot span chunks, and thus has max length 4096
-func (self *RawResourceHandler) Update(name string, data []byte) (Key, error) {
+func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
+
+	ok, err := self.validator.isOwner(name)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, fmt.Errorf("Not owner of '%s'", name)
+	}
 
 	// can be only one chunk long minus 65 byte signature
 	if int64(len(data)) > self.maxChunkData {
@@ -527,11 +542,11 @@ func (self *RawResourceHandler) Update(name string, data []byte) (Key, error) {
 
 // Closes the datastore.
 // Always call this at shutdown to avoid data corruption.
-func (self *RawResourceHandler) Close() {
+func (self *ResourceHandler) Close() {
 	self.ChunkStore.Close()
 }
 
-func (self *RawResourceHandler) getBlock() (uint64, error) {
+func (self *ResourceHandler) getBlock() (uint64, error) {
 	// get the block height and convert to uint64
 	var currentblock string
 	err := self.rpcClient.Call(&currentblock, "eth_blockNumber")
@@ -544,28 +559,28 @@ func (self *RawResourceHandler) getBlock() (uint64, error) {
 	return strconv.ParseUint(currentblock, 10, 64)
 }
 
-func (self *RawResourceHandler) BlockToPeriod(name string, blocknumber uint64) uint32 {
+func (self *ResourceHandler) BlockToPeriod(name string, blocknumber uint64) uint32 {
 	return getNextPeriod(self.resources[name].startBlock, blocknumber, self.resources[name].frequency)
 }
 
-func (self *RawResourceHandler) PeriodToBlock(name string, period uint32) uint64 {
+func (self *ResourceHandler) PeriodToBlock(name string, period uint32) uint64 {
 	return self.resources[name].startBlock + (uint64(period) * self.resources[name].frequency)
 }
 
-func (self *RawResourceHandler) getResource(name string) *resource {
+func (self *ResourceHandler) getResource(name string) *resource {
 	self.resourceLock.RLock()
 	defer self.resourceLock.RUnlock()
 	rsrc := self.resources[name]
 	return rsrc
 }
 
-func (self *RawResourceHandler) setResource(name string, rsrc *resource) {
+func (self *ResourceHandler) setResource(name string, rsrc *resource) {
 	self.resourceLock.Lock()
 	defer self.resourceLock.Unlock()
 	self.resources[name] = rsrc
 }
 
-func (self *RawResourceHandler) resourceHash(namehash common.Hash, period uint32, version uint32) Key {
+func (self *ResourceHandler) resourceHash(namehash common.Hash, period uint32, version uint32) Key {
 	// format is: hash(namehash|period|version)
 	self.hashLock.Lock()
 	defer self.hashLock.Unlock()
@@ -579,7 +594,7 @@ func (self *RawResourceHandler) resourceHash(namehash common.Hash, period uint32
 	return self.hasher.Sum(nil)
 }
 
-func (self *RawResourceHandler) signContent(data []byte) ([]byte, error) {
+func (self *ResourceHandler) signContent(data []byte) ([]byte, error) {
 	self.hashLock.Lock()
 	self.hasher.Reset()
 	self.hasher.Write(data)
@@ -596,7 +611,7 @@ func (self *RawResourceHandler) signContent(data []byte) ([]byte, error) {
 	return datawithsign, nil
 }
 
-func (self *RawResourceHandler) getContentAccount(chunkdata []byte) (common.Address, error) {
+func (self *ResourceHandler) getContentAccount(chunkdata []byte) (common.Address, error) {
 	if len(chunkdata) <= signatureLength {
 		return common.Address{}, fmt.Errorf("zero-length data")
 	}
@@ -612,7 +627,7 @@ func (self *RawResourceHandler) getContentAccount(chunkdata []byte) (common.Addr
 	return crypto.PubkeyToAddress(*pub), nil
 }
 
-func (self *RawResourceHandler) verifyContent(chunkdata []byte) error {
+func (self *ResourceHandler) verifyContent(chunkdata []byte) error {
 	address, err := self.getContentAccount(chunkdata)
 	if err != nil {
 		return err
@@ -621,7 +636,7 @@ func (self *RawResourceHandler) verifyContent(chunkdata []byte) error {
 	return nil
 }
 
-func (self *RawResourceHandler) hasUpdate(name string, period uint32) bool {
+func (self *ResourceHandler) hasUpdate(name string, period uint32) bool {
 	if self.resources[name].lastPeriod == period {
 		return true
 	}

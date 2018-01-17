@@ -1,74 +1,54 @@
 package storage
 
 import (
-	"crypto/ecdsa"
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// Implements Mutable Resources as offchain ENS resolvers
-//
-// The data part of the update is forced to be a valid ENS content hash
-//
-// Also, the ENSResourceHandler only allows creation and update of
-// Resources from the ENS owner's address
-//
-type ENSResourceHandler struct {
-	*RawResourceHandler
-	addr   common.Address
-	ensapi *ens.ENS
+// ENS validation of mutable resource owners
+type ENSValidator struct {
+	owner common.Address
+	api   *ens.ENS
 }
 
-func NewENSResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore CloudStore, rpcClient *rpc.Client, backend bind.ContractBackend, ensAddr common.Address) (*ENSResourceHandler, error) {
-	transactOpts := bind.NewKeyedTransactor(privKey)
-	ensinstance, err := ens.NewENS(transactOpts, ensAddr, backend)
+func NewENSValidator(owneraddress common.Address, contractaddress common.Address, backend bind.ContractBackend, transactOpts *bind.TransactOpts) (*ENSValidator, error) {
+	var err error
+	validator := &ENSValidator{}
+	validator.api, err = ens.NewENS(transactOpts, contractaddress, backend)
 	if err != nil {
 		return nil, err
 	}
-	rh, err := NewRawResourceHandler(privKey, datadir, cloudStore, rpcClient, ens.EnsNode)
-	if err != nil {
-		return nil, err
-	}
-	rh.nameHashFunc = func(name string) common.Hash {
-		return ens.EnsNode(name)
-	}
-
-	return &ENSResourceHandler{
-		RawResourceHandler: rh,
-		addr:               crypto.PubkeyToAddress(privKey.PublicKey),
-		ensapi:             ensinstance,
-	}, nil
+	validator.owner = owneraddress
+	return validator, nil
 }
 
-func (self *ENSResourceHandler) NewResource(name string, frequency uint64) (*resource, error) {
-	ok, err := self.IsOwner(name)
+func (self *ENSValidator) isOwner(name string) (bool, error) {
+	owneraddr, err := self.api.Owner(self.nameHash(name))
 	if err != nil {
-		return nil, err
-	} else if !ok {
-		return nil, fmt.Errorf("Not Owner")
+		return false, err
 	}
-	return self.RawResourceHandler.NewResource(name, frequency)
+	return owneraddr == self.owner, nil
 }
 
-func (self *ENSResourceHandler) Update(name string, data []byte) (Key, error) {
-	ok, err := self.IsOwner(name)
-	if err != nil {
-		return nil, err
-	} else if !ok {
-		return nil, fmt.Errorf("Not Owner")
-	}
-	return self.RawResourceHandler.Update(name, data)
+func (self *ENSValidator) nameHash(name string) common.Hash {
+	return ens.EnsNode(name)
 }
 
-func (self *ENSResourceHandler) IsOwner(name string) (bool, error) {
-	owneraddr, err := self.ensapi.Owner(self.RawResourceHandler.nameHashFunc(name))
-	if err != nil {
-		return false, fmt.Errorf("ENS error: %v", err)
+// Default fallthrough validation of mutable resource ownership
+type GenericValidator struct {
+	hashFunc func(string) common.Hash
+}
+
+func NewGenericValidator(hashFunc func(string) common.Hash) *GenericValidator {
+	return &GenericValidator{
+		hashFunc: hashFunc,
 	}
-	return owneraddr == self.addr, nil
+}
+func (self *GenericValidator) isOwner(name string) (bool, error) {
+	return true, nil
+}
+
+func (self *GenericValidator) nameHash(name string) common.Hash {
+	return self.hashFunc(name)
 }
