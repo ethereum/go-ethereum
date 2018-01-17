@@ -534,7 +534,8 @@ func registerBzzService(bzzconfig *bzzapi.Config, ctx *cli.Context, stack *node.
 			}
 		}
 
-		return swarm.NewSwarm(ctx, swapClient, ensClient, bzzconfig, bzzconfig.SwapEnabled, bzzconfig.SyncEnabled, bzzconfig.Cors, bzzconfig.PssEnabled)
+		// In production, mockStore must be always nil.
+		return swarm.NewSwarm(ctx, swapClient, ensClient, bzzconfig, bzzconfig.SwapEnabled, bzzconfig.SyncEnabled, bzzconfig.Cors, bzzconfig.PssEnabled, nil)
 	}
 	//register within the ethereum node
 	if err := stack.Register(boot); err != nil {
