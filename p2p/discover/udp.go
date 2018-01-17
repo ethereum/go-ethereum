@@ -216,9 +216,22 @@ type ReadPacket struct {
 	Addr *net.UDPAddr
 }
 
+// Config holds Table-related settings.
+type Config struct {
+	// These settings are required and configure the UDP listener:
+	PrivateKey *ecdsa.PrivateKey
+
+	// These settings are optional:
+	AnnounceAddr *net.UDPAddr      // local address announced in the DHT
+	NodeDBPath   string            // if set, the node database is stored at this filesystem location
+	NetRestrict  *netutil.Netlist  // network whitelist
+	Bootnodes    []*Node           // list of bootstrap nodes
+	Unhandled    chan<- ReadPacket // unhandled packets are sent on this channel
+}
+
 // ListenUDP returns a new table that listens for UDP packets on laddr.
-func ListenUDP(priv *ecdsa.PrivateKey, conn conn, realaddr *net.UDPAddr, unhandled chan ReadPacket, nodeDBPath string, netrestrict *netutil.Netlist) (*Table, error) {
-	tab, _, err := newUDP(priv, conn, realaddr, unhandled, nodeDBPath, netrestrict)
+func ListenUDP(c conn, cfg Config) (*Table, error) {
+	tab, _, err := newUDP(c, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -226,25 +239,29 @@ func ListenUDP(priv *ecdsa.PrivateKey, conn conn, realaddr *net.UDPAddr, unhandl
 	return tab, nil
 }
 
-func newUDP(priv *ecdsa.PrivateKey, c conn, realaddr *net.UDPAddr, unhandled chan ReadPacket, nodeDBPath string, netrestrict *netutil.Netlist) (*Table, *udp, error) {
+func newUDP(c conn, cfg Config) (*Table, *udp, error) {
 	udp := &udp{
 		conn:        c,
-		priv:        priv,
-		netrestrict: netrestrict,
+		priv:        cfg.PrivateKey,
+		netrestrict: cfg.NetRestrict,
 		closing:     make(chan struct{}),
 		gotreply:    make(chan reply),
 		addpending:  make(chan *pending),
 	}
+	realaddr := c.LocalAddr().(*net.UDPAddr)
+	if cfg.AnnounceAddr != nil {
+		realaddr = cfg.AnnounceAddr
+	}
 	// TODO: separate TCP port
 	udp.ourEndpoint = makeEndpoint(realaddr, uint16(realaddr.Port))
-	tab, err := newTable(udp, PubkeyID(&priv.PublicKey), realaddr, nodeDBPath)
+	tab, err := newTable(udp, PubkeyID(&cfg.PrivateKey.PublicKey), realaddr, cfg.NodeDBPath, cfg.Bootnodes)
 	if err != nil {
 		return nil, nil, err
 	}
 	udp.Table = tab
 
 	go udp.loop()
-	go udp.readLoop(unhandled)
+	go udp.readLoop(cfg.Unhandled)
 	return udp.Table, udp, nil
 }
 
@@ -480,7 +497,7 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, 
 }
 
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
-func (t *udp) readLoop(unhandled chan ReadPacket) {
+func (t *udp) readLoop(unhandled chan<- ReadPacket) {
 	defer t.conn.Close()
 	if unhandled != nil {
 		defer close(unhandled)

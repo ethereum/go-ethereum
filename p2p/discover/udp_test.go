@@ -70,8 +70,9 @@ func newUDPTest(t *testing.T) *udpTest {
 		remotekey:  newkey(),
 		remoteaddr: &net.UDPAddr{IP: net.IP{10, 0, 1, 99}, Port: 30303},
 	}
-	realaddr := test.pipe.LocalAddr().(*net.UDPAddr)
-	test.table, test.udp, _ = newUDP(test.localkey, test.pipe, realaddr, nil, "", nil)
+	test.table, test.udp, _ = newUDP(test.pipe, Config{PrivateKey: test.localkey})
+	// Wait for initial refresh so the table doesn't send unexpected findnode.
+	<-test.table.initDone
 	return test
 }
 

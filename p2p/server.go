@@ -431,7 +431,6 @@ func (srv *Server) Start() (err error) {
 		if err != nil {
 			return err
 		}
-
 		realaddr = conn.LocalAddr().(*net.UDPAddr)
 		if srv.NAT != nil {
 			if !realaddr.IP.IsLoopback() {
@@ -451,11 +450,16 @@ func (srv *Server) Start() (err error) {
 
 	// node table
 	if !srv.NoDiscovery {
-		ntab, err := discover.ListenUDP(srv.PrivateKey, conn, realaddr, unhandled, srv.NodeDatabase, srv.NetRestrict)
-		if err != nil {
-			return err
+		cfg := discover.Config{
+			PrivateKey:   srv.PrivateKey,
+			AnnounceAddr: realaddr,
+			NodeDBPath:   srv.NodeDatabase,
+			NetRestrict:  srv.NetRestrict,
+			Bootnodes:    srv.BootstrapNodes,
+			Unhandled:    unhandled,
 		}
-		if err := ntab.SetFallbackNodes(srv.BootstrapNodes); err != nil {
+		ntab, err := discover.ListenUDP(conn, cfg)
+		if err != nil {
 			return err
 		}
 		srv.ntab = ntab
