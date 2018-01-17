@@ -535,18 +535,17 @@ func setupENS(addr common.Address, transactOpts *bind.TransactOpts, sub string, 
 	return contractAddress, contractBackend, nil
 }
 
-func signContent(privKey *ecdsa.PrivateKey, data []byte) ([signatureLength]byte, error) {
+func signContent(privKey *ecdsa.PrivateKey, data []byte) (Signature, error) {
 	hasher.Reset()
 	hasher.Write(data)
 	datahash := hasher.Sum(nil)
 
-	signature, err := crypto.Sign(datahash, privKey)
+	signaturebytes, err := crypto.Sign(datahash, privKey)
 	if err != nil {
 		return [signatureLength]byte{}, err
 	}
-	var signaturetype [signatureLength]byte
-	copy(signaturetype[:], signature)
-	return signaturetype, nil
+	signature, err := NewSignature(signaturebytes)
+	return signature, err
 }
 
 type testCloudStore struct {

@@ -22,6 +22,17 @@ const (
 	indexSize       = 24
 )
 
+type Signature [signatureLength]byte
+
+func NewSignature(b []byte) (Signature, error) {
+	var s Signature
+	if len(b) != signatureLength {
+		return [signatureLength]byte{}, fmt.Errorf("Must be %d bytes", signatureLength)
+	}
+	copy(s[:], b)
+	return s, nil
+}
+
 // Encapsulates an actual resource update. When synced it contains the most recent
 // version of the resource update data.
 type resource struct {
@@ -185,7 +196,7 @@ func NewResource(name string, startBlock uint64, frequency uint64, nameHashFunc 
 // Creates a new root entry for a mutable resource identified by `name` with the specified `frequency`.
 //
 // The start block of the resource update will be the actual current block height of the connected network.
-func (self *ResourceHandler) NewResource(name string, frequency uint64, signature [signatureLength]byte) (*resource, error) {
+func (self *ResourceHandler) NewResource(name string, frequency uint64, signature Signature) (*resource, error) {
 
 	addr, err := self.getAddressFromDataSig([]byte(name), signature)
 	if err != nil {
@@ -465,7 +476,7 @@ func parseUpdate(blob []byte) (period uint32, version uint32, ensname []byte, da
 // It is the caller's responsibility to make sure that this data is not stale.
 //
 // A resource update cannot span chunks, and thus has max length 4096
-func (self *ResourceHandler) Update(name string, data []byte, signature [signatureLength]byte) (Key, error) {
+func (self *ResourceHandler) Update(name string, data []byte, signature Signature) (Key, error) {
 
 	addr, err := self.getAddressFromDataSig(data, signature)
 	if err != nil {
@@ -606,9 +617,11 @@ func (self *ResourceHandler) getContentAccount(chunkdata []byte) (common.Address
 	if len(chunkdata) <= signatureLength {
 		return common.Address{}, fmt.Errorf("zero-length data")
 	}
-	var signaturetype [signatureLength]byte
-	copy(signaturetype[:], chunkdata[:signatureLength])
-	return self.getAddressFromDataSig(chunkdata[signatureLength:], signaturetype)
+	signature, err := NewSignature(chunkdata[:signatureLength])
+	if err != nil {
+		return zeroAddr, err
+	}
+	return self.getAddressFromDataSig(chunkdata[signatureLength:], signature)
 }
 
 func (self *ResourceHandler) getContentName(chunkdata []byte) (string, error) {
@@ -622,7 +635,7 @@ func (self *ResourceHandler) getContentName(chunkdata []byte) (string, error) {
 	return string(namebytes), nil
 }
 
-func (self *ResourceHandler) getAddressFromDataSig(data []byte, signature [signatureLength]byte) (common.Address, error) {
+func (self *ResourceHandler) getAddressFromDataSig(data []byte, signature Signature) (common.Address, error) {
 	self.hashLock.Lock()
 	self.hasher.Reset()
 	self.hasher.Write(data)
