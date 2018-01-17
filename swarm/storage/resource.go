@@ -12,7 +12,6 @@ import (
 	"golang.org/x/net/idna"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -27,7 +26,7 @@ const (
 // version of the resource update data.
 type resource struct {
 	name       string
-	ensName    common.Hash
+	nameHash   common.Hash
 	startBlock uint64
 	lastPeriod uint32
 	frequency  uint64
@@ -41,10 +40,6 @@ type resource struct {
 // The update scheme is built on swarm chunks with chunk keys following
 // a predictable, versionable pattern.
 //
-// The data of the chunk contains the content hash of the version in question.
-// In order to be valid, the hash is signed by the owner of the ENS record
-// of the mutable resource.
-//
 // Updates are defined to be periodic in nature, where periods are
 // expressed in terms of number of blocks.
 //
@@ -57,7 +52,7 @@ type resource struct {
 
 // The root entry tells the requester from when the mutable resource was
 // first added (block number) and in which block number to look for the
-// actual updates. Thus, a resource update for identifier "foo.bar"
+// actual updates. Thus, a resource update for identifier "føø.bar"
 // starting at block 4200 with frequency 42 will have updates on block 4242,
 // 4284, 4326 and so on.
 //
@@ -67,27 +62,28 @@ type resource struct {
 //
 // Note that the root entry is not required for the resource update scheme to
 // work. A normal chunk of the blocknumber/frequency data can also be created,
-// and pointed to by an actual ENS entry (or manifest entry) instead.
+// and pointed to by an external resource (ENS or manifest entry)
 //
 // Actual data updates are also made in the form of swarm chunks. The keys
 // of the updates are the hash of a concatenation of properties as follows:
 //
-// sha256(namehash|blocknumber|version)
+// sha256(namehash|period|version)
 //
-// The blocknumber here is the next block period after the current block
-// calculated from the start block and frequency of the resource update.
-// Using our previous example, this means that an update made at block 4285,
-// and even 4284, will have 4326 as the block number.
+// The period is (currentblock - startblock) / frequency
+//
+// Using our previous example, this means that a period 3 will have 4326 as
+// the block number.
 //
 // If more than one update is made to the same block number, incremental
 // version numbers are used successively.
 //
 // A lookup agent need only know the identifier name in order to get the versions
 //
-// the data itself is prefixed with a signed hash of the data. The sigining key
-// is used to verify the authenticity of the update, for example by looking
-// up the ownership of the namehash in ENS and comparing to the address derived
-// from it
+// the chunk data is: sign(resourcedata)|resourcedata
+// the resourcedata is: headerlength|period|version|name|data
+//
+// headerlength is a 16 bit value containing the byte length of period|version|name
+// period and version are both 32 bit values. name can have arbitrary length
 //
 // NOTE: the following is yet to be implemented
 // The resource update chunks will be stored in the swarm, but receive special
@@ -95,11 +91,16 @@ type resource struct {
 // stored using a separate store, and forwarding/syncing protocols carry per-chunk
 // flags to tell whether the chunk can be validated or not; if not it is to be
 // treated as a resource update chunk.
-//
-// TODO: signature validation
+
+type ResourceValidator interface {
+	isOwner(string) (bool, error)
+	nameHash(string) common.Hash
+}
+
 type ResourceHandler struct {
 	ChunkStore
-	ethapi       *rpc.Client
+	validator    ResourceValidator
+	rpcClient    *rpc.Client
 	resources    map[string]*resource
 	hashLock     sync.Mutex
 	resourceLock sync.RWMutex
@@ -109,7 +110,7 @@ type ResourceHandler struct {
 }
 
 // Create or open resource update chunk store
-func NewResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore CloudStore, ethapi *rpc.Client) (*ResourceHandler, error) {
+func NewResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore CloudStore, rpcClient *rpc.Client, validator ResourceValidator) (*ResourceHandler, error) {
 	path := filepath.Join(datadir, "resource")
 	dbStore, err := NewDbStore(datadir, nil, singletonSwarmDbCapacity, 0)
 	if err != nil {
@@ -120,14 +121,29 @@ func NewResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore Cl
 		DbStore:  dbStore,
 	}
 	hasher := MakeHashFunc("SHA3")
-	return &ResourceHandler{
+
+	rh := &ResourceHandler{
 		ChunkStore:   newResourceChunkStore(path, hasher, localStore, cloudStore),
-		ethapi:       ethapi,
+		rpcClient:    rpcClient,
 		resources:    make(map[string]*resource),
 		hasher:       hasher(),
 		privKey:      privKey,
 		maxChunkData: DefaultBranches * int64(hasher().Size()),
-	}, nil
+	}
+
+	if validator != nil {
+		rh.validator = validator
+	} else {
+		rh.validator = NewGenericValidator(func(name string) common.Hash {
+			rh.hashLock.Lock()
+			defer rh.hashLock.Unlock()
+			rh.hasher.Reset()
+			rh.hasher.Write([]byte(name))
+			return common.BytesToHash(rh.hasher.Sum(nil))
+		})
+	}
+
+	return rh, nil
 }
 
 func validateInput(name string, frequency uint64) (string, error) {
@@ -153,7 +169,7 @@ func validateInput(name string, frequency uint64) (string, error) {
 // Creates a standalone resource object
 //
 // Can be passed to SetResource if external root data lookups are used
-func NewResource(name string, startBlock uint64, frequency uint64) (*resource, error) {
+func NewResource(name string, startBlock uint64, frequency uint64, nameHashFunc func(name string) common.Hash) (*resource, error) {
 
 	validname, err := validateInput(name, frequency)
 	if err != nil {
@@ -162,7 +178,7 @@ func NewResource(name string, startBlock uint64, frequency uint64) (*resource, e
 
 	return &resource{
 		name:       validname,
-		ensName:    ens.EnsNode(validname),
+		nameHash:   nameHashFunc(validname),
 		startBlock: startBlock,
 		frequency:  frequency,
 	}, nil
@@ -173,12 +189,19 @@ func NewResource(name string, startBlock uint64, frequency uint64) (*resource, e
 // The start block of the resource update will be the actual current block height of the connected network.
 func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resource, error) {
 
+	ok, err := self.validator.isOwner(name)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, fmt.Errorf("Not owner of '%s'", name)
+	}
+
 	validname, err := validateInput(name, frequency)
 	if err != nil {
 		return nil, err
 	}
 
-	ensName := ens.EnsNode(validname)
+	nameHash := self.validator.nameHash(validname)
 
 	// get our blockheight at this time
 	currentblock, err := self.getBlock()
@@ -188,7 +211,7 @@ func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resour
 
 	// chunk with key equal to namehash points to data of first blockheight + update frequency
 	// from this we know from what blockheight we should look for updates, and how often
-	chunk := NewChunk(Key(ensName[:]), nil)
+	chunk := NewChunk(Key(nameHash[:]), nil)
 	chunk.SData = make([]byte, indexSize)
 
 	// resource update root chunks follow same convention as "normal" chunks
@@ -200,11 +223,11 @@ func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resour
 	binary.LittleEndian.PutUint64(val, frequency)
 	copy(chunk.SData[16:], val)
 	self.Put(chunk)
-	log.Debug("new resource", "name", validname, "key", ensName, "startBlock", currentblock, "frequency", frequency)
+	log.Debug("new resource", "name", validname, "key", nameHash, "startBlock", currentblock, "frequency", frequency)
 
 	rsrc := &resource{
 		name:       validname,
-		ensName:    ensName,
+		nameHash:   nameHash,
 		startBlock: currentblock,
 		frequency:  frequency,
 		updated:    time.Now(),
@@ -221,7 +244,7 @@ func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resour
 //
 // Method will fail if resource is already registered in this session, unless
 // `allowOverwrite` is set
-func (self *ResourceHandler) SetResource(rsrc *resource, allowOverwrite bool) error {
+func (self *ResourceHandler) SetExternalResource(rsrc *resource, allowOverwrite bool) error {
 
 	utfname, err := idna.ToUnicode(rsrc.name)
 	if err != nil {
@@ -324,7 +347,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, name string, period uint32, 
 	}
 
 	for period > 0 {
-		key := self.resourceHash(rsrc.ensName, period, version)
+		key := self.resourceHash(rsrc.nameHash, period, version)
 		chunk, err := self.Get(key)
 		if err == nil {
 			if specificversion {
@@ -334,7 +357,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, name string, period uint32, 
 			log.Trace("rsrc update version 1 found, checking for version updates", "period", period, "key", key)
 			for {
 				newversion := version + 1
-				key := self.resourceHash(rsrc.ensName, period, newversion)
+				key := self.resourceHash(rsrc.nameHash, period, newversion)
 				newchunk, err := self.Get(key)
 				if err != nil {
 					return self.updateResourceIndex(rsrc, chunk, &name)
@@ -364,10 +387,10 @@ func (self *ResourceHandler) loadResource(name string, refresh bool) (*resource,
 			return nil, err
 		}
 		rsrc.name = validname
-		rsrc.ensName = ens.EnsNode(validname)
+		rsrc.nameHash = self.validator.nameHash(validname)
 
 		// get the root info chunk and update the cached value
-		chunk, err := self.Get(Key(rsrc.ensName[:]))
+		chunk, err := self.Get(Key(rsrc.nameHash[:]))
 		if err != nil {
 			return nil, err
 		}
@@ -386,7 +409,7 @@ func (self *ResourceHandler) loadResource(name string, refresh bool) (*resource,
 		rsrc.frequency = binary.LittleEndian.Uint64(chunk.SData[16:])
 	} else {
 		rsrc.name = self.resources[name].name
-		rsrc.ensName = self.resources[name].ensName
+		rsrc.nameHash = self.resources[name].nameHash
 		rsrc.startBlock = self.resources[name].startBlock
 		rsrc.frequency = self.resources[name].frequency
 	}
@@ -442,6 +465,13 @@ func parseUpdate(blob []byte) (period uint32, version uint32, ensname []byte, da
 // A resource update cannot span chunks, and thus has max length 4096
 func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 
+	ok, err := self.validator.isOwner(name)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, fmt.Errorf("Not owner of '%s'", name)
+	}
+
 	// can be only one chunk long minus 65 byte signature
 	if int64(len(data)) > self.maxChunkData {
 		return nil, fmt.Errorf("Data overflow: %d / %d bytes", len(data), 4096-signatureLength)
@@ -473,7 +503,7 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 
 	// prepend version and period to allow reverse lookups
 	// data header length does NOT include the header length prefix bytes themselves
-	headerlength := uint16(len(resource.ensName) + 4 + 4)
+	headerlength := uint16(len(resource.nameHash) + 4 + 4)
 	fulldata := make([]byte, int(headerlength)+2+len(data))
 
 	cursor := 0
@@ -486,13 +516,13 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 	binary.LittleEndian.PutUint32(fulldata[cursor:], version)
 	cursor += 4
 
-	copy(fulldata[cursor:], resource.ensName[:])
-	cursor += len(resource.ensName)
+	copy(fulldata[cursor:], resource.nameHash[:])
+	cursor += len(resource.nameHash)
 
 	copy(fulldata[cursor:], data)
 
 	// create the update chunk and send it
-	key := self.resourceHash(resource.ensName, nextperiod, version)
+	key := self.resourceHash(resource.nameHash, nextperiod, version)
 	chunk := NewChunk(key, nil)
 	chunk.SData, err = self.signContent(fulldata)
 	if err != nil {
@@ -519,7 +549,7 @@ func (self *ResourceHandler) Close() {
 func (self *ResourceHandler) getBlock() (uint64, error) {
 	// get the block height and convert to uint64
 	var currentblock string
-	err := self.ethapi.Call(&currentblock, "eth_blockNumber")
+	err := self.rpcClient.Call(&currentblock, "eth_blockNumber")
 	if err != nil {
 		return 0, err
 	}
