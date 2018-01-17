@@ -130,14 +130,15 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	}
 
 	dbAccess := network.NewDbAccess(self.lstore)
-	self.streamer = network.NewStreamer(to, dbAccess)
+	delivery := network.NewDelivery(to, dbAccess)
+	self.streamer = network.NewStreamer(delivery)
 	network.RegisterOutgoingSyncer(self.streamer, dbAccess)
 	network.RegisterIncomingSyncer(self.streamer, dbAccess)
 
 	self.bzz = network.NewBzz(bzzconfig, to, nil, self.streamer)
 
 	// set up DPA, the cloud storage local access layer
-	dpaChunkStore := storage.NewDpaChunkStore(self.lstore, self.streamer.Retrieve)
+	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
 	log.Debug(fmt.Sprintf("-> Local Access to Swarm"))
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)

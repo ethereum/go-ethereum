@@ -1123,7 +1123,7 @@ func newServices() adapters.Services {
 			if err != nil {
 				return nil, fmt.Errorf("create pss cache tmpdir failed", "error", err)
 			}
-			dpa, err := storage.NewLocalDPA(cachedir)
+			dpa, err := storage.NewLocalDPA(cachedir, network.NewAddrFromNodeID(ctx.Config.ID).Over())
 			if err != nil {
 				return nil, fmt.Errorf("local dpa creation failed", "error", err)
 			}
@@ -1178,7 +1178,7 @@ func newServices() adapters.Services {
 				UnderlayAddr: addr.Under(),
 				HiveParams:   hp,
 			}
-			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore), nil
+			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil), nil
 		},
 	}
 }
@@ -1195,7 +1195,7 @@ func newTestPss(privkey *ecdsa.PrivateKey, overlay network.Overlay, ppextra *Pss
 		log.Error("create pss cache tmpdir failed", "error", err)
 		os.Exit(1)
 	}
-	dpa, err := storage.NewLocalDPA(cachedir)
+	dpa, err := storage.NewLocalDPA(cachedir, addr.Over())
 	if err != nil {
 		log.Error("local dpa creation failed", "error", err)
 		os.Exit(1)

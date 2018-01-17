@@ -90,7 +90,7 @@ func (m *ManifestWriter) AddEntry(data io.Reader, e *ManifestEntry) (storage.Key
 		return nil, err
 	}
 	entry := newManifestTrieEntry(e, nil)
-	entry.Hash = key.String()
+	entry.Hash = key.Hex()
 	m.trie.addEntry(entry, m.quitC)
 	return key, nil
 }
@@ -338,7 +338,7 @@ func (self *manifestTrie) recalcAndStore() error {
 				if err != nil {
 					return err
 				}
-				entry.Hash = entry.subtrie.hash.String()
+				entry.Hash = entry.subtrie.hash.Hex()
 			}
 			list.Entries = append(list.Entries, entry.ManifestEntry)
 		}
@@ -351,7 +351,8 @@ func (self *manifestTrie) recalcAndStore() error {
 	}
 
 	sr := bytes.NewReader(manifest)
-	key, _, err2 := self.dpa.Store(sr, int64(len(manifest)))
+	key, wait, err2 := self.dpa.Store(sr, int64(len(manifest)))
+	wait()
 	self.hash = key
 	return err2
 }

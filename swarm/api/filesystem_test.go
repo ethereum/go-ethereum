@@ -21,7 +21,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -105,9 +104,8 @@ func TestApiDirUploadModify(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		wg := &sync.WaitGroup{}
-		hash, err := api.Store(bytes.NewReader(index), int64(len(index)), wg)
-		wg.Wait()
+		hash, wait, err := api.Store(bytes.NewReader(index), int64(len(index)))
+		wait()
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
@@ -122,7 +120,7 @@ func TestApiDirUploadModify(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		bzzhash = key.String()
+		bzzhash = key.Hex()
 
 		content := readPath(t, "testdata", "test0", "index.html")
 		resp := testGet(t, api, bzzhash, "index2.html")

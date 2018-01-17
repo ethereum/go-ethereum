@@ -147,6 +147,10 @@ func NewStreamer(delivery *Delivery) *Streamer {
 	return streamer
 }
 
+func (self *Streamer) Retrieve(chunk *storage.Chunk) error {
+	return self.delivery.RequestFromPeers(chunk.Key[:], false)
+}
+
 // RegisterIncomingStreamer registers an incoming streamer constructor
 func (self *Streamer) RegisterIncomingStreamer(stream string, f func(*StreamerPeer, []byte) (IncomingStreamer, error)) {
 	self.incomingLock.Lock()

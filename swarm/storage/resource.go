@@ -639,7 +639,7 @@ type resourceChunkStore struct {
 func newResourceChunkStore(path string, hasher SwarmHasher, localStore *LocalStore, request func(*Chunk) error) *resourceChunkStore {
 	return &resourceChunkStore{
 		localStore: localStore,
-		netStore:   NewDpaChunkStore(localStore, request),
+		netStore:   NewNetStore(localStore, request),
 	}
 }
 

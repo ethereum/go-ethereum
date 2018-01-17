@@ -17,7 +17,6 @@
 package storage
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -50,6 +49,9 @@ const (
 
 var (
 	notFound = errors.New("not found")
+
+	// timeout interval before retrieval is timed out
+	searchTimeout = 3 * time.Second
 )
 
 type DPA struct {
@@ -172,55 +174,4 @@ func (self *DPA) storeWorker() {
 		default:
 		}
 	}
-}
-
-// DpaChunkStore implements the ChunkStore interface,
-// this chunk access layer assumed 2 chunk stores
-// local storage eg. LocalStore and network storage eg., NetStore
-// access by calling network is blocking with a timeout
-
-type dpaChunkStore struct {
-	localStore *LocalStore
-	retrieve   func(chunk *Chunk) error
-}
-
-func NewDpaChunkStore(localStore *LocalStore, retrieve func(chunk *Chunk) error) *dpaChunkStore {
-	return &dpaChunkStore{localStore, retrieve}
-}
-
-// Get is the entrypoint for local retrieve requests
-// waits for response or times out
-func (self *dpaChunkStore) Get(key Key) (chunk *Chunk, err error) {
-	var created bool
-	chunk, created = self.localStore.GetOrCreateRequest(key)
-	if chunk.ReqC == nil {
-		log.Trace(fmt.Sprintf("DPA.Get: %v found locally, %d bytes", key.Log(), len(chunk.SData)))
-		return
-	}
-
-	if created {
-		if err := self.retrieve(chunk); err != nil {
-			return nil, err
-		}
-	}
-	t := time.NewTicker(searchTimeout)
-	defer t.Stop()
-
-	select {
-	case <-t.C:
-		log.Trace(fmt.Sprintf("DPA.Get: %v request time out ", key.Log()))
-		return nil, notFound
-	case <-chunk.ReqC:
-	}
-	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-	return chunk, nil
-}
-
-// Put is the entrypoint for local store requests coming from storeLoop
-func (self *dpaChunkStore) Put(chunk *Chunk) {
-	self.localStore.Put(chunk)
-}
-
-// Close chunk store
-func (self *dpaChunkStore) Close() {
 }

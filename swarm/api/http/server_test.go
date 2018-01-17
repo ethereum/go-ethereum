@@ -120,7 +120,7 @@ func TestBzzGetPath(t *testing.T) {
 			t.Fatalf("Read request body: %v", err)
 		}
 
-		if string(respbody) != key[v].String() {
+		if string(respbody) != key[v].Hex() {
 			isexpectedfailrequest := false
 
 			for _, r := range expectedfailrequests {

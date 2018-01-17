@@ -116,7 +116,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 				var wait func()
 				hash, wait, err = self.api.dpa.Store(f, stat.Size())
 				if hash != nil {
-					list[i].Hash = hash.String()
+					list[i].Hash = hash.Hex()
 				}
 				wait()
 				awg.Done()
@@ -164,7 +164,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 	err2 := trie.recalcAndStore()
 	var hs string
 	if err2 == nil {
-		hs = trie.hash.String()
+		hs = trie.hash.Hex()
 	}
 	awg.Wait()
 	return hs, err2

@@ -64,7 +64,7 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 					return nil
 				case chunk := <-chunkC:
 					// self.chunks = append(self.chunks, chunk)
-					self.chunks[chunk.Key.String()] = chunk
+					self.chunks[chunk.Key.Hex()] = chunk
 					close(chunk.dbStored)
 				}
 
@@ -101,10 +101,10 @@ func (self *chunkerTester) Append(chunker Splitter, rootKey Key, data io.Reader,
 					return nil
 				case chunk := <-chunkC:
 					if chunk != nil {
-						stored, success := self.chunks[chunk.Key.String()]
+						stored, success := self.chunks[chunk.Key.Hex()]
 						if !success {
 							// Requesting data
-							self.chunks[chunk.Key.String()] = chunk
+							self.chunks[chunk.Key.Hex()] = chunk
 							close(chunk.dbStored)
 						} else {
 							// getting data
@@ -151,7 +151,7 @@ func (self *chunkerTester) Join(chunker Chunker, key Key, c int, chunkC chan *Ch
 					return nil
 				}
 				// this just mocks the behaviour of a chunk store retrieval
-				stored, success := self.chunks[chunk.Key.String()]
+				stored, success := self.chunks[chunk.Key.Hex()]
 				if !success {
 					return errors.New("Not found")
 				}

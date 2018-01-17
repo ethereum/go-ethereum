@@ -143,7 +143,7 @@ func (b *Bzz) NodeInfo() interface{} {
 // * handshake/hive
 // * discovery
 func (b *Bzz) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{
+	protocols := []p2p.Protocol{
 		{
 			Name:     BzzSpec.Name,
 			Version:  BzzSpec.Version,
@@ -159,15 +159,18 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 			NodeInfo: b.Hive.NodeInfo,
 			PeerInfo: b.Hive.PeerInfo,
 		},
-		{
+	}
+	if b.Streamer != nil {
+		protocols = append(protocols, p2p.Protocol{
 			Name:     StreamerSpec.Name,
 			Version:  StreamerSpec.Version,
 			Length:   StreamerSpec.Length(),
 			Run:      b.RunProtocol(StreamerSpec, b.Streamer.Run),
 			NodeInfo: b.Streamer.NodeInfo,
 			PeerInfo: b.Streamer.PeerInfo,
-		},
+		})
 	}
+	return protocols
 }
 
 // APIs returns the APIs offered by bzz

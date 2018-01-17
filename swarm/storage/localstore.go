@@ -19,9 +19,31 @@ package storage
 import (
 	"encoding/binary"
 	"fmt"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
+
+type StoreParams struct {
+	ChunkDbPath   string
+	DbCapacity    uint64
+	CacheCapacity uint
+}
+
+//create params with default values
+func NewDefaultStoreParams() (self *StoreParams) {
+	return &StoreParams{
+		DbCapacity:    defaultDbCapacity,
+		CacheCapacity: defaultCacheCapacity,
+	}
+}
+
+//this can only finally be set after all config options (file, cmd line, env vars)
+//have been evaluated
+func (self *StoreParams) Init(path string) {
+	self.ChunkDbPath = filepath.Join(path, "chunks")
+}
 
 // LocalStore is a combination of inmemory db over a disk persisted db
 // implements a Get/Put with fallback (caching) logic using any 2 ChunkStores
@@ -31,8 +53,8 @@ type LocalStore struct {
 }
 
 // This constructor uses MemStore and DbStore as components
-func NewLocalStore(hash SwarmHasher, params *StoreParams, basekey []byte) (*LocalStore, error) {
-	dbStore, err := NewDbStore(params.ChunkDbPath, hash, params.DbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+func NewLocalStore(hash SwarmHasher, params *StoreParams, basekey []byte, mockStore *mock.NodeStore) (*LocalStore, error) {
+	dbStore, err := NewMockDbStore(params.ChunkDbPath, hash, params.DbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) }, mockStore)
 	if err != nil {
 		return nil, err
 	}

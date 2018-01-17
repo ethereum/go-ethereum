@@ -326,7 +326,7 @@ func testDeliveryFromNodes(nodes, conns, size int, skipCheck bool) func(adapter 
 			rrdpa := storage.NewDPA(newRoundRobinStore(localStores[1:]...), storage.NewChunkerParams())
 			rrdpa.Start()
 			// create a retriever dpa for the pivot node
-			dpacs := storage.NewDpaChunkStore(localStores[0].(*storage.LocalStore), func(chunk *storage.Chunk) error { return delivery.RequestFromPeers(chunk.Key[:], skipCheck) })
+			dpacs := storage.NewNetStore(localStores[0].(*storage.LocalStore), func(chunk *storage.Chunk) error { return delivery.RequestFromPeers(chunk.Key[:], skipCheck) })
 			dpa := storage.NewDPA(dpacs, storage.NewChunkerParams())
 			dpa.Start()
 			return func(context.Context) error {
