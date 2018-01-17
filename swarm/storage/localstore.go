@@ -56,6 +56,19 @@ func NewTestLocalStore(path string) (*LocalStore, error) {
 	return localStore, nil
 }
 
+func NewTestLocalStoreForAddr(path string, basekey []byte) (*LocalStore, error) {
+	hasher := MakeHashFunc("SHA3")
+	dbStore, err := NewDbStore(path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+	if err != nil {
+		return nil, err
+	}
+	localStore := &LocalStore{
+		memStore: NewMemStore(dbStore, singletonSwarmDbCapacity),
+		DbStore:  dbStore,
+	}
+	return localStore, nil
+}
+
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {

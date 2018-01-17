@@ -574,7 +574,6 @@ func (s *DbStore) doPut(chunk *Chunk, ikey []byte, index *dpaDBIndex, po uint8) 
 	s.entryCnt++
 	s.dataIdx++
 
-	// s.bucketCnt[po]++
 	cntKey := make([]byte, 2)
 	cntKey[0] = keyDistanceCnt
 	cntKey[1] = po

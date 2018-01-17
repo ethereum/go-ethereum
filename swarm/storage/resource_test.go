@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -36,10 +35,6 @@ var (
 	cleanF            func()
 	domainName        = "føø.bar"
 )
-
-func init() {
-	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
-}
 
 // simulated backend does not have the blocknumber call
 // so we use this wrapper to fake returning the block count
@@ -475,7 +470,8 @@ func newTestResourceHandler(datadir string, privkey *ecdsa.PrivateKey, rpcclient
 		memStore: NewMemStore(dbStore, singletonSwarmDbCapacity),
 		DbStore:  dbStore,
 	}
-	return NewResourceHandler(privkey, hasher, localStore, rpcclient, validator)
+	resourceChunkStore := newResourceChunkStore(path, hasher, localStore, func(*Chunk) error { return nil })
+	return NewResourceHandler(privkey, hasher, resourceChunkStore, rpcclient, validator)
 }
 
 // Set up simulated ENS backend for use with ENSResourceHandler tests

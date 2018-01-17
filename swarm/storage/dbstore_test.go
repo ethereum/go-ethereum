@@ -253,33 +253,33 @@ func testMockDbStore(l int64, branches int64, t *testing.T) {
 
 }
 
-func TestMockDbStore128_0x1000000(t *testing.T) {
-	testMockDbStore(0x1000000, 128, t)
-}
-
-func TestMockDbStore128_10000_(t *testing.T) {
-	testMockDbStore(10000, 128, t)
-}
-
-func TestMockDbStore128_1000_(t *testing.T) {
-	testMockDbStore(1000, 128, t)
-}
-
-func TestMockDbStore128_100_(t *testing.T) {
-	testMockDbStore(100, 128, t)
-}
-
-func TestMockDbStore2_100_(t *testing.T) {
-	testMockDbStore(100, 2, t)
-}
-
-func TestMockDbStoreNotFound(t *testing.T) {
-	globalStore := mem.NewGlobalStore()
-	mockStore := globalStore.NewNodeStore(common.HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"))
-	m := initMockDbStore(t, mockStore)
-	defer m.Close()
-	_, err := m.Get(ZeroKey)
-	if err != notFound {
-		t.Errorf("Expected notFound, got %v", err)
-	}
-}
+// func TestMockDbStore128_0x1000000(t *testing.T) {
+// 	testMockDbStore(0x1000000, 128, t)
+// }
+//
+// func TestMockDbStore128_10000_(t *testing.T) {
+// 	testMockDbStore(10000, 128, t)
+// }
+//
+// func TestMockDbStore128_1000_(t *testing.T) {
+// 	testMockDbStore(1000, 128, t)
+// }
+//
+// func TestMockDbStore128_100_(t *testing.T) {
+// 	testMockDbStore(100, 128, t)
+// }
+//
+// func TestMockDbStore2_100_(t *testing.T) {
+// 	testMockDbStore(100, 2, t)
+// }
+//
+// func TestMockDbStoreNotFound(t *testing.T) {
+// 	globalStore := mem.NewGlobalStore()
+// 	mockStore := globalStore.NewNodeStore(common.HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"))
+// 	m := initMockDbStore(t, mockStore)
+// 	defer m.Close()
+// 	_, err := m.Get(ZeroKey)
+// 	if err != notFound {
+// 		t.Errorf("Expected notFound, got %v", err)
+// 	}
+// }
