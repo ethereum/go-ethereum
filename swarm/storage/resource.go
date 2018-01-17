@@ -93,7 +93,7 @@ type resource struct {
 // treated as a resource update chunk.
 
 type ResourceValidator interface {
-	isOwner(string) (bool, error)
+	isOwner(string, common.Address) (bool, error)
 	nameHash(string) common.Hash
 }
 
@@ -105,7 +105,6 @@ type ResourceHandler struct {
 	hashLock     sync.Mutex
 	resourceLock sync.RWMutex
 	hasher       SwarmHash
-	privKey      *ecdsa.PrivateKey
 	maxChunkData int64
 }
 
@@ -127,7 +126,6 @@ func NewResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore Cl
 		rpcClient:    rpcClient,
 		resources:    make(map[string]*resource),
 		hasher:       hasher(),
-		privKey:      privKey,
 		maxChunkData: DefaultBranches * int64(hasher().Size()),
 	}
 
@@ -187,9 +185,13 @@ func NewResource(name string, startBlock uint64, frequency uint64, nameHashFunc 
 // Creates a new root entry for a mutable resource identified by `name` with the specified `frequency`.
 //
 // The start block of the resource update will be the actual current block height of the connected network.
-func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resource, error) {
+func (self *ResourceHandler) NewResource(name string, frequency uint64, signature [signatureLength]byte) (*resource, error) {
 
-	ok, err := self.validator.isOwner(name)
+	addr, err := self.getAddressFromDataSig([]byte(name), signature)
+	if err != nil {
+		return nil, fmt.Errorf("Corrupt signature")
+	}
+	ok, err := self.validator.isOwner(name, addr)
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -463,9 +465,13 @@ func parseUpdate(blob []byte) (period uint32, version uint32, ensname []byte, da
 // It is the caller's responsibility to make sure that this data is not stale.
 //
 // A resource update cannot span chunks, and thus has max length 4096
-func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
+func (self *ResourceHandler) Update(name string, data []byte, signature [signatureLength]byte) (Key, error) {
 
-	ok, err := self.validator.isOwner(name)
+	addr, err := self.getAddressFromDataSig(data, signature)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid data/signature: %v", err)
+	}
+	ok, err := self.validator.isOwner(name, addr)
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -501,34 +507,36 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 	}
 	version++
 
+	// create the update chunk
 	// prepend version and period to allow reverse lookups
 	// data header length does NOT include the header length prefix bytes themselves
 	headerlength := uint16(len(resource.nameHash) + 4 + 4)
-	fulldata := make([]byte, int(headerlength)+2+len(data))
 
-	cursor := 0
-	binary.LittleEndian.PutUint16(fulldata, headerlength)
-	cursor += 2
-
-	binary.LittleEndian.PutUint32(fulldata[cursor:], nextperiod)
-	cursor += 4
-
-	binary.LittleEndian.PutUint32(fulldata[cursor:], version)
-	cursor += 4
-
-	copy(fulldata[cursor:], resource.nameHash[:])
-	cursor += len(resource.nameHash)
-
-	copy(fulldata[cursor:], data)
-
-	// create the update chunk and send it
 	key := self.resourceHash(resource.nameHash, nextperiod, version)
 	chunk := NewChunk(key, nil)
-	chunk.SData, err = self.signContent(fulldata)
-	if err != nil {
-		return nil, err
-	}
-	chunk.Size = int64(len(fulldata))
+	chunk.SData = make([]byte, signatureLength+int(headerlength)+2+len(data))
+
+	cursor := 0
+	copy(chunk.SData, signature[:])
+	cursor += signatureLength
+
+	binary.LittleEndian.PutUint16(chunk.SData[cursor:], headerlength)
+	cursor += 2
+
+	binary.LittleEndian.PutUint32(chunk.SData[cursor:], nextperiod)
+	cursor += 4
+
+	binary.LittleEndian.PutUint32(chunk.SData[cursor:], version)
+	cursor += 4
+
+	copy(chunk.SData[cursor:], resource.nameHash[:])
+	cursor += len(resource.nameHash)
+
+	copy(chunk.SData[cursor:], data)
+
+	chunk.Size = int64(len(chunk.SData))
+
+	// send the chunk
 	self.Put(chunk)
 	log.Trace("resource update", "name", resource.name, "key", key, "currentblock", currentblock, "lastperiod", nextperiod, "version", version, "data", chunk.SData)
 
@@ -594,33 +602,33 @@ func (self *ResourceHandler) resourceHash(namehash common.Hash, period uint32, v
 	return self.hasher.Sum(nil)
 }
 
-func (self *ResourceHandler) signContent(data []byte) ([]byte, error) {
+func (self *ResourceHandler) getContentAccount(chunkdata []byte) (common.Address, error) {
+	if len(chunkdata) <= signatureLength {
+		return common.Address{}, fmt.Errorf("zero-length data")
+	}
+	var signaturetype [signatureLength]byte
+	copy(signaturetype[:], chunkdata[:signatureLength])
+	return self.getAddressFromDataSig(chunkdata[signatureLength:], signaturetype)
+}
+
+func (self *ResourceHandler) getContentName(chunkdata []byte) (string, error) {
+	nameoffset := signatureLength + 2 + 4 + 4
+	if len(chunkdata) < nameoffset {
+		return "", fmt.Errorf("invalid chunk data")
+	}
+	namelength := binary.LittleEndian.Uint16(chunkdata[signatureLength : signatureLength+2])
+	namebytes := make([]byte, namelength)
+	copy(namebytes, chunkdata[nameoffset:nameoffset+int(namelength)-2-4-4])
+	return string(namebytes), nil
+}
+
+func (self *ResourceHandler) getAddressFromDataSig(data []byte, signature [signatureLength]byte) (common.Address, error) {
 	self.hashLock.Lock()
 	self.hasher.Reset()
 	self.hasher.Write(data)
 	datahash := self.hasher.Sum(nil)
 	self.hashLock.Unlock()
-
-	signature, err := crypto.Sign(datahash, self.privKey)
-	if err != nil {
-		return nil, err
-	}
-	datawithsign := make([]byte, len(data)+signatureLength)
-	copy(datawithsign[:signatureLength], signature)
-	copy(datawithsign[signatureLength:], data)
-	return datawithsign, nil
-}
-
-func (self *ResourceHandler) getContentAccount(chunkdata []byte) (common.Address, error) {
-	if len(chunkdata) <= signatureLength {
-		return common.Address{}, fmt.Errorf("zero-length data")
-	}
-	self.hashLock.Lock()
-	self.hasher.Reset()
-	self.hasher.Write(chunkdata[signatureLength:])
-	datahash := self.hasher.Sum(nil)
-	self.hashLock.Unlock()
-	pub, err := crypto.SigToPub(datahash, chunkdata[:signatureLength])
+	pub, err := crypto.SigToPub(datahash, signature[:])
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -632,7 +640,16 @@ func (self *ResourceHandler) verifyContent(chunkdata []byte) error {
 	if err != nil {
 		return err
 	}
-	log.Warn("ens owner lookup not implemented, verify will return true in all cases", "address", address)
+	name, err := self.getContentName(chunkdata)
+	if err != nil {
+		return err
+	}
+	ok, err := self.validator.isOwner(name, address)
+	if err != nil {
+		return err
+	} else if !ok {
+		return fmt.Errorf("not owner")
+	}
 	return nil
 }
 

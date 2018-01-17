@@ -141,7 +141,12 @@ func TestResourceReverseLookup(t *testing.T) {
 	}
 
 	// create a new resource
-	rsrc, err := rh.NewResource(domainName, resourceFrequency)
+	signature, err := signContent(privkey, []byte(domainName))
+	if err != nil {
+		teardownTest(t, err)
+	}
+
+	rsrc, err := rh.NewResource(domainName, resourceFrequency, signature)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -149,7 +154,12 @@ func TestResourceReverseLookup(t *testing.T) {
 	// update data
 	fwdBlocks(int(resourceFrequency+1), backend)
 	data := []byte("foo")
-	resourcekey, err := rh.Update(domainName, data)
+	signature, err = signContent(privkey, data)
+	if err != nil {
+		teardownTest(t, err)
+	}
+
+	resourcekey, err := rh.Update(domainName, data, signature)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -205,7 +215,8 @@ func TestResourceHandler(t *testing.T) {
 	if err != nil {
 		teardownTest(t, err)
 	}
-	_, err = rh.NewResource(domainName, resourceFrequency)
+	signature, err := signContent(privkey, []byte(resourcevalidname))
+	_, err = rh.NewResource(domainName, resourceFrequency, signature)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -230,28 +241,48 @@ func TestResourceHandler(t *testing.T) {
 	// update halfway to first period
 	resourcekey := make(map[string]Key)
 	fwdBlocks(int(resourceFrequency/2), backend)
-	resourcekey["blinky"], err = rh.Update(domainName, []byte("blinky"))
+	data := []byte("blinky")
+	signature, err = signContent(privkey, data)
+	if err != nil {
+		teardownTest(t, err)
+	}
+	resourcekey["blinky"], err = rh.Update(domainName, data, signature)
 	if err != nil {
 		teardownTest(t, err)
 	}
 
 	// update on first period
 	fwdBlocks(int(resourceFrequency/2), backend)
-	resourcekey["pinky"], err = rh.Update(domainName, []byte("pinky"))
+	data = []byte("pinky")
+	signature, err = signContent(privkey, data)
+	if err != nil {
+		teardownTest(t, err)
+	}
+	resourcekey["pinky"], err = rh.Update(domainName, data, signature)
 	if err != nil {
 		teardownTest(t, err)
 	}
 
 	// update on second period
 	fwdBlocks(int(resourceFrequency), backend)
-	resourcekey["inky"], err = rh.Update(domainName, []byte("inky"))
+	data = []byte("inky")
+	signature, err = signContent(privkey, data)
+	if err != nil {
+		teardownTest(t, err)
+	}
+	resourcekey["inky"], err = rh.Update(domainName, data, signature)
 	if err != nil {
 		teardownTest(t, err)
 	}
 
 	// update just after second period
 	fwdBlocks(1, backend)
-	resourcekey["clyde"], err = rh.Update(domainName, []byte("clyde"))
+	data = []byte("clyde")
+	signature, err = signContent(privkey, data)
+	if err != nil {
+		teardownTest(t, err)
+	}
+	resourcekey["clyde"], err = rh.Update(domainName, data, signature)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -350,7 +381,7 @@ func TestResourceENSOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	validator, err := NewENSValidator(addr, contractAddr, contractbackend, transactOpts)
+	validator, err := NewENSValidator(contractAddr, contractbackend, transactOpts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,28 +392,29 @@ func TestResourceENSOwner(t *testing.T) {
 		teardownTest(t, err)
 	}
 
+	signature, err := signContent(privkey, []byte(domainName))
+	if err != nil {
+		teardownTest(t, err)
+	}
 	// create new resource when we are owner = ok
-	_, err = rh.NewResource(domainName, 42)
+	_, err = rh.NewResource(domainName, 42, signature)
 	if err != nil {
 		teardownTest(t, fmt.Errorf("Create resource fail: %v", err))
 	}
 
+	data := []byte("foo")
+	signature, err = signContent(privkey, data)
+
 	// update resource when we are owner = ok
-	_, err = rh.Update(domainName, []byte("foo"))
+	_, err = rh.Update(domainName, data, signature)
 	if err != nil {
 		teardownTest(t, fmt.Errorf("Update resource fail: %v", err))
 	}
 
 	// create new resource when we are NOT owner = !ok
-	addrtwo := crypto.PubkeyToAddress(privkeytwo.PublicKey)
-	validator.owner = addrtwo
-
-	_, err = rh.NewResource(domainName, 42)
-	if err == nil {
-		teardownTest(t, fmt.Errorf("Expected resource create fail due to owner mismatch"))
-	}
+	signaturetwo, err := signContent(privkeytwo, data)
 	// update resource when we are owner = ok
-	_, err = rh.Update(domainName, []byte("foo"))
+	_, err = rh.Update(domainName, data, signaturetwo)
 	if err == nil {
 		teardownTest(t, fmt.Errorf("Expected resource update fail due to owner mismatch"))
 	}
@@ -501,6 +533,20 @@ func setupENS(addr common.Address, transactOpts *bind.TransactOpts, sub string, 
 	contractBackend.Commit()
 
 	return contractAddress, contractBackend, nil
+}
+
+func signContent(privKey *ecdsa.PrivateKey, data []byte) ([signatureLength]byte, error) {
+	hasher.Reset()
+	hasher.Write(data)
+	datahash := hasher.Sum(nil)
+
+	signature, err := crypto.Sign(datahash, privKey)
+	if err != nil {
+		return [signatureLength]byte{}, err
+	}
+	var signaturetype [signatureLength]byte
+	copy(signaturetype[:], signature)
+	return signaturetype, nil
 }
 
 type testCloudStore struct {
