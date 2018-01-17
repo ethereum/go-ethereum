@@ -182,9 +182,6 @@ var landingPageTemplate = template.Must(template.New("landingPage").Parse(`
         <div class="page-title">
           <h1>Welcome to Swarm</h1>
         </div>
-        <div class="header-right">
-          <div id="timestamp">{{.Timestamp}}</div>
-        </div>
       </header>
 
 			<script type="text/javascript">
@@ -193,7 +190,7 @@ var landingPageTemplate = template.Must(template.New("landingPage").Parse(`
 					if (page == "") {
 						var page = "theswarm.eth"
 					}
-					var address = "http://" + location.host + "/bzz:/" + page;
+					var address = "/bzz:/" + page;
 					location.href = address;
 					console.log(address)
 			}
