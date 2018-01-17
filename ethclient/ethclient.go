@@ -382,6 +382,13 @@ func (ec *Client) PendingBalanceAt(ctx context.Context, account common.Address) 
 	return (*big.Int)(&result), err
 }
 
+// BlockNumber returns the number of most recent block.
+func (ec *Client) BlockNumber(ctx context.Context) (*big.Int, error) {
+	var result hexutil.Big
+	err := ec.c.CallContext(ctx, &result, "eth_blockNumber")
+	return (*big.Int)(&result), err
+}
+
 // PendingStorageAt returns the value of key in the contract storage of the given account in the pending state.
 func (ec *Client) PendingStorageAt(ctx context.Context, account common.Address, key common.Hash) ([]byte, error) {
 	var result hexutil.Bytes
