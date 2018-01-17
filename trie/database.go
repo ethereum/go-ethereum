@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -39,18 +40,11 @@ type DatabaseReader interface {
 	Has(key []byte) (bool, error)
 }
 
-// DatabaseWriter wraps the Put method of a backing store for the trie.
-type DatabaseWriter interface {
-	// Put stores the mapping key->value in the database. Implementations must not
-	// hold onto the value as the trie will reuse the slice across calls to Put.
-	Put(key, value []byte) error
-}
-
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
 type Database struct {
-	diskdb DatabaseReader // Persistent storage for matured trie nodes
+	diskdb ethdb.Database // Persistent storage for matured trie nodes
 
 	nodes    map[common.Hash][]byte                   // Cached data blocks of the trie nodes
 	parents  map[common.Hash]int                      // Number of live nodes referencing a given one
@@ -58,6 +52,9 @@ type Database struct {
 
 	preimages map[common.Hash][]byte // Preimages of nodes from the secure trie
 	seckeybuf [secureKeyLength]byte  // Ephemeral buffer for calculating preimage keys
+
+	nodeArena     map[common.Hash][]byte // Trie nodes actively being comitted (avoids locking during writes)
+	preimageArena map[common.Hash][]byte // Trie node preimages actively being comitted (avoids locking during writes)
 
 	gctime  time.Duration      // Time spent on garbage collection since last commit
 	gcnodes uint64             // Nodes garbage collected since last commit
@@ -69,7 +66,7 @@ type Database struct {
 
 // NewDatabase creates a new trie database to store ephemeral trie content before
 // its written out to disk or garbage collected.
-func NewDatabase(diskdb DatabaseReader) *Database {
+func NewDatabase(diskdb ethdb.Database) *Database {
 	db := &Database{
 		diskdb:    diskdb,
 		nodes:     make(map[common.Hash][]byte),
@@ -124,6 +121,9 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// Retrieve the node from cache if available
 	db.lock.RLock()
 	blob := db.nodes[hash]
+	if blob == nil && db.nodeArena != nil {
+		blob = db.nodeArena[hash]
+	}
 	db.lock.RUnlock()
 
 	if blob != nil {
@@ -139,6 +139,9 @@ func (db *Database) preimage(hash common.Hash) ([]byte, error) {
 	// Retrieve the node from cache if available
 	db.lock.RLock()
 	preimage := db.preimages[hash]
+	if preimage == nil && db.preimageArena != nil {
+		preimage = db.preimageArena[hash]
+	}
 	db.lock.RUnlock()
 
 	if preimage != nil {
@@ -243,47 +246,75 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 // to disk, forcefully tearing down all references in both directions.
 //
 // As a side effect, all pre-images accumulated up to this point are also written.
-func (db *Database) Commit(node common.Hash, writer DatabaseWriter) error {
+func (db *Database) Commit(node common.Hash) error {
+	// Create a database batch to flush persistent data out. It is important that
+	// outside code doesn't see an inconsistent state (referenced data removed from
+	// memory cache during commit but not yet in persistent storage). This could be
+	// achieved by locking the entire database during commit, but a slow writer then
+	// would starve all readers. Instead, all data-to-be-committed is moved into a
+	// staging area, where it's temporarilly still accessible during write.
 	db.lock.Lock()
-	defer db.lock.Unlock()
 
-	// Write out all the accumulated trie node preimages
+	db.nodeArena = make(map[common.Hash][]byte)
+	db.preimageArena = make(map[common.Hash][]byte)
+
+	start := time.Now()
+	batch := db.diskdb.NewBatch()
+
+	// Move all of the accumulated preimages into a write batch and preimage staging area
 	for hash, preimage := range db.preimages {
-		if err := writer.Put(db.secureKey(hash[:]), preimage); err != nil {
-			log.Error("Failed to commit preimage from mempool", "err", err)
+		db.preimageArena[hash] = preimage
+		if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
+			log.Error("Failed to commit preimage from trie database", "err", err)
+			db.lock.Unlock()
 			return err
 		}
 		db.size -= common.StorageSize(common.HashLength + len(preimage))
 	}
 	db.preimages = make(map[common.Hash][]byte)
 
-	// Write out the trie itself and dereference any flushed content
-	nodes, storage, start := len(db.nodes), db.size, time.Now()
-	if err := db.commit(node, writer); err != nil {
-		log.Error("Failed to commit trie from mempool", "err", err)
+	// Move the trie itself into the batch and staging area and dereference any reachable content
+	nodes, storage := len(db.nodes), db.size
+	if err := db.commit(node, batch); err != nil {
+		log.Error("Failed to commit trie from trie database", "err", err)
+		db.lock.Unlock()
 		return err
 	}
-	log.Debug("Persistend trie from memory database", "nodes", nodes-len(db.nodes), "size", storage-db.size, "time", time.Since(start),
+	// Write batch and staging area ready, unlock for readers during persistence
+	db.lock.Unlock()
+
+	if err := batch.Write(); err != nil {
+		log.Error("Failed to write trie to disk", "err", err)
+		return err
+	}
+	// Write successful, clear out the staging area and return
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	db.nodeArena, db.preimageArena = nil, nil
+	log.Debug("Persisted trie from memory database", "nodes", nodes-len(db.nodes), "size", storage-db.size, "time", time.Since(start),
 		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.nodes), "livesize", db.size)
 
 	// Reset the garbage collection statistics
 	db.gcnodes, db.gcsize, db.gctime = 0, 0, 0
+
 	return nil
 }
 
 // commit is the private locked version of Commit.
-func (db *Database) commit(node common.Hash, writer DatabaseWriter) error {
+func (db *Database) commit(node common.Hash, batch ethdb.Batch) error {
 	// If the node does not exist, it's a previously comitted node.
 	blob, ok := db.nodes[node]
 	if !ok {
 		return nil
 	}
 	for child := range db.children[node] {
-		if err := db.commit(child, writer); err != nil {
+		if err := db.commit(child, batch); err != nil {
 			return err
 		}
 	}
-	if err := writer.Put(node[:], blob); err != nil {
+	db.nodeArena[node] = blob
+	if err := batch.Put(node[:], blob); err != nil {
 		return err
 	}
 	delete(db.nodes, node)

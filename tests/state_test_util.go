@@ -126,7 +126,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) (*state.StateD
 	if !ok {
 		return nil, UnsupportedForkError{subtest.Fork}
 	}
-	block, _, _ := t.genesis(config).ToBlock()
+	block := t.genesis(config).ToBlock(nil)
 	db, _ := ethdb.NewMemDatabase()
 	statedb := MakePreState(db, t.json.Pre)
 

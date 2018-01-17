@@ -90,7 +90,7 @@ func testMissingNode(t *testing.T, memonly bool) {
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
 	root, _ := trie.Commit(nil)
 	if !memonly {
-		triedb.Commit(root, diskdb)
+		triedb.Commit(root)
 	}
 
 	trie, _ = New(root, triedb)
@@ -319,13 +319,13 @@ func TestLargeValue(t *testing.T) {
 }
 
 type countingDB struct {
-	DatabaseReader
+	ethdb.Database
 	gets map[string]int
 }
 
 func (db *countingDB) Get(key []byte) ([]byte, error) {
 	db.gets[string(key)]++
-	return db.DatabaseReader.Get(key)
+	return db.Database.Get(key)
 }
 
 // TestCacheUnload checks that decoded nodes are unloaded after a
@@ -339,12 +339,12 @@ func TestCacheUnload(t *testing.T) {
 	updateString(trie, key2, "this is the branch of key2.")
 
 	root, _ := trie.Commit(nil)
-	trie.db.Commit(root, trie.db.diskdb.(DatabaseWriter))
+	trie.db.Commit(root)
 
 	// Commit the trie repeatedly and access key1.
 	// The branch containing it is loaded from DB exactly two times:
 	// in the 0th and 6th iteration.
-	db := &countingDB{DatabaseReader: trie.db.diskdb, gets: make(map[string]int)}
+	db := &countingDB{Database: trie.db.diskdb, gets: make(map[string]int)}
 	trie, _ = New(root, NewDatabase(db))
 	trie.SetCacheLimit(5)
 	for i := 0; i < 12; i++ {
