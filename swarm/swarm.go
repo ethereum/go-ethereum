@@ -39,6 +39,7 @@ import (
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/stream"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
@@ -53,7 +54,7 @@ type Swarm struct {
 	//storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
 	dpa *storage.DPA // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	//depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
-	streamer *network.Streamer
+	streamer *stream.Registry
 	//cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
 	bzz         *network.Bzz       // the logistic manager
 	backend     chequebook.Backend // simple blockchain Backend
@@ -129,13 +130,13 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 		HiveParams:   config.HiveParams,
 	}
 
-	dbAccess := network.NewDbAccess(self.lstore)
-	delivery := network.NewDelivery(to, dbAccess)
-	self.streamer = network.NewStreamer(delivery)
-	network.RegisterOutgoingSyncer(self.streamer, dbAccess)
-	network.RegisterIncomingSyncer(self.streamer, dbAccess)
+	db := storage.NewDBAPI(self.lstore)
+	delivery := stream.NewDelivery(to, db)
+	self.streamer = stream.NewRegistry(delivery)
+	stream.RegisterSwarmSyncerServer(self.streamer, db)
+	stream.RegisterSwarmSyncerClient(self.streamer, db)
 
-	self.bzz = network.NewBzz(bzzconfig, to, nil, self.streamer)
+	self.bzz = network.NewBzz(bzzconfig, to, nil)
 
 	// set up DPA, the cloud storage local access layer
 	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
@@ -268,6 +269,11 @@ func (self *Swarm) Protocols() (protos []p2p.Protocol) {
 
 	if self.ps != nil {
 		for _, p := range self.ps.Protocols() {
+			protos = append(protos, p)
+		}
+	}
+	if self.streamer != nil {
+		for _, p := range self.streamer.Protocols() {
 			protos = append(protos, p)
 		}
 	}

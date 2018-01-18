@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package network
+package stream
 
 import (
 	"bytes"
@@ -92,7 +92,7 @@ func TestStreamerDownstreamSubscribeMsgExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	streamer.RegisterIncomingStreamer("foo", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
+	streamer.RegisterClientFunc("foo", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
 		return &testIncomingStreamer{
 			t: t,
 		}, nil
@@ -134,7 +134,7 @@ func TestStreamerUpstreamSubscribeMsgExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	streamer.RegisterOutgoingStreamer("foo", func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
+	streamer.RegisterServerFunc("foo", func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
 		return &testOutgoingStreamer{
 			t: t,
 		}, nil
@@ -188,7 +188,7 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	streamer.RegisterIncomingStreamer("foo", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
+	streamer.RegisterClientFunc("foo", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
 		return &testIncomingStreamer{
 			t: t,
 		}, nil

@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package network
+package stream
 
 import (
 	"bytes"
@@ -405,8 +405,8 @@ func newDeliveryService(ctx *adapters.ServiceContext) (node.Service, error) {
 	addr := NewAddrFromNodeID(id)
 	kad := NewKademlia(addr.Over(), NewKadParams())
 	localStore := localStores[nodeCount]
-	dbAccess := NewDbAccess(localStore.(*storage.LocalStore))
-	streamer := NewStreamer(NewDelivery(kad, dbAccess))
+	db := NewDBAPI(localStore.(*storage.LocalStore))
+	streamer := NewStreamerRegistry(NewDelivery(kad, db))
 	if nodeCount == 0 {
 		// the delivery service for the pivot node is assigned globally
 		// so that the simulation action call can use it for the
@@ -423,13 +423,13 @@ func newDeliveryService(ctx *adapters.ServiceContext) (node.Service, error) {
 }
 
 func (b *testStreamerService) runDelivery(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	bzzPeer := &bzzPeer{
+	BzzPeer := &BzzPeer{
 		Peer:      protocols.NewPeer(p, rw, StreamerSpec),
 		localAddr: b.addr,
 		BzzAddr:   NewAddrFromNodeID(p.ID()),
 	}
-	b.streamer.delivery.overlay.On(bzzPeer)
-	defer b.streamer.delivery.overlay.Off(bzzPeer)
+	b.streamer.delivery.overlay.On(BzzPeer)
+	defer b.streamer.delivery.overlay.Off(BzzPeer)
 	go func() {
 		// each node Subscribes to each other's retrieveRequestStream
 		// need to wait till an aynchronous process registers the peers in streamer.peers
@@ -440,5 +440,5 @@ func (b *testStreamerService) runDelivery(p *p2p.Peer, rw p2p.MsgReadWriter) err
 			log.Warn("error in subscribe", "err", err)
 		}
 	}()
-	return b.streamer.Run(bzzPeer)
+	return b.streamer.Run(BzzPeer)
 }

@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,14 +14,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package network
+package testing
 
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -33,44 +31,23 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/stream"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var services = adapters.Services{
-	"delivery": newDeliveryService,
-	"syncer":   newSyncerService,
-}
-
 var (
-	adapter  = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
-	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
+	LocalStores []storage.ChunkStore
+	Addrs       []network.Addr
+	NodeCount   int
 )
 
-func init() {
-	flag.Parse()
-	// register the Delivery service which will run as a devp2p
-	// protocol when using the exec adapter
-	adapters.RegisterServices(services)
-
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
-}
-
-var (
-	delivery    *Delivery
-	localStores []storage.ChunkStore
-	addrs       []Addr
-	fileHash    storage.Key
-	nodeCount   int
-)
-
-func setLocalStores(addrs ...Addr) (func(), error) {
+func setLocalStores(addrs ...network.Addr) (func(), error) {
 	var datadirs []string
-	localStores = make([]storage.ChunkStore, len(addrs))
+	LocalStores = make([]storage.ChunkStore, len(addrs))
 	var err error
 	for i, addr := range addrs {
 		// TODO: remove temp datadir after test
@@ -85,7 +62,7 @@ func setLocalStores(addrs ...Addr) (func(), error) {
 			break
 		}
 		datadirs = append(datadirs, datadir)
-		localStores[i] = localStore
+		LocalStores[i] = localStore
 	}
 	teardown := func() {
 		for _, datadir := range datadirs {
@@ -95,27 +72,12 @@ func setLocalStores(addrs ...Addr) (func(), error) {
 	return teardown, err
 }
 
-func mustReadAll(dpa *storage.DPA, hash storage.Key) (int, error) {
-	r := dpa.Retrieve(fileHash)
-	buf := make([]byte, 1024)
-	var n, total int
-	var err error
-	for (total == 0 || n > 0) && err == nil {
-		n, err = r.ReadAt(buf, int64(total))
-		total += n
-	}
-	if err != nil && err != io.EOF {
-		return total, err
-	}
-	return total, nil
-}
-
-func testSimulation(t *testing.T, simf func(adapters.NodeAdapter) (*simulations.StepResult, error)) {
+func testSimulation(t *testing.T, services adapters.Services, adapter string, simf func(adapters.NodeAdapter) (*simulations.StepResult, error)) {
 	var err error
 	var result *simulations.StepResult
 	startedAt := time.Now()
 
-	switch *adapter {
+	switch adapter {
 	case "sim":
 		t.Logf("simadapter")
 		result, err = simf(adapters.NewSimAdapter(services))
@@ -158,7 +120,7 @@ func testSimulation(t *testing.T, simf func(adapters.NodeAdapter) (*simulations.
 	t.Logf("Setup: %s, shutdown: %s", result.StartedAt.Sub(startedAt), finishedAt.Sub(result.FinishedAt))
 }
 
-func runSimulation(nodes, conns int, serviceName string, toAddr func(discover.NodeID) *BzzAddr, action func(*simulations.Network) func(context.Context) error, trigger func(*simulations.Network) chan discover.NodeID, check func(*simulations.Network, *storage.DPA) func(context.Context, discover.NodeID) (bool, error), adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
+func runSimulation(nodes, conns int, serviceName string, toAddr func(discover.NodeID) *network.BzzAddr, action func(*simulations.Network) func(context.Context) error, trigger func(*simulations.Network) chan discover.NodeID, check func(*simulations.Network, *storage.DPA) func(context.Context, discover.NodeID) (bool, error), adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
 	// create network
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",
@@ -166,8 +128,8 @@ func runSimulation(nodes, conns int, serviceName string, toAddr func(discover.No
 	})
 	defer net.Shutdown()
 	ids := make([]discover.NodeID, nodes)
-	nodeCount = 0
-	addrs = make([]Addr, nodes)
+	NodeCount = 0
+	Addrs = make([]network.Addr, nodes)
 	// start nodes
 	for i := 0; i < nodes; i++ {
 		node, err := net.NewNode()
@@ -175,10 +137,10 @@ func runSimulation(nodes, conns int, serviceName string, toAddr func(discover.No
 			return nil, fmt.Errorf("error creating node: %s", err)
 		}
 		ids[i] = node.ID()
-		addrs[i] = toAddr(ids[i])
+		Addrs[i] = toAddr(ids[i])
 	}
 	// set nodes number of localstores globally available
-	teardown, err := setLocalStores(addrs...)
+	teardown, err := setLocalStores(Addrs...)
 	defer teardown()
 	if err != nil {
 		return nil, err
@@ -212,11 +174,11 @@ func runSimulation(nodes, conns int, serviceName string, toAddr func(discover.No
 	}
 	wg.Wait()
 
-	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
+	log.Debug(fmt.Sprintf("nodes: %v", len(Addrs)))
 
 	// create an only locally retrieving dpa for the pivot node to test
 	// if retriee requests have arrived
-	dpa := storage.NewDPA(localStores[0], storage.NewChunkerParams())
+	dpa := storage.NewDPA(LocalStores[0], storage.NewChunkerParams())
 	dpa.Start()
 	defer dpa.Stop()
 	timeout := 300 * time.Second
@@ -231,47 +193,6 @@ func runSimulation(nodes, conns int, serviceName string, toAddr func(discover.No
 		},
 	})
 	return result, nil
-}
-
-func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Streamer, *storage.LocalStore, func(), error) {
-	// setup
-	addr := RandomAddr() // tested peers peer address
-	to := NewKademlia(addr.OAddr, NewKadParams())
-
-	// temp datadir
-	datadir, err := ioutil.TempDir("", "streamer")
-	if err != nil {
-		return nil, nil, nil, func() {}, err
-	}
-	teardown := func() {
-		os.RemoveAll(datadir)
-	}
-
-	localStore, err := storage.NewTestLocalStoreForAddr(datadir, addr.Over())
-	if err != nil {
-		return nil, nil, nil, teardown, err
-	}
-
-	dbAccess := NewDbAccess(localStore)
-	delivery := NewDelivery(to, dbAccess)
-	streamer := NewStreamer(delivery)
-	run := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-		bzzPeer := &bzzPeer{
-			Peer:      protocols.NewPeer(p, rw, StreamerSpec),
-			localAddr: addr,
-			BzzAddr:   NewAddrFromNodeID(p.ID()),
-		}
-		to.On(bzzPeer)
-		return streamer.Run(bzzPeer)
-	}
-	protocolTester := p2ptest.NewProtocolTester(t, NewNodeIDFromAddr(addr), 1, run)
-
-	err = waitForPeers(streamer, 1*time.Second)
-	if err != nil {
-		return nil, nil, nil, nil, errors.New("timeout: peer is not created")
-	}
-
-	return protocolTester, streamer, localStore, teardown, nil
 }
 
 type roundRobinStore struct {
@@ -301,34 +222,24 @@ func (rrs *roundRobinStore) Close() {
 	}
 }
 
-func waitForPeers(streamer *Streamer, timeout time.Duration) error {
-	ticker := time.NewTicker(10 * time.Millisecond)
-	timeoutTimer := time.NewTimer(timeout)
-	for {
-		select {
-		case <-ticker.C:
-			if len(streamer.peers) > 0 {
-				return nil
-			}
-		case <-timeoutTimer.C:
-			return errors.New("timeout")
-		}
-	}
-}
-
-type testStreamerService struct {
+type TestStreamerService struct {
 	index    int
-	addr     *BzzAddr
-	streamer *Streamer
-	run      func(p *p2p.Peer, rw p2p.MsgReadWriter) error
+	addr     *network.BzzAddr
+	streamer *stream.Registry
+	run      func(s *TestStreamerService, p *p2p.Peer, rw p2p.MsgReadWriter) error
 }
 
-func (tds *testStreamerService) Protocols() []p2p.Protocol {
+func NewTestStreamerService(run func(s *TestStreamerService, p *p2p.Peer, rw p2p.MsgReadWriter) error) TestStreamerService {
+	t := &TestStreamerService{}
+	t.run = run
+}
+
+func (tds *TestStreamerService) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
-			Name:    StreamerSpec.Name,
-			Version: StreamerSpec.Version,
-			Length:  StreamerSpec.Length(),
+			Name:    stream.Spec.Name,
+			Version: stream.Spec.Version,
+			Length:  stream.Spec.Length(),
 			Run:     tds.run,
 			// NodeInfo: ,
 			// PeerInfo: ,
@@ -336,14 +247,14 @@ func (tds *testStreamerService) Protocols() []p2p.Protocol {
 	}
 }
 
-func (b *testStreamerService) APIs() []rpc.API {
+func (b *TestStreamerService) APIs() []rpc.API {
 	return []rpc.API{}
 }
 
-func (b *testStreamerService) Start(server *p2p.Server) error {
+func (b *TestStreamerService) Start(server *p2p.Server) error {
 	return nil
 }
 
-func (b *testStreamerService) Stop() error {
+func (b *TestStreamerService) Stop() error {
 	return nil
 }

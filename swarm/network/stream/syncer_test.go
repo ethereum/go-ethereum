@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package network
+package stream
 
 import (
 	"context"
@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -74,10 +75,10 @@ func testSyncBetweenNodes(nodes, conns, size int, skipCheck bool, po uint8) func
 		}
 
 		check := func(net *simulations.Network, dpa *storage.DPA) func(ctx context.Context, id discover.NodeID) (bool, error) {
-			dbAccesses := make([]*DbAccess, nodes)
+			dbs := make([]*storage.DBAPI, nodes)
 
 			for i := 0; i < nodes; i++ {
-				dbAccesses[i] = NewDbAccess(localStores[i].(*storage.LocalStore))
+				dbs[i] = NewDbAccess(localStores[i].(*storage.LocalStore))
 			}
 			return func(ctx context.Context, id discover.NodeID) (bool, error) {
 				if id != net.Nodes[0].ID() {
@@ -91,8 +92,8 @@ func testSyncBetweenNodes(nodes, conns, size int, skipCheck bool, po uint8) func
 
 				var found, total int
 				for i := 1; i < nodes; i++ {
-					dbAccesses[i].iterator(0, math.MaxUint64, po, func(key storage.Key, index uint64) bool {
-						_, err := dbAccesses[0].get(key)
+					dbs[i].iterator(0, math.MaxUint64, po, func(key storage.Key, index uint64) bool {
+						_, err := dbs[0].get(key)
 						if err == nil {
 							found++
 						}
@@ -105,7 +106,7 @@ func testSyncBetweenNodes(nodes, conns, size int, skipCheck bool, po uint8) func
 			}
 		}
 		toAddr := func(id discover.NodeID) *BzzAddr {
-			addr := NewAddrFromNodeID(id)
+			addr := network.NewAddrFromNodeID(id)
 			addr.OAddr[0] = byte(0)
 			return addr
 		}
@@ -123,15 +124,15 @@ func testSyncBetweenNodes(nodes, conns, size int, skipCheck bool, po uint8) func
 
 func newSyncerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	id := ctx.Config.ID
-	addr := NewAddrFromNodeID(id)
+	addr := network.NewAddrFromNodeID(id)
 	// for the test we make all peers share 8 bits so that syncing full bins make sense
 	addr.OAddr[0] = byte(0)
 	kad := NewKademlia(addr.Over(), NewKadParams())
 	localStore := localStores[nodeCount]
-	dbAccess := NewDbAccess(localStore.(*storage.LocalStore))
-	streamer := NewStreamer(NewDelivery(kad, dbAccess))
-	RegisterIncomingSyncer(streamer, dbAccess)
-	RegisterOutgoingSyncer(streamer, dbAccess)
+	db := NewDbAccess(localStore.(*storage.LocalStore))
+	streamer := NewRegistry(NewDelivery(kad, db))
+	RegisterIncomingSyncer(streamer, db)
+	RegisterOutgoingSyncer(streamer, db)
 
 	self := &testStreamerService{
 		index:    nodeCount,
@@ -144,15 +145,15 @@ func newSyncerService(ctx *adapters.ServiceContext) (node.Service, error) {
 }
 
 func (b *testStreamerService) runSyncer(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	addr := NewAddrFromNodeID(p.ID())
+	addr := network.NewAddrFromNodeID(p.ID())
 	addr.OAddr[0] = byte(0)
-	bzzPeer := &bzzPeer{
-		Peer:      protocols.NewPeer(p, rw, StreamerSpec),
+	BzzPeer := &BzzPeer{
+		Peer:      protocols.NewPeer(p, rw, Spec),
 		localAddr: b.addr,
 		BzzAddr:   addr,
 	}
-	b.streamer.delivery.overlay.On(bzzPeer)
-	defer b.streamer.delivery.overlay.Off(bzzPeer)
+	b.streamer.delivery.overlay.On(BzzPeer)
+	defer b.streamer.delivery.overlay.Off(BzzPeer)
 	// if len(addr) > b.index+1 && bytes.Equal(addrs[b.index+1], addr) {
 	go func() {
 		// each node Subscribes to each other's retrieveRequestStream
@@ -164,5 +165,5 @@ func (b *testStreamerService) runSyncer(p *p2p.Peer, rw p2p.MsgReadWriter) error
 		}
 	}()
 	// }
-	return b.streamer.Run(bzzPeer)
+	return b.streamer.Run(BzzPeer)
 }

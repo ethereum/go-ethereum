@@ -70,7 +70,7 @@ func newTestKademlia(b string) *testKademlia {
 }
 
 func (k *testKademlia) newTestKadPeer(s string) Peer {
-	return &testDropPeer{&bzzPeer{BzzAddr: testKadPeerAddr(s)}, k.dropc}
+	return &testDropPeer{&BzzPeer{BzzAddr: testKadPeerAddr(s)}, k.dropc}
 }
 
 func (k *testKademlia) On(ons ...string) *testKademlia {

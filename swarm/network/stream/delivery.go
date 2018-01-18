@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package network
+package stream
 
 import (
 	"errors"
@@ -23,51 +23,52 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-const retrieveRequestStream = "RETRIEVE_REQUEST"
+const swarmChunkServerStreamName = "RETRIEVE_REQUEST"
 
 type Delivery struct {
-	dbAccess *DbAccess
-	overlay  Overlay
+	db       *storage.DBAPI
+	overlay  network.Overlay
 	receiveC chan *ChunkDeliveryMsg
-	getPeer  func(discover.NodeID) *StreamerPeer
+	getPeer  func(discover.NodeID) *Peer
 	quit     chan struct{}
 }
 
-func NewDelivery(overlay Overlay, dbAccess *DbAccess) *Delivery {
-	self := &Delivery{
-		dbAccess: dbAccess,
+func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
+	d := &Delivery{
+		db:       db,
 		overlay:  overlay,
 		receiveC: make(chan *ChunkDeliveryMsg, 10),
 	}
 
-	go self.processReceivedChunks()
-	return self
+	go d.processReceivedChunks()
+	return d
 }
 
-// RetrieveRequestStreamer implements OutgoingStreamer
-type RetrieveRequestStreamer struct {
+// SwarmChunkServer implements OutgoingStreamer
+type SwarmChunkServer struct {
 	deliveryC  chan []byte
 	batchC     chan []byte
-	dbAccess   *DbAccess
+	db         *storage.DBAPI
 	currentLen uint64
 }
 
-// NewRetrieveRequestStreamer is RetrieveRequestStreamer constructor
-func NewRetrieveRequestStreamer(dbAccess *DbAccess) *RetrieveRequestStreamer {
-	s := &RetrieveRequestStreamer{
+// NewSwarmChunkServer is SwarmChunkServer constructor
+func NewSwarmChunkServer(db *storage.DBAPI) *SwarmChunkServer {
+	s := &SwarmChunkServer{
 		deliveryC: make(chan []byte),
 		batchC:    make(chan []byte),
-		dbAccess:  dbAccess,
+		db:        db,
 	}
 	go s.processDeliveries()
 	return s
 }
 
 // processDeliveries handles delivered chunk hashes
-func (s *RetrieveRequestStreamer) processDeliveries() {
+func (s *SwarmChunkServer) processDeliveries() {
 	var hashes []byte
 	var batchC chan []byte
 	for {
@@ -83,7 +84,7 @@ func (s *RetrieveRequestStreamer) processDeliveries() {
 }
 
 // SetNextBatch
-func (s *RetrieveRequestStreamer) SetNextBatch(_, _ uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error) {
+func (s *SwarmChunkServer) SetNextBatch(_, _ uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error) {
 	hashes = <-s.batchC
 	from = s.currentLen
 	s.currentLen += uint64(len(hashes))
@@ -92,8 +93,8 @@ func (s *RetrieveRequestStreamer) SetNextBatch(_, _ uint64) (hashes []byte, from
 }
 
 // GetData retrives chunk data from db store
-func (s *RetrieveRequestStreamer) GetData(key []byte) []byte {
-	chunk, _ := s.dbAccess.get(storage.Key(key))
+func (s *SwarmChunkServer) GetData(key []byte) []byte {
+	chunk, _ := s.db.Get(storage.Key(key))
 	return chunk.SData
 }
 
@@ -103,16 +104,16 @@ type RetrieveRequestMsg struct {
 	SkipCheck bool
 }
 
-func (self *Delivery) handleRetrieveRequestMsg(sp *StreamerPeer, req *RetrieveRequestMsg) error {
-	s, err := sp.getOutgoingStreamer(retrieveRequestStream)
+func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) error {
+	s, err := sp.getServer(swarmChunkServerStreamName)
 	if err != nil {
 		return err
 	}
-	streamer := s.OutgoingStreamer.(*RetrieveRequestStreamer)
-	chunk, created := self.dbAccess.getOrCreateRequest(req.Key)
+	streamer := s.Server.(*SwarmChunkServer)
+	chunk, created := d.db.GetOrCreateRequest(req.Key)
 	if chunk.ReqC != nil {
 		if created {
-			if err := self.RequestFromPeers(chunk.Key[:], false, sp.ID()); err != nil {
+			if err := d.RequestFromPeers(chunk.Key[:], false, sp.ID()); err != nil {
 				return nil
 			}
 		}
@@ -122,7 +123,7 @@ func (self *Delivery) handleRetrieveRequestMsg(sp *StreamerPeer, req *RetrieveRe
 
 			select {
 			case <-chunk.ReqC:
-			case <-self.quit:
+			case <-d.quit:
 				return
 			case <-t.C:
 				return
@@ -149,21 +150,21 @@ type ChunkDeliveryMsg struct {
 	SData []byte // the stored chunk Data (incl size)
 }
 
-func (self *Delivery) handleChunkDeliveryMsg(req *ChunkDeliveryMsg) error {
-	chunk, err := self.dbAccess.get(req.Key)
+func (d *Delivery) handleChunkDeliveryMsg(req *ChunkDeliveryMsg) error {
+	chunk, err := d.db.Get(req.Key)
 	if err != nil {
 		return err
 	}
 
-	self.receiveC <- req
+	d.receiveC <- req
 
-	log.Trace(fmt.Sprintf("delivery of %v from %v", chunk, self))
+	log.Trace(fmt.Sprintf("delivery of %v from %v", chunk, d))
 	return nil
 }
 
-func (self *Delivery) processReceivedChunks() {
-	for req := range self.receiveC {
-		chunk, err := self.dbAccess.get(req.Key)
+func (d *Delivery) processReceivedChunks() {
+	for req := range d.receiveC {
+		chunk, err := d.db.Get(req.Key)
 		if err != nil {
 			continue
 		}
@@ -171,23 +172,23 @@ func (self *Delivery) processReceivedChunks() {
 		select {
 		case <-chunk.ReqC:
 		default:
-			self.dbAccess.put(chunk)
+			d.db.Put(chunk)
 			close(chunk.ReqC)
 		}
 	}
 }
 
 // RequestFromPeers sends a chunk retrieve request to
-func (self *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...discover.NodeID) error {
+func (d *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...discover.NodeID) error {
 	var success bool
-	self.overlay.EachConn(hash, 255, func(p OverlayConn, po int, nn bool) bool {
-		spId := p.(Peer).ID()
+	d.overlay.EachConn(hash, 255, func(p network.OverlayConn, po int, nn bool) bool {
+		spId := p.(*network.BzzPeer).ID()
 		for _, p := range peersToSkip {
 			if p == spId {
 				return true
 			}
 		}
-		sp := self.getPeer(spId)
+		sp := d.getPeer(spId)
 		// TODO: skip light nodes that do not accept retrieve requests
 		err := sp.SendPriority(&RetrieveRequestMsg{
 			Key:       hash,

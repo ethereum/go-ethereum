@@ -78,16 +78,16 @@ func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id discover.NodeID) []p2ptest.
 	}
 }
 
-func newBzzBaseTester(t *testing.T, n int, addr *BzzAddr, spec *protocols.Spec, run func(*bzzPeer) error) *bzzTester {
+func newBzzBaseTester(t *testing.T, n int, addr *BzzAddr, spec *protocols.Spec, run func(*BzzPeer) error) *bzzTester {
 	cs := make(map[string]chan bool)
 
-	srv := func(p *bzzPeer) error {
+	srv := func(p *BzzPeer) error {
 		defer close(cs[p.ID().String()])
 		return run(p)
 	}
 
 	protocall := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-		return srv(&bzzPeer{
+		return srv(&BzzPeer{
 			Peer:      protocols.NewPeer(p, rw, spec),
 			localAddr: addr,
 			BzzAddr:   NewAddrFromNodeID(p.ID()),
@@ -115,7 +115,7 @@ type bzzTester struct {
 
 func newBzzTester(t *testing.T, n int, addr *BzzAddr, pp *p2ptest.TestPeerPool, spec *protocols.Spec, services func(Peer) error) *bzzTester {
 
-	extraservices := func(p *bzzPeer) error {
+	extraservices := func(p *BzzPeer) error {
 		pp.Add(p)
 		defer pp.Remove(p)
 		if services == nil {
