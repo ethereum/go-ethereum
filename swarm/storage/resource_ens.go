@@ -36,7 +36,6 @@ func NewENSValidator(contractaddress common.Address, backend bind.ContractBacken
 	if err != nil {
 		return nil, err
 	}
-	validator.hashlength = len(ens.EnsNode(dbDirName).Bytes())
 	return validator, nil
 }
 
