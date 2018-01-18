@@ -69,7 +69,9 @@ func NewDefaultStoreParams() (self *StoreParams) {
 //this can only finally be set after all config options (file, cmd line, env vars)
 //have been evaluated
 func (self *StoreParams) Init(path string) {
-	self.ChunkDbPath = filepath.Join(path, "chunks")
+	if self.ChunkDbPath == "" {
+		self.ChunkDbPath = filepath.Join(path, "chunks")
+	}
 }
 
 // netstore contructor, takes path argument that is used to initialise dbStore,
