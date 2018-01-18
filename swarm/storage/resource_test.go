@@ -15,8 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/idna"
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
@@ -35,10 +33,16 @@ var (
 	resourceFrequency = uint64(42)
 	cleanF            func()
 	domainName        = "føø.bar"
+	safeName          string
 )
 
 func init() {
+	var err error
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
+	safeName, err = ToSafeName(domainName)
+	if err != nil {
+		panic(err)
+	}
 }
 
 // simulated backend does not have the blocknumber call
@@ -70,20 +74,20 @@ func TestResourceReverse(t *testing.T) {
 	period := uint32(4)
 	version := uint32(2)
 
-	// set up rpc and create resourcehandler
-	rh, _, signer, teardownTest, err := setupTest(nil, nil)
+	// signer containing private key
+	signer, err := newTestSigner()
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
 
-	// create a new resource
-	validname, err := idna.ToASCII(domainName)
+	// set up rpc and create resourcehandler
+	rh, _, _, teardownTest, err := setupTest(nil, newTestValidator(signer.signContent))
 	if err != nil {
 		teardownTest(t, err)
 	}
 
 	// generate a hash for block 4200 version 1
-	key := rh.resourceHash(period, version, rh.validator.nameHash(validname))
+	key := rh.resourceHash(period, version, rh.nameHash(safeName))
 
 	// generate some bogus data for the chunk and sign it
 	data := make([]byte, 8)
@@ -99,17 +103,18 @@ func TestResourceReverse(t *testing.T) {
 		teardownTest(t, err)
 	}
 
-	chunk := newUpdateChunk(key, sig, period, version, validname, data)
+	chunk := newUpdateChunk(key, &sig, period, version, safeName, data)
 
 	// check that we can recover the owner account from the update chunk's signature
-	checksig, checkperiod, checkversion, checkname, checkdata, err := parseUpdate(chunk.SData)
+	checksig, checkperiod, checkversion, checkname, checkdata, err := rh.parseUpdate(chunk.SData)
 	checkdigest := rh.keyDataHash(chunk.Key, checkdata)
-	recoveredaddress, err := getAddressFromDataSig(checkdigest, checksig)
+	recoveredaddress, err := getAddressFromDataSig(checkdigest, *checksig)
 	if err != nil {
-		teardownTest(t, err)
+		teardownTest(t, fmt.Errorf("Retrieve address from signature fail: %v", err))
 	}
 	originaladdress := crypto.PubkeyToAddress(signer.privKey.PublicKey)
 
+	// check that the metadata retrieved from the chunk matches what we gave it
 	if recoveredaddress != originaladdress {
 		teardownTest(t, fmt.Errorf("addresses dont match: %x != %x", originaladdress, recoveredaddress))
 	}
@@ -123,8 +128,8 @@ func TestResourceReverse(t *testing.T) {
 	if version != checkversion {
 		teardownTest(t, fmt.Errorf("Expected version '%d', was '%d'", version, checkversion))
 	}
-	if validname != checkname {
-		teardownTest(t, fmt.Errorf("Expected name '%s', was '%s'", validname, checkname))
+	if safeName != checkname {
+		teardownTest(t, fmt.Errorf("Expected name '%s', was '%s'", safeName, checkname))
 	}
 	if !bytes.Equal(data, checkdata) {
 		teardownTest(t, fmt.Errorf("Expectedn data '%x', was '%x'", data, checkdata))
@@ -145,17 +150,16 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// create a new resource
-	resourcevalidname, err := idna.ToASCII(domainName)
 	if err != nil {
 		teardownTest(t, err)
 	}
-	_, err = rh.NewResource(domainName, resourceFrequency, false)
+	_, err = rh.NewResource(safeName, resourceFrequency)
 	if err != nil {
 		teardownTest(t, err)
 	}
 
 	// check that the new resource is stored correctly
-	namehash := rh.validator.nameHash(resourcevalidname)
+	namehash := rh.nameHash(safeName)
 	chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(namehash[:]))
 	if err != nil {
 		teardownTest(t, err)
@@ -175,7 +179,7 @@ func TestResourceHandler(t *testing.T) {
 	resourcekey := make(map[string]Key)
 	fwdBlocks(int(resourceFrequency/2), backend)
 	data := []byte("blinky")
-	resourcekey["blinky"], err = rh.Update(domainName, data)
+	resourcekey["blinky"], err = rh.Update(safeName, data)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -183,7 +187,7 @@ func TestResourceHandler(t *testing.T) {
 	// update on first period
 	fwdBlocks(int(resourceFrequency/2), backend)
 	data = []byte("pinky")
-	resourcekey["pinky"], err = rh.Update(domainName, data)
+	resourcekey["pinky"], err = rh.Update(safeName, data)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -191,7 +195,7 @@ func TestResourceHandler(t *testing.T) {
 	// update on second period
 	fwdBlocks(int(resourceFrequency), backend)
 	data = []byte("inky")
-	resourcekey["inky"], err = rh.Update(domainName, data)
+	resourcekey["inky"], err = rh.Update(safeName, data)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -199,7 +203,7 @@ func TestResourceHandler(t *testing.T) {
 	// update just after second period
 	fwdBlocks(1, backend)
 	data = []byte("clyde")
-	resourcekey["clyde"], err = rh.Update(domainName, data)
+	resourcekey["clyde"], err = rh.Update(safeName, data)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -211,43 +215,44 @@ func TestResourceHandler(t *testing.T) {
 	fwdBlocks(int(resourceFrequency*2)-1, backend)
 
 	rh2, err := NewResourceHandler(datadir, &testCloudStore{}, rh.rpcClient, nil)
-	_, err = rh2.LookupLatest(domainName, true)
+	_, err = rh2.LookupLatest(safeName, true)
 	if err != nil {
 		teardownTest(t, err)
 	}
 
 	// last update should be "clyde", version two, blockheight startblocknumber + (resourcefrequency * 3)
-	if !bytes.Equal(rh2.resources[domainName].data, []byte("clyde")) {
-		teardownTest(t, fmt.Errorf("resource data was %v, expected %v", rh2.resources[domainName].data, []byte("clyde")))
+	if !bytes.Equal(rh2.resources[safeName].data, []byte("clyde")) {
+		teardownTest(t, fmt.Errorf("resource data was %v, expected %v", rh2.resources[safeName].data, []byte("clyde")))
 	}
-	if rh2.resources[domainName].version != 2 {
-		teardownTest(t, fmt.Errorf("resource version was %d, expected 2", rh2.resources[domainName].version))
+	if rh2.resources[safeName].version != 2 {
+		teardownTest(t, fmt.Errorf("resource version was %d, expected 2", rh2.resources[safeName].version))
 	}
-	if rh2.resources[domainName].lastPeriod != 3 {
-		teardownTest(t, fmt.Errorf("resource period was %d, expected 3", rh2.resources[domainName].lastPeriod))
+	if rh2.resources[safeName].lastPeriod != 3 {
+		teardownTest(t, fmt.Errorf("resource period was %d, expected 3", rh2.resources[safeName].lastPeriod))
 	}
+	log.Debug("Latest lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, latest version
-	rsrc, err := rh2.LookupHistorical(domainName, 3, true)
+	rsrc, err := rh2.LookupHistorical(safeName, 3, true)
 	if err != nil {
 		teardownTest(t, err)
 	}
-
 	// check data
 	if !bytes.Equal(rsrc.data, []byte("clyde")) {
 		teardownTest(t, fmt.Errorf("resource data (historical) was %v, expected %v", rh2.resources[domainName].data, []byte("clyde")))
 	}
+	log.Debug("Historical lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, specific version
-	rsrc, err = rh2.LookupVersion(domainName, 3, 1, true)
+	rsrc, err = rh2.LookupVersion(safeName, 3, 1, true)
 	if err != nil {
 		teardownTest(t, err)
 	}
-
 	// check data
 	if !bytes.Equal(rsrc.data, []byte("inky")) {
 		teardownTest(t, fmt.Errorf("resource data (historical) was %v, expected %v", rh2.resources[domainName].data, []byte("inky")))
 	}
+	log.Debug("Specific version lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 	teardownTest(t, nil)
 
 }
@@ -266,7 +271,7 @@ func TestResourceENSOwner(t *testing.T) {
 	transactOpts := bind.NewKeyedTransactor(signer.privKey)
 
 	// set up ENS sim
-	domainparts := strings.Split(domainName, ".")
+	domainparts := strings.Split(safeName, ".")
 	contractAddr, contractbackend, err := setupENS(addr, transactOpts, domainparts[0], domainparts[1])
 	if err != nil {
 		t.Fatal(err)
@@ -284,14 +289,14 @@ func TestResourceENSOwner(t *testing.T) {
 	}
 
 	// create new resource when we are owner = ok
-	_, err = rh.NewResource(domainName, resourceFrequency, true)
+	_, err = rh.NewResource(safeName, resourceFrequency)
 	if err != nil {
 		teardownTest(t, fmt.Errorf("Create resource fail: %v", err))
 	}
 
 	data := []byte("foo")
 	// update resource when we are owner = ok
-	_, err = rh.Update(domainName, data)
+	_, err = rh.Update(safeName, data)
 	if err != nil {
 		teardownTest(t, fmt.Errorf("Update resource fail: %v", err))
 	}
@@ -302,7 +307,7 @@ func TestResourceENSOwner(t *testing.T) {
 		teardownTest(t, err)
 	}
 	rh.validator.(*ENSValidator).signFunc = signertwo.signContent
-	_, err = rh.Update(domainName, data)
+	_, err = rh.Update(safeName, data)
 	if err == nil {
 		teardownTest(t, fmt.Errorf("Expected resource update fail due to owner mismatch"))
 	}
@@ -329,15 +334,6 @@ func setupTest(contractbackend bind.ContractBackend, validator ResourceValidator
 		if rpcClean != nil {
 			rpcClean()
 		}
-	}
-
-	if validator == nil {
-		// create a new signer, which creates the private key
-		signer, err = newTestSigner()
-		if err != nil {
-			return
-		}
-		validator = NewGenericValidator(testHashFunc, signer.signContent)
 	}
 
 	// temp datadir
@@ -431,12 +427,7 @@ func setupENS(addr common.Address, transactOpts *bind.TransactOpts, sub string, 
 	return contractAddress, contractBackend, nil
 }
 
-func testHashFunc(name string) common.Hash {
-	testHasher.Reset()
-	testHasher.Write([]byte(name))
-	return common.BytesToHash(testHasher.Sum(nil))
-}
-
+// implementation of an external signer to pass to validator
 type testSigner struct {
 	privKey *ecdsa.PrivateKey
 	hasher  SwarmHash
@@ -453,6 +444,7 @@ func newTestSigner() (*testSigner, error) {
 	}, nil
 }
 
+// matches the SignFunc type
 func (self *testSigner) signContent(data common.Hash) (signature Signature, err error) {
 	signaturebytes, err := crypto.Sign(data.Bytes(), self.privKey)
 	if err != nil {
@@ -472,4 +464,32 @@ func (c *testCloudStore) Deliver(*Chunk) {
 }
 
 func (c *testCloudStore) Retrieve(*Chunk) {
+}
+
+// Default fallthrough validation of mutable resource ownership
+type testValidator struct {
+	*baseValidator
+	hashFunc func(string) common.Hash
+}
+
+func newTestValidator(signFunc SignFunc) *testValidator {
+	return &testValidator{
+		baseValidator: &baseValidator{
+			signFunc: signFunc,
+		},
+		hashFunc: func(name string) common.Hash {
+			testHasher.Reset()
+			testHasher.Write([]byte(name))
+			return common.BytesToHash(testHasher.Sum(nil))
+		},
+	}
+
+}
+
+func (self *testValidator) checkAccess(name string, address common.Address) (bool, error) {
+	return true, nil
+}
+
+func (self *testValidator) nameHash(name string) common.Hash {
+	return self.hashFunc(name)
 }
