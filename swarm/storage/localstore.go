@@ -76,7 +76,7 @@ func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 	return
 }
 
-// Close local store
+// Close the local store
 func (self *LocalStore) Close() {
 	self.DbStore.Close()
 }
