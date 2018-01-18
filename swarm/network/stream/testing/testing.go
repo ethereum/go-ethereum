@@ -31,11 +31,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
-	"github.com/ethereum/go-ethereum/swarm/network/stream"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -223,23 +223,26 @@ func (rrs *roundRobinStore) Close() {
 }
 
 type TestStreamerService struct {
-	index    int
-	addr     *network.BzzAddr
-	streamer *stream.Registry
-	run      func(s *TestStreamerService, p *p2p.Peer, rw p2p.MsgReadWriter) error
+	// index    int
+	// addr     *network.BzzAddr
+	// // streamer *stream.Registry
+	run  func(p *p2p.Peer, rw p2p.MsgReadWriter) error
+	spec *protocols.Spec
 }
 
-func NewTestStreamerService(run func(s *TestStreamerService, p *p2p.Peer, rw p2p.MsgReadWriter) error) TestStreamerService {
-	t := &TestStreamerService{}
-	t.run = run
+func NewTestStreamerService(spec *protocols.Spec, run func(p *p2p.Peer, rw p2p.MsgReadWriter) error) *TestStreamerService {
+	return &TestStreamerService{
+		run:  run,
+		spec: spec,
+	}
 }
 
 func (tds *TestStreamerService) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
-			Name:    stream.Spec.Name,
-			Version: stream.Spec.Version,
-			Length:  stream.Spec.Length(),
+			Name:    tds.spec.Name,
+			Version: tds.spec.Version,
+			Length:  tds.spec.Length(),
 			Run:     tds.run,
 			// NodeInfo: ,
 			// PeerInfo: ,

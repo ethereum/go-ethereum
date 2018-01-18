@@ -96,13 +96,13 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 	delivery := NewDelivery(to, db)
 	streamer := NewRegistry(delivery)
 	run := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-		BzzPeer := &BzzPeer{
+		bzzPeer := &network.BzzPeer{
 			Peer:      protocols.NewPeer(p, rw, Spec),
 			localAddr: addr,
 			BzzAddr:   network.NewAddrFromNodeID(p.ID()),
 		}
-		to.On(BzzPeer)
-		return streamer.Run(BzzPeer)
+		to.On(bzzPeer)
+		return streamer.Run(bzzPeer)
 	}
 	protocolTester := p2ptest.NewProtocolTester(t, network.NewNodeIDFromAddr(addr), 1, run)
 

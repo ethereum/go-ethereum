@@ -58,7 +58,7 @@ func testSyncBetweenNodes(nodes, conns, size int, skipCheck bool, po uint8) func
 
 		action := func(net *simulations.Network) func(context.Context) error {
 			// here we distribute chunks of a random file into localstores of nodes 1 to nodes
-			rrdpa := storage.NewDPA(newRoundRobinStore(localStores[1:]...), storage.NewChunkerParams())
+			rrdpa := storage.NewDPA(newRoundRobinStore(testing.LocalStores[1:]...), storage.NewChunkerParams())
 			rrdpa.Start()
 			// create a retriever dpa for the pivot node
 			return func(context.Context) error {
@@ -78,7 +78,7 @@ func testSyncBetweenNodes(nodes, conns, size int, skipCheck bool, po uint8) func
 			dbs := make([]*storage.DBAPI, nodes)
 
 			for i := 0; i < nodes; i++ {
-				dbs[i] = NewDbAccess(localStores[i].(*storage.LocalStore))
+				dbs[i] = NewDbAccess(testing.LocalStores[i].(*storage.LocalStore))
 			}
 			return func(ctx context.Context, id discover.NodeID) (bool, error) {
 				if id != net.Nodes[0].ID() {
@@ -128,42 +128,38 @@ func newSyncerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	// for the test we make all peers share 8 bits so that syncing full bins make sense
 	addr.OAddr[0] = byte(0)
 	kad := NewKademlia(addr.Over(), NewKadParams())
-	localStore := localStores[nodeCount]
+	localStore := testing.LocalStores[testing.NodeCount]
 	db := NewDbAccess(localStore.(*storage.LocalStore))
 	streamer := NewRegistry(NewDelivery(kad, db))
 	RegisterIncomingSyncer(streamer, db)
 	RegisterOutgoingSyncer(streamer, db)
 
-	self := &testStreamerService{
-		index:    nodeCount,
-		addr:     addr,
-		streamer: streamer,
-	}
-	self.run = self.runSyncer
-	nodeCount++
-	return self, nil
+	testing.NodeCount++
+	return testing.NewTestStreamerService(Spec, makeRunFunc(addr, streamer)), nil
 }
 
-func (b *testStreamerService) runSyncer(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	addr := network.NewAddrFromNodeID(p.ID())
-	addr.OAddr[0] = byte(0)
-	BzzPeer := &BzzPeer{
-		Peer:      protocols.NewPeer(p, rw, Spec),
-		localAddr: b.addr,
-		BzzAddr:   addr,
-	}
-	b.streamer.delivery.overlay.On(BzzPeer)
-	defer b.streamer.delivery.overlay.Off(BzzPeer)
-	// if len(addr) > b.index+1 && bytes.Equal(addrs[b.index+1], addr) {
-	go func() {
-		// each node Subscribes to each other's retrieveRequestStream
-		// need to wait till an aynchronous process registers the peers in streamer.peers
-		// that is used by Subscribe
-		time.Sleep(1 * time.Second)
-		if err := b.streamer.Subscribe(p.ID(), "SYNC", []byte{uint8(1)}, 0, 0, Top, false); err != nil {
-			log.Warn("error in subscribe", "err", err)
+func makeRunFunc(localAddr network.Addr, streamer *Registry) (func(p *p2p.Peer, rw p2p.MsgReadWriter), error) {
+	return func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+		remoteAddr := network.NewAddrFromNodeID(p.ID())
+		remoteAddr.OAddr[0] = byte(0)
+		bzzPeer := &network.BzzPeer{
+			Peer:      protocols.NewPeer(p, rw, Spec),
+			localAddr: localAddr,
+			BzzAddr:   remoteAddr,
 		}
-	}()
-	// }
-	return b.streamer.Run(BzzPeer)
+		streamer.delivery.overlay.On(bzzPeer)
+		defer streamer.delivery.overlay.Off(bzzPeer)
+		// if len(addr) > b.index+1 && bytes.Equal(testing.Addrs[b.index+1], addr) {
+		go func() {
+			// each node Subscribes to each other's retrieveRequestStream
+			// need to wait till an aynchronous process registers the peers in streamer.peers
+			// that is used by Subscribe
+			time.Sleep(1 * time.Second)
+			if err := streamer.Subscribe(p.ID(), "SYNC", []byte{uint8(1)}, 0, 0, Top, false); err != nil {
+				log.Warn("error in subscribe", "err", err)
+			}
+		}()
+		// }
+		return streamer.Run(bzzPeer)
+	}
 }

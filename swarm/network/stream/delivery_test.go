@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -323,10 +324,10 @@ func testDeliveryFromNodes(nodes, conns, size int, skipCheck bool) func(adapter 
 
 		action := func(net *simulations.Network) func(context.Context) error {
 			// here we distribute chunks of a random file into localstores of nodes 1 to nodes
-			rrdpa := storage.NewDPA(newRoundRobinStore(localStores[1:]...), storage.NewChunkerParams())
+			rrdpa := storage.NewDPA(newRoundRobinStore(testing.LocalStores[1:]...), storage.NewChunkerParams())
 			rrdpa.Start()
 			// create a retriever dpa for the pivot node
-			dpacs := storage.NewNetStore(localStores[0].(*storage.LocalStore), func(chunk *storage.Chunk) error { return delivery.RequestFromPeers(chunk.Key[:], skipCheck) })
+			dpacs := storage.NewNetStore(testing.LocalStores[0].(*storage.LocalStore), func(chunk *storage.Chunk) error { return delivery.RequestFromPeers(chunk.Key[:], skipCheck) })
 			dpa := storage.NewDPA(dpacs, storage.NewChunkerParams())
 			dpa.Start()
 			return func(context.Context) error {
@@ -404,41 +405,38 @@ func newDeliveryService(ctx *adapters.ServiceContext) (node.Service, error) {
 	id := ctx.Config.ID
 	addr := NewAddrFromNodeID(id)
 	kad := NewKademlia(addr.Over(), NewKadParams())
-	localStore := localStores[nodeCount]
+	localStore := testing.LocalStores[testing.NodeCount]
 	db := NewDBAPI(localStore.(*storage.LocalStore))
 	streamer := NewStreamerRegistry(NewDelivery(kad, db))
-	if nodeCount == 0 {
+	if testing.NodeCount == 0 {
 		// the delivery service for the pivot node is assigned globally
 		// so that the simulation action call can use it for the
 		// swarm enabled dpa
 		delivery = streamer.delivery
 	}
-	self := &testStreamerService{
-		addr:     addr,
-		streamer: streamer,
-	}
-	self.run = self.runDelivery
-	nodeCount++
-	return self, nil
+	testing.NodeCount++
+	return testing.NewTestStreamerService(Spec, makeRunFunc(addr, streamer)), nil
 }
 
-func (b *testStreamerService) runDelivery(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	BzzPeer := &BzzPeer{
-		Peer:      protocols.NewPeer(p, rw, StreamerSpec),
-		localAddr: b.addr,
-		BzzAddr:   NewAddrFromNodeID(p.ID()),
-	}
-	b.streamer.delivery.overlay.On(BzzPeer)
-	defer b.streamer.delivery.overlay.Off(BzzPeer)
-	go func() {
-		// each node Subscribes to each other's retrieveRequestStream
-		// need to wait till an aynchronous process registers the peers in streamer.peers
-		// that is used by Subscribe
-		time.Sleep(1 * time.Second)
-		err := b.streamer.Subscribe(p.ID(), retrieveRequestStream, nil, 0, 0, Top, true)
-		if err != nil {
-			log.Warn("error in subscribe", "err", err)
+func makeRunFunc(addr network.Addr, streamer *Registry) (func(p *p2p.Peer, rw p2p.MsgReadWriter), error) {
+	return func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+		bzzPeer := &network.BzzPeer{
+			Peer:      protocols.NewPeer(p, rw, Spec),
+			localAddr: addr,
+			BzzAddr:   NewAddrFromNodeID(p.ID()),
 		}
-	}()
-	return b.streamer.Run(BzzPeer)
+		streamer.delivery.overlay.On(bzzPeer)
+		defer streamer.delivery.overlay.Off(bzzPeer)
+		go func() {
+			// each node Subscribes to each other's retrieveRequestStream
+			// need to wait till an aynchronous process registers the peers in streamer.peers
+			// that is used by Subscribe
+			time.Sleep(1 * time.Second)
+			err := streamer.Subscribe(p.ID(), retrieveRequestStream, nil, 0, 0, Top, true)
+			if err != nil {
+				log.Warn("error in subscribe", "err", err)
+			}
+		}()
+		return streamer.Run(bzzPeer)
+	}
 }
