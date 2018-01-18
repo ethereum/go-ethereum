@@ -160,8 +160,10 @@ func (wc *WhisperClient) SubscribeMessages(ctx *Context, criteria *Criteria, han
 			case message := <-ch:
 				handler.OnNewMessage(&Message{message})
 
-			case err := <-rawSub.Err():
-				handler.OnError(err.Error())
+			case err, ok := <-rawSub.Err():
+				if ok {
+					handler.OnError(err.Error())
+				}
 				return
 			}
 		}
