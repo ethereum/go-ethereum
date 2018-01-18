@@ -333,6 +333,15 @@ func setupTest(contractbackend bind.ContractBackend, validator ResourceValidator
 		}
 	}
 
+	if validator == nil {
+		// create a new signer, which creates the private key
+		signer, err = newTestSigner()
+		if err != nil {
+			return
+		}
+		validator = NewGenericValidator(testHashFunc, signer.signContent)
+	}
+
 	// temp datadir
 	datadir, err = ioutil.TempDir("", "rh")
 	if err != nil {
