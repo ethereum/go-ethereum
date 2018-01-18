@@ -46,9 +46,9 @@ type DatabaseReader interface {
 type Database struct {
 	diskdb ethdb.Database // Persistent storage for matured trie nodes
 
-	nodes    map[common.Hash][]byte                   // Cached data blocks of the trie nodes
-	parents  map[common.Hash]int                      // Number of live nodes referencing a given one
-	children map[common.Hash]map[common.Hash]struct{} // Set of children referenced by given nodes
+	nodes    map[common.Hash][]byte              // Cached data blocks of the trie nodes
+	parents  map[common.Hash]int                 // Number of live nodes referencing a given one
+	children map[common.Hash]map[common.Hash]int // Set of children referenced by given nodes
 
 	preimages map[common.Hash][]byte // Preimages of nodes from the secure trie
 	seckeybuf [secureKeyLength]byte  // Ephemeral buffer for calculating preimage keys
@@ -71,10 +71,10 @@ func NewDatabase(diskdb ethdb.Database) *Database {
 		diskdb:    diskdb,
 		nodes:     make(map[common.Hash][]byte),
 		parents:   make(map[common.Hash]int),
-		children:  make(map[common.Hash]map[common.Hash]struct{}),
+		children:  make(map[common.Hash]map[common.Hash]int),
 		preimages: make(map[common.Hash][]byte),
 	}
-	db.children[common.Hash{}] = make(map[common.Hash]struct{})
+	db.children[common.Hash{}] = make(map[common.Hash]int)
 	return db
 }
 
@@ -98,7 +98,7 @@ func (db *Database) insert(hash common.Hash, blob []byte) {
 		return
 	}
 	db.nodes[hash] = common.CopyBytes(blob)
-	db.children[hash] = make(map[common.Hash]struct{})
+	db.children[hash] = make(map[common.Hash]int)
 
 	db.size += common.StorageSize(common.HashLength + len(blob))
 }
@@ -203,7 +203,7 @@ func (db *Database) reference(child common.Hash, parent common.Hash) {
 		return
 	}
 	db.parents[child]++
-	db.children[parent][child] = struct{}{}
+	db.children[parent][child]++
 }
 
 // Dereference removes an existing reference from a parent node to a child node.
@@ -226,13 +226,15 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 	if !ok {
 		return
 	}
-	delete(db.children[parent], child)
-	db.parents[child]--
-
+	db.children[parent][child]--
+	if db.children[parent][child] == 0 {
+		delete(db.children[parent], child)
+	}
 	// If there are no more references to the child, delete it and cascade
+	db.parents[child]--
 	if db.parents[child] == 0 {
-		for child := range db.children[child] {
-			db.dereference(child, child)
+		for hash := range db.children[child] {
+			db.dereference(hash, child)
 		}
 		delete(db.nodes, child)
 		delete(db.parents, child)

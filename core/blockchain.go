@@ -856,7 +856,7 @@ func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.R
 		bc.triedb.Dereference(header.Root, common.Hash{})
 
 		if current%10000 == 0 {
-			log.Debug("Current trie pruning state", "size", bc.triedb.Size(), "elapsed", bc.procTime)
+			log.Warn("Current trie pruning state", "size", bc.triedb.Size(), "elapsed", bc.procTime)
 		}
 	}
 	if err := WriteBlockReceipts(batch, block.Hash(), block.NumberU64(), receipts); err != nil {
