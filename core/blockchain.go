@@ -181,7 +181,10 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, engine co
 		bc.gc.FullGC(headBlock - 1000)
 	}*/
 
-	bc.gc.BackgroundGC(bc.CurrentBlock, &bc.processing, &bc.procInterrupt, &bc.wg)
+	currentVersion := func() uint64 {
+		return bc.CurrentBlock().NumberU64()
+	}
+	bc.gc.BackgroundGC(currentVersion, &bc.processing, &bc.procInterrupt, &bc.wg)
 
 	// Take ownership of this particular state
 	go bc.update()

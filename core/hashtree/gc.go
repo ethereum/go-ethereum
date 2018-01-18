@@ -25,13 +25,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
+// Print is a debug tool that dumps the contents of the database under a certain prefix
 func Print(db ethdb.Database, prefix []byte) {
 	it := db.(*ethdb.LDBDatabase).NewIterator()
 	defer it.Release()
@@ -47,20 +47,23 @@ func Print(db ethdb.Database, prefix []byte) {
 	}
 }
 
-type hasDataFn func(version uint64) func(position, hash []byte) bool
+// hasDataFn callback is required for garbage collecting a data structure. It returns
+// another callback for each actual GC version that tells the GC whether a given element
+// is present in that version of the structure at the given position.
+type hasDataFn func(gcVersion uint64) func(position, hash []byte) bool
 
 type GarbageCollector struct {
 	db                       *ethdb.LDBDatabase
 	prefix                   []byte
 	hasData                  hasDataFn
-	gcBlock                  uint64
-	gcBlockHasData           func(position, hash []byte) bool
+	gcVersion                uint64
+	gcVersionHasData         func(position, hash []byte) bool
 	delkeys                  [][]byte
 	keysChecked, keysRemoved uint64
 	refsChecked, refsRemoved uint64
 	writeCounter             uint64
 	writeLock                sync.Mutex
-	valid                    bool
+	dbWrite                  bool
 }
 
 func NewGarbageCollector(db ethdb.Database, prefix []byte, hasData hasDataFn) *GarbageCollector {
@@ -71,9 +74,18 @@ func NewGarbageCollector(db ethdb.Database, prefix []byte, hasData hasDataFn) *G
 	}
 }
 
+// run iterates through a section of the database and deletes old entries. First only the reference
+// entries are deleted, data entries are only marked for deletion.
+//
+// Note: writeLock is not held while collecting entries for deletion because that would hurt block
+// processing performance. Instead, dbWrite flag shows if new entries were added to the database
+// while collecting data entries to be deleted. In this case, to avoid a race condition, data entries
+// are not deleted because they might have been recently added again with new references. The inclusion
+// checking effort is not lost though, when GC arrives there again in the next round, these data
+// entries are immediately deleted without any further checks if no new references have been added.
 func (g *GarbageCollector) run(startKey []byte, maxEntries uint64) (nextKey []byte) {
 	g.writeLock.Lock()
-	g.valid = true
+	g.dbWrite = false
 	g.writeLock.Unlock()
 
 	it := g.db.NewIterator()
@@ -82,7 +94,7 @@ func (g *GarbageCollector) run(startKey []byte, maxEntries uint64) (nextKey []by
 	defer func() {
 		it.Release()
 		g.writeLock.Lock()
-		if g.valid {
+		if !g.dbWrite {
 			for _, key := range g.delkeys {
 				g.db.Delete(key)
 			}
@@ -99,7 +111,7 @@ func (g *GarbageCollector) run(startKey []byte, maxEntries uint64) (nextKey []by
 		g.db.LDB().CompactRange(r)
 	}()
 
-	g.gcBlockHasData = g.hasData(g.gcBlock)
+	g.gcVersionHasData = g.hasData(g.gcVersion)
 	it.Seek(startKey)
 	for it.Valid() {
 		key := common.CopyBytes(it.Key())
@@ -145,7 +157,7 @@ func (g *GarbageCollector) gcEntry(key []byte, refkeys [][]byte) {
 	oldrefs := 0
 	for oldrefs < refcount {
 		version := binary.BigEndian.Uint64(refkeys[oldrefs][keylen-1 : keylen+7])
-		if version >= g.gcBlock {
+		if version >= g.gcVersion {
 			break
 		}
 		oldrefs++
@@ -154,7 +166,7 @@ func (g *GarbageCollector) gcEntry(key []byte, refkeys [][]byte) {
 	removerefs := 0
 	if oldrefs > 0 {
 		removerefs = oldrefs - 1
-		if oldrefs == refcount && !g.gcBlockHasData(key[len(g.prefix):keylen-33], key[keylen-33:keylen-1]) {
+		if oldrefs == refcount && !g.gcVersionHasData(key[len(g.prefix):keylen-33], key[keylen-33:keylen-1]) {
 			removerefs = refcount
 		}
 	}
@@ -170,22 +182,28 @@ func (g *GarbageCollector) gcEntry(key []byte, refkeys [][]byte) {
 	}
 }
 
-func (g *GarbageCollector) FullGC(block uint64) {
-	log.Info("Starting full GC", "block", block)
-	g.gcBlock = block
+// FullGC iterates through the entire database and removes all garbage
+func (g *GarbageCollector) FullGC(version uint64) {
+	log.Info("Starting full GC", "version", version)
+	g.gcVersion = version
 	key := g.prefix
 	for key != nil {
 		key = g.run(key, 10000)
-		k := key
+		k := key[len(g.prefix):]
 		if len(k) > 8 {
 			k = k[:8]
 		}
-		log.Info("Running...", "key", k, "keys checked", g.keysChecked, "keys removed", g.keysRemoved, "refs checked", g.refsChecked, "refs removed", g.refsRemoved)
+		log.Info("Running...", "key", fmt.Sprintf("%016x", k), "keys checked", g.keysChecked, "keys removed", g.keysRemoved, "refs checked", g.refsChecked, "refs removed", g.refsRemoved)
 	}
 	log.Info("Finished full GC", "keys checked", g.keysChecked, "keys removed", g.keysRemoved, "refs checked", g.refsChecked, "refs removed", g.refsRemoved)
 }
 
-func (g *GarbageCollector) BackgroundGC(currentBlock func() *types.Block, processing, stop *int32, wg *sync.WaitGroup) {
+// BackgroundGC runs in the background while stop is 0 and starts a GC for the next short section of the database
+// when writeCounter has been increased enough by a Writer and pause is also 0.
+//
+// Note: pause does not guarantee anything but can be used to usually avoid collision between writes and GC deletions
+// and thereby increase the performance of both processes.
+func (g *GarbageCollector) BackgroundGC(currentVersion func() uint64, pause, stop *int32, wg *sync.WaitGroup) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -200,20 +218,23 @@ func (g *GarbageCollector) BackgroundGC(currentBlock func() *types.Block, proces
 				gcCounter = wc - 10000
 				diff = 10000
 			}
-			if diff >= 100 && atomic.LoadInt32(processing) == 0 {
+			if diff >= 100 && atomic.LoadInt32(pause) == 0 {
 				gcCounter += 100
 				if key == nil {
 					key = g.prefix
 				}
-				headBlock := currentBlock().NumberU64()
-				if headBlock > 1000 {
-					g.gcBlock = headBlock - 1000
+				headVersion := currentVersion()
+				if headVersion > 1000 {
+					g.gcVersion = headVersion - 1000
 					key = g.run(key, 1000)
-					k := key
+					if key == nil {
+						key = g.prefix
+					}
+					k := key[len(g.prefix):]
 					if len(k) > 8 {
 						k = k[:8]
 					}
-					log.Info("Running GC...", "key", k, "keys checked", g.keysChecked, "keys removed", g.keysRemoved, "refs checked", g.refsChecked, "refs removed", g.refsRemoved)
+					log.Info("Running GC...", "key", fmt.Sprintf("%016x", k), "keys checked", g.keysChecked, "keys removed", g.keysRemoved, "refs checked", g.refsChecked, "refs removed", g.refsRemoved)
 				}
 			} else {
 				time.Sleep(time.Second)
@@ -222,11 +243,14 @@ func (g *GarbageCollector) BackgroundGC(currentBlock func() *types.Block, proces
 	}()
 }
 
+// LockWrite should be called before writing to the backing database. If a Writer is used with a batch of the
+// backing database then it should be called before committing the batch.
 func (g *GarbageCollector) LockWrite() {
 	g.writeLock.Lock()
-	g.valid = false
+	g.dbWrite = true
 }
 
+// UnlockWrite should be called after writing to the backing database
 func (g *GarbageCollector) UnlockWrite() {
 	g.writeLock.Unlock()
 }

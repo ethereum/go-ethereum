@@ -113,15 +113,24 @@ func hasTerm(s []byte) bool {
 	return len(s) > 0 && s[len(s)-1] == 16
 }
 
+const (
+	htEvenNibbleSuffix = 0
+	htOddNibbleSuffix  = 1
+	htSecTrieKeySuffix = 4
+)
+
+// hexToHashTreePos converts a hex encoded trie key prefix to a hash tree position.
+// Trie hash tree position encoding
+// - for even number of nibbles:   nibbles[0]*16+nibbles[1], ..., nibbles[i*2]*16+nibbles[i*2+1], 0
+// - for odd number of nibbles:    nibbles[0]*16+nibbles[1], ..., nibbles[i*2+1]*16+1
 func hexToHashTreePos(hex []byte) []byte {
-	terminator := byte(0)
+	terminator := byte(htEvenNibbleSuffix)
 	if hasTerm(hex) {
-		terminator = 2
 		hex = hex[:len(hex)-1]
 	}
 	buf := make([]byte, len(hex)/2+1)
 	if len(hex)&1 == 1 {
-		terminator += hex[len(hex)-1]<<4 + 1
+		terminator = hex[len(hex)-1]<<4 + htOddNibbleSuffix
 		hex = hex[:len(hex)-1]
 	}
 	decodeNibbles(hex, buf[:len(buf)-1])
@@ -129,18 +138,17 @@ func hexToHashTreePos(hex []byte) []byte {
 	return buf
 }
 
+// SecHashTreePos returns the hash tree position for secure trie key preimage entries
 func SecHashTreePos(hash []byte) []byte {
-	return append(hash, 4)
+	return append(hash, htSecTrieKeySuffix)
 }
 
+// hashTreePosToHex converts hash tree position (either of a trie node or a secure trie
+// key preimage entry) back to hex encoding
 func hashTreePosToHex(pos []byte) []byte {
 	base := keybytesToHex(pos)
 	base = base[:len(base)-1]
 	term := base[len(base)-1]
 	base = base[:len(base)-2+int(term&1)]
-	// apply terminator flag
-	if term >= 2 {
-		base = append(base, 16)
-	}
 	return base
 }

@@ -155,6 +155,15 @@ func (m cachedTrie) CommitTo(dbw trie.DatabaseWriter) (common.Hash, error) {
 	return root, err
 }
 
+const (
+	htContractCodeSuffix    = 5
+	htContractStorageSuffix = 6
+)
+
+// storageTrieDb implements trie.Database for contract storage tries
+//
+// a contract storage trie node's hash tree position is encoded as:
+//  contractAddressHash + htContractStorageSuffix + storage trie node position
 type storageTrieDb struct {
 	dbr      trie.DatabaseReader
 	dbw      trie.DatabaseWriter
@@ -164,7 +173,7 @@ type storageTrieDb struct {
 func (s *storageTrieDb) position(position []byte) []byte {
 	pos := make([]byte, len(position)+33)
 	copy(pos[:32], s.addrHash)
-	pos[32] = 6
+	pos[32] = htContractStorageSuffix
 	copy(pos[33:], position)
 	return pos
 }
@@ -182,6 +191,8 @@ func (s *storageTrieDb) Has(position, hash []byte) (bool, error) {
 	return s.dbr.Has(s.position(position), hash)
 }
 
+// a contract code's hash tree position is encoded as:
+//  contractAddressHash + htContractCodeSuffix
 func contractCodePosition(addrHash common.Hash) []byte {
 	return append(addrHash.Bytes(), 5)
 }

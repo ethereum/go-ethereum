@@ -606,6 +606,11 @@ func (s *StateDB) CommitTo(db hashtree.DatabaseWriter, blockNumber uint64, gc *h
 	return root, err
 }
 
+// HasDataCallback returns a GC callback function for a given state (identified by state root).
+// The callback tells if any state trie node, secure trie key preimage, contract code or contract storage
+// trie node is part of the given trie at the given position. The hash tree position encoding of state
+// trie nodes is identical to the general trie node position encoding. For contract code and storage
+// position encoding see contractCodePosition and storageTrieDb.
 func HasDataCallback(root common.Hash, dbr hashtree.DatabaseReader) func(position, hash []byte) bool {
 	db := hashtree.NewReader(dbr, DbPrefix)
 	t, err := trie.New(root, db)
@@ -614,9 +619,13 @@ func HasDataCallback(root common.Hash, dbr hashtree.DatabaseReader) func(positio
 	}
 	return func(position, hash []byte) bool {
 		lp := len(position)
-		if lp < 33 || (lp == 33 && position[32] < 5) {
+		if lp < 33 || (lp == 33 && position[32] < htContractCodeSuffix) {
+			// it should be a state trie node, check it there
 			return t.HasData(position, hash)
 		}
+		// it it either a code or a storage trie node, in either case we need the
+		// account entry to check. We do this manually with a "regular" (not secure)
+		// trie because we only know the address hash
 		addrHash := position[:32]
 		enc, err := t.TryGet(addrHash)
 		if len(enc) == 0 || err != nil {
@@ -627,13 +636,15 @@ func HasDataCallback(root common.Hash, dbr hashtree.DatabaseReader) func(positio
 		if err := rlp.DecodeBytes(enc, &data); err != nil {
 			return false
 		}
-		if lp == 33 && position[32] == 5 {
+		if lp == 33 && position[32] == htContractCodeSuffix {
+			// if it is a code, the hash should match the currently present account's code hash
 			return bytes.Equal(hash, data.CodeHash)
 		}
-		if position[32] != 6 {
+		if position[32] != htContractStorageSuffix {
 			return false
 		}
 
+		// it is a storage trie node, check in the storage trie
 		st, err := trie.New(data.Root, &storageTrieDb{dbr: db, addrHash: addrHash})
 		if err != nil {
 			return false
