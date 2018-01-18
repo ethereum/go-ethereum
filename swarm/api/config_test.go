@@ -33,8 +33,8 @@ func TestConfig(t *testing.T) {
 		t.Fatalf("failed to load private key: %v", err)
 	}
 
-	one := NewDefaultConfig()
-	two := NewDefaultConfig()
+	one := NewConfig()
+	two := NewConfig()
 
 	if equal := reflect.DeepEqual(one, two); !equal {
 		t.Fatal("Two default configs are not equal")
@@ -55,11 +55,7 @@ func TestConfig(t *testing.T) {
 		t.Fatal("Failed to correctly initialize SwapParams")
 	}
 
-	if one.SyncParams.RequestDbPath == one.Path {
-		t.Fatal("Failed to correctly initialize SyncParams")
-	}
-
-	if one.HiveParams.KadDbPath == one.Path {
+	if one.HiveParams.MaxPeersPerRequest != 5 {
 		t.Fatal("Failed to correctly initialize HiveParams")
 	}
 

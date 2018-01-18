@@ -559,7 +559,7 @@ func (t *Pot) eachBin(val Val, pof Pof, po int, f func(int, int, func(func(val V
 
 }
 
-// EachNeighbour is a syncronous iterator over neighbours of any target val
+// EachNeighbour is a synchronous iterator over neighbours of any target val
 // the order of elements retrieved reflect proximity order to the target
 // TODO: add maximum proxbin to start range of iteration
 func (t *Pot) EachNeighbour(val Val, pof Pof, f func(Val, int) bool) bool {
@@ -615,7 +615,7 @@ func (t *Pot) eachNeighbour(val Val, pof Pof, f func(Val, int) bool) bool {
 	return true
 }
 
-// EachNeighbourAsync called on (val, max, maxPos, f, wait) is an asyncronous iterator
+// EachNeighbourAsync called on (val, max, maxPos, f, wait) is an asynchronous iterator
 // over elements not closer than maxPos wrt val.
 // val does not need to be match an element of the Pot, but if it does, and
 // maxPos is keylength than it is included in the iteration
@@ -762,7 +762,7 @@ func (t *Pot) eachNeighbourAsync(val Val, pof Pof, max int, maxPos int, f func(V
 
 // getPos called on (n) returns the forking node at PO n and its index if it exists
 // otherwise nil
-// caller is suppoed to hold the lock
+// caller is supposed to hold the lock
 func (t *Pot) getPos(po int) (n *Pot, i int) {
 	for i, n = range t.bins {
 		if po > n.po {

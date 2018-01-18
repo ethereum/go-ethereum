@@ -54,14 +54,14 @@ var pof = pot.DefaultPof(256)
 // KadParams holds the config params for Kademlia
 type KadParams struct {
 	// adjustable parameters
-	MaxProxDisplay int // number of rows the table shows
-	MinProxBinSize int // nearest neighbour core minimum cardinality
-	MinBinSize     int // minimum number of peers in a row
-	MaxBinSize     int // maximum number of peers in a row before pruning
-	RetryInterval  int // initial interval before a peer is first redialed
-	RetryExponent  int // exponent to multiply retry intervals with
-	MaxRetries     int // maximum number of redial attempts
-	PruneInterval  int // interval between peer pruning cycles
+	MaxProxDisplay int  // number of rows the table shows
+	MinProxBinSize int  // nearest neighbour core minimum cardinality
+	MinBinSize     int  // minimum number of peers in a row
+	MaxBinSize     int  // maximum number of peers in a row before pruning
+	RetryInterval  uint // initial interval before a peer is first redialed
+	RetryExponent  uint // exponent to multiply retry intervals with
+	MaxRetries     int  // maximum number of redial attempts
+	PruneInterval  int  // interval between peer pruning cycles
 	// function to sanction or prevent suggesting a peer
 	Reachable func(OverlayAddr) bool
 }
@@ -400,10 +400,10 @@ func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	}
 	// calculate the allowed number of retries based on time lapsed since last seen
 	timeAgo := int(time.Since(e.seenAt))
-	div := k.RetryExponent
+	div := int(k.RetryExponent)
 	div += (150000 - rand.Intn(300000)) * div / 1000000
 	var retries int
-	for delta := timeAgo; delta > k.RetryInterval; delta /= div {
+	for delta := timeAgo; uint(delta) > k.RetryInterval; delta /= div {
 		retries++
 	}
 
@@ -424,7 +424,7 @@ func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	return e.addr()
 }
 
-// BaseAddr return the kademlia base addres
+// BaseAddr return the kademlia base address
 func (k *Kademlia) BaseAddr() []byte {
 	return k.base
 }

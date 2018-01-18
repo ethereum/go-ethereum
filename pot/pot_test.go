@@ -271,10 +271,7 @@ func testPotEachNeighbour(n *Pot, pof Pof, val Val, expCount int, fs ...func(Val
 			}
 		}
 		count++
-		if count == expCount {
-			return false
-		}
-		return true
+		return count != expCount
 	})
 	if err == nil && count < expCount {
 		return fmt.Errorf("not enough neighbours returned, expected %v, got %v", expCount, count)
@@ -558,10 +555,7 @@ func benchmarkEachNeighbourSync(t *testing.B, max, count int, d time.Duration) {
 		n.EachNeighbour(val, pof, func(v Val, po int) bool {
 			time.Sleep(d)
 			m++
-			if m == count {
-				return false
-			}
-			return true
+			return m != count
 		})
 	}
 	t.StopTimer()

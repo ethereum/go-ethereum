@@ -96,7 +96,7 @@ func (pssapi *API) BaseAddr() (PssAddress, error) {
 func (pssapi *API) GetPublicKey() (keybytes hexutil.Bytes) {
 	key := pssapi.Pss.PublicKey()
 	keybytes = crypto.FromECDSAPub(key)
-	return hexutil.Bytes(keybytes)
+	return keybytes
 }
 
 // Set Public key to associate with a particular Pss peer

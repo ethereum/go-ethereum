@@ -1,3 +1,5 @@
+// +build foo
+
 package pss
 
 import (

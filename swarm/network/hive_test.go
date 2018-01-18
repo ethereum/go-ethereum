@@ -46,7 +46,7 @@ func TestRegisterAndConnect(t *testing.T) {
 	s.TestExchanges(p2ptest.Exchange{
 		Label: "getPeersMsg message",
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 2,
 				Msg:  &subPeersMsg{0},
 				Peer: id,

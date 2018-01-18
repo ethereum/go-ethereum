@@ -207,9 +207,8 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*bzzPeer) error) func(*
 // performHandshake implements the negotiation of the bzz handshake
 // shared among swarm subprotocols
 func performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error {
-	ctx, _ := context.WithTimeout(context.Background(), bzzHandshakeTimeout)
-	// defer cancel()
-	// ctx, cancel := context.WithTimeout(context.Background(), bzzHandshakeTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), bzzHandshakeTimeout)
+	defer cancel()
 	defer close(handshake.done)
 	rsh, err := p.Handshake(ctx, handshake, checkHandshake)
 	if err != nil {
@@ -253,7 +252,7 @@ type bzzPeer struct {
 	lastActive      time.Time // time is updated whenever mutexes are releasing
 }
 
-// Off returns the overlay peer record for offline persistance
+// Off returns the overlay peer record for offline persistence
 func (p *bzzPeer) Off() OverlayAddr {
 	return p.BzzAddr
 }
