@@ -65,7 +65,10 @@ func (r *FakeRPC) BlockNumber() (string, error) {
 }
 
 // check that signature address matches update signer address
-func TestResourceSignature(t *testing.T) {
+func TestResourceReverse(t *testing.T) {
+
+	period := uint32(4)
+	version := uint32(2)
 
 	// set up rpc and create resourcehandler
 	rh, _, signer, teardownTest, err := setupTest(nil, nil)
@@ -80,7 +83,7 @@ func TestResourceSignature(t *testing.T) {
 	}
 
 	// generate a hash for block 4200 version 1
-	key := rh.resourceHash(1, 1, rh.validator.nameHash(validname))
+	key := rh.resourceHash(period, version, rh.validator.nameHash(validname))
 
 	// generate some bogus data for the chunk and sign it
 	data := make([]byte, 8)
@@ -96,13 +99,11 @@ func TestResourceSignature(t *testing.T) {
 		teardownTest(t, err)
 	}
 
-	chunk := newUpdateChunk(key, sig, 1, 1, validname, data)
-
-	log.Warn("key", "chunk", chunk.Key, "real", key)
+	chunk := newUpdateChunk(key, sig, period, version, validname, data)
 
 	// check that we can recover the owner account from the update chunk's signature
-	checksig, _, _, _, newdata, err := parseUpdate(chunk.SData)
-	checkdigest := rh.keyDataHash(chunk.Key, newdata)
+	checksig, checkperiod, checkversion, checkname, checkdata, err := parseUpdate(chunk.SData)
+	checkdigest := rh.keyDataHash(chunk.Key, checkdata)
 	recoveredaddress, err := getAddressFromDataSig(checkdigest, checksig)
 	if err != nil {
 		teardownTest(t, err)
@@ -112,64 +113,25 @@ func TestResourceSignature(t *testing.T) {
 	if recoveredaddress != originaladdress {
 		teardownTest(t, fmt.Errorf("addresses dont match: %x != %x", originaladdress, recoveredaddress))
 	}
+
+	if !bytes.Equal(key[:], chunk.Key[:]) {
+		teardownTest(t, fmt.Errorf("Expected chunk key '%x', was '%x'", key, chunk.Key))
+	}
+	if period != checkperiod {
+		teardownTest(t, fmt.Errorf("Expected period '%d', was '%d'", period, checkperiod))
+	}
+	if version != checkversion {
+		teardownTest(t, fmt.Errorf("Expected version '%d', was '%d'", version, checkversion))
+	}
+	if validname != checkname {
+		teardownTest(t, fmt.Errorf("Expected name '%s', was '%s'", validname, checkname))
+	}
+	if !bytes.Equal(data, checkdata) {
+		teardownTest(t, fmt.Errorf("Expectedn data '%x', was '%x'", data, checkdata))
+	}
 	teardownTest(t, nil)
 }
 
-//
-//// determine resource update metadata from chunk data
-//func TestResourceReverseLookup(t *testing.T) {
-//
-//	// make fake backend, set up rpc and create resourcehandler
-//	backend := &fakeBackend{
-//		blocknumber: startBlock,
-//	}
-//	rh, _, _, teardownTest, err := setupTest(backend, nil)
-//	if err != nil {
-//		teardownTest(t, err)
-//	}
-//
-//	rsrc, err := rh.NewResource(domainName, resourceFrequency, false)
-//	if err != nil {
-//		teardownTest(t, err)
-//	}
-//
-//	// update data
-//	fwdBlocks(int(resourceFrequency+1), backend)
-//	data := []byte("foo")
-//	resourcekey, err := rh.Update(domainName, data)
-//	if err != nil {
-//		teardownTest(t, err)
-//	}
-//	chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(resourcekey))
-//	if err != nil {
-//		teardownTest(t, err)
-//	}
-//
-//	// check if data after header length offset is as expected
-//	headerlength := binary.LittleEndian.Uint16(chunk.SData[signatureLength : signatureLength+2])
-//	if !bytes.Equal(chunk.SData[signatureLength+headerlength+2:], data) {
-//		teardownTest(t, fmt.Errorf("Expected chunk data with header length %d (pos %d) to match %x, but was %x", headerlength, signatureLength+headerlength+2, data, chunk.SData[signatureLength+headerlength+2:]))
-//	}
-//
-//	// get name, period, version from chunk and check
-//	_, revperiod, revversion, revname, revdata, err := parseUpdate(chunk.SData[signatureLength:])
-//
-//	//if !bytes.Equal(revname, rsrc.nameHash.Bytes()) {
-//	if revname == rsrc.name {
-//		teardownTest(t, fmt.Errorf("Expected retrieved name from chunk data to be '%x', was '%x'", rsrc.nameHash.Bytes(), revname))
-//	}
-//	if !bytes.Equal(revdata, data) {
-//		teardownTest(t, fmt.Errorf("Expected retrieved data from chunk data to be '%x', was '%x'", data, revdata))
-//	}
-//
-//	if revperiod != 2 {
-//		teardownTest(t, fmt.Errorf("Expected retrieved period from chunk data to be 1, was %d", revperiod))
-//	}
-//	if revversion != 1 {
-//		teardownTest(t, fmt.Errorf("Expected retrieved version from chunk data to be 1, was %d", revversion))
-//	}
-//}
-//
 // make updates and retrieve them based on periods and versions
 func TestResourceHandler(t *testing.T) {
 
@@ -496,7 +458,7 @@ func (self *testSigner) signContent(data common.Hash) (signature Signature, err 
 	if err != nil {
 		return
 	}
-	signature, err = bytesToSignature(signaturebytes)
+	copy(signature[:], signaturebytes)
 	return
 }
 

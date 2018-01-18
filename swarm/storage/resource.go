@@ -29,15 +29,6 @@ var emptySignature Signature
 
 type SignFunc func(common.Hash) (Signature, error)
 
-func bytesToSignature(b []byte) (Signature, error) {
-	var s Signature
-	if len(b) != signatureLength {
-		return [signatureLength]byte{}, fmt.Errorf("Must be %d bytes", signatureLength)
-	}
-	copy(s[:], b)
-	return s, nil
-}
-
 // Encapsulates an actual resource update. When synced it contains the most recent
 // version of the resource update data.
 type resource struct {
