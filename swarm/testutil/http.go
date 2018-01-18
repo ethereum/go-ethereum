@@ -17,11 +17,15 @@
 package testutil
 
 import (
+	"crypto/ecdsa"
 	"io/ioutil"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"strconv"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -38,7 +42,7 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 		CacheCapacity: 5000,
 		Radius:        0,
 	}
-	localStore, err := storage.NewLocalStore(storage.MakeHashFunc("SHA3"), storeparams, nil)
+	localStore, err := storage.NewLocalStore(storage.MakeHashFunc(storage.SHA3Hash), storeparams)
 	if err != nil {
 		os.RemoveAll(dir)
 		t.Fatal(err)
@@ -49,24 +53,84 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 		ChunkStore: localStore,
 	}
 	dpa.Start()
-	a := api.NewApi(dpa, nil)
+
+	// mutable resources test setup
+	resourcedir, err := ioutil.TempDir("", "swarm-resource-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ipcpath := filepath.Join(resourcedir, "test.ipc")
+	ipcl, err := rpc.CreateIPCListener(ipcpath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpcserver := rpc.NewServer()
+	rpcserver.RegisterName("eth", &FakeRPC{})
+	go func() {
+		rpcserver.ServeListener(ipcl)
+	}()
+	rpcClean := func() {
+		rpcserver.Stop()
+	}
+
+	// connect to fake rpc
+	rpcclient, err := rpc.Dial(ipcpath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rh, err := storage.NewResourceHandler(resourcedir, &testCloudStore{}, rpcclient, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a := api.NewApi(dpa, nil, rh)
 	srv := httptest.NewServer(httpapi.NewServer(a))
 	return &TestSwarmServer{
 		Server: srv,
 		Dpa:    dpa,
 		dir:    dir,
+		hasher: storage.MakeHashFunc("SHA3")(),
+		cleanup: func() {
+			rh.Close()
+			rpcClean()
+			os.RemoveAll(dir)
+			os.RemoveAll(resourcedir)
+		},
 	}
 }
 
 type TestSwarmServer struct {
 	*httptest.Server
-
-	Dpa *storage.DPA
-	dir string
+	hasher     storage.SwarmHash
+	privatekey *ecdsa.PrivateKey
+	Dpa        *storage.DPA
+	dir        string
+	cleanup    func()
 }
 
 func (t *TestSwarmServer) Close() {
 	t.Server.Close()
 	t.Dpa.Stop()
 	os.RemoveAll(t.dir)
+}
+
+type testCloudStore struct {
+}
+
+func (c *testCloudStore) Store(*storage.Chunk) {
+}
+
+func (c *testCloudStore) Deliver(*storage.Chunk) {
+}
+
+func (c *testCloudStore) Retrieve(*storage.Chunk) {
+}
+
+// for faking the rpc service, since we don't need the whole node stack
+type FakeRPC struct {
+	blocknumber uint64
+}
+
+func (r *FakeRPC) BlockNumber() (string, error) {
+	return strconv.FormatUint(r.blocknumber, 10), nil
 }

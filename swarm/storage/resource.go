@@ -44,8 +44,8 @@ type resource struct {
 }
 
 // TODO Expire content after a defined period (to force resync)
-func (r *resource) isSynced() bool {
-	return !r.updated.IsZero()
+func (self *resource) isSynced() bool {
+	return !self.updated.IsZero()
 }
 
 // Implement to activate validation of resource updates
@@ -164,6 +164,30 @@ func NewResourceHandler(datadir string, cloudStore CloudStore, rpcClient *rpc.Cl
 	}
 
 	return rh, nil
+}
+
+func (self *ResourceHandler) GetData(name string) []byte {
+	rsrc := self.getResource(name)
+	if rsrc == nil {
+		return nil
+	}
+	return rsrc.data
+}
+
+func (self *ResourceHandler) GetLastPeriod(name string) uint32 {
+	rsrc := self.getResource(name)
+	if rsrc == nil {
+		return 0
+	}
+	return rsrc.lastPeriod
+}
+
+func (self *ResourceHandler) GetVersion(name string) uint32 {
+	rsrc := self.getResource(name)
+	if rsrc == nil {
+		return 0
+	}
+	return rsrc.version
 }
 
 // \TODO should be hashsize * branches from the chosen chunker, implement with dpa

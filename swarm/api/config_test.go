@@ -55,10 +55,6 @@ func TestConfig(t *testing.T) {
 		t.Fatal("Failed to correctly initialize SwapParams")
 	}
 
-	if one.HiveParams.MaxPeersPerRequest != 5 {
-		t.Fatal("Failed to correctly initialize HiveParams")
-	}
-
 	if one.StoreParams.ChunkDbPath == one.Path {
 		t.Fatal("Failed to correctly initialize StoreParams")
 	}

@@ -46,15 +46,17 @@ on top of the dpa
 it is the public interface of the dpa which is included in the ethereum stack
 */
 type Api struct {
-	dpa *storage.DPA
-	dns Resolver
+	dpa      *storage.DPA
+	dns      Resolver
+	resource *storage.ResourceHandler
 }
 
 //the api constructor initialises
-func NewApi(dpa *storage.DPA, dns Resolver) (self *Api) {
+func NewApi(dpa *storage.DPA, dns Resolver, resourceHandler *storage.ResourceHandler) (self *Api) {
 	self = &Api{
-		dpa: dpa,
-		dns: dns,
+		dpa:      dpa,
+		dns:      dns,
+		resource: resourceHandler,
 	}
 	return
 }
@@ -360,4 +362,22 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 		return nil, nil, fmt.Errorf("list with prefix failed %v: %v", key.String(), err)
 	}
 	return key, manifestEntryMap, nil
+}
+
+func (self *Api) DbLookupLatest(name string) (io.ReadSeeker, error) {
+	_, err := self.resource.LookupLatest(name, true)
+	if err != nil {
+		return nil, err
+	}
+	return bytes.NewReader(self.resource.GetData(name)), nil
+}
+
+func (self *Api) DbCreate(name string, frequency uint64) (err error) {
+	_, err = self.resource.NewResource(name, frequency)
+	return err
+}
+
+func (self *Api) DbUpdate(name string, data []byte) (storage.Key, uint32, uint32, error) {
+	key, err := self.resource.Update(name, data)
+	return key, self.resource.GetLastPeriod(name), self.resource.GetVersion(name), err
 }

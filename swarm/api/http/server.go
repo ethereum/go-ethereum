@@ -21,6 +21,7 @@ package http
 
 import (
 	"archive/tar"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -288,6 +289,56 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, newKey)
+}
+
+func (s *Server) HandlePostDb(w http.ResponseWriter, r *Request) {
+	if r.ContentLength == 0 {
+		frequency, err := strconv.ParseUint(r.uri.Path, 10, 64)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			http.ServeContent(w, &r.Request, "", time.Now(), bytes.NewReader([]byte(err.Error())))
+			return
+		}
+		err = s.api.DbCreate(r.uri.Addr, frequency)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	} else {
+		data, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_, _, _, err = s.api.DbUpdate(r.uri.Addr, data)
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			http.ServeContent(w, &r.Request, "", time.Now(), bytes.NewReader([]byte(err.Error())))
+			return
+		}
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) HandleGetDb(w http.ResponseWriter, r *Request) {
+	w.Header().Set("Content-Type", "application/octet-stream")
+
+	var params []string
+	if len(r.uri.Path) > 0 {
+		params = strings.Split(r.uri.Path, "/")
+	}
+	switch len(params) {
+	case 0:
+		data, err := s.api.DbLookupLatest(r.uri.Addr)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			break
+		}
+		http.ServeContent(w, &r.Request, "", time.Now(), data)
+		break
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+	}
 }
 
 // HandleGet handles a GET request to
@@ -604,6 +655,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		if uri.Raw() || uri.DeprecatedRaw() {
 			s.HandlePostRaw(w, req)
+		} else if uri.Db() {
+			s.HandlePostDb(w, req)
 		} else {
 			s.HandlePostFiles(w, req)
 		}
@@ -641,6 +694,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		if r.Header.Get("Accept") == "application/x-tar" {
 			s.HandleGetFiles(w, req)
+			return
+		}
+
+		if uri.Db() {
+			s.HandleGetDb(w, req)
 			return
 		}
 

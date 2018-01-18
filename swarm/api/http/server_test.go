@@ -22,16 +22,56 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
+
+func init() {
+	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
+}
+
+func TestBzzGetDb(t *testing.T) {
+	srv := testutil.NewTestSwarmServer(t)
+	defer srv.Close()
+
+	url := srv.URL + "/bzz-db:/foo/42"
+	resp, err := http.Post(url, "application/octet-stream", nil)
+	if err != nil {
+		fmt.Printf("err: %v\n", err)
+		return
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	fmt.Printf("Create: %s : %s\n", resp.Status, b)
+
+	url = srv.URL + "/bzz-db:/foo"
+	data := []byte("foo")
+	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(data))
+	if err != nil {
+		fmt.Printf("err: %v\n", err)
+		return
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	fmt.Printf("Update: %s : %s\n", resp.Status, b)
+
+	url = srv.URL + "/bzz-db:/foo"
+	resp, err = http.Get(url)
+	if err != nil {
+		fmt.Printf("err: %v\n", err)
+		return
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	fmt.Printf("Get: %s : %s\n", resp.Status, b)
+
+}
 
 func TestBzzGetPath(t *testing.T) {
 
@@ -258,7 +298,6 @@ func TestBzzGetPath(t *testing.T) {
 			t.Fatalf("Non-Hash response body does not match, expected: %v, got: %v", nonhashresponses[i], string(respbody))
 		}
 	}
-
 }
 
 // TestBzzRootRedirect tests that getting the root path of a manifest without
