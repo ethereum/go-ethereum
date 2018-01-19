@@ -350,22 +350,49 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, size int, skipCheck bool)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	// create a retriever dpa for the pivot node
-	delivery := deliveries[sim.IDs[0]]
-	dpacs := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), func(chunk *storage.Chunk) error { return delivery.RequestFromPeers(chunk.Key[:], skipCheck) })
-	dpa := storage.NewDPA(dpacs, storage.NewChunkerParams())
-	dpa.Start()
+
+	waitPeerErrC = make(chan error)
+
 	action := func(context.Context) error {
-		dpa := storage.NewDPA(sim.Stores[0], storage.NewChunkerParams())
+
+		i := 0
+		for err := range waitPeerErrC {
+			if err != nil {
+				return fmt.Errorf("error waiting for peers: %s", err)
+			}
+			i++
+			if i == nodes {
+				break
+			}
+		}
+
+		for i := 0; i < len(sim.IDs)-1; i++ {
+			id := sim.IDs[i]
+			node := sim.Net.GetNode(id)
+			if node == nil {
+				return fmt.Errorf("unknown node: %s", id)
+			}
+			client, err := node.Client()
+			if err != nil {
+				return fmt.Errorf("error getting node client: %s", err)
+			}
+			sid := sim.IDs[i+1]
+			if err := client.Call(nil, "stream_subscribeStream", sid, swarmChunkServerStreamName, nil, 0, 0, Top, false); err != nil {
+				return fmt.Errorf("error subscribing: %s", err)
+			}
+		}
+
+		// create a retriever dpa for the pivot node
+		delivery := deliveries[sim.IDs[0]]
+		dpacs := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), func(chunk *storage.Chunk) error { return delivery.RequestFromPeers(chunk.Key[:], skipCheck) })
+		dpa := storage.NewDPA(dpacs, storage.NewChunkerParams())
 		dpa.Start()
-		// defer dpa.Stop()
 
 		go func() {
 			defer dpa.Stop()
 			log.Debug(fmt.Sprintf("retrieve %v", fileHash))
 			// start the retrieval on the pivot node - this will spawn retrieve requests for missing chunks
 			// we must wait for the peer connections to have started before requesting
-			time.Sleep(2 * time.Second)
 			n, err := mustReadAll(dpa, fileHash)
 			log.Debug(fmt.Sprintf("retrieved %v", fileHash), "read", n, "err", err)
 		}()
@@ -388,9 +415,9 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, size int, skipCheck bool)
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
 		var total int64
-		if err := client.Call(&total, "stream_readAll", fileHash); err != nil {
-			return false, fmt.Errorf("error reading all: %s (read %v)", err, total)
-		}
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		err = client.CallContext(ctx, &total, "stream_readAll", fileHash)
 		// total, err := mustReadAll(dpa, fileHash)
 		log.Debug(fmt.Sprintf("check if %08x is available locally: number of bytes read %v/%v (error: %v)", fileHash, total, size, err))
 		if err != nil || total != int64(size) {

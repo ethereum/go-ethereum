@@ -38,6 +38,10 @@ var (
 	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
 )
 
+var (
+	waitPeerErrC chan error
+)
+
 var services = adapters.Services{
 	"streamer": NewStreamerService,
 }
@@ -49,6 +53,7 @@ func init() {
 	adapters.RegisterServices(services)
 
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+
 }
 
 // newService
@@ -60,7 +65,14 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	db := storage.NewDBAPI(store.(*storage.LocalStore))
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
-	return NewRegistry(addr, delivery, store), nil
+	//netStore := storage.NewNetStore(store.(*storage.LocalStore), func(*storage.Chunk) error { return errors.New("not retrieved yet") })
+	r := NewRegistry(addr, delivery, store)
+	RegisterSwarmSyncerServer(r, db)
+	RegisterSwarmSyncerClient(r, db)
+	go func() {
+		waitPeerErrC <- waitForPeers(r, 1*time.Second, 1)
+	}()
+	return r, nil
 }
 
 func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {
@@ -87,7 +99,7 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 	streamer := NewRegistry(addr, delivery, localStore)
 	protocolTester := p2ptest.NewProtocolTester(t, network.NewNodeIDFromAddr(addr), 1, streamer.runProtocol)
 
-	err = waitForPeers(streamer, 1*time.Second)
+	err = waitForPeers(streamer, 1*time.Second, 1)
 	if err != nil {
 		return nil, nil, nil, nil, errors.New("timeout: peer is not created")
 	}
@@ -95,13 +107,13 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 	return protocolTester, streamer, localStore, teardown, nil
 }
 
-func waitForPeers(streamer *Registry, timeout time.Duration) error {
+func waitForPeers(streamer *Registry, timeout time.Duration, expectedPeers int) error {
 	ticker := time.NewTicker(10 * time.Millisecond)
 	timeoutTimer := time.NewTimer(timeout)
 	for {
 		select {
 		case <-ticker.C:
-			if len(streamer.peers) > 0 {
+			if streamer.peersCount() >= expectedPeers {
 				return nil
 			}
 		case <-timeoutTimer.C:

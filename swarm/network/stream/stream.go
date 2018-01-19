@@ -181,6 +181,13 @@ func (r *Registry) deletePeer(peer *Peer) {
 	r.peersMu.Unlock()
 }
 
+func (r *Registry) peersCount() (c int) {
+	r.peersMu.Lock()
+	c = len(r.peers)
+	r.peersMu.Unlock()
+	return
+}
+
 // Run protocol run function
 func (r *Registry) run(p *protocols.Peer) error {
 	sp := NewPeer(p, r)
@@ -373,9 +380,22 @@ func mustReadAll(dpa *storage.DPA, hash []byte) (int64, error) {
 }
 
 func (api *API) ReadAll(hash []byte) (int64, error) {
-	return mustReadAll(api.dpa, hash)
+	r := api.dpa.Retrieve(hash)
+	buf := make([]byte, 1024)
+	var n int
+	var total int64
+	var err error
+	for (total == 0 || n > 0) && err == nil {
+		n, err = r.ReadAt(buf, total)
+		total += int64(n)
+	}
+	if err != nil && err != io.EOF {
+		return total, err
+	}
+	return total, nil
+	//return mustReadAll(api.dpa, hash)
 }
 
-func (api *API) Subscribe(peerId discover.NodeID, s string, t []byte, from, to uint64, priority uint8, live bool) error {
+func (api *API) SubscribeStream(peerId discover.NodeID, s string, t []byte, from, to uint64, priority uint8, live bool) error {
 	return api.streamer.Subscribe(peerId, s, t, from, to, priority, live)
 }

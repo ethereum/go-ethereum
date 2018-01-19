@@ -83,8 +83,21 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, size int, skipCheck bool, 
 	if err != nil {
 		t.Fatal(err.Error())
 	}
+	waitPeerErrC = make(chan error)
 	// create a retriever dpa for the pivot node
 	action := func(context.Context) error {
+
+		i := 0
+		for err := range waitPeerErrC {
+			if err != nil {
+				return fmt.Errorf("error waiting for peers: %s", err)
+			}
+			i++
+			if i == nodes {
+				break
+			}
+		}
+
 		for i := 0; i < len(sim.IDs)-1; i++ {
 			id := sim.IDs[i]
 			// if err := streamer.Subscribe(p.ID(), "SYNC", []byte{uint8(1)}, 0, 0, Top, false); err != nil {
@@ -98,9 +111,8 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, size int, skipCheck bool, 
 			if err != nil {
 				return fmt.Errorf("error getting node client: %s", err)
 			}
-			var n int64
 			sid := sim.IDs[i+1]
-			if err := client.Call(&n, "stream_subscribe", sid, "SYNC", []byte{uint8(1)}, 0, 0, Top, false); err != nil {
+			if err := client.Call(nil, "stream_subscribeStream", sid, "SYNC", []byte{uint8(1)}, 0, 0, Top, false); err != nil {
 				return fmt.Errorf("error subscribing: %s", err)
 			}
 		}
