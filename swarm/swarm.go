@@ -22,6 +22,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"net"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -82,7 +83,8 @@ func (self *Swarm) API() *SwarmAPI {
 // implements node.Service
 // If mockStore is not nil, it will be used as the storage for chunk data.
 // MockStore should be used only for testing.
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *ethclient.Client, config *api.Config, swapEnabled, syncEnabled bool, cors string, pssEnabled bool, mockStore *mock.NodeStore) (self *Swarm, err error) {
+func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *ethclient.Client, config *api.Config, swapEnabled, syncEnabled bool, cors string, pssEnabled bool, resourceEnabled bool, mockStore *mock.NodeStore) (self *Swarm, err error) {
+
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
 	}
@@ -158,7 +160,23 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	}
 	log.Debug(fmt.Sprintf("-> Swarm Domain Name Registrar @ address %v", config.EnsRoot.Hex()))
 
-	self.api = api.NewApi(self.dpa, self.dns)
+	var resourceHandler *storage.ResourceHandler
+	// if use resource updates
+	if resourceEnabled {
+		var resourceValidator storage.ResourceValidator
+		if self.dns != nil {
+			resourceValidator, err = storage.NewENSValidator(config.EnsRoot, ensClient, transactOpts, storage.NewGenericResourceSigner(self.privateKey))
+			if err != nil {
+				return nil, err
+			}
+		}
+		resourceHandler, err = storage.NewResourceHandler(filepath.Join(self.config.Path, storage.DbDirName), self.cloud, ensClient, resourceValidator)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	self.api = api.NewApi(self.dpa, self.dns, resourceHandler)
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 
@@ -360,7 +378,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 	}
 
 	self = &Swarm{
-		api:    api.NewApi(dpa, nil),
+		api:    api.NewApi(dpa, nil, nil),
 		config: config,
 	}
 

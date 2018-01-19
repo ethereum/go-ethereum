@@ -1,10 +1,10 @@
 package storage
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -12,8 +12,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 const (
@@ -37,6 +37,7 @@ type resource struct {
 	nameHash   common.Hash
 	startBlock uint64
 	lastPeriod uint32
+	lastKey    Key
 	frequency  uint64
 	version    uint32
 	data       []byte
@@ -114,26 +115,30 @@ type ResourceValidator interface {
 // stored using a separate store, and forwarding/syncing protocols carry per-chunk
 // flags to tell whether the chunk can be validated or not; if not it is to be
 // treated as a resource update chunk.
+//
+// TODO: Include modtime in chunk data + signature
 type ResourceHandler struct {
 	ChunkStore
 	validator    ResourceValidator
-	rpcClient    *rpc.Client
+	ethClient    *ethclient.Client
 	resources    map[string]*resource
 	hashLock     sync.Mutex
 	resourceLock sync.RWMutex
 	hasher       SwarmHash
 	nameHash     nameHashFunc
 	storeTimeout time.Duration
+	ctx          context.Context
+	cancelFunc   func()
 }
 
 // Create or open resource update chunk store
 //
 // If validator is nil, signature and access validation will be deactivated
-func NewResourceHandler(datadir string, cloudStore CloudStore, rpcClient *rpc.Client, validator ResourceValidator) (*ResourceHandler, error) {
+func NewResourceHandler(datadir string, cloudStore CloudStore, ethClient *ethclient.Client, validator ResourceValidator) (*ResourceHandler, error) {
 
 	hashfunc := MakeHashFunc(SHA3Hash)
 
-	path := filepath.Join(datadir, dbDirName)
+	path := filepath.Join(datadir, DbDirName)
 	dbStore, err := NewDbStore(datadir, hashfunc, singletonSwarmDbCapacity, 0)
 	if err != nil {
 		return nil, err
@@ -143,6 +148,7 @@ func NewResourceHandler(datadir string, cloudStore CloudStore, rpcClient *rpc.Cl
 		DbStore:  dbStore,
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	rh := &ResourceHandler{
 		ChunkStore:   newResourceChunkStore(path, hashfunc, localStore, cloudStore),
 		rpcClient:    rpcClient,
@@ -150,6 +156,8 @@ func NewResourceHandler(datadir string, cloudStore CloudStore, rpcClient *rpc.Cl
 		hasher:       hashfunc(),
 		validator:    validator,
 		storeTimeout: defaultStoreTimeout,
+		ctx:          ctx,
+		cancelFunc:   cancel,
 	}
 
 	if rh.validator != nil {
@@ -167,17 +175,22 @@ func NewResourceHandler(datadir string, cloudStore CloudStore, rpcClient *rpc.Cl
 	return rh, nil
 }
 
+func (self *ResourceHandler) IsValidated() bool {
+	return self.validator == nil
+}
+
 func (self *ResourceHandler) HashSize() int {
 	return self.validator.hashSize()
 }
 
 // get data from current resource
-func (self *ResourceHandler) GetData(name string) ([]byte, error) {
+
+func (self *ResourceHandler) GetContent(name string) (Key, []byte, error) {
 	rsrc := self.getResource(name)
 	if rsrc == nil || !rsrc.isSynced() {
-		return nil, fmt.Errorf("Resource does not exist or is not synced")
+		return nil, nil, fmt.Errorf("Resource does not exist or is not synced")
 	}
-	return rsrc.data, nil
+	return rsrc.lastKey, rsrc.data, nil
 }
 
 func (self *ResourceHandler) GetLastPeriod(name string) (uint32, error) {
@@ -430,6 +443,7 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 	if *rsrc.name != name {
 		return nil, fmt.Errorf("Update belongs to '%s', but have '%s'", name, *rsrc.name)
 	}
+	log.Trace("update", "name", *rsrc.name, "rootkey", rsrc.nameHash, "updatekey", chunk.Key, "period", period, "version", version)
 	// only check signature if validator is present
 	if self.validator != nil {
 		digest := self.keyDataHash(chunk.Key, data)
@@ -440,6 +454,7 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 	}
 
 	// update our rsrcs entry map
+	rsrc.lastKey = chunk.Key
 	rsrc.lastPeriod = period
 	rsrc.version = version
 	rsrc.updated = time.Now()
@@ -582,20 +597,22 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 // Closes the datastore.
 // Always call this at shutdown to avoid data corruption.
 func (self *ResourceHandler) Close() {
+	self.cancelFunc()
 	self.ChunkStore.Close()
 }
 
 func (self *ResourceHandler) GetBlock() (uint64, error) {
+	return self.ethClient.BlockNumber(self.ctx)
 	// get the block height and convert to uint64
-	var currentblock string
-	err := self.rpcClient.Call(&currentblock, "eth_blockNumber")
-	if err != nil {
-		return 0, err
-	}
-	if currentblock == "0x0" {
-		return 0, nil
-	}
-	return strconv.ParseUint(currentblock, 10, 64)
+	//	var currentblock string
+	//	err := self.rpcClient.Call(&currentblock, "eth_blockNumber")
+	//	if err != nil {
+	//		return 0, err
+	//	}
+	//	if currentblock == "0x0" {
+	//		return 0, nil
+	//	}
+	//	return strconv.ParseUint(currentblock, 10, 64)
 }
 
 // Calculate the period index (aka major version number) from a given block number

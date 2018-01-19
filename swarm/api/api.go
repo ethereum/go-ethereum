@@ -365,13 +365,13 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 }
 
 // Look up mutable resource updates at specific periods and versions
-func (self *Api) DbLookup(key storage.Key, name string, period uint32, version uint32) (io.ReadSeeker, error) {
+func (self *Api) DbLookup(key storage.Key, name string, period uint32, version uint32) (storage.Key, io.ReadSeeker, int, error) {
 	var err error
 	if version != 0 {
 		if period == 0 {
 			currentblocknumber, err := self.resource.GetBlock()
 			if err != nil {
-				return nil, fmt.Errorf("Could not determine latest block: %v", err)
+				return nil, nil, 0, fmt.Errorf("Could not determine latest block: %v", err)
 			}
 			period = self.resource.BlockToPeriod(name, currentblocknumber)
 		}
@@ -382,13 +382,13 @@ func (self *Api) DbLookup(key storage.Key, name string, period uint32, version u
 		_, err = self.resource.LookupLatestByName(name, true)
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, 0, err
 	}
-	data, err := self.resource.GetData(name)
+	key, data, err := self.resource.GetContent(name)
 	if err != nil {
-		return nil, err
+		return nil, nil, 0, err
 	}
-	return bytes.NewReader(data), nil
+	return key, bytes.NewReader(data), len(data), nil
 }
 
 func (self *Api) DbCreate(name string, frequency uint64) (err error) {
@@ -405,4 +405,8 @@ func (self *Api) DbUpdate(name string, data []byte) (storage.Key, uint32, uint32
 
 func (self *Api) DbHashSize() int {
 	return self.resource.HashSize()
+}
+
+func (self *Api) DbIsValidated() bool {
+	return self.resource.IsValidated()
 }

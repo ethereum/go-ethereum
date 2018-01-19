@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
@@ -55,30 +56,32 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 	dpa.Start()
 
 	// mutable resources test setup
-	resourcedir, err := ioutil.TempDir("", "swarm-resource-test")
+	resourceDir, err := ioutil.TempDir("", "swarm-resource-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ipcpath := filepath.Join(resourcedir, "test.ipc")
-	ipcl, err := rpc.CreateIPCListener(ipcpath)
+	ipcPath := filepath.Join(resourceDir, "test.ipc")
+	ipcl, err := rpc.CreateIPCListener(ipcPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpcserver := rpc.NewServer()
-	rpcserver.RegisterName("eth", &FakeRPC{})
+	rpcServer := rpc.NewServer()
+	rpcServer.RegisterName("eth", &FakeRPC{})
 	go func() {
-		rpcserver.ServeListener(ipcl)
+		rpcServer.ServeListener(ipcl)
 	}()
 	rpcClean := func() {
-		rpcserver.Stop()
+		rpcServer.Stop()
 	}
 
 	// connect to fake rpc
-	rpcclient, err := rpc.Dial(ipcpath)
+	rpcClient, err := rpc.Dial(ipcPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rh, err := storage.NewResourceHandler(resourcedir, &testCloudStore{}, rpcclient, nil)
+	ethClient := ethclient.NewClient(rpcClient)
+
+	rh, err := storage.NewResourceHandler(resourceDir, &testCloudStore{}, ethClient, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +97,7 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 			rh.Close()
 			rpcClean()
 			os.RemoveAll(dir)
-			os.RemoveAll(resourcedir)
+			os.RemoveAll(resourceDir)
 		},
 	}
 }

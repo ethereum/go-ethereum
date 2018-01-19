@@ -327,7 +327,7 @@ func (s *Server) HandlePostDb(w http.ResponseWriter, r *Request) {
 func (s *Server) HandleGetDb(w http.ResponseWriter, r *Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 
-	key, err := s.api.Resolve(r.uri)
+	rootKey, err := s.api.Resolve(r.uri)
 	if err != nil {
 		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
 		return
@@ -337,12 +337,15 @@ func (s *Server) HandleGetDb(w http.ResponseWriter, r *Request) {
 	if len(r.uri.Path) > 0 {
 		params = strings.Split(r.uri.Path, "/")
 	}
+	var updateKey storage.Key
 	var period uint64
 	var version uint64
 	var data io.ReadSeeker
+	var dataLength int
+	now := time.Now()
 	switch len(params) {
 	case 0:
-		data, err = s.api.DbLookup(key, r.uri.Addr, 0, 0)
+		updateKey, data, dataLength, err = s.api.DbLookup(rootKey, r.uri.Addr, 0, 0)
 		break
 	case 2:
 		version, err = strconv.ParseUint(params[1], 10, 32)
@@ -354,7 +357,7 @@ func (s *Server) HandleGetDb(w http.ResponseWriter, r *Request) {
 		if err != nil {
 			break
 		}
-		data, err = s.api.DbLookup(key, r.uri.Addr, uint32(period), uint32(version))
+		updateKey, data, dataLength, err = s.api.DbLookup(rootKey, r.uri.Addr, uint32(period), uint32(version))
 		break
 	default:
 		w.WriteHeader(http.StatusBadRequest)
@@ -365,9 +368,32 @@ func (s *Server) HandleGetDb(w http.ResponseWriter, r *Request) {
 		return
 	}
 	if !r.uri.DbRaw() {
-
+		entry := api.ManifestEntry{
+			Hash:        rootKey.Hex(),
+			Path:        updateKey.Hex(),
+			ContentType: api.DbManifestType,
+			Size:        int64(dataLength),
+			ModTime:     now,
+			Status:      http.StatusOK,
+		}
+		mode := (6 << 2) | (4 << 1) | 4
+		if s.api.DbIsValidated() {
+			mode |= 2 << 1
+		}
+		entry.Mode = int64(mode)
+		manifest := api.Manifest{
+			Entries: []api.ManifestEntry{
+				entry,
+			},
+		}
+		manifestJson, err := json.Marshal(manifest)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		data = bytes.NewReader(manifestJson)
 	}
-	http.ServeContent(w, &r.Request, "", time.Now(), data)
+	http.ServeContent(w, &r.Request, "", now, data)
 }
 
 // HandleGet handles a GET request to

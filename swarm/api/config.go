@@ -46,22 +46,23 @@ type Config struct {
 	*network.HiveParams
 	Swap *swap.SwapParams
 	//*network.SyncParams
-	Contract    common.Address
-	EnsRoot     common.Address
-	EnsApi      string
-	Path        string
-	ListenAddr  string
-	Port        string
-	PublicKey   string
-	BzzKey      string
-	NetworkId   uint64
-	SwapEnabled bool
-	SyncEnabled bool
-	PssEnabled  bool
-	SwapApi     string
-	Cors        string
-	BzzAccount  string
-	BootNodes   string
+	Contract        common.Address
+	EnsRoot         common.Address
+	EnsApi          string
+	Path            string
+	ListenAddr      string
+	Port            string
+	PublicKey       string
+	BzzKey          string
+	NetworkId       uint64
+	SwapEnabled     bool
+	SyncEnabled     bool
+	PssEnabled      bool
+	ResourceEnabled bool
+	SwapApi         string
+	Cors            string
+	BzzAccount      string
+	BootNodes       string
 }
 
 //create a default config with all parameters to set to defaults
@@ -72,18 +73,19 @@ func NewConfig() (self *Config) {
 		ChunkerParams: storage.NewChunkerParams(),
 		HiveParams:    network.NewHiveParams(),
 		//SyncParams:    network.NewDefaultSyncParams(),
-		Swap:        swap.NewDefaultSwapParams(),
-		ListenAddr:  DefaultHTTPListenAddr,
-		Port:        DefaultHTTPPort,
-		Path:        node.DefaultDataDir(),
-		EnsApi:      node.DefaultIPCEndpoint("geth"),
-		EnsRoot:     ens.TestNetAddress,
-		NetworkId:   network.NetworkID,
-		SwapEnabled: false,
-		SyncEnabled: true,
-		PssEnabled:  true,
-		SwapApi:     "",
-		BootNodes:   "",
+		Swap:            swap.NewDefaultSwapParams(),
+		ListenAddr:      DefaultHTTPListenAddr,
+		Port:            DefaultHTTPPort,
+		Path:            node.DefaultDataDir(),
+		EnsApi:          node.DefaultIPCEndpoint("geth"),
+		EnsRoot:         ens.TestNetAddress,
+		NetworkId:       network.NetworkID,
+		SwapEnabled:     false,
+		SyncEnabled:     true,
+		PssEnabled:      true,
+		ResourceEnabled: true,
+		SwapApi:         "",
+		BootNodes:       "",
 	}
 
 	return

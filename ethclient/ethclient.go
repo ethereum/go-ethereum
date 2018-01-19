@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -74,6 +75,15 @@ type rpcBlock struct {
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`
 	UncleHashes  []common.Hash    `json:"uncles"`
+}
+
+func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
+	var number string
+	err := ec.c.CallContext(ctx, &number, "eth_blockNumber")
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseUint(number, 10, 64)
 }
 
 func (ec *Client) getBlock(ctx context.Context, method string, args ...interface{}) (*types.Block, error) {

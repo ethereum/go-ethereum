@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -211,8 +212,8 @@ func TestResourceHandler(t *testing.T) {
 	// it will match on second iteration startblocknumber + (resourceFrequency * 3)
 	fwdBlocks(int(resourceFrequency*2)-1, backend)
 
-	rh2, err := NewResourceHandler(datadir, &testCloudStore{}, rh.rpcClient, nil)
-	_, err = rh2.LookupLatest(safeName, true)
+	rh2, err := NewResourceHandler(datadir, &testCloudStore{}, rh.ethClient, nil)
+	_, err = rh2.LookupLatestByName(safeName, true)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -230,7 +231,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, latest version
-	rsrc, err := rh2.LookupHistorical(safeName, 3, true)
+	rsrc, err := rh2.LookupHistoricalByName(safeName, 3, true)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -241,7 +242,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Historical lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, specific version
-	rsrc, err = rh2.LookupVersion(safeName, 3, 1, true)
+	rsrc, err = rh2.LookupVersionByName(safeName, 3, 1, true)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -365,12 +366,14 @@ func setupTest(contractbackend bind.ContractBackend, validator ResourceValidator
 	}
 
 	// connect to fake rpc
-	rpcclient, err := rpc.Dial(ipcpath)
+	rpcClient, err := rpc.Dial(ipcpath)
 	if err != nil {
 		return
 	}
 
-	rh, err = NewResourceHandler(datadir, &testCloudStore{}, rpcclient, validator)
+	ethClient := ethclient.NewClient(rpcClient)
+
+	rh, err = NewResourceHandler(datadir, &testCloudStore{}, ethClient, validator)
 	teardown = func(t *testing.T, err error) {
 		cleanF()
 		if err != nil {
@@ -426,8 +429,9 @@ func setupENS(addr common.Address, transactOpts *bind.TransactOpts, sub string, 
 
 // implementation of an external signer to pass to validator
 type testSigner struct {
-	privKey *ecdsa.PrivateKey
-	hasher  SwarmHash
+	privKey     *ecdsa.PrivateKey
+	hasher      SwarmHash
+	signContent SignFunc
 }
 
 func newTestSigner() (*testSigner, error) {
@@ -436,19 +440,10 @@ func newTestSigner() (*testSigner, error) {
 		return nil, err
 	}
 	return &testSigner{
-		privKey: privKey,
-		hasher:  testHasher,
+		privKey:     privKey,
+		hasher:      testHasher,
+		signContent: NewGenericResourceSigner(privKey),
 	}, nil
-}
-
-// matches the SignFunc type
-func (self *testSigner) signContent(data common.Hash) (signature Signature, err error) {
-	signaturebytes, err := crypto.Sign(data.Bytes(), self.privKey)
-	if err != nil {
-		return
-	}
-	copy(signature[:], signaturebytes)
-	return
 }
 
 type testCloudStore struct {

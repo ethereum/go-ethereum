@@ -78,6 +78,16 @@ func TestBzzGetDb(t *testing.T) {
 	}
 	b, err = ioutil.ReadAll(resp.Body)
 	fmt.Printf("Get: %s : %s\n", resp.Status, b)
+
+	url = fmt.Sprintf("%s/bzz-db:/%s", srv.URL, fmt.Sprintf("%x", keybytes))
+	resp, err = http.Get(url)
+	if err != nil {
+		fmt.Printf("err: %v\n", err)
+		return
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	fmt.Printf("Get: %s : %s\n", resp.Status, b)
+
 }
 
 func TestBzzGetPath(t *testing.T) {
