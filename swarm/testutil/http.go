@@ -89,7 +89,7 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 		Server: srv,
 		Dpa:    dpa,
 		dir:    dir,
-		hasher: storage.MakeHashFunc("SHA3")(),
+		hasher: storage.MakeHashFunc(storage.SHA3Hash)(),
 		cleanup: func() {
 			rh.Close()
 			rpcClean()

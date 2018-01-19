@@ -18,6 +18,7 @@ package http_test
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -43,7 +44,14 @@ func TestBzzGetDb(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t)
 	defer srv.Close()
 
-	url := srv.URL + "/bzz-db:/foo/42"
+	keybytes := make([]byte, common.HashLength) // nearest we get to source of info
+	_, err := rand.Read(keybytes)
+	if err != nil {
+		fmt.Printf("err: %v\n", err)
+		return
+	}
+
+	url := fmt.Sprintf("%s/bzz-db:/%s/42", srv.URL, fmt.Sprintf("%x", keybytes))
 	resp, err := http.Post(url, "application/octet-stream", nil)
 	if err != nil {
 		fmt.Printf("err: %v\n", err)
@@ -52,7 +60,7 @@ func TestBzzGetDb(t *testing.T) {
 	b, err := ioutil.ReadAll(resp.Body)
 	fmt.Printf("Create: %s : %s\n", resp.Status, b)
 
-	url = srv.URL + "/bzz-db:/foo"
+	url = fmt.Sprintf("%s/bzz-db:/%s", srv.URL, fmt.Sprintf("%x", keybytes))
 	data := []byte("foo")
 	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(data))
 	if err != nil {
@@ -62,7 +70,7 @@ func TestBzzGetDb(t *testing.T) {
 	b, err = ioutil.ReadAll(resp.Body)
 	fmt.Printf("Update: %s : %s\n", resp.Status, b)
 
-	url = srv.URL + "/bzz-db:/foo"
+	url = fmt.Sprintf("%s/bzz-db-raw:/%s", srv.URL, fmt.Sprintf("%x", keybytes))
 	resp, err = http.Get(url)
 	if err != nil {
 		fmt.Printf("err: %v\n", err)
@@ -70,7 +78,6 @@ func TestBzzGetDb(t *testing.T) {
 	}
 	b, err = ioutil.ReadAll(resp.Body)
 	fmt.Printf("Get: %s : %s\n", resp.Status, b)
-
 }
 
 func TestBzzGetPath(t *testing.T) {

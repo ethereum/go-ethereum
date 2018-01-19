@@ -10,6 +10,7 @@ import (
 
 type baseValidator struct {
 	signFunc SignFunc
+	hashsize int
 }
 
 func (b *baseValidator) sign(datahash common.Hash) (signature Signature, err error) {
@@ -17,6 +18,10 @@ func (b *baseValidator) sign(datahash common.Hash) (signature Signature, err err
 		return signature, fmt.Errorf("No signature function")
 	}
 	return b.signFunc(datahash)
+}
+
+func (b *baseValidator) hashSize() int {
+	return b.hashsize
 }
 
 // ENS validation of mutable resource owners
@@ -30,6 +35,7 @@ func NewENSValidator(contractaddress common.Address, backend bind.ContractBacken
 	validator := &ENSValidator{
 		baseValidator: &baseValidator{
 			signFunc: signFunc,
+			hashsize: common.HashLength,
 		},
 	}
 	validator.api, err = ens.NewENS(transactOpts, contractaddress, backend)

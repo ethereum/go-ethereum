@@ -332,36 +332,42 @@ func (s *Server) HandleGetDb(w http.ResponseWriter, r *Request) {
 		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
 		return
 	}
-	_ = key
 
 	var params []string
 	if len(r.uri.Path) > 0 {
 		params = strings.Split(r.uri.Path, "/")
 	}
+	var period uint64
+	var version uint64
+	var data io.ReadSeeker
 	switch len(params) {
 	case 0:
-		data, err := s.api.DbLookup(r.uri.Addr)
+		data, err = s.api.DbLookup(key, r.uri.Addr, 0, 0)
 		break
 	case 2:
-		strconv.ParseUint(params[1], 10, 32)
+		version, err = strconv.ParseUint(params[1], 10, 32)
+		if err != nil {
+			break
+		}
 	case 1:
-		strconv.ParseUint(params[0], 10, 32)
+		period, err = strconv.ParseUint(params[0], 10, 32)
+		if err != nil {
+			break
+		}
+		data, err = s.api.DbLookup(key, r.uri.Addr, uint32(period), uint32(version))
 		break
 	default:
 		w.WriteHeader(http.StatusBadRequest)
-		err = "params 0-2"
+		err = fmt.Errorf("params 0-2")
 	}
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	wrappedData := wrapDbContent(data, s.uri.Scheme)
+	if !r.uri.DbRaw() {
+
+	}
 	http.ServeContent(w, &r.Request, "", time.Now(), data)
-
-}
-
-func wrapDbContent(data io.Reader, scheme *string) io.Reader {
-
 }
 
 // HandleGet handles a GET request to
@@ -705,6 +711,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.HandleDelete(w, req)
 
 	case "GET":
+
+		if uri.Db() || uri.DbRaw() {
+			s.HandleGetDb(w, req)
+			return
+		}
+
 		if uri.Raw() || uri.Hash() || uri.DeprecatedRaw() {
 			s.HandleGet(w, req)
 			return
@@ -717,11 +729,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		if r.Header.Get("Accept") == "application/x-tar" {
 			s.HandleGetFiles(w, req)
-			return
-		}
-
-		if uri.Db() {
-			s.HandleGetDb(w, req)
 			return
 		}
 

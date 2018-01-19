@@ -46,9 +46,9 @@ on top of the dpa
 it is the public interface of the dpa which is included in the ethereum stack
 */
 type Api struct {
+	resource *storage.ResourceHandler
 	dpa      *storage.DPA
 	dns      Resolver
-	resource *storage.ResourceHandler
 }
 
 //the api constructor initialises
@@ -365,7 +365,7 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 }
 
 // Look up mutable resource updates at specific periods and versions
-func (self *Api) DbLookup(name string, period uint32, version uint32) (io.ReadSeeker, error) {
+func (self *Api) DbLookup(key storage.Key, name string, period uint32, version uint32) (io.ReadSeeker, error) {
 	var err error
 	if version != 0 {
 		if period == 0 {
@@ -375,16 +375,20 @@ func (self *Api) DbLookup(name string, period uint32, version uint32) (io.ReadSe
 			}
 			period = self.resource.BlockToPeriod(name, currentblocknumber)
 		}
-		_, err = self.resource.LookupVersion(name, period, version, true)
+		_, err = self.resource.LookupVersionByName(name, period, version, true)
 	} else if period != 0 {
-		_, err = self.resource.LookupHistorical(name, period, true)
+		_, err = self.resource.LookupHistoricalByName(name, period, true)
 	} else {
-		_, err = self.resource.LookupLatest(name, true)
+		_, err = self.resource.LookupLatestByName(name, true)
 	}
 	if err != nil {
 		return nil, err
 	}
-	return bytes.NewReader(self.resource.GetData(name)), nil
+	data, err := self.resource.GetData(name)
+	if err != nil {
+		return nil, err
+	}
+	return bytes.NewReader(data), nil
 }
 
 func (self *Api) DbCreate(name string, frequency uint64) (err error) {
@@ -394,5 +398,11 @@ func (self *Api) DbCreate(name string, frequency uint64) (err error) {
 
 func (self *Api) DbUpdate(name string, data []byte) (storage.Key, uint32, uint32, error) {
 	key, err := self.resource.Update(name, data)
-	return key, self.resource.GetLastPeriod(name), self.resource.GetVersion(name), err
+	period, _ := self.resource.GetLastPeriod(name)
+	version, _ := self.resource.GetVersion(name)
+	return key, period, version, err
+}
+
+func (self *Api) DbHashSize() int {
+	return self.resource.HashSize()
 }

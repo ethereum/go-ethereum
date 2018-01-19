@@ -51,6 +51,7 @@ func (self *resource) isSynced() bool {
 // Implement to activate validation of resource updates
 // Specifically signing data and verification of signatures
 type ResourceValidator interface {
+	hashSize() int
 	checkAccess(string, common.Address) (bool, error)
 	nameHash(string) common.Hash         // nameHashFunc
 	sign(common.Hash) (Signature, error) // SignFunc
@@ -166,28 +167,34 @@ func NewResourceHandler(datadir string, cloudStore CloudStore, rpcClient *rpc.Cl
 	return rh, nil
 }
 
-func (self *ResourceHandler) GetData(name string) []byte {
-	rsrc := self.getResource(name)
-	if rsrc == nil {
-		return nil
-	}
-	return rsrc.data
+func (self *ResourceHandler) HashSize() int {
+	return self.validator.hashSize()
 }
 
-func (self *ResourceHandler) GetLastPeriod(name string) uint32 {
+// get data from current resource
+func (self *ResourceHandler) GetData(name string) ([]byte, error) {
 	rsrc := self.getResource(name)
-	if rsrc == nil {
-		return 0
+	if rsrc == nil || !rsrc.isSynced() {
+		return nil, fmt.Errorf("Resource does not exist or is not synced")
 	}
-	return rsrc.lastPeriod
+	return rsrc.data, nil
 }
 
-func (self *ResourceHandler) GetVersion(name string) uint32 {
+func (self *ResourceHandler) GetLastPeriod(name string) (uint32, error) {
 	rsrc := self.getResource(name)
-	if rsrc == nil {
-		return 0
+
+	if rsrc == nil || !rsrc.isSynced() {
+		return 0, fmt.Errorf("Resource does not exist or is not synced")
 	}
-	return rsrc.version
+	return rsrc.lastPeriod, nil
+}
+
+func (self *ResourceHandler) GetVersion(name string) (uint32, error) {
+	rsrc := self.getResource(name)
+	if rsrc == nil || !rsrc.isSynced() {
+		return 0, fmt.Errorf("Resource does not exist or is not synced")
+	}
+	return rsrc.version, nil
 }
 
 // \TODO should be hashsize * branches from the chosen chunker, implement with dpa
@@ -269,8 +276,14 @@ func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resour
 // root chunk.
 // It is the callers responsibility to make sure that this chunk exists (if the resource
 // update root data was retrieved externally, it typically doesn't)
-func (self *ResourceHandler) LookupVersion(name string, period uint32, version uint32, refresh bool) (*resource, error) {
-	rsrc, err := self.loadResource(name, refresh)
+//
+//
+func (self *ResourceHandler) LookupVersionByName(name string, period uint32, version uint32, refresh bool) (*resource, error) {
+	return self.LookupVersion(self.nameHash(name), name, period, version, refresh)
+}
+
+func (self *ResourceHandler) LookupVersion(nameHash common.Hash, name string, period uint32, version uint32, refresh bool) (*resource, error) {
+	rsrc, err := self.loadResource(nameHash, name, refresh)
 	if err != nil {
 		return nil, err
 	}
@@ -285,8 +298,12 @@ func (self *ResourceHandler) LookupVersion(name string, period uint32, version u
 // and returned.
 //
 // See also (*ResourceHandler).LookupVersion
-func (self *ResourceHandler) LookupHistorical(name string, period uint32, refresh bool) (*resource, error) {
-	rsrc, err := self.loadResource(name, refresh)
+func (self *ResourceHandler) LookupHistoricalByName(name string, period uint32, refresh bool) (*resource, error) {
+	return self.LookupHistorical(self.nameHash(name), name, period, refresh)
+}
+
+func (self *ResourceHandler) LookupHistorical(nameHash common.Hash, name string, period uint32, refresh bool) (*resource, error) {
+	rsrc, err := self.loadResource(nameHash, name, refresh)
 	if err != nil {
 		return nil, err
 	}
@@ -303,10 +320,14 @@ func (self *ResourceHandler) LookupHistorical(name string, period uint32, refres
 // Version iteration is done as in (*ResourceHandler).LookupHistorical
 //
 // See also (*ResourceHandler).LookupHistorical
-func (self *ResourceHandler) LookupLatest(name string, refresh bool) (*resource, error) {
+func (self *ResourceHandler) LookupLatestByName(name string, refresh bool) (*resource, error) {
+	return self.LookupLatest(self.nameHash(name), name, refresh)
+}
+
+func (self *ResourceHandler) LookupLatest(nameHash common.Hash, name string, refresh bool) (*resource, error) {
 
 	// get our blockheight at this time and the next block of the update period
-	rsrc, err := self.loadResource(name, refresh)
+	rsrc, err := self.loadResource(nameHash, name, refresh)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +383,11 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 }
 
 // load existing mutable resource into resource struct
-func (self *ResourceHandler) loadResource(name string, refresh bool) (*resource, error) {
+func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, refresh bool) (*resource, error) {
+
+	if name == "" {
+		name = nameHash.Hex()
+	}
 
 	// if the resource is not known to this session we must load it
 	// if refresh is set, we force load
@@ -374,7 +399,7 @@ func (self *ResourceHandler) loadResource(name string, refresh bool) (*resource,
 			return nil, fmt.Errorf("Invalid name '%s'", name)
 		}
 		rsrc.name = &name
-		rsrc.nameHash = self.nameHash(name)
+		rsrc.nameHash = nameHash
 
 		// get the root info chunk and update the cached value
 		chunk, err := self.Get(Key(rsrc.nameHash[:]))
