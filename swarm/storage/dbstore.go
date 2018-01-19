@@ -615,7 +615,7 @@ func (s *DbStore) writeBatch(b *leveldb.Batch, entryCnt, dataIdx, accessCnt uint
 	b.Put(keyEntryCnt, U64ToBytes(entryCnt))
 	b.Put(keyDataIdx, U64ToBytes(dataIdx))
 	b.Put(keyAccessCnt, U64ToBytes(accessCnt))
-	l := s.batch.Len()
+	l := b.Len()
 	if err := s.db.Write(b); err != nil {
 		log.Error(fmt.Sprintf("unable to write batch: %v", err))
 	}
