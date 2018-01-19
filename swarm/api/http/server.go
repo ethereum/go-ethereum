@@ -320,8 +320,19 @@ func (s *Server) HandlePostDb(w http.ResponseWriter, r *Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// Retrieve mutable resource updates:
+// bzz-db[-[immutable|-raw]]://<id> - get latest update
+// bzz-db[-[immutable|-raw]]://<id>/<n> - get latest update on period n
+// bzz-db[-[immutable|-raw]]://<id>/<n>/<m> - get update version m of period n
 func (s *Server) HandleGetDb(w http.ResponseWriter, r *Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
+
+	key, err := s.api.Resolve(r.uri)
+	if err != nil {
+		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		return
+	}
+	_ = key
 
 	var params []string
 	if len(r.uri.Path) > 0 {
@@ -329,16 +340,28 @@ func (s *Server) HandleGetDb(w http.ResponseWriter, r *Request) {
 	}
 	switch len(params) {
 	case 0:
-		data, err := s.api.DbLookupLatest(r.uri.Addr)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			break
-		}
-		http.ServeContent(w, &r.Request, "", time.Now(), data)
+		data, err := s.api.DbLookup(r.uri.Addr)
+		break
+	case 2:
+		strconv.ParseUint(params[1], 10, 32)
+	case 1:
+		strconv.ParseUint(params[0], 10, 32)
 		break
 	default:
 		w.WriteHeader(http.StatusBadRequest)
+		err = "params 0-2"
 	}
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	wrappedData := wrapDbContent(data, s.uri.Scheme)
+	http.ServeContent(w, &r.Request, "", time.Now(), data)
+
+}
+
+func wrapDbContent(data io.Reader, scheme *string) io.Reader {
+
 }
 
 // HandleGet handles a GET request to

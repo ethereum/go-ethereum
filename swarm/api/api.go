@@ -364,8 +364,23 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 	return key, manifestEntryMap, nil
 }
 
-func (self *Api) DbLookupLatest(name string) (io.ReadSeeker, error) {
-	_, err := self.resource.LookupLatest(name, true)
+// Look up mutable resource updates at specific periods and versions
+func (self *Api) DbLookup(name string, period uint32, version uint32) (io.ReadSeeker, error) {
+	var err error
+	if version != 0 {
+		if period == 0 {
+			currentblocknumber, err := self.resource.GetBlock()
+			if err != nil {
+				return nil, fmt.Errorf("Could not determine latest block: %v", err)
+			}
+			period = self.resource.BlockToPeriod(name, currentblocknumber)
+		}
+		_, err = self.resource.LookupVersion(name, period, version, true)
+	} else if period != 0 {
+		_, err = self.resource.LookupHistorical(name, period, true)
+	} else {
+		_, err = self.resource.LookupLatest(name, true)
+	}
 	if err != nil {
 		return nil, err
 	}

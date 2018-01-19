@@ -231,7 +231,7 @@ func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resour
 	}
 
 	// get our blockheight at this time
-	currentblock, err := self.getBlock()
+	currentblock, err := self.GetBlock()
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +310,7 @@ func (self *ResourceHandler) LookupLatest(name string, refresh bool) (*resource,
 	if err != nil {
 		return nil, err
 	}
-	currentblock, err := self.getBlock()
+	currentblock, err := self.GetBlock()
 	if err != nil {
 		return nil, err
 	}
@@ -492,7 +492,7 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 	}
 
 	// get our blockheight at this time and the next block of the update period
-	currentblock, err := self.getBlock()
+	currentblock, err := self.GetBlock()
 	if err != nil {
 		return nil, err
 	}
@@ -560,7 +560,7 @@ func (self *ResourceHandler) Close() {
 	self.ChunkStore.Close()
 }
 
-func (self *ResourceHandler) getBlock() (uint64, error) {
+func (self *ResourceHandler) GetBlock() (uint64, error) {
 	// get the block height and convert to uint64
 	var currentblock string
 	err := self.rpcClient.Call(&currentblock, "eth_blockNumber")
