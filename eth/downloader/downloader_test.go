@@ -223,7 +223,7 @@ func (dl *downloadTester) HasHeader(hash common.Hash, number uint64) bool {
 }
 
 // HasBlockAndState checks if a block and associated state is present in the testers canonical chain.
-func (dl *downloadTester) HasBlockAndState(hash common.Hash) bool {
+func (dl *downloadTester) HasBlockAndState(hash common.Hash, number uint64) bool {
 	block := dl.GetBlockByHash(hash)
 	if block == nil {
 		return false

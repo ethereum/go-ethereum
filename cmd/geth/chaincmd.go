@@ -202,7 +202,7 @@ func importChain(ctx *cli.Context) error {
 
 	if len(ctx.Args()) == 1 {
 		if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
-			utils.Fatalf("Import error: %v", err)
+			log.Error("Import error", "err", err)
 		}
 	} else {
 		for _, arg := range ctx.Args() {
@@ -211,7 +211,7 @@ func importChain(ctx *cli.Context) error {
 			}
 		}
 	}
-
+	chain.Stop()
 	fmt.Printf("Import done in %v.\n\n", time.Since(start))
 
 	// Output pre-compaction stats mostly to see the import trashing

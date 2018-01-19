@@ -156,7 +156,7 @@ type Downloader struct {
 // LightChain encapsulates functions required to synchronise a light chain.
 type LightChain interface {
 	// HasHeader verifies a header's presence in the local chain.
-	HasHeader(h common.Hash, number uint64) bool
+	HasHeader(common.Hash, uint64) bool
 
 	// GetHeaderByHash retrieves a header from the local chain.
 	GetHeaderByHash(common.Hash) *types.Header
@@ -179,7 +179,7 @@ type BlockChain interface {
 	LightChain
 
 	// HasBlockAndState verifies block and associated states' presence in the local chain.
-	HasBlockAndState(common.Hash) bool
+	HasBlockAndState(common.Hash, uint64) bool
 
 	// GetBlockByHash retrieves a block from the local chain.
 	GetBlockByHash(common.Hash) *types.Block
@@ -671,7 +671,7 @@ func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, err
 					continue
 				}
 				// Otherwise check if we already know the header or not
-				if (d.mode == FullSync && d.blockchain.HasBlockAndState(headers[i].Hash())) || (d.mode != FullSync && d.lightchain.HasHeader(headers[i].Hash(), headers[i].Number.Uint64())) {
+				if (d.mode == FullSync && d.blockchain.HasBlockAndState(headers[i].Hash(), headers[i].Number.Uint64())) || (d.mode != FullSync && d.lightchain.HasHeader(headers[i].Hash(), headers[i].Number.Uint64())) {
 					number, hash = headers[i].Number.Uint64(), headers[i].Hash()
 
 					// If every header is known, even future ones, the peer straight out lied about its head
@@ -736,7 +736,7 @@ func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, err
 				arrived = true
 
 				// Modify the search interval based on the response
-				if (d.mode == FullSync && !d.blockchain.HasBlockAndState(headers[0].Hash())) || (d.mode != FullSync && !d.lightchain.HasHeader(headers[0].Hash(), headers[0].Number.Uint64())) {
+				if (d.mode == FullSync && !d.blockchain.HasBlockAndState(headers[0].Hash(), headers[0].Number.Uint64())) || (d.mode != FullSync && !d.lightchain.HasHeader(headers[0].Hash(), headers[0].Number.Uint64())) {
 					end = check
 					break
 				}

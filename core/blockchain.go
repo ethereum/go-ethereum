@@ -219,8 +219,10 @@ func (bc *BlockChain) loadLastState() error {
 	// Make sure the state associated with the block is available
 	if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
 		// Dangling block without a state associated, init from scratch
-		log.Warn("Head state missing, resetting chain", "number", currentBlock.Number(), "hash", currentBlock.Hash())
-		return bc.Reset()
+		log.Warn("Head state missing, repairing chain", "number", currentBlock.Number(), "hash", currentBlock.Hash())
+		if err := bc.repair(&currentBlock); err != nil {
+			return err
+		}
 	}
 	// Everything seems to be fine, set as the head block
 	bc.currentBlock = currentBlock
@@ -423,6 +425,24 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	return nil
 }
 
+// repair tries to repair the current blockchain by rolling back the current block
+// until one with associated state is found. This is needed to fix incomplete db
+// writes caused either by crashes/power outages, or simply non-committed tries.
+//
+// This method only rolls back the current block. The current header and current
+// fast block are left intact.
+func (bc *BlockChain) repair(head **types.Block) error {
+	for {
+		// Abort if we've rewound to a head block that does have associated state
+		if _, err := state.New((*head).Root(), bc.stateCache); err == nil {
+			log.Info("Rewound blockchain to past state", "number", (*head).Number(), "hash", (*head).Hash())
+			return nil
+		}
+		// Otherwise rewind one block and recheck state availability there
+		(*head) = bc.GetBlock((*head).ParentHash(), (*head).NumberU64()-1)
+	}
+}
+
 // Export writes the active chain to the given writer.
 func (bc *BlockChain) Export(w io.Writer) error {
 	return bc.ExportN(w, uint64(0), bc.currentBlock.NumberU64())
@@ -531,9 +551,9 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 
 // HasBlockAndState checks if a block and associated state trie is fully present
 // in the database or not, caching it if present.
-func (bc *BlockChain) HasBlockAndState(hash common.Hash) bool {
+func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
 	// Check first that the block itself is known
-	block := bc.GetBlockByHash(hash)
+	block := bc.GetBlock(hash, number)
 	if block == nil {
 		return false
 	}
@@ -624,11 +644,20 @@ func (bc *BlockChain) Stop() {
 
 	bc.wg.Wait()
 
-	// Ensure the state of the latest block is also stored to disk
-	root := bc.CurrentHeader().Root
-
-	if err := bc.triedb.Commit(root); err != nil {
-		log.Error("Failed to commit latest state trie", "err", err)
+	// Ensure the state of a recent block is also stored to disk before exiting.
+	// It is fine if this state does not exist (fast start/stop cycle), but it is
+	// advisable to leave an N block gap from the head so 1) a restart loads up
+	// the last N blocks as sync assistance to remote nodes; 2) a restart during
+	// a (small) reorg doesn't require deep reprocesses; 3) chain "repair" from
+	// missing states are constantly tested.
+	//
+	// This may be tuned a bit on mainnet if its too annoying to reprocess the last
+	// N blocks.
+	if number := bc.CurrentBlock().NumberU64(); number >= triesInMemory {
+		recent := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - triesInMemory + 1)
+		if err := bc.triedb.Commit(recent.Root()); err != nil {
+			log.Error("Failed to commit recent state trie", "err", err)
+		}
 	}
 	log.Info("Blockchain manager stopped")
 }
