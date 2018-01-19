@@ -24,84 +24,76 @@ import (
 	"math/rand"
 	"os"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var (
-	LocalStores []storage.ChunkStore
-	Addrs       []network.Addr
-	NodeCount   int
-)
+type Simulation struct {
+	Net    *simulations.Network
+	Stores []storage.ChunkStore
+	Addrs  []network.Addr
+	IDs    []discover.NodeID
+}
 
-func setLocalStores(addrs ...network.Addr) (func(), error) {
+func SetStores(addrs ...network.Addr) ([]storage.ChunkStore, func(), error) {
 	var datadirs []string
-	LocalStores = make([]storage.ChunkStore, len(addrs))
+	stores := make([]storage.ChunkStore, len(addrs))
 	var err error
 	for i, addr := range addrs {
-		// TODO: remove temp datadir after test
 		var datadir string
 		datadir, err = ioutil.TempDir("", "streamer")
 		if err != nil {
 			break
 		}
-		var localStore *storage.LocalStore
-		localStore, err = storage.NewTestLocalStoreForAddr(datadir, addr.Over())
+		var store storage.ChunkStore
+		store, err = storage.NewTestLocalStoreForAddr(datadir, addr.Over())
 		if err != nil {
 			break
 		}
 		datadirs = append(datadirs, datadir)
-		LocalStores[i] = localStore
+		stores[i] = store
 	}
 	teardown := func() {
 		for _, datadir := range datadirs {
 			os.RemoveAll(datadir)
 		}
 	}
-	return teardown, err
+	return stores, teardown, err
 }
 
-func testSimulation(t *testing.T, services adapters.Services, adapter string, simf func(adapters.NodeAdapter) (*simulations.StepResult, error)) {
-	var err error
-	var result *simulations.StepResult
-	startedAt := time.Now()
-
-	switch adapter {
+func NewAdapter(adapterType string, services adapters.Services) (adapter adapters.NodeAdapter, teardown func(), err error) {
+	teardown = func() {}
+	switch adapterType {
 	case "sim":
-		t.Logf("simadapter")
-		result, err = simf(adapters.NewSimAdapter(services))
+		adapter = adapters.NewSimAdapter(services)
 	case "socket":
-		result, err = simf(adapters.NewSocketAdapter(services))
+		adapter = adapters.NewSocketAdapter(services)
 	case "exec":
 		baseDir, err0 := ioutil.TempDir("", "swarm-test")
 		if err0 != nil {
-			t.Fatal(err0)
+			return nil, teardown, err0
 		}
-		defer os.RemoveAll(baseDir)
-		result, err = simf(adapters.NewExecAdapter(baseDir))
+		teardown = func() { os.RemoveAll(baseDir) }
+		adapter = adapters.NewExecAdapter(baseDir)
 	case "docker":
-		adapter, err0 := adapters.NewDockerAdapter()
-		if err0 != nil {
-			t.Fatal(err0)
+		adapter, err = adapters.NewDockerAdapter()
+		if err != nil {
+			return nil, teardown, err
 		}
-		result, err = simf(adapter)
 	default:
-		t.Fatal("adapter needs to be one of sim, socket, exec, docker")
+		return nil, teardown, errors.New("adapter needs to be one of sim, socket, exec, docker")
 	}
-	if err != nil {
-		t.Fatal(err)
-	}
+	return adapter, teardown, nil
+}
+
+func CheckResult(t *testing.T, result *simulations.StepResult, startedAt, finishedAt time.Time) {
 	t.Logf("Simulation with %d nodes passed in %s", len(result.Passes), result.FinishedAt.Sub(result.StartedAt))
 	var min, max time.Duration
 	var sum int
@@ -116,148 +108,101 @@ func testSimulation(t *testing.T, services adapters.Services, adapter string, si
 		sum += int(duration.Nanoseconds())
 	}
 	t.Logf("Min: %s, Max: %s, Average: %s", min, max, time.Duration(sum/len(result.Passes))*time.Nanosecond)
-	finishedAt := time.Now()
-	t.Logf("Setup: %s, shutdown: %s", result.StartedAt.Sub(startedAt), finishedAt.Sub(result.FinishedAt))
+	t.Logf("Setup: %s, Shutdown: %s", result.StartedAt.Sub(startedAt), finishedAt.Sub(result.FinishedAt))
 }
 
-func runSimulation(nodes, conns int, serviceName string, toAddr func(discover.NodeID) *network.BzzAddr, action func(*simulations.Network) func(context.Context) error, trigger func(*simulations.Network) chan discover.NodeID, check func(*simulations.Network, *storage.DPA) func(context.Context, discover.NodeID) (bool, error), adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
+type RunConfig struct {
+	Adapter   string
+	Step      *simulations.Step
+	NodeCount int
+	ConnLevel int
+	ToAddr    func(discover.NodeID) *network.BzzAddr
+	Services  adapters.Services
+}
+
+func NewSimulation(conf *RunConfig) (*Simulation, func(), error) {
 	// create network
+	nodes := conf.NodeCount
+	adapter, adapterTeardown, err := NewAdapter(conf.Adapter, conf.Services)
+	if err != nil {
+		return nil, adapterTeardown, err
+	}
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",
-		DefaultService: serviceName,
+		DefaultService: "streamer",
 	})
-	defer net.Shutdown()
+	teardown := func() {
+		adapterTeardown()
+		net.Shutdown()
+	}
 	ids := make([]discover.NodeID, nodes)
-	NodeCount = 0
-	Addrs = make([]network.Addr, nodes)
+	addrs := make([]network.Addr, nodes)
 	// start nodes
 	for i := 0; i < nodes; i++ {
 		node, err := net.NewNode()
 		if err != nil {
-			return nil, fmt.Errorf("error creating node: %s", err)
+			return nil, teardown, fmt.Errorf("error creating node: %s", err)
 		}
 		ids[i] = node.ID()
-		Addrs[i] = toAddr(ids[i])
+		addrs[i] = conf.ToAddr(ids[i])
 	}
-	// set nodes number of localstores globally available
-	teardown, err := setLocalStores(Addrs...)
-	defer teardown()
+	// set nodes number of Stores available
+	stores, storeTeardown, err := SetStores(addrs...)
+	teardown = func() {
+		storeTeardown()
+		adapterTeardown()
+		net.Shutdown()
+	}
 	if err != nil {
-		return nil, err
+		return nil, teardown, err
 	}
+	s := &Simulation{
+		Net:    net,
+		Stores: stores,
+		IDs:    ids,
+		Addrs:  addrs,
+	}
+	return s, teardown, nil
+}
 
+func (s *Simulation) Run(conf *RunConfig) (*simulations.StepResult, error) {
+	// bring up nodes, launch the servive
+	nodes := conf.NodeCount
+	conns := conf.ConnLevel
 	for i := 0; i < nodes; i++ {
-		if err := net.Start(ids[i]); err != nil {
-			return nil, fmt.Errorf("error starting node %s: %s", ids[i].TerminalString(), err)
+		if err := s.Net.Start(s.IDs[i]); err != nil {
+			return nil, fmt.Errorf("error starting node %s: %s", s.IDs[i].TerminalString(), err)
 		}
 	}
-
 	// run a simulation which connects the 10 nodes in a chain
 	wg := sync.WaitGroup{}
-	for i := range ids {
+	for i := range s.IDs {
 		// collect the overlay addresses, to
 		for j := 0; j < conns; j++ {
 			var k int
 			if j == 0 {
 				k = i - 1
 			} else {
-				k = rand.Intn(len(ids))
+				k = rand.Intn(len(s.IDs))
 			}
 			if i > 0 {
 				wg.Add(1)
 				go func(i, k int) {
 					defer wg.Done()
-					net.Connect(ids[i], ids[k])
+					s.Net.Connect(s.IDs[i], s.IDs[k])
 				}(i, k)
 			}
 		}
 	}
 	wg.Wait()
 
-	log.Debug(fmt.Sprintf("nodes: %v", len(Addrs)))
+	log.Debug(fmt.Sprintf("nodes: %v", len(s.Addrs)))
 
 	// create an only locally retrieving dpa for the pivot node to test
 	// if retriee requests have arrived
-	dpa := storage.NewDPA(LocalStores[0], storage.NewChunkerParams())
-	dpa.Start()
-	defer dpa.Stop()
 	timeout := 300 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
-		Action:  action(net),
-		Trigger: trigger(net),
-		Expect: &simulations.Expectation{
-			Nodes: ids[0:1],
-			Check: check(net, dpa),
-		},
-	})
+	result := simulations.NewSimulation(s.Net).Run(ctx, conf.Step)
 	return result, nil
-}
-
-type roundRobinStore struct {
-	index  uint32
-	stores []storage.ChunkStore
-}
-
-func newRoundRobinStore(stores ...storage.ChunkStore) *roundRobinStore {
-	return &roundRobinStore{
-		stores: stores,
-	}
-}
-
-func (rrs *roundRobinStore) Get(key storage.Key) (*storage.Chunk, error) {
-	return nil, errors.New("get not well defined on round robin store")
-}
-
-func (rrs *roundRobinStore) Put(chunk *storage.Chunk) {
-	i := atomic.AddUint32(&rrs.index, 1)
-	idx := int(i) % len(rrs.stores)
-	rrs.stores[idx].Put(chunk)
-}
-
-func (rrs *roundRobinStore) Close() {
-	for _, store := range rrs.stores {
-		store.Close()
-	}
-}
-
-type TestStreamerService struct {
-	// index    int
-	// addr     *network.BzzAddr
-	// // streamer *stream.Registry
-	run  func(p *p2p.Peer, rw p2p.MsgReadWriter) error
-	spec *protocols.Spec
-}
-
-func NewTestStreamerService(spec *protocols.Spec, run func(p *p2p.Peer, rw p2p.MsgReadWriter) error) *TestStreamerService {
-	return &TestStreamerService{
-		run:  run,
-		spec: spec,
-	}
-}
-
-func (tds *TestStreamerService) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{
-		{
-			Name:    tds.spec.Name,
-			Version: tds.spec.Version,
-			Length:  tds.spec.Length(),
-			Run:     tds.run,
-			// NodeInfo: ,
-			// PeerInfo: ,
-		},
-	}
-}
-
-func (b *TestStreamerService) APIs() []rpc.API {
-	return []rpc.API{}
-}
-
-func (b *TestStreamerService) Start(server *p2p.Server) error {
-	return nil
-}
-
-func (b *TestStreamerService) Stop() error {
-	return nil
 }

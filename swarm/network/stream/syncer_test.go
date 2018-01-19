@@ -26,140 +26,144 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	streamTesting "github.com/ethereum/go-ethereum/swarm/network/stream/testing"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 func TestSyncerSimulation(t *testing.T) {
-	testSimulation(t, testSyncBetweenNodes(2, 1, 81000, true, 1))
-	testSimulation(t, testSyncBetweenNodes(3, 1, 81000, true, 1))
+	testSyncBetweenNodes(t, 2, 1, 81000, true, 1)
+	testSyncBetweenNodes(t, 3, 1, 81000, true, 1)
 }
 
-func testSyncBetweenNodes(nodes, conns, size int, skipCheck bool, po uint8) func(adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
-	return func(adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
-		trigger := func(net *simulations.Network) chan discover.NodeID {
-			triggerC := make(chan discover.NodeID)
-			ticker := time.NewTicker(500 * time.Millisecond)
-			go func() {
-				defer ticker.Stop()
-				// we are only testing the pivot node (net.Nodes[0])
-				for range ticker.C {
-					triggerC <- net.Nodes[0].ID()
-				}
-			}()
-			return triggerC
-		}
-
-		action := func(net *simulations.Network) func(context.Context) error {
-			// here we distribute chunks of a random file into localstores of nodes 1 to nodes
-			rrdpa := storage.NewDPA(newRoundRobinStore(testing.LocalStores[1:]...), storage.NewChunkerParams())
-			rrdpa.Start()
-			// create a retriever dpa for the pivot node
-			return func(context.Context) error {
-				defer rrdpa.Stop()
-				// upload an actual random file of size size
-				_, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size))
-				if err != nil {
-					return err
-				}
-				// wait until all chunks stored
-				wait()
-				return nil
-			}
-		}
-
-		check := func(net *simulations.Network, dpa *storage.DPA) func(ctx context.Context, id discover.NodeID) (bool, error) {
-			dbs := make([]*storage.DBAPI, nodes)
-
-			for i := 0; i < nodes; i++ {
-				dbs[i] = NewDbAccess(testing.LocalStores[i].(*storage.LocalStore))
-			}
-			return func(ctx context.Context, id discover.NodeID) (bool, error) {
-				if id != net.Nodes[0].ID() {
-					return true, nil
-				}
-				select {
-				case <-ctx.Done():
-					return false, ctx.Err()
-				default:
-				}
-
-				var found, total int
-				for i := 1; i < nodes; i++ {
-					dbs[i].iterator(0, math.MaxUint64, po, func(key storage.Key, index uint64) bool {
-						_, err := dbs[0].get(key)
-						if err == nil {
-							found++
-						}
-						total++
-						return true
-					})
-				}
-				log.Debug("sync check", "bin", po, "found", found, "total", total)
-				return found == total, nil
-			}
-		}
-		toAddr := func(id discover.NodeID) *BzzAddr {
-			addr := network.NewAddrFromNodeID(id)
-			addr.OAddr[0] = byte(0)
-			return addr
-		}
-
-		result, err := runSimulation(nodes, conns, "syncer", toAddr, action, trigger, check, adapter)
-		if err != nil {
-			return nil, fmt.Errorf("Setting up simulation failed: %v", err)
-		}
-		if result.Error != nil {
-			return nil, fmt.Errorf("Simulation failed: %s", result.Error)
-		}
-		return result, err
+func testSyncBetweenNodes(t *testing.T, nodes, conns, size int, skipCheck bool, po uint8) {
+	toAddr = func(id discover.NodeID) *network.BzzAddr {
+		addr := network.NewAddrFromNodeID(id)
+		addr.OAddr[0] = byte(0)
+		return addr
 	}
-}
-
-func newSyncerService(ctx *adapters.ServiceContext) (node.Service, error) {
-	id := ctx.Config.ID
-	addr := network.NewAddrFromNodeID(id)
-	// for the test we make all peers share 8 bits so that syncing full bins make sense
-	addr.OAddr[0] = byte(0)
-	kad := NewKademlia(addr.Over(), NewKadParams())
-	localStore := testing.LocalStores[testing.NodeCount]
-	db := NewDbAccess(localStore.(*storage.LocalStore))
-	streamer := NewRegistry(NewDelivery(kad, db))
-	RegisterIncomingSyncer(streamer, db)
-	RegisterOutgoingSyncer(streamer, db)
-
-	testing.NodeCount++
-	return testing.NewTestStreamerService(Spec, makeRunFunc(addr, streamer)), nil
-}
-
-func makeRunFunc(localAddr network.Addr, streamer *Registry) (func(p *p2p.Peer, rw p2p.MsgReadWriter), error) {
-	return func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-		remoteAddr := network.NewAddrFromNodeID(p.ID())
-		remoteAddr.OAddr[0] = byte(0)
-		bzzPeer := &network.BzzPeer{
-			Peer:      protocols.NewPeer(p, rw, Spec),
-			localAddr: localAddr,
-			BzzAddr:   remoteAddr,
-		}
-		streamer.delivery.overlay.On(bzzPeer)
-		defer streamer.delivery.overlay.Off(bzzPeer)
-		// if len(addr) > b.index+1 && bytes.Equal(testing.Addrs[b.index+1], addr) {
-		go func() {
-			// each node Subscribes to each other's retrieveRequestStream
-			// need to wait till an aynchronous process registers the peers in streamer.peers
-			// that is used by Subscribe
-			time.Sleep(1 * time.Second)
-			if err := streamer.Subscribe(p.ID(), "SYNC", []byte{uint8(1)}, 0, 0, Top, false); err != nil {
-				log.Warn("error in subscribe", "err", err)
-			}
-		}()
-		// }
-		return streamer.Run(bzzPeer)
+	conf := &streamTesting.RunConfig{
+		Adapter:   *adapter,
+		NodeCount: nodes,
+		ConnLevel: conns,
+		ToAddr:    toAddr,
+		Services:  services,
 	}
+
+	sim, teardown, err := streamTesting.NewSimulation(conf)
+	defer teardown()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	stores = make(map[discover.NodeID]storage.ChunkStore)
+	deliveries = make(map[discover.NodeID]*Delivery)
+	log.Warn("Stores", "len", len(sim.Stores))
+	for i, id := range sim.IDs {
+		stores[id] = sim.Stores[i]
+	}
+
+	// here we distribute chunks of a random file into Stores of nodes 1 to nodes
+	rrdpa := storage.NewDPA(newRoundRobinStore(sim.Stores[1:]...), storage.NewChunkerParams())
+	rrdpa.Start()
+	_, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size))
+	defer rrdpa.Stop()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	// wait until all chunks stored
+	// TODO: is wait() necessary?
+	wait()
+	// each node Subscribes to each other's swarmChunkServerStreamName
+	// need to wait till an aynchronous process registers the peers in streamer.peers
+	// that is used by Subscribe
+	// time.Sleep(1 * time.Second)
+	// err := streamer.Subscribe(p.ID(), swarmChunkServerStreamName, nil, 0, 0, Top, true)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	// create a retriever dpa for the pivot node
+	action := func(context.Context) error {
+		for i := 0; i < len(sim.IDs)-1; i++ {
+			id := sim.IDs[i]
+			// if err := streamer.Subscribe(p.ID(), "SYNC", []byte{uint8(1)}, 0, 0, Top, false); err != nil {
+			// 	log.Warn("error in subscribe", "err", err)
+			// }
+			node := sim.Net.GetNode(id)
+			if node == nil {
+				return fmt.Errorf("unknown node: %s", id)
+			}
+			client, err := node.Client()
+			if err != nil {
+				return fmt.Errorf("error getting node client: %s", err)
+			}
+			var n int64
+			sid := sim.IDs[i+1]
+			if err := client.Call(&n, "stream_subscribe", sid, "SYNC", []byte{uint8(1)}, 0, 0, Top, false); err != nil {
+				return fmt.Errorf("error subscribing: %s", err)
+			}
+		}
+		return nil
+	}
+
+	dbs := make([]*storage.DBAPI, nodes)
+	for i := 0; i < nodes; i++ {
+		dbs[i] = storage.NewDBAPI(sim.Stores[i].(*storage.LocalStore))
+	}
+
+	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+		if id != sim.Net.Nodes[0].ID() {
+			return true, nil
+		}
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		default:
+		}
+
+		var found, total int
+		for i := 1; i < nodes; i++ {
+
+			dbs[i].Iterator(0, math.MaxUint64, po, func(key storage.Key, index uint64) bool {
+				_, err := dbs[0].Get(key)
+				if err == nil {
+					found++
+				}
+				total++
+				return true
+			})
+		}
+		log.Debug("sync check", "bin", po, "found", found, "total", total)
+		return found == total, nil
+	}
+
+	trigger := make(chan discover.NodeID)
+	ticker := time.NewTicker(500 * time.Millisecond)
+	go func() {
+		defer ticker.Stop()
+		// we are only testing the pivot node (net.Nodes[0])
+		for range ticker.C {
+			trigger <- sim.Net.Nodes[0].ID()
+		}
+	}()
+
+	conf.Step = &simulations.Step{
+		Action:  action,
+		Trigger: trigger,
+		Expect: &simulations.Expectation{
+			Nodes: sim.IDs[0:1],
+			Check: check,
+		},
+	}
+	startedAt := time.Now()
+	result, err := sim.Run(conf)
+	finishedAt := time.Now()
+	if err != nil {
+		t.Fatalf("Setting up simulation failed: %v", err)
+	}
+	if result.Error != nil {
+		t.Fatalf("Simulation failed: %s", result.Error)
+	}
+	streamTesting.CheckResult(t, result, startedAt, finishedAt)
 }

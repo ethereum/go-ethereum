@@ -253,6 +253,14 @@ type BzzPeer struct {
 	lastActive      time.Time // time is updated whenever mutexes are releasing
 }
 
+func NewBzzTestPeer(p *protocols.Peer, addr *BzzAddr) *BzzPeer {
+	return &BzzPeer{
+		Peer:      p,
+		localAddr: addr,
+		BzzAddr:   NewAddrFromNodeID(p.ID()),
+	}
+}
+
 // Off returns the overlay peer record for offline persistance
 func (p *BzzPeer) Off() OverlayAddr {
 	return p.BzzAddr

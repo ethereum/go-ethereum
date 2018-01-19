@@ -19,15 +19,14 @@ package stream
 import (
 	"errors"
 	"flag"
-	"io"
 	"io/ioutil"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/network"
@@ -40,8 +39,7 @@ var (
 )
 
 var services = adapters.Services{
-	"delivery": newDeliveryService,
-	"syncer":   newSyncerService,
+	"streamer": NewStreamerService,
 }
 
 func init() {
@@ -53,24 +51,16 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 }
 
-var (
-	delivery *Delivery
-	fileHash storage.Key
-)
-
-func mustReadAll(dpa *storage.DPA, hash storage.Key) (int, error) {
-	r := dpa.Retrieve(fileHash)
-	buf := make([]byte, 1024)
-	var n, total int
-	var err error
-	for (total == 0 || n > 0) && err == nil {
-		n, err = r.ReadAt(buf, int64(total))
-		total += n
-	}
-	if err != nil && err != io.EOF {
-		return total, err
-	}
-	return total, nil
+// newService
+func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
+	id := ctx.Config.ID
+	addr := toAddr(id)
+	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+	store := stores[id]
+	db := storage.NewDBAPI(store.(*storage.LocalStore))
+	delivery := NewDelivery(kad, db)
+	deliveries[id] = delivery
+	return NewRegistry(addr, delivery, store), nil
 }
 
 func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {
@@ -94,17 +84,8 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 
 	db := storage.NewDBAPI(localStore)
 	delivery := NewDelivery(to, db)
-	streamer := NewRegistry(delivery)
-	run := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-		bzzPeer := &network.BzzPeer{
-			Peer:      protocols.NewPeer(p, rw, Spec),
-			localAddr: addr,
-			BzzAddr:   network.NewAddrFromNodeID(p.ID()),
-		}
-		to.On(bzzPeer)
-		return streamer.Run(bzzPeer)
-	}
-	protocolTester := p2ptest.NewProtocolTester(t, network.NewNodeIDFromAddr(addr), 1, run)
+	streamer := NewRegistry(addr, delivery, localStore)
+	protocolTester := p2ptest.NewProtocolTester(t, network.NewNodeIDFromAddr(addr), 1, streamer.runProtocol)
 
 	err = waitForPeers(streamer, 1*time.Second)
 	if err != nil {
@@ -126,5 +107,32 @@ func waitForPeers(streamer *Registry, timeout time.Duration) error {
 		case <-timeoutTimer.C:
 			return errors.New("timeout")
 		}
+	}
+}
+
+type roundRobinStore struct {
+	index  uint32
+	stores []storage.ChunkStore
+}
+
+func newRoundRobinStore(stores ...storage.ChunkStore) *roundRobinStore {
+	return &roundRobinStore{
+		stores: stores,
+	}
+}
+
+func (rrs *roundRobinStore) Get(key storage.Key) (*storage.Chunk, error) {
+	return nil, errors.New("get not well defined on round robin store")
+}
+
+func (rrs *roundRobinStore) Put(chunk *storage.Chunk) {
+	i := atomic.AddUint32(&rrs.index, 1)
+	idx := int(i) % len(rrs.stores)
+	rrs.stores[idx].Put(chunk)
+}
+
+func (rrs *roundRobinStore) Close() {
+	for _, store := range rrs.stores {
+		store.Close()
 	}
 }

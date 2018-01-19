@@ -18,14 +18,17 @@ package stream
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -41,6 +44,7 @@ const (
 
 // Registry registry for outgoing and incoming streamer constructors
 type Registry struct {
+	addr        *network.BzzAddr
 	clientMu    sync.RWMutex
 	serverMu    sync.RWMutex
 	peersMu     sync.RWMutex
@@ -48,11 +52,14 @@ type Registry struct {
 	clientFuncs map[string]func(*Peer, []byte) (Client, error)
 	peers       map[discover.NodeID]*Peer
 	delivery    *Delivery
+	store       storage.ChunkStore
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(delivery *Delivery) *Registry {
+func NewRegistry(addr *network.BzzAddr, delivery *Delivery, store storage.ChunkStore) *Registry {
 	streamer := &Registry{
+		addr:        addr,
+		store:       store,
 		serverFuncs: make(map[string]func(*Peer, []byte) (Server, error)),
 		clientFuncs: make(map[string]func(*Peer, []byte) (Client, error)),
 		peers:       make(map[discover.NodeID]*Peer),
@@ -175,15 +182,20 @@ func (r *Registry) deletePeer(peer *Peer) {
 }
 
 // Run protocol run function
-func (r *Registry) Run(p *protocols.Peer) error {
+func (r *Registry) run(p *protocols.Peer) error {
 	sp := NewPeer(p, r)
-	// load saved intervals
-
 	r.setPeer(sp)
-
 	defer r.deletePeer(sp)
 	defer close(sp.quit)
 	return sp.Run(sp.HandleMsg)
+}
+
+func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	peer := protocols.NewPeer(p, rw, Spec)
+	bzzPeer := network.NewBzzTestPeer(peer, r.addr)
+	r.delivery.overlay.On(bzzPeer)
+	defer r.delivery.overlay.Off(bzzPeer)
+	return r.run(peer)
 }
 
 // HandleMsg is the message handler that delegates incoming messages
@@ -305,12 +317,65 @@ func (r *Registry) Protocols() []p2p.Protocol {
 			Name:    Spec.Name,
 			Version: Spec.Version,
 			Length:  Spec.Length(),
-			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-				peer := protocols.NewPeer(p, rw, Spec)
-				return r.Run(peer)
-			},
-			NodeInfo: r.NodeInfo,
-			PeerInfo: r.PeerInfo,
+			Run:     r.runProtocol,
+			// NodeInfo: ,
+			// PeerInfo: ,
 		},
 	}
+}
+
+func (r *Registry) APIs() []rpc.API {
+	return []rpc.API{
+		{
+			Namespace: "stream",
+			Version:   "0.1",
+			Service:   NewAPI(r, r.store),
+			Public:    true,
+		},
+	}
+}
+
+func (r *Registry) Start(server *p2p.Server) error {
+	return nil
+}
+
+func (r *Registry) Stop() error {
+	return nil
+}
+
+type API struct {
+	streamer *Registry
+	dpa      *storage.DPA
+}
+
+func NewAPI(r *Registry, store storage.ChunkStore) *API {
+	dpa := storage.NewDPA(store, storage.NewChunkerParams())
+	return &API{
+		streamer: r,
+		dpa:      dpa,
+	}
+}
+
+func mustReadAll(dpa *storage.DPA, hash []byte) (int64, error) {
+	r := dpa.Retrieve(hash)
+	buf := make([]byte, 1024)
+	var n int
+	var total int64
+	var err error
+	for (total == 0 || n > 0) && err == nil {
+		n, err = r.ReadAt(buf, total)
+		total += int64(n)
+	}
+	if err != nil && err != io.EOF {
+		return total, err
+	}
+	return total, nil
+}
+
+func (api *API) ReadAll(hash []byte) (int64, error) {
+	return mustReadAll(api.dpa, hash)
+}
+
+func (api *API) Subscribe(peerId discover.NodeID, s string, t []byte, from, to uint64, priority uint8, live bool) error {
+	return api.streamer.Subscribe(peerId, s, t, from, to, priority, live)
 }

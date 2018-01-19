@@ -132,7 +132,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 
 	db := storage.NewDBAPI(self.lstore)
 	delivery := stream.NewDelivery(to, db)
-	self.streamer = stream.NewRegistry(delivery)
+	self.streamer = stream.NewRegistry(addr, delivery)
 	stream.RegisterSwarmSyncerServer(self.streamer, db)
 	stream.RegisterSwarmSyncerClient(self.streamer, db)
 
@@ -289,7 +289,7 @@ func (self *Swarm) RegisterPssProtocol(spec *protocols.Spec, targetprotocol *p2p
 }
 
 // implements node.Service
-// Apis returns the RPC Api descriptors the Swarm implementation offers
+// APIs returns the RPC Api descriptors the Swarm implementation offers
 func (self *Swarm) APIs() []rpc.API {
 
 	apis := []rpc.API{
