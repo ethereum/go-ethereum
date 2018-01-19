@@ -113,9 +113,11 @@ func TestNodeIteratorCoverage(t *testing.T) {
 			t.Errorf("failed to retrieve reported node %x: %v", hash, err)
 		}
 	}
-	for _, hash := range db.Nodes() {
-		if _, ok := hashes[hash]; !ok {
-			t.Errorf("state entry not reported %x", hash)
+	for hash, obj := range db.nodes {
+		if obj != nil && hash != (common.Hash{}) {
+			if _, ok := hashes[hash]; !ok {
+				t.Errorf("state entry not reported %x", hash)
+			}
 		}
 	}
 	for _, key := range db.diskdb.(*ethdb.MemDatabase).Keys() {
@@ -318,6 +320,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 		var (
 			rkey common.Hash
 			rval []byte
+			robj *cachedNode
 		)
 		for {
 			if memonly {
@@ -330,7 +333,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 			}
 		}
 		if memonly {
-			rval, _ = triedb.nodes[rkey]
+			robj = triedb.nodes[rkey]
 			delete(triedb.nodes, rkey)
 		} else {
 			rval, _ = diskdb.Get(rkey[:])
@@ -347,7 +350,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 
 		// Add the node back and continue iteration.
 		if memonly {
-			triedb.nodes[rkey] = rval
+			triedb.nodes[rkey] = robj
 		} else {
 			diskdb.Put(rkey[:], rval)
 		}
@@ -385,10 +388,12 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 		triedb.Commit(root)
 	}
 	barNodeHash := common.HexToHash("05041990364eb72fcb1127652ce40d8bab765f2bfe53225b1170d276cc101c2e")
-	var barNodeBlob []byte
-
+	var (
+		barNodeBlob []byte
+		barNodeObj  *cachedNode
+	)
 	if memonly {
-		barNodeBlob = triedb.nodes[barNodeHash]
+		barNodeObj = triedb.nodes[barNodeHash]
 		delete(triedb.nodes, barNodeHash)
 	} else {
 		barNodeBlob, _ = diskdb.Get(barNodeHash[:])
@@ -406,7 +411,7 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	}
 	// Reinsert the missing node.
 	if memonly {
-		triedb.nodes[barNodeHash] = barNodeBlob
+		triedb.nodes[barNodeHash] = barNodeObj
 	} else {
 		diskdb.Put(barNodeHash[:], barNodeBlob)
 	}

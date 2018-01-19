@@ -46,15 +46,9 @@ type DatabaseReader interface {
 type Database struct {
 	diskdb ethdb.Database // Persistent storage for matured trie nodes
 
-	nodes    map[common.Hash][]byte              // Cached data blocks of the trie nodes
-	parents  map[common.Hash]int                 // Number of live nodes referencing a given one
-	children map[common.Hash]map[common.Hash]int // Set of children referenced by given nodes
-
-	preimages map[common.Hash][]byte // Preimages of nodes from the secure trie
-	seckeybuf [secureKeyLength]byte  // Ephemeral buffer for calculating preimage keys
-
-	nodeArena     map[common.Hash][]byte // Trie nodes actively being comitted (avoids locking during writes)
-	preimageArena map[common.Hash][]byte // Trie node preimages actively being comitted (avoids locking during writes)
+	nodes     map[common.Hash]*cachedNode // Data and references relationships of a node
+	preimages map[common.Hash][]byte      // Preimages of nodes from the secure trie
+	seckeybuf [secureKeyLength]byte       // Ephemeral buffer for calculating preimage keys
 
 	gctime  time.Duration      // Time spent on garbage collection since last commit
 	gcnodes uint64             // Nodes garbage collected since last commit
@@ -64,18 +58,24 @@ type Database struct {
 	lock sync.RWMutex
 }
 
+// cachedNode is all the information we know about a single cached node in the
+// memory database write layer.
+type cachedNode struct {
+	blob     []byte              // Cached data block of the trie node
+	parents  int                 // Number of live nodes referencing this one
+	children map[common.Hash]int // Children referenced by this nodes
+}
+
 // NewDatabase creates a new trie database to store ephemeral trie content before
 // its written out to disk or garbage collected.
 func NewDatabase(diskdb ethdb.Database) *Database {
-	db := &Database{
-		diskdb:    diskdb,
-		nodes:     make(map[common.Hash][]byte),
-		parents:   make(map[common.Hash]int),
-		children:  make(map[common.Hash]map[common.Hash]int),
+	return &Database{
+		diskdb: diskdb,
+		nodes: map[common.Hash]*cachedNode{
+			common.Hash{}: {children: make(map[common.Hash]int)},
+		},
 		preimages: make(map[common.Hash][]byte),
 	}
-	db.children[common.Hash{}] = make(map[common.Hash]int)
-	return db
 }
 
 // DiskDB retrieves the persistent storage backing the trie database.
@@ -97,9 +97,10 @@ func (db *Database) insert(hash common.Hash, blob []byte) {
 	if _, ok := db.nodes[hash]; ok {
 		return
 	}
-	db.nodes[hash] = common.CopyBytes(blob)
-	db.children[hash] = make(map[common.Hash]int)
-
+	db.nodes[hash] = &cachedNode{
+		blob:     common.CopyBytes(blob),
+		children: make(map[common.Hash]int),
+	}
 	db.size += common.StorageSize(common.HashLength + len(blob))
 }
 
@@ -112,7 +113,6 @@ func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
 		return
 	}
 	db.preimages[hash] = common.CopyBytes(preimage)
-	db.size += common.StorageSize(common.HashLength + len(preimage))
 }
 
 // Node retrieves a cached trie node from memory. If it cannot be found cached,
@@ -120,14 +120,11 @@ func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
 func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// Retrieve the node from cache if available
 	db.lock.RLock()
-	blob := db.nodes[hash]
-	if blob == nil && db.nodeArena != nil {
-		blob = db.nodeArena[hash]
-	}
+	node := db.nodes[hash]
 	db.lock.RUnlock()
 
-	if blob != nil {
-		return blob, nil
+	if node != nil {
+		return node.blob, nil
 	}
 	// Content unavailable in memory, attempt to retrieve from disk
 	return db.diskdb.Get(hash[:])
@@ -139,9 +136,6 @@ func (db *Database) preimage(hash common.Hash) ([]byte, error) {
 	// Retrieve the node from cache if available
 	db.lock.RLock()
 	preimage := db.preimages[hash]
-	if preimage == nil && db.preimageArena != nil {
-		preimage = db.preimageArena[hash]
-	}
 	db.lock.RUnlock()
 
 	if preimage != nil {
@@ -169,21 +163,9 @@ func (db *Database) Nodes() []common.Hash {
 
 	var hashes = make([]common.Hash, 0, len(db.nodes))
 	for hash := range db.nodes {
-		hashes = append(hashes, hash)
-	}
-	return hashes
-}
-
-// Preimages retrieves the hashes of all the node pre-images cached within the
-// memory database. This method is extremely expensive and should only be used
-// to validate internal states in test code.
-func (db *Database) Preimages() []common.Hash {
-	db.lock.RLock()
-	defer db.lock.RUnlock()
-
-	var hashes = make([]common.Hash, 0, len(db.nodes))
-	for hash := range db.preimages {
-		hashes = append(hashes, hash)
+		if hash != (common.Hash{}) { // Special case for "root" references/nodes
+			hashes = append(hashes, hash)
+		}
 	}
 	return hashes
 }
@@ -199,11 +181,12 @@ func (db *Database) Reference(child common.Hash, parent common.Hash) {
 // reference is the private locked version of Reference.
 func (db *Database) reference(child common.Hash, parent common.Hash) {
 	// If the node does not exist, it's a node pulled from disk, skip
-	if _, ok := db.nodes[child]; !ok {
+	node, ok := db.nodes[child]
+	if !ok {
 		return
 	}
-	db.parents[child]++
-	db.children[parent][child]++
+	node.parents++
+	db.nodes[parent].children[child]++
 }
 
 // Dereference removes an existing reference from a parent node to a child node.
@@ -221,26 +204,26 @@ func (db *Database) Dereference(child common.Hash, parent common.Hash) {
 
 // dereference is the private locked version of Dereference.
 func (db *Database) dereference(child common.Hash, parent common.Hash) {
+	// Dereference the parent-child
+	node := db.nodes[parent]
+
+	node.children[child]--
+	if node.children[child] == 0 {
+		delete(node.children, child)
+	}
 	// If the node does not exist, it's a previously comitted node.
-	blob, ok := db.nodes[child]
+	node, ok := db.nodes[child]
 	if !ok {
 		return
 	}
-	db.children[parent][child]--
-	if db.children[parent][child] == 0 {
-		delete(db.children[parent], child)
-	}
 	// If there are no more references to the child, delete it and cascade
-	db.parents[child]--
-	if db.parents[child] == 0 {
-		for hash := range db.children[child] {
+	node.parents--
+	if node.parents == 0 {
+		for hash := range node.children {
 			db.dereference(hash, child)
 		}
 		delete(db.nodes, child)
-		delete(db.parents, child)
-		delete(db.children, child)
-
-		db.size -= common.StorageSize(common.HashLength + len(blob))
+		db.size -= common.StorageSize(common.HashLength + len(node.blob))
 	}
 }
 
@@ -251,49 +234,43 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 func (db *Database) Commit(node common.Hash) error {
 	// Create a database batch to flush persistent data out. It is important that
 	// outside code doesn't see an inconsistent state (referenced data removed from
-	// memory cache during commit but not yet in persistent storage). This could be
-	// achieved by locking the entire database during commit, but a slow writer then
-	// would starve all readers. Instead, all data-to-be-committed is moved into a
-	// staging area, where it's temporarilly still accessible during write.
-	db.lock.Lock()
-
-	db.nodeArena = make(map[common.Hash][]byte)
-	db.preimageArena = make(map[common.Hash][]byte)
+	// memory cache during commit but not yet in persistent storage). This is ensured
+	// by only uncaching existing data when the database write finalizes.
+	db.lock.RLock()
 
 	start := time.Now()
 	batch := db.diskdb.NewBatch()
 
-	// Move all of the accumulated preimages into a write batch and preimage staging area
+	// Move all of the accumulated preimages into a write batch
 	for hash, preimage := range db.preimages {
-		db.preimageArena[hash] = preimage
 		if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
 			log.Error("Failed to commit preimage from trie database", "err", err)
-			db.lock.Unlock()
+			db.lock.RUnlock()
 			return err
 		}
-		db.size -= common.StorageSize(common.HashLength + len(preimage))
 	}
-	db.preimages = make(map[common.Hash][]byte)
-
-	// Move the trie itself into the batch and staging area and dereference any reachable content
+	// Move the trie itself into the batch, flushing if enough data is accumulated
 	nodes, storage := len(db.nodes), db.size
-	if err := db.commit(node, batch); err != nil {
+	if err := db.commit(node, &batch); err != nil {
 		log.Error("Failed to commit trie from trie database", "err", err)
-		db.lock.Unlock()
+		db.lock.RUnlock()
 		return err
 	}
-	// Write batch and staging area ready, unlock for readers during persistence
-	db.lock.Unlock()
-
+	// Write batch ready, unlock for readers during persistence
 	if err := batch.Write(); err != nil {
 		log.Error("Failed to write trie to disk", "err", err)
+		db.lock.RUnlock()
 		return err
 	}
-	// Write successful, clear out the staging area and return
+	db.lock.RUnlock()
+
+	// Write successful, clear out the flushed data
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	db.nodeArena, db.preimageArena = nil, nil
+	db.preimages = make(map[common.Hash][]byte)
+	db.uncache(node)
+
 	log.Debug("Persisted trie from memory database", "nodes", nodes-len(db.nodes), "size", storage-db.size, "time", time.Since(start),
 		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.nodes), "livesize", db.size)
 
@@ -304,27 +281,46 @@ func (db *Database) Commit(node common.Hash) error {
 }
 
 // commit is the private locked version of Commit.
-func (db *Database) commit(node common.Hash, batch ethdb.Batch) error {
-	// If the node does not exist, it's a previously comitted node.
-	blob, ok := db.nodes[node]
+func (db *Database) commit(hash common.Hash, batch *ethdb.Batch) error {
+	// If the node does not exist, it's a previously comitted node
+	node, ok := db.nodes[hash]
 	if !ok {
 		return nil
 	}
-	for child := range db.children[node] {
+	for child := range node.children {
 		if err := db.commit(child, batch); err != nil {
 			return err
 		}
 	}
-	db.nodeArena[node] = blob
-	if err := batch.Put(node[:], blob); err != nil {
+	if err := (*batch).Put(hash[:], node.blob); err != nil {
 		return err
 	}
-	delete(db.nodes, node)
-	delete(db.parents, node)
-	delete(db.children, node)
-
-	db.size -= common.StorageSize(common.HashLength + len(blob))
+	// If we've reached an optimal match size, commit and start over
+	if (*batch).ValueSize() >= ethdb.IdealBatchSize {
+		if err := (*batch).Write(); err != nil {
+			return err
+		}
+		(*batch) = db.diskdb.NewBatch()
+	}
 	return nil
+}
+
+// uncache is the post-processing step of a commit operation where the already
+// persisted trie is removed from the cache. The reason behind the two-phase
+// commit is to ensure consistent data availability while moving from memory
+// to disk.
+func (db *Database) uncache(hash common.Hash) {
+	// If the node does not exist, we're done on this path
+	node, ok := db.nodes[hash]
+	if !ok {
+		return
+	}
+	// Otherwise uncache the node's subtries and remove the node itself too
+	for child := range node.children {
+		db.uncache(child)
+	}
+	delete(db.nodes, hash)
+	db.size -= common.StorageSize(common.HashLength + len(node.blob))
 }
 
 // Size returns the current storage size of the memory cache in front of the
