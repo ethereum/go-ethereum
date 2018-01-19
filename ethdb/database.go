@@ -30,7 +30,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 
-	gometrics "github.com/nonsense/go-metrics"
+	gometrics "github.com/ethersphere/go-metrics"
 )
 
 var OpenFileLimit = 64

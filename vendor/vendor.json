@@ -103,6 +103,24 @@
 			"path": "github.com/elastic/gosigar/sys/windows",
 			"revision": "a3814ce5008e612a0c6d027608b54e1d0d9a5613",
 			"revisionTime": "2018-01-22T22:25:45Z"
+    },
+    {
+			"checksumSHA1": "Cm/xumUDA/BVr4sq7qglyVpt/3M=",
+			"path": "github.com/ethersphere/go-metrics",
+			"revision": "9551ad5c1c4abf784761d7752fb0e8cc8fbb2181",
+			"revisionTime": "2018-01-17T12:19:44Z"
+		},
+		{
+			"checksumSHA1": "xn/yylagVIjYcCn/evHHRuHX0HU=",
+			"path": "github.com/ethersphere/go-metrics-influxdb",
+			"revision": "4cbc106280fb1288d93666f641520df9c24b1b88",
+			"revisionTime": "2018-01-17T12:28:20Z"
+		},
+		{
+			"checksumSHA1": "1gQE3VEX4HYb/xN2gyLm56FBGPc=",
+			"path": "github.com/ethersphere/go-metrics/exp",
+			"revision": "9551ad5c1c4abf784761d7752fb0e8cc8fbb2181",
+			"revisionTime": "2018-01-17T12:19:44Z"
 		},
 		{
 			"checksumSHA1": "7oFpbmDfGobwKsFLIf6wMUvVoKw=",
@@ -272,24 +290,6 @@
 			"path": "github.com/naoina/toml/ast",
 			"revision": "eb52202f758b98ac5b1a8eb26f36455205d688f0",
 			"revisionTime": "2017-04-03T15:03:10Z"
-		},
-		{
-			"checksumSHA1": "riVL/YgVMMSXiGx4T84qkeYBt8M=",
-			"path": "github.com/nonsense/go-metrics",
-			"revision": "9551ad5c1c4abf784761d7752fb0e8cc8fbb2181",
-			"revisionTime": "2018-01-17T12:19:44Z"
-		},
-		{
-			"checksumSHA1": "imlKDfVfXiGUjNbWUrV+7bMkVPs=",
-			"path": "github.com/nonsense/go-metrics-influxdb",
-			"revision": "da50c4cc2e1531c45fc41f1392250ee3c86de7d2",
-			"revisionTime": "2018-01-17T12:28:20Z"
-		},
-		{
-			"checksumSHA1": "UoDEj2F+9i41oox2kyjP6/nWwYQ=",
-			"path": "github.com/nonsense/go-metrics/exp",
-			"revision": "9551ad5c1c4abf784761d7752fb0e8cc8fbb2181",
-			"revisionTime": "2018-01-17T12:19:44Z"
 		},
 		{
 			"checksumSHA1": "R1h9XHH3dTmLq7yKL9/uW0xFwfs=",

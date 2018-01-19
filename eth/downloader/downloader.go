@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/nonsense/go-metrics"
+	"github.com/ethersphere/go-metrics"
 )
 
 var (

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	metrics "github.com/ethersphere/go-metrics"
 	"github.com/influxdata/influxdb/client"
 )
 

@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/nonsense/go-metrics"
+	"github.com/ethersphere/go-metrics"
 )
 
 var (

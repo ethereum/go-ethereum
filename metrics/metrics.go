@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/nonsense/go-metrics"
-	"github.com/nonsense/go-metrics/exp"
+	"github.com/ethersphere/go-metrics"
+	"github.com/ethersphere/go-metrics/exp"
 )
 
 // MetricsEnabledFlag is the CLI flag name to use to enable metrics collections.
