@@ -35,6 +35,21 @@ Example:
 signer -keystore /my/keystore -chainid 4
 ```
 
+## Security model
+
+The security model of the signer is as follows:
+
+* One critical component (the signer binary / daemon) is responsible for handling cryptographic operations; signing, private keys, encryption/decryption of keystore files.
+* The signer binary has a well-defined 'external' API.
+* The 'external' API is considered UNTRUSTED.
+* The signer binary also communicates with whatever process that invoked the binary, via stdin/stdout.
+  * This channel is considered 'trusted'. Over this channel, approvals and passwords are communicated.
+
+The general flow for signing a transaction using e.g. geth is as follows:
+![image](sign_flow.png)
+
+In this case, `geth` would be started with `--externalsigner=http://localhost:8550` and would relay requests to `eth.sendTransaction`.
+
 ## Communication
 
 ### External API
@@ -81,9 +96,9 @@ All hex encoded values must be prefixed with `0x`.
 ### account_new
 
 #### Create new password protected account
+
 The signer will generate a new private key, encrypts it according to [web3 keystore spec](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) and stores it in the keystore directory.
-The client is responsible for creating a backup of the keystore. If the keystore is lost there is no method of retrieving
-lost accounts.
+The client is responsible for creating a backup of the keystore. If the keystore is lost there is no method of retrieving lost accounts.
 
 #### Arguments
 
@@ -99,9 +114,7 @@ None
   "id": 0,
   "jsonrpc": "2.0",
   "method": "account_new",
-  "params": [
-    "my password"
-  ]
+  "params": []
 }
 
 {
@@ -612,4 +625,9 @@ put together is a bit of a hack into the http server. This could probably be gre
    * There needs to be a very good structure around rules. Either a full language (lua/js) or a limited but flexible syntax based on e.g. json/yaml. Kind of like a firewall ruleset.
    * This implies that the signer would remember passwords, which is very problematic. However, a good UI implementation will want these things,
    and it would be better to implement it once in the signer, than having UI:s develop their own remember-password logic.
+    * See [rules.md](rules.md) for more info about this.
 
+* Another potential thing to introduce is pairing.
+  * To prevent spurious requests which users just accept, implement a way to "pair" the caller with the signer (external API).
+  * Thus geth/mist/cpp would cryptographically handshake and afterwards the caller would be allowed to make signing requests.
+  * This feature would make the addition of rules less dangerous.

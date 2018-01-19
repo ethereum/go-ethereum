@@ -86,8 +86,8 @@ class StdIOHandler():
 
         return {
             "approved" : False,
-            "transaction" : transaction,
-            "from" : _from,
+            #"transaction" : transaction,
+  #          "from" : _from,
 #            "password" : None,
         }
 
