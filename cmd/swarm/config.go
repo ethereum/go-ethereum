@@ -225,15 +225,15 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 	}
 
 	if storeCapacity := ctx.GlobalUint64(SwarmStoreCapacity.Name); storeCapacity != 0 {
-		currentConfig.StoreParams.DbCapacity = uint64(storeCapacity)
+		currentConfig.StoreParams.DbCapacity = storeCapacity
 	}
 
 	if storeCacheCapacity := ctx.GlobalUint(SwarmStoreCacheCapacity.Name); storeCacheCapacity != 0 {
-		currentConfig.StoreParams.CacheCapacity = uint(storeCacheCapacity)
+		currentConfig.StoreParams.CacheCapacity = storeCacheCapacity
 	}
 
 	if storeRadius := ctx.GlobalInt(SwarmStoreRadius.Name); storeRadius != 0 {
-		currentConfig.StoreParams.Radius = int(storeRadius)
+		currentConfig.StoreParams.Radius = storeRadius
 	}
 
 	return currentConfig
