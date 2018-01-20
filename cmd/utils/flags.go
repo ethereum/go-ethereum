@@ -171,6 +171,11 @@ var (
 		Value: &defaultSyncMode,
 	}
 
+	EthPeersFlag = cli.IntFlag{
+		Name:  "ethpeers",
+		Usage: "Maximum number of ETH peers",
+		Value: 25,
+	}
 	LightServFlag = cli.IntFlag{
 		Name:  "lightserv",
 		Usage: "Maximum percentage of time allowed for serving LES requests (0-90)",
@@ -179,7 +184,7 @@ var (
 	LightPeersFlag = cli.IntFlag{
 		Name:  "lightpeers",
 		Usage: "Maximum number of LES client peers",
-		Value: 20,
+		Value: 100,
 	}
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
@@ -433,7 +438,7 @@ var (
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
 		Usage: "Maximum number of network peers (network disabled if set to 0)",
-		Value: 25,
+		Value: 125,
 	}
 	MaxPendingPeersFlag = cli.IntFlag{
 		Name:  "maxpendpeers",
@@ -791,7 +796,10 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 
 	if ctx.GlobalIsSet(MaxPeersFlag.Name) {
 		cfg.MaxPeers = ctx.GlobalInt(MaxPeersFlag.Name)
+	} else if ctx.GlobalIsSet(EthPeersFlag.Name) || ctx.GlobalIsSet(LightPeersFlag.Name) {
+		cfg.MaxPeers = ctx.GlobalInt(EthPeersFlag.Name) + ctx.GlobalInt(LightPeersFlag.Name)
 	}
+
 	if ctx.GlobalIsSet(MaxPendingPeersFlag.Name) {
 		cfg.MaxPendingPeers = ctx.GlobalInt(MaxPendingPeersFlag.Name)
 	}
@@ -988,6 +996,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		cfg.SyncMode = downloader.FastSync
 	case ctx.GlobalBool(LightModeFlag.Name):
 		cfg.SyncMode = downloader.LightSync
+	}
+	if ctx.GlobalIsSet(EthPeersFlag.Name) {
+		cfg.EthPeers = ctx.GlobalInt(EthPeersFlag.Name)
 	}
 	if ctx.GlobalIsSet(LightServFlag.Name) {
 		cfg.LightServ = ctx.GlobalInt(LightServFlag.Name)

@@ -43,7 +43,8 @@ var DefaultConfig = Config{
 		DatasetsOnDisk: 2,
 	},
 	NetworkId:     1,
-	LightPeers:    20,
+	EthPeers:      25,
+	LightPeers:    100,
 	DatabaseCache: 128,
 	GasPrice:      big.NewInt(18 * params.Shannon),
 
@@ -78,6 +79,7 @@ type Config struct {
 	// Protocol options
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
 	SyncMode  downloader.SyncMode
+	EthPeers  int `toml:",omitempty"` // Maximum number of ETH peers
 
 	// Light client options
 	LightServ  int `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
