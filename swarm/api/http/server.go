@@ -544,24 +544,6 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	// if request is "empty" results in swarm landing page
-	// check if URI is empty and looking for HTML
-	if r.uri.Addr == "" && strings.Contains(r.Header.Get("Accept"), "text/html") {
-
-	// first, 200 server response
-
-		w.WriteHeader(http.StatusOK)
-
-	// create the landing page
-	// !! need to serve home node template page !!
-
-
-	// return the whole response
-		return
-	}
-
-
-
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
 		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
