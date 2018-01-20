@@ -22,6 +22,7 @@ import (
 	"math"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 
@@ -44,6 +45,7 @@ const (
 
 // Registry registry for outgoing and incoming streamer constructors
 type Registry struct {
+	api         *API
 	addr        *network.BzzAddr
 	clientMu    sync.RWMutex
 	serverMu    sync.RWMutex
@@ -65,6 +67,7 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, store storage.ChunkS
 		peers:       make(map[discover.NodeID]*Peer),
 		delivery:    delivery,
 	}
+	streamer.api = NewAPI(streamer, streamer.store)
 	delivery.getPeer = streamer.getPeer
 	streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, t []byte) (Server, error) {
 		return NewSwarmChunkServer(delivery.db), nil
@@ -271,7 +274,7 @@ type Client interface {
 	BatchDone(string, uint64, []byte, []byte) func() (*TakeoverProof, error)
 }
 
-// NextBatch adjusts the indexes by inspecting the intervals
+// nextBatch adjusts the indexes by inspecting the intervals
 func (c *client) nextBatch(from uint64) (nextFrom uint64, nextTo uint64) {
 	var intervals []uint64
 	if c.live {
@@ -302,7 +305,7 @@ func (c *client) nextBatch(from uint64) (nextFrom uint64, nextTo uint64) {
 	return nextFrom, nextTo
 }
 
-// Spec is the spec of the streamer protocol.
+// Spec is the spec of the streamer protocol
 var Spec = &protocols.Spec{
 	Name:       "stream",
 	Version:    1,
@@ -336,17 +339,19 @@ func (r *Registry) APIs() []rpc.API {
 		{
 			Namespace: "stream",
 			Version:   "0.1",
-			Service:   NewAPI(r, r.store),
+			Service:   r.api,
 			Public:    true,
 		},
 	}
 }
 
 func (r *Registry) Start(server *p2p.Server) error {
+	r.api.dpa.Start()
 	return nil
 }
 
 func (r *Registry) Stop() error {
+	r.api.dpa.Stop()
 	return nil
 }
 
@@ -363,7 +368,7 @@ func NewAPI(r *Registry, store storage.ChunkStore) *API {
 	}
 }
 
-func mustReadAll(dpa *storage.DPA, hash []byte) (int64, error) {
+func readAll(dpa *storage.DPA, hash []byte) (int64, error) {
 	r := dpa.Retrieve(hash)
 	buf := make([]byte, 1024)
 	var n int
@@ -379,21 +384,8 @@ func mustReadAll(dpa *storage.DPA, hash []byte) (int64, error) {
 	return total, nil
 }
 
-func (api *API) ReadAll(hash []byte) (int64, error) {
-	r := api.dpa.Retrieve(hash)
-	buf := make([]byte, 1024)
-	var n int
-	var total int64
-	var err error
-	for (total == 0 || n > 0) && err == nil {
-		n, err = r.ReadAt(buf, total)
-		total += int64(n)
-	}
-	if err != nil && err != io.EOF {
-		return total, err
-	}
-	return total, nil
-	//return mustReadAll(api.dpa, hash)
+func (api *API) ReadAll(hash common.Hash) (int64, error) {
+	return readAll(api.dpa, hash[:])
 }
 
 func (api *API) SubscribeStream(peerId discover.NodeID, s string, t []byte, from, to uint64, priority uint8, live bool) error {

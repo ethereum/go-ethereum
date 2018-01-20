@@ -65,8 +65,8 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	db := storage.NewDBAPI(store.(*storage.LocalStore))
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
-	//netStore := storage.NewNetStore(store.(*storage.LocalStore), func(*storage.Chunk) error { return errors.New("not retrieved yet") })
-	r := NewRegistry(addr, delivery, store)
+	netStore := storage.NewNetStore(store.(*storage.LocalStore), func(*storage.Chunk) error { return nil })
+	r := NewRegistry(addr, delivery, netStore)
 	RegisterSwarmSyncerServer(r, db)
 	RegisterSwarmSyncerClient(r, db)
 	go func() {

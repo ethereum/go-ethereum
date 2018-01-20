@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
@@ -335,26 +336,19 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, size int, skipCheck bool)
 	rrdpa := storage.NewDPA(newRoundRobinStore(sim.Stores[1:]...), storage.NewChunkerParams())
 	rrdpa.Start()
 	fileHash, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size))
-	defer rrdpa.Stop()
-	if err != nil {
-		t.Fatal(err.Error())
-	}
 	// wait until all chunks stored
-	// TODO: is wait() necessary?
 	wait()
-	// each node Subscribes to each other's swarmChunkServerStreamName
-	// need to wait till an aynchronous process registers the peers in streamer.peers
-	// that is used by Subscribe
-	// time.Sleep(1 * time.Second)
-	// err := streamer.Subscribe(p.ID(), swarmChunkServerStreamName, nil, 0, 0, Top, true)
+	rrdpa.Stop()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-
-	waitPeerErrC = make(chan error)
 
 	action := func(context.Context) error {
-
+		// each node Subscribes to each other's swarmChunkServerStreamName
+		// need to wait till an aynchronous process registers the peers in streamer.peers
+		// that is used by Subscribe
+		// using a global err channel to share betweem action and node service
+		waitPeerErrC = make(chan error)
 		i := 0
 		for err := range waitPeerErrC {
 			if err != nil {
@@ -366,6 +360,8 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, size int, skipCheck bool)
 			}
 		}
 
+		// each node subscribes to the upstream swarm chunk server stream
+		// which responds to chunk retrieve requests all but the last node in the chain does not
 		for i := 0; i < len(sim.IDs)-1; i++ {
 			id := sim.IDs[i]
 			node := sim.Net.GetNode(id)
@@ -376,6 +372,9 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, size int, skipCheck bool)
 			if err != nil {
 				return fmt.Errorf("error getting node client: %s", err)
 			}
+			// rpc call to streamer API subscribing to chunk Server to their
+			// unique upstream except for the last node in the chain
+			// Note in this test we only test one direction
 			sid := sim.IDs[i+1]
 			if err := client.Call(nil, "stream_subscribeStream", sid, swarmChunkServerStreamName, nil, 0, 0, Top, false); err != nil {
 				return fmt.Errorf("error subscribing: %s", err)
@@ -384,16 +383,18 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, size int, skipCheck bool)
 
 		// create a retriever dpa for the pivot node
 		delivery := deliveries[sim.IDs[0]]
-		dpacs := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), func(chunk *storage.Chunk) error { return delivery.RequestFromPeers(chunk.Key[:], skipCheck) })
+		retrieveFunc := func(chunk *storage.Chunk) error {
+			return delivery.RequestFromPeers(chunk.Key[:], skipCheck)
+		}
+		dpacs := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), retrieveFunc)
 		dpa := storage.NewDPA(dpacs, storage.NewChunkerParams())
 		dpa.Start()
 
 		go func() {
 			defer dpa.Stop()
-			log.Debug(fmt.Sprintf("retrieve %v", fileHash))
 			// start the retrieval on the pivot node - this will spawn retrieve requests for missing chunks
 			// we must wait for the peer connections to have started before requesting
-			n, err := mustReadAll(dpa, fileHash)
+			n, err := readAll(dpa, fileHash)
 			log.Debug(fmt.Sprintf("retrieved %v", fileHash), "read", n, "err", err)
 		}()
 		return nil
@@ -417,8 +418,8 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, size int, skipCheck bool)
 		var total int64
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
-		err = client.CallContext(ctx, &total, "stream_readAll", fileHash)
-		// total, err := mustReadAll(dpa, fileHash)
+		// call RPC method to streamer API readAll method to check local availability
+		err = client.CallContext(ctx, &total, "stream_readAll", common.BytesToHash(fileHash))
 		log.Debug(fmt.Sprintf("check if %08x is available locally: number of bytes read %v/%v (error: %v)", fileHash, total, size, err))
 		if err != nil || total != int64(size) {
 			return false, nil
@@ -439,6 +440,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, size int, skipCheck bool)
 	conf.Step = &simulations.Step{
 		Action:  action,
 		Trigger: trigger,
+		// we are only testing the pivot node (net.Nodes[0])
 		Expect: &simulations.Expectation{
 			Nodes: sim.IDs[0:1],
 			Check: check,

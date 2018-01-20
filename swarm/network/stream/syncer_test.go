@@ -35,7 +35,9 @@ import (
 
 func TestSyncerSimulation(t *testing.T) {
 	testSyncBetweenNodes(t, 2, 1, 81000, true, 1)
+	testSyncBetweenNodes(t, 2, 1, 81000, false, 1)
 	testSyncBetweenNodes(t, 3, 1, 81000, true, 1)
+	testSyncBetweenNodes(t, 3, 1, 81000, false, 1)
 }
 
 func testSyncBetweenNodes(t *testing.T, nodes, conns, size int, skipCheck bool, po uint8) {
@@ -59,7 +61,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, size int, skipCheck bool, 
 	}
 	stores = make(map[discover.NodeID]storage.ChunkStore)
 	deliveries = make(map[discover.NodeID]*Delivery)
-	log.Warn("Stores", "len", len(sim.Stores))
 	for i, id := range sim.IDs {
 		stores[id] = sim.Stores[i]
 	}
@@ -136,7 +137,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, size int, skipCheck bool, 
 
 		var found, total int
 		for i := 1; i < nodes; i++ {
-
 			dbs[i].Iterator(0, math.MaxUint64, po, func(key storage.Key, index uint64) bool {
 				_, err := dbs[0].Get(key)
 				if err == nil {

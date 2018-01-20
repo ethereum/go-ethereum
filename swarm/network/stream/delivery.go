@@ -18,10 +18,8 @@ package stream
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -151,27 +149,21 @@ type ChunkDeliveryMsg struct {
 }
 
 func (d *Delivery) handleChunkDeliveryMsg(req *ChunkDeliveryMsg) error {
-	chunk, err := d.db.Get(req.Key)
-	if err != nil {
-		return err
-	}
-
 	d.receiveC <- req
-
-	log.Trace(fmt.Sprintf("delivery of %v from %v", chunk, d))
 	return nil
 }
 
 func (d *Delivery) processReceivedChunks() {
 	for req := range d.receiveC {
+		// this should be has locally
 		chunk, err := d.db.Get(req.Key)
-		if err != nil {
+		if err == nil && chunk.ReqC == nil {
 			continue
 		}
-		chunk.SData = req.SData
 		select {
 		case <-chunk.ReqC:
 		default:
+			chunk.SData = req.SData
 			d.db.Put(chunk)
 			close(chunk.ReqC)
 		}
