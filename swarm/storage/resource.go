@@ -17,10 +17,11 @@ import (
 )
 
 const (
-	signatureLength = 65
-	indexSize       = 16
-	dbDirName       = "resource"
-	chunkSize       = 4096 // temporary until we implement DPA in the resourcehandler
+	signatureLength     = 65
+	indexSize           = 16
+	dbDirName           = "resource"
+	chunkSize           = 4096 // temporary until we implement DPA in the resourcehandler
+	defaultStoreTimeout = 4000 * time.Millisecond
 )
 
 type Signature [signatureLength]byte
@@ -121,6 +122,7 @@ type ResourceHandler struct {
 	resourceLock sync.RWMutex
 	hasher       SwarmHash
 	nameHash     nameHashFunc
+	storeTimeout time.Duration
 }
 
 // Create or open resource update chunk store
@@ -141,11 +143,12 @@ func NewResourceHandler(datadir string, cloudStore CloudStore, rpcClient *rpc.Cl
 	}
 
 	rh := &ResourceHandler{
-		ChunkStore: newResourceChunkStore(path, hashfunc, localStore, cloudStore),
-		rpcClient:  rpcClient,
-		resources:  make(map[string]*resource),
-		hasher:     hashfunc(),
-		validator:  validator,
+		ChunkStore:   newResourceChunkStore(path, hashfunc, localStore, cloudStore),
+		rpcClient:    rpcClient,
+		resources:    make(map[string]*resource),
+		hasher:       hashfunc(),
+		validator:    validator,
+		storeTimeout: defaultStoreTimeout,
 	}
 
 	if rh.validator != nil {
@@ -344,7 +347,7 @@ func (self *ResourceHandler) loadResource(name string, refresh bool) (*resource,
 		rsrc = &resource{}
 		// make sure our name is safe to use
 		if !isSafeName(name) {
-			return nil, fmt.Errorf("Invalid name '%s'")
+			return nil, fmt.Errorf("Invalid name '%s'", name)
 		}
 		rsrc.name = &name
 		rsrc.nameHash = self.nameHash(name)
@@ -376,7 +379,7 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 	// retrieve metadata from chunk data and check that it matches this mutable resource
 	signature, period, version, name, data, err := self.parseUpdate(chunk.SData)
 	if *rsrc.name != name {
-		return nil, fmt.Errorf("Update belongs to '%s', but have '%s'", name, rsrc.name)
+		return nil, fmt.Errorf("Update belongs to '%s', but have '%s'", name, *rsrc.name)
 	}
 	// only check signature if validator is present
 	if self.validator != nil {
@@ -400,9 +403,10 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 
 // retrieve update metadata from chunk data
 // mirrors newUpdateChunk()
-func (self *ResourceHandler) parseUpdate(chunkdata []byte) (signature *Signature, period uint32, version uint32, name string, data []byte, err error) {
+func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, string, []byte, error) {
+	var err error
 	cursor := 0
-
+	var signature *Signature
 	// omit signatures if we have no validator
 	var sigoffset int
 	if self.validator != nil {
@@ -415,8 +419,13 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (signature *Signature
 	headerlength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
 	if int(headerlength+2) > len(chunkdata) {
 		err = fmt.Errorf("Reported header length %d longer than actual data length %d", headerlength, len(chunkdata))
-		return
+		return nil, 0, 0, "", nil, err
 	}
+
+	var period uint32
+	var version uint32
+	var name string
+	var data []byte
 	cursor += 2
 	period = binary.LittleEndian.Uint32(chunkdata[cursor : cursor+4])
 	cursor += 4
@@ -427,7 +436,7 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (signature *Signature
 	cursor += namelength
 	data = make([]byte, len(chunkdata)-cursor)
 	copy(data, chunkdata[cursor:])
-	return
+	return signature, period, version, name, data, err
 }
 
 // Adds an actual data update
@@ -505,6 +514,12 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 
 	// send the chunk
 	self.Put(chunk)
+	timeout := time.NewTimer(self.storeTimeout)
+	select {
+	case <-chunk.dbStored:
+	case <-timeout.C:
+
+	}
 	log.Trace("resource update", "name", name, "key", key, "currentblock", currentblock, "lastperiod", nextperiod, "version", version, "data", chunk.SData)
 
 	// update our resources map entry and return the new key

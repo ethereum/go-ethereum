@@ -150,9 +150,6 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// create a new resource
-	if err != nil {
-		teardownTest(t, err)
-	}
 	_, err = rh.NewResource(safeName, resourceFrequency)
 	if err != nil {
 		teardownTest(t, err)
