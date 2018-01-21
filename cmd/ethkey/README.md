@@ -39,7 +39,7 @@ It is possible to refer to a file containing the message.
 
 For every command that uses a keyfile, you will be prompted to provide the 
 passphrase for decrypting the keyfile.  To avoid this message, it is possible
-to pass the passphrase by using the `--passphrase` flag pointing to a file that
+to pass the passphrase by using the `--passwordfile` flag pointing to a file that
 contains the passphrase.
 
 ## JSON
