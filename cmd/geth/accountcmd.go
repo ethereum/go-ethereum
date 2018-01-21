@@ -110,6 +110,7 @@ Print a short summary of all accounts`,
 					utils.KeyStoreDirFlag,
 					utils.PasswordFileFlag,
 					utils.LightKDFFlag,
+					utils.WriteKeyStoreOnlyToStdout,
 				},
 				Description: `
     geth account new
@@ -307,12 +308,20 @@ func accountCreate(ctx *cli.Context) error {
 
 	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
-	address, err := keystore.StoreKey(keydir, password, scryptN, scryptP)
-
-	if err != nil {
-		utils.Fatalf("Failed to create account: %v", err)
+	if ctx.GlobalBool(utils.WriteKeyStoreOnlyToStdout.Name) {
+		keystore, err := keystore.CreateKeyStore(password, scryptN, scryptP)
+		if err != nil {
+			utils.Fatalf("Failed to create account: %v", err)
+		}
+		fmt.Printf("%s\n", keystore)
+	} else {
+		address, err := keystore.StoreKey(keydir, password, scryptN, scryptP)
+		if err != nil {
+			utils.Fatalf("Failed to create account: %v", err)
+		}
+		fmt.Printf("Address: {%x}\n", address)
 	}
-	fmt.Printf("Address: {%x}\n", address)
+
 	return nil
 }
 

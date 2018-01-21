@@ -122,6 +122,10 @@ var (
 		Name:  "keystore",
 		Usage: "Directory for the keystore (default = inside the datadir)",
 	}
+	WriteKeyStoreOnlyToStdout = cli.BoolFlag{
+		Name:  "stdoutkeystore",
+		Usage: "Prevents writing keystore to file, instead outputs the keystore to standard output (stdout)",
+	}
 	NoUSBFlag = cli.BoolFlag{
 		Name:  "nousb",
 		Usage: "Disables monitoring for and managing USB hardware wallets",
@@ -857,6 +861,9 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(KeyStoreDirFlag.Name) {
 		cfg.KeyStoreDir = ctx.GlobalString(KeyStoreDirFlag.Name)
+	}
+	if ctx.GlobalIsSet(WriteKeyStoreOnlyToStdout.Name) {
+		cfg.WriteKeyStoreOnlyToStdout = ctx.GlobalBool(WriteKeyStoreOnlyToStdout.Name)
 	}
 	if ctx.GlobalIsSet(LightKDFFlag.Name) {
 		cfg.UseLightweightKDF = ctx.GlobalBool(LightKDFFlag.Name)
