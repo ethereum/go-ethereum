@@ -52,67 +52,92 @@ If you want to encrypt an existing private key, it can be specified by setting
 			Name:  "privatekey",
 			Usage: "file containing a raw private key to encrypt",
 		},
+		cli.BoolFlag{
+			Name:  "stdoutkeystore",
+			Usage: "prevents writing keystore to file, instead outputs the keystore to standard output (stdout)",
+		},
 	},
 	Action: func(ctx *cli.Context) error {
-		// Check if keyfile path given and make sure it doesn't already exist.
-		keyfilepath := ctx.Args().First()
-		if keyfilepath == "" {
-			keyfilepath = defaultKeyfileName
-		}
-		if _, err := os.Stat(keyfilepath); err == nil {
-			utils.Fatalf("Keyfile already exists at %s.", keyfilepath)
-		} else if !os.IsNotExist(err) {
-			utils.Fatalf("Error checking if keyfile exists: %v", err)
-		}
-
-		var privateKey *ecdsa.PrivateKey
-		var err error
-		if file := ctx.String("privatekey"); file != "" {
-			// Load private key from file.
-			privateKey, err = crypto.LoadECDSA(file)
-			if err != nil {
-				utils.Fatalf("Can't load private key: %v", err)
-			}
+		if ctx.Bool("stdoutkeystore") {
+			// Generate and output the keystore
+			_, keyjson := newKeyStore(ctx)
+			fmt.Printf("%s\n", keyjson)
 		} else {
-			// If not loaded, generate random.
-			privateKey, err = crypto.GenerateKey()
-			if err != nil {
-				utils.Fatalf("Failed to generate random private key: %v", err)
-			}
+			// Generate and write keystore to file
+			storeKeyStore(ctx)
 		}
 
-		// Create the keyfile object with a random UUID.
-		id := uuid.NewRandom()
-		key := &keystore.Key{
-			Id:         id,
-			Address:    crypto.PubkeyToAddress(privateKey.PublicKey),
-			PrivateKey: privateKey,
-		}
-
-		// Encrypt key with passphrase.
-		passphrase := getPassPhrase(ctx, true)
-		keyjson, err := keystore.EncryptKey(key, passphrase, keystore.StandardScryptN, keystore.StandardScryptP)
-		if err != nil {
-			utils.Fatalf("Error encrypting key: %v", err)
-		}
-
-		// Store the file to disk.
-		if err := os.MkdirAll(filepath.Dir(keyfilepath), 0700); err != nil {
-			utils.Fatalf("Could not create directory %s", filepath.Dir(keyfilepath))
-		}
-		if err := ioutil.WriteFile(keyfilepath, keyjson, 0600); err != nil {
-			utils.Fatalf("Failed to write keyfile to %s: %v", keyfilepath, err)
-		}
-
-		// Output some information.
-		out := outputGenerate{
-			Address: key.Address.Hex(),
-		}
-		if ctx.Bool(jsonFlag.Name) {
-			mustPrintJSON(out)
-		} else {
-			fmt.Println("Address:", out.Address)
-		}
 		return nil
 	},
+}
+
+// storeKeyStore creates and stores a keystore from given parameters.
+// exits the program with an error message on failure.
+func storeKeyStore(ctx *cli.Context) {
+	// Check if keyfile path given and make sure it doesn't already exist.
+	keyfilepath := ctx.Args().First()
+	if keyfilepath == "" {
+		keyfilepath = defaultKeyfileName
+	}
+	if _, err := os.Stat(keyfilepath); err == nil {
+		utils.Fatalf("Keyfile already exists at %s.", keyfilepath)
+	} else if !os.IsNotExist(err) {
+		utils.Fatalf("Error checking if keyfile exists: %v", err)
+	}
+
+	key, keyjson := newKeyStore(ctx)
+
+	if err := os.MkdirAll(filepath.Dir(keyfilepath), 0700); err != nil {
+		utils.Fatalf("Could not create directory %s", filepath.Dir(keyfilepath))
+	}
+	if err := ioutil.WriteFile(keyfilepath, keyjson, 0600); err != nil {
+		utils.Fatalf("Failed to write keyfile to %s: %v", keyfilepath, err)
+	}
+
+	// Output some information.
+	out := outputGenerate{
+		Address: key.Address.Hex(),
+	}
+	if ctx.Bool(jsonFlag.Name) {
+		mustPrintJSON(out)
+	} else {
+		fmt.Println("Address:", out.Address)
+	}
+}
+
+// newKeyStore outputs a new key and keystore from given parameters
+// exits the program with an error message on failure.
+func newKeyStore(ctx *cli.Context) (*keystore.Key, []byte) {
+	var privateKey *ecdsa.PrivateKey
+	var err error
+	if file := ctx.String("privatekey"); file != "" {
+		// Load private key from file.
+		privateKey, err = crypto.LoadECDSA(file)
+		if err != nil {
+			utils.Fatalf("Can't load private key: %v", err)
+		}
+	} else {
+		// If not loaded, generate random.
+		privateKey, err = crypto.GenerateKey()
+		if err != nil {
+			utils.Fatalf("Failed to generate random private key: %v", err)
+		}
+	}
+
+	// Create the keyfile object with a random UUID.
+	id := uuid.NewRandom()
+	key := &keystore.Key{
+		Id:         id,
+		Address:    crypto.PubkeyToAddress(privateKey.PublicKey),
+		PrivateKey: privateKey,
+	}
+
+	// Encrypt key with passphrase.
+	passphrase := getPassPhrase(ctx, true)
+	keyjson, err := keystore.EncryptKey(key, passphrase, keystore.StandardScryptN, keystore.StandardScryptP)
+	if err != nil {
+		utils.Fatalf("Error encrypting key: %v", err)
+	}
+
+	return key, keyjson
 }
