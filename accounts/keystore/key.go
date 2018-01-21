@@ -53,6 +53,8 @@ type keyStore interface {
 	GetKey(addr common.Address, filename string, auth string) (*Key, error)
 	// Writes and encrypts the key.
 	StoreKey(filename string, k *Key, auth string) error
+	// Creates and encrypts the key and returns in JSON
+	CreateKeyStore(k *Key, auth string) ([]byte, error)
 	// Joins filename with the key directory unless it is already absolute.
 	JoinPath(filename string) string
 }
@@ -177,6 +179,19 @@ func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, accounts.Accou
 		return nil, a, err
 	}
 	return key, a, err
+}
+
+func newKeyStore(ks keyStore, rand io.Reader, auth string) (*Key, []byte, error) {
+	key, err := newKey(rand)
+	if err != nil {
+		return nil, []byte{}, err
+	}
+	json, err := ks.CreateKeyStore(key, auth)
+	if err != nil {
+		zeroKey(key.PrivateKey)
+		return nil, []byte{}, err
+	}
+	return key, json, err
 }
 
 func writeKeyFile(file string, content []byte) error {

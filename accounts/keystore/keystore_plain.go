@@ -53,6 +53,14 @@ func (ks keyStorePlain) StoreKey(filename string, key *Key, auth string) error {
 	return writeKeyFile(filename, content)
 }
 
+func (ks keyStorePlain) CreateKeyStore(key *Key, auth string) ([]byte, error) {
+	content, err := json.Marshal(key)
+	if err != nil {
+		return []byte{}, err
+	}
+	return content, nil
+}
+
 func (ks keyStorePlain) JoinPath(filename string) string {
 	if filepath.IsAbs(filename) {
 		return filename

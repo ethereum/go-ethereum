@@ -98,11 +98,25 @@ func StoreKey(dir, auth string, scryptN, scryptP int) (common.Address, error) {
 }
 
 func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) error {
-	keyjson, err := EncryptKey(key, auth, ks.scryptN, ks.scryptP)
+	keyjson, err := ks.CreateKeyStore(key, auth)
 	if err != nil {
 		return err
 	}
 	return writeKeyFile(filename, keyjson)
+}
+
+// CreateKeyStore generates a key, encrypts with 'auth'
+func CreateKeyStore(auth string, scryptN, scryptP int) ([]byte, error) {
+	_, json, err := newKeyStore(&keyStorePassphrase{scryptN: scryptN, scryptP: scryptP}, crand.Reader, auth)
+	return json, err
+}
+
+func (ks keyStorePassphrase) CreateKeyStore(key *Key, auth string) ([]byte, error) {
+	keyjson, err := EncryptKey(key, auth, ks.scryptN, ks.scryptP)
+	if err != nil {
+		return []byte{}, err
+	}
+	return keyjson, nil
 }
 
 func (ks keyStorePassphrase) JoinPath(filename string) string {
