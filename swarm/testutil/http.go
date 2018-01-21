@@ -17,20 +17,28 @@
 package testutil
 
 import (
-	"crypto/ecdsa"
+	"context"
 	"io/ioutil"
+	"math/big"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strconv"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
+
+type fakeBackend struct {
+	blocknumber int64
+}
+
+func (f *fakeBackend) BlockNumber(ctx context.Context) (big.Int, error) {
+	f.blocknumber++
+	biggie := big.NewInt(f.blocknumber)
+	return *biggie, nil
+}
 
 func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 	dir, err := ioutil.TempDir("", "swarm-storage-test")
@@ -60,28 +68,8 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ipcPath := filepath.Join(resourceDir, "test.ipc")
-	ipcl, err := rpc.CreateIPCListener(ipcPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rpcServer := rpc.NewServer()
-	rpcServer.RegisterName("eth", &FakeRPC{})
-	go func() {
-		rpcServer.ServeListener(ipcl)
-	}()
-	rpcClean := func() {
-		rpcServer.Stop()
-	}
 
-	// connect to fake rpc
-	rpcClient, err := rpc.Dial(ipcPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ethClient := ethclient.NewClient(rpcClient)
-
-	rh, err := storage.NewResourceHandler(resourceDir, &testCloudStore{}, ethClient, nil)
+	rh, err := storage.NewResourceHandler(resourceDir, &testCloudStore{}, &fakeBackend{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,8 +82,9 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 		dir:    dir,
 		hasher: storage.MakeHashFunc(storage.SHA3Hash)(),
 		cleanup: func() {
+			srv.Close()
 			rh.Close()
-			rpcClean()
+			dpa.Stop()
 			os.RemoveAll(dir)
 			os.RemoveAll(resourceDir)
 		},
@@ -104,17 +93,14 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 
 type TestSwarmServer struct {
 	*httptest.Server
-	hasher     storage.SwarmHash
-	privatekey *ecdsa.PrivateKey
-	Dpa        *storage.DPA
-	dir        string
-	cleanup    func()
+	hasher  storage.SwarmHash
+	Dpa     *storage.DPA
+	dir     string
+	cleanup func()
 }
 
 func (t *TestSwarmServer) Close() {
-	t.Server.Close()
-	t.Dpa.Stop()
-	os.RemoveAll(t.dir)
+	t.cleanup()
 }
 
 type testCloudStore struct {

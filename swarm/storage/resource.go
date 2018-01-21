@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"math/big"
 	"path/filepath"
 	"sync"
 	"time"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -56,6 +56,10 @@ type ResourceValidator interface {
 	checkAccess(string, common.Address) (bool, error)
 	nameHash(string) common.Hash         // nameHashFunc
 	sign(common.Hash) (Signature, error) // SignFunc
+}
+
+type ethApi interface {
+	BlockNumber(context.Context) (big.Int, error)
 }
 
 // Mutable resource is an entity which allows updates to a resource
@@ -119,8 +123,10 @@ type ResourceValidator interface {
 // TODO: Include modtime in chunk data + signature
 type ResourceHandler struct {
 	ChunkStore
+	ctx          context.Context
+	cancelFunc   func()
 	validator    ResourceValidator
-	ethClient    *ethclient.Client
+	ethClient    ethApi
 	resources    map[string]*resource
 	hashLock     sync.Mutex
 	resourceLock sync.RWMutex
@@ -134,7 +140,7 @@ type ResourceHandler struct {
 // Create or open resource update chunk store
 //
 // If validator is nil, signature and access validation will be deactivated
-func NewResourceHandler(datadir string, cloudStore CloudStore, ethClient *ethclient.Client, validator ResourceValidator) (*ResourceHandler, error) {
+func NewResourceHandler(datadir string, cloudStore CloudStore, ethClient ethApi, validator ResourceValidator) (*ResourceHandler, error) {
 
 	hashfunc := MakeHashFunc(SHA3Hash)
 
@@ -602,17 +608,11 @@ func (self *ResourceHandler) Close() {
 }
 
 func (self *ResourceHandler) GetBlock() (uint64, error) {
-	return self.ethClient.BlockNumber(self.ctx)
-	// get the block height and convert to uint64
-	//	var currentblock string
-	//	err := self.rpcClient.Call(&currentblock, "eth_blockNumber")
-	//	if err != nil {
-	//		return 0, err
-	//	}
-	//	if currentblock == "0x0" {
-	//		return 0, nil
-	//	}
-	//	return strconv.ParseUint(currentblock, 10, 64)
+	bigblocknumber, err := self.ethClient.BlockNumber(self.ctx)
+	if err != nil {
+		return 0, err
+	}
+	return bigblocknumber.Uint64(), nil
 }
 
 // Calculate the period index (aka major version number) from a given block number
@@ -776,10 +776,7 @@ func isSafeName(name string) bool {
 	if err != nil {
 		return false
 	}
-	if validname != name {
-		return false
-	}
-	return true
+	return validname == name
 }
 
 // convenience for creating signature hashes of update data

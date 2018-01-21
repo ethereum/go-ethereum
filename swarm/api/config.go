@@ -110,8 +110,8 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 	self.PublicKey = pubkeyhex
 	self.BzzKey = keyhex
 
-	self.Swap.Init(self.Contract, prvKey)
-	//self.SyncParams.Init(self.Path)
-	//self.HiveParams.Init(self.Path)
+	if self.SwapEnabled {
+		self.Swap.Init(self.Contract, prvKey)
+	}
 	self.StoreParams.Init(self.Path)
 }

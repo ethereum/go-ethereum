@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strconv"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -77,13 +76,19 @@ type rpcBlock struct {
 	UncleHashes  []common.Hash    `json:"uncles"`
 }
 
-func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
-	var number string
-	err := ec.c.CallContext(ctx, &number, "eth_blockNumber")
+func (ec *Client) BlockNumber(ctx context.Context) (big.Int, error) {
+	var numberstr string
+	number := &big.Int{}
+	err := ec.c.CallContext(ctx, &numberstr, "eth_blockNumber")
 	if err != nil {
-		return 0, err
+		return *number, err
 	}
-	return strconv.ParseUint(number, 10, 64)
+	var ok bool
+	number, ok = number.SetString(numberstr, 10)
+	if !ok {
+		err = errors.New("Failed to parse bigint")
+	}
+	return *number, err
 }
 
 func (ec *Client) getBlock(ctx context.Context, method string, args ...interface{}) (*types.Block, error) {

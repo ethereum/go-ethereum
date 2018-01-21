@@ -295,13 +295,12 @@ func (s *Server) HandlePostDb(w http.ResponseWriter, r *Request) {
 	if r.ContentLength == 0 {
 		frequency, err := strconv.ParseUint(r.uri.Path, 10, 64)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			http.ServeContent(w, &r.Request, "", time.Now(), bytes.NewReader([]byte(err.Error())))
+			s.BadRequest(w, r, fmt.Sprintf("Cannot parse frequency parameter: %v", err))
 			return
 		}
 		err = s.api.DbCreate(r.uri.Addr, frequency)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			s.Error(w, r, fmt.Errorf("Resource creation failed: %v", err))
 			return
 		}
 	} else {
@@ -324,8 +323,8 @@ func (s *Server) HandlePostDb(w http.ResponseWriter, r *Request) {
 // bzz-db[-[immutable|-raw]]://<id> - get latest update
 // bzz-db[-[immutable|-raw]]://<id>/<n> - get latest update on period n
 // bzz-db[-[immutable|-raw]]://<id>/<n>/<m> - get update version m of period n
+// <id> = ens name or hash
 func (s *Server) HandleGetDb(w http.ResponseWriter, r *Request) {
-	w.Header().Set("Content-Type", "application/octet-stream")
 
 	rootKey, err := s.api.Resolve(r.uri)
 	if err != nil {
@@ -340,34 +339,39 @@ func (s *Server) HandleGetDb(w http.ResponseWriter, r *Request) {
 	var updateKey storage.Key
 	var period uint64
 	var version uint64
-	var data io.ReadSeeker
+	var data []byte
 	var dataLength int
 	now := time.Now()
 	switch len(params) {
 	case 0:
-		updateKey, data, dataLength, err = s.api.DbLookup(rootKey, r.uri.Addr, 0, 0)
-		break
+		updateKey, data, err = s.api.DbLookup(rootKey, r.uri.Addr, 0, 0)
 	case 2:
 		version, err = strconv.ParseUint(params[1], 10, 32)
 		if err != nil {
 			break
 		}
+		updateKey, data, err = s.api.DbLookup(rootKey, r.uri.Addr, uint32(period), uint32(version))
 	case 1:
+		version, err = strconv.ParseUint(params[1], 10, 32)
+		if err != nil {
+			break
+		}
 		period, err = strconv.ParseUint(params[0], 10, 32)
 		if err != nil {
 			break
 		}
-		updateKey, data, dataLength, err = s.api.DbLookup(rootKey, r.uri.Addr, uint32(period), uint32(version))
-		break
+		updateKey, data, err = s.api.DbLookup(rootKey, r.uri.Addr, uint32(period), uint32(version))
 	default:
-		w.WriteHeader(http.StatusBadRequest)
-		err = fmt.Errorf("params 0-2")
+		s.BadRequest(w, r, fmt.Sprintf("Invalid mutable resource request"))
+		return
 	}
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		s.Error(w, r, fmt.Errorf("Mutable resource lookup failed: %v", err))
 		return
 	}
 	if !r.uri.DbRaw() {
+		w.Header().Set("Content-Type", "application/octet-stream")
+	} else {
 		entry := api.ManifestEntry{
 			Hash:        rootKey.Hex(),
 			Path:        updateKey.Hex(),
@@ -376,9 +380,9 @@ func (s *Server) HandleGetDb(w http.ResponseWriter, r *Request) {
 			ModTime:     now,
 			Status:      http.StatusOK,
 		}
-		mode := (6 << 2) | (4 << 1) | 4
+		mode := 0644
 		if s.api.DbIsValidated() {
-			mode |= 2 << 1
+			mode |= (2 << 3) | 2
 		}
 		entry.Mode = int64(mode)
 		manifest := api.Manifest{
@@ -388,12 +392,13 @@ func (s *Server) HandleGetDb(w http.ResponseWriter, r *Request) {
 		}
 		manifestJson, err := json.Marshal(manifest)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			s.Error(w, r, fmt.Errorf("Could not convert manifest to json: %v", err))
 			return
 		}
-		data = bytes.NewReader(manifestJson)
+		w.Header().Set("Content-Type", api.DbManifestType)
+		data = []byte(manifestJson)
 	}
-	http.ServeContent(w, &r.Request, "", now, data)
+	http.ServeContent(w, &r.Request, "", now, bytes.NewReader(data))
 }
 
 // HandleGet handles a GET request to

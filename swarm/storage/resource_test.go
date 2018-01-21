@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/binary"
@@ -9,8 +10,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -22,9 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 var (
@@ -50,7 +47,7 @@ func init() {
 // so we use this wrapper to fake returning the block count
 type fakeBackend struct {
 	*backends.SimulatedBackend
-	blocknumber uint64
+	blocknumber int64
 }
 
 func (f *fakeBackend) Commit() {
@@ -60,13 +57,10 @@ func (f *fakeBackend) Commit() {
 	f.blocknumber++
 }
 
-// for faking the rpc service, since we don't need the whole node stack
-type FakeRPC struct {
-	backend *fakeBackend
-}
-
-func (r *FakeRPC) BlockNumber() (string, error) {
-	return strconv.FormatUint(r.backend.blocknumber, 10), nil
+func (f *fakeBackend) BlockNumber(context context.Context) (big.Int, error) {
+	f.blocknumber++
+	biggie := big.NewInt(f.blocknumber)
+	return *biggie, nil
 }
 
 // check that signature address matches update signer address
@@ -84,8 +78,9 @@ func TestResourceReverse(t *testing.T) {
 	// set up rpc and create resourcehandler
 	rh, _, _, teardownTest, err := setupTest(nil, newTestValidator(signer.signContent))
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
+	defer teardownTest()
 
 	// generate a hash for block 4200 version 1
 	key := rh.resourceHash(period, version, rh.nameHash(safeName))
@@ -94,14 +89,14 @@ func TestResourceReverse(t *testing.T) {
 	data := make([]byte, 8)
 	_, err = rand.Read(data)
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
 	testHasher.Reset()
 	testHasher.Write(data)
 	digest := rh.keyDataHash(key, data)
 	sig, err := rh.validator.sign(digest)
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
 
 	chunk := newUpdateChunk(key, &sig, period, version, safeName, data)
@@ -111,31 +106,30 @@ func TestResourceReverse(t *testing.T) {
 	checkdigest := rh.keyDataHash(chunk.Key, checkdata)
 	recoveredaddress, err := getAddressFromDataSig(checkdigest, *checksig)
 	if err != nil {
-		teardownTest(t, fmt.Errorf("Retrieve address from signature fail: %v", err))
+		t.Fatalf("Retrieve address from signature fail: %v", err)
 	}
 	originaladdress := crypto.PubkeyToAddress(signer.privKey.PublicKey)
 
 	// check that the metadata retrieved from the chunk matches what we gave it
 	if recoveredaddress != originaladdress {
-		teardownTest(t, fmt.Errorf("addresses dont match: %x != %x", originaladdress, recoveredaddress))
+		t.Fatalf("addresses dont match: %x != %x", originaladdress, recoveredaddress)
 	}
 
 	if !bytes.Equal(key[:], chunk.Key[:]) {
-		teardownTest(t, fmt.Errorf("Expected chunk key '%x', was '%x'", key, chunk.Key))
+		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Key)
 	}
 	if period != checkperiod {
-		teardownTest(t, fmt.Errorf("Expected period '%d', was '%d'", period, checkperiod))
+		t.Fatalf("Expected period '%d', was '%d'", period, checkperiod)
 	}
 	if version != checkversion {
-		teardownTest(t, fmt.Errorf("Expected version '%d', was '%d'", version, checkversion))
+		t.Fatalf("Expected version '%d', was '%d'", version, checkversion)
 	}
 	if safeName != checkname {
-		teardownTest(t, fmt.Errorf("Expected name '%s', was '%s'", safeName, checkname))
+		t.Fatalf("Expected name '%s', was '%s'", safeName, checkname)
 	}
 	if !bytes.Equal(data, checkdata) {
-		teardownTest(t, fmt.Errorf("Expectedn data '%x', was '%x'", data, checkdata))
+		t.Fatalf("Expectedn data '%x', was '%x'", data, checkdata)
 	}
-	teardownTest(t, nil)
 }
 
 // make updates and retrieve them based on periods and versions
@@ -143,34 +137,35 @@ func TestResourceHandler(t *testing.T) {
 
 	// make fake backend, set up rpc and create resourcehandler
 	backend := &fakeBackend{
-		blocknumber: startBlock,
+		blocknumber: int64(startBlock),
 	}
 	rh, datadir, _, teardownTest, err := setupTest(backend, nil)
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
+	defer teardownTest()
 
 	// create a new resource
 	_, err = rh.NewResource(safeName, resourceFrequency)
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
 
 	// check that the new resource is stored correctly
 	namehash := rh.nameHash(safeName)
 	chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(namehash[:]))
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	} else if len(chunk.SData) < 16 {
-		teardownTest(t, fmt.Errorf("chunk data must be minimum 16 bytes, is %d", len(chunk.SData)))
+		t.Fatalf("chunk data must be minimum 16 bytes, is %d", len(chunk.SData))
 	}
 	startblocknumber := binary.LittleEndian.Uint64(chunk.SData[:8])
 	chunkfrequency := binary.LittleEndian.Uint64(chunk.SData[8:])
-	if startblocknumber != backend.blocknumber {
-		teardownTest(t, fmt.Errorf("stored block number %d does not match provided block number %d", startblocknumber, backend.blocknumber))
+	if startblocknumber != uint64(backend.blocknumber) {
+		t.Fatalf("stored block number %d does not match provided block number %d", startblocknumber, backend.blocknumber)
 	}
 	if chunkfrequency != resourceFrequency {
-		teardownTest(t, fmt.Errorf("stored frequency %d does not match provided frequency %d", chunkfrequency, resourceFrequency))
+		t.Fatalf("stored frequency %d does not match provided frequency %d", chunkfrequency, resourceFrequency)
 	}
 
 	// update halfway to first period
@@ -179,7 +174,7 @@ func TestResourceHandler(t *testing.T) {
 	data := []byte("blinky")
 	resourcekey["blinky"], err = rh.Update(safeName, data)
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
 
 	// update on first period
@@ -187,7 +182,7 @@ func TestResourceHandler(t *testing.T) {
 	data = []byte("pinky")
 	resourcekey["pinky"], err = rh.Update(safeName, data)
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
 
 	// update on second period
@@ -195,7 +190,7 @@ func TestResourceHandler(t *testing.T) {
 	data = []byte("inky")
 	resourcekey["inky"], err = rh.Update(safeName, data)
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
 
 	// update just after second period
@@ -203,7 +198,7 @@ func TestResourceHandler(t *testing.T) {
 	data = []byte("clyde")
 	resourcekey["clyde"], err = rh.Update(safeName, data)
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
 	time.Sleep(time.Second)
 	rh.Close()
@@ -215,43 +210,42 @@ func TestResourceHandler(t *testing.T) {
 	rh2, err := NewResourceHandler(datadir, &testCloudStore{}, rh.ethClient, nil)
 	_, err = rh2.LookupLatestByName(safeName, true)
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
 
 	// last update should be "clyde", version two, blockheight startblocknumber + (resourcefrequency * 3)
 	if !bytes.Equal(rh2.resources[safeName].data, []byte("clyde")) {
-		teardownTest(t, fmt.Errorf("resource data was %v, expected %v", rh2.resources[safeName].data, []byte("clyde")))
+		t.Fatalf("resource data was %v, expected %v", rh2.resources[safeName].data, []byte("clyde"))
 	}
 	if rh2.resources[safeName].version != 2 {
-		teardownTest(t, fmt.Errorf("resource version was %d, expected 2", rh2.resources[safeName].version))
+		t.Fatalf("resource version was %d, expected 2", rh2.resources[safeName].version)
 	}
 	if rh2.resources[safeName].lastPeriod != 3 {
-		teardownTest(t, fmt.Errorf("resource period was %d, expected 3", rh2.resources[safeName].lastPeriod))
+		t.Fatalf("resource period was %d, expected 3", rh2.resources[safeName].lastPeriod)
 	}
 	log.Debug("Latest lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, latest version
 	rsrc, err := rh2.LookupHistoricalByName(safeName, 3, true)
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
 	// check data
 	if !bytes.Equal(rsrc.data, []byte("clyde")) {
-		teardownTest(t, fmt.Errorf("resource data (historical) was %v, expected %v", rh2.resources[domainName].data, []byte("clyde")))
+		t.Fatalf("resource data (historical) was %v, expected %v", rh2.resources[domainName].data, []byte("clyde"))
 	}
 	log.Debug("Historical lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, specific version
 	rsrc, err = rh2.LookupVersionByName(safeName, 3, 1, true)
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
 	// check data
 	if !bytes.Equal(rsrc.data, []byte("inky")) {
-		teardownTest(t, fmt.Errorf("resource data (historical) was %v, expected %v", rh2.resources[domainName].data, []byte("inky")))
+		t.Fatalf("resource data (historical) was %v, expected %v", rh2.resources[domainName].data, []byte("inky"))
 	}
 	log.Debug("Specific version lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
-	teardownTest(t, nil)
 
 }
 
@@ -283,34 +277,33 @@ func TestResourceENSOwner(t *testing.T) {
 	// set up rpc and create resourcehandler with ENS sim backend
 	rh, _, _, teardownTest, err := setupTest(contractbackend, validator)
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
+	defer teardownTest()
 
 	// create new resource when we are owner = ok
 	_, err = rh.NewResource(safeName, resourceFrequency)
 	if err != nil {
-		teardownTest(t, fmt.Errorf("Create resource fail: %v", err))
+		t.Fatalf("Create resource fail: %v", err)
 	}
 
 	data := []byte("foo")
 	// update resource when we are owner = ok
 	_, err = rh.Update(safeName, data)
 	if err != nil {
-		teardownTest(t, fmt.Errorf("Update resource fail: %v", err))
+		t.Fatalf("Update resource fail: %v", err)
 	}
 
 	// update resource when we are owner = ok
 	signertwo, err := newTestSigner()
 	if err != nil {
-		teardownTest(t, err)
+		t.Fatal(err)
 	}
 	rh.validator.(*ENSValidator).signFunc = signertwo.signContent
 	_, err = rh.Update(safeName, data)
 	if err == nil {
-		teardownTest(t, fmt.Errorf("Expected resource update fail due to owner mismatch"))
+		t.Fatalf("Expected resource update fail due to owner mismatch")
 	}
-
-	teardownTest(t, nil)
 }
 
 // fast-forward blockheight
@@ -321,7 +314,7 @@ func fwdBlocks(count int, backend *fakeBackend) {
 }
 
 // create rpc and resourcehandler
-func setupTest(contractbackend bind.ContractBackend, validator ResourceValidator) (rh *ResourceHandler, datadir string, signer *testSigner, teardown func(*testing.T, error), err error) {
+func setupTest(backend ethApi, validator ResourceValidator) (rh *ResourceHandler, datadir string, signer *testSigner, teardown func(), err error) {
 
 	var fsClean func()
 	var rpcClean func()
@@ -337,55 +330,18 @@ func setupTest(contractbackend bind.ContractBackend, validator ResourceValidator
 	// temp datadir
 	datadir, err = ioutil.TempDir("", "rh")
 	if err != nil {
-		return
+		return nil, "", nil, nil, err
 	}
 	fsClean = func() {
 		os.RemoveAll(datadir)
 	}
 
-	// starting the whole stack just to get blocknumbers is too cumbersome
-	// so we fake the rpc server to get blocknumbers for testing
-	ipcpath := filepath.Join(datadir, "test.ipc")
-	ipcl, err := rpc.CreateIPCListener(ipcpath)
-	if err != nil {
-		return
-	}
-	rpcserver := rpc.NewServer()
-	var fake *fakeBackend
-	if contractbackend != nil {
-		fake = contractbackend.(*fakeBackend)
-	}
-	rpcserver.RegisterName("eth", &FakeRPC{
-		backend: fake,
-	})
-	go func() {
-		rpcserver.ServeListener(ipcl)
-	}()
-	rpcClean = func() {
-		rpcserver.Stop()
-	}
-
-	// connect to fake rpc
-	rpcClient, err := rpc.Dial(ipcpath)
-	if err != nil {
-		return
-	}
-
-	ethClient := ethclient.NewClient(rpcClient)
-
-	rh, err = NewResourceHandler(datadir, &testCloudStore{}, ethClient, validator)
-	teardown = func(t *testing.T, err error) {
-		cleanF()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	return
+	rh, err = NewResourceHandler(datadir, &testCloudStore{}, backend, validator)
+	return rh, datadir, signer, cleanF, nil
 }
 
 // Set up simulated ENS backend for use with ENSResourceHandler tests
-func setupENS(addr common.Address, transactOpts *bind.TransactOpts, sub string, top string) (common.Address, bind.ContractBackend, error) {
+func setupENS(addr common.Address, transactOpts *bind.TransactOpts, sub string, top string) (common.Address, *fakeBackend, error) {
 
 	// create the domain hash values to pass to the ENS contract methods
 	var tophash [32]byte
