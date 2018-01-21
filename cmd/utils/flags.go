@@ -174,7 +174,7 @@ var (
 	EthPeersFlag = cli.IntFlag{
 		Name:  "ethpeers",
 		Usage: "Maximum number of ETH peers",
-		Value: 25,
+		Value: eth.DefaultConfig.EthPeers,
 	}
 	LightServFlag = cli.IntFlag{
 		Name:  "lightserv",
@@ -184,7 +184,7 @@ var (
 	LightPeersFlag = cli.IntFlag{
 		Name:  "lightpeers",
 		Usage: "Maximum number of LES client peers",
-		Value: 100,
+		Value: eth.DefaultConfig.LightPeers,
 	}
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
