@@ -240,7 +240,7 @@ func (s *MemStore) Get(hash Key) (chunk *Chunk, err error) {
 
 func (s *MemStore) removeOldest() {
 	node := s.memtree
-
+	log.Warn("purge memstore")
 	for node.entry == nil {
 
 		aidx := uint(0)
@@ -284,9 +284,11 @@ func (s *MemStore) removeOldest() {
 	<-node.entry.dbStored
 	log.Trace(fmt.Sprintf("Memstore Clean: Chunk %v saved to DBStore. Ready to clear from mem.", node.entry.Key.Log()))
 
-	if node.entry.SData != nil {
+	if node.entry.ReqC == nil {
 		node.entry = nil
 		s.entryCnt--
+	} else {
+		return
 	}
 
 	node.access[0] = 0

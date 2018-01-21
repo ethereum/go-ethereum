@@ -28,19 +28,27 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	streamTesting "github.com/ethereum/go-ethereum/swarm/network/stream/testing"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
+const dataChunkCount = 500
+
 func TestSyncerSimulation(t *testing.T) {
-	testSyncBetweenNodes(t, 2, 1, 81000, true, 1)
-	testSyncBetweenNodes(t, 2, 1, 81000, false, 1)
-	testSyncBetweenNodes(t, 3, 1, 81000, true, 1)
-	testSyncBetweenNodes(t, 3, 1, 81000, false, 1)
+	testSyncBetweenNodes(t, 2, 1, dataChunkCount, true, 1)
+	// testSyncBetweenNodes(t, 2, 1, dataChunkCount, false, 1)
+	testSyncBetweenNodes(t, 4, 1, dataChunkCount, true, 1)
+	// testSyncBetweenNodes(t, 4, 1, dataChunkCount, false, 1)
+	testSyncBetweenNodes(t, 8, 1, dataChunkCount, true, 1)
+	// testSyncBetweenNodes(t, 8, 1, dataChunkCount, false, 1)
+	testSyncBetweenNodes(t, 16, 1, dataChunkCount, true, 1)
+	// testSyncBetweenNodes(t, 16, 1, dataChunkCount, false, 1)
 }
 
-func testSyncBetweenNodes(t *testing.T, nodes, conns, size int, skipCheck bool, po uint8) {
+func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool, po uint8) {
+	defaultSkipCheck = skipCheck
 	toAddr = func(id discover.NodeID) *network.BzzAddr {
 		addr := network.NewAddrFromNodeID(id)
 		addr.OAddr[0] = byte(0)
@@ -64,30 +72,43 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, size int, skipCheck bool, 
 	for i, id := range sim.IDs {
 		stores[id] = sim.Stores[i]
 	}
-
+	peerCount = func(id discover.NodeID) int {
+		if sim.IDs[0] == id || sim.IDs[nodes-1] == id {
+			return 1
+		}
+		return 2
+	}
 	// here we distribute chunks of a random file into Stores of nodes 1 to nodes
 	rrdpa := storage.NewDPA(newRoundRobinStore(sim.Stores[1:]...), storage.NewChunkerParams())
 	rrdpa.Start()
+	size := chunkCount * chunkSize
 	_, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size))
+	// need to wait cos we then immediately collect the relevant bin content
+	wait()
 	defer rrdpa.Stop()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	// wait until all chunks stored
-	// TODO: is wait() necessary?
-	wait()
-	// each node Subscribes to each other's swarmChunkServerStreamName
-	// need to wait till an aynchronous process registers the peers in streamer.peers
-	// that is used by Subscribe
-	// time.Sleep(1 * time.Second)
-	// err := streamer.Subscribe(p.ID(), swarmChunkServerStreamName, nil, 0, 0, Top, true)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	waitPeerErrC = make(chan error)
-	// create a retriever dpa for the pivot node
-	action := func(context.Context) error {
 
+	// collect hashes in po 1 from all nodes
+	var hashes []storage.Key
+	dbs := make([]*storage.DBAPI, nodes)
+	for i := 0; i < nodes; i++ {
+		dbs[i] = storage.NewDBAPI(sim.Stores[i].(*storage.LocalStore))
+	}
+	for i := 1; i < nodes; i++ {
+		dbs[i].Iterator(0, math.MaxUint64, po, func(key storage.Key, index uint64) bool {
+			hashes = append(hashes, key)
+			return true
+		})
+	}
+
+	waitPeerErrC = make(chan error)
+	action := func(ctx context.Context) error {
+		// need to wait till an aynchronous process registers the peers in streamer.peers
+		// that is used by Subscribe
+		// the global peerCount function tells how many connections each node has
+		// TODO: this is to be reimplemented with peerEvent watcher without global var
 		i := 0
 		for err := range waitPeerErrC {
 			if err != nil {
@@ -98,71 +119,42 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, size int, skipCheck bool, 
 				break
 			}
 		}
-
-		for i := 0; i < len(sim.IDs)-1; i++ {
-			id := sim.IDs[i]
-			// if err := streamer.Subscribe(p.ID(), "SYNC", []byte{uint8(1)}, 0, 0, Top, false); err != nil {
-			// 	log.Warn("error in subscribe", "err", err)
-			// }
-			node := sim.Net.GetNode(id)
-			if node == nil {
-				return fmt.Errorf("unknown node: %s", id)
-			}
-			client, err := node.Client()
-			if err != nil {
-				return fmt.Errorf("error getting node client: %s", err)
-			}
-			sid := sim.IDs[i+1]
-			if err := client.Call(nil, "stream_subscribeStream", sid, "SYNC", []byte{uint8(1)}, 0, 0, Top, false); err != nil {
-				return fmt.Errorf("error subscribing: %s", err)
-			}
-		}
-		return nil
+		// each node Subscribes to each other's swarmChunkServerStreamName
+		j := 0
+		return sim.CallClient(func(client *rpc.Client) error {
+			ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+			defer cancel()
+			j++
+			return client.CallContext(ctx, nil, "stream_subscribeStream", sim.IDs[j], "SYNC", []byte{1}, 0, 0, Top, false)
+		}, sim.IDs[0:nodes-1]...)
 	}
 
-	dbs := make([]*storage.DBAPI, nodes)
-	for i := 0; i < nodes; i++ {
-		dbs[i] = storage.NewDBAPI(sim.Stores[i].(*storage.LocalStore))
-	}
-
+	// this makes sure check is not called before the previous call finishes
+	checkC := make(chan struct{})
 	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
-		if id != sim.Net.Nodes[0].ID() {
-			return true, nil
-		}
+		defer func() { checkC <- struct{}{} }()
+
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
 		default:
 		}
 
-		var found, total int
-		for i := 1; i < nodes; i++ {
-			dbs[i].Iterator(0, math.MaxUint64, po, func(key storage.Key, index uint64) bool {
-				_, err := dbs[0].Get(key)
-				if err == nil {
-					found++
-				}
-				total++
-				return true
-			})
+		var found int
+		total := len(hashes)
+		for _, key := range hashes {
+			_, err := dbs[0].Get(key)
+			if err == nil {
+				found++
+			}
 		}
 		log.Debug("sync check", "bin", po, "found", found, "total", total)
 		return found == total, nil
 	}
 
-	trigger := make(chan discover.NodeID)
-	ticker := time.NewTicker(500 * time.Millisecond)
-	go func() {
-		defer ticker.Stop()
-		// we are only testing the pivot node (net.Nodes[0])
-		for range ticker.C {
-			trigger <- sim.Net.Nodes[0].ID()
-		}
-	}()
-
 	conf.Step = &simulations.Step{
 		Action:  action,
-		Trigger: trigger,
+		Trigger: streamTesting.PivotTrigger(10*time.Millisecond, checkC, sim.IDs[0]),
 		Expect: &simulations.Expectation{
 			Nodes: sim.IDs[0:1],
 			Check: check,

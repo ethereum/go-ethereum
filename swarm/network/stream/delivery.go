@@ -20,12 +20,16 @@ import (
 	"errors"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-const swarmChunkServerStreamName = "RETRIEVE_REQUEST"
+const (
+	swarmChunkServerStreamName = "RETRIEVE_REQUEST"
+	deliveryCap                = 32
+)
 
 type Delivery struct {
 	db       *storage.DBAPI
@@ -39,7 +43,7 @@ func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
 	d := &Delivery{
 		db:       db,
 		overlay:  overlay,
-		receiveC: make(chan *ChunkDeliveryMsg, 10),
+		receiveC: make(chan *ChunkDeliveryMsg, deliveryCap),
 	}
 
 	go d.processReceivedChunks()
@@ -57,7 +61,7 @@ type SwarmChunkServer struct {
 // NewSwarmChunkServer is SwarmChunkServer constructor
 func NewSwarmChunkServer(db *storage.DBAPI) *SwarmChunkServer {
 	s := &SwarmChunkServer{
-		deliveryC: make(chan []byte),
+		deliveryC: make(chan []byte, deliveryCap),
 		batchC:    make(chan []byte),
 		db:        db,
 	}
@@ -103,6 +107,7 @@ type RetrieveRequestMsg struct {
 }
 
 func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) error {
+	log.Debug("received request", "peer", sp.ID(), "hash", req.Key)
 	s, err := sp.getServer(swarmChunkServerStreamName)
 	if err != nil {
 		return err
@@ -112,6 +117,7 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 	if chunk.ReqC != nil {
 		if created {
 			if err := d.RequestFromPeers(chunk.Key[:], false, sp.ID()); err != nil {
+				log.Warn("unable to forward chunk request", "peer", sp.ID(), "key", chunk.Key, "err", err)
 				return nil
 			}
 		}
@@ -128,8 +134,10 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 			}
 
 			if req.SkipCheck {
-				sp.Deliver(chunk, s.priority)
-				return
+				err := sp.Deliver(chunk, s.priority)
+				if err != nil {
+					sp.Drop(err)
+				}
 			}
 			streamer.deliveryC <- chunk.Key[:]
 		}()
@@ -137,6 +145,7 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 	}
 	// TODO: call the retrieve function of the outgoing syncer
 	if req.SkipCheck {
+		log.Trace("deliver", "peer", sp.ID(), "hash", chunk.Key)
 		return sp.Deliver(chunk, s.priority)
 	}
 	streamer.deliveryC <- chunk.Key[:]
@@ -154,45 +163,60 @@ func (d *Delivery) handleChunkDeliveryMsg(req *ChunkDeliveryMsg) error {
 }
 
 func (d *Delivery) processReceivedChunks() {
+R:
 	for req := range d.receiveC {
 		// this should be has locally
 		chunk, err := d.db.Get(req.Key)
-		if err == nil && chunk.ReqC == nil {
-			continue
+		if err != nil {
+			log.Error("not in db? ", "key", req.Key, "chunk", chunk)
+			continue R
+		}
+		if chunk.ReqC == nil {
+			continue R
 		}
 		select {
 		case <-chunk.ReqC:
+			continue R
 		default:
-			chunk.SData = req.SData
-			d.db.Put(chunk)
-			close(chunk.ReqC)
 		}
+		chunk.SData = req.SData
+		d.db.Put(chunk)
+		log.Warn("reecived delivery", "hash", chunk.Key)
+		chunk.WaitToStore()
+		log.Warn("received delivery stored", "hash", chunk.Key)
+		close(chunk.ReqC)
+		log.Warn("received delivery requesters notified", "hash", chunk.Key)
 	}
 }
 
 // RequestFromPeers sends a chunk retrieve request to
 func (d *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...discover.NodeID) error {
 	var success bool
+	var err error
+	log.Warn("request", "hash", hash)
 	d.overlay.EachConn(hash, 255, func(p network.OverlayConn, po int, nn bool) bool {
 		spId := p.(*network.BzzPeer).ID()
 		for _, p := range peersToSkip {
 			if p == spId {
+				log.Warn("skip peer", "peer", spId)
 				return true
 			}
 		}
 		sp := d.getPeer(spId)
+		if sp == nil {
+			log.Warn("peer not found", "id", spId)
+			return true
+		}
 		// TODO: skip light nodes that do not accept retrieve requests
-		err := sp.SendPriority(&RetrieveRequestMsg{
+		err = sp.SendPriority(&RetrieveRequestMsg{
 			Key:       hash,
 			SkipCheck: skipCheck,
 		}, Top)
-		if err == nil {
-			success = true
-		}
+		success = true
 		return false
 	})
 	if success {
-		return nil
+		return err
 	}
 	return errors.New("no peer found")
 }

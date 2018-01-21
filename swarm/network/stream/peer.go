@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
@@ -27,16 +28,18 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
+var sendTimeout = 5 * time.Second
+
 // Peer is the Peer extention for the streaming protocol
 type Peer struct {
 	*protocols.Peer
-	streamer   *Registry
-	pq         *pq.PriorityQueue
-	outgoingMu sync.RWMutex
-	incomingMu sync.RWMutex
-	servers    map[string]*server
-	clients    map[string]*client
-	quit       chan struct{}
+	streamer *Registry
+	pq       *pq.PriorityQueue
+	serverMu sync.RWMutex
+	clientMu sync.RWMutex
+	servers  map[string]*server
+	clients  map[string]*client
+	quit     chan struct{}
 }
 
 // NewPeer is the constructor for Peer
@@ -64,12 +67,14 @@ func (p *Peer) Deliver(chunk *storage.Chunk, priority uint8) error {
 		Key:   chunk.Key,
 		SData: chunk.SData,
 	}
-	return p.pq.Push(nil, msg, int(priority))
+	return p.SendPriority(msg, priority)
 }
 
-// Deliver sends a storeRequestMsg protocol message to the peer
+// SendPriority sends message to the peer using the outgoing priority queue
 func (p *Peer) SendPriority(msg interface{}, priority uint8) error {
-	return p.pq.Push(nil, msg, int(priority))
+	ctx, cancel := context.WithTimeout(context.Background(), sendTimeout)
+	defer cancel()
+	return p.pq.Push(ctx, msg, int(priority))
 }
 
 // SendOfferedHashes sends OfferedHashesMsg protocol msg
@@ -92,13 +97,13 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		Stream:        s.stream,
 		Key:           s.key,
 	}
-	log.Debug("Swarm syncer offer batch", "stream", s.stream, "key", s.key, "len", len(hashes), "from", from, "to", to)
+	log.Warn("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "key", s.key, "len", len(hashes), "from", from, "to", to)
 	return p.SendPriority(msg, s.priority)
 }
 
 func (p *Peer) getServer(s string) (*server, error) {
-	p.outgoingMu.RLock()
-	defer p.outgoingMu.RUnlock()
+	p.serverMu.RLock()
+	defer p.serverMu.RUnlock()
 
 	server := p.servers[s]
 	if server == nil {
@@ -108,8 +113,8 @@ func (p *Peer) getServer(s string) (*server, error) {
 }
 
 func (p *Peer) getClient(s string) (*client, error) {
-	p.incomingMu.RLock()
-	defer p.incomingMu.RUnlock()
+	p.clientMu.RLock()
+	defer p.clientMu.RUnlock()
 
 	client := p.clients[s]
 	if client == nil {
@@ -119,8 +124,8 @@ func (p *Peer) getClient(s string) (*client, error) {
 }
 
 func (p *Peer) setServer(s string, key []byte, o Server, priority uint8) (*server, error) {
-	p.outgoingMu.Lock()
-	defer p.outgoingMu.Unlock()
+	p.serverMu.Lock()
+	defer p.serverMu.Unlock()
 
 	sk := s + keyToString(key)
 	if p.servers[sk] != nil {
@@ -137,14 +142,14 @@ func (p *Peer) setServer(s string, key []byte, o Server, priority uint8) (*serve
 }
 
 func (p *Peer) setClient(s string, key []byte, i Client, priority uint8, live bool) error {
-	p.incomingMu.Lock()
-	defer p.incomingMu.Unlock()
+	p.clientMu.Lock()
+	defer p.clientMu.Unlock()
 
 	sk := s + keyToString(key)
 	if p.clients[sk] != nil {
 		return fmt.Errorf("client %v already registered", sk)
 	}
-	next := make(chan struct{}, 1)
+	next := make(chan error, 1)
 	// var intervals *Intervals
 	// if !live {
 	// key := s + p.ID().String()
@@ -159,6 +164,6 @@ func (p *Peer) setClient(s string, key []byte, i Client, priority uint8, live bo
 		stream:   s,
 		key:      key,
 	}
-	next <- struct{}{} // this is to allow wantedKeysMsg before first batch arrives
+	next <- nil // this is to allow wantedKeysMsg before first batch arrives
 	return nil
 }

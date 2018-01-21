@@ -79,8 +79,12 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) error {
 	if err != nil {
 		return nil
 	}
-	log.Debug("received subscription", "stream", req.Stream, "Key", req.Key, "from", req.From, "to", req.To)
-	go p.SendOfferedHashes(os, req.From, req.To)
+	log.Debug("received subscription", "peer", p.ID(), "stream", req.Stream, "Key", req.Key, "from", req.From, "to", req.To)
+	go func() {
+		if err := p.SendOfferedHashes(os, req.From, req.To); err != nil {
+			p.Drop(err)
+		}
+	}()
 	return nil
 }
 
@@ -128,14 +132,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	}
 	go func() {
 		wg.Wait()
-		if tf := s.BatchDone(req.Stream, req.From, hashes, req.Root); tf != nil {
-			tp, err := tf()
-			if err != nil {
-				return
-			}
-			p.SendPriority(tp, s.priority)
-		}
-		s.next <- struct{}{}
+		s.next <- s.batchDone(p, req, hashes)
 	}()
 	// only send wantedKeysMsg if all missing chunks of the previous batch arrived
 	// except
@@ -143,7 +140,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 		s.sessionAt = req.From
 	}
 	from, to := s.nextBatch(req.To)
-	log.Debug("received batch", "stream", req.Stream, "Key", req.Key, "from", req.From, "to", req.To)
+	log.Trace("received offered batch", "peer", p.ID(), "stream", req.Stream, "Key", req.Key, "from", req.From, "to", req.To)
 	if from == to {
 		return nil
 	}
@@ -157,12 +154,19 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	}
 	go func() {
 		select {
-		case <-s.next:
+		case err := <-s.next:
+			if err != nil {
+				p.Drop(err)
+				return
+			}
 		case <-s.quit:
 			return
 		}
-		log.Debug("want batch", "stream", msg.Stream, "Key", msg.Key, "from", msg.From, "to", msg.To)
-		p.SendPriority(msg, s.priority)
+		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "Key", msg.Key, "from", msg.From, "to", msg.To)
+		err := p.SendPriority(msg, s.priority)
+		if err != nil {
+			p.Drop(err)
+		}
 	}()
 	return nil
 }
@@ -185,10 +189,9 @@ func (m WantedHashesMsg) String() string {
 // * sends the next batch of unsynced keys
 // * sends the actual data chunks as per WantedHashesMsg
 func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
-	log.Debug("received wanted batch", "stream", req.Stream, "Key", req.Key, "from", req.From, "to", req.To)
+	log.Trace("received wanted batch", "peer", p.ID(), "stream", req.Stream, "Key", req.Key, "from", req.From, "to", req.To)
 	s, err := p.getServer(req.Stream + keyToString(req.Key))
 	if err != nil {
-		log.Debug(err.Error())
 		return err
 	}
 	hashes := s.currentBatch

@@ -38,8 +38,8 @@ const (
 	Mid
 	High
 	Top
-	PriorityQueue        // number of queues
-	PriorityQueueCap = 3 // queue capacity
+	PriorityQueue         // number of queues
+	PriorityQueueCap = 32 // queue capacity
 	HashSize         = 32
 )
 
@@ -47,6 +47,7 @@ const (
 type Registry struct {
 	api         *API
 	addr        *network.BzzAddr
+	skipCheck   bool
 	clientMu    sync.RWMutex
 	serverMu    sync.RWMutex
 	peersMu     sync.RWMutex
@@ -58,9 +59,10 @@ type Registry struct {
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(addr *network.BzzAddr, delivery *Delivery, store storage.ChunkStore) *Registry {
+func NewRegistry(addr *network.BzzAddr, delivery *Delivery, store storage.ChunkStore, skipCheck bool) *Registry {
 	streamer := &Registry{
 		addr:        addr,
+		skipCheck:   skipCheck,
 		store:       store,
 		serverFuncs: make(map[string]func(*Peer, []byte) (Server, error)),
 		clientFuncs: make(map[string]func(*Peer, []byte) (Client, error)),
@@ -154,7 +156,7 @@ func (r *Registry) Subscribe(peerId discover.NodeID, s string, t []byte, from, t
 }
 
 func (r *Registry) Retrieve(chunk *storage.Chunk) error {
-	return r.delivery.RequestFromPeers(chunk.Key[:], false)
+	return r.delivery.RequestFromPeers(chunk.Key[:], r.skipCheck)
 }
 
 func (r *Registry) NodeInfo() interface{} {
@@ -265,7 +267,7 @@ type client struct {
 	stream    string
 	key       []byte
 	quit      chan struct{}
-	next      chan struct{}
+	next      chan error
 }
 
 // Client interface for incoming peer Streamer
@@ -303,6 +305,17 @@ func (c *client) nextBatch(from uint64) (nextFrom uint64, nextTo uint64) {
 	}
 	// b.intervals.set(intervals)
 	return nextFrom, nextTo
+}
+
+func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error {
+	if tf := c.BatchDone(req.Stream, req.From, hashes, req.Root); tf != nil {
+		tp, err := tf()
+		if err != nil {
+			return err
+		}
+		return p.SendPriority(tp, c.priority)
+	}
+	return nil
 }
 
 // Spec is the spec of the streamer protocol

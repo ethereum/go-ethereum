@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	BatchSize = 2
-	// BatchSize = 128
+	// BatchSize = 2
+	BatchSize = 128
 )
 
 // SwarmSyncerServer implements an OutgoingStreamer for history syncing on bins
@@ -171,6 +171,8 @@ func NewSwarmSyncerClient(_ *Peer, db *storage.DBAPI, chunker storage.Chunker) (
 // 	}
 // }
 
+// RegisterSwarmSyncerClient registers the client constructor function for
+// to handle incoming sync streams
 func RegisterSwarmSyncerClient(streamer *Registry, db *storage.DBAPI) {
 	streamer.RegisterClientFunc("SYNC", func(p *Peer, t []byte) (Client, error) {
 		return NewSwarmSyncerClient(p, db, nil)
@@ -180,12 +182,16 @@ func RegisterSwarmSyncerClient(streamer *Registry, db *storage.DBAPI) {
 // NeedData
 func (s *SwarmSyncerClient) NeedData(key []byte) (wait func()) {
 	chunk, _ := s.db.GetOrCreateRequest(key)
+	log.Warn("created request", "key", chunk.Key)
 	// TODO: we may want to request from this peer anyway even if the request exists
 	if chunk.ReqC == nil {
 		return nil
 	}
 	// create request and wait until the chunk data arrives and is stored
-	return chunk.WaitToStore
+	return func() {
+		chunk.WaitToStore()
+		log.Warn("stored", "key", chunk.Key)
+	}
 }
 
 // BatchDone

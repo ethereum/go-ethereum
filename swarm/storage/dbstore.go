@@ -599,8 +599,9 @@ func (s *DbStore) writeBatches() {
 		s.batchC = make(chan bool)
 		s.batch = new(leveldb.Batch)
 		s.lock.Unlock()
-		log.Trace(fmt.Sprintf("DbStore: spawn batch write (%d chunks) ", b.Len()))
-		s.writeBatch(b, e, d, a)
+		err := s.writeBatch(b, e, d, a)
+		// TODO: set this error on the batch, then tell the chunk
+		log.Trace(fmt.Sprintf("DbStore: spawn batch write (%d chunks): %v", b.Len(), err))
 		close(c)
 		if e >= s.capacity {
 			log.Trace(fmt.Sprintf("DbStore: collecting garbage...(%d chunks)", e))
@@ -611,15 +612,16 @@ func (s *DbStore) writeBatches() {
 }
 
 // must be called non concurrently
-func (s *DbStore) writeBatch(b *leveldb.Batch, entryCnt, dataIdx, accessCnt uint64) {
+func (s *DbStore) writeBatch(b *leveldb.Batch, entryCnt, dataIdx, accessCnt uint64) error {
 	b.Put(keyEntryCnt, U64ToBytes(entryCnt))
 	b.Put(keyDataIdx, U64ToBytes(dataIdx))
 	b.Put(keyAccessCnt, U64ToBytes(accessCnt))
 	l := s.batch.Len()
 	if err := s.db.Write(b); err != nil {
-		log.Error(fmt.Sprintf("unable to write batch: %v", err))
+		return fmt.Errorf("unable to write batch: %v", err)
 	}
 	log.Trace(fmt.Sprintf("DbStore: batch write (%d chunks) complete", l))
+	return nil
 }
 
 // newMockEncodeDataFunc returns a function that stores the chunk data

@@ -39,7 +39,9 @@ var (
 )
 
 var (
-	waitPeerErrC chan error
+	defaultSkipCheck bool
+	waitPeerErrC     chan error
+	chunkSize        = 4096
 )
 
 var services = adapters.Services{
@@ -56,7 +58,7 @@ func init() {
 
 }
 
-// newService
+// NewStreamerService
 func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	id := ctx.Config.ID
 	addr := toAddr(id)
@@ -65,12 +67,11 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	db := storage.NewDBAPI(store.(*storage.LocalStore))
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
-	netStore := storage.NewNetStore(store.(*storage.LocalStore), func(*storage.Chunk) error { return nil })
-	r := NewRegistry(addr, delivery, netStore)
+	r := NewRegistry(addr, delivery, store, defaultSkipCheck)
 	RegisterSwarmSyncerServer(r, db)
 	RegisterSwarmSyncerClient(r, db)
 	go func() {
-		waitPeerErrC <- waitForPeers(r, 1*time.Second, 1)
+		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
 	return r, nil
 }
@@ -96,7 +97,7 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 
 	db := storage.NewDBAPI(localStore)
 	delivery := NewDelivery(to, db)
-	streamer := NewRegistry(addr, delivery, localStore)
+	streamer := NewRegistry(addr, delivery, localStore, defaultSkipCheck)
 	protocolTester := p2ptest.NewProtocolTester(t, network.NewNodeIDFromAddr(addr), 1, streamer.runProtocol)
 
 	err = waitForPeers(streamer, 1*time.Second, 1)

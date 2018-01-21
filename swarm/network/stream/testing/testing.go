@@ -28,9 +28,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -61,7 +63,8 @@ func SetStores(addrs ...network.Addr) ([]storage.ChunkStore, func(), error) {
 		stores[i] = store
 	}
 	teardown := func() {
-		for _, datadir := range datadirs {
+		for i, datadir := range datadirs {
+			stores[i].Close()
 			os.RemoveAll(datadir)
 		}
 	}
@@ -94,20 +97,22 @@ func NewAdapter(adapterType string, services adapters.Services) (adapter adapter
 }
 
 func CheckResult(t *testing.T, result *simulations.StepResult, startedAt, finishedAt time.Time) {
-	t.Logf("Simulation with %d nodes passed in %s", len(result.Passes), result.FinishedAt.Sub(result.StartedAt))
-	var min, max time.Duration
-	var sum int
-	for _, pass := range result.Passes {
-		duration := pass.Sub(result.StartedAt)
-		if sum == 0 || duration < min {
-			min = duration
+	t.Logf("Simulation passed in %s", result.FinishedAt.Sub(result.StartedAt))
+	if len(result.Passes) > 1 {
+		var min, max time.Duration
+		var sum int
+		for _, pass := range result.Passes {
+			duration := pass.Sub(result.StartedAt)
+			if sum == 0 || duration < min {
+				min = duration
+			}
+			if duration > max {
+				max = duration
+			}
+			sum += int(duration.Nanoseconds())
 		}
-		if duration > max {
-			max = duration
-		}
-		sum += int(duration.Nanoseconds())
+		t.Logf("Min: %s, Max: %s, Average: %s", min, max, time.Duration(sum/len(result.Passes))*time.Nanosecond)
 	}
-	t.Logf("Min: %s, Max: %s, Average: %s", min, max, time.Duration(sum/len(result.Passes))*time.Nanosecond)
 	t.Logf("Setup: %s, Shutdown: %s", result.StartedAt.Sub(startedAt), finishedAt.Sub(result.FinishedAt))
 }
 
@@ -195,8 +200,7 @@ func (s *Simulation) Run(conf *RunConfig) (*simulations.StepResult, error) {
 		}
 	}
 	wg.Wait()
-
-	log.Debug(fmt.Sprintf("nodes: %v", len(s.Addrs)))
+	log.Info(fmt.Sprintf("simulation with %v nodes", len(s.Addrs)))
 
 	// create an only locally retrieving dpa for the pivot node to test
 	// if retriee requests have arrived
@@ -205,4 +209,60 @@ func (s *Simulation) Run(conf *RunConfig) (*simulations.StepResult, error) {
 	defer cancel()
 	result := simulations.NewSimulation(s.Net).Run(ctx, conf.Step)
 	return result, nil
+}
+
+func WatchDisconnections(id discover.NodeID, client *rpc.Client, errc chan error, quitC chan struct{}) error {
+	events := make(chan *p2p.PeerEvent)
+	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
+	if err != nil {
+		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
+	}
+	go func() {
+		defer sub.Unsubscribe()
+		select {
+		case <-quitC:
+			return
+		case e := <-events:
+			errc <- fmt.Errorf("peerEvent for node %v: %v", id, e)
+		case err := <-sub.Err():
+			if err != nil {
+				errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err)
+			}
+		}
+	}()
+	return nil
+}
+
+func PivotTrigger(d time.Duration, checkC chan struct{}, ids ...discover.NodeID) chan discover.NodeID {
+	trigger := make(chan discover.NodeID)
+	go func() {
+		ticker := time.NewTicker(d)
+		defer ticker.Stop()
+		// we are only testing the pivot node (net.Nodes[0])
+		for range ticker.C {
+			for _, id := range ids {
+				trigger <- id
+			}
+			<-checkC
+		}
+	}()
+	return trigger
+}
+
+func (sim *Simulation) CallClient(f func(*rpc.Client) error, ids ...discover.NodeID) error {
+	for _, id := range ids {
+		node := sim.Net.GetNode(id)
+		if node == nil {
+			return fmt.Errorf("unknown node: %s", id)
+		}
+		client, err := node.Client()
+		if err != nil {
+			return fmt.Errorf("error getting node client: %s", err)
+		}
+		err = f(client)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

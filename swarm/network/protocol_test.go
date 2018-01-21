@@ -17,15 +17,28 @@
 package network
 
 import (
+	"flag"
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
+
+var (
+	adapter  = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
+	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
+)
+
+func init() {
+	flag.Parse()
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+}
 
 type testStore struct {
 	sync.Mutex
