@@ -40,6 +40,7 @@ matrix:
     - os: osx
       go: 1.9.x
       script:
+        - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
         - brew update
         - brew install caskroom/cask/brew-cask
         - brew cask install osxfuse

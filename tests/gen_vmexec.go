@@ -42,8 +42,8 @@ func (v *vmExec) UnmarshalJSON(input []byte) error {
 		Address  *common.UnprefixedAddress `json:"address"  gencodec:"required"`
 		Caller   *common.UnprefixedAddress `json:"caller"   gencodec:"required"`
 		Origin   *common.UnprefixedAddress `json:"origin"   gencodec:"required"`
-		Code     hexutil.Bytes             `json:"code"     gencodec:"required"`
-		Data     hexutil.Bytes             `json:"data"     gencodec:"required"`
+		Code     *hexutil.Bytes            `json:"code"     gencodec:"required"`
+		Data     *hexutil.Bytes            `json:"data"     gencodec:"required"`
 		Value    *math.HexOrDecimal256     `json:"value"    gencodec:"required"`
 		GasLimit *math.HexOrDecimal64      `json:"gas"      gencodec:"required"`
 		GasPrice *math.HexOrDecimal256     `json:"gasPrice" gencodec:"required"`
@@ -67,11 +67,11 @@ func (v *vmExec) UnmarshalJSON(input []byte) error {
 	if dec.Code == nil {
 		return errors.New("missing required field 'code' for vmExec")
 	}
-	v.Code = dec.Code
+	v.Code = *dec.Code
 	if dec.Data == nil {
 		return errors.New("missing required field 'data' for vmExec")
 	}
-	v.Data = dec.Data
+	v.Data = *dec.Data
 	if dec.Value == nil {
 		return errors.New("missing required field 'value' for vmExec")
 	}

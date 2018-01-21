@@ -46,7 +46,7 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 		Data       []string              `json:"data"`
 		GasLimit   []math.HexOrDecimal64 `json:"gasLimit"`
 		Value      []string              `json:"value"`
-		PrivateKey hexutil.Bytes         `json:"secretKey"`
+		PrivateKey *hexutil.Bytes        `json:"secretKey"`
 	}
 	var dec stTransaction
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -74,7 +74,7 @@ func (s *stTransaction) UnmarshalJSON(input []byte) error {
 		s.Value = dec.Value
 	}
 	if dec.PrivateKey != nil {
-		s.PrivateKey = dec.PrivateKey
+		s.PrivateKey = *dec.PrivateKey
 	}
 	return nil
 }

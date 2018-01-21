@@ -89,8 +89,8 @@ type Header struct {
 type headerMarshaling struct {
 	Difficulty *hexutil.Big
 	Number     *hexutil.Big
-	GasLimit   *hexutil.Uint64
-	GasUsed    *hexutil.Uint64
+	GasLimit   hexutil.Uint64
+	GasUsed    hexutil.Uint64
 	Time       *hexutil.Big
 	Extra      hexutil.Bytes
 	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON

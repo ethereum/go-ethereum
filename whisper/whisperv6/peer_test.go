@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"fmt"
+	mrand "math/rand"
 	"net"
 	"sync"
 	"testing"
@@ -87,6 +88,9 @@ var nodes [NumNodes]*TestNode
 var sharedKey []byte = []byte("some arbitrary data here")
 var sharedTopic TopicType = TopicType{0xF, 0x1, 0x2, 0}
 var expectedMessage []byte = []byte("per rectum ad astra")
+var masterBloomFilter []byte
+var masterPow = 0.00000001
+var round int = 1
 
 func TestSimulation(t *testing.T) {
 	// create a chain of whisper nodes,
@@ -104,8 +108,13 @@ func TestSimulation(t *testing.T) {
 	// check if each node have received and decrypted exactly one message
 	checkPropagation(t, true)
 
-	// send protocol-level messages (powRequirementCode) and check the new PoW requirement values
-	powReqExchange(t)
+	// check if Status message was correctly decoded
+	checkBloomFilterExchange(t)
+	checkPowExchange(t)
+
+	// send new pow and bloom exchange messages
+	resetParams(t)
+	round++
 
 	// node #1 sends one expected (decryptable) message
 	sendMsg(t, true, 1)
@@ -113,18 +122,65 @@ func TestSimulation(t *testing.T) {
 	// check if each node (except node #0) have received and decrypted exactly one message
 	checkPropagation(t, false)
 
+	for i := 1; i < NumNodes; i++ {
+		time.Sleep(20 * time.Millisecond)
+		sendMsg(t, true, i)
+	}
+
+	// check if corresponding protocol-level messages were correctly decoded
+	checkPowExchangeForNodeZero(t)
+	checkBloomFilterExchange(t)
+
 	stopServers()
 }
 
+func resetParams(t *testing.T) {
+	// change pow only for node zero
+	masterPow = 7777777.0
+	nodes[0].shh.SetMinimumPoW(masterPow)
+
+	// change bloom for all nodes
+	masterBloomFilter = TopicToBloom(sharedTopic)
+	for i := 0; i < NumNodes; i++ {
+		nodes[i].shh.SetBloomFilter(masterBloomFilter)
+	}
+}
+
+func initBloom(t *testing.T) {
+	masterBloomFilter = make([]byte, bloomFilterSize)
+	_, err := mrand.Read(masterBloomFilter)
+	if err != nil {
+		t.Fatalf("rand failed: %s.", err)
+	}
+
+	msgBloom := TopicToBloom(sharedTopic)
+	masterBloomFilter = addBloom(masterBloomFilter, msgBloom)
+	for i := 0; i < 32; i++ {
+		masterBloomFilter[i] = 0xFF
+	}
+
+	if !bloomFilterMatch(masterBloomFilter, msgBloom) {
+		t.Fatalf("bloom mismatch on initBloom.")
+	}
+}
+
 func initialize(t *testing.T) {
+	initBloom(t)
+
 	var err error
 	ip := net.IPv4(127, 0, 0, 1)
 	port0 := 30303
 
 	for i := 0; i < NumNodes; i++ {
 		var node TestNode
+		b := make([]byte, bloomFilterSize)
+		copy(b, masterBloomFilter)
 		node.shh = New(&DefaultConfig)
-		node.shh.SetMinimumPowTest(0.00000001)
+		node.shh.SetMinimumPoW(masterPow)
+		node.shh.SetBloomFilter(b)
+		if !bytes.Equal(node.shh.BloomFilter(), masterBloomFilter) {
+			t.Fatalf("bloom mismatch on init.")
+		}
 		node.shh.Start(nil)
 		topics := make([]TopicType, 0)
 		topics = append(topics, sharedTopic)
@@ -206,7 +262,7 @@ func checkPropagation(t *testing.T, includingNodeZero bool) {
 		for i := first; i < NumNodes; i++ {
 			f := nodes[i].shh.GetFilter(nodes[i].filerId)
 			if f == nil {
-				t.Fatalf("failed to get filterId %s from node %d.", nodes[i].filerId, i)
+				t.Fatalf("failed to get filterId %s from node %d, round %d.", nodes[i].filerId, i, round)
 			}
 
 			mail := f.Retrieve()
@@ -332,34 +388,43 @@ func TestPeerBasic(t *testing.T) {
 	}
 }
 
-func powReqExchange(t *testing.T) {
-	for i, node := range nodes {
-		for peer := range node.shh.peers {
-			if peer.powRequirement > 1000.0 {
-				t.Fatalf("node %d: one of the peers' pow requirement is too big (%f).", i, peer.powRequirement)
-			}
-		}
-	}
-
-	const pow float64 = 7777777.0
-	nodes[0].shh.SetMinimumPoW(pow)
-
-	// wait until all the messages are delivered
-	time.Sleep(64 * time.Millisecond)
-
+func checkPowExchangeForNodeZero(t *testing.T) {
 	cnt := 0
 	for i, node := range nodes {
 		for peer := range node.shh.peers {
 			if peer.peer.ID() == discover.PubkeyID(&nodes[0].id.PublicKey) {
 				cnt++
-				if peer.powRequirement != pow {
+				if peer.powRequirement != masterPow {
 					t.Fatalf("node %d: failed to set the new pow requirement.", i)
 				}
 			}
 		}
 	}
-
 	if cnt == 0 {
 		t.Fatalf("no matching peers found.")
+	}
+}
+
+func checkPowExchange(t *testing.T) {
+	for i, node := range nodes {
+		for peer := range node.shh.peers {
+			if peer.peer.ID() != discover.PubkeyID(&nodes[0].id.PublicKey) {
+				if peer.powRequirement != masterPow {
+					t.Fatalf("node %d: failed to exchange pow requirement in round %d; expected %f, got %f",
+						i, round, masterPow, peer.powRequirement)
+				}
+			}
+		}
+	}
+}
+
+func checkBloomFilterExchange(t *testing.T) {
+	for i, node := range nodes {
+		for peer := range node.shh.peers {
+			if !bytes.Equal(peer.bloomFilter, masterBloomFilter) {
+				t.Fatalf("node %d: failed to exchange bloom filter requirement in round %d. \n%x expected \n%x got",
+					i, round, masterBloomFilter, peer.bloomFilter)
+			}
+		}
 	}
 }

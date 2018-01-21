@@ -31,6 +31,7 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/accounts"
 	"github.com/EthereumCommonwealth/go-callisto/accounts/keystore"
 	"github.com/EthereumCommonwealth/go-callisto/common"
+	"github.com/EthereumCommonwealth/go-callisto/common/fdlimit"
 	"github.com/EthereumCommonwealth/go-callisto/consensus"
 	"github.com/EthereumCommonwealth/go-callisto/consensus/clique"
 	"github.com/EthereumCommonwealth/go-callisto/consensus/ethash"
@@ -721,10 +722,10 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 // makeDatabaseHandles raises out the number of allowed file handles per process
 // for Geth and returns half of the allowance to assign to the database.
 func makeDatabaseHandles() int {
-	if err := raiseFdLimit(2048); err != nil {
+	if err := fdlimit.Raise(2048); err != nil {
 		Fatalf("Failed to raise file descriptor allowance: %v", err)
 	}
-	limit, err := getFdLimit()
+	limit, err := fdlimit.Current()
 	if err != nil {
 		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
 	}
@@ -1103,9 +1104,9 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 }
 
 // RegisterDashboardService adds a dashboard to the stack.
-func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config) {
+func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config, commit string) {
 	stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return dashboard.New(cfg)
+		return dashboard.New(cfg, commit)
 	})
 }
 

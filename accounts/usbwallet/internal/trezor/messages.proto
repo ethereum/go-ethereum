@@ -2,6 +2,8 @@
 //   https://github.com/trezor/trezor-common/blob/master/protob/messages.proto
 // dated 28.07.2017, commit dd8ec3231fb5f7992360aff9bdfe30bb58130f4b.
 
+syntax = "proto2";
+
 /**
  * Messages for TREZOR communication
  */
