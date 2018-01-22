@@ -93,12 +93,12 @@ func TestRecipientEmpty(t *testing.T) {
 		t.FailNow()
 	}
 
-	from, err := Sender(HomesteadSigner{}, tx)
-	if err != nil {
-		t.Error(err)
+	from := tx.From()
+	if from == nil {
+		t.Error("derived address not present")
 		t.FailNow()
 	}
-	if addr != from {
+	if addr != *from {
 		t.Error("derived address doesn't match")
 	}
 }
@@ -112,13 +112,13 @@ func TestRecipientNormal(t *testing.T) {
 		t.FailNow()
 	}
 
-	from, err := Sender(HomesteadSigner{}, tx)
-	if err != nil {
-		t.Error(err)
+	from := tx.From()
+	if from == nil {
+		t.Error("derived address not present")
 		t.FailNow()
 	}
 
-	if addr != from {
+	if addr != *from {
 		t.Error("derived address doesn't match")
 	}
 }
@@ -155,11 +155,19 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 		t.Errorf("expected %d transactions, found %d", 25*25, len(txs))
 	}
 	for i, txi := range txs {
-		fromi, _ := Sender(signer, txi)
+		fromi := txi.From()
+		if fromi == nil {
+			t.Error("derived address not present")
+			t.FailNow()
+		}
 
 		// Make sure the nonce order is valid
 		for j, txj := range txs[i+1:] {
-			fromj, _ := Sender(signer, txj)
+			fromj := txj.From()
+			if fromj == nil {
+				t.Error("derived address not present")
+				t.FailNow()
+			}
 
 			if fromi == fromj && txi.Nonce() > txj.Nonce() {
 				t.Errorf("invalid nonce ordering: tx #%d (A=%x N=%v) < tx #%d (A=%x N=%v)", i, fromi[:4], txi.Nonce(), i+j, fromj[:4], txj.Nonce())
@@ -168,13 +176,13 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 		// Find the previous and next nonce of this account
 		prev, next := i-1, i+1
 		for j := i - 1; j >= 0; j-- {
-			if fromj, _ := Sender(signer, txs[j]); fromi == fromj {
+			if fromj, _ := Sender(signer, txs[j]); *fromi == fromj {
 				prev = j
 				break
 			}
 		}
 		for j := i + 1; j < len(txs); j++ {
-			if fromj, _ := Sender(signer, txs[j]); fromi == fromj {
+			if fromj, _ := Sender(signer, txs[j]); *fromi == fromj {
 				next = j
 				break
 			}

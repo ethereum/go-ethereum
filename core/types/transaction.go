@@ -185,6 +185,20 @@ func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amo
 func (tx *Transaction) Nonce() uint64      { return tx.data.AccountNonce }
 func (tx *Transaction) CheckNonce() bool   { return true }
 
+// From returns the sender address of the transaction.
+// It returns nil if the transaction is unsigned.
+func (tx *Transaction) From() *common.Address {
+	if tx.data.V == nil {
+		return nil
+	}
+	signer := deriveSigner(tx.data.V)
+	if from, err := Sender(signer, tx); err != nil {
+		return nil
+	} else {
+		return &from
+	}
+}
+
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
 func (tx *Transaction) To() *common.Address {
