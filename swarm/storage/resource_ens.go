@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -15,7 +15,7 @@ type baseValidator struct {
 
 func (b *baseValidator) sign(datahash common.Hash) (signature Signature, err error) {
 	if b.signFunc == nil {
-		return signature, fmt.Errorf("No signature function")
+		return signature, errors.New("No signature function")
 	}
 	return b.signFunc(datahash)
 }

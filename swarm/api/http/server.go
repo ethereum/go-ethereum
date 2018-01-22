@@ -447,7 +447,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 			return api.SkipManifest
 		})
 		if entry == nil {
-			s.NotFound(w, r, fmt.Errorf("Manifest entry could not be loaded"))
+			s.NotFound(w, r, errors.New("Manifest entry could not be loaded"))
 			return
 		}
 		key = storage.Key(common.Hex2Bytes(entry.Hash))

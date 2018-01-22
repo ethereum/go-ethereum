@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 	"path/filepath"
@@ -192,7 +193,7 @@ func (self *ResourceHandler) HashSize() int {
 func (self *ResourceHandler) GetContent(name string) (Key, []byte, error) {
 	rsrc := self.getResource(name)
 	if rsrc == nil || !rsrc.isSynced() {
-		return nil, nil, fmt.Errorf("Resource does not exist or is not synced")
+		return nil, nil, errors.New("Resource does not exist or is not synced")
 	}
 	return rsrc.lastKey, rsrc.data, nil
 }
@@ -201,7 +202,7 @@ func (self *ResourceHandler) GetLastPeriod(name string) (uint32, error) {
 	rsrc := self.getResource(name)
 
 	if rsrc == nil || !rsrc.isSynced() {
-		return 0, fmt.Errorf("Resource does not exist or is not synced")
+		return 0, errors.New("Resource does not exist or is not synced")
 	}
 	return rsrc.lastPeriod, nil
 }
@@ -209,7 +210,7 @@ func (self *ResourceHandler) GetLastPeriod(name string) (uint32, error) {
 func (self *ResourceHandler) GetVersion(name string) (uint32, error) {
 	rsrc := self.getResource(name)
 	if rsrc == nil || !rsrc.isSynced() {
-		return 0, fmt.Errorf("Resource does not exist or is not synced")
+		return 0, errors.New("Resource does not exist or is not synced")
 	}
 	return rsrc.version, nil
 }
@@ -228,7 +229,7 @@ func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resour
 
 	// frequency 0 is invalid
 	if frequency == 0 {
-		return nil, fmt.Errorf("Frequency cannot be 0")
+		return nil, errors.New("Frequency cannot be 0")
 	}
 
 	if !isSafeName(name) {
@@ -360,7 +361,7 @@ func (self *ResourceHandler) LookupLatest(nameHash common.Hash, name string, ref
 func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint32, refresh bool) (*resource, error) {
 
 	if period == 0 {
-		return nil, fmt.Errorf("period must be >0")
+		return nil, errors.New("period must be >0")
 	}
 
 	// start from the last possible block period, and iterate previous ones until we find a match
@@ -396,7 +397,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 		log.Trace("rsrc update not found, checking previous period", "period", period, "key", key)
 		period--
 	}
-	return nil, fmt.Errorf("no updates found")
+	return nil, errors.New("no updates found")
 }
 
 // load existing mutable resource into resource struct
@@ -525,10 +526,10 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 	// get the cached information
 	rsrc := self.getResource(name)
 	if rsrc == nil {
-		return nil, fmt.Errorf("Resource object not in index")
+		return nil, errors.New("Resource object not in index")
 	}
 	if !rsrc.isSynced() {
-		return nil, fmt.Errorf("Resource object not in sync")
+		return nil, errors.New("Resource object not in sync")
 	}
 
 	// an update can be only one chunk long
@@ -747,7 +748,7 @@ func (r *resourceChunkStore) Get(key Key) (*Chunk, error) {
 	t := time.NewTimer(time.Second * 1)
 	select {
 	case <-t.C:
-		return nil, fmt.Errorf("timeout")
+		return nil, errors.New("timeout")
 	case <-chunk.C:
 		log.Trace("Received resource update chunk", "peer", chunk.Req.Source)
 	}
