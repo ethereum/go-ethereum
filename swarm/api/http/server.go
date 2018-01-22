@@ -291,7 +291,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, newKey)
 }
 
-func (s *Server) HandlePostDb(w http.ResponseWriter, r *Request) {
+func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	var outdata string
 	if r.uri.Path != "" {
 		frequency, err := strconv.ParseUint(r.uri.Path, 10, 64)
@@ -299,7 +299,7 @@ func (s *Server) HandlePostDb(w http.ResponseWriter, r *Request) {
 			s.BadRequest(w, r, fmt.Sprintf("Cannot parse frequency parameter: %v", err))
 			return
 		}
-		err = s.api.DbCreate(r.uri.Addr, frequency)
+		err = s.api.ResourceCreate(r.uri.Addr, frequency)
 		if err != nil {
 			s.Error(w, r, fmt.Errorf("Resource creation failed: %v", err))
 			return
@@ -333,13 +333,12 @@ func (s *Server) HandlePostDb(w http.ResponseWriter, r *Request) {
 
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		s.Error(w, r, err)
 		return
 	}
-	_, _, _, err = s.api.DbUpdate(r.uri.Addr, data)
+	_, _, _, err = s.api.ResourceUpdate(r.uri.Addr, data)
 	if err != nil {
-		w.Header().Add("Status", fmt.Sprintf("%d", http.StatusUnauthorized))
-		http.ServeContent(w, &r.Request, "", time.Now(), bytes.NewReader([]byte(err.Error())))
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
@@ -351,15 +350,15 @@ func (s *Server) HandlePostDb(w http.ResponseWriter, r *Request) {
 }
 
 // Retrieve mutable resource updates:
-// bzz-db[-[immutable|-raw]]://<id> - get latest update
-// bzz-db[-[immutable|-raw]]://<id>/<n> - get latest update on period n
-// bzz-db[-[immutable|-raw]]://<id>/<n>/<m> - get update version m of period n
+// bzz-resource://<id> - get latest update
+// bzz-resource://<id>/<n> - get latest update on period n
+// bzz-resource://<id>/<n>/<m> - get update version m of period n
 // <id> = ens name or hash
-func (s *Server) HandleGetDb(w http.ResponseWriter, r *Request) {
-	s.handleGetDb(w, r, r.uri.Addr)
+func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
+	s.handleGetResource(w, r, r.uri.Addr)
 }
 
-func (s *Server) handleGetDb(w http.ResponseWriter, r *Request, name string) {
+func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name string) {
 	var params []string
 	if len(r.uri.Path) > 0 {
 		params = strings.Split(r.uri.Path, "/")
@@ -368,19 +367,18 @@ func (s *Server) handleGetDb(w http.ResponseWriter, r *Request, name string) {
 	var period uint64
 	var version uint64
 	var data []byte
-	var dataLength int
 	var err error
 	now := time.Now()
 	log.Debug("handlegetdb", "name", name)
 	switch len(params) {
 	case 0:
-		updateKey, data, err = s.api.DbLookup(name, 0, 0)
+		updateKey, data, err = s.api.ResourceLookup(name, 0, 0)
 	case 2:
 		version, err = strconv.ParseUint(params[1], 10, 32)
 		if err != nil {
 			break
 		}
-		updateKey, data, err = s.api.DbLookup(name, uint32(period), uint32(version))
+		updateKey, data, err = s.api.ResourceLookup(name, uint32(period), uint32(version))
 	case 1:
 		version, err = strconv.ParseUint(params[1], 10, 32)
 		if err != nil {
@@ -390,7 +388,7 @@ func (s *Server) handleGetDb(w http.ResponseWriter, r *Request, name string) {
 		if err != nil {
 			break
 		}
-		updateKey, data, err = s.api.DbLookup(name, uint32(period), uint32(version))
+		updateKey, data, err = s.api.ResourceLookup(name, uint32(period), uint32(version))
 	default:
 		s.BadRequest(w, r, fmt.Sprintf("Invalid mutable resource request"))
 		return
@@ -399,35 +397,8 @@ func (s *Server) handleGetDb(w http.ResponseWriter, r *Request, name string) {
 		s.Error(w, r, fmt.Errorf("Mutable resource lookup failed: %v", err))
 		return
 	}
-	if !r.uri.DbRaw() {
-		w.Header().Set("Content-Type", "application/octet-stream")
-	} else {
-		entry := api.ManifestEntry{
-			Hash:        name,
-			Path:        updateKey.Hex(),
-			ContentType: api.ManifestType,
-			Size:        int64(dataLength),
-			ModTime:     now,
-			Status:      http.StatusOK,
-		}
-		mode := 0644
-		if s.api.DbIsValidated() {
-			mode |= (2 << 3) | 2
-		}
-		entry.Mode = int64(mode)
-		manifest := api.Manifest{
-			Entries: []api.ManifestEntry{
-				entry,
-			},
-		}
-		manifestJson, err := json.Marshal(manifest)
-		if err != nil {
-			s.Error(w, r, fmt.Errorf("Could not convert manifest to json: %v", err))
-			return
-		}
-		w.Header().Set("Content-Type", api.ManifestType)
-		data = []byte(manifestJson)
-	}
+	log.Debug("Found update", "key", updateKey)
+	w.Header().Set("Content-Type", "application/octet-stream")
 	http.ServeContent(w, &r.Request, "", now, bytes.NewReader(data))
 }
 
@@ -498,7 +469,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 		err = json.Unmarshal(b, m)
 		if len(m.Entries) > 0 {
 			if m.Entries[0].ContentType == api.ResourceContentType {
-				s.handleGetDb(w, r, m.Entries[0].Path)
+				s.handleGetResource(w, r, m.Entries[0].Path)
 				return
 			}
 		}
@@ -755,8 +726,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		if uri.Raw() || uri.DeprecatedRaw() {
 			s.HandlePostRaw(w, req)
-		} else if uri.Db() {
-			s.HandlePostDb(w, req)
+		} else if uri.Resource() {
+			s.HandlePostResource(w, req)
 		} else {
 			s.HandlePostFiles(w, req)
 		}
@@ -783,8 +754,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	case "GET":
 
-		if uri.Db() || uri.DbRaw() {
-			s.HandleGetDb(w, req)
+		if uri.Resource() {
+			s.HandleGetResource(w, req)
 			return
 		}
 

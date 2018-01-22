@@ -53,7 +53,7 @@ func TestBzzGetDb(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	url := fmt.Sprintf("%s/bzz-db:/%x/42", srv.URL, keybytes)
+	url := fmt.Sprintf("%s/bzz-resource:/%x/42", srv.URL, keybytes)
 	resp, err := http.Post(url, "application/octet-stream", bytes.NewReader(databytes))
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func TestBzzGetDb(t *testing.T) {
 	}
 	log.Debug("Create", "status", resp.Status, "body", manifesthash)
 
-	url = fmt.Sprintf("%s/bzz-db:/%x", srv.URL, keybytes)
+	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
 	data := []byte("foo")
 	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(data))
 	if err != nil {
@@ -88,9 +88,9 @@ func TestBzzGetDb(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log.Debug("Manifest", "status", resp.Status, "body", fmt.Sprintf("%s", b))
+	log.Debug("Get raw", "status", resp.Status, "body", fmt.Sprintf("%s", b))
 
-	url = fmt.Sprintf("%s/bzz-db-raw:/%x", srv.URL, keybytes)
+	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -99,18 +99,7 @@ func TestBzzGetDb(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log.Debug("Get raw", "status", resp.Status)
-
-	url = fmt.Sprintf("%s/bzz-db:/%x", srv.URL, keybytes)
-	resp, err = http.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	log.Debug("Get manifest", "status", resp.Status)
+	log.Debug("Get resource", "status", resp.Status, "data", b)
 
 }
 

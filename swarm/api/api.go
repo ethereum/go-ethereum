@@ -365,7 +365,7 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 }
 
 // Look up mutable resource updates at specific periods and versions
-func (self *Api) DbLookup(name string, period uint32, version uint32) (storage.Key, []byte, error) {
+func (self *Api) ResourceLookup(name string, period uint32, version uint32) (storage.Key, []byte, error) {
 	var err error
 	if version != 0 {
 		if period == 0 {
@@ -391,22 +391,22 @@ func (self *Api) DbLookup(name string, period uint32, version uint32) (storage.K
 	return key, data, nil
 }
 
-func (self *Api) DbCreate(name string, frequency uint64) (err error) {
+func (self *Api) ResourceCreate(name string, frequency uint64) (err error) {
 	_, err = self.resource.NewResource(name, frequency)
 	return err
 }
 
-func (self *Api) DbUpdate(name string, data []byte) (storage.Key, uint32, uint32, error) {
+func (self *Api) ResourceUpdate(name string, data []byte) (storage.Key, uint32, uint32, error) {
 	key, err := self.resource.Update(name, data)
 	period, _ := self.resource.GetLastPeriod(name)
 	version, _ := self.resource.GetVersion(name)
 	return key, period, version, err
 }
 
-func (self *Api) DbHashSize() int {
+func (self *Api) ResourceHashSize() int {
 	return self.resource.HashSize()
 }
 
-func (self *Api) DbIsValidated() bool {
+func (self *Api) ResourceIsValidated() bool {
 	return self.resource.IsValidated()
 }
