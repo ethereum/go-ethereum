@@ -45,21 +45,27 @@ func TestBzzGetDb(t *testing.T) {
 	defer srv.Close()
 
 	keybytes := make([]byte, common.HashLength) // nearest we get to source of info
-	_, err := rand.Read(keybytes)
+	copy(keybytes, []byte{42})
+
+	databytes := make([]byte, 42)
+	_, err := rand.Read(databytes)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	url := fmt.Sprintf("%s/bzz-db:/%s/42", srv.URL, fmt.Sprintf("%x", keybytes))
-	resp, err := http.Post(url, "application/octet-stream", nil)
+	url := fmt.Sprintf("%s/bzz-db:/%x/42", srv.URL, keybytes)
+	resp, err := http.Post(url, "application/octet-stream", bytes.NewReader(databytes))
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	manifesthash, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	log.Debug("Create", "status", resp.Status, "body", b)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	log.Debug("Create", "status", resp.Status, "body", manifesthash)
 
 	url = fmt.Sprintf("%s/bzz-db:/%x", srv.URL, keybytes)
 	data := []byte("foo")
@@ -67,13 +73,13 @@ func TestBzzGetDb(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err = ioutil.ReadAll(resp.Body)
+	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	log.Debug("Update", "status", resp.Status, "body", b)
+	log.Debug("Update", "status", resp.Status)
 
-	url = fmt.Sprintf("%s/bzz-db-raw:/%s", srv.URL, fmt.Sprintf("%x", keybytes))
+	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, manifesthash)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -82,9 +88,9 @@ func TestBzzGetDb(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log.Debug("Get raw", "status", resp.Status, "body", b)
+	log.Debug("Manifest", "status", resp.Status, "body", fmt.Sprintf("%s", b))
 
-	url = fmt.Sprintf("%s/bzz-db:/%s", srv.URL, fmt.Sprintf("%x", keybytes))
+	url = fmt.Sprintf("%s/bzz-db-raw:/%x", srv.URL, keybytes)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +99,18 @@ func TestBzzGetDb(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log.Debug("Get manifest", "status", resp.Status, "body", b)
+	log.Debug("Get raw", "status", resp.Status)
+
+	url = fmt.Sprintf("%s/bzz-db:/%x", srv.URL, keybytes)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Debug("Get manifest", "status", resp.Status)
 
 }
 

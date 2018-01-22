@@ -365,7 +365,7 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 }
 
 // Look up mutable resource updates at specific periods and versions
-func (self *Api) DbLookup(key storage.Key, name string, period uint32, version uint32) (storage.Key, []byte, error) {
+func (self *Api) DbLookup(name string, period uint32, version uint32) (storage.Key, []byte, error) {
 	var err error
 	if version != 0 {
 		if period == 0 {
