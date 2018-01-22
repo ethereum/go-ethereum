@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -34,10 +35,12 @@ type fakeBackend struct {
 	blocknumber int64
 }
 
-func (f *fakeBackend) BlockNumber(ctx context.Context) (big.Int, error) {
+func (f *fakeBackend) HeaderByNumber(context context.Context, bigblock *big.Int) (*types.Header, error) {
 	f.blocknumber++
 	biggie := big.NewInt(f.blocknumber)
-	return *biggie, nil
+	return &types.Header{
+		Number: biggie,
+	}, nil
 }
 
 func NewTestSwarmServer(t *testing.T) *TestSwarmServer {

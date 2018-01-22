@@ -384,11 +384,7 @@ func (self *Api) ResourceLookup(name string, period uint32, version uint32) (sto
 	if err != nil {
 		return nil, nil, err
 	}
-	key, data, err := self.resource.GetContent(name)
-	if err != nil {
-		return nil, nil, err
-	}
-	return key, data, nil
+	return self.resource.GetContent(name)
 }
 
 func (self *Api) ResourceCreate(name string, frequency uint64) (err error) {

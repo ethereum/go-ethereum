@@ -55,14 +55,14 @@ func TestBzzResource(t *testing.T) {
 	resp, err := http.Post(url, "application/octet-stream", bytes.NewReader(databytes))
 	if err != nil {
 		t.Fatal(err)
+	} else if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
 	}
 	manifesthash, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("err %s", resp.Status)
-	}
+	resp.Body.Close()
 
 	// update 2
 	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
@@ -79,6 +79,8 @@ func TestBzzResource(t *testing.T) {
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
+	} else if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
 	}
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -86,12 +88,15 @@ func TestBzzResource(t *testing.T) {
 	} else if !bytes.Equal(data, b) {
 		t.Fatalf("Expected body '%x', got '%x'", data, b)
 	}
+	resp.Body.Close()
 
 	// get latest update (1.2) through resource directly
 	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
+	} else if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
 	}
 	b, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -99,7 +104,7 @@ func TestBzzResource(t *testing.T) {
 	} else if !bytes.Equal(data, b) {
 		t.Fatalf("Expected body '%x', got '%x'", data, b)
 	}
-
+	resp.Body.Close()
 }
 
 func TestBzzGetPath(t *testing.T) {

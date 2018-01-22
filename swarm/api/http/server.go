@@ -378,19 +378,19 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name strin
 		if err != nil {
 			break
 		}
-		updateKey, data, err = s.api.ResourceLookup(name, uint32(period), uint32(version))
-	case 1:
-		version, err = strconv.ParseUint(params[1], 10, 32)
+		period, err = strconv.ParseUint(params[0], 10, 32)
 		if err != nil {
 			break
 		}
+		updateKey, data, err = s.api.ResourceLookup(name, uint32(period), uint32(version))
+	case 1:
 		period, err = strconv.ParseUint(params[0], 10, 32)
 		if err != nil {
 			break
 		}
 		updateKey, data, err = s.api.ResourceLookup(name, uint32(period), uint32(version))
 	default:
-		s.BadRequest(w, r, fmt.Sprintf("Invalid mutable resource request"))
+		s.BadRequest(w, r, "Invalid mutable resource request")
 		return
 	}
 	if err != nil {
@@ -463,14 +463,18 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	switch {
 	case r.uri.Raw():
 		m := &api.Manifest{}
-		sz, _ := reader.Size(nil)
-		b := make([]byte, sz)
-		reader.Read(b)
-		err = json.Unmarshal(b, m)
-		if len(m.Entries) > 0 {
-			if m.Entries[0].ContentType == api.ResourceContentType {
-				s.handleGetResource(w, r, m.Entries[0].Path)
-				return
+		sz, err := reader.Size(nil)
+		if err == nil {
+			b := make([]byte, sz)
+			reader.Read(b)
+			err = json.Unmarshal(b, m)
+			if err == nil {
+				if len(m.Entries) > 0 {
+					if m.Entries[0].ContentType == api.ResourceContentType {
+						s.handleGetResource(w, r, m.Entries[0].Path)
+						return
+					}
+				}
 			}
 		}
 		// allow the request to overwrite the content type using a query

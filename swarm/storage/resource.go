@@ -13,6 +13,7 @@ import (
 	"golang.org/x/net/idna"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -60,7 +61,7 @@ type ResourceValidator interface {
 }
 
 type ethApi interface {
-	BlockNumber(context.Context) (big.Int, error)
+	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
 }
 
 // Mutable resource is an entity which allows updates to a resource
@@ -124,7 +125,7 @@ type ethApi interface {
 // TODO: Include modtime in chunk data + signature
 type ResourceHandler struct {
 	ChunkStore
-	ctx          context.Context
+	ctx          context.Context // base for new contexts passed to storage layer and ethapi, to ensure teardown when Close() is called
 	cancelFunc   func()
 	validator    ResourceValidator
 	ethClient    ethApi
@@ -609,11 +610,13 @@ func (self *ResourceHandler) Close() {
 }
 
 func (self *ResourceHandler) GetBlock() (uint64, error) {
-	bigblocknumber, err := self.ethClient.BlockNumber(self.ctx)
+	ctx, cancel := context.WithCancel(self.ctx)
+	defer cancel()
+	blockheader, err := self.ethClient.HeaderByNumber(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
-	return bigblocknumber.Uint64(), nil
+	return blockheader.Number.Uint64(), nil
 }
 
 // Calculate the period index (aka major version number) from a given block number
@@ -771,11 +774,7 @@ func getNextPeriod(start uint64, current uint64, frequency uint64) uint32 {
 }
 
 func ToSafeName(name string) (string, error) {
-	validname, err := idna.ToASCII(name)
-	if err != nil {
-		return "", err
-	}
-	return validname, nil
+	return idna.ToASCII(name)
 }
 
 // check that name identifiers contain valid bytes

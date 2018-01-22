@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/contracts/ens/contract"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -57,10 +58,12 @@ func (f *fakeBackend) Commit() {
 	f.blocknumber++
 }
 
-func (f *fakeBackend) BlockNumber(context context.Context) (big.Int, error) {
+func (f *fakeBackend) HeaderByNumber(context context.Context, bigblock *big.Int) (*types.Header, error) {
 	f.blocknumber++
 	biggie := big.NewInt(f.blocknumber)
-	return *biggie, nil
+	return &types.Header{
+		Number: biggie,
+	}, nil
 }
 
 // check that signature address matches update signer address
