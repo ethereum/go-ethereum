@@ -17,7 +17,6 @@
 package storage
 
 import (
-	"encoding/binary"
 	"time"
 )
 
@@ -40,7 +39,7 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 	var created bool
 	chunk, created = self.localStore.GetOrCreateRequest(key)
 	if chunk.ReqC == nil {
-		return
+		return chunk, nil
 	}
 
 	if created {
@@ -53,10 +52,9 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 
 	select {
 	case <-t.C:
-		return nil, notFound
+		return nil, ErrNotFound
 	case <-chunk.ReqC:
 	}
-	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	return chunk, nil
 }
 

@@ -20,15 +20,27 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"hash"
 	"io"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/log"
 )
+
+var (
+	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
+)
+
+func init() {
+	flag.Parse()
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+}
 
 type brokenLimitedReader struct {
 	lr    io.Reader

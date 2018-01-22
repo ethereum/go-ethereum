@@ -106,7 +106,15 @@ func (self *LocalStore) Put(chunk *Chunk) {
 // ChunkStores are remote and can have long latency
 func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 	chunk, err = self.memStore.Get(key)
+
 	if err == nil {
+		if chunk.ReqC != nil {
+			select {
+			case <-chunk.ReqC:
+			default:
+				return chunk, ErrFetching
+			}
+		}
 		return
 	}
 	chunk, err = self.DbStore.Get(key)
@@ -123,12 +131,11 @@ func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool)
 	var err error
 	chunk, err = self.Get(key)
 	if err == nil {
-		if chunk.ReqC == nil {
-			log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
-		} else {
-			log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request", key))
-			// no need to launch again
-		}
+		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
+		return chunk, false
+	}
+	if err == ErrFetching {
+		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request %v", key, chunk.ReqC))
 		return chunk, false
 	}
 	// no data and no request status

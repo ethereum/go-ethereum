@@ -699,7 +699,7 @@ func (s *DbStore) get(key Key) (chunk *Chunk, err error) {
 		decodeData(data, chunk)
 
 	} else {
-		err = notFound
+		err = ErrNotFound
 	}
 
 	return
@@ -712,8 +712,8 @@ func newMockGetDataFunc(mockStore *mock.NodeStore) func(key Key) (data []byte, e
 	return func(key Key) (data []byte, err error) {
 		data, err = mockStore.Get(key)
 		if err == mock.ErrNotFound {
-			// preserve notFound error
-			err = notFound
+			// preserve ErrNotFound error
+			err = ErrNotFound
 		}
 		return data, err
 	}

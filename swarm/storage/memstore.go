@@ -214,7 +214,7 @@ func (s *MemStore) Get(hash Key) (chunk *Chunk, err error) {
 		l := hash.bits(bitpos, node.bits)
 		st := node.subtree[l]
 		if st == nil {
-			return nil, notFound
+			return nil, ErrNotFound
 		}
 		bitpos += node.bits
 		node = st
@@ -232,7 +232,7 @@ func (s *MemStore) Get(hash Key) (chunk *Chunk, err error) {
 			}
 		}
 	} else {
-		err = notFound
+		err = ErrNotFound
 	}
 
 	return

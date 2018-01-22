@@ -18,6 +18,7 @@ package stream
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -167,12 +168,11 @@ R:
 	for req := range d.receiveC {
 		// this should be has locally
 		chunk, err := d.db.Get(req.Key)
-		if err != nil {
-			log.Error("not in db? ", "key", req.Key, "chunk", chunk)
+		if err == nil {
 			continue R
 		}
-		if chunk.ReqC == nil {
-			continue R
+		if err != storage.ErrFetching {
+			panic(fmt.Sprintf("not in db? key %v chunk %v", req.Key, chunk))
 		}
 		select {
 		case <-chunk.ReqC:
