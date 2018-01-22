@@ -19,7 +19,7 @@ import (
 const (
 	signatureLength     = 65
 	indexSize           = 16
-	dbDirName           = "resource"
+	DbDirName           = "resource"
 	chunkSize           = 4096 // temporary until we implement DPA in the resourcehandler
 	defaultStoreTimeout = 4000 * time.Millisecond
 )
@@ -133,8 +133,6 @@ type ResourceHandler struct {
 	hasher       SwarmHash
 	nameHash     nameHashFunc
 	storeTimeout time.Duration
-	ctx          context.Context
-	cancelFunc   func()
 }
 
 // Create or open resource update chunk store
@@ -157,7 +155,7 @@ func NewResourceHandler(datadir string, cloudStore CloudStore, ethClient ethApi,
 	ctx, cancel := context.WithCancel(context.Background())
 	rh := &ResourceHandler{
 		ChunkStore:   newResourceChunkStore(path, hashfunc, localStore, cloudStore),
-		rpcClient:    rpcClient,
+		ethClient:    ethClient,
 		resources:    make(map[string]*resource),
 		hasher:       hashfunc(),
 		validator:    validator,
@@ -481,7 +479,7 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 	datalength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
 	if int(headerlength+datalength+4) > len(chunkdata) {
 		err = fmt.Errorf("Reported headerlength %d + datalength %d longer than actual chunk data length %d", headerlength, datalength, len(chunkdata))
-		return
+		return nil, 0, 0, "", nil, err
 	}
 
 	var period uint32
@@ -501,13 +499,14 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 	copy(data, chunkdata[cursor:cursor+intdatalength])
 
 	// omit signatures if we have no validator
+	var signature *Signature
 	if self.validator != nil {
 		cursor += intdatalength
 		signature = &Signature{}
 		copy(signature[:], chunkdata[cursor:cursor+signatureLength])
 	}
 
-	return
+	return signature, period, version, name, data, nil
 }
 
 // Adds an actual data update

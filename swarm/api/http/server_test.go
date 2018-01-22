@@ -40,7 +40,7 @@ func init() {
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 }
 
-func TestBzzGetDb(t *testing.T) {
+func TestBzzResource(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t)
 	defer srv.Close()
 
