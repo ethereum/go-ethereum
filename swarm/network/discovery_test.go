@@ -33,7 +33,7 @@ func TestDiscovery(t *testing.T) {
 	addr := RandomAddr()
 	to := NewKademlia(addr.OAddr, NewKadParams())
 
-	run := func(p *bzzPeer) error {
+	run := func(p *BzzPeer) error {
 		dp := newDiscovery(p, to)
 		to.On(p)
 		defer to.Off(p)

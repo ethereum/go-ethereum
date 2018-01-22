@@ -112,7 +112,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 			MaxPeers:        math.MaxInt32,
 			NoDiscovery:     true,
 			Dialer:          s,
-			EnableMsgEvents: true,
+			EnableMsgEvents: false,
 		},
 		NoUSB:  true,
 		Logger: log.New("node.id", id.String()),

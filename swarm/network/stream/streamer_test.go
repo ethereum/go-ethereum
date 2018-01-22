@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package network
+package stream
 
 import (
 	"bytes"
@@ -50,15 +50,15 @@ var (
 	batchDone                        = make(chan bool)
 )
 
-type testIncomingStreamer struct {
+type testClient struct {
 	t []byte
 }
 
-type testOutgoingStreamer struct {
+type testServer struct {
 	t []byte
 }
 
-func (self *testIncomingStreamer) NeedData(hash []byte) func() {
+func (self *testClient) NeedData(hash []byte) func() {
 	receivedHashes[string(hash)] = hash
 	if bytes.Equal(hash, hash0[:]) {
 		return func() {
@@ -72,16 +72,16 @@ func (self *testIncomingStreamer) NeedData(hash []byte) func() {
 	return nil
 }
 
-func (self *testIncomingStreamer) BatchDone(string, uint64, []byte, []byte) func() (*TakeoverProof, error) {
+func (self *testClient) BatchDone(string, uint64, []byte, []byte) func() (*TakeoverProof, error) {
 	close(batchDone)
 	return nil
 }
 
-func (self *testOutgoingStreamer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
+func (self *testServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
 	return make([]byte, HashSize), from + 1, to + 1, nil, nil
 }
 
-func (self *testOutgoingStreamer) GetData([]byte) []byte {
+func (self *testServer) GetData([]byte) []byte {
 	return nil
 }
 
@@ -92,8 +92,8 @@ func TestStreamerDownstreamSubscribeMsgExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	streamer.RegisterIncomingStreamer("foo", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
-		return &testIncomingStreamer{
+	streamer.RegisterClientFunc("foo", func(p *Peer, t []byte) (Client, error) {
+		return &testClient{
 			t: t,
 		}, nil
 	})
@@ -134,8 +134,8 @@ func TestStreamerUpstreamSubscribeMsgExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	streamer.RegisterOutgoingStreamer("foo", func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
-		return &testOutgoingStreamer{
+	streamer.RegisterServerFunc("foo", func(p *Peer, t []byte) (Server, error) {
+		return &testServer{
 			t: t,
 		}, nil
 	})
@@ -188,8 +188,8 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	streamer.RegisterIncomingStreamer("foo", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
-		return &testIncomingStreamer{
+	streamer.RegisterClientFunc("foo", func(p *Peer, t []byte) (Client, error) {
+		return &testClient{
 			t: t,
 		}, nil
 	})

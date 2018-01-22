@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.d
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,17 +14,18 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package network
+package light
 
 import (
 	"errors"
 
+	"github.com/ethereum/go-ethereum/swarm/network/stream"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // RemoteReader implements IncomingStreamer
 type RemoteSectionReader struct {
-	db            *DbAccess
+	db            *storage.DBAPI
 	start         uint64
 	end           uint64
 	hashes        chan []byte
@@ -35,7 +36,7 @@ type RemoteSectionReader struct {
 }
 
 // NewRemoteReader is the constructor for RemoteReader
-func NewRemoteSectionReader(root []byte, db *DbAccess) *RemoteSectionReader {
+func NewRemoteSectionReader(root []byte, db *storage.DBAPI) *RemoteSectionReader {
 	return &RemoteSectionReader{
 		db:     db,
 		root:   root,
@@ -45,7 +46,7 @@ func NewRemoteSectionReader(root []byte, db *DbAccess) *RemoteSectionReader {
 }
 
 func (r *RemoteSectionReader) NeedData(key []byte) func() {
-	chunk, created := r.db.getOrCreateRequest(storage.Key(key))
+	chunk, created := r.db.GetOrCreateRequest(storage.Key(key))
 	// TODO: we may want to request from this peer anyway even if the request exists
 	if chunk.ReqC == nil || !created {
 		return nil
@@ -58,7 +59,7 @@ func (r *RemoteSectionReader) NeedData(key []byte) func() {
 	}
 }
 
-func (r *RemoteSectionReader) BatchDone(s string, from uint64, hashes []byte, root []byte) func() (*TakeoverProof, error) {
+func (r *RemoteSectionReader) BatchDone(s string, from uint64, hashes []byte, root []byte) func() (*stream.TakeoverProof, error) {
 	r.hashes <- hashes
 	return nil
 }
@@ -75,9 +76,9 @@ func (r *RemoteSectionReader) Read(b []byte) (n int64, err error) {
 		return l, nil
 	}
 	var end bool
-	for i := 0; !end && i < len(r.currentHashes); i += HashSize {
-		hash := r.currentHashes[i : i+HashSize]
-		chunk, err := r.db.get(hash)
+	for i := 0; !end && i < len(r.currentHashes); i += stream.HashSize {
+		hash := r.currentHashes[i : i+stream.HashSize]
+		chunk, err := r.db.Get(hash)
 		if err != nil {
 			return n, err
 		}
@@ -96,9 +97,9 @@ func (r *RemoteSectionReader) Read(b []byte) (n int64, err error) {
 			return n, errors.New("aborted")
 		case hashes := <-r.hashes:
 			var i int
-			for ; !end && i < len(hashes); i += HashSize {
-				hash := hashes[i : i+HashSize]
-				chunk, err := r.db.get(hash)
+			for ; !end && i < len(hashes); i += stream.HashSize {
+				hash := hashes[i : i+stream.HashSize]
+				chunk, err := r.db.Get(hash)
 				if err != nil {
 					return n, err
 				}
@@ -120,12 +121,12 @@ func (r *RemoteSectionReader) Read(b []byte) (n int64, err error) {
 type RemoteSectionServer struct {
 	// quit chan struct{}
 	root []byte
-	db   *DbAccess
+	db   *storage.DBAPI
 	r    *storage.LazyChunkReader
 }
 
 // NewRemoteReader is the constructor for RemoteReader
-func NewRemoteSectionServer(db *DbAccess, r *storage.LazyChunkReader) *RemoteSectionServer {
+func NewRemoteSectionServer(db *storage.DBAPI, r *storage.LazyChunkReader) *RemoteSectionServer {
 	return &RemoteSectionServer{
 		db: db,
 		r:  r,
@@ -134,7 +135,7 @@ func NewRemoteSectionServer(db *DbAccess, r *storage.LazyChunkReader) *RemoteSec
 
 // GetData retrieves the actual chunk from localstore
 func (s *RemoteSectionServer) GetData(key []byte) []byte {
-	chunk, err := s.db.get(storage.Key(key))
+	chunk, err := s.db.Get(storage.Key(key))
 	if err != nil {
 		return nil
 	}
@@ -142,26 +143,26 @@ func (s *RemoteSectionServer) GetData(key []byte) []byte {
 }
 
 // GetBatch retrieves the next batch of hashes from the dbstore
-func (s *RemoteSectionServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
-	if to > from+batchSize {
-		to = from + batchSize
+func (s *RemoteSectionServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *stream.HandoverProof, error) {
+	if to > from+stream.BatchSize {
+		to = from + stream.BatchSize
 	}
-	batch := make([]byte, (to-from)*HashSize)
+	batch := make([]byte, (to-from)*stream.HashSize)
 	s.r.ReadAt(batch, int64(from))
 	return batch, from, to, nil, nil
 }
 
 // RegisterRemoteSectionReader registers RemoteSectionReader on light downstream node
-func RegisterRemoteSectionReader(s *Streamer, db *DbAccess) {
-	s.RegisterIncomingStreamer("REMOTE_SECTION", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
+func RegisterRemoteSectionReader(s *stream.Registry, db *storage.DBAPI) {
+	s.RegisterClientFunc("REMOTE_SECTION", func(p *stream.Peer, t []byte) (stream.Client, error) {
 		return NewRemoteSectionReader(t, db), nil
 	})
 }
 
 // RegisterRemoteSectionServer registers RemoteSectionServer outgoing streamer on
 // upstream light server node
-func RegisterRemoteSectionServer(s *Streamer, db *DbAccess, rf func([]byte) *storage.LazyChunkReader) {
-	s.RegisterOutgoingStreamer("REMOTE_SECTION", func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
+func RegisterRemoteSectionServer(s *stream.Registry, db *storage.DBAPI, rf func([]byte) *storage.LazyChunkReader) {
+	s.RegisterServerFunc("REMOTE_SECTION", func(p *stream.Peer, t []byte) (stream.Server, error) {
 		r := rf(t)
 		return NewRemoteSectionServer(db, r), nil
 	})
@@ -169,16 +170,16 @@ func RegisterRemoteSectionServer(s *Streamer, db *DbAccess, rf func([]byte) *sto
 
 // RegisterRemoteDownloader registers RemoteDownloader incoming streamer
 // on downstream light  node
-// func RegisterRemoteDownloader(s *Streamer, db *DbAccess) {
-// 	s.RegisterIncomingStreamer("REMOTE_DOWNLOADER", func(p *StreamerPeer, t []byte) (IncomingStreamer, error) {
+// func RegisterRemoteDownloader(s *Streamer, db *storage.DBAPI) {
+// 	s.RegisterIncomingStreamer("REMOTE_DOWNLOADER", func(p *stream.Peer, t []byte) (IncomingStreamer, error) {
 // 		return NewRemoteDownloader(t, db), nil
 // 	})
 // }
 //
 // // RegisterRemoteDownloadServer registers RemoteDownloadServer outgoing streamer on
 // // upstream light server node
-// func RegisterRemoteDownloadServer(s *Streamer, db *DbAccess, rf func([]byte) *storage.LazyChunkReader) {
-// 	s.RegisterOutgoingStreamer("REMOTE_DOWNLOADER", func(p *StreamerPeer, t []byte) (OutgoingStreamer, error) {
+// func RegisterRemoteDownloadServer(s *Streamer, db *storage.DBAPI, rf func([]byte) *storage.LazyChunkReader) {
+// 	s.RegisterOutgoingStreamer("REMOTE_DOWNLOADER", func(p *stream.Peer, t []byte) (OutgoingStreamer, error) {
 // 		r := rf(t)
 // 		return NewRemoteDownloadServer(db, r), nil
 // 	})

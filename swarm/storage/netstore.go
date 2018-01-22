@@ -18,10 +18,7 @@ package storage
 
 import (
 	"encoding/binary"
-	"fmt"
 	"time"
-
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // NetStore implements the ChunkStore interface,
@@ -43,7 +40,6 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 	var created bool
 	chunk, created = self.localStore.GetOrCreateRequest(key)
 	if chunk.ReqC == nil {
-		log.Trace(fmt.Sprintf("DPA.Get: %v found locally, %d bytes", key.Log(), len(chunk.SData)))
 		return
 	}
 
@@ -57,7 +53,6 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 
 	select {
 	case <-t.C:
-		log.Trace(fmt.Sprintf("DPA.Get: %v request time out ", key.Log()))
 		return nil, notFound
 	case <-chunk.ReqC:
 	}

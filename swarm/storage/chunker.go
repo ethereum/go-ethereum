@@ -13,7 +13,6 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package storage
 
 import (
@@ -463,8 +462,7 @@ func retrieve(key Key, chunkC chan *Chunk, quitC chan bool) *Chunk {
 	case <-chunk.C: // bells are ringing, data have been delivered
 	}
 	if len(chunk.SData) == 0 {
-		return nil // chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-
+		return nil
 	}
 	return chunk
 }
