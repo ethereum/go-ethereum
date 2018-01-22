@@ -993,15 +993,12 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
-	update := make(chan struct{}, 1)
-
 	// Prepare the queue and fetch block parts until the block header fetcher's done
 	finished := false
 	for {
 		select {
 		case <-d.cancelCh:
 			return errCancel
-
 		case packet := <-deliveryCh:
 			// If the peer was previously banned and failed to deliver its pack
 			// in a reasonable time frame, ignore its message.
@@ -1027,115 +1024,96 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 					peer.log.Trace("Failed to deliver retrieved data", "type", kind, "err", err)
 				}
 			}
-			// Blocks assembled, try to update the progress
-			select {
-			case update <- struct{}{}:
-			default:
-			}
-
 		case cont := <-wakeCh:
 			// The header fetcher sent a continuation flag, check if it's done
 			if !cont {
 				finished = true
 			}
-			// Headers arrive, try to update the progress
-			select {
-			case update <- struct{}{}:
-			default:
-			}
-
 		case <-ticker.C:
-			// Sanity check update the progress
-			select {
-			case update <- struct{}{}:
-			default:
-			}
+		}
 
-		case <-update:
-			// Short circuit if we lost all our peers
-			if d.peers.Len() == 0 {
-				return errNoPeers
-			}
-			// Check for fetch request timeouts and demote the responsible peers
-			for pid, fails := range expire() {
-				if peer := d.peers.Peer(pid); peer != nil {
-					// If a lot of retrieval elements expired, we might have overestimated the remote peer or perhaps
-					// ourselves. Only reset to minimal throughput but don't drop just yet. If even the minimal times
-					// out that sync wise we need to get rid of the peer.
-					//
-					// The reason the minimum threshold is 2 is because the downloader tries to estimate the bandwidth
-					// and latency of a peer separately, which requires pushing the measures capacity a bit and seeing
-					// how response times reacts, to it always requests one more than the minimum (i.e. min 2).
-					if fails > 2 {
-						peer.log.Trace("Data delivery timed out", "type", kind)
-						setIdle(peer, 0)
-					} else {
-						peer.log.Debug("Stalling delivery, dropping", "type", kind)
-						d.dropPeer(pid)
-					}
+		// Short circuit if we lost all our peers
+		if d.peers.Len() == 0 {
+			return errNoPeers
+		}
+		// Check for fetch request timeouts and demote the responsible peers
+		for pid, fails := range expire() {
+			if peer := d.peers.Peer(pid); peer != nil {
+				// If a lot of retrieval elements expired, we might have overestimated the remote peer or perhaps
+				// ourselves. Only reset to minimal throughput but don't drop just yet. If even the minimal times
+				// out that sync wise we need to get rid of the peer.
+				//
+				// The reason the minimum threshold is 2 is because the downloader tries to estimate the bandwidth
+				// and latency of a peer separately, which requires pushing the measures capacity a bit and seeing
+				// how response times reacts, to it always requests one more than the minimum (i.e. min 2).
+				if fails > 2 {
+					peer.log.Trace("Data delivery timed out", "type", kind)
+					setIdle(peer, 0)
+				} else {
+					peer.log.Debug("Stalling delivery, dropping", "type", kind)
+					d.dropPeer(pid)
 				}
 			}
-			// If there's nothing more to fetch, wait or terminate
-			if pending() == 0 {
-				if !inFlight() && finished {
-					log.Debug("Data fetching completed", "type", kind)
-					return nil
-				}
+		}
+		// If there's nothing more to fetch, wait or terminate
+		if pending() == 0 {
+			if !inFlight() && finished {
+				log.Debug("Data fetching completed", "type", kind)
+				return nil
+			}
+			continue
+		}
+		// Send a download request to all idle peers, until throttled
+		progressed, throttled, running := false, false, inFlight()
+		idles, total := idle()
+		for _, peer := range idles {
+			// Short circuit if throttling activated
+			if throttle() {
+				throttled = true
 				break
 			}
-			// Send a download request to all idle peers, until throttled
-			progressed, throttled, running := false, false, inFlight()
-			idles, total := idle()
-
-			for _, peer := range idles {
-				// Short circuit if throttling activated
-				if throttle() {
-					throttled = true
-					break
-				}
-				// Short circuit if there is no more available task.
-				if pending() == 0 {
-					break
-				}
-				// Reserve a chunk of fetches for a peer. A nil can mean either that
-				// no more headers are available, or that the peer is known not to
-				// have them.
-				request, progress, err := reserve(peer, capacity(peer))
-				if err != nil {
-					return err
-				}
-				if progress {
-					progressed = true
-				}
-				if request == nil {
-					continue
-				}
-				if request.From > 0 {
-					peer.log.Trace("Requesting new batch of data", "type", kind, "from", request.From)
-				} else if len(request.Headers) > 0 {
-					peer.log.Trace("Requesting new batch of data", "type", kind, "count", len(request.Headers), "from", request.Headers[0].Number)
-				} else {
-					peer.log.Trace("Requesting new batch of data", "type", kind, "count", len(request.Hashes))
-				}
-				// Fetch the chunk and make sure any errors return the hashes to the queue
-				if fetchHook != nil {
-					fetchHook(request.Headers)
-				}
-				if err := fetch(peer, request); err != nil {
-					// Although we could try and make an attempt to fix this, this error really
-					// means that we've double allocated a fetch task to a peer. If that is the
-					// case, the internal state of the downloader and the queue is very wrong so
-					// better hard crash and note the error instead of silently accumulating into
-					// a much bigger issue.
-					panic(fmt.Sprintf("%v: %s fetch assignment failed", peer, kind))
-				}
-				running = true
+			// Short circuit if there is no more available task.
+			if pending() == 0 {
+				break
 			}
-			// Make sure that we have peers available for fetching. If all peers have been tried
-			// and all failed throw an error
-			if !progressed && !throttled && !running && len(idles) == total && pending() > 0 {
-				return errPeersUnavailable
+			// Reserve a chunk of fetches for a peer. A nil can mean either that
+			// no more headers are available, or that the peer is known not to
+			// have them.
+			request, progress, err := reserve(peer, capacity(peer))
+			if err != nil {
+				return err
 			}
+			if progress {
+				progressed = true
+			}
+			if request == nil {
+				continue
+			}
+			if request.From > 0 {
+				peer.log.Trace("Requesting new batch of data", "type", kind, "from", request.From)
+			} else if len(request.Headers) > 0 {
+				peer.log.Trace("Requesting new batch of data", "type", kind, "count", len(request.Headers), "from", request.Headers[0].Number)
+			} else {
+				peer.log.Trace("Requesting new batch of data", "type", kind, "count", len(request.Hashes))
+			}
+			// Fetch the chunk and make sure any errors return the hashes to the queue
+			if fetchHook != nil {
+				fetchHook(request.Headers)
+			}
+			if err := fetch(peer, request); err != nil {
+				// Although we could try and make an attempt to fix this, this error really
+				// means that we've double allocated a fetch task to a peer. If that is the
+				// case, the internal state of the downloader and the queue is very wrong so
+				// better hard crash and note the error instead of silently accumulating into
+				// a much bigger issue.
+				panic(fmt.Sprintf("%v: %s fetch assignment failed", peer, kind))
+			}
+			running = true
+		}
+		// Make sure that we have peers available for fetching. If all peers have been tried
+		// and all failed throw an error
+		if !progressed && !throttled && !running && len(idles) == total && pending() > 0 {
+			return errPeersUnavailable
 		}
 	}
 }
