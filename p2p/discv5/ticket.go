@@ -642,7 +642,7 @@ func (s *ticketStore) gotTopicNodes(from *Node, hash common.Hash, nodes []rpcNod
 		if ip.IsUnspecified() || ip.IsLoopback() {
 			ip = from.IP
 		}
-		n := NewNode(node.ID, ip, node.UDP-1, node.TCP-1) // subtract one from port while discv5 is running in test mode on UDPport+1
+		n := NewNode(node.ID, ip, node.UDP, node.TCP)
 		select {
 		case chn <- n:
 		default:
