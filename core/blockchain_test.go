@@ -1197,3 +1197,51 @@ func TestEIP161AccountRemoval(t *testing.T) {
 		t.Error("account should not exist")
 	}
 }
+
+// This is a regression test (i.e. as weird as it is, don't delete it ever), which
+// tests that under weird reorg conditions the blockchain and its internal header-
+// chain return the same latest block/header.
+//
+// https://github.com/ethereum/go-ethereum/pull/15941
+func TestBlockchainHeaderchainReorgConsistency(t *testing.T) {
+	// Generate a canonical chain to act as the main dataset
+	engine := ethash.NewFaker()
+
+	db, _ := ethdb.NewMemDatabase()
+	genesis := new(Genesis).MustCommit(db)
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+
+	// Generate a bunch of fork blocks, each side forking from the canonical chain
+	forks := make([]*types.Block, len(blocks))
+	for i := 0; i < len(forks); i++ {
+		parent := genesis
+		if i > 0 {
+			parent = blocks[i-1]
+		}
+		fork, _ := GenerateChain(params.TestChainConfig, parent, engine, db, 1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
+		forks[i] = fork[0]
+	}
+	// Import the canonical and fork chain side by side, verifying the current block
+	// and current header consistency
+	diskdb, _ := ethdb.NewMemDatabase()
+	new(Genesis).MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, params.TestChainConfig, engine, vm.Config{})
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	for i := 0; i < len(blocks); i++ {
+		if _, err := chain.InsertChain(blocks[i : i+1]); err != nil {
+			t.Fatalf("block %d: failed to insert into chain: %v", i, err)
+		}
+		if chain.CurrentBlock().Hash() != chain.CurrentHeader().Hash() {
+			t.Errorf("block %d: current block/header mismatch: block #%d [%x…], header #%d [%x…]", i, chain.CurrentBlock().Number(), chain.CurrentBlock().Hash().Bytes()[:4], chain.CurrentHeader().Number, chain.CurrentHeader().Hash().Bytes()[:4])
+		}
+		if _, err := chain.InsertChain(forks[i : i+1]); err != nil {
+			t.Fatalf(" fork %d: failed to insert into chain: %v", i, err)
+		}
+		if chain.CurrentBlock().Hash() != chain.CurrentHeader().Hash() {
+			t.Errorf(" fork %d: current block/header mismatch: block #%d [%x…], header #%d [%x…]", i, chain.CurrentBlock().Number(), chain.CurrentBlock().Hash().Bytes()[:4], chain.CurrentHeader().Number, chain.CurrentHeader().Hash().Bytes()[:4])
+		}
+	}
+}
