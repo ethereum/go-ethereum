@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/hashicorp/golang-lru"
+	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
 var (
@@ -89,6 +90,7 @@ type BlockChain struct {
 
 	diskdb ethdb.Database // Low level persistent database to store final content in
 	triedb *trie.Database // High level ephemeral database to store non-final tries in
+	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
@@ -152,6 +154,7 @@ func NewBlockChain(diskdb ethdb.Database, cacheConfig *CacheConfig, chainConfig 
 		cacheConfig:  cacheConfig,
 		diskdb:       diskdb,
 		triedb:       triedb,
+		triegc:       prque.New(),
 		stateCache:   state.NewDatabase(triedb),
 		quit:         make(chan struct{}),
 		bodyCache:    bodyCache,
@@ -659,6 +662,9 @@ func (bc *BlockChain) Stop() {
 			log.Error("Failed to commit recent state trie", "err", err)
 		}
 	}
+	for !bc.triegc.Empty() {
+		bc.triedb.Dereference(bc.triegc.PopItem().(common.Hash), common.Hash{})
+	}
 	log.Info("Blockchain manager stopped")
 }
 
@@ -869,8 +875,10 @@ func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.R
 	}
 
 	bc.triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
+	bc.triegc.Push(root, -float32(block.NumberU64()))
+
 	if current := block.NumberU64(); current > triesInMemory {
-		// Find the next state trie we need to get rid of or commit
+		// Find the next state trie we need to commit
 		header := bc.GetHeaderByNumber(current - triesInMemory)
 		chosen := header.Number.Uint64()
 
@@ -882,8 +890,14 @@ func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.R
 			bc.procTime = 0
 		}
 		// Garbage collect anything below our required write retention
-		bc.triedb.Dereference(header.Root, common.Hash{})
-
+		for !bc.triegc.Empty() {
+			root, number := bc.triegc.Pop()
+			if uint64(-number) > chosen {
+				bc.triegc.Push(root, number)
+				break
+			}
+			bc.triedb.Dereference(root.(common.Hash), common.Hash{})
+		}
 		if current%10000 == 0 {
 			log.Warn("Current trie pruning state", "size", bc.triedb.Size(), "elapsed", bc.procTime)
 		}

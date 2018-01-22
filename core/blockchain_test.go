@@ -1245,3 +1245,49 @@ func TestBlockchainHeaderchainReorgConsistency(t *testing.T) {
 		}
 	}
 }
+
+// Tests that importing small side forks doesn't leave junk in the trie database
+// cache (which would eventually cause memory issues).
+func TestTrieForkGC(t *testing.T) {
+	// Generate a canonical chain to act as the main dataset
+	engine := ethash.NewFaker()
+
+	db, _ := ethdb.NewMemDatabase()
+	genesis := new(Genesis).MustCommit(db)
+	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 2*triesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+
+	// Generate a bunch of fork blocks, each side forking from the canonical chain
+	forks := make([]*types.Block, len(blocks))
+	for i := 0; i < len(forks); i++ {
+		parent := genesis
+		if i > 0 {
+			parent = blocks[i-1]
+		}
+		fork, _ := GenerateChain(params.TestChainConfig, parent, engine, db, 1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
+		forks[i] = fork[0]
+	}
+	// Import the canonical and fork chain side by side, forcing the trie cache to cache both
+	diskdb, _ := ethdb.NewMemDatabase()
+	new(Genesis).MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{})
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	for i := 0; i < len(blocks); i++ {
+		if _, err := chain.InsertChain(blocks[i : i+1]); err != nil {
+			t.Fatalf("block %d: failed to insert into chain: %v", i, err)
+		}
+		if _, err := chain.InsertChain(forks[i : i+1]); err != nil {
+			t.Fatalf("fork %d: failed to insert into chain: %v", i, err)
+		}
+	}
+	// Dereference all the recent tries and ensure no past trie is left in
+	for i := 0; i < triesInMemory; i++ {
+		chain.triedb.Dereference(blocks[len(blocks)-1-i].Root(), common.Hash{})
+		chain.triedb.Dereference(forks[len(blocks)-1-i].Root(), common.Hash{})
+	}
+	if len(chain.triedb.Nodes()) > 0 {
+		t.Fatalf("stale tries still alive after garbase collection")
+	}
+}
