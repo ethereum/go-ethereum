@@ -476,20 +476,12 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, string, []byte, error) {
 	var err error
 	cursor := 0
-	var signature *Signature
-	// omit signatures if we have no validator
-	var sigoffset int
-	if self.validator != nil {
-		signature = &Signature{}
-		copy(signature[:], chunkdata[:signatureLength])
-		sigoffset = signatureLength
-		cursor = sigoffset
-	}
-
 	headerlength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
-	if int(headerlength+2) > len(chunkdata) {
-		err = fmt.Errorf("Reported header length %d longer than actual data length %d", headerlength, len(chunkdata))
-		return nil, 0, 0, "", nil, err
+	cursor += 2
+	datalength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
+	if int(headerlength+datalength+4) > len(chunkdata) {
+		err = fmt.Errorf("Reported headerlength %d + datalength %d longer than actual chunk data length %d", headerlength, datalength, len(chunkdata))
+		return
 	}
 
 	var period uint32
@@ -501,12 +493,21 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 	cursor += 4
 	version = binary.LittleEndian.Uint32(chunkdata[cursor : cursor+4])
 	cursor += 4
-	namelength := int(headerlength) - cursor + sigoffset + 2
+	namelength := int(headerlength) - cursor + 4
 	name = string(chunkdata[cursor : cursor+namelength])
 	cursor += namelength
-	data = make([]byte, len(chunkdata)-cursor)
-	copy(data, chunkdata[cursor:])
-	return signature, period, version, name, data, err
+	intdatalength := int(datalength)
+	data = make([]byte, intdatalength)
+	copy(data, chunkdata[cursor:cursor+intdatalength])
+
+	// omit signatures if we have no validator
+	if self.validator != nil {
+		cursor += intdatalength
+		signature = &Signature{}
+		copy(signature[:], chunkdata[cursor:cursor+signatureLength])
+	}
+
+	return
 }
 
 // Adds an actual data update
@@ -517,9 +518,9 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 // A resource update cannot span chunks, and thus has max length 4096
 func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 
-	var sigoffset int
+	var signaturelength int
 	if self.validator != nil {
-		sigoffset = signatureLength
+		signaturelength = signatureLength
 	}
 
 	// get the cached information
@@ -532,7 +533,7 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 	}
 
 	// an update can be only one chunk long
-	datalimit := self.chunkSize() - int64(sigoffset-len(name)-8)
+	datalimit := self.chunkSize() - int64(signaturelength-len(name)-4-4-2-2)
 	if int64(len(data)) > datalimit {
 		return nil, fmt.Errorf("Data overflow: %d / %d bytes", len(data), datalimit)
 	}
@@ -672,27 +673,30 @@ func getAddressFromDataSig(datahash common.Hash, signature Signature) (common.Ad
 func newUpdateChunk(key Key, signature *Signature, period uint32, version uint32, name string, data []byte) *Chunk {
 
 	// no signatures if no validator
-	var sigoffset int
+	var signaturelength int
 	if signature != nil {
-		sigoffset = signatureLength
+		signaturelength = signatureLength
 	}
 
 	// prepend version and period to allow reverse lookups
-	headerlength := uint16(len(name) + 4 + 4)
+	headerlength := len(name) + 4 + 4
+
+	// also prepend datalength
+	datalength := len(data)
 
 	chunk := NewChunk(key, nil)
-	chunk.SData = make([]byte, sigoffset+int(headerlength)+2+len(data))
-
-	cursor := 0
-	if signature != nil {
-		copy(chunk.SData, (*signature)[:])
-		cursor += signatureLength
-	}
+	chunk.SData = make([]byte, 4+signaturelength+headerlength+datalength)
 
 	// data header length does NOT include the header length prefix bytes themselves
-	binary.LittleEndian.PutUint16(chunk.SData[cursor:], headerlength)
+	cursor := 0
+	binary.LittleEndian.PutUint16(chunk.SData[cursor:], uint16(headerlength))
 	cursor += 2
 
+	// data length
+	binary.LittleEndian.PutUint16(chunk.SData[cursor:], uint16(datalength))
+	cursor += 2
+
+	// header = period + version + name
 	binary.LittleEndian.PutUint32(chunk.SData[cursor:], period)
 	cursor += 4
 
@@ -703,7 +707,14 @@ func newUpdateChunk(key Key, signature *Signature, period uint32, version uint32
 	copy(chunk.SData[cursor:], namebytes)
 	cursor += len(namebytes)
 
+	// add the data
 	copy(chunk.SData[cursor:], data)
+
+	// if signature is present it's the last item in the chunk data
+	if signature != nil {
+		cursor += datalength
+		copy(chunk.SData[cursor:], signature[:])
+	}
 
 	chunk.Size = int64(len(chunk.SData))
 	return chunk

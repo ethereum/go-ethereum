@@ -77,17 +77,8 @@ type rpcBlock struct {
 }
 
 func (ec *Client) BlockNumber(ctx context.Context) (big.Int, error) {
-	var numberstr string
 	number := &big.Int{}
-	err := ec.c.CallContext(ctx, &numberstr, "eth_blockNumber")
-	if err != nil {
-		return *number, err
-	}
-	var ok bool
-	number, ok = number.SetString(numberstr, 10)
-	if !ok {
-		err = errors.New("Failed to parse bigint")
-	}
+	err := ec.c.CallContext(ctx, &number, "eth_blockNumber")
 	return *number, err
 }
 
