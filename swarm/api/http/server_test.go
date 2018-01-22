@@ -23,37 +23,35 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-func init() {
-	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
-}
-
+// \TODO if create -> get -> update -> get, the last get with return 1.1 because 1.2 retrieve is still pending
 func TestBzzResource(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t)
 	defer srv.Close()
 
-	keybytes := make([]byte, common.HashLength) // nearest we get to source of info
+	// our mutable resource "name"
+	keybytes := make([]byte, common.HashLength)
 	copy(keybytes, []byte{42})
 
-	databytes := make([]byte, 42)
+	// data of update 1
+	databytes := make([]byte, 666)
 	_, err := rand.Read(databytes)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	url := fmt.Sprintf("%s/bzz-resource:/%x/42", srv.URL, keybytes)
+	// creates resource and sets update 1
+	url := fmt.Sprintf("%s/bzz-resource:/%x/13", srv.URL, keybytes)
 	resp, err := http.Post(url, "application/octet-stream", bytes.NewReader(databytes))
 	if err != nil {
 		t.Fatal(err)
@@ -65,31 +63,31 @@ func TestBzzResource(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
 	}
-	log.Debug("Create", "status", resp.Status, "body", manifesthash)
 
+	// update 2
 	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
 	data := []byte("foo")
 	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	} else if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Update returned %d", resp.Status)
+	}
+
+	// get latest update (1.2) through swarm manifest
+	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, manifesthash)
+	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
 	}
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
+	} else if !bytes.Equal(data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", data, b)
 	}
-	log.Debug("Update", "status", resp.Status)
 
-	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, manifesthash)
-	resp, err = http.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	log.Debug("Get raw", "status", resp.Status, "body", fmt.Sprintf("%s", b))
-
+	// get latest update (1.2) through resource directly
 	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
 	resp, err = http.Get(url)
 	if err != nil {
@@ -98,8 +96,9 @@ func TestBzzResource(t *testing.T) {
 	b, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
+	} else if !bytes.Equal(data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", data, b)
 	}
-	log.Debug("Get resource", "status", resp.Status, "data", b)
 
 }
 
