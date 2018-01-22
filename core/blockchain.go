@@ -465,7 +465,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 	}
 	bc.currentBlock = block
 
-	// If the block is better than out head or is on a different chain, force update heads
+	// If the block is better than our head or is on a different chain, force update heads
 	if updateHeads {
 		bc.hc.SetCurrentHeader(block.Header())
 
@@ -1140,18 +1140,17 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	} else {
 		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "newnum", newBlock.Number(), "newhash", newBlock.Hash())
 	}
+	// Insert the new chain, taking care of the proper incremental order
 	var addedTxs types.Transactions
-	// insert blocks. Order does not matter. Last block will be written in ImportChain itself which creates the new head properly
-	for _, block := range newChain {
+	for i := len(newChain) - 1; i >= 0; i-- {
 		// insert the block in the canonical way, re-writing history
-		bc.insert(block)
+		bc.insert(newChain[i])
 		// write lookup entries for hash based transaction/receipt searches
-		if err := WriteTxLookupEntries(bc.chainDb, block); err != nil {
+		if err := WriteTxLookupEntries(bc.chainDb, newChain[i]); err != nil {
 			return err
 		}
-		addedTxs = append(addedTxs, block.Transactions()...)
+		addedTxs = append(addedTxs, newChain[i].Transactions()...)
 	}
-
 	// calculate the difference between deleted and added transactions
 	diff := types.TxDifference(deletedTxs, addedTxs)
 	// When transactions get deleted from the database that means the
