@@ -1,6 +1,6 @@
 // @flow
 
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,45 +17,41 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 import React, {Component} from 'react';
+import type {ChildrenArray} from 'react';
 
-import SideBar from './SideBar';
-import Main from './Main';
-import type {Content} from '../types/content';
+import Grid from 'material-ui/Grid';
 
 // styles contains the constant styles of the component.
 const styles = {
-	body: {
-		display: 'flex',
-		width:   '100%',
-		height:  '100%',
+	container: {
+		flexWrap: 'nowrap',
+		height:   '100%',
+		maxWidth: '100%',
+		margin:   0,
 	},
-};
+	item: {
+		flex:    1,
+		padding: 0,
+	},
+}
 
 export type Props = {
-	opened: boolean,
-	changeContent: string => void,
-	active: string,
-	content: Content,
-	shouldUpdate: Object,
+	children: ChildrenArray<React$Element<any>>,
 };
 
-// Body renders the body of the dashboard.
-class Body extends Component<Props> {
+// ChartRow renders a row of equally sized responsive charts.
+class ChartRow extends Component<Props> {
 	render() {
 		return (
-			<div style={styles.body}>
-				<SideBar
-					opened={this.props.opened}
-					changeContent={this.props.changeContent}
-				/>
-				<Main
-					active={this.props.active}
-					content={this.props.content}
-					shouldUpdate={this.props.shouldUpdate}
-				/>
-			</div>
+			<Grid container direction='row' style={styles.container} justify='space-between'>
+				{React.Children.map(this.props.children, child => (
+					<Grid item xs style={styles.item}>
+						{child}
+					</Grid>
+				))}
+			</Grid>
 		);
 	}
 }
 
-export default Body;
+export default ChartRow;

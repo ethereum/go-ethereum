@@ -35,7 +35,7 @@ class ChartGrid extends Component<Props> {
 				{
 					React.Children.map(this.props.children, child => (
 						<Grid item xs={child.props.xs}>
-							<ResponsiveContainer width="100%" height={child.props.height}>
+							<ResponsiveContainer width='100%' height={child.props.height}>
 								{React.cloneElement(child, {data: child.props.values.map(value => ({value}))})}
 							</ResponsiveContainer>
 						</Grid>

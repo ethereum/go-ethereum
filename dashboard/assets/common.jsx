@@ -63,3 +63,9 @@ export type MenuProp = {|...ProvidedMenuProp, id: string|};
 export const MENU: Map<string, {...MenuProp}> = new Map(menuSkeletons.map(({id, menu}) => ([id, {id, ...menu}])));
 
 export const DURATION = 200;
+
+export const styles = {
+	light: {
+		color: 'rgba(255, 255, 255, 0.54)',
+	},
+}

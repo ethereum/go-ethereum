@@ -19,55 +19,50 @@
 import React, {Component} from 'react';
 
 import withTheme from 'material-ui/styles/withTheme';
-import {LineChart, AreaChart, Area, YAxis, CartesianGrid, Line} from 'recharts';
+import {LineChart, AreaChart, Area, Line} from 'recharts';
 
 import ChartGrid from './ChartGrid';
 import type {ChartEntry} from '../types/content';
 
 export type Props = {
     theme: Object,
-    memory: Array<ChartEntry>,
-    traffic: Array<ChartEntry>,
+    activeMemory: Array<ChartEntry>,
+    ingress: Array<ChartEntry>,
+    egress: Array<ChartEntry>,
+    cpu: Array<ChartEntry>,
 	shouldUpdate: Object,
 };
+
 // Home renders the home content.
 class Home extends Component<Props> {
-	constructor(props: Props) {
-		super(props);
-		const {theme} = props; // The theme property is injected by withTheme().
-		this.memoryColor = theme.palette.primary[300];
-		this.trafficColor = theme.palette.secondary[300];
-	}
-
 	shouldComponentUpdate(nextProps) {
 		return typeof nextProps.shouldUpdate.home !== 'undefined';
 	}
 
-	memoryColor: Object;
-	trafficColor: Object;
-
 	render() {
-		let {memory, traffic} = this.props;
-		memory = memory.map(({value}) => (value || 0));
-		traffic = traffic.map(({value}) => (value || 0));
+		let {
+			activeMemory, ingress, egress, cpu
+		} = this.props;
+		activeMemory = activeMemory.map(({value}) => (value || 0));
+		cpu = cpu.map(({value}) => (value || 0));
+		ingress = ingress.map(({value}) => (value || 0));
+		egress = egress.map(({value}) => (value || 0));
+
+		const color = '#8884d8';
 
 		return (
 			<ChartGrid spacing={24}>
-				<AreaChart xs={6} height={300} values={memory}>
-					<YAxis />
-					<Area type="monotone" dataKey="value" stroke={this.memoryColor} fill={this.memoryColor} />
+				<AreaChart xs={6} height={300} values={activeMemory}>
+					<Area type='monotone' dataKey='value' stroke={color} fill={color} />
 				</AreaChart>
-				<LineChart xs={6} height={300} values={traffic}>
-					<Line type="monotone" dataKey="value" stroke={this.trafficColor} dot={false} />
+				<LineChart xs={6} height={300} values={ingress}>
+					<Line type='monotone' dataKey='value' stroke={color} dot={false} />
 				</LineChart>
-				<LineChart xs={6} height={300} values={memory}>
-					<YAxis />
-					<CartesianGrid stroke="#eee" strokeDasharray="5 5" />
-					<Line type="monotone" dataKey="value" stroke={this.memoryColor} dot={false} />
+				<LineChart xs={6} height={300} values={cpu}>
+					<Line type='monotone' dataKey='value' stroke={color} dot={false} />
 				</LineChart>
-				<AreaChart xs={6} height={300} values={traffic}>
-					<CartesianGrid stroke="#eee" strokeDasharray="5 5" vertical={false} />
-					<Area type="monotone" dataKey="value" stroke={this.trafficColor} fill={this.trafficColor} />
+				<AreaChart xs={6} height={300} values={egress}>
+					<Area type='monotone' dataKey='value' stroke={color} fill={color} />
 				</AreaChart>
 			</ChartGrid>
 		);

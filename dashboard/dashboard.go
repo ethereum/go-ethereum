@@ -29,10 +29,12 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/elastic/gosigar"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -42,8 +44,11 @@ import (
 )
 
 const (
-	memorySampleLimit  = 200 // Maximum number of memory data samples
-	trafficSampleLimit = 200 // Maximum number of traffic data samples
+	activeMemorySampleLimit  = 200 // Maximum number of active memory data samples
+	virtualMemorySampleLimit = 200 // Maximum number of virtual memory data samples
+	ingressSampleLimit       = 200 // Maximum number of ingress data samples
+	egressSampleLimit        = 200 // Maximum number of egress data samples
+	cpuSampleLimit           = 200 // Maximum number of cpu data samples
 )
 
 var nextID uint32 // Next connection id
@@ -76,8 +81,10 @@ func New(config *Config, commit string) (*Dashboard, error) {
 		config: config,
 		quit:   make(chan chan error),
 		charts: &HomeMessage{
-			Memory:  ChartEntries{},
-			Traffic: ChartEntries{},
+			ActiveMemory:  ChartEntries{},
+			VirtualMemory: ChartEntries{},
+			Ingress:       ChartEntries{},
+			Egress:        ChartEntries{},
 		},
 		commit: commit,
 	}, nil
@@ -215,8 +222,11 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 			Commit:  db.commit,
 		},
 		Home: &HomeMessage{
-			Memory:  db.charts.Memory,
-			Traffic: db.charts.Traffic,
+			ActiveMemory:  db.charts.ActiveMemory,
+			VirtualMemory: db.charts.VirtualMemory,
+			Ingress:       db.charts.Ingress,
+			Egress:        db.charts.Egress,
+			CPU:           db.charts.CPU,
 		},
 	}
 	// Start tracking the connection and drop at connection loss.
@@ -242,38 +252,86 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 func (db *Dashboard) collectData() {
 	defer db.wg.Done()
 
+	prevIn := metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Count()
+	prevOut := metrics.DefaultRegistry.Get("p2p/OutboundTraffic").(metrics.Meter).Count()
+	cpuUsage := gosigar.Cpu{}
+	cpuUsage.Get()
+
 	for {
 		select {
 		case errc := <-db.quit:
 			errc <- nil
 			return
 		case <-time.After(db.config.Refresh):
-			inboundTraffic := metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Rate1()
-			memoryInUse := metrics.DefaultRegistry.Get("system/memory/inuse").(metrics.Meter).Rate1()
+			var mem runtime.MemStats
+			runtime.ReadMemStats(&mem)
+
+			curIn := metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Count()
+			inboundTraffic := float64(curIn - prevIn)
+			prevIn = curIn
+
+			curOut := metrics.DefaultRegistry.Get("p2p/OutboundTraffic").(metrics.Meter).Count()
+			outboundTraffic := float64(curOut - prevOut)
+			prevOut = curOut
+
+			prevCPUUsage := cpuUsage
+			cpuUsage.Get()
+			deltaCPU := cpuUsage.Delta(prevCPUUsage)
+
 			now := time.Now()
-			memory := &ChartEntry{
+			activeMemory := &ChartEntry{
 				Time:  now,
-				Value: memoryInUse,
+				Value: float64(mem.Alloc),
 			}
-			traffic := &ChartEntry{
+			virtualMemory := &ChartEntry{
+				Time:  now,
+				Value: float64(mem.Sys),
+			}
+			ingress := &ChartEntry{
 				Time:  now,
 				Value: inboundTraffic,
 			}
+			egress := &ChartEntry{
+				Time:  now,
+				Value: outboundTraffic,
+			}
+			CPU := &ChartEntry{
+				Time:  now,
+				Value: float64(deltaCPU.User),
+			}
 			first := 0
-			if len(db.charts.Memory) == memorySampleLimit {
+			if len(db.charts.ActiveMemory) == activeMemorySampleLimit {
 				first = 1
 			}
-			db.charts.Memory = append(db.charts.Memory[first:], memory)
+			db.charts.ActiveMemory = append(db.charts.ActiveMemory[first:], activeMemory)
 			first = 0
-			if len(db.charts.Traffic) == trafficSampleLimit {
+			if len(db.charts.VirtualMemory) == virtualMemorySampleLimit {
 				first = 1
 			}
-			db.charts.Traffic = append(db.charts.Traffic[first:], traffic)
+			db.charts.VirtualMemory = append(db.charts.VirtualMemory[first:], virtualMemory)
+			first = 0
+			if len(db.charts.Ingress) == ingressSampleLimit {
+				first = 1
+			}
+			db.charts.Ingress = append(db.charts.Ingress[first:], ingress)
+			first = 0
+			if len(db.charts.Egress) == egressSampleLimit {
+				first = 1
+			}
+			db.charts.Egress = append(db.charts.Egress[first:], egress)
+			first = 0
+			if len(db.charts.CPU) == cpuSampleLimit {
+				first = 1
+			}
+			db.charts.CPU = append(db.charts.CPU[first:], CPU)
 
 			db.sendToAll(&Message{
 				Home: &HomeMessage{
-					Memory:  ChartEntries{memory},
-					Traffic: ChartEntries{traffic},
+					ActiveMemory:  ChartEntries{activeMemory},
+					VirtualMemory: ChartEntries{virtualMemory},
+					Ingress:       ChartEntries{ingress},
+					Egress:        ChartEntries{egress},
+					CPU:           ChartEntries{CPU},
 				},
 			})
 		}

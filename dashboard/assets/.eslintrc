@@ -40,6 +40,9 @@
         'react/jsx-indent':       ['error', 'tab'],
         'react/jsx-indent-props': ['error', 'tab'],
         'react/prefer-stateless-function': 'off',
+        'jsx-quotes':  ['error', 'prefer-single'],
+        'no-plusplus': 'off',
+        'no-console':  ['error', { allow: ['error'] }],
 
         // Specifies the maximum length of a line.
         'max-len': ['warn', 120, 2, {
@@ -49,7 +52,7 @@
             'ignoreStrings':          true,
             'ignoreTemplateLiterals': true,
         }],
-        // Enforces spacing between keys and values in object literal properties.
+        // Enforces consistent spacing between keys and values in object literal properties.
         'key-spacing': ['error', {'align': {
             'beforeColon': false,
             'afterColon':  true,
