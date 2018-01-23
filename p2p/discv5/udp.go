@@ -247,6 +247,7 @@ func ListenUDP(priv *ecdsa.PrivateKey, conn conn, realaddr *net.UDPAddr, nodeDBP
 	if err != nil {
 		return nil, err
 	}
+	log.Info("UDP listener up", "net", net.tab.self)
 	transport.net = net
 	go transport.readLoop()
 	return net, nil
