@@ -449,7 +449,10 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		},
 	}
 	startedAt := time.Now()
-	result, err := sim.Run(conf)
+	timeout := 300 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	result, err := sim.Run(ctx, conf)
 	finishedAt := time.Now()
 	if err != nil {
 		t.Fatalf("Setting up simulation failed: %v", err)
@@ -586,7 +589,11 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	// run the simulation in the background
 	errc := make(chan error)
 	go func() {
-		_, err := sim.Run(conf)
+		timeout := 300 * time.Second
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+
+		_, err := sim.Run(ctx, conf)
 		errc <- err
 	}()
 

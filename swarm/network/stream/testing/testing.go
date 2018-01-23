@@ -170,7 +170,7 @@ func NewSimulation(conf *RunConfig) (*Simulation, func(), error) {
 	return s, teardown, nil
 }
 
-func (s *Simulation) Run(conf *RunConfig) (*simulations.StepResult, error) {
+func (s *Simulation) Run(ctx context.Context, conf *RunConfig) (*simulations.StepResult, error) {
 	// bring up nodes, launch the servive
 	nodes := conf.NodeCount
 	conns := conf.ConnLevel
@@ -204,9 +204,6 @@ func (s *Simulation) Run(conf *RunConfig) (*simulations.StepResult, error) {
 
 	// create an only locally retrieving dpa for the pivot node to test
 	// if retriee requests have arrived
-	timeout := 300 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
 	result := simulations.NewSimulation(s.Net).Run(ctx, conf.Step)
 	return result, nil
 }

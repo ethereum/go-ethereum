@@ -121,6 +121,9 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	wg := sync.WaitGroup{}
 	for i := 0; i < len(hashes); i += HashSize {
 		hash := hashes[i : i+HashSize]
+
+		p.streamer.delivery.counterHash++
+
 		if wait := s.NeedData(hash); wait != nil {
 			want.Set(i/HashSize, true)
 			wg.Add(1)

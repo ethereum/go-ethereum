@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-const dataChunkCount = 500
+const dataChunkCount = 1000
 
 func TestSyncerSimulation(t *testing.T) {
 	// testSyncBetweenNodes(t, 2, 1, dataChunkCount, true, 1)
@@ -67,6 +67,16 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	if err != nil {
 		t.Fatal(err.Error())
 	}
+
+	defer func() {
+		for _, id := range sim.IDs {
+			deliveries[id].PrintCounters(id)
+		}
+		// for id, delivery := range deliveries {
+		// 	delivery.PrintCounters(id)
+		// }
+	}()
+
 	stores = make(map[discover.NodeID]storage.ChunkStore)
 	deliveries = make(map[discover.NodeID]*Delivery)
 	for i, id := range sim.IDs {
@@ -91,14 +101,16 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	}
 
 	// collect hashes in po 1 from all nodes
-	var hashes []storage.Key
+	hashes := make([][]storage.Key, nodes)
 	dbs := make([]*storage.DBAPI, nodes)
 	for i := 0; i < nodes; i++ {
 		dbs[i] = storage.NewDBAPI(sim.Stores[i].(*storage.LocalStore))
 	}
+	totalHashes := 0
 	for i := 1; i < nodes; i++ {
 		dbs[i].Iterator(0, math.MaxUint64, po, func(key storage.Key, index uint64) bool {
-			hashes = append(hashes, key)
+			hashes[i] = append(hashes[i], key)
+			totalHashes++
 			return true
 		})
 	}
@@ -149,15 +161,28 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		}
 
 		var found int
-		total := len(hashes)
-		for _, key := range hashes {
-			_, err := dbs[0].Get(key)
-			if err == nil {
-				found++
+		for i, n := range hashes {
+			for _, key := range n {
+				chunk, err := dbs[0].Get(key)
+				if err == storage.ErrFetching {
+					<-chunk.ReqC
+					found++
+				} else if err == nil {
+					found++
+				}
+
+				log.Error("staring dbs check", "key", key)
+				for j := i; j > 0; j-- {
+					_, err := dbs[j].Get(key)
+					if err != nil {
+						log.Error("get from node", "node", sim.IDs[j], "nodeID", j, "key", key.Hex(), "err", err)
+						break
+					}
+				}
 			}
 		}
-		log.Error("sync check", "bin", po, "found", found, "total", total)
-		pass := found == total
+		log.Error("sync check", "bin", po, "found", found, "total", totalHashes)
+		pass := found == totalHashes
 		if !pass {
 			return false, nil
 		}
@@ -175,7 +200,10 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		},
 	}
 	startedAt := time.Now()
-	result, err := sim.Run(conf)
+	timeout := 4 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	result, err := sim.Run(ctx, conf)
 	finishedAt := time.Now()
 	if err != nil {
 		t.Fatalf("Setting up simulation failed: %v", err)

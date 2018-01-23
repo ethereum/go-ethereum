@@ -106,7 +106,6 @@ func (self *LocalStore) Put(chunk *Chunk) {
 // ChunkStores are remote and can have long latency
 func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 	chunk, err = self.memStore.Get(key)
-
 	if err == nil {
 		if chunk.ReqC != nil {
 			select {

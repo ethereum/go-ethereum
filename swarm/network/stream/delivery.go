@@ -33,11 +33,14 @@ const (
 )
 
 type Delivery struct {
-	db       *storage.DBAPI
-	overlay  network.Overlay
-	receiveC chan *ChunkDeliveryMsg
-	getPeer  func(discover.NodeID) *Peer
-	quit     chan struct{}
+	db          *storage.DBAPI
+	overlay     network.Overlay
+	receiveC    chan *ChunkDeliveryMsg
+	getPeer     func(discover.NodeID) *Peer
+	quit        chan struct{}
+	counterIn   int
+	counterDone int
+	counterHash int
 }
 
 func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
@@ -159,6 +162,7 @@ type ChunkDeliveryMsg struct {
 }
 
 func (d *Delivery) handleChunkDeliveryMsg(req *ChunkDeliveryMsg) error {
+	d.counterIn++
 	d.receiveC <- req
 	return nil
 }
@@ -182,10 +186,11 @@ R:
 		chunk.SData = req.SData
 		d.db.Put(chunk)
 		log.Warn("reecived delivery", "hash", chunk.Key)
-		chunk.WaitToStore()
-		log.Warn("received delivery stored", "hash", chunk.Key)
 		close(chunk.ReqC)
+		chunk.WaitToStore()
+		//log.Warn("received delivery stored", "hash", chunk.Key)
 		log.Warn("received delivery requesters notified", "hash", chunk.Key)
+		d.counterDone++
 	}
 }
 
@@ -219,4 +224,13 @@ func (d *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...
 		return err
 	}
 	return errors.New("no peer found")
+}
+
+func (d *Delivery) PrintCounters(id discover.NodeID) {
+	if d.counterHash != d.counterDone {
+		log.Error(fmt.Sprintf("delivery %s: HASH and DONE not the same", id))
+	}
+	log.Error(fmt.Sprintf("delivery %s chunks hash: %d", id, d.counterHash))
+	log.Error(fmt.Sprintf("delivery %s chunks in: %d", id, d.counterIn))
+	log.Error(fmt.Sprintf("delivery %s chunks done: %d", id, d.counterDone))
 }

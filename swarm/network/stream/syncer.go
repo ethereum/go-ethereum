@@ -75,7 +75,9 @@ func RegisterSwarmSyncerServer(streamer *Registry, db *storage.DBAPI) {
 // GetSection retrieves the actual chunk from localstore
 func (s *SwarmSyncerServer) GetData(key []byte) []byte {
 	chunk, err := s.db.Get(storage.Key(key))
-	if err != nil {
+	if err == storage.ErrFetching {
+		<-chunk.ReqC
+	} else if err != nil {
 		return nil
 	}
 	return chunk.SData
