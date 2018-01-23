@@ -3,9 +3,7 @@ package influxdb
 import (
 	"fmt"
 	"log"
-	"math"
 	uurl "net/url"
-	"sort"
 	"time"
 
 	metrics "github.com/ethersphere/go-metrics"
@@ -197,67 +195,18 @@ func (r *reporter) send() error {
 			})
 		case metrics.ResettingTimer:
 			t := metric.Snapshot()
-			sort.Sort(Int64Slice(t.Values()))
 
-			val := t.Values()
-			count := len(val)
-			if count > 0 {
-				min := val[0]
-				max := val[count-1]
-
-				cumulativeValues := make([]int64, count)
-				cumulativeValues[0] = min
-				for i := 1; i < count; i++ {
-					cumulativeValues[i] = val[i] + cumulativeValues[i-1]
-				}
-
-				percentiles := map[string]float64{
-					"50": 50,
-					"95": 95,
-					"99": 99,
-				}
-
-				ps := []int64{}
-
-				thresholdBoundary := max
-
-				for _, pct := range percentiles {
-					if count > 1 {
-						var abs float64
-						if pct >= 0 {
-							abs = pct
-						} else {
-							abs = 100 + pct
-						}
-						// poor man's math.Round(x):
-						// math.Floor(x + 0.5)
-						indexOfPerc := int(math.Floor(((abs / 100.0) * float64(count)) + 0.5))
-						if pct >= 0 {
-							indexOfPerc -= 1 // index offset=0
-						}
-						thresholdBoundary = val[indexOfPerc]
-					}
-
-					if pct > 0 {
-						ps = append(ps, thresholdBoundary)
-						//fmt.Fprintf(w, "%s.%s.upper_%s %d %d\n", c.Prefix, name, k, thresholdBoundary, now)
-					} else {
-						ps = append(ps, thresholdBoundary)
-						//fmt.Fprintf(w, "%s.%s.lower_%s %d %d\n", c.Prefix, name, k, thresholdBoundary, now)
-					}
-				}
-
-				sum := cumulativeValues[count-1]
-				mean := float64(sum) / float64(count)
-
+			if len(t.Values()) > 0 {
+				ps := t.Percentiles([]float64{50, 95, 99})
+				val := t.Values()
 				pts = append(pts, client.Point{
 					Measurement: fmt.Sprintf("%s%s.span", namespace, name),
 					Tags:        r.tags,
 					Fields: map[string]interface{}{
-						"count": count,
-						"max":   max,
-						"mean":  mean,
-						"min":   min,
+						"count": len(val),
+						"max":   val[len(val)-1],
+						"mean":  t.Mean(),
+						"min":   val[0],
 						"p50":   ps[0],
 						"p95":   ps[1],
 						"p99":   ps[2],
@@ -265,7 +214,6 @@ func (r *reporter) send() error {
 					Time: now,
 				})
 			}
-
 		}
 	})
 
@@ -277,10 +225,3 @@ func (r *reporter) send() error {
 	_, err := r.client.Write(bps)
 	return err
 }
-
-// Int64Slice attaches the methods of sort.Interface to []int64, sorting in increasing order.
-type Int64Slice []int64
-
-func (s Int64Slice) Len() int           { return len(s) }
-func (s Int64Slice) Less(i, j int) bool { return s[i] < s[j] }
-func (s Int64Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }

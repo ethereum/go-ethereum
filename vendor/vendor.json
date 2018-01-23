@@ -103,24 +103,24 @@
 			"path": "github.com/elastic/gosigar/sys/windows",
 			"revision": "a3814ce5008e612a0c6d027608b54e1d0d9a5613",
 			"revisionTime": "2018-01-22T22:25:45Z"
-    },
-    {
-			"checksumSHA1": "Cm/xumUDA/BVr4sq7qglyVpt/3M=",
+		},
+		{
+			"checksumSHA1": "euH8WdPZ2UYezUo63Crjr4jV8cg=",
 			"path": "github.com/ethersphere/go-metrics",
-			"revision": "9551ad5c1c4abf784761d7752fb0e8cc8fbb2181",
-			"revisionTime": "2018-01-17T12:19:44Z"
+			"revision": "d68fcccfa6ce12c95ade707b49df66eb547b00c4",
+			"revisionTime": "2018-01-23T14:04:19Z"
 		},
 		{
-			"checksumSHA1": "xn/yylagVIjYcCn/evHHRuHX0HU=",
+			"checksumSHA1": "hFrrqG1jsym1R/c6evBUKbfFM30=",
 			"path": "github.com/ethersphere/go-metrics-influxdb",
-			"revision": "4cbc106280fb1288d93666f641520df9c24b1b88",
-			"revisionTime": "2018-01-17T12:28:20Z"
+			"revision": "32cb23a5aafaba2bb6c8f089d85818e602d1f554",
+			"revisionTime": "2018-01-23T10:12:09Z"
 		},
 		{
-			"checksumSHA1": "1gQE3VEX4HYb/xN2gyLm56FBGPc=",
+			"checksumSHA1": "fS9rgvbZFRui1UiI2hg0A8vDJGc=",
 			"path": "github.com/ethersphere/go-metrics/exp",
-			"revision": "9551ad5c1c4abf784761d7752fb0e8cc8fbb2181",
-			"revisionTime": "2018-01-17T12:19:44Z"
+			"revision": "d68fcccfa6ce12c95ade707b49df66eb547b00c4",
+			"revisionTime": "2018-01-23T14:04:19Z"
 		},
 		{
 			"checksumSHA1": "7oFpbmDfGobwKsFLIf6wMUvVoKw=",
@@ -229,6 +229,18 @@
 			"path": "github.com/influxdata/influxdb/client",
 			"revision": "a55dd0f50edd14c9c798d3564189eb4f53914309",
 			"revisionTime": "2017-10-09T17:24:46Z"
+		},
+		{
+			"checksumSHA1": "O4XpbSNeUhSIMD2FWtQximJiFIs=",
+			"path": "github.com/influxdata/influxdb/client/v2",
+			"revision": "b36b9f109f2da91c8941679caf5356e08eee0b2b",
+			"revisionTime": "2018-01-17T01:42:09Z"
+		},
+		{
+			"checksumSHA1": "cfumoC9gHEUROd+fA8qK3WLFAZQ=",
+			"path": "github.com/influxdata/influxdb/models",
+			"revision": "b36b9f109f2da91c8941679caf5356e08eee0b2b",
+			"revisionTime": "2018-01-17T01:42:09Z"
 		},
 		{
 			"checksumSHA1": "vTGKMIfiMwz43y5bsgx9PrL+AVw=",
