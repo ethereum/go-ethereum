@@ -299,36 +299,12 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 			s.BadRequest(w, r, fmt.Sprintf("Cannot parse frequency parameter: %v", err))
 			return
 		}
-		err = s.api.ResourceCreate(r.uri.Addr, frequency)
+		key, err := s.api.ResourceCreate(r.uri.Addr, frequency)
 		if err != nil {
 			s.Error(w, r, fmt.Errorf("Resource creation failed: %v", err))
 			return
 		}
-		manifestKey, err := s.api.NewManifest()
-		if err != nil {
-			s.Error(w, r, fmt.Errorf("create manifest err: %v", err))
-			return
-		}
-		newKey, err := s.updateManifest(manifestKey, func(mw *api.ManifestWriter) error {
-			key, err := mw.AddEntry(bytes.NewReader([]byte(r.uri.Addr)), &api.ManifestEntry{
-				Path:        r.uri.Addr,
-				ContentType: api.ResourceContentType,
-				Mode:        0644,
-				Size:        int64(len(r.uri.Addr)),
-				ModTime:     time.Now(),
-			})
-			if err != nil {
-				return err
-			}
-			s.logDebug("resource manifest for for %s stored", key.Log())
-			return nil
-		})
-		if err != nil {
-			s.Error(w, r, fmt.Errorf("update manifest err: %v", err))
-			return
-		}
-		log.Debug("manifests", "new", newKey, "old", manifestKey)
-		outdata = fmt.Sprintf("%s", newKey)
+		outdata = key.Hex()
 	}
 
 	data, err := ioutil.ReadAll(r.Body)
@@ -338,15 +314,17 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	}
 	_, _, _, err = s.api.ResourceUpdate(r.uri.Addr, data)
 	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
+		s.Error(w, r, fmt.Errorf("Update resource failed: %v", err))
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	if outdata != "" {
-		w.Header().Set("Content-type", "text/plain")
-		fmt.Fprintf(w, outdata)
+		w.Header().Add("Content-type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, outdata)
+		return
 	}
+	w.WriteHeader(http.StatusOK)
 }
 
 // Retrieve mutable resource updates:
@@ -462,21 +440,6 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 
 	switch {
 	case r.uri.Raw():
-		m := &api.Manifest{}
-		sz, err := reader.Size(nil)
-		if err == nil {
-			b := make([]byte, sz)
-			reader.Read(b)
-			err = json.Unmarshal(b, m)
-			if err == nil {
-				if len(m.Entries) > 0 {
-					if m.Entries[0].ContentType == api.ResourceContentType {
-						s.handleGetResource(w, r, m.Entries[0].Path)
-						return
-					}
-				}
-			}
-		}
 		// allow the request to overwrite the content type using a query
 		// parameter
 		contentType := "application/octet-stream"

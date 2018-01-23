@@ -82,7 +82,7 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 		Server: srv,
 		Dpa:    dpa,
 		dir:    dir,
-		hasher: storage.MakeHashFunc(storage.SHA3Hash)(),
+		Hasher: storage.MakeHashFunc(storage.SHA3Hash)(),
 		cleanup: func() {
 			srv.Close()
 			rh.Close()
@@ -95,7 +95,7 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 
 type TestSwarmServer struct {
 	*httptest.Server
-	hasher  storage.SwarmHash
+	Hasher  storage.SwarmHash
 	Dpa     *storage.DPA
 	dir     string
 	cleanup func()

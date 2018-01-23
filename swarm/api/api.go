@@ -387,9 +387,10 @@ func (self *Api) ResourceLookup(name string, period uint32, version uint32) (sto
 	return self.resource.GetContent(name)
 }
 
-func (self *Api) ResourceCreate(name string, frequency uint64) (err error) {
-	_, err = self.resource.NewResource(name, frequency)
-	return err
+func (self *Api) ResourceCreate(name string, frequency uint64) (storage.Key, error) {
+	rsrc, err := self.resource.NewResource(name, frequency)
+	h := rsrc.NameHash()
+	return storage.Key(h[:]), err
 }
 
 func (self *Api) ResourceUpdate(name string, data []byte) (storage.Key, uint32, uint32, error) {

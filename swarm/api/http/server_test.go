@@ -48,6 +48,9 @@ func TestBzzResource(t *testing.T) {
 	// our mutable resource "name"
 	keybytes := make([]byte, common.HashLength)
 	copy(keybytes, []byte{42})
+	srv.Hasher.Reset()
+	srv.Hasher.Write([]byte(fmt.Sprintf("%x", keybytes)))
+	keybyteshash := fmt.Sprintf("%x", srv.Hasher.Sum(nil))
 
 	// data of update 1
 	databytes := make([]byte, 666)
@@ -64,9 +67,11 @@ func TestBzzResource(t *testing.T) {
 	} else if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
 	}
-	manifesthash, err := ioutil.ReadAll(resp.Body)
+	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
+	} else if !bytes.Equal(b, []byte(keybyteshash)) {
+		t.Fatalf("resource update hash mismatch, expected '%s' got '%s'", keybyteshash, b)
 	}
 	resp.Body.Close()
 
@@ -78,7 +83,7 @@ func TestBzzResource(t *testing.T) {
 	} else if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
 	} else if !bytes.Equal(databytes, b) {
@@ -95,22 +100,6 @@ func TestBzzResource(t *testing.T) {
 	} else if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Update returned %d", resp.Status)
 	}
-
-	// get latest update (1.2) through swarm manifest
-	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, manifesthash)
-	resp, err = http.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	} else if resp.StatusCode != http.StatusOK {
-		t.Fatalf("err %s", resp.Status)
-	}
-	b, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	} else if !bytes.Equal(data, b) {
-		t.Fatalf("Expected body '%x', got '%x'", data, b)
-	}
-	resp.Body.Close()
 
 	// get latest update (1.2) through resource directly
 	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)

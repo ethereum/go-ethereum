@@ -52,6 +52,10 @@ func (self *resource) isSynced() bool {
 	return !self.updated.IsZero()
 }
 
+func (self *resource) NameHash() common.Hash {
+	return self.nameHash
+}
+
 // Implement to activate validation of resource updates
 // Specifically signing data and verification of signatures
 type ResourceValidator interface {
@@ -178,7 +182,9 @@ func NewResourceHandler(datadir string, cloudStore CloudStore, ethClient ethApi,
 			defer rh.hashPool.Put(hasher)
 			hasher.Reset()
 			hasher.Write([]byte(name))
-			return common.BytesToHash(hasher.Sum(nil))
+			hashval := common.BytesToHash(hasher.Sum(nil))
+			log.Debug("generic namehasher", "name", name, "hash", hashval)
+			return hashval
 		}
 	}
 
