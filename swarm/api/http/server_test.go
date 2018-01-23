@@ -64,13 +64,15 @@ func TestBzzResource(t *testing.T) {
 	resp, err := http.Post(url, "application/octet-stream", bytes.NewReader(databytes))
 	if err != nil {
 		t.Fatal(err)
-	} else if resp.StatusCode != http.StatusOK {
+	}
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
 	}
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
-	} else if !bytes.Equal(b, []byte(keybyteshash)) {
+	}
+	if !bytes.Equal(b, []byte(keybyteshash)) {
 		t.Fatalf("resource update hash mismatch, expected '%s' got '%s'", keybyteshash, b)
 	}
 	resp.Body.Close()
@@ -80,13 +82,15 @@ func TestBzzResource(t *testing.T) {
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
-	} else if resp.StatusCode != http.StatusOK {
+	}
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
 	}
 	b, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
-	} else if !bytes.Equal(databytes, b) {
+	}
+	if !bytes.Equal(databytes, b) {
 		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
 	}
 	resp.Body.Close()
@@ -97,7 +101,8 @@ func TestBzzResource(t *testing.T) {
 	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
-	} else if resp.StatusCode != http.StatusOK {
+	}
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Update returned %d", resp.Status)
 	}
 
@@ -106,13 +111,15 @@ func TestBzzResource(t *testing.T) {
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
-	} else if resp.StatusCode != http.StatusOK {
+	}
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
 	}
 	b, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
-	} else if !bytes.Equal(data, b) {
+	}
+	if !bytes.Equal(data, b) {
 		t.Fatalf("Expected body '%x', got '%x'", data, b)
 	}
 	resp.Body.Close()

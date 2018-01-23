@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -37,7 +38,11 @@ var (
 
 func init() {
 	var err error
-	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
+	verbose := flag.Bool("v", false, "verbose")
+	flag.Parse()
+	if *verbose {
+		log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
+	}
 	safeName, err = ToSafeName(domainName)
 	if err != nil {
 		panic(err)

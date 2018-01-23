@@ -703,7 +703,7 @@ func newUpdateChunk(key Key, signature *Signature, period uint32, version uint32
 	datalength := len(data)
 
 	chunk := NewChunk(key, nil)
-	chunk.SData = make([]byte, 4+signaturelength+headerlength+datalength)
+	chunk.SData = make([]byte, 4+signaturelength+headerlength+datalength) // initial 4 are uint16 length descriptors for headerlength and datalength
 
 	// data header length does NOT include the header length prefix bytes themselves
 	cursor := 0
