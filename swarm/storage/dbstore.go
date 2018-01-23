@@ -601,7 +601,9 @@ func (s *DbStore) writeBatches() {
 		s.lock.Unlock()
 		err := s.writeBatch(b, e, d, a)
 		// TODO: set this error on the batch, then tell the chunk
-		log.Trace(fmt.Sprintf("DbStore: spawn batch write (%d chunks): %v", b.Len(), err))
+		if err != nil {
+			log.Error(fmt.Sprintf("DbStore: spawn batch write (%d chunks): %v", b.Len(), err))
+		}
 		close(c)
 		if e >= s.capacity {
 			log.Trace(fmt.Sprintf("DbStore: collecting garbage...(%d chunks)", e))

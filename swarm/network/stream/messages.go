@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	bv "github.com/ethereum/go-ethereum/swarm/network/bitvector"
@@ -130,6 +131,19 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 			}(wait)
 		}
 	}
+	// done := make(chan bool)
+	// go func() {
+	// 	wg.Wait()
+	// 	close(done)
+	// }()
+	// go func() {
+	// 	select {
+	// 	case <-done:
+	// 		s.next <- s.batchDone(p, req, hashes)
+	// 	case <-time.After(1 * time.Second):
+	// 		p.Drop(errors.New("timeout waiting for batch to be delivered"))
+	// 	}
+	// }()
 	go func() {
 		wg.Wait()
 		s.next <- s.batchDone(p, req, hashes)
@@ -154,6 +168,9 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	}
 	go func() {
 		select {
+		case <-time.After(1 * time.Second):
+			p.Drop(errors.New("timeout waiting for batch to be delivered"))
+			return
 		case err := <-s.next:
 			if err != nil {
 				p.Drop(err)
@@ -196,7 +213,12 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	}
 	hashes := s.currentBatch
 	// launch in go routine since GetBatch blocks until new hashes arrive
-	go p.SendOfferedHashes(s, req.From, req.To)
+	go func() {
+		if err := p.SendOfferedHashes(s, req.From, req.To); err != nil {
+			p.Drop(err)
+		}
+	}()
+	// go p.SendOfferedHashes(s, req.From, req.To)
 	l := len(hashes) / HashSize
 	want, err := bv.NewFromBytes(req.Want, l)
 	if err != nil {

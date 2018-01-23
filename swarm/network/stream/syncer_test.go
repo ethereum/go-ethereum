@@ -37,12 +37,12 @@ import (
 const dataChunkCount = 500
 
 func TestSyncerSimulation(t *testing.T) {
-	testSyncBetweenNodes(t, 2, 1, dataChunkCount, true, 1)
+	// testSyncBetweenNodes(t, 2, 1, dataChunkCount, true, 1)
 	// testSyncBetweenNodes(t, 2, 1, dataChunkCount, false, 1)
-	testSyncBetweenNodes(t, 4, 1, dataChunkCount, true, 1)
-	// testSyncBetweenNodes(t, 4, 1, dataChunkCount, false, 1)
-	testSyncBetweenNodes(t, 8, 1, dataChunkCount, true, 1)
-	// testSyncBetweenNodes(t, 8, 1, dataChunkCount, false, 1)
+	// testSyncBetweenNodes(t, 4, 1, dataChunkCount, true, 1)
+	// // testSyncBetweenNodes(t, 4, 1, dataChunkCount, false, 1)
+	// testSyncBetweenNodes(t, 8, 1, dataChunkCount, true, 1)
+	// // testSyncBetweenNodes(t, 8, 1, dataChunkCount, false, 1)
 	testSyncBetweenNodes(t, 16, 1, dataChunkCount, true, 1)
 	// testSyncBetweenNodes(t, 16, 1, dataChunkCount, false, 1)
 }
@@ -103,7 +103,9 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		})
 	}
 
+	errc := make(chan error, 1)
 	waitPeerErrC = make(chan error)
+	quitC := make(chan struct{})
 	action := func(ctx context.Context) error {
 		// need to wait till an aynchronous process registers the peers in streamer.peers
 		// that is used by Subscribe
@@ -122,6 +124,10 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		// each node Subscribes to each other's swarmChunkServerStreamName
 		j := 0
 		return sim.CallClient(func(client *rpc.Client) error {
+			err := streamTesting.WatchDisconnections(sim.IDs[j], client, errc, quitC)
+			if err != nil {
+				return err
+			}
 			ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 			defer cancel()
 			j++
@@ -135,6 +141,8 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		defer func() { checkC <- struct{}{} }()
 
 		select {
+		case err := <-errc:
+			return false, err
 		case <-ctx.Done():
 			return false, ctx.Err()
 		default:
@@ -148,13 +156,19 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 				found++
 			}
 		}
-		log.Debug("sync check", "bin", po, "found", found, "total", total)
-		return found == total, nil
+		log.Error("sync check", "bin", po, "found", found, "total", total)
+		pass := found == total
+		if !pass {
+			return false, nil
+		}
+		close(quitC)
+		return true, nil
+
 	}
 
 	conf.Step = &simulations.Step{
 		Action:  action,
-		Trigger: streamTesting.PivotTrigger(10*time.Millisecond, checkC, sim.IDs[0]),
+		Trigger: streamTesting.PivotTrigger(100*time.Millisecond, checkC, sim.IDs[0]),
 		Expect: &simulations.Expectation{
 			Nodes: sim.IDs[0:1],
 			Check: check,
