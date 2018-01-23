@@ -287,42 +287,6 @@ func TestUnpack(t *testing.T) {
 	}
 }
 
-var unpackMobileTests = []unpackTest{
-	{
-		def:  `[{"type": "uint256"}]`,
-		enc:  "0000000000000000000000000000000000000000000000000000000000000001",
-		want: big.NewInt(1),
-	},
-}
-
-func TestUnpackMobileOnly(t *testing.T) {
-	for i, test := range unpackMobileTests {
-		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			def := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
-			abi, err := JSON(strings.NewReader(def))
-			if err != nil {
-				t.Fatalf("invalid ABI definition %s: %v", def, err)
-			}
-			encb, err := hex.DecodeString(test.enc)
-			if err != nil {
-				t.Fatalf("invalid hex: %s" + test.enc)
-			}
-			outptr := reflect.New(reflect.TypeOf(test.want))
-			results := make([]interface{}, 1)
-			copy(results, []interface{}{outptr.Interface()})
-			err = abi.Unpack(&results, "method", encb)
-			if err := test.checkError(err); err != nil {
-				t.Errorf("test %d (%v) failed: %v", i, test.def, err)
-				return
-			}
-			out := outptr.Elem().Interface()
-			if !reflect.DeepEqual(test.want, out) {
-				t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, test.want, out)
-			}
-		})
-	}
-}
-
 type methodMultiOutput struct {
 	Int    *big.Int
 	String string
