@@ -48,7 +48,10 @@ const (
 	virtualMemorySampleLimit = 200 // Maximum number of virtual memory data samples
 	ingressSampleLimit       = 200 // Maximum number of ingress data samples
 	egressSampleLimit        = 200 // Maximum number of egress data samples
-	cpuSampleLimit           = 200 // Maximum number of cpu data samples
+	processCPUSampleLimit    = 200 // Maximum number of process cpu data samples
+	systemCPUSampleLimit     = 200 // Maximum number of system cpu data samples
+	readSampleLimit          = 200 // Maximum number of read data samples
+	writeSampleLimit         = 200 // Maximum number of write data samples
 )
 
 var nextID uint32 // Next connection id
@@ -76,18 +79,33 @@ type client struct {
 
 // New creates a new dashboard instance with the given configuration.
 func New(config *Config, commit string) (*Dashboard, error) {
-	return &Dashboard{
+	db := &Dashboard{
 		conns:  make(map[uint32]*client),
 		config: config,
 		quit:   make(chan chan error),
-		charts: &HomeMessage{
-			ActiveMemory:  ChartEntries{},
-			VirtualMemory: ChartEntries{},
-			Ingress:       ChartEntries{},
-			Egress:        ChartEntries{},
-		},
+		charts: new(HomeMessage),
 		commit: commit,
-	}, nil
+	}
+	now := time.Now()
+	db.charts.ActiveMemory = db.emptyChartEntries(now, activeMemorySampleLimit)
+	db.charts.VirtualMemory = db.emptyChartEntries(now, virtualMemorySampleLimit)
+	db.charts.Ingress = db.emptyChartEntries(now, ingressSampleLimit)
+	db.charts.Egress = db.emptyChartEntries(now, egressSampleLimit)
+	db.charts.ProcessCPU = db.emptyChartEntries(now, processCPUSampleLimit)
+	db.charts.SystemCPU = db.emptyChartEntries(now, systemCPUSampleLimit)
+	db.charts.Read = db.emptyChartEntries(now, readSampleLimit)
+	db.charts.Write = db.emptyChartEntries(now, writeSampleLimit)
+	return db, nil
+}
+
+func (db *Dashboard) emptyChartEntries(t time.Time, limit int) ChartEntries {
+	ce := make(ChartEntries, limit)
+	for i := 0; i < limit; i++ {
+		ce[i] = &ChartEntry{
+			Time: t.Add(-time.Duration(i) * db.config.Refresh),
+		}
+	}
+	return ce
 }
 
 // Protocols is a meaningless implementation of node.Service.
@@ -226,7 +244,10 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 			VirtualMemory: db.charts.VirtualMemory,
 			Ingress:       db.charts.Ingress,
 			Egress:        db.charts.Egress,
-			CPU:           db.charts.CPU,
+			ProcessCPU:    db.charts.ProcessCPU,
+			SystemCPU:     db.charts.SystemCPU,
+			Read:          db.charts.Read,
+			Write:         db.charts.Write,
 		},
 	}
 	// Start tracking the connection and drop at connection loss.
@@ -254,8 +275,14 @@ func (db *Dashboard) collectData() {
 
 	prevIn := metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Count()
 	prevOut := metrics.DefaultRegistry.Get("p2p/OutboundTraffic").(metrics.Meter).Count()
-	cpuUsage := gosigar.Cpu{}
-	cpuUsage.Get()
+	prevProcessCPUTime := getProcessCPUTime()
+	systemCPUUsage := gosigar.Cpu{}
+	systemCPUUsage.Get()
+	prevRead := metrics.DefaultRegistry.Get("eth/db/chaindata/compact/input").(metrics.Meter).Count()
+	prevWrite := metrics.DefaultRegistry.Get("eth/db/chaindata/compact/output").(metrics.Meter).Count()
+
+	frequency := float64(db.config.Refresh / time.Second)
+	numCPU := float64(runtime.NumCPU())
 
 	for {
 		select {
@@ -274,56 +301,63 @@ func (db *Dashboard) collectData() {
 			outboundTraffic := float64(curOut - prevOut)
 			prevOut = curOut
 
-			prevCPUUsage := cpuUsage
-			cpuUsage.Get()
-			deltaCPU := cpuUsage.Delta(prevCPUUsage)
+			curProcessCPUTime := getProcessCPUTime()
+			processCPUTime := curProcessCPUTime - prevProcessCPUTime
+			prevProcessCPUTime = curProcessCPUTime
+
+			prevSystemCPUUsage := systemCPUUsage
+			systemCPUUsage.Get()
+			deltaCPU := systemCPUUsage.Delta(prevSystemCPUUsage)
+
+			curRead := metrics.DefaultRegistry.Get("eth/db/chaindata/compact/input").(metrics.Meter).Count()
+			deltaRead := curRead - prevRead
+			prevRead = curRead
+
+			curWrite := metrics.DefaultRegistry.Get("eth/db/chaindata/compact/output").(metrics.Meter).Count()
+			deltaWrite := curWrite - prevWrite
+			prevWrite = curWrite
 
 			now := time.Now()
 			activeMemory := &ChartEntry{
 				Time:  now,
-				Value: float64(mem.Alloc),
+				Value: float64(mem.Alloc) / frequency,
 			}
 			virtualMemory := &ChartEntry{
 				Time:  now,
-				Value: float64(mem.Sys),
+				Value: float64(mem.Sys) / frequency,
 			}
 			ingress := &ChartEntry{
 				Time:  now,
-				Value: inboundTraffic,
+				Value: inboundTraffic / frequency,
 			}
 			egress := &ChartEntry{
 				Time:  now,
-				Value: outboundTraffic,
+				Value: outboundTraffic / frequency,
 			}
-			CPU := &ChartEntry{
+			processCPU := &ChartEntry{
 				Time:  now,
-				Value: float64(deltaCPU.User),
+				Value: processCPUTime / frequency / numCPU * 100,
 			}
-			first := 0
-			if len(db.charts.ActiveMemory) == activeMemorySampleLimit {
-				first = 1
+			systemCPU := &ChartEntry{
+				Time:  now,
+				Value: float64(deltaCPU.Sys+deltaCPU.User) / frequency / numCPU,
 			}
-			db.charts.ActiveMemory = append(db.charts.ActiveMemory[first:], activeMemory)
-			first = 0
-			if len(db.charts.VirtualMemory) == virtualMemorySampleLimit {
-				first = 1
+			read := &ChartEntry{
+				Time:  now,
+				Value: float64(deltaRead) / frequency,
 			}
-			db.charts.VirtualMemory = append(db.charts.VirtualMemory[first:], virtualMemory)
-			first = 0
-			if len(db.charts.Ingress) == ingressSampleLimit {
-				first = 1
+			write := &ChartEntry{
+				Time:  now,
+				Value: float64(deltaWrite) / frequency,
 			}
-			db.charts.Ingress = append(db.charts.Ingress[first:], ingress)
-			first = 0
-			if len(db.charts.Egress) == egressSampleLimit {
-				first = 1
-			}
-			db.charts.Egress = append(db.charts.Egress[first:], egress)
-			first = 0
-			if len(db.charts.CPU) == cpuSampleLimit {
-				first = 1
-			}
-			db.charts.CPU = append(db.charts.CPU[first:], CPU)
+			db.charts.ActiveMemory = append(db.charts.ActiveMemory[1:], activeMemory)
+			db.charts.VirtualMemory = append(db.charts.VirtualMemory[1:], virtualMemory)
+			db.charts.Ingress = append(db.charts.Ingress[1:], ingress)
+			db.charts.Egress = append(db.charts.Egress[1:], egress)
+			db.charts.ProcessCPU = append(db.charts.ProcessCPU[1:], processCPU)
+			db.charts.SystemCPU = append(db.charts.SystemCPU[1:], systemCPU)
+			db.charts.Read = append(db.charts.Read[1:], read)
+			db.charts.Write = append(db.charts.Read[1:], write)
 
 			db.sendToAll(&Message{
 				Home: &HomeMessage{
@@ -331,7 +365,10 @@ func (db *Dashboard) collectData() {
 					VirtualMemory: ChartEntries{virtualMemory},
 					Ingress:       ChartEntries{ingress},
 					Egress:        ChartEntries{egress},
-					CPU:           ChartEntries{CPU},
+					ProcessCPU:    ChartEntries{processCPU},
+					SystemCPU:     ChartEntries{systemCPU},
+					Read:          ChartEntries{read},
+					Write:         ChartEntries{write},
 				},
 			})
 		}

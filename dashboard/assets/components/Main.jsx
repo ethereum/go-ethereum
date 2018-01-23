@@ -20,7 +20,6 @@ import React, {Component} from 'react';
 
 import withStyles from 'material-ui/styles/withStyles';
 
-import Home from './Home';
 import {MENU} from '../common';
 import Footer from './Footer';
 import type {Content} from '../types/content';
@@ -59,21 +58,10 @@ class Main extends Component<Props> {
 		const {
 			classes, active, content, shouldUpdate,
 		} = this.props;
-		const {home} = content;
 
 		let children = null;
 		switch (active) {
 		case MENU.get('home').id:
-			children = (
-				<Home
-					activeMemory={home.activeMemory}
-					ingress={home.ingress}
-					egress={home.egress}
-					cpu={home.cpu}
-					shouldUpdate={shouldUpdate}
-				/>
-			);
-			break;
 		case MENU.get('chain').id:
 		case MENU.get('txpool').id:
 		case MENU.get('network').id:

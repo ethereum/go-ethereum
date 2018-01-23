@@ -45,6 +45,12 @@
 			"revisionTime": "2017-02-15T19:58:14Z"
 		},
 		{
+			"checksumSHA1": "QC55lHNOv1+UAL2xtIHw17MJ8J8=",
+			"path": "github.com/StackExchange/wmi",
+			"revision": "5d049714c4a64225c3c79a7cf7d02f7fb5b96338",
+			"revisionTime": "2018-01-16T20:38:02Z"
+		},
+		{
 			"checksumSHA1": "USkefO0g1U9mr+8hagv3fpSkrxg=",
 			"path": "github.com/aristanetworks/goarista/monotime",
 			"revision": "ea17b1a17847fb6e4c0a91de0b674704693469b0",
@@ -87,6 +93,18 @@
 			"revisionTime": "2016-05-12T03:30:02Z"
 		},
 		{
+			"checksumSHA1": "Fc8BCxCoQ7ZmghDT6X1cASR10Ec=",
+			"path": "github.com/elastic/gosigar",
+			"revision": "a3814ce5008e612a0c6d027608b54e1d0d9a5613",
+			"revisionTime": "2018-01-22T22:25:45Z"
+		},
+		{
+			"checksumSHA1": "qDsgp2kAeI9nhj565HUScaUyjU4=",
+			"path": "github.com/elastic/gosigar/sys/windows",
+			"revision": "a3814ce5008e612a0c6d027608b54e1d0d9a5613",
+			"revisionTime": "2018-01-22T22:25:45Z"
+		},
+		{
 			"checksumSHA1": "7oFpbmDfGobwKsFLIf6wMUvVoKw=",
 			"path": "github.com/fatih/color",
 			"revision": "5ec5d9d3c2cf82e9688b34e9bc27a94d616a7193",
@@ -97,6 +115,18 @@
 			"path": "github.com/gizak/termui",
 			"revision": "991cd3d3809135dc24daf6188dc6edcaf3d7d2d9",
 			"revisionTime": "2017-01-17T22:23:42Z"
+		},
+		{
+			"checksumSHA1": "gxV/cPPLkByTdY8y172t7v4qcZA=",
+			"path": "github.com/go-ole/go-ole",
+			"revision": "a41e3c4b706f6ae8dfbff342b06e40fa4d2d0506",
+			"revisionTime": "2017-11-10T16:07:06Z"
+		},
+		{
+			"checksumSHA1": "PArleDBtadu2qO4hJwHR8a3IOTA=",
+			"path": "github.com/go-ole/go-ole/oleutil",
+			"revision": "a41e3c4b706f6ae8dfbff342b06e40fa4d2d0506",
+			"revisionTime": "2017-11-10T16:07:06Z"
 		},
 		{
 			"checksumSHA1": "KZ3QD2QgUS4RcoKiA3mn5pSlJxQ=",
@@ -260,6 +290,12 @@
 			"path": "github.com/peterh/liner",
 			"revision": "a37ad39843113264dae84a5d89fcee28f50b35c6",
 			"revisionTime": "2017-09-02T20:46:57Z"
+		},
+		{
+			"checksumSHA1": "xCv4GBFyw07vZkVtKF/XrUnkHRk=",
+			"path": "github.com/pkg/errors",
+			"revision": "e881fd58d78e04cf6d0de1217f8707c8cc2249bc",
+			"revisionTime": "2017-12-16T07:03:16Z"
 		},
 		{
 			"checksumSHA1": "LuFv4/jlrmFNnDb/5SCSEPAM9vU=",

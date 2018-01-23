@@ -38,7 +38,10 @@ type HomeMessage struct {
 	VirtualMemory ChartEntries `json:"virtualMemory,omitempty"`
 	Ingress       ChartEntries `json:"ingress,omitempty"`
 	Egress        ChartEntries `json:"egress,omitempty"`
-	CPU           ChartEntries `json:"cpu,omitempty"`
+	ProcessCPU    ChartEntries `json:"processCPU,omitempty"`
+	SystemCPU     ChartEntries `json:"systemCPU,omitempty"`
+	Read          ChartEntries `json:"read,omitempty"`
+	Write         ChartEntries `json:"write,omitempty"`
 }
 
 type ChartEntries []*ChartEntry

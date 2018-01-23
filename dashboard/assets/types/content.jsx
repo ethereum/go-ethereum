@@ -36,7 +36,10 @@ export type Home = {
 	virtualMemory: ChartEntries,
 	ingress: ChartEntries,
 	egress: ChartEntries,
-	cpu: ChartEntries,
+	processCPU: ChartEntries,
+	systemCPU: ChartEntries,
+	read: ChartEntries,
+	write: ChartEntries,
 };
 
 export type ChartEntries = Array<ChartEntry>;

@@ -24,33 +24,53 @@ import {styles} from '../common';
 // multiplier multiplies a number by another.
 export const multiplier = <T>(by: number = 1) => (x: number) => x * by;
 
-// valuePlotter renders a tooltip, which shows the value of the payload.
-export const valuePlotter = <T>(text: string, mapper: (T => T) = multiplier(1)) => (payload: T) => {
+// percentPlotter renders a tooltip, which displays the value of the payload followed by a percent sign.
+export const percentPlotter = <T>(text: string, mapper: (T => T) = multiplier(1)) => (payload: T) => {
 	const p = mapper(payload);
+	if (typeof p !== 'number') {
+		return null;
+	}
 	return (
 		<Typography type='caption' color='inherit'>
-			<span style={styles.light}>{text}</span> {p}
+			<span style={styles.light}>{text}</span> {p.toFixed(2)} %
 		</Typography>
 	);
 };
 
 // unit contains the units for the bytePlotter.
-const unit = ['B', 'kB', 'MB', 'GB', 'TB', 'PB'];
-// bytePlotter renders a tooltip, which shows the simplified byte value of the payload followed by the unit.
+const unit = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+
+// simplifyBytes returns the simplified version of the given value followed by the unit.
+const simplifyBytes = (x: number) => {
+	let i = 0;
+	for (; x > 1024 && i < 5; i++) {
+		x /= 1024;
+	}
+	return x.toFixed(2).toString().concat(' ', unit[i]);
+};
+
+// bytePlotter renders a tooltip, which displays the payload as a byte value.
 export const bytePlotter = <T>(text: string, mapper: (T => T) = multiplier(1)) => (payload: T) => {
-	let p = mapper(payload);
+	const p = mapper(payload);
 	if (typeof p !== 'number') {
 		return null;
 	}
-
-	let i = 0;
-	for (; p > 1024 && i < 5; i++) {
-		p /= 1024;
-	}
-
 	return (
 		<Typography type='caption' color='inherit'>
-			<span style={styles.light}>{text}</span> {p.toFixed(2)} {unit[i]}
+			<span style={styles.light}>{text}</span> {simplifyBytes(p)}
+		</Typography>
+	);
+};
+
+// bytePlotter renders a tooltip, which displays the payload as a byte value followed by '/s'.
+export const bytePerSecPlotter = <T>(text: string, mapper: (T => T) = multiplier(1)) => (payload: T) => {
+	const p = mapper(payload);
+	if (typeof p !== 'number') {
+		return null;
+	}
+	return (
+		<Typography type='caption' color='inherit'>
+			<span style={styles.light}>{text}</span> {simplifyBytes(p)}/s
 		</Typography>
 	);
 };

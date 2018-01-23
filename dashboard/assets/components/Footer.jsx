@@ -24,7 +24,7 @@ import Grid from 'material-ui/Grid';
 import {ResponsiveContainer, AreaChart, Area, Tooltip} from 'recharts';
 
 import ChartRow from './ChartRow';
-import CustomTooltip, {bytePlotter, valuePlotter, multiplier} from './CustomTooltip';
+import CustomTooltip, {bytePlotter, bytePerSecPlotter, percentPlotter, multiplier} from './CustomTooltip';
 import {styles as commonStyles} from '../common';
 import type {Content} from '../types/content';
 
@@ -141,8 +141,8 @@ class Footer extends Component<Props> {
 					<ChartRow>
 						{this.doubleChart(
 							'all',
-							{data: home.cpu, tooltip: valuePlotter('CPU')},
-							{data: home.cpu, tooltip: valuePlotter('CPU', multiplier(-1))},
+							{data: home.processCPU, tooltip: percentPlotter('Process')},
+							{data: home.systemCPU, tooltip: percentPlotter('System', multiplier(-1))},
 						)}
 						{this.doubleChart(
 							'all',
@@ -151,8 +151,13 @@ class Footer extends Component<Props> {
 						)}
 						{this.doubleChart(
 							'all',
-							{data: home.ingress, tooltip: bytePlotter('Download')},
-							{data: home.egress, tooltip: bytePlotter('Upload', multiplier(-1))},
+							{data: home.read, tooltip: bytePerSecPlotter('Read')},
+							{data: home.write, tooltip: bytePerSecPlotter('Write', multiplier(-1))},
+						)}
+						{this.doubleChart(
+							'all',
+							{data: home.ingress, tooltip: bytePerSecPlotter('Download')},
+							{data: home.egress, tooltip: bytePerSecPlotter('Upload', multiplier(-1))},
 						)}
 					</ChartRow>
 				</Grid>
