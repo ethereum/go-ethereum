@@ -301,7 +301,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		}
 		key, err := s.api.ResourceCreate(r.Context(), r.uri.Addr, frequency)
 		if err != nil {
-			s.Error(w, r, fmt.Errorf("Resource creation failed: %v", err))
+			s.translateResourceError(w, r, "Resource creation fail", err)
 			return
 		}
 		outdata = key.Hex()
@@ -314,7 +314,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	}
 	_, _, _, err = s.api.ResourceUpdate(r.Context(), r.uri.Addr, data)
 	if err != nil {
-		s.Error(w, r, fmt.Errorf("Update resource failed: %v", err))
+		s.translateResourceError(w, r, "Mutable resource update fail", err)
 		return
 	}
 
@@ -325,6 +325,31 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supErr string, err error) {
+	code := 0
+	defaulterr := fmt.Errorf("%s: %v", supErr, err)
+	rsrcerr, ok := err.(*storage.ResourceError)
+	if !ok {
+		code = rsrcerr.Code()
+	}
+	switch code {
+	case storage.ErrInval:
+		s.BadRequest(w, r, defaulterr.Error())
+	case storage.ErrNoent, storage.ErrSync, storage.ErrNodata:
+		s.NotFound(w, r, defaulterr)
+		return
+	case storage.ErrAcces, storage.ErrNokey:
+		ShowError(w, &r.Request, defaulterr.Error(), http.StatusUnauthorized)
+		return
+	case storage.ErrFbig:
+		ShowError(w, &r.Request, defaulterr.Error(), http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	s.Error(w, r, defaulterr)
+	return
 }
 
 // Retrieve mutable resource updates:
@@ -372,7 +397,7 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name strin
 		return
 	}
 	if err != nil {
-		s.Error(w, r, fmt.Errorf("Mutable resource lookup failed: %v", err))
+		s.translateResourceError(w, r, "Mutable resource lookup fail", err)
 		return
 	}
 	log.Debug("Found update", "key", updateKey)
