@@ -107,10 +107,15 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		dbs[i] = storage.NewDBAPI(sim.Stores[i].(*storage.LocalStore))
 	}
 	totalHashes := 0
-	for i := 1; i < nodes; i++ {
+	hashCounts := make([]int, nodes)
+	for i := nodes - 1; i >= 0; i-- {
+		if i < nodes-1 {
+			hashCounts[i] = hashCounts[i+1]
+		}
 		dbs[i].Iterator(0, math.MaxUint64, po, func(key storage.Key, index uint64) bool {
 			hashes[i] = append(hashes[i], key)
 			totalHashes++
+			hashCounts[i]++
 			return true
 		})
 	}
@@ -160,29 +165,34 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		default:
 		}
 
-		var found int
-		for i, n := range hashes {
-			for _, key := range n {
-				chunk, err := dbs[0].Get(key)
-				if err == storage.ErrFetching {
-					<-chunk.ReqC
-					found++
-				} else if err == nil {
-					found++
-				}
-
-				log.Error("staring dbs check", "key", key)
-				for j := i; j > 0; j-- {
-					_, err := dbs[j].Get(key)
-					if err != nil {
-						log.Error("get from node", "node", sim.IDs[j], "nodeID", j, "key", key.Hex(), "err", err)
-						break
+		var pass bool
+		var i int
+		log.Error("staring dbs check")
+		for i = nodes - 1; i >= 0; i-- {
+			nodeHashCount := hashCounts[i]
+			nodeHashFound := 0
+			for j := i; j < nodes; j++ {
+				nodeHashes := hashes[j]
+				for _, key := range nodeHashes {
+					chunk, err := dbs[i].Get(key)
+					if err == storage.ErrFetching {
+						<-chunk.ReqC
+						nodeHashFound++
+					} else if err == nil {
+						nodeHashFound++
+					} else {
+						log.Error("not found", "index", i, "origin", j, "key", key.Hex(), "err", err)
 					}
 				}
 			}
+			log.Error("sync check", "node", sim.IDs[i], "index", i, "bin", po, "found", nodeHashFound, "total", nodeHashCount)
+			pass = nodeHashFound == nodeHashCount
+			if !pass {
+				break
+			}
 		}
-		log.Error("sync check", "bin", po, "found", found, "total", totalHashes)
-		pass := found == totalHashes
+		// log.Error("sync check", "bin", po, "found", found, "total", totalHashes)
+		// pass := found == totalHashes
 		if !pass {
 			return false, nil
 		}
