@@ -22,7 +22,6 @@ import (
 	"math/big"
 	"net/http/httptest"
 	"os"
-	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -116,13 +115,4 @@ func (c *testCloudStore) Deliver(*storage.Chunk) {
 }
 
 func (c *testCloudStore) Retrieve(*storage.Chunk) {
-}
-
-// for faking the rpc service, since we don't need the whole node stack
-type FakeRPC struct {
-	blocknumber uint64
-}
-
-func (r *FakeRPC) BlockNumber() (string, error) {
-	return strconv.FormatUint(r.blocknumber, 10), nil
 }

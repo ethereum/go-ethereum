@@ -23,16 +23,22 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
+
+func init() {
+	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
+}
 
 // \TODO if create -> get -> update -> get, the last get with return 1.1 because 1.2 retrieve is still pending
 func TestBzzResource(t *testing.T) {
@@ -64,6 +70,22 @@ func TestBzzResource(t *testing.T) {
 	}
 	resp.Body.Close()
 
+	// get latest update (1.1) through resource directly
+	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	} else if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	} else if !bytes.Equal(databytes, b) {
+		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
+	}
+	resp.Body.Close()
+
 	// update 2
 	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
 	data := []byte("foo")
@@ -82,7 +104,7 @@ func TestBzzResource(t *testing.T) {
 	} else if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
 	} else if !bytes.Equal(data, b) {

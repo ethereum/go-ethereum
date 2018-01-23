@@ -752,14 +752,16 @@ func (r *resourceChunkStore) Get(key Key) (*Chunk, error) {
 	select {
 	case <-t.C:
 		return nil, errors.New("timeout")
-	case <-chunk.C:
+	case <-chunk.Req.C:
 		log.Trace("Received resource update chunk", "peer", chunk.Req.Source)
 	}
 	return chunk, nil
 }
 
 func (r *resourceChunkStore) Put(chunk *Chunk) {
+	chunk.wg = &sync.WaitGroup{}
 	r.netStore.Put(chunk)
+	chunk.wg.Wait()
 }
 
 func (r *resourceChunkStore) Close() {
