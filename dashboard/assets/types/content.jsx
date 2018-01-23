@@ -34,12 +34,12 @@ export type General = {
 export type Home = {
 	activeMemory: ChartEntries,
 	virtualMemory: ChartEntries,
-	ingress: ChartEntries,
-	egress: ChartEntries,
+	networkIngress: ChartEntries,
+	networkEgress: ChartEntries,
 	processCPU: ChartEntries,
 	systemCPU: ChartEntries,
-	read: ChartEntries,
-	write: ChartEntries,
+	diskRead: ChartEntries,
+	diskWrite: ChartEntries,
 };
 
 export type ChartEntries = Array<ChartEntry>;

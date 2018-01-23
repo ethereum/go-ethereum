@@ -26509,12 +26509,12 @@ var _bundleJs = []byte((((((((((`!function(modules) {
         home: {
             activeMemory: [],
             virtualMemory: [],
-            ingress: [],
-            egress: [],
+            networkIngress: [],
+            networkEgress: [],
             processCPU: [],
             systemCPU: [],
-            read: [],
-            write: []
+            diskRead: [],
+            diskWrite: []
         },
         chain: {},
         txpool: {},
@@ -26531,12 +26531,12 @@ var _bundleJs = []byte((((((((((`!function(modules) {
         home: {
             activeMemory: appender(200),
             virtualMemory: appender(200),
-            ingress: appender(200),
-            egress: appender(200),
+            networkIngress: appender(200),
+            networkEgress: appender(200),
             processCPU: appender(200),
             systemCPU: appender(200),
-            read: appender(200),
-            write: appender(200)
+            diskRead: appender(200),
+            diskWrite: appender(200)
         },
         chain: null,
         txpool: null,
@@ -31303,16 +31303,16 @@ var _bundleJs = []byte((((((((((`!function(modules) {
                     data: home.virtualMemory,
                     tooltip: (0, _CustomTooltip.bytePlotter)("Virtual", (0, _CustomTooltip.multiplier)(-1))
                 }), this.doubleChart("all", {
-                    data: home.read,
-                    tooltip: (0, _CustomTooltip.bytePerSecPlotter)("Read")
+                    data: home.diskRead,
+                    tooltip: (0, _CustomTooltip.bytePerSecPlotter)("Disk Read")
                 }, {
-                    data: home.write,
-                    tooltip: (0, _CustomTooltip.bytePerSecPlotter)("Write", (0, _CustomTooltip.multiplier)(-1))
+                    data: home.diskWrite,
+                    tooltip: (0, _CustomTooltip.bytePerSecPlotter)("Disk Write", (0, _CustomTooltip.multiplier)(-1))
                 }), this.doubleChart("all", {
-                    data: home.ingress,
+                    data: home.networkIngress,
                     tooltip: (0, _CustomTooltip.bytePerSecPlotter)("Download")
                 }, {
-                    data: home.egress,
+                    data: home.networkEgress,
                     tooltip: (0, _CustomTooltip.bytePerSecPlotter)("Upload", (0, _CustomTooltip.multiplier)(-1))
                 }))), _react2.default.createElement(_Grid2.default, {
                     item: !0
@@ -38400,7 +38400,7 @@ func bundleJs() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "bundle.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
-	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0x2d, 0x78, 0x89, 0xa1, 0x7d, 0x2e, 0xa5, 0xe0, 0xc, 0x68, 0x80, 0x26, 0x5, 0xa7, 0x37, 0x59, 0x73, 0xe6, 0xf2, 0xeb, 0x42, 0x9, 0xb6, 0x84, 0x1, 0x69, 0xb7, 0x23, 0x67, 0x42, 0x97, 0xa5}}
+	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0xc0, 0x90, 0x71, 0xbf, 0x69, 0x84, 0xe8, 0x63, 0x9a, 0x6c, 0x14, 0x49, 0xbd, 0x8b, 0x72, 0x2b, 0xe2, 0xd7, 0xdf, 0x49, 0x80, 0xea, 0x49, 0x2e, 0x7d, 0x4f, 0x23, 0x6b, 0xef, 0xcd, 0xc4, 0xdb}}
 	return a, nil
 }
 

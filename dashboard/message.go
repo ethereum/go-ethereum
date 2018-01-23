@@ -34,14 +34,14 @@ type GeneralMessage struct {
 }
 
 type HomeMessage struct {
-	ActiveMemory  ChartEntries `json:"activeMemory,omitempty"`
-	VirtualMemory ChartEntries `json:"virtualMemory,omitempty"`
-	Ingress       ChartEntries `json:"ingress,omitempty"`
-	Egress        ChartEntries `json:"egress,omitempty"`
-	ProcessCPU    ChartEntries `json:"processCPU,omitempty"`
-	SystemCPU     ChartEntries `json:"systemCPU,omitempty"`
-	Read          ChartEntries `json:"read,omitempty"`
-	Write         ChartEntries `json:"write,omitempty"`
+	ActiveMemory   ChartEntries `json:"activeMemory,omitempty"`
+	VirtualMemory  ChartEntries `json:"virtualMemory,omitempty"`
+	NetworkIngress ChartEntries `json:"networkIngress,omitempty"`
+	NetworkEgress  ChartEntries `json:"networkEgress,omitempty"`
+	ProcessCPU     ChartEntries `json:"processCPU,omitempty"`
+	SystemCPU      ChartEntries `json:"systemCPU,omitempty"`
+	DiskRead       ChartEntries `json:"diskRead,omitempty"`
+	DiskWrite      ChartEntries `json:"diskWrite,omitempty"`
 }
 
 type ChartEntries []*ChartEntry

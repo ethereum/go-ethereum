@@ -151,13 +151,13 @@ class Footer extends Component<Props> {
 						)}
 						{this.doubleChart(
 							'all',
-							{data: home.read, tooltip: bytePerSecPlotter('Read')},
-							{data: home.write, tooltip: bytePerSecPlotter('Write', multiplier(-1))},
+							{data: home.diskRead, tooltip: bytePerSecPlotter('Disk Read')},
+							{data: home.diskWrite, tooltip: bytePerSecPlotter('Disk Write', multiplier(-1))},
 						)}
 						{this.doubleChart(
 							'all',
-							{data: home.ingress, tooltip: bytePerSecPlotter('Download')},
-							{data: home.egress, tooltip: bytePerSecPlotter('Upload', multiplier(-1))},
+							{data: home.networkIngress, tooltip: bytePerSecPlotter('Download')},
+							{data: home.networkEgress, tooltip: bytePerSecPlotter('Upload', multiplier(-1))},
 						)}
 					</ChartRow>
 				</Grid>
