@@ -350,7 +350,7 @@ func (s *ticketStore) nextFilteredTicket() (*ticketRef, time.Duration) {
 
 		regTime := now + mclock.AbsTime(wait)
 		topic := ticket.t.topics[ticket.idx]
-		if regTime >= s.tickets[topic].nextReg {
+		if s.tickets[topic] != nil && regTime >= s.tickets[topic].nextReg {
 			return ticket, wait
 		}
 		s.removeTicketRef(*ticket)
