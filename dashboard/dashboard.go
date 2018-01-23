@@ -99,6 +99,7 @@ func New(config *Config, commit string) (*Dashboard, error) {
 	return db, nil
 }
 
+// emptyChartEntries returns a ChartEntry array containing limit number of empty samples.
 func emptyChartEntries(t time.Time, limit int, refresh time.Duration) ChartEntries {
 	ce := make(ChartEntries, limit)
 	for i := 0; i < limit; i++ {
@@ -301,8 +302,7 @@ func (db *Dashboard) collectData() {
 				curSystemCPUUsage = systemCPUUsage
 				curDiskRead       = metrics.DefaultRegistry.Get("eth/db/chaindata/compact/input").(metrics.Meter).Count()
 				curDiskWrite      = metrics.DefaultRegistry.Get("eth/db/chaindata/compact/output").(metrics.Meter).Count()
-			)
-			var (
+
 				deltaNetworkIngress = float64(curNetworkIngress - prevNetworkIngress)
 				deltaNetworkEgress  = float64(curNetworkEgress - prevNetworkEgress)
 				deltaProcessCPUTime = curProcessCPUTime - prevProcessCPUTime
