@@ -24,6 +24,7 @@ const (
 	DbDirName           = "resource"
 	chunkSize           = 4096 // temporary until we implement DPA in the resourcehandler
 	defaultStoreTimeout = 4000 * time.Millisecond
+	hasherCount         = 8
 )
 
 type Signature [signatureLength]byte
@@ -130,9 +131,8 @@ type ResourceHandler struct {
 	validator    ResourceValidator
 	ethClient    ethApi
 	resources    map[string]*resource
-	hashLock     sync.Mutex
+	hashPool     sync.Pool
 	resourceLock sync.RWMutex
-	hasher       SwarmHash
 	nameHash     nameHashFunc
 	storeTimeout time.Duration
 }
@@ -159,23 +159,32 @@ func NewResourceHandler(datadir string, cloudStore CloudStore, ethClient ethApi,
 		ChunkStore:   newResourceChunkStore(path, hashfunc, localStore, cloudStore),
 		ethClient:    ethClient,
 		resources:    make(map[string]*resource),
-		hasher:       hashfunc(),
 		validator:    validator,
 		storeTimeout: defaultStoreTimeout,
 		ctx:          ctx,
 		cancelFunc:   cancel,
+		hashPool: sync.Pool{
+			New: func() interface{} {
+				return MakeHashFunc(SHA3Hash)()
+			},
+		},
 	}
 
 	if rh.validator != nil {
 		rh.nameHash = rh.validator.nameHash
 	} else {
 		rh.nameHash = func(name string) common.Hash {
-			rh.hashLock.Lock()
-			defer rh.hashLock.Unlock()
-			rh.hasher.Reset()
-			rh.hasher.Write([]byte(name))
-			return common.BytesToHash(rh.hasher.Sum(nil))
+			hasher := rh.hashPool.Get().(SwarmHash)
+			defer rh.hashPool.Put(hasher)
+			hasher.Reset()
+			hasher.Write([]byte(name))
+			return common.BytesToHash(hasher.Sum(nil))
 		}
+	}
+
+	for i := 0; i < hasherCount; i++ {
+		hashfunc := MakeHashFunc(SHA3Hash)()
+		rh.hashPool.Put(hashfunc)
 	}
 
 	return rh, nil
@@ -645,16 +654,16 @@ func (self *ResourceHandler) setResource(name string, rsrc *resource) {
 // used for chunk keys
 func (self *ResourceHandler) resourceHash(period uint32, version uint32, namehash common.Hash) Key {
 	// format is: hash(period|version|namehash)
-	self.hashLock.Lock()
-	defer self.hashLock.Unlock()
-	self.hasher.Reset()
+	hasher := self.hashPool.Get().(SwarmHash)
+	defer self.hashPool.Put(hasher)
+	hasher.Reset()
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint32(b, period)
-	self.hasher.Write(b)
+	hasher.Write(b)
 	binary.LittleEndian.PutUint32(b, version)
-	self.hasher.Write(b)
-	self.hasher.Write(namehash[:])
-	return self.hasher.Sum(nil)
+	hasher.Write(b)
+	hasher.Write(namehash[:])
+	return hasher.Sum(nil)
 }
 
 func (self *ResourceHandler) hasUpdate(name string, period uint32) bool {
@@ -793,10 +802,10 @@ func isSafeName(name string) bool {
 
 // convenience for creating signature hashes of update data
 func (self *ResourceHandler) keyDataHash(key Key, data []byte) common.Hash {
-	self.hashLock.Lock()
-	defer self.hashLock.Unlock()
-	self.hasher.Reset()
-	self.hasher.Write(key[:])
-	self.hasher.Write(data)
-	return common.BytesToHash(self.hasher.Sum(nil))
+	hasher := self.hashPool.Get().(SwarmHash)
+	defer self.hashPool.Put(hasher)
+	hasher.Reset()
+	hasher.Write(key[:])
+	hasher.Write(data)
+	return common.BytesToHash(hasher.Sum(nil))
 }

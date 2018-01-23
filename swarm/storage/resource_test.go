@@ -106,6 +106,9 @@ func TestResourceReverse(t *testing.T) {
 
 	// check that we can recover the owner account from the update chunk's signature
 	checksig, checkperiod, checkversion, checkname, checkdata, err := rh.parseUpdate(chunk.SData)
+	if err != nil {
+		t.Fatal(err)
+	}
 	checkdigest := rh.keyDataHash(chunk.Key, checkdata)
 	recoveredaddress, err := getAddressFromDataSig(checkdigest, *checksig)
 	if err != nil {
