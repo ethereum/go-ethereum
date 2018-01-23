@@ -156,6 +156,8 @@ type lru struct {
 	futureItem interface{}
 }
 
+// newlru create a new least-recently-used cache for ither the verification caches
+// or the mining datasets.
 func newlru(what string, maxItems int, new func(epoch uint64) interface{}) *lru {
 	if maxItems <= 0 {
 		maxItems = 1
@@ -203,6 +205,8 @@ type cache struct {
 	once  sync.Once // Ensures the cache is generated only once
 }
 
+// newCache creates a new ethash verification cache and returns it as a plain Go
+// interface to be usable in an LRU cache.
 func newCache(epoch uint64) interface{} {
 	return &cache{epoch: epoch}
 }
@@ -277,6 +281,8 @@ type dataset struct {
 	once    sync.Once // Ensures the cache is generated only once
 }
 
+// newDataset creates a new ethash mining dataset and returns it as a plain Go
+// interface to be usable in an LRU cache.
 func newDataset(epoch uint64) interface{} {
 	return &dataset{epoch: epoch}
 }

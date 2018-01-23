@@ -45,7 +45,7 @@ func calcCacheSize(epoch int) uint64 {
 // block number.
 func datasetSize(block uint64) uint64 {
 	epoch := int(block / epochLength)
-	if epoch < len(datasetSizes) {
+	if epoch < maxEpoch {
 		return datasetSizes[epoch]
 	}
 	return calcDatasetSize(epoch)
