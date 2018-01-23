@@ -23,24 +23,17 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-func init() {
-	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
-}
-
-// \TODO if create -> get -> update -> get, the last get with return 1.1 because 1.2 retrieve is still pending
 func TestBzzResource(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t)
 	defer srv.Close()
@@ -65,6 +58,7 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
 	}
@@ -75,7 +69,6 @@ func TestBzzResource(t *testing.T) {
 	if !bytes.Equal(b, []byte(keybyteshash)) {
 		t.Fatalf("resource update hash mismatch, expected '%s' got '%s'", keybyteshash, b)
 	}
-	resp.Body.Close()
 
 	// get latest update (1.1) through resource directly
 	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
@@ -83,6 +76,7 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
 	}
@@ -93,7 +87,6 @@ func TestBzzResource(t *testing.T) {
 	if !bytes.Equal(databytes, b) {
 		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
 	}
-	resp.Body.Close()
 
 	// update 2
 	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
@@ -102,6 +95,7 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Update returned %d", resp.Status)
 	}
@@ -112,6 +106,7 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp.Status)
 	}
@@ -122,7 +117,42 @@ func TestBzzResource(t *testing.T) {
 	if !bytes.Equal(data, b) {
 		t.Fatalf("Expected body '%x', got '%x'", data, b)
 	}
-	resp.Body.Close()
+
+	// get latest update (1.2) with specified period
+	url = fmt.Sprintf("%s/bzz-resource:/%x/1", srv.URL, keybytes)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", data, b)
+	}
+
+	// get first update (1.1) with specified period and version
+	url = fmt.Sprintf("%s/bzz-resource:/%x/1/1", srv.URL, keybytes)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, b) {
+		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
+	}
 }
 
 func TestBzzGetPath(t *testing.T) {

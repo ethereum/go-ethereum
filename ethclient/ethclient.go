@@ -76,12 +76,6 @@ type rpcBlock struct {
 	UncleHashes  []common.Hash    `json:"uncles"`
 }
 
-func (ec *Client) BlockNumber(ctx context.Context) (big.Int, error) {
-	number := &big.Int{}
-	err := ec.c.CallContext(ctx, &number, "eth_blockNumber")
-	return *number, err
-}
-
 func (ec *Client) getBlock(ctx context.Context, method string, args ...interface{}) (*types.Block, error) {
 	var raw json.RawMessage
 	err := ec.c.CallContext(ctx, &raw, method, args...)
