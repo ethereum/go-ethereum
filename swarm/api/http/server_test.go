@@ -69,6 +69,7 @@ func TestBzzResource(t *testing.T) {
 	if !bytes.Equal(b, []byte(keybyteshash)) {
 		t.Fatalf("resource update hash mismatch, expected '%s' got '%s'", keybyteshash, b)
 	}
+	t.Logf("creatreturn %v / %v", keybyteshash, b)
 
 	// get latest update (1.1) through resource directly
 	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
@@ -97,7 +98,7 @@ func TestBzzResource(t *testing.T) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Update returned %d", resp.Status)
+		t.Fatalf("Update returned %s", resp.Status)
 	}
 
 	// get latest update (1.2) through resource directly

@@ -625,7 +625,8 @@ func (self *ResourceHandler) Close() {
 }
 
 func (self *ResourceHandler) GetBlock() (uint64, error) {
-	ctx, _ := context.WithCancel(self.ctx)
+	ctx, cancel := context.WithCancel(self.ctx)
+	defer cancel()
 	blockheader, err := self.ethClient.HeaderByNumber(ctx, nil)
 	if err != nil {
 		return 0, err
