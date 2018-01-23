@@ -370,11 +370,7 @@ func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32,
 	var err error
 	if version != 0 {
 		if period == 0 {
-			currentblocknumber, err := self.resource.GetBlock(ctx)
-			if err != nil {
-				return nil, nil, fmt.Errorf("Could not determine latest block: %v", err)
-			}
-			period = self.resource.BlockToPeriod(name, currentblocknumber)
+			return nil, nil, storage.NewResourceError(storage.ErrInval, "Period can't be 0")
 		}
 		_, err = self.resource.LookupVersionByName(ctx, name, period, version, true)
 	} else if period != 0 {
