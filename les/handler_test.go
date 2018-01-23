@@ -444,7 +444,7 @@ func TestTransactionStatusLes2(t *testing.T) {
 
 	// test error status by sending an underpriced transaction
 	tx0, _ := types.SignTx(types.NewTransaction(0, acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, testBankKey)
-	test(tx0, true, txStatus{Status: core.TxStatusUnknown, Error: core.ErrUnderpriced})
+	test(tx0, true, txStatus{Status: core.TxStatusUnknown, Data: []byte(core.ErrUnderpriced.Error())})
 
 	tx1, _ := types.SignTx(types.NewTransaction(0, acc1Addr, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, testBankKey)
 	test(tx1, false, txStatus{Status: core.TxStatusUnknown}) // query before sending, should be unknown
@@ -480,8 +480,12 @@ func TestTransactionStatusLes2(t *testing.T) {
 
 	// check if their status is included now
 	block1hash := core.GetCanonicalHash(db, 1)
-	test(tx1, false, txStatus{Status: core.TxStatusIncluded, Lookup: &core.TxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 0}})
-	test(tx2, false, txStatus{Status: core.TxStatusIncluded, Lookup: &core.TxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 1}})
+
+	pos0, _ := rlp.EncodeToBytes(core.TxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 0})
+	pos1, _ := rlp.EncodeToBytes(core.TxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 1})
+
+	test(tx1, false, txStatus{Status: core.TxStatusIncluded, Data: pos0})
+	test(tx2, false, txStatus{Status: core.TxStatusIncluded, Data: pos1})
 
 	// create a reorg that rolls them back
 	gchain, _ = core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), ethash.NewFaker(), db, 2, func(i int, block *core.BlockGen) {})

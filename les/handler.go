@@ -1014,7 +1014,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		for i, stat := range stats {
 			if stat.Status == core.TxStatusUnknown {
 				if errs := pm.txpool.AddRemotes([]*types.Transaction{req.Txs[i]}); errs[0] != nil {
-					stats[i].Error = errs[0]
+					stats[i].Data = []byte(errs[0].Error())
 					continue
 				}
 				stats[i] = pm.txStatus([]common.Hash{hashes[i]})[0]
@@ -1055,7 +1055,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		p.Log().Trace("Received tx status response")
 		var resp struct {
 			ReqID, BV uint64
-			Status    []core.TxStatus
+			Status    []txStatus
 		}
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
@@ -1116,7 +1116,7 @@ func (pm *ProtocolManager) txStatus(hashes []common.Hash) []txStatus {
 		if stat == core.TxStatusUnknown {
 			if block, number, index := core.GetTxLookupEntry(pm.chainDb, hashes[i]); block != (common.Hash{}) {
 				stats[i].Status = core.TxStatusIncluded
-				stats[i].Lookup = &core.TxLookupEntry{BlockHash: block, BlockIndex: number, Index: index}
+				stats[i].Data, _ = rlp.EncodeToBytes(core.TxLookupEntry{BlockHash: block, BlockIndex: number, Index: index})
 			}
 		}
 	}
