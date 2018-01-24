@@ -63,6 +63,7 @@ type Config struct {
 	Cors            string
 	BzzAccount      string
 	BootNodes       string
+	privateKey      *ecdsa.PrivateKey
 }
 
 //create a default config with all parameters to set to defaults
@@ -113,5 +114,14 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 	if self.SwapEnabled {
 		self.Swap.Init(self.Contract, prvKey)
 	}
+	self.privateKey = prvKey
 	self.StoreParams.Init(self.Path)
+}
+
+func (self *Config) ShiftPrivateKey() (privKey *ecdsa.PrivateKey) {
+	if self.privateKey != nil {
+		privKey = self.privateKey
+		self.privateKey = nil
+	}
+	return privKey
 }

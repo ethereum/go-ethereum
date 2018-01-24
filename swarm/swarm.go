@@ -22,6 +22,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -93,7 +94,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	self = &Swarm{
 		config:     config,
 		backend:    backend,
-		privateKey: config.Swap.PrivateKey(),
+		privateKey: config.ShiftPrivateKey(),
 	}
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
@@ -143,7 +144,8 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 		}
 	}
 
-	// set up high level api
+	// SET UP high level api
+	fmt.Fprintf(os.Stderr, "privkey %v\nswap %v\nswapendabled %v\n", self.privateKey, config.Swap, config.SwapEnabled)
 	transactOpts := bind.NewKeyedTransactor(self.privateKey)
 
 	if ensClient == nil {
