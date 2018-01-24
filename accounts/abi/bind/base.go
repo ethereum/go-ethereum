@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 // SignerFn is a signer function callback when a contract requires a method to
@@ -55,6 +56,22 @@ type TransactOpts struct {
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 }
 
+// FilterOpts is the collection of options to fine tune filtering for events
+// within a bound contract.
+type FilterOpts struct {
+	Start uint64  // Start of the queried range
+	End   *uint64 // End of the range (nil = latest)
+
+	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
+}
+
+// WatchOpts is the collection of options to fine tune subscribing for events
+// within a bound contract.
+type WatchOpts struct {
+	Start   *uint64         // Start of the queried range (nil = latest)
+	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
+}
+
 // BoundContract is the base wrapper object that reflects a contract on the
 // Ethereum network. It contains a collection of methods that are used by the
 // higher level contract bindings to operate.
@@ -63,16 +80,18 @@ type BoundContract struct {
 	abi        abi.ABI            // Reflect based ABI to access the correct Ethereum methods
 	caller     ContractCaller     // Read interface to interact with the blockchain
 	transactor ContractTransactor // Write interface to interact with the blockchain
+	filterer   ContractFilterer   // Event filtering to interact with the blockchain
 }
 
 // NewBoundContract creates a low level contract interface through which calls
 // and transactions may be made through.
-func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller, transactor ContractTransactor) *BoundContract {
+func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller, transactor ContractTransactor, filterer ContractFilterer) *BoundContract {
 	return &BoundContract{
 		address:    address,
 		abi:        abi,
 		caller:     caller,
 		transactor: transactor,
+		filterer:   filterer,
 	}
 }
 
@@ -80,7 +99,7 @@ func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller
 // deployment address with a Go wrapper.
 func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, params ...interface{}) (common.Address, *types.Transaction, *BoundContract, error) {
 	// Otherwise try to deploy the contract
-	c := NewBoundContract(common.Address{}, abi, backend, backend)
+	c := NewBoundContract(common.Address{}, abi, backend, backend, backend)
 
 	input, err := c.abi.Pack("", params...)
 	if err != nil {
@@ -225,6 +244,104 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	return signedTx, nil
 }
 
+// FilterLogs filters contract logs for past blocks, returning the necessary
+// channels to construct a strongly typed bound iterator on top of them.
+func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
+	// Don't crash on a lazy user
+	if opts == nil {
+		opts = new(FilterOpts)
+	}
+	// Append the event selector to the query parameters and construct the topic set
+	query = append([][]interface{}{{c.abi.Events[name].Id()}}, query...)
+
+	topics, err := makeTopics(query...)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Start the background filtering
+	logs := make(chan types.Log, 128)
+
+	config := ethereum.FilterQuery{
+		Addresses: []common.Address{c.address},
+		Topics:    topics,
+		FromBlock: new(big.Int).SetUint64(opts.Start),
+	}
+	if opts.End != nil {
+		config.ToBlock = new(big.Int).SetUint64(*opts.End)
+	}
+	/* TODO(karalabe): Replace the rest of the method below with this when supported
+	sub, err := c.filterer.SubscribeFilterLogs(ensureContext(opts.Context), config, logs)
+	*/
+	buff, err := c.filterer.FilterLogs(ensureContext(opts.Context), config)
+	if err != nil {
+		return nil, nil, err
+	}
+	sub, err := event.NewSubscription(func(quit <-chan struct{}) error {
+		for _, log := range buff {
+			select {
+			case logs <- log:
+			case <-quit:
+				return nil
+			}
+		}
+		return nil
+	}), nil
+
+	if err != nil {
+		return nil, nil, err
+	}
+	return logs, sub, nil
+}
+
+// WatchLogs filters subscribes to contract logs for future blocks, returning a
+// subscription object that can be used to tear down the watcher.
+func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
+	// Don't crash on a lazy user
+	if opts == nil {
+		opts = new(WatchOpts)
+	}
+	// Append the event selector to the query parameters and construct the topic set
+	query = append([][]interface{}{{c.abi.Events[name].Id()}}, query...)
+
+	topics, err := makeTopics(query...)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Start the background filtering
+	logs := make(chan types.Log, 128)
+
+	config := ethereum.FilterQuery{
+		Addresses: []common.Address{c.address},
+		Topics:    topics,
+	}
+	if opts.Start != nil {
+		config.FromBlock = new(big.Int).SetUint64(*opts.Start)
+	}
+	sub, err := c.filterer.SubscribeFilterLogs(ensureContext(opts.Context), config, logs)
+	if err != nil {
+		return nil, nil, err
+	}
+	return logs, sub, nil
+}
+
+// UnpackLog unpacks a retrieved log into the provided output structure.
+func (c *BoundContract) UnpackLog(out interface{}, event string, log types.Log) error {
+	if len(log.Data) > 0 {
+		if err := c.abi.Unpack(out, event, log.Data); err != nil {
+			return err
+		}
+	}
+	var indexed abi.Arguments
+	for _, arg := range c.abi.Events[event].Inputs {
+		if arg.Indexed {
+			indexed = append(indexed, arg)
+		}
+	}
+	return parseTopics(out, indexed, log.Topics[1:])
+}
+
+// ensureContext is a helper method to ensure a context is not nil, even if the
+// user specified it as such.
 func ensureContext(ctx context.Context) context.Context {
 	if ctx == nil {
 		return context.TODO()
