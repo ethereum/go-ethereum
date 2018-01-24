@@ -46,7 +46,7 @@ var (
 	apiPutFail           = metrics.NewCounter("api.put.fail")
 	apiGetCount          = metrics.NewCounter("api.get.count")
 	apiGetNotFound       = metrics.NewCounter("api.get.notfound")
-	apiGetHttp300        = metrics.NewCounter("api.get.http300")
+	apiGetHttp300        = metrics.NewCounter("api.get.http.300")
 	apiModifyCount       = metrics.NewCounter("api.modify.count")
 	apiModifyFail        = metrics.NewCounter("api.modify.fail")
 	apiAddFileCount      = metrics.NewCounter("api.addfile.count")
@@ -55,8 +55,8 @@ var (
 	apiRmFileFail        = metrics.NewCounter("api.removefile.fail")
 	apiAppendFileCount   = metrics.NewCounter("api.appendfile.count")
 	apiAppendFileFail    = metrics.NewCounter("api.appendfile.fail")
-	apiBuildDirTreeCount = metrics.NewCounter("api.builddirtree.fail")
-	apiBuildDirTreeFail  = metrics.NewCounter("api.builddirtree.count")
+	apiBuildDirTreeCount = metrics.NewCounter("api.builddirtree.count")
+	apiBuildDirTreeFail  = metrics.NewCounter("api.builddirtree.fail")
 )
 
 type Resolver interface {
@@ -295,7 +295,6 @@ func (self *Api) Modify(key storage.Key, path, contentHash, contentType string) 
 }
 
 func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Key, string, error) {
-
 	apiAddFileCount.Inc(1)
 
 	uri, err := Parse("bzz:/" + mhash)
@@ -346,7 +345,6 @@ func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver
 }
 
 func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (string, error) {
-
 	apiRmFileCount.Inc(1)
 
 	uri, err := Parse("bzz:/" + mhash)
@@ -388,7 +386,6 @@ func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (strin
 }
 
 func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, content []byte, oldKey storage.Key, offset int64, addSize int64, nameresolver bool) (storage.Key, string, error) {
-
 	apiAppendFileCount.Inc(1)
 
 	buffSize := offset + addSize
@@ -470,7 +467,6 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 }
 
 func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storage.Key, manifestEntryMap map[string]*manifestTrieEntry, err error) {
-
 	apiBuildDirTreeCount.Inc(1)
 
 	uri, err := Parse("bzz:/" + mhash)

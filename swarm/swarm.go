@@ -45,16 +45,14 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-
-	gometrics "github.com/rcrowley/go-metrics"
 )
 
 var (
-	runTimer       gometrics.Timer
 	startTime      time.Time
 	metricsTimeout = 5 * time.Second
 	startCounter   = metrics.NewCounter("stack,start")
 	stopCounter    = metrics.NewCounter("stack,stop")
+	uptimeGauge    = metrics.NewGauge("stack.uptime")
 	dbSizeGauge    = metrics.NewGauge("storage.db.chunks.size")
 	cacheSizeGauge = metrics.NewGauge("storage.db.cache.size")
 )
@@ -275,7 +273,6 @@ Start is called when the stack is started
 */
 // implements the node.Service interface
 func (self *Swarm) Start(srv *p2p.Server) error {
-	runTimer = metrics.NewTimer("stack,uptime")
 	startTime = time.Now()
 	connectPeer := func(url string) error {
 		node, err := discover.ParseNode(url)
@@ -342,7 +339,7 @@ func (self *Swarm) metricsLoop() {
 func (self *Swarm) sendMetrics() {
 	dbSizeGauge.Update(int64(self.lstore.DbCounter()))
 	cacheSizeGauge.Update(int64(self.lstore.CacheCounter()))
-	runTimer.UpdateSince(startTime)
+	uptimeGauge.Update(time.Since(startTime).Nanoseconds())
 }
 
 // implements the node.Service interface
@@ -360,7 +357,6 @@ func (self *Swarm) Stop() error {
 	}
 	self.sfs.Stop()
 	stopCounter.Inc(1)
-	runTimer.UpdateSince(startTime)
 	return err
 }
 

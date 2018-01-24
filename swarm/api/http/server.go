@@ -646,6 +646,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	requestCount.Inc(1)
 	startTime := time.Now()
 	defer requestTimer.UpdateSince(startTime)
+	defer metrics.NewResettingTimer("http.request.time_resetting").UpdateSince(startTime)
 	s.logDebug("HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, r.URL.Host, r.URL.Path, r.Referer(), r.Header.Get("Accept"))
 
 	uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
