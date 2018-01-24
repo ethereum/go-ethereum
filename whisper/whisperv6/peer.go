@@ -26,12 +26,14 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	set "gopkg.in/fatih/set.v0"
+
+	libp2pPeer "github.com/libp2p/go-libp2p-peer"
 )
 
 // peer represents a whisper protocol peer connection.
 type Peer struct {
 	host *Whisper
-	peer *p2p.Peer
+	pid  libp2pPeer.ID
 	ws   p2p.MsgReadWriter
 
 	trusted        bool
@@ -44,10 +46,10 @@ type Peer struct {
 }
 
 // newPeer creates a new whisper peer object, but does not run the handshake itself.
-func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
+func newPeer(host *Whisper, remote *libp2pPeer.ID, rw p2p.MsgReadWriter) *Peer {
 	return &Peer{
 		host:           host,
-		peer:           remote,
+		pid:            *remote,
 		ws:             rw,
 		trusted:        false,
 		powRequirement: 0.0,
@@ -60,13 +62,13 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 // into the network.
 func (p *Peer) start() {
 	go p.update()
-	log.Trace("start", "peer", p.ID())
+	log.Trace("start", "peer", p.pid)
 }
 
 // stop terminates the peer updater, stopping message forwarding to it.
 func (p *Peer) stop() {
 	close(p.quit)
-	log.Trace("stop", "peer", p.ID())
+	log.Trace("stop", "peer", p.pid)
 }
 
 // handshake sends the protocol initiation status message to the remote peer and
@@ -87,19 +89,19 @@ func (p *Peer) handshake() error {
 		return err
 	}
 	if packet.Code != statusCode {
-		return fmt.Errorf("peer [%x] sent packet %x before status packet", p.ID(), packet.Code)
+		return fmt.Errorf("peer [%x] sent packet %x before status packet", p.pid, packet.Code)
 	}
 	s := rlp.NewStream(packet.Payload, uint64(packet.Size))
 	_, err = s.List()
 	if err != nil {
-		return fmt.Errorf("peer [%x] sent bad status message: %v", p.ID(), err)
+		return fmt.Errorf("peer [%x] sent bad status message: %v", p.pid, err)
 	}
 	peerVersion, err := s.Uint()
 	if err != nil {
-		return fmt.Errorf("peer [%x] sent bad status message (unable to decode version): %v", p.ID(), err)
+		return fmt.Errorf("peer [%x] sent bad status message (unable to decode version): %v", p.pid, err)
 	}
 	if peerVersion != ProtocolVersion {
-		return fmt.Errorf("peer [%x]: protocol version mismatch %d != %d", p.ID(), peerVersion, ProtocolVersion)
+		return fmt.Errorf("peer [%x]: protocol version mismatch %d != %d", p.pid, peerVersion, ProtocolVersion)
 	}
 
 	// only version is mandatory, subsequent parameters are optional
@@ -107,7 +109,7 @@ func (p *Peer) handshake() error {
 	if err == nil {
 		pow := math.Float64frombits(powRaw)
 		if math.IsInf(pow, 0) || math.IsNaN(pow) || pow < 0.0 {
-			return fmt.Errorf("peer [%x] sent bad status message: invalid pow", p.ID())
+			return fmt.Errorf("peer [%x] sent bad status message: invalid pow", p.pid)
 		}
 		p.powRequirement = pow
 
@@ -116,7 +118,7 @@ func (p *Peer) handshake() error {
 		if err == nil {
 			sz := len(bloom)
 			if sz != bloomFilterSize && sz != 0 {
-				return fmt.Errorf("peer [%x] sent bad status message: wrong bloom filter size %d", p.ID(), sz)
+				return fmt.Errorf("peer [%x] sent bad status message: wrong bloom filter size %d", p.pid, sz)
 			}
 			if isFullNode(bloom) {
 				p.bloomFilter = nil
@@ -127,7 +129,7 @@ func (p *Peer) handshake() error {
 	}
 
 	if err := <-errc; err != nil {
-		return fmt.Errorf("peer [%x] failed to send status packet: %v", p.ID(), err)
+		return fmt.Errorf("peer [%x] failed to send status packet: %v", p.pid, err)
 	}
 	return nil
 }
@@ -147,7 +149,7 @@ func (p *Peer) update() {
 
 		case <-transmit.C:
 			if err := p.broadcast(); err != nil {
-				log.Trace("broadcast failed", "reason", err, "peer", p.ID())
+				log.Trace("broadcast failed", "reason", err, "peer", p.pid)
 				return
 			}
 
@@ -208,11 +210,6 @@ func (p *Peer) broadcast() error {
 		log.Trace("broadcast", "num. messages", len(bundle))
 	}
 	return nil
-}
-
-func (p *Peer) ID() []byte {
-	id := p.peer.ID()
-	return id[:]
 }
 
 func (p *Peer) notifyAboutPowRequirementChange(pow float64) error {

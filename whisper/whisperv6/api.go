@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,8 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
+
+	peer "github.com/libp2p/go-libp2p-peer"
 )
 
 const (
@@ -126,14 +128,32 @@ func (api *PublicWhisperAPI) SetBloomFilter(ctx context.Context, bloom hexutil.B
 	return true, api.w.SetBloomFilter(bloom)
 }
 
+// This is a helper for turning an address into a peer.ID. It
+// is temporary as there seems to be an official way to to it
+// with `Multiaddres`.
+func peerIDFromAddress(addr string) (peer.ID, error) {
+	comps := strings.Split(addr, "/")
+	var pid peer.ID
+	var err error
+	if comps[len(comps)-1] == "" && len(comps) > 1 {
+		pid, err = peer.IDFromString(comps[len(comps)-2])
+	} else {
+		pid, err = peer.IDFromString(comps[len(comps)-1])
+	}
+
+	if err != nil {
+		log.Error(fmt.Sprintf("Error getting id from enode: %s", err))
+	}
+
+	return pid, err
+}
+
 // MarkTrustedPeer marks a peer trusted, which will allow it to send historic (expired) messages.
 // Note: This function is not adding new nodes, the node needs to exists as a peer.
-func (api *PublicWhisperAPI) MarkTrustedPeer(ctx context.Context, enode string) (bool, error) {
-	n, err := discover.ParseNode(enode)
-	if err != nil {
-		return false, err
-	}
-	return true, api.w.AllowP2PMessagesFromPeer(n.ID[:])
+func (api *PublicWhisperAPI) MarkTrustedPeer(ctx context.Context, url string) (bool, error) {
+	pid, err := peerIDFromAddress(url)
+
+	return err == nil, api.w.AllowP2PMessagesFromPeer(pid)
 }
 
 // NewKeyPair generates a new public and private key pair for message decryption and encryption.
@@ -303,11 +323,11 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 
 	// send to specific node (skip PoW check)
 	if len(req.TargetPeer) > 0 {
-		n, err := discover.ParseNode(req.TargetPeer)
+		pid, err := peerIDFromAddress(req.TargetPeer)
 		if err != nil {
 			return false, fmt.Errorf("failed to parse target peer: %s", err)
 		}
-		return true, api.w.SendP2PMessage(n.ID[:], env)
+		return true, api.w.SendP2PMessage(pid, env)
 	}
 
 	// ensure that the message PoW meets the node's minimum accepted PoW
