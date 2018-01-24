@@ -1348,6 +1348,11 @@ func (bc *BlockChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []com
 	return bc.hc.GetBlockHashesFromHash(hash, max)
 }
 
+// GetBlockHashByNumber retrieves the block hash from the database by number.
+func (bc *BlockChain) GetBlockHashByNumber(number uint64) common.Hash {
+	return bc.hc.GetBlockHashByNumber(number)
+}
+
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
 func (bc *BlockChain) GetHeaderByNumber(number uint64) *types.Header {

@@ -370,10 +370,15 @@ func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
 	return ok
 }
 
+// GetBlockHashByNumber retrieves the block hash from the database by number.
+func (hc *HeaderChain) GetBlockHashByNumber(number uint64) common.Hash {
+	return GetCanonicalHash(hc.chainDb, number)
+}
+
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
 func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
-	hash := GetCanonicalHash(hc.chainDb, number)
+	hash := hc.GetBlockHashByNumber(number)
 	if hash == (common.Hash{}) {
 		return nil
 	}
