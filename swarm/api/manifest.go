@@ -69,6 +69,22 @@ func (a *Api) NewManifest() (storage.Key, error) {
 	return a.Store(bytes.NewReader(data), int64(len(data)), &sync.WaitGroup{})
 }
 
+// Manifest hack for supporting Mutable Resource Updates from the bzz: scheme
+// see swarm/api/api.go:Api.Get() for more information
+func (a *Api) NewResourceManifest(resourceKey string) (storage.Key, error) {
+	var manifest Manifest
+	entry := ManifestEntry{
+		Hash:        resourceKey,
+		ContentType: ResourceContentType,
+	}
+	manifest.Entries = append(manifest.Entries, entry)
+	data, err := json.Marshal(&manifest)
+	if err != nil {
+		return nil, err
+	}
+	return a.Store(bytes.NewReader(data), int64(len(data)), &sync.WaitGroup{})
+}
+
 // ManifestWriter is used to add and remove entries from an underlying manifest
 type ManifestWriter struct {
 	api   *Api
