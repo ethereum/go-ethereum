@@ -299,7 +299,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 			s.BadRequest(w, r, fmt.Sprintf("Cannot parse frequency parameter: %v", err))
 			return
 		}
-		key, err := s.api.ResourceCreate(r.uri.Addr, frequency)
+		key, err := s.api.ResourceCreate(r.Context(), r.uri.Addr, frequency)
 		if err != nil {
 			s.Error(w, r, fmt.Errorf("Resource creation failed: %v", err))
 			return
@@ -312,7 +312,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		s.Error(w, r, err)
 		return
 	}
-	_, _, _, err = s.api.ResourceUpdate(r.uri.Addr, data)
+	_, _, _, err = s.api.ResourceUpdate(r.Context(), r.uri.Addr, data)
 	if err != nil {
 		s.Error(w, r, fmt.Errorf("Update resource failed: %v", err))
 		return
@@ -350,7 +350,7 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name strin
 	log.Debug("handlegetdb", "name", name)
 	switch len(params) {
 	case 0:
-		updateKey, data, err = s.api.ResourceLookup(name, 0, 0)
+		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, 0, 0)
 	case 2:
 		version, err = strconv.ParseUint(params[1], 10, 32)
 		if err != nil {
@@ -360,13 +360,13 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name strin
 		if err != nil {
 			break
 		}
-		updateKey, data, err = s.api.ResourceLookup(name, uint32(period), uint32(version))
+		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, uint32(period), uint32(version))
 	case 1:
 		period, err = strconv.ParseUint(params[0], 10, 32)
 		if err != nil {
 			break
 		}
-		updateKey, data, err = s.api.ResourceLookup(name, uint32(period), uint32(version))
+		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, uint32(period), uint32(version))
 	default:
 		s.BadRequest(w, r, "Invalid mutable resource request")
 		return

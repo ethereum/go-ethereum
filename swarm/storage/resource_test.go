@@ -157,7 +157,9 @@ func TestResourceHandler(t *testing.T) {
 	defer teardownTest()
 
 	// create a new resource
-	_, err = rh.NewResource(safeName, resourceFrequency)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +185,7 @@ func TestResourceHandler(t *testing.T) {
 	resourcekey := make(map[string]Key)
 	fwdBlocks(int(resourceFrequency/2), backend)
 	data := []byte("blinky")
-	resourcekey["blinky"], err = rh.Update(safeName, data)
+	resourcekey["blinky"], err = rh.Update(ctx, safeName, data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +193,7 @@ func TestResourceHandler(t *testing.T) {
 	// update on first period
 	fwdBlocks(int(resourceFrequency/2), backend)
 	data = []byte("pinky")
-	resourcekey["pinky"], err = rh.Update(safeName, data)
+	resourcekey["pinky"], err = rh.Update(ctx, safeName, data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +201,7 @@ func TestResourceHandler(t *testing.T) {
 	// update on second period
 	fwdBlocks(int(resourceFrequency), backend)
 	data = []byte("inky")
-	resourcekey["inky"], err = rh.Update(safeName, data)
+	resourcekey["inky"], err = rh.Update(ctx, safeName, data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +209,7 @@ func TestResourceHandler(t *testing.T) {
 	// update just after second period
 	fwdBlocks(1, backend)
 	data = []byte("clyde")
-	resourcekey["clyde"], err = rh.Update(safeName, data)
+	resourcekey["clyde"], err = rh.Update(ctx, safeName, data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +221,7 @@ func TestResourceHandler(t *testing.T) {
 	fwdBlocks(int(resourceFrequency*2)-1, backend)
 
 	rh2, err := NewResourceHandler(datadir, &testCloudStore{}, rh.ethClient, nil)
-	_, err = rh2.LookupLatestByName(safeName, true)
+	_, err = rh2.LookupLatestByName(ctx, safeName, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +239,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, latest version
-	rsrc, err := rh2.LookupHistoricalByName(safeName, 3, true)
+	rsrc, err := rh2.LookupHistoricalByName(ctx, safeName, 3, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +250,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Historical lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, specific version
-	rsrc, err = rh2.LookupVersionByName(safeName, 3, 1, true)
+	rsrc, err = rh2.LookupVersionByName(ctx, safeName, 3, 1, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,14 +295,16 @@ func TestResourceENSOwner(t *testing.T) {
 	defer teardownTest()
 
 	// create new resource when we are owner = ok
-	_, err = rh.NewResource(safeName, resourceFrequency)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatalf("Create resource fail: %v", err)
 	}
 
 	data := []byte("foo")
 	// update resource when we are owner = ok
-	_, err = rh.Update(safeName, data)
+	_, err = rh.Update(ctx, safeName, data)
 	if err != nil {
 		t.Fatalf("Update resource fail: %v", err)
 	}
@@ -311,7 +315,7 @@ func TestResourceENSOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	rh.validator.(*ENSValidator).signFunc = signertwo.signContent
-	_, err = rh.Update(safeName, data)
+	_, err = rh.Update(ctx, safeName, data)
 	if err == nil {
 		t.Fatalf("Expected resource update fail due to owner mismatch")
 	}

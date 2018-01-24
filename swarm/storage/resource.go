@@ -130,8 +130,6 @@ type ethApi interface {
 // TODO: Include modtime in chunk data + signature
 type ResourceHandler struct {
 	ChunkStore
-	ctx          context.Context // base for new contexts passed to storage layer and ethapi, to ensure teardown when Close() is called
-	cancelFunc   func()
 	validator    ResourceValidator
 	ethClient    ethApi
 	resources    map[string]*resource
@@ -158,15 +156,12 @@ func NewResourceHandler(datadir string, cloudStore CloudStore, ethClient ethApi,
 		DbStore:  dbStore,
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
 	rh := &ResourceHandler{
 		ChunkStore:   newResourceChunkStore(path, hashfunc, localStore, cloudStore),
 		ethClient:    ethClient,
 		resources:    make(map[string]*resource),
 		validator:    validator,
 		storeTimeout: defaultStoreTimeout,
-		ctx:          ctx,
-		cancelFunc:   cancel,
 		hashPool: sync.Pool{
 			New: func() interface{} {
 				return MakeHashFunc(SHA3Hash)()
@@ -241,7 +236,7 @@ func (self *ResourceHandler) chunkSize() int64 {
 // The signature data should match the hash of the idna-converted name by the validator's namehash function, NOT the raw name bytes.
 //
 // The start block of the resource update will be the actual current block height of the connected network.
-func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resource, error) {
+func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequency uint64) (*resource, error) {
 
 	// frequency 0 is invalid
 	if frequency == 0 {
@@ -272,7 +267,7 @@ func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resour
 	}
 
 	// get our blockheight at this time
-	currentblock, err := self.GetBlock()
+	currentblock, err := self.GetBlock(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -312,11 +307,11 @@ func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resour
 // update root data was retrieved externally, it typically doesn't)
 //
 //
-func (self *ResourceHandler) LookupVersionByName(name string, period uint32, version uint32, refresh bool) (*resource, error) {
-	return self.LookupVersion(self.nameHash(name), name, period, version, refresh)
+func (self *ResourceHandler) LookupVersionByName(ctx context.Context, name string, period uint32, version uint32, refresh bool) (*resource, error) {
+	return self.LookupVersion(ctx, self.nameHash(name), name, period, version, refresh)
 }
 
-func (self *ResourceHandler) LookupVersion(nameHash common.Hash, name string, period uint32, version uint32, refresh bool) (*resource, error) {
+func (self *ResourceHandler) LookupVersion(ctx context.Context, nameHash common.Hash, name string, period uint32, version uint32, refresh bool) (*resource, error) {
 	rsrc, err := self.loadResource(nameHash, name, refresh)
 	if err != nil {
 		return nil, err
@@ -332,11 +327,11 @@ func (self *ResourceHandler) LookupVersion(nameHash common.Hash, name string, pe
 // and returned.
 //
 // See also (*ResourceHandler).LookupVersion
-func (self *ResourceHandler) LookupHistoricalByName(name string, period uint32, refresh bool) (*resource, error) {
-	return self.LookupHistorical(self.nameHash(name), name, period, refresh)
+func (self *ResourceHandler) LookupHistoricalByName(ctx context.Context, name string, period uint32, refresh bool) (*resource, error) {
+	return self.LookupHistorical(ctx, self.nameHash(name), name, period, refresh)
 }
 
-func (self *ResourceHandler) LookupHistorical(nameHash common.Hash, name string, period uint32, refresh bool) (*resource, error) {
+func (self *ResourceHandler) LookupHistorical(ctx context.Context, nameHash common.Hash, name string, period uint32, refresh bool) (*resource, error) {
 	rsrc, err := self.loadResource(nameHash, name, refresh)
 	if err != nil {
 		return nil, err
@@ -354,18 +349,18 @@ func (self *ResourceHandler) LookupHistorical(nameHash common.Hash, name string,
 // Version iteration is done as in (*ResourceHandler).LookupHistorical
 //
 // See also (*ResourceHandler).LookupHistorical
-func (self *ResourceHandler) LookupLatestByName(name string, refresh bool) (*resource, error) {
-	return self.LookupLatest(self.nameHash(name), name, refresh)
+func (self *ResourceHandler) LookupLatestByName(ctx context.Context, name string, refresh bool) (*resource, error) {
+	return self.LookupLatest(ctx, self.nameHash(name), name, refresh)
 }
 
-func (self *ResourceHandler) LookupLatest(nameHash common.Hash, name string, refresh bool) (*resource, error) {
+func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.Hash, name string, refresh bool) (*resource, error) {
 
 	// get our blockheight at this time and the next block of the update period
 	rsrc, err := self.loadResource(nameHash, name, refresh)
 	if err != nil {
 		return nil, err
 	}
-	currentblock, err := self.GetBlock()
+	currentblock, err := self.GetBlock(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -532,7 +527,7 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 // It is the caller's responsibility to make sure that this data is not stale.
 //
 // A resource update cannot span chunks, and thus has max length 4096
-func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
+func (self *ResourceHandler) Update(ctx context.Context, name string, data []byte) (Key, error) {
 
 	var signaturelength int
 	if self.validator != nil {
@@ -555,7 +550,7 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 	}
 
 	// get our blockheight at this time and the next block of the update period
-	currentblock, err := self.GetBlock()
+	currentblock, err := self.GetBlock(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -620,13 +615,10 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 // Closes the datastore.
 // Always call this at shutdown to avoid data corruption.
 func (self *ResourceHandler) Close() {
-	self.cancelFunc()
 	self.ChunkStore.Close()
 }
 
-func (self *ResourceHandler) GetBlock() (uint64, error) {
-	ctx, cancel := context.WithCancel(self.ctx)
-	defer cancel()
+func (self *ResourceHandler) GetBlock(ctx context.Context) (uint64, error) {
 	blockheader, err := self.ethClient.HeaderByNumber(ctx, nil)
 	if err != nil {
 		return 0, err
