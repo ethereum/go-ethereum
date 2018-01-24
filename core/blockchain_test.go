@@ -1291,3 +1291,56 @@ func TestTrieForkGC(t *testing.T) {
 		t.Fatalf("stale tries still alive after garbase collection")
 	}
 }
+
+// Tests that doing large reorgs works even if the state associated with the
+// forking point is not available any more.
+func TestLargeReorgTrieGC(t *testing.T) {
+	// Generate the original common chain segment and the two competing forks
+	engine := ethash.NewFaker()
+
+	db, _ := ethdb.NewMemDatabase()
+	genesis := new(Genesis).MustCommit(db)
+
+	shared, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	original, _ := GenerateChain(params.TestChainConfig, shared[len(shared)-1], engine, db, 2*triesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
+	competitor, _ := GenerateChain(params.TestChainConfig, shared[len(shared)-1], engine, db, 2*triesInMemory+1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{3}) })
+
+	// Import the shared chain and the original canonical one
+	diskdb, _ := ethdb.NewMemDatabase()
+	new(Genesis).MustCommit(diskdb)
+
+	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{})
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if _, err := chain.InsertChain(shared); err != nil {
+		t.Fatalf("failed to insert shared chain: %v", err)
+	}
+	if _, err := chain.InsertChain(original); err != nil {
+		t.Fatalf("failed to insert shared chain: %v", err)
+	}
+	// Ensure that the state associated with the forking point is pruned away
+	if node, _ := chain.triedb.Node(shared[len(shared)-1].Root()); node != nil {
+		t.Fatalf("common-but-old ancestor still cache")
+	}
+	// Import the competitor chain without exceeding the canonical's TD and ensure
+	// we have not processed any of the blocks (protection against malicious blocks)
+	if _, err := chain.InsertChain(competitor[:len(competitor)-2]); err != nil {
+		t.Fatalf("failed to insert competitor chain: %v", err)
+	}
+	for i, block := range competitor[:len(competitor)-2] {
+		if node, _ := chain.triedb.Node(block.Root()); node != nil {
+			t.Fatalf("competitor %d: low TD chain became processed", i)
+		}
+	}
+	// Import the head of the competitor chain, triggering the reorg and ensure we
+	// successfully reprocess all the stashed away blocks.
+	if _, err := chain.InsertChain(competitor[len(competitor)-2:]); err != nil {
+		t.Fatalf("failed to finalize competitor chain: %v", err)
+	}
+	for i, block := range competitor[:len(competitor)-triesInMemory] {
+		if node, _ := chain.triedb.Node(block.Root()); node != nil {
+			t.Fatalf("competitor %d: competing chain state missing", i)
+		}
+	}
+}

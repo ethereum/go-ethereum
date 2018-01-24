@@ -552,6 +552,12 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	return ok
 }
 
+// HasState checks if state trie is fully present in the database or not.
+func (bc *BlockChain) HasState(hash common.Hash) bool {
+	_, err := bc.stateCache.OpenTrie(hash)
+	return err == nil
+}
+
 // HasBlockAndState checks if a block and associated state trie is fully present
 // in the database or not, caching it if present.
 func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
@@ -560,9 +566,7 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
 	if block == nil {
 		return false
 	}
-	// Ensure the associated state is also present
-	_, err := bc.stateCache.OpenTrie(block.Root())
-	return err == nil
+	return bc.HasState(block.Root())
 }
 
 // GetBlock retrieves a block from the database by hash and number,
@@ -843,8 +847,24 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 var lastWrite uint64
 
-// WriteBlock writes the block to the chain.
-func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) (status WriteStatus, err error) {
+// WriteBlockWithoutState writes only the block and its metadata to the database,
+// but does not write any state. This is used to construct competing side forks
+// up to teh point where they exceed the canonical total difficulty.
+func (bc *BlockChain) WriteBlockWithoutState(block *types.Block, td *big.Int) (err error) {
+	bc.wg.Add(1)
+	defer bc.wg.Done()
+
+	if err := bc.hc.WriteTd(block.Hash(), block.NumberU64(), td); err != nil {
+		return err
+	}
+	if err := WriteBlock(bc.diskdb, block); err != nil {
+		return err
+	}
+	return nil
+}
+
+// WriteBlockWithState writes the block and all assocaited state to the database.
+func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) (status WriteStatus, err error) {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
@@ -1017,31 +1037,60 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		if err == nil {
 			err = bc.Validator().ValidateBody(block)
 		}
-		if err != nil {
-			if err == ErrKnownBlock {
-				stats.ignored++
-				continue
-			}
+		switch {
+		case err == ErrKnownBlock:
+			stats.ignored++
+			continue
 
-			if err == consensus.ErrFutureBlock {
-				// Allow up to MaxFuture second in the future blocks. If this limit
-				// is exceeded the chain is discarded and processed at a later time
-				// if given.
-				max := big.NewInt(time.Now().Unix() + maxTimeFutureBlocks)
-				if block.Time().Cmp(max) > 0 {
-					return i, events, coalescedLogs, fmt.Errorf("future block: %v > %v", block.Time(), max)
+		case err == consensus.ErrFutureBlock:
+			// Allow up to MaxFuture second in the future blocks. If this limit is exceeded
+			// the chain is discarded and processed at a later time if given.
+			max := big.NewInt(time.Now().Unix() + maxTimeFutureBlocks)
+			if block.Time().Cmp(max) > 0 {
+				return i, events, coalescedLogs, fmt.Errorf("future block: %v > %v", block.Time(), max)
+			}
+			bc.futureBlocks.Add(block.Hash(), block)
+			stats.queued++
+			continue
+
+		case err == consensus.ErrUnknownAncestor && bc.futureBlocks.Contains(block.ParentHash()):
+			bc.futureBlocks.Add(block.Hash(), block)
+			stats.queued++
+			continue
+
+		case err == consensus.ErrPrunedAncestor:
+			// Block competing with the canonical chain, store in the db, but don't process
+			// until the competitor TD goes above the canonical TD
+			localTd := bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64())
+			externTd := new(big.Int).Add(bc.GetTd(block.ParentHash(), block.NumberU64()-1), block.Difficulty())
+			if localTd.Cmp(externTd) > 0 {
+				if err = bc.WriteBlockWithoutState(block, externTd); err != nil {
+					return i, events, coalescedLogs, err
 				}
-				bc.futureBlocks.Add(block.Hash(), block)
-				stats.queued++
 				continue
 			}
+			// Competitor chain beat canonical, gather all blocks from the common ancestor
+			var winner []*types.Block
 
-			if err == consensus.ErrUnknownAncestor && bc.futureBlocks.Contains(block.ParentHash()) {
-				bc.futureBlocks.Add(block.Hash(), block)
-				stats.queued++
-				continue
+			parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+			for !bc.HasState(parent.Root()) {
+				winner = append(winner, parent)
+				parent = bc.GetBlock(parent.ParentHash(), parent.NumberU64()-1)
+			}
+			for j := 0; j < len(winner)/2; j++ {
+				winner[j], winner[len(winner)-1-j] = winner[len(winner)-1-j], winner[j]
+			}
+			// Import all the pruned blocks to make the state available
+			bc.chainmu.Unlock()
+			_, evs, logs, err := bc.insertChain(winner)
+			bc.chainmu.Lock()
+			events, coalescedLogs = evs, logs
+
+			if err != nil {
+				return i, events, coalescedLogs, err
 			}
 
+		case err != nil:
 			bc.reportBlock(block, nil, err)
 			return i, events, coalescedLogs, err
 		}
@@ -1072,7 +1121,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		bc.procTime += time.Since(bstart)
 
 		// Write the block to the chain and get the status.
-		status, err := bc.WriteBlockAndState(block, receipts, state)
+		status, err := bc.WriteBlockWithState(block, receipts, state)
 		if err != nil {
 			return i, events, coalescedLogs, err
 		}

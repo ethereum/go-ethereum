@@ -54,7 +54,10 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		return ErrKnownBlock
 	}
 	if !v.bc.HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
-		return consensus.ErrUnknownAncestor
+		if !v.bc.HasBlock(block.ParentHash(), block.NumberU64()-1) {
+			return consensus.ErrUnknownAncestor
+		}
+		return consensus.ErrPrunedAncestor
 	}
 	// Header validity is known at this point, check the uncles and transactions
 	header := block.Header()
