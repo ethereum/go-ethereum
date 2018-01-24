@@ -537,6 +537,7 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 		intdatalength = isMultihash(chunkdata[cursor:])
 		multihashboundary := cursor + intdatalength
 		if len(chunkdata) != multihashboundary && len(chunkdata) < multihashboundary+signatureLength {
+			log.Debug("multihash error", "chunkdatalen", len(chunkdata), "multihashboundary", multihashboundary)
 			return nil, 0, 0, "", nil, errors.New("Corrupt multihash data")
 		}
 	} else {
@@ -768,7 +769,7 @@ func newUpdateChunk(key Key, signature *Signature, period uint32, version uint32
 
 	// if signature is present it's the last item in the chunk data
 	if signature != nil {
-		cursor += datalength
+		cursor += actualdatalength
 		copy(chunk.SData[cursor:], signature[:])
 	}
 
