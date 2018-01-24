@@ -19,6 +19,7 @@ package stream
 import (
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -172,9 +173,9 @@ R:
 	for req := range d.receiveC {
 		// this should be has locally
 		chunk, err := d.db.Get(req.Key)
-		log.Error("pick from receiveC", "chunk", chunk.Key.Hex(), "reqC", chunk.ReqC, "err", err)
+		fmt.Fprintln(os.Stderr, "pick from receiveC", "chunk", chunk.Key.Hex(), "reqC", chunk.ReqC, "err", err)
 		if err == nil {
-			log.Error("found existing?", "hash", chunk.Key.Hex())
+			fmt.Fprintln(os.Stderr, "found existing?", "hash", chunk.Key.Hex())
 			continue R
 		}
 		if err != storage.ErrFetching {
@@ -182,19 +183,19 @@ R:
 		}
 		select {
 		case <-chunk.ReqC:
-			log.Error("someone else delivered?", "hash", chunk.Key.Hex())
+			fmt.Fprintln(os.Stderr, "someone else delivered?", "hash", chunk.Key.Hex())
 			continue R
 		default:
 		}
 		go func() {
 			chunk.SData = req.SData
-			log.Error("received delivery", "hash", chunk.Key.Hex())
+			fmt.Fprintln(os.Stderr, "received delivery", "hash", chunk.Key.Hex())
 			d.db.Put(chunk)
-			log.Error("put to db", "hash", chunk.Key.Hex())
+			fmt.Fprintln(os.Stderr, "put to db", "hash", chunk.Key.Hex())
 			chunk.WaitToStore()
 			close(chunk.ReqC)
 			//log.Warn("received delivery stored", "hash", chunk.Key)
-			log.Error("requesters notified", "hash", chunk.Key.Hex())
+			fmt.Fprintln(os.Stderr, "requesters notified", "hash", chunk.Key.Hex())
 			d.counterDone++
 		}()
 	}

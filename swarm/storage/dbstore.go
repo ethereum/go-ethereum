@@ -30,7 +30,9 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -538,8 +540,22 @@ func (s *DbStore) CurrentStorageIndex() uint64 {
 }
 
 func (s *DbStore) Put(chunk *Chunk) {
-	log.Error("DbStore.Put", "hash", chunk.Key.Hex())
+	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put", "hash", chunk.Key.Hex())
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put WAITER STARTED", "hash", chunk.Key.Hex())
+		select {
+		case <-time.After(1 * time.Second):
+			fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put WAITING", "hash", chunk.Key.Hex())
+		case <-done:
+			fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put EXITED", "hash", chunk.Key.Hex())
+		}
+	}()
+
+	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.LOCK acquiring", "hash", chunk.Key.Hex())
 	s.lock.Lock()
+	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.LOCK acquired", "hash", chunk.Key.Hex())
 	defer s.lock.Unlock()
 
 	ikey := getIndexKey(chunk.Key)
@@ -548,19 +564,26 @@ func (s *DbStore) Put(chunk *Chunk) {
 	po := s.po(chunk.Key)
 
 	idata, err := s.db.Get(ikey)
+	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.db.Get", "hash", chunk.Key.Hex(), "err", err)
 	if err != nil {
 		s.doPut(chunk, ikey, &index, po)
 		batchC := s.batchC
 		go func() {
+			defer func() {
+				if err := recover(); err != nil {
+					fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put PANIC", "hash", chunk.Key.Hex(), "err", err)
+				}
+			}()
+
 			<-batchC
 			close(chunk.dbStored)
 		}()
-		log.Error("DbStore.Put doPut", "hash", chunk.Key.Hex(), "dataIdx", s.dataIdx)
+		fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put doPut", "hash", chunk.Key.Hex(), "dataIdx", s.dataIdx)
 	} else {
 		log.Trace(fmt.Sprintf("DbStore: chunk already exists, only update access"))
 		decodeIndex(idata, &index)
 		close(chunk.dbStored)
-		log.Error("DbStore.Put already found", "hash", chunk.Key.Hex())
+		fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put already found", "hash", chunk.Key.Hex())
 	}
 	index.Access = s.accessCnt
 	s.accessCnt++

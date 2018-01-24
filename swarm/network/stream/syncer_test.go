@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"runtime/debug"
+	"os"
 	"testing"
 	"time"
 
@@ -182,7 +182,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 					} else if err == nil {
 						nodeHashFound++
 					} else {
-						log.Error("not found", "index", i, "origin", j, "key", key.Hex(), "err", err)
+						fmt.Fprintln(os.Stderr, time.Now(), "not found", "index", i, "origin", j, "key", key.Hex(), "err", err)
 					}
 				}
 			}
@@ -211,7 +211,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		},
 	}
 	startedAt := time.Now()
-	timeout := 4 * time.Second
+	timeout := 30 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result, err := sim.Run(ctx, conf)
@@ -222,6 +222,5 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	if result.Error != nil {
 		t.Fatalf("Simulation failed: %s", result.Error)
 		streamTesting.CheckResult(t, result, startedAt, finishedAt)
-		debug.PrintStack()
 	}
 }
