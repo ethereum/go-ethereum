@@ -43,6 +43,12 @@ import (
 	"github.com/rs/cors"
 )
 
+type resourceResponse struct {
+	Manifest storage.Key `json:"manifest"`
+	Resource string      `json:"resource"`
+	Update   storage.Key `json:"update"`
+}
+
 // ServerConfig is the basic configuration needed for the HTTP server and also
 // includes CORS settings.
 type ServerConfig struct {
@@ -292,7 +298,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 }
 
 func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
-	var outdata string
+	var outdata []byte
 	if r.uri.Path != "" {
 		frequency, err := strconv.ParseUint(r.uri.Path, 10, 64)
 		if err != nil {
@@ -304,7 +310,21 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 			s.translateResourceError(w, r, "Resource creation fail", err)
 			return
 		}
-		outdata = key.Hex()
+		m, err := s.api.NewResourceManifest(r.uri.Addr)
+		if err != nil {
+			s.Error(w, r, fmt.Errorf("Failed to create resource manifest: %v", err))
+			return
+		}
+		rsrcResponse := &resourceResponse{
+			Manifest: m,
+			Resource: r.uri.Addr,
+			Update:   key,
+		}
+		outdata, err = json.Marshal(rsrcResponse)
+		if err != nil {
+			s.Error(w, r, fmt.Errorf("Failed to create json response for %v: error was: %v", r, err))
+			return
+		}
 	}
 
 	data, err := ioutil.ReadAll(r.Body)
@@ -318,38 +338,13 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	if outdata != "" {
+	if len(outdata) > 0 {
 		w.Header().Add("Content-type", "text/plain")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, outdata)
+		fmt.Fprint(w, string(outdata))
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-}
-
-func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supErr string, err error) {
-	code := 0
-	defaulterr := fmt.Errorf("%s: %v", supErr, err)
-	rsrcerr, ok := err.(*storage.ResourceError)
-	if !ok {
-		code = rsrcerr.Code()
-	}
-	switch code {
-	case storage.ErrInval:
-		s.BadRequest(w, r, defaulterr.Error())
-	case storage.ErrNoent, storage.ErrSync, storage.ErrNodata:
-		s.NotFound(w, r, defaulterr)
-		return
-	case storage.ErrAcces, storage.ErrNokey:
-		ShowError(w, &r.Request, defaulterr.Error(), http.StatusUnauthorized)
-		return
-	case storage.ErrFbig:
-		ShowError(w, &r.Request, defaulterr.Error(), http.StatusRequestEntityTooLarge)
-		return
-	}
-
-	s.Error(w, r, defaulterr)
-	return
 }
 
 // Retrieve mutable resource updates:
@@ -403,6 +398,31 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name strin
 	log.Debug("Found update", "key", updateKey)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	http.ServeContent(w, &r.Request, "", now, bytes.NewReader(data))
+}
+
+func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supErr string, err error) {
+	code := 0
+	defaulterr := fmt.Errorf("%s: %v", supErr, err)
+	rsrcerr, ok := err.(*storage.ResourceError)
+	if !ok {
+		code = rsrcerr.Code()
+	}
+	switch code {
+	case storage.ErrInval:
+		s.BadRequest(w, r, defaulterr.Error())
+	case storage.ErrNoent, storage.ErrSync, storage.ErrNodata:
+		s.NotFound(w, r, defaulterr)
+		return
+	case storage.ErrAcces, storage.ErrNokey:
+		ShowError(w, &r.Request, defaulterr.Error(), http.StatusUnauthorized)
+		return
+	case storage.ErrFbig:
+		ShowError(w, &r.Request, defaulterr.Error(), http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	s.Error(w, r, defaulterr)
+	return
 }
 
 // HandleGet handles a GET request to
@@ -665,7 +685,14 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 
 	reader, contentType, status, err := s.api.Get(key, r.uri.Path)
+
 	if err != nil {
+		// cheeky, cheeky hack. See swarm/api/api.go:Api.Get() for an explanation
+		if rsrcErr, ok := err.(*api.ErrResourceReturn); ok {
+			log.Trace("getting resource proxy", "err", rsrcErr.Key())
+			s.handleGetResource(w, r, rsrcErr.Key())
+			return
+		}
 		switch status {
 		case http.StatusNotFound:
 			s.NotFound(w, r, err)

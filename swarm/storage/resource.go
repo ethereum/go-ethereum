@@ -571,7 +571,7 @@ func (self *ResourceHandler) Update(ctx context.Context, name string, data []byt
 	}
 
 	// get our blockheight at this time and the next block of the update period
-	currentblock, err := self.GetBlock(ctx)
+	currentblock, err := self.getBlock(ctx)
 	if err != nil {
 		return nil, NewResourceError(ErrIO, fmt.Sprintf("Could not get block height: %v", err))
 	}
