@@ -532,7 +532,16 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 	namelength := int(headerlength) - cursor + 4
 	name = string(chunkdata[cursor : cursor+namelength])
 	cursor += namelength
-	intdatalength := int(datalength)
+	var intdatalength int
+	if datalength == 0 {
+		intdatalength = isMultihash(chunkdata[cursor:])
+		multihashboundary := cursor + intdatalength
+		if len(chunkdata) != multihashboundary && len(chunkdata) < multihashboundary+signatureLength {
+			return nil, 0, 0, "", nil, errors.New("Corrupt multihash data")
+		}
+	} else {
+		intdatalength = int(datalength)
+	}
 	data = make([]byte, intdatalength)
 	copy(data, chunkdata[cursor:cursor+intdatalength])
 
@@ -553,7 +562,19 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 // It is the caller's responsibility to make sure that this data is not stale.
 //
 // A resource update cannot span chunks, and thus has max length 4096
+
+func (self *ResourceHandler) UpdateMultihash(ctx context.Context, name string, data []byte) (Key, error) {
+	if isMultihash(data) == 0 {
+		return nil, errors.New("Invalid multihash")
+	}
+	return self.update(ctx, name, data, true)
+}
+
 func (self *ResourceHandler) Update(ctx context.Context, name string, data []byte) (Key, error) {
+	return self.update(ctx, name, data, false)
+}
+
+func (self *ResourceHandler) update(ctx context.Context, name string, data []byte, multihash bool) (Key, error) {
 
 	var signaturelength int
 	if self.validator != nil {
@@ -618,7 +639,11 @@ func (self *ResourceHandler) Update(ctx context.Context, name string, data []byt
 		}
 	}
 
-	chunk := newUpdateChunk(key, signature, nextperiod, version, name, data)
+	var datalength int
+	if !multihash {
+		datalength = len(data)
+	}
+	chunk := newUpdateChunk(key, signature, nextperiod, version, name, data, datalength)
 
 	// send the chunk
 	self.Put(chunk)
@@ -703,7 +728,7 @@ func getAddressFromDataSig(datahash common.Hash, signature Signature) (common.Ad
 }
 
 // create an update chunk
-func newUpdateChunk(key Key, signature *Signature, period uint32, version uint32, name string, data []byte) *Chunk {
+func newUpdateChunk(key Key, signature *Signature, period uint32, version uint32, name string, data []byte, datalength int) *Chunk {
 
 	// no signatures if no validator
 	var signaturelength int
@@ -714,11 +739,9 @@ func newUpdateChunk(key Key, signature *Signature, period uint32, version uint32
 	// prepend version and period to allow reverse lookups
 	headerlength := len(name) + 4 + 4
 
-	// also prepend datalength
-	datalength := len(data)
-
+	actualdatalength := len(data)
 	chunk := NewChunk(key, nil)
-	chunk.SData = make([]byte, 4+signaturelength+headerlength+datalength) // initial 4 are uint16 length descriptors for headerlength and datalength
+	chunk.SData = make([]byte, 4+signaturelength+headerlength+actualdatalength) // initial 4 are uint16 length descriptors for headerlength and datalength
 
 	// data header length does NOT include the header length prefix bytes themselves
 	cursor := 0
@@ -829,4 +852,32 @@ func (self *ResourceHandler) keyDataHash(key Key, data []byte) common.Hash {
 	hasher.Write(key[:])
 	hasher.Write(data)
 	return common.BytesToHash(hasher.Sum(nil))
+}
+
+// if first byte is the start of a multihash this function will try to parse it
+// if successful it returns the length of multihash data, 0 otherwise
+func isMultihash(data []byte) int {
+	cursor := 0
+	hashtype, c := binary.Uvarint(data)
+	log.Trace("ismultihash", "hashtype", hashtype, "c", c)
+	if c == 0 {
+		log.Debug("Corrupt multihash data, hashtype is unreadable")
+		return 0
+	}
+	cursor += c
+	hashlength, c := binary.Uvarint(data[cursor:])
+	log.Trace("ismultihash", "hashlength", hashlength, "c", c)
+	if c == 0 {
+		log.Debug("Corrupt multihash data, hashlength is unreadable")
+		return 0
+	}
+	cursor += c
+	// we cheekily assume hashlength < maxint
+	inthashlength := int(hashlength)
+	log.Trace("ismultihash", "datalen", len(data), "hashlength", inthashlength, "cursor", c)
+	if len(data[cursor:]) < inthashlength {
+		log.Debug("Corrupt multihash data, hash does not align with data boundary")
+		return 0
+	}
+	return cursor + inthashlength
 }

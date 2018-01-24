@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/multiformats/go-multihash"
+
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
@@ -107,7 +109,7 @@ func TestResourceReverse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	chunk := newUpdateChunk(key, &sig, period, version, safeName, data)
+	chunk := newUpdateChunk(key, &sig, period, version, safeName, data, len(data))
 
 	// check that we can recover the owner account from the update chunk's signature
 	checksig, checkperiod, checkversion, checkname, checkdata, err := rh.parseUpdate(chunk.SData)
@@ -455,4 +457,100 @@ func (self *testValidator) checkAccess(name string, address common.Address) (boo
 
 func (self *testValidator) nameHash(name string) common.Hash {
 	return self.hashFunc(name)
+}
+
+func TestResourceMultihash(t *testing.T) {
+
+	// signer containing private key
+	//	signer, err := newTestSigner()
+	//	if err != nil {
+	//		t.Fatal(err)
+	//	}
+
+	// make fake backend, set up rpc and create resourcehandler
+	backend := &fakeBackend{
+		blocknumber: int64(startBlock),
+	}
+
+	// set up rpc and create resourcehandler
+	rh, _, _, teardownTest, err := setupTest(backend, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardownTest()
+
+	// create a new resource
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// we're naïvely assuming keccak256 for swarm hashes
+	// if it ever changes this test should also change
+	swarmhashbytes := rh.nameHash("foo")
+	swarmhashmulti, err := multihash.Encode(swarmhashbytes.Bytes(), multihash.KECCAK_256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	swarmhashkey, err := rh.UpdateMultihash(ctx, safeName, swarmhashmulti)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sha1bytes := make([]byte, multihash.DefaultLengths[multihash.SHA1])
+	sha1multi, err := multihash.Encode(sha1bytes, multihash.SHA1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sha1key, err := rh.UpdateMultihash(ctx, safeName, sha1multi)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// invalid multihashes
+	_, err = rh.UpdateMultihash(ctx, safeName, swarmhashmulti[1:])
+	if err == nil {
+		t.Fatalf("Expected update to fail with first byte skipped")
+	}
+	_, err = rh.UpdateMultihash(ctx, safeName, swarmhashmulti[:len(swarmhashmulti)-2])
+	if err == nil {
+		t.Fatalf("Expected update to fail with last byte skipped")
+	}
+
+	swarmhashchunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(swarmhashkey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, _, data, err := rh.parseUpdate(swarmhashchunk.SData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	swarmhashdecode, err := multihash.Decode(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(swarmhashdecode.Digest, swarmhashbytes.Bytes()) {
+		t.Fatalf("Decoded SHA1 hash '%x' does not match original hash '%x'", swarmhashdecode.Digest, swarmhashbytes.Bytes())
+	}
+	sha1chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(sha1key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, _, data, err = rh.parseUpdate(sha1chunk.SData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sha1decode, err := multihash.Decode(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(sha1decode.Digest, sha1bytes) {
+		t.Fatalf("Decoded SHA1 hash '%x' does not match original hash '%x'", sha1decode.Digest, sha1bytes)
+	}
+
+	// test with signed data
+	//	rh2, err := NewResourceHandler(datadir, &testCloudStore{}, rh.ethClient, Signer)
+	//	swarmhashsignedkey, err := rh2.UpdateMultihash(ctx, safeName, swarmhashmulti)
 }
