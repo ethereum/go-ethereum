@@ -65,7 +65,7 @@ func (hc *httpConn) Close() error {
 	return nil
 }
 
-// DialHTTPWithClient creates a new RPC clients that connection to an RPC server over HTTP
+// DialHTTPWithClient creates a new RPC client that connects to an RPC server over HTTP
 // using the provided HTTP Client.
 func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 	req, err := http.NewRequest(http.MethodPost, endpoint, nil)
@@ -81,7 +81,7 @@ func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 	})
 }
 
-// DialHTTP creates a new RPC clients that connection to an RPC server over HTTP.
+// DialHTTP creates a new RPC client that connects to an RPC server over HTTP.
 func DialHTTP(endpoint string) (*Client, error) {
 	return DialHTTPWithClient(endpoint, new(http.Client))
 }
