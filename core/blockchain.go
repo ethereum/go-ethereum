@@ -669,6 +669,9 @@ func (bc *BlockChain) Stop() {
 	for !bc.triegc.Empty() {
 		bc.triedb.Dereference(bc.triegc.PopItem().(common.Hash), common.Hash{})
 	}
+	if size := bc.triedb.Size(); size != 0 {
+		log.Error("Dangling trie nodes after full cleanup")
+	}
 	log.Info("Blockchain manager stopped")
 }
 
