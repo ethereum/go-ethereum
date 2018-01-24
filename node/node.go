@@ -395,7 +395,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	}
 	go rpc.NewHTTPServer(cors, allowedHosts, handler).Serve(listener)
 	n.log.Info(fmt.Sprintf("HTTP endpoint opened: http://%s", endpoint))
-	n.log.Info(fmt.Sprintf("HTTP config: cors %v, hosts%v", cors,allowedHosts))
+	n.log.Info(fmt.Sprintf("HTTP config: cors %v, hosts%v", cors, allowedHosts))
 	// All listeners booted successfully
 	n.httpEndpoint = endpoint
 	n.httpListener = listener

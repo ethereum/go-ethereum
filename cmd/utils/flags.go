@@ -385,7 +385,7 @@ var (
 	}
 	RPCAllowedHostsFlag = cli.StringFlag{
 		Name:  "rpcallowedhosts",
-		Usage: "Comma separated list of hostnames from which to accept requests (server enforced)",
+		Usage: "Comma separated list of hostnames from which to accept requests (server enforced). Set to * to disable this protection.",
 		Value: "localhost,127.0.0.1",
 	}
 	RPCApiFlag = cli.StringFlag{

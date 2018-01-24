@@ -143,7 +143,7 @@ func (t *httpReadWriteNopCloser) Close() error {
 // NewHTTPServer creates a new HTTP RPC server around an API provider.
 //
 // Deprecated: Server implements http.Handler
-func NewHTTPServer(cors []string, hosts[] string, srv *Server) *http.Server {
+func NewHTTPServer(cors []string, hosts []string, srv *Server) *http.Server {
 	// Wrap the CORS-handler within a host-handler
 	handler := newCorsHandler(srv, cors)
 	handler = newHostHandler(hosts, handler)
@@ -224,8 +224,9 @@ func (h *hostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		hostpart := parseHost(r.Host)
 		requestAllowed := false
 		for _, allowedHost := range h.AllowedHosts {
-			if strings.ToLower(allowedHost) == hostpart {
+			if strings.ToLower(allowedHost) == hostpart || allowedHost == "*" {
 				requestAllowed = true
+				break
 			}
 		}
 		if !requestAllowed {

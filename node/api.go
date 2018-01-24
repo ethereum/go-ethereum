@@ -142,7 +142,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	}
 
 	allowedHosts := api.node.config.HTTPHosts
-	if hosts != nil{
+	if hosts != nil {
 		allowedHosts = nil
 		for _, host := range strings.Split(*host, ",") {
 			allowedHosts = append(allowedHosts, strings.TrimSpace(host))
