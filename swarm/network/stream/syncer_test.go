@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"runtime/debug"
 	"testing"
 	"time"
 
@@ -203,7 +204,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 
 	conf.Step = &simulations.Step{
 		Action:  action,
-		Trigger: streamTesting.PivotTrigger(100*time.Millisecond, checkC, sim.IDs[0]),
+		Trigger: streamTesting.PivotTrigger(500*time.Millisecond, checkC, sim.IDs[0]),
 		Expect: &simulations.Expectation{
 			Nodes: sim.IDs[0:1],
 			Check: check,
@@ -220,6 +221,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	}
 	if result.Error != nil {
 		t.Fatalf("Simulation failed: %s", result.Error)
+		streamTesting.CheckResult(t, result, startedAt, finishedAt)
+		debug.PrintStack()
 	}
-	streamTesting.CheckResult(t, result, startedAt, finishedAt)
 }

@@ -161,7 +161,7 @@ type ChunkDeliveryMsg struct {
 	SData []byte // the stored chunk Data (incl size)
 }
 
-func (d *Delivery) handleChunkDeliveryMsg(req *ChunkDeliveryMsg) error {
+func (d *Delivery) handleChunkDeliveryMsg(sp *Peer, req *ChunkDeliveryMsg) error {
 	d.counterIn++
 	d.receiveC <- req
 	return nil
@@ -172,7 +172,9 @@ R:
 	for req := range d.receiveC {
 		// this should be has locally
 		chunk, err := d.db.Get(req.Key)
+		log.Error("pick from receiveC", "chunk", chunk.Key.Hex(), "reqC", chunk.ReqC, "err", err)
 		if err == nil {
+			log.Error("found existing?", "hash", chunk.Key.Hex())
 			continue R
 		}
 		if err != storage.ErrFetching {
@@ -180,17 +182,21 @@ R:
 		}
 		select {
 		case <-chunk.ReqC:
+			log.Error("someone else delivered?", "hash", chunk.Key.Hex())
 			continue R
 		default:
 		}
-		chunk.SData = req.SData
-		d.db.Put(chunk)
-		log.Warn("reecived delivery", "hash", chunk.Key)
-		close(chunk.ReqC)
-		chunk.WaitToStore()
-		//log.Warn("received delivery stored", "hash", chunk.Key)
-		log.Warn("received delivery requesters notified", "hash", chunk.Key)
-		d.counterDone++
+		go func() {
+			chunk.SData = req.SData
+			log.Error("received delivery", "hash", chunk.Key.Hex())
+			d.db.Put(chunk)
+			log.Error("put to db", "hash", chunk.Key.Hex())
+			chunk.WaitToStore()
+			close(chunk.ReqC)
+			//log.Warn("received delivery stored", "hash", chunk.Key)
+			log.Error("requesters notified", "hash", chunk.Key.Hex())
+			d.counterDone++
+		}()
 	}
 }
 

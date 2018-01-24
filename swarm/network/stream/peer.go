@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var sendTimeout = 5 * time.Second
+var sendTimeout = 1 * time.Second
 
 // Peer is the Peer extention for the streaming protocol
 type Peer struct {
@@ -97,7 +97,11 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		Stream:        s.stream,
 		Key:           s.key,
 	}
-	log.Warn("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "key", s.key, "len", len(hashes), "from", from, "to", to)
+	log.Error("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "key", s.key, "len", len(hashes), "from", from, "to", to)
+	for i := 0; i < len(hashes); i += HashSize {
+		hash := hashes[i : i+HashSize]
+		log.Error("Swarm syncer offer hash", "peer", p.ID(), "stream", s.stream, "hash", storage.Key(hash).Hex(), "len", len(hashes), "from", from, "to", to)
+	}
 	return p.SendPriority(msg, s.priority)
 }
 

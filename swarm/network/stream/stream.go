@@ -38,8 +38,8 @@ const (
 	Mid
 	High
 	Top
-	PriorityQueue         // number of queues
-	PriorityQueueCap = 32 // queue capacity
+	PriorityQueue        // number of queues
+	PriorityQueueCap = 3 // queue capacity
 	HashSize         = 32
 )
 
@@ -227,7 +227,7 @@ func (p *Peer) HandleMsg(msg interface{}) error {
 		return p.handleWantedHashesMsg(msg)
 
 	case *ChunkDeliveryMsg:
-		return p.streamer.delivery.handleChunkDeliveryMsg(msg)
+		return p.streamer.delivery.handleChunkDeliveryMsg(p, msg)
 
 	case *RetrieveRequestMsg:
 		return p.streamer.delivery.handleRetrieveRequestMsg(p, msg)

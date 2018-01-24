@@ -538,6 +538,7 @@ func (s *DbStore) CurrentStorageIndex() uint64 {
 }
 
 func (s *DbStore) Put(chunk *Chunk) {
+	log.Error("DbStore.Put", "hash", chunk.Key.Hex())
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -549,17 +550,23 @@ func (s *DbStore) Put(chunk *Chunk) {
 	idata, err := s.db.Get(ikey)
 	if err != nil {
 		s.doPut(chunk, ikey, &index, po)
+		batchC := s.batchC
+		go func() {
+			<-batchC
+			close(chunk.dbStored)
+		}()
+		log.Error("DbStore.Put doPut", "hash", chunk.Key.Hex(), "dataIdx", s.dataIdx)
 	} else {
 		log.Trace(fmt.Sprintf("DbStore: chunk already exists, only update access"))
 		decodeIndex(idata, &index)
 		close(chunk.dbStored)
+		log.Error("DbStore.Put already found", "hash", chunk.Key.Hex())
 	}
 	index.Access = s.accessCnt
 	s.accessCnt++
 	idata = encodeIndex(&index)
 	s.batch.Put(ikey, idata)
 	select {
-	case <-s.quit:
 	case s.batchesC <- struct{}{}:
 	default:
 	}
@@ -579,13 +586,6 @@ func (s *DbStore) doPut(chunk *Chunk, ikey []byte, index *dpaDBIndex, po uint8) 
 	cntKey[1] = po
 	s.batch.Put(cntKey, U64ToBytes(s.bucketCnt[po]))
 
-	batchC := s.batchC
-	go func() {
-		<-batchC
-		close(chunk.dbStored)
-	}()
-
-	log.Trace(fmt.Sprintf("DbStore.Put: %v. db storage counter: %v ", chunk.Key.Log(), s.dataIdx))
 }
 
 func (s *DbStore) writeBatches() {

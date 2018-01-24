@@ -96,9 +96,9 @@ func NewTestLocalStoreForAddr(path string, basekey []byte) (*LocalStore, error) 
 func (self *LocalStore) Put(chunk *Chunk) {
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	self.memStore.Put(chunk)
-	go func() {
-		self.DbStore.Put(chunk)
-	}()
+	log.Error("put to memstore", "hash", chunk.Key.Hex())
+	self.DbStore.Put(chunk)
+	log.Error("put to dbstore", "hash", chunk.Key.Hex())
 }
 
 // Get(chunk *Chunk) looks up a chunk in the local stores
