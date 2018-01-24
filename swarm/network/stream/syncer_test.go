@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"testing"
 	"time"
 
@@ -142,7 +141,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		// each node Subscribes to each other's swarmChunkServerStreamName
 		j := 0
 		return sim.CallClient(func(client *rpc.Client) error {
-			err := streamTesting.WatchDisconnections(sim.IDs[j], client, errc, quitC)
+			err := streamTesting.WatchDisconnections(sim.IDs[j], client, peerCount(sim.IDs[j]), errc, quitC)
 			if err != nil {
 				return err
 			}
@@ -182,7 +181,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 					} else if err == nil {
 						nodeHashFound++
 					} else {
-						fmt.Fprintln(os.Stderr, time.Now(), "not found", "index", i, "origin", j, "key", key.Hex(), "err", err)
+						log.Error("not found", "index", i, "origin", j, "key", key.Hex(), "err", err)
 					}
 				}
 			}

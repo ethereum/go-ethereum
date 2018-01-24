@@ -73,14 +73,14 @@ func RegisterSwarmSyncerServer(streamer *Registry, db *storage.DBAPI) {
 }
 
 // GetSection retrieves the actual chunk from localstore
-func (s *SwarmSyncerServer) GetData(key []byte) []byte {
+func (s *SwarmSyncerServer) GetData(key []byte) ([]byte, error) {
 	chunk, err := s.db.Get(storage.Key(key))
 	if err == storage.ErrFetching {
 		<-chunk.ReqC
 	} else if err != nil {
-		return nil
+		return nil, err
 	}
-	return chunk.SData
+	return chunk.SData, nil
 }
 
 // GetBatch retrieves the next batch of hashes from the dbstore
@@ -111,7 +111,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	}
 
 	log.Debug("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.db.CurrentBucketStorageIndex(s.po))
-	return batch, from, to + 1, nil, nil
+	return batch, from, to, nil, nil
 }
 
 // SwarmSyncerClient

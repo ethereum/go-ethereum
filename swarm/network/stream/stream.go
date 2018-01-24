@@ -256,7 +256,7 @@ type server struct {
 // Server interface for outgoing peer Streamer
 type Server interface {
 	SetNextBatch(uint64, uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error)
-	GetData([]byte) []byte
+	GetData([]byte) ([]byte, error)
 }
 
 type client struct {

@@ -34,6 +34,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
@@ -210,6 +211,7 @@ func (p *Peer) Run(handler func(msg interface{}) error) error {
 // if they are useful for other protocols
 // overwrite Disconnect for testing, so that protocol readloop quits
 func (p *Peer) Drop(err error) {
+	log.Error("p2p protocol DROP", "err", err)
 	p.Disconnect(p2p.DiscSubprotocolError)
 }
 

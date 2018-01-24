@@ -19,7 +19,6 @@ package stream
 import (
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -100,9 +99,14 @@ func (s *SwarmChunkServer) SetNextBatch(_, _ uint64) (hashes []byte, from uint64
 }
 
 // GetData retrives chunk data from db store
-func (s *SwarmChunkServer) GetData(key []byte) []byte {
-	chunk, _ := s.db.Get(storage.Key(key))
-	return chunk.SData
+func (s *SwarmChunkServer) GetData(key []byte) ([]byte, error) {
+	chunk, err := s.db.Get(storage.Key(key))
+	if err == storage.ErrFetching {
+		<-chunk.ReqC
+	} else if err != nil {
+		return nil, err
+	}
+	return chunk.SData, nil
 }
 
 // RetrieveRequestMsg is the protocol msg for chunk retrieve requests
@@ -141,7 +145,7 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 			if req.SkipCheck {
 				err := sp.Deliver(chunk, s.priority)
 				if err != nil {
-					sp.Drop(err)
+					sp.Drop(fmt.Errorf("handleRetrieveRequestMsg: %v", err))
 				}
 			}
 			streamer.deliveryC <- chunk.Key[:]
@@ -173,9 +177,9 @@ R:
 	for req := range d.receiveC {
 		// this should be has locally
 		chunk, err := d.db.Get(req.Key)
-		fmt.Fprintln(os.Stderr, "pick from receiveC", "chunk", chunk.Key.Hex(), "reqC", chunk.ReqC, "err", err)
+		log.Error("pick from receiveC", "chunk", chunk.Key.Hex(), "reqC", chunk.ReqC, "err", err)
 		if err == nil {
-			fmt.Fprintln(os.Stderr, "found existing?", "hash", chunk.Key.Hex())
+			log.Error("found existing?", "hash", chunk.Key.Hex())
 			continue R
 		}
 		if err != storage.ErrFetching {
@@ -183,19 +187,19 @@ R:
 		}
 		select {
 		case <-chunk.ReqC:
-			fmt.Fprintln(os.Stderr, "someone else delivered?", "hash", chunk.Key.Hex())
+			log.Error("someone else delivered?", "hash", chunk.Key.Hex())
 			continue R
 		default:
 		}
 		go func() {
 			chunk.SData = req.SData
-			fmt.Fprintln(os.Stderr, "received delivery", "hash", chunk.Key.Hex())
+			log.Error("received delivery", "hash", chunk.Key.Hex())
 			d.db.Put(chunk)
-			fmt.Fprintln(os.Stderr, "put to db", "hash", chunk.Key.Hex())
+			log.Error("put to db", "hash", chunk.Key.Hex())
 			chunk.WaitToStore()
 			close(chunk.ReqC)
 			//log.Warn("received delivery stored", "hash", chunk.Key)
-			fmt.Fprintln(os.Stderr, "requesters notified", "hash", chunk.Key.Hex())
+			log.Error("requesters notified", "hash", chunk.Key.Hex())
 			d.counterDone++
 		}()
 	}

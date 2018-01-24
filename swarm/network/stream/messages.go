@@ -83,7 +83,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) error {
 	log.Debug("received subscription", "peer", p.ID(), "stream", req.Stream, "Key", req.Key, "from", req.From, "to", req.To)
 	go func() {
 		if err := p.SendOfferedHashes(os, req.From, req.To); err != nil {
-			p.Drop(err)
+			p.Drop(fmt.Errorf("handleSubscribeMsg SendOfferedHashes: %v", err))
 		}
 	}()
 	return nil
@@ -176,7 +176,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 			return
 		case err := <-s.next:
 			if err != nil {
-				p.Drop(err)
+				p.Drop(fmt.Errorf("handleOfferedHashesMsg next: %v", err))
 				return
 			}
 		case <-s.quit:
@@ -185,7 +185,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "Key", msg.Key, "from", msg.From, "to", msg.To)
 		err := p.SendPriority(msg, s.priority)
 		if err != nil {
-			p.Drop(err)
+			p.Drop(fmt.Errorf("handleOfferedHashesMsg set priority: %v", err))
 		}
 	}()
 	return nil
@@ -218,7 +218,7 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	// launch in go routine since GetBatch blocks until new hashes arrive
 	go func() {
 		if err := p.SendOfferedHashes(s, req.From, req.To); err != nil {
-			p.Drop(err)
+			p.Drop(fmt.Errorf("handleWantedHashesMsg SendOfferedHashes: %v", err))
 		}
 	}()
 	// go p.SendOfferedHashes(s, req.From, req.To)
@@ -230,9 +230,9 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
 			hash := hashes[i*HashSize : (i+1)*HashSize]
-			data := s.GetData(hash)
-			if data == nil {
-				return errors.New("not found")
+			data, err := s.GetData(hash)
+			if err != nil {
+				return fmt.Errorf("handleWantedHashesMsg get data %x: %v", hash, err)
 			}
 			chunk := storage.NewChunk(hash, nil)
 			chunk.SData = data

@@ -380,7 +380,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		// which responds to chunk retrieve requests all but the last node in the chain does not
 		var j int
 		err := sim.CallClient(func(client *rpc.Client) error {
-			err := streamTesting.WatchDisconnections(sim.IDs[j], client, errc, quitC)
+			err := streamTesting.WatchDisconnections(sim.IDs[j], client, peerCount(sim.IDs[j]), errc, quitC)
 			if err != nil {
 				return err
 			}
@@ -547,7 +547,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 		// which responds to chunk retrieve requests
 		var j int
 		simErrC <- sim.CallClient(func(client *rpc.Client) error {
-			err := streamTesting.WatchDisconnections(sim.IDs[j], client, simErrC, quitC)
+			err := streamTesting.WatchDisconnections(sim.IDs[j], client, peerCount(sim.IDs[j]), simErrC, quitC)
 			if err != nil {
 				return err
 			}

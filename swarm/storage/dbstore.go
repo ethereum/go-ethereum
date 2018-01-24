@@ -30,7 +30,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"os"
 	"sync"
 	"time"
 
@@ -540,16 +539,16 @@ func (s *DbStore) CurrentStorageIndex() uint64 {
 }
 
 func (s *DbStore) Put(chunk *Chunk) {
-	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put", "hash", chunk.Key.Hex())
+	log.Error("DbStore.Put", "hash", chunk.Key.Hex())
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
-		fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put WAITER STARTED", "hash", chunk.Key.Hex())
+		log.Error("DbStore.Put WAITER STARTED", "hash", chunk.Key.Hex())
 		select {
 		case <-time.After(1 * time.Second):
-			fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put WAITING", "hash", chunk.Key.Hex())
+			log.Error("DbStore.Put WAITING", "hash", chunk.Key.Hex())
 		case <-done:
-			fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put EXITED", "hash", chunk.Key.Hex())
+			log.Error("DbStore.Put EXITED", "hash", chunk.Key.Hex())
 		}
 	}()
 
@@ -557,35 +556,35 @@ func (s *DbStore) Put(chunk *Chunk) {
 	var index dpaDBIndex
 
 	po := s.po(chunk.Key)
-	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.db.Get is being called...", "hash", chunk.Key.Hex())
+	log.Error("DbStore.db.Get is being called...", "hash", chunk.Key.Hex())
 
-	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.LOCK acquiring", "hash", chunk.Key.Hex())
+	log.Error("DbStore.LOCK acquiring", "hash", chunk.Key.Hex())
 	s.lock.Lock()
-	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.LOCK acquired", "hash", chunk.Key.Hex())
+	log.Error("DbStore.LOCK acquired", "hash", chunk.Key.Hex())
 	defer s.lock.Unlock()
 
 	idata, err := s.db.Get(ikey)
-	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.db.Get done", "hash", chunk.Key.Hex(), "err", err)
+	log.Error("DbStore.db.Get done", "hash", chunk.Key.Hex(), "err", err)
 	if err != nil {
 		s.doPut(chunk, ikey, &index, po)
+		batchC := s.batchC
 		go func() {
 			defer func() {
 				if err := recover(); err != nil {
-					fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put PANIC", "hash", chunk.Key.Hex(), "err", err)
+					log.Error("DbStore.Put PANIC", "hash", chunk.Key.Hex(), "err", err)
 				}
 			}()
+
+			<-batchC
+			close(chunk.dbStored)
 		}()
-		fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put doPut", "hash", chunk.Key.Hex(), "dataIdx", s.dataIdx)
+		log.Error("DbStore.Put doPut", "hash", chunk.Key.Hex(), "dataIdx", s.dataIdx)
 	} else {
 		log.Trace(fmt.Sprintf("DbStore: chunk already exists, only update access"))
 		decodeIndex(idata, &index)
-		fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put already found", "hash", chunk.Key.Hex())
-	}
-	batchC := s.batchC
-	go func() {
-		<-batchC
 		close(chunk.dbStored)
-	}()
+		log.Error("DbStore.Put already found", "hash", chunk.Key.Hex())
+	}
 	index.Access = s.accessCnt
 	s.accessCnt++
 	idata = encodeIndex(&index)
@@ -594,7 +593,7 @@ func (s *DbStore) Put(chunk *Chunk) {
 	case s.batchesC <- struct{}{}:
 	default:
 	}
-	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.db.Put done", "hash", chunk.Key.Hex(), "err", err)
+	log.Error("DbStore.db.Put done", "hash", chunk.Key.Hex(), "err", err)
 }
 
 // force putting into db, does not check access index
@@ -716,9 +715,9 @@ func (s *DbStore) get(key Key) (chunk *Chunk, err error) {
 			hash := hasher.Sum(nil)
 
 			if !bytes.Equal(hash, key) {
-				log.Trace(fmt.Sprintf("Apparent key/hash mismatch. Hash %x, key %v", hash, key[:]))
+				log.Error(fmt.Sprintf("Apparent key/hash mismatch. Hash %x, key %v", hash, key[:]))
 				s.delete(indx.Idx, getIndexKey(key), s.po(key))
-				log.Warn("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
+				log.Error("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
 			}
 		}
 
@@ -784,15 +783,18 @@ func (s *DbStore) Close() {
 
 // initialises a sync iterator from a syncToken (passed in with the handshake)
 func (s *DbStore) SyncIterator(since uint64, until uint64, po uint8, f func(Key, uint64) bool) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	// probably, the lock is not needed
+	// s.lock.Lock()
+	// defer s.lock.Unlock()
+
 	untilkey := getDataKey(until, po)
 
 	it := s.db.NewIterator()
 	seek := getDataKey(since, po)
 	it.Seek(seek)
 	defer it.Release()
-	for it.Valid() {
+
+	for it.Next() {
 		dbkey := it.Key()
 		if dbkey[0] != keyData || dbkey[1] != byte(po) || bytes.Compare(untilkey, dbkey) < 0 {
 			break
@@ -803,9 +805,8 @@ func (s *DbStore) SyncIterator(since uint64, until uint64, po uint8, f func(Key,
 		if !f(Key(key), binary.BigEndian.Uint64(dbkey[2:])) {
 			break
 		}
-		it.Next()
 	}
-	return nil
+	return it.Error()
 }
 
 func databaseExists(path string) bool {

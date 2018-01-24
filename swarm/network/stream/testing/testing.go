@@ -154,9 +154,9 @@ func NewSimulation(conf *RunConfig) (*Simulation, func(), error) {
 	// set nodes number of Stores available
 	stores, storeTeardown, err := SetStores(addrs...)
 	teardown = func() {
-		storeTeardown()
-		adapterTeardown()
 		net.Shutdown()
+		adapterTeardown()
+		storeTeardown()
 	}
 	if err != nil {
 		return nil, teardown, err
@@ -208,7 +208,7 @@ func (s *Simulation) Run(ctx context.Context, conf *RunConfig) (*simulations.Ste
 	return result, nil
 }
 
-func WatchDisconnections(id discover.NodeID, client *rpc.Client, errc chan error, quitC chan struct{}) error {
+func WatchDisconnections(id discover.NodeID, client *rpc.Client, expectedConnCount int, errc chan error, quitC chan struct{}) error {
 	events := make(chan *p2p.PeerEvent)
 	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
 	if err != nil {
@@ -218,10 +218,14 @@ func WatchDisconnections(id discover.NodeID, client *rpc.Client, errc chan error
 		defer sub.Unsubscribe()
 		select {
 		case <-quitC:
-			return
+			if expectedConnCount <= 0 {
+				return
+			}
 		case e := <-events:
+			expectedConnCount--
 			errc <- fmt.Errorf("peerEvent for node %v: %v", id, e)
 		case err := <-sub.Err():
+			expectedConnCount = 0
 			if err != nil {
 				errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err)
 			}
