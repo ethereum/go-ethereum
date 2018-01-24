@@ -61,9 +61,9 @@ type Database struct {
 // cachedNode is all the information we know about a single cached node in the
 // memory database write layer.
 type cachedNode struct {
-	blob     []byte                   // Cached data block of the trie node
-	parents  int                      // Number of live nodes referencing this one
-	children map[common.Hash]struct{} // Children referenced by this nodes
+	blob     []byte              // Cached data block of the trie node
+	parents  int                 // Number of live nodes referencing this one
+	children map[common.Hash]int // Children referenced by this nodes
 }
 
 // NewDatabase creates a new trie database to store ephemeral trie content before
@@ -72,7 +72,7 @@ func NewDatabase(diskdb ethdb.Database) *Database {
 	return &Database{
 		diskdb: diskdb,
 		nodes: map[common.Hash]*cachedNode{
-			common.Hash{}: {children: make(map[common.Hash]struct{})},
+			common.Hash{}: {children: make(map[common.Hash]int)},
 		},
 		preimages: make(map[common.Hash][]byte),
 	}
@@ -99,7 +99,7 @@ func (db *Database) insert(hash common.Hash, blob []byte) {
 	}
 	db.nodes[hash] = &cachedNode{
 		blob:     common.CopyBytes(blob),
-		children: make(map[common.Hash]struct{}),
+		children: make(map[common.Hash]int),
 	}
 	db.size += common.StorageSize(common.HashLength + len(blob))
 }
@@ -185,12 +185,12 @@ func (db *Database) reference(child common.Hash, parent common.Hash) {
 	if !ok {
 		return
 	}
-	// If the reference already exists, don't duplicate it
-	if _, ok = db.nodes[parent].children[child]; ok {
+	// If the reference already exists, only duplicate for roots
+	if _, ok = db.nodes[parent].children[child]; ok && parent != (common.Hash{}) {
 		return
 	}
 	node.parents++
-	db.nodes[parent].children[child] = struct{}{}
+	db.nodes[parent].children[child]++
 }
 
 // Dereference removes an existing reference from a parent node to a child node.
@@ -211,9 +211,13 @@ func (db *Database) Dereference(child common.Hash, parent common.Hash) {
 
 // dereference is the private locked version of Dereference.
 func (db *Database) dereference(child common.Hash, parent common.Hash) {
-	// Dereference the parent-child relationship
-	delete(db.nodes[parent].children, child)
+	// Dereference the parent-child
+	node := db.nodes[parent]
 
+	node.children[child]--
+	if node.children[child] == 0 {
+		delete(node.children, child)
+	}
 	// If the node does not exist, it's a previously comitted node.
 	node, ok := db.nodes[child]
 	if !ok {
