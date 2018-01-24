@@ -553,38 +553,39 @@ func (s *DbStore) Put(chunk *Chunk) {
 		}
 	}()
 
+	ikey := getIndexKey(chunk.Key)
+	var index dpaDBIndex
+
+	po := s.po(chunk.Key)
+	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.db.Get is being called...", "hash", chunk.Key.Hex())
+
 	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.LOCK acquiring", "hash", chunk.Key.Hex())
 	s.lock.Lock()
 	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.LOCK acquired", "hash", chunk.Key.Hex())
 	defer s.lock.Unlock()
 
-	ikey := getIndexKey(chunk.Key)
-	var index dpaDBIndex
-
-	po := s.po(chunk.Key)
-
 	idata, err := s.db.Get(ikey)
-	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.db.Get", "hash", chunk.Key.Hex(), "err", err)
+	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.db.Get done", "hash", chunk.Key.Hex(), "err", err)
 	if err != nil {
 		s.doPut(chunk, ikey, &index, po)
-		batchC := s.batchC
 		go func() {
 			defer func() {
 				if err := recover(); err != nil {
 					fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put PANIC", "hash", chunk.Key.Hex(), "err", err)
 				}
 			}()
-
-			<-batchC
-			close(chunk.dbStored)
 		}()
 		fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put doPut", "hash", chunk.Key.Hex(), "dataIdx", s.dataIdx)
 	} else {
 		log.Trace(fmt.Sprintf("DbStore: chunk already exists, only update access"))
 		decodeIndex(idata, &index)
-		close(chunk.dbStored)
 		fmt.Fprintln(os.Stderr, time.Now(), "DbStore.Put already found", "hash", chunk.Key.Hex())
 	}
+	batchC := s.batchC
+	go func() {
+		<-batchC
+		close(chunk.dbStored)
+	}()
 	index.Access = s.accessCnt
 	s.accessCnt++
 	idata = encodeIndex(&index)
@@ -593,6 +594,7 @@ func (s *DbStore) Put(chunk *Chunk) {
 	case s.batchesC <- struct{}{}:
 	default:
 	}
+	fmt.Fprintln(os.Stderr, time.Now(), "DbStore.db.Put done", "hash", chunk.Key.Hex(), "err", err)
 }
 
 // force putting into db, does not check access index
