@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/rs/cors"
+	"strings"
 )
 
 const (
@@ -142,8 +143,11 @@ func (t *httpReadWriteNopCloser) Close() error {
 // NewHTTPServer creates a new HTTP RPC server around an API provider.
 //
 // Deprecated: Server implements http.Handler
-func NewHTTPServer(cors []string, srv *Server) *http.Server {
-	return &http.Server{Handler: newCorsHandler(srv, cors)}
+func NewHTTPServer(cors []string, hosts[] string, srv *Server) *http.Server {
+	// Wrap the CORS-handler within a host-handler
+	handler := newCorsHandler(srv, cors)
+	handler = newHostHandler(hosts, handler)
+	return &http.Server{Handler: handler}
 }
 
 // ServeHTTP serves JSON-RPC requests over HTTP.
@@ -164,6 +168,10 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("content-type", contentType)
 	srv.ServeSingleRequest(codec, OptionMethodInvocation)
+}
+
+func parseHost(hostport string) string {
+	return strings.ToLower(strings.Split(hostport, ":")[0])
 }
 
 // validateRequest returns a non-zero response code and error message if the
@@ -195,6 +203,39 @@ func newCorsHandler(srv *Server, allowedOrigins []string) http.Handler {
 		AllowedMethods: []string{http.MethodPost, http.MethodGet},
 		MaxAge:         600,
 		AllowedHeaders: []string{"*"},
+		Debug:          true,
 	})
 	return c.Handler(srv)
+}
+
+// hostHandler is a handler which validates the Host-header of incoming requests.
+// The hostHandler can prevent DNS rebinding attacks, which do not utilize CORS-headers,
+// since they do in-domain requests against the RPC api. Instead, we can see on the Host-header
+// which domain was used, and validate that against a whitelist.
+type hostHandler struct {
+	AllowedHosts []string
+	next         http.Handler
+}
+
+// ServeHTTP serves JSON-RPC requests over HTTP, implements http.Handler
+func (h *hostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
+	if r.Host != "" {
+		hostpart := parseHost(r.Host)
+		requestAllowed := false
+		for _, allowedHost := range h.AllowedHosts {
+			if strings.ToLower(allowedHost) == hostpart {
+				requestAllowed = true
+			}
+		}
+		if !requestAllowed {
+			http.Error(w, "invalid host specified", http.StatusForbidden)
+			return
+		}
+	}
+	h.next.ServeHTTP(w, r)
+}
+
+func newHostHandler(allowedHosts []string, next http.Handler) http.Handler {
+	return &hostHandler{allowedHosts, next}
 }
