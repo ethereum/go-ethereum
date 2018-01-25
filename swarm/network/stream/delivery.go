@@ -60,6 +60,7 @@ type SwarmChunkServer struct {
 	batchC     chan []byte
 	db         *storage.DBAPI
 	currentLen uint64
+	quit       chan struct{}
 }
 
 // NewSwarmChunkServer is SwarmChunkServer constructor
@@ -68,6 +69,7 @@ func NewSwarmChunkServer(db *storage.DBAPI) *SwarmChunkServer {
 		deliveryC: make(chan []byte, deliveryCap),
 		batchC:    make(chan []byte),
 		db:        db,
+		quit:      make(chan struct{}),
 	}
 	go s.processDeliveries()
 	return s
@@ -79,6 +81,8 @@ func (s *SwarmChunkServer) processDeliveries() {
 	var batchC chan []byte
 	for {
 		select {
+		case <-s.quit:
+			return
 		case hash := <-s.deliveryC:
 			hashes = append(hashes, hash...)
 			batchC = s.batchC
@@ -96,6 +100,11 @@ func (s *SwarmChunkServer) SetNextBatch(_, _ uint64) (hashes []byte, from uint64
 	s.currentLen += uint64(len(hashes))
 	to = s.currentLen
 	return
+}
+
+// Close needs to be called on a stream server
+func (s *SwarmChunkServer) Close() {
+	close(s.quit)
 }
 
 // GetData retrives chunk data from db store
@@ -168,30 +177,40 @@ type ChunkDeliveryMsg struct {
 
 func (d *Delivery) handleChunkDeliveryMsg(sp *Peer, req *ChunkDeliveryMsg) error {
 	d.counterIn++
+	log.Error("push to receiveC", "hash", storage.Key(req.Key).Hex())
 	d.receiveC <- req
 	return nil
 }
 
 func (d *Delivery) processReceivedChunks() {
-R:
+	done := make(chan struct{})
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+	// R:
 	for req := range d.receiveC {
-		// this should be has locally
-		chunk, err := d.db.Get(req.Key)
-		log.Error("pick from receiveC", "chunk", chunk.Key.Hex(), "reqC", chunk.ReqC, "err", err)
-		if err == nil {
-			log.Error("found existing?", "hash", chunk.Key.Hex())
-			continue R
-		}
-		if err != storage.ErrFetching {
-			panic(fmt.Sprintf("not in db? key %v chunk %v", req.Key, chunk))
-		}
-		select {
-		case <-chunk.ReqC:
-			log.Error("someone else delivered?", "hash", chunk.Key.Hex())
-			continue R
-		default:
-		}
-		go func() {
+		log.Error("pop from receiveC", "hash", storage.Key(req.Key).Hex())
+		timer.Reset(1 * time.Second)
+		go func(req *ChunkDeliveryMsg) {
+			defer func() { done <- struct{}{} }()
+			// this should be has locally
+			chunk, err := d.db.Get(req.Key)
+			log.Error("after db.Get", "chunk", chunk.Key.Hex(), "reqC", chunk.ReqC, "err", err)
+			if err == nil {
+				log.Error("found existing?", "hash", chunk.Key.Hex())
+				// continue R
+				return
+			}
+			if err != storage.ErrFetching {
+				panic(fmt.Sprintf("not in db? key %v chunk %v", req.Key, chunk))
+			}
+			select {
+			case <-chunk.ReqC:
+				log.Error("someone else delivered?", "hash", chunk.Key.Hex())
+				// continue R
+				return
+			default:
+			}
+			// go func() {
 			chunk.SData = req.SData
 			log.Error("received delivery", "hash", chunk.Key.Hex())
 			d.db.Put(chunk)
@@ -201,7 +220,13 @@ R:
 			//log.Warn("received delivery stored", "hash", chunk.Key)
 			log.Error("requesters notified", "hash", chunk.Key.Hex())
 			d.counterDone++
-		}()
+			// }()
+		}(req)
+		select {
+		case <-timer.C:
+			log.Error("!!!unable to process", "hash", req.Key.Hex())
+		case <-done:
+		}
 	}
 }
 

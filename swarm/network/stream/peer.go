@@ -83,6 +83,10 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	if err != nil {
 		return err
 	}
+	// true only when quiting
+	if len(hashes) == 0 {
+		return nil
+	}
 	if proof == nil {
 		proof = &HandoverProof{
 			Handover: &Handover{},
@@ -170,4 +174,10 @@ func (p *Peer) setClient(s string, key []byte, i Client, priority uint8, live bo
 	}
 	next <- nil // this is to allow wantedKeysMsg before first batch arrives
 	return nil
+}
+
+func (p *Peer) close() {
+	for _, s := range p.servers {
+		s.Close()
+	}
 }

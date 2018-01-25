@@ -378,22 +378,23 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 
 		// each node subscribes to the upstream swarm chunk server stream
 		// which responds to chunk retrieve requests all but the last node in the chain does not
-		var j int
-		err := sim.CallClient(func(client *rpc.Client) error {
-			err := streamTesting.WatchDisconnections(sim.IDs[j], client, peerCount(sim.IDs[j]), errc, quitC)
+		for j := 0; j < nodes-1; j++ {
+			id := sim.IDs[j]
+			err := sim.CallClient(id, func(client *rpc.Client) error {
+				err := streamTesting.WatchDisconnections(sim.IDs[j], client, peerCount(sim.IDs[j]), errc, quitC)
+				if err != nil {
+					return err
+				}
+				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+				defer cancel()
+				j++
+				sid := sim.IDs[j]
+				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, swarmChunkServerStreamName, nil, 0, 0, Top, false)
+			})
 			if err != nil {
 				return err
 			}
-			ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
-			defer cancel()
-			j++
-			sid := sim.IDs[j]
-			return client.CallContext(ctx, nil, "stream_subscribeStream", sid, swarmChunkServerStreamName, nil, 0, 0, Top, false)
-		}, sim.IDs[0:nodes-1]...)
-		if err != nil {
-			return err
 		}
-
 		// create a retriever dpa for the pivot node
 		delivery := deliveries[sim.IDs[0]]
 		retrieveFunc := func(chunk *storage.Chunk) error {
@@ -426,22 +427,21 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		default:
 		}
 		var total int64
-		err := sim.CallClient(func(client *rpc.Client) error {
+		err := sim.CallClient(id, func(client *rpc.Client) error {
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 			return client.CallContext(ctx, &total, "stream_readAll", common.BytesToHash(fileHash))
-		}, id)
+		})
 		log.Info(fmt.Sprintf("check if %08x is available locally: number of bytes read %v/%v (error: %v)", fileHash, total, size, err))
 		if err != nil || total != int64(size) {
 			return false, nil
 		}
-		close(quitC)
 		return true, nil
 	}
 
 	conf.Step = &simulations.Step{
 		Action:  action,
-		Trigger: streamTesting.PivotTrigger(10*time.Millisecond, checkC, sim.IDs[0]),
+		Trigger: streamTesting.Trigger(10*time.Millisecond, quitC, sim.IDs[0]),
 		// we are only testing the pivot node (net.Nodes[0])
 		Expect: &simulations.Expectation{
 			Nodes: sim.IDs[0:1],
@@ -490,7 +490,12 @@ func BenchmarkDeliveryFromNodesWithCheck(b *testing.B) {
 }
 
 func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skipCheck bool) {
+	defaultSkipCheck = skipCheck
 	toAddr = network.NewAddrFromNodeID
+	timeout := 300 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	conf := &streamTesting.RunConfig{
 		Adapter:   *adapter,
 		NodeCount: nodes,
@@ -498,12 +503,12 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 		ToAddr:    toAddr,
 		Services:  services,
 	}
-	defaultSkipCheck = skipCheck
 	sim, teardown, err := streamTesting.NewSimulation(conf)
 	defer teardown()
 	if err != nil {
 		b.Fatal(err.Error())
 	}
+
 	stores = make(map[discover.NodeID]storage.ChunkStore)
 	deliveries = make(map[discover.NodeID]*Delivery)
 	for i, id := range sim.IDs {
@@ -515,17 +520,19 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 		}
 		return 2
 	}
+	// wait channel for all nodes all peer connections to set up
+	waitPeerErrC = make(chan error)
+
 	// create a dpa for the last node in the chain which we are gonna write to
 	remoteDpa := storage.NewDPA(sim.Stores[nodes-1], storage.NewChunkerParams())
 	remoteDpa.Start()
 	defer remoteDpa.Stop()
 
-	// wait channel for all nodes all peer connections to set up
-	waitPeerErrC = make(chan error)
 	// channel to signal simulation initialisation with action call complete
 	// or node disconnections
 	simErrC := make(chan error)
 	quitC := make(chan struct{})
+	defer close(quitC)
 
 	action := func(ctx context.Context) error {
 		// each node Subscribes to each other's swarmChunkServerStreamName
@@ -545,18 +552,19 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 
 		// each node except the last one subscribes to the upstream swarm chunk server stream
 		// which responds to chunk retrieve requests
-		var j int
-		simErrC <- sim.CallClient(func(client *rpc.Client) error {
-			err := streamTesting.WatchDisconnections(sim.IDs[j], client, peerCount(sim.IDs[j]), simErrC, quitC)
-			if err != nil {
-				return err
-			}
-			ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
-			defer cancel()
-			j++
-			sid := sim.IDs[j] // the upstream peer's id
-			return client.CallContext(ctx, nil, "stream_subscribeStream", sid, swarmChunkServerStreamName, nil, 0, 0, Top, false)
-		}, sim.IDs[0:nodes-1]...)
+		for j := 0; j < nodes-1; j++ {
+			id := sim.IDs[j]
+			simErrC <- sim.CallClient(id, func(client *rpc.Client) error {
+				err := streamTesting.WatchDisconnections(id, client, peerCount(id), simErrC, quitC)
+				if err != nil {
+					return err
+				}
+				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+				defer cancel()
+				sid := sim.IDs[j+1] // the upstream peer's id
+				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, swarmChunkServerStreamName, nil, 0, 0, Top, false)
+			})
+		}
 		// signal to the benchmark that setup is complete
 		return err
 	}
@@ -589,10 +597,6 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	// run the simulation in the background
 	errc := make(chan error)
 	go func() {
-		timeout := 300 * time.Second
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-
 		_, err := sim.Run(ctx, conf)
 		errc <- err
 	}()
@@ -608,6 +612,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 			select {
 			case err = <-simErrC:
 			case <-quitC:
+				return
 			}
 			trigger <- sim.IDs[0]
 			checkC <- err
@@ -669,7 +674,6 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 		}
 	}
 	// benchmark over, trigger the check function to conclude the simulation
-	close(quitC)
 	err = <-errc
 	if err != nil {
 		b.Fatalf("expected no error. got %v", err)

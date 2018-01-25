@@ -42,6 +42,7 @@ type SwarmSyncerServer struct {
 	db        *storage.DBAPI
 	sessionAt uint64
 	start     uint64
+	quit      chan struct{}
 }
 
 // NewSwarmSyncerServer is contructor for SwarmSyncerServer
@@ -56,6 +57,7 @@ func NewSwarmSyncerServer(live bool, po uint8, db *storage.DBAPI) (*SwarmSyncerS
 		db:        db,
 		sessionAt: sessionAt,
 		start:     start,
+		quit:      make(chan struct{}),
 	}, nil
 }
 
@@ -70,6 +72,11 @@ func RegisterSwarmSyncerServer(streamer *Registry, db *storage.DBAPI) {
 	// streamer.RegisterOutgoingStreamer(stream, func(p *Peer) (OutgoingStreamer, error) {
 	// 	return NewOutgoingProvableSwarmSyncer(po, db)
 	// })
+}
+
+// Close needs to be called on a stream server
+func (s *SwarmSyncerServer) Close() {
+	close(s.quit)
 }
 
 // GetSection retrieves the actual chunk from localstore
@@ -95,7 +102,12 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	}
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
-	for range ticker.C {
+	for {
+		select {
+		case <-ticker.C:
+		case <-s.quit:
+			return nil, 0, 0, nil, nil
+		}
 		err := s.db.Iterator(from, to, s.po, func(key storage.Key, idx uint64) bool {
 			batch = append(batch, key[:]...)
 			i++

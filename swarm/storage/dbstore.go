@@ -781,27 +781,22 @@ func (s *DbStore) Close() {
 	s.db.Close()
 }
 
-// initialises a sync iterator from a syncToken (passed in with the handshake)
+// SyncIterator(start, stop, po, f) calls f on each hash of a bin po from start to stop
 func (s *DbStore) SyncIterator(since uint64, until uint64, po uint8, f func(Key, uint64) bool) error {
-	// probably, the lock is not needed
-	// s.lock.Lock()
-	// defer s.lock.Unlock()
-
+	sincekey := getDataKey(since, po)
 	untilkey := getDataKey(until, po)
-
 	it := s.db.NewIterator()
-	seek := getDataKey(since, po)
-	it.Seek(seek)
 	defer it.Release()
+	it.Seek(sincekey)
 
 	for it.Next() {
 		dbkey := it.Key()
 		if dbkey[0] != keyData || dbkey[1] != byte(po) || bytes.Compare(untilkey, dbkey) < 0 {
 			break
 		}
-
 		key := make([]byte, 32)
-		copy(key, it.Value()[:32])
+		val := it.Value()
+		copy(key, val[:32])
 		if !f(Key(key), binary.BigEndian.Uint64(dbkey[2:])) {
 			break
 		}

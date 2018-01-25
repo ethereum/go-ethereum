@@ -179,8 +179,6 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 				p.Drop(fmt.Errorf("handleOfferedHashesMsg next: %v", err))
 				return
 			}
-		case <-s.quit:
-			return
 		}
 		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "Key", msg.Key, "from", msg.From, "to", msg.To)
 		err := p.SendPriority(msg, s.priority)

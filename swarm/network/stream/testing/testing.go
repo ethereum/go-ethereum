@@ -234,7 +234,7 @@ func WatchDisconnections(id discover.NodeID, client *rpc.Client, expectedConnCou
 	return nil
 }
 
-func PivotTrigger(d time.Duration, checkC chan struct{}, ids ...discover.NodeID) chan discover.NodeID {
+func Trigger(d time.Duration, quitC chan struct{}, ids ...discover.NodeID) chan discover.NodeID {
 	trigger := make(chan discover.NodeID)
 	go func() {
 		ticker := time.NewTicker(d)
@@ -242,28 +242,24 @@ func PivotTrigger(d time.Duration, checkC chan struct{}, ids ...discover.NodeID)
 		// we are only testing the pivot node (net.Nodes[0])
 		for range ticker.C {
 			for _, id := range ids {
-				trigger <- id
+				select {
+				case trigger <- id:
+				case <-quitC:
+				}
 			}
-			<-checkC
 		}
 	}()
 	return trigger
 }
 
-func (sim *Simulation) CallClient(f func(*rpc.Client) error, ids ...discover.NodeID) error {
-	for _, id := range ids {
-		node := sim.Net.GetNode(id)
-		if node == nil {
-			return fmt.Errorf("unknown node: %s", id)
-		}
-		client, err := node.Client()
-		if err != nil {
-			return fmt.Errorf("error getting node client: %s", err)
-		}
-		err = f(client)
-		if err != nil {
-			return err
-		}
+func (sim *Simulation) CallClient(id discover.NodeID, f func(*rpc.Client) error) error {
+	node := sim.Net.GetNode(id)
+	if node == nil {
+		return fmt.Errorf("unknown node: %s", id)
 	}
-	return nil
+	client, err := node.Client()
+	if err != nil {
+		return fmt.Errorf("error getting node client: %s", err)
+	}
+	return f(client)
 }

@@ -44,6 +44,7 @@ func TestSyncerSimulation(t *testing.T) {
 	// testSyncBetweenNodes(t, 8, 1, dataChunkCount, true, 1)
 	// // testSyncBetweenNodes(t, 8, 1, dataChunkCount, false, 1)
 	testSyncBetweenNodes(t, 16, 1, dataChunkCount, true, 1)
+	// testSyncBetweenNodes(t, 32, 1, dataChunkCount, true, 1)
 	// testSyncBetweenNodes(t, 16, 1, dataChunkCount, false, 1)
 }
 
@@ -61,34 +62,49 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		ToAddr:    toAddr,
 		Services:  services,
 	}
+	// create context for simulation run
+	timeout := 30 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	// defer cancel should come before defer simulation teardown
+	defer cancel()
 
+	// create simulation network with the config
 	sim, teardown, err := streamTesting.NewSimulation(conf)
 	defer teardown()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
+	// DEBUG:
 	defer func() {
 		for _, id := range sim.IDs {
 			deliveries[id].PrintCounters(id)
 		}
-		// for id, delivery := range deliveries {
-		// 	delivery.PrintCounters(id)
-		// }
 	}()
 
+	// HACK: these are global variables in the test so that they are available for
+	// the service constructor function
+	// TODO: will this work with exec/docker adapter?
+	// localstore of nodes made available for action and check calls
 	stores = make(map[discover.NodeID]storage.ChunkStore)
-	deliveries = make(map[discover.NodeID]*Delivery)
+	nodeIndex := make(map[discover.NodeID]int)
 	for i, id := range sim.IDs {
+		nodeIndex[id] = i
 		stores[id] = sim.Stores[i]
 	}
+	deliveries = make(map[discover.NodeID]*Delivery)
+	// peerCount function gives the number of peer connections for a nodeID
+	// this is needed for the service run function to wait until
+	// each protocol  instance runs and the streamer peers are available
 	peerCount = func(id discover.NodeID) int {
 		if sim.IDs[0] == id || sim.IDs[nodes-1] == id {
 			return 1
 		}
 		return 2
 	}
-	// here we distribute chunks of a random file into Stores of nodes 1 to nodes
+	waitPeerErrC = make(chan error)
+
+	// here we distribute chunks of a random file into stores 1...nodes
 	rrdpa := storage.NewDPA(newRoundRobinStore(sim.Stores[1:]...), storage.NewChunkerParams())
 	rrdpa.Start()
 	size := chunkCount * chunkSize
@@ -100,12 +116,14 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		t.Fatal(err.Error())
 	}
 
-	// collect hashes in po 1 from all nodes
-	hashes := make([][]storage.Key, nodes)
+	// create DBAPI-s for all nodes
 	dbs := make([]*storage.DBAPI, nodes)
 	for i := 0; i < nodes; i++ {
 		dbs[i] = storage.NewDBAPI(sim.Stores[i].(*storage.LocalStore))
 	}
+
+	// collect hashes in po 1 bin for each node
+	hashes := make([][]storage.Key, nodes)
 	totalHashes := 0
 	hashCounts := make([]int, nodes)
 	for i := nodes - 1; i >= 0; i-- {
@@ -120,9 +138,12 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		})
 	}
 
+	// errc is error channel for simulation
 	errc := make(chan error, 1)
-	waitPeerErrC = make(chan error)
 	quitC := make(chan struct{})
+	defer close(quitC)
+
+	// action is subscribe
 	action := func(ctx context.Context) error {
 		// need to wait till an aynchronous process registers the peers in streamer.peers
 		// that is used by Subscribe
@@ -139,24 +160,29 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			}
 		}
 		// each node Subscribes to each other's swarmChunkServerStreamName
-		j := 0
-		return sim.CallClient(func(client *rpc.Client) error {
-			err := streamTesting.WatchDisconnections(sim.IDs[j], client, peerCount(sim.IDs[j]), errc, quitC)
+		for j := 0; j < nodes-1; j++ {
+			id := sim.IDs[j]
+			err := sim.CallClient(id, func(client *rpc.Client) error {
+				// report disconnect events to the error channel cos peers should not disconnect
+				err := streamTesting.WatchDisconnections(id, client, peerCount(id), errc, quitC)
+				if err != nil {
+					return err
+				}
+				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+				defer cancel()
+				// start syncing, i.e., subscribe to upstream peers po 1 bin
+				sid := sim.IDs[j+1]
+				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, "SYNC", []byte{1}, 0, 0, Top, false)
+			})
 			if err != nil {
 				return err
 			}
-			ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
-			defer cancel()
-			j++
-			return client.CallContext(ctx, nil, "stream_subscribeStream", sim.IDs[j], "SYNC", []byte{1}, 0, 0, Top, false)
-		}, sim.IDs[0:nodes-1]...)
+		}
+		return nil
 	}
 
 	// this makes sure check is not called before the previous call finishes
-	checkC := make(chan struct{})
 	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
-		defer func() { checkC <- struct{}{} }()
-
 		select {
 		case err := <-errc:
 			return false, err
@@ -165,54 +191,37 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		default:
 		}
 
-		var pass bool
-		var i int
-		log.Error("staring dbs check")
-		for i = nodes - 1; i >= 0; i-- {
-			nodeHashCount := hashCounts[i]
-			nodeHashFound := 0
-			for j := i; j < nodes; j++ {
-				nodeHashes := hashes[j]
-				for _, key := range nodeHashes {
-					chunk, err := dbs[i].Get(key)
-					if err == storage.ErrFetching {
-						<-chunk.ReqC
-						nodeHashFound++
-					} else if err == nil {
-						nodeHashFound++
-					} else {
-						log.Error("not found", "index", i, "origin", j, "key", key.Hex(), "err", err)
-					}
+		log.Error("starting dbs check", "node", id)
+		i := nodeIndex[id]
+		var total, found int
+		for j := i; j < nodes; j++ {
+			total += len(hashes[j])
+			for _, key := range hashes[j] {
+				chunk, err := dbs[i].Get(key)
+				if err == storage.ErrFetching {
+					<-chunk.ReqC
+				} else if err != nil {
+					log.Error("not found", "index", i, "origin", j, "key", key.Hex(), "err", err)
+					continue
 				}
-			}
-			log.Error("sync check", "node", sim.IDs[i], "index", i, "bin", po, "found", nodeHashFound, "total", nodeHashCount)
-			pass = nodeHashFound == nodeHashCount
-			if !pass {
-				break
+				// needed for leveldb not to be closed?
+				// chunk.WaitToStore()
+				found++
 			}
 		}
-		// log.Error("sync check", "bin", po, "found", found, "total", totalHashes)
-		// pass := found == totalHashes
-		if !pass {
-			return false, nil
-		}
-		close(quitC)
-		return true, nil
-
+		log.Error("sync check", "node", id, "index", i, "bin", po, "found", found, "total", total)
+		return total == found, nil
 	}
 
 	conf.Step = &simulations.Step{
 		Action:  action,
-		Trigger: streamTesting.PivotTrigger(500*time.Millisecond, checkC, sim.IDs[0]),
+		Trigger: streamTesting.Trigger(500*time.Millisecond, quitC, sim.IDs[0:nodes-1]...),
 		Expect: &simulations.Expectation{
 			Nodes: sim.IDs[0:1],
 			Check: check,
 		},
 	}
 	startedAt := time.Now()
-	timeout := 30 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
 	result, err := sim.Run(ctx, conf)
 	finishedAt := time.Now()
 	if err != nil {

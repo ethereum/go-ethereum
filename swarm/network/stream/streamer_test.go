@@ -85,6 +85,9 @@ func (self *testServer) GetData([]byte) ([]byte, error) {
 	return nil, nil
 }
 
+func (self *testServer) Close() {
+}
+
 func TestStreamerDownstreamSubscribeMsgExchange(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(t)
 	defer teardown()

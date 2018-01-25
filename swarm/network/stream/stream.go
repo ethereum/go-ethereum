@@ -198,7 +198,8 @@ func (r *Registry) run(p *protocols.Peer) error {
 	sp := NewPeer(p, r)
 	r.setPeer(sp)
 	defer r.deletePeer(sp)
-	defer close(sp.quit)
+	// defer close(sp.quit
+	defer sp.close()
 	return sp.Run(sp.HandleMsg)
 }
 
@@ -257,6 +258,7 @@ type server struct {
 type Server interface {
 	SetNextBatch(uint64, uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error)
 	GetData([]byte) ([]byte, error)
+	Close()
 }
 
 type client struct {
@@ -266,8 +268,8 @@ type client struct {
 	live      bool
 	stream    string
 	key       []byte
-	quit      chan struct{}
-	next      chan error
+	// quit      chan struct{}
+	next chan error
 }
 
 // Client interface for incoming peer Streamer
