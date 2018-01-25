@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"path/filepath"
@@ -95,10 +96,18 @@ func NewTestLocalStoreForAddr(path string, basekey []byte) (*LocalStore, error) 
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-	self.memStore.Put(chunk)
-	log.Error("put to memstore", "hash", chunk.Key.Hex())
-	self.DbStore.Put(chunk)
-	log.Error("put to dbstore", "hash", chunk.Key.Hex())
+	c := &Chunk{
+		Key:      Key(append([]byte{}, chunk.Key...)),
+		SData:    append([]byte{}, chunk.SData...),
+		dbStored: chunk.dbStored,
+	}
+	self.memStore.Put(c)
+	log.Error("put to memstore", "hash", c.Key.Hex())
+	self.DbStore.Put(c)
+	log.Error("put to dbstore", "hash", c.Key.Hex())
+	if !bytes.Equal(chunk.Key, c.Key) {
+		panic(fmt.Errorf("LocalStore.Put: chunk %s != c %s", chunk.Key.Hex(), c.Key.Hex()))
+	}
 }
 
 // Get(chunk *Chunk) looks up a chunk in the local stores
@@ -122,7 +131,7 @@ func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 		return
 	}
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-	self.memStore.Put(chunk)
+	//self.memStore.Put(chunk)
 	return
 }
 

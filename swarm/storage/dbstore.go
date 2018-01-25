@@ -27,6 +27,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -34,7 +35,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -221,7 +221,12 @@ func getDataKey(idx uint64, po uint8) []byte {
 }
 
 func encodeIndex(index *dpaDBIndex) []byte {
-	data, _ := rlp.EncodeToBytes(index)
+	//data, _ := rlp.EncodeToBytes(index)
+
+	data, err := json.Marshal(index)
+	if err != nil {
+		panic(err)
+	}
 	return data
 }
 
@@ -230,8 +235,10 @@ func encodeData(chunk *Chunk) []byte {
 }
 
 func decodeIndex(data []byte, index *dpaDBIndex) error {
-	dec := rlp.NewStream(bytes.NewReader(data), 0)
-	return dec.Decode(index)
+	// dec := rlp.NewStream(bytes.NewReader(data), 0)
+	// return dec.Decode(index)
+	return json.Unmarshal(data, index)
+
 }
 
 func decodeData(data []byte, chunk *Chunk) {
@@ -542,6 +549,7 @@ func (s *DbStore) Put(chunk *Chunk) {
 	log.Error("DbStore.Put", "hash", chunk.Key.Hex())
 	done := make(chan struct{})
 	defer close(done)
+	key := Key(append(make([]byte, 0), chunk.Key...))
 	go func() {
 		log.Error("DbStore.Put WAITER STARTED", "hash", chunk.Key.Hex())
 		select {
@@ -549,6 +557,9 @@ func (s *DbStore) Put(chunk *Chunk) {
 			log.Error("DbStore.Put WAITING", "hash", chunk.Key.Hex())
 		case <-done:
 			log.Error("DbStore.Put EXITED", "hash", chunk.Key.Hex())
+			if !bytes.Equal(chunk.Key, key) {
+				panic(fmt.Errorf("DbStore.Get: chunk key %s != req key %s", chunk.Key.Hex(), key.Hex()))
+			}
 		}
 	}()
 
@@ -723,6 +734,10 @@ func (s *DbStore) get(key Key) (chunk *Chunk, err error) {
 
 		chunk = NewChunk(key, nil)
 		decodeData(data, chunk)
+
+		if !bytes.Equal(chunk.Key, key) {
+			panic(fmt.Errorf("DbStore.Get: chunk key %s != req key %s", chunk.Key.Hex(), key.Hex()))
+		}
 
 	} else {
 		err = ErrNotFound

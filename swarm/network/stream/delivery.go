@@ -17,6 +17,7 @@
 package stream
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"time"
@@ -197,6 +198,9 @@ func (d *Delivery) processReceivedChunks() {
 			// this should be has locally
 			log.Error("before db.Get", "peer", req.peer.ID(), "hash", storage.Key(req.Key).Hex())
 			chunk, err := d.db.Get(req.Key)
+			if !bytes.Equal(chunk.Key, req.Key) {
+				panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), storage.Key(req.Key).Hex(), req.peer.ID()))
+			}
 			log.Error("after db.Get", "peer", req.peer.ID(), "chunk", chunk.Key.Hex(), "reqC", chunk.ReqC, "err", err)
 			if err == nil {
 				log.Error("found existing?", "peer", req.peer.ID(), "hash", chunk.Key.Hex())

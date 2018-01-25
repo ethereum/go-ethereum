@@ -19,6 +19,8 @@
 package storage
 
 import (
+	"bytes"
+	"fmt"
 	"sync"
 )
 
@@ -328,6 +330,9 @@ func (m *MemStore) Get(key Key) (*Chunk, error) {
 	c, ok := m.m[string(key[:])]
 	if !ok {
 		return nil, ErrNotFound
+	}
+	if !bytes.Equal(c.Key, key) {
+		panic(fmt.Errorf("MemStore.Get: chunk key %s != req key %s", c.Key.Hex(), key.Hex()))
 	}
 	return c, nil
 }
