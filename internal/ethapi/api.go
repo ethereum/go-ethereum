@@ -370,6 +370,46 @@ func (s *PrivateAccountAPI) SendTransaction(ctx context.Context, args SendTxArgs
 	return submitTransaction(ctx, s.b, signed)
 }
 
+// SignTransaction will create a transaction from the given arguments and
+// tries to sign it with the key associated with args.To. If the given passwd isn't
+// able to decrypt the key it fails. The transaction is returned in RLP-form, not broadcast
+// to other nodes
+func (s *PrivateAccountAPI) SignTransaction(ctx context.Context, args SendTxArgs, passwd string) (*SignTransactionResult, error) {
+	// Look up the wallet containing the requested signer
+	account := accounts.Account{Address: args.From}
+
+	wallet, err := s.am.Find(account)
+	if err != nil {
+		return nil, err
+	}
+	if args.Nonce == nil {
+		// Hold the addresse's mutex around signing to prevent concurrent assignment of
+		// the same nonce to multiple accounts.
+		s.nonceLock.LockAddr(args.From)
+		defer s.nonceLock.UnlockAddr(args.From)
+	}
+	// Set some sanity defaults and terminate on failure
+	if err := args.setDefaults(ctx, s.b); err != nil {
+		return nil, err
+	}
+	// Assemble the transaction and sign with the wallet
+	tx := args.toTransaction()
+
+	var chainID *big.Int
+	if config := s.b.ChainConfig(); config.IsEIP155(s.b.CurrentBlock().Number()) {
+		chainID = config.ChainId
+	}
+	tx, err = wallet.SignTxWithPassphrase(account, passwd, tx, chainID)
+	if err != nil {
+		return nil, err
+	}
+	data, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		return nil, err
+	}
+	return &SignTransactionResult{data, tx}, nil
+}
+
 // signHash is a helper function that calculates a hash for the given message that can be
 // safely used to calculate a signature from.
 //
