@@ -173,10 +173,12 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 type ChunkDeliveryMsg struct {
 	Key   storage.Key
 	SData []byte // the stored chunk Data (incl size)
+	peer  *Peer
 }
 
 func (d *Delivery) handleChunkDeliveryMsg(sp *Peer, req *ChunkDeliveryMsg) error {
 	d.counterIn++
+	req.peer = sp
 	log.Error("push to receiveC", "hash", storage.Key(req.Key).Hex())
 	d.receiveC <- req
 	return nil
@@ -188,15 +190,16 @@ func (d *Delivery) processReceivedChunks() {
 	defer timer.Stop()
 	// R:
 	for req := range d.receiveC {
-		log.Error("pop from receiveC", "hash", storage.Key(req.Key).Hex())
+		log.Error("pop from receiveC", "peer", req.peer.ID(), "hash", storage.Key(req.Key).Hex())
 		timer.Reset(1 * time.Second)
 		go func(req *ChunkDeliveryMsg) {
 			defer func() { done <- struct{}{} }()
 			// this should be has locally
+			log.Error("before db.Get", "peer", req.peer.ID(), "hash", storage.Key(req.Key).Hex())
 			chunk, err := d.db.Get(req.Key)
-			log.Error("after db.Get", "chunk", chunk.Key.Hex(), "reqC", chunk.ReqC, "err", err)
+			log.Error("after db.Get", "peer", req.peer.ID(), "chunk", chunk.Key.Hex(), "reqC", chunk.ReqC, "err", err)
 			if err == nil {
-				log.Error("found existing?", "hash", chunk.Key.Hex())
+				log.Error("found existing?", "peer", req.peer.ID(), "hash", chunk.Key.Hex())
 				// continue R
 				return
 			}
@@ -212,20 +215,21 @@ func (d *Delivery) processReceivedChunks() {
 			}
 			// go func() {
 			chunk.SData = req.SData
-			log.Error("received delivery", "hash", chunk.Key.Hex())
+			log.Error("received delivery", "peer", req.peer.ID(), "hash", chunk.Key.Hex())
 			d.db.Put(chunk)
-			log.Error("put to db", "hash", chunk.Key.Hex())
+			log.Error("put to db", "peer", req.peer.ID(), "hash", chunk.Key.Hex())
 			chunk.WaitToStore()
 			close(chunk.ReqC)
 			//log.Warn("received delivery stored", "hash", chunk.Key)
-			log.Error("requesters notified", "hash", chunk.Key.Hex())
+			log.Error("requesters notified", "peer", req.peer.ID(), "hash", chunk.Key.Hex())
 			d.counterDone++
 			// }()
 		}(req)
 		select {
 		case <-timer.C:
-			log.Error("!!!unable to process", "hash", req.Key.Hex())
+			log.Error("!!!unable to process delivery", "peer", req.peer.ID(), "hash", req.Key.Hex())
 		case <-done:
+			log.Error("done processing delivery", "peer", req.peer.ID(), "hash", req.Key.Hex())
 		}
 	}
 }
