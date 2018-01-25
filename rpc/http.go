@@ -170,10 +170,6 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	srv.ServeSingleRequest(codec, OptionMethodInvocation)
 }
 
-func parseHost(hostport string) string {
-	return strings.ToLower(strings.Split(hostport, ":")[0])
-}
-
 // validateRequest returns a non-zero response code and error message if the
 // request is invalid.
 func validateRequest(r *http.Request) (int, error) {
@@ -220,21 +216,31 @@ type hostHandler struct {
 // ServeHTTP serves JSON-RPC requests over HTTP, implements http.Handler
 func (h *hostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-	if r.Host != "" {
-		hostpart := parseHost(r.Host)
-		requestAllowed := false
-		for _, allowedHost := range h.AllowedHosts {
-			if strings.ToLower(allowedHost) == hostpart || allowedHost == "*" {
-				requestAllowed = true
-				break
-			}
-		}
-		if !requestAllowed {
-			http.Error(w, "invalid host specified", http.StatusForbidden)
+	// if r.Host is not set, we can continue serving since a browser would set the Host header
+	if r.Host == "" {
+		h.next.ServeHTTP(w, r)
+		return
+	}
+	host, _, err := net.SplitHostPort(r.Host)
+	if err != nil {
+		// Either invalid (too many colons) or no port specified
+		host = r.Host
+	}
+	if ipAddr := net.ParseIP(host); ipAddr != nil {
+		// It's an IP address, we can serve that
+		h.next.ServeHTTP(w, r)
+		return
+
+	}
+	// Not an ip address, but a hostname. Need to validate
+	for _, allowedHost := range h.AllowedHosts {
+		if strings.ToLower(allowedHost) == strings.ToLower(host) || allowedHost == "*" {
+			h.next.ServeHTTP(w, r)
 			return
 		}
 	}
-	h.next.ServeHTTP(w, r)
+	http.Error(w, "invalid host specified", http.StatusForbidden)
+	return
 }
 
 func newHostHandler(allowedHosts []string, next http.Handler) http.Handler {

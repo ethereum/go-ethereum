@@ -263,7 +263,7 @@ func (n *Node) startRPC(services map[reflect.Type]Service) error {
 		n.stopInProc()
 		return err
 	}
-	if err := n.startHTTP(n.httpEndpoint, apis, n.config.HTTPModules, n.config.HTTPCors, n.config.HTTPHosts); err != nil {
+	if err := n.startHTTP(n.httpEndpoint, apis, n.config.HTTPModules, n.config.HTTPCors, n.config.HTTPVirtualHostnames); err != nil {
 		n.stopIPC()
 		n.stopInProc()
 		return err
@@ -395,7 +395,7 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	}
 	go rpc.NewHTTPServer(cors, allowedHosts, handler).Serve(listener)
 	n.log.Info(fmt.Sprintf("HTTP endpoint opened: http://%s", endpoint))
-	n.log.Info(fmt.Sprintf("HTTP config: cors %v, hosts%v", cors, allowedHosts))
+	n.log.Info(fmt.Sprintf("HTTP config: cors %v, vhosts%v", cors, allowedHosts))
 	// All listeners booted successfully
 	n.httpEndpoint = endpoint
 	n.httpListener = listener

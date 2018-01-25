@@ -383,10 +383,10 @@ var (
 		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
 		Value: "",
 	}
-	RPCAllowedHostsFlag = cli.StringFlag{
-		Name:  "rpcallowedhosts",
-		Usage: "Comma separated list of hostnames from which to accept requests (server enforced). Set to * to disable this protection.",
-		Value: "localhost,127.0.0.1",
+	RPCVirtualHostsFlag = cli.StringFlag{
+		Name:  "rpcvhosts",
+		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Set to * to disable this protection.",
+		Value: "localhost",
 	}
 	RPCApiFlag = cli.StringFlag{
 		Name:  "rpcapi",
@@ -682,7 +682,7 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 		cfg.HTTPModules = splitAndTrim(ctx.GlobalString(RPCApiFlag.Name))
 	}
 
-	cfg.HTTPHosts = splitAndTrim(ctx.GlobalString(RPCAllowedHostsFlag.Name))
+	cfg.HTTPVirtualHostnames = splitAndTrim(ctx.GlobalString(RPCVirtualHostsFlag.Name))
 }
 
 // setWS creates the WebSocket RPC listener interface string from the set
