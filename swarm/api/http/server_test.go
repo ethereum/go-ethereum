@@ -18,6 +18,7 @@ package http_test
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -32,6 +33,128 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
+
+func TestBzzResource(t *testing.T) {
+	srv := testutil.NewTestSwarmServer(t)
+	defer srv.Close()
+
+	// our mutable resource "name"
+	keybytes := make([]byte, common.HashLength)
+	copy(keybytes, []byte{42})
+	srv.Hasher.Reset()
+	srv.Hasher.Write([]byte(fmt.Sprintf("%x", keybytes)))
+	keybyteshash := fmt.Sprintf("%x", srv.Hasher.Sum(nil))
+
+	// data of update 1
+	databytes := make([]byte, 666)
+	_, err := rand.Read(databytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// creates resource and sets update 1
+	url := fmt.Sprintf("%s/bzz-resource:/%x/13", srv.URL, keybytes)
+	resp, err := http.Post(url, "application/octet-stream", bytes.NewReader(databytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(b, []byte(keybyteshash)) {
+		t.Fatalf("resource update hash mismatch, expected '%s' got '%s'", keybyteshash, b)
+	}
+	t.Logf("creatreturn %v / %v", keybyteshash, b)
+
+	// get latest update (1.1) through resource directly
+	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, b) {
+		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
+	}
+
+	// update 2
+	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
+	data := []byte("foo")
+	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Update returned %s", resp.Status)
+	}
+
+	// get latest update (1.2) through resource directly
+	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", data, b)
+	}
+
+	// get latest update (1.2) with specified period
+	url = fmt.Sprintf("%s/bzz-resource:/%x/1", srv.URL, keybytes)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", data, b)
+	}
+
+	// get first update (1.1) with specified period and version
+	url = fmt.Sprintf("%s/bzz-resource:/%x/1/1", srv.URL, keybytes)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, b) {
+		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
+	}
+}
 
 func TestBzzGetPath(t *testing.T) {
 
@@ -258,7 +381,6 @@ func TestBzzGetPath(t *testing.T) {
 			t.Fatalf("Non-Hash response body does not match, expected: %v, got: %v", nonhashresponses[i], string(respbody))
 		}
 	}
-
 }
 
 // TestBzzRootRedirect tests that getting the root path of a manifest without

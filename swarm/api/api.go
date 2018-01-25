@@ -17,6 +17,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -46,15 +47,17 @@ on top of the dpa
 it is the public interface of the dpa which is included in the ethereum stack
 */
 type Api struct {
-	dpa *storage.DPA
-	dns Resolver
+	resource *storage.ResourceHandler
+	dpa      *storage.DPA
+	dns      Resolver
 }
 
 //the api constructor initialises
-func NewApi(dpa *storage.DPA, dns Resolver) (self *Api) {
+func NewApi(dpa *storage.DPA, dns Resolver, resourceHandler *storage.ResourceHandler) (self *Api) {
 	self = &Api{
-		dpa: dpa,
-		dns: dns,
+		dpa:      dpa,
+		dns:      dns,
+		resource: resourceHandler,
 	}
 	return
 }
@@ -360,4 +363,51 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 		return nil, nil, fmt.Errorf("list with prefix failed %v: %v", key.String(), err)
 	}
 	return key, manifestEntryMap, nil
+}
+
+// Look up mutable resource updates at specific periods and versions
+func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32, version uint32) (storage.Key, []byte, error) {
+	var err error
+	if version != 0 {
+		if period == 0 {
+			currentblocknumber, err := self.resource.GetBlock(ctx)
+			if err != nil {
+				return nil, nil, fmt.Errorf("Could not determine latest block: %v", err)
+			}
+			period = self.resource.BlockToPeriod(name, currentblocknumber)
+		}
+		_, err = self.resource.LookupVersionByName(ctx, name, period, version, true)
+	} else if period != 0 {
+		_, err = self.resource.LookupHistoricalByName(ctx, name, period, true)
+	} else {
+		_, err = self.resource.LookupLatestByName(ctx, name, true)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return self.resource.GetContent(name)
+}
+
+func (self *Api) ResourceCreate(ctx context.Context, name string, frequency uint64) (storage.Key, error) {
+	rsrc, err := self.resource.NewResource(ctx, name, frequency)
+	if err != nil {
+		return nil, err
+	}
+	h := rsrc.NameHash()
+	return storage.Key(h[:]), nil
+}
+
+func (self *Api) ResourceUpdate(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {
+	key, err := self.resource.Update(ctx, name, data)
+	period, _ := self.resource.GetLastPeriod(name)
+	version, _ := self.resource.GetVersion(name)
+	return key, period, version, err
+}
+
+func (self *Api) ResourceHashSize() int {
+	return self.resource.HashSize()
+}
+
+func (self *Api) ResourceIsValidated() bool {
+	return self.resource.IsValidated()
 }

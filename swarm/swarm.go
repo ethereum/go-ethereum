@@ -22,6 +22,8 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -53,15 +55,13 @@ type Swarm struct {
 	storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
 	dpa     *storage.DPA       // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	//depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
-	cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
-	bzz         *network.Bzz       // the logistic manager
-	backend     chequebook.Backend // simple blockchain Backend
-	privateKey  *ecdsa.PrivateKey
-	corsString  string
-	swapEnabled bool
-	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
-	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
-	ps          *pss.Pss
+	cloud      storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
+	bzz        *network.Bzz       // the logistic manager
+	backend    chequebook.Backend // simple blockchain Backend
+	privateKey *ecdsa.PrivateKey
+	lstore     *storage.LocalStore // local store, needs to store for releasing resources after node stopped
+	sfs        *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
+	ps         *pss.Pss
 }
 
 type SwarmAPI struct {
@@ -82,7 +82,8 @@ func (self *Swarm) API() *SwarmAPI {
 // implements node.Service
 // If mockStore is not nil, it will be used as the storage for chunk data.
 // MockStore should be used only for testing.
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *ethclient.Client, config *api.Config, swapEnabled, syncEnabled bool, cors string, pssEnabled bool, mockStore *mock.NodeStore) (self *Swarm, err error) {
+func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *ethclient.Client, config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err error) {
+
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
 	}
@@ -91,11 +92,9 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	}
 
 	self = &Swarm{
-		config:      config,
-		swapEnabled: swapEnabled,
-		backend:     backend,
-		privateKey:  config.Swap.PrivateKey(),
-		corsString:  cors,
+		config:     config,
+		backend:    backend,
+		privateKey: config.ShiftPrivateKey(),
 	}
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
@@ -137,7 +136,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	log.Debug(fmt.Sprintf("-> Content Store API"))
 
 	// Pss = postal service over swarm (devp2p over bzz)
-	if pssEnabled {
+	if self.config.PssEnabled {
 		pssparams := pss.NewPssParams(self.privateKey)
 		self.ps = pss.NewPss(to, self.dpa, pssparams)
 		if pss.IsActiveHandshake {
@@ -158,7 +157,23 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	}
 	log.Debug(fmt.Sprintf("-> Swarm Domain Name Registrar @ address %v", config.EnsRoot.Hex()))
 
-	self.api = api.NewApi(self.dpa, self.dns)
+	var resourceHandler *storage.ResourceHandler
+	// if use resource updates
+	if self.config.ResourceEnabled {
+		var resourceValidator storage.ResourceValidator
+		if self.dns != nil {
+			resourceValidator, err = storage.NewENSValidator(config.EnsRoot, ensClient, transactOpts, storage.NewGenericResourceSigner(self.privateKey))
+			if err != nil {
+				return nil, err
+			}
+		}
+		resourceHandler, err = storage.NewResourceHandler(filepath.Join(self.config.Path, storage.DbDirName), self.cloud, ensClient, resourceValidator)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	self.api = api.NewApi(self.dpa, self.dns, resourceHandler)
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 
@@ -186,7 +201,7 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	log.Warn("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%x", newaddr.UAddr))
 
 	// set chequebook
-	if self.swapEnabled {
+	if self.config.SwapEnabled {
 		ctx := context.Background() // The initial setup has no deadline.
 		err := self.SetChequebook(ctx)
 		if err != nil {
@@ -219,14 +234,14 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		addr := net.JoinHostPort(self.config.ListenAddr, self.config.Port)
 		go httpapi.StartHttpServer(self.api, &httpapi.ServerConfig{
 			Addr:       addr,
-			CorsString: self.corsString,
+			CorsString: self.config.Cors,
 		})
 	}
 
 	log.Debug(fmt.Sprintf("Swarm http proxy started on port: %v", self.config.Port))
 
-	if self.corsString != "" {
-		log.Debug(fmt.Sprintf("Swarm http proxy started with corsdomain: %v", self.corsString))
+	if self.config.Cors != "" {
+		log.Debug(fmt.Sprintf("Swarm http proxy started with corsdomain: %v", self.config.Cors))
 	}
 
 	return nil
@@ -360,7 +375,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 	}
 
 	self = &Swarm{
-		api:    api.NewApi(dpa, nil),
+		api:    api.NewApi(dpa, nil, nil),
 		config: config,
 	}
 

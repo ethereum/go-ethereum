@@ -49,16 +49,9 @@ func TestConfig(t *testing.T) {
 	if one.PublicKey == "" {
 		t.Fatal("Expected PublicKey to be set")
 	}
-
-	//the Init function should append subdirs to the given path
-	if one.Swap.PayProfile.Beneficiary == (common.Address{}) {
+	if one.Swap.PayProfile.Beneficiary == (common.Address{}) && one.SwapEnabled {
 		t.Fatal("Failed to correctly initialize SwapParams")
 	}
-
-	if one.HiveParams.MaxPeersPerRequest != 5 {
-		t.Fatal("Failed to correctly initialize HiveParams")
-	}
-
 	if one.StoreParams.ChunkDbPath == one.Path {
 		t.Fatal("Failed to correctly initialize StoreParams")
 	}
