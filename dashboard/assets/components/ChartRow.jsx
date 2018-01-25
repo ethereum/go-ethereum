@@ -1,6 +1,6 @@
 // @flow
 
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,33 +17,41 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 import React, {Component} from 'react';
-import type {Node} from 'react';
+import type {ChildrenArray} from 'react';
 
 import Grid from 'material-ui/Grid';
-import {ResponsiveContainer} from 'recharts';
+
+// styles contains the constant styles of the component.
+const styles = {
+	container: {
+		flexWrap: 'nowrap',
+		height:   '100%',
+		maxWidth: '100%',
+		margin:   0,
+	},
+	item: {
+		flex:    1,
+		padding: 0,
+	},
+}
 
 export type Props = {
-	spacing: number,
-	children: Node,
+	children: ChildrenArray<React$Element<any>>,
 };
-// ChartGrid renders a grid container for responsive charts.
-// The children are Recharts components extended with the Material-UI's xs property.
-class ChartGrid extends Component<Props> {
+
+// ChartRow renders a row of equally sized responsive charts.
+class ChartRow extends Component<Props> {
 	render() {
 		return (
-			<Grid container spacing={this.props.spacing}>
-				{
-					React.Children.map(this.props.children, child => (
-						<Grid item xs={child.props.xs}>
-							<ResponsiveContainer width="100%" height={child.props.height}>
-								{React.cloneElement(child, {data: child.props.values.map(value => ({value}))})}
-							</ResponsiveContainer>
-						</Grid>
-					))
-				}
+			<Grid container direction='row' style={styles.container} justify='space-between'>
+				{React.Children.map(this.props.children, child => (
+					<Grid item xs style={styles.item}>
+						{child}
+					</Grid>
+				))}
 			</Grid>
 		);
 	}
 }
 
-export default ChartGrid;
+export default ChartRow;

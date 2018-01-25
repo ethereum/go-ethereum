@@ -29,10 +29,12 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/elastic/gosigar"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
@@ -42,8 +44,14 @@ import (
 )
 
 const (
-	memorySampleLimit  = 200 // Maximum number of memory data samples
-	trafficSampleLimit = 200 // Maximum number of traffic data samples
+	activeMemorySampleLimit   = 200 // Maximum number of active memory data samples
+	virtualMemorySampleLimit  = 200 // Maximum number of virtual memory data samples
+	networkIngressSampleLimit = 200 // Maximum number of network ingress data samples
+	networkEgressSampleLimit  = 200 // Maximum number of network egress data samples
+	processCPUSampleLimit     = 200 // Maximum number of process cpu data samples
+	systemCPUSampleLimit      = 200 // Maximum number of system cpu data samples
+	diskReadSampleLimit       = 200 // Maximum number of disk read data samples
+	diskWriteSampleLimit      = 200 // Maximum number of disk write data samples
 )
 
 var nextID uint32 // Next connection id
@@ -71,16 +79,35 @@ type client struct {
 
 // New creates a new dashboard instance with the given configuration.
 func New(config *Config, commit string) (*Dashboard, error) {
-	return &Dashboard{
+	now := time.Now()
+	db := &Dashboard{
 		conns:  make(map[uint32]*client),
 		config: config,
 		quit:   make(chan chan error),
 		charts: &HomeMessage{
-			Memory:  ChartEntries{},
-			Traffic: ChartEntries{},
+			ActiveMemory:   emptyChartEntries(now, activeMemorySampleLimit, config.Refresh),
+			VirtualMemory:  emptyChartEntries(now, virtualMemorySampleLimit, config.Refresh),
+			NetworkIngress: emptyChartEntries(now, networkIngressSampleLimit, config.Refresh),
+			NetworkEgress:  emptyChartEntries(now, networkEgressSampleLimit, config.Refresh),
+			ProcessCPU:     emptyChartEntries(now, processCPUSampleLimit, config.Refresh),
+			SystemCPU:      emptyChartEntries(now, systemCPUSampleLimit, config.Refresh),
+			DiskRead:       emptyChartEntries(now, diskReadSampleLimit, config.Refresh),
+			DiskWrite:      emptyChartEntries(now, diskWriteSampleLimit, config.Refresh),
 		},
 		commit: commit,
-	}, nil
+	}
+	return db, nil
+}
+
+// emptyChartEntries returns a ChartEntry array containing limit number of empty samples.
+func emptyChartEntries(t time.Time, limit int, refresh time.Duration) ChartEntries {
+	ce := make(ChartEntries, limit)
+	for i := 0; i < limit; i++ {
+		ce[i] = &ChartEntry{
+			Time: t.Add(-time.Duration(i) * refresh),
+		}
+	}
+	return ce
 }
 
 // Protocols is a meaningless implementation of node.Service.
@@ -215,8 +242,14 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 			Commit:  db.commit,
 		},
 		Home: &HomeMessage{
-			Memory:  db.charts.Memory,
-			Traffic: db.charts.Traffic,
+			ActiveMemory:   db.charts.ActiveMemory,
+			VirtualMemory:  db.charts.VirtualMemory,
+			NetworkIngress: db.charts.NetworkIngress,
+			NetworkEgress:  db.charts.NetworkEgress,
+			ProcessCPU:     db.charts.ProcessCPU,
+			SystemCPU:      db.charts.SystemCPU,
+			DiskRead:       db.charts.DiskRead,
+			DiskWrite:      db.charts.DiskWrite,
 		},
 	}
 	// Start tracking the connection and drop at connection loss.
@@ -241,6 +274,19 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 // collectData collects the required data to plot on the dashboard.
 func (db *Dashboard) collectData() {
 	defer db.wg.Done()
+	systemCPUUsage := gosigar.Cpu{}
+	systemCPUUsage.Get()
+	var (
+		prevNetworkIngress = metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Count()
+		prevNetworkEgress  = metrics.DefaultRegistry.Get("p2p/OutboundTraffic").(metrics.Meter).Count()
+		prevProcessCPUTime = getProcessCPUTime()
+		prevSystemCPUUsage = systemCPUUsage
+		prevDiskRead       = metrics.DefaultRegistry.Get("eth/db/chaindata/compact/input").(metrics.Meter).Count()
+		prevDiskWrite      = metrics.DefaultRegistry.Get("eth/db/chaindata/compact/output").(metrics.Meter).Count()
+
+		frequency = float64(db.config.Refresh / time.Second)
+		numCPU    = float64(runtime.NumCPU())
+	)
 
 	for {
 		select {
@@ -248,32 +294,84 @@ func (db *Dashboard) collectData() {
 			errc <- nil
 			return
 		case <-time.After(db.config.Refresh):
-			inboundTraffic := metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Rate1()
-			memoryInUse := metrics.DefaultRegistry.Get("system/memory/inuse").(metrics.Meter).Rate1()
+			systemCPUUsage.Get()
+			var (
+				curNetworkIngress = metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Count()
+				curNetworkEgress  = metrics.DefaultRegistry.Get("p2p/OutboundTraffic").(metrics.Meter).Count()
+				curProcessCPUTime = getProcessCPUTime()
+				curSystemCPUUsage = systemCPUUsage
+				curDiskRead       = metrics.DefaultRegistry.Get("eth/db/chaindata/compact/input").(metrics.Meter).Count()
+				curDiskWrite      = metrics.DefaultRegistry.Get("eth/db/chaindata/compact/output").(metrics.Meter).Count()
+
+				deltaNetworkIngress = float64(curNetworkIngress - prevNetworkIngress)
+				deltaNetworkEgress  = float64(curNetworkEgress - prevNetworkEgress)
+				deltaProcessCPUTime = curProcessCPUTime - prevProcessCPUTime
+				deltaSystemCPUUsage = systemCPUUsage.Delta(prevSystemCPUUsage)
+				deltaDiskRead       = curDiskRead - prevDiskRead
+				deltaDiskWrite      = curDiskWrite - prevDiskWrite
+			)
+			prevNetworkIngress = curNetworkIngress
+			prevNetworkEgress = curNetworkEgress
+			prevProcessCPUTime = curProcessCPUTime
+			prevSystemCPUUsage = curSystemCPUUsage
+			prevDiskRead = curDiskRead
+			prevDiskWrite = curDiskWrite
+
 			now := time.Now()
-			memory := &ChartEntry{
+
+			var mem runtime.MemStats
+			runtime.ReadMemStats(&mem)
+			activeMemory := &ChartEntry{
 				Time:  now,
-				Value: memoryInUse,
+				Value: float64(mem.Alloc) / frequency,
 			}
-			traffic := &ChartEntry{
+			virtualMemory := &ChartEntry{
 				Time:  now,
-				Value: inboundTraffic,
+				Value: float64(mem.Sys) / frequency,
 			}
-			first := 0
-			if len(db.charts.Memory) == memorySampleLimit {
-				first = 1
+			networkIngress := &ChartEntry{
+				Time:  now,
+				Value: deltaNetworkIngress / frequency,
 			}
-			db.charts.Memory = append(db.charts.Memory[first:], memory)
-			first = 0
-			if len(db.charts.Traffic) == trafficSampleLimit {
-				first = 1
+			networkEgress := &ChartEntry{
+				Time:  now,
+				Value: deltaNetworkEgress / frequency,
 			}
-			db.charts.Traffic = append(db.charts.Traffic[first:], traffic)
+			processCPU := &ChartEntry{
+				Time:  now,
+				Value: deltaProcessCPUTime / frequency / numCPU * 100,
+			}
+			systemCPU := &ChartEntry{
+				Time:  now,
+				Value: float64(deltaSystemCPUUsage.Sys+deltaSystemCPUUsage.User) / frequency / numCPU,
+			}
+			diskRead := &ChartEntry{
+				Time:  now,
+				Value: float64(deltaDiskRead) / frequency,
+			}
+			diskWrite := &ChartEntry{
+				Time:  now,
+				Value: float64(deltaDiskWrite) / frequency,
+			}
+			db.charts.ActiveMemory = append(db.charts.ActiveMemory[1:], activeMemory)
+			db.charts.VirtualMemory = append(db.charts.VirtualMemory[1:], virtualMemory)
+			db.charts.NetworkIngress = append(db.charts.NetworkIngress[1:], networkIngress)
+			db.charts.NetworkEgress = append(db.charts.NetworkEgress[1:], networkEgress)
+			db.charts.ProcessCPU = append(db.charts.ProcessCPU[1:], processCPU)
+			db.charts.SystemCPU = append(db.charts.SystemCPU[1:], systemCPU)
+			db.charts.DiskRead = append(db.charts.DiskRead[1:], diskRead)
+			db.charts.DiskWrite = append(db.charts.DiskRead[1:], diskWrite)
 
 			db.sendToAll(&Message{
 				Home: &HomeMessage{
-					Memory:  ChartEntries{memory},
-					Traffic: ChartEntries{traffic},
+					ActiveMemory:   ChartEntries{activeMemory},
+					VirtualMemory:  ChartEntries{virtualMemory},
+					NetworkIngress: ChartEntries{networkIngress},
+					NetworkEgress:  ChartEntries{networkEgress},
+					ProcessCPU:     ChartEntries{processCPU},
+					SystemCPU:      ChartEntries{systemCPU},
+					DiskRead:       ChartEntries{diskRead},
+					DiskWrite:      ChartEntries{diskWrite},
 				},
 			})
 		}
