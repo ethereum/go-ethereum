@@ -88,7 +88,7 @@ func (msg *ReceivedMessage) isAsymmetricEncryption() bool {
 }
 
 // NewSentMessage creates and initializes a non-signed, non-encrypted Whisper message.
-func NewSentMessage(params *MessageParams) (*sentMessage, error) {
+func newSentMessage(params *MessageParams) (*sentMessage, error) {
 	msg := sentMessage{}
 	msg.Raw = make([]byte, 1, len(params.Payload)+len(params.Padding)+signatureLength+padSizeLimit)
 	msg.Raw[0] = 0 // set all the flags to zero
