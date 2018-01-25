@@ -99,6 +99,7 @@ func (self *LocalStore) Put(chunk *Chunk) {
 	c := &Chunk{
 		Key:      Key(append([]byte{}, chunk.Key...)),
 		SData:    append([]byte{}, chunk.SData...),
+		Size:     chunk.Size,
 		dbStored: chunk.dbStored,
 	}
 	self.memStore.Put(c)
