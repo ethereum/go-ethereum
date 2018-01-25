@@ -37,6 +37,7 @@ import (
 	"time"
 )
 
+// Whisper protocol parameters
 const (
 	ProtocolVersion    = uint64(6) // Protocol version number
 	ProtocolVersionStr = "6.0"     // The same, as a string

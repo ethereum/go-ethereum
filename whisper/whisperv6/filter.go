@@ -166,7 +166,8 @@ func (f *Filter) expectsSymmetricEncryption() bool {
 	return f.KeySym != nil
 }
 
-// Trigger
+// Trigger adds a yet-unknown message to the filter's list of
+// received messages.
 func (f *Filter) Trigger(msg *ReceivedMessage) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
