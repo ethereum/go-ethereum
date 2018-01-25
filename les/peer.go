@@ -312,7 +312,7 @@ func (p *peer) RequestTxStatus(reqID, cost uint64, txHashes []common.Hash) error
 	return sendRequest(p.rw, GetTxStatusMsg, reqID, cost, txHashes)
 }
 
-// SendTxStatus sends a batch of transactions to be added to the remote transaction pool.
+// SendTxs sends a batch of transactions to be added to the remote transaction pool.
 func (p *peer) SendTxs(reqID, cost uint64, txs types.Transactions) error {
 	p.Log().Debug("Fetching batch of transactions", "count", len(txs))
 	switch p.version {
