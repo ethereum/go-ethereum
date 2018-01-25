@@ -144,8 +144,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 		}
 	}
 
-	// SET UP high level api
-	fmt.Fprintf(os.Stderr, "privkey %v\nswap %v\nswapendabled %v\n", self.privateKey, config.Swap, config.SwapEnabled)
+	// set up high level api
 	transactOpts := bind.NewKeyedTransactor(self.privateKey)
 
 	if ensClient == nil {
