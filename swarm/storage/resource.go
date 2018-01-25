@@ -665,10 +665,7 @@ func (self *ResourceHandler) resourceHash(period uint32, version uint32, namehas
 }
 
 func (self *ResourceHandler) hasUpdate(name string, period uint32) bool {
-	if self.resources[name].lastPeriod == period {
-		return true
-	}
-	return false
+	return self.resources[name].lastPeriod == period
 }
 
 func getAddressFromDataSig(datahash common.Hash, signature Signature) (common.Address, error) {
