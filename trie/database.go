@@ -72,7 +72,7 @@ func NewDatabase(diskdb ethdb.Database) *Database {
 	return &Database{
 		diskdb: diskdb,
 		nodes: map[common.Hash]*cachedNode{
-			common.Hash{}: {children: make(map[common.Hash]int)},
+			{}: {children: make(map[common.Hash]int)},
 		},
 		preimages: make(map[common.Hash][]byte),
 	}
@@ -218,7 +218,7 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 	if node.children[child] == 0 {
 		delete(node.children, child)
 	}
-	// If the node does not exist, it's a previously comitted node.
+	// If the node does not exist, it's a previously committed node.
 	node, ok := db.nodes[child]
 	if !ok {
 		return
@@ -289,7 +289,7 @@ func (db *Database) Commit(node common.Hash) error {
 
 // commit is the private locked version of Commit.
 func (db *Database) commit(hash common.Hash, batch *ethdb.Batch) error {
-	// If the node does not exist, it's a previously comitted node
+	// If the node does not exist, it's a previously committed node
 	node, ok := db.nodes[hash]
 	if !ok {
 		return nil
