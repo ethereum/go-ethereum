@@ -907,10 +907,31 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 
 		// Only write to disk if we exceeded our memory allowance *and* also have at
 		// least a given number of tries gapped.
-		if (bc.triedb.Size()/(1024*1024) > common.StorageSize(bc.cacheConfig.TrieNodeLimit) || bc.procTime > bc.cacheConfig.TrieTimeLimit) && chosen >= lastWrite+triesInMemory {
-			bc.triedb.Commit(header.Root)
-			lastWrite = chosen
-			bc.procTime = 0
+		var (
+			size  = bc.triedb.Size()
+			limit = common.StorageSize(bc.cacheConfig.TrieNodeLimit) * 1024 * 1024
+		)
+		if size > limit || bc.procTime > bc.cacheConfig.TrieTimeLimit {
+			// If we're exceeding limits but haven't reached a large enough memory gap,
+			// warn the user that the system is becoming unstable.
+			if chosen < lastWrite+triesInMemory {
+				switch {
+				case size >= 2*limit:
+					log.Error("Trie memory critical, forcing to disk", "size", size, "limit", limit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+				case bc.procTime >= 2*bc.cacheConfig.TrieTimeLimit:
+					log.Error("Trie timing critical, forcing to disk", "time", bc.procTime, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+				case size > limit:
+					log.Warn("Trie memory at dangerous levels", "size", size, "limit", limit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+				case bc.procTime > bc.cacheConfig.TrieTimeLimit:
+					log.Warn("Trie timing at dangerous levels", "time", bc.procTime, "limit", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+				}
+			}
+			// If optimum or critical limits reached, write to disk
+			if chosen >= lastWrite+triesInMemory || size >= 2*limit || bc.procTime >= 2*bc.cacheConfig.TrieTimeLimit {
+				bc.triedb.Commit(header.Root)
+				lastWrite = chosen
+				bc.procTime = 0
+			}
 		}
 		// Garbage collect anything below our required write retention
 		for !bc.triegc.Empty() {
