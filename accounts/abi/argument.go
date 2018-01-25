@@ -85,7 +85,6 @@ func (arguments Arguments) isTuple() bool {
 
 // Unpack performs the operation hexdata -> Go format
 func (arguments Arguments) Unpack(v interface{}, data []byte) error {
-
 	// make sure the passed value is arguments pointer
 	if reflect.Ptr != reflect.ValueOf(v).Kind() {
 		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
@@ -98,6 +97,21 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 		return arguments.unpackTuple(v, marshalledValues)
 	}
 	return arguments.unpackAtomic(v, marshalledValues)
+}
+
+// Computes the full size of an array;
+// i.e. counting nested arrays, which count towards size for unpacking.
+func getArraySize(arr *Type) int {
+	size := arr.Size
+	//arrays can be nested, with each element being the same size
+	arr = arr.Elem
+	for arr.T == ArrayTy {
+		//keep multiplying by elem.Size while the elem is an array.
+		size *= arr.Size
+		arr = arr.Elem
+	}
+	//Now we have the full array size, including its children.
+	return size
 }
 
 func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interface{}) error {
