@@ -54,7 +54,9 @@ type Database struct {
 	gcnodes uint64             // Nodes garbage collected since last commit
 	gcsize  common.StorageSize // Data storage garbage collected since last commit
 
-	size common.StorageSize // Storage size of the memory cache
+	nodesSize     common.StorageSize // Storage size of the nodes cache
+	preimagesSize common.StorageSize // Storage size of the preimages cache
+
 	lock sync.RWMutex
 }
 
@@ -101,7 +103,7 @@ func (db *Database) insert(hash common.Hash, blob []byte) {
 		blob:     common.CopyBytes(blob),
 		children: make(map[common.Hash]int),
 	}
-	db.size += common.StorageSize(common.HashLength + len(blob))
+	db.nodesSize += common.StorageSize(common.HashLength + len(blob))
 }
 
 // insertPreimage writes a new trie node pre-image to the memory database if it's
@@ -113,6 +115,7 @@ func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
 		return
 	}
 	db.preimages[hash] = common.CopyBytes(preimage)
+	db.preimagesSize += common.StorageSize(common.HashLength + len(preimage))
 }
 
 // Node retrieves a cached trie node from memory. If it cannot be found cached,
@@ -198,15 +201,15 @@ func (db *Database) Dereference(child common.Hash, parent common.Hash) {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	nodes, storage, start := len(db.nodes), db.size, time.Now()
+	nodes, storage, start := len(db.nodes), db.nodesSize, time.Now()
 	db.dereference(child, parent)
 
 	db.gcnodes += uint64(nodes - len(db.nodes))
-	db.gcsize += storage - db.size
+	db.gcsize += storage - db.nodesSize
 	db.gctime += time.Since(start)
 
-	log.Debug("Dereferenced trie from memory database", "nodes", nodes-len(db.nodes), "size", storage-db.size, "time", time.Since(start),
-		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.nodes), "livesize", db.size)
+	log.Debug("Dereferenced trie from memory database", "nodes", nodes-len(db.nodes), "size", storage-db.nodesSize, "time", time.Since(start),
+		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.nodes), "livesize", db.nodesSize)
 }
 
 // dereference is the private locked version of Dereference.
@@ -230,7 +233,7 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 			db.dereference(hash, child)
 		}
 		delete(db.nodes, child)
-		db.size -= common.StorageSize(common.HashLength + len(node.blob))
+		db.nodesSize -= common.StorageSize(common.HashLength + len(node.blob))
 	}
 }
 
@@ -255,9 +258,15 @@ func (db *Database) Commit(node common.Hash) error {
 			db.lock.RUnlock()
 			return err
 		}
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			batch = db.diskdb.NewBatch()
+		}
 	}
 	// Move the trie itself into the batch, flushing if enough data is accumulated
-	nodes, storage := len(db.nodes), db.size
+	nodes, storage := len(db.nodes), db.nodesSize+db.preimagesSize
 	if err := db.commit(node, &batch); err != nil {
 		log.Error("Failed to commit trie from trie database", "err", err)
 		db.lock.RUnlock()
@@ -276,10 +285,12 @@ func (db *Database) Commit(node common.Hash) error {
 	defer db.lock.Unlock()
 
 	db.preimages = make(map[common.Hash][]byte)
+	db.preimagesSize = 0
+
 	db.uncache(node)
 
-	log.Info("Persisted trie from memory database", "nodes", nodes-len(db.nodes), "size", storage-db.size, "time", time.Since(start),
-		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.nodes), "livesize", db.size)
+	log.Info("Persisted trie from memory database", "nodes", nodes-len(db.nodes), "size", storage-db.nodesSize, "time", time.Since(start),
+		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.nodes), "livesize", db.nodesSize)
 
 	// Reset the garbage collection statistics
 	db.gcnodes, db.gcsize, db.gctime = 0, 0, 0
@@ -327,7 +338,7 @@ func (db *Database) uncache(hash common.Hash) {
 		db.uncache(child)
 	}
 	delete(db.nodes, hash)
-	db.size -= common.StorageSize(common.HashLength + len(node.blob))
+	db.nodesSize -= common.StorageSize(common.HashLength + len(node.blob))
 }
 
 // Size returns the current storage size of the memory cache in front of the
@@ -336,5 +347,5 @@ func (db *Database) Size() common.StorageSize {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	return db.size
+	return db.nodesSize + db.preimagesSize
 }
