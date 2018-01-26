@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// Filter represents a Whisper message filter
 type Filter struct {
 	Src        *ecdsa.PublicKey  // Sender of the message
 	KeyAsym    *ecdsa.PrivateKey // Private Key of recipient
@@ -39,12 +40,14 @@ type Filter struct {
 	mutex    sync.RWMutex
 }
 
+// Filters represents a collection of filters
 type Filters struct {
 	watchers map[string]*Filter
 	whisper  *Whisper
 	mutex    sync.RWMutex
 }
 
+// NewFilters returns a newly created filter collection
 func NewFilters(w *Whisper) *Filters {
 	return &Filters{
 		watchers: make(map[string]*Filter),
@@ -52,6 +55,7 @@ func NewFilters(w *Whisper) *Filters {
 	}
 }
 
+// Install will add a new filter to the filter collection
 func (fs *Filters) Install(watcher *Filter) (string, error) {
 	if watcher.KeySym != nil && watcher.KeyAsym != nil {
 		return "", fmt.Errorf("filters must choose between symmetric and asymmetric keys")
@@ -81,6 +85,8 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 	return id, err
 }
 
+// Uninstall will remove a filter whose id has been specified from
+// the filter collection
 func (fs *Filters) Uninstall(id string) bool {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
@@ -91,12 +97,15 @@ func (fs *Filters) Uninstall(id string) bool {
 	return false
 }
 
+// Get returns a filter from the collection with a specific ID
 func (fs *Filters) Get(id string) *Filter {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 	return fs.watchers[id]
 }
 
+// NotifyWatchers notifies any filter that has declared interest
+// for the envelope's topic.
 func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 	var msg *ReceivedMessage
 
@@ -140,9 +149,9 @@ func (f *Filter) processEnvelope(env *Envelope) *ReceivedMessage {
 		msg := env.Open(f)
 		if msg != nil {
 			return msg
-		} else {
-			log.Trace("processing envelope: failed to open", "hash", env.Hash().Hex())
 		}
+
+		log.Trace("processing envelope: failed to open", "hash", env.Hash().Hex())
 	} else {
 		log.Trace("processing envelope: does not match", "hash", env.Hash().Hex())
 	}
@@ -157,6 +166,8 @@ func (f *Filter) expectsSymmetricEncryption() bool {
 	return f.KeySym != nil
 }
 
+// Trigger adds a yet-unknown message to the filter's list of
+// received messages.
 func (f *Filter) Trigger(msg *ReceivedMessage) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
@@ -166,6 +177,8 @@ func (f *Filter) Trigger(msg *ReceivedMessage) {
 	}
 }
 
+// Retrieve will return the list of all received messages associated
+// to a filter.
 func (f *Filter) Retrieve() (all []*ReceivedMessage) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
@@ -195,7 +208,7 @@ func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 	return false
 }
 
-// MatchEvelope checks if it's worth decrypting the message. If
+// MatchEnvelope checks if it's worth decrypting the message. If
 // it returns `true`, client code is expected to attempt decrypting
 // the message and subsequently call MatchMessage.
 func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
@@ -206,6 +219,7 @@ func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
 	return f.MatchTopic(envelope.Topic)
 }
 
+// MatchTopic checks that the filter captures a given topic.
 func (f *Filter) MatchTopic(topic TopicType) bool {
 	if len(f.Topics) == 0 {
 		// any topic matches
@@ -237,6 +251,7 @@ func matchSingleTopic(topic TopicType, bt []byte) bool {
 	return true
 }
 
+// IsPubKeyEqual checks that two public keys are equal
 func IsPubKeyEqual(a, b *ecdsa.PublicKey) bool {
 	if !ValidatePublicKey(a) {
 		return false

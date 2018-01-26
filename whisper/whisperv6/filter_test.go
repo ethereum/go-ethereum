@@ -109,7 +109,7 @@ func TestInstallFilters(t *testing.T) {
 			t.Fatalf("seed %d: failed to install filter: %s", seed, err)
 		}
 		tst[i].id = j
-		if len(j) != keyIdSize*2 {
+		if len(j) != keyIDSize*2 {
 			t.Fatalf("seed %d: wrong filter id size [%d]", seed, len(j))
 		}
 	}
@@ -199,7 +199,7 @@ func TestInstallIdenticalFilters(t *testing.T) {
 	filter1.Src = &params.Src.PublicKey
 	filter2.Src = &params.Src.PublicKey
 
-	sentMessage, err := NewSentMessage(params)
+	sentMessage, err := newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -306,7 +306,7 @@ func TestMatchEnvelope(t *testing.T) {
 	params.Topic[0] = 0xFF // ensure mismatch
 
 	// mismatch with pseudo-random data
-	msg, err := NewSentMessage(params)
+	msg, err := newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -327,7 +327,7 @@ func TestMatchEnvelope(t *testing.T) {
 	i := mrand.Int() % 4
 	fsym.Topics[i] = params.Topic[:]
 	fasym.Topics[i] = params.Topic[:]
-	msg, err = NewSentMessage(params)
+	msg, err = newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -372,7 +372,7 @@ func TestMatchEnvelope(t *testing.T) {
 	}
 	params.KeySym = nil
 	params.Dst = &key.PublicKey
-	msg, err = NewSentMessage(params)
+	msg, err = newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -453,7 +453,7 @@ func TestMatchMessageSym(t *testing.T) {
 	params.KeySym = f.KeySym
 	params.Topic = BytesToTopic(f.Topics[index])
 
-	sentMessage, err := NewSentMessage(params)
+	sentMessage, err := newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -546,7 +546,7 @@ func TestMatchMessageAsym(t *testing.T) {
 	keySymOrig := params.KeySym
 	params.KeySym = nil
 
-	sentMessage, err := NewSentMessage(params)
+	sentMessage, err := newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -630,7 +630,7 @@ func generateCompatibeEnvelope(t *testing.T, f *Filter) *Envelope {
 
 	params.KeySym = f.KeySym
 	params.Topic = BytesToTopic(f.Topics[2])
-	sentMessage, err := NewSentMessage(params)
+	sentMessage, err := newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -806,7 +806,7 @@ func TestVariableTopics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
-	msg, err := NewSentMessage(params)
+	msg, err := newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}

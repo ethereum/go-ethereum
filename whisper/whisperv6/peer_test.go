@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 )
 
-var keys []string = []string{
+var keys = []string{
 	"d49dcf37238dc8a7aac57dc61b9fee68f0a97f062968978b9fafa7d1033d03a9",
 	"73fd6143c48e80ed3c56ea159fe7494a0b6b393a392227b422f4c3e8f1b54f98",
 	"119dd32adb1daa7a4c7bf77f847fb28730785aa92947edf42fdd997b54de40dc",
@@ -80,17 +80,17 @@ type TestNode struct {
 	shh     *Whisper
 	id      *ecdsa.PrivateKey
 	server  *p2p.Server
-	filerId string
+	filerID string
 }
 
 var result TestData
 var nodes [NumNodes]*TestNode
-var sharedKey []byte = []byte("some arbitrary data here")
-var sharedTopic TopicType = TopicType{0xF, 0x1, 0x2, 0}
-var expectedMessage []byte = []byte("per rectum ad astra")
+var sharedKey = []byte("some arbitrary data here")
+var sharedTopic = TopicType{0xF, 0x1, 0x2, 0}
+var expectedMessage = []byte("per rectum ad astra")
 var masterBloomFilter []byte
 var masterPow = 0.00000001
-var round int = 1
+var round = 1
 
 func TestSimulation(t *testing.T) {
 	// create a chain of whisper nodes,
@@ -186,7 +186,7 @@ func initialize(t *testing.T) {
 		topics = append(topics, sharedTopic)
 		f := Filter{KeySym: sharedKey}
 		f.Topics = [][]byte{topics[0][:]}
-		node.filerId, err = node.shh.Subscribe(&f)
+		node.filerID, err = node.shh.Subscribe(&f)
 		if err != nil {
 			t.Fatalf("failed to install the filter: %s.", err)
 		}
@@ -199,9 +199,9 @@ func initialize(t *testing.T) {
 		name := common.MakeName("whisper-go", "2.0")
 		var peers []*discover.Node
 		if i > 0 {
-			peerNodeId := nodes[i-1].id
+			peerNodeID := nodes[i-1].id
 			peerPort := uint16(port - 1)
-			peerNode := discover.PubkeyID(&peerNodeId.PublicKey)
+			peerNode := discover.PubkeyID(&peerNodeID.PublicKey)
 			peer := discover.NewNode(peerNode, ip, peerPort, peerPort)
 			peers = append(peers, peer)
 		}
@@ -238,7 +238,7 @@ func stopServers() {
 	for i := 0; i < NumNodes; i++ {
 		n := nodes[i]
 		if n != nil {
-			n.shh.Unsubscribe(n.filerId)
+			n.shh.Unsubscribe(n.filerID)
 			n.shh.Stop()
 			n.server.Stop()
 		}
@@ -260,9 +260,9 @@ func checkPropagation(t *testing.T, includingNodeZero bool) {
 
 	for j := 0; j < iterations; j++ {
 		for i := first; i < NumNodes; i++ {
-			f := nodes[i].shh.GetFilter(nodes[i].filerId)
+			f := nodes[i].shh.GetFilter(nodes[i].filerID)
 			if f == nil {
-				t.Fatalf("failed to get filterId %s from node %d, round %d.", nodes[i].filerId, i, round)
+				t.Fatalf("failed to get filterId %s from node %d, round %d.", nodes[i].filerID, i, round)
 			}
 
 			mail := f.Retrieve()
@@ -281,7 +281,7 @@ func checkPropagation(t *testing.T, includingNodeZero bool) {
 	t.Fatalf("Test was not complete: timeout %d seconds.", iterations*cycle/1000)
 
 	if !includingNodeZero {
-		f := nodes[0].shh.GetFilter(nodes[0].filerId)
+		f := nodes[0].shh.GetFilter(nodes[0].filerID)
 		if f != nil {
 			t.Fatalf("node zero received a message with low PoW.")
 		}
@@ -348,7 +348,7 @@ func sendMsg(t *testing.T, expected bool, id int) {
 		opt.Payload = opt.Payload[1:]
 	}
 
-	msg, err := NewSentMessage(&opt)
+	msg, err := newSentMessage(&opt)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -372,7 +372,7 @@ func TestPeerBasic(t *testing.T) {
 	}
 
 	params.PoW = 0.001
-	msg, err := NewSentMessage(params)
+	msg, err := newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}

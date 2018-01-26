@@ -115,6 +115,8 @@ func (e *Envelope) Seal(options *MessageParams) error {
 	return nil
 }
 
+// PoW computes (if necessary) and returns the proof of work target
+// of the envelope.
 func (e *Envelope) PoW() float64 {
 	if e.pow == 0 {
 		e.calculatePoW(0)
