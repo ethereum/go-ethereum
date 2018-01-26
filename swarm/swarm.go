@@ -48,13 +48,13 @@ import (
 )
 
 var (
-	startTime      time.Time
-	metricsTimeout = 5 * time.Second
-	startCounter   = metrics.NewCounter("stack,start")
-	stopCounter    = metrics.NewCounter("stack,stop")
-	uptimeGauge    = metrics.NewGauge("stack.uptime")
-	dbSizeGauge    = metrics.NewGauge("storage.db.chunks.size")
-	cacheSizeGauge = metrics.NewGauge("storage.db.cache.size")
+	startTime          time.Time
+	updateGaugesPeriod = 5 * time.Second
+	startCounter       = metrics.NewCounter("stack,start")
+	stopCounter        = metrics.NewCounter("stack,stop")
+	uptimeGauge        = metrics.NewGauge("stack.uptime")
+	dbSizeGauge        = metrics.NewGauge("storage.db.chunks.size")
+	cacheSizeGauge     = metrics.NewGauge("storage.db.cache.size")
 )
 
 // the swarm stack
@@ -319,24 +319,23 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		}
 	}
 
-	go self.metricsLoop()
+	self.periodicallyUpdateGauges()
 
 	startCounter.Inc(1)
 	return nil
 }
 
-// metricsLoop periodically sends metrics about storage
-func (self *Swarm) metricsLoop() {
-	ticker := time.NewTicker(metricsTimeout)
+func (self *Swarm) periodicallyUpdateGauges() {
+	ticker := time.NewTicker(updateGaugesPeriod)
 
 	go func() {
 		for _ = range ticker.C {
-			self.sendMetrics()
+			self.updateGauges()
 		}
 	}()
 }
 
-func (self *Swarm) sendMetrics() {
+func (self *Swarm) updateGauges() {
 	dbSizeGauge.Update(int64(self.lstore.DbCounter()))
 	cacheSizeGauge.Update(int64(self.lstore.CacheCounter()))
 	uptimeGauge.Update(time.Since(startTime).Nanoseconds())
