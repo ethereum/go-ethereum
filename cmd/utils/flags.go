@@ -1059,6 +1059,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config, p2pcfg *p
 	cfg.LightPeers = lightPeers
 	p2pcfg.MaxPeers = ethPeers + lightPeers
 
+	log.Info("Maximum peer count", "ETH", cfg.EthPeers, "LES", cfg.LightPeers, "total", p2pcfg.MaxPeers)
+
 	if ctx.GlobalIsSet(CacheFlag.Name) {
 		cfg.DatabaseCache = ctx.GlobalInt(CacheFlag.Name)
 	}
