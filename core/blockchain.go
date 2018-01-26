@@ -91,6 +91,7 @@ type BlockChain struct {
 	diskdb ethdb.Database // Low level persistent database to store final content in
 	triedb *trie.Database // High level ephemeral database to store non-final tries in
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
+	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
 
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
@@ -114,8 +115,6 @@ type BlockChain struct {
 	bodyRLPCache *lru.Cache     // Cache for the most recent block bodies in RLP encoded format
 	blockCache   *lru.Cache     // Cache for the most recent entire blocks
 	futureBlocks *lru.Cache     // future blocks are blocks added for later processing
-
-	procTime time.Duration // Accumulator for measuring total block processing for the trie node dumping
 
 	quit    chan struct{} // blockchain quit channel
 	running int32         // running must be called atomically
@@ -911,26 +910,26 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 			size  = bc.triedb.Size()
 			limit = common.StorageSize(bc.cacheConfig.TrieNodeLimit) * 1024 * 1024
 		)
-		if size > limit || bc.procTime > bc.cacheConfig.TrieTimeLimit {
+		if size > limit || bc.gcproc > bc.cacheConfig.TrieTimeLimit {
 			// If we're exceeding limits but haven't reached a large enough memory gap,
 			// warn the user that the system is becoming unstable.
 			if chosen < lastWrite+triesInMemory {
 				switch {
 				case size >= 2*limit:
 					log.Error("Trie memory critical, forcing to disk", "size", size, "limit", limit, "optimum", float64(chosen-lastWrite)/triesInMemory)
-				case bc.procTime >= 2*bc.cacheConfig.TrieTimeLimit:
-					log.Error("Trie timing critical, forcing to disk", "time", bc.procTime, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+				case bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit:
+					log.Error("Trie timing critical, forcing to disk", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
 				case size > limit:
 					log.Warn("Trie memory at dangerous levels", "size", size, "limit", limit, "optimum", float64(chosen-lastWrite)/triesInMemory)
-				case bc.procTime > bc.cacheConfig.TrieTimeLimit:
-					log.Warn("Trie timing at dangerous levels", "time", bc.procTime, "limit", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+				case bc.gcproc > bc.cacheConfig.TrieTimeLimit:
+					log.Warn("Trie timing at dangerous levels", "time", bc.gcproc, "limit", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
 				}
 			}
 			// If optimum or critical limits reached, write to disk
-			if chosen >= lastWrite+triesInMemory || size >= 2*limit || bc.procTime >= 2*bc.cacheConfig.TrieTimeLimit {
+			if chosen >= lastWrite+triesInMemory || size >= 2*limit || bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
 				bc.triedb.Commit(header.Root)
 				lastWrite = chosen
-				bc.procTime = 0
+				bc.gcproc = 0
 			}
 		}
 		// Garbage collect anything below our required write retention
@@ -943,7 +942,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 			bc.triedb.Dereference(root.(common.Hash), common.Hash{})
 		}
 		if current%10000 == 0 {
-			log.Warn("Current trie pruning state", "size", bc.triedb.Size(), "elapsed", bc.procTime)
+			log.Warn("Current trie pruning state", "size", bc.triedb.Size(), "elapsed", bc.gcproc)
 		}
 	}
 	if err := WriteBlockReceipts(batch, block.Hash(), block.NumberU64(), receipts); err != nil {
@@ -1142,7 +1141,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			bc.reportBlock(block, receipts, err)
 			return i, events, coalescedLogs, err
 		}
-		bc.procTime += time.Since(bstart)
+		proctime := time.Since(bstart)
 
 		// Write the block to the chain and get the status.
 		status, err := bc.WriteBlockWithState(block, receipts, state)
@@ -1158,6 +1157,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			blockInsertTimer.UpdateSince(bstart)
 			events = append(events, ChainEvent{block, block.Hash(), logs})
 			lastCanon = block
+
+			// Only count canonical blocks for GC processing time
+			bc.gcproc += proctime
 
 		case SideStatTy:
 			log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(), "diff", block.Difficulty(), "elapsed",
