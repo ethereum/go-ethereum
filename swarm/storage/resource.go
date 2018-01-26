@@ -861,14 +861,14 @@ func isMultihash(data []byte) int {
 	cursor := 0
 	hashtype, c := binary.Uvarint(data)
 	log.Trace("ismultihash", "hashtype", hashtype, "c", c)
-	if c == 0 {
+	if c <= 0 {
 		log.Debug("Corrupt multihash data, hashtype is unreadable")
 		return 0
 	}
 	cursor += c
 	hashlength, c := binary.Uvarint(data[cursor:])
 	log.Trace("ismultihash", "hashlength", hashlength, "c", c)
-	if c == 0 {
+	if c <= 0 {
 		log.Debug("Corrupt multihash data, hashlength is unreadable")
 		return 0
 	}
