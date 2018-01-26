@@ -381,14 +381,13 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		for j := 0; j < nodes-1; j++ {
 			id := sim.IDs[j]
 			err := sim.CallClient(id, func(client *rpc.Client) error {
-				err := streamTesting.WatchDisconnections(sim.IDs[j], client, peerCount(sim.IDs[j]), errc, quitC)
+				err := streamTesting.WatchDisconnections(id, client, peerCount(id), errc, quitC)
 				if err != nil {
 					return err
 				}
 				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 				defer cancel()
-				j++
-				sid := sim.IDs[j]
+				sid := sim.IDs[j+1]
 				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, swarmChunkServerStreamName, nil, 0, 0, Top, false)
 			})
 			if err != nil {
@@ -416,9 +415,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		}()
 		return nil
 	}
-	checkC := make(chan struct{})
 	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
-		defer func() { checkC <- struct{}{} }()
 		select {
 		case err := <-errc:
 			return false, err

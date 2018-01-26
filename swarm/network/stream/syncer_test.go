@@ -37,15 +37,10 @@ import (
 const dataChunkCount = 1000
 
 func TestSyncerSimulation(t *testing.T) {
-	// testSyncBetweenNodes(t, 2, 1, dataChunkCount, true, 1)
-	// testSyncBetweenNodes(t, 2, 1, dataChunkCount, false, 1)
-	// testSyncBetweenNodes(t, 4, 1, dataChunkCount, true, 1)
-	// // testSyncBetweenNodes(t, 4, 1, dataChunkCount, false, 1)
-	// testSyncBetweenNodes(t, 8, 1, dataChunkCount, true, 1)
-	// // testSyncBetweenNodes(t, 8, 1, dataChunkCount, false, 1)
+	testSyncBetweenNodes(t, 2, 1, dataChunkCount, true, 1)
+	testSyncBetweenNodes(t, 4, 1, dataChunkCount, true, 1)
+	testSyncBetweenNodes(t, 8, 1, dataChunkCount, true, 1)
 	testSyncBetweenNodes(t, 16, 1, dataChunkCount, true, 1)
-	// testSyncBetweenNodes(t, 32, 1, dataChunkCount, true, 1)
-	// testSyncBetweenNodes(t, 16, 1, dataChunkCount, false, 1)
 }
 
 func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool, po uint8) {
