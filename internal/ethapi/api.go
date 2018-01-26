@@ -381,6 +381,15 @@ func (s *PrivateAccountAPI) SendTransaction(ctx context.Context, args SendTxArgs
 func (s *PrivateAccountAPI) SignTransaction(ctx context.Context, args SendTxArgs, passwd string) (*SignTransactionResult, error) {
 	// No need to obtain the noncelock mutex, since we won't be sending this
 	// tx into the transaction pool, but right back to the user
+	if args.Gas == nil {
+		return nil, fmt.Errorf("gas not specified")
+	}
+	if args.GasPrice == nil {
+		return nil, fmt.Errorf("gasPrice not specified")
+	}
+	if args.Nonce == nil {
+		return nil, fmt.Errorf("nonce not specified")
+	}
 	signed, err := s.signTransaction(ctx, args, passwd)
 	if err != nil {
 		return nil, err
@@ -1243,11 +1252,14 @@ type SignTransactionResult struct {
 // The node needs to have the private key of the account corresponding with
 // the given from address and it needs to be unlocked.
 func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args SendTxArgs) (*SignTransactionResult, error) {
+	if args.Gas == nil {
+		return nil, fmt.Errorf("gas not specified")
+	}
+	if args.GasPrice == nil {
+		return nil, fmt.Errorf("gasPrice not specified")
+	}
 	if args.Nonce == nil {
-		// Hold the addresse's mutex around signing to prevent concurrent assignment of
-		// the same nonce to multiple accounts.
-		s.nonceLock.LockAddr(args.From)
-		defer s.nonceLock.UnlockAddr(args.From)
+		return nil, fmt.Errorf("nonce not specified")
 	}
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
