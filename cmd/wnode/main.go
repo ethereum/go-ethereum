@@ -21,6 +21,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/ecdsa"
 	"crypto/sha512"
 	"encoding/binary"
@@ -39,24 +40,38 @@ import (
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/whisper/mailserver"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
+	"github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"golang.org/x/crypto/pbkdf2"
+
+	libp2pCrypto "github.com/libp2p/go-libp2p-crypto"
+	libp2pHost "github.com/libp2p/go-libp2p-host"
+	peer "github.com/libp2p/go-libp2p-peer"
+	ma "github.com/multiformats/go-multiaddr"
+	// inet "gx/ipfs/QmU4vCDZTPLDqSDKguWbHCiUe46mZUtmM2g2suBZ9NE8ko/go-libp2p-net"
+	// swarm "gx/ipfs/QmUhvp4VoQ9cKDVLqAxciEKdm8ymBx2Syx4C1Tv6SmSTPa/go-libp2p-swarm"
+	// peer "gx/ipfs/QmWNY7dV54ZDYmTA1ykVdwNCqC11mpU4zSUp6XDpLTH9eG/go-libp2p-peer"
+
+	// ma "gx/ipfs/QmW8s4zTsUoX1Q6CeYxVKPyqSKbF7H1YDUyTostBtZ8DaG/go-multiaddr"
+
+	inet "github.com/libp2p/go-libp2p-net"
 )
 
 const quitCommand = "~Q"
 
 // singletons
 var (
-	server     *p2p.Server
+	network    *inet.Network
+	host       libp2pHost.Host
 	shh        *whisper.Whisper
 	done       chan struct{}
 	mailServer mailserver.WMailServer
 
 	input = bufio.NewReader(os.Stdin)
+
+	bootnode peer.ID
 )
 
 // encryption
@@ -64,7 +79,7 @@ var (
 	symKey     []byte
 	pub        *ecdsa.PublicKey
 	asymKey    *ecdsa.PrivateKey
-	nodeid     *ecdsa.PrivateKey
+	nodeid     libp2pCrypto.PrivKey
 	topic      whisper.TopicType
 	asymKeyID  string
 	filterID   string
@@ -91,7 +106,6 @@ var (
 	argPoW       = flag.Float64("pow", whisper.DefaultMinimumPoW, "PoW for normal messages in float format (e.g. 2.7)")
 	argServerPoW = flag.Float64("mspow", whisper.DefaultMinimumPoW, "PoW requirement for Mail Server request")
 
-	argIP      = flag.String("ip", "", "IP address and port of this node (e.g. 127.0.0.1:30303)")
 	argPub     = flag.String("pub", "", "public key for asymmetric encryption")
 	argDBPath  = flag.String("dbpath", "", "path to the server's DB directory")
 	argIDFile  = flag.String("idfile", "", "file name with node id (private key)")
@@ -111,16 +125,14 @@ func processArgs() {
 
 	if len(*argIDFile) > 0 {
 		var err error
-		nodeid, err = crypto.LoadECDSA(*argIDFile)
+		keyData, err := ioutil.ReadFile(*argIDFile)
 		if err != nil {
 			utils.Fatalf("Failed to load file [%s]: %s.", *argIDFile, err)
 		}
-	}
 
-	const enodePrefix = "enode://"
-	if len(*argEnode) > 0 {
-		if (*argEnode)[:len(enodePrefix)] != enodePrefix {
-			*argEnode = enodePrefix + *argEnode
+		nodeid, err = libp2pCrypto.UnmarshalPrivateKey(keyData)
+		if err != nil {
+			utils.Fatalf("Failed to load file [%s]: %s.", *argIDFile, err)
 		}
 	}
 
@@ -157,7 +169,7 @@ func echo() {
 	fmt.Printf("workTime = %d \n", *argWorkTime)
 	fmt.Printf("pow = %f \n", *argPoW)
 	fmt.Printf("mspow = %f \n", *argServerPoW)
-	fmt.Printf("ip = %s \n", *argIP)
+	fmt.Printf("ip = %v \n", host.Addrs()[0].Protocols())
 	fmt.Printf("pub = %s \n", common.ToHex(crypto.FromECDSAPub(pub)))
 	fmt.Printf("idfile = %s \n", *argIDFile)
 	fmt.Printf("dbpath = %s \n", *argDBPath)
@@ -168,7 +180,6 @@ func initialize() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*argVerbosity), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
 	done = make(chan struct{})
-	var peers []*discover.Node
 	var err error
 
 	if *generateKey {
@@ -186,16 +197,23 @@ func initialize() {
 		msPassword = "wwww"
 	}
 
-	if *bootstrapMode {
-		if len(*argIP) == 0 {
-			argIP = scanLineA("Please enter your IP and port (e.g. 127.0.0.1:30348): ")
-		}
-	} else {
+	if !*bootstrapMode {
 		if len(*argEnode) == 0 {
-			argEnode = scanLineA("Please enter the peer's enode: ")
+			argEnode = scanLineA("Please enter the peer's address: ")
 		}
-		peer := discover.MustParseNode(*argEnode)
-		peers = append(peers, peer)
+		peeraddr, err := ma.NewMultiaddr(*argEnode)
+		if err != nil {
+			utils.Fatalf("Invalid address: %s", err)
+		}
+		pid, err := peeraddr.ValueForProtocol(ma.P_IPFS)
+		if err != nil {
+			utils.Fatalf("Could not find peer id: %s", err)
+		}
+		peerid, err := peer.IDB58Decode(pid)
+		if err != nil {
+			utils.Fatalf("Could not decode peer id: %s", err)
+		}
+		bootnode = peerid
 	}
 
 	cfg := &whisper.Config{
@@ -242,56 +260,30 @@ func initialize() {
 		utils.Fatalf("Failed to retrieve a new key pair: %s", err)
 	}
 
-	if nodeid == nil {
-		tmpID, err := shh.NewKeyPair()
-		if err != nil {
-			utils.Fatalf("Failed to generate a new key pair: %s", err)
-		}
-
-		nodeid, err = shh.GetPrivateKey(tmpID)
+	if nodeid != nil {
+		nodeid, _, err = libp2pCrypto.GenerateKeyPair(libp2pCrypto.Ed25519, 384)
 		if err != nil {
 			utils.Fatalf("Failed to retrieve a new key pair: %s", err)
 		}
 	}
-
-	maxPeers := 80
-	if *bootstrapMode {
-		maxPeers = 800
-	}
-
-	server = &p2p.Server{
-		Config: p2p.Config{
-			PrivateKey:     nodeid,
-			MaxPeers:       maxPeers,
-			Name:           common.MakeName("wnode", "5.0"),
-			Protocols:      shh.Protocols(),
-			ListenAddr:     *argIP,
-			NAT:            nat.Any(),
-			BootstrapNodes: peers,
-			StaticNodes:    peers,
-			TrustedNodes:   peers,
-		},
-	}
 }
 
 func startServer() {
-	err := server.Start()
-	if err != nil {
-		utils.Fatalf("Failed to start Whisper peer: %s.", err)
-	}
-
 	fmt.Printf("my public key: %s \n", common.ToHex(crypto.FromECDSAPub(&asymKey.PublicKey)))
-	fmt.Println(server.NodeInfo().Enode)
+	fmt.Println(host.ID())
 
 	if *bootstrapMode {
-		configureNode()
-		fmt.Println("Bootstrap Whisper node started")
+		fmt.Print("Bootstrap ")
 	} else {
-		fmt.Println("Whisper node started")
-		// first see if we can establish connection, then ask for user input
-		waitForConnection(true)
-		configureNode()
+		// first see if we can establish connection
+		_, err := host.NewStream(context.Background(), bootnode, whisperv6.WhisperProtocolString)
+		if err != nil {
+			utils.Fatalf("Error connecting to bootstrap node: %s", err)
+		}
+
 	}
+	fmt.Println("Whisper node started")
+	configureNode()
 
 	if !*forwarderMode {
 		fmt.Printf("Please type the message. To quit type: '%s'\n", quitCommand)
@@ -382,27 +374,10 @@ func generateTopic(password []byte) {
 	}
 }
 
-func waitForConnection(timeout bool) {
-	var cnt int
-	var connected bool
-	for !connected {
-		time.Sleep(time.Millisecond * 50)
-		connected = server.PeerCount() > 0
-		if timeout {
-			cnt++
-			if cnt > 1000 {
-				utils.Fatalf("Timeout expired, failed to connect")
-			}
-		}
-	}
-
-	fmt.Println("Connected to peer.")
-}
-
 func run() {
 	defer mailServer.Close()
 	startServer()
-	defer server.Stop()
+	defer host.Close()
 	shh.Start(nil)
 	defer shh.Stop()
 
@@ -601,7 +576,7 @@ func requestExpiredMessagesLoop() {
 	if err != nil {
 		utils.Fatalf("Failed to save symmetric key for mail request: %s", err)
 	}
-	peerID = extractIdFromEnode(*argEnode)
+	peerID = extractIDFromEnode(*argEnode)
 	shh.AllowP2PMessagesFromPeer(peerID)
 
 	for {
@@ -627,11 +602,19 @@ func requestExpiredMessagesLoop() {
 			data = data[:8]
 		}
 
+		nodeiddata, err := nodeid.Bytes()
+		if err != nil {
+			utils.Fatalf("Error converting libp2p key to geth key: %s", err)
+		}
+		nodeidkey, err := crypto.ToECDSA(nodeiddata)
+		if err != nil {
+			utils.Fatalf("Error converting libp2p key to geth key: %s", err)
+		}
 		var params whisper.MessageParams
 		params.PoW = *argServerPoW
 		params.Payload = data
 		params.KeySym = key
-		params.Src = nodeid
+		params.Src = nodeidkey
 		params.WorkTime = 5
 
 		msg, err := whisper.NewSentMessage(&params)
@@ -652,7 +635,7 @@ func requestExpiredMessagesLoop() {
 	}
 }
 
-func extractIdFromEnode(s string) []byte {
+func extractIDFromEnode(s string) []byte {
 	n, err := discover.ParseNode(s)
 	if err != nil {
 		utils.Fatalf("Failed to parse enode: %s", err)

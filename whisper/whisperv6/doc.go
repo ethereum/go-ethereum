@@ -72,6 +72,9 @@ const (
 
 	DefaultTTL           = 50 // seconds
 	DefaultSyncAllowance = 10 // seconds
+
+	WhisperPort           = 534848
+	WhisperProtocolString = "/whisper/6.0"
 )
 
 type unknownVersionError uint64

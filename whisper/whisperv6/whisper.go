@@ -17,11 +17,12 @@
 package whisperv6
 
 import (
-	"bytes"
+	"context"
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"crypto/sha256"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"runtime"
 	"sync"
@@ -33,6 +34,12 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	libp2p "github.com/libp2p/go-libp2p"
+	libp2pCrypto "github.com/libp2p/go-libp2p-crypto"
+	host "github.com/libp2p/go-libp2p-host"
+	inet "github.com/libp2p/go-libp2p-net"
+	peer "github.com/libp2p/go-libp2p-peer"
+	protocol "github.com/libp2p/go-libp2p-protocol"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/sync/syncmap"
@@ -59,8 +66,9 @@ const (
 // Whisper represents a dark communication interface through the Ethereum
 // network, using its very own P2P communication layer.
 type Whisper struct {
-	protocol p2p.Protocol // Protocol description and parameters
-	filters  *Filters     // Message filters installed with Subscribe function
+	protocol protocol.ID // Protocol description and parameters
+	host     host.Host
+	filters  *Filters // Message filters installed with Subscribe function
 
 	privateKeys map[string]*ecdsa.PrivateKey // Private key storage
 	symKeys     map[string][]byte            // Symmetric key storage
@@ -93,6 +101,28 @@ func New(cfg *Config) *Whisper {
 		cfg = &DefaultConfig
 	}
 
+	priv, _, err := libp2pCrypto.GenerateKeyPair(libp2pCrypto.Ed25519, 384)
+	// TODO check if this doesn't reveal my private key, which would
+	// be very bad. Alternatively, use the crypto stuff from libp2p,
+	// hopefully this can be converted back and forth with the golang
+	// crypto primitives.
+	// pid, _ := peer.IDFromString(fmt.Sprintf("%v", nodeid.D))
+	// n, _ := swarm.NewNetwork(context.Background(), []ma.Multiaddr{}, pid, nil, nil)
+	// fmt.Println(n)
+	opts := []libp2p.Option{
+		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", WhisperPort)),
+		libp2p.Identity(priv),
+	}
+
+	h, err := libp2p.New(context.Background(), opts...)
+	if err != nil {
+		// TODO return error too
+		log.Error("Error setting up the libp2p network: %s", err)
+		return nil
+	}
+
+	log.Info("Host address is at %s", h.Addrs()[0].String())
+
 	whisper := &Whisper{
 		privateKeys:   make(map[string]*ecdsa.PrivateKey),
 		symKeys:       make(map[string][]byte),
@@ -103,28 +133,44 @@ func New(cfg *Config) *Whisper {
 		p2pMsgQueue:   make(chan *Envelope, messageQueueLimit),
 		quit:          make(chan struct{}),
 		syncAllowance: DefaultSyncAllowance,
+		host:          h,
+		protocol:      WhisperProtocolString,
 	}
+
+	h.SetStreamHandler(whisper.protocol, func(stream inet.Stream) {
+		defer stream.Close()
+
+		data, err := ioutil.ReadAll(stream)
+		if err != nil {
+			log.Error("Error reading stream data %s", err)
+			return
+		}
+		if len(data) < 2 {
+			log.Error("Invalid data received: it has to be at least two bytes")
+			return
+		}
+
+		messageType := data[0]
+		var envelope Envelope
+		err = rlp.DecodeBytes(data[1:], envelope)
+		if err != nil {
+			log.Error(fmt.Sprintf("Error decoding payload: %s", err))
+			return
+		}
+
+		p, err := whisper.getPeer(stream.Conn().RemotePeer())
+		if err != nil {
+			log.Error(fmt.Sprintf("Could not find peer: %s", err))
+			return
+		}
+		whisper.ProcessIncomingMessage(messageType, data[1:], p)
+	})
 
 	whisper.filters = NewFilters(whisper)
 
 	whisper.settings.Store(minPowIdx, cfg.MinimumAcceptedPOW)
 	whisper.settings.Store(maxMsgSizeIdx, cfg.MaxMessageSize)
 	whisper.settings.Store(overflowIdx, false)
-
-	// p2p whisper sub protocol handler
-	whisper.protocol = p2p.Protocol{
-		Name:    ProtocolName,
-		Version: uint(ProtocolVersion),
-		Length:  NumberOfMessageCodes,
-		Run:     whisper.HandlePeer,
-		NodeInfo: func() interface{} {
-			return map[string]interface{}{
-				"version":        ProtocolVersionStr,
-				"maxMessageSize": whisper.MaxMessageSize(),
-				"minimumPoW":     whisper.MinPow(),
-			}
-		},
-	}
 
 	return whisper
 }
@@ -208,16 +254,6 @@ func (w *Whisper) RegisterServer(server MailServer) {
 	w.mailServer = server
 }
 
-// Protocols returns the whisper sub-protocols ran by this particular client.
-func (w *Whisper) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{w.protocol}
-}
-
-// Version returns the whisper sub-protocols version number.
-func (w *Whisper) Version() uint {
-	return w.protocol.Version
-}
-
 // SetMaxMessageSize sets the maximal message size allowed by this node
 func (w *Whisper) SetMaxMessageSize(size uint32) error {
 	if size > MaxMessageSize {
@@ -282,7 +318,7 @@ func (w *Whisper) notifyPeersAboutPowRequirementChange(pow float64) {
 			err = p.notifyAboutPowRequirementChange(pow)
 		}
 		if err != nil {
-			log.Warn("failed to notify peer about new pow requirement", "peer", p.ID(), "error", err)
+			log.Warn("failed to notify peer about new pow requirement", "peer", p.pid, "error", err)
 		}
 	}
 }
@@ -296,7 +332,7 @@ func (w *Whisper) notifyPeersAboutBloomFilterChange(bloom []byte) {
 			err = p.notifyAboutBloomFilterChange(bloom)
 		}
 		if err != nil {
-			log.Warn("failed to notify peer about new bloom filter", "peer", p.ID(), "error", err)
+			log.Warn("failed to notify peer about new bloom filter", "peer", p.pid, "error", err)
 		}
 	}
 }
@@ -314,12 +350,11 @@ func (w *Whisper) getPeers() []*Peer {
 }
 
 // getPeer retrieves peer by ID
-func (w *Whisper) getPeer(peerID []byte) (*Peer, error) {
+func (w *Whisper) getPeer(peerID peer.ID) (*Peer, error) {
 	w.peerMu.Lock()
 	defer w.peerMu.Unlock()
 	for p := range w.peers {
-		id := p.peer.ID()
-		if bytes.Equal(peerID, id[:]) {
+		if peerID == p.pid {
 			return p, nil
 		}
 	}
@@ -328,7 +363,7 @@ func (w *Whisper) getPeer(peerID []byte) (*Peer, error) {
 
 // AllowP2PMessagesFromPeer marks specific peer trusted,
 // which will allow it to send historic (expired) messages.
-func (w *Whisper) AllowP2PMessagesFromPeer(peerID []byte) error {
+func (w *Whisper) AllowP2PMessagesFromPeer(peerID peer.ID) error {
 	p, err := w.getPeer(peerID)
 	if err != nil {
 		return err
@@ -342,7 +377,7 @@ func (w *Whisper) AllowP2PMessagesFromPeer(peerID []byte) error {
 // request and respond with a number of peer-to-peer messages (possibly expired),
 // which are not supposed to be forwarded any further.
 // The whisper protocol is agnostic of the format and contents of envelope.
-func (w *Whisper) RequestHistoricMessages(peerID []byte, envelope *Envelope) error {
+func (w *Whisper) RequestHistoricMessages(peerID peer.ID, envelope *Envelope) error {
 	p, err := w.getPeer(peerID)
 	if err != nil {
 		return err
@@ -352,7 +387,7 @@ func (w *Whisper) RequestHistoricMessages(peerID []byte, envelope *Envelope) err
 }
 
 // SendP2PMessage sends a peer-to-peer message to a specific peer.
-func (w *Whisper) SendP2PMessage(peerID []byte, envelope *Envelope) error {
+func (w *Whisper) SendP2PMessage(peerID peer.ID, envelope *Envelope) error {
 	p, err := w.getPeer(peerID)
 	if err != nil {
 		return err
@@ -362,7 +397,19 @@ func (w *Whisper) SendP2PMessage(peerID []byte, envelope *Envelope) error {
 
 // SendP2PDirect sends a peer-to-peer message to a specific peer.
 func (w *Whisper) SendP2PDirect(peer *Peer, envelope *Envelope) error {
-	return p2p.Send(peer.ws, p2pMessageCode, envelope)
+	stream, err := w.host.NewStream(context.Background(), peer.pid, w.protocol)
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+
+	b, err := rlp.EncodeToBytes(envelope)
+	if err != nil {
+		return err
+	}
+
+	stream.Write(append([]byte{p2pMessageCode}, b...))
+	return nil
 }
 
 // NewKeyPair generates a new cryptographic identity for the client, and injects
@@ -621,18 +668,18 @@ func (w *Whisper) Stop() error {
 
 // HandlePeer is called by the underlying P2P layer when the whisper sub-protocol
 // connection is negotiated.
-func (wh *Whisper) HandlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+func (w *Whisper) HandlePeer(peer *peer.ID, rw p2p.MsgReadWriter) error {
 	// Create the new peer and start tracking it
-	whisperPeer := newPeer(wh, peer, rw)
+	whisperPeer := newPeer(w, peer, rw)
 
-	wh.peerMu.Lock()
-	wh.peers[whisperPeer] = struct{}{}
-	wh.peerMu.Unlock()
+	w.peerMu.Lock()
+	w.peers[whisperPeer] = struct{}{}
+	w.peerMu.Unlock()
 
 	defer func() {
-		wh.peerMu.Lock()
-		delete(wh.peers, whisperPeer)
-		wh.peerMu.Unlock()
+		w.peerMu.Lock()
+		delete(w.peers, whisperPeer)
+		w.peerMu.Unlock()
 	}()
 
 	// Run the peer handshake and state updates
@@ -642,184 +689,183 @@ func (wh *Whisper) HandlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	whisperPeer.start()
 	defer whisperPeer.stop()
 
-	return wh.runMessageLoop(whisperPeer, rw)
+	return w.runMessageLoop(whisperPeer, rw)
+}
+
+// ProcessIncomingMessage gets the payload of a p2p message and decodes it
+// depending on its type.
+func (w *Whisper) ProcessIncomingMessage(code byte, data []byte, p *Peer) error {
+	switch code {
+	case statusCode:
+		// this should not happen, but no need to panic; just ignore this message.
+		log.Warn("unxepected status message received", "peer", p.pid)
+	case messagesCode:
+		// decode the contained envelopes
+		var envelopes []*Envelope
+		err := rlp.DecodeBytes(data, envelopes)
+		if err != nil {
+			log.Warn("failed to decode envelopes, peer will be disconnected", "peer", p.pid, "err", err)
+			return errors.New("invalid envelopes")
+		}
+
+		trouble := false
+		for _, env := range envelopes {
+			cached, err := w.add(env)
+			if err != nil {
+				trouble = true
+				log.Error("bad envelope received, peer will be disconnected", "peer", p.pid, "err", err)
+			}
+			if cached {
+				p.mark(env)
+			}
+		}
+
+		if trouble {
+			return errors.New("invalid envelope")
+		}
+	case powRequirementCode:
+		var i uint64
+		err := rlp.DecodeBytes(data, i)
+		if err != nil {
+			log.Warn("failed to decode powRequirementCode message, peer will be disconnected", "peer", p.pid, "err", err)
+			return errors.New("invalid powRequirementCode message")
+		}
+		f := math.Float64frombits(i)
+		if math.IsInf(f, 0) || math.IsNaN(f) || f < 0.0 {
+			log.Warn("invalid value in powRequirementCode message, peer will be disconnected", "peer", p.pid, "err", err)
+			return errors.New("invalid value in powRequirementCode message")
+		}
+		p.powRequirement = f
+	case bloomFilterExCode:
+		// to be implemented
+	case p2pMessageCode:
+		// peer-to-peer message, sent directly to peer bypassing PoW checks, etc.
+		// this message is not supposed to be forwarded to other peers, and
+		// therefore might not satisfy the PoW, expiry and other requirements.
+		// these messages are only accepted from the trusted peer.
+		if p.trusted {
+			var envelope Envelope
+			err := rlp.DecodeBytes(data, envelope)
+			if err != nil {
+				log.Warn("failed to decode direct message, peer will be disconnected", "peer", p.pid, "err", err)
+				return errors.New("invalid direct message")
+			}
+			w.postEvent(&envelope, true)
+		}
+	case p2pRequestCode:
+		// Must be processed if mail server is implemented. Otherwise ignore.
+		if w.mailServer != nil {
+			var request Envelope
+			err := rlp.DecodeBytes(data, request)
+			if err != nil {
+				log.Warn("failed to decode p2p request message, peer will be disconnected", "peer", p.pid, "err", err)
+				return errors.New("invalid p2p request")
+			}
+			w.mailServer.DeliverMail(p, &request)
+		}
+	default:
+		// New message types might be implemented in the future versions of Whisper.
+		// For forward compatibility, just ignore.
+	}
+
+	return nil
 }
 
 // runMessageLoop reads and processes inbound messages directly to merge into client-global state.
-func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
+func (w *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 	for {
 		// fetch the next packet
 		packet, err := rw.ReadMsg()
 		if err != nil {
-			log.Warn("message loop", "peer", p.peer.ID(), "err", err)
+			log.Warn("message loop", "peer", p.pid, "err", err)
 			return err
 		}
-		if packet.Size > wh.MaxMessageSize() {
-			log.Warn("oversized message received", "peer", p.peer.ID())
+		if packet.Size > w.MaxMessageSize() {
+			log.Warn("oversized message received", "peer", p.pid)
 			return errors.New("oversized message received")
 		}
 
-		switch packet.Code {
-		case statusCode:
-			// this should not happen, but no need to panic; just ignore this message.
-			log.Warn("unxepected status message received", "peer", p.peer.ID())
-		case messagesCode:
-			// decode the contained envelopes
-			var envelopes []*Envelope
-			if err := packet.Decode(&envelopes); err != nil {
-				log.Warn("failed to decode envelopes, peer will be disconnected", "peer", p.peer.ID(), "err", err)
-				return errors.New("invalid envelopes")
-			}
+		data, err := ioutil.ReadAll(packet.Payload)
+		err = w.ProcessIncomingMessage(byte(packet.Code), data, p)
 
-			trouble := false
-			for _, env := range envelopes {
-				cached, err := wh.add(env)
-				if err != nil {
-					trouble = true
-					log.Error("bad envelope received, peer will be disconnected", "peer", p.peer.ID(), "err", err)
-				}
-				if cached {
-					p.mark(env)
-				}
-			}
-
-			if trouble {
-				return errors.New("invalid envelope")
-			}
-		case powRequirementCode:
-			s := rlp.NewStream(packet.Payload, uint64(packet.Size))
-			i, err := s.Uint()
-			if err != nil {
-				log.Warn("failed to decode powRequirementCode message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
-				return errors.New("invalid powRequirementCode message")
-			}
-			f := math.Float64frombits(i)
-			if math.IsInf(f, 0) || math.IsNaN(f) || f < 0.0 {
-				log.Warn("invalid value in powRequirementCode message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
-				return errors.New("invalid value in powRequirementCode message")
-			}
-			p.powRequirement = f
-		case bloomFilterExCode:
-			var bloom []byte
-			err := packet.Decode(&bloom)
-			if err == nil && len(bloom) != bloomFilterSize {
-				err = fmt.Errorf("wrong bloom filter size %d", len(bloom))
-			}
-
-			if err != nil {
-				log.Warn("failed to decode bloom filter exchange message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
-				return errors.New("invalid bloom filter exchange message")
-			}
-			if isFullNode(bloom) {
-				p.bloomFilter = nil
-			} else {
-				p.bloomFilter = bloom
-			}
-		case p2pMessageCode:
-			// peer-to-peer message, sent directly to peer bypassing PoW checks, etc.
-			// this message is not supposed to be forwarded to other peers, and
-			// therefore might not satisfy the PoW, expiry and other requirements.
-			// these messages are only accepted from the trusted peer.
-			if p.trusted {
-				var envelope Envelope
-				if err := packet.Decode(&envelope); err != nil {
-					log.Warn("failed to decode direct message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
-					return errors.New("invalid direct message")
-				}
-				wh.postEvent(&envelope, true)
-			}
-		case p2pRequestCode:
-			// Must be processed if mail server is implemented. Otherwise ignore.
-			if wh.mailServer != nil {
-				var request Envelope
-				if err := packet.Decode(&request); err != nil {
-					log.Warn("failed to decode p2p request message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
-					return errors.New("invalid p2p request")
-				}
-				wh.mailServer.DeliverMail(p, &request)
-			}
-		default:
-			// New message types might be implemented in the future versions of Whisper.
-			// For forward compatibility, just ignore.
+		if err != nil {
+			return err
 		}
-
-		packet.Discard()
 	}
 }
 
 // add inserts a new envelope into the message pool to be distributed within the
 // whisper network. It also inserts the envelope into the expiration pool at the
 // appropriate time-stamp. In case of error, connection should be dropped.
-func (wh *Whisper) add(envelope *Envelope) (bool, error) {
+func (w *Whisper) add(envelope *Envelope) (bool, error) {
 	now := uint32(time.Now().Unix())
 	sent := envelope.Expiry - envelope.TTL
 
 	if sent > now {
 		if sent-DefaultSyncAllowance > now {
 			return false, fmt.Errorf("envelope created in the future [%x]", envelope.Hash())
-		} else {
-			// recalculate PoW, adjusted for the time difference, plus one second for latency
-			envelope.calculatePoW(sent - now + 1)
 		}
+
+		// recalculate PoW, adjusted for the time difference, plus one second for latency
+		envelope.calculatePoW(sent - now + 1)
 	}
 
 	if envelope.Expiry < now {
 		if envelope.Expiry+DefaultSyncAllowance*2 < now {
 			return false, fmt.Errorf("very old message")
-		} else {
-			log.Debug("expired envelope dropped", "hash", envelope.Hash().Hex())
-			return false, nil // drop envelope without error
 		}
+		log.Debug("expired envelope dropped", "hash", envelope.Hash().Hex())
+		return false, nil // drop envelope without error
 	}
 
-	if uint32(envelope.size()) > wh.MaxMessageSize() {
+	if uint32(envelope.size()) > w.MaxMessageSize() {
 		return false, fmt.Errorf("huge messages are not allowed [%x]", envelope.Hash())
 	}
 
-	if envelope.PoW() < wh.MinPow() {
+	if envelope.PoW() < w.MinPow() {
 		// maybe the value was recently changed, and the peers did not adjust yet.
 		// in this case the previous value is retrieved by MinPowTolerance()
 		// for a short period of peer synchronization.
-		if envelope.PoW() < wh.MinPowTolerance() {
+		if envelope.PoW() < w.MinPowTolerance() {
 			return false, fmt.Errorf("envelope with low PoW received: PoW=%f, hash=[%v]", envelope.PoW(), envelope.Hash().Hex())
 		}
 	}
 
-	if !bloomFilterMatch(wh.BloomFilter(), envelope.Bloom()) {
+	if !bloomFilterMatch(w.BloomFilter(), envelope.Bloom()) {
 		// maybe the value was recently changed, and the peers did not adjust yet.
 		// in this case the previous value is retrieved by BloomFilterTolerance()
 		// for a short period of peer synchronization.
-		if !bloomFilterMatch(wh.BloomFilterTolerance(), envelope.Bloom()) {
+		if !bloomFilterMatch(w.BloomFilterTolerance(), envelope.Bloom()) {
 			return false, fmt.Errorf("envelope does not match bloom filter, hash=[%v], bloom: \n%x \n%x \n%x",
-				envelope.Hash().Hex(), wh.BloomFilter(), envelope.Bloom(), envelope.Topic)
+				envelope.Hash().Hex(), w.BloomFilter(), envelope.Bloom(), envelope.Topic)
 		}
 	}
 
 	hash := envelope.Hash()
 
-	wh.poolMu.Lock()
-	_, alreadyCached := wh.envelopes[hash]
+	w.poolMu.Lock()
+	_, alreadyCached := w.envelopes[hash]
 	if !alreadyCached {
-		wh.envelopes[hash] = envelope
-		if wh.expirations[envelope.Expiry] == nil {
-			wh.expirations[envelope.Expiry] = set.NewNonTS()
+		w.envelopes[hash] = envelope
+		if w.expirations[envelope.Expiry] == nil {
+			w.expirations[envelope.Expiry] = set.NewNonTS()
 		}
-		if !wh.expirations[envelope.Expiry].Has(hash) {
-			wh.expirations[envelope.Expiry].Add(hash)
+		if !w.expirations[envelope.Expiry].Has(hash) {
+			w.expirations[envelope.Expiry].Add(hash)
 		}
 	}
-	wh.poolMu.Unlock()
+	w.poolMu.Unlock()
 
 	if alreadyCached {
 		log.Trace("whisper envelope already cached", "hash", envelope.Hash().Hex())
 	} else {
 		log.Trace("cached whisper envelope", "hash", envelope.Hash().Hex())
-		wh.statsMu.Lock()
-		wh.stats.memoryUsed += envelope.size()
-		wh.statsMu.Unlock()
-		wh.postEvent(envelope, false) // notify the local node about the new message
-		if wh.mailServer != nil {
-			wh.mailServer.Archive(envelope)
+		w.statsMu.Lock()
+		w.stats.memoryUsed += envelope.size()
+		w.statsMu.Unlock()
+		w.postEvent(envelope, false) // notify the local node about the new message
+		if w.mailServer != nil {
+			w.mailServer.Archive(envelope)
 		}
 	}
 	return true, nil
