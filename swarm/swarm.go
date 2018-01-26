@@ -22,7 +22,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"net"
-	"os"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"

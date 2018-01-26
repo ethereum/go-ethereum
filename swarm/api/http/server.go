@@ -402,26 +402,26 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name strin
 
 func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supErr string, err error) {
 	code := 0
-	defaulterr := fmt.Errorf("%s: %v", supErr, err)
-	rsrcerr, ok := err.(*storage.ResourceError)
+	defaultErr := fmt.Errorf("%s: %v", supErr, err)
+	rsrcErr, ok := err.(*storage.ResourceError)
 	if !ok {
-		code = rsrcerr.Code()
+		code = rsrcErr.Code()
 	}
 	switch code {
-	case storage.ErrInval:
-		s.BadRequest(w, r, defaulterr.Error())
-	case storage.ErrNoent, storage.ErrSync, storage.ErrNodata:
-		s.NotFound(w, r, defaulterr)
+	case storage.ErrInvalidValue:
+		s.BadRequest(w, r, defaultErr.Error())
+	case storage.ErrNotFound, storage.ErrNotSynced, storage.ErrNothingToReturn:
+		s.NotFound(w, r, defaultErr)
 		return
-	case storage.ErrAcces, storage.ErrNokey:
-		ShowError(w, &r.Request, defaulterr.Error(), http.StatusUnauthorized)
+	case storage.ErrUnauthorized, storage.ErrInvalidSignature:
+		ShowError(w, &r.Request, defaultErr.Error(), http.StatusUnauthorized)
 		return
-	case storage.ErrFbig:
-		ShowError(w, &r.Request, defaulterr.Error(), http.StatusRequestEntityTooLarge)
+	case storage.ErrDataOverflow:
+		ShowError(w, &r.Request, defaultErr.Error(), http.StatusRequestEntityTooLarge)
 		return
 	}
 
-	s.Error(w, r, defaulterr)
+	s.Error(w, r, defaultErr)
 	return
 }
 

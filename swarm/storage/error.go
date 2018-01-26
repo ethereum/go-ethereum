@@ -1,13 +1,13 @@
 package storage
 
 const (
-	ErrCustom = iota
-	ErrNoent
+	ErrNotFound = iota
 	ErrIO
-	ErrAcces
-	ErrInval
-	ErrFbig
-	ErrNodata
-	ErrNokey
-	ErrSync
+	ErrUnauthorized
+	ErrInvalidValue
+	ErrDataOverflow
+	ErrNothingToReturn
+	ErrInvalidSignature
+	ErrNotSynced
+	ErrCnt
 )

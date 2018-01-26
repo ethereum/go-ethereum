@@ -41,11 +41,14 @@ func (e *ResourceError) Code() int {
 }
 
 func NewResourceError(code int, s string) error {
+	if code < 0 || code >= ErrCnt {
+		panic("no such error code!")
+	}
 	r := &ResourceError{
 		err: s,
 	}
 	switch code {
-	case ErrNoent, ErrIO, ErrAcces, ErrFbig, ErrInval, ErrNodata, ErrNokey, ErrSync:
+	case ErrNotFound, ErrIO, ErrUnauthorized, ErrInvalidValue, ErrDataOverflow, ErrNothingToReturn, ErrInvalidSignature, ErrNotSynced:
 		r.code = code
 	}
 	return r
@@ -228,7 +231,7 @@ func (self *ResourceHandler) HashSize() int {
 func (self *ResourceHandler) GetContent(name string) (Key, []byte, error) {
 	rsrc := self.getResource(name)
 	if rsrc == nil || !rsrc.isSynced() {
-		return nil, nil, NewResourceError(ErrNoent, "Resource does not exist or is not synced")
+		return nil, nil, NewResourceError(ErrNotFound, "Resource does not exist or is not synced")
 	}
 	return rsrc.lastKey, rsrc.data, nil
 }
@@ -237,7 +240,7 @@ func (self *ResourceHandler) GetLastPeriod(name string) (uint32, error) {
 	rsrc := self.getResource(name)
 
 	if rsrc == nil || !rsrc.isSynced() {
-		return 0, NewResourceError(ErrNoent, "Resource does not exist or is not synced")
+		return 0, NewResourceError(ErrNotFound, "Resource does not exist or is not synced")
 	}
 	return rsrc.lastPeriod, nil
 }
@@ -245,7 +248,7 @@ func (self *ResourceHandler) GetLastPeriod(name string) (uint32, error) {
 func (self *ResourceHandler) GetVersion(name string) (uint32, error) {
 	rsrc := self.getResource(name)
 	if rsrc == nil || !rsrc.isSynced() {
-		return 0, NewResourceError(ErrNoent, "Resource does not exist or is not synced")
+		return 0, NewResourceError(ErrNotFound, "Resource does not exist or is not synced")
 	}
 	return rsrc.version, nil
 }
@@ -264,11 +267,11 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 
 	// frequency 0 is invalid
 	if frequency == 0 {
-		return nil, NewResourceError(ErrInval, "Frequency cannot be 0")
+		return nil, NewResourceError(ErrInvalidValue, "Frequency cannot be 0")
 	}
 
 	if !isSafeName(name) {
-		return nil, NewResourceError(ErrInval, fmt.Sprintf("Invalid name: '%s'", name))
+		return nil, NewResourceError(ErrInvalidValue, fmt.Sprintf("Invalid name: '%s'", name))
 	}
 
 	nameHash := self.nameHash(name)
@@ -276,17 +279,17 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 	if self.validator != nil {
 		signature, err := self.validator.sign(nameHash)
 		if err != nil {
-			return nil, NewResourceError(ErrNokey, fmt.Sprintf("Sign fail: %v", err))
+			return nil, NewResourceError(ErrInvalidSignature, fmt.Sprintf("Sign fail: %v", err))
 		}
 		addr, err := getAddressFromDataSig(nameHash, signature)
 		if err != nil {
-			return nil, NewResourceError(ErrNokey, fmt.Sprintf("Retrieve address from signature fail: %v", err))
+			return nil, NewResourceError(ErrInvalidSignature, fmt.Sprintf("Retrieve address from signature fail: %v", err))
 		}
 		ok, err := self.validator.checkAccess(name, addr)
 		if err != nil {
 			return nil, err
 		} else if !ok {
-			return nil, NewResourceError(ErrAcces, fmt.Sprintf("Not owner of '%s'", name))
+			return nil, NewResourceError(ErrUnauthorized, fmt.Sprintf("Not owner of '%s'", name))
 		}
 	}
 
@@ -396,7 +399,7 @@ func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.H
 func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint32, refresh bool) (*resource, error) {
 
 	if period == 0 {
-		return nil, NewResourceError(ErrInval, "period must be >0")
+		return nil, NewResourceError(ErrInvalidValue, "period must be >0")
 	}
 
 	// start from the last possible block period, and iterate previous ones until we find a match
@@ -432,7 +435,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 		log.Trace("rsrc update not found, checking previous period", "period", period, "key", key)
 		period--
 	}
-	return nil, NewResourceError(ErrNoent, "no updates found")
+	return nil, NewResourceError(ErrNotFound, "no updates found")
 }
 
 // load existing mutable resource into resource struct
@@ -449,7 +452,7 @@ func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, ref
 		rsrc = &resource{}
 		// make sure our name is safe to use
 		if !isSafeName(name) {
-			return nil, NewResourceError(ErrInval, fmt.Sprintf("Invalid name '%s'", name))
+			return nil, NewResourceError(ErrInvalidValue, fmt.Sprintf("Invalid name '%s'", name))
 		}
 		rsrc.name = &name
 		rsrc.nameHash = nameHash
@@ -462,7 +465,7 @@ func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, ref
 
 		// minimum sanity check for chunk data
 		if len(chunk.SData) != indexSize {
-			return nil, NewResourceError(ErrNodata, fmt.Sprintf("Invalid chunk length %d, should be %d", len(chunk.SData), indexSize))
+			return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Invalid chunk length %d, should be %d", len(chunk.SData), indexSize))
 		}
 		rsrc.startBlock = binary.LittleEndian.Uint64(chunk.SData[:8])
 		rsrc.frequency = binary.LittleEndian.Uint64(chunk.SData[8:])
@@ -481,7 +484,7 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 	// retrieve metadata from chunk data and check that it matches this mutable resource
 	signature, period, version, name, data, err := self.parseUpdate(chunk.SData)
 	if *rsrc.name != name {
-		return nil, NewResourceError(ErrNodata, fmt.Sprintf("Update belongs to '%s', but have '%s'", name, *rsrc.name))
+		return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Update belongs to '%s', but have '%s'", name, *rsrc.name))
 	}
 	log.Trace("update", "name", *rsrc.name, "rootkey", rsrc.nameHash, "updatekey", chunk.Key, "period", period, "version", version)
 	// only check signature if validator is present
@@ -489,7 +492,7 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 		digest := self.keyDataHash(chunk.Key, data)
 		_, err = getAddressFromDataSig(digest, *signature)
 		if err != nil {
-			return nil, NewResourceError(ErrAcces, fmt.Sprintf("Invalid signature: %v", err))
+			return nil, NewResourceError(ErrUnauthorized, fmt.Sprintf("Invalid signature: %v", err))
 		}
 	}
 
@@ -513,7 +516,7 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 	cursor += 2
 	datalength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
 	if int(headerlength+datalength+4) > len(chunkdata) {
-		return nil, 0, 0, "", nil, NewResourceError(ErrNodata, fmt.Sprintf("Reported headerlength %d + datalength %d longer than actual chunk data length %d", headerlength, datalength, len(chunkdata)))
+		return nil, 0, 0, "", nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Reported headerlength %d + datalength %d longer than actual chunk data length %d", headerlength, datalength, len(chunkdata)))
 	}
 	var period uint32
 	var version uint32
@@ -558,16 +561,16 @@ func (self *ResourceHandler) Update(ctx context.Context, name string, data []byt
 	// get the cached information
 	rsrc := self.getResource(name)
 	if rsrc == nil {
-		return nil, NewResourceError(ErrNoent, "Resource object not in index")
+		return nil, NewResourceError(ErrNotFound, "Resource object not in index")
 	}
 	if !rsrc.isSynced() {
-		return nil, NewResourceError(ErrSync, "Resource object not in sync")
+		return nil, NewResourceError(ErrNotSynced, "Resource object not in sync")
 	}
 
 	// an update can be only one chunk long
 	datalimit := self.chunkSize() - int64(signaturelength-len(name)-4-4-2-2)
 	if int64(len(data)) > datalimit {
-		return nil, NewResourceError(ErrFbig, fmt.Sprintf("Data overflow: %d / %d bytes", len(data), datalimit))
+		return nil, NewResourceError(ErrDataOverflow, fmt.Sprintf("Data overflow: %d / %d bytes", len(data), datalimit))
 	}
 
 	// get our blockheight at this time and the next block of the update period
@@ -594,14 +597,14 @@ func (self *ResourceHandler) Update(ctx context.Context, name string, data []byt
 		digest := self.keyDataHash(key, data)
 		sig, err := self.validator.sign(digest)
 		if err != nil {
-			return nil, NewResourceError(ErrNokey, fmt.Sprintf("Sign fail: %v", err))
+			return nil, NewResourceError(ErrInvalidSignature, fmt.Sprintf("Sign fail: %v", err))
 		}
 		signature = &sig
 
 		// get the address of the signer (which also checks that it's a valid signature)
 		addr, err := getAddressFromDataSig(digest, *signature)
 		if err != nil {
-			return nil, NewResourceError(ErrNokey, fmt.Sprintf("Invalid data/signature: %v", err))
+			return nil, NewResourceError(ErrInvalidSignature, fmt.Sprintf("Invalid data/signature: %v", err))
 		}
 
 		// check if the signer has access to update
@@ -609,7 +612,7 @@ func (self *ResourceHandler) Update(ctx context.Context, name string, data []byt
 		if err != nil {
 			return nil, NewResourceError(ErrIO, fmt.Sprintf("Access check fail: %v", err))
 		} else if !ok {
-			return nil, NewResourceError(ErrAcces, fmt.Sprintf("Address %x does not have access to update %s", addr, name))
+			return nil, NewResourceError(ErrUnauthorized, fmt.Sprintf("Address %x does not have access to update %s", addr, name))
 		}
 	}
 
