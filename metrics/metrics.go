@@ -38,7 +38,7 @@ func init() {
 	//exp.Exp(DefaultRegistry)
 }
 
-// NewResettingTimer create a new ResettingTimer, either a real one of a NOP stub depending
+// NewResettingTimer creates a new ResettingTimer, either a real one of a NOP stub depending
 // on the metrics flag.
 func NewResettingTimer(name string) metrics.ResettingTimer {
 	if !Enabled {
