@@ -159,7 +159,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			id := sim.IDs[j]
 			err := sim.CallClient(id, func(client *rpc.Client) error {
 				// report disconnect events to the error channel cos peers should not disconnect
-				err := streamTesting.WatchDisconnections(id, client, peerCount(id), errc, quitC)
+				err := streamTesting.WatchDisconnections(id, client, errc, quitC)
 				if err != nil {
 					return err
 				}
@@ -224,6 +224,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	}
 	if result.Error != nil {
 		t.Fatalf("Simulation failed: %s", result.Error)
-		streamTesting.CheckResult(t, result, startedAt, finishedAt)
 	}
+	streamTesting.CheckResult(t, result, startedAt, finishedAt)
 }

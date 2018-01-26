@@ -381,7 +381,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		for j := 0; j < nodes-1; j++ {
 			id := sim.IDs[j]
 			err := sim.CallClient(id, func(client *rpc.Client) error {
-				err := streamTesting.WatchDisconnections(id, client, peerCount(id), errc, quitC)
+				err := streamTesting.WatchDisconnections(id, client, errc, quitC)
 				if err != nil {
 					return err
 				}
@@ -489,6 +489,7 @@ func BenchmarkDeliveryFromNodesWithCheck(b *testing.B) {
 func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skipCheck bool) {
 	defaultSkipCheck = skipCheck
 	toAddr = network.NewAddrFromNodeID
+
 	timeout := 300 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -527,9 +528,10 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 
 	// channel to signal simulation initialisation with action call complete
 	// or node disconnections
-	simErrC := make(chan error)
+	disconnectC := make(chan error)
 	quitC := make(chan struct{})
-	defer close(quitC)
+
+	initC := make(chan error)
 
 	action := func(ctx context.Context) error {
 		// each node Subscribes to each other's swarmChunkServerStreamName
@@ -546,13 +548,13 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 				break
 			}
 		}
-
+		var err error
 		// each node except the last one subscribes to the upstream swarm chunk server stream
 		// which responds to chunk retrieve requests
 		for j := 0; j < nodes-1; j++ {
 			id := sim.IDs[j]
-			simErrC <- sim.CallClient(id, func(client *rpc.Client) error {
-				err := streamTesting.WatchDisconnections(id, client, peerCount(id), simErrC, quitC)
+			err = sim.CallClient(id, func(client *rpc.Client) error {
+				err := streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
 				if err != nil {
 					return err
 				}
@@ -561,23 +563,17 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 				sid := sim.IDs[j+1] // the upstream peer's id
 				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, swarmChunkServerStreamName, nil, 0, 0, Top, false)
 			})
+			if err != nil {
+				break
+			}
 		}
-		// signal to the benchmark that setup is complete
-		return err
+		initC <- err
+		return nil
 	}
 
 	// the check function is only triggered when the benchmark finishes
-	checkC := make(chan error)
 	trigger := make(chan discover.NodeID)
 	check := func(ctx context.Context, id discover.NodeID) (_ bool, err error) {
-		select {
-		case <-ctx.Done():
-			err = ctx.Err()
-		case err = <-checkC:
-		}
-		if err != nil {
-			return false, err
-		}
 		return true, nil
 	}
 
@@ -595,26 +591,15 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	errc := make(chan error)
 	go func() {
 		_, err := sim.Run(ctx, conf)
+		close(quitC)
 		errc <- err
 	}()
 
 	// wait for simulation action to complete stream subscriptions
-	err = <-simErrC
+	err = <-initC
 	if err != nil {
 		b.Fatalf("simulation failed to initialise. expected no error. got %v", err)
 	}
-	go func() {
-		for {
-			var err error
-			select {
-			case err = <-simErrC:
-			case <-quitC:
-				return
-			}
-			trigger <- sim.IDs[0]
-			checkC <- err
-		}
-	}()
 
 	// create a retriever dpa for the pivot node
 	// by now deliveries are set for each node by the streamer service
@@ -627,6 +612,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	// benchmark loop
 	b.ResetTimer()
 	b.StopTimer()
+Loop:
 	for i := 0; i < b.N; i++ {
 		// uploading chunkCount random chunks to the last node
 		hashes := make([]storage.Key, chunkCount)
@@ -666,12 +652,34 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 			}
 		}
 		b.StopTimer()
+
+		select {
+		case err = <-disconnectC:
+			if err != nil {
+				break Loop
+			}
+		default:
+		}
+
 		if misses > 0 {
-			simErrC <- fmt.Errorf("%v chunk not found out of %v", misses, total)
+			err = fmt.Errorf("%v chunk not found out of %v", misses, total)
+			break Loop
 		}
 	}
+
+	select {
+	case <-quitC:
+	case trigger <- sim.IDs[0]:
+	}
+	if err == nil {
+		err = <-errc
+	} else {
+		if e := <-errc; e != nil {
+			b.Errorf("sim.Run function error: %v", e)
+		}
+	}
+
 	// benchmark over, trigger the check function to conclude the simulation
-	err = <-errc
 	if err != nil {
 		b.Fatalf("expected no error. got %v", err)
 	}

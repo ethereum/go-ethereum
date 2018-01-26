@@ -208,26 +208,23 @@ func (s *Simulation) Run(ctx context.Context, conf *RunConfig) (*simulations.Ste
 	return result, nil
 }
 
-func WatchDisconnections(id discover.NodeID, client *rpc.Client, expectedConnCount int, errc chan error, quitC chan struct{}) error {
+func WatchDisconnections(id discover.NodeID, client *rpc.Client, errc chan error, quitC chan struct{}) error {
 	events := make(chan *p2p.PeerEvent)
 	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
 	if err != nil {
 		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
 	}
 	go func() {
-		defer sub.Unsubscribe()
-		select {
-		case <-quitC:
-			if expectedConnCount <= 0 {
+		for {
+			select {
+			case <-quitC:
 				return
-			}
-		case e := <-events:
-			expectedConnCount--
-			errc <- fmt.Errorf("peerEvent for node %v: %v", id, e)
-		case err := <-sub.Err():
-			expectedConnCount = 0
-			if err != nil {
-				errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err)
+			case e := <-events:
+				errc <- fmt.Errorf("peerEvent for node %v: %v", id, e)
+			case err := <-sub.Err():
+				if err != nil {
+					errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err)
+				}
 			}
 		}
 	}()
@@ -237,6 +234,7 @@ func WatchDisconnections(id discover.NodeID, client *rpc.Client, expectedConnCou
 func Trigger(d time.Duration, quitC chan struct{}, ids ...discover.NodeID) chan discover.NodeID {
 	trigger := make(chan discover.NodeID)
 	go func() {
+		defer close(trigger)
 		ticker := time.NewTicker(d)
 		defer ticker.Stop()
 		// we are only testing the pivot node (net.Nodes[0])
@@ -245,6 +243,7 @@ func Trigger(d time.Duration, quitC chan struct{}, ids ...discover.NodeID) chan 
 				select {
 				case trigger <- id:
 				case <-quitC:
+					return
 				}
 			}
 		}

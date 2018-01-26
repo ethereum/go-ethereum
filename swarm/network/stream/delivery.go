@@ -96,7 +96,12 @@ func (s *SwarmChunkServer) processDeliveries() {
 
 // SetNextBatch
 func (s *SwarmChunkServer) SetNextBatch(_, _ uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error) {
-	hashes = <-s.batchC
+	select {
+	case hashes = <-s.batchC:
+	case <-s.quit:
+		return
+	}
+
 	from = s.currentLen
 	s.currentLen += uint64(len(hashes))
 	to = s.currentLen

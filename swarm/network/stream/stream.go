@@ -198,7 +198,7 @@ func (r *Registry) run(p *protocols.Peer) error {
 	sp := NewPeer(p, r)
 	r.setPeer(sp)
 	defer r.deletePeer(sp)
-	// defer close(sp.quit
+	defer close(sp.quit)
 	defer sp.close()
 	return sp.Run(sp.HandleMsg)
 }
