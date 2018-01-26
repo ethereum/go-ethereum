@@ -82,7 +82,11 @@ func newBzzBaseTester(t *testing.T, n int, addr *BzzAddr, spec *protocols.Spec, 
 	cs := make(map[string]chan bool)
 
 	srv := func(p *bzzPeer) error {
-		defer close(cs[p.ID().String()])
+		defer func() {
+			if cs[p.ID().String()] != nil {
+				close(cs[p.ID().String()])
+			}
+		}()
 		return run(p)
 	}
 

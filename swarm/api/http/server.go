@@ -422,7 +422,6 @@ func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supEr
 	}
 
 	s.Error(w, r, defaultErr)
-	return
 }
 
 // HandleGet handles a GET request to
