@@ -252,7 +252,6 @@ func (bc *BlockChain) loadLastState() error {
 	fastTd := bc.GetTd(bc.currentFastBlock.Hash(), bc.currentFastBlock.NumberU64())
 
 	bc.chainStats.SetTotalDifficulty(blockTd)
-	bc.chainStats.SetTotalFastDifficulty(fastTd)
 	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
 
 	log.Info("Loaded most recent local header", "number", currentHeader.Number, "hash", currentHeader.Hash(), "td", headerTd)
@@ -315,7 +314,6 @@ func (bc *BlockChain) SetHead(head uint64) error {
 
 	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
 	bc.chainStats.SetTotalDifficulty(bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64()))
-	bc.chainStats.SetTotalFastDifficulty(bc.GetTd(bc.currentFastBlock.Hash(), bc.currentFastBlock.NumberU64()))
 
 	return bc.loadLastState()
 }
@@ -437,7 +435,6 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 
 	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
 	bc.chainStats.SetTotalDifficulty(bc.genesisBlock.Difficulty())
-	bc.chainStats.SetTotalFastDifficulty(bc.genesisBlock.Difficulty())
 
 	return nil
 }
@@ -519,7 +516,6 @@ func (bc *BlockChain) insert(block *types.Block) {
 	}
 	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
 	bc.chainStats.SetTotalDifficulty(bc.GetTd(block.Hash(), block.NumberU64()))
-	bc.chainStats.SetTotalFastDifficulty(bc.GetTd(bc.currentFastBlock.Hash(), bc.currentFastBlock.NumberU64()))
 }
 
 // Genesis retrieves the chain's genesis block.
@@ -765,7 +761,6 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 	}
 	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
 	bc.chainStats.SetTotalDifficulty(bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64()))
-	bc.chainStats.SetTotalFastDifficulty(bc.GetTd(bc.currentFastBlock.Hash(), bc.currentFastBlock.NumberU64()))
 }
 
 // SetReceiptsData computes all the non-consensus fields of the receipts
@@ -878,7 +873,6 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			}
 			bc.currentFastBlock = head
 			bc.chainStats.SetFastNumber(bc.currentFastBlock.Number())
-			bc.chainStats.SetTotalFastDifficulty(td)
 		}
 	}
 	bc.mu.Unlock()
