@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/chainstats"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -127,7 +128,8 @@ type BlockChain struct {
 	validator Validator // block and state validator interface
 	vmConfig  vm.Config
 
-	badBlocks *lru.Cache // Bad block cache
+	badBlocks  *lru.Cache             // Bad block cache
+	chainStats *chainstats.Chainstats // Mutex-free lookups of chain stats
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -160,6 +162,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:       engine,
 		vmConfig:     vmConfig,
 		badBlocks:    badBlocks,
+		chainStats:   chainstats.NewChainstats(),
 	}
 	bc.SetValidator(NewBlockValidator(chainConfig, bc, engine))
 	bc.SetProcessor(NewStateProcessor(chainConfig, bc, engine))
@@ -248,6 +251,10 @@ func (bc *BlockChain) loadLastState() error {
 	blockTd := bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64())
 	fastTd := bc.GetTd(bc.currentFastBlock.Hash(), bc.currentFastBlock.NumberU64())
 
+	bc.chainStats.SetTotalDifficulty(blockTd)
+	bc.chainStats.SetTotalFastDifficulty(fastTd)
+	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
+
 	log.Info("Loaded most recent local header", "number", currentHeader.Number, "hash", currentHeader.Hash(), "td", headerTd)
 	log.Info("Loaded most recent local full block", "number", bc.currentBlock.Number(), "hash", bc.currentBlock.Hash(), "td", blockTd)
 	log.Info("Loaded most recent local fast block", "number", bc.currentFastBlock.Number(), "hash", bc.currentFastBlock.Hash(), "td", fastTd)
@@ -305,6 +312,11 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	if err := WriteHeadFastBlockHash(bc.db, bc.currentFastBlock.Hash()); err != nil {
 		log.Crit("Failed to reset head fast block", "err", err)
 	}
+
+	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
+	bc.chainStats.SetTotalDifficulty(bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64()))
+	bc.chainStats.SetTotalFastDifficulty(bc.GetTd(bc.currentFastBlock.Hash(), bc.currentFastBlock.NumberU64()))
+
 	return bc.loadLastState()
 }
 
@@ -322,6 +334,8 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	// If all checks out, manually set the head block
 	bc.mu.Lock()
 	bc.currentBlock = block
+	bc.chainStats.SetNumber(block.Number())
+	bc.chainStats.SetTotalDifficulty(bc.GetTd(block.Hash(), block.NumberU64()))
 	bc.mu.Unlock()
 
 	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
@@ -421,6 +435,10 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())
 	bc.currentFastBlock = bc.genesisBlock
 
+	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
+	bc.chainStats.SetTotalDifficulty(bc.genesisBlock.Difficulty())
+	bc.chainStats.SetTotalFastDifficulty(bc.genesisBlock.Difficulty())
+
 	return nil
 }
 
@@ -499,6 +517,9 @@ func (bc *BlockChain) insert(block *types.Block) {
 		}
 		bc.currentFastBlock = block
 	}
+	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
+	bc.chainStats.SetTotalDifficulty(bc.GetTd(block.Hash(), block.NumberU64()))
+	bc.chainStats.SetTotalFastDifficulty(bc.GetTd(bc.currentFastBlock.Hash(), bc.currentFastBlock.NumberU64()))
 }
 
 // Genesis retrieves the chain's genesis block.
@@ -724,6 +745,9 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 			WriteHeadBlockHash(bc.db, bc.currentBlock.Hash())
 		}
 	}
+	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
+	bc.chainStats.SetTotalDifficulty(bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64()))
+	bc.chainStats.SetTotalFastDifficulty(bc.GetTd(bc.currentFastBlock.Hash(), bc.currentFastBlock.NumberU64()))
 }
 
 // SetReceiptsData computes all the non-consensus fields of the receipts
@@ -835,6 +859,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				log.Crit("Failed to update head fast block hash", "err", err)
 			}
 			bc.currentFastBlock = head
+			bc.chainStats.SetFastNumber(bc.currentFastBlock.Number())
+			bc.chainStats.SetTotalFastDifficulty(td)
 		}
 	}
 	bc.mu.Unlock()
