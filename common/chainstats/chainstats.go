@@ -47,6 +47,10 @@ func (stats *Chainstats) SetNumber(number *big.Int) {
 func (stats *Chainstats) GetFastNumber() uint64 {
 	return stats.currentFastBlockNumber.Load().(*big.Int).Uint64()
 }
+func (stats *Chainstats) GetNumbers() (uint64, uint64) {
+	return stats.currentBlockNumber.Load().(*big.Int).Uint64(),
+		stats.currentFastBlockNumber.Load().(*big.Int).Uint64()
+}
 func (stats *Chainstats) SetFastNumber(number *big.Int) {
 	stats.currentFastBlockNumber.Store(number)
 }

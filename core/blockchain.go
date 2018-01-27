@@ -714,6 +714,24 @@ func (bc *BlockChain) procFutureBlocks() {
 	}
 }
 
+// Stats returns the chainstats which can be queried non-blocking for info about difficulty and numbers
+// These are provided on a best-effort, and it's theoretically possible that two consecutive calls to
+// number and difficulty return number for X and difficulty for Y, if the stats is updated between the calls
+func (bc *BlockChain) Stats() *chainstats.Chainstats {
+	return bc.chainStats
+}
+func (bc *BlockChain) CurrentNumber() uint64 {
+	return bc.chainStats.GetNumber()
+}
+
+func (bc *BlockChain) CurrentFastNumber() uint64 {
+	return bc.chainStats.GetFastNumber()
+}
+
+func (bc *BlockChain) CurrentTD() *big.Int {
+	return bc.chainStats.GetTotalDifficulty()
+}
+
 // WriteStatus status of write
 type WriteStatus byte
 
