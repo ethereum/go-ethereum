@@ -379,16 +379,18 @@ func NewNewMessage() *NewMessage {
 	return nm
 }
 
-func (nm *NewMessage) GetSymKeyID() string             { return nm.newMessage.SymKeyID }
-func (nm *NewMessage) SetSymKeyID(symKeyID string)     { nm.newMessage.SymKeyID = symKeyID }
-func (nm *NewMessage) GetPublicKey() []byte            { return nm.newMessage.PublicKey }
-func (nm *NewMessage) SetPublicKey(publicKey []byte)   { nm.newMessage.PublicKey = publicKey }
+func (nm *NewMessage) GetSymKeyID() string         { return nm.newMessage.SymKeyID }
+func (nm *NewMessage) SetSymKeyID(symKeyID string) { nm.newMessage.SymKeyID = symKeyID }
+func (nm *NewMessage) GetPublicKey() []byte        { return nm.newMessage.PublicKey }
+func (nm *NewMessage) SetPublicKey(publicKey []byte) {
+	nm.newMessage.PublicKey = common.CopyBytes(publicKey)
+}
 func (nm *NewMessage) GetSig() string                  { return nm.newMessage.Sig }
 func (nm *NewMessage) SetSig(sig string)               { nm.newMessage.Sig = sig }
 func (nm *NewMessage) GetTTL() int64                   { return int64(nm.newMessage.TTL) }
 func (nm *NewMessage) SetTTL(ttl int64)                { nm.newMessage.TTL = uint32(ttl) }
 func (nm *NewMessage) GetPayload() []byte              { return nm.newMessage.Payload }
-func (nm *NewMessage) SetPayload(payload []byte)       { nm.newMessage.Payload = payload }
+func (nm *NewMessage) SetPayload(payload []byte)       { nm.newMessage.Payload = common.CopyBytes(payload) }
 func (nm *NewMessage) GetPowTime() int64               { return int64(nm.newMessage.PowTime) }
 func (nm *NewMessage) SetPowTime(powTime int64)        { nm.newMessage.PowTime = uint32(powTime) }
 func (nm *NewMessage) GetPowTarget() float64           { return nm.newMessage.PowTarget }
@@ -448,6 +450,6 @@ func (c *Criteria) SetSymKeyID(symKeyID string)         { c.criteria.SymKeyID = 
 func (c *Criteria) GetPrivateKeyID() string             { return c.criteria.PrivateKeyID }
 func (c *Criteria) SetPrivateKeyID(privateKeyID string) { c.criteria.PrivateKeyID = privateKeyID }
 func (c *Criteria) GetSig() []byte                      { return c.criteria.Sig }
-func (c *Criteria) SetSig(sig []byte)                   { c.criteria.Sig = sig }
+func (c *Criteria) SetSig(sig []byte)                   { c.criteria.Sig = common.CopyBytes(sig) }
 func (c *Criteria) GetMinPow() float64                  { return c.criteria.MinPow }
 func (c *Criteria) SetMinPow(pow float64)               { c.criteria.MinPow = pow }
