@@ -18,35 +18,32 @@
 
 import React, {Component} from 'react';
 
-import withStyles from 'material-ui/styles/withStyles';
-
 import SideBar from './SideBar';
 import Main from './Main';
 import type {Content} from '../types/content';
 
-// Styles for the Body component.
-const styles = () => ({
+// styles contains the constant styles of the component.
+const styles = {
 	body: {
 		display: 'flex',
 		width:   '100%',
 		height:  '100%',
 	},
-});
+};
+
 export type Props = {
-	classes: Object,
 	opened: boolean,
-	changeContent: () => {},
+	changeContent: string => void,
 	active: string,
 	content: Content,
 	shouldUpdate: Object,
 };
+
 // Body renders the body of the dashboard.
 class Body extends Component<Props> {
 	render() {
-		const {classes} = this.props; // The classes property is injected by withStyles().
-
 		return (
-			<div className={classes.body}>
+			<div style={styles.body}>
 				<SideBar
 					opened={this.props.opened}
 					changeContent={this.props.changeContent}
@@ -61,4 +58,4 @@ class Body extends Component<Props> {
 	}
 }
 
-export default withStyles(styles)(Body);
+export default Body;

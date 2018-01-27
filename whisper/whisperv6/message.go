@@ -34,7 +34,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// Options specifies the exact way a message should be wrapped into an Envelope.
+// MessageParams specifies the exact way a message should be wrapped
+// into an Envelope.
 type MessageParams struct {
 	TTL      uint32
 	Src      *ecdsa.PrivateKey
@@ -87,9 +88,9 @@ func (msg *ReceivedMessage) isAsymmetricEncryption() bool {
 	return msg.Dst != nil
 }
 
-// NewMessage creates and initializes a non-signed, non-encrypted Whisper message.
-func NewSentMessage(params *MessageParams) (*sentMessage, error) {
-	const payloadSizeFieldMaxSize = 4
+// NewSentMessage creates and initializes a non-signed, non-encrypted Whisper message.
+func newSentMessage(params *MessageParams) (*sentMessage, error) {
+  const payloadSizeFieldMaxSize = 4
 	msg := sentMessage{}
 	msg.Raw = make([]byte, 1,
 		flagsLength+payloadSizeFieldMaxSize+len(params.Payload)+len(params.Padding)+signatureLength+padSizeLimit)
@@ -331,7 +332,8 @@ func (msg *ReceivedMessage) ValidateAndParse() bool {
 	return true
 }
 
-// Recover retrieves the public key of the message signer.
+// SigToPubKey returns the public key associated to the message's
+// signature.
 func (msg *ReceivedMessage) SigToPubKey() *ecdsa.PublicKey {
 	defer func() { recover() }() // in case of invalid signature
 

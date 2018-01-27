@@ -38,4 +38,4 @@ profile.cov
 /dashboard/assets/flow-typed
 /dashboard/assets/node_modules
 /dashboard/assets/stats.json
-/dashboard/assets/public/bundle.js
+/dashboard/assets/bundle.js
