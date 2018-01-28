@@ -204,6 +204,12 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 				count++
 				node = dbrow[cursor]
 
+				// skip empty nodes
+				if node == nil {
+					log.Debug(fmt.Sprintf("kaddb record (PO%03d:%d/%d) not found", po, cursor, len(dbrow)))
+					continue ROW
+				}
+
 				// skip already connected nodes
 				if node.node != nil {
 					log.Debug(fmt.Sprintf("kaddb record %v (PO%03d:%d/%d) already connected", node.Addr, po, cursor, len(dbrow)))
