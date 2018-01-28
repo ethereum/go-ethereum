@@ -1028,7 +1028,7 @@ func GenerateRandomID() (id string, err error) {
 	if err != nil {
 		return "", err
 	}
-	if !validateDataIntegrity(buf, keyIdSize) {
+	if !validateDataIntegrity(buf, keyIDSize) {
 		return "", fmt.Errorf("error in generateRandomID: crypto/rand failed to generate random data")
 	}
 	id = common.Bytes2Hex(buf)
