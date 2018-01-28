@@ -27,6 +27,9 @@ Whisper is a pure identity-based messaging system. Whisper provides a low-level
 or prejudiced by the low-level hardware attributes and characteristics,
 particularly the notion of singular endpoints.
 */
+
+// Contains the Whisper protocol constant definitions
+
 package whisperv6
 
 import (
@@ -34,10 +37,11 @@ import (
 	"time"
 )
 
+// Whisper protocol parameters
 const (
-	ProtocolVersion    = uint64(6)
-	ProtocolVersionStr = "6.0"
-	ProtocolName       = "shh"
+	ProtocolVersion    = uint64(6) // Protocol version number
+	ProtocolVersionStr = "6.0"     // The same, as a string
+	ProtocolName       = "shh"     // Nickname of the protocol in geth
 
 	// whisper protocol message codes, according to EIP-627
 	statusCode           = 0   // used by whisper protocol
@@ -55,7 +59,7 @@ const (
 	signatureLength = 65 // in bytes
 	aesKeyLength    = 32 // in bytes
 	AESNonceLength  = 12 // in bytes
-	keyIdSize       = 32 // in bytes
+	keyIDSize       = 32 // in bytes
 	bloomFilterSize = 64 // in bytes
 
 	EnvelopeHeaderLength = 20

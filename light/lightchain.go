@@ -393,7 +393,7 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 		return err
 	}
 	i, err := self.hc.InsertHeaderChain(chain, whFunc, start)
-	go self.postChainEvents(events)
+	self.postChainEvents(events)
 	return i, err
 }
 

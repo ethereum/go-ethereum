@@ -16,7 +16,7 @@ import (
 const FIFSRegistrarABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"subnode\",\"type\":\"bytes32\"},{\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"register\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"ensAddr\",\"type\":\"address\"},{\"name\":\"node\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"}]"
 
 // FIFSRegistrarBin is the compiled bytecode used for deploying new contracts.
-const FIFSRegistrarBin = `0x6060604052341561000f57600080fd5b604051604080610224833981016040528080519190602001805160008054600160a060020a03909516600160a060020a03199095169490941790935550506001556101c58061005f6000396000f3006060604052600436106100275763ffffffff60e060020a600035041663d22057a9811461002c575b600080fd5b341561003757600080fd5b61004e600435600160a060020a0360243516610050565b005b816000806001548360405191825260208201526040908101905190819003902060008054919350600160a060020a03909116906302571be39084906040516020015260405160e060020a63ffffffff84160281526004810191909152602401602060405180830381600087803b15156100c857600080fd5b6102c65a03f115156100d957600080fd5b5050506040518051915050600160a060020a0381161580159061010e575033600160a060020a031681600160a060020a031614155b1561011857600080fd5b600054600154600160a060020a03909116906306ab592390878760405160e060020a63ffffffff861602815260048101939093526024830191909152600160a060020a03166044820152606401600060405180830381600087803b151561017e57600080fd5b6102c65a03f1151561018f57600080fd5b50505050505050505600a165627a7a723058209b0c0f4ed76e4fe49a71d4b838ab3d00d6bad29021172db7ced9f36abcafbf510029`
+const FIFSRegistrarBin = `0x6060604052341561000f57600080fd5b604051604080610224833981016040528080519190602001805160008054600160a060020a03909516600160a060020a03199095169490941790935550506001556101c58061005f6000396000f3006060604052600436106100275763ffffffff60e060020a600035041663d22057a9811461002c575b600080fd5b341561003757600080fd5b61004e600435600160a060020a0360243516610050565b005b816000806001548360405191825260208201526040908101905190819003902060008054919350600160a060020a03909116906302571be39084906040516020015260405160e060020a63ffffffff84160281526004810191909152602401602060405180830381600087803b15156100c857600080fd5b6102c65a03f115156100d957600080fd5b5050506040518051915050600160a060020a0381161580159061010e575033600160a060020a031681600160a060020a031614155b1561011857600080fd5b600054600154600160a060020a03909116906306ab592390878760405160e060020a63ffffffff861602815260048101939093526024830191909152600160a060020a03166044820152606401600060405180830381600087803b151561017e57600080fd5b6102c65a03f1151561018f57600080fd5b50505050505050505600a165627a7a723058206fb963cb168d5e3a51af12cd6bb23e324dbd32dd4954f43653ba27e66b68ea650029`
 
 // DeployFIFSRegistrar deploys a new Ethereum contract, binding an instance of FIFSRegistrar to it.
 func DeployFIFSRegistrar(auth *bind.TransactOpts, backend bind.ContractBackend, ensAddr common.Address, node [32]byte) (common.Address, *types.Transaction, *FIFSRegistrar, error) {
@@ -28,13 +28,14 @@ func DeployFIFSRegistrar(auth *bind.TransactOpts, backend bind.ContractBackend, 
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
-	return address, tx, &FIFSRegistrar{FIFSRegistrarCaller: FIFSRegistrarCaller{contract: contract}, FIFSRegistrarTransactor: FIFSRegistrarTransactor{contract: contract}}, nil
+	return address, tx, &FIFSRegistrar{FIFSRegistrarCaller: FIFSRegistrarCaller{contract: contract}, FIFSRegistrarTransactor: FIFSRegistrarTransactor{contract: contract}, FIFSRegistrarFilterer: FIFSRegistrarFilterer{contract: contract}}, nil
 }
 
 // FIFSRegistrar is an auto generated Go binding around an Ethereum contract.
 type FIFSRegistrar struct {
 	FIFSRegistrarCaller     // Read-only binding to the contract
 	FIFSRegistrarTransactor // Write-only binding to the contract
+	FIFSRegistrarFilterer   // Log filterer for contract events
 }
 
 // FIFSRegistrarCaller is an auto generated read-only Go binding around an Ethereum contract.
@@ -44,6 +45,11 @@ type FIFSRegistrarCaller struct {
 
 // FIFSRegistrarTransactor is an auto generated write-only Go binding around an Ethereum contract.
 type FIFSRegistrarTransactor struct {
+	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+}
+
+// FIFSRegistrarFilterer is an auto generated log filtering Go binding around an Ethereum contract events.
+type FIFSRegistrarFilterer struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
 
@@ -86,16 +92,16 @@ type FIFSRegistrarTransactorRaw struct {
 
 // NewFIFSRegistrar creates a new instance of FIFSRegistrar, bound to a specific deployed contract.
 func NewFIFSRegistrar(address common.Address, backend bind.ContractBackend) (*FIFSRegistrar, error) {
-	contract, err := bindFIFSRegistrar(address, backend, backend)
+	contract, err := bindFIFSRegistrar(address, backend, backend, backend)
 	if err != nil {
 		return nil, err
 	}
-	return &FIFSRegistrar{FIFSRegistrarCaller: FIFSRegistrarCaller{contract: contract}, FIFSRegistrarTransactor: FIFSRegistrarTransactor{contract: contract}}, nil
+	return &FIFSRegistrar{FIFSRegistrarCaller: FIFSRegistrarCaller{contract: contract}, FIFSRegistrarTransactor: FIFSRegistrarTransactor{contract: contract}, FIFSRegistrarFilterer: FIFSRegistrarFilterer{contract: contract}}, nil
 }
 
 // NewFIFSRegistrarCaller creates a new read-only instance of FIFSRegistrar, bound to a specific deployed contract.
 func NewFIFSRegistrarCaller(address common.Address, caller bind.ContractCaller) (*FIFSRegistrarCaller, error) {
-	contract, err := bindFIFSRegistrar(address, caller, nil)
+	contract, err := bindFIFSRegistrar(address, caller, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -104,20 +110,29 @@ func NewFIFSRegistrarCaller(address common.Address, caller bind.ContractCaller) 
 
 // NewFIFSRegistrarTransactor creates a new write-only instance of FIFSRegistrar, bound to a specific deployed contract.
 func NewFIFSRegistrarTransactor(address common.Address, transactor bind.ContractTransactor) (*FIFSRegistrarTransactor, error) {
-	contract, err := bindFIFSRegistrar(address, nil, transactor)
+	contract, err := bindFIFSRegistrar(address, nil, transactor, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &FIFSRegistrarTransactor{contract: contract}, nil
 }
 
+// NewFIFSRegistrarFilterer creates a new log filterer instance of FIFSRegistrar, bound to a specific deployed contract.
+func NewFIFSRegistrarFilterer(address common.Address, filterer bind.ContractFilterer) (*FIFSRegistrarFilterer, error) {
+	contract, err := bindFIFSRegistrar(address, nil, nil, filterer)
+	if err != nil {
+		return nil, err
+	}
+	return &FIFSRegistrarFilterer{contract: contract}, nil
+}
+
 // bindFIFSRegistrar binds a generic wrapper to an already deployed contract.
-func bindFIFSRegistrar(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
+func bindFIFSRegistrar(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, filterer bind.ContractFilterer) (*bind.BoundContract, error) {
 	parsed, err := abi.JSON(strings.NewReader(FIFSRegistrarABI))
 	if err != nil {
 		return nil, err
 	}
-	return bind.NewBoundContract(address, parsed, caller, transactor), nil
+	return bind.NewBoundContract(address, parsed, caller, transactor, filterer), nil
 }
 
 // Call invokes the (constant) contract method with params as input values and

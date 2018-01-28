@@ -10,6 +10,7 @@ import (
 
 var _ = (*criteriaOverride)(nil)
 
+// MarshalJSON marshals type Criteria to a json string
 func (c Criteria) MarshalJSON() ([]byte, error) {
 	type Criteria struct {
 		SymKeyID     string        `json:"symKeyID"`
@@ -29,6 +30,7 @@ func (c Criteria) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&enc)
 }
 
+// UnmarshalJSON unmarshals type Criteria to a json string
 func (c *Criteria) UnmarshalJSON(input []byte) error {
 	type Criteria struct {
 		SymKeyID     *string        `json:"symKeyID"`
