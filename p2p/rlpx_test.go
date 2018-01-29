@@ -156,14 +156,18 @@ func TestProtocolHandshake(t *testing.T) {
 		node1   = &discover.Node{ID: discover.PubkeyID(&prv1.PublicKey), IP: net.IP{5, 6, 7, 8}, TCP: 44}
 		hs1     = &protoHandshake{Version: 3, ID: node1.ID, Caps: []Cap{{"c", 1}, {"d", 3}}}
 
-		fd0, fd1 = net.Pipe()
-		wg       sync.WaitGroup
+		wg sync.WaitGroup
 	)
+
+	fd0, fd1, err := tcpPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		defer fd1.Close()
+		defer fd0.Close()
 		rlpx := newRLPX(fd0)
 		remid, err := rlpx.doEncHandshake(prv0, node1)
 		if err != nil {
@@ -596,4 +600,59 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 	if !bytes.Equal(fooIngressHash, wantFooIngressHash) {
 		t.Errorf("ingress-mac('foo') mismatch:\ngot %x\nwant %x", fooIngressHash, wantFooIngressHash)
 	}
+}
+
+// tcpPipe creates an in process full duplex pipe based on a localhost TCP socket
+func tcpPipe() (net.Conn, net.Conn, error) {
+	type result struct {
+		conn net.Conn
+		err  error
+	}
+
+	cl := make(chan result)
+	cd := make(chan result)
+
+	start := make(chan net.Addr)
+
+	go func(res chan result, start chan net.Addr) {
+		// resolve
+		addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+		if err != nil {
+			res <- result{err: err}
+			return
+		}
+		// listen
+		l, err := net.ListenTCP("tcp", addr)
+		if err != nil {
+			res <- result{err: err}
+			return
+		}
+		start <- l.Addr()
+		c, err := l.AcceptTCP()
+		if err != nil {
+			res <- result{err: err}
+			return
+		}
+		res <- result{conn: c}
+	}(cl, start)
+
+	go func(res chan result, start chan net.Addr) {
+		addr := <-start
+		c, err := net.DialTCP("tcp", nil, addr.(*net.TCPAddr))
+		if err != nil {
+			res <- result{err: err}
+			return
+		}
+		res <- result{conn: c}
+	}(cd, start)
+
+	a := <-cl
+	if a.err != nil {
+		return nil, nil, a.err
+	}
+	b := <-cd
+	if b.err != nil {
+		return nil, nil, b.err
+	}
+	return a.conn, b.conn, nil
 }
