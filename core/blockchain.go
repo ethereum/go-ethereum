@@ -749,7 +749,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				return 0, err
 			}
 			bytes += batch.ValueSize()
-			batch = bc.chainDb.NewBatch()
+			batch.Reset()
 		}
 	}
 	if batch.ValueSize() > 0 {
