@@ -262,12 +262,12 @@ func (db *Database) Commit(node common.Hash) error {
 			if err := batch.Write(); err != nil {
 				return err
 			}
-			batch = db.diskdb.NewBatch()
+			batch.Reset()
 		}
 	}
 	// Move the trie itself into the batch, flushing if enough data is accumulated
 	nodes, storage := len(db.nodes), db.nodesSize+db.preimagesSize
-	if err := db.commit(node, &batch); err != nil {
+	if err := db.commit(node, batch); err != nil {
 		log.Error("Failed to commit trie from trie database", "err", err)
 		db.lock.RUnlock()
 		return err
@@ -299,7 +299,7 @@ func (db *Database) Commit(node common.Hash) error {
 }
 
 // commit is the private locked version of Commit.
-func (db *Database) commit(hash common.Hash, batch *ethdb.Batch) error {
+func (db *Database) commit(hash common.Hash, batch ethdb.Batch) error {
 	// If the node does not exist, it's a previously committed node
 	node, ok := db.nodes[hash]
 	if !ok {
@@ -310,15 +310,15 @@ func (db *Database) commit(hash common.Hash, batch *ethdb.Batch) error {
 			return err
 		}
 	}
-	if err := (*batch).Put(hash[:], node.blob); err != nil {
+	if err := batch.Put(hash[:], node.blob); err != nil {
 		return err
 	}
 	// If we've reached an optimal match size, commit and start over
-	if (*batch).ValueSize() >= ethdb.IdealBatchSize {
-		if err := (*batch).Write(); err != nil {
+	if batch.ValueSize() >= ethdb.IdealBatchSize {
+		if err := batch.Write(); err != nil {
 			return err
 		}
-		(*batch) = db.diskdb.NewBatch()
+		batch.Reset()
 	}
 	return nil
 }
