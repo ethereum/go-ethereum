@@ -420,11 +420,14 @@ func (s *ticketStore) nextRegisterableTicket() (*ticketRef, time.Duration) {
 func (s *ticketStore) removeTicketRef(ref ticketRef) {
 	log.Trace("Removing discovery ticket reference", "node", ref.t.node.ID, "serial", ref.t.serial)
 
+	// Make nextRegisterableTicket return the next available ticket.
+	s.nextTicketCached = nil
+
 	topic := ref.topic()
 	tickets := s.tickets[topic]
 
 	if tickets == nil {
-		log.Warn("Removing tickets from unknown topic", "topic", topic)
+		log.Trace("Removing tickets from unknown topic", "topic", topic)
 		return
 	}
 	bucket := timeBucket(ref.t.regTime[ref.idx] / mclock.AbsTime(ticketTimeBucketLen))
@@ -450,9 +453,6 @@ func (s *ticketStore) removeTicketRef(ref ticketRef) {
 		delete(s.nodes, ref.t.node)
 		delete(s.nodeLastReq, ref.t.node)
 	}
-
-	// Make nextRegisterableTicket return the next available ticket.
-	s.nextTicketCached = nil
 }
 
 type lookupInfo struct {
