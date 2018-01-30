@@ -476,6 +476,24 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", common.ToHex(data))
 }
 
+func (ec *Client) HashRate(ctx context.Context) (uint64, error) {
+	var hex hexutil.Uint64
+	err := ec.c.CallContext(ctx, &hex, "eth_hashrate")
+	if err != nil {
+		return 0, err
+	}
+	return uint64(hex), nil
+}
+
+func (ec *Client) GetWork(ctx context.Context) ([3]string, error) {
+	var result [3]string
+	err := ec.c.CallContext(ctx, &result, "eth_getWork")
+	if err != nil {
+		return [3]string{}, err
+	}
+	return result, nil
+}
+
 func toCallArg(msg ethereum.CallMsg) interface{} {
 	arg := map[string]interface{}{
 		"from": msg.From,
