@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -85,7 +86,7 @@ type TestNode struct {
 
 var result TestData
 var nodes [NumNodes]*TestNode
-var sharedKey = []byte("some arbitrary data here")
+var sharedKey = hexutil.MustDecode("0x03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd31")
 var sharedTopic = TopicType{0xF, 0x1, 0x2, 0}
 var expectedMessage = []byte("per rectum ad astra")
 var masterBloomFilter []byte
@@ -121,11 +122,6 @@ func TestSimulation(t *testing.T) {
 
 	// check if each node (except node #0) have received and decrypted exactly one message
 	checkPropagation(t, false)
-
-	for i := 1; i < NumNodes; i++ {
-		time.Sleep(20 * time.Millisecond)
-		sendMsg(t, true, i)
-	}
 
 	// check if corresponding protocol-level messages were correctly decoded
 	checkPowExchangeForNodeZero(t)
@@ -389,20 +385,37 @@ func TestPeerBasic(t *testing.T) {
 }
 
 func checkPowExchangeForNodeZero(t *testing.T) {
+	const iterations = 200
+	for j := 0; j < iterations; j++ {
+		lastCycle := (j == iterations-1)
+		ok := checkPowExchangeForNodeZeroOnce(t, lastCycle)
+		if ok {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func checkPowExchangeForNodeZeroOnce(t *testing.T, mustPass bool) bool {
 	cnt := 0
 	for i, node := range nodes {
 		for peer := range node.shh.peers {
 			if peer.peer.ID() == discover.PubkeyID(&nodes[0].id.PublicKey) {
 				cnt++
 				if peer.powRequirement != masterPow {
-					t.Fatalf("node %d: failed to set the new pow requirement.", i)
+					if mustPass {
+						t.Fatalf("node %d: failed to set the new pow requirement for node zero.", i)
+					} else {
+						return false
+					}
 				}
 			}
 		}
 	}
 	if cnt == 0 {
-		t.Fatalf("no matching peers found.")
+		t.Fatalf("looking for node zero: no matching peers found.")
 	}
+	return true
 }
 
 func checkPowExchange(t *testing.T) {
@@ -418,13 +431,31 @@ func checkPowExchange(t *testing.T) {
 	}
 }
 
-func checkBloomFilterExchange(t *testing.T) {
+func checkBloomFilterExchangeOnce(t *testing.T, mustPass bool) bool {
 	for i, node := range nodes {
 		for peer := range node.shh.peers {
 			if !bytes.Equal(peer.bloomFilter, masterBloomFilter) {
-				t.Fatalf("node %d: failed to exchange bloom filter requirement in round %d. \n%x expected \n%x got",
-					i, round, masterBloomFilter, peer.bloomFilter)
+				if mustPass {
+					t.Fatalf("node %d: failed to exchange bloom filter requirement in round %d. \n%x expected \n%x got",
+						i, round, masterBloomFilter, peer.bloomFilter)
+				} else {
+					return false
+				}
 			}
 		}
+	}
+
+	return true
+}
+
+func checkBloomFilterExchange(t *testing.T) {
+	const iterations = 200
+	for j := 0; j < iterations; j++ {
+		lastCycle := (j == iterations-1)
+		ok := checkBloomFilterExchangeOnce(t, lastCycle)
+		if ok {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }

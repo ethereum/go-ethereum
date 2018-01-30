@@ -200,8 +200,7 @@ func (e *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error) {
 
 // Open tries to decrypt an envelope, and populates the message fields in case of success.
 func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
-	// The API interface forbids filters doing both symmetric and
-	// asymmetric encryption.
+	// The API interface forbids filters doing both symmetric and asymmetric encryption.
 	if watcher.expectsAsymmetricEncryption() && watcher.expectsSymmetricEncryption() {
 		return nil
 	}
@@ -219,7 +218,7 @@ func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
 	}
 
 	if msg != nil {
-		ok := msg.Validate()
+		ok := msg.ValidateAndParse()
 		if !ok {
 			return nil
 		}
