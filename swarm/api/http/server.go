@@ -45,23 +45,25 @@ import (
 
 //setup metrics
 var (
-	postRawCount    = metrics.NewCounter("api.http.post.raw.count")
-	postRawFail     = metrics.NewCounter("api.http.post.raw.fail")
-	postFilesCount  = metrics.NewCounter("api.http.post.files.count")
-	postFilesFail   = metrics.NewCounter("api.http.post.files.fail")
-	deleteCount     = metrics.NewCounter("api.http.delete.count")
-	deleteFail      = metrics.NewCounter("api.http.delete.fail")
-	getCount        = metrics.NewCounter("api.http.get.count")
-	getFail         = metrics.NewCounter("api.http.get.fail")
-	getFileCount    = metrics.NewCounter("api.http.get.file.count")
-	getFileNotFound = metrics.NewCounter("api.http.get.file.notfound")
-	getFileFail     = metrics.NewCounter("api.http.get.file.fail")
-	getFilesCount   = metrics.NewCounter("api.http.get.files.count")
-	getFilesFail    = metrics.NewCounter("api.http.get.files.fail")
-	getListCount    = metrics.NewCounter("api.http.get.list.count")
-	getListFail     = metrics.NewCounter("api.http.get.list.fail")
-	requestCount    = metrics.NewCounter("http.request.count")
-	requestTimer    = metrics.NewResettingTimer("http.request.time")
+	postRawCount     = metrics.NewCounter("api.http.post.raw.count")
+	postRawFail      = metrics.NewCounter("api.http.post.raw.fail")
+	postFilesCount   = metrics.NewCounter("api.http.post.files.count")
+	postFilesFail    = metrics.NewCounter("api.http.post.files.fail")
+	deleteCount      = metrics.NewCounter("api.http.delete.count")
+	deleteFail       = metrics.NewCounter("api.http.delete.fail")
+	getCount         = metrics.NewCounter("api.http.get.count")
+	getFail          = metrics.NewCounter("api.http.get.fail")
+	getFileCount     = metrics.NewCounter("api.http.get.file.count")
+	getFileNotFound  = metrics.NewCounter("api.http.get.file.notfound")
+	getFileFail      = metrics.NewCounter("api.http.get.file.fail")
+	getFilesCount    = metrics.NewCounter("api.http.get.files.count")
+	getFilesFail     = metrics.NewCounter("api.http.get.files.fail")
+	getListCount     = metrics.NewCounter("api.http.get.list.count")
+	getListFail      = metrics.NewCounter("api.http.get.list.fail")
+	requestCount     = metrics.NewCounter("http.request.count")
+	htmlRequestCount = metrics.NewCounter("http.request.html.count")
+	jsonRequestCount = metrics.NewCounter("http.request.json.count")
+	requestTimer     = metrics.NewResettingTimer("http.request.time")
 )
 
 // ServerConfig is the basic configuration needed for the HTTP server and also
@@ -643,8 +645,19 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	requestCount.Inc(1)
-	defer requestTimer.UpdateSince(time.Now())
+	if metrics.Enabled {
+		//The increment for request count and request timer themselves have a flag check
+		//for metrics.Enabled. Nevertheless, we introduce the if here because we
+		//are looking into the header just to see what request type it is (json/html).
+		//So let's take advantage and add all metrics related stuff here
+		requestCount.Inc(1)
+		defer requestTimer.UpdateSince(time.Now())
+		if r.Header.Get("Accept") == "application/json" {
+			jsonRequestCount.Inc(1)
+		} else {
+			htmlRequestCount.Inc(1)
+		}
+	}
 	s.logDebug("HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, r.URL.Host, r.URL.Path, r.Referer(), r.Header.Get("Accept"))
 
 	uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))

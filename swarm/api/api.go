@@ -40,23 +40,21 @@ var hashMatcher = regexp.MustCompile("^[0-9A-Fa-f]{64}")
 
 //setup metrics
 var (
-	apiResolveCount      = metrics.NewCounter("api.resolve.count")
-	apiResolveFail       = metrics.NewCounter("api.resolve.fail")
-	apiPutCount          = metrics.NewCounter("api.put.count")
-	apiPutFail           = metrics.NewCounter("api.put.fail")
-	apiGetCount          = metrics.NewCounter("api.get.count")
-	apiGetNotFound       = metrics.NewCounter("api.get.notfound")
-	apiGetHttp300        = metrics.NewCounter("api.get.http.300")
-	apiModifyCount       = metrics.NewCounter("api.modify.count")
-	apiModifyFail        = metrics.NewCounter("api.modify.fail")
-	apiAddFileCount      = metrics.NewCounter("api.addfile.count")
-	apiAddFileFail       = metrics.NewCounter("api.addfile.fail")
-	apiRmFileCount       = metrics.NewCounter("api.removefile.count")
-	apiRmFileFail        = metrics.NewCounter("api.removefile.fail")
-	apiAppendFileCount   = metrics.NewCounter("api.appendfile.count")
-	apiAppendFileFail    = metrics.NewCounter("api.appendfile.fail")
-	apiBuildDirTreeCount = metrics.NewCounter("api.builddirtree.count")
-	apiBuildDirTreeFail  = metrics.NewCounter("api.builddirtree.fail")
+	apiResolveCount    = metrics.NewCounter("api.resolve.count")
+	apiResolveFail     = metrics.NewCounter("api.resolve.fail")
+	apiPutCount        = metrics.NewCounter("api.put.count")
+	apiPutFail         = metrics.NewCounter("api.put.fail")
+	apiGetCount        = metrics.NewCounter("api.get.count")
+	apiGetNotFound     = metrics.NewCounter("api.get.notfound")
+	apiGetHttp300      = metrics.NewCounter("api.get.http.300")
+	apiModifyCount     = metrics.NewCounter("api.modify.count")
+	apiModifyFail      = metrics.NewCounter("api.modify.fail")
+	apiAddFileCount    = metrics.NewCounter("api.addfile.count")
+	apiAddFileFail     = metrics.NewCounter("api.addfile.fail")
+	apiRmFileCount     = metrics.NewCounter("api.removefile.count")
+	apiRmFileFail      = metrics.NewCounter("api.removefile.fail")
+	apiAppendFileCount = metrics.NewCounter("api.appendfile.count")
+	apiAppendFileFail  = metrics.NewCounter("api.appendfile.fail")
 )
 
 type Resolver interface {
@@ -184,7 +182,6 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	isHash := hashMatcher.MatchString(uri.Addr)
 	if uri.Immutable() || uri.DeprecatedImmutable() {
 		if !isHash {
-			apiResolveFail.Inc(1)
 			return nil, fmt.Errorf("immutable address not a content hash: %q", uri.Addr)
 		}
 		return common.Hex2Bytes(uri.Addr), nil
@@ -467,23 +464,19 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 }
 
 func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storage.Key, manifestEntryMap map[string]*manifestTrieEntry, err error) {
-	apiBuildDirTreeCount.Inc(1)
 
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
-		apiBuildDirTreeFail.Inc(1)
 		return nil, nil, err
 	}
 	key, err = self.Resolve(uri)
 	if err != nil {
-		apiBuildDirTreeFail.Inc(1)
 		return nil, nil, err
 	}
 
 	quitC := make(chan bool)
 	rootTrie, err := loadManifest(self.dpa, key, quitC)
 	if err != nil {
-		apiBuildDirTreeFail.Inc(1)
 		return nil, nil, fmt.Errorf("can't load manifest %v: %v", key.String(), err)
 	}
 
@@ -493,7 +486,6 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 	})
 
 	if err != nil {
-		apiBuildDirTreeFail.Inc(1)
 		return nil, nil, fmt.Errorf("list with prefix failed %v: %v", key.String(), err)
 	}
 	return key, manifestEntryMap, nil
