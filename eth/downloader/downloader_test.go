@@ -299,8 +299,8 @@ func (dl *downloadTester) FastSyncCommitHead(hash common.Hash) error {
 	return fmt.Errorf("non existent block: %x", hash[:4])
 }
 
-// GetTdByHash retrieves the block's total difficulty from the canonical chain.
-func (dl *downloadTester) GetTdByHash(hash common.Hash) *big.Int {
+// GetTd retrieves the block's total difficulty from the canonical chain.
+func (dl *downloadTester) GetTd(hash common.Hash, number uint64) *big.Int {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
