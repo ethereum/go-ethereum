@@ -22,7 +22,7 @@ var Modules = map[string]string{
 	"chequebook": Chequebook_JS,
 	"clique":     Clique_JS,
 	"debug":      Debug_JS,
-	"eth":        Eth_JS,
+	"eth": 	      Eth_JS,
 	"miner":      Miner_JS,
 	"net":        Net_JS,
 	"personal":   Personal_JS,
@@ -412,7 +412,45 @@ web3._extend({
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, web3._extend.utils.toHex]
 		}),
-	],
+		new web3._extend.Method({
+			name: 'sendTransactionWithData',
+			call: function(args) {
+				if (args[1]) {
+					if (!web3._extend.utils.isObject(args[1])) {
+						args[1] = "{\"description\":\"" + args[1] + "\"}"
+					} else {
+						args[1] = JSON.stringify(args[1])
+					}
+					args[0].data = web3.toHex(args[1])
+				}				
+				return 'eth_sendTransaction'
+			},
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
+		}),
+		new web3._extend.Method({
+        	name: 'getTransactionFormatted',
+        	call: 'eth_getTransactionByHash',
+        	params: 1,
+        	outputFormatter: function (tx) {
+    			if(tx.blockNumber !== null)
+        			tx.blockNumber = web3.toDecimal(tx.blockNumber);
+    			if(tx.transactionIndex !== null)
+        			tx.transactionIndex = web3.toDecimal(tx.transactionIndex);
+	    		tx.nonce = web3.toDecimal(tx.nonce);
+    			tx.gas = web3.toDecimal(tx.gas);
+    			tx.gasPrice = web3.toBigNumber(tx.gasPrice);
+    			tx.value = web3.toBigNumber(tx.value);				
+				inputStr = web3.toUtf8(tx.input);
+				if (web3._extend.utils.isJson(inputStr)) {
+					tx.input = JSON.parse(inputStr);
+				} else {
+					tx.input = inputStr;
+				}
+    			return tx;
+			}
+    	}),
+	],	
 	properties: [
 		new web3._extend.Property({
 			name: 'pendingTransactions',
