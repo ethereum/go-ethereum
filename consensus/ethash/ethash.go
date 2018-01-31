@@ -391,38 +391,28 @@ type Config struct {
 	PowMode        Mode
 }
 
-// remoteOpType defines all the types of operations related to remote sealer.
-type remoteOpType uint
-
-const (
-	opGetWork remoteOpType = iota
-	opSubmitWork
-	opHashrate
-)
-
 // mineResult wraps the pow solution parameters for the specified block.
 type mineResult struct {
 	nonce     types.BlockNonce
 	mixDigest common.Hash
 	hash      common.Hash
+
+	errCh chan error
 }
 
+// hashrate wraps the hash rate submitted by the remote sealer.
 type hashrate struct {
 	id   common.Hash
 	ping time.Time
 	rate uint64
+
+	done chan struct{}
 }
 
-type hashrateOp func(map[common.Hash]hashrate)
-
-// remoteOp wraps a mining operation sent by remote miner.
-type remoteOp struct {
-	typ    remoteOpType
-	result mineResult
-	errCh  chan error
-	workCh chan [3]string
-
-	rateOp hashrateOp
+// sealWork wraps a seal work package for remote sealer.
+type sealWork struct {
+	errCh chan error
+	resCh chan [3]string
 }
 
 // Ethash is a consensus engine based on proof-of-work implementing the ethash
@@ -433,8 +423,6 @@ type Ethash struct {
 	caches   *lru // In memory caches to avoid regenerating too often
 	datasets *lru // In memory datasets to avoid regenerating too often
 
-	exitCh chan struct{} // Notification channel to exiting backend threads
-
 	// Mining related fields
 	rand     *rand.Rand    // Properly seeded random source for nonces
 	threads  int           // Number of threads to mine on if mining
@@ -442,15 +430,21 @@ type Ethash struct {
 	hashrate metrics.Meter // Meter tracking the average hashrate
 
 	// Remote sealer related fields
-	workCh   chan *types.Block // Notification channel to push new work to remote sealer
-	resultCh chan *types.Block // Channel used by mining threads to return result
-	remoteOp chan *remoteOp    // Channel used to receive all mining operations from api
+	workCh       chan *types.Block // Notification channel to push new work to remote sealer
+	resultCh     chan *types.Block // Channel used by mining threads to return result
+	fetchWorkCh  chan *sealWork    // Channel used for remote sealer to fetch mining work
+	submitWorkCh chan *mineResult  // Channel used for remote sealer to submit their mining result
+	fetchRateCh  chan chan uint64  // Channel used to gather submitted hash rate for local or remote sealer.
+	submitRateCh chan *hashrate    // Channel used for remote sealer to submit their mining hashrate
+
 	// The fields below are hooks for testing
 	shared    *Ethash       // Shared PoW verifier to avoid cache regeneration
 	fakeFail  uint64        // Block number which fails PoW check even in fake mode
 	fakeDelay time.Duration // Time delay to sleep for before returning from verify
 
-	lock sync.Mutex // Ensures thread safety for the in-memory caches and mining fields
+	lock      sync.Mutex      // Ensures thread safety for the in-memory caches and mining fields
+	closeOnce sync.Once       // Ensures exit channel will not be closed twice.
+	exitCh    chan chan error // Notification channel to exiting backend threads
 }
 
 // New creates a full sized ethash PoW scheme.
@@ -466,18 +460,20 @@ func New(config Config) *Ethash {
 		log.Info("Disk storage enabled for ethash DAGs", "dir", config.DatasetDir, "count", config.DatasetsOnDisk)
 	}
 	ethash := &Ethash{
-		config:   config,
-		caches:   newlru("cache", config.CachesInMem, newCache),
-		datasets: newlru("dataset", config.DatasetsInMem, newDataset),
-		update:   make(chan struct{}),
-		hashrate: metrics.NewMeter(),
-		exitCh:   make(chan struct{}),
-		workCh:   make(chan *types.Block),
-		resultCh: make(chan *types.Block),
-		remoteOp: make(chan *remoteOp),
+		config:       config,
+		caches:       newlru("cache", config.CachesInMem, newCache),
+		datasets:     newlru("dataset", config.DatasetsInMem, newDataset),
+		update:       make(chan struct{}),
+		hashrate:     metrics.NewMeter(),
+		workCh:       make(chan *types.Block),
+		resultCh:     make(chan *types.Block),
+		fetchWorkCh:  make(chan *sealWork),
+		submitWorkCh: make(chan *mineResult),
+		fetchRateCh:  make(chan chan uint64),
+		submitRateCh: make(chan *hashrate),
+		exitCh:       make(chan chan error),
 	}
-	go ethash.remote(ethash.resultCh)
-	runtime.SetFinalizer(ethash, (*Ethash).close)
+	go ethash.remote()
 	return ethash
 }
 
@@ -485,18 +481,20 @@ func New(config Config) *Ethash {
 // purposes.
 func NewTester() *Ethash {
 	ethash := &Ethash{
-		config: Config{PowMode: ModeTest},
-		caches:   newlru("cache", 1, newCache),
-		datasets: newlru("dataset", 1, newDataset),
-		update:   make(chan struct{}),
-		hashrate: metrics.NewMeter(),
-		exitCh:   make(chan struct{}),
-		workCh:   make(chan *types.Block),
-		resultCh: make(chan *types.Block),
-		remoteOp: make(chan *remoteOp),
+		config:       Config{PowMode: ModeTest},
+		caches:       newlru("cache", 1, newCache),
+		datasets:     newlru("dataset", 1, newDataset),
+		update:       make(chan struct{}),
+		hashrate:     metrics.NewMeter(),
+		workCh:       make(chan *types.Block),
+		resultCh:     make(chan *types.Block),
+		fetchWorkCh:  make(chan *sealWork),
+		submitWorkCh: make(chan *mineResult),
+		fetchRateCh:  make(chan chan uint64),
+		submitRateCh: make(chan *hashrate),
+		exitCh:       make(chan chan error),
 	}
-	go ethash.remote(ethash.resultCh)
-	runtime.SetFinalizer(ethash, (*Ethash).close)
+	go ethash.remote()
 	return ethash
 }
 
@@ -508,6 +506,7 @@ func NewFaker() *Ethash {
 		config: Config{
 			PowMode: ModeFake,
 		},
+		exitCh: make(chan chan error),
 	}
 }
 
@@ -520,6 +519,7 @@ func NewFakeFailer(fail uint64) *Ethash {
 			PowMode: ModeFake,
 		},
 		fakeFail: fail,
+		exitCh:   make(chan chan error),
 	}
 }
 
@@ -532,6 +532,7 @@ func NewFakeDelayer(delay time.Duration) *Ethash {
 			PowMode: ModeFake,
 		},
 		fakeDelay: delay,
+		exitCh:    make(chan chan error),
 	}
 }
 
@@ -542,19 +543,32 @@ func NewFullFaker() *Ethash {
 		config: Config{
 			PowMode: ModeFullFake,
 		},
+		exitCh: make(chan chan error),
 	}
 }
 
 // NewShared creates a full sized ethash PoW shared between all requesters running
 // in the same process.
 func NewShared() *Ethash {
-	return &Ethash{shared: sharedEthash}
+	return &Ethash{
+		shared: sharedEthash,
+		exitCh: make(chan chan error),
+	}
 }
 
-// close closes the exit channel to notify all backend threads exiting.
-func (ethash *Ethash) close() {
-	runtime.SetFinalizer(ethash, nil)
-	close(ethash.exitCh)
+// Close closes the exit channel to notify all backend threads exiting.
+func (ethash *Ethash) Close() error {
+	var err error
+	ethash.closeOnce.Do(func() {
+		var errCh = make(chan error)
+		select {
+		case ethash.exitCh <- errCh:
+			err = <-errCh
+			close(ethash.exitCh)
+		default:
+		}
+	})
+	return err
 }
 
 // cache tries to retrieve a verification cache for the specified block number
@@ -632,37 +646,38 @@ func (ethash *Ethash) SetThreads(threads int) {
 // Note the returned hashrate includes local hashrate, but also includes the total
 // hashrate of all remote miner.
 func (ethash *Ethash) Hashrate() float64 {
-	var (
-		total uint64
-		errCh = make(chan error)
-	)
-	// getHashrate gathers all remote miner's hashrate.
-	getHashrate := func(hashrate map[common.Hash]hashrate) {
-		for _, rate := range hashrate {
-			// this could overflow
-			total += rate.rate
-		}
-		return
-	}
-	op := &remoteOp{
-		typ:    opHashrate,
-		rateOp: getHashrate,
-		errCh:  errCh,
-	}
-	ethash.remoteOp <- op
-	<-errCh
+	var resCh = make(chan uint64, 1)
 
+	select {
+	case ethash.fetchRateCh <- resCh:
+	case <-ethash.exitCh:
+		// Return local hashrate only if ethash is stopped.
+		return ethash.hashrate.Rate1()
+	}
+
+	// Gather total submitted hash rate of remote sealers.
+	total := <-resCh
 	return ethash.hashrate.Rate1() + float64(total)
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC APIs.
 func (ethash *Ethash) APIs(chain consensus.ChainReader) []rpc.API {
-	return []rpc.API{{
-		Namespace: "eth",
-		Version:   "1.0",
-		Service:   &API{ethash},
-		Public:    true,
-	}}
+	// In order to ensure backward compatibility, we exposes ethash RPC APIs
+	// to both eth and ethash namespaces.
+	return []rpc.API{
+		{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   &API{ethash},
+			Public:    true,
+		},
+		{
+			Namespace: "ethash",
+			Version:   "1.0",
+			Service:   &API{ethash},
+			Public:    true,
+		},
+	}
 }
 
 // SeedHash is the seed to use for generating a verification cache and the mining

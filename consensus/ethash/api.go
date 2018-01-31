@@ -13,78 +13,87 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package ethash
 
 import (
-	"time"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// API exposes ethash related methods for the RPC interface
+var errEthashStopped = errors.New("ethash stopped")
+
+// API exposes ethash related methods for the RPC interface.
 type API struct {
 	ethash *Ethash
 }
 
-// GetWork returns a work package for external miner. The work package consists of 3 strings
-// result[0], 32 bytes hex encoded current block header pow-hash
-// result[1], 32 bytes hex encoded seed hash used for DAG
-// result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
-func (s *API) GetWork() ([3]string, error) {
+// GetWork returns a work package for external miner.
+//
+// The work package consists of 3 strings:
+//   result[0] - 32 bytes hex encoded current block header pow-hash
+//   result[1] - 32 bytes hex encoded seed hash used for DAG
+//   result[2] - 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
+func (api *API) GetWork() ([3]string, error) {
 	var (
-		workCh = make(chan [3]string)
-		errCh  = make(chan error)
+		workCh = make(chan [3]string, 1)
+		errCh  = make(chan error, 1)
+		err    error
 	)
-	op := &remoteOp{
-		typ:    opGetWork,
-		workCh: workCh,
-		errCh:  errCh,
+
+	select {
+	case api.ethash.fetchWorkCh <- &sealWork{errCh: errCh, resCh: workCh}:
+	case <-api.ethash.exitCh:
+		return [3]string{}, errEthashStopped
 	}
-	s.ethash.remoteOp <- op
-	if err := <-errCh; err == nil {
+
+	if err = <-errCh; err == nil {
 		return <-workCh, nil
-	} else {
-		return [3]string{}, err
 	}
+	return [3]string{}, err
 }
 
-// SubmitWork can be used by external miner to submit their POW solution. It returns an indication if the work was
-// accepted. Note, this is not an indication if the provided work was valid!
-func (s *API) SubmitWork(nonce types.BlockNonce, solution, digest common.Hash) bool {
-	var errCh = make(chan error)
-	op := &remoteOp{
-		typ: opSubmitWork,
-		result: mineResult{
-			nonce:     nonce,
-			mixDigest: digest,
-			hash:      solution,
-		},
-		errCh: errCh,
-	}
-	s.ethash.remoteOp <- op
-	if err := <-errCh; err == nil {
-		return true
-	} else {
+// SubmitWork can be used by external miner to submit their POW solution.
+// It returns an indication if the work was accepted.
+// Note either an invalid solution, a stale work a non-existent work will return false.
+func (api *API) SubmitWork(nonce types.BlockNonce, hash, digest common.Hash) bool {
+	var errCh = make(chan error, 1)
+
+	select {
+	case api.ethash.submitWorkCh <- &mineResult{
+		nonce:     nonce,
+		mixDigest: digest,
+		hash:      hash,
+		errCh:     errCh,
+	}:
+	case <-api.ethash.exitCh:
 		return false
 	}
+
+	err := <-errCh
+	return err == nil
 }
 
-// SubmitHashrate can be used for remote miners to submit their hash rate. This enables the node to report the combined
-// hash rate of all miners which submit work through this node. It accepts the miner hash rate and an identifier which
-// must be unique between nodes.
-func (s *API) SubmitHashRate(r hexutil.Uint64, id common.Hash) bool {
-	submit := func(rate map[common.Hash]hashrate) {
-		rate[id] = hashrate{rate: uint64(r), ping: time.Now()}
+// SubmitHashrate can be used for remote miners to submit their hash rate.
+// This enables the node to report the combined hash rate of all miners
+// which submit work through this node.
+//
+// It accepts the miner hash rate and an identifier which must be unique
+// between nodes.
+func (api *API) SubmitHashRate(rate hexutil.Uint64, id common.Hash) bool {
+	var doneCh = make(chan struct{}, 1)
+
+	select {
+	case api.ethash.submitRateCh <- &hashrate{done: doneCh, rate: uint64(rate), id: id}:
+	case <-api.ethash.exitCh:
+		return false
 	}
-	errCh := make(chan error)
-	op := &remoteOp{
-		typ:    opHashrate,
-		rateOp: submit,
-		errCh:  errCh,
-	}
-	s.ethash.remoteOp <- op
-	<-errCh
+
+	// Block until hash rate submitted successfully.
+	<-doneCh
+
 	return true
 }

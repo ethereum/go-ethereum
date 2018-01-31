@@ -248,6 +248,7 @@ func (s *LightEthereum) Stop() error {
 	s.blockchain.Stop()
 	s.protocolManager.Stop()
 	s.txPool.Stop()
+	s.engine.Close()
 
 	s.eventMux.Stop()
 

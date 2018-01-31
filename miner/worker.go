@@ -447,13 +447,6 @@ func (self *worker) commitNewWork() {
 	if self.config.DAOForkSupport && self.config.DAOForkBlock != nil && self.config.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(work.state)
 	}
-	pending, err := self.eth.TxPool().Pending()
-	if err != nil {
-		log.Error("Failed to fetch pending transactions", "err", err)
-		return
-	}
-	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
-	work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
 
 	// compute uncles for the new block.
 	var (
@@ -477,16 +470,41 @@ func (self *worker) commitNewWork() {
 	for _, hash := range badUncles {
 		delete(self.possibleUncles, hash)
 	}
-	// Create the new block to seal with the consensus engine
+
+	// Create an empty block based on temporary copied state for sealing in advance without waiting block
+	// execution finished.
+	if work.Block, err = self.engine.Finalize(self.chain, header, work.state.Copy(), nil, uncles, nil); err != nil {
+		log.Error("Failed to finalize block for temporary sealing", "err", err)
+	} else {
+		// Push empty work in advance without applying pending transaction.
+		// The reason is transactions execution can cost a lot and sealer need to
+		// take advantage of this part time.
+		if atomic.LoadInt32(&self.mining) == 1 {
+			log.Info("Commit new empty mining work", "number", work.Block.Number(), "uncles", len(uncles))
+		}
+		self.push(work)
+	}
+
+	// Fill the block with all available pending transactions.
+	pending, err := self.eth.TxPool().Pending()
+	if err != nil {
+		log.Error("Failed to fetch pending transactions", "err", err)
+		return
+	}
+	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
+	work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
+
+	// Create the full block to seal with the consensus engine
 	if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
 		log.Error("Failed to finalize block for sealing", "err", err)
 		return
 	}
 	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {
-		log.Info("Commit new mining work", "number", work.Block.Number(), "txs", work.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
+		log.Info("Commit new full mining work", "number", work.Block.Number(), "txs", work.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}
+	// Push full work to sealer, which will replace the empty work sent before automatically.
 	self.push(work)
 	self.updateSnapshot()
 }
