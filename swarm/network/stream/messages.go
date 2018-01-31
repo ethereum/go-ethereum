@@ -66,7 +66,17 @@ type SubscribeMsg struct {
 	Priority uint8 // delivered on priority channel
 }
 
-func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) error {
+func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
+	defer func() {
+		if err != nil {
+			if e := p.Send(SubscribeErrorMsg{
+				Error: err.Error(),
+			}); e != nil {
+				log.Error("send stream subscribe error message", "err", err)
+			}
+		}
+	}()
+
 	f, err := p.streamer.GetServerFunc(req.Stream)
 	if err != nil {
 		return err
@@ -77,7 +87,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) error {
 	}
 	os, err := p.setServer(req.Stream, req.Key, s, req.Priority)
 	if err != nil {
-		return nil
+		return err
 	}
 	log.Debug("received subscription", "peer", p.ID(), "stream", req.Stream, "Key", req.Key, "from", req.From, "to", req.To)
 	go func() {
@@ -85,6 +95,24 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) error {
 			p.Drop(err)
 		}
 	}()
+	return nil
+}
+
+type SubscribeErrorMsg struct {
+	Error string
+}
+
+func (p *Peer) handleSubscribeErrorMsg(req *SubscribeErrorMsg) (err error) {
+	return fmt.Errorf("subscribe to peer %s: %v", p.ID(), req.Error)
+}
+
+type UnsubscribeMsg struct {
+	Stream string
+	Key    []byte
+}
+
+func (p *Peer) handleUnsubscribeMsg(req *UnsubscribeMsg) error {
+	p.removeServer(req.Stream, req.Key)
 	return nil
 }
 
@@ -247,5 +275,3 @@ func (p *Peer) handleTakeoverProofMsg(req *TakeoverProofMsg) error {
 	// store the strongest takeoverproof for the stream in streamer
 	return nil
 }
-
-type UnsubscribeMsg struct{}

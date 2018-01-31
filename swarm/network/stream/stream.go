@@ -151,8 +151,7 @@ func (r *Registry) Subscribe(peerId discover.NodeID, s string, t []byte, from, t
 	}
 	log.Debug("Subscribe ", "peer", peerId, "stream", s, "key", t, "from", from, "to", to)
 
-	peer.SendPriority(msg, priority)
-	return nil
+	return peer.SendPriority(msg, priority)
 }
 
 func (r *Registry) Retrieve(chunk *storage.Chunk) error {
@@ -217,6 +216,12 @@ func (p *Peer) HandleMsg(msg interface{}) error {
 
 	case *SubscribeMsg:
 		return p.handleSubscribeMsg(msg)
+
+	case *SubscribeErrorMsg:
+		return p.handleSubscribeErrorMsg(msg)
+
+	case *UnsubscribeMsg:
+		return p.handleUnsubscribeMsg(msg)
 
 	case *OfferedHashesMsg:
 		return p.handleOfferedHashesMsg(msg)

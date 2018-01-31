@@ -18,6 +18,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -29,6 +30,8 @@ import (
 )
 
 var sendTimeout = 5 * time.Second
+
+var errServerNotFound = errors.New("server not found")
 
 // Peer is the Peer extention for the streaming protocol
 type Peer struct {
@@ -143,6 +146,20 @@ func (p *Peer) setServer(s string, key []byte, o Server, priority uint8) (*serve
 	}
 	p.servers[sk] = os
 	return os, nil
+}
+
+func (p *Peer) removeServer(s string, key []byte) error {
+	p.serverMu.Lock()
+	defer p.serverMu.Unlock()
+
+	sk := s + keyToString(key)
+	server, ok := p.servers[sk]
+	if !ok {
+		return errServerNotFound
+	}
+	server.Close()
+	delete(p.servers, sk)
+	return nil
 }
 
 func (p *Peer) setClient(s string, key []byte, i Client, priority uint8, live bool) error {
