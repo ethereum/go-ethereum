@@ -38,8 +38,8 @@ type testgeth struct {
 	*cmdtest.TestCmd
 
 	// template variables for expect
-	Datadir   string
-	Etherbase string
+	Datadir  string
+	Coinbase string
 }
 
 func init() {
@@ -72,9 +72,13 @@ func runGeth(t *testing.T, args ...string) *testgeth {
 			if i < len(args)-1 {
 				tt.Datadir = args[i+1]
 			}
+		case arg == "-coinbase" || arg == "--coinbase":
+			if i < len(args)-1 {
+				tt.Coinbase = args[i+1]
+			}
 		case arg == "-etherbase" || arg == "--etherbase":
 			if i < len(args)-1 {
-				tt.Etherbase = args[i+1]
+				tt.Coinbase = args[i+1]
 			}
 		}
 	}
