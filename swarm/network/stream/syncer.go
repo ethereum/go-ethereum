@@ -33,7 +33,7 @@ const (
 	BatchSize = 128
 )
 
-// SwarmSyncerServer implements an OutgoingStreamer for history syncing on bins
+// SwarmSyncerServer implements an Server for history syncing on bins
 // offered streams:
 // * live request delivery with or without checkback
 // * (live/non-live historical) chunk syncing per proximity bin
@@ -67,7 +67,7 @@ func RegisterSwarmSyncerServer(streamer *Registry, db *storage.DBAPI) {
 		// TODO: make this work for HISTORY too
 		return NewSwarmSyncerServer(false, po, db)
 	})
-	// streamer.RegisterOutgoingStreamer(stream, func(p *Peer) (OutgoingStreamer, error) {
+	// streamer.RegisterServerFunc(stream, func(p *Peer) (Server, error) {
 	// 	return NewOutgoingProvableSwarmSyncer(po, db)
 	// })
 }

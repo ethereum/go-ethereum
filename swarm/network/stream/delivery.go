@@ -51,7 +51,7 @@ func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
 	return d
 }
 
-// SwarmChunkServer implements OutgoingStreamer
+// SwarmChunkServer implements Server
 type SwarmChunkServer struct {
 	deliveryC  chan []byte
 	batchC     chan []byte
