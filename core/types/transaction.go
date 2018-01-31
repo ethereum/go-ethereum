@@ -188,11 +188,7 @@ func (tx *Transaction) CheckNonce() bool   { return true }
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
 func (tx *Transaction) To() *common.Address {
-	if tx.data.Recipient == nil {
-		return nil
-	}
-	to := *tx.data.Recipient
-	return &to
+	return tx.data.Recipient
 }
 
 // Hash hashes the RLP encoding of tx.
