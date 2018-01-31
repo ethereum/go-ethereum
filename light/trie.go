@@ -18,12 +18,14 @@ package light
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -137,6 +139,10 @@ func (t *odrTrie) NodeIterator(startkey []byte) trie.NodeIterator {
 
 func (t *odrTrie) GetKey(sha []byte) []byte {
 	return nil
+}
+
+func (t *odrTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
+	return errors.New("not implemented, needs client/server interface split")
 }
 
 // do tries and retries to execute a function until it returns with no error or
