@@ -227,9 +227,12 @@ func newTestPeer(t *testing.T, name string, version int, pm *ProtocolManager, sh
 	}
 	// Execute any implicitly requested handshakes and return
 	if shake {
-		td, head, genesis := pm.blockchain.Status()
-		headNum := pm.blockchain.CurrentHeader().Number.Uint64()
-		tp.handshake(t, td, head, headNum, genesis)
+		var (
+			genesis = pm.blockchain.Genesis()
+			head    = pm.blockchain.CurrentHeader()
+			td      = pm.blockchain.GetTd(head.Hash(), head.Number.Uint64())
+		)
+		tp.handshake(t, td, head.Hash(), head.Number.Uint64(), genesis.Hash())
 	}
 	return tp, errc
 }

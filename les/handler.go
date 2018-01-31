@@ -77,13 +77,11 @@ type BlockChain interface {
 	GetHeader(hash common.Hash, number uint64) *types.Header
 	GetHeaderByHash(hash common.Hash) *types.Header
 	CurrentHeader() *types.Header
-	GetTdByHash(hash common.Hash) *big.Int
+	GetTd(hash common.Hash, number uint64) *big.Int
 	InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error)
 	Rollback(chain []common.Hash)
-	Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash)
 	GetHeaderByNumber(number uint64) *types.Header
 	GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash
-	LastBlockHash() common.Hash
 	Genesis() *types.Block
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 }
@@ -262,9 +260,14 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
 	// Execute the LES handshake
-	td, head, genesis := pm.blockchain.Status()
-	headNum := core.GetBlockNumber(pm.chainDb, head)
-	if err := p.Handshake(td, head, headNum, genesis, pm.server); err != nil {
+	var (
+		genesis = pm.blockchain.Genesis()
+		head    = pm.blockchain.CurrentHeader()
+		hash    = head.Hash()
+		number  = head.Number.Uint64()
+		td      = pm.blockchain.GetTd(hash, number)
+	)
+	if err := p.Handshake(td, hash, number, genesis.Hash(), pm.server); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -1135,12 +1138,15 @@ type NodeInfo struct {
 
 // NodeInfo retrieves some protocol metadata about the running host node.
 func (self *ProtocolManager) NodeInfo() *NodeInfo {
+	head := self.blockchain.CurrentHeader()
+	hash := head.Hash()
+
 	return &NodeInfo{
 		Network:    self.networkId,
-		Difficulty: self.blockchain.GetTdByHash(self.blockchain.LastBlockHash()),
+		Difficulty: self.blockchain.GetTd(hash, head.Number.Uint64()),
 		Genesis:    self.blockchain.Genesis().Hash(),
 		Config:     self.blockchain.Config(),
-		Head:       self.blockchain.LastBlockHash(),
+		Head:       hash,
 	}
 }
 

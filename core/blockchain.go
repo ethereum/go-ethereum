@@ -312,14 +312,6 @@ func (bc *BlockChain) GasLimit() uint64 {
 	return bc.currentBlock.GasLimit()
 }
 
-// LastBlockHash return the hash of the HEAD block.
-func (bc *BlockChain) LastBlockHash() common.Hash {
-	bc.mu.RLock()
-	defer bc.mu.RUnlock()
-
-	return bc.currentBlock.Hash()
-}
-
 // CurrentBlock retrieves the current head block of the canonical chain. The
 // block is retrieved from the blockchain's internal cache.
 func (bc *BlockChain) CurrentBlock() *types.Block {
@@ -336,15 +328,6 @@ func (bc *BlockChain) CurrentFastBlock() *types.Block {
 	defer bc.mu.RUnlock()
 
 	return bc.currentFastBlock
-}
-
-// Status returns status information about the current chain such as the HEAD Td,
-// the HEAD hash and the hash of the genesis block.
-func (bc *BlockChain) Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash) {
-	bc.mu.RLock()
-	defer bc.mu.RUnlock()
-
-	return bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64()), bc.currentBlock.Hash(), bc.genesisBlock.Hash()
 }
 
 // SetProcessor sets the processor required for making state modifications.
@@ -1006,7 +989,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		stats.report(chain, i)
 	}
 	// Append a single chain head event if we've progressed the chain
-	if lastCanon != nil && bc.LastBlockHash() == lastCanon.Hash() {
+	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 		events = append(events, ChainHeadEvent{lastCanon})
 	}
 	return 0, events, coalescedLogs, nil
