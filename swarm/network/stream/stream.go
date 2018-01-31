@@ -154,6 +154,24 @@ func (r *Registry) Subscribe(peerId discover.NodeID, s string, t []byte, from, t
 	return peer.SendPriority(msg, priority)
 }
 
+func (r *Registry) Unsubscribe(peerId discover.NodeID, s string, t []byte) error {
+	peer := r.getPeer(peerId)
+	if peer == nil {
+		return fmt.Errorf("peer not found %v", peerId)
+	}
+
+	msg := &UnsubscribeMsg{
+		Stream: s,
+		Key:    t,
+	}
+	log.Debug("Unsubscribe ", "peer", peerId, "stream", s, "key", t)
+
+	if err := peer.Send(msg); err != nil {
+		return err
+	}
+	return peer.removeClient(s, t)
+}
+
 func (r *Registry) Retrieve(chunk *storage.Chunk) error {
 	return r.delivery.RequestFromPeers(chunk.Key[:], r.skipCheck)
 }
@@ -324,6 +342,10 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 	return nil
 }
 
+func (c *client) close() {
+	close(c.next)
+}
+
 // Spec is the spec of the streamer protocol
 var Spec = &protocols.Spec{
 	Name:       "stream",
@@ -337,6 +359,7 @@ var Spec = &protocols.Spec{
 		SubscribeMsg{},
 		RetrieveRequestMsg{},
 		ChunkDeliveryMsg{},
+		SubscribeErrorMsg{},
 	},
 }
 
@@ -409,4 +432,8 @@ func (api *API) ReadAll(hash common.Hash) (int64, error) {
 
 func (api *API) SubscribeStream(peerId discover.NodeID, s string, t []byte, from, to uint64, priority uint8, live bool) error {
 	return api.streamer.Subscribe(peerId, s, t, from, to, priority, live)
+}
+
+func (api *API) UnsubscribeStream(peerId discover.NodeID, s string, t []byte) error {
+	return api.streamer.Unsubscribe(peerId, s, t)
 }

@@ -88,7 +88,7 @@ func (self *testServer) GetData([]byte) ([]byte, error) {
 func (self *testServer) Close() {
 }
 
-func TestStreamerDownstreamSubscribeMsgExchange(t *testing.T) {
+func TestStreamerDownstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(t)
 	defer teardown()
 	if err != nil {
@@ -128,9 +128,32 @@ func TestStreamerDownstreamSubscribeMsgExchange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	err = streamer.Unsubscribe(peerID, "foo", []byte{})
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	err = tester.TestExchanges(p2ptest.Exchange{
+		Label: "Unsubscribe message",
+		Expects: []p2ptest.Expect{
+			p2ptest.Expect{
+				Code: 0,
+				Msg: &UnsubscribeMsg{
+					Stream: "foo",
+					Key:    []byte{},
+				},
+				Peer: peerID,
+			},
+		},
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
-func TestStreamerUpstreamSubscribeMsgExchange(t *testing.T) {
+func TestStreamerUpstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(t)
 	defer teardown()
 	if err != nil {
@@ -182,6 +205,69 @@ func TestStreamerUpstreamSubscribeMsgExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	err = tester.TestExchanges(p2ptest.Exchange{
+		Label: "unsubscribe message",
+		Triggers: []p2ptest.Trigger{
+			p2ptest.Trigger{
+				Code: 0,
+				Msg: &UnsubscribeMsg{
+					Stream: "foo",
+					Key:    []byte{},
+				},
+				Peer: peerID,
+			},
+		},
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStreamerUpstreamSubscribeErrorMsgExchange(t *testing.T) {
+	tester, streamer, _, teardown, err := newStreamerTester(t)
+	defer teardown()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	streamer.RegisterServerFunc("foo", func(p *Peer, t []byte) (Server, error) {
+		return &testServer{
+			t: t,
+		}, nil
+	})
+
+	peerID := tester.IDs[0]
+
+	err = tester.TestExchanges(p2ptest.Exchange{
+		Label: "Subscribe message",
+		Triggers: []p2ptest.Trigger{
+			p2ptest.Trigger{
+				Code: 4,
+				Msg: &SubscribeMsg{
+					Stream:   "bar",
+					Key:      []byte{},
+					From:     5,
+					To:       8,
+					Priority: Top,
+				},
+				Peer: peerID,
+			},
+		},
+		Expects: []p2ptest.Expect{
+			p2ptest.Expect{
+				Code: 7,
+				Msg: &SubscribeErrorMsg{
+					Error: "stream bar not registered",
+				},
+				Peer: peerID,
+			},
+		},
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {

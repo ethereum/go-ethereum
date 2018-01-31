@@ -31,7 +31,10 @@ import (
 
 var sendTimeout = 5 * time.Second
 
-var errServerNotFound = errors.New("server not found")
+var (
+	errServerNotFound = errors.New("server not found")
+	errClientNotFound = errors.New("client not found")
+)
 
 // Peer is the Peer extention for the streaming protocol
 type Peer struct {
@@ -186,6 +189,19 @@ func (p *Peer) setClient(s string, key []byte, i Client, priority uint8, live bo
 		key:      key,
 	}
 	next <- nil // this is to allow wantedKeysMsg before first batch arrives
+	return nil
+}
+
+func (p *Peer) removeClient(s string, key []byte) error {
+	p.clientMu.Lock()
+	defer p.clientMu.Unlock()
+
+	sk := s + keyToString(key)
+	client, ok := p.clients[sk]
+	if !ok {
+		return errClientNotFound
+	}
+	client.close()
 	return nil
 }
 
