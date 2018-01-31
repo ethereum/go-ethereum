@@ -42,6 +42,7 @@ type SwarmSyncerServer struct {
 	db        *storage.DBAPI
 	sessionAt uint64
 	start     uint64
+	quit      chan struct{}
 }
 
 // NewSwarmSyncerServer is contructor for SwarmSyncerServer
@@ -56,6 +57,7 @@ func NewSwarmSyncerServer(live bool, po uint8, db *storage.DBAPI) (*SwarmSyncerS
 		db:        db,
 		sessionAt: sessionAt,
 		start:     start,
+		quit:      make(chan struct{}),
 	}, nil
 }
 
@@ -72,13 +74,20 @@ func RegisterSwarmSyncerServer(streamer *Registry, db *storage.DBAPI) {
 	// })
 }
 
+// Close needs to be called on a stream server
+func (s *SwarmSyncerServer) Close() {
+	close(s.quit)
+}
+
 // GetSection retrieves the actual chunk from localstore
-func (s *SwarmSyncerServer) GetData(key []byte) []byte {
+func (s *SwarmSyncerServer) GetData(key []byte) ([]byte, error) {
 	chunk, err := s.db.Get(storage.Key(key))
-	if err != nil {
-		return nil
+	if err == storage.ErrFetching {
+		<-chunk.ReqC
+	} else if err != nil {
+		return nil, err
 	}
-	return chunk.SData
+	return chunk.SData, nil
 }
 
 // GetBatch retrieves the next batch of hashes from the dbstore
@@ -93,7 +102,12 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	}
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
-	for range ticker.C {
+	for {
+		select {
+		case <-ticker.C:
+		case <-s.quit:
+			return nil, 0, 0, nil, nil
+		}
 		err := s.db.Iterator(from, to, s.po, func(key storage.Key, idx uint64) bool {
 			batch = append(batch, key[:]...)
 			i++
@@ -109,7 +123,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	}
 
 	log.Debug("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.db.CurrentBucketStorageIndex(s.po))
-	return batch, from, to + 1, nil, nil
+	return batch, from, to, nil, nil
 }
 
 // SwarmSyncerClient
@@ -184,7 +198,6 @@ func (s *SwarmSyncerClient) NeedData(key []byte) (wait func()) {
 	chunk, _ := s.db.GetOrCreateRequest(key)
 	// TODO: we may want to request from this peer anyway even if the request exists
 	if chunk.ReqC == nil {
-		log.Error("oops this is found")
 		return nil
 	}
 	// create request and wait until the chunk data arrives and is stored

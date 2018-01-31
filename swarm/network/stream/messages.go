@@ -17,7 +17,6 @@
 package stream
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -121,6 +120,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	wg := sync.WaitGroup{}
 	for i := 0; i < len(hashes); i += HashSize {
 		hash := hashes[i : i+HashSize]
+
 		if wait := s.NeedData(hash); wait != nil {
 			want.Set(i/HashSize, true)
 			wg.Add(1)
@@ -168,16 +168,14 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	}
 	go func() {
 		select {
-		case <-time.After(1 * time.Second):
-			p.Drop(errors.New("timeout waiting for batch to be delivered"))
+		case <-time.After(30 * time.Second):
+			p.Drop(err)
 			return
 		case err := <-s.next:
 			if err != nil {
 				p.Drop(err)
 				return
 			}
-		case <-s.quit:
-			return
 		}
 		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "Key", msg.Key, "from", msg.From, "to", msg.To)
 		err := p.SendPriority(msg, s.priority)
@@ -227,9 +225,9 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
 			hash := hashes[i*HashSize : (i+1)*HashSize]
-			data := s.GetData(hash)
-			if data == nil {
-				return errors.New("not found")
+			data, err := s.GetData(hash)
+			if err != nil {
+				return fmt.Errorf("handleWantedHashesMsg get data %x: %v", hash, err)
 			}
 			chunk := storage.NewChunk(hash, nil)
 			chunk.SData = data

@@ -81,8 +81,11 @@ func (self *testServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, ui
 	return make([]byte, HashSize), from + 1, to + 1, nil, nil
 }
 
-func (self *testServer) GetData([]byte) []byte {
-	return nil
+func (self *testServer) GetData([]byte) ([]byte, error) {
+	return nil, nil
+}
+
+func (self *testServer) Close() {
 }
 
 func TestStreamerDownstreamSubscribeMsgExchange(t *testing.T) {

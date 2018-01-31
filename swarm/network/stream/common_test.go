@@ -63,11 +63,12 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	id := ctx.Config.ID
 	addr := toAddr(id)
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-	store := stores[id]
-	db := storage.NewDBAPI(store.(*storage.LocalStore))
+	store := stores[id].(*storage.LocalStore)
+	db := storage.NewDBAPI(store)
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, store, defaultSkipCheck)
+	netStore := storage.NewNetStore(store, nil)
+	r := NewRegistry(addr, delivery, netStore, defaultSkipCheck)
 	RegisterSwarmSyncerServer(r, db)
 	RegisterSwarmSyncerClient(r, db)
 	go func() {

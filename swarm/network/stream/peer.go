@@ -83,6 +83,10 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	if err != nil {
 		return err
 	}
+	// true only when quiting
+	if len(hashes) == 0 {
+		return nil
+	}
 	if proof == nil {
 		proof = &HandoverProof{
 			Handover: &Handover{},
@@ -97,7 +101,7 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		Stream:        s.stream,
 		Key:           s.key,
 	}
-	log.Warn("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "key", s.key, "len", len(hashes), "from", from, "to", to)
+	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "key", s.key, "len", len(hashes), "from", from, "to", to)
 	return p.SendPriority(msg, s.priority)
 }
 
@@ -166,4 +170,10 @@ func (p *Peer) setClient(s string, key []byte, i Client, priority uint8, live bo
 	}
 	next <- nil // this is to allow wantedKeysMsg before first batch arrives
 	return nil
+}
+
+func (p *Peer) close() {
+	for _, s := range p.servers {
+		s.Close()
+	}
 }

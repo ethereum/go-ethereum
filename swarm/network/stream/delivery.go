@@ -17,6 +17,7 @@
 package stream
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"time"
@@ -57,6 +58,7 @@ type SwarmChunkServer struct {
 	batchC     chan []byte
 	db         *storage.DBAPI
 	currentLen uint64
+	quit       chan struct{}
 }
 
 // NewSwarmChunkServer is SwarmChunkServer constructor
@@ -65,6 +67,7 @@ func NewSwarmChunkServer(db *storage.DBAPI) *SwarmChunkServer {
 		deliveryC: make(chan []byte, deliveryCap),
 		batchC:    make(chan []byte),
 		db:        db,
+		quit:      make(chan struct{}),
 	}
 	go s.processDeliveries()
 	return s
@@ -76,6 +79,8 @@ func (s *SwarmChunkServer) processDeliveries() {
 	var batchC chan []byte
 	for {
 		select {
+		case <-s.quit:
+			return
 		case hash := <-s.deliveryC:
 			hashes = append(hashes, hash...)
 			batchC = s.batchC
@@ -88,17 +93,32 @@ func (s *SwarmChunkServer) processDeliveries() {
 
 // SetNextBatch
 func (s *SwarmChunkServer) SetNextBatch(_, _ uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error) {
-	hashes = <-s.batchC
+	select {
+	case hashes = <-s.batchC:
+	case <-s.quit:
+		return
+	}
+
 	from = s.currentLen
 	s.currentLen += uint64(len(hashes))
 	to = s.currentLen
 	return
 }
 
+// Close needs to be called on a stream server
+func (s *SwarmChunkServer) Close() {
+	close(s.quit)
+}
+
 // GetData retrives chunk data from db store
-func (s *SwarmChunkServer) GetData(key []byte) []byte {
-	chunk, _ := s.db.Get(storage.Key(key))
-	return chunk.SData
+func (s *SwarmChunkServer) GetData(key []byte) ([]byte, error) {
+	chunk, err := s.db.Get(storage.Key(key))
+	if err == storage.ErrFetching {
+		<-chunk.ReqC
+	} else if err != nil {
+		return nil, err
+	}
+	return chunk.SData, nil
 }
 
 // RetrieveRequestMsg is the protocol msg for chunk retrieve requests
@@ -156,9 +176,11 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 type ChunkDeliveryMsg struct {
 	Key   storage.Key
 	SData []byte // the stored chunk Data (incl size)
+	peer  *Peer  // set in handleChunkDeliveryMsg
 }
 
-func (d *Delivery) handleChunkDeliveryMsg(req *ChunkDeliveryMsg) error {
+func (d *Delivery) handleChunkDeliveryMsg(sp *Peer, req *ChunkDeliveryMsg) error {
+	req.peer = sp
 	d.receiveC <- req
 	return nil
 }
@@ -168,6 +190,9 @@ R:
 	for req := range d.receiveC {
 		// this should be has locally
 		chunk, err := d.db.Get(req.Key)
+		if !bytes.Equal(chunk.Key, req.Key) {
+			panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), storage.Key(req.Key).Hex(), req.peer.ID()))
+		}
 		if err == nil {
 			continue R
 		}
@@ -176,16 +201,14 @@ R:
 		}
 		select {
 		case <-chunk.ReqC:
+			log.Error("someone else delivered?", "hash", chunk.Key.Hex())
 			continue R
 		default:
 		}
 		chunk.SData = req.SData
 		d.db.Put(chunk)
-		log.Warn("reecived delivery", "hash", chunk.Key)
 		chunk.WaitToStore()
-		log.Warn("received delivery stored", "hash", chunk.Key)
 		close(chunk.ReqC)
-		log.Warn("received delivery requesters notified", "hash", chunk.Key)
 	}
 }
 
@@ -193,18 +216,17 @@ R:
 func (d *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...discover.NodeID) error {
 	var success bool
 	var err error
-	log.Warn("request", "hash", hash)
 	d.overlay.EachConn(hash, 255, func(p network.OverlayConn, po int, nn bool) bool {
 		spId := p.(*network.BzzPeer).ID()
 		for _, p := range peersToSkip {
 			if p == spId {
-				log.Warn("skip peer", "peer", spId)
+				log.Trace("Delivery.RequestFromPeers: skip peer", "peer", spId)
 				return true
 			}
 		}
 		sp := d.getPeer(spId)
 		if sp == nil {
-			log.Warn("peer not found", "id", spId)
+			log.Warn("Delivery.RequestFromPeers: peer not found", "id", spId)
 			return true
 		}
 		// TODO: skip light nodes that do not accept retrieve requests

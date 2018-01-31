@@ -154,9 +154,9 @@ func NewSimulation(conf *RunConfig) (*Simulation, func(), error) {
 	// set nodes number of Stores available
 	stores, storeTeardown, err := SetStores(addrs...)
 	teardown = func() {
-		storeTeardown()
-		adapterTeardown()
 		net.Shutdown()
+		adapterTeardown()
+		storeTeardown()
 	}
 	if err != nil {
 		return nil, teardown, err
@@ -170,7 +170,7 @@ func NewSimulation(conf *RunConfig) (*Simulation, func(), error) {
 	return s, teardown, nil
 }
 
-func (s *Simulation) Run(conf *RunConfig) (*simulations.StepResult, error) {
+func (s *Simulation) Run(ctx context.Context, conf *RunConfig) (*simulations.StepResult, error) {
 	// bring up nodes, launch the servive
 	nodes := conf.NodeCount
 	conns := conf.ConnLevel
@@ -204,9 +204,6 @@ func (s *Simulation) Run(conf *RunConfig) (*simulations.StepResult, error) {
 
 	// create an only locally retrieving dpa for the pivot node to test
 	// if retriee requests have arrived
-	timeout := 300 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
 	result := simulations.NewSimulation(s.Net).Run(ctx, conf.Step)
 	return result, nil
 }
@@ -218,51 +215,50 @@ func WatchDisconnections(id discover.NodeID, client *rpc.Client, errc chan error
 		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
 	}
 	go func() {
-		defer sub.Unsubscribe()
-		select {
-		case <-quitC:
-			return
-		case e := <-events:
-			errc <- fmt.Errorf("peerEvent for node %v: %v", id, e)
-		case err := <-sub.Err():
-			if err != nil {
-				errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err)
+		for {
+			select {
+			case <-quitC:
+				return
+			case e := <-events:
+				errc <- fmt.Errorf("peerEvent for node %v: %v", id, e)
+			case err := <-sub.Err():
+				if err != nil {
+					errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err)
+				}
 			}
 		}
 	}()
 	return nil
 }
 
-func PivotTrigger(d time.Duration, checkC chan struct{}, ids ...discover.NodeID) chan discover.NodeID {
+func Trigger(d time.Duration, quitC chan struct{}, ids ...discover.NodeID) chan discover.NodeID {
 	trigger := make(chan discover.NodeID)
 	go func() {
+		defer close(trigger)
 		ticker := time.NewTicker(d)
 		defer ticker.Stop()
 		// we are only testing the pivot node (net.Nodes[0])
 		for range ticker.C {
 			for _, id := range ids {
-				trigger <- id
+				select {
+				case trigger <- id:
+				case <-quitC:
+					return
+				}
 			}
-			<-checkC
 		}
 	}()
 	return trigger
 }
 
-func (sim *Simulation) CallClient(f func(*rpc.Client) error, ids ...discover.NodeID) error {
-	for _, id := range ids {
-		node := sim.Net.GetNode(id)
-		if node == nil {
-			return fmt.Errorf("unknown node: %s", id)
-		}
-		client, err := node.Client()
-		if err != nil {
-			return fmt.Errorf("error getting node client: %s", err)
-		}
-		err = f(client)
-		if err != nil {
-			return err
-		}
+func (sim *Simulation) CallClient(id discover.NodeID, f func(*rpc.Client) error) error {
+	node := sim.Net.GetNode(id)
+	if node == nil {
+		return fmt.Errorf("unknown node: %s", id)
 	}
-	return nil
+	client, err := node.Client()
+	if err != nil {
+		return fmt.Errorf("error getting node client: %s", err)
+	}
+	return f(client)
 }

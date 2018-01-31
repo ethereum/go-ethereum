@@ -36,17 +36,28 @@ func NewNetStore(localStore *LocalStore, retrieve func(chunk *Chunk) error) *Net
 // Get is the entrypoint for local retrieve requests
 // waits for response or times out
 func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
-	var created bool
-	chunk, created = self.localStore.GetOrCreateRequest(key)
-	if chunk.ReqC == nil {
-		return chunk, nil
-	}
-
-	if created {
-		if err := self.retrieve(chunk); err != nil {
+	if self.retrieve == nil {
+		chunk, err = self.localStore.Get(key)
+		if err == nil {
+			return chunk, nil
+		}
+		if err != ErrFetching {
 			return nil, err
 		}
+	} else {
+		var created bool
+		chunk, created = self.localStore.GetOrCreateRequest(key)
+		if chunk.ReqC == nil {
+			return chunk, nil
+		}
+
+		if created {
+			if err := self.retrieve(chunk); err != nil {
+				return nil, err
+			}
+		}
 	}
+
 	t := time.NewTicker(searchTimeout)
 	defer t.Stop()
 

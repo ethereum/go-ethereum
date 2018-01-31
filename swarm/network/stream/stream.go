@@ -199,6 +199,7 @@ func (r *Registry) run(p *protocols.Peer) error {
 	r.setPeer(sp)
 	defer r.deletePeer(sp)
 	defer close(sp.quit)
+	defer sp.close()
 	return sp.Run(sp.HandleMsg)
 }
 
@@ -227,7 +228,7 @@ func (p *Peer) HandleMsg(msg interface{}) error {
 		return p.handleWantedHashesMsg(msg)
 
 	case *ChunkDeliveryMsg:
-		return p.streamer.delivery.handleChunkDeliveryMsg(msg)
+		return p.streamer.delivery.handleChunkDeliveryMsg(p, msg)
 
 	case *RetrieveRequestMsg:
 		return p.streamer.delivery.handleRetrieveRequestMsg(p, msg)
@@ -256,7 +257,8 @@ type server struct {
 // Server interface for outgoing peer Streamer
 type Server interface {
 	SetNextBatch(uint64, uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error)
-	GetData([]byte) []byte
+	GetData([]byte) ([]byte, error)
+	Close()
 }
 
 type client struct {
@@ -266,7 +268,6 @@ type client struct {
 	live      bool
 	stream    string
 	key       []byte
-	quit      chan struct{}
 	next      chan error
 }
 

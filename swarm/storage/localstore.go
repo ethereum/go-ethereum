@@ -94,10 +94,15 @@ func NewTestLocalStoreForAddr(path string, basekey []byte) (*LocalStore, error) 
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
-	self.memStore.Put(chunk)
-	go func() {
-		self.DbStore.Put(chunk)
-	}()
+	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
+	c := &Chunk{
+		Key:      Key(append([]byte{}, chunk.Key...)),
+		SData:    append([]byte{}, chunk.SData...),
+		Size:     chunk.Size,
+		dbStored: chunk.dbStored,
+	}
+	self.memStore.Put(c)
+	self.DbStore.Put(c)
 }
 
 // Get(chunk *Chunk) looks up a chunk in the local stores
@@ -106,7 +111,6 @@ func (self *LocalStore) Put(chunk *Chunk) {
 // ChunkStores are remote and can have long latency
 func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 	chunk, err = self.memStore.Get(key)
-
 	if err == nil {
 		if chunk.ReqC != nil {
 			select {

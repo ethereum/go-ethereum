@@ -81,7 +81,6 @@ type DbStore struct {
 	po       func(Key) uint8
 
 	batchC   chan bool
-	quit     chan struct{}
 	batchesC chan struct{}
 	batch    *leveldb.Batch
 	lock     sync.RWMutex
@@ -105,7 +104,6 @@ func NewDbStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uin
 	s.hashfunc = hash
 
 	s.batchC = make(chan bool)
-	s.quit = make(chan struct{})
 	s.batchesC = make(chan struct{}, 1)
 	go s.writeBatches()
 	s.batch = new(leveldb.Batch)
@@ -231,6 +229,7 @@ func encodeData(chunk *Chunk) []byte {
 func decodeIndex(data []byte, index *dpaDBIndex) error {
 	dec := rlp.NewStream(bytes.NewReader(data), 0)
 	return dec.Decode(index)
+
 }
 
 func decodeData(data []byte, chunk *Chunk) {
@@ -538,17 +537,21 @@ func (s *DbStore) CurrentStorageIndex() uint64 {
 }
 
 func (s *DbStore) Put(chunk *Chunk) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
 	ikey := getIndexKey(chunk.Key)
 	var index dpaDBIndex
 
 	po := s.po(chunk.Key)
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
 	idata, err := s.db.Get(ikey)
 	if err != nil {
 		s.doPut(chunk, ikey, &index, po)
+		batchC := s.batchC
+		go func() {
+			<-batchC
+			close(chunk.dbStored)
+		}()
 	} else {
 		log.Trace(fmt.Sprintf("DbStore: chunk already exists, only update access"))
 		decodeIndex(idata, &index)
@@ -559,7 +562,6 @@ func (s *DbStore) Put(chunk *Chunk) {
 	idata = encodeIndex(&index)
 	s.batch.Put(ikey, idata)
 	select {
-	case <-s.quit:
 	case s.batchesC <- struct{}{}:
 	default:
 	}
@@ -579,13 +581,6 @@ func (s *DbStore) doPut(chunk *Chunk, ikey []byte, index *dpaDBIndex, po uint8) 
 	cntKey[1] = po
 	s.batch.Put(cntKey, U64ToBytes(s.bucketCnt[po]))
 
-	batchC := s.batchC
-	go func() {
-		<-batchC
-		close(chunk.dbStored)
-	}()
-
-	log.Trace(fmt.Sprintf("DbStore.Put: %v. db storage counter: %v ", chunk.Key.Log(), s.dataIdx))
 }
 
 func (s *DbStore) writeBatches() {
@@ -691,15 +686,14 @@ func (s *DbStore) get(key Key) (chunk *Chunk, err error) {
 			hash := hasher.Sum(nil)
 
 			if !bytes.Equal(hash, key) {
-				log.Trace(fmt.Sprintf("Apparent key/hash mismatch. Hash %x, key %v", hash, key[:]))
+				log.Error(fmt.Sprintf("Apparent key/hash mismatch. Hash %x, key %v", hash, key[:]))
 				s.delete(indx.Idx, getIndexKey(key), s.po(key))
-				log.Warn("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
+				log.Error("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
 			}
 		}
 
 		chunk = NewChunk(key, nil)
 		decodeData(data, chunk)
-
 	} else {
 		err = ErrNotFound
 	}
@@ -757,30 +751,26 @@ func (s *DbStore) Close() {
 	s.db.Close()
 }
 
-// initialises a sync iterator from a syncToken (passed in with the handshake)
+// SyncIterator(start, stop, po, f) calls f on each hash of a bin po from start to stop
 func (s *DbStore) SyncIterator(since uint64, until uint64, po uint8, f func(Key, uint64) bool) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	sincekey := getDataKey(since, po)
 	untilkey := getDataKey(until, po)
-
 	it := s.db.NewIterator()
-	seek := getDataKey(since, po)
-	it.Seek(seek)
 	defer it.Release()
-	for it.Valid() {
+
+	for ok := it.Seek(sincekey); ok; ok = it.Next() {
 		dbkey := it.Key()
 		if dbkey[0] != keyData || dbkey[1] != byte(po) || bytes.Compare(untilkey, dbkey) < 0 {
 			break
 		}
-
 		key := make([]byte, 32)
-		copy(key, it.Value()[:32])
+		val := it.Value()
+		copy(key, val[:32])
 		if !f(Key(key), binary.BigEndian.Uint64(dbkey[2:])) {
 			break
 		}
-		it.Next()
 	}
-	return nil
+	return it.Error()
 }
 
 func databaseExists(path string) bool {
