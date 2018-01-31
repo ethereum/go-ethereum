@@ -132,7 +132,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 
 	db := storage.NewDBAPI(self.lstore)
 	delivery := stream.NewDelivery(to, db)
-	self.streamer = stream.NewRegistry(addr, delivery)
+	self.streamer = stream.NewRegistry(addr, delivery, self.lstore, false)
 	stream.RegisterSwarmSyncerServer(self.streamer, db)
 	stream.RegisterSwarmSyncerClient(self.streamer, db)
 

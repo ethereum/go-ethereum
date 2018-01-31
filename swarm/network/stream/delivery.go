@@ -34,14 +34,11 @@ const (
 )
 
 type Delivery struct {
-	db          *storage.DBAPI
-	overlay     network.Overlay
-	receiveC    chan *ChunkDeliveryMsg
-	getPeer     func(discover.NodeID) *Peer
-	quit        chan struct{}
-	counterIn   int
-	counterDone int
-	counterHash int
+	db       *storage.DBAPI
+	overlay  network.Overlay
+	receiveC chan *ChunkDeliveryMsg
+	getPeer  func(discover.NodeID) *Peer
+	quit     chan struct{}
 }
 
 func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
@@ -160,7 +157,7 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 			if req.SkipCheck {
 				err := sp.Deliver(chunk, s.priority)
 				if err != nil {
-					sp.Drop(fmt.Errorf("handleRetrieveRequestMsg: %v", err))
+					sp.Drop(err)
 				}
 			}
 			streamer.deliveryC <- chunk.Key[:]
@@ -179,67 +176,39 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 type ChunkDeliveryMsg struct {
 	Key   storage.Key
 	SData []byte // the stored chunk Data (incl size)
-	peer  *Peer
+	peer  *Peer  // set in handleChunkDeliveryMsg
 }
 
 func (d *Delivery) handleChunkDeliveryMsg(sp *Peer, req *ChunkDeliveryMsg) error {
-	d.counterIn++
 	req.peer = sp
-	log.Error("push to receiveC", "hash", storage.Key(req.Key).Hex())
 	d.receiveC <- req
 	return nil
 }
 
 func (d *Delivery) processReceivedChunks() {
-	done := make(chan struct{})
-	timer := time.NewTimer(2 * time.Second)
-	defer timer.Stop()
-	// R:
+R:
 	for req := range d.receiveC {
-		log.Error("pop from receiveC", "peer", req.peer.ID(), "hash", storage.Key(req.Key).Hex())
-		timer.Reset(1 * time.Second)
-		go func(req *ChunkDeliveryMsg) {
-			defer func() { done <- struct{}{} }()
-			// this should be has locally
-			log.Error("before db.Get", "peer", req.peer.ID(), "hash", storage.Key(req.Key).Hex())
-			chunk, err := d.db.Get(req.Key)
-			if !bytes.Equal(chunk.Key, req.Key) {
-				panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), storage.Key(req.Key).Hex(), req.peer.ID()))
-			}
-			log.Error("after db.Get", "peer", req.peer.ID(), "chunk", chunk.Key.Hex(), "reqC", chunk.ReqC, "err", err)
-			if err == nil {
-				log.Error("found existing?", "peer", req.peer.ID(), "hash", chunk.Key.Hex())
-				// continue R
-				return
-			}
-			if err != storage.ErrFetching {
-				panic(fmt.Sprintf("not in db? key %v chunk %v", req.Key, chunk))
-			}
-			select {
-			case <-chunk.ReqC:
-				log.Error("someone else delivered?", "hash", chunk.Key.Hex())
-				// continue R
-				return
-			default:
-			}
-			// go func() {
-			chunk.SData = req.SData
-			log.Error("received delivery", "peer", req.peer.ID(), "hash", chunk.Key.Hex())
-			d.db.Put(chunk)
-			log.Error("put to db", "peer", req.peer.ID(), "hash", chunk.Key.Hex())
-			chunk.WaitToStore()
-			close(chunk.ReqC)
-			//log.Warn("received delivery stored", "hash", chunk.Key)
-			log.Error("requesters notified", "peer", req.peer.ID(), "hash", chunk.Key.Hex())
-			d.counterDone++
-			// }()
-		}(req)
-		select {
-		case <-timer.C:
-			log.Error("!!!unable to process delivery", "peer", req.peer.ID(), "hash", req.Key.Hex())
-		case <-done:
-			log.Error("done processing delivery", "peer", req.peer.ID(), "hash", req.Key.Hex())
+		// this should be has locally
+		chunk, err := d.db.Get(req.Key)
+		if !bytes.Equal(chunk.Key, req.Key) {
+			panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), storage.Key(req.Key).Hex(), req.peer.ID()))
 		}
+		if err == nil {
+			continue R
+		}
+		if err != storage.ErrFetching {
+			panic(fmt.Sprintf("not in db? key %v chunk %v", req.Key, chunk))
+		}
+		select {
+		case <-chunk.ReqC:
+			log.Error("someone else delivered?", "hash", chunk.Key.Hex())
+			continue R
+		default:
+		}
+		chunk.SData = req.SData
+		d.db.Put(chunk)
+		chunk.WaitToStore()
+		close(chunk.ReqC)
 	}
 }
 
@@ -247,18 +216,17 @@ func (d *Delivery) processReceivedChunks() {
 func (d *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...discover.NodeID) error {
 	var success bool
 	var err error
-	log.Warn("request", "hash", hash)
 	d.overlay.EachConn(hash, 255, func(p network.OverlayConn, po int, nn bool) bool {
 		spId := p.(*network.BzzPeer).ID()
 		for _, p := range peersToSkip {
 			if p == spId {
-				log.Warn("skip peer", "peer", spId)
+				log.Trace("Delivery.RequestFromPeers: skip peer", "peer", spId)
 				return true
 			}
 		}
 		sp := d.getPeer(spId)
 		if sp == nil {
-			log.Warn("peer not found", "id", spId)
+			log.Warn("Delivery.RequestFromPeers: peer not found", "id", spId)
 			return true
 		}
 		// TODO: skip light nodes that do not accept retrieve requests
@@ -273,13 +241,4 @@ func (d *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...
 		return err
 	}
 	return errors.New("no peer found")
-}
-
-func (d *Delivery) PrintCounters(id discover.NodeID) {
-	if d.counterHash != d.counterDone {
-		log.Error(fmt.Sprintf("delivery %s: HASH and DONE not the same", id))
-	}
-	log.Error(fmt.Sprintf("delivery %s chunks hash: %d", id, d.counterHash))
-	log.Error(fmt.Sprintf("delivery %s chunks in: %d", id, d.counterIn))
-	log.Error(fmt.Sprintf("delivery %s chunks done: %d", id, d.counterDone))
 }

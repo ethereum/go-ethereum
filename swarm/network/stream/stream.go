@@ -38,8 +38,8 @@ const (
 	Mid
 	High
 	Top
-	PriorityQueue        // number of queues
-	PriorityQueueCap = 3 // queue capacity
+	PriorityQueue         // number of queues
+	PriorityQueueCap = 32 // queue capacity
 	HashSize         = 32
 )
 
@@ -268,8 +268,7 @@ type client struct {
 	live      bool
 	stream    string
 	key       []byte
-	// quit      chan struct{}
-	next chan error
+	next      chan error
 }
 
 // Client interface for incoming peer Streamer

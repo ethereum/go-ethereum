@@ -27,14 +27,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -82,7 +81,6 @@ type DbStore struct {
 	po       func(Key) uint8
 
 	batchC   chan bool
-	quit     chan struct{}
 	batchesC chan struct{}
 	batch    *leveldb.Batch
 	lock     sync.RWMutex
@@ -106,7 +104,6 @@ func NewDbStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uin
 	s.hashfunc = hash
 
 	s.batchC = make(chan bool)
-	s.quit = make(chan struct{})
 	s.batchesC = make(chan struct{}, 1)
 	go s.writeBatches()
 	s.batch = new(leveldb.Batch)
@@ -221,12 +218,7 @@ func getDataKey(idx uint64, po uint8) []byte {
 }
 
 func encodeIndex(index *dpaDBIndex) []byte {
-	//data, _ := rlp.EncodeToBytes(index)
-
-	data, err := json.Marshal(index)
-	if err != nil {
-		panic(err)
-	}
+	data, _ := rlp.EncodeToBytes(index)
 	return data
 }
 
@@ -235,9 +227,8 @@ func encodeData(chunk *Chunk) []byte {
 }
 
 func decodeIndex(data []byte, index *dpaDBIndex) error {
-	// dec := rlp.NewStream(bytes.NewReader(data), 0)
-	// return dec.Decode(index)
-	return json.Unmarshal(data, index)
+	dec := rlp.NewStream(bytes.NewReader(data), 0)
+	return dec.Decode(index)
 
 }
 
@@ -546,55 +537,25 @@ func (s *DbStore) CurrentStorageIndex() uint64 {
 }
 
 func (s *DbStore) Put(chunk *Chunk) {
-	log.Error("DbStore.Put", "hash", chunk.Key.Hex())
-	done := make(chan struct{})
-	defer close(done)
-	key := Key(append(make([]byte, 0), chunk.Key...))
-	go func() {
-		log.Error("DbStore.Put WAITER STARTED", "hash", chunk.Key.Hex())
-		select {
-		case <-time.After(1 * time.Second):
-			log.Error("DbStore.Put WAITING", "hash", chunk.Key.Hex())
-		case <-done:
-			log.Error("DbStore.Put EXITED", "hash", chunk.Key.Hex())
-			if !bytes.Equal(chunk.Key, key) {
-				panic(fmt.Errorf("DbStore.Get: chunk key %s != req key %s", chunk.Key.Hex(), key.Hex()))
-			}
-		}
-	}()
-
 	ikey := getIndexKey(chunk.Key)
 	var index dpaDBIndex
 
 	po := s.po(chunk.Key)
-	log.Error("DbStore.db.Get is being called...", "hash", chunk.Key.Hex())
-
-	log.Error("DbStore.LOCK acquiring", "hash", chunk.Key.Hex())
 	s.lock.Lock()
-	log.Error("DbStore.LOCK acquired", "hash", chunk.Key.Hex())
 	defer s.lock.Unlock()
 
 	idata, err := s.db.Get(ikey)
-	log.Error("DbStore.db.Get done", "hash", chunk.Key.Hex(), "err", err)
 	if err != nil {
 		s.doPut(chunk, ikey, &index, po)
 		batchC := s.batchC
 		go func() {
-			defer func() {
-				if err := recover(); err != nil {
-					log.Error("DbStore.Put PANIC", "hash", chunk.Key.Hex(), "err", err)
-				}
-			}()
-
 			<-batchC
 			close(chunk.dbStored)
 		}()
-		log.Error("DbStore.Put doPut", "hash", chunk.Key.Hex(), "dataIdx", s.dataIdx)
 	} else {
 		log.Trace(fmt.Sprintf("DbStore: chunk already exists, only update access"))
 		decodeIndex(idata, &index)
 		close(chunk.dbStored)
-		log.Error("DbStore.Put already found", "hash", chunk.Key.Hex())
 	}
 	index.Access = s.accessCnt
 	s.accessCnt++
@@ -604,7 +565,6 @@ func (s *DbStore) Put(chunk *Chunk) {
 	case s.batchesC <- struct{}{}:
 	default:
 	}
-	log.Error("DbStore.db.Put done", "hash", chunk.Key.Hex(), "err", err)
 }
 
 // force putting into db, does not check access index
@@ -734,11 +694,6 @@ func (s *DbStore) get(key Key) (chunk *Chunk, err error) {
 
 		chunk = NewChunk(key, nil)
 		decodeData(data, chunk)
-
-		if !bytes.Equal(chunk.Key, key) {
-			panic(fmt.Errorf("DbStore.Get: chunk key %s != req key %s", chunk.Key.Hex(), key.Hex()))
-		}
-
 	} else {
 		err = ErrNotFound
 	}
@@ -802,9 +757,8 @@ func (s *DbStore) SyncIterator(since uint64, until uint64, po uint8, f func(Key,
 	untilkey := getDataKey(until, po)
 	it := s.db.NewIterator()
 	defer it.Release()
-	it.Seek(sincekey)
 
-	for it.Next() {
+	for ok := it.Seek(sincekey); ok; ok = it.Next() {
 		dbkey := it.Key()
 		if dbkey[0] != keyData || dbkey[1] != byte(po) || bytes.Compare(untilkey, dbkey) < 0 {
 			break

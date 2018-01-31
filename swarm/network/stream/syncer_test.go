@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-const dataChunkCount = 1000
+const dataChunkCount = 500
 
 func TestSyncerSimulation(t *testing.T) {
 	testSyncBetweenNodes(t, 2, 1, dataChunkCount, true, 1)
@@ -69,13 +69,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-
-	// DEBUG:
-	defer func() {
-		for _, id := range sim.IDs {
-			deliveries[id].PrintCounters(id)
-		}
-	}()
 
 	// HACK: these are global variables in the test so that they are available for
 	// the service constructor function
@@ -186,7 +179,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		default:
 		}
 
-		log.Error("starting dbs check", "node", id)
 		i := nodeIndex[id]
 		var total, found int
 		for j := i; j < nodes; j++ {
@@ -196,7 +188,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 				if err == storage.ErrFetching {
 					<-chunk.ReqC
 				} else if err != nil {
-					log.Error("not found", "index", i, "origin", j, "key", key.Hex(), "err", err)
 					continue
 				}
 				// needed for leveldb not to be closed?
@@ -204,7 +195,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 				found++
 			}
 		}
-		log.Error("sync check", "node", id, "index", i, "bin", po, "found", found, "total", total)
+		log.Debug("sync check", "node", id, "index", i, "bin", po, "found", found, "total", total)
 		return total == found, nil
 	}
 
