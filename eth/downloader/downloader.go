@@ -1349,8 +1349,8 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 // processFastSyncContent takes fetch results from the queue and writes them to the
 // database. It also controls the synchronisation of state nodes of the pivot block.
 func (d *Downloader) processFastSyncContent(latest *types.Header) error {
-	// Start syncing state of the reported head block.
-	// This should get us most of the state of the pivot block.
+	// Start syncing state of the reported head block. This should get us most of
+	// the state of the pivot block.
 	stateSync := d.syncState(latest.Root)
 	defer stateSync.Cancel()
 	go func() {
@@ -1372,10 +1372,19 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 	)
 	for {
 		// Wait for the next batch of downloaded data to be available, and if the pivot
-		// block became stale, move the goalpost.
+		// block became stale, move the goalpost
 		results := d.queue.Results(oldPivot == nil) // Block if we're not monitoring pivot staleness
-		if len(results) == 0 && oldPivot == nil {
-			return stateSync.Cancel()
+		if len(results) == 0 {
+			// If pivot sync is done, stop
+			if oldPivot == nil {
+				return stateSync.Cancel()
+			}
+			// If sync failed, stop
+			select {
+			case <-d.cancelCh:
+				return stateSync.Cancel()
+			default:
+			}
 		}
 		if d.chainInsertHook != nil {
 			d.chainInsertHook(results)
