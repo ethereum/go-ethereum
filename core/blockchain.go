@@ -842,7 +842,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	log.Info("Imported new block receipts",
 		"count", stats.processed,
 		"elapsed", common.PrettyDuration(time.Since(start)),
-		"bytes", bytes,
+		"size", common.StorageSize(bytes),
 		"number", head.Number(),
 		"hash", head.Hash(),
 		"ignored", stats.ignored)
