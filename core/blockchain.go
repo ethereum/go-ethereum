@@ -661,6 +661,8 @@ func (bc *BlockChain) Stop() {
 	// N blocks.
 	if number := bc.CurrentBlock().NumberU64(); number >= triesInMemory {
 		recent := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - triesInMemory + 1)
+
+		log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
 		if err := bc.triedb.Commit(recent.Root()); err != nil {
 			log.Error("Failed to commit recent state trie", "err", err)
 		}
