@@ -247,8 +247,10 @@ func (self *ResourceHandler) GetLastPeriod(name string) (uint32, error) {
 
 func (self *ResourceHandler) GetVersion(name string) (uint32, error) {
 	rsrc := self.getResource(name)
-	if rsrc == nil || !rsrc.isSynced() {
-		return 0, NewResourceError(ErrNotFound, "Resource does not exist or is not synced")
+	if rsrc == nil {
+		return 0, NewResourceError(ErrNotFound, "Resource does not exist")
+	} else if !rsrc.isSynced() {
+		return 0, NewResourceError(ErrNotSynced, "Resource is not synced")
 	}
 	return rsrc.version, nil
 }
