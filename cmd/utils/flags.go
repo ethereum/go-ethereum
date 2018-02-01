@@ -171,6 +171,11 @@ var (
 		Value: &defaultSyncMode,
 	}
 
+	EthPeersFlag = cli.IntFlag{
+		Name:  "ethpeers",
+		Usage: "Maximum number of ETH peers",
+		Value: eth.DefaultConfig.EthPeers,
+	}
 	LightServFlag = cli.IntFlag{
 		Name:  "lightserv",
 		Usage: "Maximum percentage of time allowed for serving LES requests (0-90)",
@@ -179,7 +184,7 @@ var (
 	LightPeersFlag = cli.IntFlag{
 		Name:  "lightpeers",
 		Usage: "Maximum number of LES client peers",
-		Value: 20,
+		Value: eth.DefaultConfig.LightPeers,
 	}
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
@@ -433,7 +438,7 @@ var (
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
 		Usage: "Maximum number of network peers (network disabled if set to 0)",
-		Value: 25,
+		Value: 125,
 	}
 	MaxPendingPeersFlag = cli.IntFlag{
 		Name:  "maxpendpeers",
@@ -789,20 +794,21 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	setBootstrapNodes(ctx, cfg)
 	setBootstrapNodesV5(ctx, cfg)
 
-	if ctx.GlobalIsSet(MaxPeersFlag.Name) {
-		cfg.MaxPeers = ctx.GlobalInt(MaxPeersFlag.Name)
-	}
+	// note: cfg.MaxPeers is calculated in SetEthConfig
 	if ctx.GlobalIsSet(MaxPendingPeersFlag.Name) {
 		cfg.MaxPendingPeers = ctx.GlobalInt(MaxPendingPeersFlag.Name)
 	}
-	if ctx.GlobalIsSet(NoDiscoverFlag.Name) || ctx.GlobalBool(LightModeFlag.Name) {
+
+	lightClient := ctx.GlobalBool(LightModeFlag.Name) || ctx.GlobalString(SyncModeFlag.Name) == "light"
+	lightServer := ctx.GlobalInt(LightServFlag.Name) != 0
+	if ctx.GlobalIsSet(NoDiscoverFlag.Name) || lightClient {
 		cfg.NoDiscovery = true
 	}
 
 	// if we're running a light client or server, force enable the v5 peer discovery
 	// unless it is explicitly disabled with --nodiscover note that explicitly specifying
 	// --v5disc overrides --nodiscover, in which case the later only disables v4 discovery
-	forceV5Discovery := (ctx.GlobalBool(LightModeFlag.Name) || ctx.GlobalInt(LightServFlag.Name) > 0) && !ctx.GlobalBool(NoDiscoverFlag.Name)
+	forceV5Discovery := (lightClient || lightServer) && !ctx.GlobalBool(NoDiscoverFlag.Name)
 	if ctx.GlobalIsSet(DiscoveryV5Flag.Name) {
 		cfg.DiscoveryV5 = ctx.GlobalBool(DiscoveryV5Flag.Name)
 	} else if forceV5Discovery {
@@ -968,7 +974,7 @@ func SetShhConfig(ctx *cli.Context, stack *node.Node, cfg *whisper.Config) {
 }
 
 // SetEthConfig applies eth-related command line flags to the config.
-func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
+func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config, p2pcfg *p2p.Config) {
 	// Avoid conflicting network flags
 	checkExclusive(ctx, DeveloperFlag, TestnetFlag, RinkebyFlag)
 	checkExclusive(ctx, FastSyncFlag, LightModeFlag, SyncModeFlag)
@@ -992,12 +998,68 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(LightServFlag.Name) {
 		cfg.LightServ = ctx.GlobalInt(LightServFlag.Name)
 	}
-	if ctx.GlobalIsSet(LightPeersFlag.Name) {
-		cfg.LightPeers = ctx.GlobalInt(LightPeersFlag.Name)
-	}
 	if ctx.GlobalIsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.GlobalUint64(NetworkIdFlag.Name)
 	}
+
+	ethPeers := cfg.EthPeers
+	if ctx.GlobalIsSet(EthPeersFlag.Name) {
+		ethPeers = ctx.GlobalInt(EthPeersFlag.Name)
+	}
+	ethPeersFixed := ctx.GlobalIsSet(EthPeersFlag.Name)
+	lightPeers := cfg.LightPeers
+	if ctx.GlobalIsSet(LightPeersFlag.Name) {
+		lightPeers = ctx.GlobalInt(LightPeersFlag.Name)
+	}
+	lightPeersFixed := ctx.GlobalIsSet(LightPeersFlag.Name)
+
+	if cfg.SyncMode == downloader.LightSync {
+		// ETH is not used
+		ethPeers = 0
+		ethPeersFixed = true
+	} else if cfg.LightServ == 0 {
+		// LES is not used
+		lightPeers = 0
+		lightPeersFixed = true
+	}
+
+	// if maxpeers is specified, adjust ethpeers and/or lightpeers if possible
+	if ctx.GlobalIsSet(MaxPeersFlag.Name) {
+		maxPeersDiff := ctx.GlobalInt(MaxPeersFlag.Name) - ethPeers - lightPeers
+		if maxPeersDiff > 0 {
+			// when adjusting upwards, ETH has priority
+			if !ethPeersFixed {
+				ethPeers += maxPeersDiff
+			} else if !lightPeersFixed {
+				lightPeers += maxPeersDiff
+			}
+		} else if maxPeersDiff < 0 {
+			// when adjusting downwards, LES has priority
+			if !lightPeersFixed {
+				if lightPeers >= -maxPeersDiff {
+					lightPeers += maxPeersDiff
+					maxPeersDiff = 0
+				} else {
+					maxPeersDiff += lightPeers
+					lightPeers = 0
+				}
+			}
+			if !ethPeersFixed {
+				if ethPeers >= -maxPeersDiff {
+					ethPeers += maxPeersDiff
+					maxPeersDiff = 0
+				} else {
+					maxPeersDiff += ethPeers
+					ethPeers = 0
+				}
+			}
+		}
+	}
+	cfg.EthPeers = ethPeers
+	cfg.LightPeers = lightPeers
+	p2pcfg.MaxPeers = ethPeers + lightPeers
+
+	log.Info("Maximum peer count", "ETH", cfg.EthPeers, "LES", cfg.LightPeers, "total", p2pcfg.MaxPeers)
 
 	if ctx.GlobalIsSet(CacheFlag.Name) {
 		cfg.DatabaseCache = ctx.GlobalInt(CacheFlag.Name)
