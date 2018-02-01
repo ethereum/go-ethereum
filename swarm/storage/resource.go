@@ -566,7 +566,7 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 
 func (self *ResourceHandler) UpdateMultihash(ctx context.Context, name string, data []byte) (Key, error) {
 	if isMultihash(data) == 0 {
-		return nil, NewResourceError(ErrNoData, "Invalid multihash")
+		return nil, NewResourceError(ErrNothingToReturn, "Invalid multihash")
 	}
 	return self.update(ctx, name, data, true)
 }
@@ -859,7 +859,7 @@ func (self *ResourceHandler) keyDataHash(key Key, data []byte) common.Hash {
 // if successful it returns the length of multihash data, 0 otherwise
 func isMultihash(data []byte) int {
 	cursor := 0
-	hashtype, c := binary.Uvarint(data)
+	_, c := binary.Uvarint(data)
 	if c <= 0 {
 		log.Warn("Corrupt multihash data, hashtype is unreadable")
 		return 0
