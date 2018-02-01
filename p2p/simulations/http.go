@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -380,6 +381,13 @@ func (s *Server) ResetNetwork(w http.ResponseWriter, req *http.Request) {
 
 // StreamNetworkEvents streams network events as a server-sent-events stream
 func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
+	var throttle <-chan time.Time
+	//When running a sim, the frontend may "choke to death" depending on params (node count)
+	//due to overwhelming event rate. It is therefore important to be able to throttle
+	//the rate at which the events are emitted, in order for the frontend to have time
+	//to terminate rendering before the next event arrives.
+	throttling := false
+
 	events := make(chan *Event)
 	sub := s.network.events.Subscribe(events)
 	defer sub.Unsubscribe()
@@ -455,9 +463,21 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	//Only do throttling if requested
+	if req.URL.Query().Get("throttling") == "true" {
+		throttling = true
+		//rate at which we allow events to be emitted on the server-side event stream
+		rate := time.Second / 40
+		throttle = time.Tick(rate)
+	}
+
 	for {
 		select {
 		case event := <-events:
+			//if throttling, wait for the next throttle tick before emitting event
+			if throttling {
+				<-throttle
+			}
 			// only send message events which match the filters
 			if event.Msg != nil && !filters.Match(event.Msg) {
 				continue

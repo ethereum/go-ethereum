@@ -103,6 +103,11 @@ func startStop(net *Network, quit chan struct{}, nodeCount int) {
 func probabilistic(net *Network, quit chan struct{}, nodeCount int) {
 	nodes, err := connectNodesInRing(net, nodeCount)
 	if err != nil {
+		log.Error(fmt.Sprintf("%s", err))
+		if _, ok := <-quit; ok == false {
+			//error may be due to abortion of mocking; so the quit channel is closed
+			return
+		}
 		panic("Could not startup node network for mocker")
 	}
 	for {
@@ -169,7 +174,7 @@ func connectNodesInRing(net *Network, nodeCount int) ([]discover.NodeID, error) 
 		conf := adapters.RandomNodeConfig()
 		node, err := net.NewNodeWithConfig(conf)
 		if err != nil {
-			log.Error("Error creating a node! %s", err)
+			log.Error(fmt.Sprintf("Error creating a node! %s", err))
 			return nil, err
 		}
 		ids[i] = node.ID()
@@ -185,7 +190,7 @@ func connectNodesInRing(net *Network, nodeCount int) ([]discover.NodeID, error) 
 	for i, id := range ids {
 		peerID := ids[(i+1)%len(ids)]
 		if err := net.Connect(id, peerID); err != nil {
-			log.Error("Error connecting a node to a peer! %s", err)
+			log.Error(fmt.Sprintf("Error connecting a node to a peer! %s", err))
 			return nil, err
 		}
 	}
