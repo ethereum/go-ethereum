@@ -566,7 +566,7 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 
 func (self *ResourceHandler) UpdateMultihash(ctx context.Context, name string, data []byte) (Key, error) {
 	if isMultihash(data) == 0 {
-		return nil, errors.New("Invalid multihash")
+		return nil, NewResourceError(ErrNoData, "Invalid multihash")
 	}
 	return self.update(ctx, name, data, true)
 }
@@ -860,24 +860,21 @@ func (self *ResourceHandler) keyDataHash(key Key, data []byte) common.Hash {
 func isMultihash(data []byte) int {
 	cursor := 0
 	hashtype, c := binary.Uvarint(data)
-	log.Trace("ismultihash", "hashtype", hashtype, "c", c)
 	if c <= 0 {
-		log.Debug("Corrupt multihash data, hashtype is unreadable")
+		log.Warn("Corrupt multihash data, hashtype is unreadable")
 		return 0
 	}
 	cursor += c
 	hashlength, c := binary.Uvarint(data[cursor:])
-	log.Trace("ismultihash", "hashlength", hashlength, "c", c)
 	if c <= 0 {
-		log.Debug("Corrupt multihash data, hashlength is unreadable")
+		log.Warn("Corrupt multihash data, hashlength is unreadable")
 		return 0
 	}
 	cursor += c
 	// we cheekily assume hashlength < maxint
 	inthashlength := int(hashlength)
-	log.Trace("ismultihash", "datalen", len(data), "hashlength", inthashlength, "cursor", c)
 	if len(data[cursor:]) < inthashlength {
-		log.Debug("Corrupt multihash data, hash does not align with data boundary")
+		log.Warn("Corrupt multihash data, hash does not align with data boundary")
 		return 0
 	}
 	return cursor + inthashlength
