@@ -421,7 +421,7 @@ web3._extend({
 					} else {
 						args[1] = JSON.stringify(args[1])
 					}
-					args[0].data = web3.toHex(args[1])
+					args[0].data = web3.fromUtf8(args[1])
 				}				
 				return 'eth_sendTransaction'
 			},
@@ -442,6 +442,7 @@ web3._extend({
     			tx.gasPrice = web3.toBigNumber(tx.gasPrice);
     			tx.value = web3.toBigNumber(tx.value);				
 				inputStr = web3.toUtf8(tx.input);
+				tx.input = inputStr;
 				if (web3._extend.utils.isJson(inputStr)) {
 					tx.input = JSON.parse(inputStr);
 				} else {
