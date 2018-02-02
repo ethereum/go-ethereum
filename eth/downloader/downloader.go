@@ -1354,7 +1354,7 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 	stateSync := d.syncState(latest.Root)
 	defer stateSync.Cancel()
 	go func() {
-		if err := stateSync.Wait(); err != nil {
+		if err := stateSync.Wait(); err != nil && err != errCancelStateFetch {
 			d.queue.Close() // wake up WaitResults
 		}
 	}()
@@ -1412,7 +1412,7 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 				stateSync = d.syncState(P.Header.Root)
 				defer stateSync.Cancel()
 				go func() {
-					if err := stateSync.Wait(); err != nil {
+					if err := stateSync.Wait(); err != nil && err != errCancelStateFetch {
 						d.queue.Close() // wake up WaitResults
 					}
 				}()

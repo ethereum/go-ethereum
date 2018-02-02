@@ -1688,6 +1688,7 @@ func TestDeliverHeadersHang(t *testing.T) {
 type floodingTestPeer struct {
 	peer   Peer
 	tester *downloadTester
+	pend   sync.WaitGroup
 }
 
 func (ftp *floodingTestPeer) Head() (common.Hash, *big.Int) { return ftp.peer.Head() }
@@ -1708,9 +1709,12 @@ func (ftp *floodingTestPeer) RequestHeadersByNumber(from uint64, count, skip int
 	deliveriesDone := make(chan struct{}, 500)
 	for i := 0; i < cap(deliveriesDone); i++ {
 		peer := fmt.Sprintf("fake-peer%d", i)
+		ftp.pend.Add(1)
+
 		go func() {
 			ftp.tester.downloader.DeliverHeaders(peer, []*types.Header{{}, {}, {}, {}})
 			deliveriesDone <- struct{}{}
+			ftp.pend.Done()
 		}()
 	}
 	// Deliver the actual requested headers.
@@ -1742,12 +1746,15 @@ func testDeliverHeadersHang(t *testing.T, protocol int, mode SyncMode) {
 		// Whenever the downloader requests headers, flood it with
 		// a lot of unrequested header deliveries.
 		tester.downloader.peers.peers["peer"].peer = &floodingTestPeer{
-			tester.downloader.peers.peers["peer"].peer,
-			tester,
+			peer:   tester.downloader.peers.peers["peer"].peer,
+			tester: tester,
 		}
 		if err := tester.sync("peer", nil, mode); err != nil {
-			t.Errorf("sync failed: %v", err)
+			t.Errorf("test %d: sync failed: %v", i, err)
 		}
 		tester.terminate()
+
+		// Flush all goroutines to prevent messing with subsequent tests
+		tester.downloader.peers.peers["peer"].peer.(*floodingTestPeer).pend.Wait()
 	}
 }
