@@ -109,6 +109,7 @@ type ProtocolManager struct {
 	downloader *downloader.Downloader
 	fetcher    *lightFetcher
 	peers      *peerSet
+	maxPeers   int
 
 	SubProtocols []p2p.Protocol
 
@@ -216,7 +217,9 @@ func (pm *ProtocolManager) removePeer(id string) {
 	pm.peers.Unregister(id)
 }
 
-func (pm *ProtocolManager) Start() {
+func (pm *ProtocolManager) Start(maxPeers int) {
+	pm.maxPeers = maxPeers
+
 	if pm.lightSync {
 		go pm.syncer()
 	} else {
@@ -257,6 +260,10 @@ func (pm *ProtocolManager) newPeer(pv int, nv uint64, p *p2p.Peer, rw p2p.MsgRea
 // handle is the callback invoked to manage the life cycle of a les peer. When
 // this function terminates, the peer is disconnected.
 func (pm *ProtocolManager) handle(p *peer) error {
+	if pm.peers.Len() >= pm.maxPeers {
+		return p2p.DiscTooManyPeers
+	}
+
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
 	// Execute the LES handshake
