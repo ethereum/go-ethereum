@@ -298,6 +298,7 @@ type client struct {
 type Client interface {
 	NeedData([]byte) func()
 	BatchDone(string, uint64, []byte, []byte) func() (*TakeoverProof, error)
+	Close()
 }
 
 // nextBatch adjusts the indexes by inspecting the intervals
@@ -344,6 +345,7 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 
 func (c *client) close() {
 	close(c.next)
+	c.Close()
 }
 
 // Spec is the spec of the streamer protocol

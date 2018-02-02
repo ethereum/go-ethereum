@@ -253,3 +253,5 @@ func (s *SwarmSyncerClient) TakeoverProof(streamName string, from uint64, hashes
 		Sig:      nil,
 	}, nil
 }
+
+func (s *SwarmSyncerClient) Close() {}
