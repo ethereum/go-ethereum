@@ -120,7 +120,7 @@ func (t *BlockTest) Run() error {
 	if err != nil {
 		return err
 	}
-	cmlast := chain.LastBlockHash()
+	cmlast := chain.CurrentBlock().Hash()
 	if common.Hash(t.json.BestBlock) != cmlast {
 		return fmt.Errorf("last block hash validation mismatch: want: %x, have: %x", t.json.BestBlock, cmlast)
 	}

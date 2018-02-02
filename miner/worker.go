@@ -512,6 +512,11 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 	var coalescedLogs []*types.Log
 
 	for {
+		// If we don't have enough gas for any further transactions then we're done
+		if gp.Gas() < params.TxGas {
+			log.Trace("Not enough gas for further transactions", "gp", gp)
+			break
+		}
 		// Retrieve the next transaction and abort if all done
 		tx := txs.Peek()
 		if tx == nil {

@@ -601,7 +601,7 @@ func requestExpiredMessagesLoop() {
 	if err != nil {
 		utils.Fatalf("Failed to save symmetric key for mail request: %s", err)
 	}
-	peerID = extractIdFromEnode(*argEnode)
+	peerID = extractIDFromEnode(*argEnode)
 	shh.AllowP2PMessagesFromPeer(peerID)
 
 	for {
@@ -652,7 +652,7 @@ func requestExpiredMessagesLoop() {
 	}
 }
 
-func extractIdFromEnode(s string) []byte {
+func extractIDFromEnode(s string) []byte {
 	n, err := discover.ParseNode(s)
 	if err != nil {
 		utils.Fatalf("Failed to parse enode: %s", err)

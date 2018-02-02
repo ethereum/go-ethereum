@@ -350,7 +350,7 @@ func (s *ticketStore) nextFilteredTicket() (*ticketRef, time.Duration) {
 
 		regTime := now + mclock.AbsTime(wait)
 		topic := ticket.t.topics[ticket.idx]
-		if regTime >= s.tickets[topic].nextReg {
+		if s.tickets[topic] != nil && regTime >= s.tickets[topic].nextReg {
 			return ticket, wait
 		}
 		s.removeTicketRef(*ticket)
@@ -420,11 +420,14 @@ func (s *ticketStore) nextRegisterableTicket() (*ticketRef, time.Duration) {
 func (s *ticketStore) removeTicketRef(ref ticketRef) {
 	log.Trace("Removing discovery ticket reference", "node", ref.t.node.ID, "serial", ref.t.serial)
 
+	// Make nextRegisterableTicket return the next available ticket.
+	s.nextTicketCached = nil
+
 	topic := ref.topic()
 	tickets := s.tickets[topic]
 
 	if tickets == nil {
-		log.Warn("Removing tickets from unknown topic", "topic", topic)
+		log.Trace("Removing tickets from unknown topic", "topic", topic)
 		return
 	}
 	bucket := timeBucket(ref.t.regTime[ref.idx] / mclock.AbsTime(ticketTimeBucketLen))
@@ -450,9 +453,6 @@ func (s *ticketStore) removeTicketRef(ref ticketRef) {
 		delete(s.nodes, ref.t.node)
 		delete(s.nodeLastReq, ref.t.node)
 	}
-
-	// Make nextRegisterableTicket return the next available ticket.
-	s.nextTicketCached = nil
 }
 
 type lookupInfo struct {
@@ -642,7 +642,7 @@ func (s *ticketStore) gotTopicNodes(from *Node, hash common.Hash, nodes []rpcNod
 		if ip.IsUnspecified() || ip.IsLoopback() {
 			ip = from.IP
 		}
-		n := NewNode(node.ID, ip, node.UDP-1, node.TCP-1) // subtract one from port while discv5 is running in test mode on UDPport+1
+		n := NewNode(node.ID, ip, node.UDP, node.TCP)
 		select {
 		case chn <- n:
 		default:

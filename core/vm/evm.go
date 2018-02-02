@@ -391,7 +391,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	return ret, contractAddr, contract.Gas, err
 }
 
-// ChainConfig returns the evmironment's chain configuration
+// ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 // Interpreter returns the EVM interpreter

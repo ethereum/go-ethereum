@@ -1,8 +1,23 @@
+// Copyright 2017 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
 	"crypto/ecdsa"
-	"crypto/rand"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -26,16 +41,16 @@ var commandGenerate = cli.Command{
 	ArgsUsage: "[ <keyfile> ]",
 	Description: `
 Generate a new keyfile.
-If you want to use an existing private key to use in the keyfile, it can be 
-specified by setting --privatekey with the location of the file containing the 
-private key.`,
+
+If you want to encrypt an existing private key, it can be specified by setting
+--privatekey with the location of the file containing the private key.
+`,
 	Flags: []cli.Flag{
 		passphraseFlag,
 		jsonFlag,
 		cli.StringFlag{
-			Name: "privatekey",
-			Usage: "the file from where to read the private key to " +
-				"generate a keyfile for",
+			Name:  "privatekey",
+			Usage: "file containing a raw private key to encrypt",
 		},
 	},
 	Action: func(ctx *cli.Context) error {
@@ -51,32 +66,19 @@ private key.`,
 		}
 
 		var privateKey *ecdsa.PrivateKey
-
-		// First check if a private key file is provided.
-		privateKeyFile := ctx.String("privatekey")
-		if privateKeyFile != "" {
-			privateKeyBytes, err := ioutil.ReadFile(privateKeyFile)
+		var err error
+		if file := ctx.String("privatekey"); file != "" {
+			// Load private key from file.
+			privateKey, err = crypto.LoadECDSA(file)
 			if err != nil {
-				utils.Fatalf("Failed to read the private key file '%s': %v",
-					privateKeyFile, err)
+				utils.Fatalf("Can't load private key: %v", err)
 			}
-
-			pk, err := crypto.HexToECDSA(string(privateKeyBytes))
-			if err != nil {
-				utils.Fatalf(
-					"Could not construct ECDSA private key from file content: %v",
-					err)
-			}
-			privateKey = pk
-		}
-
-		// If not loaded, generate random.
-		if privateKey == nil {
-			pk, err := ecdsa.GenerateKey(crypto.S256(), rand.Reader)
+		} else {
+			// If not loaded, generate random.
+			privateKey, err = crypto.GenerateKey()
 			if err != nil {
 				utils.Fatalf("Failed to generate random private key: %v", err)
 			}
-			privateKey = pk
 		}
 
 		// Create the keyfile object with a random UUID.
@@ -89,8 +91,7 @@ private key.`,
 
 		// Encrypt key with passphrase.
 		passphrase := getPassPhrase(ctx, true)
-		keyjson, err := keystore.EncryptKey(key, passphrase,
-			keystore.StandardScryptN, keystore.StandardScryptP)
+		keyjson, err := keystore.EncryptKey(key, passphrase, keystore.StandardScryptN, keystore.StandardScryptP)
 		if err != nil {
 			utils.Fatalf("Error encrypting key: %v", err)
 		}
@@ -110,7 +111,7 @@ private key.`,
 		if ctx.Bool(jsonFlag.Name) {
 			mustPrintJSON(out)
 		} else {
-			fmt.Println("Address:       ", out.Address)
+			fmt.Println("Address:", out.Address)
 		}
 		return nil
 	},
