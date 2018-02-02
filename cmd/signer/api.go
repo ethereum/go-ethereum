@@ -53,6 +53,29 @@ type Metadata struct {
 	Scheme string `json:"scheme"`
 }
 
+func MetadataFromContext(ctx context.Context) Metadata {
+	m := Metadata{"NA", "NA", "NA"}
+
+	if v := ctx.Value("remote"); v != nil {
+		m.Remote = v.(string)
+	}
+	if v := ctx.Value("scheme"); v != nil {
+		m.Scheme = v.(string)
+	}
+	if v := ctx.Value("local"); v != nil {
+		m.Local = v.(string)
+	}
+	return m
+}
+
+func (m Metadata) String() string {
+	s, err := json.Marshal(m)
+	if err == nil {
+		return string(s)
+	}
+	return err.Error()
+}
+
 // types for the requests/response types
 type (
 	// SignTxRequest contains info about a Transaction to sign
@@ -129,6 +152,16 @@ func (ew errorWrapper) String() string {
 	return fmt.Sprintf("%s\n%s", ew.msg, ew.err)
 }
 
+type ExternalAPI interface {
+	List(ctx context.Context) (Accounts, error)
+	New(ctx context.Context) (accounts.Account, error)
+	SignTransaction(ctx context.Context, from common.MixedcaseAddress, args TransactionArg, methodSelector *string) (hexutil.Bytes, error)
+	Sign(ctx context.Context, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error)
+	EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error)
+	Export(ctx context.Context, addr common.Address) (json.RawMessage, error)
+	Import(ctx context.Context, keyJSON json.RawMessage) (Account, error)
+}
+
 // SignerUI specifies what method a UI needs to implement to be able to be used as a UI
 // for the signer
 type SignerUI interface {
@@ -188,21 +221,6 @@ func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abi
 	return &SignerAPI{big.NewInt(chainID), accounts.NewManager(backends...), ui, *abidb}
 }
 
-func metaData(ctx context.Context) Metadata {
-	m := Metadata{"NA", "NA", "NA"}
-
-	if v := ctx.Value("remote"); v != nil {
-		m.Remote = v.(string)
-	}
-	if v := ctx.Value("scheme"); v != nil {
-		m.Scheme = v.(string)
-	}
-	if v := ctx.Value("local"); v != nil {
-		m.Local = v.(string)
-	}
-	return m
-}
-
 // List returns the set of wallet this signer manages. Each wallet can contain
 // multiple accounts.
 func (api *SignerAPI) List(ctx context.Context) (Accounts, error) {
@@ -215,7 +233,7 @@ func (api *SignerAPI) List(ctx context.Context) (Accounts, error) {
 		}
 	}
 
-	result, err := api.ui.ApproveListing(&ListRequest{Accounts: accs, Meta: metaData(ctx)})
+	result, err := api.ui.ApproveListing(&ListRequest{Accounts: accs, Meta: MetadataFromContext(ctx)})
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +252,7 @@ func (api *SignerAPI) New(ctx context.Context) (accounts.Account, error) {
 	if len(be) == 0 {
 		return accounts.Account{}, errors.New("password based accounts not supported")
 	}
-	resp, err := api.ui.ApproveNewAccount(&NewAccountRequest{metaData(ctx)})
+	resp, err := api.ui.ApproveNewAccount(&NewAccountRequest{MetadataFromContext(ctx)})
 
 	if err != nil {
 		return accounts.Account{}, err
@@ -307,7 +325,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Mixedcase
 		result SignTxResponse
 	)
 
-	req := SignTxRequest{Transaction: args, From: from, Meta: metaData(ctx)}
+	req := SignTxRequest{Transaction: args, From: from, Meta: MetadataFromContext(ctx)}
 
 	data := args.Data
 	if len(data) > 3 {
@@ -383,7 +401,7 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, da
 
 	// We make the request prior to looking up if we actually have the account, to prevent
 	// account-enumeration via the API
-	req := &SignDataRequest{Address: addr, Rawdata: data, Message: msg, Hash: sighash, Meta: metaData(ctx)}
+	req := &SignDataRequest{Address: addr, Rawdata: data, Message: msg, Hash: sighash, Meta: MetadataFromContext(ctx)}
 	res, err := api.ui.ApproveSignData(req)
 
 	if err != nil {
@@ -454,7 +472,7 @@ func signHash(data []byte) ([]byte, string) {
 // Export returns encrypted private key associated with the given address in web3 keystore format.
 func (api *SignerAPI) Export(ctx context.Context, addr common.Address) (json.RawMessage, error) {
 
-	res, err := api.ui.ApproveExport(&ExportRequest{Address: addr, Meta: metaData(ctx)})
+	res, err := api.ui.ApproveExport(&ExportRequest{Address: addr, Meta: MetadataFromContext(ctx)})
 
 	if err != nil {
 		return nil, err
@@ -487,7 +505,7 @@ func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage) (Acco
 		return Account{}, errors.New("password based accounts not supported")
 	}
 
-	res, err := api.ui.ApproveImport(&ImportRequest{Meta: metaData(ctx)})
+	res, err := api.ui.ApproveImport(&ImportRequest{Meta: MetadataFromContext(ctx)})
 
 	if err != nil {
 		return Account{}, err

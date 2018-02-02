@@ -1,27 +1,82 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"io"
-	"time"
+	"context"
 
-	"github.com/ethereum/go-ethereum/rpc"
+	"encoding/json"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type AuditLogger struct {
-	writer *bufio.Writer
+	log log.Logger
+	api ExternalAPI
 }
 
-func (l AuditLogger) Store(record *rpc.RPCInvocationRecord) {
-	l.writer.WriteString(fmt.Sprintf("%v\n%v\n", time.Now().Format(time.RFC3339), record.Method))
-	for i, arg := range record.Args {
-		l.writer.WriteString(fmt.Sprintf("\t%d: %v\n", i, arg))
+func (l *AuditLogger) List(ctx context.Context) (Accounts, error) {
+
+	l.log.Info("Called list", "interface", "http")
+	return l.api.List(ctx)
+}
+
+func (l *AuditLogger) New(ctx context.Context) (accounts.Account, error) {
+	return l.api.New(ctx)
+}
+
+func (l *AuditLogger) SignTransaction(ctx context.Context, from common.MixedcaseAddress, args TransactionArg, methodSelector *string) (hexutil.Bytes, error) {
+	l.log.Info("SignTransaction", "type", "request", "metadata", MetadataFromContext(ctx).String(),
+		"from", from.String(), "tx", args.String(),
+		"methodSelector", methodSelector)
+	b, e := l.api.SignTransaction(ctx, from, args, methodSelector)
+
+	l.log.Info("SignTransaction", "type", "response", "data", common.Bytes2Hex(b), "error", e)
+
+	return b, e
+}
+
+func (l *AuditLogger) Sign(ctx context.Context, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error) {
+	l.log.Info("Sign", "type", "request", "metadata", MetadataFromContext(ctx).String(),
+		"addr", addr.String(), "data", common.Bytes2Hex(data))
+	b, e := l.api.Sign(ctx, addr, data)
+	l.log.Info("Sign", "type", "response", "data", common.Bytes2Hex(b), "error", e)
+	return b, e
+}
+
+func (l *AuditLogger) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error) {
+	l.log.Info("EcRecover", "type", "request", "metadata", MetadataFromContext(ctx).String(),
+		"data", common.Bytes2Hex(data))
+	a, e := l.api.EcRecover(ctx, data, sig)
+	l.log.Info("EcRecover", "type", "response", "addr", a.String(), "error", e)
+	return a, e
+}
+
+func (l *AuditLogger) Export(ctx context.Context, addr common.Address) (json.RawMessage, error) {
+	l.log.Info("Export", "type", "request", "metadata", MetadataFromContext(ctx).String(),
+		"addr", addr.Hex())
+	j, e := l.api.Export(ctx, addr)
+	// In this case, we don't actually log the json-response, which may be extra sensitive
+	l.log.Info("Export", "type", "response", "json response size", len(j), "error", e)
+	return j, e
+}
+
+func (l *AuditLogger) Import(ctx context.Context, keyJSON json.RawMessage) (Account, error) {
+	// Don't actually log the json contents
+	l.log.Info("Import", "type", "request", "metadata", MetadataFromContext(ctx).String(),
+		"keyJSON size", len(keyJSON))
+	a, e := l.api.Import(ctx, keyJSON)
+	l.log.Info("Import", "type", "response", "addr", a.String(), "error", e)
+	return a, e
+}
+
+func NewAuditLogger(path string, api ExternalAPI) (*AuditLogger, error) {
+	l := log.New("api", "signer")
+	handler, err := log.FileHandler(path, log.LogfmtFormat())
+	if err != nil {
+		return nil, err
 	}
-	l.writer.WriteString(fmt.Sprintf("%v\n", record.Response))
-	l.writer.Flush()
-}
-
-func NewAuditLogger(writer io.Writer) *AuditLogger {
-	return &AuditLogger{bufio.NewWriter(writer)}
+	l.SetHandler(handler)
+	l.Info("Configured", "audit log", path)
+	return &AuditLogger{l, api}, nil
 }

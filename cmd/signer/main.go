@@ -115,23 +115,26 @@ func main() {
 		log.Info("Loaded 4byte db", "signatures", db.Size(), "file", c.String("4bytedb"))
 
 		var (
-			server = rpc.NewServer()
-
-			api = NewSignerAPI(
-				c.Int64(utils.NetworkIdFlag.Name),
-				c.String("keystore"),
-				c.Bool(utils.NoUSBFlag.Name),
-				ui, db,
-				c.Bool(utils.LightKDFFlag.Name))
+			api      ExternalAPI
 			listener net.Listener
+			server   = rpc.NewServer()
 		)
+
+		api_impl := NewSignerAPI(
+			c.Int64(utils.NetworkIdFlag.Name),
+			c.String("keystore"),
+			c.Bool(utils.NoUSBFlag.Name),
+			ui, db,
+			c.Bool(utils.LightKDFFlag.Name))
+
+		api = api_impl
+
 		// Audit logging
 		if logfile := c.String("auditlog"); logfile != "" {
-			f, err := os.OpenFile(logfile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+			api, err = NewAuditLogger(logfile, api_impl)
 			if err != nil {
-				utils.Fatalf("Could not open %v for audit logging", logfile)
+				utils.Fatalf(err.Error())
 			}
-			server.SetAuditLogger(NewAuditLogger(f))
 			log.Info("Audit logs configured", "file", logfile)
 		}
 		// register signer API with server
@@ -156,7 +159,7 @@ func main() {
 
 		if c.Bool("stdio-ui-test") {
 			log.Info("Performing UI test")
-			go testExternalUI(api)
+			go testExternalUI(api_impl)
 		}
 
 		rpc.NewHTTPServer(cors, server).Serve(listener)
