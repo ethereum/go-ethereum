@@ -184,22 +184,32 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 
 // interprets a 32 byte slice as an offset and then determines which indice to look to decode the type.
 func lengthPrefixPointsTo(index int, output []byte) (start int, length int, err error) {
-	offsetBig := big.NewInt(0).SetBytes(output[index : index+32])
-	if !offsetBig.IsInt64() {
-		return 0, 0, fmt.Errorf("abi offset larger than int64: %v", offsetBig)
+	bigOffsetEnd := big.NewInt(0).SetBytes(output[index : index+32])
+	bigOffsetEnd.Add(bigOffsetEnd, common.Big32)
+	outputLength := big.NewInt(int64(len(output)))
+
+	if bigOffsetEnd.Cmp(outputLength) > 0 {
+		return 0, 0, fmt.Errorf("abi: cannot marshal in to go slice: offset %v would go over slice boundary (len=%v)", bigOffsetEnd, outputLength)
 	}
-	offset := int(offsetBig.Int64())
-	if offset+32 > len(output) {
-		return 0, 0, fmt.Errorf("abi: cannot marshal in to go slice: offset %d would go over slice boundary (len=%d)", len(output), offset+32)
+
+	if bigOffsetEnd.BitLen() > 63 {
+		return 0, 0, fmt.Errorf("abi offset larger than int64: %v", bigOffsetEnd)
 	}
-	lengthBig := big.NewInt(0).SetBytes(output[offset : offset+32])
-	if !lengthBig.IsInt64() {
-		return 0, 0, fmt.Errorf("abi length larger than int64: %v", lengthBig)
+
+	offsetEnd := int(bigOffsetEnd.Uint64())
+	lengthBig := big.NewInt(0).SetBytes(output[offsetEnd-32 : offsetEnd])
+
+	totalSize := big.NewInt(0)
+	totalSize.Add(totalSize, bigOffsetEnd)
+	totalSize.Add(totalSize, lengthBig)
+	if totalSize.BitLen() > 63 {
+		return 0, 0, fmt.Errorf("abi length larger than int64: %v", totalSize)
 	}
-	length = int(lengthBig.Int64())
-	if offset+32+length > len(output) {
-		return 0, 0, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), offset+32+length)
+
+	if totalSize.Cmp(outputLength) > 0 {
+		return 0, 0, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %v require %v", outputLength, totalSize)
 	}
-	start = offset + 32
+	start = int(bigOffsetEnd.Uint64())
+	length = int(lengthBig.Uint64())
 	return
 }
