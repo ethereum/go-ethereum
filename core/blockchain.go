@@ -251,8 +251,7 @@ func (bc *BlockChain) loadLastState() error {
 	blockTd := bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64())
 	fastTd := bc.GetTd(bc.currentFastBlock.Hash(), bc.currentFastBlock.NumberU64())
 
-	bc.chainStats.SetTotalDifficulty(blockTd)
-	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
+	bc.chainStats.Update(bc.currentBlock, bc.currentFastBlock, blockTd)
 
 	log.Info("Loaded most recent local header", "number", currentHeader.Number, "hash", currentHeader.Hash(), "td", headerTd)
 	log.Info("Loaded most recent local full block", "number", bc.currentBlock.Number(), "hash", bc.currentBlock.Hash(), "td", blockTd)
@@ -312,8 +311,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 		log.Crit("Failed to reset head fast block", "err", err)
 	}
 
-	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
-	bc.chainStats.SetTotalDifficulty(bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64()))
+	bc.chainStats.Update(bc.currentBlock, bc.currentFastBlock, bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64()))
 
 	return bc.loadLastState()
 }
@@ -332,7 +330,7 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	// If all checks out, manually set the head block
 	bc.mu.Lock()
 	bc.currentBlock = block
-	bc.chainStats.SetNumber(block.Number())
+	bc.chainStats.SetNumber(block.Number().Uint64())
 	bc.chainStats.SetTotalDifficulty(bc.GetTd(block.Hash(), block.NumberU64()))
 	bc.mu.Unlock()
 
@@ -433,8 +431,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())
 	bc.currentFastBlock = bc.genesisBlock
 
-	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
-	bc.chainStats.SetTotalDifficulty(bc.genesisBlock.Difficulty())
+	bc.chainStats.Update(bc.currentBlock, bc.currentFastBlock, bc.genesisBlock.Difficulty())
 
 	return nil
 }
@@ -514,8 +511,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 		}
 		bc.currentFastBlock = block
 	}
-	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
-	bc.chainStats.SetTotalDifficulty(bc.GetTd(block.Hash(), block.NumberU64()))
+	bc.chainStats.Update(bc.currentBlock, bc.currentFastBlock, bc.GetTd(block.Hash(), block.NumberU64()))
 }
 
 // Genesis retrieves the chain's genesis block.
@@ -759,8 +755,7 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 			WriteHeadBlockHash(bc.db, bc.currentBlock.Hash())
 		}
 	}
-	bc.chainStats.UpdateNumbers(bc.currentBlock, bc.currentFastBlock)
-	bc.chainStats.SetTotalDifficulty(bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64()))
+	bc.chainStats.Update(bc.currentBlock, bc.currentFastBlock, bc.GetTd(bc.currentBlock.Hash(), bc.currentBlock.NumberU64()))
 }
 
 // SetReceiptsData computes all the non-consensus fields of the receipts
@@ -872,7 +867,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				log.Crit("Failed to update head fast block hash", "err", err)
 			}
 			bc.currentFastBlock = head
-			bc.chainStats.SetFastNumber(bc.currentFastBlock.Number())
+			bc.chainStats.SetFastNumber(bc.currentFastBlock.NumberU64())
 		}
 	}
 	bc.mu.Unlock()

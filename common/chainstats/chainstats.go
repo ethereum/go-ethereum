@@ -26,49 +26,50 @@ import (
 )
 
 type Chainstats struct {
-	currentBlockNumber     atomic.Value
-	currentFastBlockNumber atomic.Value
+	currentBlockNumber     uint64
+	currentFastBlockNumber uint64
 	currentTd              atomic.Value
 }
 
 func NewChainstats() *Chainstats {
 	stats := &Chainstats{}
-	stats.currentBlockNumber.Store(big.NewInt(0))
-	stats.currentFastBlockNumber.Store(big.NewInt(0))
 	stats.currentTd.Store(big.NewInt(0))
 	return stats
 }
 
 // GetNumber returns the latest block number
 func (stats *Chainstats) GetNumber() uint64 {
-	return stats.currentBlockNumber.Load().(*big.Int).Uint64()
+	return stats.currentBlockNumber
 }
 
-// UpdateNumbers is a convenience method to set both latest number and fast number
-func (stats *Chainstats) UpdateNumbers(currentBlock, currentFastBlock *types.Block) {
-	stats.currentBlockNumber.Store(currentBlock.Number())
-	stats.currentFastBlockNumber.Store(currentFastBlock.Number())
+// Update is a convenience method to set all values
+func (stats *Chainstats) Update(currentBlock, currentFastBlock *types.Block, totalDifficulty *big.Int) {
+	stats.SetNumber(currentBlock.NumberU64())
+	stats.SetFastNumber(currentFastBlock.NumberU64())
+	stats.SetTotalDifficulty(totalDifficulty)
+
+}
+
+// GetNumbers convenience-method to get all values
+func (stats *Chainstats) Get() (uint64, uint64, *big.Int) {
+	return stats.currentBlockNumber,
+		stats.currentFastBlockNumber,
+		new(big.Int).Set(stats.currentTd.Load().(*big.Int))
 }
 
 // SetNumber stores latest block number
-func (stats *Chainstats) SetNumber(number *big.Int) {
-	stats.currentBlockNumber.Store(number)
+func (stats *Chainstats) SetNumber(number uint64) {
+	atomic.StoreUint64(&stats.currentBlockNumber, number)
 }
 
 // GetFastNumber return latest fast block number
 func (stats *Chainstats) GetFastNumber() uint64 {
-	return stats.currentFastBlockNumber.Load().(*big.Int).Uint64()
-}
-
-// GetNumbers convenience-method to get both last number and last fast number
-func (stats *Chainstats) GetNumbers() (uint64, uint64) {
-	return stats.currentBlockNumber.Load().(*big.Int).Uint64(),
-		stats.currentFastBlockNumber.Load().(*big.Int).Uint64()
+	return stats.currentFastBlockNumber
 }
 
 // SetFastNumber stores latest fast block number
-func (stats *Chainstats) SetFastNumber(number *big.Int) {
-	stats.currentFastBlockNumber.Store(number)
+func (stats *Chainstats) SetFastNumber(number uint64) {
+	atomic.StoreUint64(&stats.currentFastBlockNumber, number)
 }
 
 // GetTotalDifficulty return latest total difficulty

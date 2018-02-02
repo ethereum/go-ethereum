@@ -167,8 +167,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		return
 	}
 	// Make sure the peer's TD is higher than our own
-	currentNumber, currentFastNumber := pm.blockchain.Stats().GetNumbers()
-	td := pm.blockchain.Stats().GetTotalDifficulty()
+	currentNumber, currentFastNumber, td := pm.blockchain.Stats().Get()
 
 	pHead, pTd := peer.Head()
 	if pTd.Cmp(td) <= 0 {
