@@ -941,9 +941,6 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 			}
 			triedb.Dereference(root.(common.Hash), common.Hash{})
 		}
-		if current%10000 == 0 {
-			log.Warn("Current trie pruning state", "size", triedb.Size(), "elapsed", bc.gcproc)
-		}
 	}
 	if err := WriteBlockReceipts(batch, block.Hash(), block.NumberU64(), receipts); err != nil {
 		return NonStatTy, err
