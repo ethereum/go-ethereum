@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rcrowley/go-metrics"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
@@ -386,13 +385,16 @@ func (q *queue) Results(block bool) []*fetchResult {
 
 		// Recalculate the result item weights to prevent memory exhaustion
 		for _, result := range results {
-			var size common.StorageSize
-
-			blob, _ := rlp.EncodeToBytes(result.Receipts) // TODO(karalabe): Whoah, nice hack, super optimal
-			size += common.StorageSize(len(blob))
-			blob, _ = rlp.EncodeToBytes(result.Transactions)
-			size += common.StorageSize(len(blob))
-
+			size := result.Header.Size()
+			for _, uncle := range result.Uncles {
+				size += uncle.Size()
+			}
+			for _, receipt := range result.Receipts {
+				size += receipt.Size()
+			}
+			for _, tx := range result.Transactions {
+				size += tx.Size()
+			}
 			q.resultSize = common.StorageSize(blockCacheSizeWeight)*size + (1-common.StorageSize(blockCacheSizeWeight))*q.resultSize
 		}
 	}
