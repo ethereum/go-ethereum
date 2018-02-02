@@ -66,6 +66,7 @@ const (
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
 type CacheConfig struct {
+	Disabled      bool          // Whether to disable trie write caching (archive node)
 	TrieNodeLimit int           // Memory limit (MB) at which to flush the current in-memory trie to disk
 	TrieTimeLimit time.Duration // Time limit after which to flush the current in-memory trie to disk
 }
@@ -655,20 +656,22 @@ func (bc *BlockChain) Stop() {
 	//
 	// This may be tuned a bit on mainnet if its too annoying to reprocess the last
 	// N blocks.
-	triedb := bc.stateCache.TrieDB()
-	if number := bc.CurrentBlock().NumberU64(); number >= triesInMemory {
-		recent := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - triesInMemory + 1)
+	if !bc.cacheConfig.Disabled {
+		triedb := bc.stateCache.TrieDB()
+		if number := bc.CurrentBlock().NumberU64(); number >= triesInMemory {
+			recent := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - triesInMemory + 1)
 
-		log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
-		if err := triedb.Commit(recent.Root()); err != nil {
-			log.Error("Failed to commit recent state trie", "err", err)
+			log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
+			if err := triedb.Commit(recent.Root(), true); err != nil {
+				log.Error("Failed to commit recent state trie", "err", err)
+			}
 		}
-	}
-	for !bc.triegc.Empty() {
-		triedb.Dereference(bc.triegc.PopItem().(common.Hash), common.Hash{})
-	}
-	if size := triedb.Size(); size != 0 {
-		log.Error("Dangling trie nodes after full cleanup")
+		for !bc.triegc.Empty() {
+			triedb.Dereference(bc.triegc.PopItem().(common.Hash), common.Hash{})
+		}
+		if size := triedb.Size(); size != 0 {
+			log.Error("Dangling trie nodes after full cleanup")
+		}
 	}
 	log.Info("Blockchain manager stopped")
 }
@@ -896,50 +899,58 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	}
 	triedb := bc.stateCache.TrieDB()
 
-	triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
-	bc.triegc.Push(root, -float32(block.NumberU64()))
+	// If we're running an archive node, always flush
+	if bc.cacheConfig.Disabled {
+		if err := triedb.Commit(root, false); err != nil {
+			return NonStatTy, err
+		}
+	} else {
+		// Full but not archive node, do proper garbage collection
+		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
+		bc.triegc.Push(root, -float32(block.NumberU64()))
 
-	if current := block.NumberU64(); current > triesInMemory {
-		// Find the next state trie we need to commit
-		header := bc.GetHeaderByNumber(current - triesInMemory)
-		chosen := header.Number.Uint64()
+		if current := block.NumberU64(); current > triesInMemory {
+			// Find the next state trie we need to commit
+			header := bc.GetHeaderByNumber(current - triesInMemory)
+			chosen := header.Number.Uint64()
 
-		// Only write to disk if we exceeded our memory allowance *and* also have at
-		// least a given number of tries gapped.
-		var (
-			size  = triedb.Size()
-			limit = common.StorageSize(bc.cacheConfig.TrieNodeLimit) * 1024 * 1024
-		)
-		if size > limit || bc.gcproc > bc.cacheConfig.TrieTimeLimit {
-			// If we're exceeding limits but haven't reached a large enough memory gap,
-			// warn the user that the system is becoming unstable.
-			if chosen < lastWrite+triesInMemory {
-				switch {
-				case size >= 2*limit:
-					log.Error("Trie memory critical, forcing to disk", "size", size, "limit", limit, "optimum", float64(chosen-lastWrite)/triesInMemory)
-				case bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit:
-					log.Error("Trie timing critical, forcing to disk", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
-				case size > limit:
-					log.Warn("Trie memory at dangerous levels", "size", size, "limit", limit, "optimum", float64(chosen-lastWrite)/triesInMemory)
-				case bc.gcproc > bc.cacheConfig.TrieTimeLimit:
-					log.Warn("Trie timing at dangerous levels", "time", bc.gcproc, "limit", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+			// Only write to disk if we exceeded our memory allowance *and* also have at
+			// least a given number of tries gapped.
+			var (
+				size  = triedb.Size()
+				limit = common.StorageSize(bc.cacheConfig.TrieNodeLimit) * 1024 * 1024
+			)
+			if size > limit || bc.gcproc > bc.cacheConfig.TrieTimeLimit {
+				// If we're exceeding limits but haven't reached a large enough memory gap,
+				// warn the user that the system is becoming unstable.
+				if chosen < lastWrite+triesInMemory {
+					switch {
+					case size >= 2*limit:
+						log.Error("Trie memory critical, forcing to disk", "size", size, "limit", limit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+					case bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit:
+						log.Error("Trie timing critical, forcing to disk", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+					case size > limit:
+						log.Warn("Trie memory at dangerous levels", "size", size, "limit", limit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+					case bc.gcproc > bc.cacheConfig.TrieTimeLimit:
+						log.Warn("Trie timing at dangerous levels", "time", bc.gcproc, "limit", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+					}
+				}
+				// If optimum or critical limits reached, write to disk
+				if chosen >= lastWrite+triesInMemory || size >= 2*limit || bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
+					triedb.Commit(header.Root, true)
+					lastWrite = chosen
+					bc.gcproc = 0
 				}
 			}
-			// If optimum or critical limits reached, write to disk
-			if chosen >= lastWrite+triesInMemory || size >= 2*limit || bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
-				triedb.Commit(header.Root)
-				lastWrite = chosen
-				bc.gcproc = 0
+			// Garbage collect anything below our required write retention
+			for !bc.triegc.Empty() {
+				root, number := bc.triegc.Pop()
+				if uint64(-number) > chosen {
+					bc.triegc.Push(root, number)
+					break
+				}
+				triedb.Dereference(root.(common.Hash), common.Hash{})
 			}
-		}
-		// Garbage collect anything below our required write retention
-		for !bc.triegc.Empty() {
-			root, number := bc.triegc.Pop()
-			if uint64(-number) > chosen {
-				bc.triegc.Push(root, number)
-				break
-			}
-			triedb.Dereference(root.(common.Hash), common.Hash{})
 		}
 	}
 	if err := WriteBlockReceipts(batch, block.Hash(), block.NumberU64(), receipts); err != nil {
