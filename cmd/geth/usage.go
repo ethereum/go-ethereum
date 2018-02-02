@@ -130,7 +130,6 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.CacheFlag,
 			utils.CacheDatabaseFlag,
 			utils.CacheGCFlag,
-			utils.CacheGCTimeoutFlag,
 			utils.TrieCacheGenFlag,
 		},
 	},

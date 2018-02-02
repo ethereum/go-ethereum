@@ -27,7 +27,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -306,11 +305,6 @@ var (
 		Name:  "cache.gc",
 		Usage: "Percentage of cache memory allowance to use for trie pruning",
 		Value: 25,
-	}
-	CacheGCTimeoutFlag = cli.DurationFlag{
-		Name:  "cache.gc.timeout",
-		Usage: "Maximum time after which to flush memory-only tries to disk",
-		Value: 5 * time.Minute,
 	}
 	TrieCacheGenFlag = cli.IntFlag{
 		Name:  "trie-cache-gens",
@@ -1045,9 +1039,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
 		cfg.TrieCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
 	}
-	if ctx.GlobalIsSet(CacheGCTimeoutFlag.Name) {
-		cfg.TrieTimeout = ctx.GlobalDuration(CacheGCTimeoutFlag.Name)
-	}
 	if ctx.GlobalIsSet(MinerThreadsFlag.Name) {
 		cfg.MinerThreads = ctx.GlobalInt(MinerThreadsFlag.Name)
 	}
@@ -1237,9 +1228,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	}
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
 		cache.TrieNodeLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
-	}
-	if ctx.GlobalIsSet(CacheGCTimeoutFlag.Name) {
-		cache.TrieTimeLimit = ctx.GlobalDuration(CacheGCTimeoutFlag.Name)
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
 	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg)
