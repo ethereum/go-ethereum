@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -226,8 +225,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if db == nil {
 		db, _ = ethdb.NewMemDatabase()
 	}
-	triedb := trie.NewDatabase(db)
-	statedb, _ := state.New(common.Hash{}, state.NewDatabase(triedb))
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 	for addr, account := range g.Alloc {
 		statedb.AddBalance(addr, account.Balance)
 		statedb.SetCode(addr, account.Code)
@@ -257,7 +255,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		head.Difficulty = params.GenesisDifficulty
 	}
 	statedb.Commit(false)
-	triedb.Commit(root)
+	statedb.Database().TrieDB().Commit(root)
 
 	return types.NewBlock(head, nil, nil, nil)
 }

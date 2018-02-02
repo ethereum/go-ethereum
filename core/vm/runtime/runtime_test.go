@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 func TestDefaults(t *testing.T) {
@@ -96,7 +95,7 @@ func TestExecute(t *testing.T) {
 
 func TestCall(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	state, _ := state.New(common.Hash{}, state.NewDatabase(trie.NewDatabase(db)))
+	state, _ := state.New(common.Hash{}, state.NewDatabase(db))
 	address := common.HexToAddress("0x0a")
 	state.SetCode(address, []byte{
 		byte(vm.PUSH1), 10,

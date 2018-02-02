@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -41,7 +40,7 @@ import (
 func TestUpdateLeaks(t *testing.T) {
 	// Create an empty state database
 	db, _ := ethdb.NewMemDatabase()
-	state, _ := New(common.Hash{}, NewDatabase(trie.NewDatabase(db)))
+	state, _ := New(common.Hash{}, NewDatabase(db))
 
 	// Update it with some accounts
 	for i := byte(0); i < 255; i++ {
@@ -69,8 +68,8 @@ func TestIntermediateLeaks(t *testing.T) {
 	// Create two state databases, one transitioning to the final state, the other final from the beginning
 	transDb, _ := ethdb.NewMemDatabase()
 	finalDb, _ := ethdb.NewMemDatabase()
-	transState, _ := New(common.Hash{}, NewDatabase(trie.NewDatabase(transDb)))
-	finalState, _ := New(common.Hash{}, NewDatabase(trie.NewDatabase(finalDb)))
+	transState, _ := New(common.Hash{}, NewDatabase(transDb))
+	finalState, _ := New(common.Hash{}, NewDatabase(finalDb))
 
 	modify := func(state *StateDB, addr common.Address, i, tweak byte) {
 		state.SetBalance(addr, big.NewInt(int64(11*i)+int64(tweak)))
@@ -123,8 +122,8 @@ func TestIntermediateLeaks(t *testing.T) {
 // https://github.com/ethereum/go-ethereum/pull/15549.
 func TestCopy(t *testing.T) {
 	// Create a random state test to copy and modify "independently"
-	diskdb, _ := ethdb.NewMemDatabase()
-	orig, _ := New(common.Hash{}, NewDatabase(trie.NewDatabase(diskdb)))
+	db, _ := ethdb.NewMemDatabase()
+	orig, _ := New(common.Hash{}, NewDatabase(db))
 
 	for i := byte(0); i < 255; i++ {
 		obj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
@@ -335,9 +334,8 @@ func (test *snapshotTest) String() string {
 func (test *snapshotTest) run() bool {
 	// Run all actions and create snapshots.
 	var (
-		diskdb, _    = ethdb.NewMemDatabase()
-		triedb       = trie.NewDatabase(diskdb)
-		state, _     = New(common.Hash{}, NewDatabase(triedb))
+		db, _        = ethdb.NewMemDatabase()
+		state, _     = New(common.Hash{}, NewDatabase(db))
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0
 	)
@@ -348,11 +346,10 @@ func (test *snapshotTest) run() bool {
 		}
 		action.fn(action, state)
 	}
-
 	// Revert all snapshots in reverse order. Each revert must yield a state
 	// that is equivalent to fresh state with all actions up the snapshot applied.
 	for sindex--; sindex >= 0; sindex-- {
-		checkstate, _ := New(common.Hash{}, NewDatabase(triedb))
+		checkstate, _ := New(common.Hash{}, state.Database())
 		for _, action := range test.actions[:test.snapshots[sindex]] {
 			action.fn(action, checkstate)
 		}

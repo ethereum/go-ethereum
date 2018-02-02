@@ -88,8 +88,7 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
-	diskdb ethdb.Database // Low level persistent database to store final content in
-	triedb *trie.Database // High level ephemeral database to store non-final tries in
+	db     ethdb.Database // Low level persistent database to store final content in
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
 
@@ -133,7 +132,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(diskdb ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = &CacheConfig{
 			TrieNodeLimit: 256 * 1024 * 1024,
@@ -146,15 +145,12 @@ func NewBlockChain(diskdb ethdb.Database, cacheConfig *CacheConfig, chainConfig 
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	badBlocks, _ := lru.New(badBlockLimit)
 
-	triedb := trie.NewDatabase(diskdb)
-
 	bc := &BlockChain{
 		chainConfig:  chainConfig,
 		cacheConfig:  cacheConfig,
-		diskdb:       diskdb,
-		triedb:       triedb,
+		db:           db,
 		triegc:       prque.New(),
-		stateCache:   state.NewDatabase(triedb),
+		stateCache:   state.NewDatabase(db),
 		quit:         make(chan struct{}),
 		bodyCache:    bodyCache,
 		bodyRLPCache: bodyRLPCache,
@@ -168,7 +164,7 @@ func NewBlockChain(diskdb ethdb.Database, cacheConfig *CacheConfig, chainConfig 
 	bc.SetProcessor(NewStateProcessor(chainConfig, bc, engine))
 
 	var err error
-	bc.hc, err = NewHeaderChain(diskdb, chainConfig, engine, bc.getProcInterrupt)
+	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.getProcInterrupt)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +201,7 @@ func (bc *BlockChain) getProcInterrupt() bool {
 // assumes that the chain manager mutex is held.
 func (bc *BlockChain) loadLastState() error {
 	// Restore the last known head block
-	head := GetHeadBlockHash(bc.diskdb)
+	head := GetHeadBlockHash(bc.db)
 	if head == (common.Hash{}) {
 		// Corrupt or empty database, init from scratch
 		log.Warn("Empty database, resetting chain")
@@ -231,7 +227,7 @@ func (bc *BlockChain) loadLastState() error {
 
 	// Restore the last known head header
 	currentHeader := bc.currentBlock.Header()
-	if head := GetHeadHeaderHash(bc.diskdb); head != (common.Hash{}) {
+	if head := GetHeadHeaderHash(bc.db); head != (common.Hash{}) {
 		if header := bc.GetHeaderByHash(head); header != nil {
 			currentHeader = header
 		}
@@ -240,7 +236,7 @@ func (bc *BlockChain) loadLastState() error {
 
 	// Restore the last known head fast block
 	bc.currentFastBlock = bc.currentBlock
-	if head := GetHeadFastBlockHash(bc.diskdb); head != (common.Hash{}) {
+	if head := GetHeadFastBlockHash(bc.db); head != (common.Hash{}) {
 		if block := bc.GetBlockByHash(head); block != nil {
 			bc.currentFastBlock = block
 		}
@@ -270,7 +266,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 
 	// Rewind the header chain, deleting all block bodies until then
 	delFn := func(hash common.Hash, num uint64) {
-		DeleteBody(bc.diskdb, hash, num)
+		DeleteBody(bc.db, hash, num)
 	}
 	bc.hc.SetHead(head, delFn)
 	currentHeader := bc.hc.CurrentHeader()
@@ -302,10 +298,10 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	if bc.currentFastBlock == nil {
 		bc.currentFastBlock = bc.genesisBlock
 	}
-	if err := WriteHeadBlockHash(bc.diskdb, bc.currentBlock.Hash()); err != nil {
+	if err := WriteHeadBlockHash(bc.db, bc.currentBlock.Hash()); err != nil {
 		log.Crit("Failed to reset head full block", "err", err)
 	}
-	if err := WriteHeadFastBlockHash(bc.diskdb, bc.currentFastBlock.Hash()); err != nil {
+	if err := WriteHeadFastBlockHash(bc.db, bc.currentFastBlock.Hash()); err != nil {
 		log.Crit("Failed to reset head fast block", "err", err)
 	}
 	return bc.loadLastState()
@@ -319,7 +315,7 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	if block == nil {
 		return fmt.Errorf("non existent block [%x…]", hash[:4])
 	}
-	if _, err := trie.NewSecure(block.Root(), bc.triedb, 0); err != nil {
+	if _, err := trie.NewSecure(block.Root(), bc.stateCache.TrieDB(), 0); err != nil {
 		return err
 	}
 	// If all checks out, manually set the head block
@@ -414,7 +410,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	if err := bc.hc.WriteTd(genesis.Hash(), genesis.NumberU64(), genesis.Difficulty()); err != nil {
 		log.Crit("Failed to write genesis block TD", "err", err)
 	}
-	if err := WriteBlock(bc.diskdb, genesis); err != nil {
+	if err := WriteBlock(bc.db, genesis); err != nil {
 		log.Crit("Failed to write genesis block", "err", err)
 	}
 	bc.genesisBlock = genesis
@@ -482,13 +478,13 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) insert(block *types.Block) {
 	// If the block is on a side chain or an unknown one, force other heads onto it too
-	updateHeads := GetCanonicalHash(bc.diskdb, block.NumberU64()) != block.Hash()
+	updateHeads := GetCanonicalHash(bc.db, block.NumberU64()) != block.Hash()
 
 	// Add the block to the canonical chain number scheme and mark as the head
-	if err := WriteCanonicalHash(bc.diskdb, block.Hash(), block.NumberU64()); err != nil {
+	if err := WriteCanonicalHash(bc.db, block.Hash(), block.NumberU64()); err != nil {
 		log.Crit("Failed to insert block number", "err", err)
 	}
-	if err := WriteHeadBlockHash(bc.diskdb, block.Hash()); err != nil {
+	if err := WriteHeadBlockHash(bc.db, block.Hash()); err != nil {
 		log.Crit("Failed to insert head block hash", "err", err)
 	}
 	bc.currentBlock = block
@@ -497,7 +493,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 	if updateHeads {
 		bc.hc.SetCurrentHeader(block.Header())
 
-		if err := WriteHeadFastBlockHash(bc.diskdb, block.Hash()); err != nil {
+		if err := WriteHeadFastBlockHash(bc.db, block.Hash()); err != nil {
 			log.Crit("Failed to insert head fast block hash", "err", err)
 		}
 		bc.currentFastBlock = block
@@ -517,7 +513,7 @@ func (bc *BlockChain) GetBody(hash common.Hash) *types.Body {
 		body := cached.(*types.Body)
 		return body
 	}
-	body := GetBody(bc.diskdb, hash, bc.hc.GetBlockNumber(hash))
+	body := GetBody(bc.db, hash, bc.hc.GetBlockNumber(hash))
 	if body == nil {
 		return nil
 	}
@@ -533,7 +529,7 @@ func (bc *BlockChain) GetBodyRLP(hash common.Hash) rlp.RawValue {
 	if cached, ok := bc.bodyRLPCache.Get(hash); ok {
 		return cached.(rlp.RawValue)
 	}
-	body := GetBodyRLP(bc.diskdb, hash, bc.hc.GetBlockNumber(hash))
+	body := GetBodyRLP(bc.db, hash, bc.hc.GetBlockNumber(hash))
 	if len(body) == 0 {
 		return nil
 	}
@@ -547,7 +543,7 @@ func (bc *BlockChain) HasBlock(hash common.Hash, number uint64) bool {
 	if bc.blockCache.Contains(hash) {
 		return true
 	}
-	ok, _ := bc.diskdb.Has(blockBodyKey(hash, number))
+	ok, _ := bc.db.Has(blockBodyKey(hash, number))
 	return ok
 }
 
@@ -575,7 +571,7 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	if block, ok := bc.blockCache.Get(hash); ok {
 		return block.(*types.Block)
 	}
-	block := GetBlock(bc.diskdb, hash, number)
+	block := GetBlock(bc.db, hash, number)
 	if block == nil {
 		return nil
 	}
@@ -592,7 +588,7 @@ func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
 // GetBlockByNumber retrieves a block from the database by number, caching it
 // (associated with its hash) if found.
 func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
-	hash := GetCanonicalHash(bc.diskdb, number)
+	hash := GetCanonicalHash(bc.db, number)
 	if hash == (common.Hash{}) {
 		return nil
 	}
@@ -601,7 +597,7 @@ func (bc *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
 func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
-	return GetBlockReceipts(bc.diskdb, hash, GetBlockNumber(bc.diskdb, hash))
+	return GetBlockReceipts(bc.db, hash, GetBlockNumber(bc.db, hash))
 }
 
 // GetBlocksFromHash returns the block corresponding to hash and up to n-1 ancestors.
@@ -634,7 +630,7 @@ func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.
 // TrieNode retrieves a blob of data associated with a trie node (or code hash)
 // either from ephemeral in-memory cache, or from persistent storage.
 func (bc *BlockChain) TrieNode(hash common.Hash) ([]byte, error) {
-	return bc.triedb.Node(hash)
+	return bc.stateCache.TrieDB().Node(hash)
 }
 
 // Stop stops the blockchain service. If any imports are currently in progress
@@ -659,18 +655,19 @@ func (bc *BlockChain) Stop() {
 	//
 	// This may be tuned a bit on mainnet if its too annoying to reprocess the last
 	// N blocks.
+	triedb := bc.stateCache.TrieDB()
 	if number := bc.CurrentBlock().NumberU64(); number >= triesInMemory {
 		recent := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - triesInMemory + 1)
 
 		log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
-		if err := bc.triedb.Commit(recent.Root()); err != nil {
+		if err := triedb.Commit(recent.Root()); err != nil {
 			log.Error("Failed to commit recent state trie", "err", err)
 		}
 	}
 	for !bc.triegc.Empty() {
-		bc.triedb.Dereference(bc.triegc.PopItem().(common.Hash), common.Hash{})
+		triedb.Dereference(bc.triegc.PopItem().(common.Hash), common.Hash{})
 	}
-	if size := bc.triedb.Size(); size != 0 {
+	if size := triedb.Size(); size != 0 {
 		log.Error("Dangling trie nodes after full cleanup")
 	}
 	log.Info("Blockchain manager stopped")
@@ -717,11 +714,11 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 		}
 		if bc.currentFastBlock.Hash() == hash {
 			bc.currentFastBlock = bc.GetBlock(bc.currentFastBlock.ParentHash(), bc.currentFastBlock.NumberU64()-1)
-			WriteHeadFastBlockHash(bc.diskdb, bc.currentFastBlock.Hash())
+			WriteHeadFastBlockHash(bc.db, bc.currentFastBlock.Hash())
 		}
 		if bc.currentBlock.Hash() == hash {
 			bc.currentBlock = bc.GetBlock(bc.currentBlock.ParentHash(), bc.currentBlock.NumberU64()-1)
-			WriteHeadBlockHash(bc.diskdb, bc.currentBlock.Hash())
+			WriteHeadBlockHash(bc.db, bc.currentBlock.Hash())
 		}
 	}
 }
@@ -780,7 +777,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		stats = struct{ processed, ignored int32 }{}
 		start = time.Now()
 		bytes = 0
-		batch = bc.diskdb.NewBatch()
+		batch = bc.db.NewBatch()
 	)
 	for i, block := range blockChain {
 		receipts := receiptChain[i]
@@ -831,7 +828,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	head := blockChain[len(blockChain)-1]
 	if td := bc.GetTd(head.Hash(), head.NumberU64()); td != nil { // Rewind may have occurred, skip in that case
 		if bc.GetTd(bc.currentFastBlock.Hash(), bc.currentFastBlock.NumberU64()).Cmp(td) < 0 {
-			if err := WriteHeadFastBlockHash(bc.diskdb, head.Hash()); err != nil {
+			if err := WriteHeadFastBlockHash(bc.db, head.Hash()); err != nil {
 				log.Crit("Failed to update head fast block hash", "err", err)
 			}
 			bc.currentFastBlock = head
@@ -861,7 +858,7 @@ func (bc *BlockChain) WriteBlockWithoutState(block *types.Block, td *big.Int) (e
 	if err := bc.hc.WriteTd(block.Hash(), block.NumberU64(), td); err != nil {
 		return err
 	}
-	if err := WriteBlock(bc.diskdb, block); err != nil {
+	if err := WriteBlock(bc.db, block); err != nil {
 		return err
 	}
 	return nil
@@ -889,7 +886,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		return NonStatTy, err
 	}
 	// Write other block data using a batch.
-	batch := bc.diskdb.NewBatch()
+	batch := bc.db.NewBatch()
 	if err := WriteBlock(batch, block); err != nil {
 		return NonStatTy, err
 	}
@@ -897,8 +894,9 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if err != nil {
 		return NonStatTy, err
 	}
+	triedb := bc.stateCache.TrieDB()
 
-	bc.triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
+	triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
 	bc.triegc.Push(root, -float32(block.NumberU64()))
 
 	if current := block.NumberU64(); current > triesInMemory {
@@ -909,7 +907,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		// Only write to disk if we exceeded our memory allowance *and* also have at
 		// least a given number of tries gapped.
 		var (
-			size  = bc.triedb.Size()
+			size  = triedb.Size()
 			limit = common.StorageSize(bc.cacheConfig.TrieNodeLimit) * 1024 * 1024
 		)
 		if size > limit || bc.gcproc > bc.cacheConfig.TrieTimeLimit {
@@ -929,7 +927,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 			}
 			// If optimum or critical limits reached, write to disk
 			if chosen >= lastWrite+triesInMemory || size >= 2*limit || bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
-				bc.triedb.Commit(header.Root)
+				triedb.Commit(header.Root)
 				lastWrite = chosen
 				bc.gcproc = 0
 			}
@@ -941,10 +939,10 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 				bc.triegc.Push(root, number)
 				break
 			}
-			bc.triedb.Dereference(root.(common.Hash), common.Hash{})
+			triedb.Dereference(root.(common.Hash), common.Hash{})
 		}
 		if current%10000 == 0 {
-			log.Warn("Current trie pruning state", "size", bc.triedb.Size(), "elapsed", bc.gcproc)
+			log.Warn("Current trie pruning state", "size", triedb.Size(), "elapsed", bc.gcproc)
 		}
 	}
 	if err := WriteBlockReceipts(batch, block.Hash(), block.NumberU64(), receipts); err != nil {
@@ -970,7 +968,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 			return NonStatTy, err
 		}
 		// Write hash preimages
-		if err := WritePreimages(bc.diskdb, block.NumberU64(), state.Preimages()); err != nil {
+		if err := WritePreimages(bc.db, block.NumberU64(), state.Preimages()); err != nil {
 			return NonStatTy, err
 		}
 		status = CanonStatTy
@@ -1172,7 +1170,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		}
 		stats.processed++
 		stats.usedGas += usedGas
-		stats.report(chain, i, bc.triedb.Size())
+		stats.report(chain, i, bc.stateCache.TrieDB().Size())
 	}
 	// Append a single chain head event if we've progressed the chain
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
@@ -1246,7 +1244,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// These logs are later announced as deleted.
 		collectLogs = func(h common.Hash) {
 			// Coalesce logs and set 'Removed'.
-			receipts := GetBlockReceipts(bc.diskdb, h, bc.hc.GetBlockNumber(h))
+			receipts := GetBlockReceipts(bc.db, h, bc.hc.GetBlockNumber(h))
 			for _, receipt := range receipts {
 				for _, log := range receipt.Logs {
 					del := *log
@@ -1315,7 +1313,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// insert the block in the canonical way, re-writing history
 		bc.insert(newChain[i])
 		// write lookup entries for hash based transaction/receipt searches
-		if err := WriteTxLookupEntries(bc.diskdb, newChain[i]); err != nil {
+		if err := WriteTxLookupEntries(bc.db, newChain[i]); err != nil {
 			return err
 		}
 		addedTxs = append(addedTxs, newChain[i].Transactions()...)
@@ -1325,7 +1323,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// When transactions get deleted from the database that means the
 	// receipts that were created in the fork must also be deleted
 	for _, tx := range diff {
-		DeleteTxLookupEntry(bc.diskdb, tx.Hash())
+		DeleteTxLookupEntry(bc.db, tx.Hash())
 	}
 	if len(deletedLogs) > 0 {
 		go bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})

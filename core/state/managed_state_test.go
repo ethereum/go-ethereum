@@ -21,14 +21,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 var addr = common.BytesToAddress([]byte("test"))
 
 func create() (*ManagedState, *account) {
-	diskdb, _ := ethdb.NewMemDatabase()
-	statedb, _ := New(common.Hash{}, NewDatabase(trie.NewDatabase(diskdb)))
+	db, _ := ethdb.NewMemDatabase()
+	statedb, _ := New(common.Hash{}, NewDatabase(db))
 	ms := ManageState(statedb)
 	ms.StateDB.SetNonce(addr, 100)
 	ms.accounts[addr] = newAccount(ms.StateDB.getStateObject(addr))

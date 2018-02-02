@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // Config is a basic type specifying certain configuration flags for running
@@ -103,7 +102,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 
 	if cfg.State == nil {
 		db, _ := ethdb.NewMemDatabase()
-		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(trie.NewDatabase(db)))
+		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(db))
 	}
 	var (
 		address = common.StringToAddress("contract")
@@ -134,7 +133,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 
 	if cfg.State == nil {
 		db, _ := ethdb.NewMemDatabase()
-		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(trie.NewDatabase(db)))
+		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(db))
 	}
 	var (
 		vmenv  = NewEnv(cfg)

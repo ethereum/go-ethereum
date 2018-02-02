@@ -148,8 +148,8 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			return err
 		}
 		blockchain.mu.Lock()
-		WriteTd(blockchain.diskdb, block.Hash(), block.NumberU64(), new(big.Int).Add(block.Difficulty(), blockchain.GetTdByHash(block.ParentHash())))
-		WriteBlock(blockchain.diskdb, block)
+		WriteTd(blockchain.db, block.Hash(), block.NumberU64(), new(big.Int).Add(block.Difficulty(), blockchain.GetTdByHash(block.ParentHash())))
+		WriteBlock(blockchain.db, block)
 		statedb.Commit(false)
 		blockchain.mu.Unlock()
 	}
@@ -166,8 +166,8 @@ func testHeaderChainImport(chain []*types.Header, blockchain *BlockChain) error 
 		}
 		// Manually insert the header into the database, but don't reorganise (allows subsequent testing)
 		blockchain.mu.Lock()
-		WriteTd(blockchain.diskdb, header.Hash(), header.Number.Uint64(), new(big.Int).Add(header.Difficulty, blockchain.GetTdByHash(header.ParentHash)))
-		WriteHeader(blockchain.diskdb, header)
+		WriteTd(blockchain.db, header.Hash(), header.Number.Uint64(), new(big.Int).Add(header.Difficulty, blockchain.GetTdByHash(header.ParentHash)))
+		WriteHeader(blockchain.db, header)
 		blockchain.mu.Unlock()
 	}
 	return nil
@@ -186,9 +186,9 @@ func TestLastBlock(t *testing.T) {
 	bchain := newTestBlockChain(false)
 	defer bchain.Stop()
 
-	block := makeBlockChain(bchain.CurrentBlock(), 1, ethash.NewFaker(), bchain.diskdb, 0)[0]
+	block := makeBlockChain(bchain.CurrentBlock(), 1, ethash.NewFaker(), bchain.db, 0)[0]
 	bchain.insert(block)
-	if block.Hash() != GetHeadBlockHash(bchain.diskdb) {
+	if block.Hash() != GetHeadBlockHash(bchain.db) {
 		t.Errorf("Write/Get HeadBlockHash failed")
 	}
 }
@@ -496,7 +496,7 @@ func testReorgBadHashes(t *testing.T, full bool) {
 	}
 
 	// Create a new BlockChain and check that it rolled back the state.
-	ncm, err := NewBlockChain(bc.diskdb, nil, bc.chainConfig, ethash.NewFaker(), vm.Config{})
+	ncm, err := NewBlockChain(bc.db, nil, bc.chainConfig, ethash.NewFaker(), vm.Config{})
 	if err != nil {
 		t.Fatalf("failed to create new chain manager: %v", err)
 	}
@@ -992,7 +992,7 @@ func TestCanonicalBlockRetrieval(t *testing.T) {
 	bc := newTestBlockChain(true)
 	defer bc.Stop()
 
-	chain, _ := GenerateChain(bc.chainConfig, bc.genesisBlock, ethash.NewFaker(), bc.diskdb, 10, func(i int, gen *BlockGen) {})
+	chain, _ := GenerateChain(bc.chainConfig, bc.genesisBlock, ethash.NewFaker(), bc.db, 10, func(i int, gen *BlockGen) {})
 
 	var pend sync.WaitGroup
 	pend.Add(len(chain))
@@ -1003,14 +1003,14 @@ func TestCanonicalBlockRetrieval(t *testing.T) {
 
 			// try to retrieve a block by its canonical hash and see if the block data can be retrieved.
 			for {
-				ch := GetCanonicalHash(bc.diskdb, block.NumberU64())
+				ch := GetCanonicalHash(bc.db, block.NumberU64())
 				if ch == (common.Hash{}) {
 					continue // busy wait for canonical hash to be written
 				}
 				if ch != block.Hash() {
 					t.Fatalf("unknown canonical hash, want %s, got %s", block.Hash().Hex(), ch.Hex())
 				}
-				fb := GetBlock(bc.diskdb, ch, block.NumberU64())
+				fb := GetBlock(bc.db, ch, block.NumberU64())
 				if fb == nil {
 					t.Fatalf("unable to retrieve block %d for canonical hash: %s", block.NumberU64(), ch.Hex())
 				}
@@ -1284,10 +1284,10 @@ func TestTrieForkGC(t *testing.T) {
 	}
 	// Dereference all the recent tries and ensure no past trie is left in
 	for i := 0; i < triesInMemory; i++ {
-		chain.triedb.Dereference(blocks[len(blocks)-1-i].Root(), common.Hash{})
-		chain.triedb.Dereference(forks[len(blocks)-1-i].Root(), common.Hash{})
+		chain.stateCache.TrieDB().Dereference(blocks[len(blocks)-1-i].Root(), common.Hash{})
+		chain.stateCache.TrieDB().Dereference(forks[len(blocks)-1-i].Root(), common.Hash{})
 	}
-	if len(chain.triedb.Nodes()) > 0 {
+	if len(chain.stateCache.TrieDB().Nodes()) > 0 {
 		t.Fatalf("stale tries still alive after garbase collection")
 	}
 }
@@ -1320,7 +1320,7 @@ func TestLargeReorgTrieGC(t *testing.T) {
 		t.Fatalf("failed to insert shared chain: %v", err)
 	}
 	// Ensure that the state associated with the forking point is pruned away
-	if node, _ := chain.triedb.Node(shared[len(shared)-1].Root()); node != nil {
+	if node, _ := chain.stateCache.TrieDB().Node(shared[len(shared)-1].Root()); node != nil {
 		t.Fatalf("common-but-old ancestor still cache")
 	}
 	// Import the competitor chain without exceeding the canonical's TD and ensure
@@ -1329,7 +1329,7 @@ func TestLargeReorgTrieGC(t *testing.T) {
 		t.Fatalf("failed to insert competitor chain: %v", err)
 	}
 	for i, block := range competitor[:len(competitor)-2] {
-		if node, _ := chain.triedb.Node(block.Root()); node != nil {
+		if node, _ := chain.stateCache.TrieDB().Node(block.Root()); node != nil {
 			t.Fatalf("competitor %d: low TD chain became processed", i)
 		}
 	}
@@ -1339,7 +1339,7 @@ func TestLargeReorgTrieGC(t *testing.T) {
 		t.Fatalf("failed to finalize competitor chain: %v", err)
 	}
 	for i, block := range competitor[:len(competitor)-triesInMemory] {
-		if node, _ := chain.triedb.Node(block.Root()); node != nil {
+		if node, _ := chain.stateCache.TrieDB().Node(block.Root()); node != nil {
 			t.Fatalf("competitor %d: competing chain state missing", i)
 		}
 	}

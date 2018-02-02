@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie"
 	checker "gopkg.in/check.v1"
 )
 
@@ -89,7 +88,7 @@ func (s *StateSuite) TestDump(c *checker.C) {
 
 func (s *StateSuite) SetUpTest(c *checker.C) {
 	s.db, _ = ethdb.NewMemDatabase()
-	s.state, _ = New(common.Hash{}, NewDatabase(trie.NewDatabase(s.db)))
+	s.state, _ = New(common.Hash{}, NewDatabase(s.db))
 }
 
 func (s *StateSuite) TestNull(c *checker.C) {
@@ -134,9 +133,8 @@ func (s *StateSuite) TestSnapshotEmpty(c *checker.C) {
 // use testing instead of checker because checker does not support
 // printing/logging in tests (-check.vv does not work)
 func TestSnapshot2(t *testing.T) {
-	diskdb, _ := ethdb.NewMemDatabase()
-	triedb := trie.NewDatabase(diskdb)
-	state, _ := New(common.Hash{}, NewDatabase(triedb))
+	db, _ := ethdb.NewMemDatabase()
+	state, _ := New(common.Hash{}, NewDatabase(db))
 
 	stateobjaddr0 := toAddr([]byte("so0"))
 	stateobjaddr1 := toAddr([]byte("so1"))

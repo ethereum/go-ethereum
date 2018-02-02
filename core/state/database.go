@@ -75,10 +75,10 @@ type Trie interface {
 // concurrent use and retains cached trie nodes in memory. The pool is an optional
 // intermediate trie-node memory pool between the low level storage layer and the
 // high level trie abstraction.
-func NewDatabase(db *trie.Database) Database {
+func NewDatabase(db ethdb.Database) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &cachingDB{
-		db:            db,
+		db:            trie.NewDatabase(db),
 		codeSizeCache: csc,
 	}
 }
