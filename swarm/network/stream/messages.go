@@ -26,38 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// Handover represents a statement that the upstream peer hands over the stream section
-type Handover struct {
-	Stream     string // name of stream
-	Start, End uint64 // index of hashes
-	Root       []byte // Root hash for indexed segment inclusion proofs
-}
-
-// HandoverProof represents a signed statement that the upstream peer handed over the stream section
-type HandoverProof struct {
-	Sig []byte // Sign(Hash(Serialisation(Handover)))
-	*Handover
-}
-
-// Takeover represents a statement that downstream peer took over (stored all data)
-// handed over
-type Takeover Handover
-
-//  TakeoverProof represents a signed statement that the downstream peer took over
-// the stream section
-type TakeoverProof struct {
-	Sig []byte // Sign(Hash(Serialisation(Takeover)))
-	*Takeover
-}
-
-// TakeoverProofMsg is the protocol msg sent by downstream peer
-type TakeoverProofMsg TakeoverProof
-
-// String pretty prints TakeoverProofMsg
-func (m TakeoverProofMsg) String() string {
-	return fmt.Sprintf("Stream: '%v' [%v-%v], Root: %x, Sig: %x", m.Stream, m.Start, m.End, m.Root, m.Sig)
-}
-
 // SubcribeMsg is the protocol msg for requesting a stream(section)
 type SubscribeMsg struct {
 	Stream   string
@@ -265,6 +233,38 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 		}
 	}
 	return nil
+}
+
+// Handover represents a statement that the upstream peer hands over the stream section
+type Handover struct {
+	Stream     string // name of stream
+	Start, End uint64 // index of hashes
+	Root       []byte // Root hash for indexed segment inclusion proofs
+}
+
+// HandoverProof represents a signed statement that the upstream peer handed over the stream section
+type HandoverProof struct {
+	Sig []byte // Sign(Hash(Serialisation(Handover)))
+	*Handover
+}
+
+// Takeover represents a statement that downstream peer took over (stored all data)
+// handed over
+type Takeover Handover
+
+//  TakeoverProof represents a signed statement that the downstream peer took over
+// the stream section
+type TakeoverProof struct {
+	Sig []byte // Sign(Hash(Serialisation(Takeover)))
+	*Takeover
+}
+
+// TakeoverProofMsg is the protocol msg sent by downstream peer
+type TakeoverProofMsg TakeoverProof
+
+// String pretty prints TakeoverProofMsg
+func (m TakeoverProofMsg) String() string {
+	return fmt.Sprintf("Stream: '%v' [%v-%v], Root: %x, Sig: %x", m.Stream, m.Start, m.End, m.Root, m.Sig)
 }
 
 func (p *Peer) handleTakeoverProofMsg(req *TakeoverProofMsg) error {
