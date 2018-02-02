@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -42,11 +41,6 @@ func main() {
 	app.Name = "signer"
 	app.Usage = "Manage ethereum Account operations"
 	app.Flags = []cli.Flag{
-		cli.Int64Flag{
-			Name:  "chainid",
-			Value: params.MainnetChainConfig.ChainId.Int64(),
-			Usage: "chain identifier",
-		},
 		cli.IntFlag{
 			Name:  "loglevel",
 			Value: 4,
