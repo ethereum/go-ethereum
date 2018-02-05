@@ -22,6 +22,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -44,7 +45,9 @@ var DefaultConfig = Config{
 	},
 	NetworkId:     1,
 	LightPeers:    100,
-	DatabaseCache: 128,
+	DatabaseCache: 768,
+	TrieCache:     256,
+	TrieTimeout:   5 * time.Minute,
 	GasPrice:      big.NewInt(18 * params.Shannon),
 
 	TxPool: core.DefaultTxPoolConfig,
@@ -78,6 +81,7 @@ type Config struct {
 	// Protocol options
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
 	SyncMode  downloader.SyncMode
+	NoPruning bool
 
 	// Light client options
 	LightServ  int `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
@@ -87,6 +91,8 @@ type Config struct {
 	SkipBcVersionCheck bool `toml:"-"`
 	DatabaseHandles    int  `toml:"-"`
 	DatabaseCache      int
+	TrieCache          int
+	TrieTimeout        time.Duration
 
 	// Mining-related options
 	Etherbase    common.Address `toml:",omitempty"`

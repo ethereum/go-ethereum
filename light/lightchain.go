@@ -18,6 +18,7 @@ package light
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -26,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -210,6 +212,11 @@ func (bc *LightChain) Engine() consensus.Engine { return bc.engine }
 // Genesis returns the genesis block
 func (bc *LightChain) Genesis() *types.Block {
 	return bc.genesisBlock
+}
+
+// State returns a new mutable state based on the current HEAD block.
+func (bc *LightChain) State() (*state.StateDB, error) {
+	return nil, errors.New("not implemented, needs client/server interface split")
 }
 
 // GetBody retrieves a block body (transactions and uncles) from the database
