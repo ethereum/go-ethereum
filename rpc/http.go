@@ -143,10 +143,10 @@ func (t *httpReadWriteNopCloser) Close() error {
 // NewHTTPServer creates a new HTTP RPC server around an API provider.
 //
 // Deprecated: Server implements http.Handler
-func NewHTTPServer(cors []string, hosts []string, srv *Server) *http.Server {
+func NewHTTPServer(cors []string, vhosts []string, srv *Server) *http.Server {
 	// Wrap the CORS-handler within a host-handler
 	handler := newCorsHandler(srv, cors)
-	handler = newHostHandler(hosts, handler)
+	handler = newVHostHandler(vhosts, handler)
 	return &http.Server{Handler: handler}
 }
 
@@ -193,29 +193,26 @@ func newCorsHandler(srv *Server, allowedOrigins []string) http.Handler {
 	if len(allowedOrigins) == 0 {
 		return srv
 	}
-
 	c := cors.New(cors.Options{
 		AllowedOrigins: allowedOrigins,
 		AllowedMethods: []string{http.MethodPost, http.MethodGet},
 		MaxAge:         600,
 		AllowedHeaders: []string{"*"},
-		Debug:          true,
 	})
 	return c.Handler(srv)
 }
 
-// hostHandler is a handler which validates the Host-header of incoming requests.
-// The hostHandler can prevent DNS rebinding attacks, which do not utilize CORS-headers,
+// virtalHostHandler is a handler which validates the Host-header of incoming requests.
+// The virtalHostHandler can prevent DNS rebinding attacks, which do not utilize CORS-headers,
 // since they do in-domain requests against the RPC api. Instead, we can see on the Host-header
 // which domain was used, and validate that against a whitelist.
-type hostHandler struct {
-	AllowedHosts []string
-	next         http.Handler
+type virtalHostHandler struct {
+	vhosts map[string]struct{}
+	next   http.Handler
 }
 
 // ServeHTTP serves JSON-RPC requests over HTTP, implements http.Handler
-func (h *hostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-
+func (h *virtalHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// if r.Host is not set, we can continue serving since a browser would set the Host header
 	if r.Host == "" {
 		h.next.ServeHTTP(w, r)
@@ -233,16 +230,22 @@ func (h *hostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	}
 	// Not an ip address, but a hostname. Need to validate
-	for _, allowedHost := range h.AllowedHosts {
-		if strings.ToLower(allowedHost) == strings.ToLower(host) || allowedHost == "*" {
-			h.next.ServeHTTP(w, r)
-			return
-		}
+	if _, exist := h.vhosts["*"]; exist {
+		h.next.ServeHTTP(w, r)
+		return
+	}
+	if _, exist := h.vhosts[host]; exist {
+		h.next.ServeHTTP(w, r)
+		return
 	}
 	http.Error(w, "invalid host specified", http.StatusForbidden)
 	return
 }
 
-func newHostHandler(allowedHosts []string, next http.Handler) http.Handler {
-	return &hostHandler{allowedHosts, next}
+func newVHostHandler(vhosts []string, next http.Handler) http.Handler {
+	vhostMap := make(map[string]struct{})
+	for _, allowedHost := range vhosts {
+		vhostMap[strings.ToLower(allowedHost)] = struct{}{}
+	}
+	return &virtalHostHandler{vhostMap, next}
 }

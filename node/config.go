@@ -105,14 +105,14 @@ type Config struct {
 	// useless for custom HTTP clients.
 	HTTPCors []string `toml:",omitempty"`
 
-	// HTTPVirtualHostnames is the list of virtual hostnames which are allowed on incoming requests.
+	// HTTPVirtualHosts is the list of virtual hostnames which are allowed on incoming requests.
 	// This is by default {'localhost'}. Using this prevents attacks like
 	// DNS rebinding, which bypasses SOP by simply masquerading as being within the same
 	// origin. These attacks do not utilize CORS, since they are not cross-domain.
 	// By explicitly checking the Host-header, the server will not allow requests
 	// made against the server with a malicious host domain.
 	// Requests using ip address directly are not affected
-	HTTPVirtualHostnames []string `toml:",omitempty"`
+	HTTPVirtualHosts []string `toml:",omitempty"`
 
 	// HTTPModules is a list of API modules to expose via the HTTP RPC interface.
 	// If the module list is empty, all RPC API endpoints designated public will be

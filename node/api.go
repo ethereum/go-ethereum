@@ -114,7 +114,7 @@ func (api *PrivateAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, 
 }
 
 // StartRPC starts the HTTP RPC API server.
-func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis *string, hosts *string) (bool, error) {
+func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
@@ -141,11 +141,11 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		}
 	}
 
-	allowedHosts := api.node.config.HTTPVirtualHostnames
-	if hosts != nil {
-		allowedHosts = nil
-		for _, host := range strings.Split(*host, ",") {
-			allowedHosts = append(allowedHosts, strings.TrimSpace(host))
+	allowedVHosts := api.node.config.HTTPVirtualHosts
+	if vhosts != nil {
+		allowedVHosts = nil
+		for _, vhost := range strings.Split(*host, ",") {
+			allowedVHosts = append(allowedVHosts, strings.TrimSpace(vhost))
 		}
 	}
 
@@ -157,7 +157,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		}
 	}
 
-	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, allowedOrigins, allowedHosts); err != nil {
+	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, allowedOrigins, allowedVHosts); err != nil {
 		return false, err
 	}
 	return true, nil
