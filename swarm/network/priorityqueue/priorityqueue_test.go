@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func Test(t *testing.T) {
+func TestPriorityQueue(t *testing.T) {
 	var results []string
 	wg := sync.WaitGroup{}
 	pq := New(3, 2)
