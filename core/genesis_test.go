@@ -30,11 +30,11 @@ import (
 )
 
 func TestDefaultGenesisBlock(t *testing.T) {
-	block, _ := DefaultGenesisBlock().ToBlock()
+	block := DefaultGenesisBlock().ToBlock(nil)
 	if block.Hash() != params.MainnetGenesisHash {
 		t.Errorf("wrong mainnet genesis hash, got %v, want %v", block.Hash(), params.MainnetGenesisHash)
 	}
-	block, _ = DefaultTestnetGenesisBlock().ToBlock()
+	block = DefaultTestnetGenesisBlock().ToBlock(nil)
 	if block.Hash() != params.TestnetGenesisHash {
 		t.Errorf("wrong testnet genesis hash, got %v, want %v", block.Hash(), params.TestnetGenesisHash)
 	}
@@ -118,7 +118,7 @@ func TestSetupGenesis(t *testing.T) {
 				// Commit the 'old' genesis block with Homestead transition at #2.
 				// Advance to block #4, past the homestead transition block of customg.
 				genesis := oldcustomg.MustCommit(db)
-				bc, _ := NewBlockChain(db, oldcustomg.Config, ethash.NewFullFaker(), vm.Config{})
+				bc, _ := NewBlockChain(db, nil, oldcustomg.Config, ethash.NewFullFaker(), vm.Config{})
 				defer bc.Stop()
 				bc.SetValidator(bproc{})
 				bc.InsertChain(makeBlockChainWithDiff(genesis, []int{2, 3, 4, 5}, 0))

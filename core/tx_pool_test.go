@@ -78,8 +78,8 @@ func pricedTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ec
 }
 
 func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
-	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
+	diskdb, _ := ethdb.NewMemDatabase()
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(diskdb))
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
 
 	key, _ := crypto.GenerateKey()

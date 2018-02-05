@@ -359,7 +359,7 @@ func testGetProofs(t *testing.T, protocol int) {
 	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
 		header := bc.GetHeaderByNumber(i)
 		root := header.Root
-		trie, _ := trie.New(root, db)
+		trie, _ := trie.New(root, trie.NewDatabase(db))
 
 		for _, acc := range accounts {
 			req := ProofReq{
@@ -444,7 +444,7 @@ func TestTransactionStatusLes2(t *testing.T) {
 
 	// test error status by sending an underpriced transaction
 	tx0, _ := types.SignTx(types.NewTransaction(0, acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, testBankKey)
-	test(tx0, true, txStatus{Status: core.TxStatusUnknown, Error: core.ErrUnderpriced})
+	test(tx0, true, txStatus{Status: core.TxStatusUnknown, Error: core.ErrUnderpriced.Error()})
 
 	tx1, _ := types.SignTx(types.NewTransaction(0, acc1Addr, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, testBankKey)
 	test(tx1, false, txStatus{Status: core.TxStatusUnknown}) // query before sending, should be unknown
