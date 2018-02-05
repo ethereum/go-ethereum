@@ -1,4 +1,4 @@
-package discovery_test
+package discovery
 
 import (
 	"context"
@@ -319,5 +319,5 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 		HiveParams:   hp,
 	}
 
-	return network.NewBzz(config, kad, nil, nil), nil
+	return network.NewBzz(config, kad, nil), nil
 }
