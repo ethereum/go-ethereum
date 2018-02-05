@@ -1178,7 +1178,7 @@ func newServices() adapters.Services {
 				UnderlayAddr: addr.Under(),
 				HiveParams:   hp,
 			}
-			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil), nil
+			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore), nil
 		},
 	}
 }

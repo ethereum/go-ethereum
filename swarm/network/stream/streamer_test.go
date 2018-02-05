@@ -77,6 +77,8 @@ func (self *testClient) BatchDone(string, uint64, []byte, []byte) func() (*Takeo
 	return nil
 }
 
+func (self *testClient) Close() {}
+
 func (self *testServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
 	return make([]byte, HashSize), from + 1, to + 1, nil, nil
 }
