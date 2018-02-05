@@ -15,7 +15,7 @@
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 //
 
-package main
+package signer
 
 import (
 	"github.com/ethereum/go-ethereum/log"

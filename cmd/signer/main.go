@@ -16,7 +16,7 @@
 
 // signer is a utility that can be used so sign transactions and
 // arbitrary data.
-package main
+package signer
 
 import (
 	"fmt"
