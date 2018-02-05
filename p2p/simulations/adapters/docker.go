@@ -33,6 +33,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
+var (
+	ErrLinuxOnly = errors.New("DockerAdapter can only be used on Linux as it uses the current binary (which must be a Linux binary)")
+)
+
 // DockerAdapter is a NodeAdapter which runs simulation nodes inside Docker
 // containers.
 //
@@ -52,7 +56,7 @@ func NewDockerAdapter() (*DockerAdapter, error) {
 	// It is reasonable to require this because the caller can just
 	// compile the current binary in a Docker container.
 	if runtime.GOOS != "linux" {
-		return nil, errors.New("DockerAdapter can only be used on Linux as it uses the current binary (which must be a Linux binary)")
+		return nil, ErrLinuxOnly
 	}
 
 	if err := buildDockerImage(); err != nil {

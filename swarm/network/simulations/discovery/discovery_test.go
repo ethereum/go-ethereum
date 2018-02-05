@@ -77,7 +77,11 @@ func TestDiscoverySimulationDockerAdapter(t *testing.T) {
 func testDiscoverySimulationDockerAdapter(t *testing.T, nodes, conns int) {
 	adapter, err := adapters.NewDockerAdapter()
 	if err != nil {
-		t.Fatal(err)
+		if err == adapters.ErrLinuxOnly {
+			t.Skip(err)
+		} else {
+			t.Fatal(err)
+		}
 	}
 	testDiscoverySimulation(t, nodes, conns, adapter)
 }
