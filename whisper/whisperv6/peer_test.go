@@ -274,7 +274,7 @@ func checkPropagation(t *testing.T, includingNodeZero bool) {
 		time.Sleep(cycle * time.Millisecond)
 	}
 
-	t.Fatalf("Test was not complete: timeout %d seconds.", iterations*cycle/1000)
+	t.Fatalf("Test was not complete: timeout %d seconds. nodes=%v", iterations*cycle/1000, nodes)
 
 	if !includingNodeZero {
 		f := nodes[0].shh.GetFilter(nodes[0].filerID)
