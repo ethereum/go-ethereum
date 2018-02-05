@@ -45,11 +45,8 @@ func NewResourceError(code int, s string) error {
 		panic("no such error code!")
 	}
 	r := &ResourceError{
-		err: s,
-	}
-	switch code {
-	case ErrNotFound, ErrIO, ErrUnauthorized, ErrInvalidValue, ErrDataOverflow, ErrNothingToReturn, ErrInvalidSignature, ErrNotSynced:
-		r.code = code
+		err:  s,
+		code: code,
 	}
 	return r
 }
