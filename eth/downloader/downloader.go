@@ -324,8 +324,13 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 		errEmptyHeaderSet, errPeersUnavailable, errTooOld,
 		errInvalidAncestor, errInvalidChain:
 		log.Warn("Synchronisation failed, dropping peer", "peer", id, "err", err)
-		d.dropPeer(id)
-
+		if d.dropPeer == nil {
+			// The dropPeer method is nil when `--copydb` is used for a local copy.
+			// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
+			log.Warn("Downloader wants to drop peer, but peerdrop-function is not set", "peer", id)
+		} else {
+			d.dropPeer(id)
+		}
 	default:
 		log.Warn("Synchronisation failed, retrying", "err", err)
 	}
@@ -853,6 +858,12 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 			getHeaders(from)
 
 		case <-timeout.C:
+			if d.dropPeer == nil {
+				// The dropPeer method is nil when `--copydb` is used for a local copy.
+				// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
+				p.log.Warn("Downloader wants to drop peer, but peerdrop-function is not set", "peer", p.id)
+				break
+			}
 			// Header retrieval timed out, consider the peer bad and drop
 			p.log.Debug("Header request timed out", "elapsed", ttl)
 			headerTimeoutMeter.Mark(1)
@@ -1071,7 +1082,13 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 						setIdle(peer, 0)
 					} else {
 						peer.log.Debug("Stalling delivery, dropping", "type", kind)
-						d.dropPeer(pid)
+						if d.dropPeer == nil {
+							// The dropPeer method is nil when `--copydb` is used for a local copy.
+							// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
+							peer.log.Warn("Downloader wants to drop peer, but peerdrop-function is not set", "peer", pid)
+						} else {
+							d.dropPeer(pid)
+						}
 					}
 				}
 			}
