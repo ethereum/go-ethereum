@@ -30,17 +30,20 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"golang.org/x/net/websocket"
 )
 
@@ -107,7 +110,10 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 
 	// listen on a random localhost port (we'll get the actual port after
 	// starting the node through the RPC admin.nodeInfo method)
-	conf.Stack.P2P.ListenAddr = "127.0.0.1:0"
+	conf.Stack.P2P.ListenAddr = fmt.Sprintf("127.0.0.1:%d", config.Port)
+
+	spew.Dump("correct config")
+	spew.Dump(conf)
 
 	node := &ExecNode{
 		ID:      config.ID,
@@ -382,6 +388,14 @@ func execP2PNode() {
 		conf.Stack.WSHost = externalIP()
 	}
 
+	ports := strings.Split(conf.Stack.P2P.ListenAddr, ":")
+
+	prt, err := strconv.ParseInt(ports[1], 10, 32)
+	if err != nil {
+		panic(err)
+	}
+	prt16 := uint16(prt)
+
 	// initialize the devp2p stack
 	stack, err := node.New(&conf.Stack)
 	if err != nil {
@@ -392,28 +406,90 @@ func execP2PNode() {
 	// them in a snapshot service
 	services := make(map[string]node.Service, len(serviceNames))
 	for _, name := range serviceNames {
-		serviceFunc, exists := serviceFuncs[name]
-		if !exists {
-			log.Crit("unknown node service", "name", name)
-		}
-		constructor := func(nodeCtx *node.ServiceContext) (node.Service, error) {
-			ctx := &ServiceContext{
-				RPCDialer:   &wsRPCDialer{addrs: conf.PeerAddrs},
-				NodeContext: nodeCtx,
-				Config:      conf.Node,
+		if name == "discovery" {
+			serviceFunc := func(ctx *ServiceContext) (node.Service, error) {
+				//addr := network.NewAddrFromNodeID(ctx.Config.ID)
+
+				spew.Dump("incorrect config")
+				spew.Dump(ctx.Config)
+
+				addr := &network.BzzAddr{
+					OAddr: network.ToOverlayAddr(ctx.Config.ID.Bytes()),
+					//UAddr: []byte(discover.NewNode(ctx.Config.ID, net.IP{127, 0, 0, 1}, ctx.Config.Port, ctx.Config.Port).String()),
+					UAddr: []byte(discover.NewNode(ctx.Config.ID, net.IP{127, 0, 0, 1}, prt16, prt16).String()),
+				}
+
+				kp := network.NewKadParams()
+				kp.MinProxBinSize = 2
+				kp.MaxBinSize = 3
+				kp.MinBinSize = 1
+				kp.MaxRetries = 1000
+				kp.RetryExponent = 2
+				kp.RetryInterval = 50000000
+
+				if ctx.Config.Reachable != nil {
+					kp.Reachable = func(o network.OverlayAddr) bool {
+						return ctx.Config.Reachable(o.(*network.BzzAddr).ID())
+					}
+				}
+				kad := network.NewKademlia(addr.Over(), kp)
+
+				hp := network.NewHiveParams()
+				hp.KeepAliveInterval = 200 * time.Millisecond
+
+				config := &network.BzzConfig{
+					OverlayAddr:  addr.Over(),
+					UnderlayAddr: addr.Under(),
+					HiveParams:   hp,
+				}
+
+				return network.NewBzz(config, kad, nil), nil
 			}
-			if conf.Snapshots != nil {
-				ctx.Snapshot = conf.Snapshots[name]
+
+			constructor := func(nodeCtx *node.ServiceContext) (node.Service, error) {
+				ctx := &ServiceContext{
+					RPCDialer:   &wsRPCDialer{addrs: conf.PeerAddrs},
+					NodeContext: nodeCtx,
+					Config:      conf.Node,
+				}
+				if conf.Snapshots != nil {
+					ctx.Snapshot = conf.Snapshots[name]
+				}
+				service, err := serviceFunc(ctx)
+				if err != nil {
+					return nil, err
+				}
+				services[name] = service
+				return service, nil
 			}
-			service, err := serviceFunc(ctx)
-			if err != nil {
-				return nil, err
+			if err := stack.Register(constructor); err != nil {
+				log.Crit("error starting service", "name", name, "err", err)
 			}
-			services[name] = service
-			return service, nil
-		}
-		if err := stack.Register(constructor); err != nil {
-			log.Crit("error starting service", "name", name, "err", err)
+
+		} else {
+			serviceFunc, exists := serviceFuncs[name]
+			if !exists {
+				log.Crit("unknown node service", "name", name)
+			}
+			constructor := func(nodeCtx *node.ServiceContext) (node.Service, error) {
+				ctx := &ServiceContext{
+					RPCDialer:   &wsRPCDialer{addrs: conf.PeerAddrs},
+					NodeContext: nodeCtx,
+					Config:      conf.Node,
+				}
+				if conf.Snapshots != nil {
+					ctx.Snapshot = conf.Snapshots[name]
+				}
+				service, err := serviceFunc(ctx)
+				if err != nil {
+					return nil, err
+				}
+				services[name] = service
+				return service, nil
+			}
+			if err := stack.Register(constructor); err != nil {
+				log.Crit("error starting service", "name", name, "err", err)
+			}
 		}
 	}
 

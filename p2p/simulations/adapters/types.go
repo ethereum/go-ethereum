@@ -21,8 +21,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
+	"time"
 
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -97,6 +99,8 @@ type NodeConfig struct {
 
 	// function to sanction or prevent suggesting a peer
 	Reachable func(id discover.NodeID) bool
+
+	Port uint16
 }
 
 // nodeConfigJSON is used to encode and decode NodeConfig as JSON by encoding
@@ -165,9 +169,12 @@ func RandomNodeConfig() *NodeConfig {
 	}
 
 	id := discover.PubkeyID(&key.PublicKey)
+	rand.Seed(time.Now().UTC().UnixNano())
+	fmt.Println(rand.Int())
 	return &NodeConfig{
 		ID:         id,
 		PrivateKey: key,
+		Port:       uint16(5000 + rand.Int()%2000),
 	}
 }
 
