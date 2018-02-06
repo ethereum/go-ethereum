@@ -26,6 +26,7 @@ import (
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"strings"
 )
 
 const (
@@ -244,19 +245,23 @@ func (a UnprefixedAddress) MarshalText() ([]byte, error) {
 
 // MixedcaseAddress retains the original string, which may or may not be
 // correctly checksummed
-//
-// TODO! Should we really keep both addr and original, or _only_ original, and
-// always calculate addr on the fly? That would reduce the possibilities for errors
-// if some caller modifies the original at some point. NB: If we do so, we should still
-// parse the addr in UnmarshalJSON to ensure that the format is correct, e.g. correct size and
-// hex-encoded and such
 type MixedcaseAddress struct {
 	addr     Address
 	original string
 }
+
 // NewMixedcaseAddress constructor (mainly for testing)
 func NewMixedcaseAddress(addr Address) MixedcaseAddress {
 	return MixedcaseAddress{addr: addr, original: addr.Hex()}
+}
+
+// NewMixedcaseAddressFromString is mainly meant for unit-testing
+func NewMixedcaseAddressFromString(hexaddr string) (*MixedcaseAddress, error) {
+	if !IsHexAddress(hexaddr) {
+		return nil, fmt.Errorf("Invalid address")
+	}
+	a := FromHex(hexaddr)
+	return &MixedcaseAddress{addr: BytesToAddress(a), original: hexaddr}, nil
 }
 
 // UnmarshalJSON parses MixedcaseAddress
@@ -269,7 +274,10 @@ func (ma *MixedcaseAddress) UnmarshalJSON(input []byte) error {
 
 // MarshalJSON marshals the original value
 func (ma *MixedcaseAddress) MarshalJSON() ([]byte, error) {
-	return json.Marshal(ma.original)
+	if strings.HasPrefix(ma.original, "0x") || strings.HasPrefix(ma.original, "0X") {
+		return json.Marshal(fmt.Sprintf("0x%s", ma.original[2:]))
+	}
+	return json.Marshal(fmt.Sprintf("0x%s", ma.original))
 }
 
 // Address returns the address
