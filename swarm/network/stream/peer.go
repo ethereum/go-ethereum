@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
+	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -84,7 +85,7 @@ func (p *Peer) SendPriority(msg interface{}, priority uint8) error {
 }
 
 // SendOfferedHashes sends OfferedHashesMsg protocol msg
-func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
+func (p *Peer) SendOfferedHashes(s *server, f, t uint64, initial bool) error {
 	hashes, from, to, proof, err := s.SetNextBatch(f, t)
 	if err != nil {
 		return err
@@ -105,57 +106,56 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		From:          from,
 		To:            to,
 		Stream:        s.stream,
-		Key:           s.key,
+		Initial:       initial,
 	}
-	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "key", s.key, "len", len(hashes), "from", from, "to", to)
+	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
 	return p.SendPriority(msg, s.priority)
 }
 
-func (p *Peer) getServer(s string) (*server, error) {
+func (p *Peer) getServer(s Stream) (*server, error) {
 	p.serverMu.RLock()
 	defer p.serverMu.RUnlock()
 
-	server := p.servers[s]
+	server := p.servers[s.String()]
 	if server == nil {
 		return nil, fmt.Errorf("server '%v' not provided to peer %v", s, p.ID())
 	}
 	return server, nil
 }
 
-func (p *Peer) getClient(s string) (*client, error) {
+func (p *Peer) getClient(s Stream) (*client, error) {
 	p.clientMu.RLock()
 	defer p.clientMu.RUnlock()
 
-	client := p.clients[s]
+	client := p.clients[s.String()]
 	if client == nil {
 		return nil, fmt.Errorf("client '%v' not provided to peer %v", s, p.ID())
 	}
 	return client, nil
 }
 
-func (p *Peer) setServer(s string, key []byte, o Server, priority uint8) (*server, error) {
+func (p *Peer) setServer(s Stream, o Server, priority uint8) (*server, error) {
 	p.serverMu.Lock()
 	defer p.serverMu.Unlock()
 
-	sk := s + keyToString(key)
+	sk := s.String()
 	if p.servers[sk] != nil {
 		return nil, fmt.Errorf("server %v already registered", sk)
 	}
 	os := &server{
 		Server:   o,
-		priority: priority,
 		stream:   s,
-		key:      key,
+		priority: priority,
 	}
 	p.servers[sk] = os
 	return os, nil
 }
 
-func (p *Peer) removeServer(s string, key []byte) error {
+func (p *Peer) removeServer(s Stream) error {
 	p.serverMu.Lock()
 	defer p.serverMu.Unlock()
 
-	sk := s + keyToString(key)
+	sk := s.String()
 	server, ok := p.servers[sk]
 	if !ok {
 		return errServerNotFound
@@ -165,39 +165,63 @@ func (p *Peer) removeServer(s string, key []byte) error {
 	return nil
 }
 
-func (p *Peer) setClient(s string, key []byte, i Client, priority uint8, live bool) error {
+func (p *Peer) setClient(s Stream, i Client, priority uint8, intervalsStore intervals.Store) error {
 	p.clientMu.Lock()
 	defer p.clientMu.Unlock()
 
-	sk := s + keyToString(key)
+	sk := s.String()
 	if p.clients[sk] != nil {
 		return fmt.Errorf("client %v already registered", sk)
 	}
+
+	intervalsKey := peerStreamIntervalsKey(p, s)
+	if s.Live {
+		// try to find previous history and live intervals and merge live into history
+		historyKey := peerStreamIntervalsKey(p, NewStream(s.Name, s.Key, false))
+		historyIntervals, err := intervalsStore.Get(historyKey)
+		switch err {
+		case nil:
+			liveIntervals, err := intervalsStore.Get(intervalsKey)
+			switch err {
+			case nil:
+				historyIntervals.Merge(liveIntervals)
+				if err := intervalsStore.Put(historyKey, historyIntervals); err != nil {
+					log.Error("stream set client: put history intervals", "stream", s, "peer", p, "err", err)
+				}
+			case intervals.ErrNotFound:
+			default:
+				log.Error("stream set client: get live intervals", "stream", s, "peer", p, "err", err)
+			}
+		case intervals.ErrNotFound:
+		default:
+			log.Error("stream set client: get history intervals", "stream", s, "peer", p, "err", err)
+		}
+	} else {
+		// create intervals for history stream
+		// live stream can create intervals when the first sessionAt is known
+		if err := intervalsStore.Put(intervalsKey, intervals.NewIntervals(0)); err != nil {
+			return err
+		}
+	}
+
 	next := make(chan error, 1)
-	// var intervals *Intervals
-	// if !live {
-	// key := s + p.ID().String()
-	// intervals = NewIntervals(key, p.streamer)
-	// }
 	p.clients[sk] = &client{
-		Client: i,
-		// intervals:        intervals,
-		live:     live,
-		priority: priority,
-		next:     next,
-		stream:   s,
-		key:      key,
+		Client:         i,
+		stream:         s,
+		priority:       priority,
+		next:           next,
+		intervalsStore: intervalsStore,
+		intervalsKey:   intervalsKey,
 	}
 	next <- nil // this is to allow wantedKeysMsg before first batch arrives
 	return nil
 }
 
-func (p *Peer) removeClient(s string, key []byte) error {
+func (p *Peer) removeClient(s Stream) error {
 	p.clientMu.Lock()
 	defer p.clientMu.Unlock()
 
-	sk := s + keyToString(key)
-	client, ok := p.clients[sk]
+	client, ok := p.clients[s.String()]
 	if !ok {
 		return errClientNotFound
 	}

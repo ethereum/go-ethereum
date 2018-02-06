@@ -64,10 +64,9 @@ func NewSwarmSyncerServer(live bool, po uint8, db *storage.DBAPI) (*SwarmSyncerS
 const maxPO = 32
 
 func RegisterSwarmSyncerServer(streamer *Registry, db *storage.DBAPI) {
-	streamer.RegisterServerFunc("SYNC", func(p *Peer, t []byte) (Server, error) {
+	streamer.RegisterServerFunc("SYNC", func(p *Peer, t []byte, live bool) (Server, error) {
 		po := t[0]
-		// TODO: make this work for HISTORY too
-		return NewSwarmSyncerServer(false, po, db)
+		return NewSwarmSyncerServer(live, po, db)
 	})
 	// streamer.RegisterServerFunc(stream, func(p *Peer) (Server, error) {
 	// 	return NewOutgoingProvableSwarmSyncer(po, db)
@@ -188,7 +187,7 @@ func NewSwarmSyncerClient(_ *Peer, db *storage.DBAPI, chunker storage.Chunker) (
 // RegisterSwarmSyncerClient registers the client constructor function for
 // to handle incoming sync streams
 func RegisterSwarmSyncerClient(streamer *Registry, db *storage.DBAPI) {
-	streamer.RegisterClientFunc("SYNC", func(p *Peer, t []byte) (Client, error) {
+	streamer.RegisterClientFunc("SYNC", func(p *Peer, t []byte, love bool) (Client, error) {
 		return NewSwarmSyncerClient(p, db, nil)
 	})
 }
@@ -207,14 +206,14 @@ func (s *SwarmSyncerClient) NeedData(key []byte) (wait func()) {
 }
 
 // BatchDone
-func (s *SwarmSyncerClient) BatchDone(streamName string, from uint64, hashes []byte, root []byte) func() (*TakeoverProof, error) {
+func (s *SwarmSyncerClient) BatchDone(stream Stream, from uint64, hashes []byte, root []byte) func() (*TakeoverProof, error) {
 	if s.chunker != nil {
-		return func() (*TakeoverProof, error) { return s.TakeoverProof(streamName, from, hashes, root) }
+		return func() (*TakeoverProof, error) { return s.TakeoverProof(stream, from, hashes, root) }
 	}
 	return nil
 }
 
-func (s *SwarmSyncerClient) TakeoverProof(streamName string, from uint64, hashes []byte, root storage.Key) (*TakeoverProof, error) {
+func (s *SwarmSyncerClient) TakeoverProof(stream Stream, from uint64, hashes []byte, root storage.Key) (*TakeoverProof, error) {
 	// for provable syncer currentRoot is non-zero length
 	if s.chunker != nil {
 		if from > s.sessionAt { // for live syncing currentRoot is always updated
@@ -241,11 +240,10 @@ func (s *SwarmSyncerClient) TakeoverProof(streamName string, from uint64, hashes
 	}
 	s.end += uint64(len(hashes)) / HashSize
 	takeover := &Takeover{
-		Stream: streamName,
-		// Key:    s.Key,
-		Start: s.start,
-		End:   s.end,
-		Root:  root,
+		Stream: stream,
+		Start:  s.start,
+		End:    s.end,
+		Root:   root,
 	}
 	// serialise and sign
 	return &TakeoverProof{
