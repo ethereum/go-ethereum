@@ -129,7 +129,7 @@ type RetrieveRequestMsg struct {
 
 func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) error {
 	log.Debug("received request", "peer", sp.ID(), "hash", req.Key)
-	s, err := sp.getServer(swarmChunkServerStreamName)
+	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, nil, false))
 	if err != nil {
 		return err
 	}

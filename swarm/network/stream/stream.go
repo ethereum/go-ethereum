@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -45,43 +46,45 @@ const (
 
 // Registry registry for outgoing and incoming streamer constructors
 type Registry struct {
-	api         *API
-	addr        *network.BzzAddr
-	skipCheck   bool
-	clientMu    sync.RWMutex
-	serverMu    sync.RWMutex
-	peersMu     sync.RWMutex
-	serverFuncs map[string]func(*Peer, []byte) (Server, error)
-	clientFuncs map[string]func(*Peer, []byte) (Client, error)
-	peers       map[discover.NodeID]*Peer
-	delivery    *Delivery
-	store       storage.ChunkStore
+	api            *API
+	addr           *network.BzzAddr
+	skipCheck      bool
+	clientMu       sync.RWMutex
+	serverMu       sync.RWMutex
+	peersMu        sync.RWMutex
+	serverFuncs    map[string]func(*Peer, []byte, bool) (Server, error)
+	clientFuncs    map[string]func(*Peer, []byte, bool) (Client, error)
+	peers          map[discover.NodeID]*Peer
+	delivery       *Delivery
+	store          storage.ChunkStore
+	intervalsStore intervals.Store
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(addr *network.BzzAddr, delivery *Delivery, store storage.ChunkStore, skipCheck bool) *Registry {
+func NewRegistry(addr *network.BzzAddr, delivery *Delivery, store storage.ChunkStore, intervalsStore intervals.Store, skipCheck bool) *Registry {
 	streamer := &Registry{
-		addr:        addr,
-		skipCheck:   skipCheck,
-		store:       store,
-		serverFuncs: make(map[string]func(*Peer, []byte) (Server, error)),
-		clientFuncs: make(map[string]func(*Peer, []byte) (Client, error)),
-		peers:       make(map[discover.NodeID]*Peer),
-		delivery:    delivery,
+		addr:           addr,
+		skipCheck:      skipCheck,
+		store:          store,
+		serverFuncs:    make(map[string]func(*Peer, []byte, bool) (Server, error)),
+		clientFuncs:    make(map[string]func(*Peer, []byte, bool) (Client, error)),
+		peers:          make(map[discover.NodeID]*Peer),
+		delivery:       delivery,
+		intervalsStore: intervalsStore,
 	}
 	streamer.api = NewAPI(streamer, streamer.store)
 	delivery.getPeer = streamer.getPeer
-	streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, t []byte) (Server, error) {
+	streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ []byte, _ bool) (Server, error) {
 		return NewSwarmChunkServer(delivery.db), nil
 	})
-	streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t []byte) (Client, error) {
+	streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, _ []byte, _ bool) (Client, error) {
 		return NewSwarmSyncerClient(p, delivery.db, nil)
 	})
 	return streamer
 }
 
 // RegisterClient registers an incoming streamer constructor
-func (r *Registry) RegisterClientFunc(stream string, f func(*Peer, []byte) (Client, error)) {
+func (r *Registry) RegisterClientFunc(stream string, f func(*Peer, []byte, bool) (Client, error)) {
 	r.clientMu.Lock()
 	defer r.clientMu.Unlock()
 
@@ -89,7 +92,7 @@ func (r *Registry) RegisterClientFunc(stream string, f func(*Peer, []byte) (Clie
 }
 
 // RegisterServer registers an outgoing streamer constructor
-func (r *Registry) RegisterServerFunc(stream string, f func(*Peer, []byte) (Server, error)) {
+func (r *Registry) RegisterServerFunc(stream string, f func(*Peer, []byte, bool) (Server, error)) {
 	r.serverMu.Lock()
 	defer r.serverMu.Unlock()
 
@@ -97,7 +100,7 @@ func (r *Registry) RegisterServerFunc(stream string, f func(*Peer, []byte) (Serv
 }
 
 // GetClient accessor for incoming streamer constructors
-func (r *Registry) GetClientFunc(stream string) (func(*Peer, []byte) (Client, error), error) {
+func (r *Registry) GetClientFunc(stream string) (func(*Peer, []byte, bool) (Client, error), error) {
 	r.clientMu.RLock()
 	defer r.clientMu.RUnlock()
 
@@ -109,7 +112,7 @@ func (r *Registry) GetClientFunc(stream string) (func(*Peer, []byte) (Client, er
 }
 
 // GetServer accessor for incoming streamer constructors
-func (r *Registry) GetServerFunc(stream string) (func(*Peer, []byte) (Server, error), error) {
+func (r *Registry) GetServerFunc(stream string) (func(*Peer, []byte, bool) (Server, error), error) {
 	r.serverMu.RLock()
 	defer r.serverMu.RUnlock()
 
@@ -121,8 +124,8 @@ func (r *Registry) GetServerFunc(stream string) (func(*Peer, []byte) (Server, er
 }
 
 // Subscribe initiates the streamer
-func (r *Registry) Subscribe(peerId discover.NodeID, s string, t []byte, from, to uint64, priority uint8, live bool) error {
-	f, err := r.GetClientFunc(s)
+func (r *Registry) Subscribe(peerId discover.NodeID, s Stream, h *Range, priority uint8) error {
+	f, err := r.GetClientFunc(s.Name)
 	if err != nil {
 		return err
 	}
@@ -132,29 +135,42 @@ func (r *Registry) Subscribe(peerId discover.NodeID, s string, t []byte, from, t
 		return fmt.Errorf("peer not found %v", peerId)
 	}
 
-	is, err := f(peer, t)
+	is, err := f(peer, s.Key, s.Live)
 	if err != nil {
 		return err
 	}
-	err = peer.setClient(s, t, is, priority, live)
+	err = peer.setClient(s, is, priority, r.intervalsStore)
 	if err != nil {
 		return err
 	}
 
+	if s.Live && h != nil {
+		is, err := f(peer, s.Key, false)
+		if err != nil {
+			return err
+		}
+		p := priority
+		if p > 0 {
+			p--
+		}
+		historyStream := NewStream(s.Name, s.Key, false)
+		err = peer.setClient(historyStream, is, p, r.intervalsStore)
+		if err != nil {
+			return err
+		}
+	}
+
 	msg := &SubscribeMsg{
-		Stream: s,
-		Key:    t,
-		// Live:     live,
-		From:     from,
-		To:       to,
+		Stream:   s,
+		History:  h,
 		Priority: priority,
 	}
-	log.Debug("Subscribe ", "peer", peerId, "stream", s, "key", t, "from", from, "to", to)
+	log.Debug("Subscribe ", "peer", peerId, "stream", s, "history", h)
 
 	return peer.SendPriority(msg, priority)
 }
 
-func (r *Registry) Unsubscribe(peerId discover.NodeID, s string, t []byte) error {
+func (r *Registry) Unsubscribe(peerId discover.NodeID, s Stream) error {
 	peer := r.getPeer(peerId)
 	if peer == nil {
 		return fmt.Errorf("peer not found %v", peerId)
@@ -162,14 +178,13 @@ func (r *Registry) Unsubscribe(peerId discover.NodeID, s string, t []byte) error
 
 	msg := &UnsubscribeMsg{
 		Stream: s,
-		Key:    t,
 	}
-	log.Debug("Unsubscribe ", "peer", peerId, "stream", s, "key", t)
+	log.Debug("Unsubscribe ", "peer", peerId, "stream", s)
 
 	if err := peer.Send(msg); err != nil {
 		return err
 	}
-	return peer.removeClient(s, t)
+	return peer.removeClient(s)
 }
 
 func (r *Registry) Retrieve(chunk *storage.Chunk) error {
@@ -261,20 +276,11 @@ func (p *Peer) HandleMsg(msg interface{}) error {
 	}
 }
 
-func keyToString(key []byte) string {
-	l := len(key)
-	if l == 0 {
-		return ""
-	}
-	return fmt.Sprintf("%s-%d", string(key[:l-1]), uint8(key[l-1]))
-}
-
 type server struct {
 	Server
+	stream       Stream
 	priority     uint8
 	currentBatch []byte
-	stream       string
-	key          []byte
 }
 
 // Server interface for outgoing peer Streamer
@@ -286,56 +292,69 @@ type Server interface {
 
 type client struct {
 	Client
+	stream    Stream
 	priority  uint8
 	sessionAt uint64
-	live      bool
-	stream    string
-	key       []byte
 	next      chan error
+
+	intervalsKey   string
+	intervalsStore intervals.Store
+}
+
+func peerStreamIntervalsKey(p *Peer, s Stream) string {
+	return p.ID().String() + s.String()
+}
+
+func (c client) AddInterval(start, end uint64) (err error) {
+	i, err := c.intervalsStore.Get(c.intervalsKey)
+	if err != nil {
+		return err
+	}
+	i.Add(start, end)
+	return c.intervalsStore.Put(c.intervalsKey, i)
+}
+
+func (c client) NextInterval() (start, end uint64, err error) {
+	i, err := c.intervalsStore.Get(c.intervalsKey)
+	if err != nil {
+		return 0, 0, err
+	}
+	start, end = i.Next()
+	return start, end, nil
 }
 
 // Client interface for incoming peer Streamer
 type Client interface {
 	NeedData([]byte) func()
-	BatchDone(string, uint64, []byte, []byte) func() (*TakeoverProof, error)
+	BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error)
 	Close()
 }
 
-// nextBatch adjusts the indexes by inspecting the intervals
 func (c *client) nextBatch(from uint64) (nextFrom uint64, nextTo uint64) {
-	var intervals []uint64
-	if c.live {
-		if len(intervals) == 0 {
-			intervals = []uint64{c.sessionAt, from}
-		} else {
-			intervals[1] = from
-		}
-		nextFrom = from
-	} else if from >= c.sessionAt { // history sync complete
-		intervals = nil
-		nextFrom = from
-		nextTo = math.MaxUint64
-	} else if len(intervals) > 2 && from >= intervals[2] { // filled a gap in the intervals
-		intervals = append(intervals[:1], intervals[3:]...)
-		nextFrom = intervals[1]
-		if len(intervals) > 2 {
-			nextTo = intervals[2]
-		} else {
-			nextTo = c.sessionAt
-		}
-	} else {
-		nextFrom = from
-		intervals[1] = from
+	if c.stream.Live {
+		return from, 0
+	} else if from >= c.sessionAt {
+		return from, math.MaxUint64
+	}
+	nextFrom, nextTo, err := c.NextInterval()
+	if err != nil {
+		log.Error("next intervals", "stream", c.stream)
+		return
+	}
+	if nextTo == 0 {
 		nextTo = c.sessionAt
 	}
-	// b.intervals.set(intervals)
-	return nextFrom, nextTo
+	return
 }
 
 func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error {
 	if tf := c.BatchDone(req.Stream, req.From, hashes, req.Root); tf != nil {
 		tp, err := tf()
 		if err != nil {
+			return err
+		}
+		// TODO: make a test case for testing if the interval is added when the batch is done
+		if err := c.AddInterval(tp.Takeover.Start, tp.Takeover.End); err != nil {
 			return err
 		}
 		return p.SendPriority(tp, c.priority)
@@ -399,6 +418,10 @@ func (r *Registry) Stop() error {
 	return nil
 }
 
+type Range struct {
+	From, To uint64
+}
+
 type API struct {
 	streamer *Registry
 	dpa      *storage.DPA
@@ -432,10 +455,10 @@ func (api *API) ReadAll(hash common.Hash) (int64, error) {
 	return readAll(api.dpa, hash[:])
 }
 
-func (api *API) SubscribeStream(peerId discover.NodeID, s string, t []byte, from, to uint64, priority uint8, live bool) error {
-	return api.streamer.Subscribe(peerId, s, t, from, to, priority, live)
+func (api *API) SubscribeStream(peerId discover.NodeID, s Stream, history *Range, priority uint8) error {
+	return api.streamer.Subscribe(peerId, s, history, priority)
 }
 
-func (api *API) UnsubscribeStream(peerId discover.NodeID, s string, t []byte) error {
-	return api.streamer.Unsubscribe(peerId, s, t)
+func (api *API) UnsubscribeStream(peerId discover.NodeID, s Stream) error {
+	return api.streamer.Unsubscribe(peerId, s)
 }
