@@ -273,14 +273,20 @@ func (t *udp) close() {
 
 // ping sends a ping message to the given node and waits for a reply.
 func (t *udp) ping(toid NodeID, toaddr *net.UDPAddr) error {
-	// TODO: maybe check for ReplyTo field in callback to measure RTT
-	errc := t.pending(toid, pongPacket, func(interface{}) bool { return true })
-	t.send(toaddr, pingPacket, &ping{
+	req := &ping{
 		Version:    Version,
 		From:       t.ourEndpoint,
 		To:         makeEndpoint(toaddr, 0), // TODO: maybe use known TCP port from DB
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
+	}
+	packet, hash, err := encodePacket(t.priv, pingPacket, req)
+	if err != nil {
+		return err
+	}
+	errc := t.pending(toid, pongPacket, func(p interface{}) bool {
+		return bytes.Equal(p.(*pong).ReplyTok, hash)
 	})
+	t.write(toaddr, req.name(), packet)
 	return <-errc
 }
 
@@ -464,36 +470,41 @@ func init() {
 	}
 }
 
-func (t *udp) send(toaddr *net.UDPAddr, ptype byte, req packet) error {
-	packet, err := encodePacket(t.priv, ptype, req)
+func (t *udp) send(toaddr *net.UDPAddr, ptype byte, req packet) ([]byte, error) {
+	packet, hash, err := encodePacket(t.priv, ptype, req)
 	if err != nil {
-		return err
+		return hash, err
 	}
-	_, err = t.conn.WriteToUDP(packet, toaddr)
-	log.Trace(">> "+req.name(), "addr", toaddr, "err", err)
+	return hash, t.write(toaddr, req.name(), packet)
+}
+
+func (t *udp) write(toaddr *net.UDPAddr, what string, packet []byte) error {
+	_, err := t.conn.WriteToUDP(packet, toaddr)
+	log.Trace(">> "+what, "addr", toaddr, "err", err)
 	return err
 }
 
-func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, error) {
+func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) (packet, hash []byte, err error) {
 	b := new(bytes.Buffer)
 	b.Write(headSpace)
 	b.WriteByte(ptype)
 	if err := rlp.Encode(b, req); err != nil {
 		log.Error("Can't encode discv4 packet", "err", err)
-		return nil, err
+		return nil, nil, err
 	}
-	packet := b.Bytes()
+	packet = b.Bytes()
 	sig, err := crypto.Sign(crypto.Keccak256(packet[headSize:]), priv)
 	if err != nil {
 		log.Error("Can't sign discv4 packet", "err", err)
-		return nil, err
+		return nil, nil, err
 	}
 	copy(packet[macSize:], sig)
 	// add the hash to the front. Note: this doesn't protect the
 	// packet in any way. Our public key will be part of this hash in
 	// The future.
-	copy(packet, crypto.Keccak256(packet[macSize:]))
-	return packet, nil
+	hash = crypto.Keccak256(packet[macSize:])
+	copy(packet, hash)
+	return packet, hash, nil
 }
 
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
@@ -618,17 +629,21 @@ func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte
 	t.mutex.Unlock()
 
 	p := neighbors{Expiration: uint64(time.Now().Add(expiration).Unix())}
+	var sent bool
 	// Send neighbors in chunks with at most maxNeighbors per packet
 	// to stay below the 1280 byte limit.
-	for i, n := range closest {
-		if netutil.CheckRelayIP(from.IP, n.IP) != nil {
-			continue
+	for _, n := range closest {
+		if netutil.CheckRelayIP(from.IP, n.IP) == nil {
+			p.Nodes = append(p.Nodes, nodeToRPC(n))
 		}
-		p.Nodes = append(p.Nodes, nodeToRPC(n))
-		if len(p.Nodes) == maxNeighbors || i == len(closest)-1 {
+		if len(p.Nodes) == maxNeighbors {
 			t.send(from, neighborsPacket, &p)
 			p.Nodes = p.Nodes[:0]
+			sent = true
 		}
+	}
+	if len(p.Nodes) > 0 || !sent {
+		t.send(from, neighborsPacket, &p)
 	}
 	return nil
 }
