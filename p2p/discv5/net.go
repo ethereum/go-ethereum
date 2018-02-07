@@ -569,7 +569,7 @@ loop:
 				net.ping(n, n.addr())
 				return n.pingEcho
 			}, func(n *Node, topic Topic) []byte {
-				if n.state == known {
+				if n.canQuery() {
 					return net.conn.send(n, topicQueryPacket, topicQuery{Topic: topic}) // TODO: set expiration
 				} else {
 					if n.state == unknown {
@@ -633,15 +633,20 @@ loop:
 			}
 			net.refreshResp <- refreshDone
 		case <-refreshDone:
-			log.Trace("<-net.refreshDone")
-			refreshDone = nil
-			list := searchReqWhenRefreshDone
-			searchReqWhenRefreshDone = nil
-			go func() {
-				for _, req := range list {
-					net.topicSearchReq <- req
-				}
-			}()
+			log.Trace("<-net.refreshDone", "table size", net.tab.count)
+			if net.tab.count != 0 {
+				refreshDone = nil
+				list := searchReqWhenRefreshDone
+				searchReqWhenRefreshDone = nil
+				go func() {
+					for _, req := range list {
+						net.topicSearchReq <- req
+					}
+				}()
+			} else {
+				refreshDone = make(chan struct{})
+				net.refresh(refreshDone)
+			}
 		}
 	}
 	log.Trace("loop stopped")
@@ -751,7 +756,15 @@ func (net *Network) internNodeFromNeighbours(sender *net.UDPAddr, rn rpcNode) (n
 		return n, err
 	}
 	if !n.IP.Equal(rn.IP) || n.UDP != rn.UDP || n.TCP != rn.TCP {
-		err = fmt.Errorf("metadata mismatch: got %v, want %v", rn, n)
+		if n.state == known {
+			// reject address change if node is known by us
+			err = fmt.Errorf("metadata mismatch: got %v, want %v", rn, n)
+		} else {
+			// accept otherwise; this will be handled nicer with signed ENRs
+			n.IP = rn.IP
+			n.UDP = rn.UDP
+			n.TCP = rn.TCP
+		}
 	}
 	return n, err
 }
@@ -773,6 +786,11 @@ type nodeNetGuts struct {
 	deferredQueries   []*findnodeQuery // queries that can't be sent yet
 	pendingNeighbours *findnodeQuery   // current query, waiting for reply
 	queryTimeouts     int
+	canQueryAfter     mclock.AbsTime	  // cannot query if zero
+}
+
+func (n *nodeNetGuts) canQuery() bool {
+	return n.canQueryAfter != 0 && mclock.Now() > n.canQueryAfter
 }
 
 func (n *nodeNetGuts) deferQuery(q *findnodeQuery) {
@@ -796,7 +814,7 @@ func (q *findnodeQuery) start(net *Network) bool {
 		q.reply <- closest.entries
 		return true
 	}
-	if q.remote.state.canQuery && q.remote.pendingNeighbours == nil {
+	if q.remote.canQuery() && q.remote.pendingNeighbours == nil {
 		net.conn.sendFindnodeHash(q.remote, q.target)
 		net.timedEvent(respTimeout, q.remote, neighboursTimeout)
 		q.remote.pendingNeighbours = q
@@ -1068,6 +1086,13 @@ func (net *Network) checkPacket(n *Node, ev nodeEvent, pkt *ingressPacket) error
 
 func (net *Network) transition(n *Node, next *nodeState) {
 	if n.state != next {
+		if next.canQuery {
+			if !n.state.canQuery {
+				n.canQueryAfter = mclock.Now()+mclock.AbsTime(time.Second)
+			}
+		} else {
+			n.canQueryAfter = 0
+		}
 		n.state = next
 		if next.enter != nil {
 			next.enter(net, n)
