@@ -21,10 +21,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
-	"time"
+	"strconv"
 
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -110,6 +109,7 @@ type nodeConfigJSON struct {
 	PrivateKey string   `json:"private_key"`
 	Name       string   `json:"name"`
 	Services   []string `json:"services"`
+	Port       uint16   `json:"port"`
 }
 
 // MarshalJSON implements the json.Marshaler interface by encoding the config
@@ -119,6 +119,7 @@ func (n *NodeConfig) MarshalJSON() ([]byte, error) {
 		ID:       n.ID.String(),
 		Name:     n.Name,
 		Services: n.Services,
+		Port:     n.Port,
 	}
 	if n.PrivateKey != nil {
 		confJSON.PrivateKey = hex.EncodeToString(crypto.FromECDSA(n.PrivateKey))
@@ -156,6 +157,7 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 
 	n.Name = confJSON.Name
 	n.Services = confJSON.Services
+	n.Port = confJSON.Port
 
 	return nil
 }
@@ -169,13 +171,32 @@ func RandomNodeConfig() *NodeConfig {
 	}
 
 	id := discover.PubkeyID(&key.PublicKey)
-	rand.Seed(time.Now().UTC().UnixNano())
-	fmt.Println(rand.Int())
+	port, err := assignTCPPort()
+	if err != nil {
+		panic("unable to assign tcp port")
+	}
 	return &NodeConfig{
 		ID:         id,
 		PrivateKey: key,
-		Port:       uint16(5000 + rand.Int()%2000),
+		Port:       port,
 	}
+}
+
+func assignTCPPort() (uint16, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	l.Close()
+	_, port, err := net.SplitHostPort(l.Addr().String())
+	if err != nil {
+		return 0, err
+	}
+	p, err := strconv.ParseInt(port, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint16(p), nil
 }
 
 // ServiceContext is a collection of options and methods which can be utilised
