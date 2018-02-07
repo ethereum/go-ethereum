@@ -565,10 +565,7 @@ loop:
 			if lookupChn := searchInfo[res.target.topic].lookupChn; lookupChn != nil {
 				lookupChn <- net.ticketStore.radius[res.target.topic].converged
 			}
-			net.ticketStore.searchLookupDone(res.target, res.nodes, func(n *Node) []byte {
-				net.ping(n, n.addr())
-				return n.pingEcho
-			}, func(n *Node, topic Topic) []byte {
+			net.ticketStore.searchLookupDone(res.target, res.nodes, func(n *Node, topic Topic) []byte {
 				if n.canQuery() {
 					return net.conn.send(n, topicQueryPacket, topicQuery{Topic: topic}) // TODO: set expiration
 				} else {
@@ -1088,7 +1085,7 @@ func (net *Network) transition(n *Node, next *nodeState) {
 	if n.state != next {
 		if next.canQuery {
 			if !n.state.canQuery {
-				n.canQueryAfter = mclock.Now()+mclock.AbsTime(time.Second)
+				n.canQueryAfter = mclock.Now()+mclock.AbsTime(queryDelay)
 			}
 		} else {
 			n.canQueryAfter = 0
