@@ -566,7 +566,7 @@ loop:
 				lookupChn <- net.ticketStore.radius[res.target.topic].converged
 			}
 			net.ticketStore.searchLookupDone(res.target, res.nodes, func(n *Node, topic Topic) []byte {
-				if n.canQuery() {
+				if n.state != nil && n.state.canQuery {
 					return net.conn.send(n, topicQueryPacket, topicQuery{Topic: topic}) // TODO: set expiration
 				} else {
 					if n.state == unknown {
@@ -783,11 +783,6 @@ type nodeNetGuts struct {
 	deferredQueries   []*findnodeQuery // queries that can't be sent yet
 	pendingNeighbours *findnodeQuery   // current query, waiting for reply
 	queryTimeouts     int
-	canQueryAfter     mclock.AbsTime	  // cannot query if zero
-}
-
-func (n *nodeNetGuts) canQuery() bool {
-	return n.canQueryAfter != 0 && mclock.Now() > n.canQueryAfter
 }
 
 func (n *nodeNetGuts) deferQuery(q *findnodeQuery) {
@@ -811,7 +806,7 @@ func (q *findnodeQuery) start(net *Network) bool {
 		q.reply <- closest.entries
 		return true
 	}
-	if q.remote.canQuery() && q.remote.pendingNeighbours == nil {
+	if q.remote.state.canQuery && q.remote.pendingNeighbours == nil {
 		net.conn.sendFindnodeHash(q.remote, q.target)
 		net.timedEvent(respTimeout, q.remote, neighboursTimeout)
 		q.remote.pendingNeighbours = q
@@ -1083,13 +1078,6 @@ func (net *Network) checkPacket(n *Node, ev nodeEvent, pkt *ingressPacket) error
 
 func (net *Network) transition(n *Node, next *nodeState) {
 	if n.state != next {
-		if next.canQuery {
-			if !n.state.canQuery {
-				n.canQueryAfter = mclock.Now()+mclock.AbsTime(queryDelay)
-			}
-		} else {
-			n.canQueryAfter = 0
-		}
 		n.state = next
 		if next.enter != nil {
 			next.enter(net, n)
