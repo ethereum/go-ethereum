@@ -100,7 +100,6 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	if cp, ok := trustedCheckpoints[bc.genesisBlock.Hash()]; ok {
 		bc.addTrustedCheckpoint(cp)
 	}
-
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
@@ -128,7 +127,7 @@ func (self *LightChain) addTrustedCheckpoint(cp trustedCheckpoint) {
 	if self.odr.BloomIndexer() != nil {
 		self.odr.BloomIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
 	}
-	log.Info("Added trusted checkpoint", "chain name", cp.name)
+	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.sectionIdx+1)*ChtFrequency-1, "hash", cp.sectionHead)
 }
 
 func (self *LightChain) getProcInterrupt() bool {
