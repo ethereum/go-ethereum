@@ -63,6 +63,9 @@ const (
 	XOR
 	NOT
 	BYTE
+	SHL
+	SHR
+	SAR
 
 	SHA3 = 0x20
 )
