@@ -52,7 +52,7 @@ type trustedCheckpoint struct {
 
 var (
 	mainnetCheckpoint = trustedCheckpoint{
-		name:          "ETH mainnet",
+		name:          "mainnet",
 		sectionIdx:    150,
 		sectionHead:   common.HexToHash("1e2e67f289565cbe7bd4367f7960dbd73a3f7c53439e1047cd7ba331c8109e39"),
 		chtRoot:       common.HexToHash("f2a6c9ca143d647b44523cc249f1072c8912358ab873a77a5fdc792b8df99e80"),
@@ -60,7 +60,7 @@ var (
 	}
 
 	ropstenCheckpoint = trustedCheckpoint{
-		name:          "Ropsten testnet",
+		name:          "ropsten",
 		sectionIdx:    75,
 		sectionHead:   common.HexToHash("12e68324f4578ea3e8e7fb3968167686729396c9279287fa1f1a8b51bb2d05b4"),
 		chtRoot:       common.HexToHash("3e51dc095c69fa654a4cac766e0afff7357515b4b3c3a379c675f810363e54be"),

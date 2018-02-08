@@ -58,17 +58,14 @@ func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*typ
 			}
 		}
 	}
-
 	if number >= chtCount*ChtFrequency {
 		return nil, ErrNoTrustedCht
 	}
-
 	r := &ChtRequest{ChtRoot: GetChtRoot(db, chtCount-1, sectionHead), ChtNum: chtCount - 1, BlockNum: number}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
-	} else {
-		return r.Header, nil
 	}
+	return r.Header, nil
 }
 
 func GetCanonicalHash(ctx context.Context, odr OdrBackend, number uint64) (common.Hash, error) {
