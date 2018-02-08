@@ -88,7 +88,7 @@ func generateTestCases(t *testing.T, SizeTestFilters int) []FilterTestCase {
 	for i := 0; i < SizeTestFilters; i++ {
 		f, _ := generateFilter(t, true)
 		cases[i].f = f
-		cases[i].alive = (mrand.Int()&int(1) == 0)
+		cases[i].alive = mrand.Int()&int(1) == 0
 	}
 	return cases
 }
@@ -109,7 +109,7 @@ func TestInstallFilters(t *testing.T) {
 			t.Fatalf("seed %d: failed to install filter: %s", seed, err)
 		}
 		tst[i].id = j
-		if len(j) != keyIdSize*2 {
+		if len(j) != keyIDSize*2 {
 			t.Fatalf("seed %d: wrong filter id size [%d]", seed, len(j))
 		}
 	}
@@ -122,7 +122,7 @@ func TestInstallFilters(t *testing.T) {
 
 	for i, testCase := range tst {
 		fil := filters.Get(testCase.id)
-		exist := (fil != nil)
+		exist := fil != nil
 		if exist != testCase.alive {
 			t.Fatalf("seed %d: failed alive: %d, %v, %v", seed, i, exist, testCase.alive)
 		}
@@ -199,7 +199,7 @@ func TestInstallIdenticalFilters(t *testing.T) {
 	filter1.Src = &params.Src.PublicKey
 	filter2.Src = &params.Src.PublicKey
 
-	sentMessage, err := NewSentMessage(params)
+	sentMessage, err := newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -226,6 +226,36 @@ func TestInstallIdenticalFilters(t *testing.T) {
 
 	if !filter2.MatchMessage(msg) {
 		t.Fatalf("failed matching with the second filter")
+	}
+}
+
+func TestInstallFilterWithSymAndAsymKeys(t *testing.T) {
+	InitSingleTest()
+
+	w := New(&Config{})
+	filters := NewFilters(w)
+	filter1, _ := generateFilter(t, true)
+
+	asymKey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("Unable to create asymetric keys: %v", err)
+	}
+
+	// Copy the first filter since some of its fields
+	// are randomly gnerated.
+	filter := &Filter{
+		KeySym:   filter1.KeySym,
+		KeyAsym:  asymKey,
+		Topics:   filter1.Topics,
+		PoW:      filter1.PoW,
+		AllowP2P: filter1.AllowP2P,
+		Messages: make(map[common.Hash]*ReceivedMessage),
+	}
+
+	_, err = filters.Install(filter)
+
+	if err == nil {
+		t.Fatalf("Error detecting that a filter had both an asymmetric and symmetric key, with seed %d", seed)
 	}
 }
 
@@ -276,7 +306,7 @@ func TestMatchEnvelope(t *testing.T) {
 	params.Topic[0] = 0xFF // ensure mismatch
 
 	// mismatch with pseudo-random data
-	msg, err := NewSentMessage(params)
+	msg, err := newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -297,7 +327,7 @@ func TestMatchEnvelope(t *testing.T) {
 	i := mrand.Int() % 4
 	fsym.Topics[i] = params.Topic[:]
 	fasym.Topics[i] = params.Topic[:]
-	msg, err = NewSentMessage(params)
+	msg, err = newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -310,12 +340,6 @@ func TestMatchEnvelope(t *testing.T) {
 	match = fsym.MatchEnvelope(env)
 	if !match {
 		t.Fatalf("failed MatchEnvelope() symmetric with seed %d.", seed)
-	}
-
-	// asymmetric + matching topic: mismatch
-	match = fasym.MatchEnvelope(env)
-	if match {
-		t.Fatalf("failed MatchEnvelope() asymmetric with seed %d.", seed)
 	}
 
 	// symmetric + matching topic + insufficient PoW: mismatch
@@ -348,7 +372,7 @@ func TestMatchEnvelope(t *testing.T) {
 	}
 	params.KeySym = nil
 	params.Dst = &key.PublicKey
-	msg, err = NewSentMessage(params)
+	msg, err = newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -429,7 +453,7 @@ func TestMatchMessageSym(t *testing.T) {
 	params.KeySym = f.KeySym
 	params.Topic = BytesToTopic(f.Topics[index])
 
-	sentMessage, err := NewSentMessage(params)
+	sentMessage, err := newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -522,7 +546,7 @@ func TestMatchMessageAsym(t *testing.T) {
 	keySymOrig := params.KeySym
 	params.KeySym = nil
 
-	sentMessage, err := NewSentMessage(params)
+	sentMessage, err := newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -606,7 +630,7 @@ func generateCompatibeEnvelope(t *testing.T, f *Filter) *Envelope {
 
 	params.KeySym = f.KeySym
 	params.Topic = BytesToTopic(f.Topics[2])
-	sentMessage, err := NewSentMessage(params)
+	sentMessage, err := newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -776,12 +800,13 @@ func TestWatchers(t *testing.T) {
 func TestVariableTopics(t *testing.T) {
 	InitSingleTest()
 
+	const lastTopicByte = 3
 	var match bool
 	params, err := generateMessageParams()
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
-	msg, err := NewSentMessage(params)
+	msg, err := newSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -796,19 +821,52 @@ func TestVariableTopics(t *testing.T) {
 	}
 
 	for i := 0; i < 4; i++ {
-		arr := make([]byte, i+1, 4)
-		copy(arr, env.Topic[:i+1])
-
-		f.Topics[4] = arr
+		env.Topic = BytesToTopic(f.Topics[i])
 		match = f.MatchEnvelope(env)
 		if !match {
 			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
 		}
 
-		f.Topics[4][i]++
+		f.Topics[i][lastTopicByte]++
 		match = f.MatchEnvelope(env)
 		if match {
 			t.Fatalf("MatchEnvelope symmetric with seed %d, step %d: false positive.", seed, i)
 		}
+	}
+}
+
+func TestMatchSingleTopic_ReturnTrue(t *testing.T) {
+	bt := []byte("test")
+	topic := BytesToTopic(bt)
+
+	if !matchSingleTopic(topic, bt) {
+		t.FailNow()
+	}
+}
+
+func TestMatchSingleTopic_WithTail_ReturnTrue(t *testing.T) {
+	bt := []byte("test with tail")
+	topic := BytesToTopic([]byte("test"))
+
+	if !matchSingleTopic(topic, bt) {
+		t.FailNow()
+	}
+}
+
+func TestMatchSingleTopic_NotEquals_ReturnFalse(t *testing.T) {
+	bt := []byte("tes")
+	topic := BytesToTopic(bt)
+
+	if matchSingleTopic(topic, bt) {
+		t.FailNow()
+	}
+}
+
+func TestMatchSingleTopic_InsufficientLength_ReturnFalse(t *testing.T) {
+	bt := []byte("test")
+	topic := BytesToTopic([]byte("not_equal"))
+
+	if matchSingleTopic(topic, bt) {
+		t.FailNow()
 	}
 }
