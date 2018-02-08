@@ -56,16 +56,14 @@ the user doesn't care about years-old historical data, so we can fast-sync quick
 state of the network. To do so:
 
 ```
-$ geth --cache=512 console
+$ geth console
 ```
 
 This command will:
 
- * Start geth in fast sync mode (default, can be changed with the `--syncmode` flag), causing it to download more data in exchange for avoiding
-   processing the entire history of the Ethereum network, which is very CPU intensive.
- * Bump the memory allowance of the database to 512MB (`--cache=512`), which can help significantly in
-   sync times especially for HDD users. This flag is optional and you can set it as high or as low as
-   you'd like, though we'd recommend the 512MB - 2GB range.
+ * Start geth in fast sync mode (default, can be changed with the `--syncmode` flag), causing it to
+   download more data in exchange for avoiding processing the entire history of the Ethereum network,
+   which is very CPU intensive.
  * Start up Geth's built-in interactive [JavaScript console](https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console),
    (via the trailing `console` subcommand) through which you can invoke all official [`web3` methods](https://github.com/ethereum/wiki/wiki/JavaScript-API)
    as well as Geth's own [management APIs](https://github.com/ethereum/go-ethereum/wiki/Management-APIs).
@@ -80,10 +78,10 @@ entire system. In other words, instead of attaching to the main network, you wan
 network with your node, which is fully equivalent to the main network, but with play-Ether only.
 
 ```
-$ geth --testnet --cache=512 console
+$ geth --testnet console
 ```
 
-The `--cache` flags and `console` subcommand have the exact same meaning as above and they
+The `console` subcommand have the exact same meaning as above and they
 are equally useful on the testnet too. Please see above for their explanations if you've skipped to
 here.
 
@@ -125,7 +123,7 @@ One of the quickest ways to get Ethereum up and running on your machine is by us
 ```
 docker run -d --name ethereum-node -v /Users/alice/ethereum:/root \
            -p 8545:8545 -p 30303:30303 \
-           ethereum/client-go --cache=512
+           ethereum/client-go
 ```
 
 This will start geth in fast-sync mode with a DB memory allowance of 512MB just as the above command does.  It will also create a persistent volume in your home directory for saving your blockchain as well as map the default ports. There is also an `alpine` tag available for a slim version of the image.
