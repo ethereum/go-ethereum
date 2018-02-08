@@ -26105,7 +26105,7 @@ var _bundleJs = []byte((((((((((`!function(modules) {
             divider: "rgba(255, 255, 255, 0.12)",
             background: {
                 paper: _grey2.default[800],
-                default: "#303030",
+                default: "#301030",
                 appBar: _grey2.default[900],
                 chip: _grey2.default[700],
                 avatar: _grey2.default[600]
@@ -26181,7 +26181,7 @@ var _bundleJs = []byte((((((((((`!function(modules) {
         900: "#212121",
         A100: "#d5d5d5",
         A200: "#aaaaaa",
-        A400: "#303030",
+        A400: "#301030",
         A700: "#616161"
     };
     exports.default = grey;

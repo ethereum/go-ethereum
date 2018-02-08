@@ -73,7 +73,7 @@ The Docker image is built using `docker build` when the adapter is initialised,
 meaning no prior setup is necessary other than having a working Docker client.
 
 Each node listens on the external IP of the container and the default p2p and
-RPC ports (`30303` and `8546` respectively).
+RPC ports (`30103` and `8546` respectively).
 
 ## Network
 

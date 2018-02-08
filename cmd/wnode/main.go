@@ -91,7 +91,7 @@ var (
 	argPoW       = flag.Float64("pow", whisper.DefaultMinimumPoW, "PoW for normal messages in float format (e.g. 2.7)")
 	argServerPoW = flag.Float64("mspow", whisper.DefaultMinimumPoW, "PoW requirement for Mail Server request")
 
-	argIP      = flag.String("ip", "", "IP address and port of this node (e.g. 127.0.0.1:30303)")
+	argIP      = flag.String("ip", "", "IP address and port of this node (e.g. 127.0.0.1:30103)")
 	argPub     = flag.String("pub", "", "public key for asymmetric encryption")
 	argDBPath  = flag.String("dbpath", "", "path to the server's DB directory")
 	argIDFile  = flag.String("idfile", "", "file name with node id (private key)")

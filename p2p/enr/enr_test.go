@@ -208,7 +208,7 @@ func TestGetSetOverwrite(t *testing.T) {
 // TestSignEncodeAndDecode tests signing, RLP encoding and RLP decoding of a record.
 func TestSignEncodeAndDecode(t *testing.T) {
 	var r Record
-	r.Set(DiscPort(30303))
+	r.Set(DiscPort(30103))
 	r.Set(IP4{127, 0, 0, 1})
 	require.NoError(t, r.Sign(privkey))
 
@@ -249,7 +249,7 @@ func TestPythonInterop(t *testing.T) {
 		wantAddr, _  = hex.DecodeString("caaa1485d83b18b32ed9ad666026151bf0cae8a0a88c857ae2d4c5be2daa6726")
 		wantSeq      = uint64(1)
 		wantIP       = IP4{127, 0, 0, 1}
-		wantDiscport = DiscPort(30303)
+		wantDiscport = DiscPort(30103)
 	)
 	if r.Seq() != wantSeq {
 		t.Errorf("wrong seq: got %d, want %d", r.Seq(), wantSeq)

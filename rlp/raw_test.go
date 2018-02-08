@@ -36,7 +36,7 @@ func TestCountValues(t *testing.T) {
 		{"C0", 1, nil},
 		{"01 02 03", 3, nil},
 		{"01 C406070809 02", 3, nil},
-		{"820101 820202 8403030303 04", 4, nil},
+		{"820101 820202 8403010303 04", 4, nil},
 
 		// size errors
 		{"8142", 0, ErrCanonSize},
