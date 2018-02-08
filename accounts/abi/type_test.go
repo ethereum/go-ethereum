@@ -252,6 +252,9 @@ func TestTypeCheck(t *testing.T) {
 		{"bytes20", common.Address{}, ""},
 		{"address", [20]byte{}, ""},
 		{"address", common.Address{}, ""},
+		{"bytes32[]]", "", "invalid arg type in abi"},
+		{"invalidType", "", "unsupported arg type: invalidType"},
+		{"invalidSlice[]", "", "unsupported arg type: invalidSlice"},
 	} {
 		typ, err := NewType(test.typ)
 		if err != nil && len(test.err) == 0 {
