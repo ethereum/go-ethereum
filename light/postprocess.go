@@ -19,7 +19,6 @@ package light
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math/big"
 	"time"
 
@@ -175,7 +174,7 @@ func (c *ChtIndexerBackend) Commit() error {
 	c.triedb.Commit(root, false)
 
 	if ((c.section+1)*c.sectionSize)%ChtFrequency == 0 {
-		log.Info("Storing CHT", "idx", c.section*c.sectionSize/ChtFrequency, "sectionHead", fmt.Sprintf("%064x", c.lastHash), "root", fmt.Sprintf("%064x", root))
+		log.Info("Storing CHT", "section", c.section*c.sectionSize/ChtFrequency, "head", c.lastHash, "root", root)
 	}
 	StoreChtRoot(c.diskdb, c.section, c.lastHash, root)
 	return nil
@@ -294,7 +293,7 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 	b.triedb.Commit(root, false)
 
 	sectionHead := b.sectionHeads[b.bloomTrieRatio-1]
-	log.Info("Storing BloomTrie", "section", b.section, "sectionHead", fmt.Sprintf("%064x", sectionHead), "root", fmt.Sprintf("%064x", root), "compression ratio", float64(compSize)/float64(decompSize))
+	log.Info("Storing bloom trie", "section", b.section, "head", sectionHead, "root", root, "compression", float64(compSize)/float64(decompSize))
 	StoreBloomTrieRoot(b.diskdb, b.section, sectionHead, root)
 
 	return nil

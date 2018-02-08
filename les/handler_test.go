@@ -65,7 +65,6 @@ func testCheckProof(t *testing.T, exp *light.NodeSet, got light.NodeList) {
 
 // Tests that block headers can be retrieved from a remote chain based on user queries.
 func TestGetBlockHeadersLes1(t *testing.T) { testGetBlockHeaders(t, 1) }
-
 func TestGetBlockHeadersLes2(t *testing.T) { testGetBlockHeaders(t, 2) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
@@ -196,7 +195,6 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 
 // Tests that block contents can be retrieved from a remote chain based on their hashes.
 func TestGetBlockBodiesLes1(t *testing.T) { testGetBlockBodies(t, 1) }
-
 func TestGetBlockBodiesLes2(t *testing.T) { testGetBlockBodies(t, 2) }
 
 func testGetBlockBodies(t *testing.T, protocol int) {
@@ -274,7 +272,6 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 
 // Tests that the contract codes can be retrieved based on account addresses.
 func TestGetCodeLes1(t *testing.T) { testGetCode(t, 1) }
-
 func TestGetCodeLes2(t *testing.T) { testGetCode(t, 2) }
 
 func testGetCode(t *testing.T, protocol int) {
@@ -309,7 +306,6 @@ func testGetCode(t *testing.T, protocol int) {
 
 // Tests that the transaction receipts can be retrieved based on hashes.
 func TestGetReceiptLes1(t *testing.T) { testGetReceipt(t, 1) }
-
 func TestGetReceiptLes2(t *testing.T) { testGetReceipt(t, 2) }
 
 func testGetReceipt(t *testing.T, protocol int) {
@@ -338,7 +334,6 @@ func testGetReceipt(t *testing.T, protocol int) {
 
 // Tests that trie merkle proofs can be retrieved
 func TestGetProofsLes1(t *testing.T) { testGetProofs(t, 1) }
-
 func TestGetProofsLes2(t *testing.T) { testGetProofs(t, 2) }
 
 func testGetProofs(t *testing.T, protocol int) {

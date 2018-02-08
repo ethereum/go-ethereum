@@ -856,15 +856,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if reject(uint64(reqCnt), MaxHelperTrieProofsFetch) {
 			return errResp(ErrRequestRejected, "")
 		}
+		trieDb := trie.NewDatabase(ethdb.NewTable(pm.chainDb, light.ChtTablePrefix))
 		for _, req := range req.Reqs {
 			if header := pm.blockchain.GetHeaderByNumber(req.BlockNum); header != nil {
 				sectionHead := core.GetCanonicalHash(pm.chainDb, req.ChtNum*light.ChtV1Frequency-1)
 				if root := light.GetChtRoot(pm.chainDb, req.ChtNum-1, sectionHead); root != (common.Hash{}) {
-					statedb, err := pm.blockchain.State()
-					if err != nil {
-						continue
-					}
-					trie, err := statedb.Database().OpenTrie(root)
+					trie, err := trie.New(root, trieDb)
 					if err != nil {
 						continue
 					}
@@ -910,20 +907,16 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			lastIdx  uint64
 			lastType uint
 			root     common.Hash
-			statedb  *state.StateDB
-			trie     state.Trie
+			auxTrie  *trie.Trie
 		)
-
 		nodes := light.NewNodeSet()
-
 		for _, req := range req.Reqs {
-			if trie == nil || req.HelperTrieType != lastType || req.TrieIdx != lastIdx {
-				statedb, trie, lastType, lastIdx = nil, nil, req.HelperTrieType, req.TrieIdx
+			if auxTrie == nil || req.HelperTrieType != lastType || req.TrieIdx != lastIdx {
+				auxTrie, lastType, lastIdx = nil, req.HelperTrieType, req.TrieIdx
 
-				if root, _ = pm.getHelperTrie(req.HelperTrieType, req.TrieIdx); root != (common.Hash{}) {
-					if statedb, _ = pm.blockchain.State(); statedb != nil {
-						trie, _ = statedb.Database().OpenTrie(root)
-					}
+				var prefix string
+				if root, prefix = pm.getHelperTrie(req.HelperTrieType, req.TrieIdx); root != (common.Hash{}) {
+					auxTrie, _ = trie.New(root, trie.NewDatabase(ethdb.NewTable(pm.chainDb, prefix)))
 				}
 			}
 			if req.AuxReq == auxRoot {
@@ -934,8 +927,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				auxData = append(auxData, data)
 				auxBytes += len(data)
 			} else {
-				if trie != nil {
-					trie.Prove(req.Key, req.FromLevel, nodes)
+				if auxTrie != nil {
+					auxTrie.Prove(req.Key, req.FromLevel, nodes)
 				}
 				if req.AuxReq != 0 {
 					data := pm.getHelperTrieAuxData(req)
