@@ -49,7 +49,7 @@ var (
 // Timeouts
 const (
 	respTimeout = 500 * time.Millisecond
-	sendTimeout = 500 * time.Millisecond
+	queryDelay  = 1000 * time.Millisecond
 	expiration  = 20 * time.Second
 
 	ntpFailureThreshold = 32               // Continuous timeouts after which to check NTP
@@ -318,19 +318,19 @@ func (t *udp) sendTopicRegister(remote *Node, topics []Topic, idx int, pong []by
 
 func (t *udp) sendTopicNodes(remote *Node, queryHash common.Hash, nodes []*Node) {
 	p := topicNodes{Echo: queryHash}
-	if len(nodes) == 0 {
-		t.sendPacket(remote.ID, remote.addr(), byte(topicNodesPacket), p)
-		return
-	}
-	for i, result := range nodes {
-		if netutil.CheckRelayIP(remote.IP, result.IP) != nil {
-			continue
+	var sent bool
+	for _, result := range nodes {
+		if result.IP.Equal(t.net.tab.self.IP) || netutil.CheckRelayIP(remote.IP, result.IP) == nil {
+			p.Nodes = append(p.Nodes, nodeToRPC(result))
 		}
-		p.Nodes = append(p.Nodes, nodeToRPC(result))
-		if len(p.Nodes) == maxTopicNodes || i == len(nodes)-1 {
+		if len(p.Nodes) == maxTopicNodes {
 			t.sendPacket(remote.ID, remote.addr(), byte(topicNodesPacket), p)
 			p.Nodes = p.Nodes[:0]
+			sent = true
 		}
+	}
+	if !sent || len(p.Nodes) > 0 {
+		t.sendPacket(remote.ID, remote.addr(), byte(topicNodesPacket), p)
 	}
 }
 
