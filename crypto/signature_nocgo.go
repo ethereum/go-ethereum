@@ -87,6 +87,10 @@ func VerifySignature(pubkey, hash, signature []byte) bool {
 	if err != nil {
 		return false
 	}
+	// Reject malleable signatures. libsecp256k1 does this check but btcec doesn't.
+	if sig.S.Cmp(secp256k1_halfN) > 0 {
+		return false
+	}
 	return sig.Verify(hash, key)
 }
 
@@ -100,6 +104,11 @@ func DecompressPubkey(pubkey []byte) (*ecdsa.PublicKey, error) {
 		return nil, err
 	}
 	return key.ToECDSA(), nil
+}
+
+// CompressPubkey encodes a public key to the 33-byte compressed format.
+func CompressPubkey(pubkey *ecdsa.PublicKey) []byte {
+	return (*btcec.PublicKey)(pubkey).SerializeCompressed()
 }
 
 // S256 returns an instance of the secp256k1 curve.

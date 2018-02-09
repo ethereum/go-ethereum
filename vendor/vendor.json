@@ -45,6 +45,12 @@
 			"revisionTime": "2017-02-15T19:58:14Z"
 		},
 		{
+			"checksumSHA1": "QC55lHNOv1+UAL2xtIHw17MJ8J8=",
+			"path": "github.com/StackExchange/wmi",
+			"revision": "5d049714c4a64225c3c79a7cf7d02f7fb5b96338",
+			"revisionTime": "2018-01-16T20:38:02Z"
+		},
+		{
 			"checksumSHA1": "USkefO0g1U9mr+8hagv3fpSkrxg=",
 			"path": "github.com/aristanetworks/goarista/monotime",
 			"revision": "ea17b1a17847fb6e4c0a91de0b674704693469b0",
@@ -87,6 +93,18 @@
 			"revisionTime": "2016-05-12T03:30:02Z"
 		},
 		{
+			"checksumSHA1": "Fc8BCxCoQ7ZmghDT6X1cASR10Ec=",
+			"path": "github.com/elastic/gosigar",
+			"revision": "a3814ce5008e612a0c6d027608b54e1d0d9a5613",
+			"revisionTime": "2018-01-22T22:25:45Z"
+		},
+		{
+			"checksumSHA1": "qDsgp2kAeI9nhj565HUScaUyjU4=",
+			"path": "github.com/elastic/gosigar/sys/windows",
+			"revision": "a3814ce5008e612a0c6d027608b54e1d0d9a5613",
+			"revisionTime": "2018-01-22T22:25:45Z"
+		},
+		{
 			"checksumSHA1": "7oFpbmDfGobwKsFLIf6wMUvVoKw=",
 			"path": "github.com/fatih/color",
 			"revision": "5ec5d9d3c2cf82e9688b34e9bc27a94d616a7193",
@@ -97,6 +115,18 @@
 			"path": "github.com/gizak/termui",
 			"revision": "991cd3d3809135dc24daf6188dc6edcaf3d7d2d9",
 			"revisionTime": "2017-01-17T22:23:42Z"
+		},
+		{
+			"checksumSHA1": "gxV/cPPLkByTdY8y172t7v4qcZA=",
+			"path": "github.com/go-ole/go-ole",
+			"revision": "a41e3c4b706f6ae8dfbff342b06e40fa4d2d0506",
+			"revisionTime": "2017-11-10T16:07:06Z"
+		},
+		{
+			"checksumSHA1": "PArleDBtadu2qO4hJwHR8a3IOTA=",
+			"path": "github.com/go-ole/go-ole/oleutil",
+			"revision": "a41e3c4b706f6ae8dfbff342b06e40fa4d2d0506",
+			"revisionTime": "2017-11-10T16:07:06Z"
 		},
 		{
 			"checksumSHA1": "KZ3QD2QgUS4RcoKiA3mn5pSlJxQ=",
@@ -262,6 +292,12 @@
 			"revisionTime": "2017-09-02T20:46:57Z"
 		},
 		{
+			"checksumSHA1": "xCv4GBFyw07vZkVtKF/XrUnkHRk=",
+			"path": "github.com/pkg/errors",
+			"revision": "e881fd58d78e04cf6d0de1217f8707c8cc2249bc",
+			"revisionTime": "2017-12-16T07:03:16Z"
+		},
+		{
 			"checksumSHA1": "LuFv4/jlrmFNnDb/5SCSEPAM9vU=",
 			"path": "github.com/pmezard/go-difflib/difflib",
 			"revision": "792786c7400a136282c1664665ae0a8db921c6c2",
@@ -286,10 +322,10 @@
 			"revisionTime": "2016-11-28T21:05:44Z"
 		},
 		{
-			"checksumSHA1": "yOMpVYuaPAtsMIo9DvQP8WZqxQs=",
+			"checksumSHA1": "1ESHllhZOIBg7MnlGHUdhz047bI=",
 			"path": "github.com/rjeczalik/notify",
-			"revision": "9d5aa0c3b735c3340018a4627446c3ea5a04a097",
-			"revisionTime": "2017-01-28T20:05:44Z"
+			"revision": "27b537f07230b3f917421af6dcf044038dbe57e2",
+			"revisionTime": "2018-01-03T13:19:05Z"
 		},
 		{
 			"checksumSHA1": "5uqO4ITTDMklKi3uNaE/D9LQ5nM=",
@@ -358,10 +394,10 @@
 			"revisionTime": "2017-07-05T02:17:15Z"
 		},
 		{
-			"checksumSHA1": "yHbyLpI/Meh0DGrmi8x6FrDxxUY=",
+			"checksumSHA1": "rpu5ZHjXlV13UKA7L1d5MTOyQwA=",
 			"path": "github.com/syndtr/goleveldb/leveldb",
-			"revision": "b89cc31ef7977104127d34c1bd31ebd1a9db2199",
-			"revisionTime": "2017-07-25T06:48:36Z"
+			"revision": "211f780988068502fe874c44dae530528ebd840f",
+			"revisionTime": "2018-01-28T14:04:16Z"
 		},
 		{
 			"checksumSHA1": "EKIow7XkgNdWvR/982ffIZxKG8Y=",
@@ -692,6 +728,12 @@
 			"path": "gopkg.in/natefinch/npipe.v2",
 			"revision": "c1b8fa8bdccecb0b8db834ee0b92fdbcfa606dd6",
 			"revisionTime": "2016-06-21T03:49:01Z"
+		},
+		{
+			"checksumSHA1": "YvuEbc0a032zr+BTp/YbBQojiuY=",
+			"path": "gopkg.in/olebedev/go-duktape.v3",
+			"revision": "9af39127cb024b355a6a0221769f6ddfe3f542e7",
+			"revisionTime": "2017-12-20T12:19:14Z"
 		},
 		{
 			"checksumSHA1": "4BwmmgQUhWtizsR2soXND0nqZ1I=",

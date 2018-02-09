@@ -25,15 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// unpacker is a utility interface that enables us to have
-// abstraction between events and methods and also to properly
-// "unpack" them; e.g. events use Inputs, methods use Outputs.
-type unpacker interface {
-	tupleUnpack(v interface{}, output []byte) error
-	singleUnpack(v interface{}, output []byte) error
-	isTupleReturn() bool
-}
-
 // reads the integer based on its kind
 func readInteger(kind reflect.Kind, b []byte) interface{} {
 	switch kind {
@@ -79,7 +70,7 @@ func readBool(word []byte) (bool, error) {
 // This enforces that standard by always presenting it as a 24-array (address + sig = 24 bytes)
 func readFunctionType(t Type, word []byte) (funcTy [24]byte, err error) {
 	if t.T != FunctionTy {
-		return [24]byte{}, fmt.Errorf("abi: invalid type in call to make function type byte array.")
+		return [24]byte{}, fmt.Errorf("abi: invalid type in call to make function type byte array")
 	}
 	if garbage := binary.BigEndian.Uint64(word[24:32]); garbage != 0 {
 		err = fmt.Errorf("abi: got improperly encoded function type, got %v", word)
@@ -92,7 +83,7 @@ func readFunctionType(t Type, word []byte) (funcTy [24]byte, err error) {
 // through reflection, creates a fixed array to be read from
 func readFixedBytes(t Type, word []byte) (interface{}, error) {
 	if t.T != FixedBytesTy {
-		return nil, fmt.Errorf("abi: invalid type in call to make fixed byte array.")
+		return nil, fmt.Errorf("abi: invalid type in call to make fixed byte array")
 	}
 	// convert
 	array := reflect.New(t.Type).Elem()
@@ -202,15 +193,4 @@ func lengthPrefixPointsTo(index int, output []byte) (start int, length int, err 
 
 	//fmt.Printf("LENGTH PREFIX INFO: \nsize: %v\noffset: %v\nstart: %v\n", length, offset, start)
 	return
-}
-
-// checks for proper formatting of byte output
-func bytesAreProper(output []byte) error {
-	if len(output) == 0 {
-		return fmt.Errorf("abi: unmarshalling empty output")
-	} else if len(output)%32 != 0 {
-		return fmt.Errorf("abi: improperly formatted output")
-	} else {
-		return nil
-	}
 }

@@ -57,7 +57,7 @@ func (c *Client) UploadRaw(r io.Reader, size int64) (string, error) {
 	if size <= 0 {
 		return "", errors.New("data size must be greater than zero")
 	}
-	req, err := http.NewRequest("POST", c.Gateway+"/bzzr:/", r)
+	req, err := http.NewRequest("POST", c.Gateway+"/bzz-raw:/", r)
 	if err != nil {
 		return "", err
 	}
@@ -79,7 +79,7 @@ func (c *Client) UploadRaw(r io.Reader, size int64) (string, error) {
 
 // DownloadRaw downloads raw data from swarm
 func (c *Client) DownloadRaw(hash string) (io.ReadCloser, error) {
-	uri := c.Gateway + "/bzzr:/" + hash
+	uri := c.Gateway + "/bzz-raw:/" + hash
 	res, err := http.DefaultClient.Get(uri)
 	if err != nil {
 		return nil, err
@@ -269,7 +269,7 @@ func (c *Client) DownloadManifest(hash string) (*api.Manifest, error) {
 //
 // where entries ending with "/" are common prefixes.
 func (c *Client) List(hash, prefix string) (*api.ManifestList, error) {
-	res, err := http.DefaultClient.Get(c.Gateway + "/bzz:/" + hash + "/" + prefix + "?list=true")
+	res, err := http.DefaultClient.Get(c.Gateway + "/bzz-list:/" + hash + "/" + prefix)
 	if err != nil {
 		return nil, err
 	}

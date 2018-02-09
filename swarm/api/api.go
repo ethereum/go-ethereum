@@ -159,7 +159,7 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 
 	// if the URI is immutable, check if the address is a hash
 	isHash := hashMatcher.MatchString(uri.Addr)
-	if uri.Immutable() {
+	if uri.Immutable() || uri.DeprecatedImmutable() {
 		if !isHash {
 			return nil, fmt.Errorf("immutable address not a content hash: %q", uri.Addr)
 		}

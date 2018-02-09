@@ -18,12 +18,14 @@ package abi
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"math/big"
-	"reflect"
 	"strings"
 	"testing"
+
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -74,9 +76,24 @@ func TestReader(t *testing.T) {
 	}
 
 	// deep equal fails for some reason
-	t.Skip()
-	if !reflect.DeepEqual(abi, exp) {
-		t.Errorf("\nabi: %v\ndoes not match exp: %v", abi, exp)
+	for name, expM := range exp.Methods {
+		gotM, exist := abi.Methods[name]
+		if !exist {
+			t.Errorf("Missing expected method %v", name)
+		}
+		if !reflect.DeepEqual(gotM, expM) {
+			t.Errorf("\nGot abi method: \n%v\ndoes not match expected method\n%v", gotM, expM)
+		}
+	}
+
+	for name, gotM := range abi.Methods {
+		expM, exist := exp.Methods[name]
+		if !exist {
+			t.Errorf("Found extra method %v", name)
+		}
+		if !reflect.DeepEqual(gotM, expM) {
+			t.Errorf("\nGot abi method: \n%v\ndoes not match expected method\n%v", gotM, expM)
+		}
 	}
 }
 
@@ -348,6 +365,188 @@ func TestInputVariableInputLength(t *testing.T) {
 	}
 }
 
+func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
+	const definition = `[
+	{ "type" : "function", "name" : "fixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr", "type" : "uint256[2]" } ] },
+	{ "type" : "function", "name" : "fixedArrBytes", "constant" : true, "inputs" : [ { "name" : "str", "type" : "bytes" }, { "name" : "fixedArr", "type" : "uint256[2]" } ] },
+    { "type" : "function", "name" : "mixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr", "type": "uint256[2]" }, { "name" : "dynArr", "type": "uint256[]" } ] },
+    { "type" : "function", "name" : "doubleFixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr1", "type": "uint256[2]" }, { "name" : "fixedArr2", "type": "uint256[3]" } ] },
+    { "type" : "function", "name" : "multipleMixedArrStr", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "fixedArr1", "type": "uint256[2]" }, { "name" : "dynArr", "type" : "uint256[]" }, { "name" : "fixedArr2", "type" : "uint256[3]" } ] }
+	]`
+
+	abi, err := JSON(strings.NewReader(definition))
+	if err != nil {
+		t.Error(err)
+	}
+
+	// test string, fixed array uint256[2]
+	strin := "hello world"
+	arrin := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	fixedArrStrPack, err := abi.Pack("fixedArrStr", strin, arrin)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// generate expected output
+	offset := make([]byte, 32)
+	offset[31] = 96
+	length := make([]byte, 32)
+	length[31] = byte(len(strin))
+	strvalue := common.RightPadBytes([]byte(strin), 32)
+	arrinvalue1 := common.LeftPadBytes(arrin[0].Bytes(), 32)
+	arrinvalue2 := common.LeftPadBytes(arrin[1].Bytes(), 32)
+	exp := append(offset, arrinvalue1...)
+	exp = append(exp, arrinvalue2...)
+	exp = append(exp, append(length, strvalue...)...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	fixedArrStrPack = fixedArrStrPack[4:]
+	if !bytes.Equal(fixedArrStrPack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, fixedArrStrPack)
+	}
+
+	// test byte array, fixed array uint256[2]
+	bytesin := []byte(strin)
+	arrin = [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	fixedArrBytesPack, err := abi.Pack("fixedArrBytes", bytesin, arrin)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// generate expected output
+	offset = make([]byte, 32)
+	offset[31] = 96
+	length = make([]byte, 32)
+	length[31] = byte(len(strin))
+	strvalue = common.RightPadBytes([]byte(strin), 32)
+	arrinvalue1 = common.LeftPadBytes(arrin[0].Bytes(), 32)
+	arrinvalue2 = common.LeftPadBytes(arrin[1].Bytes(), 32)
+	exp = append(offset, arrinvalue1...)
+	exp = append(exp, arrinvalue2...)
+	exp = append(exp, append(length, strvalue...)...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	fixedArrBytesPack = fixedArrBytesPack[4:]
+	if !bytes.Equal(fixedArrBytesPack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, fixedArrBytesPack)
+	}
+
+	// test string, fixed array uint256[2], dynamic array uint256[]
+	strin = "hello world"
+	fixedarrin := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	dynarrin := []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
+	mixedArrStrPack, err := abi.Pack("mixedArrStr", strin, fixedarrin, dynarrin)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// generate expected output
+	stroffset := make([]byte, 32)
+	stroffset[31] = 128
+	strlength := make([]byte, 32)
+	strlength[31] = byte(len(strin))
+	strvalue = common.RightPadBytes([]byte(strin), 32)
+	fixedarrinvalue1 := common.LeftPadBytes(fixedarrin[0].Bytes(), 32)
+	fixedarrinvalue2 := common.LeftPadBytes(fixedarrin[1].Bytes(), 32)
+	dynarroffset := make([]byte, 32)
+	dynarroffset[31] = byte(160 + ((len(strin)/32)+1)*32)
+	dynarrlength := make([]byte, 32)
+	dynarrlength[31] = byte(len(dynarrin))
+	dynarrinvalue1 := common.LeftPadBytes(dynarrin[0].Bytes(), 32)
+	dynarrinvalue2 := common.LeftPadBytes(dynarrin[1].Bytes(), 32)
+	dynarrinvalue3 := common.LeftPadBytes(dynarrin[2].Bytes(), 32)
+	exp = append(stroffset, fixedarrinvalue1...)
+	exp = append(exp, fixedarrinvalue2...)
+	exp = append(exp, dynarroffset...)
+	exp = append(exp, append(strlength, strvalue...)...)
+	dynarrarg := append(dynarrlength, dynarrinvalue1...)
+	dynarrarg = append(dynarrarg, dynarrinvalue2...)
+	dynarrarg = append(dynarrarg, dynarrinvalue3...)
+	exp = append(exp, dynarrarg...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	mixedArrStrPack = mixedArrStrPack[4:]
+	if !bytes.Equal(mixedArrStrPack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, mixedArrStrPack)
+	}
+
+	// test string, fixed array uint256[2], fixed array uint256[3]
+	strin = "hello world"
+	fixedarrin1 := [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	fixedarrin2 := [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
+	doubleFixedArrStrPack, err := abi.Pack("doubleFixedArrStr", strin, fixedarrin1, fixedarrin2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// generate expected output
+	stroffset = make([]byte, 32)
+	stroffset[31] = 192
+	strlength = make([]byte, 32)
+	strlength[31] = byte(len(strin))
+	strvalue = common.RightPadBytes([]byte(strin), 32)
+	fixedarrin1value1 := common.LeftPadBytes(fixedarrin1[0].Bytes(), 32)
+	fixedarrin1value2 := common.LeftPadBytes(fixedarrin1[1].Bytes(), 32)
+	fixedarrin2value1 := common.LeftPadBytes(fixedarrin2[0].Bytes(), 32)
+	fixedarrin2value2 := common.LeftPadBytes(fixedarrin2[1].Bytes(), 32)
+	fixedarrin2value3 := common.LeftPadBytes(fixedarrin2[2].Bytes(), 32)
+	exp = append(stroffset, fixedarrin1value1...)
+	exp = append(exp, fixedarrin1value2...)
+	exp = append(exp, fixedarrin2value1...)
+	exp = append(exp, fixedarrin2value2...)
+	exp = append(exp, fixedarrin2value3...)
+	exp = append(exp, append(strlength, strvalue...)...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	doubleFixedArrStrPack = doubleFixedArrStrPack[4:]
+	if !bytes.Equal(doubleFixedArrStrPack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, doubleFixedArrStrPack)
+	}
+
+	// test string, fixed array uint256[2], dynamic array uint256[], fixed array uint256[3]
+	strin = "hello world"
+	fixedarrin1 = [2]*big.Int{big.NewInt(1), big.NewInt(2)}
+	dynarrin = []*big.Int{big.NewInt(1), big.NewInt(2)}
+	fixedarrin2 = [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}
+	multipleMixedArrStrPack, err := abi.Pack("multipleMixedArrStr", strin, fixedarrin1, dynarrin, fixedarrin2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// generate expected output
+	stroffset = make([]byte, 32)
+	stroffset[31] = 224
+	strlength = make([]byte, 32)
+	strlength[31] = byte(len(strin))
+	strvalue = common.RightPadBytes([]byte(strin), 32)
+	fixedarrin1value1 = common.LeftPadBytes(fixedarrin1[0].Bytes(), 32)
+	fixedarrin1value2 = common.LeftPadBytes(fixedarrin1[1].Bytes(), 32)
+	dynarroffset = U256(big.NewInt(int64(256 + ((len(strin)/32)+1)*32)))
+	dynarrlength = make([]byte, 32)
+	dynarrlength[31] = byte(len(dynarrin))
+	dynarrinvalue1 = common.LeftPadBytes(dynarrin[0].Bytes(), 32)
+	dynarrinvalue2 = common.LeftPadBytes(dynarrin[1].Bytes(), 32)
+	fixedarrin2value1 = common.LeftPadBytes(fixedarrin2[0].Bytes(), 32)
+	fixedarrin2value2 = common.LeftPadBytes(fixedarrin2[1].Bytes(), 32)
+	fixedarrin2value3 = common.LeftPadBytes(fixedarrin2[2].Bytes(), 32)
+	exp = append(stroffset, fixedarrin1value1...)
+	exp = append(exp, fixedarrin1value2...)
+	exp = append(exp, dynarroffset...)
+	exp = append(exp, fixedarrin2value1...)
+	exp = append(exp, fixedarrin2value2...)
+	exp = append(exp, fixedarrin2value3...)
+	exp = append(exp, append(strlength, strvalue...)...)
+	dynarrarg = append(dynarrlength, dynarrinvalue1...)
+	dynarrarg = append(dynarrarg, dynarrinvalue2...)
+	exp = append(exp, dynarrarg...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	multipleMixedArrStrPack = multipleMixedArrStrPack[4:]
+	if !bytes.Equal(multipleMixedArrStrPack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, multipleMixedArrStrPack)
+	}
+}
+
 func TestDefaultFunctionParsing(t *testing.T) {
 	const definition = `[{ "name" : "balance" }]`
 
@@ -417,4 +616,83 @@ func TestBareEvents(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestUnpackEvent is based on this contract:
+//    contract T {
+//      event received(address sender, uint amount, bytes memo);
+//      function receive(bytes memo) external payable {
+//        received(msg.sender, msg.value, memo);
+//      }
+//    }
+// When receive("X") is called with sender 0x00... and value 1, it produces this tx receipt:
+//   receipt{status=1 cgas=23949 bloom=00000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000040200000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 logs=[log: b6818c8064f645cd82d99b59a1a267d6d61117ef [75fd880d39c1daf53b6547ab6cb59451fc6452d27caa90e5b6649dd8293b9eed] 000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158 9ae378b6d4409eada347a5dc0c180f186cb62dc68fcc0f043425eb917335aa28 0 95d429d309bb9d753954195fe2d69bd140b4ae731b9b5b605c34323de162cf00 0]}
+func TestUnpackEvent(t *testing.T) {
+	const abiJSON = `[{"constant":false,"inputs":[{"name":"memo","type":"bytes"}],"name":"receive","outputs":[],"payable":true,"stateMutability":"payable","type":"function"},{"anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
+	abi, err := JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const hexdata = `000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158`
+	data, err := hex.DecodeString(hexdata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data)%32 == 0 {
+		t.Errorf("len(data) is %d, want a non-multiple of 32", len(data))
+	}
+
+	type ReceivedEvent struct {
+		Address common.Address
+		Amount  *big.Int
+		Memo    []byte
+	}
+	var ev ReceivedEvent
+
+	err = abi.Unpack(&ev, "received", data)
+	if err != nil {
+		t.Error(err)
+	} else {
+		t.Logf("len(data): %d; received event: %+v", len(data), ev)
+	}
+}
+
+func TestABI_MethodById(t *testing.T) {
+	const abiJSON = `[
+		{"type":"function","name":"receive","constant":false,"inputs":[{"name":"memo","type":"bytes"}],"outputs":[],"payable":true,"stateMutability":"payable"},
+		{"type":"event","name":"received","anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}]},
+		{"type":"function","name":"fixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr","type":"uint256[2]"}]},
+		{"type":"function","name":"fixedArrBytes","constant":true,"inputs":[{"name":"str","type":"bytes"},{"name":"fixedArr","type":"uint256[2]"}]},
+		{"type":"function","name":"mixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr","type":"uint256[2]"},{"name":"dynArr","type":"uint256[]"}]},
+		{"type":"function","name":"doubleFixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr1","type":"uint256[2]"},{"name":"fixedArr2","type":"uint256[3]"}]},
+		{"type":"function","name":"multipleMixedArrStr","constant":true,"inputs":[{"name":"str","type":"string"},{"name":"fixedArr1","type":"uint256[2]"},{"name":"dynArr","type":"uint256[]"},{"name":"fixedArr2","type":"uint256[3]"}]},
+		{"type":"function","name":"balance","constant":true},
+		{"type":"function","name":"send","constant":false,"inputs":[{"name":"amount","type":"uint256"}]},
+		{"type":"function","name":"test","constant":false,"inputs":[{"name":"number","type":"uint32"}]},
+		{"type":"function","name":"string","constant":false,"inputs":[{"name":"inputs","type":"string"}]},
+		{"type":"function","name":"bool","constant":false,"inputs":[{"name":"inputs","type":"bool"}]},
+		{"type":"function","name":"address","constant":false,"inputs":[{"name":"inputs","type":"address"}]},
+		{"type":"function","name":"uint64[2]","constant":false,"inputs":[{"name":"inputs","type":"uint64[2]"}]},
+		{"type":"function","name":"uint64[]","constant":false,"inputs":[{"name":"inputs","type":"uint64[]"}]},
+		{"type":"function","name":"foo","constant":false,"inputs":[{"name":"inputs","type":"uint32"}]},
+		{"type":"function","name":"bar","constant":false,"inputs":[{"name":"inputs","type":"uint32"},{"name":"string","type":"uint16"}]},
+		{"type":"function","name":"_slice","constant":false,"inputs":[{"name":"inputs","type":"uint32[2]"}]},
+		{"type":"function","name":"__slice256","constant":false,"inputs":[{"name":"inputs","type":"uint256[2]"}]},
+		{"type":"function","name":"sliceAddress","constant":false,"inputs":[{"name":"inputs","type":"address[]"}]},
+		{"type":"function","name":"sliceMultiAddress","constant":false,"inputs":[{"name":"a","type":"address[]"},{"name":"b","type":"address[]"}]}
+	]
+`
+	abi, err := JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, m := range abi.Methods {
+		a := fmt.Sprintf("%v", m)
+		b := fmt.Sprintf("%v", abi.MethodById(m.Id()))
+		if a != b {
+			t.Errorf("Method %v (id %v) not 'findable' by id in ABI", name, common.ToHex(m.Id()))
+		}
+	}
+
 }

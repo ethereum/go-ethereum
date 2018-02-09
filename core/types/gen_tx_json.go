@@ -11,11 +11,13 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+var _ = (*txdataMarshaling)(nil)
+
 func (t txdata) MarshalJSON() ([]byte, error) {
 	type txdata struct {
 		AccountNonce hexutil.Uint64  `json:"nonce"    gencodec:"required"`
 		Price        *hexutil.Big    `json:"gasPrice" gencodec:"required"`
-		GasLimit     *hexutil.Big    `json:"gas"      gencodec:"required"`
+		GasLimit     hexutil.Uint64  `json:"gas"      gencodec:"required"`
 		Recipient    *common.Address `json:"to"       rlp:"nil"`
 		Amount       *hexutil.Big    `json:"value"    gencodec:"required"`
 		Payload      hexutil.Bytes   `json:"input"    gencodec:"required"`
@@ -27,7 +29,7 @@ func (t txdata) MarshalJSON() ([]byte, error) {
 	var enc txdata
 	enc.AccountNonce = hexutil.Uint64(t.AccountNonce)
 	enc.Price = (*hexutil.Big)(t.Price)
-	enc.GasLimit = (*hexutil.Big)(t.GasLimit)
+	enc.GasLimit = hexutil.Uint64(t.GasLimit)
 	enc.Recipient = t.Recipient
 	enc.Amount = (*hexutil.Big)(t.Amount)
 	enc.Payload = t.Payload
@@ -42,10 +44,10 @@ func (t *txdata) UnmarshalJSON(input []byte) error {
 	type txdata struct {
 		AccountNonce *hexutil.Uint64 `json:"nonce"    gencodec:"required"`
 		Price        *hexutil.Big    `json:"gasPrice" gencodec:"required"`
-		GasLimit     *hexutil.Big    `json:"gas"      gencodec:"required"`
+		GasLimit     *hexutil.Uint64 `json:"gas"      gencodec:"required"`
 		Recipient    *common.Address `json:"to"       rlp:"nil"`
 		Amount       *hexutil.Big    `json:"value"    gencodec:"required"`
-		Payload      hexutil.Bytes   `json:"input"    gencodec:"required"`
+		Payload      *hexutil.Bytes  `json:"input"    gencodec:"required"`
 		V            *hexutil.Big    `json:"v" gencodec:"required"`
 		R            *hexutil.Big    `json:"r" gencodec:"required"`
 		S            *hexutil.Big    `json:"s" gencodec:"required"`
@@ -66,7 +68,7 @@ func (t *txdata) UnmarshalJSON(input []byte) error {
 	if dec.GasLimit == nil {
 		return errors.New("missing required field 'gas' for txdata")
 	}
-	t.GasLimit = (*big.Int)(dec.GasLimit)
+	t.GasLimit = uint64(*dec.GasLimit)
 	if dec.Recipient != nil {
 		t.Recipient = dec.Recipient
 	}
@@ -77,7 +79,7 @@ func (t *txdata) UnmarshalJSON(input []byte) error {
 	if dec.Payload == nil {
 		return errors.New("missing required field 'input' for txdata")
 	}
-	t.Payload = dec.Payload
+	t.Payload = *dec.Payload
 	if dec.V == nil {
 		return errors.New("missing required field 'v' for txdata")
 	}

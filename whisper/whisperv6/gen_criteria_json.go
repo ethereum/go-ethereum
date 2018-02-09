@@ -10,6 +10,7 @@ import (
 
 var _ = (*criteriaOverride)(nil)
 
+// MarshalJSON marshals type Criteria to a json string
 func (c Criteria) MarshalJSON() ([]byte, error) {
 	type Criteria struct {
 		SymKeyID     string        `json:"symKeyID"`
@@ -29,14 +30,15 @@ func (c Criteria) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&enc)
 }
 
+// UnmarshalJSON unmarshals type Criteria to a json string
 func (c *Criteria) UnmarshalJSON(input []byte) error {
 	type Criteria struct {
-		SymKeyID     *string       `json:"symKeyID"`
-		PrivateKeyID *string       `json:"privateKeyID"`
-		Sig          hexutil.Bytes `json:"sig"`
-		MinPow       *float64      `json:"minPow"`
-		Topics       []TopicType   `json:"topics"`
-		AllowP2P     *bool         `json:"allowP2P"`
+		SymKeyID     *string        `json:"symKeyID"`
+		PrivateKeyID *string        `json:"privateKeyID"`
+		Sig          *hexutil.Bytes `json:"sig"`
+		MinPow       *float64       `json:"minPow"`
+		Topics       []TopicType    `json:"topics"`
+		AllowP2P     *bool          `json:"allowP2P"`
 	}
 	var dec Criteria
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -49,7 +51,7 @@ func (c *Criteria) UnmarshalJSON(input []byte) error {
 		c.PrivateKeyID = *dec.PrivateKeyID
 	}
 	if dec.Sig != nil {
-		c.Sig = dec.Sig
+		c.Sig = *dec.Sig
 	}
 	if dec.MinPow != nil {
 		c.MinPow = *dec.MinPow

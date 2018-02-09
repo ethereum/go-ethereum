@@ -63,10 +63,11 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 			return r
 		}, abis[i])
 
-		// Extract the call and transact methods, and sort them alphabetically
+		// Extract the call and transact methods; events; and sort them alphabetically
 		var (
 			calls     = make(map[string]*tmplMethod)
 			transacts = make(map[string]*tmplMethod)
+			events    = make(map[string]*tmplEvent)
 		)
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
@@ -89,10 +90,32 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 			}
 			// Append the methods to the call or transact lists
 			if original.Const {
-				calls[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original)}
+				calls[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs)}
 			} else {
-				transacts[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original)}
+				transacts[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs)}
 			}
+		}
+		for _, original := range evmABI.Events {
+			// Skip anonymous events as they don't support explicit filtering
+			if original.Anonymous {
+				continue
+			}
+			// Normalize the event for capital cases and non-anonymous outputs
+			normalized := original
+			normalized.Name = methodNormalizer[lang](original.Name)
+
+			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
+			copy(normalized.Inputs, original.Inputs)
+			for j, input := range normalized.Inputs {
+				// Indexed fields are input, non-indexed ones are outputs
+				if input.Indexed {
+					if input.Name == "" {
+						normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
+					}
+				}
+			}
+			// Append the event to the accumulator list
+			events[original.Name] = &tmplEvent{Original: original, Normalized: normalized}
 		}
 		contracts[types[i]] = &tmplContract{
 			Type:        capitalise(types[i]),
@@ -101,6 +124,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 			Constructor: evmABI.Constructor,
 			Calls:       calls,
 			Transacts:   transacts,
+			Events:      events,
 		}
 	}
 	// Generate the contract template data content and render it
@@ -111,10 +135,11 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 	buffer := new(bytes.Buffer)
 
 	funcs := map[string]interface{}{
-		"bindtype":     bindType[lang],
-		"namedtype":    namedType[lang],
-		"capitalise":   capitalise,
-		"decapitalise": decapitalise,
+		"bindtype":      bindType[lang],
+		"bindtopictype": bindTopicType[lang],
+		"namedtype":     namedType[lang],
+		"capitalise":    capitalise,
+		"decapitalise":  decapitalise,
 	}
 	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSource[lang]))
 	if err := tmpl.Execute(buffer, data); err != nil {
@@ -133,7 +158,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 }
 
 // bindType is a set of type binders that convert Solidity types to some supported
-// programming language.
+// programming language types.
 var bindType = map[Lang]func(kind abi.Type) string{
 	LangGo:   bindTypeGo,
 	LangJava: bindTypeJava,
@@ -254,6 +279,33 @@ func bindTypeJava(kind abi.Type) string {
 	}
 }
 
+// bindTopicType is a set of type binders that convert Solidity types to some
+// supported programming language topic types.
+var bindTopicType = map[Lang]func(kind abi.Type) string{
+	LangGo:   bindTopicTypeGo,
+	LangJava: bindTopicTypeJava,
+}
+
+// bindTypeGo converts a Solidity topic type to a Go one. It is almost the same
+// funcionality as for simple types, but dynamic types get converted to hashes.
+func bindTopicTypeGo(kind abi.Type) string {
+	bound := bindTypeGo(kind)
+	if bound == "string" || bound == "[]byte" {
+		bound = "common.Hash"
+	}
+	return bound
+}
+
+// bindTypeGo converts a Solidity topic type to a Java one. It is almost the same
+// funcionality as for simple types, but dynamic types get converted to hashes.
+func bindTopicTypeJava(kind abi.Type) string {
+	bound := bindTypeJava(kind)
+	if bound == "String" || bound == "Bytes" {
+		bound = "Hash"
+	}
+	return bound
+}
+
 // namedType is a set of functions that transform language specific types to
 // named versions that my be used inside method names.
 var namedType = map[Lang]func(string, abi.Type) string{
@@ -304,8 +356,15 @@ var methodNormalizer = map[Lang]func(string) string{
 	LangJava: decapitalise,
 }
 
-// capitalise makes the first character of a string upper case.
+// capitalise makes the first character of a string upper case, also removing any
+// prefixing underscores from the variable names.
 func capitalise(input string) string {
+	for len(input) > 0 && input[0] == '_' {
+		input = input[1:]
+	}
+	if len(input) == 0 {
+		return ""
+	}
 	return strings.ToUpper(input[:1]) + input[1:]
 }
 
@@ -314,16 +373,25 @@ func decapitalise(input string) string {
 	return strings.ToLower(input[:1]) + input[1:]
 }
 
-// structured checks whether a method has enough information to return a proper
-// Go struct ot if flat returns are needed.
-func structured(method abi.Method) bool {
-	if len(method.Outputs) < 2 {
+// structured checks whether a list of ABI data types has enough information to
+// operate through a proper Go struct or if flat returns are needed.
+func structured(args abi.Arguments) bool {
+	if len(args) < 2 {
 		return false
 	}
-	for _, out := range method.Outputs {
+	exists := make(map[string]bool)
+	for _, out := range args {
+		// If the name is anonymous, we can't organize into a struct
 		if out.Name == "" {
 			return false
 		}
+		// If the field name is empty when normalized or collides (var, Var, _var, _Var),
+		// we can't organize into a struct
+		field := capitalise(out.Name)
+		if field == "" || exists[field] {
+			return false
+		}
+		exists[field] = true
 	}
 	return true
 }

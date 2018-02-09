@@ -52,7 +52,7 @@ var htmlListTemplate = template.Must(template.New("html-list").Funcs(template.Fu
     <tbody>
       {{ range .List.CommonPrefixes }}
 	<tr>
-	  <td><a href="{{ basename . }}/?list=true">{{ basename . }}/</a></td>
+	  <td><a href="{{ basename . }}/">{{ basename . }}/</a></td>
 	  <td>DIR</td>
 	  <td>-</td>
 	</tr>

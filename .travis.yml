@@ -40,6 +40,7 @@ matrix:
     - os: osx
       go: 1.9.x
       script:
+        - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
         - brew update
         - brew install caskroom/cask/brew-cask
         - brew cask install osxfuse
@@ -87,13 +88,13 @@ matrix:
         - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install gcc-arm-linux-gnueabi libc6-dev-armel-cross gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
         - sudo ln -s /usr/include/asm-generic /usr/include/asm
 
-        - GOARM=5 CC=arm-linux-gnueabi-gcc go run build/ci.go install -arch arm
+        - GOARM=5 go run build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
         - GOARM=5 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - GOARM=6 CC=arm-linux-gnueabi-gcc go run build/ci.go install -arch arm
+        - GOARM=6 go run build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
         - GOARM=6 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - GOARM=7 CC=arm-linux-gnueabihf-gcc go run build/ci.go install -arch arm
+        - GOARM=7 go run build/ci.go install -arch arm -cc arm-linux-gnueabihf-gcc
         - GOARM=7 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - CC=aarch64-linux-gnu-gcc go run build/ci.go install -arch arm64
+        - go run build/ci.go install -arch arm64 -cc aarch64-linux-gnu-gcc
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Linux Azure MIPS xgo uploads

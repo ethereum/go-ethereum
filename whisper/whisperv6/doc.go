@@ -27,6 +27,9 @@ Whisper is a pure identity-based messaging system. Whisper provides a low-level
 or prejudiced by the low-level hardware attributes and characteristics,
 particularly the notion of singular endpoints.
 */
+
+// Contains the Whisper protocol constant definitions
+
 package whisperv6
 
 import (
@@ -34,41 +37,46 @@ import (
 	"time"
 )
 
+// Whisper protocol parameters
 const (
-	EnvelopeVersion    = uint64(0)
-	ProtocolVersion    = uint64(6)
-	ProtocolVersionStr = "6.0"
-	ProtocolName       = "shh"
+	ProtocolVersion    = uint64(6) // Protocol version number
+	ProtocolVersionStr = "6.0"     // The same, as a string
+	ProtocolName       = "shh"     // Nickname of the protocol in geth
 
-	statusCode           = 0 // used by whisper protocol
-	messagesCode         = 1 // normal whisper message
-	p2pCode              = 2 // peer-to-peer message (to be consumed by the peer, but not forwarded any further)
-	p2pRequestCode       = 3 // peer-to-peer message, used by Dapp protocol
+	// whisper protocol message codes, according to EIP-627
+	statusCode           = 0   // used by whisper protocol
+	messagesCode         = 1   // normal whisper message
+	powRequirementCode   = 2   // PoW requirement
+	bloomFilterExCode    = 3   // bloom filter exchange
+	p2pRequestCode       = 126 // peer-to-peer message, used by Dapp protocol
+	p2pMessageCode       = 127 // peer-to-peer message (to be consumed by the peer, but not forwarded any further)
 	NumberOfMessageCodes = 128
 
-	paddingMask   = byte(3)
+	SizeMask      = byte(3) // mask used to extract the size of payload size field from the flags
 	signatureFlag = byte(4)
 
-	TopicLength     = 4
-	signatureLength = 65
-	aesKeyLength    = 32
-	AESNonceLength  = 12
-	keyIdSize       = 32
+	TopicLength     = 4  // in bytes
+	signatureLength = 65 // in bytes
+	aesKeyLength    = 32 // in bytes
+	aesNonceLength  = 12 // in bytes; for more info please see cipher.gcmStandardNonceSize & aesgcm.NonceSize()
+	keyIDSize       = 32 // in bytes
+	bloomFilterSize = 64 // in bytes
+	flagsLength     = 1
+
+	EnvelopeHeaderLength = 20
 
 	MaxMessageSize        = uint32(10 * 1024 * 1024) // maximum accepted size of a message.
 	DefaultMaxMessageSize = uint32(1024 * 1024)
 	DefaultMinimumPoW     = 0.2
 
-	padSizeLimit      = 256 // just an arbitrary number, could be changed without breaking the protocol (must not exceed 2^24)
+	padSizeLimit      = 256 // just an arbitrary number, could be changed without breaking the protocol
 	messageQueueLimit = 1024
 
 	expirationCycle   = time.Second
 	transmissionCycle = 300 * time.Millisecond
 
-	DefaultTTL     = 50 // seconds
-	SynchAllowance = 10 // seconds
-
-	EnvelopeHeaderLength = 20
+	DefaultTTL           = 50 // seconds
+	DefaultSyncAllowance = 10 // seconds
 )
 
 type unknownVersionError uint64

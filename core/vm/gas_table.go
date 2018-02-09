@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
@@ -130,7 +128,7 @@ func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, m
 		// 0 => non 0
 		return params.SstoreSetGas, nil
 	} else if !common.EmptyHash(val) && common.EmptyHash(common.BigToHash(y)) {
-		evm.StateDB.AddRefund(new(big.Int).SetUint64(params.SstoreRefundGas))
+		evm.StateDB.AddRefund(params.SstoreRefundGas)
 
 		return params.SstoreClearGas, nil
 	} else {
@@ -405,7 +403,7 @@ func gasSuicide(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, 
 	}
 
 	if !evm.StateDB.HasSuicided(contract.Address()) {
-		evm.StateDB.AddRefund(new(big.Int).SetUint64(params.SuicideRefundGas))
+		evm.StateDB.AddRefund(params.SuicideRefundGas)
 	}
 	return gas, nil
 }

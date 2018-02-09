@@ -361,7 +361,7 @@ func validateEnsAPIs(s string) (err error) {
 func printConfig(config *bzzapi.Config) string {
 	out, err := tomlSettings.Marshal(&config)
 	if err != nil {
-		return (fmt.Sprintf("Something is not right with the configuration: %v", err))
+		return fmt.Sprintf("Something is not right with the configuration: %v", err)
 	}
 	return string(out)
 }

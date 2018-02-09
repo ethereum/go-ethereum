@@ -60,7 +60,7 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 			for {
 				select {
 				case <-timeout:
-					return errors.New(("Split timeout error"))
+					return errors.New("Split timeout error")
 				case <-quitC:
 					return nil
 				case chunk := <-chunkC:
@@ -97,7 +97,7 @@ func (self *chunkerTester) Append(chunker Splitter, rootKey Key, data io.Reader,
 			for {
 				select {
 				case <-timeout:
-					return errors.New(("Append timeout error"))
+					return errors.New("Append timeout error")
 				case <-quitC:
 					return nil
 				case chunk := <-chunkC:
@@ -146,7 +146,7 @@ func (self *chunkerTester) Join(chunker Chunker, key Key, c int, chunkC chan *Ch
 		for {
 			select {
 			case <-timeout:
-				return errors.New(("Join timeout error"))
+				return errors.New("Join timeout error")
 			case chunk, ok := <-chunkC:
 				if !ok {
 					close(quitC)
@@ -155,7 +155,7 @@ func (self *chunkerTester) Join(chunker Chunker, key Key, c int, chunkC chan *Ch
 				// this just mocks the behaviour of a chunk store retrieval
 				stored, success := self.chunks[chunk.Key.String()]
 				if !success {
-					return errors.New(("Not found"))
+					return errors.New("Not found")
 				}
 				chunk.SData = stored.SData
 				chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))

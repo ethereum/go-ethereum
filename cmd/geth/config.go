@@ -18,7 +18,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -29,7 +28,6 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/contracts/release"
 	"github.com/ethereum/go-ethereum/dashboard"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/node"
@@ -158,7 +156,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	utils.RegisterEthService(stack, &cfg.Eth)
 
 	if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
-		utils.RegisterDashboardService(stack, &cfg.Dashboard)
+		utils.RegisterDashboardService(stack, &cfg.Dashboard, gitCommit)
 	}
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
 	shhEnabled := enableWhisper(ctx)
@@ -176,21 +174,6 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
-	}
-
-	// Add the release oracle service so it boots along with node.
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		config := release.Config{
-			Oracle: relOracle,
-			Major:  uint32(params.VersionMajor),
-			Minor:  uint32(params.VersionMinor),
-			Patch:  uint32(params.VersionPatch),
-		}
-		commit, _ := hex.DecodeString(gitCommit)
-		copy(config.Commit[:], commit)
-		return release.NewReleaseService(ctx, config)
-	}); err != nil {
-		utils.Fatalf("Failed to register the Geth release oracle service: %v", err)
 	}
 	return stack
 }

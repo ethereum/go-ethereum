@@ -107,9 +107,9 @@ func (in *Interpreter) enforceRestrictions(op OpCode, operation operation, stack
 // the return byte-slice and an error if one occurred.
 //
 // It's important to note that any errors returned by the interpreter should be
-// considered a revert-and-consume-all-gas operation. No error specific checks
-// should be handled to reduce complexity and errors further down the in.
-func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret []byte, err error) {
+// considered a revert-and-consume-all-gas operation except for
+// errExecutionReverted which means revert-and-keep-gas-left.
+func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
@@ -144,12 +144,17 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 	)
 	contract.Input = input
 
-	defer func() {
-		if err != nil && !logged && in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
-		}
-	}()
-
+	if in.cfg.Debug {
+		defer func() {
+			if err != nil {
+				if !logged {
+					in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
+				} else {
+					in.cfg.Tracer.CaptureFault(in.evm, pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
+				}
+			}
+		}()
+	}
 	// The Interpreter main run loop (contextual). This loop runs until either an
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
 	// the execution of one of the operations or until the done flag is set by the

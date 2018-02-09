@@ -22,10 +22,12 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/require"
 )
 
 type unpackTest struct {
@@ -257,82 +259,179 @@ var unpackTests = []unpackTest{
 		enc:  "000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003",
 		want: [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)},
 	},
+	// struct outputs
+	{
+		def: `[{"name":"int1","type":"int256"},{"name":"int2","type":"int256"}]`,
+		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		want: struct {
+			Int1 *big.Int
+			Int2 *big.Int
+		}{big.NewInt(1), big.NewInt(2)},
+	},
+	{
+		def: `[{"name":"int","type":"int256"},{"name":"Int","type":"int256"}]`,
+		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		want: struct {
+			Int1 *big.Int
+			Int2 *big.Int
+		}{},
+		err: "abi: multiple outputs mapping to the same struct field 'Int'",
+	},
+	{
+		def: `[{"name":"int","type":"int256"},{"name":"_int","type":"int256"}]`,
+		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		want: struct {
+			Int1 *big.Int
+			Int2 *big.Int
+		}{},
+		err: "abi: multiple outputs mapping to the same struct field 'Int'",
+	},
+	{
+		def: `[{"name":"Int","type":"int256"},{"name":"_int","type":"int256"}]`,
+		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		want: struct {
+			Int1 *big.Int
+			Int2 *big.Int
+		}{},
+		err: "abi: multiple outputs mapping to the same struct field 'Int'",
+	},
+	{
+		def: `[{"name":"Int","type":"int256"},{"name":"_","type":"int256"}]`,
+		enc: "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002",
+		want: struct {
+			Int1 *big.Int
+			Int2 *big.Int
+		}{},
+		err: "abi: purely underscored output cannot unpack to struct",
+	},
 }
 
 func TestUnpack(t *testing.T) {
 	for i, test := range unpackTests {
-		def := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
-		abi, err := JSON(strings.NewReader(def))
-		if err != nil {
-			t.Fatalf("invalid ABI definition %s: %v", def, err)
-		}
-		encb, err := hex.DecodeString(test.enc)
-		if err != nil {
-			t.Fatalf("invalid hex: %s" + test.enc)
-		}
-		outptr := reflect.New(reflect.TypeOf(test.want))
-		err = abi.Unpack(outptr.Interface(), "method", encb)
-		if err := test.checkError(err); err != nil {
-			t.Errorf("test %d (%v) failed: %v", i, test.def, err)
-			continue
-		}
-		out := outptr.Elem().Interface()
-		if !reflect.DeepEqual(test.want, out) {
-			t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, test.want, out)
-		}
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			def := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
+			abi, err := JSON(strings.NewReader(def))
+			if err != nil {
+				t.Fatalf("invalid ABI definition %s: %v", def, err)
+			}
+			encb, err := hex.DecodeString(test.enc)
+			if err != nil {
+				t.Fatalf("invalid hex: %s" + test.enc)
+			}
+			outptr := reflect.New(reflect.TypeOf(test.want))
+			err = abi.Unpack(outptr.Interface(), "method", encb)
+			if err := test.checkError(err); err != nil {
+				t.Errorf("test %d (%v) failed: %v", i, test.def, err)
+				return
+			}
+			out := outptr.Elem().Interface()
+			if !reflect.DeepEqual(test.want, out) {
+				t.Errorf("test %d (%v) failed: expected %v, got %v", i, test.def, test.want, out)
+			}
+		})
 	}
 }
 
-func TestMultiReturnWithStruct(t *testing.T) {
+type methodMultiOutput struct {
+	Int    *big.Int
+	String string
+}
+
+func methodMultiReturn(require *require.Assertions) (ABI, []byte, methodMultiOutput) {
 	const definition = `[
 	{ "name" : "multi", "constant" : false, "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
+	var expected = methodMultiOutput{big.NewInt(1), "hello"}
 
 	abi, err := JSON(strings.NewReader(definition))
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	require.NoError(err)
 	// using buff to make the code readable
 	buff := new(bytes.Buffer)
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"))
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000040"))
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000005"))
-	stringOut := "hello"
-	buff.Write(common.RightPadBytes([]byte(stringOut), 32))
+	buff.Write(common.RightPadBytes([]byte(expected.String), 32))
+	return abi, buff.Bytes(), expected
+}
 
-	var inter struct {
-		Int    *big.Int
-		String string
-	}
-	err = abi.Unpack(&inter, "multi", buff.Bytes())
-	if err != nil {
-		t.Error(err)
-	}
-
-	if inter.Int == nil || inter.Int.Cmp(big.NewInt(1)) != 0 {
-		t.Error("expected Int to be 1 got", inter.Int)
-	}
-
-	if inter.String != stringOut {
-		t.Error("expected String to be", stringOut, "got", inter.String)
-	}
-
-	var reversed struct {
+func TestMethodMultiReturn(t *testing.T) {
+	type reversed struct {
 		String string
 		Int    *big.Int
 	}
 
-	err = abi.Unpack(&reversed, "multi", buff.Bytes())
+	abi, data, expected := methodMultiReturn(require.New(t))
+	bigint := new(big.Int)
+	var testCases = []struct {
+		dest     interface{}
+		expected interface{}
+		error    string
+		name     string
+	}{{
+		&methodMultiOutput{},
+		&expected,
+		"",
+		"Can unpack into structure",
+	}, {
+		&reversed{},
+		&reversed{expected.String, expected.Int},
+		"",
+		"Can unpack into reversed structure",
+	}, {
+		&[]interface{}{&bigint, new(string)},
+		&[]interface{}{&expected.Int, &expected.String},
+		"",
+		"Can unpack into a slice",
+	}, {
+		&[2]interface{}{&bigint, new(string)},
+		&[2]interface{}{&expected.Int, &expected.String},
+		"",
+		"Can unpack into an array",
+	}, {
+		&[]interface{}{new(int), new(int)},
+		&[]interface{}{&expected.Int, &expected.String},
+		"abi: cannot unmarshal *big.Int in to int",
+		"Can not unpack into a slice with wrong types",
+	}, {
+		&[]interface{}{new(int)},
+		&[]interface{}{},
+		"abi: insufficient number of elements in the list/array for unpack, want 2, got 1",
+		"Can not unpack into a slice with wrong types",
+	}}
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			require := require.New(t)
+			err := abi.Unpack(tc.dest, "multi", data)
+			if tc.error == "" {
+				require.Nil(err, "Should be able to unpack method outputs.")
+				require.Equal(tc.expected, tc.dest)
+			} else {
+				require.EqualError(err, tc.error)
+			}
+		})
+	}
+}
+
+func TestMultiReturnWithArray(t *testing.T) {
+	const definition = `[{"name" : "multi", "outputs": [{"type": "uint64[3]"}, {"type": "uint64"}]}]`
+	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
+	buff := new(bytes.Buffer)
+	buff.Write(common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000000900000000000000000000000000000000000000000000000000000000000000090000000000000000000000000000000000000000000000000000000000000009"))
+	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000008"))
 
-	if reversed.Int == nil || reversed.Int.Cmp(big.NewInt(1)) != 0 {
-		t.Error("expected Int to be 1 got", reversed.Int)
+	ret1, ret1Exp := new([3]uint64), [3]uint64{9, 9, 9}
+	ret2, ret2Exp := new(uint64), uint64(8)
+	if err := abi.Unpack(&[]interface{}{ret1, ret2}, "multi", buff.Bytes()); err != nil {
+		t.Fatal(err)
 	}
-
-	if reversed.String != stringOut {
-		t.Error("expected String to be", stringOut, "got", reversed.String)
+	if !reflect.DeepEqual(*ret1, ret1Exp) {
+		t.Error("array result", *ret1, "!= Expected", ret1Exp)
+	}
+	if *ret2 != ret2Exp {
+		t.Error("int result", *ret2, "!= Expected", ret2Exp)
 	}
 }
 

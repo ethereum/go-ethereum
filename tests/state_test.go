@@ -39,16 +39,12 @@ func TestState(t *testing.T) {
 	st.fails(`^stRevertTest/RevertPrefoundEmptyOOG\.json/EIP158`, "bug in test")
 	st.fails(`^stRevertTest/RevertPrecompiledTouch\.json/Byzantium`, "bug in test")
 	st.fails(`^stRevertTest/RevertPrefoundEmptyOOG\.json/Byzantium`, "bug in test")
-	st.fails(`^stRandom/randomStatetest645\.json/EIP150/.*`, "known bug #15119")
-	st.fails(`^stRandom/randomStatetest645\.json/Frontier/.*`, "known bug #15119")
-	st.fails(`^stRandom/randomStatetest645\.json/Homestead/.*`, "known bug #15119")
-	st.fails(`^stRandom/randomStatetest644\.json/EIP150/.*`, "known bug #15119")
-	st.fails(`^stRandom/randomStatetest644\.json/Frontier/.*`, "known bug #15119")
-	st.fails(`^stRandom/randomStatetest644\.json/Homestead/.*`, "known bug #15119")
+	st.fails(`^stRandom2/randomStatetest64[45]\.json/(EIP150|Frontier|Homestead)/.*`, "known bug #15119")
 	st.fails(`^stCreateTest/TransactionCollisionToEmpty\.json/EIP158/2`, "known bug ")
 	st.fails(`^stCreateTest/TransactionCollisionToEmpty\.json/EIP158/3`, "known bug ")
 	st.fails(`^stCreateTest/TransactionCollisionToEmpty\.json/Byzantium/2`, "known bug ")
 	st.fails(`^stCreateTest/TransactionCollisionToEmpty\.json/Byzantium/3`, "known bug ")
+
 	st.walk(t, stateTestDir, func(t *testing.T, name string, test *StateTest) {
 		for _, subtest := range test.Subtests() {
 			subtest := subtest
@@ -68,8 +64,7 @@ func TestState(t *testing.T) {
 }
 
 // Transactions with gasLimit above this value will not get a VM trace on failure.
-//const traceErrorLimit = 400000
-const traceErrorLimit = 0
+const traceErrorLimit = 400000
 
 func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	err := test(vm.Config{})
@@ -93,4 +88,6 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	} else {
 		t.Log("EVM operation log:\n" + buf.String())
 	}
+	t.Logf("EVM output: 0x%x", tracer.Output())
+	t.Logf("EVM error: %v", tracer.Error())
 }

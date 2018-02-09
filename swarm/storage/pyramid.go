@@ -338,7 +338,7 @@ func (self *PyramidChunker) loadTree(chunkLevel [][]*TreeEntry, key Key, chunkC 
 	chunkLevel[depth-1] = append(chunkLevel[depth-1], newEntry)
 
 	// Add the rest of the tree
-	for lvl := (depth - 1); lvl >= 1; lvl-- {
+	for lvl := depth - 1; lvl >= 1; lvl-- {
 
 		//TODO(jmozah): instead of loading finished branches and then trim in the end,
 		//avoid loading them in the first place

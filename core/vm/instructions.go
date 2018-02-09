@@ -472,7 +472,7 @@ func opDifficulty(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stac
 }
 
 func opGasLimit(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(math.U256(new(big.Int).Set(evm.GasLimit)))
+	stack.push(math.U256(new(big.Int).SetUint64(evm.GasLimit)))
 	return nil, nil
 }
 
