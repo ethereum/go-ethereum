@@ -344,7 +344,7 @@ func sendMsg(t *testing.T, expected bool, id int) {
 		opt.Payload = opt.Payload[1:]
 	}
 
-	msg, err := newSentMessage(&opt)
+	msg, err := NewSentMessage(&opt)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -368,7 +368,7 @@ func TestPeerBasic(t *testing.T) {
 	}
 
 	params.PoW = 0.001
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
