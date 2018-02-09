@@ -96,7 +96,7 @@ Specifying the `--testnet` flag however will reconfigure your Geth instance a bi
    `geth attach <datadir>/testnet/geth.ipc`. Windows users are not affected by this.
  * Instead of connecting the main Ethereum network, the client will connect to the test network,
    which uses different P2P bootnodes, different network IDs and genesis states.
-   
+
 *Note: Although there are some internal protective measures to prevent transactions from crossing
 over between the main network and test network, you should make sure to always use separate accounts
 for play-money and real-money. Unless you manually move accounts, Geth will by default correctly
@@ -123,7 +123,7 @@ $ geth --your-favourite-flags dumpconfig
 One of the quickest ways to get Ethereum up and running on your machine is by using Docker:
 
 ```
-docker run -d --name ethereum-node -v /Users/alice/ethereum:/root \
+docker run -d --name ethereum-node -v /Users/alice/ethereum:/home/geth \
            -p 8545:8545 -p 30303:30303 \
            ethereum/client-go --fast --cache=512
 ```
