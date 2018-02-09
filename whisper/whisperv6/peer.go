@@ -54,6 +54,8 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 		powRequirement: 0.0,
 		known:          set.New(),
 		quit:           make(chan struct{}),
+		bloomFilter:    makeFullNodeBloom(),
+		fullNode:       true,
 	}
 }
 
@@ -229,12 +231,15 @@ func (peer *Peer) bloomMatch(env *Envelope) bool {
 func (peer *Peer) setBloomFilter(bloom []byte) {
 	peer.bloomFilter = bloom
 	peer.fullNode = isFullNode(bloom)
-	if peer.fullNode {
-		if peer.bloomFilter == nil {
-			peer.bloomFilter = make([]byte, bloomFilterSize)
-			for i := 0; i < bloomFilterSize; i++ {
-				peer.bloomFilter[i] = 0xFF
-			}
-		}
+	if peer.fullNode && peer.bloomFilter == nil {
+		peer.bloomFilter = makeFullNodeBloom()
 	}
+}
+
+func makeFullNodeBloom() []byte {
+	bloom := make([]byte, bloomFilterSize)
+	for i := 0; i < bloomFilterSize; i++ {
+		bloom[i] = 0xFF
+	}
+	return bloom
 }
