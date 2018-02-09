@@ -859,7 +859,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		trieDb := trie.NewDatabase(ethdb.NewTable(pm.chainDb, light.ChtTablePrefix))
 		for _, req := range req.Reqs {
 			if header := pm.blockchain.GetHeaderByNumber(req.BlockNum); header != nil {
-				sectionHead := core.GetCanonicalHash(pm.chainDb, req.ChtNum*light.ChtV1Frequency-1)
+				sectionHead := core.GetCanonicalHash(pm.chainDb, req.ChtNum*light.CHTFrequencyServer-1)
 				if root := light.GetChtRoot(pm.chainDb, req.ChtNum-1, sectionHead); root != (common.Hash{}) {
 					trie, err := trie.New(root, trieDb)
 					if err != nil {
@@ -875,7 +875,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					if bytes += proof.DataSize() + estHeaderRlpSize; bytes >= softResponseLimit {
 						break
 					}
-
 				}
 			}
 		}
@@ -911,11 +910,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		)
 		nodes := light.NewNodeSet()
 		for _, req := range req.Reqs {
-			if auxTrie == nil || req.HelperTrieType != lastType || req.TrieIdx != lastIdx {
-				auxTrie, lastType, lastIdx = nil, req.HelperTrieType, req.TrieIdx
+			if auxTrie == nil || req.Type != lastType || req.TrieIdx != lastIdx {
+				auxTrie, lastType, lastIdx = nil, req.Type, req.TrieIdx
 
 				var prefix string
-				if root, prefix = pm.getHelperTrie(req.HelperTrieType, req.TrieIdx); root != (common.Hash{}) {
+				if root, prefix = pm.getHelperTrie(req.Type, req.TrieIdx); root != (common.Hash{}) {
 					auxTrie, _ = trie.New(root, trie.NewDatabase(ethdb.NewTable(pm.chainDb, prefix)))
 				}
 			}
@@ -940,10 +939,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				break
 			}
 		}
-		proofs := nodes.NodeList()
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
-		return p.SendHelperTrieProofs(req.ReqID, bv, HelperTrieResps{Proofs: proofs, AuxData: auxData})
+		return p.SendHelperTrieProofs(req.ReqID, bv, HelperTrieResps{Proofs: nodes.NodeList(), AuxData: auxData})
 
 	case HeaderProofsMsg:
 		if pm.odr == nil {
@@ -1116,7 +1114,7 @@ func (pm *ProtocolManager) getAccount(statedb *state.StateDB, root, hash common.
 func (pm *ProtocolManager) getHelperTrie(id uint, idx uint64) (common.Hash, string) {
 	switch id {
 	case htCanonical:
-		sectionHead := core.GetCanonicalHash(pm.chainDb, (idx+1)*light.ChtFrequency-1)
+		sectionHead := core.GetCanonicalHash(pm.chainDb, (idx+1)*light.CHTFrequencyClient-1)
 		return light.GetChtV2Root(pm.chainDb, idx, sectionHead), light.ChtTablePrefix
 	case htBloomBits:
 		sectionHead := core.GetCanonicalHash(pm.chainDb, (idx+1)*light.BloomTrieFrequency-1)
@@ -1127,7 +1125,7 @@ func (pm *ProtocolManager) getHelperTrie(id uint, idx uint64) (common.Hash, stri
 
 // getHelperTrieAuxData returns requested auxiliary data for the given HelperTrie request
 func (pm *ProtocolManager) getHelperTrieAuxData(req HelperTrieReq) []byte {
-	if req.HelperTrieType == htCanonical && req.AuxReq == auxHeader {
+	if req.Type == htCanonical && req.AuxReq == auxHeader {
 		if len(req.Key) != 8 {
 			return nil
 		}

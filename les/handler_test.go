@@ -18,6 +18,7 @@ package les
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -405,6 +406,82 @@ func testGetProofs(t *testing.T, protocol int) {
 			t.Errorf("BV mismatch")
 		}
 		testCheckProof(t, proofsV2, resp.Data)
+	}
+}
+
+// Tests that helper trie proofs can be correctly retrieved.
+func TestGetCHTProofsLes1(t *testing.T) { testGetCHTProofs(t, 1) }
+func TestGetCHTProofsLes2(t *testing.T) { testGetCHTProofs(t, 2) }
+
+func testGetCHTProofs(t *testing.T, protocol int) {
+	// Figure out the client's CHT frequency
+	frequency := uint64(light.CHTFrequencyClient)
+	if protocol == 1 {
+		frequency = uint64(light.CHTFrequencyServer)
+	}
+	// Assemble the test environment
+	db, _ := ethdb.NewMemDatabase()
+	pm := newTestProtocolManagerMust(t, false, int(frequency)+light.HelperTrieProcessConfirmations, testChainGen, nil, nil, db)
+	bc := pm.blockchain.(*core.BlockChain)
+	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
+	defer peer.close()
+
+	// Wait a while for the CHT indexer to process the new headers
+	time.Sleep(100 * time.Millisecond * time.Duration(frequency/light.CHTFrequencyServer)) // Chain indexer throttling
+	time.Sleep(250 * time.Millisecond)                                                     // CI tester slack
+
+	// Assemble the proofs from the different protocols
+	header := bc.GetHeaderByNumber(frequency)
+	rlp, _ := rlp.EncodeToBytes(header)
+
+	key := make([]byte, 8)
+	binary.BigEndian.PutUint64(key, frequency)
+
+	proofsV1 := []ChtResp{{
+		Header: header,
+	}}
+	proofsV2 := HelperTrieResps{
+		AuxData: [][]byte{rlp},
+	}
+	switch protocol {
+	case 1:
+		root := light.GetChtRoot(db, 0, bc.GetHeaderByNumber(frequency-1).Hash())
+		trie, _ := trie.New(root, trie.NewDatabase(ethdb.NewTable(db, light.ChtTablePrefix)))
+
+		var proof light.NodeList
+		trie.Prove(key, 0, &proof)
+		proofsV1[0].Proof = proof
+
+	case 2:
+		root := light.GetChtV2Root(db, 0, bc.GetHeaderByNumber(frequency-1).Hash())
+		trie, _ := trie.New(root, trie.NewDatabase(ethdb.NewTable(db, light.ChtTablePrefix)))
+		trie.Prove(key, 0, &proofsV2.Proofs)
+	}
+	// Assemble the requests for the different protocols
+	requestsV1 := []ChtReq{{
+		ChtNum:   1,
+		BlockNum: frequency,
+	}}
+	requestsV2 := []HelperTrieReq{{
+		Type:    htCanonical,
+		TrieIdx: 0,
+		Key:     key,
+		AuxReq:  auxHeader,
+	}}
+	// Send the proof request and verify the response
+	switch protocol {
+	case 1:
+		cost := peer.GetRequestCost(GetHeaderProofsMsg, len(requestsV1))
+		sendRequest(peer.app, GetHeaderProofsMsg, 42, cost, requestsV1)
+		if err := expectResponse(peer.app, HeaderProofsMsg, 42, testBufLimit, proofsV1); err != nil {
+			t.Errorf("proofs mismatch: %v", err)
+		}
+	case 2:
+		cost := peer.GetRequestCost(GetHelperTrieProofsMsg, len(requestsV2))
+		sendRequest(peer.app, GetHelperTrieProofsMsg, 42, cost, requestsV2)
+		if err := expectResponse(peer.app, HelperTrieProofsMsg, 42, testBufLimit, proofsV2); err != nil {
+			t.Errorf("proofs mismatch: %v", err)
+		}
 	}
 }
 

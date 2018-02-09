@@ -52,13 +52,13 @@ func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*typ
 		for chtCount > 0 && canonicalHash != sectionHead && canonicalHash != (common.Hash{}) {
 			chtCount--
 			if chtCount > 0 {
-				sectionHeadNum = chtCount*ChtFrequency - 1
+				sectionHeadNum = chtCount*CHTFrequencyClient - 1
 				sectionHead = odr.ChtIndexer().SectionHead(chtCount - 1)
 				canonicalHash = core.GetCanonicalHash(db, sectionHeadNum)
 			}
 		}
 	}
-	if number >= chtCount*ChtFrequency {
+	if number >= chtCount*CHTFrequencyClient {
 		return nil, ErrNoTrustedCht
 	}
 	r := &ChtRequest{ChtRoot: GetChtRoot(db, chtCount-1, sectionHead), ChtNum: chtCount - 1, BlockNum: number}
