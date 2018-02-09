@@ -621,10 +621,10 @@ func TestBareEvents(t *testing.T) {
 // TestUnpackEvent is based on this contract:
 //    contract T {
 //      event received(address sender, uint amount, bytes memo);
-//			event receivedAddr(address sender);
+//      event receivedAddr(address sender);
 //      function receive(bytes memo) external payable {
 //        received(msg.sender, msg.value, memo);
-//				receivedAddr(msg.sender);
+//        receivedAddr(msg.sender);
 //      }
 //    }
 // When receive("X") is called with sender 0x00... and value 1, it produces this tx receipt:
