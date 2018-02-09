@@ -36,7 +36,8 @@ type Peer struct {
 
 	trusted        bool
 	powRequirement float64
-	bloomFilter    []byte // may contain nil in case of full node
+	bloomFilter    []byte
+	fullNode       bool
 
 	known *set.Set // Messages already known by the peer to avoid wasting bandwidth
 
@@ -118,11 +119,7 @@ func (peer *Peer) handshake() error {
 			if sz != bloomFilterSize && sz != 0 {
 				return fmt.Errorf("peer [%x] sent bad status message: wrong bloom filter size %d", peer.ID(), sz)
 			}
-			if isFullNode(bloom) {
-				peer.bloomFilter = nil
-			} else {
-				peer.bloomFilter = bloom
-			}
+			peer.setBloomFilter(bloom)
 		}
 	}
 
@@ -226,10 +223,18 @@ func (peer *Peer) notifyAboutBloomFilterChange(bloom []byte) error {
 }
 
 func (peer *Peer) bloomMatch(env *Envelope) bool {
-	if peer.bloomFilter == nil {
-		// no filter - full node, accepts all envelops
-		return true
-	}
+	return peer.fullNode || bloomFilterMatch(peer.bloomFilter, env.Bloom())
+}
 
-	return bloomFilterMatch(peer.bloomFilter, env.Bloom())
+func (peer *Peer) setBloomFilter(bloom []byte) {
+	peer.bloomFilter = bloom
+	peer.fullNode = isFullNode(bloom)
+	if peer.fullNode {
+		if peer.bloomFilter == nil {
+			peer.bloomFilter = make([]byte, bloomFilterSize)
+			for i := 0; i < bloomFilterSize; i++ {
+				peer.bloomFilter[i] = 0xFF
+			}
+		}
+	}
 }
