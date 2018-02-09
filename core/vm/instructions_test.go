@@ -349,7 +349,11 @@ func BenchmarkOpEq(b *testing.B) {
 
 	opBenchmark(b, opEq, x, y)
 }
-
+func BenchmarkOpEq2(b *testing.B) {
+	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
+	y := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201fffffffe"
+	opBenchmark(b, opEq, x, y)
+}
 func BenchmarkOpAnd(b *testing.B) {
 	x := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
 	y := "ABCDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff"
@@ -411,4 +415,8 @@ func BenchmarkOpSAR(b *testing.B) {
 	y := "ff"
 
 	opBenchmark(b, opSAR, x, y)
+}
+func BenchmarkOpIsZero(b *testing.B) {
+	x := "FBCDEF090807060504030201ffffffffFBCDEF090807060504030201ffffffff"
+	opBenchmark(b, opIszero, x)
 }
