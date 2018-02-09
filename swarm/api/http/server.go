@@ -101,7 +101,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 
 	key, _, err := s.api.Store(r.Body, r.ContentLength)
 	if err != nil {
-		s.Error(w, r, err)
+		ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, err), http.StatusInternalServerError)
 		return
 	}
 	log.Debug(fmt.Sprintf("content for %s stored", key.Log()))
@@ -127,13 +127,13 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 	if r.uri.Addr != "" {
 		key, err = s.api.Resolve(r.uri)
 		if err != nil {
-			s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+			ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err)), http.StatusInternalServerError)
 			return
 		}
 	} else {
 		key, err = s.api.NewManifest()
 		if err != nil {
-			s.Error(w, r, err)
+			ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, err), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -152,7 +152,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		}
 	})
 	if err != nil {
-		s.Error(w, r, fmt.Errorf("error creating manifest: %s", err))
+		ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("error creating manifest: %s", err)), http.StatusInternalServerError)
 		return
 	}
 
@@ -272,7 +272,7 @@ func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error 
 func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
-		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err)), http.StatusInternalServerError)
 		return
 	}
 
@@ -281,7 +281,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 		return mw.RemoveEntry(r.uri.Path)
 	})
 	if err != nil {
-		s.Error(w, r, fmt.Errorf("error updating manifest: %s", err))
+		ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("error updating manifest: %s", err)), http.StatusInternalServerError)
 		return
 	}
 
@@ -298,7 +298,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
-		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err)), http.StatusInternalServerError)
 		return
 	}
 
@@ -335,7 +335,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 			return api.SkipManifest
 		})
 		if entry == nil {
-			s.NotFound(w, r, fmt.Errorf("Manifest entry could not be loaded"))
+			ShowError(w, &r.Request, fmt.Sprintf("NOT FOUND error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("Manifest entry could not be loaded")), http.StatusNotFound)
 			return
 		}
 		key = storage.Key(common.Hex2Bytes(entry.Hash))
@@ -344,7 +344,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	// check the root chunk exists by retrieving the file's size
 	reader := s.api.Retrieve(key)
 	if _, err := reader.Size(nil); err != nil {
-		s.NotFound(w, r, fmt.Errorf("Root chunk not found %s: %s", key, err))
+		ShowError(w, &r.Request, fmt.Sprintf("NOT FOUND error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("Root chunk not found %s: %s", key, err)), http.StatusNotFound)
 		return
 	}
 
@@ -377,13 +377,13 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
-		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err)), http.StatusInternalServerError)
 		return
 	}
 
 	walker, err := s.api.NewManifestWalker(key, nil)
 	if err != nil {
-		s.Error(w, r, err)
+		ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, err), http.StatusInternalServerError)
 		return
 	}
 
@@ -446,14 +446,14 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
-		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err)), http.StatusInternalServerError)
 		return
 	}
 
 	list, err := s.getManifestList(key, r.uri.Path)
 
 	if err != nil {
-		s.Error(w, r, err)
+		ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, err), http.StatusInternalServerError)
 		return
 	}
 
@@ -546,7 +546,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
-		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err)), http.StatusInternalServerError)
 		return
 	}
 
@@ -554,9 +554,9 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	if err != nil {
 		switch status {
 		case http.StatusNotFound:
-			s.NotFound(w, r, err)
+			ShowError(w, &r.Request, fmt.Sprintf("NOT FOUND error serving %s %s: %s", r.Method, r.uri, err), http.StatusNotFound)
 		default:
-			s.Error(w, r, err)
+			ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, err), http.StatusInternalServerError)
 		}
 		return
 	}
@@ -567,7 +567,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		list, err := s.getManifestList(key, r.uri.Path)
 
 		if err != nil {
-			s.Error(w, r, err)
+			ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, err), http.StatusInternalServerError)
 			return
 		}
 
@@ -579,7 +579,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 
 	// check the root chunk exists by retrieving the file's size
 	if _, err := reader.Size(nil); err != nil {
-		s.NotFound(w, r, fmt.Errorf("File not found %s: %s", r.uri, err))
+		ShowError(w, &r.Request, fmt.Sprintf("NOT FOUND error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("File not found %s: %s", r.uri, err)), http.StatusNotFound)
 		return
 	}
 
@@ -668,12 +668,4 @@ func (s *Server) updateManifest(key storage.Key, update func(mw *api.ManifestWri
 	}
 	log.Debug(fmt.Sprintf("generated manifest %s", key))
 	return key, nil
-}
-
-func (s *Server) Error(w http.ResponseWriter, r *Request, err error) {
-	ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, err), http.StatusInternalServerError)
-}
-
-func (s *Server) NotFound(w http.ResponseWriter, r *Request, err error) {
-	ShowError(w, &r.Request, fmt.Sprintf("NOT FOUND error serving %s %s: %s", r.Method, r.uri, err), http.StatusNotFound)
 }
