@@ -104,7 +104,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 		s.Error(w, r, err)
 		return
 	}
-	s.logDebug("content for %s stored", key.Log())
+	log.Debug(fmt.Sprintf("content for %s stored", key.Log()))
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
@@ -185,12 +185,12 @@ func (s *Server) handleTarUpload(req *Request, mw *api.ManifestWriter) error {
 			Size:        hdr.Size,
 			ModTime:     hdr.ModTime,
 		}
-		s.logDebug("adding %s (%d bytes) to new manifest", entry.Path, entry.Size)
+		log.Debug(fmt.Sprintf("adding %s (%d bytes) to new manifest", entry.Path, entry.Size))
 		contentKey, err := mw.AddEntry(tr, entry)
 		if err != nil {
 			return fmt.Errorf("error adding manifest entry from tar stream: %s", err)
 		}
-		s.logDebug("content for %s stored", contentKey.Log())
+		log.Debug(fmt.Sprintf("content for %s stored", contentKey.Log()))
 	}
 }
 
@@ -242,12 +242,12 @@ func (s *Server) handleMultipartUpload(req *Request, boundary string, mw *api.Ma
 			Size:        size,
 			ModTime:     time.Now(),
 		}
-		s.logDebug("adding %s (%d bytes) to new manifest", entry.Path, entry.Size)
+		log.Debug(fmt.Sprintf("adding %s (%d bytes) to new manifest", entry.Path, entry.Size))
 		contentKey, err := mw.AddEntry(reader, entry)
 		if err != nil {
 			return fmt.Errorf("error adding manifest entry from multipart form: %s", err)
 		}
-		s.logDebug("content for %s stored", contentKey.Log())
+		log.Debug(fmt.Sprintf("content for %s stored", contentKey.Log()))
 	}
 }
 
@@ -262,7 +262,7 @@ func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error 
 	if err != nil {
 		return err
 	}
-	s.logDebug("content for %s stored", key.Log())
+	log.Debug(fmt.Sprintf("content for %s stored", key.Log()))
 	return nil
 }
 
@@ -277,7 +277,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	}
 
 	newKey, err := s.updateManifest(key, func(mw *api.ManifestWriter) error {
-		s.logDebug("removing %s from manifest %s", r.uri.Path, key.Log())
+		log.Debug(fmt.Sprintf("removing %s from manifest %s", r.uri.Path, key.Log()))
 		return mw.RemoveEntry(r.uri.Path)
 	})
 	if err != nil {
@@ -430,7 +430,7 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 		return nil
 	})
 	if err != nil {
-		s.logError("error generating tar stream: %s", err)
+		log.Error(fmt.Sprintf("error generating tar stream: %s", err))
 	}
 }
 
@@ -470,7 +470,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 			List: &list,
 		})
 		if err != nil {
-			s.logError("error rendering list HTML: %s", err)
+			log.Error(fmt.Sprintf("error rendering list HTML: %s", err))
 		}
 		return
 	}
@@ -571,7 +571,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 			return
 		}
 
-		s.logDebug(fmt.Sprintf("Multiple choices! -->  %v", list))
+		log.Debug(fmt.Sprintf("Multiple choices! -->  %v", list))
 		//show a nice page links to available entries
 		ShowMultipleChoices(w, &r.Request, list)
 		return
@@ -589,16 +589,16 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.logDebug("HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, r.URL.Host, r.URL.Path, r.Referer(), r.Header.Get("Accept"))
+	log.Debug(fmt.Sprintf("HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, r.URL.Host, r.URL.Path, r.Referer(), r.Header.Get("Accept")))
 
 	uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
 	req := &Request{Request: *r, uri: uri}
 	if err != nil {
-		s.logError("Invalid URI %q: %s", r.URL.Path, err)
+		log.Error(fmt.Sprintf("Invalid URI %q: %s", r.URL.Path, err))
 		s.BadRequest(w, req, fmt.Sprintf("Invalid URI %q: %s", r.URL.Path, err))
 		return
 	}
-	s.logDebug("%s request received for %s", r.Method, uri)
+	log.Debug(fmt.Sprintf("%s request received for %s", r.Method, uri))
 
 	switch r.Method {
 	case "POST":
@@ -666,16 +666,8 @@ func (s *Server) updateManifest(key storage.Key, update func(mw *api.ManifestWri
 	if err != nil {
 		return nil, err
 	}
-	s.logDebug("generated manifest %s", key)
+	log.Debug(fmt.Sprintf("generated manifest %s", key))
 	return key, nil
-}
-
-func (s *Server) logDebug(format string, v ...interface{}) {
-	log.Debug(fmt.Sprintf("[BZZ] HTTP: "+format, v...))
-}
-
-func (s *Server) logError(format string, v ...interface{}) {
-	log.Error(fmt.Sprintf("[BZZ] HTTP: "+format, v...))
 }
 
 func (s *Server) BadRequest(w http.ResponseWriter, r *Request, reason string) {
