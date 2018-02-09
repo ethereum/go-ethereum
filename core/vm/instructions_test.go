@@ -24,6 +24,32 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+type twoOperandTest struct {
+	x        string
+	y        string
+	expected string
+}
+
+func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)) {
+	var (
+		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
+		stack = newstack()
+		pc    = uint64(0)
+	)
+	for i, test := range tests {
+		x := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
+		shift := new(big.Int).SetBytes(common.Hex2Bytes(test.y))
+		expected := new(big.Int).SetBytes(common.Hex2Bytes(test.expected))
+		stack.push(x)
+		stack.push(shift)
+		opFn(&pc, env, nil, nil, stack)
+		actual := stack.pop()
+		if actual.Cmp(expected) != 0 {
+			t.Errorf("Testcase %d, expected  %v, got %v", i, expected, actual)
+		}
+	}
+}
+
 func TestByteOp(t *testing.T) {
 	var (
 		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
@@ -58,18 +84,8 @@ func TestByteOp(t *testing.T) {
 }
 
 func TestSHL(t *testing.T) {
-	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
-		stack = newstack()
-		pc    = uint64(0)
-	)
-
 	// Testcases from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-145.md#shl-shift-left
-	tests := []struct {
-		x        string
-		y        string
-		expected string
-	}{
+	tests := []twoOperandTest{
 		{"0000000000000000000000000000000000000000000000000000000000000001", "00", "0000000000000000000000000000000000000000000000000000000000000001"},
 		{"0000000000000000000000000000000000000000000000000000000000000001", "01", "0000000000000000000000000000000000000000000000000000000000000002"},
 		{"0000000000000000000000000000000000000000000000000000000000000001", "ff", "8000000000000000000000000000000000000000000000000000000000000000"},
@@ -82,34 +98,12 @@ func TestSHL(t *testing.T) {
 		{"0000000000000000000000000000000000000000000000000000000000000000", "01", "0000000000000000000000000000000000000000000000000000000000000000"},
 		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "01", "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe"},
 	}
-
-	for i, test := range tests {
-		x := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
-		shift := new(big.Int).SetBytes(common.Hex2Bytes(test.y))
-		expected := new(big.Int).SetBytes(common.Hex2Bytes(test.expected))
-		stack.push(x)
-		stack.push(shift)
-		opSHL(&pc, env, nil, nil, stack)
-		actual := stack.pop()
-		if actual.Cmp(expected) != 0 {
-			t.Errorf("Testcase %d, expected  %v, got %v", i, expected, actual)
-		}
-	}
+	testTwoOperandOp(t, tests, opSHL)
 }
 
 func TestSHR(t *testing.T) {
-	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
-		stack = newstack()
-		pc    = uint64(0)
-	)
-
 	// Testcases from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-145.md#shr-logical-shift-right
-	tests := []struct {
-		x        string
-		y        string
-		expected string
-	}{
+	tests := []twoOperandTest{
 		{"0000000000000000000000000000000000000000000000000000000000000001", "00", "0000000000000000000000000000000000000000000000000000000000000001"},
 		{"0000000000000000000000000000000000000000000000000000000000000001", "01", "0000000000000000000000000000000000000000000000000000000000000000"},
 		{"8000000000000000000000000000000000000000000000000000000000000000", "01", "4000000000000000000000000000000000000000000000000000000000000000"},
@@ -122,34 +116,12 @@ func TestSHR(t *testing.T) {
 		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0100", "0000000000000000000000000000000000000000000000000000000000000000"},
 		{"0000000000000000000000000000000000000000000000000000000000000000", "01", "0000000000000000000000000000000000000000000000000000000000000000"},
 	}
-
-	for i, test := range tests {
-		x := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
-		shift := new(big.Int).SetBytes(common.Hex2Bytes(test.y))
-		expected := new(big.Int).SetBytes(common.Hex2Bytes(test.expected))
-		stack.push(x)
-		stack.push(shift)
-		opSHR(&pc, env, nil, nil, stack)
-		actual := stack.pop()
-		if actual.Cmp(expected) != 0 {
-			t.Fatalf("Testcase %d, expected  %v, got %v", i, expected, actual)
-		}
-	}
+	testTwoOperandOp(t, tests, opSHR)
 }
 
 func TestSAR(t *testing.T) {
-	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
-		stack = newstack()
-		pc    = uint64(0)
-	)
-
 	// Testcases from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-145.md#sar-arithmetic-shift-right
-	tests := []struct {
-		x        string
-		y        string
-		expected string
-	}{
+	tests := []twoOperandTest{
 		{"0000000000000000000000000000000000000000000000000000000000000001", "00", "0000000000000000000000000000000000000000000000000000000000000001"},
 		{"0000000000000000000000000000000000000000000000000000000000000001", "01", "0000000000000000000000000000000000000000000000000000000000000000"},
 		{"8000000000000000000000000000000000000000000000000000000000000000", "01", "c000000000000000000000000000000000000000000000000000000000000000"},
@@ -168,19 +140,41 @@ func TestSAR(t *testing.T) {
 		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0100", "0000000000000000000000000000000000000000000000000000000000000000"},
 	}
 
-	for i, test := range tests {
-		x := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
-		shift := new(big.Int).SetBytes(common.Hex2Bytes(test.y))
-		expected := new(big.Int).SetBytes(common.Hex2Bytes(test.expected))
-		stack.push(x)
-		stack.push(shift)
-		opSAR(&pc, env, nil, nil, stack)
-		actual := stack.pop()
-		if actual.Cmp(expected) != 0 {
-			t.Fatalf("Testcase %d, expected  %X, got %X", i, expected, actual)
-		}
-	}
+	testTwoOperandOp(t, tests, opSAR)
 }
+
+func TestSGT(t *testing.T) {
+	tests := []twoOperandTest{
+		{"0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"0000000000000000000000000000000000000000000000000000000000000001", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001"},
+		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001"},
+		{"0000000000000000000000000000000000000000000000000000000000000001", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"8000000000000000000000000000000000000000000000000000000000000001", "8000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"8000000000000000000000000000000000000000000000000000000000000001", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001"},
+		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "8000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
+	}
+	testTwoOperandOp(t, tests, opSgt)
+}
+
+func TestSLT(t *testing.T) {
+	tests := []twoOperandTest{
+		{"0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"0000000000000000000000000000000000000000000000000000000000000001", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001"},
+		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"0000000000000000000000000000000000000000000000000000000000000001", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000001"},
+		{"8000000000000000000000000000000000000000000000000000000000000001", "8000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"8000000000000000000000000000000000000000000000000000000000000001", "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "8000000000000000000000000000000000000000000000000000000000000001", "0000000000000000000000000000000000000000000000000000000000000001"},
+	}
+	testTwoOperandOp(t, tests, opSlt)
+}
+
 func opBenchmark(bench *testing.B, op func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error), args ...string) {
 	var (
 		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
