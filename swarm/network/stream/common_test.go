@@ -71,9 +71,14 @@ func init() {
 
 // NewStreamerService
 func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
+	var err error
 	id := ctx.Config.ID
 	addr := toAddr(id)
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+	stores[id], err = createTestLocalStorageForId(id, addr)
+	if err != nil {
+		return nil, err
+	}
 	store := stores[id].(*storage.LocalStore)
 	db := storage.NewDBAPI(store)
 	delivery := NewDelivery(kad, db)
@@ -88,6 +93,32 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	}()
 	dpa := storage.NewDPA(storage.NewNetStore(store, nil), storage.NewDPAParams())
 	return &TestRegistry{Registry: r, dpa: dpa}, nil
+}
+
+//create a local store for the given node
+func createTestLocalStorageForId(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error) {
+	var datadir string
+	var err error
+	datadir, err = ioutil.TempDir("", fmt.Sprintf("syncer-test-%s", id.TerminalString()))
+	if err != nil {
+		return nil, err
+	}
+	datadirs[id] = datadir
+	var store storage.ChunkStore
+	store, err = storage.NewTestLocalStoreForAddr(datadir, addr.Over())
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
+}
+
+//local stores need to be cleaned up after the sim is done
+func localStoreCleanup() {
+	fmt.Println("Local store cleanup")
+	for i := 0; i < len(ids); i++ {
+		stores[ids[i]].Close()
+		os.RemoveAll(datadirs[ids[i]])
+	}
 }
 
 func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {
