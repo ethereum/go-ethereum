@@ -13,7 +13,8 @@ RUN apk add --no-cache ca-certificates
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 
 RUN addgroup -g 1000 geth && \
-    adduser -D -u 1000 -G geth geth
+    adduser -D -u 1000 -G geth geth && \
+    chown geth:geth /root
 
 USER geth
 
