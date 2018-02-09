@@ -90,12 +90,12 @@ type Request struct {
 // body in swarm and returns the resulting storage key as a text/plain response
 func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 	if r.uri.Path != "" {
-		s.BadRequest(w, r, "raw POST request cannot contain a path")
+		ShowError(w, &r.Request, fmt.Sprintf("Bad request %s %s: %s", r.Method, r.uri, "raw POST request cannot contain a path"), http.StatusBadRequest)
 		return
 	}
 
 	if r.Header.Get("Content-Length") == "" {
-		s.BadRequest(w, r, "missing Content-Length header in request")
+		ShowError(w, &r.Request, fmt.Sprintf("Bad request %s %s: %s", r.Method, r.uri, "missing Content-Length header in request"), http.StatusBadRequest)
 		return
 	}
 
@@ -119,7 +119,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
-		s.BadRequest(w, r, err.Error())
+		ShowError(w, &r.Request, fmt.Sprintf("Bad request %s %s: %s", r.Method, r.uri, err), http.StatusBadRequest)
 		return
 	}
 
@@ -307,7 +307,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	if r.uri.Path != "" {
 		walker, err := s.api.NewManifestWalker(key, nil)
 		if err != nil {
-			s.BadRequest(w, r, fmt.Sprintf("%s is not a manifest", key))
+			ShowError(w, &r.Request, fmt.Sprintf("Bad request %s %s: %s", r.Method, r.uri, fmt.Sprintf("%s is not a manifest", key)), http.StatusBadRequest)
 			return
 		}
 		var entry *api.ManifestEntry
@@ -371,7 +371,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 // contained in the manifest
 func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 	if r.uri.Path != "" {
-		s.BadRequest(w, r, "files request cannot contain a path")
+		ShowError(w, &r.Request, fmt.Sprintf("Bad request %s %s: %s", r.Method, r.uri, "files request cannot contain a path"), http.StatusBadRequest)
 		return
 	}
 
@@ -595,7 +595,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req := &Request{Request: *r, uri: uri}
 	if err != nil {
 		log.Error(fmt.Sprintf("Invalid URI %q: %s", r.URL.Path, err))
-		s.BadRequest(w, req, fmt.Sprintf("Invalid URI %q: %s", r.URL.Path, err))
+		ShowError(w, r, fmt.Sprintf("Bad request %s %s: %s", r.Method, uri, fmt.Sprintf("Invalid URI %q: %s", r.URL.Path, err)), http.StatusBadRequest)
 		return
 	}
 	log.Debug(fmt.Sprintf("%s request received for %s", r.Method, uri))
@@ -668,10 +668,6 @@ func (s *Server) updateManifest(key storage.Key, update func(mw *api.ManifestWri
 	}
 	log.Debug(fmt.Sprintf("generated manifest %s", key))
 	return key, nil
-}
-
-func (s *Server) BadRequest(w http.ResponseWriter, r *Request, reason string) {
-	ShowError(w, &r.Request, fmt.Sprintf("Bad request %s %s: %s", r.Method, r.uri, reason), http.StatusBadRequest)
 }
 
 func (s *Server) Error(w http.ResponseWriter, r *Request, err error) {
