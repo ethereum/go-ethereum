@@ -206,7 +206,7 @@ func opSlt(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stac
 			return nil, nil
 		}
 		// Both negative
-		if x.Cmp(y) > 0 {
+		if x.Cmp(y) < 0 {
 			y.SetUint64(1)
 		} else {
 			y.SetUint64(0)
@@ -243,7 +243,7 @@ func opSgt(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stac
 			return nil, nil
 		}
 		// Both negative (note: equality -> 0)
-		if x.Cmp(y) >= 0 {
+		if x.Cmp(y) <= 0 {
 			y.SetUint64(0)
 		} else {
 			y.SetUint64(1)
