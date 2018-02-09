@@ -47,6 +47,22 @@ func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64
 		if actual.Cmp(expected) != 0 {
 			t.Errorf("Testcase %d, expected  %v, got %v", i, expected, actual)
 		}
+		// Check pool usage
+		// 1.pool is not allowed to contain anything on the stack
+		// 2.pool is not allowed to contain the same pointers twice
+		if env.interpreter.intPool.pool.len() > 0 {
+
+			poolvals := make(map[*big.Int]struct{})
+			poolvals[actual] = struct{}{}
+
+			for ;env.interpreter.intPool.pool.len() > 0;{
+				key := env.interpreter.intPool.get()
+				if _, exist := poolvals[key]; exist{
+					t.Errorf("Testcase %d, pool contains double-entry", i)
+				}
+				poolvals[key] = struct{}{}
+			}
+		}
 	}
 }
 
