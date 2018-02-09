@@ -146,7 +146,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 	if lightSync {
 		chain, _ = light.NewLightChain(odr, gspec.Config, engine)
 	} else {
-		blockchain, _ := core.NewBlockChain(db, gspec.Config, engine, vm.Config{})
+		blockchain, _ := core.NewBlockChain(db, nil, gspec.Config, engine, vm.Config{})
 		gchain, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, blocks, generator)
 		if _, err := blockchain.InsertChain(gchain); err != nil {
 			panic(err)
@@ -176,7 +176,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		srv.fcManager = flowcontrol.NewClientManager(50, 10, 1000000000)
 		srv.fcCostStats = newCostStats(nil)
 	}
-	pm.Start()
+	pm.Start(1000)
 	return pm, nil
 }
 

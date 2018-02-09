@@ -710,11 +710,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				log.Warn("failed to decode bloom filter exchange message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
 				return errors.New("invalid bloom filter exchange message")
 			}
-			if isFullNode(bloom) {
-				p.bloomFilter = nil
-			} else {
-				p.bloomFilter = bloom
-			}
+			p.setBloomFilter(bloom)
 		case p2pMessageCode:
 			// peer-to-peer message, sent directly to peer bypassing PoW checks, etc.
 			// this message is not supposed to be forwarded to other peers, and
@@ -1049,7 +1045,6 @@ func isFullNode(bloom []byte) bool {
 
 func bloomFilterMatch(filter, sample []byte) bool {
 	if filter == nil {
-		// full node, accepts all messages
 		return true
 	}
 

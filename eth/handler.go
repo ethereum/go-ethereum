@@ -71,7 +71,6 @@ type ProtocolManager struct {
 
 	txpool      txPool
 	blockchain  *core.BlockChain
-	chaindb     ethdb.Database
 	chainconfig *params.ChainConfig
 	maxPeers    int
 
@@ -106,7 +105,6 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		eventMux:    mux,
 		txpool:      txpool,
 		blockchain:  blockchain,
-		chaindb:     chaindb,
 		chainconfig: config,
 		peers:       newPeerSet(),
 		newPeerCh:   make(chan *peer),
@@ -538,7 +536,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				return errResp(ErrDecode, "msg %v: %v", msg, err)
 			}
 			// Retrieve the requested state entry, stopping if enough was found
-			if entry, err := pm.chaindb.Get(hash.Bytes()); err == nil {
+			if entry, err := pm.blockchain.TrieNode(hash); err == nil {
 				data = append(data, entry)
 				bytes += len(entry)
 			}
@@ -576,7 +574,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				return errResp(ErrDecode, "msg %v: %v", msg, err)
 			}
 			// Retrieve the requested block's receipts, skipping if unknown to us
-			results := core.GetBlockReceipts(pm.chaindb, hash, core.GetBlockNumber(pm.chaindb, hash))
+			results := pm.blockchain.GetReceiptsByHash(hash)
 			if results == nil {
 				if header := pm.blockchain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
 					continue

@@ -18,6 +18,7 @@ package light
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -26,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -98,7 +100,6 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	if cp, ok := trustedCheckpoints[bc.genesisBlock.Hash()]; ok {
 		bc.addTrustedCheckpoint(cp)
 	}
-
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
@@ -126,7 +127,7 @@ func (self *LightChain) addTrustedCheckpoint(cp trustedCheckpoint) {
 	if self.odr.BloomIndexer() != nil {
 		self.odr.BloomIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
 	}
-	log.Info("Added trusted checkpoint", "chain name", cp.name)
+	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.sectionIdx+1)*ChtFrequency-1, "hash", cp.sectionHead)
 }
 
 func (self *LightChain) getProcInterrupt() bool {
@@ -210,6 +211,11 @@ func (bc *LightChain) Engine() consensus.Engine { return bc.engine }
 // Genesis returns the genesis block
 func (bc *LightChain) Genesis() *types.Block {
 	return bc.genesisBlock
+}
+
+// State returns a new mutable state based on the current HEAD block.
+func (bc *LightChain) State() (*state.StateDB, error) {
+	return nil, errors.New("not implemented, needs client/server interface split")
 }
 
 // GetBody retrieves a block body (transactions and uncles) from the database
