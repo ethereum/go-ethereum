@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
@@ -151,7 +152,10 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		chtIndexer := light.NewChtIndexer(db, false)
 		chtIndexer.Start(blockchain)
 
-		bloomIndexer := light.NewBloomTrieIndexer(db, false)
+		bbtIndexer := light.NewBloomTrieIndexer(db, false)
+
+		bloomIndexer := eth.NewBloomIndexer(db, params.BloomBitsBlocks)
+		bloomIndexer.AddChildIndexer(bbtIndexer)
 		bloomIndexer.Start(blockchain)
 
 		gchain, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, blocks, generator)

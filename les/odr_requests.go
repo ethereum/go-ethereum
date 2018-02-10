@@ -493,10 +493,10 @@ func (r *BloomRequest) Request(reqID uint64, peer *peer) error {
 	reqs := make([]HelperTrieReq, len(r.SectionIdxList))
 
 	var encNumber [10]byte
-	binary.BigEndian.PutUint16(encNumber[0:2], uint16(r.BitIdx))
+	binary.BigEndian.PutUint16(encNumber[:2], uint16(r.BitIdx))
 
 	for i, sectionIdx := range r.SectionIdxList {
-		binary.BigEndian.PutUint64(encNumber[2:10], sectionIdx)
+		binary.BigEndian.PutUint64(encNumber[2:], sectionIdx)
 		reqs[i] = HelperTrieReq{
 			Type:    htBloomBits,
 			TrieIdx: r.BloomTrieNum,
@@ -525,10 +525,10 @@ func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
 
 	// Verify the proofs
 	var encNumber [10]byte
-	binary.BigEndian.PutUint16(encNumber[0:2], uint16(r.BitIdx))
+	binary.BigEndian.PutUint16(encNumber[:2], uint16(r.BitIdx))
 
 	for i, idx := range r.SectionIdxList {
-		binary.BigEndian.PutUint64(encNumber[2:10], idx)
+		binary.BigEndian.PutUint64(encNumber[2:], idx)
 		value, err, _ := trie.VerifyProof(r.BloomTrieRoot, encNumber[:], reads)
 		if err != nil {
 			return err

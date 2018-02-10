@@ -385,31 +385,13 @@ func testGetProofs(t *testing.T, protocol int) {
 	case 2:
 		cost := peer.GetRequestCost(GetProofsV2Msg, len(proofreqs))
 		sendRequest(peer.app, GetProofsV2Msg, 42, cost, proofreqs)
-		msg, err := peer.app.ReadMsg()
-		if err != nil {
-			t.Errorf("Message read error: %v", err)
+		if err := expectResponse(peer.app, ProofsV2Msg, 42, testBufLimit, proofsV2.NodeList()); err != nil {
+			t.Errorf("proofs mismatch: %v", err)
 		}
-		var resp struct {
-			ReqID, BV uint64
-			Data      light.NodeList
-		}
-		if err := msg.Decode(&resp); err != nil {
-			t.Errorf("reply decode error: %v", err)
-		}
-		if msg.Code != ProofsV2Msg {
-			t.Errorf("Message code mismatch")
-		}
-		if resp.ReqID != 42 {
-			t.Errorf("ReqID mismatch")
-		}
-		if resp.BV != testBufLimit {
-			t.Errorf("BV mismatch")
-		}
-		testCheckProof(t, proofsV2, resp.Data)
 	}
 }
 
-// Tests that helper trie proofs can be correctly retrieved.
+// Tests that CHT proofs can be correctly retrieved.
 func TestGetCHTProofsLes1(t *testing.T) { testGetCHTProofs(t, 1) }
 func TestGetCHTProofsLes2(t *testing.T) { testGetCHTProofs(t, 2) }
 
@@ -482,6 +464,41 @@ func testGetCHTProofs(t *testing.T, protocol int) {
 		if err := expectResponse(peer.app, HelperTrieProofsMsg, 42, testBufLimit, proofsV2); err != nil {
 			t.Errorf("proofs mismatch: %v", err)
 		}
+	}
+}
+
+// Tests that bloombits proofs can be correctly retrieved.
+func TestGetBloombitsProofs(t *testing.T) {
+	// Assemble the test environment
+	db, _ := ethdb.NewMemDatabase()
+	pm := newTestProtocolManagerMust(t, false, light.BloomTrieFrequency+256, testChainGen, nil, nil, db)
+	//bc := pm.blockchain.(*core.BlockChain)
+	peer, _ := newTestPeer(t, "peer", 2, pm, true)
+	defer peer.close()
+
+	// Wait a while for the bloombits indexer to process the new headers
+	time.Sleep(100 * time.Millisecond * time.Duration(light.BloomTrieFrequency/4096)) // Chain indexer throttling
+	time.Sleep(250 * time.Millisecond)                                                // CI tester slack
+
+	// Assemble therequest and proofs for the bloombits
+	bit := rand.Intn(2048)
+	key := make([]byte, 10)
+
+	binary.BigEndian.PutUint16(key[:2], uint16(bit))
+	binary.BigEndian.PutUint64(key[2:], 0)
+
+	requests := []HelperTrieReq{{
+		Type:    htBloomBits,
+		TrieIdx: 0,
+		Key:     key,
+	}}
+	var proofs HelperTrieResps
+
+	// Send the proof request and verify the response
+	cost := peer.GetRequestCost(GetHelperTrieProofsMsg, len(requests))
+	sendRequest(peer.app, GetHelperTrieProofsMsg, 42, cost, requests)
+	if err := expectResponse(peer.app, HelperTrieProofsMsg, 42, testBufLimit, proofs); err != nil {
+		t.Errorf("proofs mismatch: %v", err)
 	}
 }
 

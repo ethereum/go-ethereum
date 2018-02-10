@@ -790,10 +790,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				break
 			}
 		}
-		proofs := nodes.NodeList()
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
-		return p.SendProofsV2(req.ReqID, bv, proofs)
+		return p.SendProofsV2(req.ReqID, bv, nodes.NodeList())
 
 	case ProofsV1Msg:
 		if pm.odr == nil {
