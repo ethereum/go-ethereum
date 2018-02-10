@@ -69,20 +69,24 @@ func NewPublicWhisperAPI(w *Whisper) *PublicWhisperAPI {
 // this loop deletes filter that have not been used within filterTimeout
 func (api *PublicWhisperAPI) run() {
 	timeout := time.NewTicker(2 * time.Minute)
+	defer timeout.Stop()
 	for {
-		<-timeout.C
-
-		api.mu.Lock()
-		for id, lastUsed := range api.lastUsed {
-			if time.Since(lastUsed).Seconds() >= filterTimeout {
-				delete(api.lastUsed, id)
-				if err := api.w.Unsubscribe(id); err != nil {
-					log.Error("could not unsubscribe whisper filter", "error", err)
+		select {
+		case <-api.w.quit:
+			return
+		case <-timeout.C:
+			api.mu.Lock()
+			for id, lastUsed := range api.lastUsed {
+				if time.Since(lastUsed).Seconds() >= filterTimeout {
+					delete(api.lastUsed, id)
+					if err := api.w.Unsubscribe(id); err != nil {
+						log.Error("could not unsubscribe whisper filter", "error", err)
+					}
+					log.Debug("delete whisper filter (timeout)", "id", id)
 				}
-				log.Debug("delete whisper filter (timeout)", "id", id)
 			}
+			api.mu.Unlock()
 		}
-		api.mu.Unlock()
 	}
 }
 
