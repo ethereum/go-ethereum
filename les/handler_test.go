@@ -17,7 +17,6 @@
 package les
 
 import (
-	"bytes"
 	"encoding/binary"
 	"math/big"
 	"math/rand"
@@ -44,24 +43,6 @@ func expectResponse(r p2p.MsgReader, msgcode, reqID, bv uint64, data interface{}
 		Data      interface{}
 	}
 	return p2p.ExpectMsg(r, msgcode, resp{reqID, bv, data})
-}
-
-func testCheckProof(t *testing.T, exp *light.NodeSet, got light.NodeList) {
-	if exp.KeyCount() > len(got) {
-		t.Errorf("proof has fewer nodes than expected")
-		return
-	}
-	if exp.KeyCount() < len(got) {
-		t.Errorf("proof has more nodes than expected")
-		return
-	}
-	for _, node := range got {
-		n, _ := exp.Get(crypto.Keccak256(node))
-		if !bytes.Equal(n, node) {
-			t.Errorf("proof contents mismatch")
-			return
-		}
-	}
 }
 
 // Tests that block headers can be retrieved from a remote chain based on user queries.
