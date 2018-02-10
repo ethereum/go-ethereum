@@ -472,7 +472,7 @@ func TestGetBloombitsProofs(t *testing.T) {
 	// Assemble the test environment
 	db, _ := ethdb.NewMemDatabase()
 	pm := newTestProtocolManagerMust(t, false, light.BloomTrieFrequency+256, testChainGen, nil, nil, db)
-	//bc := pm.blockchain.(*core.BlockChain)
+	bc := pm.blockchain.(*core.BlockChain)
 	peer, _ := newTestPeer(t, "peer", 2, pm, true)
 	defer peer.close()
 
@@ -480,25 +480,31 @@ func TestGetBloombitsProofs(t *testing.T) {
 	time.Sleep(100 * time.Millisecond * time.Duration(light.BloomTrieFrequency/4096)) // Chain indexer throttling
 	time.Sleep(250 * time.Millisecond)                                                // CI tester slack
 
-	// Assemble therequest and proofs for the bloombits
-	bit := rand.Intn(2048)
-	key := make([]byte, 10)
+	// Request and verify each bit of the bloom bits proofs
+	for bit := 0; bit < 2048; bit++ {
+		// Assemble therequest and proofs for the bloombits
+		key := make([]byte, 10)
 
-	binary.BigEndian.PutUint16(key[:2], uint16(bit))
-	binary.BigEndian.PutUint64(key[2:], 0)
+		binary.BigEndian.PutUint16(key[:2], uint16(bit))
+		binary.BigEndian.PutUint64(key[2:], uint64(light.BloomTrieFrequency))
 
-	requests := []HelperTrieReq{{
-		Type:    htBloomBits,
-		TrieIdx: 0,
-		Key:     key,
-	}}
-	var proofs HelperTrieResps
+		requests := []HelperTrieReq{{
+			Type:    htBloomBits,
+			TrieIdx: 0,
+			Key:     key,
+		}}
+		var proofs HelperTrieResps
 
-	// Send the proof request and verify the response
-	cost := peer.GetRequestCost(GetHelperTrieProofsMsg, len(requests))
-	sendRequest(peer.app, GetHelperTrieProofsMsg, 42, cost, requests)
-	if err := expectResponse(peer.app, HelperTrieProofsMsg, 42, testBufLimit, proofs); err != nil {
-		t.Errorf("proofs mismatch: %v", err)
+		root := light.GetBloomTrieRoot(db, 0, bc.GetHeaderByNumber(light.BloomTrieFrequency-1).Hash())
+		trie, _ := trie.New(root, trie.NewDatabase(ethdb.NewTable(db, light.BloomTrieTablePrefix)))
+		trie.Prove(key, 0, &proofs.Proofs)
+
+		// Send the proof request and verify the response
+		cost := peer.GetRequestCost(GetHelperTrieProofsMsg, len(requests))
+		sendRequest(peer.app, GetHelperTrieProofsMsg, 42, cost, requests)
+		if err := expectResponse(peer.app, HelperTrieProofsMsg, 42, testBufLimit, proofs); err != nil {
+			t.Errorf("bit %d: proofs mismatch: %v", bit, err)
+		}
 	}
 }
 

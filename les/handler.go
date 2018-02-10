@@ -1124,10 +1124,8 @@ func (pm *ProtocolManager) getHelperTrie(id uint, idx uint64) (common.Hash, stri
 
 // getHelperTrieAuxData returns requested auxiliary data for the given HelperTrie request
 func (pm *ProtocolManager) getHelperTrieAuxData(req HelperTrieReq) []byte {
-	if req.Type == htCanonical && req.AuxReq == auxHeader {
-		if len(req.Key) != 8 {
-			return nil
-		}
+	switch {
+	case req.Type == htCanonical && req.AuxReq == auxHeader && len(req.Key) == 8:
 		blockNum := binary.BigEndian.Uint64(req.Key)
 		hash := core.GetCanonicalHash(pm.chainDb, blockNum)
 		return core.GetHeaderRLP(pm.chainDb, hash, blockNum)
