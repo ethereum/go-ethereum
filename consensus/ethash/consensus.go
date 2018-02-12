@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math"
+	defmath "math"
 	"math/big"
 	"runtime"
 	"time"
@@ -538,7 +538,7 @@ var (
 // calculate reward for miners
 func calculateReward(reward int, currentTimestamp uint64) (blockReward *big.Int) {
 	rewardMaxDecimal := 7
-	currentReward := float64(reward) * math.Pow(10, float64(rewardMaxDecimal))
+	currentReward := float64(reward) * defmath.Pow(10, float64(rewardMaxDecimal))
 	rewardDecreaseTime := int64(3*365*24*60*60)
 	fromTimestamp := int64(1518395555)
 	timeDiff := int64(currentTimestamp) - fromTimestamp
@@ -551,7 +551,7 @@ func calculateReward(reward int, currentTimestamp uint64) (blockReward *big.Int)
 				currentReward = currentReward / 2
 			}
 
-			if currentReward != math.Trunc(currentReward) {
+			if currentReward != defmath.Trunc(currentReward) {
 				currentReward = 0
 			}
 		}
