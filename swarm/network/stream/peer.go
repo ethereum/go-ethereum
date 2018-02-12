@@ -36,7 +36,7 @@ var (
 	errClientNotFound = errors.New("client not found")
 )
 
-// Peer is the Peer extention for the streaming protocol
+// Peer is the Peer extension for the streaming protocol
 type Peer struct {
 	*protocols.Peer
 	streamer *Registry

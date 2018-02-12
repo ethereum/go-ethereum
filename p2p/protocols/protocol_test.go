@@ -154,18 +154,18 @@ func protocolTester(t *testing.T, pp *p2ptest.TestPeerPool) *p2ptest.ProtocolTes
 func protoHandshakeExchange(id discover.NodeID, proto *protoHandshake) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{
-		p2ptest.Exchange{
+		{
 			Expects: []p2ptest.Expect{
-				p2ptest.Expect{
+				{
 					Code: 0,
 					Msg:  &protoHandshake{42, "420"},
 					Peer: id,
 				},
 			},
 		},
-		p2ptest.Exchange{
+		{
 			Triggers: []p2ptest.Trigger{
-				p2ptest.Trigger{
+				{
 					Code: 0,
 					Msg:  proto,
 					Peer: id,
@@ -207,18 +207,18 @@ func TestProtoHandshakeSuccess(t *testing.T) {
 func moduleHandshakeExchange(id discover.NodeID, resp uint) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{
-		p2ptest.Exchange{
+		{
 			Expects: []p2ptest.Expect{
-				p2ptest.Expect{
+				{
 					Code: 1,
 					Msg:  &hs0{42},
 					Peer: id,
 				},
 			},
 		},
-		p2ptest.Exchange{
+		{
 			Triggers: []p2ptest.Trigger{
-				p2ptest.Trigger{
+				{
 					Code: 1,
 					Msg:  &hs0{resp},
 					Peer: id,
@@ -255,42 +255,42 @@ func TestModuleHandshakeSuccess(t *testing.T) {
 func testMultiPeerSetup(a, b discover.NodeID) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{
-		p2ptest.Exchange{
+		{
 			Label: "primary handshake",
 			Expects: []p2ptest.Expect{
-				p2ptest.Expect{
+				{
 					Code: 0,
 					Msg:  &protoHandshake{42, "420"},
 					Peer: a,
 				},
-				p2ptest.Expect{
+				{
 					Code: 0,
 					Msg:  &protoHandshake{42, "420"},
 					Peer: b,
 				},
 			},
 		},
-		p2ptest.Exchange{
+		{
 			Label: "module handshake",
 			Triggers: []p2ptest.Trigger{
-				p2ptest.Trigger{
+				{
 					Code: 0,
 					Msg:  &protoHandshake{42, "420"},
 					Peer: a,
 				},
-				p2ptest.Trigger{
+				{
 					Code: 0,
 					Msg:  &protoHandshake{42, "420"},
 					Peer: b,
 				},
 			},
 			Expects: []p2ptest.Expect{
-				p2ptest.Expect{
+				{
 					Code: 1,
 					Msg:  &hs0{42},
 					Peer: a,
 				},
-				p2ptest.Expect{
+				{
 					Code: 1,
 					Msg:  &hs0{42},
 					Peer: b,
@@ -298,10 +298,10 @@ func testMultiPeerSetup(a, b discover.NodeID) []p2ptest.Exchange {
 			},
 		},
 
-		p2ptest.Exchange{Label: "alternative module handshake", Triggers: []p2ptest.Trigger{p2ptest.Trigger{Code: 1, Msg: &hs0{41}, Peer: a},
-			p2ptest.Trigger{Code: 1, Msg: &hs0{41}, Peer: b}}},
-		p2ptest.Exchange{Label: "repeated module handshake", Triggers: []p2ptest.Trigger{p2ptest.Trigger{Code: 1, Msg: &hs0{1}, Peer: a}}},
-		p2ptest.Exchange{Label: "receiving repeated module handshake", Expects: []p2ptest.Expect{p2ptest.Expect{Code: 1, Msg: &hs0{43}, Peer: a}}}}
+		{Label: "alternative module handshake", Triggers: []p2ptest.Trigger{{Code: 1, Msg: &hs0{41}, Peer: a},
+			{Code: 1, Msg: &hs0{41}, Peer: b}}},
+		{Label: "repeated module handshake", Triggers: []p2ptest.Trigger{{Code: 1, Msg: &hs0{1}, Peer: a}}},
+		{Label: "receiving repeated module handshake", Expects: []p2ptest.Expect{{Code: 1, Msg: &hs0{43}, Peer: a}}}}
 }
 
 func runMultiplePeers(t *testing.T, peer int, errs ...error) {
@@ -327,7 +327,7 @@ func runMultiplePeers(t *testing.T, peer int, errs ...error) {
 	// peer 0 sends kill request for peer with index <peer>
 	s.TestExchanges(p2ptest.Exchange{
 		Triggers: []p2ptest.Trigger{
-			p2ptest.Trigger{
+			{
 				Code: 2,
 				Msg:  &kill{s.IDs[peer]},
 				Peer: s.IDs[0],
@@ -338,7 +338,7 @@ func runMultiplePeers(t *testing.T, peer int, errs ...error) {
 	// the peer not killed sends a drop request
 	s.TestExchanges(p2ptest.Exchange{
 		Triggers: []p2ptest.Trigger{
-			p2ptest.Trigger{
+			{
 				Code: 3,
 				Msg:  &drop{},
 				Peer: s.IDs[(peer+1)%2],

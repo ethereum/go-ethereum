@@ -70,18 +70,18 @@ func (t *testStore) Save(key string, v []byte) error {
 func HandshakeMsgExchange(lhs, rhs *HandshakeMsg, id discover.NodeID) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{
-		p2ptest.Exchange{
+		{
 			Expects: []p2ptest.Expect{
-				p2ptest.Expect{
+				{
 					Code: 0,
 					Msg:  lhs,
 					Peer: id,
 				},
 			},
 		},
-		p2ptest.Exchange{
+		{
 			Triggers: []p2ptest.Trigger{
-				p2ptest.Trigger{
+				{
 					Code: 0,
 					Msg:  rhs,
 					Peer: id,

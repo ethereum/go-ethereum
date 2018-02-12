@@ -262,7 +262,7 @@ func NewBzzTestPeer(p *protocols.Peer, addr *BzzAddr) *BzzPeer {
 	}
 }
 
-// Off returns the overlay peer record for offline persistance
+// Off returns the overlay peer record for offline persistence
 func (p *BzzPeer) Off() OverlayAddr {
 	return p.BzzAddr
 }

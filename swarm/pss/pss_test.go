@@ -858,7 +858,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	}
 	symkey, err := ps.w.GetSymKey(symkeyid)
 	if err != nil {
-		b.Fatalf("could not retreive symkey: %v", err)
+		b.Fatalf("could not retrieve symkey: %v", err)
 	}
 	ps.SetSymmetricKey(symkey, topic, &to, false)
 
@@ -951,7 +951,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 		}
 		symkey, err := ps.w.GetSymKey(keyid)
 		if err != nil {
-			b.Fatalf("could not retreive symkey %s: %v", keyid, err)
+			b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 		}
 		wparams := &whisper.MessageParams{
 			TTL:      defaultWhisperTTL,
@@ -1035,7 +1035,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	}
 	symkey, err := ps.w.GetSymKey(keyid)
 	if err != nil {
-		b.Fatalf("could not retreive symkey %s: %v", keyid, err)
+		b.Fatalf("could not retrieve symkey %s: %v", keyid, err)
 	}
 	wparams := &whisper.MessageParams{
 		TTL:      defaultWhisperTTL,

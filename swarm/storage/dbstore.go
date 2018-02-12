@@ -98,7 +98,7 @@ type DbStore struct {
 
 // TODO: Instead of passing the distance function, just pass the address from which distances are calculated
 // to avoid the appearance of a pluggable distance metric and opportunities of bugs associated with providing
-// a function diferent from the one that is actually used.
+// a function different from the one that is actually used.
 func NewDbStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uint8) (s *DbStore, err error) {
 	s = new(DbStore)
 	s.hashfunc = hash
