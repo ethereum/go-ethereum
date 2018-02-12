@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math"
 	"runtime"
 	"time"
 
@@ -535,29 +536,29 @@ var (
 )
 
 // calculate reward for miners
-func calculateReward(reward int, currentTimestamp int64) (blockReward *big.Int) {
-    rewardMaxDecimal := 7
-    currentReward := float64(reward) * math.Pow(10, float64(rewardMaxDecimal))
-    rewardDecreaseTime := int64(3*365*24*60*60)
-    fromTimestamp := int64(1518395555)
-    timeDiff := currentTimestamp - fromTimestamp
-    
-    if timeDiff >= rewardDecreaseTime {
-        newDiff := int(timeDiff / rewardDecreaseTime)
-        
-        if newDiff > 0 {
-            for i := 0; i < newDiff; i++ {
-		currentReward = currentReward / 2
-	    }
-            
-            if currentReward != math.Trunc(currentReward) {
-                currentReward = 0
-            }
-        }
-    }
+func calculateReward(reward int, currentTimestamp uint64) (blockReward *big.Int) {
+	rewardMaxDecimal := 7
+	currentReward := float64(reward) * math.Pow(10, float64(rewardMaxDecimal))
+	rewardDecreaseTime := int64(3*365*24*60*60)
+	fromTimestamp := int64(1518395555)
+	timeDiff := int64(currentTimestamp) - fromTimestamp
 
-    blockReward = big.NewInt(int64(currentReward) * 1e+11)
-    return
+	if timeDiff >= rewardDecreaseTime {
+		newDiff := int(timeDiff / rewardDecreaseTime)
+
+		if newDiff > 0 {
+			for i := 0; i < newDiff; i++ {
+				currentReward = currentReward / 2
+			}
+
+			if currentReward != math.Trunc(currentReward) {
+				currentReward = 0
+			}
+		}
+	}
+
+	blockReward = big.NewInt(int64(currentReward) * 1e+11)
+	return
 }
 
 // AccumulateRewards credits the coinbase of the given block with the mining
