@@ -137,7 +137,8 @@ func TestTopic(t *testing.T) {
 func TestCache(t *testing.T) {
 	var err error
 	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	keys, err := wapi.NewKeyPair(ctx)
 	privkey, err := w.GetPrivateKey(keys)
 	if err != nil {
@@ -211,7 +212,8 @@ func TestAddressMatch(t *testing.T) {
 	remoteaddr := []byte("feedbeef")
 	kadparams := network.NewKadParams()
 	kad := network.NewKademlia(localaddr, kadparams)
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	keys, err := wapi.NewKeyPair(ctx)
 	if err != nil {
 		t.Fatalf("Could not generate private key: %v", err)
@@ -255,12 +257,14 @@ func TestAddressMatch(t *testing.T) {
 // set and generate pubkeys and symkeys
 func TestKeys(t *testing.T) {
 	// make our key and init pss with it
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	ourkeys, err := wapi.NewKeyPair(ctx)
 	if err != nil {
 		t.Fatalf("create 'our' key fail")
 	}
-	ctx, _ = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel2 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel2()
 	theirkeys, err := wapi.NewKeyPair(ctx)
 	if err != nil {
 		t.Fatalf("create 'their' key fail")
@@ -449,12 +453,14 @@ func testSymSend(t *testing.T) {
 	// at this point we've verified that symkeys are saved and match on each peer
 	// now try sending symmetrically encrypted message, both directions
 	lmsgC := make(chan APIMsg)
-	lctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+	lctx, lcancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer lcancel()
 	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic)
 	log.Trace("lsub", "id", lsub)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
-	rctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+	rctx, rcancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer rcancel()
 	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
@@ -562,12 +568,14 @@ func testAsymSend(t *testing.T) {
 	time.Sleep(time.Millisecond * 500) // replace with hive healthy code
 
 	lmsgC := make(chan APIMsg)
-	lctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+	lctx, lcancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer lcancel()
 	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic)
 	log.Trace("lsub", "id", lsub)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
-	rctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+	rctx, rcancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer rcancel()
 	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
@@ -834,7 +842,8 @@ func benchmarkSymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("benchmark called with invalid msgsize param '%s': %v", msgsizestring[1], err)
 	}
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	keys, err := wapi.NewKeyPair(ctx)
 	privkey, err := w.GetPrivateKey(keys)
 	ps := newTestPss(privkey, nil, nil)
@@ -877,7 +886,8 @@ func benchmarkAsymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("benchmark called with invalid msgsize param '%s': %v", msgsizestring[1], err)
 	}
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	keys, err := wapi.NewKeyPair(ctx)
 	privkey, err := w.GetPrivateKey(keys)
 	ps := newTestPss(privkey, nil, nil)
@@ -922,7 +932,8 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	}
 	pssmsgs := make([]*PssMsg, 0, keycount)
 	var keyid string
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	keys, err := wapi.NewKeyPair(ctx)
 	privkey, err := w.GetPrivateKey(keys)
 	if cachesize > 0 {
@@ -1004,7 +1015,8 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 		}
 	}
 	addr := make([]PssAddress, keycount)
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	keys, err := wapi.NewKeyPair(ctx)
 	privkey, err := w.GetPrivateKey(keys)
 	if cachesize > 0 {
@@ -1121,17 +1133,18 @@ func newServices() adapters.Services {
 		pssProtocolName: func(ctx *adapters.ServiceContext) (node.Service, error) {
 			cachedir, err := ioutil.TempDir("", "pss-cache")
 			if err != nil {
-				return nil, fmt.Errorf("create pss cache tmpdir failed", "error", err)
+				return nil, fmt.Errorf("create pss cache tmpdir failed: %s", err)
 			}
 			dpa, err := storage.NewLocalDPA(cachedir, network.NewAddrFromNodeID(ctx.Config.ID).Over())
 			if err != nil {
-				return nil, fmt.Errorf("local dpa creation failed", "error", err)
+				return nil, fmt.Errorf("local dpa creation failed: %s", err)
 			}
 
 			// execadapter does not exec init()
 			initTest()
 
-			ctxlocal, _ := context.WithTimeout(context.Background(), time.Second)
+			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewPssParams(privkey)
