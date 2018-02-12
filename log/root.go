@@ -31,31 +31,36 @@ func Root() Logger {
 
 // Trace is a convenient alias for Root().Trace
 func Trace(msg string, ctx ...interface{}) {
-	root.write(msg, LvlTrace, ctx)
+	root.write(msg, LvlTrace, ctx, 2)
 }
 
 // Debug is a convenient alias for Root().Debug
 func Debug(msg string, ctx ...interface{}) {
-	root.write(msg, LvlDebug, ctx)
+	root.write(msg, LvlDebug, ctx, 2)
 }
 
 // Info is a convenient alias for Root().Info
 func Info(msg string, ctx ...interface{}) {
-	root.write(msg, LvlInfo, ctx)
+	root.write(msg, LvlInfo, ctx, 2)
 }
 
 // Warn is a convenient alias for Root().Warn
 func Warn(msg string, ctx ...interface{}) {
-	root.write(msg, LvlWarn, ctx)
+	root.write(msg, LvlWarn, ctx, 2)
 }
 
 // Error is a convenient alias for Root().Error
 func Error(msg string, ctx ...interface{}) {
-	root.write(msg, LvlError, ctx)
+	root.write(msg, LvlError, ctx, 2)
 }
 
 // Crit is a convenient alias for Root().Crit
 func Crit(msg string, ctx ...interface{}) {
-	root.write(msg, LvlCrit, ctx)
+	root.write(msg, LvlCrit, ctx, 2)
 	os.Exit(1)
+}
+
+// Output is a convenient alias for write
+func Output(msg string, lvl Lvl, skip int, ctx ...interface{}) {
+	root.write(msg, lvl, ctx, skip)
 }

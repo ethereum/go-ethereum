@@ -70,7 +70,7 @@ func BenchmarkDiscovery_64_4(b *testing.B)  { benchmarkDiscovery(b, 64, 4) }
 func BenchmarkDiscovery_128_4(b *testing.B) { benchmarkDiscovery(b, 128, 4) }
 func BenchmarkDiscovery_256_4(b *testing.B) { benchmarkDiscovery(b, 256, 4) }
 
-func TestDiscoverySimulationDockerAdapter(t *testing.T) {
+func XTestDiscoverySimulationDockerAdapter(t *testing.T) {
 	testDiscoverySimulationDockerAdapter(t, *nodeCount, *initCount)
 }
 

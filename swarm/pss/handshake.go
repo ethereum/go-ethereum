@@ -254,7 +254,7 @@ func (self *HandshakeController) cleanHandshake(pubkeyid string, topic *Topic, i
 func (self *HandshakeController) clean() {
 	peerpubkeys := self.handshakes
 	for pubkeyid, peertopics := range peerpubkeys {
-		for topic, _ := range peertopics {
+		for topic := range peertopics {
 			self.cleanHandshake(pubkeyid, &topic, true, true)
 		}
 	}
@@ -268,7 +268,7 @@ func (self *HandshakeController) handler(msg []byte, p *p2p.Peer, asymmetric boo
 	if !asymmetric {
 		if self.symKeyIndex[symkeyid] != nil {
 			if self.symKeyIndex[symkeyid].count >= self.symKeyIndex[symkeyid].limit {
-				return fmt.Errorf("discarding message using expired key", "symkeyid", symkeyid)
+				return fmt.Errorf("discarding message using expired key: %s", symkeyid)
 			}
 			self.symKeyIndex[symkeyid].count++
 			log.Trace("increment symkey recv use", "symsymkeyid", symkeyid, "count", self.symKeyIndex[symkeyid].count, "limit", self.symKeyIndex[symkeyid].limit, "receiver", common.ToHex(crypto.FromECDSAPub(self.pss.PublicKey())))
@@ -457,7 +457,8 @@ func (self *HandshakeAPI) Handshake(pubkeyid string, topic Topic, sync bool, flu
 		return keys, err
 	}
 	if sync {
-		ctx, _ := context.WithTimeout(context.Background(), self.ctrl.symKeyRequestTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), self.ctrl.symKeyRequestTimeout)
+		defer cancel()
 		select {
 		case keys = <-hsc:
 			log.Trace("sync handshake response receive", "key", keys)
@@ -474,7 +475,7 @@ func (self *HandshakeAPI) AddHandshake(topic Topic) error {
 	return nil
 }
 
-// Deactivate handshake functionalty on a topic
+// Deactivate handshake functionality on a topic
 func (self *HandshakeAPI) RemoveHandshake(topic *Topic) error {
 	if _, ok := self.ctrl.deregisterFuncs[*topic]; ok {
 		self.ctrl.deregisterFuncs[*topic]()

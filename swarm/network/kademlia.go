@@ -424,7 +424,7 @@ func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	return e.addr()
 }
 
-// BaseAddr return the kademlia base addres
+// BaseAddr return the kademlia base address
 func (k *Kademlia) BaseAddr() []byte {
 	return k.base
 }

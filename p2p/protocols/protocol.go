@@ -183,7 +183,7 @@ type Peer struct {
 
 // NewPeer constructs a new peer
 // this constructor is called by the p2p.Protocol#Run function
-// the first two arguments are comming the arguments passed to p2p.Protocol.Run function
+// the first two arguments are coming the arguments passed to p2p.Protocol.Run function
 // the third argument is the CodeMap describing the protocol messages and options
 func NewPeer(p *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 	return &Peer{
