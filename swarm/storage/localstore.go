@@ -19,7 +19,6 @@ package storage
 import (
 	"encoding/binary"
 	"fmt"
-	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
@@ -29,6 +28,7 @@ type StoreParams struct {
 	ChunkDbPath   string
 	DbCapacity    uint64
 	CacheCapacity uint
+	Radius        int
 }
 
 //create params with default values
@@ -37,12 +37,6 @@ func NewDefaultStoreParams() (self *StoreParams) {
 		DbCapacity:    defaultDbCapacity,
 		CacheCapacity: defaultCacheCapacity,
 	}
-}
-
-//this can only finally be set after all config options (file, cmd line, env vars)
-//have been evaluated
-func (self *StoreParams) Init(path string) {
-	self.ChunkDbPath = filepath.Join(path, "chunks")
 }
 
 // LocalStore is a combination of inmemory db over a disk persisted db
@@ -149,7 +143,7 @@ func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool)
 	return chunk, true
 }
 
-// Close local store
+// Close the local store
 func (self *LocalStore) Close() {
 	self.DbStore.Close()
 }

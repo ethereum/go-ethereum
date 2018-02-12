@@ -23,10 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-var secureKeyPrefix = []byte("secure-key-")
-
-const secureKeyLength = 11 + 32 // Length of the above prefix + 32byte hash
-
 // SecureTrie wraps a trie with key hashing. In a secure trie, all
 // access operations hash the key using keccak256. This prevents
 // calling code from creating long chains of nodes that
@@ -39,25 +35,25 @@ const secureKeyLength = 11 + 32 // Length of the above prefix + 32byte hash
 // SecureTrie is not safe for concurrent use.
 type SecureTrie struct {
 	trie             Trie
-	hashKeyBuf       [secureKeyLength]byte
-	secKeyBuf        [200]byte
+	hashKeyBuf       [common.HashLength]byte
 	secKeyCache      map[string][]byte
 	secKeyCacheOwner *SecureTrie // Pointer to self, replace the key cache on mismatch
 }
 
-// NewSecure creates a trie with an existing root node from db.
+// NewSecure creates a trie with an existing root node from a backing database
+// and optional intermediate in-memory node pool.
 //
 // If root is the zero hash or the sha3 hash of an empty string, the
 // trie is initially empty. Otherwise, New will panic if db is nil
 // and returns MissingNodeError if the root node cannot be found.
 //
-// Accessing the trie loads nodes from db on demand.
+// Accessing the trie loads nodes from the database or node pool on demand.
 // Loaded nodes are kept around until their 'cache generation' expires.
 // A new cache generation is created by each call to Commit.
 // cachelimit sets the number of past cache generations to keep.
-func NewSecure(root common.Hash, db Database, cachelimit uint16) (*SecureTrie, error) {
+func NewSecure(root common.Hash, db *Database, cachelimit uint16) (*SecureTrie, error) {
 	if db == nil {
-		panic("NewSecure called with nil database")
+		panic("trie.NewSecure called without a database")
 	}
 	trie, err := New(root, db)
 	if err != nil {
@@ -135,7 +131,7 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 	if key, ok := t.getSecKeyCache()[string(shaKey)]; ok {
 		return key
 	}
-	key, _ := t.trie.db.Get(t.secKey(shaKey))
+	key, _ := t.trie.db.preimage(common.BytesToHash(shaKey))
 	return key
 }
 
@@ -144,8 +140,19 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 //
 // Committing flushes nodes from memory. Subsequent Get calls will load nodes
 // from the database.
-func (t *SecureTrie) Commit() (root common.Hash, err error) {
-	return t.CommitTo(t.trie.db)
+func (t *SecureTrie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
+	// Write all the pre-images to the actual disk database
+	if len(t.getSecKeyCache()) > 0 {
+		t.trie.db.lock.Lock()
+		for hk, key := range t.secKeyCache {
+			t.trie.db.insertPreimage(common.BytesToHash([]byte(hk)), key)
+		}
+		t.trie.db.lock.Unlock()
+
+		t.secKeyCache = make(map[string][]byte)
+	}
+	// Commit the trie to its intermediate node database
+	return t.trie.Commit(onleaf)
 }
 
 func (t *SecureTrie) Hash() common.Hash {
@@ -167,42 +174,15 @@ func (t *SecureTrie) NodeIterator(start []byte) NodeIterator {
 	return t.trie.NodeIterator(start)
 }
 
-// CommitTo writes all nodes and the secure hash pre-images to the given database.
-// Nodes are stored with their sha3 hash as the key.
-//
-// Committing flushes nodes from memory. Subsequent Get calls will load nodes from
-// the trie's database. Calling code must ensure that the changes made to db are
-// written back to the trie's attached database before using the trie.
-func (t *SecureTrie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
-	if len(t.getSecKeyCache()) > 0 {
-		for hk, key := range t.secKeyCache {
-			if err := db.Put(t.secKey([]byte(hk)), key); err != nil {
-				return common.Hash{}, err
-			}
-		}
-		t.secKeyCache = make(map[string][]byte)
-	}
-	return t.trie.CommitTo(db)
-}
-
-// secKey returns the database key for the preimage of key, as an ephemeral buffer.
-// The caller must not hold onto the return value because it will become
-// invalid on the next call to hashKey or secKey.
-func (t *SecureTrie) secKey(key []byte) []byte {
-	buf := append(t.secKeyBuf[:0], secureKeyPrefix...)
-	buf = append(buf, key...)
-	return buf
-}
-
 // hashKey returns the hash of key as an ephemeral buffer.
 // The caller must not hold onto the return value because it will become
 // invalid on the next call to hashKey or secKey.
 func (t *SecureTrie) hashKey(key []byte) []byte {
-	h := newHasher(0, 0)
-	calculator := h.newCalculator()
-	calculator.sha.Write(key)
-	buf := calculator.sha.Sum(t.hashKeyBuf[:0])
-	h.returnCalculator(calculator)
+	h := newHasher(0, 0, nil)
+	h.sha.Reset()
+	h.sha.Write(key)
+	buf := h.sha.Sum(t.hashKeyBuf[:0])
+	returnHasherToPool(h)
 	return buf
 }
 

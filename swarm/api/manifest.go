@@ -32,7 +32,8 @@ import (
 )
 
 const (
-	ManifestType = "application/bzz-manifest+json"
+	ManifestType        = "application/bzz-manifest+json"
+	ResourceContentType = "application/bzz-resource"
 )
 
 // Manifest represents a swarm manifest

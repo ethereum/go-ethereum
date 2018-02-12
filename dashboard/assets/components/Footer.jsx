@@ -19,62 +19,155 @@
 import React, {Component} from 'react';
 
 import withStyles from 'material-ui/styles/withStyles';
-import AppBar from 'material-ui/AppBar';
-import Toolbar from 'material-ui/Toolbar';
 import Typography from 'material-ui/Typography';
+import Grid from 'material-ui/Grid';
+import {ResponsiveContainer, AreaChart, Area, Tooltip} from 'recharts';
 
-import type {General} from '../types/content';
+import ChartRow from './ChartRow';
+import CustomTooltip, {bytePlotter, bytePerSecPlotter, percentPlotter, multiplier} from './CustomTooltip';
+import {styles as commonStyles} from '../common';
+import type {Content} from '../types/content';
 
-// styles contains styles for the Header component.
-const styles = theme => ({
+// styles contains the constant styles of the component.
+const styles = {
+	footer: {
+		maxWidth: '100%',
+		flexWrap: 'nowrap',
+		margin:   0,
+	},
+	chartRowWrapper: {
+		height:  '100%',
+		padding: 0,
+	},
+	doubleChartWrapper: {
+		height:     '100%',
+		width:      '99%',
+		paddingTop: 5,
+	},
+};
+
+// themeStyles returns the styles generated from the theme for the component.
+const themeStyles: Object = (theme: Object) => ({
 	footer: {
 		backgroundColor: theme.palette.background.appBar,
 		color:           theme.palette.getContrastText(theme.palette.background.appBar),
 		zIndex:          theme.zIndex.appBar,
-	},
-	toolbar: {
-		paddingLeft:    theme.spacing.unit,
-		paddingRight:   theme.spacing.unit,
-		display:        'flex',
-		justifyContent: 'flex-end',
-	},
-	light: {
-		color: 'rgba(255, 255, 255, 0.54)',
+		height:          theme.spacing.unit * 10,
 	},
 });
+
 export type Props = {
-	general: General,
-	classes: Object,
+	classes: Object, // injected by withStyles()
+	theme: Object,
+	content: Content,
+	shouldUpdate: Object,
 };
-// TODO (kurkomisi): If the structure is appropriate, make an abstraction of the common parts with the Header.
-// Footer renders the header of the dashboard.
+
+// Footer renders the footer of the dashboard.
 class Footer extends Component<Props> {
 	shouldComponentUpdate(nextProps) {
-		return typeof nextProps.shouldUpdate.logs !== 'undefined';
+		return typeof nextProps.shouldUpdate.home !== 'undefined';
 	}
 
-	info = (about: string, data: string) => (
-		<Typography type="caption" color="inherit">
-			<span className={this.props.classes.light}>{about}</span> {data}
+	// info renders a label with the given values.
+	info = (about: string, value: ?string) => (value ? (
+		<Typography type='caption' color='inherit'>
+			<span style={commonStyles.light}>{about}</span> {value}
 		</Typography>
-	);
+	) : null);
 
-	render() {
-		const {classes, general} = this.props; // The classes property is injected by withStyles().
-		const geth = general.version ? this.info('Geth', general.version) : null;
-		const commit = general.commit ? this.info('Commit', general.commit.substring(0, 7)) : null;
+	// doubleChart renders a pair of charts separated by the baseline.
+	doubleChart = (syncId, topChart, bottomChart) => {
+		const topKey = 'topKey';
+		const bottomKey = 'bottomKey';
+		const topDefault = topChart.default ? topChart.default : 0;
+		const bottomDefault = bottomChart.default ? bottomChart.default : 0;
+		const topTooltip = topChart.tooltip ? (
+			<Tooltip cursor={false} content={<CustomTooltip tooltip={topChart.tooltip} />} />
+		) : null;
+		const bottomTooltip = bottomChart.tooltip ? (
+			<Tooltip cursor={false} content={<CustomTooltip tooltip={bottomChart.tooltip} />} />
+		) : null;
+		const topColor = '#8884d8';
+		const bottomColor = '#82ca9d';
+
+		// Put the samples of the two charts into the same array in order to avoid problems
+		// at the synchronized area charts. If one of the two arrays doesn't have value at
+		// a given position, give it a 0 default value.
+		let data = [...topChart.data.map(({value}) => {
+			const d = {};
+			d[topKey] = value || topDefault;
+			return d;
+		})];
+		for (let i = 0; i < data.length && i < bottomChart.data.length; i++) {
+			// The value needs to be negative in order to plot it upside down.
+			const d = bottomChart.data[i];
+			data[i][bottomKey] = d && d.value ? -d.value : bottomDefault;
+		}
+		data = [...data, ...bottomChart.data.slice(data.length).map(({value}) => {
+			const d = {};
+			d[topKey] = topDefault;
+			d[bottomKey] = -value || bottomDefault;
+			return d;
+		})];
 
 		return (
-			<AppBar position="static" className={classes.footer}>
-				<Toolbar className={classes.toolbar}>
-					<div>
-						{geth}
-						{commit}
-					</div>
-				</Toolbar>
-			</AppBar>
+			<div style={styles.doubleChartWrapper}>
+				<ResponsiveContainer width='100%' height='50%'>
+					<AreaChart data={data} syncId={syncId} >
+						{topTooltip}
+						<Area type='monotone' dataKey={topKey} stroke={topColor} fill={topColor} />
+					</AreaChart>
+				</ResponsiveContainer>
+				<div style={{marginTop: -10, width: '100%', height: '50%'}}>
+					<ResponsiveContainer width='100%' height='100%'>
+						<AreaChart data={data} syncId={syncId} >
+							{bottomTooltip}
+							<Area type='monotone' dataKey={bottomKey} stroke={bottomColor} fill={bottomColor} />
+						</AreaChart>
+					</ResponsiveContainer>
+				</div>
+			</div>
+		);
+	}
+
+	render() {
+		const {content} = this.props;
+		const {general, home} = content;
+
+		return (
+			<Grid container className={this.props.classes.footer} direction='row' alignItems='center' style={styles.footer}>
+				<Grid item xs style={styles.chartRowWrapper}>
+					<ChartRow>
+						{this.doubleChart(
+							'all',
+							{data: home.processCPU, tooltip: percentPlotter('Process')},
+							{data: home.systemCPU, tooltip: percentPlotter('System', multiplier(-1))},
+						)}
+						{this.doubleChart(
+							'all',
+							{data: home.activeMemory, tooltip: bytePlotter('Active')},
+							{data: home.virtualMemory, tooltip: bytePlotter('Virtual', multiplier(-1))},
+						)}
+						{this.doubleChart(
+							'all',
+							{data: home.diskRead, tooltip: bytePerSecPlotter('Disk Read')},
+							{data: home.diskWrite, tooltip: bytePerSecPlotter('Disk Write', multiplier(-1))},
+						)}
+						{this.doubleChart(
+							'all',
+							{data: home.networkIngress, tooltip: bytePerSecPlotter('Download')},
+							{data: home.networkEgress, tooltip: bytePerSecPlotter('Upload', multiplier(-1))},
+						)}
+					</ChartRow>
+				</Grid>
+				<Grid item >
+					{this.info('Geth', general.version)}
+					{this.info('Commit', general.commit ? general.commit.substring(0, 7) : null)}
+				</Grid>
+			</Grid>
 		);
 	}
 }
 
-export default withStyles(styles)(Footer);
+export default withStyles(themeStyles)(Footer);

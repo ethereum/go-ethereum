@@ -32,8 +32,14 @@ export type General = {
 };
 
 export type Home = {
-	memory: ChartEntries,
-	traffic: ChartEntries,
+	activeMemory: ChartEntries,
+	virtualMemory: ChartEntries,
+	networkIngress: ChartEntries,
+	networkEgress: ChartEntries,
+	processCPU: ChartEntries,
+	systemCPU: ChartEntries,
+	diskRead: ChartEntries,
+	diskWrite: ChartEntries,
 };
 
 export type ChartEntries = Array<ChartEntry>;

@@ -21,6 +21,7 @@ package http
 
 import (
 	"archive/tar"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -290,6 +291,95 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, newKey)
 }
 
+func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
+	var outdata string
+	if r.uri.Path != "" {
+		frequency, err := strconv.ParseUint(r.uri.Path, 10, 64)
+		if err != nil {
+			s.BadRequest(w, r, fmt.Sprintf("Cannot parse frequency parameter: %v", err))
+			return
+		}
+		key, err := s.api.ResourceCreate(r.Context(), r.uri.Addr, frequency)
+		if err != nil {
+			s.Error(w, r, fmt.Errorf("Resource creation failed: %v", err))
+			return
+		}
+		outdata = key.Hex()
+	}
+
+	data, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		s.Error(w, r, err)
+		return
+	}
+	_, _, _, err = s.api.ResourceUpdate(r.Context(), r.uri.Addr, data)
+	if err != nil {
+		s.Error(w, r, fmt.Errorf("Update resource failed: %v", err))
+		return
+	}
+
+	if outdata != "" {
+		w.Header().Add("Content-type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, outdata)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// Retrieve mutable resource updates:
+// bzz-resource://<id> - get latest update
+// bzz-resource://<id>/<n> - get latest update on period n
+// bzz-resource://<id>/<n>/<m> - get update version m of period n
+// <id> = ens name or hash
+func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
+	s.handleGetResource(w, r, r.uri.Addr)
+}
+
+func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name string) {
+	var params []string
+	if len(r.uri.Path) > 0 {
+		params = strings.Split(r.uri.Path, "/")
+	}
+	var updateKey storage.Key
+	var period uint64
+	var version uint64
+	var data []byte
+	var err error
+	now := time.Now()
+	log.Debug("handlegetdb", "name", name)
+	switch len(params) {
+	case 0:
+		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, 0, 0)
+	case 2:
+		version, err = strconv.ParseUint(params[1], 10, 32)
+		if err != nil {
+			break
+		}
+		period, err = strconv.ParseUint(params[0], 10, 32)
+		if err != nil {
+			break
+		}
+		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, uint32(period), uint32(version))
+	case 1:
+		period, err = strconv.ParseUint(params[0], 10, 32)
+		if err != nil {
+			break
+		}
+		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, uint32(period), uint32(version))
+	default:
+		s.BadRequest(w, r, "Invalid mutable resource request")
+		return
+	}
+	if err != nil {
+		s.Error(w, r, fmt.Errorf("Mutable resource lookup failed: %v", err))
+		return
+	}
+	log.Debug("Found update", "key", updateKey)
+	w.Header().Set("Content-Type", "application/octet-stream")
+	http.ServeContent(w, &r.Request, "", now, bytes.NewReader(data))
+}
+
 // HandleGet handles a GET request to
 // - bzz-raw://<key> and responds with the raw content stored at the
 //   given storage key
@@ -335,7 +425,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 			return api.SkipManifest
 		})
 		if entry == nil {
-			s.NotFound(w, r, fmt.Errorf("Manifest entry could not be loaded"))
+			s.NotFound(w, r, errors.New("Manifest entry could not be loaded"))
 			return
 		}
 		key = storage.Key(common.Hex2Bytes(entry.Hash))
@@ -357,7 +447,6 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 			contentType = typ
 		}
 		w.Header().Set("Content-Type", contentType)
-
 		http.ServeContent(w, &r.Request, "", time.Now(), reader)
 	case r.uri.Hash():
 		w.Header().Set("Content-Type", "text/plain")
@@ -604,6 +693,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		if uri.Raw() || uri.DeprecatedRaw() {
 			s.HandlePostRaw(w, req)
+		} else if uri.Resource() {
+			s.HandlePostResource(w, req)
 		} else {
 			s.HandlePostFiles(w, req)
 		}
@@ -629,6 +720,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.HandleDelete(w, req)
 
 	case "GET":
+
+		if uri.Resource() {
+			s.HandleGetResource(w, req)
+			return
+		}
+
 		if uri.Raw() || uri.Hash() || uri.DeprecatedRaw() {
 			s.HandleGet(w, req)
 			return

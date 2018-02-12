@@ -47,7 +47,7 @@ func TestDiscovery(t *testing.T) {
 	s.TestExchanges(p2ptest.Exchange{
 		Label: "outgoing SubPeersMsg",
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 3,
 				Msg:  &subPeersMsg{Depth: 0},
 				Peer: s.ProtocolTester.IDs[0],

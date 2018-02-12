@@ -71,6 +71,7 @@ func BenchmarkDiscovery_128_4(b *testing.B) { benchmarkDiscovery(b, 128, 4) }
 func BenchmarkDiscovery_256_4(b *testing.B) { benchmarkDiscovery(b, 256, 4) }
 
 func TestDiscoverySimulationDockerAdapter(t *testing.T) {
+	t.Skip("broken (cannot build image)")
 	testDiscoverySimulationDockerAdapter(t, *nodeCount, *initCount)
 }
 
@@ -87,6 +88,7 @@ func testDiscoverySimulationDockerAdapter(t *testing.T, nodes, conns int) {
 }
 
 func TestDiscoverySimulationExecAdapter(t *testing.T) {
+	t.Skip("broken (times out)")
 	testDiscoverySimulationExecAdapter(t, *nodeCount, *initCount)
 }
 
@@ -100,12 +102,7 @@ func testDiscoverySimulationExecAdapter(t *testing.T, nodes, conns int) {
 }
 
 func TestDiscoverySimulationSimAdapter(t *testing.T) {
-	testDiscoverySimulationSimAdapter(t, *nodeCount, *initCount)
-}
-
-func testDiscoverySimulationSimAdapter(t *testing.T, nodes, conns int) {
-	testDiscoverySimulation(t, nodes, conns, adapters.NewSocketAdapter(services))
-	// testDiscoverySimulation(t, nodes, conns, adapters.NewSimAdapter(services))
+	testDiscoverySimulation(t, *nodeCount, *initCount, adapters.NewSimAdapter(services))
 }
 
 func testDiscoverySimulation(t *testing.T, nodes, conns int, adapter adapters.NodeAdapter) {
@@ -139,7 +136,7 @@ func benchmarkDiscovery(b *testing.B, nodes, conns int) {
 	for i := 0; i < b.N; i++ {
 		result, err := discoverySimulation(nodes, conns, adapters.NewSimAdapter(services))
 		if err != nil {
-			b.Fatalf("setting up simulation failed: %s", err)
+			b.Fatalf("setting up simulation failed: %v", err)
 		}
 		if result.Error != nil {
 			b.Logf("simulation failed: %s", result.Error)

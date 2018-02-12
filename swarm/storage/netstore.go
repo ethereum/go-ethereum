@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"path/filepath"
 	"time"
 )
 
@@ -67,6 +68,14 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 	case <-chunk.ReqC:
 	}
 	return chunk, nil
+}
+
+//this can only finally be set after all config options (file, cmd line, env vars)
+//have been evaluated
+func (self *StoreParams) Init(path string) {
+	if self.ChunkDbPath == "" {
+		self.ChunkDbPath = filepath.Join(path, "chunks")
+	}
 }
 
 // Put is the entrypoint for local store requests coming from storeLoop

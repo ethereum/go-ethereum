@@ -812,7 +812,7 @@ func TestFUSE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ta := &testAPI{api: api.NewApi(dpa, nil)}
+	ta := &testAPI{api: api.NewApi(dpa, nil, nil)}
 	dpa.Start()
 	defer dpa.Stop()
 
