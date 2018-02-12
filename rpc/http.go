@@ -245,7 +245,6 @@ func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Error(w, "invalid host specified", http.StatusForbidden)
-	return
 }
 
 func newVHostHandler(vhosts []string, next http.Handler) http.Handler {
