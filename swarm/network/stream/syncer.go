@@ -65,7 +65,7 @@ const maxPO = 32
 
 func RegisterSwarmSyncerServer(streamer *Registry, db *storage.DBAPI) {
 	streamer.RegisterServerFunc("SYNC", func(p *Peer, t []byte) (Server, error) {
-		po := uint8(t[0])
+		po := t[0]
 		// TODO: make this work for HISTORY too
 		return NewSwarmSyncerServer(false, po, db)
 	})

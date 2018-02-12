@@ -111,7 +111,7 @@ func posProximity(one, other Address, pos int) (ret int, eq bool) {
 			start = pos % 8
 		}
 		for j := start; j < 8; j++ {
-			if (uint8(oxo)>>uint8(7-j))&0x01 != 0 {
+			if (oxo>>uint8(7-j))&0x01 != 0 {
 				return i*8 + j, false
 			}
 		}
@@ -173,13 +173,13 @@ func RandomAddress() Address {
 func NewAddressFromString(s string) []byte {
 	ha := [32]byte{}
 
-	t := s + string(zerosBin)[:len(zerosBin)-len(s)]
+	t := s + zerosBin[:len(zerosBin)-len(s)]
 	for i := 0; i < 4; i++ {
 		n, err := strconv.ParseUint(t[i*64:(i+1)*64], 2, 64)
 		if err != nil {
 			panic("wrong format: " + err.Error())
 		}
-		binary.BigEndian.PutUint64(ha[i*8:(i+1)*8], uint64(n))
+		binary.BigEndian.PutUint64(ha[i*8:(i+1)*8], n)
 	}
 	return ha[:]
 }
@@ -229,7 +229,7 @@ func proximityOrder(one, other []byte, pos int) (int, bool) {
 			start = pos % 8
 		}
 		for j := start; j < 8; j++ {
-			if (uint8(oxo)>>uint8(7-j))&0x01 != 0 {
+			if (oxo>>uint8(7-j))&0x01 != 0 {
 				return i*8 + j, false
 			}
 		}

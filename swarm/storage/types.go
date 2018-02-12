@@ -88,7 +88,7 @@ func Proximity(one, other []byte) (ret int) {
 			m = MaxPO % 8
 		}
 		for j := 0; j < m; j++ {
-			if (uint8(oxo)>>uint8(7-j))&0x01 != 0 {
+			if (oxo>>uint8(7-j))&0x01 != 0 {
 				return i*8 + j
 			}
 		}
