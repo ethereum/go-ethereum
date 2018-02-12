@@ -310,6 +310,11 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
 func DefaultGenesisBlock() *Genesis {
+	var (
+             addr1 = common.HexToAddress("9b31c50f8155e12105edf47a9e52d1da60979af2")
+             addr2 = common.HexToAddress("66819a1a22a6657bc4c79e22bad9bbf00a31abf9")
+        )
+	
 	return &Genesis{
 		Config:     params.MainnetChainConfig,
 		Nonce:      66,
@@ -317,8 +322,8 @@ func DefaultGenesisBlock() *Genesis {
 		GasLimit:   5000,
 		Difficulty: big.NewInt(17179869184),
 		Alloc:      GenesisAlloc{
-				0x9b31c50f8155e12105edf47a9e52d1da60979af2: {Balance: big.NewInt(50000000000000000000000000)},
-				0x66819a1a22a6657bc4c79e22bad9bbf00a31abf9: {Balance: big.NewInt(20000000000000000000000000)},
+				addr1: {Balance: big.NewInt(50000000000000000000)},
+				addr2: {Balance: big.NewInt(20000000000000000000)},
 			    },
 	}
 }
