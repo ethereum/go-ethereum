@@ -31,10 +31,12 @@ func TestStoragePutGet(t *testing.T) {
 		content := "hello"
 		exp := expResponse(content, "text/plain", 0)
 		// exp := expResponse([]byte(content), "text/plain", 0)
-		bzzhash, err := api.Put(content, exp.MimeType)
+		bzzkey, wait, err := api.Put(content, exp.MimeType)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+		wait()
+		bzzhash := bzzkey.Hex()
 		// to check put against the Api#Get
 		resp0 := testGet(t, api.api, bzzhash, "")
 		checkResponse(t, resp0, exp)
