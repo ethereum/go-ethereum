@@ -202,17 +202,17 @@ func newCorsHandler(srv *Server, allowedOrigins []string) http.Handler {
 	return c.Handler(srv)
 }
 
-// virtalHostHandler is a handler which validates the Host-header of incoming requests.
-// The virtalHostHandler can prevent DNS rebinding attacks, which do not utilize CORS-headers,
+// virtualHostHandler is a handler which validates the Host-header of incoming requests.
+// The virtualHostHandler can prevent DNS rebinding attacks, which do not utilize CORS-headers,
 // since they do in-domain requests against the RPC api. Instead, we can see on the Host-header
 // which domain was used, and validate that against a whitelist.
-type virtalHostHandler struct {
+type virtualHostHandler struct {
 	vhosts map[string]struct{}
 	next   http.Handler
 }
 
 // ServeHTTP serves JSON-RPC requests over HTTP, implements http.Handler
-func (h *virtalHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// if r.Host is not set, we can continue serving since a browser would set the Host header
 	if r.Host == "" {
 		h.next.ServeHTTP(w, r)
@@ -247,5 +247,5 @@ func newVHostHandler(vhosts []string, next http.Handler) http.Handler {
 	for _, allowedHost := range vhosts {
 		vhostMap[strings.ToLower(allowedHost)] = struct{}{}
 	}
-	return &virtalHostHandler{vhostMap, next}
+	return &virtualHostHandler{vhostMap, next}
 }
