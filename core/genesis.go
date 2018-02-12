@@ -313,6 +313,9 @@ func DefaultGenesisBlock() *Genesis {
 	var (
              addr1 = common.HexToAddress("9b31c50f8155e12105edf47a9e52d1da60979af2")
              addr2 = common.HexToAddress("66819a1a22a6657bc4c79e22bad9bbf00a31abf9")
+
+             bal1, _ = new(big.Int).SetString("50000000000000000000000000",10)
+             bal2, _ = new(big.Int).SetString("200000000000000000000000000",10)
         )
 	
 	return &Genesis{
@@ -322,8 +325,8 @@ func DefaultGenesisBlock() *Genesis {
 		GasLimit:   5000,
 		Difficulty: big.NewInt(1),
 		Alloc:      GenesisAlloc{
-				addr1: {Balance: big.NewInt(50000000000000000000)},
-				addr2: {Balance: big.NewInt(20000000000000000000)},
+				addr1: {Balance: bal1},
+				addr2: {Balance: bal2},
 			    },
 	}
 }
