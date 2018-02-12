@@ -63,6 +63,7 @@ type LightEthereum struct {
 	retriever  *retrieveManager
 
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
+	filterTasks   chan *filters.BlockFilterTask  // Channel receiving block filter tasks
 	bloomIndexer  *core.ChainIndexer
 
 	ApiBackend *LesApiBackend
@@ -106,6 +107,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		shutdownChan:   make(chan bool),
 		networkId:      config.NetworkId,
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
+		filterTasks:    make(chan *filters.BlockFilterTask),
 		bloomIndexer:   eth.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 	}
 

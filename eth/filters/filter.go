@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -45,6 +46,41 @@ type Backend interface {
 
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
+	FilterTaskChannel() chan *BlockFilterTask
+}
+
+// BlockFilterTask represents a request for log filtering task assignments for a given
+// block number, or a response for such a request.
+// It can also have the actual results set to be used as a delivery data struct.
+//
+// The contest and error fields are used by the light client to terminate matching
+// early if an error is enountered on some path of the pipeline.
+type BlockFilterTask struct {
+	blockNumber uint64
+	checkBloom  bool
+	filter      *Filter
+	context     context.Context
+
+	logs []*types.Log
+	err  error
+	done chan struct{}
+}
+
+func (t *BlockFilterTask) Do() {
+	defer close(t.done)
+
+	header, err := t.filter.backend.HeaderByNumber(t.context, rpc.BlockNumber(t.blockNumber))
+	if err != nil {
+		t.err = err
+		return
+	}
+	if header == nil {
+		t.err = errors.New("Header not found")
+		return
+	}
+	if !t.checkBloom || bloomFilter(header.Bloom, t.filter.addresses, t.filter.topics) {
+		t.logs, t.err = t.filter.checkMatches(t.context, header)
+	}
 }
 
 // Filter can be used to retrieve and filter logs.
@@ -146,40 +182,60 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	var (
 		logs []*types.Log
 		err  error
+		wg   sync.WaitGroup
 	)
+	tasks := make(chan *BlockFilterTask, 64)
+	wg.Add(1)
+	go func() {
+		for task := range tasks {
+			if err == nil {
+				select {
+				case <-task.done:
+				case <-ctx.Done():
+					err = ctx.Err()
+					continue
+				}
+				if len(task.logs) != 0 {
+					logs = append(logs, task.logs...)
+				}
+				err = task.err
+			}
+		}
+		wg.Done()
+	}()
+
 	size, sections := f.backend.BloomStatus()
 	if indexed := sections * size; indexed > uint64(f.begin) {
 		if indexed > end {
-			logs, err = f.indexedLogs(ctx, end)
+			f.indexedLogs(ctx, tasks, end)
 		} else {
-			logs, err = f.indexedLogs(ctx, indexed-1)
+			f.indexedLogs(ctx, tasks, indexed-1)
 		}
 		if err != nil {
 			return logs, err
 		}
 	}
-	rest, err := f.unindexedLogs(ctx, end)
-	logs = append(logs, rest...)
+	f.unindexedLogs(ctx, tasks, end)
+	close(tasks)
+	wg.Wait()
 	return logs, err
 }
 
 // indexedLogs returns the logs matching the filter criteria based on the bloom
 // bits indexed available locally or via the network.
-func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, error) {
+func (f *Filter) indexedLogs(ctx context.Context, tasks chan *BlockFilterTask, end uint64) error {
 	// Create a matcher session and request servicing from the backend
 	matches := make(chan uint64, 64)
 
 	session, err := f.matcher.Start(ctx, uint64(f.begin), end, matches)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer session.Close()
 
 	f.backend.ServiceFilter(ctx, session)
 
 	// Iterate over the matches until exhausted or context closed
-	var logs []*types.Log
-
 	for {
 		select {
 		case number, ok := <-matches:
@@ -189,44 +245,58 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 				if err == nil {
 					f.begin = int64(end) + 1
 				}
-				return logs, err
+				return err
 			}
 			f.begin = int64(number) + 1
 
-			// Retrieve the suggested block and pull any truly matching logs
-			header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(number))
-			if header == nil || err != nil {
-				return logs, err
+			task := &BlockFilterTask{
+				blockNumber: number,
+				checkBloom:  false,
+				filter:      f,
+				context:     ctx,
+				done:        make(chan struct{}),
 			}
-			found, err := f.checkMatches(ctx, header)
-			if err != nil {
-				return logs, err
+			select {
+			case f.backend.FilterTaskChannel() <- task:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
-			logs = append(logs, found...)
+			select {
+			case tasks <- task:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 
 		case <-ctx.Done():
-			return logs, ctx.Err()
+			return ctx.Err()
 		}
 	}
 }
 
 // indexedLogs returns the logs matching the filter criteria based on raw block
 // iteration and bloom matching.
-func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, error) {
-	var logs []*types.Log
-
+func (f *Filter) unindexedLogs(ctx context.Context, tasks chan *BlockFilterTask, end uint64) error {
 	for ; f.begin <= int64(end); f.begin++ {
-		header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
-		if header == nil || err != nil {
-			return logs, err
+		task := &BlockFilterTask{
+			blockNumber: uint64(f.begin),
+			checkBloom:  true,
+			filter:      f,
+			context:     ctx,
+			done:        make(chan struct{}),
 		}
-		found, err := f.blockLogs(ctx, header)
-		if err != nil {
-			return logs, err
+		select {
+		case f.backend.FilterTaskChannel() <- task:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		select {
+		case tasks <- task:
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 		logs = append(logs, found...)
 	}
-	return logs, nil
+	return nil
 }
 
 // blockLogs returns the logs matching the filter criteria within a single block.
@@ -236,7 +306,7 @@ func (f *Filter) blockLogs(ctx context.Context, header *types.Header) (logs []*t
 		if err != nil {
 			return logs, err
 		}
-		logs = append(logs, found...)
+		logs = found
 	}
 	return logs, nil
 }

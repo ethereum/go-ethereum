@@ -75,7 +75,7 @@ func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBac
 		database:   database,
 		blockchain: blockchain,
 		config:     genesis.Config,
-		events:     filters.NewEventSystem(new(event.TypeMux), &filterBackend{database, blockchain}, false),
+		events:     filters.NewEventSystem(new(event.TypeMux), &filterBackend{database, blockchain, nil}, false),
 	}
 	backend.rollback()
 	return backend
@@ -358,7 +358,27 @@ func (b *SimulatedBackend) FilterLogs(ctx context.Context, query ethereum.Filter
 			to = query.ToBlock.Int64()
 		}
 		// Construct the range filter
-		filter = filters.NewRangeFilter(&filterBackend{b.database, b.blockchain}, from, to, query.Addresses, query.Topics)
+		filterTasks := make(chan *filters.BlockFilterTask)
+		filter = filters.NewRangeFilter(&filterBackend{b.database, b.blockchain, filterTasks}, from, to, query.Addresses, query.Topics)
+
+		// start up a filter task service
+		const filterTaskServiceThreads = 16
+		stop := make(chan struct{})
+		defer close(stop)
+
+		for i := 0; i < filterTaskServiceThreads; i++ {
+			go func() {
+				for {
+					select {
+					case <-stop:
+						return
+
+					case task := <-filterTasks:
+						task.Do()
+					}
+				}
+			}()
+		}
 	}
 	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
@@ -441,8 +461,9 @@ func (m callmsg) Data() []byte         { return m.CallMsg.Data }
 // filterBackend implements filters.Backend to support filtering for logs without
 // taking bloom-bits acceleration structures into account.
 type filterBackend struct {
-	db ethdb.Database
-	bc *core.BlockChain
+	db          ethdb.Database
+	bc          *core.BlockChain
+	filterTasks chan *filters.BlockFilterTask
 }
 
 func (fb *filterBackend) ChainDb() ethdb.Database  { return fb.db }
@@ -502,4 +523,7 @@ func (fb *filterBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscr
 func (fb *filterBackend) BloomStatus() (uint64, uint64) { return 4096, 0 }
 func (fb *filterBackend) ServiceFilter(ctx context.Context, ms *bloombits.MatcherSession) {
 	panic("not supported")
+}
+func (fb *filterBackend) FilterTaskChannel() chan *filters.BlockFilterTask {
+	return fb.filterTasks
 }

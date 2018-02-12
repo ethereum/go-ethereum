@@ -28,6 +28,10 @@ const (
 	// instance to service bloombits lookups for all running filters.
 	bloomServiceThreads = 16
 
+	// filterTaskServiceThreads is the number of goroutines used globally by an Ethereum
+	// instance to service block filter tasks for all running filters.
+	filterTaskServiceThreads = 16
+
 	// bloomFilterThreads is the number of goroutines used locally per filter to
 	// multiplex requests onto the global servicing goroutines.
 	bloomFilterThreads = 3
@@ -67,6 +71,20 @@ func (eth *LightEthereum) startBloomHandlers(sectionSize uint64) {
 						task.Error = err
 					}
 					request <- task
+				}
+			}
+		}()
+	}
+
+	for i := 0; i < filterTaskServiceThreads; i++ {
+		go func() {
+			for {
+				select {
+				case <-eth.shutdownChan:
+					return
+
+				case task := <-eth.filterTasks:
+					task.Do()
 				}
 			}
 		}()
