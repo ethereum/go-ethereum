@@ -52,9 +52,9 @@ var (
 		DAOForkSupport: true,
 		EIP150Block:    big.NewInt(0),
 		EIP150Hash:     common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
-		EIP155Block:    big.NewInt(10),
-		EIP158Block:    big.NewInt(10),
-		ByzantiumBlock: big.NewInt(1700000),
+		EIP155Block:    big.NewInt(0),
+		EIP158Block:    big.NewInt(0),
+		ByzantiumBlock: big.NewInt(0),
 
 		Ethash: new(EthashConfig),
 	}
@@ -62,14 +62,14 @@ var (
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
 	RinkebyChainConfig = &ChainConfig{
 		ChainId:        big.NewInt(104),
-		HomesteadBlock: big.NewInt(1),
+		HomesteadBlock: big.NewInt(0),
 		DAOForkBlock:   nil,
 		DAOForkSupport: true,
-		EIP150Block:    big.NewInt(2),
+		EIP150Block:    big.NewInt(0),
 		EIP150Hash:     common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
-		EIP155Block:    big.NewInt(3),
-		EIP158Block:    big.NewInt(3),
-		ByzantiumBlock: big.NewInt(1035301),
+		EIP155Block:    big.NewInt(0),
+		EIP158Block:    big.NewInt(0),
+		ByzantiumBlock: big.NewInt(0),
 
 		Clique: &CliqueConfig{
 			Period: 15,
