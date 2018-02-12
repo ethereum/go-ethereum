@@ -36,8 +36,8 @@ import (
 
 // Ethash proof-of-work protocol constants.
 var (
-	FrontierBlockReward    *big.Int = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
-	ByzantiumBlockReward   *big.Int = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
+	FrontierBlockReward             = 5                   // Default Block reward in ether for successfully mining a block
+	ByzantiumBlockReward            = 3                  // Default Block reward in ether for successfully mining a block upward from Byzantium
 	maxUncles                       = 0                 // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTime          = 6 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
 )
@@ -534,14 +534,40 @@ var (
 	big32 = big.NewInt(32)
 )
 
+// calculate reward for miners
+func calculateReward(reward int, currentTimestamp int64) (blockReward *big.Int) {
+    rewardMaxDecimal := 7
+    currentReward := float64(reward) * math.Pow(10, float64(rewardMaxDecimal))
+    rewardDecreaseTime := int64(3*365*24*60*60)
+    fromTimestamp := int64(1518395555)
+    timeDiff := currentTimestamp - fromTimestamp
+    
+    if timeDiff >= rewardDecreaseTime {
+        newDiff := int(timeDiff / rewardDecreaseTime)
+        
+        if newDiff > 0 {
+            for i := 0; i < newDiff; i++ {
+		currentReward = currentReward / 2
+	    }
+            
+            if currentReward != math.Trunc(currentReward) {
+                currentReward = 0
+            }
+        }
+    }
+
+    blockReward = big.NewInt(int64(currentReward) * 1e+11)
+    return
+}
+
 // AccumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
-	blockReward := FrontierBlockReward
+	blockReward := calculateReward(FrontierBlockReward, header.Time.Uint64())
 	if config.IsByzantium(header.Number) {
-		blockReward = ByzantiumBlockReward
+		blockReward = calculateReward(ByzantiumBlockReward, header.Time.Uint64())
 	}
 	// Accumulate the rewards for the miner and any included uncles
 	reward := new(big.Int).Set(blockReward)
