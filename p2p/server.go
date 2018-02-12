@@ -142,7 +142,7 @@ type Config struct {
 	EnableMsgEvents bool
 
 	// Logger is a custom logger to use with the p2p.Server.
-	Logger log.Logger
+	Logger log.Logger `toml:",omitempty"`
 }
 
 // Server manages all peer connections.
