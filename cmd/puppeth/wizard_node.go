@@ -48,9 +48,9 @@ func (w *wizard) deployNode(boot bool) {
 	infos, err := checkNode(client, w.network, boot)
 	if err != nil {
 		if boot {
-			infos = &nodeInfos{portFull: 30303, peersTotal: 512, peersLight: 256}
+			infos = &nodeInfos{port: 30303, peersTotal: 512, peersLight: 256}
 		} else {
-			infos = &nodeInfos{portFull: 30303, peersTotal: 50, peersLight: 0, gasTarget: 4.7, gasPrice: 18}
+			infos = &nodeInfos{port: 30303, peersTotal: 50, peersLight: 0, gasTarget: 4.7, gasPrice: 18}
 		}
 	}
 	existed := err == nil
@@ -79,8 +79,8 @@ func (w *wizard) deployNode(boot bool) {
 	}
 	// Figure out which port to listen on
 	fmt.Println()
-	fmt.Printf("Which TCP/UDP port to listen on? (default = %d)\n", infos.portFull)
-	infos.portFull = w.readDefaultInt(infos.portFull)
+	fmt.Printf("Which TCP/UDP port to listen on? (default = %d)\n", infos.port)
+	infos.port = w.readDefaultInt(infos.port)
 
 	// Figure out how many peers to allow (different based on node type)
 	fmt.Println()
@@ -163,7 +163,7 @@ func (w *wizard) deployNode(boot bool) {
 		fmt.Printf("Should the node be built from scratch (y/n)? (default = no)\n")
 		nocache = w.readDefaultString("n") != "n"
 	}
-	if out, err := deployNode(client, w.network, w.conf.bootFull, w.conf.bootLight, infos, nocache); err != nil {
+	if out, err := deployNode(client, w.network, w.conf.bootnodes, infos, nocache); err != nil {
 		log.Error("Failed to deploy Ethereum node container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)
