@@ -174,9 +174,8 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 					Hashes: hash,
 					From:   0,
 					// TODO: why is this 32???
-					To:      32,
-					Stream:  NewStream(swarmChunkServerStreamName, nil, false),
-					Initial: true,
+					To:     32,
+					Stream: NewStream(swarmChunkServerStreamName, nil, false),
 				},
 				Peer: peerID,
 			},
