@@ -311,11 +311,33 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
 func DefaultGenesisBlock() *Genesis {
 	var (
-             addr1 = common.HexToAddress("9b31c50f8155e12105edf47a9e52d1da60979af2")
-             addr2 = common.HexToAddress("66819a1a22a6657bc4c79e22bad9bbf00a31abf9")
+             addr1  = common.HexToAddress("e6c02acc5764bcf9f83c18dbf5d5906e0ba9ece2")
+             addr2  = common.HexToAddress("d16ac986e13ba920a9642c67ae9ea704c16fb991")
+             addr3  = common.HexToAddress("b5409105eb3bc10b5ae0d480b3e0ea0122970854")
+             addr4  = common.HexToAddress("16f662959ccac07f18ea7a3f79860f85d9df04eb")
+             addr5  = common.HexToAddress("89336e761f382de0664b288da6a1ecfe0c9e0810")
+             addr6  = common.HexToAddress("4711cb81ac9cc6387cdaa7bb35b4da4f9d386b36")
+             addr7  = common.HexToAddress("a7d0163942151c0b2ca68e669346b95307064c30")
+             addr8  = common.HexToAddress("6c8f3e886a1fdd0825482b075be4c3db6cd3ef6b")
+             addr9  = common.HexToAddress("b001a5743e724dac397923aca7cd3f9722988ca0")
+             addr10 = common.HexToAddress("44e56291a436bb70b605471eb320ec9fa1c0ec70")
+             addr11 = common.HexToAddress("d9b1e26a7306630bfc91c0558a187e0431e95002")
+             addr12 = common.HexToAddress("e9e48a493ae69a2333fad1631e21f33dcdee0157")
+             addr13 = common.HexToAddress("9e5b953cda5103aa530ef53981c0fadb270309b0")
 
-             bal1, _ = new(big.Int).SetString("50000000000000000000000000",10)
-             bal2, _ = new(big.Int).SetString("200000000000000000000000000",10)
+             bal1, _  = new(big.Int).SetString("20000000000000000000000000",10)
+             bal2, _  = new(big.Int).SetString("30000000000000000000000000",10)
+             bal3, _  = new(big.Int).SetString("100000000000000000000000000",10)
+             bal4, _  = new(big.Int).SetString("200000000000000000000000000",10)
+             bal5, _  = new(big.Int).SetString("100000000000000000000000000",10)
+             bal6, _  = new(big.Int).SetString("200000000000000000000000000",10)
+             bal7, _  = new(big.Int).SetString("7500000000000000000000000",10)
+             bal8, _  = new(big.Int).SetString("15000000000000000000000000",10)
+             bal9, _  = new(big.Int).SetString("60000000000000000000000000",10)
+             bal10, _ = new(big.Int).SetString("37500000000000000000000000",10)
+             bal11, _ = new(big.Int).SetString("30000000000000000000000000",10)
+             bal12, _ = new(big.Int).SetString("30000000000000000000000000",10)
+             bal13, _ = new(big.Int).SetString("100000000000000000000000000",10)
         )
 	
 	return &Genesis{
@@ -325,26 +347,48 @@ func DefaultGenesisBlock() *Genesis {
 		GasLimit:   5000,
 		Difficulty: big.NewInt(1),
 		Alloc:      GenesisAlloc{
-				addr1: {Balance: bal1},
-				addr2: {Balance: bal2},
+				addr1:  {Balance: bal1},
+				addr2:  {Balance: bal2},
+				addr3:  {Balance: bal3},
+				addr4:  {Balance: bal4},
+				addr5:  {Balance: bal5},
+				addr6:  {Balance: bal6},
+				addr7:  {Balance: bal7},
+				addr8:  {Balance: bal8},
+				addr9:  {Balance: bal9},
+				addr10: {Balance: bal0},
+				addr11: {Balance: bal1},
+				addr12: {Balance: bal2},
+				addr13: {Balance: bal3},
 			    },
 	}
 }
 
 // DefaultTestnetGenesisBlock returns the Ropsten network genesis block.
 func DefaultTestnetGenesisBlock() *Genesis {
+	var (
+             addr1  = common.HexToAddress("9e5b953cda5103aa530ef53981c0fadb270309b0")
+             bal1, _  = new(big.Int).SetString("200000000000000000000000000",10)
+        )
+	
 	return &Genesis{
 		Config:     params.TestnetChainConfig,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
 		GasLimit:   16777216,
 		Difficulty: big.NewInt(1),
-		Alloc:      decodePrealloc(testnetAllocData),
+		Alloc:      GenesisAlloc{
+				addr1:  {Balance: bal1},
+		            },
 	}
 }
 
 // DefaultRinkebyGenesisBlock returns the Rinkeby network genesis block.
 func DefaultRinkebyGenesisBlock() *Genesis {
+	var (
+             addr1  = common.HexToAddress("9e5b953cda5103aa530ef53981c0fadb270309b0")
+             bal1, _  = new(big.Int).SetString("200000000000000000000000000",10)
+        )
 	return &Genesis{
 		Config:     params.RinkebyChainConfig,
 		Timestamp:  1492009146,
