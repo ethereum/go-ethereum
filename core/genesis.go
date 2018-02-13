@@ -336,7 +336,7 @@ func DefaultGenesisBlock() *Genesis {
              bal9, _  = new(big.Int).SetString("60000000000000000000000000",10)
              bal10, _ = new(big.Int).SetString("37500000000000000000000000",10)
              bal11, _ = new(big.Int).SetString("30000000000000000000000000",10)
-             bal12, _ = new(big.Int).SetString("30000000000000000000000000",10)
+             bal12, _ = new(big.Int).SetString("97528142000000000000000000",10)
              bal13, _ = new(big.Int).SetString("100000000000000000000000000",10)
         )
 	
