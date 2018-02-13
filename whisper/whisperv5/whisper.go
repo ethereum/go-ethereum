@@ -511,6 +511,15 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 		case statusCode:
 			// this should not happen, but no need to panic; just ignore this message.
 			log.Warn("unxepected status message received", "peer", p.peer.ID())
+		case hashesCode:
+			var hashes []common.Hash
+			err := packet.Decode(&hashes)
+			if err != nil {
+				return errors.New("invalid haashes")
+			}
+			for _, hash := range hashes {
+				p.known.Add(hash)
+			}
 		case messagesCode:
 			// decode the contained envelopes
 			var envelope Envelope
@@ -617,6 +626,13 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 		}
 	}
 	wh.poolMu.Unlock()
+	wh.peerMu.RLock()
+	if !alreadyCached {
+		for p := range wh.peers {
+			p.addHash(hash)
+		}
+	}
+	wh.peerMu.RUnlock()
 
 	if alreadyCached {
 		log.Trace("whisper envelope already cached", "hash", envelope.Hash().Hex())

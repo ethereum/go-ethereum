@@ -44,6 +44,7 @@ const (
 	messagesCode         = 1 // normal whisper message
 	p2pCode              = 2 // peer-to-peer message (to be consumed by the peer, but not forwarded any further)
 	p2pRequestCode       = 3 // peer-to-peer message, used by Dapp protocol
+	hashesCode           = 4 // code used to populate known hashes of the peer
 	NumberOfMessageCodes = 64
 
 	paddingMask   = byte(3)

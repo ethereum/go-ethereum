@@ -34,20 +34,23 @@ type Peer struct {
 	ws      p2p.MsgReadWriter
 	trusted bool
 
-	known *set.Set // Messages already known by the peer to avoid wasting bandwidth
-
-	quit chan struct{}
+	known      *set.Set // Messages already known by the peer to avoid wasting bandwidth
+	advertised map[common.Hash]struct{}
+	hashes     chan common.Hash
+	quit       chan struct{}
 }
 
 // newPeer creates a new whisper peer object, but does not run the handshake itself.
 func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	return &Peer{
-		host:    host,
-		peer:    remote,
-		ws:      rw,
-		trusted: false,
-		known:   set.New(),
-		quit:    make(chan struct{}),
+		host:       host,
+		peer:       remote,
+		ws:         rw,
+		trusted:    false,
+		known:      set.New(),
+		advertised: make(map[common.Hash]struct{}),
+		hashes:     make(chan common.Hash, 20),
+		quit:       make(chan struct{}),
 	}
 }
 
@@ -101,7 +104,8 @@ func (p *Peer) update() {
 	// Start the tickers for the updates
 	expire := time.NewTicker(expirationCycle)
 	transmit := time.NewTicker(transmissionCycle)
-
+	hashesTransmit := time.NewTicker(100 * time.Millisecond)
+	hashes := make([]common.Hash, 0, 10)
 	// Loop and transmit until termination is requested
 	for {
 		select {
@@ -113,7 +117,27 @@ func (p *Peer) update() {
 				log.Trace("broadcast failed", "reason", err, "peer", p.ID())
 				return
 			}
-
+		case <-hashesTransmit.C:
+			if err := p.broadcastHashes(hashes); err != nil {
+				log.Trace("broadcast of hashes failed", err, "peer", p.ID)
+				return
+			}
+			hashes = hashes[:0]
+		case hash := <-p.hashes:
+			if _, ok := p.advertised[hash]; ok {
+				continue
+			}
+			if p.known.Has(hash) {
+				continue
+			}
+			hashes = append(hashes, hash)
+			if len(hashes) == cap(hashes) {
+				if err := p.broadcastHashes(hashes); err != nil {
+					log.Trace("broadcast of hashes failed", err, "peer", p.ID)
+					return
+				}
+				hashes = hashes[:0]
+			}
 		case <-p.quit:
 			return
 		}
@@ -146,6 +170,10 @@ func (peer *Peer) expire() {
 	}
 }
 
+func (p *Peer) addHash(hash common.Hash) {
+	p.hashes <- hash
+}
+
 // broadcast iterates over the collection of envelopes and transmits yet unknown
 // ones over the network.
 func (p *Peer) broadcast() error {
@@ -164,6 +192,20 @@ func (p *Peer) broadcast() error {
 	}
 	if cnt > 0 {
 		log.Trace("broadcast", "num. messages", cnt)
+	}
+	return nil
+}
+
+func (p *Peer) broadcastHashes(hashes []common.Hash) error {
+	if len(hashes) == 0 {
+		return nil
+	}
+	log.Trace("broadcast", "hashes", hashes)
+	if err := p2p.Send(p.ws, hashesCode, hashes); err != nil {
+		return err
+	}
+	for _, hash := range hashes {
+		p.advertised[hash] = struct{}{}
 	}
 	return nil
 }
