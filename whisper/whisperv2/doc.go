@@ -17,7 +17,7 @@
 /*
 Package whisper implements the Whisper PoC-1.
 
-(https://github.com/ethereum/wiki/wiki/Whisper-PoC-1-Protocol-Spec)
+(https://github.com/etherinc/wiki/wiki/Whisper-PoC-1-Protocol-Spec)
 
 Whisper combines aspects of both DHTs and datagram messaging systems (e.g. UDP).
 As such it may be likened and compared to both, not dissimilar to the

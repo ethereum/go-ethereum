@@ -22,19 +22,19 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/etherinc/go-ethereum/common"
+	"github.com/etherinc/go-ethereum/common/hexutil"
+	"github.com/etherinc/go-ethereum/common/math"
+	"github.com/etherinc/go-ethereum/core"
+	"github.com/etherinc/go-ethereum/core/state"
+	"github.com/etherinc/go-ethereum/core/vm"
+	"github.com/etherinc/go-ethereum/crypto"
+	"github.com/etherinc/go-ethereum/ethdb"
+	"github.com/etherinc/go-ethereum/params"
 )
 
 // VMTest checks EVM execution without block or transaction context.
-// See https://github.com/ethereum/tests/wiki/VM-Tests for the test format specification.
+// See https://github.com/etherinc/tests/wiki/VM-Tests for the test format specification.
 type VMTest struct {
 	json vmJSON
 }

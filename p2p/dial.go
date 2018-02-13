@@ -24,9 +24,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/etherinc/go-ethereum/log"
+	"github.com/etherinc/go-ethereum/p2p/discover"
+	"github.com/etherinc/go-ethereum/p2p/netutil"
 )
 
 const (

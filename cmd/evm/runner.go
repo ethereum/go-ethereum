@@ -27,16 +27,16 @@ import (
 
 	goruntime "runtime"
 
-	"github.com/ethereum/go-ethereum/cmd/evm/internal/compiler"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/core/vm/runtime"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/etherinc/go-ethereum/cmd/evm/internal/compiler"
+	"github.com/etherinc/go-ethereum/cmd/utils"
+	"github.com/etherinc/go-ethereum/common"
+	"github.com/etherinc/go-ethereum/core"
+	"github.com/etherinc/go-ethereum/core/state"
+	"github.com/etherinc/go-ethereum/core/vm"
+	"github.com/etherinc/go-ethereum/core/vm/runtime"
+	"github.com/etherinc/go-ethereum/ethdb"
+	"github.com/etherinc/go-ethereum/log"
+	"github.com/etherinc/go-ethereum/params"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
