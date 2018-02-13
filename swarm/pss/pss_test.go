@@ -719,7 +719,7 @@ func testNetwork(t *testing.T) {
 				select {
 				case recvmsg := <-msgC:
 					idx, _ := binary.Uvarint(recvmsg.Msg)
-					if recvmsgs[idx] == false {
+					if !recvmsgs[idx] {
 						log.Debug("msg recv", "idx", idx, "id", id)
 						recvmsgs[idx] = true
 						trigger <- id

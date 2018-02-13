@@ -156,10 +156,7 @@ func (c KeyCollection) Len() int {
 }
 
 func (c KeyCollection) Less(i, j int) bool {
-	if bytes.Compare(c[i], c[j]) == -1 {
-		return true
-	}
-	return false
+	return bytes.Compare(c[i], c[j]) == -1
 }
 
 func (c KeyCollection) Swap(i, j int) {
