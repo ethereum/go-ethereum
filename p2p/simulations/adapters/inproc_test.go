@@ -27,7 +27,7 @@ import (
 func TestSocketPipe(t *testing.T) {
 	c1, c2, err := socketPipe()
 	if err != nil {
-		t.Fatal(err)
+		t.Skip(err)
 	}
 
 	done := make(chan struct{})
@@ -64,7 +64,7 @@ func TestSocketPipe(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("test timeout")
 	}
 }
@@ -72,7 +72,7 @@ func TestSocketPipe(t *testing.T) {
 func TestSocketPipeBidirections(t *testing.T) {
 	c1, c2, err := socketPipe()
 	if err != nil {
-		t.Fatal(err)
+		t.Skip(err)
 	}
 
 	done := make(chan struct{})
@@ -124,7 +124,7 @@ func TestSocketPipeBidirections(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("test timeout")
 	}
 }
@@ -169,7 +169,7 @@ func TestTcpPipe(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("test timeout")
 	}
 }
@@ -232,7 +232,7 @@ func TestTcpPipeBidirections(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("test timeout")
 	}
 }
@@ -281,7 +281,7 @@ func TestNetPipe(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("test timeout")
 	}
 }
@@ -356,7 +356,7 @@ func TestNetPipeBidirections(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("test timeout")
 	}
 }
