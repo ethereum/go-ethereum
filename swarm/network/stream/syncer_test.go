@@ -36,7 +36,7 @@ import (
 
 const dataChunkCount = 500
 
-func TestSyncerSimulation(t *testing.T) {
+func XTestSyncerSimulation(t *testing.T) {
 	testSyncBetweenNodes(t, 2, 1, dataChunkCount, true, 1)
 	testSyncBetweenNodes(t, 4, 1, dataChunkCount, true, 1)
 	testSyncBetweenNodes(t, 8, 1, dataChunkCount, true, 1)

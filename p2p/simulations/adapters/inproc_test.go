@@ -96,7 +96,7 @@ func TestSocketPipeBidirections(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if !bytes.Equal(out, []byte(`ping`)) {
+			if bytes.Equal(out, []byte(`ping`)) {
 				msg := []byte(`pong`)
 				_, err := c2.Write(msg)
 				if err != nil {
@@ -124,7 +124,7 @@ func TestSocketPipeBidirections(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
+	case <-time.After(1 * time.Second):
 		t.Fatal("test timeout")
 	}
 }
