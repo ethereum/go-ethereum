@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	bv "github.com/ethereum/go-ethereum/swarm/network/bitvector"
-	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -58,8 +57,8 @@ func (s Stream) String() string {
 // SubcribeMsg is the protocol msg for requesting a stream(section)
 type SubscribeMsg struct {
 	Stream   Stream
-	History  *Range
-	Priority uint8 // delivered on priority channel
+	History  *Range `rlp:"nil"`
+	Priority uint8  // delivered on priority channel
 }
 
 func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
@@ -97,7 +96,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 	}
 
 	go func() {
-		if err := p.SendOfferedHashes(os, from, to, true); err != nil {
+		if err := p.SendOfferedHashes(os, from, to); err != nil {
 			p.Drop(err)
 		}
 	}()
@@ -108,18 +107,13 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 		if err != nil {
 			return err
 		}
-		historyStream := NewStream(req.Stream.Name, req.Stream.Key, false)
-		priority := req.Priority
-		if priority > 0 {
-			// decrement history stream priority
-			priority--
-		}
-		os, err := p.setServer(historyStream, s, priority)
+
+		os, err := p.setServer(getHistoryStream(req.Stream), s, getHistoryPriority(req.Priority))
 		if err != nil {
 			return err
 		}
 		go func() {
-			if err := p.SendOfferedHashes(os, req.History.From, req.History.To, true); err != nil {
+			if err := p.SendOfferedHashes(os, req.History.From, req.History.To); err != nil {
 				p.Drop(err)
 			}
 		}()
@@ -151,8 +145,7 @@ type OfferedHashesMsg struct {
 	Stream         Stream // name of Stream
 	From, To       uint64 // peer and db-specific entry count
 	Hashes         []byte // stream of hashes (128)
-	Initial        bool
-	*HandoverProof // HandoverProof
+	*HandoverProof        // HandoverProof
 }
 
 // String pretty prints OfferedHashesMsg
@@ -163,7 +156,7 @@ func (m OfferedHashesMsg) String() string {
 // handleOfferedHashesMsg protocol msg handler calls the incoming streamer interface
 // Filter method
 func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
-	c, err := p.getClient(req.Stream)
+	c, _, err := p.getOrSetClient(req.Stream, req.From, req.To)
 	if err != nil {
 		return err
 	}
@@ -207,12 +200,6 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	// except
 	if c.stream.Live {
 		c.sessionAt = req.From
-		if req.Initial {
-			// create initial intervals for live stream starting from the first From value
-			if err := c.intervalsStore.Put(peerStreamIntervalsKey(p, req.Stream), intervals.NewIntervals(req.From)); err != nil {
-				return err
-			}
-		}
 	}
 	from, to := c.nextBatch(req.To)
 	log.Trace("received offered batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
@@ -271,7 +258,7 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	hashes := s.currentBatch
 	// launch in go routine since GetBatch blocks until new hashes arrive
 	go func() {
-		if err := p.SendOfferedHashes(s, req.From, req.To, false); err != nil {
+		if err := p.SendOfferedHashes(s, req.From, req.To); err != nil {
 			p.Drop(err)
 		}
 	}()

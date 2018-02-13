@@ -125,8 +125,8 @@ func (r *Registry) GetServerFunc(stream string) (func(*Peer, []byte, bool) (Serv
 
 // Subscribe initiates the streamer
 func (r *Registry) Subscribe(peerId discover.NodeID, s Stream, h *Range, priority uint8) error {
-	f, err := r.GetClientFunc(s.Name)
-	if err != nil {
+	// check if the stream is registered
+	if _, err := r.GetClientFunc(s.Name); err != nil {
 		return err
 	}
 
@@ -135,27 +135,18 @@ func (r *Registry) Subscribe(peerId discover.NodeID, s Stream, h *Range, priorit
 		return fmt.Errorf("peer not found %v", peerId)
 	}
 
-	is, err := f(peer, s.Key, s.Live)
-	if err != nil {
-		return err
-	}
-	err = peer.setClient(s, is, priority, r.intervalsStore)
+	err := peer.setClientParams(s, &clientParams{priority: priority})
 	if err != nil {
 		return err
 	}
 
 	if s.Live && h != nil {
-		is, err := f(peer, s.Key, false)
-		if err != nil {
-			return err
-		}
-		p := priority
-		if p > 0 {
-			p--
-		}
-		historyStream := NewStream(s.Name, s.Key, false)
-		err = peer.setClient(historyStream, is, p, r.intervalsStore)
-		if err != nil {
+		if err := peer.setClientParams(
+			getHistoryStream(s),
+			&clientParams{
+				priority: getHistoryPriority(priority),
+			},
+		); err != nil {
 			return err
 		}
 	}
@@ -367,6 +358,12 @@ func (c *client) close() {
 	c.Close()
 }
 
+// clientParams store parameters for the new client
+// between a subscription and initial offered hashes request handling.
+type clientParams struct {
+	priority uint8
+}
+
 // Spec is the spec of the streamer protocol
 var Spec = &protocols.Spec{
 	Name:       "stream",
@@ -420,6 +417,17 @@ func (r *Registry) Stop() error {
 
 type Range struct {
 	From, To uint64
+}
+
+func getHistoryPriority(priority uint8) uint8 {
+	if priority == 0 {
+		return 0
+	}
+	return priority - 1
+}
+
+func getHistoryStream(s Stream) Stream {
+	return NewStream(s.Name, s.Key, false)
 }
 
 type API struct {
