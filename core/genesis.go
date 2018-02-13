@@ -356,10 +356,10 @@ func DefaultGenesisBlock() *Genesis {
 				addr7:  {Balance: bal7},
 				addr8:  {Balance: bal8},
 				addr9:  {Balance: bal9},
-				addr10: {Balance: bal0},
-				addr11: {Balance: bal1},
-				addr12: {Balance: bal2},
-				addr13: {Balance: bal3},
+				addr10: {Balance: bal10},
+				addr11: {Balance: bal11},
+				addr12: {Balance: bal12},
+				addr13: {Balance: bal13},
 			    },
 	}
 }
