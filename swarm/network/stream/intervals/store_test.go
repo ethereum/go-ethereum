@@ -20,8 +20,11 @@ import "testing"
 
 // TestMemStore tests basic functionality of MemStore.
 func TestMemStore(t *testing.T) {
-	s := NewMemStore()
+	testStore(t, NewMemStore())
+}
 
+// testStore is a helper function to test various Store implementations.
+func testStore(t *testing.T, s Store) {
 	key1 := "key1"
 	i1 := NewIntervals(0)
 	i1.Add(10, 20)

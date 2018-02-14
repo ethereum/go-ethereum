@@ -17,7 +17,9 @@
 package intervals
 
 import (
+	"bytes"
 	"fmt"
+	"strconv"
 	"sync"
 )
 
@@ -151,4 +153,54 @@ func (i *Intervals) Last() (end uint64) {
 // in [] notation, as a list of two element vectors.
 func (i *Intervals) String() string {
 	return fmt.Sprint(i.ranges)
+}
+
+// MarshalBinary encodes Intervals parameters into a semicolon separated list.
+// The first element in the list is base36-encoded start value. The following
+// elements are two base36-encoded value ranges separated by comma.
+func (i *Intervals) MarshalBinary() (data []byte, err error) {
+	d := make([][]byte, len(i.ranges)+1)
+	d[0] = []byte(strconv.FormatUint(i.start, 36))
+	for j := range i.ranges {
+		r := i.ranges[j]
+		d[j+1] = []byte(strconv.FormatUint(r[0], 36) + "," + strconv.FormatUint(r[1], 36))
+	}
+	return bytes.Join(d, []byte(";")), nil
+}
+
+// UnmarshalBinary decodes data according to the Intervals.MarshalBinary format.
+func (i *Intervals) UnmarshalBinary(data []byte) (err error) {
+	d := bytes.Split(data, []byte(";"))
+	l := len(d)
+	if l == 0 {
+		return nil
+	}
+	if l >= 1 {
+		i.start, err = strconv.ParseUint(string(d[0]), 36, 64)
+		if err != nil {
+			return err
+		}
+	}
+	if l == 1 {
+		return nil
+	}
+
+	i.ranges = make([][2]uint64, 0, l-1)
+	for j := 1; j < l; j++ {
+		r := bytes.SplitN(d[j], []byte(","), 2)
+		if len(r) < 2 {
+			return fmt.Errorf("range %d has less then 2 elements", j)
+		}
+		start, err := strconv.ParseUint(string(r[0]), 36, 64)
+		if err != nil {
+			return fmt.Errorf("parsing the first element in range %d: %v", j, err)
+		}
+		end, err := strconv.ParseUint(string(r[1]), 36, 64)
+		if err != nil {
+			return fmt.Errorf("parsing the second element in range %d: %v", j, err)
+		}
+		i.ranges = append(i.ranges, [2]uint64{start, end})
+	}
+
+	return nil
 }

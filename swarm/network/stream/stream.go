@@ -190,6 +190,11 @@ func (r *Registry) PeerInfo(id discover.NodeID) interface{} {
 	return nil
 }
 
+func (r *Registry) Close() error {
+	r.store.Close()
+	return r.intervalsStore.Close()
+}
+
 func (r *Registry) getPeer(peerId discover.NodeID) *Peer {
 	r.peersMu.RLock()
 	defer r.peersMu.RUnlock()
@@ -286,6 +291,7 @@ type client struct {
 	stream    Stream
 	priority  uint8
 	sessionAt uint64
+	to        uint64
 	next      chan error
 
 	intervalsKey   string
@@ -348,7 +354,13 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 		if err := c.AddInterval(tp.Takeover.Start, tp.Takeover.End); err != nil {
 			return err
 		}
-		return p.SendPriority(tp, c.priority)
+		if err := p.SendPriority(tp, c.priority); err != nil {
+			return err
+		}
+		if c.to > 0 && tp.Takeover.End >= c.to {
+			return p.streamer.Unsubscribe(p.Peer.ID(), req.Stream)
+		}
+		return nil
 	}
 	return nil
 }

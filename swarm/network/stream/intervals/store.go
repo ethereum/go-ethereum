@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package intervals TODO: implement LevelDB based Store.
 package intervals
 
 import (
@@ -33,6 +32,7 @@ type Store interface {
 	Get(key string) (i *Intervals, err error)
 	Put(key string, i *Intervals) (err error)
 	Delete(key string) (err error)
+	Close() error
 }
 
 // MemStore is the reference implementation of Store interface that is supposed
@@ -80,5 +80,10 @@ func (s *MemStore) Delete(key string) (err error) {
 		return ErrNotFound
 	}
 	delete(s.db, key)
+	return nil
+}
+
+// Close doesnot do anything.
+func (s *MemStore) Close() error {
 	return nil
 }

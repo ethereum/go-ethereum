@@ -240,6 +240,7 @@ func (p *Peer) setClientNolock(s Stream, from, to uint64) (c *client, err error)
 		Client:         is,
 		stream:         s,
 		priority:       cp.priority,
+		to:             to,
 		next:           next,
 		intervalsStore: p.streamer.intervalsStore,
 		intervalsKey:   intervalsKey,
