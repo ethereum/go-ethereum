@@ -104,7 +104,7 @@ func XTestDiscoverySimulationSocketAdapter(t *testing.T) {
 }
 
 func TestDiscoverySimulationSimAdapter(t *testing.T) {
-	testDiscoverySimulationSocketAdapter(t, *nodeCount, *initCount)
+	testDiscoverySimulationSimAdapter(t, *nodeCount, *initCount)
 }
 
 func testDiscoverySimulationSimAdapter(t *testing.T, nodes, conns int) {
