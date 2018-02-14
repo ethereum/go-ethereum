@@ -219,7 +219,7 @@ func TestVerifyErrors(t *testing.T) {
 
 }
 
-func TestDeposit(t *testing.T) {
+func XTestDeposit(t *testing.T) {
 	path0 := filepath.Join(os.TempDir(), "chequebook-test-0.json")
 	backend := newTestBackend()
 	contr0, _ := deploy(key0, new(big.Int), backend)
