@@ -124,7 +124,7 @@ func TestSocketPipeBidirections(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("test timeout")
 	}
 }
