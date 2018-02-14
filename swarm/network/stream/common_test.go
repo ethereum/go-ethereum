@@ -88,18 +88,22 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 	if err != nil {
 		return nil, nil, nil, func() {}, err
 	}
-	teardown := func() {
+	removeDataDir := func() {
 		os.RemoveAll(datadir)
 	}
 
 	localStore, err := storage.NewTestLocalStoreForAddr(datadir, addr.Over())
 	if err != nil {
-		return nil, nil, nil, teardown, err
+		return nil, nil, nil, removeDataDir, err
 	}
 
 	db := storage.NewDBAPI(localStore)
 	delivery := NewDelivery(to, db)
 	streamer := NewRegistry(addr, delivery, localStore, intervals.NewMemStore(), defaultSkipCheck)
+	teardown := func() {
+		streamer.Close()
+		removeDataDir()
+	}
 	protocolTester := p2ptest.NewProtocolTester(t, network.NewNodeIDFromAddr(addr), 1, streamer.runProtocol)
 
 	err = waitForPeers(streamer, 1*time.Second, 1)
