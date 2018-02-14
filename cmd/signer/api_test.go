@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
 //Used for testing
@@ -24,18 +25,22 @@ type HeadlessUI struct {
 	controller chan string
 }
 
+func (ui *HeadlessUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
+	fmt.Printf("OnApproved called")
+}
+
 func (ui *HeadlessUI) ApproveTx(request *SignTxRequest) (SignTxResponse, error) {
 
 	switch <-ui.controller {
 	case "Y":
-		return SignTxResponse{request.Transaction, request.From, true, <-ui.controller}, nil
+		return SignTxResponse{request.Transaction,  true, <-ui.controller}, nil
 	case "M": //Modify
 		old := (*big.Int)(request.Transaction.Value)
 		newVal := big.NewInt(0).Add(old, big.NewInt(1))
 		request.Transaction.Value = (*hexutil.Big)(newVal)
-		return SignTxResponse{request.Transaction, request.From, true, <-ui.controller}, nil
+		return SignTxResponse{request.Transaction, true, <-ui.controller}, nil
 	default:
-		return SignTxResponse{request.Transaction, request.From, false, ""}, nil
+		return SignTxResponse{request.Transaction, false, ""}, nil
 	}
 }
 func (ui *HeadlessUI) ApproveSignData(request *SignDataRequest) (SignDataResponse, error) {
@@ -231,19 +236,21 @@ func TestSignData(t *testing.T) {
 		t.Errorf("Expected 65 byte signature (got %d bytes)", len(h))
 	}
 }
-func mkTestTx() TransactionArg {
+func mkTestTx(from common.MixedcaseAddress) SendTxArgs {
 	to := common.NewMixedcaseAddress(common.HexToAddress("0x1337"))
 	gas := (*hexutil.Big)(big.NewInt(21000))
 	gasPrice := (*hexutil.Big)(big.NewInt(2000000000))
 	value := (*hexutil.Big)(big.NewInt(1e18))
 	nonce := (hexutil.Uint64)(0)
-	tx := TransactionArg{
-		&to,
-		gas,
-		gasPrice,
-		value,
-		common.Hex2Bytes("01020304050607080a"),
-		&nonce}
+	data := hexutil.Bytes(common.Hex2Bytes("01020304050607080a"))
+	tx := SendTxArgs{
+		From:from,
+		To: &to,
+		Gas: gas,
+		GasPrice: gasPrice,
+		Value: value,
+		Data: &data,
+		Nonce: &nonce}
 	return tx
 }
 
@@ -251,8 +258,7 @@ func TestSignTx(t *testing.T) {
 
 	var (
 		list Accounts
-		h    []byte
-		h2   []byte
+		res, res2 *ethapi.SignTransactionResult
 		err  error
 	)
 
@@ -266,22 +272,22 @@ func TestSignTx(t *testing.T) {
 	a := common.NewMixedcaseAddress(list[0].Address)
 
 	methodSig := "test(uint)"
-	tx := mkTestTx()
+	tx := mkTestTx(a)
 
 	control <- "Y"
 	control <- "wrongpassword"
-	h, err = api.SignTransaction(context.Background(), a, tx, &methodSig)
-	if h != nil {
-		t.Errorf("Expected nil-data, got %h", h)
+	res, err = api.SignTransaction(context.Background(),  tx, &methodSig)
+	if res != nil {
+		t.Errorf("Expected nil-response, got %v", res)
 	}
 	if err != keystore.ErrDecrypt {
 		t.Errorf("Expected ErrLocked! %v", err)
 	}
 
 	control <- "No way"
-	h, err = api.SignTransaction(context.Background(), a, tx, &methodSig)
-	if h != nil {
-		t.Errorf("Expected nil-data, got %h", h)
+	res, err = api.SignTransaction(context.Background(),  tx, &methodSig)
+	if res != nil {
+		t.Errorf("Expected nil-response, got %v", res)
 	}
 	if err != ErrRequestDenied {
 		t.Errorf("Expected ErrRequestDenied! %v", err)
@@ -289,13 +295,13 @@ func TestSignTx(t *testing.T) {
 
 	control <- "Y"
 	control <- "apassword"
-	h, err = api.SignTransaction(context.Background(), a, tx, &methodSig)
+	res, err = api.SignTransaction(context.Background(), tx, &methodSig)
 
 	if err != nil {
 		t.Fatal(err)
 	}
 	parsedTx := &types.Transaction{}
-	rlp.Decode(bytes.NewReader(h), parsedTx)
+	rlp.Decode(bytes.NewReader(res.Raw), parsedTx)
 	//The tx should NOT be modified by the UI
 	if parsedTx.Value().Cmp(tx.Value.ToInt()) != 0 {
 		t.Errorf("Expected value to be unchanged, expected %v got %v", tx.Value, parsedTx.Value())
@@ -303,11 +309,11 @@ func TestSignTx(t *testing.T) {
 	control <- "Y"
 	control <- "apassword"
 
-	h2, err = api.SignTransaction(context.Background(), a, tx, &methodSig)
+	res2, err = api.SignTransaction(context.Background(), tx, &methodSig)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(h, h2) {
+	if !bytes.Equal(res.Raw, res2.Raw) {
 		t.Error("Expected tx to be unmodified by UI")
 	}
 
@@ -315,19 +321,19 @@ func TestSignTx(t *testing.T) {
 	control <- "M"
 	control <- "apassword"
 
-	h2, err = api.SignTransaction(context.Background(), a, tx, &methodSig)
+	res2, err = api.SignTransaction(context.Background(), tx, &methodSig)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	parsedTx2 := &types.Transaction{}
-	rlp.Decode(bytes.NewReader(h), parsedTx2)
-	//The tx should NOT be modified by the UI
+	rlp.Decode(bytes.NewReader(res.Raw), parsedTx2)
+	//The tx should be modified by the UI
 	if parsedTx2.Value().Cmp(tx.Value.ToInt()) != 0 {
-		t.Errorf("Expected value to be changed, got %v", parsedTx.Value())
+		t.Errorf("Expected value to be unchanged, got %v", parsedTx.Value())
 	}
 
-	if bytes.Equal(h, h2) {
+	if bytes.Equal(res.Raw, res2.Raw) {
 		t.Error("Expected tx to be modified by UI")
 	}
 

@@ -6,6 +6,8 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/signer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"math/big"
 	"testing"
 )
@@ -75,7 +77,7 @@ func TestListRequest(t *testing.T) {
 		accs[i] = acc
 	}
 
-	js := `function ApproveListing(accounts, meta){ return "Approve" }`
+	js := `function ApproveListing(){ return "Approve" }`
 
 	r, err := initRuleEngine(js)
 	if err != nil {
@@ -99,12 +101,12 @@ func TestSignTxRequest(t *testing.T) {
 	function ApproveTx(jsonstr){
 		console.log(jsonstr)
 		r = JSON.parse(jsonstr)
-		console.log("from", r.from)
+		console.log("transaction.from", r.transaction.from);
 		console.log("transaction.to", r.transaction.to);
 		console.log("transaction.value", r.transaction.value);
 		console.log("transaction.nonce", r.transaction.nonce);
-		if(r.from.toLowerCase()=="0x0000000000000000000000000000000000001337"){ return "Approve"}
-		if(r.from.toLowerCase()=="0x000000000000000000000000000000000000dead"){ return "Reject"}
+		if(r.transaction.from.toLowerCase()=="0x0000000000000000000000000000000000001337"){ return "Approve"}
+		if(r.transaction.from.toLowerCase()=="0x000000000000000000000000000000000000dead"){ return "Reject"}
 	}`
 
 	r, err := initRuleEngine(js)
@@ -125,10 +127,11 @@ func TestSignTxRequest(t *testing.T) {
 	}
 	fmt.Printf("to %v", to.Address().String())
 	resp, err := r.ApproveTx(&signer.SignTxRequest{
-		Transaction: signer.TransactionArg{To: to},
-		From:        *from,
-		Callinfo:    "",
-		Meta:        signer.Metadata{"remoteip", "localip", "inproc"},
+		Transaction: signer.SendTxArgs{
+			From: *from,
+			To:   to},
+		Callinfo: "",
+		Meta:     signer.Metadata{"remoteip", "localip", "inproc"},
 	})
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
@@ -243,26 +246,46 @@ const ExampleTxWindow = `
 		sum = new BigNumber(0)
 
 		sum = newtxs.reduce(function(agg, tx){ return big(tx.value).plus(agg)}, sum);
-		console.log("Sum so far", sum);
-		console.log("Requested", value.toNumber());
+		console.log("ApproveTx > Sum so far", sum);
+		console.log("ApproveTx > Requested", value.toNumber());
+		
 		// Would we exceed weekly limit ?
-		if (sum.plus(value).lt(limit)){ 
-			// Add this to the storage
-			newtxs.push({tstamp: new Date().getTime(), value: value});
-			storage.Put("txs", JSON.stringify(newtxs));
-			return true;
-		}
-		return false;
+		return sum.plus(value).lt(limit)
 		
 	}
 	function ApproveTx(jsonstr){
-		r = JSON.parse(jsonstr);
-		console.log("Requested value ", r.transaction.value)
-		
+		var r = JSON.parse(jsonstr)	
 		if (isLimitOk(r.transaction)){
 			return "Approve"
 		}
 		return "Nope"
+	}
+
+	/**
+	* OnApprovedTx(str) is called when a transaction has been approved and signed. The parameter
+ 	* 'response_str' contains the return value that will be sent to the external caller. 
+	* The return value from this method is ignore - the reason for having this callback is to allow the 
+	* ruleset to keep track of approved transactions. 
+	*
+	* When implementing rate-limited rules, this callback should be used. 
+	* If a rule responds with neither 'Approve' nor 'Reject' - the tx goes to manual processing. If the user
+	* then accepts the transaction, this method will be called.
+	* 
+	* TLDR; Use this method to keep track of signed transactions, instead of using the data in ApproveTx.
+	*/
+ 	function OnApprovedTx(response_str){
+		console.log("OnApprovedTx > called with data\n\t "+response_str)
+		var resp = JSON.parse(response_str)
+		var value = big(resp.tx.value)
+		var txs = []
+		// Load stored transactions
+		var stored = storage.Get('txs');
+		if(stored != ""){
+			txs = JSON.parse(stored)
+		}
+		// Add this to the storage
+		txs.push({tstamp: new Date().getTime(), value: value});
+		storage.Put("txs", JSON.stringify(txs));
 	}
 
 `
@@ -271,18 +294,31 @@ func dummyTx(value *hexutil.Big) *signer.SignTxRequest {
 
 	to, _ := mixAddr("000000000000000000000000000000000000dead")
 	from, _ := mixAddr("000000000000000000000000000000000000dead")
+	n := hexutil.Uint64(3)
+	gas := hexutil.Big(*big.NewInt(21000))
+	gasPrice := hexutil.Big(*big.NewInt(2000000))
 
 	return &signer.SignTxRequest{
-		Transaction: signer.TransactionArg{
-			To:    to,
-			Value: value,
+		Transaction: signer.SendTxArgs{
+			From:     *from,
+			To:       to,
+			Value:    value,
+			Nonce:    &n,
+			GasPrice: &gas,
+			Gas:      &gasPrice,
 		},
-		From:     *from,
 		Callinfo: "Warning, all your base are bellong to us",
 		Meta:     signer.Metadata{"remoteip", "localip", "inproc"},
 	}
 }
+func dummySigned(value *big.Int) *types.Transaction {
+	to := common.HexToAddress("000000000000000000000000000000000000dead")
+	gas := big.NewInt(21000)
+	gasPrice := big.NewInt(2000000)
+	data := make([]byte, 0)
+	return types.NewTransaction(3, to, value, gas, gasPrice, data)
 
+}
 func TestLimitWindow(t *testing.T) {
 
 	r, err := initRuleEngine(ExampleTxWindow)
@@ -299,13 +335,21 @@ func TestLimitWindow(t *testing.T) {
 	h := hexutil.Big(*v)
 	// The first three should succeed
 	for i := 0; i < 3; i++ {
-		resp, err := r.ApproveTx(dummyTx(&h))
+		unsigned := dummyTx(&h)
+		resp, err := r.ApproveTx(unsigned)
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
 		}
 		if !resp.Approved {
 			t.Errorf("Expected check to resolve to 'Approve'")
 		}
+		// Create a dummy signed transaction
+
+		response := ethapi.SignTransactionResult{
+			Tx:  dummySigned(v),
+			Raw: common.Hex2Bytes("deadbeef"),
+		}
+		r.OnApprovedTx(response)
 	}
 	// Fourth should fail
 	resp, err := r.ApproveTx(dummyTx(&h))

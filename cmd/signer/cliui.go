@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/crypto/ssh/terminal"
 )
@@ -108,10 +109,13 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	} else {
 		fmt.Printf("to:    <contact creation>\n")
 	}
-	fmt.Printf("from:  %v\n", request.From.String())
+	fmt.Printf("from:  %v\n", request.Transaction.From.String())
 	fmt.Printf("value: %v wei\n", weival)
-	if len(request.Transaction.Data) > 0 {
-		fmt.Printf("data:  %v\n", common.Bytes2Hex(request.Transaction.Data))
+	if request.Transaction.Data != nil{
+		d := *request.Transaction.Data
+		if len(d) > 0 {
+			fmt.Printf("data:  %v\n", common.Bytes2Hex(d))
+		}
 	}
 	if request.Callinfo != "" {
 		fmt.Printf("\nNote: This Transaction contains data. Review abi-decoding info below:")
@@ -122,9 +126,9 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	showMetadata(request.Meta)
 	fmt.Printf("-------------------------------------------\n")
 	if !ui.confirm() {
-		return SignTxResponse{request.Transaction, request.From, false, ""}, nil
+		return SignTxResponse{request.Transaction, false, ""}, nil
 	}
-	return SignTxResponse{request.Transaction, request.From, true, ui.readPassword()}, nil
+	return SignTxResponse{request.Transaction, true, ui.readPassword()}, nil
 }
 
 // ApproveSignData prompt the user for confirmation to request to sign data
@@ -222,6 +226,9 @@ func (ui *CommandlineUI) ShowError(message string) {
 
 // ShowInfo displays info message to user
 func (ui *CommandlineUI) ShowInfo(message string) {
-
 	fmt.Printf("Info: %v\n", message)
+}
+
+func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
+	fmt.Printf("Transaction signed: %v", tx.Tx.String())
 }

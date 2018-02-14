@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
 type AuditLogger struct {
@@ -41,15 +42,17 @@ func (l *AuditLogger) New(ctx context.Context) (accounts.Account, error) {
 	return l.api.New(ctx)
 }
 
-func (l *AuditLogger) SignTransaction(ctx context.Context, from common.MixedcaseAddress, args TransactionArg, methodSelector *string) (hexutil.Bytes, error) {
+func (l *AuditLogger) SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error) {
 	l.log.Info("SignTransaction", "type", "request", "metadata", MetadataFromContext(ctx).String(),
-		"from", from.String(), "tx", args.String(),
+		"tx", args.String(),
 		"methodSelector", methodSelector)
-	b, e := l.api.SignTransaction(ctx, from, args, methodSelector)
-
-	l.log.Info("SignTransaction", "type", "response", "data", common.Bytes2Hex(b), "error", e)
-
-	return b, e
+	res, e := l.api.SignTransaction(ctx, args, methodSelector)
+	if res != nil{
+		l.log.Info("SignTransaction", "type", "response", "data", common.Bytes2Hex(res.Raw), "error", e)
+	}else{
+		l.log.Info("SignTransaction", "type", "response", "data", res, "error", e)
+	}
+	return res, e
 }
 
 func (l *AuditLogger) Sign(ctx context.Context, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error) {

@@ -33,8 +33,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -46,7 +46,7 @@ type ExternalAPI interface {
 	// New request to create a new account
 	New(ctx context.Context) (accounts.Account, error)
 	// SignTransaction request to sign the specified transaction
-	SignTransaction(ctx context.Context, from common.MixedcaseAddress, args TransactionArg, methodSelector *string) (hexutil.Bytes, error)
+	SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error)
 	// Sign - request to sign the given data (plus prefix)
 	Sign(ctx context.Context, addr common.MixedcaseAddress, data hexutil.Bytes) (hexutil.Bytes, error)
 	// EcRecover - request to perform ecrecover
@@ -77,6 +77,9 @@ type SignerUI interface {
 	ShowError(message string)
 	// ShowInfo displays info message to user
 	ShowInfo(message string)
+	// OnApprovedTx notifies the UI about a transaction having been successfully signed.
+	// This method can be used by a UI to keep track of e.g. how much has been sent to a particular recipient.
+	OnApprovedTx(tx ethapi.SignTransactionResult)
 }
 
 // SignerAPI defines the actual implementation of ExternalAPI
@@ -123,18 +126,16 @@ func (m Metadata) String() string {
 type (
 	// SignTxRequest contains info about a Transaction to sign
 	SignTxRequest struct {
-		Transaction TransactionArg          `json:"transaction"`
-		From        common.MixedcaseAddress `json:"from"`
-		Callinfo    string                  `json:"call_info"`
-		Meta        Metadata                `json:"meta"`
+		Transaction SendTxArgs `json:"transaction"`
+		Callinfo    string     `json:"call_info"`
+		Meta        Metadata   `json:"meta"`
 	}
 	// SignTxResponse result from SignTxRequest
 	SignTxResponse struct {
 		//The UI may make changes to the TX
-		Transaction TransactionArg          `json:"transaction"`
-		From        common.MixedcaseAddress `json:"from"`
-		Approved    bool                    `json:"approved"`
-		Password    string                  `json:"password"`
+		Transaction SendTxArgs `json:"transaction"`
+		Approved    bool       `json:"approved"`
+		Password    string     `json:"password"`
 	}
 	// ExportRequest info about query to export accounts
 	ExportRequest struct {
@@ -271,23 +272,17 @@ func (api *SignerAPI) New(ctx context.Context) (accounts.Account, error) {
 	return be[0].(*keystore.KeyStore).NewAccount(resp.Password)
 }
 
-func toTransaction(args *TransactionArg) *types.Transaction {
-	if args.To == nil {
-		return types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
-	} else {
-		return types.NewTransaction(uint64(*args.Nonce), args.To.Address(), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
-	}
-}
-
 // logDiff logs the difference between the incoming (original) transaction and the one returned from the signer.
 // it also returns 'true' if the transaction was modified, to make it possible to configure the signer not to allow
 // UI-modifications to requests
 func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 	modified := false
-	if f0, f1 := original.From, new.From; f0 != f1 {
-		modified = true
+
+	if f0, f1 := original.Transaction.From, new.Transaction.From; !reflect.DeepEqual(f0, f1) {
 		log.Info("Sender-account changed by UI", "was", f0, "is", f1)
+		modified = true
 	}
+
 	if t0, t1 := original.Transaction.To, new.Transaction.To; !reflect.DeepEqual(t0, t1) {
 		log.Info("Recipient-account changed by UI", "was", t0, "is", t1)
 		modified = true
@@ -310,9 +305,19 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 			log.Info("Value changed by UI", "was", v0, "is", v1)
 		}
 	}
-	if d0, d1 := original.Transaction.Data, new.Transaction.Data; !bytes.Equal(d0, d1) {
-		modified = true
-		log.Info("Data changed by UI", "was", common.ToHex(d0), "is", common.ToHex(d1))
+	if d0, d1 := original.Transaction.Data, new.Transaction.Data; d0 != d1 {
+		d0s := ""
+		d1s := ""
+		if d0 != nil {
+			d0s = common.ToHex(*d0)
+		}
+		if d1 != nil {
+			d1s = common.ToHex(*d1)
+		}
+		if d1s != d0s {
+			modified = true
+			log.Info("Data changed by UI", "was", d0s, "is", d1s)
+		}
 	}
 	if n0, n1 := original.Transaction.Nonce, new.Transaction.Nonce; n0 != n1 {
 
@@ -324,41 +329,68 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 	return modified
 }
 
-// SignTransaction signs the given Transaction and returns it in an RLP encoded form
-// that can be posted to `eth_sendRawTransaction`.
-func (api *SignerAPI) SignTransaction(ctx context.Context, from common.MixedcaseAddress, args TransactionArg, methodSelector *string) (hexutil.Bytes, error) {
+// determineCallInfo turns ABI-data + methodselector (if given) into a string suitable
+// to present to the user.
+func (api *SignerAPI) determineCallInfo(data []byte, methodSelector *string) string {
+
+	if len(data) < 4 {
+		return ""
+	}
 	var (
-		err    error
-		result SignTxResponse
+		selector string
+		err      error
 	)
-	req := SignTxRequest{Transaction: args, From: from, Meta: MetadataFromContext(ctx)}
-	data := args.Data
-	if len(data) > 3 {
-		// Try to make sense of the data
-		var selector string
-		if methodSelector == nil {
-			selector, err = api.abidb.LookupMethodSelector(data[:4])
-			if err != nil {
-				req.Callinfo = errorWrapper{"Warning! Could not locate ABI", err}.String()
-			}
-		} else {
-			selector = *methodSelector
+	// Try to make sense of the data
+	if methodSelector == nil {
+		selector, err = api.abidb.LookupMethodSelector(data[:4])
+		if err != nil {
+			return errorWrapper{"Warning! Could not locate ABI", err}.String()
 		}
-		if selector != "" {
-			abidata, err := MethodSelectorToAbi(selector)
+	} else {
+		selector = *methodSelector
+	}
+	if selector != "" {
+		abiData, err := MethodSelectorToAbi(selector)
+		if err != nil {
+			return errorWrapper{"Warning! Could not validate ABI-data against calldata", err}.String()
+		} else {
+			var info *decodedCallData
+			info, err = parseCallData(data, string(abiData))
 			if err != nil {
-				req.Callinfo = errorWrapper{"Warning! Could not validate ABI-data against calldata", err}.String()
+				return errorWrapper{"Warning! Could not validate ABI-data against calldata", err}.String()
 			} else {
-				var info *decodedCallData
-				info, err = parseCallData(data, string(abidata))
-				if err != nil {
-					req.Callinfo = errorWrapper{"Warning! Could not validate ABI-data against calldata", err}.String()
-				} else {
-					req.Callinfo = info.String()
-				}
+				return info.String()
 			}
 		}
 	}
+	return ""
+}
+
+// SignTransaction signs the given Transaction and returns it both as json and rlp-encoded form
+func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error) {
+	var (
+		err    error
+		result SignTxResponse
+		data   []byte
+	)
+	// Prevent accidental erroneous usage of both 'input' and 'data'
+	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
+		return nil, errors.New(`Ambiguous request: moth "data" and "input" are set and are not identical`)
+	}
+
+	if args.Data != nil {
+		data = *args.Data
+	} else if args.Input != nil {
+		data = *args.Input
+		*args.Data = data
+		*args.Input = nil
+	}
+	req := SignTxRequest{
+			Transaction: args,
+			Meta: MetadataFromContext(ctx),
+			Callinfo:api.determineCallInfo(data, methodSelector),
+	}
+	// Process approval
 	result, err = api.ui.ApproveTx(&req)
 	if err != nil {
 		return nil, err
@@ -368,25 +400,33 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, from common.Mixedcase
 	}
 	// Log changes made by the UI to the signing-request
 	logDiff(&req, &result)
-
 	var (
 		acc    accounts.Account
 		wallet accounts.Wallet
 	)
-	acc = accounts.Account{Address: result.From.Address()}
+	acc = accounts.Account{Address: result.Transaction.From.Address()}
 	wallet, err = api.am.Find(acc)
 	if err != nil {
 		return nil, err
 	}
-	var tx = toTransaction(&result.Transaction)
+	// Convert fields into a real transaction
+	var unsignedTx = result.Transaction.toTransaction()
 
 	// The one to sign is the one that was returned from the UI
-	signedTx, err := wallet.SignTxWithPassphrase(acc, result.Password, tx, api.chainID)
+	signedTx, err := wallet.SignTxWithPassphrase(acc, result.Password, unsignedTx, api.chainID)
 	if err != nil {
 		api.ui.ShowError(err.Error())
 		return nil, err
 	}
-	return rlp.EncodeToBytes(signedTx)
+
+	rlpdata, err := rlp.EncodeToBytes(signedTx)
+	response := ethapi.SignTransactionResult{rlpdata, signedTx}
+
+	// Finally, send the signed tx to the UI
+	api.ui.OnApprovedTx(response)
+	// ...and to the external caller
+	return &response, nil
+
 }
 
 // Sign calculates an Ethereum ECDSA signature for:

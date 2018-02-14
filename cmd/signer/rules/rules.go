@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/signer"
 	"github.com/ethereum/go-ethereum/cmd/signer/rules/deps"
 	"github.com/ethereum/go-ethereum/cmd/signer/storage"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/robertkrimen/otto"
 	"os"
@@ -84,7 +85,7 @@ func (r *rulesetUi) checkApproval(jsfunc string, jsarg []byte, err error) error 
 	if err != nil {
 		return err
 	}
-	v, err := r.vm.Call("ApproveTx", nil, string(jsarg))
+	v, err := r.vm.Call(jsfunc, nil, string(jsarg))
 
 	if err != nil {
 		log.Info("error occurred during execution", "error", err)
@@ -106,7 +107,7 @@ func (r *rulesetUi) checkApproval(jsfunc string, jsarg []byte, err error) error 
 func (r *rulesetUi) ApproveTx(request *signer.SignTxRequest) (signer.SignTxResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	if err = r.checkApproval("ApproveTx", jsonreq, err); err == nil {
-		return signer.SignTxResponse{Transaction: request.Transaction, From: request.From, Approved: true, Password: ""}, nil
+		return signer.SignTxResponse{Transaction: request.Transaction, Approved: true, Password: ""}, nil
 	}
 	return signer.SignTxResponse{Approved: false}, err
 }
@@ -155,4 +156,18 @@ func (r *rulesetUi) ShowError(message string) {
 func (r *rulesetUi) ShowInfo(message string) {
 	log.Info(message)
 	r.next.ShowInfo(message)
+}
+func (r *rulesetUi) OnApprovedTx(tx ethapi.SignTransactionResult) {
+
+	jsonTx, err := json.Marshal(tx)
+	if err != nil {
+		log.Warn("failed marshalling transaction", "tx", tx)
+		return
+	}
+	_, err = r.vm.Call("OnApprovedTx", nil, string(jsonTx))
+	if err != nil {
+		fmt.Printf("Error in onapprove %v", err)
+		log.Warn("error occurred during execution", "error", err)
+	}
+
 }

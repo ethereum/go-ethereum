@@ -23,6 +23,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"math/big"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type Accounts []Account
@@ -48,7 +50,7 @@ func (a Account) String() string {
 	}
 	return err.Error()
 }
-
+/*
 // TransactionArg represents a Transaction for the signer.
 type TransactionArg struct {
 	To       *common.MixedcaseAddress `json:"to"`
@@ -58,11 +60,38 @@ type TransactionArg struct {
 	Data     hexutil.Bytes            `json:"data"`
 	Nonce    *hexutil.Uint64          `json:"nonce"`
 }
+*/
 
-func (t TransactionArg) String() string {
+// SendTxArgs represents the arguments to submit a transaction
+type SendTxArgs struct {
+	From     common.MixedcaseAddress  `json:"from"`
+	To       *common.MixedcaseAddress `json:"to"`
+	Gas      *hexutil.Big    `json:"gas"`
+	GasPrice *hexutil.Big    `json:"gasPrice"`
+	Value    *hexutil.Big    `json:"value"`
+	Nonce    *hexutil.Uint64 `json:"nonce"`
+	// We accept "data" and "input" for backwards-compatibility reasons.
+	Data  *hexutil.Bytes `json:"data"`
+	Input *hexutil.Bytes `json:"input"`
+}
+
+func (t SendTxArgs) String() string {
 	s, err := json.Marshal(t)
 	if err == nil {
 		return string(s)
 	}
 	return err.Error()
+}
+
+func (args *SendTxArgs) toTransaction() *types.Transaction {
+	var input []byte
+	if args.Data != nil {
+		input = *args.Data
+	} else if args.Input != nil {
+		input = *args.Input
+	}
+	if args.To == nil {
+		return types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), input)
+	}
+	return types.NewTransaction(uint64(*args.Nonce), (*args.To).Address(), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), input)
 }

@@ -18,13 +18,12 @@
 package signer
 
 import (
-	"github.com/ethereum/go-ethereum/log"
-
+	"context"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
-
-	"context"
 )
 
 type StdIOUI struct {
@@ -112,5 +111,11 @@ func (ui *StdIOUI) ShowInfo(message string) {
 	err := ui.dispatch("ShowInfo", Message{message}, nil)
 	if err != nil {
 		log.Info("Error calling 'ShowInfo'", "exc", err.Error(), "msg", message)
+	}
+}
+func (ui *StdIOUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
+	err := ui.dispatch("OnApprovedTx", tx, nil)
+	if err != nil {
+		log.Info("Error calling 'OnApprovedTx'", "exc", err.Error(), "tx", tx)
 	}
 }
