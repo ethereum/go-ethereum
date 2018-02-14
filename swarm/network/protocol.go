@@ -124,10 +124,10 @@ func NewBzz(config *BzzConfig, kad Overlay, store StateStore) *Bzz {
 
 // UpdateLocalAddr updates underlayaddress of the running node
 func (b *Bzz) UpdateLocalAddr(byteaddr []byte) *BzzAddr {
-	b.localAddr.Update(&BzzAddr{
+	b.localAddr = b.localAddr.Update(&BzzAddr{
 		UAddr: byteaddr,
 		OAddr: b.localAddr.OAddr,
-	})
+	}).(*BzzAddr)
 	return b.localAddr
 }
 
