@@ -246,7 +246,7 @@ func checkPropagation(t *testing.T, includingNodeZero bool) {
 		return
 	}
 
-	const cycle = 50
+	const cycle = 300
 	const iterations = 200
 
 	first := 0
@@ -262,9 +262,7 @@ func checkPropagation(t *testing.T, includingNodeZero bool) {
 			}
 
 			mail := f.Retrieve()
-			if !validateMail(t, i, mail) {
-				return
-			}
+			validateMail(t, i, mail)
 
 			if isTestComplete() {
 				return
@@ -274,17 +272,19 @@ func checkPropagation(t *testing.T, includingNodeZero bool) {
 		time.Sleep(cycle * time.Millisecond)
 	}
 
-	t.Fatalf("Test was not complete: timeout %d seconds. nodes=%v", iterations*cycle/1000, nodes)
-
 	if !includingNodeZero {
 		f := nodes[0].shh.GetFilter(nodes[0].filerID)
 		if f != nil {
 			t.Fatalf("node zero received a message with low PoW.")
+		} else {
+			t.Fatalf("Test (second run) was not complete: timeout %d seconds. nodes=%v", iterations*cycle/1000, nodes)
 		}
 	}
+
+	t.Fatalf("Test (first run) was not complete: timeout %d seconds. nodes=%v", iterations*cycle/1000, nodes)
 }
 
-func validateMail(t *testing.T, index int, mail []*ReceivedMessage) bool {
+func validateMail(t *testing.T, index int, mail []*ReceivedMessage) {
 	var cnt int
 	for _, m := range mail {
 		if bytes.Equal(m.Payload, expectedMessage) {
@@ -294,14 +294,13 @@ func validateMail(t *testing.T, index int, mail []*ReceivedMessage) bool {
 
 	if cnt == 0 {
 		// no messages received yet: nothing is wrong
-		return true
+		return
 	}
 	if cnt > 1 {
 		t.Fatalf("node %d received %d.", index, cnt)
-		return false
 	}
 
-	if cnt > 0 {
+	if cnt == 1 {
 		result.mutex.Lock()
 		defer result.mutex.Unlock()
 		result.counter[index] += cnt
@@ -309,7 +308,6 @@ func validateMail(t *testing.T, index int, mail []*ReceivedMessage) bool {
 			t.Fatalf("node %d accumulated %d.", index, result.counter[index])
 		}
 	}
-	return true
 }
 
 func isTestComplete() bool {
