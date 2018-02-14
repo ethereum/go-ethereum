@@ -108,8 +108,9 @@ func (t *rlpx) close(err error) {
 	// Tell the remote end why we're disconnecting if possible.
 	if t.rw != nil {
 		if r, ok := err.(DiscReason); ok && r != DiscNetworkError {
-			t.fd.SetWriteDeadline(time.Now().Add(discWriteTimeout))
-			SendItems(t.rw, discMsg, r)
+			if err2 := t.fd.SetWriteDeadline(time.Now().Add(discWriteTimeout)); err2 != nil {
+				SendItems(t.rw, discMsg, r)
+			}
 		}
 	}
 	t.fd.Close()
