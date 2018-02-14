@@ -70,9 +70,8 @@ var keys = []string{
 	"7184c1701569e3a4c4d2ddce691edd983b81e42e09196d332e1ae2f1e062cff4",
 }
 
-const NumNodes = 16 // must not exceed the number of keys (32)
-
 type TestData struct {
+	started int
 	counter [NumNodes]int
 	mutex   sync.RWMutex
 }
@@ -84,21 +83,29 @@ type TestNode struct {
 	filerID string
 }
 
+const NumNodes = 8 // must not exceed the number of keys (32)
+
 var result TestData
 var nodes [NumNodes]*TestNode
 var sharedKey = hexutil.MustDecode("0x03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd31")
+var wrongKey = hexutil.MustDecode("0xf91156714d7ec88d3edc1c652c2181dbb3044e8771c683f3b30d33c12b986b11")
 var sharedTopic = TopicType{0xF, 0x1, 0x2, 0}
-var expectedMessage = []byte("per rectum ad astra")
+var wrongTopic = TopicType{0, 0, 0, 0}
+var expectedMessage = []byte("per aspera ad astra")
+var unexpectedMessage = []byte("per rectum ad astra")
 var masterBloomFilter []byte
 var masterPow = 0.00000001
 var round = 1
+var debugMode = false
+var prevTime time.Time
+var c1prev, c2prev int
 
 func TestSimulation(t *testing.T) {
 	// create a chain of whisper nodes,
 	// installs the filters with shared (predefined) parameters
 	initialize(t)
 
-	// each node sends a number of random (undecryptable) messages
+	// each node sends one random (not decryptable) message
 	for i := 0; i < NumNodes; i++ {
 		sendMsg(t, false, i)
 	}
@@ -115,7 +122,6 @@ func TestSimulation(t *testing.T) {
 
 	// send new pow and bloom exchange messages
 	resetParams(t)
-	round++
 
 	// node #1 sends one expected (decryptable) message
 	sendMsg(t, true, 1)
@@ -140,6 +146,8 @@ func resetParams(t *testing.T) {
 	for i := 0; i < NumNodes; i++ {
 		nodes[i].shh.SetBloomFilter(masterBloomFilter)
 	}
+
+	round++
 }
 
 func initBloom(t *testing.T) {
@@ -219,15 +227,22 @@ func initialize(t *testing.T) {
 		nodes[i] = &node
 	}
 
-	for i := 1; i < NumNodes; i++ {
-		go nodes[i].server.Start()
+	for i := 0; i < NumNodes; i++ {
+		go startServer(t, nodes[i].server)
 	}
 
-	// we need to wait until the first node actually starts
-	err = nodes[0].server.Start()
+	waitForServersToStart(t)
+}
+
+func startServer(t *testing.T, s *p2p.Server) {
+	err := s.Start()
 	if err != nil {
 		t.Fatalf("failed to start the fisrt server.")
 	}
+
+	result.mutex.Lock()
+	defer result.mutex.Unlock()
+	result.started++
 }
 
 func stopServers() {
@@ -246,8 +261,10 @@ func checkPropagation(t *testing.T, includingNodeZero bool) {
 		return
 	}
 
-	const cycle = 300
-	const iterations = 200
+	prevTime = time.Now()
+	// (cycle * iterations) should not exceed 50 seconds, since TTL=50
+	const cycle = 200 // time in milliseconds
+	const iterations = 250
 
 	first := 0
 	if !includingNodeZero {
@@ -265,10 +282,12 @@ func checkPropagation(t *testing.T, includingNodeZero bool) {
 			validateMail(t, i, mail)
 
 			if isTestComplete() {
+				checkTestStatus()
 				return
 			}
 		}
 
+		checkTestStatus()
 		time.Sleep(cycle * time.Millisecond)
 	}
 
@@ -276,12 +295,10 @@ func checkPropagation(t *testing.T, includingNodeZero bool) {
 		f := nodes[0].shh.GetFilter(nodes[0].filerID)
 		if f != nil {
 			t.Fatalf("node zero received a message with low PoW.")
-		} else {
-			t.Fatalf("Test (second run) was not complete: timeout %d seconds. nodes=%v", iterations*cycle/1000, nodes)
 		}
 	}
 
-	t.Fatalf("Test (first run) was not complete: timeout %d seconds. nodes=%v", iterations*cycle/1000, nodes)
+	t.Fatalf("Test was not complete (%d round): timeout %d seconds. nodes=%v", round, iterations*cycle/1000, nodes)
 }
 
 func validateMail(t *testing.T, index int, mail []*ReceivedMessage) {
@@ -310,6 +327,33 @@ func validateMail(t *testing.T, index int, mail []*ReceivedMessage) {
 	}
 }
 
+func checkTestStatus() {
+	var c1, c2 int
+	result.mutex.RLock()
+	defer result.mutex.RUnlock()
+
+	for i := 0; i < NumNodes; i++ {
+		if result.counter[i] > 0 {
+			c1++
+		}
+	}
+
+	for i := 0; i < NumNodes; i++ {
+		envelopes := nodes[i].shh.Envelopes()
+		if len(envelopes) >= NumNodes {
+			c2++
+		}
+	}
+
+	if debugMode {
+		if c1prev != c1 || c2prev != c2 {
+			fmt.Printf("\t %v number of nodes: received all msgs - %d, decrypted one msgs - %d \n", time.Since(prevTime), c2, c1)
+			prevTime = time.Now()
+			c1prev, c2prev = c1, c2
+		}
+	}
+}
+
 func isTestComplete() bool {
 	result.mutex.RLock()
 	defer result.mutex.RUnlock()
@@ -322,7 +366,7 @@ func isTestComplete() bool {
 
 	for i := 0; i < NumNodes; i++ {
 		envelopes := nodes[i].shh.Envelopes()
-		if len(envelopes) < 2 {
+		if len(envelopes) < NumNodes+1 {
 			return false
 		}
 	}
@@ -337,9 +381,10 @@ func sendMsg(t *testing.T, expected bool, id int) {
 
 	opt := MessageParams{KeySym: sharedKey, Topic: sharedTopic, Payload: expectedMessage, PoW: 0.00000001, WorkTime: 1}
 	if !expected {
-		opt.KeySym[0]++
-		opt.Topic[0]++
-		opt.Payload = opt.Payload[1:]
+		opt.KeySym = wrongKey
+		opt.Topic = wrongTopic
+		opt.Payload = unexpectedMessage
+		opt.Payload[0] = byte(id)
 	}
 
 	msg, err := NewSentMessage(&opt)
@@ -456,4 +501,15 @@ func checkBloomFilterExchange(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+}
+
+func waitForServersToStart(t *testing.T) {
+	const iterations = 200
+	for j := 0; j < iterations; j++ {
+		time.Sleep(50 * time.Millisecond)
+		if result.started == NumNodes {
+			return
+		}
+	}
+	t.Fatalf("Failed to start all the servers, running: %d", result.started)
 }
