@@ -892,3 +892,28 @@ func TestBloom(t *testing.T) {
 		t.Fatalf("retireved wrong bloom filter")
 	}
 }
+
+func TestBloomFilterIsChanged(t *testing.T) {
+	w := New(&DefaultConfig)
+	w.SetBloomFilter(make([]byte, 64))
+	filter1, err := generateFilter(t, true)
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+	bloom := w.BloomFilter()
+	id, err := w.Subscribe(filter1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bloomSubscribed := w.BloomFilter()
+	if bloomFilterMatch(bloom, bloomSubscribed) {
+		t.Fatalf("expected %v != %v", bloom, bloomSubscribed)
+	}
+	if err := w.Unsubscribe(id); err != nil {
+		t.Fatal(err)
+	}
+	bloomUnsub := w.BloomFilter()
+	if bloomFilterMatch(bloomUnsub, bloomSubscribed) {
+		t.Fatalf("expected %v != %v", bloomUnsub, bloomSubscribed)
+	}
+}
