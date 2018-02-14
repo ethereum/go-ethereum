@@ -98,7 +98,7 @@ var masterPow = 0.00000001
 var round = 1
 var debugMode = false
 var prevTime time.Time
-var c1prev, c2prev int
+var cntPrev int
 
 func TestSimulation(t *testing.T) {
 	// create a chain of whisper nodes,
@@ -328,28 +328,23 @@ func validateMail(t *testing.T, index int, mail []*ReceivedMessage) {
 }
 
 func checkTestStatus() {
-	var c1, c2 int
-	result.mutex.RLock()
-	defer result.mutex.RUnlock()
+	var cnt int
+	var arr [NumNodes]int
 
 	for i := 0; i < NumNodes; i++ {
-		if result.counter[i] > 0 {
-			c1++
-		}
-	}
-
-	for i := 0; i < NumNodes; i++ {
+		arr[i] = nodes[i].server.PeerCount()
 		envelopes := nodes[i].shh.Envelopes()
 		if len(envelopes) >= NumNodes {
-			c2++
+			cnt++
 		}
 	}
 
 	if debugMode {
-		if c1prev != c1 || c2prev != c2 {
-			fmt.Printf("\t %v number of nodes: received all msgs - %d, decrypted one msgs - %d \n", time.Since(prevTime), c2, c1)
+		if cntPrev != cnt {
+			fmt.Printf(" %v \t number of nodes that have received all msgs: %d, number of peers per node: %v \n",
+				time.Since(prevTime), cnt, arr)
 			prevTime = time.Now()
-			c1prev, c2prev = c1, c2
+			cntPrev = cnt
 		}
 	}
 }
