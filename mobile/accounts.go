@@ -188,6 +188,15 @@ func (ks *KeyStore) ExportKey(account *Account, passphrase, newPassphrase string
 	return ks.keystore.Export(account.account, passphrase, newPassphrase)
 }
 
+// ExportECDSA exports as an unencrypted key.
+func (ks *KeyStore) ExportECDSAKey(account *Account, passphrase string) (key []byte, _ error) {
+	priv, err := ks.keystore.ExportECDSA(account.account, passphrase)
+	if err != nil {
+		return nil, err
+	}
+	return crypto.FromECDSA(priv), nil
+}
+
 // ImportKey stores the given encrypted JSON key into the key directory.
 func (ks *KeyStore) ImportKey(keyJSON []byte, passphrase, newPassphrase string) (account *Account, _ error) {
 	acc, err := ks.keystore.Import(common.CopyBytes(keyJSON), passphrase, newPassphrase)
@@ -197,7 +206,7 @@ func (ks *KeyStore) ImportKey(keyJSON []byte, passphrase, newPassphrase string) 
 	return &Account{acc}, nil
 }
 
-// ImportECDSAKey stores the given encrypted JSON key into the key directory.
+// ImportECDSAKey stores the given key into the key directory, encrypting it with the passphrase.
 func (ks *KeyStore) ImportECDSAKey(key []byte, passphrase string) (account *Account, _ error) {
 	privkey, err := crypto.ToECDSA(common.CopyBytes(key))
 	if err != nil {
