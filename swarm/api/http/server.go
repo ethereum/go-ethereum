@@ -532,7 +532,7 @@ func (s *Server) getManifestList(key storage.Key, prefix string) (list api.Manif
 		return api.SkipManifest
 	})
 
-	return list, nil
+	return list, err
 }
 
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
