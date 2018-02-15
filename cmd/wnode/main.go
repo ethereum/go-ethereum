@@ -265,7 +265,7 @@ func initialize() {
 		Config: p2p.Config{
 			PrivateKey:     nodeid,
 			MaxPeers:       maxPeers,
-			Name:           common.MakeName("wnode", "5.0"),
+			Name:           common.MakeName("wnode", "6.0"),
 			Protocols:      shh.Protocols(),
 			ListenAddr:     *argIP,
 			NAT:            nat.Any(),
@@ -656,7 +656,7 @@ func requestExpiredMessagesLoop() {
 		params.PoW = *argServerPoW
 		params.Payload = data
 		params.KeySym = key
-		params.Src = nodeid
+		params.Src = asymKey
 		params.WorkTime = 5
 
 		msg, err := whisper.NewSentMessage(&params)
