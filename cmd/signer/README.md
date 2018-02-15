@@ -174,9 +174,9 @@ None
    Signs a transactions and responds with the signed transaction in RLP encoded form.
 
 #### Arguments
-  1. from [address]: account to send the transaction from
   2. transaction object:
-     - `to` [address]: receiver account
+     - `from` [address]: account to send the transaction from
+     - `to` [address]: receiver account. If omitted or `0x`, will cause contract creation.
      - `gas` [number]: maximum amount of gas to burn
      - `gasPrice` [number]: gas price
      - `value` [number:optional]: amount of Wei to send with the transaction
@@ -196,8 +196,8 @@ None
   "jsonrpc": "2.0",
   "method": "account_signTransaction",
   "params": [
-    "0x1923f626bb8dc025849e00f99c25fe2b2f7fb0db",
     {
+      "from": "0x1923f626bb8dc025849e00f99c25fe2b2f7fb0db",
       "gas": "0x55555",
       "gasPrice": "0x1234",
       "input": "0xabcd",
@@ -209,11 +209,64 @@ None
 }
 
 {
-  "id": 2,
   "jsonrpc": "2.0",
-  "result": "0xf86480821234830555559407a565b7ed7d7a678680a4c162885bedbb695fe0821234802ea028f9ebeff90732eae45692a11c4ca2ef7f631a0a25bf8763d093e770c4ec464aa01fae77b24617913e718b989be78bc1aabb2fed3f2d4e3b93bd36759f1b5b4904"
+  "id": 67,
+  "error": {
+    "code": -32000,
+    "message": "Request denied"
+  }
 }
 ```
+#### Sample call with ABI-data
+
+
+```
+{
+  "jsonrpc": "2.0",
+  "method": "account_signTransaction",
+  "params": [
+    {
+      "from": "0x694267f14675d7e1b9494fd8d72fefe1755710fa",
+      "gas": "0x333",
+      "gasPrice": "0x1",
+      "nonce": "0x0",
+      "to": "0x07a565b7ed7d7a678680a4c162885bedbb695fe0",
+      "value": "0x0",
+      "data": "0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"
+    },
+    "safeSend(address)"
+  ],
+  "id": 67
+}
+
+{
+  "jsonrpc": "2.0",
+  "id": 67,
+  "result": {
+    "raw": "0xf88380018203339407a565b7ed7d7a678680a4c162885bedbb695fe080a44401a6e4000000000000000000000000000000000000000000000000000000000000001226a0223a7c9bcf5531c99be5ea7082183816eb20cfe0bbc322e97cc5c7f71ab8b20ea02aadee6b34b45bb15bc42d9c09de4a6754e7000908da72d48cc7704971491663",
+    "tx": {
+      "nonce": "0x0",
+      "gasPrice": "0x1",
+      "gas": "0x333",
+      "to": "0x07a565b7ed7d7a678680a4c162885bedbb695fe0",
+      "value": "0x0",
+      "input": "0x4401a6e40000000000000000000000000000000000000000000000000000000000000012",
+      "v": "0x26",
+      "r": "0x223a7c9bcf5531c99be5ea7082183816eb20cfe0bbc322e97cc5c7f71ab8b20e",
+      "s": "0x2aadee6b34b45bb15bc42d9c09de4a6754e7000908da72d48cc7704971491663",
+      "hash": "0xeba2df809e7a612a0a0d444ccfa5c839624bdc00dd29e3340d46df3870f8a30e"
+    }
+  }
+}
+```
+
+Bash example:
+```bash
+#curl -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":[{"from":"0x694267f14675d7e1b9494fd8d72fefe1755710fa","gas":"0x333","gasPrice":"0x1","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x0", "data":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"},"safeSend(address)"],"id":67}' http://localhost:8550/
+
+{"jsonrpc":"2.0","id":67,"result":{"raw":"0xf88380018203339407a565b7ed7d7a678680a4c162885bedbb695fe080a44401a6e4000000000000000000000000000000000000000000000000000000000000001226a0223a7c9bcf5531c99be5ea7082183816eb20cfe0bbc322e97cc5c7f71ab8b20ea02aadee6b34b45bb15bc42d9c09de4a6754e7000908da72d48cc7704971491663","tx":{"nonce":"0x0","gasPrice":"0x1","gas":"0x333","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0","value":"0x0","input":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012","v":"0x26","r":"0x223a7c9bcf5531c99be5ea7082183816eb20cfe0bbc322e97cc5c7f71ab8b20e","s":"0x2aadee6b34b45bb15bc42d9c09de4a6754e7000908da72d48cc7704971491663","hash":"0xeba2df809e7a612a0a0d444ccfa5c839624bdc00dd29e3340d46df3870f8a30e"}}}
+```
+
 
 ### account_sign
 
@@ -395,7 +448,8 @@ By starting the signer with the switch `--stdio-ui-test`, the signer will invoke
 denials. This can be used during development to ensure that the API is (at least somewhat) correctly implemented.
 See `pythonsigner`, which can be invoked via `python3 pythonsigner.py test` to perform the 'denial-handshake-test'.
 
-**work in progress**
+All methods in this API uses object-based parameters, so that there can be no mixups of parameters: each piece of data is accessed by key.
+
 
 
 ### ApproveTx
@@ -559,6 +613,15 @@ The UI should show the info to the user. Does not expect response.
 }
 
 ```
+
+### OnApproved
+
+`OnApprovedTx` is called when a transaction has been approved and signed. The call contains the return value that will be sent to the external caller.  The return value from this method is ignored - the reason for having this callback is to allow the ruleset to keep track of approved transactions.
+
+When implementing rate-limited rules, this callback should be used.
+
+TLDR; Use this method to keep track of signed transactions, instead of using the data in `ApproveTx`.
+
 
 ### Rules for UI apis
 

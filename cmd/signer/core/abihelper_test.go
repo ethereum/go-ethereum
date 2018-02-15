@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-package signer
+package core
 
 import (
 	"fmt"
@@ -176,13 +176,13 @@ func TestCalldataDecoding(t *testing.T) {
 
 func TestSelectorUnmarshalling(t *testing.T) {
 	var (
-		db        *abiDb
+		db        *AbiDb
 		err       error
 		abistring []byte
 		abistruct abi.ABI
 	)
 
-	db, err = NewAbiDBFromFile("4byte.json")
+	db, err = NewAbiDBFromFile("../4byte.json")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-package signer
+package core
 
 import (
 	"encoding/json"
@@ -66,10 +66,10 @@ type TransactionArg struct {
 type SendTxArgs struct {
 	From     common.MixedcaseAddress  `json:"from"`
 	To       *common.MixedcaseAddress `json:"to"`
-	Gas      *hexutil.Big    `json:"gas"`
-	GasPrice *hexutil.Big    `json:"gasPrice"`
-	Value    *hexutil.Big    `json:"value"`
-	Nonce    *hexutil.Uint64 `json:"nonce"`
+	Gas      hexutil.Big    `json:"gas"`
+	GasPrice hexutil.Big    `json:"gasPrice"`
+	Value    hexutil.Big    `json:"value"`
+	Nonce    hexutil.Uint64 `json:"nonce"`
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	Data  *hexutil.Bytes `json:"data"`
 	Input *hexutil.Bytes `json:"input"`
@@ -91,7 +91,7 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 		input = *args.Input
 	}
 	if args.To == nil {
-		return types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), input)
+		return types.NewContractCreation(uint64(args.Nonce), (*big.Int)(&args.Value), (*big.Int)(&args.Gas), (*big.Int)(&args.GasPrice), input)
 	}
-	return types.NewTransaction(uint64(*args.Nonce), (*args.To).Address(), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), input)
+	return types.NewTransaction(uint64(args.Nonce), args.To.Address(), (*big.Int)(&args.Value), (*big.Int)(&args.Gas), (*big.Int)(&args.GasPrice), input)
 }

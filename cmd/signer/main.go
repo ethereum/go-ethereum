@@ -16,7 +16,7 @@
 
 // signer is a utility that can be used so sign transactions and
 // arbitrary data.
-package signer
+package main
 
 import (
 	"fmt"
@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
+	"github.com/ethereum/go-ethereum/cmd/signer/core"
 )
 
 func main() {
@@ -90,7 +91,7 @@ func main() {
 	app.Action = func(c *cli.Context) error {
 
 		var (
-			ui SignerUI
+			ui core.SignerUI
 		)
 		// Set up the logger to print everything
 		logOutput := os.Stdout
@@ -100,14 +101,14 @@ func main() {
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int("loglevel")), log.StreamHandler(logOutput, log.TerminalFormat(true))))
 
 		if c.Bool("stdio-ui") {
-			ui = NewStdIOUI()
+			ui = core.NewStdIOUI()
 		} else {
-			ui = NewCommandlineUI()
+			ui = core.NewCommandlineUI()
 		}
 		if c.Bool("stdio-ui") {
 			log.Info("Using stdin/stdout as UI-channel")
 		}
-		db, err := NewAbiDBFromFile(c.String("4bytedb"))
+		db, err := core.NewAbiDBFromFile(c.String("4bytedb"))
 
 		if err != nil {
 			utils.Fatalf(err.Error())
@@ -115,12 +116,12 @@ func main() {
 		log.Info("Loaded 4byte db", "signatures", db.Size(), "file", c.String("4bytedb"))
 
 		var (
-			api      ExternalAPI
+			api      core.ExternalAPI
 			listener net.Listener
 			server   = rpc.NewServer()
 		)
 
-		api_impl := NewSignerAPI(
+		api_impl := core.NewSignerAPI(
 			c.Int64(utils.NetworkIdFlag.Name),
 			c.String("keystore"),
 			c.Bool(utils.NoUSBFlag.Name),
@@ -131,7 +132,7 @@ func main() {
 
 		// Audit logging
 		if logfile := c.String("auditlog"); logfile != "" {
-			api, err = NewAuditLogger(logfile, api_impl)
+			api, err = core.NewAuditLogger(logfile, api_impl)
 			if err != nil {
 				utils.Fatalf(err.Error())
 			}
@@ -170,7 +171,7 @@ func main() {
 
 }
 
-func testExternalUI(api *SignerAPI) {
+func testExternalUI(api *core.SignerAPI) {
 
 	ctx := context.WithValue(context.Background(), "remote", "signer binary")
 	ctx = context.WithValue(ctx, "scheme", "in-proc")
@@ -178,17 +179,17 @@ func testExternalUI(api *SignerAPI) {
 
 	errs := make([]string, 0)
 
-	api.ui.ShowInfo("Testing 'ShowInfo'")
-	api.ui.ShowError("Testing 'ShowError'")
+	api.UI.ShowInfo("Testing 'ShowInfo'")
+	api.UI.ShowError("Testing 'ShowError'")
 
 	checkErr := func(method string, err error) {
-		if err != nil && err != ErrRequestDenied {
+		if err != nil && err != core.ErrRequestDenied {
 			errs = append(errs, fmt.Sprintf("%v: %v", method, err.Error()))
 		}
 	}
 	var err error
 
-	_, err = api.SignTransaction(ctx, SendTxArgs{From:common.MixedcaseAddress{}}, nil)
+	_, err = api.SignTransaction(ctx, core.SendTxArgs{From:common.MixedcaseAddress{}}, nil)
 	checkErr("SignTransaction", err)
 	_, err = api.Sign(ctx, common.MixedcaseAddress{}, common.Hex2Bytes("01020304"))
 	checkErr("Sign", err)
@@ -201,7 +202,7 @@ func testExternalUI(api *SignerAPI) {
 	_, err = api.Import(ctx, json.RawMessage{})
 	checkErr("Import", err)
 
-	api.ui.ShowInfo("Tests completed")
+	api.UI.ShowInfo("Tests completed")
 
 	if len(errs) > 0 {
 		log.Error("Got errors")

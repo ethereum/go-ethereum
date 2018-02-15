@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-package signer
+package core
 
 import (
 	//	"bytes"
@@ -157,25 +157,25 @@ func MethodSelectorToAbi(selector string) ([]byte, error) {
 
 }
 
-type abiDb struct {
+type AbiDb struct {
 	db map[string]string
 }
 
 // NewAbiDBFromFile loads signature database from file, and
 // errors if the file is not valid json. Does no other validation of contents
-func NewAbiDBFromFile(path string) (*abiDb, error) {
+func NewAbiDBFromFile(path string) (*AbiDb, error) {
 	raw, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	db := new(abiDb)
+	db := new(AbiDb)
 	json.Unmarshal(raw, &db.db)
 	return db, nil
 }
 
 // LookupMethodSelector checks the given 4byte-sequence against the known ABI methods.
 // OBS: This method does not validate the match, it's assumed the caller will do so
-func (db *abiDb) LookupMethodSelector(id []byte) (string, error) {
+func (db *AbiDb) LookupMethodSelector(id []byte) (string, error) {
 	if len(id) != 4 {
 		return "", fmt.Errorf("Expected 4-byte id, got %d", len(id))
 	}
@@ -185,6 +185,6 @@ func (db *abiDb) LookupMethodSelector(id []byte) (string, error) {
 	}
 	return "", fmt.Errorf("Signature %v not found", sig)
 }
-func (db *abiDb) Size() int {
+func (db *AbiDb) Size() int {
 	return len(db.db)
 }

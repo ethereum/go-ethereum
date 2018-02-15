@@ -15,7 +15,7 @@
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 //
 
-package signer
+package core
 
 import (
 	"context"

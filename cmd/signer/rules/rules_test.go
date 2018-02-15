@@ -3,13 +3,13 @@ package rules
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/cmd/signer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"math/big"
 	"testing"
+	"github.com/ethereum/go-ethereum/cmd/signer/core"
 )
 
 const JS = `
@@ -66,11 +66,11 @@ func initRuleEngine(js string) (*rulesetUi, error) {
 }
 
 func TestListRequest(t *testing.T) {
-	accs := make([]signer.Account, 5)
+	accs := make([]core.Account, 5)
 
 	for i, _ := range accs {
 		addr := fmt.Sprintf("000000000000000000000000000000000000000%x", i)
-		acc := signer.Account{
+		acc := core.Account{
 			Address: common.BytesToAddress(common.Hex2Bytes(addr)),
 			URL:     accounts.URL{Scheme: "test", Path: fmt.Sprintf("acc-%d", i)},
 		}
@@ -84,9 +84,9 @@ func TestListRequest(t *testing.T) {
 		t.Errorf("Couldn't create evaluator %v", err)
 		return
 	}
-	resp, err := r.ApproveListing(&signer.ListRequest{
+	resp, err := r.ApproveListing(&core.ListRequest{
 		accs,
-		signer.Metadata{
+		core.Metadata{
 			"remoteip", "localip", "inproc",
 		},
 	})
@@ -126,12 +126,12 @@ func TestSignTxRequest(t *testing.T) {
 		return
 	}
 	fmt.Printf("to %v", to.Address().String())
-	resp, err := r.ApproveTx(&signer.SignTxRequest{
-		Transaction: signer.SendTxArgs{
+	resp, err := r.ApproveTx(&core.SignTxRequest{
+		Transaction: core.SendTxArgs{
 			From: *from,
 			To:   to},
 		Callinfo: "",
-		Meta:     signer.Metadata{"remoteip", "localip", "inproc"},
+		Meta:     core.Metadata{"remoteip", "localip", "inproc"},
 	})
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
@@ -290,7 +290,7 @@ const ExampleTxWindow = `
 
 `
 
-func dummyTx(value *hexutil.Big) *signer.SignTxRequest {
+func dummyTx(value hexutil.Big) *core.SignTxRequest {
 
 	to, _ := mixAddr("000000000000000000000000000000000000dead")
 	from, _ := mixAddr("000000000000000000000000000000000000dead")
@@ -298,17 +298,17 @@ func dummyTx(value *hexutil.Big) *signer.SignTxRequest {
 	gas := hexutil.Big(*big.NewInt(21000))
 	gasPrice := hexutil.Big(*big.NewInt(2000000))
 
-	return &signer.SignTxRequest{
-		Transaction: signer.SendTxArgs{
+	return &core.SignTxRequest{
+		Transaction: core.SendTxArgs{
 			From:     *from,
 			To:       to,
 			Value:    value,
-			Nonce:    &n,
-			GasPrice: &gas,
-			Gas:      &gasPrice,
+			Nonce:    n,
+			GasPrice: gas,
+			Gas:      gasPrice,
 		},
 		Callinfo: "Warning, all your base are bellong to us",
-		Meta:     signer.Metadata{"remoteip", "localip", "inproc"},
+		Meta:     core.Metadata{"remoteip", "localip", "inproc"},
 	}
 }
 func dummySigned(value *big.Int) *types.Transaction {
@@ -335,7 +335,7 @@ func TestLimitWindow(t *testing.T) {
 	h := hexutil.Big(*v)
 	// The first three should succeed
 	for i := 0; i < 3; i++ {
-		unsigned := dummyTx(&h)
+		unsigned := dummyTx(h)
 		resp, err := r.ApproveTx(unsigned)
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
@@ -352,7 +352,7 @@ func TestLimitWindow(t *testing.T) {
 		r.OnApprovedTx(response)
 	}
 	// Fourth should fail
-	resp, err := r.ApproveTx(dummyTx(&h))
+	resp, err := r.ApproveTx(dummyTx(h))
 	if resp.Approved {
 		t.Errorf("Expected check to resolve to 'Reject'")
 	}

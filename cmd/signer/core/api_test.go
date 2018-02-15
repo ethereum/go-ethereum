@@ -1,4 +1,4 @@
-package signer
+package core
 
 import (
 	"bytes"
@@ -35,9 +35,9 @@ func (ui *HeadlessUI) ApproveTx(request *SignTxRequest) (SignTxResponse, error) 
 	case "Y":
 		return SignTxResponse{request.Transaction,  true, <-ui.controller}, nil
 	case "M": //Modify
-		old := (*big.Int)(request.Transaction.Value)
-		newVal := big.NewInt(0).Add(old, big.NewInt(1))
-		request.Transaction.Value = (*hexutil.Big)(newVal)
+		old := big.Int(request.Transaction.Value)
+		newVal := big.NewInt(0).Add(&old, big.NewInt(1))
+		request.Transaction.Value = hexutil.Big(*newVal)
 		return SignTxResponse{request.Transaction, true, <-ui.controller}, nil
 	default:
 		return SignTxResponse{request.Transaction, false, ""}, nil
@@ -106,7 +106,7 @@ func setup(t *testing.T) (*SignerAPI, chan string) {
 
 	controller := make(chan string, 10)
 
-	db, err := NewAbiDBFromFile(fmt.Sprintf("./4byte.json"))
+	db, err := NewAbiDBFromFile(fmt.Sprintf("../4byte.json"))
 
 	if err != nil {
 		utils.Fatalf(err.Error())
@@ -238,9 +238,9 @@ func TestSignData(t *testing.T) {
 }
 func mkTestTx(from common.MixedcaseAddress) SendTxArgs {
 	to := common.NewMixedcaseAddress(common.HexToAddress("0x1337"))
-	gas := (*hexutil.Big)(big.NewInt(21000))
-	gasPrice := (*hexutil.Big)(big.NewInt(2000000000))
-	value := (*hexutil.Big)(big.NewInt(1e18))
+	gas := (hexutil.Big)(*big.NewInt(21000))
+	gasPrice := (hexutil.Big)(*big.NewInt(2000000000))
+	value := (hexutil.Big)(*big.NewInt(1e18))
 	nonce := (hexutil.Uint64)(0)
 	data := hexutil.Bytes(common.Hex2Bytes("01020304050607080a"))
 	tx := SendTxArgs{
@@ -250,7 +250,7 @@ func mkTestTx(from common.MixedcaseAddress) SendTxArgs {
 		GasPrice: gasPrice,
 		Value: value,
 		Data: &data,
-		Nonce: &nonce}
+		Nonce: nonce}
 	return tx
 }
 

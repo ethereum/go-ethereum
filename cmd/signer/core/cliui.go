@@ -13,7 +13,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
-package signer
+package core
 
 import (
 	"bufio"
@@ -181,7 +181,7 @@ func (ui *CommandlineUI) ApproveImport(request *ImportRequest) (ImportResponse, 
 }
 
 // ApproveListing prompt the user for confirmation to list accounts
-// the list of accounts to list can be modified by the ui
+// the list of accounts to list can be modified by the UI
 func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, error) {
 
 	ui.mu.Lock()

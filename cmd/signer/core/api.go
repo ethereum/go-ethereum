@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-package signer
+package core
 
 import (
 	"context"
@@ -69,7 +69,7 @@ type SignerUI interface {
 	// ApproveImport prompt the user for confirmation to import Account json
 	ApproveImport(request *ImportRequest) (ImportResponse, error)
 	// ApproveListing prompt the user for confirmation to list accounts
-	// the list of accounts to list can be modified by the ui
+	// the list of accounts to list can be modified by the UI
 	ApproveListing(request *ListRequest) (ListResponse, error)
 	// ApproveNewAccount prompt the user for confirmation to create new Account, and reveal to caller
 	ApproveNewAccount(request *NewAccountRequest) (NewAccountResponse, error)
@@ -86,8 +86,8 @@ type SignerUI interface {
 type SignerAPI struct {
 	chainID *big.Int
 	am      *accounts.Manager
-	ui      SignerUI
-	abidb   abiDb
+	UI      SignerUI
+	abidb   AbiDb
 }
 
 // Metadata about a request
@@ -201,7 +201,7 @@ func (ew errorWrapper) String() string {
 // key that is generated when a new Account is created.
 // noUSB disables USB support that is required to support hardware devices such as
 // ledger and trezor.
-func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abidb *abiDb, lightKDF bool) *SignerAPI {
+func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abidb *AbiDb, lightKDF bool) *SignerAPI {
 	var (
 		backends []accounts.Backend
 		n, p     = keystore.StandardScryptN, keystore.StandardScryptP
@@ -242,7 +242,7 @@ func (api *SignerAPI) List(ctx context.Context) (Accounts, error) {
 			accs = append(accs, acc)
 		}
 	}
-	result, err := api.ui.ApproveListing(&ListRequest{Accounts: accs, Meta: MetadataFromContext(ctx)})
+	result, err := api.UI.ApproveListing(&ListRequest{Accounts: accs, Meta: MetadataFromContext(ctx)})
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +261,7 @@ func (api *SignerAPI) New(ctx context.Context) (accounts.Account, error) {
 	if len(be) == 0 {
 		return accounts.Account{}, errors.New("password based accounts not supported")
 	}
-	resp, err := api.ui.ApproveNewAccount(&NewAccountRequest{MetadataFromContext(ctx)})
+	resp, err := api.UI.ApproveNewAccount(&NewAccountRequest{MetadataFromContext(ctx)})
 
 	if err != nil {
 		return accounts.Account{}, err
@@ -277,33 +277,25 @@ func (api *SignerAPI) New(ctx context.Context) (accounts.Account, error) {
 // UI-modifications to requests
 func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 	modified := false
-
 	if f0, f1 := original.Transaction.From, new.Transaction.From; !reflect.DeepEqual(f0, f1) {
 		log.Info("Sender-account changed by UI", "was", f0, "is", f1)
 		modified = true
 	}
-
 	if t0, t1 := original.Transaction.To, new.Transaction.To; !reflect.DeepEqual(t0, t1) {
 		log.Info("Recipient-account changed by UI", "was", t0, "is", t1)
 		modified = true
 	}
-	if g0, g1 := (*big.Int)(original.Transaction.Gas), (*big.Int)(new.Transaction.Gas); g0 != g1 {
-		if g0 == nil || g1 == nil || g0.Cmp(g1) != 0 {
-			modified = true
-			log.Info("Gas changed by UI", "was", g0, "is", g1)
-		}
+	if g0, g1 := big.Int(original.Transaction.Gas), big.Int(new.Transaction.Gas); g0.Cmp(&g1) != 0 {
+		modified = true
+		log.Info("Gas changed by UI", "was", g0, "is", g1)
 	}
-	if g0, g1 := (*big.Int)(original.Transaction.GasPrice), (*big.Int)(new.Transaction.GasPrice); g0 != g1 {
-		if g0 == nil || g1 == nil || g0.Cmp(g1) != 0 {
-			modified = true
-			log.Info("GasPrice changed by UI", "was", g0, "is", g1)
-		}
+	if g0, g1 := big.Int(original.Transaction.GasPrice), big.Int(new.Transaction.GasPrice); g0.Cmp(&g1) != 0 {
+		modified = true
+		log.Info("GasPrice changed by UI", "was", g0, "is", g1)
 	}
-	if v0, v1 := (*big.Int)(original.Transaction.Value), (*big.Int)(new.Transaction.Value); v0 != v1 {
-		if v0 == nil || v1 == nil || v0.Cmp(v1) != 0 {
-			modified = true
-			log.Info("Value changed by UI", "was", v0, "is", v1)
-		}
+	if v0, v1 := big.Int(original.Transaction.Value), big.Int(new.Transaction.Value); v0.Cmp(&v1) != 0 {
+		modified = true
+		log.Info("Value changed by UI", "was", v0, "is", v1)
 	}
 	if d0, d1 := original.Transaction.Data, new.Transaction.Data; d0 != d1 {
 		d0s := ""
@@ -320,11 +312,8 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 		}
 	}
 	if n0, n1 := original.Transaction.Nonce, new.Transaction.Nonce; n0 != n1 {
-
-		if n0 == nil || n1 == nil || (*n0) != (*n1) {
-			modified = true
-			log.Info("Nonce changed by UI", "was", n0, "is", n1)
-		}
+		modified = true
+		log.Info("Nonce changed by UI", "was", n0, "is", n1)
 	}
 	return modified
 }
@@ -386,12 +375,12 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 		*args.Input = nil
 	}
 	req := SignTxRequest{
-			Transaction: args,
-			Meta: MetadataFromContext(ctx),
-			Callinfo:api.determineCallInfo(data, methodSelector),
+		Transaction: args,
+		Meta:        MetadataFromContext(ctx),
+		Callinfo:    api.determineCallInfo(data, methodSelector),
 	}
 	// Process approval
-	result, err = api.ui.ApproveTx(&req)
+	result, err = api.UI.ApproveTx(&req)
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +404,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 	// The one to sign is the one that was returned from the UI
 	signedTx, err := wallet.SignTxWithPassphrase(acc, result.Password, unsignedTx, api.chainID)
 	if err != nil {
-		api.ui.ShowError(err.Error())
+		api.UI.ShowError(err.Error())
 		return nil, err
 	}
 
@@ -423,7 +412,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 	response := ethapi.SignTransactionResult{rlpdata, signedTx}
 
 	// Finally, send the signed tx to the UI
-	api.ui.OnApprovedTx(response)
+	api.UI.OnApprovedTx(response)
 	// ...and to the external caller
 	return &response, nil
 
@@ -443,7 +432,7 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, da
 	// We make the request prior to looking up if we actually have the account, to prevent
 	// account-enumeration via the API
 	req := &SignDataRequest{Address: addr, Rawdata: data, Message: msg, Hash: sighash, Meta: MetadataFromContext(ctx)}
-	res, err := api.ui.ApproveSignData(req)
+	res, err := api.UI.ApproveSignData(req)
 
 	if err != nil {
 		return nil, err
@@ -460,7 +449,7 @@ func (api *SignerAPI) Sign(ctx context.Context, addr common.MixedcaseAddress, da
 	// Assemble sign the data with the wallet
 	signature, err := wallet.SignHashWithPassphrase(account, res.Password, sighash)
 	if err != nil {
-		api.ui.ShowError(err.Error())
+		api.UI.ShowError(err.Error())
 		return nil, err
 	}
 	signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
@@ -509,7 +498,7 @@ func signHash(data []byte) ([]byte, string) {
 
 // Export returns encrypted private key associated with the given address in web3 keystore format.
 func (api *SignerAPI) Export(ctx context.Context, addr common.Address) (json.RawMessage, error) {
-	res, err := api.ui.ApproveExport(&ExportRequest{Address: addr, Meta: MetadataFromContext(ctx)})
+	res, err := api.UI.ApproveExport(&ExportRequest{Address: addr, Meta: MetadataFromContext(ctx)})
 
 	if err != nil {
 		return nil, err
@@ -537,7 +526,7 @@ func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage) (Acco
 	if len(be) == 0 {
 		return Account{}, errors.New("password based accounts not supported")
 	}
-	res, err := api.ui.ApproveImport(&ImportRequest{Meta: MetadataFromContext(ctx)})
+	res, err := api.UI.ApproveImport(&ImportRequest{Meta: MetadataFromContext(ctx)})
 
 	if err != nil {
 		return Account{}, err
@@ -547,7 +536,7 @@ func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage) (Acco
 	}
 	acc, err := be[0].(*keystore.KeyStore).Import(keyJSON, res.OldPassword, res.NewPassword)
 	if err != nil {
-		api.ui.ShowError(err.Error())
+		api.UI.ShowError(err.Error())
 		return Account{}, err
 	}
 	return Account{Typ: "Account", URL: acc.URL, Address: acc.Address}, nil

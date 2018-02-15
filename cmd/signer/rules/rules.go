@@ -19,7 +19,6 @@ package rules
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/cmd/signer"
 	"github.com/ethereum/go-ethereum/cmd/signer/rules/deps"
 	"github.com/ethereum/go-ethereum/cmd/signer/storage"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -27,6 +26,7 @@ import (
 	"github.com/robertkrimen/otto"
 	"os"
 	"strings"
+	"github.com/ethereum/go-ethereum/cmd/signer/core"
 )
 
 var (
@@ -48,7 +48,7 @@ func consoleOutput(call otto.FunctionCall) otto.Value {
 // file for each defined UI-method
 type rulesetUi struct {
 	vm      *otto.Otto      // The JS vm
-	next    signer.SignerUI // The next handler, for manual processing
+	next    core.SignerUI // The next handler, for manual processing
 	storage storage.Storage
 }
 
@@ -104,45 +104,45 @@ func (r *rulesetUi) checkApproval(jsfunc string, jsarg []byte, err error) error 
 	return fmt.Errorf("rejected")
 }
 
-func (r *rulesetUi) ApproveTx(request *signer.SignTxRequest) (signer.SignTxResponse, error) {
+func (r *rulesetUi) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	if err = r.checkApproval("ApproveTx", jsonreq, err); err == nil {
-		return signer.SignTxResponse{Transaction: request.Transaction, Approved: true, Password: ""}, nil
+		return core.SignTxResponse{Transaction: request.Transaction, Approved: true, Password: ""}, nil
 	}
-	return signer.SignTxResponse{Approved: false}, err
+	return core.SignTxResponse{Approved: false}, err
 }
 
-func (r *rulesetUi) ApproveSignData(request *signer.SignDataRequest) (signer.SignDataResponse, error) {
+func (r *rulesetUi) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	if err = r.checkApproval("ApproveTx", jsonreq, err); err == nil {
-		return signer.SignDataResponse{Approved: true, Password: ""}, nil
+		return core.SignDataResponse{Approved: true, Password: ""}, nil
 	}
-	return signer.SignDataResponse{Approved: false, Password: ""}, err
+	return core.SignDataResponse{Approved: false, Password: ""}, err
 }
 
-func (r *rulesetUi) ApproveExport(request *signer.ExportRequest) (signer.ExportResponse, error) {
+func (r *rulesetUi) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	if err = r.checkApproval("ApproveTx", jsonreq, err); err == nil {
-		return signer.ExportResponse{Approved: true}, nil
+		return core.ExportResponse{Approved: true}, nil
 	}
-	return signer.ExportResponse{Approved: false}, err
+	return core.ExportResponse{Approved: false}, err
 }
 
-func (r *rulesetUi) ApproveImport(request *signer.ImportRequest) (signer.ImportResponse, error) {
+func (r *rulesetUi) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
 	// This cannot be handled by rules, requires setting a password
 	// dispatch to next
 	return r.next.ApproveImport(request)
 }
 
-func (r *rulesetUi) ApproveListing(request *signer.ListRequest) (signer.ListResponse, error) {
+func (r *rulesetUi) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	if err = r.checkApproval("ApproveListing", jsonreq, err); err == nil {
-		return signer.ListResponse{Accounts: request.Accounts}, nil
+		return core.ListResponse{Accounts: request.Accounts}, nil
 	}
-	return signer.ListResponse{}, err
+	return core.ListResponse{}, err
 }
 
-func (r *rulesetUi) ApproveNewAccount(request *signer.NewAccountRequest) (signer.NewAccountResponse, error) {
+func (r *rulesetUi) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
 	// This cannot be handled by rules, requires setting a password
 	// dispatch to next
 	return r.next.ApproveNewAccount(request)
