@@ -1,12 +1,13 @@
 # Rules
 
-The `signer` binary needs to have customizeable rules. Typical scenarios:
+The `signer` binary contains a ruleset engine, implemented with [OttoVM](https://github.com/robertkrimen/otto)
+
+It enables usecases like the following:
 
 * I want to auto-approve transactions with contract `CasinoDapp`, with up to `0.05 ether` in value to maximum `1 ether` per 24h period
 * I want to auto-approve transaction to contract `EthAlarmClock` with `data`=`0xdeadbeef`, if `value=0`, `gas < 44k` and `gasPrice < 40Gwei`
 
-
-In order to reach this, there are two problems to solve
+The two main features that are required for this to work well are;
 
 1. Rule Implementation: how to create, manage and interpret rules in a flexible but secure manner
 2. Credential managements and credentials; how to provide auto-unlock without exposing keys unnecessarily.
@@ -15,39 +16,66 @@ The section below deals with both of them
 
 ## Rule Implementation
 
-### Alt 1: javascript
-
-In this implementation, the rules would be implemented as a `js` file; which implements the same methods as the `json-rpc` methods
+A ruleset file is implemented as a `js` file. Under the hood, the ruleset-engine is a `SignerUI`, implementing the same methods as the `json-rpc` methods
 defined in the UI protocol. Example:
 
 ```javascript
 
+function asBig(str){
+    if(str.slice(0,2) == "0x"){ return new BigNumber(str.slice(2),16)}
+    return new BigNumber(str)
+}
+
 // Approve transactions to a certain contract if value is below a certain limit
-function ApproveTx(tx, from, call_info, metadata){
+function ApproveTx(req){
 
     var limit = big.Newint("0xb1a2bc2ec50000")
+	var value = asBig(req.transaction.value);
 
-    if (tx.to.String() == "0xae967917c465db8578ca9024c205720b1a3651A9" &&
-        tx.value.Cmp(limit) < 0){
-            return "Approve"
-        }
+	if(req.transaction.to.toLowerCase()=="0xae967917c465db8578ca9024c205720b1a3651a9")
+	    && value.lt(limit) ){
+	    return "Approve"
+	 }
+    // If we return "Reject", it will be rejected.
+    // By not returning anything, it will be passed to the next UI, for manual processing
 }
 
 //Approve listings if request made from IPC
-function ApproveListing(accounts, metadata){
-    if (metadata.scheme == "ipc"){ return "Approve"}
+function ApproveListing(req){
+    if (req.metadata.scheme == "ipc"){ return "Approve"}
 }
 
 ```
 
-In this case, whenever the external API was called, the `signer` would load `ruleset.js` and invoke the corresponding method. These would be
-the possible cases:
+Whenever the external API is called (and the ruleset is enabled), the `signer` calls the UI, which is an instance of a ruleset-engine. The ruleset-engine
+invokes the corresponding method. In doing so, there are three possible outcomes:
 
-1. JS returns "Approve" -> auto-approve
-2. JS returns "Reject" -> auto-reject
-3. Method not implemented, or something else is returned -> pass on to regular UI channel.
+1. JS returns "Approve"
+  * Auto-approve request
+2. JS returns "Reject"
+  * Auto-reject request
+3. Error occurs, or something else is returned
+  * Pass on to `next` ui: the regular UI channel.
 
-In the example above, the rule about "1 ether per 24h period" is not implemented; in order to allow for such rules, some sort of history-lookup needs to be implemented.
+A more advanced example can be found below, "Example 1: ruleset for a rate-limited window", using `storage` to `Put` and `Get` `string`s by key.
+
+* At the time of writing, storage only exists as an ephemeral unencrypted implementation, to be used during testing.
+
+### Things to note
+
+The Otto vm has a few [caveats](https://github.com/robertkrimen/otto):
+
+* "use strict" will parse, but does nothing.
+* The regular expression engine (re2/regexp) is not fully compatible with the ECMA5 specification.
+* Otto targets ES5. ES6 features (eg: Typed Arrays) are not supported.
+
+Additionally, a few more have been added
+
+* The rule execution cannot load external javascript files.
+* The only preloaded libary is [`bignumber.js`](https://github.com/MikeMcl/bignumber.js) version `2.0.3`. This one is fairly old, and is not aligned with the documentation at the github repository.
+* Each invocation is made in a fresh virtual machine. This means that you cannot store data in global variables between invocations. This is a deliberate choice -- if you want to store data, use the disk-backed `storage`, since rules should not rely on ephemeral data.
+* Javascript API parameters are _always_ an object. This is also a design choice, to ensure that parameters are accessed by _key_ and not by order. This is to prevent mistakes due to missing parameters or parameter changes.
+* The JS engine has access to `storage` and `console`.
 
 #### Security considerations
 
