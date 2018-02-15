@@ -53,9 +53,46 @@ func hexAddr(a string) common.Address { return common.BytesToAddress(common.Hex2
 func mixAddr(a string) (*common.MixedcaseAddress, error) {
 	return common.NewMixedcaseAddressFromString(a)
 }
+type alwaysDenyUi struct{}
+
+func (alwaysDenyUi) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
+	return core.SignTxResponse{request.Transaction, false, ""}, nil
+}
+
+func (alwaysDenyUi) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
+	return core.SignDataResponse{false, ""}, nil
+}
+
+func (alwaysDenyUi) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
+	return core.ExportResponse{false}, nil
+}
+
+func (alwaysDenyUi) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
+	return core.ImportResponse{false, "", ""}, nil
+}
+
+func (alwaysDenyUi) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
+	return core.ListResponse{nil}, nil
+}
+
+func (alwaysDenyUi) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
+	return core.NewAccountResponse{false, ""}, nil
+}
+
+func (alwaysDenyUi) ShowError(message string) {
+	panic("implement me")
+}
+
+func (alwaysDenyUi) ShowInfo(message string) {
+	panic("implement me")
+}
+
+func (alwaysDenyUi) OnApprovedTx(tx ethapi.SignTransactionResult) {
+	panic("implement me")
+}
 
 func initRuleEngine(js string) (*rulesetUi, error) {
-	r, err := NewRuleEvaluator()
+	r, err := NewRuleEvaluator(&alwaysDenyUi{})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create js engine: %v", err)
 	}
@@ -154,10 +191,13 @@ func TestMissingFunc(t *testing.T) {
 		t.Error("Expected error")
 	}
 
-	if r.checkApproval("MissingMethod", nil, nil) == nil {
-		t.Errorf("Expected error to resolve to 'Reject'")
+	approved, err := r.checkApproval("MissingMethod", nil, nil);
+	if err == nil {
+		t.Errorf("Expected missing method to yield error'")
 	}
-
+	if approved{
+		t.Errorf("Expected missing method to cause non-approval")
+	}
 	fmt.Printf("Err %v", err)
 
 }

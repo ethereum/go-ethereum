@@ -19,6 +19,7 @@ package rules
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/cmd/signer/core"
 	"github.com/ethereum/go-ethereum/cmd/signer/rules/deps"
 	"github.com/ethereum/go-ethereum/cmd/signer/storage"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -26,7 +27,6 @@ import (
 	"github.com/robertkrimen/otto"
 	"os"
 	"strings"
-	"github.com/ethereum/go-ethereum/cmd/signer/core"
 )
 
 var (
@@ -47,14 +47,15 @@ func consoleOutput(call otto.FunctionCall) otto.Value {
 // rulesetUi provides an implementation of SignerUI that evaluates a javascript
 // file for each defined UI-method
 type rulesetUi struct {
-	vm      *otto.Otto      // The JS vm
+	vm      *otto.Otto    // The JS vm
 	next    core.SignerUI // The next handler, for manual processing
 	storage storage.Storage
 }
 
-func NewRuleEvaluator() (*rulesetUi, error) {
+func NewRuleEvaluator(next core.SignerUI) (*rulesetUi, error) {
 	c := &rulesetUi{
 		vm:      otto.New(),
+		next:    next,
 		storage: storage.NewEphemeralStorage(),
 	}
 	consoleObj, _ := c.vm.Get("console")
@@ -81,32 +82,38 @@ func (r *rulesetUi) Init(javascriptRules string) error {
 	return err
 }
 
-func (r *rulesetUi) checkApproval(jsfunc string, jsarg []byte, err error) error {
+func (r *rulesetUi) checkApproval(jsfunc string, jsarg []byte, err error) (bool, error) {
 	if err != nil {
-		return err
+		return false, err
 	}
 	v, err := r.vm.Call(jsfunc, nil, string(jsarg))
-
 	if err != nil {
 		log.Info("error occurred during execution", "error", err)
-		return err
+		return false, err
 	}
 	result, err := v.ToString()
 	if err != nil {
 		log.Info("error occurred during response unmarshalling", "error", err)
-		return err
-
+		return false, err
 	}
 	if result == "Approve" {
 		log.Info("Op approved")
-		return nil
+		return true, nil
+	} else if result == "Reject" {
+		log.Info("Op rejected")
+		return false, nil
 	}
-	return fmt.Errorf("rejected")
+	return false, fmt.Errorf("Unknown response")
 }
 
 func (r *rulesetUi) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
 	jsonreq, err := json.Marshal(request)
-	if err = r.checkApproval("ApproveTx", jsonreq, err); err == nil {
+	approved, err := r.checkApproval("ApproveTx", jsonreq, err)
+	if err != nil {
+		log.Info("Rule-based approval error, going to manual", "error", "err")
+		return r.next.ApproveTx(request)
+	}
+	if approved {
 		return core.SignTxResponse{Transaction: request.Transaction, Approved: true, Password: ""}, nil
 	}
 	return core.SignTxResponse{Approved: false}, err
@@ -114,7 +121,12 @@ func (r *rulesetUi) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse,
 
 func (r *rulesetUi) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
 	jsonreq, err := json.Marshal(request)
-	if err = r.checkApproval("ApproveTx", jsonreq, err); err == nil {
+	approved, err := r.checkApproval("ApproveSignData", jsonreq, err)
+	if err != nil {
+		log.Info("Rule-based approval error, going to manual", "error", "err")
+		return r.next.ApproveSignData(request)
+	}
+	if approved {
 		return core.SignDataResponse{Approved: true, Password: ""}, nil
 	}
 	return core.SignDataResponse{Approved: false, Password: ""}, err
@@ -122,7 +134,12 @@ func (r *rulesetUi) ApproveSignData(request *core.SignDataRequest) (core.SignDat
 
 func (r *rulesetUi) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
 	jsonreq, err := json.Marshal(request)
-	if err = r.checkApproval("ApproveTx", jsonreq, err); err == nil {
+	approved, err := r.checkApproval("ApproveExport", jsonreq, err)
+	if err != nil {
+		log.Info("Rule-based approval error, going to manual", "error", "err")
+		return r.next.ApproveExport(request)
+	}
+	if approved {
 		return core.ExportResponse{Approved: true}, nil
 	}
 	return core.ExportResponse{Approved: false}, err
@@ -136,7 +153,12 @@ func (r *rulesetUi) ApproveImport(request *core.ImportRequest) (core.ImportRespo
 
 func (r *rulesetUi) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
 	jsonreq, err := json.Marshal(request)
-	if err = r.checkApproval("ApproveListing", jsonreq, err); err == nil {
+	approved, err := r.checkApproval("ApproveListing", jsonreq, err)
+	if err != nil {
+		log.Info("Rule-based approval error, going to manual", "error", "err")
+		return r.next.ApproveListing(request)
+	}
+	if approved {
 		return core.ListResponse{Accounts: request.Accounts}, nil
 	}
 	return core.ListResponse{}, err
@@ -157,8 +179,8 @@ func (r *rulesetUi) ShowInfo(message string) {
 	log.Info(message)
 	r.next.ShowInfo(message)
 }
-func (r *rulesetUi) OnApprovedTx(tx ethapi.SignTransactionResult) {
 
+func (r *rulesetUi) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	jsonTx, err := json.Marshal(tx)
 	if err != nil {
 		log.Warn("failed marshalling transaction", "tx", tx)
@@ -169,5 +191,4 @@ func (r *rulesetUi) OnApprovedTx(tx ethapi.SignTransactionResult) {
 		fmt.Printf("Error in onapprove %v", err)
 		log.Warn("error occurred during execution", "error", err)
 	}
-
 }
