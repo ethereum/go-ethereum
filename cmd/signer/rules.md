@@ -151,8 +151,7 @@ This is now implemented (with ephemeral non-encrypted storage for now, so not ye
 		return sum.plus(value).lt(limit)
 
 	}
-	function ApproveTx(jsonstr){
-		var r = JSON.parse(jsonstr)
+	function ApproveTx(r){
 		if (isLimitOk(r.transaction)){
 			return "Approve"
 		}
@@ -171,9 +170,7 @@ This is now implemented (with ephemeral non-encrypted storage for now, so not ye
 	*
 	* TLDR; Use this method to keep track of signed transactions, instead of using the data in ApproveTx.
 	*/
- 	function OnApprovedTx(response_str){
-		console.log("OnApprovedTx > called with data\n\t "+response_str)
-		var resp = JSON.parse(response_str)
+ 	function OnApprovedTx(resp){
 		var value = big(resp.tx.value)
 		var txs = []
 		// Load stored transactions
@@ -192,8 +189,7 @@ This is now implemented (with ephemeral non-encrypted storage for now, so not ye
 
 ```javascript
 
-	function ApproveTx(jsonstr){
-		r = JSON.parse(jsonstr)
+	function ApproveTx(r){
 		if(r.transaction.from.toLowerCase()=="0x0000000000000000000000000000000000001337"){ return "Approve"}
 		if(r.transaction.from.toLowerCase()=="0x000000000000000000000000000000000000dead"){ return "Reject"}
 		// Otherwise goes to manual processing

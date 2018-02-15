@@ -47,46 +47,78 @@ func consoleOutput(call otto.FunctionCall) otto.Value {
 // rulesetUi provides an implementation of SignerUI that evaluates a javascript
 // file for each defined UI-method
 type rulesetUi struct {
-	vm      *otto.Otto    // The JS vm
+	//	vm      *otto.Otto    // The JS vm
 	next    core.SignerUI // The next handler, for manual processing
 	storage storage.Storage
+	jsRules string // The rules to use
 }
 
 func NewRuleEvaluator(next core.SignerUI) (*rulesetUi, error) {
 	c := &rulesetUi{
-		vm:      otto.New(),
+		//		vm:      otto.New(),
 		next:    next,
 		storage: storage.NewEphemeralStorage(),
+		jsRules: "",
 	}
-	consoleObj, _ := c.vm.Get("console")
-	consoleObj.Object().Set("log", consoleOutput)
-	consoleObj.Object().Set("error", consoleOutput)
-
-	c.vm.Set("storage", c.storage)
 
 	return c, nil
 }
 
 func (r *rulesetUi) Init(javascriptRules string) error {
-	script, err := r.vm.Compile("bignumber.js", BigNumber_JS)
+	r.jsRules = javascriptRules
+	return nil
+}
+func (r *rulesetUi) execute(jsfunc string, jsarg interface{}) (otto.Value, error) {
+
+	// Instantiate a fresh vm engine every time
+	vm := otto.New()
+	// Set the native callbacks
+	consoleObj, _ := vm.Get("console")
+	consoleObj.Object().Set("log", consoleOutput)
+	consoleObj.Object().Set("error", consoleOutput)
+	vm.Set("storage", r.storage)
+
+	// Load bootstrap libraries
+	script, err := vm.Compile("bignumber.js", BigNumber_JS)
 	if err != nil {
 		log.Warn("Failed loading libraries", "err", err)
-		return err
+		return otto.UndefinedValue(), err
 	}
-	r.vm.Run(script)
+	vm.Run(script)
 
-	_, err = r.vm.Run(javascriptRules)
+	// Run the actual rule implementation
+	_, err = vm.Run(r.jsRules)
 	if err != nil {
 		log.Warn("Execution failed", "err", err)
+		return otto.UndefinedValue(), err
 	}
-	return err
+
+	// And the actual call
+	// All calls are objects with the parameters being keys in that object.
+	// To provide additional insulation between js and go, we serialize it into JSON on the Go-side,
+	// and deserialize it on the JS side.
+	//argdata := ""
+
+	jsonbytes, err := json.Marshal(jsarg)
+	if err != nil {
+		log.Warn("failed marshalling data", "data", jsarg)
+		return otto.UndefinedValue(), err
+	}
+	// Now, we call foobar(JSON.parse(<jsondata>)).
+	var call string
+	if(len(jsonbytes) > 0){
+		call = fmt.Sprintf("%v(JSON.parse(%v))", jsfunc, string(jsonbytes))
+	}else{
+		call = fmt.Sprintf("%v()", jsfunc)
+	}
+	return vm.Run(call)
 }
 
 func (r *rulesetUi) checkApproval(jsfunc string, jsarg []byte, err error) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	v, err := r.vm.Call(jsfunc, nil, string(jsarg))
+	v, err := r.execute(jsfunc, string(jsarg))
 	if err != nil {
 		log.Info("error occurred during execution", "error", err)
 		return false, err
@@ -186,9 +218,8 @@ func (r *rulesetUi) OnApprovedTx(tx ethapi.SignTransactionResult) {
 		log.Warn("failed marshalling transaction", "tx", tx)
 		return
 	}
-	_, err = r.vm.Call("OnApprovedTx", nil, string(jsonTx))
+	_, err = r.execute("OnApprovedTx", string(jsonTx))
 	if err != nil {
-		fmt.Printf("Error in onapprove %v", err)
-		log.Warn("error occurred during execution", "error", err)
+		log.Info("error occurred during execution", "error", err)
 	}
 }

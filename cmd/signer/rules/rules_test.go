@@ -3,13 +3,14 @@ package rules
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/cmd/signer/core"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"math/big"
 	"testing"
-	"github.com/ethereum/go-ethereum/cmd/signer/core"
+	"strings"
 )
 
 const JS = `
@@ -53,6 +54,7 @@ func hexAddr(a string) common.Address { return common.BytesToAddress(common.Hex2
 func mixAddr(a string) (*common.MixedcaseAddress, error) {
 	return common.NewMixedcaseAddressFromString(a)
 }
+
 type alwaysDenyUi struct{}
 
 func (alwaysDenyUi) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
@@ -135,9 +137,7 @@ func TestListRequest(t *testing.T) {
 func TestSignTxRequest(t *testing.T) {
 
 	js := `
-	function ApproveTx(jsonstr){
-		console.log(jsonstr)
-		r = JSON.parse(jsonstr)
+	function ApproveTx(r){
 		console.log("transaction.from", r.transaction.from);
 		console.log("transaction.to", r.transaction.to);
 		console.log("transaction.value", r.transaction.value);
@@ -178,6 +178,85 @@ func TestSignTxRequest(t *testing.T) {
 	}
 }
 
+type dummyUi struct {
+	calls []string
+}
+
+func (d *dummyUi) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
+	d.calls = append(d.calls, "ApproveTx")
+	return core.SignTxResponse{}, core.ErrRequestDenied
+}
+
+func (d *dummyUi) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
+	d.calls = append(d.calls, "ApproveSignData")
+	return core.SignDataResponse{}, core.ErrRequestDenied
+}
+
+func (d *dummyUi) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
+	d.calls = append(d.calls, "ApproveExport")
+	return core.ExportResponse{}, core.ErrRequestDenied
+}
+
+func (d *dummyUi) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
+	d.calls = append(d.calls, "ApproveImport")
+	return core.ImportResponse{}, core.ErrRequestDenied
+}
+
+func (d *dummyUi) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
+	d.calls = append(d.calls, "ApproveListing")
+	return core.ListResponse{}, core.ErrRequestDenied
+}
+
+func (d *dummyUi) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
+	d.calls = append(d.calls, "ApproveNewAccount")
+	return core.NewAccountResponse{}, core.ErrRequestDenied
+}
+
+func (d *dummyUi) ShowError(message string) {
+	d.calls = append(d.calls, "ShowError")
+}
+
+func (d *dummyUi) ShowInfo(message string) {
+	d.calls = append(d.calls, "ShowInfo")
+}
+
+func (d *dummyUi) OnApprovedTx(tx ethapi.SignTransactionResult) {
+	d.calls = append(d.calls, "OnApprovedTx")
+}
+
+//TestForwarding tests that the rule-engine correctly dispatches requests to the next caller
+func TestForwarding(t *testing.T) {
+
+	js := ""
+	ui := &dummyUi{make([]string, 0)}
+	r, err := NewRuleEvaluator(ui)
+	if err != nil {
+		t.Fatalf("Failed to create js engine: %v", err)
+	}
+	if err = r.Init(js); err != nil {
+		t.Fatalf("Failed to load bootstrap js: %v", err)
+	}
+	r.ApproveSignData(nil)
+	r.ApproveTx(nil)
+	r.ApproveImport(nil)
+	r.ApproveNewAccount(nil)
+	r.ApproveListing(nil)
+	r.ApproveExport(nil)
+	r.ShowError("test")
+	r.ShowInfo("test")
+
+	//This one is not forwarded
+	r.OnApprovedTx(ethapi.SignTransactionResult{})
+
+	exp_calls := 8
+	if len(ui.calls) != exp_calls {
+
+		t.Errorf("Expected %d forwarded calls, got %d: %s", exp_calls, len(ui.calls), strings.Join(ui.calls,","))
+
+	}
+
+}
+
 func TestMissingFunc(t *testing.T) {
 	r, err := initRuleEngine(JS)
 	if err != nil {
@@ -185,17 +264,17 @@ func TestMissingFunc(t *testing.T) {
 		return
 	}
 
-	_, err = r.vm.Call("MissingMethod", nil, "test")
+	_, err = r.execute("MissingMethod", "test")
 
 	if err == nil {
 		t.Error("Expected error")
 	}
 
-	approved, err := r.checkApproval("MissingMethod", nil, nil);
+	approved, err := r.checkApproval("MissingMethod", nil, nil)
 	if err == nil {
 		t.Errorf("Expected missing method to yield error'")
 	}
-	if approved{
+	if approved {
 		t.Errorf("Expected missing method to cause non-approval")
 	}
 	fmt.Printf("Err %v", err)
@@ -236,7 +315,7 @@ func TestStorage(t *testing.T) {
 		return
 	}
 
-	v, err := r.vm.Call("testStorage", nil, nil)
+	v, err := r.execute("testStorage", nil)
 
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
@@ -293,8 +372,9 @@ const ExampleTxWindow = `
 		return sum.plus(value).lt(limit)
 		
 	}
-	function ApproveTx(jsonstr){
-		var r = JSON.parse(jsonstr)	
+	function ApproveTx(r){
+		console.log(r)
+		console.log(typeof(r))
 		if (isLimitOk(r.transaction)){
 			return "Approve"
 		}
@@ -313,9 +393,7 @@ const ExampleTxWindow = `
 	* 
 	* TLDR; Use this method to keep track of signed transactions, instead of using the data in ApproveTx.
 	*/
- 	function OnApprovedTx(response_str){
-		console.log("OnApprovedTx > called with data\n\t "+response_str)
-		var resp = JSON.parse(response_str)
+ 	function OnApprovedTx(resp){
 		var value = big(resp.tx.value)
 		var txs = []
 		// Load stored transactions
@@ -350,6 +428,12 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 		Callinfo: "Warning, all your base are bellong to us",
 		Meta:     core.Metadata{"remoteip", "localip", "inproc"},
 	}
+}
+func dummyTxWithV(value uint64) *core.SignTxRequest {
+
+	v := big.NewInt(0).SetUint64(value)
+	h := hexutil.Big(*v)
+	return dummyTx(h)
 }
 func dummySigned(value *big.Int) *types.Transaction {
 	to := common.HexToAddress("000000000000000000000000000000000000dead")
@@ -397,4 +481,87 @@ func TestLimitWindow(t *testing.T) {
 		t.Errorf("Expected check to resolve to 'Reject'")
 	}
 
+}
+
+// dontCallMe is used as a next-handler that does not want to be called - it invokes test failure
+type dontCallMe struct{
+	t *testing.T
+}
+
+func (d *dontCallMe) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
+	d.t.Fatalf("Did not expect next-handler to be called")
+	return core.SignTxResponse{}, core.ErrRequestDenied
+}
+
+func (d *dontCallMe) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
+	d.t.Fatalf("Did not expect next-handler to be called")
+	return core.SignDataResponse{}, core.ErrRequestDenied
+}
+
+func (d *dontCallMe) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
+	d.t.Fatalf("Did not expect next-handler to be called")
+	return core.ExportResponse{}, core.ErrRequestDenied
+}
+
+func (d *dontCallMe) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
+	d.t.Fatalf("Did not expect next-handler to be called")
+	return core.ImportResponse{}, core.ErrRequestDenied
+}
+
+func (d *dontCallMe) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
+	d.t.Fatalf("Did not expect next-handler to be called")
+	return core.ListResponse{}, core.ErrRequestDenied
+}
+
+func (d *dontCallMe) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
+	d.t.Fatalf("Did not expect next-handler to be called")
+	return core.NewAccountResponse{}, core.ErrRequestDenied
+}
+
+func (d *dontCallMe) ShowError(message string) {
+	d.t.Fatalf("Did not expect next-handler to be called")
+}
+
+func (d *dontCallMe) ShowInfo(message string) {
+	d.t.Fatalf("Did not expect next-handler to be called")
+}
+
+func (d *dontCallMe) OnApprovedTx(tx ethapi.SignTransactionResult) {
+	d.t.Fatalf("Did not expect next-handler to be called")
+}
+
+
+//TestContextIsCleared tests that the rule-engine does not retain variables over several requests.
+// if it does, that would be bad since developers may rely on that to store data,
+// instead of using the disk-based data storage
+func TestContextIsCleared(t *testing.T) {
+
+	js := `
+	function ApproveTx(){
+		if (typeof foobar == 'undefined') {
+			foobar = "Approve"
+ 		}
+		console.log(foobar)
+		if (foobar == "Approve"){
+			foobar = "Reject"
+		}else{
+			foobar = "Approve"
+		}
+		return foobar
+	}
+	`
+	ui := &dontCallMe{t}
+	r, err := NewRuleEvaluator(ui)
+	if err != nil {
+		t.Fatalf("Failed to create js engine: %v", err)
+	}
+	if err = r.Init(js); err != nil {
+		t.Fatalf("Failed to load bootstrap js: %v", err)
+	}
+	tx := dummyTxWithV(0)
+	r1, err := r.ApproveTx(tx)
+	r2, err := r.ApproveTx(tx)
+	if r1.Approved != r2.Approved{
+		t.Errorf("Expected execution context to be cleared between executions")
+	}
 }
