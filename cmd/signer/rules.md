@@ -105,3 +105,108 @@ This would leave it up to the user to ensure that the `path/to/masterseed` is ha
 imagine leveraging OS-level keychains where supported. The setup is however in general similar to how ssh-keys are  stored in `.ssh/`.
 
 
+# Implementation status
+
+This is now implemented (with ephemeral non-encrypted storage for now, so not yet enabled).
+
+## Example 1: ruleset for a rate-limited window
+
+
+```javascript
+
+	function big(str){
+		if(str.slice(0,2) == "0x"){ return new BigNumber(str.slice(2),16)}
+		return new BigNumber(str)
+	}
+
+	// Time window: 1 week
+	var window = 1000* 3600*24*7;
+
+	// Limit : 1 ether
+	var limit = new BigNumber("1e18");
+
+	function isLimitOk(transaction){
+		var value = big(transaction.value)
+		// Start of our window function
+		var windowstart = new Date().getTime() - window;
+
+		var txs = [];
+		var stored = storage.Get('txs');
+
+		if(stored != ""){
+			txs = JSON.parse(stored)
+		}
+		// First, remove all that have passed out of the time-window
+		var newtxs = txs.filter(function(tx){return tx.tstamp > windowstart});
+		console.log(txs, newtxs.length);
+
+		// Secondly, aggregate the current sum
+		sum = new BigNumber(0)
+
+		sum = newtxs.reduce(function(agg, tx){ return big(tx.value).plus(agg)}, sum);
+		console.log("ApproveTx > Sum so far", sum);
+		console.log("ApproveTx > Requested", value.toNumber());
+
+		// Would we exceed weekly limit ?
+		return sum.plus(value).lt(limit)
+
+	}
+	function ApproveTx(jsonstr){
+		var r = JSON.parse(jsonstr)
+		if (isLimitOk(r.transaction)){
+			return "Approve"
+		}
+		return "Nope"
+	}
+
+	/**
+	* OnApprovedTx(str) is called when a transaction has been approved and signed. The parameter
+ 	* 'response_str' contains the return value that will be sent to the external caller.
+	* The return value from this method is ignore - the reason for having this callback is to allow the
+	* ruleset to keep track of approved transactions.
+	*
+	* When implementing rate-limited rules, this callback should be used.
+	* If a rule responds with neither 'Approve' nor 'Reject' - the tx goes to manual processing. If the user
+	* then accepts the transaction, this method will be called.
+	*
+	* TLDR; Use this method to keep track of signed transactions, instead of using the data in ApproveTx.
+	*/
+ 	function OnApprovedTx(response_str){
+		console.log("OnApprovedTx > called with data\n\t "+response_str)
+		var resp = JSON.parse(response_str)
+		var value = big(resp.tx.value)
+		var txs = []
+		// Load stored transactions
+		var stored = storage.Get('txs');
+		if(stored != ""){
+			txs = JSON.parse(stored)
+		}
+		// Add this to the storage
+		txs.push({tstamp: new Date().getTime(), value: value});
+		storage.Put("txs", JSON.stringify(txs));
+	}
+
+```
+
+## Example 2: allow destination
+
+```javascript
+
+	function ApproveTx(jsonstr){
+		r = JSON.parse(jsonstr)
+		if(r.transaction.from.toLowerCase()=="0x0000000000000000000000000000000000001337"){ return "Approve"}
+		if(r.transaction.from.toLowerCase()=="0x000000000000000000000000000000000000dead"){ return "Reject"}
+		// Otherwise goes to manual processing
+	}
+
+```
+
+## Example 3: Allow listing
+
+```javascript
+
+    function ApproveListing(){
+        return "Approve"
+    }
+
+```

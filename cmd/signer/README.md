@@ -50,6 +50,53 @@ The general flow for signing a transaction using e.g. geth is as follows:
 
 In this case, `geth` would be started with `--externalsigner=http://localhost:8550` and would relay requests to `eth.sendTransaction`.
 
+## TODOs
+
+Some snags and todos
+
+* The signer should take a startup param "--no-change", for UI:s that do not contain the capability
+   to perform changes to things, only approve/deny. Such a UI should be able to start the signer in
+   a more secure mode by telling it that it only wants approve/deny capabilities.
+
+* It would be nice if the signer could collect new 4byte-id:s/method selectors, and have a
+secondary database for those (`4byte_custom.json`). Users could then (optionally) submit their collections for
+inclusion upstream.
+
+* It should be possible to configure the signer to check if an account is indeed known to it, before
+passing on to the UI. The reason it currently does not, is that it would make it possible to enumerate
+accounts if it immediately returned "unknown account". Similarly, it should be possible to configure
+the signer to auto-allow listing (certain) accounts, instead of asking every time.
+
+* Upon startup, the signer should spit out some info to the caller (particularly important when executed in `stdio-ui`-mode),
+invoking methods with the following info:
+  * Version info about the signer
+  * Address of API (http/ipc)
+    * This makes it posible for the UI to use the api for creating transactions
+  * List of known accounts
+
+* The signer should pass the `Origin` header as call-info to the UI. As of right now, the way that info about the request is
+put together is a bit of a hack into the http server. This could probably be greatly improved
+
+* Geth relay
+    - Geth should be started in `geth --external_signer localhost:8550`.
+
+* Geth checksum
+  - Currently, the Geth API:s use `common.Address` in the arguments to transaction submission (e.g `to` field). This
+  type is 20 `bytes`, and is incapable of carrying checksum information. The signer uses `common.MixedcaseAddress`, which
+  retains the original input.
+  - The Geth api should switch to use the same type, and relay `to`-account verbatim to the external api.
+
+* Wallets / accounts. Add API methods for wallets.
+
+* Storage
+    * An encrypted key-value storage should be implemented
+    * See [rules.md](rules.md) for more info about this.
+
+* Another potential thing to introduce is pairing.
+  * To prevent spurious requests which users just accept, implement a way to "pair" the caller with the signer (external API).
+  * Thus geth/mist/cpp would cryptographically handshake and afterwards the caller would be allowed to make signing requests.
+  * This feature would make the addition of rules less dangerous.
+
 ## Communication
 
 ### External API
@@ -642,55 +689,3 @@ A UI should conform to the following rules.
 along with the UI.
 
 
-
-
-
-## TODOs
-
-Some snags and todos
-
-* The audit-log perhaps leave some things to be desired. I have not found a perfect way to save an audit log of events.
-
-* The signer should take a startup param "--no-change", for UI:s that do not contain the capability
-   to perform changes to things, only approve/deny. Such a UI should be able to start the signer in
-   a more secure mode by telling it that it only wants approve/deny capabilities.
-
-* It would be nice if the signer could collect new 4byte-id:s/method selectors, and have a
-secondary database for those (`4byte_custom.json`). Users could then (optionally) submit their collections for
-inclusion upstream.
-
-* It should be possible to configure the signer to check if an account is indeed known to it, before
-passing on to the UI. The reason it currently does not, is that it would make it possible to enumerate
-accounts if it immediately returned "unknown account". Similarly, it should be possible to configure
-the signer to auto-allow listing (certain) accounts, instead of asking every time.
-
-* Upon startup, the signer should spit out some info to the caller (particularly important when executed in `stdio-ui`-mode),
-invoking methods with the following info:
-  * Version info about the signer
-  * Address of API (http/ipc)
-    * This makes it posible for the UI to use the api for creating transactions
-  * List of known accounts
-
-* The signer should pass the `Origin` header as call-info to the UI. As of right now, the way that info about the request is
-put together is a bit of a hack into the http server. This could probably be greatly improved
-
-* Geth relay
-    - Geth should be started in `geth --external_signer localhost:8550`.
-* Geth checksum
-  - Currently, the Geth API:s use `common.Address` in the arguments to transaction submission (e.g `to` field). This
-  type is 20 `bytes`, and is incapable of carrying checksum information. The signer uses `common.MixedcaseAddress`, which
-  retains the original input.
-  - The Geth api should switch to use the same type, and relay `to`-account verbatim to the external api.
-
-* Wallets / accounts. Add API methods for wallets.
-
-* Rules. In the future, it should be possible to specify rules, e.g. "Allow sending up to 1 eth per day to contract Y". Two problems:
-   * There needs to be a very good structure around rules. Either a full language (lua/js) or a limited but flexible syntax based on e.g. json/yaml. Kind of like a firewall ruleset.
-   * This implies that the signer would remember passwords, which is very problematic. However, a good UI implementation will want these things,
-   and it would be better to implement it once in the signer, than having UI:s develop their own remember-password logic.
-    * See [rules.md](rules.md) for more info about this.
-
-* Another potential thing to introduce is pairing.
-  * To prevent spurious requests which users just accept, implement a way to "pair" the caller with the signer (external API).
-  * Thus geth/mist/cpp would cryptographically handshake and afterwards the caller would be allowed to make signing requests.
-  * This feature would make the addition of rules less dangerous.
