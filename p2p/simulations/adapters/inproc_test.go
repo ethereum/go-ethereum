@@ -27,7 +27,7 @@ import (
 func TestSocketPipe(t *testing.T) {
 	c1, c2, err := socketPipe()
 	if err != nil {
-		t.Skip(err)
+		t.Fatal(err)
 	}
 
 	done := make(chan struct{})
@@ -35,15 +35,19 @@ func TestSocketPipe(t *testing.T) {
 	go func() {
 		msgs := 20
 		size := 8
-		for i := 0; i < msgs; i++ {
-			msg := make([]byte, size)
-			_ = binary.PutUvarint(msg, uint64(i))
 
-			_, err := c1.Write(msg)
-			if err != nil {
-				t.Fatal(err)
+		// OS socket pipe is blocking (depending on buffer size on OS), so writes are emitted asynchronously
+		go func() {
+			for i := 0; i < msgs; i++ {
+				msg := make([]byte, size)
+				_ = binary.PutUvarint(msg, uint64(i))
+
+				_, err := c1.Write(msg)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
-		}
+		}()
 
 		for i := 0; i < msgs; i++ {
 			msg := make([]byte, size)
@@ -72,7 +76,7 @@ func TestSocketPipe(t *testing.T) {
 func TestSocketPipeBidirections(t *testing.T) {
 	c1, c2, err := socketPipe()
 	if err != nil {
-		t.Skip(err)
+		t.Fatal(err)
 	}
 
 	done := make(chan struct{})
@@ -80,14 +84,18 @@ func TestSocketPipeBidirections(t *testing.T) {
 	go func() {
 		msgs := 100
 		size := 4
-		for i := 0; i < msgs; i++ {
-			msg := []byte(`ping`)
 
-			_, err := c1.Write(msg)
-			if err != nil {
-				t.Fatal(err)
+		// OS socket pipe is blocking (depending on buffer size on OS), so writes are emitted asynchronously
+		go func() {
+			for i := 0; i < msgs; i++ {
+				msg := []byte(`ping`)
+
+				_, err := c1.Write(msg)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
-		}
+		}()
 
 		for i := 0; i < msgs; i++ {
 			out := make([]byte, size)

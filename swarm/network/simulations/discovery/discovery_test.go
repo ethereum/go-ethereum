@@ -99,7 +99,7 @@ func testDiscoverySimulationExecAdapter(t *testing.T, nodes, conns int) {
 	testDiscoverySimulation(t, nodes, conns, adapters.NewExecAdapter(baseDir))
 }
 
-func XTestDiscoverySimulationSocketAdapter(t *testing.T) {
+func TestDiscoverySimulationSocketAdapter(t *testing.T) {
 	testDiscoverySimulationSocketAdapter(t, *nodeCount, *initCount)
 }
 
