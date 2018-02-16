@@ -177,6 +177,7 @@ func RandomNodeConfig() *NodeConfig {
 	}
 	return &NodeConfig{
 		ID:         id,
+		Name:       fmt.Sprintf("node_%s", id.String()),
 		PrivateKey: key,
 		Port:       port,
 	}
