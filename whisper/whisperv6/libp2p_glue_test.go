@@ -24,19 +24,17 @@ import (
 	"math/rand"
 
 	"github.com/ethereum/go-ethereum/p2p"
-	// libp2p "github.com/libp2p/go-libp2p"
 	host "github.com/libp2p/go-libp2p-host"
-	// crypto "github.com/libp2p/go-libp2p-crypto"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	testutil "github.com/libp2p/go-testutil"
 	inet "github.com/libp2p/go-libp2p-net"
 )
 
 const (
-	testProtocolId = "/whispertesting/6.1"
+	testProtocolID = "/whispertesting/6.1"
 )
 
-func createTestNetwork(t *testing.T, ctx context.Context, n int) []host.Host {
+func createTestNetwork(ctx context.Context, t *testing.T, n int) []host.Host {
 	net := make([]host.Host, n)
 	mn := mocknet.New(ctx)
 
@@ -71,7 +69,7 @@ func createTestNetwork(t *testing.T, ctx context.Context, n int) []host.Host {
 
 func TestSimpleCode(t *testing.T) {
 	ctx := context.Background()
-	hosts := createTestNetwork(t, ctx, 2)
+	hosts := createTestNetwork(ctx, t, 2)
 
 	code := rand.Uint64()
 	size := rand.Uint32() % 512
@@ -81,7 +79,7 @@ func TestSimpleCode(t *testing.T) {
 		t.Fatalf("Read %d random bytes instead of the expected %d, err: %v", n, size, err)
 	}
 
-	hosts[0].SetStreamHandler(testProtocolId, func (s inet.Stream) {
+	hosts[0].SetStreamHandler(testProtocolID, func (s inet.Stream) {
 		defer s.Close()
 
 		raw := make([]byte, size + codeLength + payloadSizeLength)
@@ -104,7 +102,7 @@ func TestSimpleCode(t *testing.T) {
 			t.Fatalf("Encoded payload differ from source")
 		}
 	})
-	stream, err := hosts[1].NewStream(ctx, hosts[0].ID(), testProtocolId)
+	stream, err := hosts[1].NewStream(ctx, hosts[0].ID(), testProtocolID)
 	if err != nil {
 		t.Fatal(err)
 	}
