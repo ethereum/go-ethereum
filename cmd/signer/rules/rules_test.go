@@ -9,8 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"math/big"
-	"testing"
 	"strings"
+	"testing"
 )
 
 const JS = `
@@ -167,7 +167,7 @@ func TestSignTxRequest(t *testing.T) {
 		Transaction: core.SendTxArgs{
 			From: *from,
 			To:   to},
-		Callinfo: "",
+		Callinfo: nil,
 		Meta:     core.Metadata{"remoteip", "localip", "inproc"},
 	})
 	if err != nil {
@@ -251,7 +251,7 @@ func TestForwarding(t *testing.T) {
 	exp_calls := 8
 	if len(ui.calls) != exp_calls {
 
-		t.Errorf("Expected %d forwarded calls, got %d: %s", exp_calls, len(ui.calls), strings.Join(ui.calls,","))
+		t.Errorf("Expected %d forwarded calls, got %d: %s", exp_calls, len(ui.calls), strings.Join(ui.calls, ","))
 
 	}
 
@@ -425,8 +425,12 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 			GasPrice: gas,
 			Gas:      gasPrice,
 		},
-		Callinfo: "Warning, all your base are bellong to us",
-		Meta:     core.Metadata{"remoteip", "localip", "inproc"},
+		Callinfo: &core.ValidationMessages{
+			[]core.ValidationInfo{
+				{"Warning", "All your base are bellong to us"},
+			},
+		},
+		Meta: core.Metadata{"remoteip", "localip", "inproc"},
 	}
 }
 func dummyTxWithV(value uint64) *core.SignTxRequest {
@@ -484,7 +488,7 @@ func TestLimitWindow(t *testing.T) {
 }
 
 // dontCallMe is used as a next-handler that does not want to be called - it invokes test failure
-type dontCallMe struct{
+type dontCallMe struct {
 	t *testing.T
 }
 
@@ -530,7 +534,6 @@ func (d *dontCallMe) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	d.t.Fatalf("Did not expect next-handler to be called")
 }
 
-
 //TestContextIsCleared tests that the rule-engine does not retain variables over several requests.
 // if it does, that would be bad since developers may rely on that to store data,
 // instead of using the disk-based data storage
@@ -561,7 +564,7 @@ func TestContextIsCleared(t *testing.T) {
 	tx := dummyTxWithV(0)
 	r1, err := r.ApproveTx(tx)
 	r2, err := r.ApproveTx(tx)
-	if r1.Approved != r2.Approved{
+	if r1.Approved != r2.Approved {
 		t.Errorf("Expected execution context to be cleared between executions")
 	}
 }

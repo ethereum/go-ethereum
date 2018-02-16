@@ -23,9 +23,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
-
-	"bytes"
-
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -84,10 +81,10 @@ type SignerUI interface {
 
 // SignerAPI defines the actual implementation of ExternalAPI
 type SignerAPI struct {
-	chainID *big.Int
-	am      *accounts.Manager
-	UI      SignerUI
-	abidb   AbiDb
+	chainID   *big.Int
+	am        *accounts.Manager
+	UI        SignerUI
+	validator *Validator
 }
 
 // Metadata about a request
@@ -126,9 +123,9 @@ func (m Metadata) String() string {
 type (
 	// SignTxRequest contains info about a Transaction to sign
 	SignTxRequest struct {
-		Transaction SendTxArgs `json:"transaction"`
-		Callinfo    string     `json:"call_info"`
-		Meta        Metadata   `json:"meta"`
+		Transaction SendTxArgs         `json:"transaction"`
+		Callinfo    *ValidationMessages `json:"call_info"`
+		Meta        Metadata           `json:"meta"`
 	}
 	// SignTxResponse result from SignTxRequest
 	SignTxResponse struct {
@@ -229,7 +226,7 @@ func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abi
 			log.Debug("Trezor support enabled")
 		}
 	}
-	return &SignerAPI{big.NewInt(chainID), accounts.NewManager(backends...), ui, *abidb}
+	return &SignerAPI{big.NewInt(chainID), accounts.NewManager(backends...), ui, NewValidator(abidb)}
 }
 
 // List returns the set of wallet this signer manages. Each wallet can contain
@@ -318,66 +315,21 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 	return modified
 }
 
-// determineCallInfo turns ABI-data + methodselector (if given) into a string suitable
-// to present to the user.
-func (api *SignerAPI) determineCallInfo(data []byte, methodSelector *string) string {
-
-	if len(data) < 4 {
-		return ""
-	}
-	var (
-		selector string
-		err      error
-	)
-	// Try to make sense of the data
-	if methodSelector == nil {
-		selector, err = api.abidb.LookupMethodSelector(data[:4])
-		if err != nil {
-			return errorWrapper{"Warning! Could not locate ABI", err}.String()
-		}
-	} else {
-		selector = *methodSelector
-	}
-	if selector != "" {
-		abiData, err := MethodSelectorToAbi(selector)
-		if err != nil {
-			return errorWrapper{"Warning! Could not validate ABI-data against calldata", err}.String()
-		} else {
-			var info *decodedCallData
-			info, err = parseCallData(data, string(abiData))
-			if err != nil {
-				return errorWrapper{"Warning! Could not validate ABI-data against calldata", err}.String()
-			} else {
-				return info.String()
-			}
-		}
-	}
-	return ""
-}
-
 // SignTransaction signs the given Transaction and returns it both as json and rlp-encoded form
 func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error) {
 	var (
 		err    error
 		result SignTxResponse
-		data   []byte
 	)
-	// Prevent accidental erroneous usage of both 'input' and 'data'
-	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
-		return nil, errors.New(`Ambiguous request: moth "data" and "input" are set and are not identical`)
+	msgs, err:= api.validator.ValidateTransaction(&args, methodSelector)
+	if err != nil {
+		return nil, err
 	}
 
-	if args.Data != nil {
-		data = *args.Data
-	} else if args.Input != nil {
-		data = *args.Input
-		*args.Data = data
-		*args.Input = nil
-	}
 	req := SignTxRequest{
 		Transaction: args,
 		Meta:        MetadataFromContext(ctx),
-		Callinfo:    api.determineCallInfo(data, methodSelector),
+		Callinfo:    msgs,
 	}
 	// Process approval
 	result, err = api.UI.ApproveTx(&req)

@@ -161,6 +161,11 @@ type AbiDb struct {
 	db map[string]string
 }
 
+// NewEmptyAbiDB exists for test purposes
+func NewEmptyAbiDB() (*AbiDb, error) {
+	return &AbiDb{make(map[string]string)}, nil
+}
+
 // NewAbiDBFromFile loads signature database from file, and
 // errors if the file is not valid json. Does no other validation of contents
 func NewAbiDBFromFile(path string) (*AbiDb, error) {

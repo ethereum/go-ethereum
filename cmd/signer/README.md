@@ -506,29 +506,137 @@ Invoked when there's a transaction for approval.
 
 #### Sample call
 
+Here's a method invocation:
+```bash
+
+curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":[{"from":"0x694267f14675d7e1b9494fd8d72fefe1755710fa","gas":"0x333","gasPrice":"0x1","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x0", "data":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"},"safeSend(address)"],"id":67}' http://localhost:8550/
+```
+
 ```json
 
 {
-	"jsonrpc": "2.0",
-	"method": "ApproveTx",
-	"params": [{
-		"transaction": {
-			"to": "0xae967917c465db8578ca9024c205720b1a3651A9",
-			"gas": "0x333",
-			"gasPrice": "0x123",
-			"value": "0x10",
-			"data": "0xd7a5865800000000000000000000000000000000000000000000000000000000000000ff",
-			"nonce": "0x0"
-		},
-		"fromaccount": "0xAe967917c465db8578ca9024c205720b1a3651A9",
-		"call_info": "Warning! Could not validate ABI-data against calldata\nSupplied ABI spec does not contain method signature in data: 0xd7a58658",
-		"meta": {
-			"remote": "127.0.0.1:34572",
-			"local": "localhost:8550",
-			"scheme": "HTTP/1.1"
-		}
-	}],
-	"id": 1
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "ApproveTx",
+  "params": [
+    {
+      "transaction": {
+        "from": "0x0x694267f14675d7e1b9494fd8d72fefe1755710fa",
+        "to": "0x0x07a565b7ed7d7a678680a4c162885bedbb695fe0",
+        "gas": "0x333",
+        "gasPrice": "0x1",
+        "value": "0x0",
+        "nonce": "0x0",
+        "data": "0x4401a6e40000000000000000000000000000000000000000000000000000000000000012",
+        "input": null
+      },
+      "call_info": {
+        "Messages": [
+          {
+            "type": "WARNING",
+            "message": "Invalid checksum on to-address"
+          },
+          {
+            "type": "Info",
+            "message": "safeSend(address: 0x0000000000000000000000000000000000000012)"
+          }
+        ]
+      },
+      "meta": {
+        "remote": "127.0.0.1:48486",
+        "local": "localhost:8550",
+        "scheme": "HTTP/1.1"
+      }
+    }
+  ]
+}
+
+```
+
+The same method invocation, but with invalid data:
+```bash
+
+curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":[{"from":"0x694267f14675d7e1b9494fd8d72fefe1755710fa","gas":"0x333","gasPrice":"0x1","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x0", "data":"0x4401a6e40000000000000002000000000000000000000000000000000000000000000012"},"safeSend(address)"],"id":67}' http://localhost:8550/
+```
+
+```json
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "ApproveTx",
+  "params": [
+    {
+      "transaction": {
+        "from": "0x0x694267f14675d7e1b9494fd8d72fefe1755710fa",
+        "to": "0x0x07a565b7ed7d7a678680a4c162885bedbb695fe0",
+        "gas": "0x333",
+        "gasPrice": "0x1",
+        "value": "0x0",
+        "nonce": "0x0",
+        "data": "0x4401a6e40000000000000002000000000000000000000000000000000000000000000012",
+        "input": null
+      },
+      "call_info": {
+        "Messages": [
+          {
+            "type": "WARNING",
+            "message": "Invalid checksum on to-address"
+          },
+          {
+            "type": "WARNING",
+            "message": "Transaction data did not match ABI-interface: WARNING: Supplied data is stuffed with extra data. \nWant 0000000000000002000000000000000000000000000000000000000000000012\nHave 0000000000000000000000000000000000000000000000000000000000000012\nfor method safeSend(address)"
+          }
+        ]
+      },
+      "meta": {
+        "remote": "127.0.0.1:48492",
+        "local": "localhost:8550",
+        "scheme": "HTTP/1.1"
+      }
+    }
+  ]
+}
+
+
+```
+
+One which has missing `to`, but with no `data`:
+
+
+```json
+
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "ApproveTx",
+  "params": [
+    {
+      "transaction": {
+        "from": "",
+        "to": null,
+        "gas": "0x0",
+        "gasPrice": "0x0",
+        "value": "0x0",
+        "nonce": "0x0",
+        "data": null,
+        "input": null
+      },
+      "call_info": {
+        "Messages": [
+          {
+            "type": "CRITICAL",
+            "message": "Tx will create contract with empty code!"
+          }
+        ]
+      },
+      "meta": {
+        "remote": "signer binary",
+        "local": "main",
+        "scheme": "in-proc"
+      }
+    }
+  ]
 }
 ```
 

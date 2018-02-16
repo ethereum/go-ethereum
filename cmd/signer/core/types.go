@@ -50,6 +50,14 @@ func (a Account) String() string {
 	}
 	return err.Error()
 }
+type ValidationInfo struct {
+	Typ     string `json:"type"`
+	Message string `json:"message"`
+}
+type ValidationMessages struct {
+	Messages []ValidationInfo
+}
+
 /*
 // TransactionArg represents a Transaction for the signer.
 type TransactionArg struct {

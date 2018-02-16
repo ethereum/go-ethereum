@@ -92,7 +92,7 @@ func (ui *CommandlineUI) confirm() bool {
 }
 
 func showMetadata(metadata Metadata) {
-	fmt.Printf("Request info:\n\t%v -> %v -> %v\n", metadata.Remote, metadata.Scheme, metadata.Local)
+	fmt.Printf("Request context:\n\t%v -> %v -> %v\n", metadata.Remote, metadata.Scheme, metadata.Local)
 }
 
 // ApproveTx prompt the user for confirmation to request to sign Transaction
@@ -117,9 +117,12 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 			fmt.Printf("data:  %v\n", common.Bytes2Hex(d))
 		}
 	}
-	if request.Callinfo != "" {
-		fmt.Printf("\nNote: This Transaction contains data. Review abi-decoding info below:")
-		fmt.Printf("\nCall info:\n\t%v\n", request.Callinfo)
+	if request.Callinfo != nil {
+		fmt.Printf("\nTransaction validation:\n")
+		for _,m := range request.Callinfo.Messages{
+			fmt.Printf("  * %s : %s", m.Typ, m.Message)
+		}
+		fmt.Println()
 
 	}
 	fmt.Printf("\n")
