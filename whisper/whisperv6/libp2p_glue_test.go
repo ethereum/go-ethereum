@@ -34,6 +34,8 @@ const (
 	testProtocolID = "/whispertesting/6.1"
 )
 
+// Create a network with n mock hosts. Each host in the array is linked to
+// all hosts preceding it, and has dialed them.
 func createTestNetwork(ctx context.Context, t *testing.T, n int) []host.Host {
 	net := make([]host.Host, n)
 	mn := mocknet.New(ctx)
@@ -121,6 +123,43 @@ func TestSimpleCode(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("Error encoding a message to the stream: %s", err)
+	}
+
+	stream.Close()
+}
+
+func TestSimpleDecode(t *testing.T) {
+	coded := []byte{0xef, 0xbe, 0xad, 0xde, 0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05}
+
+	ctx := context.Background()
+	hosts := createTestNetwork(ctx, t, 2)
+
+	hosts[0].SetStreamHandler(testProtocolID, func (s inet.Stream) {
+		lps := LibP2PStream{
+			stream: s,
+		}
+
+		msg, err := lps.ReadMsg()
+		if err != nil {
+			t.Fatalf("Error decoding message: %s", err)
+		}
+
+		if msg.Code != 0xdeadbeef {
+			t.Fatalf("Error decoding message code %d instead of %d", msg.Code, 0xdeadbeef)
+		}
+		if msg.Size != 5 {
+			t.Fatalf("Error decoding message size %d instead of %d", msg.Size, 5)
+		}
+	})
+
+	stream, err := hosts[1].NewStream(ctx, hosts[0].ID(), testProtocolID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := stream.Write(coded)
+	if err != nil || n != len(coded) {
+		t.Fatalf("Error writing %d bytes to stream: %s, %d bytes written", len(coded), err, n)
 	}
 
 	stream.Close()
