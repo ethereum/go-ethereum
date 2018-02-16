@@ -219,7 +219,7 @@ func TestVerifyErrors(t *testing.T) {
 
 }
 
-func XTestDeposit(t *testing.T) {
+func TestDeposit(t *testing.T) {
 	path0 := filepath.Join(os.TempDir(), "chequebook-test-0.json")
 	backend := newTestBackend()
 	contr0, _ := deploy(key0, new(big.Int), backend)
@@ -281,8 +281,8 @@ func XTestDeposit(t *testing.T) {
 		t.Fatalf("expected balance %v, got %v", exp, chbook.Balance())
 	}
 
-	// autodeposit every 30ms if new cheque issued
-	interval := 30 * time.Millisecond
+	// autodeposit every 200ms if new cheque issued
+	interval := 200 * time.Millisecond
 	chbook.AutoDeposit(interval, common.Big1, balance)
 	_, err = chbook.Issue(addr1, amount)
 	if err != nil {
