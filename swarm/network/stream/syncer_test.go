@@ -36,7 +36,7 @@ import (
 
 const dataChunkCount = 500
 
-func XTestSyncerSimulation(t *testing.T) {
+func TestSyncerSimulation(t *testing.T) {
 	testSyncBetweenNodes(t, 2, 1, dataChunkCount, true, 1)
 	testSyncBetweenNodes(t, 4, 1, dataChunkCount, true, 1)
 	testSyncBetweenNodes(t, 8, 1, dataChunkCount, true, 1)
@@ -51,11 +51,12 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		return addr
 	}
 	conf := &streamTesting.RunConfig{
-		Adapter:   *adapter,
-		NodeCount: nodes,
-		ConnLevel: conns,
-		ToAddr:    toAddr,
-		Services:  services,
+		Adapter:         *adapter,
+		NodeCount:       nodes,
+		ConnLevel:       conns,
+		ToAddr:          toAddr,
+		Services:        services,
+		EnableMsgEvents: false,
 	}
 	// create context for simulation run
 	timeout := 30 * time.Second

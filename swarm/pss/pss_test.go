@@ -1081,9 +1081,9 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 		DefaultService: "bzz",
 	})
 	for i := 0; i < numnodes; i++ {
-		nodes[i], err = net.NewNodeWithConfig(&adapters.NodeConfig{
-			Services: []string{"bzz", pssProtocolName},
-		})
+		nodeconf := adapters.RandomNodeConfig()
+		nodeconf.Services = []string{"bzz", pssProtocolName}
+		nodes[i], err = net.NewNodeWithConfig(nodeconf)
 		if err != nil {
 			return nil, fmt.Errorf("error creating node 1: %v", err)
 		}

@@ -306,7 +306,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 
 }
 
-func XTestDeliveryFromNodes(t *testing.T) {
+func TestDeliveryFromNodes(t *testing.T) {
 	testDeliveryFromNodes(t, 2, 1, dataChunkCount, true)
 	testDeliveryFromNodes(t, 2, 1, dataChunkCount, false)
 	testDeliveryFromNodes(t, 4, 1, dataChunkCount, true)
@@ -321,11 +321,12 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	defaultSkipCheck = skipCheck
 	toAddr = network.NewAddrFromNodeID
 	conf := &streamTesting.RunConfig{
-		Adapter:   *adapter,
-		NodeCount: nodes,
-		ConnLevel: conns,
-		ToAddr:    toAddr,
-		Services:  services,
+		Adapter:         *adapter,
+		NodeCount:       nodes,
+		ConnLevel:       conns,
+		ToAddr:          toAddr,
+		Services:        services,
+		EnableMsgEvents: false,
 	}
 
 	sim, teardown, err := streamTesting.NewSimulation(conf)
@@ -495,11 +496,12 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	defer cancel()
 
 	conf := &streamTesting.RunConfig{
-		Adapter:   *adapter,
-		NodeCount: nodes,
-		ConnLevel: conns,
-		ToAddr:    toAddr,
-		Services:  services,
+		Adapter:         *adapter,
+		NodeCount:       nodes,
+		ConnLevel:       conns,
+		ToAddr:          toAddr,
+		Services:        services,
+		EnableMsgEvents: false,
 	}
 	sim, teardown, err := streamTesting.NewSimulation(conf)
 	defer teardown()

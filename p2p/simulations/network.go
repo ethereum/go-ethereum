@@ -78,13 +78,6 @@ func (self *Network) Events() *event.Feed {
 	return &self.events
 }
 
-// NewNode adds a new node to the network with a random ID
-func (self *Network) NewNode() (*Node, error) {
-	conf := adapters.RandomNodeConfig()
-	conf.Services = []string{self.DefaultService}
-	return self.NewNodeWithConfig(conf)
-}
-
 // NewNodeWithConfig adds a new node to the network with the given config,
 // returning an error if a node with the same ID or name already exists
 func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) {

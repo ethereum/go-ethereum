@@ -105,21 +105,23 @@ type NodeConfig struct {
 // nodeConfigJSON is used to encode and decode NodeConfig as JSON by encoding
 // all fields as strings
 type nodeConfigJSON struct {
-	ID         string   `json:"id"`
-	PrivateKey string   `json:"private_key"`
-	Name       string   `json:"name"`
-	Services   []string `json:"services"`
-	Port       uint16   `json:"port"`
+	ID              string   `json:"id"`
+	PrivateKey      string   `json:"private_key"`
+	Name            string   `json:"name"`
+	Services        []string `json:"services"`
+	EnableMsgEvents bool     `json:"enable_msg_events"`
+	Port            uint16   `json:"port"`
 }
 
 // MarshalJSON implements the json.Marshaler interface by encoding the config
 // fields as strings
 func (n *NodeConfig) MarshalJSON() ([]byte, error) {
 	confJSON := nodeConfigJSON{
-		ID:       n.ID.String(),
-		Name:     n.Name,
-		Services: n.Services,
-		Port:     n.Port,
+		ID:              n.ID.String(),
+		Name:            n.Name,
+		Services:        n.Services,
+		Port:            n.Port,
+		EnableMsgEvents: n.EnableMsgEvents,
 	}
 	if n.PrivateKey != nil {
 		confJSON.PrivateKey = hex.EncodeToString(crypto.FromECDSA(n.PrivateKey))
@@ -158,6 +160,7 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 	n.Name = confJSON.Name
 	n.Services = confJSON.Services
 	n.Port = confJSON.Port
+	n.EnableMsgEvents = confJSON.EnableMsgEvents
 
 	return nil
 }
@@ -176,10 +179,11 @@ func RandomNodeConfig() *NodeConfig {
 		panic("unable to assign tcp port")
 	}
 	return &NodeConfig{
-		ID:         id,
-		Name:       fmt.Sprintf("node_%s", id.String()),
-		PrivateKey: key,
-		Port:       port,
+		ID:              id,
+		Name:            fmt.Sprintf("node_%s", id.String()),
+		PrivateKey:      key,
+		Port:            port,
+		EnableMsgEvents: true,
 	}
 }
 
