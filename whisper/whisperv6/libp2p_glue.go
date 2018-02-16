@@ -74,9 +74,11 @@ func (stream *LibP2PStream) WriteMsg(msg p2p.Msg) error {
 	binary.LittleEndian.PutUint64(data[0:codeLength], msg.Code)
 	binary.LittleEndian.PutUint32(data[codeLength:codeLength+payloadSizeLength], msg.Size)
 
-	nbytes, err := msg.Payload.Read(data[8:])
+	nbytes, err := msg.Payload.Read(data[codeLength+payloadSizeLength:])
 	if (nbytes&0xFFFFFFFF) != nbytes || uint32(nbytes) != msg.Size {
 		return fmt.Errorf("Invalid size read in libp2p stream: read %d bytes, was expecting %d bytes", nbytes, msg.Size)
+	} else if err != nil {
+		return err
 	}
 
 	nbytes, err = stream.stream.Write(data)
