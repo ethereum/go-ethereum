@@ -23,8 +23,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type AuditLogger struct {
@@ -43,13 +43,18 @@ func (l *AuditLogger) New(ctx context.Context) (accounts.Account, error) {
 }
 
 func (l *AuditLogger) SignTransaction(ctx context.Context, args SendTxArgs, methodSelector *string) (*ethapi.SignTransactionResult, error) {
+	sel := "<nil>"
+	if methodSelector != nil {
+		sel = *methodSelector
+	}
 	l.log.Info("SignTransaction", "type", "request", "metadata", MetadataFromContext(ctx).String(),
 		"tx", args.String(),
-		"methodSelector", methodSelector)
+		"methodSelector", sel)
+
 	res, e := l.api.SignTransaction(ctx, args, methodSelector)
-	if res != nil{
+	if res != nil {
 		l.log.Info("SignTransaction", "type", "response", "data", common.Bytes2Hex(res.Raw), "error", e)
-	}else{
+	} else {
 		l.log.Info("SignTransaction", "type", "response", "data", res, "error", e)
 	}
 	return res, e
