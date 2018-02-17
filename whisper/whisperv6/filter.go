@@ -85,6 +85,15 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 	return id, err
 }
 
+// Each is a thread safe iterator over all existing filters.
+func (fs *Filters) Each(f func(filter *Filter)) {
+	fs.mutex.RLock()
+	defer fs.mutex.RUnlock()
+	for _, filter := range fs.watchers {
+		f(filter)
+	}
+}
+
 // Uninstall will remove a filter whose id has been specified from
 // the filter collection
 func (fs *Filters) Uninstall(id string) bool {
