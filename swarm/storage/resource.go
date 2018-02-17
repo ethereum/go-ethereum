@@ -625,10 +625,7 @@ func (self *ResourceHandler) verifyContent(chunkdata []byte) error {
 }
 
 func (self *ResourceHandler) hasUpdate(name string, period uint32) bool {
-	if self.resources[name].lastPeriod == period {
-		return true
-	}
-	return false
+	return self.resources[name].lastPeriod == period
 }
 
 type resourceChunkStore struct {

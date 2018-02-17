@@ -269,9 +269,6 @@ func (m TakeoverProofMsg) String() string {
 
 func (p *Peer) handleTakeoverProofMsg(req *TakeoverProofMsg) error {
 	_, err := p.getServer(req.Stream)
-	if err != nil {
-		return err
-	}
 	// store the strongest takeoverproof for the stream in streamer
-	return nil
+	return err
 }

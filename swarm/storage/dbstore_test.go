@@ -206,7 +206,7 @@ func testIterator(t *testing.T, mock bool) {
 	}
 
 	for i = 0; i < chunkcount; i++ {
-		if bytes.Compare(chunkkeys[i], chunkkeys_results[i]) != 0 {
+		if !bytes.Equal(chunkkeys[i], chunkkeys_results[i]) {
 			t.Fatalf("Chunk put #%d key '%v' does not match iterator's key '%v'", i, chunkkeys[i], chunkkeys_results[i])
 		}
 	}

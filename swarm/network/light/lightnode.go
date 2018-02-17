@@ -88,7 +88,7 @@ func (r *RemoteSectionReader) Read(b []byte) (n int64, err error) {
 			end = true
 		}
 		copy(b[n:], chunk.SData[:m])
-		n += int64(m)
+		n += m
 	}
 
 	for {

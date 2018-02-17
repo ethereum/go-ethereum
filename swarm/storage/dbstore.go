@@ -126,7 +126,7 @@ func NewDbStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uin
 	for i := 0; i < 0x100; i++ {
 		k := make([]byte, 2)
 		k[0] = keyDistanceCnt
-		k[1] = byte(uint8(i))
+		k[1] = uint8(i)
 		cnt, _ := s.db.Get(k)
 		s.bucketCnt[i] = BytesToU64(cnt)
 		s.bucketCnt[i]++
@@ -211,7 +211,7 @@ func getOldDataKey(idx uint64) []byte {
 func getDataKey(idx uint64, po uint8) []byte {
 	key := make([]byte, 10)
 	key[0] = keyData
-	key[1] = byte(po)
+	key[1] = po
 	binary.BigEndian.PutUint64(key[2:], idx)
 
 	return key
@@ -483,9 +483,9 @@ func (s *DbStore) ReIndex() {
 		oldCntKey[0] = keyDistanceCnt
 		newCntKey[0] = keyDistanceCnt
 		key[0] = keyData
-		key[1] = byte(s.po(Key(key[1:])))
+		key[1] = s.po(Key(key[1:]))
 		oldCntKey[1] = key[1]
-		newCntKey[1] = byte(s.po(Key(newKey[1:])))
+		newCntKey[1] = s.po(Key(newKey[1:]))
 		copy(newKey[2:], key[1:])
 		newValue := append(hash, data...)
 
@@ -733,8 +733,7 @@ func (s *DbStore) setCapacity(c uint64) {
 	s.capacity = c
 
 	if s.entryCnt > c {
-		var ratio float32
-		ratio = float32(1.01) - float32(c)/float32(s.entryCnt)
+		ratio := float32(1.01) - float32(c)/float32(s.entryCnt)
 		if ratio < gcArrayFreeRatio {
 			ratio = gcArrayFreeRatio
 		}
@@ -760,7 +759,7 @@ func (s *DbStore) SyncIterator(since uint64, until uint64, po uint8, f func(Key,
 
 	for ok := it.Seek(sincekey); ok; ok = it.Next() {
 		dbkey := it.Key()
-		if dbkey[0] != keyData || dbkey[1] != byte(po) || bytes.Compare(untilkey, dbkey) < 0 {
+		if dbkey[0] != keyData || dbkey[1] != po || bytes.Compare(untilkey, dbkey) < 0 {
 			break
 		}
 		key := make([]byte, 32)

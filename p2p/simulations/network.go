@@ -78,26 +78,12 @@ func (self *Network) Events() *event.Feed {
 	return &self.events
 }
 
-// NewNode adds a new node to the network with a random ID
-func (self *Network) NewNode() (*Node, error) {
-	conf := adapters.RandomNodeConfig()
-	conf.Services = []string{self.DefaultService}
-	return self.NewNodeWithConfig(conf)
-}
-
 // NewNodeWithConfig adds a new node to the network with the given config,
 // returning an error if a node with the same ID or name already exists
 func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	// create a random ID and PrivateKey if not set
-	if conf.ID == (discover.NodeID{}) {
-		c := adapters.RandomNodeConfig()
-		conf.ID = c.ID
-		conf.PrivateKey = c.PrivateKey
-	}
-	id := conf.ID
 	if conf.Reachable == nil {
 		conf.Reachable = func(otherID discover.NodeID) bool {
 			_, err := self.InitConn(conf.ID, otherID)
@@ -105,14 +91,9 @@ func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error)
 		}
 	}
 
-	// assign a name to the node if not set
-	if conf.Name == "" {
-		conf.Name = fmt.Sprintf("node%02d", len(self.Nodes)+1)
-	}
-
 	// check the node doesn't already exist
-	if node := self.getNode(id); node != nil {
-		return nil, fmt.Errorf("node with ID %q already exists", id)
+	if node := self.getNode(conf.ID); node != nil {
+		return nil, fmt.Errorf("node with ID %q already exists", conf.ID)
 	}
 	if node := self.getNodeByName(conf.Name); node != nil {
 		return nil, fmt.Errorf("node with name %q already exists", conf.Name)
@@ -132,8 +113,8 @@ func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error)
 		Node:   adapterNode,
 		Config: conf,
 	}
-	log.Trace(fmt.Sprintf("node %v created", id))
-	self.nodeMap[id] = len(self.Nodes)
+	log.Trace(fmt.Sprintf("node %v created", conf.ID))
+	self.nodeMap[conf.ID] = len(self.Nodes)
 	self.Nodes = append(self.Nodes, node)
 
 	// emit a "control" event

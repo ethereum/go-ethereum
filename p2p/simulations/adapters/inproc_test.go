@@ -25,22 +25,29 @@ import (
 )
 
 func TestSocketPipe(t *testing.T) {
-	c1, c2, _ := socketPipe()
+	c1, c2, err := socketPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	done := make(chan struct{})
 
 	go func() {
 		msgs := 20
 		size := 8
-		for i := 0; i < msgs; i++ {
-			msg := make([]byte, size)
-			_ = binary.PutUvarint(msg, uint64(i))
 
-			_, err := c1.Write(msg)
-			if err != nil {
-				t.Fatal(err)
+		// OS socket pipe is blocking (depending on buffer size on OS), so writes are emitted asynchronously
+		go func() {
+			for i := 0; i < msgs; i++ {
+				msg := make([]byte, size)
+				_ = binary.PutUvarint(msg, uint64(i))
+
+				_, err := c1.Write(msg)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
-		}
+		}()
 
 		for i := 0; i < msgs; i++ {
 			msg := make([]byte, size)
@@ -52,7 +59,7 @@ func TestSocketPipe(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(msg, out) != 0 {
+			if !bytes.Equal(msg, out) {
 				t.Fatalf("expected %#v, got %#v", msg, out)
 			}
 		}
@@ -61,27 +68,34 @@ func TestSocketPipe(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("test timeout")
 	}
 }
 
 func TestSocketPipeBidirections(t *testing.T) {
-	c1, c2, _ := socketPipe()
+	c1, c2, err := socketPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	done := make(chan struct{})
 
 	go func() {
 		msgs := 100
 		size := 4
-		for i := 0; i < msgs; i++ {
-			msg := []byte(`ping`)
 
-			_, err := c1.Write(msg)
-			if err != nil {
-				t.Fatal(err)
+		// OS socket pipe is blocking (depending on buffer size on OS), so writes are emitted asynchronously
+		go func() {
+			for i := 0; i < msgs; i++ {
+				msg := []byte(`ping`)
+
+				_, err := c1.Write(msg)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
-		}
+		}()
 
 		for i := 0; i < msgs; i++ {
 			out := make([]byte, size)
@@ -90,7 +104,7 @@ func TestSocketPipeBidirections(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(out, []byte(`ping`)) == 0 {
+			if bytes.Equal(out, []byte(`ping`)) {
 				msg := []byte(`pong`)
 				_, err := c2.Write(msg)
 				if err != nil {
@@ -108,7 +122,7 @@ func TestSocketPipeBidirections(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(out, expected) != 0 {
+			if !bytes.Equal(out, expected) {
 				t.Fatalf("expected %#v, got %#v", expected, out)
 			}
 		}
@@ -118,13 +132,16 @@ func TestSocketPipeBidirections(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("test timeout")
 	}
 }
 
 func TestTcpPipe(t *testing.T) {
-	c1, c2, _ := tcpPipe()
+	c1, c2, err := tcpPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	done := make(chan struct{})
 
@@ -151,7 +168,7 @@ func TestTcpPipe(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(msg, out) != 0 {
+			if !bytes.Equal(msg, out) {
 				t.Fatalf("expected %#v, got %#v", msg, out)
 			}
 		}
@@ -160,13 +177,16 @@ func TestTcpPipe(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("test timeout")
 	}
 }
 
 func TestTcpPipeBidirections(t *testing.T) {
-	c1, c2, _ := tcpPipe()
+	c1, c2, err := tcpPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	done := make(chan struct{})
 
@@ -191,7 +211,7 @@ func TestTcpPipeBidirections(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(expected, out) != 0 {
+			if !bytes.Equal(expected, out) {
 				t.Fatalf("expected %#v, got %#v", out, expected)
 			} else {
 				msg := []byte(fmt.Sprintf("pong %02d", i))
@@ -211,7 +231,7 @@ func TestTcpPipeBidirections(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(expected, out) != 0 {
+			if !bytes.Equal(expected, out) {
 				t.Fatalf("expected %#v, got %#v", out, expected)
 			}
 		}
@@ -220,13 +240,16 @@ func TestTcpPipeBidirections(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("test timeout")
 	}
 }
 
 func TestNetPipe(t *testing.T) {
-	c1, c2, _ := netPipe()
+	c1, c2, err := netPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	done := make(chan struct{})
 
@@ -256,7 +279,7 @@ func TestNetPipe(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(msg, out) != 0 {
+			if !bytes.Equal(msg, out) {
 				t.Fatalf("expected %#v, got %#v", msg, out)
 			}
 		}
@@ -266,13 +289,16 @@ func TestNetPipe(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("test timeout")
 	}
 }
 
 func TestNetPipeBidirections(t *testing.T) {
-	c1, c2, _ := netPipe()
+	c1, c2, err := netPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	done := make(chan struct{})
 
@@ -305,7 +331,7 @@ func TestNetPipeBidirections(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if bytes.Compare(expected, out) != 0 {
+				if !bytes.Equal(expected, out) {
 					t.Fatalf("expected %#v, got %#v", expected, out)
 				}
 			}
@@ -323,7 +349,7 @@ func TestNetPipeBidirections(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if bytes.Compare(expected, out) != 0 {
+			if !bytes.Equal(expected, out) {
 				t.Fatalf("expected %#v, got %#v", expected, out)
 			} else {
 				msg := []byte(fmt.Sprintf(pongTemplate, i))
@@ -338,7 +364,7 @@ func TestNetPipeBidirections(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("test timeout")
 	}
 }

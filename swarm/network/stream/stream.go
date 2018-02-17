@@ -266,7 +266,7 @@ func keyToString(key []byte) string {
 	if l == 0 {
 		return ""
 	}
-	return fmt.Sprintf("%s-%d", string(key[:l-1]), uint8(key[l-1]))
+	return fmt.Sprintf("%s-%d", string(key[:l-1]), key[l-1])
 }
 
 type server struct {

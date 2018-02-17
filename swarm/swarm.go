@@ -262,20 +262,13 @@ func (self *Swarm) Stop() error {
 
 // implements the node.Service interface
 func (self *Swarm) Protocols() (protos []p2p.Protocol) {
-
-	for _, p := range self.bzz.Protocols() {
-		protos = append(protos, p)
-	}
+	protos = append(protos, self.bzz.Protocols()...)
 
 	if self.ps != nil {
-		for _, p := range self.ps.Protocols() {
-			protos = append(protos, p)
-		}
+		protos = append(protos, self.ps.Protocols()...)
 	}
 	if self.streamer != nil {
-		for _, p := range self.streamer.Protocols() {
-			protos = append(protos, p)
-		}
+		protos = append(protos, self.streamer.Protocols()...)
 	}
 	return
 }
@@ -336,14 +329,10 @@ func (self *Swarm) APIs() []rpc.API {
 		// {Namespace, Version, api.NewAdmin(self), false},
 	}
 
-	for _, api := range self.bzz.APIs() {
-		apis = append(apis, api)
-	}
+	apis = append(apis, self.bzz.APIs()...)
 
 	if self.ps != nil {
-		for _, api := range self.ps.APIs() {
-			apis = append(apis, api)
-		}
+		apis = append(apis, self.ps.APIs()...)
 	}
 
 	return apis

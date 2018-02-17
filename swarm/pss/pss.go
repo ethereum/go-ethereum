@@ -216,9 +216,7 @@ func (self *Pss) APIs() []rpc.API {
 			Public:    true,
 		},
 	}
-	for _, auxapi := range self.auxAPIs {
-		apis = append(apis, auxapi)
-	}
+	apis = append(apis, self.auxAPIs...)
 	return apis
 }
 
@@ -389,7 +387,7 @@ func (self *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address 
 		address: address,
 	}
 	self.pubKeyPoolMu.Lock()
-	if _, ok := self.pubKeyPool[pubkeyid]; ok == false {
+	if _, ok := self.pubKeyPool[pubkeyid]; !ok {
 		self.pubKeyPool[pubkeyid] = make(map[Topic]*pssPeer)
 	}
 	self.pubKeyPool[pubkeyid][topic] = psp
@@ -538,7 +536,7 @@ func (self *Pss) cleanKeys() (count int) {
 					match = true
 				}
 			}
-			if match == false {
+			if !match {
 				expiredtopics = append(expiredtopics, topic)
 			}
 		}
