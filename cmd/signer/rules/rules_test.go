@@ -57,6 +57,9 @@ func mixAddr(a string) (*common.MixedcaseAddress, error) {
 
 type alwaysDenyUi struct{}
 
+func (alwaysDenyUi) OnSignerStartup(info core.StartupInfo) {
+}
+
 func (alwaysDenyUi) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
 	return core.SignTxResponse{request.Transaction, false, ""}, nil
 }
@@ -222,6 +225,8 @@ func (d *dummyUi) ShowInfo(message string) {
 
 func (d *dummyUi) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	d.calls = append(d.calls, "OnApprovedTx")
+}
+func (d *dummyUi) OnSignerStartup(info core.StartupInfo) {
 }
 
 //TestForwarding tests that the rule-engine correctly dispatches requests to the next caller
@@ -490,6 +495,9 @@ func TestLimitWindow(t *testing.T) {
 // dontCallMe is used as a next-handler that does not want to be called - it invokes test failure
 type dontCallMe struct {
 	t *testing.T
+}
+
+func (d *dontCallMe) OnSignerStartup(info core.StartupInfo) {
 }
 
 func (d *dontCallMe) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {

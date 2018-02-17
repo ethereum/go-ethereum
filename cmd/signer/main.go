@@ -27,14 +27,20 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/cmd/signer/core"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
-	"github.com/ethereum/go-ethereum/cmd/signer/core"
 )
+
+// EXT_API_VERSION -- see extapi_changelog.md
+const EXT_API_VERSION = "2.0.0"
+
+// INT_API_VERSION -- see intapi_changelog.md
+const INT_API_VERSION = "1.2.0"
 
 func main() {
 
@@ -65,6 +71,11 @@ func main() {
 			Name:  "4bytedb",
 			Usage: "File containing 4byte-identifiers",
 			Value: "./4byte.json",
+		},
+		cli.StringFlag{
+			Name:  "4bytedb-custom",
+			Usage: "File used for writing new 4byte-identifiers submitted via API",
+			Value: "./4byte-custom.json",
 		},
 		cli.StringFlag{
 			Name:  "auditlog",
@@ -108,7 +119,7 @@ func main() {
 		if c.Bool("stdio-ui") {
 			log.Info("Using stdin/stdout as UI-channel")
 		}
-		db, err := core.NewAbiDBFromFile(c.String("4bytedb"))
+		db, err := core.NewAbiDBFromFiles(c.String("4bytedb"), c.String("4bytedb-custom"))
 
 		if err != nil {
 			utils.Fatalf(err.Error())
@@ -142,7 +153,6 @@ func main() {
 		if err = server.RegisterName("account", api); err != nil {
 			utils.Fatalf("Could not register signer API: %v", err)
 		}
-		//server.ListServices()
 
 		// Import from file
 		if rfile := c.String("requestfile"); rfile != "" {
@@ -155,13 +165,22 @@ func main() {
 		if listener, err = net.Listen("tcp", endpoint); err != nil {
 			utils.Fatalf("Could not start http listener: %v", err)
 		}
-		log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%s", endpoint))
+		extapi_url := fmt.Sprintf("http://%s", endpoint)
+		log.Info("HTTP endpoint opened", "url", extapi_url)
 		cors := []string{"*"}
 
 		if c.Bool("stdio-ui-test") {
 			log.Info("Performing UI test")
 			go testExternalUI(api_impl)
 		}
+		ui.OnSignerStartup(core.StartupInfo{
+			Info: map[string]interface{}{
+				"extapi_version": EXT_API_VERSION,
+				"intapi_version": INT_API_VERSION,
+				"extapi_http":    extapi_url,
+				"extapi_ipc":     nil,
+			},
+		})
 
 		rpc.NewHTTPServer(cors, server).Serve(listener)
 
@@ -189,7 +208,7 @@ func testExternalUI(api *core.SignerAPI) {
 	}
 	var err error
 
-	_, err = api.SignTransaction(ctx, core.SendTxArgs{From:common.MixedcaseAddress{}}, nil)
+	_, err = api.SignTransaction(ctx, core.SendTxArgs{From: common.MixedcaseAddress{}}, nil)
 	checkErr("SignTransaction", err)
 	_, err = api.Sign(ctx, common.MixedcaseAddress{}, common.Hex2Bytes("01020304"))
 	checkErr("Sign", err)

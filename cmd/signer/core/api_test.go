@@ -16,13 +16,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 //Used for testing
 type HeadlessUI struct {
 	controller chan string
+}
+
+func (ui *HeadlessUI) OnSignerStartup(info StartupInfo) {
 }
 
 func (ui *HeadlessUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
@@ -33,7 +36,7 @@ func (ui *HeadlessUI) ApproveTx(request *SignTxRequest) (SignTxResponse, error) 
 
 	switch <-ui.controller {
 	case "Y":
-		return SignTxResponse{request.Transaction,  true, <-ui.controller}, nil
+		return SignTxResponse{request.Transaction, true, <-ui.controller}, nil
 	case "M": //Modify
 		old := big.Int(request.Transaction.Value)
 		newVal := big.NewInt(0).Add(&old, big.NewInt(1))
@@ -244,22 +247,22 @@ func mkTestTx(from common.MixedcaseAddress) SendTxArgs {
 	nonce := (hexutil.Uint64)(0)
 	data := hexutil.Bytes(common.Hex2Bytes("01020304050607080a"))
 	tx := SendTxArgs{
-		From:from,
-		To: &to,
-		Gas: gas,
+		From:     from,
+		To:       &to,
+		Gas:      gas,
 		GasPrice: gasPrice,
-		Value: value,
-		Data: &data,
-		Nonce: nonce}
+		Value:    value,
+		Data:     &data,
+		Nonce:    nonce}
 	return tx
 }
 
 func TestSignTx(t *testing.T) {
 
 	var (
-		list Accounts
+		list      Accounts
 		res, res2 *ethapi.SignTransactionResult
-		err  error
+		err       error
 	)
 
 	api, control := setup(t)
@@ -276,7 +279,7 @@ func TestSignTx(t *testing.T) {
 
 	control <- "Y"
 	control <- "wrongpassword"
-	res, err = api.SignTransaction(context.Background(),  tx, &methodSig)
+	res, err = api.SignTransaction(context.Background(), tx, &methodSig)
 	if res != nil {
 		t.Errorf("Expected nil-response, got %v", res)
 	}
@@ -285,7 +288,7 @@ func TestSignTx(t *testing.T) {
 	}
 
 	control <- "No way"
-	res, err = api.SignTransaction(context.Background(),  tx, &methodSig)
+	res, err = api.SignTransaction(context.Background(), tx, &methodSig)
 	if res != nil {
 		t.Errorf("Expected nil-response, got %v", res)
 	}

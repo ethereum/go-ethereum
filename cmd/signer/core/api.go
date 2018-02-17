@@ -56,7 +56,6 @@ type ExternalAPI interface {
 
 // SignerUI specifies what method a UI needs to implement to be able to be used as a UI for the signer
 type SignerUI interface {
-
 	// ApproveTx prompt the user for confirmation to request to sign Transaction
 	ApproveTx(request *SignTxRequest) (SignTxResponse, error)
 	// ApproveSignData prompt the user for confirmation to request to sign data
@@ -77,6 +76,9 @@ type SignerUI interface {
 	// OnApprovedTx notifies the UI about a transaction having been successfully signed.
 	// This method can be used by a UI to keep track of e.g. how much has been sent to a particular recipient.
 	OnApprovedTx(tx ethapi.SignTransactionResult)
+	// OnSignerStartup is invoked when the signer boots, and tells the UI info about external API location and version
+	// information
+	OnSignerStartup(info StartupInfo)
 }
 
 // SignerAPI defines the actual implementation of ExternalAPI
@@ -123,9 +125,9 @@ func (m Metadata) String() string {
 type (
 	// SignTxRequest contains info about a Transaction to sign
 	SignTxRequest struct {
-		Transaction SendTxArgs         `json:"transaction"`
+		Transaction SendTxArgs          `json:"transaction"`
 		Callinfo    *ValidationMessages `json:"call_info"`
-		Meta        Metadata           `json:"meta"`
+		Meta        Metadata            `json:"meta"`
 	}
 	// SignTxResponse result from SignTxRequest
 	SignTxResponse struct {
@@ -179,6 +181,9 @@ type (
 	}
 	Message struct {
 		Text string `json:"text"`
+	}
+	StartupInfo struct {
+		Info map[string]interface{} `json:"info"`
 	}
 )
 
@@ -321,7 +326,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 		err    error
 		result SignTxResponse
 	)
-	msgs, err:= api.validator.ValidateTransaction(&args, methodSelector)
+	msgs, err := api.validator.ValidateTransaction(&args, methodSelector)
 	if err != nil {
 		return nil, err
 	}

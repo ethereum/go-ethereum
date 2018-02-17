@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	//	"reflect"
 	//	"math/big"
+	"io/ioutil"
 	"math/big"
 	"reflect"
 )
@@ -209,4 +210,36 @@ func TestSelectorUnmarshalling(t *testing.T) {
 		}
 	}
 
+}
+
+func TestCustomABI(t *testing.T) {
+	d, err := ioutil.TempDir("", "signer-4byte-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	filename := fmt.Sprintf("%s/4byte_custom.json", d)
+	abidb, err := NewAbiDBFromFiles("../4byte.json", filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Now we'll remove all existing signatures
+	abidb.db = make(map[string]string)
+	calldata := common.Hex2Bytes("a52c101edeadbeef")
+	_, err = abidb.LookupMethodSelector(calldata)
+	if err == nil {
+		t.Fatalf("Should not find a match on empty db")
+	}
+	if err = abidb.AddSignature("send(uint256)", calldata); err != nil {
+		t.Fatalf("Failed to save file: %v", err)
+	}
+	_, err = abidb.LookupMethodSelector(calldata)
+	if err != nil {
+		t.Fatalf("Should find a match for abi signature, got: %v", err)
+	}
+	//Check that it wrote to file
+	abidb2, err := NewAbiDBFromFile(filename)
+	_, err = abidb2.LookupMethodSelector(calldata)
+	if err != nil {
+		t.Fatalf("Save failed: should find a match for abi signature after loading from disk")
+	}
 }

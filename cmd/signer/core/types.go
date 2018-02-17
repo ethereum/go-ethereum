@@ -23,8 +23,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"math/big"
 	"github.com/ethereum/go-ethereum/core/types"
+	"math/big"
 )
 
 type Accounts []Account
@@ -50,6 +50,7 @@ func (a Account) String() string {
 	}
 	return err.Error()
 }
+
 type ValidationInfo struct {
 	Typ     string `json:"type"`
 	Message string `json:"message"`
@@ -74,10 +75,10 @@ type TransactionArg struct {
 type SendTxArgs struct {
 	From     common.MixedcaseAddress  `json:"from"`
 	To       *common.MixedcaseAddress `json:"to"`
-	Gas      hexutil.Big    `json:"gas"`
-	GasPrice hexutil.Big    `json:"gasPrice"`
-	Value    hexutil.Big    `json:"value"`
-	Nonce    hexutil.Uint64 `json:"nonce"`
+	Gas      hexutil.Big              `json:"gas"`
+	GasPrice hexutil.Big              `json:"gasPrice"`
+	Value    hexutil.Big              `json:"value"`
+	Nonce    hexutil.Uint64           `json:"nonce"`
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	Data  *hexutil.Bytes `json:"data"`
 	Input *hexutil.Bytes `json:"input"`

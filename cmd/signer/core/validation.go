@@ -46,6 +46,21 @@ type Validator struct {
 func NewValidator(db *AbiDb) *Validator {
 	return &Validator{db}
 }
+func testSelector(selector string, data []byte) (*decodedCallData, error) {
+	if selector == "" {
+		return nil, fmt.Errorf("selector not found")
+	}
+	abiData, err := MethodSelectorToAbi(selector)
+	if err != nil {
+		return nil, err
+	}
+	info, err := parseCallData(data, string(abiData))
+	if err != nil {
+		return nil, err
+	}
+	return info, nil
+
+}
 
 // validateCallData checks if the ABI-data + methodselector (if given) can be parsed and seems to match
 func (v *Validator) validateCallData(msgs *ValidationMessages, data []byte, methodSelector *string) {
@@ -57,34 +72,30 @@ func (v *Validator) validateCallData(msgs *ValidationMessages, data []byte, meth
 		return
 	}
 	var (
-		selector string
-		err      error
+		info *decodedCallData
+		err  error
 	)
-	// Try to make sense of the data
+	// Check the provided one
 	if methodSelector != nil {
-		selector = *methodSelector
-	}
-
-	if selector == "" {
-		selector, err = v.db.LookupMethodSelector(data[:4])
+		info, err = testSelector(*methodSelector, data)
 		if err != nil {
-			msgs.warn(fmt.Sprintf("Tx contains data, but the ABI signature could not be found: %v", err))
-			return
+			msgs.warn(fmt.Sprintf("Tx contains data, but provided ABI signature could not be matched: %v", err))
+		} else {
+			msgs.info(info.String())
+			//Successfull match. add to db if not there already (ignore errors there)
+			v.db.AddSignature(*methodSelector, data[:4])
 		}
-	}
-	if selector == "" {
-		// No more to do that this stage
 		return
 	}
-	abiData, err := MethodSelectorToAbi(selector)
+	// Check the db
+	selector, err := v.db.LookupMethodSelector(data[:4])
 	if err != nil {
-		msgs.warn(fmt.Sprintf("Transaction data did not match ABI-interface: %v", err))
+		msgs.warn(fmt.Sprintf("Tx contains data, but the ABI signature could not be found: %v", err))
 		return
 	}
-
-	info, err := parseCallData(data, string(abiData))
+	info, err = testSelector(selector, data)
 	if err != nil {
-		msgs.warn(fmt.Sprintf("Transaction data did not match ABI-interface: %v", err))
+		msgs.warn(fmt.Sprintf("Tx contains data, but provided ABI signature could not be matched: %v", err))
 	} else {
 		msgs.info(info.String())
 	}
@@ -139,7 +150,7 @@ func (v *Validator) validate(msgs *ValidationMessages, txargs *SendTxArgs, metho
 			msgs.crit("Tx destination is the zero address!")
 		}
 		// Validate calldata
-		v.validateCallData(msgs, data, methodSelector);
+		v.validateCallData(msgs, data, methodSelector)
 	}
 	return nil
 }

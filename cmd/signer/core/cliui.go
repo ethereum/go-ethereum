@@ -111,7 +111,7 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	}
 	fmt.Printf("from:  %v\n", request.Transaction.From.String())
 	fmt.Printf("value: %v wei\n", weival)
-	if request.Transaction.Data != nil{
+	if request.Transaction.Data != nil {
 		d := *request.Transaction.Data
 		if len(d) > 0 {
 			fmt.Printf("data:  %v\n", common.Bytes2Hex(d))
@@ -119,7 +119,7 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	}
 	if request.Callinfo != nil {
 		fmt.Printf("\nTransaction validation:\n")
-		for _,m := range request.Callinfo.Messages{
+		for _, m := range request.Callinfo.Messages {
 			fmt.Printf("  * %s : %s", m.Typ, m.Message)
 		}
 		fmt.Println()
@@ -234,4 +234,12 @@ func (ui *CommandlineUI) ShowInfo(message string) {
 
 func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	fmt.Printf("Transaction signed: %v", tx.Tx.String())
+}
+
+func (ui *CommandlineUI) OnSignerStartup(info StartupInfo) {
+
+	fmt.Printf("------- Signer info ------- ")
+	for k, v := range info.Info {
+		fmt.Printf("* %v : %v", k, v)
+	}
 }

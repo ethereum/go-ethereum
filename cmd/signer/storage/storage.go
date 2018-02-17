@@ -62,7 +62,7 @@ func (s *EphemeralStorage) Get(key string) string {
 func (s *EphemeralStorage) New(namespace string) Storage {
 	child := &EphemeralStorage{
 		data:      make(map[string]string),
-		namespace: fmt.Sprintf("%s.%s", namespace),
+		namespace: fmt.Sprintf("%s.%s", s.namespace, namespace),
 	}
 	return child
 }

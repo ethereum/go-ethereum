@@ -44,11 +44,11 @@ func NewStdIOUI() *StdIOUI {
 }
 
 // dispatch sends a request over the stdio
-func (ui *StdIOUI) dispatch(serviceMethod string, args interface{}, reply interface{}) error{
+func (ui *StdIOUI) dispatch(serviceMethod string, args interface{}, reply interface{}) error {
 	var err error
-	if reply != nil{
+	if reply != nil {
 		err = ui.client.Call(nil, serviceMethod, args)
-	}else{
+	} else {
 		err = ui.client.Call(&reply, serviceMethod, args)
 	}
 	if err != nil {
@@ -122,5 +122,12 @@ func (ui *StdIOUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	err := ui.dispatch("OnApprovedTx", tx, nil)
 	if err != nil {
 		log.Info("Error calling 'OnApprovedTx'", "exc", err.Error(), "tx", tx)
+	}
+}
+
+func (ui *StdIOUI) OnSignerStartup(info StartupInfo) {
+	err := ui.dispatch("OnSignerStartup", info, nil)
+	if err != nil {
+		log.Info("Error calling 'OnSignerStartup'", "exc", err.Error(), "info", info)
 	}
 }

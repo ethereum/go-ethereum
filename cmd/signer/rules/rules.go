@@ -106,9 +106,9 @@ func (r *rulesetUi) execute(jsfunc string, jsarg interface{}) (otto.Value, error
 	}
 	// Now, we call foobar(JSON.parse(<jsondata>)).
 	var call string
-	if(len(jsonbytes) > 0){
+	if len(jsonbytes) > 0 {
 		call = fmt.Sprintf("%v(JSON.parse(%v))", jsfunc, string(jsonbytes))
-	}else{
+	} else {
 		call = fmt.Sprintf("%v()", jsfunc)
 	}
 	return vm.Run(call)

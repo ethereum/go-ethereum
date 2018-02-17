@@ -58,14 +58,14 @@ Some snags and todos
    to perform changes to things, only approve/deny. Such a UI should be able to start the signer in
    a more secure mode by telling it that it only wants approve/deny capabilities.
 
-* It would be nice if the signer could collect new 4byte-id:s/method selectors, and have a
+* [x] DONE: It would be nice if the signer could collect new 4byte-id:s/method selectors, and have a
 secondary database for those (`4byte_custom.json`). Users could then (optionally) submit their collections for
 inclusion upstream.
 
 * It should be possible to configure the signer to check if an account is indeed known to it, before
 passing on to the UI. The reason it currently does not, is that it would make it possible to enumerate
-accounts if it immediately returned "unknown account". Similarly, it should be possible to configure
-the signer to auto-allow listing (certain) accounts, instead of asking every time.
+accounts if it immediately returned "unknown account".
+  * [x] DONE: Similarly, it should be possible to configure the signer to auto-allow listing (certain) accounts, instead of asking every time.
 
 * Upon startup, the signer should spit out some info to the caller (particularly important when executed in `stdio-ui`-mode),
 invoking methods with the following info:
@@ -130,6 +130,8 @@ process output for confirmation-requests.
 * The `signer` signs (or not), and responds to the original request.
 
 ## External API
+
+See the [external api changelog](extapi_changelog.md) for information about changes to this API.
 
 ### Encoding
 - number: positive integers that are hex encoded
@@ -497,7 +499,7 @@ See `pythonsigner`, which can be invoked via `python3 pythonsigner.py test` to p
 
 All methods in this API uses object-based parameters, so that there can be no mixups of parameters: each piece of data is accessed by key.
 
-
+See the [ui api changelog](intapi_changelog.md) for information about changes to this API.
 
 ### ApproveTx
 
@@ -776,6 +778,32 @@ The UI should show the info to the user. Does not expect response.
 When implementing rate-limited rules, this callback should be used.
 
 TLDR; Use this method to keep track of signed transactions, instead of using the data in `ApproveTx`.
+
+### OnSignerStartup
+
+This method provide the UI with information about what API version the signer uses (both internal and external) aswell as build-info and external api,
+in k/v-form.
+
+Example call:
+```json
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "OnSignerStartup",
+  "params": [
+    {
+      "info": {
+        "extapi_http": "http://localhost:8550",
+        "extapi_ipc": null,
+        "extapi_version": "2.0.0",
+        "intapi_version": "1.2.0"
+      }
+    }
+  ]
+}
+
+```
 
 
 ### Rules for UI apis

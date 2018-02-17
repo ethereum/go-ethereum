@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"bytes"
+	"os"
 	"regexp"
 )
 
@@ -158,12 +159,14 @@ func MethodSelectorToAbi(selector string) ([]byte, error) {
 }
 
 type AbiDb struct {
-	db map[string]string
+	db           map[string]string
+	customdb     map[string]string
+	customdbPath string
 }
 
 // NewEmptyAbiDB exists for test purposes
 func NewEmptyAbiDB() (*AbiDb, error) {
-	return &AbiDb{make(map[string]string)}, nil
+	return &AbiDb{make(map[string]string), make(map[string]string), ""}, nil
 }
 
 // NewAbiDBFromFile loads signature database from file, and
@@ -178,18 +181,74 @@ func NewAbiDBFromFile(path string) (*AbiDb, error) {
 	return db, nil
 }
 
+// NewAbiDBFromFiles loads both the standard signature database and a custom database. The latter will be used
+// to write new values into if they are submitted via the API
+func NewAbiDBFromFiles(standard, custom string) (*AbiDb, error) {
+
+	db := &AbiDb{make(map[string]string), make(map[string]string), custom}
+	db.customdbPath = custom
+
+	raw, err := ioutil.ReadFile(standard)
+	if err != nil {
+		return nil, err
+	}
+	json.Unmarshal(raw, &db.db)
+	// Custom file may not exist. Will be created during save, if needed
+	if _, err := os.Stat(custom); err == nil {
+		raw, err = ioutil.ReadFile(custom)
+		if err != nil {
+			return nil, err
+		}
+		json.Unmarshal(raw, &db.customdb)
+	}
+
+	return db, nil
+}
+
 // LookupMethodSelector checks the given 4byte-sequence against the known ABI methods.
 // OBS: This method does not validate the match, it's assumed the caller will do so
 func (db *AbiDb) LookupMethodSelector(id []byte) (string, error) {
-	if len(id) != 4 {
+	if len(id) < 4 {
 		return "", fmt.Errorf("Expected 4-byte id, got %d", len(id))
 	}
-	sig := common.ToHex(id)
+	sig := common.ToHex(id[:4])
 	if key, exists := db.db[sig]; exists {
+		return key, nil
+	}
+	if key, exists := db.customdb[sig]; exists {
 		return key, nil
 	}
 	return "", fmt.Errorf("Signature %v not found", sig)
 }
 func (db *AbiDb) Size() int {
 	return len(db.db)
+}
+
+// saveCustomAbi saves a signature ephemerally. If custom file is used, also saves to disk
+func (db *AbiDb) saveCustomAbi(selector, signature string) error {
+	db.customdb[signature] = selector
+	if db.customdbPath == "" {
+		return nil //Not an error per se, just not used
+	}
+	d, err := json.Marshal(db.customdb)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(db.customdbPath, d, 0600)
+	return err
+}
+
+// Adds a signature to the database, if custom database saving is enabled.
+// OBS: This method does _not_ validate the correctness of the data,
+// it is assumed that the caller has already done so
+func (db *AbiDb) AddSignature(selector string, data []byte) error {
+	if len(data) < 4 {
+		return nil
+	}
+	_, err := db.LookupMethodSelector(data[:4])
+	if err == nil {
+		return nil
+	}
+	sig := common.ToHex(data[:4])
+	return db.saveCustomAbi(selector, sig)
 }
