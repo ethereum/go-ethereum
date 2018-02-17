@@ -25,6 +25,16 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go test -coverage
 
+    - os: osx
+      go: 1.9.x
+      script:
+        - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
+        - brew update
+        - brew install caskroom/cask/brew-cask
+        - brew cask install osxfuse
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage
+
     # These are the latest Go versions.
     - os: linux
       dist: trusty
@@ -38,7 +48,7 @@ matrix:
         - go run build/ci.go test -coverage
 
     - os: osx
-      go: 1.9.x
+      go: "1.10"
       script:
         - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
         - brew update
