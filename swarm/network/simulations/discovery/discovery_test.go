@@ -164,7 +164,8 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	trigger := make(chan discover.NodeID)
 	ids := make([]discover.NodeID, nodes)
 	for i := 0; i < nodes; i++ {
-		node, err := net.NewNode()
+		conf := adapters.RandomNodeConfig()
+		node, err := net.NewNodeWithConfig(conf)
 		if err != nil {
 			return nil, fmt.Errorf("error starting node: %s", err)
 		}
