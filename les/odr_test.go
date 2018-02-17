@@ -101,7 +101,6 @@ func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainCon
 			res = append(res, rlp...)
 		}
 	}
-
 	return res
 }
 

@@ -26,7 +26,7 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/crypto"
 	"github.com/EthereumCommonwealth/go-callisto/log"
 	"github.com/EthereumCommonwealth/go-callisto/rlp"
-	whisper "github.com/EthereumCommonwealth/go-callisto/whisper/whisperv5"
+	whisper "github.com/EthereumCommonwealth/go-callisto/whisper/whisperv6"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )

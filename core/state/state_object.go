@@ -25,7 +25,6 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/common"
 	"github.com/EthereumCommonwealth/go-callisto/crypto"
 	"github.com/EthereumCommonwealth/go-callisto/rlp"
-	"github.com/EthereumCommonwealth/go-callisto/trie"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -238,12 +237,12 @@ func (self *stateObject) updateRoot(db Database) {
 
 // CommitTrie the storage trie of the object to dwb.
 // This updates the trie root.
-func (self *stateObject) CommitTrie(db Database, dbw trie.DatabaseWriter) error {
+func (self *stateObject) CommitTrie(db Database) error {
 	self.updateTrie(db)
 	if self.dbErr != nil {
 		return self.dbErr
 	}
-	root, err := self.trie.CommitTo(dbw)
+	root, err := self.trie.Commit(nil)
 	if err == nil {
 		self.data.Root = root
 	}

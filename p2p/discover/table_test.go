@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/rand"
+	"sync"
 
 	"net"
 	"reflect"
@@ -32,60 +33,65 @@ import (
 )
 
 func TestTable_pingReplace(t *testing.T) {
-	doit := func(newNodeIsResponding, lastInBucketIsResponding bool) {
-		transport := newPingRecorder()
-		tab, _ := newTable(transport, NodeID{}, &net.UDPAddr{}, "")
-		defer tab.Close()
-		pingSender := NewNode(MustHexID("a502af0f59b2aab7746995408c79e9ca312d2793cc997e44fc55eda62f0150bbb8c59a6f9269ba3a081518b62699ee807c7c19c20125ddfccca872608af9e370"), net.IP{}, 99, 99)
-
-		// fill up the sender's bucket.
-		last := fillBucket(tab, 253)
-
-		// this call to bond should replace the last node
-		// in its bucket if the node is not responding.
-		transport.responding[last.ID] = lastInBucketIsResponding
-		transport.responding[pingSender.ID] = newNodeIsResponding
-		tab.bond(true, pingSender.ID, &net.UDPAddr{}, 0)
-
-		// first ping goes to sender (bonding pingback)
-		if !transport.pinged[pingSender.ID] {
-			t.Error("table did not ping back sender")
-		}
-		if newNodeIsResponding {
-			// second ping goes to oldest node in bucket
-			// to see whether it is still alive.
-			if !transport.pinged[last.ID] {
-				t.Error("table did not ping last node in bucket")
-			}
-		}
-
-		tab.mutex.Lock()
-		defer tab.mutex.Unlock()
-		if l := len(tab.buckets[253].entries); l != bucketSize {
-			t.Errorf("wrong bucket size after bond: got %d, want %d", l, bucketSize)
-		}
-
-		if lastInBucketIsResponding || !newNodeIsResponding {
-			if !contains(tab.buckets[253].entries, last.ID) {
-				t.Error("last entry was removed")
-			}
-			if contains(tab.buckets[253].entries, pingSender.ID) {
-				t.Error("new entry was added")
-			}
-		} else {
-			if contains(tab.buckets[253].entries, last.ID) {
-				t.Error("last entry was not removed")
-			}
-			if !contains(tab.buckets[253].entries, pingSender.ID) {
-				t.Error("new entry was not added")
-			}
-		}
+	run := func(newNodeResponding, lastInBucketResponding bool) {
+		name := fmt.Sprintf("newNodeResponding=%t/lastInBucketResponding=%t", newNodeResponding, lastInBucketResponding)
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			testPingReplace(t, newNodeResponding, lastInBucketResponding)
+		})
 	}
 
-	doit(true, true)
-	doit(false, true)
-	doit(true, false)
-	doit(false, false)
+	run(true, true)
+	run(false, true)
+	run(true, false)
+	run(false, false)
+}
+
+func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding bool) {
+	transport := newPingRecorder()
+	tab, _ := newTable(transport, NodeID{}, &net.UDPAddr{}, "", nil)
+	defer tab.Close()
+
+	// Wait for init so bond is accepted.
+	<-tab.initDone
+
+	// fill up the sender's bucket.
+	pingSender := NewNode(MustHexID("a502af0f59b2aab7746995408c79e9ca312d2793cc997e44fc55eda62f0150bbb8c59a6f9269ba3a081518b62699ee807c7c19c20125ddfccca872608af9e370"), net.IP{}, 99, 99)
+	last := fillBucket(tab, pingSender)
+
+	// this call to bond should replace the last node
+	// in its bucket if the node is not responding.
+	transport.dead[last.ID] = !lastInBucketIsResponding
+	transport.dead[pingSender.ID] = !newNodeIsResponding
+	tab.bond(true, pingSender.ID, &net.UDPAddr{}, 0)
+	tab.doRevalidate(make(chan struct{}, 1))
+
+	// first ping goes to sender (bonding pingback)
+	if !transport.pinged[pingSender.ID] {
+		t.Error("table did not ping back sender")
+	}
+	if !transport.pinged[last.ID] {
+		// second ping goes to oldest node in bucket
+		// to see whether it is still alive.
+		t.Error("table did not ping last node in bucket")
+	}
+
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+	wantSize := bucketSize
+	if !lastInBucketIsResponding && !newNodeIsResponding {
+		wantSize--
+	}
+	if l := len(tab.bucket(pingSender.sha).entries); l != wantSize {
+		t.Errorf("wrong bucket size after bond: got %d, want %d", l, wantSize)
+	}
+	if found := contains(tab.bucket(pingSender.sha).entries, last.ID); found != lastInBucketIsResponding {
+		t.Errorf("last entry found: %t, want: %t", found, lastInBucketIsResponding)
+	}
+	wantNewEntry := newNodeIsResponding && !lastInBucketIsResponding
+	if found := contains(tab.bucket(pingSender.sha).entries, pingSender.ID); found != wantNewEntry {
+		t.Errorf("new entry found: %t, want: %t", found, wantNewEntry)
+	}
 }
 
 func TestBucket_bumpNoDuplicates(t *testing.T) {
@@ -130,11 +136,45 @@ func TestBucket_bumpNoDuplicates(t *testing.T) {
 	}
 }
 
+// This checks that the table-wide IP limit is applied correctly.
+func TestTable_IPLimit(t *testing.T) {
+	transport := newPingRecorder()
+	tab, _ := newTable(transport, NodeID{}, &net.UDPAddr{}, "", nil)
+	defer tab.Close()
+
+	for i := 0; i < tableIPLimit+1; i++ {
+		n := nodeAtDistance(tab.self.sha, i)
+		n.IP = net.IP{172, 0, 1, byte(i)}
+		tab.add(n)
+	}
+	if tab.len() > tableIPLimit {
+		t.Errorf("too many nodes in table")
+	}
+}
+
+// This checks that the table-wide IP limit is applied correctly.
+func TestTable_BucketIPLimit(t *testing.T) {
+	transport := newPingRecorder()
+	tab, _ := newTable(transport, NodeID{}, &net.UDPAddr{}, "", nil)
+	defer tab.Close()
+
+	d := 3
+	for i := 0; i < bucketIPLimit+1; i++ {
+		n := nodeAtDistance(tab.self.sha, d)
+		n.IP = net.IP{172, 0, 1, byte(i)}
+		tab.add(n)
+	}
+	if tab.len() > bucketIPLimit {
+		t.Errorf("too many nodes in table")
+	}
+}
+
 // fillBucket inserts nodes into the given bucket until
 // it is full. The node's IDs dont correspond to their
 // hashes.
-func fillBucket(tab *Table, ld int) (last *Node) {
-	b := tab.buckets[ld]
+func fillBucket(tab *Table, n *Node) (last *Node) {
+	ld := logdist(tab.self.sha, n.sha)
+	b := tab.bucket(n.sha)
 	for len(b.entries) < bucketSize {
 		b.entries = append(b.entries, nodeAtDistance(tab.self.sha, ld))
 	}
@@ -146,30 +186,39 @@ func fillBucket(tab *Table, ld int) (last *Node) {
 func nodeAtDistance(base common.Hash, ld int) (n *Node) {
 	n = new(Node)
 	n.sha = hashAtDistance(base, ld)
-	n.IP = net.IP{10, 0, 2, byte(ld)}
+	n.IP = net.IP{byte(ld), 0, 2, byte(ld)}
 	copy(n.ID[:], n.sha[:]) // ensure the node still has a unique ID
 	return n
 }
 
-type pingRecorder struct{ responding, pinged map[NodeID]bool }
+type pingRecorder struct {
+	mu           sync.Mutex
+	dead, pinged map[NodeID]bool
+}
 
 func newPingRecorder() *pingRecorder {
-	return &pingRecorder{make(map[NodeID]bool), make(map[NodeID]bool)}
+	return &pingRecorder{
+		dead:   make(map[NodeID]bool),
+		pinged: make(map[NodeID]bool),
+	}
 }
 
 func (t *pingRecorder) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node, error) {
-	panic("findnode called on pingRecorder")
+	return nil, nil
 }
 func (t *pingRecorder) close() {}
 func (t *pingRecorder) waitping(from NodeID) error {
 	return nil // remote always pings
 }
 func (t *pingRecorder) ping(toid NodeID, toaddr *net.UDPAddr) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	t.pinged[toid] = true
-	if t.responding[toid] {
-		return nil
-	} else {
+	if t.dead[toid] {
 		return errTimeout
+	} else {
+		return nil
 	}
 }
 
@@ -178,7 +227,8 @@ func TestTable_closest(t *testing.T) {
 
 	test := func(test *closeTest) bool {
 		// for any node table, Target and N
-		tab, _ := newTable(nil, test.Self, &net.UDPAddr{}, "")
+		transport := newPingRecorder()
+		tab, _ := newTable(transport, test.Self, &net.UDPAddr{}, "", nil)
 		defer tab.Close()
 		tab.stuff(test.All)
 
@@ -237,8 +287,11 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 		},
 	}
 	test := func(buf []*Node) bool {
-		tab, _ := newTable(nil, NodeID{}, &net.UDPAddr{}, "")
+		transport := newPingRecorder()
+		tab, _ := newTable(transport, NodeID{}, &net.UDPAddr{}, "", nil)
 		defer tab.Close()
+		<-tab.initDone
+
 		for i := 0; i < len(buf); i++ {
 			ld := cfg.Rand.Intn(len(tab.buckets))
 			tab.stuff([]*Node{nodeAtDistance(tab.self.sha, ld)})
@@ -280,7 +333,7 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 
 func TestTable_Lookup(t *testing.T) {
 	self := nodeAtDistance(common.Hash{}, 0)
-	tab, _ := newTable(lookupTestnet, self.ID, &net.UDPAddr{}, "")
+	tab, _ := newTable(lookupTestnet, self.ID, &net.UDPAddr{}, "", nil)
 	defer tab.Close()
 
 	// lookup on empty table returns no nodes

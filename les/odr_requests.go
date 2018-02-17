@@ -321,7 +321,7 @@ const (
 )
 
 type HelperTrieReq struct {
-	HelperTrieType    uint
+	Type              uint
 	TrieIdx           uint64
 	Key               []byte
 	FromLevel, AuxReq uint
@@ -365,7 +365,7 @@ func (r *ChtRequest) CanSend(peer *peer) bool {
 	peer.lock.RLock()
 	defer peer.lock.RUnlock()
 
-	return peer.headInfo.Number >= light.HelperTrieConfirmations && r.ChtNum <= (peer.headInfo.Number-light.HelperTrieConfirmations)/light.ChtFrequency
+	return peer.headInfo.Number >= light.HelperTrieConfirmations && r.ChtNum <= (peer.headInfo.Number-light.HelperTrieConfirmations)/light.CHTFrequencyClient
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
@@ -374,10 +374,10 @@ func (r *ChtRequest) Request(reqID uint64, peer *peer) error {
 	var encNum [8]byte
 	binary.BigEndian.PutUint64(encNum[:], r.BlockNum)
 	req := HelperTrieReq{
-		HelperTrieType: htCanonical,
-		TrieIdx:        r.ChtNum,
-		Key:            encNum[:],
-		AuxReq:         auxHeader,
+		Type:    htCanonical,
+		TrieIdx: r.ChtNum,
+		Key:     encNum[:],
+		AuxReq:  auxHeader,
 	}
 	return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), []HelperTrieReq{req})
 }
@@ -493,14 +493,14 @@ func (r *BloomRequest) Request(reqID uint64, peer *peer) error {
 	reqs := make([]HelperTrieReq, len(r.SectionIdxList))
 
 	var encNumber [10]byte
-	binary.BigEndian.PutUint16(encNumber[0:2], uint16(r.BitIdx))
+	binary.BigEndian.PutUint16(encNumber[:2], uint16(r.BitIdx))
 
 	for i, sectionIdx := range r.SectionIdxList {
-		binary.BigEndian.PutUint64(encNumber[2:10], sectionIdx)
+		binary.BigEndian.PutUint64(encNumber[2:], sectionIdx)
 		reqs[i] = HelperTrieReq{
-			HelperTrieType: htBloomBits,
-			TrieIdx:        r.BloomTrieNum,
-			Key:            common.CopyBytes(encNumber[:]),
+			Type:    htBloomBits,
+			TrieIdx: r.BloomTrieNum,
+			Key:     common.CopyBytes(encNumber[:]),
 		}
 	}
 	return peer.RequestHelperTrieProofs(reqID, r.GetCost(peer), reqs)
@@ -525,10 +525,10 @@ func (r *BloomRequest) Validate(db ethdb.Database, msg *Msg) error {
 
 	// Verify the proofs
 	var encNumber [10]byte
-	binary.BigEndian.PutUint16(encNumber[0:2], uint16(r.BitIdx))
+	binary.BigEndian.PutUint16(encNumber[:2], uint16(r.BitIdx))
 
 	for i, idx := range r.SectionIdxList {
-		binary.BigEndian.PutUint64(encNumber[2:10], idx)
+		binary.BigEndian.PutUint64(encNumber[2:], idx)
 		value, err, _ := trie.VerifyProof(r.BloomTrieRoot, encNumber[:], reads)
 		if err != nil {
 			return err

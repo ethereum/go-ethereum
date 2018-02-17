@@ -26,7 +26,7 @@ import (
 
 	"github.com/EthereumCommonwealth/go-callisto/common"
 	"github.com/EthereumCommonwealth/go-callisto/crypto"
-	whisper "github.com/EthereumCommonwealth/go-callisto/whisper/whisperv5"
+	whisper "github.com/EthereumCommonwealth/go-callisto/whisper/whisperv6"
 )
 
 const powRequirement = 0.00001

@@ -425,6 +425,9 @@ func (f *lightFetcher) nextRequest() (*distReq, uint64) {
 			},
 			canSend: func(dp distPeer) bool {
 				p := dp.(*peer)
+				f.lock.Lock()
+				defer f.lock.Unlock()
+
 				fp := f.peers[p]
 				return fp != nil && fp.nodeByHash[bestHash] != nil
 			},

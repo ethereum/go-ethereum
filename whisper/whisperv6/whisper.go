@@ -19,7 +19,6 @@ package whisperv6
 import (
 	"bytes"
 	"crypto/ecdsa"
-	crand "crypto/rand"
 	"crypto/sha256"
 	"fmt"
 	"math"
@@ -444,11 +443,10 @@ func (whisper *Whisper) GetPrivateKey(id string) (*ecdsa.PrivateKey, error) {
 // GenerateSymKey generates a random symmetric key and stores it under id,
 // which is then returned. Will be used in the future for session key exchange.
 func (whisper *Whisper) GenerateSymKey() (string, error) {
-	key := make([]byte, aesKeyLength)
-	_, err := crand.Read(key)
+	key, err := generateSecureRandomData(aesKeyLength)
 	if err != nil {
 		return "", err
-	} else if !validateSymmetricKey(key) {
+	} else if !validateDataIntegrity(key, aesKeyLength) {
 		return "", fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
 	}
 
@@ -712,11 +710,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				log.Warn("failed to decode bloom filter exchange message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
 				return errors.New("invalid bloom filter exchange message")
 			}
-			if isFullNode(bloom) {
-				p.bloomFilter = nil
-			} else {
-				p.bloomFilter = bloom
-			}
+			p.setBloomFilter(bloom)
 		case p2pMessageCode:
 			// peer-to-peer message, sent directly to peer bypassing PoW checks, etc.
 			// this message is not supposed to be forwarded to other peers, and
@@ -983,9 +977,16 @@ func validatePrivateKey(k *ecdsa.PrivateKey) bool {
 	return ValidatePublicKey(&k.PublicKey)
 }
 
-// validateSymmetricKey returns false if the key contains all zeros
-func validateSymmetricKey(k []byte) bool {
-	return len(k) > 0 && !containsOnlyZeros(k)
+// validateDataIntegrity returns false if the data have the wrong or contains all zeros,
+// which is the simplest and the most common bug.
+func validateDataIntegrity(k []byte, expectedSize int) bool {
+	if len(k) != expectedSize {
+		return false
+	}
+	if expectedSize > 3 && containsOnlyZeros(k) {
+		return false
+	}
+	return true
 }
 
 // containsOnlyZeros checks if the data contain only zeros.
@@ -1019,12 +1020,11 @@ func BytesToUintBigEndian(b []byte) (res uint64) {
 
 // GenerateRandomID generates a random string, which is then returned to be used as a key id
 func GenerateRandomID() (id string, err error) {
-	buf := make([]byte, keyIDSize)
-	_, err = crand.Read(buf)
+	buf, err := generateSecureRandomData(keyIDSize)
 	if err != nil {
 		return "", err
 	}
-	if !validateSymmetricKey(buf) {
+	if !validateDataIntegrity(buf, keyIDSize) {
 		return "", fmt.Errorf("error in generateRandomID: crypto/rand failed to generate random data")
 	}
 	id = common.Bytes2Hex(buf)
@@ -1045,7 +1045,6 @@ func isFullNode(bloom []byte) bool {
 
 func bloomFilterMatch(filter, sample []byte) bool {
 	if filter == nil {
-		// full node, accepts all messages
 		return true
 	}
 
