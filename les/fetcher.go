@@ -36,24 +36,26 @@ const (
 	maxNodeCount      = 20               // maximum number of fetcherTreeNode entries remembered for each peer
 )
 
-// lightFetcher
+// lightFetcher implements retrieval of newly announced headers. It also provides a peerHasBlock function for the
+// ODR system to ensure that we only request data related to a certain block from peers who have already processed
+// and announced that block.
 type lightFetcher struct {
 	pm    *ProtocolManager
 	odr   *LesOdr
 	chain *light.LightChain
 
+	lock            sync.Mutex // lock protects access to the fetcher's internal state variables except sent requests
 	maxConfirmedTd  *big.Int
 	peers           map[*peer]*fetcherPeerInfo
 	lastUpdateStats *updateStatsEntry
+	syncing         bool
+	syncDone        chan *peer
 
-	lock       sync.Mutex
-	deliverChn chan fetchResponse
-	reqMu      sync.RWMutex
+	reqMu      sync.RWMutex // reqMu protects access to sent header fetch requests
 	requested  map[uint64]fetchRequest
+	deliverChn chan fetchResponse
 	timeoutChn chan uint64
 	requestChn chan bool // true if initiated from outside
-	syncing    bool
-	syncDone   chan *peer
 }
 
 // fetcherPeerInfo holds fetcher-specific information about each active peer
