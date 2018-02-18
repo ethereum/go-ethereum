@@ -624,15 +624,15 @@ func (whisper *Whisper) Stop() error {
 func (whisper *Whisper) HandlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	// Create the new peer and start tracking it
 	whisperPeer := newPeer(whisper, peer, rw)
-
 	whisper.peerMu.Lock()
 	whisper.peers[whisperPeer] = struct{}{}
 	whisper.peerMu.Unlock()
-
+	metricsPeers.Inc(1)
 	defer func() {
 		whisper.peerMu.Lock()
 		delete(whisper.peers, whisperPeer)
 		whisper.peerMu.Unlock()
+		metricsPeers.Dec(1)
 	}()
 
 	// Run the peer handshake and state updates
@@ -747,6 +747,9 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 // whisper network. It also inserts the envelope into the expiration pool at the
 // appropriate time-stamp. In case of error, connection should be dropped.
 func (whisper *Whisper) add(envelope *Envelope) (bool, error) {
+	totalEnvelopes.Mark(1)
+	envelopesSize.Mark(int64(envelope.size()))
+
 	now := uint32(time.Now().Unix())
 	sent := envelope.Expiry - envelope.TTL
 
@@ -794,6 +797,7 @@ func (whisper *Whisper) add(envelope *Envelope) (bool, error) {
 	whisper.poolMu.Lock()
 	_, alreadyCached := whisper.envelopes[hash]
 	if !alreadyCached {
+		newEnvelopes.Mark(1)
 		whisper.envelopes[hash] = envelope
 		if whisper.expirations[envelope.Expiry] == nil {
 			whisper.expirations[envelope.Expiry] = set.NewNonTS()
