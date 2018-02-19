@@ -24,7 +24,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -66,7 +65,9 @@ func (a *Api) NewManifest() (storage.Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	return a.Store(bytes.NewReader(data), int64(len(data)), &sync.WaitGroup{})
+	key, wait, err := a.Store(bytes.NewReader(data), int64(len(data)))
+	wait()
+	return key, err
 }
 
 // ManifestWriter is used to add and remove entries from an underlying manifest
@@ -86,12 +87,12 @@ func (a *Api) NewManifestWriter(key storage.Key, quitC chan bool) (*ManifestWrit
 
 // AddEntry stores the given data and adds the resulting key to the manifest
 func (m *ManifestWriter) AddEntry(data io.Reader, e *ManifestEntry) (storage.Key, error) {
-	key, err := m.api.Store(data, e.Size, nil)
+	key, _, err := m.api.Store(data, e.Size)
 	if err != nil {
 		return nil, err
 	}
 	entry := newManifestTrieEntry(e, nil)
-	entry.Hash = key.String()
+	entry.Hash = key.Hex()
 	m.trie.addEntry(entry, m.quitC)
 	return key, nil
 }
@@ -339,7 +340,7 @@ func (self *manifestTrie) recalcAndStore() error {
 				if err != nil {
 					return err
 				}
-				entry.Hash = entry.subtrie.hash.String()
+				entry.Hash = entry.subtrie.hash.Hex()
 			}
 			list.Entries = append(list.Entries, entry.ManifestEntry)
 		}
@@ -352,9 +353,8 @@ func (self *manifestTrie) recalcAndStore() error {
 	}
 
 	sr := bytes.NewReader(manifest)
-	wg := &sync.WaitGroup{}
-	key, err2 := self.dpa.Store(sr, int64(len(manifest)), wg, nil)
-	wg.Wait()
+	key, wait, err2 := self.dpa.Store(sr, int64(len(manifest)))
+	wait()
 	self.hash = key
 	return err2
 }

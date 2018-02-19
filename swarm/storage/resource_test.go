@@ -220,7 +220,7 @@ func TestResourceHandler(t *testing.T) {
 	// it will match on second iteration startblocknumber + (resourceFrequency * 3)
 	fwdBlocks(int(resourceFrequency*2)-1, backend)
 
-	rh2, err := NewResourceHandler(datadir, &testCloudStore{}, rh.ethClient, nil)
+	rh2, err := NewTestResourceHandler(datadir, rh.ethClient, nil)
 	_, err = rh2.LookupLatestByName(ctx, safeName, true)
 	if err != nil {
 		t.Fatal(err)
@@ -351,7 +351,7 @@ func setupTest(backend ethApi, validator ResourceValidator) (rh *ResourceHandler
 		os.RemoveAll(datadir)
 	}
 
-	rh, err = NewResourceHandler(datadir, &testCloudStore{}, backend, validator)
+	rh, err = NewTestResourceHandler(datadir, backend, validator)
 	return rh, datadir, signer, cleanF, nil
 }
 
@@ -415,18 +415,6 @@ func newTestSigner() (*testSigner, error) {
 		hasher:      testHasher,
 		signContent: NewGenericResourceSigner(privKey),
 	}, nil
-}
-
-type testCloudStore struct {
-}
-
-func (c *testCloudStore) Store(*Chunk) {
-}
-
-func (c *testCloudStore) Deliver(*Chunk) {
-}
-
-func (c *testCloudStore) Retrieve(*Chunk) {
 }
 
 // Default fallthrough validation of mutable resource ownership

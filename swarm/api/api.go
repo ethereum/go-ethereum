@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"sync"
 
 	"bytes"
 	"mime"
@@ -74,8 +73,8 @@ func (self *Api) Retrieve(key storage.Key) storage.LazySectionReader {
 	return self.dpa.Retrieve(key)
 }
 
-func (self *Api) Store(data io.Reader, size int64, wg *sync.WaitGroup) (key storage.Key, err error) {
-	return self.dpa.Store(data, size, wg, nil)
+func (self *Api) Store(data io.Reader, size int64) (key storage.Key, wait func(), err error) {
+	return self.dpa.Store(data, size)
 }
 
 type ErrResolve error
@@ -112,21 +111,22 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 }
 
 // Put provides singleton manifest creation on top of dpa store
-func (self *Api) Put(content, contentType string) (storage.Key, error) {
+func (self *Api) Put(content, contentType string) (k storage.Key, wait func(), err error) {
 	r := strings.NewReader(content)
-	wg := &sync.WaitGroup{}
-	key, err := self.dpa.Store(r, int64(len(content)), wg, nil)
+	key, waitContent, err := self.dpa.Store(r, int64(len(content)))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
-	key, err = self.dpa.Store(r, int64(len(manifest)), wg, nil)
+	key, waitManifest, err := self.dpa.Store(r, int64(len(manifest)))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	wg.Wait()
-	return key, nil
+	return key, func() {
+		waitContent()
+		waitManifest()
+	}, nil
 }
 
 // Get uses iterative manifest retrieval and prefix matching

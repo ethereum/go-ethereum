@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -182,15 +181,14 @@ func TestBzzGetPath(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t)
 	defer srv.Close()
 
-	wg := &sync.WaitGroup{}
-
 	for i, mf := range testmanifest {
 		reader[i] = bytes.NewReader([]byte(mf))
-		key[i], err = srv.Dpa.Store(reader[i], int64(len(mf)), wg, nil)
+		var wait func()
+		key[i], wait, err = srv.Dpa.Store(reader[i], int64(len(mf)))
 		if err != nil {
 			t.Fatal(err)
 		}
-		wg.Wait()
+		wait()
 	}
 
 	_, err = http.Get(srv.URL + "/bzz-raw:/" + common.ToHex(key[0])[2:] + "/a")
@@ -245,7 +243,7 @@ func TestBzzGetPath(t *testing.T) {
 			t.Fatalf("Read request body: %v", err)
 		}
 
-		if string(respbody) != key[v].String() {
+		if string(respbody) != key[v].Hex() {
 			isexpectedfailrequest := false
 
 			for _, r := range expectedfailrequests {

@@ -93,7 +93,7 @@ var masterBloomFilter []byte
 var masterPow = 0.00000001
 var round = 1
 
-func TestSimulation(t *testing.T) {
+func XTestSimulation(t *testing.T) {
 	// create a chain of whisper nodes,
 	// installs the filters with shared (predefined) parameters
 	initialize(t)

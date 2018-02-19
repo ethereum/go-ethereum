@@ -43,14 +43,12 @@ func TestRegisterAndConnect(t *testing.T) {
 	pp.Start(s.Server)
 	defer pp.Stop()
 	// retrieve and broadcast
-	s.TestExchanges(p2ptest.Exchange{
-		Label: "getPeersMsg message",
-		Expects: []p2ptest.Expect{
-			{
-				Code: 2,
-				Msg:  &subPeersMsg{0},
-				Peer: id,
-			},
-		},
+	err := s.TestDisconnected(&p2ptest.Disconnect{
+		Peer:  s.IDs[0],
+		Error: nil,
 	})
+
+	if err == nil || err.Error() != "timed out waiting for peers to disconnect" {
+		t.Fatalf("expected peer to connect")
+	}
 }

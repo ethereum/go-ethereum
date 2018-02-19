@@ -70,7 +70,7 @@ func newTestKademlia(b string) *testKademlia {
 }
 
 func (k *testKademlia) newTestKadPeer(s string) Peer {
-	return &testDropPeer{&bzzPeer{BzzAddr: testKadPeerAddr(s)}, k.dropc}
+	return &testDropPeer{&BzzPeer{BzzAddr: testKadPeerAddr(s)}, k.dropc}
 }
 
 func (k *testKademlia) On(ons ...string) *testKademlia {
@@ -283,16 +283,15 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 func TestSuggestPeerRetries(t *testing.T) {
 	// 2 row gap, unsaturated proxbin, no callables -> want PO 0
 	k := newTestKademlia("00000000")
-	cycle := time.Second
-	k.RetryInterval = uint(cycle)
+	k.RetryInterval = int64(time.Second) // cycle
 	k.MaxRetries = 50
 	k.RetryExponent = 2
 	sleep := func(n int) {
-		t := k.RetryInterval
+		ts := k.RetryInterval
 		for i := 1; i < n; i++ {
-			t *= k.RetryExponent
+			ts *= int64(k.RetryExponent)
 		}
-		time.Sleep(time.Duration(t))
+		time.Sleep(time.Duration(ts))
 	}
 
 	k.Register("01000000")
@@ -399,14 +398,10 @@ func TestPruning(t *testing.T) {
 
 func TestKademliaHiveString(t *testing.T) {
 	k := newTestKademlia("00000000").On("01000000", "00100000").Register("10000000", "10000001")
+	k.MaxProxDisplay = 8
 	h := k.String()
-	expH := "\n=========================================================================\nMon Feb 27 12:10:28 UTC 2017 KΛÐΞMLIΛ hive: queen's address: 000000\npopulation: 2 (4), MinProxBinSize: 2, MinBinSize: 1, MaxBinSize: 4\n000  0                              |  2 8100 (0) 8000 (0)\n============ DEPTH: 1 ==========================================\n001  1 4000                         |  1 4000 (0)\n002  1 2000                         |  1 2000 (0)\n"
-	for i := 3; i < 16; i++ {
-		expH += fmt.Sprintf("%03d  0                              |  0\n", i)
-	}
-	expH += "========================================================================="
-	if expH[106:] != h[106:] {
-		t.Errorf("incorrect hive output. full - expected %v, got %v", expH, h)
-		t.Fatalf("incorrect hive output. substr - expected %v, got %v", expH[100:], h[100:])
+	expH := "\n=========================================================================\nMon Feb 27 12:10:28 UTC 2017 KΛÐΞMLIΛ hive: queen's address: 000000\npopulation: 2 (4), MinProxBinSize: 2, MinBinSize: 1, MaxBinSize: 4\n000  0                              |  2 8100 (0) 8000 (0)\n============ DEPTH: 1 ==========================================\n001  1 4000                         |  1 4000 (0)\n002  1 2000                         |  1 2000 (0)\n003  0                              |  0\n004  0                              |  0\n005  0                              |  0\n006  0                              |  0\n007  0                              |  0\n========================================================================="
+	if expH[104:] != h[104:] {
+		t.Fatalf("incorrect hive output. expected %v, got %v", expH, h)
 	}
 }

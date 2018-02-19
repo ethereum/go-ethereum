@@ -175,12 +175,12 @@ func (b *Bzz) APIs() []rpc.API {
 // returns a p2p protocol run function that can be assigned to p2p.Protocol#Run field
 // arguments:
 // * p2p protocol spec
-// * run function taking bzzPeer as argument
+// * run function taking BzzPeer as argument
 //   this run function is meant to block for the duration of the protocol session
 //   on return the session is terminated and the peer is disconnected
 // the protocol waits for the bzz handshake is negotiated
-// the overlay address on the bzzPeer is set from the remote handshake
-func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*bzzPeer) error) func(*p2p.Peer, p2p.MsgReadWriter) error {
+// the overlay address on the BzzPeer is set from the remote handshake
+func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*p2p.Peer, p2p.MsgReadWriter) error {
 	return func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		// wait for the bzz protocol to perform the handshake
 		handshake, _ := b.GetHandshake(p.ID())
@@ -193,8 +193,8 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*bzzPeer) error) func(*
 		if handshake.err != nil {
 			return fmt.Errorf("%08x: %s protocol closed: %v", b.BaseAddr()[:4], spec.Name, handshake.err)
 		}
-		// the handshake has succeeded so construct the bzzPeer and run the protocol
-		peer := &bzzPeer{
+		// the handshake has succeeded so construct the BzzPeer and run the protocol
+		peer := &BzzPeer{
 			Peer:       protocols.NewPeer(p, rw, spec),
 			localAddr:  b.localAddr,
 			BzzAddr:    handshake.peerAddr,
@@ -208,8 +208,10 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*bzzPeer) error) func(*
 // shared among swarm subprotocols
 func performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error {
 	ctx, cancel := context.WithTimeout(context.Background(), bzzHandshakeTimeout)
-	defer cancel()
-	defer close(handshake.done)
+	defer func() {
+		close(handshake.done)
+		cancel()
+	}()
 	rsh, err := p.Handshake(ctx, handshake, checkHandshake)
 	if err != nil {
 		handshake.err = err
@@ -243,22 +245,30 @@ func (b *Bzz) runBzz(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return errors.New("received multiple handshakes")
 }
 
-// bzzPeer is the bzz protocol view of a protocols.Peer (itself an extension of p2p.Peer)
+// BzzPeer is the bzz protocol view of a protocols.Peer (itself an extension of p2p.Peer)
 // implements the Peer interface and all interfaces Peer implements: Addr, OverlayPeer
-type bzzPeer struct {
+type BzzPeer struct {
 	*protocols.Peer           // represents the connection for online peers
 	localAddr       *BzzAddr  // local Peers address
 	*BzzAddr                  // remote address -> implements Addr interface = protocols.Peer
 	lastActive      time.Time // time is updated whenever mutexes are releasing
 }
 
+func NewBzzTestPeer(p *protocols.Peer, addr *BzzAddr) *BzzPeer {
+	return &BzzPeer{
+		Peer:      p,
+		localAddr: addr,
+		BzzAddr:   NewAddrFromNodeID(p.ID()),
+	}
+}
+
 // Off returns the overlay peer record for offline persistence
-func (p *bzzPeer) Off() OverlayAddr {
+func (p *BzzPeer) Off() OverlayAddr {
 	return p.BzzAddr
 }
 
 // LastActive returns the time the peer was last active
-func (p *bzzPeer) LastActive() time.Time {
+func (p *BzzPeer) LastActive() time.Time {
 	return p.lastActive
 }
 
@@ -390,6 +400,15 @@ func NewAddrFromNodeID(id discover.NodeID) *BzzAddr {
 	return &BzzAddr{
 		OAddr: ToOverlayAddr(id.Bytes()),
 		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
+	}
+}
+
+// NewAddrFromNodeIDAndPort constucts a BzzAddr from a discover.NodeID and port uint16
+// the overlay address is derived as the hash of the nodeID
+func NewAddrFromNodeIDAndPort(id discover.NodeID, port uint16) *BzzAddr {
+	return &BzzAddr{
+		OAddr: ToOverlayAddr(id.Bytes()),
+		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, port, port).String()),
 	}
 }
 

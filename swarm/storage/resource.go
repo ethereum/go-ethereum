@@ -140,24 +140,9 @@ type ResourceHandler struct {
 }
 
 // Create or open resource update chunk store
-//
-// If validator is nil, signature and access validation will be deactivated
-func NewResourceHandler(datadir string, cloudStore CloudStore, ethClient ethApi, validator ResourceValidator) (*ResourceHandler, error) {
-
-	hashfunc := MakeHashFunc(SHA3Hash)
-
-	path := filepath.Join(datadir, DbDirName)
-	dbStore, err := NewDbStore(datadir, hashfunc, singletonSwarmDbCapacity, 0)
-	if err != nil {
-		return nil, err
-	}
-	localStore := &LocalStore{
-		memStore: NewMemStore(dbStore, singletonSwarmDbCapacity),
-		DbStore:  dbStore,
-	}
-
+func NewResourceHandler(hasher SwarmHasher, chunkStore ChunkStore, ethClient ethApi, validator ResourceValidator) (*ResourceHandler, error) {
 	rh := &ResourceHandler{
-		ChunkStore:   newResourceChunkStore(path, hashfunc, localStore, cloudStore),
+		ChunkStore:   chunkStore,
 		ethClient:    ethClient,
 		resources:    make(map[string]*resource),
 		validator:    validator,
@@ -734,10 +719,10 @@ type resourceChunkStore struct {
 	chunkSize  int64
 }
 
-func newResourceChunkStore(path string, hasher SwarmHasher, localStore *LocalStore, cloudStore CloudStore) *resourceChunkStore {
+func NewResourceChunkStore(localStore *LocalStore, request func(*Chunk) error) ChunkStore {
 	return &resourceChunkStore{
 		localStore: localStore,
-		netStore:   NewNetStore(hasher, localStore, cloudStore, NewDefaultStoreParams()),
+		netStore:   NewNetStore(localStore, request),
 	}
 }
 
@@ -749,23 +734,23 @@ func (r *resourceChunkStore) Get(key Key) (*Chunk, error) {
 	// if the chunk has to be remotely retrieved, we define a timeout of how long to wait for it before failing.
 	// sadly due to the nature of swarm, the error will never be conclusive as to whether it was a network issue
 	// that caused the failure or that the chunk doesn't exist.
-	if chunk.Req == nil {
+	if chunk.ReqC == nil {
 		return chunk, nil
 	}
 	t := time.NewTimer(time.Second * 1)
 	select {
 	case <-t.C:
-		return nil, errors.New("timeout")
-	case <-chunk.Req.C:
-		log.Trace("Received resource update chunk", "peer", chunk.Req.Source)
+		log.Trace("Timeout on resource chunk store")
+		return nil, fmt.Errorf("timeout")
+	case <-chunk.C:
+		log.Trace("Received resource update chunk")
 	}
 	return chunk, nil
 }
 
 func (r *resourceChunkStore) Put(chunk *Chunk) {
-	chunk.wg = &sync.WaitGroup{}
 	r.netStore.Put(chunk)
-	chunk.wg.Wait()
+	chunk.WaitToStore()
 }
 
 func (r *resourceChunkStore) Close() {
@@ -803,4 +788,21 @@ func (self *ResourceHandler) keyDataHash(key Key, data []byte) common.Hash {
 	hasher.Write(key[:])
 	hasher.Write(data)
 	return common.BytesToHash(hasher.Sum(nil))
+}
+
+// TODO: this should not be exposed, but swarm/testutil/http.go needs it
+func NewTestResourceHandler(datadir string, ethClient ethApi, validator ResourceValidator) (*ResourceHandler, error) {
+	path := filepath.Join(datadir, DbDirName)
+	basekey := make([]byte, 32)
+	hasher := MakeHashFunc(SHA3Hash)
+	dbStore, err := NewDbStore(path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+	if err != nil {
+		return nil, err
+	}
+	localStore := &LocalStore{
+		memStore: NewMemStore(dbStore, singletonSwarmDbCapacity),
+		DbStore:  dbStore,
+	}
+	resourceChunkStore := NewResourceChunkStore(localStore, nil)
+	return NewResourceHandler(hasher, resourceChunkStore, ethClient, validator)
 }
