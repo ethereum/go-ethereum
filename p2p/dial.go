@@ -155,7 +155,7 @@ func (s *dialstate) removeStatic(n *discover.Node) {
 	// This removes a task so future attempts to connect will not be made.
 	delete(s.static, n.ID)
 	// This removes a previous dial timestamp so that application
-	// can force a server to reconnect with chosen peer immediatly.
+	// can force a server to reconnect with chosen peer immediately.
 	s.hist.remove(n.ID)
 }
 
