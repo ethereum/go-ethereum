@@ -515,7 +515,7 @@ func TestDialStateStaticDial(t *testing.T) {
 	})
 }
 
-// This test checks that static peers will be redialed immediatly if they were re-added to a static list.
+// This test checks that static peers will be redialed immediately if they were re-added to a static list.
 func TestDialStaticAfterReset(t *testing.T) {
 	wantStatic := []*discover.Node{
 		{ID: uintID(1)},
