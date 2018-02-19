@@ -26,6 +26,8 @@ import (
 	inet "github.com/libp2p/go-libp2p-net"
 )
 
+// LibP2PStream is a wrapper used to implement the MsgReadWriter
+// interface for libp2p's streams.
 type LibP2PStream struct {
 	stream inet.Stream
 }

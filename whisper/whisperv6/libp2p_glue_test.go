@@ -17,18 +17,18 @@
 package whisperv6
 
 import (
-	"math"
-	"encoding/binary"
-	"context"
 	"bytes"
-	"testing"
+	"context"
+	"encoding/binary"
+	"math"
 	"math/rand"
+	"testing"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	host "github.com/libp2p/go-libp2p-host"
+	inet "github.com/libp2p/go-libp2p-net"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	testutil "github.com/libp2p/go-testutil"
-	inet "github.com/libp2p/go-libp2p-net"
 )
 
 const (
@@ -82,10 +82,10 @@ func TestSimpleCode(t *testing.T) {
 		t.Fatalf("Read %d random bytes instead of the expected %d, err: %v", n, size, err)
 	}
 
-	hosts[0].SetStreamHandler(testProtocolID, func (s inet.Stream) {
+	hosts[0].SetStreamHandler(testProtocolID, func(s inet.Stream) {
 		defer s.Close()
 
-		raw := make([]byte, size + codeLength + payloadSizeLength)
+		raw := make([]byte, size+codeLength+payloadSizeLength)
 		n, err = s.Read(raw)
 
 		if len(raw) != n || err != nil {
@@ -135,7 +135,7 @@ func TestSimpleDecode(t *testing.T) {
 	ctx := context.Background()
 	hosts := createTestNetwork(ctx, t, 2)
 
-	hosts[0].SetStreamHandler(testProtocolID, func (s inet.Stream) {
+	hosts[0].SetStreamHandler(testProtocolID, func(s inet.Stream) {
 		defer s.Close()
 
 		lps := LibP2PStream{
@@ -180,7 +180,7 @@ func TestSimpleCodeDecode(t *testing.T) {
 		t.Fatalf("Read %d random bytes instead of the expected %d, err: %v", n, size, err)
 	}
 
-	hosts[0].SetStreamHandler(testProtocolID, func (s inet.Stream) {
+	hosts[0].SetStreamHandler(testProtocolID, func(s inet.Stream) {
 		defer s.Close()
 
 		lps := LibP2PStream{
@@ -245,7 +245,7 @@ func TestMaxWriteSize(t *testing.T) {
 		t.Fatalf("Read %d random bytes instead of the expected %d, err: %v", n, size, err)
 	}
 
-	hosts[0].SetStreamHandler(testProtocolID, func (s inet.Stream) {
+	hosts[0].SetStreamHandler(testProtocolID, func(s inet.Stream) {
 		defer s.Close()
 
 		dummy := []byte{0x0}
@@ -258,7 +258,7 @@ func TestMaxWriteSize(t *testing.T) {
 
 	msg := p2p.Msg{
 		Code:    code,
-		Size:    math.MaxInt32+1,
+		Size:    math.MaxInt32 + 1,
 		Payload: bytes.NewReader(payload),
 	}
 
