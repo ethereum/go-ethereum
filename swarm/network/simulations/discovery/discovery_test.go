@@ -70,7 +70,7 @@ func BenchmarkDiscovery_64_4(b *testing.B)  { benchmarkDiscovery(b, 64, 4) }
 func BenchmarkDiscovery_128_4(b *testing.B) { benchmarkDiscovery(b, 128, 4) }
 func BenchmarkDiscovery_256_4(b *testing.B) { benchmarkDiscovery(b, 256, 4) }
 
-func TestDiscoverySimulationDockerAdapter(t *testing.T) {
+func XTestDiscoverySimulationDockerAdapter(t *testing.T) {
 	testDiscoverySimulationDockerAdapter(t, *nodeCount, *initCount)
 }
 
@@ -99,13 +99,20 @@ func testDiscoverySimulationExecAdapter(t *testing.T, nodes, conns int) {
 	testDiscoverySimulation(t, nodes, conns, adapters.NewExecAdapter(baseDir))
 }
 
+func TestDiscoverySimulationSocketAdapter(t *testing.T) {
+	testDiscoverySimulationSocketAdapter(t, *nodeCount, *initCount)
+}
+
 func TestDiscoverySimulationSimAdapter(t *testing.T) {
 	testDiscoverySimulationSimAdapter(t, *nodeCount, *initCount)
 }
 
 func testDiscoverySimulationSimAdapter(t *testing.T, nodes, conns int) {
+	testDiscoverySimulation(t, nodes, conns, adapters.NewSimAdapter(services))
+}
+
+func testDiscoverySimulationSocketAdapter(t *testing.T, nodes, conns int) {
 	testDiscoverySimulation(t, nodes, conns, adapters.NewSocketAdapter(services))
-	// testDiscoverySimulation(t, nodes, conns, adapters.NewSimAdapter(services))
 }
 
 func testDiscoverySimulation(t *testing.T, nodes, conns int, adapter adapters.NodeAdapter) {
@@ -139,7 +146,7 @@ func benchmarkDiscovery(b *testing.B, nodes, conns int) {
 	for i := 0; i < b.N; i++ {
 		result, err := discoverySimulation(nodes, conns, adapters.NewSimAdapter(services))
 		if err != nil {
-			b.Fatalf("setting up simulation failed", result)
+			b.Fatalf("setting up simulation failed: %s", err)
 		}
 		if result.Error != nil {
 			b.Logf("simulation failed: %s", result.Error)
@@ -157,7 +164,8 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	trigger := make(chan discover.NodeID)
 	ids := make([]discover.NodeID, nodes)
 	for i := 0; i < nodes; i++ {
-		node, err := net.NewNode()
+		conf := adapters.RandomNodeConfig()
+		node, err := net.NewNodeWithConfig(conf)
 		if err != nil {
 			return nil, fmt.Errorf("error starting node: %s", err)
 		}
@@ -297,7 +305,7 @@ func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id di
 }
 
 func newService(ctx *adapters.ServiceContext) (node.Service, error) {
-	addr := network.NewAddrFromNodeID(ctx.Config.ID)
+	addr := network.NewAddrFromNodeIDAndPort(ctx.Config.ID, ctx.Config.Port)
 
 	kp := network.NewKadParams()
 	kp.MinProxBinSize = testMinProxBinSize

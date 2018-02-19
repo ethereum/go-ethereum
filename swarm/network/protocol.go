@@ -207,10 +207,11 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 // performHandshake implements the negotiation of the bzz handshake
 // shared among swarm subprotocols
 func performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error {
-	ctx, _ := context.WithTimeout(context.Background(), bzzHandshakeTimeout)
-	// defer cancel()
-	// ctx, cancel := context.WithTimeout(context.Background(), bzzHandshakeTimeout)
-	defer close(handshake.done)
+	ctx, cancel := context.WithTimeout(context.Background(), bzzHandshakeTimeout)
+	defer func() {
+		close(handshake.done)
+		cancel()
+	}()
 	rsh, err := p.Handshake(ctx, handshake, checkHandshake)
 	if err != nil {
 		handshake.err = err
@@ -261,7 +262,7 @@ func NewBzzTestPeer(p *protocols.Peer, addr *BzzAddr) *BzzPeer {
 	}
 }
 
-// Off returns the overlay peer record for offline persistance
+// Off returns the overlay peer record for offline persistence
 func (p *BzzPeer) Off() OverlayAddr {
 	return p.BzzAddr
 }
@@ -399,6 +400,15 @@ func NewAddrFromNodeID(id discover.NodeID) *BzzAddr {
 	return &BzzAddr{
 		OAddr: ToOverlayAddr(id.Bytes()),
 		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
+	}
+}
+
+// NewAddrFromNodeIDAndPort constucts a BzzAddr from a discover.NodeID and port uint16
+// the overlay address is derived as the hash of the nodeID
+func NewAddrFromNodeIDAndPort(id discover.NodeID, port uint16) *BzzAddr {
+	return &BzzAddr{
+		OAddr: ToOverlayAddr(id.Bytes()),
+		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, port, port).String()),
 	}
 }
 

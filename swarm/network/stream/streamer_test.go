@@ -188,7 +188,7 @@ func TestStreamerDownstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Unsubscribe message",
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 0,
 				Msg: &UnsubscribeMsg{
 					Stream: stream,
@@ -221,7 +221,7 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
 		Triggers: []p2ptest.Trigger{
-			p2ptest.Trigger{
+			{
 				Code: 4,
 				Msg: &SubscribeMsg{
 					Stream: stream,
@@ -235,7 +235,7 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 			},
 		},
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 1,
 				Msg: &OfferedHashesMsg{
 					Stream: stream,
@@ -258,7 +258,7 @@ func TestStreamerUpstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "unsubscribe message",
 		Triggers: []p2ptest.Trigger{
-			p2ptest.Trigger{
+			{
 				Code: 0,
 				Msg: &UnsubscribeMsg{
 					Stream: stream,
@@ -357,7 +357,7 @@ func TestStreamerUpstreamSubscribeErrorMsgExchange(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
 		Triggers: []p2ptest.Trigger{
-			p2ptest.Trigger{
+			{
 				Code: 4,
 				Msg: &SubscribeMsg{
 					Stream: stream,
@@ -371,7 +371,7 @@ func TestStreamerUpstreamSubscribeErrorMsgExchange(t *testing.T) {
 			},
 		},
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 7,
 				Msg: &SubscribeErrorMsg{
 					Error: "stream bar not registered",
@@ -482,7 +482,7 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 4,
 				Msg: &SubscribeMsg{
 					Stream: stream,
@@ -499,7 +499,7 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 		p2ptest.Exchange{
 			Label: "WantedHashes message",
 			Triggers: []p2ptest.Trigger{
-				p2ptest.Trigger{
+				{
 					Code: 1,
 					Msg: &OfferedHashesMsg{
 						HandoverProof: &HandoverProof{
@@ -514,7 +514,7 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 				},
 			},
 			Expects: []p2ptest.Expect{
-				p2ptest.Expect{
+				{
 					Code: 2,
 					Msg: &WantedHashesMsg{
 						Stream: stream,

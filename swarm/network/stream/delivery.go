@@ -191,7 +191,7 @@ R:
 		// this should be has locally
 		chunk, err := d.db.Get(req.Key)
 		if !bytes.Equal(chunk.Key, req.Key) {
-			panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), storage.Key(req.Key).Hex(), req.peer.ID()))
+			panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), req.Key.Hex(), req.peer.ID()))
 		}
 		if err == nil {
 			continue R

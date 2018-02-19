@@ -30,7 +30,7 @@ func NewFromBytes(b []byte, l int) (bv *BitVector, err error) {
 
 func (bv *BitVector) Get(i int) bool {
 	bi := i / 8
-	return uint8(bv.b[bi])&(0x1<<uint(i%8)) != 0
+	return bv.b[bi]&(0x1<<uint(i%8)) != 0
 }
 
 func (bv *BitVector) Set(i int, v bool) {

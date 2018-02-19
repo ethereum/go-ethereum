@@ -190,7 +190,7 @@ var pssSpec = &protocols.Spec{
 
 func (self *Pss) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
-		p2p.Protocol{
+		{
 			Name:    pssSpec.Name,
 			Version: pssSpec.Version,
 			Length:  pssSpec.Length(),
@@ -209,16 +209,14 @@ func (self *Pss) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 func (self *Pss) APIs() []rpc.API {
 	apis := []rpc.API{
-		rpc.API{
+		{
 			Namespace: "pss",
 			Version:   "1.0",
 			Service:   NewAPI(self),
 			Public:    true,
 		},
 	}
-	for _, auxapi := range self.auxAPIs {
-		apis = append(apis, auxapi)
-	}
+	apis = append(apis, self.auxAPIs...)
 	return apis
 }
 
@@ -389,7 +387,7 @@ func (self *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address 
 		address: address,
 	}
 	self.pubKeyPoolMu.Lock()
-	if _, ok := self.pubKeyPool[pubkeyid]; ok == false {
+	if _, ok := self.pubKeyPool[pubkeyid]; !ok {
 		self.pubKeyPool[pubkeyid] = make(map[Topic]*pssPeer)
 	}
 	self.pubKeyPool[pubkeyid][topic] = psp
@@ -418,7 +416,7 @@ func (self *Pss) generateSymmetricKey(topic Topic, address *PssAddress, addToCac
 // If addtocache is set to true, the key will be added to the cache of keys
 // used to attempt symmetric decryption of incoming messages.
 //
-// Returns a string id that can be used to retreive the key bytes
+// Returns a string id that can be used to retrieve the key bytes
 // from the whisper backend (see pss.GetSymmetricKey())
 func (self *Pss) SetSymmetricKey(key []byte, topic Topic, address *PssAddress, addtocache bool) (string, error) {
 	keyid, err := self.w.AddSymKeyDirect(key)
@@ -501,7 +499,7 @@ func (self *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessag
 func (self *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error) {
 	recvmsg, err := envelope.OpenAsymmetric(self.privateKey)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("could not decrypt message: %v", "err", err)
+		return nil, "", nil, fmt.Errorf("could not decrypt message: %s", err)
 	}
 	// check signature (if signed), strip padding
 	if !recvmsg.Validate() {
@@ -538,7 +536,7 @@ func (self *Pss) cleanKeys() (count int) {
 					match = true
 				}
 			}
-			if match == false {
+			if !match {
 				expiredtopics = append(expiredtopics, topic)
 			}
 		}

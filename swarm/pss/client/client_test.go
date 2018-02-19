@@ -104,7 +104,8 @@ func TestClientHandshake(t *testing.T) {
 	lproto := pss.NewPingProtocol(lpssping)
 	rproto := pss.NewPingProtocol(rpssping)
 
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
 	err = lpsc.RunProtocol(ctx, lproto)
 	if err != nil {
 		t.Fatal(err)
@@ -179,9 +180,9 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 		DefaultService: "bzz",
 	})
 	for i := 0; i < numnodes; i++ {
-		nodes[i], err = net.NewNodeWithConfig(&adapters.NodeConfig{
-			Services: []string{"bzz", "pss"},
-		})
+		nodeconf := adapters.RandomNodeConfig()
+		nodeconf.Services = []string{"bzz", "pss"}
+		nodes[i], err = net.NewNodeWithConfig(nodeconf)
 		if err != nil {
 			return nil, fmt.Errorf("error creating node 1: %v", err)
 		}
@@ -231,13 +232,14 @@ func newServices() adapters.Services {
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			cachedir, err := ioutil.TempDir("", "pss-cache")
 			if err != nil {
-				return nil, fmt.Errorf("create pss cache tmpdir failed", "error", err)
+				return nil, fmt.Errorf("create pss cache tmpdir failed: %s", err)
 			}
 			dpa, err := storage.NewLocalDPA(cachedir, make([]byte, 32))
 			if err != nil {
-				return nil, fmt.Errorf("local dpa creation failed", "error", err)
+				return nil, fmt.Errorf("local dpa creation failed: %s", err)
 			}
-			ctxlocal, _ := context.WithTimeout(context.Background(), time.Second)
+			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
 			psparams := pss.NewPssParams(privkey)

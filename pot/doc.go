@@ -48,8 +48,8 @@ concurrent routines,
 Pot
 * retrieval, insertion and deletion by key involves log(n) pointer lookups
 * for any item retrieval  (defined as common prefix on the binary key)
-* provide syncronous iterators respecting proximity ordering  wrt any item
-* provide asyncronous iterator (for parallel execution of operations) over n items
+* provide synchronous iterators respecting proximity ordering  wrt any item
+* provide asynchronous iterator (for parallel execution of operations) over n items
 * allows cheap iteration over ranges
 * asymmetric concurrent merge (union)
 

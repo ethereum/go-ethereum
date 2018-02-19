@@ -64,7 +64,8 @@ func (a *Api) NewManifest() (storage.Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	key, _, err := a.Store(bytes.NewReader(data), int64(len(data)))
+	key, wait, err := a.Store(bytes.NewReader(data), int64(len(data)))
+	wait()
 	return key, err
 }
 
