@@ -65,16 +65,6 @@ func newTestClient(t []byte) *testClient {
 	}
 }
 
-type testServer struct {
-	t []byte
-}
-
-func newTestServer(t []byte) *testServer {
-	return &testServer{
-		t: t,
-	}
-}
-
 func (self *testClient) NeedData(hash []byte) func() {
 	self.receivedHashes[string(hash)] = hash
 	if bytes.Equal(hash, hash0[:]) {
@@ -95,6 +85,16 @@ func (self *testClient) BatchDone(Stream, uint64, []byte, []byte) func() (*Takeo
 }
 
 func (self *testClient) Close() {}
+
+type testServer struct {
+	t []byte
+}
+
+func newTestServer(t []byte) *testServer {
+	return &testServer{
+		t: t,
+	}
+}
 
 func (self *testServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
 	return make([]byte, HashSize), from + 1, to + 1, nil, nil

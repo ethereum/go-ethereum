@@ -17,18 +17,24 @@
 package stream
 
 import (
+	"context"
 	"errors"
 	"flag"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -46,7 +52,8 @@ var (
 )
 
 var services = adapters.Services{
-	"streamer": NewStreamerService,
+	"streamer":          NewStreamerService,
+	"intervalsStreamer": newIntervalsStreamerService,
 }
 
 func init() {
@@ -75,7 +82,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	go func() {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
-	return r, nil
+	return &TestRegistry{Registry: r}, nil
 }
 
 func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {
@@ -154,4 +161,143 @@ func (rrs *roundRobinStore) Close() {
 	for _, store := range rrs.stores {
 		store.Close()
 	}
+}
+
+type TestRegistry struct {
+	*Registry
+}
+
+func (r *TestRegistry) APIs() []rpc.API {
+	a := r.Registry.APIs()
+	a = append(a, rpc.API{
+		Namespace: "stream",
+		Version:   "0.1",
+		Service:   r,
+		Public:    true,
+	})
+	return a
+}
+
+func readAll(dpa *storage.DPA, hash []byte) (int64, error) {
+	r := dpa.Retrieve(hash)
+	buf := make([]byte, 1024)
+	var n int
+	var total int64
+	var err error
+	for (total == 0 || n > 0) && err == nil {
+		n, err = r.ReadAt(buf, total)
+		total += int64(n)
+	}
+	if err != nil && err != io.EOF {
+		return total, err
+	}
+	return total, nil
+}
+
+func (r *TestRegistry) ReadAll(hash common.Hash) (int64, error) {
+	return readAll(r.api.dpa, hash[:])
+}
+
+type TestExternalRegistry struct {
+	*Registry
+	hashesChan chan []byte
+}
+
+func (r *TestExternalRegistry) APIs() []rpc.API {
+	a := r.Registry.APIs()
+	a = append(a, rpc.API{
+		Namespace: "stream",
+		Version:   "0.1",
+		Service:   r,
+		Public:    true,
+	})
+	return a
+}
+
+func (r *TestExternalRegistry) GetHashes(ctx context.Context, peerId discover.NodeID, s Stream) (*rpc.Subscription, error) {
+
+	peer := r.getPeer(peerId)
+
+	client, err := peer.getClient(s)
+	if err != nil {
+		return nil, err
+	}
+
+	c := client.Client.(*testExternalClient)
+
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return nil, fmt.Errorf("Subscribe not supported")
+	}
+
+	sub := notifier.CreateSubscription()
+
+	go func() {
+		for {
+			select {
+			case h := <-c.hashes:
+				if err := notifier.Notify(sub.ID, h); err != nil {
+					log.Warn(fmt.Sprintf("rpc sub notifier notify stream %s: %v", s, err))
+				}
+			case err := <-sub.Err():
+				log.Warn(fmt.Sprintf("caught subscription error in stream %s: %v", s, err))
+			case <-notifier.Closed():
+				log.Warn(fmt.Sprintf("rpc sub notifier closed"))
+			}
+		}
+	}()
+
+	return sub, nil
+}
+
+// TODO: merge functionalities of testExternalClient and testExternalServer
+// with testClient and testServer.
+
+type testExternalClient struct {
+	t []byte
+	// wait0     chan bool
+	// batchDone chan bool
+	hashes chan []byte
+}
+
+func newTestExternalClient(t []byte, hashesChan chan []byte) *testExternalClient {
+	return &testExternalClient{
+		t: t,
+		// wait0:     make(chan bool),
+		// batchDone: make(chan bool),
+		hashes: hashesChan,
+	}
+}
+
+func (self *testExternalClient) NeedData(hash []byte) func() {
+	self.hashes <- hash
+	return func() {}
+}
+
+func (self *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error) {
+	// close(self.batchDone)
+	return nil
+}
+
+func (self *testExternalClient) Close() {}
+
+type testExternalServer struct {
+	t []byte
+}
+
+func newTestExternalServer(t []byte) *testExternalServer {
+	return &testExternalServer{
+		t: t,
+	}
+}
+
+func (self *testExternalServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
+	return make([]byte, HashSize), from + 1, to + 1, nil, nil
+}
+
+func (self *testExternalServer) GetData([]byte) ([]byte, error) {
+	return nil, nil
+}
+
+func (self *testExternalServer) Close() {
 }
