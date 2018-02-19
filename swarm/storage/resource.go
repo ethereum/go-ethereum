@@ -740,6 +740,7 @@ func (r *resourceChunkStore) Get(key Key) (*Chunk, error) {
 	t := time.NewTimer(time.Second * 1)
 	select {
 	case <-t.C:
+		log.Trace("Timeout on resource chunk store")
 		return nil, fmt.Errorf("timeout")
 	case <-chunk.C:
 		log.Trace("Received resource update chunk")
@@ -802,6 +803,6 @@ func NewTestResourceHandler(datadir string, ethClient ethApi, validator Resource
 		memStore: NewMemStore(dbStore, singletonSwarmDbCapacity),
 		DbStore:  dbStore,
 	}
-	resourceChunkStore := NewResourceChunkStore(localStore, func(*Chunk) error { return nil })
+	resourceChunkStore := NewResourceChunkStore(localStore, nil)
 	return NewResourceHandler(hasher, resourceChunkStore, ethClient, validator)
 }
