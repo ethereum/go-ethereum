@@ -57,7 +57,7 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
 					Key:       hash0[:],
@@ -97,7 +97,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Triggers: []p2ptest.Trigger{
-			p2ptest.Trigger{
+			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
 					Key: chunk.Key[:],
@@ -106,7 +106,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 			},
 		},
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 1,
 				Msg: &OfferedHashesMsg{
 					HandoverProof: nil,
@@ -154,7 +154,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Triggers: []p2ptest.Trigger{
-			p2ptest.Trigger{
+			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
 					Key: hash,
@@ -163,7 +163,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 			},
 		},
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 1,
 				Msg: &OfferedHashesMsg{
 					HandoverProof: &HandoverProof{
@@ -194,7 +194,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Triggers: []p2ptest.Trigger{
-			p2ptest.Trigger{
+			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
 					Key:       hash,
@@ -204,7 +204,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 			},
 		},
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 6,
 				Msg: &ChunkDeliveryMsg{
 					Key:   hash,
@@ -256,7 +256,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 4,
 				Msg: &SubscribeMsg{
 					Stream:   "foo",
@@ -272,7 +272,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 		p2ptest.Exchange{
 			Label: "ChunkDeliveryRequest message",
 			Triggers: []p2ptest.Trigger{
-				p2ptest.Trigger{
+				{
 					Code: 6,
 					Msg: &ChunkDeliveryMsg{
 						Key:   chunkKey,
@@ -321,11 +321,12 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	defaultSkipCheck = skipCheck
 	toAddr = network.NewAddrFromNodeID
 	conf := &streamTesting.RunConfig{
-		Adapter:   *adapter,
-		NodeCount: nodes,
-		ConnLevel: conns,
-		ToAddr:    toAddr,
-		Services:  services,
+		Adapter:         *adapter,
+		NodeCount:       nodes,
+		ConnLevel:       conns,
+		ToAddr:          toAddr,
+		Services:        services,
+		EnableMsgEvents: false,
 	}
 
 	sim, teardown, err := streamTesting.NewSimulation(conf)
@@ -495,11 +496,12 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	defer cancel()
 
 	conf := &streamTesting.RunConfig{
-		Adapter:   *adapter,
-		NodeCount: nodes,
-		ConnLevel: conns,
-		ToAddr:    toAddr,
-		Services:  services,
+		Adapter:         *adapter,
+		NodeCount:       nodes,
+		ConnLevel:       conns,
+		ToAddr:          toAddr,
+		Services:        services,
+		EnableMsgEvents: false,
 	}
 	sim, teardown, err := streamTesting.NewSimulation(conf)
 	defer teardown()

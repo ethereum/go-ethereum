@@ -70,8 +70,7 @@ func BenchmarkDiscovery_64_4(b *testing.B)  { benchmarkDiscovery(b, 64, 4) }
 func BenchmarkDiscovery_128_4(b *testing.B) { benchmarkDiscovery(b, 128, 4) }
 func BenchmarkDiscovery_256_4(b *testing.B) { benchmarkDiscovery(b, 256, 4) }
 
-func TestDiscoverySimulationDockerAdapter(t *testing.T) {
-	t.Skip("broken (cannot build image)")
+func XTestDiscoverySimulationDockerAdapter(t *testing.T) {
 	testDiscoverySimulationDockerAdapter(t, *nodeCount, *initCount)
 }
 
@@ -101,8 +100,20 @@ func testDiscoverySimulationExecAdapter(t *testing.T, nodes, conns int) {
 	testDiscoverySimulation(t, nodes, conns, adapters.NewExecAdapter(baseDir))
 }
 
+func TestDiscoverySimulationSocketAdapter(t *testing.T) {
+	testDiscoverySimulationSocketAdapter(t, *nodeCount, *initCount)
+}
+
 func TestDiscoverySimulationSimAdapter(t *testing.T) {
-	testDiscoverySimulation(t, *nodeCount, *initCount, adapters.NewSimAdapter(services))
+	testDiscoverySimulationSimAdapter(t, *nodeCount, *initCount)
+}
+
+func testDiscoverySimulationSimAdapter(t *testing.T, nodes, conns int) {
+	testDiscoverySimulation(t, nodes, conns, adapters.NewSimAdapter(services))
+}
+
+func testDiscoverySimulationSocketAdapter(t *testing.T, nodes, conns int) {
+	testDiscoverySimulation(t, nodes, conns, adapters.NewSocketAdapter(services))
 }
 
 func testDiscoverySimulation(t *testing.T, nodes, conns int, adapter adapters.NodeAdapter) {
@@ -154,7 +165,8 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	trigger := make(chan discover.NodeID)
 	ids := make([]discover.NodeID, nodes)
 	for i := 0; i < nodes; i++ {
-		node, err := net.NewNode()
+		conf := adapters.RandomNodeConfig()
+		node, err := net.NewNodeWithConfig(conf)
 		if err != nil {
 			return nil, fmt.Errorf("error starting node: %s", err)
 		}

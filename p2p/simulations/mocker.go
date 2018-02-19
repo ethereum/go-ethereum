@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
 //a map of mocker names to its function
@@ -165,7 +166,8 @@ func probabilistic(net *Network, quit chan struct{}, nodeCount int) {
 func connectNodesInRing(net *Network, nodeCount int) ([]discover.NodeID, error) {
 	ids := make([]discover.NodeID, nodeCount)
 	for i := 0; i < nodeCount; i++ {
-		node, err := net.NewNode()
+		conf := adapters.RandomNodeConfig()
+		node, err := net.NewNodeWithConfig(conf)
 		if err != nil {
 			log.Error("Error creating a node! %s", err)
 			return nil, err

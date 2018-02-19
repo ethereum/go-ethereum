@@ -283,16 +283,15 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 func TestSuggestPeerRetries(t *testing.T) {
 	// 2 row gap, unsaturated proxbin, no callables -> want PO 0
 	k := newTestKademlia("00000000")
-	cycle := time.Second
-	k.RetryInterval = uint(cycle)
+	k.RetryInterval = int64(time.Second) // cycle
 	k.MaxRetries = 50
 	k.RetryExponent = 2
 	sleep := func(n int) {
-		t := k.RetryInterval
+		ts := k.RetryInterval
 		for i := 1; i < n; i++ {
-			t *= k.RetryExponent
+			ts *= int64(k.RetryExponent)
 		}
-		time.Sleep(time.Duration(t))
+		time.Sleep(time.Duration(ts))
 	}
 
 	k.Register("01000000")

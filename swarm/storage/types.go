@@ -88,7 +88,7 @@ func Proximity(one, other []byte) (ret int) {
 			m = MaxPO % 8
 		}
 		for j := 0; j < m; j++ {
-			if (uint8(oxo)>>uint8(7-j))&0x01 != 0 {
+			if (oxo>>uint8(7-j))&0x01 != 0 {
 				return i*8 + j
 			}
 		}
@@ -156,10 +156,7 @@ func (c KeyCollection) Len() int {
 }
 
 func (c KeyCollection) Less(i, j int) bool {
-	if bytes.Compare(c[i], c[j]) == -1 {
-		return true
-	}
-	return false
+	return bytes.Compare(c[i], c[j]) == -1
 }
 
 func (c KeyCollection) Swap(i, j int) {

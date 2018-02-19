@@ -498,7 +498,7 @@ func (self *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessag
 func (self *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error) {
 	recvmsg, err := envelope.OpenAsymmetric(self.privateKey)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("could not decrypt message: %v", err)
+		return nil, "", nil, fmt.Errorf("could not decrypt message: %s", err)
 	}
 	// check signature (if signed), strip padding
 	if !recvmsg.Validate() {

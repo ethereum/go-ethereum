@@ -208,8 +208,10 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 // shared among swarm subprotocols
 func performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error {
 	ctx, cancel := context.WithTimeout(context.Background(), bzzHandshakeTimeout)
-	defer cancel()
-	defer close(handshake.done)
+	defer func() {
+		close(handshake.done)
+		cancel()
+	}()
 	rsh, err := p.Handshake(ctx, handshake, checkHandshake)
 	if err != nil {
 		handshake.err = err

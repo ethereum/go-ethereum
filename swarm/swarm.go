@@ -279,16 +279,13 @@ func (self *Swarm) Stop() error {
 
 // implements the node.Service interface
 func (self *Swarm) Protocols() (protos []p2p.Protocol) {
-
 	protos = append(protos, self.bzz.Protocols()...)
 
 	if self.ps != nil {
 		protos = append(protos, self.ps.Protocols()...)
 	}
 	if self.streamer != nil {
-		for _, p := range self.streamer.Protocols() {
-			protos = append(protos, p)
-		}
+		protos = append(protos, self.streamer.Protocols()...)
 	}
 	return
 }

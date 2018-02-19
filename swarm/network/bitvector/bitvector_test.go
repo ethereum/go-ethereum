@@ -58,11 +58,11 @@ func TestBitvectorGetSet(t *testing.T) {
 			bv.Set(i, true)
 			for j := 0; j < length; j++ {
 				if j == i {
-					if bv.Get(j) != true {
+					if !bv.Get(j) {
 						t.Errorf("element on index %v is not set to true", i)
 					}
 				} else {
-					if bv.Get(j) != false {
+					if bv.Get(j) {
 						t.Errorf("element on index %v is not false", i)
 					}
 				}
@@ -70,7 +70,7 @@ func TestBitvectorGetSet(t *testing.T) {
 
 			bv.Set(i, false)
 
-			if bv.Get(i) != false {
+			if bv.Get(i) {
 				t.Errorf("element on index %v is not set to false", i)
 			}
 		}
@@ -82,7 +82,7 @@ func TestBitvectorNewFromBytesGet(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if bv.Get(3) != true {
+	if !bv.Get(3) {
 		t.Fatalf("element 3 is not set to true: state %08b", bv.b[0])
 	}
 }
