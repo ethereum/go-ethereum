@@ -5,7 +5,7 @@
 
 #include <stdarg.h>  /* va_list etc */
 #include <stddef.h>  /* size_t */
-#include <stdint.h>  /* SIZE_MAX */
+#include "duktape.h"  /* SIZE_MAX */
 
 /* Write character with bound checking.  Offset 'off' is updated regardless
  * of whether an actual write is made.  This is necessary to satisfy snprintf()
