@@ -17,7 +17,7 @@
 package les
 
 import (
-	"bytes"
+	"encoding/binary"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -45,27 +45,8 @@ func expectResponse(r p2p.MsgReader, msgcode, reqID, bv uint64, data interface{}
 	return p2p.ExpectMsg(r, msgcode, resp{reqID, bv, data})
 }
 
-func testCheckProof(t *testing.T, exp *light.NodeSet, got light.NodeList) {
-	if exp.KeyCount() > len(got) {
-		t.Errorf("proof has fewer nodes than expected")
-		return
-	}
-	if exp.KeyCount() < len(got) {
-		t.Errorf("proof has more nodes than expected")
-		return
-	}
-	for _, node := range got {
-		n, _ := exp.Get(crypto.Keccak256(node))
-		if !bytes.Equal(n, node) {
-			t.Errorf("proof contents mismatch")
-			return
-		}
-	}
-}
-
 // Tests that block headers can be retrieved from a remote chain based on user queries.
 func TestGetBlockHeadersLes1(t *testing.T) { testGetBlockHeaders(t, 1) }
-
 func TestGetBlockHeadersLes2(t *testing.T) { testGetBlockHeaders(t, 2) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
@@ -196,7 +177,6 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 
 // Tests that block contents can be retrieved from a remote chain based on their hashes.
 func TestGetBlockBodiesLes1(t *testing.T) { testGetBlockBodies(t, 1) }
-
 func TestGetBlockBodiesLes2(t *testing.T) { testGetBlockBodies(t, 2) }
 
 func testGetBlockBodies(t *testing.T, protocol int) {
@@ -274,7 +254,6 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 
 // Tests that the contract codes can be retrieved based on account addresses.
 func TestGetCodeLes1(t *testing.T) { testGetCode(t, 1) }
-
 func TestGetCodeLes2(t *testing.T) { testGetCode(t, 2) }
 
 func testGetCode(t *testing.T, protocol int) {
@@ -309,7 +288,6 @@ func testGetCode(t *testing.T, protocol int) {
 
 // Tests that the transaction receipts can be retrieved based on hashes.
 func TestGetReceiptLes1(t *testing.T) { testGetReceipt(t, 1) }
-
 func TestGetReceiptLes2(t *testing.T) { testGetReceipt(t, 2) }
 
 func testGetReceipt(t *testing.T, protocol int) {
@@ -338,7 +316,6 @@ func testGetReceipt(t *testing.T, protocol int) {
 
 // Tests that trie merkle proofs can be retrieved
 func TestGetProofsLes1(t *testing.T) { testGetProofs(t, 1) }
-
 func TestGetProofsLes2(t *testing.T) { testGetProofs(t, 2) }
 
 func testGetProofs(t *testing.T, protocol int) {
@@ -389,27 +366,126 @@ func testGetProofs(t *testing.T, protocol int) {
 	case 2:
 		cost := peer.GetRequestCost(GetProofsV2Msg, len(proofreqs))
 		sendRequest(peer.app, GetProofsV2Msg, 42, cost, proofreqs)
-		msg, err := peer.app.ReadMsg()
-		if err != nil {
-			t.Errorf("Message read error: %v", err)
+		if err := expectResponse(peer.app, ProofsV2Msg, 42, testBufLimit, proofsV2.NodeList()); err != nil {
+			t.Errorf("proofs mismatch: %v", err)
 		}
-		var resp struct {
-			ReqID, BV uint64
-			Data      light.NodeList
+	}
+}
+
+// Tests that CHT proofs can be correctly retrieved.
+func TestGetCHTProofsLes1(t *testing.T) { testGetCHTProofs(t, 1) }
+func TestGetCHTProofsLes2(t *testing.T) { testGetCHTProofs(t, 2) }
+
+func testGetCHTProofs(t *testing.T, protocol int) {
+	// Figure out the client's CHT frequency
+	frequency := uint64(light.CHTFrequencyClient)
+	if protocol == 1 {
+		frequency = uint64(light.CHTFrequencyServer)
+	}
+	// Assemble the test environment
+	db, _ := ethdb.NewMemDatabase()
+	pm := newTestProtocolManagerMust(t, false, int(frequency)+light.HelperTrieProcessConfirmations, testChainGen, nil, nil, db)
+	bc := pm.blockchain.(*core.BlockChain)
+	peer, _ := newTestPeer(t, "peer", protocol, pm, true)
+	defer peer.close()
+
+	// Wait a while for the CHT indexer to process the new headers
+	time.Sleep(100 * time.Millisecond * time.Duration(frequency/light.CHTFrequencyServer)) // Chain indexer throttling
+	time.Sleep(250 * time.Millisecond)                                                     // CI tester slack
+
+	// Assemble the proofs from the different protocols
+	header := bc.GetHeaderByNumber(frequency)
+	rlp, _ := rlp.EncodeToBytes(header)
+
+	key := make([]byte, 8)
+	binary.BigEndian.PutUint64(key, frequency)
+
+	proofsV1 := []ChtResp{{
+		Header: header,
+	}}
+	proofsV2 := HelperTrieResps{
+		AuxData: [][]byte{rlp},
+	}
+	switch protocol {
+	case 1:
+		root := light.GetChtRoot(db, 0, bc.GetHeaderByNumber(frequency-1).Hash())
+		trie, _ := trie.New(root, trie.NewDatabase(ethdb.NewTable(db, light.ChtTablePrefix)))
+
+		var proof light.NodeList
+		trie.Prove(key, 0, &proof)
+		proofsV1[0].Proof = proof
+
+	case 2:
+		root := light.GetChtV2Root(db, 0, bc.GetHeaderByNumber(frequency-1).Hash())
+		trie, _ := trie.New(root, trie.NewDatabase(ethdb.NewTable(db, light.ChtTablePrefix)))
+		trie.Prove(key, 0, &proofsV2.Proofs)
+	}
+	// Assemble the requests for the different protocols
+	requestsV1 := []ChtReq{{
+		ChtNum:   1,
+		BlockNum: frequency,
+	}}
+	requestsV2 := []HelperTrieReq{{
+		Type:    htCanonical,
+		TrieIdx: 0,
+		Key:     key,
+		AuxReq:  auxHeader,
+	}}
+	// Send the proof request and verify the response
+	switch protocol {
+	case 1:
+		cost := peer.GetRequestCost(GetHeaderProofsMsg, len(requestsV1))
+		sendRequest(peer.app, GetHeaderProofsMsg, 42, cost, requestsV1)
+		if err := expectResponse(peer.app, HeaderProofsMsg, 42, testBufLimit, proofsV1); err != nil {
+			t.Errorf("proofs mismatch: %v", err)
 		}
-		if err := msg.Decode(&resp); err != nil {
-			t.Errorf("reply decode error: %v", err)
+	case 2:
+		cost := peer.GetRequestCost(GetHelperTrieProofsMsg, len(requestsV2))
+		sendRequest(peer.app, GetHelperTrieProofsMsg, 42, cost, requestsV2)
+		if err := expectResponse(peer.app, HelperTrieProofsMsg, 42, testBufLimit, proofsV2); err != nil {
+			t.Errorf("proofs mismatch: %v", err)
 		}
-		if msg.Code != ProofsV2Msg {
-			t.Errorf("Message code mismatch")
+	}
+}
+
+// Tests that bloombits proofs can be correctly retrieved.
+func TestGetBloombitsProofs(t *testing.T) {
+	// Assemble the test environment
+	db, _ := ethdb.NewMemDatabase()
+	pm := newTestProtocolManagerMust(t, false, light.BloomTrieFrequency+256, testChainGen, nil, nil, db)
+	bc := pm.blockchain.(*core.BlockChain)
+	peer, _ := newTestPeer(t, "peer", 2, pm, true)
+	defer peer.close()
+
+	// Wait a while for the bloombits indexer to process the new headers
+	time.Sleep(100 * time.Millisecond * time.Duration(light.BloomTrieFrequency/4096)) // Chain indexer throttling
+	time.Sleep(250 * time.Millisecond)                                                // CI tester slack
+
+	// Request and verify each bit of the bloom bits proofs
+	for bit := 0; bit < 2048; bit++ {
+		// Assemble therequest and proofs for the bloombits
+		key := make([]byte, 10)
+
+		binary.BigEndian.PutUint16(key[:2], uint16(bit))
+		binary.BigEndian.PutUint64(key[2:], uint64(light.BloomTrieFrequency))
+
+		requests := []HelperTrieReq{{
+			Type:    htBloomBits,
+			TrieIdx: 0,
+			Key:     key,
+		}}
+		var proofs HelperTrieResps
+
+		root := light.GetBloomTrieRoot(db, 0, bc.GetHeaderByNumber(light.BloomTrieFrequency-1).Hash())
+		trie, _ := trie.New(root, trie.NewDatabase(ethdb.NewTable(db, light.BloomTrieTablePrefix)))
+		trie.Prove(key, 0, &proofs.Proofs)
+
+		// Send the proof request and verify the response
+		cost := peer.GetRequestCost(GetHelperTrieProofsMsg, len(requests))
+		sendRequest(peer.app, GetHelperTrieProofsMsg, 42, cost, requests)
+		if err := expectResponse(peer.app, HelperTrieProofsMsg, 42, testBufLimit, proofs); err != nil {
+			t.Errorf("bit %d: proofs mismatch: %v", bit, err)
 		}
-		if resp.ReqID != 42 {
-			t.Errorf("ReqID mismatch")
-		}
-		if resp.BV != testBufLimit {
-			t.Errorf("BV mismatch")
-		}
-		testCheckProof(t, proofsV2, resp.Data)
 	}
 }
 

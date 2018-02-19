@@ -292,7 +292,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 	}
 
 	// encrypt and sent message
-	whisperMsg, err := newSentMessage(params)
+	whisperMsg, err := NewSentMessage(params)
 	if err != nil {
 		return false, err
 	}
