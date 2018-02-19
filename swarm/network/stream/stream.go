@@ -18,11 +18,9 @@ package stream
 
 import (
 	"fmt"
-	"io"
 	"math"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 
@@ -453,26 +451,6 @@ func NewAPI(r *Registry, store storage.ChunkStore) *API {
 		streamer: r,
 		dpa:      dpa,
 	}
-}
-
-func readAll(dpa *storage.DPA, hash []byte) (int64, error) {
-	r := dpa.Retrieve(hash)
-	buf := make([]byte, 1024)
-	var n int
-	var total int64
-	var err error
-	for (total == 0 || n > 0) && err == nil {
-		n, err = r.ReadAt(buf, total)
-		total += int64(n)
-	}
-	if err != nil && err != io.EOF {
-		return total, err
-	}
-	return total, nil
-}
-
-func (api *API) ReadAll(hash common.Hash) (int64, error) {
-	return readAll(api.dpa, hash[:])
 }
 
 func (api *API) SubscribeStream(peerId discover.NodeID, s Stream, history *Range, priority uint8) error {
