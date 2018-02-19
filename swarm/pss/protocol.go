@@ -227,7 +227,7 @@ func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter
 	}
 	go func() {
 		err := run(p, rw)
-		log.Warn(fmt.Sprintf("pss vprotocol quit topic %v: %v", topic, err))
+		log.Warn(fmt.Sprintf("pss vprotocol quit on %v topic %v: %v", p, topic, err))
 	}()
 	return rw, nil
 }

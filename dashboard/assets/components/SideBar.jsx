@@ -24,18 +24,22 @@ import Icon from 'material-ui/Icon';
 import Transition from 'react-transition-group/Transition';
 import {Icon as FontAwesome} from 'react-fa';
 
-import {MENU, DURATION} from './Common';
+import {MENU, DURATION} from '../common';
 
-// menuDefault is the default style of the menu.
-const menuDefault = {
-	transition: `margin-left ${DURATION}ms`,
+// styles contains the constant styles of the component.
+const styles = {
+	menu: {
+		default: {
+			transition: `margin-left ${DURATION}ms`,
+		},
+		transition: {
+			entered: {marginLeft: -200},
+		},
+	},
 };
-// menuTransition is the additional style of the menu corresponding to the transition's state.
-const menuTransition = {
-	entered: {marginLeft: -200},
-};
-// Styles for the SideBar component.
-const styles = theme => ({
+
+// themeStyles returns the styles generated from the theme for the component.
+const themeStyles = theme => ({
 	list: {
 		background: theme.palette.background.appBar,
 	},
@@ -46,38 +50,32 @@ const styles = theme => ({
 		fontSize: theme.spacing.unit * 3,
 	},
 });
+
 export type Props = {
-	classes: Object,
+	classes: Object, // injected by withStyles()
 	opened: boolean,
-	changeContent: () => {},
+	changeContent: string => void,
 };
+
 // SideBar renders the sidebar of the dashboard.
 class SideBar extends Component<Props> {
-	constructor(props) {
-		super(props);
-
-		// clickOn contains onClick event functions for the menu items.
-		// Instantiate only once, and reuse the existing functions to prevent the creation of
-		// new function instances every time the render method is triggered.
-		this.clickOn = {};
-		MENU.forEach((menu) => {
-			this.clickOn[menu.id] = (event) => {
-				event.preventDefault();
-				props.changeContent(menu.id);
-			};
-		});
-	}
-
 	shouldComponentUpdate(nextProps) {
 		return nextProps.opened !== this.props.opened;
 	}
 
+	// clickOn returns a click event handler function for the given menu item.
+	clickOn = menu => (event) => {
+		event.preventDefault();
+		this.props.changeContent(menu);
+	};
+
+	// menuItems returns the menu items corresponding to the sidebar state.
 	menuItems = (transitionState) => {
 		const {classes} = this.props;
 		const children = [];
 		MENU.forEach((menu) => {
-			children.push(
-				<ListItem button key={menu.id} onClick={this.clickOn[menu.id]} className={classes.listItem}>
+			children.push((
+				<ListItem button key={menu.id} onClick={this.clickOn(menu.id)} className={classes.listItem}>
 					<ListItemIcon>
 						<Icon className={classes.icon}>
 							<FontAwesome name={menu.icon} />
@@ -86,29 +84,25 @@ class SideBar extends Component<Props> {
 					<ListItemText
 						primary={menu.title}
 						style={{
-							...menuDefault,
-							...menuTransition[transitionState],
+							...styles.menu.default,
+							...styles.menu.transition[transitionState],
 							padding: 0,
 						}}
 					/>
-				</ListItem>,
-			);
+				</ListItem>
+			));
 		});
 		return children;
 	};
 
 	// menu renders the list of the menu items.
-	menu = (transitionState) => {
-		const {classes} = this.props; // The classes property is injected by withStyles().
-
-		return (
-			<div className={classes.list}>
-				<List>
-					{this.menuItems(transitionState)}
-				</List>
-			</div>
-		);
-	};
+	menu = (transitionState: Object) => (
+		<div className={this.props.classes.list}>
+			<List>
+				{this.menuItems(transitionState)}
+			</List>
+		</div>
+	);
 
 	render() {
 		return (
@@ -119,4 +113,4 @@ class SideBar extends Component<Props> {
 	}
 }
 
-export default withStyles(styles)(SideBar);
+export default withStyles(themeStyles)(SideBar);

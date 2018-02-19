@@ -97,7 +97,6 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		Type      string
 		Name      string
 		Constant  bool
-		Indexed   bool
 		Anonymous bool
 		Inputs    []Argument
 		Outputs   []Argument

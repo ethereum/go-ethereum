@@ -111,7 +111,9 @@ func (self *chunkerTester) Append(chunker Splitter, rootKey Key, data io.Reader,
 							chunk.SData = stored.SData
 							chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 							close(chunk.dbStored)
-							close(chunk.C)
+							if chunk.C != nil {
+								close(chunk.C)
+							}
 						}
 					}
 				}

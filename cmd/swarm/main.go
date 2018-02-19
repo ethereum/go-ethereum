@@ -154,6 +154,26 @@ var (
 		Usage:  "Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied separated by a ',')",
 		EnvVar: SWARM_ENV_CORS,
 	}
+	SwarmStorePath = cli.StringFlag{
+		Name:   "store.path",
+		Usage:  "Path to leveldb chunk DB (default <$GETH_ENV_DIR>/swarm/bzz-<$BZZ_KEY>/chunks)",
+		EnvVar: SWARM_ENV_STORE_PATH,
+	}
+	SwarmStoreCapacity = cli.Uint64Flag{
+		Name:   "store.size",
+		Usage:  "Number of chunks (5M is roughly 20-25GB) (default 5000000)",
+		EnvVar: SWARM_ENV_STORE_CAPACITY,
+	}
+	SwarmStoreCacheCapacity = cli.UintFlag{
+		Name:   "store.cache.size",
+		Usage:  "Number of recent chunks cached in memory (default 5000)",
+		EnvVar: SWARM_ENV_STORE_CACHE_CAPACITY,
+	}
+	SwarmStoreRadius = cli.IntFlag{
+		Name:   "store.radius",
+		Usage:  "Minimum proximity order (number of identical prefix bits of address key) for chunks to warrant storage (default 0)",
+		EnvVar: SWARM_ENV_STORE_RADIUS,
+	}
 
 	// the following flags are deprecated and should be removed in the future
 	DeprecatedEthAPIFlag = cli.StringFlag{
@@ -367,6 +387,11 @@ DEPRECATED: use 'swarm db clean'.
 		SwarmUploadMimeType,
 		// pss flags
 		SwarmPssEnabledFlag,
+		// storage flags
+		SwarmStorePath,
+		SwarmStoreCapacity,
+		SwarmStoreCacheCapacity,
+		SwarmStoreRadius,
 		//deprecated flags
 		DeprecatedEthAPIFlag,
 	}
@@ -535,7 +560,7 @@ func registerBzzService(bzzconfig *bzzapi.Config, ctx *cli.Context, stack *node.
 		}
 
 		// In production, mockStore must be always nil.
-		return swarm.NewSwarm(ctx, swapClient, ensClient, bzzconfig, bzzconfig.SwapEnabled, bzzconfig.SyncEnabled, bzzconfig.Cors, bzzconfig.PssEnabled, nil)
+		return swarm.NewSwarm(ctx, swapClient, ensClient, bzzconfig, nil)
 	}
 	//register within the ethereum node
 	if err := stack.Register(boot); err != nil {

@@ -320,6 +320,11 @@ func runMultiplePeers(t *testing.T, peer int, errs ...error) {
 	if !pp.Has(s.IDs[0]) {
 		t.Fatalf("missing peer test-0: %v (%v)", pp, s.IDs)
 	}
+	for !pp.Has(s.IDs[1]) {
+		time.Sleep(1)
+		log.Trace(fmt.Sprintf("missing peer test-1: %v (%v)", pp, s.IDs))
+	}
+
 	if !pp.Has(s.IDs[1]) {
 		t.Fatalf("missing peer test-1: %v (%v)", pp, s.IDs)
 	}
