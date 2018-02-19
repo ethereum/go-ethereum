@@ -17,6 +17,7 @@
 package whisperv6
 
 import (
+	"math"
 	"encoding/binary"
 	"context"
 	"bytes"
@@ -135,6 +136,8 @@ func TestSimpleDecode(t *testing.T) {
 	hosts := createTestNetwork(ctx, t, 2)
 
 	hosts[0].SetStreamHandler(testProtocolID, func (s inet.Stream) {
+		defer s.Close()
+
 		lps := LibP2PStream{
 			stream: s,
 		}
@@ -164,3 +167,111 @@ func TestSimpleDecode(t *testing.T) {
 
 	stream.Close()
 }
+
+func TestSimpleCodeDecode(t *testing.T) {
+	ctx := context.Background()
+	hosts := createTestNetwork(ctx, t, 2)
+
+	code := rand.Uint64()
+	size := rand.Uint32() % 512
+	payload := make([]byte, size)
+	n, err := rand.Read(payload)
+	if err != nil || uint32(n) != size {
+		t.Fatalf("Read %d random bytes instead of the expected %d, err: %v", n, size, err)
+	}
+
+	hosts[0].SetStreamHandler(testProtocolID, func (s inet.Stream) {
+		defer s.Close()
+
+		lps := LibP2PStream{
+			stream: s,
+		}
+
+		msg, err := lps.ReadMsg()
+		if err != nil {
+			t.Fatalf("Error decoding message: %s", err)
+		}
+
+		if msg.Code != code {
+			t.Fatalf("Error decoding message code %d instead of %d", msg.Code, code)
+		}
+		if int(msg.Size) != len(payload) {
+			t.Fatalf("Error decoding message size %d instead of %d", msg.Size, len(payload))
+		}
+
+		readPayload := make([]byte, len(payload))
+		sizeRead, err := msg.Payload.Read(readPayload)
+		if err != nil || sizeRead != len(payload) {
+			t.Fatalf("Error reading payload from source: %s (%d bytes read for %d expected)", err, sizeRead, len(payload))
+		} else if !bytes.Equal(payload, readPayload) {
+			t.Fatal("Encoded payload differ from source")
+		}
+	})
+	stream, err := hosts[1].NewStream(ctx, hosts[0].ID(), testProtocolID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg := p2p.Msg{
+		Code:    code,
+		Size:    size,
+		Payload: bytes.NewReader(payload),
+	}
+
+	lps := LibP2PStream{
+		stream: stream,
+	}
+
+	err = lps.WriteMsg(msg)
+
+	if err != nil {
+		t.Fatalf("Error encoding a message to the stream: %s", err)
+	}
+
+	stream.Close()
+}
+
+func TestMaxWriteSize(t *testing.T) {
+	ctx := context.Background()
+	hosts := createTestNetwork(ctx, t, 2)
+
+	code := rand.Uint64()
+	// This isn't the size that will be reported, but if I actually
+	// require 2GB or RAM the CI servers will fail.
+	size := 10
+	payload := make([]byte, size)
+	n, err := rand.Read(payload)
+	if err != nil || n != size {
+		t.Fatalf("Read %d random bytes instead of the expected %d, err: %v", n, size, err)
+	}
+
+	hosts[0].SetStreamHandler(testProtocolID, func (s inet.Stream) {
+		defer s.Close()
+
+		dummy := []byte{0x0}
+		_, _ = s.Read(dummy)
+	})
+	stream, err := hosts[1].NewStream(ctx, hosts[0].ID(), testProtocolID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	msg := p2p.Msg{
+		Code:    code,
+		Size:    math.MaxInt32+1,
+		Payload: bytes.NewReader(payload),
+	}
+
+	lps := LibP2PStream{
+		stream: stream,
+	}
+
+	err = lps.WriteMsg(msg)
+
+	if err.Error() != "Payload size must be a maximum of 2147483647 bytes" {
+		t.Fatal("Should have returned an error with invalid payload size")
+	}
+
+	stream.Close()
+}
+

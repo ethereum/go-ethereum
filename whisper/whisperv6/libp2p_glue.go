@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"math"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	inet "github.com/libp2p/go-libp2p-net"
@@ -69,13 +70,21 @@ func (stream *LibP2PStream) ReadMsg() (p2p.Msg, error) {
 // WriteMsg implements the MsgReadWriter interface to write messages
 // to lilbp2p streams.
 func (stream *LibP2PStream) WriteMsg(msg p2p.Msg) error {
+	// Refuse to write messages with an unsigned size greater than
+	// a signed 32-bit integer size. This is because len() returns
+	// an int, forcing a conversion at some locations in the code,
+	// and on some blatforms that might cause an issue.
+	if msg.Size > math.MaxInt32 {
+		return fmt.Errorf("Payload size must be a maximum of %d bytes", math.MaxInt32)
+	}
+
 	data := make([]byte, msg.Size+codeLength+payloadSizeLength)
 
 	binary.LittleEndian.PutUint64(data[0:codeLength], msg.Code)
 	binary.LittleEndian.PutUint32(data[codeLength:codeLength+payloadSizeLength], msg.Size)
 
 	nbytes, err := msg.Payload.Read(data[codeLength+payloadSizeLength:])
-	if (nbytes&0xFFFFFFFF) != nbytes || uint32(nbytes) != msg.Size {
+	if nbytes > math.MaxInt32 || uint32(nbytes) != msg.Size {
 		return fmt.Errorf("Invalid size read in libp2p stream: read %d bytes, was expecting %d bytes", nbytes, msg.Size)
 	} else if err != nil {
 		return err
