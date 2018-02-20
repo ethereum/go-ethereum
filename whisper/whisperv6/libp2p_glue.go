@@ -57,6 +57,9 @@ func (stream *LibP2PStream) ReadMsg() (p2p.Msg, error) {
 		return p2p.Msg{}, fmt.Errorf("Invalid message size length: expected %d, got %d", len(sizeBytes), nbytes)
 	}
 	size := binary.LittleEndian.Uint32(sizeBytes)
+	if size > math.MaxInt32 {
+		return p2p.Msg{}, fmt.Errorf("Invalid message size length: got %d which is above the max of %d", size, math.MaxInt32)
+	}
 
 	payload := make([]byte, size)
 	nbytes, err = stream.stream.Read(payload)

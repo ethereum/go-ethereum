@@ -17,6 +17,7 @@
 package whisperv6
 
 import (
+	"io/ioutil"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -91,7 +92,7 @@ func TestSimpleCode(t *testing.T) {
 		if len(raw) != n || err != nil {
 			t.Fatalf("Error reading output of encoding (%d/%d bytes) %s", n, len(raw), err)
 		}
-		
+
 		c := binary.LittleEndian.Uint64(raw[:8])
 		if c != code {
 			t.Fatalf("Invalid code retreived %d, expected %d", c, code)
@@ -275,3 +276,38 @@ func TestMaxWriteSize(t *testing.T) {
 	stream.Close()
 }
 
+func TestMaxReadSize(t *testing.T) {
+	coded := []byte{0xef, 0xbe, 0xad, 0xde, 0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0xF0, 0x01, 0x02, 0x03, 0x04, 0x05}
+
+	ctx := context.Background()
+	hosts := createTestNetwork(ctx, t, 2)
+
+	hosts[0].SetStreamHandler(testProtocolID, func (s inet.Stream) {
+		defer s.Close()
+
+		lps := LibP2PStream{
+			stream: s,
+		}
+
+		_, err := lps.ReadMsg()
+		if err.Error() != "Invalid message size length: got 4026531845 which is above the max of 2147483647" {
+			t.Fatal("Did not detect an invalid payload size")
+		}
+
+		// WORKAROUND Need to read the whole content of the stream for the
+		// stream to be properly closed by the underlying implementation.
+		_, _ = ioutil.ReadAll(s)
+	})
+
+	stream, err := hosts[1].NewStream(ctx, hosts[0].ID(), testProtocolID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := stream.Write(coded)
+	if err != nil || n != len(coded) {
+		t.Fatalf("Error writing %d bytes to stream: %s, %d bytes written", len(coded), err, n)
+	}
+
+	stream.Close()
+}
