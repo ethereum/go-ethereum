@@ -77,21 +77,18 @@ var (
 	// CallistoTestnetChainConfig contains the chain parameters to run a node on the Callisto test network.
 	CallistoTestnetChainConfig = &ChainConfig{
 		ChainId:        big.NewInt(7919),
-		HomesteadBlock: big.NewInt(0),
+		HomesteadBlock: big.NewInt(1),
 		DAOForkBlock:   big.NewInt(0),
 		DAOForkSupport: false,
-		EIP150Block:    big.NewInt(0),
+		EIP150Block:    big.NewInt(2),
 		EIP150Hash:     common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		EIP155Block:    big.NewInt(3),
-		EIP158Block:    big.NewInt(0),
+		EIP158Block:    big.NewInt(3),
 		ByzantiumBlock: big.NewInt(4),
-		CallistoBlock:  big.NewInt(1),
+		CallistoBlock:  big.NewInt(4),
 		CallistoTreasuryAddress: common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"),
 
-		Clique: &CliqueConfig{
-			Period: 10,
-			Epoch:  30000,
-		},
+		Ethash: new(EthashConfig),
 	}
 
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
