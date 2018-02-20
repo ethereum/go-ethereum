@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/multiformats/go-multihash"
+
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
@@ -107,7 +109,7 @@ func TestResourceReverse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	chunk := newUpdateChunk(key, &sig, period, version, safeName, data)
+	chunk := newUpdateChunk(key, &sig, period, version, safeName, data, len(data))
 
 	// check that we can recover the owner account from the update chunk's signature
 	checksig, checkperiod, checkversion, checkname, checkdata, err := rh.parseUpdate(chunk.SData)
@@ -260,6 +262,133 @@ func TestResourceHandler(t *testing.T) {
 	}
 	log.Debug("Specific version lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
+}
+
+func TestResourceMultihash(t *testing.T) {
+
+	// signer containing private key
+	signer, err := newTestSigner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	validator := newTestValidator(signer.signContent)
+
+	// make fake backend, set up rpc and create resourcehandler
+	backend := &fakeBackend{
+		blocknumber: int64(startBlock),
+	}
+
+	// set up rpc and create resourcehandler
+	rh, datadir, _, teardownTest, err := setupTest(backend, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardownTest()
+
+	// create a new resource
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// we're naïvely assuming keccak256 for swarm hashes
+	// if it ever changes this test should also change
+	swarmhashbytes := rh.nameHash("foo")
+	swarmhashmulti, err := multihash.Encode(swarmhashbytes.Bytes(), multihash.KECCAK_256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	swarmhashkey, err := rh.UpdateMultihash(ctx, safeName, swarmhashmulti)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sha1bytes := make([]byte, multihash.DefaultLengths[multihash.SHA1])
+	sha1multi, err := multihash.Encode(sha1bytes, multihash.SHA1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sha1key, err := rh.UpdateMultihash(ctx, safeName, sha1multi)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// invalid multihashes
+	_, err = rh.UpdateMultihash(ctx, safeName, swarmhashmulti[1:])
+	if err == nil {
+		t.Fatalf("Expected update to fail with first byte skipped")
+	}
+	_, err = rh.UpdateMultihash(ctx, safeName, swarmhashmulti[:len(swarmhashmulti)-2])
+	if err == nil {
+		t.Fatalf("Expected update to fail with last byte skipped")
+	}
+
+	data, err := getUpdateDirect(rh, swarmhashkey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	swarmhashdecode, err := multihash.Decode(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(swarmhashdecode.Digest, swarmhashbytes.Bytes()) {
+		t.Fatalf("Decoded SHA1 hash '%x' does not match original hash '%x'", swarmhashdecode.Digest, swarmhashbytes.Bytes())
+	}
+	data, err = getUpdateDirect(rh, sha1key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sha1decode, err := multihash.Decode(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(sha1decode.Digest, sha1bytes) {
+		t.Fatalf("Decoded SHA1 hash '%x' does not match original hash '%x'", sha1decode.Digest, sha1bytes)
+	}
+	rh.Close()
+
+	// test with signed data
+	rh2, err := NewTestResourceHandler(datadir, rh.ethClient, validator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = rh2.NewResource(ctx, safeName, resourceFrequency)
+	if err != nil {
+		t.Fatal(err)
+	}
+	swarmhashsignedkey, err := rh2.UpdateMultihash(ctx, safeName, swarmhashmulti)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sha1signedkey, err := rh2.UpdateMultihash(ctx, safeName, sha1multi)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err = getUpdateDirect(rh2, swarmhashsignedkey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	swarmhashdecode, err = multihash.Decode(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(swarmhashdecode.Digest, swarmhashbytes.Bytes()) {
+		t.Fatalf("Decoded SHA1 hash '%x' does not match original hash '%x'", swarmhashdecode.Digest, swarmhashbytes.Bytes())
+	}
+	data, err = getUpdateDirect(rh2, sha1signedkey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sha1decode, err = multihash.Decode(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(sha1decode.Digest, sha1bytes) {
+		t.Fatalf("Decoded SHA1 hash '%x' does not match original hash '%x'", sha1decode.Digest, sha1bytes)
+	}
 }
 
 // create ENS enabled resource update, with and without valid owner
@@ -443,4 +572,16 @@ func (self *testValidator) checkAccess(name string, address common.Address) (boo
 
 func (self *testValidator) nameHash(name string) common.Hash {
 	return self.hashFunc(name)
+}
+
+func getUpdateDirect(rh *ResourceHandler, key Key) ([]byte, error) {
+	chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	_, _, _, _, data, err := rh.parseUpdate(chunk.SData)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }

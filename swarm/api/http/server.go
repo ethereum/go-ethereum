@@ -415,22 +415,16 @@ func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supEr
 	}
 	switch code {
 	case storage.ErrInvalidValue:
-		//s.BadRequest(w, r, defaultErr.Error())
 		return http.StatusBadRequest, defaultErr
 	case storage.ErrNotFound, storage.ErrNotSynced, storage.ErrNothingToReturn:
-		//s.NotFound(w, r, defaultErr)
 		return http.StatusNotFound, defaultErr
 	case storage.ErrUnauthorized, storage.ErrInvalidSignature:
-		//ShowError(w, &r.Request, defaultErr.Error(), http.StatusUnauthorized)
 		return http.StatusUnauthorized, defaultErr
 	case storage.ErrDataOverflow:
-		//ShowError(w, &r.Request, defaultErr.Error(), http.StatusRequestEntityTooLarge)
 		return http.StatusRequestEntityTooLarge, defaultErr
 	}
 
 	return http.StatusInternalServerError, defaultErr
-
-	//s.Error(w, r, defaultErr)
 }
 
 // HandleGet handles a GET request to
