@@ -19,27 +19,44 @@ package http_test
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
+func init() {
+	verbose := flag.Bool("v", false, "verbose")
+	flag.Parse()
+	if *verbose {
+		log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
+	}
+}
+
+type resourceResponse struct {
+	Manifest storage.Key `json:"manifest"`
+	Resource string      `json:"resource"`
+	Update   storage.Key `json:"update"`
+}
+
 func TestBzzResource(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t)
 	defer srv.Close()
 
 	// our mutable resource "name"
-	keybytes := make([]byte, common.HashLength)
-	copy(keybytes, []byte{42})
+	keybytes := []byte("foo")
 	srv.Hasher.Reset()
 	srv.Hasher.Write([]byte(fmt.Sprintf("%x", keybytes)))
 	keybyteshash := fmt.Sprintf("%x", srv.Hasher.Sum(nil))
@@ -65,10 +82,55 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(b, []byte(keybyteshash)) {
-		t.Fatalf("resource update hash mismatch, expected '%s' got '%s'", keybyteshash, b)
+	rsrcResp := &resourceResponse{}
+	err = json.Unmarshal(b, rsrcResp)
+	if err != nil {
+		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
-	t.Logf("creatreturn %v / %v", keybyteshash, b)
+	if rsrcResp.Update.Hex() != keybyteshash {
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", keybyteshash, rsrcResp.Resource)
+	}
+
+	// get manifest
+	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, rsrcResp.Manifest)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := &api.Manifest{}
+	err = json.Unmarshal(b, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Entries) != 1 {
+		t.Fatalf("Manifest has %d entries", len(manifest.Entries))
+	}
+	if manifest.Entries[0].Hash != rsrcResp.Resource {
+		t.Fatalf("Expected manifest path '%s', got '%s'", keybyteshash, manifest.Entries[0].Hash)
+	}
+
+	// get bzz manifest transparent resource resolve
+	url = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp.Manifest)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// get latest update (1.1) through resource directly
 	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)

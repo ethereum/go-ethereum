@@ -142,8 +142,8 @@ func testDbStoreNotFound(t *testing.T, mock bool) {
 	defer db.close()
 
 	_, err = db.Get(ZeroKey)
-	if err != ErrNotFound {
-		t.Errorf("Expected ErrNotFound, got %v", err)
+	if err != ErrChunkNotFound {
+		t.Errorf("Expected ErrChunkNotFound, got %v", err)
 	}
 }
 

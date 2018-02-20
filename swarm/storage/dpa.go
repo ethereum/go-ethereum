@@ -48,8 +48,8 @@ const (
 )
 
 var (
-	ErrNotFound = errors.New("not found")
-	ErrFetching = errors.New("chunk still fetching")
+	ErrChunkNotFound = errors.New("chunk not found")
+	ErrFetching      = errors.New("chunk still fetching")
 	// timeout interval before retrieval is timed out
 	searchTimeout = 3 * time.Second
 )

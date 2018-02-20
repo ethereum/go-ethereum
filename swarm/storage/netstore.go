@@ -64,7 +64,7 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 
 	select {
 	case <-t.C:
-		return nil, ErrNotFound
+		return nil, ErrChunkNotFound
 	case <-chunk.ReqC:
 	}
 	return chunk, nil

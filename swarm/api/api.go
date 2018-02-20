@@ -36,6 +36,18 @@ import (
 
 var hashMatcher = regexp.MustCompile("^[0-9A-Fa-f]{64}")
 
+type ErrResourceReturn struct {
+	key string
+}
+
+func (e *ErrResourceReturn) Error() string {
+	return "resourceupdate"
+}
+
+func (e *ErrResourceReturn) Key() string {
+	return e.key
+}
+
 type Resolver interface {
 	Resolve(string) (common.Hash, error)
 }
@@ -145,6 +157,18 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 	entry, _ := trie.getEntry(path)
 
 	if entry != nil {
+		// we want to be able to serve Mutable Resource Updates transparently using the bzz:// scheme
+		//
+		// we use a special manifest hack for this purpose, which is pathless and where the resource root key
+		// is set as the hash of the manifest (see swarm/api/manifest.go:NewResourceManifest)
+		//
+		// to avoid taking a performance hit hacking a storage.LazySectionReader to wrap the resource key,
+		// we return a typed error instead. Since for all other purposes this is an invalid manifest,
+		// any normal interfacing code will just see an error fail accordingly.
+		if entry.ContentType == ResourceContentType {
+			log.Warn("resource type", "hash", entry.Hash)
+			return nil, entry.ContentType, http.StatusOK, &ErrResourceReturn{entry.Hash}
+		}
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
@@ -370,11 +394,7 @@ func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32,
 	var err error
 	if version != 0 {
 		if period == 0 {
-			currentblocknumber, err := self.resource.GetBlock(ctx)
-			if err != nil {
-				return nil, nil, fmt.Errorf("Could not determine latest block: %v", err)
-			}
-			period = self.resource.BlockToPeriod(name, currentblocknumber)
+			return nil, nil, storage.NewResourceError(storage.ErrInvalidValue, "Period can't be 0")
 		}
 		_, err = self.resource.LookupVersionByName(ctx, name, period, version, true)
 	} else if period != 0 {

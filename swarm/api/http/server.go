@@ -43,6 +43,12 @@ import (
 	"github.com/rs/cors"
 )
 
+type resourceResponse struct {
+	Manifest storage.Key `json:"manifest"`
+	Resource string      `json:"resource"`
+	Update   storage.Key `json:"update"`
+}
+
 // ServerConfig is the basic configuration needed for the HTTP server and also
 // includes CORS settings.
 type ServerConfig struct {
@@ -292,7 +298,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 }
 
 func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
-	var outdata string
+	var outdata []byte
 	if r.uri.Path != "" {
 		frequency, err := strconv.ParseUint(r.uri.Path, 10, 64)
 		if err != nil {
@@ -301,10 +307,26 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		}
 		key, err := s.api.ResourceCreate(r.Context(), r.uri.Addr, frequency)
 		if err != nil {
-			ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("Resource creation failed: %v", err)), http.StatusInternalServerError)
+			code, err2 := s.translateResourceError(w, r, "Resource creation fail", err)
+
+			ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, err2), code)
 			return
 		}
-		outdata = key.Hex()
+		m, err := s.api.NewResourceManifest(r.uri.Addr)
+		if err != nil {
+			ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("Failed to create resource manifest: %v", err)), http.StatusInternalServerError)
+			return
+		}
+		rsrcResponse := &resourceResponse{
+			Manifest: m,
+			Resource: r.uri.Addr,
+			Update:   key,
+		}
+		outdata, err = json.Marshal(rsrcResponse)
+		if err != nil {
+			ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("Failed to create json response for %v: error was: %v", r, err)), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	data, err := ioutil.ReadAll(r.Body)
@@ -314,14 +336,16 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	}
 	_, _, _, err = s.api.ResourceUpdate(r.Context(), r.uri.Addr, data)
 	if err != nil {
-		ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("Update resource failed: %v", err)), http.StatusInternalServerError)
+		code, err2 := s.translateResourceError(w, r, "Mutable resource update fail", err)
+
+		ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, err2), code)
 		return
 	}
 
-	if outdata != "" {
+	if len(outdata) > 0 {
 		w.Header().Add("Content-type", "text/plain")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, outdata)
+		fmt.Fprint(w, string(outdata))
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -372,12 +396,41 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name strin
 		return
 	}
 	if err != nil {
-		ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, fmt.Errorf("Mutable resource lookup failed: %v", err)), http.StatusInternalServerError)
+		code, err2 := s.translateResourceError(w, r, "Mutable resource lookup fail", err)
+
+		ShowError(w, &r.Request, fmt.Sprintf("Error serving %s %s: %s", r.Method, r.uri, err2), code)
 		return
 	}
 	log.Debug("Found update", "key", updateKey)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	http.ServeContent(w, &r.Request, "", now, bytes.NewReader(data))
+}
+
+func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supErr string, err error) (int, error) {
+	code := 0
+	defaultErr := fmt.Errorf("%s: %v", supErr, err)
+	rsrcErr, ok := err.(*storage.ResourceError)
+	if !ok {
+		code = rsrcErr.Code()
+	}
+	switch code {
+	case storage.ErrInvalidValue:
+		//s.BadRequest(w, r, defaultErr.Error())
+		return http.StatusBadRequest, defaultErr
+	case storage.ErrNotFound, storage.ErrNotSynced, storage.ErrNothingToReturn:
+		//s.NotFound(w, r, defaultErr)
+		return http.StatusNotFound, defaultErr
+	case storage.ErrUnauthorized, storage.ErrInvalidSignature:
+		//ShowError(w, &r.Request, defaultErr.Error(), http.StatusUnauthorized)
+		return http.StatusUnauthorized, defaultErr
+	case storage.ErrDataOverflow:
+		//ShowError(w, &r.Request, defaultErr.Error(), http.StatusRequestEntityTooLarge)
+		return http.StatusRequestEntityTooLarge, defaultErr
+	}
+
+	return http.StatusInternalServerError, defaultErr
+
+	//s.Error(w, r, defaultErr)
 }
 
 // HandleGet handles a GET request to
@@ -640,7 +693,14 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 
 	reader, contentType, status, err := s.api.Get(key, r.uri.Path)
+
 	if err != nil {
+		// cheeky, cheeky hack. See swarm/api/api.go:Api.Get() for an explanation
+		if rsrcErr, ok := err.(*api.ErrResourceReturn); ok {
+			log.Trace("getting resource proxy", "err", rsrcErr.Key())
+			s.handleGetResource(w, r, rsrcErr.Key())
+			return
+		}
 		switch status {
 		case http.StatusNotFound:
 			ShowError(w, &r.Request, fmt.Sprintf("NOT FOUND error serving %s %s: %s", r.Method, r.uri, err), http.StatusNotFound)
