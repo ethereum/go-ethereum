@@ -207,6 +207,24 @@
 			"revisionTime": "2016-12-24T10:41:01Z"
 		},
 		{
+			"checksumSHA1": "2SyY8LpzxtFHo9yLZp4n1SdC65A=",
+			"path": "github.com/influxdata/influxdb/client/v2",
+			"revision": "dba3ce1a42183cf07875f9e568f5ddf3dad646d1",
+			"revisionTime": "2017-07-07T20:36:33Z"
+		},
+		{
+			"checksumSHA1": "FDKQSVAhW1SRbKlSbDlVjC/BMYA=",
+			"path": "github.com/influxdata/influxdb/models",
+			"revision": "dba3ce1a42183cf07875f9e568f5ddf3dad646d1",
+			"revisionTime": "2017-07-07T20:36:33Z"
+		},
+		{
+			"checksumSHA1": "H/J/qLqzUONXIecHHKtVZmxJZZA=",
+			"path": "github.com/influxdata/influxdb/pkg/escape",
+			"revision": "dba3ce1a42183cf07875f9e568f5ddf3dad646d1",
+			"revisionTime": "2017-07-07T20:36:33Z"
+		},
+		{
 			"checksumSHA1": "vTGKMIfiMwz43y5bsgx9PrL+AVw=",
 			"path": "github.com/jackpal/go-nat-pmp",
 			"revision": "1fa385a6f45828c83361136b45b1a21a12139493",

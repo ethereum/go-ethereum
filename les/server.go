@@ -47,6 +47,7 @@ type LesServer struct {
 	quitSync        chan struct{}
 
 	chtIndexer, bloomTrieIndexer *core.ChainIndexer
+	influxDBLogger               *influxLogger
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
@@ -99,6 +100,10 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	}
 	srv.fcManager = flowcontrol.NewClientManager(uint64(config.LightServ), 10, 1000000000)
 	srv.fcCostStats = newCostStats(eth.ChainDb())
+	if config.LightServStats == true {
+		srv.influxDBLogger = GetInfluxLoggerInstance()
+		log.Info("Light server influx stats is active")
+	}
 	return srv, nil
 }
 
@@ -135,6 +140,7 @@ func (s *LesServer) Stop() {
 	// bloom trie indexer is closed by parent bloombits indexer
 	s.fcCostStats.store()
 	s.fcManager.Stop()
+	s.influxDBLogger.clnt.Close()
 	go func() {
 		<-s.protocolManager.noMorePeers
 	}()
@@ -311,6 +317,7 @@ func (s *requestCostStats) update(msgCode, reqCnt, cost uint64) {
 	if !ok || reqCnt == 0 {
 		return
 	}
+
 	c.add(float64(reqCnt), float64(cost))
 }
 

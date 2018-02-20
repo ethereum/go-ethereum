@@ -1,4 +1,5 @@
 // Copyright 2016 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -42,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/common/mclock"
 )
 
 const (
@@ -476,7 +478,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + query.Amount*costs.reqCost)
+		// passing logger instance to update
 		pm.server.fcCostStats.update(msg.Code, query.Amount, rcost)
+		if pm.server.influxDBLogger != nil {
+			pm.server.influxDBLogger.WriteData(msg.Code, query.Amount, rcost, mclock.Now(), p.id)
+		}
 		return p.SendBlockHeaders(req.ReqID, bv, headers)
 
 	case BlockHeadersMsg:
@@ -534,6 +540,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+		if pm.server.influxDBLogger != nil {
+			pm.server.influxDBLogger.WriteData(msg.Code, uint64(reqCnt), rcost, mclock.Now(), p.id)
+		}
+
 		return p.SendBlockBodiesRLP(req.ReqID, bv, bodies)
 
 	case BlockBodiesMsg:
@@ -597,6 +607,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+		if pm.server.influxDBLogger != nil {
+			pm.server.influxDBLogger.WriteData(msg.Code, uint64(reqCnt), rcost, mclock.Now(), p.id)
+		}
+
 		return p.SendCode(req.ReqID, bv, data)
 
 	case CodeMsg:
@@ -660,6 +674,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+		if pm.server.influxDBLogger != nil {
+			pm.server.influxDBLogger.WriteData(msg.Code, uint64(reqCnt), rcost, mclock.Now(), p.id)
+		}
+
 		return p.SendReceiptsRLP(req.ReqID, bv, receipts)
 
 	case ReceiptsMsg:
@@ -732,6 +750,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+		if pm.server.influxDBLogger != nil {
+			pm.server.influxDBLogger.WriteData(msg.Code, uint64(reqCnt), rcost, mclock.Now(), p.id)
+		}
+
 		return p.SendProofs(req.ReqID, bv, proofs)
 
 	case GetProofsV2Msg:
@@ -879,6 +901,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+		if pm.server.influxDBLogger != nil {
+			pm.server.influxDBLogger.WriteData(msg.Code, uint64(reqCnt), rcost, mclock.Now(), p.id)
+		}
+
 		return p.SendHeaderProofs(req.ReqID, bv, proofs)
 
 	case GetHelperTrieProofsMsg:
@@ -1035,6 +1061,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+		if pm.server.influxDBLogger != nil {
+			pm.server.influxDBLogger.WriteData(msg.Code, uint64(reqCnt), rcost, mclock.Now(), p.id)
+		}
 
 		return p.SendTxStatus(req.ReqID, bv, stats)
 
@@ -1056,6 +1085,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+		if pm.server.influxDBLogger != nil {
+			pm.server.influxDBLogger.WriteData(msg.Code, uint64(reqCnt), rcost, mclock.Now(), p.id)
+		}
 
 		return p.SendTxStatus(req.ReqID, bv, pm.txStatus(req.Hashes))
 
@@ -1077,6 +1109,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	default:
 		p.Log().Trace("Received unknown message", "code", msg.Code)
+
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
 
