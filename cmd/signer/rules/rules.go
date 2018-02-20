@@ -19,14 +19,16 @@ package rules
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/cmd/signer/core"
 	"github.com/ethereum/go-ethereum/cmd/signer/rules/deps"
 	"github.com/ethereum/go-ethereum/cmd/signer/storage"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/robertkrimen/otto"
-	"os"
-	"strings"
 )
 
 var (
@@ -47,18 +49,18 @@ func consoleOutput(call otto.FunctionCall) otto.Value {
 // rulesetUi provides an implementation of SignerUI that evaluates a javascript
 // file for each defined UI-method
 type rulesetUi struct {
-	//	vm      *otto.Otto    // The JS vm
-	next    core.SignerUI // The next handler, for manual processing
-	storage storage.Storage
-	jsRules string // The rules to use
+	next        core.SignerUI // The next handler, for manual processing
+	storage     storage.Storage
+	credentials storage.Storage
+	jsRules     string // The rules to use
 }
 
-func NewRuleEvaluator(next core.SignerUI) (*rulesetUi, error) {
+func NewRuleEvaluator(next core.SignerUI, jsbackend, credentialsBackend storage.Storage) (*rulesetUi, error) {
 	c := &rulesetUi{
-		//		vm:      otto.New(),
-		next:    next,
-		storage: storage.NewEphemeralStorage(),
-		jsRules: "",
+		next:        next,
+		storage:     jsbackend,
+		credentials: credentialsBackend,
+		jsRules:     "",
 	}
 
 	return c, nil
@@ -97,7 +99,6 @@ func (r *rulesetUi) execute(jsfunc string, jsarg interface{}) (otto.Value, error
 	// All calls are objects with the parameters being keys in that object.
 	// To provide additional insulation between js and go, we serialize it into JSON on the Go-side,
 	// and deserialize it on the JS side.
-	//argdata := ""
 
 	jsonbytes, err := json.Marshal(jsarg)
 	if err != nil {
@@ -142,24 +143,34 @@ func (r *rulesetUi) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse,
 	jsonreq, err := json.Marshal(request)
 	approved, err := r.checkApproval("ApproveTx", jsonreq, err)
 	if err != nil {
-		log.Info("Rule-based approval error, going to manual", "error", "err")
+		log.Info("Rule-based approval error, going to manual", "error", err)
 		return r.next.ApproveTx(request)
 	}
+
 	if approved {
-		return core.SignTxResponse{Transaction: request.Transaction, Approved: true, Password: ""}, nil
+		return core.SignTxResponse{
+				Transaction: request.Transaction,
+				Approved:    true,
+				Password:    r.lookupPassword(request.Transaction.From.Address()),
+			},
+			nil
 	}
 	return core.SignTxResponse{Approved: false}, err
+}
+
+func (r *rulesetUi) lookupPassword(address common.Address) string {
+	return r.credentials.Get(strings.ToLower(address.String()))
 }
 
 func (r *rulesetUi) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
 	jsonreq, err := json.Marshal(request)
 	approved, err := r.checkApproval("ApproveSignData", jsonreq, err)
 	if err != nil {
-		log.Info("Rule-based approval error, going to manual", "error", "err")
+		log.Info("Rule-based approval error, going to manual", "error", err)
 		return r.next.ApproveSignData(request)
 	}
 	if approved {
-		return core.SignDataResponse{Approved: true, Password: ""}, nil
+		return core.SignDataResponse{Approved: true, Password: r.lookupPassword(request.Address.Address())}, nil
 	}
 	return core.SignDataResponse{Approved: false, Password: ""}, err
 }
@@ -168,7 +179,7 @@ func (r *rulesetUi) ApproveExport(request *core.ExportRequest) (core.ExportRespo
 	jsonreq, err := json.Marshal(request)
 	approved, err := r.checkApproval("ApproveExport", jsonreq, err)
 	if err != nil {
-		log.Info("Rule-based approval error, going to manual", "error", "err")
+		log.Info("Rule-based approval error, going to manual", "error", err)
 		return r.next.ApproveExport(request)
 	}
 	if approved {
@@ -187,7 +198,7 @@ func (r *rulesetUi) ApproveListing(request *core.ListRequest) (core.ListResponse
 	jsonreq, err := json.Marshal(request)
 	approved, err := r.checkApproval("ApproveListing", jsonreq, err)
 	if err != nil {
-		log.Info("Rule-based approval error, going to manual", "error", "err")
+		log.Info("Rule-based approval error, going to manual", "error", err)
 		return r.next.ApproveListing(request)
 	}
 	if approved {
@@ -210,6 +221,18 @@ func (r *rulesetUi) ShowError(message string) {
 func (r *rulesetUi) ShowInfo(message string) {
 	log.Info(message)
 	r.next.ShowInfo(message)
+}
+func (r *rulesetUi) OnSignerStartup(info core.StartupInfo) {
+	jsonInfo, err := json.Marshal(info)
+	if err != nil {
+		log.Warn("failed marshalling data", "data", info)
+		return
+	}
+	r.next.OnSignerStartup(info)
+	_, err = r.execute("OnSignerStartup", string(jsonInfo))
+	if err != nil {
+		log.Info("error occurred during execution", "error", err)
+	}
 }
 
 func (r *rulesetUi) OnApprovedTx(tx ethapi.SignTransactionResult) {

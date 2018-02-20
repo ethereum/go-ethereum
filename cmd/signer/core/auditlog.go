@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -33,9 +34,12 @@ type AuditLogger struct {
 }
 
 func (l *AuditLogger) List(ctx context.Context) (Accounts, error) {
+	l.log.Info("List", "type", "request", "metadata", MetadataFromContext(ctx).String())
+	res, e := l.api.List(ctx)
 
-	l.log.Info("Called list", "interface", "http")
-	return l.api.List(ctx)
+	l.log.Info("List", "type", "response", "data", res.String())
+
+	return res, e
 }
 
 func (l *AuditLogger) New(ctx context.Context) (accounts.Account, error) {

@@ -2,15 +2,17 @@ package rules
 
 import (
 	"fmt"
+	"math/big"
+	"strings"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/signer/core"
+	"github.com/ethereum/go-ethereum/cmd/signer/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"math/big"
-	"strings"
-	"testing"
 )
 
 const JS = `
@@ -97,7 +99,7 @@ func (alwaysDenyUi) OnApprovedTx(tx ethapi.SignTransactionResult) {
 }
 
 func initRuleEngine(js string) (*rulesetUi, error) {
-	r, err := NewRuleEvaluator(&alwaysDenyUi{})
+	r, err := NewRuleEvaluator(&alwaysDenyUi{}, storage.NewEphemeralStorage(), storage.NewEphemeralStorage())
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create js engine: %v", err)
 	}
@@ -234,7 +236,9 @@ func TestForwarding(t *testing.T) {
 
 	js := ""
 	ui := &dummyUi{make([]string, 0)}
-	r, err := NewRuleEvaluator(ui)
+	jsbackend := storage.NewEphemeralStorage()
+	credbackend := storage.NewEphemeralStorage()
+	r, err := NewRuleEvaluator(ui, jsbackend, credbackend)
 	if err != nil {
 		t.Fatalf("Failed to create js engine: %v", err)
 	}
@@ -459,10 +463,7 @@ func TestLimitWindow(t *testing.T) {
 		t.Errorf("Couldn't create evaluator %v", err)
 		return
 	}
-	if err != nil {
-		t.Error(err)
-		return
-	}
+
 	// 0.3 ether: 429D069189E0000 wei
 	v := big.NewInt(0).SetBytes(common.Hex2Bytes("0429D069189E0000"))
 	h := hexutil.Big(*v)
@@ -562,7 +563,7 @@ func TestContextIsCleared(t *testing.T) {
 	}
 	`
 	ui := &dontCallMe{t}
-	r, err := NewRuleEvaluator(ui)
+	r, err := NewRuleEvaluator(ui, storage.NewEphemeralStorage(), storage.NewEphemeralStorage())
 	if err != nil {
 		t.Fatalf("Failed to create js engine: %v", err)
 	}
@@ -574,5 +575,46 @@ func TestContextIsCleared(t *testing.T) {
 	r2, err := r.ApproveTx(tx)
 	if r1.Approved != r2.Approved {
 		t.Errorf("Expected execution context to be cleared between executions")
+	}
+}
+
+func TestSignData(t *testing.T) {
+
+	js := `function ApproveListing(){
+    return "Approve"
+}
+function ApproveSignData(r){
+    if( r.address.toLowerCase() == "0x694267f14675d7e1b9494fd8d72fefe1755710fa")
+    {
+        if(r.message.indexOf("bazonk") >= 0){
+            return "Approve"
+        }
+        return "Reject"
+    }
+    // Otherwise goes to manual processing
+}`
+	r, err := initRuleEngine(js)
+	if err != nil {
+		t.Errorf("Couldn't create evaluator %v", err)
+		return
+	}
+	message := []byte("baz bazonk foo")
+	hash, msg := core.SignHash(message)
+	raw := hexutil.Bytes(message)
+	addr, _ := mixAddr("0x694267f14675d7e1b9494fd8d72fefe1755710fa")
+
+	fmt.Printf("address %v %v\n", addr.String(), addr.Original())
+	resp, err := r.ApproveSignData(&core.SignDataRequest{
+		Address: *addr,
+		Message: msg,
+		Hash:    hash,
+		Meta:    core.Metadata{"remoteip", "localip", "inproc"},
+		Rawdata: raw,
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error", err)
+	}
+	if !resp.Approved {
+		t.Fatalf("Expected approved")
 	}
 }

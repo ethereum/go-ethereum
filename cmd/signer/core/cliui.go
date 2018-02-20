@@ -140,7 +140,7 @@ func (ui *CommandlineUI) ApproveSignData(request *SignDataRequest) (SignDataResp
 	defer ui.mu.Unlock()
 
 	fmt.Printf("-------- Sign data request--------------\n")
-	fmt.Printf("Account:  %x\n", request.Address)
+	fmt.Printf("Account:  %s\n", request.Address.String())
 	fmt.Printf("message:  \n%q\n", request.Message)
 	fmt.Printf("raw data: \n%v\n", request.Rawdata)
 	fmt.Printf("message hash:  %v\n", request.Hash)
@@ -238,8 +238,8 @@ func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 
 func (ui *CommandlineUI) OnSignerStartup(info StartupInfo) {
 
-	fmt.Printf("------- Signer info ------- ")
+	fmt.Printf("------- Signer info -------\n")
 	for k, v := range info.Info {
-		fmt.Printf("* %v : %v", k, v)
+		fmt.Printf("* %v : %v\n", k, v)
 	}
 }

@@ -17,7 +17,6 @@
 package core
 
 import (
-	//	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"

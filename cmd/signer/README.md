@@ -9,24 +9,38 @@ This setup allows a DApp to connect to a remote Ethereum node and send transacti
 help in situations when a DApp is connected to a remote node because a local Ethereum node is not available, not
 synchronised with the chain or a particular Ethereum node that has no build in, or limited account management.
   
-In its current form the signer is very limited and designed to work with Mist. It hasn't got a connection to an
-Ethereum node. This restriction imposed many limitations such as the lack of ability to keep track of nonces, balances
-or fetching additional information that can help the user to make a decision to sign a transaction or data. 
+The signer can run as a daemon on the same machine, or off a usb-stick like [usb armory](https://inversepath.com/usbarmory),
+or a separate VM in a [QubesOS](https://www.qubes-os.org/) type os setup.
+
 
 ## Command line flags
 The signer accepts the following command line options:
 ```
-   --chainid value    chain identifier (default: 1)
-   --loglevel value   log level to emit to the screen (default: 4)
-   --keystore value   Directory for the keystore (default: "/home/martin/.ethereum/keystore")
-   --networkid value  Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby) (default: 1)
-   --lightkdf         Reduce key-derivation RAM & CPU usage at some expense of KDF strength
-   --nousb            Disables monitoring for and managing USB hardware wallets
-   --rpcaddr value    HTTP-RPC server listening interface (default: "localhost")
-   --rpcport value    HTTP-RPC server listening port (default: 8550)
-   --4bytedb value    File containing 4byte-identifiers (default: "./4byte.json")
-   --stdio-ui         Use STDIN/STDOUT as a channel for an external UI. This means that an STDIN/STDOUT is used for RPC-communication with a e.g. a graphical user interface, and can be used when the signer is started by an external process.
-   --help, -h         show help
+COMMANDS:
+   init    Initialize the signer, generate secret storage
+   attest  Attest that a js-file is to be used
+   addpw   Store a credential for a keystore file
+   help    Shows a list of commands or help for one command
+
+GLOBAL OPTIONS:
+   --loglevel value        log level to emit to the screen (default: 4)
+   --keystore value        Directory for the keystore (default: "/home/martin/.ethereum/keystore")
+   --configdir value       Directory for signer configuration (default: "/home/martin/.signer")
+   --networkid value       Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby) (default: 1)
+   --lightkdf              Reduce key-derivation RAM & CPU usage at some expense of KDF strength
+   --nousb                 Disables monitoring for and managing USB hardware wallets
+   --rpcaddr value         HTTP-RPC server listening interface (default: "localhost")
+   --rpcport value         HTTP-RPC server listening port (default: 8550)
+   --signersecret value    A file containing the password used to encrypt signer credentials, e.g. keystore credentials and ruleset hash
+   --4bytedb value         File containing 4byte-identifiers (default: "./4byte.json")
+   --4bytedb-custom value  File used for writing new 4byte-identifiers submitted via API (default: "./4byte-custom.json")
+   --auditlog value        File used to emit audit logs. Set to "" to disable (default: "audit.log")
+   --rules value           Enable rule-engine (default: "rules.json")
+   --stdio-ui              Use STDIN/STDOUT as a channel for an external UI. This means that an STDIN/STDOUT is used for RPC-communication with a e.g. a graphical user interface, and can be used when the signer is started by an external process.
+   --stdio-ui-test         Mechanism to test interface between signer and UI. Requires 'stdio-ui'.
+   --help, -h              show help
+   --version, -v           print the version
+
 ```
 
 
@@ -34,6 +48,8 @@ Example:
 ```
 signer -keystore /my/keystore -chainid 4
 ```
+
+Check out the [tutorial](tutorial.md) for some concrete examples on how the signer works.
 
 ## Security model
 
@@ -67,35 +83,33 @@ passing on to the UI. The reason it currently does not, is that it would make it
 accounts if it immediately returned "unknown account".
   * [x] DONE: Similarly, it should be possible to configure the signer to auto-allow listing (certain) accounts, instead of asking every time.
 
-* Upon startup, the signer should spit out some info to the caller (particularly important when executed in `stdio-ui`-mode),
+* [x] Done Upon startup, the signer should spit out some info to the caller (particularly important when executed in `stdio-ui`-mode),
 invoking methods with the following info:
-  * Version info about the signer
-  * Address of API (http/ipc)
-    * This makes it posible for the UI to use the api for creating transactions
-  * List of known accounts
+  * [x] Version info about the signer
+  * [x] Address of API (http/ipc)
+  * [ ] List of known accounts
 
-* The signer should pass the `Origin` header as call-info to the UI. As of right now, the way that info about the request is
+
+* Geth todos
+    - The signer should pass the `Origin` header as call-info to the UI. As of right now, the way that info about the request is
 put together is a bit of a hack into the http server. This could probably be greatly improved
-
-* Geth relay
-    - Geth should be started in `geth --external_signer localhost:8550`.
-
-* Geth checksum
-  - Currently, the Geth API:s use `common.Address` in the arguments to transaction submission (e.g `to` field). This
+    - Relay: Geth should be started in `geth --external_signer localhost:8550`.
+    - Currently, the Geth API:s use `common.Address` in the arguments to transaction submission (e.g `to` field). This
   type is 20 `bytes`, and is incapable of carrying checksum information. The signer uses `common.MixedcaseAddress`, which
   retains the original input.
-  - The Geth api should switch to use the same type, and relay `to`-account verbatim to the external api.
+    - The Geth api should switch to use the same type, and relay `to`-account verbatim to the external api.
 
-* Wallets / accounts. Add API methods for wallets.
 
-* Storage
-    * An encrypted key-value storage should be implemented
+* [x] Storage
+    * [x] An encrypted key-value storage should be implemented
     * See [rules.md](rules.md) for more info about this.
 
 * Another potential thing to introduce is pairing.
   * To prevent spurious requests which users just accept, implement a way to "pair" the caller with the signer (external API).
   * Thus geth/mist/cpp would cryptographically handshake and afterwards the caller would be allowed to make signing requests.
   * This feature would make the addition of rules less dangerous.
+
+* Wallets / accounts. Add API methods for wallets.
 
 ## Communication
 

@@ -26,8 +26,6 @@ type Storage interface {
 	Put(key, value string)
 	// Get returns the previously stored value, or the empty string if it does not exist or key is of 0-length
 	Get(key string) string
-	// New creates a new (sub) namespace for the storage
-	New(namespace string) Storage
 }
 
 // EphemeralStorage is an in-memory storage that does
@@ -41,17 +39,14 @@ func (s *EphemeralStorage) Put(key, value string) {
 	if len(key) == 0 {
 		return
 	}
-	key = fmt.Sprintf("%s.%s", s.namespace, key)
 	fmt.Printf("storage: put %v -> %v\n", key, value)
 	s.data[key] = value
 }
 
 func (s *EphemeralStorage) Get(key string) string {
-
 	if len(key) == 0 {
 		return ""
 	}
-	key = fmt.Sprintf("%s.%s", s.namespace, key)
 	fmt.Printf("storage: get %v\n", key)
 	if v, exist := s.data[key]; exist {
 		return v
@@ -59,18 +54,9 @@ func (s *EphemeralStorage) Get(key string) string {
 	return ""
 }
 
-func (s *EphemeralStorage) New(namespace string) Storage {
-	child := &EphemeralStorage{
-		data:      make(map[string]string),
-		namespace: fmt.Sprintf("%s.%s", s.namespace, namespace),
-	}
-	return child
-}
-
 func NewEphemeralStorage() Storage {
 	s := &EphemeralStorage{
-		data:      make(map[string]string),
-		namespace: "root",
+		data: make(map[string]string),
 	}
 	return s
 }
