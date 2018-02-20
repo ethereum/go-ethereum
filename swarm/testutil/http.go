@@ -51,9 +51,8 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 		ChunkDbPath:   dir,
 		DbCapacity:    5000000,
 		CacheCapacity: 5000,
-		Radius:        0,
 	}
-	localStore, err := storage.NewLocalStore(storage.MakeHashFunc(storage.SHA3Hash), storeparams, nil)
+	localStore, err := storage.NewLocalStore(storage.MakeHashFunc(storage.SHA3Hash), storeparams, make([]byte, 32), nil)
 	if err != nil {
 		os.RemoveAll(dir)
 		t.Fatal(err)
@@ -71,7 +70,7 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 		t.Fatal(err)
 	}
 
-	rh, err := storage.NewResourceHandler(resourceDir, &testCloudStore{}, &fakeBackend{}, nil)
+	rh, err := storage.NewTestResourceHandler(resourceDir, &fakeBackend{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,16 +102,4 @@ type TestSwarmServer struct {
 
 func (t *TestSwarmServer) Close() {
 	t.cleanup()
-}
-
-type testCloudStore struct {
-}
-
-func (c *testCloudStore) Store(*storage.Chunk) {
-}
-
-func (c *testCloudStore) Deliver(*storage.Chunk) {
-}
-
-func (c *testCloudStore) Retrieve(*storage.Chunk) {
 }

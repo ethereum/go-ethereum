@@ -498,7 +498,7 @@ func (self *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessag
 func (self *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error) {
 	recvmsg, err := envelope.OpenAsymmetric(self.privateKey)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("could not decrypt message: %v", err)
+		return nil, "", nil, fmt.Errorf("could not decrypt message: %s", err)
 	}
 	// check signature (if signed), strip padding
 	if !recvmsg.Validate() {
@@ -774,10 +774,8 @@ func (self *Pss) checkFwdCache(addr []byte, digest pssDigest) bool {
 
 // DPA storage handler for message cache
 func (self *Pss) storeMsg(msg *PssMsg) (pssDigest, error) {
-	swg := &sync.WaitGroup{}
-	wwg := &sync.WaitGroup{}
 	buf := bytes.NewReader(msg.serialize())
-	key, err := self.dpa.Store(buf, int64(buf.Len()), swg, wwg)
+	key, _, err := self.dpa.Store(buf, int64(buf.Len()))
 	if err != nil {
 		log.Warn("Could not store in swarm", "err", err)
 		return pssDigest{}, err

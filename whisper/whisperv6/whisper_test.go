@@ -471,7 +471,7 @@ func TestExpiry(t *testing.T) {
 	}
 
 	params.TTL = 1
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -537,7 +537,7 @@ func TestCustomization(t *testing.T) {
 	params.Topic = BytesToTopic(f.Topics[2])
 	params.PoW = smallPoW
 	params.TTL = 3600 * 24 // one day
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -558,7 +558,7 @@ func TestCustomization(t *testing.T) {
 	}
 
 	params.TTL++
-	msg, err = newSentMessage(params)
+	msg, err = NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -647,7 +647,7 @@ func TestSymmetricSendCycle(t *testing.T) {
 	params.PoW = filter1.PoW
 	params.WorkTime = 10
 	params.TTL = 50
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -725,7 +725,7 @@ func TestSymmetricSendWithoutAKey(t *testing.T) {
 	params.PoW = filter.PoW
 	params.WorkTime = 10
 	params.TTL = 50
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -791,7 +791,7 @@ func TestSymmetricSendKeyMismatch(t *testing.T) {
 	params.PoW = filter.PoW
 	params.WorkTime = 10
 	params.TTL = 50
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}

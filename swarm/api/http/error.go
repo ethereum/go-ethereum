@@ -110,7 +110,8 @@ func ShowMultipleChoices(w http.ResponseWriter, r *http.Request, list api.Manife
 //(and return the correct HTTP status code)
 func ShowError(w http.ResponseWriter, r *http.Request, msg string, code int) {
 	if code == http.StatusInternalServerError {
-		log.Error(msg)
+		//log.Error(msg)
+		log.Output(msg, log.LvlError, 3)
 	}
 	respond(w, r, &ErrorParams{
 		Code:      code,

@@ -808,7 +808,7 @@ func TestFUSE(t *testing.T) {
 	}
 	os.RemoveAll(datadir)
 
-	dpa, err := storage.NewLocalDPA(datadir)
+	dpa, err := storage.NewLocalDPA(datadir, make([]byte, 32))
 	if err != nil {
 		t.Fatal(err)
 	}

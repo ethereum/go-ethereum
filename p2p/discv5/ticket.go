@@ -494,13 +494,13 @@ func (s *ticketStore) registerLookupDone(lookup lookupInfo, nodes []*Node, ping 
 	}
 }
 
-func (s *ticketStore) searchLookupDone(lookup lookupInfo, nodes []*Node, ping func(n *Node) []byte, query func(n *Node, topic Topic) []byte) {
+func (s *ticketStore) searchLookupDone(lookup lookupInfo, nodes []*Node, query func(n *Node, topic Topic) []byte) {
 	now := mclock.Now()
 	for i, n := range nodes {
 		if i == 0 || (binary.BigEndian.Uint64(n.sha[:8])^binary.BigEndian.Uint64(lookup.target[:8])) < s.radius[lookup.topic].minRadius {
 			if lookup.radiusLookup {
 				if lastReq, ok := s.nodeLastReq[n]; !ok || time.Duration(now-lastReq.time) > radiusTC {
-					s.nodeLastReq[n] = reqInfo{pingHash: ping(n), lookup: lookup, time: now}
+					s.nodeLastReq[n] = reqInfo{pingHash: nil, lookup: lookup, time: now}
 				}
 			} // else {
 			if s.canQueryTopic(n, lookup.topic) {

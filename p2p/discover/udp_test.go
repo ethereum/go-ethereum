@@ -70,14 +70,15 @@ func newUDPTest(t *testing.T) *udpTest {
 		remotekey:  newkey(),
 		remoteaddr: &net.UDPAddr{IP: net.IP{10, 0, 1, 99}, Port: 30303},
 	}
-	realaddr := test.pipe.LocalAddr().(*net.UDPAddr)
-	test.table, test.udp, _ = newUDP(test.localkey, test.pipe, realaddr, nil, "", nil)
+	test.table, test.udp, _ = newUDP(test.pipe, Config{PrivateKey: test.localkey})
+	// Wait for initial refresh so the table doesn't send unexpected findnode.
+	<-test.table.initDone
 	return test
 }
 
 // handles a packet as if it had been sent to the transport.
 func (test *udpTest) packetIn(wantError error, ptype byte, data packet) error {
-	enc, err := encodePacket(test.remotekey, ptype, data)
+	enc, _, err := encodePacket(test.remotekey, ptype, data)
 	if err != nil {
 		return test.errorf("packet (%d) encode error: %v", ptype, err)
 	}
@@ -90,19 +91,19 @@ func (test *udpTest) packetIn(wantError error, ptype byte, data packet) error {
 
 // waits for a packet to be sent by the transport.
 // validate should have type func(*udpTest, X) error, where X is a packet type.
-func (test *udpTest) waitPacketOut(validate interface{}) error {
+func (test *udpTest) waitPacketOut(validate interface{}) ([]byte, error) {
 	dgram := test.pipe.waitPacketOut()
-	p, _, _, err := decodePacket(dgram)
+	p, _, hash, err := decodePacket(dgram)
 	if err != nil {
-		return test.errorf("sent packet decode error: %v", err)
+		return hash, test.errorf("sent packet decode error: %v", err)
 	}
 	fn := reflect.ValueOf(validate)
 	exptype := fn.Type().In(0)
 	if reflect.TypeOf(p) != exptype {
-		return test.errorf("sent packet type mismatch, got: %v, want: %v", reflect.TypeOf(p), exptype)
+		return hash, test.errorf("sent packet type mismatch, got: %v, want: %v", reflect.TypeOf(p), exptype)
 	}
 	fn.Call([]reflect.Value{reflect.ValueOf(p)})
-	return nil
+	return hash, nil
 }
 
 func (test *udpTest) errorf(format string, args ...interface{}) error {
@@ -246,12 +247,8 @@ func TestUDP_findnode(t *testing.T) {
 
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.
-	test.table.db.updateNode(NewNode(
-		PubkeyID(&test.remotekey.PublicKey),
-		test.remoteaddr.IP,
-		uint16(test.remoteaddr.Port),
-		99,
-	))
+	test.table.db.updateBondTime(PubkeyID(&test.remotekey.PublicKey), time.Now())
+
 	// check that closest neighbors are returned.
 	test.packetIn(nil, findnodePacket, &findnode{Target: testTarget, Expiration: futureExp})
 	expected := test.table.closest(targetHash, bucketSize)
@@ -351,7 +348,7 @@ func TestUDP_successfulPing(t *testing.T) {
 	})
 
 	// remote is unknown, the table pings back.
-	test.waitPacketOut(func(p *ping) error {
+	hash, _ := test.waitPacketOut(func(p *ping) error {
 		if !reflect.DeepEqual(p.From, test.udp.ourEndpoint) {
 			t.Errorf("got ping.From %v, want %v", p.From, test.udp.ourEndpoint)
 		}
@@ -365,7 +362,7 @@ func TestUDP_successfulPing(t *testing.T) {
 		}
 		return nil
 	})
-	test.packetIn(nil, pongPacket, &pong{Expiration: futureExp})
+	test.packetIn(nil, pongPacket, &pong{ReplyTok: hash, Expiration: futureExp})
 
 	// the node should be added to the table shortly after getting the
 	// pong packet.

@@ -21,19 +21,23 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"sync"
 	"testing"
 )
 
 const testDataSize = 0x1000000
 
 func TestDPArandom(t *testing.T) {
-	dbStore := initDbStore(t)
-	dbStore.setCapacity(50000)
-	memStore := NewMemStore(dbStore, defaultCacheCapacity)
+	tdb, err := newTestDbStore(false)
+	if err != nil {
+		t.Fatalf("init dbStore failed: %v", err)
+	}
+	defer tdb.close()
+	db := tdb.DbStore
+	db.setCapacity(50000)
+	memStore := NewMemStore(db, defaultCacheCapacity)
 	localStore := &LocalStore{
 		memStore,
-		dbStore,
+		db,
 	}
 	chunker := NewTreeChunker(NewChunkerParams())
 	dpa := &DPA{
@@ -45,12 +49,11 @@ func TestDPArandom(t *testing.T) {
 	defer os.RemoveAll("/tmp/bzz")
 
 	reader, slice := testDataReaderAndSlice(testDataSize)
-	wg := &sync.WaitGroup{}
-	key, err := dpa.Store(reader, testDataSize, wg, nil)
+	key, wait, err := dpa.Store(reader, testDataSize)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
-	wg.Wait()
+	wait()
 	resultReader := dpa.Retrieve(key)
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)
@@ -65,7 +68,7 @@ func TestDPArandom(t *testing.T) {
 	}
 	ioutil.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
 	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
-	localStore.memStore = NewMemStore(dbStore, defaultCacheCapacity)
+	localStore.memStore = NewMemStore(db, defaultCacheCapacity)
 	resultReader = dpa.Retrieve(key)
 	for i := range resultSlice {
 		resultSlice[i] = 0
@@ -83,13 +86,17 @@ func TestDPArandom(t *testing.T) {
 }
 
 func TestDPA_capacity(t *testing.T) {
-	dbStore := initDbStore(t)
-	memStore := NewMemStore(dbStore, defaultCacheCapacity)
+	tdb, err := newTestDbStore(false)
+	if err != nil {
+		t.Fatalf("init dbStore failed: %v", err)
+	}
+	defer tdb.close()
+	db := tdb.DbStore
+	memStore := NewMemStore(db, 0)
 	localStore := &LocalStore{
 		memStore,
-		dbStore,
+		db,
 	}
-	memStore.setCapacity(0)
 	chunker := NewTreeChunker(NewChunkerParams())
 	dpa := &DPA{
 		Chunker:    chunker,
@@ -97,12 +104,11 @@ func TestDPA_capacity(t *testing.T) {
 	}
 	dpa.Start()
 	reader, slice := testDataReaderAndSlice(testDataSize)
-	wg := &sync.WaitGroup{}
-	key, err := dpa.Store(reader, testDataSize, wg, nil)
+	key, wait, err := dpa.Store(reader, testDataSize)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
-	wg.Wait()
+	wait()
 	resultReader := dpa.Retrieve(key)
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)

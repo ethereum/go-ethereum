@@ -34,9 +34,8 @@ func testApi(t *testing.T, f func(*Api)) {
 	if err != nil {
 		t.Fatalf("unable to create temp dir: %v", err)
 	}
-	os.RemoveAll(datadir)
 	defer os.RemoveAll(datadir)
-	dpa, err := storage.NewLocalDPA(datadir)
+	dpa, err := storage.NewLocalDPA(datadir, make([]byte, 32))
 	if err != nil {
 		return
 	}
@@ -110,11 +109,12 @@ func TestApiPut(t *testing.T) {
 		content := "hello"
 		exp := expResponse(content, "text/plain", 0)
 		// exp := expResponse([]byte(content), "text/plain", 0)
-		key, err := api.Put(content, exp.MimeType)
+		key, wait, err := api.Put(content, exp.MimeType)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		resp := testGet(t, api, key.String(), "")
+		wait()
+		resp := testGet(t, api, key.Hex(), "")
 		checkResponse(t, resp, exp)
 	})
 }

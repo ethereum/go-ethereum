@@ -159,7 +159,7 @@ func (h *Hive) connect() {
 }
 
 // Run protocol run function
-func (h *Hive) Run(p *bzzPeer) error {
+func (h *Hive) Run(p *BzzPeer) error {
 	dp := newDiscovery(p, h)
 	depth, changed := h.On(dp)
 	// if we want discovery, advertise changed depth of depth
@@ -191,7 +191,7 @@ func ToAddr(pa OverlayPeer) *BzzAddr {
 	if p, ok := pa.(*discPeer); ok {
 		return p.BzzAddr
 	}
-	return pa.(*bzzPeer).BzzAddr
+	return pa.(*BzzPeer).BzzAddr
 }
 
 // loadPeers, savePeer implement persistence callback/
