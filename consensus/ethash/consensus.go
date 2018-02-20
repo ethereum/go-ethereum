@@ -639,5 +639,5 @@ func getTreasuryPercent(header *types.Header) int64 {
 	factorReduction := new(big.Int).Set(header.Number)
 	factorReduction.Div(factorReduction, big.NewInt(2160000))
 
-	return 10 - (2 * factorReduction.Int64())
+	return 30 - (2 * factorReduction.Int64())
 }
