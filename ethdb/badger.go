@@ -17,28 +17,26 @@
 package ethdb
 
 import (
-	"strconv"
-	"strings"
+	//"strconv"
+	//"strings"
 	"sync"
 	"time"
-
+	
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/errors"
-	"github.com/syndtr/goleveldb/leveldb/filter"
-	"github.com/syndtr/goleveldb/leveldb/iterator"
-	"github.com/syndtr/goleveldb/leveldb/opt"
-
+	//"github.com/ethereum/go-ethereum/metrics"
+	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/options"
+	"github.com/ethereum/go-ethereum/common"
+	
 	gometrics "github.com/rcrowley/go-metrics"
 )
 
-var OpenFileLimit = 64
 
-type LDBDatabase struct {
-	fn string      // filename for reporting
-	db *leveldb.DB // LevelDB instance
 
+type BadgerDatabase struct {
+	fn 				string      // filename for reporting
+	db				*badger.DB 
+	badgerCache		*BadgerCache
 	getTimer       gometrics.Timer // Timer for measuring the database get request counts and latencies
 	putTimer       gometrics.Timer // Timer for measuring the database put request counts and latencies
 	delTimer       gometrics.Timer // Timer for measuring the database delete request counts and latencies
@@ -56,46 +54,38 @@ type LDBDatabase struct {
 }
 
 // NewLDBDatabase returns a LevelDB wrapped object.
-func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
+func NewBadgerDatabase(file string) (*BadgerDatabase, error) {
 	logger := log.New("database", file)
+	
+	opts := badger.DefaultOptions
+	opts.Dir = file
+	opts.ValueDir = file
+	opts.SyncWrites = false
+	opts.ValueLogFileSize = 1 << 30
+	opts.TableLoadingMode = options.MemoryMap
+	db, err := badger.Open(opts)
 
-	// Ensure we have some minimal caching and file guarantees
-	if cache < 16 {
-		cache = 16
-	}
-	if handles < 16 {
-		handles = 16
-	}
-	logger.Info("Allocated cache and file handles", "cache", cache, "handles", handles)
-
-	// Open the db and recover any potential corruptions
-	db, err := leveldb.OpenFile(file, &opt.Options{
-		OpenFilesCacheCapacity: handles,
-		BlockCacheCapacity:     cache / 2 * opt.MiB,
-		WriteBuffer:            cache / 4 * opt.MiB, // Two of these are used internally
-		Filter:                 filter.NewBloomFilter(10),
-	})
-	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
-		db, err = leveldb.RecoverFile(file, nil)
-	}
 	// (Re)check for errors and abort if opening of the db failed
 	if err != nil {
 		return nil, err
 	}
-	return &LDBDatabase{
+	ret := &BadgerDatabase{
 		fn:  file,
 		db:  db,
 		log: logger,
-	}, nil
+	}
+	
+	ret.badgerCache = &BadgerCache{db: ret, c: make(map[string][]byte), size: 0, limit: 100000000}
+	return ret, nil
 }
 
 // Path returns the path to the database directory.
-func (db *LDBDatabase) Path() string {
+func (db *BadgerDatabase) Path() string {
 	return db.fn
 }
 
 // Put puts the given key / value to the queue
-func (db *LDBDatabase) Put(key []byte, value []byte) error {
+func (db *BadgerDatabase) Put(key []byte, value []byte) error {
 	// Measure the database put latency, if requested
 	if db.putTimer != nil {
 		defer db.putTimer.UpdateSince(time.Now())
@@ -106,28 +96,101 @@ func (db *LDBDatabase) Put(key []byte, value []byte) error {
 	if db.writeMeter != nil {
 		db.writeMeter.Mark(int64(len(value)))
 	}
-	return db.db.Put(key, value, nil)
+	
+	db.badgerCache.lock.Lock()
+	db.badgerCache.c[string(key)] = common.CopyBytes(value)
+	db.badgerCache.size += len(value)+len(key)
+	db.badgerCache.lock.Unlock()
+	
+	if db.badgerCache.size >= db.badgerCache.limit {
+		return db.badgerCache.Flush()
+	}
+	
+	return nil
 }
 
-func (db *LDBDatabase) Has(key []byte) (bool, error) {
-	return db.db.Has(key, nil)
+func (db *BadgerDatabase) Has(key []byte) (ret bool, err error) {
+	db.badgerCache.lock.RLock()
+	defer db.badgerCache.lock.RUnlock()
+	if db.badgerCache.c[string(key)] != nil {
+		return true, nil
+	}
+	
+	err = db.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(key)
+		if item != nil {
+			ret = true
+		}
+		if err == badger.ErrKeyNotFound {
+			ret = false
+			err = nil
+		}
+		return err
+	})
+	return ret, err
+}
+
+type BadgerCache struct {
+	db		*BadgerDatabase
+	c	 	map[string][]byte
+	size	int
+	limit	int
+	lock 	sync.RWMutex
+}
+
+func (badgerCache *BadgerCache) Flush() (err error) {
+	badgerCache.lock.Lock()
+	defer badgerCache.lock.Unlock()
+	
+	txn := badgerCache.db.db.NewTransaction(true)
+	
+	for key, value := range badgerCache.c {
+		err = txn.Set([]byte(key), value)
+		if err == badger.ErrTxnTooBig {
+		    txn.Commit(nil)
+		    txn = badgerCache.db.db.NewTransaction(true)
+		    err = txn.Set([]byte(key), value)
+		}
+	}
+	err = txn.Commit(nil)
+	log.Info("Badger flushed to disk", "badgerCache size", badgerCache.size)
+	badgerCache.size = 0
+	badgerCache.c = make(map[string][]byte)
+	return err
 }
 
 // Get returns the given key if it's present.
-func (db *LDBDatabase) Get(key []byte) ([]byte, error) {
+func (db *BadgerDatabase) Get(key []byte) (dat []byte, err error) {
 	// Measure the database get latency, if requested
 	if db.getTimer != nil {
 		defer db.getTimer.UpdateSince(time.Now())
 	}
-	// Retrieve the key and increment the miss counter if not found
-	dat, err := db.db.Get(key, nil)
+	
+	
+	db.badgerCache.lock.RLock()
+	dat = db.badgerCache.c[string(key)]
+	db.badgerCache.lock.RUnlock()
+	if dat == nil {
+		err = db.db.View(func(txn *badger.Txn) error {
+			item, err := txn.Get(key)
+			if err != nil {
+				return err
+			}
+			val, err := item.Value()
+			if err != nil {
+				return err
+			}
+			dat = common.CopyBytes(val)
+			return nil
+		})
+	}
 	if err != nil {
 		if db.missMeter != nil {
 			db.missMeter.Mark(1)
 		}
 		return nil, err
 	}
-	// Otherwise update the actually retrieved amount of data
+	//Update the actually retrieved amount of data
 	if db.readMeter != nil {
 		db.readMeter.Mark(int64(len(dat)))
 	}
@@ -136,20 +199,78 @@ func (db *LDBDatabase) Get(key []byte) ([]byte, error) {
 }
 
 // Delete deletes the key from the queue and database
-func (db *LDBDatabase) Delete(key []byte) error {
+func (db *BadgerDatabase) Delete(key []byte) error {
 	// Measure the database delete latency, if requested
 	if db.delTimer != nil {
 		defer db.delTimer.UpdateSince(time.Now())
 	}
 	// Execute the actual operation
-	return db.db.Delete(key, nil)
+	db.badgerCache.lock.Lock()
+	delete(db.badgerCache.c, string(key))
+	
+	//TODO: also subtract len(value)
+	db.badgerCache.size-=len(key)
+	db.badgerCache.lock.Unlock()
+	return db.db.Update(func(txn *badger.Txn) error {
+  		err := txn.Delete(key)
+		if err == badger.ErrKeyNotFound {
+			err = nil
+		}
+  		return err
+	})
 }
 
-func (db *LDBDatabase) NewIterator() iterator.Iterator {
-	return db.db.NewIterator(nil, nil)
+type badgerIterator struct {
+	txn 				*badger.Txn
+	internIterator		*badger.Iterator
+	released			bool
+	initialised			bool
 }
 
-func (db *LDBDatabase) Close() {
+func (it *badgerIterator) Release() {
+	it.internIterator.Close()
+	it.txn.Discard()
+	it.released = true
+}
+
+func (it *badgerIterator) Released() bool {
+	return it.released
+}
+
+func (it *badgerIterator) Next() bool {
+	if(!it.initialised) {
+		it.internIterator.Rewind()
+		it.initialised = true
+	} else {
+		it.internIterator.Next()
+	}
+	return it.internIterator.Valid()
+}
+
+func (it *badgerIterator) Seek(key []byte) {
+	it.internIterator.Seek(key)
+}
+
+func (it *badgerIterator) Key() []byte {
+	return it.internIterator.Item().Key()
+}
+
+func (it *badgerIterator) Value() []byte {
+	value, err := it.internIterator.Item().Value()
+	if err != nil {
+		return nil
+	}
+	return value
+}
+
+func (db *BadgerDatabase) NewIterator() badgerIterator {
+	txn := db.db.NewTransaction(false)
+	opts := badger.DefaultIteratorOptions
+	internIterator := txn.NewIterator(opts)
+	return badgerIterator{txn: txn, internIterator: internIterator, released: false, initialised: false}
+}
+
+func (db *BadgerDatabase) Close() {
 	// Stop the metrics collection to avoid internal database races
 	db.quitLock.Lock()
 	defer db.quitLock.Unlock()
@@ -161,6 +282,7 @@ func (db *LDBDatabase) Close() {
 			db.log.Error("Metrics collection failed", "err", err)
 		}
 	}
+	db.badgerCache.Flush()
 	err := db.db.Close()
 	if err == nil {
 		db.log.Info("Database closed")
@@ -169,12 +291,9 @@ func (db *LDBDatabase) Close() {
 	}
 }
 
-func (db *LDBDatabase) LDB() *leveldb.DB {
-	return db.db
-}
-
+/*
 // Meter configures the database metrics collectors and
-func (db *LDBDatabase) Meter(prefix string) {
+func (db *BadgerDatabase) Meter(prefix string) {
 	// Short circuit metering if the metrics system is disabled
 	if !metrics.Enabled {
 		return
@@ -197,19 +316,10 @@ func (db *LDBDatabase) Meter(prefix string) {
 
 	go db.meter(3 * time.Second)
 }
+*/
 
-// meter periodically retrieves internal leveldb counters and reports them to
-// the metrics subsystem.
-//
-// This is how a stats table look like (currently):
-//   Compactions
-//    Level |   Tables   |    Size(MB)   |    Time(sec)  |    Read(MB)   |   Write(MB)
-//   -------+------------+---------------+---------------+---------------+---------------
-//      0   |          0 |       0.00000 |       1.27969 |       0.00000 |      12.31098
-//      1   |         85 |     109.27913 |      28.09293 |     213.92493 |     214.26294
-//      2   |        523 |    1000.37159 |       7.26059 |      66.86342 |      66.77884
-//      3   |        570 |    1113.18458 |       0.00000 |       0.00000 |       0.00000
-func (db *LDBDatabase) meter(refresh time.Duration) {
+/*
+func (db *BadgerDatabase) meter(refresh time.Duration) {
 	// Create the counters to store current and previous values
 	counters := make([][]float64, 2)
 	for i := 0; i < 2; i++ {
@@ -274,36 +384,48 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		}
 	}
 }
-
-func (db *LDBDatabase) NewBatch() Batch {
-	return &ldbBatch{db: db.db, b: new(leveldb.Batch)}
+*/
+func (db *BadgerDatabase) NewBatch() Batch {
+	return &badgerBatch{db: db}
 }
 
-type ldbBatch struct {
-	db   *leveldb.DB
-	b    *leveldb.Batch
+type badgerBatch struct {
+	db		*BadgerDatabase
 	size int
 }
 
-func (b *ldbBatch) Put(key, value []byte) error {
-	b.b.Put(key, value)
+func (b *badgerBatch) Put(key, value []byte) error {
+	b.db.badgerCache.lock.Lock()
+	b.db.badgerCache.c[string(key)] = common.CopyBytes(value)
+	b.db.badgerCache.size += len(value)+len(key)
+	b.db.badgerCache.lock.Unlock()
+	if b.db.badgerCache.size >= b.db.badgerCache.limit {
+		b.db.badgerCache.Flush()
+	}
 	b.size += len(value)
 	return nil
 }
 
-func (b *ldbBatch) Write() error {
-	return b.db.Write(b.b, nil)
+func (b *badgerBatch) Write() error {
+	b.size = 0
+	if b.db.badgerCache.size >= b.db.badgerCache.limit {
+		return b.db.badgerCache.Flush()
+	}
+	return nil
 }
 
-func (b *ldbBatch) ValueSize() int {
+func (b *badgerBatch) Discard() {
+	b.size = 0
+}
+
+func (b *badgerBatch) ValueSize() int {
 	return b.size
 }
 
-func (b *ldbBatch) Reset() {
-	b.b.Reset()
+func (b *badgerBatch) Reset() {
 	b.size = 0
 }
-/*
+
 type table struct {
 	db     Database
 	prefix string
@@ -367,4 +489,3 @@ func (tb *tableBatch) ValueSize() int {
 func (tb *tableBatch) Reset() {
 	tb.batch.Reset()
 }
-*/

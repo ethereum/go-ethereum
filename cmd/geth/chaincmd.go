@@ -216,7 +216,10 @@ func importChain(ctx *cli.Context) error {
 	}
 	chain.Stop()
 	fmt.Printf("Import done in %v.\n\n", time.Since(start))
-
+	
+	fmt.Printf("We are using badger, cancel compaction and stat printing for now")
+	return nil
+	
 	// Output pre-compaction stats mostly to see the import trashing
 	db := chainDb.(*ethdb.LDBDatabase)
 
