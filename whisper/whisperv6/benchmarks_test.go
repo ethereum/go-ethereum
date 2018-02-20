@@ -39,7 +39,7 @@ func BenchmarkEncryptionSym(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		msg, _ := newSentMessage(params)
+		msg, _ := NewSentMessage(params)
 		_, err := msg.Wrap(params)
 		if err != nil {
 			b.Errorf("failed Wrap with seed %d: %s.", seed, err)
@@ -64,7 +64,7 @@ func BenchmarkEncryptionAsym(b *testing.B) {
 	params.Dst = &key.PublicKey
 
 	for i := 0; i < b.N; i++ {
-		msg, _ := newSentMessage(params)
+		msg, _ := NewSentMessage(params)
 		_, err := msg.Wrap(params)
 		if err != nil {
 			b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
@@ -79,7 +79,7 @@ func BenchmarkDecryptionSymValid(b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
-	msg, _ := newSentMessage(params)
+	msg, _ := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
 		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
@@ -101,7 +101,7 @@ func BenchmarkDecryptionSymInvalid(b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
-	msg, _ := newSentMessage(params)
+	msg, _ := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
 		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
@@ -130,7 +130,7 @@ func BenchmarkDecryptionAsymValid(b *testing.B) {
 	f := Filter{KeyAsym: key}
 	params.KeySym = nil
 	params.Dst = &key.PublicKey
-	msg, _ := newSentMessage(params)
+	msg, _ := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
 		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
@@ -157,7 +157,7 @@ func BenchmarkDecryptionAsymInvalid(b *testing.B) {
 	}
 	params.KeySym = nil
 	params.Dst = &key.PublicKey
-	msg, _ := newSentMessage(params)
+	msg, _ := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
 		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
@@ -199,7 +199,7 @@ func BenchmarkPoW(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		increment(params.Payload)
-		msg, _ := newSentMessage(params)
+		msg, _ := NewSentMessage(params)
 		_, err := msg.Wrap(params)
 		if err != nil {
 			b.Fatalf("failed Wrap with seed %d: %s.", seed, err)

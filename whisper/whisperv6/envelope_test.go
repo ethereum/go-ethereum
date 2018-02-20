@@ -45,7 +45,7 @@ func TestEnvelopeOpenAcceptsOnlyOneKeyTypeInFilter(t *testing.T) {
 
 	mrand.Read(params.Payload)
 
-	msg, err := newSentMessage(&params)
+	msg, err := NewSentMessage(&params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
