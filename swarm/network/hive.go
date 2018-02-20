@@ -162,9 +162,15 @@ func (h *Hive) connect() {
 func (h *Hive) Run(p *BzzPeer) error {
 	dp := newDiscovery(p, h)
 	depth, changed := h.On(dp)
-	// if we want discovery, advertise changed depth of depth
-	if h.Discovery && changed {
-		NotifyDepth(depth, h)
+	// if we want discovery, advertise change of depth
+	if h.Discovery {
+		if changed {
+			// if depth changed, send to all peers
+			NotifyDepth(depth, h)
+		} else {
+			// otherwise just send depth to new peer
+			dp.NotifyDepth(depth)
+		}
 	}
 	NotifyPeer(p.Off(), h)
 	defer h.Off(dp)

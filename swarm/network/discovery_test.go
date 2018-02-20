@@ -17,10 +17,8 @@
 package network
 
 import (
-	"fmt"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/log"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
@@ -30,28 +28,30 @@ import (
  *
  */
 func TestDiscovery(t *testing.T) {
-	addr := RandomAddr()
-	to := NewKademlia(addr.OAddr, NewKadParams())
+	params := NewHiveParams()
+	s, pp := newHiveTester(t, params)
 
-	run := func(p *BzzPeer) error {
-		dp := newDiscovery(p, to)
-		to.On(p)
-		defer to.Off(p)
-		log.Trace(fmt.Sprintf("kademlia on %v", p))
-		return p.Run(dp.HandleMsg)
-	}
+	id := s.IDs[0]
+	raddr := NewAddrFromNodeID(id)
+	pp.Register([]OverlayAddr{OverlayAddr(raddr)})
 
-	s := newBzzBaseTester(t, 1, addr, DiscoverySpec, run)
-	defer s.Stop()
+	// start the hive and wait for the connection
+	pp.Start(s.Server)
+	defer pp.Stop()
 
-	s.TestExchanges(p2ptest.Exchange{
-		Label: "outgoing SubPeersMsg",
+	// send subPeersMsg to the peer
+	err := s.TestExchanges(p2ptest.Exchange{
+		Label: "outgoing subPeersMsg",
 		Expects: []p2ptest.Expect{
 			{
-				Code: 3,
+				Code: 1,
 				Msg:  &subPeersMsg{Depth: 0},
-				Peer: s.ProtocolTester.IDs[0],
+				Peer: id,
 			},
 		},
 	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
 }
