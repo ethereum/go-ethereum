@@ -125,13 +125,13 @@ func TestNodeDBFetchStore(t *testing.T) {
 		t.Errorf("ping: value mismatch: have %v, want %v", stored, inst)
 	}
 	// Check fetch/store operations on a node pong object
-	if stored := db.lastPong(node.ID); stored.Unix() != 0 {
+	if stored := db.bondTime(node.ID); stored.Unix() != 0 {
 		t.Errorf("pong: non-existing object: %v", stored)
 	}
-	if err := db.updateLastPong(node.ID, inst); err != nil {
+	if err := db.updateBondTime(node.ID, inst); err != nil {
 		t.Errorf("pong: failed to update: %v", err)
 	}
-	if stored := db.lastPong(node.ID); stored.Unix() != inst.Unix() {
+	if stored := db.bondTime(node.ID); stored.Unix() != inst.Unix() {
 		t.Errorf("pong: value mismatch: have %v, want %v", stored, inst)
 	}
 	// Check fetch/store operations on a node findnode-failure object
@@ -224,8 +224,8 @@ func TestNodeDBSeedQuery(t *testing.T) {
 		if err := db.updateNode(seed.node); err != nil {
 			t.Fatalf("node %d: failed to insert: %v", i, err)
 		}
-		if err := db.updateLastPong(seed.node.ID, seed.pong); err != nil {
-			t.Fatalf("node %d: failed to insert lastPong: %v", i, err)
+		if err := db.updateBondTime(seed.node.ID, seed.pong); err != nil {
+			t.Fatalf("node %d: failed to insert bondTime: %v", i, err)
 		}
 	}
 
@@ -332,8 +332,8 @@ func TestNodeDBExpiration(t *testing.T) {
 		if err := db.updateNode(seed.node); err != nil {
 			t.Fatalf("node %d: failed to insert: %v", i, err)
 		}
-		if err := db.updateLastPong(seed.node.ID, seed.pong); err != nil {
-			t.Fatalf("node %d: failed to update pong: %v", i, err)
+		if err := db.updateBondTime(seed.node.ID, seed.pong); err != nil {
+			t.Fatalf("node %d: failed to update bondTime: %v", i, err)
 		}
 	}
 	// Expire some of them, and check the rest
@@ -365,8 +365,8 @@ func TestNodeDBSelfExpiration(t *testing.T) {
 		if err := db.updateNode(seed.node); err != nil {
 			t.Fatalf("node %d: failed to insert: %v", i, err)
 		}
-		if err := db.updateLastPong(seed.node.ID, seed.pong); err != nil {
-			t.Fatalf("node %d: failed to update pong: %v", i, err)
+		if err := db.updateBondTime(seed.node.ID, seed.pong); err != nil {
+			t.Fatalf("node %d: failed to update bondTime: %v", i, err)
 		}
 	}
 	// Expire the nodes and make sure self has been evacuated too

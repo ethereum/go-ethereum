@@ -22,7 +22,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"net"
-	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -40,6 +39,7 @@ import (
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/stream"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
@@ -51,16 +51,19 @@ type Swarm struct {
 	api    *api.Api     // high level api layer (fs/manifest)
 	dns    api.Resolver // DNS registrar
 	//dbAccess    *network.DbAccess      // access to local chunk db iterator and storage counter
-	storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
-	dpa     *storage.DPA       // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	//storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
+	dpa *storage.DPA // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	//depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
-	cloud      storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
-	bzz        *network.Bzz       // the logistic manager
-	backend    chequebook.Backend // simple blockchain Backend
-	privateKey *ecdsa.PrivateKey
-	lstore     *storage.LocalStore // local store, needs to store for releasing resources after node stopped
-	sfs        *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
-	ps         *pss.Pss
+	streamer *stream.Registry
+	//cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
+	bzz         *network.Bzz       // the logistic manager
+	backend     chequebook.Backend // simple blockchain Backend
+	privateKey  *ecdsa.PrivateKey
+	corsString  string
+	swapEnabled bool
+	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
+	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
+	ps          *pss.Pss
 }
 
 type SwarmAPI struct {
@@ -98,7 +101,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
 	hash := storage.MakeHashFunc(config.ChunkerParams.Hash)
-	self.lstore, err = storage.NewLocalStore(hash, config.StoreParams, mockStore)
+	self.lstore, err = storage.NewLocalStore(hash, config.StoreParams, common.Hex2Bytes(config.BzzKey), mockStore)
 	if err != nil {
 		return
 	}
@@ -115,8 +118,8 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	config.HiveParams.Discovery = true
 
 	// setup cloud storage internal access layer
-	self.cloud = &storage.Forwarder{}
-	self.storage = storage.NewNetStore(hash, self.lstore, self.cloud, config.StoreParams)
+	//self.cloud = &storage.Forwarder{}
+	//self.storage = storage.NewNetStore(hash, self.lstore, self.cloud, config.StoreParams)
 	log.Debug(fmt.Sprintf("-> swarm net store shared access layer to Swarm Chunk Store"))
 	nodeid := discover.PubkeyID(crypto.ToECDSAPub(common.FromHex(config.PublicKey)))
 	addr := network.NewAddrFromNodeID(nodeid)
@@ -125,10 +128,17 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 		UnderlayAddr: addr.UAddr,
 		HiveParams:   config.HiveParams,
 	}
+
+	db := storage.NewDBAPI(self.lstore)
+	delivery := stream.NewDelivery(to, db)
+	self.streamer = stream.NewRegistry(addr, delivery, self.lstore, false)
+	stream.RegisterSwarmSyncerServer(self.streamer, db)
+	stream.RegisterSwarmSyncerClient(self.streamer, db)
+
 	self.bzz = network.NewBzz(bzzconfig, to, nil)
 
 	// set up DPA, the cloud storage local access layer
-	dpaChunkStore := storage.NewDpaChunkStore(self.lstore, self.storage)
+	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
 	log.Debug(fmt.Sprintf("-> Local Access to Swarm"))
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)
@@ -166,7 +176,9 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 				return nil, err
 			}
 		}
-		resourceHandler, err = storage.NewResourceHandler(filepath.Join(self.config.Path, storage.DbDirName), self.cloud, ensClient, resourceValidator)
+		hashfunc := storage.MakeHashFunc(storage.SHA3Hash)
+		chunkStore := storage.NewResourceChunkStore(self.lstore, func(*storage.Chunk) error { return nil })
+		resourceHandler, err = storage.NewResourceHandler(hashfunc, chunkStore, ensClient, resourceValidator)
 		if err != nil {
 			return nil, err
 		}
@@ -267,11 +279,13 @@ func (self *Swarm) Stop() error {
 
 // implements the node.Service interface
 func (self *Swarm) Protocols() (protos []p2p.Protocol) {
-
 	protos = append(protos, self.bzz.Protocols()...)
 
 	if self.ps != nil {
 		protos = append(protos, self.ps.Protocols()...)
+	}
+	if self.streamer != nil {
+		protos = append(protos, self.streamer.Protocols()...)
 	}
 	return
 }
@@ -285,7 +299,7 @@ func (self *Swarm) RegisterPssProtocol(spec *protocols.Spec, targetprotocol *p2p
 }
 
 // implements node.Service
-// Apis returns the RPC Api descriptors the Swarm implementation offers
+// APIs returns the RPC Api descriptors the Swarm implementation offers
 func (self *Swarm) APIs() []rpc.API {
 
 	apis := []rpc.API{
@@ -353,32 +367,6 @@ func (self *Swarm) SetChequebook(ctx context.Context) error {
 	}
 	log.Info(fmt.Sprintf("new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract.Hex()))
 	return nil
-}
-
-// Local swarm without netStore
-func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
-
-	prvKey, err := crypto.GenerateKey()
-	if err != nil {
-		return
-	}
-
-	config := api.NewConfig()
-	config.Path = datadir
-	config.Port = port
-	config.Init(prvKey)
-
-	dpa, err := storage.NewLocalDPA(datadir)
-	if err != nil {
-		return
-	}
-
-	self = &Swarm{
-		api:    api.NewApi(dpa, nil, nil),
-		config: config,
-	}
-
-	return
 }
 
 // serialisable info about swarm

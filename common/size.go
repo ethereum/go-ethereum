@@ -20,18 +20,29 @@ import (
 	"fmt"
 )
 
+// StorageSize is a wrapper around a float value that supports user friendly
+// formatting.
 type StorageSize float64
 
-func (self StorageSize) String() string {
-	if self > 1000000 {
-		return fmt.Sprintf("%.2f mB", self/1000000)
-	} else if self > 1000 {
-		return fmt.Sprintf("%.2f kB", self/1000)
+// String implements the stringer interface.
+func (s StorageSize) String() string {
+	if s > 1000000 {
+		return fmt.Sprintf("%.2f mB", s/1000000)
+	} else if s > 1000 {
+		return fmt.Sprintf("%.2f kB", s/1000)
 	} else {
-		return fmt.Sprintf("%.2f B", self)
+		return fmt.Sprintf("%.2f B", s)
 	}
 }
 
-func (self StorageSize) Int64() int64 {
-	return int64(self)
+// TerminalString implements log.TerminalStringer, formatting a string for console
+// output during logging.
+func (s StorageSize) TerminalString() string {
+	if s > 1000000 {
+		return fmt.Sprintf("%.2fmB", s/1000000)
+	} else if s > 1000 {
+		return fmt.Sprintf("%.2fkB", s/1000)
+	} else {
+		return fmt.Sprintf("%.2fB", s)
+	}
 }

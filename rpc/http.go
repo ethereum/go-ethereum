@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/rs/cors"
+	"strings"
 )
 
 const (
@@ -65,8 +66,9 @@ func (hc *httpConn) Close() error {
 	return nil
 }
 
-// DialHTTP creates a new RPC clients that connection to an RPC server over HTTP.
-func DialHTTP(endpoint string) (*Client, error) {
+// DialHTTPWithClient creates a new RPC client that connects to an RPC server over HTTP
+// using the provided HTTP Client.
+func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 	req, err := http.NewRequest(http.MethodPost, endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -76,8 +78,13 @@ func DialHTTP(endpoint string) (*Client, error) {
 
 	initctx := context.Background()
 	return newClient(initctx, func(context.Context) (net.Conn, error) {
-		return &httpConn{client: new(http.Client), req: req, closed: make(chan struct{})}, nil
+		return &httpConn{client: client, req: req, closed: make(chan struct{})}, nil
 	})
+}
+
+// DialHTTP creates a new RPC client that connects to an RPC server over HTTP.
+func DialHTTP(endpoint string) (*Client, error) {
+	return DialHTTPWithClient(endpoint, new(http.Client))
 }
 
 func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
@@ -142,8 +149,11 @@ func (t *httpReadWriteNopCloser) Close() error {
 // NewHTTPServer creates a new HTTP RPC server around an API provider.
 //
 // Deprecated: Server implements http.Handler
-func NewHTTPServer(cors []string, srv *Server) *http.Server {
-	return &http.Server{Handler: newCorsHandler(srv, cors)}
+func NewHTTPServer(cors []string, vhosts []string, srv *Server) *http.Server {
+	// Wrap the CORS-handler within a host-handler
+	handler := newCorsHandler(srv, cors)
+	handler = newVHostHandler(vhosts, handler)
+	return &http.Server{Handler: handler}
 }
 
 // ServeHTTP serves JSON-RPC requests over HTTP.
@@ -189,7 +199,6 @@ func newCorsHandler(srv *Server, allowedOrigins []string) http.Handler {
 	if len(allowedOrigins) == 0 {
 		return srv
 	}
-
 	c := cors.New(cors.Options{
 		AllowedOrigins: allowedOrigins,
 		AllowedMethods: []string{http.MethodPost, http.MethodGet},
@@ -197,4 +206,51 @@ func newCorsHandler(srv *Server, allowedOrigins []string) http.Handler {
 		AllowedHeaders: []string{"*"},
 	})
 	return c.Handler(srv)
+}
+
+// virtualHostHandler is a handler which validates the Host-header of incoming requests.
+// The virtualHostHandler can prevent DNS rebinding attacks, which do not utilize CORS-headers,
+// since they do in-domain requests against the RPC api. Instead, we can see on the Host-header
+// which domain was used, and validate that against a whitelist.
+type virtualHostHandler struct {
+	vhosts map[string]struct{}
+	next   http.Handler
+}
+
+// ServeHTTP serves JSON-RPC requests over HTTP, implements http.Handler
+func (h *virtualHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// if r.Host is not set, we can continue serving since a browser would set the Host header
+	if r.Host == "" {
+		h.next.ServeHTTP(w, r)
+		return
+	}
+	host, _, err := net.SplitHostPort(r.Host)
+	if err != nil {
+		// Either invalid (too many colons) or no port specified
+		host = r.Host
+	}
+	if ipAddr := net.ParseIP(host); ipAddr != nil {
+		// It's an IP address, we can serve that
+		h.next.ServeHTTP(w, r)
+		return
+
+	}
+	// Not an ip address, but a hostname. Need to validate
+	if _, exist := h.vhosts["*"]; exist {
+		h.next.ServeHTTP(w, r)
+		return
+	}
+	if _, exist := h.vhosts[host]; exist {
+		h.next.ServeHTTP(w, r)
+		return
+	}
+	http.Error(w, "invalid host specified", http.StatusForbidden)
+}
+
+func newVHostHandler(vhosts []string, next http.Handler) http.Handler {
+	vhostMap := make(map[string]struct{})
+	for _, allowedHost := range vhosts {
+		vhostMap[strings.ToLower(allowedHost)] = struct{}{}
+	}
+	return &virtualHostHandler{vhostMap, next}
 }

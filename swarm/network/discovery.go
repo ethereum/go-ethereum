@@ -25,9 +25,9 @@ import (
 
 // discovery bzz extension for requesting and relaying node address records
 
-// discPeer wraps bzzPeer and embeds an Overlay connectivity driver
+// discPeer wraps BzzPeer and embeds an Overlay connectivity driver
 type discPeer struct {
-	*bzzPeer
+	*BzzPeer
 	overlay   Overlay
 	sentPeers bool // whether we already sent peer closer to this address
 	mtx       sync.Mutex
@@ -36,10 +36,10 @@ type discPeer struct {
 }
 
 // NewDiscovery constructs a discovery peer
-func newDiscovery(p *bzzPeer, o Overlay) *discPeer {
+func newDiscovery(p *BzzPeer, o Overlay) *discPeer {
 	d := &discPeer{
 		overlay: o,
-		bzzPeer: p,
+		BzzPeer: p,
 		peers:   make(map[string]bool),
 	}
 	// record remote as seen so we never send a peer its own record
