@@ -44,6 +44,7 @@ type Filter struct {
 type Filters struct {
 	watchers       map[string]*Filter
 	watchersTopics map[string]map[string]struct{}
+	topicMatcher   *topicMatcher
 	whisper        *Whisper
 	mutex          sync.RWMutex
 }
@@ -52,9 +53,9 @@ func NewFilters(w *Whisper) *Filters {
 	fs := &Filters{
 		watchers:       make(map[string]*Filter),
 		watchersTopics: make(map[string]map[string]struct{}),
+		topicMatcher:   newTopicMatcher(),
 		whisper:        w,
 	}
-	fs.watchersTopics[ALL_TOPICS] = make(map[string]struct{})
 	return fs
 }
 
@@ -80,48 +81,8 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 	}
 
 	fs.watchers[id] = watcher
-	fs.addFilterToTopicsMapping(watcher, id)
+	fs.topicMatcher.addFilterToTopicsMapping(watcher, id)
 	return id, err
-}
-
-func (fs *Filters) addFilterToTopicsMapping(watcher *Filter, id string) {
-	for i := range fs.prepareTopicsMapping(watcher) {
-		topicMapping, ok := fs.watchersTopics[i]
-		if !ok {
-			fs.watchersTopics[i] = make(map[string]struct{})
-			topicMapping = fs.watchersTopics[i]
-		}
-		topicMapping[id] = struct{}{}
-	}
-}
-
-func (fs *Filters) removeTopicFromTopicMapping(id string) {
-	for i := range fs.watchersTopics {
-		delete(fs.watchersTopics[i], id)
-	}
-}
-
-func (fs *Filters) prepareTopicsMapping(watcher *Filter) map[string]struct{} {
-	topics := make(map[string]struct{}, len(watcher.Topics))
-
-	if len(watcher.Topics) == 0 {
-		topics[ALL_TOPICS] = struct{}{}
-		return topics
-	}
-
-	for _, topic := range watcher.Topics {
-		topics[common.ToHex(topic)] = struct{}{}
-	}
-
-	return topics
-}
-
-func (fs *Filters) matchedTopics(topic TopicType) map[string]struct{} {
-	m := fs.watchersTopics[ALL_TOPICS]
-	for i := range fs.watchersTopics[topic.String()] {
-		m[i] = struct{}{}
-	}
-	return m
 }
 
 func (fs *Filters) Uninstall(id string) bool {
@@ -129,7 +90,7 @@ func (fs *Filters) Uninstall(id string) bool {
 	defer fs.mutex.Unlock()
 	if fs.watchers[id] != nil {
 		delete(fs.watchers, id)
-		fs.removeTopicFromTopicMapping(id)
+		fs.topicMatcher.removeTopicFromTopicMapping(id)
 		return true
 	}
 	return false
@@ -147,7 +108,7 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 
-	for watcherID := range fs.matchedTopics(env.Topic) {
+	for watcherID := range fs.topicMatcher.matchedTopics(env.Topic) {
 		watcher, ok := fs.watchers[watcherID]
 		if !ok {
 			log.Trace(fmt.Sprintf("msg [%x], filter [%s]: filter not exists", env.Hash(), watcherID))
@@ -261,4 +222,71 @@ func IsPubKeyEqual(a, b *ecdsa.PublicKey) bool {
 	}
 	// the curve is always the same, just compare the points
 	return a.X.Cmp(b.X) == 0 && a.Y.Cmp(b.Y) == 0
+}
+
+func newTopicMatcher() *topicMatcher {
+	tm := new(topicMatcher)
+	tm.mapper = make(map[string]map[string]struct{})
+	tm.mapper[ALL_TOPICS] = make(map[string]struct{})
+	return tm
+}
+
+type topicMatcher struct {
+	mapper map[string]map[string]struct{}
+	mx     sync.RWMutex
+}
+
+func (fs *topicMatcher) addFilterToTopicsMapping(watcher *Filter, id string) {
+	fs.mx.Lock()
+	defer fs.mx.Unlock()
+
+	for i := range fs.prepareTopicsMapping(watcher) {
+		topicMapping, ok := fs.mapper[i]
+		if !ok {
+			fs.mapper[i] = make(map[string]struct{})
+			topicMapping = fs.mapper[i]
+		}
+		topicMapping[id] = struct{}{}
+	}
+}
+
+func (fs *topicMatcher) removeTopicFromTopicMapping(id string) {
+	fs.mx.Lock()
+	defer fs.mx.Unlock()
+	for i := range fs.mapper {
+		delete(fs.mapper[i], id)
+	}
+}
+
+func (fs *topicMatcher) prepareTopicsMapping(watcher *Filter) map[string]struct{} {
+	fs.mx.RLock()
+	defer fs.mx.RUnlock()
+	topics := make(map[string]struct{}, len(watcher.Topics))
+
+	if len(watcher.Topics) == 0 {
+		topics[ALL_TOPICS] = struct{}{}
+		return topics
+	}
+
+	for _, topic := range watcher.Topics {
+		topics[common.ToHex(topic)] = struct{}{}
+	}
+
+	return topics
+}
+
+func (fs *topicMatcher) matchedTopics(topic TopicType) map[string]struct{} {
+	fs.mx.RLock()
+	defer fs.mx.RUnlock()
+
+	m := make(map[string]struct{}, len(fs.mapper[ALL_TOPICS])+len(fs.mapper[topic.String()]))
+
+	for i := range fs.mapper[ALL_TOPICS] {
+		m[i] = struct{}{}
+	}
+
+	for i := range fs.mapper[topic.String()] {
+		m[i] = struct{}{}
+	}
+	return m
 }

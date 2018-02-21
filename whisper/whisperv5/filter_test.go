@@ -85,10 +85,9 @@ func generateFilter(t *testing.T, symmetric bool) (*Filter, error) {
 
 func generateFilters() *Filters {
 	fs := Filters{
-		watchers:       make(map[string]*Filter),
-		watchersTopics: make(map[string]map[string]struct{}),
+		watchers:     make(map[string]*Filter),
+		topicMatcher: newTopicMatcher(),
 	}
-	fs.watchersTopics[ALL_TOPICS] = make(map[string]struct{})
 	return &fs
 }
 
@@ -496,7 +495,7 @@ func TestMatchMessageAsym(t *testing.T) {
 		t.Fatalf("failed filter install with seed %d: %s.", seed, err)
 	}
 
-	m := fs.matchedTopics(env.Topic)
+	m := fs.topicMatcher.matchedTopics(env.Topic)
 	_, matchedTopic := m[filterID]
 
 	if !matchedTopic {
@@ -509,7 +508,7 @@ func TestMatchMessageAsym(t *testing.T) {
 	}
 	f.Topics[index][0]++
 	filterID, err = fs.Install(f)
-	m = fs.matchedTopics(env.Topic)
+	m = fs.topicMatcher.matchedTopics(env.Topic)
 	_, matchedTopic = m[filterID]
 
 	if matchedTopic {
@@ -762,7 +761,7 @@ func TestVariableTopics(t *testing.T) {
 		env.Topic = BytesToTopic(f.Topics[i])
 
 		//test match
-		m := fs.matchedTopics(env.Topic)
+		m := fs.topicMatcher.matchedTopics(env.Topic)
 		_, ok := m[filterID]
 		match = f.MatchEnvelope(env)
 		if !(match && ok) {
@@ -774,9 +773,9 @@ func TestVariableTopics(t *testing.T) {
 
 		//false positive test
 		match = f.MatchEnvelope(env)
-		m = fs.matchedTopics(env.Topic)
+		m = fs.topicMatcher.matchedTopics(env.Topic)
 		_, ok = m[filterID]
-		if !(match && ok) {
+		if match && ok {
 			t.Fatalf("MatchEnvelope symmetric with seed %d, step %d: false positive.", seed, i)
 		}
 	}
@@ -813,7 +812,7 @@ func TestTopicsMapping(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		m := fs.matchedTopics(env.Topic)
+		m := fs.topicMatcher.matchedTopics(env.Topic)
 		if _, matchTopic := m[filterID]; !matchTopic {
 			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
 		}
@@ -822,7 +821,7 @@ func TestTopicsMapping(t *testing.T) {
 		if !fs.Uninstall(filterID) {
 			t.Fatal("Failed to uninstall filter")
 		}
-		m = fs.matchedTopics(env.Topic)
+		m = fs.topicMatcher.matchedTopics(env.Topic)
 		if _, matchTopic := m[filterID]; matchTopic {
 			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
 		}
@@ -833,7 +832,7 @@ func TestTopicsMapping(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		m = fs.matchedTopics(env.Topic)
+		m = fs.topicMatcher.matchedTopics(env.Topic)
 		if _, matchTopic := m[filterID]; matchTopic {
 			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
 		}
@@ -863,25 +862,24 @@ func TestTopicsMapping_MatchAllTopics_Success(t *testing.T) {
 	topic := TopicType{}
 	mrand.Read(topic[:])
 
-	m := fs.matchedTopics(topic)
+	m := fs.topicMatcher.matchedTopics(topic)
 	if _, matchTopic := m[filterID]; !matchTopic {
 		t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed)
 	}
-	if _, ok := fs.watchersTopics[ALL_TOPICS][filterID]; !ok {
+	if _, ok := fs.topicMatcher.mapper[ALL_TOPICS][filterID]; !ok {
 		t.Fatal("watcher mapping incorrect")
 	}
 
-	////test match without filter
+	//test match without filter
 	if !fs.Uninstall(filterID) {
 		t.Fatal("Failed to uninstall filter")
 	}
-	m = fs.matchedTopics(topic)
+	m = fs.topicMatcher.matchedTopics(topic)
 	if _, matchTopic := m[filterID]; matchTopic {
 		t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed)
 	}
 
-	if _, ok := fs.watchersTopics[ALL_TOPICS][filterID]; ok {
+	if _, ok := fs.topicMatcher.mapper[ALL_TOPICS][filterID]; ok {
 		t.Fatal("watcher mapping incorrect")
 	}
-
 }
