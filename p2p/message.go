@@ -112,30 +112,6 @@ func SendItems(w MsgWriter, msgcode uint64, elems ...interface{}) error {
 	return Send(w, msgcode, elems)
 }
 
-// netWrapper wraps a MsgReadWriter with locks around
-// ReadMsg/WriteMsg and applies read/write deadlines.
-type netWrapper struct {
-	rmu, wmu sync.Mutex
-
-	rtimeout, wtimeout time.Duration
-	conn               net.Conn
-	wrapped            MsgReadWriter
-}
-
-func (rw *netWrapper) ReadMsg() (Msg, error) {
-	rw.rmu.Lock()
-	defer rw.rmu.Unlock()
-	rw.conn.SetReadDeadline(time.Now().Add(rw.rtimeout))
-	return rw.wrapped.ReadMsg()
-}
-
-func (rw *netWrapper) WriteMsg(msg Msg) error {
-	rw.wmu.Lock()
-	defer rw.wmu.Unlock()
-	rw.conn.SetWriteDeadline(time.Now().Add(rw.wtimeout))
-	return rw.wrapped.WriteMsg(msg)
-}
-
 // eofSignal wraps a reader with eof signaling. the eof channel is
 // closed when the wrapped reader returns an error or when count bytes
 // have been read.
