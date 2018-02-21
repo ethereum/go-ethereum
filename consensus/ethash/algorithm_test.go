@@ -688,8 +688,8 @@ func TestConcurrentDiskCacheGeneration(t *testing.T) {
 		TxHash:      common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 		ReceiptHash: common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 		Difficulty:  big.NewInt(167925187834220),
-		GasLimit:    big.NewInt(4015682),
-		GasUsed:     big.NewInt(0),
+		GasLimit:    4015682,
+		GasUsed:     0,
 		Time:        big.NewInt(1488928920),
 		Extra:       []byte("www.bw.com"),
 		MixDigest:   common.HexToHash("0x3e140b0784516af5e5ec6730f2fb20cca22f32be399b9e4ad77d32541f798cd0"),
@@ -703,8 +703,7 @@ func TestConcurrentDiskCacheGeneration(t *testing.T) {
 
 		go func(idx int) {
 			defer pend.Done()
-
-			ethash := New(cachedir, 0, 1, "", 0, 0)
+			ethash := New(Config{cachedir, 0, 1, "", 0, 0, ModeNormal})
 			if err := ethash.VerifySeal(nil, block.Header()); err != nil {
 				t.Errorf("proc %d: block verification failed: %v", idx, err)
 			}

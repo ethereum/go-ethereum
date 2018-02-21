@@ -94,7 +94,7 @@ func LocalEnv() Environment {
 	}
 	if env.Branch == "" {
 		if head != "HEAD" {
-			env.Branch = strings.TrimLeft(head, "refs/heads/")
+			env.Branch = strings.TrimPrefix(head, "refs/heads/")
 		}
 	}
 	if info, err := os.Stat(".git/objects"); err == nil && info.IsDir() && env.Tag == "" {

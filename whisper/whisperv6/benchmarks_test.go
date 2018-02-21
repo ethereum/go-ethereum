@@ -17,14 +17,16 @@
 package whisperv6
 
 import (
+	"crypto/sha256"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 func BenchmarkDeriveKeyMaterial(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		deriveKeyMaterial([]byte("test"), 0)
+		pbkdf2.Key([]byte("test"), nil, 65356, aesKeyLength, sha256.New)
 	}
 }
 

@@ -18,10 +18,10 @@
 package main
 
 //go:generate go-bindata -nometadata -o website.go faucet.html
+//go:generate gofmt -w -s website.go
 
 import (
 	"bytes"
-	"compress/zlib"
 	"context"
 	"encoding/json"
 	"errors"
@@ -83,7 +83,8 @@ var (
 	captchaToken  = flag.String("captcha.token", "", "Recaptcha site key to authenticate client side")
 	captchaSecret = flag.String("captcha.secret", "", "Recaptcha secret key to authenticate server side")
 
-	logFlag = flag.Int("loglevel", 3, "Log level to use for Ethereum and the faucet")
+	noauthFlag = flag.Bool("noauth", false, "Enables funding requests without authentication")
+	logFlag    = flag.Int("loglevel", 3, "Log level to use for Ethereum and the faucet")
 )
 
 var (
@@ -132,6 +133,7 @@ func main() {
 		"Amounts":   amounts,
 		"Periods":   periods,
 		"Recaptcha": *captchaToken,
+		"NoAuth":    *noauthFlag,
 	})
 	if err != nil {
 		log.Crit("Failed to render the faucet template", "err", err)
@@ -221,7 +223,6 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 			NoDiscovery:      true,
 			DiscoveryV5:      true,
 			ListenAddr:       fmt.Sprintf(":%d", port),
-			DiscoveryV5Addr:  fmt.Sprintf(":%d", port+1),
 			MaxPeers:         25,
 			BootstrapNodesV5: enodes,
 		},
@@ -374,7 +375,7 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 		if err = websocket.JSON.Receive(conn, &msg); err != nil {
 			return
 		}
-		if !strings.HasPrefix(msg.URL, "https://gist.github.com/") && !strings.HasPrefix(msg.URL, "https://twitter.com/") &&
+		if !*noauthFlag && !strings.HasPrefix(msg.URL, "https://gist.github.com/") && !strings.HasPrefix(msg.URL, "https://twitter.com/") &&
 			!strings.HasPrefix(msg.URL, "https://plus.google.com/") && !strings.HasPrefix(msg.URL, "https://www.facebook.com/") {
 			if err = sendError(conn, errors.New("URL doesn't link to supported services")); err != nil {
 				log.Warn("Failed to send URL error to client", "err", err)
@@ -435,13 +436,19 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 		)
 		switch {
 		case strings.HasPrefix(msg.URL, "https://gist.github.com/"):
-			username, avatar, address, err = authGitHub(msg.URL)
+			if err = sendError(conn, errors.New("GitHub authentication discontinued at the official request of GitHub")); err != nil {
+				log.Warn("Failed to send GitHub deprecation to client", "err", err)
+				return
+			}
+			continue
 		case strings.HasPrefix(msg.URL, "https://twitter.com/"):
 			username, avatar, address, err = authTwitter(msg.URL)
 		case strings.HasPrefix(msg.URL, "https://plus.google.com/"):
 			username, avatar, address, err = authGooglePlus(msg.URL)
 		case strings.HasPrefix(msg.URL, "https://www.facebook.com/"):
 			username, avatar, address, err = authFacebook(msg.URL)
+		case *noauthFlag:
+			username, avatar, address, err = authNoAuth(msg.URL)
 		default:
 			err = errors.New("Something funky happened, please open an issue at https://github.com/ethereum/go-ethereum/issues")
 		}
@@ -466,7 +473,7 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			amount = new(big.Int).Mul(amount, new(big.Int).Exp(big.NewInt(5), big.NewInt(int64(msg.Tier)), nil))
 			amount = new(big.Int).Div(amount, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(msg.Tier)), nil))
 
-			tx := types.NewTransaction(f.nonce+uint64(len(f.reqs)), address, amount, big.NewInt(21000), f.price, nil)
+			tx := types.NewTransaction(f.nonce+uint64(len(f.reqs)), address, amount, 21000, f.price, nil)
 			signed, err := f.keystore.SignTx(f.account, tx, f.config.ChainId)
 			if err != nil {
 				f.lock.Unlock()
@@ -498,7 +505,7 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 
 		// Send an error if too frequent funding, othewise a success
 		if !fund {
-			if err = sendError(conn, fmt.Errorf("%s left until next allowance", common.PrettyDuration(timeout.Sub(time.Now())))); err != nil {
+			if err = sendError(conn, fmt.Errorf("%s left until next allowance", common.PrettyDuration(timeout.Sub(time.Now())))); err != nil { // nolint: gosimple
 				log.Warn("Failed to send funding error to client", "err", err)
 				return
 			}
@@ -690,11 +697,7 @@ func authTwitter(url string) (string, string, common.Address, error) {
 	}
 	defer res.Body.Close()
 
-	reader, err := zlib.NewReader(res.Body)
-	if err != nil {
-		return "", "", common.Address{}, err
-	}
-	body, err := ioutil.ReadAll(reader)
+	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return "", "", common.Address{}, err
 	}
@@ -775,4 +778,15 @@ func authFacebook(url string) (string, string, common.Address, error) {
 		avatar = parts[1]
 	}
 	return username + "@facebook", avatar, address, nil
+}
+
+// authNoAuth tries to interpret a faucet request as a plain Ethereum address,
+// without actually performing any remote authentication. This mode is prone to
+// Byzantine attack, so only ever use for truly private networks.
+func authNoAuth(url string) (string, string, common.Address, error) {
+	address := common.HexToAddress(regexp.MustCompile("0x[0-9a-fA-F]{40}").FindString(url))
+	if address == (common.Address{}) {
+		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
+	}
+	return address.Hex() + "@noauth", "", address, nil
 }

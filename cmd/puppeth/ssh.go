@@ -116,6 +116,7 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 	keycheck := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		// If no public key is known for SSH, ask the user to confirm
 		if pubkey == nil {
+			fmt.Println()
 			fmt.Printf("The authenticity of host '%s (%s)' can't be established.\n", hostname, remote)
 			fmt.Printf("SSH key fingerprint is %s [MD5]\n", ssh.FingerprintLegacyMD5(key))
 			fmt.Printf("Are you sure you want to continue connecting (yes/no)? ")
@@ -215,8 +216,8 @@ func (client *sshClient) Stream(cmd string) error {
 	return session.Run(cmd)
 }
 
-// Upload copied the set of files to a remote server via SCP, creating any non-
-// existing folder in te mean time.
+// Upload copies the set of files to a remote server via SCP, creating any non-
+// existing folders in the mean time.
 func (client *sshClient) Upload(files map[string][]byte) ([]byte, error) {
 	// Establish a single command session
 	session, err := client.client.NewSession()

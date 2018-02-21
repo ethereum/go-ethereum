@@ -18,9 +18,12 @@ package whisperv6
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	mrand "math/rand"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -90,8 +93,8 @@ func singleMessageTest(t *testing.T, symmetric bool) {
 		t.Fatalf("failed to encrypt with seed %d: %s.", seed, err)
 	}
 
-	if !decrypted.Validate() {
-		t.Fatalf("failed to validate with seed %d.", seed)
+	if !decrypted.ValidateAndParse() {
+		t.Fatalf("failed to validate with seed %d, symmetric = %v.", seed, symmetric)
 	}
 
 	if !bytes.Equal(text, decrypted.Payload) {
@@ -174,10 +177,8 @@ func TestMessageSeal(t *testing.T) {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
 	params.TTL = 1
-	aesnonce := make([]byte, 12)
-	mrand.Read(aesnonce)
 
-	env := NewEnvelope(params.TTL, params.Topic, aesnonce, msg)
+	env := NewEnvelope(params.TTL, params.Topic, msg)
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
@@ -208,7 +209,7 @@ func TestEnvelopeOpen(t *testing.T) {
 	InitSingleTest()
 
 	var symmetric bool
-	for i := 0; i < 256; i++ {
+	for i := 0; i < 32; i++ {
 		singleEnvelopeOpenTest(t, symmetric)
 		symmetric = !symmetric
 	}
@@ -242,7 +243,12 @@ func singleEnvelopeOpenTest(t *testing.T, symmetric bool) {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
 
-	f := Filter{KeyAsym: key, KeySym: params.KeySym}
+	var f Filter
+	if symmetric {
+		f = Filter{KeySym: params.KeySym}
+	} else {
+		f = Filter{KeyAsym: key}
+	}
 	decrypted := env.Open(&f)
 	if decrypted == nil {
 		t.Fatalf("failed to open with seed %d.", seed)
@@ -411,5 +417,55 @@ func TestPadding(t *testing.T) {
 	for i := 0; i < 256; i++ {
 		n := mrand.Intn(256*1024) + 256*256
 		singlePaddingTest(t, n)
+	}
+}
+
+func TestPaddingAppendedToSymMessagesWithSignature(t *testing.T) {
+	params := &MessageParams{
+		Payload: make([]byte, 246),
+		KeySym:  make([]byte, aesKeyLength),
+	}
+
+	pSrc, err := crypto.GenerateKey()
+
+	if err != nil {
+		t.Fatalf("Error creating the signature key %v", err)
+		return
+	}
+	params.Src = pSrc
+
+	// Simulate a message with a payload just under 256 so that
+	// payload + flag + signature > 256. Check that the result
+	// is padded on the next 256 boundary.
+	msg := sentMessage{}
+	const payloadSizeFieldMinSize = 1
+	msg.Raw = make([]byte, flagsLength+payloadSizeFieldMinSize+len(params.Payload))
+
+	err = msg.appendPadding(params)
+
+	if err != nil {
+		t.Fatalf("Error appending padding to message %v", err)
+		return
+	}
+
+	if len(msg.Raw) != 512-signatureLength {
+		t.Errorf("Invalid size %d != 512", len(msg.Raw))
+	}
+}
+
+func TestAesNonce(t *testing.T) {
+	key := hexutil.MustDecode("0x03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd31")
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		t.Fatalf("NewCipher failed: %s", err)
+	}
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		t.Fatalf("NewGCM failed: %s", err)
+	}
+	// This is the most important single test in this package.
+	// If it fails, whisper will not be working.
+	if aesgcm.NonceSize() != aesNonceLength {
+		t.Fatalf("Nonce size is wrong. This is a critical error. Apparently AES nonce size have changed in the new version of AES GCM package. Whisper will not be working until this problem is resolved.")
 	}
 }

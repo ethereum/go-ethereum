@@ -8,7 +8,6 @@ matrix:
       sudo: required
       go: 1.7.x
       script:
-        - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install fuse
         - sudo modprobe fuse
         - sudo chmod 666 /dev/fuse
         - sudo chown root:$USER /etc/fuse.conf
@@ -20,7 +19,6 @@ matrix:
       sudo: required
       go: 1.8.x
       script:
-        - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install fuse
         - sudo modprobe fuse
         - sudo chmod 666 /dev/fuse
         - sudo chown root:$USER /etc/fuse.conf
@@ -33,7 +31,6 @@ matrix:
       sudo: required
       go: 1.9.x
       script:
-        - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install fuse
         - sudo modprobe fuse
         - sudo chmod 666 /dev/fuse
         - sudo chown root:$USER /etc/fuse.conf
@@ -42,8 +39,8 @@ matrix:
 
     - os: osx
       go: 1.9.x
-      sudo: required
       script:
+        - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
         - brew update
         - brew install caskroom/cask/brew-cask
         - brew cask install osxfuse
@@ -53,15 +50,12 @@ matrix:
     # This builder only tests code linters on latest version of Go
     - os: linux
       dist: trusty
-      sudo: required
       go: 1.9.x
       env:
         - lint
+      git:
+        submodules: false # avoid cloning ethereum/tests
       script:
-        - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install fuse
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
         - go run build/ci.go lint
 
     # This builder does the Ubuntu PPA and Linux Azure uploads
@@ -72,6 +66,8 @@ matrix:
       env:
         - ubuntu-ppa
         - azure-linux
+      git:
+        submodules: false # avoid cloning ethereum/tests
       addons:
         apt:
           packages:
@@ -92,24 +88,25 @@ matrix:
         - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install gcc-arm-linux-gnueabi libc6-dev-armel-cross gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
         - sudo ln -s /usr/include/asm-generic /usr/include/asm
 
-        - GOARM=5 CC=arm-linux-gnueabi-gcc go run build/ci.go install -arch arm
+        - GOARM=5 go run build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
         - GOARM=5 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - GOARM=6 CC=arm-linux-gnueabi-gcc go run build/ci.go install -arch arm
+        - GOARM=6 go run build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
         - GOARM=6 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - GOARM=7 CC=arm-linux-gnueabihf-gcc go run build/ci.go install -arch arm
+        - GOARM=7 go run build/ci.go install -arch arm -cc arm-linux-gnueabihf-gcc
         - GOARM=7 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - CC=aarch64-linux-gnu-gcc go run build/ci.go install -arch arm64
+        - go run build/ci.go install -arch arm64 -cc aarch64-linux-gnu-gcc
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the Linux Azure MIPS xgo uploads
     - os: linux
       dist: trusty
-      sudo: required
       services:
         - docker
       go: 1.9.x
       env:
         - azure-linux-mips
+      git:
+        submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go xgo --alltools -- --targets=linux/mips --ldflags '-extldflags "-static"' -v
         - for bin in build/bin/*-linux-mips; do mv -f "${bin}" "${bin/-linux-mips/}"; done
@@ -146,6 +143,8 @@ matrix:
       env:
         - azure-android
         - maven-android
+      git:
+        submodules: false # avoid cloning ethereum/tests
       before_install:
         - curl https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
@@ -169,6 +168,8 @@ matrix:
         - azure-osx
         - azure-ios
         - cocoapods-ios
+      git:
+        submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go install
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
@@ -184,6 +185,8 @@ matrix:
         - xctool -version
         - xcrun simctl list
 
+        # Workaround for https://github.com/golang/go/issues/23749
+        - export CGO_CFLAGS_ALLOW='-fmodules|-fblocks|-fobjc-arc'
         - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
     # This builder does the Azure archive purges to avoid accumulating junk
@@ -193,14 +196,10 @@ matrix:
       go: 1.9.x
       env:
         - azure-purge
+      git:
+        submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go purge -store gethstore/builds -days 14
-
-install:
-  - go get golang.org/x/tools/cmd/cover
-script:
-  - go run build/ci.go install
-  - go run build/ci.go test -coverage
 
 notifications:
   webhooks:

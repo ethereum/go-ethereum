@@ -52,7 +52,7 @@ type KadParams struct {
 	ConnRetryExp         int
 }
 
-func NewKadParams() *KadParams {
+func NewDefaultKadParams() *KadParams {
 	return &KadParams{
 		MaxProx:              maxProx,
 		ProxBinSize:          proxBinSize,

@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -24,15 +24,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 )
-
-// unpacker is a utility interface that enables us to have
-// abstraction between events and methods and also to properly
-// "unpack" them; e.g. events use Inputs, methods use Outputs.
-type unpacker interface {
-	tupleUnpack(v interface{}, output []byte) error
-	singleUnpack(v interface{}, output []byte) error
-	isTupleReturn() bool
-}
 
 // reads the integer based on its kind
 func readInteger(kind reflect.Kind, b []byte) interface{} {
@@ -79,7 +70,7 @@ func readBool(word []byte) (bool, error) {
 // This enforces that standard by always presenting it as a 24-array (address + sig = 24 bytes)
 func readFunctionType(t Type, word []byte) (funcTy [24]byte, err error) {
 	if t.T != FunctionTy {
-		return [24]byte{}, fmt.Errorf("abi: invalid type in call to make function type byte array.")
+		return [24]byte{}, fmt.Errorf("abi: invalid type in call to make function type byte array")
 	}
 	if garbage := binary.BigEndian.Uint64(word[24:32]); garbage != 0 {
 		err = fmt.Errorf("abi: got improperly encoded function type, got %v", word)
@@ -92,7 +83,7 @@ func readFunctionType(t Type, word []byte) (funcTy [24]byte, err error) {
 // through reflection, creates a fixed array to be read from
 func readFixedBytes(t Type, word []byte) (interface{}, error) {
 	if t.T != FixedBytesTy {
-		return nil, fmt.Errorf("abi: invalid type in call to make fixed byte array.")
+		return nil, fmt.Errorf("abi: invalid type in call to make fixed byte array")
 	}
 	// convert
 	array := reflect.New(t.Type).Elem()
@@ -104,6 +95,9 @@ func readFixedBytes(t Type, word []byte) (interface{}, error) {
 
 // iteratively unpack elements
 func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) {
+	if size < 0 {
+		return nil, fmt.Errorf("cannot marshal input to array, size is negative (%d)", size)
+	}
 	if start+32*size > len(output) {
 		return nil, fmt.Errorf("abi: cannot marshal in to go array: offset %d would go over slice boundary (len=%d)", len(output), start+32*size)
 	}
@@ -190,27 +184,32 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 
 // interprets a 32 byte slice as an offset and then determines which indice to look to decode the type.
 func lengthPrefixPointsTo(index int, output []byte) (start int, length int, err error) {
-	offset := int(binary.BigEndian.Uint64(output[index+24 : index+32]))
-	if offset+32 > len(output) {
-		return 0, 0, fmt.Errorf("abi: cannot marshal in to go slice: offset %d would go over slice boundary (len=%d)", len(output), offset+32)
-	}
-	length = int(binary.BigEndian.Uint64(output[offset+24 : offset+32]))
-	if offset+32+length > len(output) {
-		return 0, 0, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), offset+32+length)
-	}
-	start = offset + 32
+	bigOffsetEnd := big.NewInt(0).SetBytes(output[index : index+32])
+	bigOffsetEnd.Add(bigOffsetEnd, common.Big32)
+	outputLength := big.NewInt(int64(len(output)))
 
-	//fmt.Printf("LENGTH PREFIX INFO: \nsize: %v\noffset: %v\nstart: %v\n", length, offset, start)
+	if bigOffsetEnd.Cmp(outputLength) > 0 {
+		return 0, 0, fmt.Errorf("abi: cannot marshal in to go slice: offset %v would go over slice boundary (len=%v)", bigOffsetEnd, outputLength)
+	}
+
+	if bigOffsetEnd.BitLen() > 63 {
+		return 0, 0, fmt.Errorf("abi offset larger than int64: %v", bigOffsetEnd)
+	}
+
+	offsetEnd := int(bigOffsetEnd.Uint64())
+	lengthBig := big.NewInt(0).SetBytes(output[offsetEnd-32 : offsetEnd])
+
+	totalSize := big.NewInt(0)
+	totalSize.Add(totalSize, bigOffsetEnd)
+	totalSize.Add(totalSize, lengthBig)
+	if totalSize.BitLen() > 63 {
+		return 0, 0, fmt.Errorf("abi length larger than int64: %v", totalSize)
+	}
+
+	if totalSize.Cmp(outputLength) > 0 {
+		return 0, 0, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %v require %v", outputLength, totalSize)
+	}
+	start = int(bigOffsetEnd.Uint64())
+	length = int(lengthBig.Uint64())
 	return
-}
-
-// checks for proper formatting of byte output
-func bytesAreProper(output []byte) error {
-	if len(output) == 0 {
-		return fmt.Errorf("abi: unmarshalling empty output")
-	} else if len(output)%32 != 0 {
-		return fmt.Errorf("abi: improperly formatted output")
-	} else {
-		return nil
-	}
 }

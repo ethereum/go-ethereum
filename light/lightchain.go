@@ -18,6 +18,7 @@ package light
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -26,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -98,7 +100,6 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	if cp, ok := trustedCheckpoints[bc.genesisBlock.Hash()]; ok {
 		bc.addTrustedCheckpoint(cp)
 	}
-
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
@@ -126,7 +127,7 @@ func (self *LightChain) addTrustedCheckpoint(cp trustedCheckpoint) {
 	if self.odr.BloomIndexer() != nil {
 		self.odr.BloomIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
 	}
-	log.Info("Added trusted checkpoint", "chain name", cp.name)
+	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.sectionIdx+1)*CHTFrequencyClient-1, "hash", cp.sectionHead)
 }
 
 func (self *LightChain) getProcInterrupt() bool {
@@ -169,30 +170,11 @@ func (bc *LightChain) SetHead(head uint64) {
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
-func (self *LightChain) GasLimit() *big.Int {
+func (self *LightChain) GasLimit() uint64 {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
 	return self.hc.CurrentHeader().GasLimit
-}
-
-// LastBlockHash return the hash of the HEAD block.
-func (self *LightChain) LastBlockHash() common.Hash {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
-	return self.hc.CurrentHeader().Hash()
-}
-
-// Status returns status information about the current chain such as the HEAD Td,
-// the HEAD hash and the hash of the genesis block.
-func (self *LightChain) Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash) {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
-	header := self.hc.CurrentHeader()
-	hash := header.Hash()
-	return self.GetTd(hash, header.Number.Uint64()), hash, self.genesisBlock.Hash()
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
@@ -229,6 +211,11 @@ func (bc *LightChain) Engine() consensus.Engine { return bc.engine }
 // Genesis returns the genesis block
 func (bc *LightChain) Genesis() *types.Block {
 	return bc.genesisBlock
+}
+
+// State returns a new mutable state based on the current HEAD block.
+func (bc *LightChain) State() (*state.StateDB, error) {
+	return nil, errors.New("not implemented, needs client/server interface split")
 }
 
 // GetBody retrieves a block body (transactions and uncles) from the database
@@ -337,7 +324,7 @@ func (self *LightChain) postChainEvents(events []interface{}) {
 	for _, event := range events {
 		switch ev := event.(type) {
 		case core.ChainEvent:
-			if self.LastBlockHash() == ev.Hash {
+			if self.CurrentHeader().Hash() == ev.Hash {
 				self.chainHeadFeed.Send(core.ChainHeadEvent{Block: ev.Block})
 			}
 			self.chainFeed.Send(ev)
@@ -393,7 +380,7 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 		return err
 	}
 	i, err := self.hc.InsertHeaderChain(chain, whFunc, start)
-	go self.postChainEvents(events)
+	self.postChainEvents(events)
 	return i, err
 }
 
@@ -457,14 +444,17 @@ func (self *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64)
 	return GetHeaderByNumber(ctx, self.odr, number)
 }
 
+// Config retrieves the header chain's chain configuration.
+func (self *LightChain) Config() *params.ChainConfig { return self.hc.Config() }
+
 func (self *LightChain) SyncCht(ctx context.Context) bool {
 	if self.odr.ChtIndexer() == nil {
 		return false
 	}
 	headNum := self.CurrentHeader().Number.Uint64()
 	chtCount, _, _ := self.odr.ChtIndexer().Sections()
-	if headNum+1 < chtCount*ChtFrequency {
-		num := chtCount*ChtFrequency - 1
+	if headNum+1 < chtCount*CHTFrequencyClient {
+		num := chtCount*CHTFrequencyClient - 1
 		header, err := GetHeaderByNumber(ctx, self.odr, num)
 		if header != nil && err == nil {
 			self.mu.Lock()

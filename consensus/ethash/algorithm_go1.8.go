@@ -20,17 +20,20 @@ package ethash
 
 import "math/big"
 
-// cacheSize calculates and returns the size of the ethash verification cache that
-// belongs to a certain block number. The cache size grows linearly, however, we
-// always take the highest prime below the linearly growing threshold in order to
-// reduce the risk of accidental regularities leading to cyclic behavior.
+// cacheSize returns the size of the ethash verification cache that belongs to a certain
+// block number.
 func cacheSize(block uint64) uint64 {
-	// If we have a pre-generated value, use that
 	epoch := int(block / epochLength)
-	if epoch < len(cacheSizes) {
+	if epoch < maxEpoch {
 		return cacheSizes[epoch]
 	}
-	// No known cache size, calculate manually (sanity branch only)
+	return calcCacheSize(epoch)
+}
+
+// calcCacheSize calculates the cache size for epoch. The cache size grows linearly,
+// however, we always take the highest prime below the linearly growing threshold in order
+// to reduce the risk of accidental regularities leading to cyclic behavior.
+func calcCacheSize(epoch int) uint64 {
 	size := cacheInitBytes + cacheGrowthBytes*uint64(epoch) - hashBytes
 	for !new(big.Int).SetUint64(size / hashBytes).ProbablyPrime(1) { // Always accurate for n < 2^64
 		size -= 2 * hashBytes
@@ -38,17 +41,20 @@ func cacheSize(block uint64) uint64 {
 	return size
 }
 
-// datasetSize calculates and returns the size of the ethash mining dataset that
-// belongs to a certain block number. The dataset size grows linearly, however, we
-// always take the highest prime below the linearly growing threshold in order to
-// reduce the risk of accidental regularities leading to cyclic behavior.
+// datasetSize returns the size of the ethash mining dataset that belongs to a certain
+// block number.
 func datasetSize(block uint64) uint64 {
-	// If we have a pre-generated value, use that
 	epoch := int(block / epochLength)
-	if epoch < len(datasetSizes) {
+	if epoch < maxEpoch {
 		return datasetSizes[epoch]
 	}
-	// No known dataset size, calculate manually (sanity branch only)
+	return calcDatasetSize(epoch)
+}
+
+// calcDatasetSize calculates the dataset size for epoch. The dataset size grows linearly,
+// however, we always take the highest prime below the linearly growing threshold in order
+// to reduce the risk of accidental regularities leading to cyclic behavior.
+func calcDatasetSize(epoch int) uint64 {
 	size := datasetInitBytes + datasetGrowthBytes*uint64(epoch) - mixBytes
 	for !new(big.Int).SetUint64(size / mixBytes).ProbablyPrime(1) { // Always accurate for n < 2^64
 		size -= 2 * mixBytes

@@ -1,3 +1,5 @@
+// @flow
+
 // Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -15,155 +17,219 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 import React, {Component} from 'react';
-import PropTypes from 'prop-types';
-import {withStyles} from 'material-ui/styles';
 
-import SideBar from './SideBar.jsx';
-import Header from './Header.jsx';
-import Main from "./Main.jsx";
-import {isNullOrUndefined, LIMIT, TAGS, DATA_KEYS,} from "./Common.jsx";
+import withStyles from 'material-ui/styles/withStyles';
 
-// Styles for the Dashboard component.
-const styles = theme => ({
-    appFrame: {
-        position:   'relative',
-        display:    'flex',
-        width:      '100%',
-        height:     '100%',
-        background: theme.palette.background.default,
-    },
-});
+import Header from './Header';
+import Body from './Body';
+import {MENU} from '../common';
+import type {Content} from '../types/content';
 
-// Dashboard is the main component, which renders the whole page, makes connection with the server and listens for messages.
-// When there is an incoming message, updates the page's content correspondingly.
-class Dashboard extends Component {
-    constructor(props) {
-        super(props);
-        this.state = {
-            active:       TAGS.home.id, // active menu
-            sideBar:      true, // true if the sidebar is opened
-            memory:       [],
-            traffic:      [],
-            logs:         [],
-            shouldUpdate: {},
-        };
-    }
+// deepUpdate updates an object corresponding to the given update data, which has
+// the shape of the same structure as the original object. updater also has the same
+// structure, except that it contains functions where the original data needs to be
+// updated. These functions are used to handle the update.
+//
+// Since the messages have the same shape as the state content, this approach allows
+// the generalization of the message handling. The only necessary thing is to set a
+// handler function for every path of the state in order to maximize the flexibility
+// of the update.
+const deepUpdate = (updater: Object, update: Object, prev: Object): $Shape<Content> => {
+	if (typeof update === 'undefined') {
+		// TODO (kurkomisi): originally this was deep copy, investigate it.
+		return prev;
+	}
+	if (typeof updater === 'function') {
+		return updater(update, prev);
+	}
+	const updated = {};
+	Object.keys(prev).forEach((key) => {
+		updated[key] = deepUpdate(updater[key], update[key], prev[key]);
+	});
 
-    // componentDidMount initiates the establishment of the first websocket connection after the component is rendered.
-    componentDidMount() {
-        this.reconnect();
-    }
-
-    // reconnect establishes a websocket connection with the server, listens for incoming messages
-    // and tries to reconnect on connection loss.
-    reconnect = () => {
-        const server = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + "/api");
-
-        server.onmessage = event => {
-            const msg = JSON.parse(event.data);
-            if (isNullOrUndefined(msg)) {
-                return;
-            }
-            this.update(msg);
-        };
-
-        server.onclose = () => {
-            setTimeout(this.reconnect, 3000);
-        };
-    };
-
-    // update analyzes the incoming message, and updates the charts' content correspondingly.
-    update = msg => {
-        console.log(msg);
-        this.setState(prevState => {
-            let newState = [];
-            newState.shouldUpdate = {};
-            const insert = (key, values, limit) => {
-                newState[key] = [...prevState[key], ...values];
-                while (newState[key].length > limit) {
-                    newState[key].shift();
-                }
-                newState.shouldUpdate[key] = true;
-            };
-            // (Re)initialize the state with the past data.
-            if (!isNullOrUndefined(msg.history)) {
-                const memory = DATA_KEYS.memory;
-                const traffic = DATA_KEYS.traffic;
-                newState[memory] = [];
-                newState[traffic] = [];
-                if (!isNullOrUndefined(msg.history.memorySamples)) {
-                    newState[memory] = msg.history.memorySamples.map(elem => isNullOrUndefined(elem.value) ? 0 : elem.value);
-                    while (newState[memory].length > LIMIT.memory) {
-                        newState[memory].shift();
-                    }
-                    newState.shouldUpdate[memory] = true;
-                }
-                if (!isNullOrUndefined(msg.history.trafficSamples)) {
-                    newState[traffic] = msg.history.trafficSamples.map(elem => isNullOrUndefined(elem.value) ? 0 : elem.value);
-                    while (newState[traffic].length > LIMIT.traffic) {
-                        newState[traffic].shift();
-                    }
-                    newState.shouldUpdate[traffic] = true;
-                }
-            }
-            // Insert the new data samples.
-            if (!isNullOrUndefined(msg.memory)) {
-                insert(DATA_KEYS.memory, [isNullOrUndefined(msg.memory.value) ? 0 : msg.memory.value], LIMIT.memory);
-            }
-            if (!isNullOrUndefined(msg.traffic)) {
-                insert(DATA_KEYS.traffic, [isNullOrUndefined(msg.traffic.value) ? 0 : msg.traffic.value], LIMIT.traffic);
-            }
-            if (!isNullOrUndefined(msg.log)) {
-                insert(DATA_KEYS.logs, [msg.log], LIMIT.log);
-            }
-
-            return newState;
-        });
-    };
-
-    // The change of the active label on the SideBar component will trigger a new render in the Main component.
-    changeContent = active => {
-        this.setState(prevState => prevState.active !== active ? {active: active} : {});
-    };
-
-    openSideBar = () => {
-        this.setState({sideBar: true});
-    };
-
-    closeSideBar = () => {
-        this.setState({sideBar: false});
-    };
-
-    render() {
-        // The classes property is injected by withStyles().
-        const {classes} = this.props;
-
-        return (
-            <div className={classes.appFrame}>
-                <Header
-                    opened={this.state.sideBar}
-                    open={this.openSideBar}
-                />
-                <SideBar
-                    opened={this.state.sideBar}
-                    close={this.closeSideBar}
-                    changeContent={this.changeContent}
-                />
-                <Main
-                    opened={this.state.sideBar}
-                    active={this.state.active}
-                    memory={this.state.memory}
-                    traffic={this.state.traffic}
-                    logs={this.state.logs}
-                    shouldUpdate={this.state.shouldUpdate}
-                />
-            </div>
-        );
-    }
-}
-
-Dashboard.propTypes = {
-    classes: PropTypes.object.isRequired,
+	return updated;
 };
 
-export default withStyles(styles)(Dashboard);
+// shouldUpdate returns the structure of a message. It is used to prevent unnecessary render
+// method triggerings. In the affected component's shouldComponentUpdate method it can be checked
+// whether the involved data was changed or not by checking the message structure.
+//
+// We could return the message itself too, but it's safer not to give access to it.
+const shouldUpdate = (updater: Object, msg: Object) => {
+	const su = {};
+	Object.keys(msg).forEach((key) => {
+		su[key] = typeof updater[key] !== 'function' ? shouldUpdate(updater[key], msg[key]) : true;
+	});
+
+	return su;
+};
+
+// replacer is a state updater function, which replaces the original data.
+const replacer = <T>(update: T) => update;
+
+// appender is a state updater function, which appends the update data to the
+// existing data. limit defines the maximum allowed size of the created array,
+// mapper maps the update data.
+const appender = <T>(limit: number, mapper = replacer) => (update: Array<T>, prev: Array<T>) => [
+	...prev,
+	...update.map(sample => mapper(sample)),
+].slice(-limit);
+
+// defaultContent is the initial value of the state content.
+const defaultContent: Content = {
+	general: {
+		version: null,
+		commit:  null,
+	},
+	home: {
+		activeMemory:   [],
+		virtualMemory:  [],
+		networkIngress: [],
+		networkEgress:  [],
+		processCPU:     [],
+		systemCPU:      [],
+		diskRead:       [],
+		diskWrite:      [],
+	},
+	chain:   {},
+	txpool:  {},
+	network: {},
+	system:  {},
+	logs:    {
+		log: [],
+	},
+};
+
+// updaters contains the state updater functions for each path of the state.
+//
+// TODO (kurkomisi): Define a tricky type which embraces the content and the updaters.
+const updaters = {
+	general: {
+		version: replacer,
+		commit:  replacer,
+	},
+	home: {
+		activeMemory:   appender(200),
+		virtualMemory:  appender(200),
+		networkIngress: appender(200),
+		networkEgress:  appender(200),
+		processCPU:     appender(200),
+		systemCPU:      appender(200),
+		diskRead:       appender(200),
+		diskWrite:      appender(200),
+	},
+	chain:   null,
+	txpool:  null,
+	network: null,
+	system:  null,
+	logs:    {
+		log: appender(200),
+	},
+};
+
+// styles contains the constant styles of the component.
+const styles = {
+	dashboard: {
+		display:  'flex',
+		flexFlow: 'column',
+		width:    '100%',
+		height:   '100%',
+		zIndex:   1,
+		overflow: 'hidden',
+	}
+};
+
+// themeStyles returns the styles generated from the theme for the component.
+const themeStyles: Object = (theme: Object) => ({
+	dashboard: {
+		background: theme.palette.background.default,
+	},
+});
+
+export type Props = {
+	classes: Object, // injected by withStyles()
+};
+
+type State = {
+	active: string, // active menu
+	sideBar: boolean, // true if the sidebar is opened
+	content: Content, // the visualized data
+	shouldUpdate: Object, // labels for the components, which need to re-render based on the incoming message
+};
+
+// Dashboard is the main component, which renders the whole page, makes connection with the server and
+// listens for messages. When there is an incoming message, updates the page's content correspondingly.
+class Dashboard extends Component<Props, State> {
+	constructor(props: Props) {
+		super(props);
+		this.state = {
+			active:       MENU.get('home').id,
+			sideBar:      true,
+			content:      defaultContent,
+			shouldUpdate: {},
+		};
+	}
+
+	// componentDidMount initiates the establishment of the first websocket connection after the component is rendered.
+	componentDidMount() {
+		this.reconnect();
+	}
+
+	// reconnect establishes a websocket connection with the server, listens for incoming messages
+	// and tries to reconnect on connection loss.
+	reconnect = () => {
+		const server = new WebSocket(`${((window.location.protocol === 'https:') ? 'wss://' : 'ws://') + window.location.host}/api`);
+		server.onopen = () => {
+			this.setState({content: defaultContent, shouldUpdate: {}});
+		};
+		server.onmessage = (event) => {
+			const msg: $Shape<Content> = JSON.parse(event.data);
+			if (!msg) {
+				console.error(`Incoming message is ${msg}`);
+				return;
+			}
+			this.update(msg);
+		};
+		server.onclose = () => {
+			setTimeout(this.reconnect, 3000);
+		};
+	};
+
+	// update updates the content corresponding to the incoming message.
+	update = (msg: $Shape<Content>) => {
+		this.setState(prevState => ({
+			content:      deepUpdate(updaters, msg, prevState.content),
+			shouldUpdate: shouldUpdate(updaters, msg),
+		}));
+	};
+
+	// changeContent sets the active label, which is used at the content rendering.
+	changeContent = (newActive: string) => {
+		this.setState(prevState => (prevState.active !== newActive ? {active: newActive} : {}));
+	};
+
+	// switchSideBar opens or closes the sidebar's state.
+	switchSideBar = () => {
+		this.setState(prevState => ({sideBar: !prevState.sideBar}));
+	};
+
+	render() {
+		return (
+			<div className={this.props.classes.dashboard} style={styles.dashboard}>
+				<Header
+					opened={this.state.sideBar}
+					switchSideBar={this.switchSideBar}
+				/>
+				<Body
+					opened={this.state.sideBar}
+					changeContent={this.changeContent}
+					active={this.state.active}
+					content={this.state.content}
+					shouldUpdate={this.state.shouldUpdate}
+				/>
+			</div>
+		);
+	}
+}
+
+export default withStyles(themeStyles)(Dashboard);
