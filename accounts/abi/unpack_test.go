@@ -440,6 +440,46 @@ func TestMultiReturnWithArray(t *testing.T) {
 	}
 }
 
+func TestMultiReturnWithDeeplyNestedArray(t *testing.T) {
+	// Similar to TestMultiReturnWithArray, but with a special case in mind:
+	//  values of nested static arrays count towards the size as well, and any element following
+	//  after such nested array argument should be read with the correct offset,
+	//  so that it does not read content from the previous array argument.
+	const definition = `[{"name" : "multi", "outputs": [{"type": "uint64[3][2][4]"}, {"type": "uint64"}]}]`
+	abi, err := JSON(strings.NewReader(definition))
+	if err != nil {
+		t.Fatal(err)
+	}
+	buff := new(bytes.Buffer)
+	// construct the test array, each 3 char element is joined with 61 '0' chars,
+	// to from the ((3 + 61) * 0.5) = 32 byte elements in the array.
+	buff.Write(common.Hex2Bytes(strings.Join([]string{
+		"", //empty, to apply the 61-char separator to the first element as well.
+		"111", "112", "113", "121", "122", "123",
+		"211", "212", "213", "221", "222", "223",
+		"311", "312", "313", "321", "322", "323",
+		"411", "412", "413", "421", "422", "423",
+	}, "0000000000000000000000000000000000000000000000000000000000000")))
+	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000009876"))
+
+	ret1, ret1Exp := new([4][2][3]uint64), [4][2][3]uint64{
+		{{0x111, 0x112, 0x113}, {0x121, 0x122, 0x123}},
+		{{0x211, 0x212, 0x213}, {0x221, 0x222, 0x223}},
+		{{0x311, 0x312, 0x313}, {0x321, 0x322, 0x323}},
+		{{0x411, 0x412, 0x413}, {0x421, 0x422, 0x423}},
+	}
+	ret2, ret2Exp := new(uint64), uint64(0x9876)
+	if err := abi.Unpack(&[]interface{}{ret1, ret2}, "multi", buff.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(*ret1, ret1Exp) {
+		t.Error("array result", *ret1, "!= Expected", ret1Exp)
+	}
+	if *ret2 != ret2Exp {
+		t.Error("int result", *ret2, "!= Expected", ret2Exp)
+	}
+}
+
 func TestUnmarshal(t *testing.T) {
 	const definition = `[
 	{ "name" : "int", "constant" : false, "outputs": [ { "type": "uint256" } ] },
