@@ -26,7 +26,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const ALL_TOPICS = ""
+const (
+	ALL_TOPICS = ""
+	MAX_POOL_CAPACITY = 1000
+)
 
 type Filter struct {
 	Src        *ecdsa.PublicKey  // Sender of the message
@@ -43,18 +46,16 @@ type Filter struct {
 
 type Filters struct {
 	watchers       map[string]*Filter
-	watchersTopics map[string]map[string]struct{}
-	topicMatcher   *topicMatcher
 	whisper        *Whisper
 	mutex          sync.RWMutex
+	topicMatcher   *topicMatcher
 }
 
 func NewFilters(w *Whisper) *Filters {
 	fs := &Filters{
 		watchers:       make(map[string]*Filter),
-		watchersTopics: make(map[string]map[string]struct{}),
-		topicMatcher:   newTopicMatcher(),
 		whisper:        w,
+		topicMatcher:   newTopicMatcher(),
 	}
 	return fs
 }
@@ -228,6 +229,9 @@ func IsPubKeyEqual(a, b *ecdsa.PublicKey) bool {
 }
 
 type topicMatcher struct {
+	//structure - map[topic]map[filterID]
+	//mapping for topics
+	//"" topic means that the filter allows all topic values
 	mapper map[string]map[string]struct{}
 	mx     sync.RWMutex
 	pool   sync.Pool
@@ -247,7 +251,7 @@ func (fs *topicMatcher) take() []string {
 	return fs.pool.Get().([]string)
 }
 func (fs *topicMatcher) resolve(s []string) {
-	if cap(s) > 1000 {
+	if cap(s) > MAX_POOL_CAPACITY {
 		return
 	}
 	fs.pool.Put(s[:0])

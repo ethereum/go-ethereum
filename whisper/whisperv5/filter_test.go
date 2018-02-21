@@ -723,6 +723,7 @@ func TestVariableTopics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed generateFilter with seed %d: %s.", seed, err)
 	}
+
 	fs := generateFilters()
 
 	filterID, err := fs.Install(f)
