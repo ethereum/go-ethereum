@@ -26,6 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+const ALL_TOPICS = ""
+
 type Filter struct {
 	Src        *ecdsa.PublicKey  // Sender of the message
 	KeyAsym    *ecdsa.PrivateKey // Private Key of recipient
@@ -40,16 +42,20 @@ type Filter struct {
 }
 
 type Filters struct {
-	watchers map[string]*Filter
-	whisper  *Whisper
-	mutex    sync.RWMutex
+	watchers       map[string]*Filter
+	watchersTopics map[string]map[string]struct{}
+	whisper        *Whisper
+	mutex          sync.RWMutex
 }
 
 func NewFilters(w *Whisper) *Filters {
-	return &Filters{
-		watchers: make(map[string]*Filter),
-		whisper:  w,
+	fs := &Filters{
+		watchers:       make(map[string]*Filter),
+		watchersTopics: make(map[string]map[string]struct{}),
+		whisper:        w,
 	}
+	fs.watchersTopics[ALL_TOPICS] = make(map[string]struct{})
+	return fs
 }
 
 func (fs *Filters) Install(watcher *Filter) (string, error) {
@@ -74,7 +80,48 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 	}
 
 	fs.watchers[id] = watcher
+	fs.addFilterToTopicsMapping(watcher, id)
 	return id, err
+}
+
+func (fs *Filters) addFilterToTopicsMapping(watcher *Filter, id string) {
+	for i := range fs.prepareTopicsMapping(watcher) {
+		topicMapping, ok := fs.watchersTopics[i]
+		if !ok {
+			fs.watchersTopics[i] = make(map[string]struct{})
+			topicMapping = fs.watchersTopics[i]
+		}
+		topicMapping[id] = struct{}{}
+	}
+}
+
+func (fs *Filters) removeTopicFromTopicMapping(id string) {
+	for i := range fs.watchersTopics {
+		delete(fs.watchersTopics[i], id)
+	}
+}
+
+func (fs *Filters) prepareTopicsMapping(watcher *Filter) map[string]struct{} {
+	topics := make(map[string]struct{}, len(watcher.Topics))
+
+	if len(watcher.Topics) == 0 {
+		topics[ALL_TOPICS] = struct{}{}
+		return topics
+	}
+
+	for _, topic := range watcher.Topics {
+		topics[common.ToHex(topic)] = struct{}{}
+	}
+
+	return topics
+}
+
+func (fs *Filters) matchedTopics(topic TopicType) map[string]struct{} {
+	m := fs.watchersTopics[ALL_TOPICS]
+	for i := range fs.watchersTopics[topic.String()] {
+		m[i] = struct{}{}
+	}
+	return m
 }
 
 func (fs *Filters) Uninstall(id string) bool {
@@ -82,6 +129,7 @@ func (fs *Filters) Uninstall(id string) bool {
 	defer fs.mutex.Unlock()
 	if fs.watchers[id] != nil {
 		delete(fs.watchers, id)
+		fs.removeTopicFromTopicMapping(id)
 		return true
 	}
 	return false
@@ -99,11 +147,15 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 
-	i := -1 // only used for logging info
-	for _, watcher := range fs.watchers {
-		i++
+	for watcherID := range fs.matchedTopics(env.Topic) {
+		watcher, ok := fs.watchers[watcherID]
+		if !ok {
+			log.Trace(fmt.Sprintf("msg [%x], filter [%s]: filter not exists", env.Hash(), watcherID))
+			continue
+		}
+
 		if p2pMessage && !watcher.AllowP2P {
-			log.Trace(fmt.Sprintf("msg [%x], filter [%d]: p2p messages are not allowed", env.Hash(), i))
+			log.Trace(fmt.Sprintf("msg [%x], filter [%s]: p2p messages are not allowed", env.Hash(), watcherID))
 			continue
 		}
 
@@ -115,10 +167,10 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 			if match {
 				msg = env.Open(watcher)
 				if msg == nil {
-					log.Trace("processing message: failed to open", "message", env.Hash().Hex(), "filter", i)
+					log.Trace("processing message: failed to open", "message", env.Hash().Hex(), "filter", watcherID)
 				}
 			} else {
-				log.Trace("processing message: does not match", "message", env.Hash().Hex(), "filter", i)
+				log.Trace("processing message: does not match", "message", env.Hash().Hex(), "filter", watcherID)
 			}
 		}
 
@@ -181,9 +233,9 @@ func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 	}
 
 	if f.expectsAsymmetricEncryption() && msg.isAsymmetricEncryption() {
-		return IsPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst) && f.MatchTopic(msg.Topic)
+		return IsPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst)
 	} else if f.expectsSymmetricEncryption() && msg.isSymmetricEncryption() {
-		return f.SymKeyHash == msg.SymKeyHash && f.MatchTopic(msg.Topic)
+		return f.SymKeyHash == msg.SymKeyHash
 	}
 	return false
 }
@@ -194,42 +246,11 @@ func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
 	}
 
 	if f.expectsAsymmetricEncryption() && envelope.isAsymmetric() {
-		return f.MatchTopic(envelope.Topic)
+		return true
 	} else if f.expectsSymmetricEncryption() && envelope.IsSymmetric() {
-		return f.MatchTopic(envelope.Topic)
-	}
-	return false
-}
-
-func (f *Filter) MatchTopic(topic TopicType) bool {
-	if len(f.Topics) == 0 {
-		// any topic matches
 		return true
 	}
-
-	for _, bt := range f.Topics {
-		if matchSingleTopic(topic, bt) {
-			return true
-		}
-	}
 	return false
-}
-
-func matchSingleTopic(topic TopicType, bt []byte) bool {
-	if len(bt) > TopicLength {
-		bt = bt[:TopicLength]
-	}
-
-	if len(bt) < TopicLength {
-		return false
-	}
-
-	for j, b := range bt {
-		if topic[j] != b {
-			return false
-		}
-	}
-	return true
 }
 
 func IsPubKeyEqual(a, b *ecdsa.PublicKey) bool {
