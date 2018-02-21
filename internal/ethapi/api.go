@@ -1144,7 +1144,7 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 			input = *args.Input
 		}
 		if len(input) == 0 {
-			return errors.New(`Contract creation without any data provided`)
+			return errors.New(`contract creation without any data provided`)
 		}
 	}
 	return nil
