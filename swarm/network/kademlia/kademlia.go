@@ -105,10 +105,7 @@ func New(addr Address, params *KadParams) *Kademlia {
 		buckets:   buckets,
 		db:        newKadDb(addr, params),
 	}
-	//if metrics are enabled, initialise the array of counters
-	if metrics.Enabled {
-		kad.initMetricsVariables()
-	}
+	kad.initMetricsVariables()
 	return kad
 }
 
