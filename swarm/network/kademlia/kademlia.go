@@ -448,7 +448,7 @@ func (self *Kademlia) initMetricsVariables() {
 	bucketAddIndexCount = make([]gometrics.Counter, self.MaxProx+1)
 	bucketRmIndexCount = make([]gometrics.Counter, self.MaxProx+1)
 	//at each index create a metrics counter
-	for i := 0; i < (self.KadParams.MaxProx); i++ {
+	for i := 0; i < (self.KadParams.MaxProx + 1); i++ {
 		bucketAddIndexCount[i] = metrics.NewCounter(fmt.Sprintf("network.kademlia.bucket.add.%d.index", i))
 		bucketRmIndexCount[i] = metrics.NewCounter(fmt.Sprintf("network.kademlia.bucket.rm.%d.index", i))
 	}
