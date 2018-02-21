@@ -2,7 +2,7 @@
 
 Before you do a feature request please check and make sure that it isn't possible
 through some other means. The JavaScript enabled console is a powerful feature
-in the right hands. Please check our [Bitchin' tricks](https://github.com/ethereum/go-ethereum/wiki/bitchin-tricks) wiki page for more info
+in the right hands. Please check our [Wiki page](https://github.com/ethereum/go-ethereum/wiki) for more info
 and help.
 
 ## Contributing

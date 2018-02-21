@@ -224,6 +224,6 @@ type proofsData [][]rlp.RawValue
 
 type txStatus struct {
 	Status core.TxStatus
-	Lookup *core.TxLookupEntry
-	Error  error
+	Lookup *core.TxLookupEntry `rlp:"nil"`
+	Error  string
 }
