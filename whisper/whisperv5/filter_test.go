@@ -489,33 +489,6 @@ func TestMatchMessageAsym(t *testing.T) {
 		t.Fatalf("failed MatchEnvelope(sufficient PoW) with seed %d.", seed)
 	}
 
-	fs := generateFilters()
-	filterID, err := fs.Install(f)
-	if err != nil {
-		t.Fatalf("failed filter install with seed %d: %s.", seed, err)
-	}
-
-	m := fs.topicMatcher.matchedTopics(env.Topic)
-	_, matchedTopic := m[filterID]
-
-	if !matchedTopic {
-		t.Fatalf("failed MatchEnvelope(topic mismatch) with seed %d.", seed)
-	}
-
-	// topic mismatch
-	if !fs.Uninstall(filterID) {
-		t.Fatal("failed to uninstall filter")
-	}
-	f.Topics[index][0]++
-	filterID, err = fs.Install(f)
-	m = fs.topicMatcher.matchedTopics(env.Topic)
-	_, matchedTopic = m[filterID]
-
-	if matchedTopic {
-		t.Fatalf("failed MatchEnvelope(topic mismatch) with seed %d.", seed)
-	}
-	f.Topics[index][0]--
-
 	// key mismatch
 	prev := *f.KeyAsym.PublicKey.X
 	zero := *big.NewInt(0)
@@ -761,10 +734,10 @@ func TestVariableTopics(t *testing.T) {
 		env.Topic = BytesToTopic(f.Topics[i])
 
 		//test match
-		m := fs.topicMatcher.matchedTopics(env.Topic)
-		_, ok := m[filterID]
+		matched := []string{}
+		fs.topicMatcher.matchedTopics(env.Topic, &matched)
 		match = f.MatchEnvelope(env)
-		if !(match && ok) {
+		if !(match && hasFilterID(matched, filterID)) {
 			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
 		}
 
@@ -773,9 +746,10 @@ func TestVariableTopics(t *testing.T) {
 
 		//false positive test
 		match = f.MatchEnvelope(env)
-		m = fs.topicMatcher.matchedTopics(env.Topic)
-		_, ok = m[filterID]
-		if match && ok {
+
+		matched = matched[:0]
+		fs.topicMatcher.matchedTopics(env.Topic, &matched)
+		if match && hasFilterID(matched, filterID) {
 			t.Fatalf("MatchEnvelope symmetric with seed %d, step %d: false positive.", seed, i)
 		}
 	}
@@ -812,8 +786,9 @@ func TestTopicsMapping(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		m := fs.topicMatcher.matchedTopics(env.Topic)
-		if _, matchTopic := m[filterID]; !matchTopic {
+		matched := []string{}
+		fs.topicMatcher.matchedTopics(env.Topic, &matched)
+		if !hasFilterID(matched, filterID) {
 			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
 		}
 
@@ -821,8 +796,9 @@ func TestTopicsMapping(t *testing.T) {
 		if !fs.Uninstall(filterID) {
 			t.Fatal("Failed to uninstall filter")
 		}
-		m = fs.topicMatcher.matchedTopics(env.Topic)
-		if _, matchTopic := m[filterID]; matchTopic {
+		matched = matched[:0]
+		fs.topicMatcher.matchedTopics(env.Topic, &matched)
+		if hasFilterID(matched, filterID) {
 			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
 		}
 
@@ -832,8 +808,9 @@ func TestTopicsMapping(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		m = fs.topicMatcher.matchedTopics(env.Topic)
-		if _, matchTopic := m[filterID]; matchTopic {
+		matched = matched[:0]
+		fs.topicMatcher.matchedTopics(env.Topic, &matched)
+		if hasFilterID(matched, filterID) {
 			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
 		}
 		if !fs.Uninstall(filterID) {
@@ -862,8 +839,9 @@ func TestTopicsMapping_MatchAllTopics_Success(t *testing.T) {
 	topic := TopicType{}
 	mrand.Read(topic[:])
 
-	m := fs.topicMatcher.matchedTopics(topic)
-	if _, matchTopic := m[filterID]; !matchTopic {
+	matched := []string{}
+	fs.topicMatcher.matchedTopics(topic, &matched)
+	if !hasFilterID(matched, filterID) {
 		t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed)
 	}
 	if _, ok := fs.topicMatcher.mapper[ALL_TOPICS][filterID]; !ok {
@@ -874,12 +852,22 @@ func TestTopicsMapping_MatchAllTopics_Success(t *testing.T) {
 	if !fs.Uninstall(filterID) {
 		t.Fatal("Failed to uninstall filter")
 	}
-	m = fs.topicMatcher.matchedTopics(topic)
-	if _, matchTopic := m[filterID]; matchTopic {
+	matched = matched[:0]
+	fs.topicMatcher.matchedTopics(topic, &matched)
+	if hasFilterID(matched, filterID) {
 		t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed)
 	}
 
 	if _, ok := fs.topicMatcher.mapper[ALL_TOPICS][filterID]; ok {
 		t.Fatal("watcher mapping incorrect")
 	}
+}
+
+func hasFilterID(matched []string, filterID string) bool {
+	for i := range matched {
+		if matched[i] == filterID {
+			return true
+		}
+	}
+	return false
 }

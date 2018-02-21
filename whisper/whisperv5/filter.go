@@ -104,11 +104,14 @@ func (fs *Filters) Get(id string) *Filter {
 
 func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 	var msg *ReceivedMessage
+	matchedTopics := fs.topicMatcher.take()
+	defer fs.topicMatcher.resolve(matchedTopics)
 
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 
-	for watcherID := range fs.topicMatcher.matchedTopics(env.Topic) {
+	fs.topicMatcher.matchedTopics(env.Topic, &matchedTopics)
+	for _, watcherID := range matchedTopics {
 		watcher, ok := fs.watchers[watcherID]
 		if !ok {
 			log.Trace(fmt.Sprintf("msg [%x], filter [%s]: filter not exists", env.Hash(), watcherID))
@@ -224,16 +227,30 @@ func IsPubKeyEqual(a, b *ecdsa.PublicKey) bool {
 	return a.X.Cmp(b.X) == 0 && a.Y.Cmp(b.Y) == 0
 }
 
+type topicMatcher struct {
+	mapper map[string]map[string]struct{}
+	mx     sync.RWMutex
+	pool   sync.Pool
+}
+
 func newTopicMatcher() *topicMatcher {
 	tm := new(topicMatcher)
 	tm.mapper = make(map[string]map[string]struct{})
 	tm.mapper[ALL_TOPICS] = make(map[string]struct{})
+	tm.pool.New = func() interface{} {
+		return []string{}
+	}
 	return tm
 }
 
-type topicMatcher struct {
-	mapper map[string]map[string]struct{}
-	mx     sync.RWMutex
+func (fs *topicMatcher) take() []string {
+	return fs.pool.Get().([]string)
+}
+func (fs *topicMatcher) resolve(s []string) {
+	if cap(s) > 1000 {
+		return
+	}
+	fs.pool.Put(s[:0])
 }
 
 func (fs *topicMatcher) addFilterToTopicsMapping(watcher *Filter, id string) {
@@ -259,8 +276,6 @@ func (fs *topicMatcher) removeTopicFromTopicMapping(id string) {
 }
 
 func (fs *topicMatcher) prepareTopicsMapping(watcher *Filter) map[string]struct{} {
-	fs.mx.RLock()
-	defer fs.mx.RUnlock()
 	topics := make(map[string]struct{}, len(watcher.Topics))
 
 	if len(watcher.Topics) == 0 {
@@ -275,18 +290,15 @@ func (fs *topicMatcher) prepareTopicsMapping(watcher *Filter) map[string]struct{
 	return topics
 }
 
-func (fs *topicMatcher) matchedTopics(topic TopicType) map[string]struct{} {
+func (fs *topicMatcher) matchedTopics(topic TopicType, matched *[]string) {
 	fs.mx.RLock()
 	defer fs.mx.RUnlock()
 
-	m := make(map[string]struct{}, len(fs.mapper[ALL_TOPICS])+len(fs.mapper[topic.String()]))
-
 	for i := range fs.mapper[ALL_TOPICS] {
-		m[i] = struct{}{}
+		*matched = append(*matched, i)
 	}
 
 	for i := range fs.mapper[topic.String()] {
-		m[i] = struct{}{}
+		*matched = append(*matched, i)
 	}
-	return m
 }
