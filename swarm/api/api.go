@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
 	"regexp"
 	"strings"
 	"sync"
@@ -38,6 +39,81 @@ var hashMatcher = regexp.MustCompile("^[0-9A-Fa-f]{64}")
 
 type Resolver interface {
 	Resolve(string) (common.Hash, error)
+}
+
+// NoResolverError is returned by MultiResolver.Resolve if no resolver
+// can be found for the address.
+type NoResolverError struct {
+	TLD string
+}
+
+func NewNoResolverError(tld string) *NoResolverError {
+	return &NoResolverError{TLD: tld}
+}
+
+func (e *NoResolverError) Error() string {
+	if e.TLD == "" {
+		return "no ENS resolver"
+	}
+	return fmt.Sprintf("no ENS endpoint configured to resolve .%s TLD names", e.TLD)
+}
+
+// MultiResolver is used to resolve URL addresses based on their TLDs.
+// Each TLD can have multiple resolvers, and the resoluton from the
+// first one in the sequence will be returned.
+type MultiResolver struct {
+	resolvers map[string][]Resolver
+}
+
+// MultiResolverOption sets options for MultiResolver and is used as
+// arguments for its constructor.
+type MultiResolverOption func(*MultiResolver)
+
+// MultiResolverOptionWithResolver adds a Resolver to a list of resolvers
+// for a specific TLD. If TLD is an empty string, the resolver will be added
+// to the list of default resolver, the ones that will be used for resolution
+// of addresses which do not have their TLD resolver specified.
+func MultiResolverOptionWithResolver(r Resolver, tld string) MultiResolverOption {
+	return func(m *MultiResolver) {
+		m.resolvers[tld] = append(m.resolvers[tld], r)
+	}
+}
+
+// NewMultiResolver creates a new instance of MultiResolver.
+func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
+	m = &MultiResolver{
+		resolvers: make(map[string][]Resolver),
+	}
+	for _, o := range opts {
+		o(m)
+	}
+	return m
+}
+
+// Resolve resolves address by choosing a Resolver by TLD.
+// If there are more default Resolvers, or for a specific TLD,
+// the Hash from the the first one which does not return error
+// will be returned.
+func (m MultiResolver) Resolve(addr string) (h common.Hash, err error) {
+	rs := m.resolvers[""]
+	tld := path.Ext(addr)
+	if tld != "" {
+		tld = tld[1:]
+		rstld, ok := m.resolvers[tld]
+		if ok {
+			rs = rstld
+		}
+	}
+	if rs == nil {
+		return h, NewNoResolverError(tld)
+	}
+	for _, r := range rs {
+		h, err = r.Resolve(addr)
+		if err == nil {
+			return
+		}
+	}
+	return
 }
 
 /*

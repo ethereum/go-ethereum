@@ -21,7 +21,11 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"math/big"
 	"net"
+	"strings"
+	"time"
+	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -33,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
@@ -76,7 +81,7 @@ func (self *Swarm) API() *SwarmAPI {
 
 // creates a new swarm service instance
 // implements node.Service
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *ethclient.Client, config *api.Config, swapEnabled, syncEnabled bool, cors string) (self *Swarm, err error) {
+func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config) (self *Swarm, err error) {
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
 	}
@@ -86,10 +91,10 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 
 	self = &Swarm{
 		config:      config,
-		swapEnabled: swapEnabled,
+		swapEnabled: config.SwapEnabled,
 		backend:     backend,
 		privateKey:  config.Swap.PrivateKey(),
-		corsString:  cors,
+		corsString:  config.Cors,
 	}
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
@@ -109,8 +114,8 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	self.hive = network.NewHive(
 		common.HexToHash(self.config.BzzKey), // key to hive (kademlia base address)
 		config.HiveParams,                    // configuration parameters
-		swapEnabled,                          // SWAP enabled
-		syncEnabled,                          // syncronisation enabled
+		config.SwapEnabled,                   // SWAP enabled
+		config.SyncEnabled,                   // syncronisation enabled
 	)
 	log.Debug(fmt.Sprintf("Set up swarm network with Kademlia hive"))
 
@@ -133,18 +138,18 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)
 	log.Debug(fmt.Sprintf("-> Content Store API"))
 
-	// set up high level api
-	transactOpts := bind.NewKeyedTransactor(self.privateKey)
-
-	if ensClient == nil {
-		log.Warn("No ENS, please specify non-empty --ens-api to use domain name resolution")
-	} else {
-		self.dns, err = ens.NewENS(transactOpts, config.EnsRoot, ensClient)
-		if err != nil {
-			return nil, err
+	if len(config.EnsAPIs) > 0 {
+		opts := []api.MultiResolverOption{}
+		for _, c := range config.EnsAPIs {
+			tld, endpoint, addr := parseEnsAPIAddress(c)
+			r, err := newEnsClient(endpoint, addr, config)
+			if err != nil {
+				return nil, err
+			}
+			opts = append(opts, api.MultiResolverOptionWithResolver(r, tld))
 		}
+		self.dns = api.NewMultiResolver(opts...)
 	}
-	log.Debug(fmt.Sprintf("-> Swarm Domain Name Registrar @ address %v", config.EnsRoot.Hex()))
 
 	self.api = api.NewApi(self.dpa, self.dns)
 	// Manifests for Smart Hosting
@@ -154,6 +159,95 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	log.Debug("-> Initializing Fuse file system")
 
 	return self, nil
+}
+
+// parseEnsAPIAddress parses string according to format
+// [tld:][contract-addr@]url and returns ENSClientConfig structure
+// with endpoint, contract address and TLD.
+func parseEnsAPIAddress(s string) (tld, endpoint string, addr common.Address) {
+	isAllLetterString := func(s string) bool {
+		for _, r := range s {
+			if !unicode.IsLetter(r) {
+				return false
+			}
+		}
+		return true
+	}
+	endpoint = s
+	if i := strings.Index(endpoint, ":"); i > 0 {
+		if isAllLetterString(endpoint[:i]) && len(endpoint) > i+2 && endpoint[i+1:i+3] != "//" {
+			tld = endpoint[:i]
+			endpoint = endpoint[i+1:]
+		}
+	}
+	if i := strings.Index(endpoint, "@"); i > 0 {
+		addr = common.HexToAddress(endpoint[:i])
+		endpoint = endpoint[i+1:]
+	}
+	return
+}
+
+// newEnsClient creates a new ENS client for that is a consumer of
+// a ENS API on a specific endpoint. It is used as a helper function
+// for creating multiple resolvers in NewSwarm function.
+func newEnsClient(endpoint string, addr common.Address, config *api.Config) (*ens.ENS, error) {
+	log.Info("connecting to ENS API", "url", endpoint)
+	client, err := rpc.Dial(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("error connecting to ENS API %s: %s", endpoint, err)
+	}
+	ensClient := ethclient.NewClient(client)
+
+	ensRoot := config.EnsRoot
+	if addr != (common.Address{}) {
+		ensRoot = addr
+	} else {
+		a, err := detectEnsAddr(client)
+		if err == nil {
+			ensRoot = a
+		} else {
+			log.Warn(fmt.Sprintf("could not determine ENS contract address, using default %s", ensRoot), "err", err)
+		}
+	}
+	transactOpts := bind.NewKeyedTransactor(config.Swap.PrivateKey())
+	dns, err := ens.NewENS(transactOpts, ensRoot, ensClient)
+	if err != nil {
+		return nil, err
+	}
+	log.Debug(fmt.Sprintf("-> Swarm Domain Name Registrar %v @ address %v", endpoint, ensRoot.Hex()))
+	return dns, err
+}
+
+// detectEnsAddr determines the ENS contract address by getting both the
+// version and genesis hash using the client and matching them to either
+// mainnet or testnet addresses
+func detectEnsAddr(client *rpc.Client) (common.Address, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var version string
+	if err := client.CallContext(ctx, &version, "net_version"); err != nil {
+		return common.Address{}, err
+	}
+
+	block, err := ethclient.NewClient(client).BlockByNumber(ctx, big.NewInt(0))
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	switch {
+
+	case version == "1" && block.Hash() == params.MainnetGenesisHash:
+		log.Info("using Mainnet ENS contract address", "addr", ens.MainNetAddress)
+		return ens.MainNetAddress, nil
+
+	case version == "3" && block.Hash() == params.TestnetGenesisHash:
+		log.Info("using Testnet ENS contract address", "addr", ens.TestNetAddress)
+		return ens.TestNetAddress, nil
+
+	default:
+		return common.Address{}, fmt.Errorf("unknown version and genesis hash: %s %s", version, block.Hash())
+	}
 }
 
 /*
