@@ -105,24 +105,6 @@
 			"revisionTime": "2018-01-22T22:25:45Z"
 		},
 		{
-			"checksumSHA1": "euH8WdPZ2UYezUo63Crjr4jV8cg=",
-			"path": "github.com/ethersphere/go-metrics",
-			"revision": "d68fcccfa6ce12c95ade707b49df66eb547b00c4",
-			"revisionTime": "2018-01-23T14:04:19Z"
-		},
-		{
-			"checksumSHA1": "hFrrqG1jsym1R/c6evBUKbfFM30=",
-			"path": "github.com/ethersphere/go-metrics-influxdb",
-			"revision": "32cb23a5aafaba2bb6c8f089d85818e602d1f554",
-			"revisionTime": "2018-01-23T10:12:09Z"
-		},
-		{
-			"checksumSHA1": "fS9rgvbZFRui1UiI2hg0A8vDJGc=",
-			"path": "github.com/ethersphere/go-metrics/exp",
-			"revision": "d68fcccfa6ce12c95ade707b49df66eb547b00c4",
-			"revisionTime": "2018-01-23T14:04:19Z"
-		},
-		{
 			"checksumSHA1": "7oFpbmDfGobwKsFLIf6wMUvVoKw=",
 			"path": "github.com/fatih/color",
 			"revision": "5ec5d9d3c2cf82e9688b34e9bc27a94d616a7193",
@@ -241,6 +223,12 @@
 			"path": "github.com/influxdata/influxdb/models",
 			"revision": "b36b9f109f2da91c8941679caf5356e08eee0b2b",
 			"revisionTime": "2018-01-17T01:42:09Z"
+		},
+		{
+			"checksumSHA1": "Z0Bb5PWa5WL/j5Dm2KJCLGn1l7U=",
+			"path": "github.com/influxdata/influxdb/pkg/escape",
+			"revision": "01288bdb0883a01cac999326bd34421b29acaec8",
+			"revisionTime": "2018-02-21T22:33:40Z"
 		},
 		{
 			"checksumSHA1": "vTGKMIfiMwz43y5bsgx9PrL+AVw=",
