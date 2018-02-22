@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
-	"sync"
 	"sync/atomic"
 	"time"
 
