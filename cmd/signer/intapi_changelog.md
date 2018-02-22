@@ -1,5 +1,46 @@
 ### Changelog for internal API (ui-api)
 
+### 2.0.0
+
+* Modify how `call_info` on a transaction is conveyed. New format:
+
+```
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "ApproveTx",
+  "params": [
+    {
+      "transaction": {
+        "from": "0x82A2A876D39022B3019932D30Cd9c97ad5616813",
+        "to": "0x07a565b7ed7d7a678680a4c162885bedbb695fe0",
+        "gas": "0x333",
+        "gasPrice": "0x123",
+        "value": "0x10",
+        "nonce": "0x0",
+        "data": "0x4401a6e40000000000000000000000000000000000000000000000000000000000000012",
+        "input": null
+      },
+      "call_info": [
+        {
+          "type": "WARNING",
+          "message": "Invalid checksum on to-address"
+        },
+        {
+          "type": "WARNING",
+          "message": "Tx contains data, but provided ABI signature could not be matched: Did not match: test (0 matches)"
+        }
+      ],
+      "meta": {
+        "remote": "127.0.0.1:54286",
+        "local": "localhost:8550",
+        "scheme": "HTTP/1.1"
+      }
+    }
+  ]
+}
+```
+
 #### 1.2.0
 
 * Add `OnStartup` method, to provide the UI with information about what API version

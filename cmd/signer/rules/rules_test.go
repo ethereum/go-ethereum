@@ -422,7 +422,7 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 	to, _ := mixAddr("000000000000000000000000000000000000dead")
 	from, _ := mixAddr("000000000000000000000000000000000000dead")
 	n := hexutil.Uint64(3)
-	gas := hexutil.Big(*big.NewInt(21000))
+	gas := hexutil.Uint64(21000)
 	gasPrice := hexutil.Big(*big.NewInt(2000000))
 
 	return &core.SignTxRequest{
@@ -431,13 +431,11 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 			To:       to,
 			Value:    value,
 			Nonce:    n,
-			GasPrice: gas,
-			Gas:      gasPrice,
+			GasPrice: gasPrice,
+			Gas:      gas,
 		},
-		Callinfo: &core.ValidationMessages{
-			[]core.ValidationInfo{
-				{"Warning", "All your base are bellong to us"},
-			},
+		Callinfo: []core.ValidationInfo{
+			{"Warning", "All your base are bellong to us"},
 		},
 		Meta: core.Metadata{"remoteip", "localip", "inproc"},
 	}
@@ -450,7 +448,7 @@ func dummyTxWithV(value uint64) *core.SignTxRequest {
 }
 func dummySigned(value *big.Int) *types.Transaction {
 	to := common.HexToAddress("000000000000000000000000000000000000dead")
-	gas := big.NewInt(21000)
+	gas := uint64(21000)
 	gasPrice := big.NewInt(2000000)
 	data := make([]byte, 0)
 	return types.NewTransaction(3, to, value, gas, gasPrice, data)

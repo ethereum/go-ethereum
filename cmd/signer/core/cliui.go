@@ -119,7 +119,7 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	}
 	if request.Callinfo != nil {
 		fmt.Printf("\nTransaction validation:\n")
-		for _, m := range request.Callinfo.Messages {
+		for _, m := range request.Callinfo {
 			fmt.Printf("  * %s : %s", m.Typ, m.Message)
 		}
 		fmt.Println()

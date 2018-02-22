@@ -241,7 +241,7 @@ func TestSignData(t *testing.T) {
 }
 func mkTestTx(from common.MixedcaseAddress) SendTxArgs {
 	to := common.NewMixedcaseAddress(common.HexToAddress("0x1337"))
-	gas := (hexutil.Big)(*big.NewInt(21000))
+	gas := hexutil.Uint64(21000)
 	gasPrice := (hexutil.Big)(*big.NewInt(2000000000))
 	value := (hexutil.Big)(*big.NewInt(1e18))
 	nonce := (hexutil.Uint64)(0)

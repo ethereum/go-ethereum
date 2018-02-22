@@ -125,9 +125,9 @@ func (m Metadata) String() string {
 type (
 	// SignTxRequest contains info about a Transaction to sign
 	SignTxRequest struct {
-		Transaction SendTxArgs          `json:"transaction"`
-		Callinfo    *ValidationMessages `json:"call_info"`
-		Meta        Metadata            `json:"meta"`
+		Transaction SendTxArgs       `json:"transaction"`
+		Callinfo    []ValidationInfo `json:"call_info"`
+		Meta        Metadata         `json:"meta"`
 	}
 	// SignTxResponse result from SignTxRequest
 	SignTxResponse struct {
@@ -287,7 +287,7 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 		log.Info("Recipient-account changed by UI", "was", t0, "is", t1)
 		modified = true
 	}
-	if g0, g1 := big.Int(original.Transaction.Gas), big.Int(new.Transaction.Gas); g0.Cmp(&g1) != 0 {
+	if g0, g1 := original.Transaction.Gas, new.Transaction.Gas; g0 != g1 {
 		modified = true
 		log.Info("Gas changed by UI", "was", g0, "is", g1)
 	}
@@ -334,7 +334,7 @@ func (api *SignerAPI) SignTransaction(ctx context.Context, args SendTxArgs, meth
 	req := SignTxRequest{
 		Transaction: args,
 		Meta:        MetadataFromContext(ctx),
-		Callinfo:    msgs,
+		Callinfo:    msgs.Messages,
 	}
 	// Process approval
 	result, err = api.UI.ApproveTx(&req)

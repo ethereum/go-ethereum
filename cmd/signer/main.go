@@ -51,7 +51,7 @@ import (
 const EXT_API_VERSION = "2.0.0"
 
 // INT_API_VERSION -- see intapi_changelog.md
-const INT_API_VERSION = "1.2.0"
+const INT_API_VERSION = "2.0.0"
 
 const legal_warning = `
 WARNING! 
@@ -179,6 +179,7 @@ func init() {
 		utils.LightKDFFlag,
 		utils.NoUSBFlag,
 		utils.RPCListenAddrFlag,
+		utils.RPCVirtualHostsFlag,
 		rpcPortFlag,
 		signerSecretFlag,
 		dBFlag,
@@ -291,14 +292,18 @@ func addCredential(ctx *cli.Context) error {
 }
 
 func initialize(c *cli.Context) error {
-	if !confirm(legal_warning) {
-		return fmt.Errorf("aborted by user")
-	}
 	// Set up the logger to print everything
 	logOutput := os.Stdout
 	if c.Bool(stdiouiFlag.Name) {
 		logOutput = os.Stderr
+		// If using the stdioui, we can't do the 'confirm'-flow
+		fmt.Fprintf(logOutput, legal_warning)
+	} else {
+		if !confirm(legal_warning) {
+			return fmt.Errorf("aborted by user")
+		}
 	}
+
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int(logLevelFlag.Name)), log.StreamHandler(logOutput, log.TerminalFormat(true))))
 	return nil
 }
@@ -416,10 +421,20 @@ func signer(c *cli.Context) error {
 			"extapi_ipc":     nil,
 		},
 	})
-
-	rpc.NewHTTPServer(cors, server).Serve(listener)
+	vhosts := splitAndTrim(c.GlobalString(utils.RPCVirtualHostsFlag.Name))
+	rpc.NewHTTPServer(cors, vhosts, server).Serve(listener)
 
 	return nil
+}
+
+// splitAndTrim splits input separated by a comma
+// and trims excessive white space from the substrings.
+func splitAndTrim(input string) []string {
+	result := strings.Split(input, ",")
+	for i, r := range result {
+		result[i] = strings.TrimSpace(r)
+	}
+	return result
 }
 
 // DefaultConfigDir is the default config directory to use for the vaults and other
@@ -570,10 +585,10 @@ curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","me
 // 4401a6e40000000000000000000000000000000000000000000000000000000000000012
 
 // supplied abi
-curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":["0x82A2A876D39022B3019932D30Cd9c97ad5616813",{"gas":"0x333","gasPrice":"0x123","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x10", "data":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"},"test"],"id":67}' http://localhost:8550/
+curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":[{"from":"0x82A2A876D39022B3019932D30Cd9c97ad5616813","gas":"0x333","gasPrice":"0x123","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x10", "data":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"},"test"],"id":67}' http://localhost:8550/
 
 // Not supplied
-curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":["0x82A2A876D39022B3019932D30Cd9c97ad5616813",{"gas":"0x333","gasPrice":"0x123","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x10", "data":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"}],"id":67}' http://localhost:8550/
+curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"account_signTransaction","params":[{"from":"0x82A2A876D39022B3019932D30Cd9c97ad5616813","gas":"0x333","gasPrice":"0x123","nonce":"0x0","to":"0x07a565b7ed7d7a678680a4c162885bedbb695fe0", "value":"0x10", "data":"0x4401a6e40000000000000000000000000000000000000000000000000000000000000012"}],"id":67}' http://localhost:8550/
 
 // Sign data
 
