@@ -139,12 +139,12 @@ func (path DerivationPath) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf("\"%s\"", path.String())), nil
 }
 
-func (dp *DerivationPath) UnmarshalJSON(b []byte) error {
-	var path string
+func (path *DerivationPath) UnmarshalJSON(b []byte) error {
+	var dp string
 	var err error
-	if err = json.Unmarshal(b, &path); err != nil {
+	if err = json.Unmarshal(b, &dp); err != nil {
 		return err
 	}
-	*dp, err = ParseDerivationPath(path)
+	*path, err = ParseDerivationPath(dp)
 	return err
 }

@@ -42,7 +42,7 @@ import (
 )
 
 var (
-	APPLET_AID              = []byte{0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x57, 0x61, 0x6C, 0x6C, 0x65, 0x74, 0x41, 0x70, 0x70}
+	appletAID               = []byte{0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x57, 0x61, 0x6C, 0x6C, 0x65, 0x74, 0x41, 0x70, 0x70}
 	AlreadyOpenError        = errors.New("Wallet already open")
 	PairingRequiredError    = errors.New("Pairing required with personal.openWallet(puk)")
 	PinRequiredError        = errors.New("Must unlock with personal.openWallet(pin)")
@@ -52,23 +52,23 @@ var (
 )
 
 const (
-	CLA_SCWALLET             = 0x80
-	INS_VERIFY_PIN           = 0x20
-	INS_EXPORT_KEY           = 0xC2
-	INS_SIGN                 = 0xC0
-	INS_LOAD_KEY             = 0xD0
-	INS_DERIVE_KEY           = 0xD1
-	INS_STATUS               = 0xF2
-	DERIVE_P1_ASSISTED       = uint8(0x01)
-	DERIVE_P1_APPEND         = uint8(0x80)
-	DERIVE_P2_KEY_PATH       = uint8(0x00)
-	DERIVE_P2_PUBLIC_KEY     = uint8(0x01)
-	STATUS_P1_WALLET_STATUS  = uint8(0x00)
-	STATUS_P1_PATH           = uint8(0x01)
-	SIGN_P1_PRECOMPUTED_HASH = uint8(0x01)
-	SIGN_P2_ONLY_BLOCK       = uint8(0x81)
-	EXPORT_P1_ANY            = uint8(0x00)
-	EXPORT_P2_PUBKEY         = uint8(0x01)
+	claSCWallet           = 0x80
+	insVerifyPin          = 0x20
+	insExportKey          = 0xC2
+	insSign               = 0xC0
+	insLoadKey            = 0xD0
+	insDeriveKey          = 0xD1
+	insStatus             = 0xF2
+	deriveP1Assisted      = uint8(0x01)
+	deriveP1Append        = uint8(0x80)
+	deriveP2KeyPath       = uint8(0x00)
+	deriveP2PublicKey     = uint8(0x01)
+	statusP1WalletStatus  = uint8(0x00)
+	statusP1Path          = uint8(0x01)
+	signP1PrecomputedHash = uint8(0x01)
+	signP2OnlyBlock       = uint8(0x81)
+	exportP1Any           = uint8(0x00)
+	exportP2Pubkey        = uint8(0x01)
 
 	// Minimum time to wait between self derivation attempts, even it the user is
 	// requesting accounts like crazy.
@@ -120,10 +120,10 @@ func transmit(card *scard.Card, command *CommandAPDU) (*ResponseAPDU, error) {
 	}
 
 	// Are we being asked to fetch the response separately?
-	if response.Sw1 == SW1_GET_RESPONSE && (command.Cla != CLA_ISO7816 || command.Ins != INS_GET_RESPONSE) {
+	if response.Sw1 == sw1GetResponse && (command.Cla != claISO7816 || command.Ins != insGetResponse) {
 		return transmit(card, &CommandAPDU{
-			Cla:  CLA_ISO7816,
-			Ins:  INS_GET_RESPONSE,
+			Cla:  claISO7816,
+			Ins:  insGetResponse,
 			P1:   0,
 			P2:   0,
 			Data: nil,
@@ -131,7 +131,7 @@ func transmit(card *scard.Card, command *CommandAPDU) (*ResponseAPDU, error) {
 		})
 	}
 
-	if response.Sw1 != SW1_OK {
+	if response.Sw1 != sw1Ok {
 		return nil, fmt.Errorf("Unexpected insecure response status Cla=0x%x, Ins=0x%x, Sw=0x%x%x", command.Cla, command.Ins, response.Sw1, response.Sw2)
 	}
 
@@ -173,11 +173,11 @@ func (w *Wallet) connect() error {
 // doselect is an internal (unlocked) function to send a SELECT APDU to the card.
 func (w *Wallet) doselect() (*applicationInfo, error) {
 	response, err := transmit(w.card, &CommandAPDU{
-		Cla:  CLA_ISO7816,
-		Ins:  INS_SELECT,
+		Cla:  claISO7816,
+		Ins:  insSelect,
 		P1:   4,
 		P2:   0,
-		Data: APPLET_AID,
+		Data: appletAID,
 	})
 	if err != nil {
 		return nil, err
@@ -685,7 +685,7 @@ func (w *Wallet) findAccountPath(account accounts.Account) (accounts.DerivationP
 	return accounts.ParseDerivationPath(parts[1])
 }
 
-// Session represents a secured communication session with the wallet
+// Session represents a secured communication session with the wallet.
 type Session struct {
 	Wallet   *Wallet               // A handle to the wallet that opened the session
 	Channel  *SecureChannelSession // A secure channel for encrypted messages
@@ -693,13 +693,13 @@ type Session struct {
 }
 
 // pair establishes a new pairing over this channel, using the provided secret.
-func (s *Session) pair(secret []byte) (SmartcardPairing, error) {
+func (s *Session) pair(secret []byte) (smartcardPairing, error) {
 	err := s.Channel.Pair(secret)
 	if err != nil {
-		return SmartcardPairing{}, err
+		return smartcardPairing{}, err
 	}
 
-	return SmartcardPairing{
+	return smartcardPairing{
 		PublicKey:    s.Wallet.PublicKey,
 		PairingIndex: s.Channel.PairingIndex,
 		PairingKey:   s.Channel.PairingKey,
@@ -707,7 +707,7 @@ func (s *Session) pair(secret []byte) (SmartcardPairing, error) {
 	}, nil
 }
 
-// unpair deletes an existing pairing
+// unpair deletes an existing pairing.
 func (s *Session) unpair() error {
 	if !s.verified {
 		return fmt.Errorf("Unpair requires that the PIN be verified")
@@ -715,27 +715,27 @@ func (s *Session) unpair() error {
 	return s.Channel.Unpair()
 }
 
-// verifyPin unlocks a wallet with the provided pin
+// verifyPin unlocks a wallet with the provided pin.
 func (s *Session) verifyPin(pin []byte) error {
-	if _, err := s.Channel.TransmitEncrypted(CLA_SCWALLET, INS_VERIFY_PIN, 0, 0, pin); err != nil {
+	if _, err := s.Channel.TransmitEncrypted(claSCWallet, insVerifyPin, 0, 0, pin); err != nil {
 		return err
 	}
 	s.verified = true
 	return nil
 }
 
-// release releases resources associated with the channel
+// release releases resources associated with the channel.
 func (s *Session) release() error {
 	return s.Wallet.card.Disconnect(scard.LeaveCard)
 }
 
-// paired returns true if a valid pairing exists
+// paired returns true if a valid pairing exists.
 func (s *Session) paired() bool {
 	return s.Channel.PairingKey != nil
 }
 
-// authenticate uses an existing pairing to establish a secure channel
-func (s *Session) authenticate(pairing SmartcardPairing) error {
+// authenticate uses an existing pairing to establish a secure channel.
+func (s *Session) authenticate(pairing smartcardPairing) error {
 	if !bytes.Equal(s.Wallet.PublicKey, pairing.PublicKey) {
 		return fmt.Errorf("Cannot pair using another wallet's pairing; %x != %x", s.Wallet.PublicKey, pairing.PublicKey)
 	}
@@ -744,7 +744,7 @@ func (s *Session) authenticate(pairing SmartcardPairing) error {
 	return s.Channel.Open()
 }
 
-// walletStatus describes a smartcard wallet's status information
+// walletStatus describes a smartcard wallet's status information.
 type walletStatus struct {
 	PinRetryCount        int  // Number of remaining PIN retries
 	PukRetryCount        int  // Number of remaining PUK retries
@@ -756,9 +756,9 @@ func (w walletStatus) String() string {
 	return fmt.Sprintf("pinRetryCount=%d, pukRetryCount=%d, initialized=%t, supportsPkDerivation=%t", w.PinRetryCount, w.PukRetryCount, w.Initialized, w.SupportsPKDerivation)
 }
 
-// getWalletStatus fetches the wallet's status from the card
+// getWalletStatus fetches the wallet's status from the card.
 func (s *Session) getWalletStatus() (*walletStatus, error) {
-	response, err := s.Channel.TransmitEncrypted(CLA_SCWALLET, INS_STATUS, STATUS_P1_WALLET_STATUS, 0, nil)
+	response, err := s.Channel.TransmitEncrypted(claSCWallet, insStatus, statusP1WalletStatus, 0, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -771,9 +771,9 @@ func (s *Session) getWalletStatus() (*walletStatus, error) {
 	return status, nil
 }
 
-// getDerivationPath fetches the wallet's current derivation path from the card
+// getDerivationPath fetches the wallet's current derivation path from the card.
 func (s *Session) getDerivationPath() (accounts.DerivationPath, error) {
-	response, err := s.Channel.TransmitEncrypted(CLA_SCWALLET, INS_STATUS, STATUS_P1_PATH, 0, nil)
+	response, err := s.Channel.TransmitEncrypted(claSCWallet, insStatus, statusP1Path, 0, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -783,14 +783,14 @@ func (s *Session) getDerivationPath() (accounts.DerivationPath, error) {
 	return path, binary.Read(buf, binary.BigEndian, &path)
 }
 
-// initializeData contains data needed to initialize the smartcard wallet
+// initializeData contains data needed to initialize the smartcard wallet.
 type initializeData struct {
 	PublicKey  []byte `asn1:"tag:0"`
 	PrivateKey []byte `asn1:"tag:1"`
 	ChainCode  []byte `asn1:"tag:2"`
 }
 
-// initialize initializes the card with new key data
+// initialize initializes the card with new key data.
 func (s *Session) initialize(seed []byte) error {
 	// HMAC the seed to produce the private key and chain code
 	mac := hmac.New(sha512.New, []byte("Bitcoin seed"))
@@ -814,11 +814,11 @@ func (s *Session) initialize(seed []byte) error {
 	// Nasty hack to force the top-level struct tag to be context-specific
 	data[0] = 0xA1
 
-	_, err = s.Channel.TransmitEncrypted(CLA_SCWALLET, INS_LOAD_KEY, 0x02, 0, data)
+	_, err = s.Channel.TransmitEncrypted(claSCWallet, insLoadKey, 0x02, 0, data)
 	return err
 }
 
-// derive derives a new HD key path on the card
+// derive derives a new HD key path on the card.
 func (s *Session) derive(path accounts.DerivationPath) (accounts.Account, error) {
 	// If the current path is a prefix of the desired path, we don't have to
 	// start again.
@@ -858,7 +858,7 @@ func (s *Session) derive(path accounts.DerivationPath) (accounts.Account, error)
 	return s.Wallet.makeAccount(crypto.PubkeyToAddress(*crypto.ToECDSAPub(pubkey)), path), nil
 }
 
-// keyDerivationInfo contains information on the current key derivation step
+// keyDerivationInfo contains information on the current key derivation step.
 type keyDerivationInfo struct {
 	PublicKeyX []byte `asn1:"tag:3"` // The X coordinate of the current public key
 	Signature  struct {
@@ -871,16 +871,16 @@ type keyDerivationInfo struct {
 // a specific path, and performing the necessary computations to finish the public key
 // generation step.
 func (s *Session) deriveKeyAssisted(reset bool, pathComponent uint32) ([]byte, error) {
-	p1 := DERIVE_P1_ASSISTED
+	p1 := deriveP1Assisted
 	if !reset {
-		p1 |= DERIVE_P1_APPEND
+		p1 |= deriveP1Append
 	}
 
 	buf := new(bytes.Buffer)
 	if err := binary.Write(buf, binary.BigEndian, pathComponent); err != nil {
 		return nil, err
 	}
-	response, err := s.Channel.TransmitEncrypted(CLA_SCWALLET, INS_DERIVE_KEY, p1, DERIVE_P2_KEY_PATH, buf.Bytes())
+	response, err := s.Channel.TransmitEncrypted(claSCWallet, insDeriveKey, p1, deriveP2KeyPath, buf.Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -900,7 +900,7 @@ func (s *Session) deriveKeyAssisted(reset bool, pathComponent uint32) ([]byte, e
 		return nil, err
 	}
 
-	_, err = s.Channel.TransmitEncrypted(CLA_SCWALLET, INS_DERIVE_KEY, DERIVE_P1_ASSISTED|DERIVE_P1_APPEND, DERIVE_P2_PUBLIC_KEY, pubkey)
+	_, err = s.Channel.TransmitEncrypted(claSCWallet, insDeriveKey, deriveP1Assisted|deriveP1Append, deriveP2PublicKey, pubkey)
 	if err != nil {
 		return nil, err
 	}
@@ -908,15 +908,15 @@ func (s *Session) deriveKeyAssisted(reset bool, pathComponent uint32) ([]byte, e
 	return pubkey, nil
 }
 
-// keyExport contains information on an exported keypair
+// keyExport contains information on an exported keypair.
 type keyExport struct {
 	PublicKey  []byte `asn1:"tag:0"`
 	PrivateKey []byte `asn1:"tag:1,optional"`
 }
 
-// getPublicKey returns the public key for the current derivation path
+// getPublicKey returns the public key for the current derivation path.
 func (s *Session) getPublicKey() ([]byte, error) {
-	response, err := s.Channel.TransmitEncrypted(CLA_SCWALLET, INS_EXPORT_KEY, EXPORT_P1_ANY, EXPORT_P2_PUBKEY, nil)
+	response, err := s.Channel.TransmitEncrypted(claSCWallet, insExportKey, exportP1Any, exportP2Pubkey, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -930,7 +930,7 @@ func (s *Session) getPublicKey() ([]byte, error) {
 }
 
 // signatureData contains information on a signature - the signature itself and
-// the corresponding public key
+// the corresponding public key.
 type signatureData struct {
 	PublicKey []byte `asn1:"tag:0"`
 	Signature struct {
@@ -949,7 +949,7 @@ func (s *Session) sign(path accounts.DerivationPath, hash []byte) ([]byte, error
 	}
 	deriveTime := time.Now()
 
-	response, err := s.Channel.TransmitEncrypted(CLA_SCWALLET, INS_SIGN, SIGN_P1_PRECOMPUTED_HASH, SIGN_P2_ONLY_BLOCK, hash)
+	response, err := s.Channel.TransmitEncrypted(claSCWallet, insSign, signP1PrecomputedHash, signP2OnlyBlock, hash)
 	if err != nil {
 		return nil, err
 	}

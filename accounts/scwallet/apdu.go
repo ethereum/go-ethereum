@@ -22,20 +22,20 @@ import (
 )
 
 const (
-	CLA_ISO7816 = 0
+	claISO7816 = 0
 
-	INS_SELECT                = 0xA4
-	INS_GET_RESPONSE          = 0xC0
-	INS_PAIR                  = 0x12
-	INS_UNPAIR                = 0x13
-	INS_OPEN_SECURE_CHANNEL   = 0x10
-	INS_MUTUALLY_AUTHENTICATE = 0x11
+	insSelect               = 0xA4
+	insGetResponse          = 0xC0
+	insPair                 = 0x12
+	insUnpair               = 0x13
+	insOpenSecureChannel    = 0x10
+	insMutuallyAuthenticate = 0x11
 
-	SW1_GET_RESPONSE = 0x61
-	SW1_OK           = 0x90
+	sw1GetResponse = 0x61
+	sw1Ok          = 0x90
 )
 
-// CommandAPDU represents an application data unit sent to a smartcard
+// CommandAPDU represents an application data unit sent to a smartcard.
 type CommandAPDU struct {
 	Cla, Ins, P1, P2 uint8  // Class, Instruction, Parameter 1, Parameter 2
 	Data             []byte // Command data
@@ -72,13 +72,13 @@ func (ca CommandAPDU) serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// ResponseAPDU represents an application data unit received from a smart card
+// ResponseAPDU represents an application data unit received from a smart card.
 type ResponseAPDU struct {
 	Data     []byte // response data
 	Sw1, Sw2 uint8  // status words 1 and 2
 }
 
-// deserialize deserializes a response APDU
+// deserialize deserializes a response APDU.
 func (ra *ResponseAPDU) deserialize(data []byte) error {
 	ra.Data = make([]byte, len(data)-2)
 
