@@ -140,20 +140,20 @@ func (r *ReceiptsRequest) GetCost(peer *peer) uint64 {
 
 // CanSend tells if a certain peer is suitable for serving the given request
 func (r *ReceiptsRequest) CanSend(peer *peer) bool {
-	return peer.HasBlock(r.Hash, r.Number)
+	return peer.HasBlock(r.Block.Hash(), r.Block.NumberU64())
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (r *ReceiptsRequest) Request(reqID uint64, peer *peer) error {
-	peer.Log().Debug("Requesting block receipts", "hash", r.Hash)
-	return peer.RequestReceipts(reqID, r.GetCost(peer), []common.Hash{r.Hash})
+	peer.Log().Debug("Requesting block receipts", "hash", r.Block.Hash())
+	return peer.RequestReceipts(reqID, r.GetCost(peer), []common.Hash{r.Block.Hash()})
 }
 
 // Valid processes an ODR request reply message from the LES network
 // returns true and stores results in memory if the message was a valid reply
 // to the request (implementation of LesOdrRequest)
 func (r *ReceiptsRequest) Validate(db ethdb.Database, msg *Msg) error {
-	log.Debug("Validating block receipts", "hash", r.Hash)
+	log.Debug("Validating block receipts", "hash", r.Block.Hash())
 
 	// Ensure we have a correct message with a single block receipt
 	if msg.MsgType != MsgReceipts {
@@ -166,14 +166,12 @@ func (r *ReceiptsRequest) Validate(db ethdb.Database, msg *Msg) error {
 	receipt := receipts[0]
 
 	// Retrieve our stored header and validate receipt content against it
-	header := core.GetHeader(db, r.Hash, r.Number)
-	if header == nil {
-		return errHeaderUnavailable
-	}
-	if header.ReceiptHash != types.DeriveSha(receipt) {
+	if r.Block.ReceiptHash() != types.DeriveSha(receipt) {
 		return errReceiptHashMismatch
 	}
 	// Validations passed, store and return
+	core.SetReceiptsData(r.Config, r.Block, receipt)
+
 	r.Receipts = receipt
 	return nil
 }

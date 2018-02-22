@@ -35,13 +35,13 @@ func secAddr(addr common.Address) []byte {
 	return crypto.Keccak256(addr[:])
 }
 
-type accessTestFn func(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest
+type accessTestFn func(odr *LesOdr, bhash common.Hash, number uint64) light.OdrRequest
 
 func TestBlockAccessLes1(t *testing.T) { testAccess(t, 1, tfBlockAccess) }
 
 func TestBlockAccessLes2(t *testing.T) { testAccess(t, 2, tfBlockAccess) }
 
-func tfBlockAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
+func tfBlockAccess(odr *LesOdr, bhash common.Hash, number uint64) light.OdrRequest {
 	return &light.BlockRequest{Hash: bhash, Number: number}
 }
 
@@ -49,24 +49,30 @@ func TestReceiptsAccessLes1(t *testing.T) { testAccess(t, 1, tfReceiptsAccess) }
 
 func TestReceiptsAccessLes2(t *testing.T) { testAccess(t, 2, tfReceiptsAccess) }
 
-func tfReceiptsAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
-	return &light.ReceiptsRequest{Hash: bhash, Number: number}
+func tfReceiptsAccess(odr *LesOdr, bhash common.Hash, number uint64) light.OdrRequest {
+	odr.Retrieve(context.TODO(), &light.BlockRequest{Hash: bhash, Number: number})
+
+	block := core.GetBlock(odr.Database(), bhash, number)
+	genesis := core.GetCanonicalHash(odr.Database(), 0)
+	config, _ := core.GetChainConfig(odr.Database(), genesis)
+
+	return &light.ReceiptsRequest{Config: config, Block: block}
 }
 
 func TestTrieEntryAccessLes1(t *testing.T) { testAccess(t, 1, tfTrieEntryAccess) }
 
 func TestTrieEntryAccessLes2(t *testing.T) { testAccess(t, 2, tfTrieEntryAccess) }
 
-func tfTrieEntryAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
-	return &light.TrieRequest{Id: light.StateTrieID(core.GetHeader(db, bhash, core.GetBlockNumber(db, bhash))), Key: testBankSecureTrieKey}
+func tfTrieEntryAccess(odr *LesOdr, bhash common.Hash, number uint64) light.OdrRequest {
+	return &light.TrieRequest{Id: light.StateTrieID(core.GetHeader(odr.Database(), bhash, core.GetBlockNumber(odr.Database(), bhash))), Key: testBankSecureTrieKey}
 }
 
 func TestCodeAccessLes1(t *testing.T) { testAccess(t, 1, tfCodeAccess) }
 
 func TestCodeAccessLes2(t *testing.T) { testAccess(t, 2, tfCodeAccess) }
 
-func tfCodeAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
-	header := core.GetHeader(db, bhash, core.GetBlockNumber(db, bhash))
+func tfCodeAccess(odr *LesOdr, bhash common.Hash, number uint64) light.OdrRequest {
+	header := core.GetHeader(odr.Database(), bhash, core.GetBlockNumber(odr.Database(), bhash))
 	if header.Number.Uint64() < testContractDeployed {
 		return nil
 	}
@@ -100,7 +106,7 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	test := func(expFail uint64) {
 		for i := uint64(0); i <= pm.blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := core.GetCanonicalHash(db, i)
-			if req := fn(ldb, bhash, i); req != nil {
+			if req := fn(odr, bhash, i); req != nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 				defer cancel()
 
