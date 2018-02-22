@@ -77,15 +77,19 @@ func NewEnvelope(ttl uint32, topic TopicType, msg *sentMessage) *Envelope {
 // Seal closes the envelope by spending the requested amount of time as a proof
 // of work on hashing the data.
 func (e *Envelope) Seal(options *MessageParams) error {
-	var target, bestBit int
 	if options.PoW == 0 {
-		// adjust for the duration of Seal() execution only if execution time is predefined unconditionally
+		// PoW is not required
+		return nil
+	}
+
+	var target, bestBit int
+	if options.PoW < 0 {
+		// target is not set - the function should run for a period
+		// of time specified in WorkTime param. Since we can predict
+		// the execution time, we can also adjust Expiry.
 		e.Expiry += options.WorkTime
 	} else {
 		target = e.powToFirstBit(options.PoW)
-		if target < 1 {
-			target = 1
-		}
 	}
 
 	buf := make([]byte, 64)
@@ -143,7 +147,11 @@ func (e *Envelope) powToFirstBit(pow float64) int {
 	x *= float64(e.TTL)
 	bits := gmath.Log2(x)
 	bits = gmath.Ceil(bits)
-	return int(bits)
+	res := int(bits)
+	if res < 1 {
+		res = 1
+	}
+	return res
 }
 
 // Hash returns the SHA3 hash of the envelope, calculating it if not yet done.
