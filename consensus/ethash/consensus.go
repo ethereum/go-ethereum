@@ -31,8 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/log"
-
 	 set "gopkg.in/fatih/set.v0"
 )
 
@@ -577,9 +575,9 @@ func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	//	log.Info("参数变量","minerpool",minerpool)
 	//	reward.Sub(reward,minerpool)
 		state.AddBalance(params.PosMinerContractAddr, TotalReward.Mul(TotalReward,big.NewInt(99)))
-		log.Info("参数变量","TotalReward",TotalReward)
+		//log.Info("参数变量","TotalReward",TotalReward)
 	}else{
 		state.AddBalance(header.Coinbase, TotalReward)
-		log.Info("参数变量","TotalReward",TotalReward)
+		//log.Info("参数变量","TotalReward",TotalReward)
 	}
 }
