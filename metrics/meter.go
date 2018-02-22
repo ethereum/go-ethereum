@@ -247,11 +247,8 @@ var arbiter = meterArbiter{ticker: time.NewTicker(5e9), meters: make(map[*Standa
 
 // Ticks meters on the scheduled interval
 func (ma *meterArbiter) tick() {
-	for {
-		select {
-		case <-ma.ticker.C:
-			ma.tickMeters()
-		}
+	for range ma.ticker.C {
+		ma.tickMeters()
 	}
 }
 

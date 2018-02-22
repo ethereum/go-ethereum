@@ -11,7 +11,7 @@ import (
 )
 
 // a regexp for extracting the unit from time.Duration.String
-var unitRegexp = regexp.MustCompile("[^\\d]+$")
+var unitRegexp = regexp.MustCompile(`[^\\d]+$`)
 
 // a helper that turns a time.Duration into librato display attributes for timer metrics
 func translateTimerAttributes(d time.Duration) (attrs map[string]interface{}) {
@@ -116,7 +116,7 @@ func (self *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot 
 			snapshot.Gauges = append(snapshot.Gauges, measurement)
 		case metrics.Histogram:
 			if m.Count() > 0 {
-				gauges := make([]Measurement, histogramGaugeCount, histogramGaugeCount)
+				gauges := make([]Measurement, histogramGaugeCount)
 				s := m.Sample()
 				measurement[Name] = fmt.Sprintf("%s.%s", name, "hist")
 				measurement[Count] = uint64(s.Count())
@@ -176,7 +176,7 @@ func (self *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot 
 			snapshot.Counters = append(snapshot.Counters, measurement)
 			if m.Count() > 0 {
 				libratoName := fmt.Sprintf("%s.%s", name, "timer.mean")
-				gauges := make([]Measurement, histogramGaugeCount, histogramGaugeCount)
+				gauges := make([]Measurement, histogramGaugeCount)
 				gauges[0] = Measurement{
 					Name:       libratoName,
 					Count:      uint64(m.Count()),
