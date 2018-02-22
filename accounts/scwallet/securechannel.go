@@ -32,15 +32,15 @@ import (
 )
 
 const (
-	MAX_PAYLOAD_SIZE   = 223
-	PAIR_P1_FIRST_STEP = 0
-	PAIR_P1_LAST_STEP  = 1
+	maxPayloadSize  = 223
+	pairP1FirstStep = 0
+	pairP1LastStep  = 1
 
-	SC_SECRET_LENGTH = 32
-	SC_BLOCK_SIZE    = 16
+	scSecretLength = 32
+	scBlockSize    = 16
 )
 
-// SecureChannelSession enables secure communication with a hardware wallet
+// SecureChannelSession enables secure communication with a hardware wallet.
 type SecureChannelSession struct {
 	card          *scard.Card // A handle to the smartcard for communication
 	secret        []byte      // A shared secret generated from our ECDSA keys
@@ -52,7 +52,7 @@ type SecureChannelSession struct {
 	PairingIndex  uint8       // The pairing index
 }
 
-// NewSecureChannelSession creates a new secure channel for the given card and public key
+// NewSecureChannelSession creates a new secure channel for the given card and public key.
 func NewSecureChannelSession(card *scard.Card, keyData []byte) (*SecureChannelSession, error) {
 	// Generate an ECDSA keypair for ourselves
 	gen := ecdh.NewEllipticECDH(crypto.S256())
@@ -78,7 +78,7 @@ func NewSecureChannelSession(card *scard.Card, keyData []byte) (*SecureChannelSe
 	}, nil
 }
 
-// Pair establishes a new pairing with the smartcard
+// Pair establishes a new pairing with the smartcard.
 func (s *SecureChannelSession) Pair(sharedSecret []byte) error {
 	secretHash := sha256.Sum256(sharedSecret)
 
@@ -87,7 +87,7 @@ func (s *SecureChannelSession) Pair(sharedSecret []byte) error {
 		return err
 	}
 
-	response, err := s.pair(PAIR_P1_FIRST_STEP, challenge)
+	response, err := s.pair(pairP1FirstStep, challenge)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (s *SecureChannelSession) Pair(sharedSecret []byte) error {
 	md.Reset()
 	md.Write(secretHash[:])
 	md.Write(cardChallenge)
-	response, err = s.pair(PAIR_P1_LAST_STEP, md.Sum(nil))
+	response, err = s.pair(pairP1LastStep, md.Sum(nil))
 	if err != nil {
 		return err
 	}
@@ -121,13 +121,13 @@ func (s *SecureChannelSession) Pair(sharedSecret []byte) error {
 	return nil
 }
 
-// Unpair disestablishes an existing pairing
+// Unpair disestablishes an existing pairing.
 func (s *SecureChannelSession) Unpair() error {
 	if s.PairingKey == nil {
 		return fmt.Errorf("Cannot unpair: not paired")
 	}
 
-	_, err := s.TransmitEncrypted(CLA_SCWALLET, INS_UNPAIR, s.PairingIndex, 0, []byte{})
+	_, err := s.TransmitEncrypted(claSCWallet, insUnpair, s.PairingIndex, 0, []byte{})
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func (s *SecureChannelSession) Unpair() error {
 	return nil
 }
 
-// Open initializes the secure channel
+// Open initializes the secure channel.
 func (s *SecureChannelSession) Open() error {
 	if s.iv != nil {
 		return fmt.Errorf("Session already opened")
@@ -153,13 +153,13 @@ func (s *SecureChannelSession) Open() error {
 	md := sha512.New()
 	md.Write(s.secret)
 	md.Write(s.PairingKey)
-	md.Write(response.Data[:SC_SECRET_LENGTH])
+	md.Write(response.Data[:scSecretLength])
 	keyData := md.Sum(nil)
-	s.sessionEncKey = keyData[:SC_SECRET_LENGTH]
-	s.sessionMacKey = keyData[SC_SECRET_LENGTH : SC_SECRET_LENGTH*2]
+	s.sessionEncKey = keyData[:scSecretLength]
+	s.sessionMacKey = keyData[scSecretLength : scSecretLength*2]
 
 	// The IV is the last bytes returned from the Open APDU.
-	s.iv = response.Data[SC_SECRET_LENGTH:]
+	s.iv = response.Data[scSecretLength:]
 
 	if err := s.mutuallyAuthenticate(); err != nil {
 		return err
@@ -171,12 +171,12 @@ func (s *SecureChannelSession) Open() error {
 // mutuallyAuthenticate is an internal method to authenticate both ends of the
 // connection.
 func (s *SecureChannelSession) mutuallyAuthenticate() error {
-	data := make([]byte, SC_SECRET_LENGTH)
+	data := make([]byte, scSecretLength)
 	if _, err := rand.Read(data); err != nil {
 		return err
 	}
 
-	response, err := s.TransmitEncrypted(CLA_SCWALLET, INS_MUTUALLY_AUTHENTICATE, 0, 0, data)
+	response, err := s.TransmitEncrypted(claSCWallet, insMutuallyAuthenticate, 0, 0, data)
 	if err != nil {
 		return err
 	}
@@ -184,18 +184,18 @@ func (s *SecureChannelSession) mutuallyAuthenticate() error {
 		return fmt.Errorf("Got unexpected response from MUTUALLY_AUTHENTICATE: 0x%x%x", response.Sw1, response.Sw2)
 	}
 
-	if len(response.Data) != SC_SECRET_LENGTH {
-		return fmt.Errorf("Response from MUTUALLY_AUTHENTICATE was %d bytes, expected %d", len(response.Data), SC_SECRET_LENGTH)
+	if len(response.Data) != scSecretLength {
+		return fmt.Errorf("Response from MUTUALLY_AUTHENTICATE was %d bytes, expected %d", len(response.Data), scSecretLength)
 	}
 
 	return nil
 }
 
-// open is an internal method that sends an open APDU
+// open is an internal method that sends an open APDU.
 func (s *SecureChannelSession) open() (*ResponseAPDU, error) {
 	return transmit(s.card, &CommandAPDU{
-		Cla:  CLA_SCWALLET,
-		Ins:  INS_OPEN_SECURE_CHANNEL,
+		Cla:  claSCWallet,
+		Ins:  insOpenSecureChannel,
 		P1:   s.PairingIndex,
 		P2:   0,
 		Data: s.publicKey,
@@ -203,11 +203,11 @@ func (s *SecureChannelSession) open() (*ResponseAPDU, error) {
 	})
 }
 
-// pair is an internal method that sends a pair APDU
+// pair is an internal method that sends a pair APDU.
 func (s *SecureChannelSession) pair(p1 uint8, data []byte) (*ResponseAPDU, error) {
 	return transmit(s.card, &CommandAPDU{
-		Cla:  CLA_SCWALLET,
-		Ins:  INS_PAIR,
+		Cla:  claSCWallet,
+		Ins:  insPair,
 		P1:   p1,
 		P2:   0,
 		Data: data,
@@ -215,7 +215,7 @@ func (s *SecureChannelSession) pair(p1 uint8, data []byte) (*ResponseAPDU, error
 	})
 }
 
-// TransmitEncrypted sends an encrypted message, and decrypts and returns the response
+// TransmitEncrypted sends an encrypted message, and decrypts and returns the response.
 func (s *SecureChannelSession) TransmitEncrypted(cla, ins, p1, p2 byte, data []byte) (*ResponseAPDU, error) {
 	if s.iv == nil {
 		return nil, fmt.Errorf("Channel not open")
@@ -225,7 +225,7 @@ func (s *SecureChannelSession) TransmitEncrypted(cla, ins, p1, p2 byte, data []b
 	if err != nil {
 		return nil, err
 	}
-	meta := []byte{cla, ins, p1, p2, byte(len(data) + SC_BLOCK_SIZE), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	meta := []byte{cla, ins, p1, p2, byte(len(data) + scBlockSize), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 	if err = s.updateIV(meta, data); err != nil {
 		return nil, err
 	}
@@ -263,17 +263,17 @@ func (s *SecureChannelSession) TransmitEncrypted(cla, ins, p1, p2 byte, data []b
 	rapdu := &ResponseAPDU{}
 	rapdu.deserialize(plainData)
 
-	if rapdu.Sw1 != SW1_OK {
+	if rapdu.Sw1 != sw1Ok {
 		return nil, fmt.Errorf("Unexpected response status Cla=0x%x, Ins=0x%x, Sw=0x%x%x", cla, ins, rapdu.Sw1, rapdu.Sw2)
 	}
 
 	return rapdu, nil
 }
 
-// encryptAPDU is an internal method that serializes and encrypts an APDU
+// encryptAPDU is an internal method that serializes and encrypts an APDU.
 func (s *SecureChannelSession) encryptAPDU(data []byte) ([]byte, error) {
-	if len(data) > MAX_PAYLOAD_SIZE {
-		return nil, fmt.Errorf("Payload of %d bytes exceeds maximum of %d", len(data), MAX_PAYLOAD_SIZE)
+	if len(data) > maxPayloadSize {
+		return nil, fmt.Errorf("Payload of %d bytes exceeds maximum of %d", len(data), maxPayloadSize)
 	}
 	data = pad(data, 0x80)
 
@@ -288,7 +288,7 @@ func (s *SecureChannelSession) encryptAPDU(data []byte) ([]byte, error) {
 	return ret, nil
 }
 
-// pad applies message padding to a 16 byte boundary
+// pad applies message padding to a 16 byte boundary.
 func pad(data []byte, terminator byte) []byte {
 	padded := make([]byte, (len(data)/16+1)*16)
 	copy(padded, data)
@@ -296,7 +296,7 @@ func pad(data []byte, terminator byte) []byte {
 	return padded
 }
 
-// decryptAPDU is an internal method that decrypts and deserializes an APDU
+// decryptAPDU is an internal method that decrypts and deserializes an APDU.
 func (s *SecureChannelSession) decryptAPDU(data []byte) ([]byte, error) {
 	a, err := aes.NewCipher(s.sessionEncKey)
 	if err != nil {
@@ -310,7 +310,7 @@ func (s *SecureChannelSession) decryptAPDU(data []byte) ([]byte, error) {
 	return unpad(ret, 0x80)
 }
 
-// unpad strips padding from a message
+// unpad strips padding from a message.
 func unpad(data []byte, terminator byte) ([]byte, error) {
 	for i := 1; i <= 16; i++ {
 		switch data[len(data)-i] {

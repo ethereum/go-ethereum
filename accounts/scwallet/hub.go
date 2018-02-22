@@ -14,6 +14,22 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// This package implements support for smartcard-based hardware wallets such as
+// the one written by Status: https://github.com/status-im/hardware-wallet
+//
+// This implementation of smartcard wallets have a different interaction process
+// to other types of hardware wallet. The process works like this:
+//
+// 1. (First use with a given client) Establish a pairing between hardware
+//    wallet and client. This requires a secret value called a 'PUK'. You can
+//    pair with an unpaired wallet with `personal.openWallet(URI, PUK)`.
+// 2. (First use only) Initialize the wallet, which generates a keypair, stores
+//    it on the wallet, and returns it so the user can back it up. You can
+//    initialize a wallet with `personal.initializeWallet(URI)`.
+// 3. Connect to the wallet using the pairing information established in step 1.
+//    You can connect to a paired wallet with `personal.openWallet(URI, PIN)`.
+// 4. Interact with the wallet as normal.
+
 package scwallet
 
 import (
@@ -32,6 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// Scheme is the URI prefix for smartcard wallets.
 const Scheme = "pcsc"
 
 // refreshCycle is the maximum time between wallet refreshes (if USB hotplug
@@ -41,9 +58,9 @@ const refreshCycle = 5 * time.Second
 // refreshThrottling is the minimum time between wallet refreshes to avoid thrashing.
 const refreshThrottling = 500 * time.Millisecond
 
-// SmartcardPairing contains information about a smart card we have paired with
-// or might pair withub.
-type SmartcardPairing struct {
+// smartcardPairing contains information about a smart card we have paired with
+// or might pair with the hub.
+type smartcardPairing struct {
 	PublicKey    []byte                                     `json:"publicKey"`
 	PairingIndex uint8                                      `json:"pairingIndex"`
 	PairingKey   []byte                                     `json:"pairingKey"`
@@ -56,7 +73,7 @@ type Hub struct {
 
 	context     *scard.Context
 	datadir     string
-	pairings    map[string]SmartcardPairing
+	pairings    map[string]smartcardPairing
 	refreshed   time.Time               // Time instance when the list of wallets was last refreshed
 	wallets     map[string]*Wallet      // Mapping from reader names to wallet instances
 	updateFeed  event.Feed              // Event feed to notify wallet additions/removals
@@ -71,7 +88,7 @@ type Hub struct {
 var HubType = reflect.TypeOf(&Hub{})
 
 func (hub *Hub) readPairings() error {
-	hub.pairings = make(map[string]SmartcardPairing)
+	hub.pairings = make(map[string]smartcardPairing)
 	pairingFile, err := os.Open(hub.datadir + "/smartcards.json")
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -84,7 +101,7 @@ func (hub *Hub) readPairings() error {
 	if err != nil {
 		return err
 	}
-	var pairings []SmartcardPairing
+	var pairings []smartcardPairing
 	if err := json.Unmarshal(pairingData, &pairings); err != nil {
 		return err
 	}
@@ -101,7 +118,7 @@ func (hub *Hub) writePairings() error {
 		return err
 	}
 
-	pairings := make([]SmartcardPairing, 0, len(hub.pairings))
+	pairings := make([]smartcardPairing, 0, len(hub.pairings))
 	for _, pairing := range hub.pairings {
 		pairings = append(pairings, pairing)
 	}
@@ -118,7 +135,7 @@ func (hub *Hub) writePairings() error {
 	return pairingFile.Close()
 }
 
-func (hub *Hub) getPairing(wallet *Wallet) *SmartcardPairing {
+func (hub *Hub) getPairing(wallet *Wallet) *smartcardPairing {
 	pairing, ok := hub.pairings[string(wallet.PublicKey)]
 	if ok {
 		return &pairing
@@ -126,7 +143,7 @@ func (hub *Hub) getPairing(wallet *Wallet) *SmartcardPairing {
 	return nil
 }
 
-func (hub *Hub) setPairing(wallet *Wallet, pairing *SmartcardPairing) error {
+func (hub *Hub) setPairing(wallet *Wallet, pairing *smartcardPairing) error {
 	if pairing == nil {
 		delete(hub.pairings, string(wallet.PublicKey))
 	} else {
@@ -158,7 +175,7 @@ func NewHub(scheme string, datadir string) (*Hub, error) {
 	return hub, nil
 }
 
-// Wallets implements accounts.Backend, returning all the currently tracked USB
+// Wallets implements accounts.Backend, returning all the currently tracked
 // devices that appear to be hardware wallets.
 func (hub *Hub) Wallets() []accounts.Wallet {
 	// Make sure the list of wallets is up to date
@@ -176,7 +193,7 @@ func (hub *Hub) Wallets() []accounts.Wallet {
 	return cpy
 }
 
-// refreshWallets scans the USB devices attached to the machine and updates the
+// refreshWallets scans the devices attached to the machine and updates the
 // list of wallets based on the found devices.
 func (hub *Hub) refreshWallets() {
 	elapsed := time.Since(hub.refreshed)
