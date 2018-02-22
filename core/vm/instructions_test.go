@@ -55,9 +55,9 @@ func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64
 			poolvals := make(map[*big.Int]struct{})
 			poolvals[actual] = struct{}{}
 
-			for ;env.interpreter.intPool.pool.len() > 0;{
+			for env.interpreter.intPool.pool.len() > 0 {
 				key := env.interpreter.intPool.get()
-				if _, exist := poolvals[key]; exist{
+				if _, exist := poolvals[key]; exist {
 					t.Errorf("Testcase %d, pool contains double-entry", i)
 				}
 				poolvals[key] = struct{}{}

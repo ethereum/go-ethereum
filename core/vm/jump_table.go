@@ -61,7 +61,7 @@ var (
 // byzantium and contantinople instructions.
 func NewConstantinopleInstructionSet() [256]operation {
 	// instructions that can be executed during the byzantium phase.
-	instructionSet := NewHomesteadInstructionSet()
+	instructionSet := NewByzantiumInstructionSet()
 	instructionSet[SHL] = operation{
 		execute:       opSHL,
 		gasCost:       constGasFunc(GasFastestStep),
