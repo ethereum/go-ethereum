@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // NoOdr is the default context passed to an ODR capable function when the ODR
@@ -118,14 +119,14 @@ func (req *BlockRequest) StoreResult(db ethdb.Database) {
 // ReceiptsRequest is the ODR request type for retrieving block bodies
 type ReceiptsRequest struct {
 	OdrRequest
-	Hash     common.Hash
-	Number   uint64
+	Config   *params.ChainConfig
+	Block    *types.Block
 	Receipts types.Receipts
 }
 
 // StoreResult stores the retrieved data in local database
 func (req *ReceiptsRequest) StoreResult(db ethdb.Database) {
-	core.WriteBlockReceipts(db, req.Hash, req.Number, req.Receipts)
+	core.WriteBlockReceipts(db, req.Block.Hash(), req.Block.NumberU64(), req.Receipts)
 }
 
 // ChtRequest is the ODR request type for state/storage trie entries

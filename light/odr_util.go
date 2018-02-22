@@ -130,7 +130,15 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 	if receipts != nil {
 		return receipts, nil
 	}
-	r := &ReceiptsRequest{Hash: hash, Number: number}
+	// Receipts unavailable locally, we need the full block to reconstruct
+	block, err := GetBlock(ctx, odr, hash, number)
+	if err != nil {
+		return nil, err
+	}
+	genesis := core.GetCanonicalHash(odr.Database(), 0)
+	config, _ := core.GetChainConfig(odr.Database(), genesis)
+
+	r := &ReceiptsRequest{Config: config, Block: block}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
 	}
