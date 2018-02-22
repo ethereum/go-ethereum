@@ -610,9 +610,17 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 
 	reward := new(big.Int).Set(blockReward)
+
+	// Treasury fee
 	treasuryReward := new(big.Int)
 	treasuryReward.Mul(reward, treasuryDevFunds)
 	treasuryReward.Div(treasuryReward, big.NewInt(100))
+
+	// Stake fee
+	stakeReward := new(big.Int)
+	stakeReward.Mul(reward, stakeFunds)
+	stakeReward.Div(treasuryReward, big.NewInt(100))
+
 	// Accumulate the rewards for the miner and any included uncles
 	r := new(big.Int)
 	for _, uncle := range uncles {
@@ -628,7 +636,9 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	if config.IsCallisto(header.Number) {
 		reward.Sub(reward, treasuryReward)
+		reward.Sub(stakeReward, treasuryReward)
 		state.AddBalance(config.CallistoTreasuryAddress, treasuryReward)
+		state.AddBalance(config.CallistoStakeAddress, stakeReward)
 	}
 
 	state.AddBalance(header.Coinbase, reward)
