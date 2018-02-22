@@ -604,55 +604,28 @@ func TestHandshakeForwardCompatibility(t *testing.T) {
 
 // tcpPipe creates an in process full duplex pipe based on a localhost TCP socket
 func tcpPipe() (net.Conn, net.Conn, error) {
-	type result struct {
-		conn net.Conn
-		err  error
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, nil, err
 	}
+	defer l.Close()
 
-	cl := make(chan result)
-	cd := make(chan result)
+	var aconn net.Conn
+	aerr := make(chan error, 1)
+	go func() {
+		var err error
+		aconn, err = l.Accept()
+		aerr <- err
+	}()
 
-	start := make(chan net.Addr)
-
-	go func(res chan result, start chan net.Addr) {
-		// resolve
-		addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-		if err != nil {
-			res <- result{err: err}
-			return
-		}
-		// listen
-		l, err := net.ListenTCP("tcp", addr)
-		if err != nil {
-			res <- result{err: err}
-			return
-		}
-		start <- l.Addr()
-		c, err := l.AcceptTCP()
-		if err != nil {
-			res <- result{err: err}
-			return
-		}
-		res <- result{conn: c}
-	}(cl, start)
-
-	go func(res chan result, start chan net.Addr) {
-		addr := <-start
-		c, err := net.DialTCP("tcp", nil, addr.(*net.TCPAddr))
-		if err != nil {
-			res <- result{err: err}
-			return
-		}
-		res <- result{conn: c}
-	}(cd, start)
-
-	a := <-cl
-	if a.err != nil {
-		return nil, nil, a.err
+	dconn, err := net.Dial("tcp", l.Addr().String())
+	if err != nil {
+		<-aerr
+		return nil, nil, err
 	}
-	b := <-cd
-	if b.err != nil {
-		return nil, nil, b.err
+	if err := <-aerr; err != nil {
+		dconn.Close()
+		return nil, nil, err
 	}
-	return a.conn, b.conn, nil
+	return aconn, dconn, nil
 }
