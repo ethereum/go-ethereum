@@ -279,7 +279,7 @@ func (c *ChainIndexer) updateLoop() {
 				if time.Since(updated) > 8*time.Second {
 					if c.knownSections > c.storedSections+1 {
 						updating = true
-						c.log.Info("更新消品链索引", "百分比", c.storedSections*100/c.knownSections)
+						c.log.Info("更新应链索引", "百分比", c.storedSections*100/c.knownSections)
 					}
 					updated = time.Now()
 				}
@@ -303,7 +303,7 @@ func (c *ChainIndexer) updateLoop() {
 					c.setValidSections(section + 1)
 					if c.storedSections == c.knownSections && updating {
 						updating = false
-						c.log.Info("完成消品链索引更新")
+						c.log.Info("完成应链索引更新")
 					}
 
 					c.cascadedHead = c.storedSections*c.sectionSize - 1

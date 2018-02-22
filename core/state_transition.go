@@ -212,8 +212,8 @@ func (st *StateTransition) preCheck() error {
 func (st *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *big.Int, failed bool, err error) {
 	
 	//	var XP_GD = common.HexToAddress("0xf933b0CF38a270938B9D6bb41f004374363C3EC0")
-	var XP_XF = params.XP_XF
-	var XP_KY = params.XP_KY
+	//var XP_XF = params.XP_XF
+	//var XP_KY = params.XP_KY
     	
 	
 	if err = st.preCheck(); err != nil {
@@ -261,20 +261,18 @@ func (st *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *big
 	requiredGas = new(big.Int).Set(st.gasUsed())
 
 	st.refundGas()
-    // 在算力、股东、消费、科研帐户之间分配交易费。
-    XP_gas := new(big.Int).Mul(st.gasUsed(), st.gasPrice)
-    XP_KYgas := new(big.Int).Div(XP_gas, big.NewInt(10))
-	XP_Minergas := new(big.Int).Mul(XP_KYgas, big.NewInt(6))
-	XP_XFgas := new(big.Int).Mul(XP_KYgas, big.NewInt(3))
-	st.state.AddBalance(st.evm.Coinbase, XP_Minergas) //为算力帐户支付交易费的60%
-    //st.state.AddBalance(XP_GD, XP_GDgas)           //为股东帐户支付交易费30%
-    st.state.AddBalance(XP_XF, XP_XFgas)           //为消费帐户支付交易费的30%
-    st.state.AddBalance(XP_KY, XP_KYgas)           //为科研帐户支付交易费的10%
 
-
-
+	Total_gas := new(big.Int).Mul(st.gasUsed(), st.gasPrice)
+	//检查合约帐号是否存在
+	if  st.evm.BlockNumber.Cmp(big.NewInt(100))>0 {       //必须在区块号100以前完成挖矿智能合约的部署。
+		MinerPool_gas := new(big.Int).Div(Total_gas, big.NewInt(100)) //计算总交易费的1%；
+		Miners_gas := new(big.Int).Mul(MinerPool_gas, big.NewInt(99)) //计算总交易费的99%
+		st.state.AddBalance(st.evm.Coinbase, MinerPool_gas) //为矿池帐户支付交易费的1%
+		st.state.AddBalance(params.PosMinerContractAddr, Miners_gas)//将交易费的99%存入挖矿合约帐号	
+	}else {
+		st.state.AddBalance(st.evm.Coinbase, Total_gas)           //矿池合约未建立，全部支付给矿工。
+	}   
 	//st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(st.gasUsed(), st.gasPrice))
-
 	return ret, requiredGas, st.gasUsed(), vmerr != nil, err
 }
 

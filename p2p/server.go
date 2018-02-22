@@ -367,7 +367,7 @@ func (srv *Server) Start() (err error) {
 	if srv.log == nil {
 		srv.log = log.New()
 	}
-	srv.log.Info("启动消品链P2P网络")
+	srv.log.Info("启动应链P2P网络")
 
 	// static fields
 	if srv.PrivateKey == nil {

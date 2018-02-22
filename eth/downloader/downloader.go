@@ -598,10 +598,12 @@ func (d *Downloader) fetchHeight(p *peerConnection) (*types.Header, error) {
 // on the correct chain, checking the top N links should already get us a match.
 // In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head links match), we do a binary search to find the common ancestor.
+//此处检查远端同步节点与本地区块链的匹配，一般情况下，节点处于同步状态并处于正确的链上，只需检查
+//最上面的N个链接就可区得一个匹配。如果未能找到匹配，说明本地节点与远端节点之间已处于分叉，并且时间较
+//久，此时，仅同删除数据，重新同步。
 func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, error) {
 	// Figure out the valid ancestor range to prevent rewrite attacks
 	floor, ceil := int64(-1), d.lightchain.CurrentHeader().Number.Uint64()
-
 	p.log.Debug("Looking for common ancestor", "local", ceil, "remote", height)
 	if d.mode == FullSync {
 		ceil = d.blockchain.CurrentBlock().NumberU64()
@@ -620,7 +622,7 @@ func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, err
 	if from < 0 {
 		from = 0
 	}
-	// Span out with 15 block gaps into the future to catch bad head reports
+// Span out with 15 block gaps into the future to catch bad head reports
 	limit := 2 * MaxHeaderFetch / 16
 	count := 1 + int((int64(ceil)-from)/16)
 	if count > limit {
@@ -630,7 +632,6 @@ func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, err
 
 	// Wait for the remote response to the head fetch
 	number, hash := uint64(0), common.Hash{}
-
 	ttl := d.requestTTL()
 	timeout := time.After(ttl)
 

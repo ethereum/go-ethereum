@@ -76,8 +76,8 @@ var (
 	MinGasLimit            = big.NewInt(5000)                  // Minimum the gas limit may ever be.
 	GenesisGasLimit        = big.NewInt(4712388)               // Gas limit of the Genesis block.
 	TargetGasLimit         = new(big.Int).Set(GenesisGasLimit) // The artificial target
-	DifficultyBoundDivisor = big.NewInt(256)   //big.NewInt(2048)  // The bound divisor of the difficulty, used in the update calculations.
-	GenesisDifficulty      = big.NewInt(13107200)                // 此处增加100倍Difficulty of the Genesis block.
-	MinimumDifficulty      = big.NewInt(13107200)                // 此处增加100倍The minimum that the difficulty may ever be.
+	DifficultyBoundDivisor = big.NewInt(512)   //big.NewInt(2048)  // The bound divisor of the difficulty, used in the update calculations.
+	GenesisDifficulty      = big.NewInt(1310720)                // 此处增加100倍Difficulty of the Genesis block.
+	MinimumDifficulty      = big.NewInt(1310720)                // 此处增加100倍The minimum that the difficulty may ever be.
 	DurationLimit          = big.NewInt(13)                    // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 )

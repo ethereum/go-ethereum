@@ -39,12 +39,14 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+
 const (
 	clientIdentifier = "geth" // Client identifier to advertise over the network
 )
 
 var (
 	// Git SHA1 commit hash of the release (set via linker flags)
+	
 	gitCommit = ""
 	// Ethereum address of the Geth release oracle.
 	relOracle = common.HexToAddress("0xfa7b9770ca4cb04296cac84f37736d4041251cdf")

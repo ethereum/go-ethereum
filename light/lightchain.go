@@ -313,7 +313,7 @@ func (bc *LightChain) Stop() {
 	atomic.StoreInt32(&bc.procInterrupt, 1)
 
 	bc.wg.Wait()
-	log.Info("消品链管理器停止工作")
+	log.Info("应链管理器停止工作")
 }
 
 // Rollback is designed to remove a chain of links from the database that aren't

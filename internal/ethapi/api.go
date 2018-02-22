@@ -45,7 +45,8 @@ import (
 
 const (
 	defaultGas      = 90000
-	defaultGasPrice = 50 * params.Shannon
+	//defaultGasPrice = 50 * params.Shannon 
+	defaultGasPrice = 5000 * params.Shannon   //此处增加100倍
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -1117,7 +1118,7 @@ func submitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		addr := crypto.CreateAddress(from, tx.Nonce())
 		log.Info("Submitted contract creation", "fullhash", tx.Hash().Hex(), "contract", addr.Hex())
 	} else {
-		log.Info("Submitted transaction", "fullhash", tx.Hash().Hex(), "recipient", tx.To())
+		log.Info("提交交易", "交易哈希码", tx.Hash().Hex(), "目标帐号", tx.To())
 	}
 	return tx.Hash(), nil
 }

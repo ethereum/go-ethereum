@@ -311,7 +311,7 @@ func (self *worker) wait() {
 			}
 			stat, err := self.chain.WriteBlockAndState(block, work.receipts, work.state)
 			if err != nil {
-				log.Error("区块写入消品链失败", "错误", err)
+				log.Error("区块写入应链失败", "错误", err)
 				continue
 			}
 			// check if canon block and write transactions
@@ -488,7 +488,7 @@ func (self *worker) commitNewWork() {
 	}
 	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {
-		log.Info("执行新的挖矿任务", "区块号", work.Block.Number(), "消品权重", header.Tokentime,"交易数", work.tcount, "叔块", len(uncles), "耗时", common.PrettyDuration(time.Since(tstart)))
+		log.Info("开始新的挖矿任务", "区块号", work.Block.Number(), "挖矿权重", header.Tokentime,"交易数", work.tcount, "叔块", len(uncles), "耗时", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}
 	self.push(work)

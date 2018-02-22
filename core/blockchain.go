@@ -42,6 +42,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/hashicorp/golang-lru"
+	"github.com/ethereum/go-ethereum/contracts/posminer"
+	"github.com/ethereum/go-ethereum/ethclient"
+
 )
 
 var (
@@ -606,7 +609,7 @@ func (bc *BlockChain) Stop() {
 	atomic.StoreInt32(&bc.procInterrupt, 1)
 
 	bc.wg.Wait()
-	log.Info("消品链管理器停止工作")
+	log.Info("应链管理器停止工作")
 }
 
 func (bc *BlockChain) procFutureBlocks() {
@@ -854,19 +857,65 @@ func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.R
 	return status, nil
 }
 
-//计算币龄的函数，根据收币数量与时间计算当前币量的币龄,传入参数：待计算地址及起始时间
+//统计移动应用权重帐户的用户权重
 func (bc *BlockChain) CalcTokenTime(Coinbase common.Address) (Tokentime *big.Int) {
 	//var sumToken *big.Int = big.NewInt(0)
 	//var Tokentime *big.Int = big.NewInt(0)
-	statedb, _ := state.New(bc.GetBlockByHash(bc.currentBlock.Hash()).Root(), bc.stateCache)
-
-	//bc, _ :=
-	//log.Error("所查帐号的余额为", "ETHER", statedb.GetBalance(common.HexToAddress("0x3656E9cE021f6454906687FF615915235f8E510f")))
-	//取出待查币龄值帐号的帐户余额
-	Tokentime = statedb.GetBalance(Coinbase)
-	Tokentime.Div(Tokentime, new(big.Int).Mul(big.NewInt(1), big.NewInt(1e18)))
+	var exist bool
+	exist=false
+	Tokentime=big.NewInt(0) 
+	var ActiveMiners []common.Address
+	State,_:=bc.State()
+	if State.Exist(params.PosMinerContractAddr)!=true{
+		//log.Info("警告","RPC未使能",Tokentime)
+		return Tokentime
+	}
+	//log.Info("posminer.PosConn",posminer.PosConn)
+	if posminer.PosConn==nil {
+		posminer.PosConn, _ = ethclient.Dial("//./pipe/geth.ipc")
+		log.Info("AppChain连接", "连接IPC服务")
+	}
+	//if err != nil {
+	//	log.Info("警告", "设置了ipcdisable，不能使用权重挖矿!",err)
+	//	return Tokentime
+	//}
+	PosMiner, err := posminer.NewPosminer(params.PosMinerContractAddr, posminer.PosConn)
+	//log.Info("错误码","err",err,"PosMiner",PosMiner)
+	if err !=nil{
+		log.Info("调用挖矿智能合约posminer失败","错误",err)
+		return Tokentime
+	}
+	//M,err:=PosMiner.RegLength(nil)
+	for i:=uint64(0);i<bc.currentBlock.NumberU64() ;i++{
+		for _,tx:=range bc.GetBlockByNumber(i).Transactions() {
+			msg,err:= tx.AsMessage(types.MakeSigner(bc.Config(), bc.GetBlockByNumber(i).Header().Number))
+			if err != nil {
+				return Tokentime
+			}
+			CmpMiner,err:= PosMiner.Registers(nil, msg.From())
+			if err != nil {
+				return Tokentime
+			}
+			RegistryTime := new(big.Int).Set(CmpMiner.RegistryTime)
+			if RegistryTime.Add(RegistryTime,big.NewInt(86400)).Cmp(bc.currentBlock.Time())>0 &&CmpMiner.MinerPool==Coinbase {
+				for j:=0;j<len(ActiveMiners);j++{
+					if ActiveMiners[j]==msg.From(){
+						exist=true
+						break
+					}  
+				}
+				if exist==false {
+					Tokentime.Add(Tokentime,big.NewInt(1))
+					ActiveMiners=append(ActiveMiners,msg.From())
+				}
+				exist=false
+			}
+		}
+	}
 	return Tokentime
 }
+
+
 
 // InsertChain attempts to insert the given batch of blocks in to the canonical
 // chain or, otherwise, create a fork. If an error is returned it will return
@@ -923,13 +972,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
     //此处检查区块时间时帐号币龄
    if new(big.Int).Sub(big.NewInt(time.Now().Unix()), bc.currentBlock.Time()).Cmp(big.NewInt(100)) < 0 {
 	   Tokentime := bc.CalcTokenTime(bc.currentBlock.Coinbase())
-	   // Tokentime2 := bc.CalcTokenTime(common.HexToAddress("0xac9d739c4d83e3501d824c4e308e7812aba8306d"))
-	   //Tokentime3 := bc.CalcTokenTime(common.HexToAddress("0xed867421dabc9dc2785e54411497ae2327f28dfe"))
-	   //log.Error("各帐号币权值", "帐号1币权", Tokentime, "帐号2币权", Tokentime2, "帐号3币权", Tokentime3)
-	   //验证区块登记币权与根据区块时间计算币权的差值的绝对值是否小于一个数100，若是则通过。
-       //log.Error("币权验证", "帐号1币权", bc.CalcTokenTime(bc.currentBlock.Coinbase()), "区块登记币权", bc.currentBlock.Header().Tokentime)
-	   if Tokentime.Cmp(bc.currentBlock.Header().Tokentime) < 0 {
-		   //log.Info("消品权重验证失败","区块号", bc.currentBlock.NumberU64,"消品权重",Tokentime,"区块封装难度",bc.currentBlock.Difficulty)
+	      if Tokentime.Cmp(bc.currentBlock.Header().Tokentime) < 0 {
+		   //log.Info("应链权重验证失败","区块号", bc.currentBlock.NumberU64,"应链权重",Tokentime,"区块封装难度",bc.currentBlock.Difficulty)
 		   abort := make(chan struct{})
 		   defer close(abort)
 
@@ -1080,7 +1124,7 @@ func (st *insertStats) report(chain []*types.Block, index int) {
 		if st.ignored > 0 {
 			context = append(context, []interface{}{"忽略", st.ignored}...)
 		}
-		log.Info("导入消品新链块", context...)
+		log.Info("导入应链新区块", context...)
 
 		*st = insertStats{startTime: now, lastIndex: index + 1}
 	}
@@ -1270,7 +1314,7 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 		receiptString += fmt.Sprintf("\t%v\n", receipt)
 	}
 	log.Error(fmt.Sprintf(`
-########## 不符合消品链规则的区块 #########
+########## 不符合应链规则的区块 #########
 区块链配置: %v
 
 区块编号: %v

@@ -86,7 +86,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
 		return nil, genesisErr
 	}
-	log.Info("初始化消品链配置", "配置", chainConfig)
+	log.Info("初始化应链配置", "配置", chainConfig)
 
 	peers := newPeerSet()
 	quitSync := make(chan struct{})

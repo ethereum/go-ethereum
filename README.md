@@ -1,6 +1,6 @@
 ## Go Ethereum
 
-消品链GO-thereum项目
+应链GO-thereum项目
 
 
 ## 源码创建

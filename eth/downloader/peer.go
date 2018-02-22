@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-)
+	)
 
 const (
 	maxLackingHashes  = 4096 // Maximum number of entries allowed on the list or lacking items

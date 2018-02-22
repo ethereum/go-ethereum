@@ -116,7 +116,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	}
 	// Figure out whether to allow fast sync or not
 	if mode == downloader.FastSync && blockchain.CurrentBlock().NumberU64() > 0 {
-		log.Warn("消品链非空, 快速同步失效")
+		log.Warn("应链非空, 快速同步失效")
 		mode = downloader.FullSync
 	}
 	if mode == downloader.FastSync {

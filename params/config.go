@@ -27,11 +27,11 @@ var (
 	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3") // Mainnet genesis hash to enforce below configs on
 	TestnetGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d") // Testnet genesis hash to enforce below configs on
 )
+//POSMINER相关定义
 var (
-	XP_XF = common.HexToAddress ("0xeD867421dabc9dC2785E54411497ae2327f28dfe")
-    XP_KY = common.HexToAddress("0x52F1433De32f47D9611CA50aF34b7965aE038f91") 
+	PosMinerContractAddr = common.HexToAddress ("0x8C00B660792b235d4382368299E77C8c04ED4754")     //POSMINER合约地址
 )
-     
+    
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{

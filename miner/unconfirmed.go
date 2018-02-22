@@ -101,9 +101,9 @@ func (set *unconfirmedBlocks) Shift(height uint64) {
 		case header == nil:
 			log.Warn("检索已挖矿块头失败", "区块号", next.index, "哈希码", next.hash)
 		case header.Hash() == next.hash:
-			log.Info("🔗 区块已成功编入消品链", "区块号", next.index, "哈希码", next.hash)
+			log.Info("🔗 区块已编入应链主链", "区块号", next.index, "哈希码", next.hash)
 		default:
-			log.Info("⑂ 区块未能编入消品链", "区块号", next.index, "哈希码", next.hash)
+			log.Info("⑂ 区块未编入应链主链", "区块号", next.index, "哈希码", next.hash)
 		}
 		// Drop the block out of the ring
 		if set.blocks.Value == set.blocks.Next().Value {

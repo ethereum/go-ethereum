@@ -31,6 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/log"
+
 	 set "gopkg.in/fatih/set.v0"
 )
 
@@ -38,9 +40,9 @@ import (
 var (
 	//BlockReward  *big.Int = big.NewInt(4e+18) // Block reward in wei for successfully mining a block
 	//lockReward *big.Int = big.NewInt(2e+18) // Block reward in wei for successfully mining a block upward from Byzantium
-	blockReward *big.Int = big.NewInt(18e17) // Block reward in wei for successfully mining a block
-	XF_reward *big.Int = big.NewInt(9e17)
-	KY_reward *big.Int = big.NewInt(3e17) // Block reward in wei for successfully mining a block
+	blockReward *big.Int = big.NewInt(8e+18) // Block reward in wei for successfully mining a block
+	//XF_reward *big.Int = big.NewInt(9e17)
+	//KY_reward *big.Int = big.NewInt(3e17) // Block reward in wei for successfully mining a block
 	//KY_blockReward *big.Int = big.NewInt(1e0)
 	maxUncles                     = 2                 // Maximum number of uncles allowed in a single block
 )
@@ -512,7 +514,7 @@ func (ethash *Ethash) VerifySeal(chain consensus.ChainReader, header *types.Head
 	if new(big.Int).SetBytes(result).Cmp(target) > 0 {
 		return errInvalidPoW
 	}
-    //log.Info("消品链验证","区块号",header.Number, "消品权重",header.Tokentime,"封装难度",header.Difficulty)
+    //log.Info("应链验证","区块号",header.Number, "应链权重",header.Tokentime,"封装难度",header.Difficulty)
 	return nil
 }
 
@@ -550,30 +552,8 @@ var (
 // included uncles. The coinbase of each uncle block is also rewarded.
 // TODO (karalabe): Move the chain maker into this package and make this private!
 func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
-	// Select the correct block reward based on chain progression
-	//blockReward := FrontierBlockReward
-	//if config.IsByzantium(header.Number) {
-	//	blockReward = ByzantiumBlockReward
-	//}
-	// Accumulate the rewards for the miner and any included uncles
-	//reward := new(big.Int).Set(blockReward)
-	//r := new(big.Int)
-	//for _, uncle := range uncles {
-	//	r.Add(uncle.Number, big8)
-	//	r.Sub(r, header.Number)
-	//	r.Mul(r, blockReward)
-	//	r.Div(r, big8)
-	//	state.AddBalance(uncle.Coinbase, r)
-
-	//	r.Div(blockReward, big32)
-	//	reward.Add(reward, r)
-	//}
-	//state.AddBalance(header.Coinbase, reward)
-	
+	//挖矿成功，将1%奖励给矿池，将99%存入挖矿合约帐户
 	reward := new(big.Int).Set(blockReward)
-	//var XP_GD = common.HexToAddress("0xf933b0CF38a270938B9D6bb41f004374363C3EC0")
-	var XP_XF = params.XP_XF
-	var XP_KY = params.XP_KY
 	r := new(big.Int)
 	for _, uncle := range uncles {
 		r.Add(uncle.Number, big8)
@@ -585,12 +565,21 @@ func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
-	state.AddBalance(header.Coinbase, reward)
-	//	log.Info("计算挖矿", "算力帐号：", header.Coinbase, "奖励数量", XP_blockReward, "单位", "XPing")
-	//state.AddBalance(XP_GD, reward)
-	//	log.Info("投资挖矿", "股东帐号：", XP_GD, "奖励数量", XP_blockReward, "单位", "XPing")
-	state.AddBalance(XP_XF, XF_reward)
-	//	log.Info("消费挖矿", "基金帐号：", XP_XF, "奖励数量", XP_blockReward, "单位", "XPing")
-	state.AddBalance(XP_KY, KY_reward)
-	//	log.Info("技术挖矿", "科研帐号：", XP_KY, "奖励数量", KY_blockReward, "单位", "XPing")
+	TotalReward:=new(big.Int).Set(reward.Mul(reward,big.NewInt(100)))
+	Reward_justnum:=new(big.Int).Set(header.Number)
+	Reward_justnum.Div(header.Number, big.NewInt(50000000))   //计算调整系数,每隔五千万个区块减半发行
+    //log.Info("参数变量","TotalReward",TotalReward,"Reward_Justnum",Reward_justnum)  
+	TotalReward.Div(TotalReward,math.Exp(big.NewInt(2),Reward_justnum))   // reward/2**justnum
+	//log.Info("参数变量","TotalReward",TotalReward)
+	if header.Number.Cmp(big.NewInt(100))>0 {       //必须在区块号100以前完成挖矿智能合约的部署。
+	    minerpool:=TotalReward.Div(TotalReward,big.NewInt(100))
+		state.AddBalance(header.Coinbase, minerpool)
+	//	log.Info("参数变量","minerpool",minerpool)
+	//	reward.Sub(reward,minerpool)
+		state.AddBalance(params.PosMinerContractAddr, TotalReward.Mul(TotalReward,big.NewInt(99)))
+		log.Info("参数变量","TotalReward",TotalReward)
+	}else{
+		state.AddBalance(header.Coinbase, TotalReward)
+		log.Info("参数变量","TotalReward",TotalReward)
+	}
 }
