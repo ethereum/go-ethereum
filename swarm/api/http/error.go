@@ -36,7 +36,7 @@ import (
 var templateMap map[int]*template.Template
 
 //parameters needed for formatting the correct HTML page
-type ErrorParams struct {
+type ResponseParams struct {
 	Msg       string
 	Code      int
 	Timestamp string
@@ -75,45 +75,44 @@ func initErrHandling() {
 //For example, if the user requests bzz:/<hash>/read and that manifest contains entries
 //"readme.md" and "readinglist.txt", a HTML page is returned with this two links.
 //This only applies if the manifest has no default entry
-func ShowMultipleChoices(w http.ResponseWriter, r *http.Request, list api.ManifestList) {
+func ShowMultipleChoices(w http.ResponseWriter, req *Request, list api.ManifestList) {
 	msg := ""
 	if list.Entries == nil {
-		ShowError(w, r, "Internal Server Error", http.StatusInternalServerError)
+		Respond(w, req, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	//make links relative
 	//requestURI comes with the prefix of the ambiguous path, e.g. "read" for "readme.md" and "readinglist.txt"
 	//to get clickable links, need to remove the ambiguous path, i.e. "read"
-	idx := strings.LastIndex(r.RequestURI, "/")
+	idx := strings.LastIndex(req.RequestURI, "/")
 	if idx == -1 {
-		ShowError(w, r, "Internal Server Error", http.StatusInternalServerError)
+		Respond(w, req, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 	//remove ambiguous part
-	base := r.RequestURI[:idx+1]
+	base := req.RequestURI[:idx+1]
 	for _, e := range list.Entries {
 		//create clickable link for each entry
 		msg += "<a href='" + base + e.Path + "'>" + e.Path + "</a><br/>"
 	}
-	respond(w, r, &ErrorParams{
-		Code:      http.StatusMultipleChoices,
-		Details:   template.HTML(msg),
-		Timestamp: time.Now().Format(time.RFC1123),
-		template:  getTemplate(http.StatusMultipleChoices),
-	})
+
+	Respond(w, req, msg, http.StatusMultipleChoices)
 }
 
-//ShowError is used to show an HTML error page to a client.
+//Respond is used to show an HTML page to a client.
 //If there is an `Accept` header of `application/json`, JSON will be returned instead
 //The function just takes a string message which will be displayed in the error page.
 //The code is used to evaluate which template will be displayed
 //(and return the correct HTTP status code)
-func ShowError(w http.ResponseWriter, r *http.Request, msg string, code int) {
-	if code == http.StatusInternalServerError {
-		//log.Error(msg)
-		log.Output(msg, log.LvlError, 3)
+func Respond(w http.ResponseWriter, req *Request, msg string, code int) {
+	switch code {
+	case http.StatusInternalServerError:
+		log.Output(msg, log.LvlError, 3, "ruid", req.ruid, "code", code)
+	default:
+		log.Output(msg, log.LvlDebug, 3, "ruid", req.ruid, "code", code)
 	}
-	respond(w, r, &ErrorParams{
+
+	respond(w, &req.Request, &ResponseParams{
 		Code:      code,
 		Msg:       msg,
 		Timestamp: time.Now().Format(time.RFC1123),
@@ -122,7 +121,7 @@ func ShowError(w http.ResponseWriter, r *http.Request, msg string, code int) {
 }
 
 //evaluate if client accepts html or json response
-func respond(w http.ResponseWriter, r *http.Request, params *ErrorParams) {
+func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 	w.WriteHeader(params.Code)
 	if r.Header.Get("Accept") == "application/json" {
 		respondJson(w, params)
@@ -132,7 +131,7 @@ func respond(w http.ResponseWriter, r *http.Request, params *ErrorParams) {
 }
 
 //return a HTML page
-func respondHtml(w http.ResponseWriter, params *ErrorParams) {
+func respondHtml(w http.ResponseWriter, params *ResponseParams) {
 	err := params.template.Execute(w, params)
 	if err != nil {
 		log.Error(err.Error())
@@ -140,7 +139,7 @@ func respondHtml(w http.ResponseWriter, params *ErrorParams) {
 }
 
 //return JSON
-func respondJson(w http.ResponseWriter, params *ErrorParams) {
+func respondJson(w http.ResponseWriter, params *ResponseParams) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(params)
 }
