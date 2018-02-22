@@ -42,6 +42,8 @@ var (
 	ByzantiumBlockReward   *big.Int = big.NewInt(3e+18)                                   // Block reward in wei for successfully mining a block upward from Byzantium
 	maxUncles                       = 2                                                   // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTime          = 15 * time.Second
+	treasuryDevFunds	   *big.Int	= big.NewInt(20)
+	stakeFunds			   *big.Int	= big.NewInt(10)
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -607,10 +609,9 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		blockReward = ByzantiumBlockReward
 	}
 
-	treasuryPercent := getTreasuryPercent(header)
 	reward := new(big.Int).Set(blockReward)
 	treasuryReward := new(big.Int)
-	treasuryReward.Mul(reward, big.NewInt(treasuryPercent))
+	treasuryReward.Mul(reward, treasuryDevFunds)
 	treasuryReward.Div(treasuryReward, big.NewInt(100))
 	// Accumulate the rewards for the miner and any included uncles
 	r := new(big.Int)
@@ -633,11 +634,3 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	state.AddBalance(header.Coinbase, reward)
 }
 
-// getTreasuryPercent computes the current block reward's percent will be for
-// dev subsidy.
-func getTreasuryPercent(header *types.Header) int64 {
-	factorReduction := new(big.Int).Set(header.Number)
-	factorReduction.Div(factorReduction, big.NewInt(2160000))
-
-	return 30 - (2 * factorReduction.Int64())
-}

@@ -56,6 +56,5 @@ var DiscoveryV5Bootnodes = []string{
 // CallistoTestnetBootnodes are the enode URLs of the P2P bootstrap nodes for the
 // Callisto tes network.
 var CallistoTestnetBootnodes = []string{
-	"enode://6b857ecbb4ea5e4469cb132eb07a5885a346d34c34588ce3e40f27a9cd134db6da44eb76f6b0bb856361daa5045ad2333e1273e781209f2ec2a6be617554432e@138.197.90.157:30303",
-	"enode://c19ce20fa8d079c488ec27e6defd4b0b7e17a4df667e9f9436ff54841f637db051cd43aecb7350c6ddcd2056597878a420d9083dec4076ab68e93c619bdbe77c@104.131.103.14:30303",
+	"enode://5c0cef5656d2b6c7baee7bb2362b37c96930988622c397885510546cf19f53f4c3c572bca3e0326139502ad28111935e1efcdaa1e6360bbf65c269212802b509@192.168.0.2:30303",
 }
