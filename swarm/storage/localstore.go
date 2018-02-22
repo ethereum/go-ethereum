@@ -74,4 +74,6 @@ func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 }
 
 // Close local store
-func (self *LocalStore) Close() {}
+func (self *LocalStore) Close() {
+	self.DbStore.Close()
+}

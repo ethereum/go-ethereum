@@ -318,7 +318,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 	config.Init(prvKey)
 	config.Port = port
 
-	dpa, err := storage.NewLocalDPA(datadir)
+	dpa, err := storage.NewLocalDPA(datadir, "")
 	if err != nil {
 		return
 	}
