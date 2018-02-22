@@ -159,22 +159,26 @@ func (r *ReceiptsRequest) Validate(db ethdb.Database, msg *Msg) error {
 	if msg.MsgType != MsgReceipts {
 		return errInvalidMessageType
 	}
-	receipts := msg.Obj.([]types.Receipts)
-	if len(receipts) != 1 {
+	receiptsList := msg.Obj.([][]*types.ReceiptForStorage)
+	if len(receiptsList) != 1 {
 		return errInvalidEntryCount
 	}
-	receipt := receipts[0]
+	storageReceipts := receiptsList[0]
+	receipts := make(types.Receipts, len(storageReceipts))
+	for i, receipt := range storageReceipts {
+		receipts[i] = (*types.Receipt)(receipt)
+	}
 
 	// Retrieve our stored header and validate receipt content against it
 	header := core.GetHeader(db, r.Hash, r.Number)
 	if header == nil {
 		return errHeaderUnavailable
 	}
-	if header.ReceiptHash != types.DeriveSha(receipt) {
+	if header.ReceiptHash != types.DeriveSha(receipts) {
 		return errReceiptHashMismatch
 	}
 	// Validations passed, store and return
-	r.Receipts = receipt
+	r.Receipts = receipts
 	return nil
 }
 

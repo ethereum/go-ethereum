@@ -299,12 +299,17 @@ func testGetReceipt(t *testing.T, protocol int) {
 	defer peer.close()
 
 	// Collect the hashes to request, and the response to expect
-	hashes, receipts := []common.Hash{}, []types.Receipts{}
+	hashes, receipts := []common.Hash{}, [][]*types.ReceiptForStorage{}
 	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
 		block := bc.GetBlockByNumber(i)
 
 		hashes = append(hashes, block.Hash())
-		receipts = append(receipts, core.GetBlockReceipts(db, block.Hash(), block.NumberU64()))
+		blockReceipts := core.GetBlockReceipts(db, block.Hash(), block.NumberU64())
+		storageReceipts := make([]*types.ReceiptForStorage, len(blockReceipts))
+		for i, receipt := range blockReceipts {
+			storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
+		}
+		receipts = append(receipts, storageReceipts)
 	}
 	// Send the hash request and verify the response
 	cost := peer.GetRequestCost(GetReceiptsMsg, len(hashes))

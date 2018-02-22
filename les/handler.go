@@ -644,14 +644,18 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				break
 			}
 			// Retrieve the requested block's receipts, skipping if unknown to us
-			results := core.GetBlockReceipts(pm.chainDb, hash, core.GetBlockNumber(pm.chainDb, hash))
-			if results == nil {
+			blockReceipts := core.GetBlockReceipts(pm.chainDb, hash, core.GetBlockNumber(pm.chainDb, hash))
+			if blockReceipts == nil {
 				if header := pm.blockchain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
 					continue
 				}
 			}
 			// If known, encode and queue for response packet
-			if encoded, err := rlp.EncodeToBytes(results); err != nil {
+			storageReceipts := make([]*types.ReceiptForStorage, len(blockReceipts))
+			for i, receipt := range blockReceipts {
+				storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
+			}
+			if encoded, err := rlp.EncodeToBytes(storageReceipts); err != nil {
 				log.Error("Failed to encode receipt", "err", err)
 			} else {
 				receipts = append(receipts, encoded)
@@ -671,7 +675,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// A batch of receipts arrived to one of our previous requests
 		var resp struct {
 			ReqID, BV uint64
-			Receipts  []types.Receipts
+			Receipts  [][]*types.ReceiptForStorage
 		}
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
