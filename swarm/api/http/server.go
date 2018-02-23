@@ -349,7 +349,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	}
 
 	switch {
-	case r.uri.Raw():
+	case r.uri.Raw() || r.uri.DeprecatedRaw():
 		// allow the request to overwrite the content type using a query
 		// parameter
 		contentType := "application/octet-stream"
