@@ -129,8 +129,8 @@ func Setup(ctx *cli.Context) error {
 
 	// pprof server
 	if ctx.GlobalBool(pprofFlag.Name) {
-		// Hook go-metrics into expvar
-		// on any /debug/metrics request, load all vars from the registry into expvar, and execute regular expvar handler
+		// Hook go-metrics into expvar on any /debug/metrics request, load all vars
+		// from the registry into expvar, and execute regular expvar handler.
 		exp.Exp(metrics.DefaultRegistry)
 
 		address := fmt.Sprintf("%s:%d", ctx.GlobalString(pprofAddrFlag.Name), ctx.GlobalInt(pprofPortFlag.Name))
