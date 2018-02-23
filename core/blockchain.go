@@ -244,7 +244,7 @@ func (bc *BlockChain) loadLastState() error {
 	}
 
 	// Issue a status log for the user
-	currentFastBlock := bc.currentFastBlock.Load().(*types.Block)
+	currentFastBlock := bc.CurrentFastBlock()
 
 	headerTd := bc.GetTd(currentHeader.Hash(), currentHeader.Number.Uint64())
 	blockTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
@@ -334,7 +334,7 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 
 // GasLimit returns the gas limit of the current HEAD block.
 func (bc *BlockChain) GasLimit() uint64 {
-	return bc.currentBlock.Load().(*types.Block).GasLimit()
+	return bc.CurrentBlock().GasLimit()
 }
 
 // CurrentBlock retrieves the current head block of the canonical chain. The
