@@ -82,6 +82,8 @@ type Whisper struct {
 
 	syncAllowance int // maximum time in seconds allowed to process the whisper-related messages
 
+	lightClient bool // indicates is this node is pure light client (does not forward any messages)
+
 	statsMu sync.Mutex // guard stats
 	stats   Statistics // Statistics of whisper node
 
@@ -587,7 +589,7 @@ func (whisper *Whisper) Unsubscribe(id string) error {
 // Send injects a message into the whisper send queue, to be distributed in the
 // network in the coming cycles.
 func (whisper *Whisper) Send(envelope *Envelope) error {
-	ok, err := whisper.add(envelope)
+	ok, err := whisper.add(envelope, false)
 	if err != nil {
 		return err
 	}
@@ -673,7 +675,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 
 			trouble := false
 			for _, env := range envelopes {
-				cached, err := whisper.add(env)
+				cached, err := whisper.add(env, whisper.lightClient)
 				if err != nil {
 					trouble = true
 					log.Error("bad envelope received, peer will be disconnected", "peer", p.peer.ID(), "err", err)
@@ -746,7 +748,8 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 // add inserts a new envelope into the message pool to be distributed within the
 // whisper network. It also inserts the envelope into the expiration pool at the
 // appropriate time-stamp. In case of error, connection should be dropped.
-func (whisper *Whisper) add(envelope *Envelope) (bool, error) {
+// param isP2P indicates whether the message is peer-to-peer (should not be forwarded).
+func (whisper *Whisper) add(envelope *Envelope, isP2P bool) (bool, error) {
 	now := uint32(time.Now().Unix())
 	sent := envelope.Expiry - envelope.TTL
 
@@ -811,7 +814,7 @@ func (whisper *Whisper) add(envelope *Envelope) (bool, error) {
 		whisper.statsMu.Lock()
 		whisper.stats.memoryUsed += envelope.size()
 		whisper.statsMu.Unlock()
-		whisper.postEvent(envelope, false) // notify the local node about the new message
+		whisper.postEvent(envelope, isP2P) // notify the local node about the new message
 		if whisper.mailServer != nil {
 			whisper.mailServer.Archive(envelope)
 		}
