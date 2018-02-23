@@ -32,10 +32,30 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 var hashMatcher = regexp.MustCompile("^[0-9A-Fa-f]{64}")
+
+//setup metrics
+var (
+	apiResolveCount    = metrics.NewRegisteredCounter("api.resolve.count", nil)
+	apiResolveFail     = metrics.NewRegisteredCounter("api.resolve.fail", nil)
+	apiPutCount        = metrics.NewRegisteredCounter("api.put.count", nil)
+	apiPutFail         = metrics.NewRegisteredCounter("api.put.fail", nil)
+	apiGetCount        = metrics.NewRegisteredCounter("api.get.count", nil)
+	apiGetNotFound     = metrics.NewRegisteredCounter("api.get.notfound", nil)
+	apiGetHttp300      = metrics.NewRegisteredCounter("api.get.http.300", nil)
+	apiModifyCount     = metrics.NewRegisteredCounter("api.modify.count", nil)
+	apiModifyFail      = metrics.NewRegisteredCounter("api.modify.fail", nil)
+	apiAddFileCount    = metrics.NewRegisteredCounter("api.addfile.count", nil)
+	apiAddFileFail     = metrics.NewRegisteredCounter("api.addfile.fail", nil)
+	apiRmFileCount     = metrics.NewRegisteredCounter("api.removefile.count", nil)
+	apiRmFileFail      = metrics.NewRegisteredCounter("api.removefile.fail", nil)
+	apiAppendFileCount = metrics.NewRegisteredCounter("api.appendfile.count", nil)
+	apiAppendFileFail  = metrics.NewRegisteredCounter("api.appendfile.fail", nil)
+)
 
 type Resolver interface {
 	Resolve(string) (common.Hash, error)
@@ -155,6 +175,7 @@ type ErrResolve error
 
 // DNS Resolver
 func (self *Api) Resolve(uri *URI) (storage.Key, error) {
+	apiResolveCount.Inc(1)
 	log.Trace(fmt.Sprintf("Resolving : %v", uri.Addr))
 
 	// if the URI is immutable, check if the address is a hash
@@ -169,6 +190,7 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	// if DNS is not configured, check if the address is a hash
 	if self.dns == nil {
 		if !isHash {
+			apiResolveFail.Inc(1)
 			return nil, fmt.Errorf("no DNS to resolve name: %q", uri.Addr)
 		}
 		return common.Hex2Bytes(uri.Addr), nil
@@ -179,6 +201,7 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	if err == nil {
 		return resolved[:], nil
 	} else if !isHash {
+		apiResolveFail.Inc(1)
 		return nil, err
 	}
 	return common.Hex2Bytes(uri.Addr), nil
@@ -186,16 +209,19 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 
 // Put provides singleton manifest creation on top of dpa store
 func (self *Api) Put(content, contentType string) (storage.Key, error) {
+	apiPutCount.Inc(1)
 	r := strings.NewReader(content)
 	wg := &sync.WaitGroup{}
 	key, err := self.dpa.Store(r, int64(len(content)), wg, nil)
 	if err != nil {
+		apiPutFail.Inc(1)
 		return nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
 	key, err = self.dpa.Store(r, int64(len(manifest)), wg, nil)
 	if err != nil {
+		apiPutFail.Inc(1)
 		return nil, err
 	}
 	wg.Wait()
@@ -206,8 +232,10 @@ func (self *Api) Put(content, contentType string) (storage.Key, error) {
 // to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status and an error
 func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, err error) {
+	apiGetCount.Inc(1)
 	trie, err := loadManifest(self.dpa, key, nil)
 	if err != nil {
+		apiGetNotFound.Inc(1)
 		status = http.StatusNotFound
 		log.Warn(fmt.Sprintf("loadManifestTrie error: %v", err))
 		return
@@ -221,6 +249,7 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
+			apiGetHttp300.Inc(1)
 			return
 		} else {
 			mimeType = entry.ContentType
@@ -229,6 +258,7 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 		}
 	} else {
 		status = http.StatusNotFound
+		apiGetNotFound.Inc(1)
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
 		log.Warn(fmt.Sprintf("%v", err))
 	}
@@ -236,9 +266,11 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 }
 
 func (self *Api) Modify(key storage.Key, path, contentHash, contentType string) (storage.Key, error) {
+	apiModifyCount.Inc(1)
 	quitC := make(chan bool)
 	trie, err := loadManifest(self.dpa, key, quitC)
 	if err != nil {
+		apiModifyFail.Inc(1)
 		return nil, err
 	}
 	if contentHash != "" {
@@ -253,19 +285,23 @@ func (self *Api) Modify(key storage.Key, path, contentHash, contentType string) 
 	}
 
 	if err := trie.recalcAndStore(); err != nil {
+		apiModifyFail.Inc(1)
 		return nil, err
 	}
 	return trie.hash, nil
 }
 
 func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Key, string, error) {
+	apiAddFileCount.Inc(1)
 
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
+		apiAddFileFail.Inc(1)
 		return nil, "", err
 	}
 	mkey, err := self.Resolve(uri)
 	if err != nil {
+		apiAddFileFail.Inc(1)
 		return nil, "", err
 	}
 
@@ -284,16 +320,19 @@ func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver
 
 	mw, err := self.NewManifestWriter(mkey, nil)
 	if err != nil {
+		apiAddFileFail.Inc(1)
 		return nil, "", err
 	}
 
 	fkey, err := mw.AddEntry(bytes.NewReader(content), entry)
 	if err != nil {
+		apiAddFileFail.Inc(1)
 		return nil, "", err
 	}
 
 	newMkey, err := mw.Store()
 	if err != nil {
+		apiAddFileFail.Inc(1)
 		return nil, "", err
 
 	}
@@ -303,13 +342,16 @@ func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver
 }
 
 func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (string, error) {
+	apiRmFileCount.Inc(1)
 
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
+		apiRmFileFail.Inc(1)
 		return "", err
 	}
 	mkey, err := self.Resolve(uri)
 	if err != nil {
+		apiRmFileFail.Inc(1)
 		return "", err
 	}
 
@@ -320,16 +362,19 @@ func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (strin
 
 	mw, err := self.NewManifestWriter(mkey, nil)
 	if err != nil {
+		apiRmFileFail.Inc(1)
 		return "", err
 	}
 
 	err = mw.RemoveEntry(filepath.Join(path, fname))
 	if err != nil {
+		apiRmFileFail.Inc(1)
 		return "", err
 	}
 
 	newMkey, err := mw.Store()
 	if err != nil {
+		apiRmFileFail.Inc(1)
 		return "", err
 
 	}
@@ -338,6 +383,7 @@ func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (strin
 }
 
 func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, content []byte, oldKey storage.Key, offset int64, addSize int64, nameresolver bool) (storage.Key, string, error) {
+	apiAppendFileCount.Inc(1)
 
 	buffSize := offset + addSize
 	if buffSize < existingSize {
@@ -366,10 +412,12 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
+		apiAppendFileFail.Inc(1)
 		return nil, "", err
 	}
 	mkey, err := self.Resolve(uri)
 	if err != nil {
+		apiAppendFileFail.Inc(1)
 		return nil, "", err
 	}
 
@@ -380,11 +428,13 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 
 	mw, err := self.NewManifestWriter(mkey, nil)
 	if err != nil {
+		apiAppendFileFail.Inc(1)
 		return nil, "", err
 	}
 
 	err = mw.RemoveEntry(filepath.Join(path, fname))
 	if err != nil {
+		apiAppendFileFail.Inc(1)
 		return nil, "", err
 	}
 
@@ -398,11 +448,13 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 
 	fkey, err := mw.AddEntry(io.Reader(combinedReader), entry)
 	if err != nil {
+		apiAppendFileFail.Inc(1)
 		return nil, "", err
 	}
 
 	newMkey, err := mw.Store()
 	if err != nil {
+		apiAppendFileFail.Inc(1)
 		return nil, "", err
 
 	}
@@ -412,6 +464,7 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 }
 
 func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storage.Key, manifestEntryMap map[string]*manifestTrieEntry, err error) {
+
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
 		return nil, nil, err

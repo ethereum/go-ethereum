@@ -35,7 +35,6 @@ func init() {
 			Enabled = true
 		}
 	}
-	//exp.Exp(DefaultRegistry)
 }
 
 // CollectProcessMetrics periodically collects various metrics about the running

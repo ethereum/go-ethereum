@@ -29,11 +29,18 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
 )
 
 //templateMap holds a mapping of an HTTP error code to a template
 var templateMap map[int]*template.Template
+
+//metrics variables
+var (
+	htmlCounter = metrics.NewRegisteredCounter("api.http.errorpage.html.count", nil)
+	jsonCounter = metrics.NewRegisteredCounter("api.http.errorpage.json.count", nil)
+)
 
 //parameters needed for formatting the correct HTML page
 type ErrorParams struct {
@@ -132,6 +139,7 @@ func respond(w http.ResponseWriter, r *http.Request, params *ErrorParams) {
 
 //return a HTML page
 func respondHtml(w http.ResponseWriter, params *ErrorParams) {
+	htmlCounter.Inc(1)
 	err := params.template.Execute(w, params)
 	if err != nil {
 		log.Error(err.Error())
@@ -140,6 +148,7 @@ func respondHtml(w http.ResponseWriter, params *ErrorParams) {
 
 //return JSON
 func respondJson(w http.ResponseWriter, params *ErrorParams) {
+	jsonCounter.Inc(1)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(params)
 }
