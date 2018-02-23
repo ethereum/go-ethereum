@@ -61,30 +61,7 @@ func NewPublicWhisperAPI(w *Whisper) *PublicWhisperAPI {
 		w:        w,
 		lastUsed: make(map[string]time.Time),
 	}
-
-	go api.run()
 	return api
-}
-
-// run the api event loop.
-// this loop deletes filter that have not been used within filterTimeout
-func (api *PublicWhisperAPI) run() {
-	timeout := time.NewTicker(2 * time.Minute)
-	for {
-		<-timeout.C
-
-		api.mu.Lock()
-		for id, lastUsed := range api.lastUsed {
-			if time.Since(lastUsed).Seconds() >= filterTimeout {
-				delete(api.lastUsed, id)
-				if err := api.w.Unsubscribe(id); err != nil {
-					log.Error("could not unsubscribe whisper filter", "error", err)
-				}
-				log.Debug("delete whisper filter (timeout)", "id", id)
-			}
-		}
-		api.mu.Unlock()
-	}
 }
 
 // Version returns the Whisper sub-protocol version.
@@ -219,7 +196,8 @@ func (api *PublicWhisperAPI) DeleteSymKey(ctx context.Context, id string) bool {
 	return api.w.DeleteSymKey(id)
 }
 
-// MakeLightClient turns the node into light client, which does not forward any incoming messages.
+// MakeLightClient turns the node into light client, which does not forward
+// any incoming messages, and sends only messages originated in this node.
 func (api *PublicWhisperAPI) MakeLightClient(ctx context.Context) bool {
 	api.w.lightClient = true
 	return api.w.lightClient
