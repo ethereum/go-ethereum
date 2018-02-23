@@ -590,10 +590,7 @@ func (whisper *Whisper) Unsubscribe(id string) error {
 // network in the coming cycles.
 func (whisper *Whisper) Send(envelope *Envelope) error {
 	ok, err := whisper.add(envelope, false)
-	if err != nil {
-		return err
-	}
-	if !ok {
+	if err == nil && !ok {
 		return fmt.Errorf("failed to add envelope")
 	}
 	return err
