@@ -27,6 +27,10 @@ import (
 )
 
 var (
+	metricsEnableInfluxDBExportFlag = cli.BoolFlag{
+		Name:  "metrics.influxdb.export",
+		Usage: "Enable metrics export/push to an external InfluxDB database",
+	}
 	metricsInfluxDBEndpointFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.endpoint",
 		Usage: "Metrics InfluxDB endpoint",
@@ -34,17 +38,17 @@ var (
 	}
 	metricsInfluxDBDatabaseFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.database",
-		Usage: "metrics InfluxDB database",
+		Usage: "Metrics InfluxDB database",
 		Value: "metrics",
 	}
 	metricsInfluxDBUsernameFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.username",
-		Usage: "metrics InfluxDB username",
+		Usage: "Metrics InfluxDB username",
 		Value: "",
 	}
 	metricsInfluxDBPasswordFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.password",
-		Usage: "metrics InfluxDB password",
+		Usage: "Metrics InfluxDB password",
 		Value: "",
 	}
 	// The `host` tag is part of every measurement sent to InfluxDB. Queries on tags are faster in InfluxDB.
@@ -53,7 +57,7 @@ var (
 	// https://docs.influxdata.com/influxdb/v1.4/concepts/key_concepts/#tag-key
 	metricsInfluxDBHostTagFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.host.tag",
-		Usage: "metrics InfluxDB `host` tag attached to all measurements",
+		Usage: "Metrics InfluxDB `host` tag attached to all measurements",
 		Value: "localhost",
 	}
 )
@@ -61,22 +65,27 @@ var (
 // Flags holds all command-line flags required for metrics collection.
 var Flags = []cli.Flag{
 	utils.MetricsEnabledFlag,
+	metricsEnableInfluxDBExportFlag,
 	metricsInfluxDBEndpointFlag, metricsInfluxDBDatabaseFlag, metricsInfluxDBUsernameFlag, metricsInfluxDBPasswordFlag, metricsInfluxDBHostTagFlag,
 }
 
 func Setup(ctx *cli.Context) {
 	if gethmetrics.Enabled {
+		log.Info("Enabling swarm metrics collection")
 		var (
-			endpoint = ctx.GlobalString(metricsInfluxDBEndpointFlag.Name)
-			database = ctx.GlobalString(metricsInfluxDBDatabaseFlag.Name)
-			username = ctx.GlobalString(metricsInfluxDBUsernameFlag.Name)
-			password = ctx.GlobalString(metricsInfluxDBPasswordFlag.Name)
-			hosttag  = ctx.GlobalString(metricsInfluxDBHostTagFlag.Name)
+			enableExport = ctx.GlobalBool(metricsEnableInfluxDBExportFlag.Name)
+			endpoint     = ctx.GlobalString(metricsInfluxDBEndpointFlag.Name)
+			database     = ctx.GlobalString(metricsInfluxDBDatabaseFlag.Name)
+			username     = ctx.GlobalString(metricsInfluxDBUsernameFlag.Name)
+			password     = ctx.GlobalString(metricsInfluxDBPasswordFlag.Name)
+			hosttag      = ctx.GlobalString(metricsInfluxDBHostTagFlag.Name)
 		)
 
-		log.Info("Enabling swarm metrics collection and export")
-		go influxdb.InfluxDBWithTags(gethmetrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "swarm.", map[string]string{
-			"host": hosttag,
-		})
+		if enableExport {
+			log.Info("Enabling swarm metrics export to InfluxDB")
+			go influxdb.InfluxDBWithTags(gethmetrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "swarm.", map[string]string{
+				"host": hosttag,
+			})
+		}
 	}
 }
