@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	gometrics "github.com/ethersphere/go-metrics"
 )
 
 //metrics variables
@@ -33,8 +32,8 @@ import (
 //at a certain index. Thus we do that with an array of counters with
 //entry for each index
 var (
-	bucketAddIndexCount []gometrics.Counter
-	bucketRmIndexCount  []gometrics.Counter
+	bucketAddIndexCount []metrics.Counter
+	bucketRmIndexCount  []metrics.Counter
 )
 
 const (
@@ -445,11 +444,11 @@ func (self *Kademlia) String() string {
 //We have to build up the array of counters for each index
 func (self *Kademlia) initMetricsVariables() {
 	//create the arrays
-	bucketAddIndexCount = make([]gometrics.Counter, self.MaxProx+1)
-	bucketRmIndexCount = make([]gometrics.Counter, self.MaxProx+1)
+	bucketAddIndexCount = make([]metrics.Counter, self.MaxProx+1)
+	bucketRmIndexCount = make([]metrics.Counter, self.MaxProx+1)
 	//at each index create a metrics counter
 	for i := 0; i < (self.KadParams.MaxProx + 1); i++ {
-		bucketAddIndexCount[i] = metrics.NewCounter(fmt.Sprintf("network.kademlia.bucket.add.%d.index", i))
-		bucketRmIndexCount[i] = metrics.NewCounter(fmt.Sprintf("network.kademlia.bucket.rm.%d.index", i))
+		bucketAddIndexCount[i] = metrics.NewRegisteredCounter(fmt.Sprintf("network.kademlia.bucket.add.%d.index", i), nil)
+		bucketRmIndexCount[i] = metrics.NewRegisteredCounter(fmt.Sprintf("network.kademlia.bucket.rm.%d.index", i), nil)
 	}
 }

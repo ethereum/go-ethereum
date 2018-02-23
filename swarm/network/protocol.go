@@ -48,15 +48,15 @@ import (
 
 //metrics variables
 var (
-	storeRequestMsgCounter    = metrics.NewCounter("network.protocol.msg.storerequest.count")
-	retrieveRequestMsgCounter = metrics.NewCounter("network.protocol.msg.retrieverequest.count")
-	peersMsgCounter           = metrics.NewCounter("network.protocol.msg.peers.count")
-	syncRequestMsgCounter     = metrics.NewCounter("network.protocol.msg.syncrequest.count")
-	unsyncedKeysMsgCounter    = metrics.NewCounter("network.protocol.msg.unsyncedkeys.count")
-	deliverRequestMsgCounter  = metrics.NewCounter("network.protocol.msg.deliverrequest.count")
-	paymentMsgCounter         = metrics.NewCounter("network.protocol.msg.payment.count")
-	invalidMsgCounter         = metrics.NewCounter("network.protocol.msg.invalid.count")
-	handleStatusMsgCounter    = metrics.NewCounter("network.protocol.msg.handlestatus.count")
+	storeRequestMsgCounter    = metrics.NewRegisteredCounter("network.protocol.msg.storerequest.count", nil)
+	retrieveRequestMsgCounter = metrics.NewRegisteredCounter("network.protocol.msg.retrieverequest.count", nil)
+	peersMsgCounter           = metrics.NewRegisteredCounter("network.protocol.msg.peers.count", nil)
+	syncRequestMsgCounter     = metrics.NewRegisteredCounter("network.protocol.msg.syncrequest.count", nil)
+	unsyncedKeysMsgCounter    = metrics.NewRegisteredCounter("network.protocol.msg.unsyncedkeys.count", nil)
+	deliverRequestMsgCounter  = metrics.NewRegisteredCounter("network.protocol.msg.deliverrequest.count", nil)
+	paymentMsgCounter         = metrics.NewRegisteredCounter("network.protocol.msg.payment.count", nil)
+	invalidMsgCounter         = metrics.NewRegisteredCounter("network.protocol.msg.invalid.count", nil)
+	handleStatusMsgCounter    = metrics.NewRegisteredCounter("network.protocol.msg.handlestatus.count", nil)
 )
 
 const (

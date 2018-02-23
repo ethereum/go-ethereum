@@ -24,7 +24,7 @@ import (
 
 //metrics variables
 var (
-	dbStorePutCounter = metrics.NewCounter("storage.db.dbstore.put.count")
+	dbStorePutCounter = metrics.NewRegisteredCounter("storage.db.dbstore.put.count", nil)
 )
 
 // LocalStore is a combination of inmemory db over a disk persisted db

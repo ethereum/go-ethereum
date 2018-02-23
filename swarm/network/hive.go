@@ -41,9 +41,9 @@ import (
 // to keep the nodetable uptodate
 
 var (
-	peersNumGauge     = metrics.NewGauge("network.peers.num")
-	addPeerCounter    = metrics.NewCounter("network.addpeer.count")
-	removePeerCounter = metrics.NewCounter("network.removepeer.count")
+	peersNumGauge     = metrics.NewRegisteredGauge("network.peers.num", nil)
+	addPeerCounter    = metrics.NewRegisteredCounter("network.addpeer.count", nil)
+	removePeerCounter = metrics.NewRegisteredCounter("network.removepeer.count", nil)
 )
 
 type Hive struct {

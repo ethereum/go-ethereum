@@ -67,7 +67,7 @@ var (
 
 //metrics variables
 var (
-	newChunkCounter = metrics.NewCounter("storage.chunks.new")
+	newChunkCounter = metrics.NewRegisteredCounter("storage.chunks.new", nil)
 )
 
 type TreeChunker struct {

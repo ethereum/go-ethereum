@@ -35,25 +35,6 @@ func init() {
 			Enabled = true
 		}
 	}
-	//exp.Exp(DefaultRegistry)
-}
-
-// NewResettingTimer creates a new ResettingTimer, either a real one of a NOP stub depending
-// on the metrics flag.
-func NewResettingTimer(name string) metrics.ResettingTimer {
-	if !Enabled {
-		return new(metrics.NilResettingTimer)
-	}
-	return metrics.GetOrRegisterResettingTimer(name, metrics.DefaultRegistry)
-}
-
-// NewGauge creates a new metrics Gauge, either a real one of a NOP stub depending
-// on the metrics flag.
-func NewGauge(name string) metrics.Gauge {
-	if !Enabled {
-		return new(metrics.NilGauge)
-	}
-	return metrics.GetOrRegisterGauge(name, metrics.DefaultRegistry)
 }
 
 // CollectProcessMetrics periodically collects various metrics about the running

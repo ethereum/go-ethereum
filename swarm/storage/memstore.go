@@ -28,8 +28,8 @@ import (
 
 //metrics variables
 var (
-	memstorePutCounter    = metrics.NewCounter("storage.db.memstore.put.count")
-	memstoreRemoveCounter = metrics.NewCounter("storage.db.memstore.rm.count")
+	memstorePutCounter    = metrics.NewRegisteredCounter("storage.db.memstore.put.count", nil)
+	memstoreRemoveCounter = metrics.NewRegisteredCounter("storage.db.memstore.rm.count", nil)
 )
 
 const (

@@ -22,8 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
 	gethmetrics "github.com/ethereum/go-ethereum/metrics"
-	metrics "github.com/ethersphere/go-metrics"
-	influxdb "github.com/ethersphere/go-metrics-influxdb"
+	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -76,7 +75,7 @@ func Setup(ctx *cli.Context) {
 		)
 
 		log.Info("Enabling swarm metrics collection and export")
-		go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "swarm.", map[string]string{
+		go influxdb.InfluxDBWithTags(gethmetrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "swarm.", map[string]string{
 			"host": hosttag,
 		})
 	}

@@ -29,11 +29,11 @@ import (
 
 //metrics variables
 var (
-	syncReceiveCount  = metrics.NewCounter("network.sync.recv.count")
-	syncReceiveIgnore = metrics.NewCounter("network.sync.recv.ignore")
-	syncSendCount     = metrics.NewCounter("network.sync.send.count")
-	syncSendRefused   = metrics.NewCounter("network.sync.send.refused")
-	syncSendNotFound  = metrics.NewCounter("network.sync.send.notfound")
+	syncReceiveCount  = metrics.NewRegisteredCounter("network.sync.recv.count", nil)
+	syncReceiveIgnore = metrics.NewRegisteredCounter("network.sync.recv.ignore", nil)
+	syncSendCount     = metrics.NewRegisteredCounter("network.sync.send.count", nil)
+	syncSendRefused   = metrics.NewRegisteredCounter("network.sync.send.refused", nil)
+	syncSendNotFound  = metrics.NewRegisteredCounter("network.sync.send.notfound", nil)
 )
 
 // Handler for storage/retrieval related protocol requests

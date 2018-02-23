@@ -38,8 +38,8 @@ var templateMap map[int]*template.Template
 
 //metrics variables
 var (
-	htmlCounter = metrics.NewCounter("api.http.errorpage.html.count")
-	jsonCounter = metrics.NewCounter("api.http.errorpage.json.count")
+	htmlCounter = metrics.NewRegisteredCounter("api.http.errorpage.html.count", nil)
+	jsonCounter = metrics.NewRegisteredCounter("api.http.errorpage.json.count", nil)
 )
 
 //parameters needed for formatting the correct HTML page

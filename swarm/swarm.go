@@ -50,11 +50,11 @@ import (
 var (
 	startTime          time.Time
 	updateGaugesPeriod = 5 * time.Second
-	startCounter       = metrics.NewCounter("stack,start")
-	stopCounter        = metrics.NewCounter("stack,stop")
-	uptimeGauge        = metrics.NewGauge("stack.uptime")
-	dbSizeGauge        = metrics.NewGauge("storage.db.chunks.size")
-	cacheSizeGauge     = metrics.NewGauge("storage.db.cache.size")
+	startCounter       = metrics.NewRegisteredCounter("stack,start", nil)
+	stopCounter        = metrics.NewRegisteredCounter("stack,stop", nil)
+	uptimeGauge        = metrics.NewRegisteredGauge("stack.uptime", nil)
+	dbSizeGauge        = metrics.NewRegisteredGauge("storage.db.chunks.size", nil)
+	cacheSizeGauge     = metrics.NewRegisteredGauge("storage.db.cache.size", nil)
 )
 
 // the swarm stack
@@ -329,7 +329,7 @@ func (self *Swarm) periodicallyUpdateGauges() {
 	ticker := time.NewTicker(updateGaugesPeriod)
 
 	go func() {
-		for _ = range ticker.C {
+		for range ticker.C {
 			self.updateGauges()
 		}
 	}()

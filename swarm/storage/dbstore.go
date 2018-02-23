@@ -41,8 +41,8 @@ import (
 
 //metrics variables
 var (
-	gcCounter            = metrics.NewCounter("storage.db.dbstore.gc.count")
-	dbStoreDeleteCounter = metrics.NewCounter("storage.db.dbstore.rm.count")
+	gcCounter            = metrics.NewRegisteredCounter("storage.db.dbstore.gc.count", nil)
+	dbStoreDeleteCounter = metrics.NewRegisteredCounter("storage.db.dbstore.rm.count", nil)
 )
 
 const (
