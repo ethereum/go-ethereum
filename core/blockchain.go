@@ -648,22 +648,21 @@ func (bc *BlockChain) Stop() {
 	bc.wg.Wait()
 
 	// Ensure the state of a recent block is also stored to disk before exiting.
-	// It is fine if this state does not exist (fast start/stop cycle), but it is
-	// advisable to leave an N block gap from the head so 1) a restart loads up
-	// the last N blocks as sync assistance to remote nodes; 2) a restart during
-	// a (small) reorg doesn't require deep reprocesses; 3) chain "repair" from
-	// missing states are constantly tested.
-	//
-	// This may be tuned a bit on mainnet if its too annoying to reprocess the last
-	// N blocks.
+	// We're writing three different states to catch different restart scenarios:
+	//  - HEAD:     So we don't need to reprocess any blocks in the general case
+	//  - HEAD-1:   So we don't do large reorgs if our HEAD becomes an uncle
+	//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
 	if !bc.cacheConfig.Disabled {
 		triedb := bc.stateCache.TrieDB()
-		if number := bc.CurrentBlock().NumberU64(); number >= triesInMemory {
-			recent := bc.GetBlockByNumber(bc.CurrentBlock().NumberU64() - triesInMemory + 1)
 
-			log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
-			if err := triedb.Commit(recent.Root(), true); err != nil {
-				log.Error("Failed to commit recent state trie", "err", err)
+		for _, offset := range []uint64{0, 1, triesInMemory - 1} {
+			if number := bc.CurrentBlock().NumberU64(); number > offset {
+				recent := bc.GetBlockByNumber(number - offset)
+
+				log.Info("Writing cached state to disk", "block", recent.Number(), "hash", recent.Hash(), "root", recent.Root())
+				if err := triedb.Commit(recent.Root(), true); err != nil {
+					log.Error("Failed to commit recent state trie", "err", err)
+				}
 			}
 		}
 		for !bc.triegc.Empty() {
