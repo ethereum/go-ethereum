@@ -282,6 +282,18 @@ func (dl *downloadTester) CurrentFastBlock() *types.Block {
 	}
 	return dl.genesis
 }
+func (dl *downloadTester) CurrentNumber() uint64 {
+	return dl.CurrentBlock().NumberU64()
+}
+
+func (dl *downloadTester) CurrentFastNumber() uint64 {
+	return dl.CurrentFastBlock().NumberU64()
+}
+
+func (dl *downloadTester) CurrentTD() *big.Int {
+	cur := dl.CurrentBlock()
+	return dl.GetTd(cur.Hash(), cur.NumberU64())
+}
 
 // FastSyncCommitHead manually sets the head block to a given hash.
 func (dl *downloadTester) FastSyncCommitHead(hash common.Hash) error {
