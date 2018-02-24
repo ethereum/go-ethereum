@@ -24,15 +24,17 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	//"sort"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	//	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/pot"
+	//	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	//streamTesting "github.com/ethereum/go-ethereum/swarm/network/stream/testing"
@@ -41,10 +43,15 @@ import (
 const testMinProxBinSize = 2
 
 var (
-	pof       = pot.DefaultPof(256)
+	pof = pot.DefaultPof(256)
+
+	startTime time.Time
 	ids       []discover.NodeID
 	datadirs  map[discover.NodeID]string
-	startTime time.Time
+	overlays  map[discover.NodeID]network.Overlay
+	conf      *synctestConfig
+	ppmap     map[discover.NodeID]*network.PeerPot
+	//conf      := &synctestConfig{}
 )
 
 type synctestConfig struct {
@@ -81,6 +88,8 @@ func initSyncTest() {
 	datadirs = make(map[discover.NodeID]string)
 	//deliveries for each node
 	deliveries = make(map[discover.NodeID]*Delivery)
+	//overlays (kademlia)
+	overlays = make(map[discover.NodeID]network.Overlay)
 
 	//channel to wait for peers connected
 	waitPeerErrC = make(chan error)
@@ -177,7 +186,7 @@ kademlia network. The snapshot should have 'streamer' in its service list.
 */
 func runSyncTest(chunkCount int, nodeCount int) error {
 
-	conf := &synctestConfig{}
+	conf = &synctestConfig{}
 	//mapping of nearest node addresses for chunk hashes
 	//nodesToChunksMap = make(map[discover.NodeID][]storage.Key)
 	conf.retrievalMap = make(map[string]map[string]time.Duration)
@@ -212,6 +221,7 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 		conf.addrToIdMap[string(a)] = ids[c]
 	}
 
+	ppmap = network.NewPeerPot(testMinProxBinSize, ids, conf.addrs)
 	// channel to signal simulation initialisation with action call complete
 	// or node disconnections
 	//disconnectC := make(chan error)
@@ -253,6 +263,7 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 				log.Error(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))
 				allSuccess = false
 			} else {
+				fmt.Println("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
 				log.Info(fmt.Sprintf("Chunk %s FOUND for id %s", chunk, id))
 			}
 		}
@@ -280,9 +291,13 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 			}
 		}
 
-		peerPot := network.NewPeerPot(testMinProxBinSize, ids, conf.addrs)
+		time.Sleep(10 * time.Second)
+		//peerPot := network.NewPeerPot(testMinProxBinSize, ids, conf.addrs)
 		// each node Subscribes to each other's swarmChunkServerStreamName
 		for j := 0; j < len(ids); j++ {
+			//overlays[ids[j]].EachAddr(nil, 0, func(addr network.OverlayAddr, po int, nn bool) bool {
+			//overlays[ids[j]].EachAddr(nil, 256, func(addr network.OverlayAddr, po int, nn bool) bool {
+			//overlays[ids[j]].EachConn(nil, 256, func(addr network.OverlayConn, po int, nn bool) bool {
 			log.Debug(fmt.Sprintf("subscribe: %d", j))
 			ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 			defer cancel()
@@ -290,22 +305,42 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 			if err != nil {
 				return err
 			}
-			//RPC call to subscribe, select bin 0
-			//client.CallContext(ctx, nil, "stream_subscribeStream", sid, "SYNC", []byte{0}, 0, 0, Top, false)
-			// report disconnect events to the error channel cos peers should not disconnect
-			//err = streamTesting.WatchDisconnections(ids[j], client, disconnectC, quitC)
-			//if err != nil {
-			//  return err
-			//}
-			// start syncing, i.e., subscribe to upstream peers po 1 bin
-			//each node subscribes to the next index, last subscribes to 0
-			idx := j + 1
-			if j == len(ids)-1 {
-				idx = 0
+			err = client.CallContext(ctx, nil, "stream_startSyncing")
+			if err != nil {
+				log.Error(fmt.Sprintf("FAILED CallContext %v", err))
+				return nil
 			}
-			sid := ids[idx]
-			client.CallContext(ctx, nil, "stream_subscribeStream", sid, "SYNC", []byte{0}, 0, 0, Top, false)
+			//	})
+
 		}
+		/*
+					for j := 0; j < len(ids); j++ {
+						log.Debug(fmt.Sprintf("subscribe: %d", j))
+						ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+						defer cancel()
+						client, err := net.GetNode(ids[j]).Client()
+						if err != nil {
+							return err
+						}
+						//RPC call to subscribe, select bin 0
+						//client.CallContext(ctx, nil, "stream_subscribeStream", sid, "SYNC", []byte{0}, 0, 0, Top, false)
+						// report disconnect events to the error channel cos peers should not disconnect
+						//err = streamTesting.WatchDisconnections(ids[j], client, disconnectC, quitC)
+						//if err != nil {
+						//  return err
+						//}
+						// start syncing, i.e., subscribe to upstream peers po 1 bin
+						//each node subscribes to the next index, last subscribes to 0
+						idx := j + 1
+						if j == len(ids)-1 {
+							idx = 0
+						}
+						sid := ids[idx]
+						//client.CallContext(ctx, nil, "stream_subscribeStream", sid, "SYNC", []byte{0}, 0, 0, Top, false)
+						client.CallContext(ctx, nil, "stream_startSyncing", sid, po, nn)
+			}
+		*/
+		time.Sleep(10 * time.Second)
 		//now upload the chunks to the selected random single node
 		conf.chunks, err = uploadFileToSingleNodeStore(node.ID(), chunkCount)
 		if err != nil {
@@ -328,13 +363,15 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 			}
 		}
 	}()
-	go func() {
-		startTime = time.Now()
-		ticker := time.NewTicker(time.Second / 10)
-		for range ticker.C {
-			checkChunkIsAtNode(conf)
-		}
-	}()
+	/*
+		go func() {
+			startTime = time.Now()
+			ticker := time.NewTicker(time.Second / 10)
+			for range ticker.C {
+				checkChunkIsAtNode(conf)
+			}
+		}()
+	*/
 
 	//run the simulation
 	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
@@ -353,16 +390,113 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 	return nil
 }
 
-func StartSyncing(s *Streamer, peerId discover.NodeID, po uint8, nn bool) {
-	lastPO := po
-	if nn {
-		lastPO = maxPO
+func newSyncingProtocol(ctx *adapters.ServiceContext) (node.Service, error) {
+	var err error
+	id := ctx.Config.ID
+	addr := toAddr(id)
+	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+	overlays[id] = kad
+	stores[id], err = createTestLocalStorageForId(id, addr)
+	if err != nil {
+		return nil, err
 	}
+	store := stores[id].(*storage.LocalStore)
+	db := storage.NewDBAPI(store)
+	delivery := NewDelivery(kad, db)
+	deliveries[id] = delivery
+	netStore := storage.NewNetStore(store, nil)
+	r := NewRegistry(addr, delivery, netStore, defaultSkipCheck)
 
-	for i := po; i <= lastPO; i++ {
-		s.Subscribe(peerId, "SYNC", newSyncLabel("LIVE", po), 0, 0, High, true)
-		s.Subscribe(peerId, "SYNC", newSyncLabel("HISTORY", po), 0, 0, Mid, false)
-	}
+	RegisterSwarmSyncerServer(r, db)
+	RegisterSwarmSyncerClient(r, db)
+
+	//externalStreamName := "syncProtocol"
+	//hashesChan := make(chan []byte) // this chanel is only for one client, in need for more clients, create a map
+	/*
+
+		//r.RegisterClientFunc(externalStreamName, func(p *Peer, t []byte, live bool) (Client, error) {
+			r.RegisterClientFunc(externalStreamName, func(p *Peer, t []byte) (Client, error) {
+				return newTestExternalClient(t, hashesChan), nil
+			})
+			//r.RegisterServerFunc(externalStreamName, func(p *Peer, t []byte, live bool) (Server, error) {
+			r.RegisterServerFunc(externalStreamName, func(p *Peer, t []byte) (Server, error) {
+				return newTestExternalServer(t), nil
+			})
+	*/
+	go func() {
+		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
+	}()
+
+	//return &TestExternalRegistry{r, hashesChan}, nil
+	return &TestRegistry{Registry: r}, nil
+}
+
+func (r *TestRegistry) StartSyncing(ctx context.Context) error {
+	//func StartSyncing(s *Streamer, peerId discover.NodeID, po uint8, nn bool) {
+	var err error
+
+	//fmt.Println(r.delivery.overlay.String())
+	add := r.addr.ID()
+	//fmt.Println(add)
+	pp := ppmap[add]
+	h := r.delivery.overlay.Healthy(pp)
+	fmt.Println("----------------------------------")
+	fmt.Println(r.delivery.overlay.String())
+	fmt.Println(fmt.Sprintf("IS HEALTHY: %t", h.GotNN && h.KnowNN && h.Full))
+	pos := make(map[int]discover.NodeID)
+	r.delivery.overlay.EachConn(nil, 256, func(addr network.OverlayConn, po int, nn bool) bool {
+		//r.delivery.overlay.EachAddr(nil, 256, func(addr network.OverlayAddr, po int, nn bool) bool {
+		//fmt.Println("A")
+		//fmt.Println(po)
+
+		lastPO := po
+		if nn {
+			lastPO = maxPO
+		}
+		//fmt.Println(lastPO)
+		//fmt.Println("E")
+		peerId := conf.addrToIdMap[string(addr.Address())]
+		fmt.Println(fmt.Sprintf("node %s has conn with %s at po %d and is nn: %t", r.addr.ID(), peerId, po, nn))
+		pos[po] = peerId
+		for i := po; i <= lastPO; i++ {
+			//for ; i <= lastPO; i++ {
+			//for i := 0; i <= maxPO; i++ {
+			//fmt.Println(fmt.Sprintf("SUBSCRIBING %s TO %s and PO %d", string(r.addr.ID().String()), peerId, i))
+			err = r.Subscribe(peerId, "SYNC", []byte{byte(i)}, 0, 0, Top, true)
+			if err != nil {
+				log.Error(fmt.Sprintf("Error subscribing! %v", err))
+				return false
+			}
+		}
+		return true
+	})
+	prev := 0
+	r.delivery.overlay.conns.EachBin(nil, pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
+		skip := po - prev
+		if skip > 1 {
+			f(func(val pot.Val, i int) bool {
+				for c := po + 1; c < po+skip; c++ {
+					err = r.RequestSubscription(peerId, "SYNC", []byte{byte(i)}, 0, 0, Top, true)
+					if err != nil {
+						log.Error(fmt.Sprintf("Error subscribing! %v", err))
+						return false
+					}
+				}
+			})
+		}
+	})
+
+	/*
+		for k, pid := range pos {
+			i := k - 1
+			for p := pos[i]; p == (discover.NodeID{}) && i > 0; i-- {
+				fmt.Println(fmt.Sprintf("Subscribe to bin %d", i))
+				r.Subscribe(pid, "SYNC", []byte{byte(i)}, 0, 0, Top, true)
+				p = pos[i-1]
+			}
+		}
+	*/
+	return nil
 }
 
 func checkChunkIsAtNode(conf *synctestConfig) {
@@ -409,6 +543,7 @@ func mapKeysToNodes(conf *synctestConfig) *synctestConfig {
 		np.EachNeighbour([]byte(conf.chunks[i]), pof, func(val pot.Val, po int) bool {
 			a := val.([]byte)
 			if pl == 256 || pl == po {
+				fmt.Println(fmt.Sprintf("appending %s", conf.addrToIdMap[string(a)]))
 				nns = append(nns, mm[string(a)])
 				nodemap[string(a)] = append(nodemap[string(a)], i)
 			}
@@ -418,7 +553,8 @@ func mapKeysToNodes(conf *synctestConfig) *synctestConfig {
 			return true
 		})
 		//kmap[conf.chunks[i].String()] = nns
-		kmap[string(conf.chunks[i])] = nns
+		//kmap[string(conf.chunks[i])] = nns
+		kmap[conf.chunks[i].String()] = nns
 		//log.Debug(fmt.Sprintf("Length for id %s: %d",ids[i],len(kmap[ids[i]])))
 	}
 	for k, v := range nodemap {
