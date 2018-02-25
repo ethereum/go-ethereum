@@ -686,8 +686,6 @@ func authTwitter(url string) (string, string, common.Address, error) {
 	if len(parts) < 4 || parts[len(parts)-2] != "status" {
 		return "", "", common.Address{}, errors.New("Invalid Twitter status URL")
 	}
-	username := parts[len(parts)-3]
-
 	// Twitter's API isn't really friendly with direct links. Still, we don't
 	// want to do ask read permissions from users, so just load the public posts and
 	// scrape it for the Ethereum address and profile URL.
@@ -696,6 +694,13 @@ func authTwitter(url string) (string, string, common.Address, error) {
 		return "", "", common.Address{}, err
 	}
 	defer res.Body.Close()
+
+	// Resolve the username from the final redirect, no intermediate junk
+	parts = strings.Split(res.Request.URL.String(), "/")
+	if len(parts) < 4 || parts[len(parts)-2] != "status" {
+		return "", "", common.Address{}, errors.New("Invalid Twitter status URL")
+	}
+	username := parts[len(parts)-3]
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {

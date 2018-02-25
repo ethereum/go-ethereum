@@ -28,7 +28,7 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/common"
 	"github.com/EthereumCommonwealth/go-callisto/core/types"
 	"github.com/EthereumCommonwealth/go-callisto/log"
-	"github.com/rcrowley/go-metrics"
+	"github.com/EthereumCommonwealth/go-callisto/metrics"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 

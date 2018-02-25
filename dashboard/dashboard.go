@@ -35,11 +35,11 @@ import (
 	"time"
 
 	"github.com/EthereumCommonwealth/go-callisto/log"
+	"github.com/EthereumCommonwealth/go-callisto/metrics"
 	"github.com/EthereumCommonwealth/go-callisto/p2p"
 	"github.com/EthereumCommonwealth/go-callisto/params"
 	"github.com/EthereumCommonwealth/go-callisto/rpc"
 	"github.com/elastic/gosigar"
-	"github.com/rcrowley/go-metrics"
 	"golang.org/x/net/websocket"
 )
 

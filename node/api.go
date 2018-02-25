@@ -24,10 +24,10 @@ import (
 
 	"github.com/EthereumCommonwealth/go-callisto/common/hexutil"
 	"github.com/EthereumCommonwealth/go-callisto/crypto"
+	"github.com/EthereumCommonwealth/go-callisto/metrics"
 	"github.com/EthereumCommonwealth/go-callisto/p2p"
 	"github.com/EthereumCommonwealth/go-callisto/p2p/discover"
 	"github.com/EthereumCommonwealth/go-callisto/rpc"
-	"github.com/rcrowley/go-metrics"
 )
 
 // PrivateAdminAPI is the collection of administrative API methods exposed only

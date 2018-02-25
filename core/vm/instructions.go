@@ -302,6 +302,66 @@ func opMulmod(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	return nil, nil
 }
 
+// opSHL implements Shift Left
+// The SHL instruction (shift left) pops 2 values from the stack, first arg1 and then arg2,
+// and pushes on the stack arg2 shifted to the left by arg1 number of bits.
+func opSHL(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	// Note, second operand is left in the stack; accumulate result into it, and no need to push it afterwards
+	shift, value := math.U256(stack.pop()), math.U256(stack.peek())
+	defer evm.interpreter.intPool.put(shift) // First operand back into the pool
+
+	if shift.Cmp(common.Big256) >= 0 {
+		value.SetUint64(0)
+		return nil, nil
+	}
+	n := uint(shift.Uint64())
+	math.U256(value.Lsh(value, n))
+
+	return nil, nil
+}
+
+// opSHR implements Logical Shift Right
+// The SHR instruction (logical shift right) pops 2 values from the stack, first arg1 and then arg2,
+// and pushes on the stack arg2 shifted to the right by arg1 number of bits with zero fill.
+func opSHR(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	// Note, second operand is left in the stack; accumulate result into it, and no need to push it afterwards
+	shift, value := math.U256(stack.pop()), math.U256(stack.peek())
+	defer evm.interpreter.intPool.put(shift) // First operand back into the pool
+
+	if shift.Cmp(common.Big256) >= 0 {
+		value.SetUint64(0)
+		return nil, nil
+	}
+	n := uint(shift.Uint64())
+	math.U256(value.Rsh(value, n))
+
+	return nil, nil
+}
+
+// opSAR implements Arithmetic Shift Right
+// The SAR instruction (arithmetic shift right) pops 2 values from the stack, first arg1 and then arg2,
+// and pushes on the stack arg2 shifted to the right by arg1 number of bits with sign extension.
+func opSAR(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	// Note, S256 returns (potentially) a new bigint, so we're popping, not peeking this one
+	shift, value := math.U256(stack.pop()), math.S256(stack.pop())
+	defer evm.interpreter.intPool.put(shift) // First operand back into the pool
+
+	if shift.Cmp(common.Big256) >= 0 {
+		if value.Sign() > 0 {
+			value.SetUint64(0)
+		} else {
+			value.SetInt64(-1)
+		}
+		stack.push(math.U256(value))
+		return nil, nil
+	}
+	n := uint(shift.Uint64())
+	value.Rsh(value, n)
+	stack.push(math.U256(value))
+
+	return nil, nil
+}
+
 func opSha3(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	offset, size := stack.pop(), stack.pop()
 	data := memory.Get(offset.Int64(), size.Int64())
