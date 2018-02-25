@@ -101,7 +101,7 @@ func (s *WMailServer) Archive(env *whisper.Envelope) {
 	}
 }
 
-func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope) {
+func (s *WMailServer) DeliverMail(peer whisper.Peer, request *whisper.Envelope) {
 	if peer == nil {
 		log.Error("Whisper peer is nil")
 		return
@@ -113,7 +113,7 @@ func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope)
 	}
 }
 
-func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, bloom []byte) []*whisper.Envelope {
+func (s *WMailServer) processRequest(peer whisper.Peer, lower, upper uint32, bloom []byte) []*whisper.Envelope {
 	ret := make([]*whisper.Envelope, 0)
 	var err error
 	var zero common.Hash
@@ -169,7 +169,7 @@ func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) 
 	}
 
 	// if you want to check the signature, you can do it here. e.g.:
-	// if !bytes.Equal(peerID, src) {
+	// if peerID == src {
 	if src == nil {
 		log.Warn(fmt.Sprintf("Wrong signature of p2p request"))
 		return false, 0, 0, nil

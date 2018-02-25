@@ -32,6 +32,10 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+const (
+	filterTimeout = 300 // filters are considered timeout out after filterTimeout seconds
+)
+
 // List of errors
 var (
 	ErrSymAsym              = errors.New("specify either a symmetric or an asymmetric key")
@@ -107,7 +111,7 @@ func (api *PublicWhisperAPI) MarkTrustedPeer(ctx context.Context, enode string) 
 	if err != nil {
 		return false, err
 	}
-	return true, api.w.AllowP2PMessagesFromPeer(n.ID[:])
+	return true, api.w.AllowP2PMessagesFromPeer(n.ID.String())
 }
 
 // NewKeyPair generates a new public and private key pair for message decryption and encryption.
@@ -296,7 +300,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (hexutil.
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse target peer: %s", err)
 		}
-		err = api.w.SendP2PMessage(n.ID[:], env)
+		err = api.w.SendP2PMessage(n.ID.String(), env)
 		if err == nil {
 			hash := env.Hash()
 			result = hash[:]
@@ -566,10 +570,9 @@ func (api *PublicWhisperAPI) NewMessageFilter(req Criteria) (string, error) {
 	}
 
 	if len(req.Topics) > 0 {
-		topics = make([][]byte, len(req.Topics))
-		for i, topic := range req.Topics {
-			topics[i] = make([]byte, TopicLength)
-			copy(topics[i], topic[:])
+		topics = make([][]byte, 0, len(req.Topics))
+		for _, topic := range req.Topics {
+			topics = append(topics, topic[:])
 		}
 	}
 

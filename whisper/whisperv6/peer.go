@@ -29,10 +29,9 @@ import (
 	set "gopkg.in/fatih/set.v0"
 )
 
-// Peer represents a whisper protocol peer connection.
-type Peer struct {
+// PeerBase represents a whisper protocol peer connection.
+type PeerBase struct {
 	host *Whisper
-	peer *p2p.Peer
 	ws   p2p.MsgReadWriter
 
 	trusted        bool
@@ -46,37 +45,70 @@ type Peer struct {
 	quit chan struct{}
 }
 
+// Peer is an abstract representation of a whisper peer. It could
+// represent a devp2p peer or a libp2p peer.
+type Peer interface {
+	ID() string
+	start()
+	stop()
+	handshake() error
+	update()
+	mark(*Envelope)
+	marked(*Envelope) bool
+	expire()
+	broadcast() error
+	notifyAboutPowRequirementChange(pow float64) error
+	notifyAboutBloomFilterChange([]byte) error
+	bloomMatch(*Envelope) bool
+	setBloomFilter([]byte)
+	isTrusted() bool
+	setTrusted(bool)
+	setPoWRequirement(float64)
+	stream() p2p.MsgReadWriter
+
+	// newPeer(*Whisper, p2p.MsgReadWriter) Peer
+}
+
+// DevP2PPeer is the DevP2P implementation of the Peer interface
+type DevP2PPeer struct {
+	*PeerBase
+
+	peer *p2p.Peer
+}
+
 // newPeer creates a new whisper peer object, but does not run the handshake itself.
-func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
-	return &Peer{
-		host:           host,
-		peer:           remote,
-		ws:             rw,
-		trusted:        false,
-		powRequirement: 0.0,
-		known:          set.New(),
-		quit:           make(chan struct{}),
-		bloomFilter:    MakeFullNodeBloom(),
-		fullNode:       true,
+func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) Peer {
+	return &DevP2PPeer{
+		&PeerBase {
+			host:           host,
+			ws:             rw,
+			trusted:        false,
+			powRequirement: 0.0,
+			known:          set.New(),
+			quit:           make(chan struct{}),
+			bloomFilter:    MakeFullNodeBloom(),
+			fullNode:       true,
+		},
+		remote,
 	}
 }
 
 // start initiates the peer updater, periodically broadcasting the whisper packets
 // into the network.
-func (peer *Peer) start() {
+func (peer *DevP2PPeer) start() {
 	go peer.update()
 	log.Trace("start", "peer", peer.ID())
 }
 
 // stop terminates the peer updater, stopping message forwarding to it.
-func (peer *Peer) stop() {
+func (peer *DevP2PPeer) stop() {
 	close(peer.quit)
 	log.Trace("stop", "peer", peer.ID())
 }
 
 // handshake sends the protocol initiation status message to the remote peer and
 // verifies the remote status too.
-func (peer *Peer) handshake() error {
+func (peer *DevP2PPeer) handshake() error {
 	// Send the handshake status message asynchronously
 	errc := make(chan error, 1)
 	go func() {
@@ -135,7 +167,7 @@ func (peer *Peer) handshake() error {
 
 // update executes periodic operations on the peer, including message transmission
 // and expiration.
-func (peer *Peer) update() {
+func (peer *DevP2PPeer) update() {
 	// Start the tickers for the updates
 	expire := time.NewTicker(expirationCycle)
 	transmit := time.NewTicker(transmissionCycle)
@@ -159,18 +191,18 @@ func (peer *Peer) update() {
 }
 
 // mark marks an envelope known to the peer so that it won't be sent back.
-func (peer *Peer) mark(envelope *Envelope) {
+func (peer *DevP2PPeer) mark(envelope *Envelope) {
 	peer.known.Add(envelope.Hash())
 }
 
 // marked checks if an envelope is already known to the remote peer.
-func (peer *Peer) marked(envelope *Envelope) bool {
+func (peer *DevP2PPeer) marked(envelope *Envelope) bool {
 	return peer.known.Has(envelope.Hash())
 }
 
 // expire iterates over all the known envelopes in the host and removes all
 // expired (unknown) ones from the known list.
-func (peer *Peer) expire() {
+func (peer *DevP2PPeer) expire() {
 	unmark := make(map[common.Hash]struct{})
 	peer.known.Each(func(v interface{}) bool {
 		if !peer.host.isEnvelopeCached(v.(common.Hash)) {
@@ -186,7 +218,7 @@ func (peer *Peer) expire() {
 
 // broadcast iterates over the collection of envelopes and transmits yet unknown
 // ones over the network.
-func (peer *Peer) broadcast() error {
+func (peer *DevP2PPeer) broadcast() error {
 	envelopes := peer.host.Envelopes()
 	bundle := make([]*Envelope, 0, len(envelopes))
 	for _, envelope := range envelopes {
@@ -212,27 +244,26 @@ func (peer *Peer) broadcast() error {
 }
 
 // ID returns a peer's id
-func (peer *Peer) ID() []byte {
-	id := peer.peer.ID()
-	return id[:]
+func (peer *DevP2PPeer) ID() string {
+	return peer.peer.ID().String()
 }
 
-func (peer *Peer) notifyAboutPowRequirementChange(pow float64) error {
+func (peer *DevP2PPeer) notifyAboutPowRequirementChange(pow float64) error {
 	i := math.Float64bits(pow)
 	return p2p.Send(peer.ws, powRequirementCode, i)
 }
 
-func (peer *Peer) notifyAboutBloomFilterChange(bloom []byte) error {
+func (peer *DevP2PPeer) notifyAboutBloomFilterChange(bloom []byte) error {
 	return p2p.Send(peer.ws, bloomFilterExCode, bloom)
 }
 
-func (peer *Peer) bloomMatch(env *Envelope) bool {
+func (peer *DevP2PPeer) bloomMatch(env *Envelope) bool {
 	peer.bloomMu.Lock()
 	defer peer.bloomMu.Unlock()
 	return peer.fullNode || BloomFilterMatch(peer.bloomFilter, env.Bloom())
 }
 
-func (peer *Peer) setBloomFilter(bloom []byte) {
+func (peer *DevP2PPeer) setBloomFilter(bloom []byte) {
 	peer.bloomMu.Lock()
 	defer peer.bloomMu.Unlock()
 	peer.bloomFilter = bloom
@@ -240,6 +271,22 @@ func (peer *Peer) setBloomFilter(bloom []byte) {
 	if peer.fullNode && peer.bloomFilter == nil {
 		peer.bloomFilter = MakeFullNodeBloom()
 	}
+}
+
+func (peer *DevP2PPeer) isTrusted() bool {
+	return peer.trusted
+}
+
+func (peer *DevP2PPeer) setTrusted(t bool) {
+	peer.trusted = t
+}
+
+func (peer *DevP2PPeer) setPoWRequirement(r float64) {
+	peer.powRequirement = r
+}
+
+func (peer *DevP2PPeer) stream() p2p.MsgReadWriter {
+	return peer.ws
 }
 
 func MakeFullNodeBloom() []byte {

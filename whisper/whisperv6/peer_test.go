@@ -314,6 +314,7 @@ func validateMail(t *testing.T, index int, mail []*ReceivedMessage) {
 	}
 	if cnt > 1 {
 		t.Fatalf("node %d received %d.", index, cnt)
+		return false
 	}
 
 	if cnt == 1 {
@@ -437,9 +438,9 @@ func checkPowExchangeForNodeZeroOnce(t *testing.T, mustPass bool) bool {
 	cnt := 0
 	for i, node := range nodes {
 		for peer := range node.shh.peers {
-			if peer.peer.ID() == discover.PubkeyID(&nodes[0].id.PublicKey) {
+			if peer.ID() == discover.PubkeyID(&nodes[0].id.PublicKey).String() {
 				cnt++
-				if peer.powRequirement != masterPow {
+				if peer.(*DevP2PPeer).powRequirement != masterPow {
 					if mustPass {
 						t.Fatalf("node %d: failed to set the new pow requirement for node zero.", i)
 					} else {
@@ -458,10 +459,10 @@ func checkPowExchangeForNodeZeroOnce(t *testing.T, mustPass bool) bool {
 func checkPowExchange(t *testing.T) {
 	for i, node := range nodes {
 		for peer := range node.shh.peers {
-			if peer.peer.ID() != discover.PubkeyID(&nodes[0].id.PublicKey) {
-				if peer.powRequirement != masterPow {
+			if peer.ID() != discover.PubkeyID(&nodes[0].id.PublicKey).String() {
+				if peer.(*DevP2PPeer).powRequirement != masterPow {
 					t.Fatalf("node %d: failed to exchange pow requirement in round %d; expected %f, got %f",
-						i, round, masterPow, peer.powRequirement)
+						i, round, masterPow, peer.(*DevP2PPeer).powRequirement)
 				}
 			}
 		}
@@ -477,7 +478,7 @@ func checkBloomFilterExchangeOnce(t *testing.T, mustPass bool) bool {
 			if !equals {
 				if mustPass {
 					t.Fatalf("node %d: failed to exchange bloom filter requirement in round %d. \n%x expected \n%x got",
-						i, round, masterBloomFilter, peer.bloomFilter)
+						i, round, masterBloomFilter, peer.(*DevP2PPeer).bloomFilter)
 				} else {
 					return false
 				}

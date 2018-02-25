@@ -17,6 +17,7 @@
 package whisperv6
 
 import (
+	"fmt"
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/sha256"
@@ -51,8 +52,12 @@ func TestWhisperBasic(t *testing.T) {
 		t.Fatalf("failed GetFilter.")
 	}
 
-	peerID := make([]byte, 64)
-	mrand.Read(peerID)
+	peerIDBytes := make([]byte, 64)
+	mrand.Read(peerIDBytes)
+	peerID := ""
+	for b := range peerIDBytes {
+		peerID = fmt.Sprintf("%s%02x", peerID, b)
+	}
 	peer, _ := w.getPeer(peerID)
 	if peer != nil {
 		t.Fatal("found peer for random key.")
