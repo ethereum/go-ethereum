@@ -793,6 +793,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	requestCount.Inc(1)
 	log.Info("serve request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
 
+	if r.RequestURI == "/" && strings.Contains(r.Header.Get("Accept"), "text/html") {
+
+		err := landingPageTemplate.Execute(w, nil)
+		if err != nil {
+			s.logError("error rendering landing page: %s", err)
+		}
+		return
+	}
+
 	uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
 	if err != nil {
 		Respond(w, req, fmt.Sprintf("invalid URI %q", r.URL.Path), http.StatusBadRequest)
