@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -48,7 +49,7 @@ type FilterTestCase struct {
 	msgCnt int
 }
 
-func generateFilter(t *testing.T, symmetric bool) (*Filter, error) {
+func generateFilter(symmetric bool) (*Filter, error) {
 	var f Filter
 	f.Messages = make(map[common.Hash]*ReceivedMessage)
 
@@ -62,8 +63,8 @@ func generateFilter(t *testing.T, symmetric bool) (*Filter, error) {
 
 	key, err := crypto.GenerateKey()
 	if err != nil {
-		t.Fatalf("generateFilter 1 failed with seed %d.", seed)
-		return nil, err
+		return nil, fmt.Errorf("generateFilter 1 failed with seed %d. Error: %s", seed, err.Error())
+
 	}
 	f.Src = &key.PublicKey
 
@@ -74,8 +75,7 @@ func generateFilter(t *testing.T, symmetric bool) (*Filter, error) {
 	} else {
 		f.KeyAsym, err = crypto.GenerateKey()
 		if err != nil {
-			t.Fatalf("generateFilter 2 failed with seed %d.", seed)
-			return nil, err
+			return nil, fmt.Errorf("generateFilter 2 failed with seed %d. Error: %s", seed, err.Error())
 		}
 	}
 
@@ -94,7 +94,10 @@ func generateFilters() *Filters {
 func generateTestCases(t *testing.T, SizeTestFilters int) []FilterTestCase {
 	cases := make([]FilterTestCase, SizeTestFilters)
 	for i := 0; i < SizeTestFilters; i++ {
-		f, _ := generateFilter(t, true)
+		f, err := generateFilter(true)
+		if err != nil {
+			t.Fatal(err)
+		}
 		cases[i].f = f
 		cases[i].alive = mrand.Int()&int(1) == 0
 	}
@@ -145,8 +148,10 @@ func TestInstallSymKeyGeneratesHash(t *testing.T) {
 
 	w := New(&Config{})
 	filters := NewFilters(w)
-	filter, _ := generateFilter(t, true)
-
+	filter, err := generateFilter(true)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// save the current SymKeyHash for comparison
 	initialSymKeyHash := filter.SymKeyHash
 
@@ -154,7 +159,7 @@ func TestInstallSymKeyGeneratesHash(t *testing.T) {
 	var invalid common.Hash
 	filter.SymKeyHash = invalid
 
-	_, err := filters.Install(filter)
+	_, err = filters.Install(filter)
 
 	if err != nil {
 		t.Fatalf("Error installing the filter: %s", err)
@@ -172,8 +177,10 @@ func TestInstallIdenticalFilters(t *testing.T) {
 
 	w := New(&Config{})
 	filters := NewFilters(w)
-	filter1, _ := generateFilter(t, true)
-
+	filter1, err := generateFilter(true)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Copy the first filter since some of its fields
 	// are randomly gnerated.
 	filter2 := &Filter{
@@ -184,7 +191,7 @@ func TestInstallIdenticalFilters(t *testing.T) {
 		Messages: make(map[common.Hash]*ReceivedMessage),
 	}
 
-	_, err := filters.Install(filter1)
+	_, err = filters.Install(filter1)
 
 	if err != nil {
 		t.Fatalf("Error installing the first filter with seed %d: %s", seed, err)
@@ -266,12 +273,12 @@ func TestComparePubKey(t *testing.T) {
 func TestMatchEnvelope(t *testing.T) {
 	InitSingleTest()
 
-	fsym, err := generateFilter(t, true)
+	fsym, err := generateFilter(true)
 	if err != nil {
 		t.Fatalf("failed generateFilter with seed %d: %s.", seed, err)
 	}
 
-	fasym, err := generateFilter(t, false)
+	fasym, err := generateFilter(false)
 	if err != nil {
 		t.Fatalf("failed generateFilter() with seed %d: %s.", seed, err)
 	}
@@ -362,7 +369,7 @@ func TestMatchMessageSym(t *testing.T) {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 
-	f, err := generateFilter(t, true)
+	f, err := generateFilter(true)
 	if err != nil {
 		t.Fatalf("failed generateFilter with seed %d: %s.", seed, err)
 	}
@@ -441,7 +448,7 @@ func TestMatchMessageSym(t *testing.T) {
 func TestMatchMessageAsym(t *testing.T) {
 	InitSingleTest()
 
-	f, err := generateFilter(t, false)
+	f, err := generateFilter(false)
 	if err != nil {
 		t.Fatalf("failed generateFilter with seed %d: %s.", seed, err)
 	}
@@ -719,7 +726,7 @@ func TestVariableTopics(t *testing.T) {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
 
-	f, err := generateFilter(t, true)
+	f, err := generateFilter(true)
 	if err != nil {
 		t.Fatalf("failed generateFilter with seed %d: %s.", seed, err)
 	}
@@ -773,7 +780,7 @@ func TestTopicsMapping(t *testing.T) {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
 
-	f, err := generateFilter(t, true)
+	f, err := generateFilter(true)
 	if err != nil {
 		t.Fatalf("failed generateFilter with seed %d: %s.", seed, err)
 	}
@@ -823,7 +830,7 @@ func TestTopicsMapping(t *testing.T) {
 func TestTopicsMapping_MatchAllTopics_Success(t *testing.T) {
 	InitSingleTest()
 
-	f, err := generateFilter(t, true)
+	f, err := generateFilter(true)
 	if err != nil {
 		t.Fatalf("failed generateFilter with seed %d: %s.", seed, err)
 	}
@@ -871,4 +878,64 @@ func hasFilterID(matched []string, filterID string) bool {
 		}
 	}
 	return false
+}
+
+func BenchmarkFilter_MatchEnvelope_5Filters(b *testing.B) {
+	InitSingleTest()
+	benchFilter_MatchMessage(b, 5)
+}
+func BenchmarkFilter_MatchEnvelope_10Filters(b *testing.B) {
+	InitSingleTest()
+	benchFilter_MatchMessage(b, 10)
+}
+func BenchmarkFilter_MatchEnvelope_20Filters(b *testing.B) {
+	InitSingleTest()
+	benchFilter_MatchMessage(b, 20)
+}
+func BenchmarkFilter_MatchEnvelope_50Filters(b *testing.B) {
+	InitSingleTest()
+	benchFilter_MatchMessage(b, 50)
+}
+func BenchmarkFilter_MatchEnvelope_100Filters(b *testing.B) {
+	InitSingleTest()
+	benchFilter_MatchMessage(b, 100)
+}
+
+func benchFilter_MatchMessage(b *testing.B, numOfFilters int) {
+	params, err := generateMessageParams()
+	if err != nil {
+		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+	msg, err := NewSentMessage(params)
+	if err != nil {
+		b.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
+	env, err := msg.Wrap(params)
+	if err != nil {
+		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
+	}
+
+	fs := generateFilters()
+
+	for i := 0; i < numOfFilters; i++ {
+		f, err := generateFilter(true)
+		if err != nil {
+			b.Fatalf("failed generateFilter with seed %d: %s.", seed, err)
+		}
+
+		_, err = fs.Install(f)
+		if err != nil {
+			b.Fatalf("failed generateFilter with seed %d: %s.", seed, err)
+		}
+
+	}
+
+	var topic TopicType
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mrand.Read(topic[:])
+		env.Topic = topic
+
+		fs.NotifyWatchers(env, false)
+	}
 }
