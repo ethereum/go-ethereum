@@ -21,7 +21,12 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+)
+
+var (
+	dbStorePutCounter = metrics.NewRegisteredCounter("storage.db.dbstore.put.count", nil)
 )
 
 type StoreParams struct {
@@ -85,6 +90,10 @@ func NewTestLocalStoreForAddr(path string, basekey []byte) (*LocalStore, error) 
 	return localStore, nil
 }
 
+func (self *LocalStore) CacheCounter() uint64 {
+	return uint64(self.memStore.(*MemStore).Counter())
+}
+
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
@@ -95,6 +104,8 @@ func (self *LocalStore) Put(chunk *Chunk) {
 		Size:     chunk.Size,
 		dbStored: chunk.dbStored,
 	}
+
+	dbStorePutCounter.Inc(1)
 	self.memStore.Put(c)
 	self.DbStore.Put(c)
 }

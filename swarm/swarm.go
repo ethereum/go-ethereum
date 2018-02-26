@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -48,6 +49,15 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+)
+
+var (
+	startTime          time.Time
+	updateGaugesPeriod = 5 * time.Second
+	startCounter       = metrics.NewRegisteredCounter("stack,start", nil)
+	stopCounter        = metrics.NewRegisteredCounter("stack,stop", nil)
+	uptimeGauge        = metrics.NewRegisteredGauge("stack.uptime", nil)
+	cacheSizeGauge     = metrics.NewRegisteredGauge("storage.db.cache.size", nil)
 )
 
 // the swarm stack
@@ -309,11 +319,11 @@ Start is called when the stack is started
 */
 // implements the node.Service interface
 func (self *Swarm) Start(srv *p2p.Server) error {
+	startTime = time.Now()
 
 	// update uaddr to correct enode
 	newaddr := self.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
 	log.Warn("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
-
 	// set chequebook
 	if self.config.SwapEnabled {
 		ctx := context.Background() // The initial setup has no deadline.
@@ -358,7 +368,25 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		log.Debug(fmt.Sprintf("Swarm http proxy started with corsdomain: %v", self.config.Cors))
 	}
 
+	self.periodicallyUpdateGauges()
+
+	startCounter.Inc(1)
 	return nil
+}
+
+func (self *Swarm) periodicallyUpdateGauges() {
+	ticker := time.NewTicker(updateGaugesPeriod)
+
+	go func() {
+		for range ticker.C {
+			self.updateGauges()
+		}
+	}()
+}
+
+func (self *Swarm) updateGauges() {
+	cacheSizeGauge.Update(int64(self.lstore.CacheCounter()))
+	uptimeGauge.Update(time.Since(startTime).Nanoseconds())
 }
 
 // implements the node.Service interface
@@ -377,6 +405,7 @@ func (self *Swarm) Stop() error {
 		self.lstore.DbStore.Close()
 	}
 	self.sfs.Stop()
+	stopCounter.Inc(1)
 	return self.bzz.Stop()
 }
 

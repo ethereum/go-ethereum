@@ -26,10 +26,24 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rpc"
+)
+
+//metrics variables
+var (
+	storeRequestMsgCounter    = metrics.NewRegisteredCounter("network.protocol.msg.storerequest.count", nil)
+	retrieveRequestMsgCounter = metrics.NewRegisteredCounter("network.protocol.msg.retrieverequest.count", nil)
+	peersMsgCounter           = metrics.NewRegisteredCounter("network.protocol.msg.peers.count", nil)
+	syncRequestMsgCounter     = metrics.NewRegisteredCounter("network.protocol.msg.syncrequest.count", nil)
+	unsyncedKeysMsgCounter    = metrics.NewRegisteredCounter("network.protocol.msg.unsyncedkeys.count", nil)
+	deliverRequestMsgCounter  = metrics.NewRegisteredCounter("network.protocol.msg.deliverrequest.count", nil)
+	paymentMsgCounter         = metrics.NewRegisteredCounter("network.protocol.msg.payment.count", nil)
+	invalidMsgCounter         = metrics.NewRegisteredCounter("network.protocol.msg.invalid.count", nil)
+	handleStatusMsgCounter    = metrics.NewRegisteredCounter("network.protocol.msg.handlestatus.count", nil)
 )
 
 const (
