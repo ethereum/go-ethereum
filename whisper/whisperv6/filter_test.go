@@ -844,7 +844,7 @@ func TestTopicsMapping(t *testing.T) {
 		matched := []string{}
 		fs.topicMatcher.matchedTopics(env.Topic, &matched)
 		if !hasFilterID(matched, filterID) {
-			t.Fatalf("failed matchedTopics, step %d.", seed, i)
+			t.Fatalf("failed matchedTopics, step %d.", i)
 		}
 
 		//test match without filter
