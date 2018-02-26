@@ -660,6 +660,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	s.logDebug("HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, r.URL.Host, r.URL.Path, r.Referer(), r.Header.Get("Accept"))
 
+	if r.RequestURI == "/" && strings.Contains(r.Header.Get("Accept"), "text/html") {
+
+		err := landingPageTemplate.Execute(w, nil)
+		if err != nil {
+			s.logError("error rendering landing page: %s", err)
+		}
+		return
+	}
+
 	uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
 	req := &Request{Request: *r, uri: uri}
 	if err != nil {
