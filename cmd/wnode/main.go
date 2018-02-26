@@ -76,8 +76,8 @@ var (
 
 // cmd arguments
 var (
-	bootstrapMode  = flag.Bool("standalone", false, "boostrap node: does not initiate connection to peers, just waits for incoming connections")
-	forwarderMode  = flag.Bool("forwarder", false, "forwarder mode: only forwards messages, neither encrypts nor decrypts messages")
+	bootstrapMode  = flag.Bool("standalone", false, "boostrap node: don't initiate connection to peers, just wait for incoming connections")
+	forwarderMode  = flag.Bool("forwarder", false, "forwarder mode: only forward messages, neither encrypt nor decrypt messages")
 	mailServerMode = flag.Bool("mailserver", false, "mail server mode: delivers expired messages on demand")
 	requestMail    = flag.Bool("mailclient", false, "request expired messages from the bootstrap server")
 	asymmetricMode = flag.Bool("asym", false, "use asymmetric encryption")
@@ -552,7 +552,9 @@ func messageLoop() {
 			m2 := af.Retrieve()
 			messages := append(m1, m2...)
 			for _, msg := range messages {
-				// NB: it is possible that *fileExMode == false && len(*argSaveDir) > 0
+				// All messages are saved upon specifying argSaveDir.
+				// fileExMode only specifies how messages are displayed on the console after they are saved.
+				// if fileExMode == true, only the hashes are displayed, since messages might be too big.
 				if len(*argSaveDir) > 0 {
 					writeMessageToFile(*argSaveDir, msg)
 				}
