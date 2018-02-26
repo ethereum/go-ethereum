@@ -17,14 +17,17 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -121,12 +124,12 @@ func TestApiPut(t *testing.T) {
 
 // testResolver implements the Resolver interface and either returns the given
 // hash if it is set, or returns a "name not found" error
-type testResolver struct {
+type testResolveValidator struct {
 	hash *common.Hash
 }
 
-func newTestResolver(addr string) *testResolver {
-	r := &testResolver{}
+func newTestResolveValidator(addr string) *testResolveValidator {
+	r := &testResolveValidator{}
 	if addr != "" {
 		hash := common.HexToHash(addr)
 		r.hash = &hash
@@ -134,11 +137,18 @@ func newTestResolver(addr string) *testResolver {
 	return r
 }
 
-func (t *testResolver) Resolve(addr string) (common.Hash, error) {
+func (t *testResolveValidator) Resolve(addr string) (common.Hash, error) {
 	if t.hash == nil {
 		return common.Hash{}, fmt.Errorf("DNS name not found: %q", addr)
 	}
 	return *t.hash, nil
+}
+
+func (t *testResolveValidator) Owner(node [32]byte) (addr common.Address, err error) {
+	return
+}
+func (t *testResolveValidator) HeaderByNumber(context.Context, *big.Int) (header *types.Header, err error) {
+	return
 }
 
 // TestAPIResolve tests resolving URIs which can either contain content hashes
@@ -147,8 +157,8 @@ func TestAPIResolve(t *testing.T) {
 	ensAddr := "swarm.eth"
 	hashAddr := "1111111111111111111111111111111111111111111111111111111111111111"
 	resolvedAddr := "2222222222222222222222222222222222222222222222222222222222222222"
-	doesResolve := newTestResolver(resolvedAddr)
-	doesntResolve := newTestResolver("")
+	doesResolve := newTestResolveValidator(resolvedAddr)
+	doesntResolve := newTestResolveValidator("")
 
 	type test struct {
 		desc      string
@@ -232,6 +242,131 @@ func TestAPIResolve(t *testing.T) {
 				}
 				if err.Error() != x.expectErr.Error() {
 					t.Fatalf("expected error %q, got %q", x.expectErr, err)
+				}
+			}
+		})
+	}
+}
+
+func TestMultiResolver(t *testing.T) {
+	doesntResolve := newTestResolveValidator("")
+
+	ethAddr := "swarm.eth"
+	ethHash := "0x2222222222222222222222222222222222222222222222222222222222222222"
+	ethResolve := newTestResolveValidator(ethHash)
+
+	testAddr := "swarm.test"
+	testHash := "0x1111111111111111111111111111111111111111111111111111111111111111"
+	testResolve := newTestResolveValidator(testHash)
+
+	tests := []struct {
+		desc   string
+		r      Resolver
+		addr   string
+		result string
+		err    error
+	}{
+		{
+			desc: "No resolvers, returns error",
+			r:    NewMultiResolver(),
+			err:  NewNoResolverError(""),
+		},
+		{
+			desc:   "One default resolver, returns resolved address",
+			r:      NewMultiResolver(MultiResolverOptionWithResolver(ethResolve, "")),
+			addr:   ethAddr,
+			result: ethHash,
+		},
+		{
+			desc: "Two default resolvers, returns resolved address",
+			r: NewMultiResolver(
+				MultiResolverOptionWithResolver(ethResolve, ""),
+				MultiResolverOptionWithResolver(ethResolve, ""),
+			),
+			addr:   ethAddr,
+			result: ethHash,
+		},
+		{
+			desc: "Two default resolvers, first doesn't resolve, returns resolved address",
+			r: NewMultiResolver(
+				MultiResolverOptionWithResolver(doesntResolve, ""),
+				MultiResolverOptionWithResolver(ethResolve, ""),
+			),
+			addr:   ethAddr,
+			result: ethHash,
+		},
+		{
+			desc: "Default resolver doesn't resolve, tld resolver resolve, returns resolved address",
+			r: NewMultiResolver(
+				MultiResolverOptionWithResolver(doesntResolve, ""),
+				MultiResolverOptionWithResolver(ethResolve, "eth"),
+			),
+			addr:   ethAddr,
+			result: ethHash,
+		},
+		{
+			desc: "Three TLD resolvers, third resolves, returns resolved address",
+			r: NewMultiResolver(
+				MultiResolverOptionWithResolver(doesntResolve, "eth"),
+				MultiResolverOptionWithResolver(doesntResolve, "eth"),
+				MultiResolverOptionWithResolver(ethResolve, "eth"),
+			),
+			addr:   ethAddr,
+			result: ethHash,
+		},
+		{
+			desc: "One TLD resolver doesn't resolve, returns error",
+			r: NewMultiResolver(
+				MultiResolverOptionWithResolver(doesntResolve, ""),
+				MultiResolverOptionWithResolver(ethResolve, "eth"),
+			),
+			addr:   ethAddr,
+			result: ethHash,
+		},
+		{
+			desc: "One defautl and one TLD resolver, all doesn't resolve, returns error",
+			r: NewMultiResolver(
+				MultiResolverOptionWithResolver(doesntResolve, ""),
+				MultiResolverOptionWithResolver(doesntResolve, "eth"),
+			),
+			addr:   ethAddr,
+			result: ethHash,
+			err:    errors.New(`DNS name not found: "swarm.eth"`),
+		},
+		{
+			desc: "Two TLD resolvers, both resolve, returns resolved address",
+			r: NewMultiResolver(
+				MultiResolverOptionWithResolver(ethResolve, "eth"),
+				MultiResolverOptionWithResolver(testResolve, "test"),
+			),
+			addr:   testAddr,
+			result: testHash,
+		},
+		{
+			desc: "One TLD resolver, no default resolver, returns error for different TLD",
+			r: NewMultiResolver(
+				MultiResolverOptionWithResolver(ethResolve, "eth"),
+			),
+			addr: testAddr,
+			err:  NewNoResolverError("test"),
+		},
+	}
+	for _, x := range tests {
+		t.Run(x.desc, func(t *testing.T) {
+			res, err := x.r.Resolve(x.addr)
+			if err == nil {
+				if x.err != nil {
+					t.Fatalf("expected error %q, got result %q", x.err, res.Hex())
+				}
+				if res.Hex() != x.result {
+					t.Fatalf("expected result %q, got %q", x.result, res.Hex())
+				}
+			} else {
+				if x.err == nil {
+					t.Fatalf("expected no error, got %q", err)
+				}
+				if err.Error() != x.err.Error() {
+					t.Fatalf("expected error %q, got %q", x.err, err)
 				}
 			}
 		})

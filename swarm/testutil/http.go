@@ -34,7 +34,7 @@ type fakeBackend struct {
 	blocknumber int64
 }
 
-func (f *fakeBackend) HeaderByNumber(context context.Context, bigblock *big.Int) (*types.Header, error) {
+func (f *fakeBackend) HeaderByNumber(context context.Context, _ string, bigblock *big.Int) (*types.Header, error) {
 	f.blocknumber++
 	biggie := big.NewInt(f.blocknumber)
 	return &types.Header{

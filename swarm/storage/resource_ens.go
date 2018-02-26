@@ -3,7 +3,6 @@ package storage
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 )
@@ -24,35 +23,30 @@ func (b *baseValidator) hashSize() int {
 	return b.hashsize
 }
 
+type OwnerValidator interface {
+	ValidateOwner(name string, address common.Address) (bool, error)
+}
+
 // ENS validation of mutable resource owners
 type ENSValidator struct {
 	*baseValidator
-	api *ens.ENS
+	api OwnerValidator
 }
 
-func NewENSValidator(contractaddress common.Address, backend bind.ContractBackend, transactOpts *bind.TransactOpts, signFunc SignFunc) (*ENSValidator, error) {
-	var err error
-	validator := &ENSValidator{
+func NewENSValidator(contractaddress common.Address, ownerValidator OwnerValidator, signFunc SignFunc) *ENSValidator {
+	return &ENSValidator{
 		baseValidator: &baseValidator{
 			signFunc: signFunc,
 			hashsize: common.HashLength,
 		},
+		api: ownerValidator,
 	}
-	validator.api, err = ens.NewENS(transactOpts, contractaddress, backend)
-	if err != nil {
-		return nil, err
-	}
-	return validator, nil
 }
 
 func (self *ENSValidator) checkAccess(name string, address common.Address) (bool, error) {
-	owneraddr, err := self.api.Owner(self.nameHash(name))
-	if err != nil {
-		return false, err
-	}
-	return owneraddr == address, nil
+	return self.api.ValidateOwner(name, address)
 }
 
-func (self *ENSValidator) nameHash(name string) common.Hash {
+func (self *ENSValidator) NameHash(name string) common.Hash {
 	return ens.EnsNode(name)
 }

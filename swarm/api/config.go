@@ -48,7 +48,7 @@ type Config struct {
 	//*network.SyncParams
 	Contract        common.Address
 	EnsRoot         common.Address
-	EnsApi          string
+	EnsAPIs         []string
 	Path            string
 	ListenAddr      string
 	Port            string
@@ -78,7 +78,7 @@ func NewConfig() (self *Config) {
 		ListenAddr:      DefaultHTTPListenAddr,
 		Port:            DefaultHTTPPort,
 		Path:            node.DefaultDataDir(),
-		EnsApi:          node.DefaultIPCEndpoint("geth"),
+		EnsAPIs:         nil,
 		EnsRoot:         ens.TestNetAddress,
 		NetworkId:       network.NetworkID,
 		SwapEnabled:     false,

@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,10 +14,26 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package storage
 
-import (
-	"math/big"
-)
-
-var BlockReward = big.NewInt(5e+18)
+//
+// import "github.com/ethereum/go-ethereum/swarm/storage/encryption"
+//
+// type HasherStore interface {
+// 	Put([]byte) Key
+// 	Get(Key) ([]byte, error)
+// }
+//
+// type PlainHasherStore struct {
+// 	store ChunkStore
+// }
+//
+// type EncryptedHasherStore struct {
+// 	PlainHasherStore
+// 	dataEncryption encryption.Encryption
+// 	spanEncryption encryption.Encryption
+// }
+//
+// func (e *PlainHasherStore) Put([]byte) Key {
+//
+// }

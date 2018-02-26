@@ -20,20 +20,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
-
-func init() {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlWarn, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
-}
 
 // handshake message type
 type hs0 struct {
@@ -141,8 +135,7 @@ func newProtocol(pp *p2ptest.TestPeerPool) func(*p2p.Peer, p2p.MsgReadWriter) er
 
 		pp.Add(peer)
 		defer pp.Remove(peer)
-		err = peer.Run(handle)
-		return err
+		return peer.Run(handle)
 	}
 }
 
@@ -232,8 +225,12 @@ func runModuleHandshake(t *testing.T, resp uint, errs ...error) {
 	pp := p2ptest.NewTestPeerPool()
 	s := protocolTester(t, pp)
 	id := s.IDs[0]
-	s.TestExchanges(protoHandshakeExchange(id, &protoHandshake{42, "420"})...)
-	s.TestExchanges(moduleHandshakeExchange(id, resp)...)
+	if err := s.TestExchanges(protoHandshakeExchange(id, &protoHandshake{42, "420"})...); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.TestExchanges(moduleHandshakeExchange(id, resp)...); err != nil {
+		t.Fatal(err)
+	}
 	var disconnects []*p2ptest.Disconnect
 	for i, err := range errs {
 		disconnects = append(disconnects, &p2ptest.Disconnect{Peer: s.IDs[i], Error: err})
@@ -308,29 +305,32 @@ func runMultiplePeers(t *testing.T, peer int, errs ...error) {
 	pp := p2ptest.NewTestPeerPool()
 	s := protocolTester(t, pp)
 
-	s.TestExchanges(testMultiPeerSetup(s.IDs[0], s.IDs[1])...)
+	if err := s.TestExchanges(testMultiPeerSetup(s.IDs[0], s.IDs[1])...); err != nil {
+		t.Fatal(err)
+	}
 	// after some exchanges of messages, we can test state changes
 	// here this is simply demonstrated by the peerPool
 	// after the handshake negotiations peers must be added to the pool
 	// time.Sleep(1)
-	for !pp.Has(s.IDs[0]) {
-		time.Sleep(1)
-		log.Trace(fmt.Sprintf("missing peer test-0: %v (%v)", pp, s.IDs))
+	tick := time.NewTicker(10 * time.Millisecond)
+	timeout := time.NewTimer(1 * time.Second)
+WAIT:
+	for {
+		select {
+		case <-tick.C:
+			if pp.Has(s.IDs[0]) {
+				break WAIT
+			}
+		case <-timeout.C:
+			t.Fatal("timeout")
+		}
 	}
-	if !pp.Has(s.IDs[0]) {
-		t.Fatalf("missing peer test-0: %v (%v)", pp, s.IDs)
-	}
-	for !pp.Has(s.IDs[1]) {
-		time.Sleep(1)
-		log.Trace(fmt.Sprintf("missing peer test-1: %v (%v)", pp, s.IDs))
-	}
-
 	if !pp.Has(s.IDs[1]) {
 		t.Fatalf("missing peer test-1: %v (%v)", pp, s.IDs)
 	}
 
 	// peer 0 sends kill request for peer with index <peer>
-	s.TestExchanges(p2ptest.Exchange{
+	err := s.TestExchanges(p2ptest.Exchange{
 		Triggers: []p2ptest.Trigger{
 			{
 				Code: 2,
@@ -340,8 +340,12 @@ func runMultiplePeers(t *testing.T, peer int, errs ...error) {
 		},
 	})
 
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// the peer not killed sends a drop request
-	s.TestExchanges(p2ptest.Exchange{
+	err = s.TestExchanges(p2ptest.Exchange{
 		Triggers: []p2ptest.Trigger{
 			{
 				Code: 3,
@@ -350,6 +354,11 @@ func runMultiplePeers(t *testing.T, peer int, errs ...error) {
 			},
 		},
 	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// check the actual discconnect errors on the individual peers
 	var disconnects []*p2ptest.Disconnect
 	for i, err := range errs {
@@ -364,7 +373,6 @@ func runMultiplePeers(t *testing.T, peer int, errs ...error) {
 	}
 
 }
-
 func XTestMultiplePeersDropSelf(t *testing.T) {
 	runMultiplePeers(t, 0,
 		fmt.Errorf("subprotocol error"),

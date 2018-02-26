@@ -119,7 +119,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 		},
 	})
 
-	expectedError := "exchange 0: 'RetrieveRequestMsg' timed out"
+	expectedError := `exchange #0 "RetrieveRequestMsg": timed out`
 	if err == nil || err.Error() != expectedError {
 		t.Fatalf("Expected error %v, got %v", expectedError, err)
 	}
