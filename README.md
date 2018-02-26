@@ -1,24 +1,21 @@
-## Ethereum Go
+## Ubiq Go
 
-Official golang implementation of the Ethereum protocol.
+Official golang implementation of the Ubiq protocol.
 
 [![API Reference](
 https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
 )](https://godoc.org/github.com/ubiq/go-ubiq)
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ubiq/go-ubiq?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 Automated builds are available for stable releases and the unstable master branch.
-Binary archives are published at https://github.com/ubiq/go-ubiq/releases.
+Binary archives are published at [releases](https://github.com/ubiq/go-ubiq/releases) page.
 
 ## Building the source
 
-For prerequisites and detailed build instructions please read the
-[Installation Instructions](https://github.com/ubiq/go-ubiq/wiki/Building-Ethereum)
-on the wiki.
+For prerequisites and detailed build instructions please read the [Ethereum's Installation Instructions](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum) on their wiki. 
 
-Building gubiq requires both a Go and a C compiler.
-You can install them using your favourite package manager.
-Once the dependencies are installed, run
+*Note*: Keep in mind that Ubiq aims to be 100% compatible with Ethereum, so mostly all the documentation you can find on Ethereum wiki, will apply for sure to Ubiq.
+
+Building gubiq requires both a Go and a C compiler. You can install them using your favourite package manager. Once the dependencies are installed, run
 
     make gubiq
 
@@ -32,25 +29,24 @@ The go-ubiq project comes with several wrappers/executables found in the `cmd` d
 
 | Command    | Description |
 |:----------:|-------------|
-| **`gubiq`** | Our main Ethereum CLI client. It is the entry point into the Ethereum network (main-, test- or private net), capable of running as a full node (default) archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the Ethereum network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `gubiq --help` and the [CLI Wiki page](https://github.com/ubiq/go-ubiq/wiki/Command-Line-Options) for command line options |
-| `abigen` | Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages. It operates on plain [Ethereum contract ABIs](https://github.com/ubiq/wiki/wiki/Ethereum-Contract-ABI) with expanded functionality if the contract bytecode is also available. However it also accepts Solidity source files, making development much more streamlined. Please see our [Native DApps](https://github.com/ubiq/go-ubiq/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts) wiki page for details. |
-| `bootnode` | Stripped down version of our Ethereum client implementation that only takes part in the network node discovery protocol, but does not run any of the higher level application protocols. It can be used as a lightweight bootstrap node to aid in finding peers in private networks. |
+| **`gubiq`** | Our main Ubiq CLI client. It is the entry point into the Ubiq network (main-, test- or private net), capable of running as a full node (default) archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the Ubiq network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `gubiq --help` and the [CLI Wiki page](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options) for command line options |
+| `abigen` | Source code generator to convert Ubiq contract definitions into easy to use, compile-time type-safe Go packages. It operates on plain [Ethereum contract ABIs](https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI) with expanded functionality if the contract bytecode is also available. However it also accepts Solidity source files, making development much more streamlined. Please see [Ethereum Native DApps](https://github.com/ethereum/go-ethereum/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts) wiki page for details. |
+| `bootnode` | Stripped down version of our Ubiq client implementation that only takes part in the network node discovery protocol, but does not run any of the higher level application protocols. It can be used as a lightweight bootstrap node to aid in finding peers in private networks. |
 | `disasm` | Bytecode disassembler to convert EVM (Ethereum Virtual Machine) bytecode into more user friendly assembly-like opcodes (e.g. `echo "6001" | disasm`). For details on the individual opcodes, please see pages 22-30 of the [Ethereum Yellow Paper](http://gavwood.com/paper.pdf). |
 | `evm` | Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow insolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug`). |
 | `gubiqrpctest` | Developer utility tool to support our [ubiq/rpc-test](https://github.com/ubiq/rpc-tests) test suite which validates baseline conformity to the [Ethereum JSON RPC](https://github.com/ubiq/wiki/wiki/JSON-RPC) specs. Please see the [test suite's readme](https://github.com/ubiq/rpc-tests/blob/master/README.md) for details. |
 | `rlpdump` | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://github.com/ubiq/wiki/wiki/RLP)) dumps (data encoding used by the Ethereum protocol both network as well as consensus wise) to user friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`). |
-| `swarm`    | swarm daemon and tools. This is the entrypoint for the swarm network. `swarm --help` for command line options and subcommands. See https://swarm-guide.readthedocs.io for swarm documentation. |
 
 ## Running gubiq
 
-Going through all the possible command line flags is out of scope here (please consult our
-[CLI Wiki page](https://github.com/ubiq/go-ubiq/wiki/Command-Line-Options)), but we've
+Going through all the possible command line flags is out of scope here (please consult 
+[Ethereum CLI Wiki page](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options)), but we've
 enumerated a few common parameter combos to get you up to speed quickly on how you can run your
 own Gubiq instance.
 
 ### Full node on the main Ethereum network
 
-By far the most common scenario is people wanting to simply interact with the Ethereum network:
+By far the most common scenario is people wanting to simply interact with the Ubiq network:
 create accounts; transfer funds; deploy and interact with contracts. For this particular use-case
 the user doesn't care about years-old historical data, so we can fast-sync quickly to the current
 state of the network. To do so:
@@ -66,9 +62,9 @@ This command will:
  * Bump the memory allowance of the database to 512MB (`--cache=512`), which can help significantly in
    sync times especially for HDD users. This flag is optional and you can set it as high or as low as
    you'd like, though we'd recommend the 512MB - 2GB range.
- * Start up Gubiq's built-in interactive [JavaScript console](https://github.com/ubiq/go-ubiq/wiki/JavaScript-Console),
-   (via the trailing `console` subcommand) through which you can invoke all official [`web3` methods](https://github.com/ubiq/wiki/wiki/JavaScript-API)
-   as well as Gubiq's own [management APIs](https://github.com/ubiq/go-ubiq/wiki/Management-APIs).
+ * Start up Gubiq's built-in interactive [JavaScript console](https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console),
+   (via the trailing `console` subcommand) through which you can invoke all official [`web3` methods](https://github.com/ethereum/wiki/wiki/JavaScript-API)
+   as well as Gubiq's own [management APIs](https://github.com/ethereum/go-ethereum/wiki/Management-APIs).
    This too is optional and if you leave it out you can always attach to an already running Gubiq instance
    with `gubiq --attach`.
 
@@ -91,7 +87,7 @@ Specifying the `--testnet` flag however will reconfigure your Gubiq instance a b
 
  * Instead of using the default data directory (`~/.ubiq` on Linux for example), Gubiq will nest
    itself one level deeper into a `testnet` subfolder (`~/.ubiq/testnet` on Linux).
- * Instead of connecting the main Ethereum network, the client will connect to the test network,
+ * Instead of connecting the main Ubiq network, the client will connect to the test network,
    which uses different P2P bootnodes, different network IDs and genesis states.
 
 *Note: Although there are some internal protective measures to prevent transactions from crossing
@@ -102,7 +98,7 @@ them.*
 
 #### Docker quick start
 
-One of the quickest ways to get Ethereum up and running on your machine is by using Docker:
+One of the quickest ways to get Ubiq up and running on your machine is by using Docker:
 
 ```
 docker run -d --name ubiq-node -v /Users/alice/ubiq:/root \
@@ -110,14 +106,14 @@ docker run -d --name ubiq-node -v /Users/alice/ubiq:/root \
            ubiqsmart/gubiq --fast --cache=512
 ```
 
-This will start gubiq in fast sync mode with a DB memory allowance of 512MB just as the above command does.  It will also create a persistent volume in your home directory for saving your blockchain as well as map the default ports. There is also an `alpine` tag available for a slim version of the image.
+This will start gubiq in fast sync mode with a DB memory allowance of 512MB just as the above command does.  It will also create a persistent volume in your home directory for saving your blockchain as well as map the default ports.
 
 ### Programatically interfacing Gubiq nodes
 
-As a developer, sooner rather than later you'll want to start interacting with Gubiq and the Ethereum
+As a developer, sooner rather than later you'll want to start interacting with Gubiq and the Ubiq
 network via your own programs and not manually through the console. To aid this, Gubiq has built in
-support for a JSON-RPC based APIs ([standard APIs](https://github.com/ubiq/wiki/wiki/JSON-RPC) and
-[Gubiq specific APIs](https://github.com/ubiq/go-ubiq/wiki/Management-APIs)). These can be
+support for a JSON-RPC based APIs ([standard APIs](https://github.com/ethereum/wiki/wiki/JSON-RPC) and
+[Gubiq specific APIs](https://github.com/ethereum/go-ethereum/wiki/Management-APIs)). These can be
 exposed via HTTP, WebSockets and IPC (unix sockets on unix based platroms, and named pipes on Windows).
 
 The IPC interface is enabled by default and exposes all the APIs supported by Gubiq, whereas the HTTP
@@ -203,7 +199,7 @@ $ bootnode --genkey=boot.key
 $ bootnode --nodekey=boot.key
 ```
 
-With the bootnode online, it will display an [`enode` URL](https://github.com/ubiq/wiki/wiki/enode-url-format)
+With the bootnode online, it will display an [`enode` URL](https://github.com/ethereum/wiki/wiki/enode-url-format)
 that other nodes can use to connect to it and exchange peer information. Make sure to replace the
 displayed IP address information (most probably `[::]`) with your externally accessible IP to get the
 actual `enode` URL.
@@ -224,26 +220,6 @@ $ gubiq --datadir=path/to/custom/data/folder --bootnodes=<bootnode-enode-url-fro
 *Note: Since your network will be completely cut off from the main and test networks, you'll also
 need to configure a miner to process transactions and create new blocks for you.*
 
-#### Running a private miner
-
-Mining on the public Ethereum network is a complex task as it's only feasible using GPUs, requiring
-an OpenCL or CUDA enabled `ethminer` instance. For information on such a setup, please consult the
-[EtherMining subreddit](https://www.reddit.com/r/EtherMining/) and the [Genoil miner](https://github.com/Genoil/cpp-ethereum)
-repository.
-
-In a private network setting however, a single CPU miner instance is more than enough for practical
-purposes as it can produce a stable stream of blocks at the correct intervals without needing heavy
-resources (consider running on a single thread, no need for multiple ones either). To start a Gubiq
-instance for mining, run it with all your usual flags, extended by:
-
-```
-$ gubiq <usual-flags> --mine --minerthreads=1 --etherbase=0x0000000000000000000000000000000000000000
-```
-
-Which will start mining bocks and transactions on a single CPU thread, crediting all proceedings to
-the account specified by `--etherbase`. You can further tune the mining by changing the default gas
-limit blocks converge to (`--targetgaslimit`) and the price transactions are accepted at (`--gasprice`).
-
 ## Contribution
 
 Thank you for considering to help out with the source code! We welcome contributions from
@@ -251,7 +227,7 @@ anyone on the internet, and are grateful for even the smallest of fixes!
 
 If you'd like to contribute to go-ubiq, please fork, fix, commit and send a pull request
 for the maintainers to review and merge into the main code base. If you wish to submit more
-complex changes though, please check up with the core devs first on [our gitter channel](https://gitter.im/ubiq/go-ubiq)
+complex changes though, please check up with the core devs first on [our Discord channel](https://discord.gg/HF6vEGF)
 to ensure those changes are in line with the general philosophy of the project and/or get some
 early feedback which can make both your efforts much lighter as well as our review and merge
 procedures quick and simple.
@@ -264,15 +240,15 @@ Please make sure your contributions adhere to our coding guidelines:
  * Commit messages should be prefixed with the package(s) they modify.
    * E.g. "eth, rpc: make trace configs optional"
 
-Please see the [Developers' Guide](https://github.com/ubiq/go-ubiq/wiki/Developers'-Guide)
+Please see the [Developers' Guide](https://github.com/ethereum/go-ethereum∏/wiki/Developers'-Guide)
 for more details on configuring your environment, managing project dependencies and testing procedures.
 
 ## License
 
-The go-ubiq library (i.e. all code outside of the `cmd` directory) is licensed under the
-[GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.en.html), also
-included in our repository in the `COPYING.LESSER` file.
+    The go-ubiq library (i.e. all code outside of the `cmd` directory) is licensed under the
+    [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.en.html), also
+    included in our repository in the `COPYING.LESSER` file.
 
-The go-ubiq binaries (i.e. all code inside of the `cmd` directory) is licensed under the
-[GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html), also included
-in our repository in the `COPYING` file.
+    The go-ubiq binaries (i.e. all code inside of the `cmd` directory) is licensed under the
+    [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html), also included
+    in our repository in the `COPYING` file.
