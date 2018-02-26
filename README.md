@@ -44,7 +44,7 @@ Going through all the possible command line flags is out of scope here (please c
 enumerated a few common parameter combos to get you up to speed quickly on how you can run your
 own Gubiq instance.
 
-### Full node on the main Ethereum network
+### Full node on the main Ubiq network
 
 By far the most common scenario is people wanting to simply interact with the Ubiq network:
 create accounts; transfer funds; deploy and interact with contracts. For this particular use-case
@@ -68,7 +68,7 @@ This command will:
    This too is optional and if you leave it out you can always attach to an already running Gubiq instance
    with `gubiq --attach`.
 
-### Full node on the Ethereum test network
+### Full node on the Ubiq test network
 
 Transitioning towards developers, if you'd like to play around with creating Ethereum contracts, you
 almost certainly would like to do that without any real money involved until you get the hang of the
