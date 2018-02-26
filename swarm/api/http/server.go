@@ -797,7 +797,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		err := landingPageTemplate.Execute(w, nil)
 		if err != nil {
-			s.logError("error rendering landing page: %s", err)
+			log.Error(fmt.Sprintf("error rendering landing page: %s", err))
 		}
 		return
 	}
