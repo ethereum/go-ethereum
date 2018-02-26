@@ -38,6 +38,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/pborman/uuid"
@@ -49,6 +50,28 @@ type resourceResponse struct {
 	Resource string      `json:"resource"`
 	Update   storage.Key `json:"update"`
 }
+
+var (
+	postRawCount     = metrics.NewRegisteredCounter("api.http.post.raw.count", nil)
+	postRawFail      = metrics.NewRegisteredCounter("api.http.post.raw.fail", nil)
+	postFilesCount   = metrics.NewRegisteredCounter("api.http.post.files.count", nil)
+	postFilesFail    = metrics.NewRegisteredCounter("api.http.post.files.fail", nil)
+	deleteCount      = metrics.NewRegisteredCounter("api.http.delete.count", nil)
+	deleteFail       = metrics.NewRegisteredCounter("api.http.delete.fail", nil)
+	getCount         = metrics.NewRegisteredCounter("api.http.get.count", nil)
+	getFail          = metrics.NewRegisteredCounter("api.http.get.fail", nil)
+	getFileCount     = metrics.NewRegisteredCounter("api.http.get.file.count", nil)
+	getFileNotFound  = metrics.NewRegisteredCounter("api.http.get.file.notfound", nil)
+	getFileFail      = metrics.NewRegisteredCounter("api.http.get.file.fail", nil)
+	getFilesCount    = metrics.NewRegisteredCounter("api.http.get.files.count", nil)
+	getFilesFail     = metrics.NewRegisteredCounter("api.http.get.files.fail", nil)
+	getListCount     = metrics.NewRegisteredCounter("api.http.get.list.count", nil)
+	getListFail      = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
+	requestCount     = metrics.NewRegisteredCounter("http.request.count", nil)
+	htmlRequestCount = metrics.NewRegisteredCounter("http.request.html.count", nil)
+	jsonRequestCount = metrics.NewRegisteredCounter("http.request.json.count", nil)
+	requestTimer     = metrics.NewRegisteredResettingTimer("http.request.time", nil)
+)
 
 // ServerConfig is the basic configuration needed for the HTTP server and also
 // includes CORS settings.
@@ -98,18 +121,22 @@ type Request struct {
 // HandlePostRaw handles a POST request to a raw bzz-raw:/ URI, stores the request
 // body in swarm and returns the resulting storage key as a text/plain response
 func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
+	postRawCount.Inc(1)
 	if r.uri.Path != "" {
+		postRawFail.Inc(1)
 		Respond(w, r, "raw POST request cannot contain a path", http.StatusBadRequest)
 		return
 	}
 
 	if r.Header.Get("Content-Length") == "" {
+		postRawFail.Inc(1)
 		Respond(w, r, "missing Content-Length header in request", http.StatusBadRequest)
 		return
 	}
 
 	key, _, err := s.api.Store(r.Body, r.ContentLength)
 	if err != nil {
+		postRawFail.Inc(1)
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -126,8 +153,10 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 // existing manifest or to a new manifest under <path> and returns the
 // resulting manifest hash as a text/plain response
 func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
+	postFilesCount.Inc(1)
 	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
+		postFilesFail.Inc(1)
 		Respond(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -136,12 +165,14 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 	if r.uri.Addr != "" {
 		key, err = s.api.Resolve(r.uri)
 		if err != nil {
+			postFilesFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
 			return
 		}
 	} else {
 		key, err = s.api.NewManifest()
 		if err != nil {
+			postFilesFail.Inc(1)
 			Respond(w, r, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -161,6 +192,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		}
 	})
 	if err != nil {
+		postFilesFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("cannot create manifest: %s", err), http.StatusInternalServerError)
 		return
 	}
@@ -279,8 +311,10 @@ func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error 
 // <path> from <manifest> and returns the resulting manifest hash as a
 // text/plain response
 func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
+	deleteCount.Inc(1)
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
+		deleteFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
 		return
 	}
@@ -290,6 +324,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 		return mw.RemoveEntry(r.uri.Path)
 	})
 	if err != nil {
+		deleteFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("cannot update manifest: %s", err), http.StatusInternalServerError)
 		return
 	}
@@ -435,8 +470,10 @@ func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supEr
 // - bzz-hash://<key> and responds with the hash of the content stored
 //   at the given storage key as a text/plain response
 func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
+	getCount.Inc(1)
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
+		getFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
 		return
 	}
@@ -446,6 +483,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	if r.uri.Path != "" {
 		walker, err := s.api.NewManifestWalker(key, nil)
 		if err != nil {
+			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("%s is not a manifest", key), http.StatusBadRequest)
 			return
 		}
@@ -474,6 +512,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 			return api.SkipManifest
 		})
 		if entry == nil {
+			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("manifest entry could not be loaded"), http.StatusNotFound)
 			return
 		}
@@ -483,12 +522,13 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	// check the root chunk exists by retrieving the file's size
 	reader := s.api.Retrieve(key)
 	if _, err := reader.Size(nil); err != nil {
+		getFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("root chunk not found %s: %s", key, err), http.StatusNotFound)
 		return
 	}
 
 	switch {
-	case r.uri.Raw():
+	case r.uri.Raw() || r.uri.DeprecatedRaw():
 		// allow the request to overwrite the content type using a query
 		// parameter
 		contentType := "application/octet-stream"
@@ -508,19 +548,23 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 // header of "application/x-tar" and returns a tar stream of all files
 // contained in the manifest
 func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
+	getFilesCount.Inc(1)
 	if r.uri.Path != "" {
+		getFilesFail.Inc(1)
 		Respond(w, r, "files request cannot contain a path", http.StatusBadRequest)
 		return
 	}
 
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
+		getFilesFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
 		return
 	}
 
 	walker, err := s.api.NewManifestWalker(key, nil)
 	if err != nil {
+		getFilesFail.Inc(1)
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -568,6 +612,7 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 		return nil
 	})
 	if err != nil {
+		getFilesFail.Inc(1)
 		log.Error(fmt.Sprintf("error generating tar stream: %s", err))
 	}
 }
@@ -576,6 +621,7 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 // a list of all files contained in <manifest> under <path> grouped into
 // common prefixes using "/" as a delimiter
 func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
+	getListCount.Inc(1)
 	// ensure the root path has a trailing slash so that relative URLs work
 	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
 		http.Redirect(w, &r.Request, r.URL.Path+"/", http.StatusMovedPermanently)
@@ -584,6 +630,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
+		getListFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
 		return
 	}
@@ -591,6 +638,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	list, err := s.getManifestList(key, r.uri.Path)
 
 	if err != nil {
+		getListFail.Inc(1)
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -608,6 +656,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 			List: &list,
 		})
 		if err != nil {
+			getListFail.Inc(1)
 			log.Error(fmt.Sprintf("error rendering list HTML: %s", err))
 		}
 		return
@@ -676,6 +725,7 @@ func (s *Server) getManifestList(key storage.Key, prefix string) (list api.Manif
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
 // with the content of the file at <path> from the given <manifest>
 func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
+	getFileCount.Inc(1)
 	// ensure the root path has a trailing slash so that relative URLs work
 	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
 		http.Redirect(w, &r.Request, r.URL.Path+"/", http.StatusMovedPermanently)
@@ -684,6 +734,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
+		getFileFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
 		return
 	}
@@ -699,8 +750,10 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		}
 		switch status {
 		case http.StatusNotFound:
+			getFileNotFound.Inc(1)
 			Respond(w, r, err.Error(), http.StatusNotFound)
 		default:
+			getFileFail.Inc(1)
 			Respond(w, r, err.Error(), http.StatusInternalServerError)
 		}
 		return
@@ -712,6 +765,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		list, err := s.getManifestList(key, r.uri.Path)
 
 		if err != nil {
+			getFileFail.Inc(1)
 			Respond(w, r, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -724,6 +778,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 
 	// check the root chunk exists by retrieving the file's size
 	if _, err := reader.Size(nil); err != nil {
+		getFileNotFound.Inc(1)
 		Respond(w, r, fmt.Sprintf("file not found %s: %s", r.uri, err), http.StatusNotFound)
 		return
 	}
@@ -735,7 +790,17 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req := &Request{Request: *r, ruid: uuid.New()[:8]}
+	requestCount.Inc(1)
 	log.Info("serve request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
+
+	if r.RequestURI == "/" && strings.Contains(r.Header.Get("Accept"), "text/html") {
+
+		err := landingPageTemplate.Execute(w, nil)
+		if err != nil {
+			log.Error(fmt.Sprintf("error rendering landing page: %s", err))
+		}
+		return
+	}
 
 	uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
 	if err != nil {

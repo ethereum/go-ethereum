@@ -88,12 +88,12 @@ func (self *resource) NameHash() common.Hash {
 type ResourceValidator interface {
 	hashSize() int
 	checkAccess(string, common.Address) (bool, error)
-	nameHash(string) common.Hash         // nameHashFunc
+	NameHash(string) common.Hash         // nameHashFunc
 	sign(common.Hash) (Signature, error) // SignFunc
 }
 
-type ethApi interface {
-	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
+type headerGetter interface {
+	HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error)
 }
 
 // Mutable resource is an entity which allows updates to a resource
@@ -158,7 +158,7 @@ type ethApi interface {
 type ResourceHandler struct {
 	ChunkStore
 	validator    ResourceValidator
-	ethClient    ethApi
+	ethClient    headerGetter
 	resources    map[string]*resource
 	hashPool     sync.Pool
 	resourceLock sync.RWMutex
@@ -167,7 +167,7 @@ type ResourceHandler struct {
 }
 
 // Create or open resource update chunk store
-func NewResourceHandler(hasher SwarmHasher, chunkStore ChunkStore, ethClient ethApi, validator ResourceValidator) (*ResourceHandler, error) {
+func NewResourceHandler(hasher SwarmHasher, chunkStore ChunkStore, ethClient headerGetter, validator ResourceValidator) (*ResourceHandler, error) {
 	rh := &ResourceHandler{
 		ChunkStore:   chunkStore,
 		ethClient:    ethClient,
@@ -182,7 +182,7 @@ func NewResourceHandler(hasher SwarmHasher, chunkStore ChunkStore, ethClient eth
 	}
 
 	if rh.validator != nil {
-		rh.nameHash = rh.validator.nameHash
+		rh.nameHash = rh.validator.NameHash
 	} else {
 		rh.nameHash = func(name string) common.Hash {
 			hasher := rh.hashPool.Get().(SwarmHash)
@@ -281,7 +281,7 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 	}
 
 	// get our blockheight at this time
-	currentblock, err := self.getBlock(ctx)
+	currentblock, err := self.getBlock(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +374,7 @@ func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.H
 	if err != nil {
 		return nil, err
 	}
-	currentblock, err := self.getBlock(ctx)
+	currentblock, err := self.getBlock(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -583,7 +583,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	}
 
 	// get our blockheight at this time and the next block of the update period
-	currentblock, err := self.getBlock(ctx)
+	currentblock, err := self.getBlock(ctx, name)
 	if err != nil {
 		return nil, NewResourceError(ErrIO, fmt.Sprintf("Could not get block height: %v", err))
 	}
@@ -655,8 +655,8 @@ func (self *ResourceHandler) Close() {
 	self.ChunkStore.Close()
 }
 
-func (self *ResourceHandler) getBlock(ctx context.Context) (uint64, error) {
-	blockheader, err := self.ethClient.HeaderByNumber(ctx, nil)
+func (self *ResourceHandler) getBlock(ctx context.Context, name string) (uint64, error) {
+	blockheader, err := self.ethClient.HeaderByNumber(ctx, name, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -866,7 +866,7 @@ func isMultihash(data []byte) int {
 }
 
 // TODO: this should not be exposed, but swarm/testutil/http.go needs it
-func NewTestResourceHandler(datadir string, ethClient ethApi, validator ResourceValidator) (*ResourceHandler, error) {
+func NewTestResourceHandler(datadir string, ethClient headerGetter, validator ResourceValidator) (*ResourceHandler, error) {
 	path := filepath.Join(datadir, DbDirName)
 	basekey := make([]byte, 32)
 	hasher := MakeHashFunc(SHA3Hash)
