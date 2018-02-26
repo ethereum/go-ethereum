@@ -241,6 +241,9 @@ func (pm *ProtocolManager) Stop() {
 
 	close(pm.quitSync) // quits syncer, fetcher
 
+	// Stop downloader and make sure that all the running downloads are complete.
+	pm.downloader.Terminate()
+
 	// Disconnect existing sessions.
 	// This also closes the gate for any new registrations on the peer set.
 	// sessions which are already established but not added to pm.peers yet
