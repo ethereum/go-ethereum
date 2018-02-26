@@ -797,7 +797,7 @@ func TestTopicsMapping(t *testing.T) {
 		matched := []string{}
 		fs.topicMatcher.matchedTopics(env.Topic, &matched)
 		if !hasFilterID(matched, filterID) {
-			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
+			t.Fatalf("failed matchedTopics, step %d.", i)
 		}
 
 		//test match without filter
@@ -807,7 +807,7 @@ func TestTopicsMapping(t *testing.T) {
 		matched = matched[:0]
 		fs.topicMatcher.matchedTopics(env.Topic, &matched)
 		if hasFilterID(matched, filterID) {
-			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
+			t.Fatalf("failed match without filter, step %d.", i)
 		}
 
 		//test match with changed topic
@@ -819,7 +819,7 @@ func TestTopicsMapping(t *testing.T) {
 		matched = matched[:0]
 		fs.topicMatcher.matchedTopics(env.Topic, &matched)
 		if hasFilterID(matched, filterID) {
-			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
+			t.Fatalf("failed match with changed topic, step %d.", i)
 		}
 		if !fs.Uninstall(filterID) {
 			t.Fatal("Failed to uninstall filter")
@@ -850,7 +850,7 @@ func TestTopicsMapping_MatchAllTopics_Success(t *testing.T) {
 	matched := []string{}
 	fs.topicMatcher.matchedTopics(topic, &matched)
 	if !hasFilterID(matched, filterID) {
-		t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed)
+		t.Fatal("failed matchedTopics")
 	}
 	if _, ok := fs.topicMatcher.mapper[ALL_TOPICS][filterID]; !ok {
 		t.Fatal("watcher mapping incorrect")
@@ -863,7 +863,7 @@ func TestTopicsMapping_MatchAllTopics_Success(t *testing.T) {
 	matched = matched[:0]
 	fs.topicMatcher.matchedTopics(topic, &matched)
 	if hasFilterID(matched, filterID) {
-		t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed)
+		t.Fatal("failed match without filter")
 	}
 
 	if _, ok := fs.topicMatcher.mapper[ALL_TOPICS][filterID]; ok {
@@ -925,7 +925,7 @@ func benchFilter_MatchMessage(b *testing.B, numOfFilters int) {
 
 		_, err = fs.Install(f)
 		if err != nil {
-			b.Fatalf("failed generateFilter with seed %d: %s.", seed, err)
+			b.Fatalf("failed install filter with seed %d: %s.", seed, err)
 		}
 
 	}
