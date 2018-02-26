@@ -91,7 +91,8 @@ func (e *encryption) transform(data []byte, key Key) []byte {
 
 		hasher.Reset()
 
-		for j := 0; j < min(hashSize, dataLength-i); j++ {
+		segmentSize := min(hashSize, dataLength-i)
+		for j := 0; j < segmentSize; j++ {
 			transformedData[i+j] = data[i+j] ^ segmentKey[j]
 		}
 		ctr++
