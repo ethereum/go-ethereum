@@ -25,24 +25,24 @@ import (
 
 var (
 	CallistoMainnetGenesisHash = common.HexToHash("0x73ab688c08ff2062b61c301cd7abb13adf5cff3cf80e6238e129f03140183f01") // Callisto Mainnet genesis hash to enforce below configs on
-	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3") // Mainnet genesis hash to enforce below configs on
-	TestnetGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d") // Testnet genesis hash to enforce below configs on
+	MainnetGenesisHash         = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3") // Mainnet genesis hash to enforce below configs on
+	TestnetGenesisHash         = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d") // Testnet genesis hash to enforce below configs on
 )
 
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		ChainId:        big.NewInt(1),
-		HomesteadBlock: big.NewInt(1150000),
-		DAOForkBlock:   big.NewInt(1920000),
-		DAOForkSupport: true,
-		EIP150Block:    big.NewInt(2463000),
-		EIP150Hash:     common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
-		EIP155Block:    big.NewInt(2675000),
-		EIP158Block:    big.NewInt(2675000),
-		ByzantiumBlock: big.NewInt(4370000),
-
-		Ethash: new(EthashConfig),
+		ChainId:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(1150000),
+		DAOForkBlock:        big.NewInt(1920000),
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(2463000),
+		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:         big.NewInt(2675000),
+		EIP158Block:         big.NewInt(2675000),
+		ByzantiumBlock:      big.NewInt(4370000),
+		ConstantinopleBlock: nil,
+		Ethash:              new(EthashConfig),
 	}
 
 	// CallistoMainnetChainConfig contains the chain parameters to run a node on the Callisto Main network.
@@ -61,49 +61,49 @@ var (
 
 	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
 	TestnetChainConfig = &ChainConfig{
-		ChainId:        big.NewInt(3),
-		HomesteadBlock: big.NewInt(0),
-		DAOForkBlock:   nil,
-		DAOForkSupport: true,
-		EIP150Block:    big.NewInt(0),
-		EIP150Hash:     common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
-		EIP155Block:    big.NewInt(10),
-		EIP158Block:    big.NewInt(10),
-		ByzantiumBlock: big.NewInt(1700000),
-
-		Ethash: new(EthashConfig),
+		ChainId:             big.NewInt(3),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+		EIP155Block:         big.NewInt(10),
+		EIP158Block:         big.NewInt(10),
+		ByzantiumBlock:      big.NewInt(1700000),
+		ConstantinopleBlock: nil,
+		Ethash:              new(EthashConfig),
 	}
 
 	// CallistoTestnetChainConfig contains the chain parameters to run a node on the Callisto test network.
 	CallistoTestnetChainConfig = &ChainConfig{
-		ChainId:        big.NewInt(7919),
-		HomesteadBlock: big.NewInt(1),
-		DAOForkBlock:   big.NewInt(0),
-		DAOForkSupport: false,
-		EIP150Block:    big.NewInt(2),
-		EIP150Hash:     common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
-		EIP155Block:    big.NewInt(3),
-		EIP158Block:    big.NewInt(3),
-		ByzantiumBlock: big.NewInt(4),
-		CallistoBlock:  big.NewInt(4),
+		ChainId:                 big.NewInt(7919),
+		HomesteadBlock:          big.NewInt(1),
+		DAOForkBlock:            big.NewInt(0),
+		DAOForkSupport:          false,
+		EIP150Block:             big.NewInt(2),
+		EIP150Hash:              common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		EIP155Block:             big.NewInt(3),
+		EIP158Block:             big.NewInt(3),
+		ByzantiumBlock:          big.NewInt(4),
+		CallistoBlock:           big.NewInt(4),
 		CallistoTreasuryAddress: common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"),
-		CallistoStakeAddress: common.HexToAddress("0x3c06f218Ce6dD8E2c535a8925A2eDF81674984D9"),
+		CallistoStakeAddress:    common.HexToAddress("0x3c06f218Ce6dD8E2c535a8925A2eDF81674984D9"),
 
 		Ethash: new(EthashConfig),
 	}
 
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
 	RinkebyChainConfig = &ChainConfig{
-		ChainId:        big.NewInt(4),
-		HomesteadBlock: big.NewInt(1),
-		DAOForkBlock:   nil,
-		DAOForkSupport: true,
-		EIP150Block:    big.NewInt(2),
-		EIP150Hash:     common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
-		EIP155Block:    big.NewInt(3),
-		EIP158Block:    big.NewInt(3),
-		ByzantiumBlock: big.NewInt(1035301),
-
+		ChainId:             big.NewInt(4),
+		HomesteadBlock:      big.NewInt(1),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(2),
+		EIP150Hash:          common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
+		EIP155Block:         big.NewInt(3),
+		EIP158Block:         big.NewInt(3),
+		ByzantiumBlock:      big.NewInt(1035301),
+		ConstantinopleBlock: nil,
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
@@ -115,16 +115,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, common.Address{}, new(EthashConfig), nil}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, common.Address{}, new(EthashConfig), nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, common.Address{},nil, &CliqueConfig{Period: 0, Epoch: 30000}}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, common.Address{}, nil, &CliqueConfig{Period: 0, Epoch: 30000}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, common.Address{}, new(EthashConfig), nil}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, common.Address{}, new(EthashConfig), nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -148,11 +148,12 @@ type ChainConfig struct {
 	EIP155Block *big.Int `json:"eip155Block,omitempty"` // EIP155 HF block
 	EIP158Block *big.Int `json:"eip158Block,omitempty"` // EIP158 HF block
 
-	ByzantiumBlock *big.Int `json:"byzantiumBlock,omitempty"` // Byzantium switch block (nil = no fork, 0 = already on byzantium)
+	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
+	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 
-	CallistoBlock *big.Int `json:"callistoBlock,omitempty"`
-	CallistoTreasuryAddress common.Address  `json:"callistoTreasuryAddress,omitempty"`
-	CallistoStakeAddress common.Address  `json:"callistoStakeAddress,omitempty"`
+	CallistoBlock           *big.Int       `json:"callistoBlock,omitempty"`
+	CallistoTreasuryAddress common.Address `json:"callistoTreasuryAddress,omitempty"`
+	CallistoStakeAddress    common.Address `json:"callistoStakeAddress,omitempty"`
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
@@ -188,7 +189,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Callisto: %v Callisto Treasury Address: %v Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Callisto: %v Callisto Treasury Address: %v Engine: %v}",
 		c.ChainId,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -197,6 +198,7 @@ func (c *ChainConfig) String() string {
 		c.EIP155Block,
 		c.EIP158Block,
 		c.ByzantiumBlock,
+		c.ConstantinopleBlock,
 		c.CallistoBlock,
 		c.CallistoTreasuryAddress,
 		engine,
@@ -227,6 +229,10 @@ func (c *ChainConfig) IsEIP158(num *big.Int) bool {
 
 func (c *ChainConfig) IsByzantium(num *big.Int) bool {
 	return isForked(c.ByzantiumBlock, num)
+}
+
+func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
+	return isForked(c.ConstantinopleBlock, num)
 }
 
 func (c *ChainConfig) IsCallisto(num *big.Int) bool {
@@ -295,6 +301,9 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	}
 	if isForkIncompatible(c.ByzantiumBlock, newcfg.ByzantiumBlock, head) {
 		return newCompatError("Byzantium fork block", c.ByzantiumBlock, newcfg.ByzantiumBlock)
+	}
+	if isForkIncompatible(c.ConstantinopleBlock, newcfg.ConstantinopleBlock, head) {
+		return newCompatError("Constantinople fork block", c.ConstantinopleBlock, newcfg.ConstantinopleBlock)
 	}
 	return nil
 }

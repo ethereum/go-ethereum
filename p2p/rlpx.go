@@ -108,8 +108,14 @@ func (t *rlpx) close(err error) {
 	// Tell the remote end why we're disconnecting if possible.
 	if t.rw != nil {
 		if r, ok := err.(DiscReason); ok && r != DiscNetworkError {
-			t.fd.SetWriteDeadline(time.Now().Add(discWriteTimeout))
-			SendItems(t.rw, discMsg, r)
+			// rlpx tries to send DiscReason to disconnected peer
+			// if the connection is net.Pipe (in-memory simulation)
+			// it hangs forever, since net.Pipe does not implement
+			// a write deadline. Because of this only try to send
+			// the disconnect reason message if there is no error.
+			if err := t.fd.SetWriteDeadline(time.Now().Add(discWriteTimeout)); err == nil {
+				SendItems(t.rw, discMsg, r)
+			}
 		}
 	}
 	t.fd.Close()

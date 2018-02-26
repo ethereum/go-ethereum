@@ -24,7 +24,7 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/common"
 	"github.com/EthereumCommonwealth/go-callisto/crypto"
 	"github.com/EthereumCommonwealth/go-callisto/log"
-	"github.com/rcrowley/go-metrics"
+	"github.com/EthereumCommonwealth/go-callisto/metrics"
 )
 
 var (

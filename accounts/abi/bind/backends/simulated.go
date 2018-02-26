@@ -428,8 +428,21 @@ func (fb *filterBackend) HeaderByNumber(ctx context.Context, block rpc.BlockNumb
 	}
 	return fb.bc.GetHeaderByNumber(uint64(block.Int64())), nil
 }
+
 func (fb *filterBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	return core.GetBlockReceipts(fb.db, hash, core.GetBlockNumber(fb.db, hash)), nil
+}
+
+func (fb *filterBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
+	receipts := core.GetBlockReceipts(fb.db, hash, core.GetBlockNumber(fb.db, hash))
+	if receipts == nil {
+		return nil, nil
+	}
+	logs := make([][]*types.Log, len(receipts))
+	for i, receipt := range receipts {
+		logs[i] = receipt.Logs
+	}
+	return logs, nil
 }
 
 func (fb *filterBackend) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {

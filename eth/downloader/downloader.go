@@ -31,8 +31,8 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/ethdb"
 	"github.com/EthereumCommonwealth/go-callisto/event"
 	"github.com/EthereumCommonwealth/go-callisto/log"
+	"github.com/EthereumCommonwealth/go-callisto/metrics"
 	"github.com/EthereumCommonwealth/go-callisto/params"
-	"github.com/rcrowley/go-metrics"
 )
 
 var (

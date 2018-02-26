@@ -118,10 +118,12 @@ func TestSetupGenesis(t *testing.T) {
 				// Commit the 'old' genesis block with Homestead transition at #2.
 				// Advance to block #4, past the homestead transition block of customg.
 				genesis := oldcustomg.MustCommit(db)
+
 				bc, _ := NewBlockChain(db, nil, oldcustomg.Config, ethash.NewFullFaker(), vm.Config{})
 				defer bc.Stop()
-				bc.SetValidator(bproc{})
-				bc.InsertChain(makeBlockChainWithDiff(genesis, []int{2, 3, 4, 5}, 0))
+
+				blocks, _ := GenerateChain(oldcustomg.Config, genesis, ethash.NewFaker(), db, 4, nil)
+				bc.InsertChain(blocks)
 				bc.CurrentBlock()
 				// This should return a compatibility error.
 				return SetupGenesisBlock(db, &customg)

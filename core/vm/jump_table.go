@@ -51,10 +51,37 @@ type operation struct {
 }
 
 var (
-	frontierInstructionSet  = NewFrontierInstructionSet()
-	homesteadInstructionSet = NewHomesteadInstructionSet()
-	byzantiumInstructionSet = NewByzantiumInstructionSet()
+	frontierInstructionSet       = NewFrontierInstructionSet()
+	homesteadInstructionSet      = NewHomesteadInstructionSet()
+	byzantiumInstructionSet      = NewByzantiumInstructionSet()
+	constantinopleInstructionSet = NewConstantinopleInstructionSet()
 )
+
+// NewConstantinopleInstructionSet returns the frontier, homestead
+// byzantium and contantinople instructions.
+func NewConstantinopleInstructionSet() [256]operation {
+	// instructions that can be executed during the byzantium phase.
+	instructionSet := NewByzantiumInstructionSet()
+	instructionSet[SHL] = operation{
+		execute:       opSHL,
+		gasCost:       constGasFunc(GasFastestStep),
+		validateStack: makeStackFunc(2, 1),
+		valid:         true,
+	}
+	instructionSet[SHR] = operation{
+		execute:       opSHR,
+		gasCost:       constGasFunc(GasFastestStep),
+		validateStack: makeStackFunc(2, 1),
+		valid:         true,
+	}
+	instructionSet[SAR] = operation{
+		execute:       opSAR,
+		gasCost:       constGasFunc(GasFastestStep),
+		validateStack: makeStackFunc(2, 1),
+		valid:         true,
+	}
+	return instructionSet
+}
 
 // NewByzantiumInstructionSet returns the frontier, homestead and
 // byzantium instructions.

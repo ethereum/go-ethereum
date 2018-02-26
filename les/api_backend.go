@@ -87,6 +87,10 @@ func (b *LesApiBackend) GetReceipts(ctx context.Context, blockHash common.Hash) 
 	return light.GetBlockReceipts(ctx, b.eth.odr, blockHash, core.GetBlockNumber(b.eth.chainDb, blockHash))
 }
 
+func (b *LesApiBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
+	return light.GetBlockLogs(ctx, b.eth.odr, blockHash, core.GetBlockNumber(b.eth.chainDb, blockHash))
+}
+
 func (b *LesApiBackend) GetTd(blockHash common.Hash) *big.Int {
 	return b.eth.blockchain.GetTdByHash(blockHash)
 }

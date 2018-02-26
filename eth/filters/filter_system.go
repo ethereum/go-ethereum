@@ -375,19 +375,35 @@ func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.
 		// Get the logs of the block
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
-		receipts, err := es.backend.GetReceipts(ctx, header.Hash())
+		logsList, err := es.backend.GetLogs(ctx, header.Hash())
 		if err != nil {
 			return nil
 		}
 		var unfiltered []*types.Log
-		for _, receipt := range receipts {
-			for _, log := range receipt.Logs {
+		for _, logs := range logsList {
+			for _, log := range logs {
 				logcopy := *log
 				logcopy.Removed = remove
 				unfiltered = append(unfiltered, &logcopy)
 			}
 		}
 		logs := filterLogs(unfiltered, nil, nil, addresses, topics)
+		if len(logs) > 0 && logs[0].TxHash == (common.Hash{}) {
+			// We have matching but non-derived logs
+			receipts, err := es.backend.GetReceipts(ctx, header.Hash())
+			if err != nil {
+				return nil
+			}
+			unfiltered = unfiltered[:0]
+			for _, receipt := range receipts {
+				for _, log := range receipt.Logs {
+					logcopy := *log
+					logcopy.Removed = remove
+					unfiltered = append(unfiltered, &logcopy)
+				}
+			}
+			logs = filterLogs(unfiltered, nil, nil, addresses, topics)
+		}
 		return logs
 	}
 	return nil

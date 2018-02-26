@@ -34,10 +34,10 @@ import (
 
 	"github.com/EthereumCommonwealth/go-callisto/consensus"
 	"github.com/EthereumCommonwealth/go-callisto/log"
+	"github.com/EthereumCommonwealth/go-callisto/metrics"
 	"github.com/EthereumCommonwealth/go-callisto/rpc"
 	mmap "github.com/edsrzf/mmap-go"
 	"github.com/hashicorp/golang-lru/simplelru"
-	metrics "github.com/rcrowley/go-metrics"
 )
 
 var ErrInvalidDumpMagic = errors.New("invalid dump magic")
