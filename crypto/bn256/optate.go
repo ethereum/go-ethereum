@@ -1,184 +1,114 @@
-// Copyright 2012 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package bn256
 
-func lineFunctionAdd(r, p *twistPoint, q *curvePoint, r2 *gfP2, pool *bnPool) (a, b, c *gfP2, rOut *twistPoint) {
+func lineFunctionAdd(r, p *twistPoint, q *curvePoint, r2 *gfP2) (a, b, c *gfP2, rOut *twistPoint) {
 	// See the mixed addition algorithm from "Faster Computation of the
 	// Tate Pairing", http://arxiv.org/pdf/0904.0854v3.pdf
+	B := (&gfP2{}).Mul(&p.x, &r.t)
 
-	B := newGFp2(pool).Mul(p.x, r.t, pool)
+	D := (&gfP2{}).Add(&p.y, &r.z)
+	D.Square(D).Sub(D, r2).Sub(D, &r.t).Mul(D, &r.t)
 
-	D := newGFp2(pool).Add(p.y, r.z)
-	D.Square(D, pool)
-	D.Sub(D, r2)
-	D.Sub(D, r.t)
-	D.Mul(D, r.t, pool)
+	H := (&gfP2{}).Sub(B, &r.x)
+	I := (&gfP2{}).Square(H)
 
-	H := newGFp2(pool).Sub(B, r.x)
-	I := newGFp2(pool).Square(H, pool)
-
-	E := newGFp2(pool).Add(I, I)
+	E := (&gfP2{}).Add(I, I)
 	E.Add(E, E)
 
-	J := newGFp2(pool).Mul(H, E, pool)
+	J := (&gfP2{}).Mul(H, E)
 
-	L1 := newGFp2(pool).Sub(D, r.y)
-	L1.Sub(L1, r.y)
+	L1 := (&gfP2{}).Sub(D, &r.y)
+	L1.Sub(L1, &r.y)
 
-	V := newGFp2(pool).Mul(r.x, E, pool)
+	V := (&gfP2{}).Mul(&r.x, E)
 
-	rOut = newTwistPoint(pool)
-	rOut.x.Square(L1, pool)
-	rOut.x.Sub(rOut.x, J)
-	rOut.x.Sub(rOut.x, V)
-	rOut.x.Sub(rOut.x, V)
+	rOut = &twistPoint{}
+	rOut.x.Square(L1).Sub(&rOut.x, J).Sub(&rOut.x, V).Sub(&rOut.x, V)
 
-	rOut.z.Add(r.z, H)
-	rOut.z.Square(rOut.z, pool)
-	rOut.z.Sub(rOut.z, r.t)
-	rOut.z.Sub(rOut.z, I)
+	rOut.z.Add(&r.z, H).Square(&rOut.z).Sub(&rOut.z, &r.t).Sub(&rOut.z, I)
 
-	t := newGFp2(pool).Sub(V, rOut.x)
-	t.Mul(t, L1, pool)
-	t2 := newGFp2(pool).Mul(r.y, J, pool)
+	t := (&gfP2{}).Sub(V, &rOut.x)
+	t.Mul(t, L1)
+	t2 := (&gfP2{}).Mul(&r.y, J)
 	t2.Add(t2, t2)
 	rOut.y.Sub(t, t2)
 
-	rOut.t.Square(rOut.z, pool)
+	rOut.t.Square(&rOut.z)
 
-	t.Add(p.y, rOut.z)
-	t.Square(t, pool)
-	t.Sub(t, r2)
-	t.Sub(t, rOut.t)
+	t.Add(&p.y, &rOut.z).Square(t).Sub(t, r2).Sub(t, &rOut.t)
 
-	t2.Mul(L1, p.x, pool)
+	t2.Mul(L1, &p.x)
 	t2.Add(t2, t2)
-	a = newGFp2(pool)
-	a.Sub(t2, t)
+	a = (&gfP2{}).Sub(t2, t)
 
-	c = newGFp2(pool)
-	c.MulScalar(rOut.z, q.y)
+	c = (&gfP2{}).MulScalar(&rOut.z, &q.y)
 	c.Add(c, c)
 
-	b = newGFp2(pool)
-	b.SetZero()
-	b.Sub(b, L1)
-	b.MulScalar(b, q.x)
-	b.Add(b, b)
-
-	B.Put(pool)
-	D.Put(pool)
-	H.Put(pool)
-	I.Put(pool)
-	E.Put(pool)
-	J.Put(pool)
-	L1.Put(pool)
-	V.Put(pool)
-	t.Put(pool)
-	t2.Put(pool)
+	b = (&gfP2{}).Neg(L1)
+	b.MulScalar(b, &q.x).Add(b, b)
 
 	return
 }
 
-func lineFunctionDouble(r *twistPoint, q *curvePoint, pool *bnPool) (a, b, c *gfP2, rOut *twistPoint) {
+func lineFunctionDouble(r *twistPoint, q *curvePoint) (a, b, c *gfP2, rOut *twistPoint) {
 	// See the doubling algorithm for a=0 from "Faster Computation of the
 	// Tate Pairing", http://arxiv.org/pdf/0904.0854v3.pdf
+	A := (&gfP2{}).Square(&r.x)
+	B := (&gfP2{}).Square(&r.y)
+	C := (&gfP2{}).Square(B)
 
-	A := newGFp2(pool).Square(r.x, pool)
-	B := newGFp2(pool).Square(r.y, pool)
-	C_ := newGFp2(pool).Square(B, pool)
+	D := (&gfP2{}).Add(&r.x, B)
+	D.Square(D).Sub(D, A).Sub(D, C).Add(D, D)
 
-	D := newGFp2(pool).Add(r.x, B)
-	D.Square(D, pool)
-	D.Sub(D, A)
-	D.Sub(D, C_)
-	D.Add(D, D)
-
-	E := newGFp2(pool).Add(A, A)
+	E := (&gfP2{}).Add(A, A)
 	E.Add(E, A)
 
-	G := newGFp2(pool).Square(E, pool)
+	G := (&gfP2{}).Square(E)
 
-	rOut = newTwistPoint(pool)
-	rOut.x.Sub(G, D)
-	rOut.x.Sub(rOut.x, D)
+	rOut = &twistPoint{}
+	rOut.x.Sub(G, D).Sub(&rOut.x, D)
 
-	rOut.z.Add(r.y, r.z)
-	rOut.z.Square(rOut.z, pool)
-	rOut.z.Sub(rOut.z, B)
-	rOut.z.Sub(rOut.z, r.t)
+	rOut.z.Add(&r.y, &r.z).Square(&rOut.z).Sub(&rOut.z, B).Sub(&rOut.z, &r.t)
 
-	rOut.y.Sub(D, rOut.x)
-	rOut.y.Mul(rOut.y, E, pool)
-	t := newGFp2(pool).Add(C_, C_)
-	t.Add(t, t)
-	t.Add(t, t)
-	rOut.y.Sub(rOut.y, t)
+	rOut.y.Sub(D, &rOut.x).Mul(&rOut.y, E)
+	t := (&gfP2{}).Add(C, C)
+	t.Add(t, t).Add(t, t)
+	rOut.y.Sub(&rOut.y, t)
 
-	rOut.t.Square(rOut.z, pool)
+	rOut.t.Square(&rOut.z)
 
-	t.Mul(E, r.t, pool)
-	t.Add(t, t)
-	b = newGFp2(pool)
-	b.SetZero()
-	b.Sub(b, t)
-	b.MulScalar(b, q.x)
+	t.Mul(E, &r.t).Add(t, t)
+	b = (&gfP2{}).Neg(t)
+	b.MulScalar(b, &q.x)
 
-	a = newGFp2(pool)
-	a.Add(r.x, E)
-	a.Square(a, pool)
-	a.Sub(a, A)
-	a.Sub(a, G)
-	t.Add(B, B)
-	t.Add(t, t)
+	a = (&gfP2{}).Add(&r.x, E)
+	a.Square(a).Sub(a, A).Sub(a, G)
+	t.Add(B, B).Add(t, t)
 	a.Sub(a, t)
 
-	c = newGFp2(pool)
-	c.Mul(rOut.z, r.t, pool)
-	c.Add(c, c)
-	c.MulScalar(c, q.y)
-
-	A.Put(pool)
-	B.Put(pool)
-	C_.Put(pool)
-	D.Put(pool)
-	E.Put(pool)
-	G.Put(pool)
-	t.Put(pool)
+	c = (&gfP2{}).Mul(&rOut.z, &r.t)
+	c.Add(c, c).MulScalar(c, &q.y)
 
 	return
 }
 
-func mulLine(ret *gfP12, a, b, c *gfP2, pool *bnPool) {
-	a2 := newGFp6(pool)
-	a2.x.SetZero()
+func mulLine(ret *gfP12, a, b, c *gfP2) {
+	a2 := &gfP6{}
 	a2.y.Set(a)
 	a2.z.Set(b)
-	a2.Mul(a2, ret.x, pool)
-	t3 := newGFp6(pool).MulScalar(ret.y, c, pool)
+	a2.Mul(a2, &ret.x)
+	t3 := (&gfP6{}).MulScalar(&ret.y, c)
 
-	t := newGFp2(pool)
-	t.Add(b, c)
-	t2 := newGFp6(pool)
-	t2.x.SetZero()
+	t := (&gfP2{}).Add(b, c)
+	t2 := &gfP6{}
 	t2.y.Set(a)
 	t2.z.Set(t)
-	ret.x.Add(ret.x, ret.y)
+	ret.x.Add(&ret.x, &ret.y)
 
 	ret.y.Set(t3)
 
-	ret.x.Mul(ret.x, t2, pool)
-	ret.x.Sub(ret.x, a2)
-	ret.x.Sub(ret.x, ret.y)
-	a2.MulTau(a2, pool)
-	ret.y.Add(ret.y, a2)
-
-	a2.Put(pool)
-	t3.Put(pool)
-	t2.Put(pool)
-	t.Put(pool)
+	ret.x.Mul(&ret.x, t2).Sub(&ret.x, a2).Sub(&ret.x, &ret.y)
+	a2.MulTau(a2)
+	ret.y.Add(&ret.y, a2)
 }
 
 // sixuPlus2NAF is 6u+2 in non-adjacent form.
@@ -189,54 +119,44 @@ var sixuPlus2NAF = []int8{0, 0, 0, 1, 0, 1, 0, -1, 0, 0, 1, -1, 0, 0, 1, 0,
 
 // miller implements the Miller loop for calculating the Optimal Ate pairing.
 // See algorithm 1 from http://cryptojedi.org/papers/dclxvi-20100714.pdf
-func miller(q *twistPoint, p *curvePoint, pool *bnPool) *gfP12 {
-	ret := newGFp12(pool)
-	ret.SetOne()
+func miller(q *twistPoint, p *curvePoint) *gfP12 {
+	ret := (&gfP12{}).SetOne()
 
-	aAffine := newTwistPoint(pool)
+	aAffine := &twistPoint{}
 	aAffine.Set(q)
-	aAffine.MakeAffine(pool)
+	aAffine.MakeAffine()
 
-	bAffine := newCurvePoint(pool)
+	bAffine := &curvePoint{}
 	bAffine.Set(p)
-	bAffine.MakeAffine(pool)
+	bAffine.MakeAffine()
 
-	minusA := newTwistPoint(pool)
-	minusA.Negative(aAffine, pool)
+	minusA := &twistPoint{}
+	minusA.Neg(aAffine)
 
-	r := newTwistPoint(pool)
+	r := &twistPoint{}
 	r.Set(aAffine)
 
-	r2 := newGFp2(pool)
-	r2.Square(aAffine.y, pool)
+	r2 := (&gfP2{}).Square(&aAffine.y)
 
 	for i := len(sixuPlus2NAF) - 1; i > 0; i-- {
-		a, b, c, newR := lineFunctionDouble(r, bAffine, pool)
+		a, b, c, newR := lineFunctionDouble(r, bAffine)
 		if i != len(sixuPlus2NAF)-1 {
-			ret.Square(ret, pool)
+			ret.Square(ret)
 		}
 
-		mulLine(ret, a, b, c, pool)
-		a.Put(pool)
-		b.Put(pool)
-		c.Put(pool)
-		r.Put(pool)
+		mulLine(ret, a, b, c)
 		r = newR
 
 		switch sixuPlus2NAF[i-1] {
 		case 1:
-			a, b, c, newR = lineFunctionAdd(r, aAffine, bAffine, r2, pool)
+			a, b, c, newR = lineFunctionAdd(r, aAffine, bAffine, r2)
 		case -1:
-			a, b, c, newR = lineFunctionAdd(r, minusA, bAffine, r2, pool)
+			a, b, c, newR = lineFunctionAdd(r, minusA, bAffine, r2)
 		default:
 			continue
 		}
 
-		mulLine(ret, a, b, c, pool)
-		a.Put(pool)
-		b.Put(pool)
-		c.Put(pool)
-		r.Put(pool)
+		mulLine(ret, a, b, c)
 		r = newR
 	}
 
@@ -255,11 +175,9 @@ func miller(q *twistPoint, p *curvePoint, pool *bnPool) *gfP12 {
 	//
 	// A similar argument can be made for the y value.
 
-	q1 := newTwistPoint(pool)
-	q1.x.Conjugate(aAffine.x)
-	q1.x.Mul(q1.x, xiToPMinus1Over3, pool)
-	q1.y.Conjugate(aAffine.y)
-	q1.y.Mul(q1.y, xiToPMinus1Over2, pool)
+	q1 := &twistPoint{}
+	q1.x.Conjugate(&aAffine.x).Mul(&q1.x, xiToPMinus1Over3)
+	q1.y.Conjugate(&aAffine.y).Mul(&q1.y, xiToPMinus1Over2)
 	q1.z.SetOne()
 	q1.t.SetOne()
 
@@ -269,35 +187,21 @@ func miller(q *twistPoint, p *curvePoint, pool *bnPool) *gfP12 {
 	// xiToPSquaredMinus1Over3 is ∈ GF(p). With y we get a factor of -1. We
 	// ignore this to end up with -Q2.
 
-	minusQ2 := newTwistPoint(pool)
-	minusQ2.x.MulScalar(aAffine.x, xiToPSquaredMinus1Over3)
-	minusQ2.y.Set(aAffine.y)
+	minusQ2 := &twistPoint{}
+	minusQ2.x.MulScalar(&aAffine.x, xiToPSquaredMinus1Over3)
+	minusQ2.y.Set(&aAffine.y)
 	minusQ2.z.SetOne()
 	minusQ2.t.SetOne()
 
-	r2.Square(q1.y, pool)
-	a, b, c, newR := lineFunctionAdd(r, q1, bAffine, r2, pool)
-	mulLine(ret, a, b, c, pool)
-	a.Put(pool)
-	b.Put(pool)
-	c.Put(pool)
-	r.Put(pool)
+	r2.Square(&q1.y)
+	a, b, c, newR := lineFunctionAdd(r, q1, bAffine, r2)
+	mulLine(ret, a, b, c)
 	r = newR
 
-	r2.Square(minusQ2.y, pool)
-	a, b, c, newR = lineFunctionAdd(r, minusQ2, bAffine, r2, pool)
-	mulLine(ret, a, b, c, pool)
-	a.Put(pool)
-	b.Put(pool)
-	c.Put(pool)
-	r.Put(pool)
+	r2.Square(&minusQ2.y)
+	a, b, c, newR = lineFunctionAdd(r, minusQ2, bAffine, r2)
+	mulLine(ret, a, b, c)
 	r = newR
-
-	aAffine.Put(pool)
-	bAffine.Put(pool)
-	minusA.Put(pool)
-	r.Put(pool)
-	r2.Put(pool)
 
 	return ret
 }
@@ -305,90 +209,60 @@ func miller(q *twistPoint, p *curvePoint, pool *bnPool) *gfP12 {
 // finalExponentiation computes the (p¹²-1)/Order-th power of an element of
 // GF(p¹²) to obtain an element of GT (steps 13-15 of algorithm 1 from
 // http://cryptojedi.org/papers/dclxvi-20100714.pdf)
-func finalExponentiation(in *gfP12, pool *bnPool) *gfP12 {
-	t1 := newGFp12(pool)
+func finalExponentiation(in *gfP12) *gfP12 {
+	t1 := &gfP12{}
 
 	// This is the p^6-Frobenius
-	t1.x.Negative(in.x)
-	t1.y.Set(in.y)
+	t1.x.Neg(&in.x)
+	t1.y.Set(&in.y)
 
-	inv := newGFp12(pool)
-	inv.Invert(in, pool)
-	t1.Mul(t1, inv, pool)
+	inv := &gfP12{}
+	inv.Invert(in)
+	t1.Mul(t1, inv)
 
-	t2 := newGFp12(pool).FrobeniusP2(t1, pool)
-	t1.Mul(t1, t2, pool)
+	t2 := (&gfP12{}).FrobeniusP2(t1)
+	t1.Mul(t1, t2)
 
-	fp := newGFp12(pool).Frobenius(t1, pool)
-	fp2 := newGFp12(pool).FrobeniusP2(t1, pool)
-	fp3 := newGFp12(pool).Frobenius(fp2, pool)
+	fp := (&gfP12{}).Frobenius(t1)
+	fp2 := (&gfP12{}).FrobeniusP2(t1)
+	fp3 := (&gfP12{}).Frobenius(fp2)
 
-	fu, fu2, fu3 := newGFp12(pool), newGFp12(pool), newGFp12(pool)
-	fu.Exp(t1, u, pool)
-	fu2.Exp(fu, u, pool)
-	fu3.Exp(fu2, u, pool)
+	fu := (&gfP12{}).Exp(t1, u)
+	fu2 := (&gfP12{}).Exp(fu, u)
+	fu3 := (&gfP12{}).Exp(fu2, u)
 
-	y3 := newGFp12(pool).Frobenius(fu, pool)
-	fu2p := newGFp12(pool).Frobenius(fu2, pool)
-	fu3p := newGFp12(pool).Frobenius(fu3, pool)
-	y2 := newGFp12(pool).FrobeniusP2(fu2, pool)
+	y3 := (&gfP12{}).Frobenius(fu)
+	fu2p := (&gfP12{}).Frobenius(fu2)
+	fu3p := (&gfP12{}).Frobenius(fu3)
+	y2 := (&gfP12{}).FrobeniusP2(fu2)
 
-	y0 := newGFp12(pool)
-	y0.Mul(fp, fp2, pool)
-	y0.Mul(y0, fp3, pool)
+	y0 := &gfP12{}
+	y0.Mul(fp, fp2).Mul(y0, fp3)
 
-	y1, y4, y5 := newGFp12(pool), newGFp12(pool), newGFp12(pool)
-	y1.Conjugate(t1)
-	y5.Conjugate(fu2)
+	y1 := (&gfP12{}).Conjugate(t1)
+	y5 := (&gfP12{}).Conjugate(fu2)
 	y3.Conjugate(y3)
-	y4.Mul(fu, fu2p, pool)
+	y4 := (&gfP12{}).Mul(fu, fu2p)
 	y4.Conjugate(y4)
 
-	y6 := newGFp12(pool)
-	y6.Mul(fu3, fu3p, pool)
+	y6 := (&gfP12{}).Mul(fu3, fu3p)
 	y6.Conjugate(y6)
 
-	t0 := newGFp12(pool)
-	t0.Square(y6, pool)
-	t0.Mul(t0, y4, pool)
-	t0.Mul(t0, y5, pool)
-	t1.Mul(y3, y5, pool)
-	t1.Mul(t1, t0, pool)
-	t0.Mul(t0, y2, pool)
-	t1.Square(t1, pool)
-	t1.Mul(t1, t0, pool)
-	t1.Square(t1, pool)
-	t0.Mul(t1, y1, pool)
-	t1.Mul(t1, y0, pool)
-	t0.Square(t0, pool)
-	t0.Mul(t0, t1, pool)
-
-	inv.Put(pool)
-	t1.Put(pool)
-	t2.Put(pool)
-	fp.Put(pool)
-	fp2.Put(pool)
-	fp3.Put(pool)
-	fu.Put(pool)
-	fu2.Put(pool)
-	fu3.Put(pool)
-	fu2p.Put(pool)
-	fu3p.Put(pool)
-	y0.Put(pool)
-	y1.Put(pool)
-	y2.Put(pool)
-	y3.Put(pool)
-	y4.Put(pool)
-	y5.Put(pool)
-	y6.Put(pool)
+	t0 := (&gfP12{}).Square(y6)
+	t0.Mul(t0, y4).Mul(t0, y5)
+	t1.Mul(y3, y5).Mul(t1, t0)
+	t0.Mul(t0, y2)
+	t1.Square(t1).Mul(t1, t0).Square(t1)
+	t0.Mul(t1, y1)
+	t1.Mul(t1, y0)
+	t0.Square(t0).Mul(t0, t1)
 
 	return t0
 }
 
-func optimalAte(a *twistPoint, b *curvePoint, pool *bnPool) *gfP12 {
-	e := miller(a, b, pool)
-	ret := finalExponentiation(e, pool)
-	e.Put(pool)
+func optimalAte(a *twistPoint, b *curvePoint) *gfP12 {
+	e := miller(a, b)
+	ret := finalExponentiation(e)
 
 	if a.IsInfinity() || b.IsInfinity() {
 		ret.SetOne()
