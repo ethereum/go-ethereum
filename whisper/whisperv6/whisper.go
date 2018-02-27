@@ -49,12 +49,13 @@ type Statistics struct {
 }
 
 const (
-	maxMsgSizeIdx           = iota // Maximal message length allowed by the whisper node
-	overflowIdx                    // Indicator of message queue overflow
-	minPowIdx                      // Minimal PoW required by the whisper node
-	minPowToleranceIdx             // Minimal PoW tolerated by the whisper node for a limited time
-	bloomFilterIdx                 // Bloom filter for topics of interest for this node
-	bloomFilterToleranceIdx        // Bloom filter tolerated by the whisper node for a limited time
+	maxMsgSizeIdx               = iota // Maximal message length allowed by the whisper node
+	overflowIdx                        // Indicator of message queue overflow
+	minPowIdx                          // Minimal PoW required by the whisper node
+	minPowToleranceIdx                 // Minimal PoW tolerated by the whisper node for a limited time
+	bloomFilterIdx                     // Bloom filter for topics of interest for this node
+	bloomFilterToleranceIdx            // Bloom filter tolerated by the whisper node for a limited time
+	bloomFilterRebuildPeriodIdx        // Used to define period how often bloom filter is rebuild from scratch.
 )
 
 // Whisper represents a dark communication interface through the Ethereum
@@ -113,6 +114,7 @@ func New(cfg *Config) *Whisper {
 	whisper.settings.Store(minPowIdx, cfg.MinimumAcceptedPOW)
 	whisper.settings.Store(maxMsgSizeIdx, cfg.MaxMessageSize)
 	whisper.settings.Store(overflowIdx, false)
+	whisper.settings.Store(bloomFilterRebuildPeriodIdx, cfg.BloomFilterRebuildPeriod)
 
 	// p2p whisper sub protocol handler
 	whisper.protocol = p2p.Protocol{
@@ -238,7 +240,6 @@ func (whisper *Whisper) SetBloomFilter(bloom []byte) error {
 
 	b := make([]byte, bloomFilterSize)
 	copy(b, bloom)
-
 	whisper.settings.Store(bloomFilterIdx, b)
 	whisper.notifyPeersAboutBloomFilterChange(b)
 
@@ -555,6 +556,24 @@ func (whisper *Whisper) Subscribe(f *Filter) (string, error) {
 	return s, err
 }
 
+// rebuildBloomFilter makes a new bloom filter from currently subscribed watchers
+// if new bloom filter is different from current bloom filter - peers will be notified
+func (whisper *Whisper) rebuildBloomFilter() {
+	if isFullNode(whisper.BloomFilter()) {
+		return
+	}
+	aggregate := make([]byte, bloomFilterSize)
+	whisper.filters.Each(func(filter *Filter) {
+		for _, t := range filter.Topics {
+			top := BytesToTopic(t)
+			aggregate = addBloom(aggregate, TopicToBloom(top))
+		}
+	})
+	if !bloomFilterMatch(aggregate, whisper.BloomFilter()) {
+		whisper.SetBloomFilter(aggregate)
+	}
+}
+
 // updateBloomFilter recalculates the new value of bloom filter,
 // and informs the peers if necessary.
 func (whisper *Whisper) updateBloomFilter(f *Filter) {
@@ -868,13 +887,22 @@ func (whisper *Whisper) processQueue() {
 func (whisper *Whisper) update() {
 	// Start a ticker to check for expirations
 	expire := time.NewTicker(expirationCycle)
-
+	defer expire.Stop()
+	// bloomFilterRebuildPeriodIdx is always set in New
+	val, _ := whisper.settings.Load(bloomFilterRebuildPeriodIdx)
+	var rebuildTicker <-chan time.Time
+	if duration := val.(time.Duration); duration > 0 {
+		bloomRebuild := time.NewTicker(val.(time.Duration))
+		defer bloomRebuild.Stop()
+		rebuildTicker = bloomRebuild.C
+	}
 	// Repeat updates until termination is requested
 	for {
 		select {
 		case <-expire.C:
 			whisper.expire()
-
+		case <-rebuildTicker:
+			whisper.rebuildBloomFilter()
 		case <-whisper.quit:
 			return
 		}

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -891,4 +892,40 @@ func TestBloom(t *testing.T) {
 	if !bloomFilterMatch(f, x) || !bloomFilterMatch(x, f) {
 		t.Fatalf("retireved wrong bloom filter")
 	}
+}
+
+// TestPeriodicFilterRebuild verifies that bloom filter will be periodically
+// rebuild to avoid consuming unnecessary traffic.
+func TestPeriodicBloomFilterRebuild(t *testing.T) {
+	InitSingleTest()
+	w := New(&Config{
+		MaxMessageSize:           DefaultMaxMessageSize,
+		MinimumAcceptedPOW:       DefaultMinimumPoW,
+		BloomFilterRebuildPeriod: 100 * time.Millisecond,
+	})
+	w.Start(nil)
+	defer w.Stop()
+
+	emptyBloom := make([]byte, bloomFilterSize)
+	require.NoError(t, w.SetBloomFilter(emptyBloom))
+
+	f1, err := generateFilter(t, true)
+	require.NoError(t, err)
+	f2, err := generateFilter(t, true)
+	require.NoError(t, err)
+	sub1, err := w.Subscribe(f1)
+	require.NoError(t, err)
+	bloomf1 := w.BloomFilter()
+	sub2, err := w.Subscribe(f2)
+	require.NoError(t, err)
+
+	require.NoError(t, w.Unsubscribe(sub2))
+	time.Sleep(200 * time.Millisecond)
+	require.Equal(t, bloomf1, w.BloomFilter())
+	// tolerance will be updated only after 10s
+	require.Nil(t, w.BloomFilterTolerance())
+
+	require.NoError(t, w.Unsubscribe(sub1))
+	time.Sleep(200 * time.Millisecond)
+	require.Equal(t, emptyBloom, w.BloomFilter())
 }
