@@ -167,7 +167,8 @@ func singleRequest(t *testing.T, server *WMailServer, env *whisper.Envelope, p *
 
 	src[0]++
 	ok, lower, upper, topic = server.validateRequest(src, request)
-	if ok {
+	if !ok {
+		// request should be valid regardless of signature
 		t.Fatalf("request validation false positive, seed: %d (lower: %d, upper: %d).", seed, lower, upper)
 	}
 }
