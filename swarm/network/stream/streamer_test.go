@@ -168,7 +168,7 @@ func TestStreamerDownstreamSubscribeUnsubscribeMsgExchange(t *testing.T) {
 					Msg: &WantedHashesMsg{
 						Stream: stream,
 						Want:   []byte{5},
-						From:   8,
+						From:   9,
 						To:     0,
 					},
 					Peer: peerID,
@@ -386,75 +386,73 @@ func TestStreamerUpstreamSubscribeErrorMsgExchange(t *testing.T) {
 	}
 }
 
-// TODO: fix: tests with TestExchanges are inconsistent because Expects check
-// 			  ordering is not guarrantied but fails if the order is wrong.
-// func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
-// 	tester, streamer, _, teardown, err := newStreamerTester(t)
-// 	defer teardown()
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
+func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
+	tester, streamer, _, teardown, err := newStreamerTester(t)
+	defer teardown()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// 	stream := NewStream("foo", nil, true)
+	stream := NewStream("foo", nil, true)
 
-// 	streamer.RegisterServerFunc("foo", func(p *Peer, t []byte, live bool) (Server, error) {
-// 		return &testServer{
-// 			t: t,
-// 		}, nil
-// 	})
+	streamer.RegisterServerFunc("foo", func(p *Peer, t []byte, live bool) (Server, error) {
+		return &testServer{
+			t: t,
+		}, nil
+	})
 
-// 	peerID := tester.IDs[0]
+	peerID := tester.IDs[0]
 
-// 	err = tester.TestExchanges(p2ptest.Exchange{
-// 		Label: "Subscribe message",
-// 		Triggers: []p2ptest.Trigger{
-// 			{
-// 				Code: 4,
-// 				Msg: &SubscribeMsg{
-// 					Stream: stream,
-// 					History: &Range{
-// 						From: 5,
-// 						To:   8,
-// 					},
-// 					Priority: Top,
-// 				},
-// 				Peer: peerID,
-// 			},
-// 		},
-// 		Expects: []p2ptest.Expect{
-// 			{
-// 				Code: 1,
-// 				Msg: &OfferedHashesMsg{
-// 					Stream: NewStream("foo", nil, false),
-// 					HandoverProof: &HandoverProof{
-// 						Handover: &Handover{},
-// 					},
-// 					Hashes:  make([]byte, HashSize),
-// 					From:    6,
-// 					To:      9,
-// 				},
-// 				Peer: peerID,
-// 			},
-// 			{
-// 				Code: 1,
-// 				Msg: &OfferedHashesMsg{
-// 					Stream: stream,
-// 					HandoverProof: &HandoverProof{
-// 						Handover: &Handover{},
-// 					},
-// 					From:    1,
-// 					To:      1,
-// 					Hashes:  make([]byte, HashSize),
-// 				},
-// 				Peer: peerID,
-// 			},
-// 		},
-// 	})
+	err = tester.TestExchanges(p2ptest.Exchange{
+		Label: "Subscribe message",
+		Triggers: []p2ptest.Trigger{
+			{
+				Code: 4,
+				Msg: &SubscribeMsg{
+					Stream: stream,
+					History: &Range{
+						From: 5,
+						To:   8,
+					},
+					Priority: Top,
+				},
+				Peer: peerID,
+			},
+		},
+		Expects: []p2ptest.Expect{
+			{
+				Code: 1,
+				Msg: &OfferedHashesMsg{
+					Stream: NewStream("foo", nil, false),
+					HandoverProof: &HandoverProof{
+						Handover: &Handover{},
+					},
+					Hashes: make([]byte, HashSize),
+					From:   6,
+					To:     9,
+				},
+				Peer: peerID,
+			},
+			{
+				Code: 1,
+				Msg: &OfferedHashesMsg{
+					Stream: stream,
+					HandoverProof: &HandoverProof{
+						Handover: &Handover{},
+					},
+					From:   1,
+					To:     1,
+					Hashes: make([]byte, HashSize),
+				},
+				Peer: peerID,
+			},
+		},
+	})
 
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// }
+	if err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(t)
@@ -519,7 +517,7 @@ func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
 					Msg: &WantedHashesMsg{
 						Stream: stream,
 						Want:   []byte{5},
-						From:   8,
+						From:   9,
 						To:     0,
 					},
 					Peer: peerID,

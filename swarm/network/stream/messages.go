@@ -102,7 +102,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 	}()
 
 	if req.Stream.Live && req.History != nil {
-		// subscribe to the history stream as well
+		// subscribe to the history stream
 		s, err := f(p, req.Stream.Key, false)
 		if err != nil {
 			return err
@@ -201,7 +201,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	if c.stream.Live {
 		c.sessionAt = req.From
 	}
-	from, to := c.nextBatch(req.To)
+	from, to := c.nextBatch(req.To + 1)
 	log.Trace("received offered batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
 	if from == to {
 		return nil

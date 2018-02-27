@@ -17,6 +17,7 @@
 package stream
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sync"
@@ -133,7 +134,12 @@ func (r *Registry) Subscribe(peerId discover.NodeID, s Stream, h *Range, priorit
 		return fmt.Errorf("peer not found %v", peerId)
 	}
 
-	err := peer.setClientParams(s, &clientParams{priority: priority})
+	var to uint64
+	if !s.Live && h != nil {
+		to = h.To
+	}
+
+	err := peer.setClientParams(s, newClientParams(priority, to))
 	if err != nil {
 		return err
 	}
@@ -141,9 +147,7 @@ func (r *Registry) Subscribe(peerId discover.NodeID, s Stream, h *Range, priorit
 	if s.Live && h != nil {
 		if err := peer.setClientParams(
 			getHistoryStream(s),
-			&clientParams{
-				priority: getHistoryPriority(priority),
-			},
+			newClientParams(getHistoryPriority(priority), h.To),
 		); err != nil {
 			return err
 		}
@@ -326,15 +330,24 @@ type Client interface {
 }
 
 func (c *client) nextBatch(from uint64) (nextFrom uint64, nextTo uint64) {
+	if c.to > 0 && from >= c.to {
+		return 0, 0
+	}
 	if c.stream.Live {
 		return from, 0
 	} else if from >= c.sessionAt {
+		if c.to > 0 {
+			return from, c.to
+		}
 		return from, math.MaxUint64
 	}
 	nextFrom, nextTo, err := c.NextInterval()
 	if err != nil {
 		log.Error("next intervals", "stream", c.stream)
 		return
+	}
+	if nextTo > c.to {
+		nextTo = c.to
 	}
 	if nextTo == 0 {
 		nextTo = c.sessionAt
@@ -372,6 +385,30 @@ func (c *client) close() {
 // between a subscription and initial offered hashes request handling.
 type clientParams struct {
 	priority uint8
+	to       uint64
+	// signal when the client is created
+	clientCreatedC chan struct{}
+}
+
+func newClientParams(priority uint8, to uint64) *clientParams {
+	return &clientParams{
+		priority:       priority,
+		to:             to,
+		clientCreatedC: make(chan struct{}),
+	}
+}
+
+func (c *clientParams) waitClient(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.clientCreatedC:
+		return nil
+	}
+}
+
+func (c *clientParams) clientCreated() {
+	close(c.clientCreatedC)
 }
 
 // Spec is the spec of the streamer protocol

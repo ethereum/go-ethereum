@@ -18,7 +18,6 @@ package stream
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -32,22 +31,28 @@ import (
 
 var sendTimeout = 5 * time.Second
 
-var (
-	errServerNotFound       = errors.New("server not found")
-	errClientNotFound       = errors.New("client not found")
-	errClientParamsNotFound = errors.New("client params not found")
-)
+type notFoundError struct {
+	t string
+	s Stream
+}
+
+func newNotFoundError(t string, s Stream) *notFoundError {
+	return &notFoundError{t: t, s: s}
+}
+
+func (e *notFoundError) Error() string {
+	return fmt.Sprintf("%s not found for stream %q", e.t, e.s)
+}
 
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
 	*protocols.Peer
-	streamer       *Registry
-	pq             *pq.PriorityQueue
-	serverMu       sync.RWMutex
-	clientMu       sync.RWMutex
-	clientParamsMu sync.RWMutex
-	servers        map[string]*server
-	clients        map[string]*client
+	streamer *Registry
+	pq       *pq.PriorityQueue
+	serverMu sync.RWMutex
+	clientMu sync.RWMutex // protects both clients and clientParams
+	servers  map[string]*server
+	clients  map[string]*client
 	// clientParams map keeps required client arguments
 	// that are set on Registry.Subscribe and used
 	// on creating a new client in offered hashes handler.
@@ -153,51 +158,71 @@ func (p *Peer) removeServer(s Stream) error {
 	sk := s.String()
 	server, ok := p.servers[sk]
 	if !ok {
-		return errServerNotFound
+		return newNotFoundError("server", s)
 	}
 	server.Close()
 	delete(p.servers, sk)
 	return nil
 }
 
-func (p *Peer) getClient(s Stream) (*client, error) {
+func (p *Peer) getClient(ctx context.Context, s Stream) (c *client, err error) {
+	var params *clientParams
+	sk := s.String()
+	func() {
+		p.clientMu.RLock()
+		defer p.clientMu.RUnlock()
+
+		c = p.clients[sk]
+		if c != nil {
+			return
+		}
+		params = p.clientParams[sk]
+	}()
+	if c != nil {
+		return c, nil
+	}
+
+	if params != nil {
+		//debug.PrintStack()
+		if err := params.waitClient(ctx); err != nil {
+			return nil, err
+		}
+	}
+
 	p.clientMu.RLock()
 	defer p.clientMu.RUnlock()
 
-	client := p.clients[s.String()]
-	if client == nil {
-		return nil, fmt.Errorf("client '%v' not provided to peer %v", s, p.ID())
+	c = p.clients[sk]
+	if c != nil {
+		return c, nil
 	}
-	return client, nil
+	return nil, newNotFoundError("client", s)
 }
 
-func (p *Peer) setClient(s Stream, from, to uint64) error {
+func (p *Peer) getOrSetClient(s Stream, from, to uint64) (c *client, created bool, err error) {
+	sk := s.String()
+
 	p.clientMu.Lock()
 	defer p.clientMu.Unlock()
 
-	sk := s.String()
-	if p.clients[sk] != nil {
-		return fmt.Errorf("client %v already registered", sk)
+	c = p.clients[sk]
+	if c != nil {
+		return c, false, nil
 	}
 
-	_, err := p.setClientNolock(s, from, to)
-	return err
-}
-
-func (p *Peer) setClientNolock(s Stream, from, to uint64) (c *client, err error) {
 	f, err := p.streamer.GetClientFunc(s.Name)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	is, err := f(p, s.Key, s.Live)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	cp, err := p.getClientParams(s)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer func() {
 		if err == nil {
@@ -232,7 +257,7 @@ func (p *Peer) setClientNolock(s Stream, from, to uint64) (c *client, err error)
 	}
 
 	if err := p.streamer.intervalsStore.Put(intervalsKey, intervals.NewIntervals(from)); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	next := make(chan error, 1)
@@ -240,29 +265,14 @@ func (p *Peer) setClientNolock(s Stream, from, to uint64) (c *client, err error)
 		Client:         is,
 		stream:         s,
 		priority:       cp.priority,
-		to:             to,
+		to:             cp.to,
 		next:           next,
 		intervalsStore: p.streamer.intervalsStore,
 		intervalsKey:   intervalsKey,
 	}
-	p.clients[s.String()] = c
-	next <- nil // this is to allow wantedKeysMsg before first batch arrives
-	return c, nil
-}
-
-func (p *Peer) getOrSetClient(s Stream, from, to uint64) (c *client, created bool, err error) {
-	p.clientMu.RLock()
-	defer p.clientMu.RUnlock()
-
-	c = p.clients[s.String()]
-	if c != nil {
-		return c, false, nil
-	}
-
-	c, err = p.setClientNolock(s, from, to)
-	if err != nil {
-		return nil, false, err
-	}
+	p.clients[sk] = c
+	cp.clientCreated() // unblock all possible getClient calls that are waiting
+	next <- nil        // this is to allow wantedKeysMsg before first batch arrives
 	return c, true, nil
 }
 
@@ -272,28 +282,20 @@ func (p *Peer) removeClient(s Stream) error {
 
 	client, ok := p.clients[s.String()]
 	if !ok {
-		return errClientNotFound
+		return newNotFoundError("client", s)
 	}
 	client.close()
 	return nil
 }
 
-func (p *Peer) getClientParams(s Stream) (*clientParams, error) {
-	p.clientParamsMu.RLock()
-	defer p.clientParamsMu.RUnlock()
-
-	params := p.clientParams[s.String()]
-	if params == nil {
-		return nil, fmt.Errorf("client params '%v' not provided to peer %v", s, p.ID())
-	}
-	return params, nil
-}
-
 func (p *Peer) setClientParams(s Stream, params *clientParams) error {
-	p.clientParamsMu.Lock()
-	defer p.clientParamsMu.Unlock()
+	p.clientMu.Lock()
+	defer p.clientMu.Unlock()
 
 	sk := s.String()
+	if p.clients[sk] != nil {
+		return fmt.Errorf("client %v already exists", sk)
+	}
 	if p.clientParams[sk] != nil {
 		return fmt.Errorf("client params %v already set", sk)
 	}
@@ -301,14 +303,19 @@ func (p *Peer) setClientParams(s Stream, params *clientParams) error {
 	return nil
 }
 
-func (p *Peer) removeClientParams(s Stream) error {
-	p.clientParamsMu.Lock()
-	defer p.clientParamsMu.Unlock()
+func (p *Peer) getClientParams(s Stream) (*clientParams, error) {
+	params := p.clientParams[s.String()]
+	if params == nil {
+		return nil, fmt.Errorf("client params '%v' not provided to peer %v", s, p.ID())
+	}
+	return params, nil
+}
 
+func (p *Peer) removeClientParams(s Stream) error {
 	sk := s.String()
 	_, ok := p.clientParams[sk]
 	if !ok {
-		return errClientParamsNotFound
+		return newNotFoundError("client params", s)
 	}
 	delete(p.clientParams, sk)
 	return nil

@@ -36,7 +36,11 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var externalStreamName = "externalStream"
+var (
+	externalStreamName             = "externalStream"
+	externalStreamSessionAt uint64 = 50
+	externalStreamMaxKeys   uint64 = 100
+)
 
 func newIntervalsStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	id := ctx.Config.ID
@@ -47,23 +51,28 @@ func newIntervalsStreamerService(ctx *adapters.ServiceContext) (node.Service, er
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
 	netStore := storage.NewNetStore(store, nil)
-	hashesChan := make(chan []byte) // this chanel is only for one client, in need for more clients, create a map
 	r := NewRegistry(addr, delivery, netStore, intervals.NewMemStore(), defaultSkipCheck)
 
 	r.RegisterClientFunc(externalStreamName, func(p *Peer, t []byte, live bool) (Client, error) {
-		return newTestExternalClient(t, hashesChan), nil
+		return newTestExternalClient(t, db), nil
 	})
 	r.RegisterServerFunc(externalStreamName, func(p *Peer, t []byte, live bool) (Server, error) {
-		return newTestExternalServer(t), nil
+		return newTestExternalServer(t, externalStreamSessionAt, externalStreamMaxKeys, nil), nil
 	})
 
 	go func() {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
-	return &TestExternalRegistry{r, hashesChan}, nil
+	return &TestExternalRegistry{r}, nil
 }
 
-func XTestIntervals(t *testing.T) {
+func TestIntervals(t *testing.T) {
+	testIntervals(t, true, nil)
+	testIntervals(t, false, &Range{From: 9, To: 26})
+	testIntervals(t, true, &Range{From: 9, To: 26})
+}
+
+func testIntervals(t *testing.T, live bool, history *Range) {
 	nodes := 2
 	chunkCount := dataChunkCount
 	skipCheck := false
@@ -71,17 +80,24 @@ func XTestIntervals(t *testing.T) {
 	defaultSkipCheck = skipCheck
 	toAddr = network.NewAddrFromNodeID
 	conf := &streamTesting.RunConfig{
-		Adapter:   *adapter,
-		NodeCount: nodes,
-		ConnLevel: 1,
-		ToAddr:    toAddr,
-		Services:  services,
+		Adapter:        *adapter,
+		NodeCount:      nodes,
+		ConnLevel:      1,
+		ToAddr:         toAddr,
+		Services:       services,
+		DefaultService: "intervalsStreamer",
 	}
 
 	sim, teardown, err := streamTesting.NewSimulation(conf)
 	defer teardown()
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	stores = make(map[discover.NodeID]storage.ChunkStore)
+	deliveries = make(map[discover.NodeID]*Delivery)
+	for i, id := range sim.IDs {
+		stores[id] = sim.Stores[i]
 	}
 
 	peerCount = func(id discover.NodeID) int {
@@ -101,6 +117,7 @@ func XTestIntervals(t *testing.T) {
 	errc := make(chan error, 1)
 	waitPeerErrC = make(chan error)
 	quitC := make(chan struct{})
+	defer close(quitC)
 
 	action := func(ctx context.Context) error {
 		i := 0
@@ -116,42 +133,148 @@ func XTestIntervals(t *testing.T) {
 
 		liveHashesChan := make(chan []byte)
 		historyHashesChan := make(chan []byte)
+
+		var historySubscription *rpc.ClientSubscription
+		var liveSubscription *rpc.ClientSubscription
+
 		id := sim.IDs[1]
 		err := sim.CallClient(id, func(client *rpc.Client) error {
 			err := streamTesting.WatchDisconnections(id, client, errc, quitC)
 			if err != nil {
 				return err
 			}
-			ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+			ctx, cancel := context.WithTimeout(ctx, 100*time.Second)
 			defer cancel()
 			sid := sim.IDs[0]
-			err = client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(externalStreamName, nil, true), &Range{From: 0, To: 5}, Top)
 
+			err = client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(externalStreamName, nil, live), history, Top)
 			if err != nil {
 				return err
 			}
-			// live stream
-			_, err = client.Subscribe(ctx, "stream_getHashes", liveHashesChan, sid, NewStream(externalStreamName, nil, true))
-			if err != nil {
+
+			liveSubErrC := make(chan error)
+			historySubErrC := make(chan error)
+
+			go func() {
+				if live {
+					var err error
+					defer func() { liveSubErrC <- err }()
+					// live stream
+					liveSubscription, err = client.Subscribe(ctx, "stream", liveHashesChan, "getHashes", sid, NewStream(externalStreamName, nil, true))
+					if err != nil {
+						return
+					}
+					// we have got the channel, enable notifications
+					err = client.CallContext(ctx, nil, "stream_enableNotifications", sid, NewStream(externalStreamName, nil, true))
+				} else {
+					close(liveSubErrC)
+				}
+			}()
+
+			go func() {
+				if !live || history != nil {
+					var err error
+					defer func() { historySubErrC <- err }()
+
+					// history stream
+					historySubscription, err = client.Subscribe(ctx, "stream", historyHashesChan, "getHashes", sid, NewStream(externalStreamName, nil, false))
+					if err != nil {
+						return
+					}
+					// we have got the channel, enable notifications
+					err = client.CallContext(ctx, nil, "stream_enableNotifications", sid, NewStream(externalStreamName, nil, false))
+				} else {
+					close(historySubErrC)
+				}
+			}()
+
+			if err := <-liveSubErrC; err != nil {
 				return err
 			}
-			// history stream
-			_, err = client.Subscribe(ctx, "stream_getHashes", historyHashesChan, sid, NewStream(externalStreamName, nil, false))
-			return err
+			if err := <-historySubErrC; err != nil {
+				return err
+			}
+
+			return nil
 		})
 		if err != nil {
 			return err
 		}
 
+		historyErrC := make(chan error)
+
 		go func() {
-			for i := uint64(0); i < 5; i++ {
-				h := binary.BigEndian.Uint64(<-historyHashesChan)
-				if h != i {
-					errc <- fmt.Errorf("")
+			defer close(historyErrC)
+
+			if historySubscription == nil {
+				return
+			}
+
+			defer historySubscription.Unsubscribe()
+
+			i := history.From
+			historyTo := externalStreamMaxKeys
+			if history != nil && history.To != 0 {
+				historyTo = history.To
+			}
+
+			for {
+				select {
+				case hash := <-historyHashesChan:
+					h := binary.BigEndian.Uint64(hash)
+					if h != i {
+						historyErrC <- fmt.Errorf("expected history hash %d, got %d", i, h)
+						return
+					}
+					i++
+					if i > historyTo {
+						return
+					}
+				case err := <-historySubscription.Err():
+					historyErrC <- err
+				case <-ctx.Done():
+					return
 				}
 			}
 		}()
-		return nil
+
+		liveErrC := make(chan error)
+
+		go func() {
+			defer close(liveErrC)
+
+			if liveSubscription == nil {
+				return
+			}
+
+			defer liveSubscription.Unsubscribe()
+
+			i := externalStreamSessionAt
+
+			for {
+				select {
+				case hash := <-liveHashesChan:
+					h := binary.BigEndian.Uint64(hash)
+					if h != i {
+						liveErrC <- fmt.Errorf("expected live hash %d, got %d", i, h)
+						return
+					}
+					i++
+					if i > externalStreamMaxKeys {
+						return
+					}
+				case err := <-liveSubscription.Err():
+					errc <- err
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+
+		if err = <-historyErrC; err != nil {
+			return err
+		}
+		return <-liveErrC
 	}
 	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
@@ -168,7 +291,7 @@ func XTestIntervals(t *testing.T) {
 		Action:  action,
 		Trigger: streamTesting.Trigger(10*time.Millisecond, quitC, sim.IDs[0]),
 		Expect: &simulations.Expectation{
-			Nodes: sim.IDs[0:1],
+			Nodes: sim.IDs[1:1],
 			Check: check,
 		},
 	}

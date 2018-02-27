@@ -18,6 +18,7 @@ package stream
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"flag"
 	"fmt"
@@ -200,7 +201,6 @@ func (r *TestRegistry) ReadAll(hash common.Hash) (int64, error) {
 
 type TestExternalRegistry struct {
 	*Registry
-	hashesChan chan []byte
 }
 
 func (r *TestExternalRegistry) APIs() []rpc.API {
@@ -215,10 +215,9 @@ func (r *TestExternalRegistry) APIs() []rpc.API {
 }
 
 func (r *TestExternalRegistry) GetHashes(ctx context.Context, peerId discover.NodeID, s Stream) (*rpc.Subscription, error) {
-
 	peer := r.getPeer(peerId)
 
-	client, err := peer.getClient(s)
+	client, err := peer.getClient(ctx, s)
 	if err != nil {
 		return nil, err
 	}
@@ -236,18 +235,38 @@ func (r *TestExternalRegistry) GetHashes(ctx context.Context, peerId discover.No
 		for {
 			select {
 			case h := <-c.hashes:
+				<-c.enableNotificationsC // wait for notification subscription to complete
 				if err := notifier.Notify(sub.ID, h); err != nil {
 					log.Warn(fmt.Sprintf("rpc sub notifier notify stream %s: %v", s, err))
 				}
 			case err := <-sub.Err():
-				log.Warn(fmt.Sprintf("caught subscription error in stream %s: %v", s, err))
+				if err != nil {
+					log.Warn(fmt.Sprintf("caught subscription error in stream %s: %v", s, err))
+				}
 			case <-notifier.Closed():
-				log.Warn(fmt.Sprintf("rpc sub notifier closed"))
+				log.Trace(fmt.Sprintf("rpc sub notifier closed"))
+				return
 			}
 		}
 	}()
 
 	return sub, nil
+}
+
+func (r *TestExternalRegistry) EnableNotifications(peerId discover.NodeID, s Stream) error {
+	peer := r.getPeer(peerId)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, err := peer.getClient(ctx, s)
+	if err != nil {
+		return err
+	}
+
+	close(client.Client.(*testExternalClient).enableNotificationsC)
+
+	return nil
 }
 
 // TODO: merge functionalities of testExternalClient and testExternalServer
@@ -257,47 +276,84 @@ type testExternalClient struct {
 	t []byte
 	// wait0     chan bool
 	// batchDone chan bool
-	hashes chan []byte
+	hashes               chan []byte
+	db                   *storage.DBAPI
+	enableNotificationsC chan struct{}
 }
 
-func newTestExternalClient(t []byte, hashesChan chan []byte) *testExternalClient {
+func newTestExternalClient(t []byte, db *storage.DBAPI) *testExternalClient {
 	return &testExternalClient{
 		t: t,
 		// wait0:     make(chan bool),
 		// batchDone: make(chan bool),
-		hashes: hashesChan,
+		hashes:               make(chan []byte),
+		db:                   db,
+		enableNotificationsC: make(chan struct{}),
 	}
 }
 
-func (self *testExternalClient) NeedData(hash []byte) func() {
-	self.hashes <- hash
-	return func() {}
+func (c *testExternalClient) NeedData(hash []byte) func() {
+	chunk, _ := c.db.GetOrCreateRequest(hash)
+	if chunk.ReqC == nil {
+		return nil
+	}
+	c.hashes <- hash
+	return func() {
+		chunk.WaitToStore()
+	}
 }
 
-func (self *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error) {
-	// close(self.batchDone)
+func (c *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error) {
 	return nil
 }
 
-func (self *testExternalClient) Close() {}
+func (c *testExternalClient) Close() {}
+
+const testExternalServerBatchSize = 10
 
 type testExternalServer struct {
-	t []byte
+	t         []byte
+	keyFunc   func(key []byte, index uint64)
+	sessionAt uint64
+	maxKeys   uint64
+	streamer  *TestExternalRegistry
 }
 
-func newTestExternalServer(t []byte) *testExternalServer {
+func newTestExternalServer(t []byte, sessionAt, maxKeys uint64, keyFunc func(key []byte, index uint64)) *testExternalServer {
+	if keyFunc == nil {
+		keyFunc = binary.BigEndian.PutUint64
+	}
 	return &testExternalServer{
-		t: t,
+		t:         t,
+		keyFunc:   keyFunc,
+		sessionAt: sessionAt,
+		maxKeys:   maxKeys,
 	}
 }
 
-func (self *testExternalServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
-	return make([]byte, HashSize), from + 1, to + 1, nil, nil
+func (s *testExternalServer) SetNextBatch(from uint64, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
+	if from == 0 && to == 0 {
+		from = s.sessionAt
+		to = s.sessionAt + testExternalServerBatchSize
+	}
+	if to-from > testExternalServerBatchSize {
+		to = from + testExternalServerBatchSize - 1
+	}
+	if from >= s.maxKeys && to > s.maxKeys {
+		return nil, 0, 0, nil, io.EOF
+	}
+	if to > s.maxKeys {
+		to = s.maxKeys
+	}
+	b := make([]byte, HashSize*(to-from+1))
+	for i := from; i <= to; i++ {
+		s.keyFunc(b[(i-from)*HashSize:(i-from+1)*HashSize], i)
+	}
+	return b, from, to, nil, nil
 }
 
-func (self *testExternalServer) GetData([]byte) ([]byte, error) {
-	return nil, nil
+func (s *testExternalServer) GetData([]byte) ([]byte, error) {
+	return make([]byte, 4096), nil
 }
 
-func (self *testExternalServer) Close() {
-}
+func (s *testExternalServer) Close() {}
