@@ -34,9 +34,9 @@ type Peer struct {
 	ws      p2p.MsgReadWriter
 	trusted bool
 
-	known *set.Set // Messages already known by the peer to avoid wasting bandwidth
-
-	quit chan struct{}
+	known  *set.Set // Messages already known by the peer to avoid wasting bandwidth
+	hashes chan common.Hash
+	quit   chan struct{}
 }
 
 // newPeer creates a new whisper peer object, but does not run the handshake itself.
@@ -47,6 +47,7 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 		ws:      rw,
 		trusted: false,
 		known:   set.New(),
+		hashes:  make(chan common.Hash, 20),
 		quit:    make(chan struct{}),
 	}
 }
@@ -101,7 +102,8 @@ func (p *Peer) update() {
 	// Start the tickers for the updates
 	expire := time.NewTicker(expirationCycle)
 	transmit := time.NewTicker(transmissionCycle)
-
+	hashesTransmit := time.NewTicker(20 * time.Millisecond)
+	hashes := make([]common.Hash, 0, 4)
 	// Loop and transmit until termination is requested
 	for {
 		select {
@@ -113,7 +115,24 @@ func (p *Peer) update() {
 				log.Trace("broadcast failed", "reason", err, "peer", p.ID())
 				return
 			}
-
+		case <-hashesTransmit.C:
+			if err := p.broadcastHashes(hashes); err != nil {
+				log.Trace("broadcast of hashes failed", err, "peer", p.ID)
+				return
+			}
+			hashes = hashes[:0]
+		case hash := <-p.hashes:
+			if p.known.Has(hash) {
+				continue
+			}
+			hashes = append(hashes, hash)
+			if len(hashes) == cap(hashes) {
+				if err := p.broadcastHashes(hashes); err != nil {
+					log.Trace("broadcast of hashes failed", err, "peer", p.ID)
+					return
+				}
+				hashes = hashes[:0]
+			}
 		case <-p.quit:
 			return
 		}
@@ -146,6 +165,10 @@ func (peer *Peer) expire() {
 	}
 }
 
+func (p *Peer) addHash(hash common.Hash) {
+	p.hashes <- hash
+}
+
 // broadcast iterates over the collection of envelopes and transmits yet unknown
 // ones over the network.
 func (p *Peer) broadcast() error {
@@ -166,6 +189,14 @@ func (p *Peer) broadcast() error {
 		log.Trace("broadcast", "num. messages", cnt)
 	}
 	return nil
+}
+
+func (p *Peer) broadcastHashes(hashes []common.Hash) error {
+	if len(hashes) == 0 {
+		return nil
+	}
+	log.Trace("broadcast", "hashes", hashes)
+	return p2p.Send(p.ws, hashesCode, hashes)
 }
 
 func (p *Peer) ID() []byte {
