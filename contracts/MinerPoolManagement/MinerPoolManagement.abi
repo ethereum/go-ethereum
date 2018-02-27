@@ -1,0 +1,95 @@
+[
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "MinerPool",
+				"type": "address"
+			},
+			{
+				"name": "status",
+				"type": "bool"
+			},
+			{
+				"name": "AppAddr",
+				"type": "string"
+			}
+		],
+		"name": "MinerPoolSetting",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "MPools",
+		"outputs": [
+			{
+				"name": "status",
+				"type": "bool"
+			},
+			{
+				"name": "AppAddr",
+				"type": "string"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "Manager",
+		"outputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "RegistryPoolNum",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "newManager",
+				"type": "address"
+			}
+		],
+		"name": "transferManagement",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	}
+]

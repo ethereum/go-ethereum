@@ -42,8 +42,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/hashicorp/golang-lru"
-	"github.com/ethereum/go-ethereum/contracts/posminer"
+	"github.com/ethereum/go-ethereum/contracts/MinerPoolManagement"
+	"github.com/ethereum/go-ethereum/contracts/MobileMine"
 	"github.com/ethereum/go-ethereum/ethclient"
+
 
 )
 
@@ -859,59 +861,40 @@ func (bc *BlockChain) WriteBlockAndState(block *types.Block, receipts []*types.R
 
 //统计移动应用权重帐户的用户权重
 func (bc *BlockChain) CalcTokenTime(Coinbase common.Address) (Tokentime *big.Int) {
-	//var sumToken *big.Int = big.NewInt(0)
-	//var Tokentime *big.Int = big.NewInt(0)
-	var exist bool
-	exist=false
+	
+	//var Pos_Addjust *big.Int
 	Tokentime=big.NewInt(0) 
-	var ActiveMiners []common.Address
 	State,_:=bc.State()
-	if State.Exist(params.PosMinerContractAddr)!=true{
-		//log.Info("警告","RPC未使能",Tokentime)
+	if State.Exist(params.PosMinerContractAddr)!=true || State.GetCode(Coinbase)==nil{
+		log.Info("警告","矿池管理合约未部署,尚不能使用权重挖矿！",Tokentime)
 		return Tokentime
 	}
 	//log.Info("posminer.PosConn",posminer.PosConn)
-	if posminer.PosConn==nil {
-		posminer.PosConn, _ = ethclient.Dial("//./pipe/geth.ipc")
+	if MinerPoolManagement.PosConn==nil {
+		MinerPoolManagement.PosConn, _ = ethclient.Dial("//./pipe/geth.ipc")
 		log.Info("AppChain连接", "连接IPC服务")
 	}
-	//if err != nil {
-	//	log.Info("警告", "设置了ipcdisable，不能使用权重挖矿!",err)
-	//	return Tokentime
-	//}
-	PosMiner, err := posminer.NewPosminer(params.PosMinerContractAddr, posminer.PosConn)
-	//log.Info("错误码","err",err,"PosMiner",PosMiner)
+	MinerPool, err := MinerPoolManagement.NewMinerPoolManagement(params.PosMinerContractAddr, MinerPoolManagement.PosConn)
+	//log.Info("params.posminerContractAddr",params.PosMinerContractAddr)
 	if err !=nil{
-		log.Info("调用挖矿智能合约posminer失败","错误",err)
+		log.Info("调用矿池智能合约失败","错误",err)
 		return Tokentime
 	}
-	//M,err:=PosMiner.RegLength(nil)
-	for i:=uint64(0);i<bc.currentBlock.NumberU64() ;i++{
-		for _,tx:=range bc.GetBlockByNumber(i).Transactions() {
-			msg,err:= tx.AsMessage(types.MakeSigner(bc.Config(), bc.GetBlockByNumber(i).Header().Number))
-			if err != nil {
-				return Tokentime
-			}
-			CmpMiner,err:= PosMiner.Registers(nil, msg.From())
-			if err != nil {
-				return Tokentime
-			}
-			RegistryTime := new(big.Int).Set(CmpMiner.RegistryTime)
-			if RegistryTime.Add(RegistryTime,big.NewInt(86400)).Cmp(bc.currentBlock.Time())>0 &&CmpMiner.MinerPool==Coinbase {
-				for j:=0;j<len(ActiveMiners);j++{
-					if ActiveMiners[j]==msg.From(){
-						exist=true
-						break
-					}  
-				}
-				if exist==false {
-					Tokentime.Add(Tokentime,big.NewInt(1))
-					ActiveMiners=append(ActiveMiners,msg.From())
-				}
-				exist=false
-			}
-		}
+	//查询移动应用矿池状态
+	Mpool,err:= MinerPool.MPools(nil, Coinbase)
+	//log.Info("警告","Mpool.status",Mpool.Status)
+	if Mpool.Status!=true {
+		return Tokentime
 	}
+	//查询移动应用矿池的权重
+	MpoolMine,err:=MobileMine.NewMobileMine(Coinbase,MinerPoolManagement.PosConn)
+    if err !=nil{
+		log.Info("调用移动应用矿池合约失败","错误",err)
+		return Tokentime
+	}
+	MpoolActiveNum,err:=MpoolMine.ActiveUsers(nil)
+	Tokentime.Sqrt(MpoolActiveNum.ActiveNum)
+	//log.Info("调用移动应用矿池合约失败","Tokentime1",Tokentime1,"Tokentime2",Tokentime2)
 	return Tokentime
 }
 

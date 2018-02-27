@@ -30,7 +30,7 @@ var (
 //POSMINER相关定义
 var (
 	PosMinerContractAddr = common.HexToAddress ("0x8C00B660792b235d4382368299E77C8c04ED4754")     //POSMINER合约地址
-)
+	)
     
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.

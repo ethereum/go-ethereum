@@ -263,15 +263,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *big
 	st.refundGas()
 
 	Total_gas := new(big.Int).Mul(st.gasUsed(), st.gasPrice)
-	//检查合约帐号是否存在
-	if  st.evm.BlockNumber.Cmp(big.NewInt(100))>0 {       //必须在区块号100以前完成挖矿智能合约的部署。
-		MinerPool_gas := new(big.Int).Div(Total_gas, big.NewInt(100)) //计算总交易费的1%；
-		Miners_gas := new(big.Int).Mul(MinerPool_gas, big.NewInt(99)) //计算总交易费的99%
-		st.state.AddBalance(st.evm.Coinbase, MinerPool_gas) //为矿池帐户支付交易费的1%
-		st.state.AddBalance(params.PosMinerContractAddr, Miners_gas)//将交易费的99%存入挖矿合约帐号	
-	}else {
-		st.state.AddBalance(st.evm.Coinbase, Total_gas)           //矿池合约未建立，全部支付给矿工。
-	}   
+	st.state.AddBalance(st.evm.Coinbase, Total_gas)           
 	//st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(st.gasUsed(), st.gasPrice))
 	return ret, requiredGas, st.gasUsed(), vmerr != nil, err
 }

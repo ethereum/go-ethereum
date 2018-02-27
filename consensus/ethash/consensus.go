@@ -569,15 +569,7 @@ func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
     //log.Info("参数变量","TotalReward",TotalReward,"Reward_Justnum",Reward_justnum)  
 	TotalReward.Div(TotalReward,math.Exp(big.NewInt(2),Reward_justnum))   // reward/2**justnum
 	//log.Info("参数变量","TotalReward",TotalReward)
-	if header.Number.Cmp(big.NewInt(100))>0 {       //必须在区块号100以前完成挖矿智能合约的部署。
-	    minerpool:=TotalReward.Div(TotalReward,big.NewInt(100))
-		state.AddBalance(header.Coinbase, minerpool)
-	//	log.Info("参数变量","minerpool",minerpool)
-	//	reward.Sub(reward,minerpool)
-		state.AddBalance(params.PosMinerContractAddr, TotalReward.Mul(TotalReward,big.NewInt(99)))
-		//log.Info("参数变量","TotalReward",TotalReward)
-	}else{
-		state.AddBalance(header.Coinbase, TotalReward)
-		//log.Info("参数变量","TotalReward",TotalReward)
-	}
+	state.AddBalance(header.Coinbase, TotalReward)
+	//log.Info("参数变量","TotalReward",TotalReward)
+	
 }
