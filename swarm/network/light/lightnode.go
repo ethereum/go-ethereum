@@ -59,7 +59,7 @@ func (r *RemoteSectionReader) NeedData(key []byte) func() {
 	}
 }
 
-func (r *RemoteSectionReader) BatchDone(s string, from uint64, hashes []byte, root []byte) func() (*stream.TakeoverProof, error) {
+func (r *RemoteSectionReader) BatchDone(s stream.Stream, from uint64, hashes []byte, root []byte) func() (*stream.TakeoverProof, error) {
 	r.hashes <- hashes
 	return nil
 }
@@ -158,7 +158,7 @@ func (s *RemoteSectionServer) Close() {}
 
 // RegisterRemoteSectionReader registers RemoteSectionReader on light downstream node
 func RegisterRemoteSectionReader(s *stream.Registry, db *storage.DBAPI) {
-	s.RegisterClientFunc("REMOTE_SECTION", func(p *stream.Peer, t []byte) (stream.Client, error) {
+	s.RegisterClientFunc("REMOTE_SECTION", func(p *stream.Peer, t []byte, live bool) (stream.Client, error) {
 		return NewRemoteSectionReader(t, db), nil
 	})
 }
@@ -166,7 +166,7 @@ func RegisterRemoteSectionReader(s *stream.Registry, db *storage.DBAPI) {
 // RegisterRemoteSectionServer registers RemoteSectionServer outgoing streamer on
 // upstream light server node
 func RegisterRemoteSectionServer(s *stream.Registry, db *storage.DBAPI, rf func([]byte) *storage.LazyChunkReader) {
-	s.RegisterServerFunc("REMOTE_SECTION", func(p *stream.Peer, t []byte) (stream.Server, error) {
+	s.RegisterServerFunc("REMOTE_SECTION", func(p *stream.Peer, t []byte, live bool) (stream.Server, error) {
 		r := rf(t)
 		return NewRemoteSectionServer(db, r), nil
 	})
