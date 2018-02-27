@@ -238,16 +238,17 @@ func (f *Filter) Retrieve() (all []*ReceivedMessage) {
 
 // MatchMessage checks if the filter matches an already decrypted
 // message (i.e. a Message that has already been handled by
-// MatchEnvelope when checked by a previous filter)
+// MatchEnvelope when checked by a previous filter).
+// Topics are not checked here, since this is done by topic matchers.
 func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 	if f.PoW > 0 && msg.PoW < f.PoW {
 		return false
 	}
 
 	if f.expectsAsymmetricEncryption() && msg.isAsymmetricEncryption() {
-		return IsPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst) && f.MatchTopic(msg.Topic)
+		return IsPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst)
 	} else if f.expectsSymmetricEncryption() && msg.isSymmetricEncryption() {
-		return f.SymKeyHash == msg.SymKeyHash && f.MatchTopic(msg.Topic)
+		return f.SymKeyHash == msg.SymKeyHash
 	}
 	return false
 }
@@ -255,27 +256,9 @@ func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 // MatchEnvelope checks if it's worth decrypting the message. If
 // it returns `true`, client code is expected to attempt decrypting
 // the message and subsequently call MatchMessage.
+// Topics are not checked here, since this is done by topic matchers.
 func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
-	if f.PoW > 0 && envelope.pow < f.PoW {
-		return false
-	}
-
-	return f.MatchTopic(envelope.Topic)
-}
-
-// MatchTopic checks that the filter captures a given topic.
-func (f *Filter) MatchTopic(topic TopicType) bool {
-	if len(f.Topics) == 0 {
-		// any topic matches
-		return true
-	}
-
-	for _, bt := range f.Topics {
-		if matchSingleTopic(topic, bt) {
-			return true
-		}
-	}
-	return false
+	return f.PoW <= 0 || envelope.pow >= f.PoW
 }
 
 func matchSingleTopic(topic TopicType, bt []byte) bool {

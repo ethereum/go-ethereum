@@ -928,24 +928,6 @@ func (whisper *Whisper) Envelopes() []*Envelope {
 	return all
 }
 
-// Messages iterates through all currently floating envelopes
-// and retrieves all the messages, that this filter could decrypt.
-func (whisper *Whisper) Messages(id string) []*ReceivedMessage {
-	result := make([]*ReceivedMessage, 0)
-	whisper.poolMu.RLock()
-	defer whisper.poolMu.RUnlock()
-
-	if filter := whisper.filters.Get(id); filter != nil {
-		for _, env := range whisper.envelopes {
-			msg := filter.processEnvelope(env)
-			if msg != nil {
-				result = append(result, msg)
-			}
-		}
-	}
-	return result
-}
-
 // isEnvelopeCached checks if envelope with specific hash has already been received and cached.
 func (whisper *Whisper) isEnvelopeCached(hash common.Hash) bool {
 	whisper.poolMu.Lock()
