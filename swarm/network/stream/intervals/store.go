@@ -26,7 +26,7 @@ import (
 var ErrNotFound = errors.New("not found")
 
 // Store defines methods required to get and retrieve Intervals for different keys.
-// It is meant to be used for intervals persistance for different streams in the
+// It is meant to be used for intervals persistence for different streams in the
 // stream package.
 type Store interface {
 	Get(key string) (i *Intervals, err error)
