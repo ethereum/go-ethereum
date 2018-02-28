@@ -472,9 +472,9 @@ func checkBloomFilterExchangeOnce(t *testing.T, mustPass bool) bool {
 	for i, node := range nodes {
 		for peer := range node.shh.peers {
 			peer.bloomMu.Lock()
-			eqals := bytes.Equal(peer.bloomFilter, masterBloomFilter)
+			equals := bytes.Equal(peer.bloomFilter, masterBloomFilter)
 			peer.bloomMu.Unlock()
-			if !eqals {
+			if !equals {
 				if mustPass {
 					t.Fatalf("node %d: failed to exchange bloom filter requirement in round %d. \n%x expected \n%x got",
 						i, round, masterBloomFilter, peer.bloomFilter)
