@@ -43,9 +43,10 @@ type Filter struct {
 
 // Filters represents a collection of filters
 type Filters struct {
-	watchers         map[string]*Filter
-	topicMatcher     map[TopicType]map[*Filter]struct{}
-	allTopicsMatcher map[*Filter]struct{}
+	watchers map[string]*Filter
+
+	topicMatcher     map[TopicType]map[*Filter]struct{} // map a topic to the filters that are interested in being notified when a message matches that topic
+	allTopicsMatcher map[*Filter]struct{}               // list all the filters that will be notified of a new message, no matter what its topic is
 
 	whisper *Whisper
 	mutex   sync.RWMutex
@@ -106,7 +107,9 @@ func (fs *Filters) Uninstall(id string) bool {
 	return false
 }
 
-// addTopicMatcher adds a filter to the topic matchers
+// addTopicMatcher adds a filter to the topic matchers.
+// If the filter's Topics array is empty, it will be tried on every topic.
+// Otherwise, it will be tried on the topics specified.
 func (fs *Filters) addTopicMatcher(watcher *Filter) {
 	if len(watcher.Topics) == 0 {
 		fs.allTopicsMatcher[watcher] = struct{}{}
@@ -133,10 +136,10 @@ func (fs *Filters) removeFromTopicMatchers(watcher *Filter) {
 // match a specific topic
 func (fs *Filters) getWatchersByTopic(topic TopicType) []*Filter {
 	res := make([]*Filter, 0, len(fs.allTopicsMatcher))
-	for watcher, _ := range fs.allTopicsMatcher {
+	for watcher := range fs.allTopicsMatcher {
 		res = append(res, watcher)
 	}
-	for watcher, _ := range fs.topicMatcher[topic] {
+	for watcher := range fs.topicMatcher[topic] {
 		res = append(res, watcher)
 	}
 	return res

@@ -313,16 +313,6 @@ func TestMatchEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
-	match := fsym.MatchEnvelope(env)
-	if !match {
-		// topic mismatch should have no affect, as topics are handled by topic matchers
-		t.Fatalf("failed MatchEnvelope symmetric with seed %d.", seed)
-	}
-	match = fasym.MatchEnvelope(env)
-	if !match {
-		// topic mismatch should have no affect, as topics are handled by topic matchers
-		t.Fatalf("failed MatchEnvelope asymmetric with seed %d.", seed)
-	}
 
 	// encrypt symmetrically
 	i := mrand.Int() % 4
@@ -338,7 +328,7 @@ func TestMatchEnvelope(t *testing.T) {
 	}
 
 	// symmetric + matching topic: match
-	match = fsym.MatchEnvelope(env)
+	match := fsym.MatchEnvelope(env)
 	if !match {
 		t.Fatalf("failed MatchEnvelope() symmetric with seed %d.", seed)
 	}
