@@ -107,3 +107,14 @@ func (stream *LibP2PStream) WriteMsg(msg p2p.Msg) error {
 
 	return nil
 }
+
+type LibP2PWhisperServer struct {
+}
+
+func (server *LibP2PWhisperServer) Start() error {
+	return nil
+}
+
+func NewLibP2PWhisperServer() WhisperServer {
+	return &LibP2PWhisperServer{}
+}

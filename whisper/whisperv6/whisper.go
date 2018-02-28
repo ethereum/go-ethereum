@@ -56,6 +56,10 @@ const (
 	bloomFilterToleranceIdx        // Bloom filter tolerated by the whisper node for a limited time
 )
 
+type WhisperServer interface {
+	Start() error
+}
+
 // Whisper represents a dark communication interface through the Ethereum
 // network, using its very own P2P communication layer.
 type Whisper struct {
@@ -597,7 +601,7 @@ func (whisper *Whisper) Send(envelope *Envelope) error {
 
 // Start implements node.Service, starting the background data propagation thread
 // of the Whisper protocol.
-func (whisper *Whisper) Start(*p2p.Server) error {
+func (whisper *Whisper) Start(WhisperServer) error {
 	log.Info("started whisper v." + ProtocolVersionStr)
 	go whisper.update()
 

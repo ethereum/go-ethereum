@@ -53,7 +53,7 @@ const entropySize = 32
 
 // singletons
 var (
-	server     *p2p.Server
+	server     WhisperServer
 	shh        *whisper.Whisper
 	done       chan struct{}
 	mailServer mailserver.WMailServer
@@ -104,6 +104,8 @@ var (
 	argEnode   = flag.String("boot", "", "bootstrap node you want to connect to (e.g. enode://e454......08d50@52.176.211.200:16428)")
 	argTopic   = flag.String("topic", "", "topic in hexadecimal format (e.g. 70a4beef)")
 	argSaveDir = flag.String("savedir", "", "directory where all incoming messages will be saved as files")
+
+	useLibP2P = flag.Bool("libp2p", false, "Use libp2p as the protocol layer")
 )
 
 func main() {
@@ -274,17 +276,21 @@ func initialize() {
 		mailServer.Init(shh, *argDBPath, msPassword, *argServerPoW)
 	}
 
-	server = &p2p.Server{
-		Config: p2p.Config{
-			PrivateKey:     nodeid,
-			MaxPeers:       maxPeers,
-			Name:           common.MakeName("wnode", "6.0"),
-			Protocols:      shh.Protocols(),
-			ListenAddr:     *argIP,
-			NAT:            nat.Any(),
-			BootstrapNodes: peers,
-			StaticNodes:    peers,
-			TrustedNodes:   peers,
+	if *useLibP2P {
+		server = NewLibP2PWhisperServer()
+	} else {
+		server = &p2p.Server{
+			Config: p2p.Config{
+				PrivateKey:     nodeid,
+				MaxPeers:       maxPeers,
+				Name:           common.MakeName("wnode", "6.1"),
+				Protocols:      shh.Protocols(),
+				ListenAddr:     *argIP,
+				NAT:            nat.Any(),
+				BootstrapNodes: peers,
+				StaticNodes:    peers,
+				TrustedNodes:   peers,
+			},
 		},
 	}
 }
@@ -614,6 +620,7 @@ func messageLoop() {
 					printMessageInfo(msg)
 					reportedOnce = true
 				}
+			}
 
 				// All messages are saved upon specifying argSaveDir.
 				// fileExMode only specifies how messages are displayed on the console after they are saved.
