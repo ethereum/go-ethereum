@@ -17,6 +17,7 @@
 package mailserver
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 
@@ -107,9 +108,9 @@ func (s *WMailServer) DeliverMail(peer whisper.Peer, request *whisper.Envelope) 
 		return
 	}
 
-	ok, lower, upper, bloom := s.validateRequest(peer.ID(), request)
+	ok, lower, upper, bloom := s.validateRequest([]byte(peer.ID()), request)
 	if ok {
-		s.processRequest(peer, lower, upper, bloom)
+		s.processRequest(peer, lower, upper, topic)
 	}
 }
 
