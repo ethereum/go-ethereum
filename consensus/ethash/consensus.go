@@ -37,13 +37,11 @@ import (
 // Ethash proof-of-work protocol constants
 // Callisto reward 600 CLO.
 var (
-	callistoBlockReward, _          = new(big.Int).SetString("600000000000000000000", 10) // Block reward in wei for successfully mining a block
+	//callistoBlockReward, _          = new(big.Int).SetString("600000000000000000000", 10) // Block reward in wei for successfully mining a block
 	FrontierBlockReward    *big.Int = big.NewInt(5e+18)                                   // Block reward in wei for successfully mining a block
 	ByzantiumBlockReward   *big.Int = big.NewInt(3e+18)                                   // Block reward in wei for successfully mining a block upward from Byzantium
 	maxUncles                       = 2                                                   // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTime          = 15 * time.Second
-	treasuryDevFunds	   *big.Int	= big.NewInt(20)
-	stakeFunds			   *big.Int	= big.NewInt(10)
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -302,8 +300,8 @@ func (ethash *Ethash) CalcDifficulty(chain consensus.ChainReader, time uint64, p
 func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
-	case config.IsCallisto(next):
-		return calcDifficultyCallisto(time, parent)
+	//case config.IsCallisto(next):
+	//	return calcDifficultyCallisto(time, parent)
 	case config.IsByzantium(next):
 		return calcDifficultyByzantium(time, parent)
 	case config.IsHomestead(next):
@@ -601,25 +599,15 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	// Select the correct block reward based on chain progression
 	blockReward := FrontierBlockReward
 
-	if config.IsCallisto(header.Number) {
-		blockReward = callistoBlockReward
-	}
-
-	if config.IsByzantium(header.Number) && !config.IsCallisto(header.Number) {
+	if config.IsByzantium(header.Number) {
 		blockReward = ByzantiumBlockReward
 	}
 
+	if config.IsCallisto(header.Number) {
+		blockReward = config.CallistoMinerReward
+	}
+
 	reward := new(big.Int).Set(blockReward)
-
-	// Treasury fee
-	treasuryReward := new(big.Int)
-	treasuryReward.Mul(reward, treasuryDevFunds)
-	treasuryReward.Div(treasuryReward, big.NewInt(100))
-
-	// Stake fee
-	stakeReward := new(big.Int)
-	stakeReward.Mul(reward, stakeFunds)
-	stakeReward.Div(stakeReward, big.NewInt(100))
 
 	// Accumulate the rewards for the miner and any included uncles
 	r := new(big.Int)
@@ -635,10 +623,8 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 
 	if config.IsCallisto(header.Number) {
-		reward.Sub(reward, treasuryReward)
-		reward.Sub(reward, stakeReward)
-		state.AddBalance(config.CallistoTreasuryAddress, treasuryReward)
-		state.AddBalance(config.CallistoStakeAddress, stakeReward)
+		state.AddBalance(config.CallistoTreasuryAddress, config.CallistoTreasuryReward)
+		state.AddBalance(config.CallistoStakeAddress, config.CallistoStakeReward)
 	}
 
 	state.AddBalance(header.Coinbase, reward)
