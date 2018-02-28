@@ -23,6 +23,7 @@ import (
 	mrand "math/rand"
 	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -71,7 +72,7 @@ var keys = []string{
 }
 
 type TestData struct {
-	started int
+	started int64
 	counter [NumNodes]int
 	mutex   sync.RWMutex
 }
@@ -240,9 +241,7 @@ func startServer(t *testing.T, s *p2p.Server) {
 		t.Fatalf("failed to start the fisrt server.")
 	}
 
-	result.mutex.Lock()
-	defer result.mutex.Unlock()
-	result.started++
+	atomic.AddInt64(&result.started, 1)
 }
 
 func stopServers() {
@@ -472,7 +471,10 @@ func checkPowExchange(t *testing.T) {
 func checkBloomFilterExchangeOnce(t *testing.T, mustPass bool) bool {
 	for i, node := range nodes {
 		for peer := range node.shh.peers {
-			if !bytes.Equal(peer.bloomFilter, masterBloomFilter) {
+			peer.bloomMu.Lock()
+			equals := bytes.Equal(peer.bloomFilter, masterBloomFilter)
+			peer.bloomMu.Unlock()
+			if !equals {
 				if mustPass {
 					t.Fatalf("node %d: failed to exchange bloom filter requirement in round %d. \n%x expected \n%x got",
 						i, round, masterBloomFilter, peer.bloomFilter)
@@ -500,11 +502,13 @@ func checkBloomFilterExchange(t *testing.T) {
 
 func waitForServersToStart(t *testing.T) {
 	const iterations = 200
+	var started int64
 	for j := 0; j < iterations; j++ {
 		time.Sleep(50 * time.Millisecond)
-		if result.started == NumNodes {
+		started = atomic.LoadInt64(&result.started)
+		if started == NumNodes {
 			return
 		}
 	}
-	t.Fatalf("Failed to start all the servers, running: %d", result.started)
+	t.Fatalf("Failed to start all the servers, running: %d", started)
 }
