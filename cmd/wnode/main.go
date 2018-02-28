@@ -594,19 +594,22 @@ func writeMessageToFile(dir string, msg *whisper.ReceivedMessage) {
 		address = crypto.PubkeyToAddress(*msg.Src)
 	}
 
-	if whisper.IsPubKeyEqual(msg.Src, &asymKey.PublicKey) {
-		// message from myself: don't save, only report
-		fmt.Printf("\n%s <%x>: message received: '%s'\n", timestamp, address, name)
-	} else if len(dir) > 0 {
+	// this is a sample code; uncomment if you don't want to save your own messages.
+	//if whisper.IsPubKeyEqual(msg.Src, &asymKey.PublicKey) {
+	//	fmt.Printf("\n%s <%x>: message from myself received, not saved: '%s'\n", timestamp, address, name)
+	//	return
+	//}
+
+	if len(dir) > 0 {
 		fullpath := filepath.Join(dir, name)
-		err := ioutil.WriteFile(fullpath, msg.Payload, 0644)
+		err := ioutil.WriteFile(fullpath, msg.Raw, 0644)
 		if err != nil {
 			fmt.Printf("\n%s {%x}: message received but not saved: %s\n", timestamp, address, err)
 		} else {
-			fmt.Printf("\n%s {%x}: message received and saved as '%s' (%d bytes)\n", timestamp, address, name, len(msg.Payload))
+			fmt.Printf("\n%s {%x}: message received and saved as '%s' (%d bytes)\n", timestamp, address, name, len(msg.Raw))
 		}
 	} else {
-		fmt.Printf("\n%s {%x}: big message received (%d bytes), but not saved: %s\n", timestamp, address, len(msg.Payload), name)
+		fmt.Printf("\n%s {%x}: message received (%d bytes), but not saved: %s\n", timestamp, address, len(msg.Raw), name)
 	}
 }
 
