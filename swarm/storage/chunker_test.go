@@ -199,7 +199,7 @@ func testRandomData(splitter Splitter, n int, tester *chunkerTester) Key {
 	input, found := tester.inputs[uint64(n)]
 	var data io.Reader
 	if !found {
-		data, input = testDataReaderAndSlice(n)
+		data, input = generateRandomData(n)
 		tester.inputs[uint64(n)] = input
 	} else {
 		data = io.LimitReader(bytes.NewReader(input), int64(n))
@@ -234,66 +234,6 @@ func testRandomData(splitter Splitter, n int, tester *chunkerTester) Key {
 	return key
 }
 
-func testRandomDataAppend(splitter Splitter, n, m int, tester *chunkerTester) {
-	if tester.inputs == nil {
-		tester.inputs = make(map[uint64][]byte)
-	}
-	input, found := tester.inputs[uint64(n)]
-	var data io.Reader
-	if !found {
-		data, input = testDataReaderAndSlice(n)
-		tester.inputs[uint64(n)] = input
-	} else {
-		data = io.LimitReader(bytes.NewReader(input), int64(n))
-	}
-
-	chunkC := make(chan *Chunk, 1000)
-
-	key, wait, err := tester.Split(splitter, data, int64(n), chunkC, nil)
-	if err != nil {
-		tester.t.Fatalf(err.Error())
-	}
-	wait()
-	tester.t.Logf(" Key = %v\n", key)
-
-	//create a append data stream
-	appendInput, found := tester.inputs[uint64(m)]
-	var appendData io.Reader
-	if !found {
-		appendData, appendInput = testDataReaderAndSlice(m)
-		tester.inputs[uint64(m)] = appendInput
-	} else {
-		appendData = io.LimitReader(bytes.NewReader(appendInput), int64(m))
-	}
-
-	chunkC = make(chan *Chunk, 1000)
-
-	newKey, wait, err := tester.Append(splitter, key, appendData, chunkC, nil)
-	if err != nil {
-		tester.t.Fatalf(err.Error())
-	}
-	wait()
-	tester.t.Logf(" NewKey = %v\n", newKey)
-
-	chunkC = make(chan *Chunk, 1000)
-	quitC := make(chan bool)
-
-	chunker := NewTreeChunker(NewChunkerParams())
-	reader := tester.Join(chunker, newKey, 0, chunkC, quitC)
-	newOutput := make([]byte, n+m)
-	r, err := reader.Read(newOutput)
-	if r != (n + m) {
-		tester.t.Fatalf("read error  read: %v  n = %v  err = %v\n", r, n, err)
-	}
-
-	newInput := append(input, appendInput...)
-	if !bytes.Equal(newOutput, newInput) {
-		tester.t.Fatalf("input and output mismatch\n IN: %v\nOUT: %v\n", newInput, newOutput)
-	}
-
-	close(chunkC)
-}
-
 func TestSha3ForCorrectness(t *testing.T) {
 	tester := &chunkerTester{t: t}
 
@@ -323,19 +263,73 @@ func TestSha3ForCorrectness(t *testing.T) {
 
 }
 
-// func TestDataAppend(t *testing.T) {
-// 	// sizes := []int{1, 1, 1, 4095, 4096, 4097, 1, 1, 1, 123456, 2345678, 2345678}
-// 	sizes := []int{1}
-// 	// appendSizes := []int{4095, 4096, 4097, 1, 1, 1, 8191, 8192, 8193, 9000, 3000, 5000}
-// 	appendSizes := []int{4095}
-//
-// 	tester := &chunkerTester{t: t}
-// 	chunker := NewPyramidChunker(NewChunkerParams())
-// 	for i, s := range sizes {
-// 		testRandomDataAppend(chunker, s, appendSizes[i], tester)
-//
-// 	}
-// }
+func TestDataAppend(t *testing.T) {
+	sizes := []int{1, 1, 1, 4095, 4096, 4097, 1, 1, 1, 123456, 2345678, 2345678}
+	appendSizes := []int{4095, 4096, 4097, 1, 1, 1, 8191, 8192, 8193, 9000, 3000, 5000}
+
+	tester := &chunkerTester{t: t}
+	for i := range sizes {
+		n := sizes[i]
+		m := appendSizes[i]
+
+		if tester.inputs == nil {
+			tester.inputs = make(map[uint64][]byte)
+		}
+		input, found := tester.inputs[uint64(n)]
+		var data io.Reader
+		if !found {
+			data, input = generateRandomData(n)
+			tester.inputs[uint64(n)] = input
+		} else {
+			data = io.LimitReader(bytes.NewReader(input), int64(n))
+		}
+
+		chunkC := make(chan *Chunk, 1000)
+
+		chunker := NewPyramidChunker(NewChunkerParams())
+		key, wait, err := tester.Split(chunker, data, int64(n), chunkC, nil)
+		if err != nil {
+			tester.t.Fatalf(err.Error())
+		}
+		wait()
+
+		//create a append data stream
+		appendInput, found := tester.inputs[uint64(m)]
+		var appendData io.Reader
+		if !found {
+			appendData, appendInput = generateRandomData(m)
+			tester.inputs[uint64(m)] = appendInput
+		} else {
+			appendData = io.LimitReader(bytes.NewReader(appendInput), int64(m))
+		}
+
+		chunkC = make(chan *Chunk, 1000)
+
+		newKey, wait, err := tester.Append(chunker, key, appendData, chunkC, nil)
+		if err != nil {
+			tester.t.Fatalf(err.Error())
+		}
+		wait()
+
+		chunkC = make(chan *Chunk, 1000)
+		quitC := make(chan bool)
+
+		treeChunker := NewTreeChunker(NewChunkerParams())
+		reader := tester.Join(treeChunker, newKey, 0, chunkC, quitC)
+		newOutput := make([]byte, n+m)
+		r, err := reader.Read(newOutput)
+		if r != (n + m) {
+			tester.t.Fatalf("read error  read: %v  n = %v  m = %v  err = %v\n", r, n, m, err)
+		}
+
+		newInput := append(input, appendInput...)
+		if !bytes.Equal(newOutput, newInput) {
+			tester.t.Fatalf("input and output mismatch\n IN: %v\nOUT: %v\n", newInput, newOutput)
+		}
+
+		close(chunkC)
+	}
+}
 
 func TestRandomData(t *testing.T) {
 	sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 8191, 8192, 8193, 12287, 12288, 12289, 123456, 2345678}
