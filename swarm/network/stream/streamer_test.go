@@ -39,6 +39,20 @@ func TestStreamerSubscribe(t *testing.T) {
 	}
 }
 
+func TestStreamerRequestSubscription(t *testing.T) {
+	tester, streamer, _, teardown, err := newStreamerTester(t)
+	defer teardown()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stream := NewStream("foo", nil, false)
+	err = streamer.RequestSubscription(tester.IDs[0], stream, Top)
+	if err == nil || err.Error() != "stream foo not registered" {
+		t.Fatalf("Expected error %v, got %v", "stream foo not registered", err)
+	}
+}
+
 var (
 	hash0     = sha3.Sum256([]byte{0})
 	hash1     = sha3.Sum256([]byte{1})
