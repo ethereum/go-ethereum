@@ -123,6 +123,7 @@ type RunConfig struct {
 	ConnLevel       int
 	ToAddr          func(discover.NodeID) *network.BzzAddr
 	Services        adapters.Services
+	DefaultService  string
 	EnableMsgEvents bool
 }
 
@@ -133,9 +134,13 @@ func NewSimulation(conf *RunConfig) (*Simulation, func(), error) {
 	if err != nil {
 		return nil, adapterTeardown, err
 	}
+	defaultService := "streamer"
+	if conf.DefaultService != "" {
+		defaultService = conf.DefaultService
+	}
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",
-		DefaultService: "streamer",
+		DefaultService: defaultService,
 	})
 	teardown := func() {
 		adapterTeardown()

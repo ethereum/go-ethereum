@@ -18,7 +18,6 @@ package stream
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -26,15 +25,24 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
+	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 var sendTimeout = 5 * time.Second
 
-var (
-	errServerNotFound = errors.New("server not found")
-	errClientNotFound = errors.New("client not found")
-)
+type notFoundError struct {
+	t string
+	s Stream
+}
+
+func newNotFoundError(t string, s Stream) *notFoundError {
+	return &notFoundError{t: t, s: s}
+}
+
+func (e *notFoundError) Error() string {
+	return fmt.Sprintf("%s not found for stream %q", e.t, e.s)
+}
 
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
@@ -42,21 +50,26 @@ type Peer struct {
 	streamer *Registry
 	pq       *pq.PriorityQueue
 	serverMu sync.RWMutex
-	clientMu sync.RWMutex
+	clientMu sync.RWMutex // protects both clients and clientParams
 	servers  map[string]*server
 	clients  map[string]*client
-	quit     chan struct{}
+	// clientParams map keeps required client arguments
+	// that are set on Registry.Subscribe and used
+	// on creating a new client in offered hashes handler.
+	clientParams map[string]*clientParams
+	quit         chan struct{}
 }
 
 // NewPeer is the constructor for Peer
 func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 	p := &Peer{
-		Peer:     peer,
-		pq:       pq.New(int(PriorityQueue), PriorityQueueCap),
-		streamer: streamer,
-		servers:  make(map[string]*server),
-		clients:  make(map[string]*client),
-		quit:     make(chan struct{}),
+		Peer:         peer,
+		pq:           pq.New(int(PriorityQueue), PriorityQueueCap),
+		streamer:     streamer,
+		servers:      make(map[string]*server),
+		clients:      make(map[string]*client),
+		clientParams: make(map[string]*clientParams),
+		quit:         make(chan struct{}),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	go p.pq.Run(ctx, func(i interface{}) { p.Send(i) })
@@ -105,103 +118,206 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		From:          from,
 		To:            to,
 		Stream:        s.stream,
-		Key:           s.key,
 	}
-	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "key", s.key, "len", len(hashes), "from", from, "to", to)
+	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
 	return p.SendPriority(msg, s.priority)
 }
 
-func (p *Peer) getServer(s string) (*server, error) {
+func (p *Peer) getServer(s Stream) (*server, error) {
 	p.serverMu.RLock()
 	defer p.serverMu.RUnlock()
 
-	server := p.servers[s]
+	server := p.servers[s.String()]
 	if server == nil {
 		return nil, fmt.Errorf("server '%v' not provided to peer %v", s, p.ID())
 	}
 	return server, nil
 }
 
-func (p *Peer) getClient(s string) (*client, error) {
-	p.clientMu.RLock()
-	defer p.clientMu.RUnlock()
-
-	client := p.clients[s]
-	if client == nil {
-		return nil, fmt.Errorf("client '%v' not provided to peer %v", s, p.ID())
-	}
-	return client, nil
-}
-
-func (p *Peer) setServer(s string, key []byte, o Server, priority uint8) (*server, error) {
+func (p *Peer) setServer(s Stream, o Server, priority uint8) (*server, error) {
 	p.serverMu.Lock()
 	defer p.serverMu.Unlock()
 
-	sk := s + keyToString(key)
+	sk := s.String()
 	if p.servers[sk] != nil {
 		return nil, fmt.Errorf("server %v already registered", sk)
 	}
 	os := &server{
 		Server:   o,
-		priority: priority,
 		stream:   s,
-		key:      key,
+		priority: priority,
 	}
 	p.servers[sk] = os
 	return os, nil
 }
 
-func (p *Peer) removeServer(s string, key []byte) error {
+func (p *Peer) removeServer(s Stream) error {
 	p.serverMu.Lock()
 	defer p.serverMu.Unlock()
 
-	sk := s + keyToString(key)
+	sk := s.String()
 	server, ok := p.servers[sk]
 	if !ok {
-		return errServerNotFound
+		return newNotFoundError("server", s)
 	}
 	server.Close()
 	delete(p.servers, sk)
 	return nil
 }
 
-func (p *Peer) setClient(s string, key []byte, i Client, priority uint8, live bool) error {
+func (p *Peer) getClient(ctx context.Context, s Stream) (c *client, err error) {
+	var params *clientParams
+	sk := s.String()
+	func() {
+		p.clientMu.RLock()
+		defer p.clientMu.RUnlock()
+
+		c = p.clients[sk]
+		if c != nil {
+			return
+		}
+		params = p.clientParams[sk]
+	}()
+	if c != nil {
+		return c, nil
+	}
+
+	if params != nil {
+		//debug.PrintStack()
+		if err := params.waitClient(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	p.clientMu.RLock()
+	defer p.clientMu.RUnlock()
+
+	c = p.clients[sk]
+	if c != nil {
+		return c, nil
+	}
+	return nil, newNotFoundError("client", s)
+}
+
+func (p *Peer) getOrSetClient(s Stream, from, to uint64) (c *client, created bool, err error) {
+	sk := s.String()
+
 	p.clientMu.Lock()
 	defer p.clientMu.Unlock()
 
-	sk := s + keyToString(key)
-	if p.clients[sk] != nil {
-		return fmt.Errorf("client %v already registered", sk)
+	c = p.clients[sk]
+	if c != nil {
+		return c, false, nil
 	}
+
+	f, err := p.streamer.GetClientFunc(s.Name)
+	if err != nil {
+		return nil, false, err
+	}
+
+	is, err := f(p, s.Key, s.Live)
+	if err != nil {
+		return nil, false, err
+	}
+
+	cp, err := p.getClientParams(s)
+	if err != nil {
+		return nil, false, err
+	}
+	defer func() {
+		if err == nil {
+			if err := p.removeClientParams(s); err != nil {
+				log.Error("stream set client: remove client params", "stream", s, "peer", p, "err", err)
+			}
+		}
+	}()
+
+	intervalsKey := peerStreamIntervalsKey(p, s)
+	if s.Live {
+		// try to find previous history and live intervals and merge live into history
+		historyKey := peerStreamIntervalsKey(p, NewStream(s.Name, s.Key, false))
+		historyIntervals, err := p.streamer.intervalsStore.Get(historyKey)
+		switch err {
+		case nil:
+			liveIntervals, err := p.streamer.intervalsStore.Get(intervalsKey)
+			switch err {
+			case nil:
+				historyIntervals.Merge(liveIntervals)
+				if err := p.streamer.intervalsStore.Put(historyKey, historyIntervals); err != nil {
+					log.Error("stream set client: put history intervals", "stream", s, "peer", p, "err", err)
+				}
+			case intervals.ErrNotFound:
+			default:
+				log.Error("stream set client: get live intervals", "stream", s, "peer", p, "err", err)
+			}
+		case intervals.ErrNotFound:
+		default:
+			log.Error("stream set client: get history intervals", "stream", s, "peer", p, "err", err)
+		}
+	}
+
+	if err := p.streamer.intervalsStore.Put(intervalsKey, intervals.NewIntervals(from)); err != nil {
+		return nil, false, err
+	}
+
 	next := make(chan error, 1)
-	// var intervals *Intervals
-	// if !live {
-	// key := s + p.ID().String()
-	// intervals = NewIntervals(key, p.streamer)
-	// }
-	p.clients[sk] = &client{
-		Client: i,
-		// intervals:        intervals,
-		live:     live,
-		priority: priority,
-		next:     next,
-		stream:   s,
-		key:      key,
+	c = &client{
+		Client:         is,
+		stream:         s,
+		priority:       cp.priority,
+		to:             cp.to,
+		next:           next,
+		intervalsStore: p.streamer.intervalsStore,
+		intervalsKey:   intervalsKey,
 	}
-	next <- nil // this is to allow wantedKeysMsg before first batch arrives
+	p.clients[sk] = c
+	cp.clientCreated() // unblock all possible getClient calls that are waiting
+	next <- nil        // this is to allow wantedKeysMsg before first batch arrives
+	return c, true, nil
+}
+
+func (p *Peer) removeClient(s Stream) error {
+	p.clientMu.Lock()
+	defer p.clientMu.Unlock()
+
+	client, ok := p.clients[s.String()]
+	if !ok {
+		return newNotFoundError("client", s)
+	}
+	client.close()
 	return nil
 }
 
-func (p *Peer) removeClient(s string, key []byte) error {
+func (p *Peer) setClientParams(s Stream, params *clientParams) error {
 	p.clientMu.Lock()
 	defer p.clientMu.Unlock()
 
-	sk := s + keyToString(key)
-	client, ok := p.clients[sk]
-	if !ok {
-		return errClientNotFound
+	sk := s.String()
+	if p.clients[sk] != nil {
+		return fmt.Errorf("client %v already exists", sk)
 	}
-	client.close()
+	if p.clientParams[sk] != nil {
+		return fmt.Errorf("client params %v already set", sk)
+	}
+	p.clientParams[sk] = params
+	return nil
+}
+
+func (p *Peer) getClientParams(s Stream) (*clientParams, error) {
+	params := p.clientParams[s.String()]
+	if params == nil {
+		return nil, fmt.Errorf("client params '%v' not provided to peer %v", s, p.ID())
+	}
+	return params, nil
+}
+
+func (p *Peer) removeClientParams(s Stream) error {
+	sk := s.String()
+	_, ok := p.clientParams[sk]
+	if !ok {
+		return newNotFoundError("client params", s)
+	}
+	delete(p.clientParams, sk)
 	return nil
 }
 

@@ -26,12 +26,39 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
+// Stream defines a unique stream identifier.
+type Stream struct {
+	// Name is used for Client and Server functions identification.
+	Name string
+	// Key is the name of specific stream data.
+	Key []byte
+	// Live defines whether the stream delivers only new data
+	// for the specific stream.
+	Live bool
+}
+
+func NewStream(name string, key []byte, live bool) Stream {
+	return Stream{
+		Name: name,
+		Key:  key,
+		Live: live,
+	}
+}
+
+// String return a stream id based on all Stream fields.
+func (s Stream) String() string {
+	t := "h"
+	if s.Live {
+		t = "l"
+	}
+	return fmt.Sprintf("%s|%x|%s", s.Name, s.Key, t)
+}
+
 // SubcribeMsg is the protocol msg for requesting a stream(section)
 type SubscribeMsg struct {
-	Stream   string
-	Key      []byte
-	From, To uint64
-	Priority uint8 // delivered on priority channel
+	Stream   Stream
+	History  *Range `rlp:"nil"`
+	Priority uint8  // delivered on priority channel
 }
 
 func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
@@ -45,24 +72,53 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 		}
 	}()
 
-	f, err := p.streamer.GetServerFunc(req.Stream)
+	log.Debug("received subscription", "peer", p.ID(), "stream", req.Stream, "history", req.History)
+
+	f, err := p.streamer.GetServerFunc(req.Stream.Name)
 	if err != nil {
 		return err
 	}
-	s, err := f(p, req.Key)
+
+	s, err := f(p, req.Stream.Key, req.Stream.Live)
 	if err != nil {
 		return err
 	}
-	os, err := p.setServer(req.Stream, req.Key, s, req.Priority)
+	os, err := p.setServer(req.Stream, s, req.Priority)
 	if err != nil {
 		return err
 	}
-	log.Debug("received subscription", "peer", p.ID(), "stream", req.Stream, "Key", req.Key, "from", req.From, "to", req.To)
+
+	var from uint64
+	var to uint64
+	if !req.Stream.Live && req.History != nil {
+		from = req.History.From
+		to = req.History.To
+	}
+
 	go func() {
-		if err := p.SendOfferedHashes(os, req.From, req.To); err != nil {
+		if err := p.SendOfferedHashes(os, from, to); err != nil {
 			p.Drop(err)
 		}
 	}()
+
+	if req.Stream.Live && req.History != nil {
+		// subscribe to the history stream
+		s, err := f(p, req.Stream.Key, false)
+		if err != nil {
+			return err
+		}
+
+		os, err := p.setServer(getHistoryStream(req.Stream), s, getHistoryPriority(req.Priority))
+		if err != nil {
+			return err
+		}
+		go func() {
+			if err := p.SendOfferedHashes(os, req.History.From, req.History.To); err != nil {
+				p.Drop(err)
+			}
+		}()
+	}
+
 	return nil
 }
 
@@ -75,20 +131,18 @@ func (p *Peer) handleSubscribeErrorMsg(req *SubscribeErrorMsg) (err error) {
 }
 
 type UnsubscribeMsg struct {
-	Stream string
-	Key    []byte
+	Stream Stream
 }
 
 func (p *Peer) handleUnsubscribeMsg(req *UnsubscribeMsg) error {
-	p.removeServer(req.Stream, req.Key)
+	p.removeServer(req.Stream)
 	return nil
 }
 
 // OfferedHashesMsg is the protocol msg for offering to hand over a
 // stream section
 type OfferedHashesMsg struct {
-	Stream         string // name of Stream
-	Key            []byte // subtype or key
+	Stream         Stream // name of Stream
 	From, To       uint64 // peer and db-specific entry count
 	Hashes         []byte // stream of hashes (128)
 	*HandoverProof        // HandoverProof
@@ -102,9 +156,7 @@ func (m OfferedHashesMsg) String() string {
 // handleOfferedHashesMsg protocol msg handler calls the incoming streamer interface
 // Filter method
 func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
-	sk := req.Stream
-	sk += keyToString(req.Key)
-	s, err := p.getClient(sk)
+	c, _, err := p.getOrSetClient(req.Stream, req.From, req.To)
 	if err != nil {
 		return err
 	}
@@ -117,7 +169,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	for i := 0; i < len(hashes); i += HashSize {
 		hash := hashes[i : i+HashSize]
 
-		if wait := s.NeedData(hash); wait != nil {
+		if wait := c.NeedData(hash); wait != nil {
 			want.Set(i/HashSize, true)
 			wg.Add(1)
 			// create request and wait until the chunk data arrives and is stored
@@ -142,22 +194,21 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	// }()
 	go func() {
 		wg.Wait()
-		s.next <- s.batchDone(p, req, hashes)
+		c.next <- c.batchDone(p, req, hashes)
 	}()
 	// only send wantedKeysMsg if all missing chunks of the previous batch arrived
 	// except
-	if s.live {
-		s.sessionAt = req.From
+	if c.stream.Live {
+		c.sessionAt = req.From
 	}
-	from, to := s.nextBatch(req.To)
-	log.Trace("received offered batch", "peer", p.ID(), "stream", req.Stream, "Key", req.Key, "from", req.From, "to", req.To)
+	from, to := c.nextBatch(req.To + 1)
+	log.Trace("received offered batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
 	if from == to {
 		return nil
 	}
 
 	msg := &WantedHashesMsg{
 		Stream: req.Stream,
-		Key:    req.Key,
 		Want:   want.Bytes(),
 		From:   from,
 		To:     to,
@@ -167,14 +218,14 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 		case <-time.After(30 * time.Second):
 			p.Drop(err)
 			return
-		case err := <-s.next:
+		case err := <-c.next:
 			if err != nil {
 				p.Drop(err)
 				return
 			}
 		}
-		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "Key", msg.Key, "from", msg.From, "to", msg.To)
-		err := p.SendPriority(msg, s.priority)
+		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
+		err := p.SendPriority(msg, c.priority)
 		if err != nil {
 			p.Drop(err)
 		}
@@ -185,8 +236,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 // WantedHashesMsg is the protocol msg data for signaling which hashes
 // offered in OfferedHashesMsg downstream peer actually wants sent over
 type WantedHashesMsg struct {
-	Stream   string // name of stream
-	Key      []byte // subtype or key
+	Stream   Stream
 	Want     []byte // bitvector indicating which keys of the batch needed
 	From, To uint64 // next interval offset - empty if not to be continued
 }
@@ -200,8 +250,8 @@ func (m WantedHashesMsg) String() string {
 // * sends the next batch of unsynced keys
 // * sends the actual data chunks as per WantedHashesMsg
 func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
-	log.Trace("received wanted batch", "peer", p.ID(), "stream", req.Stream, "Key", req.Key, "from", req.From, "to", req.To)
-	s, err := p.getServer(req.Stream + keyToString(req.Key))
+	log.Trace("received wanted batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
+	s, err := p.getServer(req.Stream)
 	if err != nil {
 		return err
 	}
@@ -237,7 +287,7 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 
 // Handover represents a statement that the upstream peer hands over the stream section
 type Handover struct {
-	Stream     string // name of stream
+	Stream     Stream // name of stream
 	Start, End uint64 // index of hashes
 	Root       []byte // Root hash for indexed segment inclusion proofs
 }
