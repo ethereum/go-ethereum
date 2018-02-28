@@ -17,7 +17,6 @@
 package mailserver
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 
@@ -175,7 +174,10 @@ func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) 
 	if len(src)-len(peerID) == 1 {
 		src = src[1:]
 	}
-	if !bytes.Equal(peerID, src) {
+
+	// if you want to check the signature, you can do it here. e.g.:
+	// if !bytes.Equal(peerID, src) {
+	if src == nil {
 		log.Warn(fmt.Sprintf("Wrong signature of p2p request"))
 		return false, 0, 0, topic
 	}
