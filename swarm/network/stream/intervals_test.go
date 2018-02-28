@@ -131,150 +131,138 @@ func testIntervals(t *testing.T, live bool, history *Range) {
 			}
 		}
 
-		liveHashesChan := make(chan []byte)
-		historyHashesChan := make(chan []byte)
-
-		var historySubscription *rpc.ClientSubscription
-		var liveSubscription *rpc.ClientSubscription
-
 		id := sim.IDs[1]
+
 		err := sim.CallClient(id, func(client *rpc.Client) error {
+
+			sid := sim.IDs[0]
+
 			err := streamTesting.WatchDisconnections(id, client, errc, quitC)
 			if err != nil {
 				return err
 			}
 			ctx, cancel := context.WithTimeout(ctx, 100*time.Second)
 			defer cancel()
-			sid := sim.IDs[0]
 
 			err = client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(externalStreamName, nil, live), history, Top)
 			if err != nil {
 				return err
 			}
 
-			liveSubErrC := make(chan error)
-			historySubErrC := make(chan error)
+			liveErrC := make(chan error)
+			historyErrC := make(chan error)
 
 			go func() {
-				if live {
-					var err error
-					defer func() { liveSubErrC <- err }()
-					// live stream
-					liveSubscription, err = client.Subscribe(ctx, "stream", liveHashesChan, "getHashes", sid, NewStream(externalStreamName, nil, true))
-					if err != nil {
+				if !live {
+					close(liveErrC)
+					return
+				}
+
+				var err error
+				defer func() {
+					liveErrC <- err
+				}()
+
+				// live stream
+				liveHashesChan := make(chan []byte)
+				liveSubscription, err := client.Subscribe(ctx, "stream", liveHashesChan, "getHashes", sid, NewStream(externalStreamName, nil, true))
+				if err != nil {
+					return
+				}
+				defer liveSubscription.Unsubscribe()
+
+				i := externalStreamSessionAt
+
+				// we have subscribed, enable notifications
+				err = client.CallContext(ctx, nil, "stream_enableNotifications", sid, NewStream(externalStreamName, nil, true))
+				if err != nil {
+					return
+				}
+
+				for {
+					select {
+					case hash := <-liveHashesChan:
+						h := binary.BigEndian.Uint64(hash)
+						if h != i {
+							err = fmt.Errorf("expected live hash %d, got %d", i, h)
+							return
+						}
+						i++
+						if i > externalStreamMaxKeys {
+							return
+						}
+					case err = <-liveSubscription.Err():
+						return
+					case <-ctx.Done():
 						return
 					}
-					// we have got the channel, enable notifications
-					err = client.CallContext(ctx, nil, "stream_enableNotifications", sid, NewStream(externalStreamName, nil, true))
-				} else {
-					close(liveSubErrC)
 				}
 			}()
 
 			go func() {
-				if !live || history != nil {
-					var err error
-					defer func() { historySubErrC <- err }()
+				if live && history == nil {
+					close(historyErrC)
+					return
+				}
 
-					// history stream
-					historySubscription, err = client.Subscribe(ctx, "stream", historyHashesChan, "getHashes", sid, NewStream(externalStreamName, nil, false))
-					if err != nil {
+				var err error
+				defer func() {
+					historyErrC <- err
+				}()
+
+				// history stream
+				historyHashesChan := make(chan []byte)
+				historySubscription, err := client.Subscribe(ctx, "stream", historyHashesChan, "getHashes", sid, NewStream(externalStreamName, nil, false))
+				if err != nil {
+					return
+				}
+				defer historySubscription.Unsubscribe()
+
+				var i uint64
+				historyTo := externalStreamMaxKeys
+				if history != nil {
+					i = history.From
+					if history.To != 0 {
+						historyTo = history.To
+					}
+				}
+
+				// we have subscribed, enable notifications
+				err = client.CallContext(ctx, nil, "stream_enableNotifications", sid, NewStream(externalStreamName, nil, false))
+				if err != nil {
+					return
+				}
+
+				for {
+					select {
+					case hash := <-historyHashesChan:
+						h := binary.BigEndian.Uint64(hash)
+						if h != i {
+							err = fmt.Errorf("expected history hash %d, got %d", i, h)
+							return
+						}
+						i++
+						if i > historyTo {
+							return
+						}
+					case err = <-historySubscription.Err():
+						return
+					case <-ctx.Done():
 						return
 					}
-					// we have got the channel, enable notifications
-					err = client.CallContext(ctx, nil, "stream_enableNotifications", sid, NewStream(externalStreamName, nil, false))
-				} else {
-					close(historySubErrC)
 				}
 			}()
 
-			if err := <-liveSubErrC; err != nil {
+			if err := <-liveErrC; err != nil {
 				return err
 			}
-			if err := <-historySubErrC; err != nil {
+			if err := <-historyErrC; err != nil {
 				return err
 			}
 
 			return nil
 		})
-		if err != nil {
-			return err
-		}
-
-		historyErrC := make(chan error)
-
-		go func() {
-			defer close(historyErrC)
-
-			if historySubscription == nil {
-				return
-			}
-
-			defer historySubscription.Unsubscribe()
-
-			i := history.From
-			historyTo := externalStreamMaxKeys
-			if history != nil && history.To != 0 {
-				historyTo = history.To
-			}
-
-			for {
-				select {
-				case hash := <-historyHashesChan:
-					h := binary.BigEndian.Uint64(hash)
-					if h != i {
-						historyErrC <- fmt.Errorf("expected history hash %d, got %d", i, h)
-						return
-					}
-					i++
-					if i > historyTo {
-						return
-					}
-				case err := <-historySubscription.Err():
-					historyErrC <- err
-				case <-ctx.Done():
-					return
-				}
-			}
-		}()
-
-		liveErrC := make(chan error)
-
-		go func() {
-			defer close(liveErrC)
-
-			if liveSubscription == nil {
-				return
-			}
-
-			defer liveSubscription.Unsubscribe()
-
-			i := externalStreamSessionAt
-
-			for {
-				select {
-				case hash := <-liveHashesChan:
-					h := binary.BigEndian.Uint64(hash)
-					if h != i {
-						liveErrC <- fmt.Errorf("expected live hash %d, got %d", i, h)
-						return
-					}
-					i++
-					if i > externalStreamMaxKeys {
-						return
-					}
-				case err := <-liveSubscription.Err():
-					errc <- err
-				case <-ctx.Done():
-					return
-				}
-			}
-		}()
-
-		if err = <-historyErrC; err != nil {
-			return err
-		}
-		return <-liveErrC
+		return err
 	}
 	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {

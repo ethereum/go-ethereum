@@ -232,6 +232,11 @@ func (r *TestExternalRegistry) GetHashes(ctx context.Context, peerId discover.No
 	sub := notifier.CreateSubscription()
 
 	go func() {
+		// if we begin sending event immediately some events
+		// will probably be dropped since the subscription ID might not be send to
+		// the client.
+		// ref: rpc/subscription_test.go#L65
+		time.Sleep(1 * time.Second)
 		for {
 			select {
 			case h := <-c.hashes:
