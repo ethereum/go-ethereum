@@ -75,10 +75,6 @@ func TestWhisperBasic(t *testing.T) {
 	if len(mail) != 0 {
 		t.Fatalf("failed w.Envelopes().")
 	}
-	m := w.Messages("non-existent")
-	if len(m) != 0 {
-		t.Fatalf("failed w.Messages.")
-	}
 
 	derived := pbkdf2.Key([]byte(peerID), nil, 65356, aesKeyLength, sha256.New)
 	if !validateDataIntegrity(derived, aesKeyLength) {
@@ -593,7 +589,7 @@ func TestCustomization(t *testing.T) {
 	}
 
 	// check w.messages()
-	id, err := w.Subscribe(f)
+	_, err = w.Subscribe(f)
 	if err != nil {
 		t.Fatalf("failed subscribe with seed %d: %s.", seed, err)
 	}
@@ -601,11 +597,6 @@ func TestCustomization(t *testing.T) {
 	mail := f.Retrieve()
 	if len(mail) > 0 {
 		t.Fatalf("received premature mail")
-	}
-
-	mail = w.Messages(id)
-	if len(mail) != 2 {
-		t.Fatalf("failed to get whisper messages")
 	}
 }
 
