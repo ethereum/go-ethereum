@@ -542,7 +542,7 @@ func TestCustomization(t *testing.T) {
 
 	const smallPoW = 0.00001
 
-	f, err := generateFilter(t, true)
+	f, err := generateFilter(true)
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
@@ -636,7 +636,7 @@ func TestSymmetricSendCycle(t *testing.T) {
 	w.Start(nil)
 	defer w.Stop()
 
-	filter1, err := generateFilter(t, true)
+	filter1, err := generateFilter(true)
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
@@ -725,7 +725,7 @@ func TestSymmetricSendWithoutAKey(t *testing.T) {
 	w.Start(nil)
 	defer w.Stop()
 
-	filter, err := generateFilter(t, true)
+	filter, err := generateFilter(true)
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
@@ -793,7 +793,7 @@ func TestSymmetricSendKeyMismatch(t *testing.T) {
 	w.Start(nil)
 	defer w.Stop()
 
-	filter, err := generateFilter(t, true)
+	filter, err := generateFilter(true)
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}

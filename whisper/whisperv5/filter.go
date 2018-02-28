@@ -26,6 +26,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+const (
+	ALL_TOPICS        = ""
+	MAX_POOL_CAPACITY = 1000
+)
+
 type Filter struct {
 	Src        *ecdsa.PublicKey  // Sender of the message
 	KeyAsym    *ecdsa.PrivateKey // Private Key of recipient
@@ -40,16 +45,19 @@ type Filter struct {
 }
 
 type Filters struct {
-	watchers map[string]*Filter
-	whisper  *Whisper
-	mutex    sync.RWMutex
+	watchers     map[string]*Filter
+	whisper      *Whisper
+	mutex        sync.RWMutex
+	topicMatcher *topicMatcher
 }
 
 func NewFilters(w *Whisper) *Filters {
-	return &Filters{
-		watchers: make(map[string]*Filter),
-		whisper:  w,
+	fs := &Filters{
+		watchers:     make(map[string]*Filter),
+		whisper:      w,
+		topicMatcher: newTopicMatcher(),
 	}
+	return fs
 }
 
 func (fs *Filters) Install(watcher *Filter) (string, error) {
@@ -74,6 +82,7 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 	}
 
 	fs.watchers[id] = watcher
+	fs.topicMatcher.addFilterToTopicsMapping(watcher, id)
 	return id, err
 }
 
@@ -82,6 +91,7 @@ func (fs *Filters) Uninstall(id string) bool {
 	defer fs.mutex.Unlock()
 	if fs.watchers[id] != nil {
 		delete(fs.watchers, id)
+		fs.topicMatcher.removeTopicFromTopicMapping(id)
 		return true
 	}
 	return false
@@ -95,15 +105,22 @@ func (fs *Filters) Get(id string) *Filter {
 
 func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 	var msg *ReceivedMessage
+	matchedTopics := fs.topicMatcher.take()
+	defer fs.topicMatcher.resolve(matchedTopics)
 
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 
-	i := -1 // only used for logging info
-	for _, watcher := range fs.watchers {
-		i++
+	fs.topicMatcher.matchedTopics(env.Topic, &matchedTopics)
+	for _, watcherID := range matchedTopics {
+		watcher, ok := fs.watchers[watcherID]
+		if !ok {
+			log.Trace(fmt.Sprintf("msg [%x], filter [%s]: filter not exists", env.Hash(), watcherID))
+			continue
+		}
+
 		if p2pMessage && !watcher.AllowP2P {
-			log.Trace(fmt.Sprintf("msg [%x], filter [%d]: p2p messages are not allowed", env.Hash(), i))
+			log.Trace(fmt.Sprintf("msg [%x], filter [%s]: p2p messages are not allowed", env.Hash(), watcherID))
 			continue
 		}
 
@@ -115,10 +132,10 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 			if match {
 				msg = env.Open(watcher)
 				if msg == nil {
-					log.Trace("processing message: failed to open", "message", env.Hash().Hex(), "filter", i)
+					log.Trace("processing message: failed to open", "message", env.Hash().Hex(), "filter", watcherID)
 				}
 			} else {
-				log.Trace("processing message: does not match", "message", env.Hash().Hex(), "filter", i)
+				log.Trace("processing message: does not match", "message", env.Hash().Hex(), "filter", watcherID)
 			}
 		}
 
@@ -181,9 +198,9 @@ func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 	}
 
 	if f.expectsAsymmetricEncryption() && msg.isAsymmetricEncryption() {
-		return IsPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst) && f.MatchTopic(msg.Topic)
+		return IsPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst)
 	} else if f.expectsSymmetricEncryption() && msg.isSymmetricEncryption() {
-		return f.SymKeyHash == msg.SymKeyHash && f.MatchTopic(msg.Topic)
+		return f.SymKeyHash == msg.SymKeyHash
 	}
 	return false
 }
@@ -194,42 +211,11 @@ func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
 	}
 
 	if f.expectsAsymmetricEncryption() && envelope.isAsymmetric() {
-		return f.MatchTopic(envelope.Topic)
+		return true
 	} else if f.expectsSymmetricEncryption() && envelope.IsSymmetric() {
-		return f.MatchTopic(envelope.Topic)
-	}
-	return false
-}
-
-func (f *Filter) MatchTopic(topic TopicType) bool {
-	if len(f.Topics) == 0 {
-		// any topic matches
 		return true
 	}
-
-	for _, bt := range f.Topics {
-		if matchSingleTopic(topic, bt) {
-			return true
-		}
-	}
 	return false
-}
-
-func matchSingleTopic(topic TopicType, bt []byte) bool {
-	if len(bt) > TopicLength {
-		bt = bt[:TopicLength]
-	}
-
-	if len(bt) < TopicLength {
-		return false
-	}
-
-	for j, b := range bt {
-		if topic[j] != b {
-			return false
-		}
-	}
-	return true
 }
 
 func IsPubKeyEqual(a, b *ecdsa.PublicKey) bool {
@@ -240,4 +226,92 @@ func IsPubKeyEqual(a, b *ecdsa.PublicKey) bool {
 	}
 	// the curve is always the same, just compare the points
 	return a.X.Cmp(b.X) == 0 && a.Y.Cmp(b.Y) == 0
+}
+
+//topicMatcher keeps topic->watcher mapping
+type topicMatcher struct {
+	//structure - map[topic]map[filterID]
+	//mapping for topics
+	//"" topic means that the filter allows all topic values
+	mapper map[string]map[string]struct{}
+	mx     sync.RWMutex
+	pool   sync.Pool
+}
+
+//newTopicMatcher returns a newly created topic matcher
+func newTopicMatcher() *topicMatcher {
+	tm := new(topicMatcher)
+	tm.mapper = make(map[string]map[string]struct{})
+	tm.mapper[ALL_TOPICS] = make(map[string]struct{})
+	tm.pool.New = func() interface{} {
+		return []string{}
+	}
+	return tm
+}
+
+//take returns []string from pool
+func (fs *topicMatcher) take() []string {
+	return fs.pool.Get().([]string)
+}
+
+//resolve put []string to pool
+func (fs *topicMatcher) resolve(s []string) {
+	if cap(s) > MAX_POOL_CAPACITY {
+		return
+	}
+	fs.pool.Put(s[:0])
+}
+
+//addFilterToTopicsMapping fill topic->watcher mapping for current watcher
+func (fs *topicMatcher) addFilterToTopicsMapping(watcher *Filter, id string) {
+	fs.mx.Lock()
+	defer fs.mx.Unlock()
+
+	for i := range fs.prepareTopicsMapping(watcher) {
+		topicMapping, ok := fs.mapper[i]
+		if !ok {
+			fs.mapper[i] = make(map[string]struct{})
+			topicMapping = fs.mapper[i]
+		}
+		topicMapping[id] = struct{}{}
+	}
+}
+
+//removeTopicFromTopicMapping removes mapping info by filterID
+func (fs *topicMatcher) removeTopicFromTopicMapping(id string) {
+	fs.mx.Lock()
+	defer fs.mx.Unlock()
+	for i := range fs.mapper {
+		delete(fs.mapper[i], id)
+	}
+}
+
+//prepareTopicsMapping returns set of topics for watcher
+func (fs *topicMatcher) prepareTopicsMapping(watcher *Filter) map[string]struct{} {
+	topics := make(map[string]struct{}, len(watcher.Topics))
+
+	if len(watcher.Topics) == 0 {
+		topics[ALL_TOPICS] = struct{}{}
+		return topics
+	}
+
+	for _, topic := range watcher.Topics {
+		topics[common.ToHex(topic)] = struct{}{}
+	}
+
+	return topics
+}
+
+//matchedTopics write all matched topics to matched
+func (fs *topicMatcher) matchedTopics(topic TopicType, matched *[]string) {
+	fs.mx.RLock()
+	defer fs.mx.RUnlock()
+
+	for i := range fs.mapper[ALL_TOPICS] {
+		*matched = append(*matched, i)
+	}
+
+	for i := range fs.mapper[topic.String()] {
+		*matched = append(*matched, i)
+	}
 }
