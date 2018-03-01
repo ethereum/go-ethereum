@@ -1,3 +1,5 @@
+// +build amd64,!appengine,!gccgo
+
 #include "gfp.h"
 #include "mul.h"
 #include "mul_bmi2.h"

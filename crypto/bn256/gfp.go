@@ -1,6 +1,9 @@
 package bn256
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 type gfP [4]uint64
 
@@ -55,25 +58,24 @@ func (e *gfP) Marshal(out []byte) {
 	}
 }
 
-func (e *gfP) Unmarshal(in []byte) {
+func (e *gfP) Unmarshal(in []byte) error {
+	// Unmarshal the bytes into little endian form
 	for w := uint(0); w < 4; w++ {
 		for b := uint(0); b < 8; b++ {
 			e[3-w] += uint64(in[8*w+b]) << (56 - 8*b)
 		}
 	}
+	// Ensure the point respects the curve modulus
+	for i := 3; i >= 0; i-- {
+		if e[i] < p2[i] {
+			return nil
+		}
+		if e[i] > p2[i] {
+			return errors.New("bn256: coordinate exceeds modulus")
+		}
+	}
+	return errors.New("bn256: coordinate equals modulus")
 }
 
 func montEncode(c, a *gfP) { gfpMul(c, a, r2) }
 func montDecode(c, a *gfP) { gfpMul(c, a, &gfP{1}) }
-
-// go:noescape
-func gfpNeg(c, a *gfP)
-
-//go:noescape
-func gfpAdd(c, a, b *gfP)
-
-//go:noescape
-func gfpSub(c, a, b *gfP)
-
-//go:noescape
-func gfpMul(c, a, b *gfP)
