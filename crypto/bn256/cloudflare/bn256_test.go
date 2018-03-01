@@ -1,3 +1,5 @@
+// +build amd64,!appengine,!gccgo
+
 package bn256
 
 import (
