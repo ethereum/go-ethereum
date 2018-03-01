@@ -932,7 +932,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 					}
 				}
 				// If optimum or critical limits reached, write to disk
-				if chosen >= lastWrite+triesInMemory || size >= 2*limit || bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
+				if chosen >= lastWrite+triesInMemory || size >= limit || bc.gcproc >= bc.cacheConfig.TrieTimeLimit {
 					triedb.Commit(header.Root, true)
 					lastWrite = chosen
 					bc.gcproc = 0
