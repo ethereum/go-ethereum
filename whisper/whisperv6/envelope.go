@@ -249,7 +249,7 @@ func (e *Envelope) Bloom() []byte {
 
 // TopicToBloom converts the topic (4 bytes) to the bloom filter (64 bytes)
 func TopicToBloom(topic TopicType) []byte {
-	b := make([]byte, bloomFilterSize)
+	b := make([]byte, BloomFilterSize)
 	var index [3]int
 	for j := 0; j < 3; j++ {
 		index[j] = int(topic[j])

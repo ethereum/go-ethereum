@@ -22,6 +22,7 @@ package main
 import (
 	"bufio"
 	"crypto/ecdsa"
+	crand "crypto/rand"
 	"crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
@@ -48,6 +49,7 @@ import (
 )
 
 const quitCommand = "~Q"
+const entropySize = 32
 
 // singletons
 var (
@@ -55,6 +57,7 @@ var (
 	shh        *whisper.Whisper
 	done       chan struct{}
 	mailServer mailserver.WMailServer
+	entropy    [entropySize]byte
 
 	input = bufio.NewReader(os.Stdin)
 )
@@ -273,6 +276,11 @@ func initialize() {
 			StaticNodes:    peers,
 			TrustedNodes:   peers,
 		},
+	}
+
+	_, err = crand.Read(entropy[:])
+	if err != nil {
+		utils.Fatalf("crypto/rand failed: %s", err)
 	}
 }
 
@@ -614,10 +622,10 @@ func writeMessageToFile(dir string, msg *whisper.ReceivedMessage) {
 }
 
 func requestExpiredMessagesLoop() {
-	var key, peerID []byte
+	var key, peerID, bloom []byte
 	var timeLow, timeUpp uint32
 	var t string
-	var xt, empty whisper.TopicType
+	var xt whisper.TopicType
 
 	keyID, err := shh.AddSymKeyFromPassword(msPassword)
 	if err != nil {
@@ -640,18 +648,19 @@ func requestExpiredMessagesLoop() {
 				utils.Fatalf("Failed to parse the topic: %s", err)
 			}
 			xt = whisper.BytesToTopic(x)
+			bloom = whisper.TopicToBloom(xt)
+			obfuscateBloom(bloom)
+		} else {
+			bloom = whisper.MakeFullNodeBloom()
 		}
 		if timeUpp == 0 {
 			timeUpp = 0xFFFFFFFF
 		}
 
-		data := make([]byte, 8+whisper.TopicLength)
+		data := make([]byte, 8, 8+whisper.BloomFilterSize)
 		binary.BigEndian.PutUint32(data, timeLow)
 		binary.BigEndian.PutUint32(data[4:], timeUpp)
-		copy(data[8:], xt[:])
-		if xt == empty {
-			data = data[:8]
-		}
+		data = append(data, bloom...)
 
 		var params whisper.MessageParams
 		params.PoW = *argServerPoW
@@ -684,4 +693,21 @@ func extractIDFromEnode(s string) []byte {
 		utils.Fatalf("Failed to parse enode: %s", err)
 	}
 	return n.ID[:]
+}
+
+// obfuscateBloom adds 16 random bits to the the bloom
+// filter, in order to obfuscate the containing topics.
+// it does so deterministically within every session.
+// despite additional bits, it will match on average
+// 32000 times less messages than full node's bloom filter.
+func obfuscateBloom(bloom []byte) {
+	const half = entropySize / 2
+	for i := 0; i < half; i++ {
+		x := int(entropy[i])
+		if entropy[half+i] < 128 {
+			x += 256
+		}
+
+		bloom[x/8] = 1 << uint(x%8) // set the bit number X
+	}
 }
