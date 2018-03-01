@@ -26,19 +26,6 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go test -coverage
 
-    - os: linux
-      dist: trusty
-      sudo: required
-      go: 1.9.x
-      env:
-        - 386
-      script:
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
-        - GOARCH=386 go run build/ci.go install
-        - GOARCH=386 go run build/ci.go test -coverage
-
     - os: osx
       go: 1.9.x
       script:
