@@ -43,7 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/whisper/mailserver"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -61,27 +61,29 @@ var (
 
 // encryption
 var (
-	symKey     []byte
-	pub        *ecdsa.PublicKey
-	asymKey    *ecdsa.PrivateKey
-	nodeid     *ecdsa.PrivateKey
-	topic      whisper.TopicType
-	asymKeyID  string
-	filterID   string
-	symPass    string
-	msPassword string
+	symKey  []byte
+	pub     *ecdsa.PublicKey
+	asymKey *ecdsa.PrivateKey
+	nodeid  *ecdsa.PrivateKey
+	topic   whisper.TopicType
+
+	asymKeyID    string
+	asymFilterID string
+	symFilterID  string
+	symPass      string
+	msPassword   string
 )
 
 // cmd arguments
 var (
-	bootstrapMode  = flag.Bool("standalone", false, "boostrap node: don't actively connect to peers, wait for incoming connections")
-	forwarderMode  = flag.Bool("forwarder", false, "forwarder mode: only forward messages, neither send nor decrypt messages")
+	bootstrapMode  = flag.Bool("standalone", false, "boostrap node: don't initiate connection to peers, just wait for incoming connections")
+	forwarderMode  = flag.Bool("forwarder", false, "forwarder mode: only forward messages, neither encrypt nor decrypt messages")
 	mailServerMode = flag.Bool("mailserver", false, "mail server mode: delivers expired messages on demand")
 	requestMail    = flag.Bool("mailclient", false, "request expired messages from the bootstrap server")
 	asymmetricMode = flag.Bool("asym", false, "use asymmetric encryption")
 	generateKey    = flag.Bool("generatekey", false, "generate and show the private key")
 	fileExMode     = flag.Bool("fileexchange", false, "file exchange mode")
-	testMode       = flag.Bool("test", false, "use of predefined parameters for diagnostics")
+	testMode       = flag.Bool("test", false, "use of predefined parameters for diagnostics (password, etc.)")
 	echoMode       = flag.Bool("echo", false, "echo mode: prints some arguments for diagnostics")
 
 	argVerbosity = flag.Int("verbosity", int(log.LvlError), "log verbosity level")
@@ -97,7 +99,7 @@ var (
 	argIDFile  = flag.String("idfile", "", "file name with node id (private key)")
 	argEnode   = flag.String("boot", "", "bootstrap node you want to connect to (e.g. enode://e454......08d50@52.176.211.200:16428)")
 	argTopic   = flag.String("topic", "", "topic in hexadecimal format (e.g. 70a4beef)")
-	argSaveDir = flag.String("savedir", "", "directory where incoming messages will be saved as files")
+	argSaveDir = flag.String("savedir", "", "directory where all incoming messages will be saved as files")
 )
 
 func main() {
@@ -263,7 +265,7 @@ func initialize() {
 		Config: p2p.Config{
 			PrivateKey:     nodeid,
 			MaxPeers:       maxPeers,
-			Name:           common.MakeName("wnode", "5.0"),
+			Name:           common.MakeName("wnode", "6.0"),
 			Protocols:      shh.Protocols(),
 			ListenAddr:     *argIP,
 			NAT:            nat.Any(),
@@ -363,13 +365,22 @@ func configureNode() {
 		}
 	}
 
-	filter := whisper.Filter{
+	symFilter := whisper.Filter{
 		KeySym:   symKey,
+		Topics:   [][]byte{topic[:]},
+		AllowP2P: p2pAccept,
+	}
+	symFilterID, err = shh.Subscribe(&symFilter)
+	if err != nil {
+		utils.Fatalf("Failed to install filter: %s", err)
+	}
+
+	asymFilter := whisper.Filter{
 		KeyAsym:  asymKey,
 		Topics:   [][]byte{topic[:]},
 		AllowP2P: p2pAccept,
 	}
-	filterID, err = shh.Subscribe(&filter)
+	asymFilterID, err = shh.Subscribe(&asymFilter)
 	if err != nil {
 		utils.Fatalf("Failed to install filter: %s", err)
 	}
@@ -522,9 +533,14 @@ func sendMsg(payload []byte) common.Hash {
 }
 
 func messageLoop() {
-	f := shh.GetFilter(filterID)
-	if f == nil {
-		utils.Fatalf("filter is not installed")
+	sf := shh.GetFilter(symFilterID)
+	if sf == nil {
+		utils.Fatalf("symmetric filter is not installed")
+	}
+
+	af := shh.GetFilter(asymFilterID)
+	if af == nil {
+		utils.Fatalf("asymmetric filter is not installed")
 	}
 
 	ticker := time.NewTicker(time.Millisecond * 50)
@@ -532,11 +548,18 @@ func messageLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			messages := f.Retrieve()
+			m1 := sf.Retrieve()
+			m2 := af.Retrieve()
+			messages := append(m1, m2...)
 			for _, msg := range messages {
-				if *fileExMode || len(msg.Payload) > 2048 {
+				// All messages are saved upon specifying argSaveDir.
+				// fileExMode only specifies how messages are displayed on the console after they are saved.
+				// if fileExMode == true, only the hashes are displayed, since messages might be too big.
+				if len(*argSaveDir) > 0 {
 					writeMessageToFile(*argSaveDir, msg)
-				} else {
+				}
+
+				if !*fileExMode && len(msg.Payload) <= 2048 {
 					printMessageInfo(msg)
 				}
 			}
@@ -571,19 +594,22 @@ func writeMessageToFile(dir string, msg *whisper.ReceivedMessage) {
 		address = crypto.PubkeyToAddress(*msg.Src)
 	}
 
-	if whisper.IsPubKeyEqual(msg.Src, &asymKey.PublicKey) {
-		// message from myself: don't save, only report
-		fmt.Printf("\n%s <%x>: message received: '%s'\n", timestamp, address, name)
-	} else if len(dir) > 0 {
+	// this is a sample code; uncomment if you don't want to save your own messages.
+	//if whisper.IsPubKeyEqual(msg.Src, &asymKey.PublicKey) {
+	//	fmt.Printf("\n%s <%x>: message from myself received, not saved: '%s'\n", timestamp, address, name)
+	//	return
+	//}
+
+	if len(dir) > 0 {
 		fullpath := filepath.Join(dir, name)
-		err := ioutil.WriteFile(fullpath, msg.Payload, 0644)
+		err := ioutil.WriteFile(fullpath, msg.Raw, 0644)
 		if err != nil {
 			fmt.Printf("\n%s {%x}: message received but not saved: %s\n", timestamp, address, err)
 		} else {
-			fmt.Printf("\n%s {%x}: message received and saved as '%s' (%d bytes)\n", timestamp, address, name, len(msg.Payload))
+			fmt.Printf("\n%s {%x}: message received and saved as '%s' (%d bytes)\n", timestamp, address, name, len(msg.Raw))
 		}
 	} else {
-		fmt.Printf("\n%s {%x}: big message received (%d bytes), but not saved: %s\n", timestamp, address, len(msg.Payload), name)
+		fmt.Printf("\n%s {%x}: message received (%d bytes), but not saved: %s\n", timestamp, address, len(msg.Raw), name)
 	}
 }
 
@@ -631,7 +657,7 @@ func requestExpiredMessagesLoop() {
 		params.PoW = *argServerPoW
 		params.Payload = data
 		params.KeySym = key
-		params.Src = nodeid
+		params.Src = asymKey
 		params.WorkTime = 5
 
 		msg, err := whisper.NewSentMessage(&params)

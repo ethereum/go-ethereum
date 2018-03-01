@@ -75,10 +75,6 @@ func TestWhisperBasic(t *testing.T) {
 	if len(mail) != 0 {
 		t.Fatalf("failed w.Envelopes().")
 	}
-	m := w.Messages("non-existent")
-	if len(m) != 0 {
-		t.Fatalf("failed w.Messages.")
-	}
 
 	derived := pbkdf2.Key([]byte(peerID), nil, 65356, aesKeyLength, sha256.New)
 	if !validateDataIntegrity(derived, aesKeyLength) {
@@ -471,7 +467,7 @@ func TestExpiry(t *testing.T) {
 	}
 
 	params.TTL = 1
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -537,7 +533,7 @@ func TestCustomization(t *testing.T) {
 	params.Topic = BytesToTopic(f.Topics[2])
 	params.PoW = smallPoW
 	params.TTL = 3600 * 24 // one day
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -558,7 +554,7 @@ func TestCustomization(t *testing.T) {
 	}
 
 	params.TTL++
-	msg, err = newSentMessage(params)
+	msg, err = NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -593,7 +589,7 @@ func TestCustomization(t *testing.T) {
 	}
 
 	// check w.messages()
-	id, err := w.Subscribe(f)
+	_, err = w.Subscribe(f)
 	if err != nil {
 		t.Fatalf("failed subscribe with seed %d: %s.", seed, err)
 	}
@@ -601,11 +597,6 @@ func TestCustomization(t *testing.T) {
 	mail := f.Retrieve()
 	if len(mail) > 0 {
 		t.Fatalf("received premature mail")
-	}
-
-	mail = w.Messages(id)
-	if len(mail) != 2 {
-		t.Fatalf("failed to get whisper messages")
 	}
 }
 
@@ -647,7 +638,7 @@ func TestSymmetricSendCycle(t *testing.T) {
 	params.PoW = filter1.PoW
 	params.WorkTime = 10
 	params.TTL = 50
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -725,7 +716,7 @@ func TestSymmetricSendWithoutAKey(t *testing.T) {
 	params.PoW = filter.PoW
 	params.WorkTime = 10
 	params.TTL = 50
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
@@ -791,7 +782,7 @@ func TestSymmetricSendKeyMismatch(t *testing.T) {
 	params.PoW = filter.PoW
 	params.WorkTime = 10
 	params.TTL = 50
-	msg, err := newSentMessage(params)
+	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}

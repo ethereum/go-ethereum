@@ -82,6 +82,8 @@ type Whisper struct {
 
 	syncAllowance int // maximum time in seconds allowed to process the whisper-related messages
 
+	lightClient bool // indicates is this node is pure light client (does not forward any messages)
+
 	statsMu sync.Mutex // guard stats
 	stats   Statistics // Statistics of whisper node
 
@@ -587,11 +589,8 @@ func (whisper *Whisper) Unsubscribe(id string) error {
 // Send injects a message into the whisper send queue, to be distributed in the
 // network in the coming cycles.
 func (whisper *Whisper) Send(envelope *Envelope) error {
-	ok, err := whisper.add(envelope)
-	if err != nil {
-		return err
-	}
-	if !ok {
+	ok, err := whisper.add(envelope, false)
+	if err == nil && !ok {
 		return fmt.Errorf("failed to add envelope")
 	}
 	return err
@@ -673,7 +672,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 
 			trouble := false
 			for _, env := range envelopes {
-				cached, err := whisper.add(env)
+				cached, err := whisper.add(env, whisper.lightClient)
 				if err != nil {
 					trouble = true
 					log.Error("bad envelope received, peer will be disconnected", "peer", p.peer.ID(), "err", err)
@@ -710,11 +709,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				log.Warn("failed to decode bloom filter exchange message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
 				return errors.New("invalid bloom filter exchange message")
 			}
-			if isFullNode(bloom) {
-				p.bloomFilter = nil
-			} else {
-				p.bloomFilter = bloom
-			}
+			p.setBloomFilter(bloom)
 		case p2pMessageCode:
 			// peer-to-peer message, sent directly to peer bypassing PoW checks, etc.
 			// this message is not supposed to be forwarded to other peers, and
@@ -750,7 +745,8 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 // add inserts a new envelope into the message pool to be distributed within the
 // whisper network. It also inserts the envelope into the expiration pool at the
 // appropriate time-stamp. In case of error, connection should be dropped.
-func (whisper *Whisper) add(envelope *Envelope) (bool, error) {
+// param isP2P indicates whether the message is peer-to-peer (should not be forwarded).
+func (whisper *Whisper) add(envelope *Envelope, isP2P bool) (bool, error) {
 	now := uint32(time.Now().Unix())
 	sent := envelope.Expiry - envelope.TTL
 
@@ -815,7 +811,7 @@ func (whisper *Whisper) add(envelope *Envelope) (bool, error) {
 		whisper.statsMu.Lock()
 		whisper.stats.memoryUsed += envelope.size()
 		whisper.statsMu.Unlock()
-		whisper.postEvent(envelope, false) // notify the local node about the new message
+		whisper.postEvent(envelope, isP2P) // notify the local node about the new message
 		if whisper.mailServer != nil {
 			whisper.mailServer.Archive(envelope)
 		}
@@ -932,24 +928,6 @@ func (whisper *Whisper) Envelopes() []*Envelope {
 	return all
 }
 
-// Messages iterates through all currently floating envelopes
-// and retrieves all the messages, that this filter could decrypt.
-func (whisper *Whisper) Messages(id string) []*ReceivedMessage {
-	result := make([]*ReceivedMessage, 0)
-	whisper.poolMu.RLock()
-	defer whisper.poolMu.RUnlock()
-
-	if filter := whisper.filters.Get(id); filter != nil {
-		for _, env := range whisper.envelopes {
-			msg := filter.processEnvelope(env)
-			if msg != nil {
-				result = append(result, msg)
-			}
-		}
-	}
-	return result
-}
-
 // isEnvelopeCached checks if envelope with specific hash has already been received and cached.
 func (whisper *Whisper) isEnvelopeCached(hash common.Hash) bool {
 	whisper.poolMu.Lock()
@@ -1049,7 +1027,6 @@ func isFullNode(bloom []byte) bool {
 
 func bloomFilterMatch(filter, sample []byte) bool {
 	if filter == nil {
-		// full node, accepts all messages
 		return true
 	}
 

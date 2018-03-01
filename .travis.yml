@@ -6,17 +6,6 @@ matrix:
     - os: linux
       dist: trusty
       sudo: required
-      go: 1.7.x
-      script:
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage
-
-    - os: linux
-      dist: trusty
-      sudo: required
       go: 1.8.x
       script:
         - sudo modprobe fuse
@@ -185,6 +174,8 @@ matrix:
         - xctool -version
         - xcrun simctl list
 
+        # Workaround for https://github.com/golang/go/issues/23749
+        - export CGO_CFLAGS_ALLOW='-fmodules|-fblocks|-fobjc-arc'
         - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
     # This builder does the Azure archive purges to avoid accumulating junk

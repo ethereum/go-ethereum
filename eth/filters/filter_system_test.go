@@ -69,8 +69,19 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 }
 
 func (b *testBackend) GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
-	num := core.GetBlockNumber(b.db, blockHash)
-	return core.GetBlockReceipts(b.db, blockHash, num), nil
+	number := core.GetBlockNumber(b.db, blockHash)
+	return core.GetBlockReceipts(b.db, blockHash, number), nil
+}
+
+func (b *testBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
+	number := core.GetBlockNumber(b.db, blockHash)
+	receipts := core.GetBlockReceipts(b.db, blockHash, number)
+
+	logs := make([][]*types.Log, len(receipts))
+	for i, receipt := range receipts {
+		logs[i] = receipt.Logs
+	}
+	return logs, nil
 }
 
 func (b *testBackend) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {

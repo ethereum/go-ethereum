@@ -100,7 +100,6 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	if cp, ok := trustedCheckpoints[bc.genesisBlock.Hash()]; ok {
 		bc.addTrustedCheckpoint(cp)
 	}
-
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
@@ -128,7 +127,7 @@ func (self *LightChain) addTrustedCheckpoint(cp trustedCheckpoint) {
 	if self.odr.BloomIndexer() != nil {
 		self.odr.BloomIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
 	}
-	log.Info("Added trusted checkpoint", "chain name", cp.name)
+	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.sectionIdx+1)*CHTFrequencyClient-1, "hash", cp.sectionHead)
 }
 
 func (self *LightChain) getProcInterrupt() bool {
@@ -172,9 +171,6 @@ func (bc *LightChain) SetHead(head uint64) {
 
 // GasLimit returns the gas limit of the current HEAD block.
 func (self *LightChain) GasLimit() uint64 {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
 	return self.hc.CurrentHeader().GasLimit
 }
 
@@ -388,9 +384,6 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 // CurrentHeader retrieves the current head header of the canonical chain. The
 // header is retrieved from the HeaderChain's internal cache.
 func (self *LightChain) CurrentHeader() *types.Header {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
 	return self.hc.CurrentHeader()
 }
 
@@ -454,8 +447,8 @@ func (self *LightChain) SyncCht(ctx context.Context) bool {
 	}
 	headNum := self.CurrentHeader().Number.Uint64()
 	chtCount, _, _ := self.odr.ChtIndexer().Sections()
-	if headNum+1 < chtCount*ChtFrequency {
-		num := chtCount*ChtFrequency - 1
+	if headNum+1 < chtCount*CHTFrequencyClient {
+		num := chtCount*CHTFrequencyClient - 1
 		header, err := GetHeaderByNumber(ctx, self.odr, num)
 		if header != nil && err == nil {
 			self.mu.Lock()

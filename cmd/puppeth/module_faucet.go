@@ -93,7 +93,7 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 		"NetworkID":     config.node.network,
 		"Bootnodes":     strings.Join(bootnodes, ","),
 		"Ethstats":      config.node.ethstats,
-		"EthPort":       config.node.portFull,
+		"EthPort":       config.node.port,
 		"CaptchaToken":  config.captchaToken,
 		"CaptchaSecret": config.captchaSecret,
 		"FaucetName":    strings.Title(network),
@@ -110,7 +110,7 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 		"Datadir":       config.node.datadir,
 		"VHost":         config.host,
 		"ApiPort":       config.port,
-		"EthPort":       config.node.portFull,
+		"EthPort":       config.node.port,
 		"EthName":       config.node.ethstats[:strings.Index(config.node.ethstats, ":")],
 		"CaptchaToken":  config.captchaToken,
 		"CaptchaSecret": config.captchaSecret,
@@ -158,7 +158,7 @@ func (info *faucetInfos) Report() map[string]string {
 	report := map[string]string{
 		"Website address":              info.host,
 		"Website listener port":        strconv.Itoa(info.port),
-		"Ethereum listener port":       strconv.Itoa(info.node.portFull),
+		"Ethereum listener port":       strconv.Itoa(info.node.port),
 		"Funding amount (base tier)":   fmt.Sprintf("%d Ethers", info.amount),
 		"Funding cooldown (base tier)": fmt.Sprintf("%d mins", info.minutes),
 		"Funding tiers":                strconv.Itoa(info.tiers),
@@ -228,7 +228,7 @@ func checkFaucet(client *sshClient, network string) (*faucetInfos, error) {
 	return &faucetInfos{
 		node: &nodeInfos{
 			datadir:  infos.volumes["/root/.faucet"],
-			portFull: infos.portmap[infos.envvars["ETH_PORT"]+"/tcp"],
+			port:     infos.portmap[infos.envvars["ETH_PORT"]+"/tcp"],
 			ethstats: infos.envvars["ETH_NAME"],
 			keyJSON:  keyJSON,
 			keyPass:  keyPass,
