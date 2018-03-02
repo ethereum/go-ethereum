@@ -327,17 +327,6 @@ Remove corrupt entries from a local chunk database.
 				},
 			},
 		},
-		{
-			Action: func(ctx *cli.Context) {
-				utils.Fatalf("ERROR: 'swarm cleandb' has been removed, please use 'swarm db clean'.")
-			},
-			Name:      "cleandb",
-			Usage:     "DEPRECATED: use 'swarm db clean'",
-			ArgsUsage: " ",
-			Description: `
-DEPRECATED: use 'swarm db clean'.
-`,
-		},
 		// See config.go
 		DumpConfigCommand,
 	}
