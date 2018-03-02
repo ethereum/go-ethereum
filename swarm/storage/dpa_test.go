@@ -32,7 +32,7 @@ func TestDPArandom(t *testing.T) {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 	defer tdb.close()
-	db := tdb.DbStore
+	db := tdb.LDBStore
 	db.setCapacity(50000)
 	memStore := NewMemStore(db, defaultCacheCapacity)
 	localStore := &LocalStore{
@@ -91,7 +91,7 @@ func TestDPA_capacity(t *testing.T) {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 	defer tdb.close()
-	db := tdb.DbStore
+	db := tdb.LDBStore
 	memStore := NewMemStore(db, 0)
 	localStore := &LocalStore{
 		memStore,
