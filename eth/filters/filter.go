@@ -66,6 +66,7 @@ type BlockFilterTask struct {
 	done chan struct{}
 }
 
+// Do is a callback function called for each block filter task by ServeFilterTasks
 func (t *BlockFilterTask) Do() {
 	defer close(t.done)
 
@@ -80,6 +81,27 @@ func (t *BlockFilterTask) Do() {
 	}
 	if !t.checkBloom || bloomFilter(header.Bloom, t.filter.addresses, t.filter.topics) {
 		t.logs, t.err = t.filter.checkMatches(t.context, header)
+	}
+}
+
+// filterTaskServiceThreads is the number of goroutines used globally by a filter
+// backend to service block filter tasks for all running filters.
+const filterTaskServiceThreads = 16
+
+// ServeFilterTasks is called by the filter backend to start up filter task service threads
+func ServeFilterTasks(tasks chan *BlockFilterTask, stop chan bool) {
+	for i := 0; i < filterTaskServiceThreads; i++ {
+		go func() {
+			for {
+				select {
+				case <-stop:
+					return
+
+				case task := <-tasks:
+					task.Do()
+				}
+			}
+		}()
 	}
 }
 

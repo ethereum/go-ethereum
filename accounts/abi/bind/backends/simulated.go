@@ -362,23 +362,9 @@ func (b *SimulatedBackend) FilterLogs(ctx context.Context, query ethereum.Filter
 		filter = filters.NewRangeFilter(&filterBackend{b.database, b.blockchain, filterTasks}, from, to, query.Addresses, query.Topics)
 
 		// start up a filter task service
-		const filterTaskServiceThreads = 16
-		stop := make(chan struct{})
+		stop := make(chan bool)
 		defer close(stop)
-
-		for i := 0; i < filterTaskServiceThreads; i++ {
-			go func() {
-				for {
-					select {
-					case <-stop:
-						return
-
-					case task := <-filterTasks:
-						task.Do()
-					}
-				}
-			}()
-		}
+		filters.ServeFilterTasks(filterTasks, stop)
 	}
 	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
