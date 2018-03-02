@@ -47,7 +47,7 @@ func TestStreamerRequestSubscription(t *testing.T) {
 	}
 
 	stream := NewStream("foo", nil, false)
-	err = streamer.RequestSubscription(tester.IDs[0], stream, Top)
+	err = streamer.RequestSubscription(tester.IDs[0], stream, &Range{}, Top)
 	if err == nil || err.Error() != "stream foo not registered" {
 		t.Fatalf("Expected error %v, got %v", "stream foo not registered", err)
 	}

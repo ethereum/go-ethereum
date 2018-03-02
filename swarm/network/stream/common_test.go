@@ -114,11 +114,12 @@ func createTestLocalStorageForId(id discover.NodeID, addr *network.BzzAddr) (sto
 
 //local stores need to be cleaned up after the sim is done
 func localStoreCleanup() {
-	fmt.Println("Local store cleanup")
+	log.Info("Cleaning up...")
 	for i := 0; i < len(ids); i++ {
 		stores[ids[i]].Close()
 		os.RemoveAll(datadirs[ids[i]])
 	}
+	log.Info("Local store cleanup done")
 }
 
 func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {

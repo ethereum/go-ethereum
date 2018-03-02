@@ -294,8 +294,13 @@ func (p *Peer) setClientParams(s Stream, params *clientParams) error {
 	if p.clients[s] != nil {
 		return fmt.Errorf("client %s already exists", s)
 	}
+<<<<<<< HEAD
 	if p.clientParams[s] != nil {
 		return fmt.Errorf("client params %s already set", s)
+=======
+	if p.clientParams[sk] != nil {
+		return fmt.Errorf("client params %v already set, %s to %s", sk, p.streamer.addr.ID(), p.ID())
+>>>>>>> e13194f15... swarm: Subscribe to bins with RequestSubscription
 	}
 	p.clientParams[s] = params
 	return nil
