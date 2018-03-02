@@ -86,6 +86,7 @@ var (
 	asymmetricMode = flag.Bool("asym", false, "use asymmetric encryption")
 	generateKey    = flag.Bool("generatekey", false, "generate and show the private key")
 	fileExMode     = flag.Bool("fileexchange", false, "file exchange mode")
+	fileReader     = flag.Bool("filereader", false, "load and decrypt messages saved as files, display as plain text")
 	testMode       = flag.Bool("test", false, "use of predefined parameters for diagnostics (password, etc.)")
 	echoMode       = flag.Bool("echo", false, "echo mode: prints some arguments for diagnostics")
 
@@ -433,6 +434,8 @@ func run() {
 		requestExpiredMessagesLoop()
 	} else if *fileExMode {
 		sendFilesLoop()
+	} else if *fileReader {
+		fileReaderLoop()
 	} else {
 		sendLoop()
 	}
@@ -478,6 +481,40 @@ func sendFilesLoop() {
 				timestamp := time.Now().Unix()
 				from := crypto.PubkeyToAddress(asymKey.PublicKey)
 				fmt.Printf("\n%d <%x>: sent message with hash %x\n", timestamp, from, h)
+			}
+		}
+	}
+}
+
+func fileReaderLoop() {
+	watcher1 := shh.GetFilter(symFilterID)
+	watcher2 := shh.GetFilter(asymFilterID)
+	if watcher1 == nil && watcher2 == nil {
+		fmt.Println("Error: neither symmetric nor asymmetric filter is installed")
+		close(done)
+		return
+	}
+
+	for {
+		s := scanLine("")
+		if s == quitCommand {
+			fmt.Println("Quit command received")
+			close(done)
+			return
+		}
+		raw, err := ioutil.ReadFile(s)
+		if err != nil {
+			fmt.Printf(">>> Error: %s \n", err)
+		} else {
+			env := whisper.Envelope{Data: raw} // the topic is zero
+			msg := env.Open(watcher1)          // force-open envelope regardless of the topic
+			if msg == nil {
+				msg = env.Open(watcher2)
+			}
+			if msg == nil {
+				fmt.Printf(">>> Error: failed to decrypt the message \n")
+			} else {
+				printMessageInfo(msg)
 			}
 		}
 	}
