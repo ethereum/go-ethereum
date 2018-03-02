@@ -191,20 +191,6 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 	}
 }
 
-func (f *Filter) processEnvelope(env *Envelope) *ReceivedMessage {
-	if f.MatchEnvelope(env) {
-		msg := env.Open(f)
-		if msg != nil {
-			return msg
-		}
-
-		log.Trace("processing envelope: failed to open", "hash", env.Hash().Hex())
-	} else {
-		log.Trace("processing envelope: does not match", "hash", env.Hash().Hex())
-	}
-	return nil
-}
-
 func (f *Filter) expectsAsymmetricEncryption() bool {
 	return f.KeyAsym != nil
 }
