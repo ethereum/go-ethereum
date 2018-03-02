@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -221,6 +222,13 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			db.log.Error("Failed to read database stats", "err", err)
 			return
 		}
+		iostats, err := db.db.GetProperty("leveldb.iostats")
+		if err != nil {
+			db.log.Error("Failed to read database iostats", "err", err)
+			return
+		}
+		fmt.Println(iostats)
+
 		// Find the compaction table, skip the header
 		lines := strings.Split(stats, "\n")
 		for len(lines) > 0 && strings.TrimSpace(lines[0]) != "Compactions" {

@@ -168,7 +168,7 @@ func openDB(s *session) (*DB, error) {
 // The returned DB instance is safe for concurrent use.
 // The DB must be closed after use, by calling Close method.
 func Open(stor storage.Storage, o *opt.Options) (db *DB, err error) {
-	s, err := newSession(stor, o)
+	s, err := newSession(storage.IOCounterWrapper(stor), o)
 	if err != nil {
 		return
 	}
@@ -906,6 +906,8 @@ func (db *DB) GetSnapshot() (*Snapshot, error) {
 //		Returns the number of files at level 'n'.
 //	leveldb.stats
 //		Returns statistics of the underlying DB.
+//	leveldb.iostats
+//		Returns statistics of effective disk read and write.
 //	leveldb.writedelay
 //		Returns cumulative write delay caused by compaction.
 //	leveldb.sstables
@@ -959,6 +961,12 @@ func (db *DB) GetProperty(name string) (value string, err error) {
 				level, len(tables), float64(tables.size())/1048576.0, duration.Seconds(),
 				float64(read)/1048576.0, float64(write)/1048576.0)
 		}
+	case p == "iostats":
+		var r, w float64
+		if s, ok := db.s.stor.(storage.IOCounter); ok {
+			r, w = float64(s.Reads())/1048576.0, float64(s.Writes())/1048576.0
+		}
+		value = fmt.Sprintf("Read(MB): %13.5f Write(MB): %13.5f", r, w)
 	case p == "writedelay":
 		writeDelayN, writeDelay := atomic.LoadInt32(&db.cWriteDelayN), time.Duration(atomic.LoadInt64(&db.cWriteDelay))
 		value = fmt.Sprintf("DelayN:%d Delay:%s", writeDelayN, writeDelay)

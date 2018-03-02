@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync/atomic"
 )
 
 // FileType represent a file type.
@@ -176,4 +177,79 @@ type Storage interface {
 	// It is valid to call Close multiple times. Other methods should not be
 	// called after the storage has been closed.
 	Close() error
+}
+
+// IOCounter collects read and write statistics.
+type IOCounter interface {
+	// Reads returns the cumulative number of read bytes of the underlying storage.
+	Reads() uint64
+	// Writes returns the cumulative number of written bytes of the underlying storage.
+	Writes() uint64
+}
+
+type ioCounter struct {
+	Storage
+	read  uint64
+	write uint64
+}
+
+func (c *ioCounter) Open(fd FileDesc) (Reader, error) {
+	r, err := c.Storage.Open(fd)
+	return &meteredReader{r, c}, err
+}
+
+func (c *ioCounter) Create(fd FileDesc) (Writer, error) {
+	w, err := c.Storage.Create(fd)
+	return &meteredWriter{w, c}, err
+}
+
+func (c *ioCounter) Reads() uint64 {
+	return atomic.LoadUint64(&c.read)
+}
+
+func (c *ioCounter) Writes() uint64 {
+	return atomic.LoadUint64(&c.write)
+}
+
+// AddRead increases the number of read bytes by n.
+func (c *ioCounter) AddRead(n uint64) uint64 {
+	return atomic.AddUint64(&c.read, n)
+}
+
+// AddWrite increases the number of written bytes by n.
+func (c *ioCounter) AddWrite(n uint64) uint64 {
+	return atomic.AddUint64(&c.write, n)
+}
+
+// IOCounterWrapper returns the given storage wrapped by ioCounter.
+func IOCounterWrapper(s Storage) Storage {
+	return &ioCounter{s, 0, 0}
+}
+
+type meteredReader struct {
+	Reader
+	c *ioCounter
+}
+
+func (r *meteredReader) Read(p []byte) (n int, err error) {
+	n, err = r.Reader.Read(p)
+	r.c.AddRead(uint64(n))
+	return n, err
+}
+
+func (r *meteredReader) ReadAt(p []byte, off int64) (n int, err error) {
+	n, err = r.Reader.ReadAt(p, off)
+	r.c.AddRead(uint64(n))
+	return n, err
+}
+
+type meteredWriter struct {
+	Writer
+	c *ioCounter
+}
+
+func (w *meteredWriter) Write(p []byte) (n int, err error) {
+	n, err = w.Writer.Write(p)
+	w.c.AddWrite(uint64(n))
+	return n, err
 }
