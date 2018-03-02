@@ -112,6 +112,16 @@ func (stream *LibP2PStream) WriteMsg(msg p2p.Msg) error {
 	return nil
 }
 
+type LibP2PPeer struct {
+	PeerBase
+
+	id peer.ID
+}
+
+func (p *LibP2PPeer) ID() string {
+	return p.id.String()
+}
+
 type LibP2PWhisperServer struct {
 		Host host.Host
 }
