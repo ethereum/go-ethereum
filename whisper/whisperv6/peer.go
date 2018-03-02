@@ -79,7 +79,7 @@ type DevP2PPeer struct {
 // newPeer creates a new whisper peer object, but does not run the handshake itself.
 func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) Peer {
 	return &DevP2PPeer{
-		&PeerBase {
+		&PeerBase{
 			host:           host,
 			ws:             rw,
 			trusted:        false,

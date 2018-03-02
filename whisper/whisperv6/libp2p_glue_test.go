@@ -17,10 +17,10 @@
 package whisperv6
 
 import (
-	"io/ioutil"
 	"bytes"
 	"context"
 	"encoding/binary"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"testing"
@@ -282,7 +282,7 @@ func TestMaxReadSize(t *testing.T) {
 	ctx := context.Background()
 	hosts := createTestNetwork(ctx, t, 2)
 
-	hosts[0].SetStreamHandler(testProtocolID, func (s inet.Stream) {
+	hosts[0].SetStreamHandler(testProtocolID, func(s inet.Stream) {
 		defer s.Close()
 
 		lps := LibP2PStream{

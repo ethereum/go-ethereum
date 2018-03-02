@@ -56,6 +56,8 @@ const (
 	bloomFilterToleranceIdx        // Bloom filter tolerated by the whisper node for a limited time
 )
 
+// WhisperServer abstracts a server, which could be either DevP2p-based
+// or libp2p-based.
 type WhisperServer interface {
 	Start() error
 	Stop()
@@ -77,8 +79,8 @@ type Whisper struct {
 	envelopes   map[common.Hash]*Envelope // Pool of envelopes currently tracked by this node
 	expirations map[uint32]*set.SetNonTS  // Message expiration pool
 
-	peerMu sync.RWMutex       // Mutex to sync the active peer set
-	peers  map[Peer]struct{}  // Set of currently active peers
+	peerMu sync.RWMutex      // Mutex to sync the active peer set
+	peers  map[Peer]struct{} // Set of currently active peers
 
 	messageQueue chan *Envelope // Message queue for normal whisper messages
 	p2pMsgQueue  chan *Envelope // Message queue for peer-to-peer messages (not to be forwarded any further)

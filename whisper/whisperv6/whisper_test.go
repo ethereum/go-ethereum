@@ -17,10 +17,10 @@
 package whisperv6
 
 import (
-	"fmt"
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/sha256"
+	"fmt"
 	mrand "math/rand"
 	"testing"
 	"time"
