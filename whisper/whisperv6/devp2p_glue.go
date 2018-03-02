@@ -21,9 +21,21 @@ import (
 )
 
 type DevP2PWhisperServer struct {
-	server *p2p.Server
+	Server *p2p.Server
 }
 
 func (server *DevP2PWhisperServer) Start() error {
-	return server.Start()
+	return server.Server.Start()
+}
+
+func (server *DevP2PWhisperServer) Stop() {
+	server.Server.Stop()
+}
+
+func (server *DevP2PWhisperServer) PeerCount() int {
+	return server.Server.PeerCount()
+}
+
+func (server *DevP2PWhisperServer) Enode() string {
+	return server.Server.NodeInfo().Enode
 }

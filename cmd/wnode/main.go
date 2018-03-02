@@ -53,7 +53,7 @@ const entropySize = 32
 
 // singletons
 var (
-	server     WhisperServer
+	server     whisper.WhisperServer
 	shh        *whisper.Whisper
 	done       chan struct{}
 	mailServer mailserver.WMailServer
@@ -277,21 +277,26 @@ func initialize() {
 	}
 
 	if *useLibP2P {
-		server = NewLibP2PWhisperServer()
+		server, err = whisper.NewLibP2PWhisperServer()
+		if err != nil {
+			utils.Fatalf("Error starting the libp2p client: %v", err)
+		}
 	} else {
-		server = &p2p.Server{
-			Config: p2p.Config{
-				PrivateKey:     nodeid,
-				MaxPeers:       maxPeers,
-				Name:           common.MakeName("wnode", "6.1"),
-				Protocols:      shh.Protocols(),
-				ListenAddr:     *argIP,
-				NAT:            nat.Any(),
-				BootstrapNodes: peers,
-				StaticNodes:    peers,
-				TrustedNodes:   peers,
+		server = &whisper.DevP2PWhisperServer{
+			&p2p.Server{
+				Config: p2p.Config{
+					PrivateKey:     nodeid,
+					MaxPeers:       maxPeers,
+					Name:           common.MakeName("wnode", "6.1"),
+					Protocols:      shh.Protocols(),
+					ListenAddr:     *argIP,
+					NAT:            nat.Any(),
+					BootstrapNodes: peers,
+					StaticNodes:    peers,
+					TrustedNodes:   peers,
+				},
 			},
-		},
+		}
 	}
 }
 
@@ -303,7 +308,7 @@ func startServer() error {
 	}
 
 	fmt.Printf("my public key: %s \n", common.ToHex(crypto.FromECDSAPub(&asymKey.PublicKey)))
-	fmt.Println(server.NodeInfo().Enode)
+	fmt.Println(server.Enode())
 
 	if *bootstrapMode {
 		configureNode()
@@ -686,7 +691,8 @@ func writeMessageToFile(dir string, msg *whisper.ReceivedMessage, show bool) {
 }
 
 func requestExpiredMessagesLoop() {
-	var key, peerID, bloom []byte
+	var key, bloom []byte
+	var peerID string
 	var timeLow, timeUpp uint32
 	var t string
 	var xt whisper.TopicType
@@ -756,12 +762,15 @@ func requestExpiredMessagesLoop() {
 	}
 }
 
-func extractIDFromEnode(s string) []byte {
-	n, err := discover.ParseNode(s)
-	if err != nil {
-		utils.Fatalf("Failed to parse enode: %s", err)
+func extractIDFromEnode(s string) string {
+	if !*useLibP2P {
+		n, err := discover.ParseNode(s)
+		if err != nil {
+			utils.Fatalf("Failed to parse enode: %s", err)
+		}
+		return n.ID.String()
 	}
-	return n.ID[:]
+	return ""
 }
 
 // obfuscateBloom adds 16 random bits to the the bloom

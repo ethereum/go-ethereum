@@ -17,13 +17,17 @@
 package whisperv6
 
 import (
+	"context"
 	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
 
 	"github.com/ethereum/go-ethereum/p2p"
+	libp2p "github.com/libp2p/go-libp2p"
+	host "github.com/libp2p/go-libp2p-host"
 	inet "github.com/libp2p/go-libp2p-net"
+	crypto "github.com/libp2p/go-libp2p-crypto"
 )
 
 // LibP2PStream is a wrapper used to implement the MsgReadWriter
@@ -109,12 +113,38 @@ func (stream *LibP2PStream) WriteMsg(msg p2p.Msg) error {
 }
 
 type LibP2PWhisperServer struct {
+		Host host.Host
 }
 
 func (server *LibP2PWhisperServer) Start() error {
 	return nil
 }
 
-func NewLibP2PWhisperServer() WhisperServer {
-	return &LibP2PWhisperServer{}
+// Stop stops the server
+func (server *LibP2PWhisperServer) Stop() {
+	server.Host.Close()
+}
+
+// PeerCount returns the peer count for the node
+func (server *LibP2PWhisperServer) PeerCount() int {
+	return 0
+}
+
+// Enode returns the enode address of the node
+func (server *LibP2PWhisperServer) Enode() string {
+	return server.Host.Addrs()[0].String()
+}
+
+func NewLibP2PWhisperServer() (WhisperServer, error) {
+	priv, _, err := crypto.GenerateKeyPair(crypto.Ed25519, 384)
+	opts := []libp2p.Option{
+		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", WhisperPort)),
+		libp2p.Identity(priv),
+}
+
+	h, err := libp2p.New(context.Background(), opts...)
+	if err != nil {
+		return nil, fmt.Errorf("Error setting up the libp2p network: %s", err)
+	}
+	return &LibP2PWhisperServer{h}, nil
 }

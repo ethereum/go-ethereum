@@ -58,6 +58,9 @@ const (
 
 type WhisperServer interface {
 	Start() error
+	Stop()
+	PeerCount() int
+	Enode() string
 }
 
 // Whisper represents a dark communication interface through the Ethereum
