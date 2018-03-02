@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/pot"
 	"github.com/ethereum/go-ethereum/swarm/network"
-	streamTesting "github.com/ethereum/go-ethereum/swarm/network/stream/testing"
+	//streamTesting "github.com/ethereum/go-ethereum/swarm/network/stream/testing"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -47,6 +47,8 @@ var (
 	datadirs  map[discover.NodeID]string
 	conf      *synctestConfig
 	ppmap     map[discover.NodeID]*network.PeerPot
+
+	printed bool
 )
 
 type synctestConfig struct {
@@ -84,6 +86,8 @@ func initSyncTest() {
 	datadirs = make(map[discover.NodeID]string)
 	//deliveries for each node
 	deliveries = make(map[discover.NodeID]*Delivery)
+	//registries, map of discover.NodeID to its streamer
+	registries = make(map[discover.NodeID]*TestRegistry)
 
 	//channel to wait for peers connected
 	waitPeerErrC = make(chan error)
@@ -194,12 +198,32 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 	//map of overlay address to discover ID
 	conf.addrToIdMap = make(map[string]discover.NodeID)
 	//First load the snapshot from the file
+	var actionTicker *time.Ticker
+	var timingTicker *time.Ticker
+	trigger := make(chan discover.NodeID)
+	// channel to signal simulation initialisation with action call complete
+	// or node disconnections
+	disconnectC := make(chan error)
+	quitC := make(chan struct{})
+
 	net, err := initNetWithSnapshot(nodeCount)
 	if err != nil {
 		return err
 	}
-	defer net.Shutdown()
-
+	cleanup := func() {
+		timingTicker.Stop()
+		actionTicker.Stop()
+		//close(trigger)
+		close(quitC)
+		close(disconnectC)
+		close(waitPeerErrC)
+		//after the test, clean up local stores initialized with createLocalStoreForId
+		localStoreCleanup()
+		//shutdown the snapshot network
+		net.Shutdown()
+		//datadirsCleanup()
+	}
+	defer cleanup()
 	//get the nodes of the network
 	nodes := net.GetNodes()
 	//select one index at random...
@@ -226,13 +250,6 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 	log.Info("Test config successfully initialized")
 
 	ppmap = network.NewPeerPot(testMinProxBinSize, ids, conf.addrs)
-	// channel to signal simulation initialisation with action call complete
-	// or node disconnections
-	disconnectC := make(chan error)
-	quitC := make(chan struct{})
-
-	//after the test, clean up local stores initialized with createLocalStoreForId
-	defer localStoreCleanup()
 
 	//define the action to be performed before the test checks: start syncing
 	action := func(ctx context.Context) error {
@@ -286,10 +303,10 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 					log.Debug(kt)
 				}
 			}
-			err = streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
-			if err != nil {
-				return err
-			}
+			//err = streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
+			//if err != nil {
+			//	return err
+			//}
 			err = client.CallContext(ctx, nil, "stream_startSyncing")
 			if err != nil {
 				return err
@@ -309,10 +326,19 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 		//finally map chunks to the closest addresses
 		mapKeysToNodes(conf)
 
+		//periodically check if chunks have arrived at nodes
+		actionTicker = time.NewTicker(time.Second / 100)
+		go func() {
+			startTime = time.Now()
+			for range actionTicker.C {
+				checkChunkIsAtNode(conf)
+			}
+		}()
+		log.Info("Action terminated")
+
 		return nil
 	}
 
-	trigger := make(chan discover.NodeID)
 	//check defines what will be checked during the test
 	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
@@ -323,7 +349,6 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 			return false, ctx.Err()
 		default:
 		}
-
 		log.Trace(fmt.Sprintf("Checking node: %s", id))
 		//select the local store for the given node
 		lstore := stores[id]
@@ -353,25 +378,16 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	timingTicker = time.NewTicker(time.Second * 1)
 	//for each tick, run the checks on all nodes
 	go func() {
-		ticker := time.NewTicker(time.Second * 1)
-		for range ticker.C {
+		for range timingTicker.C {
 			for i := 0; i < len(ids); i++ {
 				log.Trace(fmt.Sprintf("triggering step %d, id %s", i, ids[i]))
 				trigger <- ids[i]
 			}
 		}
 	}()
-	/*
-		go func() {
-			startTime = time.Now()
-			ticker := time.NewTicker(time.Second / 10)
-			for range ticker.C {
-				checkChunkIsAtNode(conf)
-			}
-		}()
-	*/
 
 	log.Info("Starting simulation run...")
 	//run the simulation
@@ -383,11 +399,9 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 			Check: check,
 		},
 	})
-	close(quitC)
 	if result.Error != nil {
 		return result.Error
 	}
-
 	log.Info("Simulation terminated")
 	return nil
 }
@@ -432,7 +446,6 @@ func (r *TestRegistry) StartSyncing(ctx context.Context) error {
 
 	//iterate over each bin and solicit needed subscription to bins
 	kad.EachBin(r.addr.Over(), pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
-
 		//identify begin and start index of the bin(s) we want to subscribe to
 		if po < kadDepth {
 			//not nn
@@ -471,28 +484,45 @@ func (r *TestRegistry) StartSyncing(ctx context.Context) error {
 	return nil
 }
 
+//periodically check if chunks have arrived at nodes
 func checkChunkIsAtNode(conf *synctestConfig) {
 	allOk := true
+	if printed {
+		return
+	}
+	//for every chunk, get the array of nodes it should have arrived to
 	for chunk, nodes := range conf.chunksToNodesMap {
+		//for every of those nodes
 		for _, node := range nodes {
+			//check that the chunk is in that localstore
 			if ok, _ := stores[conf.addrToIdMap[string(conf.addrs[node])]].Get([]byte(chunk)); ok != nil {
+				//if it is there, write the amount of time passed in the retrievalMap
+				//first create the map for the chunk if it is not there yet
 				if len(conf.retrievalMap[chunk]) == 0 {
 					conf.retrievalMap[chunk] = make(map[string]time.Duration)
 				}
-				conf.retrievalMap[chunk][string(conf.addrs[node])] = time.Since(startTime)
+				//if the time value for the chunk at this node has not been recorded yet...
+				if _, ok := conf.retrievalMap[chunk][string(conf.addrs[node])]; !ok {
+					//...record it
+					conf.retrievalMap[chunk][string(conf.addrs[node])] = time.Since(startTime)
+				}
+			} else {
+				allOk = false
 			}
+			//if one of the chunks hasn't arrived yet, don't print
 			if conf.retrievalMap[chunk][string(conf.addrs[node])] == 0 {
 				allOk = false
 			}
 		}
 	}
-	if allOk {
+	if allOk && !printed {
 		log.Info("All chunks arrived at destination")
 		for ch, n := range conf.retrievalMap {
 			for a, t := range n {
-				log.Info(fmt.Sprintf("Chunk %s at node %s took %v ms", string(ch), string(a), t.Seconds()*1e3))
+				log.Info(fmt.Sprintf("Chunk %v at node %s took %v ms", storage.Key([]byte((ch))).String()[:8], conf.addrToIdMap[string(a)].String()[0:8], t.Seconds()*1e3))
 			}
 		}
+		printed = true
 	}
 }
 
@@ -529,7 +559,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 			}
 			return true
 		})
-		kmap[conf.chunks[i].String()] = nns
+		kmap[string(conf.chunks[i])] = nns
 		//log.Debug(fmt.Sprintf("Length for id %s: %d",ids[i],len(kmap[ids[i]])))
 	}
 	if log.Lvl(*loglevel) == log.LvlTrace {

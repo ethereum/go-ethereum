@@ -74,15 +74,6 @@ func (p *Peer) handleRequestSubscription(req *RequestSubscriptionMsg) (err error
 	return p.streamer.Subscribe(p.ID(), req.Stream, req.History, req.Priority)
 }
 
-func (p *Peer) handleRequestSubscription(req *RequestSubscriptionMsg) (err error) {
-	log.Debug(fmt.Sprintf("handleRequestSubscription: streamer %s to subscribe to %s with stream %s", p.streamer.addr.ID(), p.ID(), req.Stream))
-	err = p.streamer.Subscribe(p.ID(), req.Stream, req.History, req.Priority)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 	defer func() {
 		if err != nil {

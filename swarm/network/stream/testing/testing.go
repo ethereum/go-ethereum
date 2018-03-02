@@ -228,7 +228,9 @@ func WatchDisconnections(id discover.NodeID, client *rpc.Client, errc chan error
 			case <-quitC:
 				return
 			case e := <-events:
-				errc <- fmt.Errorf("peerEvent for node %v: %v", id, e)
+				if e.Type == p2p.PeerEventTypeDrop {
+					errc <- fmt.Errorf("peerEvent for node %v: %v", id, e)
+				}
 			case err := <-sub.Err():
 				if err != nil {
 					errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err)

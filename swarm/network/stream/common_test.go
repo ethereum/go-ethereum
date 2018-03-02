@@ -52,6 +52,7 @@ var (
 	defaultSkipCheck bool
 	waitPeerErrC     chan error
 	chunkSize        = 4096
+	registries       map[discover.NodeID]*TestRegistry
 )
 
 var services = adapters.Services{
@@ -92,7 +93,9 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
 	dpa := storage.NewDPA(storage.NewNetStore(store, nil), storage.NewDPAParams())
-	return &TestRegistry{Registry: r, dpa: dpa}, nil
+	testRegistry := &TestRegistry{Registry: r, dpa: dpa}
+	registries[id] = testRegistry
+	return testRegistry, nil
 }
 
 //create a local store for the given node
@@ -112,12 +115,18 @@ func createTestLocalStorageForId(id discover.NodeID, addr *network.BzzAddr) (sto
 	return store, nil
 }
 
+func datadirsCleanup() {
+	for _, id := range ids {
+		os.RemoveAll(datadirs[id])
+	}
+}
+
 //local stores need to be cleaned up after the sim is done
 func localStoreCleanup() {
 	log.Info("Cleaning up...")
-	for i := 0; i < len(ids); i++ {
-		stores[ids[i]].Close()
-		os.RemoveAll(datadirs[ids[i]])
+	for _, id := range ids {
+		registries[id].Close()
+		stores[id].Close()
 	}
 	log.Info("Local store cleanup done")
 }
