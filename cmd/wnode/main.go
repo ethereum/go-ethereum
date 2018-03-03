@@ -439,6 +439,8 @@ func run() {
 	} else {
 		sendLoop()
 	}
+
+	close(done)
 }
 
 func sendLoop() {
@@ -446,11 +448,9 @@ func sendLoop() {
 		s := scanLine("")
 		if s == quitCommand {
 			fmt.Println("Quit command received")
-			close(done)
-			break
+			return
 		}
 		sendMsg([]byte(s))
-
 		if *asymmetricMode {
 			// print your own message for convenience,
 			// because in asymmetric mode it is impossible to decrypt it
@@ -466,13 +466,11 @@ func sendFilesLoop() {
 		s := scanLine("")
 		if s == quitCommand {
 			fmt.Println("Quit command received")
-			close(done)
-			break
+			return
 		}
 		b, err := ioutil.ReadFile(s)
 		if err != nil {
 			fmt.Printf(">>> Error: %s \n", err)
-			continue
 		} else {
 			h := sendMsg(b)
 			if (h == common.Hash{}) {
@@ -491,7 +489,6 @@ func fileReaderLoop() {
 	watcher2 := shh.GetFilter(asymFilterID)
 	if watcher1 == nil && watcher2 == nil {
 		fmt.Println("Error: neither symmetric nor asymmetric filter is installed")
-		close(done)
 		return
 	}
 
@@ -499,7 +496,6 @@ func fileReaderLoop() {
 		s := scanLine("")
 		if s == quitCommand {
 			fmt.Println("Quit command received")
-			close(done)
 			return
 		}
 		raw, err := ioutil.ReadFile(s)
