@@ -881,12 +881,13 @@ func (pool *TxPool) removeTx(hash common.Hash) {
 			if pending.Empty() {
 				delete(pool.pending, addr)
 				delete(pool.beats, addr)
-			} else {
-				// Otherwise postpone any invalidated transactions
-				for _, tx := range invalids {
-					pool.enqueueTx(tx.Hash(), tx)
-				}
 			}
+
+			// Otherwise postpone any invalidated transactions
+			for _, tx := range invalids {
+				pool.enqueueTx(tx.Hash(), tx)
+			}
+
 			// Update the account nonce if needed
 			if nonce := tx.Nonce(); pool.pendingState.GetNonce(addr) > nonce {
 				pool.pendingState.SetNonce(addr, nonce)
