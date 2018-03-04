@@ -87,7 +87,6 @@ func testDiscoverySimulationDockerAdapter(t *testing.T, nodes, conns int) {
 }
 
 func TestDiscoverySimulationExecAdapter(t *testing.T) {
-	t.Skip("broken (times out)")
 	testDiscoverySimulationExecAdapter(t, *nodeCount, *initCount)
 }
 
