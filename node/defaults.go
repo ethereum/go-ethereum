@@ -45,6 +45,7 @@ var DefaultConfig = Config{
 		MaxPeers:   25,
 		NAT:        nat.Any(),
 	},
+	HTTPVirtualHosts: []string{"localhost"},
 }
 
 // DefaultDataDir is the default data directory to use for the databases and other

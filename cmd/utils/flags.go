@@ -697,8 +697,6 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(RPCVirtualHostsFlag.Name) {
 		cfg.HTTPVirtualHosts = splitAndTrim(ctx.GlobalString(RPCVirtualHostsFlag.Name))
-	} else if len(cfg.HTTPVirtualHosts) == 0 {
-		cfg.HTTPVirtualHosts = splitAndTrim(ctx.GlobalString(RPCVirtualHostsFlag.Name))
 	}
 }
 
