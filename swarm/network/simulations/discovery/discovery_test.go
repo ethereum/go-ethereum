@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"net"
 	"os"
 	"sync"
 	"testing"
@@ -20,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	colorable "github.com/mattn/go-colorable"
 )
 
 // serviceName is used with the exec adapter so the exec'd binary knows which
@@ -44,7 +46,8 @@ func init() {
 	// protocol when using the exec adapter
 	adapters.RegisterServices(services)
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	log.PrintOrigins(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
 // Benchmarks to test the average time it takes for an N-node ring
@@ -70,7 +73,7 @@ func BenchmarkDiscovery_64_4(b *testing.B)  { benchmarkDiscovery(b, 64, 4) }
 func BenchmarkDiscovery_128_4(b *testing.B) { benchmarkDiscovery(b, 128, 4) }
 func BenchmarkDiscovery_256_4(b *testing.B) { benchmarkDiscovery(b, 256, 4) }
 
-func XTestDiscoverySimulationDockerAdapter(t *testing.T) {
+func TestDiscoverySimulationDockerAdapter(t *testing.T) {
 	testDiscoverySimulationDockerAdapter(t, *nodeCount, *initCount)
 }
 
@@ -231,7 +234,7 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 
 	// 64 nodes ~ 1min
 	// 128 nodes ~
-	timeout := 300 * time.Second
+	timeout := 60 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
@@ -304,8 +307,23 @@ func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id di
 	return nil
 }
 
+// getOutboundIP gets preferred outbound ip of this machine/container
+func getOutboundIP() net.IP {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddr.IP
+}
+
 func newService(ctx *adapters.ServiceContext) (node.Service, error) {
-	addr := network.NewAddrFromNodeIDAndPort(ctx.Config.ID, ctx.Config.Port)
+	host := getOutboundIP()
+
+	addr := network.NewAddrFromNodeIDAndPort(ctx.Config.ID, host, ctx.Config.Port)
 
 	kp := network.NewKadParams()
 	kp.MinProxBinSize = testMinProxBinSize

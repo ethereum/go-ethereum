@@ -28,7 +28,6 @@ import (
 	"strings"
 
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -99,7 +98,10 @@ func (d *DockerAdapter) NewNode(config *NodeConfig) (Node, error) {
 	conf.Stack.P2P.NoDiscovery = true
 	conf.Stack.P2P.NAT = nil
 	conf.Stack.NoUSB = true
-	conf.Stack.Logger = log.New("node.id", config.ID.String())
+
+	// listen on a localhost port, which we set when we
+	// initialise NodeConfig (usually a random port)
+	conf.Stack.P2P.ListenAddr = fmt.Sprintf(":%d", config.Port)
 
 	node := &DockerNode{
 		ExecNode: ExecNode{
