@@ -201,7 +201,7 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	go func() {
 		s := bufio.NewScanner(stderrR)
 		for s.Scan() {
-			if strings.Contains(s.Text(), "WebSocket endpoint opened:") {
+			if strings.Contains(s.Text(), "WebSocket endpoint opened") {
 				wsAddrC <- wsAddrPattern.FindString(s.Text())
 			}
 		}
