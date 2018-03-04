@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
-	"net"
 	"os"
 	"sync"
 	"testing"
@@ -307,21 +306,8 @@ func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id di
 	return nil
 }
 
-// getOutboundIP gets preferred outbound ip of this machine/container
-func getOutboundIP() net.IP {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
-	if err != nil {
-		panic(err)
-	}
-	defer conn.Close()
-
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
-
-	return localAddr.IP
-}
-
 func newService(ctx *adapters.ServiceContext) (node.Service, error) {
-	host := getOutboundIP()
+	host := adapters.ExternalIP()
 
 	addr := network.NewAddrFromNodeIDAndPort(ctx.Config.ID, host, ctx.Config.Port)
 
