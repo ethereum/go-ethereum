@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 	"testing"
+	"time"
 )
 
 const FANOUT = 128
@@ -114,7 +115,7 @@ func Example() {
 
 	// Threadsafe registration
 	t := GetOrRegisterTimer("db.get.latency", nil)
-	t.Time(func() {})
+	t.Time(func() { time.Sleep(10 * time.Millisecond) })
 	t.Update(1)
 
 	fmt.Println(c.Count())

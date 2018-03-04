@@ -533,9 +533,11 @@ func (f *faucet) loop() {
 	}
 	defer sub.Unsubscribe()
 
-	for {
-		select {
-		case head := <-heads:
+	// Start a goroutine to update the state from head notifications in the background
+	update := make(chan *types.Header)
+
+	go func() {
+		for head := range update {
 			// New chain head arrived, query the current stats and stream to clients
 			var (
 				balance *big.Int
@@ -588,6 +590,17 @@ func (f *faucet) loop() {
 				}
 			}
 			f.lock.RUnlock()
+		}
+	}()
+	// Wait for various events and assing to the appropriate background threads
+	for {
+		select {
+		case head := <-heads:
+			// New head arrived, send if for state update if there's none running
+			select {
+			case update <- head:
+			default:
+			}
 
 		case <-f.update:
 			// Pending requests updated, stream to clients

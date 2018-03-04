@@ -1043,7 +1043,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		return nil, err
 	}
 	if len(receipts) <= int(index) {
-		return nil, errors.New("unknown receipt")
+		return nil, nil
 	}
 	receipt := receipts[index]
 
