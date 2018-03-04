@@ -37,7 +37,7 @@ import (
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
-	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
+	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -77,7 +77,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
 	netStore := storage.NewNetStore(store, nil)
-	r := NewRegistry(addr, delivery, netStore, intervals.NewMemStore(), defaultSkipCheck)
+	r := NewRegistry(addr, delivery, netStore, state.NewMemStore(), defaultSkipCheck)
 	RegisterSwarmSyncerServer(r, db)
 	RegisterSwarmSyncerClient(r, db)
 	go func() {
@@ -107,7 +107,7 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 
 	db := storage.NewDBAPI(localStore)
 	delivery := NewDelivery(to, db)
-	streamer := NewRegistry(addr, delivery, localStore, intervals.NewMemStore(), defaultSkipCheck)
+	streamer := NewRegistry(addr, delivery, localStore, state.NewMemStore(), defaultSkipCheck)
 	teardown := func() {
 		streamer.Close()
 		removeDataDir()

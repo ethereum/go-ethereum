@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
+	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -56,11 +57,11 @@ type Registry struct {
 	peers          map[discover.NodeID]*Peer
 	delivery       *Delivery
 	store          storage.ChunkStore
-	intervalsStore intervals.Store
+	intervalsStore state.Store
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(addr *network.BzzAddr, delivery *Delivery, store storage.ChunkStore, intervalsStore intervals.Store, skipCheck bool) *Registry {
+func NewRegistry(addr *network.BzzAddr, delivery *Delivery, store storage.ChunkStore, intervalsStore state.Store, skipCheck bool) *Registry {
 	streamer := &Registry{
 		addr:           addr,
 		skipCheck:      skipCheck,
@@ -297,7 +298,7 @@ type client struct {
 	next      chan error
 
 	intervalsKey   string
-	intervalsStore intervals.Store
+	intervalsStore state.Store
 }
 
 func peerStreamIntervalsKey(p *Peer, s Stream) string {
@@ -305,7 +306,8 @@ func peerStreamIntervalsKey(p *Peer, s Stream) string {
 }
 
 func (c client) AddInterval(start, end uint64) (err error) {
-	i, err := c.intervalsStore.Get(c.intervalsKey)
+	i := &intervals.Intervals{}
+	err = c.intervalsStore.Get(c.intervalsKey, i)
 	if err != nil {
 		return err
 	}
@@ -314,7 +316,8 @@ func (c client) AddInterval(start, end uint64) (err error) {
 }
 
 func (c client) NextInterval() (start, end uint64, err error) {
-	i, err := c.intervalsStore.Get(c.intervalsKey)
+	i := &intervals.Intervals{}
+	err = c.intervalsStore.Get(c.intervalsKey, i)
 	if err != nil {
 		return 0, 0, err
 	}

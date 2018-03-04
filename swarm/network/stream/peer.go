@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
+	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -236,21 +237,23 @@ func (p *Peer) getOrSetClient(s Stream, from, to uint64) (c *client, created boo
 	if s.Live {
 		// try to find previous history and live intervals and merge live into history
 		historyKey := peerStreamIntervalsKey(p, NewStream(s.Name, s.Key, false))
-		historyIntervals, err := p.streamer.intervalsStore.Get(historyKey)
+		historyIntervals := &intervals.Intervals{}
+		err := p.streamer.intervalsStore.Get(historyKey, historyIntervals)
 		switch err {
 		case nil:
-			liveIntervals, err := p.streamer.intervalsStore.Get(intervalsKey)
+			liveIntervals := &intervals.Intervals{}
+			err := p.streamer.intervalsStore.Get(intervalsKey, liveIntervals)
 			switch err {
 			case nil:
 				historyIntervals.Merge(liveIntervals)
 				if err := p.streamer.intervalsStore.Put(historyKey, historyIntervals); err != nil {
 					log.Error("stream set client: put history intervals", "stream", s, "peer", p, "err", err)
 				}
-			case intervals.ErrNotFound:
+			case state.ErrNotFound:
 			default:
 				log.Error("stream set client: get live intervals", "stream", s, "peer", p, "err", err)
 			}
-		case intervals.ErrNotFound:
+		case state.ErrNotFound:
 		default:
 			log.Error("stream set client: get history intervals", "stream", s, "peer", p, "err", err)
 		}

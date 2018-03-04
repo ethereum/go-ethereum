@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/state"
 )
 
 //metrics variables
@@ -102,12 +103,6 @@ type Conn interface {
 	Off() OverlayAddr
 }
 
-// StateStore is a container interface to save/load peers across sessions
-type StateStore interface {
-	Load(string) ([]byte, error) // load peer
-	Save(string, []byte) error   // save peer
-}
-
 // BzzConfig captures the config params used by the hive
 type BzzConfig struct {
 	OverlayAddr  []byte // base address of the overlay network
@@ -128,7 +123,7 @@ type Bzz struct {
 // * bzz config
 // * overlay driver
 // * peer store
-func NewBzz(config *BzzConfig, kad Overlay, store StateStore) *Bzz {
+func NewBzz(config *BzzConfig, kad Overlay, store state.Store) *Bzz {
 	return &Bzz{
 		Hive:       NewHive(config.HiveParams, kad, store),
 		localAddr:  &BzzAddr{config.OverlayAddr, config.UnderlayAddr},

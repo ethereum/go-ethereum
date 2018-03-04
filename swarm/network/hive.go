@@ -17,7 +17,6 @@
 package network
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -26,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/swarm/state"
 )
 
 /*
@@ -79,7 +79,7 @@ func NewHiveParams() *HiveParams {
 type Hive struct {
 	*HiveParams                      // settings
 	Overlay                          // the overlay connectiviy driver
-	Store       StateStore           // storage interface to save peers across sessions
+	Store       state.Store          // storage interface to save peers across sessions
 	addPeer     func(*discover.Node) // server callback to connect to a peer
 	// bookkeeping
 	lock   sync.Mutex
@@ -90,7 +90,7 @@ type Hive struct {
 // HiveParams: config parameters
 // Overlay: connectivity driver using a network topology
 // StateStore: to save peers across sessions
-func NewHive(params *HiveParams, overlay Overlay, store StateStore) *Hive {
+func NewHive(params *HiveParams, overlay Overlay, store state.Store) *Hive {
 	return &Hive{
 		HiveParams: params,
 		Overlay:    overlay,
@@ -202,15 +202,13 @@ func ToAddr(pa OverlayPeer) *BzzAddr {
 
 // loadPeers, savePeer implement persistence callback/
 func (h *Hive) loadPeers() error {
-	data, err := h.Store.Load("peers")
-	if err != nil {
-		return err
-	}
-	if data == nil {
-		return nil
-	}
 	var as []*BzzAddr
-	if err := json.Unmarshal(data, &as); err != nil {
+
+	err := h.Store.Get("peers", &as)
+	if err != nil {
+		if err == state.ErrNotFound {
+			return nil
+		}
 		return err
 	}
 	return h.Register(toOverlayAddrs(as...))
@@ -235,11 +233,7 @@ func (h *Hive) savePeers() error {
 		peers = append(peers, ToAddr(pa))
 		return true
 	})
-	data, err := json.Marshal(peers)
-	if err != nil {
-		return fmt.Errorf("could not encode peers: %v", err)
-	}
-	if err := h.Store.Save("peers", data); err != nil {
+	if err := h.Store.Put("peers", peers); err != nil {
 		return fmt.Errorf("could not save peers: %v", err)
 	}
 	return nil

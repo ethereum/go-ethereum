@@ -31,8 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
-	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	streamTesting "github.com/ethereum/go-ethereum/swarm/network/stream/testing"
+	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -51,7 +51,7 @@ func newIntervalsStreamerService(ctx *adapters.ServiceContext) (node.Service, er
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
 	netStore := storage.NewNetStore(store, nil)
-	r := NewRegistry(addr, delivery, netStore, intervals.NewMemStore(), defaultSkipCheck)
+	r := NewRegistry(addr, delivery, netStore, state.NewMemStore(), defaultSkipCheck)
 
 	r.RegisterClientFunc(externalStreamName, func(p *Peer, t []byte, live bool) (Client, error) {
 		return newTestExternalClient(t, db), nil

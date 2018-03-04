@@ -20,6 +20,8 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/swarm/state"
 )
 
 // TestDBStore tests basic functionality of DBStore.
@@ -30,7 +32,7 @@ func TestDBStore(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	store, err := NewDBStore(dir)
+	store, err := state.NewDBStore(dir)
 	if err != nil {
 		t.Fatal(err)
 	}

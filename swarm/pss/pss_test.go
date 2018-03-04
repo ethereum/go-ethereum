@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
@@ -1112,7 +1113,7 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 }
 
 func newServices() adapters.Services {
-	stateStore := newStateStore()
+	stateStore := state.NewMemStore()
 	kademlias := make(map[discover.NodeID]*network.Kademlia)
 	kademlia := func(id discover.NodeID) *network.Kademlia {
 		if k, ok := kademlias[id]; ok {

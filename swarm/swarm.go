@@ -47,8 +47,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream"
-	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/pss"
+	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
@@ -149,15 +149,15 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	db := storage.NewDBAPI(self.lstore)
 	delivery := stream.NewDelivery(to, db)
 	// TODO: decide on intervals store file location
-	intervalsStore, err := intervals.NewDBStore(filepath.Join(config.Path, "stream-intervals.db"))
+	stateStore, err := state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
 	if err != nil {
 		return
 	}
-	self.streamer = stream.NewRegistry(addr, delivery, self.lstore, intervalsStore, false)
+	self.streamer = stream.NewRegistry(addr, delivery, self.lstore, stateStore, false)
 	stream.RegisterSwarmSyncerServer(self.streamer, db)
 	stream.RegisterSwarmSyncerClient(self.streamer, db)
 
-	self.bzz = network.NewBzz(bzzconfig, to, nil)
+	self.bzz = network.NewBzz(bzzconfig, to, stateStore)
 
 	// set up DPA, the cloud storage local access layer
 	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
