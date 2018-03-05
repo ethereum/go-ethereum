@@ -113,9 +113,11 @@ type BzzConfig struct {
 // Bzz is the swarm protocol bundle
 type Bzz struct {
 	*Hive
-	localAddr  *BzzAddr
-	mtx        sync.Mutex
-	handshakes map[discover.NodeID]*HandshakeMsg
+	localAddr    *BzzAddr
+	mtx          sync.Mutex
+	handshakes   map[discover.NodeID]*HandshakeMsg
+	streamerSpec *protocols.Spec
+	streamerRun  func(*BzzPeer) error
 }
 
 // NewBzz is the swarm protocol constructor
@@ -123,11 +125,13 @@ type Bzz struct {
 // * bzz config
 // * overlay driver
 // * peer store
-func NewBzz(config *BzzConfig, kad Overlay, store state.Store) *Bzz {
+func NewBzz(config *BzzConfig, kad Overlay, store state.Store, streamerSpec *protocols.Spec, streamerRun func(*BzzPeer) error) *Bzz {
 	return &Bzz{
-		Hive:       NewHive(config.HiveParams, kad, store),
-		localAddr:  &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
-		handshakes: make(map[discover.NodeID]*HandshakeMsg),
+		Hive:         NewHive(config.HiveParams, kad, store),
+		localAddr:    &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
+		handshakes:   make(map[discover.NodeID]*HandshakeMsg),
+		streamerRun:  streamerRun,
+		streamerSpec: streamerSpec,
 	}
 }
 
@@ -165,6 +169,12 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 			Run:      b.RunProtocol(DiscoverySpec, b.Hive.Run),
 			NodeInfo: b.Hive.NodeInfo,
 			PeerInfo: b.Hive.PeerInfo,
+		},
+		{
+			Name:    b.streamerSpec.Name,
+			Version: b.streamerSpec.Version,
+			Length:  b.streamerSpec.Length(),
+			Run:     b.RunProtocol(b.streamerSpec, b.streamerRun),
 		},
 	}
 }

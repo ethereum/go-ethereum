@@ -329,6 +329,12 @@ func (k *Kademlia) Off(p OverlayConn) {
 	}
 }
 
+func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool) {
+	k.lock.RLock()
+	defer k.lock.RUnlock()
+	k.conns.EachBin(base, pof, o, eachBinFunc)
+}
+
 // EachConn is an iterator with args (base, po, f) applies f to each live peer
 // that has proximity order po or less as measured from the base
 // if base is nil, kademlia base address is used
