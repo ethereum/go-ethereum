@@ -233,7 +233,7 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 
 	// 64 nodes ~ 1min
 	// 128 nodes ~
-	timeout := 60 * time.Second
+	timeout := 300 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{

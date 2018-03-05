@@ -340,17 +340,27 @@ type execNodeConfig struct {
 
 // ExternalIP gets an external IP address so that Enode URL is usable
 func ExternalIP() net.IP {
-	addrs, err := net.InterfaceAddrs()
+	//addrs, err := net.InterfaceAddrs()
+	//if err != nil {
+	//log.Crit("error getting IP address", "err", err)
+	//}
+	//for _, addr := range addrs {
+	//if ip, ok := addr.(*net.IPNet); ok && !ip.IP.IsLoopback() {
+	//return ip.IP
+	//}
+	//}
+	//log.Crit("unable to determine explicit IP address")
+	//return net.IP{127, 0, 0, 1}
+
+	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
-		log.Crit("error getting IP address", "err", err)
+		panic(err)
 	}
-	for _, addr := range addrs {
-		if ip, ok := addr.(*net.IPNet); ok && !ip.IP.IsLoopback() {
-			return ip.IP
-		}
-	}
-	log.Crit("unable to determine explicit IP address")
-	return net.IP{127, 0, 0, 1}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddr.IP
 }
 
 // execP2PNode starts a devp2p node when the current binary is executed with
