@@ -137,7 +137,7 @@ func newBzzHandshakeTester(t *testing.T, n int, addr *BzzAddr) *bzzTester {
 		HiveParams:   NewHiveParams(),
 	}
 	kad := NewKademlia(addr.OAddr, NewKadParams())
-	bzz := NewBzz(config, kad, nil)
+	bzz := NewBzz(config, kad, nil, nil, nil)
 
 	s := p2ptest.NewProtocolTester(t, NewNodeIDFromAddr(addr), 1, bzz.runBzz)
 

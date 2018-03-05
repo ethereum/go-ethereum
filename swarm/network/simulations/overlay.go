@@ -69,7 +69,7 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 		HiveParams:   hp,
 	}
 
-	return network.NewBzz(config, kad, store), nil
+	return network.NewBzz(config, kad, store, nil, nil), nil
 }
 
 func createMockers() map[string]*simulations.MockerConfig {
