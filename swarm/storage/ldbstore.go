@@ -74,7 +74,7 @@ type gcItem struct {
 	idxKey []byte
 }
 
-type DbStore struct {
+type LDBStore struct {
 	db *LDBDatabase
 
 	// this should be stored in db, accessed transactionally
@@ -106,8 +106,8 @@ type DbStore struct {
 // TODO: Instead of passing the distance function, just pass the address from which distances are calculated
 // to avoid the appearance of a pluggable distance metric and opportunities of bugs associated with providing
 // a function different from the one that is actually used.
-func NewDbStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uint8) (s *DbStore, err error) {
-	s = new(DbStore)
+func NewLDBStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uint8) (s *LDBStore, err error) {
+	s = new(LDBStore)
 	s.hashfunc = hash
 
 	s.batchC = make(chan bool)
@@ -158,8 +158,8 @@ func NewDbStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uin
 // NewMockDbStore creates a new instance of DbStore with
 // mockStore set to a provided value. If mockStore argument is nil,
 // this function behaves exactly as NewDbStore.
-func NewMockDbStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uint8, mockStore *mock.NodeStore) (s *DbStore, err error) {
-	s, err = NewDbStore(path, hash, capacity, po)
+func NewMockDbStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uint8, mockStore *mock.NodeStore) (s *LDBStore, err error) {
+	s, err = NewLDBStore(path, hash, capacity, po)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +195,7 @@ func getIndexGCValue(index *dpaDBIndex) uint64 {
 	return index.Access
 }
 
-func (s *DbStore) updateIndexAccess(index *dpaDBIndex) {
+func (s *LDBStore) updateIndexAccess(index *dpaDBIndex) {
 	index.Access = s.accessCnt
 }
 
@@ -286,7 +286,7 @@ func gcListSelect(list []*gcItem, left int, right int, n int) int {
 	}
 }
 
-func (s *DbStore) collectGarbage(ratio float32) {
+func (s *LDBStore) collectGarbage(ratio float32) {
 	it := s.db.NewIterator()
 	it.Seek(s.gcPos)
 	if it.Valid() {
@@ -345,7 +345,7 @@ func (s *DbStore) collectGarbage(ratio float32) {
 
 // Export writes all chunks from the store to a tar archive, returning the
 // number of chunks written.
-func (s *DbStore) Export(out io.Writer) (int64, error) {
+func (s *LDBStore) Export(out io.Writer) (int64, error) {
 	tw := tar.NewWriter(out)
 	defer tw.Close()
 
@@ -387,7 +387,7 @@ func (s *DbStore) Export(out io.Writer) (int64, error) {
 }
 
 // of chunks read.
-func (s *DbStore) Import(in io.Reader) (int64, error) {
+func (s *LDBStore) Import(in io.Reader) (int64, error) {
 	tr := tar.NewReader(in)
 
 	var count int64
@@ -429,7 +429,7 @@ func (s *DbStore) Import(in io.Reader) (int64, error) {
 	return count, nil
 }
 
-func (s *DbStore) Cleanup() {
+func (s *LDBStore) Cleanup() {
 	//Iterates over the database and checks that there are no faulty chunks
 	it := s.db.NewIterator()
 	startPosition := []byte{kpIndex}
@@ -468,7 +468,7 @@ func (s *DbStore) Cleanup() {
 	log.Warn(fmt.Sprintf("Found %v errors out of %v entries", errorsFound, total))
 }
 
-func (s *DbStore) ReIndex() {
+func (s *LDBStore) ReIndex() {
 	//Iterates over the database and checks that there are no faulty chunks
 	it := s.db.NewIterator()
 	startPosition := []byte{keyOldData}
@@ -511,7 +511,7 @@ func (s *DbStore) ReIndex() {
 	log.Warn(fmt.Sprintf("Found %v errors out of %v entries", errorsFound, total))
 }
 
-func (s *DbStore) delete(idx uint64, idxKey []byte, po uint8) {
+func (s *LDBStore) delete(idx uint64, idxKey []byte, po uint8) {
 	batch := new(leveldb.Batch)
 	batch.Delete(idxKey)
 	batch.Delete(getDataKey(idx, po))
@@ -526,26 +526,26 @@ func (s *DbStore) delete(idx uint64, idxKey []byte, po uint8) {
 	s.db.Write(batch)
 }
 
-func (s *DbStore) CurrentBucketStorageIndex(po uint8) uint64 {
+func (s *LDBStore) CurrentBucketStorageIndex(po uint8) uint64 {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
 	return s.bucketCnt[po]
 }
 
-func (s *DbStore) Size() uint64 {
+func (s *LDBStore) Size() uint64 {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	return s.entryCnt
 }
 
-func (s *DbStore) CurrentStorageIndex() uint64 {
+func (s *LDBStore) CurrentStorageIndex() uint64 {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	return s.dataIdx
 }
 
-func (s *DbStore) Put(chunk *Chunk) {
+func (s *LDBStore) Put(chunk *Chunk) {
 	ikey := getIndexKey(chunk.Key)
 	var index dpaDBIndex
 
@@ -577,7 +577,7 @@ func (s *DbStore) Put(chunk *Chunk) {
 }
 
 // force putting into db, does not check access index
-func (s *DbStore) doPut(chunk *Chunk, ikey []byte, index *dpaDBIndex, po uint8) {
+func (s *LDBStore) doPut(chunk *Chunk, ikey []byte, index *dpaDBIndex, po uint8) {
 	data := s.encodeDataFunc(chunk)
 	s.batch.Put(getDataKey(s.dataIdx, po), data)
 	index.Idx = s.dataIdx
@@ -592,7 +592,7 @@ func (s *DbStore) doPut(chunk *Chunk, ikey []byte, index *dpaDBIndex, po uint8) 
 
 }
 
-func (s *DbStore) writeBatches() {
+func (s *LDBStore) writeBatches() {
 	for range s.batchesC {
 		s.lock.Lock()
 		b := s.batch
@@ -618,7 +618,7 @@ func (s *DbStore) writeBatches() {
 }
 
 // must be called non concurrently
-func (s *DbStore) writeBatch(b *leveldb.Batch, entryCnt, dataIdx, accessCnt uint64) error {
+func (s *LDBStore) writeBatch(b *leveldb.Batch, entryCnt, dataIdx, accessCnt uint64) error {
 	b.Put(keyEntryCnt, U64ToBytes(entryCnt))
 	b.Put(keyDataIdx, U64ToBytes(dataIdx))
 	b.Put(keyAccessCnt, U64ToBytes(accessCnt))
@@ -644,7 +644,7 @@ func newMockEncodeDataFunc(mockStore *mock.NodeStore) func(chunk *Chunk) []byte 
 }
 
 // try to find index; if found, update access cnt and return true
-func (s *DbStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
+func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	idata, err := s.db.Get(ikey)
 	if err != nil {
 		return false
@@ -658,13 +658,13 @@ func (s *DbStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	return true
 }
 
-func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
+func (s *LDBStore) Get(key Key) (chunk *Chunk, err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	return s.get(key)
 }
 
-func (s *DbStore) get(key Key) (chunk *Chunk, err error) {
+func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 	var indx dpaDBIndex
 
 	if s.tryAccessIdx(getIndexKey(key), &indx) {
@@ -724,7 +724,7 @@ func newMockGetDataFunc(mockStore *mock.NodeStore) func(key Key) (data []byte, e
 	}
 }
 
-func (s *DbStore) updateAccessCnt(key Key) {
+func (s *LDBStore) updateAccessCnt(key Key) {
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -734,7 +734,7 @@ func (s *DbStore) updateAccessCnt(key Key) {
 
 }
 
-func (s *DbStore) setCapacity(c uint64) {
+func (s *LDBStore) setCapacity(c uint64) {
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -755,12 +755,12 @@ func (s *DbStore) setCapacity(c uint64) {
 	}
 }
 
-func (s *DbStore) Close() {
+func (s *LDBStore) Close() {
 	s.db.Close()
 }
 
 // SyncIterator(start, stop, po, f) calls f on each hash of a bin po from start to stop
-func (s *DbStore) SyncIterator(since uint64, until uint64, po uint8, f func(Key, uint64) bool) error {
+func (s *LDBStore) SyncIterator(since uint64, until uint64, po uint8, f func(Key, uint64) bool) error {
 	sincekey := getDataKey(since, po)
 	untilkey := getDataKey(until, po)
 	it := s.db.NewIterator()

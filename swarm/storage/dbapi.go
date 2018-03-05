@@ -18,12 +18,12 @@ package storage
 
 // wrapper of db-s to provide mockable custom local chunk store access to syncer
 type DBAPI struct {
-	db  *DbStore
+	db  *LDBStore
 	loc *LocalStore
 }
 
 func NewDBAPI(loc *LocalStore) *DBAPI {
-	return &DBAPI{loc.DbStore.(*DbStore), loc}
+	return &DBAPI{loc.DbStore.(*LDBStore), loc}
 }
 
 // to obtain the chunks from key or request db entry only

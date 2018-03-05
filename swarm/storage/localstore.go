@@ -66,7 +66,7 @@ func NewLocalStore(hash SwarmHasher, params *StoreParams, basekey []byte, mockSt
 func NewTestLocalStore(path string) (*LocalStore, error) {
 	basekey := make([]byte, 32)
 	hasher := MakeHashFunc("SHA3")
-	dbStore, err := NewDbStore(path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+	dbStore, err := NewLDBStore(path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func NewTestLocalStore(path string) (*LocalStore, error) {
 
 func NewTestLocalStoreForAddr(path string, basekey []byte) (*LocalStore, error) {
 	hasher := MakeHashFunc("SHA3")
-	dbStore, err := NewDbStore(path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+	dbStore, err := NewLDBStore(path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
 	if err != nil {
 		return nil, err
 	}

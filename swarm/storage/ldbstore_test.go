@@ -30,7 +30,7 @@ import (
 )
 
 type testDbStore struct {
-	*DbStore
+	*LDBStore
 	dir string
 }
 
@@ -40,7 +40,7 @@ func newTestDbStore(mock bool) (*testDbStore, error) {
 		return nil, err
 	}
 
-	var db *DbStore
+	var db *LDBStore
 	if mock {
 		globalStore := mem.NewGlobalStore()
 		addr := common.HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")
@@ -48,7 +48,7 @@ func newTestDbStore(mock bool) (*testDbStore, error) {
 
 		db, err = NewMockDbStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, testPoFunc, mockStore)
 	} else {
-		db, err = NewDbStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, testPoFunc)
+		db, err = NewLDBStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, testPoFunc)
 	}
 
 	return &testDbStore{db, dir}, err

@@ -71,7 +71,7 @@ func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
 
 	hash := MakeHashFunc("SHA3")
 
-	dbStore, err := NewDbStore(datadir, hash, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+	dbStore, err := NewLDBStore(datadir, hash, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
 	if err != nil {
 		return nil, err
 	}
