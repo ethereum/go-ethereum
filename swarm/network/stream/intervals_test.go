@@ -47,9 +47,7 @@ func newIntervalsStreamerService(ctx *adapters.ServiceContext) (node.Service, er
 	addr := toAddr(id)
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 	store := stores[id].(*storage.LocalStore)
-
-	netStore := storage.NewNetStore(store, nil)
-	db := storage.NewDBAPI(netStore)
+	db := storage.NewDBAPI(store)
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
 	r := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false)
