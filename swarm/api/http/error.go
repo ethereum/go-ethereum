@@ -35,6 +35,7 @@ import (
 
 //templateMap holds a mapping of an HTTP error code to a template
 var templateMap map[int]*template.Template
+var caseErrors []CaseError
 
 //metrics variables
 var (
@@ -49,6 +50,13 @@ type ResponseParams struct {
 	Timestamp string
 	template  *template.Template
 	Details   template.HTML
+}
+
+//a custom error case struct that would be used to store validators and
+//additional error info to display with client responses.
+type CaseError struct {
+	Validator func(*Request) bool
+	Msg       func(*Request) string
 }
 
 //we init the error handling right on boot time, so lookup and http response is fast
@@ -74,6 +82,29 @@ func initErrHandling() {
 		//assign formatted HTML to the code
 		templateMap[code] = template.Must(template.New(fmt.Sprintf("%d", code)).Parse(tname))
 	}
+
+	caseErrors = []CaseError{
+		{
+			Validator: func(r *Request) bool { return r.uri != nil && r.uri.Addr != "" && strings.HasPrefix(r.uri.Addr, "0x") },
+			Msg: func(r *Request) string {
+				uriCopy := r.uri
+				uriCopy.Addr = strings.TrimPrefix(uriCopy.Addr, "0x")
+				return fmt.Sprintf(`The requested hash seems to be prefixed with '0x'. You will be redirected to the correct URL within 5 seconds.<br/>
+			Please click <a href='%[1]s'>here</a> if your browser does not redirect you.<script>setTimeout("location.href='%[1]s';",5000);</script>`, "/"+uriCopy.String())
+			},
+		}}
+}
+
+//ValidateCaseErrors is a method that process the request object through certain validators
+//that assert if certain conditions are met for further information to log as an error
+func ValidateCaseErrors(r *Request) string {
+	for _, err := range caseErrors {
+		if err.Validator(r) {
+			return err.Msg(r)
+		}
+	}
+
+	return ""
 }
 
 //ShowMultipeChoices is used when a user requests a resource in a manifest which results
@@ -111,7 +142,9 @@ func ShowMultipleChoices(w http.ResponseWriter, req *Request, list api.ManifestL
 //The function just takes a string message which will be displayed in the error page.
 //The code is used to evaluate which template will be displayed
 //(and return the correct HTTP status code)
+
 func Respond(w http.ResponseWriter, req *Request, msg string, code int) {
+	additionalMessage := ValidateCaseErrors(req)
 	switch code {
 	case http.StatusInternalServerError:
 		log.Output(msg, log.LvlError, 3, "ruid", req.ruid, "code", code)
@@ -122,6 +155,7 @@ func Respond(w http.ResponseWriter, req *Request, msg string, code int) {
 	respond(w, &req.Request, &ResponseParams{
 		Code:      code,
 		Msg:       msg,
+		Details:   template.HTML(additionalMessage),
 		Timestamp: time.Now().Format(time.RFC1123),
 		template:  getTemplate(code),
 	})

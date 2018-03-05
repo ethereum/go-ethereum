@@ -474,7 +474,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
 		getFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
+		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
 		return
 	}
 
@@ -558,7 +558,7 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
 		getFilesFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
+		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
 		return
 	}
 
@@ -631,7 +631,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
 		getListFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
+		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
 		return
 	}
 
@@ -735,7 +735,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
 		getFileFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
+		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
 		return
 	}
 
