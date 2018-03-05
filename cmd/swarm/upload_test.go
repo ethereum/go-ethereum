@@ -27,8 +27,6 @@ import (
 // TestCLISwarmUp tests that running 'swarm up' makes the resulting file
 // available from all nodes via the HTTP API
 func TestCLISwarmUp(t *testing.T) {
-	// skipped because syncer is not functional
-	t.Skip()
 	// start 3 node cluster
 	t.Log("starting 3 node cluster")
 	cluster := newTestCluster(t, 3)
