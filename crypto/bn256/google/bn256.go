@@ -18,6 +18,7 @@ package bn256
 
 import (
 	"crypto/rand"
+	"errors"
 	"io"
 	"math/big"
 )
@@ -115,21 +116,25 @@ func (n *G1) Marshal() []byte {
 
 // Unmarshal sets e to the result of converting the output of Marshal back into
 // a group element and then returns e.
-func (e *G1) Unmarshal(m []byte) (*G1, bool) {
+func (e *G1) Unmarshal(m []byte) ([]byte, error) {
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
-
 	if len(m) != 2*numBytes {
-		return nil, false
+		return nil, errors.New("bn256: not enough data")
 	}
-
+	// Unmarshal the points and check their caps
 	if e.p == nil {
 		e.p = newCurvePoint(nil)
 	}
-
 	e.p.x.SetBytes(m[0*numBytes : 1*numBytes])
+	if e.p.x.Cmp(P) >= 0 {
+		return nil, errors.New("bn256: coordinate exceeds modulus")
+	}
 	e.p.y.SetBytes(m[1*numBytes : 2*numBytes])
-
+	if e.p.y.Cmp(P) >= 0 {
+		return nil, errors.New("bn256: coordinate exceeds modulus")
+	}
+	// Ensure the point is on the curve
 	if e.p.x.Sign() == 0 && e.p.y.Sign() == 0 {
 		// This is the point at infinity.
 		e.p.y.SetInt64(1)
@@ -140,11 +145,10 @@ func (e *G1) Unmarshal(m []byte) (*G1, bool) {
 		e.p.t.SetInt64(1)
 
 		if !e.p.IsOnCurve() {
-			return nil, false
+			return nil, errors.New("bn256: malformed point")
 		}
 	}
-
-	return e, true
+	return m[2*numBytes:], nil
 }
 
 // G2 is an abstract cyclic group. The zero value is suitable for use as the
@@ -233,23 +237,33 @@ func (n *G2) Marshal() []byte {
 
 // Unmarshal sets e to the result of converting the output of Marshal back into
 // a group element and then returns e.
-func (e *G2) Unmarshal(m []byte) (*G2, bool) {
+func (e *G2) Unmarshal(m []byte) ([]byte, error) {
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
-
 	if len(m) != 4*numBytes {
-		return nil, false
+		return nil, errors.New("bn256: not enough data")
 	}
-
+	// Unmarshal the points and check their caps
 	if e.p == nil {
 		e.p = newTwistPoint(nil)
 	}
-
 	e.p.x.x.SetBytes(m[0*numBytes : 1*numBytes])
+	if e.p.x.x.Cmp(P) >= 0 {
+		return nil, errors.New("bn256: coordinate exceeds modulus")
+	}
 	e.p.x.y.SetBytes(m[1*numBytes : 2*numBytes])
+	if e.p.x.y.Cmp(P) >= 0 {
+		return nil, errors.New("bn256: coordinate exceeds modulus")
+	}
 	e.p.y.x.SetBytes(m[2*numBytes : 3*numBytes])
+	if e.p.y.x.Cmp(P) >= 0 {
+		return nil, errors.New("bn256: coordinate exceeds modulus")
+	}
 	e.p.y.y.SetBytes(m[3*numBytes : 4*numBytes])
-
+	if e.p.y.y.Cmp(P) >= 0 {
+		return nil, errors.New("bn256: coordinate exceeds modulus")
+	}
+	// Ensure the point is on the curve
 	if e.p.x.x.Sign() == 0 &&
 		e.p.x.y.Sign() == 0 &&
 		e.p.y.x.Sign() == 0 &&
@@ -263,11 +277,10 @@ func (e *G2) Unmarshal(m []byte) (*G2, bool) {
 		e.p.t.SetOne()
 
 		if !e.p.IsOnCurve() {
-			return nil, false
+			return nil, errors.New("bn256: malformed point")
 		}
 	}
-
-	return e, true
+	return m[4*numBytes:], nil
 }
 
 // GT is an abstract cyclic group. The zero value is suitable for use as the
