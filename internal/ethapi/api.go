@@ -1035,14 +1035,14 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
 	tx, blockHash, blockNumber, index := core.GetTransaction(s.b.ChainDb(), hash)
 	if tx == nil {
-		return nil, errors.New("unknown transaction")
+		return nil, nil
 	}
 	receipts, err := s.b.GetReceipts(ctx, blockHash)
 	if err != nil {
 		return nil, err
 	}
 	if len(receipts) <= int(index) {
-		return nil, errors.New("unknown receipt")
+		return nil, nil
 	}
 	receipt := receipts[index]
 

@@ -116,7 +116,7 @@ func ValidateCaseErrors(r *Request) string {
 func ShowMultipleChoices(w http.ResponseWriter, req *Request, list api.ManifestList) {
 	msg := ""
 	if list.Entries == nil {
-		Respond(w, req, "Internal Server Error", http.StatusInternalServerError)
+		Respond(w, req, "Could not resolve", http.StatusInternalServerError)
 		return
 	}
 	//make links relative
@@ -133,7 +133,6 @@ func ShowMultipleChoices(w http.ResponseWriter, req *Request, list api.ManifestL
 		//create clickable link for each entry
 		msg += "<a href='" + base + e.Path + "'>" + e.Path + "</a><br/>"
 	}
-
 	Respond(w, req, msg, http.StatusMultipleChoices)
 }
 
@@ -142,7 +141,6 @@ func ShowMultipleChoices(w http.ResponseWriter, req *Request, list api.ManifestL
 //The function just takes a string message which will be displayed in the error page.
 //The code is used to evaluate which template will be displayed
 //(and return the correct HTTP status code)
-
 func Respond(w http.ResponseWriter, req *Request, msg string, code int) {
 	additionalMessage := ValidateCaseErrors(req)
 	switch code {
