@@ -269,3 +269,9 @@ func TopicToBloom(topic TopicType) []byte {
 	}
 	return b
 }
+
+func (w *Whisper) GetEnvelope(hash common.Hash) *Envelope {
+	w.poolMu.RLock()
+	defer w.poolMu.RUnlock()
+	return w.envelopes[hash]
+}
