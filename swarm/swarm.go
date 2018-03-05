@@ -157,7 +157,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	stream.RegisterSwarmSyncerServer(self.streamer, db)
 	stream.RegisterSwarmSyncerClient(self.streamer, db)
 
-	self.bzz = network.NewBzz(bzzconfig, to, stateStore)
+	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
 	// set up DPA, the cloud storage local access layer
 	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
@@ -378,6 +378,7 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	self.periodicallyUpdateGauges()
 
 	startCounter.Inc(1)
+	self.streamer.Start(srv)
 	return nil
 }
 
@@ -413,6 +414,7 @@ func (self *Swarm) Stop() error {
 	}
 	self.sfs.Stop()
 	stopCounter.Inc(1)
+	self.streamer.Stop()
 	return self.bzz.Stop()
 }
 

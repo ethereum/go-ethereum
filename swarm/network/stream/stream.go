@@ -22,12 +22,12 @@ import (
 	"math"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
-
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
+	"github.com/ethereum/go-ethereum/pot"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/state"
@@ -121,6 +121,26 @@ func (r *Registry) GetServerFunc(stream string) (func(*Peer, []byte, bool) (Serv
 		return nil, fmt.Errorf("stream %v not registered", stream)
 	}
 	return f, nil
+}
+
+func (r *Registry) RequestSubscription(peerId discover.NodeID, s Stream, h *Range, prio uint8) error {
+	// check if the stream is registered
+	if _, err := r.GetClientFunc(s.Name); err != nil {
+		return err
+	}
+
+	peer := r.getPeer(peerId)
+	if peer == nil {
+		return fmt.Errorf("peer not found %v", peerId)
+	}
+
+	msg := &RequestSubscriptionMsg{
+		Stream:   s,
+		History:  h,
+		Priority: prio,
+	}
+	log.Debug("RequestSubscription ", "peer", peerId, "stream", s, "history", h)
+	return peer.Send(msg)
 }
 
 // Subscribe initiates the streamer
@@ -225,12 +245,71 @@ func (r *Registry) peersCount() (c int) {
 }
 
 // Run protocol run function
-func (r *Registry) run(p *protocols.Peer) error {
-	sp := NewPeer(p, r)
+func (r *Registry) Run(p *network.BzzPeer) error {
+	sp := NewPeer(p.Peer, r)
 	r.setPeer(sp)
 	defer r.deletePeer(sp)
 	defer close(sp.quit)
 	defer sp.close()
+
+	var kadDepth int
+
+	r.delivery.overlay.EachConn(nil, 256, func(addr network.OverlayConn, po int, nn bool) bool {
+		// TODO: stop or expose by kademlia
+		if nn {
+			kadDepth = po
+		}
+		return true
+	})
+
+	kad, ok := r.delivery.overlay.(*network.Kademlia)
+	if !ok {
+		return fmt.Errorf("Not a Kademlia!")
+	}
+
+	var startPo int
+	var endPo int
+	var i int
+	var err error
+
+	//iterate over each bin and solicit needed subscription to bins
+	kad.EachBin(r.addr.Over(), pot.DefaultPof(256), 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
+
+		//identify begin and start index of the bin(s) we want to subscribe to
+		if po < kadDepth {
+			//not nn
+			endPo = po
+			if i > 0 {
+				startPo = endPo + 1
+			}
+		} else if endPo < kadDepth || endPo == 0 {
+			if po == 0 && kadDepth == 0 {
+				startPo = endPo
+			} else {
+				startPo = endPo + 1
+			}
+			endPo = maxPO
+		}
+
+		// now iterate and subscribe
+		for bin := po - startPo; bin <= endPo; bin++ {
+
+			f(func(val pot.Val, i int) bool {
+				// a := val.(network.OverlayPeer)
+				log.Debug(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr.ID(), p.ID(), bin))
+
+				err = r.RequestSubscription(p.ID(), NewStream("SYNC", []byte{uint8(bin)}, true), &Range{}, Top)
+				if err != nil {
+					log.Error(fmt.Sprintf("Error in RequestSubsciption! %v", err))
+					return false
+				}
+				return true
+			})
+		}
+		i++
+		return true
+	})
+
 	return sp.Run(sp.HandleMsg)
 }
 
@@ -239,7 +318,7 @@ func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	bzzPeer := network.NewBzzTestPeer(peer, r.addr)
 	r.delivery.overlay.On(bzzPeer)
 	defer r.delivery.overlay.Off(bzzPeer)
-	return r.run(peer)
+	return r.Run(bzzPeer)
 }
 
 // HandleMsg is the message handler that delegates incoming messages
@@ -269,6 +348,9 @@ func (p *Peer) HandleMsg(msg interface{}) error {
 
 	case *RetrieveRequestMsg:
 		return p.streamer.delivery.handleRetrieveRequestMsg(p, msg)
+
+	case *RequestSubscriptionMsg:
+		return p.handleRequestSubscription(msg)
 
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)
@@ -428,6 +510,7 @@ var Spec = &protocols.Spec{
 		RetrieveRequestMsg{},
 		ChunkDeliveryMsg{},
 		SubscribeErrorMsg{},
+		RequestSubscriptionMsg{},
 	},
 }
 
@@ -457,6 +540,7 @@ func (r *Registry) APIs() []rpc.API {
 
 func (r *Registry) Start(server *p2p.Server) error {
 	r.api.dpa.Start()
+	log.Info("Streamer started")
 	return nil
 }
 
