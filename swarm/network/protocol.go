@@ -170,12 +170,6 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 			NodeInfo: b.Hive.NodeInfo,
 			PeerInfo: b.Hive.PeerInfo,
 		},
-		{
-			Name:    b.streamerSpec.Name,
-			Version: b.streamerSpec.Version,
-			Length:  b.streamerSpec.Length(),
-			Run:     b.RunProtocol(b.streamerSpec, b.streamerRun),
-		},
 	}
 	if b.streamerSpec != nil && b.streamerRun != nil {
 		protocol = append(protocol, p2p.Protocol{
