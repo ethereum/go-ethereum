@@ -183,7 +183,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		opts := []api.MultiResolverOption{}
 		for _, c := range config.EnsAPIs {
 			tld, endpoint, addr := parseEnsAPIAddress(c)
-			r, err := newEnsClient(endpoint, addr, config)
+			r, err := newEnsClient(endpoint, addr, config, self.privateKey)
 			if err != nil {
 				return nil, err
 			}
@@ -252,7 +252,7 @@ type ensClient struct {
 // newEnsClient creates a new ENS client for that is a consumer of
 // a ENS API on a specific endpoint. It is used as a helper function
 // for creating multiple resolvers in NewSwarm function.
-func newEnsClient(endpoint string, addr common.Address, config *api.Config) (*ensClient, error) {
+func newEnsClient(endpoint string, addr common.Address, config *api.Config, privkey *ecdsa.PrivateKey) (*ensClient, error) {
 	log.Info("connecting to ENS API", "url", endpoint)
 	client, err := rpc.Dial(endpoint)
 	if err != nil {
@@ -271,7 +271,7 @@ func newEnsClient(endpoint string, addr common.Address, config *api.Config) (*en
 			log.Warn(fmt.Sprintf("could not determine ENS contract address, using default %s", ensRoot), "err", err)
 		}
 	}
-	transactOpts := bind.NewKeyedTransactor(config.Swap.PrivateKey())
+	transactOpts := bind.NewKeyedTransactor(privkey)
 	dns, err := ens.NewENS(transactOpts, ensRoot, ethClient)
 	if err != nil {
 		return nil, err
