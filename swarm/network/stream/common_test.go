@@ -75,8 +75,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	addr := toAddr(id)
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 	store := stores[id].(*storage.LocalStore)
-	netStore := storage.NewNetStore(store, nil)
-	db := storage.NewDBAPI(netStore)
+	db := storage.NewDBAPI(store)
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
 	r := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false)
@@ -108,9 +107,7 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 		return nil, nil, nil, removeDataDir, err
 	}
 
-	netStore := storage.NewNetStore(localStore, nil)
-	db := storage.NewDBAPI(netStore)
-
+	db := storage.NewDBAPI(localStore)
 	delivery := NewDelivery(to, db)
 	streamer := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false)
 	teardown := func() {
