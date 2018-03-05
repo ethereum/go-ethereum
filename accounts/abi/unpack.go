@@ -93,15 +93,28 @@ func readFixedBytes(t Type, word []byte) (interface{}, error) {
 
 }
 
+func getFullElemSize(elem *Type) int {
+	//all other should be counted as 32 (slices have pointers to respective elements)
+	size := 32
+	//arrays wrap it, each element being the same size
+	for elem.T == ArrayTy {
+		size *= elem.Size
+		elem = elem.Elem
+	}
+	return size
+}
+
 // iteratively unpack elements
 func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) {
+	if size < 0 {
+		return nil, fmt.Errorf("cannot marshal input to array, size is negative (%d)", size)
+	}
 	if start+32*size > len(output) {
 		return nil, fmt.Errorf("abi: cannot marshal in to go array: offset %d would go over slice boundary (len=%d)", len(output), start+32*size)
 	}
 
 	// this value will become our slice or our array, depending on the type
 	var refSlice reflect.Value
-	slice := output[start : start+size*32]
 
 	if t.T == SliceTy {
 		// declare our slice
@@ -113,15 +126,20 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 		return nil, fmt.Errorf("abi: invalid type in array/slice unpacking stage")
 	}
 
-	for i, j := start, 0; j*32 < len(slice); i, j = i+32, j+1 {
-		// this corrects the arrangement so that we get all the underlying array values
-		if t.Elem.T == ArrayTy && j != 0 {
-			i = start + t.Elem.Size*32*j
-		}
+	// Arrays have packed elements, resulting in longer unpack steps.
+	// Slices have just 32 bytes per element (pointing to the contents).
+	elemSize := 32
+	if t.T == ArrayTy {
+		elemSize = getFullElemSize(t.Elem)
+	}
+
+	for i, j := start, 0; j < size; i, j = i+elemSize, j+1 {
+
 		inter, err := toGoType(i, *t.Elem, output)
 		if err != nil {
 			return nil, err
 		}
+
 		// append the item to our reflect slice
 		refSlice.Index(j).Set(reflect.ValueOf(inter))
 	}
@@ -181,16 +199,32 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 
 // interprets a 32 byte slice as an offset and then determines which indice to look to decode the type.
 func lengthPrefixPointsTo(index int, output []byte) (start int, length int, err error) {
-	offset := int(binary.BigEndian.Uint64(output[index+24 : index+32]))
-	if offset+32 > len(output) {
-		return 0, 0, fmt.Errorf("abi: cannot marshal in to go slice: offset %d would go over slice boundary (len=%d)", len(output), offset+32)
-	}
-	length = int(binary.BigEndian.Uint64(output[offset+24 : offset+32]))
-	if offset+32+length > len(output) {
-		return 0, 0, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), offset+32+length)
-	}
-	start = offset + 32
+	bigOffsetEnd := big.NewInt(0).SetBytes(output[index : index+32])
+	bigOffsetEnd.Add(bigOffsetEnd, common.Big32)
+	outputLength := big.NewInt(int64(len(output)))
 
-	//fmt.Printf("LENGTH PREFIX INFO: \nsize: %v\noffset: %v\nstart: %v\n", length, offset, start)
+	if bigOffsetEnd.Cmp(outputLength) > 0 {
+		return 0, 0, fmt.Errorf("abi: cannot marshal in to go slice: offset %v would go over slice boundary (len=%v)", bigOffsetEnd, outputLength)
+	}
+
+	if bigOffsetEnd.BitLen() > 63 {
+		return 0, 0, fmt.Errorf("abi offset larger than int64: %v", bigOffsetEnd)
+	}
+
+	offsetEnd := int(bigOffsetEnd.Uint64())
+	lengthBig := big.NewInt(0).SetBytes(output[offsetEnd-32 : offsetEnd])
+
+	totalSize := big.NewInt(0)
+	totalSize.Add(totalSize, bigOffsetEnd)
+	totalSize.Add(totalSize, lengthBig)
+	if totalSize.BitLen() > 63 {
+		return 0, 0, fmt.Errorf("abi length larger than int64: %v", totalSize)
+	}
+
+	if totalSize.Cmp(outputLength) > 0 {
+		return 0, 0, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %v require %v", outputLength, totalSize)
+	}
+	start = int(bigOffsetEnd.Uint64())
+	length = int(lengthBig.Uint64())
 	return
 }

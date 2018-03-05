@@ -168,6 +168,11 @@ func GetGenericErrorPage() string {
                   {{.Msg}}
                 </td>
               </tr>
+              <tr>
+                <td class="value">
+                  {{.Details}}
+                </td>
+              </tr>
 
               <tr>
                 <td class="key">
@@ -342,6 +347,12 @@ func GetNotFoundErrorPage() string {
                   {{.Msg}}
                 </td>
               </tr>
+              <tr>
+                <td class="value">
+                  {{.Details}}
+                </td>
+              </tr>
+
 
               <tr>
                 <td class="key">

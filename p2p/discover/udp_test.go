@@ -247,12 +247,8 @@ func TestUDP_findnode(t *testing.T) {
 
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.
-	test.table.db.updateNode(NewNode(
-		PubkeyID(&test.remotekey.PublicKey),
-		test.remoteaddr.IP,
-		uint16(test.remoteaddr.Port),
-		99,
-	))
+	test.table.db.updateBondTime(PubkeyID(&test.remotekey.PublicKey), time.Now())
+
 	// check that closest neighbors are returned.
 	test.packetIn(nil, findnodePacket, &findnode{Target: testTarget, Expiration: futureExp})
 	expected := test.table.closest(targetHash, bucketSize)
