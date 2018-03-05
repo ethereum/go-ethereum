@@ -33,9 +33,16 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
+)
+
+//metrics variables
+var (
+	gcCounter            = metrics.NewRegisteredCounter("storage.db.dbstore.gc.count", nil)
+	dbStoreDeleteCounter = metrics.NewRegisteredCounter("storage.db.dbstore.rm.count", nil)
 )
 
 const (
@@ -255,6 +262,7 @@ func (s *DbStore) collectGarbage(ratio float32) {
 	// actual gc
 	for i := 0; i < gcnt; i++ {
 		if s.gcArray[i].value <= cutval {
+			gcCounter.Inc(1)
 			s.delete(s.gcArray[i].idx, s.gcArray[i].idxKey)
 		}
 	}
@@ -383,6 +391,7 @@ func (s *DbStore) delete(idx uint64, idxKey []byte) {
 	batch := new(leveldb.Batch)
 	batch.Delete(idxKey)
 	batch.Delete(getDataKey(idx))
+	dbStoreDeleteCounter.Inc(1)
 	s.entryCnt--
 	batch.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
 	s.db.Write(batch)

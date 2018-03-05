@@ -17,7 +17,6 @@
 package mailserver
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 
@@ -108,17 +107,16 @@ func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope)
 		return
 	}
 
-	ok, lower, upper, topic := s.validateRequest(peer.ID(), request)
+	ok, lower, upper, bloom := s.validateRequest(peer.ID(), request)
 	if ok {
-		s.processRequest(peer, lower, upper, topic)
+		s.processRequest(peer, lower, upper, bloom)
 	}
 }
 
-func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, topic whisper.TopicType) []*whisper.Envelope {
+func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, bloom []byte) []*whisper.Envelope {
 	ret := make([]*whisper.Envelope, 0)
 	var err error
 	var zero common.Hash
-	var empty whisper.TopicType
 	kl := NewDbKey(lower, zero)
 	ku := NewDbKey(upper, zero)
 	i := s.db.NewIterator(&util.Range{Start: kl.raw, Limit: ku.raw}, nil)
@@ -131,7 +129,7 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, to
 			log.Error(fmt.Sprintf("RLP decoding failed: %s", err))
 		}
 
-		if topic == empty || envelope.Topic == topic {
+		if whisper.BloomFilterMatch(bloom, envelope.Bloom()) {
 			if peer == nil {
 				// used for test purposes
 				ret = append(ret, &envelope)
@@ -153,39 +151,45 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, to
 	return ret
 }
 
-func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) (bool, uint32, uint32, whisper.TopicType) {
-	var topic whisper.TopicType
+func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) (bool, uint32, uint32, []byte) {
 	if s.pow > 0.0 && request.PoW() < s.pow {
-		return false, 0, 0, topic
+		return false, 0, 0, nil
 	}
 
 	f := whisper.Filter{KeySym: s.key}
 	decrypted := request.Open(&f)
 	if decrypted == nil {
 		log.Warn(fmt.Sprintf("Failed to decrypt p2p request"))
-		return false, 0, 0, topic
-	}
-
-	if len(decrypted.Payload) < 8 {
-		log.Warn(fmt.Sprintf("Undersized p2p request"))
-		return false, 0, 0, topic
+		return false, 0, 0, nil
 	}
 
 	src := crypto.FromECDSAPub(decrypted.Src)
 	if len(src)-len(peerID) == 1 {
 		src = src[1:]
 	}
-	if !bytes.Equal(peerID, src) {
+
+	// if you want to check the signature, you can do it here. e.g.:
+	// if !bytes.Equal(peerID, src) {
+	if src == nil {
 		log.Warn(fmt.Sprintf("Wrong signature of p2p request"))
-		return false, 0, 0, topic
+		return false, 0, 0, nil
+	}
+
+	var bloom []byte
+	payloadSize := len(decrypted.Payload)
+	if payloadSize < 8 {
+		log.Warn(fmt.Sprintf("Undersized p2p request"))
+		return false, 0, 0, nil
+	} else if payloadSize == 8 {
+		bloom = whisper.MakeFullNodeBloom()
+	} else if payloadSize < 8+whisper.BloomFilterSize {
+		log.Warn(fmt.Sprintf("Undersized bloom filter in p2p request"))
+		return false, 0, 0, nil
+	} else {
+		bloom = decrypted.Payload[8 : 8+whisper.BloomFilterSize]
 	}
 
 	lower := binary.BigEndian.Uint32(decrypted.Payload[:4])
 	upper := binary.BigEndian.Uint32(decrypted.Payload[4:8])
-
-	if len(decrypted.Payload) >= 8+whisper.TopicLength {
-		topic = whisper.BytesToTopic(decrypted.Payload[8:])
-	}
-
-	return true, lower, upper, topic
+	return true, lower, upper, bloom
 }

@@ -24,6 +24,16 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+//metrics variables
+//For metrics, we want to count how many times peers are added/removed
+//at a certain index. Thus we do that with an array of counters with
+//entry for each index
+var (
+	bucketAddIndexCount []metrics.Counter
+	bucketRmIndexCount  []metrics.Counter
 )
 
 const (
@@ -88,12 +98,14 @@ type Node interface {
 // params is KadParams configuration
 func New(addr Address, params *KadParams) *Kademlia {
 	buckets := make([][]Node, params.MaxProx+1)
-	return &Kademlia{
+	kad := &Kademlia{
 		addr:      addr,
 		KadParams: params,
 		buckets:   buckets,
 		db:        newKadDb(addr, params),
 	}
+	kad.initMetricsVariables()
+	return kad
 }
 
 // accessor for KAD base address
@@ -138,6 +150,7 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 	// TODO: give priority to peers with active traffic
 	if len(bucket) < self.BucketSize { // >= allows us to add peers beyond the bucketsize limitation
 		self.buckets[index] = append(bucket, node)
+		bucketAddIndexCount[index].Inc(1)
 		log.Debug(fmt.Sprintf("add node %v to table", node))
 		self.setProxLimit(index, true)
 		record.node = node
@@ -178,6 +191,7 @@ func (self *Kademlia) Off(node Node, cb func(*NodeRecord, Node)) (err error) {
 	defer self.lock.Unlock()
 
 	index := self.proximityBin(node.Addr())
+	bucketRmIndexCount[index].Inc(1)
 	bucket := self.buckets[index]
 	for i := 0; i < len(bucket); i++ {
 		if node.Addr() == bucket[i].Addr() {
@@ -425,4 +439,16 @@ func (self *Kademlia) String() string {
 	}
 	rows = append(rows, "=========================================================================")
 	return strings.Join(rows, "\n")
+}
+
+//We have to build up the array of counters for each index
+func (self *Kademlia) initMetricsVariables() {
+	//create the arrays
+	bucketAddIndexCount = make([]metrics.Counter, self.MaxProx+1)
+	bucketRmIndexCount = make([]metrics.Counter, self.MaxProx+1)
+	//at each index create a metrics counter
+	for i := 0; i < (self.KadParams.MaxProx + 1); i++ {
+		bucketAddIndexCount[i] = metrics.NewRegisteredCounter(fmt.Sprintf("network.kademlia.bucket.add.%d.index", i), nil)
+		bucketRmIndexCount[i] = metrics.NewRegisteredCounter(fmt.Sprintf("network.kademlia.bucket.rm.%d.index", i), nil)
+	}
 }
