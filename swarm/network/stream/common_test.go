@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
@@ -78,13 +79,14 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	db := storage.NewDBAPI(netStore)
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, netStore, state.NewMemStore(), defaultSkipCheck)
+	r := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false)
 	RegisterSwarmSyncerServer(r, db)
 	RegisterSwarmSyncerClient(r, db)
 	go func() {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
-	return &TestRegistry{Registry: r}, nil
+	dpa := storage.NewDPA(storage.NewNetStore(store, nil), storage.NewChunkerParams())
+	return &TestRegistry{Registry: r, dpa: dpa}, nil
 }
 
 func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {
@@ -110,7 +112,7 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 	db := storage.NewDBAPI(netStore)
 
 	delivery := NewDelivery(to, db)
-	streamer := NewRegistry(addr, delivery, localStore, state.NewMemStore(), defaultSkipCheck)
+	streamer := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false)
 	teardown := func() {
 		streamer.Close()
 		removeDataDir()
@@ -169,6 +171,7 @@ func (rrs *roundRobinStore) Close() {
 
 type TestRegistry struct {
 	*Registry
+	dpa *storage.DPA
 }
 
 func (r *TestRegistry) APIs() []rpc.API {
@@ -199,7 +202,17 @@ func readAll(dpa *storage.DPA, hash []byte) (int64, error) {
 }
 
 func (r *TestRegistry) ReadAll(hash common.Hash) (int64, error) {
-	return readAll(r.api.dpa, hash[:])
+	return readAll(r.dpa, hash[:])
+}
+
+func (r *TestRegistry) Start(server *p2p.Server) error {
+	r.dpa.Start()
+	return r.Registry.Start(server)
+}
+
+func (r *TestRegistry) Stop() error {
+	r.dpa.Stop()
+	return r.Registry.Stop()
 }
 
 type TestExternalRegistry struct {

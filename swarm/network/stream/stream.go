@@ -56,23 +56,23 @@ type Registry struct {
 	clientFuncs    map[string]func(*Peer, []byte, bool) (Client, error)
 	peers          map[discover.NodeID]*Peer
 	delivery       *Delivery
-	store          storage.ChunkStore
 	intervalsStore state.Store
+	doSync         bool
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(addr *network.BzzAddr, delivery *Delivery, store storage.ChunkStore, intervalsStore state.Store, skipCheck bool) *Registry {
+func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, intervalsStore state.Store, skipCheck, doSync bool) *Registry {
 	streamer := &Registry{
 		addr:           addr,
 		skipCheck:      skipCheck,
-		store:          store,
 		serverFuncs:    make(map[string]func(*Peer, []byte, bool) (Server, error)),
 		clientFuncs:    make(map[string]func(*Peer, []byte, bool) (Client, error)),
 		peers:          make(map[discover.NodeID]*Peer),
 		delivery:       delivery,
 		intervalsStore: intervalsStore,
+		doSync:         doSync,
 	}
-	streamer.api = NewAPI(streamer, streamer.store)
+	streamer.api = NewAPI(streamer)
 	delivery.getPeer = streamer.getPeer
 	streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ []byte, _ bool) (Server, error) {
 		return NewSwarmChunkServer(delivery.db), nil
@@ -80,6 +80,8 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, store storage.ChunkS
 	streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, _ []byte, _ bool) (Client, error) {
 		return NewSwarmSyncerClient(p, delivery.db, nil)
 	})
+	RegisterSwarmSyncerServer(streamer, db)
+	RegisterSwarmSyncerClient(streamer, db)
 	return streamer
 }
 
@@ -214,7 +216,6 @@ func (r *Registry) PeerInfo(id discover.NodeID) interface{} {
 }
 
 func (r *Registry) Close() error {
-	r.store.Close()
 	return r.intervalsStore.Close()
 }
 
@@ -252,63 +253,65 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 	defer close(sp.quit)
 	defer sp.close()
 
-	var kadDepth int
+	if r.doSync {
+		var kadDepth int
 
-	r.delivery.overlay.EachConn(nil, 256, func(addr network.OverlayConn, po int, nn bool) bool {
-		// TODO: stop or expose by kademlia
-		if nn {
-			kadDepth = po
-		}
-		return true
-	})
-
-	kad, ok := r.delivery.overlay.(*network.Kademlia)
-	if !ok {
-		return fmt.Errorf("Not a Kademlia!")
-	}
-
-	var startPo int
-	var endPo int
-	var i int
-	var err error
-
-	//iterate over each bin and solicit needed subscription to bins
-	kad.EachBin(r.addr.Over(), pot.DefaultPof(256), 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
-
-		//identify begin and start index of the bin(s) we want to subscribe to
-		if po < kadDepth {
-			//not nn
-			endPo = po
-			if i > 0 {
-				startPo = endPo + 1
+		r.delivery.overlay.EachConn(nil, 256, func(addr network.OverlayConn, po int, nn bool) bool {
+			// TODO: stop or expose by kademlia
+			if nn {
+				kadDepth = po
 			}
-		} else if endPo < kadDepth || endPo == 0 {
-			if po == 0 && kadDepth == 0 {
-				startPo = endPo
-			} else {
-				startPo = endPo + 1
-			}
-			endPo = maxPO
+			return true
+		})
+
+		kad, ok := r.delivery.overlay.(*network.Kademlia)
+		if !ok {
+			return fmt.Errorf("Not a Kademlia!")
 		}
 
-		// now iterate and subscribe
-		for bin := po - startPo; bin <= endPo; bin++ {
+		var startPo int
+		var endPo int
+		var i int
+		var err error
 
-			f(func(val pot.Val, i int) bool {
-				// a := val.(network.OverlayPeer)
-				log.Debug(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr.ID(), p.ID(), bin))
+		//iterate over each bin and solicit needed subscription to bins
+		kad.EachBin(r.addr.Over(), pot.DefaultPof(256), 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
 
-				err = r.RequestSubscription(p.ID(), NewStream("SYNC", []byte{uint8(bin)}, true), &Range{}, Top)
-				if err != nil {
-					log.Error(fmt.Sprintf("Error in RequestSubsciption! %v", err))
-					return false
+			//identify begin and start index of the bin(s) we want to subscribe to
+			if po < kadDepth {
+				//not nn
+				endPo = po
+				if i > 0 {
+					startPo = endPo + 1
 				}
-				return true
-			})
-		}
-		i++
-		return true
-	})
+			} else if endPo < kadDepth || endPo == 0 {
+				if po == 0 && kadDepth == 0 {
+					startPo = endPo
+				} else {
+					startPo = endPo + 1
+				}
+				endPo = maxPO
+			}
+
+			// now iterate and subscribe
+			for bin := po - startPo; bin <= endPo; bin++ {
+
+				f(func(val pot.Val, i int) bool {
+					// a := val.(network.OverlayPeer)
+					log.Debug(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr.ID(), p.ID(), bin))
+
+					err = r.RequestSubscription(p.ID(), NewStream("SYNC", []byte{uint8(bin)}, true), &Range{}, Top)
+					if err != nil {
+						log.Error(fmt.Sprintf("Error in RequestSubsciption! %v", err))
+						return false
+					}
+					return true
+				})
+			}
+			i++
+			return true
+		})
+	}
 
 	return sp.Run(sp.HandleMsg)
 }
@@ -539,13 +542,11 @@ func (r *Registry) APIs() []rpc.API {
 }
 
 func (r *Registry) Start(server *p2p.Server) error {
-	r.api.dpa.Start()
 	log.Info("Streamer started")
 	return nil
 }
 
 func (r *Registry) Stop() error {
-	r.api.dpa.Stop()
 	return nil
 }
 
@@ -566,14 +567,11 @@ func getHistoryStream(s Stream) Stream {
 
 type API struct {
 	streamer *Registry
-	dpa      *storage.DPA
 }
 
-func NewAPI(r *Registry, store storage.ChunkStore) *API {
-	dpa := storage.NewDPA(store, storage.NewChunkerParams())
+func NewAPI(r *Registry) *API {
 	return &API{
 		streamer: r,
-		dpa:      dpa,
 	}
 }
 

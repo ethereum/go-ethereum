@@ -163,6 +163,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 				// start syncing, i.e., subscribe to upstream peers po 1 bin
 				sid := sim.IDs[j+1]
 				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream("SYNC", []byte{1}, false), &Range{From: 0, To: 0}, Top)
+				return nil
 			})
 			if err != nil {
 				return err
