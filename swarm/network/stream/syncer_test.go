@@ -108,7 +108,8 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	// create DBAPI-s for all nodes
 	dbs := make([]*storage.DBAPI, nodes)
 	for i := 0; i < nodes; i++ {
-		dbs[i] = storage.NewDBAPI(sim.Stores[i].(*storage.LocalStore))
+		netStore := storage.NewNetStore(sim.Stores[i].(*storage.LocalStore), nil)
+		dbs[i] = storage.NewDBAPI(netStore)
 	}
 
 	// collect hashes in po 1 bin for each node

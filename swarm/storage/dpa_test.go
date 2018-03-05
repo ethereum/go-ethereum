@@ -36,8 +36,8 @@ func TestDPArandom(t *testing.T) {
 	db.setCapacity(50000)
 	memStore := NewMemStore(db, defaultCacheCapacity)
 	localStore := &LocalStore{
-		memStore,
-		db,
+		memStore: memStore,
+		DbStore:  db,
 	}
 	chunker := NewTreeChunker(NewChunkerParams())
 	dpa := &DPA{
@@ -94,8 +94,8 @@ func TestDPA_capacity(t *testing.T) {
 	db := tdb.LDBStore
 	memStore := NewMemStore(db, 0)
 	localStore := &LocalStore{
-		memStore,
-		db,
+		memStore: memStore,
+		DbStore:  db,
 	}
 	chunker := NewTreeChunker(NewChunkerParams())
 	dpa := &DPA{

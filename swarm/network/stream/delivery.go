@@ -38,7 +38,6 @@ type Delivery struct {
 	overlay  network.Overlay
 	receiveC chan *ChunkDeliveryMsg
 	getPeer  func(discover.NodeID) *Peer
-	quit     chan struct{}
 }
 
 func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
@@ -139,6 +138,7 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 		if created {
 			if err := d.RequestFromPeers(chunk.Key[:], false, sp.ID()); err != nil {
 				log.Warn("unable to forward chunk request", "peer", sp.ID(), "key", chunk.Key, "err", err)
+				chunk.SetErrored(true)
 				return nil
 			}
 		}
@@ -148,11 +148,11 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 
 			select {
 			case <-chunk.ReqC:
-			case <-d.quit:
-				return
 			case <-t.C:
+				chunk.SetErrored(true)
 				return
 			}
+			chunk.SetErrored(false)
 
 			if req.SkipCheck {
 				err := sp.Deliver(chunk, s.priority)

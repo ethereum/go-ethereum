@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/bmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -173,9 +174,25 @@ type Chunk struct {
 	SData []byte // nil if request, to be supplied by dpa
 	Size  int64  // size of the data covered by the subtree encoded in this chunk
 	//Source   Peer           // peer
-	C        chan bool // to signal data delivery by the dpa
-	ReqC     chan bool // to signal the request done
-	dbStored chan bool // never remove a chunk from memStore before it is written to dbStore
+	C         chan bool // to signal data delivery by the dpa
+	ReqC      chan bool // to signal the request done
+	dbStored  chan bool // never remove a chunk from memStore before it is written to dbStore
+	errored   bool      // flag which is set when the chunk request has errored or timeouted
+	erroredMu sync.Mutex
+}
+
+func (c *Chunk) SetErrored(val bool) {
+	c.erroredMu.Lock()
+	defer c.erroredMu.Unlock()
+
+	c.errored = val
+}
+
+func (c *Chunk) GetErrored() bool {
+	c.erroredMu.Lock()
+	defer c.erroredMu.Unlock()
+
+	return c.errored
 }
 
 func NewChunk(key Key, reqC chan bool) *Chunk {

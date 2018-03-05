@@ -18,35 +18,34 @@ package storage
 
 // wrapper of db-s to provide mockable custom local chunk store access to syncer
 type DBAPI struct {
-	db  *LDBStore
-	loc *LocalStore
+	ns *NetStore
 }
 
-func NewDBAPI(loc *LocalStore) *DBAPI {
-	return &DBAPI{loc.DbStore.(*LDBStore), loc}
+func NewDBAPI(ns *NetStore) *DBAPI {
+	return &DBAPI{ns: ns}
 }
 
 // to obtain the chunks from key or request db entry only
 func (self *DBAPI) Get(key Key) (*Chunk, error) {
-	return self.loc.Get(key)
+	return self.ns.localStore.Get(key)
 }
 
 // current storage counter of chunk db
 func (self *DBAPI) CurrentBucketStorageIndex(po uint8) uint64 {
-	return self.db.CurrentBucketStorageIndex(po)
+	return self.ns.localStore.DbStore.CurrentBucketStorageIndex(po)
 }
 
 // iteration storage counter and proximity order
 func (self *DBAPI) Iterator(from uint64, to uint64, po uint8, f func(Key, uint64) bool) error {
-	return self.db.SyncIterator(from, to, po, f)
+	return self.ns.localStore.DbStore.SyncIterator(from, to, po, f)
 }
 
 // to obtain the chunks from key or request db entry only
 func (self *DBAPI) GetOrCreateRequest(key Key) (*Chunk, bool) {
-	return self.loc.GetOrCreateRequest(key)
+	return self.ns.localStore.GetOrCreateRequest(key)
 }
 
 // to obtain the chunks from key or request db entry only
 func (self *DBAPI) Put(chunk *Chunk) {
-	self.loc.Put(chunk)
+	self.ns.localStore.Put(chunk)
 }

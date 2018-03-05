@@ -39,11 +39,12 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	colorable "github.com/mattn/go-colorable"
 )
 
 var (
 	adapter  = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
-	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
+	loglevel = flag.Int("loglevel", 4, "verbosity of logs")
 )
 
 var (
@@ -63,8 +64,8 @@ func init() {
 	// protocol when using the exec adapter
 	adapters.RegisterServices(services)
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
-
+	log.PrintOrigins(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
 // NewStreamerService
@@ -73,10 +74,10 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	addr := toAddr(id)
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 	store := stores[id].(*storage.LocalStore)
-	db := storage.NewDBAPI(store)
+	netStore := storage.NewNetStore(store, nil)
+	db := storage.NewDBAPI(netStore)
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
-	netStore := storage.NewNetStore(store, nil)
 	r := NewRegistry(addr, delivery, netStore, state.NewMemStore(), defaultSkipCheck)
 	RegisterSwarmSyncerServer(r, db)
 	RegisterSwarmSyncerClient(r, db)
@@ -105,7 +106,9 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 		return nil, nil, nil, removeDataDir, err
 	}
 
-	db := storage.NewDBAPI(localStore)
+	netStore := storage.NewNetStore(localStore, nil)
+	db := storage.NewDBAPI(netStore)
+
 	delivery := NewDelivery(to, db)
 	streamer := NewRegistry(addr, delivery, localStore, state.NewMemStore(), defaultSkipCheck)
 	teardown := func() {

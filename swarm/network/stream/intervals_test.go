@@ -47,10 +47,11 @@ func newIntervalsStreamerService(ctx *adapters.ServiceContext) (node.Service, er
 	addr := toAddr(id)
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 	store := stores[id].(*storage.LocalStore)
-	db := storage.NewDBAPI(store)
+
+	netStore := storage.NewNetStore(store, nil)
+	db := storage.NewDBAPI(netStore)
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
-	netStore := storage.NewNetStore(store, nil)
 	r := NewRegistry(addr, delivery, netStore, state.NewMemStore(), defaultSkipCheck)
 
 	r.RegisterClientFunc(externalStreamName, func(p *Peer, t []byte, live bool) (Client, error) {
