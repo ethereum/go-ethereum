@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -57,7 +58,6 @@ type Registry struct {
 	peers          map[discover.NodeID]*Peer
 	delivery       *Delivery
 	intervalsStore state.Store
-	doSync         bool
 	doRetrieve     bool
 }
 
@@ -71,7 +71,6 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 		peers:          make(map[discover.NodeID]*Peer),
 		delivery:       delivery,
 		intervalsStore: intervalsStore,
-		doSync:         doSync,
 		doRetrieve:     doRetrieve,
 	}
 	streamer.api = NewAPI(streamer)
@@ -84,6 +83,16 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 	})
 	RegisterSwarmSyncerServer(streamer, db)
 	RegisterSwarmSyncerClient(streamer, db)
+
+	if doSync {
+		go func() {
+			// this is a temporary workaround to wait for kademlia table to be healthy
+			time.Sleep(30 * time.Second)
+
+			streamer.startSyncing()
+		}()
+	}
+
 	return streamer
 }
 
@@ -255,66 +264,6 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 	defer close(sp.quit)
 	defer sp.close()
 
-	if r.doSync {
-		var kadDepth int
-
-		r.delivery.overlay.EachConn(nil, 256, func(addr network.OverlayConn, po int, nn bool) bool {
-			// TODO: stop or expose by kademlia
-			if nn {
-				kadDepth = po
-			}
-			return true
-		})
-
-		kad, ok := r.delivery.overlay.(*network.Kademlia)
-		if !ok {
-			return fmt.Errorf("Not a Kademlia!")
-		}
-
-		var startPo int
-		var endPo int
-		var i int
-		var err error
-
-		//iterate over each bin and solicit needed subscription to bins
-		kad.EachBin(r.addr.Over(), pot.DefaultPof(256), 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
-
-			//identify begin and start index of the bin(s) we want to subscribe to
-			if po < kadDepth {
-				//not nn
-				endPo = po
-				if i > 0 {
-					startPo = endPo + 1
-				}
-			} else if endPo < kadDepth || endPo == 0 {
-				if po == 0 && kadDepth == 0 {
-					startPo = endPo
-				} else {
-					startPo = endPo + 1
-				}
-				endPo = maxPO
-			}
-
-			// now iterate and subscribe
-			for bin := po - startPo; bin <= endPo; bin++ {
-
-				f(func(val pot.Val, i int) bool {
-					// a := val.(network.OverlayPeer)
-					log.Debug(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr.ID(), p.ID(), bin))
-
-					stream := NewStream("SYNC", []byte{uint8(bin)}, true)
-					err = r.RequestSubscription(p.ID(), stream, &Range{}, Top)
-					if err != nil {
-						log.Error("request subscription", "err", err, "peer", p.ID(), "stream", stream)
-						return false
-					}
-					return true
-				})
-			}
-			i++
-			return true
-		})
-	}
 	if r.doRetrieve {
 		err := r.Subscribe(p.ID(), NewStream(swarmChunkServerStreamName, nil, false), nil, Top)
 		if err != nil {
@@ -323,6 +272,24 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 	}
 
 	return sp.Run(sp.HandleMsg)
+}
+
+func (r *Registry) startSyncing() {
+	// panic freely
+	kad := r.delivery.overlay.(*network.Kademlia)
+
+	kad.EachBin(r.addr.Over(), pot.DefaultPof(256), 0, func(conn network.OverlayConn, bin int) bool {
+		p := conn.(network.Peer)
+		log.Debug(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr.ID(), p.ID(), bin))
+
+		stream := NewStream("SYNC", []byte{uint8(bin)}, true)
+		err := r.RequestSubscription(p.ID(), stream, &Range{}, Top)
+		if err != nil {
+			log.Error("request subscription", "err", err, "peer", p.ID(), "stream", stream)
+			return false
+		}
+		return true
+	})
 }
 
 func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
