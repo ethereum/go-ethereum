@@ -79,8 +79,6 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
 	r := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false, false)
-	RegisterSwarmSyncerServer(r, db)
-	RegisterSwarmSyncerClient(r, db)
 	go func() {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
