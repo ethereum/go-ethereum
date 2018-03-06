@@ -144,15 +144,15 @@ type TxPoolConfig struct {
 // pool.
 var DefaultTxPoolConfig = TxPoolConfig{
 	Journal:   "transactions.rlp",
-	Rejournal: 24*time.Hour,
+	Rejournal: time.Hour,
 
-	PriceLimit: 50,
+	PriceLimit: 1,
 	PriceBump:  10,
 
 	AccountSlots: 16,
-	GlobalSlots:  200,
+	GlobalSlots:  4096,
 	AccountQueue: 64,
-	GlobalQueue:  100,
+	GlobalQueue:  1024,
 
 	Lifetime: 3 * time.Hour,
 }
@@ -351,14 +351,6 @@ func (pool *TxPool) lockedReset(oldHead, newHead *types.Header) {
 // reset retrieves the current state of the blockchain and ensures the content
 // of the transaction pool is valid with regard to the chain state.
 func (pool *TxPool) reset(oldHead, newHead *types.Header) {
-	log.Info("TxPool reset exec")
-	/*
-	pool.pending = make(map[common.Address]*txList)         // All currently processable transactions
-	pool.queue = make(map[common.Address]*txList)      // Queued but non-processable transactions
-	pool.beats = make(map[common.Address]time.Time)     // Last heartbeat from each known account
-	pool.all = make(map[common.Hash]*types.Transaction) // All transactions to allow lookups
-	pool.priced = nil                   // All transactions sorted by price*/
-	return
 	// If we're reorging an old state, reinject all dropped transactions
 	var reinject types.Transactions
 

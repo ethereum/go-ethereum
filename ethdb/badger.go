@@ -23,12 +23,11 @@ import (
 	"time"
 	
 	"github.com/ethereum/go-ethereum/log"
-	//"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/options"
 	"github.com/ethereum/go-ethereum/common"
 	
-	gometrics "github.com/rcrowley/go-metrics"
 )
 
 
@@ -37,15 +36,15 @@ type BadgerDatabase struct {
 	fn 				string      // filename for reporting
 	db				*badger.DB 
 	badgerCache		*BadgerCache
-	getTimer       gometrics.Timer // Timer for measuring the database get request counts and latencies
-	putTimer       gometrics.Timer // Timer for measuring the database put request counts and latencies
-	delTimer       gometrics.Timer // Timer for measuring the database delete request counts and latencies
-	missMeter      gometrics.Meter // Meter for measuring the missed database get requests
-	readMeter      gometrics.Meter // Meter for measuring the database get request data usage
-	writeMeter     gometrics.Meter // Meter for measuring the database put request data usage
-	compTimeMeter  gometrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter  gometrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter gometrics.Meter // Meter for measuring the data written during compaction
+	getTimer       metrics.Timer // Timer for measuring the database get request counts and latencies
+	putTimer       metrics.Timer // Timer for measuring the database put request counts and latencies
+	delTimer       metrics.Timer // Timer for measuring the database delete request counts and latencies
+	missMeter      metrics.Meter // Meter for measuring the missed database get requests
+	readMeter      metrics.Meter // Meter for measuring the database get request data usage
+	writeMeter     metrics.Meter // Meter for measuring the database put request data usage
+	compTimeMeter  metrics.Meter // Meter for measuring the total time spent in database compaction
+	compReadMeter  metrics.Meter // Meter for measuring the data read during compaction
+	compWriteMeter metrics.Meter // Meter for measuring the data written during compaction
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -75,7 +74,7 @@ func NewBadgerDatabase(file string) (*BadgerDatabase, error) {
 		log: logger,
 	}
 	
-	ret.badgerCache = &BadgerCache{db: ret, c: make(map[string][]byte), size: 0, limit: 100000000}
+	ret.badgerCache = &BadgerCache{db: ret, c: make(map[string][]byte), size: 0, limit: 500000000}
 	return ret, nil
 }
 
