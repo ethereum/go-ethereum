@@ -217,7 +217,7 @@ func (d *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...
 	var success bool
 	var err error
 	d.overlay.EachConn(hash, 255, func(p network.OverlayConn, po int, nn bool) bool {
-		spId := p.(*network.BzzPeer).ID()
+		spId := p.(network.Peer).ID()
 		for _, p := range peersToSkip {
 			if p == spId {
 				log.Trace("Delivery.RequestFromPeers: skip peer", "peer", spId)
