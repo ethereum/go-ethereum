@@ -808,11 +808,11 @@ func TestFUSE(t *testing.T) {
 	}
 	os.RemoveAll(datadir)
 
-	dpa, err := storage.NewLocalDPA(datadir)
+	dpa, err := storage.NewLocalDPA(datadir, make([]byte, 32))
 	if err != nil {
 		t.Fatal(err)
 	}
-	ta := &testAPI{api: api.NewApi(dpa, nil)}
+	ta := &testAPI{api: api.NewApi(dpa, nil, nil)}
 	dpa.Start()
 	defer dpa.Stop()
 

@@ -105,9 +105,9 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 	conf.Stack.P2P.NAT = nil
 	conf.Stack.NoUSB = true
 
-	// listen on a random localhost port (we'll get the actual port after
-	// starting the node through the RPC admin.nodeInfo method)
-	conf.Stack.P2P.ListenAddr = "127.0.0.1:0"
+	// listen on a localhost port, which we set when we
+	// initialise NodeConfig (usually a random port)
+	conf.Stack.P2P.ListenAddr = fmt.Sprintf("127.0.0.1:%d", config.Port)
 
 	node := &ExecNode{
 		ID:      config.ID,
@@ -201,7 +201,7 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	go func() {
 		s := bufio.NewScanner(stderrR)
 		for s.Scan() {
-			if strings.Contains(s.Text(), "WebSocket endpoint opened:") {
+			if strings.Contains(s.Text(), "WebSocket endpoint opened") {
 				wsAddrC <- wsAddrPattern.FindString(s.Text())
 			}
 		}

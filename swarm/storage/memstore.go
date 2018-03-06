@@ -44,7 +44,7 @@ type MemStore struct {
 	entryCnt, capacity uint   // stored entries
 	accessCnt          uint64 // access counter; oldest is thrown away when full
 	dbAccessCnt        uint64
-	dbStore            *DbStore
+	ldbStore           *LDBStore
 	lock               sync.Mutex
 }
 
@@ -61,10 +61,10 @@ a hash prefix subtree containing subtrees or one storage entry (but never both)
   (access[] is a binary tree inside the multi-bit leveled hash tree)
 */
 
-func NewMemStore(d *DbStore, capacity uint) (m *MemStore) {
+func NewMemStore(d *LDBStore, capacity uint) (m *MemStore) {
 	m = &MemStore{}
 	m.memtree = newMemTree(memTreeFLW, nil, 0)
-	m.dbStore = d
+	m.ldbStore = d
 	m.setCapacity(capacity)
 	return
 }
@@ -181,8 +181,8 @@ func (s *MemStore) Put(entry *Chunk) {
 				entry.Size = node.entry.Size
 				entry.SData = node.entry.SData
 			}
-			if entry.Req == nil {
-				entry.Req = node.entry.Req
+			if entry.ReqC == nil {
+				entry.ReqC = node.entry.ReqC
 			}
 			entry.C = node.entry.C
 			node.entry = entry
@@ -227,7 +227,7 @@ func (s *MemStore) Get(hash Key) (chunk *Chunk, err error) {
 		l := hash.bits(bitpos, node.bits)
 		st := node.subtree[l]
 		if st == nil {
-			return nil, notFound
+			return nil, ErrChunkNotFound
 		}
 		bitpos += node.bits
 		node = st
@@ -240,12 +240,12 @@ func (s *MemStore) Get(hash Key) (chunk *Chunk, err error) {
 		if s.dbAccessCnt-node.lastDBaccess > dbForceUpdateAccessCnt {
 			s.dbAccessCnt++
 			node.lastDBaccess = s.dbAccessCnt
-			if s.dbStore != nil {
-				s.dbStore.updateAccessCnt(hash)
+			if s.ldbStore != nil {
+				s.ldbStore.updateAccessCnt(hash)
 			}
 		}
 	} else {
-		err = notFound
+		err = ErrChunkNotFound
 	}
 
 	return
@@ -253,7 +253,7 @@ func (s *MemStore) Get(hash Key) (chunk *Chunk, err error) {
 
 func (s *MemStore) removeOldest() {
 	node := s.memtree
-
+	log.Warn("purge memstore")
 	for node.entry == nil {
 
 		aidx := uint(0)
@@ -293,18 +293,16 @@ func (s *MemStore) removeOldest() {
 
 	}
 
-	if node.entry.dbStored != nil {
-		log.Trace(fmt.Sprintf("Memstore Clean: Waiting for chunk %v to be saved", node.entry.Key.Log()))
-		<-node.entry.dbStored
-		log.Trace(fmt.Sprintf("Memstore Clean: Chunk %v saved to DBStore. Ready to clear from mem.", node.entry.Key.Log()))
-	} else {
-		log.Trace(fmt.Sprintf("Memstore Clean: Chunk %v already in DB. Ready to delete.", node.entry.Key.Log()))
-	}
+	log.Trace(fmt.Sprintf("Memstore Clean: Waiting for chunk %v to be saved", node.entry.Key.Log()))
+	<-node.entry.dbStored
+	log.Trace(fmt.Sprintf("Memstore Clean: Chunk %v saved to DBStore. Ready to clear from mem.", node.entry.Key.Log()))
 
-	if node.entry.SData != nil {
+	if node.entry.ReqC == nil {
 		memstoreRemoveCounter.Inc(1)
 		node.entry = nil
 		s.entryCnt--
+	} else {
+		return
 	}
 
 	node.access[0] = 0
@@ -329,6 +327,40 @@ func (s *MemStore) removeOldest() {
 		}
 	}
 }
+
+// type MemStore struct {
+// 	m  map[string]*Chunk
+// 	mu sync.RWMutex
+// }
+
+// func NewMemStore(d *DbStore, capacity uint) (m *MemStore) {
+// 	return &MemStore{
+// 		m: make(map[string]*Chunk),
+// 	}
+// }
+
+// func (m *MemStore) Get(key Key) (*Chunk, error) {
+// 	m.mu.RLock()
+// 	defer m.mu.RUnlock()
+// 	c, ok := m.m[string(key[:])]
+// 	if !ok {
+// 		return nil, ErrNotFound
+// 	}
+// 	if !bytes.Equal(c.Key, key) {
+// 		panic(fmt.Errorf("MemStore.Get: chunk key %s != req key %s", c.Key.Hex(), key.Hex()))
+// 	}
+// 	return c, nil
+// }
+
+// func (m *MemStore) Put(c *Chunk) {
+// 	m.mu.Lock()
+// 	defer m.mu.Unlock()
+// 	m.m[string(c.Key[:])] = c
+// }
+
+// func (m *MemStore) setCapacity(n int) {
+
+// }
 
 // Close memstore
 func (s *MemStore) Close() {}

@@ -136,10 +136,34 @@ var (
 		Name:  "mime",
 		Usage: "force mime type",
 	}
+	SwarmPssEnabledFlag = cli.BoolFlag{
+		Name:  "pss",
+		Usage: "Enable pss (message passing over swarm)",
+	}
 	CorsStringFlag = cli.StringFlag{
 		Name:   "corsdomain",
 		Usage:  "Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied separated by a ',')",
 		EnvVar: SWARM_ENV_CORS,
+	}
+	SwarmStorePath = cli.StringFlag{
+		Name:   "store.path",
+		Usage:  "Path to leveldb chunk DB (default <$GETH_ENV_DIR>/swarm/bzz-<$BZZ_KEY>/chunks)",
+		EnvVar: SWARM_ENV_STORE_PATH,
+	}
+	SwarmStoreCapacity = cli.Uint64Flag{
+		Name:   "store.size",
+		Usage:  "Number of chunks (5M is roughly 20-25GB) (default 5000000)",
+		EnvVar: SWARM_ENV_STORE_CAPACITY,
+	}
+	SwarmStoreCacheCapacity = cli.UintFlag{
+		Name:   "store.cache.size",
+		Usage:  "Number of recent chunks cached in memory (default 5000)",
+		EnvVar: SWARM_ENV_STORE_CACHE_CAPACITY,
+	}
+	SwarmStoreRadius = cli.IntFlag{
+		Name:   "store.radius",
+		Usage:  "Minimum proximity order (number of identical prefix bits of address key) for chunks to warrant storage (default 0)",
+		EnvVar: SWARM_ENV_STORE_RADIUS,
 	}
 
 	// the following flags are deprecated and should be removed in the future
@@ -303,17 +327,6 @@ Remove corrupt entries from a local chunk database.
 				},
 			},
 		},
-		{
-			Action: func(ctx *cli.Context) {
-				utils.Fatalf("ERROR: 'swarm cleandb' has been removed, please use 'swarm db clean'.")
-			},
-			Name:      "cleandb",
-			Usage:     "DEPRECATED: use 'swarm db clean'",
-			ArgsUsage: " ",
-			Description: `
-DEPRECATED: use 'swarm db clean'.
-`,
-		},
 		// See config.go
 		DumpConfigCommand,
 	}
@@ -355,10 +368,25 @@ DEPRECATED: use 'swarm db clean'.
 		SwarmUploadDefaultPath,
 		SwarmUpFromStdinFlag,
 		SwarmUploadMimeType,
+		// pss flags
+		SwarmPssEnabledFlag,
+		// storage flags
+		SwarmStorePath,
+		SwarmStoreCapacity,
+		SwarmStoreCacheCapacity,
+		SwarmStoreRadius,
 		//deprecated flags
 		DeprecatedEthAPIFlag,
 		DeprecatedEnsAddrFlag,
 	}
+	rpcFlags := []cli.Flag{
+		utils.WSEnabledFlag,
+		utils.WSListenAddrFlag,
+		utils.WSPortFlag,
+		utils.WSApiFlag,
+		utils.WSAllowedOriginsFlag,
+	}
+	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, swarmmetrics.Flags...)
 	app.Before = func(ctx *cli.Context) error {
@@ -405,6 +433,12 @@ func bzzd(ctx *cli.Context) error {
 	}
 
 	cfg := defaultNodeConfig
+
+	//pss operates on ws
+	if bzzconfig.PssEnabled {
+		cfg.WSModules = append(cfg.WSModules, "pss")
+	}
+
 	//geth only supports --datadir via command line
 	//in order to be consistent within swarm, if we pass --datadir via environment variable
 	//or via config file, we get the same directory for geth and swarm
@@ -462,7 +496,8 @@ func registerBzzService(bzzconfig *bzzapi.Config, ctx *cli.Context, stack *node.
 			}
 		}
 
-		return swarm.NewSwarm(ctx, swapClient, bzzconfig)
+		// In production, mockStore must be always nil.
+		return swarm.NewSwarm(ctx, swapClient, bzzconfig, nil)
 	}
 	//register within the ethereum node
 	if err := stack.Register(boot); err != nil {

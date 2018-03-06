@@ -43,6 +43,7 @@ func NewFileSystem(api *Api) *FileSystem {
 
 // Upload replicates a local directory as a manifest file and uploads it
 // using dpa store
+// This function waits the chunks to be stored.
 // TODO: localpath should point to a manifest
 //
 // DEPRECATED: Use the HTTP API instead
@@ -112,12 +113,12 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 			if err == nil {
 				stat, _ := f.Stat()
 				var hash storage.Key
-				wg := &sync.WaitGroup{}
-				hash, err = self.api.dpa.Store(f, stat.Size(), wg, nil)
+				var wait func()
+				hash, wait, err = self.api.dpa.Store(f, stat.Size())
 				if hash != nil {
-					list[i].Hash = hash.String()
+					list[i].Hash = hash.Hex()
 				}
-				wg.Wait()
+				wait()
 				awg.Done()
 				if err == nil {
 					first512 := make([]byte, 512)
@@ -163,7 +164,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 	err2 := trie.recalcAndStore()
 	var hs string
 	if err2 == nil {
-		hs = trie.hash.String()
+		hs = trie.hash.Hex()
 	}
 	awg.Wait()
 	return hs, err2

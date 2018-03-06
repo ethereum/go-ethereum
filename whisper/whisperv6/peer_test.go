@@ -101,7 +101,7 @@ var debugMode = false
 var prevTime time.Time
 var cntPrev int
 
-func TestSimulation(t *testing.T) {
+func XTestSimulation(t *testing.T) {
 	// create a chain of whisper nodes,
 	// installs the filters with shared (predefined) parameters
 	initialize(t)
@@ -238,7 +238,7 @@ func initialize(t *testing.T) {
 func startServer(t *testing.T, s *p2p.Server) {
 	err := s.Start()
 	if err != nil {
-		t.Fatalf("failed to start the fisrt server.")
+		t.Fatal("failed to start the first server: ", err)
 	}
 
 	atomic.AddInt64(&result.started, 1)

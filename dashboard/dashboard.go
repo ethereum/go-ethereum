@@ -21,6 +21,8 @@ package dashboard
 //go:generate go-bindata -nometadata -o assets.go -prefix assets -nocompress -pkg dashboard assets/dashboard.html assets/bundle.js
 //go:generate sh -c "sed 's#var _bundleJs#//nolint:misspell\\\n&#' assets.go > assets.go.tmp && mv assets.go.tmp assets.go"
 //go:generate sh -c "sed 's#var _dashboardHtml#//nolint:misspell\\\n&#' assets.go > assets.go.tmp && mv assets.go.tmp assets.go"
+//go:generate go-bindata -nometadata -o assets.go -prefix assets -nocompress -pkg dashboard assets/public/...
+//go:generate sh -c "sed 's#var _public#//nolint:misspell\\\n&#' assets.go > assets.go.tmp && mv assets.go.tmp assets.go"
 //go:generate gofmt -w -s assets.go
 
 import (

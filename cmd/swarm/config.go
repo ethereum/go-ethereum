@@ -58,19 +58,24 @@ var (
 
 //constants for environment variables
 const (
-	SWARM_ENV_CHEQUEBOOK_ADDR = "SWARM_CHEQUEBOOK_ADDR"
-	SWARM_ENV_ACCOUNT         = "SWARM_ACCOUNT"
-	SWARM_ENV_LISTEN_ADDR     = "SWARM_LISTEN_ADDR"
-	SWARM_ENV_PORT            = "SWARM_PORT"
-	SWARM_ENV_NETWORK_ID      = "SWARM_NETWORK_ID"
-	SWARM_ENV_SWAP_ENABLE     = "SWARM_SWAP_ENABLE"
-	SWARM_ENV_SWAP_API        = "SWARM_SWAP_API"
-	SWARM_ENV_SYNC_ENABLE     = "SWARM_SYNC_ENABLE"
-	SWARM_ENV_ENS_API         = "SWARM_ENS_API"
-	SWARM_ENV_ENS_ADDR        = "SWARM_ENS_ADDR"
-	SWARM_ENV_CORS            = "SWARM_CORS"
-	SWARM_ENV_BOOTNODES       = "SWARM_BOOTNODES"
-	GETH_ENV_DATADIR          = "GETH_DATADIR"
+	SWARM_ENV_CHEQUEBOOK_ADDR      = "SWARM_CHEQUEBOOK_ADDR"
+	SWARM_ENV_ACCOUNT              = "SWARM_ACCOUNT"
+	SWARM_ENV_LISTEN_ADDR          = "SWARM_LISTEN_ADDR"
+	SWARM_ENV_PORT                 = "SWARM_PORT"
+	SWARM_ENV_NETWORK_ID           = "SWARM_NETWORK_ID"
+	SWARM_ENV_SWAP_ENABLE          = "SWARM_SWAP_ENABLE"
+	SWARM_ENV_SWAP_API             = "SWARM_SWAP_API"
+	SWARM_ENV_SYNC_ENABLE          = "SWARM_SYNC_ENABLE"
+	SWARM_ENV_ENS_API              = "SWARM_ENS_API"
+	SWARM_ENV_ENS_ADDR             = "SWARM_ENS_ADDR"
+	SWARM_ENV_CORS                 = "SWARM_CORS"
+	SWARM_ENV_BOOTNODES            = "SWARM_BOOTNODES"
+	SWARM_ENV_PSS_ENABLE           = "SWARM_PSS_ENABLE"
+	SWARM_ENV_STORE_PATH           = "SWARM_STORE_PATH"
+	SWARM_ENV_STORE_CAPACITY       = "SWARM_STORE_CAPACITY"
+	SWARM_ENV_STORE_CACHE_CAPACITY = "SWARM_STORE_CACHE_CAPACITY"
+	SWARM_ENV_STORE_RADIUS         = "SWARM_STORE_RADIUS"
+	GETH_ENV_DATADIR               = "GETH_DATADIR"
 )
 
 // These settings ensure that TOML keys use the same names as Go struct fields.
@@ -95,7 +100,7 @@ func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
 	//check for deprecated flags
 	checkDeprecated(ctx)
 	//start by creating a default config
-	config = bzzapi.NewDefaultConfig()
+	config = bzzapi.NewConfig()
 	//first load settings from config file (if provided)
 	config, err = configFileOverride(config, ctx)
 	if err != nil {
@@ -221,6 +226,26 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.BootNodes = ctx.GlobalString(utils.BootnodesFlag.Name)
 	}
 
+	if ctx.GlobalIsSet(SwarmPssEnabledFlag.Name) {
+		currentConfig.PssEnabled = true
+	}
+
+	if storePath := ctx.GlobalString(SwarmStorePath.Name); storePath != "" {
+		currentConfig.StoreParams.ChunkDbPath = storePath
+	}
+
+	if storeCapacity := ctx.GlobalUint64(SwarmStoreCapacity.Name); storeCapacity != 0 {
+		currentConfig.StoreParams.DbCapacity = storeCapacity
+	}
+
+	if storeCacheCapacity := ctx.GlobalUint(SwarmStoreCacheCapacity.Name); storeCacheCapacity != 0 {
+		currentConfig.StoreParams.CacheCapacity = storeCacheCapacity
+	}
+
+	if storeRadius := ctx.GlobalInt(SwarmStoreRadius.Name); storeRadius != 0 {
+		currentConfig.StoreParams.Radius = storeRadius
+	}
+
 	return currentConfig
 
 }
@@ -290,6 +315,12 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 
 	if bootnodes := os.Getenv(SWARM_ENV_BOOTNODES); bootnodes != "" {
 		currentConfig.BootNodes = bootnodes
+	}
+
+	if pssenable := os.Getenv(SWARM_ENV_PSS_ENABLE); pssenable != "" {
+		if ps, err := strconv.ParseBool(pssenable); err != nil {
+			currentConfig.PssEnabled = ps
+		}
 	}
 
 	return currentConfig

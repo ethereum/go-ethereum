@@ -45,43 +45,48 @@ type Config struct {
 	*storage.ChunkerParams
 	*network.HiveParams
 	Swap *swap.SwapParams
-	*network.SyncParams
-	Contract    common.Address
-	EnsRoot     common.Address
-	EnsAPIs     []string
-	Path        string
-	ListenAddr  string
-	Port        string
-	PublicKey   string
-	BzzKey      string
-	NetworkId   uint64
-	SwapEnabled bool
-	SyncEnabled bool
-	SwapApi     string
-	Cors        string
-	BzzAccount  string
-	BootNodes   string
+	//*network.SyncParams
+	Contract        common.Address
+	EnsRoot         common.Address
+	EnsAPIs         []string
+	Path            string
+	ListenAddr      string
+	Port            string
+	PublicKey       string
+	BzzKey          string
+	NetworkId       uint64
+	SwapEnabled     bool
+	SyncEnabled     bool
+	PssEnabled      bool
+	ResourceEnabled bool
+	SwapApi         string
+	Cors            string
+	BzzAccount      string
+	BootNodes       string
+	privateKey      *ecdsa.PrivateKey
 }
 
 //create a default config with all parameters to set to defaults
-func NewDefaultConfig() (self *Config) {
+func NewConfig() (self *Config) {
 
 	self = &Config{
 		StoreParams:   storage.NewDefaultStoreParams(),
 		ChunkerParams: storage.NewChunkerParams(),
-		HiveParams:    network.NewDefaultHiveParams(),
-		SyncParams:    network.NewDefaultSyncParams(),
-		Swap:          swap.NewDefaultSwapParams(),
-		ListenAddr:    DefaultHTTPListenAddr,
-		Port:          DefaultHTTPPort,
-		Path:          node.DefaultDataDir(),
-		EnsAPIs:       nil,
-		EnsRoot:       ens.TestNetAddress,
-		NetworkId:     network.NetworkId,
-		SwapEnabled:   false,
-		SyncEnabled:   true,
-		SwapApi:       "",
-		BootNodes:     "",
+		HiveParams:    network.NewHiveParams(),
+		//SyncParams:    network.NewDefaultSyncParams(),
+		Swap:            swap.NewDefaultSwapParams(),
+		ListenAddr:      DefaultHTTPListenAddr,
+		Port:            DefaultHTTPPort,
+		Path:            node.DefaultDataDir(),
+		EnsAPIs:         nil,
+		EnsRoot:         ens.TestNetAddress,
+		NetworkId:       network.NetworkID,
+		SwapEnabled:     false,
+		SyncEnabled:     true,
+		PssEnabled:      true,
+		ResourceEnabled: true,
+		SwapApi:         "",
+		BootNodes:       "",
 	}
 
 	return
@@ -106,8 +111,17 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 	self.PublicKey = pubkeyhex
 	self.BzzKey = keyhex
 
-	self.Swap.Init(self.Contract, prvKey)
-	self.SyncParams.Init(self.Path)
-	self.HiveParams.Init(self.Path)
+	if self.SwapEnabled {
+		self.Swap.Init(self.Contract, prvKey)
+	}
+	self.privateKey = prvKey
 	self.StoreParams.Init(self.Path)
+}
+
+func (self *Config) ShiftPrivateKey() (privKey *ecdsa.PrivateKey) {
+	if self.privateKey != nil {
+		privKey = self.privateKey
+		self.privateKey = nil
+	}
+	return privKey
 }

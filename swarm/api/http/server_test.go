@@ -18,20 +18,204 @@ package http_test
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
+
+func init() {
+	verbose := flag.Bool("v", false, "verbose")
+	flag.Parse()
+	if *verbose {
+		log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
+	}
+}
+
+type resourceResponse struct {
+	Manifest storage.Key `json:"manifest"`
+	Resource string      `json:"resource"`
+	Update   storage.Key `json:"update"`
+}
+
+func TestBzzResource(t *testing.T) {
+	srv := testutil.NewTestSwarmServer(t)
+	defer srv.Close()
+
+	// our mutable resource "name"
+	keybytes := []byte("foo")
+	srv.Hasher.Reset()
+	srv.Hasher.Write([]byte(fmt.Sprintf("%x", keybytes)))
+	keybyteshash := fmt.Sprintf("%x", srv.Hasher.Sum(nil))
+
+	// data of update 1
+	databytes := make([]byte, 666)
+	_, err := rand.Read(databytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// creates resource and sets update 1
+	url := fmt.Sprintf("%s/bzz-resource:/%x/13", srv.URL, keybytes)
+	resp, err := http.Post(url, "application/octet-stream", bytes.NewReader(databytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rsrcResp := &resourceResponse{}
+	err = json.Unmarshal(b, rsrcResp)
+	if err != nil {
+		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
+	}
+	if rsrcResp.Update.Hex() != keybyteshash {
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", keybyteshash, rsrcResp.Resource)
+	}
+
+	// get manifest
+	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, rsrcResp.Manifest)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := &api.Manifest{}
+	err = json.Unmarshal(b, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Entries) != 1 {
+		t.Fatalf("Manifest has %d entries", len(manifest.Entries))
+	}
+	if manifest.Entries[0].Hash != rsrcResp.Resource {
+		t.Fatalf("Expected manifest path '%s', got '%s'", keybyteshash, manifest.Entries[0].Hash)
+	}
+
+	// get bzz manifest transparent resource resolve
+	url = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp.Manifest)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// get latest update (1.1) through resource directly
+	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, b) {
+		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
+	}
+
+	// update 2
+	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
+	data := []byte("foo")
+	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Update returned %s", resp.Status)
+	}
+
+	// get latest update (1.2) through resource directly
+	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", data, b)
+	}
+
+	// get latest update (1.2) with specified period
+	url = fmt.Sprintf("%s/bzz-resource:/%x/1", srv.URL, keybytes)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", data, b)
+	}
+
+	// get first update (1.1) with specified period and version
+	url = fmt.Sprintf("%s/bzz-resource:/%x/1/1", srv.URL, keybytes)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, b) {
+		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
+	}
+}
 
 func TestBzzGetPath(t *testing.T) {
 
@@ -59,15 +243,14 @@ func TestBzzGetPath(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t)
 	defer srv.Close()
 
-	wg := &sync.WaitGroup{}
-
 	for i, mf := range testmanifest {
 		reader[i] = bytes.NewReader([]byte(mf))
-		key[i], err = srv.Dpa.Store(reader[i], int64(len(mf)), wg, nil)
+		var wait func()
+		key[i], wait, err = srv.Dpa.Store(reader[i], int64(len(mf)))
 		if err != nil {
 			t.Fatal(err)
 		}
-		wg.Wait()
+		wait()
 	}
 
 	_, err = http.Get(srv.URL + "/bzz-raw:/" + common.ToHex(key[0])[2:] + "/a")
@@ -122,7 +305,7 @@ func TestBzzGetPath(t *testing.T) {
 			t.Fatalf("Read request body: %v", err)
 		}
 
-		if string(respbody) != key[v].String() {
+		if string(respbody) != key[v].Hex() {
 			isexpectedfailrequest := false
 
 			for _, r := range expectedfailrequests {
@@ -233,11 +416,11 @@ func TestBzzGetPath(t *testing.T) {
 	}
 
 	nonhashresponses := []string{
-		"error resolving name: no DNS to resolve name: &#34;name&#34;",
-		"error resolving nonhash: immutable address not a content hash: &#34;nonhash&#34;",
-		"error resolving nonhash: no DNS to resolve name: &#34;nonhash&#34;",
-		"error resolving nonhash: no DNS to resolve name: &#34;nonhash&#34;",
-		"error resolving nonhash: no DNS to resolve name: &#34;nonhash&#34;",
+		"cannot resolve name: no DNS to resolve name: &#34;name&#34;",
+		"cannot resolve nonhash: immutable address not a content hash: &#34;nonhash&#34;",
+		"cannot resolve nonhash: no DNS to resolve name: &#34;nonhash&#34;",
+		"cannot resolve nonhash: no DNS to resolve name: &#34;nonhash&#34;",
+		"cannot resolve nonhash: no DNS to resolve name: &#34;nonhash&#34;",
 	}
 
 	for i, url := range nonhashtests {
@@ -258,7 +441,6 @@ func TestBzzGetPath(t *testing.T) {
 			t.Fatalf("Non-Hash response body does not match, expected: %v, got: %v", nonhashresponses[i], string(respbody))
 		}
 	}
-
 }
 
 // TestBzzRootRedirect tests that getting the root path of a manifest without
