@@ -17,29 +17,13 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 export type Content = {
-	general: General,
 	home: Home,
 	chain: Chain,
 	txpool: TxPool,
 	network: Network,
 	system: System,
 	logs: Logs,
-};
-
-export type General = {
-	version: ?string,
-	commit: ?string,
-};
-
-export type Home = {
-	activeMemory: ChartEntries,
-	virtualMemory: ChartEntries,
-	networkIngress: ChartEntries,
-	networkEgress: ChartEntries,
-	processCPU: ChartEntries,
-	systemCPU: ChartEntries,
-	diskRead: ChartEntries,
-	diskWrite: ChartEntries,
+	footer: Footer,
 };
 
 export type ChartEntries = Array<ChartEntry>;
@@ -47,6 +31,10 @@ export type ChartEntries = Array<ChartEntry>;
 export type ChartEntry = {
 	time: Date,
 	value: number,
+};
+
+export type Home = {
+	/* TODO (kurkomisi) */
 };
 
 export type Chain = {
@@ -67,4 +55,18 @@ export type System = {
 
 export type Logs = {
 	log: Array<string>,
+};
+
+export type Footer = {
+	activeMemory: ChartEntries,
+	virtualMemory: ChartEntries,
+	networkIngress: ChartEntries,
+	networkEgress: ChartEntries,
+	processCPU: ChartEntries,
+	systemCPU: ChartEntries,
+	diskRead: ChartEntries,
+	diskWrite: ChartEntries,
+
+	version: ?string,
+	commit: ?string,
 };

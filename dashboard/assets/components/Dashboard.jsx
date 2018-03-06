@@ -25,6 +25,11 @@ import Body from './Body';
 import {MENU} from '../common';
 import type {Content} from '../types/content';
 
+// gethHost is the host of geth.
+const gethHost = 'localhost';
+// gethPort is the port of geth.
+const gethPort = 8080;
+
 // deepUpdate updates an object corresponding to the given update data, which has
 // the shape of the same structure as the original object. updater also has the same
 // structure, except that it contains functions where the original data needs to be
@@ -77,11 +82,15 @@ const appender = <T>(limit: number, mapper = replacer) => (update: Array<T>, pre
 
 // defaultContent is the initial value of the state content.
 const defaultContent: Content = {
-	general: {
-		version: null,
-		commit:  null,
+	home:    {},
+	chain:   {},
+	txpool:  {},
+	network: {},
+	system:  {},
+	logs:    {
+		log: [],
 	},
-	home: {
+	footer: {
 		activeMemory:   [],
 		virtualMemory:  [],
 		networkIngress: [],
@@ -90,13 +99,9 @@ const defaultContent: Content = {
 		systemCPU:      [],
 		diskRead:       [],
 		diskWrite:      [],
-	},
-	chain:   {},
-	txpool:  {},
-	network: {},
-	system:  {},
-	logs:    {
-		log: [],
+
+		version: null,
+		commit:  null,
 	},
 };
 
@@ -104,11 +109,15 @@ const defaultContent: Content = {
 //
 // TODO (kurkomisi): Define a tricky type which embraces the content and the updaters.
 const updaters = {
-	general: {
-		version: replacer,
-		commit:  replacer,
+	home:    null,
+	chain:   null,
+	txpool:  null,
+	network: null,
+	system:  null,
+	logs:    {
+		log: appender(200),
 	},
-	home: {
+	footer: {
 		activeMemory:   appender(200),
 		virtualMemory:  appender(200),
 		networkIngress: appender(200),
@@ -117,13 +126,9 @@ const updaters = {
 		systemCPU:      appender(200),
 		diskRead:       appender(200),
 		diskWrite:      appender(200),
-	},
-	chain:   null,
-	txpool:  null,
-	network: null,
-	system:  null,
-	logs:    {
-		log: appender(200),
+
+		version: replacer,
+		commit:  replacer,
 	},
 };
 
@@ -178,7 +183,7 @@ class Dashboard extends Component<Props, State> {
 	// reconnect establishes a websocket connection with the server, listens for incoming messages
 	// and tries to reconnect on connection loss.
 	reconnect = () => {
-		const server = new WebSocket(`${((window.location.protocol === 'https:') ? 'wss://' : 'ws://') + window.location.host}/api`);
+		const server = new WebSocket(`${((window.location.protocol === 'https:') ? 'wss://' : 'ws://')}${gethHost}:${gethPort}/api`);
 		server.onopen = () => {
 			this.setState({content: defaultContent, shouldUpdate: {}});
 		};
@@ -217,7 +222,6 @@ class Dashboard extends Component<Props, State> {
 		return (
 			<div className={this.props.classes.dashboard} style={styles.dashboard}>
 				<Header
-					opened={this.state.sideBar}
 					switchSideBar={this.switchSideBar}
 				/>
 				<Body

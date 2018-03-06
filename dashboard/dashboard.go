@@ -25,10 +25,8 @@ package dashboard
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -62,7 +60,7 @@ type Dashboard struct {
 
 	listener net.Listener
 	conns    map[uint32]*client // Currently live websocket connections
-	charts   *HomeMessage
+	charts   *FooterMessage
 	commit   string
 	lock     sync.RWMutex // Lock protecting the dashboard's internals
 
@@ -84,7 +82,7 @@ func New(config *Config, commit string) (*Dashboard, error) {
 		conns:  make(map[uint32]*client),
 		config: config,
 		quit:   make(chan chan error),
-		charts: &HomeMessage{
+		charts: &FooterMessage{
 			ActiveMemory:   emptyChartEntries(now, activeMemorySampleLimit, config.Refresh),
 			VirtualMemory:  emptyChartEntries(now, virtualMemorySampleLimit, config.Refresh),
 			NetworkIngress: emptyChartEntries(now, networkIngressSampleLimit, config.Refresh),
@@ -182,17 +180,6 @@ func (db *Dashboard) webHandler(w http.ResponseWriter, r *http.Request) {
 	if path == "/" {
 		path = "/dashboard.html"
 	}
-	// If the path of the assets is manually set
-	if db.config.Assets != "" {
-		blob, err := ioutil.ReadFile(filepath.Join(db.config.Assets, path))
-		if err != nil {
-			log.Warn("Failed to read file", "path", path, "err", err)
-			http.Error(w, "not found", http.StatusNotFound)
-			return
-		}
-		w.Write(blob)
-		return
-	}
 	blob, err := Asset(path[1:])
 	if err != nil {
 		log.Warn("Failed to load the asset", "path", path, "err", err)
@@ -237,11 +224,7 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 	}
 	// Send the past data.
 	client.msg <- Message{
-		General: &GeneralMessage{
-			Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
-			Commit:  db.commit,
-		},
-		Home: &HomeMessage{
+		Footer: &FooterMessage{
 			ActiveMemory:   db.charts.ActiveMemory,
 			VirtualMemory:  db.charts.VirtualMemory,
 			NetworkIngress: db.charts.NetworkIngress,
@@ -250,6 +233,9 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 			SystemCPU:      db.charts.SystemCPU,
 			DiskRead:       db.charts.DiskRead,
 			DiskWrite:      db.charts.DiskWrite,
+
+			Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
+			Commit:  db.commit,
 		},
 	}
 	// Start tracking the connection and drop at connection loss.
@@ -277,6 +263,8 @@ func (db *Dashboard) collectData() {
 	systemCPUUsage := gosigar.Cpu{}
 	systemCPUUsage.Get()
 	var (
+		mem runtime.MemStats
+
 		prevNetworkIngress = metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Count()
 		prevNetworkEgress  = metrics.DefaultRegistry.Get("p2p/OutboundTraffic").(metrics.Meter).Count()
 		prevProcessCPUTime = getProcessCPUTime()
@@ -306,7 +294,7 @@ func (db *Dashboard) collectData() {
 				deltaNetworkIngress = float64(curNetworkIngress - prevNetworkIngress)
 				deltaNetworkEgress  = float64(curNetworkEgress - prevNetworkEgress)
 				deltaProcessCPUTime = curProcessCPUTime - prevProcessCPUTime
-				deltaSystemCPUUsage = systemCPUUsage.Delta(prevSystemCPUUsage)
+				deltaSystemCPUUsage = curSystemCPUUsage.Delta(prevSystemCPUUsage)
 				deltaDiskRead       = curDiskRead - prevDiskRead
 				deltaDiskWrite      = curDiskWrite - prevDiskWrite
 			)
@@ -319,7 +307,6 @@ func (db *Dashboard) collectData() {
 
 			now := time.Now()
 
-			var mem runtime.MemStats
 			runtime.ReadMemStats(&mem)
 			activeMemory := &ChartEntry{
 				Time:  now,
@@ -363,7 +350,7 @@ func (db *Dashboard) collectData() {
 			db.charts.DiskWrite = append(db.charts.DiskRead[1:], diskWrite)
 
 			db.sendToAll(&Message{
-				Home: &HomeMessage{
+				Footer: &FooterMessage{
 					ActiveMemory:   ChartEntries{activeMemory},
 					VirtualMemory:  ChartEntries{virtualMemory},
 					NetworkIngress: ChartEntries{networkIngress},
