@@ -59,7 +59,7 @@ func (m *mockRetrieve) retrieve(chunk *Chunk) error {
 	if m.requests[hkey] == 3 {
 		*chunk = *newDummyChunk(chunk.Key)
 		go func() {
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			close(chunk.ReqC)
 		}()
 
@@ -70,7 +70,7 @@ func (m *mockRetrieve) retrieve(chunk *Chunk) error {
 }
 
 func TestNetstoreFailedRequest(t *testing.T) {
-	searchTimeout = 100 * time.Millisecond
+	searchTimeout = 300 * time.Millisecond
 
 	// setup
 	addr := network.RandomAddr() // tested peers peer address
