@@ -17,7 +17,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -81,19 +80,21 @@ func main() {
 		for _, kind := range strings.Split(*excFlag, ",") {
 			exclude[strings.ToLower(kind)] = true
 		}
-		contracts, err := compiler.CompileSolidity(*solcFlag, *solFlag)
-		if err != nil {
+		solc, err := compiler.InitSolc(*solcFlag)
+
+		solReturn, err := solc.Compile(compiler.FlagOpts{}, *solFlag)
+		if err != nil || solReturn.Typ != compiler.Solc {
 			fmt.Printf("Failed to build Solidity contract: %v\n", err)
 			os.Exit(-1)
 		}
 		// Gather all non-excluded contract for binding
-		for name, contract := range contracts {
+		for name, contract := range solReturn.Contracts {
 			if exclude[strings.ToLower(name)] {
 				continue
 			}
-			abi, _ := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
-			abis = append(abis, string(abi))
-			bins = append(bins, contract.Code)
+
+			abis = append(abis, contract.Abi)
+			bins = append(bins, contract.Bin)
 
 			nameParts := strings.Split(name, ":")
 			types = append(types, nameParts[len(nameParts)-1])
