@@ -60,7 +60,7 @@ const (
 	aesKeyLength    = 32 // in bytes
 	aesNonceLength  = 12 // in bytes; for more info please see cipher.gcmStandardNonceSize & aesgcm.NonceSize()
 	keyIDSize       = 32 // in bytes
-	bloomFilterSize = 64 // in bytes
+	BloomFilterSize = 64 // in bytes
 	flagsLength     = 1
 
 	EnvelopeHeaderLength = 20

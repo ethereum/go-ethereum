@@ -18,6 +18,13 @@ package storage
 
 import (
 	"encoding/binary"
+
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+//metrics variables
+var (
+	dbStorePutCounter = metrics.NewRegisteredCounter("storage.db.dbstore.put.count", nil)
 )
 
 // LocalStore is a combination of inmemory db over a disk persisted db
@@ -39,6 +46,14 @@ func NewLocalStore(hash SwarmHasher, params *StoreParams) (*LocalStore, error) {
 	}, nil
 }
 
+func (self *LocalStore) CacheCounter() uint64 {
+	return uint64(self.memStore.(*MemStore).Counter())
+}
+
+func (self *LocalStore) DbCounter() uint64 {
+	return self.DbStore.(*DbStore).Counter()
+}
+
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
@@ -48,6 +63,7 @@ func (self *LocalStore) Put(chunk *Chunk) {
 		chunk.wg.Add(1)
 	}
 	go func() {
+		dbStorePutCounter.Inc(1)
 		self.DbStore.Put(chunk)
 		if chunk.wg != nil {
 			chunk.wg.Done()

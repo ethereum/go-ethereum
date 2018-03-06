@@ -23,6 +23,8 @@ import (
 	"io"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 /*
@@ -61,6 +63,11 @@ The hashing itself does use extra copies and allocation though, since it does ne
 var (
 	errAppendOppNotSuported = errors.New("Append operation not supported")
 	errOperationTimedOut    = errors.New("operation timed out")
+)
+
+//metrics variables
+var (
+	newChunkCounter = metrics.NewRegisteredCounter("storage.chunks.new", nil)
 )
 
 type TreeChunker struct {
@@ -298,6 +305,13 @@ func (self *TreeChunker) hashChunk(hasher SwarmHash, job *hashJob, chunkC chan *
 	job.parentWg.Done()
 
 	if chunkC != nil {
+		//NOTE: this increases the chunk count even if the local node already has this chunk;
+		//on file upload the node will increase this counter even if the same file has already been uploaded
+		//So it should be evaluated whether it is worth keeping this counter
+		//and/or actually better track when the chunk is Put to the local database
+		//(which may question the need for disambiguation when a completely new chunk has been created
+		//and/or a chunk is being put to the local DB; for chunk tracking it may be worth distinguishing
+		newChunkCounter.Inc(1)
 		chunkC <- newChunk
 	}
 }
