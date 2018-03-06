@@ -302,9 +302,10 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 					// a := val.(network.OverlayPeer)
 					log.Debug(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr.ID(), p.ID(), bin))
 
-					err = r.RequestSubscription(p.ID(), NewStream("SYNC", []byte{uint8(bin)}, true), &Range{}, Top)
+					stream := NewStream("SYNC", []byte{uint8(bin)}, true)
+					err = r.RequestSubscription(p.ID(), stream, &Range{}, Top)
 					if err != nil {
-						log.Error(fmt.Sprintf("Error in RequestSubsciption! %v", err))
+						log.Error("request subscription", "err", err, "peer", p.ID(), "stream", stream)
 						return false
 					}
 					return true
