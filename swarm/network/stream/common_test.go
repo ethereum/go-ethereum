@@ -78,7 +78,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	db := storage.NewDBAPI(store)
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false)
+	r := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false, false)
 	RegisterSwarmSyncerServer(r, db)
 	RegisterSwarmSyncerClient(r, db)
 	go func() {
@@ -109,7 +109,7 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 
 	db := storage.NewDBAPI(localStore)
 	delivery := NewDelivery(to, db)
-	streamer := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false)
+	streamer := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false, false)
 	teardown := func() {
 		streamer.Close()
 		removeDataDir()

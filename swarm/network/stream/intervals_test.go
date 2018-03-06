@@ -50,7 +50,7 @@ func newIntervalsStreamerService(ctx *adapters.ServiceContext) (node.Service, er
 	db := storage.NewDBAPI(store)
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false)
+	r := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false, false)
 
 	r.RegisterClientFunc(externalStreamName, func(p *Peer, t []byte, live bool) (Client, error) {
 		return newTestExternalClient(t, db), nil

@@ -58,10 +58,11 @@ type Registry struct {
 	delivery       *Delivery
 	intervalsStore state.Store
 	doSync         bool
+	doRetrieve     bool
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, intervalsStore state.Store, skipCheck, doSync bool) *Registry {
+func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, intervalsStore state.Store, skipCheck, doSync, doRetrieve bool) *Registry {
 	streamer := &Registry{
 		addr:           addr,
 		skipCheck:      skipCheck,
@@ -71,6 +72,7 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 		delivery:       delivery,
 		intervalsStore: intervalsStore,
 		doSync:         doSync,
+		doRetrieve:     doRetrieve,
 	}
 	streamer.api = NewAPI(streamer)
 	delivery.getPeer = streamer.getPeer
@@ -311,6 +313,12 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 			i++
 			return true
 		})
+	}
+	if r.doRetrieve {
+		err := r.Subscribe(p.ID(), NewStream(swarmChunkServerStreamName, nil, false), nil, Top)
+		if err != nil {
+			return err
+		}
 	}
 
 	return sp.Run(sp.HandleMsg)

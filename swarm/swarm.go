@@ -153,7 +153,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	if err != nil {
 		return
 	}
-	self.streamer = stream.NewRegistry(addr, delivery, db, stateStore, false, true)
+	self.streamer = stream.NewRegistry(addr, delivery, db, stateStore, false, true, true)
 
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
