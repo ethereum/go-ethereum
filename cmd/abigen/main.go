@@ -33,9 +33,10 @@ var (
 	binFlag = flag.String("bin", "", "Path to the Ethereum contract bytecode (generate deploy method)")
 	typFlag = flag.String("type", "", "Struct name for the binding (default = package name)")
 
-	solFlag  = flag.String("sol", "", "Path to the Ethereum contract Solidity source to build and bind")
-	solcFlag = flag.String("solc", "solc", "Solidity compiler to use if source builds are requested")
-	excFlag  = flag.String("exc", "", "Comma separated types to exclude from binding")
+	solFlag      = flag.String("sol", "", "Path to the Ethereum contract Solidity source to build and bind")
+	solcFlag     = flag.String("solc", "solc", "Solidity compiler to use if source builds are requested")
+	excFlag      = flag.String("exc", "", "Comma separated types to exclude from binding")
+	solcArgsFlag = flag.String("flags", "", "Space separated extra flags to pass to solc")
 
 	pkgFlag  = flag.String("pkg", "", "Package name to generate the binding into")
 	outFlag  = flag.String("out", "", "Output file for the generated binding (default = stdout)")
@@ -81,7 +82,11 @@ func main() {
 		for _, kind := range strings.Split(*excFlag, ",") {
 			exclude[strings.ToLower(kind)] = true
 		}
-		contracts, err := compiler.CompileSolidity(*solcFlag, *solFlag)
+		var solcArgs []string
+		if *solcArgsFlag != "" {
+			solcArgs = strings.Split(*solcArgsFlag, " ")
+		}
+		contracts, err := compiler.CompileSolidity(*solcFlag, solcArgs, *solFlag)
 		if err != nil {
 			fmt.Printf("Failed to build Solidity contract: %v\n", err)
 			os.Exit(-1)
