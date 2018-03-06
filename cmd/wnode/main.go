@@ -309,8 +309,10 @@ func startServer() error {
 		configureNode()
 	}
 
-	if *fileExMode || *fileReader {
-		fmt.Printf("Please type the file name. To quit type: '%s'\n", quitCommand)
+	if *fileExMode {
+		fmt.Printf("Please type the file name to be send. To quit type: '%s'\n", quitCommand)
+	} else if *fileReader {
+		fmt.Printf("Please type the file name to be decrypted. To quit type: '%s'\n", quitCommand)
 	} else if !*forwarderMode {
 		fmt.Printf("Please type the message. To quit type: '%s'\n", quitCommand)
 	}
@@ -696,7 +698,7 @@ func requestExpiredMessagesLoop() {
 	for {
 		timeLow = scanUint("Please enter the lower limit of the time range (unix timestamp): ")
 		timeUpp = scanUint("Please enter the upper limit of the time range (unix timestamp): ")
-		t = scanLine("Please enter the topic (hexadecimal). For all topics just press Enter: ")
+		t = scanLine("Enter the topic (hex). Press enter to request all messages, regardless of the topic: ")
 		if len(t) == whisper.TopicLength*2 {
 			x, err := hex.DecodeString(t)
 			if err != nil {

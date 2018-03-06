@@ -270,6 +270,8 @@ func TopicToBloom(topic TopicType) []byte {
 	return b
 }
 
+// GetEnvelope retrieves an envelope from the message queue by its hash.
+// It returns nil if the envelope can not be found.
 func (w *Whisper) GetEnvelope(hash common.Hash) *Envelope {
 	w.poolMu.RLock()
 	defer w.poolMu.RUnlock()
