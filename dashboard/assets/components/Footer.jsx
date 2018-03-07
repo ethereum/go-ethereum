@@ -26,13 +26,13 @@ import {ResponsiveContainer, AreaChart, Area, Tooltip} from 'recharts';
 import ChartRow from './ChartRow';
 import CustomTooltip, {bytePlotter, bytePerSecPlotter, percentPlotter, multiplier} from './CustomTooltip';
 import {styles as commonStyles} from '../common';
-import type {Footer as FooterType} from '../types/content';
+import type {General, System} from '../types/content';
 
 const FOOTER_SYNC_ID = 'footerSyncId';
 
-const CPU = 'cpu';
-const MEMORY = 'memory';
-const DISK = 'disk';
+const CPU     = 'cpu';
+const MEMORY  = 'memory';
+const DISK    = 'disk';
 const TRAFFIC = 'traffic';
 
 const TOP = 'Top';
@@ -68,14 +68,15 @@ const themeStyles: Object = (theme: Object) => ({
 export type Props = {
 	classes: Object, // injected by withStyles()
 	theme: Object,
-	content: FooterType,
+	general: General,
+	system: System,
 	shouldUpdate: Object,
 };
 
 // Footer renders the footer of the dashboard.
 class Footer extends Component<Props> {
 	shouldComponentUpdate(nextProps) {
-		return typeof nextProps.shouldUpdate.footer !== 'undefined';
+		return typeof nextProps.shouldUpdate.general !== 'undefined' || typeof nextProps.shouldUpdate.system !== 'undefined';
 	}
 
 	// halfHeightChart renders an area chart with half of the height of its parent.
@@ -125,7 +126,7 @@ class Footer extends Component<Props> {
 	};
 
 	render() {
-		const {content} = this.props;
+		const {general, system} = this.props;
 
 		return (
 			<Grid container className={this.props.classes.footer} direction='row' alignItems='center' style={styles.footer}>
@@ -134,38 +135,38 @@ class Footer extends Component<Props> {
 						{this.doubleChart(
 							FOOTER_SYNC_ID,
 							CPU,
-							{data: content.processCPU, tooltip: percentPlotter('Process load')},
-							{data: content.systemCPU, tooltip: percentPlotter('System load', multiplier(-1))},
+							{data: system.processCPU, tooltip: percentPlotter('Process load')},
+							{data: system.systemCPU, tooltip: percentPlotter('System load', multiplier(-1))},
 						)}
 						{this.doubleChart(
 							FOOTER_SYNC_ID,
 							MEMORY,
-							{data: content.activeMemory, tooltip: bytePlotter('Active memory')},
-							{data: content.virtualMemory, tooltip: bytePlotter('Virtual memory', multiplier(-1))},
+							{data: system.activeMemory, tooltip: bytePlotter('Active memory')},
+							{data: system.virtualMemory, tooltip: bytePlotter('Virtual memory', multiplier(-1))},
 						)}
 						{this.doubleChart(
 							FOOTER_SYNC_ID,
 							DISK,
-							{data: content.diskRead, tooltip: bytePerSecPlotter('Disk read')},
-							{data: content.diskWrite, tooltip: bytePerSecPlotter('Disk write', multiplier(-1))},
+							{data: system.diskRead, tooltip: bytePerSecPlotter('Disk read')},
+							{data: system.diskWrite, tooltip: bytePerSecPlotter('Disk write', multiplier(-1))},
 						)}
 						{this.doubleChart(
 							FOOTER_SYNC_ID,
 							TRAFFIC,
-							{data: content.networkIngress, tooltip: bytePerSecPlotter('Download')},
-							{data: content.networkEgress, tooltip: bytePerSecPlotter('Upload', multiplier(-1))},
+							{data: system.networkIngress, tooltip: bytePerSecPlotter('Download')},
+							{data: system.networkEgress, tooltip: bytePerSecPlotter('Upload', multiplier(-1))},
 						)}
 					</ChartRow>
 				</Grid>
 				<Grid item >
 					<Typography type='caption' color='inherit'>
-						<span style={commonStyles.light}>Geth</span> {content.version}
+						<span style={commonStyles.light}>Geth</span> {general.version}
 					</Typography>
-					{content.commit && (
+					{general.commit && (
 						<Typography type='caption' color='inherit'>
 							<span style={commonStyles.light}>{'Commit '}</span>
-							<a href={`https://github.com/ethereum/go-ethereum/commit/${content.commit}`} target='_blank' style={{color: 'inherit', textDecoration: 'none'}} >
-								{content.commit.substring(0, 8)}
+							<a href={`https://github.com/ethereum/go-ethereum/commit/${general.commit}`} target='_blank' style={{color: 'inherit', textDecoration: 'none'}} >
+								{general.commit.substring(0, 8)}
 							</a>
 						</Typography>
 					)}

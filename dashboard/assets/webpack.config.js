@@ -32,6 +32,9 @@ module.exports = {
 			mangle:   false,
 			beautify: true,
 		}),
+		new webpack.DefinePlugin({
+			PROD: process.env.NODE_ENV === 'production',
+		}),
 	],
 	module: {
 		rules: [
@@ -71,7 +74,4 @@ module.exports = {
 			},
 		],
 	},
-	devServer: {
-		port: 8081,
-	}
 };

@@ -12,23 +12,20 @@ The client's UI uses [React][React] with JSX syntax, which is validated by the [
 As the dashboard depends on certain NPM packages (which are not included in the `go-ethereum` repo), these need to be installed first:
 
 ```
-$ (cd dashboard/assets && yarn install)
-$ (cd dashboard/assets && ./node_modules/.bin/flow-typed install)
+$ (cd dashboard/assets && yarn install && yarn flow)
 ```
 
-Normally the dashboard assets are bundled into Geth via `go-bindata` to avoid external dependencies. Rebuilding Geth after each UI modification however is not feasible from a developer perspective. Instead, we can run `webpack-dev-server` to run a `geth` independent server which automatically rebundles the UI, and uses external assets to make connection with `geth`, which this way does not rely on compiled resources:
+Normally the dashboard assets are bundled into Geth via `go-bindata` to avoid external dependencies. Rebuilding Geth after each UI modification however is not feasible from a developer perspective. Instead, we can run `yarn dev` to watch for file system changes and refresh the browser automatically.
 
 ```
 $ geth --dashboard --vmodule=dashboard=5
-$ (cd dashboard/assets && ./node_modules/.bin/webpack-dev-server)
+$ (cd dashboard/assets && yarn dev)
 ```
-
-The configuration of `webpack-dev-server` is in `webpack.config.js`.
 
 To bundle up the final UI into Geth, run `go generate`:
 
 ```
-$ go generate ./dashboard
+$ (cd dashboard && go generate)
 ```
 
 ### Static type checking
@@ -43,7 +40,7 @@ For more IDE support install the `linter-eslint` package too, which finds the `.
 
 [Webpack][Webpack] offers handy tools for visualizing the bundle's dependency tree and space usage.
 
-* Generate the bundle's profile running `webpack --profile --json > stats.json`
+* Generate the bundle's profile running `yarn stats`
 * For the _dependency tree_ go to [Webpack Analyze][WA], and import `stats.json`
 * For the _space usage_ go to [Webpack Visualizer][WV], and import `stats.json`
 

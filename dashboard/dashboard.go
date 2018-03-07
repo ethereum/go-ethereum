@@ -16,11 +16,11 @@
 
 package dashboard
 
-//go:generate npm --prefix ./assets install
-//go:generate ./assets/node_modules/.bin/webpack --config ./assets/webpack.config.js --context ./assets
-//go:generate go-bindata -nometadata -o assets.go -prefix assets -nocompress -pkg dashboard assets/dashboard.html assets/bundle.js
+//go:generate yarn --cwd ./assets install
+//go:generate yarn --cwd ./assets build
+//go:generate go-bindata -nometadata -o assets.go -prefix assets -nocompress -pkg dashboard assets/index.html assets/bundle.js
 //go:generate sh -c "sed 's#var _bundleJs#//nolint:misspell\\\n&#' assets.go > assets.go.tmp && mv assets.go.tmp assets.go"
-//go:generate sh -c "sed 's#var _dashboardHtml#//nolint:misspell\\\n&#' assets.go > assets.go.tmp && mv assets.go.tmp assets.go"
+//go:generate sh -c "sed 's#var _indexHtml#//nolint:misspell\\\n&#' assets.go > assets.go.tmp && mv assets.go.tmp assets.go"
 //go:generate gofmt -w -s assets.go
 
 import (
@@ -60,7 +60,7 @@ type Dashboard struct {
 
 	listener net.Listener
 	conns    map[uint32]*client // Currently live websocket connections
-	charts   *FooterMessage
+	charts   *SystemMessage
 	commit   string
 	lock     sync.RWMutex // Lock protecting the dashboard's internals
 
@@ -82,7 +82,7 @@ func New(config *Config, commit string) (*Dashboard, error) {
 		conns:  make(map[uint32]*client),
 		config: config,
 		quit:   make(chan chan error),
-		charts: &FooterMessage{
+		charts: &SystemMessage{
 			ActiveMemory:   emptyChartEntries(now, activeMemorySampleLimit, config.Refresh),
 			VirtualMemory:  emptyChartEntries(now, virtualMemorySampleLimit, config.Refresh),
 			NetworkIngress: emptyChartEntries(now, networkIngressSampleLimit, config.Refresh),
@@ -178,7 +178,7 @@ func (db *Dashboard) webHandler(w http.ResponseWriter, r *http.Request) {
 
 	path := r.URL.String()
 	if path == "/" {
-		path = "/dashboard.html"
+		path = "/index.html"
 	}
 	blob, err := Asset(path[1:])
 	if err != nil {
@@ -224,7 +224,11 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 	}
 	// Send the past data.
 	client.msg <- Message{
-		Footer: &FooterMessage{
+		General: &GeneralMessage{
+			Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
+			Commit:  db.commit,
+		},
+		System: &SystemMessage{
 			ActiveMemory:   db.charts.ActiveMemory,
 			VirtualMemory:  db.charts.VirtualMemory,
 			NetworkIngress: db.charts.NetworkIngress,
@@ -233,9 +237,6 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 			SystemCPU:      db.charts.SystemCPU,
 			DiskRead:       db.charts.DiskRead,
 			DiskWrite:      db.charts.DiskWrite,
-
-			Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
-			Commit:  db.commit,
 		},
 	}
 	// Start tracking the connection and drop at connection loss.
@@ -350,7 +351,7 @@ func (db *Dashboard) collectData() {
 			db.charts.DiskWrite = append(db.charts.DiskRead[1:], diskWrite)
 
 			db.sendToAll(&Message{
-				Footer: &FooterMessage{
+				System: &SystemMessage{
 					ActiveMemory:   ChartEntries{activeMemory},
 					VirtualMemory:  ChartEntries{virtualMemory},
 					NetworkIngress: ChartEntries{networkIngress},

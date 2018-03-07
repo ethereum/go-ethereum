@@ -37,5 +37,11 @@
         "url-loader": "^0.6.2",
         "webpack": "^3.10.0",
         "webpack-dev-server": "^2.11.1"
+    },
+    "scripts": {
+        "build": "NODE_ENV=production webpack",
+        "stats": "webpack --profile --json > stats.json",
+        "dev":   "webpack-dev-server --port 8081",
+        "flow":  "flow-typed install"
     }
 }
