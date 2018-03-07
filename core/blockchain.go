@@ -723,10 +723,13 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 }
 
 // SetReceiptsData computes all the non-consensus fields of the receipts
-func SetReceiptsData(config *params.ChainConfig, block *types.Block, receipts types.Receipts) {
+func SetReceiptsData(config *params.ChainConfig, block *types.Block, receipts types.Receipts) error {
 	signer := types.MakeSigner(config, block.Number())
 
 	transactions, logIndex := block.Transactions(), uint(0)
+	if len(transactions) != len(receipts) {
+		return errors.New("transaction and receipt count mismatch")
+	}
 
 	for j := 0; j < len(receipts); j++ {
 		// The transaction hash can be retrieved from the transaction itself
@@ -754,6 +757,7 @@ func SetReceiptsData(config *params.ChainConfig, block *types.Block, receipts ty
 			logIndex++
 		}
 	}
+	return nil
 }
 
 // InsertReceiptChain attempts to complete an already existing header chain with
@@ -794,7 +798,9 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			continue
 		}
 		// Compute all the non-consensus fields of the receipts
-		SetReceiptsData(bc.chainConfig, block, receipts)
+		if err := SetReceiptsData(bc.chainConfig, block, receipts); err != nil {
+			return i, fmt.Errorf("failed to set receipts data: %v", err)
+		}
 		// Write all the data out into the database
 		if err := WriteBody(batch, block.Hash(), block.NumberU64(), block.Body()); err != nil {
 			return i, fmt.Errorf("failed to write block body: %v", err)

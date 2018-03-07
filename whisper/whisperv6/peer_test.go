@@ -152,7 +152,7 @@ func resetParams(t *testing.T) {
 }
 
 func initBloom(t *testing.T) {
-	masterBloomFilter = make([]byte, bloomFilterSize)
+	masterBloomFilter = make([]byte, BloomFilterSize)
 	_, err := mrand.Read(masterBloomFilter)
 	if err != nil {
 		t.Fatalf("rand failed: %s.", err)
@@ -164,7 +164,7 @@ func initBloom(t *testing.T) {
 		masterBloomFilter[i] = 0xFF
 	}
 
-	if !bloomFilterMatch(masterBloomFilter, msgBloom) {
+	if !BloomFilterMatch(masterBloomFilter, msgBloom) {
 		t.Fatalf("bloom mismatch on initBloom.")
 	}
 }
@@ -178,7 +178,7 @@ func initialize(t *testing.T) {
 
 	for i := 0; i < NumNodes; i++ {
 		var node TestNode
-		b := make([]byte, bloomFilterSize)
+		b := make([]byte, BloomFilterSize)
 		copy(b, masterBloomFilter)
 		node.shh = New(&DefaultConfig)
 		node.shh.SetMinimumPoW(masterPow)
