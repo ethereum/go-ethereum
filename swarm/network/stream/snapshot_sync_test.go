@@ -28,12 +28,14 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/pot"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
-	//streamTesting "github.com/ethereum/go-ethereum/swarm/network/stream/testing"
+	streamTesting "github.com/ethereum/go-ethereum/swarm/network/stream/testing"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -42,13 +44,15 @@ const testMinProxBinSize = 2
 var (
 	pof = pot.DefaultPof(256)
 
+	conf      *synctestConfig
 	startTime time.Time
 	ids       []discover.NodeID
 	datadirs  map[discover.NodeID]string
-	conf      *synctestConfig
 	ppmap     map[discover.NodeID]*network.PeerPot
 
-	printed bool
+	requestedSubscriptions int
+	receivedSubscriptions  int
+	printed                bool
 )
 
 type synctestConfig struct {
@@ -213,15 +217,14 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 	cleanup := func() {
 		timingTicker.Stop()
 		actionTicker.Stop()
-		//close(trigger)
 		close(quitC)
 		close(disconnectC)
-		close(waitPeerErrC)
 		//after the test, clean up local stores initialized with createLocalStoreForId
 		localStoreCleanup()
 		//shutdown the snapshot network
 		net.Shutdown()
-		//datadirsCleanup()
+		//finally clear all data directories
+		datadirsCleanup()
 	}
 	defer cleanup()
 	//get the nodes of the network
@@ -251,35 +254,11 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 
 	ppmap = network.NewPeerPot(testMinProxBinSize, ids, conf.addrs)
 
+	subscriptionsDone := make(chan struct{})
+	errc := make(chan error)
 	//define the action to be performed before the test checks: start syncing
 	action := func(ctx context.Context) error {
-		// need to wait till an aynchronous process registers the peers in streamer.peers
-		// that is used by Subscribe
-		// the global peerCount function tells how many connections each node has
-		// TODO: this is to be reimplemented with peerEvent watcher without global var
-
-		//TODO: VALIDATE THE ASSUMPTION THAT THE FOLLOWING CODE IS NOT NEEDED,
-		//AS THE SNAPSHOT CONSTRUCTS ALL CONNECTIONS DURING LOAD, SO WE DON'T NEED TO WAIT HERE?
-
-		/*
-			i := 0
-			for err := range waitPeerErrC {
-				fmt.Println("aaaa")
-				if err != nil {
-					return fmt.Errorf("error waiting for peers: %s", err)
-				}
-				i++
-				if i == len(ids)-1 {
-					break
-				}
-			}
-
-			// wait for connections
-			time.Sleep(5 * time.Second)
-		*/
-
 		log.Info("Setting up stream subscription")
-
 		// each node Subscribes to each other's swarmChunkServerStreamName
 		for j, id := range ids {
 			log.Trace(fmt.Sprintf("subscribe: %d", j))
@@ -289,6 +268,12 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 			if err != nil {
 				return err
 			}
+
+			/*
+				watchCtx, watchCancel := context.WithTimeout(ctx, 15*time.Second)
+				defer watchCancel()
+				watchSubscriptionEvents(watchCtx, id, client, subscriptionsDone, errc)
+			*/
 
 			if log.Lvl(*loglevel) == log.LvlDebug {
 				//print uploading node kademlia
@@ -303,20 +288,26 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 					log.Debug(kt)
 				}
 			}
-			//err = streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
-			//if err != nil {
-			//	return err
-			//}
+			err = streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
+			if err != nil {
+				return err
+			}
 			err = client.CallContext(ctx, nil, "stream_startSyncing")
 			if err != nil {
 				return err
 			}
 		}
 
+		select {
+		case <-subscriptionsDone:
+			close(subscriptionsDone)
+		case err := <-errc:
+			return err
+		}
 		log.Info("Stream subscriptions successfully requested")
 		// wait for subscritpions
 		//TODO: Implement a proper sync mechanism so that we don't need to Sleep()
-		time.Sleep(10 * time.Second)
+		//time.Sleep(10 * time.Second)
 		//now upload the chunks to the selected random single node
 		conf.chunks, err = uploadFileToSingleNodeStore(node.ID(), chunkCount)
 		if err != nil {
@@ -425,62 +416,26 @@ func (r *TestRegistry) StartSyncing(ctx context.Context) error {
 		log.Debug(fmt.Sprintf("IS HEALTHY: %t", h.GotNN && h.KnowNN && h.Full))
 	}
 
-	var kadDepth int
-
-	r.delivery.overlay.EachConn(nil, 256, func(addr network.OverlayConn, po int, nn bool) bool {
-		// TODO: stop or expose by kademlia
-		if nn {
-			kadDepth = po
-		}
-		return true
-	})
-
 	kad, ok := r.delivery.overlay.(*network.Kademlia)
 	if !ok {
 		return fmt.Errorf("Not a Kademlia!")
 	}
 
-	var startPo int
-	var endPo int
-	var i int
-
 	//iterate over each bin and solicit needed subscription to bins
-	kad.EachBin(r.addr.Over(), pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
+	kad.EachBin(r.addr.Over(), pof, 0, func(conn network.OverlayConn, po int) bool {
 		//identify begin and start index of the bin(s) we want to subscribe to
-		if po < kadDepth {
-			//not nn
-			endPo = po
-			if i > 0 {
-				startPo = endPo + 1
-			}
-		} else if endPo < kadDepth || endPo == 0 {
-			if po == 0 && kadDepth == 0 {
-				startPo = endPo
-			} else {
-				startPo = endPo + 1
-			}
-			endPo = maxPO
+		log.Debug(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr.ID(), conf.addrToIdMap[string(conn.Address())], po))
+
+		err = r.RequestSubscription(conf.addrToIdMap[string(conn.Address())], NewStream("SYNC", []byte{uint8(po)}, true), &Range{}, Top)
+		if err != nil {
+			log.Error(fmt.Sprintf("Error in RequestSubsciption! %v", err))
+			return false
 		}
-
-		// now iterate and subscribe
-		for bin := po - startPo; bin <= endPo; bin++ {
-
-			f(func(val pot.Val, i int) bool {
-				a := val.(network.OverlayPeer)
-				log.Debug(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr.ID(), conf.addrToIdMap[string(a.Address())], bin))
-
-				err = r.RequestSubscription(conf.addrToIdMap[string(a.Address())], NewStream("SYNC", []byte{uint8(bin)}, true), &Range{}, Top)
-				if err != nil {
-					log.Error(fmt.Sprintf("Error in RequestSubsciption! %v", err))
-					return false
-				}
-				return true
-			})
-		}
-		i++
+		requestedSubscriptions += 1
+		//fmt.Println(requestedSubscriptions)
 		return true
-	})
 
+	})
 	return nil
 }
 
@@ -607,6 +562,38 @@ func uploadFileToSingleNodeStore(id discover.NodeID, chunkCount int) ([]storage.
 	return rootkeys, nil
 }
 
+//Here we wait until all connections from the snapshot are up
+func waitForSnapshotConnsUp(ctx context.Context, net *simulations.Network, done chan struct{}, connCount int, errc chan error) {
+	arrivedConns := 0
+	events := make(chan *simulations.Event)
+	//subscribe to all events from the network
+	sub := net.Events().Subscribe(events)
+	defer sub.Unsubscribe()
+
+	for {
+		select {
+		case <-ctx.Done():
+			errc <- fmt.Errorf("Timeout waiting for Snapshot connections")
+		case event := <-events:
+			//if the event is of type connection, is a Live event and the connection is up
+			//NOTE; this will require that all connections are UP in the snapshot!
+			if event.Type == simulations.EventTypeConn && !event.Control && event.Conn.Up {
+				arrivedConns++
+				//the amount of expected connections has been reached, so we can stop waiting
+				if arrivedConns == connCount {
+					done <- struct{}{}
+					return
+				}
+			}
+		case err := <-sub.Err():
+			if err != nil {
+				errc <- err
+			}
+		}
+	}
+	return
+}
+
 //initialize a network from a snapshot
 func initNetWithSnapshot(nodeCount int) (*simulations.Network, error) {
 
@@ -651,10 +638,60 @@ func initNetWithSnapshot(nodeCount int) (*simulations.Network, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	log.Info("Waiting for p2p connections to be established...")
+	errc := make(chan error)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	connCount := len(snap.Conns)
+	done := make(chan struct{})
+	go waitForSnapshotConnsUp(ctx, net, done, connCount, errc)
+
 	err = net.Load(&snap)
 	if err != nil {
 		return nil, err
 	}
-	log.Info("Snapshot loaded")
+	select {
+	case <-done:
+		close(done)
+	case err = <-errc:
+		return nil, err
+	}
+	log.Info("Snapshot loaded and connections established")
 	return net, nil
+}
+
+func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rpc.Client, done chan struct{}, errc chan error) {
+	events := make(chan *p2p.PeerEvent)
+	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
+	if err != nil {
+		errc <- fmt.Errorf("error getting peer events for node %v: %s", id, err)
+		return
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e := <-events:
+				fmt.Println(e)
+				fmt.Println(*e.MsgCode)
+				if e.Type == p2p.PeerEventTypeMsgRecv && e.Protocol == "stream" && e.MsgCode != nil && *e.MsgCode == 1 {
+					fmt.Println(receivedSubscriptions)
+					fmt.Println(requestedSubscriptions)
+					receivedSubscriptions += 1
+					if receivedSubscriptions == requestedSubscriptions {
+						done <- struct{}{}
+						return
+					}
+				}
+			case err := <-sub.Err():
+				if err != nil {
+					errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err)
+					return
+				}
+			}
+		}
+	}()
+	return
 }
