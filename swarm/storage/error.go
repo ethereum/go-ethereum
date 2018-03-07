@@ -9,5 +9,6 @@ const (
 	ErrNothingToReturn
 	ErrInvalidSignature
 	ErrNotSynced
+	ErrPeriodDepth
 	ErrCnt
 )
