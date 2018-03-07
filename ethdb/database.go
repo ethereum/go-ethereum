@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -29,6 +30,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"regexp"
 )
 
 var OpenFileLimit = 64
@@ -46,6 +48,8 @@ type LDBDatabase struct {
 	compTimeMeter  metrics.Meter // Meter for measuring the total time spent in database compaction
 	compReadMeter  metrics.Meter // Meter for measuring the data read during compaction
 	compWriteMeter metrics.Meter // Meter for measuring the data written during compaction
+	diskReadMeter  metrics.Meter // Meter for measuring the effective amount of data read
+	diskWriteMeter metrics.Meter // Meter for measuring the effective amount of data written
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -187,16 +191,67 @@ func (db *LDBDatabase) Meter(prefix string) {
 	db.compTimeMeter = metrics.NewRegisteredMeter(prefix+"compact/time", nil)
 	db.compReadMeter = metrics.NewRegisteredMeter(prefix+"compact/input", nil)
 	db.compWriteMeter = metrics.NewRegisteredMeter(prefix+"compact/output", nil)
+	db.diskReadMeter = metrics.NewRegisteredMeter(prefix+"disk/read", nil)
+	db.diskWriteMeter = metrics.NewRegisteredMeter(prefix+"disk/write", nil)
 
 	// Create a quit channel for the periodic collector and run it
 	db.quitLock.Lock()
 	db.quitChan = make(chan chan error)
 	db.quitLock.Unlock()
 
-	go db.meter(3 * time.Second)
+	go db.meterDiskIO(3 * time.Second)
+	go db.meterCompaction(3 * time.Second)
 }
 
-// meter periodically retrieves internal leveldb counters and reports them to
+// meterDiskIO periodically retrieves internal leveldb counters and reports them to
+// the metrics subsystem.
+//
+// This is how the iostats look like (currently):
+// Read(MB):    3895.04860 Write(MB):    3654.64712
+func (db *LDBDatabase) meterDiskIO(refresh time.Duration) {
+	var prev, curr [2]float64
+	spaceTruncater := regexp.MustCompile(`[ ]{2,}`)
+
+	for {
+		ioStats, err := db.db.GetProperty("leveldb.iostats")
+		if err != nil {
+			db.log.Error("Failed to read database iostats", "err", err)
+			return
+		}
+
+		parts := strings.Split(spaceTruncater.ReplaceAllString(ioStats, " "), " ")
+		if curr[0], err = strconv.ParseFloat(parts[1], 64); err != nil {
+			db.log.Error("Read entry parsing failed", "err", err)
+			return
+		}
+		if curr[1], err = strconv.ParseFloat(parts[3], 64); err != nil {
+			db.log.Error("Write entry parsing failed", "err", err)
+			return
+		}
+		if db.diskReadMeter != nil {
+			db.diskReadMeter.Mark(int64((curr[0] - prev[0]) * 1024 * 1024))
+		}
+		if db.diskWriteMeter != nil {
+			db.diskWriteMeter.Mark(int64((curr[1] - prev[1]) * 1024 * 1024))
+		}
+		fmt.Printf("Read: %9.5fMB Write: %9.5fMB / %v\n", curr[0]-prev[0], curr[1]-prev[1], refresh)
+		prev[0] = curr[0]
+		prev[1] = curr[1]
+
+		// Sleep a bit, then repeat the iostats collection
+		select {
+		case errc := <-db.quitChan:
+			// Quit requesting, stop hammering the database
+			errc <- nil
+			return
+
+		case <-time.After(refresh):
+			// Timeout, gather a new set of iostats
+		}
+	}
+}
+
+// meterCompaction periodically retrieves internal leveldb counters and reports them to
 // the metrics subsystem.
 //
 // This is how a stats table look like (currently):
@@ -207,7 +262,7 @@ func (db *LDBDatabase) Meter(prefix string) {
 //      1   |         85 |     109.27913 |      28.09293 |     213.92493 |     214.26294
 //      2   |        523 |    1000.37159 |       7.26059 |      66.86342 |      66.77884
 //      3   |        570 |    1113.18458 |       0.00000 |       0.00000 |       0.00000
-func (db *LDBDatabase) meter(refresh time.Duration) {
+func (db *LDBDatabase) meterCompaction(refresh time.Duration) {
 	// Create the counters to store current and previous values
 	counters := make([][]float64, 2)
 	for i := 0; i < 2; i++ {
