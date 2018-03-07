@@ -225,6 +225,13 @@ func importChain(ctx *cli.Context) error {
 		utils.Fatalf("Failed to read database stats: %v", err)
 	}
 	fmt.Println(stats)
+
+	ioStats, err := db.LDB().GetProperty("leveldb.iostats")
+	if err != nil {
+		utils.Fatalf("Failed to read database iostats: %v", err)
+	}
+	fmt.Println(ioStats)
+
 	fmt.Printf("Trie cache misses:  %d\n", trie.CacheMisses())
 	fmt.Printf("Trie cache unloads: %d\n\n", trie.CacheUnloads())
 
@@ -254,6 +261,12 @@ func importChain(ctx *cli.Context) error {
 		utils.Fatalf("Failed to read database stats: %v", err)
 	}
 	fmt.Println(stats)
+
+	ioStats, err = db.LDB().GetProperty("leveldb.iostats")
+	if err != nil {
+		utils.Fatalf("Failed to read database iostats: %v", err)
+	}
+	fmt.Println(ioStats)
 
 	return nil
 }
