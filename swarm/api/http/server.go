@@ -397,6 +397,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
 	s.handleGetResource(w, r, r.uri.Addr)
 }
 
+// TODO: Enable pass maxPeriod parameter
 func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name string) {
 	var params []string
 	if len(r.uri.Path) > 0 {
@@ -411,7 +412,7 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name strin
 	log.Debug("handlegetdb", "name", name, "ruid", r.ruid)
 	switch len(params) {
 	case 0:
-		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, 0, 0)
+		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, 0, 0, 0)
 	case 2:
 		version, err = strconv.ParseUint(params[1], 10, 32)
 		if err != nil {
@@ -421,13 +422,13 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name strin
 		if err != nil {
 			break
 		}
-		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, uint32(period), uint32(version))
+		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, uint32(period), uint32(version), 0)
 	case 1:
 		period, err = strconv.ParseUint(params[0], 10, 32)
 		if err != nil {
 			break
 		}
-		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, uint32(period), uint32(version))
+		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, uint32(period), uint32(version), 0)
 	default:
 		Respond(w, r, "invalid mutable resource request", http.StatusBadRequest)
 		return

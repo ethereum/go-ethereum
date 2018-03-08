@@ -70,7 +70,7 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 		t.Fatal(err)
 	}
 
-	rh, err := storage.NewTestResourceHandler(resourceDir, &fakeBackend{}, nil, -1)
+	rh, err := storage.NewTestResourceHandler(resourceDir, &fakeBackend{}, nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
