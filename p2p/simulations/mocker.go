@@ -103,13 +103,7 @@ func startStop(net *Network, quit chan struct{}, nodeCount int) {
 func probabilistic(net *Network, quit chan struct{}, nodeCount int) {
 	nodes, err := connectNodesInRing(net, nodeCount)
 	if err != nil {
-		select {
-		case <-quit:
-			//error may be due to abortion of mocking; so the quit channel is closed
-			return
-		default:
-			panic("Could not startup node network for mocker")
-		}
+		panic("Could not startup node network for mocker")
 	}
 	for {
 		select {
@@ -150,7 +144,7 @@ func probabilistic(net *Network, quit chan struct{}, nodeCount int) {
 			log.Debug(fmt.Sprintf("node %v shutting down", nodes[i]))
 			err := net.Stop(nodes[i])
 			if err != nil {
-				log.Error("Error stopping node", "node", nodes[i])
+				log.Error(fmt.Sprintf("Error stopping node %s", nodes[i]))
 				wg.Done()
 				continue
 			}
@@ -158,7 +152,7 @@ func probabilistic(net *Network, quit chan struct{}, nodeCount int) {
 				time.Sleep(randWait)
 				err := net.Start(id)
 				if err != nil {
-					log.Error("Error starting node", "node", id)
+					log.Error(fmt.Sprintf("Error starting node %s", id))
 				}
 				wg.Done()
 			}(nodes[i])
@@ -175,7 +169,7 @@ func connectNodesInRing(net *Network, nodeCount int) ([]discover.NodeID, error) 
 		conf := adapters.RandomNodeConfig()
 		node, err := net.NewNodeWithConfig(conf)
 		if err != nil {
-			log.Error("Error creating a node!", "err", err)
+			log.Error("Error creating a node! %s", err)
 			return nil, err
 		}
 		ids[i] = node.ID()
@@ -183,7 +177,7 @@ func connectNodesInRing(net *Network, nodeCount int) ([]discover.NodeID, error) 
 
 	for _, id := range ids {
 		if err := net.Start(id); err != nil {
-			log.Error("Error starting a node!", "err", err)
+			log.Error("Error starting a node! %s", err)
 			return nil, err
 		}
 		log.Debug(fmt.Sprintf("node %v starting up", id))
@@ -191,7 +185,7 @@ func connectNodesInRing(net *Network, nodeCount int) ([]discover.NodeID, error) 
 	for i, id := range ids {
 		peerID := ids[(i+1)%len(ids)]
 		if err := net.Connect(id, peerID); err != nil {
-			log.Error("Error connecting a node to a peer!", "err", err)
+			log.Error("Error connecting a node to a peer! %s", err)
 			return nil, err
 		}
 	}

@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var sendTimeout = 5 * time.Second
+var sendTimeout = 30 * time.Second
 
 type notFoundError struct {
 	t string
@@ -83,7 +83,6 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 
 // Deliver sends a storeRequestMsg protocol message to the peer
 func (p *Peer) Deliver(chunk *storage.Chunk, priority uint8) error {
-	//fmt.Println(fmt.Sprintf("DELIVER from %s: to %s : chunk: %s", string(p.streamer.addr.Under()), p.ID(), chunk.String()))
 	msg := &ChunkDeliveryMsg{
 		Key:   chunk.Key,
 		SData: chunk.SData,
@@ -294,13 +293,8 @@ func (p *Peer) setClientParams(s Stream, params *clientParams) error {
 	if p.clients[s] != nil {
 		return fmt.Errorf("client %s already exists", s)
 	}
-<<<<<<< HEAD
 	if p.clientParams[s] != nil {
 		return fmt.Errorf("client params %s already set", s)
-=======
-	if p.clientParams[sk] != nil {
-		return fmt.Errorf("client params %v already set, %s to %s", sk, p.streamer.addr.ID(), p.ID())
->>>>>>> e13194f15... swarm: Subscribe to bins with RequestSubscription
 	}
 	p.clientParams[s] = params
 	return nil

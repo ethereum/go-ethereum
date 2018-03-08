@@ -223,17 +223,26 @@ func WatchDisconnections(id discover.NodeID, client *rpc.Client, errc chan error
 		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
 	}
 	go func() {
+		defer sub.Unsubscribe()
 		for {
 			select {
 			case <-quitC:
 				return
 			case e := <-events:
 				if e.Type == p2p.PeerEventTypeDrop {
-					errc <- fmt.Errorf("peerEvent for node %v: %v", id, e)
+					select {
+					case errc <- fmt.Errorf("peerEvent for node %v: %v", id, e):
+					case <-quitC:
+						return
+					}
 				}
 			case err := <-sub.Err():
 				if err != nil {
-					errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err)
+					select {
+					case errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err):
+					case <-quitC:
+						return
+					}
 				}
 			}
 		}
