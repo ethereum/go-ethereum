@@ -80,7 +80,7 @@ func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
 	progress := s.b.Downloader().Progress()
 
 	// Return not syncing if the synchronisation already completed
-	if !s.b.Downloader().Synchronising() {
+	if progress.CurrentBlock >= progress.HighestBlock {
 		return false, nil
 	}
 	// Otherwise gather the block sync stats

@@ -1300,7 +1300,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 			// Update the highest block number we know if a higher one is found.
 			d.syncStatsLock.Lock()
 			if d.syncStatsChainHeight < origin {
-				d.syncStatsChainHeight = origin
+				d.syncStatsChainHeight = origin - 1
 			}
 			d.syncStatsLock.Unlock()
 
