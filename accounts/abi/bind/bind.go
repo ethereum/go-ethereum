@@ -164,48 +164,84 @@ var bindType = map[Lang]func(kind abi.Type) string{
 	LangJava: bindTypeJava,
 }
 
+// Helper function for the binding generators.
+// It reads the unmatched characters after the inner type-match,
+//  (since the inner type is a prefix of the total type declaration),
+//  looks for valid arrays (possibly a dynamic one) wrapping the inner type,
+//  and returns the sizes of these arrays.
+//
+// Returned array sizes are in the same order as solidity signatures; inner array size first.
+// Array sizes may also be "", indicating a dynamic array.
+func wrapArray(stringKind string, innerLen int, innerMapping string) (string, []string) {
+	remainder := stringKind[innerLen:]
+	//find all the sizes
+	matches := regexp.MustCompile(`\[(\d*)\]`).FindAllStringSubmatch(remainder, -1)
+	parts := make([]string, 0, len(matches))
+	for _, match := range matches {
+		//get group 1 from the regex match
+		parts = append(parts, match[1])
+	}
+	return innerMapping, parts
+}
+
+// Translates the array sizes to a Go-lang declaration of a (nested) array of the inner type.
+// Simply returns the inner type if arraySizes is empty.
+func arrayBindingGo(inner string, arraySizes []string) string {
+	out := ""
+	//prepend all array sizes, from outer (end arraySizes) to inner (start arraySizes)
+	for i := len(arraySizes) - 1; i >= 0; i-- {
+		out += "[" + arraySizes[i] + "]"
+	}
+	out += inner
+	return out
+}
+
 // bindTypeGo converts a Solidity type to a Go one. Since there is no clear mapping
 // from all Solidity types to Go ones (e.g. uint17), those that cannot be exactly
 // mapped will use an upscaled type (e.g. *big.Int).
 func bindTypeGo(kind abi.Type) string {
 	stringKind := kind.String()
+	innerLen, innerMapping := bindUnnestedTypeGo(stringKind)
+	return arrayBindingGo(wrapArray(stringKind, innerLen, innerMapping))
+}
+
+// The inner function of bindTypeGo, this finds the inner type of stringKind.
+// (Or just the type itself if it is not an array or slice)
+// The length of the matched part is returned, with the the translated type.
+func bindUnnestedTypeGo(stringKind string) (int, string) {
 
 	switch {
 	case strings.HasPrefix(stringKind, "address"):
-		parts := regexp.MustCompile(`address(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
-		if len(parts) != 2 {
-			return stringKind
-		}
-		return fmt.Sprintf("%scommon.Address", parts[1])
+		return len("address"), "common.Address"
 
 	case strings.HasPrefix(stringKind, "bytes"):
-		parts := regexp.MustCompile(`bytes([0-9]*)(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
-		if len(parts) != 3 {
-			return stringKind
-		}
-		return fmt.Sprintf("%s[%s]byte", parts[2], parts[1])
+		parts := regexp.MustCompile(`bytes([0-9]*)`).FindStringSubmatch(stringKind)
+		return len(parts[0]), fmt.Sprintf("[%s]byte", parts[1])
 
 	case strings.HasPrefix(stringKind, "int") || strings.HasPrefix(stringKind, "uint"):
-		parts := regexp.MustCompile(`(u)?int([0-9]*)(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
-		if len(parts) != 4 {
-			return stringKind
-		}
+		parts := regexp.MustCompile(`(u)?int([0-9]*)`).FindStringSubmatch(stringKind)
 		switch parts[2] {
 		case "8", "16", "32", "64":
-			return fmt.Sprintf("%s%sint%s", parts[3], parts[1], parts[2])
+			return len(parts[0]), fmt.Sprintf("%sint%s", parts[1], parts[2])
 		}
-		return fmt.Sprintf("%s*big.Int", parts[3])
+		return len(parts[0]), "*big.Int"
 
-	case strings.HasPrefix(stringKind, "bool") || strings.HasPrefix(stringKind, "string"):
-		parts := regexp.MustCompile(`([a-z]+)(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
-		if len(parts) != 3 {
-			return stringKind
-		}
-		return fmt.Sprintf("%s%s", parts[2], parts[1])
+	case strings.HasPrefix(stringKind, "bool"):
+		return len("bool"), "bool"
+
+	case strings.HasPrefix(stringKind, "string"):
+		return len("string"), "string"
 
 	default:
-		return stringKind
+		return len(stringKind), stringKind
 	}
+}
+
+// Translates the array sizes to a Java declaration of a (nested) array of the inner type.
+// Simply returns the inner type if arraySizes is empty.
+func arrayBindingJava(inner string, arraySizes []string) string {
+	// Java array type declarations do not include the length.
+	return inner + strings.Repeat("[]", len(arraySizes))
 }
 
 // bindTypeJava converts a Solidity type to a Java one. Since there is no clear mapping
@@ -213,69 +249,62 @@ func bindTypeGo(kind abi.Type) string {
 // mapped will use an upscaled type (e.g. BigDecimal).
 func bindTypeJava(kind abi.Type) string {
 	stringKind := kind.String()
+	innerLen, innerMapping := bindUnnestedTypeJava(stringKind)
+	return arrayBindingJava(wrapArray(stringKind, innerLen, innerMapping))
+}
+
+// The inner function of bindTypeJava, this finds the inner type of stringKind.
+// (Or just the type itself if it is not an array or slice)
+// The length of the matched part is returned, with the the translated type.
+func bindUnnestedTypeJava(stringKind string) (int, string) {
 
 	switch {
 	case strings.HasPrefix(stringKind, "address"):
 		parts := regexp.MustCompile(`address(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
 		if len(parts) != 2 {
-			return stringKind
+			return len(stringKind), stringKind
 		}
 		if parts[1] == "" {
-			return fmt.Sprintf("Address")
+			return len("address"), "Address"
 		}
-		return fmt.Sprintf("Addresses")
+		return len(parts[0]), "Addresses"
 
 	case strings.HasPrefix(stringKind, "bytes"):
-		parts := regexp.MustCompile(`bytes([0-9]*)(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
-		if len(parts) != 3 {
-			return stringKind
+		parts := regexp.MustCompile(`bytes([0-9]*)`).FindStringSubmatch(stringKind)
+		if len(parts) != 2 {
+			return len(stringKind), stringKind
 		}
-		if parts[2] != "" {
-			return "byte[][]"
-		}
-		return "byte[]"
+		return len(parts[0]), "byte[]"
 
 	case strings.HasPrefix(stringKind, "int") || strings.HasPrefix(stringKind, "uint"):
-		parts := regexp.MustCompile(`(u)?int([0-9]*)(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
-		if len(parts) != 4 {
-			return stringKind
+		//Note that uint and int (without digits) are also matched,
+		// these are size 256, and will translate to BigInt (the default).
+		parts := regexp.MustCompile(`(u)?int([0-9]*)`).FindStringSubmatch(stringKind)
+		if len(parts) != 3 {
+			return len(stringKind), stringKind
 		}
-		switch parts[2] {
-		case "8", "16", "32", "64":
-			if parts[1] == "" {
-				if parts[3] == "" {
-					return fmt.Sprintf("int%s", parts[2])
-				}
-				return fmt.Sprintf("int%s[]", parts[2])
-			}
+
+		namedSize := map[string]string{
+			"8":  "byte",
+			"16": "short",
+			"32": "int",
+			"64": "long",
+		}[parts[2]]
+
+		//default to BigInt
+		if namedSize == "" {
+			namedSize = "BigInt"
 		}
-		if parts[3] == "" {
-			return fmt.Sprintf("BigInt")
-		}
-		return fmt.Sprintf("BigInts")
+		return len(parts[0]), namedSize
 
 	case strings.HasPrefix(stringKind, "bool"):
-		parts := regexp.MustCompile(`bool(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
-		if len(parts) != 2 {
-			return stringKind
-		}
-		if parts[1] == "" {
-			return fmt.Sprintf("bool")
-		}
-		return fmt.Sprintf("bool[]")
+		return len("bool"), "boolean"
 
 	case strings.HasPrefix(stringKind, "string"):
-		parts := regexp.MustCompile(`string(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
-		if len(parts) != 2 {
-			return stringKind
-		}
-		if parts[1] == "" {
-			return fmt.Sprintf("String")
-		}
-		return fmt.Sprintf("String[]")
+		return len("string"), "String"
 
 	default:
-		return stringKind
+		return len(stringKind), stringKind
 	}
 }
 
@@ -325,11 +354,13 @@ func namedTypeJava(javaKind string, solKind abi.Type) string {
 		return "String"
 	case "string[]":
 		return "Strings"
-	case "bool":
+	case "boolean":
 		return "Bool"
-	case "bool[]":
+	case "boolean[]":
 		return "Bools"
-	case "BigInt":
+	case "BigInt[]":
+		return "BigInts"
+	default:
 		parts := regexp.MustCompile(`(u)?int([0-9]*)(\[[0-9]*\])?`).FindStringSubmatch(solKind.String())
 		if len(parts) != 4 {
 			return javaKind
@@ -344,8 +375,6 @@ func namedTypeJava(javaKind string, solKind abi.Type) string {
 		default:
 			return javaKind
 		}
-	default:
-		return javaKind
 	}
 }
 

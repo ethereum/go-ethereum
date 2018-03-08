@@ -110,6 +110,7 @@ func main() {
 	processArgs()
 	initialize()
 	run()
+	shutdown()
 }
 
 func processArgs() {
@@ -209,21 +210,6 @@ func initialize() {
 		MinimumAcceptedPOW: *argPoW,
 	}
 
-	if *mailServerMode {
-		if len(msPassword) == 0 {
-			msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
-			if err != nil {
-				utils.Fatalf("Failed to read Mail Server password: %s", err)
-			}
-		}
-
-		shh = whisper.New(cfg)
-		shh.RegisterServer(&mailServer)
-		mailServer.Init(shh, *argDBPath, msPassword, *argServerPoW)
-	} else {
-		shh = whisper.New(cfg)
-	}
-
 	if *argPoW != whisper.DefaultMinimumPoW {
 		err := shh.SetMinimumPoW(*argPoW)
 		if err != nil {
@@ -265,6 +251,26 @@ func initialize() {
 		maxPeers = 800
 	}
 
+	_, err = crand.Read(entropy[:])
+	if err != nil {
+		utils.Fatalf("crypto/rand failed: %s", err)
+	}
+
+	if *mailServerMode {
+		if len(msPassword) == 0 {
+			msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
+			if err != nil {
+				utils.Fatalf("Failed to read Mail Server password: %s", err)
+			}
+		}
+
+		shh = whisper.New(cfg)
+		shh.RegisterServer(&mailServer)
+		mailServer.Init(shh, *argDBPath, msPassword, *argServerPoW)
+	} else {
+		shh = whisper.New(cfg)
+	}
+
 	server = &p2p.Server{
 		Config: p2p.Config{
 			PrivateKey:     nodeid,
@@ -278,17 +284,13 @@ func initialize() {
 			TrustedNodes:   peers,
 		},
 	}
-
-	_, err = crand.Read(entropy[:])
-	if err != nil {
-		utils.Fatalf("crypto/rand failed: %s", err)
-	}
 }
 
-func startServer() {
+func startServer() error {
 	err := server.Start()
 	if err != nil {
-		utils.Fatalf("Failed to start Whisper peer: %s.", err)
+		fmt.Printf("Failed to start Whisper peer: %s.", err)
+		return err
 	}
 
 	fmt.Printf("my public key: %s \n", common.ToHex(crypto.FromECDSAPub(&asymKey.PublicKey)))
@@ -307,6 +309,7 @@ func startServer() {
 	if !*forwarderMode {
 		fmt.Printf("Please type the message. To quit type: '%s'\n", quitCommand)
 	}
+	return nil
 }
 
 func isKeyValid(k *ecdsa.PublicKey) bool {
@@ -420,8 +423,10 @@ func waitForConnection(timeout bool) {
 }
 
 func run() {
-	defer mailServer.Close()
-	startServer()
+	err := startServer()
+	if err != nil {
+		return
+	}
 	defer server.Stop()
 	shh.Start(nil)
 	defer shh.Stop()
@@ -441,16 +446,19 @@ func run() {
 	}
 }
 
+func shutdown() {
+	close(done)
+	mailServer.Close()
+}
+
 func sendLoop() {
 	for {
 		s := scanLine("")
 		if s == quitCommand {
 			fmt.Println("Quit command received")
-			close(done)
-			break
+			return
 		}
 		sendMsg([]byte(s))
-
 		if *asymmetricMode {
 			// print your own message for convenience,
 			// because in asymmetric mode it is impossible to decrypt it
@@ -466,13 +474,11 @@ func sendFilesLoop() {
 		s := scanLine("")
 		if s == quitCommand {
 			fmt.Println("Quit command received")
-			close(done)
-			break
+			return
 		}
 		b, err := ioutil.ReadFile(s)
 		if err != nil {
 			fmt.Printf(">>> Error: %s \n", err)
-			continue
 		} else {
 			h := sendMsg(b)
 			if (h == common.Hash{}) {
@@ -491,7 +497,6 @@ func fileReaderLoop() {
 	watcher2 := shh.GetFilter(asymFilterID)
 	if watcher1 == nil && watcher2 == nil {
 		fmt.Println("Error: neither symmetric nor asymmetric filter is installed")
-		close(done)
 		return
 	}
 
@@ -499,7 +504,6 @@ func fileReaderLoop() {
 		s := scanLine("")
 		if s == quitCommand {
 			fmt.Println("Quit command received")
-			close(done)
 			return
 		}
 		raw, err := ioutil.ReadFile(s)
