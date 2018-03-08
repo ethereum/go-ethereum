@@ -131,9 +131,8 @@ type SyncParams struct {
 }
 
 // constructor with default values
-func NewSyncParams(bzzdir string) *SyncParams {
+func NewDefaultSyncParams() *SyncParams {
 	return &SyncParams{
-		RequestDbPath:      filepath.Join(bzzdir, "requests"),
 		RequestDbBatchSize: requestDbBatchSize,
 		KeyBufferSize:      keyBufferSize,
 		SyncBufferSize:     syncBufferSize,
@@ -142,6 +141,12 @@ func NewSyncParams(bzzdir string) *SyncParams {
 		SyncPriorities:     []uint{High, Medium, Medium, Low, Low},
 		SyncModes:          []bool{true, true, true, true, false},
 	}
+}
+
+//this can only finally be set after all config options (file, cmd line, env vars)
+//have been evaluated
+func (self *SyncParams) Init(path string) {
+	self.RequestDbPath = filepath.Join(path, "requests")
 }
 
 // syncer is the agent that manages content distribution/storage replication/chunk storeRequest forwarding
@@ -378,7 +383,7 @@ func (self *syncer) syncHistory(state *syncState) chan interface{} {
 				}
 				select {
 				// blocking until history channel is read from
-				case history <- storage.Key(key):
+				case history <- key:
 					n++
 					log.Trace(fmt.Sprintf("syncer[%v]: history: %v (%v keys)", self.key.Log(), key.Log(), n))
 					state.Latest = key

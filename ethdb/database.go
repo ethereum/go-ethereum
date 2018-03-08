@@ -29,8 +29,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-
-	gometrics "github.com/rcrowley/go-metrics"
 )
 
 var OpenFileLimit = 64
@@ -39,15 +37,15 @@ type LDBDatabase struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
 
-	getTimer       gometrics.Timer // Timer for measuring the database get request counts and latencies
-	putTimer       gometrics.Timer // Timer for measuring the database put request counts and latencies
-	delTimer       gometrics.Timer // Timer for measuring the database delete request counts and latencies
-	missMeter      gometrics.Meter // Meter for measuring the missed database get requests
-	readMeter      gometrics.Meter // Meter for measuring the database get request data usage
-	writeMeter     gometrics.Meter // Meter for measuring the database put request data usage
-	compTimeMeter  gometrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter  gometrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter gometrics.Meter // Meter for measuring the data written during compaction
+	getTimer       metrics.Timer // Timer for measuring the database get request counts and latencies
+	putTimer       metrics.Timer // Timer for measuring the database put request counts and latencies
+	delTimer       metrics.Timer // Timer for measuring the database delete request counts and latencies
+	missMeter      metrics.Meter // Meter for measuring the missed database get requests
+	readMeter      metrics.Meter // Meter for measuring the database get request data usage
+	writeMeter     metrics.Meter // Meter for measuring the database put request data usage
+	compTimeMeter  metrics.Meter // Meter for measuring the total time spent in database compaction
+	compReadMeter  metrics.Meter // Meter for measuring the data read during compaction
+	compWriteMeter metrics.Meter // Meter for measuring the data written during compaction
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -107,6 +105,10 @@ func (db *LDBDatabase) Put(key []byte, value []byte) error {
 		db.writeMeter.Mark(int64(len(value)))
 	}
 	return db.db.Put(key, value, nil)
+}
+
+func (db *LDBDatabase) Has(key []byte) (bool, error) {
+	return db.db.Has(key, nil)
 }
 
 // Get returns the given key if it's present.
@@ -176,15 +178,15 @@ func (db *LDBDatabase) Meter(prefix string) {
 		return
 	}
 	// Initialize all the metrics collector at the requested prefix
-	db.getTimer = metrics.NewTimer(prefix + "user/gets")
-	db.putTimer = metrics.NewTimer(prefix + "user/puts")
-	db.delTimer = metrics.NewTimer(prefix + "user/dels")
-	db.missMeter = metrics.NewMeter(prefix + "user/misses")
-	db.readMeter = metrics.NewMeter(prefix + "user/reads")
-	db.writeMeter = metrics.NewMeter(prefix + "user/writes")
-	db.compTimeMeter = metrics.NewMeter(prefix + "compact/time")
-	db.compReadMeter = metrics.NewMeter(prefix + "compact/input")
-	db.compWriteMeter = metrics.NewMeter(prefix + "compact/output")
+	db.getTimer = metrics.NewRegisteredTimer(prefix+"user/gets", nil)
+	db.putTimer = metrics.NewRegisteredTimer(prefix+"user/puts", nil)
+	db.delTimer = metrics.NewRegisteredTimer(prefix+"user/dels", nil)
+	db.missMeter = metrics.NewRegisteredMeter(prefix+"user/misses", nil)
+	db.readMeter = metrics.NewRegisteredMeter(prefix+"user/reads", nil)
+	db.writeMeter = metrics.NewRegisteredMeter(prefix+"user/writes", nil)
+	db.compTimeMeter = metrics.NewRegisteredMeter(prefix+"compact/time", nil)
+	db.compReadMeter = metrics.NewRegisteredMeter(prefix+"compact/input", nil)
+	db.compWriteMeter = metrics.NewRegisteredMeter(prefix+"compact/output", nil)
 
 	// Create a quit channel for the periodic collector and run it
 	db.quitLock.Lock()
@@ -271,24 +273,33 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 	}
 }
 
-// TODO: remove this stuff and expose leveldb directly
-
 func (db *LDBDatabase) NewBatch() Batch {
 	return &ldbBatch{db: db.db, b: new(leveldb.Batch)}
 }
 
 type ldbBatch struct {
-	db *leveldb.DB
-	b  *leveldb.Batch
+	db   *leveldb.DB
+	b    *leveldb.Batch
+	size int
 }
 
 func (b *ldbBatch) Put(key, value []byte) error {
 	b.b.Put(key, value)
+	b.size += len(value)
 	return nil
 }
 
 func (b *ldbBatch) Write() error {
 	return b.db.Write(b.b, nil)
+}
+
+func (b *ldbBatch) ValueSize() int {
+	return b.size
+}
+
+func (b *ldbBatch) Reset() {
+	b.b.Reset()
+	b.size = 0
 }
 
 type table struct {
@@ -307,6 +318,10 @@ func NewTable(db Database, prefix string) Database {
 
 func (dt *table) Put(key []byte, value []byte) error {
 	return dt.db.Put(append([]byte(dt.prefix), key...), value)
+}
+
+func (dt *table) Has(key []byte) (bool, error) {
+	return dt.db.Has(append([]byte(dt.prefix), key...))
 }
 
 func (dt *table) Get(key []byte) ([]byte, error) {
@@ -341,4 +356,12 @@ func (tb *tableBatch) Put(key, value []byte) error {
 
 func (tb *tableBatch) Write() error {
 	return tb.batch.Write()
+}
+
+func (tb *tableBatch) ValueSize() int {
+	return tb.batch.ValueSize()
+}
+
+func (tb *tableBatch) Reset() {
+	tb.batch.Reset()
 }

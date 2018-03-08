@@ -19,15 +19,16 @@
 package fuse
 
 import (
-	"bazil.org/fuse"
-	"bazil.org/fuse/fs"
 	"errors"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/storage"
-	"golang.org/x/net/context"
 	"io"
 	"os"
 	"sync"
+
+	"bazil.org/fuse"
+	"bazil.org/fuse/fs"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/storage"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -87,7 +88,7 @@ func (file *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
 		if err != nil {
 			log.Warn("Couldnt get size of file %s : %v", file.path, err)
 		}
-		file.fileSize = int64(size)
+		file.fileSize = size
 	}
 	a.Size = uint64(file.fileSize)
 	return nil
@@ -134,7 +135,7 @@ func (sf *SwarmFile) Write(ctx context.Context, req *fuse.WriteRequest, resp *fu
 		if err != nil {
 			return err
 		}
-		resp.Size = int(sf.fileSize)
+		resp.Size = len(req.Data)
 	} else {
 		log.Warn("Invalid write request size(%v) : off(%v)", sf.fileSize, req.Offset)
 		return errInvalidOffset

@@ -140,10 +140,9 @@ func (h *HandlerT) GoTrace(file string, nsec uint) error {
 	return nil
 }
 
-// BlockProfile turns on CPU profiling for nsec seconds and writes
-// profile data to file. It uses a profile rate of 1 for most accurate
-// information. If a different rate is desired, set the rate
-// and write the profile manually.
+// BlockProfile turns on goroutine profiling for nsec seconds and writes profile data to
+// file. It uses a profile rate of 1 for most accurate information. If a different rate is
+// desired, set the rate and write the profile manually.
 func (*HandlerT) BlockProfile(file string, nsec uint) error {
 	runtime.SetBlockProfileRate(1)
 	time.Sleep(time.Duration(nsec) * time.Second)
@@ -162,6 +161,26 @@ func (*HandlerT) WriteBlockProfile(file string) error {
 	return writeProfile("block", file)
 }
 
+// MutexProfile turns on mutex profiling for nsec seconds and writes profile data to file.
+// It uses a profile rate of 1 for most accurate information. If a different rate is
+// desired, set the rate and write the profile manually.
+func (*HandlerT) MutexProfile(file string, nsec uint) error {
+	runtime.SetMutexProfileFraction(1)
+	time.Sleep(time.Duration(nsec) * time.Second)
+	defer runtime.SetMutexProfileFraction(0)
+	return writeProfile("mutex", file)
+}
+
+// SetMutexProfileFraction sets the rate of mutex profiling.
+func (*HandlerT) SetMutexProfileFraction(rate int) {
+	runtime.SetMutexProfileFraction(rate)
+}
+
+// WriteMutexProfile writes a goroutine blocking profile to the given file.
+func (*HandlerT) WriteMutexProfile(file string) error {
+	return writeProfile("mutex", file)
+}
+
 // WriteMemProfile writes an allocation profile to the given file.
 // Note that the profiling rate cannot be set through the API,
 // it must be set on the command line.
@@ -174,6 +193,17 @@ func (*HandlerT) Stacks() string {
 	buf := make([]byte, 1024*1024)
 	buf = buf[:runtime.Stack(buf, true)]
 	return string(buf)
+}
+
+// FreeOSMemory returns unused memory to the OS.
+func (*HandlerT) FreeOSMemory() {
+	debug.FreeOSMemory()
+}
+
+// SetGCPercent sets the garbage collection target percentage. It returns the previous
+// setting. A negative value disables GC.
+func (*HandlerT) SetGCPercent(v int) int {
+	return debug.SetGCPercent(v)
 }
 
 func writeProfile(name, file string) error {

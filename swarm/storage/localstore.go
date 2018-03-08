@@ -18,6 +18,13 @@ package storage
 
 import (
 	"encoding/binary"
+
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+//metrics variables
+var (
+	dbStorePutCounter = metrics.NewRegisteredCounter("storage.db.dbstore.put.count", nil)
 )
 
 // LocalStore is a combination of inmemory db over a disk persisted db
@@ -28,7 +35,7 @@ type LocalStore struct {
 }
 
 // This constructor uses MemStore and DbStore as components
-func NewLocalStore(hash Hasher, params *StoreParams) (*LocalStore, error) {
+func NewLocalStore(hash SwarmHasher, params *StoreParams) (*LocalStore, error) {
 	dbStore, err := NewDbStore(params.ChunkDbPath, hash, params.DbCapacity, params.Radius)
 	if err != nil {
 		return nil, err
@@ -37,6 +44,14 @@ func NewLocalStore(hash Hasher, params *StoreParams) (*LocalStore, error) {
 		memStore: NewMemStore(dbStore, params.CacheCapacity),
 		DbStore:  dbStore,
 	}, nil
+}
+
+func (self *LocalStore) CacheCounter() uint64 {
+	return uint64(self.memStore.(*MemStore).Counter())
+}
+
+func (self *LocalStore) DbCounter() uint64 {
+	return self.DbStore.(*DbStore).Counter()
 }
 
 // LocalStore is itself a chunk store
@@ -48,6 +63,7 @@ func (self *LocalStore) Put(chunk *Chunk) {
 		chunk.wg.Add(1)
 	}
 	go func() {
+		dbStorePutCounter.Inc(1)
 		self.DbStore.Put(chunk)
 		if chunk.wg != nil {
 			chunk.wg.Done()

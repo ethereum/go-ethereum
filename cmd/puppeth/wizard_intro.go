@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -58,15 +59,16 @@ func (w *wizard) run() {
 	fmt.Println()
 
 	// Make sure we have a good network name to work with	fmt.Println()
+	// Docker accepts hyphens in image names, but doesn't like it for container names
 	if w.network == "" {
-		fmt.Println("Please specify a network name to administer (no spaces, please)")
+		fmt.Println("Please specify a network name to administer (no spaces or hyphens, please)")
 		for {
 			w.network = w.readString()
-			if !strings.Contains(w.network, " ") {
-				fmt.Printf("Sweet, you can set this via --network=%s next time!\n\n", w.network)
+			if !strings.Contains(w.network, " ") && !strings.Contains(w.network, "-") {
+				fmt.Printf("\nSweet, you can set this via --network=%s next time!\n\n", w.network)
 				break
 			}
-			log.Error("I also like to live dangerously, still no spaces")
+			log.Error("I also like to live dangerously, still no spaces or hyphens")
 		}
 	}
 	log.Info("Administering Ethereum network", "name", w.network)
@@ -80,25 +82,36 @@ func (w *wizard) run() {
 	} else if err := json.Unmarshal(blob, &w.conf); err != nil {
 		log.Crit("Previous configuration corrupted", "path", w.conf.path, "err", err)
 	} else {
+		// Dial all previously known servers concurrently
+		var pend sync.WaitGroup
 		for server, pubkey := range w.conf.Servers {
-			log.Info("Dialing previously configured server", "server", server)
-			client, err := dial(server, pubkey)
-			if err != nil {
-				log.Error("Previous server unreachable", "server", server, "err", err)
-			}
-			w.servers[server] = client
+			pend.Add(1)
+
+			go func(server string, pubkey []byte) {
+				defer pend.Done()
+
+				log.Info("Dialing previously configured server", "server", server)
+				client, err := dial(server, pubkey)
+				if err != nil {
+					log.Error("Previous server unreachable", "server", server, "err", err)
+				}
+				w.lock.Lock()
+				w.servers[server] = client
+				w.lock.Unlock()
+			}(server, pubkey)
 		}
-		w.networkStats(false)
+		pend.Wait()
+		w.networkStats()
 	}
 	// Basics done, loop ad infinitum about what to do
 	for {
 		fmt.Println()
 		fmt.Println("What would you like to do? (default = stats)")
 		fmt.Println(" 1. Show network stats")
-		if w.conf.genesis == nil {
+		if w.conf.Genesis == nil {
 			fmt.Println(" 2. Configure new genesis")
 		} else {
-			fmt.Println(" 2. Save existing genesis")
+			fmt.Println(" 2. Manage existing genesis")
 		}
 		if len(w.servers) == 0 {
 			fmt.Println(" 3. Track new remote server")
@@ -110,31 +123,22 @@ func (w *wizard) run() {
 		} else {
 			fmt.Println(" 4. Manage network components")
 		}
-		//fmt.Println(" 5. ProTips for common usecases")
 
 		choice := w.read()
 		switch {
 		case choice == "" || choice == "1":
-			w.networkStats(false)
+			w.networkStats()
 
 		case choice == "2":
-			// If we don't have a genesis, make one
-			if w.conf.genesis == nil {
+			if w.conf.Genesis == nil {
 				w.makeGenesis()
 			} else {
-				// Otherwise just save whatever we currently have
-				fmt.Println()
-				fmt.Printf("Which file to save the genesis into? (default = %s.json)\n", w.network)
-				out, _ := json.MarshalIndent(w.conf.genesis, "", "  ")
-				if err := ioutil.WriteFile(w.readDefaultString(fmt.Sprintf("%s.json", w.network)), out, 0644); err != nil {
-					log.Error("Failed to save genesis file", "err", err)
-				}
-				log.Info("Exported existing genesis block")
+				w.manageGenesis()
 			}
 		case choice == "3":
 			if len(w.servers) == 0 {
 				if w.makeServer() != "" {
-					w.networkStats(false)
+					w.networkStats()
 				}
 			} else {
 				w.manageServers()
@@ -145,9 +149,6 @@ func (w *wizard) run() {
 			} else {
 				w.manageComponents()
 			}
-
-		case choice == "5":
-			w.networkStats(true)
 
 		default:
 			log.Error("That's not something I can do")

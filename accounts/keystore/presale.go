@@ -58,6 +58,9 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	if err != nil {
 		return nil, errors.New("invalid hex in encSeed")
 	}
+	if len(encSeedBytes) < 16 {
+		return nil, errors.New("invalid encSeed, too short")
+	}
 	iv := encSeedBytes[:16]
 	cipherText := encSeedBytes[16:]
 	/*

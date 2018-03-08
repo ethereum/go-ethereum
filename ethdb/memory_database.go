@@ -37,12 +37,26 @@ func NewMemDatabase() (*MemDatabase, error) {
 	}, nil
 }
 
+func NewMemDatabaseWithCap(size int) (*MemDatabase, error) {
+	return &MemDatabase{
+		db: make(map[string][]byte, size),
+	}, nil
+}
+
 func (db *MemDatabase) Put(key []byte, value []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
 	db.db[string(key)] = common.CopyBytes(value)
 	return nil
+}
+
+func (db *MemDatabase) Has(key []byte) (bool, error) {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
+	_, ok := db.db[string(key)]
+	return ok, nil
 }
 
 func (db *MemDatabase) Get(key []byte) ([]byte, error) {
@@ -66,14 +80,6 @@ func (db *MemDatabase) Keys() [][]byte {
 	return keys
 }
 
-/*
-func (db *MemDatabase) GetKeys() []*common.Key {
-	data, _ := db.Get([]byte("KeyRing"))
-
-	return []*common.Key{common.NewKeyFromBytes(data)}
-}
-*/
-
 func (db *MemDatabase) Delete(key []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -88,26 +94,23 @@ func (db *MemDatabase) NewBatch() Batch {
 	return &memBatch{db: db}
 }
 
+func (db *MemDatabase) Len() int { return len(db.db) }
+
 type kv struct{ k, v []byte }
 
 type memBatch struct {
 	db     *MemDatabase
 	writes []kv
-	lock   sync.RWMutex
+	size   int
 }
 
 func (b *memBatch) Put(key, value []byte) error {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
 	b.writes = append(b.writes, kv{common.CopyBytes(key), common.CopyBytes(value)})
+	b.size += len(value)
 	return nil
 }
 
 func (b *memBatch) Write() error {
-	b.lock.RLock()
-	defer b.lock.RUnlock()
-
 	b.db.lock.Lock()
 	defer b.db.lock.Unlock()
 
@@ -115,4 +118,13 @@ func (b *memBatch) Write() error {
 		b.db.db[string(kv.k)] = kv.v
 	}
 	return nil
+}
+
+func (b *memBatch) ValueSize() int {
+	return b.size
+}
+
+func (b *memBatch) Reset() {
+	b.writes = b.writes[:0]
+	b.size = 0
 }

@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -31,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"gopkg.in/fatih/set.v0"
 )
 
 // Minimum amount of time between cache reloads. This limit applies if the platform does
@@ -71,6 +71,7 @@ type accountCache struct {
 	byAddr   map[common.Address][]accounts.Account
 	throttle *time.Timer
 	notify   chan struct{}
+	fileC    fileCache
 }
 
 func newAccountCache(keydir string) (*accountCache, chan struct{}) {
@@ -78,6 +79,7 @@ func newAccountCache(keydir string) (*accountCache, chan struct{}) {
 		keydir: keydir,
 		byAddr: make(map[common.Address][]accounts.Account),
 		notify: make(chan struct{}, 1),
+		fileC:  fileCache{all: set.NewNonTS()},
 	}
 	ac.watcher = newWatcher(ac)
 	return ac, ac.notify
@@ -127,6 +129,23 @@ func (ac *accountCache) delete(removed accounts.Account) {
 	}
 }
 
+// deleteByFile removes an account referenced by the given path.
+func (ac *accountCache) deleteByFile(path string) {
+	ac.mu.Lock()
+	defer ac.mu.Unlock()
+	i := sort.Search(len(ac.all), func(i int) bool { return ac.all[i].URL.Path >= path })
+
+	if i < len(ac.all) && ac.all[i].URL.Path == path {
+		removed := ac.all[i]
+		ac.all = append(ac.all[:i], ac.all[i+1:]...)
+		if ba := removeAccount(ac.byAddr[removed.Address], removed); len(ba) == 0 {
+			delete(ac.byAddr, removed.Address)
+		} else {
+			ac.byAddr[removed.Address] = ba
+		}
+	}
+}
+
 func removeAccount(slice []accounts.Account, elem accounts.Account) []accounts.Account {
 	for i := range slice {
 		if slice[i] == elem {
@@ -167,15 +186,16 @@ func (ac *accountCache) find(a accounts.Account) (accounts.Account, error) {
 	default:
 		err := &AmbiguousAddrError{Addr: a.Address, Matches: make([]accounts.Account, len(matches))}
 		copy(err.Matches, matches)
+		sort.Sort(accountsByURL(err.Matches))
 		return accounts.Account{}, err
 	}
 }
 
 func (ac *accountCache) maybeReload() {
 	ac.mu.Lock()
-	defer ac.mu.Unlock()
 
 	if ac.watcher.running {
+		ac.mu.Unlock()
 		return // A watcher is running and will keep the cache up-to-date.
 	}
 	if ac.throttle == nil {
@@ -184,12 +204,15 @@ func (ac *accountCache) maybeReload() {
 		select {
 		case <-ac.throttle.C:
 		default:
+			ac.mu.Unlock()
 			return // The cache was reloaded recently.
 		}
 	}
+	// No watcher running, start it.
 	ac.watcher.start()
-	ac.reload()
 	ac.throttle.Reset(minReloadInterval)
+	ac.mu.Unlock()
+	ac.scanAccounts()
 }
 
 func (ac *accountCache) close() {
@@ -205,80 +228,71 @@ func (ac *accountCache) close() {
 	ac.mu.Unlock()
 }
 
-// reload caches addresses of existing accounts.
-// Callers must hold ac.mu.
-func (ac *accountCache) reload() {
-	accounts, err := ac.scan()
+// scanAccounts checks if any changes have occurred on the filesystem, and
+// updates the account cache accordingly
+func (ac *accountCache) scanAccounts() error {
+	// Scan the entire folder metadata for file changes
+	creates, deletes, updates, err := ac.fileC.scan(ac.keydir)
 	if err != nil {
 		log.Debug("Failed to reload keystore contents", "err", err)
+		return err
 	}
-	ac.all = accounts
-	sort.Sort(ac.all)
-	for k := range ac.byAddr {
-		delete(ac.byAddr, k)
+	if creates.Size() == 0 && deletes.Size() == 0 && updates.Size() == 0 {
+		return nil
 	}
-	for _, a := range accounts {
-		ac.byAddr[a.Address] = append(ac.byAddr[a.Address], a)
+	// Create a helper method to scan the contents of the key files
+	var (
+		buf = new(bufio.Reader)
+		key struct {
+			Address string `json:"address"`
+		}
+	)
+	readAccount := func(path string) *accounts.Account {
+		fd, err := os.Open(path)
+		if err != nil {
+			log.Trace("Failed to open keystore file", "path", path, "err", err)
+			return nil
+		}
+		defer fd.Close()
+		buf.Reset(fd)
+		// Parse the address.
+		key.Address = ""
+		err = json.NewDecoder(buf).Decode(&key)
+		addr := common.HexToAddress(key.Address)
+		switch {
+		case err != nil:
+			log.Debug("Failed to decode keystore key", "path", path, "err", err)
+		case (addr == common.Address{}):
+			log.Debug("Failed to decode keystore key", "path", path, "err", "missing or zero address")
+		default:
+			return &accounts.Account{Address: addr, URL: accounts.URL{Scheme: KeyStoreScheme, Path: path}}
+		}
+		return nil
 	}
+	// Process all the file diffs
+	start := time.Now()
+
+	for _, p := range creates.List() {
+		if a := readAccount(p.(string)); a != nil {
+			ac.add(*a)
+		}
+	}
+	for _, p := range deletes.List() {
+		ac.deleteByFile(p.(string))
+	}
+	for _, p := range updates.List() {
+		path := p.(string)
+		ac.deleteByFile(path)
+		if a := readAccount(path); a != nil {
+			ac.add(*a)
+		}
+	}
+	end := time.Now()
+
 	select {
 	case ac.notify <- struct{}{}:
 	default:
 	}
-	log.Debug("Reloaded keystore contents", "accounts", len(ac.all))
-}
-
-func (ac *accountCache) scan() ([]accounts.Account, error) {
-	files, err := ioutil.ReadDir(ac.keydir)
-	if err != nil {
-		return nil, err
-	}
-
-	var (
-		buf     = new(bufio.Reader)
-		addrs   []accounts.Account
-		keyJSON struct {
-			Address string `json:"address"`
-		}
-	)
-	for _, fi := range files {
-		path := filepath.Join(ac.keydir, fi.Name())
-		if skipKeyFile(fi) {
-			log.Trace("Ignoring file on account scan", "path", path)
-			continue
-		}
-		logger := log.New("path", path)
-
-		fd, err := os.Open(path)
-		if err != nil {
-			logger.Trace("Failed to open keystore file", "err", err)
-			continue
-		}
-		buf.Reset(fd)
-		// Parse the address.
-		keyJSON.Address = ""
-		err = json.NewDecoder(buf).Decode(&keyJSON)
-		addr := common.HexToAddress(keyJSON.Address)
-		switch {
-		case err != nil:
-			logger.Debug("Failed to decode keystore key", "err", err)
-		case (addr == common.Address{}):
-			logger.Debug("Failed to decode keystore key", "err", "missing or zero address")
-		default:
-			addrs = append(addrs, accounts.Account{Address: addr, URL: accounts.URL{Scheme: KeyStoreScheme, Path: path}})
-		}
-		fd.Close()
-	}
-	return addrs, err
-}
-
-func skipKeyFile(fi os.FileInfo) bool {
-	// Skip editor backups and UNIX-style hidden files.
-	if strings.HasSuffix(fi.Name(), "~") || strings.HasPrefix(fi.Name(), ".") {
-		return true
-	}
-	// Skip misc special files, directories (yes, symlinks too).
-	if fi.IsDir() || fi.Mode()&os.ModeType != 0 {
-		return true
-	}
-	return false
+	log.Trace("Handled keystore changes", "time", end.Sub(start))
+	return nil
 }

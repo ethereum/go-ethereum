@@ -17,13 +17,10 @@
 package abi
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"reflect"
-	"strings"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // The ABI holds information about a contract's context and available
@@ -54,136 +51,52 @@ func JSON(reader io.Reader) (ABI, error) {
 // methods string signature. (signature = baz(uint32,string32))
 func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 	// Fetch the ABI of the requested method
-	var method Method
-
 	if name == "" {
-		method = abi.Constructor
-	} else {
-		m, exist := abi.Methods[name]
-		if !exist {
-			return nil, fmt.Errorf("method '%s' not found", name)
+		// constructor
+		arguments, err := abi.Constructor.Inputs.Pack(args...)
+		if err != nil {
+			return nil, err
 		}
-		method = m
+		return arguments, nil
+
 	}
-	arguments, err := method.pack(args...)
+	method, exist := abi.Methods[name]
+	if !exist {
+		return nil, fmt.Errorf("method '%s' not found", name)
+	}
+
+	arguments, err := method.Inputs.Pack(args...)
 	if err != nil {
 		return nil, err
 	}
 	// Pack up the method ID too if not a constructor and return
-	if name == "" {
-		return arguments, nil
-	}
 	return append(method.Id(), arguments...), nil
 }
 
-// these variable are used to determine certain types during type assertion for
-// assignment.
-var (
-	r_interSlice = reflect.TypeOf([]interface{}{})
-	r_hash       = reflect.TypeOf(common.Hash{})
-	r_bytes      = reflect.TypeOf([]byte{})
-	r_byte       = reflect.TypeOf(byte(0))
-)
-
 // Unpack output in v according to the abi specification
-func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
-	var method = abi.Methods[name]
-
+func (abi ABI) Unpack(v interface{}, name string, output []byte) (err error) {
 	if len(output) == 0 {
 		return fmt.Errorf("abi: unmarshalling empty output")
 	}
-
-	// make sure the passed value is a pointer
-	valueOf := reflect.ValueOf(v)
-	if reflect.Ptr != valueOf.Kind() {
-		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
+	// since there can't be naming collisions with contracts and events,
+	// we need to decide whether we're calling a method or an event
+	if method, ok := abi.Methods[name]; ok {
+		if len(output)%32 != 0 {
+			return fmt.Errorf("abi: improperly formatted output")
+		}
+		return method.Outputs.Unpack(v, output)
+	} else if event, ok := abi.Events[name]; ok {
+		return event.Inputs.Unpack(v, output)
 	}
-
-	var (
-		value = valueOf.Elem()
-		typ   = value.Type()
-	)
-
-	if len(method.Outputs) > 1 {
-		switch value.Kind() {
-		// struct will match named return values to the struct's field
-		// names
-		case reflect.Struct:
-			for i := 0; i < len(method.Outputs); i++ {
-				marshalledValue, err := toGoType(i, method.Outputs[i], output)
-				if err != nil {
-					return err
-				}
-				reflectValue := reflect.ValueOf(marshalledValue)
-
-				for j := 0; j < typ.NumField(); j++ {
-					field := typ.Field(j)
-					// TODO read tags: `abi:"fieldName"`
-					if field.Name == strings.ToUpper(method.Outputs[i].Name[:1])+method.Outputs[i].Name[1:] {
-						if err := set(value.Field(j), reflectValue, method.Outputs[i]); err != nil {
-							return err
-						}
-					}
-				}
-			}
-		case reflect.Slice:
-			if !value.Type().AssignableTo(r_interSlice) {
-				return fmt.Errorf("abi: cannot marshal tuple in to slice %T (only []interface{} is supported)", v)
-			}
-
-			// if the slice already contains values, set those instead of the interface slice itself.
-			if value.Len() > 0 {
-				if len(method.Outputs) > value.Len() {
-					return fmt.Errorf("abi: cannot marshal in to slices of unequal size (require: %v, got: %v)", len(method.Outputs), value.Len())
-				}
-
-				for i := 0; i < len(method.Outputs); i++ {
-					marshalledValue, err := toGoType(i, method.Outputs[i], output)
-					if err != nil {
-						return err
-					}
-					reflectValue := reflect.ValueOf(marshalledValue)
-					if err := set(value.Index(i).Elem(), reflectValue, method.Outputs[i]); err != nil {
-						return err
-					}
-				}
-				return nil
-			}
-
-			// create a new slice and start appending the unmarshalled
-			// values to the new interface slice.
-			z := reflect.MakeSlice(typ, 0, len(method.Outputs))
-			for i := 0; i < len(method.Outputs); i++ {
-				marshalledValue, err := toGoType(i, method.Outputs[i], output)
-				if err != nil {
-					return err
-				}
-				z = reflect.Append(z, reflect.ValueOf(marshalledValue))
-			}
-			value.Set(z)
-		default:
-			return fmt.Errorf("abi: cannot unmarshal tuple in to %v", typ)
-		}
-
-	} else {
-		marshalledValue, err := toGoType(0, method.Outputs[0], output)
-		if err != nil {
-			return err
-		}
-		if err := set(value, reflect.ValueOf(marshalledValue), method.Outputs[0]); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return fmt.Errorf("abi: could not locate named method or event")
 }
 
+// UnmarshalJSON implements json.Unmarshaler interface
 func (abi *ABI) UnmarshalJSON(data []byte) error {
 	var fields []struct {
 		Type      string
 		Name      string
 		Constant  bool
-		Indexed   bool
 		Anonymous bool
 		Inputs    []Argument
 		Outputs   []Argument
@@ -219,4 +132,15 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// MethodById looks up a method by the 4-byte id
+// returns nil if none found
+func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
+	for _, method := range abi.Methods {
+		if bytes.Equal(method.Id(), sigdata[:4]) {
+			return &method, nil
+		}
+	}
+	return nil, fmt.Errorf("no method with id: %#x", sigdata[:4])
 }

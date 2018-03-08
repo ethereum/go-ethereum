@@ -20,9 +20,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -39,8 +37,6 @@ type Config struct {
 	// NoRecursion disabled Interpreter call, callcode,
 	// delegate call and create.
 	NoRecursion bool
-	// Disable gas metering
-	DisableGasMetering bool
 	// Enable recording of SHA3/keccak preimages
 	EnablePreimageRecording bool
 	// JumpTable contains the EVM instruction table. This
@@ -70,8 +66,10 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 	// we'll set the default jump table.
 	if !cfg.JumpTable[STOP].valid {
 		switch {
-		case evm.ChainConfig().IsMetropolis(evm.BlockNumber):
-			cfg.JumpTable = metropolisInstructionSet
+		case evm.ChainConfig().IsConstantinople(evm.BlockNumber):
+			cfg.JumpTable = constantinopleInstructionSet
+		case evm.ChainConfig().IsByzantium(evm.BlockNumber):
+			cfg.JumpTable = byzantiumInstructionSet
 		case evm.ChainConfig().IsHomestead(evm.BlockNumber):
 			cfg.JumpTable = homesteadInstructionSet
 		default:
@@ -88,7 +86,7 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 }
 
 func (in *Interpreter) enforceRestrictions(op OpCode, operation operation, stack *Stack) error {
-	if in.evm.chainRules.IsMetropolis {
+	if in.evm.chainRules.IsByzantium {
 		if in.readOnly {
 			// If the interpreter is operating in readonly mode, make sure no
 			// state-modifying operation is performed. The 3rd stack item
@@ -107,9 +105,9 @@ func (in *Interpreter) enforceRestrictions(op OpCode, operation operation, stack
 // the return byte-slice and an error if one occurred.
 //
 // It's important to note that any errors returned by the interpreter should be
-// considered a revert-and-consume-all-gas operation. No error specific checks
-// should be handled to reduce complexity and errors further down the in.
-func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret []byte, err error) {
+// considered a revert-and-consume-all-gas operation except for
+// errExecutionReverted which means revert-and-keep-gas-left.
+func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
@@ -123,11 +121,6 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		return nil, nil
 	}
 
-	codehash := contract.CodeHash // codehash is used when doing jump dest caching
-	if codehash == (common.Hash{}) {
-		codehash = crypto.Keccak256Hash(contract.Code)
-	}
-
 	var (
 		op    OpCode        // current opcode
 		mem   = NewMemory() // bound memory
@@ -137,37 +130,46 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		// to be uint256. Practically much less so feasible.
 		pc   = uint64(0) // program counter
 		cost uint64
+		// copies used by tracer
+		pcCopy  uint64 // needed for the deferred Tracer
+		gasCopy uint64 // for Tracer to log gas remaining before execution
+		logged  bool   // deferred Tracer should ignore already logged steps
 	)
 	contract.Input = input
 
-	defer func() {
-		if err != nil && in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(in.evm, pc, op, contract.Gas, cost, mem, stack, contract, in.evm.depth, err)
-		}
-	}()
-
+	if in.cfg.Debug {
+		defer func() {
+			if err != nil {
+				if !logged {
+					in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
+				} else {
+					in.cfg.Tracer.CaptureFault(in.evm, pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
+				}
+			}
+		}()
+	}
 	// The Interpreter main run loop (contextual). This loop runs until either an
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
 	// the execution of one of the operations or until the done flag is set by the
 	// parent context.
 	for atomic.LoadInt32(&in.evm.abort) == 0 {
-		// Get the memory location of pc
-		op = contract.GetOp(pc)
-
-		// get the operation from the jump table matching the opcode
-		operation := in.cfg.JumpTable[op]
-		if err := in.enforceRestrictions(op, operation, stack); err != nil {
-			return nil, err
+		if in.cfg.Debug {
+			// Capture pre-execution values for tracing.
+			logged, pcCopy, gasCopy = false, pc, contract.Gas
 		}
 
-		// if the op is invalid abort the process and return an error
+		// Get the operation from the jump table and validate the stack to ensure there are
+		// enough stack items available to perform the operation.
+		op = contract.GetOp(pc)
+		operation := in.cfg.JumpTable[op]
 		if !operation.valid {
 			return nil, fmt.Errorf("invalid opcode 0x%x", int(op))
 		}
-
-		// validate the stack and make sure there enough stack items available
-		// to perform the operation
 		if err := operation.validateStack(stack); err != nil {
+			return nil, err
+		}
+		// If the operation is valid, enforce and write restrictions
+		if err := in.enforceRestrictions(op, operation, stack); err != nil {
 			return nil, err
 		}
 
@@ -185,21 +187,19 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 				return nil, errGasUintOverflow
 			}
 		}
-
-		if !in.cfg.DisableGasMetering {
-			// consume the gas and return an error if not enough gas is available.
-			// cost is explicitly set so that the capture state defer method cas get the proper cost
-			cost, err = operation.gasCost(in.gasTable, in.evm, contract, stack, mem, memorySize)
-			if err != nil || !contract.UseGas(cost) {
-				return nil, ErrOutOfGas
-			}
+		// consume the gas and return an error if not enough gas is available.
+		// cost is explicitly set so that the capture state defer method cas get the proper cost
+		cost, err = operation.gasCost(in.gasTable, in.evm, contract, stack, mem, memorySize)
+		if err != nil || !contract.UseGas(cost) {
+			return nil, ErrOutOfGas
 		}
 		if memorySize > 0 {
 			mem.Resize(memorySize)
 		}
 
 		if in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(in.evm, pc, op, contract.Gas, cost, mem, stack, contract, in.evm.depth, err)
+			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
+			logged = true
 		}
 
 		// execute the operation

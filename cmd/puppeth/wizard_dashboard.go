@@ -40,6 +40,8 @@ func (w *wizard) deployDashboard() {
 			host: client.server,
 		}
 	}
+	existed := err == nil
+
 	// Figure out which port to listen on
 	fmt.Println()
 	fmt.Printf("Which port should the dashboard listen on? (default = %d)\n", infos.port)
@@ -58,7 +60,6 @@ func (w *wizard) deployDashboard() {
 			available[service] = append(available[service], server)
 		}
 	}
-	listing := make(map[string]string)
 	for _, service := range []string{"ethstats", "explorer", "wallet", "faucet"} {
 		// Gather all the locally hosted pages of this type
 		var pages []string
@@ -73,6 +74,14 @@ func (w *wizard) deployDashboard() {
 			case "ethstats":
 				if infos, err := checkEthstats(client, w.network); err == nil {
 					port = infos.port
+				}
+			case "explorer":
+				if infos, err := checkExplorer(client, w.network); err == nil {
+					port = infos.webPort
+				}
+			case "wallet":
+				if infos, err := checkWallet(client, w.network); err == nil {
+					port = infos.webPort
 				}
 			case "faucet":
 				if infos, err := checkFaucet(client, w.network); err == nil {
@@ -101,26 +110,43 @@ func (w *wizard) deployDashboard() {
 			log.Error("Invalid listing choice, aborting")
 			return
 		}
+		var page string
 		switch {
 		case choice <= len(pages):
-			listing[service] = pages[choice-1]
+			page = pages[choice-1]
 		case choice == len(pages)+1:
 			fmt.Println()
 			fmt.Printf("Which address is the external %s service at?\n", service)
-			listing[service] = w.readString()
+			page = w.readString()
 		default:
 			// No service hosting for this
 		}
+		// Save the users choice
+		switch service {
+		case "ethstats":
+			infos.ethstats = page
+		case "explorer":
+			infos.explorer = page
+		case "wallet":
+			infos.wallet = page
+		case "faucet":
+			infos.faucet = page
+		}
 	}
 	// If we have ethstats running, ask whether to make the secret public or not
-	var ethstats bool
 	if w.conf.ethstats != "" {
 		fmt.Println()
 		fmt.Println("Include ethstats secret on dashboard (y/n)? (default = yes)")
-		ethstats = w.readDefaultString("y") == "y"
+		infos.trusted = w.readDefaultString("y") == "y"
 	}
 	// Try to deploy the dashboard container on the host
-	if out, err := deployDashboard(client, w.network, infos.port, infos.host, listing, &w.conf, ethstats); err != nil {
+	nocache := false
+	if existed {
+		fmt.Println()
+		fmt.Printf("Should the dashboard be built from scratch (y/n)? (default = no)\n")
+		nocache = w.readDefaultString("n") != "n"
+	}
+	if out, err := deployDashboard(client, w.network, &w.conf, infos, nocache); err != nil {
 		log.Error("Failed to deploy dashboard container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)
@@ -128,5 +154,5 @@ func (w *wizard) deployDashboard() {
 		return
 	}
 	// All ok, run a network scan to pick any changes up
-	w.networkStats(false)
+	w.networkStats()
 }

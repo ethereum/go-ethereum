@@ -36,7 +36,7 @@ NetStore falls back to a backend (CloudStorage interface)
 implemented by bzz/network/forwarder. forwarder or IPFS or IPΞS
 */
 type NetStore struct {
-	hashfunc   Hasher
+	hashfunc   SwarmHasher
 	localStore *LocalStore
 	cloud      CloudStore
 }
@@ -57,19 +57,25 @@ type StoreParams struct {
 	Radius        int
 }
 
-func NewStoreParams(path string) (self *StoreParams) {
+//create params with default values
+func NewDefaultStoreParams() (self *StoreParams) {
 	return &StoreParams{
-		ChunkDbPath:   filepath.Join(path, "chunks"),
 		DbCapacity:    defaultDbCapacity,
 		CacheCapacity: defaultCacheCapacity,
 		Radius:        defaultRadius,
 	}
 }
 
+//this can only finally be set after all config options (file, cmd line, env vars)
+//have been evaluated
+func (self *StoreParams) Init(path string) {
+	self.ChunkDbPath = filepath.Join(path, "chunks")
+}
+
 // netstore contructor, takes path argument that is used to initialise dbStore,
 // the persistent (disk) storage component of LocalStore
 // the second argument is the hive, the connection/logistics manager for the node
-func NewNetStore(hash Hasher, lstore *LocalStore, cloud CloudStore, params *StoreParams) *NetStore {
+func NewNetStore(hash SwarmHasher, lstore *LocalStore, cloud CloudStore, params *StoreParams) *NetStore {
 	return &NetStore{
 		hashfunc:   hash,
 		localStore: lstore,

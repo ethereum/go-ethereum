@@ -34,19 +34,6 @@ func (s *BytesSuite) TestCopyBytes(c *checker.C) {
 	c.Assert(res1, checker.DeepEquals, exp1)
 }
 
-func (s *BytesSuite) TestIsHex(c *checker.C) {
-	data1 := "a9e67e"
-	exp1 := false
-	res1 := IsHex(data1)
-	c.Assert(res1, checker.DeepEquals, exp1)
-
-	data2 := "0xa9e67e00"
-	exp2 := true
-	res2 := IsHex(data2)
-	c.Assert(res2, checker.DeepEquals, exp2)
-
-}
-
 func (s *BytesSuite) TestLeftPadBytes(c *checker.C) {
 	val1 := []byte{1, 2, 3, 4}
 	exp1 := []byte{0, 0, 0, 0, 1, 2, 3, 4}
@@ -74,7 +61,28 @@ func TestFromHex(t *testing.T) {
 	expected := []byte{1}
 	result := FromHex(input)
 	if !bytes.Equal(expected, result) {
-		t.Errorf("Expected % x got % x", expected, result)
+		t.Errorf("Expected %x got %x", expected, result)
+	}
+}
+
+func TestIsHex(t *testing.T) {
+	tests := []struct {
+		input string
+		ok    bool
+	}{
+		{"", true},
+		{"0", false},
+		{"00", true},
+		{"a9e67e", true},
+		{"A9E67E", true},
+		{"0xa9e67e", false},
+		{"a9e67e001", false},
+		{"0xHELLO_MY_NAME_IS_STEVEN_@#$^&*", false},
+	}
+	for _, test := range tests {
+		if ok := isHex(test.input); ok != test.ok {
+			t.Errorf("isHex(%q) = %v, want %v", test.input, ok, test.ok)
+		}
 	}
 }
 
@@ -83,6 +91,15 @@ func TestFromHexOddLength(t *testing.T) {
 	expected := []byte{1}
 	result := FromHex(input)
 	if !bytes.Equal(expected, result) {
-		t.Errorf("Expected % x got % x", expected, result)
+		t.Errorf("Expected %x got %x", expected, result)
+	}
+}
+
+func TestNoPrefixShortHexOddLength(t *testing.T) {
+	input := "1"
+	expected := []byte{1}
+	result := FromHex(input)
+	if !bytes.Equal(expected, result) {
+		t.Errorf("Expected %x got %x", expected, result)
 	}
 }

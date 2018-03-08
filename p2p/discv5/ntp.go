@@ -54,10 +54,10 @@ func checkClockDrift() {
 		howtofix := fmt.Sprintf("Please enable network time synchronisation in system settings")
 		separator := strings.Repeat("-", len(warning))
 
-		log.Warn(fmt.Sprint(separator))
-		log.Warn(fmt.Sprint(warning))
-		log.Warn(fmt.Sprint(howtofix))
-		log.Warn(fmt.Sprint(separator))
+		log.Warn(separator)
+		log.Warn(warning)
+		log.Warn(howtofix)
+		log.Warn(separator)
 	} else {
 		log.Debug(fmt.Sprintf("Sanity NTP check reported %v drift, all ok", drift))
 	}

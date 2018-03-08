@@ -62,7 +62,7 @@ type (
 
 	// Changes to other state values.
 	refundChange struct {
-		prev *big.Int
+		prev uint64
 	}
 	addLogChange struct {
 		txhash common.Hash
@@ -132,6 +132,7 @@ func (ch addLogChange) undo(s *StateDB) {
 	} else {
 		s.logs[ch.txhash] = logs[:len(logs)-1]
 	}
+	s.logSize--
 }
 
 func (ch addPreimageChange) undo(s *StateDB) {

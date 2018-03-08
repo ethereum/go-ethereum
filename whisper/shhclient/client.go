@@ -45,8 +45,8 @@ func NewClient(c *rpc.Client) *Client {
 }
 
 // Version returns the Whisper sub-protocol version.
-func (sc *Client) Version(ctx context.Context) (uint, error) {
-	var result uint
+func (sc *Client) Version(ctx context.Context) (string, error) {
+	var result string
 	err := sc.c.CallContext(ctx, &result, "shh_version")
 	return result, err
 }

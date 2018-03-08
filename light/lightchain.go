@@ -18,6 +18,7 @@ package light
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -26,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -95,12 +97,9 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	if bc.genesisBlock == nil {
 		return nil, core.ErrNoGenesis
 	}
-	if bc.genesisBlock.Hash() == params.MainnetGenesisHash {
-		// add trusted CHT
-		WriteTrustedCht(bc.chainDb, TrustedCht{Number: 805, Root: common.HexToHash("85e4286fe0a730390245c49de8476977afdae0eb5530b277f62a52b12313d50f")})
-		log.Info("Added trusted CHT for mainnet")
+	if cp, ok := trustedCheckpoints[bc.genesisBlock.Hash()]; ok {
+		bc.addTrustedCheckpoint(cp)
 	}
-
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
@@ -113,6 +112,22 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		}
 	}
 	return bc, nil
+}
+
+// addTrustedCheckpoint adds a trusted checkpoint to the blockchain
+func (self *LightChain) addTrustedCheckpoint(cp trustedCheckpoint) {
+	if self.odr.ChtIndexer() != nil {
+		StoreChtRoot(self.chainDb, cp.sectionIdx, cp.sectionHead, cp.chtRoot)
+		self.odr.ChtIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
+	}
+	if self.odr.BloomTrieIndexer() != nil {
+		StoreBloomTrieRoot(self.chainDb, cp.sectionIdx, cp.sectionHead, cp.bloomTrieRoot)
+		self.odr.BloomTrieIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
+	}
+	if self.odr.BloomIndexer() != nil {
+		self.odr.BloomIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
+	}
+	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.sectionIdx+1)*CHTFrequencyClient-1, "hash", cp.sectionHead)
 }
 
 func (self *LightChain) getProcInterrupt() bool {
@@ -155,30 +170,8 @@ func (bc *LightChain) SetHead(head uint64) {
 }
 
 // GasLimit returns the gas limit of the current HEAD block.
-func (self *LightChain) GasLimit() *big.Int {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
+func (self *LightChain) GasLimit() uint64 {
 	return self.hc.CurrentHeader().GasLimit
-}
-
-// LastBlockHash return the hash of the HEAD block.
-func (self *LightChain) LastBlockHash() common.Hash {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
-	return self.hc.CurrentHeader().Hash()
-}
-
-// Status returns status information about the current chain such as the HEAD Td,
-// the HEAD hash and the hash of the genesis block.
-func (self *LightChain) Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash) {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
-	header := self.hc.CurrentHeader()
-	hash := header.Hash()
-	return self.GetTd(hash, header.Number.Uint64()), hash, self.genesisBlock.Hash()
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
@@ -217,6 +210,11 @@ func (bc *LightChain) Genesis() *types.Block {
 	return bc.genesisBlock
 }
 
+// State returns a new mutable state based on the current HEAD block.
+func (bc *LightChain) State() (*state.StateDB, error) {
+	return nil, errors.New("not implemented, needs client/server interface split")
+}
+
 // GetBody retrieves a block body (transactions and uncles) from the database
 // or ODR service by hash, caching it if found.
 func (self *LightChain) GetBody(ctx context.Context, hash common.Hash) (*types.Body, error) {
@@ -252,8 +250,8 @@ func (self *LightChain) GetBodyRLP(ctx context.Context, hash common.Hash) (rlp.R
 
 // HasBlock checks if a block is fully present in the database or not, caching
 // it if present.
-func (bc *LightChain) HasBlock(hash common.Hash) bool {
-	blk, _ := bc.GetBlockByHash(NoOdr, hash)
+func (bc *LightChain) HasBlock(hash common.Hash, number uint64) bool {
+	blk, _ := bc.GetBlock(NoOdr, hash, number)
 	return blk != nil
 }
 
@@ -323,7 +321,7 @@ func (self *LightChain) postChainEvents(events []interface{}) {
 	for _, event := range events {
 		switch ev := event.(type) {
 		case core.ChainEvent:
-			if self.LastBlockHash() == ev.Hash {
+			if self.CurrentHeader().Hash() == ev.Hash {
 				self.chainHeadFeed.Send(core.ChainHeadEvent{Block: ev.Block})
 			}
 			self.chainFeed.Send(ev)
@@ -379,16 +377,13 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 		return err
 	}
 	i, err := self.hc.InsertHeaderChain(chain, whFunc, start)
-	go self.postChainEvents(events)
+	self.postChainEvents(events)
 	return i, err
 }
 
 // CurrentHeader retrieves the current head header of the canonical chain. The
 // header is retrieved from the HeaderChain's internal cache.
 func (self *LightChain) CurrentHeader() *types.Header {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
 	return self.hc.CurrentHeader()
 }
 
@@ -418,8 +413,8 @@ func (self *LightChain) GetHeaderByHash(hash common.Hash) *types.Header {
 
 // HasHeader checks if a block header is present in the database or not, caching
 // it if present.
-func (bc *LightChain) HasHeader(hash common.Hash) bool {
-	return bc.hc.HasHeader(hash)
+func (bc *LightChain) HasHeader(hash common.Hash, number uint64) bool {
+	return bc.hc.HasHeader(hash, number)
 }
 
 // GetBlockHashesFromHash retrieves a number of block hashes starting at a given
@@ -443,11 +438,17 @@ func (self *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64)
 	return GetHeaderByNumber(ctx, self.odr, number)
 }
 
+// Config retrieves the header chain's chain configuration.
+func (self *LightChain) Config() *params.ChainConfig { return self.hc.Config() }
+
 func (self *LightChain) SyncCht(ctx context.Context) bool {
+	if self.odr.ChtIndexer() == nil {
+		return false
+	}
 	headNum := self.CurrentHeader().Number.Uint64()
-	cht := GetTrustedCht(self.chainDb)
-	if headNum+1 < cht.Number*ChtFrequency {
-		num := cht.Number*ChtFrequency - 1
+	chtCount, _, _ := self.odr.ChtIndexer().Sections()
+	if headNum+1 < chtCount*CHTFrequencyClient {
+		num := chtCount*CHTFrequencyClient - 1
 		header, err := GetHeaderByNumber(ctx, self.odr, num)
 		if header != nil && err == nil {
 			self.mu.Lock()

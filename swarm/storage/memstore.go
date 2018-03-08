@@ -23,6 +23,13 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+//metrics variables
+var (
+	memstorePutCounter    = metrics.NewRegisteredCounter("storage.db.memstore.put.count", nil)
+	memstoreRemoveCounter = metrics.NewRegisteredCounter("storage.db.memstore.rm.count", nil)
 )
 
 const (
@@ -78,7 +85,7 @@ type memTree struct {
 func newMemTree(b uint, parent *memTree, pidx uint) (node *memTree) {
 	node = new(memTree)
 	node.bits = b
-	node.width = 1 << uint(b)
+	node.width = 1 << b
 	node.subtree = make([]*memTree, node.width)
 	node.access = make([]uint64, node.width-1)
 	node.parent = parent
@@ -130,6 +137,10 @@ func (s *MemStore) setCapacity(c uint) {
 	s.capacity = c
 }
 
+func (s *MemStore) Counter() uint {
+	return s.entryCnt
+}
+
 // entry (not its copy) is going to be in MemStore
 func (s *MemStore) Put(entry *Chunk) {
 	if s.capacity == 0 {
@@ -144,6 +155,8 @@ func (s *MemStore) Put(entry *Chunk) {
 	}
 
 	s.accessCnt++
+
+	memstorePutCounter.Inc(1)
 
 	node := s.memtree
 	bitpos := uint(0)
@@ -289,6 +302,7 @@ func (s *MemStore) removeOldest() {
 	}
 
 	if node.entry.SData != nil {
+		memstoreRemoveCounter.Inc(1)
 		node.entry = nil
 		s.entryCnt--
 	}

@@ -21,7 +21,7 @@
 // as well as (auto)depositing ether to the chequebook contract.
 package chequebook
 
-//go:generate abigen --sol contract/chequebook.sol --pkg contract --out contract/chequebook.go
+//go:generate abigen --sol contract/chequebook.sol --exc contract/mortal.sol:mortal,contract/owned.sol:owned --pkg contract --out contract/chequebook.go
 //go:generate go run ./gencode.go
 
 import (
@@ -56,8 +56,8 @@ import (
 // * watching incoming ether
 
 var (
-	gasToCash = big.NewInt(2000000) // gas cost of a cash transaction using chequebook
-	// gasToDeploy = big.NewInt(3000000)
+	gasToCash = uint64(2000000) // gas cost of a cash transaction using chequebook
+	// gasToDeploy = uint64(3000000)
 )
 
 // Backend wraps all methods required for chequebook operation.

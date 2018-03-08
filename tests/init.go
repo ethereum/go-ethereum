@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,56 +25,56 @@ import (
 
 // This table defines supported forks and their chain config.
 var Forks = map[string]*params.ChainConfig{
-	"Frontier": &params.ChainConfig{
+	"Frontier": {
 		ChainId: big.NewInt(1),
 	},
-	"Homestead": &params.ChainConfig{
+	"Homestead": {
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 	},
-	"EIP150": &params.ChainConfig{
+	"EIP150": {
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(0),
 	},
-	"EIP158": &params.ChainConfig{
+	"EIP158": {
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(0),
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
 	},
-	"Byzantium": &params.ChainConfig{
-		ChainId:         big.NewInt(1),
-		HomesteadBlock:  big.NewInt(0),
-		EIP150Block:     big.NewInt(0),
-		EIP155Block:     big.NewInt(0),
-		EIP158Block:     big.NewInt(0),
-		DAOForkBlock:    big.NewInt(0),
-		MetropolisBlock: big.NewInt(0),
+	"Byzantium": {
+		ChainId:        big.NewInt(1),
+		HomesteadBlock: big.NewInt(0),
+		EIP150Block:    big.NewInt(0),
+		EIP155Block:    big.NewInt(0),
+		EIP158Block:    big.NewInt(0),
+		DAOForkBlock:   big.NewInt(0),
+		ByzantiumBlock: big.NewInt(0),
 	},
-	"FrontierToHomesteadAt5": &params.ChainConfig{
+	"FrontierToHomesteadAt5": {
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(5),
 	},
-	"HomesteadToEIP150At5": &params.ChainConfig{
+	"HomesteadToEIP150At5": {
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		EIP150Block:    big.NewInt(5),
 	},
-	"HomesteadToDaoAt5": &params.ChainConfig{
+	"HomesteadToDaoAt5": {
 		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		DAOForkBlock:   big.NewInt(5),
 		DAOForkSupport: true,
 	},
-	"EIP158ToByzantiumAt5": &params.ChainConfig{
-		ChainId:         big.NewInt(1),
-		HomesteadBlock:  big.NewInt(0),
-		EIP150Block:     big.NewInt(0),
-		EIP155Block:     big.NewInt(0),
-		EIP158Block:     big.NewInt(0),
-		MetropolisBlock: big.NewInt(5),
+	"EIP158ToByzantiumAt5": {
+		ChainId:        big.NewInt(1),
+		HomesteadBlock: big.NewInt(0),
+		EIP150Block:    big.NewInt(0),
+		EIP155Block:    big.NewInt(0),
+		EIP158Block:    big.NewInt(0),
+		ByzantiumBlock: big.NewInt(5),
 	},
 }
 

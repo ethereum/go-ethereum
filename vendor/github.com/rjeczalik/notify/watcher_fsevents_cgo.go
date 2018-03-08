@@ -26,9 +26,9 @@ import "C"
 import (
 	"errors"
 	"os"
+	"runtime"
 	"sync"
 	"sync/atomic"
-	"time"
 	"unsafe"
 )
 
@@ -63,6 +63,10 @@ var (
 func init() {
 	wg.Add(1)
 	go func() {
+		// There is exactly one run loop per thread. Lock this goroutine to its
+		// thread to ensure that it's not rescheduled on a different thread while
+		// setting up the run loop.
+		runtime.LockOSThread()
 		runloop = C.CFRunLoopGetCurrent()
 		C.CFRunLoopAddSource(runloop, source, C.kCFRunLoopDefaultMode)
 		C.CFRunLoopRun()
@@ -73,7 +77,6 @@ func init() {
 
 //export gosource
 func gosource(unsafe.Pointer) {
-	time.Sleep(time.Second)
 	wg.Done()
 }
 

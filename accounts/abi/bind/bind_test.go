@@ -126,6 +126,7 @@ var bindTests = []struct {
 				{"type":"function","name":"namedOutput","constant":true,"inputs":[],"outputs":[{"name":"str","type":"string"}]},
 				{"type":"function","name":"anonOutput","constant":true,"inputs":[],"outputs":[{"name":"","type":"string"}]},
 				{"type":"function","name":"namedOutputs","constant":true,"inputs":[],"outputs":[{"name":"str1","type":"string"},{"name":"str2","type":"string"}]},
+				{"type":"function","name":"collidingOutputs","constant":true,"inputs":[],"outputs":[{"name":"str","type":"string"},{"name":"Str","type":"string"}]},
 				{"type":"function","name":"anonOutputs","constant":true,"inputs":[],"outputs":[{"name":"","type":"string"},{"name":"","type":"string"}]},
 				{"type":"function","name":"mixedOutputs","constant":true,"inputs":[],"outputs":[{"name":"","type":"string"},{"name":"str","type":"string"}]}
 			]
@@ -140,10 +141,69 @@ var bindTests = []struct {
 			 str1, err        = b.NamedOutput(nil)
 			 str1, err        = b.AnonOutput(nil)
 			 res, _          := b.NamedOutputs(nil)
+			 str1, str2, err  = b.CollidingOutputs(nil)
 			 str1, str2, err  = b.AnonOutputs(nil)
 			 str1, str2, err  = b.MixedOutputs(nil)
 
 			 fmt.Println(str1, str2, res.Str1, res.Str2, err)
+		 }`,
+	},
+	// Tests that named, anonymous and indexed events are handled correctly
+	{
+		`EventChecker`, ``, ``,
+		`
+			[
+				{"type":"event","name":"empty","inputs":[]},
+				{"type":"event","name":"indexed","inputs":[{"name":"addr","type":"address","indexed":true},{"name":"num","type":"int256","indexed":true}]},
+				{"type":"event","name":"mixed","inputs":[{"name":"addr","type":"address","indexed":true},{"name":"num","type":"int256"}]},
+				{"type":"event","name":"anonymous","anonymous":true,"inputs":[]},
+				{"type":"event","name":"dynamic","inputs":[{"name":"idxStr","type":"string","indexed":true},{"name":"idxDat","type":"bytes","indexed":true},{"name":"str","type":"string"},{"name":"dat","type":"bytes"}]}
+			]
+		`,
+		`if e, err := NewEventChecker(common.Address{}, nil); e == nil || err != nil {
+			 t.Fatalf("binding (%v) nil or error (%v) not nil", e, nil)
+		 } else if false { // Don't run, just compile and test types
+			 var (
+				 err  error
+			   res  bool
+				 str  string
+				 dat  []byte
+				 hash common.Hash
+			 )
+			 _, err = e.FilterEmpty(nil)
+			 _, err = e.FilterIndexed(nil, []common.Address{}, []*big.Int{})
+
+			 mit, err := e.FilterMixed(nil, []common.Address{})
+
+			 res = mit.Next()  // Make sure the iterator has a Next method
+			 err = mit.Error() // Make sure the iterator has an Error method
+			 err = mit.Close() // Make sure the iterator has a Close method
+
+			 fmt.Println(mit.Event.Raw.BlockHash) // Make sure the raw log is contained within the results
+			 fmt.Println(mit.Event.Num)           // Make sure the unpacked non-indexed fields are present
+			 fmt.Println(mit.Event.Addr)          // Make sure the reconstructed indexed fields are present
+
+			 dit, err := e.FilterDynamic(nil, []string{}, [][]byte{})
+
+			 str  = dit.Event.Str    // Make sure non-indexed strings retain their type
+			 dat  = dit.Event.Dat    // Make sure non-indexed bytes retain their type
+			 hash = dit.Event.IdxStr // Make sure indexed strings turn into hashes
+			 hash = dit.Event.IdxDat // Make sure indexed bytes turn into hashes
+
+			 sink := make(chan *EventCheckerMixed)
+			 sub, err := e.WatchMixed(nil, sink, []common.Address{})
+			 defer sub.Unsubscribe()
+
+			 event := <-sink
+			 fmt.Println(event.Raw.BlockHash) // Make sure the raw log is contained within the results
+			 fmt.Println(event.Num)           // Make sure the unpacked non-indexed fields are present
+			 fmt.Println(event.Addr)          // Make sure the reconstructed indexed fields are present
+
+			 fmt.Println(res, str, dat, hash, err)
+		 }
+		 // Run a tiny reflection test to ensure disallowed methods don't appear
+		 if _, ok := reflect.TypeOf(&EventChecker{}).MethodByName("FilterAnonymous"); ok {
+		 	t.Errorf("binding has disallowed method (FilterAnonymous)")
 		 }`,
 	},
 	// Test that contract interactions (deploy, transact and call) generate working code
@@ -397,7 +457,6 @@ var bindTests = []struct {
 			sim.Commit()
 
 			// Set the field with automatic estimation and check that it succeeds
-			auth.GasLimit = nil
 			if _, err := limiter.SetField(auth, "automatic"); err != nil {
 				t.Fatalf("Failed to call automatically gased transaction: %v", err)
 			}
@@ -447,6 +506,303 @@ var bindTests = []struct {
 			}
 		`,
 	},
+	{
+		`Underscorer`,
+		`
+		contract Underscorer {
+			function UnderscoredOutput() constant returns (int _int, string _string) {
+				return (314, "pi");
+			}
+			function LowerLowerCollision() constant returns (int _res, int res) {
+				return (1, 2);
+			}
+			function LowerUpperCollision() constant returns (int _res, int Res) {
+				return (1, 2);
+		  }
+			function UpperLowerCollision() constant returns (int _Res, int res) {
+				return (1, 2);
+			}
+			function UpperUpperCollision() constant returns (int _Res, int Res) {
+				return (1, 2);
+			}
+			function PurelyUnderscoredOutput() constant returns (int _, int res) {
+				return (1, 2);
+			}
+			function AllPurelyUnderscoredOutput() constant returns (int _, int __) {
+				return (1, 2);
+			}
+		}
+		`, `6060604052341561000f57600080fd5b6103498061001e6000396000f300606060405260043610610083576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806303a592131461008857806367e6633d146100b85780639df484851461014d578063af7486ab1461017d578063b564b34d146101ad578063e02ab24d146101dd578063e409ca451461020d575b600080fd5b341561009357600080fd5b61009b61023d565b604051808381526020018281526020019250505060405180910390f35b34156100c357600080fd5b6100cb610252565b6040518083815260200180602001828103825283818151815260200191508051906020019080838360005b838110156101115780820151818401526020810190506100f6565b50505050905090810190601f16801561013e5780820380516001836020036101000a031916815260200191505b50935050505060405180910390f35b341561015857600080fd5b6101606102a0565b604051808381526020018281526020019250505060405180910390f35b341561018857600080fd5b6101906102b5565b604051808381526020018281526020019250505060405180910390f35b34156101b857600080fd5b6101c06102ca565b604051808381526020018281526020019250505060405180910390f35b34156101e857600080fd5b6101f06102df565b604051808381526020018281526020019250505060405180910390f35b341561021857600080fd5b6102206102f4565b604051808381526020018281526020019250505060405180910390f35b60008060016002819150809050915091509091565b600061025c610309565b61013a8090506040805190810160405280600281526020017f7069000000000000000000000000000000000000000000000000000000000000815250915091509091565b60008060016002819150809050915091509091565b60008060016002819150809050915091509091565b60008060016002819150809050915091509091565b60008060016002819150809050915091509091565b60008060016002819150809050915091509091565b6020604051908101604052806000815250905600a165627a7a72305820c11dcfa136fc7d182ee4d34f0b12d988496228f7e2d02d2b5376d996ca1743d00029`,
+		`[{"constant":true,"inputs":[],"name":"LowerUpperCollision","outputs":[{"name":"_res","type":"int256"},{"name":"Res","type":"int256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"UnderscoredOutput","outputs":[{"name":"_int","type":"int256"},{"name":"_string","type":"string"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"PurelyUnderscoredOutput","outputs":[{"name":"_","type":"int256"},{"name":"res","type":"int256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"UpperLowerCollision","outputs":[{"name":"_Res","type":"int256"},{"name":"res","type":"int256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"AllPurelyUnderscoredOutput","outputs":[{"name":"_","type":"int256"},{"name":"__","type":"int256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"UpperUpperCollision","outputs":[{"name":"_Res","type":"int256"},{"name":"Res","type":"int256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"LowerLowerCollision","outputs":[{"name":"_res","type":"int256"},{"name":"res","type":"int256"}],"payable":false,"stateMutability":"view","type":"function"}]`,
+		`
+			// Generate a new random account and a funded simulator
+			key, _ := crypto.GenerateKey()
+			auth := bind.NewKeyedTransactor(key)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
+
+			// Deploy a underscorer tester contract and execute a structured call on it
+			_, _, underscorer, err := DeployUnderscorer(auth, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy underscorer contract: %v", err)
+			}
+			sim.Commit()
+
+			// Verify that underscored return values correctly parse into structs
+			if res, err := underscorer.UnderscoredOutput(nil); err != nil {
+				t.Errorf("Failed to call constant function: %v", err)
+			} else if res.Int.Cmp(big.NewInt(314)) != 0 || res.String != "pi" {
+				t.Errorf("Invalid result, want: {314, \"pi\"}, got: %+v", res)
+			}
+			// Verify that underscored and non-underscored name collisions force tuple outputs
+			var a, b *big.Int
+
+			a, b, _ = underscorer.LowerLowerCollision(nil)
+			a, b, _ = underscorer.LowerUpperCollision(nil)
+			a, b, _ = underscorer.UpperLowerCollision(nil)
+			a, b, _ = underscorer.UpperUpperCollision(nil)
+			a, b, _ = underscorer.PurelyUnderscoredOutput(nil)
+			a, b, _ = underscorer.AllPurelyUnderscoredOutput(nil)
+
+			fmt.Println(a, b, err)
+		`,
+	},
+	// Tests that logs can be successfully filtered and decoded.
+	{
+		`Eventer`,
+		`
+			contract Eventer {
+					event SimpleEvent (
+					address indexed Addr,
+					bytes32 indexed Id,
+					bool    indexed Flag,
+					uint    Value
+				);
+				function raiseSimpleEvent(address addr, bytes32 id, bool flag, uint value) {
+					SimpleEvent(addr, id, flag, value);
+				}
+
+				event NodataEvent (
+					uint   indexed Number,
+					int16  indexed Short,
+					uint32 indexed Long
+				);
+				function raiseNodataEvent(uint number, int16 short, uint32 long) {
+					NodataEvent(number, short, long);
+				}
+
+				event DynamicEvent (
+					string indexed IndexedString,
+					bytes  indexed IndexedBytes,
+					string NonIndexedString,
+					bytes  NonIndexedBytes
+				);
+				function raiseDynamicEvent(string str, bytes blob) {
+					DynamicEvent(str, blob, str, blob);
+				}
+			}
+		`,
+		`6060604052341561000f57600080fd5b61042c8061001e6000396000f300606060405260043610610057576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063528300ff1461005c578063630c31e2146100fc578063c7d116dd14610156575b600080fd5b341561006757600080fd5b6100fa600480803590602001908201803590602001908080601f0160208091040260200160405190810160405280939291908181526020018383808284378201915050505050509190803590602001908201803590602001908080601f01602080910402602001604051908101604052809392919081815260200183838082843782019150505050505091905050610194565b005b341561010757600080fd5b610154600480803573ffffffffffffffffffffffffffffffffffffffff16906020019091908035600019169060200190919080351515906020019091908035906020019091905050610367565b005b341561016157600080fd5b610192600480803590602001909190803560010b90602001909190803563ffffffff169060200190919050506103c3565b005b806040518082805190602001908083835b6020831015156101ca57805182526020820191506020810190506020830392506101a5565b6001836020036101000a0380198251168184511680821785525050505050509050019150506040518091039020826040518082805190602001908083835b60208310151561022d5780518252602082019150602081019050602083039250610208565b6001836020036101000a03801982511681845116808217855250505050505090500191505060405180910390207f3281fd4f5e152dd3385df49104a3f633706e21c9e80672e88d3bcddf33101f008484604051808060200180602001838103835285818151815260200191508051906020019080838360005b838110156102c15780820151818401526020810190506102a6565b50505050905090810190601f1680156102ee5780820380516001836020036101000a031916815260200191505b50838103825284818151815260200191508051906020019080838360005b8381101561032757808201518184015260208101905061030c565b50505050905090810190601f1680156103545780820380516001836020036101000a031916815260200191505b5094505050505060405180910390a35050565b81151583600019168573ffffffffffffffffffffffffffffffffffffffff167f1f097de4289df643bd9c11011cc61367aa12983405c021056e706eb5ba1250c8846040518082815260200191505060405180910390a450505050565b8063ffffffff168260010b847f3ca7f3a77e5e6e15e781850bc82e32adfa378a2a609370db24b4d0fae10da2c960405160405180910390a45050505600a165627a7a72305820d1f8a8bbddbc5bb29f285891d6ae1eef8420c52afdc05e1573f6114d8e1714710029`,
+		`[{"constant":false,"inputs":[{"name":"str","type":"string"},{"name":"blob","type":"bytes"}],"name":"raiseDynamicEvent","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"addr","type":"address"},{"name":"id","type":"bytes32"},{"name":"flag","type":"bool"},{"name":"value","type":"uint256"}],"name":"raiseSimpleEvent","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"number","type":"uint256"},{"name":"short","type":"int16"},{"name":"long","type":"uint32"}],"name":"raiseNodataEvent","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"Addr","type":"address"},{"indexed":true,"name":"Id","type":"bytes32"},{"indexed":true,"name":"Flag","type":"bool"},{"indexed":false,"name":"Value","type":"uint256"}],"name":"SimpleEvent","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"Number","type":"uint256"},{"indexed":true,"name":"Short","type":"int16"},{"indexed":true,"name":"Long","type":"uint32"}],"name":"NodataEvent","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"IndexedString","type":"string"},{"indexed":true,"name":"IndexedBytes","type":"bytes"},{"indexed":false,"name":"NonIndexedString","type":"string"},{"indexed":false,"name":"NonIndexedBytes","type":"bytes"}],"name":"DynamicEvent","type":"event"}]`,
+		`
+			// Generate a new random account and a funded simulator
+			key, _ := crypto.GenerateKey()
+			auth := bind.NewKeyedTransactor(key)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
+
+			// Deploy an eventer contract
+			_, _, eventer, err := DeployEventer(auth, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy eventer contract: %v", err)
+			}
+			sim.Commit()
+
+			// Inject a few events into the contract, gradually more in each block
+			for i := 1; i <= 3; i++ {
+				for j := 1; j <= i; j++ {
+					if _, err := eventer.RaiseSimpleEvent(auth, common.Address{byte(j)}, [32]byte{byte(j)}, true, big.NewInt(int64(10*i+j))); err != nil {
+						t.Fatalf("block %d, event %d: raise failed: %v", i, j, err)
+					}
+				}
+				sim.Commit()
+			}
+			// Test filtering for certain events and ensure they can be found
+			sit, err := eventer.FilterSimpleEvent(nil, []common.Address{common.Address{1}, common.Address{3}}, [][32]byte{{byte(1)}, {byte(2)}, {byte(3)}}, []bool{true})
+			if err != nil {
+				t.Fatalf("failed to filter for simple events: %v", err)
+			}
+			defer sit.Close()
+
+			sit.Next()
+			if sit.Event.Value.Uint64() != 11 || !sit.Event.Flag {
+				t.Errorf("simple log content mismatch: have %v, want {11, true}", sit.Event)
+			}
+			sit.Next()
+			if sit.Event.Value.Uint64() != 21 || !sit.Event.Flag {
+				t.Errorf("simple log content mismatch: have %v, want {21, true}", sit.Event)
+			}
+			sit.Next()
+			if sit.Event.Value.Uint64() != 31 || !sit.Event.Flag {
+				t.Errorf("simple log content mismatch: have %v, want {31, true}", sit.Event)
+			}
+			sit.Next()
+			if sit.Event.Value.Uint64() != 33 || !sit.Event.Flag {
+				t.Errorf("simple log content mismatch: have %v, want {33, true}", sit.Event)
+			}
+
+			if sit.Next() {
+				t.Errorf("unexpected simple event found: %+v", sit.Event)
+			}
+			if err = sit.Error(); err != nil {
+				t.Fatalf("simple event iteration failed: %v", err)
+			}
+			// Test raising and filtering for an event with no data component
+			if _, err := eventer.RaiseNodataEvent(auth, big.NewInt(314), 141, 271); err != nil {
+				t.Fatalf("failed to raise nodata event: %v", err)
+			}
+			sim.Commit()
+
+			nit, err := eventer.FilterNodataEvent(nil, []*big.Int{big.NewInt(314)}, []int16{140, 141, 142}, []uint32{271})
+			if err != nil {
+				t.Fatalf("failed to filter for nodata events: %v", err)
+			}
+			defer nit.Close()
+
+			if !nit.Next() {
+				t.Fatalf("nodata log not found: %v", nit.Error())
+			}
+			if nit.Event.Number.Uint64() != 314 {
+				t.Errorf("nodata log content mismatch: have %v, want 314", nit.Event.Number)
+			}
+			if nit.Next() {
+				t.Errorf("unexpected nodata event found: %+v", nit.Event)
+			}
+			if err = nit.Error(); err != nil {
+				t.Fatalf("nodata event iteration failed: %v", err)
+			}
+			// Test raising and filtering for events with dynamic indexed components
+			if _, err := eventer.RaiseDynamicEvent(auth, "Hello", []byte("World")); err != nil {
+				t.Fatalf("failed to raise dynamic event: %v", err)
+			}
+			sim.Commit()
+
+			dit, err := eventer.FilterDynamicEvent(nil, []string{"Hi", "Hello", "Bye"}, [][]byte{[]byte("World")})
+			if err != nil {
+				t.Fatalf("failed to filter for dynamic events: %v", err)
+			}
+			defer dit.Close()
+
+			if !dit.Next() {
+				t.Fatalf("dynamic log not found: %v", dit.Error())
+			}
+			if dit.Event.NonIndexedString != "Hello" || string(dit.Event.NonIndexedBytes) != "World" ||	dit.Event.IndexedString != common.HexToHash("0x06b3dfaec148fb1bb2b066f10ec285e7c9bf402ab32aa78a5d38e34566810cd2") || dit.Event.IndexedBytes != common.HexToHash("0xf2208c967df089f60420785795c0a9ba8896b0f6f1867fa7f1f12ad6f79c1a18") {
+				t.Errorf("dynamic log content mismatch: have %v, want {'0x06b3dfaec148fb1bb2b066f10ec285e7c9bf402ab32aa78a5d38e34566810cd2, '0xf2208c967df089f60420785795c0a9ba8896b0f6f1867fa7f1f12ad6f79c1a18', 'Hello', 'World'}", dit.Event)
+			}
+			if dit.Next() {
+				t.Errorf("unexpected dynamic event found: %+v", dit.Event)
+			}
+			if err = dit.Error(); err != nil {
+				t.Fatalf("dynamic event iteration failed: %v", err)
+			}
+			// Test subscribing to an event and raising it afterwards
+			ch := make(chan *EventerSimpleEvent, 16)
+			sub, err := eventer.WatchSimpleEvent(nil, ch, nil, nil, nil)
+			if err != nil {
+				t.Fatalf("failed to subscribe to simple events: %v", err)
+			}
+			if _, err := eventer.RaiseSimpleEvent(auth, common.Address{255}, [32]byte{255}, true, big.NewInt(255)); err != nil {
+				t.Fatalf("failed to raise subscribed simple event: %v", err)
+			}
+			sim.Commit()
+
+			select {
+			case event := <-ch:
+				if event.Value.Uint64() != 255 {
+					t.Errorf("simple log content mismatch: have %v, want 255", event)
+				}
+			case <-time.After(250 * time.Millisecond):
+				t.Fatalf("subscribed simple event didn't arrive")
+			}
+			// Unsubscribe from the event and make sure we're not delivered more
+			sub.Unsubscribe()
+
+			if _, err := eventer.RaiseSimpleEvent(auth, common.Address{254}, [32]byte{254}, true, big.NewInt(254)); err != nil {
+				t.Fatalf("failed to raise subscribed simple event: %v", err)
+			}
+			sim.Commit()
+
+			select {
+			case event := <-ch:
+				t.Fatalf("unsubscribed simple event arrived: %v", event)
+			case <-time.After(250 * time.Millisecond):
+			}
+		`,
+	},
+	{
+		`DeeplyNestedArray`,
+		`
+			contract DeeplyNestedArray {
+				uint64[3][4][5] public deepUint64Array;
+				function storeDeepUintArray(uint64[3][4][5] arr) public {
+					deepUint64Array = arr;
+				}
+				function retrieveDeepArray() public view returns (uint64[3][4][5]) {
+					return deepUint64Array;
+				}
+			}
+		`,
+		`6060604052341561000f57600080fd5b6106438061001e6000396000f300606060405260043610610057576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063344248551461005c5780638ed4573a1461011457806398ed1856146101ab575b600080fd5b341561006757600080fd5b610112600480806107800190600580602002604051908101604052809291906000905b828210156101055783826101800201600480602002604051908101604052809291906000905b828210156100f25783826060020160038060200260405190810160405280929190826003602002808284378201915050505050815260200190600101906100b0565b505050508152602001906001019061008a565b5050505091905050610208565b005b341561011f57600080fd5b61012761021d565b604051808260056000925b8184101561019b578284602002015160046000925b8184101561018d5782846020020151600360200280838360005b8381101561017c578082015181840152602081019050610161565b505050509050019260010192610147565b925050509260010192610132565b9250505091505060405180910390f35b34156101b657600080fd5b6101de6004808035906020019091908035906020019091908035906020019091905050610309565b604051808267ffffffffffffffff1667ffffffffffffffff16815260200191505060405180910390f35b80600090600561021992919061035f565b5050565b6102256103b0565b6000600580602002604051908101604052809291906000905b8282101561030057838260040201600480602002604051908101604052809291906000905b828210156102ed578382016003806020026040519081016040528092919082600380156102d9576020028201916000905b82829054906101000a900467ffffffffffffffff1667ffffffffffffffff16815260200190600801906020826007010492830192600103820291508084116102945790505b505050505081526020019060010190610263565b505050508152602001906001019061023e565b50505050905090565b60008360058110151561031857fe5b600402018260048110151561032957fe5b018160038110151561033757fe5b6004918282040191900660080292509250509054906101000a900467ffffffffffffffff1681565b826005600402810192821561039f579160200282015b8281111561039e5782518290600461038e9291906103df565b5091602001919060040190610375565b5b5090506103ac919061042d565b5090565b610780604051908101604052806005905b6103c9610459565b8152602001906001900390816103c15790505090565b826004810192821561041c579160200282015b8281111561041b5782518290600361040b929190610488565b50916020019190600101906103f2565b5b5090506104299190610536565b5090565b61045691905b8082111561045257600081816104499190610562565b50600401610433565b5090565b90565b610180604051908101604052806004905b6104726105a7565b81526020019060019003908161046a5790505090565b82600380016004900481019282156105255791602002820160005b838211156104ef57835183826101000a81548167ffffffffffffffff021916908367ffffffffffffffff16021790555092602001926008016020816007010492830192600103026104a3565b80156105235782816101000a81549067ffffffffffffffff02191690556008016020816007010492830192600103026104ef565b505b50905061053291906105d9565b5090565b61055f91905b8082111561055b57600081816105529190610610565b5060010161053c565b5090565b90565b50600081816105719190610610565b50600101600081816105839190610610565b50600101600081816105959190610610565b5060010160006105a59190610610565b565b6060604051908101604052806003905b600067ffffffffffffffff168152602001906001900390816105b75790505090565b61060d91905b8082111561060957600081816101000a81549067ffffffffffffffff0219169055506001016105df565b5090565b90565b50600090555600a165627a7a7230582087e5a43f6965ab6ef7a4ff056ab80ed78fd8c15cff57715a1bf34ec76a93661c0029`,
+		`[{"constant":false,"inputs":[{"name":"arr","type":"uint64[3][4][5]"}],"name":"storeDeepUintArray","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"retrieveDeepArray","outputs":[{"name":"","type":"uint64[3][4][5]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"},{"name":"","type":"uint256"},{"name":"","type":"uint256"}],"name":"deepUint64Array","outputs":[{"name":"","type":"uint64"}],"payable":false,"stateMutability":"view","type":"function"}]`,
+		`
+			// Generate a new random account and a funded simulator
+			key, _ := crypto.GenerateKey()
+			auth := bind.NewKeyedTransactor(key)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
+
+			//deploy the test contract
+			_, _, testContract, err := DeployDeeplyNestedArray(auth, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy test contract: %v", err)
+			}
+
+			// Finish deploy.
+			sim.Commit()
+
+			//Create coordinate-filled array, for testing purposes.
+			testArr := [5][4][3]uint64{}
+			for i := 0; i < 5; i++ {
+				testArr[i] = [4][3]uint64{}
+				for j := 0; j < 4; j++ {
+					testArr[i][j] = [3]uint64{}
+					for k := 0; k < 3; k++ {
+						//pack the coordinates, each array value will be unique, and can be validated easily.
+						testArr[i][j][k] = uint64(i) << 16 | uint64(j) << 8 | uint64(k)
+					}
+				}
+			}
+
+			if _, err := testContract.StoreDeepUintArray(&bind.TransactOpts{
+				From: auth.From,
+				Signer: auth.Signer,
+			}, testArr); err != nil {
+				t.Fatalf("Failed to store nested array in test contract: %v", err)
+			}
+
+			sim.Commit()
+
+			retrievedArr, err := testContract.RetrieveDeepArray(&bind.CallOpts{
+				From: auth.From,
+				Pending: false,
+			})
+			if err != nil {
+				t.Fatalf("Failed to retrieve nested array from test contract: %v", err)
+			}
+
+			//quick check to see if contents were copied
+			// (See accounts/abi/unpack_test.go for more extensive testing)
+			if retrievedArr[4][3][2] != testArr[4][3][2] {
+				t.Fatalf("Retrieved value does not match expected value! got: %d, expected: %d. %v", retrievedArr[4][3][2], testArr[4][3][2], err)
+			}`,
+	},
 }
 
 // Tests that packages generated by the binder can be successfully compiled and
@@ -459,7 +815,7 @@ func TestBindings(t *testing.T) {
 	}
 	// Skip the test if the go-ethereum sources are symlinked (https://github.com/golang/go/issues/14845)
 	linkTestCode := fmt.Sprintf("package linktest\nfunc CheckSymlinks(){\nfmt.Println(backends.NewSimulatedBackend(nil))\n}")
-	linkTestDeps, err := imports.Process("", []byte(linkTestCode), nil)
+	linkTestDeps, err := imports.Process(os.TempDir(), []byte(linkTestCode), nil)
 	if err != nil {
 		t.Fatalf("failed check for goimports symlink bug: %v", err)
 	}
@@ -498,7 +854,7 @@ func TestBindings(t *testing.T) {
 		}
 	}
 	// Test the entire package and report any failures
-	cmd := exec.Command(gocmd, "test", "-v")
+	cmd := exec.Command(gocmd, "test", "-v", "-count", "1")
 	cmd.Dir = pkg
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to run binding test: %v\n%s", err, out)

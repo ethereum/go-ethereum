@@ -290,7 +290,7 @@ func TestSubscriptionMultipleNamespaces(t *testing.T) {
 
 	for {
 		done := true
-		for id, _ := range count {
+		for id := range count {
 			if count, found := count[id]; !found || count < (2*n) {
 				done = false
 			}

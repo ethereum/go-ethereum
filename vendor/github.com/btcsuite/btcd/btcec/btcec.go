@@ -36,8 +36,9 @@ var (
 // interface from crypto/elliptic.
 type KoblitzCurve struct {
 	*elliptic.CurveParams
-	q *big.Int
-	H int // cofactor of the curve.
+	q         *big.Int
+	H         int      // cofactor of the curve.
+	halfOrder *big.Int // half the order N
 
 	// byteSize is simply the bit size / 8 and is provided for convenience
 	// since it is calculated repeatedly.
@@ -747,9 +748,9 @@ func NAF(k []byte) ([]byte, []byte) {
 	}
 	if carry {
 		retPos[0] = 1
+		return retPos, retNeg
 	}
-
-	return retPos, retNeg
+	return retPos[1:], retNeg[1:]
 }
 
 // ScalarMult returns k*(Bx, By) where k is a big endian integer.
@@ -912,9 +913,10 @@ func initS256() {
 	secp256k1.Gx = fromHex("79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798")
 	secp256k1.Gy = fromHex("483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8")
 	secp256k1.BitSize = 256
-	secp256k1.H = 1
 	secp256k1.q = new(big.Int).Div(new(big.Int).Add(secp256k1.P,
 		big.NewInt(1)), big.NewInt(4))
+	secp256k1.H = 1
+	secp256k1.halfOrder = new(big.Int).Rsh(secp256k1.N, 1)
 
 	// Provided for convenience since this gets computed repeatedly.
 	secp256k1.byteSize = secp256k1.BitSize / 8

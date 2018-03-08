@@ -113,7 +113,7 @@ func (s *State) nextPending(timeout <-chan time.Time) (rune, error) {
 	select {
 	case thing, ok := <-s.next:
 		if !ok {
-			return 0, errors.New("liner: internal error")
+			return 0, ErrInternal
 		}
 		if thing.err != nil {
 			return 0, thing.err
@@ -137,7 +137,7 @@ func (s *State) readNext() (interface{}, error) {
 	select {
 	case thing, ok := <-s.next:
 		if !ok {
-			return 0, errors.New("liner: internal error")
+			return 0, ErrInternal
 		}
 		if thing.err != nil {
 			return nil, thing.err

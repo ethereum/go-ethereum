@@ -211,12 +211,12 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 				}
 
 				// if node is scheduled to connect
-				if time.Time(node.After).After(time.Now()) {
+				if node.After.After(time.Now()) {
 					log.Debug(fmt.Sprintf("kaddb record %v (PO%03d:%d) skipped. seen at %v (%v ago), scheduled at %v", node.Addr, po, cursor, node.Seen, delta, node.After))
 					continue ROW
 				}
 
-				delta = time.Since(time.Time(node.Seen))
+				delta = time.Since(node.Seen)
 				if delta < self.initialRetryInterval {
 					delta = self.initialRetryInterval
 				}
@@ -230,7 +230,7 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 				log.Debug(fmt.Sprintf("kaddb record %v (PO%03d:%d) ready to be tried. seen at %v (%v ago), scheduled at %v", node.Addr, po, cursor, node.Seen, delta, node.After))
 
 				// scheduling next check
-				interval = time.Duration(delta * time.Duration(self.connRetryExp))
+				interval = delta * time.Duration(self.connRetryExp)
 				after = time.Now().Add(interval)
 
 				log.Debug(fmt.Sprintf("kaddb record %v (PO%03d:%d) selected as candidate connection %v. seen at %v (%v ago), selectable since %v, retry after %v (in %v)", node.Addr, po, cursor, rounds, node.Seen, delta, node.After, after, interval))
@@ -330,7 +330,7 @@ func (self *KadDb) load(path string, cb func(*NodeRecord, Node) error) (err erro
 				}
 			}
 			n++
-			if (node.After == time.Time{}) {
+			if node.After.IsZero() {
 				node.After = time.Now()
 			}
 			self.index[node.Addr] = node

@@ -28,10 +28,16 @@ type bytesBacked interface {
 	Bytes() []byte
 }
 
-const bloomLength = 256
+const (
+	// BloomByteLength represents the number of bytes used in a header log bloom.
+	BloomByteLength = 256
 
-// Bloom represents a 256 bit bloom filter.
-type Bloom [bloomLength]byte
+	// BloomBitLength represents the number of bits used in a header log bloom.
+	BloomBitLength = 8 * BloomByteLength
+)
+
+// Bloom represents a 2048 bit bloom filter.
+type Bloom [BloomByteLength]byte
 
 // BytesToBloom converts a byte slice to a bloom filter.
 // It panics if b is not of suitable size.
@@ -47,7 +53,7 @@ func (b *Bloom) SetBytes(d []byte) {
 	if len(b) < len(d) {
 		panic(fmt.Sprintf("bloom bytes too big %d %d", len(b), len(d)))
 	}
-	copy(b[bloomLength-len(d):], d)
+	copy(b[BloomByteLength-len(d):], d)
 }
 
 // Add adds d to the filter. Future calls of Test(d) will return true.
