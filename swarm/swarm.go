@@ -194,11 +194,13 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	var resourceHandler *storage.ResourceHandler
 	// if use resource updates
 	if self.config.ResourceEnabled && resolver != nil {
-		resourceValidator := storage.NewENSValidator(config.EnsRoot, resolver, storage.NewGenericResourceSigner(self.privateKey))
-		resolver.SetNameHash(resourceValidator.NameHash)
+		resourceparams := &storage.ResourceHandlerParams{
+			Validator: storage.NewENSValidator(config.EnsRoot, resolver, storage.NewGenericResourceSigner(self.privateKey)),
+		}
+		resolver.SetNameHash(resourceparams.Validator.NameHash)
 		hashfunc := storage.MakeHashFunc(storage.SHA3Hash)
 		chunkStore := storage.NewResourceChunkStore(self.lstore, func(*storage.Chunk) error { return nil })
-		resourceHandler, err = storage.NewResourceHandler(hashfunc, chunkStore, resolver, resourceValidator)
+		resourceHandler, err = storage.NewResourceHandler(hashfunc, chunkStore, resolver, resourceparams)
 		if err != nil {
 			return nil, err
 		}
