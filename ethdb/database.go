@@ -243,8 +243,26 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			return
 		}
 		parts := strings.Split(ioStats, " ")
-		read, _ := strconv.ParseFloat(strings.Split(parts[0], ":")[1], 64)
-		write, _ := strconv.ParseFloat(strings.Split(parts[1], ":")[1], 64)
+		r := strings.Split(parts[0], ":")
+		if len(r) < 2 {
+			db.log.Error("Bad syntax of read entry", "entry", parts[0])
+			return
+		}
+		read, err := strconv.ParseFloat(r[1], 64)
+		if err != nil {
+			db.log.Error("Read entry parsing failed", "err", err)
+			return
+		}
+		w := strings.Split(parts[1], ":")
+		if len(r) < 2 {
+			db.log.Error("Bad syntax of write entry", "entry", parts[1])
+			return
+		}
+		write, err := strconv.ParseFloat(w[1], 64)
+		if err != nil {
+			db.log.Error("Write entry parsing failed", "err", err)
+			return
+		}
 		if db.diskReadMeter != nil {
 			db.diskReadMeter.Mark(int64((read - iostats[0]) * 1024 * 1024))
 		}
