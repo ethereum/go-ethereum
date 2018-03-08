@@ -253,10 +253,18 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	case LightSync:
 		current = d.lightchain.CurrentHeader().Number.Uint64()
 	}
+
+	// If the current block number is greater than the highest block number when synchronization started
+	// due to pivot point moving, using the current block number as a replacement.
+	highest := d.syncStatsChainHeight
+	if current > highest {
+		highest = current
+	}
+
 	return ethereum.SyncProgress{
 		StartingBlock: d.syncStatsChainOrigin,
 		CurrentBlock:  current,
-		HighestBlock:  d.syncStatsChainHeight,
+		HighestBlock:  highest,
 		PulledStates:  d.syncStatsState.processed,
 		KnownStates:   d.syncStatsState.processed + d.syncStatsState.pending,
 	}
