@@ -270,8 +270,8 @@ func (db *Dashboard) collectData() {
 		prevNetworkEgress  = metrics.DefaultRegistry.Get("p2p/OutboundTraffic").(metrics.Meter).Count()
 		prevProcessCPUTime = getProcessCPUTime()
 		prevSystemCPUUsage = systemCPUUsage
-		prevDiskRead       = metrics.DefaultRegistry.Get("eth/db/chaindata/compact/input").(metrics.Meter).Count()
-		prevDiskWrite      = metrics.DefaultRegistry.Get("eth/db/chaindata/compact/output").(metrics.Meter).Count()
+		prevDiskRead       = metrics.DefaultRegistry.Get("eth/db/chaindata/disk/read").(metrics.Meter).Count()
+		prevDiskWrite      = metrics.DefaultRegistry.Get("eth/db/chaindata/disk/write").(metrics.Meter).Count()
 
 		frequency = float64(db.config.Refresh / time.Second)
 		numCPU    = float64(runtime.NumCPU())
@@ -289,8 +289,8 @@ func (db *Dashboard) collectData() {
 				curNetworkEgress  = metrics.DefaultRegistry.Get("p2p/OutboundTraffic").(metrics.Meter).Count()
 				curProcessCPUTime = getProcessCPUTime()
 				curSystemCPUUsage = systemCPUUsage
-				curDiskRead       = metrics.DefaultRegistry.Get("eth/db/chaindata/compact/input").(metrics.Meter).Count()
-				curDiskWrite      = metrics.DefaultRegistry.Get("eth/db/chaindata/compact/output").(metrics.Meter).Count()
+				curDiskRead       = metrics.DefaultRegistry.Get("eth/db/chaindata/disk/read").(metrics.Meter).Count()
+				curDiskWrite      = metrics.DefaultRegistry.Get("eth/db/chaindata/disk/write").(metrics.Meter).Count()
 
 				deltaNetworkIngress = float64(curNetworkIngress - prevNetworkIngress)
 				deltaNetworkEgress  = float64(curNetworkEgress - prevNetworkEgress)
