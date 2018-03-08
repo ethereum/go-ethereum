@@ -30,6 +30,8 @@ import (
 
 var (
 	bigZero                  = new(big.Int)
+	tt255                    = math.BigPow(2, 255)
+	tt256                    = math.BigPow(2, 256)
 	errWriteProtection       = errors.New("evm: write protection")
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
 	errExecutionReverted     = errors.New("evm: execution reverted")
@@ -191,50 +193,71 @@ func opGt(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack
 }
 
 func opSlt(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	x, y := math.S256(stack.pop()), math.S256(stack.pop())
-	if x.Cmp(math.S256(y)) < 0 {
-		stack.push(evm.interpreter.intPool.get().SetUint64(1))
-	} else {
-		stack.push(new(big.Int))
-	}
+	x, y := stack.pop(), stack.peek()
 
-	evm.interpreter.intPool.put(x, y)
+	xSign := x.Cmp(tt255)
+	ySign := y.Cmp(tt255)
+
+	switch {
+	case xSign >= 0 && ySign < 0:
+		y.SetUint64(1)
+
+	case xSign < 0 && ySign >= 0:
+		y.SetUint64(0)
+
+	default:
+		if x.Cmp(y) < 0 {
+			y.SetUint64(1)
+		} else {
+			y.SetUint64(0)
+		}
+	}
+	evm.interpreter.intPool.put(x)
 	return nil, nil
 }
 
 func opSgt(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	x, y := math.S256(stack.pop()), math.S256(stack.pop())
-	if x.Cmp(y) > 0 {
-		stack.push(evm.interpreter.intPool.get().SetUint64(1))
-	} else {
-		stack.push(new(big.Int))
-	}
+	x, y := stack.pop(), stack.peek()
 
-	evm.interpreter.intPool.put(x, y)
+	xSign := x.Cmp(tt255)
+	ySign := y.Cmp(tt255)
+
+	switch {
+	case xSign >= 0 && ySign < 0:
+		y.SetUint64(0)
+
+	case xSign < 0 && ySign >= 0:
+		y.SetUint64(1)
+
+	default:
+		if x.Cmp(y) > 0 {
+			y.SetUint64(1)
+		} else {
+			y.SetUint64(0)
+		}
+	}
+	evm.interpreter.intPool.put(x)
 	return nil, nil
 }
 
 func opEq(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	x, y := stack.pop(), stack.pop()
+	x, y := stack.pop(), stack.peek()
 	if x.Cmp(y) == 0 {
-		stack.push(evm.interpreter.intPool.get().SetUint64(1))
+		y.SetUint64(1)
 	} else {
-		stack.push(new(big.Int))
+		y.SetUint64(0)
 	}
-
-	evm.interpreter.intPool.put(x, y)
+	evm.interpreter.intPool.put(x)
 	return nil, nil
 }
 
 func opIszero(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	x := stack.pop()
+	x := stack.peek()
 	if x.Sign() > 0 {
-		stack.push(new(big.Int))
+		x.SetUint64(0)
 	} else {
-		stack.push(evm.interpreter.intPool.get().SetUint64(1))
+		x.SetUint64(1)
 	}
-
-	evm.interpreter.intPool.put(x)
 	return nil, nil
 }
 
