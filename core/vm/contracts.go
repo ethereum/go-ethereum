@@ -251,26 +251,12 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	return common.LeftPadBytes(base.Exp(base, exp, mod).Bytes(), int(modLen)), nil
 }
 
-var (
-	// errNotOnCurve is returned if a point being unmarshalled as a bn256 elliptic
-	// curve point is not on the curve.
-	errNotOnCurve = errors.New("point not on elliptic curve")
-
-	// errInvalidCurvePoint is returned if a point being unmarshalled as a bn256
-	// elliptic curve point is invalid.
-	errInvalidCurvePoint = errors.New("invalid elliptic curve point")
-)
-
 // newCurvePoint unmarshals a binary blob into a bn256 elliptic curve point,
 // returning it, or an error if the point is invalid.
 func newCurvePoint(blob []byte) (*bn256.G1, error) {
-	p, onCurve := new(bn256.G1).Unmarshal(blob)
-	if !onCurve {
-		return nil, errNotOnCurve
-	}
-	gx, gy, _, _ := p.CurvePoints()
-	if gx.Cmp(bn256.P) >= 0 || gy.Cmp(bn256.P) >= 0 {
-		return nil, errInvalidCurvePoint
+	p := new(bn256.G1)
+	if _, err := p.Unmarshal(blob); err != nil {
+		return nil, err
 	}
 	return p, nil
 }
@@ -278,14 +264,9 @@ func newCurvePoint(blob []byte) (*bn256.G1, error) {
 // newTwistPoint unmarshals a binary blob into a bn256 elliptic curve point,
 // returning it, or an error if the point is invalid.
 func newTwistPoint(blob []byte) (*bn256.G2, error) {
-	p, onCurve := new(bn256.G2).Unmarshal(blob)
-	if !onCurve {
-		return nil, errNotOnCurve
-	}
-	x2, y2, _, _ := p.CurvePoints()
-	if x2.Real().Cmp(bn256.P) >= 0 || x2.Imag().Cmp(bn256.P) >= 0 ||
-		y2.Real().Cmp(bn256.P) >= 0 || y2.Imag().Cmp(bn256.P) >= 0 {
-		return nil, errInvalidCurvePoint
+	p := new(bn256.G2)
+	if _, err := p.Unmarshal(blob); err != nil {
+		return nil, err
 	}
 	return p, nil
 }

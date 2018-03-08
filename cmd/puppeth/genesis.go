@@ -168,19 +168,18 @@ type parityChainSpec struct {
 	Engine struct {
 		Ethash struct {
 			Params struct {
-				MinimumDifficulty      *hexutil.Big   `json:"minimumDifficulty"`
-				DifficultyBoundDivisor *hexutil.Big   `json:"difficultyBoundDivisor"`
-				GasLimitBoundDivisor   hexutil.Uint64 `json:"gasLimitBoundDivisor"`
-				DurationLimit          *hexutil.Big   `json:"durationLimit"`
-				BlockReward            *hexutil.Big   `json:"blockReward"`
-				HomesteadTransition    uint64         `json:"homesteadTransition"`
-				EIP150Transition       uint64         `json:"eip150Transition"`
-				EIP160Transition       uint64         `json:"eip160Transition"`
-				EIP161abcTransition    uint64         `json:"eip161abcTransition"`
-				EIP161dTransition      uint64         `json:"eip161dTransition"`
-				EIP649Reward           *hexutil.Big   `json:"eip649Reward"`
-				EIP100bTransition      uint64         `json:"eip100bTransition"`
-				EIP649Transition       uint64         `json:"eip649Transition"`
+				MinimumDifficulty      *hexutil.Big `json:"minimumDifficulty"`
+				DifficultyBoundDivisor *hexutil.Big `json:"difficultyBoundDivisor"`
+				DurationLimit          *hexutil.Big `json:"durationLimit"`
+				BlockReward            *hexutil.Big `json:"blockReward"`
+				HomesteadTransition    uint64       `json:"homesteadTransition"`
+				EIP150Transition       uint64       `json:"eip150Transition"`
+				EIP160Transition       uint64       `json:"eip160Transition"`
+				EIP161abcTransition    uint64       `json:"eip161abcTransition"`
+				EIP161dTransition      uint64       `json:"eip161dTransition"`
+				EIP649Reward           *hexutil.Big `json:"eip649Reward"`
+				EIP100bTransition      uint64       `json:"eip100bTransition"`
+				EIP649Transition       uint64       `json:"eip649Transition"`
 			} `json:"params"`
 		} `json:"Ethash"`
 	} `json:"engine"`
@@ -188,6 +187,7 @@ type parityChainSpec struct {
 	Params struct {
 		MaximumExtraDataSize hexutil.Uint64 `json:"maximumExtraDataSize"`
 		MinGasLimit          hexutil.Uint64 `json:"minGasLimit"`
+		GasLimitBoundDivisor hexutil.Uint64 `json:"gasLimitBoundDivisor"`
 		NetworkID            hexutil.Uint64 `json:"networkID"`
 		MaxCodeSize          uint64         `json:"maxCodeSize"`
 		EIP155Transition     uint64         `json:"eip155Transition"`
@@ -270,7 +270,6 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 	}
 	spec.Engine.Ethash.Params.MinimumDifficulty = (*hexutil.Big)(params.MinimumDifficulty)
 	spec.Engine.Ethash.Params.DifficultyBoundDivisor = (*hexutil.Big)(params.DifficultyBoundDivisor)
-	spec.Engine.Ethash.Params.GasLimitBoundDivisor = (hexutil.Uint64)(params.GasLimitBoundDivisor)
 	spec.Engine.Ethash.Params.DurationLimit = (*hexutil.Big)(params.DurationLimit)
 	spec.Engine.Ethash.Params.BlockReward = (*hexutil.Big)(ethash.FrontierBlockReward)
 	spec.Engine.Ethash.Params.HomesteadTransition = genesis.Config.HomesteadBlock.Uint64()
@@ -284,6 +283,7 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 
 	spec.Params.MaximumExtraDataSize = (hexutil.Uint64)(params.MaximumExtraDataSize)
 	spec.Params.MinGasLimit = (hexutil.Uint64)(params.MinGasLimit)
+	spec.Params.GasLimitBoundDivisor = (hexutil.Uint64)(params.GasLimitBoundDivisor)
 	spec.Params.NetworkID = (hexutil.Uint64)(genesis.Config.ChainId.Uint64())
 	spec.Params.MaxCodeSize = params.MaxCodeSize
 	spec.Params.EIP155Transition = genesis.Config.EIP155Block.Uint64()

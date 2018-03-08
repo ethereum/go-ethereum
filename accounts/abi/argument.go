@@ -169,6 +169,21 @@ func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues []interf
 	return set(elem, reflectValue, arguments.NonIndexed()[0])
 }
 
+// Computes the full size of an array;
+// i.e. counting nested arrays, which count towards size for unpacking.
+func getArraySize(arr *Type) int {
+	size := arr.Size
+	// Arrays can be nested, with each element being the same size
+	arr = arr.Elem
+	for arr.T == ArrayTy {
+		// Keep multiplying by elem.Size while the elem is an array.
+		size *= arr.Size
+		arr = arr.Elem
+	}
+	// Now we have the full array size, including its children.
+	return size
+}
+
 // UnpackValues can be used to unpack ABI-encoded hexdata according to the ABI-specification,
 // without supplying a struct to unpack into. Instead, this method returns a list containing the
 // values. An atomic argument will be a list with one element.
@@ -181,9 +196,14 @@ func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 			// If we have a static array, like [3]uint256, these are coded as
 			// just like uint256,uint256,uint256.
 			// This means that we need to add two 'virtual' arguments when
-			// we count the index from now on
-
-			virtualArgs += arg.Type.Size - 1
+			// we count the index from now on.
+			//
+			// Array values nested multiple levels deep are also encoded inline:
+			// [2][3]uint256: uint256,uint256,uint256,uint256,uint256,uint256
+			//
+			// Calculate the full array size to get the correct offset for the next argument.
+			// Decrement it by 1, as the normal index increment is still applied.
+			virtualArgs += getArraySize(&arg.Type) - 1
 		}
 		if err != nil {
 			return nil, err
