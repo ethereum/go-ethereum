@@ -181,13 +181,13 @@ func (db *LDBDatabase) Meter(prefix string) {
 // This is how the iostats look like (currently):
 // Read(MB):3895.04860 Write(MB):3654.64712
 func (db *LDBDatabase) meter(refresh time.Duration) {
-	// Create the counters to store current and previous values
-	counters := make([][]float64, 2)
+	// Create the counters to store current and previous compaction values
+	compactions := make([][]float64, 2)
 	for i := 0; i < 2; i++ {
-		counters[i] = make([]float64, 3)
+		compactions[i] = make([]float64, 3)
 	}
 	// Create storage for iostats.
-	var curr, prev [2]float64
+	var iostats [2]float64
 	// Iterate ad infinitum and collect the stats
 	for i := 1; ; i++ {
 		// Retrieve the database stats
@@ -208,8 +208,8 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		lines = lines[3:]
 
 		// Iterate over all the table rows, and accumulate the entries
-		for j := 0; j < len(counters[i%2]); j++ {
-			counters[i%2][j] = 0
+		for j := 0; j < len(compactions[i%2]); j++ {
+			compactions[i%2][j] = 0
 		}
 		for _, line := range lines {
 			parts := strings.Split(line, "|")
@@ -222,18 +222,18 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 					db.log.Error("Compaction entry parsing failed", "err", err)
 					return
 				}
-				counters[i%2][idx] += value
+				compactions[i%2][idx] += value
 			}
 		}
 		// Update all the requested meters
 		if db.compTimeMeter != nil {
-			db.compTimeMeter.Mark(int64((counters[i%2][0] - counters[(i-1)%2][0]) * 1000 * 1000 * 1000))
+			db.compTimeMeter.Mark(int64((compactions[i%2][0] - compactions[(i-1)%2][0]) * 1000 * 1000 * 1000))
 		}
 		if db.compReadMeter != nil {
-			db.compReadMeter.Mark(int64((counters[i%2][1] - counters[(i-1)%2][1]) * 1024 * 1024))
+			db.compReadMeter.Mark(int64((compactions[i%2][1] - compactions[(i-1)%2][1]) * 1024 * 1024))
 		}
 		if db.compWriteMeter != nil {
-			db.compWriteMeter.Mark(int64((counters[i%2][2] - counters[(i-1)%2][2]) * 1024 * 1024))
+			db.compWriteMeter.Mark(int64((compactions[i%2][2] - compactions[(i-1)%2][2]) * 1024 * 1024))
 		}
 
 		// Retrieve the database iostats.
@@ -243,16 +243,16 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			return
 		}
 		parts := strings.Split(ioStats, " ")
-		curr[0], _ = strconv.ParseFloat(strings.Split(parts[0], ":")[1], 64)
-		curr[1], _ = strconv.ParseFloat(strings.Split(parts[1], ":")[1], 64)
+		read, _ := strconv.ParseFloat(strings.Split(parts[0], ":")[1], 64)
+		write, _ := strconv.ParseFloat(strings.Split(parts[1], ":")[1], 64)
 		if db.diskReadMeter != nil {
-			db.diskReadMeter.Mark(int64((curr[0] - prev[0]) * 1024 * 1024))
+			db.diskReadMeter.Mark(int64((read - iostats[0]) * 1024 * 1024))
 		}
 		if db.diskWriteMeter != nil {
-			db.diskWriteMeter.Mark(int64((curr[1] - prev[1]) * 1024 * 1024))
+			db.diskWriteMeter.Mark(int64((write - iostats[1]) * 1024 * 1024))
 		}
-		prev[0] = curr[0]
-		prev[1] = curr[1]
+		iostats[0] = read
+		iostats[1] = write
 
 		// Sleep a bit, then repeat the stats collection
 		select {
