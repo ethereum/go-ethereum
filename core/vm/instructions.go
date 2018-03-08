@@ -198,31 +198,18 @@ func opSlt(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stac
 	xSign := x.Cmp(tt255)
 	ySign := y.Cmp(tt255)
 
-	if xSign >= 0 {
-		//x negative
-		if ySign < 0 {
-			// y positive
-			y.SetUint64(1)
-			return nil, nil
-		}
-		// Both negative
+	switch {
+	case xSign >= 0 && ySign < 0:
+		y.SetUint64(1)
+
+	case xSign < 0 && ySign >= 0:
+		y.SetUint64(0)
+
+	default:
 		if x.Cmp(y) < 0 {
 			y.SetUint64(1)
 		} else {
 			y.SetUint64(0)
-		}
-	} else {
-		// x positive
-		if ySign >= 0 {
-			// y negative
-			y.SetUint64(0)
-			return nil, nil
-		}
-		// Both positive
-		if x.Cmp(y) >= 0 {
-			y.SetUint64(0)
-		} else {
-			y.SetUint64(1)
 		}
 	}
 	evm.interpreter.intPool.put(x)
@@ -235,27 +222,14 @@ func opSgt(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stac
 	xSign := x.Cmp(tt255)
 	ySign := y.Cmp(tt255)
 
-	if xSign >= 0 {
-		//x negative
-		if ySign < 0 {
-			// y positive
-			y.SetUint64(0)
-			return nil, nil
-		}
-		// Both negative (note: equality -> 0)
-		if x.Cmp(y) <= 0 {
-			y.SetUint64(0)
-		} else {
-			y.SetUint64(1)
-		}
-	} else {
-		// x positive
-		if ySign >= 0 {
-			// y negative
-			y.SetUint64(1)
-			return nil, nil
-		}
-		// Both positive
+	switch {
+	case xSign >= 0 && ySign < 0:
+		y.SetUint64(0)
+
+	case xSign < 0 && ySign >= 0:
+		y.SetUint64(1)
+
+	default:
 		if x.Cmp(y) > 0 {
 			y.SetUint64(1)
 		} else {
