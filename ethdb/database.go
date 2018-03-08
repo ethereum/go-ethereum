@@ -243,6 +243,10 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			return
 		}
 		parts := strings.Split(ioStats, " ")
+		if len(parts) < 2 {
+			db.log.Error("Bad syntax of ioStats", "ioStats", ioStats)
+			return
+		}
 		r := strings.Split(parts[0], ":")
 		if len(r) < 2 {
 			db.log.Error("Bad syntax of read entry", "entry", parts[0])
