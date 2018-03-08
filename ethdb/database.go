@@ -258,7 +258,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			return
 		}
 		w := strings.Split(parts[1], ":")
-		if len(r) < 2 {
+		if len(w) < 2 {
 			db.log.Error("Bad syntax of write entry", "entry", parts[1])
 			return
 		}
