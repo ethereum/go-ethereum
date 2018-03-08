@@ -44,8 +44,12 @@ import (
 )
 
 var (
-	adapter  = flag.String("adapter", "socket", "type of simulation: sim|socket|exec|docker")
-	loglevel = flag.Int("loglevel", 4, "verbosity of logs")
+	deliveries map[discover.NodeID]*Delivery
+	stores     map[discover.NodeID]storage.ChunkStore
+	toAddr     func(discover.NodeID) *network.BzzAddr
+	peerCount  func(discover.NodeID) int
+	adapter    = flag.String("adapter", "socket", "type of simulation: sim|socket|exec|docker")
+	loglevel   = flag.Int("loglevel", 4, "verbosity of logs")
 )
 
 var (
@@ -53,6 +57,7 @@ var (
 	waitPeerErrC     chan error
 	chunkSize        = 4096
 	registries       map[discover.NodeID]*TestRegistry
+	createStoreFunc  func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
 )
 
 var services = adapters.Services{
@@ -76,7 +81,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	id := ctx.Config.ID
 	addr := toAddr(id)
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-	stores[id], err = createTestLocalStorageForId(id, addr)
+	stores[id], err = createStoreFunc(id, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -96,23 +101,6 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	testRegistry := &TestRegistry{Registry: r, dpa: dpa}
 	registries[id] = testRegistry
 	return testRegistry, nil
-}
-
-//create a local store for the given node
-func createTestLocalStorageForId(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error) {
-	var datadir string
-	var err error
-	datadir, err = ioutil.TempDir("", fmt.Sprintf("syncer-test-%s", id.TerminalString()))
-	if err != nil {
-		return nil, err
-	}
-	datadirs[id] = datadir
-	var store storage.ChunkStore
-	store, err = storage.NewTestLocalStoreForAddr(datadir, addr.Over())
-	if err != nil {
-		return nil, err
-	}
-	return store, nil
 }
 
 func datadirsCleanup() {

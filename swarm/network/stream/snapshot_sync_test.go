@@ -69,7 +69,7 @@ type synctestConfig struct {
 func init() {
 	rand.Seed(time.Now().Unix())
 
-	initSyncTest()
+	//initSyncTest()
 }
 
 //common_test needs to initialize the test in a init() func
@@ -84,6 +84,7 @@ func initSyncTest() {
 		return addr
 	}
 
+	createStoreFunc = createTestLocalStorageForId
 	//local stores
 	stores = make(map[discover.NodeID]storage.ChunkStore)
 	//data directories for each node and store
@@ -134,20 +135,23 @@ func TestSyncing_1024_16(t *testing.T) { testSyncing(t, 1024, 16) }
 
 //The following tests have been disabled because they seem to hit resource limits
 //on developer machines and/or are long running
-func TestSyncing_256_64(t *testing.T)   { testSyncing(t, 256, 64) }
-func TestSyncing_8_256(t *testing.T)    { testSyncing(t, 8, 256) }
-func TestSyncing_32_256(t *testing.T)   { testSyncing(t, 32, 256) }
-func TestSyncing_32_128(t *testing.T)   { testSyncing(t, 32, 128) }
-func TestSyncing_256_128(t *testing.T)  { testSyncing(t, 256, 128) }
-func TestSyncing_128_128(t *testing.T)  { testSyncing(t, 128, 128) }
+/*
+func TestSyncing_256_64(t *testing.T)  { testSyncing(t, 256, 64) }
+func TestSyncing_8_256(t *testing.T) { testSyncing(t, 8, 256) }
+func TestSyncing_32_256(t *testing.T)  { testSyncing(t, 32, 256) }
+func TestSyncing_32_128(t *testing.T)  { testSyncing(t, 32, 128) }
+func TestSyncing_256_128(t *testing.T) { testSyncing(t, 256, 128) }
+func TestSyncing_128_128(t *testing.T) { testSyncing(t, 128, 128) }
 func TestSyncing_256_256(t *testing.T)  { testSyncing(t, 256, 256) }
-func TestSyncing_128_256(t *testing.T)  { testSyncing(t, 128, 256) }
-func TestSyncing_1024_32(t *testing.T)  { testSyncing(t, 1024, 32) }
-func TestSyncing_1024_64(t *testing.T)  { testSyncing(t, 1024, 64) }
+func TestSyncing_128_256(t *testing.T) { testSyncing(t, 128, 256) }
+func TestSyncing_1024_32(t *testing.T) { testSyncing(t, 1024, 32) }
+func TestSyncing_1024_64(t *testing.T) { testSyncing(t, 1024, 64) }
 func TestSyncing_1024_128(t *testing.T) { testSyncing(t, 1024, 128) }
 func TestSyncing_1024_256(t *testing.T) { testSyncing(t, 1024, 256) }
+*/
 
 func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
+	initSyncTest()
 	ids = make([]discover.NodeID, nodeCount)
 
 	//test live and NO history
@@ -173,7 +177,6 @@ func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 }
 
 /*
@@ -707,4 +710,21 @@ func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rp
 		}
 	}()
 	return
+}
+
+//create a local store for the given node
+func createTestLocalStorageForId(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error) {
+	var datadir string
+	var err error
+	datadir, err = ioutil.TempDir("", fmt.Sprintf("syncer-test-%s", id.TerminalString()))
+	if err != nil {
+		return nil, err
+	}
+	datadirs[id] = datadir
+	var store storage.ChunkStore
+	store, err = storage.NewTestLocalStoreForAddr(datadir, addr.Over())
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
 }
