@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/go-stack/stack"
+	"strings"
 )
 
 // Handler defines where and how log records are written.
@@ -68,6 +69,36 @@ func FileHandler(path string, fmtr Format) (Handler, error) {
 		return nil, err
 	}
 	return closingHandler{f, StreamHandler(f, fmtr)}, nil
+}
+
+// DashboardHandler returns a handler which writes log records to file chunks
+// at the given path. When a file's size reaches the 1MB, the handler creates
+// a new file named with the timestamp of the first log record it will contain.
+func DashboardHandler(path string) Handler {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if err = os.MkdirAll(path, 0755); err != nil {
+			// TODO (kurkomisi): handle error?
+			return DiscardHandler()
+		}
+	}
+
+	var size uint
+	maxSize := uint(1048576)
+	var h Handler
+	formatter := JsonFormat()
+
+	return FuncHandler(func(r *Record) error {
+		var err error
+		if h == nil || size > maxSize {
+			if h, err = FileHandler(fmt.Sprintf("%s/%s.log", path,
+				strings.Replace(r.Time.Format("060102150405.00"), ".", "", 1)), formatter); err != nil {
+				return err
+			}
+			size = 0
+		}
+		size += uint(len(formatter.Format(r)))
+		return h.Log(r)
+	})
 }
 
 // NetHandler opens a socket to the given address and writes records
