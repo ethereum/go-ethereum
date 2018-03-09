@@ -427,10 +427,10 @@ func NewAddrFromNodeID(id discover.NodeID) *BzzAddr {
 
 // NewAddrFromNodeIDAndPort constucts a BzzAddr from a discover.NodeID and port uint16
 // the overlay address is derived as the hash of the nodeID
-func NewAddrFromNodeIDAndPort(id discover.NodeID, port uint16) *BzzAddr {
+func NewAddrFromNodeIDAndPort(id discover.NodeID, host net.IP, port uint16) *BzzAddr {
 	return &BzzAddr{
 		OAddr: ToOverlayAddr(id.Bytes()),
-		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, port, port).String()),
+		UAddr: []byte(discover.NewNode(id, host, port, port).String()),
 	}
 }
 
