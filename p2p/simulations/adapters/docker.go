@@ -99,7 +99,7 @@ func (d *DockerAdapter) NewNode(config *NodeConfig) (Node, error) {
 	conf.Stack.P2P.NAT = nil
 	conf.Stack.NoUSB = true
 
-	// listen on a localhost port, which we set when we
+	// listen on all interfaces on a given port, which we set when we
 	// initialise NodeConfig (usually a random port)
 	conf.Stack.P2P.ListenAddr = fmt.Sprintf(":%d", config.Port)
 
