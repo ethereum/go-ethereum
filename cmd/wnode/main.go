@@ -197,6 +197,8 @@ func initialize() {
 		if len(*argIP) == 0 {
 			argIP = scanLineA("Please enter your IP and port (e.g. 127.0.0.1:30348): ")
 		}
+	} else if *fileReader {
+		*bootstrapMode = true
 	} else {
 		if len(*argEnode) == 0 {
 			argEnode = scanLineA("Please enter the peer's enode: ")
@@ -205,10 +207,21 @@ func initialize() {
 		peers = append(peers, peer)
 	}
 
+	if *mailServerMode {
+		if len(msPassword) == 0 {
+			msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
+			if err != nil {
+				utils.Fatalf("Failed to read Mail Server password: %s", err)
+			}
+		}
+	}
+
 	cfg := &whisper.Config{
 		MaxMessageSize:     uint32(*argMaxSize),
 		MinimumAcceptedPOW: *argPoW,
 	}
+
+	shh = whisper.New(cfg)
 
 	if *argPoW != whisper.DefaultMinimumPoW {
 		err := shh.SetMinimumPoW(*argPoW)
@@ -257,18 +270,8 @@ func initialize() {
 	}
 
 	if *mailServerMode {
-		if len(msPassword) == 0 {
-			msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
-			if err != nil {
-				utils.Fatalf("Failed to read Mail Server password: %s", err)
-			}
-		}
-
-		shh = whisper.New(cfg)
 		shh.RegisterServer(&mailServer)
 		mailServer.Init(shh, *argDBPath, msPassword, *argServerPoW)
-	} else {
-		shh = whisper.New(cfg)
 	}
 
 	server = &p2p.Server{
@@ -306,7 +309,11 @@ func startServer() error {
 		configureNode()
 	}
 
-	if !*forwarderMode {
+	if *fileExMode {
+		fmt.Printf("Please type the file name to be send. To quit type: '%s'\n", quitCommand)
+	} else if *fileReader {
+		fmt.Printf("Please type the file name to be decrypted. To quit type: '%s'\n", quitCommand)
+	} else if !*forwarderMode {
 		fmt.Printf("Please type the message. To quit type: '%s'\n", quitCommand)
 	}
 	return nil
@@ -566,6 +573,7 @@ func sendMsg(payload []byte) common.Hash {
 	if err != nil {
 		utils.Fatalf("failed to create new message: %s", err)
 	}
+
 	envelope, err := msg.Wrap(&params)
 	if err != nil {
 		fmt.Printf("failed to seal message: %v \n", err)
@@ -601,15 +609,17 @@ func messageLoop() {
 			m2 := af.Retrieve()
 			messages := append(m1, m2...)
 			for _, msg := range messages {
+				reportedOnce := false
+				if !*fileExMode && len(msg.Payload) <= 2048 {
+					printMessageInfo(msg)
+					reportedOnce = true
+				}
+
 				// All messages are saved upon specifying argSaveDir.
 				// fileExMode only specifies how messages are displayed on the console after they are saved.
 				// if fileExMode == true, only the hashes are displayed, since messages might be too big.
 				if len(*argSaveDir) > 0 {
-					writeMessageToFile(*argSaveDir, msg)
-				}
-
-				if !*fileExMode && len(msg.Payload) <= 2048 {
-					printMessageInfo(msg)
+					writeMessageToFile(*argSaveDir, msg, !reportedOnce)
 				}
 			}
 		case <-done:
@@ -634,7 +644,11 @@ func printMessageInfo(msg *whisper.ReceivedMessage) {
 	}
 }
 
-func writeMessageToFile(dir string, msg *whisper.ReceivedMessage) {
+func writeMessageToFile(dir string, msg *whisper.ReceivedMessage, show bool) {
+	if len(dir) == 0 {
+		return
+	}
+
 	timestamp := fmt.Sprintf("%d", msg.Sent)
 	name := fmt.Sprintf("%x", msg.EnvelopeHash)
 
@@ -643,22 +657,24 @@ func writeMessageToFile(dir string, msg *whisper.ReceivedMessage) {
 		address = crypto.PubkeyToAddress(*msg.Src)
 	}
 
+	env := shh.GetEnvelope(msg.EnvelopeHash)
+	if env == nil {
+		fmt.Printf("\nUnexpected error: envelope not found: %x\n", msg.EnvelopeHash)
+		return
+	}
+
 	// this is a sample code; uncomment if you don't want to save your own messages.
 	//if whisper.IsPubKeyEqual(msg.Src, &asymKey.PublicKey) {
 	//	fmt.Printf("\n%s <%x>: message from myself received, not saved: '%s'\n", timestamp, address, name)
 	//	return
 	//}
 
-	if len(dir) > 0 {
-		fullpath := filepath.Join(dir, name)
-		err := ioutil.WriteFile(fullpath, msg.Raw, 0644)
-		if err != nil {
-			fmt.Printf("\n%s {%x}: message received but not saved: %s\n", timestamp, address, err)
-		} else {
-			fmt.Printf("\n%s {%x}: message received and saved as '%s' (%d bytes)\n", timestamp, address, name, len(msg.Raw))
-		}
-	} else {
-		fmt.Printf("\n%s {%x}: message received (%d bytes), but not saved: %s\n", timestamp, address, len(msg.Raw), name)
+	fullpath := filepath.Join(dir, name)
+	err := ioutil.WriteFile(fullpath, env.Data, 0644)
+	if err != nil {
+		fmt.Printf("\n%s {%x}: message received but not saved: %s\n", timestamp, address, err)
+	} else if show {
+		fmt.Printf("\n%s {%x}: message received and saved as '%s' (%d bytes)\n", timestamp, address, name, len(env.Data))
 	}
 }
 
@@ -682,18 +698,23 @@ func requestExpiredMessagesLoop() {
 	for {
 		timeLow = scanUint("Please enter the lower limit of the time range (unix timestamp): ")
 		timeUpp = scanUint("Please enter the upper limit of the time range (unix timestamp): ")
-		t = scanLine("Please enter the topic (hexadecimal): ")
-		if len(t) >= whisper.TopicLength*2 {
+		t = scanLine("Enter the topic (hex). Press enter to request all messages, regardless of the topic: ")
+		if len(t) == whisper.TopicLength*2 {
 			x, err := hex.DecodeString(t)
 			if err != nil {
-				utils.Fatalf("Failed to parse the topic: %s", err)
+				fmt.Printf("Failed to parse the topic: %s \n", err)
+				continue
 			}
 			xt = whisper.BytesToTopic(x)
 			bloom = whisper.TopicToBloom(xt)
 			obfuscateBloom(bloom)
-		} else {
+		} else if len(t) == 0 {
 			bloom = whisper.MakeFullNodeBloom()
+		} else {
+			fmt.Println("Error: topic is invalid, request aborted")
+			continue
 		}
+
 		if timeUpp == 0 {
 			timeUpp = 0xFFFFFFFF
 		}

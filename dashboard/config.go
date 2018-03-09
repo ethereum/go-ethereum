@@ -38,8 +38,4 @@ type Config struct {
 
 	// Refresh is the refresh rate of the data updates, the chartEntry will be collected this often.
 	Refresh time.Duration `toml:",omitempty"`
-
-	// Assets offers a possibility to manually set the dashboard website's location on the server side.
-	// It is useful for debugging, avoids the repeated generation of the binary.
-	Assets string `toml:",omitempty"`
 }
