@@ -814,6 +814,9 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 
 	if ctx.GlobalIsSet(MaxPeersFlag.Name) {
 		cfg.MaxPeers = ctx.GlobalInt(MaxPeersFlag.Name)
+		if lightServer && !ctx.GlobalIsSet(LightPeersFlag.Name) {
+			cfg.MaxPeers += lightPeers
+		}
 	} else {
 		if lightServer {
 			cfg.MaxPeers += lightPeers
