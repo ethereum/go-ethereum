@@ -15,11 +15,11 @@
         "css-loader": "^0.28.9",
         "eslint": "^4.16.0",
         "eslint-config-airbnb": "^16.1.0",
-        "eslint-loader": "^1.9.0",
+        "eslint-loader": "^2.0.0",
+        "eslint-plugin-flowtype": "^2.41.0",
         "eslint-plugin-import": "^2.8.0",
         "eslint-plugin-jsx-a11y": "^6.0.3",
         "eslint-plugin-react": "^7.5.1",
-        "eslint-plugin-flowtype": "^2.41.0",
         "file-loader": "^1.1.6",
         "flow-bin": "^0.63.1",
         "flow-bin-loader": "^1.0.2",
@@ -35,6 +35,13 @@
         "style-loader": "^0.19.1",
         "url": "^0.11.0",
         "url-loader": "^0.6.2",
-        "webpack": "^3.10.0"
+        "webpack": "^3.10.0",
+        "webpack-dev-server": "^2.11.1"
+    },
+    "scripts": {
+        "build": "NODE_ENV=production webpack",
+        "stats": "webpack --profile --json > stats.json",
+        "dev":   "webpack-dev-server --port 8081",
+        "flow":  "flow-typed install"
     }
 }

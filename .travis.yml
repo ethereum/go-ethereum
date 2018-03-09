@@ -14,7 +14,6 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go test -coverage
 
-    # These are the latest Go versions.
     - os: linux
       dist: trusty
       sudo: required
@@ -26,8 +25,20 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go test -coverage
 
+    # These are the latest Go versions.
+    - os: linux
+      dist: trusty
+      sudo: required
+      go: "1.10"
+      script:
+        - sudo modprobe fuse
+        - sudo chmod 666 /dev/fuse
+        - sudo chown root:$USER /etc/fuse.conf
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage
+
     - os: osx
-      go: 1.9.x
+      go: "1.10"
       script:
         - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
         - brew update
@@ -39,7 +50,7 @@ matrix:
     # This builder only tests code linters on latest version of Go
     - os: linux
       dist: trusty
-      go: 1.9.x
+      go: "1.10"
       env:
         - lint
       git:
@@ -51,7 +62,7 @@ matrix:
     - os: linux
       dist: trusty
       sudo: required
-      go: 1.9.x
+      go: "1.10"
       env:
         - ubuntu-ppa
         - azure-linux
@@ -91,7 +102,7 @@ matrix:
       dist: trusty
       services:
         - docker
-      go: 1.9.x
+      go: "1.10"
       env:
         - azure-linux-mips
       git:
@@ -135,7 +146,7 @@ matrix:
       git:
         submodules: false # avoid cloning ethereum/tests
       before_install:
-        - curl https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz | tar -xz
+        - curl https://storage.googleapis.com/golang/go1.10.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
@@ -152,7 +163,7 @@ matrix:
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
     - os: osx
-      go: 1.9.x
+      go: "1.10"
       env:
         - azure-osx
         - azure-ios
@@ -182,7 +193,7 @@ matrix:
     - os: linux
       dist: trusty
       sudo: required
-      go: 1.9.x
+      go: "1.10"
       env:
         - azure-purge
       git:

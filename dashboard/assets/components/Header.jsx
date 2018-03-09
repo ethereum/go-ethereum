@@ -21,30 +21,16 @@ import React, {Component} from 'react';
 import withStyles from 'material-ui/styles/withStyles';
 import AppBar from 'material-ui/AppBar';
 import Toolbar from 'material-ui/Toolbar';
-import Transition from 'react-transition-group/Transition';
 import IconButton from 'material-ui/IconButton';
+import Icon from 'material-ui/Icon';
+import MenuIcon from 'material-ui-icons/Menu';
 import Typography from 'material-ui/Typography';
-import ChevronLeftIcon from 'material-ui-icons/ChevronLeft';
-
-import {DURATION} from '../common';
-
-// styles contains the constant styles of the component.
-const styles = {
-	arrow: {
-		default: {
-			transition: `transform ${DURATION}ms`,
-		},
-		transition: {
-			entered: {transform: 'rotate(180deg)'},
-		},
-	},
-};
 
 // themeStyles returns the styles generated from the theme for the component.
 const themeStyles = (theme: Object) => ({
 	header: {
-		backgroundColor: theme.palette.background.appBar,
-		color:           theme.palette.getContrastText(theme.palette.background.appBar),
+		backgroundColor: theme.palette.grey[900],
+		color:           theme.palette.getContrastText(theme.palette.grey[900]),
 		zIndex:          theme.zIndex.appBar,
 	},
 	toolbar: {
@@ -53,42 +39,28 @@ const themeStyles = (theme: Object) => ({
 	},
 	title: {
 		paddingLeft: theme.spacing.unit,
+		fontSize:    3 * theme.spacing.unit,
 	},
 });
 
 export type Props = {
 	classes: Object, // injected by withStyles()
-	opened: boolean,
 	switchSideBar: () => void,
 };
 
 // Header renders the header of the dashboard.
 class Header extends Component<Props> {
-	shouldComponentUpdate(nextProps) {
-		return nextProps.opened !== this.props.opened;
-	}
-
-	// arrow renders a button, which changes the sidebar's state.
-	arrow = (transitionState: string) => (
-		<IconButton onClick={this.props.switchSideBar}>
-			<ChevronLeftIcon
-				style={{
-					...styles.arrow.default,
-					...styles.arrow.transition[transitionState],
-				}}
-			/>
-		</IconButton>
-	);
-
 	render() {
-		const {classes, opened} = this.props;
+		const {classes} = this.props;
 
 		return (
 			<AppBar position='static' className={classes.header}>
 				<Toolbar className={classes.toolbar}>
-					<Transition mountOnEnter in={opened} timeout={{enter: DURATION}}>
-						{this.arrow}
-					</Transition>
+					<IconButton onClick={this.props.switchSideBar}>
+						<Icon>
+							<MenuIcon />
+						</Icon>
+					</IconButton>
 					<Typography type='title' color='inherit' noWrap className={classes.title}>
 						Go Ethereum Dashboard
 					</Typography>
