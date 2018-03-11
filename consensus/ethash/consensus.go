@@ -174,10 +174,6 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 	if ethash.config.PowMode == ModeFullFake {
 		return nil
 	}
-	// Verify that there are at most 2 uncles included in this block
-	if len(block.Uncles()) > maxUncles {
-		return errTooManyUncles
-	}
 	// Gather the set of past uncles and ancestors
 	uncles, ancestors := set.New(), make(map[common.Hash]*types.Header)
 
@@ -572,16 +568,5 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 	// Accumulate the rewards for the miner and any included uncles
 	reward := new(big.Int).Set(blockReward)
-	r := new(big.Int)
-	for _, uncle := range uncles {
-		r.Add(uncle.Number, big8)
-		r.Sub(r, header.Number)
-		r.Mul(r, blockReward)
-		r.Div(r, big8)
-		state.AddBalance(uncle.Coinbase, r)
-
-		r.Div(blockReward, big32)
-		reward.Add(reward, r)
-	}
 	state.AddBalance(header.Coinbase, reward)
 }
