@@ -89,6 +89,15 @@ invoking methods with the following info:
   * [x] Address of API (http/ipc)
   * [ ] List of known accounts
 
+* [ ] `account_signRawTransaction`
+* [ ] `account_bulkSignTransactions([] transactions)` should
+   * only exist if enabled via config/flag
+   * only allow non-data-sending transactions
+   * all txs must use the same `from`-account
+   * let the user confirm, showing
+      * the total amount
+      * the number of unique recipients
+
 
 * Geth todos
     - The signer should pass the `Origin` header as call-info to the UI. As of right now, the way that info about the request is
@@ -115,7 +124,7 @@ put together is a bit of a hack into the http server. This could probably be gre
 
 ### External API
 
-The signer listens to HTTP requests on `rpcaddr`:`rpcport`. The messages are
+The signer listens to HTTP requests on `rpcaddr`:`rpcport`, with the same JSONRPC standard as Geth. The messages are
 expected to be JSON [jsonrpc 2.0 standard](http://www.jsonrpc.org/specification).
 
 Some of these call can require user interaction. Clients must be aware that responses
@@ -172,7 +181,7 @@ None
   - url [string]: location of the keyfile
   
 #### Sample call
-```
+```json
 {
   "id": 0,
   "jsonrpc": "2.0",
@@ -206,7 +215,7 @@ None
      - account.url [string]: location of the account
   
 #### Sample call
-```
+```json
 {
   "id": 1,
   "jsonrpc": "2.0",
@@ -253,7 +262,7 @@ None
   - signed transaction in RLP encoded form [data]
   
 #### Sample call
-```
+```json
 {
   "id": 2,
   "jsonrpc": "2.0",
@@ -270,7 +279,10 @@ None
     }
   ]
 }
+```
+Response
 
+```json
 {
   "jsonrpc": "2.0",
   "id": 67,
@@ -283,7 +295,7 @@ None
 #### Sample call with ABI-data
 
 
-```
+```json
 {
   "jsonrpc": "2.0",
   "method": "account_signTransaction",
@@ -301,7 +313,10 @@ None
   ],
   "id": 67
 }
+```
+Response
 
+```json
 {
   "jsonrpc": "2.0",
   "id": 67,
@@ -344,7 +359,7 @@ Bash example:
   - calculated signature [data]
   
 #### Sample call
-```
+```json
 {
   "id": 3,
   "jsonrpc": "2.0",
@@ -354,7 +369,10 @@ Bash example:
     "0xaabbccdd"
   ]
 }
+```
+Response
 
+```json
 {
   "id": 3,
   "jsonrpc": "2.0",
@@ -375,7 +393,7 @@ Bash example:
   - derived account [address]
   
 #### Sample call
-```
+```json
 {
   "id": 4,
   "jsonrpc": "2.0",
@@ -385,7 +403,10 @@ Bash example:
     "0x5b6693f153b48ec1c706ba4169960386dbaa6903e249cc79a8e6ddc434451d417e1e57327872c7f538beeb323c300afa9999a3d4a5de6caf3be0d5ef832b67ef1c"
   ]
 }
+```
+Response
 
+```json
 {
   "id": 4,
   "jsonrpc": "2.0",
@@ -410,7 +431,7 @@ Bash example:
      - key.url [string]: key URL
   
 #### Sample call
-```
+```json
 {
   "id": 6,
   "jsonrpc": "2.0",
@@ -439,6 +460,10 @@ Bash example:
     },
   ]
 }
+```
+Response
+
+```json
 {
   "id": 6,
   "jsonrpc": "2.0",
@@ -464,7 +489,7 @@ Bash example:
   more information
   
 #### Sample call
-```
+```json
 {
   "id": 5,
   "jsonrpc": "2.0",
@@ -473,6 +498,10 @@ Bash example:
     "0xc7412fc59930fd90099c917a50e5f11d0934b2f5"
   ]
 }
+```
+Response
+
+```json
 {
   "id": 5,
   "jsonrpc": "2.0",
@@ -506,7 +535,6 @@ Bash example:
 
 These methods needs to be implemented by a UI listener.
 
-
 By starting the signer with the switch `--stdio-ui-test`, the signer will invoke all known methods, and expect the UI to respond with
 denials. This can be used during development to ensure that the API is (at least somewhat) correctly implemented.
 See `pythonsigner`, which can be invoked via `python3 pythonsigner.py test` to perform the 'denial-handshake-test'.
@@ -514,6 +542,10 @@ See `pythonsigner`, which can be invoked via `python3 pythonsigner.py test` to p
 All methods in this API uses object-based parameters, so that there can be no mixups of parameters: each piece of data is accessed by key.
 
 See the [ui api changelog](intapi_changelog.md) for information about changes to this API.
+
+OBS! A slight deviation from `json` standard is in place: every request and response should be confined to a single line.
+Whereas the `json` specification allows for linebreaks, linebreaks __should not__ be used in this communication channel, to make
+things simpler for both parties.
 
 ### ApproveTx
 

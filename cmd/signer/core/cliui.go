@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/crypto/ssh/terminal"
+	"github.com/davecgh/go-spew/spew"
 )
 
 type CommandlineUI struct {
@@ -233,7 +234,8 @@ func (ui *CommandlineUI) ShowInfo(message string) {
 }
 
 func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
-	fmt.Printf("Transaction signed: %v", tx.Tx.String())
+	fmt.Printf("Transaction signed:\n ")
+	spew.Dump(tx.Tx)
 }
 
 func (ui *CommandlineUI) OnSignerStartup(info StartupInfo) {

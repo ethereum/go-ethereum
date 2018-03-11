@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -45,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
+	"os/signal"
 )
 
 // EXT_API_VERSION -- see extapi_changelog.md
@@ -180,6 +180,9 @@ func init() {
 		utils.NoUSBFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCVirtualHostsFlag,
+		utils.IPCDisabledFlag,
+		utils.IPCPathFlag,
+		utils.RPCEnabledFlag,
 		rpcPortFlag,
 		signerSecretFlag,
 		dBFlag,
@@ -329,9 +332,7 @@ func signer(c *cli.Context) error {
 	log.Info("Loaded 4byte db", "signatures", db.Size(), "file", c.String("4bytedb"))
 
 	var (
-		api      core.ExternalAPI
-		listener net.Listener
-		server   = rpc.NewServer()
+		api core.ExternalAPI
 	)
 
 	configDir := c.String(configdirFlag.Name)
@@ -396,18 +397,56 @@ func signer(c *cli.Context) error {
 		log.Info("Audit logs configured", "file", logfile)
 	}
 	// register signer API with server
-	if err = server.RegisterName("account", api); err != nil {
-		utils.Fatalf("Could not register signer API: %v", err)
+	var (
+		extapiUrl = "n/a"
+		ipcApiUrl = "n/a"
+	)
+	rpcApi := []rpc.API{
+		rpc.API{
+			Namespace: "account",
+			Public:    true,
+			Service:   api,
+			Version:   "1.0"},
 	}
+	if c.Bool(utils.RPCEnabledFlag.Name) {
 
-	// start http server
-	endpoint := fmt.Sprintf("%s:%d", c.String(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
-	if listener, err = net.Listen("tcp", endpoint); err != nil {
-		utils.Fatalf("Could not start http listener: %v", err)
+		vhosts := splitAndTrim(c.GlobalString(utils.RPCVirtualHostsFlag.Name))
+		//!TODO
+		cors := []string{"*"}
+
+		// start http server
+		httpEndpoint := fmt.Sprintf("%s:%d", c.String(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
+		listener, _, err := node.StartHttpEndpoint(httpEndpoint, rpcApi, []string{"account"}, cors, vhosts)
+		if err != nil {
+			utils.Fatalf("Could not start RPC api: %v", err)
+		}
+		extapiUrl = fmt.Sprintf("http://%s", httpEndpoint)
+		log.Info("HTTP endpoint opened", "url", extapiUrl)
+
+		defer func() {
+			listener.Close()
+			log.Info("HTTP endpoint closed", "url", httpEndpoint)
+		}()
+
 	}
-	extapi_url := fmt.Sprintf("http://%s", endpoint)
-	log.Info("HTTP endpoint opened", "url", extapi_url)
-	cors := []string{"*"}
+	if !c.Bool(utils.IPCDisabledFlag.Name) {
+		if c.IsSet(utils.IPCPathFlag.Name) {
+			ipcApiUrl = c.String(utils.IPCPathFlag.Name)
+		} else {
+			ipcApiUrl = fmt.Sprintf("%s", filepath.Join(configDir, "signer.ipc"))
+		}
+
+		listener, _, err := node.StartIPCEndpoint(func() bool { return true }, ipcApiUrl, rpcApi)
+		if err != nil {
+			utils.Fatalf("Could not start IPC api: %v", err)
+		}
+		log.Info("IPC endpoint opened", "url", ipcApiUrl)
+		defer func() {
+			listener.Close()
+			log.Info("IPC endpoint closed", "url", ipcApiUrl)
+		}()
+
+	}
 
 	if c.Bool(testFlag.Name) {
 		log.Info("Performing UI test")
@@ -417,12 +456,18 @@ func signer(c *cli.Context) error {
 		Info: map[string]interface{}{
 			"extapi_version": EXT_API_VERSION,
 			"intapi_version": INT_API_VERSION,
-			"extapi_http":    extapi_url,
-			"extapi_ipc":     nil,
+			"extapi_http":    extapiUrl,
+			"extapi_ipc":     ipcApiUrl,
 		},
 	})
-	vhosts := splitAndTrim(c.GlobalString(utils.RPCVirtualHostsFlag.Name))
-	rpc.NewHTTPServer(cors, vhosts, server).Serve(listener)
+
+	abortChan := make(chan os.Signal)
+	signal.Notify(abortChan, os.Interrupt)
+
+	select {
+	case sig := <-abortChan:
+		log.Info("Exiting...", "signal", sig)
+	}
 
 	return nil
 }
