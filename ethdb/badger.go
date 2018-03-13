@@ -42,9 +42,6 @@ type BadgerDatabase struct {
 	missMeter      metrics.Meter // Meter for measuring the missed database get requests
 	readMeter      metrics.Meter // Meter for measuring the database get request data usage
 	writeMeter     metrics.Meter // Meter for measuring the database put request data usage
-	compTimeMeter  metrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter  metrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter metrics.Meter // Meter for measuring the data written during compaction
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -85,17 +82,7 @@ func (db *BadgerDatabase) Path() string {
 
 // Put puts the given key / value to the queue
 func (db *BadgerDatabase) Put(key []byte, value []byte) error {
-	// Measure the database put latency, if requested
-	if db.putTimer != nil {
-		defer db.putTimer.UpdateSince(time.Now())
-	}
-	// Generate the data to write to disk, update the meter and write
-	//value = rle.Compress(value)
 
-	if db.writeMeter != nil {
-		db.writeMeter.Mark(int64(len(value)))
-	}
-	
 	db.badgerCache.lock.Lock()
 	db.badgerCache.c[string(key)] = common.CopyBytes(value)
 	db.badgerCache.size += len(value)+len(key)
@@ -142,13 +129,19 @@ func (badgerCache *BadgerCache) Flush() (err error) {
 	defer badgerCache.lock.Unlock()
 	
 	txn := badgerCache.db.db.NewTransaction(true)
-	
 	for key, value := range badgerCache.c {
+		putStartTime := time.Now()
+		if badgerCache.db.writeMeter != nil {
+			badgerCache.db.writeMeter.Mark(int64(len(value)))
+		}
 		err = txn.Set([]byte(key), value)
 		if err == badger.ErrTxnTooBig {
 		    txn.Commit(nil)
 		    txn = badgerCache.db.db.NewTransaction(true)
 		    err = txn.Set([]byte(key), value)
+		}
+		if badgerCache.db.putTimer != nil {
+			badgerCache.db.putTimer.UpdateSince(putStartTime)
 		}
 	}
 	err = txn.Commit(nil)
@@ -160,16 +153,14 @@ func (badgerCache *BadgerCache) Flush() (err error) {
 
 // Get returns the given key if it's present.
 func (db *BadgerDatabase) Get(key []byte) (dat []byte, err error) {
-	// Measure the database get latency, if requested
-	if db.getTimer != nil {
-		defer db.getTimer.UpdateSince(time.Now())
-	}
-	
-	
 	db.badgerCache.lock.RLock()
 	dat = db.badgerCache.c[string(key)]
 	db.badgerCache.lock.RUnlock()
 	if dat == nil {
+		// Measure the database get latency, if requested
+		if db.getTimer != nil {
+			defer db.getTimer.UpdateSince(time.Now())
+		}
 		err = db.db.View(func(txn *badger.Txn) error {
 			item, err := txn.Get(key)
 			if err != nil {
@@ -182,6 +173,10 @@ func (db *BadgerDatabase) Get(key []byte) (dat []byte, err error) {
 			dat = common.CopyBytes(val)
 			return nil
 		})
+		//Update the actually retrieved amount of data
+		if db.readMeter != nil {
+			db.readMeter.Mark(int64(len(dat)))
+		}
 	}
 	if err != nil {
 		if db.missMeter != nil {
@@ -189,20 +184,13 @@ func (db *BadgerDatabase) Get(key []byte) (dat []byte, err error) {
 		}
 		return nil, err
 	}
-	//Update the actually retrieved amount of data
-	if db.readMeter != nil {
-		db.readMeter.Mark(int64(len(dat)))
-	}
+	
 	return dat, nil
-	//return rle.Decompress(dat)
 }
 
 // Delete deletes the key from the queue and database
 func (db *BadgerDatabase) Delete(key []byte) error {
-	// Measure the database delete latency, if requested
-	if db.delTimer != nil {
-		defer db.delTimer.UpdateSince(time.Now())
-	}
+	
 	// Execute the actual operation
 	db.badgerCache.lock.Lock()
 	delete(db.badgerCache.c, string(key))
@@ -210,6 +198,11 @@ func (db *BadgerDatabase) Delete(key []byte) error {
 	//TODO: also subtract len(value)
 	db.badgerCache.size-=len(key)
 	db.badgerCache.lock.Unlock()
+	
+	// Measure the database delete latency, if requested
+	if db.delTimer != nil {
+		defer db.delTimer.UpdateSince(time.Now())
+	}
 	return db.db.Update(func(txn *badger.Txn) error {
   		err := txn.Delete(key)
 		if err == badger.ErrKeyNotFound {
@@ -270,6 +263,8 @@ func (db *BadgerDatabase) NewIterator() badgerIterator {
 }
 
 func (db *BadgerDatabase) Close() {
+	
+	db.badgerCache.Flush()
 	// Stop the metrics collection to avoid internal database races
 	db.quitLock.Lock()
 	defer db.quitLock.Unlock()
@@ -281,7 +276,6 @@ func (db *BadgerDatabase) Close() {
 			db.log.Error("Metrics collection failed", "err", err)
 		}
 	}
-	db.badgerCache.Flush()
 	err := db.db.Close()
 	if err == nil {
 		db.log.Info("Database closed")
@@ -290,7 +284,6 @@ func (db *BadgerDatabase) Close() {
 	}
 }
 
-/*
 // Meter configures the database metrics collectors and
 func (db *BadgerDatabase) Meter(prefix string) {
 	// Short circuit metering if the metrics system is disabled
@@ -298,92 +291,21 @@ func (db *BadgerDatabase) Meter(prefix string) {
 		return
 	}
 	// Initialize all the metrics collector at the requested prefix
-	db.getTimer = metrics.NewTimer(prefix + "user/gets")
-	db.putTimer = metrics.NewTimer(prefix + "user/puts")
-	db.delTimer = metrics.NewTimer(prefix + "user/dels")
-	db.missMeter = metrics.NewMeter(prefix + "user/misses")
-	db.readMeter = metrics.NewMeter(prefix + "user/reads")
-	db.writeMeter = metrics.NewMeter(prefix + "user/writes")
-	db.compTimeMeter = metrics.NewMeter(prefix + "compact/time")
-	db.compReadMeter = metrics.NewMeter(prefix + "compact/input")
-	db.compWriteMeter = metrics.NewMeter(prefix + "compact/output")
+	db.getTimer = metrics.NewRegisteredTimer(prefix+"user/gets", nil)
+	db.putTimer = metrics.NewRegisteredTimer(prefix+"user/puts", nil)
+	db.delTimer = metrics.NewRegisteredTimer(prefix+"user/dels", nil)
+	db.missMeter = metrics.NewRegisteredMeter(prefix+"user/misses", nil)
+	db.readMeter = metrics.NewRegisteredMeter(prefix+"user/reads", nil)
+	db.writeMeter = metrics.NewRegisteredMeter(prefix+"user/writes", nil)
 
 	// Create a quit channel for the periodic collector and run it
 	db.quitLock.Lock()
 	db.quitChan = make(chan chan error)
 	db.quitLock.Unlock()
 
-	go db.meter(3 * time.Second)
+	//go db.meter(3 * time.Second)
 }
-*/
 
-/*
-func (db *BadgerDatabase) meter(refresh time.Duration) {
-	// Create the counters to store current and previous values
-	counters := make([][]float64, 2)
-	for i := 0; i < 2; i++ {
-		counters[i] = make([]float64, 3)
-	}
-	// Iterate ad infinitum and collect the stats
-	for i := 1; ; i++ {
-		// Retrieve the database stats
-		stats, err := db.db.GetProperty("leveldb.stats")
-		if err != nil {
-			db.log.Error("Failed to read database stats", "err", err)
-			return
-		}
-		// Find the compaction table, skip the header
-		lines := strings.Split(stats, "\n")
-		for len(lines) > 0 && strings.TrimSpace(lines[0]) != "Compactions" {
-			lines = lines[1:]
-		}
-		if len(lines) <= 3 {
-			db.log.Error("Compaction table not found")
-			return
-		}
-		lines = lines[3:]
-
-		// Iterate over all the table rows, and accumulate the entries
-		for j := 0; j < len(counters[i%2]); j++ {
-			counters[i%2][j] = 0
-		}
-		for _, line := range lines {
-			parts := strings.Split(line, "|")
-			if len(parts) != 6 {
-				break
-			}
-			for idx, counter := range parts[3:] {
-				value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64)
-				if err != nil {
-					db.log.Error("Compaction entry parsing failed", "err", err)
-					return
-				}
-				counters[i%2][idx] += value
-			}
-		}
-		// Update all the requested meters
-		if db.compTimeMeter != nil {
-			db.compTimeMeter.Mark(int64((counters[i%2][0] - counters[(i-1)%2][0]) * 1000 * 1000 * 1000))
-		}
-		if db.compReadMeter != nil {
-			db.compReadMeter.Mark(int64((counters[i%2][1] - counters[(i-1)%2][1]) * 1024 * 1024))
-		}
-		if db.compWriteMeter != nil {
-			db.compWriteMeter.Mark(int64((counters[i%2][2] - counters[(i-1)%2][2]) * 1024 * 1024))
-		}
-		// Sleep a bit, then repeat the stats collection
-		select {
-		case errc := <-db.quitChan:
-			// Quit requesting, stop hammering the database
-			errc <- nil
-			return
-
-		case <-time.After(refresh):
-			// Timeout, gather a new set of stats
-		}
-	}
-}
-*/
 func (db *BadgerDatabase) NewBatch() Batch {
 	return &badgerBatch{db: db}
 }
