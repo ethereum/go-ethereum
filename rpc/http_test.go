@@ -32,7 +32,7 @@ func TestHTTPErrorResponseWithPut(t *testing.T) {
 }
 
 func TestHTTPErrorResponseWithMaxContentLength(t *testing.T) {
-	body := make([]rune, maxHTTPRequestContentLength+1)
+	body := make([]rune, maxRequestContentLength+1)
 	testHTTPErrorResponse(t,
 		http.MethodPost, contentType, string(body), http.StatusRequestEntityTooLarge)
 }
