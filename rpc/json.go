@@ -76,13 +76,13 @@ type jsonNotification struct {
 // jsonCodec reads and writes JSON-RPC messages to the underlying connection. It
 // also has support for parsing arguments and serializing (result) objects.
 type jsonCodec struct {
-	closer sync.Once          // close closed channel once
-	closed chan interface{}   // closed on Close
-	decMu  sync.Mutex         // guards d
-	d      *json.Decoder      // decodes incoming requests
-	encMu  sync.Mutex         // guards e
-	e      *json.Encoder      // encodes responses
-	rw     io.ReadWriteCloser // connection
+	closer sync.Once                 // close closed channel once
+	closed chan interface{}          // closed on Close
+	decMu  sync.Mutex                // guards the decoder
+	decode func(v interface{}) error // decoder to allow multiple transports
+	encMu  sync.Mutex                // guards the encoder
+	encode func(v interface{}) error // encoder to allow multiple transports
+	rw     io.ReadWriteCloser        // connection
 }
 
 func (err *jsonError) Error() string {
@@ -96,11 +96,29 @@ func (err *jsonError) ErrorCode() int {
 	return err.Code
 }
 
-// NewJSONCodec creates a new RPC server codec with support for JSON-RPC 2.0
+// NewCodec creates a new RPC server codec with support for JSON-RPC 2.0 based
+// on explicitly given encoding and decoding methods.
+func NewCodec(rwc io.ReadWriteCloser, encode, decode func(v interface{}) error) ServerCodec {
+	return &jsonCodec{
+		closed: make(chan interface{}),
+		encode: encode,
+		decode: decode,
+		rw:     rwc,
+	}
+}
+
+// NewJSONCodec creates a new RPC server codec with support for JSON-RPC 2.0.
 func NewJSONCodec(rwc io.ReadWriteCloser) ServerCodec {
-	d := json.NewDecoder(rwc)
-	d.UseNumber()
-	return &jsonCodec{closed: make(chan interface{}), d: d, e: json.NewEncoder(rwc), rw: rwc}
+	enc := json.NewEncoder(rwc)
+	dec := json.NewDecoder(rwc)
+	dec.UseNumber()
+
+	return &jsonCodec{
+		closed: make(chan interface{}),
+		encode: enc.Encode,
+		decode: dec.Decode,
+		rw:     rwc,
+	}
 }
 
 // isBatch returns true when the first non-whitespace characters is '['
@@ -123,14 +141,12 @@ func (c *jsonCodec) ReadRequestHeaders() ([]rpcRequest, bool, Error) {
 	defer c.decMu.Unlock()
 
 	var incomingMsg json.RawMessage
-	if err := c.d.Decode(&incomingMsg); err != nil {
+	if err := c.decode(&incomingMsg); err != nil {
 		return nil, false, &invalidRequestError{err.Error()}
 	}
-
 	if isBatch(incomingMsg) {
 		return parseBatchRequest(incomingMsg)
 	}
-
 	return parseRequest(incomingMsg)
 }
 
@@ -338,7 +354,7 @@ func (c *jsonCodec) Write(res interface{}) error {
 	c.encMu.Lock()
 	defer c.encMu.Unlock()
 
-	return c.e.Encode(res)
+	return c.encode(res)
 }
 
 // Close the underlying connection
