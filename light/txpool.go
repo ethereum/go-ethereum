@@ -22,15 +22,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/TeamEGEM/go-egem/common"
+	"github.com/TeamEGEM/go-egem/core"
+	"github.com/TeamEGEM/go-egem/core/state"
+	"github.com/TeamEGEM/go-egem/core/types"
+	"github.com/TeamEGEM/go-egem/ethdb"
+	"github.com/TeamEGEM/go-egem/event"
+	"github.com/TeamEGEM/go-egem/log"
+	"github.com/TeamEGEM/go-egem/params"
+	"github.com/TeamEGEM/go-egem/rlp"
 )
 
 const (

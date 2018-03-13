@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/TeamEGEM/go-egem/consensus/ethash"
+	"github.com/TeamEGEM/go-egem/core/types"
+	"github.com/TeamEGEM/go-egem/core/vm"
+	"github.com/TeamEGEM/go-egem/crypto"
+	"github.com/TeamEGEM/go-egem/ethdb"
+	"github.com/TeamEGEM/go-egem/params"
 )
 
 func ExampleGenerateChain() {

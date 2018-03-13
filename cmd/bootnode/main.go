@@ -24,13 +24,13 @@ import (
 	"net"
 	"os"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/TeamEGEM/go-egem/cmd/utils"
+	"github.com/TeamEGEM/go-egem/crypto"
+	"github.com/TeamEGEM/go-egem/log"
+	"github.com/TeamEGEM/go-egem/p2p/discover"
+	"github.com/TeamEGEM/go-egem/p2p/discv5"
+	"github.com/TeamEGEM/go-egem/p2p/nat"
+	"github.com/TeamEGEM/go-egem/p2p/netutil"
 )
 
 func main() {

@@ -41,23 +41,23 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/ethstats"
-	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/TeamEGEM/go-egem/accounts"
+	"github.com/TeamEGEM/go-egem/accounts/keystore"
+	"github.com/TeamEGEM/go-egem/common"
+	"github.com/TeamEGEM/go-egem/core"
+	"github.com/TeamEGEM/go-egem/core/types"
+	"github.com/TeamEGEM/go-egem/eth"
+	"github.com/TeamEGEM/go-egem/eth/downloader"
+	"github.com/TeamEGEM/go-egem/ethclient"
+	"github.com/TeamEGEM/go-egem/ethstats"
+	"github.com/TeamEGEM/go-egem/les"
+	"github.com/TeamEGEM/go-egem/log"
+	"github.com/TeamEGEM/go-egem/node"
+	"github.com/TeamEGEM/go-egem/p2p"
+	"github.com/TeamEGEM/go-egem/p2p/discover"
+	"github.com/TeamEGEM/go-egem/p2p/discv5"
+	"github.com/TeamEGEM/go-egem/p2p/nat"
+	"github.com/TeamEGEM/go-egem/params"
 	"golang.org/x/net/websocket"
 )
 
@@ -450,7 +450,7 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 		case *noauthFlag:
 			username, avatar, address, err = authNoAuth(msg.URL)
 		default:
-			err = errors.New("Something funky happened, please open an issue at https://github.com/ethereum/go-ethereum/issues")
+			err = errors.New("Something funky happened, please open an issue at https://github.com/TeamEGEM/go-egem/issues")
 		}
 		if err != nil {
 			if err = sendError(conn, err); err != nil {

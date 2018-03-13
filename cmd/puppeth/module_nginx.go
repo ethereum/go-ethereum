@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/TeamEGEM/go-egem/log"
 )
 
 // nginxDockerfile is theis the Dockerfile required to build an nginx reverse-

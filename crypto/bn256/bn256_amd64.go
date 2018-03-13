@@ -22,7 +22,7 @@ package bn256
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto/bn256/cloudflare"
+	"github.com/TeamEGEM/go-egem/crypto/bn256/cloudflare"
 )
 
 // G1 is an abstract cyclic group. The zero value is suitable for use as the

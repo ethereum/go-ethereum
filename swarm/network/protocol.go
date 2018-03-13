@@ -37,13 +37,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ethereum/go-ethereum/contracts/chequebook"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p"
-	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
-	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/TeamEGEM/go-egem/contracts/chequebook"
+	"github.com/TeamEGEM/go-egem/log"
+	"github.com/TeamEGEM/go-egem/metrics"
+	"github.com/TeamEGEM/go-egem/p2p"
+	bzzswap "github.com/TeamEGEM/go-egem/swarm/services/swap"
+	"github.com/TeamEGEM/go-egem/swarm/services/swap/swap"
+	"github.com/TeamEGEM/go-egem/swarm/storage"
 )
 
 //metrics variables

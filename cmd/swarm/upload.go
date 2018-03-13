@@ -30,8 +30,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+	"github.com/TeamEGEM/go-egem/cmd/utils"
+	swarm "github.com/TeamEGEM/go-egem/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
 )
 
