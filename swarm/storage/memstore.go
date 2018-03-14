@@ -21,6 +21,7 @@ package storage
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -252,6 +253,8 @@ func (s *MemStore) Get(hash Key) (chunk *Chunk, err error) {
 }
 
 func (s *MemStore) removeOldest() {
+	defer metrics.GetOrRegisterResettingTimer("memstore.purge", metrics.DefaultRegistry).UpdateSince(time.Now())
+
 	node := s.memtree
 	log.Warn("purge memstore")
 	for node.entry == nil {
