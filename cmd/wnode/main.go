@@ -43,6 +43,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/multiformats/go-multiaddr"
+
 	"github.com/ethereum/go-ethereum/whisper/mailserver"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"golang.org/x/crypto/pbkdf2"
@@ -178,6 +180,7 @@ func initialize() {
 
 	done = make(chan struct{})
 	var peers []*discover.Node
+	var libp2pPeers []multiaddr.Multiaddr
 	var err error
 
 	if *generateKey {
@@ -202,11 +205,24 @@ func initialize() {
 	} else if *fileReader {
 		*bootstrapMode = true
 	} else {
-		if len(*argEnode) == 0 {
-			argEnode = scanLineA("Please enter the peer's enode: ")
+		if *useLibP2P {
+			var libp2pbootstrap *string
+			for libp2pbootstrap == nil {
+				libp2pbootstrap = scanLineA("Please enter the bootstrap node's addres: ")
+			}
+			libp2pbootaddr, err := multiaddr.NewMultiaddr(*libp2pbootstrap)
+			if err != nil {
+				utils.Fatalf("Error parsing the bootnode addr: %v", err)
+			}
+			fmt.Println(libp2pbootaddr)
+			libp2pPeers = append(libp2pPeers, libp2pbootaddr)
+		} else {
+			if len(*argEnode) == 0 {
+				argEnode = scanLineA("Please enter the peer's enode: ")
+			}
+			peer := discover.MustParseNode(*argEnode)
+			peers = append(peers, peer)
 		}
-		peer := discover.MustParseNode(*argEnode)
-		peers = append(peers, peer)
 	}
 
 	if *mailServerMode {
@@ -280,6 +296,9 @@ func initialize() {
 		server, err = whisper.NewLibP2PWhisperServer()
 		if err != nil {
 			utils.Fatalf("Error starting the libp2p client: %v", err)
+		}
+		for _, p := range libp2pPeers {
+			server.(*whisper.LibP2PWhisperServer).AddPeer(p)
 		}
 	} else {
 		server = &whisper.DevP2PWhisperServer{

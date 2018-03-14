@@ -29,6 +29,7 @@ import (
 	host "github.com/libp2p/go-libp2p-host"
 	inet "github.com/libp2p/go-libp2p-net"
 	peer "github.com/libp2p/go-libp2p-peer"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 // LibP2PStream is a wrapper used to implement the MsgReadWriter
@@ -128,6 +129,8 @@ func (p *LibP2PPeer) ID() string {
 // LibP2PWhisperServer implements WhisperServer for libp2p.
 type LibP2PWhisperServer struct {
 	Host host.Host
+
+	Peers []LibP2PPeer
 }
 
 // Start starts the server
@@ -147,7 +150,20 @@ func (server *LibP2PWhisperServer) PeerCount() int {
 
 // Enode returns the enode address of the node
 func (server *LibP2PWhisperServer) Enode() string {
-	return server.Host.Addrs()[0].String()
+	addr := server.Host.Addrs()[0]
+	hostAddr, _ := ma.NewMultiaddr(fmt.Sprintf("/ipfs/%s", server.Host.ID().Pretty()))
+	fullAddr := addr.Encapsulate(hostAddr)
+	return fullAddr.String()
+}
+
+func (server *LibP2PWhisperServer) AddPeer(addr ma.Multiaddr) *LibP2PPeer {
+	fmt.Println("Adding peer: ", addr)
+	pid, err := addr.ValueForProtocol(ma.P_IPFS)
+	if err != nil {
+		// XXX
+		panic(err)
+	}
+	return &LibP2PPeer{id: peer.ID(pid)}
 }
 
 // NewLibP2PWhisperServer creates a new WhisperServer with
@@ -163,5 +179,5 @@ func NewLibP2PWhisperServer() (WhisperServer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Error setting up the libp2p network: %s", err)
 	}
-	return &LibP2PWhisperServer{h}, nil
+	return &LibP2PWhisperServer{h, []LibP2PPeer{}}, nil
 }
