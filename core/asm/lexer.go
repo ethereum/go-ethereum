@@ -48,7 +48,7 @@ const (
 	lineEnd                           // emitted when a line ends
 	invalidStatement                  // any invalid statement
 	element                           // any element during element parsing
-	label                             // label is emitted when a labal is found
+	label                             // label is emitted when a label is found
 	labelDef                          // label definition is emitted when a new label is found
 	number                            // number is emitted when a number is found
 	stringValue                       // stringValue is emitted when a string has been found
