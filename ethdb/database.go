@@ -29,6 +29,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 var OpenFileLimit = 64
@@ -119,6 +120,11 @@ func (db *LDBDatabase) Delete(key []byte) error {
 
 func (db *LDBDatabase) NewIterator() iterator.Iterator {
 	return db.db.NewIterator(nil, nil)
+}
+
+// NewIteratorByPrefix returns a iterator to iterate over subset of database content with a particular prefix.
+func (db *LDBDatabase) NewIteratorByPrefix(prefix []byte) iterator.Iterator {
+	return db.db.NewIterator(util.BytesPrefix(prefix), nil)
 }
 
 func (db *LDBDatabase) Close() {

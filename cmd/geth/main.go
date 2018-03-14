@@ -158,6 +158,8 @@ func init() {
 		copydbCommand,
 		removedbCommand,
 		dumpCommand,
+		preimageDumpCommand,
+		preimageImportCommand,
 		// See monitorcmd.go:
 		monitorCommand,
 		// See accountcmd.go:

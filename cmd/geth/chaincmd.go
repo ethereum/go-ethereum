@@ -41,6 +41,11 @@ import (
 )
 
 var (
+	// secureKeyPrefix is the database key prefix used to store trie node preimages.
+	secureKeyPrefix = []byte("secure-key-")
+)
+
+var (
 	initCommand = cli.Command{
 		Action:    utils.MigrateFlags(initGenesis),
 		Name:      "init",
@@ -140,6 +145,34 @@ Remove blockchain and state databases`,
 		Description: `
 The arguments are interpreted as block numbers or hashes.
 Use "ethereum dump 0" to dump the genesis block.`,
+	}
+	preimageDumpCommand = cli.Command{
+		Action:    utils.MigrateFlags(dumpPreimage),
+		Name:      "preimagedump",
+		Usage:     "Dump the preimage database in json format",
+		ArgsUsage: "<dumpfile>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.LightModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+		Description: `
+Dump the preimage database in json format`,
+	}
+	preimageImportCommand = cli.Command{
+		Action:    utils.MigrateFlags(importPreimage),
+		Name:      "preimageimport",
+		Usage:     "Import the preimage data from the specified file",
+		ArgsUsage: "<datafile>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.LightModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+		Description: `
+Import the preimage data from the specified file`,
 	}
 )
 
@@ -403,6 +436,86 @@ func dump(ctx *cli.Context) error {
 		}
 	}
 	chainDb.Close()
+	return nil
+}
+
+// PreimageEntry represents a map between preimage and hash.
+type PreimageEntry struct {
+	Hash     string `json:"hash"`
+	Preimage string `json:"preimage"`
+}
+
+// dumpPreimage dumps the preimage data to specified json file in streaming way.
+func dumpPreimage(ctx *cli.Context) error {
+	// Make sure the export json file has been specified.
+	if len(ctx.Args()) < 1 {
+		utils.Fatalf("This command requires an argument.")
+	}
+
+	// Encode preimage data to json file in streaming way.
+	file, err := os.Create(ctx.Args().First())
+	if err != nil {
+		return err
+	}
+	encoder := json.NewEncoder(file)
+
+	stack := makeFullNode(ctx)
+	db := utils.MakeChainDatabase(ctx, stack)
+
+	// Dump all preimage entries.
+	it := db.(*ethdb.LDBDatabase).NewIteratorByPrefix(secureKeyPrefix)
+	for it.Next() {
+		hash := it.Key()[len(secureKeyPrefix):]
+		if err := encoder.Encode(PreimageEntry{common.Bytes2Hex(hash), common.Bytes2Hex(it.Value())}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// importPreimages imports preimage data from the specified file.
+func importPreimage(ctx *cli.Context) error {
+	// Make sure the export json file has been specified.
+	if len(ctx.Args()) < 1 {
+		utils.Fatalf("This command requires an argument.")
+	}
+
+	// Decode the preimage data in streaming way.
+	file, err := os.Open(ctx.Args().First())
+	if err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(file)
+
+	stack := makeFullNode(ctx)
+	db := utils.MakeChainDatabase(ctx, stack)
+
+	var (
+		entry     PreimageEntry
+		preimages = make(map[common.Hash][]byte)
+	)
+
+	for decoder.More() {
+		if err := decoder.Decode(&entry); err != nil {
+			return err
+		}
+		preimages[common.HexToHash(entry.Hash)] = common.Hex2Bytes(entry.Preimage)
+		// Flush to database in batch
+		if len(preimages) > 1024 {
+			err := core.WritePreimages(db, 0, preimages)
+			if err != nil {
+				return err
+			}
+			preimages = make(map[common.Hash][]byte)
+		}
+	}
+	// Flush the last batch preimage data
+	if len(preimages) > 0 {
+		err := core.WritePreimages(db, 0, preimages)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
