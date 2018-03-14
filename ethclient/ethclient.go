@@ -39,11 +39,7 @@ type Client struct {
 
 // Dial connects a client to the given URL.
 func Dial(rawurl string) (*Client, error) {
-	c, err := rpc.Dial(rawurl)
-	if err != nil {
-		return nil, err
-	}
-	return NewClient(c), nil
+	return DialContext(context.Background(), rawurl)
 }
 
 func DialContext(ctx context.Context, rawurl string) (*Client, error) {
