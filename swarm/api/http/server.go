@@ -121,6 +121,8 @@ type Request struct {
 // HandlePostRaw handles a POST request to a raw bzz-raw:/ URI, stores the request
 // body in swarm and returns the resulting storage key as a text/plain response
 func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
+	log.Debug("http.server handle.post.raw", "ruid", r.ruid)
+
 	postRawCount.Inc(1)
 	if r.uri.Path != "" {
 		postRawFail.Inc(1)
@@ -398,6 +400,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
 }
 
 func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name string) {
+	log.Debug("handle.get.resource", "ruid", r.ruid)
 	var params []string
 	if len(r.uri.Path) > 0 {
 		params = strings.Split(r.uri.Path, "/")
@@ -470,6 +473,7 @@ func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supEr
 // - bzz-hash://<key> and responds with the hash of the content stored
 //   at the given storage key as a text/plain response
 func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.get", "ruid", r.ruid, "uri", r.uri)
 	getCount.Inc(1)
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
@@ -477,6 +481,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
 		return
 	}
+	log.Debug("handle.get: resolved", "ruid", r.ruid, "key", key)
 
 	// if path is set, interpret <key> as a manifest and return the
 	// raw entry at the given path
@@ -548,6 +553,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 // header of "application/x-tar" and returns a tar stream of all files
 // contained in the manifest
 func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.get.files", "ruid", r.ruid, "uri", r.uri)
 	getFilesCount.Inc(1)
 	if r.uri.Path != "" {
 		getFilesFail.Inc(1)
@@ -561,6 +567,7 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
 		return
 	}
+	log.Debug("handle.get.files: resolved", "ruid", r.ruid, "key", key)
 
 	walker, err := s.api.NewManifestWalker(key, nil)
 	if err != nil {
@@ -621,6 +628,7 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 // a list of all files contained in <manifest> under <path> grouped into
 // common prefixes using "/" as a delimiter
 func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.get.list", "ruid", r.ruid, "uri", r.uri)
 	getListCount.Inc(1)
 	// ensure the root path has a trailing slash so that relative URLs work
 	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
@@ -634,6 +642,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
 		return
 	}
+	log.Debug("handle.get.list: resolved", "ruid", r.ruid, "key", key)
 
 	list, err := s.getManifestList(key, r.uri.Path)
 
@@ -725,6 +734,7 @@ func (s *Server) getManifestList(key storage.Key, prefix string) (list api.Manif
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
 // with the content of the file at <path> from the given <manifest>
 func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.get.file", "ruid", r.ruid)
 	getFileCount.Inc(1)
 	// ensure the root path has a trailing slash so that relative URLs work
 	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
@@ -738,6 +748,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
 		return
 	}
+	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", key)
 
 	reader, contentType, status, err := s.api.Get(key, r.uri.Path)
 

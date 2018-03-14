@@ -242,6 +242,7 @@ func (self *Api) Retrieve(key storage.Key) storage.LazySectionReader {
 }
 
 func (self *Api) Store(data io.Reader, size int64) (key storage.Key, wait func(), err error) {
+	log.Debug("api.store", "size", size)
 	return self.dpa.Store(data, size)
 }
 

@@ -169,7 +169,7 @@ func (self *PyramidChunker) decrementWorkerCount() {
 }
 
 func (self *PyramidChunker) Split(data io.Reader, size int64, chunkC chan *Chunk) (k Key, wait func(), err error) {
-	log.Trace("pyramid.chunker: Split()")
+	log.Debug("pyramid.chunker: Split()", "size", size)
 	jobC := make(chan *chunkJob, 2*ChunkProcessors)
 	wg := &sync.WaitGroup{}
 	storageWG := &sync.WaitGroup{}
@@ -204,11 +204,10 @@ func (self *PyramidChunker) Split(data io.Reader, size int64, chunkC chan *Chunk
 	case <-time.NewTimer(splitTimeout).C:
 	}
 	return rootKey, storageWG.Wait, nil
-
 }
 
 func (self *PyramidChunker) Append(key Key, data io.Reader, chunkC chan *Chunk) (k Key, wait func(), err error) {
-	log.Trace("pyramid.chunker: Append()")
+	log.Debug("pyramid.chunker: Append()")
 	quitC := make(chan bool)
 	rootKey := make([]byte, self.hashSize)
 	chunkLevel := make([][]*TreeEntry, self.branches)
@@ -267,7 +266,7 @@ func (self *PyramidChunker) processor(id int64, jobC chan *chunkJob, chunkC chan
 }
 
 func (self *PyramidChunker) processChunk(id int64, hasher SwarmHash, job *chunkJob, chunkC chan *Chunk, storageWG *sync.WaitGroup) {
-	log.Trace("pyramid.chunker: processChunk()", "id", id)
+	log.Debug("pyramid.chunker: processChunk()", "id", id)
 
 	hasher.ResetWithLength(job.chunk[:8]) // 8 bytes of length
 	hasher.Write(job.chunk[8:])           // minus 8 []byte length
@@ -294,7 +293,7 @@ func (self *PyramidChunker) processChunk(id int64, hasher SwarmHash, job *chunkJ
 }
 
 func (self *PyramidChunker) loadTree(chunkLevel [][]*TreeEntry, key Key, chunkC chan *Chunk, quitC chan bool) error {
-	log.Trace("pyramid.chunker: loadTree()")
+	log.Debug("pyramid.chunker: loadTree()")
 	// Get the root chunk to get the total size
 	chunk := retrieve(key, chunkC, quitC)
 	if chunk == nil {
@@ -377,7 +376,7 @@ func (self *PyramidChunker) loadTree(chunkLevel [][]*TreeEntry, key Key, chunkC 
 }
 
 func (self *PyramidChunker) prepareChunks(isAppend bool, chunkLevel [][]*TreeEntry, data io.Reader, rootKey []byte, quitC chan bool, wg *sync.WaitGroup, jobC chan *chunkJob, chunkC chan *Chunk, errC chan error, storageWG *sync.WaitGroup) {
-	log.Trace("pyramid.chunker: prepareChunks", "isAppend", isAppend)
+	log.Debug("pyramid.chunker: prepareChunks", "isAppend", isAppend)
 	defer wg.Done()
 
 	chunkWG := &sync.WaitGroup{}
