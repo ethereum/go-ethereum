@@ -30,6 +30,7 @@ import (
 	inet "github.com/libp2p/go-libp2p-net"
 	peer "github.com/libp2p/go-libp2p-peer"
 	ma "github.com/multiformats/go-multiaddr"
+	set "gopkg.in/fatih/set.v0"
 )
 
 // LibP2PStream is a wrapper used to implement the MsgReadWriter
@@ -116,9 +117,25 @@ func (stream *LibP2PStream) WriteMsg(msg p2p.Msg) error {
 
 // LibP2PPeer implements Peer for libp2p
 type LibP2PPeer struct {
-	PeerBase
+	*PeerBase
 
 	id peer.ID
+}
+
+func newLibP2PPeer(w *Whisper, pid peer.ID, rw p2p.MsgReadWriter) Peer {
+	return &LibP2PPeer{
+		&PeerBase{
+			host:           w,
+			ws:             rw,
+			trusted:        false,
+			powRequirement: 0.0,
+			known:          set.New(),
+			quit:           make(chan struct{}),
+			bloomFilter:    makeFullNodeBloom(),
+			fullNode:       true,
+		},
+		pid,
+	}
 }
 
 // ID returns the id of the peer
@@ -126,15 +143,47 @@ func (p *LibP2PPeer) ID() string {
 	return p.id.String()
 }
 
+func (p *LibP2PPeer) handshake() error {
+	err := p.handshakeBase()
+	if err != nil {
+		return fmt.Errorf("peer [%x] %s", p.ID(), err.Error())
+	}
+	return nil
+}
+
 // LibP2PWhisperServer implements WhisperServer for libp2p.
 type LibP2PWhisperServer struct {
 	Host host.Host
 
-	Peers []LibP2PPeer
+	Peers []*LibP2PPeer
 }
 
 // Start starts the server
 func (server *LibP2PWhisperServer) Start() error {
+	server.Host.SetStreamHandler(WhisperProtocolString, func (stream inet.Stream) {
+		defer stream.Close()
+	
+		pid := stream.Conn().RemotePeer()
+		var peer Peer
+		for _, p := range server.Peers {
+			if p.id == pid {
+				peer = p
+				break
+			}
+		}
+
+		whisper := server.Peers[0].host
+		lps := &LibP2PStream{stream}
+
+		// Unknown peer
+		if peer == nil {
+			peer = newLibP2PPeer(whisper, pid, lps)
+			// TODO check critical section
+			server.Peers = append(server.Peers, peer.(*LibP2PPeer))
+		}
+
+		whisper.runMessageLoop(peer, lps)
+	})
 	return nil
 }
 
@@ -179,5 +228,7 @@ func NewLibP2PWhisperServer() (WhisperServer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Error setting up the libp2p network: %s", err)
 	}
-	return &LibP2PWhisperServer{h, []LibP2PPeer{}}, nil
+
+	server := &LibP2PWhisperServer{h, []*LibP2PPeer{}}
+	return server, nil
 }

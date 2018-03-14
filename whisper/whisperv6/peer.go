@@ -95,20 +95,28 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) Peer {
 
 // start initiates the peer updater, periodically broadcasting the whisper packets
 // into the network.
-func (peer *DevP2PPeer) start() {
+func (peer *PeerBase) start() {
 	go peer.update()
-	log.Trace("start", "peer", peer.ID())
+	// log.Trace("start", "peer", peer.ID())
 }
 
 // stop terminates the peer updater, stopping message forwarding to it.
-func (peer *DevP2PPeer) stop() {
+func (peer *PeerBase) stop() {
 	close(peer.quit)
-	log.Trace("stop", "peer", peer.ID())
+	// log.Trace("stop", "peer", peer.ID())
 }
 
 // handshake sends the protocol initiation status message to the remote peer and
 // verifies the remote status too.
 func (peer *DevP2PPeer) handshake() error {
+	err := peer.handshakeBase()
+	if err != nil {
+		return fmt.Errorf("peer [%x] %s", peer.ID(), err.Error())
+	}
+	return nil
+}
+
+func (peer *PeerBase) handshakeBase() error {
 	// Send the handshake status message asynchronously
 	errc := make(chan error, 1)
 	go func() {
@@ -124,19 +132,19 @@ func (peer *DevP2PPeer) handshake() error {
 		return err
 	}
 	if packet.Code != statusCode {
-		return fmt.Errorf("peer [%x] sent packet %x before status packet", peer.ID(), packet.Code)
+		return fmt.Errorf("peer [%s] sent packet %x before status packet", peer.ID(), packet.Code)
 	}
 	s := rlp.NewStream(packet.Payload, uint64(packet.Size))
 	_, err = s.List()
 	if err != nil {
-		return fmt.Errorf("peer [%x] sent bad status message: %v", peer.ID(), err)
+		return fmt.Errorf("peer [%s] sent bad status message: %v", peer.ID(), err)
 	}
 	peerVersion, err := s.Uint()
 	if err != nil {
-		return fmt.Errorf("peer [%x] sent bad status message (unable to decode version): %v", peer.ID(), err)
+		return fmt.Errorf("peer [%s] sent bad status message (unable to decode version): %v", peer.ID(), err)
 	}
 	if peerVersion != ProtocolVersion {
-		return fmt.Errorf("peer [%x]: protocol version mismatch %d != %d", peer.ID(), peerVersion, ProtocolVersion)
+		return fmt.Errorf("peer [%s]: protocol version mismatch %d != %d", peer.ID(), peerVersion, ProtocolVersion)
 	}
 
 	// only version is mandatory, subsequent parameters are optional
@@ -144,7 +152,7 @@ func (peer *DevP2PPeer) handshake() error {
 	if err == nil {
 		pow := math.Float64frombits(powRaw)
 		if math.IsInf(pow, 0) || math.IsNaN(pow) || pow < 0.0 {
-			return fmt.Errorf("peer [%x] sent bad status message: invalid pow", peer.ID())
+			return fmt.Errorf("peer [%s] sent bad status message: invalid pow", peer.ID())
 		}
 		peer.powRequirement = pow
 
@@ -153,14 +161,14 @@ func (peer *DevP2PPeer) handshake() error {
 		if err == nil {
 			sz := len(bloom)
 			if sz != BloomFilterSize && sz != 0 {
-				return fmt.Errorf("peer [%x] sent bad status message: wrong bloom filter size %d", peer.ID(), sz)
+				return fmt.Errorf("peer [%s] sent bad status message: wrong bloom filter size %d", peer.ID(), sz)
 			}
 			peer.setBloomFilter(bloom)
 		}
 	}
 
 	if err := <-errc; err != nil {
-		return fmt.Errorf("peer [%x] failed to send status packet: %v", peer.ID(), err)
+		return fmt.Errorf("peer [%s] failed to send status packet: %v", peer.ID(), err)
 	}
 	return nil
 }
@@ -191,18 +199,18 @@ func (peer *DevP2PPeer) update() {
 }
 
 // mark marks an envelope known to the peer so that it won't be sent back.
-func (peer *DevP2PPeer) mark(envelope *Envelope) {
+func (peer *PeerBase) mark(envelope *Envelope) {
 	peer.known.Add(envelope.Hash())
 }
 
 // marked checks if an envelope is already known to the remote peer.
-func (peer *DevP2PPeer) marked(envelope *Envelope) bool {
+func (peer *PeerBase) marked(envelope *Envelope) bool {
 	return peer.known.Has(envelope.Hash())
 }
 
 // expire iterates over all the known envelopes in the host and removes all
 // expired (unknown) ones from the known list.
-func (peer *DevP2PPeer) expire() {
+func (peer *PeerBase) expire() {
 	unmark := make(map[common.Hash]struct{})
 	peer.known.Each(func(v interface{}) bool {
 		if !peer.host.isEnvelopeCached(v.(common.Hash)) {
@@ -218,7 +226,7 @@ func (peer *DevP2PPeer) expire() {
 
 // broadcast iterates over the collection of envelopes and transmits yet unknown
 // ones over the network.
-func (peer *DevP2PPeer) broadcast() error {
+func (peer *PeerBase) broadcast() error {
 	envelopes := peer.host.Envelopes()
 	bundle := make([]*Envelope, 0, len(envelopes))
 	for _, envelope := range envelopes {
@@ -248,22 +256,22 @@ func (peer *DevP2PPeer) ID() string {
 	return peer.peer.ID().String()
 }
 
-func (peer *DevP2PPeer) notifyAboutPowRequirementChange(pow float64) error {
+func (peer *PeerBase) notifyAboutPowRequirementChange(pow float64) error {
 	i := math.Float64bits(pow)
 	return p2p.Send(peer.ws, powRequirementCode, i)
 }
 
-func (peer *DevP2PPeer) notifyAboutBloomFilterChange(bloom []byte) error {
+func (peer *PeerBase) notifyAboutBloomFilterChange(bloom []byte) error {
 	return p2p.Send(peer.ws, bloomFilterExCode, bloom)
 }
 
-func (peer *DevP2PPeer) bloomMatch(env *Envelope) bool {
+func (peer *PeerBase) bloomMatch(env *Envelope) bool {
 	peer.bloomMu.Lock()
 	defer peer.bloomMu.Unlock()
 	return peer.fullNode || BloomFilterMatch(peer.bloomFilter, env.Bloom())
 }
 
-func (peer *DevP2PPeer) setBloomFilter(bloom []byte) {
+func (peer *PeerBase) setBloomFilter(bloom []byte) {
 	peer.bloomMu.Lock()
 	defer peer.bloomMu.Unlock()
 	peer.bloomFilter = bloom
@@ -273,19 +281,19 @@ func (peer *DevP2PPeer) setBloomFilter(bloom []byte) {
 	}
 }
 
-func (peer *DevP2PPeer) isTrusted() bool {
+func (peer *PeerBase) isTrusted() bool {
 	return peer.trusted
 }
 
-func (peer *DevP2PPeer) setTrusted(t bool) {
+func (peer *PeerBase) setTrusted(t bool) {
 	peer.trusted = t
 }
 
-func (peer *DevP2PPeer) setPoWRequirement(r float64) {
+func (peer *PeerBase) setPoWRequirement(r float64) {
 	peer.powRequirement = r
 }
 
-func (peer *DevP2PPeer) stream() p2p.MsgReadWriter {
+func (peer *PeerBase) stream() p2p.MsgReadWriter {
 	return peer.ws
 }
 
