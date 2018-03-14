@@ -20,6 +20,12 @@ package params
 // the main Ethereum network.
 var MainnetBootnodes = []string{
 	// Egem Go Bootnodes
+"enode://29b1dbbdecd17028fcae228fbf21ba13154a353aa815f42f38b9cb5ac8c75dad9537495fedb5a48763c8c392e38ce8b51477007227bd793ffc7ab3b563de6d45@[154.20.195.166]:30303",
+}
+
+// TestnetBootnodes are the enode URLs of the P2P bootstrap nodes running on the
+// RoGem test network.
+var TestnetBootnodes = []string{
 	"enode://fba5bbff0f302105be69ca689c0724d95591e314bd87295237085dd1972f7ebe2f13a231c5a1817a7b1fca6500c1ab56c6ead2de34db3d849a4035b0e7e4a07f@154.20.195.166:30303", // NW CANADA
 	"enode://f90107f8efc23e2e38553b6c194cfbe2f0e0af29e79c99b828b38168eeb02a06b37c3b205e085b48d182d4c644a7ec42d951286d7a416f70a16966335fdc4f7a@[45.77.210.216]:30303", // N0 Seattle
 	"enode://735dcc50b9ab58d0ffcd3d7ba44c9ab0187ca296f10f90b9667893ffe989846648d82edfb7fe1cfa9a26b450747c142699996d8696fe4f0b8dd3d53f14bfd6a1@[144.202.88.155]:30303", //N1 Seattle
@@ -28,16 +34,6 @@ var MainnetBootnodes = []string{
 	"enode://fbb4b509a419b5db20405e2ce8b36eecd4d2fb9ebae7c87a6ef9ee68a074a58f6fa87dc08376635dfb8d23c72b2afaf078cb465c825c40be1455d15490cd4966@144.202.101.110:30303", // MakeMoneyOz Sil valley
 	"enode://8fb089d66eb948048cc91c8588c316d29e9a35f9b2cae42d3b15938bf2a0978fe2aa41185b259c7816e10b77fcf0931e2057514cb176828555bd82248c319bc4@198.13.36.85:30303", // MakeMoneyOz Japan
 	"enode://b532392fcfd0244c572f8a269e7fbd6066d30b35f82ec47edb7547fe9aa5399b1a24a586feeba0357b41c164d4085907a4db938d9eac1939bd6a48e8d3820ee1@173.199.119.64:30303", // MakeMoneyOz NewYork-NJ
-
-}
-
-// TestnetBootnodes are the enode URLs of the P2P bootstrap nodes running on the
-// Ropsten test network.
-var TestnetBootnodes = []string{
-	"enode://30b7ab30a01c124a6cceca36863ece12c4f5fa68e3ba9b0b51407ccc002eeed3b3102d20a88f1c1d3c3154e2449317b8ef95090e77b312d5cc39354f86d5d606@52.176.7.10:30303",    // US-Azure geth
-	"enode://865a63255b3bb68023b6bffd5095118fcc13e79dcf014fe4e47e065c350c7cc72af2e53eff895f11ba1bbb6a2b33271c1116ee870f266618eadfc2e78aa7349c@52.176.100.77:30303",  // US-Azure parity
-	"enode://6332792c4a00e3e4ee0926ed89e0d27ef985424d97b6a45bf0f23e51f0dcb5e66b875777506458aea7af6f9e4ffb69f43f3778ee73c81ed9d34c51c4b16b0b0f@52.232.243.152:30303", // Parity
-	"enode://94c15d1b9e2fe7ce56e458b9a3b672ef11894ddedd0c6f247e0f1d3487f52b66208fb4aeb8179fce6e3a749ea93ed147c37976d67af557508d199d9594c35f09@192.81.208.223:30303", // @gpip
 }
 
 // RinkebyBootnodes are the enode URLs of the P2P bootstrap nodes running on the
