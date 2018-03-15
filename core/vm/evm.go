@@ -69,7 +69,7 @@ type Context struct {
 
 	// Block information
 	Coinbase    common.Address // Provides information for COINBASE
-	GasLimit    *big.Int       // Provides information for GASLIMIT
+	GasLimit    uint64         // Provides information for GASLIMIT
 	BlockNumber *big.Int       // Provides information for NUMBER
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
@@ -391,7 +391,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	return ret, contractAddr, contract.Gas, err
 }
 
-// ChainConfig returns the evmironment's chain configuration
+// ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 // Interpreter returns the EVM interpreter

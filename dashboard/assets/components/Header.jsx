@@ -21,79 +21,47 @@ import React, {Component} from 'react';
 import withStyles from 'material-ui/styles/withStyles';
 import AppBar from 'material-ui/AppBar';
 import Toolbar from 'material-ui/Toolbar';
-import Transition from 'react-transition-group/Transition';
 import IconButton from 'material-ui/IconButton';
+import Icon from 'material-ui/Icon';
+import MenuIcon from 'material-ui-icons/Menu';
 import Typography from 'material-ui/Typography';
-import ChevronLeftIcon from 'material-ui-icons/ChevronLeft';
 
-import {DURATION} from './Common';
-
-// arrowDefault is the default style of the arrow button.
-const arrowDefault = {
-	transition: `transform ${DURATION}ms`,
-};
-// arrowTransition is the additional style of the arrow button corresponding to the transition's state.
-const arrowTransition = {
-	entered: {transform: 'rotate(180deg)'},
-};
-// Styles for the Header component.
-const styles = theme => ({
+// themeStyles returns the styles generated from the theme for the component.
+const themeStyles = (theme: Object) => ({
 	header: {
-		backgroundColor: theme.palette.background.appBar,
-		color:           theme.palette.getContrastText(theme.palette.background.appBar),
+		backgroundColor: theme.palette.grey[900],
+		color:           theme.palette.getContrastText(theme.palette.grey[900]),
 		zIndex:          theme.zIndex.appBar,
 	},
 	toolbar: {
 		paddingLeft:  theme.spacing.unit,
 		paddingRight: theme.spacing.unit,
 	},
-	mainText: {
+	title: {
 		paddingLeft: theme.spacing.unit,
+		fontSize:    3 * theme.spacing.unit,
 	},
 });
+
 export type Props = {
-	classes: Object,
-	opened: boolean,
-	openSideBar: () => {},
-	closeSideBar: () => {},
+	classes: Object, // injected by withStyles()
+	switchSideBar: () => void,
 };
+
 // Header renders the header of the dashboard.
 class Header extends Component<Props> {
-	shouldComponentUpdate(nextProps) {
-		return nextProps.opened !== this.props.opened;
-	}
-
-	// changeSideBar opens or closes the sidebar corresponding to the previous state.
-	changeSideBar = () => {
-		if (this.props.opened) {
-			this.props.closeSideBar();
-		} else {
-			this.props.openSideBar();
-		}
-	};
-
-	// arrowButton is connected to the sidebar; changes its state.
-	arrowButton = (transitionState: string) => (
-		<IconButton onClick={this.changeSideBar}>
-			<ChevronLeftIcon
-				style={{
-					...arrowDefault,
-					...arrowTransition[transitionState],
-				}}
-			/>
-		</IconButton>
-	);
-
 	render() {
-		const {classes, opened} = this.props; // The classes property is injected by withStyles().
+		const {classes} = this.props;
 
 		return (
-			<AppBar position="static" className={classes.header}>
+			<AppBar position='static' className={classes.header}>
 				<Toolbar className={classes.toolbar}>
-					<Transition mountOnEnter in={opened} timeout={{enter: DURATION}}>
-						{this.arrowButton}
-					</Transition>
-					<Typography type="title" color="inherit" noWrap className={classes.mainText}>
+					<IconButton onClick={this.props.switchSideBar}>
+						<Icon>
+							<MenuIcon />
+						</Icon>
+					</IconButton>
+					<Typography type='title' color='inherit' noWrap className={classes.title}>
 						Go Ethereum Dashboard
 					</Typography>
 				</Toolbar>
@@ -102,4 +70,4 @@ class Header extends Component<Props> {
 	}
 }
 
-export default withStyles(styles)(Header);
+export default withStyles(themeStyles)(Header);

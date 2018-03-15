@@ -22,6 +22,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
@@ -42,7 +43,7 @@ var (
 		Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
-See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console.`,
+See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console.`,
 	}
 
 	attachCommand = cli.Command{
@@ -55,7 +56,7 @@ See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console.`,
 		Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
-See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console.
+See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console.
 This command allows to open a console on a running geth node.`,
 	}
 
@@ -68,7 +69,7 @@ This command allows to open a console on a running geth node.`,
 		Category:  "CONSOLE COMMANDS",
 		Description: `
 The JavaScript VM exposes a node admin interface as well as the Ðapp
-JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console`,
+JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console`,
 	}
 )
 
@@ -207,7 +208,7 @@ func ephemeralConsole(ctx *cli.Context) error {
 	}
 	// Wait for pending callbacks, but stop for Ctrl-C.
 	abort := make(chan os.Signal, 1)
-	signal.Notify(abort, os.Interrupt)
+	signal.Notify(abort, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
 		<-abort

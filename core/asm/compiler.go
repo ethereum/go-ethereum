@@ -122,7 +122,7 @@ func (c *Compiler) next() token {
 }
 
 // compile line compiles a single line instruction e.g.
-// "push 1", "jump @labal".
+// "push 1", "jump @label".
 func (c *Compiler) compileLine() error {
 	n := c.next()
 	if n.typ != lineStart {

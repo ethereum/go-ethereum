@@ -30,6 +30,8 @@ import (
 
 var (
 	bigZero                  = new(big.Int)
+	tt255                    = math.BigPow(2, 255)
+	tt256                    = math.BigPow(2, 256)
 	errWriteProtection       = errors.New("evm: write protection")
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
 	errExecutionReverted     = errors.New("evm: execution reverted")
@@ -191,50 +193,71 @@ func opGt(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack
 }
 
 func opSlt(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	x, y := math.S256(stack.pop()), math.S256(stack.pop())
-	if x.Cmp(math.S256(y)) < 0 {
-		stack.push(evm.interpreter.intPool.get().SetUint64(1))
-	} else {
-		stack.push(new(big.Int))
-	}
+	x, y := stack.pop(), stack.peek()
 
-	evm.interpreter.intPool.put(x, y)
+	xSign := x.Cmp(tt255)
+	ySign := y.Cmp(tt255)
+
+	switch {
+	case xSign >= 0 && ySign < 0:
+		y.SetUint64(1)
+
+	case xSign < 0 && ySign >= 0:
+		y.SetUint64(0)
+
+	default:
+		if x.Cmp(y) < 0 {
+			y.SetUint64(1)
+		} else {
+			y.SetUint64(0)
+		}
+	}
+	evm.interpreter.intPool.put(x)
 	return nil, nil
 }
 
 func opSgt(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	x, y := math.S256(stack.pop()), math.S256(stack.pop())
-	if x.Cmp(y) > 0 {
-		stack.push(evm.interpreter.intPool.get().SetUint64(1))
-	} else {
-		stack.push(new(big.Int))
-	}
+	x, y := stack.pop(), stack.peek()
 
-	evm.interpreter.intPool.put(x, y)
+	xSign := x.Cmp(tt255)
+	ySign := y.Cmp(tt255)
+
+	switch {
+	case xSign >= 0 && ySign < 0:
+		y.SetUint64(0)
+
+	case xSign < 0 && ySign >= 0:
+		y.SetUint64(1)
+
+	default:
+		if x.Cmp(y) > 0 {
+			y.SetUint64(1)
+		} else {
+			y.SetUint64(0)
+		}
+	}
+	evm.interpreter.intPool.put(x)
 	return nil, nil
 }
 
 func opEq(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	x, y := stack.pop(), stack.pop()
+	x, y := stack.pop(), stack.peek()
 	if x.Cmp(y) == 0 {
-		stack.push(evm.interpreter.intPool.get().SetUint64(1))
+		y.SetUint64(1)
 	} else {
-		stack.push(new(big.Int))
+		y.SetUint64(0)
 	}
-
-	evm.interpreter.intPool.put(x, y)
+	evm.interpreter.intPool.put(x)
 	return nil, nil
 }
 
 func opIszero(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	x := stack.pop()
+	x := stack.peek()
 	if x.Sign() > 0 {
-		stack.push(new(big.Int))
+		x.SetUint64(0)
 	} else {
-		stack.push(evm.interpreter.intPool.get().SetUint64(1))
+		x.SetUint64(1)
 	}
-
-	evm.interpreter.intPool.put(x)
 	return nil, nil
 }
 
@@ -299,6 +322,66 @@ func opMulmod(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	}
 
 	evm.interpreter.intPool.put(y, z)
+	return nil, nil
+}
+
+// opSHL implements Shift Left
+// The SHL instruction (shift left) pops 2 values from the stack, first arg1 and then arg2,
+// and pushes on the stack arg2 shifted to the left by arg1 number of bits.
+func opSHL(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	// Note, second operand is left in the stack; accumulate result into it, and no need to push it afterwards
+	shift, value := math.U256(stack.pop()), math.U256(stack.peek())
+	defer evm.interpreter.intPool.put(shift) // First operand back into the pool
+
+	if shift.Cmp(common.Big256) >= 0 {
+		value.SetUint64(0)
+		return nil, nil
+	}
+	n := uint(shift.Uint64())
+	math.U256(value.Lsh(value, n))
+
+	return nil, nil
+}
+
+// opSHR implements Logical Shift Right
+// The SHR instruction (logical shift right) pops 2 values from the stack, first arg1 and then arg2,
+// and pushes on the stack arg2 shifted to the right by arg1 number of bits with zero fill.
+func opSHR(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	// Note, second operand is left in the stack; accumulate result into it, and no need to push it afterwards
+	shift, value := math.U256(stack.pop()), math.U256(stack.peek())
+	defer evm.interpreter.intPool.put(shift) // First operand back into the pool
+
+	if shift.Cmp(common.Big256) >= 0 {
+		value.SetUint64(0)
+		return nil, nil
+	}
+	n := uint(shift.Uint64())
+	math.U256(value.Rsh(value, n))
+
+	return nil, nil
+}
+
+// opSAR implements Arithmetic Shift Right
+// The SAR instruction (arithmetic shift right) pops 2 values from the stack, first arg1 and then arg2,
+// and pushes on the stack arg2 shifted to the right by arg1 number of bits with sign extension.
+func opSAR(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	// Note, S256 returns (potentially) a new bigint, so we're popping, not peeking this one
+	shift, value := math.U256(stack.pop()), math.S256(stack.pop())
+	defer evm.interpreter.intPool.put(shift) // First operand back into the pool
+
+	if shift.Cmp(common.Big256) >= 0 {
+		if value.Sign() > 0 {
+			value.SetUint64(0)
+		} else {
+			value.SetInt64(-1)
+		}
+		stack.push(math.U256(value))
+		return nil, nil
+	}
+	n := uint(shift.Uint64())
+	value.Rsh(value, n)
+	stack.push(math.U256(value))
+
 	return nil, nil
 }
 
@@ -472,7 +555,7 @@ func opDifficulty(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stac
 }
 
 func opGasLimit(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(math.U256(new(big.Int).Set(evm.GasLimit)))
+	stack.push(math.U256(new(big.Int).SetUint64(evm.GasLimit)))
 	return nil, nil
 }
 

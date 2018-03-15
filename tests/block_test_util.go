@@ -77,8 +77,8 @@ type btHeader struct {
 	UncleHash        common.Hash
 	ExtraData        []byte
 	Difficulty       *big.Int
-	GasLimit         *big.Int
-	GasUsed          *big.Int
+	GasLimit         uint64
+	GasUsed          uint64
 	Timestamp        *big.Int
 }
 
@@ -86,8 +86,8 @@ type btHeaderMarshaling struct {
 	ExtraData  hexutil.Bytes
 	Number     *math.HexOrDecimal256
 	Difficulty *math.HexOrDecimal256
-	GasLimit   *math.HexOrDecimal256
-	GasUsed    *math.HexOrDecimal256
+	GasLimit   math.HexOrDecimal64
+	GasUsed    math.HexOrDecimal64
 	Timestamp  *math.HexOrDecimal256
 }
 
@@ -110,7 +110,7 @@ func (t *BlockTest) Run() error {
 		return fmt.Errorf("genesis block state root does not match test: computed=%x, test=%x", gblock.Root().Bytes()[:6], t.json.Genesis.StateRoot[:6])
 	}
 
-	chain, err := core.NewBlockChain(db, config, ethash.NewShared(), vm.Config{})
+	chain, err := core.NewBlockChain(db, nil, config, ethash.NewShared(), vm.Config{})
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func (t *BlockTest) Run() error {
 	if err != nil {
 		return err
 	}
-	cmlast := chain.LastBlockHash()
+	cmlast := chain.CurrentBlock().Hash()
 	if common.Hash(t.json.BestBlock) != cmlast {
 		return fmt.Errorf("last block hash validation mismatch: want: %x, have: %x", t.json.BestBlock, cmlast)
 	}
@@ -141,8 +141,8 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 		Timestamp:  t.json.Genesis.Timestamp.Uint64(),
 		ParentHash: t.json.Genesis.ParentHash,
 		ExtraData:  t.json.Genesis.ExtraData,
-		GasLimit:   t.json.Genesis.GasLimit.Uint64(),
-		GasUsed:    t.json.Genesis.GasUsed.Uint64(),
+		GasLimit:   t.json.Genesis.GasLimit,
+		GasUsed:    t.json.Genesis.GasUsed,
 		Difficulty: t.json.Genesis.Difficulty,
 		Mixhash:    t.json.Genesis.MixHash,
 		Coinbase:   t.json.Genesis.Coinbase,
@@ -234,11 +234,11 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	if h.Difficulty.Cmp(h2.Difficulty) != 0 {
 		return fmt.Errorf("Difficulty: want: %v have: %v", h.Difficulty, h2.Difficulty)
 	}
-	if h.GasLimit.Cmp(h2.GasLimit) != 0 {
-		return fmt.Errorf("GasLimit: want: %v have: %v", h.GasLimit, h2.GasLimit)
+	if h.GasLimit != h2.GasLimit {
+		return fmt.Errorf("GasLimit: want: %d have: %d", h.GasLimit, h2.GasLimit)
 	}
-	if h.GasUsed.Cmp(h2.GasUsed) != 0 {
-		return fmt.Errorf("GasUsed: want: %v have: %v", h.GasUsed, h2.GasUsed)
+	if h.GasUsed != h2.GasUsed {
+		return fmt.Errorf("GasUsed: want: %d have: %d", h.GasUsed, h2.GasUsed)
 	}
 	if h.Timestamp.Cmp(h2.Time) != 0 {
 		return fmt.Errorf("Timestamp: want: %v have: %v", h.Timestamp, h2.Time)

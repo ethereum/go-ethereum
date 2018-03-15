@@ -23,7 +23,7 @@ module.exports = {
 	},
 	entry:  './index',
 	output: {
-		path:     path.resolve(__dirname, 'public'),
+		path:     path.resolve(__dirname, ''),
 		filename: 'bundle.js',
 	},
 	plugins: [
@@ -31,6 +31,9 @@ module.exports = {
 			comments: false,
 			mangle:   false,
 			beautify: true,
+		}),
+		new webpack.DefinePlugin({
+			PROD: process.env.NODE_ENV === 'production',
 		}),
 	],
 	module: {

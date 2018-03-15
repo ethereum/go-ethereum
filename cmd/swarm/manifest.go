@@ -35,7 +35,7 @@ const bzzManifestJSON = "application/bzz-manifest+json"
 func add(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) < 3 {
-		utils.Fatalf("Need atleast three arguments <MHASH> <path> <HASH> [<content-type>]")
+		utils.Fatalf("Need at least three arguments <MHASH> <path> <HASH> [<content-type>]")
 	}
 
 	var (
@@ -69,7 +69,7 @@ func update(ctx *cli.Context) {
 
 	args := ctx.Args()
 	if len(args) < 3 {
-		utils.Fatalf("Need atleast three arguments <MHASH> <path> <HASH>")
+		utils.Fatalf("Need at least three arguments <MHASH> <path> <HASH>")
 	}
 
 	var (
@@ -101,7 +101,7 @@ func update(ctx *cli.Context) {
 func remove(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) < 2 {
-		utils.Fatalf("Need atleast two arguments <MHASH> <path>")
+		utils.Fatalf("Need at least two arguments <MHASH> <path>")
 	}
 
 	var (

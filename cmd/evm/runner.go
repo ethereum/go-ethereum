@@ -96,7 +96,9 @@ func runCmd(ctx *cli.Context) error {
 	}
 	if ctx.GlobalString(GenesisFlag.Name) != "" {
 		gen := readGenesis(ctx.GlobalString(GenesisFlag.Name))
-		_, statedb = gen.ToBlock()
+		db, _ := ethdb.NewMemDatabase()
+		genesis := gen.ToBlock(db)
+		statedb, _ = state.New(genesis.Root(), state.NewDatabase(db))
 		chainConfig = gen.Config
 	} else {
 		db, _ := ethdb.NewMemDatabase()
@@ -159,9 +161,8 @@ func runCmd(ctx *cli.Context) error {
 		GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
 		Value:    utils.GlobalBig(ctx, ValueFlag.Name),
 		EVMConfig: vm.Config{
-			Tracer:             tracer,
-			Debug:              ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
-			DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
+			Tracer: tracer,
+			Debug:  ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
 		},
 	}
 

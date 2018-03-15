@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
@@ -38,6 +39,12 @@ import (
 // for db storage and filtering
 // connections and disconnections are reported and relayed
 // to keep the nodetable uptodate
+
+var (
+	peersNumGauge     = metrics.NewRegisteredGauge("network.peers.num", nil)
+	addPeerCounter    = metrics.NewRegisteredCounter("network.addpeer.count", nil)
+	removePeerCounter = metrics.NewRegisteredCounter("network.removepeer.count", nil)
+)
 
 type Hive struct {
 	listenAddr   func() string
@@ -192,6 +199,7 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 func (self *Hive) keepAlive() {
 	alarm := time.NewTicker(time.Duration(self.callInterval)).C
 	for {
+		peersNumGauge.Update(int64(self.kad.Count()))
 		select {
 		case <-alarm:
 			if self.kad.DBCount() > 0 {
@@ -223,6 +231,7 @@ func (self *Hive) Stop() error {
 
 // called at the end of a successful protocol handshake
 func (self *Hive) addPeer(p *peer) error {
+	addPeerCounter.Inc(1)
 	defer func() {
 		select {
 		case self.more <- true:
@@ -247,6 +256,7 @@ func (self *Hive) addPeer(p *peer) error {
 
 // called after peer disconnected
 func (self *Hive) removePeer(p *peer) {
+	removePeerCounter.Inc(1)
 	log.Debug(fmt.Sprintf("bee %v removed", p))
 	self.kad.Off(p, saveSync)
 	select {

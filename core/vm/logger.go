@@ -62,20 +62,28 @@ type StructLog struct {
 	Stack      []*big.Int                  `json:"stack"`
 	Storage    map[common.Hash]common.Hash `json:"-"`
 	Depth      int                         `json:"depth"`
-	Err        error                       `json:"error"`
+	Err        error                       `json:"-"`
 }
 
 // overrides for gencodec
 type structLogMarshaling struct {
-	Stack   []*math.HexOrDecimal256
-	Gas     math.HexOrDecimal64
-	GasCost math.HexOrDecimal64
-	Memory  hexutil.Bytes
-	OpName  string `json:"opName"`
+	Stack       []*math.HexOrDecimal256
+	Gas         math.HexOrDecimal64
+	GasCost     math.HexOrDecimal64
+	Memory      hexutil.Bytes
+	OpName      string `json:"opName"` // adds call to OpName() in MarshalJSON
+	ErrorString string `json:"error"`  // adds call to ErrorString() in MarshalJSON
 }
 
 func (s *StructLog) OpName() string {
 	return s.Op.String()
+}
+
+func (s *StructLog) ErrorString() string {
+	if s.Err != nil {
+		return s.Err.Error()
+	}
+	return ""
 }
 
 // Tracer is used to collect execution traces from an EVM transaction
@@ -100,6 +108,8 @@ type StructLogger struct {
 
 	logs          []StructLog
 	changedValues map[common.Address]Storage
+	output        []byte
+	err           error
 }
 
 // NewStructLogger returns a new logger
@@ -172,17 +182,19 @@ func (l *StructLogger) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost ui
 }
 
 func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
-	fmt.Printf("0x%x", output)
-	if err != nil {
-		fmt.Printf(" error: %v\n", err)
-	}
+	l.output = output
+	l.err = err
 	return nil
 }
 
-// StructLogs returns a list of captured log entries
-func (l *StructLogger) StructLogs() []StructLog {
-	return l.logs
-}
+// StructLogs returns the captured log entries.
+func (l *StructLogger) StructLogs() []StructLog { return l.logs }
+
+// Error returns the VM error captured by the trace.
+func (l *StructLogger) Error() error { return l.err }
+
+// Output returns the VM return value captured by the trace.
+func (l *StructLogger) Output() []byte { return l.output }
 
 // WriteTrace writes a formatted trace to the given writer
 func WriteTrace(writer io.Writer, logs []StructLog) {

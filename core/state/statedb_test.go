@@ -97,10 +97,10 @@ func TestIntermediateLeaks(t *testing.T) {
 	}
 
 	// Commit and cross check the databases.
-	if _, err := transState.CommitTo(transDb, false); err != nil {
+	if _, err := transState.Commit(false); err != nil {
 		t.Fatalf("failed to commit transition state: %v", err)
 	}
-	if _, err := finalState.CommitTo(finalDb, false); err != nil {
+	if _, err := finalState.Commit(false); err != nil {
 		t.Fatalf("failed to commit final state: %v", err)
 	}
 	for _, key := range finalDb.Keys() {
@@ -122,8 +122,8 @@ func TestIntermediateLeaks(t *testing.T) {
 // https://github.com/ethereum/go-ethereum/pull/15549.
 func TestCopy(t *testing.T) {
 	// Create a random state test to copy and modify "independently"
-	mem, _ := ethdb.NewMemDatabase()
-	orig, _ := New(common.Hash{}, NewDatabase(mem))
+	db, _ := ethdb.NewMemDatabase()
+	orig, _ := New(common.Hash{}, NewDatabase(db))
 
 	for i := byte(0); i < 255; i++ {
 		obj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
@@ -263,7 +263,7 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "AddRefund",
 			fn: func(a testAction, s *StateDB) {
-				s.AddRefund(big.NewInt(a.args[0]))
+				s.AddRefund(uint64(a.args[0]))
 			},
 			args:   make([]int64, 1),
 			noAddr: true,
@@ -346,11 +346,10 @@ func (test *snapshotTest) run() bool {
 		}
 		action.fn(action, state)
 	}
-
 	// Revert all snapshots in reverse order. Each revert must yield a state
 	// that is equivalent to fresh state with all actions up the snapshot applied.
 	for sindex--; sindex >= 0; sindex-- {
-		checkstate, _ := New(common.Hash{}, NewDatabase(db))
+		checkstate, _ := New(common.Hash{}, state.Database())
 		for _, action := range test.actions[:test.snapshots[sindex]] {
 			action.fn(action, checkstate)
 		}
@@ -396,7 +395,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		}
 	}
 
-	if state.GetRefund().Cmp(checkstate.GetRefund()) != 0 {
+	if state.GetRefund() != checkstate.GetRefund() {
 		return fmt.Errorf("got GetRefund() == %d, want GetRefund() == %d",
 			state.GetRefund(), checkstate.GetRefund())
 	}
@@ -409,7 +408,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 
 func (s *StateSuite) TestTouchDelete(c *check.C) {
 	s.state.GetOrNewStateObject(common.Address{})
-	root, _ := s.state.CommitTo(s.db, false)
+	root, _ := s.state.Commit(false)
 	s.state.Reset(root)
 
 	snapshot := s.state.Snapshot()
@@ -417,7 +416,6 @@ func (s *StateSuite) TestTouchDelete(c *check.C) {
 	if len(s.state.stateObjectsDirty) != 1 {
 		c.Fatal("expected one dirty state object")
 	}
-
 	s.state.RevertToSnapshot(snapshot)
 	if len(s.state.stateObjectsDirty) != 0 {
 		c.Fatal("expected no dirty state object")
