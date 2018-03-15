@@ -143,9 +143,15 @@ func BytesToAddress(b []byte) Address {
 	a.SetBytes(b)
 	return a
 }
+
+// StringToAddress converts an arbitrary string into an Address.
 func StringToAddress(s string) Address { return BytesToAddress([]byte(s)) }
-func BigToAddress(b *big.Int) Address  { return BytesToAddress(b.Bytes()) }
-func HexToAddress(s string) Address    { return BytesToAddress(FromHex(s)) }
+
+// BigToAddress converts an arbitary *big.Int into an Address.
+func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
+
+// HexToAddress converts a string containing an address into an Address.
+func HexToAddress(s string) Address { return BytesToAddress(FromHex(s)) }
 
 // IsHexAddress verifies whether a string can represent a valid hex-encoded
 // Ethereum address or not.
