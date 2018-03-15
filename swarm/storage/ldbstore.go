@@ -546,6 +546,7 @@ func (s *LDBStore) CurrentStorageIndex() uint64 {
 }
 
 func (s *LDBStore) Put(chunk *Chunk) {
+	log.Trace("ldbstore.put", "key", chunk.Key)
 	ikey := getIndexKey(chunk.Key)
 	var index dpaDBIndex
 
@@ -553,6 +554,7 @@ func (s *LDBStore) Put(chunk *Chunk) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
+	log.Trace("ldbstore.put: s.db.Get", "key", chunk.Key)
 	idata, err := s.db.Get(ikey)
 	if err != nil {
 		s.doPut(chunk, ikey, &index, po)
@@ -562,7 +564,7 @@ func (s *LDBStore) Put(chunk *Chunk) {
 			close(chunk.dbStored)
 		}()
 	} else {
-		log.Trace(fmt.Sprintf("DbStore: chunk already exists, only update access"))
+		log.Trace("ldbstore.put: chunk already exists, only update access", "key", chunk.Key)
 		decodeIndex(idata, &index)
 		close(chunk.dbStored)
 	}
@@ -578,6 +580,7 @@ func (s *LDBStore) Put(chunk *Chunk) {
 
 // force putting into db, does not check access index
 func (s *LDBStore) doPut(chunk *Chunk, ikey []byte, index *dpaDBIndex, po uint8) {
+	log.Trace("ldbstore.doPut", "key", chunk.Key)
 	data := s.encodeDataFunc(chunk)
 	s.batch.Put(getDataKey(s.dataIdx, po), data)
 	index.Idx = s.dataIdx
@@ -659,6 +662,7 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 }
 
 func (s *LDBStore) Get(key Key) (chunk *Chunk, err error) {
+	//log.Trace("ldbstore.get", "key", chunk.Key) - seems like chunk is nil sometimes
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	return s.get(key)
@@ -671,6 +675,7 @@ func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 		var data []byte
 		if s.getDataFunc != nil {
 			// if getDataFunc is defined, use it to retrieve the chunk data
+			log.Trace("ldbstore.get retrieve with getDataFunc", "key", key)
 			data, err = s.getDataFunc(key)
 			if err != nil {
 				return
@@ -680,9 +685,9 @@ func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 			proximity := s.po(key)
 			datakey := getDataKey(indx.Idx, proximity)
 			data, err = s.db.Get(datakey)
-			log.Trace(fmt.Sprintf("DBStore: Chunk %v indexkey %v datakey %x proximity %d", key.Log(), indx.Idx, datakey, proximity))
+			log.Trace("ldbstore.get retrieve", "key", key, "indexkey", indx.Idx, "datakey", datakey, "proximity", proximity)
 			if err != nil {
-				log.Trace(fmt.Sprintf("DBStore: Chunk %v found but could not be accessed: %v", key.Log(), err))
+				log.Trace("ldbstore.get chunk found but could not be accessed", "key", key, "err", err)
 				s.delete(indx.Idx, getIndexKey(key), s.po(key))
 				return
 			}

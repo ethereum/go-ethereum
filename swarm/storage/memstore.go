@@ -144,6 +144,7 @@ func (s *MemStore) Counter() uint {
 
 // entry (not its copy) is going to be in MemStore
 func (s *MemStore) Put(entry *Chunk) {
+	log.Trace("memstore.put", "key", entry.Key)
 	if s.capacity == 0 {
 		return
 	}
@@ -219,6 +220,7 @@ func (s *MemStore) Put(entry *Chunk) {
 }
 
 func (s *MemStore) Get(hash Key) (chunk *Chunk, err error) {
+	log.Trace("memstore.get", "key", hash)
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
