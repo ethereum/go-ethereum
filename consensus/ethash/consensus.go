@@ -36,21 +36,23 @@ import (
 
 // EGEM Ethash proof-of-work protocol constants.
 var (
-	egem0BlockReward                *big.Int = big.NewInt(8000000000000000000) // Block reward in wei for successfully mining a block 8 EGEM
-	egem1BlockReward                *big.Int = big.NewInt(4000000000000000000) // Block reward in wei for successfully mining a block 4 EGEM
-	egem2BlockReward                *big.Int = big.NewInt(2000000000000000000) // Block reward in wei for successfully mining a block 4 EGEM
-	egem0DevReward                  *big.Int = big.NewInt(250000000000000000) // Dev reward 0.25 EGEM in wei sent to the 4 devs totalling 1 EGEM per block.
-	egem1DevReward                  *big.Int = big.NewInt(125000000000000000) // Dev reward 0.125 EGEM in wei sent to the 4 devs totaling 0.5 EGEM per block.
-	egem2DevReward                  *big.Int = big.NewInt(50000000000000000) // Dev reward 0.01 EGEM in wei sent to the 4 devs totaling 0.1 EGEM per block.
-	egemRewardSwitchBlockEra0       *big.Int = big.NewInt(5000)
-	egemRewardSwitchBlockEra1       *big.Int = big.NewInt(10000000)
-	egemRewardSwitchBlockEra2       *big.Int = big.NewInt(20000000)
+	egem0BlockReward                *big.Int = big.NewInt(8e+18) //  8 EGEM Block reward in wei for successfully mining a block.
+	egem1BlockReward                *big.Int = big.NewInt(4e+18) //  4 EGEM Block reward in wei for successfully mining a block.
+	egem2BlockReward                *big.Int = big.NewInt(2e+18) //  2 EGEM Block reward in wei for successfully mining a block.
+	egem0DevReward                  *big.Int = big.NewInt(250000000000000000) // Era0 Dev reward 0.25 EGEM in wei sent to the 4 devs totalling 1 EGEM per block.
+	egem1DevReward                  *big.Int = big.NewInt(125000000000000000) // Era1 Dev reward 0.125 EGEM in wei sent to the 4 devs totaling 0.5 EGEM per block.
+	egem2DevReward                  *big.Int = big.NewInt(50000000000000000) // Era2 Dev reward 0.01 EGEM in wei sent to the 4 devs totaling 0.1 EGEM per block.
+	egemRewardSwitchBlockEra0       *big.Int = big.NewInt(5000) //5K Block era transition
+	egemRewardSwitchBlockEra1       *big.Int = big.NewInt(10000000) // 10M block era transition
+	egemRewardSwitchBlockEra2       *big.Int = big.NewInt(20000000) // 20M block era transtiton
 	maxUncles                       = 2                 // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTime          = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
-	dev1 														= common.HexToAddress("0xe6923aec35a0bcbaad4a045923cbd61c75eb65d8") //oso
-	dev2 														= common.HexToAddress("0xc393659c2918a64cdfb44d463de9c747aa4ce3f7") //ridz
-	dev3 														= common.HexToAddress("0xaaB4C5830bF586047857f795357f630F026d187A") //jal
-	dev4 														= common.HexToAddress("0x89b09D40c25B05491AAeb236F6e4465D7A74bdb7") //oz
+	dev1 														= common.HexToAddress("0x0666bf13ab1902de7dee4f8193c819118d7e21a6") //o
+	dev2 														= common.HexToAddress("0xc393659c2918a64cdfb44d463de9c747aa4ce3f7") //r
+	dev3 														= common.HexToAddress("0xaaB4C5830bF586047857f795357f630F026d187A") //j
+	dev4 														= common.HexToAddress("0x89b09D40c25B05491AAeb236F6e4465D7A74bdb7") //o
+	FrontierBlockReward    					*big.Int = big.NewInt(5e+18) // Not used
+	ByzantiumBlockReward   					*big.Int = big.NewInt(3e+18) // Not used
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -532,14 +534,13 @@ var (
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 
-// Select the correct block reward based on chain progression
+	// Select the correct block reward based on chain progression
 	block0Reward := egem0BlockReward
 	block1Reward := egem1BlockReward
 	block2Reward := egem2BlockReward
 	d0Reward := egem0DevReward
 	d1Reward := egem1DevReward
 	d2Reward := egem2DevReward
-
 
 	// Accumulate the rewards for the miner and any included uncles
 
