@@ -121,6 +121,8 @@ type Request struct {
 // HandlePostRaw handles a POST request to a raw bzz-raw:/ URI, stores the request
 // body in swarm and returns the resulting storage key as a text/plain response
 func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.post.raw", "ruid", r.ruid)
+
 	postRawCount.Inc(1)
 	if r.uri.Path != "" {
 		postRawFail.Inc(1)
@@ -140,7 +142,8 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Debug(fmt.Sprintf("content for %s stored", key.Log()), "ruid", r.ruid)
+
+	log.Debug("stored content", "ruid", r.ruid, "key", key)
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
@@ -153,6 +156,8 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 // existing manifest or to a new manifest under <path> and returns the
 // resulting manifest hash as a text/plain response
 func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.post.files", "ruid", r.ruid)
+
 	postFilesCount.Inc(1)
 	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
@@ -169,6 +174,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
 			return
 		}
+		log.Debug("resolved key", "ruid", r.ruid, "key", key)
 	} else {
 		key, err = s.api.NewManifest()
 		if err != nil {
@@ -176,6 +182,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 			Respond(w, r, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		log.Debug("new manifest", "ruid", r.ruid, "key", key)
 	}
 
 	newKey, err := s.updateManifest(key, func(mw *api.ManifestWriter) error {
@@ -197,12 +204,15 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		return
 	}
 
+	log.Debug("stored content", "ruid", r.ruid, "key", newKey)
+
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, newKey)
 }
 
 func (s *Server) handleTarUpload(req *Request, mw *api.ManifestWriter) error {
+	log.Debug("handle.tar.upload", "ruid", req.ruid)
 	tr := tar.NewReader(req.Body)
 	for {
 		hdr, err := tr.Next()
@@ -226,16 +236,17 @@ func (s *Server) handleTarUpload(req *Request, mw *api.ManifestWriter) error {
 			Size:        hdr.Size,
 			ModTime:     hdr.ModTime,
 		}
-		log.Debug(fmt.Sprintf("adding %s (%d bytes) to new manifest", entry.Path, entry.Size))
+		log.Debug("adding path to new manifest", "ruid", req.ruid, "bytes", entry.Size, "path", entry.Path)
 		contentKey, err := mw.AddEntry(tr, entry)
 		if err != nil {
 			return fmt.Errorf("error adding manifest entry from tar stream: %s", err)
 		}
-		log.Debug(fmt.Sprintf("content for %s stored", contentKey.Log()))
+		log.Debug("stored content", "ruid", req.ruid, "key", contentKey)
 	}
 }
 
 func (s *Server) handleMultipartUpload(req *Request, boundary string, mw *api.ManifestWriter) error {
+	log.Debug("handle.multipart.upload", "ruid", req.ruid)
 	mr := multipart.NewReader(req.Body, boundary)
 	for {
 		part, err := mr.NextPart()
@@ -283,16 +294,17 @@ func (s *Server) handleMultipartUpload(req *Request, boundary string, mw *api.Ma
 			Size:        size,
 			ModTime:     time.Now(),
 		}
-		log.Debug(fmt.Sprintf("adding %s (%d bytes) to new manifest", entry.Path, entry.Size))
+		log.Debug("adding path to new manifest", "ruid", req.ruid, "bytes", entry.Size, "path", entry.Path)
 		contentKey, err := mw.AddEntry(reader, entry)
 		if err != nil {
 			return fmt.Errorf("error adding manifest entry from multipart form: %s", err)
 		}
-		log.Debug(fmt.Sprintf("content for %s stored", contentKey.Log()))
+		log.Debug("stored content", "ruid", req.ruid, "key", contentKey)
 	}
 }
 
 func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error {
+	log.Debug("handle.direct.upload", "ruid", req.ruid)
 	key, err := mw.AddEntry(req.Body, &api.ManifestEntry{
 		Path:        req.uri.Path,
 		ContentType: req.Header.Get("Content-Type"),
@@ -303,7 +315,7 @@ func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error 
 	if err != nil {
 		return err
 	}
-	log.Debug(fmt.Sprintf("content for %s stored", key.Log()))
+	log.Debug("stored content", "ruid", req.ruid, "key", key)
 	return nil
 }
 
@@ -311,6 +323,8 @@ func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error 
 // <path> from <manifest> and returns the resulting manifest hash as a
 // text/plain response
 func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.delete", "ruid", r.ruid)
+
 	deleteCount.Inc(1)
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
@@ -335,6 +349,8 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 }
 
 func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.post.resource", "ruid", r.ruid)
+
 	var outdata []byte
 	if r.uri.Path != "" {
 		frequency, err := strconv.ParseUint(r.uri.Path, 10, 64)
@@ -398,6 +414,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
 }
 
 func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name string) {
+	log.Debug("handle.get.resource", "ruid", r.ruid)
 	var params []string
 	if len(r.uri.Path) > 0 {
 		params = strings.Split(r.uri.Path, "/")
@@ -470,6 +487,7 @@ func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supEr
 // - bzz-hash://<key> and responds with the hash of the content stored
 //   at the given storage key as a text/plain response
 func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.get", "ruid", r.ruid, "uri", r.uri)
 	getCount.Inc(1)
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
@@ -477,6 +495,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
 		return
 	}
+	log.Debug("handle.get: resolved", "ruid", r.ruid, "key", key)
 
 	// if path is set, interpret <key> as a manifest and return the
 	// raw entry at the given path
@@ -548,6 +567,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 // header of "application/x-tar" and returns a tar stream of all files
 // contained in the manifest
 func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.get.files", "ruid", r.ruid, "uri", r.uri)
 	getFilesCount.Inc(1)
 	if r.uri.Path != "" {
 		getFilesFail.Inc(1)
@@ -561,6 +581,7 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
 		return
 	}
+	log.Debug("handle.get.files: resolved", "ruid", r.ruid, "key", key)
 
 	walker, err := s.api.NewManifestWalker(key, nil)
 	if err != nil {
@@ -621,6 +642,7 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 // a list of all files contained in <manifest> under <path> grouped into
 // common prefixes using "/" as a delimiter
 func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.get.list", "ruid", r.ruid, "uri", r.uri)
 	getListCount.Inc(1)
 	// ensure the root path has a trailing slash so that relative URLs work
 	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
@@ -634,6 +656,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
 		return
 	}
+	log.Debug("handle.get.list: resolved", "ruid", r.ruid, "key", key)
 
 	list, err := s.getManifestList(key, r.uri.Path)
 
@@ -725,6 +748,7 @@ func (s *Server) getManifestList(key storage.Key, prefix string) (list api.Manif
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
 // with the content of the file at <path> from the given <manifest>
 func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.get.file", "ruid", r.ruid)
 	getFileCount.Inc(1)
 	// ensure the root path has a trailing slash so that relative URLs work
 	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
@@ -738,6 +762,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
 		return
 	}
+	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", key)
 
 	reader, contentType, status, err := s.api.Get(key, r.uri.Path)
 
@@ -788,10 +813,13 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	http.ServeContent(w, &r.Request, "", time.Now(), reader)
 }
 
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	req := &Request{Request: *r, ruid: uuid.New()[:8]}
 	requestCount.Inc(1)
-	log.Info("serve request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
+	log.Info("serving request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
+
+	// wrapping the ResponseWriter, so that we get the response code set by http.ServeContent
+	w := newLoggingResponseWriter(rw)
 
 	if r.RequestURI == "/" && strings.Contains(r.Header.Get("Accept"), "text/html") {
 
@@ -869,6 +897,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		Respond(w, req, fmt.Sprintf("%s method is not supported", r.Method), http.StatusMethodNotAllowed)
 	}
+
+	log.Info("served response", "ruid", req.ruid, "code", w.statusCode)
 }
 
 func (s *Server) updateManifest(key storage.Key, update func(mw *api.ManifestWriter) error) (storage.Key, error) {
@@ -887,4 +917,18 @@ func (s *Server) updateManifest(key storage.Key, update func(mw *api.ManifestWri
 	}
 	log.Debug(fmt.Sprintf("generated manifest %s", key))
 	return key, nil
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func newLoggingResponseWriter(w http.ResponseWriter) *loggingResponseWriter {
+	return &loggingResponseWriter{w, http.StatusOK}
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	lrw.statusCode = code
+	lrw.ResponseWriter.WriteHeader(code)
 }
