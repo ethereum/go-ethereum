@@ -121,7 +121,7 @@ type Request struct {
 // HandlePostRaw handles a POST request to a raw bzz-raw:/ URI, stores the request
 // body in swarm and returns the resulting storage key as a text/plain response
 func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
-	log.Debug("http.server handle.post.raw", "ruid", r.ruid)
+	log.Debug("handle.post.raw", "ruid", r.ruid)
 
 	postRawCount.Inc(1)
 	if r.uri.Path != "" {
@@ -142,7 +142,8 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Debug(fmt.Sprintf("content for %s stored", key.Log()), "ruid", r.ruid)
+
+	log.Debug("stored content", "ruid", r.ruid, "key", key)
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
@@ -155,6 +156,8 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 // existing manifest or to a new manifest under <path> and returns the
 // resulting manifest hash as a text/plain response
 func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.post.files", "ruid", r.ruid)
+
 	postFilesCount.Inc(1)
 	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
@@ -171,6 +174,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
 			return
 		}
+		log.Debug("resolved key", "ruid", r.ruid, "key", key)
 	} else {
 		key, err = s.api.NewManifest()
 		if err != nil {
@@ -178,6 +182,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 			Respond(w, r, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		log.Debug("new manifest", "ruid", r.ruid, "key", key)
 	}
 
 	newKey, err := s.updateManifest(key, func(mw *api.ManifestWriter) error {
@@ -199,12 +204,15 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		return
 	}
 
+	log.Debug("stored content", "ruid", r.ruid, "key", newKey)
+
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, newKey)
 }
 
 func (s *Server) handleTarUpload(req *Request, mw *api.ManifestWriter) error {
+	log.Debug("handle.tar.upload", "ruid", req.ruid)
 	tr := tar.NewReader(req.Body)
 	for {
 		hdr, err := tr.Next()
@@ -228,16 +236,17 @@ func (s *Server) handleTarUpload(req *Request, mw *api.ManifestWriter) error {
 			Size:        hdr.Size,
 			ModTime:     hdr.ModTime,
 		}
-		log.Debug(fmt.Sprintf("adding %s (%d bytes) to new manifest", entry.Path, entry.Size))
+		log.Debug("adding path to new manifest", "ruid", req.ruid, "bytes", entry.Size, "path", entry.Path)
 		contentKey, err := mw.AddEntry(tr, entry)
 		if err != nil {
 			return fmt.Errorf("error adding manifest entry from tar stream: %s", err)
 		}
-		log.Debug(fmt.Sprintf("content for %s stored", contentKey.Log()))
+		log.Debug("stored content", "ruid", req.ruid, "key", contentKey)
 	}
 }
 
 func (s *Server) handleMultipartUpload(req *Request, boundary string, mw *api.ManifestWriter) error {
+	log.Debug("handle.multipart.upload", "ruid", req.ruid)
 	mr := multipart.NewReader(req.Body, boundary)
 	for {
 		part, err := mr.NextPart()
@@ -285,16 +294,17 @@ func (s *Server) handleMultipartUpload(req *Request, boundary string, mw *api.Ma
 			Size:        size,
 			ModTime:     time.Now(),
 		}
-		log.Debug(fmt.Sprintf("adding %s (%d bytes) to new manifest", entry.Path, entry.Size))
+		log.Debug("adding path to new manifest", "ruid", req.ruid, "bytes", entry.Size, "path", entry.Path)
 		contentKey, err := mw.AddEntry(reader, entry)
 		if err != nil {
 			return fmt.Errorf("error adding manifest entry from multipart form: %s", err)
 		}
-		log.Debug(fmt.Sprintf("content for %s stored", contentKey.Log()))
+		log.Debug("stored content", "ruid", req.ruid, "key", contentKey)
 	}
 }
 
 func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error {
+	log.Debug("handle.direct.upload", "ruid", req.ruid)
 	key, err := mw.AddEntry(req.Body, &api.ManifestEntry{
 		Path:        req.uri.Path,
 		ContentType: req.Header.Get("Content-Type"),
@@ -305,7 +315,7 @@ func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error 
 	if err != nil {
 		return err
 	}
-	log.Debug(fmt.Sprintf("content for %s stored", key.Log()))
+	log.Debug("stored content", "ruid", req.ruid, "key", key)
 	return nil
 }
 
@@ -313,6 +323,8 @@ func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error 
 // <path> from <manifest> and returns the resulting manifest hash as a
 // text/plain response
 func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.delete", "ruid", r.ruid)
+
 	deleteCount.Inc(1)
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
@@ -337,6 +349,8 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 }
 
 func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.post.resource", "ruid", r.ruid)
+
 	var outdata []byte
 	if r.uri.Path != "" {
 		frequency, err := strconv.ParseUint(r.uri.Path, 10, 64)
