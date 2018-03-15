@@ -536,9 +536,9 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	block0Reward := egem0BlockReward
 	block1Reward := egem1BlockReward
 	block2Reward := egem2BlockReward
-	dev0Reward := egem0DevReward
-	dev1Reward := egem1DevReward
-	dev2Reward := egem2DevReward
+	d0Reward := egem0DevReward
+	d1Reward := egem1DevReward
+	d2Reward := egem2DevReward
 
 
 	// Accumulate the rewards for the miner and any included uncles
