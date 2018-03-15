@@ -201,10 +201,10 @@ type manifestTrieEntry struct {
 }
 
 func loadManifest(dpa *storage.DPA, hash storage.Key, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
-
-	log.Trace(fmt.Sprintf("manifest lookup key: '%v'.", hash.Log()))
+	log.Trace("manifest lookup", "key", hash)
 	// retrieve manifest via DPA
 	manifestReader := dpa.Retrieve(hash)
+	log.Trace("reader retrieved", "key", hash)
 	return readManifest(manifestReader, hash, dpa, quitC)
 }
 
@@ -214,31 +214,32 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dp
 	size, err := manifestReader.Size(quitC)
 	if err != nil { // size == 0
 		// can't determine size means we don't have the root chunk
+		log.Trace("manifest not found", "key", hash)
 		err = fmt.Errorf("Manifest not Found")
 		return
 	}
 	manifestData := make([]byte, size)
 	read, err := manifestReader.Read(manifestData)
 	if int64(read) < size {
-		log.Trace(fmt.Sprintf("Manifest %v not found.", hash.Log()))
+		log.Trace("manifest not found", "key", hash)
 		if err == nil {
 			err = fmt.Errorf("Manifest retrieval cut short: read %v, expect %v", read, size)
 		}
 		return
 	}
 
-	log.Trace(fmt.Sprintf("Manifest %v retrieved", hash.Log()))
+	log.Trace("manifest retrieved", "key", hash)
 	var man struct {
 		Entries []*manifestTrieEntry `json:"entries"`
 	}
 	err = json.Unmarshal(manifestData, &man)
 	if err != nil {
 		err = fmt.Errorf("Manifest %v is malformed: %v", hash.Log(), err)
-		log.Trace(fmt.Sprintf("%v", err))
+		log.Trace("malformed manifest", "key", hash)
 		return
 	}
 
-	log.Trace(fmt.Sprintf("Manifest %v has %d entries.", hash.Log(), len(man.Entries)))
+	log.Trace("manifest entries", "key", hash, "len", len(man.Entries))
 
 	trie = &manifestTrie{
 		dpa: dpa,

@@ -308,6 +308,7 @@ func (self *Api) Put(content, contentType string) (k storage.Key, wait func(), e
 // to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status and an error
 func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, err error) {
+	log.Debug("api.get", "key", key)
 	apiGetCount.Inc(1)
 	trie, err := loadManifest(self.dpa, key, nil)
 	if err != nil {
@@ -317,8 +318,7 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 		return
 	}
 
-	log.Trace(fmt.Sprintf("getEntry(%s)", path))
-
+	log.Trace("trie.getentry", "key", key, "path", path)
 	entry, _ := trie.getEntry(path)
 
 	if entry != nil {
@@ -331,7 +331,7 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 		// we return a typed error instead. Since for all other purposes this is an invalid manifest,
 		// any normal interfacing code will just see an error fail accordingly.
 		if entry.ContentType == ResourceContentType {
-			log.Warn("resource type", "hash", entry.Hash)
+			log.Warn("resource type", "key", key, "hash", entry.Hash)
 			return nil, entry.ContentType, http.StatusOK, &ErrResourceReturn{entry.Hash}
 		}
 		key = common.Hex2Bytes(entry.Hash)
@@ -341,14 +341,14 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 			return
 		} else {
 			mimeType = entry.ContentType
-			log.Trace(fmt.Sprintf("content lookup key: '%v' (%v)", key, mimeType))
+			log.Trace("content lookup key", "key", key, "mimetype", mimeType)
 			reader = self.dpa.Retrieve(key)
 		}
 	} else {
 		status = http.StatusNotFound
 		apiGetNotFound.Inc(1)
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
-		log.Warn(fmt.Sprintf("%v", err))
+		log.Trace("manifest entry not found", "key", key, "path", path)
 	}
 	return
 }
