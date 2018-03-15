@@ -298,11 +298,11 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
 	case config.IsByzantium(next):
-		return calcDifficultyByzantium(time, parent)
+		return calcDifficultyEGEM(time, parent)
 	case config.IsHomestead(next):
-		return calcDifficultyHomestead(time, parent)
+		return calcDifficultyEGEM(time, parent)
 	default:
-		return calcDifficultyFrontier(time, parent)
+		return calcDifficultyEGEM(time, parent)
 	}
 }
 
@@ -454,6 +454,26 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 		expDiff.Exp(big2, expDiff, nil)
 		diff.Add(diff, expDiff)
 		diff = math.BigMax(diff, params.MinimumDifficulty)
+	}
+	return diff
+}
+
+func calcDifficultyEGEM(time uint64, parent *types.Header) *big.Int {
+	diff := new(big.Int)
+	adjust := new(big.Int).Div(parent.Difficulty, big10)
+	bigTime := new(big.Int)
+	bigParentTime := new(big.Int)
+
+	bigTime.SetUint64(time)
+	bigParentTime.Set(parent.Time)
+
+	if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
+		diff.Add(parent.Difficulty, adjust)
+	} else {
+		diff.Sub(parent.Difficulty, adjust)
+	}
+	if diff.Cmp(params.MinimumDifficulty) < 0 {
+		diff.Set(params.MinimumDifficulty)
 	}
 	return diff
 }
