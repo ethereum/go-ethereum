@@ -799,10 +799,13 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	http.ServeContent(w, &r.Request, "", time.Now(), reader)
 }
 
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	req := &Request{Request: *r, ruid: uuid.New()[:8]}
 	requestCount.Inc(1)
-	log.Info("serve request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
+	log.Info("serving request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
+
+	// wrapping the ResponseWriter, so that we get the response code set by http.ServeContent
+	w := newLoggingResponseWriter(rw)
 
 	if r.RequestURI == "/" && strings.Contains(r.Header.Get("Accept"), "text/html") {
 
@@ -880,6 +883,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		Respond(w, req, fmt.Sprintf("%s method is not supported", r.Method), http.StatusMethodNotAllowed)
 	}
+
+	log.Info("served response", "ruid", req.ruid, "code", w.statusCode)
 }
 
 func (s *Server) updateManifest(key storage.Key, update func(mw *api.ManifestWriter) error) (storage.Key, error) {
@@ -898,4 +903,18 @@ func (s *Server) updateManifest(key storage.Key, update func(mw *api.ManifestWri
 	}
 	log.Debug(fmt.Sprintf("generated manifest %s", key))
 	return key, nil
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func newLoggingResponseWriter(w http.ResponseWriter) *loggingResponseWriter {
+	return &loggingResponseWriter{w, http.StatusOK}
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	lrw.statusCode = code
+	lrw.ResponseWriter.WriteHeader(code)
 }
