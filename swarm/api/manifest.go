@@ -436,7 +436,6 @@ func (self *manifestTrie) listWithPrefix(prefix string, quitC chan bool, cb func
 }
 
 func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *manifestTrieEntry, pos int) {
-
 	log.Trace(fmt.Sprintf("findPrefixOf(%s)", path))
 
 	if len(path) == 0 {

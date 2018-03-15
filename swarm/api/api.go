@@ -251,7 +251,7 @@ type ErrResolve error
 // DNS Resolver
 func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	apiResolveCount.Inc(1)
-	log.Trace(fmt.Sprintf("Resolving : %v", uri.Addr))
+	log.Trace("resolving", "uri", uri.Addr)
 
 	// if the URI is immutable, check if the address is a hash
 	isHash := hashMatcher.MatchString(uri.Addr)
@@ -308,7 +308,7 @@ func (self *Api) Put(content, contentType string) (k storage.Key, wait func(), e
 // to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status and an error
 func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, err error) {
-	log.Debug("api.get", "key", key)
+	log.Debug("api.get", "key", key, "path", path)
 	apiGetCount.Inc(1)
 	trie, err := loadManifest(self.dpa, key, nil)
 	if err != nil {
@@ -318,8 +318,9 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 		return
 	}
 
-	log.Trace("trie.getentry", "key", key, "path", path)
+	log.Trace("trie getting entry", "key", key, "path", path)
 	entry, _ := trie.getEntry(path)
+	log.Trace("trie got entry", "key", key, "path", path)
 
 	if entry != nil {
 		// we want to be able to serve Mutable Resource Updates transparently using the bzz:// scheme
