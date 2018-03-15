@@ -34,12 +34,23 @@ import (
 	set "gopkg.in/fatih/set.v0"
 )
 
-// Ethash proof-of-work protocol constants.
+// EGEM Ethash proof-of-work protocol constants.
 var (
-	egemBlockReward    *big.Int = big.NewInt(8000000000000000000) // Block reward in wei for successfully mining a block 8 EGEM
-	egemDevReward *big.Int = big.NewInt(500000000000000000) // Dev reward 0.5 EGEM x 2 sent to two address
+	egem0BlockReward                *big.Int = big.NewInt(8000000000000000000) // Block reward in wei for successfully mining a block 8 EGEM
+	egem1BlockReward                *big.Int = big.NewInt(4000000000000000000) // Block reward in wei for successfully mining a block 4 EGEM
+	egem2BlockReward                *big.Int = big.NewInt(2000000000000000000) // Block reward in wei for successfully mining a block 4 EGEM
+	egem0DevReward                  *big.Int = big.NewInt(250000000000000000) // Dev reward 0.25 EGEM in wei sent to the 4 devs totalling 1 EGEM per block.
+	egem1DevReward                  *big.Int = big.NewInt(125000000000000000) // Dev reward 0.125 EGEM in wei sent to the 4 devs totaling 0.5 EGEM per block.
+	egem2DevReward                  *big.Int = big.NewInt(50000000000000000) // Dev reward 0.01 EGEM in wei sent to the 4 devs totaling 0.1 EGEM per block.
+	egemRewardSwitchBlockEra0       *big.Int = big.NewInt(5000)
+	egemRewardSwitchBlockEra1       *big.Int = big.NewInt(10000000)
+	egemRewardSwitchBlockEra2       *big.Int = big.NewInt(20000000)
 	maxUncles                       = 2                 // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTime          = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
+	dev1 														= common.HexToAddress("0xe6923aec35a0bcbaad4a045923cbd61c75eb65d8") //oso
+	dev2 														= common.HexToAddress("0xc393659c2918a64cdfb44d463de9c747aa4ce3f7") //ridz
+	dev3 														= common.HexToAddress("0xaaB4C5830bF586047857f795357f630F026d187A") //jal
+	dev4 														= common.HexToAddress("0x89b09D40c25B05491AAeb236F6e4465D7A74bdb7") //oz
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -425,39 +436,6 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 	return x
 }
 
-// calcDifficultyFrontier is the difficulty adjustment algorithm. It returns the
-// difficulty that a new block should have when created at time given the parent
-// block's time and difficulty. The calculation uses the Frontier rules.
-// func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
-// 	diff := new(big.Int)
-// 	adjust := new(big.Int).Div(parent.Difficulty, params.DifficultyBoundDivisor)
-// 	bigTime := new(big.Int)
-// 	bigParentTime := new(big.Int)
-//
-// 	bigTime.SetUint64(time)
-// 	bigParentTime.Set(parent.Time)
-//
-// 	if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
-// 		diff.Add(parent.Difficulty, adjust)
-// 	} else {
-// 		diff.Sub(parent.Difficulty, adjust)
-// 	}
-// 	if diff.Cmp(params.MinimumDifficulty) < 0 {
-// 		diff.Set(params.MinimumDifficulty)
-// 	}
-//
-// 	periodCount := new(big.Int).Add(parent.Number, big1)
-// 	periodCount.Div(periodCount, expDiffPeriod)
-// 	if periodCount.Cmp(big1) > 0 {
-// 		// diff = diff + 2^(periodCount - 2)
-// 		expDiff := periodCount.Sub(periodCount, big2)
-// 		expDiff.Exp(big2, expDiff, nil)
-// 		diff.Add(diff, expDiff)
-// 		diff = math.BigMax(diff, params.MinimumDifficulty)
-// 	}
-// 	return diff
-// }
-
 // EGEM Difficulty Algo
 func calcDifficultyEGEM(time uint64, parent *types.Header) *big.Int {
 	diff := new(big.Int)
@@ -553,27 +531,96 @@ var (
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
-	// Select the correct block reward based on chain progression
-	blockReward := egemBlockReward
-	dev1Reward := egemDevReward
-	dev2Reward := egemDevReward
+
+// Select the correct block reward based on chain progression
+	block0Reward := egem0BlockReward
+	block1Reward := egem1BlockReward
+	block2Reward := egem2BlockReward
+	dev0Reward := egem0DevReward
+	dev1Reward := egem1DevReward
+	dev2Reward := egem2DevReward
+
+
 	// Accumulate the rewards for the miner and any included uncles
-	reward := new(big.Int).Set(blockReward)
-	r := new(big.Int)
-	for _, uncle := range uncles {
-		r.Add(uncle.Number, big8)
-		r.Sub(r, header.Number)
-		r.Mul(r, blockReward)
-		r.Div(r, big8)
-		state.AddBalance(uncle.Coinbase, r)
 
-		r.Div(blockReward, big32)
-		reward.Add(reward, r)
+	// if block.Number > 5000 dev rewards kick in 8/1.
+	if (header.Number.Cmp(egemRewardSwitchBlockEra0) == 1) {
+			reward := new(big.Int).Set(block0Reward)
+			r := new(big.Int)
+			for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+		state.AddBalance(header.Coinbase, reward)
+
+		//dev rewards
+		state.AddBalance(dev1, d0Reward) //oso
+		state.AddBalance(dev2, d0Reward) //ridz
+		state.AddBalance(dev3, d0Reward) //jal
+		state.AddBalance(dev4, d0Reward) //oz
+
+	//Era2 Reward scheme Block and dev reward halving 4/0.1.
+	} else if (header.Number.Cmp(egemRewardSwitchBlockEra1) == 1) {
+		reward := new(big.Int).Set(block1Reward)
+		r := new(big.Int)
+		for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+		state.AddBalance(header.Coinbase, reward)
+
+		//dev rewards
+		state.AddBalance(dev1, d1Reward) //oso
+		state.AddBalance(dev2, d1Reward) //ridz
+		state.AddBalance(dev3, d1Reward) //jal
+		state.AddBalance(dev4, d1Reward) //oz
+
+  //Final form and final halving of block and dev rewards 2/0.001.
+	} else if (header.Number.Cmp(egemRewardSwitchBlockEra2) == 1) {
+		reward := new(big.Int).Set(block2Reward)
+		r := new(big.Int)
+		for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+		state.AddBalance(header.Coinbase, reward)
+
+		//dev rewards
+		state.AddBalance(dev1, d2Reward) //oso
+		state.AddBalance(dev2, d2Reward) //ridz
+		state.AddBalance(dev3, d2Reward) //jal
+		state.AddBalance(dev4, d2Reward) //oz
+
+	// Fair Launch upto block 5000 then dev fee system kicks in.
+	} else  {
+		reward := new(big.Int).Set(block0Reward)
+		r := new(big.Int)
+		for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+
+		state.AddBalance(header.Coinbase, reward)
 	}
-	state.AddBalance(header.Coinbase, reward)
-
-  state.AddBalance(common.HexToAddress("0xe6923aec35a0bcbaad4a045923cbd61c75eb65d8"), dev1Reward)
-	state.AddBalance(common.HexToAddress("0xc393659c2918a64cdfb44d463de9c747aa4ce3f7"), dev2Reward)
-
 
 }
