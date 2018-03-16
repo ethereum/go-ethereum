@@ -359,45 +359,45 @@ func calcDifficultyEGEM(time uint64, parent *types.Header) *big.Int {
 	bigParentTime.Set(parent.Time)
 
 	if (parent.Number.Cmp(egemRewardSwitchBlockEra2) == 1) {
-		if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
-			diff.Add(parent.Difficulty, adjust0)
-		} else {
-			diff.Sub(parent.Difficulty, adjust0)
-		}
-		if diff.Cmp(params.MinimumDifficulty) < 0 {
-			diff.Set(params.MinimumDifficulty)
-		}
-		return diff
+			if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
+				diff.Add(parent.Difficulty, adjust0)
+			} else {
+				diff.Sub(parent.Difficulty, adjust0)
+			}
+			if diff.Cmp(params.MinimumDifficulty) < 0 {
+				diff.Set(params.MinimumDifficulty)
+			}
+			return diff
 	} else if (parent.Number.Cmp(egemRewardSwitchBlockEra1) == 1) {
-		if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
-			diff.Add(parent.Difficulty, adjust1)
-		} else {
-			diff.Sub(parent.Difficulty, adjust1)
-		}
-		if diff.Cmp(params.MinimumDifficulty) < 0 {
-			diff.Set(params.MinimumDifficulty)
-		}
-		return diff
+			if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
+				diff.Add(parent.Difficulty, adjust1)
+			} else {
+				diff.Sub(parent.Difficulty, adjust1)
+			}
+			if diff.Cmp(params.MinimumDifficulty) < 0 {
+				diff.Set(params.MinimumDifficulty)
+			}
+			return diff
 	} else if (parent.Number.Cmp(egemRewardSwitchBlockEra0) == 1) {
-		if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
-			diff.Add(parent.Difficulty, adjust2)
-		} else {
-			diff.Sub(parent.Difficulty, adjust2)
-		}
-		if diff.Cmp(params.MinimumDifficulty) < 0 {
-			diff.Set(params.MinimumDifficulty)
-		}
-		return diff
+			if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
+				diff.Add(parent.Difficulty, adjust2)
+			} else {
+				diff.Sub(parent.Difficulty, adjust2)
+			}
+			if diff.Cmp(params.MinimumDifficulty) < 0 {
+				diff.Set(params.MinimumDifficulty)
+			}
+			return diff
 	} else {
-		if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
-			diff.Add(parent.Difficulty, adjust3)
-		} else {
-			diff.Sub(parent.Difficulty, adjust3)
-		}
-		if diff.Cmp(params.MinimumDifficulty) < 0 {
-			diff.Set(params.MinimumDifficulty)
-		}
-		return diff
+			if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
+				diff.Add(parent.Difficulty, adjust3)
+			} else {
+				diff.Sub(parent.Difficulty, adjust3)
+			}
+			if diff.Cmp(params.MinimumDifficulty) < 0 {
+				diff.Set(params.MinimumDifficulty)
+			}
+			return diff
 	}
 }
 
