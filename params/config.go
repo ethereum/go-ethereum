@@ -146,10 +146,8 @@ func (c *CliqueConfig) String() string {
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
 
-	return fmt.Sprintf("{ChainID: %v EIP150: %v EIP155: %v EIP158: %v EGEM Geth}",
+	return fmt.Sprintf("{ChainID: %v EGEM Geth}",
 		c.ChainId,
-		c.EIP150Block,
-		c.EIP155Block,
 	)
 }
 
