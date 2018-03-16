@@ -40,7 +40,7 @@ func skipWithoutSolc(t *testing.T) {
 
 func TestCompiler(t *testing.T) {
 	skipWithoutSolc(t)
-
+	SetOptimizeRuns(2000)
 	contracts, err := CompileSolidityString("", testSource)
 	if err != nil {
 		t.Fatalf("error compiling source. result %v: %v", contracts, err)

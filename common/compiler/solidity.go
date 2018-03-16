@@ -31,6 +31,8 @@ import (
 
 var versionRegexp = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
 
+var optimizeRuns int64 = 200
+
 type Contract struct {
 	Code string       `json:"code"`
 	Info ContractInfo `json:"info"`
@@ -67,10 +69,18 @@ func (s *Solidity) makeArgs() []string {
 		"--combined-json", "bin,abi,userdoc,devdoc",
 		"--optimize", // code optimizer switched on
 	}
+	if optimizeRuns != 200 {
+		p = append(p, "-optimize-runs",strconv.FormatInt(optimizeRuns, 10))
+	}
 	if s.Major > 0 || s.Minor > 4 || s.Patch > 6 {
 		p[1] += ",metadata"
 	}
 	return p
+}
+
+// SetOptimizeRuns set the number of optimize runs for solc
+func SetOptimizeRuns(_optimizeRuns int64) {
+	optimizeRuns = _optimizeRuns
 }
 
 // SolidityVersion runs solc and parses its version output.
