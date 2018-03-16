@@ -156,15 +156,8 @@ func (c *ChainConfig) String() string {
 	}
 	return fmt.Sprintf("{ChainID: %v EIP150: %v EIP155: %v EIP158: %v EGEM Geth}",
 		c.ChainId,
-		c.HomesteadBlock,
-		c.DAOForkBlock,
-		c.DAOForkSupport,
 		c.EIP150Block,
 		c.EIP155Block,
-		c.EIP158Block,
-		c.ByzantiumBlock,
-		c.ConstantinopleBlock,
-		engine,
 	)
 }
 
