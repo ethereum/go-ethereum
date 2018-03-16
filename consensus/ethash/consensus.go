@@ -335,12 +335,23 @@ var (
 )
 
 // EGEM Era Difficulty Algo
+<<<<<<< HEAD
 // Per block calculation.
 //
 // 50% Adjustment from 0 - 5000
 // 20% Adjustment from 5001 - 10,000,000
 // 15% Adjustment from 10,000,001 - 20,000,000
 // 10% Adjusment from 20,000,001 +
+=======
+//
+// Launch 0 - 5000 50% Difficulty*
+// Requiem Era0 5001 - 10,000,000 20% Difficulty**
+// Solstice Era1 10,000,001 - 20,000,000 15% Difficulty*
+// Oblivion Era2 20,000,001 + 10% Difficulty*
+//
+// * +/- adjustment per block
+// ** Dev fee is enabled at this Era start.
+>>>>>>> 53d2032cfb9a759f32e685a92343aaac7cef2b08
 //
 
 func calcDifficultyEGEM(time uint64, parent *types.Header) *big.Int {
@@ -377,14 +388,14 @@ func calcDifficultyEGEM(time uint64, parent *types.Header) *big.Int {
 		}
 		return diff
 	} else if (parent.Number.Cmp(egemRewardSwitchBlockEra0) == 1) {
-			if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
-				diff.Add(parent.Difficulty, adjust2)
-			} else {
-				diff.Sub(parent.Difficulty, adjust2)
-			}
-			if diff.Cmp(params.MinimumDifficulty) < 0 {
-				diff.Set(params.MinimumDifficulty)
-			}
+		if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
+			diff.Add(parent.Difficulty, adjust2)
+		} else {
+			diff.Sub(parent.Difficulty, adjust2)
+		}
+		if diff.Cmp(params.MinimumDifficulty) < 0 {
+			diff.Set(params.MinimumDifficulty)
+		}
 		return diff
 	} else {
 		if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
@@ -520,7 +531,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		//dev rewards
 		state.AddBalance(devFund, d1Reward) //ridz
 
-  //Era0 Reward of block and dev reward 8/1. 20% Difficulty adjustment per block
+  //Era0 Reward of block and dev reward 8/1 EGEM. 20% Difficulty adjustment per block
 	} else if (header.Number.Cmp(egemRewardSwitchBlockEra0) == 1) {
 		reward := new(big.Int).Set(block0Reward)
 		r := new(big.Int)
@@ -538,7 +549,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		//dev rewards
 		state.AddBalance(devFund, d0Reward) //ridz
 
-	// Fair Launch upto block 5000 with a 50% Difficulty adjustment per block.
+	// Launch upto block 5000 with a 50% Difficulty adjustment per block, 8 EGEM reward.
 	} else  {
 		reward := new(big.Int).Set(block0Reward)
 		r := new(big.Int)
