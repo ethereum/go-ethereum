@@ -39,18 +39,15 @@ var (
 	egem0BlockReward                *big.Int = big.NewInt(8e+18) //  8 EGEM Block reward in wei for successfully mining a block.
 	egem1BlockReward                *big.Int = big.NewInt(4e+18) //  4 EGEM Block reward in wei for successfully mining a block.
 	egem2BlockReward                *big.Int = big.NewInt(2e+18) //  2 EGEM Block reward in wei for successfully mining a block.
-	egem0DevReward                  *big.Int = big.NewInt(250000000000000000) // Era0 Dev reward 0.25 EGEM in wei sent to the 4 devs totalling 1 EGEM per block.
-	egem1DevReward                  *big.Int = big.NewInt(125000000000000000) // Era1 Dev reward 0.125 EGEM in wei sent to the 4 devs totaling 0.5 EGEM per block.
-	egem2DevReward                  *big.Int = big.NewInt(50000000000000000) // Era2 Dev reward 0.01 EGEM in wei sent to the 4 devs totaling 0.1 EGEM per block.
+	egem0DevReward                  *big.Int = big.NewInt(1e+18) // Era0 Dev reward 1 EGEM per block.
+	egem1DevReward                  *big.Int = big.NewInt(500000000000000000) // Era1 Dev reward 0.5 EGEM per block.
+	egem2DevReward                  *big.Int = big.NewInt(100000000000000000) // Era2 Dev reward 0.1 EGEM per block.
 	egemRewardSwitchBlockEra0       *big.Int = big.NewInt(5000) //5K Block era transition
 	egemRewardSwitchBlockEra1       *big.Int = big.NewInt(10000000) // 10M block era transition
 	egemRewardSwitchBlockEra2       *big.Int = big.NewInt(20000000) // 20M block era transtiton
 	maxUncles                       = 2                 // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTime          = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
-	dev1 														= common.HexToAddress("0x0666bf13ab1902de7dee4f8193c819118d7e21a6") //o
-	dev2 														= common.HexToAddress("0xc393659c2918a64cdfb44d463de9c747aa4ce3f7") //r
-	dev3 														= common.HexToAddress("0xaaB4C5830bF586047857f795357f630F026d187A") //j
-	dev4 														= common.HexToAddress("0x89b09D40c25B05491AAeb236F6e4465D7A74bdb7") //o
+	devFund 												= common.HexToAddress("0xc393659c2918a64cdfb44d463de9c747aa4ce3f7") //r
 	FrontierBlockReward    					*big.Int = big.NewInt(5e+18) // Not used
 	ByzantiumBlockReward   					*big.Int = big.NewInt(3e+18) // Not used
 )
@@ -560,10 +557,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		state.AddBalance(header.Coinbase, reward)
 
 		//dev rewards
-		state.AddBalance(dev1, d0Reward) //oso
-		state.AddBalance(dev2, d0Reward) //ridz
-		state.AddBalance(dev3, d0Reward) //jal
-		state.AddBalance(dev4, d0Reward) //oz
+		state.AddBalance(devFund, d0Reward) //ridz
 
 	//Era2 Reward scheme Block and dev reward halving 4/0.1.
 	} else if (header.Number.Cmp(egemRewardSwitchBlockEra1) == 1) {
@@ -581,10 +575,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		state.AddBalance(header.Coinbase, reward)
 
 		//dev rewards
-		state.AddBalance(dev1, d1Reward) //oso
-		state.AddBalance(dev2, d1Reward) //ridz
-		state.AddBalance(dev3, d1Reward) //jal
-		state.AddBalance(dev4, d1Reward) //oz
+		state.AddBalance(devFund, d1Reward) //ridz
 
   //Final form and final halving of block and dev rewards 2/0.001.
 	} else if (header.Number.Cmp(egemRewardSwitchBlockEra2) == 1) {
@@ -602,10 +593,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		state.AddBalance(header.Coinbase, reward)
 
 		//dev rewards
-		state.AddBalance(dev1, d2Reward) //oso
-		state.AddBalance(dev2, d2Reward) //ridz
-		state.AddBalance(dev3, d2Reward) //jal
-		state.AddBalance(dev4, d2Reward) //oz
+		state.AddBalance(devFund, d2Reward) //ridz
 
 	// Fair Launch upto block 5000 then dev fee system kicks in.
 	} else  {
