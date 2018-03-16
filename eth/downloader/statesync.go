@@ -280,13 +280,16 @@ func (s *stateSync) loop() (err error) {
 	peerSub := s.d.peers.SubscribeNewPeers(newPeer)
 	defer peerSub.Unsubscribe()
 	defer func() {
-		err = s.commit(true)
+		cerr := s.commit(true)
+		if err == nil {
+			err = cerr
+		}
 	}()
 
 	// Keep assigning new tasks until the sync completes or aborts
 	for s.sched.Pending() > 0 {
 		if err = s.commit(false); err != nil {
-			return
+			return err
 		}
 		s.assignTasks()
 		// Tasks assigned, wait for something to happen
@@ -312,12 +315,12 @@ func (s *stateSync) loop() (err error) {
 			// Process all the received blobs and check for stale delivery
 			if err = s.process(req); err != nil {
 				log.Warn("Node data write error", "err", err)
-				return
+				return err
 			}
 			req.peer.SetNodeDataIdle(len(req.response))
 		}
 	}
-	return
+	return nil
 }
 
 func (s *stateSync) commit(force bool) error {
@@ -326,7 +329,6 @@ func (s *stateSync) commit(force bool) error {
 	}
 	start := time.Now()
 	b := s.d.stateDB.NewBatch()
-	// Ignore empty write.
 	if written, err := s.sched.Commit(b); written == 0 || err != nil {
 		return err
 	}
