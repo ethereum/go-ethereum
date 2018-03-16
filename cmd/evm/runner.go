@@ -236,6 +236,10 @@ Gas used:           %d
 	}
 	if tracer != nil {
 		tracer.CaptureEnd(ret, initialGas-leftOverGas, execTime, err)
+		fmt.Printf("0x%x", ret)
+		if err != nil {
+			fmt.Printf(" error: %v\n", err)
+		}
 	} else {
 		fmt.Printf("0x%x\n", ret)
 		if err != nil {
