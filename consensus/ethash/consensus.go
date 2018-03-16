@@ -477,7 +477,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	// Accumulate the rewards for the miner and any included uncles
 
-	// if block.Number > 5000 dev rewards kick in 2/0.1.
+	// Final form of rewards and blocks 2/0.1. 10% Difficulty adjustment per block
 	if (header.Number.Cmp(egemRewardSwitchBlockEra2) == 1) {
 			reward := new(big.Int).Set(block2Reward)
 			r := new(big.Int)
@@ -495,7 +495,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		//dev rewards
 		state.AddBalance(devFund, d2Reward) //ridz
 
-	//Era2 Reward scheme Block and dev reward halving 4/0.5.
+	//Era1 Reward scheme Block and dev reward halving 4/0.5. 15% Difficulty adjustment per block
 	} else if (header.Number.Cmp(egemRewardSwitchBlockEra1) == 1) {
 		reward := new(big.Int).Set(block1Reward)
 		r := new(big.Int)
@@ -513,7 +513,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		//dev rewards
 		state.AddBalance(devFund, d1Reward) //ridz
 
-  //Final form and final halving of block and dev rewards 8/1.
+  //Era0 Reward of block and dev reward 8/1. 20% Difficulty adjustment per block
 	} else if (header.Number.Cmp(egemRewardSwitchBlockEra0) == 1) {
 		reward := new(big.Int).Set(block0Reward)
 		r := new(big.Int)
@@ -531,7 +531,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		//dev rewards
 		state.AddBalance(devFund, d0Reward) //ridz
 
-	// Fair Launch upto block 5000 then dev fee system kicks in.
+	// Fair Launch upto block 5000 with a 50% Difficulty adjustment per block.
 	} else  {
 		reward := new(big.Int).Set(block0Reward)
 		r := new(big.Int)
