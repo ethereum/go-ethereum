@@ -335,14 +335,6 @@ var (
 )
 
 // EGEM Era Difficulty Algo
-<<<<<<< HEAD
-// Per block calculation.
-//
-// 50% Adjustment from 0 - 5000
-// 20% Adjustment from 5001 - 10,000,000
-// 15% Adjustment from 10,000,001 - 20,000,000
-// 10% Adjusment from 20,000,001 +
-=======
 //
 // Launch 0 - 5000 50% Difficulty*
 // Requiem Era0 5001 - 10,000,000 20% Difficulty**
@@ -351,7 +343,6 @@ var (
 //
 // * +/- adjustment per block
 // ** Dev fee is enabled at this Era start.
->>>>>>> 53d2032cfb9a759f32e685a92343aaac7cef2b08
 //
 
 func calcDifficultyEGEM(time uint64, parent *types.Header) *big.Int {
