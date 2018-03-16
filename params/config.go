@@ -145,15 +145,7 @@ func (c *CliqueConfig) String() string {
 
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
-	var engine interface{}
-	switch {
-	case c.Ethash != nil:
-		engine = c.Ethash
-	case c.Clique != nil:
-		engine = c.Clique
-	default:
-		engine = "unknown"
-	}
+
 	return fmt.Sprintf("{ChainID: %v EIP150: %v EIP155: %v EIP158: %v EGEM Geth}",
 		c.ChainId,
 		c.EIP150Block,
