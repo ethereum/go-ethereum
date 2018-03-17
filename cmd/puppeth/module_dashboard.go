@@ -208,7 +208,7 @@ var dashboardContent = `
 											<pre>geth --datadir=$HOME/.{{.Network}} init {{.GethGenesis}}</pre>
 										</p>
 										<p>With your local chain initialized, you can start the Ethereum Wallet:
-											<pre>ethereumwallet --rpc $HOME/.{{.Network}}/geth.ipc --node-networkid={{.NetworkID}} --node-datadir=$HOME/.{{.Network}}{{if .Ethstats}} --node-ethstats='{{.Ethstats}}'{{end}} --node-bootnodes={{.BootnodesFlat}}</pre>
+											<pre>ethereumwallet --rpc $HOME/.{{.Network}}/egem.ipc --node-networkid={{.NetworkID}} --node-datadir=$HOME/.{{.Network}}{{if .Ethstats}} --node-ethstats='{{.Ethstats}}'{{end}} --node-bootnodes={{.BootnodesFlat}}</pre>
 										<p>
 										<br/>
 										<p>You can download the Ethereum Wallet from <a href="https://github.com/ethereum/mist/releases" target="about:blank">https://github.com/ethereum/mist/releases</a>.</p>
@@ -229,7 +229,7 @@ var dashboardContent = `
 											<pre>geth --datadir=$HOME/.{{.Network}} init {{.GethGenesis}}</pre>
 										</p>
 										<p>With your local chain initialized, you can start Mist:
-											<pre>mist --rpc $HOME/.{{.Network}}/geth.ipc --node-networkid={{.NetworkID}} --node-datadir=$HOME/.{{.Network}}{{if .Ethstats}} --node-ethstats='{{.Ethstats}}'{{end}} --node-bootnodes={{.BootnodesFlat}}</pre>
+											<pre>mist --rpc $HOME/.{{.Network}}/egem.ipc --node-networkid={{.NetworkID}} --node-datadir=$HOME/.{{.Network}}{{if .Ethstats}} --node-ethstats='{{.Ethstats}}'{{end}} --node-bootnodes={{.BootnodesFlat}}</pre>
 										<p>
 										<br/>
 										<p>You can download the Mist browser from <a href="https://github.com/ethereum/mist/releases" target="about:blank">https://github.com/ethereum/mist/releases</a>.</p>
