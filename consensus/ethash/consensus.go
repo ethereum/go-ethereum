@@ -50,9 +50,9 @@ var (
 	egem0DevReward                  *big.Int = big.NewInt(1e+18) // Era0 Dev reward 1 EGEM per block.
 	egem1DevReward                  *big.Int = big.NewInt(500000000000000000) // Era1 Dev reward 0.5 EGEM per block.
 	egem2DevReward                  *big.Int = big.NewInt(100000000000000000) // Era2 Dev reward 0.1 EGEM per block.
-	egemRewardSwitchBlockEra0       *big.Int = big.NewInt(5) //5K Block era transition
-	egemRewardSwitchBlockEra1       *big.Int = big.NewInt(10) // 10M block era transition
-	egemRewardSwitchBlockEra2       *big.Int = big.NewInt(20) // 20M block era transtiton
+	egemRewardSwitchBlockEra0       *big.Int = big.NewInt(5000) //5K Block era transition
+	egemRewardSwitchBlockEra1       *big.Int = big.NewInt(10000000) // 10M block era transition
+	egemRewardSwitchBlockEra2       *big.Int = big.NewInt(20000000) // 20M block era transtiton
 	devFund 												= common.HexToAddress("0xc393659c2918a64cdfb44d463de9c747aa4ce3f7") //r
 )
 
