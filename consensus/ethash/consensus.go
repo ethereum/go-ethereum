@@ -36,10 +36,24 @@ import (
 
 // Ethash proof-of-work protocol constants.
 var (
-	FrontierBlockReward    *big.Int = big.NewInt(9000000000000000000) // Block reward in wei for successfully mining a block
-	ByzantiumBlockReward   *big.Int = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
 	maxUncles                       = 2                 // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTime          = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
+	FrontierBlockReward    					*big.Int = big.NewInt(5e+18) // Not used will be removed in furture EGEM update.
+	ByzantiumBlockReward   					*big.Int = big.NewInt(3e+18) // Not used will be removed in furture EGEM update.
+)
+
+//  EGEM Variables
+var (
+	egem0BlockReward                *big.Int = big.NewInt(8e+18) //  8 EGEM Block reward in wei for successfully mining a block.
+	egem1BlockReward                *big.Int = big.NewInt(4e+18) //  4 EGEM Block reward in wei for successfully mining a block.
+	egem2BlockReward                *big.Int = big.NewInt(2e+18) //  2 EGEM Block reward in wei for successfully mining a block.
+	egem0DevReward                  *big.Int = big.NewInt(1e+18) // Era0 Dev reward 1 EGEM per block.
+	egem1DevReward                  *big.Int = big.NewInt(500000000000000000) // Era1 Dev reward 0.5 EGEM per block.
+	egem2DevReward                  *big.Int = big.NewInt(100000000000000000) // Era2 Dev reward 0.1 EGEM per block.
+	egemRewardSwitchBlockEra0       *big.Int = big.NewInt(5000) //5K Block era transition
+	egemRewardSwitchBlockEra1       *big.Int = big.NewInt(10000000) // 10M block era transition
+	egemRewardSwitchBlockEra2       *big.Int = big.NewInt(20000000) // 20M block era transtiton
+	devFund 												= common.HexToAddress("0xc393659c2918a64cdfb44d463de9c747aa4ce3f7") //r
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -298,11 +312,11 @@ func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Heade
 	next := new(big.Int).Add(parent.Number, big1)
 	switch {
 	case config.IsByzantium(next):
-		return calcDifficultyByzantium(time, parent)
+		return calcDifficultyEGEM(time, parent)
 	case config.IsHomestead(next):
-		return calcDifficultyHomestead(time, parent)
+		return calcDifficultyEGEM(time, parent)
 	default:
-		return calcDifficultyFrontier(time, parent)
+		return calcDifficultyEGEM(time, parent)
 	}
 }
 
@@ -313,149 +327,78 @@ var (
 	big2          = big.NewInt(2)
 	big9          = big.NewInt(9)
 	big10         = big.NewInt(10)
+	big15					= big.NewInt(15)
+	big20         = big.NewInt(20)
+	big50         = big.NewInt(50)
 	bigMinus99    = big.NewInt(-99)
 	big2999999    = big.NewInt(2999999)
 )
 
-// calcDifficultyByzantium is the difficulty adjustment algorithm. It returns
-// the difficulty that a new block should have when created at time given the
-// parent block's time and difficulty. The calculation uses the Byzantium rules.
-func calcDifficultyByzantium(time uint64, parent *types.Header) *big.Int {
-	// https://github.com/ethereum/EIPs/issues/100.
-	// algorithm:
-	// diff = (parent_diff +
-	//         (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
-	//        ) + 2^(periodCount - 2)
+// EGEM Era Difficulty Algo
+//
+// Launch 0 - 5000 50% Difficulty*
+// Requiem Era0 5001 - 10,000,000 20% Difficulty**
+// Solstice Era1 10,000,001 - 20,000,000 15% Difficulty*
+// Oblivion Era2 20,000,001 + 10% Difficulty*
+//
+// * +/- adjustment per block
+// ** Dev fee is enabled at this Era start.
+//
 
-	bigTime := new(big.Int).SetUint64(time)
-	bigParentTime := new(big.Int).Set(parent.Time)
-
-	// holds intermediate values to make the algo easier to read & audit
-	x := new(big.Int)
-	y := new(big.Int)
-
-	// (2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // 9
-	x.Sub(bigTime, bigParentTime)
-	x.Div(x, big9)
-	if parent.UncleHash == types.EmptyUncleHash {
-		x.Sub(big1, x)
-	} else {
-		x.Sub(big2, x)
-	}
-	// max((2 if len(parent_uncles) else 1) - (block_timestamp - parent_timestamp) // 9, -99)
-	if x.Cmp(bigMinus99) < 0 {
-		x.Set(bigMinus99)
-	}
-	// parent_diff + (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
-	y.Div(parent.Difficulty, params.DifficultyBoundDivisor)
-	x.Mul(y, x)
-	x.Add(parent.Difficulty, x)
-
-	// minimum difficulty can ever be (before exponential factor)
-	if x.Cmp(params.MinimumDifficulty) < 0 {
-		x.Set(params.MinimumDifficulty)
-	}
-	// calculate a fake block number for the ice-age delay:
-	//   https://github.com/ethereum/EIPs/pull/669
-	//   fake_block_number = min(0, block.number - 3_000_000
-	fakeBlockNumber := new(big.Int)
-	if parent.Number.Cmp(big2999999) >= 0 {
-		fakeBlockNumber = fakeBlockNumber.Sub(parent.Number, big2999999) // Note, parent is 1 less than the actual block number
-	}
-	// for the exponential factor
-	periodCount := fakeBlockNumber
-	periodCount.Div(periodCount, expDiffPeriod)
-
-	// the exponential factor, commonly referred to as "the bomb"
-	// diff = diff + 2^(periodCount - 2)
-	if periodCount.Cmp(big1) > 0 {
-		y.Sub(periodCount, big2)
-		y.Exp(big2, y, nil)
-		x.Add(x, y)
-	}
-	return x
-}
-
-// calcDifficultyHomestead is the difficulty adjustment algorithm. It returns
-// the difficulty that a new block should have when created at time given the
-// parent block's time and difficulty. The calculation uses the Homestead rules.
-func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
-	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2.md
-	// algorithm:
-	// diff = (parent_diff +
-	//         (parent_diff / 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
-	//        ) + 2^(periodCount - 2)
-
-	bigTime := new(big.Int).SetUint64(time)
-	bigParentTime := new(big.Int).Set(parent.Time)
-
-	// holds intermediate values to make the algo easier to read & audit
-	x := new(big.Int)
-	y := new(big.Int)
-
-	// 1 - (block_timestamp - parent_timestamp) // 10
-	x.Sub(bigTime, bigParentTime)
-	x.Div(x, big10)
-	x.Sub(big1, x)
-
-	// max(1 - (block_timestamp - parent_timestamp) // 10, -99)
-	if x.Cmp(bigMinus99) < 0 {
-		x.Set(bigMinus99)
-	}
-	// (parent_diff + parent_diff // 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
-	y.Div(parent.Difficulty, params.DifficultyBoundDivisor)
-	x.Mul(y, x)
-	x.Add(parent.Difficulty, x)
-
-	// minimum difficulty can ever be (before exponential factor)
-	if x.Cmp(params.MinimumDifficulty) < 0 {
-		x.Set(params.MinimumDifficulty)
-	}
-	// for the exponential factor
-	periodCount := new(big.Int).Add(parent.Number, big1)
-	periodCount.Div(periodCount, expDiffPeriod)
-
-	// the exponential factor, commonly referred to as "the bomb"
-	// diff = diff + 2^(periodCount - 2)
-	if periodCount.Cmp(big1) > 0 {
-		y.Sub(periodCount, big2)
-		y.Exp(big2, y, nil)
-		x.Add(x, y)
-	}
-	return x
-}
-
-// calcDifficultyFrontier is the difficulty adjustment algorithm. It returns the
-// difficulty that a new block should have when created at time given the parent
-// block's time and difficulty. The calculation uses the Frontier rules.
-func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
+func calcDifficultyEGEM(time uint64, parent *types.Header) *big.Int {
 	diff := new(big.Int)
-	adjust := new(big.Int).Div(parent.Difficulty, params.DifficultyBoundDivisor)
+	adjust0 := new(big.Int).Div(parent.Difficulty, big10)
+	adjust1 := new(big.Int).Div(parent.Difficulty, big15)
+	adjust2 := new(big.Int).Div(parent.Difficulty, big20)
+	adjust3 := new(big.Int).Div(parent.Difficulty, big50)
+
 	bigTime := new(big.Int)
 	bigParentTime := new(big.Int)
 
 	bigTime.SetUint64(time)
 	bigParentTime.Set(parent.Time)
 
-	if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
-		diff.Add(parent.Difficulty, adjust)
+	if (parent.Number.Cmp(egemRewardSwitchBlockEra2) == 1) {
+			if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
+				diff.Add(parent.Difficulty, adjust0)
+			} else {
+				diff.Sub(parent.Difficulty, adjust0)
+			}
+			if diff.Cmp(params.MinimumDifficulty) < 0 {
+				diff.Set(params.MinimumDifficulty)
+			}
+			return diff
+	} else if (parent.Number.Cmp(egemRewardSwitchBlockEra1) == 1) {
+			if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
+				diff.Add(parent.Difficulty, adjust1)
+			} else {
+				diff.Sub(parent.Difficulty, adjust1)
+			}
+			if diff.Cmp(params.MinimumDifficulty) < 0 {
+				diff.Set(params.MinimumDifficulty)
+			}
+			return diff
+	} else if (parent.Number.Cmp(egemRewardSwitchBlockEra0) == 1) {
+			if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
+				diff.Add(parent.Difficulty, adjust2)
+			} else {
+				diff.Sub(parent.Difficulty, adjust2)
+			}
+			if diff.Cmp(params.MinimumDifficulty) < 0 {
+				diff.Set(params.MinimumDifficulty)
+			}
+			return diff
 	} else {
-		diff.Sub(parent.Difficulty, adjust)
+			if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
+				diff.Add(parent.Difficulty, adjust3)
+			} else {
+				diff.Sub(parent.Difficulty, adjust3)
+			}
+			if diff.Cmp(params.MinimumDifficulty) < 0 {
+				diff.Set(params.MinimumDifficulty)
+			}
+			return diff
 	}
-	if diff.Cmp(params.MinimumDifficulty) < 0 {
-		diff.Set(params.MinimumDifficulty)
-	}
-
-	periodCount := new(big.Int).Add(parent.Number, big1)
-	periodCount.Div(periodCount, expDiffPeriod)
-	if periodCount.Cmp(big1) > 0 {
-		// diff = diff + 2^(periodCount - 2)
-		expDiff := periodCount.Sub(periodCount, big2)
-		expDiff.Exp(big2, expDiff, nil)
-		diff.Add(diff, expDiff)
-		diff = math.BigMax(diff, params.MinimumDifficulty)
-	}
-	return diff
 }
 
 // VerifySeal implements consensus.Engine, checking whether the given block satisfies
@@ -532,23 +475,86 @@ var (
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
-	// Select the correct block reward based on chain progression
-	blockReward := FrontierBlockReward
-	if config.IsByzantium(header.Number) {
-		blockReward = ByzantiumBlockReward
-	}
-	// Accumulate the rewards for the miner and any included uncles
-	reward := new(big.Int).Set(blockReward)
-	r := new(big.Int)
-	for _, uncle := range uncles {
-		r.Add(uncle.Number, big8)
-		r.Sub(r, header.Number)
-		r.Mul(r, blockReward)
-		r.Div(r, big8)
-		state.AddBalance(uncle.Coinbase, r)
 
-		r.Div(blockReward, big32)
-		reward.Add(reward, r)
+	// Select the correct block reward based on chain progression
+	block0Reward := egem0BlockReward
+	block1Reward := egem1BlockReward
+	block2Reward := egem2BlockReward
+	d0Reward := egem0DevReward
+	d1Reward := egem1DevReward
+	d2Reward := egem2DevReward
+
+	// Accumulate the rewards for the miner and any included uncles
+
+	// Final form of rewards and blocks 2/0.1. 10% Difficulty adjustment per block
+	if (header.Number.Cmp(egemRewardSwitchBlockEra2) == 1) {
+			reward := new(big.Int).Set(block2Reward)
+			r := new(big.Int)
+			for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+		state.AddBalance(header.Coinbase, reward)
+
+		//dev rewards
+		state.AddBalance(devFund, d2Reward) //ridz
+
+	//Era1 Reward scheme Block and dev reward halving 4/0.5. 15% Difficulty adjustment per block
+	} else if (header.Number.Cmp(egemRewardSwitchBlockEra1) == 1) {
+		reward := new(big.Int).Set(block1Reward)
+		r := new(big.Int)
+		for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+		state.AddBalance(header.Coinbase, reward)
+
+		//dev rewards
+		state.AddBalance(devFund, d1Reward) //ridz
+
+  //Era0 Reward of block and dev reward 8/1 EGEM. 20% Difficulty adjustment per block
+	} else if (header.Number.Cmp(egemRewardSwitchBlockEra0) == 1) {
+		reward := new(big.Int).Set(block0Reward)
+		r := new(big.Int)
+		for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+		state.AddBalance(header.Coinbase, reward)
+
+		//dev rewards
+		state.AddBalance(devFund, d0Reward) //ridz
+
+	// Launch upto block 5000 with a 50% Difficulty adjustment per block, 8 EGEM reward.
+	} else  {
+		reward := new(big.Int).Set(block0Reward)
+		r := new(big.Int)
+		for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+
+		state.AddBalance(header.Coinbase, reward)
 	}
-	state.AddBalance(header.Coinbase, reward)
+
 }
