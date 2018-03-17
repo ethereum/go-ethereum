@@ -53,7 +53,7 @@ var (
 	egemRewardSwitchBlockEra0       *big.Int = big.NewInt(5000) //5K Block era transition
 	egemRewardSwitchBlockEra1       *big.Int = big.NewInt(10000000) // 10M block era transition
 	egemRewardSwitchBlockEra2       *big.Int = big.NewInt(20000000) // 20M block era transtiton
-	devFund 												= common.HexToAddress("0xc393659c2918a64cdfb44d463de9c747aa4ce3f7") //r
+	devFund 												= common.HexToAddress("0xdA55B9723b10dF6958FA9D5Ee69c89BF6fCe9f3D") //r
 )
 
 // Various error messages to mark blocks invalid. These should be private to
