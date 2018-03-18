@@ -177,7 +177,7 @@ var (
 	}
 	LightServFlag = cli.IntFlag{
 		Name:  "lightserv",
-		Usage: "Maximum percentage of time allowed for serving LES requests (0-90)",
+		Usage: "Maximum percentage of time allowed for serving LES requests (multi-threaded processing allows values over 100)",
 		Value: 0,
 	}
 	LightPeersFlag = cli.IntFlag{

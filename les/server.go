@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -98,7 +99,12 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		BufLimit:    300000000,
 		MinRecharge: 50000,
 	}
-	srv.fcManager = flowcontrol.NewClientManager(uint64(config.LightServ), 10, 1000000000)
+	tpr := float64(config.LightServ) / 100
+	mpr := int(tpr * 4)
+	if mpr < 4 {
+		mpr = 4
+	}
+	srv.fcManager = flowcontrol.NewClientManager(mpr, tpr, &mclock.MonotonicClock{}, nil)
 	srv.fcCostStats = newCostStats(eth.ChainDb())
 	return srv, nil
 }

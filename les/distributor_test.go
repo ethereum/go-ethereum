@@ -23,6 +23,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common/mclock"
 )
 
 type testDistReq struct {
@@ -121,7 +123,7 @@ func testRequestDistributor(t *testing.T, resend bool) {
 	stop := make(chan struct{})
 	defer close(stop)
 
-	dist := newRequestDistributor(nil, stop)
+	dist := newRequestDistributor(nil, stop, &mclock.MonotonicClock{})
 	var peers [testDistPeerCount]*testDistPeer
 	for i := range peers {
 		peers[i] = &testDistPeer{}

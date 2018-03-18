@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
@@ -487,7 +488,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 			return err
 		}
 		p.fcServerParams = params
-		p.fcServer = flowcontrol.NewServerNode(params)
+		p.fcServer = flowcontrol.NewServerNode(params, &mclock.MonotonicClock{})
 		p.fcCosts = MRC.decode()
 	}
 
