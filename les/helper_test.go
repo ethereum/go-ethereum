@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -183,13 +184,14 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 	if !lightSync {
 		srv := &LesServer{lesCommons: lesCommons{protocolManager: pm}}
 		pm.server = srv
+		pm.servingQueue.setThreads(4)
 
 		srv.defParams = &flowcontrol.ServerParams{
 			BufLimit:    testBufLimit,
 			MinRecharge: 1,
 		}
 
-		srv.fcManager = flowcontrol.NewClientManager(50, 10, 1000000000)
+		srv.fcManager = flowcontrol.NewClientManager(nil, &mclock.System{})
 		srv.fcCostStats = newCostStats(nil)
 	}
 	pm.Start(1000)
@@ -375,7 +377,7 @@ func newClientServerEnv(t *testing.T, blocks int, protocol int, waitIndexers fun
 	db, ldb := ethdb.NewMemDatabase(), ethdb.NewMemDatabase()
 	peers, lPeers := newPeerSet(), newPeerSet()
 
-	dist := newRequestDistributor(lPeers, make(chan struct{}))
+	dist := newRequestDistributor(lPeers, make(chan struct{}), &mclock.System{})
 	rm := newRetrieveManager(lPeers, dist, nil)
 	odr := NewLesOdr(ldb, light.TestClientIndexerConfig, rm)
 

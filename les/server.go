@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -47,6 +48,9 @@ type LesServer struct {
 	lesTopics   []discv5.Topic
 	privateKey  *ecdsa.PrivateKey
 	quitSync    chan struct{}
+
+	bwcNormal, bwcBlockProcessing flowcontrol.PieceWiseLinear // bandwidth curve for normal operation and block processing mode
+	thcNormal, thcBlockProcessing int                         // serving thread count for normal operation and block processing mode
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
@@ -102,9 +106,50 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		BufLimit:    300000000,
 		MinRecharge: 50000,
 	}
-	srv.fcManager = flowcontrol.NewClientManager(uint64(config.LightServ), 10, 1000000000)
+	bwNormal := uint64(config.LightServ) * flowcontrol.FixedPointMultiplier / 100
+	srv.bwcNormal = flowcontrol.PieceWiseLinear{{0, 0}, {bwNormal / 10, bwNormal}, {bwNormal, bwNormal}}
+	// limit the serving thread count to at least 4 times the targeted average
+	// bandwidth, allowing more paralellization in short-term load spikes but
+	// still limiting the total thread count at a reasonable level
+	srv.thcNormal = int(bwNormal * 4 / flowcontrol.FixedPointMultiplier)
+	if srv.thcNormal < 4 {
+		srv.thcNormal = 4
+	}
+	// while processing blocks use half of the normal target bandwidth
+	bwBlockProcessing := bwNormal / 2
+	srv.bwcBlockProcessing = flowcontrol.PieceWiseLinear{{0, 0}, {bwBlockProcessing / 10, bwBlockProcessing}, {bwBlockProcessing, bwBlockProcessing}}
+	// limit the serving thread count just above the targeted average bandwidth,
+	// ensuring that block processing is minimally hindered
+	srv.thcBlockProcessing = int(bwBlockProcessing/flowcontrol.FixedPointMultiplier) + 1
+
+	pm.servingQueue.setThreads(srv.thcNormal)
+	srv.fcManager = flowcontrol.NewClientManager(srv.bwcNormal, &mclock.System{})
+	srv.blockProcLoop(pm)
 	srv.fcCostStats = newCostStats(eth.ChainDb())
 	return srv, nil
+}
+
+func (s *LesServer) blockProcLoop(pm *ProtocolManager) {
+	pm.wg.Add(1)
+	procFeedback := make(chan bool, 10)
+	pm.blockchain.(*core.BlockChain).SetProcFeedback(procFeedback)
+	go func() {
+		for {
+			select {
+			case processing := <-procFeedback:
+				if processing {
+					pm.servingQueue.setThreads(s.thcBlockProcessing)
+					s.fcManager.SetRechargeCurve(s.bwcBlockProcessing)
+				} else {
+					pm.servingQueue.setThreads(s.thcNormal)
+					s.fcManager.SetRechargeCurve(s.bwcNormal)
+				}
+			case <-pm.quitSync:
+				pm.wg.Done()
+				return
+			}
+		}
+	}()
 }
 
 func (s *LesServer) Protocols() []p2p.Protocol {
@@ -139,7 +184,6 @@ func (s *LesServer) Stop() {
 	s.chtIndexer.Close()
 	// bloom trie indexer is closed by parent bloombits indexer
 	s.fcCostStats.store()
-	s.fcManager.Stop()
 	go func() {
 		<-s.protocolManager.noMorePeers
 	}()
