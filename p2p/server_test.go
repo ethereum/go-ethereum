@@ -363,7 +363,61 @@ func TestServerAtCap(t *testing.T) {
 	if !c.is(trustedConn) {
 		t.Error("Server did not set trusted flag")
 	}
+}
 
+func TestServerPeerLimits(t *testing.T) {
+	srvkey := newkey()
+	srvid := discover.PubkeyID(&srvkey.PublicKey)
+
+	var tp *setupTransport = &setupTransport{id: srvid, phs: &protoHandshake{ID: srvid}}
+	var flags connFlag = dynDialedConn
+	var dialDest *discover.Node = &discover.Node{ID: srvid}
+
+	srv := &Server{
+		Config: Config{
+			PrivateKey: srvkey,
+			MaxPeers:   0,
+			NoDial:     true,
+			Protocols:  []Protocol{discard},
+		},
+		newTransport: func(fd net.Conn) transport { return tp },
+		log:          log.New(),
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatalf("couldn't start server: %v", err)
+	}
+
+	// Check that server is full (MaxPeers=0)
+	conn, _ := net.Pipe()
+	srv.SetupConn(conn, flags, dialDest)
+	if tp.closeErr != DiscTooManyPeers {
+		t.Errorf("unexpected close error: %q", tp.closeErr)
+	}
+	conn.Close()
+
+	srv.AddTrustedPeer(dialDest)
+
+	// Check that server allows a trusted peer despite being full.
+	conn, _ = net.Pipe()
+	srv.SetupConn(conn, flags, dialDest)
+	if tp.closeErr == DiscTooManyPeers {
+		t.Errorf("failed to bypass MaxPeers with trusted node: %q", tp.closeErr)
+	}
+
+	if tp.closeErr != DiscSelf {
+		t.Errorf("unexpected close error: %q", tp.closeErr)
+	}
+	conn.Close()
+
+	srv.RemoveTrustedPeer(dialDest)
+
+	// Check that server is full again.
+	conn, _ = net.Pipe()
+	srv.SetupConn(conn, flags, dialDest)
+	if tp.closeErr != DiscTooManyPeers {
+		t.Errorf("unexpected close error: %q", tp.closeErr)
+	}
+	conn.Close()
 }
 
 func TestServerSetupConn(t *testing.T) {
