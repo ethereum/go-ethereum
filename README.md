@@ -1,5 +1,5 @@
 ## Go Ethereum
 
-Official golang implementation of the Ethereum Inc protocol.
+Official golang implementation of the eInc protocol.
 
 
