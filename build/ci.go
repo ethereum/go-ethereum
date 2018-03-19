@@ -787,9 +787,10 @@ func gomobileTool(subcmd string, args ...string) *exec.Cmd {
 	cmd.Args = append(cmd.Args, args...)
 	cmd.Env = []string{
 		"GOPATH=" + build.GOPATH(),
+		"PATH=" + GOBIN + string(os.PathListSeparator) + os.Getenv("PATH"),
 	}
 	for _, e := range os.Environ() {
-		if strings.HasPrefix(e, "GOPATH=") {
+		if strings.HasPrefix(e, "GOPATH=") || strings.HasPrefix(e, "PATH=") {
 			continue
 		}
 		cmd.Env = append(cmd.Env, e)
