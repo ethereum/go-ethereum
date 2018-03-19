@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// +build gofuzz
+
 package bn256
 
 import (
@@ -39,6 +41,8 @@ func FuzzAdd(data []byte) int {
 
 	if (errc == nil) != (errg == nil) {
 		panic("parse mismatch")
+	} else if errc != nil {
+		return 0
 	}
 	// Ensure both libs can parse the second curve point
 	yc := new(cloudflare.G1)
@@ -49,6 +53,8 @@ func FuzzAdd(data []byte) int {
 
 	if (errc == nil) != (errg == nil) {
 		panic("parse mismatch")
+	} else if errc != nil {
+		return 0
 	}
 	// Add the two points and ensure they result in the same output
 	rc := new(cloudflare.G1)
@@ -79,6 +85,8 @@ func FuzzMul(data []byte) int {
 
 	if (errc == nil) != (errg == nil) {
 		panic("parse mismatch")
+	} else if errc != nil {
+		return 0
 	}
 	// Add the two points and ensure they result in the same output
 	rc := new(cloudflare.G1)
@@ -107,6 +115,8 @@ func FuzzPair(data []byte) int {
 
 	if (errc == nil) != (errg == nil) {
 		panic("parse mismatch")
+	} else if errc != nil {
+		return 0
 	}
 	// Ensure both libs can parse the twist point
 	tc := new(cloudflare.G2)
@@ -117,6 +127,8 @@ func FuzzPair(data []byte) int {
 
 	if (errc == nil) != (errg == nil) {
 		panic("parse mismatch")
+	} else if errc != nil {
+		return 0
 	}
 	// Pair the two points and ensure thet result in the same output
 	if cloudflare.PairingCheck([]*cloudflare.G1{pc}, []*cloudflare.G2{tc}) != google.PairingCheck([]*google.G1{pg}, []*google.G2{tg}) {
