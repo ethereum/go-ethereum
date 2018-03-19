@@ -20,8 +20,10 @@ package main
 import (
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -47,6 +49,10 @@ func main() {
 		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int("loglevel")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
 		rand.Seed(time.Now().UnixNano())
 
+		network := c.String("network")
+		if strings.Contains(network, " ") || strings.Contains(network, "-") {
+			utils.Fatalf("No spaces or hyphens allowed in network name")
+		}
 		// Start the wizard and relinquish control
 		makeWizard(c.String("network")).run()
 		return nil
