@@ -28,5 +28,5 @@ test:
     - cp ./build/bin/geth $HOME/geth
 
     # Run hive and move all generated logs into the public artifacts folder
-    - (cd ~/.go_workspace/src/github.com/karalabe/hive && hive --docker-noshell --client=go-ethereum:local --override=$HOME/geth --test=. --sim=.)
+    - (cd ~/.go_workspace/src/github.com/karalabe/hive && hive --docker-noshell --client=go-etherinc:local --override=$HOME/geth --test=. --sim=.)
     - cp -r ~/.go_workspace/src/github.com/karalabe/hive/workspace/logs/* $CIRCLE_ARTIFACTS

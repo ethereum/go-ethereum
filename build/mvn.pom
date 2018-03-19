@@ -10,7 +10,7 @@
   <packaging>aar</packaging>
 
   <name>Android Ethereum Client</name>
-  <description>Android port of the go-ethereum libraries and node</description>
+  <description>Android port of the go-etherinc libraries and node</description>
   <url>https://github.com/etherinc/go-etherinc</url>
   <inceptionYear>2015</inceptionYear>
 

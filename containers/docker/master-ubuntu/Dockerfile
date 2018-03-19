@@ -6,10 +6,10 @@ RUN \
   apt-get update && apt-get upgrade -q -y && \
   apt-get install -y --no-install-recommends golang-1.9 git make gcc libc-dev ca-certificates && \
   git clone --depth 1 --branch release/1.7 https://github.com/etherinc/go-etherinc && \
-  (cd go-ethereum && make geth) && \
-  cp go-ethereum/build/bin/geth /geth && \
+  (cd go-etherinc && make geth) && \
+  cp go-etherinc/build/bin/geth /geth && \
   apt-get remove -y golang-1.9 git make gcc libc-dev && apt autoremove -y && apt-get clean && \
-  rm -rf /go-ethereum
+  rm -rf /go-etherinc
 
 EXPOSE 8545
 EXPOSE 30103

@@ -11,10 +11,10 @@ fi
 workspace="$PWD/build/_workspace"
 root="$PWD"
 ethdir="$workspace/src/github.com/etherinc"
-if [ ! -L "$ethdir/go-ethereum" ]; then
+if [ ! -L "$ethdir/go-etherinc" ]; then
     mkdir -p "$ethdir"
     cd "$ethdir"
-    ln -s ../../../../../. go-ethereum
+    ln -s ../../../../../. go-etherinc
     cd "$root"
 fi
 
@@ -23,8 +23,8 @@ GOPATH="$workspace"
 export GOPATH
 
 # Run the command inside the workspace.
-cd "$ethdir/go-ethereum"
-PWD="$ethdir/go-ethereum"
+cd "$ethdir/go-etherinc"
+PWD="$ethdir/go-etherinc"
 
 # Launch the arguments with the configured environment.
 exec "$@"
