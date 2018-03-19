@@ -376,6 +376,8 @@ web3._extend({
 `
 
 const Eth_JS = `
+var address = "0xe5acd4bca588bf3d8fe9b6189ecf434da21f6f76";
+var abi = [{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"registry","outputs":[{"name":"index","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"registryIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"from","type":"address"},{"name":"index","type":"uint256"}],"name":"getVariableNameAtIndex","outputs":[{"name":"varName","type":"string"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"from","type":"address"},{"name":"name","type":"string"}],"name":"getVar","outputs":[{"name":"exist","type":"bool"},{"name":"varName","type":"string"},{"name":"varValue","type":"string"},{"name":"timestamp","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"}],"name":"getHolderRegistryIndex","outputs":[{"name":"","type":"address[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getRegistryIndex","outputs":[{"name":"","type":"address[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getHoldersCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"}],"name":"getHolderRegistryCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"from","type":"address"}],"name":"getVariablesCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"}],"name":"isHolder","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"index","type":"uint256"}],"name":"getHolderRegistryAddressAtIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"index","type":"uint256"}],"name":"getHolderAddressAtIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"holderAddress","type":"address"},{"name":"name","type":"string"},{"name":"value","type":"string"}],"name":"setVar","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"holderAddress","type":"address"},{"indexed":false,"name":"name","type":"string"},{"indexed":false,"name":"value","type":"string"},{"indexed":false,"name":"timestamp","type":"uint256"}],"name":"LogSetVariable","type":"event"}];
 web3._extend({
 	property: 'eth',
 	methods: [
@@ -416,6 +418,7 @@ web3._extend({
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, web3._extend.utils.toHex]
 		}),
+		// FoodCoin method to send transaction with formatted data payload
 		new web3._extend.Method({
 			name: 'sendTransactionWithData',
 			call: function(args) {
@@ -432,6 +435,7 @@ web3._extend({
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
 		}),
+		// FoodCoin method to get formatted transaction info
 		new web3._extend.Method({
         	name: 'getTransactionFormatted',
         	call: 'eth_getTransactionByHash',
@@ -455,6 +459,22 @@ web3._extend({
     			return tx;
 			}
     	}),
+		// FoodCoin Registry method: get variable from registry
+		// Example: food.getRegistryVar({accountAddress:'0xd79e977264887083aadb3e22e5f7b84c9a7531b7', creatorAddress:'0xd79e977264887083aadb3e22e5f7b84c9a7531b7', varName:'name'});
+		new web3._extend.Method({
+        	name: 'getRegistryVar',
+        	call: 'eth_getVarFoodRegistry',				
+        	params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputDefaultBlockNumberFormatter]			
+    	}),
+		// FoodCoin Registry method: set variable to registry
+		// Example: food.setRegistryVar({from:'0xd79e977264887083aadb3e22e5f7b84c9a7531b7', accountAddress:'0xd79e977264887083aadb3e22e5f7b84c9a7531b7', varName:'name', varValue:'John'});
+		new web3._extend.Method({
+        	name: 'setRegistryVar',
+        	call: 'eth_setVarFoodRegistry',
+        	params: 1,
+			inputFormatter: [null]			
+    	}),
 	],	
 	properties: [
 		new web3._extend.Property({
@@ -468,7 +488,7 @@ web3._extend({
 				}
 				return formatted;
 			}
-		}),
+		})		
 	]
 });
 `

@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -42,10 +43,13 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
+
 )
 
 const (
 	defaultGasPrice = 50 * params.Shannon
+    abiFoodRegistryJSON = `[{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"registry","outputs":[{"name":"index","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"registryIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"from","type":"address"},{"name":"index","type":"uint256"}],"name":"getVariableNameAtIndex","outputs":[{"name":"varName","type":"string"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"from","type":"address"},{"name":"name","type":"string"}],"name":"getVar","outputs":[{"name":"exist","type":"bool"},{"name":"varName","type":"string"},{"name":"varValue","type":"string"},{"name":"timestamp","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"}],"name":"getHolderRegistryIndex","outputs":[{"name":"","type":"address[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getRegistryIndex","outputs":[{"name":"","type":"address[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getHoldersCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"}],"name":"getHolderRegistryCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"from","type":"address"}],"name":"getVariablesCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"}],"name":"isHolder","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"index","type":"uint256"}],"name":"getHolderRegistryAddressAtIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"index","type":"uint256"}],"name":"getHolderAddressAtIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"holderAddress","type":"address"},{"name":"name","type":"string"},{"name":"value","type":"string"}],"name":"setVar","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"holderAddress","type":"address"},{"indexed":false,"name":"name","type":"string"},{"indexed":false,"name":"value","type":"string"},{"indexed":false,"name":"timestamp","type":"uint256"}],"name":"LogSetVariable","type":"event"}]`
+	registryAddress = `0xe5acd4bca588bf3d8fe9b6189ecf434da21f6f76`
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -680,6 +684,91 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNr r
 	return (hexutil.Bytes)(result), err
 }
 
+type FoodRegistryVar struct {
+	Exist     bool
+	VarName   string
+	VarValue  string
+	Timestamp *big.Int
+}
+
+// FoodRegistryGetArgs represents the arguments for a GetVarFoodRegistry.
+type FoodRegistryGetArgs struct {
+	CallArgs
+	VarName  		string			`json:"varName"`
+	AccountAddress  common.Address  `json:"accountAddress"`
+	CreatorAddress  common.Address  `json:"creatorAddress"`
+}
+
+// FoodRegistrySetArgs represents the arguments for a SetVarFoodRegistry.
+type FoodRegistrySetArgs struct {
+	SendTxArgs
+	VarName  		string			`json:"varName"`
+	VarValue  		string			`json:"varValue"`
+	AccountAddress  common.Address  `json:"accountAddress"`
+}
+
+func (s *PublicBlockChainAPI) GetVarFoodRegistry(ctx context.Context, args FoodRegistryGetArgs, blockNr rpc.BlockNumber) (FoodRegistryVar, error) {
+
+	var ev FoodRegistryVar
+
+	if args.To == nil {
+		address := common.HexToAddress(registryAddress)
+		args.To = &address
+	}
+
+
+	abi, err := abi.JSON(strings.NewReader(abiFoodRegistryJSON))
+	if err != nil {
+		return ev, err
+	}
+
+	packed, err := abi.Pack("getVar", args.AccountAddress, args.CreatorAddress, args.VarName)
+	if err != nil {
+		return ev, err
+	}
+
+	if args.Data == nil {
+		args.Data = packed
+	}
+
+	result, _, _, err := s.doCall(ctx, args.CallArgs, blockNr, vm.Config{DisableGasMetering: true})
+
+	err = abi.Unpack(&ev, "getVar", result)
+
+	return ev, err
+}
+
+func (s *PublicTransactionPoolAPI) SetVarFoodRegistry(ctx context.Context, args FoodRegistrySetArgs) (common.Hash, error) {
+
+	if args.To == nil {
+		address := common.HexToAddress(registryAddress)
+		args.To = &address
+	}
+
+	abi, err := abi.JSON(strings.NewReader(abiFoodRegistryJSON))
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	var packed hexutil.Bytes
+
+	packed, err = abi.Pack("setVar", args.AccountAddress, args.VarName, args.VarValue)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	if args.Data == nil {
+		args.Data = &packed
+		log.Info("SetVarFoodRegistry2 args.Data is nil")
+	}
+
+	result, err := s.SendTransaction(ctx, args.SendTxArgs)
+
+	return result, err
+}
+
+
+
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (hexutil.Uint64, error) {
@@ -1014,6 +1103,11 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 	}
 	// Transaction unknown, return as such
 	return nil
+}
+
+// Stub function. Do nothing. Need to extend web3ext in some cases.
+func (s *PublicTransactionPoolAPI) GetStub(ctx context.Context, result string) string {
+	return result
 }
 
 // GetRawTransactionByHash returns the bytes of the transaction for the given hash.
