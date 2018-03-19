@@ -86,7 +86,7 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) (err error) {
 		}
 		return method.Outputs.Unpack(v, output)
 	} else if event, ok := abi.Events[name]; ok {
-		return event.Inputs.Unpack(v, output)
+		return event.Inputs.unpackTuple(v, output)
 	}
 	return fmt.Errorf("abi: could not locate named method or event")
 }
