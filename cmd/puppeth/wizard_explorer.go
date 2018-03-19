@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/etherinc/go-ethereum/log"
+	"github.com/etherinc/go-etherinc/log"
 )
 
 // deployExplorer creates a new block explorer based on some user input.

@@ -22,8 +22,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/core/types"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/core/types"
 )
 
 // NotFound is returned by API methods if the requested item does not exist.

@@ -21,7 +21,7 @@ package keystore
 import (
 	"time"
 
-	"github.com/etherinc/go-ethereum/log"
+	"github.com/etherinc/go-etherinc/log"
 	"github.com/rjeczalik/notify"
 )
 

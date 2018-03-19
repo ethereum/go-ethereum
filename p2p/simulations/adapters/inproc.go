@@ -23,12 +23,12 @@ import (
 	"net"
 	"sync"
 
-	"github.com/etherinc/go-ethereum/event"
-	"github.com/etherinc/go-ethereum/log"
-	"github.com/etherinc/go-ethereum/node"
-	"github.com/etherinc/go-ethereum/p2p"
-	"github.com/etherinc/go-ethereum/p2p/discover"
-	"github.com/etherinc/go-ethereum/rpc"
+	"github.com/etherinc/go-etherinc/event"
+	"github.com/etherinc/go-etherinc/log"
+	"github.com/etherinc/go-etherinc/node"
+	"github.com/etherinc/go-etherinc/p2p"
+	"github.com/etherinc/go-etherinc/p2p/discover"
+	"github.com/etherinc/go-etherinc/rpc"
 )
 
 // SimAdapter is a NodeAdapter which creates in-memory simulation nodes and

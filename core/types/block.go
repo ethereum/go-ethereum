@@ -27,10 +27,10 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/common/hexutil"
-	"github.com/etherinc/go-ethereum/crypto/sha3"
-	"github.com/etherinc/go-ethereum/rlp"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/common/hexutil"
+	"github.com/etherinc/go-etherinc/crypto/sha3"
+	"github.com/etherinc/go-etherinc/rlp"
 )
 
 var (

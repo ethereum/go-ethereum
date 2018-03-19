@@ -42,7 +42,7 @@ import (
 	"fmt"
 	"hash"
 
-	ethcrypto "github.com/etherinc/go-ethereum/crypto"
+	ethcrypto "github.com/etherinc/go-etherinc/crypto"
 )
 
 var (

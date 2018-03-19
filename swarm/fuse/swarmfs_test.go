@@ -27,8 +27,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/etherinc/go-ethereum/swarm/api"
-	"github.com/etherinc/go-ethereum/swarm/storage"
+	"github.com/etherinc/go-etherinc/swarm/api"
+	"github.com/etherinc/go-etherinc/swarm/storage"
 )
 
 type fileInfo struct {

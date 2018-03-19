@@ -22,11 +22,11 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/core/types"
-	"github.com/etherinc/go-ethereum/internal/ethapi"
-	"github.com/etherinc/go-ethereum/params"
-	"github.com/etherinc/go-ethereum/rpc"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/core/types"
+	"github.com/etherinc/go-etherinc/internal/ethapi"
+	"github.com/etherinc/go-etherinc/params"
+	"github.com/etherinc/go-etherinc/rpc"
 )
 
 var maxPrice = big.NewInt(500 * params.Shannon)

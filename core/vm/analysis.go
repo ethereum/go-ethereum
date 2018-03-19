@@ -19,7 +19,7 @@ package vm
 import (
 	"math/big"
 
-	"github.com/etherinc/go-ethereum/common"
+	"github.com/etherinc/go-etherinc/common"
 )
 
 // destinations stores one map per contract (keyed by hash of code).

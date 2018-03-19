@@ -17,14 +17,14 @@
 package core
 
 import (
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/consensus"
-	"github.com/etherinc/go-ethereum/consensus/misc"
-	"github.com/etherinc/go-ethereum/core/state"
-	"github.com/etherinc/go-ethereum/core/types"
-	"github.com/etherinc/go-ethereum/core/vm"
-	"github.com/etherinc/go-ethereum/crypto"
-	"github.com/etherinc/go-ethereum/params"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/consensus"
+	"github.com/etherinc/go-etherinc/consensus/misc"
+	"github.com/etherinc/go-etherinc/core/state"
+	"github.com/etherinc/go-etherinc/core/types"
+	"github.com/etherinc/go-etherinc/core/vm"
+	"github.com/etherinc/go-etherinc/crypto"
+	"github.com/etherinc/go-etherinc/params"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning

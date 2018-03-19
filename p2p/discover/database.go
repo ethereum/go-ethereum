@@ -27,9 +27,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/etherinc/go-ethereum/crypto"
-	"github.com/etherinc/go-ethereum/log"
-	"github.com/etherinc/go-ethereum/rlp"
+	"github.com/etherinc/go-etherinc/crypto"
+	"github.com/etherinc/go-etherinc/log"
+	"github.com/etherinc/go-etherinc/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/iterator"

@@ -19,7 +19,7 @@ package state
 import (
 	"math/big"
 
-	"github.com/etherinc/go-ethereum/common"
+	"github.com/etherinc/go-etherinc/common"
 )
 
 type journalEntry interface {

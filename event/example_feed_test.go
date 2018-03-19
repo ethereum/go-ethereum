@@ -19,7 +19,7 @@ package event_test
 import (
 	"fmt"
 
-	"github.com/etherinc/go-ethereum/event"
+	"github.com/etherinc/go-etherinc/event"
 )
 
 func ExampleFeed_acknowledgedEvents() {

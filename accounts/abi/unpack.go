@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/etherinc/go-ethereum/common"
+	"github.com/etherinc/go-etherinc/common"
 )
 
 // reads the integer based on its kind

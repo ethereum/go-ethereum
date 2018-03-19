@@ -19,10 +19,10 @@ package core
 import (
 	"fmt"
 
-	"github.com/etherinc/go-ethereum/consensus"
-	"github.com/etherinc/go-ethereum/core/state"
-	"github.com/etherinc/go-ethereum/core/types"
-	"github.com/etherinc/go-ethereum/params"
+	"github.com/etherinc/go-etherinc/consensus"
+	"github.com/etherinc/go-etherinc/core/state"
+	"github.com/etherinc/go-etherinc/core/types"
+	"github.com/etherinc/go-etherinc/params"
 )
 
 // BlockValidator is responsible for validating block headers, uncles and

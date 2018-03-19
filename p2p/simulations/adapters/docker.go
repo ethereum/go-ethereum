@@ -28,9 +28,9 @@ import (
 	"strings"
 
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/etherinc/go-ethereum/log"
-	"github.com/etherinc/go-ethereum/node"
-	"github.com/etherinc/go-ethereum/p2p/discover"
+	"github.com/etherinc/go-etherinc/log"
+	"github.com/etherinc/go-etherinc/node"
+	"github.com/etherinc/go-etherinc/p2p/discover"
 )
 
 // DockerAdapter is a NodeAdapter which runs simulation nodes inside Docker

@@ -2,7 +2,7 @@ FROM alpine:3.7
 
 RUN \
   apk add --update go git make gcc musl-dev linux-headers ca-certificates && \
-  git clone --depth 1 --branch release/1.7 https://github.com/etherinc/go-ethereum && \
+  git clone --depth 1 --branch release/1.7 https://github.com/etherinc/go-etherinc && \
   (cd go-ethereum && make geth) && \
   cp go-ethereum/build/bin/geth /geth && \
   apk del go git make gcc musl-dev linux-headers && \

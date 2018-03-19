@@ -22,15 +22,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/core"
-	"github.com/etherinc/go-ethereum/core/state"
-	"github.com/etherinc/go-ethereum/core/types"
-	"github.com/etherinc/go-ethereum/ethdb"
-	"github.com/etherinc/go-ethereum/event"
-	"github.com/etherinc/go-ethereum/log"
-	"github.com/etherinc/go-ethereum/params"
-	"github.com/etherinc/go-ethereum/rlp"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/core"
+	"github.com/etherinc/go-etherinc/core/state"
+	"github.com/etherinc/go-etherinc/core/types"
+	"github.com/etherinc/go-etherinc/ethdb"
+	"github.com/etherinc/go-etherinc/event"
+	"github.com/etherinc/go-etherinc/log"
+	"github.com/etherinc/go-etherinc/params"
+	"github.com/etherinc/go-etherinc/rlp"
 )
 
 const (

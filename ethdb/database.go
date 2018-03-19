@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/etherinc/go-ethereum/log"
-	"github.com/etherinc/go-ethereum/metrics"
+	"github.com/etherinc/go-etherinc/log"
+	"github.com/etherinc/go-etherinc/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"

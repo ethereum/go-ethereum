@@ -19,8 +19,8 @@
 package whisperv6
 
 import (
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/common/hexutil"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/common/hexutil"
 )
 
 // TopicType represents a cryptographically secure, probabilistic partial

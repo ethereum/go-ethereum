@@ -27,12 +27,12 @@ import (
 
 	cli "gopkg.in/urfave/cli.v1"
 
-	"github.com/etherinc/go-ethereum/cmd/utils"
-	"github.com/etherinc/go-ethereum/dashboard"
-	"github.com/etherinc/go-ethereum/eth"
-	"github.com/etherinc/go-ethereum/node"
-	"github.com/etherinc/go-ethereum/params"
-	whisper "github.com/etherinc/go-ethereum/whisper/whisperv5"
+	"github.com/etherinc/go-etherinc/cmd/utils"
+	"github.com/etherinc/go-etherinc/dashboard"
+	"github.com/etherinc/go-etherinc/eth"
+	"github.com/etherinc/go-etherinc/node"
+	"github.com/etherinc/go-etherinc/params"
+	whisper "github.com/etherinc/go-etherinc/whisper/whisperv5"
 	"github.com/naoina/toml"
 )
 

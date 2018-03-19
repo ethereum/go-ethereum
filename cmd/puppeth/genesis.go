@@ -21,11 +21,11 @@ import (
 	"errors"
 	"math"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/common/hexutil"
-	"github.com/etherinc/go-ethereum/consensus/ethash"
-	"github.com/etherinc/go-ethereum/core"
-	"github.com/etherinc/go-ethereum/params"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/common/hexutil"
+	"github.com/etherinc/go-etherinc/consensus/ethash"
+	"github.com/etherinc/go-etherinc/core"
+	"github.com/etherinc/go-etherinc/params"
 )
 
 // cppEthereumGenesisSpec represents the genesis specification format used by the

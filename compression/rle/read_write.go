@@ -21,7 +21,7 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/etherinc/go-ethereum/crypto"
+	"github.com/etherinc/go-etherinc/crypto"
 )
 
 const (

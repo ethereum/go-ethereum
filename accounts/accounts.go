@@ -20,10 +20,10 @@ package accounts
 import (
 	"math/big"
 
-	ethereum "github.com/etherinc/go-ethereum"
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/core/types"
-	"github.com/etherinc/go-ethereum/event"
+	ethereum "github.com/etherinc/go-etherinc"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/core/types"
+	"github.com/etherinc/go-etherinc/event"
 )
 
 // Account represents an Ethereum account located at a specific location defined

@@ -25,13 +25,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/core/state"
-	"github.com/etherinc/go-ethereum/core/types"
-	"github.com/etherinc/go-ethereum/event"
-	"github.com/etherinc/go-ethereum/log"
-	"github.com/etherinc/go-ethereum/metrics"
-	"github.com/etherinc/go-ethereum/params"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/core/state"
+	"github.com/etherinc/go-etherinc/core/types"
+	"github.com/etherinc/go-etherinc/event"
+	"github.com/etherinc/go-etherinc/log"
+	"github.com/etherinc/go-etherinc/metrics"
+	"github.com/etherinc/go-etherinc/params"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 

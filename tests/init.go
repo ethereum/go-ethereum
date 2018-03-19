@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/etherinc/go-ethereum/params"
+	"github.com/etherinc/go-etherinc/params"
 )
 
 // This table defines supported forks and their chain config.

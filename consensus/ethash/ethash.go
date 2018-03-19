@@ -33,9 +33,9 @@ import (
 	"unsafe"
 
 	mmap "github.com/edsrzf/mmap-go"
-	"github.com/etherinc/go-ethereum/consensus"
-	"github.com/etherinc/go-ethereum/log"
-	"github.com/etherinc/go-ethereum/rpc"
+	"github.com/etherinc/go-etherinc/consensus"
+	"github.com/etherinc/go-etherinc/log"
+	"github.com/etherinc/go-etherinc/rpc"
 	"github.com/hashicorp/golang-lru/simplelru"
 	metrics "github.com/rcrowley/go-metrics"
 )

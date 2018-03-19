@@ -19,7 +19,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/etherinc/go-ethereum/core/vm"
+	"github.com/etherinc/go-etherinc/core/vm"
 )
 
 func TestVM(t *testing.T) {

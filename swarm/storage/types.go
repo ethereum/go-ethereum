@@ -24,9 +24,9 @@ import (
 	"io"
 	"sync"
 
-	"github.com/etherinc/go-ethereum/bmt"
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/crypto/sha3"
+	"github.com/etherinc/go-etherinc/bmt"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/crypto/sha3"
 )
 
 type Hasher func() hash.Hash

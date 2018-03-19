@@ -19,7 +19,7 @@ package vm
 import (
 	"fmt"
 
-	"github.com/etherinc/go-ethereum/params"
+	"github.com/etherinc/go-etherinc/params"
 )
 
 func makeStackFunc(pop, push int) stackValidationFunc {

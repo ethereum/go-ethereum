@@ -19,10 +19,10 @@ package downloader
 import (
 	"math/big"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/core"
-	"github.com/etherinc/go-ethereum/core/types"
-	"github.com/etherinc/go-ethereum/ethdb"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/core"
+	"github.com/etherinc/go-etherinc/core/types"
+	"github.com/etherinc/go-etherinc/ethdb"
 )
 
 // FakePeer is a mock downloader peer that operates on a local database instance

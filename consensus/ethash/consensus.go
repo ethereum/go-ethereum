@@ -25,13 +25,13 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/common/math"
-	"github.com/etherinc/go-ethereum/consensus"
-	"github.com/etherinc/go-ethereum/consensus/misc"
-	"github.com/etherinc/go-ethereum/core/state"
-	"github.com/etherinc/go-ethereum/core/types"
-	"github.com/etherinc/go-ethereum/params"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/common/math"
+	"github.com/etherinc/go-etherinc/consensus"
+	"github.com/etherinc/go-etherinc/consensus/misc"
+	"github.com/etherinc/go-etherinc/core/state"
+	"github.com/etherinc/go-etherinc/core/types"
+	"github.com/etherinc/go-etherinc/params"
 	set "gopkg.in/fatih/set.v0"
 )
 

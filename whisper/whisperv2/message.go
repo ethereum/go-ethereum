@@ -26,10 +26,10 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/crypto"
-	"github.com/etherinc/go-ethereum/crypto/ecies"
-	"github.com/etherinc/go-ethereum/log"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/crypto"
+	"github.com/etherinc/go-etherinc/crypto/ecies"
+	"github.com/etherinc/go-etherinc/log"
 )
 
 // Message represents an end-user data packet to transmit through the Whisper

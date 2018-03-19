@@ -20,7 +20,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/etherinc/go-ethereum/common"
+	"github.com/etherinc/go-etherinc/common"
 )
 
 const Version = "1.0"

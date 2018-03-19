@@ -24,8 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/etherinc/go-ethereum/crypto"
-	"github.com/etherinc/go-ethereum/rlp"
+	"github.com/etherinc/go-etherinc/crypto"
+	"github.com/etherinc/go-etherinc/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

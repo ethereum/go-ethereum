@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/crypto"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/crypto"
 )
 
 // Event is an event potentially triggered by the EVM's LOG mechanism. The Event

@@ -18,11 +18,11 @@
 package consensus
 
 import (
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/core/state"
-	"github.com/etherinc/go-ethereum/core/types"
-	"github.com/etherinc/go-ethereum/params"
-	"github.com/etherinc/go-ethereum/rpc"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/core/state"
+	"github.com/etherinc/go-etherinc/core/types"
+	"github.com/etherinc/go-etherinc/params"
+	"github.com/etherinc/go-etherinc/rpc"
 	"math/big"
 )
 

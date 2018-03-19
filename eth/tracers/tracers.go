@@ -21,7 +21,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/etherinc/go-ethereum/eth/tracers/internal/tracers"
+	"github.com/etherinc/go-etherinc/eth/tracers/internal/tracers"
 )
 
 // all contains all the built in JavaScript tracers by name.

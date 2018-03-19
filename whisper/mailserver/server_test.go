@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/crypto"
-	whisper "github.com/etherinc/go-ethereum/whisper/whisperv5"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/crypto"
+	whisper "github.com/etherinc/go-etherinc/whisper/whisperv5"
 )
 
 const powRequirement = 0.00001

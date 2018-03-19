@@ -24,7 +24,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/etherinc/go-ethereum/core/types"
+	"github.com/etherinc/go-etherinc/core/types"
 )
 
 // Tests that ethash works correctly in test mode.
@@ -44,7 +44,7 @@ func TestTestMode(t *testing.T) {
 }
 
 // This test checks that cache lru logic doesn't crash under load.
-// It reproduces https://github.com/etherinc/go-ethereum/issues/14943
+// It reproduces https://github.com/etherinc/go-etherinc/issues/14943
 func TestCacheFileEvict(t *testing.T) {
 	tmpdir, err := ioutil.TempDir("", "ethash-test")
 	if err != nil {

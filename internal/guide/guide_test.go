@@ -30,8 +30,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/etherinc/go-ethereum/accounts/keystore"
-	"github.com/etherinc/go-ethereum/core/types"
+	"github.com/etherinc/go-etherinc/accounts/keystore"
+	"github.com/etherinc/go-etherinc/core/types"
 )
 
 // Tests that the account management snippets work correctly.

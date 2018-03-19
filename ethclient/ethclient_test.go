@@ -16,7 +16,7 @@
 
 package ethclient
 
-import "github.com/etherinc/go-ethereum"
+import "github.com/etherinc/go-etherinc"
 
 // Verify that Client implements the ethereum interfaces.
 var (

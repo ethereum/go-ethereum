@@ -25,12 +25,12 @@ import (
 	"sync"
 	"time"
 
-	ethereum "github.com/etherinc/go-ethereum"
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/core"
-	"github.com/etherinc/go-ethereum/core/types"
-	"github.com/etherinc/go-ethereum/event"
-	"github.com/etherinc/go-ethereum/rpc"
+	ethereum "github.com/etherinc/go-etherinc"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/core"
+	"github.com/etherinc/go-etherinc/core/types"
+	"github.com/etherinc/go-etherinc/event"
+	"github.com/etherinc/go-etherinc/rpc"
 )
 
 // Type determines the kind of filter and is used to put the filter in to

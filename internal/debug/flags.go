@@ -24,8 +24,8 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/etherinc/go-ethereum/log"
-	"github.com/etherinc/go-ethereum/log/term"
+	"github.com/etherinc/go-etherinc/log"
+	"github.com/etherinc/go-etherinc/log/term"
 	colorable "github.com/mattn/go-colorable"
 	"gopkg.in/urfave/cli.v1"
 )

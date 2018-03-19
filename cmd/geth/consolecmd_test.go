@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/etherinc/go-ethereum/params"
+	"github.com/etherinc/go-etherinc/params"
 )
 
 const (

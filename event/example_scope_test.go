@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/etherinc/go-ethereum/event"
+	"github.com/etherinc/go-etherinc/event"
 )
 
 // This example demonstrates how SubscriptionScope can be used to control the lifetime of

@@ -29,7 +29,7 @@ import (
 	"net"
 	"sort"
 
-	"github.com/etherinc/go-ethereum/common"
+	"github.com/etherinc/go-etherinc/common"
 )
 
 const (

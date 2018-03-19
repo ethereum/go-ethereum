@@ -21,10 +21,10 @@ import (
 	"io"
 	"os"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/core/types"
-	"github.com/etherinc/go-ethereum/log"
-	"github.com/etherinc/go-ethereum/rlp"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/core/types"
+	"github.com/etherinc/go-etherinc/log"
+	"github.com/etherinc/go-etherinc/rlp"
 )
 
 // errNoActiveJournal is returned if a transaction is attempted to be inserted

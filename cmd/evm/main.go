@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/etherinc/go-ethereum/cmd/utils"
+	"github.com/etherinc/go-etherinc/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 

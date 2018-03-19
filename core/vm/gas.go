@@ -19,7 +19,7 @@ package vm
 import (
 	"math/big"
 
-	"github.com/etherinc/go-ethereum/params"
+	"github.com/etherinc/go-etherinc/params"
 )
 
 const (

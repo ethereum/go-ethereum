@@ -33,7 +33,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/etherinc/go-ethereum/log"
+	"github.com/etherinc/go-etherinc/log"
 )
 
 // Handler is the global debugging handler.

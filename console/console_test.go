@@ -26,12 +26,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/consensus/ethash"
-	"github.com/etherinc/go-ethereum/core"
-	"github.com/etherinc/go-ethereum/eth"
-	"github.com/etherinc/go-ethereum/internal/jsre"
-	"github.com/etherinc/go-ethereum/node"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/consensus/ethash"
+	"github.com/etherinc/go-etherinc/core"
+	"github.com/etherinc/go-etherinc/eth"
+	"github.com/etherinc/go-etherinc/internal/jsre"
+	"github.com/etherinc/go-etherinc/node"
 )
 
 const (

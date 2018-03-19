@@ -35,9 +35,9 @@ import (
 	"io"
 	"sort"
 
-	"github.com/etherinc/go-ethereum/crypto"
-	"github.com/etherinc/go-ethereum/crypto/sha3"
-	"github.com/etherinc/go-ethereum/rlp"
+	"github.com/etherinc/go-etherinc/crypto"
+	"github.com/etherinc/go-etherinc/crypto/sha3"
+	"github.com/etherinc/go-etherinc/rlp"
 )
 
 const SizeLimit = 300 // maximum encoded size of a node record in bytes

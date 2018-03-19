@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/etherinc/go-ethereum/common"
+	"github.com/etherinc/go-etherinc/common"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.

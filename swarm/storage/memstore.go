@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/etherinc/go-ethereum/log"
+	"github.com/etherinc/go-etherinc/log"
 )
 
 const (

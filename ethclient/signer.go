@@ -20,8 +20,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/core/types"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/core/types"
 )
 
 // senderFromServer is a types.Signer that remembers the sender address returned by the RPC

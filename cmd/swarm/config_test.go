@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/etherinc/go-ethereum/rpc"
-	"github.com/etherinc/go-ethereum/swarm"
-	"github.com/etherinc/go-ethereum/swarm/api"
+	"github.com/etherinc/go-etherinc/rpc"
+	"github.com/etherinc/go-etherinc/swarm"
+	"github.com/etherinc/go-etherinc/swarm/api"
 
 	"github.com/docker/docker/pkg/reexec"
 )

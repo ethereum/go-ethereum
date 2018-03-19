@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/etherinc/go-ethereum/common/mclock"
+	"github.com/etherinc/go-etherinc/common/mclock"
 )
 
 const fcTimeConst = time.Millisecond

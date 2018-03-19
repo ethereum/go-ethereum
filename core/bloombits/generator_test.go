@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/etherinc/go-ethereum/core/types"
+	"github.com/etherinc/go-etherinc/core/types"
 )
 
 // Tests that batched bloom bits are correctly rotated from the input bloom

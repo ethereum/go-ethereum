@@ -26,10 +26,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/etherinc/go-ethereum/cmd/internal/browser"
-	"github.com/etherinc/go-ethereum/params"
+	"github.com/etherinc/go-etherinc/cmd/internal/browser"
+	"github.com/etherinc/go-etherinc/params"
 
-	"github.com/etherinc/go-ethereum/cmd/utils"
+	"github.com/etherinc/go-etherinc/cmd/utils"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -41,7 +41,7 @@ var bugCommand = cli.Command{
 	Category:  "MISCELLANEOUS COMMANDS",
 }
 
-const issueUrl = "https://github.com/etherinc/go-ethereum/issues/new"
+const issueUrl = "https://github.com/etherinc/go-etherinc/issues/new"
 
 // reportBug reports a bug by opening a new URL to the go-ethereum GH issue
 // tracker and setting default values as the issue body.

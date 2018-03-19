@@ -26,13 +26,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/etherinc/go-ethereum/common"
-	"github.com/etherinc/go-ethereum/core/types"
-	"github.com/etherinc/go-ethereum/eth"
-	"github.com/etherinc/go-ethereum/les/flowcontrol"
-	"github.com/etherinc/go-ethereum/light"
-	"github.com/etherinc/go-ethereum/p2p"
-	"github.com/etherinc/go-ethereum/rlp"
+	"github.com/etherinc/go-etherinc/common"
+	"github.com/etherinc/go-etherinc/core/types"
+	"github.com/etherinc/go-etherinc/eth"
+	"github.com/etherinc/go-etherinc/les/flowcontrol"
+	"github.com/etherinc/go-etherinc/light"
+	"github.com/etherinc/go-etherinc/p2p"
+	"github.com/etherinc/go-etherinc/rlp"
 )
 
 var (
