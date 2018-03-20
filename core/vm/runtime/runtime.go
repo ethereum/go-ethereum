@@ -21,12 +21,12 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/eximchain/go-ethereum/common"
+	"github.com/eximchain/go-ethereum/core/state"
+	"github.com/eximchain/go-ethereum/core/vm"
+	"github.com/eximchain/go-ethereum/crypto"
+	"github.com/eximchain/go-ethereum/ethdb"
+	"github.com/eximchain/go-ethereum/params"
 )
 
 // Config is a basic type specifying certain configuration flags for running
