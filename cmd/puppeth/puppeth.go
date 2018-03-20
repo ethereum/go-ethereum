@@ -36,7 +36,7 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "network",
-			Usage: "name of the network to administer",
+			Usage: "name of the network to administer (no spaces or hyphens, please)",
 		},
 		cli.IntFlag{
 			Name:  "loglevel",
