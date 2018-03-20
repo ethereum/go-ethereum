@@ -35,21 +35,22 @@ import (
 type BadgerDatabase struct {
 	fn 				string      // filename for reporting
 	db				*badger.DB 
-	badgerCache		*BadgerCache
 	getTimer       metrics.Timer // Timer for measuring the database get request counts and latencies
 	putTimer       metrics.Timer // Timer for measuring the database put request counts and latencies
 	delTimer       metrics.Timer // Timer for measuring the database delete request counts and latencies
 	missMeter      metrics.Meter // Meter for measuring the missed database get requests
 	readMeter      metrics.Meter // Meter for measuring the database get request data usage
 	writeMeter     metrics.Meter // Meter for measuring the database put request data usage
+	batchPutTimer  		metrics.Timer
+	batchWriteTimer 	metrics.Timer
+	batchWriteMeter		metrics.Meter
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
-	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 
 	log log.Logger // Contextual logger tracking the database path
 }
 
-// NewLDBDatabase returns a LevelDB wrapped object.
+// NewBadgerDatabase returns a BadgerDB wrapped object.
 func NewBadgerDatabase(file string) (*BadgerDatabase, error) {
 	logger := log.New("database", file)
 	
@@ -71,7 +72,6 @@ func NewBadgerDatabase(file string) (*BadgerDatabase, error) {
 		log: logger,
 	}
 	
-	ret.badgerCache = &BadgerCache{db: ret, c: make(map[string][]byte), size: 0, limit: 500000000}
 	return ret, nil
 }
 
@@ -81,27 +81,23 @@ func (db *BadgerDatabase) Path() string {
 }
 
 // Put puts the given key / value to the queue
-func (db *BadgerDatabase) Put(key []byte, value []byte) error {
+func (db *BadgerDatabase) Put(key []byte, value []byte) error {	
+	if db.putTimer != nil {
+		defer db.putTimer.UpdateSince(time.Now())
+	}
 
-	db.badgerCache.lock.Lock()
-	db.badgerCache.c[string(key)] = common.CopyBytes(value)
-	db.badgerCache.size += len(value)+len(key)
-	db.badgerCache.lock.Unlock()
-	
-	if db.badgerCache.size >= db.badgerCache.limit {
-		return db.badgerCache.Flush()
+	if db.writeMeter != nil {
+		db.writeMeter.Mark(int64(len(value)))
 	}
 	
-	return nil
+	
+	return db.db.Update(func(txn *badger.Txn) error {
+  		err := txn.Set(key, value)
+  		return err
+	})
 }
 
 func (db *BadgerDatabase) Has(key []byte) (ret bool, err error) {
-	db.badgerCache.lock.RLock()
-	defer db.badgerCache.lock.RUnlock()
-	if db.badgerCache.c[string(key)] != nil {
-		return true, nil
-	}
-	
 	err = db.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(key)
 		if item != nil {
@@ -116,67 +112,27 @@ func (db *BadgerDatabase) Has(key []byte) (ret bool, err error) {
 	return ret, err
 }
 
-type BadgerCache struct {
-	db		*BadgerDatabase
-	c	 	map[string][]byte
-	size	int
-	limit	int
-	lock 	sync.RWMutex
-}
-
-func (badgerCache *BadgerCache) Flush() (err error) {
-	badgerCache.lock.Lock()
-	defer badgerCache.lock.Unlock()
-	
-	txn := badgerCache.db.db.NewTransaction(true)
-	for key, value := range badgerCache.c {
-		putStartTime := time.Now()
-		if badgerCache.db.writeMeter != nil {
-			badgerCache.db.writeMeter.Mark(int64(len(value)))
-		}
-		err = txn.Set([]byte(key), value)
-		if err == badger.ErrTxnTooBig {
-		    txn.Commit(nil)
-		    txn = badgerCache.db.db.NewTransaction(true)
-		    err = txn.Set([]byte(key), value)
-		}
-		if badgerCache.db.putTimer != nil {
-			badgerCache.db.putTimer.UpdateSince(putStartTime)
-		}
-	}
-	err = txn.Commit(nil)
-	log.Info("Badger flushed to disk", "badgerCache size", badgerCache.size)
-	badgerCache.size = 0
-	badgerCache.c = make(map[string][]byte)
-	return err
-}
-
 // Get returns the given key if it's present.
 func (db *BadgerDatabase) Get(key []byte) (dat []byte, err error) {
-	db.badgerCache.lock.RLock()
-	dat = db.badgerCache.c[string(key)]
-	db.badgerCache.lock.RUnlock()
-	if dat == nil {
-		// Measure the database get latency, if requested
-		if db.getTimer != nil {
-			defer db.getTimer.UpdateSince(time.Now())
+	// Measure the database get latency, if requested
+	if db.getTimer != nil {
+		defer db.getTimer.UpdateSince(time.Now())
+	}
+	err = db.db.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(key)
+		if err != nil {
+			return err
 		}
-		err = db.db.View(func(txn *badger.Txn) error {
-			item, err := txn.Get(key)
-			if err != nil {
-				return err
-			}
-			val, err := item.Value()
-			if err != nil {
-				return err
-			}
-			dat = common.CopyBytes(val)
-			return nil
-		})
-		//Update the actually retrieved amount of data
-		if db.readMeter != nil {
-			db.readMeter.Mark(int64(len(dat)))
+		val, err := item.Value()
+		if err != nil {
+			return err
 		}
+		dat = common.CopyBytes(val)
+		return nil
+	})
+	//Update the actually retrieved amount of data
+	if db.readMeter != nil {
+		db.readMeter.Mark(int64(len(dat)))
 	}
 	if err != nil {
 		if db.missMeter != nil {
@@ -190,15 +146,6 @@ func (db *BadgerDatabase) Get(key []byte) (dat []byte, err error) {
 
 // Delete deletes the key from the queue and database
 func (db *BadgerDatabase) Delete(key []byte) error {
-	
-	// Execute the actual operation
-	db.badgerCache.lock.Lock()
-	delete(db.badgerCache.c, string(key))
-	
-	//TODO: also subtract len(value)
-	db.badgerCache.size-=len(key)
-	db.badgerCache.lock.Unlock()
-	
 	// Measure the database delete latency, if requested
 	if db.delTimer != nil {
 		defer db.delTimer.UpdateSince(time.Now())
@@ -263,19 +210,8 @@ func (db *BadgerDatabase) NewIterator() badgerIterator {
 }
 
 func (db *BadgerDatabase) Close() {
-	
-	db.badgerCache.Flush()
-	// Stop the metrics collection to avoid internal database races
-	db.quitLock.Lock()
-	defer db.quitLock.Unlock()
-
-	if db.quitChan != nil {
-		errc := make(chan error)
-		db.quitChan <- errc
-		if err := <-errc; err != nil {
-			db.log.Error("Metrics collection failed", "err", err)
-		}
-	}
+	// hacky way around https://github.com/dgraph-io/badger/pull/437
+	time.Sleep(time.Second * 15)
 	err := db.db.Close()
 	if err == nil {
 		db.log.Info("Database closed")
@@ -297,45 +233,53 @@ func (db *BadgerDatabase) Meter(prefix string) {
 	db.missMeter = metrics.NewRegisteredMeter(prefix+"user/misses", nil)
 	db.readMeter = metrics.NewRegisteredMeter(prefix+"user/reads", nil)
 	db.writeMeter = metrics.NewRegisteredMeter(prefix+"user/writes", nil)
-
-	// Create a quit channel for the periodic collector and run it
-	db.quitLock.Lock()
-	db.quitChan = make(chan chan error)
-	db.quitLock.Unlock()
-
-	//go db.meter(3 * time.Second)
+	db.batchPutTimer = metrics.NewRegisteredTimer(prefix+"user/batchPuts", nil)
+	db.batchWriteTimer = metrics.NewRegisteredTimer(prefix+"user/batchWriteTimes", nil)
+	db.batchWriteMeter = metrics.NewRegisteredMeter(prefix+"user/batchWrites", nil)
 }
 
 func (db *BadgerDatabase) NewBatch() Batch {
-	return &badgerBatch{db: db}
+	return &badgerBatch{db: db, b: make(map[string][]byte)}
 }
 
 type badgerBatch struct {
 	db		*BadgerDatabase
+	b		map[string][]byte
 	size int
 }
 
 func (b *badgerBatch) Put(key, value []byte) error {
-	b.db.badgerCache.lock.Lock()
-	b.db.badgerCache.c[string(key)] = common.CopyBytes(value)
-	b.db.badgerCache.size += len(value)+len(key)
-	b.db.badgerCache.lock.Unlock()
-	if b.db.badgerCache.size >= b.db.badgerCache.limit {
-		b.db.badgerCache.Flush()
+	if b.db.batchPutTimer != nil {
+		defer b.db.batchPutTimer.UpdateSince(time.Now())
 	}
+	
+	b.b[string(key)] = common.CopyBytes(value)
 	b.size += len(value)
 	return nil
 }
 
-func (b *badgerBatch) Write() error {
-	b.size = 0
-	if b.db.badgerCache.size >= b.db.badgerCache.limit {
-		return b.db.badgerCache.Flush()
+func (b *badgerBatch) Write() (err error) {
+	if b.db.batchWriteTimer != nil {
+		defer b.db.batchWriteTimer.UpdateSince(time.Now())
 	}
-	return nil
+
+	if b.db.batchWriteMeter != nil {
+		b.db.batchWriteMeter.Mark(int64(b.size))
+	}
+	
+	err = b.db.db.Update(func(txn *badger.Txn) error {
+  		for key, value := range b.b {
+			err = txn.Set([]byte(key), value)
+		}
+  		return err
+	})
+	b.size = 0
+	b.b = make(map[string][]byte)
+	return err
 }
 
 func (b *badgerBatch) Discard() {
+	b.b = make(map[string][]byte)
 	b.size = 0
 }
 
@@ -344,6 +288,7 @@ func (b *badgerBatch) ValueSize() int {
 }
 
 func (b *badgerBatch) Reset() {
+	b.b = make(map[string][]byte)
 	b.size = 0
 }
 
