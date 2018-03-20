@@ -24,12 +24,12 @@ import (
 	"net"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/eximchain/go-ethereum/common"
+	"github.com/eximchain/go-ethereum/crypto"
+	"github.com/eximchain/go-ethereum/log"
+	"github.com/eximchain/go-ethereum/p2p/nat"
+	"github.com/eximchain/go-ethereum/p2p/netutil"
+	"github.com/eximchain/go-ethereum/rlp"
 )
 
 const Version = 4

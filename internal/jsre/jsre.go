@@ -26,8 +26,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/internal/jsre/deps"
+	"github.com/eximchain/go-ethereum/common"
+	"github.com/eximchain/go-ethereum/internal/jsre/deps"
 	"github.com/robertkrimen/otto"
 )
 

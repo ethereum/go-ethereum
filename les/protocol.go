@@ -26,11 +26,11 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/eximchain/go-ethereum/common"
+	"github.com/eximchain/go-ethereum/core"
+	"github.com/eximchain/go-ethereum/crypto"
+	"github.com/eximchain/go-ethereum/crypto/secp256k1"
+	"github.com/eximchain/go-ethereum/rlp"
 )
 
 // Constants to match up protocol versions and messages
