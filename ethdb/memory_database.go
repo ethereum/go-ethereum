@@ -20,7 +20,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/eximchain/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 /*

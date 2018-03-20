@@ -30,9 +30,9 @@ import (
 
 	check "gopkg.in/check.v1"
 
-	"github.com/eximchain/go-ethereum/common"
-	"github.com/eximchain/go-ethereum/core/types"
-	"github.com/eximchain/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -119,7 +119,7 @@ func TestIntermediateLeaks(t *testing.T) {
 
 // TestCopy tests that copying a statedb object indeed makes the original and
 // the copy independent of each other. This test is a regression test against
-// https://github.com/eximchain/go-ethereum/pull/15549.
+// https://github.com/ethereum/go-ethereum/pull/15549.
 func TestCopy(t *testing.T) {
 	// Create a random state test to copy and modify "independently"
 	db, _ := ethdb.NewMemDatabase()

@@ -20,7 +20,7 @@ import (
 	"crypto/sha256"
 	"testing"
 
-	"github.com/eximchain/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/crypto/pbkdf2"
 )
 

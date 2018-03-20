@@ -25,8 +25,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/eximchain/go-ethereum/swarm/api"
-	"github.com/eximchain/go-ethereum/swarm/testutil"
+	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 // TestClientUploadDownloadRaw test uploading and downloading raw data to swarm

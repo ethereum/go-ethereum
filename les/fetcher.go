@@ -22,13 +22,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eximchain/go-ethereum/common"
-	"github.com/eximchain/go-ethereum/common/mclock"
-	"github.com/eximchain/go-ethereum/consensus"
-	"github.com/eximchain/go-ethereum/core"
-	"github.com/eximchain/go-ethereum/core/types"
-	"github.com/eximchain/go-ethereum/light"
-	"github.com/eximchain/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const (

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/eximchain/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // manageServers displays a list of servers the user can disconnect from, and an

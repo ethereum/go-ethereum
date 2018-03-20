@@ -22,13 +22,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eximchain/go-ethereum/common"
-	"github.com/eximchain/go-ethereum/core"
-	"github.com/eximchain/go-ethereum/core/state"
-	"github.com/eximchain/go-ethereum/crypto/sha3"
-	"github.com/eximchain/go-ethereum/ethdb"
-	"github.com/eximchain/go-ethereum/log"
-	"github.com/eximchain/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // stateReq represents a batch of state fetch requests groupped together into

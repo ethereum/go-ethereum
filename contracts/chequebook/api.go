@@ -20,7 +20,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/eximchain/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const Version = "1.0"

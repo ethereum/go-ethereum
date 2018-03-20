@@ -34,7 +34,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/eximchain/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p"
 )
 
 // error codes used by this  protocol scheme

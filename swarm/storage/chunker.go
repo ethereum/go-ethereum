@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eximchain/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 /*

@@ -19,8 +19,8 @@ package vm
 import (
 	"math/big"
 
-	"github.com/eximchain/go-ethereum/common"
-	"github.com/eximchain/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 func NoopCanTransfer(db StateDB, from common.Address, balance *big.Int) bool {

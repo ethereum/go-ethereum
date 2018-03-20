@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/eximchain/go-ethereum/accounts/keystore"
-	"github.com/eximchain/go-ethereum/cmd/utils"
-	"github.com/eximchain/go-ethereum/common"
-	"github.com/eximchain/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"gopkg.in/urfave/cli.v1"
 )
 

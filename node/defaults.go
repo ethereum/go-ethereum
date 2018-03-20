@@ -22,8 +22,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/eximchain/go-ethereum/p2p"
-	"github.com/eximchain/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/nat"
 )
 
 const (

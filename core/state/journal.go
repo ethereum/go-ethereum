@@ -19,7 +19,7 @@ package state
 import (
 	"math/big"
 
-	"github.com/eximchain/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type journalEntry interface {

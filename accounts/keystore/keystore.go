@@ -33,11 +33,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eximchain/go-ethereum/accounts"
-	"github.com/eximchain/go-ethereum/common"
-	"github.com/eximchain/go-ethereum/core/types"
-	"github.com/eximchain/go-ethereum/crypto"
-	"github.com/eximchain/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 var (

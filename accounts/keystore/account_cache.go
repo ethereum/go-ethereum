@@ -27,9 +27,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eximchain/go-ethereum/accounts"
-	"github.com/eximchain/go-ethereum/common"
-	"github.com/eximchain/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/fatih/set.v0"
 )
 

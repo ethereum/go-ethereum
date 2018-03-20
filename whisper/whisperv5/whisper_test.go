@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eximchain/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func TestWhisperBasic(t *testing.T) {

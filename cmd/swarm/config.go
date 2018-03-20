@@ -28,13 +28,13 @@ import (
 
 	cli "gopkg.in/urfave/cli.v1"
 
-	"github.com/eximchain/go-ethereum/cmd/utils"
-	"github.com/eximchain/go-ethereum/common"
-	"github.com/eximchain/go-ethereum/log"
-	"github.com/eximchain/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/naoina/toml"
 
-	bzzapi "github.com/eximchain/go-ethereum/swarm/api"
+	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
 )
 
 var (
@@ -84,7 +84,7 @@ var tomlSettings = toml.Config{
 	MissingField: func(rt reflect.Type, field string) error {
 		link := ""
 		if unicode.IsUpper(rune(rt.Name()[0])) && rt.PkgPath() != "main" {
-			link = fmt.Sprintf(", check github.com/eximchain/go-ethereum/swarm/api/config.go for available fields")
+			link = fmt.Sprintf(", check github.com/ethereum/go-ethereum/swarm/api/config.go for available fields")
 		}
 		return fmt.Errorf("field '%s' is not defined in %s%s", field, rt.String(), link)
 	},

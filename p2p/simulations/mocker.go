@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eximchain/go-ethereum/log"
-	"github.com/eximchain/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 //a map of mocker names to its function
