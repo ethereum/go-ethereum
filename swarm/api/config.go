@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens"
@@ -57,6 +58,7 @@ type Config struct {
 	NetworkId       uint64
 	SwapEnabled     bool
 	SyncEnabled     bool
+	SyncUpdateDelay time.Duration
 	PssEnabled      bool
 	ResourceEnabled bool
 	SwapApi         string
@@ -83,6 +85,7 @@ func NewConfig() (self *Config) {
 		NetworkId:       network.NetworkID,
 		SwapEnabled:     false,
 		SyncEnabled:     true,
+		SyncUpdateDelay: 15 * time.Second,
 		PssEnabled:      true,
 		ResourceEnabled: true,
 		SwapApi:         "",

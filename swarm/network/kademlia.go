@@ -88,6 +88,9 @@ type Kademlia struct {
 	addrs      *pot.Pot // pots container for known peer addresses
 	conns      *pot.Pot // pots container for live peer connections
 	depth      uint8    // stores the last current depth of saturation
+	nDepth     int      // stores the last neighbourhood depth
+	nDepthC    chan int // returned by DepthC function to signal neighbourhood depth change
+	addrCountC chan int // returned by AddrCountC function to signal peer count change
 }
 
 // NewKademlia creates a Kademlia table for base address addr
@@ -198,6 +201,10 @@ func (k *Kademlia) Register(peers []OverlayAddr) error {
 		}
 		size++
 	}
+	// send new address count value only if there are new addresses
+	if k.addrCountC != nil && size-known > 0 {
+		k.addrCountC <- k.addrs.Size()
+	}
 	// log.Trace(fmt.Sprintf("%x registered %v peers, %v known, total: %v", k.BaseAddr()[:4], size, known, k.addrs.Size()))
 	return nil
 }
@@ -296,6 +303,10 @@ func (k *Kademlia) On(p OverlayConn) (uint8, bool) {
 		k.addrs, _, _, _ = pot.Swap(k.addrs, p, pof, func(v pot.Val) pot.Val {
 			return e
 		})
+		// send new address count value only if the peer is inserted
+		if k.addrCountC != nil {
+			k.addrCountC <- k.addrs.Size()
+		}
 	}
 	log.Trace(k.string())
 	// calculate if depth of saturation changed
@@ -305,7 +316,36 @@ func (k *Kademlia) On(p OverlayConn) (uint8, bool) {
 		changed = true
 		k.depth = depth
 	}
+	if k.nDepthC != nil {
+		nDepth := k.neighbourhoodDepth()
+		if nDepth != k.nDepth {
+			k.nDepth = nDepth
+			k.nDepthC <- nDepth
+		}
+	}
 	return k.depth, changed
+}
+
+// NeighbourhoodDepthC returns the channel that sends a new kademlia
+// neighbourhood depth on each change.
+// Not receiving from the returned channel will block On function
+// when the neighbourhood depth is changed.
+func (k *Kademlia) NeighbourhoodDepthC() <-chan int {
+	if k.nDepthC == nil {
+		k.nDepthC = make(chan int)
+	}
+	return k.nDepthC
+}
+
+// AddrCountC returns the channel that sends a new
+// address count value on each change.
+// Not receiving from the returned channel will block Register function
+// when address count value changes.
+func (k *Kademlia) AddrCountC() <-chan int {
+	if k.addrCountC == nil {
+		k.addrCountC = make(chan int)
+	}
+	return k.addrCountC
 }
 
 // Off removes a peer from among live peers
@@ -326,6 +366,10 @@ func (k *Kademlia) Off(p OverlayConn) {
 			// v cannot be nil, but no need to check
 			return nil
 		})
+		// send new address count value only if the peer is deleted
+		if k.addrCountC != nil {
+			k.addrCountC <- k.addrs.Size()
+		}
 	}
 }
 
@@ -333,23 +377,17 @@ func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(con
 	k.lock.RLock()
 	defer k.lock.RUnlock()
 
-	var i int
 	var startPo int
 	var endPo int
-	kadDepth := int(k.depth)
+	kadDepth := k.neighbourhoodDepth()
 
 	k.conns.EachBin(base, pof, o, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
+		if startPo > 0 && endPo != k.MaxProxDisplay {
+			startPo = endPo + 1
+		}
 		if po < kadDepth {
 			endPo = po
-			if i > 0 {
-				startPo = endPo + 1
-			}
-		} else if endPo < kadDepth || endPo == 0 {
-			if po == 0 && kadDepth == 0 {
-				startPo = endPo
-			} else {
-				startPo = endPo + 1
-			}
+		} else {
 			endPo = k.MaxProxDisplay
 		}
 
@@ -358,10 +396,8 @@ func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(con
 				return eachBinFunc(val.(*entry).conn(), bin)
 			})
 		}
-		i++
 		return true
 	})
-
 }
 
 // EachConn is an iterator with args (base, po, f) applies f to each live peer

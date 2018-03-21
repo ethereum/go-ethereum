@@ -106,6 +106,11 @@ var (
 		Usage:  "Swarm Syncing enabled (default true)",
 		EnvVar: SWARM_ENV_SYNC_ENABLE,
 	}
+	SwarmSyncUpdateDelay = cli.DurationFlag{
+		Name:   "sync-update-delay",
+		Usage:  "Duration for sync subscriptions update after no new peers are added (default 15s)",
+		EnvVar: SWARM_ENV_SYNC_UPDATE_DELAY,
+	}
 	EnsAPIFlag = cli.StringSliceFlag{
 		Name:   "ens-api",
 		Usage:  "ENS API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url",
@@ -356,6 +361,7 @@ Remove corrupt entries from a local chunk database.
 		SwarmSwapEnabledFlag,
 		SwarmSwapAPIFlag,
 		SwarmSyncEnabledFlag,
+		SwarmSyncUpdateDelay,
 		SwarmListenAddrFlag,
 		SwarmPortFlag,
 		SwarmAccountFlag,

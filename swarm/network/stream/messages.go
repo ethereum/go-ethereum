@@ -31,13 +31,13 @@ type Stream struct {
 	// Name is used for Client and Server functions identification.
 	Name string
 	// Key is the name of specific stream data.
-	Key []byte
+	Key string
 	// Live defines whether the stream delivers only new data
 	// for the specific stream.
 	Live bool
 }
 
-func NewStream(name string, key []byte, live bool) Stream {
+func NewStream(name string, key string, live bool) Stream {
 	return Stream{
 		Name: name,
 		Key:  key,
@@ -51,7 +51,7 @@ func (s Stream) String() string {
 	if s.Live {
 		t = "l"
 	}
-	return fmt.Sprintf("%s|%x|%s", s.Name, s.Key, t)
+	return fmt.Sprintf("%s|%s|%s", s.Name, s.Key, t)
 }
 
 // SubcribeMsg is the protocol msg for requesting a stream(section)
@@ -148,8 +148,15 @@ type UnsubscribeMsg struct {
 }
 
 func (p *Peer) handleUnsubscribeMsg(req *UnsubscribeMsg) error {
-	p.removeServer(req.Stream)
-	return nil
+	return p.removeServer(req.Stream)
+}
+
+type QuitMsg struct {
+	Stream Stream
+}
+
+func (p *Peer) handleQuitMsg(req *QuitMsg) error {
+	return p.removeClient(req.Stream)
 }
 
 // OfferedHashesMsg is the protocol msg for offering to hand over a

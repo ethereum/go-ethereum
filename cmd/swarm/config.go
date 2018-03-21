@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	cli "gopkg.in/urfave/cli.v1"
@@ -66,6 +67,7 @@ const (
 	SWARM_ENV_SWAP_ENABLE          = "SWARM_SWAP_ENABLE"
 	SWARM_ENV_SWAP_API             = "SWARM_SWAP_API"
 	SWARM_ENV_SYNC_ENABLE          = "SWARM_SYNC_ENABLE"
+	SWARM_ENV_SYNC_UPDATE_DELAY    = "SWARM_ENV_SYNC_UPDATE_DELAY"
 	SWARM_ENV_ENS_API              = "SWARM_ENS_API"
 	SWARM_ENV_ENS_ADDR             = "SWARM_ENS_ADDR"
 	SWARM_ENV_CORS                 = "SWARM_CORS"
@@ -200,6 +202,10 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.SyncEnabled = true
 	}
 
+	if d := ctx.GlobalDuration(SwarmSyncUpdateDelay.Name); d > 0 {
+		currentConfig.SyncUpdateDelay = d
+	}
+
 	currentConfig.SwapApi = ctx.GlobalString(SwarmSwapAPIFlag.Name)
 	if currentConfig.SwapEnabled && currentConfig.SwapApi == "" {
 		utils.Fatalf(SWARM_ERR_SWAP_SET_NO_API)
@@ -290,6 +296,12 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	if syncenable := os.Getenv(SWARM_ENV_SYNC_ENABLE); syncenable != "" {
 		if sync, err := strconv.ParseBool(syncenable); err != nil {
 			currentConfig.SyncEnabled = sync
+		}
+	}
+
+	if v := os.Getenv(SWARM_ENV_SYNC_UPDATE_DELAY); v != "" {
+		if d, err := time.ParseDuration(v); err != nil {
+			currentConfig.SyncUpdateDelay = d
 		}
 	}
 

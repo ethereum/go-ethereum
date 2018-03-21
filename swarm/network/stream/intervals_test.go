@@ -50,12 +50,14 @@ func newIntervalsStreamerService(ctx *adapters.ServiceContext) (node.Service, er
 	db := storage.NewDBAPI(store)
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false, false)
-
-	r.RegisterClientFunc(externalStreamName, func(p *Peer, t []byte, live bool) (Client, error) {
-		return newTestExternalClient(t, db), nil
+	r := NewRegistry(addr, delivery, db, state.NewMemStore(), &RegistryOptions{
+		SkipCheck: defaultSkipCheck,
 	})
-	r.RegisterServerFunc(externalStreamName, func(p *Peer, t []byte, live bool) (Server, error) {
+
+	r.RegisterClientFunc(externalStreamName, func(p *Peer, t string, live bool) (Client, error) {
+		return newTestExternalClient(db), nil
+	})
+	r.RegisterServerFunc(externalStreamName, func(p *Peer, t string, live bool) (Server, error) {
 		return newTestExternalServer(t, externalStreamSessionAt, externalStreamMaxKeys, nil), nil
 	})
 
@@ -67,8 +69,8 @@ func newIntervalsStreamerService(ctx *adapters.ServiceContext) (node.Service, er
 
 func TestIntervals(t *testing.T) {
 	testIntervals(t, true, nil)
-	testIntervals(t, false, &Range{From: 9, To: 26})
-	testIntervals(t, true, &Range{From: 9, To: 26})
+	testIntervals(t, false, NewRange(9, 26))
+	testIntervals(t, true, NewRange(9, 26))
 }
 
 func testIntervals(t *testing.T, live bool, history *Range) {
@@ -143,7 +145,7 @@ func testIntervals(t *testing.T, live bool, history *Range) {
 			ctx, cancel := context.WithTimeout(ctx, 100*time.Second)
 			defer cancel()
 
-			err = client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(externalStreamName, nil, live), history, Top)
+			err = client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(externalStreamName, "", live), history, Top)
 			if err != nil {
 				return err
 			}
@@ -164,7 +166,7 @@ func testIntervals(t *testing.T, live bool, history *Range) {
 
 				// live stream
 				liveHashesChan := make(chan []byte)
-				liveSubscription, err := client.Subscribe(ctx, "stream", liveHashesChan, "getHashes", sid, NewStream(externalStreamName, nil, true))
+				liveSubscription, err := client.Subscribe(ctx, "stream", liveHashesChan, "getHashes", sid, NewStream(externalStreamName, "", true))
 				if err != nil {
 					return
 				}
@@ -173,7 +175,7 @@ func testIntervals(t *testing.T, live bool, history *Range) {
 				i := externalStreamSessionAt
 
 				// we have subscribed, enable notifications
-				err = client.CallContext(ctx, nil, "stream_enableNotifications", sid, NewStream(externalStreamName, nil, true))
+				err = client.CallContext(ctx, nil, "stream_enableNotifications", sid, NewStream(externalStreamName, "", true))
 				if err != nil {
 					return
 				}
@@ -211,7 +213,7 @@ func testIntervals(t *testing.T, live bool, history *Range) {
 
 				// history stream
 				historyHashesChan := make(chan []byte)
-				historySubscription, err := client.Subscribe(ctx, "stream", historyHashesChan, "getHashes", sid, NewStream(externalStreamName, nil, false))
+				historySubscription, err := client.Subscribe(ctx, "stream", historyHashesChan, "getHashes", sid, NewStream(externalStreamName, "", false))
 				if err != nil {
 					return
 				}
@@ -227,7 +229,7 @@ func testIntervals(t *testing.T, live bool, history *Range) {
 				}
 
 				// we have subscribed, enable notifications
-				err = client.CallContext(ctx, nil, "stream_enableNotifications", sid, NewStream(externalStreamName, nil, false))
+				err = client.CallContext(ctx, nil, "stream_enableNotifications", sid, NewStream(externalStreamName, "", false))
 				if err != nil {
 					return
 				}

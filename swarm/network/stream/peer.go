@@ -52,12 +52,12 @@ type Peer struct {
 	pq       *pq.PriorityQueue
 	serverMu sync.RWMutex
 	clientMu sync.RWMutex // protects both clients and clientParams
-	servers  map[string]*server
-	clients  map[string]*client
+	servers  map[Stream]*server
+	clients  map[Stream]*client
 	// clientParams map keeps required client arguments
 	// that are set on Registry.Subscribe and used
 	// on creating a new client in offered hashes handler.
-	clientParams map[string]*clientParams
+	clientParams map[Stream]*clientParams
 	quit         chan struct{}
 }
 
@@ -67,9 +67,9 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 		Peer:         peer,
 		pq:           pq.New(int(PriorityQueue), PriorityQueueCap),
 		streamer:     streamer,
-		servers:      make(map[string]*server),
-		clients:      make(map[string]*client),
-		clientParams: make(map[string]*clientParams),
+		servers:      make(map[Stream]*server),
+		clients:      make(map[Stream]*client),
+		clientParams: make(map[Stream]*clientParams),
 		quit:         make(chan struct{}),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -128,9 +128,9 @@ func (p *Peer) getServer(s Stream) (*server, error) {
 	p.serverMu.RLock()
 	defer p.serverMu.RUnlock()
 
-	server := p.servers[s.String()]
+	server := p.servers[s]
 	if server == nil {
-		return nil, fmt.Errorf("server '%v' not provided to peer %v", s, p.ID())
+		return nil, newNotFoundError("server", s)
 	}
 	return server, nil
 }
@@ -139,16 +139,15 @@ func (p *Peer) setServer(s Stream, o Server, priority uint8) (*server, error) {
 	p.serverMu.Lock()
 	defer p.serverMu.Unlock()
 
-	sk := s.String()
-	if p.servers[sk] != nil {
-		return nil, fmt.Errorf("server %v already registered", sk)
+	if p.servers[s] != nil {
+		return nil, fmt.Errorf("server %s already registered", s)
 	}
 	os := &server{
 		Server:   o,
 		stream:   s,
 		priority: priority,
 	}
-	p.servers[sk] = os
+	p.servers[s] = os
 	return os, nil
 }
 
@@ -156,28 +155,26 @@ func (p *Peer) removeServer(s Stream) error {
 	p.serverMu.Lock()
 	defer p.serverMu.Unlock()
 
-	sk := s.String()
-	server, ok := p.servers[sk]
+	server, ok := p.servers[s]
 	if !ok {
 		return newNotFoundError("server", s)
 	}
 	server.Close()
-	delete(p.servers, sk)
+	delete(p.servers, s)
 	return nil
 }
 
 func (p *Peer) getClient(ctx context.Context, s Stream) (c *client, err error) {
 	var params *clientParams
-	sk := s.String()
 	func() {
 		p.clientMu.RLock()
 		defer p.clientMu.RUnlock()
 
-		c = p.clients[sk]
+		c = p.clients[s]
 		if c != nil {
 			return
 		}
-		params = p.clientParams[sk]
+		params = p.clientParams[s]
 	}()
 	if c != nil {
 		return c, nil
@@ -193,7 +190,7 @@ func (p *Peer) getClient(ctx context.Context, s Stream) (c *client, err error) {
 	p.clientMu.RLock()
 	defer p.clientMu.RUnlock()
 
-	c = p.clients[sk]
+	c = p.clients[s]
 	if c != nil {
 		return c, nil
 	}
@@ -201,12 +198,10 @@ func (p *Peer) getClient(ctx context.Context, s Stream) (c *client, err error) {
 }
 
 func (p *Peer) getOrSetClient(s Stream, from, to uint64) (c *client, created bool, err error) {
-	sk := s.String()
-
 	p.clientMu.Lock()
 	defer p.clientMu.Unlock()
 
-	c = p.clients[sk]
+	c = p.clients[s]
 	if c != nil {
 		return c, false, nil
 	}
@@ -273,7 +268,7 @@ func (p *Peer) getOrSetClient(s Stream, from, to uint64) (c *client, created boo
 		intervalsStore: p.streamer.intervalsStore,
 		intervalsKey:   intervalsKey,
 	}
-	p.clients[sk] = c
+	p.clients[s] = c
 	cp.clientCreated() // unblock all possible getClient calls that are waiting
 	next <- nil        // this is to allow wantedKeysMsg before first batch arrives
 	return c, true, nil
@@ -283,7 +278,7 @@ func (p *Peer) removeClient(s Stream) error {
 	p.clientMu.Lock()
 	defer p.clientMu.Unlock()
 
-	client, ok := p.clients[s.String()]
+	client, ok := p.clients[s]
 	if !ok {
 		return newNotFoundError("client", s)
 	}
@@ -295,19 +290,18 @@ func (p *Peer) setClientParams(s Stream, params *clientParams) error {
 	p.clientMu.Lock()
 	defer p.clientMu.Unlock()
 
-	sk := s.String()
-	if p.clients[sk] != nil {
-		return fmt.Errorf("client %v already exists", sk)
+	if p.clients[s] != nil {
+		return fmt.Errorf("client %s already exists", s)
 	}
-	if p.clientParams[sk] != nil {
-		return fmt.Errorf("client params %v already set", sk)
+	if p.clientParams[s] != nil {
+		return fmt.Errorf("client params %s already set", s)
 	}
-	p.clientParams[sk] = params
+	p.clientParams[s] = params
 	return nil
 }
 
 func (p *Peer) getClientParams(s Stream) (*clientParams, error) {
-	params := p.clientParams[s.String()]
+	params := p.clientParams[s]
 	if params == nil {
 		return nil, fmt.Errorf("client params '%v' not provided to peer %v", s, p.ID())
 	}
@@ -315,12 +309,11 @@ func (p *Peer) getClientParams(s Stream) (*clientParams, error) {
 }
 
 func (p *Peer) removeClientParams(s Stream) error {
-	sk := s.String()
-	_, ok := p.clientParams[sk]
+	_, ok := p.clientParams[s]
 	if !ok {
 		return newNotFoundError("client params", s)
 	}
-	delete(p.clientParams, sk)
+	delete(p.clientParams, s)
 	return nil
 }
 

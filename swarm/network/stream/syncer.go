@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -64,8 +65,11 @@ func NewSwarmSyncerServer(live bool, po uint8, db *storage.DBAPI) (*SwarmSyncerS
 const maxPO = 32
 
 func RegisterSwarmSyncerServer(streamer *Registry, db *storage.DBAPI) {
-	streamer.RegisterServerFunc("SYNC", func(p *Peer, t []byte, live bool) (Server, error) {
-		po := t[0]
+	streamer.RegisterServerFunc("SYNC", func(p *Peer, t string, live bool) (Server, error) {
+		po, err := ParseSyncBinKey(t)
+		if err != nil {
+			return nil, err
+		}
 		return NewSwarmSyncerServer(live, po, db)
 	})
 	// streamer.RegisterServerFunc(stream, func(p *Peer) (Server, error) {
@@ -99,7 +103,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	if to <= from || from >= s.sessionAt {
 		to = math.MaxUint64
 	}
-	ticker := time.NewTicker(10 * time.Millisecond)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -187,7 +191,7 @@ func NewSwarmSyncerClient(_ *Peer, db *storage.DBAPI, chunker storage.Chunker) (
 // RegisterSwarmSyncerClient registers the client constructor function for
 // to handle incoming sync streams
 func RegisterSwarmSyncerClient(streamer *Registry, db *storage.DBAPI) {
-	streamer.RegisterClientFunc("SYNC", func(p *Peer, t []byte, love bool) (Client, error) {
+	streamer.RegisterClientFunc("SYNC", func(p *Peer, _ string, love bool) (Client, error) {
 		return NewSwarmSyncerClient(p, db, nil)
 	})
 }
@@ -253,3 +257,23 @@ func (s *SwarmSyncerClient) TakeoverProof(stream Stream, from uint64, hashes []b
 }
 
 func (s *SwarmSyncerClient) Close() {}
+
+// base for parsing and formating sync bin key
+// it must be 2 <= base <= 36
+const syncBinKeyBase = 36
+
+// FormatSyncBinKey returns a string representation of
+// Kademlia bin number to be used as key for SYNC stream.
+func FormatSyncBinKey(bin uint8) string {
+	return strconv.FormatUint(uint64(bin), syncBinKeyBase)
+}
+
+// ParseSyncBinKey parses the string representation
+// and returns the Kademlia bin number.
+func ParseSyncBinKey(s string) (uint8, error) {
+	bin, err := strconv.ParseUint(s, syncBinKeyBase, 8)
+	if err != nil {
+		return 0, err
+	}
+	return uint8(bin), nil
+}
