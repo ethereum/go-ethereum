@@ -137,8 +137,8 @@ func (ec *EthereumClient) SubscribeNewHead(ctx *Context, handler NewHeadHandler,
 			case header := <-ch:
 				handler.OnNewHead(&Header{header})
 
-			case err, ok := <-rawSub.Err():
-				if ok {
+			case err := <-rawSub.Err():
+				if err != nil {
 					handler.OnError(err.Error())
 				}
 				return
@@ -228,8 +228,8 @@ func (ec *EthereumClient) SubscribeFilterLogs(ctx *Context, query *FilterQuery, 
 			case log := <-ch:
 				handler.OnFilterLogs(&Log{&log})
 
-			case err, ok := <-rawSub.Err():
-				if ok {
+			case err := <-rawSub.Err():
+				if err != nil {
 					handler.OnError(err.Error())
 				}
 				return
