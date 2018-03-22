@@ -707,6 +707,7 @@ func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 		}
 
 		chunk = NewChunk(key, nil)
+		close(chunk.dbStored)
 		decodeData(data, chunk)
 	} else {
 		err = ErrChunkNotFound

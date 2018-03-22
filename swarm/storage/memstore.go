@@ -230,6 +230,7 @@ func (s *MemStore) Get(hash Key) (chunk *Chunk, err error) {
 		l := hash.bits(bitpos, node.bits)
 		st := node.subtree[l]
 		if st == nil {
+			log.Trace("memstore.get ErrChunkNotFound", "key", hash)
 			return nil, ErrChunkNotFound
 		}
 		bitpos += node.bits
@@ -251,6 +252,7 @@ func (s *MemStore) Get(hash Key) (chunk *Chunk, err error) {
 		err = ErrChunkNotFound
 	}
 
+	log.Trace("memstore.get return", "key", hash, "chunk", chunk, "err", err)
 	return
 }
 
@@ -298,11 +300,11 @@ func (s *MemStore) removeOldest() {
 
 	}
 
-	log.Trace(fmt.Sprintf("Memstore Clean: Waiting for chunk %v to be saved", node.entry.Key.Log()))
-	<-node.entry.dbStored
-	log.Trace(fmt.Sprintf("Memstore Clean: Chunk %v saved to DBStore. Ready to clear from mem.", node.entry.Key.Log()))
-
 	if node.entry.ReqC == nil {
+		log.Trace(fmt.Sprintf("Memstore Clean: Waiting for chunk %v to be saved", node.entry.Key.Log()))
+		<-node.entry.dbStored
+		log.Trace(fmt.Sprintf("Memstore Clean: Chunk %v saved to DBStore. Ready to clear from mem.", node.entry.Key.Log()))
+
 		memstoreRemoveCounter.Inc(1)
 		node.entry = nil
 		s.entryCnt--
