@@ -38,7 +38,7 @@ func (w *wizard) deployFaucet() {
 	infos, err := checkFaucet(client, w.network)
 	if err != nil {
 		infos = &faucetInfos{
-			node:    &nodeInfos{portFull: 30303, peersTotal: 25},
+			node:    &nodeInfos{port: 30303, peersTotal: 25},
 			port:    80,
 			host:    client.server,
 			amount:  1,
@@ -113,8 +113,8 @@ func (w *wizard) deployFaucet() {
 	}
 	// Figure out which port to listen on
 	fmt.Println()
-	fmt.Printf("Which TCP/UDP port should the light client listen on? (default = %d)\n", infos.node.portFull)
-	infos.node.portFull = w.readDefaultInt(infos.node.portFull)
+	fmt.Printf("Which TCP/UDP port should the light client listen on? (default = %d)\n", infos.node.port)
+	infos.node.port = w.readDefaultInt(infos.node.port)
 
 	// Set a proper name to report on the stats page
 	fmt.Println()
@@ -168,7 +168,7 @@ func (w *wizard) deployFaucet() {
 		fmt.Printf("Should the faucet be built from scratch (y/n)? (default = no)\n")
 		nocache = w.readDefaultString("n") != "n"
 	}
-	if out, err := deployFaucet(client, w.network, w.conf.bootLight, infos, nocache); err != nil {
+	if out, err := deployFaucet(client, w.network, w.conf.bootnodes, infos, nocache); err != nil {
 		log.Error("Failed to deploy faucet container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)

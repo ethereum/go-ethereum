@@ -37,8 +37,7 @@ func (w *wizard) networkStats() {
 	}
 	// Clear out some previous configs to refill from current scan
 	w.conf.ethstats = ""
-	w.conf.bootFull = w.conf.bootFull[:0]
-	w.conf.bootLight = w.conf.bootLight[:0]
+	w.conf.bootnodes = w.conf.bootnodes[:0]
 
 	// Iterate over all the specified hosts and check their status
 	var pend sync.WaitGroup
@@ -76,8 +75,7 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 	var (
 		genesis   string
 		ethstats  string
-		bootFull  []string
-		bootLight []string
+		bootnodes []string
 	)
 	// Ensure a valid SSH connection to the remote server
 	logger := log.New("server", server)
@@ -123,10 +121,7 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 		stat.services["bootnode"] = infos.Report()
 
 		genesis = string(infos.genesis)
-		bootFull = append(bootFull, infos.enodeFull)
-		if infos.enodeLight != "" {
-			bootLight = append(bootLight, infos.enodeLight)
-		}
+		bootnodes = append(bootnodes, infos.enode)
 	}
 	logger.Debug("Checking for sealnode availability")
 	if infos, err := checkNode(client, w.network, false); err != nil {
@@ -184,8 +179,7 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 	if ethstats != "" {
 		w.conf.ethstats = ethstats
 	}
-	w.conf.bootFull = append(w.conf.bootFull, bootFull...)
-	w.conf.bootLight = append(w.conf.bootLight, bootLight...)
+	w.conf.bootnodes = append(w.conf.bootnodes, bootnodes...)
 
 	return stat
 }

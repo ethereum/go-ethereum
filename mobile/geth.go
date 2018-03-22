@@ -116,7 +116,6 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		P2P: p2p.Config{
 			NoDiscovery:      true,
 			DiscoveryV5:      true,
-			DiscoveryV5Addr:  ":0",
 			BootstrapNodesV5: config.BootstrapNodes.nodes,
 			ListenAddr:       ":0",
 			NAT:              nat.Any(),

@@ -24,10 +24,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/rcrowley/go-metrics"
 )
 
 // PrivateAdminAPI is the collection of administrative API methods exposed only
@@ -114,7 +114,7 @@ func (api *PrivateAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, 
 }
 
 // StartRPC starts the HTTP RPC API server.
-func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis *string) (bool, error) {
+func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
@@ -141,6 +141,14 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		}
 	}
 
+	allowedVHosts := api.node.config.HTTPVirtualHosts
+	if vhosts != nil {
+		allowedVHosts = nil
+		for _, vhost := range strings.Split(*host, ",") {
+			allowedVHosts = append(allowedVHosts, strings.TrimSpace(vhost))
+		}
+	}
+
 	modules := api.node.httpWhitelist
 	if apis != nil {
 		modules = nil
@@ -149,7 +157,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		}
 	}
 
-	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, allowedOrigins); err != nil {
+	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, allowedOrigins, allowedVHosts); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -300,6 +308,11 @@ func (api *PublicDebugAPI) Metrics(raw bool) (map[string]interface{}, error) {
 		// Fill the counter with the metric details, formatting if requested
 		if raw {
 			switch metric := metric.(type) {
+			case metrics.Counter:
+				root[name] = map[string]interface{}{
+					"Overall": float64(metric.Count()),
+				}
+
 			case metrics.Meter:
 				root[name] = map[string]interface{}{
 					"AvgRate01Min": metric.Rate1(),
@@ -330,6 +343,11 @@ func (api *PublicDebugAPI) Metrics(raw bool) (map[string]interface{}, error) {
 			}
 		} else {
 			switch metric := metric.(type) {
+			case metrics.Counter:
+				root[name] = map[string]interface{}{
+					"Overall": float64(metric.Count()),
+				}
+
 			case metrics.Meter:
 				root[name] = map[string]interface{}{
 					"Avg01Min": format(metric.Rate1()*60, metric.Rate1()),

@@ -17,11 +17,9 @@
 package main
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"os"
 	"os/signal"
 	"runtime"
@@ -29,14 +27,12 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -45,9 +41,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm"
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
+	swarmmetrics "github.com/ethereum/go-ethereum/swarm/metrics"
 
 	"gopkg.in/urfave/cli.v1"
 )
@@ -110,15 +106,10 @@ var (
 		Usage:  "Swarm Syncing enabled (default true)",
 		EnvVar: SWARM_ENV_SYNC_ENABLE,
 	}
-	EnsAPIFlag = cli.StringFlag{
+	EnsAPIFlag = cli.StringSliceFlag{
 		Name:   "ens-api",
-		Usage:  "URL of the Ethereum API provider to use for ENS record lookups",
+		Usage:  "ENS API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url",
 		EnvVar: SWARM_ENV_ENS_API,
-	}
-	EnsAddrFlag = cli.StringFlag{
-		Name:   "ens-addr",
-		Usage:  "ENS contract address (default is detected as testnet or mainnet using --ens-api)",
-		EnvVar: SWARM_ENV_ENS_ADDR,
 	}
 	SwarmApiFlag = cli.StringFlag{
 		Name:  "bzzapi",
@@ -155,6 +146,10 @@ var (
 	DeprecatedEthAPIFlag = cli.StringFlag{
 		Name:  "ethapi",
 		Usage: "DEPRECATED: please use --ens-api and --swap-api",
+	}
+	DeprecatedEnsAddrFlag = cli.StringFlag{
+		Name:  "ens-addr",
+		Usage: "DEPRECATED: ENS contract address, please use --ens-api with contract address according to its format",
 	}
 )
 
@@ -343,7 +338,6 @@ DEPRECATED: use 'swarm db clean'.
 		// bzzd-specific flags
 		CorsStringFlag,
 		EnsAPIFlag,
-		EnsAddrFlag,
 		SwarmTomlConfigPathFlag,
 		SwarmConfigPathFlag,
 		SwarmSwapEnabledFlag,
@@ -363,11 +357,17 @@ DEPRECATED: use 'swarm db clean'.
 		SwarmUploadMimeType,
 		//deprecated flags
 		DeprecatedEthAPIFlag,
+		DeprecatedEnsAddrFlag,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
+	app.Flags = append(app.Flags, swarmmetrics.Flags...)
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
-		return debug.Setup(ctx)
+		if err := debug.Setup(ctx); err != nil {
+			return err
+		}
+		swarmmetrics.Setup(ctx)
+		return nil
 	}
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
@@ -448,38 +448,6 @@ func bzzd(ctx *cli.Context) error {
 	return nil
 }
 
-// detectEnsAddr determines the ENS contract address by getting both the
-// version and genesis hash using the client and matching them to either
-// mainnet or testnet addresses
-func detectEnsAddr(client *rpc.Client) (common.Address, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	var version string
-	if err := client.CallContext(ctx, &version, "net_version"); err != nil {
-		return common.Address{}, err
-	}
-
-	block, err := ethclient.NewClient(client).BlockByNumber(ctx, big.NewInt(0))
-	if err != nil {
-		return common.Address{}, err
-	}
-
-	switch {
-
-	case version == "1" && block.Hash() == params.MainnetGenesisHash:
-		log.Info("using Mainnet ENS contract address", "addr", ens.MainNetAddress)
-		return ens.MainNetAddress, nil
-
-	case version == "3" && block.Hash() == params.TestnetGenesisHash:
-		log.Info("using Testnet ENS contract address", "addr", ens.TestNetAddress)
-		return ens.TestNetAddress, nil
-
-	default:
-		return common.Address{}, fmt.Errorf("unknown version and genesis hash: %s %s", version, block.Hash())
-	}
-}
-
 func registerBzzService(bzzconfig *bzzapi.Config, ctx *cli.Context, stack *node.Node) {
 
 	//define the swarm service boot function
@@ -494,27 +462,7 @@ func registerBzzService(bzzconfig *bzzapi.Config, ctx *cli.Context, stack *node.
 			}
 		}
 
-		var ensClient *ethclient.Client
-		if bzzconfig.EnsApi != "" {
-			log.Info("connecting to ENS API", "url", bzzconfig.EnsApi)
-			client, err := rpc.Dial(bzzconfig.EnsApi)
-			if err != nil {
-				return nil, fmt.Errorf("error connecting to ENS API %s: %s", bzzconfig.EnsApi, err)
-			}
-			ensClient = ethclient.NewClient(client)
-
-			//no ENS root address set yet
-			if bzzconfig.EnsRoot == (common.Address{}) {
-				ensAddr, err := detectEnsAddr(client)
-				if err == nil {
-					bzzconfig.EnsRoot = ensAddr
-				} else {
-					log.Warn(fmt.Sprintf("could not determine ENS contract address, using default %s", bzzconfig.EnsRoot), "err", err)
-				}
-			}
-		}
-
-		return swarm.NewSwarm(ctx, swapClient, ensClient, bzzconfig, bzzconfig.SwapEnabled, bzzconfig.SyncEnabled, bzzconfig.Cors)
+		return swarm.NewSwarm(ctx, swapClient, bzzconfig)
 	}
 	//register within the ethereum node
 	if err := stack.Register(boot); err != nil {

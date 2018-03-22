@@ -110,3 +110,19 @@ func requireUnpackKind(v reflect.Value, t reflect.Type, k reflect.Kind,
 	}
 	return nil
 }
+
+// requireUniqueStructFieldNames makes sure field names don't collide
+func requireUniqueStructFieldNames(args Arguments) error {
+	exists := make(map[string]bool)
+	for _, arg := range args {
+		field := capitalise(arg.Name)
+		if field == "" {
+			return fmt.Errorf("abi: purely underscored output cannot unpack to struct")
+		}
+		if exists[field] {
+			return fmt.Errorf("abi: multiple outputs mapping to the same struct field '%s'", field)
+		}
+		exists[field] = true
+	}
+	return nil
+}

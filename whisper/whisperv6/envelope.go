@@ -42,9 +42,11 @@ type Envelope struct {
 	Data   []byte
 	Nonce  uint64
 
-	pow  float64     // Message-specific PoW as described in the Whisper specification.
-	hash common.Hash // Cached hash of the envelope to avoid rehashing every time.
-	// Don't access hash directly, use Hash() function instead.
+	pow float64 // Message-specific PoW as described in the Whisper specification.
+
+	// the following variables should not be accessed directly, use the corresponding function instead: Hash(), Bloom()
+	hash  common.Hash // Cached hash of the envelope to avoid rehashing every time.
+	bloom []byte
 }
 
 // size returns the size of envelope as it is sent (i.e. public fields only)
@@ -75,15 +77,19 @@ func NewEnvelope(ttl uint32, topic TopicType, msg *sentMessage) *Envelope {
 // Seal closes the envelope by spending the requested amount of time as a proof
 // of work on hashing the data.
 func (e *Envelope) Seal(options *MessageParams) error {
-	var target, bestBit int
 	if options.PoW == 0 {
-		// adjust for the duration of Seal() execution only if execution time is predefined unconditionally
+		// PoW is not required
+		return nil
+	}
+
+	var target, bestBit int
+	if options.PoW < 0 {
+		// target is not set - the function should run for a period
+		// of time specified in WorkTime param. Since we can predict
+		// the execution time, we can also adjust Expiry.
 		e.Expiry += options.WorkTime
 	} else {
 		target = e.powToFirstBit(options.PoW)
-		if target < 1 {
-			target = 1
-		}
 	}
 
 	buf := make([]byte, 64)
@@ -113,6 +119,8 @@ func (e *Envelope) Seal(options *MessageParams) error {
 	return nil
 }
 
+// PoW computes (if necessary) and returns the proof of work target
+// of the envelope.
 func (e *Envelope) PoW() float64 {
 	if e.pow == 0 {
 		e.calculatePoW(0)
@@ -139,7 +147,11 @@ func (e *Envelope) powToFirstBit(pow float64) int {
 	x *= float64(e.TTL)
 	bits := gmath.Log2(x)
 	bits = gmath.Ceil(bits)
-	return int(bits)
+	res := int(bits)
+	if res < 1 {
+		res = 1
+	}
+	return res
 }
 
 // Hash returns the SHA3 hash of the envelope, calculating it if not yet done.
@@ -196,8 +208,11 @@ func (e *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error) {
 
 // Open tries to decrypt an envelope, and populates the message fields in case of success.
 func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
-	// The API interface forbids filters doing both symmetric and
-	// asymmetric encryption.
+	if watcher == nil {
+		return nil
+	}
+
+	// The API interface forbids filters doing both symmetric and asymmetric encryption.
 	if watcher.expectsAsymmetricEncryption() && watcher.expectsSymmetricEncryption() {
 		return nil
 	}
@@ -215,7 +230,7 @@ func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
 	}
 
 	if msg != nil {
-		ok := msg.Validate()
+		ok := msg.ValidateAndParse()
 		if !ok {
 			return nil
 		}
@@ -226,4 +241,39 @@ func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
 		msg.EnvelopeHash = e.Hash()
 	}
 	return msg
+}
+
+// Bloom maps 4-bytes Topic into 64-byte bloom filter with 3 bits set (at most).
+func (e *Envelope) Bloom() []byte {
+	if e.bloom == nil {
+		e.bloom = TopicToBloom(e.Topic)
+	}
+	return e.bloom
+}
+
+// TopicToBloom converts the topic (4 bytes) to the bloom filter (64 bytes)
+func TopicToBloom(topic TopicType) []byte {
+	b := make([]byte, BloomFilterSize)
+	var index [3]int
+	for j := 0; j < 3; j++ {
+		index[j] = int(topic[j])
+		if (topic[3] & (1 << uint(j))) != 0 {
+			index[j] += 256
+		}
+	}
+
+	for j := 0; j < 3; j++ {
+		byteIndex := index[j] / 8
+		bitIndex := index[j] % 8
+		b[byteIndex] = (1 << uint(bitIndex))
+	}
+	return b
+}
+
+// GetEnvelope retrieves an envelope from the message queue by its hash.
+// It returns nil if the envelope can not be found.
+func (w *Whisper) GetEnvelope(hash common.Hash) *Envelope {
+	w.poolMu.RLock()
+	defer w.poolMu.RUnlock()
+	return w.envelopes[hash]
 }

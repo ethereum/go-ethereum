@@ -109,7 +109,7 @@ func TestInstallFilters(t *testing.T) {
 			t.Fatalf("seed %d: failed to install filter: %s", seed, err)
 		}
 		tst[i].id = j
-		if len(j) != keyIdSize*2 {
+		if len(j) != keyIDSize*2 {
 			t.Fatalf("seed %d: wrong filter id size [%d]", seed, len(j))
 		}
 	}
@@ -303,9 +303,8 @@ func TestMatchEnvelope(t *testing.T) {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 
-	params.Topic[0] = 0xFF // ensure mismatch
+	params.Topic[0] = 0xFF // topic mismatch
 
-	// mismatch with pseudo-random data
 	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
@@ -313,14 +312,6 @@ func TestMatchEnvelope(t *testing.T) {
 	env, err := msg.Wrap(params)
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
-	}
-	match := fsym.MatchEnvelope(env)
-	if match {
-		t.Fatalf("failed MatchEnvelope symmetric with seed %d.", seed)
-	}
-	match = fasym.MatchEnvelope(env)
-	if match {
-		t.Fatalf("failed MatchEnvelope asymmetric with seed %d.", seed)
 	}
 
 	// encrypt symmetrically
@@ -337,7 +328,7 @@ func TestMatchEnvelope(t *testing.T) {
 	}
 
 	// symmetric + matching topic: match
-	match = fsym.MatchEnvelope(env)
+	match := fsym.MatchEnvelope(env)
 	if !match {
 		t.Fatalf("failed MatchEnvelope() symmetric with seed %d.", seed)
 	}
@@ -396,7 +387,7 @@ func TestMatchEnvelope(t *testing.T) {
 	// asymmetric + matching topic: match
 	fasym.Topics[i] = fasym.Topics[i+1]
 	match = fasym.MatchEnvelope(env)
-	if match {
+	if !match {
 		t.Fatalf("failed MatchEnvelope(asymmetric + matching topic) with seed %d.", seed)
 	}
 
@@ -431,7 +422,8 @@ func TestMatchEnvelope(t *testing.T) {
 	// filter with topic + envelope without topic: mismatch
 	fasym.Topics = fsym.Topics
 	match = fasym.MatchEnvelope(env)
-	if match {
+	if !match {
+		// topic mismatch should have no affect, as topics are handled by topic matchers
 		t.Fatalf("failed MatchEnvelope(filter without topic + envelope without topic) with seed %d.", seed)
 	}
 }
@@ -487,7 +479,8 @@ func TestMatchMessageSym(t *testing.T) {
 
 	// topic mismatch
 	f.Topics[index][0]++
-	if f.MatchMessage(msg) {
+	if !f.MatchMessage(msg) {
+		// topic mismatch should have no affect, as topics are handled by topic matchers
 		t.Fatalf("failed MatchEnvelope(topic mismatch) with seed %d.", seed)
 	}
 	f.Topics[index][0]--
@@ -580,7 +573,8 @@ func TestMatchMessageAsym(t *testing.T) {
 
 	// topic mismatch
 	f.Topics[index][0]++
-	if f.MatchMessage(msg) {
+	if !f.MatchMessage(msg) {
+		// topic mismatch should have no affect, as topics are handled by topic matchers
 		t.Fatalf("failed MatchEnvelope(topic mismatch) with seed %d.", seed)
 	}
 	f.Topics[index][0]--
@@ -800,6 +794,7 @@ func TestWatchers(t *testing.T) {
 func TestVariableTopics(t *testing.T) {
 	InitSingleTest()
 
+	const lastTopicByte = 3
 	var match bool
 	params, err := generateMessageParams()
 	if err != nil {
@@ -820,19 +815,53 @@ func TestVariableTopics(t *testing.T) {
 	}
 
 	for i := 0; i < 4; i++ {
-		arr := make([]byte, i+1, 4)
-		copy(arr, env.Topic[:i+1])
-
-		f.Topics[4] = arr
+		env.Topic = BytesToTopic(f.Topics[i])
 		match = f.MatchEnvelope(env)
 		if !match {
 			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
 		}
 
-		f.Topics[4][i]++
+		f.Topics[i][lastTopicByte]++
 		match = f.MatchEnvelope(env)
-		if match {
-			t.Fatalf("MatchEnvelope symmetric with seed %d, step %d: false positive.", seed, i)
+		if !match {
+			// topic mismatch should have no affect, as topics are handled by topic matchers
+			t.Fatalf("MatchEnvelope symmetric with seed %d, step %d.", seed, i)
 		}
+	}
+}
+
+func TestMatchSingleTopic_ReturnTrue(t *testing.T) {
+	bt := []byte("test")
+	topic := BytesToTopic(bt)
+
+	if !matchSingleTopic(topic, bt) {
+		t.FailNow()
+	}
+}
+
+func TestMatchSingleTopic_WithTail_ReturnTrue(t *testing.T) {
+	bt := []byte("test with tail")
+	topic := BytesToTopic([]byte("test"))
+
+	if !matchSingleTopic(topic, bt) {
+		t.FailNow()
+	}
+}
+
+func TestMatchSingleTopic_NotEquals_ReturnFalse(t *testing.T) {
+	bt := []byte("tes")
+	topic := BytesToTopic(bt)
+
+	if matchSingleTopic(topic, bt) {
+		t.FailNow()
+	}
+}
+
+func TestMatchSingleTopic_InsufficientLength_ReturnFalse(t *testing.T) {
+	bt := []byte("test")
+	topic := BytesToTopic([]byte("not_equal"))
+
+	if matchSingleTopic(topic, bt) {
+		t.FailNow()
 	}
 }

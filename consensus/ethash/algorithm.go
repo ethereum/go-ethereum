@@ -19,6 +19,7 @@ package ethash
 import (
 	"encoding/binary"
 	"hash"
+	"math/big"
 	"reflect"
 	"runtime"
 	"sync"
@@ -46,6 +47,48 @@ const (
 	cacheRounds        = 3       // Number of rounds in cache production
 	loopAccesses       = 64      // Number of accesses in hashimoto loop
 )
+
+// cacheSize returns the size of the ethash verification cache that belongs to a certain
+// block number.
+func cacheSize(block uint64) uint64 {
+	epoch := int(block / epochLength)
+	if epoch < maxEpoch {
+		return cacheSizes[epoch]
+	}
+	return calcCacheSize(epoch)
+}
+
+// calcCacheSize calculates the cache size for epoch. The cache size grows linearly,
+// however, we always take the highest prime below the linearly growing threshold in order
+// to reduce the risk of accidental regularities leading to cyclic behavior.
+func calcCacheSize(epoch int) uint64 {
+	size := cacheInitBytes + cacheGrowthBytes*uint64(epoch) - hashBytes
+	for !new(big.Int).SetUint64(size / hashBytes).ProbablyPrime(1) { // Always accurate for n < 2^64
+		size -= 2 * hashBytes
+	}
+	return size
+}
+
+// datasetSize returns the size of the ethash mining dataset that belongs to a certain
+// block number.
+func datasetSize(block uint64) uint64 {
+	epoch := int(block / epochLength)
+	if epoch < maxEpoch {
+		return datasetSizes[epoch]
+	}
+	return calcDatasetSize(epoch)
+}
+
+// calcDatasetSize calculates the dataset size for epoch. The dataset size grows linearly,
+// however, we always take the highest prime below the linearly growing threshold in order
+// to reduce the risk of accidental regularities leading to cyclic behavior.
+func calcDatasetSize(epoch int) uint64 {
+	size := datasetInitBytes + datasetGrowthBytes*uint64(epoch) - mixBytes
+	for !new(big.Int).SetUint64(size / mixBytes).ProbablyPrime(1) { // Always accurate for n < 2^64
+		size -= 2 * mixBytes
+	}
+	return size
+}
 
 // hasher is a repetitive hasher allowing the same hash data structures to be
 // reused between hash runs instead of requiring new ones to be created.
@@ -355,9 +398,11 @@ func hashimotoFull(dataset []uint32, hash []byte, nonce uint64) ([]byte, []byte)
 	return hashimoto(hash, nonce, uint64(len(dataset))*4, lookup)
 }
 
+const maxEpoch = 2048
+
 // datasetSizes is a lookup table for the ethash dataset size for the first 2048
 // epochs (i.e. 61440000 blocks).
-var datasetSizes = []uint64{
+var datasetSizes = [maxEpoch]uint64{
 	1073739904, 1082130304, 1090514816, 1098906752, 1107293056,
 	1115684224, 1124070016, 1132461952, 1140849536, 1149232768,
 	1157627776, 1166013824, 1174404736, 1182786944, 1191180416,
@@ -771,7 +816,7 @@ var datasetSizes = []uint64{
 
 // cacheSizes is a lookup table for the ethash verification cache size for the
 // first 2048 epochs (i.e. 61440000 blocks).
-var cacheSizes = []uint64{
+var cacheSizes = [maxEpoch]uint64{
 	16776896, 16907456, 17039296, 17170112, 17301056, 17432512, 17563072,
 	17693888, 17824192, 17955904, 18087488, 18218176, 18349504, 18481088,
 	18611392, 18742336, 18874304, 19004224, 19135936, 19267264, 19398208,
