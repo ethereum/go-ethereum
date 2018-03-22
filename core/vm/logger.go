@@ -186,7 +186,7 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 	l.output = output
 	l.err = err
 	if l.cfg.Debug {
-		fmt.Printf("0x%x", output)
+		fmt.Printf("0x%x\n", output)
 		if err != nil {
 			fmt.Printf(" error: %v\n", err)
 		}
