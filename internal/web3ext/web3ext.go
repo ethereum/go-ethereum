@@ -421,19 +421,9 @@ web3._extend({
 		// FoodCoin method to send transaction with formatted data payload
 		new web3._extend.Method({
 			name: 'sendTransactionWithData',
-			call: function(args) {
-				if (args[1]) {
-					if (!web3._extend.utils.isObject(args[1])) {
-						args[1] = "{\"description\":\"" + args[1] + "\"}"
-					} else {
-						args[1] = JSON.stringify(args[1])
-					}
-					args[0].data = web3.fromUtf8(args[1])
-				}				
-				return 'eth_sendTransaction'
-			},
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
+			call: 'eth_sendTransactionWithData',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null]
 		}),
 		// FoodCoin method to get formatted transaction info
 		new web3._extend.Method({
@@ -463,7 +453,7 @@ web3._extend({
 		// Example: food.getRegistryVar({accountAddress:'0xd79e977264887083aadb3e22e5f7b84c9a7531b7', creatorAddress:'0xd79e977264887083aadb3e22e5f7b84c9a7531b7', varName:'name'});
 		new web3._extend.Method({
         	name: 'getRegistryVar',
-        	call: 'eth_getVarFoodRegistry',				
+        	call: 'eth_getVarFR',				
         	params: 2,
 			inputFormatter: [null, web3._extend.formatters.inputDefaultBlockNumberFormatter]			
     	}),
@@ -471,9 +461,49 @@ web3._extend({
 		// Example: food.setRegistryVar({from:'0xd79e977264887083aadb3e22e5f7b84c9a7531b7', accountAddress:'0xd79e977264887083aadb3e22e5f7b84c9a7531b7', varName:'name', varValue:'John'});
 		new web3._extend.Method({
         	name: 'setRegistryVar',
-        	call: 'eth_setVarFoodRegistry',
+        	call: 'eth_setVarFR',
         	params: 1,
 			inputFormatter: [null]			
+    	}),
+		// Adds verificator to the list of verificators.
+    	// parameters: 
+    	//     VerificatorAddress - address of a verificator
+    	//     IssuedTimeStamp - verificator's license issued timestamp
+    	//     ValidUntilTimeStamp - verificator's license valid until timestamp
+		new web3._extend.Method({
+        	name: 'addVerificator',
+        	call: 'eth_addVerificator',
+        	params: 1,
+			inputFormatter: [null]
+    	}),
+		new web3._extend.Method({
+        	name: 'getVerificatorsCount',
+        	call: 'eth_getVerificatorsCount',
+        	params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputDefaultBlockNumberFormatter],
+			outputFormatter: function (tx) {
+    			if(tx !== null)
+        			tx = web3.toDecimal(tx);
+    			return tx;
+			}
+    	}),
+		new web3._extend.Method({
+        	name: 'getVerificatorsIndex',
+        	call: 'eth_getVerificatorsIndex',
+        	params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputDefaultBlockNumberFormatter],			
+    	}),
+		new web3._extend.Method({
+        	name: 'getVerificatorAtIndex',
+        	call: 'eth_getVerificatorAtIndex',
+        	params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputDefaultBlockNumberFormatter],			
+    	}),
+		new web3._extend.Method({
+        	name: 'updateVerificatorLicenseExpiration',
+        	call: 'eth_updateVerificatorLicenseExpiration',
+        	params: 1,
+			inputFormatter: [null],
     	}),
 	],	
 	properties: [

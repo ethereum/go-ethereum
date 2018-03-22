@@ -44,12 +44,13 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 
+	"encoding/json"
 )
 
 const (
 	defaultGasPrice = 50 * params.Shannon
-    abiFoodRegistryJSON = `[{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"registry","outputs":[{"name":"index","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"registryIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"from","type":"address"},{"name":"index","type":"uint256"}],"name":"getVariableNameAtIndex","outputs":[{"name":"varName","type":"string"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"from","type":"address"},{"name":"name","type":"string"}],"name":"getVar","outputs":[{"name":"exist","type":"bool"},{"name":"varName","type":"string"},{"name":"varValue","type":"string"},{"name":"timestamp","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"}],"name":"getHolderRegistryIndex","outputs":[{"name":"","type":"address[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getRegistryIndex","outputs":[{"name":"","type":"address[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getHoldersCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"}],"name":"getHolderRegistryCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"from","type":"address"}],"name":"getVariablesCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"}],"name":"isHolder","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"holderAddress","type":"address"},{"name":"index","type":"uint256"}],"name":"getHolderRegistryAddressAtIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"index","type":"uint256"}],"name":"getHolderAddressAtIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"holderAddress","type":"address"},{"name":"name","type":"string"},{"name":"value","type":"string"}],"name":"setVar","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"holderAddress","type":"address"},{"indexed":false,"name":"name","type":"string"},{"indexed":false,"name":"value","type":"string"},{"indexed":false,"name":"timestamp","type":"uint256"}],"name":"LogSetVariable","type":"event"}]`
-	registryAddress = `0xe5acd4bca588bf3d8fe9b6189ecf434da21f6f76`
+    abiFRJSON = `[{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"registry","outputs":[{"name":"index","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"personAddress","type":"address"}],"name":"getPersonRegistryCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"registryIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"personAddress","type":"address"}],"name":"isPerson","outputs":[{"name":"","type":"bool"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"personAddress","type":"address"},{"name":"from","type":"address"},{"name":"index","type":"uint256"}],"name":"getVariableNameAtIndex","outputs":[{"name":"varName","type":"string"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"verificators","outputs":[{"name":"verificatorAddress","type":"address"},{"name":"timestamp","type":"uint256"},{"name":"licenceIssuedTimeStamp","type":"uint256"},{"name":"licenceValidUntilTimeStamp","type":"uint256"},{"name":"index","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"personAddress","type":"address"},{"name":"from","type":"address"},{"name":"name","type":"string"}],"name":"getVar","outputs":[{"name":"exist","type":"bool"},{"name":"varName","type":"string"},{"name":"varValue","type":"string"},{"name":"timestamp","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"personAddress","type":"address"},{"name":"from","type":"address"},{"name":"index","type":"uint256"}],"name":"getVarByIndex","outputs":[{"name":"exist","type":"bool"},{"name":"varName","type":"string"},{"name":"varValue","type":"string"},{"name":"timestamp","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getRegistryIndex","outputs":[{"name":"","type":"address[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"verificatorAddress","type":"address"},{"name":"licenceValidUntilTimeStamp","type":"uint256"}],"name":"updateVerificatorLicenseExpiration","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"name":"personAddress","type":"address"},{"name":"index","type":"uint256"}],"name":"getPersonRegistryAddressAtIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"verificatorAddress","type":"address"},{"name":"licenceIssuedTimeStamp","type":"uint256"},{"name":"licenceValidUntilTimeStamp","type":"uint256"}],"name":"addVerificator","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"owner","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getPersonsCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"verificatorsIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"personAddress","type":"address"}],"name":"getPersonRegistryIndex","outputs":[{"name":"","type":"address[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"index","type":"uint256"}],"name":"getVerificatorAtIndex","outputs":[{"name":"verificatorAddress","type":"address"},{"name":"timestamp","type":"uint256"},{"name":"licenceIssuedTimeStamp","type":"uint256"},{"name":"licenceValidUntilTimeStamp","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"personAddress","type":"address"},{"name":"from","type":"address"}],"name":"getVariablesCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getVerificatorsIndex","outputs":[{"name":"","type":"address[]"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"getVerificatorsCount","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[{"name":"index","type":"uint256"}],"name":"getPersonAddressAtIndex","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"personAddress","type":"address"},{"name":"name","type":"string"},{"name":"value","type":"string"}],"name":"setVar","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"inputs":[],"payable":false,"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"personAddress","type":"address"},{"indexed":false,"name":"name","type":"string"},{"indexed":false,"name":"value","type":"string"},{"indexed":false,"name":"timestamp","type":"uint256"}],"name":"LogSetVariable","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"verificatorAddress","type":"address"},{"indexed":false,"name":"licenceIssuedTimeStamp","type":"uint256"},{"indexed":false,"name":"licenceValidUntilTimeStamp","type":"uint256"}],"name":"LogAddVerificator","type":"event"}]`
+	registryAddress = `0xb9c84fe5d9ee933202012efa6380bd83930d44cc`
 )
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -684,32 +685,76 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNr r
 	return (hexutil.Bytes)(result), err
 }
 
-type FoodRegistryVar struct {
+type FRVar struct {
 	Exist     bool
 	VarName   string
 	VarValue  string
 	Timestamp *big.Int
 }
 
-// FoodRegistryGetArgs represents the arguments for a GetVarFoodRegistry.
-type FoodRegistryGetArgs struct {
+type FRVerificator struct {
+	VerificatorAddress          common.Address
+	Timestamp   				*big.Int
+	LicenceIssuedTimeStamp  	*big.Int
+	LicenceValidUntilTimeStamp  *big.Int
+}
+
+// FRGetArgs represents the arguments for a GetVarFR.
+type FRGetArgs struct {
 	CallArgs
 	VarName  		string			`json:"varName"`
 	AccountAddress  common.Address  `json:"accountAddress"`
 	CreatorAddress  common.Address  `json:"creatorAddress"`
 }
 
-// FoodRegistrySetArgs represents the arguments for a SetVarFoodRegistry.
-type FoodRegistrySetArgs struct {
+// FRSetArgs represents the arguments for a SetVarFR.
+type FRSetArgs struct {
 	SendTxArgs
 	VarName  		string			`json:"varName"`
 	VarValue  		string			`json:"varValue"`
 	AccountAddress  common.Address  `json:"accountAddress"`
 }
 
-func (s *PublicBlockChainAPI) GetVarFoodRegistry(ctx context.Context, args FoodRegistryGetArgs, blockNr rpc.BlockNumber) (FoodRegistryVar, error) {
+// FRAddVerificatorArgs represents the arguments for a AddVerificator.
+type FRAddVerificatorArgs struct {
+	SendTxArgs
+	VerificatorAddress   common.Address  `json:"verificatorAddress"`
+	IssuedTimeStamp  	 *big.Int		 `json:"IssuedTimeStamp"`
+	ValidUntilTimeStamp  *big.Int		 `json:"ValidUntilTimeStamp"`
+	Index		   		 *big.Int		 `json:"Index"`
+}
 
-	var ev FoodRegistryVar
+// FRVerificatorByIndexArgs represents the arguments for a GetVerificatorByIndex.
+type FRVerificatorByIndexArgs struct {
+	CallArgs
+	Index		   		 *big.Int		 `json:"Index"`
+}
+
+func isJSON(s string) bool {
+	var js map[string]interface{}
+	return json.Unmarshal([]byte(s), &js) == nil
+
+}
+
+func (s *PublicTransactionPoolAPI) SendTransactionWithData(ctx context.Context, args SendTxArgs, data interface{}) (common.Hash, error) {
+
+	var packed hexutil.Bytes
+	packed, err := json.Marshal(data)
+
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	if !isJSON(string(packed)) {
+		packed = []byte("{\"description\":" + string(packed) + "}")
+	}
+	args.Data = &packed
+	return s.SendTransaction(ctx, args)
+}
+
+func (s *PublicBlockChainAPI) GetVarFR(ctx context.Context, args FRGetArgs, blockNr rpc.BlockNumber) (FRVar, error) {
+
+	var ev FRVar
 
 	if args.To == nil {
 		address := common.HexToAddress(registryAddress)
@@ -717,7 +762,7 @@ func (s *PublicBlockChainAPI) GetVarFoodRegistry(ctx context.Context, args FoodR
 	}
 
 
-	abi, err := abi.JSON(strings.NewReader(abiFoodRegistryJSON))
+	abi, err := abi.JSON(strings.NewReader(abiFRJSON))
 	if err != nil {
 		return ev, err
 	}
@@ -738,14 +783,14 @@ func (s *PublicBlockChainAPI) GetVarFoodRegistry(ctx context.Context, args FoodR
 	return ev, err
 }
 
-func (s *PublicTransactionPoolAPI) SetVarFoodRegistry(ctx context.Context, args FoodRegistrySetArgs) (common.Hash, error) {
+func (s *PublicTransactionPoolAPI) SetVarFR(ctx context.Context, args FRSetArgs) (common.Hash, error) {
 
 	if args.To == nil {
 		address := common.HexToAddress(registryAddress)
 		args.To = &address
 	}
 
-	abi, err := abi.JSON(strings.NewReader(abiFoodRegistryJSON))
+	abi, err := abi.JSON(strings.NewReader(abiFRJSON))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -759,7 +804,156 @@ func (s *PublicTransactionPoolAPI) SetVarFoodRegistry(ctx context.Context, args 
 
 	if args.Data == nil {
 		args.Data = &packed
-		log.Info("SetVarFoodRegistry2 args.Data is nil")
+	}
+
+	result, err := s.SendTransaction(ctx, args.SendTxArgs)
+
+	return result, err
+}
+
+func (s *PublicTransactionPoolAPI) AddVerificator(ctx context.Context, args FRAddVerificatorArgs) (common.Hash, error) {
+
+	if args.To == nil {
+		address := common.HexToAddress(registryAddress)
+		args.To = &address
+	}
+
+	abi, err := abi.JSON(strings.NewReader(abiFRJSON))
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	var packed hexutil.Bytes
+
+	packed, err = abi.Pack("addVerificator", args.VerificatorAddress, args.IssuedTimeStamp, args.ValidUntilTimeStamp)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	if args.Data == nil {
+		args.Data = &packed
+	}
+
+	result, err := s.SendTransaction(ctx, args.SendTxArgs)
+
+	return result, err
+}
+
+func (s *PublicBlockChainAPI) GetVerificatorsCount(ctx context.Context, args CallArgs, blockNr rpc.BlockNumber) (*big.Int, error) {
+
+	ev := big.NewInt(0)
+
+	if args.To == nil {
+		address := common.HexToAddress(registryAddress)
+		args.To = &address
+	}
+
+
+	abi, err := abi.JSON(strings.NewReader(abiFRJSON))
+	if err != nil {
+		return ev, err
+	}
+
+	packed, err := abi.Pack("getVerificatorsCount")
+	if err != nil {
+		return ev, err
+	}
+
+	if args.Data == nil {
+		args.Data = packed
+	}
+
+	result, _, _, err := s.doCall(ctx, args, blockNr, vm.Config{DisableGasMetering: true})
+
+	err = abi.Unpack(&ev, "getVerificatorsCount", result)
+
+	return ev, err
+}
+
+func (s *PublicBlockChainAPI) GetVerificatorsIndex(ctx context.Context, args CallArgs, blockNr rpc.BlockNumber) ([]common.Address, error) {
+
+	var ev []common.Address
+
+	if args.To == nil {
+		address := common.HexToAddress(registryAddress)
+		args.To = &address
+	}
+
+
+	abi, err := abi.JSON(strings.NewReader(abiFRJSON))
+	if err != nil {
+		return ev, err
+	}
+
+	packed, err := abi.Pack("getVerificatorsIndex")
+	if err != nil {
+		return ev, err
+	}
+
+	if args.Data == nil {
+		args.Data = packed
+	}
+
+	result, _, _, err := s.doCall(ctx, args, blockNr, vm.Config{DisableGasMetering: true})
+
+	err = abi.Unpack(&ev, "getVerificatorsIndex", result)
+
+	return ev, err
+}
+
+func (s *PublicBlockChainAPI) GetVerificatorAtIndex(ctx context.Context, args FRVerificatorByIndexArgs,
+	blockNr rpc.BlockNumber) (FRVerificator, error) {
+
+	var ev FRVerificator
+
+	if args.To == nil {
+		address := common.HexToAddress(registryAddress)
+		args.To = &address
+	}
+
+
+	abi, err := abi.JSON(strings.NewReader(abiFRJSON))
+	if err != nil {
+		return ev, err
+	}
+
+	packed, err := abi.Pack("getVerificatorAtIndex", args.Index)
+	if err != nil {
+		return ev, err
+	}
+
+	if args.Data == nil {
+		args.Data = packed
+	}
+
+	result, _, _, err := s.doCall(ctx, args.CallArgs, blockNr, vm.Config{DisableGasMetering: true})
+
+	err = abi.Unpack(&ev, "getVerificatorAtIndex", result)
+
+	return ev, err
+}
+
+func (s *PublicTransactionPoolAPI) UpdateVerificatorLicenseExpiration(ctx context.Context, args FRAddVerificatorArgs) (common.Hash, error) {
+
+	if args.To == nil {
+		address := common.HexToAddress(registryAddress)
+		args.To = &address
+	}
+
+	abi, err := abi.JSON(strings.NewReader(abiFRJSON))
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	var packed hexutil.Bytes
+
+	packed, err = abi.Pack("updateVerificatorLicenseExpiration", args.VerificatorAddress, args.ValidUntilTimeStamp)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	if args.Data == nil {
+		args.Data = &packed
 	}
 
 	result, err := s.SendTransaction(ctx, args.SendTxArgs)
