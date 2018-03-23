@@ -662,7 +662,7 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 }
 
 func (s *LDBStore) Get(key Key) (chunk *Chunk, err error) {
-	//log.Trace("ldbstore.get", "key", chunk.Key) - seems like chunk is nil sometimes
+	log.Trace("ldbstore.get", "key", key)
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	return s.get(key)
@@ -700,9 +700,9 @@ func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 			hash := hasher.Sum(nil)
 
 			if !bytes.Equal(hash, key) {
-				log.Error(fmt.Sprintf("Apparent key/hash mismatch. Hash %x, key %v", hash, key[:]))
+				log.Error("apparent key/hash mismatch", "hash", hash, "key", key[:])
 				s.delete(indx.Idx, getIndexKey(key), s.po(key))
-				log.Error("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
+				log.Error("invalid chunk in database.")
 			}
 		}
 
