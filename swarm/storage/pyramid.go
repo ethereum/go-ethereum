@@ -266,8 +266,6 @@ func (self *PyramidChunker) processor(id int64, jobC chan *chunkJob, chunkC chan
 }
 
 func (self *PyramidChunker) processChunk(id int64, hasher SwarmHash, job *chunkJob, chunkC chan *Chunk, storageWG *sync.WaitGroup) {
-	log.Debug("pyramid.chunker: processChunk()", "id", id)
-
 	hasher.ResetWithLength(job.chunk[:8]) // 8 bytes of length
 	hasher.Write(job.chunk[8:])           // minus 8 []byte length
 	h := hasher.Sum(nil)
