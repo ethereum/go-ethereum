@@ -80,7 +80,7 @@ func initSyncTest() {
 	//assign the toAddr func so NewStreamerService can build the addr
 	toAddr = func(id discover.NodeID) *network.BzzAddr {
 		addr := network.NewAddrFromNodeID(id)
-		addr.OAddr[0] = byte(0)
+		// addr.OAddr[0] = byte(0)
 		return addr
 	}
 
@@ -134,20 +134,18 @@ func TestSyncing_1024_16(t *testing.T) { testSyncing(t, 1024, 16) }
 
 //The following tests have been disabled because they seem to hit resource limits
 //on developer machines and/or are long running
-/*
-func TestSyncing_256_64(t *testing.T)  { testSyncing(t, 256, 64) }
-func TestSyncing_8_256(t *testing.T) { testSyncing(t, 8, 256) }
-func TestSyncing_32_256(t *testing.T)  { testSyncing(t, 32, 256) }
-func TestSyncing_32_128(t *testing.T)  { testSyncing(t, 32, 128) }
-func TestSyncing_256_128(t *testing.T) { testSyncing(t, 256, 128) }
-func TestSyncing_128_128(t *testing.T) { testSyncing(t, 128, 128) }
+func TestSyncing_256_64(t *testing.T)   { testSyncing(t, 256, 64) }
+func TestSyncing_8_256(t *testing.T)    { testSyncing(t, 8, 256) }
+func TestSyncing_32_256(t *testing.T)   { testSyncing(t, 32, 256) }
+func TestSyncing_32_128(t *testing.T)   { testSyncing(t, 32, 128) }
+func TestSyncing_256_128(t *testing.T)  { testSyncing(t, 256, 128) }
+func TestSyncing_128_128(t *testing.T)  { testSyncing(t, 128, 128) }
 func TestSyncing_256_256(t *testing.T)  { testSyncing(t, 256, 256) }
-func TestSyncing_128_256(t *testing.T) { testSyncing(t, 128, 256) }
-func TestSyncing_1024_32(t *testing.T) { testSyncing(t, 1024, 32) }
-func TestSyncing_1024_64(t *testing.T) { testSyncing(t, 1024, 64) }
+func TestSyncing_128_256(t *testing.T)  { testSyncing(t, 128, 256) }
+func TestSyncing_1024_32(t *testing.T)  { testSyncing(t, 1024, 32) }
+func TestSyncing_1024_64(t *testing.T)  { testSyncing(t, 1024, 64) }
 func TestSyncing_1024_128(t *testing.T) { testSyncing(t, 1024, 128) }
 func TestSyncing_1024_256(t *testing.T) { testSyncing(t, 1024, 256) }
-*/
 
 func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
 	ids = make([]discover.NodeID, nodeCount)
@@ -263,6 +261,29 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 
 	//define the action to be performed before the test checks: start syncing
 	action := func(ctx context.Context) error {
+		ticker := time.NewTicker(200 * time.Millisecond)
+		defer ticker.Stop()
+		for range ticker.C {
+			healthy := true
+			for _, id := range ids {
+				r := registries[id]
+				//PeerPot for this node
+				pp := ppmap[id]
+				//call Healthy RPC
+				h := r.delivery.overlay.Healthy(pp)
+				//print info
+				log.Error(r.delivery.overlay.String())
+				log.Error(fmt.Sprintf("IS HEALTHY: %t", h.GotNN && h.KnowNN && h.Full))
+				if !h.GotNN || !h.Full {
+					healthy = false
+					break
+				}
+			}
+			if healthy {
+				break
+			}
+		}
+
 		if history {
 			log.Info("Uploading for history")
 			//If testing only history, we upload the chunk(s) first
