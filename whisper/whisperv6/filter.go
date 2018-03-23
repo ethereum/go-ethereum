@@ -255,10 +255,6 @@ func matchSingleTopic(topic TopicType, bt []byte) bool {
 		bt = bt[:TopicLength]
 	}
 
-	if len(bt) < TopicLength {
-		return false
-	}
-
 	for j, b := range bt {
 		if topic[j] != b {
 			return false
