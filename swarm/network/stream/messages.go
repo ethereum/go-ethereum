@@ -110,7 +110,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 
 	go func() {
 		if err := p.SendOfferedHashes(os, from, to); err != nil {
-			log.Error("ERROR in SendOfferedHashes, DROPPING peer!", "err", err)
+			log.Warn("ERROR in SendOfferedHashes, DROPPING peer!", "err", err)
 			p.Drop(err)
 		}
 	}()
@@ -128,7 +128,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 		}
 		go func() {
 			if err := p.SendOfferedHashes(os, req.History.From, req.History.To); err != nil {
-				log.Error("ERROR in SendOfferedHashes, DROPPING peer!", "err", err)
+				log.Warn("ERROR in SendOfferedHashes, DROPPING peer!", "err", err)
 				p.Drop(err)
 			}
 		}()
@@ -238,12 +238,12 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	go func() {
 		select {
 		case <-time.After(120 * time.Second):
-			log.Error("ERROR in handleOfferedHashesMsg, DROPPING peer!", "err", "TIMEOUT")
+			log.Warn("ERROR in handleOfferedHashesMsg, DROPPING peer!", "err", "TIMEOUT")
 			p.Drop(err)
 			return
 		case err := <-c.next:
 			if err != nil {
-				log.Error("ERROR in handleOfferedHashesMsg, DROPPING peer!", "err", err)
+				log.Warn("ERROR in handleOfferedHashesMsg, DROPPING peer!", "err", err)
 				p.Drop(err)
 				return
 			}
@@ -251,7 +251,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
 		err := p.SendPriority(msg, c.priority)
 		if err != nil {
-			log.Error("ERROR in handleOfferedHashesMsg, DROPPING peer!", "err", err)
+			log.Warn("ERROR in handleOfferedHashesMsg, DROPPING peer!", "err", err)
 			p.Drop(err)
 		}
 	}()
@@ -284,7 +284,7 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	// launch in go routine since GetBatch blocks until new hashes arrive
 	go func() {
 		if err := p.SendOfferedHashes(s, req.From, req.To); err != nil {
-			log.Error("ERROR in handleWantedHashesMsg, DROPPING peer!", "err", err)
+			log.Warn("ERROR in handleWantedHashesMsg, DROPPING peer!", "err", err)
 			p.Drop(err)
 		}
 	}()
