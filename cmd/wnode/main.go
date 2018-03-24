@@ -208,7 +208,7 @@ func initialize() {
 		if *useLibP2P {
 			var libp2pbootstrap *string
 			for libp2pbootstrap == nil {
-				libp2pbootstrap = scanLineA("Please enter the bootstrap node's addres: ")
+				libp2pbootstrap = scanLineA("Please enter the bootstrap node's address: ")
 			}
 			libp2pbootaddr, err := multiaddr.NewMultiaddr(*libp2pbootstrap)
 			if err != nil {
@@ -293,7 +293,10 @@ func initialize() {
 	}
 
 	if *useLibP2P {
-		server, err = whisper.NewLibP2PWhisperServer()
+		var port uint
+		var a string
+		fmt.Scanf(*argIP, "%s:%d", &a, &port)
+		server, err = whisper.NewLibP2PWhisperServer(port, shh)
 		if err != nil {
 			utils.Fatalf("Error starting the libp2p client: %v", err)
 		}
