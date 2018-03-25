@@ -85,6 +85,7 @@ func (self *LocalStore) CacheCounter() uint64 {
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
+	log.Trace("localstore.put", "key", chunk.Key)
 	self.mu.Lock()
 	defer self.mu.Unlock()
 

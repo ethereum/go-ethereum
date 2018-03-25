@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 )
 
@@ -332,6 +333,7 @@ func (self *TreeChunker) Join(key Key, chunkC chan *Chunk, depth int) LazySectio
 
 // Size is meant to be called on the LazySectionReader
 func (self *LazyChunkReader) Size(quitC chan bool) (n int64, err error) {
+	log.Debug("lazychunkreader.size", "key", self.key)
 	if self.chunk != nil {
 		return self.chunk.Size, nil
 	}
@@ -459,15 +461,18 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 // block until they time out or arrive
 // abort if quitC is readable
 func retrieve(key Key, chunkC chan *Chunk, quitC chan bool) *Chunk {
+	log.Debug("retrieve", "key", key)
 	chunk := NewChunk(key, nil)
 	chunk.C = make(chan bool)
 	// submit chunk for retrieval
+	log.Debug("submit chunk for retrieval", "key", key)
 	select {
 	case chunkC <- chunk: // submit retrieval request, someone should be listening on the other side (or we will time out globally)
 	case <-quitC:
 		return nil
 	}
 	// waiting for the chunk retrieval
+	log.Debug("waiting for the chunk retrieval", "key", key)
 	select { // chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 
 	case <-quitC:
@@ -478,11 +483,13 @@ func retrieve(key Key, chunkC chan *Chunk, quitC chan bool) *Chunk {
 	if len(chunk.SData) == 0 {
 		return nil
 	}
+	log.Debug("chunk retrieved", "key", key)
 	return chunk
 }
 
 // Read keeps a cursor so cannot be called simulateously, see ReadAt
 func (self *LazyChunkReader) Read(b []byte) (read int, err error) {
+	log.Debug("lazychunkreader.read", "key", self.key)
 	read, err = self.ReadAt(b, self.off)
 
 	self.off += int64(read)
@@ -494,6 +501,7 @@ var errWhence = errors.New("Seek: invalid whence")
 var errOffset = errors.New("Seek: invalid offset")
 
 func (s *LazyChunkReader) Seek(offset int64, whence int) (int64, error) {
+	log.Debug("lazychunkreader.seek", "key", s.key, "offset", offset)
 	switch whence {
 	default:
 		return 0, errWhence
