@@ -100,6 +100,7 @@ var (
 	argServerPoW = flag.Float64("mspow", whisper.DefaultMinimumPoW, "PoW requirement for Mail Server request")
 
 	argIP      = flag.String("ip", "", "IP address and port of this node (e.g. 127.0.0.1:30303)")
+	argPort    = flag.Uint("port", 0, "Port to be used byt the libp2p server")
 	argPub     = flag.String("pub", "", "public key for asymmetric encryption")
 	argDBPath  = flag.String("dbpath", "", "path to the server's DB directory")
 	argIDFile  = flag.String("idfile", "", "file name with node id (private key)")
@@ -199,11 +200,22 @@ func initialize() {
 	}
 
 	if *bootstrapMode {
+		if !*useLibP2P {
 		if len(*argIP) == 0 {
 			argIP = scanLineA("Please enter your IP and port (e.g. 127.0.0.1:30348): ")
 		}
 	} else if *fileReader {
 		*bootstrapMode = true
+	} else {
+			if *argPort == 0 {
+				for {
+					fmt.Print("Please enter the port to use: ")
+					if _, err := fmt.Scanf("%d", argPort); err != nil || *argPort >= 1024 {
+						break
+					}
+				}
+			}
+		}
 	} else {
 		if *useLibP2P {
 			var libp2pbootstrap *string
@@ -293,10 +305,8 @@ func initialize() {
 	}
 
 	if *useLibP2P {
-		var port uint
-		var a string
-		fmt.Scanf(*argIP, "%s:%d", &a, &port)
-		server, err = whisper.NewLibP2PWhisperServer(port, shh)
+		fmt.Println("Using port", *argPort)
+		server, err = whisper.NewLibP2PWhisperServer(*argPort, shh)
 		if err != nil {
 			utils.Fatalf("Error starting the libp2p client: %v", err)
 		}
@@ -330,7 +340,7 @@ func startServer() error {
 	}
 
 	fmt.Printf("my public key: %s \n", common.ToHex(crypto.FromECDSAPub(&asymKey.PublicKey)))
-	fmt.Println(server.Enode())
+	fmt.Println("my address:", server.Enode())
 
 	if *bootstrapMode {
 		configureNode()

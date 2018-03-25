@@ -24,7 +24,6 @@ import (
 	"math"
 
 	"github.com/ethereum/go-ethereum/p2p"
-	libp2p "github.com/libp2p/go-libp2p"
 	crypto "github.com/libp2p/go-libp2p-crypto"
 	host "github.com/libp2p/go-libp2p-host"
 	inet "github.com/libp2p/go-libp2p-net"
@@ -32,6 +31,8 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	set "gopkg.in/fatih/set.v0"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
+	swarm "github.com/libp2p/go-libp2p-swarm"
+	"github.com/libp2p/go-libp2p/p2p/host/basic"
 )
 
 // LibP2PStream is a wrapper used to implement the MsgReadWriter
@@ -269,7 +270,7 @@ func (server *LibP2PWhisperServer) AddPeer(addr ma.Multiaddr) *LibP2PPeer {
 	ipfsaddrpart, _ := ma.NewMultiaddr(fmt.Sprintf("/ipfs/%s", pid))
 	ipaddr := addr.Decapsulate(ipfsaddrpart)
 	server.Host.Peerstore().AddAddr(peerid, ipaddr, pstore.PermanentAddrTTL)
-	newPeer := &LibP2PPeer{id: peer.ID(pid)}
+	newPeer := &LibP2PPeer{id: peerid}
 	server.Peers = append(server.Peers, newPeer)
 
 	return newPeer
@@ -278,16 +279,28 @@ func (server *LibP2PWhisperServer) AddPeer(addr ma.Multiaddr) *LibP2PPeer {
 // NewLibP2PWhisperServer creates a new WhisperServer with
 // a libp2p backend.
 func NewLibP2PWhisperServer(port uint, whisper *Whisper) (WhisperServer, error) {
-	priv, _, err := crypto.GenerateKeyPair(crypto.Ed25519, 384)
-	opts := []libp2p.Option{
-		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", port)),
-		libp2p.Identity(priv),
+	priv, pub, err := crypto.GenerateKeyPair(crypto.Ed25519, 384)
+	if err != nil {
+		return nil, fmt.Errorf("Error creating libp2p server: %v", err)
+	}
+	nodeID, err := peer.IDFromPublicKey(pub)
+	if err != nil {
+		return nil, fmt.Errorf("Error creating libp2p server identity: %v pubkey=%v", err, pub)
+	}
+	serverAddr, err := ma.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", port))
+	if err != nil {
+		return nil, fmt.Errorf("Error creating libp2p server address: %v port=%d", err, port)
 	}
 
-	h, err := libp2p.New(context.Background(), opts...)
+	ps := pstore.NewPeerstore()
+	ps.AddPrivKey(nodeID, priv)
+	ps.AddPubKey(nodeID, pub)
+
+	network, err := swarm.NewNetwork(context.Background(), []ma.Multiaddr{serverAddr}, nodeID, ps, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Error setting up the libp2p network: %s", err)
+		return nil, fmt.Errorf("Error creating libp2p network: %v port=%d", err, port)
 	}
+	h := basichost.New(network)
 
 	server := &LibP2PWhisperServer{h, []*LibP2PPeer{}, whisper}
 	return server, nil
