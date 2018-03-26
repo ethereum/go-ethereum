@@ -560,7 +560,7 @@ func (api *PublicWhisperAPI) NewMessageFilter(req Criteria) (string, error) {
 	if len(req.Topics) > 0 {
 		topics = make([][]byte, len(req.Topics))
 		for i, topic := range req.Topics {
-			topics[i] = make([]byte, 0, len(topic))
+			topics[i] = make([]byte, len(topic))
 			copy(topics[i], topic[:])
 		}
 	}
