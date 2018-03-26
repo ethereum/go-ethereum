@@ -28,10 +28,6 @@ import (
 type Config struct {
 	// Debug enabled debugging Interpreter options
 	Debug bool
-	// EnableJit enabled the JIT VM
-	EnableJit bool
-	// ForceJit forces the JIT VM
-	ForceJit bool
 	// Tracer is the op code logger
 	Tracer Tracer
 	// NoRecursion disabled Interpreter call, callcode,
@@ -47,7 +43,7 @@ type Config struct {
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
 // passed evmironment to query external sources for state information.
-// The Interpreter will run the byte code VM or JIT VM based on the passed
+// The Interpreter will run the byte code VM based on the passed
 // configuration.
 type Interpreter struct {
 	evm      *EVM
