@@ -66,10 +66,10 @@ var (
 
 	ropstenCheckpoint = trustedCheckpoint{
 		name:          "ropsten",
-		sectionIdx:    83,
-		sectionHead:   common.HexToHash("3ca623586bc0da35f1fc8d9b6b55950f3b1f69be9c6501846a2df672adb61236"),
-		chtRoot:       common.HexToHash("8f08ec7783969768c6ef06e5fe3398223cbf4ae2907b676da7b6fe6c7f55b059"),
-		bloomTrieRoot: common.HexToHash("02d86d3c6a87f8f8a92c2a59bbba2132ff6f9f61b0915a5dc28a9d8279219fd0"),
+		sectionIdx:    87,
+		sectionHead:   common.HexToHash("ebc0adcb30ed21cbe95bd77499cc1af0bada621fee3644cb80dbcf1444c123fe"),
+		chtRoot:       common.HexToHash("d9830f4893c821ddf149b8cb9d3e3bfe3109d2eea8e3c4a4ede7c8b2ee8a7800"),
+		bloomTrieRoot: common.HexToHash("c76e12d713f65b84c5a36d06bc77d0c8419248ea0b36e0812a78b76aa6da0ddb"),
 	}
 )
 
