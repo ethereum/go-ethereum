@@ -23,7 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -51,7 +50,7 @@ func main() {
 
 		network := c.String("network")
 		if strings.Contains(network, " ") || strings.Contains(network, "-") {
-			utils.Fatalf("No spaces or hyphens allowed in network name")
+			log.Crit("No spaces or hyphens allowed in network name")
 		}
 		// Start the wizard and relinquish control
 		makeWizard(c.String("network")).run()
