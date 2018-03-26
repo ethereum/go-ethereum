@@ -130,7 +130,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		stopDbUpgrade:  stopDbUpgrade,
 		networkId:      config.NetworkId,
 		gasPrice:       config.GasPrice,
-		etherbase:      config.Etherbase,
+		etherbase:      determineEtherbase(ctx, config, chainConfig),
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks),
 	}
@@ -216,6 +216,10 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chai
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
 	}
+	// If Istanbul is requested, set it up
+	//if chainConfig.Istanbul != nil {
+	//	// Do something
+	//}
 	// Otherwise assume proof-of-work
 	switch {
 	case config.PowMode == ethash.ModeFake:
@@ -239,6 +243,14 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chai
 		engine.SetThreads(-1) // Disable CPU mining
 		return engine
 	}
+}
+
+func determineEtherbase(ctx *node.ServiceContext, config *Config, chainConfig *params.ChainConfig) common.Address {
+	// Force etherbase to node key address when using Istanbul
+	//if chainConfig.Istanbul != nil {
+	//	return crypto.PubkeyToAddress(ctx.NodeKey().PublicKey)
+	//}
+	return config.Etherbase
 }
 
 // APIs returns the collection of RPC services the ethereum package offers.
@@ -328,6 +340,12 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 // set in js console via admin interface or wrapper from cli flags
 func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 	self.lock.Lock()
+	// Disallow re-setting etherbase when using Istanbul
+	//if _, ok := self.engine.(consensus.Istanbul); ok {
+	//	self.lock.Unlock()
+	//	log.Error("Cannot set etherbase in Istanbul consensus")
+	//	return
+	//}
 	self.etherbase = etherbase
 	self.lock.Unlock()
 

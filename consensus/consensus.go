@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"math/big"
@@ -95,6 +96,34 @@ type Engine interface {
 
 	// APIs returns the RPC APIs this consensus engine provides.
 	APIs(chain ChainReader) []rpc.API
+}
+
+// Handler defines the interface to implement if a consensus engine needs to send/receive
+// messages from peers.
+type Handler interface {
+	// AddPeer adds a P2P peer
+	AddPeer(id string, peer Peer)
+
+	// RemovePeer removes a P2P peer
+	RemovePeer(id string)
+
+	// HandleMsg handles a message from peer
+	HandleMsg(data p2p.Msg) error
+
+	// SetBlockScheduler sets the scheduler for inserting a block after consensus is achieved.
+	SetBlockScheduler(scheduler BlockScheduler)
+}
+
+// BlockScheduler provides the interface that consensus engine needs to
+// schedule for a future import of a block.
+type BlockScheduler interface {
+	Enqueue(id string, block *types.Block) error
+}
+
+// Peer defines the interface to communicate with peers of the consensus engine.
+type Peer interface {
+	// Send sends the message to this peer
+	Send(msgCode uint64, data interface{}) error
 }
 
 // PoW is a consensus engine based on proof-of-work.

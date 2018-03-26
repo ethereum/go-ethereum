@@ -94,6 +94,8 @@ type ProtocolManager struct {
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
 	wg sync.WaitGroup
+
+	engine consensus.Engine
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
@@ -111,6 +113,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		noMorePeers: make(chan struct{}),
 		txsyncCh:    make(chan *txsync),
 		quitSync:    make(chan struct{}),
+		engine:      engine,
 	}
 	// Figure out whether to allow fast sync or not
 	if mode == downloader.FastSync && blockchain.CurrentBlock().NumberU64() > 0 {
@@ -177,6 +180,9 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		return manager.blockchain.InsertChain(blocks)
 	}
 	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer)
+	if handler, ok := manager.engine.(consensus.Handler); ok {
+		handler.SetBlockScheduler(manager.fetcher)
+	}
 
 	return manager, nil
 }
@@ -191,6 +197,10 @@ func (pm *ProtocolManager) removePeer(id string) {
 
 	// Unregister the peer from the downloader and Ethereum peer set
 	pm.downloader.UnregisterPeer(id)
+	// Remove from the consensus engine's peer set
+	if handler, ok := pm.engine.(consensus.Handler); ok {
+		handler.RemovePeer(id)
+	}
 	if err := pm.peers.Unregister(id); err != nil {
 		log.Error("Peer removal failed", "peer", id, "err", err)
 	}
@@ -274,6 +284,10 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	if err := pm.peers.Register(p); err != nil {
 		p.Log().Error("Ethereum peer registration failed", "err", err)
 		return err
+	}
+	// Register the peer with the consensus engine
+	if handler, ok := pm.engine.(consensus.Handler); ok {
+		handler.AddPeer(p.id, p)
 	}
 	defer pm.removePeer(p.id)
 
@@ -672,6 +686,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			p.MarkTransaction(tx.Hash())
 		}
 		pm.txpool.AddRemotes(txs)
+
+	case msg.Code == ConsensusMsg:
+		if handler, ok := pm.engine.(consensus.Handler); ok {
+			if err := handler.HandleMsg(msg); err != nil {
+				return err
+			}
+		}
 
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
