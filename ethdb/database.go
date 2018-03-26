@@ -122,8 +122,8 @@ func (db *LDBDatabase) NewIterator() iterator.Iterator {
 	return db.db.NewIterator(nil, nil)
 }
 
-// NewIteratorByPrefix returns a iterator to iterate over subset of database content with a particular prefix.
-func (db *LDBDatabase) NewIteratorByPrefix(prefix []byte) iterator.Iterator {
+// NewIteratorWithPrefix returns a iterator to iterate over subset of database content with a particular prefix.
+func (db *LDBDatabase) NewIteratorWithPrefix(prefix []byte) iterator.Iterator {
 	return db.db.NewIterator(util.BytesPrefix(prefix), nil)
 }
 

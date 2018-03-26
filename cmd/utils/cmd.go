@@ -27,8 +27,11 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -105,6 +108,8 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	}
 
 	log.Info("Importing blockchain", "file", fn)
+
+	// Open the file handle and potentially unwrap the gzip stream
 	fh, err := os.Open(fn)
 	if err != nil {
 		return err
@@ -180,8 +185,12 @@ func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block
 	return nil
 }
 
+// ExportChain exports a blockchain into the specified file, truncating any data
+// already present in the file.
 func ExportChain(blockchain *core.BlockChain, fn string) error {
 	log.Info("Exporting blockchain", "file", fn)
+
+	// Open the file handle and potentially wrap with a gzip stream
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return err
@@ -193,7 +202,7 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 		writer = gzip.NewWriter(writer)
 		defer writer.(*gzip.Writer).Close()
 	}
-
+	// Iterate over the blocks and export them
 	if err := blockchain.Export(writer); err != nil {
 		return err
 	}
@@ -202,9 +211,12 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 	return nil
 }
 
+// ExportAppendChain exports a blockchain into the specified file, appending to
+// the file if data already exists in it.
 func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, last uint64) error {
 	log.Info("Exporting blockchain", "file", fn)
-	// TODO verify mode perms
+
+	// Open the file handle and potentially wrap with a gzip stream
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return err
@@ -216,10 +228,86 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 		writer = gzip.NewWriter(writer)
 		defer writer.(*gzip.Writer).Close()
 	}
-
+	// Iterate over the blocks and export them
 	if err := blockchain.ExportN(writer, first, last); err != nil {
 		return err
 	}
 	log.Info("Exported blockchain to", "file", fn)
+	return nil
+}
+
+// ImportPreimages imports a batch of exported hash preimages into the database.
+func ImportPreimages(db *ethdb.LDBDatabase, fn string) error {
+	log.Info("Importing preimages", "file", fn)
+
+	// Open the file handle and potentially unwrap the gzip stream
+	fh, err := os.Open(fn)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	var reader io.Reader = fh
+	if strings.HasSuffix(fn, ".gz") {
+		if reader, err = gzip.NewReader(reader); err != nil {
+			return err
+		}
+	}
+	stream := rlp.NewStream(reader, 0)
+
+	// Import the preimages in batches to prevent disk trashing
+	preimages := make(map[common.Hash][]byte)
+
+	for {
+		// Read the next entry and ensure it's not junk
+		var blob []byte
+
+		if err := stream.Decode(&blob); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		// Accumulate the preimages and flush when enough ws gathered
+		preimages[crypto.Keccak256Hash(blob)] = common.CopyBytes(blob)
+		if len(preimages) > 1024 {
+			if err := core.WritePreimages(db, 0, preimages); err != nil {
+				return err
+			}
+			preimages = make(map[common.Hash][]byte)
+		}
+	}
+	// Flush the last batch preimage data
+	if len(preimages) > 0 {
+		return core.WritePreimages(db, 0, preimages)
+	}
+	return nil
+}
+
+// ExportPreimages exports all known hash preimages into the specified file,
+// truncating any data already present in the file.
+func ExportPreimages(db *ethdb.LDBDatabase, fn string) error {
+	log.Info("Exporting preimages", "file", fn)
+
+	// Open the file handle and potentially wrap with a gzip stream
+	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	var writer io.Writer = fh
+	if strings.HasSuffix(fn, ".gz") {
+		writer = gzip.NewWriter(writer)
+		defer writer.(*gzip.Writer).Close()
+	}
+	// Iterate over the preimages and export them
+	it := db.NewIteratorWithPrefix([]byte("secure-key-"))
+	for it.Next() {
+		if err := rlp.Encode(writer, it.Value()); err != nil {
+			return err
+		}
+	}
+	log.Info("Exported preimages", "file", fn)
 	return nil
 }

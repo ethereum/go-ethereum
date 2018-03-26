@@ -155,11 +155,11 @@ func init() {
 		initCommand,
 		importCommand,
 		exportCommand,
+		importPreimagesCommand,
+		exportPreimagesCommand,
 		copydbCommand,
 		removedbCommand,
 		dumpCommand,
-		preimageDumpCommand,
-		preimageImportCommand,
 		// See monitorcmd.go:
 		monitorCommand,
 		// See accountcmd.go:
