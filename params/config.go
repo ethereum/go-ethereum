@@ -190,6 +190,7 @@ func (c *ChainConfig) String() string {
 		c.ByzantiumBlock,
 		c.DisposalBlock,
 		c.ECIP1017EraRounds,
+		c.EIP160Block,
 		c.ConstantinopleBlock,
 		engine,
 	)
