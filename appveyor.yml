@@ -30,7 +30,19 @@ install:
 
 build_script:
   - go run build\ci.go install
+  - 7z a multi-geth-win64.zip build/bin/geth.exe
+  - ps: Get-FileHash multi-geth-win64.zip -Algorithm SHA256
+  - ps: Get-FileHash multi-geth-win64.zip -Algorithm SHA256 | Out-File multi-geth-win64.zip.sha256
 
 test_script:
   - set CGO_ENABLED=1
   - go run build\ci.go test -coverage
+
+deploy:
+  artifact: /multi-geth-win64\.zip.*/
+  auth_token:
+    secure: Or4bHgwveQXAjhl+UM1iRUsy5/zbcrk3lUDFFl0nOUyhyuf5PZuvBaEdR2bRW6nv
+  draft: true
+  on:
+    appveyor_repo_tag: true
+  provider: GitHub
