@@ -141,9 +141,9 @@ func (c *stateObject) touch() {
 		account: &c.address,
 	})
 	if c.address == ripemd {
-		//Explicitly put it in the dirty-cache, which is otherwise
-		// generated from flattened journals
-		c.db.journal.dirtyOverride(c.address)
+		// Explicitly put it in the dirty-cache, which is otherwise generated from
+		// flattened journals.
+		c.db.journal.dirty(c.address)
 	}
 }
 

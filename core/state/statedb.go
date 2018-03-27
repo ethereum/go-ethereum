@@ -76,7 +76,7 @@ type StateDB struct {
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
-	journal        journal
+	journal        *journal
 	validRevisions []revision
 	nextRevisionId int
 
@@ -96,6 +96,7 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		stateObjectsDirty: make(map[common.Address]struct{}),
 		logs:              make(map[common.Hash][]*types.Log),
 		preimages:         make(map[common.Hash][]byte),
+		journal:           newJournal(),
 	}, nil
 }
 
@@ -456,21 +457,20 @@ func (self *StateDB) Copy() *StateDB {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	dirtyObjects := self.journal.flatten()
-
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
 		db:                self.db,
 		trie:              self.db.CopyTrie(self.trie),
-		stateObjects:      make(map[common.Address]*stateObject, len(dirtyObjects)),
-		stateObjectsDirty: make(map[common.Address]struct{}, len(dirtyObjects)),
+		stateObjects:      make(map[common.Address]*stateObject, len(self.journal.dirties)),
+		stateObjectsDirty: make(map[common.Address]struct{}, len(self.journal.dirties)),
 		refund:            self.refund,
 		logs:              make(map[common.Hash][]*types.Log, len(self.logs)),
 		logSize:           self.logSize,
 		preimages:         make(map[common.Hash][]byte),
+		journal:           newJournal(),
 	}
 	// Copy the dirty states, logs, and preimages
-	for addr := range dirtyObjects {
+	for addr := range self.journal.dirties {
 		state.stateObjects[addr] = self.stateObjects[addr].deepCopy(state)
 		state.stateObjectsDirty[addr] = struct{}{}
 	}
@@ -488,7 +488,7 @@ func (self *StateDB) Copy() *StateDB {
 func (self *StateDB) Snapshot() int {
 	id := self.nextRevisionId
 	self.nextRevisionId++
-	self.validRevisions = append(self.validRevisions, revision{id, self.journal.Length()})
+	self.validRevisions = append(self.validRevisions, revision{id, self.journal.length()})
 	return id
 }
 
@@ -503,13 +503,8 @@ func (self *StateDB) RevertToSnapshot(revid int) {
 	}
 	snapshot := self.validRevisions[idx].journalIndex
 
-	// Replay the journal to undo changes.
-	for i := self.journal.Length() - 1; i >= snapshot; i-- {
-		self.journal.entries[i].undo(self)
-	}
-	self.journal.entries = self.journal.entries[:snapshot]
-
-	// Remove invalidated snapshots from the stack.
+	// Replay the journal to undo changes and remove invalidated snapshots
+	self.journal.revert(self, snapshot)
 	self.validRevisions = self.validRevisions[:idx]
 }
 
@@ -521,8 +516,7 @@ func (self *StateDB) GetRefund() uint64 {
 // Finalise finalises the state by removing the self destructed objects
 // and clears the journal as well as the refunds.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
-
-	for addr, v := range s.journal.flatten() {
+	for addr := range s.journal.dirties {
 		stateObject := s.stateObjects[addr]
 		if stateObject.suicided || (deleteEmptyObjects && stateObject.empty()) {
 			s.deleteStateObject(stateObject)
@@ -530,7 +524,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			stateObject.updateRoot(s.db)
 			s.updateStateObject(stateObject)
 		}
-		s.stateObjectsDirty[addr] = v
+		s.stateObjectsDirty[addr] = struct{}{}
 	}
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
@@ -574,7 +568,7 @@ func (s *StateDB) DeleteSuicides() {
 }
 
 func (s *StateDB) clearJournalAndRefund() {
-	s.journal = journal{}
+	s.journal = newJournal()
 	s.validRevisions = s.validRevisions[:0]
 	s.refund = 0
 }
@@ -583,10 +577,9 @@ func (s *StateDB) clearJournalAndRefund() {
 func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) {
 	defer s.clearJournalAndRefund()
 
-	for addr, v := range s.journal.flatten() {
-		s.stateObjectsDirty[addr] = v
+	for addr := range s.journal.dirties {
+		s.stateObjectsDirty[addr] = struct{}{}
 	}
-
 	// Commit objects to the trie.
 	for addr, stateObject := range s.stateObjects {
 		_, isDirty := s.stateObjectsDirty[addr]
