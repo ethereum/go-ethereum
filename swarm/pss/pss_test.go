@@ -635,7 +635,7 @@ func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubke
 // params in run name:
 // nodes/msgs/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
-func XTestNetwork(t *testing.T) {
+func TestNetwork(t *testing.T) {
 	t.Run("3/2000/4/sock", testNetwork)
 	t.Run("4/2000/4/sock", testNetwork)
 	t.Run("8/2000/4/sock", testNetwork)
@@ -706,6 +706,8 @@ func testNetwork(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	time.Sleep(1 * time.Second)
+
 	triggerChecks := func(trigger chan discover.NodeID, id discover.NodeID, rpcclient *rpc.Client, topic string) error {
 		msgC := make(chan APIMsg)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -764,11 +766,15 @@ func testNetwork(t *testing.T) {
 		}
 	}
 
+	time.Sleep(1 * time.Second)
+
 	// setup workers
 	jobs := make(chan Job, 10)
 	for w := 1; w <= 10; w++ {
 		go worker(w, jobs, rpcs, pubkeys, topic)
 	}
+
+	time.Sleep(1 * time.Second)
 
 	for i := 0; i < int(msgcount); i++ {
 		sendnodeidx := rand.Intn(int(nodecount))
