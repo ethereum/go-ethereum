@@ -189,10 +189,3 @@ matrix:
         submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go purge -store gethstore/builds -days 14
-
-notifications:
-  webhooks:
-    urls:
-      - https://webhooks.gitter.im/e/e09ccdce1048c5e03445
-    on_success: change
-    on_failure: always
