@@ -44,6 +44,21 @@ var (
 		Ethash:              new(EthashConfig),
 	}
 
+	// EllaismChainConfig is the chain parameters to run a node on the Ellaism main network.
+	EllaismChainConfig = &ChainConfig{
+		ChainId:             big.NewInt(64),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.HexToHash("0x4d7df65052bb21264d6ad2d6fe2d5578a36be12f71bf8d0559b0c15c4dc539b5"),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0x7fffffffffffffff),
+		ByzantiumBlock:      big.NewInt(0x7fffffffffffffff),
+		ConstantinopleBlock: nil,
+		Ethash:              new(EthashConfig),
+	}
+
 	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
 	TestnetChainConfig = &ChainConfig{
 		ChainId:             big.NewInt(3),
