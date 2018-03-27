@@ -36,12 +36,12 @@ import (
 
 // Ethash proof-of-work protocol constants.
 var (
-	FrontierBlockReward    *big.Int = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
-	ByzantiumBlockReward   *big.Int = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
-	maxUncles                       = 2                 // Maximum number of uncles allowed in a single block
-	allowedFutureBlockTime          = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
-	DisinflationRateQuotient        = big.NewInt(4)     // Disinflation rate quotient for ECIP1017
-	DisinflationRateDivisor         = big.NewInt(5)     // Disinflation rate divisor for ECIP1017
+	FrontierBlockReward      *big.Int = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
+	ByzantiumBlockReward     *big.Int = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
+	maxUncles                         = 2                 // Maximum number of uncles allowed in a single block
+	allowedFutureBlockTime            = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
+	DisinflationRateQuotient          = big.NewInt(4)     // Disinflation rate quotient for ECIP1017
+	DisinflationRateDivisor           = big.NewInt(5)     // Disinflation rate divisor for ECIP1017
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -585,7 +585,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		// Ensure value 'era' is configured.
 		eraLen := config.ECIP1017EraRounds
 		era := GetBlockEra(header.Number, eraLen)
-		wr := GetBlockWinnerRewardByEra(era, blockReward) // wr "winner reward". 5, 4, 3.2, 2.56, ...
+		wr := GetBlockWinnerRewardByEra(era, blockReward)                    // wr "winner reward". 5, 4, 3.2, 2.56, ...
 		wurs := GetBlockWinnerRewardForUnclesByEra(era, uncles, blockReward) // wurs "winner uncle rewards"
 		wr.Add(wr, wurs)
 		state.AddBalance(header.Coinbase, wr) // $$
@@ -625,10 +625,10 @@ func GetBlockUncleRewardByEra(era *big.Int, header, uncle *types.Header, blockRe
 	//   An extra reward to the winning miner for including uncles as part of the block, in the form of an extra 1/32 (0.15625ETC) per uncle included, up to a maximum of two (2) uncles.
 	if era.Cmp(big.NewInt(0)) == 0 {
 		r := new(big.Int)
-		r.Add(uncle.Number, big8)    // 2,534,998 + 8              = 2,535,006
-		r.Sub(r, header.Number)      // 2,535,006 - 2,534,999        = 7
-		r.Mul(r, blockReward) // 7 * 5e+18               = 35e+18
-		r.Div(r, big8)               // 35e+18 / 8                            = 7/8 * 5e+18
+		r.Add(uncle.Number, big8) // 2,534,998 + 8              = 2,535,006
+		r.Sub(r, header.Number)   // 2,535,006 - 2,534,999        = 7
+		r.Mul(r, blockReward)     // 7 * 5e+18               = 35e+18
+		r.Div(r, big8)            // 35e+18 / 8                            = 7/8 * 5e+18
 
 		return r
 	}
