@@ -32,6 +32,15 @@ func MainnetGenesis() string {
 	return ""
 }
 
+// EllaismGenesis returns the JSON spec to use for the Ellaism network.
+func EllaismGenesis() string {
+	enc, err := json.Marshal(core.DefaultEllaismGenesisBlock())
+	if err != nil {
+		panic(err)
+	}
+	return string(enc)
+}
+
 // TestnetGenesis returns the JSON spec to use for the Ethereum test network.
 func TestnetGenesis() string {
 	enc, err := json.Marshal(core.DefaultTestnetGenesisBlock())
