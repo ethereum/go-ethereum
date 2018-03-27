@@ -31,7 +31,7 @@ build_script:
 
 test_script:
   - set CGO_ENABLED=1
-  - go run build\ci.go test -coverage
+  - go run build\ci.go test
 
 deploy:
   artifact: /multi-geth-win64\.zip.*/
