@@ -6,25 +6,15 @@ matrix:
   - os: linux
     dist: trusty
     sudo: required
-    go: 1.9.x
-    script:
-    - sudo modprobe fuse
-    - sudo chmod 666 /dev/fuse
-    - sudo chown root:$USER /etc/fuse.conf
-    - go run build/ci.go install
-    - go run build/ci.go test -coverage
-  - os: linux
-    dist: trusty
-    sudo: required
     go: '1.10'
     script:
     - sudo modprobe fuse
     - sudo chmod 666 /dev/fuse
     - sudo chown root:$USER /etc/fuse.conf
     - go run build/ci.go install
-    - go run build/ci.go test -coverage
+    - go run build/ci.go test
     before_deploy:
-    - sh .ci/deploy.sh
+    - sh build/deploy.sh
     deploy:
       provider: releases
       api_key:
@@ -45,9 +35,9 @@ matrix:
     - brew install caskroom/cask/brew-cask
     - brew cask install osxfuse
     - go run build/ci.go install
-    - go run build/ci.go test -coverage
+    - go run build/ci.go test
     before_deploy:
-    - sh .ci/deploy.sh
+    - sh build/deploy.sh
     deploy:
       provider: releases
       api_key:
