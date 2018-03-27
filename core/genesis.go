@@ -329,7 +329,7 @@ func DefaultEllaismGenesisBlock() *Genesis {
 		Nonce:      64,
 		ExtraData:  hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		GasLimit:   5000,
-		Difficulty: big.NewInt(17179869184),
+		Difficulty: big.NewInt(1073741824),
 		Alloc:      decodePrealloc(ellaismAllocData),
 	}
 }
