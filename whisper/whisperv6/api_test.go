@@ -18,8 +18,8 @@ package whisperv6
 
 import (
 	"bytes"
-	"testing"
 	"crypto/ecdsa"
+	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -45,7 +45,7 @@ func TestMultipleTopicCopyInNewMessageFilter(t *testing.T) {
 		t.Fatalf("Error generating symmetric key: %v", err)
 	}
 	api := PublicWhisperAPI{
-		w: w,
+		w:        w,
 		lastUsed: make(map[string]time.Time),
 	}
 
@@ -54,7 +54,7 @@ func TestMultipleTopicCopyInNewMessageFilter(t *testing.T) {
 
 	crit := Criteria{
 		SymKeyID: keyID,
-		Topics: []TopicType{TopicType(t1), TopicType(t2)},
+		Topics:   []TopicType{TopicType(t1), TopicType(t2)},
 	}
 
 	_, err = api.NewMessageFilter(crit)
