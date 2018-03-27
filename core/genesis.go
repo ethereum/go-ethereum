@@ -324,7 +324,7 @@ func DefaultGenesisBlock() *Genesis {
 
 // EllaismGenesisBlock returns the Ellaism genesis block.
 func DefaultEllaismGenesisBlock() *Genesis {
-	return &Genesis {
+	return &Genesis{
 		Config:     params.EllaismChainConfig,
 		Nonce:      64,
 		ExtraData:  hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000"),
