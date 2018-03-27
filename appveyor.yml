@@ -33,6 +33,12 @@ test_script:
   - set CGO_ENABLED=1
   - go run build\ci.go test
 
+artifacts:
+  - path: '*.zip'
+    name: geth
+  - path: '*.zip.sha256'
+    name: geth-sha256
+
 deploy:
   artifact: /multi-geth-win64\.zip.*/
   auth_token:
