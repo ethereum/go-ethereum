@@ -133,14 +133,14 @@ type ChainConfig struct {
 	EIP150Block *big.Int    `json:"eip150Block,omitempty"` // EIP150 HF block (nil = no fork)
 	EIP150Hash  common.Hash `json:"eip150Hash,omitempty"`  // EIP150 HF hash (needed for header only clients as only gas pricing changed)
 
-	EIP155Block *big.Int `json:"eip155Block,omitempty"` // EIP155 HF block
-	EIP158Block *big.Int `json:"eip158Block,omitempty"` // EIP158 HF block
+	EIP155Block   *big.Int `json:"eip155Block,omitempty"`   // EIP155 HF block
+	EIP158Block   *big.Int `json:"eip158Block,omitempty"`   // EIP158 HF block
 	DisposalBlock *big.Int `json:"disposalBlock,omitempty"` // Bomb disposal HF block
 
 	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 
-	ECIP1017EraRounds   *big.Int `json:"ecip1017EraRounds,omitempty"` // ECIP1017 era rounds
+	ECIP1017EraRounds *big.Int `json:"ecip1017EraRounds,omitempty"` // ECIP1017 era rounds
 
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
