@@ -46,6 +46,8 @@ matrix:
     - brew cask install osxfuse
     - go run build/ci.go install
     - go run build/ci.go test -coverage
+    before_deploy:
+    - sh .ci/deploy.sh
     deploy:
       provider: releases
       api_key:
