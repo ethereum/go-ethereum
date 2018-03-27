@@ -25,7 +25,7 @@ install:
 
 build_script:
   - go run build\ci.go install
-  - 7z a multi-geth-win64.zip build/bin/geth.exe
+  - 7z a multi-geth-win64.zip .\build\bin\geth.exe
   - ps: Get-FileHash multi-geth-win64.zip -Algorithm SHA256
   - ps: Get-FileHash multi-geth-win64.zip -Algorithm SHA256 | Out-File multi-geth-win64.zip.sha256
 
