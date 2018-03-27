@@ -3,46 +3,67 @@ go_import_path: github.com/ethereum/go-ethereum
 sudo: false
 matrix:
   include:
-    - os: linux
-      dist: trusty
-      sudo: required
-      go: 1.9.x
-      script:
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage
-
-    # These are the latest Go versions.
-    - os: linux
-      dist: trusty
-      sudo: required
-      go: "1.10"
-      script:
-        - sudo modprobe fuse
-        - sudo chmod 666 /dev/fuse
-        - sudo chown root:$USER /etc/fuse.conf
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage
-
-    - os: osx
-      go: "1.10"
-      script:
-        - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
-        - brew update
-        - brew install caskroom/cask/brew-cask
-        - brew cask install osxfuse
-        - go run build/ci.go install
-        - go run build/ci.go test -coverage
-
-    # This builder only tests code linters on latest version of Go
-    - os: linux
-      dist: trusty
-      go: "1.10"
-      env:
-        - lint
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      script:
-        - go run build/ci.go lint
+  - os: linux
+    dist: trusty
+    sudo: required
+    go: 1.9.x
+    script:
+    - sudo modprobe fuse
+    - sudo chmod 666 /dev/fuse
+    - sudo chown root:$USER /etc/fuse.conf
+    - go run build/ci.go install
+    - go run build/ci.go test -coverage
+  - os: linux
+    dist: trusty
+    sudo: required
+    go: '1.10'
+    script:
+    - sudo modprobe fuse
+    - sudo chmod 666 /dev/fuse
+    - sudo chown root:$USER /etc/fuse.conf
+    - go run build/ci.go install
+    - go run build/ci.go test -coverage
+    before_deploy:
+    - sh .ci/deploy.sh
+    deploy:
+      provider: releases
+      api_key:
+        secure: Aynh6/R/IRY1rJtfAbwn/yaMISVIYhfbZF0IlOtPUrLpMvmA9jTU7paPYG7bzluKSJwPiwIkdKzYfrkoaqZ1O0CCJzyQZ2EURfm3PPTI8gtVi9CRV0XYVfbKzpLmDmWVu8cJ1sJ5Js/9Vyg1FVBJTBVjjKJ/gXI7JOj+joZvsRSdQvHnR+lpxo0UPPbzXIlpb3I1Wputk3QTvBzihcIuHXy+TBWvvW3ZNNUAh8n552cIAUIAmhjhE18IifstjgfHF1oPqMgBOTVjmQcn8965RQWV+rTsuB76Z79syyns4EFAXFd4vQlMShfYCXKLGjKp9SAq3zNDvdUlMLo1t6leD0PDEAu6bZxKbor1Yhh/OBLAftaF5DuFpEU/bH/YTqWPa1YjIJzUULuD9hkj4dhOfDkHWEOZ7B+FoQeP7zZ6RD2Cw98U8MzsvLl3UoyDJNxC/bR8nCJSkQlezNsGnIlmlH+SoGwn+yVdtF5dC7SPo5qgCq0r/f0P2YAKhiqt6CcmEvbmH0jyMIu7nUB0YIwlK7vu+kauV0dAHYqIkP8qVVt0AcMtNinoGHLng34+dLNcA49z44duaX3nIdxjUh2EuQINdsWsK3/ewCaJkpQxX+pnmtaoOUB05eD+0twa9In7k0RjP4RBcjGR281g18EE6lBGIUhKq/uEoJOOT3WAaq4=
+      file: multi-geth-$TRAVIS_OS_NAME.*
+      file_glob: true
+      draft: true
+      on:
+        repo: ellaism/multi-geth
+        tags: true
+      skip_cleanup: true
+      tag_name: "$TRAVIS_TAG"
+  - os: osx
+    go: '1.10'
+    script:
+    - unset -f cd
+    - brew update
+    - brew install caskroom/cask/brew-cask
+    - brew cask install osxfuse
+    - go run build/ci.go install
+    - go run build/ci.go test -coverage
+    deploy:
+      provider: releases
+      api_key:
+        secure: Aynh6/R/IRY1rJtfAbwn/yaMISVIYhfbZF0IlOtPUrLpMvmA9jTU7paPYG7bzluKSJwPiwIkdKzYfrkoaqZ1O0CCJzyQZ2EURfm3PPTI8gtVi9CRV0XYVfbKzpLmDmWVu8cJ1sJ5Js/9Vyg1FVBJTBVjjKJ/gXI7JOj+joZvsRSdQvHnR+lpxo0UPPbzXIlpb3I1Wputk3QTvBzihcIuHXy+TBWvvW3ZNNUAh8n552cIAUIAmhjhE18IifstjgfHF1oPqMgBOTVjmQcn8965RQWV+rTsuB76Z79syyns4EFAXFd4vQlMShfYCXKLGjKp9SAq3zNDvdUlMLo1t6leD0PDEAu6bZxKbor1Yhh/OBLAftaF5DuFpEU/bH/YTqWPa1YjIJzUULuD9hkj4dhOfDkHWEOZ7B+FoQeP7zZ6RD2Cw98U8MzsvLl3UoyDJNxC/bR8nCJSkQlezNsGnIlmlH+SoGwn+yVdtF5dC7SPo5qgCq0r/f0P2YAKhiqt6CcmEvbmH0jyMIu7nUB0YIwlK7vu+kauV0dAHYqIkP8qVVt0AcMtNinoGHLng34+dLNcA49z44duaX3nIdxjUh2EuQINdsWsK3/ewCaJkpQxX+pnmtaoOUB05eD+0twa9In7k0RjP4RBcjGR281g18EE6lBGIUhKq/uEoJOOT3WAaq4=
+      file: multi-geth-$TRAVIS_OS_NAME.*
+      file_glob: true
+      draft: true
+      on:
+        repo: ellaism/multi-geth
+        tags: true
+      skip_cleanup: true
+      tag_name: "$TRAVIS_TAG"
+  - os: linux
+    dist: trusty
+    go: '1.10'
+    env:
+    - lint
+    git:
+      submodules: false
+    script:
+    - go run build/ci.go lint
