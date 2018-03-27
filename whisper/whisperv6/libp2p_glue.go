@@ -17,6 +17,7 @@
 package whisperv6
 
 import (
+	"github.com/ethereum/go-ethereum/log"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -165,10 +166,38 @@ type LibP2PWhisperServer struct {
 	whisper *Whisper
 }
 
+func (server *LibP2PWhisperServer) connectToPeer(p *LibP2PPeer) error {
+	log.Info("opening stream to peer: ", p.id.Pretty(), "from peer", server.Host.ID().Pretty())
+
+	// Create a stream with the peer
+	s, err := server.Host.NewStream(context.Background(), p.id, WhisperProtocolString)
+	if err != nil {
+		panic(err)
+	}
+
+	// Save the stream
+	lps := LibP2PStream{
+		stream: s,
+	}
+	p.connectionStream = &lps
+
+	// Send a first message to notify the remote peer we want
+	// to connect
+	connectMsg := p2p.Msg{
+		Code: lp2pPeerCode,
+		Size: 0,
+		Payload: bytes.NewReader([]byte{0}),
+	}
+
+	err = lps.WriteMsg(connectMsg)
+	
+	return err
+}
+
 // Start starts the server
 func (server *LibP2PWhisperServer) Start() error {
 	server.Host.SetStreamHandler(WhisperProtocolString, func (stream inet.Stream) {
-		defer stream.Close()
+		log.Info("opening stream from new peer")
 	
 		pid := stream.Conn().RemotePeer()
 		var peer Peer
@@ -188,48 +217,20 @@ func (server *LibP2PWhisperServer) Start() error {
 			server.Peers = append(server.Peers, peer.(*LibP2PPeer))
 		}
 
-		server.whisper.runMessageLoop(peer, lps)
+		go server.whisper.runMessageLoop(peer, lps)
 	})
 
 	fmt.Println("Currently having the following peers:", server.Peers)
 
 	// Open a stream to every peer currently known
+	var err error
 	for _, p := range server.Peers {
-		fmt.Println("opening stream to peer: ", p)
-		// Do not dial to self - actually, this should raise
-		// an exception rather than be ignored
-		// if pid == server.Host.ID() {
-		// 	continue
-		// }
-
-		// Create a stream with the peer
-		s, err := server.Host.NewStream(context.Background(), p.id, WhisperProtocolString)
-		if err != nil {
-			panic(err)
+		if e := server.connectToPeer(p); e != nil {
+			err = e
+		}
 		}
 
-		// Save the stream
-		lps := LibP2PStream{
-			stream: s,
-		}
-		p.connectionStream = &lps
-
-		// Send a first message to notify the remote peer we want
-		// to connect
-		connectMsg := p2p.Msg{
-			Code: lp2pPeerCode,
-			Size: 0,
-			Payload: bytes.NewReader([]byte{}),
-		}
-
-		err = lps.WriteMsg(connectMsg)
-		if err != nil {
-			// XXX
-			panic(err)
-		}
-	}
-
-	return nil
+	return err
 }
 
 // Stop stops the server
@@ -257,7 +258,7 @@ func (server *LibP2PWhisperServer) Enode() string {
 
 // AddPeer is a helper function to add peers to the server
 func (server *LibP2PWhisperServer) AddPeer(addr ma.Multiaddr) *LibP2PPeer {
-	fmt.Println("Adding peer: ", addr)
+	log.Info("Adding peer: ", addr)
 	pid, err := addr.ValueForProtocol(ma.P_IPFS)
 	if err != nil {
 		// XXX
