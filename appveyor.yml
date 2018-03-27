@@ -31,10 +31,6 @@ install:
 build_script:
   - go run build\ci.go install
 
-after_build:
-  - go run build\ci.go archive -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
-  - go run build\ci.go nsis -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
-
 test_script:
   - set CGO_ENABLED=1
   - go run build\ci.go test -coverage
