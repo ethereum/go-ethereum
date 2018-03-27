@@ -17,6 +17,7 @@
 package network
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -182,9 +183,9 @@ func (k *Kademlia) Register(peers []OverlayAddr) error {
 	for _, p := range peers {
 		// error if self received, peer should know better
 		// and should be punished for this
-		//if bytes.Equal(p.Address(), k.base) {
-		//return fmt.Errorf("add peers: %x is self", k.base)
-		//}
+		if bytes.Equal(p.Address(), k.base) {
+			return fmt.Errorf("add peers: %x is self", k.base)
+		}
 		var found bool
 		k.addrs, _, found, _ = pot.Swap(k.addrs, p, pof, func(v pot.Val) pot.Val {
 			// if not found

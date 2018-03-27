@@ -57,13 +57,11 @@ var (
 	useHandshake     bool
 )
 
-var services = newServices()
-
 func init() {
 	flag.Parse()
 	rand.Seed(time.Now().Unix())
 
-	adapters.RegisterServices(services)
+	adapters.RegisterServices(newServices())
 	initTest()
 }
 
@@ -677,11 +675,11 @@ func testNetwork(t *testing.T) {
 		}
 		a = adapters.NewExecAdapter(dirname)
 	} else if adapter == "sock" {
-		a = adapters.NewSocketAdapter(services)
+		a = adapters.NewSocketAdapter(newServices())
 	} else if adapter == "tcp" {
-		a = adapters.NewTCPAdapter(services)
+		a = adapters.NewTCPAdapter(newServices())
 	} else if adapter == "sim" {
-		a = adapters.NewSimAdapter(services)
+		a = adapters.NewSimAdapter(newServices())
 	}
 	net := simulations.NewNetwork(a, &simulations.NetworkConfig{
 		ID: "0",
@@ -1082,7 +1080,7 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 	if numnodes < 2 {
 		return nil, fmt.Errorf("Minimum two nodes in network")
 	}
-	adapter := adapters.NewSimAdapter(services)
+	adapter := adapters.NewSimAdapter(newServices())
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",
 		DefaultService: "bzz",
