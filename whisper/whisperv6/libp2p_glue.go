@@ -172,7 +172,7 @@ func (server *LibP2PWhisperServer) connectToPeer(p *LibP2PPeer) error {
 	// Create a stream with the peer
 	s, err := server.Host.NewStream(context.Background(), p.id, WhisperProtocolString)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	// Save the stream
@@ -181,15 +181,10 @@ func (server *LibP2PWhisperServer) connectToPeer(p *LibP2PPeer) error {
 	}
 	p.connectionStream = &lps
 
-	// Send a first message to notify the remote peer we want
-	// to connect
-	connectMsg := p2p.Msg{
-		Code: lp2pPeerCode,
-		Size: 0,
-		Payload: bytes.NewReader([]byte{0}),
-	}
+	// If we got here, it means that a connection was established.
+	// Save the peer.
 
-	err = lps.WriteMsg(connectMsg)
+	// TODO send my known list of peers
 	
 	return err
 }
@@ -245,7 +240,7 @@ func (server *LibP2PWhisperServer) Stop() {
 
 // PeerCount returns the peer count for the node
 func (server *LibP2PWhisperServer) PeerCount() int {
-	return 0
+	return len(server.Peers)
 }
 
 // Enode returns the enode address of the node

@@ -226,7 +226,7 @@ func initialize() {
 			if err != nil {
 				utils.Fatalf("Error parsing the bootnode addr: %v", err)
 			}
-			fmt.Println(libp2pbootaddr)
+			fmt.Println("bootstrap addr: ", libp2pbootaddr)
 			libp2pPeers = append(libp2pPeers, libp2pbootaddr)
 		} else {
 			if len(*argEnode) == 0 {
