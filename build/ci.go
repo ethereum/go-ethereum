@@ -460,25 +460,45 @@ func maybeSkipArchive(env build.Environment) {
 
 func doDebianSource(cmdline []string) {
 	var (
-		signer  = flag.String("signer", "", `Signing key name, also used as package author`)
-		upload  = flag.String("upload", "", `Where to upload the source package (usually "ppa:ethereum/ethereum")`)
-		workdir = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
-		now     = time.Now()
+		signer   = flag.String("signer", "", `Signing key name, also used as package author`)
+		upload   = flag.String("upload", "", `Upload to a Launchpad PPA (usually "ethereum/ethereum")`)
+		sftpUser = flag.String("sftp-user", "", `Username for sftp upload`)
+		workdir  = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
+		now      = time.Now()
 	)
 	flag.CommandLine.Parse(cmdline)
 	*workdir = makeWorkdir(*workdir)
 	env := build.Env()
 	maybeSkipArchive(env)
 
-	// Import the signing key.
-	if b64key := os.Getenv("PPA_SIGNING_KEY"); b64key != "" {
-		key, err := base64.StdEncoding.DecodeString(b64key)
-		if err != nil {
-			log.Fatal("invalid base64 PPA_SIGNING_KEY")
-		}
+	// Import the GPG signing key and the SSH key for sftp.
+	if gpgkey := decodeEnvKey("PPA_SIGNING_KEY"); gpgkey != nil {
 		gpg := exec.Command("gpg", "--import")
-		gpg.Stdin = bytes.NewReader(key)
+		gpg.Stdin = bytes.NewReader(gpgkey)
 		build.MustRun(gpg)
+	}
+	sshkeyFile := ""
+	if sshkey := decodeEnvKey("PPA_SSH_KEY"); sshkey != nil {
+		sshkeyFile = filepath.Join(*workdir, ".ssh-key")
+		ioutil.WriteFile(sshkeyFile, sshkey, 0600)
+	}
+
+	// Render dput.cf
+	dputConfig := filepath.Join(*workdir, "dput.cf")
+	if *upload != "" {
+		p := strings.Split(*upload, "/")
+		if len(p) != 2 {
+			log.Fatal("-upload PPA name must contain single /")
+		}
+		if *sftpUser == "" {
+			log.Fatal("-sftp-user is required for sftp upload")
+		}
+		build.Render("build/dput-launchpad.cf", dputConfig, 0644, map[string]string{
+			"LaunchpadUser":    p[0],
+			"LaunchpadPPA":     p[1],
+			"LaunchpadUserSSH": *sftpUser,
+			"IdentityFile":     sshkeyFile,
+		})
 	}
 
 	// Create the packages.
@@ -495,9 +515,23 @@ func doDebianSource(cmdline []string) {
 			build.MustRunCommand("debsign", changes)
 		}
 		if *upload != "" {
-			build.MustRunCommand("dput", *upload, changes)
+			dput := exec.Command("dput", "--no-upload-log", "-c", dputConfig, *upload, changes)
+			dput.Stdin = strings.NewReader("yes\n") // accept SSH host key
+			build.MustRun(dput)
 		}
 	}
+}
+
+func decodeEnvKey(variable string) []byte {
+	b64key := os.Getenv(variable)
+	if b64key == "" {
+		return nil
+	}
+	key, err := base64.StdEncoding.DecodeString(b64key)
+	if err != nil {
+		log.Fatal("invalid base64 " + variable)
+	}
+	return key
 }
 
 func makeWorkdir(wdflag string) string {
