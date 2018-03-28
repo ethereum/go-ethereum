@@ -174,11 +174,13 @@ type Chunk struct {
 	SData []byte // nil if request, to be supplied by dpa
 	Size  int64  // size of the data covered by the subtree encoded in this chunk
 	//Source   Peer           // peer
-	C         chan bool // to signal data delivery by the dpa
-	ReqC      chan bool // to signal the request done
-	dbStored  chan bool // never remove a chunk from memStore before it is written to dbStore
-	errored   bool      // flag which is set when the chunk request has errored or timeouted
-	erroredMu sync.Mutex
+	C          chan bool // to signal data delivery by the dpa
+	ReqC       chan bool // to signal the request done
+	dbStoredC  chan bool // never remove a chunk from memStore before it is written to dbStore
+	dbStored   bool      // never remove a chunk from memStore before it is written to dbStore
+	dbStoredMu sync.Mutex
+	errored    bool // flag which is set when the chunk request has errored or timeouted
+	erroredMu  sync.Mutex
 }
 
 func (c *Chunk) SetErrored(val bool) {
@@ -196,11 +198,21 @@ func (c *Chunk) GetErrored() bool {
 }
 
 func NewChunk(key Key, reqC chan bool) *Chunk {
-	return &Chunk{Key: key, ReqC: reqC, dbStored: make(chan bool)}
+	return &Chunk{Key: key, ReqC: reqC, dbStoredC: make(chan bool)}
+}
+
+func (c *Chunk) markAsStored() {
+	c.dbStoredMu.Lock()
+	defer c.dbStoredMu.Unlock()
+
+	if !c.dbStored {
+		close(c.dbStoredC)
+		c.dbStored = true
+	}
 }
 
 func (c *Chunk) WaitToStore() {
-	<-c.dbStored
+	<-c.dbStoredC
 }
 
 func FakeChunk(size int64, count int, chunks []*Chunk) int {

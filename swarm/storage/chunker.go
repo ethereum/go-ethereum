@@ -298,7 +298,7 @@ func (self *TreeChunker) hashChunk(hasher SwarmHash, job *hashJob, chunkC chan *
 		storeWg.Add(1)
 		go func() {
 			defer storeWg.Done()
-			<-newChunk.dbStored
+			<-newChunk.dbStoredC
 		}()
 	}
 }
