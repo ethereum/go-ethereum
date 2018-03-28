@@ -56,6 +56,11 @@ func NewResourceError(code int, s string) error {
 
 type Signature [signatureLength]byte
 
+type ResourceLookupParams struct {
+	Limit bool
+	Max   uint32
+}
+
 type SignFunc func(common.Hash) (Signature, error)
 
 type nameHashFunc func(string) common.Hash
@@ -164,16 +169,21 @@ type ResourceHandler struct {
 	resourceLock    sync.RWMutex
 	nameHash        nameHashFunc
 	storeTimeout    time.Duration
-	queryMaxPeriods uint
+	queryMaxPeriods *ResourceLookupParams
 }
 
 type ResourceHandlerParams struct {
 	Validator       ResourceValidator
-	QueryMaxPeriods uint
+	QueryMaxPeriods *ResourceLookupParams
 }
 
 // Create or open resource update chunk store
 func NewResourceHandler(hasher SwarmHasher, chunkStore ChunkStore, ethClient headerGetter, params *ResourceHandlerParams) (*ResourceHandler, error) {
+	if params.QueryMaxPeriods == nil {
+		params.QueryMaxPeriods = &ResourceLookupParams{
+			Limit: false,
+		}
+	}
 	rh := &ResourceHandler{
 		ChunkStore:   chunkStore,
 		ethClient:    ethClient,
@@ -330,16 +340,16 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 // If maxPeriod is -1, the default QueryMaxPeriod from ResourceHandlerParams will be used
 // if maxPeriod is 0, there will be no limit on period hops
 // if maxPeriod > 0, the given value will be the limit of period hops
-func (self *ResourceHandler) LookupVersionByName(ctx context.Context, name string, period uint32, version uint32, refresh bool, maxPeriod int) (*resource, error) {
-	return self.LookupVersion(ctx, self.nameHash(name), name, period, version, refresh, maxPeriod)
+func (self *ResourceHandler) LookupVersionByName(ctx context.Context, name string, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+	return self.LookupVersion(ctx, self.nameHash(name), name, period, version, refresh, maxLookup)
 }
 
-func (self *ResourceHandler) LookupVersion(ctx context.Context, nameHash common.Hash, name string, period uint32, version uint32, refresh bool, maxPeriod int) (*resource, error) {
+func (self *ResourceHandler) LookupVersion(ctx context.Context, nameHash common.Hash, name string, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 	rsrc, err := self.loadResource(nameHash, name, refresh)
 	if err != nil {
 		return nil, err
 	}
-	return self.lookup(rsrc, period, version, refresh, maxPeriod)
+	return self.lookup(rsrc, period, version, refresh, maxLookup)
 }
 
 // Retrieves the latest version of the resource update identified by `name`
@@ -350,16 +360,16 @@ func (self *ResourceHandler) LookupVersion(ctx context.Context, nameHash common.
 // and returned.
 //
 // See also (*ResourceHandler).LookupVersion
-func (self *ResourceHandler) LookupHistoricalByName(ctx context.Context, name string, period uint32, refresh bool, maxPeriod int) (*resource, error) {
-	return self.LookupHistorical(ctx, self.nameHash(name), name, period, refresh, maxPeriod)
+func (self *ResourceHandler) LookupHistoricalByName(ctx context.Context, name string, period uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+	return self.LookupHistorical(ctx, self.nameHash(name), name, period, refresh, maxLookup)
 }
 
-func (self *ResourceHandler) LookupHistorical(ctx context.Context, nameHash common.Hash, name string, period uint32, refresh bool, maxPeriod int) (*resource, error) {
+func (self *ResourceHandler) LookupHistorical(ctx context.Context, nameHash common.Hash, name string, period uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 	rsrc, err := self.loadResource(nameHash, name, refresh)
 	if err != nil {
 		return nil, err
 	}
-	return self.lookup(rsrc, period, 0, refresh, maxPeriod)
+	return self.lookup(rsrc, period, 0, refresh, maxLookup)
 }
 
 // Retrieves the latest version of the resource update identified by `name`
@@ -372,11 +382,11 @@ func (self *ResourceHandler) LookupHistorical(ctx context.Context, nameHash comm
 // Version iteration is done as in (*ResourceHandler).LookupHistorical
 //
 // See also (*ResourceHandler).LookupHistorical
-func (self *ResourceHandler) LookupLatestByName(ctx context.Context, name string, refresh bool, maxPeriod int) (*resource, error) {
-	return self.LookupLatest(ctx, self.nameHash(name), name, refresh, maxPeriod)
+func (self *ResourceHandler) LookupLatestByName(ctx context.Context, name string, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+	return self.LookupLatest(ctx, self.nameHash(name), name, refresh, maxLookup)
 }
 
-func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.Hash, name string, refresh bool, maxPeriod int) (*resource, error) {
+func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.Hash, name string, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 
 	// get our blockheight at this time and the next block of the update period
 	rsrc, err := self.loadResource(nameHash, name, refresh)
@@ -388,11 +398,11 @@ func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.H
 		return nil, err
 	}
 	nextperiod := getNextPeriod(rsrc.startBlock, currentblock, rsrc.frequency)
-	return self.lookup(rsrc, nextperiod, 0, refresh, maxPeriod)
+	return self.lookup(rsrc, nextperiod, 0, refresh, maxLookup)
 }
 
 // base code for public lookup methods
-func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint32, refresh bool, maxPeriod int) (*resource, error) {
+func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 
 	if period == 0 {
 		return nil, NewResourceError(ErrInvalidValue, "period must be >0")
@@ -407,13 +417,13 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 		version = 1
 	}
 
-	hops := 0
-	if maxPeriod < 0 {
-		maxPeriod = int(self.queryMaxPeriods)
+	var hops uint32
+	if maxLookup == nil {
+		maxLookup = self.queryMaxPeriods
 	}
 	for period > 0 {
-		if hops > maxPeriod && maxPeriod > 0 {
-			return nil, NewResourceError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", maxPeriod))
+		if maxLookup.Limit && hops > maxLookup.Max {
+			return nil, NewResourceError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", maxLookup.Max))
 		}
 		key := self.resourceHash(period, version, rsrc.nameHash)
 		chunk, err := self.Get(key)
@@ -883,7 +893,7 @@ func isMultihash(data []byte) int {
 }
 
 // TODO: this should not be part of production code, but currently swarm/testutil/http.go needs it
-func NewTestResourceHandler(datadir string, ethClient headerGetter, validator ResourceValidator, maxPeriod uint) (*ResourceHandler, error) {
+func NewTestResourceHandler(datadir string, ethClient headerGetter, validator ResourceValidator, maxLimit *ResourceLookupParams) (*ResourceHandler, error) {
 	path := filepath.Join(datadir, DbDirName)
 	basekey := make([]byte, 32)
 	hasher := MakeHashFunc(SHA3Hash)
@@ -897,9 +907,14 @@ func NewTestResourceHandler(datadir string, ethClient headerGetter, validator Re
 		DbStore:  dbStore,
 	}
 	resourceChunkStore := NewResourceChunkStore(localStore, nil)
+	if maxLimit == nil {
+		maxLimit = &ResourceLookupParams{
+			Limit: false,
+		}
+	}
 	params := &ResourceHandlerParams{
 		Validator:       validator,
-		QueryMaxPeriods: maxPeriod,
+		QueryMaxPeriods: maxLimit,
 	}
 	return NewResourceHandler(hasher, resourceChunkStore, ethClient, params)
 }
