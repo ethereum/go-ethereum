@@ -177,7 +177,7 @@ type Chunk struct {
 	C          chan bool // to signal data delivery by the dpa
 	ReqC       chan bool // to signal the request done
 	dbStoredC  chan bool // never remove a chunk from memStore before it is written to dbStore
-	dbStored   bool      // never remove a chunk from memStore before it is written to dbStore
+	dbStored   bool
 	dbStoredMu sync.Mutex
 	errored    bool // flag which is set when the chunk request has errored or timeouted
 	erroredMu  sync.Mutex
