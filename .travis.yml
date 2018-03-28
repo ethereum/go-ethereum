@@ -47,14 +47,12 @@ matrix:
       script:
         - go run build/ci.go lint
 
-    # This builder does the Ubuntu PPA and Linux Azure uploads
+    # This builder does the Ubuntu PPA upload
     - os: linux
       dist: trusty
-      sudo: required
       go: "1.10"
       env:
         - ubuntu-ppa
-        - azure-linux
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
@@ -63,11 +61,25 @@ matrix:
             - devscripts
             - debhelper
             - dput
-            - gcc-multilib
             - fakeroot
       script:
-        # Build for the primary platforms that Trusty can manage
         - go run build/ci.go debsrc -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>" -upload ppa:ethereum/ethereum
+
+    # This builder does the Linux Azure uploads
+    - os: linux
+      dist: trusty
+      sudo: required
+      go: "1.10"
+      env:
+        - azure-linux
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      addons:
+        apt:
+          packages:
+            - gcc-multilib
+      script:
+        # Build for the primary platforms that Trusty can manage
         - go run build/ci.go install
         - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
         - go run build/ci.go install -arch 386
@@ -181,7 +193,6 @@ matrix:
     # This builder does the Azure archive purges to avoid accumulating junk
     - os: linux
       dist: trusty
-      sudo: required
       go: "1.10"
       env:
         - azure-purge
