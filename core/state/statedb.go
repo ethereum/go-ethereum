@@ -235,10 +235,10 @@ func (self *StateDB) GetCodeHash(addr common.Address) common.Hash {
 	return common.BytesToHash(stateObject.CodeHash())
 }
 
-func (self *StateDB) GetState(a common.Address, b common.Hash) common.Hash {
-	stateObject := self.getStateObject(a)
+func (self *StateDB) GetState(addr common.Address, bhash common.Hash) common.Hash {
+	stateObject := self.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.GetState(self.db, b)
+		return stateObject.GetState(self.db, bhash)
 	}
 	return common.Hash{}
 }
@@ -250,8 +250,8 @@ func (self *StateDB) Database() Database {
 
 // StorageTrie returns the storage trie of an account.
 // The return value is a copy and is nil for non-existent accounts.
-func (self *StateDB) StorageTrie(a common.Address) Trie {
-	stateObject := self.getStateObject(a)
+func (self *StateDB) StorageTrie(addr common.Address) Trie {
+	stateObject := self.getStateObject(addr)
 	if stateObject == nil {
 		return nil
 	}
