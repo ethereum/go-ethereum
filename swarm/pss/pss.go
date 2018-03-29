@@ -687,6 +687,12 @@ func (self *Pss) forward(msg *PssMsg) {
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
 
+	// message hash
+	digest, err := self.storeMsg(msg)
+	if err != nil {
+		log.Warn(fmt.Sprintf("could not store message %v to cache: %v", msg, err))
+	}
+
 	// send with kademlia
 	// find the closest peer to the recipient and attempt to send
 	sent := 0
@@ -817,6 +823,20 @@ func (self *Pss) digest(msg *PssMsg) pssDigest {
 
 func (self *Pss) isMsgExpired(msg *PssMsg) bool {
 	msgexp := time.Unix(int64(msg.Expire), 0)
+	if msgexp.Before(time.Now()) || msgexp.After(time.Now().Add(self.msgTTL)) {
+		return true
+	}
+	return false
+}
+
+func (self *Pss) isMsgExpired(msg *PssMsg) bool {
+	msgexp := time.Unix(int64(msg.Expire), 0)
+	//	if msgexp.Before(time.Now()) {
+	//		log.Trace("pss expired :/ ... dropping")
+	//		return nil
+	//	} else if msgexp.After(time.Now().Add(self.msgTTL)) {
+	//		return errors.New("Invalid TTL")
+	//	}
 	if msgexp.Before(time.Now()) || msgexp.After(time.Now().Add(self.msgTTL)) {
 		return true
 	}
