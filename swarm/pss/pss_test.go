@@ -477,7 +477,7 @@ func testSymSend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = clients[1].Call(&rkeyids, "psstest_setSymKeys", rpubkeyhex, rrecvkey, lrecvkey, defaultSymKeySendLimit, topic, loaddrhex)
+	err = clients[1].Call(&rkeyids, "psstest_setSymKeys", lpubkeyhex, rrecvkey, lrecvkey, defaultSymKeySendLimit, topic, loaddrhex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -504,7 +504,7 @@ func testSymSend(t *testing.T) {
 	select {
 	case recvmsg := <-rmsgC:
 		if !bytes.Equal(recvmsg.Msg, rmsg) {
-			t.Fatalf("node 2 received payload mismatch: expected %v, got %v", rmsg, recvmsg.Msg)
+			t.Fatalf("node 2 received payload mismatch: expected %x, got %v", rmsg, recvmsg.Msg)
 		}
 	case cerr := <-rctx.Done():
 		t.Fatalf("test message timed out: %v", cerr)

@@ -307,7 +307,7 @@ func (self *HandshakeController) handleKeys(pubkeyid string, keymsg *handshakeMs
 			copy(sendsymkey, key)
 			var address PssAddress
 			copy(address[:], keymsg.From)
-			sendsymkeyid, err := self.pss.SetSymmetricKey(sendsymkey, keymsg.Topic, &address, false)
+			sendsymkeyid, err := self.pss.setSymmetricKey(sendsymkey, keymsg.Topic, &address, false, false)
 			if err != nil {
 				return err
 			}
