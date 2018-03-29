@@ -78,7 +78,10 @@ func Bytes2Hex(d []byte) string {
 }
 
 func Hex2Bytes(str string) []byte {
-	h, _ := hex.DecodeString(str)
+	h, err := hex.DecodeString(str)
+	if err != nil {
+		panic(err)
+	}
 
 	return h
 }

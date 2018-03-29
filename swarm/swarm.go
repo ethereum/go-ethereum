@@ -118,7 +118,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
 	hash := storage.MakeHashFunc(config.ChunkerParams.Hash)
-	self.lstore, err = storage.NewLocalStore(hash, config.StoreParams, common.Hex2Bytes(config.BzzKey), mockStore)
+	self.lstore, err = storage.NewLocalStore(hash, config.StoreParams, common.FromHex(config.BzzKey), mockStore)
 	if err != nil {
 		return
 	}
