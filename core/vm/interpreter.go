@@ -42,7 +42,7 @@ type Config struct {
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
-// passed evmironment to query external sources for state information.
+// passed environment to query external sources for state information.
 // The Interpreter will run the byte code VM based on the passed
 // configuration.
 type Interpreter struct {
@@ -184,7 +184,7 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 			}
 		}
 		// consume the gas and return an error if not enough gas is available.
-		// cost is explicitly set so that the capture state defer method cas get the proper cost
+		// cost is explicitly set so that the capture state defer method can get the proper cost
 		cost, err = operation.gasCost(in.gasTable, in.evm, contract, stack, mem, memorySize)
 		if err != nil || !contract.UseGas(cost) {
 			return nil, ErrOutOfGas
