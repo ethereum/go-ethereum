@@ -178,7 +178,7 @@ type Chunk struct {
 	ReqC       chan bool // to signal the request done
 	dbStoredC  chan bool // never remove a chunk from memStore before it is written to dbStore
 	dbStored   bool
-	dbStoredMu sync.Mutex
+	dbStoredMu *sync.Mutex
 	errored    bool // flag which is set when the chunk request has errored or timeouted
 	erroredMu  sync.Mutex
 }
@@ -198,7 +198,12 @@ func (c *Chunk) GetErrored() bool {
 }
 
 func NewChunk(key Key, reqC chan bool) *Chunk {
-	return &Chunk{Key: key, ReqC: reqC, dbStoredC: make(chan bool)}
+	return &Chunk{
+		Key:        key,
+		ReqC:       reqC,
+		dbStoredC:  make(chan bool),
+		dbStoredMu: &sync.Mutex{},
+	}
 }
 
 func (c *Chunk) markAsStored() {
