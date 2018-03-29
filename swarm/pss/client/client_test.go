@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"sync"
@@ -22,7 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/state"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
@@ -231,21 +229,13 @@ func newServices() adapters.Services {
 	}
 	return adapters.Services{
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			cachedir, err := ioutil.TempDir("", "pss-cache")
-			if err != nil {
-				return nil, fmt.Errorf("create pss cache tmpdir failed: %s", err)
-			}
-			dpa, err := storage.NewLocalDPA(cachedir, make([]byte, 32))
-			if err != nil {
-				return nil, fmt.Errorf("local dpa creation failed: %s", err)
-			}
 			ctxlocal, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
 			psparams := pss.NewPssParams(privkey)
 			pskad := kademlia(ctx.Config.ID)
-			ps := pss.NewPss(pskad, dpa, psparams)
+			ps := pss.NewPss(pskad, psparams)
 			pshparams := pss.NewHandshakeParams()
 			pshparams.SymKeySendLimit = sendLimit
 			err = pss.SetHandshakeController(ps, pshparams)
