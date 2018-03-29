@@ -208,7 +208,6 @@ func getTestAccount(t *testing.T, dir string) (conf *node.Config, account accoun
 }
 
 func existingTestNode(t *testing.T, dir string, bzzaccount string) *testNode {
-
 	conf, _ := getTestAccount(t, dir)
 	node := &testNode{Dir: dir}
 
