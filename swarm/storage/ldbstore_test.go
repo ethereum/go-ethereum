@@ -182,7 +182,7 @@ func testIterator(t *testing.T, mock bool) {
 		j := i
 		go func() {
 			defer wg.Done()
-			<-chunks[j].dbStored
+			<-chunks[j].dbStoredC
 		}()
 	}
 

@@ -285,7 +285,7 @@ func (self *PyramidChunker) processChunk(id int64, hasher SwarmHash, job *chunkJ
 		storageWG.Add(1)
 		go func() {
 			defer storageWG.Done()
-			<-newChunk.dbStored
+			<-newChunk.dbStoredC
 		}()
 	}
 }

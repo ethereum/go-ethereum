@@ -65,7 +65,7 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 				case chunk := <-chunkC:
 					// self.chunks = append(self.chunks, chunk)
 					self.chunks[chunk.Key.Hex()] = chunk
-					close(chunk.dbStored)
+					chunk.markAsStored()
 				}
 
 			}
@@ -105,12 +105,12 @@ func (self *chunkerTester) Append(chunker Splitter, rootKey Key, data io.Reader,
 						if !success {
 							// Requesting data
 							self.chunks[chunk.Key.Hex()] = chunk
-							close(chunk.dbStored)
+							chunk.markAsStored()
 						} else {
 							// getting data
 							chunk.SData = stored.SData
 							chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-							close(chunk.dbStored)
+							chunk.markAsStored()
 							if chunk.C != nil {
 								close(chunk.C)
 							}

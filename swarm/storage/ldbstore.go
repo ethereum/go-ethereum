@@ -167,6 +167,7 @@ func NewMockDbStore(path string, hash SwarmHasher, capacity uint64, po func(Key)
 	if err != nil {
 		return nil, err
 	}
+
 	// replace put and get with mock store functionality
 	if mockStore != nil {
 		s.encodeDataFunc = newMockEncodeDataFunc(mockStore)
@@ -425,7 +426,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			<-chunk.dbStored
+			<-chunk.dbStoredC
 		}()
 		count++
 	}
@@ -565,12 +566,12 @@ func (s *LDBStore) Put(chunk *Chunk) {
 		batchC := s.batchC
 		go func() {
 			<-batchC
-			close(chunk.dbStored)
+			chunk.markAsStored()
 		}()
 	} else {
 		log.Trace("ldbstore.put: chunk already exists, only update access", "key", chunk.Key)
 		decodeIndex(idata, &index)
-		close(chunk.dbStored)
+		chunk.markAsStored()
 	}
 	index.Access = s.accessCnt
 	s.accessCnt++
@@ -711,7 +712,7 @@ func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 		}
 
 		chunk = NewChunk(key, nil)
-		close(chunk.dbStored)
+		chunk.markAsStored()
 		decodeData(data, chunk)
 	} else {
 		err = ErrChunkNotFound
