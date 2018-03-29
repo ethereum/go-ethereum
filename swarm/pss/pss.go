@@ -114,7 +114,7 @@ type Pss struct {
 
 	// message handling
 	handlers   map[Topic]map[*Handler]bool // topic and version based pss payload handlers. See pss.Handle()
-	handlersMu sync.RWMutex
+	handlersMu sync.Mutex
 	hashPool   sync.Pool
 
 	// process
@@ -348,6 +348,14 @@ func (self *Pss) process(pssmsg *PssMsg) bool {
 	var keyid string
 	var keyFunc func(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error)
 
+	digest, err := self.digest(pssmsg)
+	if err != nil {
+		log.Warn(fmt.Sprintf("could not store message %v to cache: %v", pssmsg, err))
+	}
+	if self.checkFwdCache(nil, digest) {
+		log.Trace(fmt.Sprintf("pss relay block-cache match (process): FROM %x TO %x", self.Overlay.BaseAddr(), common.ToHex(pssmsg.To)))
+		return false
+	}
 	envelope := pssmsg.Payload
 	psstopic := Topic(envelope.Topic)
 
@@ -677,7 +685,6 @@ func (self *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key [
 		Payload: envelope,
 	}
 	self.outbox <- pssmsg
-	return nil
 }
 
 // Forwards a pss message to the peer(s) closest to the to recipient address in the PssMsg struct
@@ -688,7 +695,7 @@ func (self *Pss) forward(msg *PssMsg) {
 	copy(to[:len(msg.To)], msg.To)
 
 	// message hash
-	digest, err := self.storeMsg(msg)
+	digest, err := self.digest(msg)
 	if err != nil {
 		log.Warn(fmt.Sprintf("could not store message %v to cache: %v", msg, err))
 	}
@@ -831,12 +838,6 @@ func (self *Pss) isMsgExpired(msg *PssMsg) bool {
 
 func (self *Pss) isMsgExpired(msg *PssMsg) bool {
 	msgexp := time.Unix(int64(msg.Expire), 0)
-	//	if msgexp.Before(time.Now()) {
-	//		log.Trace("pss expired :/ ... dropping")
-	//		return nil
-	//	} else if msgexp.After(time.Now().Add(self.msgTTL)) {
-	//		return errors.New("Invalid TTL")
-	//	}
 	if msgexp.Before(time.Now()) || msgexp.After(time.Now().Add(self.msgTTL)) {
 		return true
 	}
