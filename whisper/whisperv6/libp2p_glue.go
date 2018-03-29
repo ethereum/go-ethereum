@@ -180,11 +180,13 @@ func (server *LibP2PWhisperServer) connectToPeer(p *LibP2PPeer) error {
 		stream: s,
 	}
 	p.connectionStream = &lps
+	p.ws = p.connectionStream
 
-	// If we got here, it means that a connection was established.
-	// Save the peer.
 
 	// TODO send my known list of peers
+	
+	// Call HandlePeer to perform the handshake
+	go server.whisper.HandlePeer(p, p.connectionStream)
 	
 	return err
 }
@@ -212,7 +214,7 @@ func (server *LibP2PWhisperServer) Start() error {
 			server.Peers = append(server.Peers, peer.(*LibP2PPeer))
 		}
 
-		go server.whisper.runMessageLoop(peer, lps)
+		go server.whisper.HandlePeer(peer, lps)
 	})
 
 	fmt.Println("Currently having the following peers:", server.Peers)
@@ -266,7 +268,7 @@ func (server *LibP2PWhisperServer) AddPeer(addr ma.Multiaddr) *LibP2PPeer {
 	ipfsaddrpart, _ := ma.NewMultiaddr(fmt.Sprintf("/ipfs/%s", pid))
 	ipaddr := addr.Decapsulate(ipfsaddrpart)
 	server.Host.Peerstore().AddAddr(peerid, ipaddr, pstore.PermanentAddrTTL)
-	newPeer := &LibP2PPeer{id: peerid}
+	newPeer := newLibP2PPeer(server.whisper, peerid, nil).(*LibP2PPeer)
 	server.Peers = append(server.Peers, newPeer)
 
 	return newPeer

@@ -127,7 +127,7 @@ func New(cfg *Config) *Whisper {
 		Name:    ProtocolName,
 		Version: uint(ProtocolVersion),
 		Length:  NumberOfMessageCodes,
-		Run:     whisper.HandlePeer,
+		Run:     whisper.HandleDevP2PPeer,
 		NodeInfo: func() interface{} {
 			return map[string]interface{}{
 				"version":        ProtocolVersionStr,
@@ -626,12 +626,18 @@ func (whisper *Whisper) Stop() error {
 	return nil
 }
 
-// HandlePeer is called by the underlying P2P layer when the whisper sub-protocol
+// HandleDevP2PPeer is called by the underlying P2P layer when the whisper sub-protocol
 // connection is negotiated.
-func (whisper *Whisper) HandlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+func (whisper *Whisper) HandleDevP2PPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	// Create the new peer and start tracking it
 	whisperPeer := newPeer(whisper, peer, rw)
 
+	return whisper.HandlePeer(whisperPeer, rw)
+}
+
+// HandlePeer sets up the connection with the peer once the underlying
+// layer has established it.
+func (whisper *Whisper) HandlePeer(whisperPeer Peer, rw p2p.MsgReadWriter) error {
 	whisper.peerMu.Lock()
 	whisper.peers[whisperPeer] = struct{}{}
 	whisper.peerMu.Unlock()
