@@ -581,17 +581,17 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 }
 
 // Look up mutable resource updates at specific periods and versions
-func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32, version uint32) (storage.Key, []byte, error) {
+func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32, version uint32, maxLookup *storage.ResourceLookupParams) (storage.Key, []byte, error) {
 	var err error
 	if version != 0 {
 		if period == 0 {
 			return nil, nil, storage.NewResourceError(storage.ErrInvalidValue, "Period can't be 0")
 		}
-		_, err = self.resource.LookupVersionByName(ctx, name, period, version, true)
+		_, err = self.resource.LookupVersionByName(ctx, name, period, version, true, maxLookup)
 	} else if period != 0 {
-		_, err = self.resource.LookupHistoricalByName(ctx, name, period, true)
+		_, err = self.resource.LookupHistoricalByName(ctx, name, period, true, maxLookup)
 	} else {
-		_, err = self.resource.LookupLatestByName(ctx, name, true)
+		_, err = self.resource.LookupLatestByName(ctx, name, true, maxLookup)
 	}
 	if err != nil {
 		return nil, nil, err

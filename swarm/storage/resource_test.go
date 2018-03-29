@@ -40,11 +40,8 @@ var (
 
 func init() {
 	var err error
-	verbose := flag.Bool("v", false, "verbose")
 	flag.Parse()
-	if *verbose {
-		log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
-	}
+	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 	safeName, err = ToSafeName(domainName)
 	if err != nil {
 		panic(err)
@@ -222,8 +219,14 @@ func TestResourceHandler(t *testing.T) {
 	// it will match on second iteration startblocknumber + (resourceFrequency * 3)
 	fwdBlocks(int(resourceFrequency*2)-1, backend)
 
-	rh2, err := NewTestResourceHandler(datadir, rh.ethClient, nil)
-	_, err = rh2.LookupLatestByName(ctx, safeName, true)
+	lookupParams := &ResourceLookupParams{
+		Limit: false,
+	}
+	rh2, err := NewTestResourceHandler(datadir, rh.ethClient, nil, lookupParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = rh2.LookupLatestByName(ctx, safeName, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +244,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, latest version
-	rsrc, err := rh2.LookupHistoricalByName(ctx, safeName, 3, true)
+	rsrc, err := rh2.LookupHistoricalByName(ctx, safeName, 3, true, lookupParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +255,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Historical lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, specific version
-	rsrc, err = rh2.LookupVersionByName(ctx, safeName, 3, 1, true)
+	rsrc, err = rh2.LookupVersionByName(ctx, safeName, 3, 1, true, lookupParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +353,7 @@ func TestResourceMultihash(t *testing.T) {
 	rh.Close()
 
 	// test with signed data
-	rh2, err := NewTestResourceHandler(datadir, rh.ethClient, validator)
+	rh2, err := NewTestResourceHandler(datadir, rh.ethClient, validator, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -481,7 +484,7 @@ func setupTest(backend headerGetter, validator ResourceValidator) (rh *ResourceH
 		os.RemoveAll(datadir)
 	}
 
-	rh, err = NewTestResourceHandler(datadir, backend, validator)
+	rh, err = NewTestResourceHandler(datadir, backend, validator, &ResourceLookupParams{Limit: false})
 	return rh, datadir, signer, cleanF, nil
 }
 

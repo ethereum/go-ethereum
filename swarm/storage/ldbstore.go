@@ -155,6 +155,10 @@ func NewLDBStore(path string, hash SwarmHasher, capacity uint64, po func(Key) ui
 	return s, nil
 }
 
+func (self *LDBStore) SetTrusted() {
+	self.trusted = true
+}
+
 // NewMockDbStore creates a new instance of DbStore with
 // mockStore set to a provided value. If mockStore argument is nil,
 // this function behaves exactly as NewDbStore.
