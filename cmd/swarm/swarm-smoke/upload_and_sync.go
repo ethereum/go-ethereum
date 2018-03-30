@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/google/uuid"
+	"github.com/pborman/uuid"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -43,13 +43,12 @@ func cliUploadAndSync(c *cli.Context) error {
 	wg := sync.WaitGroup{}
 	for _, endpoint := range endpoints {
 		endpoint := endpoint
-		ruid := uuid.New().String()[:8]
+		ruid := uuid.New()[:8]
 		wg.Add(1)
 		go func(endpoint string, ruid string) {
 			for {
 				err := fetch(hash, endpoint, fhash, ruid)
 				if err != nil {
-					log.Warn(err.Error(), "ruid", ruid)
 					continue
 				}
 
@@ -72,23 +71,29 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 	log.Trace("http get request", "ruid", ruid, "api", endpoint, "hash", hash)
 	res, err := http.Get(endpoint + "/bzz:/" + hash)
 	if err != nil {
+		log.Warn(err.Error(), "ruid", ruid)
 		return err
 	}
-	log.Trace("http get response", "ruid", ruid, "api", endpoint, "hash", hash, "code", res.StatusCode)
+	log.Trace("http get response", "ruid", ruid, "api", endpoint, "hash", hash, "code", res.StatusCode, "len", res.ContentLength)
 
 	if res.StatusCode != 200 {
-		return fmt.Errorf("expected status code %d, got %v", 200, res.StatusCode)
+		err := fmt.Errorf("expected status code %d, got %v", 200, res.StatusCode)
+		log.Warn(err.Error(), "ruid", ruid)
+		return err
 	}
 
 	defer res.Body.Close()
 
 	rdigest, err := digest(res.Body)
 	if err != nil {
+		log.Warn(err.Error(), "ruid", ruid)
 		return err
 	}
 
 	if !bytes.Equal(rdigest, original) {
-		return fmt.Errorf("downloaded imported file md5=%x is not the same as the generated one=%x", rdigest, original)
+		err := fmt.Errorf("downloaded imported file md5=%x is not the same as the generated one=%x", rdigest, original)
+		log.Warn(err.Error(), "ruid", ruid)
+		return err
 	}
 
 	log.Trace("downloaded file matches random file", "ruid", ruid, "len", res.ContentLength)
