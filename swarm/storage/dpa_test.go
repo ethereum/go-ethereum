@@ -21,36 +21,39 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"sync"
 	"testing"
 )
 
 const testDataSize = 0x1000000
 
 func TestDPArandom(t *testing.T) {
-	dbStore := initDbStore(t)
-	dbStore.setCapacity(50000)
-	memStore := NewMemStore(dbStore, defaultCacheCapacity)
+	testDpaRandom(false, t)
+	testDpaRandom(true, t)
+}
+
+func testDpaRandom(toEncrypt bool, t *testing.T) {
+	tdb, err := newTestDbStore(false)
+	if err != nil {
+		t.Fatalf("init dbStore failed: %v", err)
+	}
+	defer tdb.close()
+	db := tdb.LDBStore
+	db.setCapacity(50000)
+	memStore := NewMemStore(db, defaultCacheCapacity)
 	localStore := &LocalStore{
-		memStore,
-		dbStore,
+		memStore: memStore,
+		DbStore:  db,
 	}
-	chunker := NewTreeChunker(NewChunkerParams())
-	dpa := &DPA{
-		Chunker:    chunker,
-		ChunkStore: localStore,
-	}
-	dpa.Start()
-	defer dpa.Stop()
+
+	dpa := NewDPA(localStore, NewDPAParams())
 	defer os.RemoveAll("/tmp/bzz")
 
-	reader, slice := testDataReaderAndSlice(testDataSize)
-	wg := &sync.WaitGroup{}
-	key, err := dpa.Store(reader, testDataSize, wg, nil)
+	reader, slice := generateRandomData(testDataSize)
+	key, wait, err := dpa.Store(reader, testDataSize, toEncrypt)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
-	wg.Wait()
+	wait()
 	resultReader := dpa.Retrieve(key)
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)
@@ -65,7 +68,7 @@ func TestDPArandom(t *testing.T) {
 	}
 	ioutil.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
 	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
-	localStore.memStore = NewMemStore(dbStore, defaultCacheCapacity)
+	localStore.memStore = NewMemStore(db, defaultCacheCapacity)
 	resultReader = dpa.Retrieve(key)
 	for i := range resultSlice {
 		resultSlice[i] = 0
@@ -83,26 +86,29 @@ func TestDPArandom(t *testing.T) {
 }
 
 func TestDPA_capacity(t *testing.T) {
-	dbStore := initDbStore(t)
-	memStore := NewMemStore(dbStore, defaultCacheCapacity)
+	testDPA_capacity(false, t)
+	testDPA_capacity(true, t)
+}
+
+func testDPA_capacity(toEncrypt bool, t *testing.T) {
+	tdb, err := newTestDbStore(false)
+	if err != nil {
+		t.Fatalf("init dbStore failed: %v", err)
+	}
+	defer tdb.close()
+	db := tdb.LDBStore
+	memStore := NewMemStore(db, 0)
 	localStore := &LocalStore{
-		memStore,
-		dbStore,
+		memStore: memStore,
+		DbStore:  db,
 	}
-	memStore.setCapacity(0)
-	chunker := NewTreeChunker(NewChunkerParams())
-	dpa := &DPA{
-		Chunker:    chunker,
-		ChunkStore: localStore,
-	}
-	dpa.Start()
-	reader, slice := testDataReaderAndSlice(testDataSize)
-	wg := &sync.WaitGroup{}
-	key, err := dpa.Store(reader, testDataSize, wg, nil)
+	dpa := NewDPA(localStore, NewDPAParams())
+	reader, slice := generateRandomData(testDataSize)
+	key, wait, err := dpa.Store(reader, testDataSize, toEncrypt)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
-	wg.Wait()
+	wait()
 	resultReader := dpa.Retrieve(key)
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)

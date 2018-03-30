@@ -24,7 +24,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,7 +32,8 @@ import (
 )
 
 const (
-	ManifestType = "application/bzz-manifest+json"
+	ManifestType        = "application/bzz-manifest+json"
+	ResourceContentType = "application/bzz-resource"
 )
 
 // Manifest represents a swarm manifest
@@ -59,13 +59,32 @@ type ManifestList struct {
 }
 
 // NewManifest creates and stores a new, empty manifest
-func (a *Api) NewManifest() (storage.Key, error) {
+func (a *Api) NewManifest(toEncrypt bool) (storage.Key, error) {
 	var manifest Manifest
 	data, err := json.Marshal(&manifest)
 	if err != nil {
 		return nil, err
 	}
-	return a.Store(bytes.NewReader(data), int64(len(data)), &sync.WaitGroup{})
+	key, wait, err := a.Store(bytes.NewReader(data), int64(len(data)), toEncrypt)
+	wait()
+	return key, err
+}
+
+// Manifest hack for supporting Mutable Resource Updates from the bzz: scheme
+// see swarm/api/api.go:Api.Get() for more information
+func (a *Api) NewResourceManifest(resourceKey string, toEncrypt bool) (storage.Key, error) {
+	var manifest Manifest
+	entry := ManifestEntry{
+		Hash:        resourceKey,
+		ContentType: ResourceContentType,
+	}
+	manifest.Entries = append(manifest.Entries, entry)
+	data, err := json.Marshal(&manifest)
+	if err != nil {
+		return nil, err
+	}
+	key, _, err := a.Store(bytes.NewReader(data), int64(len(data)), toEncrypt)
+	return key, err
 }
 
 // ManifestWriter is used to add and remove entries from an underlying manifest
@@ -85,12 +104,15 @@ func (a *Api) NewManifestWriter(key storage.Key, quitC chan bool) (*ManifestWrit
 
 // AddEntry stores the given data and adds the resulting key to the manifest
 func (m *ManifestWriter) AddEntry(data io.Reader, e *ManifestEntry) (storage.Key, error) {
-	key, err := m.api.Store(data, e.Size, nil)
+
+	toEncrypt := (len(m.trie.hash) > m.trie.dpa.HashSize())
+
+	key, _, err := m.api.Store(data, e.Size, toEncrypt)
 	if err != nil {
 		return nil, err
 	}
 	entry := newManifestTrieEntry(e, nil)
-	entry.Hash = key.String()
+	entry.Hash = key.Hex()
 	m.trie.addEntry(entry, m.quitC)
 	return key, nil
 }
@@ -182,10 +204,10 @@ type manifestTrieEntry struct {
 }
 
 func loadManifest(dpa *storage.DPA, hash storage.Key, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
-
-	log.Trace(fmt.Sprintf("manifest lookup key: '%v'.", hash.Log()))
+	log.Trace("manifest lookup", "key", hash)
 	// retrieve manifest via DPA
 	manifestReader := dpa.Retrieve(hash)
+	log.Trace("reader retrieved", "key", hash)
 	return readManifest(manifestReader, hash, dpa, quitC)
 }
 
@@ -195,31 +217,32 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dp
 	size, err := manifestReader.Size(quitC)
 	if err != nil { // size == 0
 		// can't determine size means we don't have the root chunk
+		log.Trace("manifest not found", "key", hash)
 		err = fmt.Errorf("Manifest not Found")
 		return
 	}
 	manifestData := make([]byte, size)
 	read, err := manifestReader.Read(manifestData)
 	if int64(read) < size {
-		log.Trace(fmt.Sprintf("Manifest %v not found.", hash.Log()))
+		log.Trace("manifest not found", "key", hash)
 		if err == nil {
 			err = fmt.Errorf("Manifest retrieval cut short: read %v, expect %v", read, size)
 		}
 		return
 	}
 
-	log.Trace(fmt.Sprintf("Manifest %v retrieved", hash.Log()))
+	log.Trace("manifest retrieved", "key", hash)
 	var man struct {
 		Entries []*manifestTrieEntry `json:"entries"`
 	}
 	err = json.Unmarshal(manifestData, &man)
 	if err != nil {
 		err = fmt.Errorf("Manifest %v is malformed: %v", hash.Log(), err)
-		log.Trace(fmt.Sprintf("%v", err))
+		log.Trace("malformed manifest", "key", hash)
 		return
 	}
 
-	log.Trace(fmt.Sprintf("Manifest %v has %d entries.", hash.Log(), len(man.Entries)))
+	log.Trace("manifest entries", "key", hash, "len", len(man.Entries))
 
 	trie = &manifestTrie{
 		dpa: dpa,
@@ -338,7 +361,7 @@ func (self *manifestTrie) recalcAndStore() error {
 				if err != nil {
 					return err
 				}
-				entry.Hash = entry.subtrie.hash.String()
+				entry.Hash = entry.subtrie.hash.Hex()
 			}
 			list.Entries = append(list.Entries, entry.ManifestEntry)
 		}
@@ -351,9 +374,8 @@ func (self *manifestTrie) recalcAndStore() error {
 	}
 
 	sr := bytes.NewReader(manifest)
-	wg := &sync.WaitGroup{}
-	key, err2 := self.dpa.Store(sr, int64(len(manifest)), wg, nil)
-	wg.Wait()
+	key, wait, err2 := self.dpa.Store(sr, int64(len(manifest)), false)
+	wait()
 	self.hash = key
 	return err2
 }
@@ -417,7 +439,6 @@ func (self *manifestTrie) listWithPrefix(prefix string, quitC chan bool, cb func
 }
 
 func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *manifestTrieEntry, pos int) {
-
 	log.Trace(fmt.Sprintf("findPrefixOf(%s)", path))
 
 	if len(path) == 0 {

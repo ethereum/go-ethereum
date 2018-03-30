@@ -17,15 +17,30 @@
 package testutil
 
 import (
+	"context"
 	"io/ioutil"
+	"math/big"
 	"net/http/httptest"
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
+
+type fakeBackend struct {
+	blocknumber int64
+}
+
+func (f *fakeBackend) HeaderByNumber(context context.Context, _ string, bigblock *big.Int) (*types.Header, error) {
+	f.blocknumber++
+	biggie := big.NewInt(f.blocknumber)
+	return &types.Header{
+		Number: biggie,
+	}, nil
+}
 
 func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 	dir, err := ioutil.TempDir("", "swarm-storage-test")
@@ -36,37 +51,49 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 		ChunkDbPath:   dir,
 		DbCapacity:    5000000,
 		CacheCapacity: 5000,
-		Radius:        0,
 	}
-	localStore, err := storage.NewLocalStore(storage.MakeHashFunc("SHA3"), storeparams)
+	localStore, err := storage.NewLocalStore(storage.MakeHashFunc(storage.SHA3Hash), storeparams, make([]byte, 32), nil)
 	if err != nil {
 		os.RemoveAll(dir)
 		t.Fatal(err)
 	}
-	chunker := storage.NewTreeChunker(storage.NewChunkerParams())
-	dpa := &storage.DPA{
-		Chunker:    chunker,
-		ChunkStore: localStore,
+	dpa := storage.NewDPA(localStore, storage.NewDPAParams())
+
+	// mutable resources test setup
+	resourceDir, err := ioutil.TempDir("", "swarm-resource-test")
+	if err != nil {
+		t.Fatal(err)
 	}
-	dpa.Start()
-	a := api.NewApi(dpa, nil)
+
+	rh, err := storage.NewTestResourceHandler(resourceDir, &fakeBackend{}, nil, &storage.ResourceLookupParams{Limit: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a := api.NewApi(dpa, nil, rh)
 	srv := httptest.NewServer(httpapi.NewServer(a))
 	return &TestSwarmServer{
 		Server: srv,
 		Dpa:    dpa,
 		dir:    dir,
+		Hasher: storage.MakeHashFunc(storage.SHA3Hash)(),
+		cleanup: func() {
+			srv.Close()
+			rh.Close()
+			os.RemoveAll(dir)
+			os.RemoveAll(resourceDir)
+		},
 	}
 }
 
 type TestSwarmServer struct {
 	*httptest.Server
-
-	Dpa *storage.DPA
-	dir string
+	Hasher  storage.SwarmHash
+	Dpa     *storage.DPA
+	dir     string
+	cleanup func()
 }
 
 func (t *TestSwarmServer) Close() {
-	t.Server.Close()
-	t.Dpa.Stop()
-	os.RemoveAll(t.dir)
+	t.cleanup()
 }

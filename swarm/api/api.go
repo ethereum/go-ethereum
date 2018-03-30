@@ -17,13 +17,14 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"path"
 	"regexp"
 	"strings"
-	"sync"
 
 	"bytes"
 	"mime"
@@ -31,14 +32,29 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/contracts/ens"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var hashMatcher = regexp.MustCompile("^[0-9A-Fa-f]{64}")
 
-//setup metrics
+// TODO: this is bad, it should not be hardcoded how long is a hash
+var hashMatcher = regexp.MustCompile("^([0-9A-Fa-f]{64})([0-9A-Fa-f]{64})?")
+
+type ErrResourceReturn struct {
+	key string
+}
+
+func (e *ErrResourceReturn) Error() string {
+	return "resourceupdate"
+}
+
+func (e *ErrResourceReturn) Key() string {
+	return e.key
+}
+
 var (
 	apiResolveCount    = metrics.NewRegisteredCounter("api.resolve.count", nil)
 	apiResolveFail     = metrics.NewRegisteredCounter("api.resolve.fail", nil)
@@ -59,6 +75,12 @@ var (
 
 type Resolver interface {
 	Resolve(string) (common.Hash, error)
+}
+
+type ResolveValidator interface {
+	Resolver
+	Owner(node [32]byte) (common.Address, error)
+	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
 }
 
 // NoResolverError is returned by MultiResolver.Resolve if no resolver
@@ -82,7 +104,8 @@ func (e *NoResolverError) Error() string {
 // Each TLD can have multiple resolvers, and the resoluton from the
 // first one in the sequence will be returned.
 type MultiResolver struct {
-	resolvers map[string][]Resolver
+	resolvers map[string][]ResolveValidator
+	nameHash  func(string) common.Hash
 }
 
 // MultiResolverOption sets options for MultiResolver and is used as
@@ -93,16 +116,23 @@ type MultiResolverOption func(*MultiResolver)
 // for a specific TLD. If TLD is an empty string, the resolver will be added
 // to the list of default resolver, the ones that will be used for resolution
 // of addresses which do not have their TLD resolver specified.
-func MultiResolverOptionWithResolver(r Resolver, tld string) MultiResolverOption {
+func MultiResolverOptionWithResolver(r ResolveValidator, tld string) MultiResolverOption {
 	return func(m *MultiResolver) {
 		m.resolvers[tld] = append(m.resolvers[tld], r)
+	}
+}
+
+func MultiResolverOptionWithNameHash(nameHash func(string) common.Hash) MultiResolverOption {
+	return func(m *MultiResolver) {
+		m.nameHash = nameHash
 	}
 }
 
 // NewMultiResolver creates a new instance of MultiResolver.
 func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
 	m = &MultiResolver{
-		resolvers: make(map[string][]Resolver),
+		resolvers: make(map[string][]ResolveValidator),
+		nameHash:  ens.EnsNode,
 	}
 	for _, o := range opts {
 		o(m)
@@ -114,18 +144,10 @@ func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
 // If there are more default Resolvers, or for a specific TLD,
 // the Hash from the the first one which does not return error
 // will be returned.
-func (m MultiResolver) Resolve(addr string) (h common.Hash, err error) {
-	rs := m.resolvers[""]
-	tld := path.Ext(addr)
-	if tld != "" {
-		tld = tld[1:]
-		rstld, ok := m.resolvers[tld]
-		if ok {
-			rs = rstld
-		}
-	}
-	if rs == nil {
-		return h, NewNoResolverError(tld)
+func (m *MultiResolver) Resolve(addr string) (h common.Hash, err error) {
+	rs, err := m.getResolveValidator(addr)
+	if err != nil {
+		return h, err
 	}
 	for _, r := range rs {
 		h, err = r.Resolve(addr)
@@ -136,29 +158,83 @@ func (m MultiResolver) Resolve(addr string) (h common.Hash, err error) {
 	return
 }
 
+func (m *MultiResolver) ValidateOwner(name string, address common.Address) (bool, error) {
+	rs, err := m.getResolveValidator(name)
+	if err != nil {
+		return false, err
+	}
+	var addr common.Address
+	for _, r := range rs {
+		addr, err = r.Owner(m.nameHash(name))
+		// we hide the error if it is not for the last resolver we check
+		if err == nil {
+			return addr == address, nil
+		}
+	}
+	return false, err
+}
+
+func (m *MultiResolver) HeaderByNumber(ctx context.Context, name string, blockNr *big.Int) (*types.Header, error) {
+	rs, err := m.getResolveValidator(name)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rs {
+		var header *types.Header
+		header, err = r.HeaderByNumber(ctx, blockNr)
+		// we hide the error if it is not for the last resolver we check
+		if err == nil {
+			return header, nil
+		}
+	}
+	return nil, err
+}
+
+func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, error) {
+	rs := m.resolvers[""]
+	tld := path.Ext(name)
+	if tld != "" {
+		tld = tld[1:]
+		rstld, ok := m.resolvers[tld]
+		if ok {
+			return rstld, nil
+		}
+	}
+	if len(rs) == 0 {
+		return rs, NewNoResolverError(tld)
+	}
+	return rs, nil
+}
+
+func (m *MultiResolver) SetNameHash(nameHash func(string) common.Hash) {
+	m.nameHash = nameHash
+}
+
 /*
 Api implements webserver/file system related content storage and retrieval
 on top of the dpa
 it is the public interface of the dpa which is included in the ethereum stack
 */
 type Api struct {
-	dpa *storage.DPA
-	dns Resolver
+	resource *storage.ResourceHandler
+	dpa      *storage.DPA
+	dns      Resolver
 }
 
 //the api constructor initialises
-func NewApi(dpa *storage.DPA, dns Resolver) (self *Api) {
+func NewApi(dpa *storage.DPA, dns Resolver, resourceHandler *storage.ResourceHandler) (self *Api) {
 	self = &Api{
-		dpa: dpa,
-		dns: dns,
+		dpa:      dpa,
+		dns:      dns,
+		resource: resourceHandler,
 	}
 	return
 }
 
 // to be used only in TEST
-func (self *Api) Upload(uploadDir, index string) (hash string, err error) {
+func (self *Api) Upload(uploadDir, index string, toEncrypt bool) (hash string, err error) {
 	fs := NewFileSystem(self)
-	hash, err = fs.Upload(uploadDir, index)
+	hash, err = fs.Upload(uploadDir, index, toEncrypt)
 	return hash, err
 }
 
@@ -167,8 +243,9 @@ func (self *Api) Retrieve(key storage.Key) storage.LazySectionReader {
 	return self.dpa.Retrieve(key)
 }
 
-func (self *Api) Store(data io.Reader, size int64, wg *sync.WaitGroup) (key storage.Key, err error) {
-	return self.dpa.Store(data, size, wg, nil)
+func (self *Api) Store(data io.Reader, size int64, toEncrypt bool) (key storage.Key, wait func(), err error) {
+	log.Debug("api.store", "size", size)
+	return self.dpa.Store(data, size, toEncrypt)
 }
 
 type ErrResolve error
@@ -176,7 +253,7 @@ type ErrResolve error
 // DNS Resolver
 func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	apiResolveCount.Inc(1)
-	log.Trace(fmt.Sprintf("Resolving : %v", uri.Addr))
+	log.Trace("resolving", "uri", uri.Addr)
 
 	// if the URI is immutable, check if the address is a hash
 	isHash := hashMatcher.MatchString(uri.Addr)
@@ -208,30 +285,32 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 }
 
 // Put provides singleton manifest creation on top of dpa store
-func (self *Api) Put(content, contentType string) (storage.Key, error) {
+func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Key, wait func(), err error) {
 	apiPutCount.Inc(1)
 	r := strings.NewReader(content)
-	wg := &sync.WaitGroup{}
-	key, err := self.dpa.Store(r, int64(len(content)), wg, nil)
+	key, waitContent, err := self.dpa.Store(r, int64(len(content)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
-		return nil, err
+		return nil, nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
-	key, err = self.dpa.Store(r, int64(len(manifest)), wg, nil)
+	key, waitManifest, err := self.dpa.Store(r, int64(len(manifest)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
-		return nil, err
+		return nil, nil, err
 	}
-	wg.Wait()
-	return key, nil
+	return key, func() {
+		waitContent()
+		waitManifest()
+	}, nil
 }
 
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status and an error
 func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, err error) {
+	log.Debug("api.get", "key", key, "path", path)
 	apiGetCount.Inc(1)
 	trie, err := loadManifest(self.dpa, key, nil)
 	if err != nil {
@@ -241,11 +320,23 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 		return
 	}
 
-	log.Trace(fmt.Sprintf("getEntry(%s)", path))
-
+	log.Trace("trie getting entry", "key", key, "path", path)
 	entry, _ := trie.getEntry(path)
+	log.Trace("trie got entry", "key", key, "path", path)
 
 	if entry != nil {
+		// we want to be able to serve Mutable Resource Updates transparently using the bzz:// scheme
+		//
+		// we use a special manifest hack for this purpose, which is pathless and where the resource root key
+		// is set as the hash of the manifest (see swarm/api/manifest.go:NewResourceManifest)
+		//
+		// to avoid taking a performance hit hacking a storage.LazySectionReader to wrap the resource key,
+		// we return a typed error instead. Since for all other purposes this is an invalid manifest,
+		// any normal interfacing code will just see an error fail accordingly.
+		if entry.ContentType == ResourceContentType {
+			log.Warn("resource type", "key", key, "hash", entry.Hash)
+			return nil, entry.ContentType, http.StatusOK, &ErrResourceReturn{entry.Hash}
+		}
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
@@ -253,14 +344,14 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 			return
 		} else {
 			mimeType = entry.ContentType
-			log.Trace(fmt.Sprintf("content lookup key: '%v' (%v)", key, mimeType))
+			log.Trace("content lookup key", "key", key, "mimetype", mimeType)
 			reader = self.dpa.Retrieve(key)
 		}
 	} else {
 		status = http.StatusNotFound
 		apiGetNotFound.Inc(1)
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
-		log.Warn(fmt.Sprintf("%v", err))
+		log.Trace("manifest entry not found", "key", key, "path", path)
 	}
 	return
 }
@@ -489,4 +580,47 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 		return nil, nil, fmt.Errorf("list with prefix failed %v: %v", key.String(), err)
 	}
 	return key, manifestEntryMap, nil
+}
+
+// Look up mutable resource updates at specific periods and versions
+func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32, version uint32, maxLookup *storage.ResourceLookupParams) (storage.Key, []byte, error) {
+	var err error
+	if version != 0 {
+		if period == 0 {
+			return nil, nil, storage.NewResourceError(storage.ErrInvalidValue, "Period can't be 0")
+		}
+		_, err = self.resource.LookupVersionByName(ctx, name, period, version, true, maxLookup)
+	} else if period != 0 {
+		_, err = self.resource.LookupHistoricalByName(ctx, name, period, true, maxLookup)
+	} else {
+		_, err = self.resource.LookupLatestByName(ctx, name, true, maxLookup)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return self.resource.GetContent(name)
+}
+
+func (self *Api) ResourceCreate(ctx context.Context, name string, frequency uint64) (storage.Key, error) {
+	rsrc, err := self.resource.NewResource(ctx, name, frequency)
+	if err != nil {
+		return nil, err
+	}
+	h := rsrc.NameHash()
+	return storage.Key(h[:]), nil
+}
+
+func (self *Api) ResourceUpdate(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {
+	key, err := self.resource.Update(ctx, name, data)
+	period, _ := self.resource.GetLastPeriod(name)
+	version, _ := self.resource.GetVersion(name)
+	return key, period, version, err
+}
+
+func (self *Api) ResourceHashSize() int {
+	return self.resource.HashSize()
+}
+
+func (self *Api) ResourceIsValidated() bool {
+	return self.resource.IsValidated()
 }
