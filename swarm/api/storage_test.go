@@ -20,18 +20,18 @@ import (
 	"testing"
 )
 
-func testStorage(t *testing.T, f func(*Storage)) {
-	testApi(t, func(api *Api) {
-		f(NewStorage(api))
+func testStorage(t *testing.T, f func(*Storage, bool)) {
+	testApi(t, func(api *Api, toEncrypt bool) {
+		f(NewStorage(api), toEncrypt)
 	})
 }
 
 func TestStoragePutGet(t *testing.T) {
-	testStorage(t, func(api *Storage) {
+	testStorage(t, func(api *Storage, toEncrypt bool) {
 		content := "hello"
 		exp := expResponse(content, "text/plain", 0)
 		// exp := expResponse([]byte(content), "text/plain", 0)
-		bzzkey, wait, err := api.Put(content, exp.MimeType)
+		bzzkey, wait, err := api.Put(content, exp.MimeType, toEncrypt)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

@@ -47,7 +47,7 @@ func NewFileSystem(api *Api) *FileSystem {
 // TODO: localpath should point to a manifest
 //
 // DEPRECATED: Use the HTTP API instead
-func (self *FileSystem) Upload(lpath, index string) (string, error) {
+func (self *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error) {
 	var list []*manifestTrieEntry
 	localpath, err := filepath.Abs(filepath.Clean(lpath))
 	if err != nil {
@@ -114,7 +114,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 				stat, _ := f.Stat()
 				var hash storage.Key
 				var wait func()
-				hash, wait, err = self.api.dpa.Store(f, stat.Size(), false)
+				hash, wait, err = self.api.dpa.Store(f, stat.Size(), toEncrypt)
 				if hash != nil {
 					list[i].Hash = hash.Hex()
 				}
