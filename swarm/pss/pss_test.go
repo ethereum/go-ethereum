@@ -61,7 +61,7 @@ func init() {
 	flag.Parse()
 	rand.Seed(time.Now().Unix())
 
-	adapters.RegisterServices(newServices())
+	adapters.RegisterServices(newServices(false))
 	initTest()
 }
 
@@ -419,6 +419,88 @@ func TestMismatch(t *testing.T) {
 
 }
 
+func TestRawSend(t *testing.T) {
+	t.Run("32", testRawSend)
+	t.Run("8", testRawSend)
+	t.Run("0", testRawSend)
+}
+
+func testRawSend(t *testing.T) {
+
+	var addrsize int64
+	var err error
+
+	paramstring := strings.Split(t.Name(), "/")
+
+	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
+	log.Info("raw send test", "addrsize", addrsize)
+
+	clients, err := setupNetwork(2, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	topic := "0x00000000"
+
+	var loaddrhex string
+	err = clients[0].Call(&loaddrhex, "pss_baseAddr")
+	if err != nil {
+		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
+	}
+	loaddrhex = loaddrhex[:2+(addrsize*2)]
+	var roaddrhex string
+	err = clients[1].Call(&roaddrhex, "pss_baseAddr")
+	if err != nil {
+		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
+	}
+	roaddrhex = roaddrhex[:2+(addrsize*2)]
+
+	time.Sleep(time.Millisecond * 500)
+
+	// at this point we've verified that symkeys are saved and match on each peer
+	// now try sending symmetrically encrypted message, both directions
+	lmsgC := make(chan APIMsg)
+	lctx, lcancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer lcancel()
+	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic)
+	log.Trace("lsub", "id", lsub)
+	defer lsub.Unsubscribe()
+	rmsgC := make(chan APIMsg)
+	rctx, rcancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer rcancel()
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
+	log.Trace("rsub", "id", rsub)
+	defer rsub.Unsubscribe()
+
+	// send and verify delivery
+	lmsg := []byte("plugh")
+	err = clients[1].Call(nil, "pss_sendRaw", lmsg, loaddrhex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case recvmsg := <-lmsgC:
+		if !bytes.Equal(recvmsg.Msg, lmsg) {
+			t.Fatalf("node 1 received payload mismatch: expected %v, got %v", lmsg, recvmsg)
+		}
+	case cerr := <-lctx.Done():
+		t.Fatalf("test message (left) timed out: %v", cerr)
+	}
+	rmsg := []byte("xyzzy")
+	err = clients[0].Call(nil, "pss_sendRaw", rmsg, roaddrhex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case recvmsg := <-rmsgC:
+		if !bytes.Equal(recvmsg.Msg, rmsg) {
+			t.Fatalf("node 2 received payload mismatch: expected %x, got %v", rmsg, recvmsg.Msg)
+		}
+	case cerr := <-rctx.Done():
+		t.Fatalf("test message (right) timed out: %v", cerr)
+	}
+}
+
 // send symmetrically encrypted message between two directly connected peers
 func TestSymSend(t *testing.T) {
 	t.Run("32", testSymSend)
@@ -435,7 +517,7 @@ func testSymSend(t *testing.T) {
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("sym send test", "addrsize", addrsize)
 
-	clients, err := setupNetwork(2)
+	clients, err := setupNetwork(2, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -550,7 +632,7 @@ func testAsymSend(t *testing.T) {
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("asym send test", "addrsize", addrsize)
 
-	clients, err := setupNetwork(2)
+	clients, err := setupNetwork(2, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -867,7 +949,7 @@ outer:
 func TestDeduplication(t *testing.T) {
 	var err error
 
-	clients, err := setupNetwork(3)
+	clients, err := setupNetwork(3, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1197,13 +1279,13 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 }
 
 // setup simulated network and connect nodes in circle
-func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
+func setupNetwork(numnodes int, allowRaw bool) (clients []*rpc.Client, err error) {
 	nodes := make([]*simulations.Node, numnodes)
 	clients = make([]*rpc.Client, numnodes)
 	if numnodes < 2 {
 		return nil, fmt.Errorf("Minimum two nodes in network")
 	}
-	adapter := adapters.NewSimAdapter(newServices())
+	adapter := adapters.NewSimAdapter(newServices(allowRaw))
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",
 		DefaultService: "bzz",
@@ -1239,7 +1321,7 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 	return clients, nil
 }
 
-func newServices() adapters.Services {
+func newServices(allowRaw bool) adapters.Services {
 	stateStore := state.NewMemStore()
 	kademlias := make(map[discover.NodeID]*network.Kademlia)
 	kademlia := func(id discover.NodeID) *network.Kademlia {
@@ -1268,6 +1350,7 @@ func newServices() adapters.Services {
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewPssParams(privkey)
 			pssp.MsgTTL = time.Second * 30
+			pssp.AllowRaw = allowRaw
 			pskad := kademlia(ctx.Config.ID)
 			ps := NewPss(pskad, pssp)
 

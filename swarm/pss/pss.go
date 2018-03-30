@@ -71,6 +71,7 @@ type PssParams struct {
 	CacheTTL            time.Duration
 	privateKey          *ecdsa.PrivateKey
 	SymKeyCacheCapacity int
+	AllowRaw            bool
 }
 
 // Sane defaults for Pss
@@ -115,6 +116,7 @@ type Pss struct {
 	// message handling
 	handlers   map[Topic]map[*Handler]bool // topic and version based pss payload handlers. See pss.Handle()
 	handlersMu sync.Mutex
+	allowRaw   bool
 	hashPool   sync.Pool
 
 	// process
@@ -154,6 +156,7 @@ func NewPss(k network.Overlay, params *PssParams) *Pss {
 		symKeyDecryptCacheCapacity: params.SymKeyCacheCapacity,
 
 		handlers: make(map[Topic]map[*Handler]bool),
+		allowRaw: params.AllowRaw,
 		hashPool: sync.Pool{
 			New: func() interface{} {
 				return storage.MakeHashFunc(storage.SHA3Hash)()
@@ -359,7 +362,9 @@ func (self *Pss) process(pssmsg *PssMsg) bool {
 	}
 	recvmsg, keyid, from, err = keyFunc(envelope)
 	if err != nil {
-		log.Debug("decrypt message fail", "err", err, "asym", asymmetric, "pss", common.ToHex(self.BaseAddr()))
+		if self.allowRaw {
+			self.executeHandlers(rawTopic, envelope.Data, nil, false, "")
+		}
 		return false
 	}
 
@@ -368,17 +373,25 @@ func (self *Pss) process(pssmsg *PssMsg) bool {
 			self.outbox <- pssmsg
 		}()
 	}
-	handlers := self.getHandlers(psstopic)
+	if psstopic == rawTopic {
+		return false
+	}
+	self.executeHandlers(psstopic, recvmsg.Payload, from, asymmetric, keyid)
+
+	return true
+
+}
+
+func (self *Pss) executeHandlers(topic Topic, payload []byte, from *PssAddress, asymmetric bool, keyid string) {
+	handlers := self.getHandlers(topic)
 	nid, _ := discover.HexID("0x00") // this hack is needed to satisfy the p2p method
 	p := p2p.NewPeer(nid, fmt.Sprintf("%x", from), []p2p.Cap{})
 	for f := range handlers {
-		err := (*f)(recvmsg.Payload, p, asymmetric, keyid)
+		err := (*f)(payload, p, asymmetric, keyid)
 		if err != nil {
 			log.Warn("Pss handler %p failed: %v", f, err)
 		}
 	}
-	return true
-
 }
 
 // will return false if using partial address
@@ -585,6 +598,25 @@ func (self *Pss) cleanKeys() (count int) {
 /////////////////////////////////////////////////////////////////////
 // SECTION: Message sending
 /////////////////////////////////////////////////////////////////////
+
+// Send a raw message (any encryption is responsibility of calling client)
+//
+// Will fail if raw messages are disallowed
+func (self *Pss) SendRaw(msg []byte, address PssAddress) error {
+	if !self.allowRaw {
+		return errors.New("Raw messages not enabled")
+	}
+	pssmsg := &PssMsg{
+		To:     address,
+		Expire: uint32(time.Now().Add(self.msgTTL).Unix()),
+		Payload: &whisper.Envelope{
+			Data:  msg,
+			Topic: whisper.TopicType(rawTopic),
+		},
+	}
+	self.addFwdCache(pssmsg)
+	return self.enqueue(pssmsg)
+}
 
 // Send a message using symmetric encryption
 //

@@ -37,7 +37,7 @@ func testProtocol(t *testing.T) {
 
 	topic := PingTopic.String()
 
-	clients, err := setupNetwork(2)
+	clients, err := setupNetwork(2, false)
 	if err != nil {
 		t.Fatal(err)
 	}
