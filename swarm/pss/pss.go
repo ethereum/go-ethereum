@@ -348,14 +348,6 @@ func (self *Pss) process(pssmsg *PssMsg) bool {
 	var keyid string
 	var keyFunc func(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error)
 
-	digest, err := self.digest(pssmsg)
-	if err != nil {
-		log.Warn(fmt.Sprintf("could not store message %v to cache: %v", pssmsg, err))
-	}
-	if self.checkFwdCache(nil, digest) {
-		log.Trace(fmt.Sprintf("pss relay block-cache match (process): FROM %x TO %x", self.Overlay.BaseAddr(), common.ToHex(pssmsg.To)))
-		return false
-	}
 	envelope := pssmsg.Payload
 	psstopic := Topic(envelope.Topic)
 
@@ -694,12 +686,6 @@ func (self *Pss) forward(msg *PssMsg) {
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
 
-	// message hash
-	digest, err := self.digest(msg)
-	if err != nil {
-		log.Warn(fmt.Sprintf("could not store message %v to cache: %v", msg, err))
-	}
-
 	// send with kademlia
 	// find the closest peer to the recipient and attempt to send
 	sent := 0
@@ -826,14 +812,6 @@ func (self *Pss) digest(msg *PssMsg) pssDigest {
 	key := hasher.Sum(nil)
 	copy(digest[:], key[:digestLength])
 	return digest
-}
-
-func (self *Pss) isMsgExpired(msg *PssMsg) bool {
-	msgexp := time.Unix(int64(msg.Expire), 0)
-	if msgexp.Before(time.Now()) || msgexp.After(time.Now().Add(self.msgTTL)) {
-		return true
-	}
-	return false
 }
 
 func (self *Pss) isMsgExpired(msg *PssMsg) bool {
