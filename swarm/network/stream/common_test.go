@@ -86,7 +86,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	go func() {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
-	dpa := storage.NewDPA(storage.NewNetStore(store, nil), storage.NewChunkerParams())
+	dpa := storage.NewDPA(storage.NewNetStore(store, nil), storage.NewDPAParams())
 	return &TestRegistry{Registry: r, dpa: dpa}, nil
 }
 
@@ -207,12 +207,10 @@ func (r *TestRegistry) ReadAll(hash common.Hash) (int64, error) {
 }
 
 func (r *TestRegistry) Start(server *p2p.Server) error {
-	r.dpa.Start()
 	return r.Registry.Start(server)
 }
 
 func (r *TestRegistry) Stop() error {
-	r.dpa.Stop()
 	return r.Registry.Stop()
 }
 

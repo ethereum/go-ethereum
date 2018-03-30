@@ -32,6 +32,7 @@ import (
 )
 
 const MaxPO = 7
+const KeyLength = 32
 
 type Hasher func() hash.Hash
 type SwarmHasher func() SwarmHash
@@ -223,9 +224,8 @@ func (c *Chunk) WaitToStore() {
 func FakeChunk(size int64, count int, chunks []*Chunk) int {
 	var i int
 	hasher := MakeHashFunc(SHA3Hash)()
-	chunksize := getDefaultChunkSize()
-	if size > chunksize {
-		size = chunksize
+	if size > DefaultChunkSize {
+		size = DefaultChunkSize
 	}
 
 	for i = 0; i < count; i++ {
@@ -239,79 +239,6 @@ func FakeChunk(size int64, count int, chunks []*Chunk) int {
 	}
 
 	return i
-}
-
-func getDefaultChunkSize() int64 {
-	return DefaultBranches * int64(MakeHashFunc(SHA3Hash)().Size())
-
-}
-
-/*
-The ChunkStore interface is implemented by :
-
-- MemStore: a memory cache
-- DbStore: local disk/db store
-- LocalStore: a combination (sequence of) memStore and dbStore
-- NetStore: cloud storage abstraction layer
-- DPA: local requests for swarm storage and retrieval
-*/
-type ChunkStore interface {
-	Put(*Chunk) // effectively there is no error even if there is an error
-	Get(Key) (*Chunk, error)
-	Close()
-}
-
-/*
-Chunker is the interface to a component that is responsible for disassembling and assembling larger data and indended to be the dependency of a DPA storage system with fixed maximum chunksize.
-
-It relies on the underlying chunking model.
-
-When calling Split, the caller provides a channel (chan *Chunk) on which it receives chunks to store. The DPA delegates to storage layers (implementing ChunkStore interface).
-
-Split returns an error channel, which the caller can monitor.
-After getting notified that all the data has been split (the error channel is closed), the caller can safely read or save the root key. Optionally it times out if not all chunks get stored or not the entire stream of data has been processed. By inspecting the errc channel the caller can check if any explicit errors (typically IO read/write failures) occurred during splitting.
-
-When calling Join with a root key, the caller gets returned a seekable lazy reader. The caller again provides a channel on which the caller receives placeholder chunks with missing data. The DPA is supposed to forward this to the chunk stores and notify the chunker if the data has been delivered (i.e. retrieved from memory cache, disk-persisted db or cloud based swarm delivery). As the seekable reader is used, the chunker then puts these together the relevant parts on demand.
-*/
-type Splitter interface {
-	/*
-	   When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Key), the root hash of the entire content will fill this once processing finishes.
-	   New chunks to store are coming to caller via the chunk storage channel, which the caller provides.
-	   wg is a Waitgroup (can be nil) that can be used to block until the local storage finishes
-	   The caller gets returned an error channel, if an error is encountered during splitting, it is fed to errC error channel.
-	   A closed error signals process completion at which point the key can be considered final if there were no errors.
-	*/
-	Split(io.Reader, int64, chan *Chunk) (Key, func(), error)
-
-	/* This is the first step in making files mutable (not chunks)..
-	   Append allows adding more data chunks to the end of the already existsing file.
-	   The key for the root chunk is supplied to load the respective tree.
-	   Rest of the parameters behave like Split.
-	*/
-	Append(Key, io.Reader, chan *Chunk) (Key, func(), error)
-}
-
-type Joiner interface {
-	/*
-	   Join reconstructs original content based on a root key.
-	   When joining, the caller gets returned a Lazy SectionReader, which is
-	   seekable and implements on-demand fetching of chunks as and where it is read.
-	   New chunks to retrieve are coming to caller via the Chunk channel, which the caller provides.
-	   If an error is encountered during joining, it appears as a reader error.
-	   The SectionReader.
-	   As a result, partial reads from a document are possible even if other parts
-	   are corrupt or lost.
-	   The chunks are not meant to be validated by the chunker when joining. This
-	   is because it is left to the DPA to decide which sources are trusted.
-	*/
-	Join(key Key, chunkC chan *Chunk, depth int) LazySectionReader
-}
-
-type Chunker interface {
-	Joiner
-	Splitter
-	// returns the key length
-	// KeySize() int64
 }
 
 // Size, Seek, Read, ReadAt
@@ -328,4 +255,33 @@ type LazyTestSectionReader struct {
 
 func (self *LazyTestSectionReader) Size(chan bool) (int64, error) {
 	return self.SectionReader.Size(), nil
+}
+
+type ChunkData []byte
+
+type Reference []byte
+
+// Putter is responsible to store data and create a reference for it
+type Putter interface {
+	Put(ChunkData) (Reference, error)
+	// RefSize returns the length of the Reference created by this Putter
+	RefSize() int64
+	// Close is to indicate that no more chunk data will be Put on this Putter
+	Close()
+	// Wait returns if all data has been store and the Close() was called.
+	Wait()
+}
+
+// Getter is an interface to retrieve a chunk's data by its reference
+type Getter interface {
+	Get(Reference) (ChunkData, error)
+}
+
+// NOTE: this returns invalid data if chunk is encrypted
+func (c ChunkData) Size() int64 {
+	return int64(binary.LittleEndian.Uint64(c[:8]))
+}
+
+func (c ChunkData) Data() []byte {
+	return c[8:]
 }

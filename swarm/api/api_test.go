@@ -43,9 +43,7 @@ func testApi(t *testing.T, f func(*Api)) {
 		return
 	}
 	api := NewApi(dpa, nil, nil)
-	dpa.Start()
 	f(api)
-	dpa.Stop()
 }
 
 type testResponse struct {

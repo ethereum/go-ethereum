@@ -114,7 +114,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 				stat, _ := f.Stat()
 				var hash storage.Key
 				var wait func()
-				hash, wait, err = self.api.dpa.Store(f, stat.Size())
+				hash, wait, err = self.api.dpa.Store(f, stat.Size(), false)
 				if hash != nil {
 					list[i].Hash = hash.Hex()
 				}

@@ -246,7 +246,7 @@ func TestBzzGetPath(t *testing.T) {
 	for i, mf := range testmanifest {
 		reader[i] = bytes.NewReader([]byte(mf))
 		var wait func()
-		key[i], wait, err = srv.Dpa.Store(reader[i], int64(len(mf)))
+		key[i], wait, err = srv.Dpa.Store(reader[i], int64(len(mf)), false)
 		if err != nil {
 			t.Fatal(err)
 		}

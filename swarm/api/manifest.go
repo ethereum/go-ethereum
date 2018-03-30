@@ -371,7 +371,7 @@ func (self *manifestTrie) recalcAndStore() error {
 	}
 
 	sr := bytes.NewReader(manifest)
-	key, wait, err2 := self.dpa.Store(sr, int64(len(manifest)))
+	key, wait, err2 := self.dpa.Store(sr, int64(len(manifest)), false)
 	wait()
 	self.hash = key
 	return err2

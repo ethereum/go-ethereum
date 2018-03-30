@@ -157,7 +157,6 @@ func TestConfigFileOverrides(t *testing.T) {
 	defaultConf.NetworkId = 54
 	defaultConf.Port = httpPort
 	defaultConf.StoreParams.DbCapacity = 9000000
-	defaultConf.ChunkerParams.Branches = 64
 	defaultConf.HiveParams.KeepAliveInterval = 6000000000
 	defaultConf.Swap.Params.Strategy.AutoCashInterval = 600 * time.Second
 	//defaultConf.SyncParams.KeyBufferSize = 512
@@ -235,10 +234,6 @@ func TestConfigFileOverrides(t *testing.T) {
 
 	if info.StoreParams.DbCapacity != 9000000 {
 		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkId)
-	}
-
-	if info.ChunkerParams.Branches != 64 {
-		t.Fatalf("Expected chunker params branches to be %d, got %d", 64, info.ChunkerParams.Branches)
 	}
 
 	if info.HiveParams.KeepAliveInterval != 6000000000 {
@@ -374,7 +369,6 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 	defaultConf.NetworkId = 54
 	defaultConf.Port = "8588"
 	defaultConf.StoreParams.DbCapacity = 9000000
-	defaultConf.ChunkerParams.Branches = 64
 	defaultConf.HiveParams.KeepAliveInterval = 6000000000
 	defaultConf.Swap.Params.Strategy.AutoCashInterval = 600 * time.Second
 	//defaultConf.SyncParams.KeyBufferSize = 512
@@ -454,10 +448,6 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 
 	if info.StoreParams.DbCapacity != 9000000 {
 		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkId)
-	}
-
-	if info.ChunkerParams.Branches != 64 {
-		t.Fatalf("Expected chunker params branches to be %d, got %d", 64, info.ChunkerParams.Branches)
 	}
 
 	if info.HiveParams.KeepAliveInterval != 6000000000 {

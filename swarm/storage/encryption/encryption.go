@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"hash"
 )
+
+const KeyLength = 32
 
 type Key []byte
 
@@ -98,6 +100,12 @@ func (e *encryption) transform(data []byte, key Key) []byte {
 		ctr++
 	}
 	return transformedData
+}
+
+func GenerateRandomKey() (Key, error) {
+	key := make([]byte, KeyLength)
+	_, err := rand.Read(key)
+	return key, err
 }
 
 func min(x, y int) int {
