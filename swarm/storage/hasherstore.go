@@ -95,7 +95,7 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 // If the data is encrypted and the reference contains an encryption key, it will be decrypted before
 // return.
 func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
-	key, encryptionKey, err := parseReference(ref, int(h.hashSize))
+	key, encryptionKey, err := parseReference(ref, h.hashSize)
 	if err != nil {
 		return nil, err
 	}
