@@ -172,7 +172,7 @@ func testIterator(t *testing.T, mock bool) {
 	}
 	defer db.close()
 
-	FakeChunk(getDefaultChunkSize(), chunkcount, chunks)
+	FakeChunk(DefaultChunkSize, chunkcount, chunks)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(len(chunks))
@@ -182,7 +182,7 @@ func testIterator(t *testing.T, mock bool) {
 		j := i
 		go func() {
 			defer wg.Done()
-			<-chunks[j].dbStored
+			<-chunks[j].dbStoredC
 		}()
 	}
 

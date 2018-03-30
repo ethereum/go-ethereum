@@ -17,10 +17,6 @@
 package stream
 
 import (
-	"bytes"
-	"errors"
-	"fmt"
-	"io"
 	"math"
 	"strconv"
 	"time"
@@ -138,17 +134,16 @@ type SwarmSyncerClient struct {
 	retrieveC     chan *storage.Chunk
 	storeC        chan *storage.Chunk
 	db            *storage.DBAPI
-	chunker       storage.Chunker
-	currentRoot   storage.Key
-	requestFunc   func(chunk *storage.Chunk)
-	end, start    uint64
+	// chunker       storage.Chunker
+	currentRoot storage.Key
+	requestFunc func(chunk *storage.Chunk)
+	end, start  uint64
 }
 
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
-func NewSwarmSyncerClient(_ *Peer, db *storage.DBAPI, chunker storage.Chunker) (*SwarmSyncerClient, error) {
+func NewSwarmSyncerClient(_ *Peer, db *storage.DBAPI) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
-		db:      db,
-		chunker: chunker,
+		db: db,
 	}, nil
 }
 
@@ -192,7 +187,7 @@ func NewSwarmSyncerClient(_ *Peer, db *storage.DBAPI, chunker storage.Chunker) (
 // to handle incoming sync streams
 func RegisterSwarmSyncerClient(streamer *Registry, db *storage.DBAPI) {
 	streamer.RegisterClientFunc("SYNC", func(p *Peer, _ string, love bool) (Client, error) {
-		return NewSwarmSyncerClient(p, db, nil)
+		return NewSwarmSyncerClient(p, db)
 	})
 }
 
@@ -211,37 +206,39 @@ func (s *SwarmSyncerClient) NeedData(key []byte) (wait func()) {
 
 // BatchDone
 func (s *SwarmSyncerClient) BatchDone(stream Stream, from uint64, hashes []byte, root []byte) func() (*TakeoverProof, error) {
-	if s.chunker != nil {
-		return func() (*TakeoverProof, error) { return s.TakeoverProof(stream, from, hashes, root) }
-	}
+	// TODO: reenable this with putter/getter refactored code
+	// if s.chunker != nil {
+	// 	return func() (*TakeoverProof, error) { return s.TakeoverProof(stream, from, hashes, root) }
+	// }
 	return nil
 }
 
 func (s *SwarmSyncerClient) TakeoverProof(stream Stream, from uint64, hashes []byte, root storage.Key) (*TakeoverProof, error) {
 	// for provable syncer currentRoot is non-zero length
-	if s.chunker != nil {
-		if from > s.sessionAt { // for live syncing currentRoot is always updated
-			//expRoot, err := s.chunker.Append(s.currentRoot, bytes.NewReader(hashes), s.retrieveC, s.storeC)
-			expRoot, _, err := s.chunker.Append(s.currentRoot, bytes.NewReader(hashes), s.retrieveC)
-			if err != nil {
-				return nil, err
-			}
-			if !bytes.Equal(root, expRoot) {
-				return nil, fmt.Errorf("HandoverProof mismatch")
-			}
-			s.currentRoot = root
-		} else {
-			expHashes := make([]byte, len(hashes))
-			_, err := s.sessionReader.ReadAt(expHashes, int64(s.end*HashSize))
-			if err != nil && err != io.EOF {
-				return nil, err
-			}
-			if !bytes.Equal(expHashes, hashes) {
-				return nil, errors.New("invalid proof")
-			}
-		}
-		return nil, nil
-	}
+	// TODO: reenable this with putter/getter
+	// if s.chunker != nil {
+	// 	if from > s.sessionAt { // for live syncing currentRoot is always updated
+	// 		//expRoot, err := s.chunker.Append(s.currentRoot, bytes.NewReader(hashes), s.retrieveC, s.storeC)
+	// 		expRoot, _, err := s.chunker.Append(s.currentRoot, bytes.NewReader(hashes), s.retrieveC)
+	// 		if err != nil {
+	// 			return nil, err
+	// 		}
+	// 		if !bytes.Equal(root, expRoot) {
+	// 			return nil, fmt.Errorf("HandoverProof mismatch")
+	// 		}
+	// 		s.currentRoot = root
+	// 	} else {
+	// 		expHashes := make([]byte, len(hashes))
+	// 		_, err := s.sessionReader.ReadAt(expHashes, int64(s.end*HashSize))
+	// 		if err != nil && err != io.EOF {
+	// 			return nil, err
+	// 		}
+	// 		if !bytes.Equal(expHashes, hashes) {
+	// 			return nil, errors.New("invalid proof")
+	// 		}
+	// 	}
+	// 	return nil, nil
+	// }
 	s.end += uint64(len(hashes)) / HashSize
 	takeover := &Takeover{
 		Stream: stream,

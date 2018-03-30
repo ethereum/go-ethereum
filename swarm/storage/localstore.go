@@ -91,10 +91,12 @@ func (self *LocalStore) Put(chunk *Chunk) {
 
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	c := &Chunk{
-		Key:      Key(append([]byte{}, chunk.Key...)),
-		SData:    append([]byte{}, chunk.SData...),
-		Size:     chunk.Size,
-		dbStored: chunk.dbStored,
+		Key:        Key(append([]byte{}, chunk.Key...)),
+		SData:      append([]byte{}, chunk.SData...),
+		Size:       chunk.Size,
+		dbStored:   chunk.dbStored,
+		dbStoredC:  chunk.dbStoredC,
+		dbStoredMu: chunk.dbStoredMu,
 	}
 
 	dbStorePutCounter.Inc(1)

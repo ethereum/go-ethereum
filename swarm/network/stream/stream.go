@@ -93,7 +93,7 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 		return NewSwarmChunkServer(delivery.db), nil
 	})
 	streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, _ string, _ bool) (Client, error) {
-		return NewSwarmSyncerClient(p, delivery.db, nil)
+		return NewSwarmSyncerClient(p, delivery.db)
 	})
 	RegisterSwarmSyncerServer(streamer, db)
 	RegisterSwarmSyncerClient(streamer, db)

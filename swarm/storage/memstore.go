@@ -302,7 +302,7 @@ func (s *MemStore) removeOldest() {
 
 	if node.entry.ReqC == nil {
 		log.Trace(fmt.Sprintf("Memstore Clean: Waiting for chunk %v to be saved", node.entry.Key.Log()))
-		<-node.entry.dbStored
+		<-node.entry.dbStoredC
 		log.Trace(fmt.Sprintf("Memstore Clean: Chunk %v saved to DBStore. Ready to clear from mem.", node.entry.Key.Log()))
 
 		memstoreRemoveCounter.Inc(1)

@@ -101,7 +101,7 @@ func mput(store ChunkStore, processors int, n int, f func(i int) *Chunk) (hs []K
 
 					store.Put(chunk)
 
-					<-chunk.dbStored
+					<-chunk.dbStoredC
 				}()
 			}
 		}()
@@ -110,7 +110,7 @@ func mput(store ChunkStore, processors int, n int, f func(i int) *Chunk) (hs []K
 	if _, ok := store.(*MemStore); ok {
 		fa = func(i int) *Chunk {
 			chunk := f(i)
-			close(chunk.dbStored)
+			chunk.markAsStored()
 			return chunk
 		}
 	}

@@ -662,7 +662,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	self.Put(chunk)
 	timeout := time.NewTimer(self.storeTimeout)
 	select {
-	case <-chunk.dbStored:
+	case <-chunk.dbStoredC:
 	case <-timeout.C:
 		return nil, NewResourceError(ErrIO, "chunk store timeout")
 	}

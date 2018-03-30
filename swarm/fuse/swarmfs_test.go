@@ -813,8 +813,6 @@ func TestFUSE(t *testing.T) {
 		t.Fatal(err)
 	}
 	ta := &testAPI{api: api.NewApi(dpa, nil, nil)}
-	dpa.Start()
-	defer dpa.Stop()
 
 	t.Run("mountListAndUmount", ta.mountListAndUnmount)
 	t.Run("maxMounts", ta.maxMounts)
