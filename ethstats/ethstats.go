@@ -150,8 +150,8 @@ func (s *Service) loop() {
 	headSub := blockchain.SubscribeChainHeadEvent(chainHeadCh)
 	defer headSub.Unsubscribe()
 
-	txEventCh := make(chan core.TxPreEvent, txChanSize)
-	txSub := txpool.SubscribeTxPreEvent(txEventCh)
+	txPreEventCh := make(chan core.TxPreEvent, txChanSize)
+	txSub := txpool.SubscribeTxPreEvent(txPreEventCh)
 	defer txSub.Unsubscribe()
 
 	// Start a goroutine that exhausts the subsciptions to avoid events piling up
@@ -174,7 +174,7 @@ func (s *Service) loop() {
 				}
 
 			// Notify of new transaction events, but drop if too frequent
-			case <-txEventCh:
+			case <-txPreEventCh:
 				if time.Duration(mclock.Now()-lastTx) < time.Second {
 					continue
 				}

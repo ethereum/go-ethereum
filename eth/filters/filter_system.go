@@ -35,31 +35,37 @@ import (
 
 // Type determines the kind of filter and is used to put the filter in to
 // the correct bucket when added.
-type Type byte
+type Type = rpc.SubscriptionType
 
 const (
 	// UnknownSubscription indicates an unknown subscription type
-	UnknownSubscription Type = iota
+	UnknownSubscription Type = rpc.UnknownSubscription
 	// LogsSubscription queries for new or removed (chain reorg) logs
-	LogsSubscription
+	LogsSubscription Type = rpc.LogsSubscription
 	// PendingLogsSubscription queries for logs in pending blocks
-	PendingLogsSubscription
+	PendingLogsSubscription Type = rpc.PendingLogsSubscription
 	// MinedAndPendingLogsSubscription queries for logs in mined and pending blocks.
-	MinedAndPendingLogsSubscription
+	MinedAndPendingLogsSubscription Type = rpc.MinedAndPendingLogsSubscription
 	// PendingTransactionsSubscription queries tx hashes for pending
 	// transactions entering the pending state
-	PendingTransactionsSubscription
+	PendingTransactionsSubscription Type = rpc.PendingTransactionsSubscription
 	// BlocksSubscription queries hashes for blocks that are imported
-	BlocksSubscription
+	BlocksSubscription Type = rpc.BlocksSubscription
+    // ReturnData queries for return data from transactions executed by a 
+    // particular rpc client
+    ReturnDataSubscription Type = rpc.ReturnDataSubscription
 	// LastSubscription keeps track of the last index
-	LastIndexSubscription
+	LastIndexSubscription Type = rpc.LastIndexSubscription
 )
 
 const (
 
-	// txChanSize is the size of channel listening to TxPreEvent.
+	// txPreChanSize is the size of channel listening to TxPreEvent.
 	// The number is referenced from the size of tx pool.
-	txChanSize = 4096
+	txPreChanSize = 4096
+	// txPostChanSize is the size of channel listening to TransactionEvent.
+    // For now, setting to same as txPreChanSize--good number?
+	txPostChanSize = 4096
 	// rmLogsChanSize is the size of channel listening to RemovedLogsEvent.
 	rmLogsChanSize = 10
 	// logsChanSize is the size of channel listening to LogsEvent.
@@ -73,15 +79,16 @@ var (
 )
 
 type subscription struct {
-	id        rpc.ID
-	typ       Type
-	created   time.Time
-	logsCrit  ethereum.FilterQuery
-	logs      chan []*types.Log
-	hashes    chan common.Hash
-	headers   chan *types.Header
-	installed chan struct{} // closed when the filter is installed
-	err       chan error    // closed when the filter is uninstalled
+	id          rpc.ID
+	typ         Type
+	created     time.Time
+	logsCrit    ethereum.FilterQuery
+	logs        chan []*types.Log
+	hashes      chan common.Hash
+	headers     chan *types.Header
+    retdata     chan *types.ReturnData
+	installed   chan struct{} // closed when the filter is installed
+	err         chan error    // closed when the filter is uninstalled
 }
 
 // EventSystem creates subscriptions, processes events and broadcasts them to the
@@ -282,6 +289,20 @@ func (es *EventSystem) SubscribePendingTxEvents(hashes chan common.Hash) *Subscr
 	return es.subscribe(sub)
 }
 
+// SubscribeReturnData creates a subscription that captures return data for transactions
+//  executed by a particular rpc client
+func (es *EventSystem) SubscribeReturnData(retCh chan *types.ReturnData) *Subscription {
+    sub := &subscription{
+		id:        rpc.NewID(),
+		typ:       ReturnDataSubscription,
+		created:   time.Now(),
+        retdata:    retCh,
+		installed: make(chan struct{}),
+		err:       make(chan error),
+    }
+    return es.subscribe(sub)
+}
+
 type filterIndex map[Type]map[rpc.ID]*subscription
 
 // broadcast event to filters that match criteria.
@@ -320,6 +341,10 @@ func (es *EventSystem) broadcast(filters filterIndex, ev interface{}) {
 		for _, f := range filters[PendingTransactionsSubscription] {
 			f.hashes <- e.Tx.Hash()
 		}
+    case *core.TransactionEvent:
+        for _, f := range filters[ReturnDataSubscription] {
+            f.retdata <- &e.RetData
+        }
 	case core.ChainEvent:
 		for _, f := range filters[BlocksSubscription] {
 			f.headers <- e.Block.Header()
@@ -414,9 +439,12 @@ func (es *EventSystem) eventLoop() {
 	var (
 		index = make(filterIndex)
 		sub   = es.mux.Subscribe(core.PendingLogsEvent{})
-		// Subscribe TxPreEvent form txpool
-		txCh  = make(chan core.TxPreEvent, txChanSize)
-		txSub = es.backend.SubscribeTxPreEvent(txCh)
+		// Subscribe to TxPreEvent from txpool
+		txPreCh  = make(chan core.TxPreEvent, txPreChanSize)
+		txPreSub = es.backend.SubscribeTxPreEvent(txPreCh)
+        // Subscribe to TransactionEvent from applyTransaction
+        txCh = make(chan *core.TransactionEvent, txPostChanSize)
+        txSub = es.backend.SubscribeTransactionEvent(txCh)
 		// Subscribe RemovedLogsEvent
 		rmLogsCh  = make(chan core.RemovedLogsEvent, rmLogsChanSize)
 		rmLogsSub = es.backend.SubscribeRemovedLogsEvent(rmLogsCh)
@@ -430,6 +458,7 @@ func (es *EventSystem) eventLoop() {
 
 	// Unsubscribe all events
 	defer sub.Unsubscribe()
+	defer txPreSub.Unsubscribe()
 	defer txSub.Unsubscribe()
 	defer rmLogsSub.Unsubscribe()
 	defer logsSub.Unsubscribe()
@@ -448,6 +477,8 @@ func (es *EventSystem) eventLoop() {
 			es.broadcast(index, ev)
 
 		// Handle subscribed events
+		case ev := <-txPreCh:
+			es.broadcast(index, ev)
 		case ev := <-txCh:
 			es.broadcast(index, ev)
 		case ev := <-rmLogsCh:
@@ -477,6 +508,8 @@ func (es *EventSystem) eventLoop() {
 			close(f.err)
 
 		// System stopped
+		case <-txPreSub.Err():
+			return
 		case <-txSub.Err():
 			return
 		case <-rmLogsSub.Err():

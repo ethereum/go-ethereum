@@ -144,6 +144,10 @@ func (b *EthApiBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) e
 	return b.eth.BlockChain().SubscribeChainSideEvent(ch)
 }
 
+func (b *EthApiBackend) SubscribeTransactionEvent(ch chan<- *core.TransactionEvent) event.Subscription {
+	return b.eth.BlockChain().SubscribeTransactionEvent(ch)
+}
+
 func (b *EthApiBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return b.eth.BlockChain().SubscribeLogsEvent(ch)
 }

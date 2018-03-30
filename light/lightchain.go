@@ -52,6 +52,7 @@ type LightChain struct {
 	chainFeed     event.Feed
 	chainSideFeed event.Feed
 	chainHeadFeed event.Feed
+    txPostFeed    event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 
@@ -487,6 +488,12 @@ func (self *LightChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) e
 func (self *LightChain) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
 	return self.scope.Track(self.chainSideFeed.Subscribe(ch))
 }
+
+// SubscribeTransactionEvent registers a subscription of TransactionEvent.
+func (self *LightChain) SubscribeTransactionEvent(ch chan<- *core.TransactionEvent) event.Subscription {
+	return self.scope.Track(self.txPostFeed.Subscribe(ch))
+}
+
 
 // SubscribeLogsEvent implements the interface of filters.Backend
 // LightChain does not send logs events, so return an empty subscription.

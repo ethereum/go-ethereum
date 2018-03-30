@@ -24,11 +24,13 @@ import (
 	"math/big"
 	"sync"
 	"time"
+    "reflect"
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -46,6 +48,7 @@ type filter struct {
 	hashes   []common.Hash
 	crit     FilterCriteria
 	logs     []*types.Log
+    retdata  []types.ReturnData
 	s        *Subscription // associated subscription in event system
 }
 
@@ -229,6 +232,81 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 	return rpcSub, nil
 }
 
+func (api *PublicFilterAPI) NewReturnDataFilter() rpc.ID {
+    var (
+        retCh = make(chan *types.ReturnData)
+        retSub = api.events.SubscribeReturnData(retCh)
+    )
+
+    api.filtersMu.Lock()
+	api.filters[retSub.ID] = &filter{typ: ReturnDataSubscription, deadline: time.NewTimer(deadline), retdata: make([]types.ReturnData, 0), s: retSub}
+	api.filtersMu.Unlock()
+
+    go func() {
+        for {
+			select {
+			case retdata := <-retCh:
+				api.filtersMu.Lock()
+				if f, found := api.filters[retSub.ID]; found {
+                    f.retdata = append(f.retdata, *retdata)
+				}
+				api.filtersMu.Unlock()
+			case <-retSub.Err():
+				api.filtersMu.Lock()
+				delete(api.filters, retSub.ID)
+				api.filtersMu.Unlock()
+				return
+			}
+	    }
+	}()
+
+    return retSub.ID
+}
+
+func (api *PublicFilterAPI) ReturnData(ctx context.Context) (*rpc.Subscription, error) {
+    notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+    txListen := make(map[common.Hash]bool)
+
+	rpcSub := notifier.CreateSubscription()
+    rpcSub.SetType(rpc.ReturnDataSubscription)
+
+	go func() {
+		retCh := make(chan *types.ReturnData)
+		retSub := api.events.SubscribeReturnData(retCh)
+
+		for {
+			select {
+            case msg := <-rpcSub.Update():
+                // client submitted new tx, save hash for later
+                hash,ishash := msg.(common.Hash)
+                if ishash {
+                    txListen[hash] = true
+                } else {
+                    log.Warn(fmt.Sprintf("Received update msg of invalid type %s for ReturnData subscription",reflect.TypeOf(msg).String()))
+                }
+	        case retdata := <-retCh:
+                if txListen[retdata.TxHash] {
+                    // tx from client just completed execution--send back return data
+                    notifier.Notify(rpcSub.ID, retdata)
+                }
+		case <-rpcSub.Err():
+				retSub.Unsubscribe()
+				return
+			case <-notifier.Closed():
+				retSub.Unsubscribe()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
+}
+
+
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
@@ -399,6 +477,7 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_getfilterchanges
 func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
+
 	api.filtersMu.Lock()
 	defer api.filtersMu.Unlock()
 
@@ -419,6 +498,10 @@ func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 			logs := f.logs
 			f.logs = nil
 			return returnLogs(logs), nil
+        case ReturnDataSubscription:
+            retdata := f.retdata
+            f.retdata = nil
+            return returnRetData(retdata), nil
 		}
 	}
 
@@ -441,6 +524,17 @@ func returnLogs(logs []*types.Log) []*types.Log {
 		return []*types.Log{}
 	}
 	return logs
+}
+
+func returnRetData(rdata []types.ReturnData) []types.ReturnData {
+    if rdata == nil {
+        return []types.ReturnData{}
+    } else {
+        for _,r := range rdata {
+            r.Data = []byte{}
+        }
+    }
+    return rdata
 }
 
 // UnmarshalJSON sets *args fields with given data.

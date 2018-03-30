@@ -99,6 +99,7 @@ type BlockChain struct {
 	chainSideFeed event.Feed
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
+    txPostFeed    event.Feed  // named with Post to distinguish between txFeed in tx_pool, which gets triggered *before* a transaction gets processed rather than after
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 
@@ -1371,8 +1372,8 @@ func (bc *BlockChain) PostChainEvents(events []interface{}, logs []*types.Log) {
 
 		case ChainSideEvent:
 			bc.chainSideFeed.Send(ev)
-		}
-	}
+	    }
+    }
 }
 
 func (bc *BlockChain) update() {
@@ -1556,6 +1557,11 @@ func (bc *BlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Su
 // SubscribeChainSideEvent registers a subscription of ChainSideEvent.
 func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Subscription {
 	return bc.scope.Track(bc.chainSideFeed.Subscribe(ch))
+}
+
+// SubscribeTransactionEvent registers a subscription of SubscribeTransactionEvent.
+func (bc *BlockChain) SubscribeTransactionEvent(ch chan<- *TransactionEvent) event.Subscription {
+	return bc.scope.Track(bc.txPostFeed.Subscribe(ch))
 }
 
 // SubscribeLogsEvent registers a subscription of []*types.Log.

@@ -37,6 +37,7 @@ type Backend interface {
 	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error)
 
 	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
+    SubscribeTransactionEvent(chan<- *core.TransactionEvent) event.Subscription
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
@@ -177,7 +178,7 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 	}
 }
 
-// indexedLogs returns the logs matching the filter criteria based on raw block
+// unindexedLogs returns the logs matching the filter criteria based on raw block
 // iteration and bloom matching.
 func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, error) {
 	var logs []*types.Log

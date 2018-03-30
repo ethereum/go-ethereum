@@ -27,20 +27,60 @@ var (
 	ErrNotificationsUnsupported = errors.New("notifications not supported")
 	// ErrNotificationNotFound is returned when the notification for the given id is not found
 	ErrSubscriptionNotFound = errors.New("subscription not found")
+    ErrNamespaceNotFound = errors.New("namespace not found")
+	ErrSubscriptionTypeNotFound = errors.New("no active subscriptions of specified type")
 )
 
 // ID defines a pseudo random number that is used to identify RPC subscriptions.
 type ID string
 
-// a Subscription is created by a notifier and tight to that notifier. The client can use
+// SubscriptionType determines the type of subscription (which allows sending updates to 
+// subscriptions of a particular type); this is also used by eth/filters to index different
+// filter types.
+type SubscriptionType byte
+
+const (
+	// UnknownSubscription indicates an unknown subscription type
+	UnknownSubscription SubscriptionType = iota
+	// LogsSubscription queries for new or removed (chain reorg) logs
+	LogsSubscription
+	// PendingLogsSubscription queries for logs in pending blocks
+	PendingLogsSubscription
+	// MinedAndPendingLogsSubscription queries for logs in mined and pending blocks.
+	MinedAndPendingLogsSubscription
+	// PendingTransactionsSubscription queries tx hashes for pending
+	// transactions entering the pending state
+	PendingTransactionsSubscription
+	// BlocksSubscription queries hashes for blocks that are imported
+	BlocksSubscription
+    // ReturnData queries for return data from transactions executed by a
+    // particular rpc client
+    ReturnDataSubscription
+	// LastSubscription keeps track of the last index
+	LastIndexSubscription
+)
+
+
+
+// a Subscription is created by a notifier and tied to that notifier. The client can use
 // this subscription to wait for an unsubscribe request for the client, see Err().
 type Subscription struct {
 	ID        ID
 	namespace string
+    Type   SubscriptionType
+    update    chan interface{}  // used to send update filter criteria of subscription
 	err       chan error // closed on unsubscribe
 }
 
-// Err returns a channel that is closed when the client send an unsubscribe request.
+func (s *Subscription) SetType(subType SubscriptionType) {
+    s.Type = subType
+}
+
+func (s *Subscription) Update() <-chan interface{} {
+    return s.update
+}
+
+// Err returns a channel that is closed when the client sends an unsubscribe request.
 func (s *Subscription) Err() <-chan error {
 	return s.err
 }
@@ -48,7 +88,7 @@ func (s *Subscription) Err() <-chan error {
 // notifierKey is used to store a notifier within the connection context.
 type notifierKey struct{}
 
-// Notifier is tight to a RPC connection that supports subscriptions.
+// Notifier is tied to a RPC connection that supports subscriptions.
 // Server callbacks use the notifier to send notifications.
 type Notifier struct {
 	codec    ServerCodec
@@ -78,7 +118,7 @@ func NotifierFromContext(ctx context.Context) (*Notifier, bool) {
 // are dropped until the subscription is marked as active. This is done
 // by the RPC server after the subscription ID is send to the client.
 func (n *Notifier) CreateSubscription() *Subscription {
-	s := &Subscription{ID: NewID(), err: make(chan error)}
+    s := &Subscription{ID: NewID(), update: make(chan interface{}),err: make(chan error)}
 	n.subMu.Lock()
 	n.inactive[s.ID] = s
 	n.subMu.Unlock()
@@ -100,6 +140,46 @@ func (n *Notifier) Notify(id ID, data interface{}) error {
 		}
 	}
 	return nil
+}
+
+// Send an update message to the update channel of a particular subscription id.
+//
+// Intended use pattern is to update the filter criteria about which events should
+//   generate notifcations.
+//
+func (n *Notifier) UpdateSubscription(id ID, message interface{}) error {
+    n.subMu.RLock()
+    defer n.subMu.RUnlock()
+    sub, validid := n.active[id]
+    if validid {
+        sub.update <- message
+        return nil
+    } else {
+        return ErrSubscriptionNotFound
+    }
+}
+
+// Send an update message to the update channels of all subscriptions of
+//  the specified subscription type.
+//
+// Intended use pattern is to update the filter criteria about which events should
+//   generate notifcations.  This version is especially useful if the subscription
+//   id is not known by the caller.  Unlike UpdateScription, this can block.
+//
+//  For example, when a client is subscribed to ReturnData, each time the client
+//   submits a new transaction, this is used to add the tx to the list of transactions
+//   which should generate a TransactionEvent and notify the client with return data.
+func (n *Notifier) UpdateSubscriptions(subType SubscriptionType, message interface{}) error {
+    n.subMu.RLock()
+    defer n.subMu.RUnlock()
+    for _,sub := range n.active {
+        if sub.Type == subType {
+            sub.update <- message
+            return nil
+        }
+    }
+
+    return ErrSubscriptionTypeNotFound
 }
 
 // Closed returns a channel that is closed when the RPC connection is closed.
