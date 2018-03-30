@@ -43,7 +43,7 @@ const (
 type Config struct {
 	// serialised/persisted fields
 	*storage.StoreParams
-	*storage.ChunkerParams
+	*storage.DPAParams
 	*network.HiveParams
 	Swap *swap.SwapParams
 	//*network.SyncParams
@@ -72,9 +72,9 @@ type Config struct {
 func NewConfig() (self *Config) {
 
 	self = &Config{
-		StoreParams:   storage.NewDefaultStoreParams(),
-		ChunkerParams: storage.NewChunkerParams(),
-		HiveParams:    network.NewHiveParams(),
+		StoreParams: storage.NewDefaultStoreParams(),
+		DPAParams:   storage.NewDPAParams(),
+		HiveParams:  network.NewHiveParams(),
 		//SyncParams:    network.NewDefaultSyncParams(),
 		Swap:            swap.NewDefaultSwapParams(),
 		ListenAddr:      DefaultHTTPListenAddr,

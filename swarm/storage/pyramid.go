@@ -65,9 +65,8 @@ var (
 )
 
 const (
-	ChunkProcessors       = 8
-	DefaultBranches int64 = 128
-	splitTimeout          = time.Minute * 5
+	ChunkProcessors = 8
+	splitTimeout    = time.Minute * 5
 )
 
 const (
@@ -75,16 +74,37 @@ const (
 	TreeChunk = 1
 )
 
-type ChunkerParams struct {
-	Branches int64
-	Hash     string
+type PyramidSplitterParams struct {
+	SplitterParams
+	getter Getter
 }
 
-func NewChunkerParams() *ChunkerParams {
-	return &ChunkerParams{
-		Branches: DefaultBranches,
-		Hash:     SHA3Hash,
+func NewPyramidSplitterParams(key Key, reader io.Reader, putter Putter, getter Getter, chunkSize int64) *PyramidSplitterParams {
+	hashSize := putter.RefSize()
+	return &PyramidSplitterParams{
+		SplitterParams: SplitterParams{
+			ChunkerParams: ChunkerParams{
+				chunkSize: chunkSize,
+				hashSize:  hashSize,
+			},
+			reader: reader,
+			putter: putter,
+			key:    key,
+		},
+		getter: getter,
 	}
+}
+
+/*
+	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Key), the root hash of the entire content will fill this once processing finishes.
+	New chunks to store are store using the putter which the caller provides.
+*/
+func PyramidSplit(reader io.Reader, putter Putter, getter Getter) (Key, func(), error) {
+	return NewPyramidSplitter(NewPyramidSplitterParams(nil, reader, putter, getter, DefaultChunkSize)).Split()
+}
+
+func PyramidAppend(key Key, reader io.Reader, putter Putter, getter Getter) (Key, func(), error) {
+	return NewPyramidSplitter(NewPyramidSplitterParams(key, reader, putter, getter, DefaultChunkSize)).Append()
 }
 
 // Entry to create a tree node
@@ -112,41 +132,56 @@ func NewTreeEntry(pyramid *PyramidChunker) *TreeEntry {
 
 // Used by the hash processor to create a data/tree chunk and send to storage
 type chunkJob struct {
-	key       Key
-	chunk     []byte
-	size      int64
-	parentWg  *sync.WaitGroup
-	chunkType int // used to identify the tree related chunks for debugging
-	chunkLvl  int // leaf-1 is level 0 and goes upwards until it reaches root
+	key      Key
+	chunk    []byte
+	parentWg *sync.WaitGroup
 }
 
 type PyramidChunker struct {
-	hashFunc    SwarmHasher
 	chunkSize   int64
 	hashSize    int64
 	branches    int64
+	reader      io.Reader
+	putter      Putter
+	getter      Getter
+	key         Key
 	workerCount int64
 	workerLock  sync.RWMutex
+	jobC        chan *chunkJob
+	wg          *sync.WaitGroup
+	errC        chan error
+	quitC       chan bool
+	rootKey     []byte
+	chunkLevel  [][]*TreeEntry
 }
 
-func NewPyramidChunker(params *ChunkerParams) (self *PyramidChunker) {
+func NewPyramidSplitter(params *PyramidSplitterParams) (self *PyramidChunker) {
 	self = &PyramidChunker{}
-	self.hashFunc = MakeHashFunc(params.Hash)
-	self.branches = params.Branches
-	self.hashSize = int64(self.hashFunc().Size())
+	self.reader = params.reader
+	self.hashSize = params.hashSize
+	self.branches = params.chunkSize / self.hashSize
 	self.chunkSize = self.hashSize * self.branches
+	self.putter = params.putter
+	self.getter = params.getter
+	self.key = params.key
 	self.workerCount = 0
+	self.jobC = make(chan *chunkJob, 2*ChunkProcessors)
+	self.wg = &sync.WaitGroup{}
+	self.errC = make(chan error)
+	self.quitC = make(chan bool)
+	self.rootKey = make([]byte, self.hashSize)
+	self.chunkLevel = make([][]*TreeEntry, self.branches)
 	return
 }
 
-func (self *PyramidChunker) Join(key Key, chunkC chan *Chunk, depth int) LazySectionReader {
+func (self *PyramidChunker) Join(key Key, getter Getter, depth int) LazySectionReader {
 	return &LazyChunkReader{
 		key:       key,
-		chunkC:    chunkC,
 		depth:     depth,
 		chunkSize: self.chunkSize,
 		branches:  self.branches,
 		hashSize:  self.hashSize,
+		getter:    getter,
 	}
 }
 
@@ -168,204 +203,179 @@ func (self *PyramidChunker) decrementWorkerCount() {
 	self.workerCount -= 1
 }
 
-func (self *PyramidChunker) Split(data io.Reader, size int64, chunkC chan *Chunk) (k Key, wait func(), err error) {
-	log.Debug("pyramid.chunker: Split()", "size", size)
-	jobC := make(chan *chunkJob, 2*ChunkProcessors)
-	wg := &sync.WaitGroup{}
-	storageWG := &sync.WaitGroup{}
-	storageWG.Add(1)
-	errC := make(chan error)
-	quitC := make(chan bool)
-	rootKey := make([]byte, self.hashSize)
-	chunkLevel := make([][]*TreeEntry, self.branches)
+func (self *PyramidChunker) Split() (k Key, wait func(), err error) {
+	log.Debug("pyramid.chunker: Split()")
 
-	wg.Add(1)
-	self.prepareChunks(false, chunkLevel, data, rootKey, quitC, wg, jobC, chunkC, errC, storageWG)
+	self.wg.Add(1)
+	self.prepareChunks(false)
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
 
 		// waiting for all chunks to finish
-		wg.Wait()
+		self.wg.Wait()
 
 		//We close errC here because this is passed down to 8 parallel routines underneath.
 		// if a error happens in one of them.. that particular routine raises error...
 		// once they all complete successfully, the control comes back and we can safely close this here.
-		close(errC)
+		close(self.errC)
 	}()
 
-	defer close(quitC)
+	defer close(self.quitC)
+	defer self.putter.Close()
 
 	select {
-	case err := <-errC:
+	case err := <-self.errC:
 		if err != nil {
 			return nil, nil, err
 		}
 	case <-time.NewTimer(splitTimeout).C:
 	}
-	return rootKey, storageWG.Wait, nil
+	return self.rootKey, self.putter.Wait, nil
+
 }
 
-func (self *PyramidChunker) Append(key Key, data io.Reader, chunkC chan *Chunk) (k Key, wait func(), err error) {
+func (self *PyramidChunker) Append() (k Key, wait func(), err error) {
 	log.Debug("pyramid.chunker: Append()")
-	quitC := make(chan bool)
-	rootKey := make([]byte, self.hashSize)
-	chunkLevel := make([][]*TreeEntry, self.branches)
-
 	// Load the right most unfinished tree chunks in every level
-	self.loadTree(chunkLevel, key, chunkC, quitC)
+	self.loadTree()
 
-	jobC := make(chan *chunkJob, 2*ChunkProcessors)
-	wg := &sync.WaitGroup{}
-	errC := make(chan error)
-
-	storageWG := &sync.WaitGroup{}
-	storageWG.Add(1)
-
-	wg.Add(1)
-	self.prepareChunks(true, chunkLevel, data, rootKey, quitC, wg, jobC, chunkC, errC, storageWG)
+	self.wg.Add(1)
+	self.prepareChunks(true)
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
 
 		// waiting for all chunks to finish
-		wg.Wait()
+		self.wg.Wait()
 
-		close(errC)
+		close(self.errC)
 	}()
 
-	defer close(quitC)
+	defer close(self.quitC)
+	defer self.putter.Close()
 
 	select {
-	case err := <-errC:
+	case err := <-self.errC:
 		if err != nil {
 			return nil, nil, err
 		}
 	case <-time.NewTimer(splitTimeout).C:
 	}
-	return rootKey, storageWG.Wait, nil
+
+	return self.rootKey, self.putter.Wait, nil
 
 }
 
-func (self *PyramidChunker) processor(id int64, jobC chan *chunkJob, chunkC chan *Chunk, errC chan error, quitC chan bool, storageWG *sync.WaitGroup) {
+func (self *PyramidChunker) processor(id int64) {
 	defer self.decrementWorkerCount()
-	defer storageWG.Done()
-	hasher := self.hashFunc()
 	for {
 		select {
 
-		case job, ok := <-jobC:
+		case job, ok := <-self.jobC:
 			if !ok {
 				return
 			}
-			self.processChunk(id, hasher, job, chunkC, storageWG)
-		case <-quitC:
+			self.processChunk(id, job)
+		case <-self.quitC:
 			return
 		}
 	}
 }
 
-func (self *PyramidChunker) processChunk(id int64, hasher SwarmHash, job *chunkJob, chunkC chan *Chunk, storageWG *sync.WaitGroup) {
-	hasher.ResetWithLength(job.chunk[:8]) // 8 bytes of length
-	hasher.Write(job.chunk[8:])           // minus 8 []byte length
-	h := hasher.Sum(nil)
+func (self *PyramidChunker) processChunk(id int64, job *chunkJob) {
+	log.Debug("pyramid.chunker: processChunk()", "id", id)
 
-	newChunk := NewChunk(h, nil)
-	newChunk.SData = job.chunk
-	newChunk.Size = job.size
+	ref, err := self.putter.Put(job.chunk)
+	if err != nil {
+		self.errC <- err
+	}
 
 	// report hash of this chunk one level up (keys corresponds to the proper subslice of the parent chunk)
-	copy(job.key, h)
+	copy(job.key, ref)
 
 	// send off new chunk to storage
 	job.parentWg.Done()
-
-	if chunkC != nil {
-		chunkC <- newChunk
-		storageWG.Add(1)
-		go func() {
-			defer storageWG.Done()
-			<-newChunk.dbStoredC
-		}()
-	}
 }
 
-func (self *PyramidChunker) loadTree(chunkLevel [][]*TreeEntry, key Key, chunkC chan *Chunk, quitC chan bool) error {
+func (self *PyramidChunker) loadTree() error {
 	log.Debug("pyramid.chunker: loadTree()")
 	// Get the root chunk to get the total size
-	chunk := retrieve(key, chunkC, quitC)
-	if chunk == nil {
+	chunkData, err := self.getter.Get(Reference(self.key))
+	if err != nil {
 		return errLoadingTreeRootChunk
 	}
-	log.Trace("pyramid.chunker: root chunk", "chunk.Size", chunk.Size, "self.chunkSize", self.chunkSize)
+	chunkSize := chunkData.Size()
+	log.Trace("pyramid.chunker: root chunk", "chunk.Size", chunkSize, "self.chunkSize", self.chunkSize)
 
 	//if data size is less than a chunk... add a parent with update as pending
-	if chunk.Size <= self.chunkSize {
+	if chunkSize <= self.chunkSize {
 		newEntry := &TreeEntry{
 			level:         0,
 			branchCount:   1,
-			subtreeSize:   uint64(chunk.Size),
+			subtreeSize:   uint64(chunkSize),
 			chunk:         make([]byte, self.chunkSize+8),
 			key:           make([]byte, self.hashSize),
 			index:         0,
 			updatePending: true,
 		}
-		copy(newEntry.chunk[8:], chunk.Key)
-		chunkLevel[0] = append(chunkLevel[0], newEntry)
+		copy(newEntry.chunk[8:], self.key)
+		self.chunkLevel[0] = append(self.chunkLevel[0], newEntry)
 		return nil
 	}
 
 	var treeSize int64
 	var depth int
 	treeSize = self.chunkSize
-	for ; treeSize < chunk.Size; treeSize *= self.branches {
+	for ; treeSize < chunkSize; treeSize *= self.branches {
 		depth++
 	}
 	log.Trace("pyramid.chunker", "depth", depth)
 
 	// Add the root chunk entry
-	branchCount := int64(len(chunk.SData)-8) / self.hashSize
+	branchCount := int64(len(chunkData)-8) / self.hashSize
 	newEntry := &TreeEntry{
 		level:         depth - 1,
 		branchCount:   branchCount,
-		subtreeSize:   uint64(chunk.Size),
-		chunk:         chunk.SData,
-		key:           key,
+		subtreeSize:   uint64(chunkSize),
+		chunk:         chunkData,
+		key:           self.key,
 		index:         0,
 		updatePending: true,
 	}
-	chunkLevel[depth-1] = append(chunkLevel[depth-1], newEntry)
+	self.chunkLevel[depth-1] = append(self.chunkLevel[depth-1], newEntry)
 
 	// Add the rest of the tree
 	for lvl := depth - 1; lvl >= 1; lvl-- {
 
 		//TODO(jmozah): instead of loading finished branches and then trim in the end,
 		//avoid loading them in the first place
-		for _, ent := range chunkLevel[lvl] {
+		for _, ent := range self.chunkLevel[lvl] {
 			branchCount = int64(len(ent.chunk)-8) / self.hashSize
 			for i := int64(0); i < branchCount; i++ {
 				key := ent.chunk[8+(i*self.hashSize) : 8+((i+1)*self.hashSize)]
-				newChunk := retrieve(key, chunkC, quitC)
-				if newChunk == nil {
+				newChunkData, err := self.getter.Get(Reference(key))
+				if err != nil {
 					return errLoadingTreeChunk
 				}
-				bewBranchCount := int64(len(newChunk.SData)-8) / self.hashSize
+				newChunkSize := newChunkData.Size()
+				bewBranchCount := int64(len(newChunkData)-8) / self.hashSize
 				newEntry := &TreeEntry{
 					level:         lvl - 1,
 					branchCount:   bewBranchCount,
-					subtreeSize:   uint64(newChunk.Size),
-					chunk:         newChunk.SData,
+					subtreeSize:   uint64(newChunkSize),
+					chunk:         newChunkData,
 					key:           key,
 					index:         0,
 					updatePending: true,
 				}
-				chunkLevel[lvl-1] = append(chunkLevel[lvl-1], newEntry)
+				self.chunkLevel[lvl-1] = append(self.chunkLevel[lvl-1], newEntry)
 
 			}
 
 			// We need to get only the right most unfinished branch.. so trim all finished branches
-			if int64(len(chunkLevel[lvl-1])) >= self.branches {
-				chunkLevel[lvl-1] = nil
+			if int64(len(self.chunkLevel[lvl-1])) >= self.branches {
+				self.chunkLevel[lvl-1] = nil
 			}
 		}
 	}
@@ -373,22 +383,23 @@ func (self *PyramidChunker) loadTree(chunkLevel [][]*TreeEntry, key Key, chunkC 
 	return nil
 }
 
-func (self *PyramidChunker) prepareChunks(isAppend bool, chunkLevel [][]*TreeEntry, data io.Reader, rootKey []byte, quitC chan bool, wg *sync.WaitGroup, jobC chan *chunkJob, chunkC chan *Chunk, errC chan error, storageWG *sync.WaitGroup) {
+func (self *PyramidChunker) prepareChunks(isAppend bool) {
 	log.Debug("pyramid.chunker: prepareChunks", "isAppend", isAppend)
-	defer wg.Done()
+	defer self.wg.Done()
 
 	chunkWG := &sync.WaitGroup{}
 
 	self.incrementWorkerCount()
 
-	go self.processor(self.workerCount, jobC, chunkC, errC, quitC, storageWG)
+	go self.processor(self.workerCount)
 
 	parent := NewTreeEntry(self)
-	var unfinishedChunk *Chunk
+	var unfinishedChunkData ChunkData
+	var unfinishedChunkSize int64
 
-	if isAppend && len(chunkLevel[0]) != 0 {
-		lastIndex := len(chunkLevel[0]) - 1
-		ent := chunkLevel[0][lastIndex]
+	if isAppend && len(self.chunkLevel[0]) != 0 {
+		lastIndex := len(self.chunkLevel[0]) - 1
+		ent := self.chunkLevel[0][lastIndex]
 
 		if ent.branchCount < self.branches {
 			parent = &TreeEntry{
@@ -404,12 +415,17 @@ func (self *PyramidChunker) prepareChunks(isAppend bool, chunkLevel [][]*TreeEnt
 			lastBranch := parent.branchCount - 1
 			lastKey := parent.chunk[8+lastBranch*self.hashSize : 8+(lastBranch+1)*self.hashSize]
 
-			unfinishedChunk = retrieve(lastKey, chunkC, quitC)
-			if unfinishedChunk.Size < self.chunkSize {
-				parent.subtreeSize = parent.subtreeSize - uint64(unfinishedChunk.Size)
+			var err error
+			unfinishedChunkData, err = self.getter.Get(lastKey)
+			if err != nil {
+				self.errC <- err
+			}
+			unfinishedChunkSize = unfinishedChunkData.Size()
+			if unfinishedChunkSize < self.chunkSize {
+				parent.subtreeSize = parent.subtreeSize - uint64(unfinishedChunkSize)
 				parent.branchCount = parent.branchCount - 1
 			} else {
-				unfinishedChunk = nil
+				unfinishedChunkData = nil
 			}
 		}
 	}
@@ -420,15 +436,15 @@ func (self *PyramidChunker) prepareChunks(isAppend bool, chunkLevel [][]*TreeEnt
 
 		var readBytes int
 
-		if unfinishedChunk != nil {
-			copy(chunkData, unfinishedChunk.SData)
-			readBytes += int(unfinishedChunk.Size)
-			unfinishedChunk = nil
+		if unfinishedChunkData != nil {
+			copy(chunkData, unfinishedChunkData)
+			readBytes += int(unfinishedChunkSize)
+			unfinishedChunkData = nil
 			log.Trace("pyramid.chunker: found unfinished chunk", "readBytes", readBytes)
 		}
 
 		var res []byte
-		res, err = ioutil.ReadAll(io.LimitReader(data, int64(len(chunkData)-(8+readBytes))))
+		res, err = ioutil.ReadAll(io.LimitReader(self.reader, int64(len(chunkData)-(8+readBytes))))
 
 		// hack for ioutil.ReadAll:
 		// a successful call to ioutil.ReadAll returns err == nil, not err == EOF, whereas we
@@ -447,21 +463,21 @@ func (self *PyramidChunker) prepareChunks(isAppend bool, chunkLevel [][]*TreeEnt
 					// Data is exactly one chunk.. pick the last chunk key as root
 					chunkWG.Wait()
 					lastChunksKey := parent.chunk[8 : 8+self.hashSize]
-					copy(rootKey, lastChunksKey)
+					copy(self.rootKey, lastChunksKey)
 					break
 				}
 			} else {
-				close(quitC)
+				close(self.quitC)
 				break
 			}
 		}
 
 		// Data ended in chunk boundary.. just signal to start bulding tree
 		if readBytes == 0 {
-			self.buildTree(isAppend, chunkLevel, parent, chunkWG, jobC, quitC, true, rootKey)
+			self.buildTree(isAppend, parent, chunkWG, true)
 			break
 		} else {
-			pkey := self.enqueueDataChunk(chunkData, uint64(readBytes), parent, chunkWG, jobC, quitC)
+			pkey := self.enqueueDataChunk(chunkData, uint64(readBytes), parent, chunkWG)
 
 			// update tree related parent data structures
 			parent.subtreeSize += uint64(readBytes)
@@ -473,40 +489,39 @@ func (self *PyramidChunker) prepareChunks(isAppend bool, chunkLevel [][]*TreeEnt
 				// only one data chunk .. so dont add any parent chunk
 				if parent.branchCount <= 1 {
 					chunkWG.Wait()
-					copy(rootKey, pkey)
+					copy(self.rootKey, pkey)
 					break
 				}
 
-				self.buildTree(isAppend, chunkLevel, parent, chunkWG, jobC, quitC, true, rootKey)
+				self.buildTree(isAppend, parent, chunkWG, true)
 				break
 			}
 
 			if parent.branchCount == self.branches {
-				self.buildTree(isAppend, chunkLevel, parent, chunkWG, jobC, quitC, false, rootKey)
+				self.buildTree(isAppend, parent, chunkWG, false)
 				parent = NewTreeEntry(self)
 			}
 
 		}
 
 		workers := self.getWorkerCount()
-		if int64(len(jobC)) > workers && workers < ChunkProcessors {
+		if int64(len(self.jobC)) > workers && workers < ChunkProcessors {
 			self.incrementWorkerCount()
-			storageWG.Add(1)
-			go self.processor(self.workerCount, jobC, chunkC, errC, quitC, storageWG)
+			go self.processor(self.workerCount)
 		}
 
 	}
 
 }
 
-func (self *PyramidChunker) buildTree(isAppend bool, chunkLevel [][]*TreeEntry, ent *TreeEntry, chunkWG *sync.WaitGroup, jobC chan *chunkJob, quitC chan bool, last bool, rootKey []byte) {
+func (self *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sync.WaitGroup, last bool) {
 	chunkWG.Wait()
-	self.enqueueTreeChunk(chunkLevel, ent, chunkWG, jobC, quitC, last)
+	self.enqueueTreeChunk(ent, chunkWG, last)
 
 	compress := false
 	endLvl := self.branches
 	for lvl := int64(0); lvl < self.branches; lvl++ {
-		lvlCount := int64(len(chunkLevel[lvl]))
+		lvlCount := int64(len(self.chunkLevel[lvl]))
 		if lvlCount >= self.branches {
 			endLvl = lvl + 1
 			compress = true
@@ -523,9 +538,9 @@ func (self *PyramidChunker) buildTree(isAppend bool, chunkLevel [][]*TreeEntry, 
 
 	for lvl := int64(ent.level); lvl < endLvl; lvl++ {
 
-		lvlCount := int64(len(chunkLevel[lvl]))
+		lvlCount := int64(len(self.chunkLevel[lvl]))
 		if lvlCount == 1 && last {
-			copy(rootKey, chunkLevel[lvl][0].key)
+			copy(self.rootKey, self.chunkLevel[lvl][0].key)
 			return
 		}
 
@@ -538,9 +553,9 @@ func (self *PyramidChunker) buildTree(isAppend bool, chunkLevel [][]*TreeEntry, 
 
 			var nextLvlCount int64
 			var tempEntry *TreeEntry
-			if len(chunkLevel[lvl+1]) > 0 {
-				nextLvlCount = int64(len(chunkLevel[lvl+1]) - 1)
-				tempEntry = chunkLevel[lvl+1][nextLvlCount]
+			if len(self.chunkLevel[lvl+1]) > 0 {
+				nextLvlCount = int64(len(self.chunkLevel[lvl+1]) - 1)
+				tempEntry = self.chunkLevel[lvl+1][nextLvlCount]
 			}
 			if isAppend && tempEntry != nil && tempEntry.updatePending {
 				updateEntry := &TreeEntry{
@@ -554,11 +569,11 @@ func (self *PyramidChunker) buildTree(isAppend bool, chunkLevel [][]*TreeEntry, 
 				}
 				for index := int64(0); index < lvlCount; index++ {
 					updateEntry.branchCount++
-					updateEntry.subtreeSize += chunkLevel[lvl][index].subtreeSize
-					copy(updateEntry.chunk[8+(index*self.hashSize):8+((index+1)*self.hashSize)], chunkLevel[lvl][index].key[:self.hashSize])
+					updateEntry.subtreeSize += self.chunkLevel[lvl][index].subtreeSize
+					copy(updateEntry.chunk[8+(index*self.hashSize):8+((index+1)*self.hashSize)], self.chunkLevel[lvl][index].key[:self.hashSize])
 				}
 
-				self.enqueueTreeChunk(chunkLevel, updateEntry, chunkWG, jobC, quitC, last)
+				self.enqueueTreeChunk(updateEntry, chunkWG, last)
 
 			} else {
 
@@ -575,13 +590,13 @@ func (self *PyramidChunker) buildTree(isAppend bool, chunkLevel [][]*TreeEntry, 
 
 				index := int64(0)
 				for i := startCount; i < endCount; i++ {
-					entry := chunkLevel[lvl][i]
+					entry := self.chunkLevel[lvl][i]
 					newEntry.subtreeSize += entry.subtreeSize
 					copy(newEntry.chunk[8+(index*self.hashSize):8+((index+1)*self.hashSize)], entry.key[:self.hashSize])
 					index++
 				}
 
-				self.enqueueTreeChunk(chunkLevel, newEntry, chunkWG, jobC, quitC, last)
+				self.enqueueTreeChunk(newEntry, chunkWG, last)
 
 			}
 
@@ -590,15 +605,15 @@ func (self *PyramidChunker) buildTree(isAppend bool, chunkLevel [][]*TreeEntry, 
 		if !isAppend {
 			chunkWG.Wait()
 			if compress {
-				chunkLevel[lvl] = nil
+				self.chunkLevel[lvl] = nil
 			}
 		}
 	}
 
 }
 
-func (self *PyramidChunker) enqueueTreeChunk(chunkLevel [][]*TreeEntry, ent *TreeEntry, chunkWG *sync.WaitGroup, jobC chan *chunkJob, quitC chan bool, last bool) {
-	if ent != nil {
+func (self *PyramidChunker) enqueueTreeChunk(ent *TreeEntry, chunkWG *sync.WaitGroup, last bool) {
+	if ent != nil && ent.branchCount > 0 {
 
 		// wait for data chunks to get over before processing the tree chunk
 		if last {
@@ -609,29 +624,29 @@ func (self *PyramidChunker) enqueueTreeChunk(chunkLevel [][]*TreeEntry, ent *Tre
 		ent.key = make([]byte, self.hashSize)
 		chunkWG.Add(1)
 		select {
-		case jobC <- &chunkJob{ent.key, ent.chunk[:ent.branchCount*self.hashSize+8], int64(ent.subtreeSize), chunkWG, TreeChunk, 0}:
-		case <-quitC:
+		case self.jobC <- &chunkJob{ent.key, ent.chunk[:ent.branchCount*self.hashSize+8], chunkWG}:
+		case <-self.quitC:
 		}
 
 		// Update or append based on weather it is a new entry or being reused
 		if ent.updatePending {
 			chunkWG.Wait()
-			chunkLevel[ent.level][ent.index] = ent
+			self.chunkLevel[ent.level][ent.index] = ent
 		} else {
-			chunkLevel[ent.level] = append(chunkLevel[ent.level], ent)
+			self.chunkLevel[ent.level] = append(self.chunkLevel[ent.level], ent)
 		}
 
 	}
 }
 
-func (self *PyramidChunker) enqueueDataChunk(chunkData []byte, size uint64, parent *TreeEntry, chunkWG *sync.WaitGroup, jobC chan *chunkJob, quitC chan bool) Key {
+func (self *PyramidChunker) enqueueDataChunk(chunkData []byte, size uint64, parent *TreeEntry, chunkWG *sync.WaitGroup) Key {
 	binary.LittleEndian.PutUint64(chunkData[:8], size)
 	pkey := parent.chunk[8+parent.branchCount*self.hashSize : 8+(parent.branchCount+1)*self.hashSize]
 
 	chunkWG.Add(1)
 	select {
-	case jobC <- &chunkJob{pkey, chunkData[:size+8], int64(size), chunkWG, DataChunk, -1}:
-	case <-quitC:
+	case self.jobC <- &chunkJob{pkey, chunkData[:size+8], chunkWG}:
+	case <-self.quitC:
 	}
 
 	return pkey

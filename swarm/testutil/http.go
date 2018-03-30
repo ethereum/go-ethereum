@@ -57,12 +57,7 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 		os.RemoveAll(dir)
 		t.Fatal(err)
 	}
-	chunker := storage.NewTreeChunker(storage.NewChunkerParams())
-	dpa := &storage.DPA{
-		Chunker:    chunker,
-		ChunkStore: localStore,
-	}
-	dpa.Start()
+	dpa := storage.NewDPA(localStore, storage.NewDPAParams())
 
 	// mutable resources test setup
 	resourceDir, err := ioutil.TempDir("", "swarm-resource-test")
@@ -85,7 +80,6 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 		cleanup: func() {
 			srv.Close()
 			rh.Close()
-			dpa.Stop()
 			os.RemoveAll(dir)
 			os.RemoveAll(resourceDir)
 		},

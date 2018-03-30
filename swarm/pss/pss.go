@@ -775,7 +775,7 @@ func (self *Pss) checkFwdCache(addr []byte, digest pssDigest) bool {
 // DPA storage handler for message cache
 func (self *Pss) storeMsg(msg *PssMsg) (pssDigest, error) {
 	buf := bytes.NewReader(msg.serialize())
-	key, _, err := self.dpa.Store(buf, int64(buf.Len()))
+	key, _, err := self.dpa.Store(buf, int64(buf.Len()), false)
 	if err != nil {
 		log.Warn("Could not store in swarm", "err", err)
 		return pssDigest{}, err

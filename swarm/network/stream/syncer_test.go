@@ -94,13 +94,11 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	waitPeerErrC = make(chan error)
 
 	// here we distribute chunks of a random file into stores 1...nodes
-	rrdpa := storage.NewDPA(newRoundRobinStore(sim.Stores[1:]...), storage.NewChunkerParams())
-	rrdpa.Start()
+	rrdpa := storage.NewDPA(newRoundRobinStore(sim.Stores[1:]...), storage.NewDPAParams())
 	size := chunkCount * chunkSize
-	_, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size))
+	_, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 	// need to wait cos we then immediately collect the relevant bin content
 	wait()
-	defer rrdpa.Stop()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
