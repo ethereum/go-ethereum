@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -634,10 +635,21 @@ func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubke
 // nodes/msgs/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("Travis macOS build seems to be very slow, and these tests are flaky on it. Skipping until we find a solution.")
+	}
+
 	t.Run("3/2000/4/sock", testNetwork)
 	t.Run("4/2000/4/sock", testNetwork)
 	t.Run("8/2000/4/sock", testNetwork)
 	t.Run("16/2000/4/sock", testNetwork)
+	t.Run("32/2000/4/sock", testNetwork)
+
+	t.Run("3/2000/4/sim", testNetwork)
+	t.Run("4/2000/4/sim", testNetwork)
+	t.Run("8/2000/4/sim", testNetwork)
+	t.Run("16/2000/4/sim", testNetwork)
+	t.Run("32/2000/4/sim", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
