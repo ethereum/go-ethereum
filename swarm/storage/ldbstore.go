@@ -59,6 +59,7 @@ const (
 )
 
 var (
+	keyIndex       = byte(0)
 	keyOldData     = byte(1)
 	keyAccessCnt   = []byte{2}
 	keyEntryCnt    = []byte{3}
@@ -207,7 +208,7 @@ func (s *LDBStore) updateIndexAccess(index *dpaDBIndex) {
 func getIndexKey(hash Key) []byte {
 	hashSize := len(hash)
 	key := make([]byte, hashSize+1)
-	key[0] = 0
+	key[0] = keyIndex
 	copy(key[1:], hash[:])
 	return key
 }
@@ -364,11 +365,13 @@ func (s *LDBStore) Export(out io.Writer) (int64, error) {
 		}
 
 		var index dpaDBIndex
-		decodeIndex(it.Value(), &index)
 
 		hash := key[1:]
-
-		data, err := s.db.Get(getDataKey(index.Idx, s.po(hash)))
+		decodeIndex(it.Value(), &index)
+		po := s.po(hash)
+		datakey := getDataKey(index.Idx, po)
+		log.Trace("store.export", "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po)
+		data, err := s.db.Get(datakey)
 		if err != nil {
 			log.Warn(fmt.Sprintf("Chunk %x found but could not be accessed: %v", key[:], err))
 			continue
@@ -421,7 +424,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 			return count, err
 		}
 		chunk := NewChunk(key, nil)
-		chunk.SData = data
+		chunk.SData = data[32:]
 		s.Put(chunk)
 		wg.Add(1)
 		go func() {
@@ -559,10 +562,10 @@ func (s *LDBStore) Put(chunk *Chunk) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	log.Trace("ldbstore.put: s.db.Get", "key", chunk.Key)
+	log.Trace("ldbstore.put: s.db.Get", "key", chunk.Key, "ikey", fmt.Sprintf("%x", ikey))
 	idata, err := s.db.Get(ikey)
 	if err != nil {
-		s.doPut(chunk, ikey, &index, po)
+		s.doPut(chunk, &index, po)
 		batchC := s.batchC
 		go func() {
 			<-batchC
@@ -584,10 +587,10 @@ func (s *LDBStore) Put(chunk *Chunk) {
 }
 
 // force putting into db, does not check access index
-func (s *LDBStore) doPut(chunk *Chunk, ikey []byte, index *dpaDBIndex, po uint8) {
-	log.Trace("ldbstore.doPut", "key", chunk.Key)
+func (s *LDBStore) doPut(chunk *Chunk, index *dpaDBIndex, po uint8) {
 	data := s.encodeDataFunc(chunk)
-	s.batch.Put(getDataKey(s.dataIdx, po), data)
+	dkey := getDataKey(s.dataIdx, po)
+	s.batch.Put(dkey, data)
 	index.Idx = s.dataIdx
 	s.bucketCnt[po] = s.dataIdx
 	s.entryCnt++
@@ -597,7 +600,6 @@ func (s *LDBStore) doPut(chunk *Chunk, ikey []byte, index *dpaDBIndex, po uint8)
 	cntKey[0] = keyDistanceCnt
 	cntKey[1] = po
 	s.batch.Put(cntKey, U64ToBytes(s.bucketCnt[po]))
-
 }
 
 func (s *LDBStore) writeBatches() {
@@ -690,7 +692,7 @@ func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 			proximity := s.po(key)
 			datakey := getDataKey(indx.Idx, proximity)
 			data, err = s.db.Get(datakey)
-			log.Trace("ldbstore.get retrieve", "key", key, "indexkey", indx.Idx, "datakey", datakey, "proximity", proximity)
+			log.Trace("ldbstore.get retrieve", "key", key, "indexkey", indx.Idx, "datakey", fmt.Sprintf("%x", datakey), "proximity", proximity)
 			if err != nil {
 				log.Trace("ldbstore.get chunk found but could not be accessed", "key", key, "err", err)
 				s.delete(indx.Idx, getIndexKey(key), s.po(key))
