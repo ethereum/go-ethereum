@@ -218,7 +218,11 @@ func TestBzzResource(t *testing.T) {
 }
 
 func TestBzzGetPath(t *testing.T) {
+	// testBzzGetPath(false, t)
+	testBzzGetPath(true, t)
+}
 
+func testBzzGetPath(encrypted bool, t *testing.T) {
 	var err error
 
 	testmanifest := []string{
@@ -246,7 +250,7 @@ func TestBzzGetPath(t *testing.T) {
 	for i, mf := range testmanifest {
 		reader[i] = bytes.NewReader([]byte(mf))
 		var wait func()
-		key[i], wait, err = srv.Dpa.Store(reader[i], int64(len(mf)), false)
+		key[i], wait, err = srv.Dpa.Store(reader[i], int64(len(mf)), encrypted)
 		if err != nil {
 			t.Fatal(err)
 		}

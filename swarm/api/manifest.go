@@ -59,20 +59,20 @@ type ManifestList struct {
 }
 
 // NewManifest creates and stores a new, empty manifest
-func (a *Api) NewManifest() (storage.Key, error) {
+func (a *Api) NewManifest(toEncrypt bool) (storage.Key, error) {
 	var manifest Manifest
 	data, err := json.Marshal(&manifest)
 	if err != nil {
 		return nil, err
 	}
-	key, wait, err := a.Store(bytes.NewReader(data), int64(len(data)))
+	key, wait, err := a.Store(bytes.NewReader(data), int64(len(data)), toEncrypt)
 	wait()
 	return key, err
 }
 
 // Manifest hack for supporting Mutable Resource Updates from the bzz: scheme
 // see swarm/api/api.go:Api.Get() for more information
-func (a *Api) NewResourceManifest(resourceKey string) (storage.Key, error) {
+func (a *Api) NewResourceManifest(resourceKey string, toEncrypt bool) (storage.Key, error) {
 	var manifest Manifest
 	entry := ManifestEntry{
 		Hash:        resourceKey,
@@ -83,7 +83,7 @@ func (a *Api) NewResourceManifest(resourceKey string) (storage.Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	key, _, err := a.Store(bytes.NewReader(data), int64(len(data)))
+	key, _, err := a.Store(bytes.NewReader(data), int64(len(data)), toEncrypt)
 	return key, err
 }
 
@@ -104,7 +104,10 @@ func (a *Api) NewManifestWriter(key storage.Key, quitC chan bool) (*ManifestWrit
 
 // AddEntry stores the given data and adds the resulting key to the manifest
 func (m *ManifestWriter) AddEntry(data io.Reader, e *ManifestEntry) (storage.Key, error) {
-	key, _, err := m.api.Store(data, e.Size)
+
+	toEncrypt := (len(m.trie.hash) > m.trie.dpa.HashSize())
+
+	key, _, err := m.api.Store(data, e.Size, toEncrypt)
 	if err != nil {
 		return nil, err
 	}

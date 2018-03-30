@@ -100,3 +100,7 @@ func (self *DPA) Store(data io.Reader, size int64, toEncrypt bool) (key Key, wai
 	putter := NewHasherStore(self.ChunkStore, self.hashFunc, toEncrypt)
 	return PyramidSplit(data, putter, putter)
 }
+
+func (self *DPA) HashSize() int {
+	return self.hashFunc().Size()
+}

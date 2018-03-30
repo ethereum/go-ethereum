@@ -39,7 +39,9 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var hashMatcher = regexp.MustCompile("^[0-9A-Fa-f]{64}")
+
+// TODO: this is bad, it should not be hardcoded how long is a hash
+var hashMatcher = regexp.MustCompile("^([0-9A-Fa-f]{64})([0-9A-Fa-f]{64})?")
 
 type ErrResourceReturn struct {
 	key string
@@ -230,9 +232,9 @@ func NewApi(dpa *storage.DPA, dns Resolver, resourceHandler *storage.ResourceHan
 }
 
 // to be used only in TEST
-func (self *Api) Upload(uploadDir, index string) (hash string, err error) {
+func (self *Api) Upload(uploadDir, index string, toEncrypt bool) (hash string, err error) {
 	fs := NewFileSystem(self)
-	hash, err = fs.Upload(uploadDir, index)
+	hash, err = fs.Upload(uploadDir, index, toEncrypt)
 	return hash, err
 }
 
@@ -241,9 +243,9 @@ func (self *Api) Retrieve(key storage.Key) storage.LazySectionReader {
 	return self.dpa.Retrieve(key)
 }
 
-func (self *Api) Store(data io.Reader, size int64) (key storage.Key, wait func(), err error) {
+func (self *Api) Store(data io.Reader, size int64, toEncrypt bool) (key storage.Key, wait func(), err error) {
 	log.Debug("api.store", "size", size)
-	return self.dpa.Store(data, size, false)
+	return self.dpa.Store(data, size, toEncrypt)
 }
 
 type ErrResolve error
@@ -283,17 +285,17 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 }
 
 // Put provides singleton manifest creation on top of dpa store
-func (self *Api) Put(content, contentType string) (k storage.Key, wait func(), err error) {
+func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Key, wait func(), err error) {
 	apiPutCount.Inc(1)
 	r := strings.NewReader(content)
-	key, waitContent, err := self.dpa.Store(r, int64(len(content)), false)
+	key, waitContent, err := self.dpa.Store(r, int64(len(content)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
 		return nil, nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
-	key, waitManifest, err := self.dpa.Store(r, int64(len(manifest)), false)
+	key, waitManifest, err := self.dpa.Store(r, int64(len(manifest)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
 		return nil, nil, err
