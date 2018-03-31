@@ -363,7 +363,7 @@ func TestRandomData(t *testing.T) {
 
 }
 
-func TestRandomBrokenData(t *testing.T) {
+func XTestRandomBrokenData(t *testing.T) {
 	sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 8191, 8192, 8193, 12287, 12288, 12289, 123456, 2345678}
 	tester := &chunkerTester{t: t}
 	chunker := NewTreeChunker(NewChunkerParams())

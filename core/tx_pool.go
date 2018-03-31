@@ -877,15 +877,14 @@ func (pool *TxPool) removeTx(hash common.Hash) {
 	// Remove the transaction from the pending lists and reset the account nonce
 	if pending := pool.pending[addr]; pending != nil {
 		if removed, invalids := pending.Remove(tx); removed {
-			// If no more transactions are left, remove the list
+			// If no more pending transactions are left, remove the list
 			if pending.Empty() {
 				delete(pool.pending, addr)
 				delete(pool.beats, addr)
-			} else {
-				// Otherwise postpone any invalidated transactions
-				for _, tx := range invalids {
-					pool.enqueueTx(tx.Hash(), tx)
-				}
+			}
+			// Postpone any invalidated transactions
+			for _, tx := range invalids {
+				pool.enqueueTx(tx.Hash(), tx)
 			}
 			// Update the account nonce if needed
 			if nonce := tx.Nonce(); pool.pendingState.GetNonce(addr) > nonce {

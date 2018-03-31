@@ -34,7 +34,7 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/p2p"
 	"github.com/EthereumCommonwealth/go-callisto/p2p/nat"
 	"github.com/EthereumCommonwealth/go-callisto/params"
-	whisper "github.com/EthereumCommonwealth/go-callisto/whisper/whisperv5"
+	whisper "github.com/EthereumCommonwealth/go-callisto/whisper/whisperv6"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Geth
