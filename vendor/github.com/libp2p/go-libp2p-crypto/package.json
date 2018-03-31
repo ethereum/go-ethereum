@@ -1,0 +1,42 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/libp2p/go-libp2p-transport"
+  },
+  "gx": {
+    "dvcsimport": "github.com/libp2p/go-libp2p-crypto"
+  },
+  "gxDependencies": [
+    {
+      "author": "whyrusleeping",
+      "hash": "QmZ4Qi3GaRbjcx28Sme5eMH7RQjGkt8wHxt2a65oLaeFEV",
+      "name": "gogo-protobuf",
+      "version": "0.0.0"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmQ51pHe6u7CWodkUGDLqaCEMchkbMt7VEZnECF5mp6tVb",
+      "name": "ed25519",
+      "version": "0.0.0"
+    },
+    {
+      "author": "btcsuite",
+      "hash": "QmWq5PJgAQKDWQerAijYUVKW8mN5MDatK5j7VMp8rizKQd",
+      "name": "btcec",
+      "version": "0.0.1"
+    },
+    {
+      "author": "minio",
+      "hash": "QmXTpwq2AkzQsPjKqFQDNY2bMdsAT53hUBETeyj8QRHTZU",
+      "name": "sha256-simd",
+      "version": "0.1.1"
+    }
+  ],
+  "gxVersion": "0.4.0",
+  "language": "go",
+  "license": "MIT",
+  "name": "go-libp2p-crypto",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "1.6.2"
+}
+

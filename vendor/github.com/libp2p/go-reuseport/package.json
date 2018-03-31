@@ -1,0 +1,47 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/libp2p/go-reuseport"
+  },
+  "gx": {
+    "dvcsimport": "github.com/libp2p/go-reuseport"
+  },
+  "gxDependencies": [
+    {
+      "hash": "QmRb5jh8z2E8hMGN2tkvs1yHynUanqnZ3UeKwgN1i9P1F8",
+      "name": "go-log",
+      "version": "1.4.0"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmReJHiSNCL7heqC4rccNLxTsNtRKufw7qYt9VhABJv54f",
+      "name": "go-sockaddr",
+      "version": "1.0.2"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "Qma73Sqt13DzHzveZ667BBfraM7MuMrPepUXjmv812JhRS",
+      "name": "go-net-resolve-addr",
+      "version": "0.0.0"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmSGRM5Udmy1jsFBr1Cawez7Lt7LZ3ZKA23GGVEsiEW6F3",
+      "name": "eventfd",
+      "version": "0.1.0"
+    },
+    {
+      "author": "The Go Authors",
+      "hash": "QmPXvegq26x982cQjSfbTvSzZXn7GiaMwhhVPHkeTEhrPT",
+      "name": "sys",
+      "version": "0.1.0"
+    }
+  ],
+  "gxVersion": "0.9.0",
+  "language": "go",
+  "license": "",
+  "name": "go-reuseport",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "0.1.12"
+}
+
