@@ -144,7 +144,9 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		genesis := core.GetCanonicalHash(odr.Database(), 0)
 		config, _ := core.GetChainConfig(odr.Database(), genesis)
 
-		core.SetReceiptsData(config, block, receipts)
+		if err := core.SetReceiptsData(config, block, receipts); err != nil {
+			return nil, err
+		}
 		core.WriteBlockReceipts(odr.Database(), hash, number, receipts)
 	}
 	return receipts, nil

@@ -32,7 +32,7 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/eth"
 	"github.com/EthereumCommonwealth/go-callisto/node"
 	"github.com/EthereumCommonwealth/go-callisto/params"
-	whisper "github.com/EthereumCommonwealth/go-callisto/whisper/whisperv5"
+	whisper "github.com/EthereumCommonwealth/go-callisto/whisper/whisperv6"
 	"github.com/naoina/toml"
 )
 

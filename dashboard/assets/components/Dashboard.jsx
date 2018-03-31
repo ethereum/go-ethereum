@@ -81,7 +81,11 @@ const defaultContent: Content = {
 		version: null,
 		commit:  null,
 	},
-	home: {
+	home:    {},
+	chain:   {},
+	txpool:  {},
+	network: {},
+	system:  {
 		activeMemory:   [],
 		virtualMemory:  [],
 		networkIngress: [],
@@ -91,10 +95,6 @@ const defaultContent: Content = {
 		diskRead:       [],
 		diskWrite:      [],
 	},
-	chain:   {},
-	txpool:  {},
-	network: {},
-	system:  {},
 	logs:    {
 		log: [],
 	},
@@ -108,7 +108,11 @@ const updaters = {
 		version: replacer,
 		commit:  replacer,
 	},
-	home: {
+	home:    null,
+	chain:   null,
+	txpool:  null,
+	network: null,
+	system:  {
 		activeMemory:   appender(200),
 		virtualMemory:  appender(200),
 		networkIngress: appender(200),
@@ -118,11 +122,7 @@ const updaters = {
 		diskRead:       appender(200),
 		diskWrite:      appender(200),
 	},
-	chain:   null,
-	txpool:  null,
-	network: null,
-	system:  null,
-	logs:    {
+	logs: {
 		log: appender(200),
 	},
 };
@@ -136,7 +136,7 @@ const styles = {
 		height:   '100%',
 		zIndex:   1,
 		overflow: 'hidden',
-	}
+	},
 };
 
 // themeStyles returns the styles generated from the theme for the component.
@@ -178,7 +178,8 @@ class Dashboard extends Component<Props, State> {
 	// reconnect establishes a websocket connection with the server, listens for incoming messages
 	// and tries to reconnect on connection loss.
 	reconnect = () => {
-		const server = new WebSocket(`${((window.location.protocol === 'https:') ? 'wss://' : 'ws://') + window.location.host}/api`);
+		// PROD is defined by webpack.
+		const server = new WebSocket(`${((window.location.protocol === 'https:') ? 'wss://' : 'ws://')}${PROD ? window.location.host : 'localhost:8080'}/api`);
 		server.onopen = () => {
 			this.setState({content: defaultContent, shouldUpdate: {}});
 		};
@@ -217,7 +218,6 @@ class Dashboard extends Component<Props, State> {
 		return (
 			<div className={this.props.classes.dashboard} style={styles.dashboard}>
 				<Header
-					opened={this.state.sideBar}
 					switchSideBar={this.switchSideBar}
 				/>
 				<Body

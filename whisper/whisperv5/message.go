@@ -277,7 +277,7 @@ func (msg *ReceivedMessage) decryptSymmetric(key []byte, nonce []byte) error {
 
 // decryptAsymmetric decrypts an encrypted payload with a private key.
 func (msg *ReceivedMessage) decryptAsymmetric(key *ecdsa.PrivateKey) error {
-	decrypted, err := ecies.ImportECDSA(key).Decrypt(crand.Reader, msg.Raw, nil, nil)
+	decrypted, err := ecies.ImportECDSA(key).Decrypt(msg.Raw, nil, nil)
 	if err == nil {
 		msg.Raw = decrypted
 	}

@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/big"
 	mrand "math/rand"
+	"sync/atomic"
 	"time"
 
 	"github.com/EthereumCommonwealth/go-callisto/common"
@@ -32,7 +33,6 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/log"
 	"github.com/EthereumCommonwealth/go-callisto/params"
 	"github.com/hashicorp/golang-lru"
-	"sync/atomic"
 )
 
 const (

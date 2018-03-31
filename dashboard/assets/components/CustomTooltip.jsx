@@ -38,15 +38,15 @@ export const percentPlotter = <T>(text: string, mapper: (T => T) = multiplier(1)
 };
 
 // unit contains the units for the bytePlotter.
-const unit = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+const unit = ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi', 'Yi'];
 
 // simplifyBytes returns the simplified version of the given value followed by the unit.
 const simplifyBytes = (x: number) => {
 	let i = 0;
-	for (; x > 1024 && i < 5; i++) {
+	for (; x > 1024 && i < 8; i++) {
 		x /= 1024;
 	}
-	return x.toFixed(2).toString().concat(' ', unit[i]);
+	return x.toFixed(2).toString().concat(' ', unit[i], 'B');
 };
 
 // bytePlotter renders a tooltip, which displays the payload as a byte value.

@@ -1296,6 +1296,14 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 				headers = headers[limit:]
 				origin += uint64(limit)
 			}
+
+			// Update the highest block number we know if a higher one is found.
+			d.syncStatsLock.Lock()
+			if d.syncStatsChainHeight < origin {
+				d.syncStatsChainHeight = origin - 1
+			}
+			d.syncStatsLock.Unlock()
+
 			// Signal the content downloaders of the availablility of new tasks
 			for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
 				select {
