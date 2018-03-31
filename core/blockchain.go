@@ -99,7 +99,7 @@ type BlockChain struct {
 	chainSideFeed event.Feed
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
-    txPostFeed    event.Feed  // named with Post to distinguish between txFeed in tx_pool, which gets triggered *before* a transaction gets processed rather than after
+	txPostFeed    event.Feed // named with Post to distinguish between txFeed in tx_pool, which gets triggered *before* a transaction gets processed rather than after
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 
@@ -1372,8 +1372,8 @@ func (bc *BlockChain) PostChainEvents(events []interface{}, logs []*types.Log) {
 
 		case ChainSideEvent:
 			bc.chainSideFeed.Send(ev)
-	    }
-    }
+		}
+	}
 }
 
 func (bc *BlockChain) update() {

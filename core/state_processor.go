@@ -124,9 +124,9 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
-    retData := types.ReturnData{receipt.TxHash,data,false}
-    txPostEvent := TransactionEvent{receipt.TxHash,retData}
-    go bc.txPostFeed.Send(&txPostEvent)
+	retData := types.ReturnData{TxHash: receipt.TxHash, Data: data, Removed: false}
+	txPostEvent := TransactionEvent{TxHash: receipt.TxHash, RetData: retData}
+	go bc.txPostFeed.Send(&txPostEvent)
 
 	return receipt, gas, err
 }

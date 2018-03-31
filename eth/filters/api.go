@@ -22,17 +22,17 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 	"sync"
 	"time"
-    "reflect"
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -48,7 +48,7 @@ type filter struct {
 	hashes   []common.Hash
 	crit     FilterCriteria
 	logs     []*types.Log
-    retdata  []types.ReturnData
+	retdata  []types.ReturnData
 	s        *Subscription // associated subscription in event system
 }
 
@@ -233,22 +233,22 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 }
 
 func (api *PublicFilterAPI) NewReturnDataFilter() rpc.ID {
-    var (
-        retCh = make(chan *types.ReturnData)
-        retSub = api.events.SubscribeReturnData(retCh)
-    )
+	var (
+		retCh  = make(chan *types.ReturnData)
+		retSub = api.events.SubscribeReturnData(retCh)
+	)
 
-    api.filtersMu.Lock()
+	api.filtersMu.Lock()
 	api.filters[retSub.ID] = &filter{typ: ReturnDataSubscription, deadline: time.NewTimer(deadline), retdata: make([]types.ReturnData, 0), s: retSub}
 	api.filtersMu.Unlock()
 
-    go func() {
-        for {
+	go func() {
+		for {
 			select {
 			case retdata := <-retCh:
 				api.filtersMu.Lock()
 				if f, found := api.filters[retSub.ID]; found {
-                    f.retdata = append(f.retdata, *retdata)
+					f.retdata = append(f.retdata, *retdata)
 				}
 				api.filtersMu.Unlock()
 			case <-retSub.Err():
@@ -257,22 +257,22 @@ func (api *PublicFilterAPI) NewReturnDataFilter() rpc.ID {
 				api.filtersMu.Unlock()
 				return
 			}
-	    }
+		}
 	}()
 
-    return retSub.ID
+	return retSub.ID
 }
 
 func (api *PublicFilterAPI) ReturnData(ctx context.Context) (*rpc.Subscription, error) {
-    notifier, supported := rpc.NotifierFromContext(ctx)
+	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
 
-    txListen := make(map[common.Hash]bool)
+	txListen := make(map[common.Hash]bool)
 
 	rpcSub := notifier.CreateSubscription()
-    rpcSub.SetType(rpc.ReturnDataSubscription)
+	rpcSub.SetType(rpc.ReturnDataSubscription)
 
 	go func() {
 		retCh := make(chan *types.ReturnData)
@@ -280,20 +280,20 @@ func (api *PublicFilterAPI) ReturnData(ctx context.Context) (*rpc.Subscription, 
 
 		for {
 			select {
-            case msg := <-rpcSub.Update():
-                // client submitted new tx, save hash for later
-                hash,ishash := msg.(common.Hash)
-                if ishash {
-                    txListen[hash] = true
-                } else {
-                    log.Warn(fmt.Sprintf("Received update msg of invalid type %s for ReturnData subscription",reflect.TypeOf(msg).String()))
-                }
-	        case retdata := <-retCh:
-                if txListen[retdata.TxHash] {
-                    // tx from client just completed execution--send back return data
-                    notifier.Notify(rpcSub.ID, retdata)
-                }
-		case <-rpcSub.Err():
+			case msg := <-rpcSub.Update():
+				// client submitted new tx, save hash for later
+				hash, ishash := msg.(common.Hash)
+				if ishash {
+					txListen[hash] = true
+				} else {
+					log.Warn(fmt.Sprintf("Received update msg of invalid type %s for ReturnData subscription", reflect.TypeOf(msg).String()))
+				}
+			case retdata := <-retCh:
+				if txListen[retdata.TxHash] {
+					// tx from client just completed execution--send back return data
+					notifier.Notify(rpcSub.ID, retdata)
+				}
+			case <-rpcSub.Err():
 				retSub.Unsubscribe()
 				return
 			case <-notifier.Closed():
@@ -305,7 +305,6 @@ func (api *PublicFilterAPI) ReturnData(ctx context.Context) (*rpc.Subscription, 
 
 	return rpcSub, nil
 }
-
 
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subscription, error) {
@@ -498,10 +497,10 @@ func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 			logs := f.logs
 			f.logs = nil
 			return returnLogs(logs), nil
-        case ReturnDataSubscription:
-            retdata := f.retdata
-            f.retdata = nil
-            return returnRetData(retdata), nil
+		case ReturnDataSubscription:
+			retdata := f.retdata
+			f.retdata = nil
+			return returnRetData(retdata), nil
 		}
 	}
 
@@ -527,14 +526,14 @@ func returnLogs(logs []*types.Log) []*types.Log {
 }
 
 func returnRetData(rdata []types.ReturnData) []types.ReturnData {
-    if rdata == nil {
-        return []types.ReturnData{}
-    } else {
-        for _,r := range rdata {
-            r.Data = []byte{}
-        }
-    }
-    return rdata
+	if rdata == nil {
+		return []types.ReturnData{}
+	} else {
+		for _, r := range rdata {
+			r.Data = []byte{}
+		}
+	}
+	return rdata
 }
 
 // UnmarshalJSON sets *args fields with given data.

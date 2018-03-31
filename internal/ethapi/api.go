@@ -1185,15 +1185,15 @@ func submitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		log.Info("Submitted transaction", "fullhash", tx.Hash().Hex(), "recipient", tx.To())
 	}
 
-    notifier,supported := rpc.NotifierFromContext(ctx)
-    if supported {
-        // If this client has a returnData subscription, add tx hash to set of transactions
-        //   whose return data should be sent back to rpc subscriber after transaction 
-        //   is sealed in a new block.
-        go notifier.UpdateSubscriptions(rpc.ReturnDataSubscription,tx.Hash())
-    }
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if supported {
+		// If this client has a returnData subscription, add tx hash to set of transactions
+		//   whose return data should be sent back to rpc subscriber after transaction
+		//   is sealed in a new block.
+		go notifier.UpdateSubscriptions(rpc.ReturnDataSubscription, tx.Hash())
+	}
 
-    return tx.Hash(), nil
+	return tx.Hash(), nil
 }
 
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the

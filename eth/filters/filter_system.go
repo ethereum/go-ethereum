@@ -51,9 +51,9 @@ const (
 	PendingTransactionsSubscription Type = rpc.PendingTransactionsSubscription
 	// BlocksSubscription queries hashes for blocks that are imported
 	BlocksSubscription Type = rpc.BlocksSubscription
-    // ReturnData queries for return data from transactions executed by a 
-    // particular rpc client
-    ReturnDataSubscription Type = rpc.ReturnDataSubscription
+	// ReturnData queries for return data from transactions executed by a
+	// particular rpc client
+	ReturnDataSubscription Type = rpc.ReturnDataSubscription
 	// LastSubscription keeps track of the last index
 	LastIndexSubscription Type = rpc.LastIndexSubscription
 )
@@ -64,7 +64,7 @@ const (
 	// The number is referenced from the size of tx pool.
 	txPreChanSize = 4096
 	// txPostChanSize is the size of channel listening to TransactionEvent.
-    // For now, setting to same as txPreChanSize--good number?
+	// For now, setting to same as txPreChanSize--good number?
 	txPostChanSize = 4096
 	// rmLogsChanSize is the size of channel listening to RemovedLogsEvent.
 	rmLogsChanSize = 10
@@ -79,16 +79,16 @@ var (
 )
 
 type subscription struct {
-	id          rpc.ID
-	typ         Type
-	created     time.Time
-	logsCrit    ethereum.FilterQuery
-	logs        chan []*types.Log
-	hashes      chan common.Hash
-	headers     chan *types.Header
-    retdata     chan *types.ReturnData
-	installed   chan struct{} // closed when the filter is installed
-	err         chan error    // closed when the filter is uninstalled
+	id        rpc.ID
+	typ       Type
+	created   time.Time
+	logsCrit  ethereum.FilterQuery
+	logs      chan []*types.Log
+	hashes    chan common.Hash
+	headers   chan *types.Header
+	retdata   chan *types.ReturnData
+	installed chan struct{} // closed when the filter is installed
+	err       chan error    // closed when the filter is uninstalled
 }
 
 // EventSystem creates subscriptions, processes events and broadcasts them to the
@@ -292,15 +292,15 @@ func (es *EventSystem) SubscribePendingTxEvents(hashes chan common.Hash) *Subscr
 // SubscribeReturnData creates a subscription that captures return data for transactions
 //  executed by a particular rpc client
 func (es *EventSystem) SubscribeReturnData(retCh chan *types.ReturnData) *Subscription {
-    sub := &subscription{
+	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       ReturnDataSubscription,
 		created:   time.Now(),
-        retdata:    retCh,
+		retdata:   retCh,
 		installed: make(chan struct{}),
 		err:       make(chan error),
-    }
-    return es.subscribe(sub)
+	}
+	return es.subscribe(sub)
 }
 
 type filterIndex map[Type]map[rpc.ID]*subscription
@@ -341,10 +341,10 @@ func (es *EventSystem) broadcast(filters filterIndex, ev interface{}) {
 		for _, f := range filters[PendingTransactionsSubscription] {
 			f.hashes <- e.Tx.Hash()
 		}
-    case *core.TransactionEvent:
-        for _, f := range filters[ReturnDataSubscription] {
-            f.retdata <- &e.RetData
-        }
+	case *core.TransactionEvent:
+		for _, f := range filters[ReturnDataSubscription] {
+			f.retdata <- &e.RetData
+		}
 	case core.ChainEvent:
 		for _, f := range filters[BlocksSubscription] {
 			f.headers <- e.Block.Header()
@@ -442,9 +442,9 @@ func (es *EventSystem) eventLoop() {
 		// Subscribe to TxPreEvent from txpool
 		txPreCh  = make(chan core.TxPreEvent, txPreChanSize)
 		txPreSub = es.backend.SubscribeTxPreEvent(txPreCh)
-        // Subscribe to TransactionEvent from applyTransaction
-        txCh = make(chan *core.TransactionEvent, txPostChanSize)
-        txSub = es.backend.SubscribeTransactionEvent(txCh)
+		// Subscribe to TransactionEvent from applyTransaction
+		txCh  = make(chan *core.TransactionEvent, txPostChanSize)
+		txSub = es.backend.SubscribeTransactionEvent(txCh)
 		// Subscribe RemovedLogsEvent
 		rmLogsCh  = make(chan core.RemovedLogsEvent, rmLogsChanSize)
 		rmLogsSub = es.backend.SubscribeRemovedLogsEvent(rmLogsCh)
