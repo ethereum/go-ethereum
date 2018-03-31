@@ -17,6 +17,7 @@
 package whisperv6
 
 import (
+	"io"
 	"github.com/ethereum/go-ethereum/log"
 	"bytes"
 	"context"
@@ -101,7 +102,7 @@ func (stream *LibP2PStream) WriteMsg(msg p2p.Msg) error {
 	nbytes, err := msg.Payload.Read(data[codeLength+payloadSizeLength:])
 	if nbytes > math.MaxInt32 || uint32(nbytes) != msg.Size {
 		return fmt.Errorf("Invalid size read in libp2p stream: read %d bytes, was expecting %d bytes", nbytes, msg.Size)
-	} else if err != nil {
+	} else if err != nil && err != io.EOF {
 		return err
 	}
 

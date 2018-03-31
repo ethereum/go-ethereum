@@ -17,6 +17,7 @@
 package whisperv6
 
 import (
+	"io"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -35,6 +36,21 @@ import (
 const (
 	testProtocolID = "/whispertesting/6.1"
 )
+
+func newTestMsg(t *testing.T, size int) p2p.Msg {
+	code := rand.Uint64()
+	payload := make([]byte, size)
+	n, err := rand.Read(payload)
+	if err != nil || n != size {
+		t.Fatalf("Read %d random bytes instead of the expected %d, err: %v", n, size, err)
+	}
+
+	return p2p.Msg{
+		Code:    code,
+		Size:    math.MaxInt32 + 1,
+		Payload: bytes.NewReader(payload),
+	}
+}
 
 // Create a network with n mock hosts. Each host in the array is linked to
 // all hosts preceding it, and has dialed them.
@@ -236,15 +252,9 @@ func TestMaxWriteSize(t *testing.T) {
 	ctx := context.Background()
 	hosts := createTestNetwork(ctx, t, 2)
 
-	code := rand.Uint64()
 	// This isn't the size that will be reported, but if I actually
 	// require 2GB or RAM the CI servers will fail.
-	size := 10
-	payload := make([]byte, size)
-	n, err := rand.Read(payload)
-	if err != nil || n != size {
-		t.Fatalf("Read %d random bytes instead of the expected %d, err: %v", n, size, err)
-	}
+	msg := newTestMsg(t, 10)
 
 	hosts[0].SetStreamHandler(testProtocolID, func(s inet.Stream) {
 		defer s.Close()
@@ -255,12 +265,6 @@ func TestMaxWriteSize(t *testing.T) {
 	stream, err := hosts[1].NewStream(ctx, hosts[0].ID(), testProtocolID)
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	msg := p2p.Msg{
-		Code:    code,
-		Size:    math.MaxInt32 + 1,
-		Payload: bytes.NewReader(payload),
 	}
 
 	lps := LibP2PStream{
@@ -310,4 +314,21 @@ func TestMaxReadSize(t *testing.T) {
 	}
 
 	stream.Close()
+}
+
+// TestEndOfStreamDoesNotBlockWriteMsg checks that an EOF in the
+// stream will not return an error.
+func TestEndOfStreamDoesNotBlockWriteMsg(t *testing.T) {
+	r, w := io.Pipe()
+
+	s := mocknet.NewStream(w, r)
+
+	lps := &LibP2PStream{s}
+
+	msg := newTestMsg(t, 5)
+
+	err := lps.WriteMsg(msg)
+	if err == io.EOF {
+		t.Fatalf("EOF got reported as an error")
+	}
 }
