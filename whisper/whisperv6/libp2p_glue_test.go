@@ -17,10 +17,10 @@
 package whisperv6
 
 import (
-	"io"
 	"bytes"
 	"context"
 	"encoding/binary"
+	"io"
 	"io/ioutil"
 	"math"
 	"math/rand"

@@ -17,12 +17,12 @@
 package whisperv6
 
 import (
-	"io"
-	"github.com/ethereum/go-ethereum/log"
 	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
+	"io"
 	"math"
 
 	"github.com/ethereum/go-ethereum/p2p"
@@ -30,11 +30,11 @@ import (
 	host "github.com/libp2p/go-libp2p-host"
 	inet "github.com/libp2p/go-libp2p-net"
 	peer "github.com/libp2p/go-libp2p-peer"
-	ma "github.com/multiformats/go-multiaddr"
-	set "gopkg.in/fatih/set.v0"
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 	swarm "github.com/libp2p/go-libp2p-swarm"
 	"github.com/libp2p/go-libp2p/p2p/host/basic"
+	ma "github.com/multiformats/go-multiaddr"
+	set "gopkg.in/fatih/set.v0"
 )
 
 // LibP2PStream is a wrapper used to implement the MsgReadWriter
@@ -183,7 +183,6 @@ func (server *LibP2PWhisperServer) connectToPeer(p *LibP2PPeer) error {
 	p.connectionStream = &lps
 	p.ws = p.connectionStream
 
-
 	// TODO send my known list of peers
 	
 	// Call HandlePeer to perform the handshake
@@ -194,7 +193,7 @@ func (server *LibP2PWhisperServer) connectToPeer(p *LibP2PPeer) error {
 
 // Start starts the server
 func (server *LibP2PWhisperServer) Start() error {
-	server.Host.SetStreamHandler(WhisperProtocolString, func (stream inet.Stream) {
+	server.Host.SetStreamHandler(WhisperProtocolString, func(stream inet.Stream) {
 		log.Info("opening stream from new peer")
 	
 		pid := stream.Conn().RemotePeer()

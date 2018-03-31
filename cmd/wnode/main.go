@@ -201,12 +201,12 @@ func initialize() {
 
 	if *bootstrapMode {
 		if !*useLibP2P {
-		if len(*argIP) == 0 {
-			argIP = scanLineA("Please enter your IP and port (e.g. 127.0.0.1:30348): ")
-		}
-	} else if *fileReader {
-		*bootstrapMode = true
-	} else {
+			if len(*argIP) == 0 {
+				argIP = scanLineA("Please enter your IP and port (e.g. 127.0.0.1:30348): ")
+			}
+		} else if *fileReader {
+			*bootstrapMode = true
+		} else {
 			if *argPort == 0 {
 				for {
 					fmt.Print("Please enter the port to use: ")
@@ -759,7 +759,6 @@ func requestExpiredMessagesLoop() {
 			fmt.Println("Error: topic is invalid, request aborted")
 			continue
 		}
-
 		if timeUpp == 0 {
 			timeUpp = 0xFFFFFFFF
 		}
