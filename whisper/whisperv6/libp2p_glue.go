@@ -17,12 +17,12 @@
 package whisperv6
 
 import (
+	"bufio"
 	"bytes"
+	"fmt"
+	"github.com/ethereum/go-ethereum/rlp"
 	"io/ioutil"
 	"time"
-	"bufio"
-	"github.com/ethereum/go-ethereum/rlp"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	inet "github.com/libp2p/go-libp2p-net"
@@ -36,9 +36,9 @@ type LibP2PStream struct {
 
 // serializableP2PMsg is the serializable version of p2p.Msg
 type serializableP2PMsg struct {
-	Code uint64
-	Size uint32
-	Payload []byte
+	Code       uint64
+	Size       uint32
+	Payload    []byte
 	ReceivedAt time.Time
 }
 
@@ -52,9 +52,9 @@ func (stream *LibP2PStream) ReadMsg() (p2p.Msg, error) {
 	}
 	err = rlp.DecodeBytes(raw, &m)
 	msg := p2p.Msg{
-		Code: m.Code,
-		Size: m.Size,
-		Payload: bytes.NewReader(m.Payload),
+		Code:       m.Code,
+		Size:       m.Size,
+		Payload:    bytes.NewReader(m.Payload),
 		ReceivedAt: m.ReceivedAt,
 	}
 	return msg, err
@@ -67,7 +67,7 @@ func (stream *LibP2PStream) WriteMsg(msg p2p.Msg) error {
 	if err != nil {
 		return fmt.Errorf("Error reading payload: %v", err)
 	}
-	m := serializableP2PMsg {msg.Code, msg.Size, payload, msg.ReceivedAt}
+	m := serializableP2PMsg{msg.Code, msg.Size, payload, msg.ReceivedAt}
 
 	data, err := rlp.EncodeToBytes(m)
 	if err != nil {
