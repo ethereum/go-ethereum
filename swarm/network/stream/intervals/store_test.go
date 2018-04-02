@@ -25,9 +25,9 @@ import (
 
 var ErrNotFound = errors.New("not found")
 
-// TestMemStore tests basic functionality of MemStore.
-func TestMemStore(t *testing.T) {
-	testStore(t, state.NewMemStore())
+// TestInmemoryStore tests basic functionality of InmemoryStore.
+func TestInmemoryStore(t *testing.T) {
+	testStore(t, state.NewInmemoryStore())
 }
 
 // testStore is a helper function to test various Store implementations.
