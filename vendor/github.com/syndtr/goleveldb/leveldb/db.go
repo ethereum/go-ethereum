@@ -906,6 +906,8 @@ func (db *DB) GetSnapshot() (*Snapshot, error) {
 //		Returns the number of files at level 'n'.
 //	leveldb.stats
 //		Returns statistics of the underlying DB.
+//	leveldb.iostats
+//		Returns statistics of effective disk read and write.
 //	leveldb.writedelay
 //		Returns cumulative write delay caused by compaction.
 //	leveldb.sstables
@@ -959,6 +961,10 @@ func (db *DB) GetProperty(name string) (value string, err error) {
 				level, len(tables), float64(tables.size())/1048576.0, duration.Seconds(),
 				float64(read)/1048576.0, float64(write)/1048576.0)
 		}
+	case p == "iostats":
+		value = fmt.Sprintf("Read(MB):%.5f Write(MB):%.5f",
+			float64(db.s.stor.reads())/1048576.0,
+			float64(db.s.stor.writes())/1048576.0)
 	case p == "writedelay":
 		writeDelayN, writeDelay := atomic.LoadInt32(&db.cWriteDelayN), time.Duration(atomic.LoadInt64(&db.cWriteDelay))
 		value = fmt.Sprintf("DelayN:%d Delay:%s", writeDelayN, writeDelay)

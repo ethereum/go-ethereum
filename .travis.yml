@@ -6,7 +6,7 @@ matrix:
     - os: linux
       dist: trusty
       sudo: required
-      go: 1.8.x
+      go: 1.9.x
       script:
         - sudo modprobe fuse
         - sudo chmod 666 /dev/fuse
@@ -18,7 +18,7 @@ matrix:
     - os: linux
       dist: trusty
       sudo: required
-      go: 1.9.x
+      go: "1.10"
       script:
         - sudo modprobe fuse
         - sudo chmod 666 /dev/fuse
@@ -27,7 +27,7 @@ matrix:
         - go run build/ci.go test -coverage
 
     - os: osx
-      go: 1.9.x
+      go: "1.10"
       script:
         - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
         - brew update
@@ -39,7 +39,7 @@ matrix:
     # This builder only tests code linters on latest version of Go
     - os: linux
       dist: trusty
-      go: 1.9.x
+      go: "1.10"
       env:
         - lint
       git:
@@ -47,14 +47,12 @@ matrix:
       script:
         - go run build/ci.go lint
 
-    # This builder does the Ubuntu PPA and Linux Azure uploads
+    # This builder does the Ubuntu PPA upload
     - os: linux
       dist: trusty
-      sudo: required
-      go: 1.9.x
+      go: "1.10"
       env:
         - ubuntu-ppa
-        - azure-linux
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
@@ -63,11 +61,25 @@ matrix:
             - devscripts
             - debhelper
             - dput
-            - gcc-multilib
             - fakeroot
       script:
-        # Build for the primary platforms that Trusty can manage
         - go run build/ci.go debsrc -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>" -upload ppa:ethereum/ethereum
+
+    # This builder does the Linux Azure uploads
+    - os: linux
+      dist: trusty
+      sudo: required
+      go: "1.10"
+      env:
+        - azure-linux
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      addons:
+        apt:
+          packages:
+            - gcc-multilib
+      script:
+        # Build for the primary platforms that Trusty can manage
         - go run build/ci.go install
         - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
         - go run build/ci.go install -arch 386
@@ -91,7 +103,7 @@ matrix:
       dist: trusty
       services:
         - docker
-      go: 1.9.x
+      go: "1.10"
       env:
         - azure-linux-mips
       git:
@@ -135,7 +147,7 @@ matrix:
       git:
         submodules: false # avoid cloning ethereum/tests
       before_install:
-        - curl https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz | tar -xz
+        - curl https://storage.googleapis.com/golang/go1.10.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
@@ -152,7 +164,7 @@ matrix:
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
     - os: osx
-      go: 1.9.x
+      go: "1.10"
       env:
         - azure-osx
         - azure-ios
@@ -181,8 +193,7 @@ matrix:
     # This builder does the Azure archive purges to avoid accumulating junk
     - os: linux
       dist: trusty
-      sudo: required
-      go: 1.9.x
+      go: "1.10"
       env:
         - azure-purge
       git:
