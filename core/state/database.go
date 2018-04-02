@@ -26,7 +26,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
-// Trie cache generation limit after which to evic trie nodes from memory.
+// Trie cache generation limit after which to evict trie nodes from memory.
 var MaxTrieCacheGen = uint16(120)
 
 const (
