@@ -68,7 +68,7 @@ var (
 	ClassicChainConfig = &ChainConfig{
 		ChainId:             big.NewInt(61),
 		HomesteadBlock:      big.NewInt(1150000),
-		DAOForkBlock:        nil,
+		DAOForkBlock:        big.NewInt(1920000),
 		DAOForkSupport:      false,
 		EIP150Block:         big.NewInt(2500000),
 		EIP150Hash:          common.HexToHash("0xca12c63534f565899681965528d536c52cb05b7c48e269c2a6cb77ad864d878a"),
