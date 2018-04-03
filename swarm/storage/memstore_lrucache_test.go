@@ -70,10 +70,10 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 			n:         20001,
 			chunkSize: 4096,
 		},
-		{
-			n:         50001,
-			chunkSize: 4096,
-		},
+		//{
+		//n:         50001,
+		//chunkSize: 4096,
+		//},
 	}
 
 	for _, tt := range tests {
