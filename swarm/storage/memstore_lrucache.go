@@ -30,7 +30,6 @@ const (
 )
 
 type MemStore struct {
-	//cache *lru.ARCCache
 	cache    *lru.Cache
 	disabled bool
 }
@@ -52,7 +51,6 @@ func NewMemStore(_ *LDBStore, capacity uint) (m *MemStore) {
 	}
 
 	return &MemStore{
-		//cache: lru.NewARC(capacity),
 		cache: c,
 	}
 }
@@ -88,5 +86,4 @@ func (m *MemStore) setCapacity(n int) {
 	}
 }
 
-// Close memstore
 func (s *MemStore) Close() {}
