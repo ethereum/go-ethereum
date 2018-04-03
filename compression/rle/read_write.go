@@ -68,7 +68,7 @@ func compressChunk(dat []byte) (ret []byte, n int) {
 		return []byte{token, tokenToken}, 1
 	case len(dat) > 1 && dat[0] == 0x0 && dat[1] == 0x0:
 		j := 0
-		for j <= 254 && j < len(dat) {
+		for j <= 249 && j < len(dat) {
 			if dat[j] != 0 {
 				break
 			}

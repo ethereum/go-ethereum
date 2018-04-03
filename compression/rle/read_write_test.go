@@ -48,3 +48,10 @@ func (s *CompressionRleSuite) TestDecompressSimple(c *checker.C) {
 	c.Assert(res, checker.DeepEquals, make([]byte, 10))
 
 }
+
+func (s *CompressionRleSuite) TestIdentity(c *checker.C) {
+	var exp []byte = make([]byte, 251)
+	res, err := Decompress(Compress(exp))
+	c.Assert(err, checker.IsNil)
+	c.Assert(res, checker.DeepEquals, exp)
+}
