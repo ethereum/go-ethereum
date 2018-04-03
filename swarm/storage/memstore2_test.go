@@ -17,7 +17,6 @@
 package storage
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -31,7 +30,6 @@ func newLDBStore(t *testing.T) (*LDBStore, func()) {
 		t.Fatal(err)
 	}
 	log.Trace("memstore.tempdir", "dir", dir)
-	fmt.Println(dir)
 
 	db, err := NewLDBStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, testPoFunc)
 	if err != nil {
@@ -39,6 +37,7 @@ func newLDBStore(t *testing.T) (*LDBStore, func()) {
 	}
 
 	cleanup := func() {
+		db.Close()
 		err := os.RemoveAll(dir)
 		if err != nil {
 			t.Fatal(err)
@@ -48,26 +47,31 @@ func newLDBStore(t *testing.T) (*LDBStore, func()) {
 	return db, cleanup
 }
 
-func newMemStore(t *testing.T) (*MemStore, func()) {
+func TestMemStoreAndLDBStore(t *testing.T) {
 	ldb, cleanup := newLDBStore(t)
 	ldb.setCapacity(singletonSwarmDbCapacity)
-
-	memstore := NewMemStore(ldb, defaultCacheCapacity)
-	return memstore, cleanup
-}
-
-func TestMemStore(t *testing.T) {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-
-	memStore, cleanup := newMemStore(t)
 	defer cleanup()
+
+	memStore := NewMemStore(ldb, defaultCacheCapacity)
 
 	tests := []struct {
 		n         int   // number of chunks to push to memStore
 		chunkSize int64 // size of chunk (by default in Swarm - 4096)
 	}{
 		{
-			n:         10001,
+			n:         1,
+			chunkSize: 4096,
+		},
+		{
+			n:         201,
+			chunkSize: 4096,
+		},
+		{
+			n:         20001,
+			chunkSize: 4096,
+		},
+		{
+			n:         50001,
 			chunkSize: 4096,
 		},
 	}
@@ -82,14 +86,27 @@ func TestMemStore(t *testing.T) {
 		FakeChunk(tt.chunkSize, tt.n, chunks)
 
 		for i := 0; i < tt.n; i++ {
+			go ldb.Put(chunks[i])
 			memStore.Put(chunks[i])
 		}
 
 		for i := 0; i < tt.n; i++ {
 			_, err := memStore.Get(chunks[i].Key)
 			if err != nil {
-				t.Fatal(err)
+				if err == ErrChunkNotFound {
+					_, err := ldb.Get(chunks[i].Key)
+					if err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					t.Fatal(err)
+				}
 			}
+		}
+
+		// wait for all chunks to be stored before ending the test are cleaning up
+		for i := 0; i < tt.n; i++ {
+			<-chunks[i].dbStoredC
 		}
 	}
 }
