@@ -31,10 +31,17 @@ const (
 
 type MemStore struct {
 	//cache *lru.ARCCache
-	cache *lru.Cache
+	cache    *lru.Cache
+	disabled bool
 }
 
 func NewMemStore(_ *LDBStore, capacity uint) (m *MemStore) {
+	if capacity == 0 {
+		return &MemStore{
+			disabled: true,
+		}
+	}
+
 	onEvicted := func(key interface{}, value interface{}) {
 		v := value.(*Chunk)
 		<-v.dbStoredC
@@ -51,6 +58,10 @@ func NewMemStore(_ *LDBStore, capacity uint) (m *MemStore) {
 }
 
 func (m *MemStore) Get(key Key) (*Chunk, error) {
+	if m.disabled {
+		return nil, ErrChunkNotFound
+	}
+
 	c, ok := m.cache.Get(string(key))
 	if !ok {
 		return nil, ErrChunkNotFound
@@ -63,11 +74,18 @@ func (m *MemStore) Get(key Key) (*Chunk, error) {
 }
 
 func (m *MemStore) Put(c *Chunk) {
+	if m.disabled {
+		return
+	}
 	m.cache.Add(string(c.Key), c)
 }
 
 func (m *MemStore) setCapacity(n int) {
-	//no-op
+	if n <= 0 {
+		m.disabled = true
+	} else {
+		m = NewMemStore(nil, uint(n))
+	}
 }
 
 // Close memstore
