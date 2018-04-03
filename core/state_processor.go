@@ -126,7 +126,9 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 
 	retData := types.ReturnData{TxHash: receipt.TxHash, Data: data, Removed: false}
 	txPostEvent := TransactionEvent{TxHash: receipt.TxHash, RetData: retData}
-	go bc.txPostFeed.Send(&txPostEvent)
+	if bc != nil { // For some tests unrelated to tx events, this ptr can be nil; should always be non-nil in production
+		go bc.txPostFeed.Send(&txPostEvent)
+	}
 
 	return receipt, gas, err
 }
