@@ -49,7 +49,7 @@ func newLDBStore(t *testing.T) (*LDBStore, func()) {
 
 func TestMemStoreAndLDBStore(t *testing.T) {
 	ldb, cleanup := newLDBStore(t)
-	ldb.setCapacity(singletonSwarmDbCapacity)
+	ldb.setCapacity(50000)
 	defer cleanup()
 
 	memStore := NewMemStore(ldb, defaultCacheCapacity)
@@ -67,13 +67,13 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 			chunkSize: 4096,
 		},
 		{
-			n:         20001,
+			n:         9999,
 			chunkSize: 4096,
 		},
-		//{
-		//n:         50001,
-		//chunkSize: 4096,
-		//},
+		{
+			n:         80001,
+			chunkSize: 4096,
+		},
 	}
 
 	for _, tt := range tests {
@@ -96,10 +96,10 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 				if err == ErrChunkNotFound {
 					_, err := ldb.Get(chunks[i].Key)
 					if err != nil {
-						t.Fatal(err)
+						t.Fatalf("couldn't get chunk %v from ldb, got error: %v", i, err)
 					}
 				} else {
-					t.Fatal(err)
+					t.Fatalf("got error from memstore: %v", err)
 				}
 			}
 		}
