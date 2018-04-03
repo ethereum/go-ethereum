@@ -17,8 +17,11 @@
 package storage
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"io/ioutil"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -55,8 +58,8 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 	memStore := NewMemStore(ldb, defaultCacheCapacity)
 
 	tests := []struct {
-		n         int   // number of chunks to push to memStore
-		chunkSize int64 // size of chunk (by default in Swarm - 4096)
+		n         int    // number of chunks to push to memStore
+		chunkSize uint64 // size of chunk (by default in Swarm - 4096)
 	}{
 		{
 			n:         1,
@@ -71,6 +74,10 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 			chunkSize: 4096,
 		},
 		{
+			n:         20001,
+			chunkSize: 4096,
+		},
+		{
 			n:         80001,
 			chunkSize: 4096,
 		},
@@ -80,10 +87,8 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 		var chunks []*Chunk
 
 		for i := 0; i < tt.n; i++ {
-			chunks = append(chunks, NewChunk(nil, make(chan bool)))
+			chunks = append(chunks, NewRandomChunk(tt.chunkSize))
 		}
-
-		FakeChunk(tt.chunkSize, tt.n, chunks)
 
 		for i := 0; i < tt.n; i++ {
 			go ldb.Put(chunks[i])
@@ -109,4 +114,24 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 			<-chunks[i].dbStoredC
 		}
 	}
+}
+
+func NewRandomChunk(chunkSize uint64) *Chunk {
+	c := &Chunk{
+		Key:        make([]byte, 32),
+		ReqC:       nil,
+		SData:      make([]byte, chunkSize),
+		dbStoredC:  make(chan bool),
+		dbStoredMu: &sync.Mutex{},
+	}
+
+	rand.Read(c.SData)
+
+	binary.LittleEndian.PutUint64(c.SData[:8], chunkSize)
+
+	hasher := MakeHashFunc(SHA3Hash)()
+	hasher.Write(c.SData)
+	copy(c.Key, hasher.Sum(nil))
+
+	return c
 }
