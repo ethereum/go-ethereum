@@ -60,34 +60,43 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 	tests := []struct {
 		n         int    // number of chunks to push to memStore
 		chunkSize uint64 // size of chunk (by default in Swarm - 4096)
+		request   bool   // whether or not to set the ReqC channel on the random chunks
 	}{
 		{
 			n:         1,
 			chunkSize: 4096,
+			request:   false,
 		},
 		{
 			n:         201,
 			chunkSize: 4096,
+			request:   false,
 		},
 		{
-			n:         9999,
+			n:         60001,
 			chunkSize: 4096,
+			request:   false,
 		},
 		{
-			n:         20001,
+			n:         60001,
 			chunkSize: 4096,
-		},
-		{
-			n:         80001,
-			chunkSize: 4096,
+			request:   true,
 		},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
+		log.Info("running test", "idx", i, "tt", tt)
 		var chunks []*Chunk
 
 		for i := 0; i < tt.n; i++ {
-			chunks = append(chunks, NewRandomChunk(tt.chunkSize))
+			var c *Chunk
+			if tt.request {
+				c = NewRandomRequestChunk(tt.chunkSize)
+			} else {
+				c = NewRandomChunk(tt.chunkSize)
+			}
+
+			chunks = append(chunks, c)
 		}
 
 		for i := 0; i < tt.n; i++ {
@@ -132,6 +141,13 @@ func NewRandomChunk(chunkSize uint64) *Chunk {
 	hasher := MakeHashFunc(SHA3Hash)()
 	hasher.Write(c.SData)
 	copy(c.Key, hasher.Sum(nil))
+
+	return c
+}
+
+func NewRandomRequestChunk(chunkSize uint64) *Chunk {
+	c := NewRandomChunk(chunkSize)
+	c.ReqC = make(chan bool)
 
 	return c
 }
