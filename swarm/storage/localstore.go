@@ -78,10 +78,6 @@ func NewTestLocalStoreForAddr(path string, basekey []byte) (*LocalStore, error) 
 	return localStore, nil
 }
 
-//func (self *LocalStore) CacheCounter() uint64 {
-//return uint64(self.memStore.Counter())
-//}
-
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
