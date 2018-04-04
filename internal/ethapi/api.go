@@ -776,7 +776,7 @@ func (s *PublicBlockChainAPI) GetVarFR(ctx context.Context, args FRGetArgs, bloc
 		args.Data = packed
 	}
 
-	result, _, _, err := s.doCall(ctx, args.CallArgs, blockNr, vm.Config{DisableGasMetering: true})
+	result, _, _, err := s.doCall(ctx, args.CallArgs, blockNr, vm.Config{}, 5*time.Second)
 
 	err = abi.Unpack(&ev, "getVar", result)
 
@@ -863,7 +863,7 @@ func (s *PublicBlockChainAPI) GetVerificatorsCount(ctx context.Context, args Cal
 		args.Data = packed
 	}
 
-	result, _, _, err := s.doCall(ctx, args, blockNr, vm.Config{DisableGasMetering: true})
+	result, _, _, err := s.doCall(ctx, args, blockNr, vm.Config{}, 5*time.Second)
 
 	err = abi.Unpack(&ev, "getVerificatorsCount", result)
 
@@ -894,7 +894,7 @@ func (s *PublicBlockChainAPI) GetVerificatorsIndex(ctx context.Context, args Cal
 		args.Data = packed
 	}
 
-	result, _, _, err := s.doCall(ctx, args, blockNr, vm.Config{DisableGasMetering: true})
+	result, _, _, err := s.doCall(ctx, args, blockNr, vm.Config{}, 5*time.Second)
 
 	err = abi.Unpack(&ev, "getVerificatorsIndex", result)
 
@@ -926,7 +926,7 @@ func (s *PublicBlockChainAPI) GetVerificatorAtIndex(ctx context.Context, args FR
 		args.Data = packed
 	}
 
-	result, _, _, err := s.doCall(ctx, args.CallArgs, blockNr, vm.Config{DisableGasMetering: true})
+	result, _, _, err := s.doCall(ctx, args.CallArgs, blockNr, vm.Config{}, 5*time.Second)
 
 	err = abi.Unpack(&ev, "getVerificatorAtIndex", result)
 
