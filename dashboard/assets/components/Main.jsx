@@ -76,7 +76,8 @@ class Main extends Component<Props> {
 			<div style={styles.wrapper}>
 				<div className={classes.content} style={styles.content}>{children}</div>
 				<Footer
-					content={content}
+					general={content.general}
+					system={content.system}
 					shouldUpdate={shouldUpdate}
 				/>
 			</div>

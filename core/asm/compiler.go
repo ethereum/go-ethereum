@@ -114,7 +114,7 @@ func (c *Compiler) Compile() (string, []error) {
 }
 
 // next returns the next token and increments the
-// posititon.
+// position.
 func (c *Compiler) next() token {
 	token := c.tokens[c.pos]
 	c.pos++
@@ -122,7 +122,7 @@ func (c *Compiler) next() token {
 }
 
 // compile line compiles a single line instruction e.g.
-// "push 1", "jump @labal".
+// "push 1", "jump @label".
 func (c *Compiler) compileLine() error {
 	n := c.next()
 	if n.typ != lineStart {

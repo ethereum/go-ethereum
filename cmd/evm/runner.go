@@ -161,9 +161,8 @@ func runCmd(ctx *cli.Context) error {
 		GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
 		Value:    utils.GlobalBig(ctx, ValueFlag.Name),
 		EVMConfig: vm.Config{
-			Tracer:             tracer,
-			Debug:              ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
-			DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
+			Tracer: tracer,
+			Debug:  ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
 		},
 	}
 

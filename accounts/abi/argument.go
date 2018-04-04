@@ -113,16 +113,8 @@ func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interfa
 	}
 	// If the output interface is a struct, make sure names don't collide
 	if kind == reflect.Struct {
-		exists := make(map[string]bool)
-		for _, arg := range arguments {
-			field := capitalise(arg.Name)
-			if field == "" {
-				return fmt.Errorf("abi: purely underscored output cannot unpack to struct")
-			}
-			if exists[field] {
-				return fmt.Errorf("abi: multiple outputs mapping to the same struct field '%s'", field)
-			}
-			exists[field] = true
+		if err := requireUniqueStructFieldNames(arguments); err != nil {
+			return err
 		}
 	}
 	for i, arg := range arguments.NonIndexed() {
@@ -131,14 +123,9 @@ func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interfa
 
 		switch kind {
 		case reflect.Struct:
-			name := capitalise(arg.Name)
-			for j := 0; j < typ.NumField(); j++ {
-				// TODO read tags: `abi:"fieldName"`
-				if typ.Field(j).Name == name {
-					if err := set(value.Field(j), reflectValue, arg); err != nil {
-						return err
-					}
-				}
+			err := unpackStruct(value, reflectValue, arg)
+			if err != nil {
+				return err
 			}
 		case reflect.Slice, reflect.Array:
 			if value.Len() < i {
@@ -165,8 +152,35 @@ func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues []interf
 		return fmt.Errorf("abi: wrong length, expected single value, got %d", len(marshalledValues))
 	}
 	elem := reflect.ValueOf(v).Elem()
+	kind := elem.Kind()
 	reflectValue := reflect.ValueOf(marshalledValues[0])
+
+	if kind == reflect.Struct {
+		//make sure names don't collide
+		if err := requireUniqueStructFieldNames(arguments); err != nil {
+			return err
+		}
+
+		return unpackStruct(elem, reflectValue, arguments[0])
+	}
+
 	return set(elem, reflectValue, arguments.NonIndexed()[0])
+
+}
+
+// Computes the full size of an array;
+// i.e. counting nested arrays, which count towards size for unpacking.
+func getArraySize(arr *Type) int {
+	size := arr.Size
+	// Arrays can be nested, with each element being the same size
+	arr = arr.Elem
+	for arr.T == ArrayTy {
+		// Keep multiplying by elem.Size while the elem is an array.
+		size *= arr.Size
+		arr = arr.Elem
+	}
+	// Now we have the full array size, including its children.
+	return size
 }
 
 // UnpackValues can be used to unpack ABI-encoded hexdata according to the ABI-specification,
@@ -181,9 +195,14 @@ func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 			// If we have a static array, like [3]uint256, these are coded as
 			// just like uint256,uint256,uint256.
 			// This means that we need to add two 'virtual' arguments when
-			// we count the index from now on
-
-			virtualArgs += arg.Type.Size - 1
+			// we count the index from now on.
+			//
+			// Array values nested multiple levels deep are also encoded inline:
+			// [2][3]uint256: uint256,uint256,uint256,uint256,uint256,uint256
+			//
+			// Calculate the full array size to get the correct offset for the next argument.
+			// Decrement it by 1, as the normal index increment is still applied.
+			virtualArgs += getArraySize(&arg.Type) - 1
 		}
 		if err != nil {
 			return nil, err
@@ -257,4 +276,19 @@ func capitalise(input string) string {
 		return ""
 	}
 	return strings.ToUpper(input[:1]) + input[1:]
+}
+
+//unpackStruct extracts each argument into its corresponding struct field
+func unpackStruct(value, reflectValue reflect.Value, arg Argument) error {
+	name := capitalise(arg.Name)
+	typ := value.Type()
+	for j := 0; j < typ.NumField(); j++ {
+		// TODO read tags: `abi:"fieldName"`
+		if typ.Field(j).Name == name {
+			if err := set(value.Field(j), reflectValue, arg); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
