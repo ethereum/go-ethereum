@@ -159,7 +159,7 @@ func (dl *downloadTester) makeChainFork(n, f int, parent *types.Block, parentRec
 	// Create the common suffix
 	hashes, headers, blocks, receipts := dl.makeChain(n-f, 0, parent, parentReceipts, false)
 
-	// Create the forks, making the second heavyer if non balanced forks were requested
+	// Create the forks, making the second heavier if non balanced forks were requested
 	hashes1, headers1, blocks1, receipts1 := dl.makeChain(f, 1, blocks[hashes[0]], receipts[hashes[0]], false)
 	hashes1 = append(hashes1, hashes[1:]...)
 
