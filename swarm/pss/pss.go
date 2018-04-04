@@ -177,7 +177,10 @@ func (self *Pss) Start(srv *p2p.Server) error {
 	go func() {
 		for {
 			tickC := time.Tick(defaultCleanInterval)
+			cacheTickC := time.Tick(cacheTTL)
 			select {
+			case <-cacheTickC:
+				self.cleanFwdCache()
 			case <-tickC:
 				self.cleanKeys()
 			case <-self.quitC:
@@ -758,13 +761,13 @@ func (self *Pss) forward(msg *PssMsg) {
 
 // remove expired entries from forward cache
 func (self *Pss) cleanFwdCache() {
-  self.fwdCacheMu.Lock()
-  defer self.fwdCacheMu.Unlock()
-  for k,v := range self.fwdCache {
-    if v.expiresAt.Before(time.Now()) {
-      delete(self.fwdCache[k])
-    }
-  }
+	self.fwdCacheMu.Lock()
+	defer self.fwdCacheMu.Unlock()
+	for k, v := range self.fwdCache {
+		if v.expiresAt.Before(time.Now()) {
+			delete(self.fwdCache[k])
+		}
+	}
 }
 
 // add a message to the cache
