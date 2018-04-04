@@ -142,7 +142,7 @@ Do not forget `--rpcaddr 0.0.0.0`, if you want to access RPC from other containe
 ### Programatically interfacing Geth nodes
 
 As a developer, sooner rather than later you'll want to start interacting with Geth and the Ethereum
-network via your own programs and not manually through the console. To aid this, Geth has built in
+network via your own programs and not manually through the console. To aid this, Geth has built-in
 support for a JSON-RPC based APIs ([standard APIs](https://github.com/ethereum/wiki/wiki/JSON-RPC) and
 [Geth specific APIs](https://github.com/ethereum/go-ethereum/wiki/Management-APIs)). These can be
 exposed via HTTP, WebSockets and IPC (unix sockets on unix based platforms, and named pipes on Windows).
