@@ -756,6 +756,17 @@ func (self *Pss) forward(msg *PssMsg) {
 // SECTION: Caching
 /////////////////////////////////////////////////////////////////////
 
+// remove expired entries from forward cache
+func (self *Pss) cleanFwdCache() {
+  self.fwdCacheMu.Lock()
+  defer self.fwdCacheMu.Unlock()
+  for k,v := range self.fwdCache {
+    if v.expiresAt.Before(time.Now()) {
+      delete(self.fwdCache[k])
+    }
+  }
+}
+
 // add a message to the cache
 func (self *Pss) addFwdCache(msg *PssMsg) error {
 	var entry pssCacheEntry
