@@ -766,7 +766,7 @@ func doAndroidArchive(cmdline []string) {
 		if meta.Develop {
 			repo = *deploy + "/content/repositories/snapshots"
 		}
-		build.MustRunCommand("mvn", "gpg:sign-and-deploy-file",
+		build.MustRunCommand("mvn", "gpg:sign-and-deploy-file", "-e", "-X",
 			"-settings=build/mvn.settings", "-Durl="+repo, "-DrepositoryId=ossrh",
 			"-DpomFile="+meta.Package+".pom", "-Dfile="+meta.Package+".aar")
 	}
