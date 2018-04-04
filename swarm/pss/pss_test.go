@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,13 +58,11 @@ var (
 	useHandshake     bool
 )
 
-var services = newServices()
-
 func init() {
 	flag.Parse()
 	rand.Seed(time.Now().Unix())
 
-	adapters.RegisterServices(services)
+	adapters.RegisterServices(newServices())
 	initTest()
 }
 
@@ -635,13 +634,22 @@ func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubke
 // params in run name:
 // nodes/msgs/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
-func XTestNetwork(t *testing.T) {
+func TestNetwork(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("Travis macOS build seems to be very slow, and these tests are flaky on it. Skipping until we find a solution.")
+	}
+
 	t.Run("3/2000/4/sock", testNetwork)
 	t.Run("4/2000/4/sock", testNetwork)
 	t.Run("8/2000/4/sock", testNetwork)
 	t.Run("16/2000/4/sock", testNetwork)
 	t.Run("32/2000/4/sock", testNetwork)
-	t.Run("64/2000/4/sim", testNetwork)
+
+	t.Run("3/2000/4/sim", testNetwork)
+	t.Run("4/2000/4/sim", testNetwork)
+	t.Run("8/2000/4/sim", testNetwork)
+	t.Run("16/2000/4/sim", testNetwork)
+	t.Run("32/2000/4/sim", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
@@ -677,11 +685,11 @@ func testNetwork(t *testing.T) {
 		}
 		a = adapters.NewExecAdapter(dirname)
 	} else if adapter == "sock" {
-		a = adapters.NewSocketAdapter(services)
+		a = adapters.NewSocketAdapter(newServices())
 	} else if adapter == "tcp" {
-		a = adapters.NewTCPAdapter(services)
+		a = adapters.NewTCPAdapter(newServices())
 	} else if adapter == "sim" {
-		a = adapters.NewSimAdapter(services)
+		a = adapters.NewSimAdapter(newServices())
 	}
 	net := simulations.NewNetwork(a, &simulations.NetworkConfig{
 		ID: "0",
@@ -705,6 +713,8 @@ func testNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	time.Sleep(1 * time.Second)
 
 	triggerChecks := func(trigger chan discover.NodeID, id discover.NodeID, rpcclient *rpc.Client, topic string) error {
 		msgC := make(chan APIMsg)
@@ -764,11 +774,15 @@ func testNetwork(t *testing.T) {
 		}
 	}
 
+	time.Sleep(1 * time.Second)
+
 	// setup workers
 	jobs := make(chan Job, 10)
 	for w := 1; w <= 10; w++ {
 		go worker(w, jobs, rpcs, pubkeys, topic)
 	}
+
+	time.Sleep(1 * time.Second)
 
 	for i := 0; i < int(msgcount); i++ {
 		sendnodeidx := rand.Intn(int(nodecount))
@@ -1076,7 +1090,7 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 	if numnodes < 2 {
 		return nil, fmt.Errorf("Minimum two nodes in network")
 	}
-	adapter := adapters.NewSimAdapter(services)
+	adapter := adapters.NewSimAdapter(newServices())
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",
 		DefaultService: "bzz",
