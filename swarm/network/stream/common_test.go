@@ -44,14 +44,20 @@ import (
 )
 
 var (
-	adapter  = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
-	loglevel = flag.Int("loglevel", 4, "verbosity of logs")
+	deliveries map[discover.NodeID]*Delivery
+	stores     map[discover.NodeID]storage.ChunkStore
+	toAddr     func(discover.NodeID) *network.BzzAddr
+	peerCount  func(discover.NodeID) int
+	adapter    = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
+	loglevel   = flag.Int("loglevel", 2, "verbosity of logs")
 )
 
 var (
 	defaultSkipCheck bool
 	waitPeerErrC     chan error
 	chunkSize        = 4096
+	registries       map[discover.NodeID]*TestRegistry
+	createStoreFunc  func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
 )
 
 var services = adapters.Services{
@@ -71,9 +77,14 @@ func init() {
 
 // NewStreamerService
 func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
+	var err error
 	id := ctx.Config.ID
 	addr := toAddr(id)
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+	stores[id], err = createStoreFunc(id, addr)
+	if err != nil {
+		return nil, err
+	}
 	store := stores[id].(*storage.LocalStore)
 	db := storage.NewDBAPI(store)
 	delivery := NewDelivery(kad, db)
@@ -87,7 +98,25 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
 	dpa := storage.NewDPA(storage.NewNetStore(store, nil), storage.NewDPAParams())
-	return &TestRegistry{Registry: r, dpa: dpa}, nil
+	testRegistry := &TestRegistry{Registry: r, dpa: dpa}
+	registries[id] = testRegistry
+	return testRegistry, nil
+}
+
+func datadirsCleanup() {
+	for _, id := range ids {
+		os.RemoveAll(datadirs[id])
+	}
+}
+
+//local stores need to be cleaned up after the sim is done
+func localStoreCleanup() {
+	log.Info("Cleaning up...")
+	for _, id := range ids {
+		registries[id].Close()
+		stores[id].Close()
+	}
+	log.Info("Local store cleanup done")
 }
 
 func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *storage.LocalStore, func(), error) {

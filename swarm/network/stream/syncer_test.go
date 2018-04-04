@@ -45,8 +45,11 @@ func TestSyncerSimulation(t *testing.T) {
 
 func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool, po uint8) {
 	defaultSkipCheck = skipCheck
+	createStoreFunc = createTestLocalStorageFromSim
+	registries = make(map[discover.NodeID]*TestRegistry)
 	toAddr = func(id discover.NodeID) *network.BzzAddr {
 		addr := network.NewAddrFromNodeID(id)
+		//hack to put addresses in same space
 		addr.OAddr[0] = byte(0)
 		return addr
 	}

@@ -135,15 +135,17 @@ type SwarmSyncerClient struct {
 	storeC        chan *storage.Chunk
 	db            *storage.DBAPI
 	// chunker       storage.Chunker
-	currentRoot storage.Key
-	requestFunc func(chunk *storage.Chunk)
-	end, start  uint64
+	currentRoot           storage.Key
+	requestFunc           func(chunk *storage.Chunk)
+	end, start            uint64
+	ignoreExistingRequest bool
 }
 
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
-func NewSwarmSyncerClient(_ *Peer, db *storage.DBAPI) (*SwarmSyncerClient, error) {
+func NewSwarmSyncerClient(_ *Peer, db *storage.DBAPI, ignoreExistingRequest bool) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
 		db: db,
+		ignoreExistingRequest: ignoreExistingRequest,
 	}, nil
 }
 
@@ -187,15 +189,15 @@ func NewSwarmSyncerClient(_ *Peer, db *storage.DBAPI) (*SwarmSyncerClient, error
 // to handle incoming sync streams
 func RegisterSwarmSyncerClient(streamer *Registry, db *storage.DBAPI) {
 	streamer.RegisterClientFunc("SYNC", func(p *Peer, _ string, love bool) (Client, error) {
-		return NewSwarmSyncerClient(p, db)
+		return NewSwarmSyncerClient(p, db, true)
 	})
 }
 
 // NeedData
 func (s *SwarmSyncerClient) NeedData(key []byte) (wait func()) {
-	chunk, _ := s.db.GetOrCreateRequest(key)
+	chunk, created := s.db.GetOrCreateRequest(key)
 	// TODO: we may want to request from this peer anyway even if the request exists
-	if chunk.ReqC == nil {
+	if chunk.ReqC == nil || (s.ignoreExistingRequest && !created) {
 		return nil
 	}
 	// create request and wait until the chunk data arrives and is stored

@@ -36,13 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var (
-	deliveries map[discover.NodeID]*Delivery
-	stores     map[discover.NodeID]storage.ChunkStore
-	toAddr     func(discover.NodeID) *network.BzzAddr
-	peerCount  func(discover.NodeID) int
-)
-
 func TestStreamerRetrieveRequest(t *testing.T) {
 	tester, streamer, _, teardown, err := newStreamerTester(t)
 	defer teardown()
@@ -314,6 +307,7 @@ func TestDeliveryFromNodes(t *testing.T) {
 func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool) {
 	defaultSkipCheck = skipCheck
 	toAddr = network.NewAddrFromNodeID
+	createStoreFunc = createTestLocalStorageFromSim
 	conf := &streamTesting.RunConfig{
 		Adapter:         *adapter,
 		NodeCount:       nodes,
@@ -329,10 +323,11 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		t.Fatal(err.Error())
 	}
 	stores = make(map[discover.NodeID]storage.ChunkStore)
-	deliveries = make(map[discover.NodeID]*Delivery)
 	for i, id := range sim.IDs {
 		stores[id] = sim.Stores[i]
 	}
+	registries = make(map[discover.NodeID]*TestRegistry)
+	deliveries = make(map[discover.NodeID]*Delivery)
 	peerCount = func(id discover.NodeID) int {
 		if sim.IDs[0] == id || sim.IDs[nodes-1] == id {
 			return 1
@@ -673,4 +668,8 @@ Loop:
 	if err != nil {
 		b.Fatalf("expected no error. got %v", err)
 	}
+}
+
+func createTestLocalStorageFromSim(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error) {
+	return stores[id], nil
 }
