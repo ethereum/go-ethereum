@@ -353,6 +353,7 @@ func (r *Receipt) String() string {
 	return r.receipt.String()
 }
 
+func (r *Receipt) GetStatus() uint              { return r.receipt.Status }
 func (r *Receipt) GetPostState() []byte         { return r.receipt.PostState }
 func (r *Receipt) GetCumulativeGasUsed() int64  { return int64(r.receipt.CumulativeGasUsed) }
 func (r *Receipt) GetBloom() *Bloom             { return &Bloom{r.receipt.Bloom} }
