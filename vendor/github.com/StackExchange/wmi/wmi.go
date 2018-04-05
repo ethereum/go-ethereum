@@ -37,6 +37,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-ole/go-ole"
 	"github.com/go-ole/go-ole/oleutil"
 )
 

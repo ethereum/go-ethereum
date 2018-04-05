@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"gopkg.in/urfave/cli.v1"
 )
 
 func hash(ctx *cli.Context) {

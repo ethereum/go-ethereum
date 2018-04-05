@@ -24,9 +24,8 @@ import (
 	"sync"
 	"time"
 
-	set "gopkg.in/fatih/set.v0"
-
 	"github.com/ethereum/go-ethereum/log"
+	set "gopkg.in/fatih/set.v0"
 )
 
 // fileCache is a cache of files seen during scan of keystore.

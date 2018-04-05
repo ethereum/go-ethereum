@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/math"
+	"gopkg.in/urfave/cli.v1"
 )
 
 // Custom type which is registered in the flags library which cli uses for

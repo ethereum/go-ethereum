@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/go-ole/go-ole"
 	"github.com/go-ole/go-ole/oleutil"
 )
 

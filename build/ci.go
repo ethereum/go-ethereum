@@ -332,6 +332,7 @@ func doLint(cmdline []string) {
 	// Run fast linters batched together
 	configs := []string{
 		"--vendor",
+		"--tests",
 		"--disable-all",
 		"--enable=goimports",
 		"--enable=varcheck",

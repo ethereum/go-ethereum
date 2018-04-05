@@ -2,6 +2,7 @@
 
 package termbox
 
+import "github.com/mattn/go-runewidth"
 import "fmt"
 import "os"
 import "os/signal"

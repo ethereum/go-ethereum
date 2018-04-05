@@ -7,6 +7,8 @@ package termui
 import (
 	"regexp"
 	"strings"
+
+	"github.com/mitchellh/go-wordwrap"
 )
 
 // TextBuilder is a minimal interface to produce text []Cell using specific syntax (markdown).

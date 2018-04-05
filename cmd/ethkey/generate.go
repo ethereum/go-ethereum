@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 
 	"github.com/pborman/uuid"
+	"gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"

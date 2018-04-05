@@ -1,5 +1,7 @@
 package otto
 
+import ()
+
 type _resultKind int
 
 const (

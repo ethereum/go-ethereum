@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
+	"gopkg.in/urfave/cli.v1"
 )
 
 // getPassPhrase obtains a passphrase given by the user.  It first checks the

@@ -43,6 +43,7 @@ import (
 	"github.com/robertkrimen/otto/ast"
 	"github.com/robertkrimen/otto/file"
 	"github.com/robertkrimen/otto/token"
+	"gopkg.in/sourcemap.v1"
 )
 
 // A Mode value is a set of flags (or 0). They control optional parser functionality.

@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"gopkg.in/fatih/set.v0"
 )
 
 // API describes the set of methods offered over the RPC interface

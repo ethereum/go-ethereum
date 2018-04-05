@@ -8,11 +8,10 @@ import (
 	"crypto/cipher"
 	"crypto/sha1"
 	"crypto/subtle"
+	"golang.org/x/crypto/openpgp/errors"
 	"hash"
 	"io"
 	"strconv"
-
-	"golang.org/x/crypto/openpgp/errors"
 )
 
 // SymmetricallyEncrypted represents a symmetrically encrypted byte string. The

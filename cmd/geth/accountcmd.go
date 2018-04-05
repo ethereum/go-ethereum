@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var (

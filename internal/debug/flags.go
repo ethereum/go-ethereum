@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/log/term"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var (

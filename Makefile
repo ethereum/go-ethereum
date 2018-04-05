@@ -41,7 +41,7 @@ lint: ## Run linters. Use make install-linters first.
 	build/env.sh go run build/ci.go lint
 
 format:  # Formats the code. Must have goimports installed
-	goimports -w -local github.com/ethereum/go-ethereum ./
+	build/gofmt.sh
 
 clean:
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*

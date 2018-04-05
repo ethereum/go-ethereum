@@ -56,6 +56,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var (
