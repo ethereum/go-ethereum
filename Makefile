@@ -37,6 +37,15 @@ ios:
 test: all
 	build/env.sh go run build/ci.go test
 
+lint: install-linters ## Run linters. Use make install-linters first.
+	vendorcheck ./...
+	gometalinter --disable-all -E vet -E goimports -E varcheck --tests --vendor ./...
+
+install-linters: ## Install linters
+	go get -u github.com/FiloSottile/vendorcheck
+	go get -u github.com/alecthomas/gometalinter
+	gometalinter --vendored-linters --install
+
 clean:
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
 
