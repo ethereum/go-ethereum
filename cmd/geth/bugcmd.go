@@ -49,7 +49,8 @@ func reportBug(ctx *cli.Context) error {
 	// execute template and write contents to buff
 	var buff bytes.Buffer
 
-	fmt.Fprintln(&buff, "#### System information\n")
+	fmt.Fprintln(&buff, "#### System information")
+	fmt.Fprintln(&buff)
 	fmt.Fprintln(&buff, "Version:", params.Version)
 	fmt.Fprintln(&buff, "Go Version:", runtime.Version())
 	fmt.Fprintln(&buff, "OS:", runtime.GOOS)
