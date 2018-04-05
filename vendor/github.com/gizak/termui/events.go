@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-
-	"github.com/nsf/termbox-go"
 )
 
 type Event struct {

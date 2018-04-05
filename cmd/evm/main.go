@@ -22,8 +22,6 @@ import (
 	"math/big"
 	"os"
 
-	"gopkg.in/urfave/cli.v1"
-
 	"github.com/ethereum/go-ethereum/cmd/utils"
 )
 

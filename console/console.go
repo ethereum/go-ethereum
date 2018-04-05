@@ -28,7 +28,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
 

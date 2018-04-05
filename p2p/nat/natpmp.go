@@ -21,8 +21,6 @@ import (
 	"net"
 	"strings"
 	"time"
-
-	"github.com/jackpal/go-nat-pmp"
 )
 
 // natPMPClient adapts the NAT-PMP protocol implementation so it conforms to

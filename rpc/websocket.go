@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"golang.org/x/net/websocket"
-	"gopkg.in/fatih/set.v0"
 
 	"github.com/ethereum/go-ethereum/log"
 )

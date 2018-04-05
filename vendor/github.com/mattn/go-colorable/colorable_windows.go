@@ -9,8 +9,6 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
-
-	"github.com/mattn/go-isatty"
 )
 
 const (
