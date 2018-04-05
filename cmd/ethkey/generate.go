@@ -54,17 +54,6 @@ If you want to encrypt an existing private key, it can be specified by setting
 		},
 	},
 	Action: func(ctx *cli.Context) error {
-		// Check if keyfile path given and make sure it doesn't already exist.
-		keyfilepath := ctx.Args().First()
-		if keyfilepath == "" {
-			keyfilepath = defaultKeyfileName
-		}
-		if _, err := os.Stat(keyfilepath); err == nil {
-			utils.Fatalf("Keyfile already exists at %s.", keyfilepath)
-		} else if !os.IsNotExist(err) {
-			utils.Fatalf("Error checking if keyfile exists: %v", err)
-		}
-
 		var privateKey *ecdsa.PrivateKey
 		var err error
 		if file := ctx.String("privatekey"); file != "" {
@@ -96,6 +85,11 @@ If you want to encrypt an existing private key, it can be specified by setting
 			utils.Fatalf("Error encrypting key: %v", err)
 		}
 
+		keyfilepath := ctx.Args().First()
+		if keyfilepath == "" {
+			// If the output keyfile name is not specified, generates the file name in a fixed format.
+			keyfilepath = keystore.KeyFileName(key.Address)
+		}
 		// Store the file to disk.
 		if err := os.MkdirAll(filepath.Dir(keyfilepath), 0700); err != nil {
 			utils.Fatalf("Could not create directory %s", filepath.Dir(keyfilepath))
