@@ -164,7 +164,7 @@ func (self *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, err
 	err2 := trie.recalcAndStore()
 	var hs string
 	if err2 == nil {
-		hs = trie.hash.Hex()
+		hs = trie.ref.Hex()
 	}
 	awg.Wait()
 	return hs, err2

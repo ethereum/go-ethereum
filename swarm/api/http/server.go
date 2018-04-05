@@ -177,8 +177,13 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		return
 	}
 
+	toEncrypt := false
+	if r.uri.Addr == "encrypt" {
+		toEncrypt = true
+	}
+
 	var key storage.Key
-	if r.uri.Addr != "" {
+	if r.uri.Addr != "" && r.uri.Addr != "encrypt" {
 		key, err = s.api.Resolve(r.uri)
 		if err != nil {
 			postFilesFail.Inc(1)
@@ -187,7 +192,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		}
 		log.Debug("resolved key", "ruid", r.ruid, "key", key)
 	} else {
-		key, err = s.api.NewManifest(false)
+		key, err = s.api.NewManifest(toEncrypt)
 		if err != nil {
 			postFilesFail.Inc(1)
 			Respond(w, r, err.Error(), http.StatusInternalServerError)
@@ -376,7 +381,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 			Respond(w, r, err2.Error(), code)
 			return
 		}
-		m, err := s.api.NewResourceManifest(r.uri.Addr, false)
+		m, err := s.api.NewResourceManifest(r.uri.Addr)
 		if err != nil {
 			Respond(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
 			return

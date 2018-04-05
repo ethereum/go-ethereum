@@ -379,7 +379,7 @@ func (self *Api) Modify(key storage.Key, path, contentHash, contentType string) 
 		apiModifyFail.Inc(1)
 		return nil, err
 	}
-	return trie.hash, nil
+	return trie.ref, nil
 }
 
 func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Key, string, error) {

@@ -218,8 +218,8 @@ func TestBzzResource(t *testing.T) {
 }
 
 func TestBzzGetPath(t *testing.T) {
-	// testBzzGetPath(false, t)
-	testBzzGetPath(true, t)
+	testBzzGetPath(false, t)
+	// testBzzGetPath(true, t)
 }
 
 func testBzzGetPath(encrypted bool, t *testing.T) {
