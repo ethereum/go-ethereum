@@ -177,7 +177,7 @@ func (self *Pss) Start(srv *p2p.Server) error {
 	go func() {
 		for {
 			tickC := time.Tick(defaultCleanInterval)
-			cacheTickC := time.Tick(cacheTTL)
+			cacheTickC := time.Tick(self.cacheTTL)
 			select {
 			case <-cacheTickC:
 				self.cleanFwdCache()
@@ -765,7 +765,7 @@ func (self *Pss) cleanFwdCache() {
 	defer self.fwdCacheMu.Unlock()
 	for k, v := range self.fwdCache {
 		if v.expiresAt.Before(time.Now()) {
-			delete(self.fwdCache[k])
+			delete(self.fwdCache, k)
 		}
 	}
 }
