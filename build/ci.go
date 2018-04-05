@@ -324,12 +324,17 @@ func doLint(cmdline []string) {
 	}
 	// Get metalinter and install all supported linters
 	build.MustRun(goTool("get", "gopkg.in/alecthomas/gometalinter.v2"))
+	build.MustRun(goTool("get", "github.com/FiloSottile/vendorcheck"))
+
+	build.MustRunCommand(filepath.Join(GOBIN, "vendorcheck"), "./...")
 	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v2"), "--install")
 
 	// Run fast linters batched together
 	configs := []string{
 		"--vendor",
 		"--disable-all",
+		"--enable=goimports",
+		"--enable=varcheck",
 		"--enable=vet",
 		"--enable=gofmt",
 		"--enable=misspell",
@@ -340,7 +345,7 @@ func doLint(cmdline []string) {
 
 	// Run slow linters one by one
 	for _, linter := range []string{"unconvert", "gosimple"} {
-		configs = []string{"--vendor", "--deadline=10m", "--disable-all", "--enable=" + linter}
+		configs = []string{"--vendor", "--tests", "--deadline=10m", "--disable-all", "--enable=" + linter}
 		build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v2"), append(configs, packages...)...)
 	}
 }

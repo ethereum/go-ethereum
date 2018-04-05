@@ -38,15 +38,9 @@ test: all
 	build/env.sh go run build/ci.go test
 
 lint: ## Run linters. Use make install-linters first.
-	vendorcheck ./...
-	gometalinter --disable-all -E vet -E goimports -E varcheck -E gofmt -E misspell -E goconst -E unconvert -E gosimple --deadline=10m --min-occurrences=6 --tests --vendor ./...
+	build/env.sh go run build/ci.go lint
 
-install-linters: ## Install linters
-	go get -u github.com/FiloSottile/vendorcheck
-	go get -u github.com/alecthomas/gometalinter
-	gometalinter --vendored-linters --install
-
-format:  # Formats the code. Must have goimports installed (use make install-linters).
+format:  # Formats the code. Must have goimports installed
 	goimports -w -local github.com/ethereum/go-ethereum ./
 
 clean:
