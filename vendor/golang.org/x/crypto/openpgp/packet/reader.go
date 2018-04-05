@@ -5,8 +5,9 @@
 package packet
 
 import (
-	"golang.org/x/crypto/openpgp/errors"
 	"io"
+
+	"golang.org/x/crypto/openpgp/errors"
 )
 
 // Reader reads packets from an io.Reader and allows packets to be 'unread' so

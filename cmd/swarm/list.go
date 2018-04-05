@@ -22,9 +22,10 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
-	"gopkg.in/urfave/cli.v1"
 )
 
 func list(ctx *cli.Context) {

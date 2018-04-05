@@ -22,10 +22,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"gopkg.in/urfave/cli.v1"
 )
 
 func dbExport(ctx *cli.Context) {

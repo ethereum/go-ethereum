@@ -20,8 +20,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
+
+	"github.com/ethereum/go-ethereum/cmd/utils"
 )
 
 const (
@@ -53,10 +54,10 @@ var (
 		Name:  "json",
 		Usage: "output JSON instead of human-readable format",
 	}
-	messageFlag = cli.StringFlag{
-		Name:  "message",
-		Usage: "the file that contains the message to sign/verify",
-	}
+	//messageFlag = cli.StringFlag{
+	//	Name:  "message",
+	//	Usage: "the file that contains the message to sign/verify",
+	//}
 )
 
 func main() {

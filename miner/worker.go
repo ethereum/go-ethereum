@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gopkg.in/fatih/set.v0"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -35,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"gopkg.in/fatih/set.v0"
 )
 
 const (

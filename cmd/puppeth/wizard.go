@@ -30,10 +30,11 @@ import (
 	"strings"
 	"sync"
 
+	"golang.org/x/crypto/ssh/terminal"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/log"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 // config contains all the configurations needed by puppeth that should be saved

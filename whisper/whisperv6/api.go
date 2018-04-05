@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	filterTimeout = 300 // filters are considered timeout out after filterTimeout seconds
+//filterTimeout = 300 // filters are considered timeout out after filterTimeout seconds
 )
 
 // List of errors

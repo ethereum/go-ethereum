@@ -84,8 +84,8 @@ func NewNetStore(hash SwarmHasher, lstore *LocalStore, cloud CloudStore, params 
 }
 
 const (
-	// maximum number of peers that a retrieved message is delivered to
-	requesterCount = 3
+// maximum number of peers that a retrieved message is delivered to
+//requesterCount = 3
 )
 
 var (

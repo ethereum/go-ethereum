@@ -38,7 +38,7 @@ const (
 	hashBits   = len(common.Hash{}) * 8
 	nBuckets   = hashBits + 1 // Number of buckets
 
-	maxBondingPingPongs = 16
+	//maxBondingPingPongs = 16
 	maxFindnodeFailures = 5
 )
 

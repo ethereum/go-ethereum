@@ -36,13 +36,14 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
+	"github.com/pborman/uuid"
+	"golang.org/x/crypto/pbkdf2"
+	"golang.org/x/crypto/scrypt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
-	"github.com/pborman/uuid"
-	"golang.org/x/crypto/pbkdf2"
-	"golang.org/x/crypto/scrypt"
 )
 
 const (

@@ -24,12 +24,13 @@ import (
 	"os"
 	"runtime"
 
+	colorable "github.com/mattn/go-colorable"
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/log/term"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"
-	colorable "github.com/mattn/go-colorable"
-	"gopkg.in/urfave/cli.v1"
 )
 
 var (

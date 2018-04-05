@@ -21,10 +21,11 @@ import (
 	"math/big"
 	"testing"
 
+	checker "gopkg.in/check.v1"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	checker "gopkg.in/check.v1"
 )
 
 type StateSuite struct {

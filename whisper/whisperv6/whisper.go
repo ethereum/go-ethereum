@@ -26,16 +26,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/syndtr/goleveldb/leveldb/errors"
+	"golang.org/x/crypto/pbkdf2"
+	"golang.org/x/sync/syncmap"
+	set "gopkg.in/fatih/set.v0"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/syndtr/goleveldb/leveldb/errors"
-	"golang.org/x/crypto/pbkdf2"
-	"golang.org/x/sync/syncmap"
-	set "gopkg.in/fatih/set.v0"
 )
 
 // Statistics holds several message-related counter for analytics

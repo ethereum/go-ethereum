@@ -25,8 +25,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/fatih/set.v0"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const MetadataApi = "rpc"

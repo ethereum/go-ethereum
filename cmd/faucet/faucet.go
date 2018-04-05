@@ -41,6 +41,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/websocket"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -58,7 +60,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
-	"golang.org/x/net/websocket"
 )
 
 var (

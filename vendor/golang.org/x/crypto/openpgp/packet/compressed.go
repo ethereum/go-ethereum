@@ -8,9 +8,10 @@ import (
 	"compress/bzip2"
 	"compress/flate"
 	"compress/zlib"
-	"golang.org/x/crypto/openpgp/errors"
 	"io"
 	"strconv"
+
+	"golang.org/x/crypto/openpgp/errors"
 )
 
 // Compressed represents a compressed OpenPGP packet. The decompressed contents

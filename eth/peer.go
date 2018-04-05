@@ -23,11 +23,12 @@ import (
 	"sync"
 	"time"
 
+	"gopkg.in/fatih/set.v0"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
-	"gopkg.in/fatih/set.v0"
 )
 
 var (

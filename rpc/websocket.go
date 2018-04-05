@@ -29,9 +29,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/net/websocket"
 	"gopkg.in/fatih/set.v0"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // websocketJSONCodec is a custom JSON codec with payload size enforcement and

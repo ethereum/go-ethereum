@@ -47,8 +47,8 @@ const (
 	discMsg      = 0x01
 	pingMsg      = 0x02
 	pongMsg      = 0x03
-	getPeersMsg  = 0x04
-	peersMsg     = 0x05
+	//getPeersMsg  = 0x04
+	//peersMsg     = 0x05
 )
 
 // protoHandshake is the RLP structure of the protocol handshake.

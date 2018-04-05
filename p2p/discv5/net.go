@@ -36,7 +36,7 @@ import (
 var (
 	errInvalidEvent = errors.New("invalid in current state")
 	errNoQuery      = errors.New("no pending query")
-	errWrongAddress = errors.New("unknown sender address")
+	//errWrongAddress = errors.New("unknown sender address")
 )
 
 const (
@@ -828,11 +828,12 @@ type nodeEvent uint
 //go:generate stringer -type=nodeEvent
 
 const (
-	invalidEvent nodeEvent = iota // zero is reserved
+	//invalidEvent
+	//nodeEvent = iota // zero is reserved
 
 	// Packet type events.
 	// These correspond to packet types in the UDP protocol.
-	pingPacket
+	pingPacket = iota
 	pongPacket
 	findnodePacket
 	neighborsPacket
