@@ -13,5 +13,6 @@ find_files() {
 }
 
 GOFMT="gofmt -s -w";
-GOFMT="goimports -w";
+GOIMPORTS="goimports -w";
 find_files | xargs $GOFMT;
+find_files | xargs $GOIMPORTS;
