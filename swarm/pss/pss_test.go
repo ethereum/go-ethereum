@@ -144,9 +144,11 @@ func TestCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	ps := newTestPss(privkey, nil, nil)
+
 	pp := NewPssParams(privkey)
 	data := []byte("foo")
 	datatwo := []byte("bar")
+  datathree := []byte("baz")
 	wparams := &whisper.MessageParams{
 		TTL:      defaultWhisperTTL,
 		Src:      privkey,
@@ -169,6 +171,13 @@ func TestCache(t *testing.T) {
 		Payload: envtwo,
 		To:      to,
 	}
+	wparams.Payload = datathree
+	woutmsg, err = whisper.NewSentMessage(wparams)
+	envthree, err := woutmsg.Wrap(wparams)
+	msgthree := &PssMsg{
+		Payload: envthree,
+		To:      to,
+	}
 
 	digest := ps.digest(msg)
 	if err != nil {
@@ -178,6 +187,11 @@ func TestCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not store cache msgtwo: %v", err)
 	}
+	digestthree := ps.digest(msgthree)
+	if err != nil {
+		t.Fatalf("could not store cache msgthree: %v", err)
+	}
+
 
 	if digest == digesttwo {
 		t.Fatalf("different msgs return same hash: %d", digesttwo)
@@ -197,9 +211,22 @@ func TestCache(t *testing.T) {
 		t.Fatalf("message %v should NOT have EXPIRE record in cache but checkCache returned true", msgtwo)
 	}
 
-	time.Sleep(pp.CacheTTL)
+	time.Sleep(pp.CacheTTL + 1*time.Second)
+  err = ps.addFwdCache(msgthree)
+	if err != nil {
+		t.Fatalf("write to pss expire cache failed: %v", err)
+	}
+
 	if ps.checkFwdCache(msg) {
 		t.Fatalf("message %v should have expired from cache but checkCache returned true", msg)
+	}
+
+  if _, ok := ps.fwdCache[digestthree]; !ok {
+		t.Fatalf("unexpired message should be in the cache: %v", digestthree)
+  }
+
+	if _, ok := ps.fwdCache[digesttwo]; ok {
+		t.Fatalf("expired message should have been cleared from the cache: %v", digesttwo)
 	}
 }
 
@@ -1309,6 +1336,7 @@ func newTestPss(privkey *ecdsa.PrivateKey, overlay network.Overlay, ppextra *Pss
 		pp.SymKeyCacheCapacity = ppextra.SymKeyCacheCapacity
 	}
 	ps := NewPss(overlay, pp)
+	ps.Start(nil)
 
 	return ps
 }
