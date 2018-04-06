@@ -792,11 +792,11 @@ func testNetwork(t *testing.T) {
 		}
 		a = adapters.NewExecAdapter(dirname)
 	} else if adapter == "sock" {
-		a = adapters.NewSocketAdapter(newServices())
+		a = adapters.NewSocketAdapter(newServices(false))
 	} else if adapter == "tcp" {
-		a = adapters.NewTCPAdapter(newServices())
+		a = adapters.NewTCPAdapter(newServices(false))
 	} else if adapter == "sim" {
-		a = adapters.NewSimAdapter(newServices())
+		a = adapters.NewSimAdapter(newServices(false))
 	}
 	net := simulations.NewNetwork(a, &simulations.NetworkConfig{
 		ID: "0",

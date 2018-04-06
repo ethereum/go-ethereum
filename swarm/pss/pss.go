@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -115,7 +116,7 @@ type Pss struct {
 
 	// message handling
 	handlers   map[Topic]map[*Handler]bool // topic and version based pss payload handlers. See pss.Handle()
-	handlersMu sync.Mutex
+	handlersMu sync.RWMutex
 	allowRaw   bool
 	hashPool   sync.Pool
 
@@ -615,7 +616,8 @@ func (self *Pss) SendRaw(msg []byte, address PssAddress) error {
 		},
 	}
 	self.addFwdCache(pssmsg)
-	return self.enqueue(pssmsg)
+	self.outbox <- pssmsg
+	return nil
 }
 
 // Send a message using symmetric encryption
@@ -709,6 +711,7 @@ func (self *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key [
 		Payload: envelope,
 	}
 	self.outbox <- pssmsg
+	return nil
 }
 
 // Forwards a pss message to the peer(s) closest to the to recipient address in the PssMsg struct
