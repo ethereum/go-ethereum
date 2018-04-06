@@ -33,6 +33,7 @@ var deduplicateData = []byte("dbUpgrade_20170714deduplicateData")
 // upgradeDeduplicateData checks the chain database version and
 // starts a background process to make upgrades if necessary.
 // Returns a stop function that blocks until the process has
+
 // been safely stopped.
 func upgradeDeduplicateData(db ethdb.Database) func() error {
 	// If the database is already converted or empty, bail out
@@ -49,10 +50,10 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 	stop := make(chan chan error)
 
 	go func() {
-		// Create an iterator to read the entire database and covert old lookup entires
-		it := db.(*ethdb.LDBDatabase).NewIterator()
+		// Create an iterator to read the entire database and convert old lookup entires
+		it := db.(*ethdb.BadgerDatabase).NewIterator()
 		defer func() {
-			if it != nil {
+			if it.Released() != true {
 				it.Release()
 			}
 		}()
@@ -100,7 +101,7 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 			converted++
 			if converted%100000 == 0 {
 				it.Release()
-				it = db.(*ethdb.LDBDatabase).NewIterator()
+				it = db.(*ethdb.BadgerDatabase).NewIterator()
 				it.Seek(key)
 
 				log.Info("Deduplicating database entries", "deduped", converted)
@@ -121,7 +122,6 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 			log.Error("Database deduplication failed", "deduped", converted, "err", failed)
 		}
 		it.Release()
-		it = nil
 
 		errc := <-stop
 		errc <- failed
