@@ -158,7 +158,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		eth.blockchain.SetHead(compat.RewindTo)
 		core.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
-	eth.bloomIndexer.Start(eth.blockchain)
+	
+	// Disable for tests
+	//eth.bloomIndexer.Start(eth.blockchain)
 
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = ctx.ResolvePath(config.TxPool.Journal)
@@ -204,7 +206,7 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 	if err != nil {
 		return nil, err
 	}
-	if db, ok := db.(*ethdb.LDBDatabase); ok {
+	if db, ok := db.(*ethdb.BadgerDatabase); ok {
 		db.Meter("eth/db/chaindata/")
 	}
 	return db, nil
