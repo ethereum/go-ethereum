@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/params"
+	"golang.org/x/crypto/ed25519"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -57,6 +58,20 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{6}): &bn256Add{},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMul{},
 	common.BytesToAddress([]byte{8}): &bn256Pairing{},
+}
+
+// PrecompiledContractsConstantinople contains the default set of pre-compiled Ethereum
+// contracts used in the Constantinople release.
+var PrecompiledContractsConstantinople = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}): &ecrecover{},
+	common.BytesToAddress([]byte{2}): &sha256hash{},
+	common.BytesToAddress([]byte{3}): &ripemd160hash{},
+	common.BytesToAddress([]byte{4}): &dataCopy{},
+	common.BytesToAddress([]byte{5}): &bigModExp{},
+	common.BytesToAddress([]byte{6}): &bn256Add{},
+	common.BytesToAddress([]byte{7}): &bn256ScalarMul{},
+	common.BytesToAddress([]byte{8}): &bn256Pairing{},
+	common.BytesToAddress([]byte{9}): &ed25519Verify{},
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
@@ -354,6 +369,29 @@ func (c *bn256Pairing) Run(input []byte) ([]byte, error) {
 	}
 	// Execute the pairing checks and return the results
 	if bn256.PairingCheck(cs, ts) {
+		return true32Byte, nil
+	}
+	return false32Byte, nil
+}
+
+// ed25519Verify implements a native Ed25519 signature verification.
+type ed25519Verify struct{}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+func (c *ed25519Verify) RequiredGas(input []byte) uint64 {
+	return params.Ed25519VerifyGas
+}
+
+func (c *ed25519Verify) Run(input []byte) ([]byte, error) {
+	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-665.md#specification
+	message := getData(input, 0, 32)
+	publicKey := getData(input, 32, 32)
+	sig := getData(input, 64, 64)
+
+	// Verify the Ed25519 signature against the public key and message
+	// and return result
+	// https://godoc.org/golang.org/x/crypto/ed25519#Verify
+	if ed25519.Verify(publicKey, message, sig) {
 		return true32Byte, nil
 	}
 	return false32Byte, nil
