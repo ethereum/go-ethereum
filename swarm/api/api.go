@@ -39,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-
 // TODO: this is bad, it should not be hardcoded how long is a hash
 var hashMatcher = regexp.MustCompile("^([0-9A-Fa-f]{64})([0-9A-Fa-f]{64})?")
 
