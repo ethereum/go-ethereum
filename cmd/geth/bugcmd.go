@@ -29,9 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/internal/browser"
 	"github.com/ethereum/go-ethereum/params"
 
-	cli "gopkg.in/urfave/cli.v1"
-
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	cli "gopkg.in/urfave/cli.v1"
 )
 
 var bugCommand = cli.Command{

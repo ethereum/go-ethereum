@@ -32,12 +32,11 @@ import (
 	"io/ioutil"
 	"sync"
 
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/iterator"
-
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
 
 //metrics variables
@@ -55,7 +54,6 @@ const (
 
 	// key prefixes for leveldb storage
 	kpIndex = 0
-	//kpData  = 1
 )
 
 var (

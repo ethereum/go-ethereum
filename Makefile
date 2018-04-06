@@ -40,9 +40,6 @@ test: all
 lint: ## Run linters. Use make install-linters first.
 	build/env.sh go run build/ci.go lint
 
-format:  # Formats the code. Must have goimports installed
-	build/gofmt.sh
-
 clean:
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
 

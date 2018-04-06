@@ -33,13 +33,12 @@ import (
 	"time"
 
 	"github.com/elastic/gosigar"
-	"golang.org/x/net/websocket"
-
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"golang.org/x/net/websocket"
 )
 
 const (

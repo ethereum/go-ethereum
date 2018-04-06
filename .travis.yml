@@ -13,7 +13,6 @@ matrix:
         - sudo chown root:$USER /etc/fuse.conf
         - go run build/ci.go install
         - go run build/ci.go test -coverage
-        - go run build/ci.go lint
 
     # These are the latest Go versions.
     - os: linux

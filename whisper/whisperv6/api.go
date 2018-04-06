@@ -32,9 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-const (
-//filterTimeout = 300 // filters are considered timeout out after filterTimeout seconds
-)
 
 // List of errors
 var (

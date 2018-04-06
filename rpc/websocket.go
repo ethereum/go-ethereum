@@ -29,9 +29,8 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/websocket"
-
 	"github.com/ethereum/go-ethereum/log"
+	"golang.org/x/net/websocket"
 	"gopkg.in/fatih/set.v0"
 )
 

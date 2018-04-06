@@ -25,8 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -34,13 +32,13 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
 const (
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
 	// rmTxChanSize is the size of channel listening to RemovedTransactionEvent.
-	//rmTxChanSize = 10
 )
 
 var (

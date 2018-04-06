@@ -20,10 +20,9 @@ import (
 	"errors"
 	"fmt"
 
-	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
 // ErrNotRequested is returned by the trie sync when it's requested to process a

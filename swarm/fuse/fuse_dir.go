@@ -19,13 +19,12 @@
 package fuse
 
 import (
-	"os"
-	"path/filepath"
-	"sync"
-
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
 	"golang.org/x/net/context"
+	"os"
+	"path/filepath"
+	"sync"
 )
 
 var (

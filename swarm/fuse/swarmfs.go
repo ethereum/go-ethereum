@@ -17,10 +17,9 @@
 package fuse
 
 import (
+	"github.com/ethereum/go-ethereum/swarm/api"
 	"sync"
 	"time"
-
-	"github.com/ethereum/go-ethereum/swarm/api"
 )
 
 const (

@@ -22,9 +22,8 @@ import (
 	"testing"
 	"time"
 
-	set "gopkg.in/fatih/set.v0"
-
 	"github.com/ethereum/go-ethereum/common"
+	set "gopkg.in/fatih/set.v0"
 )
 
 func TestMultipleTopicCopyInNewMessageFilter(t *testing.T) {
