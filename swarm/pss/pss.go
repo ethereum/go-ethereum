@@ -35,6 +35,7 @@ const (
 	defaultOutboxQueueSize     = 10000
 	pssProtocolName            = "pss"
 	pssVersion                 = 1
+	hasherCount                = 8
 )
 
 var (
@@ -45,8 +46,7 @@ var (
 // will also be instrumental in flood guard mechanism
 // and mailbox implementation
 type pssCacheEntry struct {
-	expiresAt    time.Time
-	receivedFrom []byte
+	expiresAt time.Time
 }
 
 // abstraction to enable access to p2p.protocols.Peer.Send
@@ -89,7 +89,6 @@ func NewPssParams(privatekey *ecdsa.PrivateKey) *PssParams {
 type Pss struct {
 	network.Overlay                   // we can get the overlayaddress from this
 	privateKey      *ecdsa.PrivateKey // pss can have it's own independent key
-	dpa             *storage.DPA      // we use swarm to store the cache
 	w               *whisper.Whisper  // key and encryption backend
 	auxAPIs         []rpc.API         // builtins (handshake, test) can add APIs
 
@@ -116,6 +115,7 @@ type Pss struct {
 	// message handling
 	handlers   map[Topic]map[*Handler]bool // topic and version based pss payload handlers. See pss.Handle()
 	handlersMu sync.RWMutex
+	hashPool   sync.Pool
 
 	// process
 	quitC chan struct{}
@@ -129,15 +129,14 @@ func (self *Pss) String() string {
 //
 // In addition to params, it takes a swarm network overlay
 // and a DPA storage for message cache storage.
-func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
+func NewPss(k network.Overlay, params *PssParams) *Pss {
 	cap := p2p.Cap{
 		Name:    pssProtocolName,
 		Version: pssVersion,
 	}
-	return &Pss{
+	ps := &Pss{
 		Overlay:    k,
 		privateKey: params.privateKey,
-		dpa:        dpa,
 		w:          whisper.New(&whisper.DefaultConfig),
 		quitC:      make(chan struct{}),
 
@@ -155,7 +154,19 @@ func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 		symKeyDecryptCacheCapacity: params.SymKeyCacheCapacity,
 
 		handlers: make(map[Topic]map[*Handler]bool),
+		hashPool: sync.Pool{
+			New: func() interface{} {
+				return storage.MakeHashFunc(storage.SHA3Hash)()
+			},
+		},
 	}
+
+	for i := 0; i < hasherCount; i++ {
+		hashfunc := storage.MakeHashFunc(storage.SHA3Hash)()
+		ps.hashPool.Put(hashfunc)
+	}
+
+	return ps
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -170,7 +181,7 @@ func (self *Pss) Start(srv *p2p.Server) error {
 			case <-tickC:
 				self.cleanKeys()
 			case <-self.quitC:
-				log.Info("pss shutting down")
+				return
 			}
 		}
 	}()
@@ -180,7 +191,7 @@ func (self *Pss) Start(srv *p2p.Server) error {
 			case msg := <-self.outbox:
 				self.forward(msg)
 			case <-self.quitC:
-				log.Info("pss shutting down")
+				return
 			}
 		}
 	}()
@@ -189,6 +200,7 @@ func (self *Pss) Start(srv *p2p.Server) error {
 }
 
 func (self *Pss) Stop() error {
+	log.Info("pss shutting down")
 	close(self.quitC)
 	return nil
 }
@@ -298,7 +310,14 @@ func (self *Pss) getHandlers(topic Topic) map[*Handler]bool {
 // Passes error to pss protocol handler if payload is not valid pssmsg
 func (self *Pss) handlePssMsg(msg interface{}) error {
 	pssmsg, ok := msg.(*PssMsg)
+
 	if ok {
+		if self.checkFwdCache(pssmsg) {
+			log.Trace(fmt.Sprintf("pss relay block-cache match (process): FROM %x TO %x", self.Overlay.BaseAddr(), common.ToHex(pssmsg.To)))
+			return nil
+		}
+		self.addFwdCache(pssmsg)
+
 		var err error
 		if !self.isSelfPossibleRecipient(pssmsg) {
 			log.Trace("pss was for someone else :'( ... forwarding", "pss", common.ToHex(self.BaseAddr()))
@@ -532,7 +551,7 @@ func (self *Pss) cleanKeys() (count int) {
 	for keyid, peertopics := range self.symKeyPool {
 		var expiredtopics []Topic
 		for topic, psp := range peertopics {
-			log.Trace("check topic", "topic", topic, "id", keyid, "protect", psp.protected, "p", fmt.Sprintf("%p", self.symKeyPool[keyid][topic]))
+			//log.Trace("check topic", "topic", topic, "id", keyid, "protect", psp.protected, "p", fmt.Sprintf("%p", self.symKeyPool[keyid][topic]))
 			if psp.protected {
 				continue
 			}
@@ -540,7 +559,7 @@ func (self *Pss) cleanKeys() (count int) {
 			var match bool
 			for i := self.symKeyDecryptCacheCursor; i > self.symKeyDecryptCacheCursor-cap(self.symKeyDecryptCache) && i > 0; i-- {
 				cacheid := self.symKeyDecryptCache[i%cap(self.symKeyDecryptCache)]
-				log.Trace("check cache", "idx", i, "id", *cacheid)
+				//log.Trace("check cache", "idx", i, "id", *cacheid)
 				if *cacheid == keyid {
 					match = true
 				}
@@ -665,16 +684,9 @@ func (self *Pss) forward(msg *PssMsg) {
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
 
-	// message hash
-	digest, err := self.storeMsg(msg)
-	if err != nil {
-		log.Warn(fmt.Sprintf("could not store message %v to cache: %v", msg, err))
-	}
-
 	// send with kademlia
 	// find the closest peer to the recipient and attempt to send
 	sent := 0
-
 	self.Overlay.EachConn(to, 256, func(op network.OverlayConn, po int, isproxbin bool) bool {
 		// we need p2p.protocols.Peer.Send
 		// cast and resolve
@@ -699,23 +711,19 @@ func (self *Pss) forward(msg *PssMsg) {
 		}
 
 		// get the protocol peer from the forwarding peer cache
-		sendMsg := fmt.Sprintf("MSG %x TO %x FROM %x VIA %x", digest, to, self.BaseAddr(), op.Address())
+		sendMsg := fmt.Sprintf("MSG TO %x FROM %x VIA %x", to, self.BaseAddr(), op.Address())
 		self.fwdPoolMu.RLock()
 		pp := self.fwdPool[sp.Info().ID]
 		self.fwdPoolMu.RUnlock()
-		if self.checkFwdCache(op.Address(), digest) {
-			log.Trace(fmt.Sprintf("%v: peer already forwarded to", sendMsg))
+
+		// attempt to send the message
+		err := pp.Send(msg)
+		if err != nil {
 			return true
 		}
-		// attempt to send the message
-		go func() {
-			err := pp.Send(msg)
-			if err != nil {
-				log.Debug(fmt.Sprintf("%v: failed forwarding: %v", sendMsg, err))
-			}
-		}()
-		log.Trace(fmt.Sprintf("%v: successfully forwarded", sendMsg))
 		sent++
+		log.Trace(fmt.Sprintf("%v: successfully forwarded", sendMsg))
+
 		// continue forwarding if:
 		// - if the peer is end recipient but the full address has not been disclosed
 		// - if the peer address matches the partial address fully
@@ -741,7 +749,7 @@ func (self *Pss) forward(msg *PssMsg) {
 	}
 
 	// cache the message
-	self.addFwdCache(digest)
+	self.addFwdCache(msg)
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -749,11 +757,14 @@ func (self *Pss) forward(msg *PssMsg) {
 /////////////////////////////////////////////////////////////////////
 
 // add a message to the cache
-func (self *Pss) addFwdCache(digest pssDigest) error {
-	self.fwdCacheMu.Lock()
-	defer self.fwdCacheMu.Unlock()
+func (self *Pss) addFwdCache(msg *PssMsg) error {
 	var entry pssCacheEntry
 	var ok bool
+
+	self.fwdCacheMu.Lock()
+	defer self.fwdCacheMu.Unlock()
+
+	digest := self.digest(msg)
 	if entry, ok = self.fwdCache[digest]; !ok {
 		entry = pssCacheEntry{}
 	}
@@ -763,34 +774,31 @@ func (self *Pss) addFwdCache(digest pssDigest) error {
 }
 
 // check if message is in the cache
-func (self *Pss) checkFwdCache(addr []byte, digest pssDigest) bool {
-	self.fwdCacheMu.RLock()
-	defer self.fwdCacheMu.RUnlock()
+func (self *Pss) checkFwdCache(msg *PssMsg) bool {
+	self.fwdCacheMu.Lock()
+	defer self.fwdCacheMu.Unlock()
+
+	digest := self.digest(msg)
 	entry, ok := self.fwdCache[digest]
 	if ok {
 		if entry.expiresAt.After(time.Now()) {
 			log.Trace(fmt.Sprintf("unexpired cache for digest %x", digest))
-			return true
-		} else if entry.expiresAt.IsZero() && bytes.Equal(addr, entry.receivedFrom) {
-			log.Trace(fmt.Sprintf("sendermatch %x for digest %x", common.ToHex(addr), digest))
 			return true
 		}
 	}
 	return false
 }
 
-// DPA storage handler for message cache
-func (self *Pss) storeMsg(msg *PssMsg) (pssDigest, error) {
-	buf := bytes.NewReader(msg.serialize())
-	key, _, err := self.dpa.Store(buf, int64(buf.Len()), false)
-	if err != nil {
-		log.Warn("Could not store in swarm", "err", err)
-		return pssDigest{}, err
-	}
-	log.Trace("Stored msg in swarm", "key", key)
+// Digest of message
+func (self *Pss) digest(msg *PssMsg) pssDigest {
+	hasher := self.hashPool.Get().(storage.SwarmHash)
+	defer self.hashPool.Put(hasher)
+	hasher.Reset()
+	hasher.Write(msg.serialize())
 	digest := pssDigest{}
+	key := hasher.Sum(nil)
 	copy(digest[:], key[:digestLength])
-	return digest, nil
+	return digest
 }
 
 func (self *Pss) isMsgExpired(msg *PssMsg) bool {
