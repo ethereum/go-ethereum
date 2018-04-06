@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 )
 
-
 // syncer is responsible for periodically synchronising with the network, both
 // downloading hashes and blocks as well as handling the announcement handler.
 func (pm *ProtocolManager) syncer() {

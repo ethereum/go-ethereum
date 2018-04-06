@@ -45,7 +45,7 @@ const SizeLimit = 300 // maximum encoded size of a node record in bytes
 const ID_SECP256k1_KECCAK = ID("secp256k1-keccak") // the default identity scheme
 
 var (
-	errNoID = errors.New("unknown or unspecified identity scheme")
+	errNoID           = errors.New("unknown or unspecified identity scheme")
 	errInvalidSig     = errors.New("invalid signature")
 	errNotSorted      = errors.New("record key/value pairs are not sorted by key")
 	errDuplicateKey   = errors.New("record contains duplicate key")

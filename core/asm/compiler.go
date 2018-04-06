@@ -263,7 +263,6 @@ func (err compileError) Error() string {
 	return fmt.Sprintf("%d syntax error: unexpected %v, expected %v", err.lineno, err.got, err.want)
 }
 
-
 func compileErr(c token, got, want string) error {
 	return compileError{
 		got:    got,

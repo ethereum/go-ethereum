@@ -72,4 +72,3 @@ func (eth *LightEthereum) startBloomHandlers() {
 		}()
 	}
 }
-

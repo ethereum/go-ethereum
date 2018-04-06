@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-
 var (
 	ErrSymAsym              = errors.New("specify either a symmetric or an asymmetric key")
 	ErrInvalidSymmetricKey  = errors.New("invalid symmetric key")

@@ -29,8 +29,8 @@ import (
 )
 
 var (
-	bigZero = new(big.Int)
-	tt255   = math.BigPow(2, 255)
+	bigZero                  = new(big.Int)
+	tt255                    = math.BigPow(2, 255)
 	errWriteProtection       = errors.New("evm: write protection")
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
 	errExecutionReverted     = errors.New("evm: execution reverted")

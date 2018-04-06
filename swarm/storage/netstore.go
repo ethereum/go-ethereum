@@ -83,7 +83,6 @@ func NewNetStore(hash SwarmHasher, lstore *LocalStore, cloud CloudStore, params 
 	}
 }
 
-
 var (
 	// timeout interval before retrieval is timed out
 	searchTimeout = 3 * time.Second
