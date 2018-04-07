@@ -216,6 +216,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.TestnetChainConfig
 	case ghash == params.EllaismGenesisHash:
 		return params.EllaismChainConfig
+	case ghash == params.SocialGenesisHash:
+		return params.SocialChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -334,7 +336,7 @@ func DefaultEllaismGenesisBlock() *Genesis {
 	}
 }
 
-// ClassicGenesisBlock returns the Ellaism genesis block.
+// ClassicGenesisBlock returns the Ethereum Classic genesis block.
 func DefaultClassicGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.ClassicChainConfig,
@@ -343,6 +345,18 @@ func DefaultClassicGenesisBlock() *Genesis {
 		GasLimit:   5000,
 		Difficulty: big.NewInt(17179869184),
 		Alloc:      decodePrealloc(mainnetAllocData),
+	}
+}
+
+// SocialGenesisBlock returns the Ethereum Social genesis block.
+func DefaultSocialGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.SocialChainConfig,
+		Nonce:      66,
+		ExtraData:  hexutil.MustDecode("0x3230313820457468657265756d20536f6369616c2050726f6a656374"),
+		GasLimit:   5000,
+		Difficulty: big.NewInt(17179869184),
+		Alloc:      decodePrealloc(socialAllocData),
 	}
 }
 

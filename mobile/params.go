@@ -41,6 +41,15 @@ func EllaismGenesis() string {
 	return string(enc)
 }
 
+// SocialGenesis returns the JSON spec to use for the Ethereum Social network.
+func SocialGenesis() string {
+	enc, err := json.Marshal(core.DefaultSocialGenesisBlock())
+	if err != nil {
+		panic(err)
+	}
+	return string(enc)
+}
+
 // TestnetGenesis returns the JSON spec to use for the Ethereum test network.
 func TestnetGenesis() string {
 	enc, err := json.Marshal(core.DefaultTestnetGenesisBlock())

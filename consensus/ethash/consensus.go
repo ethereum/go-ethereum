@@ -38,6 +38,7 @@ import (
 var (
 	FrontierBlockReward      *big.Int = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
 	ByzantiumBlockReward     *big.Int = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
+	SocialBlockReward        *big.Int = new(big.Int).Mul(big.NewInt(50), big.NewInt(1e+18)) // Block reward in wei for successfully mining a block upward for Ethereum Social
 	maxUncles                         = 2                 // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTime            = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
 	DisinflationRateQuotient          = big.NewInt(4)     // Disinflation rate quotient for ECIP1017
@@ -580,6 +581,9 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	blockReward := FrontierBlockReward
 	if config.IsByzantium(header.Number) {
 		blockReward = ByzantiumBlockReward
+	}
+	if config.IsSocial(header.Number) {
+		blockReward = SocialBlockReward
 	}
 	if config.HasECIP1017() {
 		// Ensure value 'era' is configured.
