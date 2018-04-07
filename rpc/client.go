@@ -168,6 +168,7 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 	}
 	switch u.Scheme {
 	case "http", "https":
+                log.Debug(fmt.Sprintf("connecting to rpc url %s", rawurl))
 		return DialHTTP(rawurl)
 	case "ws", "wss":
 		return DialWebsocket(ctx, rawurl, "")

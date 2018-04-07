@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -95,7 +96,7 @@ func localConsole(ctx *cli.Context) error {
 
 	console, err := console.New(config)
 	if err != nil {
-		utils.Fatalf("Failed to start the JavaScript console: %v", err)
+		utils.Fatalf("Failed to start the local JavaScript console: %v", err)
 	}
 	defer console.Stop(false)
 
@@ -116,6 +117,7 @@ func localConsole(ctx *cli.Context) error {
 func remoteConsole(ctx *cli.Context) error {
 	// Attach to a remotely running geth instance and start the JavaScript console
 	endpoint := ctx.Args().First()
+        log.Debug(fmt.Sprintf("remote endpoint is %s", endpoint))
 	if endpoint == "" {
 		path := node.DefaultDataDir()
 		if ctx.GlobalIsSet(utils.DataDirFlag.Name) {
@@ -143,7 +145,7 @@ func remoteConsole(ctx *cli.Context) error {
 
 	console, err := console.New(config)
 	if err != nil {
-		utils.Fatalf("Failed to start the JavaScript console: %v", err)
+		utils.Fatalf("Failed to start the remote JavaScript console: %v", err)
 	}
 	defer console.Stop(false)
 
@@ -196,7 +198,7 @@ func ephemeralConsole(ctx *cli.Context) error {
 
 	console, err := console.New(config)
 	if err != nil {
-		utils.Fatalf("Failed to start the JavaScript console: %v", err)
+		utils.Fatalf("Failed to start the ephemeral JavaScript console: %v", err)
 	}
 	defer console.Stop(false)
 
