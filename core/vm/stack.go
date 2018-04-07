@@ -32,6 +32,10 @@ func newstack() *Stack {
 	return &Stack{data: make([]*big.Int, 0, 1024)}
 }
 
+func newZeroSizeStack() *Stack {
+	return &Stack{data: make([]*big.Int, 0)}
+}
+
 func (st *Stack) Data() []*big.Int {
 	return st.data
 }

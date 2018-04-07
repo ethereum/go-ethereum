@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -51,8 +52,9 @@ type Interpreter struct {
 	gasTable params.GasTable
 	intPool  *intPool
 
-	readOnly   bool   // Whether to throw on stateful modifications
-	returnData []byte // Last CALL's return data for subsequent reuse
+	readOnly    bool   // Whether to throw on stateful modifications
+	returnData  []byte // Last CALL's return data for subsequent reuse
+	precompiles map[common.Address]PrecompiledContract
 }
 
 // NewInterpreter returns a new instance of the Interpreter.
@@ -73,11 +75,17 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 		}
 	}
 
+	precompiles := PrecompiledContractsHomestead
+	if evm.ChainConfig().IsByzantium(evm.BlockNumber) {
+		precompiles = PrecompiledContractsByzantium
+	}
+
 	return &Interpreter{
-		evm:      evm,
-		cfg:      cfg,
-		gasTable: evm.ChainConfig().GasTable(evm.BlockNumber),
-		intPool:  newIntPool(),
+		evm:         evm,
+		cfg:         cfg,
+		gasTable:    evm.ChainConfig().GasTable(evm.BlockNumber),
+		intPool:     newZerosizeIntPool(),
+		precompiles: precompiles,
 	}
 }
 

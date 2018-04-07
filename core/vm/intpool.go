@@ -32,6 +32,10 @@ func newIntPool() *intPool {
 	return &intPool{pool: newstack()}
 }
 
+func newZerosizeIntPool() *intPool {
+	return &intPool{pool: newZeroSizeStack()}
+}
+
 // get retrieves a big int from the pool, allocating one if the pool is empty.
 // Note, the returned int's value is arbitrary and will not be zeroed!
 func (p *intPool) get() *big.Int {
