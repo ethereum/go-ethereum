@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -50,42 +49,35 @@ type Interpreter struct {
 	evm      *EVM
 	cfg      Config
 	gasTable params.GasTable
-	intPool  *intPool
 
 	readOnly    bool   // Whether to throw on stateful modifications
 	returnData  []byte // Last CALL's return data for subsequent reuse
-	precompiles map[common.Address]PrecompiledContract
+	blockContext *BlockContext
 }
 
 // NewInterpreter returns a new instance of the Interpreter.
-func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
+func NewInterpreter(evm *EVM, cfg Config,blockContext *BlockContext) *Interpreter {
 	// We use the STOP instruction whether to see
 	// the jump table was initialised. If it was not
 	// we'll set the default jump table.
 	if !cfg.JumpTable[STOP].valid {
 		switch {
-		case evm.ChainConfig().IsConstantinople(evm.BlockNumber):
+		case evm.ChainConfig().IsConstantinople(blockContext.BlockNumber):
 			cfg.JumpTable = constantinopleInstructionSet
-		case evm.ChainConfig().IsByzantium(evm.BlockNumber):
+		case evm.ChainConfig().IsByzantium(blockContext.BlockNumber):
 			cfg.JumpTable = byzantiumInstructionSet
-		case evm.ChainConfig().IsHomestead(evm.BlockNumber):
+		case evm.ChainConfig().IsHomestead(blockContext.BlockNumber):
 			cfg.JumpTable = homesteadInstructionSet
 		default:
 			cfg.JumpTable = frontierInstructionSet
 		}
 	}
 
-	precompiles := PrecompiledContractsHomestead
-	if evm.ChainConfig().IsByzantium(evm.BlockNumber) {
-		precompiles = PrecompiledContractsByzantium
-	}
-
 	return &Interpreter{
 		evm:         evm,
 		cfg:         cfg,
-		gasTable:    evm.ChainConfig().GasTable(evm.BlockNumber),
-		intPool:     newZerosizeIntPool(),
-		precompiles: precompiles,
+		gasTable:    evm.ChainConfig().GasTable(blockContext.BlockNumber),
+		blockContext: blockContext,
 	}
 }
 
@@ -211,7 +203,7 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		// verifyPool is a build flag. Pool verification makes sure the integrity
 		// of the integer pool by comparing values to a default value.
 		if verifyPool {
-			verifyIntegerPool(in.intPool)
+			verifyIntegerPool(in.blockContext.Intpool)
 		}
 		// if the operation clears the return data (e.g. it has returning data)
 		// set the last return to the result of the operation.

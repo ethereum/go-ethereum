@@ -53,7 +53,8 @@ type BlockGen struct {
 
 	config *params.ChainConfig
 	engine consensus.Engine
-}
+
+	}
 
 // SetCoinbase sets the coinbase of the generated block.
 // It can be called at most once.
@@ -98,9 +99,19 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.Prepare(tx.Hash(), common.Hash{}, len(b.txs))
-	signer := types.MakeSigner(b.config, b.header.Number)
 
-	receipt, _, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{}, &signer)
+	blockContext := &vm.BlockContext{
+		BlockNumber: b.header.Number,
+		Coinbase:    b.header.Coinbase,
+		GasLimit:    b.header.GasLimit,
+		Signer:      types.MakeSigner(b.config, b.header.Number),
+		Precompiles: vm.PrecompiledContractsByzantium, // TODO fix
+		Intpool:     vm.NewIntpool(),
+		Time:        b.header.Time,
+		Difficulty:  b.header.Difficulty,
+	}
+
+	receipt, _, err := ApplyTransaction(b.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{}, blockContext)
 	if err != nil {
 		panic(err)
 	}
