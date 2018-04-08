@@ -91,7 +91,7 @@ This command will:
    connecting to Ellaism network.
  * Default data directory will be `~/.ethereum/ellaism`.
 
-## Full node on the main Ethereum Classic network
+### Full node on the main Ethereum Classic network
 
 To get on Ethereum Classic network and take advantage of fast-sync:
 
