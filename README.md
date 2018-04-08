@@ -77,41 +77,44 @@ This command will:
    This too is optional and if you leave it out you can always attach to an already running Geth instance
    with `geth attach`.
 
-### Full node on the Ethereum test network
+### Full node on the main Ellaism network
 
-Transitioning towards developers, if you'd like to play around with creating Ethereum contracts, you
-almost certainly would like to do that without any real money involved until you get the hang of the
-entire system. In other words, instead of attaching to the main network, you want to join the **test**
-network with your node, which is fully equivalent to the main network, but with play-Ether only.
+To get on Ellaism network and take advantage of fast-sync:
 
 ```
-$ geth --testnet console
+$ geth --ellaism console
 ```
 
-The `console` subcommand have the exact same meaning as above and they are equally useful on the
-testnet too. Please see above for their explanations if you've skipped to here.
+This command will:
 
-Specifying the `--testnet` flag however will reconfigure your Geth instance a bit:
+ * Start geth in fast sync mode and start up geth's built-in interactive JavaScript console,
+   connecting to Ellaism network.
+ * Default data directory will be `~/.ethereum/ellaism`.
 
- * Instead of using the default data directory (`~/.ethereum` on Linux for example), Geth will nest
-   itself one level deeper into a `testnet` subfolder (`~/.ethereum/testnet` on Linux). Note, on OSX
-   and Linux this also means that attaching to a running testnet node requires the use of a custom
-   endpoint since `geth attach` will try to attach to a production node endpoint by default. E.g.
-   `geth attach <datadir>/testnet/geth.ipc`. Windows users are not affected by this.
- * Instead of connecting the main Ethereum network, the client will connect to the test network,
-   which uses different P2P bootnodes, different network IDs and genesis states.
+## Full node on the main Ethereum Classic network
 
-*Note: Although there are some internal protective measures to prevent transactions from crossing
-over between the main network and test network, you should make sure to always use separate accounts
-for play-money and real-money. Unless you manually move accounts, Geth will by default correctly
-separate the two networks and will not make any accounts available between them.*
-
-### Full node on the Rinkeby test network
-
-The above test network is a cross client one based on the ethash proof-of-work consensus algorithm. As such, it has certain extra overhead and is more susceptible to reorganization attacks due to the network's low difficulty / security. Go Ethereum also supports connecting to a proof-of-authority based test network called [*Rinkeby*](https://www.rinkeby.io) (operated by members of the community). This network is lighter, more secure, but is only supported by go-ethereum.
+To get on Ethereum Classic network and take advantage of fast-sync:
 
 ```
-$ geth --rinkeby console
+$ geth --classic console
+```
+
+This command will:
+
+ * Start geth in fast sync mode and start up geth's built-in interactive JavaScript console,
+   connecting to Ethereum Classic network.
+ * Default data directory will be `~/.ethereum/classic`.
+
+### All networks
+
+For a full list of networks supported by multi-geth, take a look at the command-line help messages:
+
+```
+--testnet                            Ropsten network: pre-configured proof-of-work test network
+--ellaism                            Ellaism network: pre-configured Ellaism mainnet
+--classic                            Ethereum Classic network: pre-configured Ethereum Classic mainnet
+--social                             Ethereum Social network: pre-configured Ethereum Social mainnet
+--rinkeby                            Rinkeby network: pre-configured proof-of-authority test network
 ```
 
 ### Configuration
