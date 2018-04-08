@@ -13,7 +13,7 @@ matrix:
         - sudo chmod 666 /dev/fuse
         - sudo chown root:$USER /etc/fuse.conf
         - go run build/ci.go install
-        - go run build/ci.go test
+        - travis_wait 30 go run build/ci.go test
       before_deploy:
         - sh build/deploy.sh
       deploy:
@@ -37,7 +37,7 @@ matrix:
         - brew install caskroom/cask/brew-cask
         - brew cask install osxfuse
         - go run build/ci.go install
-        - go run build/ci.go test
+        - travis_wait 30 go run build/ci.go test
       before_deploy:
         - sh build/deploy.sh
       deploy:
