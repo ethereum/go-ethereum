@@ -1087,7 +1087,7 @@ func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transacti
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: addr}
 
-	wallet, err := s.b.AccountManager().Find(account)
+	wallet, err := s.b.AccountManager().Find(account) //manage.go  Find attempts to locate the wallet corresponding to a specific account
 	if err != nil {
 		return nil, err
 	}
@@ -1193,7 +1193,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: args.From}
 
-	wallet, err := s.b.AccountManager().Find(account)
+	wallet, err := s.b.AccountManager().Find(account)  // accounts/manage.go Find attempts to locate the wallet corresponding to a specific account
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1201,7 +1201,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 	if args.Nonce == nil {
 		// Hold the addresse's mutex around signing to prevent concurrent assignment of
 		// the same nonce to multiple accounts.
-		s.nonceLock.LockAddr(args.From)
+		s.nonceLock.LockAddr(args.From)  
 		defer s.nonceLock.UnlockAddr(args.From)
 	}
 
@@ -1213,11 +1213,10 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 	tx := args.toTransaction()
 
 	var chainID *big.Int
-	if config := s.b.ChainConfig(); config.IsEIP155(s.b.CurrentBlock().Number()) {
-		chainID = config.ChainId
+	if config := s.b.ChainConfig(); config.IsEIP155(s.b.CurrentBlock().Number()) {  // param/config.go  type/Block.go
+		chainID = config.ChainId  //Choose fork
 	}
-	signed, err := wallet.SignTx(account, tx, chainID)
-	if err != nil {
+	signed, err := wallet.SignTx(account, tx, chainID)  // accounts/acount.go wallet.go
 		return common.Hash{}, err
 	}
 	return submitTransaction(ctx, s.b, signed)
@@ -1267,6 +1266,8 @@ type SignTransactionResult struct {
 // SignTransaction will sign the given transaction with the from account.
 // The node needs to have the private key of the account corresponding with
 // the given from address and it needs to be unlocked.
+
+//对发送来的交易进行签名
 func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args SendTxArgs) (*SignTransactionResult, error) {
 	if args.Gas == nil {
 		return nil, fmt.Errorf("gas not specified")
