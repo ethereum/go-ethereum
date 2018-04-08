@@ -27,7 +27,7 @@ import (
 
 // FakePeer is a mock downloader peer that operates on a local database instance
 // instead of being an actual live node. It's useful for testing and to implement
-// sync commands from an xisting local database.
+// sync commands from an existing local database.
 type FakePeer struct {
 	id string
 	db ethdb.Database
@@ -48,7 +48,7 @@ func (p *FakePeer) Head() (common.Hash, *big.Int) {
 }
 
 // RequestHeadersByHash implements downloader.Peer, returning a batch of headers
-// defined by the origin hash and the associaed query parameters.
+// defined by the origin hash and the associated query parameters.
 func (p *FakePeer) RequestHeadersByHash(hash common.Hash, amount int, skip int, reverse bool) error {
 	var (
 		headers []*types.Header
@@ -92,7 +92,7 @@ func (p *FakePeer) RequestHeadersByHash(hash common.Hash, amount int, skip int, 
 }
 
 // RequestHeadersByNumber implements downloader.Peer, returning a batch of headers
-// defined by the origin number and the associaed query parameters.
+// defined by the origin number and the associated query parameters.
 func (p *FakePeer) RequestHeadersByNumber(number uint64, amount int, skip int, reverse bool) error {
 	var (
 		headers []*types.Header
