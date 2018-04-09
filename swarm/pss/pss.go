@@ -759,7 +759,7 @@ func (self *Pss) forward(msg *PssMsg) {
 // SECTION: Caching
 /////////////////////////////////////////////////////////////////////
 
-// remove expired entries from forward cache
+// cleanFwdCache is used to periodically remove expired entries from the forward cache
 func (self *Pss) cleanFwdCache() {
 	self.fwdCacheMu.Lock()
 	defer self.fwdCacheMu.Unlock()
