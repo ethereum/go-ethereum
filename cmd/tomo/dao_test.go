@@ -112,11 +112,11 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 		if err := ioutil.WriteFile(json, []byte(genesis), 0600); err != nil {
 			t.Fatalf("test %d: failed to write genesis file: %v", test, err)
 		}
-		runGeth(t, "--datadir", datadir, "init", json).WaitExit()
+		runTomo(t, "--datadir", datadir, "init", json).WaitExit()
 	} else {
 		// Force chain initialization
 		args := []string{"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none", "--ipcdisable", "--datadir", datadir}
-		tomo := runGeth(t, append(args, []string{"--exec", "2+2", "console"}...)...)
+		tomo := runTomo(t, append(args, []string{"--exec", "2+2", "console"}...)...)
 		tomo.WaitExit()
 	}
 	// Retrieve the DAO config flag from the database

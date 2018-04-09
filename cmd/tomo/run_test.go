@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 
 // spawns tomo with the given command line args. If the args don't set --datadir, the
 // child g gets a temporary data directory.
-func runtomo(t *testing.T, args ...string) *testtomo {
+func runTomo(t *testing.T, args ...string) *testtomo {
 	tt := &testtomo{}
 	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
 	for i, arg := range args {
