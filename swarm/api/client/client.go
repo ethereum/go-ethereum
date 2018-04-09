@@ -125,11 +125,11 @@ func Open(path string) (*File, error) {
 // (if the manifest argument is non-empty) or creates a new manifest containing
 // the file, returning the resulting manifest hash (the file will then be
 // available at bzz:/<hash>/<path>)
-func (c *Client) Upload(file *File, manifest string) (string, error) {
+func (c *Client) Upload(file *File, manifest string, toEncrypt bool) (string, error) {
 	if file.Size <= 0 {
 		return "", errors.New("file size must be greater than zero")
 	}
-	return c.TarUpload(manifest, &FileUploader{file})
+	return c.TarUpload(manifest, &FileUploader{file}, toEncrypt)
 }
 
 // Download downloads a file with the given path from the swarm manifest with
@@ -159,14 +159,14 @@ func (c *Client) Download(hash, path string) (*File, error) {
 // directory will then be available at bzz:/<hash>/path/to/file), with
 // the file specified in defaultPath being uploaded to the root of the manifest
 // (i.e. bzz:/<hash>/)
-func (c *Client) UploadDirectory(dir, defaultPath, manifest string) (string, error) {
+func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt bool) (string, error) {
 	stat, err := os.Stat(dir)
 	if err != nil {
 		return "", err
 	} else if !stat.IsDir() {
 		return "", fmt.Errorf("not a directory: %s", dir)
 	}
-	return c.TarUpload(manifest, &DirectoryUploader{dir, defaultPath})
+	return c.TarUpload(manifest, &DirectoryUploader{dir, defaultPath}, toEncrypt)
 }
 
 // DownloadDirectory downloads the files contained in a swarm manifest under
@@ -350,10 +350,19 @@ type UploadFn func(file *File) error
 
 // TarUpload uses the given Uploader to upload files to swarm as a tar stream,
 // returning the resulting manifest hash
-func (c *Client) TarUpload(hash string, uploader Uploader) (string, error) {
+func (c *Client) TarUpload(hash string, uploader Uploader, toEncrypt bool) (string, error) {
 	reqR, reqW := io.Pipe()
 	defer reqR.Close()
-	req, err := http.NewRequest("POST", c.Gateway+"/bzz:/"+hash, reqR)
+	addr := hash
+
+	// If there is a hash already (a manifest), then that manifest will determine if the upload has
+	// to be encrypted or not. If there is no manifest then the toEncrypt parameter decides if
+	// there is encryption or not.
+	if hash == "" && toEncrypt {
+		// This is the built-in address for the encrypted upload endpoint
+		addr = "encrypt"
+	}
+	req, err := http.NewRequest("POST", c.Gateway+"/bzz:/"+addr, reqR)
 	if err != nil {
 		return "", err
 	}

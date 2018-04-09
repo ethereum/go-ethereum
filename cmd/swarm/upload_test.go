@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -29,6 +30,16 @@ import (
 // TestCLISwarmUp tests that running 'swarm up' makes the resulting file
 // available from all nodes via the HTTP API
 func TestCLISwarmUp(t *testing.T) {
+	testCLISwarmUp(false, t)
+}
+
+// TestCLISwarmUpEncrypted tests that running 'swarm encrypted-up' makes the resulting file
+// available from all nodes via the HTTP API
+func TestCLISwarmUpEncrypted(t *testing.T) {
+	testCLISwarmUp(true, t)
+}
+
+func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 	log.Info("starting 3 node cluster")
 	cluster := newTestCluster(t, 3)
 	defer cluster.Shutdown()
@@ -48,10 +59,16 @@ func TestCLISwarmUp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// upload the file with 'swarm up' and expect a hash
-	log.Info("uploading file with 'swarm up'")
-	up := runSwarm(t, "--bzzapi", cluster.Nodes[0].URL, "up", tmp.Name())
-	_, matches := up.ExpectRegexp(`[a-f\d]{64}`)
+	cmd := "up"
+	hashRegexp := `[a-f\d]{64}`
+	if toEncrypt {
+		cmd = "encrypted-up"
+		hashRegexp = `[a-f\d]{128}`
+	}
+	// upload the file with 'swarm up' or 'swarm encrypted-up' and expect a hash
+	log.Info(fmt.Sprintf("uploading file with '%s'", cmd))
+	up := runSwarm(t, "--bzzapi", cluster.Nodes[0].URL, cmd, tmp.Name())
+	_, matches := up.ExpectRegexp(hashRegexp)
 	up.ExpectExit()
 	hash := matches[0]
 	log.Info("file uploaded", "hash", hash)

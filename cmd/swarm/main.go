@@ -218,9 +218,18 @@ The output of this command is supposed to be machine-readable.
 `,
 		},
 		{
-			Action:    upload,
+			Action:    nonEncryptedUpload,
 			Name:      "up",
 			Usage:     "upload a file or directory to swarm using the HTTP API",
+			ArgsUsage: " <file>",
+			Description: `
+"upload a file or directory to swarm using the HTTP API and prints the root hash",
+`,
+		},
+		{
+			Action:    encryptedUpload,
+			Name:      "encrypted-up",
+			Usage:     "Upload a file or directory with encryption to swarm using the HTTP API. NOTE: Currently the reference for the uploaded content is non-deterministic, so you will receive different references if you upload it twice.",
 			ArgsUsage: " <file>",
 			Description: `
 "upload a file or directory to swarm using the HTTP API and prints the root hash",

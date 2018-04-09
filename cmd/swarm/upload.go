@@ -35,7 +35,15 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-func upload(ctx *cli.Context) {
+func encryptedUpload(ctx *cli.Context) {
+	upload(ctx, true)
+}
+
+func nonEncryptedUpload(ctx *cli.Context) {
+	upload(ctx, false)
+}
+
+func upload(ctx *cli.Context, toEncrypt bool) {
 
 	args := ctx.Args()
 	var (
@@ -97,7 +105,7 @@ func upload(ctx *cli.Context) {
 			if !recursive {
 				return "", errors.New("Argument is a directory and recursive upload is disabled")
 			}
-			return client.UploadDirectory(file, defaultPath, "")
+			return client.UploadDirectory(file, defaultPath, "", toEncrypt)
 		}
 	} else {
 		doUpload = func() (string, error) {
@@ -110,7 +118,7 @@ func upload(ctx *cli.Context) {
 				mimeType = detectMimeType(file)
 			}
 			f.ContentType = mimeType
-			return client.Upload(f, "")
+			return client.Upload(f, "", toEncrypt)
 		}
 	}
 	hash, err := doUpload()
