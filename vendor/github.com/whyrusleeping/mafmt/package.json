@@ -1,0 +1,24 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {},
+  "gx": {
+    "dvcsimport": "github.com/whyrusleeping/mafmt"
+  },
+  "gxDependencies": [
+    {
+      "author": "whyrusleeping",
+      "hash": "QmWWQ2Txc2c6tqjsBpzg5Ar652cHPGNsQQp2SejkNmkUMb",
+      "name": "go-multiaddr",
+      "version": "1.2.6"
+    }
+  ],
+  "gxVersion": "0.6.0",
+  "gx_version": "0.4.0",
+  "issues_url": "https://github.com/whyrusleeping/mafmt",
+  "language": "go",
+  "license": "",
+  "name": "mafmt",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "1.2.5"
+}
+

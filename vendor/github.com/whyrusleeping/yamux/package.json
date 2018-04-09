@@ -1,0 +1,16 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/whyrusleeping/yamux"
+  },
+  "gx": {
+    "dvcsimport": "github.com/whyrusleeping/yamux"
+  },
+  "gxVersion": "0.10.0",
+  "language": "go",
+  "license": "",
+  "name": "yamux",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "1.0.6"
+}
+

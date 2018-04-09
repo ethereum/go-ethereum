@@ -1,0 +1,54 @@
+{
+  "author": "multiformats",
+  "bugs": {
+    "url": "https://github.com/multiformats/go-multihash/issues"
+  },
+  "gx": {
+    "dvcsimport": "github.com/multiformats/go-multihash"
+  },
+  "gxDependencies": [
+    {
+      "author": "whyrusleeping",
+      "hash": "QmaPHkZLbQQbvcyavn8q1GFHg6o6yeceyHFSJ3Pjf3p3TQ",
+      "name": "go-crypto",
+      "version": "0.0.0"
+    },
+    {
+      "author": "mr-tron",
+      "hash": "QmWFAMPqsEyUX7gDUsRVmMWz59FxSpJ1b2v6bJ1yYzo7jY",
+      "name": "go-base58-fast",
+      "version": "0.1.1"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmZtJMfZZvoD3EKpQaf8xsFi83HMtX5acQekY8exMbcWEi",
+      "name": "keccakpg",
+      "version": "0.0.1"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmfJHywXQu98UeZtGJBQrPAR6AtmDjjbe3qjTo9piXHPnx",
+      "name": "murmur3",
+      "version": "0.0.0"
+    },
+    {
+      "author": "minio",
+      "hash": "QmXTpwq2AkzQsPjKqFQDNY2bMdsAT53hUBETeyj8QRHTZU",
+      "name": "sha256-simd",
+      "version": "0.1.1"
+    },
+    {
+      "author": "minio",
+      "hash": "QmZp3eKdYQHHAneECmeK6HhiMwTPufmjC8DuuaGKv3unvx",
+      "name": "blake2b-simd",
+      "version": "0.1.1"
+    }
+  ],
+  "gxVersion": "0.9.0",
+  "language": "go",
+  "license": "MIT",
+  "name": "go-multihash",
+  "releaseCmd": "git commit -a -m \"gx release $VERSION\"",
+  "version": "1.0.7"
+}
+

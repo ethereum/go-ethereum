@@ -1,0 +1,16 @@
+{
+  "author": "Stebalien",
+  "bugs": {
+    "url": "github.com/libp2p/go-flow-metrics"
+  },
+  "gx": {
+    "dvcsimport": "github.com/libp2p/go-flow-metrics"
+  },
+  "gxVersion": "0.12.1",
+  "language": "go",
+  "license": "",
+  "name": "go-flow-metrics",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "0.2.0"
+}
+
