@@ -165,6 +165,13 @@ func (t *SecureTrie) Root() []byte {
 
 func (t *SecureTrie) Copy() *SecureTrie {
 	cpy := *t
+	if len(t.secKeyCache) > 0 {
+		cpy.secKeyCache = make(map[string][]byte)
+		for k, v := range t.secKeyCache {
+			cpy.secKeyCache[k] = v
+		}
+		cpy.secKeyCacheOwner = &cpy
+	}
 	return &cpy
 }
 

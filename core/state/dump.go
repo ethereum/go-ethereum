@@ -52,19 +52,18 @@ func (self *StateDB) RawDump() Dump {
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 			panic(err)
 		}
-
-		obj := newObject(nil, common.BytesToAddress(addr), data, nil)
+		code, _ := self.db.ContractCode(common.BytesToHash(it.Key), common.BytesToHash(data.CodeHash))
 		account := DumpAccount{
 			Balance:  data.Balance.String(),
 			Nonce:    data.Nonce,
 			Root:     common.Bytes2Hex(data.Root[:]),
 			CodeHash: common.Bytes2Hex(data.CodeHash),
-			Code:     common.Bytes2Hex(obj.Code(self.db)),
+			Code:     common.Bytes2Hex(code),
 			Storage:  make(map[string]string),
 		}
-		storageIt := trie.NewIterator(obj.getTrie(self.db).NodeIterator(nil))
-		for storageIt.Next() {
-			account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
+		storage := self.StorageTrie(common.BytesToAddress(addr))
+		for it := trie.NewIterator(storage.NodeIterator(nil)); it.Next(); {
+			account.Storage[common.Bytes2Hex(storage.GetKey(it.Key))] = common.Bytes2Hex(it.Value)
 		}
 		dump.Accounts[common.Bytes2Hex(addr)] = account
 	}
@@ -76,6 +75,5 @@ func (self *StateDB) Dump() []byte {
 	if err != nil {
 		fmt.Println("dump err", err)
 	}
-
 	return json
 }
