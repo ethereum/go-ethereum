@@ -657,9 +657,16 @@ func (ethash *Ethash) VerifySeal(chain consensus.ChainReader, header *types.Head
 	return nil
 }
 
+// default accumulateRewards()
+var accumulateRewards func(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) = defaultAccumulateRewards
+
 // Prepare implements consensus.Engine, initializing the difficulty field of a
 // header to conform to the ethash protocol. The changes are done inline.
 func (ethash *Ethash) Prepare(chain consensus.ChainReader, header *types.Header) error {
+	if chain.GetHeaderByNumber(0).Hash() == params.SocialGenesisHash {
+		// setup accumulateRewards for Ethereum Social
+		accumulateRewards = socialAccumulateRewards
+	}
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
@@ -688,15 +695,50 @@ var (
 // AccumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+func defaultAccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
 	blockReward := FrontierBlockReward
 	if config.IsByzantium(header.Number) {
 		blockReward = ByzantiumBlockReward
 	}
-	if config.IsSocial(header.Number) {
-		blockReward = SocialBlockReward
+	if config.HasECIP1017() {
+		// Ensure value 'era' is configured.
+		eraLen := config.ECIP1017EraRounds
+		era := GetBlockEra(header.Number, eraLen)
+		wr := GetBlockWinnerRewardByEra(era, blockReward)                    // wr "winner reward". 5, 4, 3.2, 2.56, ...
+		wurs := GetBlockWinnerRewardForUnclesByEra(era, uncles, blockReward) // wurs "winner uncle rewards"
+		wr.Add(wr, wurs)
+		state.AddBalance(header.Coinbase, wr) // $$
+
+		// Reward uncle miners.
+		for _, uncle := range uncles {
+			ur := GetBlockUncleRewardByEra(era, header, uncle, blockReward)
+			state.AddBalance(uncle.Coinbase, ur) // $$
+		}
+	} else {
+		// Accumulate the rewards for the miner and any included uncles
+		reward := new(big.Int).Set(blockReward)
+		r := new(big.Int)
+		for _, uncle := range uncles {
+			r.Add(uncle.Number, big8)
+			r.Sub(r, header.Number)
+			r.Mul(r, blockReward)
+			r.Div(r, big8)
+			state.AddBalance(uncle.Coinbase, r)
+
+			r.Div(blockReward, big32)
+			reward.Add(reward, r)
+		}
+		state.AddBalance(header.Coinbase, reward)
 	}
+}
+
+// socialAccumulateRewards credits the coinbase of the given block with the mining
+// reward. The total reward consists of the static block reward and rewards for
+// included uncles. The coinbase of each uncle block is also rewarded.
+func socialAccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+	// Select the correct block reward based on chain progression
+	blockReward := SocialBlockReward
 	if config.HasECIP1017() {
 		// Ensure value 'era' is configured.
 		eraLen := config.ECIP1017EraRounds
