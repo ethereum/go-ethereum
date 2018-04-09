@@ -12,5 +12,4 @@ send a pull request. Commits which do not comply with the coding standards
 are ignored (use gofmt!).
 
 See [Developers' Guide](https://github.com/ethereum/go-ethereum/wiki/Developers'-Guide)
-for more details on configuring your environment, testing, and
-dependency management.
+for more details.
