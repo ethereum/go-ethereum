@@ -75,7 +75,7 @@ type Hasher struct {
 	blocksize   int         // segment size (size of hash) also for hash.Hash
 	count       int         // segment count
 	size        int         // for hash.Hash same as hashsize
-	cur         int         // cursor position for righmost currently open chunk
+	cur         int         // cursor position for rightmost currently open chunk
 	segment     []byte      // the rightmost open segment (not complete)
 	depth       int         // index of last level
 	result      chan []byte // result channel
@@ -149,7 +149,7 @@ func NewTreePool(hasher BaseHasher, segmentCount, capacity int) *TreePool {
 	}
 }
 
-// Drain drains the pool uptil it has no more than n resources
+// Drain drains the pool until it has no more than n resources
 func (self *TreePool) Drain(n int) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -412,11 +412,10 @@ func (self *Hasher) Reset() {
 
 // ResetWithLength needs to be called before writing to the hasher
 // the argument is supposed to be the byte slice binary representation of
-// the legth of the data subsumed under the hash
+// the length of the data subsumed under the hash
 func (self *Hasher) ResetWithLength(l []byte) {
 	self.Reset()
 	self.blockLength = l
-
 }
 
 // Release gives back the Tree to the pool whereby it unlocks
@@ -531,7 +530,7 @@ func (self *Hasher) finalise(n *Node, i int) (d int) {
 	for {
 		// when the final segment's path is going via left segments
 		// the incoming data is pushed to the parent upon pulling the left
-		// we do not need toogle the state since this condition is
+		// we do not need toggle the state since this condition is
 		// detectable
 		n.unbalanced = isLeft
 		n.right = nil
