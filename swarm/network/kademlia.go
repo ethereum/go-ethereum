@@ -258,16 +258,25 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 	// try to select a candidate peer
 	// find the first callable peer
 	nxt := bpo[0]
+	var i int
 	k.addrs.EachBin(k.base, pof, nxt, func(po, _ int, f func(func(pot.Val, int) bool) bool) bool {
 		// for each bin (up until depth) we find callable candidate peers
-		if po >= depth {
+		if po >= depth || po != nxt {
 			return false
 		}
-		f(func(val pot.Val, _ int) bool {
+		i++
+		ok := f(func(val pot.Val, _ int) bool {
 			a = k.callable(val)
 			return a == nil
 		})
-		return false
+		if !ok {
+			return false
+		}
+		if i >= len(bpo) {
+			return false
+		}
+		nxt = bpo[i]
+		return true
 	})
 	// found a candidate
 	if a != nil {
@@ -677,9 +686,18 @@ func (k *Kademlia) saturation(n int) int {
 func (k *Kademlia) full(emptyBins []int) (full bool) {
 	prev := 0
 	e := len(emptyBins)
+	ok := true
+	depth := k.neighbourhoodDepth()
 	k.conns.EachBin(k.base, pof, 0, func(po, _ int, _ func(func(val pot.Val, i int) bool) bool) bool {
-		for i := prev; e > 0 && i < po; i++ {
+		for i := prev; i < po; i++ {
+			if prev == depth+1 {
+				return true
+			}
 			e--
+			if e < 0 {
+				ok = false
+				return false
+			}
 			if emptyBins[e] != i {
 				log.Trace(fmt.Sprintf("%08x po: %d, i: %d, e: %d, emptybins: %v", k.BaseAddr()[:4], po, i, e, logEmptyBins(emptyBins)))
 				if emptyBins[e] < i {
@@ -691,6 +709,9 @@ func (k *Kademlia) full(emptyBins []int) (full bool) {
 		prev = po + 1
 		return true
 	})
+	if !ok {
+		return false
+	}
 	return e == 0
 }
 
