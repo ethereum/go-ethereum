@@ -55,7 +55,7 @@ var (
 		ArgsUsage: " ",
 		Category:  "MONITOR COMMANDS",
 		Description: `
-The Geth monitor is a tool to collect and visualize various internal metrics
+The tomo monitor is a tool to collect and visualize various internal metrics
 gathered by the node, supporting different chart types as well as the capacity
 to display multiple metrics simultaneously.
 `,
@@ -76,7 +76,7 @@ func monitor(ctx *cli.Context) error {
 	// Attach to an Ethereum node over IPC or RPC
 	endpoint := ctx.String(monitorCommandAttachFlag.Name)
 	if client, err = dialRPC(endpoint); err != nil {
-		utils.Fatalf("Unable to attach to geth node: %v", err)
+		utils.Fatalf("Unable to attach to tomo node: %v", err)
 	}
 	defer client.Close()
 
@@ -93,7 +93,7 @@ func monitor(ctx *cli.Context) error {
 		if len(list) > 0 {
 			utils.Fatalf("No metrics specified.\n\nAvailable:\n - %s", strings.Join(list, "\n - "))
 		} else {
-			utils.Fatalf("No metrics collected by geth (--%s).\n", utils.MetricsEnabledFlag.Name)
+			utils.Fatalf("No metrics collected by tomo (--%s).\n", utils.MetricsEnabledFlag.Name)
 		}
 	}
 	sort.Strings(monitored)
@@ -158,7 +158,7 @@ func monitor(ctx *cli.Context) error {
 	return nil
 }
 
-// retrieveMetrics contacts the attached geth node and retrieves the entire set
+// retrieveMetrics contacts the attached tomo node and retrieves the entire set
 // of collected system metrics.
 func retrieveMetrics(client *rpc.Client) (map[string]interface{}, error) {
 	var metrics map[string]interface{}

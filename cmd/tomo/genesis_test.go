@@ -84,7 +84,7 @@ var customGenesisTests = []struct {
 	},
 }
 
-// Tests that initializing Geth with a custom genesis block and chain definitions
+// Tests that initializing tomo with a custom genesis block and chain definitions
 // work properly.
 func TestCustomGenesis(t *testing.T) {
 	for i, tt := range customGenesisTests {
@@ -100,11 +100,11 @@ func TestCustomGenesis(t *testing.T) {
 		runGeth(t, "--datadir", datadir, "init", json).WaitExit()
 
 		// Query the custom genesis block
-		geth := runGeth(t,
+		tomo := runGeth(t,
 			"--datadir", datadir, "--maxpeers", "0", "--port", "0",
 			"--nodiscover", "--nat", "none", "--ipcdisable",
 			"--exec", tt.query, "console")
-		geth.ExpectRegexp(tt.result)
-		geth.ExpectExit()
+		tomo.ExpectRegexp(tt.result)
+		tomo.ExpectExit()
 	}
 }

@@ -106,7 +106,7 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 	datadir := tmpdir(t)
 	defer os.RemoveAll(datadir)
 
-	// Start a Geth instance with the requested flags set and immediately terminate
+	// Start a tomo instance with the requested flags set and immediately terminate
 	if genesis != "" {
 		json := filepath.Join(datadir, "genesis.json")
 		if err := ioutil.WriteFile(json, []byte(genesis), 0600); err != nil {
@@ -116,11 +116,11 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 	} else {
 		// Force chain initialization
 		args := []string{"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none", "--ipcdisable", "--datadir", datadir}
-		geth := runGeth(t, append(args, []string{"--exec", "2+2", "console"}...)...)
-		geth.WaitExit()
+		tomo := runGeth(t, append(args, []string{"--exec", "2+2", "console"}...)...)
+		tomo.WaitExit()
 	}
 	// Retrieve the DAO config flag from the database
-	path := filepath.Join(datadir, "geth", "chaindata")
+	path := filepath.Join(datadir, "tomo", "chaindata")
 	db, err := ethdb.NewLDBDatabase(path, 0, 0)
 	if err != nil {
 		t.Fatalf("test %d: failed to open test database: %v", test, err)
