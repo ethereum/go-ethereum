@@ -59,13 +59,13 @@ type ManifestList struct {
 }
 
 // NewManifest creates and stores a new, empty manifest
-func (a *Api) NewManifest() (storage.Key, error) {
+func (a *Api) NewManifest(toEncrypt bool) (storage.Key, error) {
 	var manifest Manifest
 	data, err := json.Marshal(&manifest)
 	if err != nil {
 		return nil, err
 	}
-	key, wait, err := a.Store(bytes.NewReader(data), int64(len(data)))
+	key, wait, err := a.Store(bytes.NewReader(data), int64(len(data)), toEncrypt)
 	wait()
 	return key, err
 }
@@ -83,7 +83,7 @@ func (a *Api) NewResourceManifest(resourceKey string) (storage.Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	key, _, err := a.Store(bytes.NewReader(data), int64(len(data)))
+	key, _, err := a.Store(bytes.NewReader(data), int64(len(data)), false)
 	return key, err
 }
 
@@ -104,7 +104,8 @@ func (a *Api) NewManifestWriter(key storage.Key, quitC chan bool) (*ManifestWrit
 
 // AddEntry stores the given data and adds the resulting key to the manifest
 func (m *ManifestWriter) AddEntry(data io.Reader, e *ManifestEntry) (storage.Key, error) {
-	key, _, err := m.api.Store(data, e.Size)
+
+	key, _, err := m.api.Store(data, e.Size, m.trie.encrypted)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +123,7 @@ func (m *ManifestWriter) RemoveEntry(path string) error {
 
 // Store stores the manifest, returning the resulting storage key
 func (m *ManifestWriter) Store() (storage.Key, error) {
-	return m.trie.hash, m.trie.recalcAndStore()
+	return m.trie.ref, m.trie.recalcAndStore()
 }
 
 // ManifestWalker is used to recursively walk the entries in the manifest and
@@ -182,9 +183,10 @@ func (m *ManifestWalker) walk(trie *manifestTrie, prefix string, walkFn WalkFn) 
 }
 
 type manifestTrie struct {
-	dpa     *storage.DPA
-	entries [257]*manifestTrieEntry // indexed by first character of basePath, entries[256] is the empty basePath entry
-	hash    storage.Key             // if hash != nil, it is stored
+	dpa       *storage.DPA
+	entries   [257]*manifestTrieEntry // indexed by first character of basePath, entries[256] is the empty basePath entry
+	ref       storage.Key             // if ref != nil, it is stored
+	encrypted bool
 }
 
 func newManifestTrieEntry(entry *ManifestEntry, subtrie *manifestTrie) *manifestTrieEntry {
@@ -228,7 +230,7 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dp
 		return
 	}
 
-	log.Trace("manifest retrieved", "key", hash)
+	log.Debug("manifest retrieved", "key", hash)
 	var man struct {
 		Entries []*manifestTrieEntry `json:"entries"`
 	}
@@ -242,7 +244,8 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dp
 	log.Trace("manifest entries", "key", hash, "len", len(man.Entries))
 
 	trie = &manifestTrie{
-		dpa: dpa,
+		dpa:       dpa,
+		encrypted: (len(hash) > dpa.HashSize()),
 	}
 	for _, entry := range man.Entries {
 		trie.addEntry(entry, quitC)
@@ -251,7 +254,7 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dp
 }
 
 func (self *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
-	self.hash = nil // trie modified, hash needs to be re-calculated on demand
+	self.ref = nil // trie modified, hash needs to be re-calculated on demand
 
 	if len(entry.Path) == 0 {
 		self.entries[256] = entry
@@ -283,7 +286,8 @@ func (self *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 	commonPrefix := entry.Path[:cpl]
 
 	subtrie := &manifestTrie{
-		dpa: self.dpa,
+		dpa:       self.dpa,
+		encrypted: self.encrypted,
 	}
 	entry.Path = entry.Path[cpl:]
 	oldentry.Path = oldentry.Path[cpl:]
@@ -307,7 +311,7 @@ func (self *manifestTrie) getCountLast() (cnt int, entry *manifestTrieEntry) {
 }
 
 func (self *manifestTrie) deleteEntry(path string, quitC chan bool) {
-	self.hash = nil // trie modified, hash needs to be re-calculated on demand
+	self.ref = nil // trie modified, hash needs to be re-calculated on demand
 
 	if len(path) == 0 {
 		self.entries[256] = nil
@@ -343,7 +347,7 @@ func (self *manifestTrie) deleteEntry(path string, quitC chan bool) {
 }
 
 func (self *manifestTrie) recalcAndStore() error {
-	if self.hash != nil {
+	if self.ref != nil {
 		return nil
 	}
 
@@ -358,7 +362,7 @@ func (self *manifestTrie) recalcAndStore() error {
 				if err != nil {
 					return err
 				}
-				entry.Hash = entry.subtrie.hash.Hex()
+				entry.Hash = entry.subtrie.ref.Hex()
 			}
 			list.Entries = append(list.Entries, entry.ManifestEntry)
 		}
@@ -371,9 +375,9 @@ func (self *manifestTrie) recalcAndStore() error {
 	}
 
 	sr := bytes.NewReader(manifest)
-	key, wait, err2 := self.dpa.Store(sr, int64(len(manifest)), false)
+	key, wait, err2 := self.dpa.Store(sr, int64(len(manifest)), self.encrypted)
 	wait()
-	self.hash = key
+	self.ref = key
 	return err2
 }
 

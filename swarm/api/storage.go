@@ -45,8 +45,8 @@ func NewStorage(api *Api) *Storage {
 // its content type
 //
 // DEPRECATED: Use the HTTP API instead
-func (self *Storage) Put(content, contentType string) (storage.Key, func(), error) {
-	return self.api.Put(content, contentType)
+func (self *Storage) Put(content, contentType string, toEncrypt bool) (storage.Key, func(), error) {
+	return self.api.Put(content, contentType, toEncrypt)
 }
 
 // Get retrieves the content from bzzpath and reads the response in full
