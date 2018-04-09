@@ -98,7 +98,7 @@ type BlockContext struct{
 type EVM struct {
 	BlockContext *BlockContext
 	// Context provides auxiliary blockchain related information
-	Context
+	*Context
 	// StateDB gives access to the underlying state
 	StateDB StateDB
 	// Depth is the current call stack
@@ -110,7 +110,7 @@ type EVM struct {
 	chainRules params.Rules
 	// virtual machine configuration options used to initialise the
 	// evm.
-	vmConfig Config
+	vmConfig *Config
 	// global (to this context) ethereum virtual machine
 	// used throughout the execution of the tx.
 	interpreter *Interpreter
@@ -125,7 +125,7 @@ type EVM struct {
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig Config,blockContext *BlockContext) *EVM {
+func NewEVM(ctx *Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig *Config,blockContext *BlockContext) *EVM {
 	evm := &EVM{
 		Context:      ctx,
 		StateDB:      statedb,

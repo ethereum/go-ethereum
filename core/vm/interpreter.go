@@ -47,7 +47,7 @@ type Config struct {
 // configuration.
 type Interpreter struct {
 	evm      *EVM
-	cfg      Config
+	cfg      *Config
 	gasTable params.GasTable
 
 	readOnly    bool   // Whether to throw on stateful modifications
@@ -56,7 +56,7 @@ type Interpreter struct {
 }
 
 // NewInterpreter returns a new instance of the Interpreter.
-func NewInterpreter(evm *EVM, cfg Config,blockContext *BlockContext) *Interpreter {
+func NewInterpreter(evm *EVM, cfg *Config,blockContext *BlockContext) *Interpreter {
 	// We use the STOP instruction whether to see
 	// the jump table was initialised. If it was not
 	// we'll set the default jump table.
