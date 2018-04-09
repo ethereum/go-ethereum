@@ -324,9 +324,6 @@ func doLint(cmdline []string) {
 	}
 	// Get metalinter and install all supported linters
 	build.MustRun(goTool("get", "gopkg.in/alecthomas/gometalinter.v2"))
-	build.MustRun(goTool("get", "github.com/FiloSottile/vendorcheck"))
-
-	build.MustRunCommand(filepath.Join(GOBIN, "vendorcheck"), "./...")
 	build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v2"), "--install")
 
 	// Run fast linters batched together
