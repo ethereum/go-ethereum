@@ -12,7 +12,7 @@ matrix:
         - sudo chmod 666 /dev/fuse
         - sudo chown root:$USER /etc/fuse.conf
         - go run build/ci.go install
-        - go run build/ci.go test -coverage
+        - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # These are the latest Go versions.
     - os: linux
@@ -24,7 +24,7 @@ matrix:
         - sudo chmod 666 /dev/fuse
         - sudo chown root:$USER /etc/fuse.conf
         - go run build/ci.go install
-        - go run build/ci.go test -coverage
+        - go run build/ci.go test -coverage $TEST_PACKAGES
 
     - os: osx
       go: "1.10"
@@ -34,7 +34,7 @@ matrix:
         - brew install caskroom/cask/brew-cask
         - brew cask install osxfuse
         - go run build/ci.go install
-        - go run build/ci.go test -coverage
+        - go run build/ci.go test -coverage $TEST_PACKAGES
 
     # This builder only tests code linters on latest version of Go
     - os: linux
