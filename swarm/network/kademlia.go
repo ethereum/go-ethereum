@@ -674,6 +674,8 @@ func (k *Kademlia) saturation(n int) int {
 	return prev
 }
 
+// full returns true if all required bins have connected peers.
+// It is used in Healthy function.
 func (k *Kademlia) full(emptyBins []int) (full bool) {
 	prev := 0
 	e := len(emptyBins)
