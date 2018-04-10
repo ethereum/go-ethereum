@@ -37,7 +37,7 @@ ios:
 test: all
 	build/env.sh go run build/ci.go test
 
-lint: ## Run linters. Use make install-linters first.
+lint: ## Run linters.
 	build/env.sh go run build/ci.go lint
 
 clean:
