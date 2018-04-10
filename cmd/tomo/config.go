@@ -74,7 +74,7 @@ type ethstatsConfig struct {
 	URL string `toml:",omitempty"`
 }
 
-type gethConfig struct {
+type tomoConfig struct {
 	Eth       eth.Config
 	Shh       whisper.Config
 	Node      node.Config
@@ -82,7 +82,7 @@ type gethConfig struct {
 	Dashboard dashboard.Config
 }
 
-func loadConfig(file string, cfg *gethConfig) error {
+func loadConfig(file string, cfg *tomoConfig) error {
 	f, err := os.Open(file)
 	if err != nil {
 		return err
@@ -103,13 +103,13 @@ func defaultNodeConfig() node.Config {
 	cfg.Version = params.VersionWithCommit(gitCommit)
 	cfg.HTTPModules = append(cfg.HTTPModules, "eth", "shh")
 	cfg.WSModules = append(cfg.WSModules, "eth", "shh")
-	cfg.IPCPath = "geth.ipc"
+	cfg.IPCPath = "tomo.ipc"
 	return cfg
 }
 
-func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
+func makeConfigNode(ctx *cli.Context) (*node.Node, tomoConfig) {
 	// Load defaults.
-	cfg := gethConfig{
+	cfg := tomoConfig{
 		Eth:       eth.DefaultConfig,
 		Shh:       whisper.DefaultConfig,
 		Node:      defaultNodeConfig(),
