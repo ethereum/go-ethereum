@@ -1,0 +1,14 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {},
+  "gx": {
+    "dvcsimport": "github.com/gxed/hashland/keccakpg"
+  },
+  "gxVersion": "0.10.0",
+  "language": "go",
+  "license": "",
+  "name": "keccakpg",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "0.0.1"
+}
+
