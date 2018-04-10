@@ -361,6 +361,10 @@ func (self *Pss) process(pssmsg *PssMsg) bool {
 
 	envelope := pssmsg.Payload
 	psstopic := Topic(envelope.Topic)
+	if self.allowRaw && psstopic == rawTopic {
+		self.executeHandlers(rawTopic, envelope.Data, nil, false, "")
+		return true
+	}
 
 	if len(envelope.AESNonce) > 0 { // detect symkey msg according to whisperv5/envelope.go:OpenSymmetric
 		keyFunc = self.processSym
@@ -370,9 +374,6 @@ func (self *Pss) process(pssmsg *PssMsg) bool {
 	}
 	recvmsg, keyid, from, err = keyFunc(envelope)
 	if err != nil {
-		if self.allowRaw {
-			self.executeHandlers(rawTopic, envelope.Data, nil, false, "")
-		}
 		return false
 	}
 
@@ -381,9 +382,6 @@ func (self *Pss) process(pssmsg *PssMsg) bool {
 			log.Error("outbox full!")
 			return false
 		}
-	}
-	if psstopic == rawTopic {
-		return false
 	}
 	self.executeHandlers(psstopic, recvmsg.Payload, from, asymmetric, keyid)
 
@@ -609,13 +607,11 @@ func (self *Pss) cleanKeys() (count int) {
 /////////////////////////////////////////////////////////////////////
 
 func (self *Pss) enqueue(msg *PssMsg) bool {
-	self.fwdPoolMu.Lock()
-	defer self.fwdPoolMu.Unlock()
-	if self.outboxCounter == self.outboxCapacity {
-		return false
+	select {
+	case self.outbox <- msg:
+		return true
+	default:
 	}
-	self.outboxCounter++
-	self.outbox <- msg
 	return true
 }
 
@@ -809,11 +805,6 @@ func (self *Pss) forward(msg *PssMsg) error {
 			return errors.New("outbox full!")
 		}
 	}
-
-	// remove from queue
-	self.fwdPoolMu.Lock()
-	self.outboxCounter--
-	self.fwdPoolMu.Unlock()
 
 	// cache the message
 	self.addFwdCache(msg)
