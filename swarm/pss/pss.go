@@ -72,7 +72,7 @@ type PssParams struct {
 	CacheTTL            time.Duration
 	privateKey          *ecdsa.PrivateKey
 	SymKeyCacheCapacity int
-	AllowRaw            bool
+	AllowRaw            bool // If true, enables sending and receiving messages without builtin pss encryption
 }
 
 // Sane defaults for Pss

@@ -946,6 +946,8 @@ outer:
 
 }
 
+// check that in a network of a -> b -> c -> a
+// a doesn't receive a sent message twice
 func TestDeduplication(t *testing.T) {
 	var err error
 
@@ -1278,7 +1280,9 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	}
 }
 
-// setup simulated network and connect nodes in circle
+// setup simulated network with bzz/discovery and pss services.
+// connects nodes in a circle
+// if allowRaw is set, omission of builtin pss encryption is enabled (see PssParams)
 func setupNetwork(numnodes int, allowRaw bool) (clients []*rpc.Client, err error) {
 	nodes := make([]*simulations.Node, numnodes)
 	clients = make([]*rpc.Client, numnodes)
