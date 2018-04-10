@@ -451,6 +451,10 @@ func testKademliaCase(t *testing.T, pivotAddr string, addrs ...string) {
 
 /*
 The regression test for the following invalid kademlia edge case.
+
+Addresses used in this test are discovered as part of the simulation network
+in higher level tests for streaming. They were generated randomly.
+
 =========================================================================
 Mon Apr  9 12:18:24 UTC 2018 KΛÐΞMLIΛ hive: queen's address: 7efef1
 population: 9 (49), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
@@ -530,6 +534,10 @@ func TestKademliaCase1(t *testing.T) {
 
 /*
 The regression test for the following invalid kademlia edge case.
+
+Addresses used in this test are discovered as part of the simulation network
+in higher level tests for streaming. They were generated randomly.
+
 =========================================================================
 Mon Apr  9 18:43:48 UTC 2018 KΛÐΞMLIΛ hive: queen's address: bc7f3b
 population: 9 (49), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
@@ -560,6 +568,10 @@ func TestKademliaCase2(t *testing.T) {
 
 /*
 The regression test for the following invalid kademlia edge case.
+
+Addresses used in this test are discovered as part of the simulation network
+in higher level tests for streaming. They were generated randomly.
+
 =========================================================================
 Mon Apr  9 19:04:35 UTC 2018 KΛÐΞMLIΛ hive: queen's address: b4822e
 population: 8 (49), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
@@ -590,6 +602,10 @@ func TestKademliaCase3(t *testing.T) {
 
 /*
 The regression test for the following invalid kademlia edge case.
+
+Addresses used in this test are discovered as part of the simulation network
+in higher level tests for streaming. They were generated randomly.
+
 =========================================================================
 Mon Apr  9 19:16:25 UTC 2018 KΛÐΞMLIΛ hive: queen's address: 9a90fe
 population: 8 (49), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
@@ -621,6 +637,10 @@ func TestKademliaCase4(t *testing.T) {
 
 /*
 The regression test for the following invalid kademlia edge case.
+
+Addresses used in this test are discovered as part of the simulation network
+in higher level tests for streaming. They were generated randomly.
+
 =========================================================================
 Mon Apr  9 19:25:18 UTC 2018 KΛÐΞMLIΛ hive: queen's address: 5dd5c7
 population: 13 (49), MinProxBinSize: 2, MinBinSize: 2, MaxBinSize: 4
