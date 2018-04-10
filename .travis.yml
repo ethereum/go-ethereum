@@ -18,7 +18,7 @@ matrix:
     - os: linux
       dist: trusty
       sudo: required
-      go: "1.10"
+      go: 1.10.x
       script:
         - sudo modprobe fuse
         - sudo chmod 666 /dev/fuse
@@ -27,7 +27,7 @@ matrix:
         - go run build/ci.go test -coverage
 
     - os: osx
-      go: "1.10"
+      go: 1.10.x
       script:
         - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
         - brew update
@@ -39,7 +39,7 @@ matrix:
     # This builder only tests code linters on latest version of Go
     - os: linux
       dist: trusty
-      go: "1.10"
+      go: 1.10.x
       env:
         - lint
       git:
@@ -50,7 +50,7 @@ matrix:
     # This builder does the Ubuntu PPA upload
     - os: linux
       dist: trusty
-      go: "1.10"
+      go: 1.10.x
       env:
         - ubuntu-ppa
       git:
@@ -69,7 +69,7 @@ matrix:
     - os: linux
       dist: trusty
       sudo: required
-      go: "1.10"
+      go: 1.10.x
       env:
         - azure-linux
       git:
@@ -103,7 +103,7 @@ matrix:
       dist: trusty
       services:
         - docker
-      go: "1.10"
+      go: 1.10.x
       env:
         - azure-linux-mips
       git:
@@ -147,7 +147,7 @@ matrix:
       git:
         submodules: false # avoid cloning ethereum/tests
       before_install:
-        - curl https://storage.googleapis.com/golang/go1.10.linux-amd64.tar.gz | tar -xz
+        - curl https://storage.googleapis.com/golang/go1.10.1.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
@@ -164,7 +164,7 @@ matrix:
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
     - os: osx
-      go: "1.10"
+      go: 1.10.x
       env:
         - azure-osx
         - azure-ios
@@ -193,7 +193,7 @@ matrix:
     # This builder does the Azure archive purges to avoid accumulating junk
     - os: linux
       dist: trusty
-      go: "1.10"
+      go: 1.10.x
       env:
         - azure-purge
       git:
