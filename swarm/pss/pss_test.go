@@ -419,13 +419,13 @@ func TestMismatch(t *testing.T) {
 
 }
 
-func TestRawSend(t *testing.T) {
-	t.Run("32", testRawSend)
-	t.Run("8", testRawSend)
-	t.Run("0", testRawSend)
+func TestSendRaw(t *testing.T) {
+	t.Run("32", testSendRaw)
+	t.Run("8", testSendRaw)
+	t.Run("0", testSendRaw)
 }
 
-func testRawSend(t *testing.T) {
+func testSendRaw(t *testing.T) {
 
 	var addrsize int64
 	var err error
@@ -502,13 +502,13 @@ func testRawSend(t *testing.T) {
 }
 
 // send symmetrically encrypted message between two directly connected peers
-func TestSymSend(t *testing.T) {
-	t.Run("32", testSymSend)
-	t.Run("8", testSymSend)
-	t.Run("0", testSymSend)
+func TestSendSym(t *testing.T) {
+	t.Run("32", testSendSym)
+	t.Run("8", testSendSym)
+	t.Run("0", testSendSym)
 }
 
-func testSymSend(t *testing.T) {
+func testSendSym(t *testing.T) {
 
 	// address hint size
 	var addrsize int64
@@ -617,13 +617,13 @@ func testSymSend(t *testing.T) {
 }
 
 // send asymmetrically encrypted message between two directly connected peers
-func TestAsymSend(t *testing.T) {
-	t.Run("32", testAsymSend)
-	t.Run("8", testAsymSend)
-	t.Run("0", testAsymSend)
+func TestSendAsym(t *testing.T) {
+	t.Run("32", testSendAsym)
+	t.Run("8", testSendAsym)
+	t.Run("0", testSendAsym)
 }
 
-func testAsymSend(t *testing.T) {
+func testSendAsym(t *testing.T) {
 
 	// address hint size
 	var addrsize int64

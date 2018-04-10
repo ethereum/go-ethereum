@@ -33,7 +33,7 @@ const (
 	defaultMaxMsgSize          = 1024 * 1024
 	defaultCleanInterval       = time.Second * 60 * 10
 	defaultDequeueInterval     = time.Millisecond * 10
-	defaultOutboxQueueSize     = 10000
+	defaultOutboxCapacity      = 10000
 	pssProtocolName            = "pss"
 	pssVersion                 = 1
 	hasherCount                = 8
@@ -104,6 +104,8 @@ type Pss struct {
 	paddingByteSize int
 	capstring       string
 	outbox          chan *PssMsg
+	outboxCapacity  int
+	outboxCounter   int
 
 	// keys and peers
 	pubKeyPool                 map[string]map[Topic]*pssPeer // mapping of hex public keys to peer address by topic.
@@ -149,7 +151,8 @@ func NewPss(k network.Overlay, params *PssParams) *Pss {
 		msgTTL:          params.MsgTTL,
 		paddingByteSize: defaultPaddingByteSize,
 		capstring:       cap.String(),
-		outbox:          make(chan *PssMsg, defaultOutboxQueueSize),
+		outbox:          make(chan *PssMsg, defaultOutboxCapacity),
+		outboxCapacity:  defaultOutboxCapacity,
 
 		pubKeyPool:                 make(map[string]map[Topic]*pssPeer),
 		symKeyPool:                 make(map[string]map[Topic]*pssPeer),
@@ -328,12 +331,16 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 		var err error
 		if !self.isSelfPossibleRecipient(pssmsg) {
 			log.Trace("pss was for someone else :'( ... forwarding", "pss", common.ToHex(self.BaseAddr()))
-			self.outbox <- pssmsg
+			if !self.enqueue(pssmsg) {
+				return errors.New("outbox full!")
+			}
 		}
 		log.Trace("pss for us, yay! ... let's process!", "pss", common.ToHex(self.BaseAddr()))
 
 		if !self.process(pssmsg) {
-			self.outbox <- pssmsg
+			if !self.enqueue(pssmsg) {
+				return errors.New("outbox full!")
+			}
 		}
 		return err
 	}
@@ -370,9 +377,10 @@ func (self *Pss) process(pssmsg *PssMsg) bool {
 	}
 
 	if len(pssmsg.To) < addressLength {
-		go func() {
-			self.outbox <- pssmsg
-		}()
+		if !self.enqueue(pssmsg) {
+			log.Error("outbox full!")
+			return false
+		}
 	}
 	if psstopic == rawTopic {
 		return false
@@ -600,6 +608,17 @@ func (self *Pss) cleanKeys() (count int) {
 // SECTION: Message sending
 /////////////////////////////////////////////////////////////////////
 
+func (self *Pss) enqueue(msg *PssMsg) bool {
+	self.fwdPoolMu.Lock()
+	defer self.fwdPoolMu.Unlock()
+	if self.outboxCounter == self.outboxCapacity {
+		return false
+	}
+	self.outboxCounter++
+	self.outbox <- msg
+	return true
+}
+
 // Send a raw message (any encryption is responsibility of calling client)
 //
 // Will fail if raw messages are disallowed
@@ -616,7 +635,9 @@ func (self *Pss) SendRaw(msg []byte, address PssAddress) error {
 		},
 	}
 	self.addFwdCache(pssmsg)
-	self.outbox <- pssmsg
+	if !self.enqueue(pssmsg) {
+		return errors.New("outbox full!")
+	}
 	return nil
 }
 
@@ -710,14 +731,16 @@ func (self *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key [
 		Expire:  uint32(time.Now().Add(self.msgTTL).Unix()),
 		Payload: envelope,
 	}
-	self.outbox <- pssmsg
+	if !self.enqueue(pssmsg) {
+		return errors.New("outbox full!")
+	}
 	return nil
 }
 
 // Forwards a pss message to the peer(s) closest to the to recipient address in the PssMsg struct
 // The recipient address can be of any length, and the byte slice will be matched to the MSB slice
 // of the peer address of the equivalent length.
-func (self *Pss) forward(msg *PssMsg) {
+func (self *Pss) forward(msg *PssMsg) error {
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
 
@@ -782,11 +805,19 @@ func (self *Pss) forward(msg *PssMsg) {
 	if sent == 0 {
 		log.Debug("unable to forward to any peers")
 		time.Sleep(time.Millisecond)
-		self.outbox <- msg
+		if !self.enqueue(msg) {
+			return errors.New("outbox full!")
+		}
 	}
+
+	// remove from queue
+	self.fwdPoolMu.Lock()
+	self.outboxCounter--
+	self.fwdPoolMu.Unlock()
 
 	// cache the message
 	self.addFwdCache(msg)
+	return nil
 }
 
 /////////////////////////////////////////////////////////////////////
