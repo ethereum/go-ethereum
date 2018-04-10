@@ -252,8 +252,8 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 				//call Healthy RPC
 				h := r.delivery.overlay.Healthy(pp)
 				//print info
-				log.Error(r.delivery.overlay.String())
-				log.Error(fmt.Sprintf("IS HEALTHY: %t", h.GotNN && h.KnowNN && h.Full))
+				log.Debug(r.delivery.overlay.String())
+				log.Debug(fmt.Sprintf("IS HEALTHY: %t", h.GotNN && h.KnowNN && h.Full))
 				if !h.GotNN || !h.Full {
 					healthy = false
 					break
