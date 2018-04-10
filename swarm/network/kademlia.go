@@ -258,13 +258,11 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 	// try to select a candidate peer
 	// find the first callable peer
 	nxt := bpo[0]
-	var i int
 	k.addrs.EachBin(k.base, pof, nxt, func(po, _ int, f func(func(pot.Val, int) bool) bool) bool {
 		// for each bin (up until depth) we find callable candidate peers
-		if po >= depth || po != nxt {
+		if po >= depth {
 			return false
 		}
-		i++
 		ok := f(func(val pot.Val, _ int) bool {
 			a = k.callable(val)
 			return a == nil
@@ -272,10 +270,6 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 		if !ok {
 			return false
 		}
-		if i >= len(bpo) {
-			return false
-		}
-		nxt = bpo[i]
 		return true
 	})
 	// found a candidate
@@ -689,10 +683,10 @@ func (k *Kademlia) full(emptyBins []int) (full bool) {
 	ok := true
 	depth := k.neighbourhoodDepth()
 	k.conns.EachBin(k.base, pof, 0, func(po, _ int, _ func(func(val pot.Val, i int) bool) bool) bool {
+		if prev == depth+1 {
+			return true
+		}
 		for i := prev; i < po; i++ {
-			if prev == depth+1 {
-				return true
-			}
 			e--
 			if e < 0 {
 				ok = false
@@ -703,6 +697,7 @@ func (k *Kademlia) full(emptyBins []int) (full bool) {
 				if emptyBins[e] < i {
 					panic("incorrect peerpot")
 				}
+				ok = false
 				return false
 			}
 		}

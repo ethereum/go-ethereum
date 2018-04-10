@@ -228,19 +228,18 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 	}
 
 	k.Register("01000001")
-	err = testSuggestPeer(t, k, "<nil>", 0, false)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-
-	k.On("10000001")
-	log.Trace("Kad:\n%v", k.String())
 	err = testSuggestPeer(t, k, "01000001", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	k.On("10000001")
+	log.Trace(fmt.Sprintf("Kad:\n%v", k.String()))
+	err = testSuggestPeer(t, k, "<nil>", 1, true)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
 	k.On("01000001")
 	err = testSuggestPeer(t, k, "<nil>", 0, false)
 	if err != nil {
@@ -283,7 +282,7 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 func TestSuggestPeerRetries(t *testing.T) {
 	// 2 row gap, unsaturated proxbin, no callables -> want PO 0
 	k := newTestKademlia("00000000")
-	k.RetryInterval = int64(time.Second) // cycle
+	k.RetryInterval = int64(100 * time.Millisecond) // cycle
 	k.MaxRetries = 50
 	k.RetryExponent = 2
 	sleep := func(n int) {
