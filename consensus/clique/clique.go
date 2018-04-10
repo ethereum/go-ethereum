@@ -571,8 +571,10 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 // rewards given, and returns the final block.
 func (c *Clique) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// set block reward
-	blockReward := big.NewInt(5e+18)
-	reward := new(big.Int).Set(blockReward)
+	// FIXME: unit Ether could be too plump
+	chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
+
+	reward := new(big.Int).Set(chainReward)
 	state.AddBalance(header.Coinbase, reward)
 
 	// No block rewards in PoA, so the state remains as is and uncles are dropped

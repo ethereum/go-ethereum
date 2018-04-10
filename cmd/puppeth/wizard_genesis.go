@@ -66,10 +66,15 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.Clique = &params.CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
+			Reward: 0,
 		}
 		fmt.Println()
 		fmt.Println("How many seconds should blocks take? (default = 15)")
 		genesis.Config.Clique.Period = uint64(w.readDefaultInt(15))
+
+		fmt.Println()
+		fmt.Println("How many Ethers should be rewarded to signer? (default = 0)")
+		genesis.Config.Clique.Reward = uint64(w.readDefaultInt(0))
 
 		// We also need the initial list of signers
 		fmt.Println()
