@@ -413,11 +413,12 @@ func (s *StateSuite) TestTouchDelete(c *check.C) {
 
 	snapshot := s.state.Snapshot()
 	s.state.AddBalance(common.Address{}, new(big.Int))
-	if len(s.state.stateObjectsDirty) != 1 {
+
+	if len(s.state.journal.dirties) != 1 {
 		c.Fatal("expected one dirty state object")
 	}
 	s.state.RevertToSnapshot(snapshot)
-	if len(s.state.stateObjectsDirty) != 0 {
+	if len(s.state.journal.dirties) != 0 {
 		c.Fatal("expected no dirty state object")
 	}
 }
