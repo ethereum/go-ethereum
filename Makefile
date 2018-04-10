@@ -9,7 +9,12 @@
 .PHONY: tomo-windows tomo-windows-386 tomo-windows-amd64
 
 GOBIN = $(shell pwd)/build/bin
+GOFMT = gofmt
 GO ?= latest
+GO_PACKAGES = .
+GO_FILES := $(shell find $(shell go list -f '{{.Dir}}' $(GO_PACKAGES)) -name \*.go)
+
+GIT = git
 
 tomo:
 	build/env.sh go run build/ci.go install ./cmd/tomo
@@ -143,4 +148,8 @@ tomo-windows-386:
 tomo-windows-amd64:
 	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=windows/amd64 -v ./cmd/tomo
 	@echo "Windows amd64 cross compilation done:"
-	@ls -ld $(GOBIN)/tomo-windows-* | grep amd64
+	@ls -ld $(GOBIN)/geth-windows-* | grep amd64
+
+gofmt:
+	$(GOFMT) -s -w $(GO_FILES)
+	$(GIT) checkout vendor
