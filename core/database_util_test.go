@@ -317,7 +317,7 @@ func TestLookupStorage(t *testing.T) {
 			if hash != block.Hash() || number != block.NumberU64() || index != uint64(i) {
 				t.Fatalf("tx #%d [%x]: positional metadata mismatch: have %x/%d/%d, want %x/%v/%v", i, tx.Hash(), hash, number, index, block.Hash(), block.NumberU64(), i)
 			}
-			if tx.String() != txn.String() {
+			if tx.Hash() != txn.Hash() {
 				t.Fatalf("tx #%d [%x]: transaction mismatch: have %v, want %v", i, tx.Hash(), txn, tx)
 			}
 		}
