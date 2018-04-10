@@ -140,6 +140,17 @@ var (
 		utils.WhisperMaxMessageSizeFlag,
 		utils.WhisperMinPOWFlag,
 	}
+
+	sqlFlags = []cli.Flag{
+		utils.MySQLFlag,
+		utils.MySQLAddressFlag,
+		utils.MySQLPortFlag,
+		utils.MySQLPasswordFlag,
+		utils.MySQLUserFlag,
+		utils.MySQLDatabaseFlag,
+		utils.MySQLProtocolFlag,
+		utils.MySQLNativeFlag,
+	}
 )
 
 func init() {
@@ -182,6 +193,7 @@ func init() {
 	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, whisperFlags...)
+	app.Flags = append(app.Flags, sqlFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())

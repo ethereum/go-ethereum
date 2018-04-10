@@ -44,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/mysql"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
@@ -532,6 +533,46 @@ var (
 		Usage: "Minimum POW accepted",
 		Value: whisper.DefaultMinimumPoW,
 	}
+
+	// MySQL settings
+	MySQLFlag = cli.BoolFlag{
+		Name:  "mysql",
+		Usage: "Enables external MySQL as our geth database",
+	}
+	MySQLAddressFlag = cli.StringFlag{
+		Name:  "mysql.address",
+		Usage: "MySQL address",
+		Value: mysql.DefaultConfig.Address,
+	}
+	MySQLPortFlag = cli.StringFlag{
+		Name:  "mysql.port",
+		Usage: "MySQL port",
+		Value: mysql.DefaultConfig.Port,
+	}
+	MySQLPasswordFlag = cli.StringFlag{
+		Name:  "mysql.password",
+		Usage: "MySQL password",
+		Value: mysql.DefaultConfig.Password,
+	}
+	MySQLUserFlag = cli.StringFlag{
+		Name:  "mysql.user",
+		Usage: "MySQL user name",
+		Value: mysql.DefaultConfig.User,
+	}
+	MySQLDatabaseFlag = cli.StringFlag{
+		Name:  "mysql.database",
+		Usage: "MySQL database name",
+		Value: mysql.DefaultConfig.Database,
+	}
+	MySQLProtocolFlag = cli.StringFlag{
+		Name:  "mysql.protocol",
+		Usage: "MySQL protocol",
+		Value: mysql.DefaultConfig.Protocol,
+	}
+	MySQLNativeFlag = cli.BoolTFlag{
+		Name:  "mysql.native",
+		Usage: "Enable allow native passwords in MySQL",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -868,9 +909,26 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	}
 }
 
+// SetMySQL applies mysql-related command line flags to the config.
+func setMySQL(ctx *cli.Context, cfg *node.Config) {
+	if !ctx.GlobalBool(MySQLFlag.Name) {
+		return
+	}
+	cfg.MySQL = &mysql.Config{
+		Protocol:             ctx.GlobalString(MySQLProtocolFlag.Name),
+		Address:              ctx.GlobalString(MySQLAddressFlag.Name),
+		Port:                 ctx.GlobalString(MySQLPortFlag.Name),
+		User:                 ctx.GlobalString(MySQLUserFlag.Name),
+		Password:             ctx.GlobalString(MySQLPasswordFlag.Name),
+		Database:             ctx.GlobalString(MySQLDatabaseFlag.Name),
+		AllowNativePasswords: ctx.GlobalBoolT(MySQLNativeFlag.Name),
+	}
+}
+
 // SetNodeConfig applies node-related command line flags to the config.
 func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	SetP2PConfig(ctx, &cfg.P2P)
+	setMySQL(ctx, cfg)
 	setIPC(ctx, cfg)
 	setHTTP(ctx, cfg)
 	setWS(ctx, cfg)
