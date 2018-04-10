@@ -23,6 +23,7 @@ import (
 	"sort"
 	"sync"
 
+	"bytes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -617,9 +618,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		if account.Root != emptyState {
 			s.db.TrieDB().Reference(account.Root, parent)
 		}
-		code := common.BytesToHash(account.CodeHash)
-		if code != emptyCode {
-			s.db.TrieDB().Reference(code, parent)
+		if !bytes.Equal(emptyCodeHash, account.CodeHash) {
+			s.db.TrieDB().Reference(common.BytesToHash(account.CodeHash), parent)
 		}
 		return nil
 	})

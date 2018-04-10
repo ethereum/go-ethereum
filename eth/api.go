@@ -369,7 +369,7 @@ type storageEntry struct {
 	Key   *common.Hash `json:"key"`
 	Value common.Hash  `json:"value"`
 }
-
+/*
 // StorageRangeAt returns the storage at the given block height and transaction index.
 func (api *PrivateDebugAPI) StorageRangeAt(ctx context.Context, blockHash common.Hash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
 	_, _, statedb, err := api.computeTxEnv(blockHash, txIndex, 0)
@@ -405,7 +405,7 @@ func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeRes
 	}
 	return result, nil
 }
-
+*/
 // GetModifiedAccountsByumber returns all accounts that have changed between the
 // two blocks specified. A change is defined as a difference in nonce, balance,
 // code hash, or storage hash.
