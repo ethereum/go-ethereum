@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/pot"
 )
 
@@ -263,14 +263,10 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 		if po >= depth {
 			return false
 		}
-		ok := f(func(val pot.Val, _ int) bool {
+		return f(func(val pot.Val, _ int) bool {
 			a = k.callable(val)
 			return a == nil
 		})
-		if !ok {
-			return false
-		}
-		return true
 	})
 	// found a candidate
 	if a != nil {
@@ -619,16 +615,17 @@ type PeerPot struct {
 	EmptyBins []int
 }
 
-// NewPeerPot just creates a new pot record OverlayAddr
-func NewPeerPot(kadMinProxSize int, ids []discover.NodeID, addrs [][]byte) map[discover.NodeID]*PeerPot {
+// NewPeerPotMap creates a map of pot record of OverlayAddr with keys
+// as hexadecimal representations of the address.
+func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
 	// create a table of all nodes for health check
 	np := pot.NewPot(nil, 0)
 	for _, addr := range addrs {
 		np, _, _ = pot.Add(np, addr, pof)
 	}
-	ppmap := make(map[discover.NodeID]*PeerPot)
+	ppmap := make(map[string]*PeerPot)
 
-	for i, id := range ids {
+	for i, a := range addrs {
 		pl := 256
 		prev := 256
 		var emptyBins []int
@@ -657,7 +654,7 @@ func NewPeerPot(kadMinProxSize int, ids []discover.NodeID, addrs [][]byte) map[d
 			emptyBins = append(emptyBins, j)
 		}
 		log.Trace(fmt.Sprintf("%x NNS: %s", addrs[i][:4], logNNS(nns)))
-		ppmap[id] = &PeerPot{nns, emptyBins}
+		ppmap[common.Bytes2Hex(a)] = &PeerPot{nns, emptyBins}
 	}
 	return ppmap
 }
