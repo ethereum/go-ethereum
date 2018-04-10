@@ -74,7 +74,7 @@ func TestClientUploadDownloadFiles(t *testing.T) {
 				Size:        int64(len(data)),
 			},
 		}
-		hash, err := client.Upload(file, manifest)
+		hash, err := client.Upload(file, manifest, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -168,7 +168,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 	// upload the directory
 	client := NewClient(srv.URL)
 	defaultPath := filepath.Join(dir, testDirFiles[0])
-	hash, err := client.UploadDirectory(dir, defaultPath, "")
+	hash, err := client.UploadDirectory(dir, defaultPath, "", false)
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)
 	}
@@ -224,7 +224,7 @@ func TestClientFileList(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	client := NewClient(srv.URL)
-	hash, err := client.UploadDirectory(dir, "", "")
+	hash, err := client.UploadDirectory(dir, "", "", false)
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)
 	}

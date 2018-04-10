@@ -556,12 +556,14 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	}
 
 	// check the root chunk exists by retrieving the file's size
-	reader := s.api.Retrieve(key)
+	reader, isEncrypted := s.api.Retrieve(key)
 	if _, err := reader.Size(nil); err != nil {
 		getFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("root chunk not found %s: %s", key, err), http.StatusNotFound)
 		return
 	}
+
+	w.Header().Set("X-Encrypted", fmt.Sprintf("%v", isEncrypted))
 
 	switch {
 	case r.uri.Raw() || r.uri.DeprecatedRaw():
@@ -619,11 +621,12 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 		}
 
 		// retrieve the entry's key and size
-		reader := s.api.Retrieve(storage.Key(common.Hex2Bytes(entry.Hash)))
+		reader, isEncrypted := s.api.Retrieve(storage.Key(common.Hex2Bytes(entry.Hash)))
 		size, err := reader.Size(nil)
 		if err != nil {
 			return err
 		}
+		w.Header().Set("X-Encrypted", fmt.Sprintf("%v", isEncrypted))
 
 		// write a tar header for the entry
 		hdr := &tar.Header{

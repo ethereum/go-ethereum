@@ -44,7 +44,7 @@ func testGetEntry(t *testing.T, path, match string, multiple bool, paths ...stri
 	quitC := make(chan bool)
 	dpa := storage.NewDPA(nil, storage.NewDPAParams())
 	ref := make([]byte, dpa.HashSize())
-	trie, err := readManifest(manifest(paths...), ref, dpa, quitC)
+	trie, err := readManifest(manifest(paths...), ref, dpa, false, quitC)
 	if err != nil {
 		t.Errorf("unexpected error making manifest: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestExactMatch(t *testing.T) {
 	mf := manifest("shouldBeExactMatch.css", "shouldBeExactMatch.css.map")
 	dpa := storage.NewDPA(nil, storage.NewDPAParams())
 	ref := make([]byte, dpa.HashSize())
-	trie, err := readManifest(mf, ref, dpa, quitC)
+	trie, err := readManifest(mf, ref, dpa, false, quitC)
 	if err != nil {
 		t.Errorf("unexpected error making manifest: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestAddFileWithManifestPath(t *testing.T) {
 	}
 	dpa := storage.NewDPA(nil, storage.NewDPAParams())
 	ref := make([]byte, dpa.HashSize())
-	trie, err := readManifest(reader, ref, dpa, nil)
+	trie, err := readManifest(reader, ref, dpa, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

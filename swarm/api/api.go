@@ -238,7 +238,7 @@ func (self *Api) Upload(uploadDir, index string, toEncrypt bool) (hash string, e
 }
 
 // DPA reader API
-func (self *Api) Retrieve(key storage.Key) storage.LazySectionReader {
+func (self *Api) Retrieve(key storage.Key) (reader storage.LazySectionReader, isEncrypted bool) {
 	return self.dpa.Retrieve(key)
 }
 
@@ -344,7 +344,7 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 		} else {
 			mimeType = entry.ContentType
 			log.Trace("content lookup key", "key", key, "mimetype", mimeType)
-			reader = self.dpa.Retrieve(key)
+			reader, _ = self.dpa.Retrieve(key)
 		}
 	} else {
 		status = http.StatusNotFound
@@ -482,7 +482,7 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 
 	buf := make([]byte, buffSize)
 
-	oldReader := self.Retrieve(oldKey)
+	oldReader, _ := self.Retrieve(oldKey)
 	io.ReadAtLeast(oldReader, buf, int(offset))
 
 	newReader := bytes.NewReader(content)

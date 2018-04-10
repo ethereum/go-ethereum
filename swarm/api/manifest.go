@@ -205,12 +205,12 @@ type manifestTrieEntry struct {
 func loadManifest(dpa *storage.DPA, hash storage.Key, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 	log.Trace("manifest lookup", "key", hash)
 	// retrieve manifest via DPA
-	manifestReader := dpa.Retrieve(hash)
+	manifestReader, isEncrypted := dpa.Retrieve(hash)
 	log.Trace("reader retrieved", "key", hash)
-	return readManifest(manifestReader, hash, dpa, quitC)
+	return readManifest(manifestReader, hash, dpa, isEncrypted, quitC)
 }
 
-func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dpa *storage.DPA, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dpa *storage.DPA, isEncrypted bool, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
 	// TODO check size for oversized manifests
 	size, err := manifestReader.Size(quitC)
@@ -245,7 +245,7 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dp
 
 	trie = &manifestTrie{
 		dpa:       dpa,
-		encrypted: (len(hash) > dpa.HashSize()),
+		encrypted: isEncrypted,
 	}
 	for _, entry := range man.Entries {
 		trie.addEntry(entry, quitC)

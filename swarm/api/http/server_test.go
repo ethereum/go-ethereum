@@ -472,7 +472,7 @@ func TestBzzRootRedirect(t *testing.T) {
 			Size:        int64(len(data)),
 		},
 	}
-	hash, err := client.Upload(file, "")
+	hash, err := client.Upload(file, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

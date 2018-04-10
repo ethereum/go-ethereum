@@ -273,7 +273,7 @@ func retrieveToFile(quitC chan bool, dpa *storage.DPA, key storage.Key, path str
 	if err != nil {
 		return err
 	}
-	reader := dpa.Retrieve(key)
+	reader, _ := dpa.Retrieve(key)
 	writer := bufio.NewWriter(f)
 	size, err := reader.Size(quitC)
 	if err != nil {
