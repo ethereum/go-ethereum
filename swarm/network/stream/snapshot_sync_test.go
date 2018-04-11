@@ -199,15 +199,20 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 	if err != nil {
 		return err
 	}
+	var rpcSubscriptionsWg sync.WaitGroup
 	//do cleanup after test is terminated
 	defer func() {
+		// close quitC channel to signall all goroutines to clanup
+		// before calling simulation network shutdown.
+		close(quitC)
+		//wait for all rpc subscriptions to unsubscribe
+		rpcSubscriptionsWg.Wait()
 		//shutdown the snapshot network
 		net.Shutdown()
 		//after the test, clean up local stores initialized with createLocalStoreForId
 		localStoreCleanup()
 		//finally clear all data directories
 		datadirsCleanup()
-		close(quitC)
 	}()
 	//get the nodes of the network
 	nodes := net.GetNodes()
@@ -290,7 +295,15 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 				return err
 			}
 
-			watchSubscriptionEvents(ctx, id, client, errc)
+			wsDoneC := watchSubscriptionEvents(ctx, id, client, errc, quitC)
+			// doneC is nil, the error happened which is sent to errc channel, already
+			if wsDoneC == nil {
+				continue
+			}
+			go func() {
+				<-wsDoneC
+				rpcSubscriptionsWg.Done()
+			}()
 
 			if log.Lvl(*loglevel) >= log.LvlTrace {
 				//this will print the kademlia tables of all nodes
@@ -306,10 +319,15 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 				log.Debug(kt)
 			}
 			//watch for peers disconnecting
-			err = streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
+			wdDoneC, err := streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
 			if err != nil {
 				return err
 			}
+			rpcSubscriptionsWg.Add(1)
+			go func() {
+				<-wdDoneC
+				rpcSubscriptionsWg.Done()
+			}()
 			//start syncing!
 			err = client.CallContext(ctx, nil, "stream_startSyncing")
 			if err != nil {
@@ -589,7 +607,7 @@ func initNetWithSnapshot(nodeCount int) (*simulations.Network, error) {
 
 //we want to wait for subscriptions to be established before uploading to test
 //that live syncing is working correctly
-func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rpc.Client, errc chan error) {
+func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rpc.Client, errc chan error, quitC chan struct{}) (doneC <-chan struct{}) {
 	events := make(chan *p2p.PeerEvent)
 	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
 	if err != nil {
@@ -597,11 +615,18 @@ func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rp
 		errc <- fmt.Errorf("error getting peer events for node %v: %s", id, err)
 		return
 	}
+	c := make(chan struct{})
 	go func() {
-		defer sub.Unsubscribe()
+		defer func() {
+			log.Trace("watch subscription events: unsubscribe", "id", id)
+			sub.Unsubscribe()
+			close(c)
+		}()
 
 		for {
 			select {
+			case <-quitC:
+				return
 			case <-ctx.Done():
 				errc <- ctx.Err()
 				return
@@ -618,7 +643,7 @@ func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rp
 			}
 		}
 	}()
-	return
+	return c
 }
 
 //create a local store for the given node

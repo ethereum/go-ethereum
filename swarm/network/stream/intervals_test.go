@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -90,7 +91,11 @@ func testIntervals(t *testing.T, live bool, history *Range) {
 	}
 
 	sim, teardown, err := streamTesting.NewSimulation(conf)
-	defer teardown()
+	var rpcSubscriptionsWg sync.WaitGroup
+	defer func() {
+		rpcSubscriptionsWg.Wait()
+		teardown()
+	}()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,10 +141,15 @@ func testIntervals(t *testing.T, live bool, history *Range) {
 
 			sid := sim.IDs[0]
 
-			err := streamTesting.WatchDisconnections(id, client, errc, quitC)
+			doneC, err := streamTesting.WatchDisconnections(id, client, errc, quitC)
 			if err != nil {
 				return err
 			}
+			rpcSubscriptionsWg.Add(1)
+			go func() {
+				<-doneC
+				rpcSubscriptionsWg.Done()
+			}()
 			ctx, cancel := context.WithTimeout(ctx, 100*time.Second)
 			defer cancel()
 
