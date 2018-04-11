@@ -903,7 +903,7 @@ func NewTestResourceHandler(datadir string, ethClient headerGetter, validator Re
 		return nil, err
 	}
 	localStore := &LocalStore{
-		memStore: NewMemStore(dbStore, singletonSwarmDbCapacity),
+		memStore: NewMemStore(dbStore, singletonSwarmCacheCapacity, singletonSwarmDbCapacity),
 		DbStore:  dbStore,
 	}
 	resourceChunkStore := NewResourceChunkStore(localStore, nil)

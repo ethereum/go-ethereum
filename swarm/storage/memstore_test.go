@@ -19,7 +19,7 @@ package storage
 import "testing"
 
 func newTestMemStore() *MemStore {
-	return NewMemStore(nil, defaultCacheCapacity)
+	return NewMemStore(nil, defaultCacheCapacity, singletonSwarmDbCapacity)
 }
 
 func testMemStoreRandom(n int, processors int, chunksize int, t *testing.T) {

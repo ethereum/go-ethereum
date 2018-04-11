@@ -21,6 +21,7 @@ package storage
 import (
 	"bytes"
 	"fmt"
+	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -31,11 +32,13 @@ const (
 
 type MemStore struct {
 	cache    *lru.Cache
+	requests *lru.Cache
+	mu       sync.Mutex
 	disabled bool
 }
 
-func NewMemStore(_ *LDBStore, capacity uint) (m *MemStore) {
-	if capacity == 0 {
+func NewMemStore(_ *LDBStore, cacheCapacity uint, requestsCapacity uint) (m *MemStore) {
+	if cacheCapacity == 0 {
 		return &MemStore{
 			disabled: true,
 		}
@@ -45,13 +48,19 @@ func NewMemStore(_ *LDBStore, capacity uint) (m *MemStore) {
 		v := value.(*Chunk)
 		<-v.dbStoredC
 	}
-	c, err := lru.NewWithEvict(int(capacity), onEvicted)
+	c, err := lru.NewWithEvict(int(cacheCapacity), onEvicted)
+	if err != nil {
+		panic(err)
+	}
+
+	r, err := lru.New(int(requestsCapacity))
 	if err != nil {
 		panic(err)
 	}
 
 	return &MemStore{
-		cache: c,
+		cache:    c,
+		requests: r,
 	}
 }
 
@@ -60,6 +69,16 @@ func (m *MemStore) Get(key Key) (*Chunk, error) {
 		return nil, ErrChunkNotFound
 	}
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	r, ok := m.requests.Get(string(key))
+	// it is a request
+	if ok {
+		return r.(*Chunk), nil
+	}
+
+	// it is not a request
 	c, ok := m.cache.Get(string(key))
 	if !ok {
 		return nil, ErrChunkNotFound
@@ -75,14 +94,37 @@ func (m *MemStore) Put(c *Chunk) {
 	if m.disabled {
 		return
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// it is a request
+	if c.ReqC != nil {
+		select {
+		case <-c.ReqC:
+			ok := c.GetErrored()
+			if !ok {
+				m.requests.Remove(string(c.Key))
+				return
+			}
+			m.cache.Add(string(c.Key), c)
+			m.requests.Remove(string(c.Key))
+		default:
+			m.requests.Add(string(c.Key), c)
+		}
+		return
+	}
+
+	// it is not a request
 	m.cache.Add(string(c.Key), c)
+	m.requests.Remove(string(c.Key))
 }
 
 func (m *MemStore) setCapacity(n int) {
 	if n <= 0 {
 		m.disabled = true
 	} else {
-		m = NewMemStore(nil, uint(n))
+		m = NewMemStore(nil, uint(n), singletonSwarmDbCapacity)
 	}
 }
 

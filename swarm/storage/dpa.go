@@ -72,7 +72,7 @@ func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
 	}
 
 	return NewDPA(&LocalStore{
-		memStore: NewMemStore(dbStore, singletonSwarmCacheCapacity),
+		memStore: NewMemStore(dbStore, singletonSwarmCacheCapacity, singletonSwarmDbCapacity),
 		DbStore:  dbStore,
 	}, NewDPAParams()), nil
 }

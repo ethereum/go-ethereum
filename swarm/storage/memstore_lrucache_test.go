@@ -52,10 +52,12 @@ func newLDBStore(t *testing.T) (*LDBStore, func()) {
 
 func TestMemStoreAndLDBStore(t *testing.T) {
 	ldb, cleanup := newLDBStore(t)
-	ldb.setCapacity(50000)
+	ldb.setCapacity(4000)
 	defer cleanup()
 
-	memStore := NewMemStore(ldb, defaultCacheCapacity)
+	cacheCap := 200
+	requestsCap := 10000
+	memStore := NewMemStore(ldb, uint(cacheCap), uint(requestsCap))
 
 	tests := []struct {
 		n         int    // number of chunks to push to memStore
@@ -73,15 +75,20 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 			request:   false,
 		},
 		{
-			n:         60001,
+			n:         501,
 			chunkSize: 4096,
 			request:   false,
 		},
 		{
-			n:         60001,
+			n:         15001,
 			chunkSize: 4096,
-			request:   true,
+			request:   false,
 		},
+		//{
+		//n:         60001,
+		//chunkSize: 4096,
+		//request:   true,
+		//},
 	}
 
 	for i, tt := range tests {
@@ -102,6 +109,14 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 		for i := 0; i < tt.n; i++ {
 			go ldb.Put(chunks[i])
 			memStore.Put(chunks[i])
+
+			if got := memStore.cache.Len(); got > cacheCap {
+				t.Fatalf("expected to get cache capacity less than %v, but got %v", cacheCap, got)
+			}
+
+			if got := memStore.requests.Len(); got > requestsCap {
+				t.Fatalf("expected to get requests capacity less than %v, but got %v", requestsCap, got)
+			}
 		}
 
 		for i := 0; i < tt.n; i++ {

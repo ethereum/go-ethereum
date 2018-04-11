@@ -60,7 +60,7 @@ func NewLocalStore(hash SwarmHasher, params *StoreParams, basekey []byte, mockSt
 		return nil, err
 	}
 	return &LocalStore{
-		memStore: NewMemStore(dbStore, params.CacheCapacity),
+		memStore: NewMemStore(dbStore, params.CacheCapacity, singletonSwarmDbCapacity),
 		DbStore:  dbStore,
 	}, nil
 }
@@ -72,7 +72,7 @@ func NewTestLocalStoreForAddr(path string, basekey []byte) (*LocalStore, error) 
 		return nil, err
 	}
 	localStore := &LocalStore{
-		memStore: NewMemStore(dbStore, singletonSwarmDbCapacity),
+		memStore: NewMemStore(dbStore, singletonSwarmDbCapacity, singletonSwarmDbCapacity),
 		DbStore:  dbStore,
 	}
 	return localStore, nil

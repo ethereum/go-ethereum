@@ -618,6 +618,10 @@ func (s *LDBStore) writeBatches() {
 		if err != nil {
 			log.Error(fmt.Sprintf("DbStore: spawn batch write (%d chunks): %v", b.Len(), err))
 		}
+		if e >= s.capacity {
+			log.Trace(fmt.Sprintf("DbStore: collecting garbage...(%d chunks)", e))
+			s.collectGarbage(gcArrayFreeRatio)
+		}
 		close(c)
 	}
 	log.Trace(fmt.Sprintf("DbStore: quit batch write loop"))
@@ -757,6 +761,9 @@ func (s *LDBStore) setCapacity(c uint64) {
 		}
 		if ratio > 1 {
 			ratio = 1
+		}
+		for s.entryCnt > c {
+			s.collectGarbage(ratio)
 		}
 	}
 }
