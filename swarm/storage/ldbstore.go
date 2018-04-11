@@ -618,11 +618,11 @@ func (s *LDBStore) writeBatches() {
 		if err != nil {
 			log.Error(fmt.Sprintf("DbStore: spawn batch write (%d chunks): %v", b.Len(), err))
 		}
+		close(c)
 		if e >= s.capacity {
 			log.Trace(fmt.Sprintf("DbStore: collecting garbage...(%d chunks)", e))
 			s.collectGarbage(gcArrayFreeRatio)
 		}
-		close(c)
 	}
 	log.Trace(fmt.Sprintf("DbStore: quit batch write loop"))
 }

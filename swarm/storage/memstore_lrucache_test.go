@@ -79,11 +79,6 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 			chunkSize: 4096,
 			request:   false,
 		},
-		{
-			n:         15001,
-			chunkSize: 4096,
-			request:   false,
-		},
 		//{
 		//n:         60001,
 		//chunkSize: 4096,
