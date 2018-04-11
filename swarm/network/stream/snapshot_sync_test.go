@@ -25,7 +25,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -53,8 +52,6 @@ var (
 	ids       []discover.NodeID
 	datadirs  map[discover.NodeID]string
 	ppmap     map[string]*network.PeerPot
-
-	globalWg sync.WaitGroup
 
 	live    bool
 	history bool
@@ -107,20 +104,24 @@ func initSyncTest() {
 	}
 }
 
-//This file executes a number of tests with the syntax
-//TestSyncing_x_y
-//x is the number of chunks which will be uploaded
-//y is the number of nodes for the test
-func TestSyncing_4_32(t *testing.T)  { testSyncing(t, 4, 32) }
-func TestSyncing_32_16(t *testing.T) { testSyncing(t, 32, 16) }
-
-func TestLongRunningSyncing(t *testing.T) {
-	if *longrunning {
-		chnkCnt := []int{1, 8, 32, 256, 1024}
-		nCnt := []int{16, 32, 64, 128, 256}
-
+//This file executes a number of syncing tests
+//node and chunk number can be provided via flags
+func TestSyncing(t *testing.T) {
+	if *nodes != 0 && *chunks != 0 {
+		log.Info(fmt.Sprintf("Running test with %d chunks and %d nodes...", *chunks, *nodes))
+		testSyncing(t, *chunks, *nodes)
+	} else {
+		var nodeCnt []int
+		var chnkCnt []int
+		if *longrunning {
+			chnkCnt = []int{1, 8, 32, 256, 1024}
+			nodeCnt = []int{16, 32, 64, 128, 256}
+		} else {
+			chnkCnt = []int{4, 32}
+			nodeCnt = []int{32, 16}
+		}
 		for _, chnk := range chnkCnt {
-			for _, n := range nCnt {
+			for _, n := range nodeCnt {
 				log.Info(fmt.Sprintf("Long running test with %d chunks and %d nodes...", chnk, n))
 				testSyncing(t, chnk, n)
 			}
@@ -291,7 +292,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 		log.Info("Setting up stream subscription")
 		// each node Subscribes to each other's swarmChunkServerStreamName
 		for j, id := range ids {
-			log.Trace(fmt.Sprintf("subscribe: %d", j))
+			log.Trace(fmt.Sprintf("Subscribe to subscription events: %d", j))
 			client, err := net.GetNode(id).Client()
 			if err != nil {
 				return err
@@ -331,23 +332,34 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 				<-wdDoneC
 				rpcSubscriptionsWg.Done()
 			}()
-			//start syncing!
-			err = client.CallContext(ctx, nil, "stream_startSyncing")
+		}
+
+		for j, id := range ids {
+			log.Trace(fmt.Sprintf("Start syncing subscriptions: %d", j))
+			client, err := net.GetNode(id).Client()
 			if err != nil {
 				return err
 			}
+			//start syncing!
+			var cnt int
+			err = client.CallContext(ctx, &cnt, "stream_startSyncing")
+			if err != nil {
+				return err
+			}
+			subscriptionCount += cnt
 		}
 
 		//now wait until the number of expected subscriptions has been finished
-		go func() {
-			globalWg.Wait()
-			errc <- nil
-		}()
-
-		err := <-errc
-		if err != nil {
-			return err
+		for err := range errc {
+			if err != nil {
+				return err
+			}
+			subscriptionCount--
+			if subscriptionCount == 0 {
+				break
+			}
 		}
+
 		log.Info("Stream subscriptions successfully requested")
 		if live {
 			//now upload the chunks to the selected random single node
@@ -443,7 +455,7 @@ func (r *TestRegistry) GetKad(ctx context.Context) string {
 }
 
 //the server func to start syncing
-func (r *TestRegistry) StartSyncing(ctx context.Context) error {
+func (r *TestRegistry) StartSyncing(ctx context.Context) (int, error) {
 	var err error
 
 	if log.Lvl(*loglevel) == log.LvlDebug {
@@ -459,9 +471,10 @@ func (r *TestRegistry) StartSyncing(ctx context.Context) error {
 
 	kad, ok := r.delivery.overlay.(*network.Kademlia)
 	if !ok {
-		return fmt.Errorf("Not a Kademlia!")
+		return 0, fmt.Errorf("Not a Kademlia!")
 	}
 
+	subCnt := 0
 	//iterate over each bin and solicit needed subscription to bins
 	kad.EachBin(r.addr.Over(), pof, 0, func(conn network.OverlayConn, po int) bool {
 		//identify begin and start index of the bin(s) we want to subscribe to
@@ -471,7 +484,7 @@ func (r *TestRegistry) StartSyncing(ctx context.Context) error {
 			histRange = &Range{}
 		}
 
-		globalWg.Add(1)
+		subCnt++
 		err = r.RequestSubscription(conf.addrToIdMap[string(conn.Address())], NewStream("SYNC", FormatSyncBinKey(uint8(po)), live), histRange, Top)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error in RequestSubsciption! %v", err))
@@ -480,7 +493,7 @@ func (r *TestRegistry) StartSyncing(ctx context.Context) error {
 		return true
 
 	})
-	return nil
+	return subCnt, nil
 }
 
 //map chunk keys to addresses which are responsible
@@ -616,6 +629,7 @@ func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rp
 		return
 	}
 	c := make(chan struct{})
+
 	go func() {
 		defer func() {
 			log.Trace("watch subscription events: unsubscribe", "id", id)
@@ -636,7 +650,7 @@ func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rp
 			case e := <-events:
 				//just catch SubscribeMsg
 				if e.Type == p2p.PeerEventTypeMsgRecv && e.Protocol == "stream" && e.MsgCode != nil && *e.MsgCode == 4 {
-					globalWg.Done()
+					errc <- nil
 				}
 			case err := <-sub.Err():
 				if err != nil {
