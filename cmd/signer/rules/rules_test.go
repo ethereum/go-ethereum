@@ -128,7 +128,7 @@ func initRuleEngine(js string) (*rulesetUi, error) {
 func TestListRequest(t *testing.T) {
 	accs := make([]core.Account, 5)
 
-	for i, _ := range accs {
+	for i := range accs {
 		addr := fmt.Sprintf("000000000000000000000000000000000000000%x", i)
 		acc := core.Account{
 			Address: common.BytesToAddress(common.Hex2Bytes(addr)),
@@ -626,7 +626,7 @@ function ApproveSignData(r){
 		Rawdata: raw,
 	})
 	if err != nil {
-		t.Fatalf("Unexpected error", err)
+		t.Fatalf("Unexpected error %v", err)
 	}
 	if !resp.Approved {
 		t.Fatalf("Expected approved")

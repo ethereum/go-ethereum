@@ -229,7 +229,7 @@ func TestSignData(t *testing.T) {
 	control <- "wrongpassword"
 	h, err := api.Sign(context.Background(), a, []byte("EHLO world"))
 	if h != nil {
-		t.Errorf("Expected nil-data, got %h", h)
+		t.Errorf("Expected nil-data, got %x", h)
 	}
 	if err != keystore.ErrDecrypt {
 		t.Errorf("Expected ErrLocked! %v", err)
@@ -238,7 +238,7 @@ func TestSignData(t *testing.T) {
 	control <- "No way"
 	h, err = api.Sign(context.Background(), a, []byte("EHLO world"))
 	if h != nil {
-		t.Errorf("Expected nil-data, got %h", h)
+		t.Errorf("Expected nil-data, got %x", h)
 	}
 	if err != ErrRequestDenied {
 		t.Errorf("Expected ErrRequestDenied! %v", err)

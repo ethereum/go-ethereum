@@ -27,15 +27,12 @@ import (
 )
 
 type StdIOUI struct {
-	//client *jsonrpc2.Client
 	client rpc.Client
-	//	codec  rpc.ClientCodec
-	mu sync.Mutex
+	mu     sync.Mutex
 }
 
 func NewStdIOUI() *StdIOUI {
 	log.Info("NewStdIOUI")
-	//	in, out := bufio.NewReader(os.Stdin), os.Stdout
 	client, err := rpc.DialContext(context.Background(), "stdio://")
 	if err != nil {
 		log.Crit("Could not create stdio client", "err", err)

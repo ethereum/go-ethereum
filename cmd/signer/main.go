@@ -402,7 +402,7 @@ func signer(c *cli.Context) error {
 		ipcApiUrl = "n/a"
 	)
 	rpcApi := []rpc.API{
-		rpc.API{
+		{
 			Namespace: "account",
 			Public:    true,
 			Service:   api,

@@ -52,11 +52,11 @@ func TestEncryption(t *testing.T) {
 func TestFileStorage(t *testing.T) {
 
 	a := map[string]storedCredential{
-		"secret": storedCredential{
+		"secret": {
 			Iv:         common.Hex2Bytes("cdb30036279601aeee60f16b"),
 			CipherText: common.Hex2Bytes("f311ac49859d7260c2c464c28ffac122daf6be801d3cfd3edcbde7e00c9ff74f"),
 		},
-		"secret2": storedCredential{
+		"secret2": {
 			Iv:         common.Hex2Bytes("afb8a7579bf971db9f8ceeed"),
 			CipherText: common.Hex2Bytes("2df87baf86b5073ef1f03e3cc738de75b511400f5465bb0ddeacf47ae4dc267d"),
 		},

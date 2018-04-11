@@ -1,7 +1,7 @@
 **Signer API**
 ----
 The signer utility can be used to sign transactions and data and is meant as a replacement for geth's account management.
-This allows DApp's not to depend on geth's account management. When a DApp wants to sign data it can send the data to
+This allows DApps not to depend on geth's account management. When a DApp wants to sign data it can send the data to
 the signer, the signer will than provide the user with context and asks the user for permission to sign the data. If
 the users grants the signing request the signer will send the signature back to the DApp.
   

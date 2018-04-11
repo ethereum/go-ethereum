@@ -98,7 +98,7 @@ type Metadata struct {
 
 // MetadataFromContext extracts Metadata from a given context.Context
 func MetadataFromContext(ctx context.Context) Metadata {
-	m := Metadata{"NA", "NA", "NA"}
+	m := Metadata{"NA", "NA", "NA"} // batman
 
 	if v := ctx.Value("remote"); v != nil {
 		m.Remote = v.(string)
@@ -444,7 +444,7 @@ func (api *SignerAPI) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (c
 // SignHash is a helper function that calculates a hash for the given message that can be
 // safely used to calculate a signature from.
 //
-// The hash is calulcated as
+// The hash is calculated as
 //   keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
 //
 // This gives context to the signed message and prevents signing of transactions.

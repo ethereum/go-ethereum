@@ -23,11 +23,11 @@ import (
 
 	"sync"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/crypto/ssh/terminal"
-	"github.com/davecgh/go-spew/spew"
 )
 
 type CommandlineUI struct {
@@ -84,8 +84,8 @@ func (ui *CommandlineUI) readPasswordText(inputstring string) string {
 
 // confirm returns true if user enters 'Yes', otherwise false
 func (ui *CommandlineUI) confirm() bool {
-	fmt.Printf("Type 'Yes' to approve:\n")
-	if ui.readString() == "Yes" {
+	fmt.Printf("Approve? [y/N]:\n")
+	if ui.readString() == "y" {
 		return true
 	}
 	fmt.Println("-----------------------")

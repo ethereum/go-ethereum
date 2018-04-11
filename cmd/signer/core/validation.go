@@ -108,7 +108,7 @@ func (v *Validator) validate(msgs *ValidationMessages, txargs *SendTxArgs, metho
 	// Prevent accidental erroneous usage of both 'input' and 'data'
 	if txargs.Data != nil && txargs.Input != nil && !bytes.Equal(*txargs.Data, *txargs.Input) {
 		// This is a showstopper
-		return errors.New(`Ambiguous request: moth "data" and "input" are set and are not identical`)
+		return errors.New(`Ambiguous request: both "data" and "input" are set and are not identical`)
 	}
 	var (
 		data []byte
