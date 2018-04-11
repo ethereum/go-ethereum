@@ -1192,7 +1192,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if !ps.process(pssmsgs[len(pssmsgs)-(i%len(pssmsgs))-1]) {
+		if err := ps.process(pssmsgs[len(pssmsgs)-(i%len(pssmsgs))-1]); err != nil {
 			b.Fatalf("pss processing failed: %v", err)
 		}
 	}
@@ -1274,7 +1274,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 		Payload: env,
 	}
 	for i := 0; i < b.N; i++ {
-		if !ps.process(pssmsg) {
+		if err := ps.process(pssmsg); err != nil {
 			b.Fatalf("pss processing failed: %v", err)
 		}
 	}

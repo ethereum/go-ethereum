@@ -104,8 +104,6 @@ type Pss struct {
 	paddingByteSize int
 	capstring       string
 	outbox          chan *PssMsg
-	outboxCapacity  int
-	outboxCounter   int
 
 	// keys and peers
 	pubKeyPool                 map[string]map[Topic]*pssPeer // mapping of hex public keys to peer address by topic.
@@ -152,7 +150,6 @@ func NewPss(k network.Overlay, params *PssParams) *Pss {
 		paddingByteSize: defaultPaddingByteSize,
 		capstring:       cap.String(),
 		outbox:          make(chan *PssMsg, defaultOutboxCapacity),
-		outboxCapacity:  defaultOutboxCapacity,
 
 		pubKeyPool:                 make(map[string]map[Topic]*pssPeer),
 		symKeyPool:                 make(map[string]map[Topic]*pssPeer),
@@ -331,15 +328,16 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 		var err error
 		if !self.isSelfPossibleRecipient(pssmsg) {
 			log.Trace("pss was for someone else :'( ... forwarding", "pss", common.ToHex(self.BaseAddr()))
-			if !self.enqueue(pssmsg) {
-				return errors.New("outbox full!")
+			if err := self.enqueue(pssmsg); err != nil {
+				return err
 			}
 		}
 		log.Trace("pss for us, yay! ... let's process!", "pss", common.ToHex(self.BaseAddr()))
 
-		if !self.process(pssmsg) {
-			if !self.enqueue(pssmsg) {
-				return errors.New("outbox full!")
+		if err := self.process(pssmsg); err != nil {
+			qerr := self.enqueue(pssmsg)
+			if qerr != nil {
+				err = fmt.Errorf("%s + %s", err, qerr)
 			}
 		}
 		return err
@@ -351,7 +349,7 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 // Entry point to processing a message for which the current node can be the intended recipient.
 // Attempts symmetric and asymmetric decryption with stored keys.
 // Dispatches message to all handlers matching the message topic
-func (self *Pss) process(pssmsg *PssMsg) bool {
+func (self *Pss) process(pssmsg *PssMsg) error {
 	var err error
 	var recvmsg *whisper.ReceivedMessage
 	var from *PssAddress
@@ -363,7 +361,7 @@ func (self *Pss) process(pssmsg *PssMsg) bool {
 	psstopic := Topic(envelope.Topic)
 	if self.allowRaw && psstopic == rawTopic {
 		self.executeHandlers(rawTopic, envelope.Data, nil, false, "")
-		return true
+		return nil
 	}
 
 	if len(envelope.AESNonce) > 0 { // detect symkey msg according to whisperv5/envelope.go:OpenSymmetric
@@ -374,18 +372,17 @@ func (self *Pss) process(pssmsg *PssMsg) bool {
 	}
 	recvmsg, keyid, from, err = keyFunc(envelope)
 	if err != nil {
-		return false
+		return errors.New("Decryption failed")
 	}
 
 	if len(pssmsg.To) < addressLength {
-		if !self.enqueue(pssmsg) {
-			log.Error("outbox full!")
-			return false
+		if err := self.enqueue(pssmsg); err != nil {
+			return err
 		}
 	}
 	self.executeHandlers(psstopic, recvmsg.Payload, from, asymmetric, keyid)
 
-	return true
+	return nil
 
 }
 
@@ -606,13 +603,14 @@ func (self *Pss) cleanKeys() (count int) {
 // SECTION: Message sending
 /////////////////////////////////////////////////////////////////////
 
-func (self *Pss) enqueue(msg *PssMsg) bool {
+func (self *Pss) enqueue(msg *PssMsg) error {
 	select {
 	case self.outbox <- msg:
-		return true
+		return nil
 	default:
 	}
-	return true
+
+	return errors.New("outbox full")
 }
 
 // Send a raw message (any encryption is responsibility of calling client)
@@ -631,10 +629,7 @@ func (self *Pss) SendRaw(msg []byte, address PssAddress) error {
 		},
 	}
 	self.addFwdCache(pssmsg)
-	if !self.enqueue(pssmsg) {
-		return errors.New("outbox full!")
-	}
-	return nil
+	return self.enqueue(pssmsg)
 }
 
 // Send a message using symmetric encryption
@@ -727,10 +722,7 @@ func (self *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key [
 		Expire:  uint32(time.Now().Add(self.msgTTL).Unix()),
 		Payload: envelope,
 	}
-	if !self.enqueue(pssmsg) {
-		return errors.New("outbox full!")
-	}
-	return nil
+	return self.enqueue(pssmsg)
 }
 
 // Forwards a pss message to the peer(s) closest to the to recipient address in the PssMsg struct
@@ -801,8 +793,8 @@ func (self *Pss) forward(msg *PssMsg) error {
 	if sent == 0 {
 		log.Debug("unable to forward to any peers")
 		time.Sleep(time.Millisecond)
-		if !self.enqueue(msg) {
-			return errors.New("outbox full!")
+		if err := self.enqueue(msg); err != nil {
+			return err
 		}
 	}
 
