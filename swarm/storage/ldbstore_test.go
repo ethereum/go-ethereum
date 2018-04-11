@@ -23,10 +23,13 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
+
+	ldberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
 
 type testDbStore struct {
@@ -270,4 +273,111 @@ func BenchmarkMockDbStoreGet_1_5k(b *testing.B) {
 
 func BenchmarkMockDbStoreGet_8_5k(b *testing.B) {
 	benchmarkDbStoreGet(5000, 8, 4096, true, b)
+}
+
+// TestLDBStoreWithoutCollectGarbage tests that we can put a number of random chunks in the LevelDB store, and
+// retrieve them, provided we don't hit the garbage collection and we are at least 20-30% below the specified capacity
+func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
+	chunkSize := uint64(4096)
+	capacity := 50
+	n := 10
+
+	ldb, cleanup := newLDBStore(t)
+	ldb.setCapacity(uint64(capacity))
+	defer cleanup()
+
+	chunks := []*Chunk{}
+	for i := 0; i < n; i++ {
+		c := NewRandomChunk(chunkSize)
+		chunks = append(chunks, c)
+		log.Info("generate random chunk", "idx", i, "chunk", c)
+	}
+
+	for i := 0; i < n; i++ {
+		go ldb.Put(chunks[i])
+	}
+
+	// wait for all chunks to be stored before ending the test are cleaning up
+	for i := 0; i < n; i++ {
+		<-chunks[i].dbStoredC
+	}
+
+	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
+
+	for i := 0; i < n; i++ {
+		ret, err := ldb.Get(chunks[i].Key)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !bytes.Equal(ret.SData, chunks[i].SData) {
+			t.Fatal("expected to get the same data back, but got smth else")
+		}
+
+		log.Info("got back chunk", "chunk", ret)
+	}
+
+	if ldb.entryCnt != uint64(n+1) {
+		t.Fatalf("expected entryCnt to be equal to %v, but got %v", n+1, ldb.entryCnt)
+	}
+
+	if ldb.accessCnt != uint64(2*n+1) {
+		t.Fatalf("expected accessCnt to be equal to %v, but got %v", n+1, ldb.accessCnt)
+	}
+}
+
+// TestLDBStoreCollectGarbage tests that we can put more chunks than LevelDB's capacity, and
+// retrieve only some of them, because garbage collection must have cleared some of them
+func TestLDBStoreCollectGarbage(t *testing.T) {
+	chunkSize := uint64(4096)
+	capacity := 5
+	n := 2000
+
+	ldb, cleanup := newLDBStore(t)
+	ldb.setCapacity(uint64(capacity))
+	defer cleanup()
+
+	chunks := []*Chunk{}
+	for i := 0; i < n; i++ {
+		c := NewRandomChunk(chunkSize)
+		chunks = append(chunks, c)
+		log.Info("generate random chunk", "idx", i, "chunk", c)
+	}
+
+	for i := 0; i < n; i++ {
+		go ldb.Put(chunks[i])
+	}
+
+	// wait for all chunks to be stored before ending the test are cleaning up
+	for i := 0; i < n; i++ {
+		<-chunks[i].dbStoredC
+	}
+
+	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
+
+	time.Sleep(5 * time.Second)
+
+	var missing int
+	for i := 0; i < n; i++ {
+		ret, err := ldb.Get(chunks[i].Key)
+		if err == ErrChunkNotFound || err == ldberrors.ErrNotFound {
+			missing++
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !bytes.Equal(ret.SData, chunks[i].SData) {
+			t.Fatal("expected to get the same data back, but got smth else")
+		}
+
+		log.Info("got back chunk", "chunk", ret)
+	}
+
+	if missing < n-capacity {
+		t.Fatalf("gc failure: expected to miss %v chunks, but only %v are actually missing", n-capacity, missing)
+	}
+
+	log.Info("ldbstore", "total", n, "missing", missing)
 }
