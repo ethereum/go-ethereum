@@ -42,9 +42,9 @@ const (
 	resultQueueSize  = 10
 	miningLogAtDepth = 5
 
-	// txChanSize is the size of channel listening to TxPreEvent.
+	// txPreChanSize is the size of channel listening to TxPreEvent.
 	// The number is referenced from the size of tx pool.
-	txChanSize = 4096
+	txPreChanSize = 4096
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
 	// chainSideChanSize is the size of channel listening to ChainSideEvent.
@@ -95,8 +95,8 @@ type worker struct {
 
 	// update loop
 	mux          *event.TypeMux
-	txCh         chan core.TxPreEvent
-	txSub        event.Subscription
+	txPreCh      chan core.TxPreEvent
+	txPreSub     event.Subscription
 	chainHeadCh  chan core.ChainHeadEvent
 	chainHeadSub event.Subscription
 	chainSideCh  chan core.ChainSideEvent
@@ -137,7 +137,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		engine:         engine,
 		eth:            eth,
 		mux:            mux,
-		txCh:           make(chan core.TxPreEvent, txChanSize),
+		txPreCh:        make(chan core.TxPreEvent, txPreChanSize),
 		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
 		chainDb:        eth.ChainDb(),
@@ -150,7 +150,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
 	}
 	// Subscribe TxPreEvent for tx pool
-	worker.txSub = eth.TxPool().SubscribeTxPreEvent(worker.txCh)
+	worker.txPreSub = eth.TxPool().SubscribeTxPreEvent(worker.txPreCh)
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
@@ -241,7 +241,7 @@ func (self *worker) unregister(agent Agent) {
 }
 
 func (self *worker) update() {
-	defer self.txSub.Unsubscribe()
+	defer self.txPreSub.Unsubscribe()
 	defer self.chainHeadSub.Unsubscribe()
 	defer self.chainSideSub.Unsubscribe()
 
@@ -259,7 +259,7 @@ func (self *worker) update() {
 			self.uncleMu.Unlock()
 
 		// Handle TxPreEvent
-		case ev := <-self.txCh:
+		case ev := <-self.txPreCh:
 			// Apply transaction to the pending state if we're not mining
 			if atomic.LoadInt32(&self.mining) == 0 {
 				self.currentMu.Lock()
@@ -278,7 +278,7 @@ func (self *worker) update() {
 			}
 
 		// System stopped
-		case <-self.txSub.Err():
+		case <-self.txPreSub.Err():
 			return
 		case <-self.chainHeadSub.Err():
 			return
