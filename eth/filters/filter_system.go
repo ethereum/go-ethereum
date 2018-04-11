@@ -86,7 +86,7 @@ type subscription struct {
 	logs      chan []*types.Log
 	hashes    chan common.Hash
 	headers   chan *types.Header
-	retdata   chan *types.ReturnData
+	retData   chan *types.ReturnData
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
 }
@@ -341,7 +341,7 @@ func (es *EventSystem) broadcast(filters filterIndex, ev interface{}) {
 		for _, f := range filters[PendingTransactionsSubscription] {
 			f.hashes <- e.Tx.Hash()
 		}
-	case *core.TransactionEvent:
+	case core.TransactionEvent:
 		for _, f := range filters[ReturnDataSubscription] {
 			f.retData <- e.RetData
 		}
@@ -443,7 +443,7 @@ func (es *EventSystem) eventLoop() {
 		txPreCh  = make(chan core.TxPreEvent, txPreChanSize)
 		txPreSub = es.backend.SubscribeTxPreEvent(txPreCh)
 		// Subscribe to TransactionEvent from applyTransaction
-		txCh  = make(chan *core.TransactionEvent, txPostChanSize)
+		txCh  = make(chan core.TransactionEvent, txPostChanSize)
 		txSub = es.backend.SubscribeTransactionEvent(txCh)
 		// Subscribe RemovedLogsEvent
 		rmLogsCh  = make(chan core.RemovedLogsEvent, rmLogsChanSize)

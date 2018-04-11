@@ -274,7 +274,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				traced += uint64(len(txs))
 			}
 			// Generate the next state snapshot fast without tracing
-			_, _, _, err := api.eth.blockchain.Processor().Process(block, statedb, vm.Config{})
+			_, _, _, _, err := api.eth.blockchain.Processor().Process(block, statedb, vm.Config{})
 			if err != nil {
 				failed = err
 				break
@@ -509,7 +509,7 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 		if block = api.eth.blockchain.GetBlockByNumber(block.NumberU64() + 1); block == nil {
 			return nil, fmt.Errorf("block #%d not found", block.NumberU64()+1)
 		}
-		_, _, _, err := api.eth.blockchain.Processor().Process(block, statedb, vm.Config{})
+		_, _, _, _, err := api.eth.blockchain.Processor().Process(block, statedb, vm.Config{})
 		if err != nil {
 			return nil, err
 		}

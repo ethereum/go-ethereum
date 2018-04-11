@@ -101,7 +101,7 @@ func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 	return b.chainFeed.Subscribe(ch)
 }
 
-func (b *testBackend) SubscribeTransactionEvent(ch chan<- *core.TransactionEvent) event.Subscription {
+func (b *testBackend) SubscribeTransactionEvent(ch chan<- core.TransactionEvent) event.Subscription {
 	return b.txPostFeed.Subscribe(ch)
 }
 

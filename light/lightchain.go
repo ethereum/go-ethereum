@@ -490,7 +490,7 @@ func (self *LightChain) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) e
 }
 
 // SubscribeTransactionEvent registers a subscription of TransactionEvent.
-func (self *LightChain) SubscribeTransactionEvent(ch chan<- *core.TransactionEvent) event.Subscription {
+func (self *LightChain) SubscribeTransactionEvent(ch chan<- core.TransactionEvent) event.Subscription {
 	return self.scope.Track(self.txPostFeed.Subscribe(ch))
 }
 

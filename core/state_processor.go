@@ -53,13 +53,15 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
+func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, []TransactionEvent, error) {
 	var (
-		receipts types.Receipts
-		usedGas  = new(uint64)
-		header   = block.Header()
-		allLogs  []*types.Log
-		gp       = new(GasPool).AddGas(block.GasLimit())
+		receipts     types.Receipts
+		usedGas      = new(uint64)
+		header       = block.Header()
+		allLogs      []*types.Log
+		gp           = new(GasPool).AddGas(block.GasLimit())
+		retData      *types.ReturnData
+		txPostEvents []TransactionEvent
 	)
 	// Mutate the the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
@@ -68,27 +70,29 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
-		receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
+		receipt, _, data, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
 		if err != nil {
-			return nil, nil, 0, err
+			return nil, nil, 0, nil, err
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
+		retData = &types.ReturnData{TxHash: tx.Hash(), Data: data}
+		txPostEvents = append(txPostEvents, TransactionEvent{TxHash: tx.Hash(), RetData: retData})
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts)
 
-	return receipts, allLogs, *usedGas, nil
+	return receipts, allLogs, *usedGas, txPostEvents, nil
 }
 
 // ApplyTransaction attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, error) {
+func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, []byte, error) {
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	// Create a new context to be used in the EVM environment
 	context := NewEVMContext(msg, header, bc, author)
@@ -97,9 +101,9 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 	vmenv := vm.NewEVM(context, statedb, config, cfg)
 	// Apply the transaction to the current state (included in the env)
 
-	data, gas, failed, err := ApplyMessage(vmenv, msg, gp)
+	retData, gas, failed, err := ApplyMessage(vmenv, msg, gp)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 
 	// Update the state with pending changes
@@ -124,11 +128,5 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
-	retData := types.ReturnData{TxHash: receipt.TxHash, Data: data, Removed: false}
-	txPostEvent := TransactionEvent{TxHash: receipt.TxHash, RetData: retData}
-	if bc != nil { // For some tests unrelated to tx events, this ptr can be nil; should always be non-nil in production
-		go bc.txPostFeed.Send(&txPostEvent)
-	}
-
-	return receipt, gas, err
+	return receipt, gas, retData, err
 }

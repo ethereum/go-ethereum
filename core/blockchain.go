@@ -1036,7 +1036,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 	// acquiring.
 	var (
 		stats         = insertStats{startTime: mclock.Now()}
-		events        = make([]interface{}, 0, len(chain))
+		events        = make([]interface{}, 0, 10*len(chain))
 		lastCanon     *types.Block
 		coalescedLogs []*types.Log
 	)
@@ -1145,7 +1145,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			return i, events, coalescedLogs, err
 		}
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
+		receipts, logs, usedGas, txPostEvents, err := bc.processor.Process(block, state, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return i, events, coalescedLogs, err
@@ -1171,6 +1171,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			coalescedLogs = append(coalescedLogs, logs...)
 			blockInsertTimer.UpdateSince(bstart)
 			events = append(events, ChainEvent{block, block.Hash(), logs})
+			for _, txPostEvent := range txPostEvents {
+				events = append(events, txPostEvent)
+			}
 			lastCanon = block
 
 			// Only count canonical blocks for GC processing time
@@ -1181,6 +1184,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 				common.PrettyDuration(time.Since(bstart)), "txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()))
 
 			blockInsertTimer.UpdateSince(bstart)
+			for _, txPostEvent := range txPostEvents {
+				txPostEvent.RetData.Removed = true
+				events = append(events, txPostEvent)
+			}
 			events = append(events, ChainSideEvent{block})
 		}
 		stats.processed++
@@ -1372,6 +1379,9 @@ func (bc *BlockChain) PostChainEvents(events []interface{}, logs []*types.Log) {
 
 		case ChainSideEvent:
 			bc.chainSideFeed.Send(ev)
+
+		case TransactionEvent:
+			bc.txPostFeed.Send(ev)
 		}
 	}
 }
@@ -1560,7 +1570,7 @@ func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Su
 }
 
 // SubscribeTransactionEvent registers a subscription of SubscribeTransactionEvent.
-func (bc *BlockChain) SubscribeTransactionEvent(ch chan<- *TransactionEvent) event.Subscription {
+func (bc *BlockChain) SubscribeTransactionEvent(ch chan<- TransactionEvent) event.Subscription {
 	return bc.scope.Track(bc.txPostFeed.Subscribe(ch))
 }
 

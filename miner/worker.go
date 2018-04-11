@@ -74,9 +74,10 @@ type Work struct {
 
 	Block *types.Block // the new block
 
-	header   *types.Header
-	txs      []*types.Transaction
-	receipts []*types.Receipt
+	header       *types.Header
+	txs          []*types.Transaction
+	receipts     []*types.Receipt
+	txPostEvents []core.TransactionEvent
 
 	createdAt time.Time
 }
@@ -320,12 +321,20 @@ func (self *worker) wait() {
 				// implicit by posting ChainHeadEvent
 				mustCommitNewWork = false
 			}
+
 			// Broadcast the block and announce chain insertion event
 			self.mux.Post(core.NewMinedBlockEvent{Block: block})
 			var (
 				events []interface{}
 				logs   = work.state.Logs()
 			)
+
+			for _, txEv := range work.txPostEvents {
+				if stat == core.SideStatTy {
+					txEv.RetData.Removed = true
+				}
+				events = append(events, txEv)
+			}
 			events = append(events, core.ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 			if stat == core.CanonStatTy {
 				events = append(events, core.ChainHeadEvent{Block: block})
@@ -425,7 +434,7 @@ func (self *worker) commitNewWork() {
 		log.Error("Failed to prepare header for mining", "err", err)
 		return
 	}
-	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
+	// If we care about TheDAO hard-fork, check whether to override the extra-data or not
 	if daoBlock := self.config.DAOForkBlock; daoBlock != nil {
 		// Check whether the block is among the fork extra-override range
 		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
@@ -553,7 +562,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
 
-		err, logs := env.commitTransaction(tx, bc, coinbase, gp)
+		err, retData, logs := env.commitTransaction(tx, bc, coinbase, gp)
 		switch err {
 		case core.ErrGasLimitReached:
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -573,6 +582,8 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		case nil:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
+			r := types.ReturnData{TxHash: tx.Hash(), Data: retData}
+			env.txPostEvents = append(env.txPostEvents, core.TransactionEvent{TxHash: r.TxHash, RetData: &r})
 			env.tcount++
 			txs.Shift()
 
@@ -604,16 +615,16 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 	}
 }
 
-func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool) (error, []*types.Log) {
+func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool) (error, []byte, []*types.Log) {
 	snap := env.state.Snapshot()
 
-	receipt, _, err := core.ApplyTransaction(env.config, bc, &coinbase, gp, env.state, env.header, tx, &env.header.GasUsed, vm.Config{})
+	receipt, _, retData, err := core.ApplyTransaction(env.config, bc, &coinbase, gp, env.state, env.header, tx, &env.header.GasUsed, vm.Config{})
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
-		return err, nil
+		return err, nil, nil
 	}
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
 
-	return nil, receipt.Logs
+	return nil, retData, receipt.Logs
 }

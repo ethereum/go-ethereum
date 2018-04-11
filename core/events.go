@@ -38,7 +38,7 @@ type NewMinedBlockEvent struct{ Block *types.Block }
 // TransactionEvent is posted when a transaction completes execution
 type TransactionEvent struct {
 	TxHash  common.Hash
-	RetData types.ReturnData
+	RetData *types.ReturnData
 }
 
 // RemovedTransactionEvent is posted when a reorg happens

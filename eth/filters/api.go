@@ -48,7 +48,7 @@ type filter struct {
 	hashes   []common.Hash
 	crit     FilterCriteria
 	logs     []*types.Log
-	retdata  []types.ReturnData
+	retData  []types.ReturnData
 	s        *Subscription // associated subscription in event system
 }
 
@@ -239,16 +239,16 @@ func (api *PublicFilterAPI) NewReturnDataFilter() rpc.ID {
 	)
 
 	api.filtersMu.Lock()
-	api.filters[retSub.ID] = &filter{typ: ReturnDataSubscription, deadline: time.NewTimer(deadline), retdata: make([]types.ReturnData, 0), s: retSub}
+	api.filters[retSub.ID] = &filter{typ: ReturnDataSubscription, deadline: time.NewTimer(deadline), retData: make([]types.ReturnData, 0), s: retSub}
 	api.filtersMu.Unlock()
 
 	go func() {
 		for {
 			select {
-			case retdata := <-retCh:
+			case retData := <-retCh:
 				api.filtersMu.Lock()
 				if f, found := api.filters[retSub.ID]; found {
-					f.retdata = append(f.retdata, *retdata)
+					f.retData = append(f.retData, *retData)
 				}
 				api.filtersMu.Unlock()
 			case <-retSub.Err():
@@ -498,9 +498,9 @@ func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 			f.logs = nil
 			return returnLogs(logs), nil
 		case ReturnDataSubscription:
-			retdata := f.retdata
-			f.retdata = nil
-			return returnRetData(retdata), nil
+			retData := f.retData
+			f.retData = nil
+			return returnRetData(retData), nil
 		}
 	}
 

@@ -461,7 +461,7 @@ func (fb *filterBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscr
 	return fb.bc.SubscribeLogsEvent(ch)
 }
 
-func (fb *filterBackend) SubscribeTransactionEvent(ch chan<- *core.TransactionEvent) event.Subscription {
+func (fb *filterBackend) SubscribeTransactionEvent(ch chan<- core.TransactionEvent) event.Subscription {
 	return fb.bc.SubscribeTransactionEvent(ch)
 }
 

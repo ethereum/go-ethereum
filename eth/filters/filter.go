@@ -37,7 +37,7 @@ type Backend interface {
 	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error)
 
 	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
-	SubscribeTransactionEvent(chan<- *core.TransactionEvent) event.Subscription
+	SubscribeTransactionEvent(chan<- core.TransactionEvent) event.Subscription
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
