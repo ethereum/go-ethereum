@@ -84,7 +84,7 @@ func upload(ctx *cli.Context, toEncrypt bool) {
 			utils.Fatalf("Error opening file: %s", err)
 		}
 		defer f.Close()
-		hash, err := client.UploadRaw(f, f.Size)
+		hash, err := client.UploadRaw(f, f.Size, toEncrypt)
 		if err != nil {
 			utils.Fatalf("Upload failed: %s", err)
 		}

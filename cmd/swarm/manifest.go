@@ -131,13 +131,13 @@ func addEntryToManifest(ctx *cli.Context, mhash, path, hash, ctype string) strin
 		longestPathEntry = api.ManifestEntry{}
 	)
 
-	mroot, err := client.DownloadManifest(mhash)
+	mroot, isEncrypted, err := client.DownloadManifest(mhash)
 	if err != nil {
 		utils.Fatalf("Manifest download failed: %v", err)
 	}
 
 	//TODO: check if the "hash" to add is valid and present in swarm
-	_, err = client.DownloadManifest(hash)
+	_, _, err = client.DownloadManifest(hash)
 	if err != nil {
 		utils.Fatalf("Hash to add is not present: %v", err)
 	}
@@ -180,7 +180,7 @@ func addEntryToManifest(ctx *cli.Context, mhash, path, hash, ctype string) strin
 		mroot.Entries = append(mroot.Entries, newEntry)
 	}
 
-	newManifestHash, err := client.UploadManifest(mroot)
+	newManifestHash, err := client.UploadManifest(mroot, isEncrypted)
 	if err != nil {
 		utils.Fatalf("Manifest upload failed: %v", err)
 	}
@@ -197,7 +197,7 @@ func updateEntryInManifest(ctx *cli.Context, mhash, path, hash, ctype string) st
 		longestPathEntry = api.ManifestEntry{}
 	)
 
-	mroot, err := client.DownloadManifest(mhash)
+	mroot, isEncrypted, err := client.DownloadManifest(mhash)
 	if err != nil {
 		utils.Fatalf("Manifest download failed: %v", err)
 	}
@@ -257,7 +257,7 @@ func updateEntryInManifest(ctx *cli.Context, mhash, path, hash, ctype string) st
 		mroot = newMRoot
 	}
 
-	newManifestHash, err := client.UploadManifest(mroot)
+	newManifestHash, err := client.UploadManifest(mroot, isEncrypted)
 	if err != nil {
 		utils.Fatalf("Manifest upload failed: %v", err)
 	}
@@ -273,7 +273,7 @@ func removeEntryFromManifest(ctx *cli.Context, mhash, path string) string {
 		longestPathEntry = api.ManifestEntry{}
 	)
 
-	mroot, err := client.DownloadManifest(mhash)
+	mroot, isEncrypted, err := client.DownloadManifest(mhash)
 	if err != nil {
 		utils.Fatalf("Manifest download failed: %v", err)
 	}
@@ -323,7 +323,7 @@ func removeEntryFromManifest(ctx *cli.Context, mhash, path string) string {
 		mroot = newMRoot
 	}
 
-	newManifestHash, err := client.UploadManifest(mroot)
+	newManifestHash, err := client.UploadManifest(mroot, isEncrypted)
 	if err != nil {
 		utils.Fatalf("Manifest upload failed: %v", err)
 	}

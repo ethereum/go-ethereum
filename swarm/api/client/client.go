@@ -52,12 +52,17 @@ type Client struct {
 	Gateway string
 }
 
-// UploadRaw uploads raw data to swarm and returns the resulting hash
-func (c *Client) UploadRaw(r io.Reader, size int64) (string, error) {
+// UploadRaw uploads raw data to swarm and returns the resulting hash. If toEncrypt is true it
+// uploads encrypted data
+func (c *Client) UploadRaw(r io.Reader, size int64, toEncrypt bool) (string, error) {
 	if size <= 0 {
 		return "", errors.New("data size must be greater than zero")
 	}
-	req, err := http.NewRequest("POST", c.Gateway+"/bzz-raw:/", r)
+	addr := ""
+	if toEncrypt {
+		addr = "encrypt"
+	}
+	req, err := http.NewRequest("POST", c.Gateway+"/bzz-raw:/"+addr, r)
 	if err != nil {
 		return "", err
 	}
@@ -77,18 +82,20 @@ func (c *Client) UploadRaw(r io.Reader, size int64) (string, error) {
 	return string(data), nil
 }
 
-// DownloadRaw downloads raw data from swarm
-func (c *Client) DownloadRaw(hash string) (io.ReadCloser, error) {
+// DownloadRaw downloads raw data from swarm and it returns a ReadCloser and a bool whether the
+// content was encrypted
+func (c *Client) DownloadRaw(hash string) (io.ReadCloser, bool, error) {
 	uri := c.Gateway + "/bzz-raw:/" + hash
 	res, err := http.DefaultClient.Get(uri)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if res.StatusCode != http.StatusOK {
 		res.Body.Close()
-		return nil, fmt.Errorf("unexpected HTTP status: %s", res.Status)
+		return nil, false, fmt.Errorf("unexpected HTTP status: %s", res.Status)
 	}
-	return res.Body, nil
+	isEncrypted := (res.Header.Get("X-Encrypted") == "true")
+	return res.Body, isEncrypted, nil
 }
 
 // File represents a file in a swarm manifest and is used for uploading and
@@ -229,26 +236,26 @@ func (c *Client) DownloadDirectory(hash, path, destDir string) error {
 }
 
 // UploadManifest uploads the given manifest to swarm
-func (c *Client) UploadManifest(m *api.Manifest) (string, error) {
+func (c *Client) UploadManifest(m *api.Manifest, toEncrypt bool) (string, error) {
 	data, err := json.Marshal(m)
 	if err != nil {
 		return "", err
 	}
-	return c.UploadRaw(bytes.NewReader(data), int64(len(data)))
+	return c.UploadRaw(bytes.NewReader(data), int64(len(data)), toEncrypt)
 }
 
 // DownloadManifest downloads a swarm manifest
-func (c *Client) DownloadManifest(hash string) (*api.Manifest, error) {
-	res, err := c.DownloadRaw(hash)
+func (c *Client) DownloadManifest(hash string) (*api.Manifest, bool, error) {
+	res, isEncrypted, err := c.DownloadRaw(hash)
 	if err != nil {
-		return nil, err
+		return nil, isEncrypted, err
 	}
 	defer res.Close()
 	var manifest api.Manifest
 	if err := json.NewDecoder(res).Decode(&manifest); err != nil {
-		return nil, err
+		return nil, isEncrypted, err
 	}
-	return &manifest, nil
+	return &manifest, isEncrypted, nil
 }
 
 // List list files in a swarm manifest which have the given prefix, grouping
