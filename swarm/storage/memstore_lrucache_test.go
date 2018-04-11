@@ -56,7 +56,7 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 	defer cleanup()
 
 	cacheCap := 200
-	requestsCap := 10000
+	requestsCap := 200
 	memStore := NewMemStore(ldb, uint(cacheCap), uint(requestsCap))
 
 	tests := []struct {
@@ -79,11 +79,16 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 			chunkSize: 4096,
 			request:   false,
 		},
-		//{
-		//n:         60001,
-		//chunkSize: 4096,
-		//request:   true,
-		//},
+		{
+			n:         60001,
+			chunkSize: 4096,
+			request:   false,
+		},
+		{
+			n:         100,
+			chunkSize: 4096,
+			request:   true,
+		},
 	}
 
 	for i, tt := range tests {
