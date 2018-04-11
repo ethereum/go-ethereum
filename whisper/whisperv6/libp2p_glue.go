@@ -17,15 +17,15 @@
 package whisperv6
 
 import (
+	"bufio"
 	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"io"
-	"math"
 
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 	crypto "github.com/libp2p/go-libp2p-crypto"
 	host "github.com/libp2p/go-libp2p-host"
 	inet "github.com/libp2p/go-libp2p-net"
@@ -40,84 +40,53 @@ import (
 // LibP2PStream is a wrapper used to implement the MsgReadWriter
 // interface for libp2p's streams.
 type LibP2PStream struct {
-	stream inet.Stream
+	lp2pStream inet.Stream
+	rlpStream  *rlp.Stream
 }
 
-const (
-	codeLength        = 8
-	payloadSizeLength = 4
-)
+func newLibp2pStream(lp2pStream inet.Stream) p2p.MsgReadWriter {
+	return &LibP2PStream{lp2pStream: lp2pStream, rlpStream: rlp.NewStream(bufio.NewReader(lp2pStream), 0)}
+}
 
 // ReadMsg implements the MsgReadWriter interface to read messages
 // from lilbp2p streams.
 func (stream *LibP2PStream) ReadMsg() (p2p.Msg, error) {
-	codeBytes := make([]byte, codeLength)
-	nbytes, err := stream.stream.Read(codeBytes)
+	msgcode, err := stream.rlpStream.Uint()
 	if err != nil {
-		return p2p.Msg{}, err
-	} else if nbytes != len(codeBytes) {
-		return p2p.Msg{}, fmt.Errorf("Invalid message header length: expected %d, got %d", codeLength, nbytes)
+		return p2p.Msg{}, fmt.Errorf("can't read message code: %v", err)
 	}
-	code := binary.LittleEndian.Uint64(codeBytes)
-
-	sizeBytes := make([]byte, payloadSizeLength)
-	nbytes, err = stream.stream.Read(sizeBytes)
+	_, size, err := stream.rlpStream.Kind()
 	if err != nil {
-		return p2p.Msg{}, err
-	} else if nbytes != len(sizeBytes) {
-		return p2p.Msg{}, fmt.Errorf("Invalid message size length: expected %d, got %d", len(sizeBytes), nbytes)
+		return p2p.Msg{}, fmt.Errorf("can't read message size: %v", err)
 	}
-	size := binary.LittleEndian.Uint32(sizeBytes)
-	if size > math.MaxInt32 {
-		return p2p.Msg{}, fmt.Errorf("Invalid message size length: got %d which is above the max of %d", size, math.MaxInt32)
+	// Only the size of the encoded payload is checked, so theoretically
+	// the decrypted message could be much bigger. We would need to add
+	// a function to rlp.Stream to find out what is the raw size. Since
+	// this is still work in progress, we won't bother with that just yet.
+	if size > uint64(MaxMessageSize) {
+		return p2p.Msg{}, fmt.Errorf("message too large")
 	}
-
-	payload := make([]byte, size)
-	nbytes, err = stream.stream.Read(payload)
+	content, err := stream.rlpStream.Raw()
 	if err != nil {
-		return p2p.Msg{}, err
-	} else if nbytes != int(size) {
-		return p2p.Msg{}, fmt.Errorf("Invalid message payload length: expected %d, got %d", size, nbytes)
+		return p2p.Msg{}, fmt.Errorf("can't read message: %v", err)
 	}
 
-	return p2p.Msg{Code: code, Size: size, Payload: bytes.NewReader(payload)}, nil
+	return p2p.Msg{Code: msgcode, Size: uint32(len(content)), Payload: bytes.NewReader(content)}, nil
 }
 
 // WriteMsg implements the MsgReadWriter interface to write messages
 // to lilbp2p streams.
 func (stream *LibP2PStream) WriteMsg(msg p2p.Msg) error {
-	// Refuse to write messages with an unsigned size greater than
-	// a signed 32-bit integer size. This is because len() returns
-	// an int, forcing a conversion at some locations in the code,
-	// and on some blatforms that might cause an issue.
-	if msg.Size > math.MaxInt32 {
-		return fmt.Errorf("Payload size must be a maximum of %d bytes", math.MaxInt32)
-	}
 
-	data := make([]byte, msg.Size+codeLength+payloadSizeLength)
 
-	binary.LittleEndian.PutUint64(data[0:codeLength], msg.Code)
-	binary.LittleEndian.PutUint32(data[codeLength:codeLength+payloadSizeLength], msg.Size)
+	stream.lp2pStream.SetWriteDeadline(time.Now().Add(transmissionCycle))
 
-	nbytes, err := msg.Payload.Read(data[codeLength+payloadSizeLength:])
-	if nbytes > math.MaxInt32 || uint32(nbytes) != msg.Size {
-		return fmt.Errorf("Invalid size read in libp2p stream: read %d bytes, was expecting %d bytes", nbytes, msg.Size)
-	} else if err != nil && err != io.EOF {
+	if err := rlp.Encode(stream.lp2pStream, msg.Code); err != nil {
 		return err
 	}
-
-	nbytes, err = stream.stream.Write(data)
-
-	if err != nil {
+	_, err := io.Copy(stream.lp2pStream, msg.Payload)
 		return err
 	}
-
-	if nbytes != len(data) {
-		return fmt.Errorf("Invalid size written in libp2p stream: wrote %d bytes, was expecting %d bytes", nbytes, msg.Size)
-	}
-
-	return nil
-}
 
 // LibP2PPeer implements Peer for libp2p
 type LibP2PPeer struct {
@@ -177,10 +146,9 @@ func (server *LibP2PWhisperServer) connectToPeer(p *LibP2PPeer) error {
 	}
 
 	// Save the stream
-	lps := LibP2PStream{
-		stream: s,
-	}
-	p.connectionStream = &lps
+	lps := newLibp2pStream(s).(*LibP2PStream)
+
+	p.connectionStream = lps
 	p.ws = p.connectionStream
 
 	// TODO send my known list of peers
@@ -205,7 +173,7 @@ func (server *LibP2PWhisperServer) Start() error {
 			}
 		}
 
-		lps := &LibP2PStream{stream}
+		lps := newLibp2pStream(stream).(*LibP2PStream)
 
 		// Unknown peer
 		if peer == nil {
@@ -234,7 +202,7 @@ func (server *LibP2PWhisperServer) Start() error {
 func (server *LibP2PWhisperServer) Stop() {
 	for _, p := range server.Peers {
 		// TODO send disconnect message
-		p.connectionStream.stream.Close()
+		p.connectionStream.lp2pStream.Close()
 	}
 
 	server.Host.Close()
