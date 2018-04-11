@@ -80,7 +80,7 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 			request:   false,
 		},
 		{
-			n:         60001,
+			n:         3100,
 			chunkSize: 4096,
 			request:   false,
 		},

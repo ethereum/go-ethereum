@@ -52,10 +52,6 @@ const (
 
 	gcArraySize      = 10000
 	gcArrayFreeRatio = 0.1
-
-	// key prefixes for leveldb storage
-	kpIndex = 0
-	kpData  = 1
 )
 
 var (
@@ -79,11 +75,15 @@ type LDBStore struct {
 	db *LDBDatabase
 
 	// this should be stored in db, accessed transactionally
-	entryCnt, accessCnt, dataIdx, capacity uint64
-	bucketCnt                              []uint64
+	entryCnt  uint64 // number of items in the LevelDB
+	accessCnt uint64 // ever-accumulating number increased every time we read/access an entry
+	dataIdx   uint64 // similar to entryCnt, but we only increment it
+	capacity  uint64
+	bucketCnt []uint64
 
-	gcPos, gcStartPos []byte
-	gcArray           []*gcItem
+	gcPos      []byte
+	gcStartPos []byte
+	gcArray    []*gcItem
 
 	hashfunc SwarmHasher
 	po       func(Key) uint8
@@ -126,10 +126,6 @@ func NewLDBStore(path string, hash SwarmHasher, capacity uint64, po func(Key) ui
 	s.po = po
 	s.setCapacity(capacity)
 
-	s.gcStartPos = make([]byte, 1)
-	s.gcStartPos[0] = kpIndex
-	s.gcArray = make([]*gcItem, gcArraySize)
-
 	s.bucketCnt = make([]uint64, 0x100)
 	for i := 0; i < 0x100; i++ {
 		k := make([]byte, 2)
@@ -149,6 +145,9 @@ func NewLDBStore(path string, hash SwarmHasher, capacity uint64, po func(Key) ui
 	s.dataIdx = BytesToU64(data)
 	s.dataIdx++
 
+	s.gcStartPos = make([]byte, 1)
+	s.gcStartPos[0] = keyIndex
+	s.gcArray = make([]*gcItem, gcArraySize)
 	s.gcPos, _ = s.db.Get(keyGCPos)
 	if s.gcPos == nil {
 		s.gcPos = s.gcStartPos
@@ -192,7 +191,6 @@ func BytesToU64(data []byte) uint64 {
 
 func U64ToBytes(val uint64) []byte {
 	data := make([]byte, 8)
-	//binary.LittleEndian.PutUint64(data, val)
 	binary.BigEndian.PutUint64(data, val)
 	return data
 }
@@ -294,8 +292,7 @@ func gcListSelect(list []*gcItem, left int, right int, n int) int {
 
 func (s *LDBStore) collectGarbage(ratio float32) {
 	it := s.db.NewIterator()
-	it.Seek(s.gcPos)
-	if it.Valid() {
+	if it.Seek(s.gcPos) {
 		s.gcPos = it.Key()
 	} else {
 		s.gcPos = nil
@@ -304,16 +301,16 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 
 	for (gcnt < gcArraySize) && (uint64(gcnt) < s.entryCnt) {
 
-		if (s.gcPos == nil) || (s.gcPos[0] != kpIndex) {
+		if (s.gcPos == nil) || (s.gcPos[0] != keyIndex) {
 			it.Seek(s.gcStartPos)
 			if it.Valid() {
 				s.gcPos = it.Key()
 			} else {
-				s.gcPos = nil
+				s.gcPos = s.gcStartPos
 			}
 		}
 
-		if (s.gcPos == nil) || (s.gcPos[0] != kpIndex) {
+		if (s.gcPos == nil) || (s.gcPos[0] != keyIndex) {
 			break
 		}
 
@@ -335,6 +332,9 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 	}
 	it.Release()
 
+	if gcnt == 0 {
+		gcnt++
+	}
 	cutidx := gcListSelect(s.gcArray, 0, gcnt-1, int(float32(gcnt)*ratio))
 	cutval := s.gcArray[cutidx].value
 
@@ -358,9 +358,9 @@ func (s *LDBStore) Export(out io.Writer) (int64, error) {
 	it := s.db.NewIterator()
 	defer it.Release()
 	var count int64
-	for ok := it.Seek([]byte{kpIndex}); ok; ok = it.Next() {
+	for ok := it.Seek([]byte{keyIndex}); ok; ok = it.Next() {
 		key := it.Key()
-		if (key == nil) || (key[0] != kpIndex) {
+		if (key == nil) || (key[0] != keyIndex) {
 			break
 		}
 
@@ -440,13 +440,13 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 func (s *LDBStore) Cleanup() {
 	//Iterates over the database and checks that there are no faulty chunks
 	it := s.db.NewIterator()
-	startPosition := []byte{kpIndex}
+	startPosition := []byte{keyIndex}
 	it.Seek(startPosition)
 	var key []byte
 	var errorsFound, total int
 	for it.Valid() {
 		key = it.Key()
-		if (key == nil) || (key[0] != kpIndex) {
+		if (key == nil) || (key[0] != keyIndex) {
 			break
 		}
 		total++
