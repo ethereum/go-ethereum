@@ -31423,7 +31423,7 @@ var _bundleJs = []byte((((((((((`!function(modules) {
                 }, _react2.default.createElement("span", {
                     style: _common.styles.light
                 }, "Commit "), _react2.default.createElement("a", {
-                    href: "https://github.com/ethereum/go-ethereum/commit/" + general.commit,
+                    href: "https://github.com/EtherFact-Project/go-etherfact/commit/" + general.commit,
                     target: "_blank",
                     style: {
                         color: "inherit",
