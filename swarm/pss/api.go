@@ -2,6 +2,7 @@ package pss
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -122,7 +123,11 @@ func (pssapi *API) GetAsymmetricAddressHint(topic Topic, pubkeyid string) (PssAd
 }
 
 func (pssapi *API) StringToTopic(topicstring string) (Topic, error) {
-	return BytesToTopic([]byte(topicstring)), nil
+	topicbytes := BytesToTopic([]byte(topicstring))
+	if topicbytes == rawTopic {
+		return rawTopic, errors.New("Topic string hashes to 0x00000000 and cannot be used")
+	}
+	return topicbytes, nil
 }
 
 func (pssapi *API) SendAsym(pubkeyhex string, topic Topic, msg hexutil.Bytes) error {

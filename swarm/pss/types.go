@@ -20,6 +20,7 @@ const (
 var (
 	topicHashMutex = sync.Mutex{}
 	topicHashFunc  = storage.MakeHashFunc("SHA256")()
+	rawTopic       = Topic{}
 )
 
 type Topic whisper.TopicType

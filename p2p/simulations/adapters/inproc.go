@@ -274,7 +274,7 @@ func (self *SimNode) Start(snapshots map[string][]byte) error {
 		for _, name := range self.config.Services {
 			if err := self.node.Register(newService(name)); err != nil {
 				regErr = err
-				return
+				break
 			}
 		}
 	})
