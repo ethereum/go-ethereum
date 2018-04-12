@@ -300,6 +300,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 			if wsDoneC == nil {
 				continue
 			}
+			rpcSubscriptionsWg.Add(1)
 			go func() {
 				<-wsDoneC
 				rpcSubscriptionsWg.Done()
@@ -628,7 +629,10 @@ func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rp
 			case <-quitC:
 				return
 			case <-ctx.Done():
-				errc <- ctx.Err()
+				select {
+				case errc <- ctx.Err():
+				case <-quitC:
+				}
 				return
 			case e := <-events:
 				//just catch SubscribeMsg
@@ -637,7 +641,10 @@ func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rp
 				}
 			case err := <-sub.Err():
 				if err != nil {
-					errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err)
+					select {
+					case errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err):
+					case <-quitC:
+					}
 					return
 				}
 			}
