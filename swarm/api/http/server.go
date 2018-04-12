@@ -563,7 +563,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	w.Header().Set("X-Encrypted", fmt.Sprintf("%v", isEncrypted))
+	w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
 
 	switch {
 	case r.uri.Raw() || r.uri.DeprecatedRaw():
@@ -626,7 +626,7 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 		if err != nil {
 			return err
 		}
-		w.Header().Set("X-Encrypted", fmt.Sprintf("%v", isEncrypted))
+		w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
 
 		// write a tar header for the entry
 		hdr := &tar.Header{
