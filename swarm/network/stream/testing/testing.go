@@ -216,14 +216,23 @@ func (s *Simulation) Run(ctx context.Context, conf *RunConfig) (*simulations.Ste
 	return result, nil
 }
 
-func WatchDisconnections(id discover.NodeID, client *rpc.Client, errc chan error, quitC chan struct{}) error {
+// WatchDisconnections subscribes to admin peerEvents and sends peer event drop
+// errors to the errc channel. Channel quitC signals the termination of the event loop.
+// Returned doneC will be closed after the rpc subscription is unsubscribed,
+// signaling that simulations network is safe to shutdown.
+func WatchDisconnections(id discover.NodeID, client *rpc.Client, errc chan error, quitC chan struct{}) (doneC <-chan struct{}, err error) {
 	events := make(chan *p2p.PeerEvent)
 	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
 	if err != nil {
-		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
+		return nil, fmt.Errorf("error getting peer events for node %v: %s", id, err)
 	}
+	c := make(chan struct{})
 	go func() {
-		defer sub.Unsubscribe()
+		defer func() {
+			log.Trace("watch disconnections: unsubscribe", "id", id)
+			sub.Unsubscribe()
+			close(c)
+		}()
 		for {
 			select {
 			case <-quitC:
@@ -247,7 +256,7 @@ func WatchDisconnections(id discover.NodeID, client *rpc.Client, errc chan error
 			}
 		}
 	}()
-	return nil
+	return c, nil
 }
 
 func Trigger(d time.Duration, quitC chan struct{}, ids ...discover.NodeID) chan discover.NodeID {

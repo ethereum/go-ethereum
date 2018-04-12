@@ -22,6 +22,7 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -318,7 +319,11 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	}
 
 	sim, teardown, err := streamTesting.NewSimulation(conf)
-	defer teardown()
+	var rpcSubscriptionsWg sync.WaitGroup
+	defer func() {
+		rpcSubscriptionsWg.Wait()
+		teardown()
+	}()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -347,6 +352,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	errc := make(chan error, 1)
 	waitPeerErrC = make(chan error)
 	quitC := make(chan struct{})
+	defer close(quitC)
 
 	action := func(ctx context.Context) error {
 		// each node Subscribes to each other's swarmChunkServerStreamName
@@ -369,10 +375,15 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		for j := 0; j < nodes-1; j++ {
 			id := sim.IDs[j]
 			err := sim.CallClient(id, func(client *rpc.Client) error {
-				err := streamTesting.WatchDisconnections(id, client, errc, quitC)
+				doneC, err := streamTesting.WatchDisconnections(id, client, errc, quitC)
 				if err != nil {
 					return err
 				}
+				rpcSubscriptionsWg.Add(1)
+				go func() {
+					<-doneC
+					rpcSubscriptionsWg.Done()
+				}()
 				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 				defer cancel()
 				sid := sim.IDs[j+1]
@@ -475,6 +486,8 @@ func BenchmarkDeliveryFromNodesWithCheck(b *testing.B) {
 func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skipCheck bool) {
 	defaultSkipCheck = skipCheck
 	toAddr = network.NewAddrFromNodeID
+	createStoreFunc = createTestLocalStorageFromSim
+	registries = make(map[discover.NodeID]*TestRegistry)
 
 	timeout := 300 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -489,7 +502,11 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 		EnableMsgEvents: false,
 	}
 	sim, teardown, err := streamTesting.NewSimulation(conf)
-	defer teardown()
+	var rpcSubscriptionsWg sync.WaitGroup
+	defer func() {
+		rpcSubscriptionsWg.Wait()
+		teardown()
+	}()
 	if err != nil {
 		b.Fatal(err.Error())
 	}
@@ -539,10 +556,15 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 		for j := 0; j < nodes-1; j++ {
 			id := sim.IDs[j]
 			err = sim.CallClient(id, func(client *rpc.Client) error {
-				err := streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
+				doneC, err := streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
 				if err != nil {
 					return err
 				}
+				rpcSubscriptionsWg.Add(1)
+				go func() {
+					<-doneC
+					rpcSubscriptionsWg.Done()
+				}()
 				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 				defer cancel()
 				sid := sim.IDs[j+1] // the upstream peer's id
