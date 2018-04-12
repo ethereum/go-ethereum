@@ -216,7 +216,7 @@ func (r *TestRegistry) APIs() []rpc.API {
 }
 
 func readAll(dpa *storage.DPA, hash []byte) (int64, error) {
-	r := dpa.Retrieve(hash)
+	r, _ := dpa.Retrieve(hash)
 	buf := make([]byte, 1024)
 	var n int
 	var total int64

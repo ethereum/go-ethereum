@@ -257,7 +257,6 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 			t.Fatal(err)
 		}
 		wait()
-		fmt.Println("!!!!!!!!!!", i, key[i])
 	}
 
 	rootRef := key[2].Hex()
@@ -458,6 +457,13 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 // a trailing slash gets redirected to include the trailing slash so that
 // relative URLs work as expected.
 func TestBzzRootRedirect(t *testing.T) {
+	testBzzRootRedirect(false, t)
+}
+func TestBzzRootRedirectEncrypted(t *testing.T) {
+	testBzzRootRedirect(true, t)
+}
+
+func testBzzRootRedirect(toEncrypt bool, t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t)
 	defer srv.Close()
 
@@ -472,7 +478,7 @@ func TestBzzRootRedirect(t *testing.T) {
 			Size:        int64(len(data)),
 		},
 	}
-	hash, err := client.Upload(file, "")
+	hash, err := client.Upload(file, "", toEncrypt)
 	if err != nil {
 		t.Fatal(err)
 	}
