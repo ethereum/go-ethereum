@@ -82,7 +82,7 @@ func initSyncTest() {
 		addr := network.NewAddrFromNodeID(id)
 		return addr
 	}
-
+	//global func to create local store
 	createStoreFunc = createTestLocalStorageForId
 	//local stores
 	stores = make(map[discover.NodeID]storage.ChunkStore)
@@ -92,7 +92,6 @@ func initSyncTest() {
 	deliveries = make(map[discover.NodeID]*Delivery)
 	//registries, map of discover.NodeID to its streamer
 	registries = make(map[discover.NodeID]*TestRegistry)
-	//channel to wait for peers connected
 	//not needed for this test but required from common_test for NewStreamService
 	waitPeerErrC = make(chan error)
 	//also not needed for this test but required for NewStreamService
@@ -104,19 +103,29 @@ func initSyncTest() {
 	}
 }
 
-//This file executes a number of syncing tests
-//node and chunk number can be provided via flags
+//This test is a syncing test for nodes.
+//One node is randomly selected to be the pivot node.
+//A configurable number of chunks and nodes can be
+//provided to the test, the number of chunks is uploaded
+//to the pivot node, and we check that nodes get the chunks
+//they are expected to store based on the syncing protocol.
+//Number of chunks and nodes can be provided via commandline too.
 func TestSyncing(t *testing.T) {
+	//if nodes/chunks have been provided via commandline,
+	//run the tests with these values
 	if *nodes != 0 && *chunks != 0 {
 		log.Info(fmt.Sprintf("Running test with %d chunks and %d nodes...", *chunks, *nodes))
 		testSyncing(t, *chunks, *nodes)
 	} else {
 		var nodeCnt []int
 		var chnkCnt []int
+		//if the `longrunning` flag has been provided
+		//run more test combinations
 		if *longrunning {
 			chnkCnt = []int{1, 8, 32, 256, 1024}
 			nodeCnt = []int{16, 32, 64, 128, 256}
 		} else {
+			//default test
 			chnkCnt = []int{4, 32}
 			nodeCnt = []int{32, 16}
 		}
@@ -129,11 +138,9 @@ func TestSyncing(t *testing.T) {
 	}
 }
 
-//do run the tests
+//Do run the tests
+//Every test runs 3 times, a live, a history, and a live AND history
 func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
-	initSyncTest()
-	ids = make([]discover.NodeID, nodeCount)
-
 	//test live and NO history
 	log.Info("Testing live and no history")
 	live = true
@@ -160,12 +167,19 @@ func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
 }
 
 /*
-The test generates the given number of chunks,
-then uploads these to a random node.
-Afterwards for every chunk generated, the nearest node addresses
-are identified, syncing is started, and finally we verify
-that the nodes closer to the chunk addresses actually do have
-the chunks in their local stores.
+The test generates the given number of chunks
+
+The upload is done by dependency to the global
+`live` and `history` variables;
+
+If `live` is set, first stream subscriptions are established, then
+upload to a random node.
+
+If `history` is enabled, first upload then build up subscriptions.
+
+For every chunk generated, the nearest node addresses
+are identified, we verify that the nodes closer to the
+chunk addresses actually do have the chunks in their local stores.
 
 The test loads a snapshot file to construct the swarm network,
 assuming that the snapshot file identifies a healthy
@@ -180,6 +194,9 @@ For every test run, a series of three tests will be executed:
   are uploaded twice, once before and once after subscriptions
 */
 func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
+	initSyncTest()
+	//the ids of the snapshot nodes, initiate only now as we need nodeCount
+	ids = make([]discover.NodeID, nodeCount)
 	//initialize the test struct
 	conf = &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
@@ -188,12 +205,13 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 	conf.idToAddrMap = make(map[discover.NodeID][]byte)
 	//map of overlay address to discover ID
 	conf.addrToIdMap = make(map[string]discover.NodeID)
+	//array where the generated chunk hashes will be stored
 	conf.chunks = make([]storage.Key, 0)
-	//First load the snapshot from the file
+	//channel to trigger node checks in the simulation
 	trigger := make(chan discover.NodeID)
-	// channel to signal simulation initialisation with action call complete
-	// or node disconnections
+	//channel to check for disconnection errors
 	disconnectC := make(chan error)
+	//channel to close disconnection watcher routine
 	quitC := make(chan struct{})
 
 	//load nodes from the snapshot file
@@ -246,6 +264,8 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 
 	//define the action to be performed before the test checks: start syncing
 	action := func(ctx context.Context) error {
+		//first run the health check on all nodes,
+		//wait until nodes are all healthy
 		ticker := time.NewTicker(200 * time.Millisecond)
 		defer ticker.Stop()
 		for range ticker.C {
@@ -290,7 +310,15 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 		defer watchCancel()
 
 		log.Info("Setting up stream subscription")
-		// each node Subscribes to each other's swarmChunkServerStreamName
+
+		//We need two iterations, one to subscribe to the subscription events
+		//(so we know when setup phase is finished), and one to
+		//actually run the stream subscriptions. We can't do it in the same iteration,
+		//because while the first nodes in the loop are setting up subscriptions,
+		//the latter ones have not subscribed to listen to peer events yet,
+		//and then we miss events.
+
+		//first iteration: setup disconnection watcher and subscribe to peer events
 		for j, id := range ids {
 			log.Trace(fmt.Sprintf("Subscribe to subscription events: %d", j))
 			client, err := net.GetNode(id).Client()
@@ -309,19 +337,6 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 				rpcSubscriptionsWg.Done()
 			}()
 
-			if log.Lvl(*loglevel) >= log.LvlTrace {
-				//this will print the kademlia tables of all nodes
-				//to only print the kademlia of the pivot node,
-				//use: if j == idx {}
-				var kt string
-				err = client.CallContext(ctx, &kt, "stream_getKad")
-				if err != nil {
-					return err
-				}
-
-				log.Debug("kad table " + node.ID().String())
-				log.Debug(kt)
-			}
 			//watch for peers disconnecting
 			wdDoneC, err := streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
 			if err != nil {
@@ -334,6 +349,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 			}()
 		}
 
+		//second iteration: start syncing
 		for j, id := range ids {
 			log.Trace(fmt.Sprintf("Start syncing subscriptions: %d", j))
 			client, err := net.GetNode(id).Client()
@@ -346,15 +362,20 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 			if err != nil {
 				return err
 			}
+			//increment the number of subscriptions we need to wait for
+			//by the count returned from startSyncing (SYNC subscriptions)
 			subscriptionCount += cnt
 		}
 
 		//now wait until the number of expected subscriptions has been finished
+		//`watchSubscriptionEvents` will write with a `nil` value to errc
 		for err := range errc {
 			if err != nil {
 				return err
 			}
+			//`nil` received, decrement count
 			subscriptionCount--
+			//all subscriptions received
 			if subscriptionCount == 0 {
 				break
 			}
@@ -449,12 +470,10 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 	return nil
 }
 
-//Show kademlia of uploading node for debugging
-func (r *TestRegistry) GetKad(ctx context.Context) string {
-	return r.delivery.overlay.String()
-}
-
 //the server func to start syncing
+//issues `RequestSubscriptionMsg` to peers, based on po, by iterating over
+//the kademlia's `EachBin` function.
+//returns the number of subscriptions requested
 func (r *TestRegistry) StartSyncing(ctx context.Context) (int, error) {
 	var err error
 

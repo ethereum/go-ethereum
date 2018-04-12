@@ -17,31 +17,26 @@ package stream
 
 import (
 	"context"
-	//	crand "crypto/rand"
 	"fmt"
-	//"io"
 	"math/rand"
-	//"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	//"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
-	//"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	//"github.com/ethereum/go-ethereum/pot"
-	//"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	streamTesting "github.com/ethereum/go-ethereum/swarm/network/stream/testing"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 func initRetrievalTest() {
+	//global func to get overlay address from discover ID
 	toAddr = func(id discover.NodeID) *network.BzzAddr {
 		addr := network.NewAddrFromNodeID(id)
 		return addr
 	}
+	//global func to create local store
 	createStoreFunc = createTestLocalStorageForId
 	//local stores
 	stores = make(map[discover.NodeID]storage.ChunkStore)
@@ -49,16 +44,15 @@ func initRetrievalTest() {
 	datadirs = make(map[discover.NodeID]string)
 	//deliveries for each node
 	deliveries = make(map[discover.NodeID]*Delivery)
+	//global retrieve func
 	getRetrieveFunc = func(id discover.NodeID) func(chunk *storage.Chunk) error {
 		return func(chunk *storage.Chunk) error {
 			skipCheck := true
-			//fmt.Println(fmt.Sprintf("-- %s", id))
 			return deliveries[id].RequestFromPeers(chunk.Key[:], skipCheck)
 		}
 	}
 	//registries, map of discover.NodeID to its streamer
 	registries = make(map[discover.NodeID]*TestRegistry)
-	//channel to wait for peers connected
 	//not needed for this test but required from common_test for NewStreamService
 	waitPeerErrC = make(chan error)
 	//also not needed for this test but required for NewStreamService
@@ -70,17 +64,27 @@ func initRetrievalTest() {
 	}
 }
 
+//This test is a retrieval test for nodes.
+//One node is randomly selected to be the pivot node.
+//A configurable number of chunks and nodes can be
+//provided to the test, the number of chunks is uploaded
+//to the pivot node and other nodes try to retrieve the chunk(s).
+//Number of chunks and nodes can be provided via commandline too.
 func TestRetrieval(t *testing.T) {
-
+	//if nodes/chunks have been provided via commandline,
+	//run the tests with these values
 	if *nodes != 0 && *chunks != 0 {
 		retrievalTest(t, *chunks, *nodes)
 	} else {
 		var nodeCnt []int
 		var chnkCnt []int
+		//if the `longrunning` flag has been provided
+		//run more test combinations
 		if *longrunning {
 			nodeCnt = []int{16, 32, 128}
 			chnkCnt = []int{4, 32, 256}
 		} else {
+			//default test
 			nodeCnt = []int{16}
 			chnkCnt = []int{32}
 		}
@@ -92,6 +96,7 @@ func TestRetrieval(t *testing.T) {
 	}
 }
 
+//Every test runs 3 times, a live, a history, and a live AND history
 func retrievalTest(t *testing.T, chunkCount int, nodeCount int) {
 	//test live and NO history
 	log.Info("Testing live and no history", "chunkCount", chunkCount, "nodeCount", nodeCount)
@@ -119,22 +124,33 @@ func retrievalTest(t *testing.T, chunkCount int, nodeCount int) {
 }
 
 /*
-The test generates the given number of chunks,
-then uploads these to a random node.
-Afterwards for every chunk generated, the nearest node addresses
-are identified, syncing is started, and finally we verify
-that the nodes closer to the chunk addresses actually do have
-the chunks in their local stores.
+The test generates the given number of chunks.
+
+The upload is done by dependency to the global
+`live` and `history` variables;
+
+If `live` is set, first stream subscriptions are established, then
+upload to a random node.
+
+If `history` is enabled, first upload then build up subscriptions.
 
 The test loads a snapshot file to construct the swarm network,
 assuming that the snapshot file identifies a healthy
-kademlia network. The snapshot should have 'streamer' in its service list.
+kademlia network. Nevertheless a health check runs in the
+simulation's `action` function.
+
+The snapshot should have 'streamer' in its service list.
 */
 func runRetrievalTest(chunkCount int, nodeCount int) error {
+	//for every run (live, history), int the variables
 	initRetrievalTest()
+	//the ids of the snapshot nodes, initiate only now as we need nodeCount
 	ids = make([]discover.NodeID, nodeCount)
+	//channel to check for disconnection errors
 	disconnectC := make(chan error)
+	//channel to close disconnection watcher routine
 	quitC := make(chan struct{})
+	//the test conf (using same as in `snapshot_sync_test`
 	conf = &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
 	conf.idToChunksMap = make(map[discover.NodeID][]int)
@@ -142,6 +158,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 	conf.idToAddrMap = make(map[discover.NodeID][]byte)
 	//map of overlay address to discover ID
 	conf.addrToIdMap = make(map[string]discover.NodeID)
+	//array where the generated chunk hashes will be stored
 	conf.chunks = make([]storage.Key, 0)
 	//load nodes from the snapshot file
 	net, err := initNetWithSnapshot(nodeCount)
@@ -179,13 +196,11 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 	//needed for healthy call
 	ppmap = network.NewPeerPot(testMinProxBinSize, ids, conf.addrs)
 
-	// channel to signal simulation initialisation with action call complete
-	// or node disconnections
-	//disconnectC := make(chan error)
-	//quitC := make(chan struct{})
-
 	trigger := make(chan discover.NodeID)
+	//simulation action
 	action := func(ctx context.Context) error {
+		//first run the health check on all nodes,
+		//wait until nodes are all healthy
 		ticker := time.NewTicker(200 * time.Millisecond)
 		defer ticker.Stop()
 		for range ticker.C {
@@ -226,7 +241,14 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 		defer watchCancel()
 
 		log.Info("Setting up stream subscription")
-		// each node Subscribes to each other's swarmChunkServerStreamName
+		//We need two iterations, one to subscribe to the subscription events
+		//(so we know when setup phase is finished), and one to
+		//actually run the stream subscriptions. We can't do it in the same iteration,
+		//because while the first nodes in the loop are setting up subscriptions,
+		//the latter ones have not subscribed to listen to peer events yet,
+		//and then we miss events.
+
+		//first iteration: setup disconnection watcher and subscribe to peer events
 		for j, id := range ids {
 			log.Trace(fmt.Sprintf("Subscribe to subscription events: %d", j))
 			client, err := net.GetNode(id).Client()
@@ -239,9 +261,11 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 				return err
 			}
 
+			//check for `SubscribeMsg` events to know when setup phase is complete
 			watchSubscriptionEvents(ctx, id, client, errc)
 		}
 
+		//second iteration: start syncing and setup stream subscriptions
 		for j, id := range ids {
 			log.Trace(fmt.Sprintf("Start syncing and stream subscriptions: %d", j))
 			client, err := net.GetNode(id).Client()
@@ -254,7 +278,10 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 			if err != nil {
 				return err
 			}
+			//increment the number of subscriptions we need to wait for
+			//by the count returned from startSyncing (SYNC subscriptions)
 			subscriptionCount += cnt
+			//now also add the number of RETRIEVAL_REQUEST subscriptions
 			for snid := range registries[id].peers {
 				subscriptionCount++
 				err = client.CallContext(ctx, nil, "stream_subscribeStream", snid, NewStream(swarmChunkServerStreamName, "", false), nil, Top)
@@ -265,11 +292,15 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 		}
 
 		//now wait until the number of expected subscriptions has been finished
+		//`watchSubscriptionEvents` will write with a `nil` value to errc
+		//every time a `SubscriptionMsg` has been received
 		for err := range errc {
 			if err != nil {
 				return err
 			}
+			//`nil` received, decrement count
 			subscriptionCount--
+			//all subscriptions received
 			if subscriptionCount == 0 {
 				break
 			}
@@ -294,6 +325,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 	//check defines what will be checked during the test
 	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
 
+		//don't check the uploader node
 		if id == uploadNode.ID() {
 			return true, nil
 		}
@@ -310,9 +342,12 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 		//if there are more than one chunk, test only succeeds if all expected chunks are found
 		allSuccess := true
 
+		//check on the node's dpa (netstore)
 		dpa := registries[id].dpa
+		//check all chunks
 		for _, chnk := range conf.chunks {
 			reader := dpa.Retrieve(chnk)
+			//assuming that reading the Size of the chunk is enough to know we found it
 			if s, err := reader.Size(nil); err != nil || s != chunkSize {
 				allSuccess = false
 				log.Warn("Retrieve error", "err", err, "chunk", chnk, "nodeId", id)
@@ -350,29 +385,10 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 			Check: check,
 		},
 	})
-	//close(quitC)
+
 	if result.Error != nil {
 		return result.Error
 	}
+
 	return nil
 }
-
-//upload a file(chunks)
-/*
-func uploadRandomChunks(net *simulations.Network, chunkCount int) error {
-	log.Debug(fmt.Sprintf("Uploading to node id: %s", id))
-	lstore := stores[id]
-	size := chunkCount * chunkSize
-	dpa := storage.NewDPA(lstore, storage.NewChunkerParams())
-	dpa.Start()
-	rootHash, wait, err := dpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size))
-	wait()
-	if err != nil {
-		return nil, err
-	}
-
-	defer dpa.Stop()
-
-	return rootHash, nil
-}
-*/
