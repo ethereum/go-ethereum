@@ -143,9 +143,7 @@ func NewSimulation(conf *RunConfig) (*Simulation, func(), error) {
 		DefaultService: defaultService,
 	})
 	teardown := func() {
-		log.Trace("simulation: teardown adapter")
 		adapterTeardown()
-		log.Trace("simulation: teardown net")
 		net.Shutdown()
 	}
 	ids := make([]discover.NodeID, nodes)
@@ -164,11 +162,8 @@ func NewSimulation(conf *RunConfig) (*Simulation, func(), error) {
 	// set nodes number of Stores available
 	stores, storeTeardown, err := SetStores(addrs...)
 	teardown = func() {
-		log.Trace("simulation: teardown net")
 		net.Shutdown()
-		log.Trace("simulation: teardown adapter")
 		adapterTeardown()
-		log.Trace("simulation: teardown store")
 		storeTeardown()
 	}
 	if err != nil {
