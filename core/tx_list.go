@@ -367,9 +367,20 @@ func (l *txList) Flatten() types.Transactions {
 // price-sorted transactions to discard when the pool fills up.
 type priceHeap []*types.Transaction
 
-func (h priceHeap) Len() int           { return len(h) }
-func (h priceHeap) Less(i, j int) bool { return h[i].GasPrice().Cmp(h[j].GasPrice()) < 0 }
-func (h priceHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h priceHeap) Len() int      { return len(h) }
+func (h priceHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+
+func (h priceHeap) Less(i, j int) bool {
+	// Sort primarily by price, returning the cheaper one
+	switch h[i].GasPrice().Cmp(h[j].GasPrice()) {
+	case -1:
+		return true
+	case 1:
+		return false
+	}
+	// If the prices match, stabilize via nonces (high nonce is worse)
+	return h[i].Nonce() > h[j].Nonce()
+}
 
 func (h *priceHeap) Push(x interface{}) {
 	*h = append(*h, x.(*types.Transaction))
