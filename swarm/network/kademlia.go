@@ -263,10 +263,14 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 		if po >= depth {
 			return false
 		}
-		return f(func(val pot.Val, _ int) bool {
+		ok := f(func(val pot.Val, _ int) bool {
 			a = k.callable(val)
 			return a == nil
 		})
+		if !ok {
+			return false
+		}
+		return true
 	})
 	// found a candidate
 	if a != nil {
