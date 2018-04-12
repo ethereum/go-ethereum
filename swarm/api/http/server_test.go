@@ -257,7 +257,6 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 			t.Fatal(err)
 		}
 		wait()
-		fmt.Println("!!!!!!!!!!", i, key[i])
 	}
 
 	rootRef := key[2].Hex()
