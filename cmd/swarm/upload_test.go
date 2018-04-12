@@ -59,15 +59,22 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd := "up"
 	hashRegexp := `[a-f\d]{64}`
+	flags := []string{
+		"--bzzapi", cluster.Nodes[0].URL,
+		"up",
+		tmp.Name()}
 	if toEncrypt {
-		cmd = "encrypted-up"
 		hashRegexp = `[a-f\d]{128}`
+		flags = []string{
+			"--bzzapi", cluster.Nodes[0].URL,
+			"up",
+			"--encrypted",
+			tmp.Name()}
 	}
-	// upload the file with 'swarm up' or 'swarm encrypted-up' and expect a hash
-	log.Info(fmt.Sprintf("uploading file with '%s'", cmd))
-	up := runSwarm(t, "--bzzapi", cluster.Nodes[0].URL, cmd, tmp.Name())
+	// upload the file with 'swarm up' and expect a hash
+	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
+	up := runSwarm(t, flags...)
 	_, matches := up.ExpectRegexp(hashRegexp)
 	up.ExpectExit()
 	hash := matches[0]

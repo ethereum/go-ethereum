@@ -141,6 +141,10 @@ var (
 		Name:  "mime",
 		Usage: "force mime type",
 	}
+	SwarmEncryptedFlag = cli.BoolFlag{
+		Name:  "encrypted",
+		Usage: "use encrypted upload",
+	}
 	SwarmPssEnabledFlag = cli.BoolFlag{
 		Name:  "pss",
 		Usage: "Enable pss (message passing over swarm)",
@@ -218,19 +222,11 @@ The output of this command is supposed to be machine-readable.
 `,
 		},
 		{
-			Action:    nonEncryptedUpload,
+			Action:    upload,
 			Name:      "up",
 			Usage:     "upload a file or directory to swarm using the HTTP API",
 			ArgsUsage: " <file>",
-			Description: `
-"upload a file or directory to swarm using the HTTP API and prints the root hash",
-`,
-		},
-		{
-			Action:    encryptedUpload,
-			Name:      "encrypted-up",
-			Usage:     "Upload a file or directory with encryption to swarm using the HTTP API. NOTE: Currently the reference for the uploaded content is non-deterministic, so you will receive different references if you upload it twice.",
-			ArgsUsage: " <file>",
+			Flags:     []cli.Flag{SwarmEncryptedFlag},
 			Description: `
 "upload a file or directory to swarm using the HTTP API and prints the root hash",
 `,

@@ -35,15 +35,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-func encryptedUpload(ctx *cli.Context) {
-	upload(ctx, true)
-}
-
-func nonEncryptedUpload(ctx *cli.Context) {
-	upload(ctx, false)
-}
-
-func upload(ctx *cli.Context, toEncrypt bool) {
+func upload(ctx *cli.Context) {
 
 	args := ctx.Args()
 	var (
@@ -54,6 +46,7 @@ func upload(ctx *cli.Context, toEncrypt bool) {
 		fromStdin    = ctx.GlobalBool(SwarmUpFromStdinFlag.Name)
 		mimeType     = ctx.GlobalString(SwarmUploadMimeType.Name)
 		client       = swarm.NewClient(bzzapi)
+		toEncrypt    = ctx.Bool(SwarmEncryptedFlag.Name)
 		file         string
 	)
 
