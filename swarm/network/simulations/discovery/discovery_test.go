@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -207,7 +208,7 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	wg.Wait()
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 	// construct the peer pot, so that kademlia health can be checked
-	ppmap := network.NewPeerPot(testMinProxBinSize, ids, addrs)
+	ppmap := network.NewPeerPotMap(testMinProxBinSize, addrs)
 	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
@@ -224,7 +225,8 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
 		healthy := &network.Health{}
-		if err := client.Call(&healthy, "hive_healthy", ppmap[id]); err != nil {
+		addr := common.Bytes2Hex(network.ToOverlayAddr(id.Bytes()))
+		if err := client.Call(&healthy, "hive_healthy", ppmap[addr]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
 		log.Debug(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v, saturated: %v\n%v", id, healthy.GotNN, healthy.KnowNN, healthy.Full, healthy.Hive))

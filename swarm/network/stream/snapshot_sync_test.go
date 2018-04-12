@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -51,7 +52,7 @@ var (
 	startTime time.Time
 	ids       []discover.NodeID
 	datadirs  map[discover.NodeID]string
-	ppmap     map[discover.NodeID]*network.PeerPot
+	ppmap     map[string]*network.PeerPot
 
 	globalWg sync.WaitGroup
 
@@ -235,7 +236,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 	log.Info("Test config successfully initialized")
 
 	//only needed for healthy call when debugging
-	ppmap = network.NewPeerPot(testMinProxBinSize, ids, conf.addrs)
+	ppmap = network.NewPeerPotMap(testMinProxBinSize, conf.addrs)
 
 	//define the action to be performed before the test checks: start syncing
 	action := func(ctx context.Context) error {
@@ -246,7 +247,8 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 			for _, id := range ids {
 				r := registries[id]
 				//PeerPot for this node
-				pp := ppmap[id]
+				addr := common.Bytes2Hex(network.ToOverlayAddr(id.Bytes()))
+				pp := ppmap[addr]
 				//call Healthy RPC
 				h := r.delivery.overlay.Healthy(pp)
 				//print info
@@ -323,11 +325,9 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 			errc <- nil
 		}()
 
-		select {
-		case err := <-errc:
-			if err != nil {
-				return err
-			}
+		err := <-errc
+		if err != nil {
+			return err
 		}
 		log.Info("Stream subscriptions successfully requested")
 		if live {
@@ -428,10 +428,9 @@ func (r *TestRegistry) StartSyncing(ctx context.Context) error {
 	var err error
 
 	if log.Lvl(*loglevel) == log.LvlDebug {
-		//address of registry
-		add := r.addr.ID()
 		//PeerPot for this node
-		pp := ppmap[add]
+		addr := common.Bytes2Hex(r.addr.OAddr)
+		pp := ppmap[addr]
 		//call Healthy RPC
 		h := r.delivery.overlay.Healthy(pp)
 		//print info
@@ -618,7 +617,6 @@ func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rp
 			}
 		}
 	}()
-	return
 }
 
 //create a local store for the given node
