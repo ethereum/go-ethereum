@@ -42,7 +42,7 @@ import (
 )
 
 const testMinProxBinSize = 2
-const MAX_TIMEOUT = 600
+const MaxTimeout = 600
 
 var (
 	pof = pot.DefaultPof(256)
@@ -61,10 +61,9 @@ var (
 
 type synctestConfig struct {
 	addrs            [][]byte
-	chunks           []storage.Key
+	hashes           []storage.Key
 	idToChunksMap    map[discover.NodeID][]int
 	chunksToNodesMap map[string][]int
-	idToAddrMap      map[discover.NodeID][]byte
 	addrToIdMap      map[string]discover.NodeID
 }
 
@@ -201,12 +200,10 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 	conf = &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
 	conf.idToChunksMap = make(map[discover.NodeID][]int)
-	//map of discover ID to kademlia overlay address
-	conf.idToAddrMap = make(map[discover.NodeID][]byte)
 	//map of overlay address to discover ID
 	conf.addrToIdMap = make(map[string]discover.NodeID)
 	//array where the generated chunk hashes will be stored
-	conf.chunks = make([]storage.Key, 0)
+	conf.hashes = make([]storage.Key, 0)
 	//channel to trigger node checks in the simulation
 	trigger := make(chan discover.NodeID)
 	//channel to check for disconnection errors
@@ -254,7 +251,6 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 		//the proximity calculation is on overlay addr,
 		//the p2p/simulations check func triggers on discover.NodeID,
 		//so we need to know which overlay addr maps to which nodeID
-		conf.idToAddrMap[ids[c]] = a
 		conf.addrToIdMap[string(a)] = ids[c]
 	}
 	log.Info("Test config successfully initialized")
@@ -297,7 +293,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 			if err != nil {
 				return err
 			}
-			conf.chunks = append(conf.chunks, chunks...)
+			conf.hashes = append(conf.hashes, chunks...)
 			//finally map chunks to the closest addresses
 			mapKeysToNodes(conf)
 		}
@@ -306,7 +302,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 		errc := make(chan error)
 
 		//now setup and start event watching in order to know when we can upload
-		ctx, watchCancel := context.WithTimeout(context.Background(), MAX_TIMEOUT*time.Second)
+		ctx, watchCancel := context.WithTimeout(context.Background(), MaxTimeout*time.Second)
 		defer watchCancel()
 
 		log.Info("Setting up stream subscription")
@@ -384,13 +380,13 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 		log.Info("Stream subscriptions successfully requested")
 		if live {
 			//now upload the chunks to the selected random single node
-			chunks, err := uploadFileToSingleNodeStore(node.ID(), chunkCount)
+			hashes, err := uploadFileToSingleNodeStore(node.ID(), chunkCount)
 			if err != nil {
 				return err
 			}
-			conf.chunks = append(conf.chunks, chunks...)
+			conf.hashes = append(conf.hashes, hashes...)
 			//finally map chunks to the closest addresses
-			log.Debug(fmt.Sprintf("Uploaded chunks for live syncing: %v", conf.chunks))
+			log.Debug(fmt.Sprintf("Uploaded chunks for live syncing: %v", conf.hashes))
 			mapKeysToNodes(conf)
 			log.Info(fmt.Sprintf("Uploaded %d chunks to random single node", chunkCount))
 		}
@@ -421,7 +417,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 		//for each expected chunk, check if it is in the local store
 		for _, ch := range localChunks {
 			//get the real chunk by the index in the index array
-			chunk := conf.chunks[ch]
+			chunk := conf.hashes[ch]
 			log.Trace(fmt.Sprintf("node has chunk: %s:", chunk))
 			//check if the expected chunk is indeed in the localstore
 			if _, err := lstore.Get(chunk); err != nil {
@@ -449,7 +445,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 
 	log.Info("Starting simulation run...")
 
-	timeout := MAX_TIMEOUT * time.Second
+	timeout := MaxTimeout * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -527,11 +523,11 @@ func mapKeysToNodes(conf *synctestConfig) {
 		np, _, _ = pot.Add(np, a, pof)
 	}
 	//for each address, run EachNeighbour on the chunk hashes pot to identify closest nodes
-	log.Trace(fmt.Sprintf("Generated hash chunk(s): %v", conf.chunks))
-	for i := 0; i < len(conf.chunks); i++ {
+	log.Trace(fmt.Sprintf("Generated hash chunk(s): %v", conf.hashes))
+	for i := 0; i < len(conf.hashes); i++ {
 		pl := 256 //highest possible proximity
 		var nns []int
-		np.EachNeighbour([]byte(conf.chunks[i]), pof, func(val pot.Val, po int) bool {
+		np.EachNeighbour([]byte(conf.hashes[i]), pof, func(val pot.Val, po int) bool {
 			a := val.([]byte)
 			if pl < 256 && pl != po {
 				return false
@@ -548,7 +544,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 			}
 			return true
 		})
-		kmap[string(conf.chunks[i])] = nns
+		kmap[string(conf.hashes[i])] = nns
 	}
 	for addr, chunks := range nodemap {
 		//this selects which chunks are expected to be found with the given node

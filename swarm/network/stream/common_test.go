@@ -56,13 +56,11 @@ var (
 
 var (
 	defaultSkipCheck  bool
-	defaultDoRetrieve bool
 	waitPeerErrC      chan error
 	chunkSize         = 4096
 	registries        map[discover.NodeID]*TestRegistry
 	createStoreFunc   func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
 	getRetrieveFunc   = defaultRetrieveFunc
-	doRetrieve        = defaultDoRetrieve
 	subscriptionCount = 0
 )
 
@@ -97,7 +95,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	deliveries[id] = delivery
 	r := NewRegistry(addr, delivery, db, state.NewMemStore(), &RegistryOptions{
 		SkipCheck:  defaultSkipCheck,
-		DoRetrieve: defaultDoRetrieve,
+		DoRetrieve: false,
 	})
 	RegisterSwarmSyncerServer(r, db)
 	RegisterSwarmSyncerClient(r, db)
