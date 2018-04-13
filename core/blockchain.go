@@ -90,7 +90,7 @@ type BlockChain struct {
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
 	db     ethdb.Database // Low level persistent database to store final content in
-	blockExplorerDb int
+	blockExplorerDb ethdb.Database
 
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
@@ -153,7 +153,7 @@ func NewBlockChain(db ethdb.Database, blockExplorerDb ethdb.Database, cacheConfi
 		chainConfig:  chainConfig,
 		cacheConfig:  cacheConfig,
 		db:           db,
-		blockExplorerDb: 101,
+		blockExplorerDb: blockExplorerDb,
 		triegc:       prque.New(),
 		stateCache:   state.NewDatabase(db),
 		quit:         make(chan struct{}),
