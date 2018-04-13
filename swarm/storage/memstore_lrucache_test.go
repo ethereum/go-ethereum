@@ -144,7 +144,7 @@ func NewRandomChunk(chunkSize uint64) *Chunk {
 	c := &Chunk{
 		Key:        make([]byte, 32),
 		ReqC:       nil,
-		SData:      make([]byte, chunkSize),
+		SData:      make([]byte, chunkSize+8), // SData should be chunkSize + 8 bytes reserved for length
 		dbStoredC:  make(chan bool),
 		dbStoredMu: &sync.Mutex{},
 	}
