@@ -292,10 +292,10 @@
 			"revisionTime": "2017-07-13T18:40:44Z"
 		},
 		{
-			"checksumSHA1": "2gmvVTDCks8cPhpmyDlvm0sbrXE=",
+			"checksumSHA1": "FYM/8R2CqS6PSNAoKl6X5gNJ20A=",
 			"path": "github.com/naoina/toml",
-			"revision": "ac014c6b6502388d89a85552b7208b8da7cfe104",
-			"revisionTime": "2017-04-10T21:57:17Z"
+			"revision": "9fafd69674167c06933b1787ae235618431ce87f",
+			"revisionTime": "2017-09-18T21:04:37Z"
 		},
 		{
 			"checksumSHA1": "xZBlSMT5o/A+EDOro6KbfHZwSNc=",

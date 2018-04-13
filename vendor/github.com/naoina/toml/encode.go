@@ -61,20 +61,26 @@ func (cfg *Config) NewEncoder(w io.Writer) *Encoder {
 // Encode writes the TOML of v to the stream.
 // See the documentation for Marshal for details about the conversion of Go values to TOML.
 func (e *Encoder) Encode(v interface{}) error {
-	rv := reflect.ValueOf(v)
+	var (
+		buf = &tableBuf{typ: ast.TableTypeNormal}
+		rv  = reflect.ValueOf(v)
+		err error
+	)
+
 	for rv.Kind() == reflect.Ptr {
 		if rv.IsNil() {
 			return &marshalNilError{rv.Type()}
 		}
 		rv = rv.Elem()
 	}
-	buf := &tableBuf{typ: ast.TableTypeNormal}
-	var err error
+
 	switch rv.Kind() {
 	case reflect.Struct:
 		err = buf.structFields(e.cfg, rv)
 	case reflect.Map:
 		err = buf.mapFields(e.cfg, rv)
+	case reflect.Interface:
+		return e.Encode(rv.Interface())
 	default:
 		err = &marshalTableError{rv.Type()}
 	}

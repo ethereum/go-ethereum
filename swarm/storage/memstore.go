@@ -62,7 +62,9 @@ a hash prefix subtree containing subtrees or one storage entry (but never both)
   (access[] is a binary tree inside the multi-bit leveled hash tree)
 */
 
-func NewMemStore(d *LDBStore, capacity uint) (m *MemStore) {
+func NewMemStore(params *StoreParams, d *LDBStore) (m *MemStore) {
+
+	capacity := params.CacheCapacity
 	m = &MemStore{}
 	m.memtree = newMemTree(memTreeFLW, nil, 0)
 	m.ldbStore = d
@@ -260,7 +262,6 @@ func (s *MemStore) removeOldest() {
 	defer metrics.GetOrRegisterResettingTimer("memstore.purge", metrics.DefaultRegistry).UpdateSince(time.Now())
 
 	node := s.memtree
-	log.Warn("purge memstore")
 	for node.entry == nil {
 
 		aidx := uint(0)

@@ -662,7 +662,10 @@ func createTestLocalStorageForId(id discover.NodeID, addr *network.BzzAddr) (sto
 	}
 	datadirs[id] = datadir
 	var store storage.ChunkStore
-	store, err = storage.NewTestLocalStoreForAddr(datadir, addr.Over())
+	params := storage.NewDefaultLocalStoreParams()
+	params.ChunkDbPath = datadir
+	params.BaseKey = addr.Over()
+	store, err = storage.NewTestLocalStoreForAddr(params)
 	if err != nil {
 		return nil, err
 	}

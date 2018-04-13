@@ -36,6 +36,7 @@ func TestConfig(t *testing.T) {
 	one := NewConfig()
 	two := NewConfig()
 
+	one.LocalStoreParams = two.LocalStoreParams
 	if equal := reflect.DeepEqual(one, two); !equal {
 		t.Fatal("Two default configs are not equal")
 	}
@@ -52,7 +53,7 @@ func TestConfig(t *testing.T) {
 	if one.Swap.PayProfile.Beneficiary == (common.Address{}) && one.SwapEnabled {
 		t.Fatal("Failed to correctly initialize SwapParams")
 	}
-	if one.StoreParams.ChunkDbPath == one.Path {
+	if one.ChunkDbPath == one.Path {
 		t.Fatal("Failed to correctly initialize StoreParams")
 	}
 }

@@ -481,13 +481,13 @@ func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supEr
 	code := 0
 	defaultErr := fmt.Errorf("%s: %v", supErr, err)
 	rsrcErr, ok := err.(*storage.ResourceError)
-	if !ok {
+	if !ok && rsrcErr != nil {
 		code = rsrcErr.Code()
 	}
 	switch code {
 	case storage.ErrInvalidValue:
 		return http.StatusBadRequest, defaultErr
-	case storage.ErrNotFound, storage.ErrNotSynced, storage.ErrNothingToReturn:
+	case storage.ErrNotFound, storage.ErrNotSynced, storage.ErrNothingToReturn, storage.ErrInit:
 		return http.StatusNotFound, defaultErr
 	case storage.ErrUnauthorized, storage.ErrInvalidSignature:
 		return http.StatusUnauthorized, defaultErr

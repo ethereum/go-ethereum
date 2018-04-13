@@ -169,11 +169,6 @@ var (
 		Usage:  "Number of recent chunks cached in memory (default 5000)",
 		EnvVar: SWARM_ENV_STORE_CACHE_CAPACITY,
 	}
-	SwarmStoreRadius = cli.IntFlag{
-		Name:   "store.radius",
-		Usage:  "Minimum proximity order (number of identical prefix bits of address key) for chunks to warrant storage (default 0)",
-		EnvVar: SWARM_ENV_STORE_RADIUS,
-	}
 
 	// the following flags are deprecated and should be removed in the future
 	DeprecatedEthAPIFlag = cli.StringFlag{
@@ -385,7 +380,6 @@ Remove corrupt entries from a local chunk database.
 		SwarmStorePath,
 		SwarmStoreCapacity,
 		SwarmStoreCacheCapacity,
-		SwarmStoreRadius,
 		//deprecated flags
 		DeprecatedEthAPIFlag,
 		DeprecatedEnsAddrFlag,

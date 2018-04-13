@@ -47,12 +47,11 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 	if err != nil {
 		t.Fatal(err)
 	}
-	storeparams := &storage.StoreParams{
-		ChunkDbPath:   dir,
-		DbCapacity:    5000000,
-		CacheCapacity: 5000,
-	}
-	localStore, err := storage.NewLocalStore(storage.MakeHashFunc(storage.SHA3Hash), storeparams, make([]byte, 32), nil)
+	storeparams := storage.NewDefaultLocalStoreParams()
+	storeparams.DbCapacity = 5000000
+	storeparams.CacheCapacity = 5000
+	storeparams.Init(dir)
+	localStore, err := storage.NewLocalStore(storeparams, nil)
 	if err != nil {
 		os.RemoveAll(dir)
 		t.Fatal(err)
@@ -64,8 +63,11 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	rh, err := storage.NewTestResourceHandler(resourceDir, &fakeBackend{}, nil, &storage.ResourceLookupParams{Limit: false})
+	rhparams := &storage.ResourceHandlerParams{
+		QueryMaxPeriods: &storage.ResourceLookupParams{},
+		EthClient:       &fakeBackend{},
+	}
+	rh, err := storage.NewTestResourceHandler(resourceDir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -112,6 +112,6 @@ func openLDBStore(path string, basekey []byte) (*storage.LDBStore, error) {
 	if _, err := os.Stat(filepath.Join(path, "CURRENT")); err != nil {
 		return nil, fmt.Errorf("invalid chunkdb path: %s", err)
 	}
-	hash := storage.MakeHashFunc("SHA3")
-	return storage.NewLDBStore(path, hash, 10000000, func(k storage.Key) (ret uint8) { return uint8(storage.Proximity(basekey[:], k[:])) })
+	storeParams := storage.NewLDBStoreParams(path, 10000000, nil, nil)
+	return storage.NewLDBStore(storeParams)
 }

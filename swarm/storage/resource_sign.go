@@ -7,14 +7,20 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// matches the SignFunc type
-func NewGenericResourceSigner(privKey *ecdsa.PrivateKey) SignFunc {
-	return func(data common.Hash) (signature Signature, err error) {
-		signaturebytes, err := crypto.Sign(data.Bytes(), privKey)
-		if err != nil {
-			return
-		}
-		copy(signature[:], signaturebytes)
+// Signs resource updates
+type ResourceSigner interface {
+	Sign(common.Hash) (Signature, error)
+}
+
+type GenericResourceSigner struct {
+	PrivKey *ecdsa.PrivateKey
+}
+
+func (self *GenericResourceSigner) Sign(data common.Hash) (signature Signature, err error) {
+	signaturebytes, err := crypto.Sign(data.Bytes(), self.PrivKey)
+	if err != nil {
 		return
 	}
+	copy(signature[:], signaturebytes)
+	return
 }

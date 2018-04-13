@@ -17,7 +17,6 @@
 package storage
 
 import (
-	"errors"
 	"io"
 	"time"
 )
@@ -40,8 +39,6 @@ const (
 )
 
 var (
-	ErrChunkNotFound = errors.New("chunk not found")
-	ErrFetching      = errors.New("chunk still fetching")
 	// timeout interval before retrieval is timed out
 	searchTimeout = 3 * time.Second
 )
@@ -63,18 +60,14 @@ func NewDPAParams() *DPAParams {
 
 // for testing locally
 func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
-
-	hash := MakeHashFunc("SHA3")
-
-	dbStore, err := NewLDBStore(datadir, hash, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+	params := NewDefaultLocalStoreParams()
+	params.Init(datadir)
+	localStore, err := NewLocalStore(params, nil)
 	if err != nil {
 		return nil, err
 	}
-
-	return NewDPA(&LocalStore{
-		memStore: NewMemStore(dbStore, singletonSwarmCacheCapacity),
-		DbStore:  dbStore,
-	}, NewDPAParams()), nil
+	localStore.Validators = append(localStore.Validators, NewContentAddressValidator(MakeHashFunc(SHA3Hash)))
+	return NewDPA(localStore, NewDPAParams()), nil
 }
 
 func NewDPA(store ChunkStore, params *DPAParams) *DPA {
