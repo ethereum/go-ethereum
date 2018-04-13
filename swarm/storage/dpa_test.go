@@ -39,7 +39,7 @@ func testDpaRandom(toEncrypt bool, t *testing.T) {
 	defer tdb.close()
 	db := tdb.LDBStore
 	db.setCapacity(50000)
-	memStore := NewMemStore(db, defaultCacheCapacity, defaultCacheCapacity)
+	memStore := NewMemStore(db, defaultCacheCapacity, defaultChunkRequestsCacheCapacity)
 	localStore := &LocalStore{
 		memStore: memStore,
 		DbStore:  db,
@@ -68,7 +68,7 @@ func testDpaRandom(toEncrypt bool, t *testing.T) {
 	}
 	ioutil.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
 	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
-	localStore.memStore = NewMemStore(db, defaultCacheCapacity, defaultCacheCapacity)
+	localStore.memStore = NewMemStore(db, defaultCacheCapacity, defaultChunkRequestsCacheCapacity)
 	resultReader = dpa.Retrieve(key)
 	for i := range resultSlice {
 		resultSlice[i] = 0

@@ -35,8 +35,9 @@ implementation for storage or retrieval.
 */
 
 const (
-	singletonSwarmDbCapacity    = 50000
-	singletonSwarmCacheCapacity = 500
+	defaultLDBCapacity                = 50000 // capacity for LevelDB
+	defaultCacheCapacity              = 500   // capacity for in-memory chunks' cache
+	defaultChunkRequestsCacheCapacity = 50000 // capacity for container holding outgoing requests for chunks. should be set to LevelDB capacity
 )
 
 var (
@@ -66,13 +67,13 @@ func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
 
 	hash := MakeHashFunc("SHA3")
 
-	dbStore, err := NewLDBStore(datadir, hash, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+	dbStore, err := NewLDBStore(datadir, hash, defaultLDBCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
 	if err != nil {
 		return nil, err
 	}
 
 	return NewDPA(&LocalStore{
-		memStore: NewMemStore(dbStore, singletonSwarmCacheCapacity, singletonSwarmDbCapacity),
+		memStore: NewMemStore(dbStore, defaultCacheCapacity, defaultChunkRequestsCacheCapacity),
 		DbStore:  dbStore,
 	}, NewDPAParams()), nil
 }

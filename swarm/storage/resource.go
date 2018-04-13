@@ -897,13 +897,13 @@ func NewTestResourceHandler(datadir string, ethClient headerGetter, validator Re
 	path := filepath.Join(datadir, DbDirName)
 	basekey := make([]byte, 32)
 	hasher := MakeHashFunc(SHA3Hash)
-	dbStore, err := NewLDBStore(path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+	dbStore, err := NewLDBStore(path, hasher, defaultLDBCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
 	dbStore.SetTrusted()
 	if err != nil {
 		return nil, err
 	}
 	localStore := &LocalStore{
-		memStore: NewMemStore(dbStore, singletonSwarmCacheCapacity, singletonSwarmDbCapacity),
+		memStore: NewMemStore(dbStore, defaultCacheCapacity, defaultChunkRequestsCacheCapacity),
 		DbStore:  dbStore,
 	}
 	resourceChunkStore := NewResourceChunkStore(localStore, nil)

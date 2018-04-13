@@ -60,19 +60,19 @@ func NewLocalStore(hash SwarmHasher, params *StoreParams, basekey []byte, mockSt
 		return nil, err
 	}
 	return &LocalStore{
-		memStore: NewMemStore(dbStore, params.CacheCapacity, singletonSwarmDbCapacity),
+		memStore: NewMemStore(dbStore, params.CacheCapacity, defaultChunkRequestsCacheCapacity),
 		DbStore:  dbStore,
 	}, nil
 }
 
 func NewTestLocalStoreForAddr(path string, basekey []byte) (*LocalStore, error) {
 	hasher := MakeHashFunc("SHA3")
-	dbStore, err := NewLDBStore(path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+	dbStore, err := NewLDBStore(path, hasher, defaultLDBCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
 	if err != nil {
 		return nil, err
 	}
 	localStore := &LocalStore{
-		memStore: NewMemStore(dbStore, singletonSwarmDbCapacity, singletonSwarmDbCapacity),
+		memStore: NewMemStore(dbStore, defaultCacheCapacity, defaultChunkRequestsCacheCapacity),
 		DbStore:  dbStore,
 	}
 	return localStore, nil

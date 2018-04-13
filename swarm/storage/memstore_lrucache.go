@@ -26,10 +26,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
-const (
-	defaultCacheCapacity = 5000
-)
-
 type MemStore struct {
 	cache    *lru.Cache
 	requests *lru.Cache
@@ -124,7 +120,7 @@ func (m *MemStore) setCapacity(n int) {
 	if n <= 0 {
 		m.disabled = true
 	} else {
-		m = NewMemStore(nil, uint(n), singletonSwarmDbCapacity)
+		m = NewMemStore(nil, uint(n), defaultChunkRequestsCacheCapacity)
 	}
 }
 
