@@ -309,6 +309,9 @@ func (self *worker) wait() {
 			for _, log := range work.state.Logs() {
 				log.BlockHash = block.Hash()
 			}
+			fmt.Println("+++++++++++++++++miner/worker.GO+++++++++++++++++++++++++wait()")
+			fmt.Println(work.state)
+			fmt.Println("+++++++++++++++++miner/worker.GO+++++++++++++++++++++++++selt chain")
 			stat, err := self.chain.WriteBlockWithState(block, work.receipts, work.state)
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
