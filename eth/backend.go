@@ -119,7 +119,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		return nil, genesisErr
 	}
 	log.Info("Initialised chain configuration", "config", chainConfig)
-
+	fmt.Println(config.GasPrice)
 	eth := &Ethereum{
 		config:         config,
 		chainDb:        chainDb,

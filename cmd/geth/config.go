@@ -118,6 +118,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 
 	// Load config file.
 	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
+		fmt.Println()
 		if err := loadConfig(file, &cfg); err != nil {
 			utils.Fatalf("%v", err)
 		}
