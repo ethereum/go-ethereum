@@ -23,6 +23,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -340,7 +341,7 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	for i := 0; i < n; i++ {
 		c := NewRandomChunk(chunkSize)
 		chunks = append(chunks, c)
-		log.Info("generate random chunk", "idx", i, "chunk", c)
+		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}
 
 	for i := 0; i < n; i++ {
@@ -353,6 +354,9 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	}
 
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
+
+	// wait for garbage collection to kick in on the responsible actor
+	time.Sleep(5 * time.Second)
 
 	var missing int
 	for i := 0; i < n; i++ {
@@ -369,7 +373,7 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 			t.Fatal("expected to get the same data back, but got smth else")
 		}
 
-		log.Info("got back chunk", "chunk", ret)
+		log.Trace("got back chunk", "chunk", ret)
 	}
 
 	if missing < n-capacity {
