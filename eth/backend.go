@@ -99,8 +99,8 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 	ls.SetBloomBitsIndexer(s.bloomIndexer)
 }
 
-// New creates a new Ethereum object (including the
-// initialisation of the common Ethereum object)
+// New creates a new EtherFact object (including the
+// initialisation of the common EtherFact object)
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -117,7 +117,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
-	log.Info("Initialised chain configuration", "config", chainConfig)
 
 	eth := &Ethereum{
 		config:         config,
