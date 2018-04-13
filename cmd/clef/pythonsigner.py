@@ -4,9 +4,8 @@ from tinyrpc.protocols.jsonrpc import JSONRPCProtocol
 from tinyrpc.dispatch import public,RPCDispatcher
 from tinyrpc.server import RPCServer
 
-""" This is a POC example of how to write a custom UI for the signer. The UI starts the 
-signer process with the '--stdio-ui' option, and communicates with the signer binary
-using standard input / output.
+""" This is a POC example of how to write a custom UI for Clef. The UI starts the
+clef process with the '--stdio-ui' option, and communicates with clef using standard input / output.
 
 The standard input/output is a relatively secure way to communicate, as it does not require opening any ports
 or IPC files. Needless to say, it does not protect against memory inspection mechanisms where an attacker
@@ -160,7 +159,7 @@ class StdIOHandler():
 
 def main(args):
 
-    cmd = ["./signer", "--stdio-ui"]
+    cmd = ["./clef", "--stdio-ui"]
     if len(args) > 0 and args[0] == "test":
         cmd.extend(["--stdio-ui-test"])
     print("cmd: {}".format(" ".join(cmd)))

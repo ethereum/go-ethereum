@@ -1,20 +1,20 @@
-**Signer API**
+Clef
 ----
-The signer utility can be used to sign transactions and data and is meant as a replacement for geth's account management.
+Clef can be used to sign transactions and data and is meant as a replacement for geth's account management.
 This allows DApps not to depend on geth's account management. When a DApp wants to sign data it can send the data to
-the signer, the signer will than provide the user with context and asks the user for permission to sign the data. If
+the signer, the signer will then provide the user with context and asks the user for permission to sign the data. If
 the users grants the signing request the signer will send the signature back to the DApp.
   
 This setup allows a DApp to connect to a remote Ethereum node and send transactions that are locally signed. This can
 help in situations when a DApp is connected to a remote node because a local Ethereum node is not available, not
-synchronised with the chain or a particular Ethereum node that has no build in, or limited account management.
+synchronised with the chain or a particular Ethereum node that has no built-in (or limited) account management.
   
-The signer can run as a daemon on the same machine, or off a usb-stick like [usb armory](https://inversepath.com/usbarmory),
+Clef can run as a daemon on the same machine, or off a usb-stick like [usb armory](https://inversepath.com/usbarmory),
 or a separate VM in a [QubesOS](https://www.qubes-os.org/) type os setup.
 
 
 ## Command line flags
-The signer accepts the following command line options:
+Clef accepts the following command line options:
 ```
 COMMANDS:
    init    Initialize the signer, generate secret storage
@@ -24,8 +24,8 @@ COMMANDS:
 
 GLOBAL OPTIONS:
    --loglevel value        log level to emit to the screen (default: 4)
-   --keystore value        Directory for the keystore (default: "/home/martin/.ethereum/keystore")
-   --configdir value       Directory for signer configuration (default: "/home/martin/.signer")
+   --keystore value        Directory for the keystore (default: "$HOME/.ethereum/keystore")
+   --configdir value       Directory for clef configuration (default: "$HOME/.clef")
    --networkid value       Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby) (default: 1)
    --lightkdf              Reduce key-derivation RAM & CPU usage at some expense of KDF strength
    --nousb                 Disables monitoring for and managing USB hardware wallets
@@ -55,7 +55,7 @@ Check out the [tutorial](tutorial.md) for some concrete examples on how the sign
 
 The security model of the signer is as follows:
 
-* One critical component (the signer binary / daemon) is responsible for handling cryptographic operations; signing, private keys, encryption/decryption of keystore files.
+* One critical component (the signer binary / daemon) is responsible for handling cryptographic operations: signing, private keys, encryption/decryption of keystore files.
 * The signer binary has a well-defined 'external' API.
 * The 'external' API is considered UNTRUSTED.
 * The signer binary also communicates with whatever process that invoked the binary, via stdin/stdout.
@@ -70,25 +70,24 @@ In this case, `geth` would be started with `--externalsigner=http://localhost:85
 
 Some snags and todos
 
-* The signer should take a startup param "--no-change", for UI:s that do not contain the capability
+* [ ] The signer should take a startup param "--no-change", for UIs that do not contain the capability
    to perform changes to things, only approve/deny. Such a UI should be able to start the signer in
    a more secure mode by telling it that it only wants approve/deny capabilities.
 
-* [x] DONE: It would be nice if the signer could collect new 4byte-id:s/method selectors, and have a
+* [x] It would be nice if the signer could collect new 4byte-id:s/method selectors, and have a
 secondary database for those (`4byte_custom.json`). Users could then (optionally) submit their collections for
 inclusion upstream.
 
 * It should be possible to configure the signer to check if an account is indeed known to it, before
 passing on to the UI. The reason it currently does not, is that it would make it possible to enumerate
 accounts if it immediately returned "unknown account".
-  * [x] DONE: Similarly, it should be possible to configure the signer to auto-allow listing (certain) accounts, instead of asking every time.
-
+* [x] It should be possible to configure the signer to auto-allow listing (certain) accounts, instead of asking every time.
 * [x] Done Upon startup, the signer should spit out some info to the caller (particularly important when executed in `stdio-ui`-mode),
 invoking methods with the following info:
   * [x] Version info about the signer
   * [x] Address of API (http/ipc)
   * [ ] List of known accounts
-
+* [ ] Have a default timeout on signing operations, so that if the user has not answered withing e.g. 60 seconds, the request is rejected.
 * [ ] `account_signRawTransaction`
 * [ ] `account_bulkSignTransactions([] transactions)` should
    * only exist if enabled via config/flag
@@ -98,16 +97,14 @@ invoking methods with the following info:
       * the total amount
       * the number of unique recipients
 
-
 * Geth todos
     - The signer should pass the `Origin` header as call-info to the UI. As of right now, the way that info about the request is
 put together is a bit of a hack into the http server. This could probably be greatly improved
     - Relay: Geth should be started in `geth --external_signer localhost:8550`.
-    - Currently, the Geth API:s use `common.Address` in the arguments to transaction submission (e.g `to` field). This
+    - Currently, the Geth APIs use `common.Address` in the arguments to transaction submission (e.g `to` field). This
   type is 20 `bytes`, and is incapable of carrying checksum information. The signer uses `common.MixedcaseAddress`, which
   retains the original input.
     - The Geth api should switch to use the same type, and relay `to`-account verbatim to the external api.
-
 
 * [x] Storage
     * [x] An encrypted key-value storage should be implemented
@@ -128,7 +125,7 @@ The signer listens to HTTP requests on `rpcaddr`:`rpcport`, with the same JSONRP
 expected to be JSON [jsonrpc 2.0 standard](http://www.jsonrpc.org/specification).
 
 Some of these call can require user interaction. Clients must be aware that responses
-may be deplayed significanlty or may never be received if a users decideds to ignore the confirmation request.
+may be delayed significanlty or may never be received if a users decides to ignore the confirmation request.
 
 The External API is **untrusted** : it does not accept credentials over this api, nor does it expect
 that requests have any authority.
@@ -578,8 +575,7 @@ curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","me
         "data": "0x4401a6e40000000000000000000000000000000000000000000000000000000000000012",
         "input": null
       },
-      "call_info": {
-        "Messages": [
+      "call_info": [
           {
             "type": "WARNING",
             "message": "Invalid checksum on to-address"
@@ -588,8 +584,7 @@ curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","me
             "type": "Info",
             "message": "safeSend(address: 0x0000000000000000000000000000000000000012)"
           }
-        ]
-      },
+        ],
       "meta": {
         "remote": "127.0.0.1:48486",
         "local": "localhost:8550",
@@ -625,8 +620,7 @@ curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","me
         "data": "0x4401a6e40000000000000002000000000000000000000000000000000000000000000012",
         "input": null
       },
-      "call_info": {
-        "Messages": [
+      "call_info": [
           {
             "type": "WARNING",
             "message": "Invalid checksum on to-address"
@@ -635,8 +629,7 @@ curl -i -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","me
             "type": "WARNING",
             "message": "Transaction data did not match ABI-interface: WARNING: Supplied data is stuffed with extra data. \nWant 0000000000000002000000000000000000000000000000000000000000000012\nHave 0000000000000000000000000000000000000000000000000000000000000012\nfor method safeSend(address)"
           }
-        ]
-      },
+        ],
       "meta": {
         "remote": "127.0.0.1:48492",
         "local": "localhost:8550",
@@ -670,14 +663,12 @@ One which has missing `to`, but with no `data`:
         "data": null,
         "input": null
       },
-      "call_info": {
-        "Messages": [
+      "call_info": [
           {
             "type": "CRITICAL",
             "message": "Tx will create contract with empty code!"
           }
-        ]
-      },
+        ],
       "meta": {
         "remote": "signer binary",
         "local": "main",

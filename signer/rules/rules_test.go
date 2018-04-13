@@ -23,8 +23,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/cmd/signer/core"
-	"github.com/ethereum/go-ethereum/cmd/signer/storage"
+	"github.com/ethereum/go-ethereum/cmd/clef/core"
+	"github.com/ethereum/go-ethereum/cmd/clef/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"

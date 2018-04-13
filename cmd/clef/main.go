@@ -34,29 +34,29 @@ import (
 	"strings"
 
 	"encoding/hex"
-	"github.com/ethereum/go-ethereum/cmd/signer/core"
-	"github.com/ethereum/go-ethereum/cmd/signer/rules"
-	"github.com/ethereum/go-ethereum/cmd/signer/storage"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/signer/core"
+	"github.com/ethereum/go-ethereum/signer/rules"
+	"github.com/ethereum/go-ethereum/signer/storage"
 	"gopkg.in/urfave/cli.v1"
 	"os/signal"
 )
 
-// EXT_API_VERSION -- see extapi_changelog.md
-const EXT_API_VERSION = "2.0.0"
+// ExternalApiVersion -- see extapi_changelog.md
+const ExternalApiVersion = "2.0.0"
 
-// INT_API_VERSION -- see intapi_changelog.md
-const INT_API_VERSION = "2.0.0"
+// InternalApiVersion -- see intapi_changelog.md
+const InternalApiVersion = "2.0.0"
 
 const legal_warning = `
 WARNING! 
 
-The signer is alpha software, and not yet publically released. This software has _not_ been audited, and there
+Clef is alpha software, and not yet publically released. This software has _not_ been audited, and there
 are no guarantees about the workings of this software. It may contain severe flaws. You should not use this software
 unless you agree to take full responsibility for doing so, and know what you are doing. 
 
@@ -78,7 +78,7 @@ var (
 	configdirFlag = cli.StringFlag{
 		Name:  "configdir",
 		Value: DefaultConfigDir(),
-		Usage: "Directory for signer configuration",
+		Usage: "Directory for Clef configuration",
 	}
 	rpcPortFlag = cli.IntFlag{
 		Name:  "rpcport",
@@ -87,7 +87,7 @@ var (
 	}
 	signerSecretFlag = cli.StringFlag{
 		Name:  "signersecret",
-		Usage: "A file containing the password used to encrypt signer credentials, e.g. keystore credentials and ruleset hash",
+		Usage: "A file containing the password used to encrypt Clef credentials, e.g. keystore credentials and ruleset hash",
 	}
 	dBFlag = cli.StringFlag{
 		Name:  "4bytedb",
@@ -113,11 +113,11 @@ var (
 		Name: "stdio-ui",
 		Usage: "Use STDIN/STDOUT as a channel for an external UI. " +
 			"This means that an STDIN/STDOUT is used for RPC-communication with a e.g. a graphical user " +
-			"interface, and can be used when the signer is started by an external process.",
+			"interface, and can be used when Clef is started by an external process.",
 	}
 	testFlag = cli.BoolFlag{
 		Name:  "stdio-ui-test",
-		Usage: "Mechanism to test interface between signer and UI. Requires 'stdio-ui'.",
+		Usage: "Mechanism to test interface between Clef and UI. Requires 'stdio-ui'.",
 	}
 	app         = cli.NewApp()
 	initCommand = cli.Command{
@@ -130,7 +130,7 @@ var (
 			configdirFlag,
 		},
 		Description: `
-The init command generates a master seed which the signer can use to store credentials and data needed for 
+The init command generates a master seed which Clef can use to store credentials and data needed for 
 the rule-engine to work.`,
 	}
 	attestCommand = cli.Command{
@@ -148,7 +148,7 @@ The attest command stores the sha256 of the rule.js-file that you want to use fo
 incoming requests. 
 
 Whenever you make an edit to the rule file, you need to use attestation to tell 
-the signer that the file is 'safe' to execute.`,
+Clef that the file is 'safe' to execute.`,
 	}
 
 	addCredentialCommand = cli.Command{
@@ -169,7 +169,7 @@ remove any stored credential for that address (keyfile)
 )
 
 func init() {
-	app.Name = "signer"
+	app.Name = "Clef"
 	app.Usage = "Manage ethereum Account operations"
 	app.Flags = []cli.Flag{
 		logLevelFlag,
@@ -416,7 +416,7 @@ func signer(c *cli.Context) error {
 
 		// start http server
 		httpEndpoint := fmt.Sprintf("%s:%d", c.String(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
-		listener, _, err := node.StartHttpEndpoint(httpEndpoint, rpcApi, []string{"account"}, cors, vhosts)
+		listener, _, err := node.StartHTTPEndpoint(httpEndpoint, rpcApi, []string{"account"}, cors, vhosts)
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
 		}
@@ -433,7 +433,7 @@ func signer(c *cli.Context) error {
 		if c.IsSet(utils.IPCPathFlag.Name) {
 			ipcApiUrl = c.String(utils.IPCPathFlag.Name)
 		} else {
-			ipcApiUrl = fmt.Sprintf("%s", filepath.Join(configDir, "signer.ipc"))
+			ipcApiUrl = fmt.Sprintf("%s", filepath.Join(configDir, "clef.ipc"))
 		}
 
 		listener, _, err := node.StartIPCEndpoint(func() bool { return true }, ipcApiUrl, rpcApi)
@@ -454,8 +454,8 @@ func signer(c *cli.Context) error {
 	}
 	ui.OnSignerStartup(core.StartupInfo{
 		Info: map[string]interface{}{
-			"extapi_version": EXT_API_VERSION,
-			"intapi_version": INT_API_VERSION,
+			"extapi_version": ExternalApiVersion,
+			"intapi_version": InternalApiVersion,
 			"extapi_http":    extapiUrl,
 			"extapi_ipc":     ipcApiUrl,
 		},
@@ -493,7 +493,7 @@ func DefaultConfigDir() string {
 		} else if runtime.GOOS == "windows" {
 			return filepath.Join(home, "AppData", "Roaming", "Signer")
 		} else {
-			return filepath.Join(home, ".signer")
+			return filepath.Join(home, ".clef")
 		}
 	}
 	// As we cannot guess a stable location, return empty and handle later
@@ -574,7 +574,7 @@ func confirm(text string) bool {
 
 func testExternalUI(api *core.SignerAPI) {
 
-	ctx := context.WithValue(context.Background(), "remote", "signer binary")
+	ctx := context.WithValue(context.Background(), "remote", "clef binary")
 	ctx = context.WithValue(ctx, "scheme", "in-proc")
 	ctx = context.WithValue(ctx, "local", "main")
 

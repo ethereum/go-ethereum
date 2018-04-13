@@ -60,18 +60,6 @@ type ValidationMessages struct {
 	Messages []ValidationInfo
 }
 
-/*
-// TransactionArg represents a Transaction for the signer.
-type TransactionArg struct {
-	To       *common.MixedcaseAddress `json:"to"`
-	Gas      *hexutil.Big             `json:"gas"`
-	GasPrice *hexutil.Big             `json:"gasPrice"`
-	Value    *hexutil.Big             `json:"value"`
-	Data     hexutil.Bytes            `json:"data"`
-	Nonce    *hexutil.Uint64          `json:"nonce"`
-}
-*/
-
 // SendTxArgs represents the arguments to submit a transaction
 type SendTxArgs struct {
 	From     common.MixedcaseAddress  `json:"from"`
