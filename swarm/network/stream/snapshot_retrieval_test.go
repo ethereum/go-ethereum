@@ -17,12 +17,15 @@ package stream
 
 import (
 	"context"
+	crand "crypto/rand"
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
@@ -35,7 +38,6 @@ import (
 const (
 	minFileSize = 2
 	maxFileSize = 40
-	charset     = ".,/.!@#$%^&*()-=:;<>abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 )
 
 func initRetrievalTest() {
@@ -85,7 +87,7 @@ func TestFileRetrieval(t *testing.T) {
 		//if the `longrunning` flag has been provided
 		//run more test combinations
 		if *longrunning {
-			nodeCnt = []int{16, 32, 128, 256}
+			nodeCnt = []int{16, 32, 128}
 		} else {
 			//default test
 			nodeCnt = []int{16}
@@ -219,6 +221,7 @@ func runFileRetrievalTest(nodeCount int) error {
 	if err != nil {
 		return err
 	}
+	var rpcSubscriptionsWg sync.WaitGroup
 	//do cleanup after test is terminated
 	defer func() {
 		//shutdown the snapshot network
@@ -241,7 +244,7 @@ func runFileRetrievalTest(nodeCount int) error {
 	}
 
 	//needed for healthy call
-	ppmap = network.NewPeerPot(testMinProxBinSize, ids, conf.addrs)
+	ppmap = network.NewPeerPotMap(testMinProxBinSize, conf.addrs)
 
 	//an array for the random files
 	var randomFiles []string
@@ -260,7 +263,8 @@ func runFileRetrievalTest(nodeCount int) error {
 			for _, id := range ids {
 				r := registries[id]
 				//PeerPot for this node
-				pp := ppmap[id]
+				addr := common.Bytes2Hex(r.addr.OAddr)
+				pp := ppmap[addr]
 				//call Healthy RPC
 				h := r.delivery.overlay.Healthy(pp)
 				//print info
@@ -307,14 +311,27 @@ func runFileRetrievalTest(nodeCount int) error {
 			if err != nil {
 				return err
 			}
+			wsDoneC := watchSubscriptionEvents(ctx, id, client, errc, quitC)
+			// doneC is nil, the error happened which is sent to errc channel, already
+			if wsDoneC == nil {
+				continue
+			}
+			rpcSubscriptionsWg.Add(1)
+			go func() {
+				<-wsDoneC
+				rpcSubscriptionsWg.Done()
+			}()
+
 			//watch for peers disconnecting
-			err = streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
+			wdDoneC, err := streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
 			if err != nil {
 				return err
 			}
-
-			//check for `SubscribeMsg` events to know when setup phase is complete
-			watchSubscriptionEvents(ctx, id, client, errc)
+			rpcSubscriptionsWg.Add(1)
+			go func() {
+				<-wdDoneC
+				rpcSubscriptionsWg.Done()
+			}()
 		}
 
 		//second iteration: start syncing and setup stream subscriptions
@@ -396,7 +413,7 @@ func runFileRetrievalTest(nodeCount int) error {
 		dpa := registries[id].dpa
 		//check all chunks
 		for i, hash := range conf.hashes {
-			reader := dpa.Retrieve(hash)
+			reader, _ := dpa.Retrieve(hash)
 			//check that we can read the file size and that it corresponds to the generated file size
 			if s, err := reader.Size(nil); err != nil || s != int64(len(randomFiles[i])) {
 				allSuccess = false
@@ -487,6 +504,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 	if err != nil {
 		return err
 	}
+	var rpcSubscriptionsWg sync.WaitGroup
 	//do cleanup after test is terminated
 	defer func() {
 		//shutdown the snapshot network
@@ -514,7 +532,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 	}
 
 	//needed for healthy call
-	ppmap = network.NewPeerPot(testMinProxBinSize, ids, conf.addrs)
+	ppmap = network.NewPeerPotMap(testMinProxBinSize, conf.addrs)
 
 	trigger := make(chan discover.NodeID)
 	//simulation action
@@ -528,7 +546,8 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 			for _, id := range ids {
 				r := registries[id]
 				//PeerPot for this node
-				pp := ppmap[id]
+				addr := common.Bytes2Hex(network.ToOverlayAddr(id.Bytes()))
+				pp := ppmap[addr]
 				//call Healthy RPC
 				h := r.delivery.overlay.Healthy(pp)
 				//print info
@@ -575,14 +594,29 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 			if err != nil {
 				return err
 			}
+
+			//check for `SubscribeMsg` events to know when setup phase is complete
+			wsDoneC := watchSubscriptionEvents(ctx, id, client, errc, quitC)
+			// doneC is nil, the error happened which is sent to errc channel, already
+			if wsDoneC == nil {
+				continue
+			}
+			rpcSubscriptionsWg.Add(1)
+			go func() {
+				<-wsDoneC
+				rpcSubscriptionsWg.Done()
+			}()
+
 			//watch for peers disconnecting
-			err = streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
+			wdDoneC, err := streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
 			if err != nil {
 				return err
 			}
-
-			//check for `SubscribeMsg` events to know when setup phase is complete
-			watchSubscriptionEvents(ctx, id, client, errc)
+			rpcSubscriptionsWg.Add(1)
+			go func() {
+				<-wdDoneC
+				rpcSubscriptionsWg.Done()
+			}()
 		}
 
 		//second iteration: start syncing and setup stream subscriptions
@@ -666,7 +700,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 		dpa := registries[id].dpa
 		//check all chunks
 		for _, chnk := range conf.hashes {
-			reader := dpa.Retrieve(chnk)
+			reader, _ := dpa.Retrieve(chnk)
 			//assuming that reading the Size of the chunk is enough to know we found it
 			if s, err := reader.Size(nil); err != nil || s != chunkSize {
 				allSuccess = false
@@ -723,12 +757,16 @@ func uploadFilesToNodes(nodes []*simulations.Node) ([]storage.Key, []string, err
 	//array holding the root hashes of the files
 	rootkeys := make([]storage.Key, nodeCnt)
 
+	var err error
 	//for every node, generate a file and upload
 	for i, n := range nodes {
 		id := n.ID()
 		dpa := registries[id].dpa
 		//generate a file
-		rfiles[i] = generateRandomFile()
+		rfiles[i], err = generateRandomFile()
+		if err != nil {
+			return nil, nil, err
+		}
 		//store it (upload it) on the dpa
 		rk, wait, err := dpa.Store(strings.NewReader(rfiles[i]), int64(len(rfiles[i])), false)
 		log.Debug("Uploaded random string file to node")
@@ -742,13 +780,15 @@ func uploadFilesToNodes(nodes []*simulations.Node) ([]storage.Key, []string, err
 }
 
 //generate a random file (string)
-func generateRandomFile() string {
+func generateRandomFile() (string, error) {
 	//generate a random file size between minFileSize and maxFileSize
 	fileSize := rand.Intn(maxFileSize-minFileSize) + minFileSize
 	log.Debug(fmt.Sprintf("Generated file with filesize %d kB", fileSize))
 	b := make([]byte, fileSize*1024)
-	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
+	_, err := crand.Read(b)
+	if err != nil {
+		log.Error("Error generating random file.", "err", err)
+		return "", err
 	}
-	return string(b)
+	return string(b), nil
 }
