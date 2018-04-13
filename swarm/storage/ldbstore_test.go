@@ -23,7 +23,6 @@ import (
 	"os"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -353,11 +352,6 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 
 	for i := 0; i < n; i++ {
 		ldb.Put(chunks[i])
-
-		if i%100 == 0 {
-			log.Info("sleeping 1 sec...")
-			time.Sleep(1 * time.Second)
-		}
 	}
 
 	// wait for all chunks to be stored before ending the test are cleaning up
@@ -366,8 +360,6 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	}
 
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
-
-	time.Sleep(5 * time.Second)
 
 	var missing int
 	for i := 0; i < n; i++ {
@@ -419,7 +411,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 		go ldb.Put(chunks[i])
 	}
 
-	// wait for all chunks to be stored before ending the test are cleaning up
+	// wait for all chunks to be stored before continuing
 	for i := 0; i < n; i++ {
 		<-chunks[i].dbStoredC
 	}
@@ -458,5 +450,81 @@ func TestLDBStoreAddRemove(t *testing.T) {
 				t.Fatal("expected to get the same data back, but got smth else")
 			}
 		}
+	}
+}
+
+// TestLDBStoreRemoveThenCollectGarbage tests that we can delete chunks and that we can trigger garbage collection
+func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
+	log.PrintOrigins(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+
+	capacity := 10
+
+	ldb, cleanup := newLDBStore(t)
+	ldb.setCapacity(uint64(capacity))
+
+	n := 7
+
+	chunks := []*Chunk{}
+	for i := 0; i < capacity; i++ {
+		c := NewRandomChunk(chunkSize)
+		chunks = append(chunks, c)
+		log.Info("generate random chunk", "idx", i, "chunk", c)
+	}
+
+	for i := 0; i < n; i++ {
+		ldb.Put(chunks[i])
+	}
+
+	// wait for all chunks to be stored before continuing
+	for i := 0; i < n; i++ {
+		<-chunks[i].dbStoredC
+	}
+
+	// delete all chunks
+	for i := 0; i < n; i++ {
+		key := chunks[i].Key
+		ikey := getIndexKey(key)
+
+		var indx dpaDBIndex
+		ldb.tryAccessIdx(ikey, &indx)
+
+		ldb.delete(indx.Idx, ikey, ldb.po(key))
+	}
+
+	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
+
+	cleanup()
+
+	ldb, cleanup = newLDBStore(t)
+	ldb.setCapacity(uint64(capacity))
+
+	n = 10
+
+	for i := 0; i < n; i++ {
+		ldb.Put(chunks[i])
+	}
+
+	// wait for all chunks to be stored before continuing
+	for i := 0; i < n; i++ {
+		<-chunks[i].dbStoredC
+	}
+
+	// expect for first chunk to be missing
+	idx := 0
+	ret, err := ldb.Get(chunks[idx].Key)
+	if err == nil || ret != nil {
+		t.Fatal("expected first chunk to be missing, but got no error")
+	}
+
+	// expect for last chunk to be present
+	idx = 9
+	ret, err = ldb.Get(chunks[idx].Key)
+	if err != nil {
+		t.Fatalf("expected no error, but got %s", err)
+	}
+
+	if !bytes.Equal(ret.SData, chunks[idx].SData) {
+		t.Fatal("expected to get the same data back, but got smth else")
 	}
 }
