@@ -31,6 +31,13 @@ import (
 
 // TestClientUploadDownloadRaw test uploading and downloading raw data to swarm
 func TestClientUploadDownloadRaw(t *testing.T) {
+	testClientUploadDownloadRaw(false, t)
+}
+func TestClientUploadDownloadRawEncrypted(t *testing.T) {
+	testClientUploadDownloadRaw(true, t)
+}
+
+func testClientUploadDownloadRaw(toEncrypt bool, t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t)
 	defer srv.Close()
 
@@ -38,15 +45,18 @@ func TestClientUploadDownloadRaw(t *testing.T) {
 
 	// upload some raw data
 	data := []byte("foo123")
-	hash, err := client.UploadRaw(bytes.NewReader(data), int64(len(data)))
+	hash, err := client.UploadRaw(bytes.NewReader(data), int64(len(data)), toEncrypt)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// check we can download the same data
-	res, err := client.DownloadRaw(hash)
+	res, isEncrypted, err := client.DownloadRaw(hash)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if isEncrypted != toEncrypt {
+		t.Fatalf("Expected encyption status %v got %v", toEncrypt, isEncrypted)
 	}
 	defer res.Close()
 	gotData, err := ioutil.ReadAll(res)
@@ -61,6 +71,14 @@ func TestClientUploadDownloadRaw(t *testing.T) {
 // TestClientUploadDownloadFiles test uploading and downloading files to swarm
 // manifests
 func TestClientUploadDownloadFiles(t *testing.T) {
+	testClientUploadDownloadFiles(false, t)
+}
+
+func TestClientUploadDownloadFilesEncrypted(t *testing.T) {
+	testClientUploadDownloadFiles(true, t)
+}
+
+func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t)
 	defer srv.Close()
 
@@ -74,7 +92,7 @@ func TestClientUploadDownloadFiles(t *testing.T) {
 				Size:        int64(len(data)),
 			},
 		}
-		hash, err := client.Upload(file, manifest)
+		hash, err := client.Upload(file, manifest, toEncrypt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -168,7 +186,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 	// upload the directory
 	client := NewClient(srv.URL)
 	defaultPath := filepath.Join(dir, testDirFiles[0])
-	hash, err := client.UploadDirectory(dir, defaultPath, "")
+	hash, err := client.UploadDirectory(dir, defaultPath, "", false)
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)
 	}
@@ -217,6 +235,14 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 
 // TestClientFileList tests listing files in a swarm manifest
 func TestClientFileList(t *testing.T) {
+	testClientFileList(false, t)
+}
+
+func TestClientFileListEncrypted(t *testing.T) {
+	testClientFileList(true, t)
+}
+
+func testClientFileList(toEncrypt bool, t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t)
 	defer srv.Close()
 
@@ -224,7 +250,7 @@ func TestClientFileList(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	client := NewClient(srv.URL)
-	hash, err := client.UploadDirectory(dir, "", "")
+	hash, err := client.UploadDirectory(dir, "", "", toEncrypt)
 	if err != nil {
 		t.Fatalf("error uploading directory: %s", err)
 	}

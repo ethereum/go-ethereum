@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sync"
 	"testing"
 	"time"
 
@@ -45,8 +46,11 @@ func TestSyncerSimulation(t *testing.T) {
 
 func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool, po uint8) {
 	defaultSkipCheck = skipCheck
+	createStoreFunc = createTestLocalStorageFromSim
+	registries = make(map[discover.NodeID]*TestRegistry)
 	toAddr = func(id discover.NodeID) *network.BzzAddr {
 		addr := network.NewAddrFromNodeID(id)
+		//hack to put addresses in same space
 		addr.OAddr[0] = byte(0)
 		return addr
 	}
@@ -66,7 +70,11 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 
 	// create simulation network with the config
 	sim, teardown, err := streamTesting.NewSimulation(conf)
-	defer teardown()
+	var rpcSubscriptionsWg sync.WaitGroup
+	defer func() {
+		rpcSubscriptionsWg.Wait()
+		teardown()
+	}()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -151,10 +159,15 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			id := sim.IDs[j]
 			err := sim.CallClient(id, func(client *rpc.Client) error {
 				// report disconnect events to the error channel cos peers should not disconnect
-				err := streamTesting.WatchDisconnections(id, client, errc, quitC)
+				doneC, err := streamTesting.WatchDisconnections(id, client, errc, quitC)
 				if err != nil {
 					return err
 				}
+				rpcSubscriptionsWg.Add(1)
+				go func() {
+					<-doneC
+					rpcSubscriptionsWg.Done()
+				}()
 				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 				defer cancel()
 				// start syncing, i.e., subscribe to upstream peers po 1 bin

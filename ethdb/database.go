@@ -91,9 +91,6 @@ func (db *LDBDatabase) Path() string {
 
 // Put puts the given key / value to the queue
 func (db *LDBDatabase) Put(key []byte, value []byte) error {
-	// Generate the data to write to disk, update the meter and write
-	//value = rle.Compress(value)
-
 	return db.db.Put(key, value, nil)
 }
 
@@ -103,18 +100,15 @@ func (db *LDBDatabase) Has(key []byte) (bool, error) {
 
 // Get returns the given key if it's present.
 func (db *LDBDatabase) Get(key []byte) ([]byte, error) {
-	// Retrieve the key and increment the miss counter if not found
 	dat, err := db.db.Get(key, nil)
 	if err != nil {
 		return nil, err
 	}
 	return dat, nil
-	//return rle.Decompress(dat)
 }
 
 // Delete deletes the key from the queue and database
 func (db *LDBDatabase) Delete(key []byte) error {
-	// Execute the actual operation
 	return db.db.Delete(key, nil)
 }
 

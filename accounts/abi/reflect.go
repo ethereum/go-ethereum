@@ -24,7 +24,7 @@ import (
 // indirect recursively dereferences the value until it either gets the value
 // or finds a big.Int
 func indirect(v reflect.Value) reflect.Value {
-	if v.Kind() == reflect.Ptr && v.Elem().Type() != derefbig_t {
+	if v.Kind() == reflect.Ptr && v.Elem().Type() != derefbigT {
 		return indirect(v.Elem())
 	}
 	return v
@@ -36,26 +36,26 @@ func reflectIntKindAndType(unsigned bool, size int) (reflect.Kind, reflect.Type)
 	switch size {
 	case 8:
 		if unsigned {
-			return reflect.Uint8, uint8_t
+			return reflect.Uint8, uint8T
 		}
-		return reflect.Int8, int8_t
+		return reflect.Int8, int8T
 	case 16:
 		if unsigned {
-			return reflect.Uint16, uint16_t
+			return reflect.Uint16, uint16T
 		}
-		return reflect.Int16, int16_t
+		return reflect.Int16, int16T
 	case 32:
 		if unsigned {
-			return reflect.Uint32, uint32_t
+			return reflect.Uint32, uint32T
 		}
-		return reflect.Int32, int32_t
+		return reflect.Int32, int32T
 	case 64:
 		if unsigned {
-			return reflect.Uint64, uint64_t
+			return reflect.Uint64, uint64T
 		}
-		return reflect.Int64, int64_t
+		return reflect.Int64, int64T
 	}
-	return reflect.Ptr, big_t
+	return reflect.Ptr, bigT
 }
 
 // mustArrayToBytesSlice creates a new byte slice with the exact same size as value

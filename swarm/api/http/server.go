@@ -124,9 +124,21 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.raw", "ruid", r.ruid)
 
 	postRawCount.Inc(1)
+
+	toEncrypt := false
+	if r.uri.Addr == "encrypt" {
+		toEncrypt = true
+	}
+
 	if r.uri.Path != "" {
 		postRawFail.Inc(1)
 		Respond(w, r, "raw POST request cannot contain a path", http.StatusBadRequest)
+		return
+	}
+
+	if r.uri.Addr != "" && r.uri.Addr != "encrypt" {
+		postRawFail.Inc(1)
+		Respond(w, r, "raw POST request addr can only be empty or \"encrypt\"", http.StatusBadRequest)
 		return
 	}
 
@@ -135,8 +147,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 		Respond(w, r, "missing Content-Length header in request", http.StatusBadRequest)
 		return
 	}
-
-	key, _, err := s.api.Store(r.Body, r.ContentLength)
+	key, _, err := s.api.Store(r.Body, r.ContentLength, toEncrypt)
 	if err != nil {
 		postRawFail.Inc(1)
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
@@ -166,8 +177,13 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		return
 	}
 
+	toEncrypt := false
+	if r.uri.Addr == "encrypt" {
+		toEncrypt = true
+	}
+
 	var key storage.Key
-	if r.uri.Addr != "" {
+	if r.uri.Addr != "" && r.uri.Addr != "encrypt" {
 		key, err = s.api.Resolve(r.uri)
 		if err != nil {
 			postFilesFail.Inc(1)
@@ -176,7 +192,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		}
 		log.Debug("resolved key", "ruid", r.ruid, "key", key)
 	} else {
-		key, err = s.api.NewManifest()
+		key, err = s.api.NewManifest(toEncrypt)
 		if err != nil {
 			postFilesFail.Inc(1)
 			Respond(w, r, err.Error(), http.StatusInternalServerError)
@@ -540,12 +556,14 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	}
 
 	// check the root chunk exists by retrieving the file's size
-	reader := s.api.Retrieve(key)
+	reader, isEncrypted := s.api.Retrieve(key)
 	if _, err := reader.Size(nil); err != nil {
 		getFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("root chunk not found %s: %s", key, err), http.StatusNotFound)
 		return
 	}
+
+	w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
 
 	switch {
 	case r.uri.Raw() || r.uri.DeprecatedRaw():
@@ -603,11 +621,12 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 		}
 
 		// retrieve the entry's key and size
-		reader := s.api.Retrieve(storage.Key(common.Hex2Bytes(entry.Hash)))
+		reader, isEncrypted := s.api.Retrieve(storage.Key(common.Hex2Bytes(entry.Hash)))
 		size, err := reader.Size(nil)
 		if err != nil {
 			return err
 		}
+		w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
 
 		// write a tar header for the entry
 		hdr := &tar.Header{
@@ -840,14 +859,18 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	req.uri = uri
 
 	log.Debug("parsed request path", "ruid", req.ruid, "method", req.Method, "uri", req.uri)
+	log.Debug("parsed request path", "uri.Addr", req.uri.Addr, "uri.path", req.uri.Path, "uri.Scheme", req.uri.Scheme)
 
 	switch r.Method {
 	case "POST":
 		if uri.Raw() || uri.DeprecatedRaw() {
+			log.Debug("handlePostRaw")
 			s.HandlePostRaw(w, req)
 		} else if uri.Resource() {
+			log.Debug("handlePostResource")
 			s.HandlePostResource(w, req)
 		} else {
+			log.Debug("handlePostFiles")
 			s.HandlePostFiles(w, req)
 		}
 

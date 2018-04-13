@@ -22,6 +22,7 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,13 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	streamTesting "github.com/ethereum/go-ethereum/swarm/network/stream/testing"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-)
-
-var (
-	deliveries map[discover.NodeID]*Delivery
-	stores     map[discover.NodeID]storage.ChunkStore
-	toAddr     func(discover.NodeID) *network.BzzAddr
-	peerCount  func(discover.NodeID) int
 )
 
 func TestStreamerRetrieveRequest(t *testing.T) {
@@ -314,6 +308,7 @@ func TestDeliveryFromNodes(t *testing.T) {
 func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool) {
 	defaultSkipCheck = skipCheck
 	toAddr = network.NewAddrFromNodeID
+	createStoreFunc = createTestLocalStorageFromSim
 	conf := &streamTesting.RunConfig{
 		Adapter:         *adapter,
 		NodeCount:       nodes,
@@ -324,15 +319,20 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	}
 
 	sim, teardown, err := streamTesting.NewSimulation(conf)
-	defer teardown()
+	var rpcSubscriptionsWg sync.WaitGroup
+	defer func() {
+		rpcSubscriptionsWg.Wait()
+		teardown()
+	}()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	stores = make(map[discover.NodeID]storage.ChunkStore)
-	deliveries = make(map[discover.NodeID]*Delivery)
 	for i, id := range sim.IDs {
 		stores[id] = sim.Stores[i]
 	}
+	registries = make(map[discover.NodeID]*TestRegistry)
+	deliveries = make(map[discover.NodeID]*Delivery)
 	peerCount = func(id discover.NodeID) int {
 		if sim.IDs[0] == id || sim.IDs[nodes-1] == id {
 			return 1
@@ -352,6 +352,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	errc := make(chan error, 1)
 	waitPeerErrC = make(chan error)
 	quitC := make(chan struct{})
+	defer close(quitC)
 
 	action := func(ctx context.Context) error {
 		// each node Subscribes to each other's swarmChunkServerStreamName
@@ -374,10 +375,15 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		for j := 0; j < nodes-1; j++ {
 			id := sim.IDs[j]
 			err := sim.CallClient(id, func(client *rpc.Client) error {
-				err := streamTesting.WatchDisconnections(id, client, errc, quitC)
+				doneC, err := streamTesting.WatchDisconnections(id, client, errc, quitC)
 				if err != nil {
 					return err
 				}
+				rpcSubscriptionsWg.Add(1)
+				go func() {
+					<-doneC
+					rpcSubscriptionsWg.Done()
+				}()
 				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 				defer cancel()
 				sid := sim.IDs[j+1]
@@ -480,6 +486,8 @@ func BenchmarkDeliveryFromNodesWithCheck(b *testing.B) {
 func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skipCheck bool) {
 	defaultSkipCheck = skipCheck
 	toAddr = network.NewAddrFromNodeID
+	createStoreFunc = createTestLocalStorageFromSim
+	registries = make(map[discover.NodeID]*TestRegistry)
 
 	timeout := 300 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -494,7 +502,11 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 		EnableMsgEvents: false,
 	}
 	sim, teardown, err := streamTesting.NewSimulation(conf)
-	defer teardown()
+	var rpcSubscriptionsWg sync.WaitGroup
+	defer func() {
+		rpcSubscriptionsWg.Wait()
+		teardown()
+	}()
 	if err != nil {
 		b.Fatal(err.Error())
 	}
@@ -544,10 +556,15 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 		for j := 0; j < nodes-1; j++ {
 			id := sim.IDs[j]
 			err = sim.CallClient(id, func(client *rpc.Client) error {
-				err := streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
+				doneC, err := streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
 				if err != nil {
 					return err
 				}
+				rpcSubscriptionsWg.Add(1)
+				go func() {
+					<-doneC
+					rpcSubscriptionsWg.Done()
+				}()
 				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 				defer cancel()
 				sid := sim.IDs[j+1] // the upstream peer's id
@@ -673,4 +690,8 @@ Loop:
 	if err != nil {
 		b.Fatalf("expected no error. got %v", err)
 	}
+}
+
+func createTestLocalStorageFromSim(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error) {
+	return stores[id], nil
 }

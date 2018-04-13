@@ -42,7 +42,9 @@ func manifest(paths ...string) (manifestReader storage.LazySectionReader) {
 
 func testGetEntry(t *testing.T, path, match string, multiple bool, paths ...string) *manifestTrie {
 	quitC := make(chan bool)
-	trie, err := readManifest(manifest(paths...), nil, nil, quitC)
+	dpa := storage.NewDPA(nil, storage.NewDPAParams())
+	ref := make([]byte, dpa.HashSize())
+	trie, err := readManifest(manifest(paths...), ref, dpa, false, quitC)
 	if err != nil {
 		t.Errorf("unexpected error making manifest: %v", err)
 	}
@@ -97,7 +99,9 @@ func TestGetEntry(t *testing.T) {
 func TestExactMatch(t *testing.T) {
 	quitC := make(chan bool)
 	mf := manifest("shouldBeExactMatch.css", "shouldBeExactMatch.css.map")
-	trie, err := readManifest(mf, nil, nil, quitC)
+	dpa := storage.NewDPA(nil, storage.NewDPAParams())
+	ref := make([]byte, dpa.HashSize())
+	trie, err := readManifest(mf, ref, dpa, false, quitC)
 	if err != nil {
 		t.Errorf("unexpected error making manifest: %v", err)
 	}
@@ -128,7 +132,9 @@ func TestAddFileWithManifestPath(t *testing.T) {
 	reader := &storage.LazyTestSectionReader{
 		SectionReader: io.NewSectionReader(bytes.NewReader(manifest), 0, int64(len(manifest))),
 	}
-	trie, err := readManifest(reader, nil, nil, nil)
+	dpa := storage.NewDPA(nil, storage.NewDPAParams())
+	ref := make([]byte, dpa.HashSize())
+	trie, err := readManifest(reader, ref, dpa, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

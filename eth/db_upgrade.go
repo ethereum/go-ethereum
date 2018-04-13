@@ -62,7 +62,7 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 			failed    error
 		)
 		for failed == nil && it.Next() {
-			// Skip any entries that don't look like old transaction meta entires (<hash>0x01)
+			// Skip any entries that don't look like old transaction meta entries (<hash>0x01)
 			key := it.Key()
 			if len(key) != common.HashLength+1 || key[common.HashLength] != 0x01 {
 				continue
@@ -86,7 +86,7 @@ func upgradeDeduplicateData(db ethdb.Database) func() error {
 				}
 			}
 			// Convert the old metadata to a new lookup entry, delete duplicate data
-			if failed = db.Put(append([]byte("l"), hash...), it.Value()); failed == nil { // Write the new looku entry
+			if failed = db.Put(append([]byte("l"), hash...), it.Value()); failed == nil { // Write the new lookup entry
 				if failed = db.Delete(hash); failed == nil { // Delete the duplicate transaction data
 					if failed = db.Delete(append([]byte("receipts-"), hash...)); failed == nil { // Delete the duplicate receipt data
 						if failed = db.Delete(key); failed != nil { // Delete the old transaction metadata

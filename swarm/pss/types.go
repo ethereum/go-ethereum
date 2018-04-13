@@ -20,6 +20,7 @@ const (
 var (
 	topicHashMutex = sync.Mutex{}
 	topicHashFunc  = storage.MakeHashFunc("SHA256")()
+	rawTopic       = Topic{}
 )
 
 type Topic whisper.TopicType
@@ -75,7 +76,13 @@ type PssMsg struct {
 
 // serializes the message for use in cache
 func (msg *PssMsg) serialize() []byte {
-	rlpdata, _ := rlp.EncodeToBytes(msg)
+	rlpdata, _ := rlp.EncodeToBytes(struct {
+		To      []byte
+		Payload *whisper.Envelope
+	}{
+		To:      msg.To,
+		Payload: msg.Payload,
+	})
 	return rlpdata
 }
 

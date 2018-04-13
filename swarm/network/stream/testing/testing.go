@@ -216,27 +216,47 @@ func (s *Simulation) Run(ctx context.Context, conf *RunConfig) (*simulations.Ste
 	return result, nil
 }
 
-func WatchDisconnections(id discover.NodeID, client *rpc.Client, errc chan error, quitC chan struct{}) error {
+// WatchDisconnections subscribes to admin peerEvents and sends peer event drop
+// errors to the errc channel. Channel quitC signals the termination of the event loop.
+// Returned doneC will be closed after the rpc subscription is unsubscribed,
+// signaling that simulations network is safe to shutdown.
+func WatchDisconnections(id discover.NodeID, client *rpc.Client, errc chan error, quitC chan struct{}) (doneC <-chan struct{}, err error) {
 	events := make(chan *p2p.PeerEvent)
 	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
 	if err != nil {
-		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
+		return nil, fmt.Errorf("error getting peer events for node %v: %s", id, err)
 	}
+	c := make(chan struct{})
 	go func() {
+		defer func() {
+			log.Trace("watch disconnections: unsubscribe", "id", id)
+			sub.Unsubscribe()
+			close(c)
+		}()
 		for {
 			select {
 			case <-quitC:
 				return
 			case e := <-events:
-				errc <- fmt.Errorf("peerEvent for node %v: %v", id, e)
+				if e.Type == p2p.PeerEventTypeDrop {
+					select {
+					case errc <- fmt.Errorf("peerEvent for node %v: %v", id, e):
+					case <-quitC:
+						return
+					}
+				}
 			case err := <-sub.Err():
 				if err != nil {
-					errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err)
+					select {
+					case errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err):
+					case <-quitC:
+						return
+					}
 				}
 			}
 		}
 	}()
-	return nil
+	return c, nil
 }
 
 func Trigger(d time.Duration, quitC chan struct{}, ids ...discover.NodeID) chan discover.NodeID {

@@ -47,7 +47,7 @@ var (
 
 	MaxForkAncestry  = 3 * params.EpochDuration // Maximum chain reorganisation
 	rttMinEstimate   = 2 * time.Second          // Minimum round-trip time to target for download requests
-	rttMaxEstimate   = 20 * time.Second         // Maximum rount-trip time to target for download requests
+	rttMaxEstimate   = 20 * time.Second         // Maximum round-trip time to target for download requests
 	rttMinConfidence = 0.1                      // Worse confidence factor in our estimated RTT value
 	ttlScaling       = 3                        // Constant scaling factor for RTT -> TTL conversion
 	ttlLimit         = time.Minute              // Maximum TTL allowance to prevent reaching crazy timeouts
@@ -884,7 +884,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 // immediately to the header processor to keep the rest of the pipeline full even
 // in the case of header stalls.
 //
-// The method returs the entire filled skeleton and also the number of headers
+// The method returns the entire filled skeleton and also the number of headers
 // already forwarded for processing.
 func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) ([]*types.Header, int, error) {
 	log.Debug("Filling up skeleton", "from", from)
@@ -1377,7 +1377,7 @@ func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 		pivot = height - uint64(fsMinFullBlocks)
 	}
 	// To cater for moving pivot points, track the pivot block and subsequently
-	// accumulated download results separatey.
+	// accumulated download results separately.
 	var (
 		oldPivot *fetchResult   // Locked in pivot block, might change eventually
 		oldTail  []*fetchResult // Downloaded content after the pivot
@@ -1615,7 +1615,7 @@ func (d *Downloader) qosReduceConfidence() {
 //
 // Note, the returned RTT is .9 of the actually estimated RTT. The reason is that
 // the downloader tries to adapt queries to the RTT, so multiple RTT values can
-// be adapted to, but smaller ones are preffered (stabler download stream).
+// be adapted to, but smaller ones are preferred (stabler download stream).
 func (d *Downloader) requestRTT() time.Duration {
 	return time.Duration(atomic.LoadUint64(&d.rttEstimate)) * 9 / 10
 }

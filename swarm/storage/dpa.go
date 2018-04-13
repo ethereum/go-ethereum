@@ -90,9 +90,12 @@ func NewDPA(store ChunkStore, params *DPAParams) *DPA {
 // FS-aware API and httpaccess
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
-func (self *DPA) Retrieve(key Key) LazySectionReader {
-	getter := NewHasherStore(self.ChunkStore, self.hashFunc, len(key) > self.hashFunc().Size())
-	return TreeJoin(key, getter, 0)
+// It returns a reader with the chunk data and whether the content was encrypted
+func (self *DPA) Retrieve(key Key) (reader LazySectionReader, isEncrypted bool) {
+	isEncrypted = len(key) > self.hashFunc().Size()
+	getter := NewHasherStore(self.ChunkStore, self.hashFunc, isEncrypted)
+	reader = TreeJoin(key, getter, 0)
+	return
 }
 
 // Public API. Main entry point for document storage directly. Used by the
@@ -100,4 +103,8 @@ func (self *DPA) Retrieve(key Key) LazySectionReader {
 func (self *DPA) Store(data io.Reader, size int64, toEncrypt bool) (key Key, wait func(), err error) {
 	putter := NewHasherStore(self.ChunkStore, self.hashFunc, toEncrypt)
 	return PyramidSplit(data, putter, putter)
+}
+
+func (self *DPA) HashSize() int {
+	return self.hashFunc().Size()
 }

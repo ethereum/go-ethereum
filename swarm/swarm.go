@@ -171,7 +171,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	// Pss = postal service over swarm (devp2p over bzz)
 	if self.config.PssEnabled {
 		pssparams := pss.NewPssParams(self.privateKey)
-		self.ps = pss.NewPss(to, self.dpa, pssparams)
+		self.ps = pss.NewPss(to, pssparams)
 		if pss.IsActiveHandshake {
 			pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 		}

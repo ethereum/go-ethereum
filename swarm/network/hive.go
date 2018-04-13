@@ -18,7 +18,6 @@ package network
 
 import (
 	"fmt"
-	"math/rand"
 	"sync"
 	"time"
 
@@ -71,7 +70,7 @@ func NewHiveParams() *HiveParams {
 		Discovery:             true,
 		PeersBroadcastSetSize: 3,
 		MaxPeersPerRequest:    5,
-		KeepAliveInterval:     1000 * time.Millisecond,
+		KeepAliveInterval:     500 * time.Millisecond,
 	}
 }
 
@@ -102,10 +101,12 @@ func NewHive(params *HiveParams, overlay Overlay, store state.Store) *Hive {
 // server is used to connect to a peer based on its NodeID or enode URL
 // these are called on the p2p.Server which runs on the node
 func (h *Hive) Start(server *p2p.Server) error {
-	log.Trace(fmt.Sprintf("%08x hive starting", h.BaseAddr()[:4]))
+	log.Info(fmt.Sprintf("%08x hive starting", h.BaseAddr()[:4]))
 	// if state store is specified, load peers to prepopulate the overlay address book
 	if h.Store != nil {
+		log.Info("detected an existing store. trying to load peers")
 		if err := h.loadPeers(); err != nil {
+			log.Error(fmt.Sprintf("%08x hive encoutered an error trying to load peers", h.BaseAddr()[:4]))
 			return err
 		}
 	}
@@ -123,7 +124,12 @@ func (h *Hive) Stop() error {
 	log.Info(fmt.Sprintf("%08x hive stopping, saving peers", h.BaseAddr()[:4]))
 	h.ticker.Stop()
 	if h.Store != nil {
-		return h.savePeers()
+		if err := h.savePeers(); err != nil {
+			return fmt.Errorf("could not save peers to persistence store: %v", err)
+		}
+		if err := h.Store.Close(); err != nil {
+			return fmt.Errorf("could not close file handle to persistence store: %v", err)
+		}
 	}
 	log.Info(fmt.Sprintf("%08x hive stopped, dropping peers", h.BaseAddr()[:4]))
 	h.EachConn(nil, 255, func(p OverlayConn, _ int, _ bool) bool {
@@ -139,8 +145,9 @@ func (h *Hive) Stop() error {
 // at each iteration, ask the overlay driver to suggest the most preferred peer to connect to
 // as well as advertises saturation depth if needed
 func (h *Hive) connect() {
-	time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
 	for range h.ticker.C {
+		log.Trace(fmt.Sprintf("%08x hive connect()", h.BaseAddr()[:4]))
+
 		addr, depth, changed := h.SuggestPeer()
 		if h.Discovery && changed {
 			NotifyDepth(uint8(depth), h)
@@ -203,14 +210,16 @@ func ToAddr(pa OverlayPeer) *BzzAddr {
 // loadPeers, savePeer implement persistence callback/
 func (h *Hive) loadPeers() error {
 	var as []*BzzAddr
-
 	err := h.Store.Get("peers", &as)
 	if err != nil {
 		if err == state.ErrNotFound {
+			log.Info(fmt.Sprintf("hive %08x: no persisted peers found", h.BaseAddr()[:4]))
 			return nil
 		}
 		return err
 	}
+	log.Info(fmt.Sprintf("hive %08x: peers loaded", h.BaseAddr()[:4]))
+
 	return h.Register(toOverlayAddrs(as...))
 }
 

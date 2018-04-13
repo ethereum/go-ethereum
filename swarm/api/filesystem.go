@@ -47,7 +47,7 @@ func NewFileSystem(api *Api) *FileSystem {
 // TODO: localpath should point to a manifest
 //
 // DEPRECATED: Use the HTTP API instead
-func (self *FileSystem) Upload(lpath, index string) (string, error) {
+func (self *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error) {
 	var list []*manifestTrieEntry
 	localpath, err := filepath.Abs(filepath.Clean(lpath))
 	if err != nil {
@@ -114,7 +114,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 				stat, _ := f.Stat()
 				var hash storage.Key
 				var wait func()
-				hash, wait, err = self.api.dpa.Store(f, stat.Size(), false)
+				hash, wait, err = self.api.dpa.Store(f, stat.Size(), toEncrypt)
 				if hash != nil {
 					list[i].Hash = hash.Hex()
 				}
@@ -164,7 +164,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 	err2 := trie.recalcAndStore()
 	var hs string
 	if err2 == nil {
-		hs = trie.hash.Hex()
+		hs = trie.ref.Hex()
 	}
 	awg.Wait()
 	return hs, err2
@@ -273,7 +273,7 @@ func retrieveToFile(quitC chan bool, dpa *storage.DPA, key storage.Key, path str
 	if err != nil {
 		return err
 	}
-	reader := dpa.Retrieve(key)
+	reader, _ := dpa.Retrieve(key)
 	writer := bufio.NewWriter(f)
 	size, err := reader.Size(quitC)
 	if err != nil {
