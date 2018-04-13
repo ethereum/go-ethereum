@@ -451,14 +451,11 @@ func (s *LDBStore) ReIndex() {
 }
 
 func (s *LDBStore) delete(idx uint64, idxKey []byte, po uint8) {
-	log.Trace("LDBStore delete()", "idx", idx, "idxKey", fmt.Sprintf("%x", idxKey), "po", po)
-
 	batch := new(leveldb.Batch)
 	batch.Delete(idxKey)
 	batch.Delete(getDataKey(idx, po))
 	dbStoreDeleteCounter.Inc(1)
 	s.entryCnt--
-	log.Trace("delete s.entryCnt--", "entryCnt", s.entryCnt)
 	s.bucketCnt[po]--
 	cntKey := make([]byte, 2)
 	cntKey[0] = keyDistanceCnt
@@ -528,7 +525,6 @@ func (s *LDBStore) doPut(chunk *Chunk, index *dpaDBIndex, po uint8) {
 	index.Idx = s.dataIdx
 	s.bucketCnt[po] = s.dataIdx
 	s.entryCnt++
-	log.Trace("doPut entryCnt++", "entryCnt", s.entryCnt)
 	s.dataIdx++
 
 	cntKey := make([]byte, 2)
@@ -553,7 +549,7 @@ func (s *LDBStore) writeBatches() {
 			log.Error(fmt.Sprintf("spawn batch write (%d entries): %v", b.Len(), err))
 		}
 		close(c)
-		if e >= s.capacity && int(float32(e-1)*gcArrayFreeRatio) > 0 {
+		if e >= s.capacity {
 			log.Trace(fmt.Sprintf("collecting garbage (%d chunks)", e))
 			s.collectGarbage(gcArrayFreeRatio)
 		}
