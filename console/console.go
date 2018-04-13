@@ -131,7 +131,6 @@ func (c *Console) init(preload []string) error {
 		return fmt.Errorf("web3 provider: %v", err)
 	}
 	// Load the supported APIs into the JavaScript runtime environment
-        // This is where the Zeroconf DNS bails
 	apis, err := c.client.SupportedModules()
 	if err != nil {
 		return fmt.Errorf("cannot create api client modules: %v", err)
