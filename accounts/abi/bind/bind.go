@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-etherfact library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package bind generates Ethereum contract Go bindings.
+// Package bind generates EtherFact contract Go bindings.
 //
 // Detailed usage document and tutorial available on the go-etherfact Wiki page:
 // https://github.com/EtherFact-Project/go-etherfact/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts
