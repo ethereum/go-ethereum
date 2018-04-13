@@ -290,7 +290,7 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 	for i := 0; i < n; i++ {
 		c := NewRandomChunk(chunkSize)
 		chunks = append(chunks, c)
-		log.Info("generate random chunk", "idx", i, "chunk", c)
+		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}
 
 	for i := 0; i < n; i++ {
@@ -395,7 +395,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 	for i := 0; i < n; i++ {
 		c := NewRandomChunk(chunkSize)
 		chunks = append(chunks, c)
-		log.Info("generate random chunk", "idx", i, "chunk", c)
+		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}
 
 	for i := 0; i < n; i++ {
@@ -457,7 +457,7 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	for i := 0; i < capacity; i++ {
 		c := NewRandomChunk(chunkSize)
 		chunks = append(chunks, c)
-		log.Info("generate random chunk", "idx", i, "chunk", c)
+		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}
 
 	for i := 0; i < n; i++ {
