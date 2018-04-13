@@ -40,7 +40,7 @@ type StoreParams struct {
 //create params with default values
 func NewDefaultStoreParams() (self *StoreParams) {
 	return &StoreParams{
-		DbCapacity:    defaultDbCapacity,
+		DbCapacity:    defaultLDBCapacity,
 		CacheCapacity: defaultCacheCapacity,
 	}
 }

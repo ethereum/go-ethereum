@@ -49,9 +49,9 @@ func newTestDbStore(mock bool) (*testDbStore, error) {
 		addr := common.HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")
 		mockStore := globalStore.NewNodeStore(addr)
 
-		db, err = NewMockDbStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, testPoFunc, mockStore)
+		db, err = NewMockDbStore(dir, MakeHashFunc(SHA3Hash), defaultLDBCapacity, testPoFunc, mockStore)
 	} else {
-		db, err = NewLDBStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, testPoFunc)
+		db, err = NewLDBStore(dir, MakeHashFunc(SHA3Hash), defaultLDBCapacity, testPoFunc)
 	}
 
 	return &testDbStore{db, dir}, err

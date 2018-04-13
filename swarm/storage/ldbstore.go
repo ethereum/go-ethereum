@@ -48,10 +48,8 @@ var (
 )
 
 const (
-	defaultDbCapacity = 5000000
-	defaultRadius     = 0 // not yet used
-
 	gcArrayFreeRatio = 0.1
+	maxGCitems       = 5000 // max number of items to be gc'd per call to collectGarbage()
 )
 
 var (
@@ -81,9 +79,6 @@ type LDBStore struct {
 	dataIdx   uint64 // similar to entryCnt, but we only increment it
 	capacity  uint64
 	bucketCnt []uint64
-
-	gcPos      []byte
-	gcStartPos []byte
 
 	hashfunc SwarmHasher
 	po       func(Key) uint8
@@ -138,7 +133,6 @@ func NewLDBStore(path string, hash SwarmHasher, capacity uint64, po func(Key) ui
 	data, _ := s.db.Get(keyEntryCnt)
 	s.entryCnt = BytesToU64(data)
 	s.entryCnt++
-	log.Trace("NewLDBStore s.entryCnt++", "entryCnt", s.entryCnt)
 	data, _ = s.db.Get(keyAccessCnt)
 	s.accessCnt = BytesToU64(data)
 	s.accessCnt++
@@ -146,12 +140,6 @@ func NewLDBStore(path string, hash SwarmHasher, capacity uint64, po func(Key) ui
 	s.dataIdx = BytesToU64(data)
 	s.dataIdx++
 
-	s.gcStartPos = make([]byte, 1)
-	s.gcStartPos[0] = keyIndex
-	s.gcPos, _ = s.db.Get(keyGCPos)
-	if s.gcPos == nil {
-		s.gcPos = s.gcStartPos
-	}
 	return s, nil
 }
 
@@ -254,14 +242,18 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 	garbage := []*gcItem{}
 	gcnt := 0
 
-	for ok := it.Seek([]byte{keyIndex}); ok && (gcnt < 5000) && (uint64(gcnt) < s.entryCnt); ok = it.Next() {
-		key := it.Key()
-		val := it.Value()
-		if (key == nil) || (key[0] != keyIndex) {
+	for ok := it.Seek([]byte{keyIndex}); ok && (gcnt < maxGCitems) && (uint64(gcnt) < s.entryCnt); ok = it.Next() {
+		itkey := it.Key()
+
+		if (itkey == nil) || (itkey[0] != keyIndex) {
 			break
 		}
 
-		log.Trace("iterator", "key", fmt.Sprintf("%x", key), "value", fmt.Sprintf("%x", val))
+		// it.Key() contents change on next call to it.Next(), so we must copy it
+		key := make([]byte, len(it.Key()))
+		copy(key, it.Key())
+
+		val := it.Value()
 
 		var index dpaDBIndex
 
@@ -269,17 +261,12 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 		decodeIndex(val, &index)
 		po := s.po(hash)
 
-		kkey := make([]byte, len(key))
-		copy(kkey, key)
-
 		gci := &gcItem{
-			idxKey: kkey,
+			idxKey: key,
 			idx:    index.Idx,
-			value:  index.Access,
+			value:  index.Access, // the smaller, the more likely to be gc'd. see sort comparator below.
 			po:     po,
 		}
-
-		log.Trace("gci.idxKey", "gcnt", gcnt, "idxKey", fmt.Sprintf("%x", gci.idxKey), "idx", gci.idx, "gci.value", gci.value)
 
 		garbage = append(garbage, gci)
 		gcnt++
@@ -287,17 +274,10 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 
 	sort.Slice(garbage[:gcnt], func(i, j int) bool { return garbage[i].value < garbage[j].value })
 
-	for k := 0; k < gcnt; k++ {
-		log.Trace("gcArray[]", "k", k, "idx", garbage[k].idx, "idxKey", fmt.Sprintf("%x", garbage[k].idxKey), "value", garbage[k].value)
-	}
-
 	cutoff := int(float32(gcnt) * ratio)
-	log.Trace("cutoff", "cut", cutoff, "gcnt", gcnt)
 	for i := 0; i < cutoff; i++ {
 		s.delete(garbage[i].idx, garbage[i].idxKey, garbage[i].po)
 	}
-
-	//s.db.Put(keyGCPos, s.gcPos)
 }
 
 // Export writes all chunks from the store to a tar archive, returning the

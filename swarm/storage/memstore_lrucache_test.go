@@ -34,7 +34,7 @@ func newLDBStore(t *testing.T) (*LDBStore, func()) {
 	}
 	log.Trace("memstore.tempdir", "dir", dir)
 
-	db, err := NewLDBStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, testPoFunc)
+	db, err := NewLDBStore(dir, MakeHashFunc(SHA3Hash), defaultLDBCapacity, testPoFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
