@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
-	colorable "github.com/mattn/go-colorable"
 
 	ldberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
@@ -276,11 +275,8 @@ func BenchmarkMockDbStoreGet_8_5k(b *testing.B) {
 }
 
 // TestLDBStoreWithoutCollectGarbage tests that we can put a number of random chunks in the LevelDB store, and
-// retrieve them, provided we don't hit the garbage collection and we are at least 20-30% below the specified capacity
+// retrieve them, provided we don't hit the garbage collection
 func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
-
 	chunkSize := uint64(4096)
 	capacity := 50
 	n := 10
@@ -332,9 +328,6 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 // TestLDBStoreCollectGarbage tests that we can put more chunks than LevelDB's capacity, and
 // retrieve only some of them, because garbage collection must have cleared some of them
 func TestLDBStoreCollectGarbage(t *testing.T) {
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
-
 	chunkSize := uint64(4096)
 	capacity := 500
 	n := 2000
@@ -380,20 +373,14 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	}
 
 	if missing < n-capacity {
-		log.Info("ldbstore", "total", n, "missing", missing)
-		log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 		t.Fatalf("gc failure: expected to miss %v chunks, but only %v are actually missing", n-capacity, missing)
 	}
 
-	log.Info("ldbstore", "total", n, "missing", missing)
-	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
+	log.Info("ldbstore", "total", n, "missing", missing, "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 }
 
 // TestLDBStoreAddRemove tests that we can put and then delete a given chunk
 func TestLDBStoreAddRemove(t *testing.T) {
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
-
 	ldb, cleanup := newLDBStore(t)
 	ldb.setCapacity(200)
 	defer cleanup()
@@ -455,9 +442,6 @@ func TestLDBStoreAddRemove(t *testing.T) {
 
 // TestLDBStoreRemoveThenCollectGarbage tests that we can delete chunks and that we can trigger garbage collection
 func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
-
 	capacity := 10
 
 	ldb, cleanup := newLDBStore(t)
@@ -510,14 +494,14 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 		<-chunks[i].dbStoredC
 	}
 
-	// expect for first chunk to be missing
+	// expect for first chunk to be missing, because it has the smallest access value
 	idx := 0
 	ret, err := ldb.Get(chunks[idx].Key)
 	if err == nil || ret != nil {
 		t.Fatal("expected first chunk to be missing, but got no error")
 	}
 
-	// expect for last chunk to be present
+	// expect for last chunk to be present, as it has the largest access value
 	idx = 9
 	ret, err = ldb.Get(chunks[idx].Key)
 	if err != nil {
