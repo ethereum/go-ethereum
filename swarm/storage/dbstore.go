@@ -88,7 +88,6 @@ func NewDbStore(path string, hash SwarmHasher, capacity uint64, radius int) (s *
 	s = new(DbStore)
 
 	s.hashfunc = hash
-
 	s.db, err = NewLDBDatabase(path)
 	if err != nil {
 		return
