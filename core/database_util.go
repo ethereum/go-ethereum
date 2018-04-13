@@ -455,6 +455,7 @@ func WriteBlock(db ethdb.Putter, block *types.Block) error {
 	if err := WriteHeader(db, block.Header()); err != nil {
 		return err
 	}
+
 	return nil
 }
 

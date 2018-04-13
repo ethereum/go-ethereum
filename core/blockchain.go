@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/shyftdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -876,8 +877,7 @@ func (bc *BlockChain) WriteBlockWithoutState(block *types.Block, td *big.Int) (e
 
 // WriteBlockWithState writes the block and all associated state to the database.
 func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) (status WriteStatus, err error) {
-    fmt.Println("WriteBlockWithState function. bc.blockexplorerDB")
-    fmt.Println(bc.blockExplorerDb)
+    fmt.Println("+++++++++++++++++++Blockchain.go+++++++++++++++++writeBlockWithState()")
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
@@ -901,6 +901,11 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	// Write other block data using a batch.
 	batch := bc.db.NewBatch()
 	if err := WriteBlock(batch, block); err != nil {
+		return NonStatTy, err
+	}
+
+	explorerBatch := bc.blockExplorerDb.NewBatch()
+	if err := shyftdb.WriteBlock(explorerBatch, block); err != nil {
 		return NonStatTy, err
 	}
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
