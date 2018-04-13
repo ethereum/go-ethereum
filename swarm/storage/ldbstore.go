@@ -185,7 +185,6 @@ func BytesToU64(data []byte) uint64 {
 	if len(data) < 8 {
 		return 0
 	}
-	//return binary.LittleEndian.Uint64(data)
 	return binary.BigEndian.Uint64(data)
 }
 
@@ -236,7 +235,6 @@ func encodeData(chunk *Chunk) []byte {
 func decodeIndex(data []byte, index *dpaDBIndex) error {
 	dec := rlp.NewStream(bytes.NewReader(data), 0)
 	return dec.Decode(index)
-
 }
 
 func decodeData(data []byte, chunk *Chunk) {
@@ -247,43 +245,6 @@ func decodeData(data []byte, chunk *Chunk) {
 func decodeOldData(data []byte, chunk *Chunk) {
 	chunk.SData = data
 	chunk.Size = int64(binary.BigEndian.Uint64(data[0:8]))
-}
-
-func gcListPartition(list []*gcItem, left int, right int, pivotIndex int) int {
-	pivotValue := list[pivotIndex].value
-	dd := list[pivotIndex]
-	list[pivotIndex] = list[right]
-	list[right] = dd
-	storeIndex := left
-	for i := left; i < right; i++ {
-		if list[i].value < pivotValue {
-			dd = list[storeIndex]
-			list[storeIndex] = list[i]
-			list[i] = dd
-			storeIndex++
-		}
-	}
-	dd = list[storeIndex]
-	list[storeIndex] = list[right]
-	list[right] = dd
-	return storeIndex
-}
-
-func gcListSelect(list []*gcItem, left int, right int, n int) int {
-	if left == right {
-		return left
-	}
-	pivotIndex := (left + right) / 2
-	pivotIndex = gcListPartition(list, left, right, pivotIndex)
-	if n == pivotIndex {
-		return n
-	} else {
-		if n < pivotIndex {
-			return gcListSelect(list, left, pivotIndex-1, n)
-		} else {
-			return gcListSelect(list, pivotIndex+1, right, n)
-		}
-	}
 }
 
 func (s *LDBStore) collectGarbage(ratio float32) {
