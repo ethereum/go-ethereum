@@ -296,7 +296,7 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 		go ldb.Put(chunks[i])
 	}
 
-	// wait for all chunks to be stored before ending the test are cleaning up
+	// wait for all chunks to be stored
 	for i := 0; i < n; i++ {
 		<-chunks[i].dbStoredC
 	}
@@ -347,7 +347,7 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 		ldb.Put(chunks[i])
 	}
 
-	// wait for all chunks to be stored before ending the test are cleaning up
+	// wait for all chunks to be stored
 	for i := 0; i < n; i++ {
 		<-chunks[i].dbStoredC
 	}
