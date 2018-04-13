@@ -90,6 +90,8 @@ type BlockChain struct {
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
 	db     ethdb.Database // Low level persistent database to store final content in
+	blockExplorerDb int
+
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
 
@@ -133,7 +135,8 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, blockExplorerDb ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
+    fmt.Printf("+++++++++++++++++core/blockchain.GO+++++++++++++++++++++++++NewBlockChain()")
 	if cacheConfig == nil {
 		cacheConfig = &CacheConfig{
 			TrieNodeLimit: 256 * 1024 * 1024,
@@ -150,6 +153,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		chainConfig:  chainConfig,
 		cacheConfig:  cacheConfig,
 		db:           db,
+		blockExplorerDb: 101,
 		triegc:       prque.New(),
 		stateCache:   state.NewDatabase(db),
 		quit:         make(chan struct{}),
@@ -872,6 +876,8 @@ func (bc *BlockChain) WriteBlockWithoutState(block *types.Block, td *big.Int) (e
 
 // WriteBlockWithState writes the block and all associated state to the database.
 func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) (status WriteStatus, err error) {
+    fmt.Println("WriteBlockWithState function. bc.blockexplorerDB")
+    fmt.Println(bc.blockExplorerDb)
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
