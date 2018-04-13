@@ -140,7 +140,7 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 		s.codecsMu.Unlock()
 	}()
 
-//	ctx, cancel := context.WithCancel(context.Background())
+	//	ctx, cancel := context.WithCancel(context.Background())
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -216,7 +216,7 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 // stopped. In either case the codec is closed.
 func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	defer codec.Close()
-	s.serveRequest(codec, false, options,context.Background())
+	s.serveRequest(codec, false, options, context.Background())
 }
 
 // ServeSingleRequest reads and processes a single RPC request from the given codec. It will not
