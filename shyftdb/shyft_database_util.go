@@ -7,6 +7,5 @@ import (
 )
 
 func WriteBlock(db ethdb.Putter, block *types.Block) error {
-	fmt.Println(block)
 	return nil
 }
