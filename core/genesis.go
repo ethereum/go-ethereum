@@ -327,8 +327,12 @@ func DefaultCallistoMainnetGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.CallistoMainnetChainConfig,
 		ExtraData:  hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   4700000,
-		Difficulty: big.NewInt(4000000),
+		GasLimit:   10400000,
+		Difficulty: big.NewInt(524288),
+		Timestamp:  1519622213,
+		Nonce:		0,
+		Coinbase:   common.HexToAddress("0xc3F70b10CE5EC4aA47ce44Eb0B7900A883cd45Dd"),
+		Mixhash:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		Alloc:      decodePrealloc(callistoMainnetAllocData),
 	}
 }

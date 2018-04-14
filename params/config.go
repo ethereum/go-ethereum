@@ -45,20 +45,6 @@ var (
 		Ethash:              new(EthashConfig),
 	}
 
-	// CallistoMainnetChainConfig contains the chain parameters to run a node on the Callisto Main network.
-	CallistoMainnetChainConfig = &ChainConfig{
-		ChainId:        big.NewInt(104729),
-		HomesteadBlock: big.NewInt(1),
-		DAOForkBlock:   big.NewInt(0),
-		DAOForkSupport: false,
-		EIP150Block:    big.NewInt(2),
-		EIP150Hash:     common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
-		EIP155Block:    big.NewInt(3),
-		EIP158Block:    big.NewInt(3),
-		ByzantiumBlock: big.NewInt(4),
-		CallistoBlock:  big.NewInt(1),
-	}
-
 	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
 	TestnetChainConfig = &ChainConfig{
 		ChainId:             big.NewInt(3),
@@ -74,11 +60,30 @@ var (
 		Ethash:              new(EthashConfig),
 	}
 
-	// CallistoTestnetChainConfig contains the chain parameters to run a node on the Callisto test network.
+	cloMinerReward, _ = new(big.Int).SetString("420000000000000000000", 10)
+	cloTreasuryReward, _ = new(big.Int).SetString("120000000000000000000", 10)
+	cloStakeReward, _ = new(big.Int).SetString("60000000000000000000", 10)
 
-	testMinerReward, _ = new(big.Int).SetString("420000000000000000000", 10)
-	testTreasuryReward, _ = new(big.Int).SetString("120000000000000000000", 10)
-	testStakeReward, _ = new(big.Int).SetString("60000000000000000000", 10)
+	// CallistoMainnetChainConfig contains the chain parameters to run a node on the Callisto Main network.
+	CallistoMainnetChainConfig = &ChainConfig{
+		ChainId:        big.NewInt(820),
+		HomesteadBlock:          big.NewInt(0),
+		DAOForkBlock:            nil,
+		DAOForkSupport:          false,
+		EIP150Block:             big.NewInt(0),
+		EIP150Hash:              common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		EIP155Block:             big.NewInt(10),
+		EIP158Block:             big.NewInt(10),
+		ByzantiumBlock:          big.NewInt(20),
+		CallistoBlock:           big.NewInt(0),
+		CallistoMinerReward:  	 cloMinerReward,
+		CallistoTreasuryAddress: common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"),
+		CallistoTreasuryReward:  cloTreasuryReward,
+		CallistoStakeAddress:    common.HexToAddress("0x3c06f218Ce6dD8E2c535a8925A2eDF81674984D9"),
+		CallistoStakeReward:	 cloStakeReward,
+
+		Ethash: new(EthashConfig),
+	}
 
 	CallistoTestnetChainConfig = &ChainConfig{
 		ChainId:                 big.NewInt(7919),
@@ -91,11 +96,11 @@ var (
 		EIP158Block:             big.NewInt(10),
 		ByzantiumBlock:          big.NewInt(20),
 		CallistoBlock:           big.NewInt(0),
-		CallistoMinerReward:  	 testMinerReward,
+		CallistoMinerReward:  	 cloMinerReward,
 		CallistoTreasuryAddress: common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"),
-		CallistoTreasuryReward:  testTreasuryReward,
+		CallistoTreasuryReward:  cloTreasuryReward,
 		CallistoStakeAddress:    common.HexToAddress("0x3c06f218Ce6dD8E2c535a8925A2eDF81674984D9"),
-		CallistoStakeReward:	 testStakeReward,
+		CallistoStakeReward:	 cloStakeReward,
 
 		Ethash: new(EthashConfig),
 	}
