@@ -530,7 +530,9 @@ func returnRetData(rdata []types.ReturnData) []types.ReturnData {
 		return []types.ReturnData{}
 	} else {
 		for _, r := range rdata {
-			r.Data = []byte{}
+			if r.Data == nil {
+				r.Data = []byte{}
+			}
 		}
 	}
 	return rdata
