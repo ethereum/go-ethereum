@@ -46,3 +46,4 @@ profile.cov
 
 **/yarn-error.log
 tests/testdata
+tests/testdata
