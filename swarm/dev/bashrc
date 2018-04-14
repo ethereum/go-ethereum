@@ -9,7 +9,7 @@ cat <<WELCOME
 
 Welcome to the swarm development environment.
 
-- Run 'make' to build the swarm, geth and bootnode binaries
+- Run 'make' to build the swarm, getf and bootnode binaries
 - Run 'make test' to run the swarm unit tests
 - Run 'make cluster' to start a swarm cluster
 - Run 'exit' to exit the development environment

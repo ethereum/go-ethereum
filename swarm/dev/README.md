@@ -11,7 +11,7 @@ at a bash prompt inside the `swarm/dev` directory.
 
 ### Build binaries
 
-Run `make` to build the `swarm`, `geth` and `bootnode` binaries into the
+Run `make` to build the `swarm`, `getf` and `bootnode` binaries into the
 `swarm/dev/bin` directory.
 
 ### Boot a cluster

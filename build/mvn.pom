@@ -5,7 +5,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>org.ethereum</groupId>
-  <artifactId>geth</artifactId>
+  <artifactId>getf</artifactId>
   <version>{{.Version}}</version>
   <packaging>aar</packaging>
 

@@ -29,7 +29,7 @@ main() {
   local pid_dir="${base_dir}/pids"
 
   stop_swarm_nodes
-  stop_node "geth"
+  stop_node "getf"
   stop_node "bootnode"
   delete_network
 }

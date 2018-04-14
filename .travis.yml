@@ -63,7 +63,7 @@ matrix:
             - dput
             - fakeroot
       script:
-        - go run build/ci.go debsrc -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>" -upload ppa:ethereum/ethereum
+        - go run build/ci.go debsrc -signer "Go Ethereum Linux Builder <getf-ci@ethereum.org>" -upload ppa:ethereum/ethereum
 
     # This builder does the Linux Azure uploads
     - os: linux

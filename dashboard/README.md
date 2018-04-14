@@ -1,6 +1,6 @@
 ## Go Ethereum Dashboard
 
-The dashboard is a data visualizer integrated into geth, intended to collect and visualize useful information of an Ethereum node. It consists of two parts:
+The dashboard is a data visualizer integrated into getf, intended to collect and visualize useful information of an Ethereum node. It consists of two parts:
 
 * The client visualizes the collected data.
 * The server collects the data, and updates the clients.
@@ -18,7 +18,7 @@ $ (cd dashboard/assets && yarn install && yarn flow)
 Normally the dashboard assets are bundled into Geth via `go-bindata` to avoid external dependencies. Rebuilding Geth after each UI modification however is not feasible from a developer perspective. Instead, we can run `yarn dev` to watch for file system changes and refresh the browser automatically.
 
 ```
-$ geth --dashboard --vmodule=dashboard=5
+$ getf --dashboard --vmodule=dashboard=5
 $ (cd dashboard/assets && yarn dev)
 ```
 
