@@ -12,19 +12,19 @@ type Prque struct {
 }
 
 // Creates a new priority queue.
-func New() *Prque {
-	return &Prque{newSstack()}
+func New(compare compareFn) *Prque {
+	return &Prque{newSstack(compare)}
 }
 
 // Pushes a value with a given priority into the queue, expanding if necessary.
-func (p *Prque) Push(i item) {
+func (p *Prque) Push(i interface{}) {
 	heap.Push(p.cont, i)
 }
 
 // Pops the value with the greates priority off the stack and returns it.
 // Currently no shrinking is done.
-func (p *Prque) Pop() item {
-	return heap.Pop(p.cont).(item)
+func (p *Prque) Pop() interface{} {
+	return heap.Pop(p.cont)
 }
 
 // Checks whether the priority queue is empty.
@@ -39,5 +39,5 @@ func (p *Prque) Size() int {
 
 // Clears the contents of the priority queue.
 func (p *Prque) Reset() {
-	*p = *New()
+	*p = *New(p.cont.compare)
 }

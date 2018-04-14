@@ -50,8 +50,8 @@ type rcQueueItem struct {
 //
 // Note: intValue is interpreted as mod 2^64, the difference between the highest
 // and lowest value at any moment is always less than 2^63.
-func (rcq rcQueueItem) Before(j interface{}) bool {
-	return (j.(rcQueueItem).intValue - rcq.intValue) > 0
+func rcQueueCompare(i, j interface{}) bool {
+	return (j.(rcQueueItem).intValue - i.(rcQueueItem).intValue) > 0
 }
 
 // Note: valid is called under client manager mutex lock
@@ -66,8 +66,8 @@ type servingQueueItem struct {
 }
 
 // Before implements prque.item
-func (sq servingQueueItem) Before(j interface{}) bool {
-	return sq.priority > j.(servingQueueItem).priority
+func servingQueueCompare(i, j interface{}) bool {
+	return i.(servingQueueItem).priority > j.(servingQueueItem).priority
 }
 
 // ClientManager controls the bandwidth assigned to the clients of a server.
@@ -105,8 +105,8 @@ func NewClientManager(maxParallelReqs int, targetParallelReqs float64, clock mcl
 		clock:        clock,
 		nodes:        make(map[*ClientNode]struct{}),
 		child:        child,
-		servingQueue: prque.New(),
-		rcQueue:      prque.New(),
+		servingQueue: prque.New(servingQueueCompare),
+		rcQueue:      prque.New(rcQueueCompare),
 
 		maxParallelReqs:    maxParallelReqs,
 		targetParallelReqs: targetParallelReqs,

@@ -5,28 +5,28 @@ package prque
 // The size of a block of data
 const blockSize = 4096
 
-// A prioritized item in the sorted stack.
-type item interface {
-	Before(interface{}) bool
-}
+// returns true if a comes before b
+type compareFn func(a, b interface{}) bool
 
 // Internal sortable stack data structure. Implements the Push and Pop ops for
 // the stack (heap) functionality and the Len, Less and Swap methods for the
 // sortability requirements of the heaps.
 type sstack struct {
+	compare  compareFn
 	size     int
 	capacity int
 	offset   int
 
-	blocks [][]item
-	active []item
+	blocks [][]interface{}
+	active []interface{}
 }
 
 // Creates a new, empty stack.
-func newSstack() *sstack {
+func newSstack(compare compareFn) *sstack {
 	result := new(sstack)
-	result.active = make([]item, blockSize)
-	result.blocks = [][]item{result.active}
+	result.compare = compare
+	result.active = make([]interface{}, blockSize)
+	result.blocks = [][]interface{}{result.active}
 	result.capacity = blockSize
 	return result
 }
@@ -35,7 +35,7 @@ func newSstack() *sstack {
 // heap.Interface.
 func (s *sstack) Push(data interface{}) {
 	if s.size == s.capacity {
-		s.active = make([]item, blockSize)
+		s.active = make([]interface{}, blockSize)
 		s.blocks = append(s.blocks, s.active)
 		s.capacity += blockSize
 		s.offset = 0
@@ -43,7 +43,7 @@ func (s *sstack) Push(data interface{}) {
 		s.active = s.blocks[s.size/blockSize]
 		s.offset = 0
 	}
-	s.active[s.offset] = data.(item)
+	s.active[s.offset] = data
 	s.offset++
 	s.size++
 }
@@ -69,7 +69,7 @@ func (s *sstack) Len() int {
 // Compares the priority of two elements of the stack (higher is first).
 // Required by sort.Interface.
 func (s *sstack) Less(i, j int) bool {
-	return (s.blocks[i/blockSize][i%blockSize].Before(s.blocks[j/blockSize][j%blockSize]))
+	return s.compare(s.blocks[i/blockSize][i%blockSize], s.blocks[j/blockSize][j%blockSize])
 }
 
 // Swaps two elements in the stack. Required by sort.Interface.
@@ -80,5 +80,5 @@ func (s *sstack) Swap(i, j int) {
 
 // Resets the stack, effectively clearing its contents.
 func (s *sstack) Reset() {
-	*s = *newSstack()
+	*s = *newSstack(s.compare)
 }
