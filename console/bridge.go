@@ -105,9 +105,37 @@ func (b *bridge) OpenWallet(call otto.FunctionCall) (response otto.Value) {
 		return val
 	}
 	// Wallet open failed, report error unless it's a PIN entry
-	if !strings.HasSuffix(err.Error(), usbwallet.ErrTrezorPINNeeded.Error()) {
+	if strings.HasSuffix(err.Error(), usbwallet.ErrTrezorPINNeeded.Error()) {
+		val, err = b.readPinAndReopenWallet(call)
+		if err == nil {
+			return val
+		}
+	}
+	// Check if the user needs to input a passphrase
+	if !strings.HasSuffix(err.Error(), usbwallet.ErrTrezorPassphraseNeeded.Error()) {
 		throwJSException(err.Error())
 	}
+	val, err = b.readPassphraseAndReopenWallet(call)
+	if err != nil {
+		throwJSException(err.Error())
+	}
+	return val
+}
+
+func (b *bridge) readPassphraseAndReopenWallet(call otto.FunctionCall) (otto.Value, error) {
+	var passwd otto.Value
+	wallet := call.Argument(0)
+	if input, err := b.prompter.PromptPassword("Please enter your passphrase: "); err != nil {
+		throwJSException(err.Error())
+	} else {
+		passwd, _ = otto.ToValue(input)
+	}
+	return call.Otto.Call("jeth.openWallet", nil, wallet, passwd)
+}
+
+func (b *bridge) readPinAndReopenWallet(call otto.FunctionCall) (otto.Value, error) {
+	var passwd otto.Value
+	wallet := call.Argument(0)
 	// Trezor PIN matrix input requested, display the matrix to the user and fetch the data
 	fmt.Fprintf(b.printer, "Look at the device for number positions\n\n")
 	fmt.Fprintf(b.printer, "7 | 8 | 9\n")
@@ -121,10 +149,7 @@ func (b *bridge) OpenWallet(call otto.FunctionCall) (response otto.Value) {
 	} else {
 		passwd, _ = otto.ToValue(input)
 	}
-	if val, err = call.Otto.Call("jeth.openWallet", nil, wallet, passwd); err != nil {
-		throwJSException(err.Error())
-	}
-	return val
+	return call.Otto.Call("jeth.openWallet", nil, wallet, passwd)
 }
 
 // UnlockAccount is a wrapper around the personal.unlockAccount RPC method that
