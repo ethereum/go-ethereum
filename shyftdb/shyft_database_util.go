@@ -1,7 +1,6 @@
 package shyftdb
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/core/types"
 )
