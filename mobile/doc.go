@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-etherfact library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package geth contains the simplified mobile APIs to go-etherfact.
+// Package getf contains the simplified mobile APIs to go-etherfact.
 //
 // The scope of this package is *not* to allow writing a custom Ethereum client
 // with pieces plucked from go-etherfact, rather to allow writing native dapps on
@@ -58,4 +58,4 @@
 // Note, a panic *cannot* cross over language boundaries, instead will result in
 // an undebuggable SEGFAULT in the process. For error handling only ever use error
 // returns, which may be the only or the second return.
-package geth
+package getf

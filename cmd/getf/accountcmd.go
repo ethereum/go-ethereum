@@ -36,7 +36,7 @@ var (
 		ArgsUsage: "",
 		Category:  "ACCOUNT COMMANDS",
 		Description: `
-    geth wallet import /path/to/my/presale.wallet
+    getf wallet import /path/to/my/presale.wallet
 
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
@@ -56,7 +56,7 @@ passwordfile as argument containing the wallet password in plaintext.`,
 					utils.LightKDFFlag,
 				},
 				Description: `
-	geth wallet [options] /path/to/my/presale.wallet
+	getf wallet [options] /path/to/my/presale.wallet
 
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
@@ -112,7 +112,7 @@ Print a short summary of all accounts`,
 					utils.LightKDFFlag,
 				},
 				Description: `
-    geth account new
+    getf account new
 
 Creates a new account and prints the address.
 
@@ -137,7 +137,7 @@ password to file or expose in any other way.
 					utils.LightKDFFlag,
 				},
 				Description: `
-    geth account update <address>
+    getf account update <address>
 
 Update an existing account.
 
@@ -149,7 +149,7 @@ format to the newest format or change the password for an account.
 
 For non-interactive use the passphrase can be specified with the --password flag:
 
-    geth account update [options] <address>
+    getf account update [options] <address>
 
 Since only one password can be given, only format update can be performed,
 changing your password is only possible interactively.
@@ -167,7 +167,7 @@ changing your password is only possible interactively.
 				},
 				ArgsUsage: "<keyFile>",
 				Description: `
-    geth account import <keyfile>
+    getf account import <keyfile>
 
 Imports an unencrypted private key from <keyfile> and creates a new account.
 Prints the address.
@@ -180,7 +180,7 @@ You must remember this passphrase to unlock your account in the future.
 
 For non-interactive use the passphrase can be specified with the -password flag:
 
-    geth account import [options] <keyfile>
+    getf account import [options] <keyfile>
 
 Note:
 As you can directly copy your encrypted accounts to another ethereum instance,

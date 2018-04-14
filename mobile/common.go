@@ -16,7 +16,7 @@
 
 // Contains all the wrappers from the common package.
 
-package geth
+package getf
 
 import (
 	"encoding/hex"

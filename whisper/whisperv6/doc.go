@@ -41,7 +41,7 @@ import (
 const (
 	ProtocolVersion    = uint64(6) // Protocol version number
 	ProtocolVersionStr = "6.0"     // The same, as a string
-	ProtocolName       = "shh"     // Nickname of the protocol in geth
+	ProtocolName       = "shh"     // Nickname of the protocol in getf
 
 	// whisper protocol message codes, according to EIP-627
 	statusCode           = 0   // used by whisper protocol

@@ -16,7 +16,7 @@
 
 // Contains all the wrappers from the go-etherfact root package.
 
-package geth
+package getf
 
 import (
 	"errors"

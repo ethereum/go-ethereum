@@ -49,7 +49,7 @@ type ContractCaller interface {
 	CodeAt(ctx context.Context, contract common.Address, blockNumber *big.Int) ([]byte, error)
 	// ContractCall executes an EtherFact contract call with the specified data as the
 	// input.
-	CallContract(ctx context.Context, call etherfact.CallMsg, blockNumber *big.Int) ([]byte, error)
+	CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error)
 }
 
 // PendingContractCaller defines methods to perform contract calls on the pending state.
@@ -59,7 +59,7 @@ type PendingContractCaller interface {
 	// PendingCodeAt returns the code of the given account in the pending state.
 	PendingCodeAt(ctx context.Context, contract common.Address) ([]byte, error)
 	// PendingCallContract executes an EtherFact contract call against the pending state.
-	PendingCallContract(ctx context.Context, call etherfact.CallMsg) ([]byte, error)
+	PendingCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error)
 }
 
 // ContractTransactor defines the methods needed to allow operating with contract
@@ -79,7 +79,7 @@ type ContractTransactor interface {
 	// There is no guarantee that this is the true gas limit requirement as other
 	// transactions may be added or removed by miners, but it should provide a basis
 	// for setting a reasonable default.
-	EstimateGas(ctx context.Context, call etherfact.CallMsg) (gas uint64, err error)
+	EstimateGas(ctx context.Context, call ethereum.CallMsg) (gas uint64, err error)
 	// SendTransaction injects the transaction into the pending pool for execution.
 	SendTransaction(ctx context.Context, tx *types.Transaction) error
 }
@@ -91,11 +91,11 @@ type ContractFilterer interface {
 	// returning all the results in one batch.
 	//
 	// TODO(karalabe): Deprecate when the subscription one can return past data too.
-	FilterLogs(ctx context.Context, query etherfact.FilterQuery) ([]types.Log, error)
+	FilterLogs(ctx context.Context, query ethereum.FilterQuery) ([]types.Log, error)
 
 	// SubscribeFilterLogs creates a background log filtering operation, returning
 	// a subscription immediately, which can be used to stream the found events.
-	SubscribeFilterLogs(ctx context.Context, query etherfact.FilterQuery, ch chan<- types.Log) (etherfact.Subscription, error)
+	SubscribeFilterLogs(ctx context.Context, query ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error)
 }
 
 // DeployBackend wraps the operations needed by WaitMined and WaitDeployed.

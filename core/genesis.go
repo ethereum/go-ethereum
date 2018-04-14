@@ -313,7 +313,6 @@ func DefaultGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.MainnetChainConfig,
 		Nonce:      0xC261220,
-		ExtraData:  hexutil.MustDecode("Sửa đổi sau khi hoàn thành"),
 		GasLimit:   5000,
 		Difficulty: big.NewInt(17179869184),
 		Alloc:      decodePrealloc(mainnetAllocData),
@@ -344,7 +343,7 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 	}
 }
 
-// DeveloperGenesisBlock returns the 'geth --dev' genesis block. Note, this must
+// DeveloperGenesisBlock returns the 'getf --dev' genesis block. Note, this must
 // be seeded with the
 func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	// Override the default period to the user requested one

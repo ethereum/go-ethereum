@@ -116,7 +116,7 @@ func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context) {
 	//at this point, all vars should be set in the Config
 	//get the account for the provided swarm account
 	prvkey := getAccount(config.BzzAccount, ctx, stack)
-	//set the resolved config path (geth --datadir)
+	//set the resolved config path (getf --datadir)
 	config.Path = stack.InstanceDir()
 	//finally, initialize the configuration
 	config.Init(prvkey)

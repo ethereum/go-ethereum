@@ -116,11 +116,11 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 	} else {
 		// Force chain initialization
 		args := []string{"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none", "--ipcdisable", "--datadir", datadir}
-		geth := runGeth(t, append(args, []string{"--exec", "2+2", "console"}...)...)
-		geth.WaitExit()
+		getf := runGeth(t, append(args, []string{"--exec", "2+2", "console"}...)...)
+		getf.WaitExit()
 	}
 	// Retrieve the DAO config flag from the database
-	path := filepath.Join(datadir, "geth", "chaindata")
+	path := filepath.Join(datadir, "getf", "chaindata")
 	db, err := ethdb.NewLDBDatabase(path, 0, 0)
 	if err != nil {
 		t.Fatalf("test %d: failed to open test database: %v", test, err)
