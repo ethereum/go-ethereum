@@ -41,7 +41,7 @@ import (
 type LesServer struct {
 	config          *eth.Config
 	protocolManager *ProtocolManager
-	fcManager       *flowcontrol.ClientManager // nil if our node is client only
+	fcManager       *flowcontrol.ClientManager
 	fcCostStats     *requestCostStats
 	defParams       *flowcontrol.ServerParams
 	lesTopics       []discv5.Topic
@@ -105,8 +105,30 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		mpr = 4
 	}
 	srv.fcManager = flowcontrol.NewClientManager(mpr, tpr, &mclock.MonotonicClock{}, nil)
+	pm.blockProcLoop(srv.fcManager)
 	srv.fcCostStats = newCostStats(eth.ChainDb())
 	return srv, nil
+}
+
+func (pm *ProtocolManager) blockProcLoop(cm *flowcontrol.ClientManager) {
+	pm.wg.Add(1)
+	procFeedback := make(chan bool, 10)
+	pm.blockchain.(*core.BlockChain).SetProcFeedback(procFeedback)
+	go func() {
+		for {
+			select {
+			case processing := <-procFeedback:
+				if processing {
+					cm.SetMode(flowcontrol.CmBlockProcessing)
+				} else {
+					cm.SetMode(flowcontrol.CmNormal)
+				}
+			case <-pm.quitSync:
+				pm.wg.Done()
+				return
+			}
+		}
+	}()
 }
 
 func (s *LesServer) Protocols() []p2p.Protocol {

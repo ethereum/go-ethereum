@@ -25,9 +25,9 @@ import (
 )
 
 const (
-	cmDisabled        = iota // client manager is disabled, no requests are accepted
-	cmNormal                 // normal operation, maximum available bandwidth can be allocated
-	cmBlockProcessing        // requests are accepted but the buffers are only recharged with the guaranteed minimum rate
+	CmDisabled        = iota // client manager is disabled, no requests are accepted
+	CmNormal                 // normal operation, maximum available bandwidth can be allocated
+	CmBlockProcessing        // requests are accepted but the buffers are only recharged with the guaranteed minimum rate
 )
 
 // cmNodeFields are ClientNode fields used by the client manager
@@ -111,7 +111,7 @@ func NewClientManager(maxParallelReqs int, targetParallelReqs float64, clock mcl
 		maxParallelReqs:    maxParallelReqs,
 		targetParallelReqs: targetParallelReqs,
 	}
-	cm.SetMode(cmNormal)
+	cm.SetMode(CmNormal)
 	return cm
 }
 
@@ -127,8 +127,8 @@ func (cm *ClientManager) SetMode(newMode int) {
 	}
 	cm.updateRecharge(cm.clock.Now())
 
-	enabled := cm.mode != cmDisabled
-	newEnabled := cm.mode != cmDisabled
+	enabled := cm.mode != CmDisabled
+	newEnabled := cm.mode != CmDisabled
 	if !enabled && newEnabled && cm.enabledCh != nil {
 		close(cm.enabledCh)
 		cm.enabledCh = nil
@@ -138,15 +138,15 @@ func (cm *ClientManager) SetMode(newMode int) {
 	}
 
 	switch newMode {
-	case cmDisabled:
+	case CmDisabled:
 		cm.totalRecharge = 0
 		cm.bufCorrEnabled = false
 		cm.forceMinRecharge = false
-	case cmNormal:
+	case CmNormal:
 		cm.totalRecharge = cm.targetParallelReqs * 1000000
 		cm.bufCorrEnabled = true
 		cm.forceMinRecharge = false
-	case cmBlockProcessing:
+	case CmBlockProcessing:
 		cm.totalRecharge = 0
 		cm.bufCorrEnabled = false
 		cm.forceMinRecharge = true
@@ -158,7 +158,7 @@ func (cm *ClientManager) SetMode(newMode int) {
 		if cm.parallelReqs == 0 {
 			cm.child.SetMode(newMode)
 		} else {
-			cm.child.SetMode(cmDisabled)
+			cm.child.SetMode(CmDisabled)
 		}
 	}
 }
@@ -167,9 +167,9 @@ func (cm *ClientManager) setParallelReqs(p int, time mclock.AbsTime) {
 	if p == cm.parallelReqs {
 		return
 	}
-	if cm.child != nil && cm.mode != cmDisabled {
+	if cm.child != nil && cm.mode != CmDisabled {
 		if cm.parallelReqs == 0 {
-			cm.child.SetMode(cmDisabled)
+			cm.child.SetMode(CmDisabled)
 		}
 		if p == 0 {
 			cm.child.SetMode(cm.mode)
