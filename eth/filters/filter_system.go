@@ -296,7 +296,7 @@ func (es *EventSystem) SubscribeReturnData(retCh chan *types.ReturnData) *Subscr
 		id:        rpc.NewID(),
 		typ:       ReturnDataSubscription,
 		created:   time.Now(),
-		retdata:   retCh,
+		retData:   retCh,
 		installed: make(chan struct{}),
 		err:       make(chan error),
 	}
@@ -343,7 +343,7 @@ func (es *EventSystem) broadcast(filters filterIndex, ev interface{}) {
 		}
 	case *core.TransactionEvent:
 		for _, f := range filters[ReturnDataSubscription] {
-			f.retdata <- &e.RetData
+			f.retData <- e.RetData
 		}
 	case core.ChainEvent:
 		for _, f := range filters[BlocksSubscription] {
