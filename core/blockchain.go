@@ -908,7 +908,6 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if err := shyftdb.WriteBlock(bc.blockExplorerDb, block); err != nil {
 		return NonStatTy, err
 	}
-	shyftdb.GetBlock(bc.blockExplorerDb, block)
 
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
