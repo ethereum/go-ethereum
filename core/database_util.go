@@ -21,8 +21,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math/big"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -447,10 +447,16 @@ func WriteTd(db ethdb.Putter, hash common.Hash, number uint64, td *big.Int) erro
 
 // WriteBlock serializes a block into the database, header and body separately.
 func WriteBlock(db ethdb.Putter, block *types.Block) error {
-	fmt.Println("+++++++++++++++++++++++++++")
-	fmt.Println(block.Transactions())
-	fmt.Println("+++++++++++++++++++++++++++")
 	// Store the body first to retain database consistency
+	fmt.Println("\t\t ~~~~~BLOCK~~~~~")
+	fmt.Println(block.Transactions())
+	if block.Transactions().Len() > 0 {
+		for _, tx := range block.Transactions() {
+			fmt.Println(tx.Hash())
+			fmt.Println("TX HASH")
+			fmt.Println(tx.To().Hex())
+		}
+	}
 	if err := WriteBody(db, block.Hash(), block.NumberU64(), block.Body()); err != nil {
 		return err
 	}
@@ -466,6 +472,7 @@ func WriteBlock(db ethdb.Putter, block *types.Block) error {
 // as a single receipt slice. This is used during chain reorganisations for
 // rescheduling dropped transactions.
 func WriteBlockReceipts(db ethdb.Putter, hash common.Hash, number uint64, receipts types.Receipts) error {
+
 	// Convert the receipts into their storage form and serialize them
 	storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
 	for i, receipt := range receipts {
@@ -477,6 +484,7 @@ func WriteBlockReceipts(db ethdb.Putter, hash common.Hash, number uint64, receip
 	}
 	// Store the flattened receipt slice
 	key := append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+
 	if err := db.Put(key, bytes); err != nil {
 		log.Crit("Failed to store block receipts", "err", err)
 	}
