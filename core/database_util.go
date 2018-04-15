@@ -447,14 +447,6 @@ func WriteTd(db ethdb.Putter, hash common.Hash, number uint64, td *big.Int) erro
 
 // WriteBlock serializes a block into the database, header and body separately.
 func WriteBlock(db ethdb.Putter, block *types.Block) error {
-	// Store the body first to retain database consistency
-	fmt.Println("\t\t ~~~~~BLOCK~~~~~")
-	fmt.Println(block.Transactions())
-	if block.Transactions().Len() > 0 {
-		for _, tx := range block.Transactions() {
-			fmt.Println(tx.To().Hex())
-		}
-	}
 	if err := WriteBody(db, block.Hash(), block.NumberU64(), block.Body()); err != nil {
 		return err
 	}
