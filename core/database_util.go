@@ -452,6 +452,8 @@ func WriteBlock(db ethdb.Putter, block *types.Block) error {
 	fmt.Println(block.Transactions())
 	if block.Transactions().Len() > 0 {
 		for _, tx := range block.Transactions() {
+			fmt.Println(tx.Hash())
+			fmt.Println("TX HASH")
 			fmt.Println(tx.To().Hex())
 		}
 	}
