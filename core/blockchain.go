@@ -904,14 +904,8 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if err := WriteBlock(batch, block); err != nil {
 		return NonStatTy, err
 	}
-<<<<<<< HEAD
 	// @NOTE:SHYFT - Write block data for block explorer
-	explorerBatch := bc.blockExplorerDb.NewBatch()
-	if err := shyftdb.WriteBlock(explorerBatch, block); err != nil {
-=======
-
 	if err := shyftdb.WriteBlock(bc.blockExplorerDb, block); err != nil {
->>>>>>> f776e85... change shyftdb to point to a plain leveldb object and directoryr
 		return NonStatTy, err
 	}
 	shyftdb.GetBlock(bc.blockExplorerDb, block)
