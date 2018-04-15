@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -137,7 +138,7 @@ func testRCL() RequestCostList {
 // newTestProtocolManager creates a new protocol manager for testing purposes,
 // with the given number of blocks already known, and potential notification
 // channels for different events.
-func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *core.BlockGen), peers *peerSet, odr *LesOdr, db ethdb.Database) (*ProtocolManager, error) {
+func newTestProtocolManager(lightSync bool, blocks int, processSections uint64, generator func(int, *core.BlockGen), peers *peerSet, odr *LesOdr, db ethdb.Database) (*ProtocolManager, error) {
 	var (
 		evmux  = new(event.TypeMux)
 		engine = ethash.NewFaker()
@@ -170,6 +171,18 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		if _, err := blockchain.InsertChain(gchain); err != nil {
 			panic(err)
 		}
+
+		if processSections > 0 {
+			for {
+				cs, _, _ := chtIndexer.Sections()
+				bs, _, _ := bloomIndexer.Sections()
+				if cs >= processSections && bs >= processSections {
+					break
+				}
+				time.Sleep(time.Millisecond * 10)
+			}
+		}
+
 		chain = blockchain
 	}
 
@@ -204,8 +217,8 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 // with the given number of blocks already known, and potential notification
 // channels for different events. In case of an error, the constructor force-
 // fails the test.
-func newTestProtocolManagerMust(t *testing.T, lightSync bool, blocks int, generator func(int, *core.BlockGen), peers *peerSet, odr *LesOdr, db ethdb.Database) *ProtocolManager {
-	pm, err := newTestProtocolManager(lightSync, blocks, generator, peers, odr, db)
+func newTestProtocolManagerMust(t *testing.T, lightSync bool, blocks int, processSections uint64, generator func(int, *core.BlockGen), peers *peerSet, odr *LesOdr, db ethdb.Database) *ProtocolManager {
+	pm, err := newTestProtocolManager(lightSync, blocks, processSections, generator, peers, odr, db)
 	if err != nil {
 		t.Fatalf("Failed to create protocol manager: %v", err)
 	}
