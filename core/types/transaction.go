@@ -94,6 +94,8 @@ func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit 
 	if len(data) > 0 {
 		data = common.CopyBytes(data)
 	}
+	fmt.Println("DASas")
+	fmt.Println(to)
 	d := txdata{
 		AccountNonce: nonce,
 		Recipient:    to,

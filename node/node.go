@@ -642,6 +642,7 @@ func (n *Node) EventMux() *event.TypeMux {
 // previous can be found) from within the node's instance directory. If the node is
 // ephemeral, a memory database is returned.
 func (n *Node) OpenDatabase(name string, cache, handles int) (ethdb.Database, error) {
+	fmt.Println("DSAhhysagdhkajsndjgasuygdvkhasbdjhs")
 	if n.config.DataDir == "" {
 		return ethdb.NewMemDatabase()
 	}
