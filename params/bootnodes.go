@@ -68,6 +68,14 @@ var SocialBootnodes = []string{
 	"enode://851f14c5cc86cbc0a81acfcbe5dd99ad5c823435357219df736932c5f89ad4318f6973a553857a32d97a71793f5a35c062d46320be282aa0a80b06b9c6b624e4@13.125.232.71:30303",
 }
 
+// CallistoBootnodes are the enode URLs of the P2P bootstrap nodes running on
+// the Callisto network.
+var CallistoBootnodes = []string{
+	"enode://ab0d9fe81f23653c3217303d3a4bc035be908b05f8b12d6f155ab4598d7760cfea1e009e414771279c9ffc3499950283afaabe099a5329c5a6013f57d77de0a6@104.236.96.118:30303",
+	"enode://9e2d9dc2639e02893aa17c80e6ba8e8803fd3166083b622a841fc852161112720281514436f7605c89041d5efa1738215185c4c4024ff812b0f500c403cc0ab1@206.189.47.198:30303",
+	"enode://149ba679e8851c3e0d030e0dc0336984b97c83ef649e68ec113dcf266449364cc1ec8ee27950f71b00c2182ef504894fa7bff19f6741978ced67e9e4b6536d2a@206.189.45.31:30303",
+}
+
 // TestnetBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // Ropsten test network.
 var TestnetBootnodes = []string{
