@@ -26,6 +26,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	
+	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -91,7 +93,7 @@ type BlockChain struct {
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
 	db     ethdb.Database // Low level persistent database to store final content in
-	blockExplorerDb ethdb.Database
+	blockExplorerDb *leveldb.DB
 
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
@@ -136,7 +138,8 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, blockExplorerDb ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, blockExplorerDb *leveldb.DB, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
+    fmt.Printf("+++++++++++++++++core/blockchain.GO+++++++++++++++++++++++++NewBlockChain()")
 	if cacheConfig == nil {
 		cacheConfig = &CacheConfig{
 			TrieNodeLimit: 256 * 1024 * 1024,
@@ -901,11 +904,18 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if err := WriteBlock(batch, block); err != nil {
 		return NonStatTy, err
 	}
+<<<<<<< HEAD
 	// @NOTE:SHYFT - Write block data for block explorer
 	explorerBatch := bc.blockExplorerDb.NewBatch()
 	if err := shyftdb.WriteBlock(explorerBatch, block); err != nil {
+=======
+
+	if err := shyftdb.WriteBlock(bc.blockExplorerDb, block); err != nil {
+>>>>>>> f776e85... change shyftdb to point to a plain leveldb object and directoryr
 		return NonStatTy, err
 	}
+	shyftdb.GetBlock(bc.blockExplorerDb, block)
+
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
 		return NonStatTy, err
