@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-
+	logger "log"
 	"github.com/gorilla/mux"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/ethereum/go-ethereum/shyftdb"
 )
 
 // GetAllTransactions gets txs
@@ -55,13 +57,20 @@ func GetBalances(w http.ResponseWriter, r *http.Request) {
 
 // GetBlocksMined get blocks mined
 func GetBlocksMined(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	address := vars["address"]
-
+	blockExplorerDb, err := leveldb.OpenFile("./shyftData/geth/blockExplorerDb/", &opt.Options{
+		ErrorIfMissing: true,
+		ReadOnly: true,
+	})
+	if err != nil {
+		logger.Print(err)
+		return
+	}
+	blocks := shyftdb.GetAllBlocks(blockExplorerDb)
+	
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	fmt.Fprintln(w, "Get Blocks Mined", address)
+	fmt.Fprintln(w, "Get Blocks Mined", blocks)
 }
 
 // GetTransactions gets txs
