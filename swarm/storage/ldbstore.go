@@ -563,7 +563,7 @@ func (s *LDBStore) writeBatches() {
 		}
 		close(c)
 		if e >= s.capacity {
-			log.Trace(fmt.Sprintf("collecting garbage (%d chunks)", e))
+			log.Info("collecting garbage", "entryCnt", e, "capacity", s.capacity)
 			s.collectGarbage(gcArrayFreeRatio)
 		}
 		s.lock.Unlock()
@@ -694,6 +694,7 @@ func (s *LDBStore) setCapacity(c uint64) {
 			ratio = 1
 		}
 		for s.entryCnt > c {
+			log.Info("collecting garbage (set.capacity)", "entryCnt", s.entryCnt, "capacity", c)
 			s.collectGarbage(ratio)
 		}
 	}
