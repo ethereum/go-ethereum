@@ -235,3 +235,5 @@ func (b *testChainIndexBackend) Commit() error {
 	}
 	return nil
 }
+
+func (b *testChainIndexBackend) Closing() {}

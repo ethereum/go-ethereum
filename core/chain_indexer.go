@@ -45,6 +45,17 @@ type ChainIndexerBackend interface {
 
 	// Commit finalizes the section metadata and stores it into the database.
 	Commit() error
+
+	// Closing signals the backend about the indexer shutting down. After Closing
+	// is called the backend should not block waiting for any external events and
+	// may return with an error if it cannot finish the current operation. If there
+	// are no blocking operations and result is guaranteed in a limited time then
+	// Closing can be ignored.
+	//
+	// Note: Closing may be called during any phase of section processing or also
+	// when no processing is happening at all. It applies to all current and
+	// subsequent blocking operations.
+	Closing()
 }
 
 // ChainIndexerChain interface is used for connecting the indexer to a blockchain
@@ -137,6 +148,8 @@ func (c *ChainIndexer) Start(chain ChainIndexerChain) {
 // that might have occurred internally.
 func (c *ChainIndexer) Close() error {
 	var errs []error
+
+	c.backend.Closing()
 
 	// Tear down the primary update loop
 	errc := make(chan error)

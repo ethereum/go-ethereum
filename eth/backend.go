@@ -130,7 +130,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		gasPrice:       config.GasPrice,
 		etherbase:      config.Etherbase,
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
-		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks),
+		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks, bloomConfirms),
 	}
 
 	log.Info("Initialising Ethereum protocol", "versions", ProtocolVersions, "network", config.NetworkId)

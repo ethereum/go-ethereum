@@ -67,8 +67,8 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 		protocolManager:  pm,
 		quitSync:         quitSync,
 		lesTopics:        lesTopics,
-		chtIndexer:       light.NewChtIndexer(eth.ChainDb(), false),
-		bloomTrieIndexer: light.NewBloomTrieIndexer(eth.ChainDb(), false),
+		chtIndexer:       light.NewChtIndexer(eth.ChainDb(), false, nil),
+		bloomTrieIndexer: light.NewBloomTrieIndexer(eth.ChainDb(), false, nil),
 	}
 	logger := log.New()
 

@@ -95,29 +95,35 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	quitSync := make(chan struct{})
 
 	leth := &LightEthereum{
-		config:           config,
-		chainConfig:      chainConfig,
-		chainDb:          chainDb,
-		eventMux:         ctx.EventMux,
-		peers:            peers,
-		reqDist:          newRequestDistributor(peers, quitSync),
-		accountManager:   ctx.AccountManager,
-		engine:           eth.CreateConsensusEngine(ctx, chainConfig, &config.Ethash, nil, chainDb),
-		shutdownChan:     make(chan bool),
-		networkId:        config.NetworkId,
-		bloomRequests:    make(chan chan *bloombits.Retrieval),
-		bloomIndexer:     eth.NewBloomIndexer(chainDb, light.BloomTrieFrequency),
-		chtIndexer:       light.NewChtIndexer(chainDb, true),
-		bloomTrieIndexer: light.NewBloomTrieIndexer(chainDb, true),
+		config:         config,
+		chainConfig:    chainConfig,
+		chainDb:        chainDb,
+		eventMux:       ctx.EventMux,
+		peers:          peers,
+		reqDist:        newRequestDistributor(peers, quitSync),
+		accountManager: ctx.AccountManager,
+		engine:         eth.CreateConsensusEngine(ctx, chainConfig, &config.Ethash, nil, chainDb),
+		shutdownChan:   make(chan bool),
+		networkId:      config.NetworkId,
+		bloomRequests:  make(chan chan *bloombits.Retrieval),
+		bloomIndexer:   eth.NewBloomIndexer(chainDb, light.BloomTrieFrequency, light.HelperTrieConfirmations),
 	}
 
 	leth.relay = NewLesTxRelay(peers, leth.reqDist)
 	leth.serverPool = newServerPool(chainDb, quitSync, &leth.wg)
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool)
-	leth.odr = NewLesOdr(chainDb, leth.chtIndexer, leth.bloomTrieIndexer, leth.bloomIndexer, leth.retriever)
+	leth.odr = NewLesOdr(chainDb, leth.retriever)
+	leth.chtIndexer = light.NewChtIndexer(chainDb, true, leth.odr)
+	leth.bloomTrieIndexer = light.NewBloomTrieIndexer(chainDb, true, leth.odr)
+	leth.odr.SetIndexers(leth.chtIndexer, leth.bloomTrieIndexer, leth.bloomIndexer)
+	// Note: NewLightChain adds the trusted checkpoint so it needs an ODR with
+	// indexers already set but not started yet
 	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine); err != nil {
 		return nil, err
 	}
+	// Note: AddChildIndexer starts the update process for the child
+	leth.bloomIndexer.AddChildIndexer(leth.bloomTrieIndexer)
+	leth.chtIndexer.Start(leth.blockchain)
 	leth.bloomIndexer.Start(leth.blockchain)
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
@@ -241,9 +247,6 @@ func (s *LightEthereum) Stop() error {
 	}
 	if s.chtIndexer != nil {
 		s.chtIndexer.Close()
-	}
-	if s.bloomTrieIndexer != nil {
-		s.bloomTrieIndexer.Close()
 	}
 	s.blockchain.Stop()
 	s.protocolManager.Stop()

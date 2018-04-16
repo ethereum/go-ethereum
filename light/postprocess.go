@@ -17,8 +17,10 @@
 package light
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -119,15 +121,17 @@ func StoreChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root common
 
 // ChtIndexerBackend implements core.ChainIndexerBackend
 type ChtIndexerBackend struct {
-	diskdb               ethdb.Database
+	diskdb, trieTable    ethdb.Database
+	odr                  OdrBackend
 	triedb               *trie.Database
 	section, sectionSize uint64
 	lastHash             common.Hash
 	trie                 *trie.Trie
+	quit                 chan struct{}
 }
 
 // NewBloomTrieIndexer creates a BloomTrie chain indexer
-func NewChtIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer {
+func NewChtIndexer(db ethdb.Database, clientMode bool, odr OdrBackend) *core.ChainIndexer {
 	var sectionSize, confirmReq uint64
 	if clientMode {
 		sectionSize = CHTFrequencyClient
@@ -137,12 +141,53 @@ func NewChtIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer {
 		confirmReq = HelperTrieProcessConfirmations
 	}
 	idb := ethdb.NewTable(db, "chtIndex-")
+	trieTable := ethdb.NewTable(db, ChtTablePrefix)
 	backend := &ChtIndexerBackend{
 		diskdb:      db,
-		triedb:      trie.NewDatabase(ethdb.NewTable(db, ChtTablePrefix)),
+		odr:         odr,
+		trieTable:   trieTable,
+		triedb:      trie.NewDatabase(trieTable),
 		sectionSize: sectionSize,
+		quit:        make(chan struct{}),
 	}
 	return core.NewChainIndexer(db, idb, backend, sectionSize, confirmReq, time.Millisecond*100, "cht")
+}
+
+// fetchMissingNodes tries to retrieve the last entry of the latest trusted CHT from the
+// ODR backend in order to be able to add new entries and calculate subsequent root hashes
+func (c *ChtIndexerBackend) fetchMissingNodes(section uint64, root common.Hash) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-done:
+		case <-c.quit:
+		}
+		cancel()
+	}()
+	defer close(done)
+
+	batch := c.trieTable.NewBatch()
+	r := &ChtRequest{ChtRoot: root, ChtNum: section - 1, BlockNum: section*c.sectionSize - 1}
+	var err error
+	for {
+		err = c.odr.Retrieve(ctx, r)
+		if err == ErrNoPeers {
+			// if there are no peers to serve, retry later
+			select {
+			case <-c.quit:
+				return fmt.Errorf("Section processing cancelled")
+			case <-time.After(time.Second * 10):
+			}
+		} else {
+			break
+		}
+	}
+	if err == nil {
+		r.Proof.Store(batch)
+		err = batch.Write()
+	}
+	return err
 }
 
 // Reset implements core.ChainIndexerBackend
@@ -153,6 +198,14 @@ func (c *ChtIndexerBackend) Reset(section uint64, lastSectionHead common.Hash) e
 	}
 	var err error
 	c.trie, err = trie.New(root, c.triedb)
+
+	if err != nil && c.odr != nil {
+		err = c.fetchMissingNodes(section, root)
+		if err == nil {
+			c.trie, err = trie.New(root, c.triedb)
+		}
+	}
+
 	c.section = section
 	return err
 }
@@ -181,16 +234,20 @@ func (c *ChtIndexerBackend) Commit() error {
 	c.triedb.Commit(root, false)
 
 	if ((c.section+1)*c.sectionSize)%CHTFrequencyClient == 0 {
-		log.Info("Storing CHT", "section", c.section*c.sectionSize/CHTFrequencyClient, "head", c.lastHash, "root", root)
+		log.Info("Storing CHT", "section", c.section*c.sectionSize/CHTFrequencyClient, "head", fmt.Sprintf("%064x", c.lastHash), "root", fmt.Sprintf("%064x", root))
 	}
 	StoreChtRoot(c.diskdb, c.section, c.lastHash, root)
 	return nil
 }
 
+// Cancel implements core.ChainIndexerBackend
+func (c *ChtIndexerBackend) Closing() {
+	close(c.quit)
+}
+
 const (
-	BloomTrieFrequency        = 32768
-	ethBloomBitsSection       = 4096
-	ethBloomBitsConfirmations = 256
+	BloomTrieFrequency  = 32768
+	ethBloomBitsSection = 4096
 )
 
 var (
@@ -215,32 +272,98 @@ func StoreBloomTrieRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root 
 
 // BloomTrieIndexerBackend implements core.ChainIndexerBackend
 type BloomTrieIndexerBackend struct {
-	diskdb                                     ethdb.Database
+	diskdb, trieTable                          ethdb.Database
+	odr                                        OdrBackend
 	triedb                                     *trie.Database
 	section, parentSectionSize, bloomTrieRatio uint64
 	trie                                       *trie.Trie
 	sectionHeads                               []common.Hash
+	quit                                       chan struct{}
 }
 
 // NewBloomTrieIndexer creates a BloomTrie chain indexer
-func NewBloomTrieIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer {
+func NewBloomTrieIndexer(db ethdb.Database, clientMode bool, odr OdrBackend) *core.ChainIndexer {
+	trieTable := ethdb.NewTable(db, BloomTrieTablePrefix)
 	backend := &BloomTrieIndexerBackend{
-		diskdb: db,
-		triedb: trie.NewDatabase(ethdb.NewTable(db, BloomTrieTablePrefix)),
+		diskdb:    db,
+		odr:       odr,
+		trieTable: trieTable,
+		triedb:    trie.NewDatabase(trieTable),
+		quit:      make(chan struct{}),
 	}
 	idb := ethdb.NewTable(db, "bltIndex-")
 
-	var confirmReq uint64
 	if clientMode {
 		backend.parentSectionSize = BloomTrieFrequency
-		confirmReq = HelperTrieConfirmations
 	} else {
 		backend.parentSectionSize = ethBloomBitsSection
-		confirmReq = HelperTrieProcessConfirmations
 	}
 	backend.bloomTrieRatio = BloomTrieFrequency / backend.parentSectionSize
 	backend.sectionHeads = make([]common.Hash, backend.bloomTrieRatio)
-	return core.NewChainIndexer(db, idb, backend, BloomTrieFrequency, confirmReq-ethBloomBitsConfirmations, time.Millisecond*100, "bloomtrie")
+	return core.NewChainIndexer(db, idb, backend, BloomTrieFrequency, 0, time.Millisecond*100, "bloomtrie")
+}
+
+// fetchMissingNodes tries to retrieve the last entries of the latest trusted bloom trie from the
+// ODR backend in order to be able to add new entries and calculate subsequent root hashes
+func (b *BloomTrieIndexerBackend) fetchMissingNodes(section uint64, root common.Hash) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-done:
+		case <-b.quit:
+		}
+		cancel()
+	}()
+	defer close(done)
+
+	indexCh := make(chan uint, types.BloomBitLength)
+	type res struct {
+		nodes *NodeSet
+		err   error
+	}
+	resCh := make(chan res, types.BloomBitLength)
+	for i := 0; i < 20; i++ {
+		go func() {
+			for {
+				bitIndex, ok := <-indexCh
+				if !ok {
+					return
+				}
+				r := &BloomRequest{BloomTrieRoot: root, BloomTrieNum: section - 1, BitIdx: bitIndex, SectionIdxList: []uint64{section - 1}}
+				var err error
+				for {
+					err = b.odr.Retrieve(ctx, r)
+					if err == ErrNoPeers {
+						// if there are no peers to serve, retry later
+						select {
+						case <-b.quit:
+							resCh <- res{nil, fmt.Errorf("Section processing cancelled")}
+							return
+						case <-time.After(time.Second * 10):
+						}
+					} else {
+						break
+					}
+				}
+				resCh <- res{r.Proofs, err}
+			}
+		}()
+	}
+
+	for i := uint(0); i < types.BloomBitLength; i++ {
+		indexCh <- i
+	}
+	close(indexCh)
+	batch := b.trieTable.NewBatch()
+	for i := uint(0); i < types.BloomBitLength; i++ {
+		res := <-resCh
+		if res.err != nil {
+			return res.err
+		}
+		res.nodes.Store(batch)
+	}
+	return batch.Write()
 }
 
 // Reset implements core.ChainIndexerBackend
@@ -251,6 +374,12 @@ func (b *BloomTrieIndexerBackend) Reset(section uint64, lastSectionHead common.H
 	}
 	var err error
 	b.trie, err = trie.New(root, b.triedb)
+	if err != nil && b.odr != nil {
+		err = b.fetchMissingNodes(section, root)
+		if err == nil {
+			b.trie, err = trie.New(root, b.triedb)
+		}
+	}
 	b.section = section
 	return err
 }
@@ -300,8 +429,13 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 	b.triedb.Commit(root, false)
 
 	sectionHead := b.sectionHeads[b.bloomTrieRatio-1]
-	log.Info("Storing bloom trie", "section", b.section, "head", sectionHead, "root", root, "compression", float64(compSize)/float64(decompSize))
+	log.Info("Storing bloom trie", "section", b.section, "head", fmt.Sprintf("%064x", sectionHead), "root", fmt.Sprintf("%064x", root), "compression", float64(compSize)/float64(decompSize))
 	StoreBloomTrieRoot(b.diskdb, b.section, sectionHead, root)
 
 	return nil
+}
+
+// Cancel implements core.ChainIndexerBackend
+func (b *BloomTrieIndexerBackend) Closing() {
+	close(b.quit)
 }
