@@ -28,7 +28,7 @@ import (
 type MemStore struct {
 	cache    *lru.Cache
 	requests *lru.Cache
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	disabled bool
 }
 
@@ -73,8 +73,8 @@ func (m *MemStore) Get(key Key) (*Chunk, error) {
 		return nil, ErrChunkNotFound
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	r, ok := m.requests.Get(string(key))
 	// it is a request
