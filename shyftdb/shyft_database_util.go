@@ -43,30 +43,36 @@ type ShyftTxEntryPretty struct {
 	Data      []byte
 }
 
+type ShyftAccountEntry struct {
+	Balance *big.Int
+	Txs     []string
+}
+
 func WriteBlock(db *leveldb.DB, block *types.Block) error {
 	leng := block.Transactions().Len()
 	var tx_strs = make([]string, leng)
 	//var tx_bytes = make([]byte, leng)
+	hash := block.Header().Hash().Bytes()
 
-    hash := block.Header().Hash().Bytes()
-	if block.Transactions().Len() > 0 {
-		for i, tx := range block.Transactions() {
- 			tx_strs[i] = WriteTransactions(db, tx, block.Header().Hash())
-			//tx_bytes[i] = tx.Hash().Bytes()
- 		}
-	}
-	
 	fmt.Println("The tx_strs is")
 	fmt.Println(tx_strs)
 	//strs := []string{"foo", "bar"}
 	buf := &bytes.Buffer{}
 	gob.NewEncoder(buf).Encode(tx_strs)
 	bs := buf.Bytes()
-	
+
     key := append([]byte("bk-")[:], hash[:]...)
 	if err := db.Put(key, bs, nil); err != nil {
 		log.Crit("Failed to store block", "err", err)
 		return nil // Do we want to force an exit here?
+	}
+	WriteMinerReward(db, block)
+
+	if block.Transactions().Len() > 0 {
+		for i, tx := range block.Transactions() {
+			tx_strs[i] = WriteTransactions(db, tx, block.Header().Hash())
+			//tx_bytes[i] = tx.Hash().Bytes()
+		}
 	}
 	return nil
 }
@@ -92,10 +98,84 @@ func WriteTransactions(db *leveldb.DB, tx *types.Transaction, blockHash common.H
 	if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
 		log.Crit("Failed to store TX", "err", err)
 	}
+	//WriteAccountBalances(db, tx)
 	return tx.Hash().String()
 }
 
+//func WriteAccountBalances(db *leveldb.DB, tx *types.Transaction) {
+//	fromKey := append([]byte("acc-")[:], tx.From().Hash().Bytes()[:]...)
+//	//toKey := append([]byte("acc-")[:], tx.To().Hash().Bytes()[:]...)
+//	fromData, err := db.Get(fromKey, nil)
+//	if err != nil {
+//		// Assume this is the first entry
+//		firstEntry, entryErr := db.Put()
+//		log.Crit("Could not retrieve TX", "err", err)
+//	}
+//	fmt.Println(fromData)
+//}
+
+// @NOTE: This function is extremely complex and requires heavy testing and knowdlege of edge cases:
+// uncle blocks, account balance updates based on reorgs, diverges that get dropped.
+// Reason for this is because the accounts are not deterministic like the block and tx hashes.
+// @TODO: Calculate reward from uncles
+// @TODO: Calculate mining reward (most likely retrieve higher up in the operations)
+// @TODO: Calculate reorg
+func WriteMinerReward(db *leveldb.DB, block *types.Block)  {
+	var totalGas *big.Int
+	var txs []string
+	key := append([]byte("acc-")[:], block.Coinbase().Hash().Bytes()[:]...)
+	for _, tx := range block.Transactions() {
+		totalGas.Add(totalGas, new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas())))
+	}
+	retreivedData, err := db.Get(key, nil)
+	if err != nil {
+		// Assume time this account has had a tx
+		// Balacne is exclusively minerreward + total gas from the block b/c no prior evm activity
+		// Txs would be empty because they have not had any transactions on the EVM
+		// @TODO: Calc mining reward
+		//balance := totalGas.Add(totalGas, MINING_REWARD)
+		balance := totalGas
+		accData := ShyftAccountEntry{
+			Balance: balance,
+			Txs: txs,
+		}
+		var encodedData bytes.Buffer
+		encoder := gob.NewEncoder(&encodedData)
+		if err := encoder.Encode(accData); err != nil {
+			log.Crit("Faild to encode Miner Account data", "err", err)
+		}
+		if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
+			log.Crit("Could not write the miner's first tx", "err", err)
+		}
+	} else {
+		// The account has already have previous data stored due to activity in the EVM
+		// Decode the data to update balance
+		var decodedData ShyftAccountEntry
+		d := gob.NewDecoder(bytes.NewBuffer(retreivedData))
+		if err := d.Decode(&decodedData); err != nil {
+			log.Crit("Failed to decode miner data:", "err", err)
+		}
+		// Write new balance
+		// @TODO: Calc mining reward
+		// decodedData.Balance.Add(decodedData.Balance, totalGas.Add(totalGas, MINING_REWARD)))
+		decodedData.Balance.Add(decodedData.Balance, totalGas)
+		// Encode the data to be written back to the db
+		var encodedData bytes.Buffer
+		encoder := gob.NewEncoder(&encodedData)
+		if err := encoder.Encode(decodedData); err != nil {
+			log.Crit("Faild to encode Miner Account data", "err", err)
+		}
+		// Write newly encoded data back to the db
+		if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
+			log.Crit("Could not update miner account data", "err", err)
+		}
+	}
+}
+
+////////////////////////////
 // Meant for internal tests
+///////////////////////////
+
 func GetAllBlocks(db *leveldb.DB) []SBlock{
 	var arr []SBlock
 	iter := db.NewIterator(util.BytesPrefix([]byte("bk-")), nil)
