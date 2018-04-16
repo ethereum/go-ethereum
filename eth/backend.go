@@ -104,7 +104,6 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
     // @NOTE:shyft Where we instantiate BlockExplorerDB
-	fmt.Println("+++++++++++++++++eth/backend.GO+++++++++++++++++++++++++New()")
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
 	}
@@ -210,7 +209,6 @@ func makeExtraData(extra []byte) []byte {
 
 // CreateDB creates the chain database.
 func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Database, error) {
-	fmt.Println("+++++++++++++++++eth/backend.GO+++++++++++++++++++++++++CreateDB()")
 	db, err := ctx.OpenDatabase(name, config.DatabaseCache, config.DatabaseHandles)
 	if err != nil {
 		return nil, err

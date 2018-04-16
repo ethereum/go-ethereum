@@ -152,7 +152,6 @@ func enableWhisper(ctx *cli.Context) bool {
 }
 
 func makeFullNode(ctx *cli.Context) *node.Node {
-	fmt.Println("+++++++++++++++++cmd/geth/config.GO+++++++++++++++++++++++++MakeFullNode()")
 	stack, cfg := makeConfigNode(ctx)
 
 	utils.RegisterEthService(stack, &cfg.Eth)

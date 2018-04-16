@@ -214,7 +214,6 @@ func main() {
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
 func geth(ctx *cli.Context) error {
-	fmt.Println("+++++++++++++++++cmd/main/geth.GO+++++++++++++++++++++++++Geth()")
 	node := makeFullNode(ctx)
 	startNode(ctx, node)
 	node.Wait()

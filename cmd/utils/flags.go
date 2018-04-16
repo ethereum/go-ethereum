@@ -1124,7 +1124,6 @@ func SetDashboardConfig(ctx *cli.Context, cfg *dashboard.Config) {
 
 // RegisterEthService adds an Ethereum client to the stack.
 func RegisterEthService(stack *node.Node, cfg *eth.Config) {
-	fmt.Println("+++++++++++++++++cmd/utils/Flags.GO+++++++++++++++++++++++++RegisterEthService()")
 	var err error
 	if cfg.SyncMode == downloader.LightSync {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
@@ -1216,7 +1215,6 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 
 // MakeChain creates a chain manager from set command line flags.
 func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
-    fmt.Println("+++++++++++++++++cmd/flags.GO+++++++++++++++++++++++++MakeChain()")
 	var err error
 	chainDb = MakeChainDatabase(ctx, stack)
 
