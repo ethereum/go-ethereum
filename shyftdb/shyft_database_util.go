@@ -7,6 +7,7 @@ import (
     "github.com/syndtr/goleveldb/leveldb"
     "github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -58,6 +59,28 @@ func WriteTransactions(db *leveldb.DB, transactions []*types.Transaction, blockH
 }
 
 // Meant for internal tests
+func GetAllBlocks(db *leveldb.DB) {
+	iter := db.NewIterator(util.BytesPrefix([]byte("bk-")), nil)
+	for iter.Next() {
+	    result := iter.Value()
+	    buf := bytes.NewBuffer(result)
+		strs2 := []string{}
+		gob.NewDecoder(buf).Decode(&strs2)
+		fmt.Println("the key is")
+		hash := common.BytesToHash(iter.Key())
+		hex := hash.Hex()
+		fmt.Println(hex)
+		if(len(strs2) > 0){
+			fmt.Println("ALL TRANSACTIONS:")
+			fmt.Printf("%v", strs2)
+	    	fmt.Println("")		
+		}
+
+		//fmt.Println("\n ALL BK BK VALUE" + string(result))
+	}
+	
+	iter.Release()
+}
 
 func GetBlock(db *leveldb.DB, block *types.Block) []byte {
 	hash := block.Header().Hash().Bytes()
