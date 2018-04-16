@@ -269,7 +269,7 @@ func (api *PublicFilterAPI) ReturnData(ctx context.Context) (*rpc.Subscription, 
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
 
-	txListen := make(map[common.Hash]bool)
+	txListen := make(map[common.Hash]struct{})
 
 	rpcSub := notifier.CreateSubscription()
 	rpcSub.SetType(rpc.ReturnDataSubscription)
@@ -284,12 +284,12 @@ func (api *PublicFilterAPI) ReturnData(ctx context.Context) (*rpc.Subscription, 
 				// client submitted new tx, save hash for later
 				hash, ishash := msg.(common.Hash)
 				if ishash {
-					txListen[hash] = true
+					txListen[hash] = struct{}{}
 				} else {
 					log.Warn(fmt.Sprintf("Received update msg of invalid type %s for ReturnData subscription", reflect.TypeOf(msg).String()))
 				}
 			case retdata := <-retCh:
-				if txListen[retdata.TxHash] {
+				if _, has := txListen[retdata.TxHash]; has {
 					// tx from client just completed execution--send back return data
 					notifier.Notify(rpcSub.ID, retdata)
 				}
