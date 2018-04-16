@@ -18,7 +18,7 @@ var routes = Routes{
 	Route{
 		"GetBalance",
 		"GET",
-		"/api/get_balance/{address}",
+		"/api/get_balance/",
 		GetBalance,
 	},
 	Route{
@@ -42,7 +42,7 @@ var routes = Routes{
 	Route{
 		"GetAllTransactions",
 		"GET",
-		"/api/get_all_transactions/{address}",
+		"/api/get_all_transactions/",
 		GetAllTransactions,
 	},
 	Route{
@@ -57,10 +57,4 @@ var routes = Routes{
 		"/api/get_internal_transactions_hash/{transactions_hash}",
 		GetInternalTransactionsHash,
 	},
-	// Route{
-	// 	"PostTestData",
-	// 	"POST",
-	// 	"/api/post_test_data/",
-	// 	PostTestData,
-	// },
 }
