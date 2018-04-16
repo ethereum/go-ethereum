@@ -72,7 +72,6 @@ func (set *unconfirmedBlocks) Insert(index uint64, hash common.Hash) {
 	// Set as the initial ring or append to the end
 	set.lock.Lock()
 	defer set.lock.Unlock()
-
 	if set.blocks == nil {
 		set.blocks = item
 	} else {

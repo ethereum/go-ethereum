@@ -20,17 +20,22 @@ package core
 import (
 	"errors"
 	"fmt"
+	//"bytes"
+	//"encoding/gob"
 	"io"
 	"math/big"
 	mrand "math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
+	
+	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/shyftdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -90,7 +95,7 @@ type BlockChain struct {
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
 	db     ethdb.Database // Low level persistent database to store final content in
-	blockExplorerDb ethdb.Database
+	blockExplorerDb *leveldb.DB
 
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
@@ -135,7 +140,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, blockExplorerDb ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, blockExplorerDb *leveldb.DB, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
     fmt.Printf("+++++++++++++++++core/blockchain.GO+++++++++++++++++++++++++NewBlockChain()")
 	if cacheConfig == nil {
 		cacheConfig = &CacheConfig{
@@ -876,8 +881,6 @@ func (bc *BlockChain) WriteBlockWithoutState(block *types.Block, td *big.Int) (e
 
 // WriteBlockWithState writes the block and all associated state to the database.
 func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) (status WriteStatus, err error) {
-    fmt.Println("WriteBlockWithState function. bc.blockexplorerDB")
-    fmt.Println(bc.blockExplorerDb)
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
@@ -903,6 +906,29 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if err := WriteBlock(batch, block); err != nil {
 		return NonStatTy, err
 	}
+	// @NOTE:SHYFT - Write block data for block explorer
+	if err := shyftdb.WriteBlock(bc.blockExplorerDb, block); err != nil {
+		return NonStatTy, err
+	}
+	//fmt.Println(shyftdb.GetAllBlocks(bc.blockExplorerDb))
+	//result := shyftdb.GetBlock(bc.blockExplorerDb, block)
+
+	// this is WIP for decoding bytes rather than hex strings
+	// maybe this will be dropped
+	/*for i, txhash := range result {
+    	//dst := make([]byte, hex.DecodedLen(len(txhash)))
+		content := hex.Dump(txhash)
+		fmt.Printf("%s", content)
+	}*/
+	
+	//buf := bytes.NewBuffer(result)
+	//strs2 := []string{}
+	//gob.NewDecoder(buf).Decode(&strs2)
+	//fmt.Println("ALL TRANSACTIONS:")
+	//
+	//fmt.Println("the returned array is")
+	//fmt.Printf("%v", strs2)
+
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
 		return NonStatTy, err
