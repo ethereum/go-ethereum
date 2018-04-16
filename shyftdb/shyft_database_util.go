@@ -32,16 +32,9 @@ func WriteBlock(db *leveldb.DB, block *types.Block) error {
 
     hash := block.Header().Hash().Bytes()
 	if block.Transactions().Len() > 0 {
-	    // this is inefficient, there are 2 loops over 
-	    // block.Transactions
-	    // TODO: Fix this so there is only one loop
-		WriteTransactions(db, block.Transactions(), hash)
 		for i, tx := range block.Transactions() {
- 			fmt.Println(tx.Hash())
- 			fmt.Println("TX HASH")
- 			fmt.Println(tx.To().Hex())
- 			tx_strs[i] = tx.Hash().String()
- 			//tx_bytes[i] = tx.Hash().Bytes()
+ 			tx_strs[i] = WriteTransactions(db, tx, hash)
+			//tx_bytes[i] = tx.Hash().Bytes()
  		}
 	}
 	
@@ -60,41 +53,24 @@ func WriteBlock(db *leveldb.DB, block *types.Block) error {
 	return nil
 }
 
-func WriteTransactions(db *leveldb.DB, transactions []*types.Transaction, blockHash []byte) error {
-	for _, tx := range transactions {
-		var from = GenerateFromAddr()
-		txData := txEntry{
-			TxHash:    tx.Hash(),
-			To:   	   tx.To(),
-			From: 	   from,
-			BlockHash: blockHash,
-			Amount:    tx.Value(),
-			GasPrice:  tx.GasPrice(),
-			Gas:   	   tx.Gas(),
-			Nonce:     tx.Nonce(),
-			Data:      tx.Data(),
-		}
-		fmt.Println(txData)
-		key := append([]byte("tx-")[:], tx.Hash().Bytes()[:]...)
-		if err := db.Put(key, []byte("Hello hello"), nil); err != nil {
-			log.Crit("Failed to store TX", "err", err)
-		}
-		GetTransaction(db, tx)
+func WriteTransactions(db *leveldb.DB, tx *types.Transaction, blockHash []byte) string {
+	txData := txEntry{
+		TxHash:    tx.Hash(),
+		To:   	   tx.To(),
+		From: 	   tx.From(),
+		BlockHash: blockHash,
+		Amount:    tx.Value(),
+		GasPrice:  tx.GasPrice(),
+		Gas:   	   tx.Gas(),
+		Nonce:     tx.Nonce(),
+		Data:      tx.Data(),
 	}
-	GetAllTransactions(db)
-	return nil
-}
-
-// Helper functions
-
-func GenerateFromAddr(tx *types.Transaction) *common.Address {
-	var from *common.Address
-	signer := deriveSigner(tx.data.V)
-	if f, err := Sender(signer, tx); err != nil { // derive but don't cache
-		from = "[invalid sender: invalid sig]"
-	} else {
-		from = fmt.Sprintf("%x", f[:])
+	fmt.Println(txData)
+	key := append([]byte("tx-")[:], tx.Hash().Bytes()[:]...)
+	if err := db.Put(key, []byte("Hello hello"), nil); err != nil {
+		log.Crit("Failed to store TX", "err", err)
 	}
+	return tx.Hash().String()
 }
 
 // Meant for internal tests
