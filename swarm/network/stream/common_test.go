@@ -93,7 +93,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	db := storage.NewDBAPI(store)
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, db, state.NewMemStore(), &RegistryOptions{
+	r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
 		SkipCheck:  defaultSkipCheck,
 		DoRetrieve: false,
 	})
@@ -153,7 +153,7 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 
 	db := storage.NewDBAPI(localStore)
 	delivery := NewDelivery(to, db)
-	streamer := NewRegistry(addr, delivery, db, state.NewMemStore(), &RegistryOptions{
+	streamer := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
 		SkipCheck: defaultSkipCheck,
 	})
 	teardown := func() {

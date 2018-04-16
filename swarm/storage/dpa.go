@@ -34,8 +34,9 @@ implementation for storage or retrieval.
 */
 
 const (
-	singletonSwarmDbCapacity    = 50000
-	singletonSwarmCacheCapacity = 500
+	defaultLDBCapacity                = 5000000 // capacity for LevelDB, by default 5*10^6*4096 bytes == 20GB
+	defaultCacheCapacity              = 500     // capacity for in-memory chunks' cache
+	defaultChunkRequestsCacheCapacity = 5000000 // capacity for container holding outgoing requests for chunks. should be set to LevelDB capacity
 )
 
 var (

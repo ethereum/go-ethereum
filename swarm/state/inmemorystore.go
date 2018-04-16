@@ -22,23 +22,23 @@ import (
 	"sync"
 )
 
-// MemStore is the reference implementation of Store interface that is supposed
+// InmemoryStore is the reference implementation of Store interface that is supposed
 // to be used in tests.
-type MemStore struct {
+type InmemoryStore struct {
 	db map[string][]byte
 	mu sync.RWMutex
 }
 
-// NewMemStore returns a new instance of MemStore.
-func NewMemStore() *MemStore {
-	return &MemStore{
+// NewInmemoryStore returns a new instance of InmemoryStore.
+func NewInmemoryStore() *InmemoryStore {
+	return &InmemoryStore{
 		db: make(map[string][]byte),
 	}
 }
 
 // Get retrieves a value stored for a specific key. If there is no value found,
 // ErrNotFound is returned.
-func (s *MemStore) Get(key string, i interface{}) (err error) {
+func (s *InmemoryStore) Get(key string, i interface{}) (err error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -56,7 +56,7 @@ func (s *MemStore) Get(key string, i interface{}) (err error) {
 }
 
 // Put stores a value for a specific key.
-func (s *MemStore) Put(key string, i interface{}) (err error) {
+func (s *InmemoryStore) Put(key string, i interface{}) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	bytes := []byte{}
@@ -77,7 +77,7 @@ func (s *MemStore) Put(key string, i interface{}) (err error) {
 }
 
 // Delete removes value stored under a specific key.
-func (s *MemStore) Delete(key string) (err error) {
+func (s *InmemoryStore) Delete(key string) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -89,6 +89,6 @@ func (s *MemStore) Delete(key string) (err error) {
 }
 
 // Close does not do anything.
-func (s *MemStore) Close() error {
+func (s *InmemoryStore) Close() error {
 	return nil
 }

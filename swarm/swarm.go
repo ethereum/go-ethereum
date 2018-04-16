@@ -410,7 +410,6 @@ func (self *Swarm) periodicallyUpdateGauges() {
 }
 
 func (self *Swarm) updateGauges() {
-	cacheSizeGauge.Update(int64(self.lstore.CacheCounter()))
 	uptimeGauge.Update(time.Since(startTime).Nanoseconds())
 }
 

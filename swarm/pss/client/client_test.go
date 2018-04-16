@@ -210,7 +210,7 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 }
 
 func newServices() adapters.Services {
-	stateStore := state.NewMemStore()
+	stateStore := state.NewInmemoryStore()
 	kademlias := make(map[discover.NodeID]*network.Kademlia)
 	kademlia := func(id discover.NodeID) *network.Kademlia {
 		if k, ok := kademlias[id]; ok {

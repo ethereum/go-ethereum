@@ -112,6 +112,8 @@ func openLDBStore(path string, basekey []byte) (*storage.LDBStore, error) {
 	if _, err := os.Stat(filepath.Join(path, "CURRENT")); err != nil {
 		return nil, fmt.Errorf("invalid chunkdb path: %s", err)
 	}
-	storeParams := storage.NewLDBStoreParams(path, 10000000, nil, nil)
-	return storage.NewLDBStore(storeParams)
+
+	storeparams := storage.NewDefaultStoreParams()
+	ldbparams := storage.NewLDBStoreParams(storeparams, path)
+	return storage.NewLDBStore(ldbparams)
 }

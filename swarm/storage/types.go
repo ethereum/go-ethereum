@@ -259,27 +259,30 @@ func (self *LazyTestSectionReader) Size(chan bool) (int64, error) {
 }
 
 type StoreParams struct {
-	Hash          SwarmHasher `toml:"-"`
-	DbCapacity    uint64
-	CacheCapacity uint
-	BaseKey       []byte
+	Hash                       SwarmHasher `toml:"-"`
+	DbCapacity                 uint64
+	CacheCapacity              uint
+	ChunkRequestsCacheCapacity uint
+	BaseKey                    []byte
 }
 
-func NewStoreParams(capacity uint64, hash SwarmHasher, basekey []byte) *StoreParams {
+func NewDefaultStoreParams() *StoreParams {
+	return NewStoreParams(defaultLDBCapacity, defaultCacheCapacity, defaultChunkRequestsCacheCapacity, nil, nil)
+}
+
+func NewStoreParams(ldbCap uint64, cacheCap uint, requestsCap uint, hash SwarmHasher, basekey []byte) *StoreParams {
 	if basekey == nil {
 		basekey = make([]byte, 32)
 	}
 	if hash == nil {
 		hash = MakeHashFunc("SHA3")
 	}
-	if capacity == 0 {
-		capacity = defaultDbCapacity
-	}
 	return &StoreParams{
-		Hash:          hash,
-		DbCapacity:    capacity,
-		CacheCapacity: defaultCacheCapacity,
-		BaseKey:       basekey,
+		Hash:                       hash,
+		DbCapacity:                 ldbCap,
+		CacheCapacity:              cacheCap,
+		ChunkRequestsCacheCapacity: requestsCap,
+		BaseKey:                    basekey,
 	}
 }
 

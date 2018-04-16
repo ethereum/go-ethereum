@@ -16,10 +16,19 @@
 
 package storage
 
-import "testing"
+import (
+	"crypto/rand"
+	"encoding/binary"
+	"io/ioutil"
+	"os"
+	"sync"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/log"
+)
 
 func newTestMemStore() *MemStore {
-	storeparams := NewStoreParams(defaultCacheCapacity, nil, nil)
+	storeparams := NewDefaultStoreParams()
 	return NewMemStore(storeparams, nil)
 }
 
@@ -95,4 +104,145 @@ func BenchmarkMemStoreGet_1_5k(b *testing.B) {
 
 func BenchmarkMemStoreGet_8_5k(b *testing.B) {
 	benchmarkMemStoreGet(5000, 8, 4096, b)
+}
+
+func newLDBStore(t *testing.T) (*LDBStore, func()) {
+	dir, err := ioutil.TempDir("", "bzz-storage-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Trace("memstore.tempdir", "dir", dir)
+
+	ldbparams := NewLDBStoreParams(NewDefaultStoreParams(), dir)
+	db, err := NewLDBStore(ldbparams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cleanup := func() {
+		db.Close()
+		err := os.RemoveAll(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	return db, cleanup
+}
+
+func TestMemStoreAndLDBStore(t *testing.T) {
+	ldb, cleanup := newLDBStore(t)
+	ldb.setCapacity(4000)
+	defer cleanup()
+
+	cacheCap := 200
+	requestsCap := 200
+	memStore := NewMemStore(NewStoreParams(4000, 200, 200, nil, nil), nil)
+
+	tests := []struct {
+		n         int    // number of chunks to push to memStore
+		chunkSize uint64 // size of chunk (by default in Swarm - 4096)
+		request   bool   // whether or not to set the ReqC channel on the random chunks
+	}{
+		{
+			n:         1,
+			chunkSize: 4096,
+			request:   false,
+		},
+		{
+			n:         201,
+			chunkSize: 4096,
+			request:   false,
+		},
+		{
+			n:         501,
+			chunkSize: 4096,
+			request:   false,
+		},
+		{
+			n:         3100,
+			chunkSize: 4096,
+			request:   false,
+		},
+		{
+			n:         100,
+			chunkSize: 4096,
+			request:   true,
+		},
+	}
+
+	for i, tt := range tests {
+		log.Info("running test", "idx", i, "tt", tt)
+		var chunks []*Chunk
+
+		for i := 0; i < tt.n; i++ {
+			var c *Chunk
+			if tt.request {
+				c = NewRandomRequestChunk(tt.chunkSize)
+			} else {
+				c = NewRandomChunk(tt.chunkSize)
+			}
+
+			chunks = append(chunks, c)
+		}
+
+		for i := 0; i < tt.n; i++ {
+			go ldb.Put(chunks[i])
+			memStore.Put(chunks[i])
+
+			if got := memStore.cache.Len(); got > cacheCap {
+				t.Fatalf("expected to get cache capacity less than %v, but got %v", cacheCap, got)
+			}
+
+			if got := memStore.requests.Len(); got > requestsCap {
+				t.Fatalf("expected to get requests capacity less than %v, but got %v", requestsCap, got)
+			}
+		}
+
+		for i := 0; i < tt.n; i++ {
+			_, err := memStore.Get(chunks[i].Key)
+			if err != nil {
+				if err == ErrChunkNotFound {
+					_, err := ldb.Get(chunks[i].Key)
+					if err != nil {
+						t.Fatalf("couldn't get chunk %v from ldb, got error: %v", i, err)
+					}
+				} else {
+					t.Fatalf("got error from memstore: %v", err)
+				}
+			}
+		}
+
+		// wait for all chunks to be stored before ending the test are cleaning up
+		for i := 0; i < tt.n; i++ {
+			<-chunks[i].dbStoredC
+		}
+	}
+}
+
+func NewRandomChunk(chunkSize uint64) *Chunk {
+	c := &Chunk{
+		Key:        make([]byte, 32),
+		ReqC:       nil,
+		SData:      make([]byte, chunkSize+8), // SData should be chunkSize + 8 bytes reserved for length
+		dbStoredC:  make(chan bool),
+		dbStoredMu: &sync.Mutex{},
+	}
+
+	rand.Read(c.SData)
+
+	binary.LittleEndian.PutUint64(c.SData[:8], chunkSize)
+
+	hasher := MakeHashFunc(SHA3Hash)()
+	hasher.Write(c.SData)
+	copy(c.Key, hasher.Sum(nil))
+
+	return c
+}
+
+func NewRandomRequestChunk(chunkSize uint64) *Chunk {
+	c := NewRandomChunk(chunkSize)
+	c.ReqC = make(chan bool)
+
+	return c
 }

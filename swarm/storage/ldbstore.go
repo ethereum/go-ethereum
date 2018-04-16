@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"sort"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -47,15 +48,8 @@ var (
 )
 
 const (
-	defaultDbCapacity = 5000000
-	defaultRadius     = 0 // not yet used
-
-	gcArraySize      = 10000
 	gcArrayFreeRatio = 0.1
-
-	// key prefixes for leveldb storage
-	kpIndex = 0
-	kpData  = 1
+	maxGCitems       = 5000 // max number of items to be gc'd per call to collectGarbage()
 )
 
 var (
@@ -73,6 +67,7 @@ type gcItem struct {
 	idx    uint64
 	value  uint64
 	idxKey []byte
+	po     uint8
 }
 
 type LDBStoreParams struct {
@@ -82,16 +77,7 @@ type LDBStoreParams struct {
 }
 
 // NewLDBStoreParams constructs LDBStoreParams with the specified values.
-// if 0 is set for capacity or nil for hash, and basekey is specified, default values for these params will be used
-// path has no default value
-func NewLDBStoreParams(path string, capacity uint64, hash SwarmHasher, basekey []byte) *LDBStoreParams {
-	if hash == nil {
-		hash = MakeHashFunc(SHA3Hash)
-	}
-	if capacity == 0 {
-		capacity = singletonSwarmDbCapacity
-	}
-	storeparams := NewStoreParams(capacity, hash, basekey)
+func NewLDBStoreParams(storeparams *StoreParams, path string) *LDBStoreParams {
 	return &LDBStoreParams{
 		StoreParams: storeparams,
 		Path:        path,
@@ -103,11 +89,11 @@ type LDBStore struct {
 	db *LDBDatabase
 
 	// this should be stored in db, accessed transactionally
-	entryCnt, accessCnt, dataIdx, capacity uint64
-	bucketCnt                              []uint64
-
-	gcPos, gcStartPos []byte
-	gcArray           []*gcItem
+	entryCnt  uint64 // number of items in the LevelDB
+	accessCnt uint64 // ever-accumulating number increased every time we read/access an entry
+	dataIdx   uint64 // similar to entryCnt, but we only increment it
+	capacity  uint64
+	bucketCnt []uint64
 
 	hashfunc SwarmHasher
 	po       func(Key) uint8
@@ -149,10 +135,6 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	s.po = params.Po
 	s.setCapacity(params.DbCapacity)
 
-	s.gcStartPos = make([]byte, 1)
-	s.gcStartPos[0] = kpIndex
-	s.gcArray = make([]*gcItem, gcArraySize)
-
 	s.bucketCnt = make([]uint64, 0x100)
 	for i := 0; i < 0x100; i++ {
 		k := make([]byte, 2)
@@ -172,10 +154,6 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	s.dataIdx = BytesToU64(data)
 	s.dataIdx++
 
-	s.gcPos, _ = s.db.Get(keyGCPos)
-	if s.gcPos == nil {
-		s.gcPos = s.gcStartPos
-	}
 	return s, nil
 }
 
@@ -205,19 +183,13 @@ func BytesToU64(data []byte) uint64 {
 	if len(data) < 8 {
 		return 0
 	}
-	//return binary.LittleEndian.Uint64(data)
 	return binary.BigEndian.Uint64(data)
 }
 
 func U64ToBytes(val uint64) []byte {
 	data := make([]byte, 8)
-	//binary.LittleEndian.PutUint64(data, val)
 	binary.BigEndian.PutUint64(data, val)
 	return data
-}
-
-func getIndexGCValue(index *dpaDBIndex) uint64 {
-	return index.Access
 }
 
 func (s *LDBStore) updateIndexAccess(index *dpaDBIndex) {
@@ -261,7 +233,6 @@ func encodeData(chunk *Chunk) []byte {
 func decodeIndex(data []byte, index *dpaDBIndex) error {
 	dec := rlp.NewStream(bytes.NewReader(data), 0)
 	return dec.Decode(index)
-
 }
 
 func decodeData(data []byte, chunk *Chunk) {
@@ -274,98 +245,49 @@ func decodeOldData(data []byte, chunk *Chunk) {
 	chunk.Size = int64(binary.BigEndian.Uint64(data[0:8]))
 }
 
-func gcListPartition(list []*gcItem, left int, right int, pivotIndex int) int {
-	pivotValue := list[pivotIndex].value
-	dd := list[pivotIndex]
-	list[pivotIndex] = list[right]
-	list[right] = dd
-	storeIndex := left
-	for i := left; i < right; i++ {
-		if list[i].value < pivotValue {
-			dd = list[storeIndex]
-			list[storeIndex] = list[i]
-			list[i] = dd
-			storeIndex++
-		}
-	}
-	dd = list[storeIndex]
-	list[storeIndex] = list[right]
-	list[right] = dd
-	return storeIndex
-}
-
-func gcListSelect(list []*gcItem, left int, right int, n int) int {
-	if left == right {
-		return left
-	}
-	pivotIndex := (left + right) / 2
-	pivotIndex = gcListPartition(list, left, right, pivotIndex)
-	if n == pivotIndex {
-		return n
-	} else {
-		if n < pivotIndex {
-			return gcListSelect(list, left, pivotIndex-1, n)
-		} else {
-			return gcListSelect(list, pivotIndex+1, right, n)
-		}
-	}
-}
-
 func (s *LDBStore) collectGarbage(ratio float32) {
 	it := s.db.NewIterator()
-	it.Seek(s.gcPos)
-	if it.Valid() {
-		s.gcPos = it.Key()
-	} else {
-		s.gcPos = nil
-	}
+	defer it.Release()
+
+	garbage := []*gcItem{}
 	gcnt := 0
 
-	for (gcnt < gcArraySize) && (uint64(gcnt) < s.entryCnt) {
+	for ok := it.Seek([]byte{keyIndex}); ok && (gcnt < maxGCitems) && (uint64(gcnt) < s.entryCnt); ok = it.Next() {
+		itkey := it.Key()
 
-		if (s.gcPos == nil) || (s.gcPos[0] != kpIndex) {
-			it.Seek(s.gcStartPos)
-			if it.Valid() {
-				s.gcPos = it.Key()
-			} else {
-				s.gcPos = nil
-			}
-		}
-
-		if (s.gcPos == nil) || (s.gcPos[0] != kpIndex) {
+		if (itkey == nil) || (itkey[0] != keyIndex) {
 			break
 		}
 
-		gci := new(gcItem)
-		gci.idxKey = s.gcPos
+		// it.Key() contents change on next call to it.Next(), so we must copy it
+		key := make([]byte, len(it.Key()))
+		copy(key, it.Key())
+
+		val := it.Value()
+
 		var index dpaDBIndex
-		decodeIndex(it.Value(), &index)
-		gci.idx = index.Idx
-		// the smaller, the more likely to be gc'd
-		gci.value = getIndexGCValue(&index)
-		s.gcArray[gcnt] = gci
+
+		hash := key[1:]
+		decodeIndex(val, &index)
+		po := s.po(hash)
+
+		gci := &gcItem{
+			idxKey: key,
+			idx:    index.Idx,
+			value:  index.Access, // the smaller, the more likely to be gc'd. see sort comparator below.
+			po:     po,
+		}
+
+		garbage = append(garbage, gci)
 		gcnt++
-		it.Next()
-		if it.Valid() {
-			s.gcPos = it.Key()
-		} else {
-			s.gcPos = nil
-		}
-	}
-	it.Release()
-
-	cutidx := gcListSelect(s.gcArray, 0, gcnt-1, int(float32(gcnt)*ratio))
-	cutval := s.gcArray[cutidx].value
-
-	// actual gc
-	for i := 0; i < gcnt; i++ {
-		if s.gcArray[i].value <= cutval {
-			gcCounter.Inc(1)
-			s.delete(s.gcArray[i].idx, s.gcArray[i].idxKey, s.po(Key(s.gcPos[1:])))
-		}
 	}
 
-	s.db.Put(keyGCPos, s.gcPos)
+	sort.Slice(garbage[:gcnt], func(i, j int) bool { return garbage[i].value < garbage[j].value })
+
+	cutoff := int(float32(gcnt) * ratio)
+	for i := 0; i < cutoff; i++ {
+		s.delete(garbage[i].idx, garbage[i].idxKey, garbage[i].po)
+	}
 }
 
 // Export writes all chunks from the store to a tar archive, returning the
@@ -377,9 +299,9 @@ func (s *LDBStore) Export(out io.Writer) (int64, error) {
 	it := s.db.NewIterator()
 	defer it.Release()
 	var count int64
-	for ok := it.Seek([]byte{kpIndex}); ok; ok = it.Next() {
+	for ok := it.Seek([]byte{keyIndex}); ok; ok = it.Next() {
 		key := it.Key()
-		if (key == nil) || (key[0] != kpIndex) {
+		if (key == nil) || (key[0] != keyIndex) {
 			break
 		}
 
@@ -460,13 +382,13 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 func (s *LDBStore) Cleanup() {
 	//Iterates over the database and checks that there are no faulty chunks
 	it := s.db.NewIterator()
-	startPosition := []byte{kpIndex}
+	startPosition := []byte{keyIndex}
 	it.Seek(startPosition)
 	var key []byte
 	var errorsFound, total int
 	for it.Valid() {
 		key = it.Key()
-		if (key == nil) || (key[0] != kpIndex) {
+		if (key == nil) || (key[0] != keyIndex) {
 			break
 		}
 		total++
@@ -632,17 +554,17 @@ func (s *LDBStore) writeBatches() {
 		c := s.batchC
 		s.batchC = make(chan bool)
 		s.batch = new(leveldb.Batch)
-		s.lock.Unlock()
 		err := s.writeBatch(b, e, d, a)
 		// TODO: set this error on the batch, then tell the chunk
 		if err != nil {
-			log.Error(fmt.Sprintf("DbStore: spawn batch write (%d chunks): %v", b.Len(), err))
+			log.Error(fmt.Sprintf("spawn batch write (%d entries): %v", b.Len(), err))
 		}
 		close(c)
-		if e >= s.capacity {
-			log.Trace(fmt.Sprintf("DbStore: collecting garbage...(%d chunks)", e))
+		for e > s.capacity {
 			s.collectGarbage(gcArrayFreeRatio)
+			e = s.entryCnt
 		}
+		s.lock.Unlock()
 	}
 	log.Trace(fmt.Sprintf("DbStore: quit batch write loop"))
 }
@@ -656,7 +578,7 @@ func (s *LDBStore) writeBatch(b *leveldb.Batch, entryCnt, dataIdx, accessCnt uin
 	if err := s.db.Write(b); err != nil {
 		return fmt.Errorf("unable to write batch: %v", err)
 	}
-	log.Trace(fmt.Sprintf("DbStore: batch write (%d chunks) complete", l))
+	log.Trace(fmt.Sprintf("batch write (%d entries)", l))
 	return nil
 }
 

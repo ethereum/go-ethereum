@@ -39,7 +39,7 @@ type LocalStoreParams struct {
 
 func NewDefaultLocalStoreParams() *LocalStoreParams {
 	return &LocalStoreParams{
-		StoreParams: NewStoreParams(0, nil, nil),
+		StoreParams: NewDefaultStoreParams(),
 	}
 }
 
@@ -62,7 +62,7 @@ type LocalStore struct {
 
 // This constructor uses MemStore and DbStore as components
 func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalStore, error) {
-	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.DbCapacity, params.Hash, params.BaseKey)
+	ldbparams := NewLDBStoreParams(params.StoreParams, params.ChunkDbPath)
 	dbStore, err := NewMockDbStore(ldbparams, mockStore)
 	if err != nil {
 		return nil, err
@@ -75,7 +75,7 @@ func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalS
 }
 
 func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
-	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.DbCapacity, params.Hash, params.BaseKey)
+	ldbparams := NewLDBStoreParams(params.StoreParams, params.ChunkDbPath)
 	dbStore, err := NewLDBStore(ldbparams)
 	if err != nil {
 		return nil, err
@@ -86,10 +86,6 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 		Validators: params.Validators,
 	}
 	return localStore, nil
-}
-
-func (self *LocalStore) CacheCounter() uint64 {
-	return uint64(self.memStore.Counter())
 }
 
 func (self *LocalStore) Put(chunk *Chunk) {

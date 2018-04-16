@@ -39,8 +39,7 @@ func testDpaRandom(toEncrypt bool, t *testing.T) {
 	defer tdb.close()
 	db := tdb.LDBStore
 	db.setCapacity(50000)
-	storeParams := NewStoreParams(defaultCacheCapacity, nil, nil)
-	memStore := NewMemStore(storeParams, db)
+	memStore := NewMemStore(NewDefaultStoreParams(), db)
 	localStore := &LocalStore{
 		memStore: memStore,
 		DbStore:  db,
@@ -72,7 +71,7 @@ func testDpaRandom(toEncrypt bool, t *testing.T) {
 	}
 	ioutil.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
 	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
-	localStore.memStore = NewMemStore(storeParams, db)
+	localStore.memStore = NewMemStore(NewDefaultStoreParams(), db)
 	resultReader, isEncrypted = dpa.Retrieve(key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
@@ -104,9 +103,7 @@ func testDPA_capacity(toEncrypt bool, t *testing.T) {
 	}
 	defer tdb.close()
 	db := tdb.LDBStore
-	storeParams := NewStoreParams(0, nil, nil)
-	storeParams.CacheCapacity = 10000000
-	memStore := NewMemStore(storeParams, db)
+	memStore := NewMemStore(NewDefaultStoreParams(), db)
 	localStore := &LocalStore{
 		memStore: memStore,
 		DbStore:  db,
