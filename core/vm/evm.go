@@ -167,7 +167,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		to       = AccountRef(addr)
 		snapshot = evm.StateDB.Snapshot()
 	)
-	if !evm.StateDB.Exist(addr) {
+	exists := evm.StateDB.Exist(addr)
+	if !exists{
 		if evm.BlockContext.Precompiles[addr] == nil && evm.ChainConfig().IsEIP158(evm.BlockContext.BlockNumber) && value.Sign() == 0 {
 			// Calling a non existing account, don't do antything, but ping the tracer
 			if evm.vmConfig.Debug && evm.depth == 0 {
@@ -180,9 +181,17 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
 
+	precompile, isPrecompile := evm.BlockContext.Precompiles[addr]
+
+	if !exists && !isPrecompile{
+		// Shortcut execution -- account didn't exist,
+		// so no need to lookup the code
+		// but make sure to set returndata to nil
+		evm.interpreter.returnData = nil
+		return nil, gas, nil
+	}
 	code := evm.StateDB.GetCode(addr)
 	codeHash := evm.StateDB.GetCodeHash(addr)
-	_, isPrecompile := evm.BlockContext.Precompiles[addr]
 
 	if !isPrecompile && len(code) == 0 {
 		// Shortcut execution if there is no code,
@@ -193,21 +202,29 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
-	contract := NewContract(caller, to, value, gas)
-	contract.SetCallCode(&addr, codeHash, code)
+	var contract *Contract
 
-	start := time.Now()
-
+	if!isPrecompile {
+		contract = NewContract(caller, to, value, gas)
+		contract.SetCallCode(&addr, codeHash, code)
+	}else{
+		contract = NewPrecompiledContract(caller, to, value, gas)
+	}
 	// Capture the tracer start/end events in debug mode
 	if evm.vmConfig.Debug && evm.depth == 0 {
+		start := time.Now()
 		evm.vmConfig.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
 
 		defer func() { // Lazy evaluation of the parameters
 			evm.vmConfig.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
 		}()
 	}
-	ret, err = run(evm, contract, input)
 
+	if!isPrecompile{
+		ret, err = evm.interpreter.Run(contract, input)
+	}else{
+		ret, err = RunPrecompiledContract(precompile, input, contract)
+	}
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.

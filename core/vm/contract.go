@@ -64,6 +64,18 @@ type Contract struct {
 	DelegateCall bool
 }
 
+func NewPrecompiledContract( caller ContractRef,  object ContractRef,value *big.Int, gas uint64) *Contract{
+
+	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object, Args: nil}
+	// Gas should be a pointer so it can safely be reduced through the run
+	// This pointer will be off the state transition
+	c.Gas = gas
+	// ensures a value is set
+	c.value = value
+	return c
+
+}
+
 // NewContract returns a new contract environment for the execution of EVM.
 func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64) *Contract {
 	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object, Args: nil}
