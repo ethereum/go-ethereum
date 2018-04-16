@@ -201,35 +201,31 @@ func initialize() {
 			if len(*argIP) == 0 {
 				argIP = scanLineA("Please enter your IP and port (e.g. 127.0.0.1:30348): ")
 			}
-		} else {
-			if *argPort == 0 {
-				for {
-					fmt.Print("Please enter the port to use: ")
-					if _, err := fmt.Scanf("%d", argPort); err != nil || *argPort >= 1024 {
-						break
-					}
+		} else if *argPort == 0 {
+			for {
+				fmt.Print("Please enter the port to use: ")
+				if _, err := fmt.Scanf("%d", argPort); err != nil || *argPort >= 1024 {
+					break
 				}
 			}
 		}
-	} else {
-		if *useLibP2P {
-			var libp2pbootstrap *string
-			for libp2pbootstrap == nil {
-				libp2pbootstrap = scanLineA("Please enter the bootstrap node's address: ")
-			}
-			libp2pbootaddr, err := multiaddr.NewMultiaddr(*libp2pbootstrap)
-			if err != nil {
-				utils.Fatalf("Error parsing the bootnode addr: %v", err)
-			}
-			fmt.Println("bootstrap addr: ", libp2pbootaddr)
-			libp2pPeers = append(libp2pPeers, libp2pbootaddr)
-		} else {
-			if len(*argEnode) == 0 {
-				argEnode = scanLineA("Please enter the peer's enode: ")
-			}
-			peer := discover.MustParseNode(*argEnode)
-			peers = append(peers, peer)
+	} else if *useLibP2P {
+		var libp2pbootstrap *string
+		for libp2pbootstrap == nil {
+			libp2pbootstrap = scanLineA("Please enter the bootstrap node's address: ")
 		}
+		libp2pbootaddr, err := multiaddr.NewMultiaddr(*libp2pbootstrap)
+		if err != nil {
+			utils.Fatalf("Error parsing the bootnode addr: %v", err)
+		}
+		fmt.Println("bootstrap addr: ", libp2pbootaddr)
+		libp2pPeers = append(libp2pPeers, libp2pbootaddr)
+	} else {
+		if len(*argEnode) == 0 {
+			argEnode = scanLineA("Please enter the peer's enode: ")
+		}
+		peer := discover.MustParseNode(*argEnode)
+		peers = append(peers, peer)
 	}
 
 	if *mailServerMode {
