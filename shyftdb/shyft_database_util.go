@@ -14,19 +14,33 @@ func WriteBlock(db *leveldb.DB, block *types.Block) error {
 	leng := block.Transactions().Len()
 	var tx_strs = make([]string, leng)
 	//var tx_bytes = make([]byte, leng)
+
+    hash := block.Header().Hash().Bytes()
+	if block.Transactions().Len() > 0 {
+	    // this is inefficient, there are 2 loops over 
+	    // block.Transactions
+	    // TODO: Fix this so there is only one loop
+		WriteTransactions(db, block.Transactions(), hash)
+		for i, tx := range block.Transactions() {
+ 			fmt.Println(tx.Hash())
+ 			fmt.Println("TX HASH")
+ 			fmt.Println(tx.To().Hex())
+ 			tx_strs[i] = tx.Hash().String()
+ 			//tx_bytes[i] = tx.Hash().Bytes()
+ 		}
+	}
+	
 	fmt.Println("The tx_strs is")
 	fmt.Println(tx_strs)
 	//strs := []string{"foo", "bar"}
 	buf := &bytes.Buffer{}
 	gob.NewEncoder(buf).Encode(tx_strs)
 	bs := buf.Bytes()
-	hash := block.Header().Hash().Bytes()
-	if err := db.Put(hash, bs, nil); err != nil {
+	
+    key := append([]byte("bk-")[:], hash[:]...)
+	if err := db.Put(key, bs, nil); err != nil {
 		log.Crit("Failed to store block", "err", err)
 		return nil // Do we want to force an exit here?
-	}
-	if block.Transactions().Len() > 0 {
-		WriteTransactions(db, block.Transactions(), hash)
 	}
 	return nil
 }
@@ -45,13 +59,15 @@ func WriteTransactions(db *leveldb.DB, transactions []*types.Transaction, blockH
 
 // Meant for internal tests
 
-func GetBlock(db *leveldb.DB, block *types.Block) {
+func GetBlock(db *leveldb.DB, block *types.Block) []byte {
 	hash := block.Header().Hash().Bytes()
-	data, err := db.Get(hash, nil)
+	key := append([]byte("bk-")[:], hash[:]...)
+	data, err := db.Get(key, nil)
 	if err != nil {
 		log.Crit("Could not retrieve block", "err", err)
 	}
 	fmt.Println("\nBLOCK Value: " + string(data))
+	return data
 }
 
 func GetAllTransactions(db *leveldb.DB) {
