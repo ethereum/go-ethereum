@@ -31,6 +31,18 @@ type ShyftTxEntry struct {
 	Data      []byte
 }
 
+type ShyftTxEntryPretty struct {
+	TxHash    string
+	To   	  string
+	From 	  string
+	BlockHash string
+	Amount 	  *big.Int
+	GasPrice  *big.Int
+	Gas 	  uint64
+	Nonce     uint64
+	Data      []byte
+}
+
 func WriteBlock(db *leveldb.DB, block *types.Block) error {
 	leng := block.Transactions().Len()
 	var tx_strs = make([]string, leng)
@@ -80,8 +92,6 @@ func WriteTransactions(db *leveldb.DB, tx *types.Transaction, blockHash common.H
 	if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
 		log.Crit("Failed to store TX", "err", err)
 	}
-	GetTransaction(db, tx)
-	GetAllTransactions(db)
 	return tx.Hash().String()
 }
 
@@ -119,7 +129,8 @@ func GetBlock(db *leveldb.DB, block *types.Block) []byte {
 	return data
 }
 
-func GetAllTransactions(db *leveldb.DB) {
+func GetAllTransactions(db *leveldb.DB) []ShyftTxEntryPretty {
+	var txs []ShyftTxEntryPretty
 	iter := db.NewIterator(util.BytesPrefix([]byte("tx-")), nil)
 	for iter.Next() {
 		var txData ShyftTxEntry
@@ -127,21 +138,36 @@ func GetAllTransactions(db *leveldb.DB) {
 		if err := d.Decode(&txData); err != nil {
 			log.Crit("Failed to decode tx:", "err", err)
 		}
-		fmt.Println("DECODED TX")
-		fmt.Println("Tx Hash: ", txData.TxHash.Hex())
-		fmt.Println("From: ", txData.From.Hex())
-		fmt.Println("To: ", txData.To.Hex())
-		fmt.Println("BlockHash: ", txData.BlockHash.Hex())
-		fmt.Println("Amount: ", txData.Amount)
-		fmt.Println("Gas: ", txData.Gas)
-		fmt.Println("GasPrice: ", txData.GasPrice)
-		fmt.Println("Nonce: ", txData.Nonce)
-		fmt.Println("Data: ", txData.Data)
+		prettyFormat := ShyftTxEntryPretty{
+			TxHash:    txData.TxHash.Hex(),
+			From:  	   txData.From.Hex(),
+			To:  	   txData.To.Hex(),
+			BlockHash: txData.BlockHash.Hex(),
+			Amount:    txData.Amount,
+			Gas:       txData.Gas,
+			GasPrice:  txData.GasPrice,
+			Nonce:     txData.Nonce,
+			Data:      txData.Data,
+		}
+		txs = append(txs, prettyFormat)
+		// Uncomment to view "pretty" version of data
+		//fmt.Println("DECODED TX")
+		//fmt.Println("Tx Hash: ", txData.TxHash.Hex())
+		//fmt.Println("From: ", txData.From.Hex())
+		//fmt.Println("To: ", txData.To.Hex())
+		//fmt.Println("BlockHash: ", txData.BlockHash.Hex())
+		//fmt.Println("Amount: ", txData.Amount)
+		//fmt.Println("Gas: ", txData.Gas)
+		//fmt.Println("GasPrice: ", txData.GasPrice)
+		//fmt.Println("Nonce: ", txData.Nonce)
+		//fmt.Println("Data: ", txData.Data)
 	}
 	iter.Release()
+	return txs
 }
 
-func GetTransaction (db *leveldb.DB, tx *types.Transaction) {
+func GetTransaction (db *leveldb.DB, tx *types.Transaction) ShyftTxEntryPretty {
+	var prettyFormat ShyftTxEntryPretty
 	key := append([]byte("tx-")[:], tx.Hash().Bytes()[:]...)
 	data, err := db.Get(key, nil)
 	if err != nil {
@@ -153,15 +179,28 @@ func GetTransaction (db *leveldb.DB, tx *types.Transaction) {
 		if err := d.Decode(&txData); err != nil {
 			log.Crit("Failed to decode tx:", "err", err)
 		}
-		fmt.Println("DECODED TX")
-		fmt.Println("Tx Hash: ", txData.TxHash.Hex())
-		fmt.Println("From: ", txData.From.Hex())
-		fmt.Println("To: ", txData.To.Hex())
-		fmt.Println("BlockHash: ", txData.BlockHash.Hex())
-		fmt.Println("Amount: ", txData.Amount)
-		fmt.Println("Gas: ", txData.Gas)
-		fmt.Println("GasPrice: ", txData.GasPrice)
-		fmt.Println("Nonce: ", txData.Nonce)
-		fmt.Println("Data: ", txData.Data)
+		prettyFormat = ShyftTxEntryPretty{
+			TxHash:    txData.TxHash.Hex(),
+			From:  	   txData.From.Hex(),
+			To:  	   txData.To.Hex(),
+			BlockHash: txData.BlockHash.Hex(),
+			Amount:    txData.Amount,
+			Gas:       txData.Gas,
+			GasPrice:  txData.GasPrice,
+			Nonce:     txData.Nonce,
+			Data:      txData.Data,
+		}
+		// Uncomment to view "pretty" version of data
+		//fmt.Println("DECODED TX")
+		//fmt.Println("Tx Hash: ", txData.TxHash.Hex())
+		//fmt.Println("From: ", txData.From.Hex())
+		//fmt.Println("To: ", txData.To.Hex())
+		//fmt.Println("BlockHash: ", txData.BlockHash.Hex())
+		//fmt.Println("Amount: ", txData.Amount)
+		//fmt.Println("Gas: ", txData.Gas)
+		//fmt.Println("GasPrice: ", txData.GasPrice)
+		//fmt.Println("Nonce: ", txData.Nonce)
+		//fmt.Println("Data: ", txData.Data)
 	}
+	return prettyFormat
 }
