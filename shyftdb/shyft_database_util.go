@@ -4,11 +4,26 @@ import (
     "fmt"
     "bytes"
     "encoding/gob"
+	"math/big"
+
     "github.com/syndtr/goleveldb/leveldb"
     "github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/common"
 )
+
+type ShyftTxEntry struct {
+	TxHash    common.Hash
+	To   	  *common.Address
+	From 	  *common.Address
+	BlockHash common.Hash
+	Amount 	  *big.Int
+	GasPrice  *big.Int
+	Gas 	  uint64
+	Nonce     uint64
+	Data      []byte
+}
 
 func WriteBlock(db *leveldb.DB, block *types.Block) error {
 	leng := block.Transactions().Len()
@@ -17,16 +32,9 @@ func WriteBlock(db *leveldb.DB, block *types.Block) error {
 
     hash := block.Header().Hash().Bytes()
 	if block.Transactions().Len() > 0 {
-	    // this is inefficient, there are 2 loops over 
-	    // block.Transactions
-	    // TODO: Fix this so there is only one loop
-		WriteTransactions(db, block.Transactions(), hash)
 		for i, tx := range block.Transactions() {
- 			fmt.Println(tx.Hash())
- 			fmt.Println("TX HASH")
- 			fmt.Println(tx.To().Hex())
- 			tx_strs[i] = tx.Hash().String()
- 			//tx_bytes[i] = tx.Hash().Bytes()
+ 			tx_strs[i] = WriteTransactions(db, tx, block.Header().Hash())
+			//tx_bytes[i] = tx.Hash().Bytes()
  		}
 	}
 	
@@ -45,16 +53,30 @@ func WriteBlock(db *leveldb.DB, block *types.Block) error {
 	return nil
 }
 
-func WriteTransactions(db *leveldb.DB, transactions []*types.Transaction, blockHash []byte) error {
-	for _, tx := range transactions {
-		key := append([]byte("tx-")[:], tx.Hash().Bytes()[:]...)
-		if err := db.Put(key, []byte("Hello hello"), nil); err != nil {
-			log.Crit("Failed to store TX", "err", err)
-		}
-		GetTransaction(db, tx)
+func WriteTransactions(db *leveldb.DB, tx *types.Transaction, blockHash common.Hash) string {
+	txData := ShyftTxEntry{
+		TxHash:    tx.Hash(),
+		To:   	   tx.To(),
+		From: 	   tx.From(),
+		BlockHash: blockHash,
+		Amount:    tx.Value(),
+		GasPrice:  tx.GasPrice(),
+		Gas:   	   tx.Gas(),
+		Nonce:     tx.Nonce(),
+		Data:      tx.Data(),
 	}
+	var encodedData bytes.Buffer
+	encoder := gob.NewEncoder(&encodedData)
+	if err := encoder.Encode(txData); err != nil {
+		log.Crit("Faild to encode TX data", "err", err)
+	}
+	key := append([]byte("tx-")[:], tx.Hash().Bytes()[:]...)
+	if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
+		log.Crit("Failed to store TX", "err", err)
+	}
+	GetTransaction(db, tx)
 	GetAllTransactions(db)
-	return nil
+	return tx.Hash().String()
 }
 
 // Meant for internal tests
@@ -73,7 +95,21 @@ func GetBlock(db *leveldb.DB, block *types.Block) []byte {
 func GetAllTransactions(db *leveldb.DB) {
 	iter := db.NewIterator(util.BytesPrefix([]byte("tx-")), nil)
 	for iter.Next() {
-		fmt.Println("\nALL TX VALUE: " + string(iter.Value()))
+		var txData ShyftTxEntry
+		d := gob.NewDecoder(bytes.NewBuffer(iter.Value()))
+		if err := d.Decode(&txData); err != nil {
+			log.Crit("Failed to decode tx:", "err", err)
+		}
+		fmt.Println("DECODED TX")
+		fmt.Println("Tx Hash: ", txData.TxHash.Hex())
+		fmt.Println("From: ", txData.From.Hex())
+		fmt.Println("To: ", txData.To.Hex())
+		fmt.Println("BlockHash: ", txData.BlockHash.Hex())
+		fmt.Println("Amount: ", txData.Amount)
+		fmt.Println("Gas: ", txData.Gas)
+		fmt.Println("GasPrice: ", txData.GasPrice)
+		fmt.Println("Nonce: ", txData.Nonce)
+		fmt.Println("Data: ", txData.Data)
 	}
 	iter.Release()
 }
@@ -85,6 +121,20 @@ func GetTransaction (db *leveldb.DB, tx *types.Transaction) {
 		log.Crit("Could not retrieve TX", "err", err)
 	}
 	if len(data) > 0 {
-		fmt.Println("\nTX Value: " + string(data))
+		var txData ShyftTxEntry
+		d := gob.NewDecoder(bytes.NewBuffer(data))
+		if err := d.Decode(&txData); err != nil {
+			log.Crit("Failed to decode tx:", "err", err)
+		}
+		fmt.Println("DECODED TX")
+		fmt.Println("Tx Hash: ", txData.TxHash.Hex())
+		fmt.Println("From: ", txData.From.Hex())
+		fmt.Println("To: ", txData.To.Hex())
+		fmt.Println("BlockHash: ", txData.BlockHash.Hex())
+		fmt.Println("Amount: ", txData.Amount)
+		fmt.Println("Gas: ", txData.Gas)
+		fmt.Println("GasPrice: ", txData.GasPrice)
+		fmt.Println("Nonce: ", txData.Nonce)
+		fmt.Println("Data: ", txData.Data)
 	}
 }
