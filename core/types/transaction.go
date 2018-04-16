@@ -195,6 +195,22 @@ func (tx *Transaction) To() *common.Address {
 	return &to
 }
 
+//@NOTE:SHYFT - Custom function to require FROM
+func (tx *Transaction) From() *common.Address {
+	if tx.data.V != nil {
+		// make a best guess about the signer and use that to derive
+		// the sender.
+		signer := deriveSigner(tx.data.V)
+		if from, err := Sender(signer, tx); err != nil { // derive but don't cache
+			return nil
+		} else {
+			return &from
+		}
+	} else {
+		return nil
+	}
+}
+
 // Hash hashes the RLP encoding of tx.
 // It uniquely identifies the transaction.
 func (tx *Transaction) Hash() common.Hash {
