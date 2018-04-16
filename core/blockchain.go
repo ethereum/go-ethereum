@@ -910,6 +910,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if err := shyftdb.WriteBlock(bc.blockExplorerDb, block); err != nil {
 		return NonStatTy, err
 	}
+	//fmt.Println(shyftdb.GetAllBlocks(bc.blockExplorerDb))
 	//result := shyftdb.GetBlock(bc.blockExplorerDb, block)
 
 	// this is WIP for decoding bytes rather than hex strings

@@ -9,9 +9,16 @@ import (
     "github.com/syndtr/goleveldb/leveldb"
     "github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/common"
 )
+
+
+type SBlock struct {
+	hash string
+	txes []string
+}
 
 type ShyftTxEntry struct {
 	TxHash    common.Hash
@@ -80,6 +87,27 @@ func WriteTransactions(db *leveldb.DB, tx *types.Transaction, blockHash common.H
 }
 
 // Meant for internal tests
+func GetAllBlocks(db *leveldb.DB) []SBlock{
+	var arr []SBlock
+	iter := db.NewIterator(util.BytesPrefix([]byte("bk-")), nil)
+	for iter.Next() {
+	    result := iter.Value()
+	    buf := bytes.NewBuffer(result)
+		strs2 := []string{}
+		gob.NewDecoder(buf).Decode(&strs2)
+		//fmt.Println("the key is")
+		hash := common.BytesToHash(iter.Key())
+		hex := hash.Hex()
+		//fmt.Println(hex)
+		sblock := SBlock{hex, strs2}
+		arr = append(arr, sblock)
+
+		//fmt.Println("\n ALL BK BK VALUE" + string(result))
+	}
+	
+	iter.Release()
+	return arr
+}
 
 func GetBlock(db *leveldb.DB, block *types.Block) []byte {
 	hash := block.Header().Hash().Bytes()
