@@ -27,10 +27,12 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/rs/cors"
 )
 
@@ -70,6 +72,7 @@ func (hc *httpConn) Close() error {
 // using the provided HTTP Client.
 func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 	req, err := http.NewRequest(http.MethodPost, endpoint, nil)
+	log.Debug(fmt.Sprintf("connecting to HTTP endpoint %s", endpoint))
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +99,8 @@ func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) e
 	defer respBody.Close()
 	var respmsg jsonrpcMessage
 	if err := json.NewDecoder(respBody).Decode(&respmsg); err != nil {
+		err := fmt.Errorf("Error creating HTTP connection to RPC socket. Did you set --rpcvhosts on the server? Actual error is \"%s\"", err)
+		debug.PrintStack()
 		return err
 	}
 	op.resp <- &respmsg
