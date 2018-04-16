@@ -246,7 +246,6 @@ func decodeOldData(data []byte, chunk *Chunk) {
 }
 
 func (s *LDBStore) collectGarbage(ratio float32) {
-	log.Info("collect garbage", "ratio", ratio)
 	it := s.db.NewIterator()
 	defer it.Release()
 
@@ -286,7 +285,6 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 	sort.Slice(garbage[:gcnt], func(i, j int) bool { return garbage[i].value < garbage[j].value })
 
 	cutoff := int(float32(gcnt) * ratio)
-	log.Info("cutoff", "cutoff", cutoff, "gcnt", gcnt)
 	for i := 0; i < cutoff; i++ {
 		s.delete(garbage[i].idx, garbage[i].idxKey, garbage[i].po)
 	}
@@ -563,7 +561,6 @@ func (s *LDBStore) writeBatches() {
 		}
 		close(c)
 		for e > s.capacity {
-			log.Info("collecting garbage", "entryCnt", e, "capacity", s.capacity)
 			s.collectGarbage(gcArrayFreeRatio)
 			e = s.entryCnt
 		}
@@ -695,7 +692,6 @@ func (s *LDBStore) setCapacity(c uint64) {
 			ratio = 1
 		}
 		for s.entryCnt > c {
-			log.Info("collecting garbage (set.capacity)", "entryCnt", s.entryCnt, "capacity", c)
 			s.collectGarbage(ratio)
 		}
 	}
