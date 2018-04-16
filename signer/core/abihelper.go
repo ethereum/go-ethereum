@@ -175,7 +175,10 @@ func NewAbiDBFromFile(path string) (*AbiDb, error) {
 	if err != nil {
 		return nil, err
 	}
-	db := new(AbiDb)
+	db, err := NewEmptyAbiDB()
+	if err != nil {
+		return nil, err
+	}
 	json.Unmarshal(raw, &db.db)
 	return db, nil
 }

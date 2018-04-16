@@ -182,7 +182,7 @@ func TestSelectorUnmarshalling(t *testing.T) {
 		abistruct abi.ABI
 	)
 
-	db, err = NewAbiDBFromFile("../4byte.json")
+	db, err = NewAbiDBFromFile("../../cmd/clef/4byte.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestCustomABI(t *testing.T) {
 		t.Fatal(err)
 	}
 	filename := fmt.Sprintf("%s/4byte_custom.json", d)
-	abidb, err := NewAbiDBFromFiles("../4byte.json", filename)
+	abidb, err := NewAbiDBFromFiles("../../cmd/clef/4byte.json", filename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,6 +237,9 @@ func TestCustomABI(t *testing.T) {
 	}
 	//Check that it wrote to file
 	abidb2, err := NewAbiDBFromFile(filename)
+	if err != nil {
+		t.Fatalf("Failed to create new abidb: %v", err)
+	}
 	_, err = abidb2.LookupMethodSelector(calldata)
 	if err != nil {
 		t.Fatalf("Save failed: should find a match for abi signature after loading from disk")

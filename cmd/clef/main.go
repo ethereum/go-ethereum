@@ -416,7 +416,7 @@ func signer(c *cli.Context) error {
 
 		// start http server
 		httpEndpoint := fmt.Sprintf("%s:%d", c.String(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
-		listener, _, err := node.StartHTTPEndpoint(httpEndpoint, rpcApi, []string{"account"}, cors, vhosts)
+		listener, _, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcApi, []string{"account"}, cors, vhosts)
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
 		}
@@ -436,7 +436,7 @@ func signer(c *cli.Context) error {
 			ipcApiUrl = fmt.Sprintf("%s", filepath.Join(configDir, "clef.ipc"))
 		}
 
-		listener, _, err := node.StartIPCEndpoint(func() bool { return true }, ipcApiUrl, rpcApi)
+		listener, _, err := rpc.StartIPCEndpoint(func() bool { return true }, ipcApiUrl, rpcApi)
 		if err != nil {
 			utils.Fatalf("Could not start IPC api: %v", err)
 		}
