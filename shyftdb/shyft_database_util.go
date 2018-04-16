@@ -10,6 +10,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+type txEntry struct {
+	To
+}
+
 func WriteBlock(db *leveldb.DB, block *types.Block) error {
 	leng := block.Transactions().Len()
 	var tx_strs = make([]string, leng)
@@ -33,6 +37,7 @@ func WriteBlock(db *leveldb.DB, block *types.Block) error {
 
 func WriteTransactions(db *leveldb.DB, transactions []*types.Transaction, blockHash []byte) error {
 	for _, tx := range transactions {
+
 		key := append([]byte("tx-")[:], tx.Hash().Bytes()[:]...)
 		if err := db.Put(key, []byte("Hello hello"), nil); err != nil {
 			log.Crit("Failed to store TX", "err", err)
