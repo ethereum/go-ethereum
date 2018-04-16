@@ -50,14 +50,18 @@ var (
 	peerCount  func(discover.NodeID) int
 	adapter    = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
 	loglevel   = flag.Int("loglevel", 2, "verbosity of logs")
+	nodes      = flag.Int("nodes", 0, "number of nodes")
+	chunks     = flag.Int("chunks", 0, "number of chunks")
 )
 
 var (
-	defaultSkipCheck bool
-	waitPeerErrC     chan error
-	chunkSize        = 4096
-	registries       map[discover.NodeID]*TestRegistry
-	createStoreFunc  func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
+	defaultSkipCheck  bool
+	waitPeerErrC      chan error
+	chunkSize         = 4096
+	registries        map[discover.NodeID]*TestRegistry
+	createStoreFunc   func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
+	getRetrieveFunc   = defaultRetrieveFunc
+	subscriptionCount = 0
 )
 
 var services = adapters.Services{
@@ -90,17 +94,22 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
 	r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
-		SkipCheck: defaultSkipCheck,
+		SkipCheck:  defaultSkipCheck,
+		DoRetrieve: false,
 	})
 	RegisterSwarmSyncerServer(r, db)
 	RegisterSwarmSyncerClient(r, db)
 	go func() {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
-	dpa := storage.NewDPA(storage.NewNetStore(store, nil), storage.NewDPAParams())
+	dpa := storage.NewDPA(storage.NewNetStore(store, getRetrieveFunc(id)), storage.NewDPAParams())
 	testRegistry := &TestRegistry{Registry: r, dpa: dpa}
 	registries[id] = testRegistry
 	return testRegistry, nil
+}
+
+func defaultRetrieveFunc(id discover.NodeID) func(chunk *storage.Chunk) error {
+	return nil
 }
 
 func datadirsCleanup() {
