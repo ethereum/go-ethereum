@@ -43,7 +43,7 @@ import (
 )
 
 const testMinProxBinSize = 2
-const MAX_TIMEOUT = 600
+const MaxTimeout = 600
 
 var (
 	pof = pot.DefaultPof(256)
@@ -54,8 +54,6 @@ var (
 	datadirs  map[discover.NodeID]string
 	ppmap     map[string]*network.PeerPot
 
-	globalWg sync.WaitGroup
-
 	live    bool
 	history bool
 
@@ -64,10 +62,9 @@ var (
 
 type synctestConfig struct {
 	addrs            [][]byte
-	chunks           []storage.Key
+	hashes           []storage.Key
 	idToChunksMap    map[discover.NodeID][]int
 	chunksToNodesMap map[string][]int
-	idToAddrMap      map[discover.NodeID][]byte
 	addrToIdMap      map[string]discover.NodeID
 }
 
@@ -85,7 +82,7 @@ func initSyncTest() {
 		addr := network.NewAddrFromNodeID(id)
 		return addr
 	}
-
+	//global func to create local store
 	createStoreFunc = createTestLocalStorageForId
 	//local stores
 	stores = make(map[discover.NodeID]storage.ChunkStore)
@@ -95,7 +92,6 @@ func initSyncTest() {
 	deliveries = make(map[discover.NodeID]*Delivery)
 	//registries, map of discover.NodeID to its streamer
 	registries = make(map[discover.NodeID]*TestRegistry)
-	//channel to wait for peers connected
 	//not needed for this test but required from common_test for NewStreamService
 	waitPeerErrC = make(chan error)
 	//also not needed for this test but required for NewStreamService
@@ -107,20 +103,34 @@ func initSyncTest() {
 	}
 }
 
-//This file executes a number of tests with the syntax
-//TestSyncing_x_y
-//x is the number of chunks which will be uploaded
-//y is the number of nodes for the test
-func TestSyncing_4_32(t *testing.T)  { testSyncing(t, 4, 32) }
-func TestSyncing_32_16(t *testing.T) { testSyncing(t, 32, 16) }
-
-func TestLongRunningSyncing(t *testing.T) {
-	if *longrunning {
-		chnkCnt := []int{1, 8, 32, 256, 1024}
-		nCnt := []int{16, 32, 64, 128, 256}
-
+//This test is a syncing test for nodes.
+//One node is randomly selected to be the pivot node.
+//A configurable number of chunks and nodes can be
+//provided to the test, the number of chunks is uploaded
+//to the pivot node, and we check that nodes get the chunks
+//they are expected to store based on the syncing protocol.
+//Number of chunks and nodes can be provided via commandline too.
+func TestSyncing(t *testing.T) {
+	//if nodes/chunks have been provided via commandline,
+	//run the tests with these values
+	if *nodes != 0 && *chunks != 0 {
+		log.Info(fmt.Sprintf("Running test with %d chunks and %d nodes...", *chunks, *nodes))
+		testSyncing(t, *chunks, *nodes)
+	} else {
+		var nodeCnt []int
+		var chnkCnt []int
+		//if the `longrunning` flag has been provided
+		//run more test combinations
+		if *longrunning {
+			chnkCnt = []int{1, 8, 32, 256, 1024}
+			nodeCnt = []int{16, 32, 64, 128, 256}
+		} else {
+			//default test
+			chnkCnt = []int{4, 32}
+			nodeCnt = []int{32, 16}
+		}
 		for _, chnk := range chnkCnt {
-			for _, n := range nCnt {
+			for _, n := range nodeCnt {
 				log.Info(fmt.Sprintf("Long running test with %d chunks and %d nodes...", chnk, n))
 				testSyncing(t, chnk, n)
 			}
@@ -128,11 +138,9 @@ func TestLongRunningSyncing(t *testing.T) {
 	}
 }
 
-//do run the tests
+//Do run the tests
+//Every test runs 3 times, a live, a history, and a live AND history
 func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
-	initSyncTest()
-	ids = make([]discover.NodeID, nodeCount)
-
 	//test live and NO history
 	log.Info("Testing live and no history")
 	live = true
@@ -159,12 +167,19 @@ func testSyncing(t *testing.T, chunkCount int, nodeCount int) {
 }
 
 /*
-The test generates the given number of chunks,
-then uploads these to a random node.
-Afterwards for every chunk generated, the nearest node addresses
-are identified, syncing is started, and finally we verify
-that the nodes closer to the chunk addresses actually do have
-the chunks in their local stores.
+The test generates the given number of chunks
+
+The upload is done by dependency to the global
+`live` and `history` variables;
+
+If `live` is set, first stream subscriptions are established, then
+upload to a random node.
+
+If `history` is enabled, first upload then build up subscriptions.
+
+For every chunk generated, the nearest node addresses
+are identified, we verify that the nodes closer to the
+chunk addresses actually do have the chunks in their local stores.
 
 The test loads a snapshot file to construct the swarm network,
 assuming that the snapshot file identifies a healthy
@@ -179,20 +194,22 @@ For every test run, a series of three tests will be executed:
   are uploaded twice, once before and once after subscriptions
 */
 func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
+	initSyncTest()
+	//the ids of the snapshot nodes, initiate only now as we need nodeCount
+	ids = make([]discover.NodeID, nodeCount)
 	//initialize the test struct
 	conf = &synctestConfig{}
 	//map of discover ID to indexes of chunks expected at that ID
 	conf.idToChunksMap = make(map[discover.NodeID][]int)
-	//map of discover ID to kademlia overlay address
-	conf.idToAddrMap = make(map[discover.NodeID][]byte)
 	//map of overlay address to discover ID
 	conf.addrToIdMap = make(map[string]discover.NodeID)
-	conf.chunks = make([]storage.Key, 0)
-	//First load the snapshot from the file
+	//array where the generated chunk hashes will be stored
+	conf.hashes = make([]storage.Key, 0)
+	//channel to trigger node checks in the simulation
 	trigger := make(chan discover.NodeID)
-	// channel to signal simulation initialisation with action call complete
-	// or node disconnections
+	//channel to check for disconnection errors
 	disconnectC := make(chan error)
+	//channel to close disconnection watcher routine
 	quitC := make(chan struct{})
 
 	//load nodes from the snapshot file
@@ -235,7 +252,6 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 		//the proximity calculation is on overlay addr,
 		//the p2p/simulations check func triggers on discover.NodeID,
 		//so we need to know which overlay addr maps to which nodeID
-		conf.idToAddrMap[ids[c]] = a
 		conf.addrToIdMap[string(a)] = ids[c]
 	}
 	log.Info("Test config successfully initialized")
@@ -245,6 +261,8 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 
 	//define the action to be performed before the test checks: start syncing
 	action := func(ctx context.Context) error {
+		//first run the health check on all nodes,
+		//wait until nodes are all healthy
 		ticker := time.NewTicker(200 * time.Millisecond)
 		defer ticker.Stop()
 		for range ticker.C {
@@ -276,7 +294,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 			if err != nil {
 				return err
 			}
-			conf.chunks = append(conf.chunks, chunks...)
+			conf.hashes = append(conf.hashes, chunks...)
 			//finally map chunks to the closest addresses
 			mapKeysToNodes(conf)
 		}
@@ -285,13 +303,21 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 		errc := make(chan error)
 
 		//now setup and start event watching in order to know when we can upload
-		ctx, watchCancel := context.WithTimeout(context.Background(), MAX_TIMEOUT*time.Second)
+		ctx, watchCancel := context.WithTimeout(context.Background(), MaxTimeout*time.Second)
 		defer watchCancel()
 
 		log.Info("Setting up stream subscription")
-		// each node Subscribes to each other's swarmChunkServerStreamName
+
+		//We need two iterations, one to subscribe to the subscription events
+		//(so we know when setup phase is finished), and one to
+		//actually run the stream subscriptions. We can't do it in the same iteration,
+		//because while the first nodes in the loop are setting up subscriptions,
+		//the latter ones have not subscribed to listen to peer events yet,
+		//and then we miss events.
+
+		//first iteration: setup disconnection watcher and subscribe to peer events
 		for j, id := range ids {
-			log.Trace(fmt.Sprintf("subscribe: %d", j))
+			log.Trace(fmt.Sprintf("Subscribe to subscription events: %d", j))
 			client, err := net.GetNode(id).Client()
 			if err != nil {
 				return err
@@ -308,19 +334,6 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 				rpcSubscriptionsWg.Done()
 			}()
 
-			if log.Lvl(*loglevel) >= log.LvlTrace {
-				//this will print the kademlia tables of all nodes
-				//to only print the kademlia of the pivot node,
-				//use: if j == idx {}
-				var kt string
-				err = client.CallContext(ctx, &kt, "stream_getKad")
-				if err != nil {
-					return err
-				}
-
-				log.Debug("kad table " + node.ID().String())
-				log.Debug(kt)
-			}
 			//watch for peers disconnecting
 			wdDoneC, err := streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
 			if err != nil {
@@ -331,33 +344,50 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 				<-wdDoneC
 				rpcSubscriptionsWg.Done()
 			}()
-			//start syncing!
-			err = client.CallContext(ctx, nil, "stream_startSyncing")
+		}
+
+		//second iteration: start syncing
+		for j, id := range ids {
+			log.Trace(fmt.Sprintf("Start syncing subscriptions: %d", j))
+			client, err := net.GetNode(id).Client()
 			if err != nil {
 				return err
 			}
+			//start syncing!
+			var cnt int
+			err = client.CallContext(ctx, &cnt, "stream_startSyncing")
+			if err != nil {
+				return err
+			}
+			//increment the number of subscriptions we need to wait for
+			//by the count returned from startSyncing (SYNC subscriptions)
+			subscriptionCount += cnt
 		}
 
 		//now wait until the number of expected subscriptions has been finished
-		go func() {
-			globalWg.Wait()
-			errc <- nil
-		}()
-
-		err := <-errc
-		if err != nil {
-			return err
-		}
-		log.Info("Stream subscriptions successfully requested")
-		if live {
-			//now upload the chunks to the selected random single node
-			chunks, err := uploadFileToSingleNodeStore(node.ID(), chunkCount)
+		//`watchSubscriptionEvents` will write with a `nil` value to errc
+		for err := range errc {
 			if err != nil {
 				return err
 			}
-			conf.chunks = append(conf.chunks, chunks...)
+			//`nil` received, decrement count
+			subscriptionCount--
+			//all subscriptions received
+			if subscriptionCount == 0 {
+				break
+			}
+		}
+
+		log.Info("Stream subscriptions successfully requested")
+		if live {
+			//now upload the chunks to the selected random single node
+			hashes, err := uploadFileToSingleNodeStore(node.ID(), chunkCount)
+			if err != nil {
+				return err
+			}
+			conf.hashes = append(conf.hashes, hashes...)
 			//finally map chunks to the closest addresses
-			log.Debug(fmt.Sprintf("Uploaded chunks for live syncing: %v", conf.chunks))
+			log.Debug(fmt.Sprintf("Uploaded chunks for live syncing: %v", conf.hashes))
 			mapKeysToNodes(conf)
 			log.Info(fmt.Sprintf("Uploaded %d chunks to random single node", chunkCount))
 		}
@@ -388,7 +418,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 		//for each expected chunk, check if it is in the local store
 		for _, ch := range localChunks {
 			//get the real chunk by the index in the index array
-			chunk := conf.chunks[ch]
+			chunk := conf.hashes[ch]
 			log.Trace(fmt.Sprintf("node has chunk: %s:", chunk))
 			//check if the expected chunk is indeed in the localstore
 			if _, err := lstore.Get(chunk); err != nil {
@@ -416,7 +446,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 
 	log.Info("Starting simulation run...")
 
-	timeout := MAX_TIMEOUT * time.Second
+	timeout := MaxTimeout * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -437,13 +467,11 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 	return nil
 }
 
-//Show kademlia of uploading node for debugging
-func (r *TestRegistry) GetKad(ctx context.Context) string {
-	return r.delivery.overlay.String()
-}
-
 //the server func to start syncing
-func (r *TestRegistry) StartSyncing(ctx context.Context) error {
+//issues `RequestSubscriptionMsg` to peers, based on po, by iterating over
+//the kademlia's `EachBin` function.
+//returns the number of subscriptions requested
+func (r *TestRegistry) StartSyncing(ctx context.Context) (int, error) {
 	var err error
 
 	if log.Lvl(*loglevel) == log.LvlDebug {
@@ -459,9 +487,10 @@ func (r *TestRegistry) StartSyncing(ctx context.Context) error {
 
 	kad, ok := r.delivery.overlay.(*network.Kademlia)
 	if !ok {
-		return fmt.Errorf("Not a Kademlia!")
+		return 0, fmt.Errorf("Not a Kademlia!")
 	}
 
+	subCnt := 0
 	//iterate over each bin and solicit needed subscription to bins
 	kad.EachBin(r.addr.Over(), pof, 0, func(conn network.OverlayConn, po int) bool {
 		//identify begin and start index of the bin(s) we want to subscribe to
@@ -471,7 +500,7 @@ func (r *TestRegistry) StartSyncing(ctx context.Context) error {
 			histRange = &Range{}
 		}
 
-		globalWg.Add(1)
+		subCnt++
 		err = r.RequestSubscription(conf.addrToIdMap[string(conn.Address())], NewStream("SYNC", FormatSyncBinKey(uint8(po)), live), histRange, Top)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error in RequestSubsciption! %v", err))
@@ -480,7 +509,7 @@ func (r *TestRegistry) StartSyncing(ctx context.Context) error {
 		return true
 
 	})
-	return nil
+	return subCnt, nil
 }
 
 //map chunk keys to addresses which are responsible
@@ -495,11 +524,11 @@ func mapKeysToNodes(conf *synctestConfig) {
 		np, _, _ = pot.Add(np, a, pof)
 	}
 	//for each address, run EachNeighbour on the chunk hashes pot to identify closest nodes
-	log.Trace(fmt.Sprintf("Generated hash chunk(s): %v", conf.chunks))
-	for i := 0; i < len(conf.chunks); i++ {
+	log.Trace(fmt.Sprintf("Generated hash chunk(s): %v", conf.hashes))
+	for i := 0; i < len(conf.hashes); i++ {
 		pl := 256 //highest possible proximity
 		var nns []int
-		np.EachNeighbour([]byte(conf.chunks[i]), pof, func(val pot.Val, po int) bool {
+		np.EachNeighbour([]byte(conf.hashes[i]), pof, func(val pot.Val, po int) bool {
 			a := val.([]byte)
 			if pl < 256 && pl != po {
 				return false
@@ -516,7 +545,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 			}
 			return true
 		})
-		kmap[string(conf.chunks[i])] = nns
+		kmap[string(conf.hashes[i])] = nns
 	}
 	for addr, chunks := range nodemap {
 		//this selects which chunks are expected to be found with the given node
@@ -616,6 +645,7 @@ func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rp
 		return
 	}
 	c := make(chan struct{})
+
 	go func() {
 		defer func() {
 			log.Trace("watch subscription events: unsubscribe", "id", id)
@@ -636,7 +666,7 @@ func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rp
 			case e := <-events:
 				//just catch SubscribeMsg
 				if e.Type == p2p.PeerEventTypeMsgRecv && e.Protocol == "stream" && e.MsgCode != nil && *e.MsgCode == 4 {
-					globalWg.Done()
+					errc <- nil
 				}
 			case err := <-sub.Err():
 				if err != nil {
