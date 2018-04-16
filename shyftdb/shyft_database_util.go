@@ -4,14 +4,25 @@ import (
     "fmt"
     "bytes"
     "encoding/gob"
+	"math/big"
+
     "github.com/syndtr/goleveldb/leveldb"
     "github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type txEntry struct {
-	To
+	TxHash    common.Hash
+	To   	  *common.Address
+	From 	  *common.Address
+	BlockHash []byte
+	Amount 	  *big.Int
+	GasPrice  *big.Int
+	Gas 	  uint64
+	Nonce     uint64
+	Data      []byte
 }
 
 func WriteBlock(db *leveldb.DB, block *types.Block) error {
@@ -37,7 +48,19 @@ func WriteBlock(db *leveldb.DB, block *types.Block) error {
 
 func WriteTransactions(db *leveldb.DB, transactions []*types.Transaction, blockHash []byte) error {
 	for _, tx := range transactions {
-
+		var from = GenerateFromAddr()
+		txData := txEntry{
+			TxHash:    tx.Hash(),
+			To:   	   tx.To(),
+			From: 	   from,
+			BlockHash: blockHash,
+			Amount:    tx.Value(),
+			GasPrice:  tx.GasPrice(),
+			Gas:   	   tx.Gas(),
+			Nonce:     tx.Nonce(),
+			Data:      tx.Data(),
+		}
+		fmt.Println(txData)
 		key := append([]byte("tx-")[:], tx.Hash().Bytes()[:]...)
 		if err := db.Put(key, []byte("Hello hello"), nil); err != nil {
 			log.Crit("Failed to store TX", "err", err)
@@ -46,6 +69,18 @@ func WriteTransactions(db *leveldb.DB, transactions []*types.Transaction, blockH
 	}
 	GetAllTransactions(db)
 	return nil
+}
+
+// Helper functions
+
+func GenerateFromAddr(tx *types.Transaction) *common.Address {
+	var from *common.Address
+	signer := deriveSigner(tx.data.V)
+	if f, err := Sender(signer, tx); err != nil { // derive but don't cache
+		from = "[invalid sender: invalid sig]"
+	} else {
+		from = fmt.Sprintf("%x", f[:])
+	}
 }
 
 // Meant for internal tests
