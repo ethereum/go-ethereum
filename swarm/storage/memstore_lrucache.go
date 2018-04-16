@@ -19,8 +19,6 @@
 package storage
 
 import (
-	"bytes"
-	"fmt"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -79,11 +77,7 @@ func (m *MemStore) Get(key Key) (*Chunk, error) {
 	if !ok {
 		return nil, ErrChunkNotFound
 	}
-	chunk := c.(*Chunk)
-	if !bytes.Equal(chunk.Key, key) {
-		panic(fmt.Errorf("MemStore.Get: chunk key %s != req key %s", chunk.Key.Hex(), key.Hex()))
-	}
-	return chunk, nil
+	return c.(*Chunk), nil
 }
 
 func (m *MemStore) Put(c *Chunk) {
