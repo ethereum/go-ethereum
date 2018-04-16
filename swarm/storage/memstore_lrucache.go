@@ -33,8 +33,8 @@ type MemStore struct {
 	disabled bool
 }
 
-func NewMemStore(_ *LDBStore, cacheCapacity uint, requestsCapacity uint) (m *MemStore) {
-	if cacheCapacity == 0 {
+func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
+	if params.CacheCapacity == 0 {
 		return &MemStore{
 			disabled: true,
 		}
@@ -44,12 +44,12 @@ func NewMemStore(_ *LDBStore, cacheCapacity uint, requestsCapacity uint) (m *Mem
 		v := value.(*Chunk)
 		<-v.dbStoredC
 	}
-	c, err := lru.NewWithEvict(int(cacheCapacity), onEvicted)
+	c, err := lru.NewWithEvict(int(params.CacheCapacity), onEvicted)
 	if err != nil {
 		panic(err)
 	}
 
-	r, err := lru.New(int(requestsCapacity))
+	r, err := lru.New(int(params.ChunkRequestsCacheCapacity))
 	if err != nil {
 		panic(err)
 	}
@@ -98,8 +98,7 @@ func (m *MemStore) Put(c *Chunk) {
 	if c.ReqC != nil {
 		select {
 		case <-c.ReqC:
-			ok := c.GetErrored()
-			if !ok {
+			if c.GetErrored() != nil {
 				m.requests.Remove(string(c.Key))
 				return
 			}
@@ -120,7 +119,24 @@ func (m *MemStore) setCapacity(n int) {
 	if n <= 0 {
 		m.disabled = true
 	} else {
-		m = NewMemStore(nil, uint(n), defaultChunkRequestsCacheCapacity)
+		onEvicted := func(key interface{}, value interface{}) {
+			v := value.(*Chunk)
+			<-v.dbStoredC
+		}
+		c, err := lru.NewWithEvict(n, onEvicted)
+		if err != nil {
+			panic(err)
+		}
+
+		r, err := lru.New(defaultChunkRequestsCacheCapacity)
+		if err != nil {
+			panic(err)
+		}
+
+		m = &MemStore{
+			cache:    c,
+			requests: r,
+		}
 	}
 }
 

@@ -37,21 +37,25 @@ type testDbStore struct {
 	dir string
 }
 
-func newTestDbStore(mock bool) (*testDbStore, error) {
+func newTestDbStore(mock bool, trusted bool) (*testDbStore, error) {
 	dir, err := ioutil.TempDir("", "bzz-storage-test")
 	if err != nil {
 		return nil, err
 	}
 
 	var db *LDBStore
+	storeparams := NewDefaultStoreParams()
+	params := NewLDBStoreParams(storeparams, dir)
+	params.Po = testPoFunc
+
 	if mock {
 		globalStore := mem.NewGlobalStore()
 		addr := common.HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")
 		mockStore := globalStore.NewNodeStore(addr)
 
-		db, err = NewMockDbStore(dir, MakeHashFunc(SHA3Hash), defaultLDBCapacity, testPoFunc, mockStore)
+		db, err = NewMockDbStore(params, mockStore)
 	} else {
-		db, err = NewLDBStore(dir, MakeHashFunc(SHA3Hash), defaultLDBCapacity, testPoFunc)
+		db, err = NewLDBStore(params)
 	}
 
 	return &testDbStore{db, dir}, err
@@ -71,17 +75,16 @@ func (db *testDbStore) close() {
 }
 
 func testDbStoreRandom(n int, processors int, chunksize int, mock bool, t *testing.T) {
-	db, err := newTestDbStore(mock)
+	db, err := newTestDbStore(mock, true)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 	defer db.close()
-	db.trusted = true
 	testStoreRandom(db, processors, n, chunksize, t)
 }
 
 func testDbStoreCorrect(n int, processors int, chunksize int, mock bool, t *testing.T) {
-	db, err := newTestDbStore(mock)
+	db, err := newTestDbStore(mock, false)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
@@ -138,7 +141,7 @@ func TestMockDbStoreCorrect_8_5k(t *testing.T) {
 }
 
 func testDbStoreNotFound(t *testing.T, mock bool) {
-	db, err := newTestDbStore(mock)
+	db, err := newTestDbStore(mock, false)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
@@ -169,7 +172,7 @@ func testIterator(t *testing.T, mock bool) {
 		chunks = append(chunks, NewChunk(nil, nil))
 	}
 
-	db, err := newTestDbStore(mock)
+	db, err := newTestDbStore(mock, false)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
@@ -224,22 +227,20 @@ func TestMockIterator(t *testing.T) {
 }
 
 func benchmarkDbStorePut(n int, processors int, chunksize int, mock bool, b *testing.B) {
-	db, err := newTestDbStore(mock)
+	db, err := newTestDbStore(mock, true)
 	if err != nil {
 		b.Fatalf("init dbStore failed: %v", err)
 	}
 	defer db.close()
-	db.trusted = true
 	benchmarkStorePut(db, processors, n, chunksize, b)
 }
 
 func benchmarkDbStoreGet(n int, processors int, chunksize int, mock bool, b *testing.B) {
-	db, err := newTestDbStore(mock)
+	db, err := newTestDbStore(mock, true)
 	if err != nil {
 		b.Fatalf("init dbStore failed: %v", err)
 	}
 	defer db.close()
-	db.trusted = true
 	benchmarkStoreGet(db, processors, n, chunksize, b)
 }
 

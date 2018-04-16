@@ -138,7 +138,7 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 		if created {
 			if err := d.RequestFromPeers(chunk.Key[:], false, sp.ID()); err != nil {
 				log.Warn("unable to forward chunk request", "peer", sp.ID(), "key", chunk.Key, "err", err)
-				chunk.SetErrored(true)
+				chunk.SetErrored(storage.ErrChunkForward)
 				return nil
 			}
 		}
@@ -149,10 +149,10 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 			select {
 			case <-chunk.ReqC:
 			case <-t.C:
-				chunk.SetErrored(true)
+				chunk.SetErrored(storage.ErrChunkTimeout)
 				return
 			}
-			chunk.SetErrored(false)
+			chunk.SetErrored(nil)
 
 			if req.SkipCheck {
 				err := sp.Deliver(chunk, s.priority)
@@ -209,6 +209,12 @@ R:
 		chunk.SData = req.SData
 		d.db.Put(chunk)
 		chunk.WaitToStore()
+		err = chunk.GetErrored()
+		if err != nil {
+			if err == storage.ErrChunkInvalid {
+				req.peer.Drop(err)
+			}
+		}
 		close(chunk.ReqC)
 	}
 }

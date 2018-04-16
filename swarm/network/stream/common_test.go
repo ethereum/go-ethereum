@@ -133,7 +133,11 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 		os.RemoveAll(datadir)
 	}
 
-	localStore, err := storage.NewTestLocalStoreForAddr(datadir, addr.Over())
+	params := storage.NewDefaultLocalStoreParams()
+	params.Init(datadir)
+	params.BaseKey = addr.Over()
+
+	localStore, err := storage.NewTestLocalStoreForAddr(params)
 	if err != nil {
 		return nil, nil, nil, removeDataDir, err
 	}

@@ -34,7 +34,8 @@ func newLDBStore(t *testing.T) (*LDBStore, func()) {
 	}
 	log.Trace("memstore.tempdir", "dir", dir)
 
-	db, err := NewLDBStore(dir, MakeHashFunc(SHA3Hash), defaultLDBCapacity, testPoFunc)
+	ldbparams := NewLDBStoreParams(NewDefaultStoreParams(), dir)
+	db, err := NewLDBStore(ldbparams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +58,7 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 
 	cacheCap := 200
 	requestsCap := 200
-	memStore := NewMemStore(ldb, uint(cacheCap), uint(requestsCap))
+	memStore := NewMemStore(NewStoreParams(4000, 200, 200, nil, nil), nil)
 
 	tests := []struct {
 		n         int    // number of chunks to push to memStore

@@ -76,7 +76,6 @@ const (
 	SWARM_ENV_STORE_PATH           = "SWARM_STORE_PATH"
 	SWARM_ENV_STORE_CAPACITY       = "SWARM_STORE_CAPACITY"
 	SWARM_ENV_STORE_CACHE_CAPACITY = "SWARM_STORE_CACHE_CAPACITY"
-	SWARM_ENV_STORE_RADIUS         = "SWARM_STORE_RADIUS"
 	GETH_ENV_DATADIR               = "GETH_DATADIR"
 )
 
@@ -237,19 +236,15 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 	}
 
 	if storePath := ctx.GlobalString(SwarmStorePath.Name); storePath != "" {
-		currentConfig.StoreParams.ChunkDbPath = storePath
+		currentConfig.LocalStoreParams.ChunkDbPath = storePath
 	}
 
 	if storeCapacity := ctx.GlobalUint64(SwarmStoreCapacity.Name); storeCapacity != 0 {
-		currentConfig.StoreParams.DbCapacity = storeCapacity
+		currentConfig.LocalStoreParams.DbCapacity = storeCapacity
 	}
 
 	if storeCacheCapacity := ctx.GlobalUint(SwarmStoreCacheCapacity.Name); storeCacheCapacity != 0 {
-		currentConfig.StoreParams.CacheCapacity = storeCacheCapacity
-	}
-
-	if storeRadius := ctx.GlobalInt(SwarmStoreRadius.Name); storeRadius != 0 {
-		currentConfig.StoreParams.Radius = storeRadius
+		currentConfig.LocalStoreParams.CacheCapacity = storeCacheCapacity
 	}
 
 	return currentConfig

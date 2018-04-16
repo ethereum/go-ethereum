@@ -70,6 +70,21 @@ type gcItem struct {
 	po     uint8
 }
 
+type LDBStoreParams struct {
+	*StoreParams
+	Path string
+	Po   func(Key) uint8
+}
+
+// NewLDBStoreParams constructs LDBStoreParams with the specified values.
+func NewLDBStoreParams(storeparams *StoreParams, path string) *LDBStoreParams {
+	return &LDBStoreParams{
+		StoreParams: storeparams,
+		Path:        path,
+		Po:          func(k Key) (ret uint8) { return uint8(Proximity(storeparams.BaseKey[:], k[:])) },
+	}
+}
+
 type LDBStore struct {
 	db *LDBDatabase
 
@@ -87,7 +102,6 @@ type LDBStore struct {
 	batchesC chan struct{}
 	batch    *leveldb.Batch
 	lock     sync.RWMutex
-	trusted  bool // if hash integity check is to be performed (for testing only)
 
 	// Functions encodeDataFunc is used to bypass
 	// the default functionality of DbStore with
@@ -102,9 +116,9 @@ type LDBStore struct {
 // TODO: Instead of passing the distance function, just pass the address from which distances are calculated
 // to avoid the appearance of a pluggable distance metric and opportunities of bugs associated with providing
 // a function different from the one that is actually used.
-func NewLDBStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uint8) (s *LDBStore, err error) {
+func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	s = new(LDBStore)
-	s.hashfunc = hash
+	s.hashfunc = params.Hash
 
 	s.batchC = make(chan bool)
 	s.batchesC = make(chan struct{}, 1)
@@ -113,13 +127,13 @@ func NewLDBStore(path string, hash SwarmHasher, capacity uint64, po func(Key) ui
 	// associate encodeData with default functionality
 	s.encodeDataFunc = encodeData
 
-	s.db, err = NewLDBDatabase(path)
+	s.db, err = NewLDBDatabase(params.Path)
 	if err != nil {
 		return nil, err
 	}
 
-	s.po = po
-	s.setCapacity(capacity)
+	s.po = params.Po
+	s.setCapacity(params.DbCapacity)
 
 	s.bucketCnt = make([]uint64, 0x100)
 	for i := 0; i < 0x100; i++ {
@@ -143,15 +157,11 @@ func NewLDBStore(path string, hash SwarmHasher, capacity uint64, po func(Key) ui
 	return s, nil
 }
 
-func (self *LDBStore) SetTrusted() {
-	self.trusted = true
-}
-
 // NewMockDbStore creates a new instance of DbStore with
 // mockStore set to a provided value. If mockStore argument is nil,
 // this function behaves exactly as NewDbStore.
-func NewMockDbStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uint8, mockStore *mock.NodeStore) (s *LDBStore, err error) {
-	s, err = NewLDBStore(path, hash, capacity, po)
+func NewMockDbStore(params *LDBStoreParams, mockStore *mock.NodeStore) (s *LDBStore, err error) {
+	s, err = NewLDBStore(params)
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +354,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 			continue
 		}
 
-		key, err := hex.DecodeString(hdr.Name)
+		keybytes, err := hex.DecodeString(hdr.Name)
 		if err != nil {
 			log.Warn("ignoring invalid chunk file", "name", hdr.Name, "err", err)
 			continue
@@ -354,6 +364,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 		if err != nil {
 			return count, err
 		}
+		key := Key(keybytes)
 		chunk := NewChunk(key, nil)
 		chunk.SData = data[32:]
 		s.Put(chunk)
@@ -628,19 +639,6 @@ func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 				log.Trace("ldbstore.get chunk found but could not be accessed", "key", key, "err", err)
 				s.delete(indx.Idx, getIndexKey(key), s.po(key))
 				return
-			}
-		}
-
-		if !s.trusted {
-			data_mod := data[32:]
-			hasher := s.hashfunc()
-			hasher.Write(data_mod)
-			hash := hasher.Sum(nil)
-
-			if !bytes.Equal(hash, key) {
-				log.Error("apparent key/hash mismatch", "hash", hash, "key", key[:])
-				s.delete(indx.Idx, getIndexKey(key), s.po(key))
-				log.Error("invalid chunk in database.")
 			}
 		}
 

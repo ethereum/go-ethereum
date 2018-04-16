@@ -29,6 +29,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
@@ -37,11 +38,9 @@ import (
 )
 
 func init() {
-	verbose := flag.Bool("v", false, "verbose")
+	loglevel := flag.Int("loglevel", 2, "loglevel")
 	flag.Parse()
-	if *verbose {
-		log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
-	}
+	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 }
 
 type resourceResponse struct {
@@ -55,10 +54,8 @@ func TestBzzResource(t *testing.T) {
 	defer srv.Close()
 
 	// our mutable resource "name"
-	keybytes := []byte("foo")
-	srv.Hasher.Reset()
-	srv.Hasher.Write([]byte(fmt.Sprintf("%x", keybytes)))
-	keybyteshash := fmt.Sprintf("%x", srv.Hasher.Sum(nil))
+	keybytes := "foo"
+	keybyteshash := ens.EnsNode(keybytes)
 
 	// data of update 1
 	databytes := make([]byte, 666)
@@ -68,7 +65,7 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// creates resource and sets update 1
-	url := fmt.Sprintf("%s/bzz-resource:/%x/13", srv.URL, keybytes)
+	url := fmt.Sprintf("%s/bzz-resource:/%s/13", srv.URL, []byte(keybytes))
 	resp, err := http.Post(url, "application/octet-stream", bytes.NewReader(databytes))
 	if err != nil {
 		t.Fatal(err)
@@ -86,8 +83,8 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
-	if rsrcResp.Update.Hex() != keybyteshash {
-		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", keybyteshash, rsrcResp.Resource)
+	if !bytes.Equal(rsrcResp.Update, keybyteshash.Bytes()) {
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", keybyteshash.Hex(), rsrcResp.Update.Hex())
 	}
 
 	// get manifest
@@ -131,8 +128,16 @@ func TestBzzResource(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// get non-existent name
+	url = fmt.Sprintf("%s/bzz-resource:/bar", srv.URL)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
 	// get latest update (1.1) through resource directly
-	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
+	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, keybytes)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +155,7 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// update 2
-	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
+	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, keybytes)
 	data := []byte("foo")
 	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(data))
 	if err != nil {
@@ -162,7 +167,7 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// get latest update (1.2) through resource directly
-	url = fmt.Sprintf("%s/bzz-resource:/%x", srv.URL, keybytes)
+	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, keybytes)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -180,7 +185,7 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// get latest update (1.2) with specified period
-	url = fmt.Sprintf("%s/bzz-resource:/%x/1", srv.URL, keybytes)
+	url = fmt.Sprintf("%s/bzz-resource:/%s/1", srv.URL, keybytes)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -198,7 +203,7 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// get first update (1.1) with specified period and version
-	url = fmt.Sprintf("%s/bzz-resource:/%x/1/1", srv.URL, keybytes)
+	url = fmt.Sprintf("%s/bzz-resource:/%s/1/1", srv.URL, keybytes)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)

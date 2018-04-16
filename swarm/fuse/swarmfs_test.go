@@ -21,6 +21,7 @@ package fuse
 import (
 	"bytes"
 	"crypto/rand"
+	"flag"
 	"io"
 	"io/ioutil"
 	"os"
@@ -29,7 +30,22 @@ import (
 
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+
+	"github.com/ethereum/go-ethereum/log"
+
+	colorable "github.com/mattn/go-colorable"
 )
+
+var (
+	loglevel = flag.Int("loglevel", 4, "verbosity of logs")
+	rawlog   = flag.Bool("rawlog", false, "turn off terminal formatting in logs")
+)
+
+func init() {
+	flag.Parse()
+	log.PrintOrigins(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(!*rawlog))))
+}
 
 type fileInfo struct {
 	perm     uint64

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/bmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const MaxPO = 7
@@ -180,18 +181,18 @@ type Chunk struct {
 	dbStoredC  chan bool // never remove a chunk from memStore before it is written to dbStore
 	dbStored   bool
 	dbStoredMu *sync.Mutex
-	errored    bool // flag which is set when the chunk request has errored or timeouted
+	errored    error // flag which is set when the chunk request has errored or timeouted
 	erroredMu  sync.Mutex
 }
 
-func (c *Chunk) SetErrored(val bool) {
+func (c *Chunk) SetErrored(err error) {
 	c.erroredMu.Lock()
 	defer c.erroredMu.Unlock()
 
-	c.errored = val
+	c.errored = err
 }
 
-func (c *Chunk) GetErrored() bool {
+func (c *Chunk) GetErrored() error {
 	c.erroredMu.Lock()
 	defer c.erroredMu.Unlock()
 
@@ -257,6 +258,34 @@ func (self *LazyTestSectionReader) Size(chan bool) (int64, error) {
 	return self.SectionReader.Size(), nil
 }
 
+type StoreParams struct {
+	Hash                       SwarmHasher `toml:"-"`
+	DbCapacity                 uint64
+	CacheCapacity              uint
+	ChunkRequestsCacheCapacity uint
+	BaseKey                    []byte
+}
+
+func NewDefaultStoreParams() *StoreParams {
+	return NewStoreParams(defaultLDBCapacity, defaultCacheCapacity, defaultChunkRequestsCacheCapacity, nil, nil)
+}
+
+func NewStoreParams(ldbCap uint64, cacheCap uint, requestsCap uint, hash SwarmHasher, basekey []byte) *StoreParams {
+	if basekey == nil {
+		basekey = make([]byte, 32)
+	}
+	if hash == nil {
+		hash = MakeHashFunc("SHA3")
+	}
+	return &StoreParams{
+		Hash:                       hash,
+		DbCapacity:                 ldbCap,
+		CacheCapacity:              cacheCap,
+		ChunkRequestsCacheCapacity: requestsCap,
+		BaseKey:                    basekey,
+	}
+}
+
 type ChunkData []byte
 
 type Reference []byte
@@ -284,4 +313,35 @@ func (c ChunkData) Size() int64 {
 
 func (c ChunkData) Data() []byte {
 	return c[8:]
+}
+
+type ChunkValidator interface {
+	Validate(key Key, data []byte) bool
+}
+
+// Provides method for validation of content address in chunks
+// Holds the corresponding hasher to create the address
+type ContentAddressValidator struct {
+	Hasher SwarmHasher
+}
+
+// Constructor
+func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
+	return &ContentAddressValidator{
+		Hasher: hasher,
+	}
+}
+
+// Validate that the given key is a valid content address for the given data
+func (self *ContentAddressValidator) Validate(key Key, data []byte) bool {
+	hasher := self.Hasher()
+	hasher.ResetWithLength(data[:8])
+	hasher.Write(data[8:])
+	hash := hasher.Sum(nil)
+
+	if !bytes.Equal(hash, key[:]) {
+		log.Error("invalid content address", "expected", fmt.Sprintf("%x", hash), "have", key)
+		return false
+	}
+	return true
 }

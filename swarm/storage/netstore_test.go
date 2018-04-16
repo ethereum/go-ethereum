@@ -80,8 +80,10 @@ func TestNetstoreFailedRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	localStore, err := NewTestLocalStoreForAddr(datadir, addr.Over())
+	params := NewDefaultLocalStoreParams()
+	params.Init(datadir)
+	params.BaseKey = addr.Over()
+	localStore, err := NewTestLocalStoreForAddr(params)
 	if err != nil {
 		t.Fatal(err)
 	}

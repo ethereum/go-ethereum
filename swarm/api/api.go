@@ -617,7 +617,7 @@ func (self *Api) ResourceUpdate(ctx context.Context, name string, data []byte) (
 }
 
 func (self *Api) ResourceHashSize() int {
-	return self.resource.HashSize()
+	return self.resource.HashSize
 }
 
 func (self *Api) ResourceIsValidated() bool {

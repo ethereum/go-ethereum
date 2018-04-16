@@ -42,8 +42,8 @@ const (
 // allow several bzz nodes running in parallel
 type Config struct {
 	// serialised/persisted fields
-	*storage.StoreParams
 	*storage.DPAParams
+	*storage.LocalStoreParams
 	*network.HiveParams
 	Swap *swap.SwapParams
 	//*network.SyncParams
@@ -72,9 +72,9 @@ type Config struct {
 func NewConfig() (self *Config) {
 
 	self = &Config{
-		StoreParams: storage.NewDefaultStoreParams(),
-		DPAParams:   storage.NewDPAParams(),
-		HiveParams:  network.NewHiveParams(),
+		LocalStoreParams: storage.NewDefaultLocalStoreParams(),
+		DPAParams:        storage.NewDPAParams(),
+		HiveParams:       network.NewHiveParams(),
 		//SyncParams:    network.NewDefaultSyncParams(),
 		Swap:            swap.NewDefaultSwapParams(),
 		ListenAddr:      DefaultHTTPListenAddr,
@@ -117,8 +117,9 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 	if self.SwapEnabled {
 		self.Swap.Init(self.Contract, prvKey)
 	}
+
 	self.privateKey = prvKey
-	self.StoreParams.Init(self.Path)
+	self.LocalStoreParams.Init(self.Path)
 }
 
 func (self *Config) ShiftPrivateKey() (privKey *ecdsa.PrivateKey) {
