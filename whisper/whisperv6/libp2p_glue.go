@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"io"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -77,8 +78,6 @@ func (stream *LibP2PStream) ReadMsg() (p2p.Msg, error) {
 // WriteMsg implements the MsgReadWriter interface to write messages
 // to lilbp2p streams.
 func (stream *LibP2PStream) WriteMsg(msg p2p.Msg) error {
-
-
 	stream.lp2pStream.SetWriteDeadline(time.Now().Add(transmissionCycle))
 
 	if err := rlp.Encode(stream.lp2pStream, msg.Code); err != nil {
@@ -94,10 +93,12 @@ type LibP2PPeer struct {
 
 	id peer.ID
 
+	server *LibP2PWhisperServer
+
 	connectionStream *LibP2PStream
 }
 
-func newLibP2PPeer(w *Whisper, pid peer.ID, rw p2p.MsgReadWriter) Peer {
+func newLibP2PPeer(s *LibP2PWhisperServer, w *Whisper, pid peer.ID, rw p2p.MsgReadWriter) Peer {
 	return &LibP2PPeer{
 		&PeerBase{
 			host:           w,
@@ -110,6 +111,7 @@ func newLibP2PPeer(w *Whisper, pid peer.ID, rw p2p.MsgReadWriter) Peer {
 			fullNode:       true,
 		},
 		pid,
+		s,
 		nil,
 	}
 }
@@ -125,6 +127,52 @@ func (p *LibP2PPeer) handshake() error {
 		return fmt.Errorf("peer [%x] %s", p.ID(), err.Error())
 	}
 	return nil
+}
+
+// start initiates the peer updater, periodically broadcasting the whisper packets
+// into the network.
+func (p *LibP2PPeer) start() {
+	go p.update()
+	log.Trace("start", "peer", p.ID())
+}
+
+// stop terminates the peer updater, stopping message forwarding to it.
+func (p *LibP2PPeer) stop() {
+	close(p.quit)
+	fmt.Println("stop", "peer", p.ID())
+}
+
+// update executes periodic operations on the peer, including message transmission
+// and expiration.
+func (p *LibP2PPeer) update() {
+	// Start the tickers for the updates
+	expire := time.NewTicker(expirationCycle)
+	transmit := time.NewTicker(transmissionCycle)
+
+	// Loop and transmit until termination is requested
+updateLoop:
+	for {
+		select {
+		case <-expire.C:
+			p.expire()
+
+		case <-transmit.C:
+			if err := p.broadcast(); err != nil {
+				break updateLoop
+			}
+
+		case <-p.quit:
+			break updateLoop
+		}
+	}
+
+	// Cleanup and remove the peer from the list
+	for i, it := range p.server.Peers {
+		if it.id == p.id {
+			p.server.Peers = append(p.server.Peers[:i], p.server.Peers[i+1:]...)
+			break
+		}
+	}
 }
 
 // LibP2PWhisperServer implements WhisperServer for libp2p.
@@ -177,7 +225,7 @@ func (server *LibP2PWhisperServer) Start() error {
 
 		// Unknown peer
 		if peer == nil {
-			peer = newLibP2PPeer(server.whisper, pid, lps)
+			peer = newLibP2PPeer(server, server.whisper, pid, lps)
 			// TODO check critical section
 			server.Peers = append(server.Peers, peer.(*LibP2PPeer))
 		}
@@ -236,7 +284,7 @@ func (server *LibP2PWhisperServer) AddPeer(addr ma.Multiaddr) *LibP2PPeer {
 	ipfsaddrpart, _ := ma.NewMultiaddr(fmt.Sprintf("/ipfs/%s", pid))
 	ipaddr := addr.Decapsulate(ipfsaddrpart)
 	server.Host.Peerstore().AddAddr(peerid, ipaddr, pstore.PermanentAddrTTL)
-	newPeer := newLibP2PPeer(server.whisper, peerid, nil).(*LibP2PPeer)
+	newPeer := newLibP2PPeer(server, server.whisper, peerid, nil).(*LibP2PPeer)
 	server.Peers = append(server.Peers, newPeer)
 
 	return newPeer

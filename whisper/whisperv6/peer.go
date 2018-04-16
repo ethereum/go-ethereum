@@ -52,7 +52,6 @@ type Peer interface {
 	start()
 	stop()
 	handshake() error
-	update()
 	mark(*Envelope)
 	marked(*Envelope) bool
 	expire()
@@ -65,55 +64,6 @@ type Peer interface {
 	setTrusted(bool)
 	setPoWRequirement(float64)
 	stream() p2p.MsgReadWriter
-
-	// newPeer(*Whisper, p2p.MsgReadWriter) Peer
-}
-
-// DevP2PPeer is the DevP2P implementation of the Peer interface
-type DevP2PPeer struct {
-	*PeerBase
-
-	peer *p2p.Peer
-}
-
-// newPeer creates a new whisper peer object, but does not run the handshake itself.
-func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) Peer {
-	return &DevP2PPeer{
-		&PeerBase{
-			host:           host,
-			ws:             rw,
-			trusted:        false,
-			powRequirement: 0.0,
-			known:          set.New(),
-			quit:           make(chan struct{}),
-			bloomFilter:    MakeFullNodeBloom(),
-			fullNode:       true,
-		},
-		remote,
-	}
-}
-
-// start initiates the peer updater, periodically broadcasting the whisper packets
-// into the network.
-func (peer *PeerBase) start() {
-	go peer.update()
-	// log.Trace("start", "peer", peer.ID())
-}
-
-// stop terminates the peer updater, stopping message forwarding to it.
-func (peer *PeerBase) stop() {
-	close(peer.quit)
-	// log.Trace("stop", "peer", peer.ID())
-}
-
-// handshake sends the protocol initiation status message to the remote peer and
-// verifies the remote status too.
-func (peer *DevP2PPeer) handshake() error {
-	err := peer.handshakeBase()
-	if err != nil {
-		return fmt.Errorf("peer [%x] %s", peer.ID(), err.Error())
-	}
-	return nil
 }
 
 func (peer *PeerBase) handshakeBase() error {
@@ -171,31 +121,6 @@ func (peer *PeerBase) handshakeBase() error {
 		return fmt.Errorf("peer [%s] failed to send status packet: %v", peer.ID(), err)
 	}
 	return nil
-}
-
-// update executes periodic operations on the peer, including message transmission
-// and expiration.
-func (peer *DevP2PPeer) update() {
-	// Start the tickers for the updates
-	expire := time.NewTicker(expirationCycle)
-	transmit := time.NewTicker(transmissionCycle)
-
-	// Loop and transmit until termination is requested
-	for {
-		select {
-		case <-expire.C:
-			peer.expire()
-
-		case <-transmit.C:
-			if err := peer.broadcast(); err != nil {
-				log.Trace("broadcast failed", "reason", err, "peer", peer.ID())
-				return
-			}
-
-		case <-peer.quit:
-			return
-		}
-	}
 }
 
 // mark marks an envelope known to the peer so that it won't be sent back.
