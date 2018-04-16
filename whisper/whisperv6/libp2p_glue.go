@@ -41,20 +41,35 @@ import (
 // LibP2PStream is a wrapper used to implement the MsgReadWriter
 // interface for libp2p's streams.
 type LibP2PStream struct {
-	lp2pStream inet.Stream
-	rlpStream  *rlp.Stream
+	UseDeadline bool
+	lp2pStream  inet.Stream
+	rlpStream   *rlp.Stream
 }
 
-func newLibp2pStream(lp2pStream inet.Stream) p2p.MsgReadWriter {
-	return &LibP2PStream{lp2pStream: lp2pStream, rlpStream: rlp.NewStream(bufio.NewReader(lp2pStream), 0)}
+func newLibp2pStream(server *LibP2PWhisperServer, lp2pStream inet.Stream) p2p.MsgReadWriter {
+	useDeadline, ok := server.whisper.settings.Load(useDeadlineIdx)
+	if !ok {
+		useDeadline = false
+	}
+	return &LibP2PStream{
+		UseDeadline: useDeadline.(bool),
+		lp2pStream:  lp2pStream,
+		rlpStream:   rlp.NewStream(bufio.NewReader(lp2pStream), 0),
+	}
 }
 
 // ReadMsg implements the MsgReadWriter interface to read messages
 // from lilbp2p streams.
 func (stream *LibP2PStream) ReadMsg() (p2p.Msg, error) {
+	if stream.UseDeadline {
+		stream.lp2pStream.SetReadDeadline(time.Now().Add(expirationCycle))
+	}
 	msgcode, err := stream.rlpStream.Uint()
 	if err != nil {
 		return p2p.Msg{}, fmt.Errorf("can't read message code: %v", err)
+	}
+	if stream.UseDeadline {
+		stream.lp2pStream.SetReadDeadline(time.Now().Add(expirationCycle))
 	}
 	_, size, err := stream.rlpStream.Kind()
 	if err != nil {
@@ -78,14 +93,16 @@ func (stream *LibP2PStream) ReadMsg() (p2p.Msg, error) {
 // WriteMsg implements the MsgReadWriter interface to write messages
 // to lilbp2p streams.
 func (stream *LibP2PStream) WriteMsg(msg p2p.Msg) error {
-	stream.lp2pStream.SetWriteDeadline(time.Now().Add(transmissionCycle))
+	if stream.UseDeadline {
+		stream.lp2pStream.SetWriteDeadline(time.Now().Add(expirationCycle))
+	}
 
 	if err := rlp.Encode(stream.lp2pStream, msg.Code); err != nil {
 		return err
 	}
 	_, err := io.Copy(stream.lp2pStream, msg.Payload)
-		return err
-	}
+	return err
+}
 
 // LibP2PPeer implements Peer for libp2p
 type LibP2PPeer struct {
@@ -194,16 +211,16 @@ func (server *LibP2PWhisperServer) connectToPeer(p *LibP2PPeer) error {
 	}
 
 	// Save the stream
-	lps := newLibp2pStream(s).(*LibP2PStream)
+	lps := newLibp2pStream(server, s).(*LibP2PStream)
 
 	p.connectionStream = lps
 	p.ws = p.connectionStream
 
 	// TODO send my known list of peers
-	
+
 	// Call HandlePeer to perform the handshake
 	go server.whisper.HandlePeer(p, p.connectionStream)
-	
+
 	return err
 }
 
@@ -211,7 +228,7 @@ func (server *LibP2PWhisperServer) connectToPeer(p *LibP2PPeer) error {
 func (server *LibP2PWhisperServer) Start() error {
 	server.Host.SetStreamHandler(WhisperProtocolString, func(stream inet.Stream) {
 		log.Info("opening stream from new peer")
-	
+
 		pid := stream.Conn().RemotePeer()
 		var peer Peer
 		for _, p := range server.Peers {
@@ -221,7 +238,7 @@ func (server *LibP2PWhisperServer) Start() error {
 			}
 		}
 
-		lps := newLibp2pStream(stream).(*LibP2PStream)
+		lps := newLibp2pStream(server, stream).(*LibP2PStream)
 
 		// Unknown peer
 		if peer == nil {
@@ -241,7 +258,7 @@ func (server *LibP2PWhisperServer) Start() error {
 		if e := server.connectToPeer(p); e != nil {
 			err = e
 		}
-		}
+	}
 
 	return err
 }

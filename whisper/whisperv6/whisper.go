@@ -54,6 +54,7 @@ const (
 	minPowToleranceIdx             // Minimal PoW tolerated by the whisper node for a limited time
 	bloomFilterIdx                 // Bloom filter for topics of interest for this node
 	bloomFilterToleranceIdx        // Bloom filter tolerated by the whisper node for a limited time
+	useDeadlineIdx                 // Indicates whether peer disconnect deadlines should be used (libp2p only)
 )
 
 // WhisperServer abstracts a server, which could be either DevP2p-based
@@ -121,6 +122,7 @@ func New(cfg *Config) *Whisper {
 	whisper.settings.Store(minPowIdx, cfg.MinimumAcceptedPOW)
 	whisper.settings.Store(maxMsgSizeIdx, cfg.MaxMessageSize)
 	whisper.settings.Store(overflowIdx, false)
+	whisper.settings.Store(useDeadlineIdx, cfg.UseDeadlines)
 
 	// p2p whisper sub protocol handler
 	whisper.protocol = p2p.Protocol{
