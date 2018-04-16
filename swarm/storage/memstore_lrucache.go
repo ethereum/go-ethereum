@@ -31,6 +31,12 @@ type MemStore struct {
 	disabled bool
 }
 
+//NewMemStore is instantiating a MemStore cache. We are keeping a record of all outgoing requests for chunks, that
+//should later be delivered by peer nodes, in the `requests` LRU cache. We are also keeping all frequently requested
+//chunks in the `cache` LRU cache.
+//
+//`requests` LRU cache capacity should ideally never be reached, this is why for the time being it should be initialised
+//with the same value as the LDBStore capacity.
 func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
 	if params.CacheCapacity == 0 {
 		return &MemStore{

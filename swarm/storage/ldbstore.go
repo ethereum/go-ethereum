@@ -562,9 +562,10 @@ func (s *LDBStore) writeBatches() {
 			log.Error(fmt.Sprintf("spawn batch write (%d entries): %v", b.Len(), err))
 		}
 		close(c)
-		if e >= s.capacity {
+		for e > s.capacity {
 			log.Info("collecting garbage", "entryCnt", e, "capacity", s.capacity)
 			s.collectGarbage(gcArrayFreeRatio)
+			e = s.entryCnt
 		}
 		s.lock.Unlock()
 	}
