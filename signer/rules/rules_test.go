@@ -68,7 +68,6 @@ function test(thing){
 
 `
 
-func hexAddr(a string) common.Address { return common.BytesToAddress(common.Hex2Bytes(a)) }
 func mixAddr(a string) (*common.MixedcaseAddress, error) {
 	return common.NewMixedcaseAddressFromString(a)
 }
@@ -79,27 +78,27 @@ func (alwaysDenyUi) OnSignerStartup(info core.StartupInfo) {
 }
 
 func (alwaysDenyUi) ApproveTx(request *core.SignTxRequest) (core.SignTxResponse, error) {
-	return core.SignTxResponse{request.Transaction, false, ""}, nil
+	return core.SignTxResponse{Transaction: request.Transaction, Approved: false, Password: ""}, nil
 }
 
 func (alwaysDenyUi) ApproveSignData(request *core.SignDataRequest) (core.SignDataResponse, error) {
-	return core.SignDataResponse{false, ""}, nil
+	return core.SignDataResponse{Approved: false, Password: ""}, nil
 }
 
 func (alwaysDenyUi) ApproveExport(request *core.ExportRequest) (core.ExportResponse, error) {
-	return core.ExportResponse{false}, nil
+	return core.ExportResponse{Approved: false}, nil
 }
 
 func (alwaysDenyUi) ApproveImport(request *core.ImportRequest) (core.ImportResponse, error) {
-	return core.ImportResponse{false, "", ""}, nil
+	return core.ImportResponse{Approved: false, OldPassword: "", NewPassword: ""}, nil
 }
 
 func (alwaysDenyUi) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
-	return core.ListResponse{nil}, nil
+	return core.ListResponse{Accounts: nil}, nil
 }
 
 func (alwaysDenyUi) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
-	return core.NewAccountResponse{false, ""}, nil
+	return core.NewAccountResponse{Approved: false, Password: ""}, nil
 }
 
 func (alwaysDenyUi) ShowError(message string) {
@@ -117,10 +116,10 @@ func (alwaysDenyUi) OnApprovedTx(tx ethapi.SignTransactionResult) {
 func initRuleEngine(js string) (*rulesetUi, error) {
 	r, err := NewRuleEvaluator(&alwaysDenyUi{}, storage.NewEphemeralStorage(), storage.NewEphemeralStorage())
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create js engine: %v", err)
+		return nil, fmt.Errorf("failed to create js engine: %v", err)
 	}
 	if err = r.Init(js); err != nil {
-		return nil, fmt.Errorf("Failed to load bootstrap js: %v", err)
+		return nil, fmt.Errorf("failed to load bootstrap js: %v", err)
 	}
 	return r, nil
 }
@@ -145,10 +144,8 @@ func TestListRequest(t *testing.T) {
 		return
 	}
 	resp, err := r.ApproveListing(&core.ListRequest{
-		accs,
-		core.Metadata{
-			"remoteip", "localip", "inproc",
-		},
+		Accounts: accs,
+		Meta:     core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
 	})
 	if len(resp.Accounts) != len(accs) {
 		t.Errorf("Expected check to resolve to 'Approve'")
@@ -189,7 +186,7 @@ func TestSignTxRequest(t *testing.T) {
 			From: *from,
 			To:   to},
 		Callinfo: nil,
-		Meta:     core.Metadata{"remoteip", "localip", "inproc"},
+		Meta:     core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
 	})
 	if err != nil {
 		t.Errorf("Unexpected error %v", err)
@@ -252,9 +249,9 @@ func TestForwarding(t *testing.T) {
 
 	js := ""
 	ui := &dummyUi{make([]string, 0)}
-	jsbackend := storage.NewEphemeralStorage()
-	credbackend := storage.NewEphemeralStorage()
-	r, err := NewRuleEvaluator(ui, jsbackend, credbackend)
+	jsBackend := storage.NewEphemeralStorage()
+	credBackend := storage.NewEphemeralStorage()
+	r, err := NewRuleEvaluator(ui, jsBackend, credBackend)
 	if err != nil {
 		t.Fatalf("Failed to create js engine: %v", err)
 	}
@@ -273,10 +270,10 @@ func TestForwarding(t *testing.T) {
 	//This one is not forwarded
 	r.OnApprovedTx(ethapi.SignTransactionResult{})
 
-	exp_calls := 8
-	if len(ui.calls) != exp_calls {
+	expCalls := 8
+	if len(ui.calls) != expCalls {
 
-		t.Errorf("Expected %d forwarded calls, got %d: %s", exp_calls, len(ui.calls), strings.Join(ui.calls, ","))
+		t.Errorf("Expected %d forwarded calls, got %d: %s", expCalls, len(ui.calls), strings.Join(ui.calls, ","))
 
 	}
 
@@ -451,9 +448,9 @@ func dummyTx(value hexutil.Big) *core.SignTxRequest {
 			Gas:      gas,
 		},
 		Callinfo: []core.ValidationInfo{
-			{"Warning", "All your base are bellong to us"},
+			{Typ: "Warning", Message: "All your base are bellong to us"},
 		},
-		Meta: core.Metadata{"remoteip", "localip", "inproc"},
+		Meta: core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
 	}
 }
 func dummyTxWithV(value uint64) *core.SignTxRequest {
@@ -622,7 +619,7 @@ function ApproveSignData(r){
 		Address: *addr,
 		Message: msg,
 		Hash:    hash,
-		Meta:    core.Metadata{"remoteip", "localip", "inproc"},
+		Meta:    core.Metadata{Remote: "remoteip", Local: "localip", Scheme: "inproc"},
 		Rawdata: raw,
 	})
 	if err != nil {

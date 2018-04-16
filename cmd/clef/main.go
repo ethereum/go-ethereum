@@ -53,7 +53,7 @@ const ExternalApiVersion = "2.0.0"
 // InternalApiVersion -- see intapi_changelog.md
 const InternalApiVersion = "2.0.0"
 
-const legal_warning = `
+const legalWarning = `
 WARNING! 
 
 Clef is alpha software, and not yet publically released. This software has _not_ been audited, and there
@@ -170,7 +170,7 @@ remove any stored credential for that address (keyfile)
 
 func init() {
 	app.Name = "Clef"
-	app.Usage = "Manage ethereum Account operations"
+	app.Usage = "Manage Ethereum account operations"
 	app.Flags = []cli.Flag{
 		logLevelFlag,
 		keystoreFlag,
@@ -215,7 +215,7 @@ func initializeSecrets(c *cli.Context) error {
 		return err
 	}
 	if n != len(masterSeed) {
-		return fmt.Errorf("Failed to read enough random")
+		return fmt.Errorf("failed to read enough random")
 	}
 	err = os.Mkdir(configDir, 0700)
 	if err != nil && !os.IsExist(err) {
@@ -283,13 +283,13 @@ func addCredential(ctx *cli.Context) error {
 	pwkey := crypto.Keccak256([]byte("credentials"), stretchedKey)
 
 	// Initialize the encrypted storages
-	pw_storage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
+	pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
 	key := ctx.Args().First()
 	value := ""
 	if len(ctx.Args()) > 1 {
 		value = ctx.Args().Get(1)
 	}
-	pw_storage.Put(key, value)
+	pwStorage.Put(key, value)
 	log.Info("Credential store updated", "key", key)
 	return nil
 }
@@ -300,9 +300,9 @@ func initialize(c *cli.Context) error {
 	if c.Bool(stdiouiFlag.Name) {
 		logOutput = os.Stderr
 		// If using the stdioui, we can't do the 'confirm'-flow
-		fmt.Fprintf(logOutput, legal_warning)
+		fmt.Fprintf(logOutput, legalWarning)
 	} else {
-		if !confirm(legal_warning) {
+		if !confirm(legalWarning) {
 			return fmt.Errorf("aborted by user")
 		}
 	}
@@ -351,9 +351,9 @@ func signer(c *cli.Context) error {
 		confkey := crypto.Keccak256([]byte("config"), stretchedKey)
 
 		// Initialize the encrypted storages
-		pw_storage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
-		js_storage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "jsstorage.json"), jskey)
-		config_storage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "config.json"), confkey)
+		pwStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "credentials.json"), pwkey)
+		jsStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "jsstorage.json"), jskey)
+		configStorage := storage.NewAESEncryptedStorage(filepath.Join(vaultLocation, "config.json"), confkey)
 
 		//Do we have a rule-file?
 		ruleJS, err := ioutil.ReadFile(c.String(ruleFlag.Name))
@@ -363,12 +363,12 @@ func signer(c *cli.Context) error {
 			hasher := sha256.New()
 			hasher.Write(ruleJS)
 			shasum := hasher.Sum(nil)
-			stored_shasum := config_storage.Get("ruleset_sha256")
-			if stored_shasum != hex.EncodeToString(shasum) {
-				log.Info("Could not validate ruleset hash, rules not enabled", "got", hex.EncodeToString(shasum), "expected", stored_shasum)
+			storedShasum := configStorage.Get("ruleset_sha256")
+			if storedShasum != hex.EncodeToString(shasum) {
+				log.Info("Could not validate ruleset hash, rules not enabled", "got", hex.EncodeToString(shasum), "expected", storedShasum)
 			} else {
 				// Initialize rules
-				ruleEngine, err := rules.NewRuleEvaluator(ui, js_storage, pw_storage)
+				ruleEngine, err := rules.NewRuleEvaluator(ui, jsStorage, pwStorage)
 				if err != nil {
 					utils.Fatalf(err.Error())
 				}
@@ -411,8 +411,7 @@ func signer(c *cli.Context) error {
 	if c.Bool(utils.RPCEnabledFlag.Name) {
 
 		vhosts := splitAndTrim(c.GlobalString(utils.RPCVirtualHostsFlag.Name))
-		//!TODO
-		cors := []string{"*"}
+		cors := splitAndTrim(c.GlobalString(utils.RPCCORSDomainFlag.Name))
 
 		// start http server
 		httpEndpoint := fmt.Sprintf("%s:%d", c.String(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
@@ -433,7 +432,7 @@ func signer(c *cli.Context) error {
 		if c.IsSet(utils.IPCPathFlag.Name) {
 			ipcApiUrl = c.String(utils.IPCPathFlag.Name)
 		} else {
-			ipcApiUrl = fmt.Sprintf("%s", filepath.Join(configDir, "clef.ipc"))
+			ipcApiUrl = filepath.Join(configDir, "clef.ipc")
 		}
 
 		listener, _, err := rpc.StartIPCEndpoint(func() bool { return true }, ipcApiUrl, rpcApi)
@@ -464,10 +463,8 @@ func signer(c *cli.Context) error {
 	abortChan := make(chan os.Signal)
 	signal.Notify(abortChan, os.Interrupt)
 
-	select {
-	case sig := <-abortChan:
-		log.Info("Exiting...", "signal", sig)
-	}
+	sig := <-abortChan
+	log.Info("Exiting...", "signal", sig)
 
 	return nil
 }
@@ -527,7 +524,7 @@ func readMasterKey(ctx *cli.Context) ([]byte, error) {
 		return nil, err
 	}
 	if len(masterKey) < 256 {
-		return nil, fmt.Errorf("Master key of insufficient length, expected >255 bytes, got %d", len(masterKey))
+		return nil, fmt.Errorf("master key of insufficient length, expected >255 bytes, got %d", len(masterKey))
 	}
 	// Create vault location
 	vaultLocation := filepath.Join(configDir, common.Bytes2Hex(crypto.Keccak256([]byte("vault"), masterKey)[:10]))

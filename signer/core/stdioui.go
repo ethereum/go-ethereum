@@ -51,50 +51,38 @@ func (ui *StdIOUI) dispatch(serviceMethod string, args interface{}, reply interf
 
 func (ui *StdIOUI) ApproveTx(request *SignTxRequest) (SignTxResponse, error) {
 	var result SignTxResponse
-	if err := ui.dispatch("ApproveTx", request, &result); err != nil {
-		return result, err
-	}
-	return result, nil
+	err := ui.dispatch("ApproveTx", request, &result)
+	return result, err
 }
 
 func (ui *StdIOUI) ApproveSignData(request *SignDataRequest) (SignDataResponse, error) {
 	var result SignDataResponse
-	if err := ui.dispatch("ApproveSignData", request, &result); err != nil {
-		return result, err
-	}
-	return result, nil
+	err := ui.dispatch("ApproveSignData", request, &result)
+	return result, err
 }
 
 func (ui *StdIOUI) ApproveExport(request *ExportRequest) (ExportResponse, error) {
 	var result ExportResponse
-	if err := ui.dispatch("ApproveExport", request, &result); err != nil {
-		return result, err
-	}
-	return result, nil
+	err := ui.dispatch("ApproveExport", request, &result)
+	return result, err
 }
 
 func (ui *StdIOUI) ApproveImport(request *ImportRequest) (ImportResponse, error) {
 	var result ImportResponse
-	if err := ui.dispatch("ApproveImport", request, &result); err != nil {
-		return result, err
-	}
-	return result, nil
+	err := ui.dispatch("ApproveImport", request, &result)
+	return result, err
 }
 
 func (ui *StdIOUI) ApproveListing(request *ListRequest) (ListResponse, error) {
 	var result ListResponse
-	if err := ui.dispatch("ApproveListing", request, &result); err != nil {
-		return result, err
-	}
-	return result, nil
+	err := ui.dispatch("ApproveListing", request, &result)
+	return result, err
 }
 
 func (ui *StdIOUI) ApproveNewAccount(request *NewAccountRequest) (NewAccountResponse, error) {
 	var result NewAccountResponse
-	if err := ui.dispatch("ApproveNewAccount", request, &result); err != nil {
-		return result, err
-	}
-	return result, nil
+	err := ui.dispatch("ApproveNewAccount", request, &result)
+	return result, err
 }
 
 func (ui *StdIOUI) ShowError(message string) {

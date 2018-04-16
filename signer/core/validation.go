@@ -100,7 +100,6 @@ func (v *Validator) validateCallData(msgs *ValidationMessages, data []byte, meth
 	} else {
 		msgs.info(info.String())
 	}
-	return
 }
 
 // validateSemantics checks if the transactions 'makes sense', and generate warnings for a couple of typical scenarios

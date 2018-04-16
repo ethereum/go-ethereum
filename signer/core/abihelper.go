@@ -128,7 +128,7 @@ func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
 // which can be consumed by the standard abi package.
 func MethodSelectorToAbi(selector string) ([]byte, error) {
 
-	re := regexp.MustCompile("^([^\\)]+)\\(([a-z0-9,\\[\\]]*)\\)")
+	re := regexp.MustCompile(`^([^\)]+)\(([a-z0-9,\[\]]*)\)`)
 
 	type fakeArg struct {
 		Type string `json:"type"`
