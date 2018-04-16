@@ -55,7 +55,6 @@ func GetBlock(db *leveldb.DB, block *types.Block) {
 }
 
 func GetAllTransactions(db *leveldb.DB) {
-	//iter := db.NewIterator(util.BytesPrefix([]byte("tx-")), nil)
 	iter := db.NewIterator(util.BytesPrefix([]byte("tx-")), nil)
 	for iter.Next() {
 		fmt.Println("\nALL TX VALUE: " + string(iter.Value()))
