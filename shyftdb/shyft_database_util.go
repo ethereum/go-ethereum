@@ -2,7 +2,8 @@ package shyftdb
 
 import (
     "fmt"
-    
+    "bytes"
+    "encoding/gob"
     "github.com/syndtr/goleveldb/leveldb"
     "github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -10,13 +11,21 @@ import (
 )
 
 func WriteBlock(db *leveldb.DB, block *types.Block) error {
-    hash := block.Header().Hash().Bytes()
-    fmt.Println(hash)
-    if err := db.Put(hash, []byte("GOOD MORNING WORLD"), nil); err != nil {
-    	log.Crit("Failed to store block", "err", err)
+	leng := block.Transactions().Len()
+	var tx_strs = make([]string, leng)
+	//var tx_bytes = make([]byte, leng)
+	fmt.Println("The tx_strs is")
+	fmt.Println(tx_strs)
+	//strs := []string{"foo", "bar"}
+	buf := &bytes.Buffer{}
+	gob.NewEncoder(buf).Encode(tx_strs)
+	bs := buf.Bytes()
+	hash := block.Header().Hash().Bytes()
+	if err := db.Put(hash, bs, nil); err != nil {
+		log.Crit("Failed to store block", "err", err)
+		return nil // Do we want to force an exit here?
 	}
-	// If the block was not succesfully stored we will not store the tx data
-    if block.Transactions().Len() > 0 {
+	if block.Transactions().Len() > 0 {
 		WriteTransactions(db, block.Transactions(), hash)
 	}
 	return nil
@@ -38,30 +47,29 @@ func WriteTransactions(db *leveldb.DB, transactions []*types.Transaction, blockH
 
 func GetBlock(db *leveldb.DB, block *types.Block) {
 	hash := block.Header().Hash().Bytes()
-	bar, err := db.Get(hash, nil)
-	fmt.Println("Our error is ")
-	fmt.Println(err)
-	fmt.Println("Our result is ")
-	fmt.Println(bar)
-
+	data, err := db.Get(hash, nil)
+	if err != nil {
+		log.Crit("Could not retrieve block", "err", err)
+	}
+	fmt.Println("\nBLOCK Value: " + string(data))
 }
 
 func GetAllTransactions(db *leveldb.DB) {
 	//iter := db.NewIterator(util.BytesPrefix([]byte("tx-")), nil)
 	iter := db.NewIterator(util.BytesPrefix([]byte("tx-")), nil)
 	for iter.Next() {
-		fmt.Println(iter.Key())
-		fmt.Println(iter.Value())
+		fmt.Println("\nALL TX VALUE: " + string(iter.Value()))
 	}
 	iter.Release()
 }
+
 func GetTransaction (db *leveldb.DB, tx *types.Transaction) {
 	key := append([]byte("tx-")[:], tx.Hash().Bytes()[:]...)
-	value, err := db.Get(key, nil)
+	data, err := db.Get(key, nil)
 	if err != nil {
-		log.Crit("Could not retrieve data")
+		log.Crit("Could not retrieve TX", "err", err)
 	}
-	if len(value) > 0 {
-		fmt.Println(value)
+	if len(data) > 0 {
+		fmt.Println("\nTX Value: " + string(data))
 	}
 }

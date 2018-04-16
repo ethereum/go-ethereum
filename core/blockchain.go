@@ -20,6 +20,8 @@ package core
 import (
 	"errors"
 	"fmt"
+	//"bytes"
+	//"encoding/gob"
 	"io"
 	"math/big"
 	mrand "math/rand"
@@ -908,6 +910,23 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	if err := shyftdb.WriteBlock(bc.blockExplorerDb, block); err != nil {
 		return NonStatTy, err
 	}
+	//result := shyftdb.GetBlock(bc.blockExplorerDb, block)
+
+	// this is WIP for decoding bytes rather than hex strings
+	// maybe this will be dropped
+	/*for i, txhash := range result {
+    	//dst := make([]byte, hex.DecodedLen(len(txhash)))
+		content := hex.Dump(txhash)
+		fmt.Printf("%s", content)
+	}*/
+	
+	//buf := bytes.NewBuffer(result)
+	//strs2 := []string{}
+	//gob.NewDecoder(buf).Decode(&strs2)
+	//fmt.Println("ALL TRANSACTIONS:")
+	//
+	//fmt.Println("the returned array is")
+	//fmt.Printf("%v", strs2)
 
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
