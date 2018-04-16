@@ -24,7 +24,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
-
+	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -74,7 +74,7 @@ type Ethereum struct {
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
-	blockExplorerDb int
+	blockExplorerDb *leveldb.DB
 
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
@@ -117,7 +117,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	
 	// @NOTE:shyft instantiate BlockExplorerDB here?
-	blockExplorerDb, err := CreateDB(ctx, config, "blockExplorerDb")
+	blockExplorerDb, err := leveldb.OpenFile("./shyftData/geth/blockExplorerDb/", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth := &Ethereum{
 		config:         config,
 		chainDb:        chainDb,
-		blockExplorerDb:  42,
+		blockExplorerDb:  blockExplorerDb,
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,

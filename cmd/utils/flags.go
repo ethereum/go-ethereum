@@ -27,6 +27,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	
+	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -1250,8 +1252,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		cache.TrieNodeLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
+	blockExplorerDb, _ := leveldb.OpenFile("./foo_data/", nil)
 	fmt.Println("Calling NewBlock CHAIN in flags.go ******************************")
-	chain, err = core.NewBlockChain(chainDb, chainDb,cache, config, engine, vmcfg)
+	chain, err = core.NewBlockChain(chainDb, blockExplorerDb,cache, config, engine, vmcfg)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

@@ -21,8 +21,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math/big"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -455,6 +455,7 @@ func WriteBlock(db ethdb.Putter, block *types.Block) error {
 	if err := WriteHeader(db, block.Header()); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -462,6 +463,7 @@ func WriteBlock(db ethdb.Putter, block *types.Block) error {
 // as a single receipt slice. This is used during chain reorganisations for
 // rescheduling dropped transactions.
 func WriteBlockReceipts(db ethdb.Putter, hash common.Hash, number uint64, receipts types.Receipts) error {
+
 	// Convert the receipts into their storage form and serialize them
 	storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
 	for i, receipt := range receipts {
@@ -473,6 +475,7 @@ func WriteBlockReceipts(db ethdb.Putter, hash common.Hash, number uint64, receip
 	}
 	// Store the flattened receipt slice
 	key := append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+
 	if err := db.Put(key, bytes); err != nil {
 		log.Crit("Failed to store block receipts", "err", err)
 	}
