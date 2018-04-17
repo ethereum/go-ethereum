@@ -30,6 +30,7 @@ import (
 )
 
 //go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
+//go:generate gencodec -type ReturnData -field-override returnDataMarshaling -out gen_return_data.go
 
 var (
 	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
@@ -90,6 +91,10 @@ type ReturnData struct {
 
 	// True if this transaction was reverted due to chain reorg
 	Removed bool `json:"removed"`
+}
+
+type returnDataMarshaling struct {
+	Data hexutil.Bytes
 }
 
 func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
