@@ -288,10 +288,10 @@ func (api *PublicFilterAPI) ReturnData(ctx context.Context) (*rpc.Subscription, 
 				} else {
 					log.Warn(fmt.Sprintf("Received update msg of invalid type %s for ReturnData subscription", reflect.TypeOf(msg).String()))
 				}
-			case retdata := <-retCh:
-				if _, has := txListen[retdata.TxHash]; has {
+			case retData := <-retCh:
+				if _, has := txListen[retData.TxHash]; has {
 					// tx from client just completed execution--send back return data
-					notifier.Notify(rpcSub.ID, retdata)
+					notifier.Notify(rpcSub.ID, retData)
 				}
 			case <-rpcSub.Err():
 				retSub.Unsubscribe()
