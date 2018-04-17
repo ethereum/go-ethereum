@@ -30,7 +30,7 @@ var routes = Routes{
 	Route{
 		"GetBlocksMined",
 		"GET",
-		"/api/get_blocks_mined/{address}",
+		"/api/get_blocks_mined",
 		GetBlocksMined,
 	},
 	Route{
