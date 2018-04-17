@@ -7,7 +7,7 @@ matrix:
     - os: linux
       dist: trusty
       sudo: required
-      go: "1.10"
+      go: 1.10.x
       script:
         - sudo modprobe fuse
         - sudo chmod 666 /dev/fuse
@@ -30,7 +30,7 @@ matrix:
         tag_name: "$TRAVIS_TAG"
 
     - os: osx
-      go: "1.10"
+      go: 1.10.x
       script:
         - unset -f cd # workaround for https://github.com/travis-ci/travis-ci/issues/8703
         - brew update
@@ -56,10 +56,174 @@ matrix:
     # This builder only tests code linters on latest version of Go
     - os: linux
       dist: trusty
-      go: "1.10"
+      go: 1.10.x
       env:
         - lint
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
         - go run build/ci.go lint
+<<<<<<< HEAD
+=======
+
+    # This builder does the Ubuntu PPA upload
+    - os: linux
+      dist: trusty
+      go: 1.10.x
+      env:
+        - ubuntu-ppa
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      addons:
+        apt:
+          packages:
+            - devscripts
+            - debhelper
+            - dput
+            - fakeroot
+      script:
+        - go run build/ci.go debsrc -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>" -upload ppa:ethereum/ethereum
+
+    # This builder does the Linux Azure uploads
+    - os: linux
+      dist: trusty
+      sudo: required
+      go: 1.10.x
+      env:
+        - azure-linux
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      addons:
+        apt:
+          packages:
+            - gcc-multilib
+      script:
+        # Build for the primary platforms that Trusty can manage
+        - go run build/ci.go install
+        - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go install -arch 386
+        - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+
+        # Switch over GCC to cross compilation (breaks 386, hence why do it here only)
+        - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install gcc-arm-linux-gnueabi libc6-dev-armel-cross gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+        - sudo ln -s /usr/include/asm-generic /usr/include/asm
+
+        - GOARM=5 go run build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
+        - GOARM=5 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - GOARM=6 go run build/ci.go install -arch arm -cc arm-linux-gnueabi-gcc
+        - GOARM=6 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - GOARM=7 go run build/ci.go install -arch arm -cc arm-linux-gnueabihf-gcc
+        - GOARM=7 go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go install -arch arm64 -cc aarch64-linux-gnu-gcc
+        - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+
+    # This builder does the Linux Azure MIPS xgo uploads
+    - os: linux
+      dist: trusty
+      services:
+        - docker
+      go: 1.10.x
+      env:
+        - azure-linux-mips
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script:
+        - go run build/ci.go xgo --alltools -- --targets=linux/mips --ldflags '-extldflags "-static"' -v
+        - for bin in build/bin/*-linux-mips; do mv -f "${bin}" "${bin/-linux-mips/}"; done
+        - go run build/ci.go archive -arch mips -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+
+        - go run build/ci.go xgo --alltools -- --targets=linux/mipsle --ldflags '-extldflags "-static"' -v
+        - for bin in build/bin/*-linux-mipsle; do mv -f "${bin}" "${bin/-linux-mipsle/}"; done
+        - go run build/ci.go archive -arch mipsle -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+
+        - go run build/ci.go xgo --alltools -- --targets=linux/mips64 --ldflags '-extldflags "-static"' -v
+        - for bin in build/bin/*-linux-mips64; do mv -f "${bin}" "${bin/-linux-mips64/}"; done
+        - go run build/ci.go archive -arch mips64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+
+        - go run build/ci.go xgo --alltools -- --targets=linux/mips64le --ldflags '-extldflags "-static"' -v
+        - for bin in build/bin/*-linux-mips64le; do mv -f "${bin}" "${bin/-linux-mips64le/}"; done
+        - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+
+    # This builder does the Android Maven and Azure uploads
+    - os: linux
+      dist: precise # Needed for the android tools
+      addons:
+        apt:
+          packages:
+            - oracle-java8-installer
+            - oracle-java8-set-default
+      language: android
+      android:
+        components:
+          - platform-tools
+          - tools
+          - android-15
+          - android-19
+          - android-24
+      env:
+        - azure-android
+        - maven-android
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      before_install:
+        - curl https://storage.googleapis.com/golang/go1.10.1.linux-amd64.tar.gz | tar -xz
+        - export PATH=`pwd`/go/bin:$PATH
+        - export GOROOT=`pwd`/go
+        - export GOPATH=$HOME/go
+      script:
+        # Build the Android archive and upload it to Maven Central and Azure
+        - curl https://dl.google.com/android/repository/android-ndk-r15c-linux-x86_64.zip -o android-ndk-r15c.zip
+        - unzip -q android-ndk-r15c.zip && rm android-ndk-r15c.zip
+        - mv android-ndk-r15c $HOME
+        - export ANDROID_NDK=$HOME/android-ndk-r15c
+
+        - mkdir -p $GOPATH/src/github.com/ethereum
+        - ln -s `pwd` $GOPATH/src/github.com/ethereum
+        - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
+
+    # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
+    - os: osx
+      go: 1.10.x
+      env:
+        - azure-osx
+        - azure-ios
+        - cocoapods-ios
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script:
+        - go run build/ci.go install
+        - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
+
+        # Build the iOS framework and upload it to CocoaPods and Azure
+        - gem uninstall cocoapods -a -x
+        - gem install cocoapods
+
+        - mv ~/.cocoapods/repos/master ~/.cocoapods/repos/master.bak
+        - sed -i '.bak' 's/repo.join/!repo.join/g' $(dirname `gem which cocoapods`)/cocoapods/sources_manager.rb
+        - if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then git clone --depth=1 https://github.com/CocoaPods/Specs.git ~/.cocoapods/repos/master && pod setup --verbose; fi
+
+        - xctool -version
+        - xcrun simctl list
+
+        # Workaround for https://github.com/golang/go/issues/23749
+        - export CGO_CFLAGS_ALLOW='-fmodules|-fblocks|-fobjc-arc'
+        - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
+
+    # This builder does the Azure archive purges to avoid accumulating junk
+    - os: linux
+      dist: trusty
+      go: 1.10.x
+      env:
+        - azure-purge
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script:
+        - go run build/ci.go purge -store gethstore/builds -days 14
+
+notifications:
+  webhooks:
+    urls:
+      - https://webhooks.gitter.im/e/e09ccdce1048c5e03445
+    on_success: change
+    on_failure: always
+>>>>>>> 7605e63cb9dda7fc5bb619abf1eb1f74ac3f6cc1
