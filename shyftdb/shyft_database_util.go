@@ -222,9 +222,9 @@ func WriteMinerReward(db *leveldb.DB, block *types.Block)  {
 	}
 }
 
-////////////////////////////
-// Meant for internal tests
-///////////////////////////
+///////////
+// Getters
+//////////
 
 func GetAllBlocks(db *leveldb.DB) []SBlock{
 	var arr []SBlock
