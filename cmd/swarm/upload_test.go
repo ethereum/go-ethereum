@@ -90,7 +90,7 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		}
 
 		if res.StatusCode != 200 {
-			t.Fatalf("expected HTTP status %d, got %s", 200, res.Status)
+			t.Fatalf("expected HTTP status 200, got %s", res.Status)
 		}
 
 		reply, err := ioutil.ReadAll(res.Body)
@@ -100,6 +100,17 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		}
 		if string(reply) != data {
 			t.Fatalf("expected HTTP body %q, got %q", data, reply)
+		}
+	}
+
+	// get an non-existent hash from each node
+	for _, node := range cluster.Nodes {
+		res, err := http.Get(node.URL + "/bzz:/1023e8bae0f70be7d7b5f74343088ba408a218254391490c85ae16278e230340")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.StatusCode != 404 {
+			t.Fatalf("expected HTTP status 404, got %s", res.Status)
 		}
 	}
 }
