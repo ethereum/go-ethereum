@@ -286,12 +286,6 @@
 			"revisionTime": "2015-03-14T17:03:34Z"
 		},
 		{
-			"checksumSHA1": "qcDnp9aAjAswDFGztkzgb+BZA+0=",
-			"path": "github.com/multiformats/go-multihash",
-			"revision": "f1ef5a02f28c862ca5a2037907cf76cc6c98dbf9",
-			"revisionTime": "2017-07-13T18:40:44Z"
-		},
-		{
 			"checksumSHA1": "FYM/8R2CqS6PSNAoKl6X5gNJ20A=",
 			"path": "github.com/naoina/toml",
 			"revision": "9fafd69674167c06933b1787ae235618431ce87f",

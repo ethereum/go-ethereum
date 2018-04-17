@@ -19,16 +19,13 @@ package storage
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/binary"
 	"flag"
 	"fmt"
-	"hash"
 	"io"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	colorable "github.com/mattn/go-colorable"
 )
@@ -58,35 +55,10 @@ func brokenLimitReader(data io.Reader, size int, errAt int) *brokenLimitedReader
 	}
 }
 
-func mputChunks(store ChunkStore, processors int, n int, chunksize int, hash hash.Hash) (hs []Key) {
-	f := func(int) *Chunk {
-		data := make([]byte, chunksize)
-		rand.Reader.Read(data)
-		hash.Reset()
-		hash.Write(data)
-		h := hash.Sum(nil)
-		chunk := NewChunk(Key(h), nil)
-		chunk.SData = data
-		return chunk
-	}
-	return mput(store, processors, n, f)
+func mputChunks(store ChunkStore, processors int, n int, chunksize int64) (hs []Key) {
+	return mput(store, processors, n, GenerateRandomChunk)
 }
-
-func mputRandomKey(store ChunkStore, processors int, n int, chunksize int) (hs []Key) {
-	data := make([]byte, chunksize+8)
-	binary.LittleEndian.PutUint64(data[0:8], uint64(chunksize))
-
-	f := func(int) *Chunk {
-		h := make([]byte, 32)
-		rand.Reader.Read(h)
-		chunk := NewChunk(Key(h), nil)
-		chunk.SData = data
-		return chunk
-	}
-	return mput(store, processors, n, f)
-}
-
-func mput(store ChunkStore, processors int, n int, f func(i int) *Chunk) (hs []Key) {
+func mput(store ChunkStore, processors int, n int, f func(i int64) *Chunk) (hs []Key) {
 	wg := sync.WaitGroup{}
 	wg.Add(processors)
 	c := make(chan *Chunk)
@@ -108,14 +80,14 @@ func mput(store ChunkStore, processors int, n int, f func(i int) *Chunk) (hs []K
 	}
 	fa := f
 	if _, ok := store.(*MemStore); ok {
-		fa = func(i int) *Chunk {
+		fa = func(i int64) *Chunk {
 			chunk := f(i)
 			chunk.markAsStored()
 			return chunk
 		}
 	}
 	for i := 0; i < n; i++ {
-		chunk := fa(i)
+		chunk := fa(int64(i))
 		hs = append(hs, chunk.Key)
 		c <- chunk
 	}
@@ -180,22 +152,23 @@ func generateRandomData(l int) (r io.Reader, slice []byte) {
 	return
 }
 
-func testStoreRandom(m ChunkStore, processors int, n int, chunksize int, t *testing.T) {
-	hs := mputRandomKey(m, processors, n, chunksize)
+func testStoreRandom(m ChunkStore, processors int, n int, chunksize int64, t *testing.T) {
+	hs := mputChunks(m, processors, n, chunksize)
 	err := mget(m, hs, nil)
 	if err != nil {
 		t.Fatalf("testStore failed: %v", err)
 	}
 }
 
-func testStoreCorrect(m ChunkStore, processors int, n int, chunksize int, t *testing.T) {
-	hs := mputChunks(m, processors, n, chunksize, sha3.NewKeccak256())
+func testStoreCorrect(m ChunkStore, processors int, n int, chunksize int64, t *testing.T) {
+	hs := mputChunks(m, processors, n, chunksize)
 	f := func(h Key, chunk *Chunk) error {
 		if !bytes.Equal(h, chunk.Key) {
 			return fmt.Errorf("key does not match retrieved chunk Key")
 		}
-		hasher := sha3.NewKeccak256()
-		hasher.Write(chunk.SData)
+		hasher := MakeHashFunc(DefaultHash)()
+		hasher.ResetWithLength(chunk.SData[:8])
+		hasher.Write(chunk.SData[8:])
 		exp := hasher.Sum(nil)
 		if !bytes.Equal(h, exp) {
 			return fmt.Errorf("key is not hash of chunk data")
@@ -208,16 +181,16 @@ func testStoreCorrect(m ChunkStore, processors int, n int, chunksize int, t *tes
 	}
 }
 
-func benchmarkStorePut(store ChunkStore, processors int, n int, chunksize int, b *testing.B) {
+func benchmarkStorePut(store ChunkStore, processors int, n int, chunksize int64, b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		mputRandomKey(store, processors, n, chunksize)
+		mputChunks(store, processors, n, chunksize)
 	}
 }
 
-func benchmarkStoreGet(store ChunkStore, processors int, n int, chunksize int, b *testing.B) {
-	hs := mputRandomKey(store, processors, n, chunksize)
+func benchmarkStoreGet(store ChunkStore, processors int, n int, chunksize int64, b *testing.B) {
+	hs := mputChunks(store, processors, n, chunksize)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

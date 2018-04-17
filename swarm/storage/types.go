@@ -222,24 +222,29 @@ func (c *Chunk) WaitToStore() {
 	<-c.dbStoredC
 }
 
-func FakeChunk(size int64, count int, chunks []*Chunk) int {
+func GenerateRandomChunk(dataSize int64) *Chunk {
+	return GenerateRandomChunks(dataSize, 1)[0]
+}
+
+func GenerateRandomChunks(dataSize int64, count int) (chunks []*Chunk) {
 	var i int
-	hasher := MakeHashFunc(SHA3Hash)()
-	if size > DefaultChunkSize {
-		size = DefaultChunkSize
+	hasher := MakeHashFunc(DefaultHash)()
+	if dataSize > DefaultChunkSize {
+		dataSize = DefaultChunkSize
 	}
 
 	for i = 0; i < count; i++ {
-		hasher.Reset()
-		chunks[i].SData = make([]byte, size)
+		chunks = append(chunks, NewChunk(nil, nil))
+		chunks[i].SData = make([]byte, dataSize+8)
 		rand.Read(chunks[i].SData)
-		binary.LittleEndian.PutUint64(chunks[i].SData[:8], uint64(size))
-		hasher.Write(chunks[i].SData)
+		binary.LittleEndian.PutUint64(chunks[i].SData[:8], uint64(dataSize))
+		hasher.ResetWithLength(chunks[i].SData[:8])
+		hasher.Write(chunks[i].SData[8:])
 		chunks[i].Key = make([]byte, 32)
 		copy(chunks[i].Key, hasher.Sum(nil))
 	}
 
-	return i
+	return chunks
 }
 
 // Size, Seek, Read, ReadAt
@@ -275,7 +280,7 @@ func NewStoreParams(ldbCap uint64, cacheCap uint, requestsCap uint, hash SwarmHa
 		basekey = make([]byte, 32)
 	}
 	if hash == nil {
-		hash = MakeHashFunc("SHA3")
+		hash = MakeHashFunc(DefaultHash)
 	}
 	return &StoreParams{
 		Hash:                       hash,

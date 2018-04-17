@@ -18,8 +18,6 @@ package storage
 
 import (
 	"bytes"
-	"crypto/rand"
-	"encoding/binary"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
@@ -44,16 +42,16 @@ func TestHasherStore(t *testing.T) {
 
 	for _, tt := range tests {
 		chunkStore := NewMapChunkStore()
-		hasherStore := NewHasherStore(chunkStore, MakeHashFunc(SHA3Hash), tt.toEncrypt)
+		hasherStore := NewHasherStore(chunkStore, MakeHashFunc(DefaultHash), tt.toEncrypt)
 
 		// Put two random chunks into the hasherStore
-		chunkData1 := generateRandomChunkData(tt.chunkLength)
+		chunkData1 := GenerateRandomChunk(int64(tt.chunkLength)).SData
 		key1, err := hasherStore.Put(chunkData1)
 		if err != nil {
 			t.Fatalf("Expected no error got \"%v\"", err)
 		}
 
-		chunkData2 := generateRandomChunkData(tt.chunkLength)
+		chunkData2 := GenerateRandomChunk(int64(tt.chunkLength)).SData
 		key2, err := hasherStore.Put(chunkData2)
 		if err != nil {
 			t.Fatalf("Expected no error got \"%v\"", err)
@@ -117,12 +115,4 @@ func TestHasherStore(t *testing.T) {
 			t.Fatalf("Chunk expected to be not encrypted but stored content is different. Expected %v got %v", common.Bytes2Hex(chunkData1), common.Bytes2Hex(chunkDataInStore))
 		}
 	}
-}
-
-func generateRandomChunkData(length int) ChunkData {
-	chunkData := make([]byte, length)
-
-	rand.Read(chunkData)
-	binary.LittleEndian.PutUint64(chunkData[:8], uint64(len(chunkData)-8))
-	return chunkData
 }

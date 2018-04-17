@@ -10,33 +10,8 @@ import (
 )
 
 var (
-	hashfunc = MakeHashFunc("SHA3")
+	hashfunc = MakeHashFunc(DefaultHash)
 )
-
-// convenience generator for unique chunks
-type randomChunkGenerator struct {
-	data   []byte
-	hasher SwarmHash
-}
-
-func newRandomChunkGenerator(stem []byte) *randomChunkGenerator {
-	gen := &randomChunkGenerator{
-		data:   make([]byte, 8),
-		hasher: hashfunc(),
-	}
-	gen.data = append(gen.data, stem...)
-	return gen
-}
-
-func (self *randomChunkGenerator) newChunk() *Chunk {
-	self.hasher.Reset()
-	self.hasher.Write(self.data)
-	chunk := NewChunk(self.hasher.Sum(nil), nil)
-	chunk.SData = make([]byte, len(self.data))
-	copy(chunk.SData, self.data)
-	self.data[0]++
-	return chunk
-}
 
 // put to localstore and wait for stored channel
 // does not check delivery error state
@@ -59,8 +34,6 @@ func putChunks(store *LocalStore, chunks ...*Chunk) {
 // tests that resource update chunks are passed through content address validator
 // the test checking the resouce update validator internal correctness is found in resource_test.go
 func TestValidator(t *testing.T) {
-	bogusData := []byte("00000000bar")
-
 	// set up localstore
 	datadir, err := ioutil.TempDir("", "storage-testvalidator")
 	if err != nil {
@@ -76,10 +49,10 @@ func TestValidator(t *testing.T) {
 	}
 
 	// check puts with no validators, both succeed
-	gen := newRandomChunkGenerator([]byte("foo"))
-	goodChunk := gen.newChunk()
-	badChunk := gen.newChunk()
-	badChunk.SData = bogusData
+	chunks := GenerateRandomChunks(259, 2)
+	goodChunk := chunks[0]
+	badChunk := chunks[1]
+	copy(badChunk.SData, goodChunk.SData)
 
 	putChunks(store, goodChunk, badChunk)
 	if err := goodChunk.GetErrored(); err != nil {
@@ -92,9 +65,10 @@ func TestValidator(t *testing.T) {
 	// add content address validator and check puts
 	// bad should fail, good should pass
 	store.Validators = append(store.Validators, NewContentAddressValidator(hashfunc))
-	goodChunk = gen.newChunk()
-	badChunk = gen.newChunk()
-	badChunk.SData = bogusData
+	chunks = GenerateRandomChunks(DefaultChunkSize, 2)
+	goodChunk = chunks[0]
+	badChunk = chunks[1]
+	copy(badChunk.SData, goodChunk.SData)
 
 	putChunks(store, goodChunk, badChunk)
 	if err := goodChunk.GetErrored(); err != nil {
@@ -113,7 +87,7 @@ func TestValidator(t *testing.T) {
 	}
 	store.Validators = append(store.Validators, rh)
 
-	goodChunk = gen.newChunk()
+	goodChunk = GenerateRandomChunk(DefaultChunkSize)
 	key := rh.resourceHash(42, 1, ens.EnsNode("xyzzy.eth"))
 	data := []byte("bar")
 	uglyChunk := newUpdateChunk(key, nil, 42, 1, "xyzzy.eth", data, len(data))
@@ -135,7 +109,7 @@ func TestValidator(t *testing.T) {
 	store.Validators[0] = store.Validators[1]
 	store.Validators = store.Validators[:1]
 
-	goodChunk = gen.newChunk()
+	goodChunk = GenerateRandomChunk(DefaultChunkSize)
 	key = rh.resourceHash(42, 2, ens.EnsNode("xyzzy.eth"))
 	data = []byte("baz")
 	uglyChunk = newUpdateChunk(key, nil, 42, 2, "xyzzy.eth", data, len(data))

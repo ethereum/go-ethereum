@@ -160,13 +160,13 @@ func NewPss(k network.Overlay, params *PssParams) *Pss {
 		allowRaw: params.AllowRaw,
 		hashPool: sync.Pool{
 			New: func() interface{} {
-				return storage.MakeHashFunc(storage.SHA3Hash)()
+				return storage.MakeHashFunc(storage.DefaultHash)()
 			},
 		},
 	}
 
 	for i := 0; i < hasherCount; i++ {
-		hashfunc := storage.MakeHashFunc(storage.SHA3Hash)()
+		hashfunc := storage.MakeHashFunc(storage.DefaultHash)()
 		ps.hashPool.Put(hashfunc)
 	}
 

@@ -32,13 +32,13 @@ func newTestMemStore() *MemStore {
 	return NewMemStore(storeparams, nil)
 }
 
-func testMemStoreRandom(n int, processors int, chunksize int, t *testing.T) {
+func testMemStoreRandom(n int, processors int, chunksize int64, t *testing.T) {
 	m := newTestMemStore()
 	defer m.Close()
 	testStoreRandom(m, processors, n, chunksize, t)
 }
 
-func testMemStoreCorrect(n int, processors int, chunksize int, t *testing.T) {
+func testMemStoreCorrect(n int, processors int, chunksize int64, t *testing.T) {
 	m := newTestMemStore()
 	defer m.Close()
 	testStoreCorrect(m, processors, n, chunksize, t)
@@ -78,13 +78,13 @@ func TestMemStoreNotFound(t *testing.T) {
 	}
 }
 
-func benchmarkMemStorePut(n int, processors int, chunksize int, b *testing.B) {
+func benchmarkMemStorePut(n int, processors int, chunksize int64, b *testing.B) {
 	m := newTestMemStore()
 	defer m.Close()
 	benchmarkStorePut(m, processors, n, chunksize, b)
 }
 
-func benchmarkMemStoreGet(n int, processors int, chunksize int, b *testing.B) {
+func benchmarkMemStoreGet(n int, processors int, chunksize int64, b *testing.B) {
 	m := newTestMemStore()
 	defer m.Close()
 	benchmarkStoreGet(m, processors, n, chunksize, b)

@@ -58,6 +58,8 @@ const (
 	BLAKE2S_MIN = 0xb241
 	BLAKE2S_MAX = 0xb260
 
+	BMT_SHA3 = 0xb270
+
 	DBL_SHA2_256 = 0x56
 
 	MURMUR3 = 0x22
@@ -102,6 +104,7 @@ var Names = map[string]uint64{
 	"keccak-512":   KECCAK_512,
 	"shake-128":    SHAKE_128,
 	"shake-256":    SHAKE_256,
+	"bmt-sha3":     BMT_SHA3,
 }
 
 // Codes maps a hash code to it's name
@@ -122,6 +125,7 @@ var Codes = map[uint64]string{
 	KECCAK_512:   "keccak-512",
 	SHAKE_128:    "shake-128",
 	SHAKE_256:    "shake-256",
+	BMT_SHA3:     "bmt-sha3",
 }
 
 // DefaultLengths maps a hash code to it's default length
@@ -142,6 +146,7 @@ var DefaultLengths = map[uint64]int{
 	KECCAK_512:   64,
 	SHAKE_128:    32,
 	SHAKE_256:    64,
+	BMT_SHA3:     32,
 }
 
 func uvarint(buf []byte) (uint64, []byte, error) {

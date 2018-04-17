@@ -74,7 +74,7 @@ func (db *testDbStore) close() {
 	}
 }
 
-func testDbStoreRandom(n int, processors int, chunksize int, mock bool, t *testing.T) {
+func testDbStoreRandom(n int, processors int, chunksize int64, mock bool, t *testing.T) {
 	db, err := newTestDbStore(mock, true)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
@@ -83,7 +83,7 @@ func testDbStoreRandom(n int, processors int, chunksize int, mock bool, t *testi
 	testStoreRandom(db, processors, n, chunksize, t)
 }
 
-func testDbStoreCorrect(n int, processors int, chunksize int, mock bool, t *testing.T) {
+func testDbStoreCorrect(n int, processors int, chunksize int64, mock bool, t *testing.T) {
 	db, err := newTestDbStore(mock, false)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
@@ -166,11 +166,6 @@ func testIterator(t *testing.T, mock bool) {
 	var poc uint
 	chunkkeys := NewKeyCollection(chunkcount)
 	chunkkeys_results := NewKeyCollection(chunkcount)
-	var chunks []*Chunk
-
-	for i := 0; i < chunkcount; i++ {
-		chunks = append(chunks, NewChunk(nil, nil))
-	}
 
 	db, err := newTestDbStore(mock, false)
 	if err != nil {
@@ -178,7 +173,7 @@ func testIterator(t *testing.T, mock bool) {
 	}
 	defer db.close()
 
-	FakeChunk(DefaultChunkSize, chunkcount, chunks)
+	chunks := GenerateRandomChunks(DefaultChunkSize, chunkcount)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(len(chunks))
@@ -226,7 +221,7 @@ func TestMockIterator(t *testing.T) {
 	testIterator(t, true)
 }
 
-func benchmarkDbStorePut(n int, processors int, chunksize int, mock bool, b *testing.B) {
+func benchmarkDbStorePut(n int, processors int, chunksize int64, mock bool, b *testing.B) {
 	db, err := newTestDbStore(mock, true)
 	if err != nil {
 		b.Fatalf("init dbStore failed: %v", err)
@@ -235,7 +230,7 @@ func benchmarkDbStorePut(n int, processors int, chunksize int, mock bool, b *tes
 	benchmarkStorePut(db, processors, n, chunksize, b)
 }
 
-func benchmarkDbStoreGet(n int, processors int, chunksize int, mock bool, b *testing.B) {
+func benchmarkDbStoreGet(n int, processors int, chunksize int64, mock bool, b *testing.B) {
 	db, err := newTestDbStore(mock, true)
 	if err != nil {
 		b.Fatalf("init dbStore failed: %v", err)
