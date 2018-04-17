@@ -246,9 +246,6 @@ func isJump(op string) bool {
 
 // toBinary converts text to a vm.OpCode
 func toBinary(text string) vm.OpCode {
-	if isPush(text) {
-		text = "push1"
-	}
 	return vm.StringToOp(strings.ToUpper(text))
 }
 
