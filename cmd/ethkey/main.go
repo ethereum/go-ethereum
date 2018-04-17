@@ -38,6 +38,7 @@ func init() {
 	app.Commands = []cli.Command{
 		commandGenerate,
 		commandInspect,
+		commandChangePassphrase,
 		commandSignMessage,
 		commandVerifyMessage,
 	}
@@ -46,7 +47,7 @@ func init() {
 // Commonly used command line flags.
 var (
 	passphraseFlag = cli.StringFlag{
-		Name:  "passwordfile",
+		Name:  "passfile",
 		Usage: "the file that contains the passphrase for the keyfile",
 	}
 	jsonFlag = cli.BoolFlag{
