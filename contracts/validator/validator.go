@@ -4,6 +4,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/validator/contract"
+	"math/big"
 )
 
 type Validator struct {
@@ -26,8 +27,8 @@ func NewValidator(transactOpts *bind.TransactOpts, contractAddr common.Address, 
 	}, nil
 }
 
-func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend) (common.Address, *Validator, error) {
-	validatorAddr, _, _, err := contract.DeployTomoValidator(transactOpts, contractBackend, nil, nil)
+func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend, candidates []common.Address, caps []*big.Int) (common.Address, *Validator, error) {
+	validatorAddr, _, _, err := contract.DeployTomoValidator(transactOpts, contractBackend, candidates, caps)
 	if err != nil {
 		return validatorAddr, nil, err
 	}
