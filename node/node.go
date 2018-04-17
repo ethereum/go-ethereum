@@ -303,23 +303,13 @@ func (n *Node) stopInProc() {
 
 // startIPC initializes and starts the IPC RPC endpoint.
 func (n *Node) startIPC(apis []rpc.API) error {
-	// Short circuit if the IPC endpoint isn't being exposed
 	if n.ipcEndpoint == "" {
-		return nil
-
+		return nil // IPC disabled.
 	}
-	isClosed := func() bool {
-		n.lock.RLock()
-		defer n.lock.RUnlock()
-		return n.ipcListener == nil
-	}
-
-	listener, handler, err := rpc.StartIPCEndpoint(isClosed, n.ipcEndpoint, apis)
+	listener, handler, err := rpc.StartIPCEndpoint(n.ipcEndpoint, apis)
 	if err != nil {
 		return err
 	}
-
-	// All listeners booted successfully
 	n.ipcListener = listener
 	n.ipcHandler = handler
 	n.log.Info("IPC endpoint opened", "url", n.ipcEndpoint)
