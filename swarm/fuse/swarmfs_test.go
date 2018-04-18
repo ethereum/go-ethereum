@@ -100,6 +100,7 @@ func mountDir(t *testing.T, api *api.Api, files map[string]fileInfo, bzzHash str
 	found := false
 	mi := swarmfs.Listmounts()
 	for _, minfo := range mi {
+		minfo.lock.RLock()
 		if minfo.MountPoint == mountDir {
 			if minfo.StartManifest != bzzHash ||
 				minfo.LatestManifest != bzzHash ||
@@ -108,6 +109,7 @@ func mountDir(t *testing.T, api *api.Api, files map[string]fileInfo, bzzHash str
 			}
 			found = true
 		}
+		minfo.lock.RUnlock()
 	}
 
 	// Test listMounts
