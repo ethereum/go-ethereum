@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -104,22 +105,59 @@ func (b *bridge) OpenWallet(call otto.FunctionCall) (response otto.Value) {
 	if err == nil {
 		return val
 	}
-	// Wallet open failed, report error unless it's a PIN entry
-	if strings.HasSuffix(err.Error(), usbwallet.ErrTrezorPINNeeded.Error()) {
+
+	// Wallet open failed, report error unless it's a PIN or PUK entry
+	switch {
+	case strings.HasSuffix(err.Error(), usbwallet.ErrTrezorPINNeeded.Error()):
 		val, err = b.readPinAndReopenWallet(call)
 		if err == nil {
 			return val
 		}
-	}
-	// Check if the user needs to input a passphrase
-	if !strings.HasSuffix(err.Error(), usbwallet.ErrTrezorPassphraseNeeded.Error()) {
-		throwJSException(err.Error())
-	}
-	val, err = b.readPassphraseAndReopenWallet(call)
-	if err != nil {
+		val, err = b.readPassphraseAndReopenWallet(call)
+		if err != nil {
+			throwJSException(err.Error())
+		}
+
+	case strings.HasSuffix(err.Error(), scwallet.ErrPUKNeeded.Error()):
+		// PUK input requested, fetch from the user and call open again
+		if input, err := b.prompter.PromptPassword("Please enter current PUK: "); err != nil {
+			throwJSException(err.Error())
+		} else {
+			passwd, _ = otto.ToValue(input)
+		}
+		if val, err = call.Otto.Call("jeth.openWallet", nil, wallet, passwd); err != nil {
+			if !strings.HasSuffix(err.Error(), scwallet.ErrPINNeeded.Error()) {
+				throwJSException(err.Error())
+			} else {
+				// PIN input requested, fetch from the user and call open again
+				if input, err := b.prompter.PromptPassword("Please enter current PIN: "); err != nil {
+					throwJSException(err.Error())
+				} else {
+					passwd, _ = otto.ToValue(input)
+				}
+				if val, err = call.Otto.Call("jeth.openWallet", nil, wallet, passwd); err != nil {
+					throwJSException(err.Error())
+				}
+			}
+		}
+
+	case strings.HasSuffix(err.Error(), scwallet.ErrPINNeeded.Error()):
+		// PIN input requested, fetch from the user and call open again
+		if input, err := b.prompter.PromptPassword("Please enter current PIN: "); err != nil {
+			throwJSException(err.Error())
+		} else {
+			passwd, _ = otto.ToValue(input)
+		}
+		if val, err = call.Otto.Call("jeth.openWallet", nil, wallet, passwd); err != nil {
+			throwJSException(err.Error())
+		}
+
+	default:
+		// Unknown error occurred, drop to the user
 		throwJSException(err.Error())
 	}
 	return val
+>>>>>>> accounts/scwallet, console: user friendly card opening
 }
 
 func (b *bridge) readPassphraseAndReopenWallet(call otto.FunctionCall) (otto.Value, error) {

@@ -41,13 +41,26 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// ErrPUKNeeded is returned if opening the smart card requires pairing with a PUK
+// code. In this case, the calling application should request user input to enter
+// the PUK and send it back.
+var ErrPUKNeeded = errors.New("smartcard: puk needed")
+
+// ErrPINNeeded is returned if opening the smart card requires a PIN code. In
+// this case, the calling application should request user input to enter the PIN
+// and send it back.
+var ErrPINNeeded = errors.New("smartcard: pin needed")
+
+// ErrAlreadyOpen is returned if the smart card is attempted to be opened, but
+// there is already a paired and unlocked session.
+var ErrAlreadyOpen = errors.New("smartcard: already open")
+
+// ErrPubkeyMismatch is returned if the public key recovered from a signature
+// does not match the one expected by the user.
+var ErrPubkeyMismatch = errors.New("smartcard: recovered public key mismatch")
+
 var (
 	appletAID               = []byte{0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x57, 0x61, 0x6C, 0x6C, 0x65, 0x74, 0x41, 0x70, 0x70}
-	AlreadyOpenError        = errors.New("Wallet already open")
-	PairingRequiredError    = errors.New("Pairing required with personal.openWallet(puk)")
-	PinRequiredError        = errors.New("Must unlock with personal.openWallet(pin)")
-	PubkeyMismatchError     = errors.New("Could not recover matching public key from signature")
-	WalletChangedError      = errors.New("Smartcard has been changed")
 	DerivationSignatureHash = sha256.Sum256([]byte("STATUS KEY DERIVATION"))
 )
 
@@ -240,21 +253,17 @@ func (w *Wallet) Unpair(pin []byte) error {
 	defer w.lock.Unlock()
 
 	if !w.session.paired() {
-		return fmt.Errorf("Wallet %x not paired", w.PublicKey)
+		return fmt.Errorf("wallet %x not paired", w.PublicKey)
 	}
-
 	if err := w.session.verifyPin(pin); err != nil {
-		return fmt.Errorf("Error verifying pin: %s", err)
+		return fmt.Errorf("failed to verify pin: %s", err)
 	}
-
 	if err := w.session.unpair(); err != nil {
-		return fmt.Errorf("Error unpairing: %s", err)
+		return fmt.Errorf("failed to unpair: %s", err)
 	}
-
 	if err := w.Hub.setPairing(w, nil); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -306,34 +315,39 @@ func (w *Wallet) Open(passphrase string) error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
+	// If the session is already open, bail out
 	if w.session.verified {
-		// Already open
-		return AlreadyOpenError
+		return ErrAlreadyOpen
 	}
-
+	// If the smart card is not yet paired, attempt to do so either from a previous
+	// pairing key or form the supplied PUK code.
 	if !w.session.paired() {
-		// Unpaired.
+		// If a previous pairing exists, only ever try to use that
 		if pairing := w.Hub.getPairing(w); pairing != nil {
-			// Authenticate with the existing pairing.
 			if err := w.session.authenticate(*pairing); err != nil {
-				return fmt.Errorf("Could not authenticate with paired card %x: %s", w.PublicKey[:4], err)
+				return fmt.Errorf("failed to authenticate card %x: %s", w.PublicKey[:4], err)
 			}
-		} else if passphrase != "" {
-			// Establish a new pairing
-			return w.pair([]byte(passphrase))
-		} else {
-			return PairingRequiredError
+			return nil
 		}
+		// If no passphrase was supplied, request the PUK from the user
+		if passphrase == "" {
+			return ErrPUKNeeded
+		}
+		// Attempt to pair the smart card with the user supplied PUK
+		if err := w.pair([]byte(passphrase)); err != nil {
+			return err
+		}
+		return ErrPINNeeded // We always need the PIN after the PUK
 	}
-
+	// The smart card was successfully paired, request a PIN code or use the one
+	// supplied by the user
 	if passphrase == "" {
-		return PinRequiredError
+		return ErrPINNeeded
 	}
-	// Verify pin
 	if err := w.session.verifyPin([]byte(passphrase)); err != nil {
 		return err
 	}
-
+	// Smart card paired and unlocked, initialize and register
 	w.deriveReq = make(chan chan struct{})
 	w.deriveQuit = make(chan chan error)
 
@@ -990,7 +1004,7 @@ func determinePublicKey(sig, pubkeyX []byte) ([]byte, error) {
 			return nil, err
 		}
 	}
-	return nil, PubkeyMismatchError
+	return nil, ErrPubkeyMismatch
 }
 
 // makeRecoverableSignature uses a signature and an expected public key to
@@ -1007,5 +1021,5 @@ func makeRecoverableSignature(hash, sig, expectedPubkey []byte) ([]byte, error) 
 			return nil, err
 		}
 	}
-	return nil, PubkeyMismatchError
+	return nil, ErrPubkeyMismatch
 }
