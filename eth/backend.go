@@ -24,7 +24,6 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -48,6 +47,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	
+	// @shyft
+	"database/sql"
 )
 
 type LesServer interface {
@@ -74,7 +76,7 @@ type Ethereum struct {
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
-	blockExplorerDb *leveldb.DB
+	blockExplorerDb *sql.DB
 
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
@@ -116,7 +118,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	
 	// @NOTE:shyft instantiate BlockExplorerDB here?
-	blockExplorerDb, err := leveldb.OpenFile("./shyftData/geth/blockExplorerDb/", nil)
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	blockExplorerDb, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, err
 	}
