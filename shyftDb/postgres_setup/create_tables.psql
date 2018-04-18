@@ -1,0 +1,16 @@
+CREATE TABLE IF NOT EXISTS blocks (
+  hash text primary key,
+  coinbase text, 
+  number bigint
+);
+
+CREATE TABLE IF NOT EXISTS txs (
+  from_addr text,
+  blockhash text,
+  amount bigint,
+  gasprice bigint,
+  gas numeric,
+  nonce numeric,
+  data bytea,
+  block text references blocks(hash)
+);
