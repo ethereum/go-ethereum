@@ -578,6 +578,13 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.logDebug("HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, r.URL.Host, r.URL.Path, r.Referer(), r.Header.Get("Accept"))
 
+	if r.RequestURI == "/" && strings.Contains(r.Header.Get("Accept"), "application/json") {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode("Welcome to Swarm!")
+		return
+	}	
+	
 	uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
 	req := &Request{Request: *r, uri: uri}
 	if err != nil {
