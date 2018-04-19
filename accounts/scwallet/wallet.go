@@ -93,10 +93,11 @@ type Wallet struct {
 	Hub       *Hub   // A handle to the Hub that instantiated this wallet.
 	PublicKey []byte // The wallet's public key (used for communication and identification, not signing!)
 
-	lock           sync.Mutex                // Lock that gates access to struct fields and communication with the card
-	card           *scard.Card               // A handle to the smartcard interface for the wallet.
-	session        *Session                  // The secure communication session with the card
-	log            log.Logger                // Contextual logger to tag the base with its id
+	lock    sync.Mutex  // Lock that gates access to struct fields and communication with the card
+	card    *scard.Card // A handle to the smartcard interface for the wallet.
+	session *Session    // The secure communication session with the card
+	log     log.Logger  // Contextual logger to tag the base with its id
+
 	deriveNextPath accounts.DerivationPath   // Next derivation path for account auto-discovery
 	deriveNextAddr common.Address            // Next derived account address for auto-discovery
 	deriveChain    ethereum.ChainStateReader // Blockchain state reader to discover used account with
@@ -273,7 +274,7 @@ func (w *Wallet) Unpair(pin []byte) error {
 func (w *Wallet) URL() accounts.URL {
 	return accounts.URL{
 		Scheme: w.Hub.scheme,
-		Path:   fmt.Sprintf("%x", w.PublicKey[1:3]),
+		Path:   fmt.Sprintf("%x", w.PublicKey[1:5]), // Byte #0 isn't unique; 1:5 covers << 64K cards, bump to 1:9 for << 4M
 	}
 }
 
@@ -327,7 +328,7 @@ func (w *Wallet) Open(passphrase string) error {
 			if err := w.session.authenticate(*pairing); err != nil {
 				return fmt.Errorf("failed to authenticate card %x: %s", w.PublicKey[:4], err)
 			}
-			return nil
+			return ErrPINNeeded
 		}
 		// If no passphrase was supplied, request the PUK from the user
 		if passphrase == "" {
@@ -389,8 +390,8 @@ func (w *Wallet) Close() error {
 // selfDerive is an account derivation loop that upon request attempts to find
 // new non-zero accounts.
 func (w *Wallet) selfDerive() {
-	w.log.Debug("Smartcard wallet self-derivation started")
-	defer w.log.Debug("Smartcard wallet self-derivation stopped")
+	w.log.Debug("Smart card wallet self-derivation started")
+	defer w.log.Debug("Smart card wallet self-derivation stopped")
 
 	// Execute self-derivations until termination or error
 	var (
@@ -418,21 +419,22 @@ func (w *Wallet) selfDerive() {
 
 		// Device lock obtained, derive the next batch of accounts
 		var (
-			paths       []accounts.DerivationPath
-			nextAccount accounts.Account
-			nextAddr    = w.deriveNextAddr
-			nextPath    = w.deriveNextPath
+			paths   []accounts.DerivationPath
+			nextAcc accounts.Account
+
+			nextAddr = w.deriveNextAddr
+			nextPath = w.deriveNextPath
 
 			context = context.Background()
 		)
 		for empty := false; !empty; {
 			// Retrieve the next derived Ethereum account
 			if nextAddr == (common.Address{}) {
-				if nextAccount, err = w.session.derive(nextPath); err != nil {
+				if nextAcc, err = w.session.derive(nextPath); err != nil {
 					w.log.Warn("Smartcard wallet account derivation failed", "err", err)
 					break
 				}
-				nextAddr = nextAccount.Address
+				nextAddr = nextAcc.Address
 			}
 			// Check the account's status against the current chain state
 			var (
@@ -459,8 +461,8 @@ func (w *Wallet) selfDerive() {
 			paths = append(paths, path)
 
 			// Display a log message to the user for new (or previously empty accounts)
-			if _, known := pairing.Accounts[nextAddr]; !known || (!empty && nextAddr == w.deriveNextAddr) {
-				w.log.Info("Smartcard wallet discovered new account", "address", nextAccount.Address, "path", path, "balance", balance, "nonce", nonce)
+			if _, known := pairing.Accounts[nextAddr]; !known || !empty || nextAddr != w.deriveNextAddr {
+				w.log.Info("Smartcard wallet discovered new account", "address", nextAddr, "path", path, "balance", balance, "nonce", nonce)
 			}
 			pairing.Accounts[nextAddr] = path
 
@@ -470,12 +472,10 @@ func (w *Wallet) selfDerive() {
 				nextPath[len(nextPath)-1]++
 			}
 		}
-
 		// If there are new accounts, write them out
 		if len(paths) > 0 {
 			err = w.Hub.setPairing(w, pairing)
 		}
-
 		// Shift the self-derivation forward
 		w.deriveNextAddr = nextAddr
 		w.deriveNextPath = nextPath
@@ -523,6 +523,13 @@ func (w *Wallet) Accounts() []accounts.Account {
 		ret := make([]accounts.Account, 0, len(pairing.Accounts))
 		for address, path := range pairing.Accounts {
 			ret = append(ret, w.makeAccount(address, path))
+		}
+		for i := 0; i < len(ret); i++ {
+			for j := i + 1; j < len(ret); j++ {
+				if ret[i].URL.Cmp(ret[j].URL) > 0 {
+					ret[i], ret[j] = ret[j], ret[i]
+				}
+			}
 		}
 		return ret
 	}
