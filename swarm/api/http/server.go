@@ -850,7 +850,7 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.URL.Path == "/robot.txt" {
+	if r.URL.Path == "/robots.txt" {
 		w.Header().Set("Last-Modified", time.Now().Format(http.TimeFormat))
 		fmt.Fprintf(w, "User-agent: *\nDisallow: /")
 		return
