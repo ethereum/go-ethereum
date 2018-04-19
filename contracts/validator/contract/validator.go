@@ -7,14 +7,16 @@ import (
 	"math/big"
 	"strings"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 // IValidatorABI is the input ABI used to generate the binding from.
-const IValidatorABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"\",\"type\":\"address\"}],\"name\":\"propose\",\"outputs\":[],\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"function\"}]"
+const IValidatorABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"\",\"type\":\"address\"}],\"name\":\"vote\",\"outputs\":[],\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"propose\",\"outputs\":[],\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"function\"}]"
 
 // IValidatorBin is the compiled bytecode used for deploying new contracts.
 const IValidatorBin = `0x`
@@ -174,25 +176,46 @@ func (_IValidator *IValidatorTransactorRaw) Transact(opts *bind.TransactOpts, me
 	return _IValidator.Contract.contract.Transact(opts, method, params...)
 }
 
-// Propose is a paid mutator transaction binding the contract method 0x01267951.
+// Propose is a paid mutator transaction binding the contract method 0xc198f8ba.
 //
-// Solidity: function propose( address) returns()
-func (_IValidator *IValidatorTransactor) Propose(opts *bind.TransactOpts, arg0 common.Address) (*types.Transaction, error) {
-	return _IValidator.contract.Transact(opts, "propose", arg0)
+// Solidity: function propose() returns()
+func (_IValidator *IValidatorTransactor) Propose(opts *bind.TransactOpts) (*types.Transaction, error) {
+	return _IValidator.contract.Transact(opts, "propose")
 }
 
-// Propose is a paid mutator transaction binding the contract method 0x01267951.
+// Propose is a paid mutator transaction binding the contract method 0xc198f8ba.
 //
-// Solidity: function propose( address) returns()
-func (_IValidator *IValidatorSession) Propose(arg0 common.Address) (*types.Transaction, error) {
-	return _IValidator.Contract.Propose(&_IValidator.TransactOpts, arg0)
+// Solidity: function propose() returns()
+func (_IValidator *IValidatorSession) Propose() (*types.Transaction, error) {
+	return _IValidator.Contract.Propose(&_IValidator.TransactOpts)
 }
 
-// Propose is a paid mutator transaction binding the contract method 0x01267951.
+// Propose is a paid mutator transaction binding the contract method 0xc198f8ba.
 //
-// Solidity: function propose( address) returns()
-func (_IValidator *IValidatorTransactorSession) Propose(arg0 common.Address) (*types.Transaction, error) {
-	return _IValidator.Contract.Propose(&_IValidator.TransactOpts, arg0)
+// Solidity: function propose() returns()
+func (_IValidator *IValidatorTransactorSession) Propose() (*types.Transaction, error) {
+	return _IValidator.Contract.Propose(&_IValidator.TransactOpts)
+}
+
+// Vote is a paid mutator transaction binding the contract method 0x6dd7d8ea.
+//
+// Solidity: function vote( address) returns()
+func (_IValidator *IValidatorTransactor) Vote(opts *bind.TransactOpts, arg0 common.Address) (*types.Transaction, error) {
+	return _IValidator.contract.Transact(opts, "vote", arg0)
+}
+
+// Vote is a paid mutator transaction binding the contract method 0x6dd7d8ea.
+//
+// Solidity: function vote( address) returns()
+func (_IValidator *IValidatorSession) Vote(arg0 common.Address) (*types.Transaction, error) {
+	return _IValidator.Contract.Vote(&_IValidator.TransactOpts, arg0)
+}
+
+// Vote is a paid mutator transaction binding the contract method 0x6dd7d8ea.
+//
+// Solidity: function vote( address) returns()
+func (_IValidator *IValidatorTransactorSession) Vote(arg0 common.Address) (*types.Transaction, error) {
+	return _IValidator.Contract.Vote(&_IValidator.TransactOpts, arg0)
 }
 
 // SafeMathABI is the input ABI used to generate the binding from.
@@ -357,10 +380,10 @@ func (_SafeMath *SafeMathTransactorRaw) Transact(opts *bind.TransactOpts, method
 }
 
 // TomoValidatorABI is the input ABI used to generate the binding from.
-const TomoValidatorABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"_candidate\",\"type\":\"address\"}],\"name\":\"propose\",\"outputs\":[],\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"_candidate\",\"type\":\"address\"},{\"name\":\"_cap\",\"type\":\"uint256\"}],\"name\":\"unvote\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"getCandidates\",\"outputs\":[{\"name\":\"\",\"type\":\"address[]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_candidate\",\"type\":\"address\"},{\"name\":\"_voter\",\"type\":\"address\"}],\"name\":\"getVoterCap\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"name\":\"candidates\",\"outputs\":[{\"name\":\"\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_candidate\",\"type\":\"address\"}],\"name\":\"getCandidateCap\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"_candidate\",\"type\":\"address\"}],\"name\":\"vote\",\"outputs\":[],\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_candidate\",\"type\":\"address\"}],\"name\":\"isCandidate\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"_candidates\",\"type\":\"address[]\"},{\"name\":\"_caps\",\"type\":\"uint256[]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"}]"
+const TomoValidatorABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"_candidate\",\"type\":\"address\"},{\"name\":\"_cap\",\"type\":\"uint256\"}],\"name\":\"unvote\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"getCandidates\",\"outputs\":[{\"name\":\"\",\"type\":\"address[]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_candidate\",\"type\":\"address\"},{\"name\":\"_voter\",\"type\":\"address\"}],\"name\":\"getVoterCap\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"name\":\"candidates\",\"outputs\":[{\"name\":\"\",\"type\":\"address\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_candidate\",\"type\":\"address\"}],\"name\":\"getCandidateCap\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"_candidate\",\"type\":\"address\"}],\"name\":\"vote\",\"outputs\":[],\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"maxCandidateNumber\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"propose\",\"outputs\":[],\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"maxValidatorNumber\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_candidate\",\"type\":\"address\"}],\"name\":\"isCandidate\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"minCandidateCap\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"_candidates\",\"type\":\"address[]\"},{\"name\":\"_caps\",\"type\":\"uint256[]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"_candidate\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"_cap\",\"type\":\"uint256\"}],\"name\":\"Vote\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"_candidate\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"_cap\",\"type\":\"uint256\"}],\"name\":\"Unvote\",\"type\":\"event\"}]"
 
 // TomoValidatorBin is the compiled bytecode used for deploying new contracts.
-const TomoValidatorBin = `0x60606040526000600255341561001457600080fd5b6040516107d63803806107d68339810160405280805182019190602001805190910190506000600183805161004d9291602001906100ec565b50600090505b82518110156100e45760408051908101604052600181526020810183838151811061007a57fe5b90602001906020020151905260008085848151811061009557fe5b90602001906020020151600160a060020a0316815260208101919091526040016000208151815460ff191690151517815560208201516001918201556002805482019055919091019050610053565b50505061017a565b828054828255906000526020600020908101928215610143579160200282015b828111156101435782518254600160a060020a031916600160a060020a03919091161782556020929092019160019091019061010c565b5061014f929150610153565b5090565b61017791905b8082111561014f578054600160a060020a0319168155600101610159565b90565b61064d806101896000396000f30060606040526004361061008d5763ffffffff7c010000000000000000000000000000000000000000000000000000000060003504166301267951811461009257806302aa9be2146100a857806306a49fce146100ca578063302b6872146101305780633477ee2e1461016757806358e7525f146101995780636dd7d8ea146101b8578063d51b9e93146101cc575b600080fd5b6100a6600160a060020a03600435166101ff565b005b34156100b357600080fd5b6100a6600160a060020a03600435166024356102b9565b34156100d557600080fd5b6100dd6103e2565b60405160208082528190810183818151815260200191508051906020019060200280838360005b8381101561011c578082015183820152602001610104565b505050509050019250505060405180910390f35b341561013b57600080fd5b610155600160a060020a036004358116906024351661044b565b60405190815260200160405180910390f35b341561017257600080fd5b61017d600435610478565b604051600160a060020a03909116815260200160405180910390f35b34156101a457600080fd5b610155600160a060020a03600435166104a0565b6100a6600160a060020a03600435166104be565b34156101d757600080fd5b6101eb600160a060020a0360043516610582565b604051901515815260200160405180910390f35b600160a060020a03811660009081526020819052604090205460ff161515610265576001805480820161023283826105c8565b506000918252602090912001805473ffffffffffffffffffffffffffffffffffffffff1916600160a060020a0383161790555b6040805190810160409081526001825234602080840191909152600160a060020a038416600090815290819052208151815460ff191690151517815560208201516001918201556002805490910190555050565b600160a060020a03821660009081526020819052604090205460ff1615156102e057600080fd5b600160a060020a038083166000908152602081815260408083203390941683526002909301905220548190101561031657600080fd5b600160a060020a038216600090815260208190526040902060010154610342908263ffffffff6105a016565b600160a060020a0380841660009081526020818152604080832060018101959095553390931682526002909301909252902054610385908263ffffffff6105a016565b600160a060020a0380841660009081526020818152604080832033909416808452600290940190915290819020929092559082156108fc0290839051600060405180830381858888f1935050505015156103de57600080fd5b5050565b6103ea6105f1565b600180548060200260200160405190810160405280929190818152602001828054801561044057602002820191906000526020600020905b8154600160a060020a03168152600190910190602001808311610422575b505050505090505b90565b600160a060020a039182166000908152602081815260408083209390941682526002909201909152205490565b600180548290811061048657fe5b600091825260209091200154600160a060020a0316905081565b600160a060020a031660009081526020819052604090206001015490565b600160a060020a03811660009081526020819052604090205460ff1615156104e557600080fd5b600160a060020a038116600090815260208190526040902060010154610511903463ffffffff6105b216565b600160a060020a0380831660009081526020818152604080832060018101959095553390931682526002909301909252902054610554903463ffffffff6105b216565b600160a060020a03918216600090815260208181526040808320339095168352600290940190529190912055565b600160a060020a031660009081526020819052604090205460ff1690565b6000828211156105ac57fe5b50900390565b6000828201838110156105c157fe5b9392505050565b8154818355818115116105ec576000838152602090206105ec918101908301610603565b505050565b60206040519081016040526000815290565b61044891905b8082111561061d5760008155600101610609565b50905600a165627a7a723058204f35ebf7b5775f52742c989407a76898f3dcbfa948c7b047bd1768f7a5e1f2130029`
+const TomoValidatorBin = `0x60606040526000600255341561001457600080fd5b6040516108f43803806108f48339810160405280805182019190602001805190910190506000600183805161004d9291602001906100ec565b50600090505b82518110156100e45760408051908101604052600181526020810183838151811061007a57fe5b90602001906020020151905260008085848151811061009557fe5b90602001906020020151600160a060020a0316815260208101919091526040016000208151815460ff191690151517815560208201516001918201556002805482019055919091019050610053565b50505061017a565b828054828255906000526020600020908101928215610143579160200282015b828111156101435782518254600160a060020a031916600160a060020a03919091161782556020929092019160019091019061010c565b5061014f929150610153565b5090565b61017791905b8082111561014f578054600160a060020a0319168155600101610159565b90565b61076b806101896000396000f3006060604052600436106100ae5763ffffffff7c010000000000000000000000000000000000000000000000000000000060003504166302aa9be281146100b357806306a49fce146100d7578063302b68721461013d5780633477ee2e1461017457806358e7525f146101a65780636dd7d8ea146101c55780638198a8dc146101d9578063c198f8ba146101ec578063d09f1ab4146101f4578063d51b9e9314610207578063d55b7dff1461023a575b600080fd5b34156100be57600080fd5b6100d5600160a060020a036004351660243561024d565b005b34156100e257600080fd5b6100ea6103ba565b60405160208082528190810183818151815260200191508051906020019060200280838360005b83811015610129578082015183820152602001610111565b505050509050019250505060405180910390f35b341561014857600080fd5b610162600160a060020a0360043581169060243516610423565b60405190815260200160405180910390f35b341561017f57600080fd5b61018a600435610450565b604051600160a060020a03909116815260200160405180910390f35b34156101b157600080fd5b610162600160a060020a0360043516610478565b6100d5600160a060020a0360043516610496565b34156101e457600080fd5b6101626105a2565b6100d56105a8565b34156101ff57600080fd5b61016261068d565b341561021257600080fd5b610226600160a060020a0360043516610692565b604051901515815260200160405180910390f35b341561024557600080fd5b6101626106b0565b600160a060020a03821660009081526020819052604090205460ff16151561027457600080fd5b600160a060020a03808316600090815260208181526040808320339094168352600290930190522054819010156102aa57600080fd5b600160a060020a0382166000908152602081905260409020600101546102d6908263ffffffff6106be16565b600160a060020a0380841660009081526020818152604080832060018101959095553390931682526002909301909252902054610319908263ffffffff6106be16565b600160a060020a0380841660009081526020818152604080832033909416808452600290940190915290819020929092559082156108fc0290839051600060405180830381858888f19350505050151561037257600080fd5b7f23ae40ca85f8a7c921ebb4269dc9a81e8a6de8dba614752927e0ff39341392fc8282604051600160a060020a03909216825260208201526040908101905180910390a15050565b6103c26106e6565b600180548060200260200160405190810160405280929190818152602001828054801561041857602002820191906000526020600020905b8154600160a060020a031681526001909101906020018083116103fa575b505050505090505b90565b600160a060020a039182166000908152602081815260408083209390941682526002909201909152205490565b600180548290811061045e57fe5b600091825260209091200154600160a060020a0316905081565b600160a060020a031660009081526020819052604090206001015490565b600160a060020a03811660009081526020819052604090205460ff1615156104bd57600080fd5b600160a060020a0381166000908152602081905260409020600101546104e9903463ffffffff6106d016565b600160a060020a038083166000908152602081815260408083206001810195909555339093168252600290930190925290205461052c903463ffffffff6106d016565b600160a060020a0380831660009081526020818152604080832033909416835260029093019052819020919091557ff668ead05c744b9178e571d2edb452e72baf6529c8d72160e64e59b50d865bd0908290349051600160a060020a03909216825260208201526040908101905180910390a150565b6101f481565b69021e19e0c9bab24000003410156105bf57600080fd5b600160a060020a03331660009081526020819052604090205460ff16156105e557600080fd5b6002546101f49011156105f757600080fd5b6001805480820161060883826106f8565b506000918252602090912001805473ffffffffffffffffffffffffffffffffffffffff191633600160a060020a03161790556040805190810160409081526001825234602080840191909152600160a060020a033316600090815290819052208151815460ff1916901515178155602082015160019182015560028054909101905550565b606381565b600160a060020a031660009081526020819052604090205460ff1690565b69021e19e0c9bab240000081565b6000828211156106ca57fe5b50900390565b6000828201838110156106df57fe5b9392505050565b60206040519081016040526000815290565b81548183558181151161071c5760008381526020902061071c918101908301610721565b505050565b61042091905b8082111561073b5760008155600101610727565b50905600a165627a7a72305820b31a90944fa6d48f577167e8fa11fd3d187b9e72442ec372e0144b82a4fa773c0029`
 
 // DeployTomoValidator deploys a new Ethereum contract, binding an instance of TomoValidator to it.
 func DeployTomoValidator(auth *bind.TransactOpts, backend bind.ContractBackend, _candidates []common.Address, _caps []*big.Int) (common.Address, *types.Transaction, *TomoValidator, error) {
@@ -647,25 +670,103 @@ func (_TomoValidator *TomoValidatorCallerSession) IsCandidate(_candidate common.
 	return _TomoValidator.Contract.IsCandidate(&_TomoValidator.CallOpts, _candidate)
 }
 
-// Propose is a paid mutator transaction binding the contract method 0x01267951.
+// MaxCandidateNumber is a free data retrieval call binding the contract method 0x8198a8dc.
 //
-// Solidity: function propose(_candidate address) returns()
-func (_TomoValidator *TomoValidatorTransactor) Propose(opts *bind.TransactOpts, _candidate common.Address) (*types.Transaction, error) {
-	return _TomoValidator.contract.Transact(opts, "propose", _candidate)
+// Solidity: function maxCandidateNumber() constant returns(uint256)
+func (_TomoValidator *TomoValidatorCaller) MaxCandidateNumber(opts *bind.CallOpts) (*big.Int, error) {
+	var (
+		ret0 = new(*big.Int)
+	)
+	out := ret0
+	err := _TomoValidator.contract.Call(opts, out, "maxCandidateNumber")
+	return *ret0, err
 }
 
-// Propose is a paid mutator transaction binding the contract method 0x01267951.
+// MaxCandidateNumber is a free data retrieval call binding the contract method 0x8198a8dc.
 //
-// Solidity: function propose(_candidate address) returns()
-func (_TomoValidator *TomoValidatorSession) Propose(_candidate common.Address) (*types.Transaction, error) {
-	return _TomoValidator.Contract.Propose(&_TomoValidator.TransactOpts, _candidate)
+// Solidity: function maxCandidateNumber() constant returns(uint256)
+func (_TomoValidator *TomoValidatorSession) MaxCandidateNumber() (*big.Int, error) {
+	return _TomoValidator.Contract.MaxCandidateNumber(&_TomoValidator.CallOpts)
 }
 
-// Propose is a paid mutator transaction binding the contract method 0x01267951.
+// MaxCandidateNumber is a free data retrieval call binding the contract method 0x8198a8dc.
 //
-// Solidity: function propose(_candidate address) returns()
-func (_TomoValidator *TomoValidatorTransactorSession) Propose(_candidate common.Address) (*types.Transaction, error) {
-	return _TomoValidator.Contract.Propose(&_TomoValidator.TransactOpts, _candidate)
+// Solidity: function maxCandidateNumber() constant returns(uint256)
+func (_TomoValidator *TomoValidatorCallerSession) MaxCandidateNumber() (*big.Int, error) {
+	return _TomoValidator.Contract.MaxCandidateNumber(&_TomoValidator.CallOpts)
+}
+
+// MaxValidatorNumber is a free data retrieval call binding the contract method 0xd09f1ab4.
+//
+// Solidity: function maxValidatorNumber() constant returns(uint256)
+func (_TomoValidator *TomoValidatorCaller) MaxValidatorNumber(opts *bind.CallOpts) (*big.Int, error) {
+	var (
+		ret0 = new(*big.Int)
+	)
+	out := ret0
+	err := _TomoValidator.contract.Call(opts, out, "maxValidatorNumber")
+	return *ret0, err
+}
+
+// MaxValidatorNumber is a free data retrieval call binding the contract method 0xd09f1ab4.
+//
+// Solidity: function maxValidatorNumber() constant returns(uint256)
+func (_TomoValidator *TomoValidatorSession) MaxValidatorNumber() (*big.Int, error) {
+	return _TomoValidator.Contract.MaxValidatorNumber(&_TomoValidator.CallOpts)
+}
+
+// MaxValidatorNumber is a free data retrieval call binding the contract method 0xd09f1ab4.
+//
+// Solidity: function maxValidatorNumber() constant returns(uint256)
+func (_TomoValidator *TomoValidatorCallerSession) MaxValidatorNumber() (*big.Int, error) {
+	return _TomoValidator.Contract.MaxValidatorNumber(&_TomoValidator.CallOpts)
+}
+
+// MinCandidateCap is a free data retrieval call binding the contract method 0xd55b7dff.
+//
+// Solidity: function minCandidateCap() constant returns(uint256)
+func (_TomoValidator *TomoValidatorCaller) MinCandidateCap(opts *bind.CallOpts) (*big.Int, error) {
+	var (
+		ret0 = new(*big.Int)
+	)
+	out := ret0
+	err := _TomoValidator.contract.Call(opts, out, "minCandidateCap")
+	return *ret0, err
+}
+
+// MinCandidateCap is a free data retrieval call binding the contract method 0xd55b7dff.
+//
+// Solidity: function minCandidateCap() constant returns(uint256)
+func (_TomoValidator *TomoValidatorSession) MinCandidateCap() (*big.Int, error) {
+	return _TomoValidator.Contract.MinCandidateCap(&_TomoValidator.CallOpts)
+}
+
+// MinCandidateCap is a free data retrieval call binding the contract method 0xd55b7dff.
+//
+// Solidity: function minCandidateCap() constant returns(uint256)
+func (_TomoValidator *TomoValidatorCallerSession) MinCandidateCap() (*big.Int, error) {
+	return _TomoValidator.Contract.MinCandidateCap(&_TomoValidator.CallOpts)
+}
+
+// Propose is a paid mutator transaction binding the contract method 0xc198f8ba.
+//
+// Solidity: function propose() returns()
+func (_TomoValidator *TomoValidatorTransactor) Propose(opts *bind.TransactOpts) (*types.Transaction, error) {
+	return _TomoValidator.contract.Transact(opts, "propose")
+}
+
+// Propose is a paid mutator transaction binding the contract method 0xc198f8ba.
+//
+// Solidity: function propose() returns()
+func (_TomoValidator *TomoValidatorSession) Propose() (*types.Transaction, error) {
+	return _TomoValidator.Contract.Propose(&_TomoValidator.TransactOpts)
+}
+
+// Propose is a paid mutator transaction binding the contract method 0xc198f8ba.
+//
+// Solidity: function propose() returns()
+func (_TomoValidator *TomoValidatorTransactorSession) Propose() (*types.Transaction, error) {
+	return _TomoValidator.Contract.Propose(&_TomoValidator.TransactOpts)
 }
 
 // Unvote is a paid mutator transaction binding the contract method 0x02aa9be2.
@@ -708,4 +809,250 @@ func (_TomoValidator *TomoValidatorSession) Vote(_candidate common.Address) (*ty
 // Solidity: function vote(_candidate address) returns()
 func (_TomoValidator *TomoValidatorTransactorSession) Vote(_candidate common.Address) (*types.Transaction, error) {
 	return _TomoValidator.Contract.Vote(&_TomoValidator.TransactOpts, _candidate)
+}
+
+// TomoValidatorUnvoteIterator is returned from FilterUnvote and is used to iterate over the raw logs and unpacked data for Unvote events raised by the TomoValidator contract.
+type TomoValidatorUnvoteIterator struct {
+	Event *TomoValidatorUnvote // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *TomoValidatorUnvoteIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(TomoValidatorUnvote)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(TomoValidatorUnvote)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *TomoValidatorUnvoteIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *TomoValidatorUnvoteIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// TomoValidatorUnvote represents a Unvote event raised by the TomoValidator contract.
+type TomoValidatorUnvote struct {
+	Candidate common.Address
+	Cap       *big.Int
+	Raw       types.Log // Blockchain specific contextual infos
+}
+
+// FilterUnvote is a free log retrieval operation binding the contract event 0x23ae40ca85f8a7c921ebb4269dc9a81e8a6de8dba614752927e0ff39341392fc.
+//
+// Solidity: event Unvote(_candidate address, _cap uint256)
+func (_TomoValidator *TomoValidatorFilterer) FilterUnvote(opts *bind.FilterOpts) (*TomoValidatorUnvoteIterator, error) {
+
+	logs, sub, err := _TomoValidator.contract.FilterLogs(opts, "Unvote")
+	if err != nil {
+		return nil, err
+	}
+	return &TomoValidatorUnvoteIterator{contract: _TomoValidator.contract, event: "Unvote", logs: logs, sub: sub}, nil
+}
+
+// WatchUnvote is a free log subscription operation binding the contract event 0x23ae40ca85f8a7c921ebb4269dc9a81e8a6de8dba614752927e0ff39341392fc.
+//
+// Solidity: event Unvote(_candidate address, _cap uint256)
+func (_TomoValidator *TomoValidatorFilterer) WatchUnvote(opts *bind.WatchOpts, sink chan<- *TomoValidatorUnvote) (event.Subscription, error) {
+
+	logs, sub, err := _TomoValidator.contract.WatchLogs(opts, "Unvote")
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(TomoValidatorUnvote)
+				if err := _TomoValidator.contract.UnpackLog(event, "Unvote", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+// TomoValidatorVoteIterator is returned from FilterVote and is used to iterate over the raw logs and unpacked data for Vote events raised by the TomoValidator contract.
+type TomoValidatorVoteIterator struct {
+	Event *TomoValidatorVote // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *TomoValidatorVoteIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(TomoValidatorVote)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(TomoValidatorVote)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *TomoValidatorVoteIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *TomoValidatorVoteIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// TomoValidatorVote represents a Vote event raised by the TomoValidator contract.
+type TomoValidatorVote struct {
+	Candidate common.Address
+	Cap       *big.Int
+	Raw       types.Log // Blockchain specific contextual infos
+}
+
+// FilterVote is a free log retrieval operation binding the contract event 0xf668ead05c744b9178e571d2edb452e72baf6529c8d72160e64e59b50d865bd0.
+//
+// Solidity: event Vote(_candidate address, _cap uint256)
+func (_TomoValidator *TomoValidatorFilterer) FilterVote(opts *bind.FilterOpts) (*TomoValidatorVoteIterator, error) {
+
+	logs, sub, err := _TomoValidator.contract.FilterLogs(opts, "Vote")
+	if err != nil {
+		return nil, err
+	}
+	return &TomoValidatorVoteIterator{contract: _TomoValidator.contract, event: "Vote", logs: logs, sub: sub}, nil
+}
+
+// WatchVote is a free log subscription operation binding the contract event 0xf668ead05c744b9178e571d2edb452e72baf6529c8d72160e64e59b50d865bd0.
+//
+// Solidity: event Vote(_candidate address, _cap uint256)
+func (_TomoValidator *TomoValidatorFilterer) WatchVote(opts *bind.WatchOpts, sink chan<- *TomoValidatorVote) (event.Subscription, error) {
+
+	logs, sub, err := _TomoValidator.contract.WatchLogs(opts, "Vote")
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(TomoValidatorVote)
+				if err := _TomoValidator.contract.UnpackLog(event, "Vote", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
 }
