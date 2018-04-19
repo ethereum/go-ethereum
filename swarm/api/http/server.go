@@ -850,6 +850,12 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.URL.Path == "/robots.txt" {
+		w.Header().Set("Last-Modified", time.Now().Format(http.TimeFormat))
+		fmt.Fprintf(w, "User-agent: *\nDisallow: /")
+		return
+	}
+
 	uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
 	if err != nil {
 		Respond(w, req, fmt.Sprintf("invalid URI %q", r.URL.Path), http.StatusBadRequest)
