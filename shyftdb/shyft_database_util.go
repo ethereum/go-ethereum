@@ -49,14 +49,12 @@ type ShyftAccountEntry struct {
 }
 
 func WriteBlock(db *leveldb.DB, block *types.Block) error {
+	fmt.Println("+++++++++++++++++++++++++++ BLOCK NUMBER", block.Number())
+	fmt.Println("+++++++++++++++++++++++++++ # of TX", len(block.Transactions()))
 	leng := block.Transactions().Len()
 	var tx_strs = make([]string, leng)
-	//var tx_bytes = make([]byte, leng)
 	hash := block.Header().Hash().Bytes()
 
-	fmt.Println("The tx_strs is")
-	fmt.Println(tx_strs)
-	//strs := []string{"foo", "bar"}
 	buf := &bytes.Buffer{}
 	gob.NewEncoder(buf).Encode(tx_strs)
 	bs := buf.Bytes()
@@ -71,7 +69,6 @@ func WriteBlock(db *leveldb.DB, block *types.Block) error {
 	if block.Transactions().Len() > 0 {
 		for i, tx := range block.Transactions() {
 			tx_strs[i] = WriteTransactions(db, tx, block.Header().Hash())
-			//tx_bytes[i] = tx.Hash().Bytes()
 		}
 	}
 	return nil
@@ -167,7 +164,7 @@ func WriteToBalance(db *leveldb.DB, tx *types.Transaction) {
 // @NOTE: This function is extremely complex and requires heavy testing and knowdlege of edge cases:
 // uncle blocks, account balance updates based on reorgs, diverges that get dropped.
 // Reason for this is because the accounts are not deterministic like the block and tx hashes.
-// @TODO: Calculate reward from uncles
+// @TODO: Calculate reward if there are uncles
 // @TODO: Calculate mining reward (most likely retrieve higher up in the operations)
 // @TODO: Calculate reorg
 func WriteMinerReward(db *leveldb.DB, block *types.Block)  {

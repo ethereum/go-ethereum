@@ -103,7 +103,6 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
-    // @NOTE:shyft Where we instantiate BlockExplorerDB
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
 	}
@@ -115,7 +114,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 	
-	// @NOTE:shyft instantiate BlockExplorerDB here?
+	// @NOTE:shyft instantiate BlockExplorerDB here
+	// @TODO: Create Genesis Block
 	blockExplorerDb, err := leveldb.OpenFile("./shyftData/geth/blockExplorerDb/", nil)
 	if err != nil {
 		return nil, err
