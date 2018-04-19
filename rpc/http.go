@@ -90,10 +90,19 @@ func DialHTTP(endpoint string) (*Client, error) {
 func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
 	hc := c.writeConn.(*httpConn)
 	respBody, err := hc.doRequest(ctx, msg)
+	if respBody != nil {
+		defer respBody.Close()
+	}
+
 	if err != nil {
+		if respBody != nil {
+			buf := new(bytes.Buffer)
+			if _, err2 := buf.ReadFrom(respBody); err2 == nil {
+				return fmt.Errorf("%v %v", err, buf.String())
+			}
+		}
 		return err
 	}
-	defer respBody.Close()
 	var respmsg jsonrpcMessage
 	if err := json.NewDecoder(respBody).Decode(&respmsg); err != nil {
 		return err
@@ -131,6 +140,9 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	resp, err := hc.client.Do(req)
 	if err != nil {
 		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return resp.Body, errors.New(resp.Status)
 	}
 	return resp.Body, nil
 }
