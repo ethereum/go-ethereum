@@ -11,6 +11,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	
+	"database/sql"
+	_ "github.com/lib/pq"
 )
 
 
@@ -48,29 +51,59 @@ type ShyftAccountEntry struct {
 	Txs     []string
 }
 
-func WriteBlock(db *leveldb.DB, block *types.Block) error {
-	fmt.Println("+++++++++++++++++++++++++++ BLOCK NUMBER", block.Number())
-	fmt.Println("+++++++++++++++++++++++++++ # of TX", len(block.Transactions()))
-	leng := block.Transactions().Len()
-	var tx_strs = make([]string, leng)
-	hash := block.Header().Hash().Bytes()
+//func WriteBlock(db *leveldb.DB, block *types.Block) error {
+//	fmt.Println("+++++++++++++++++++++++++++ BLOCK NUMBER", block.Number())
+//	fmt.Println("+++++++++++++++++++++++++++ # of TX", len(block.Transactions()))
+//	leng := block.Transactions().Len()
+//	var tx_strs = make([]string, leng)
+//	hash := block.Header().Hash().Bytes()
+//
+//	buf := &bytes.Buffer{}
+//	gob.NewEncoder(buf).Encode(tx_strs)
+//	bs := buf.Bytes()
+//
+//    key := append([]byte("bk-")[:], hash[:]...)
+//	if err := db.Put(key, bs, nil); err != nil {
+//		log.Crit("Failed to store block", "err", err)
+//		return nil // Do we want to force an exit here?
+//	}
+//	WriteMinerReward(db, block)
+//
+//	if block.Transactions().Len() > 0 {
+//		for i, tx := range block.Transactions() {
+//			tx_strs[i] = WriteTransactions(db, tx, block.Header().Hash())
+//		}
+//	}
 
-	buf := &bytes.Buffer{}
-	gob.NewEncoder(buf).Encode(tx_strs)
-	bs := buf.Bytes()
+func WriteBlock(sqldb *sql.DB, block *types.Block) error {
 
-    key := append([]byte("bk-")[:], hash[:]...)
-	if err := db.Put(key, bs, nil); err != nil {
-		log.Crit("Failed to store block", "err", err)
-		return nil // Do we want to force an exit here?
-	}
-	WriteMinerReward(db, block)
+    //hash := block.Header().Hash().Bytes()
+    coinbase := block.Header().Coinbase.String()
+    number := block.Header().Number.String()
+    
+// 	if block.Transactions().Len() > 0 {
+//		for i, tx := range block.Transactions() {
+// 			tx_strs[i] = WriteTransactions(db, tx, block.Header().Hash())
+// 			//tx_bytes[i] = tx.Hash().Bytes()
+//  		}
+// 	}
+	
+	//connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	//sqldb, err := sql.Open("postgres", connStr)
 
-	if block.Transactions().Len() > 0 {
-		for i, tx := range block.Transactions() {
-			tx_strs[i] = WriteTransactions(db, tx, block.Header().Hash())
-		}
-	}
+	//if merr := sqldb.Ping(); merr != nil {
+	//    fmt.Println("ping ERROR")
+  	//	fmt.Println(merr)
+	//}
+
+    //sqldb.Exec("INSERT INTO block(hash, miner) VALUES ($1)", block)
+  	//qerr := sqldb.QueryRow(`INSERT INTO block(hash, miner) VALUES('bark', 'willow')`).Scan(&fun)
+  	res, qerr := sqldb.Exec(`INSERT INTO blocks(hash, coinbase, number) VALUES(($1), ($2), ($3))`, block.Header().Hash().Hex(), coinbase, number) //.Scan(&fun)
+  	fmt.Println("insert ERROR")
+  	fmt.Println(qerr)
+  	fmt.Println(res)
+  	fmt.Println(number)
+
 	return nil
 }
 
