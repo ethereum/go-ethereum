@@ -92,7 +92,7 @@ An example method:
 Subscriptions are deleted when:
  - the user sends an unsubscribe request
  - the connection which was used to create the subscription is closed. This can be initiated
-   by the client and server. The server will close the connection on an write error or when
+   by the client and server. The server will close the connection on a write error or when
    the queue of buffered notifications gets too big.
 */
 package rpc
