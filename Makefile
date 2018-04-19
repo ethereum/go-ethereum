@@ -8,9 +8,6 @@
 .PHONY: getf-darwin getf-darwin-386 getf-darwin-amd64
 .PHONY: getf-windows getf-windows-386 getf-windows-amd64
 
-GOBIN = $(shell pwd)/build/bin
-GO ?= latest
-
 getf:
 	build/env.sh go run build/ci.go install ./cmd/getf
 	@echo "Done building."
