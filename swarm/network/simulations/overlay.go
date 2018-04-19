@@ -53,10 +53,7 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 	kp.MaxRetries = 1000
 	kp.RetryExponent = 2
 	kp.RetryInterval = 1000000
-	kp.PruneInterval = 2000
 	kad := network.NewKademlia(addr.Over(), kp)
-	ticker := time.NewTicker(time.Duration(kad.PruneInterval) * time.Millisecond)
-	kad.Prune(ticker.C)
 	hp := network.NewHiveParams()
 	hp.Discovery = !*noDiscovery
 	hp.KeepAliveInterval = 300 * time.Millisecond

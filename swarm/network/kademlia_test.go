@@ -348,55 +348,6 @@ func TestSuggestPeerRetries(t *testing.T) {
 
 }
 
-func TestPruning(t *testing.T) {
-	k := newTestKademlia("00000000")
-	k.On("10000000", "11000000", "10100000", "10010000", "10001000", "10000100")
-	k.On("01000000", "01100000", "01000100", "01000010", "01000001")
-	k.On("00100000", "00110000", "00100010", "00100001")
-	k.MaxBinSize = 4
-	k.MinBinSize = 3
-	prune := make(chan time.Time)
-	defer close(prune)
-	k.Prune((<-chan time.Time)(prune))
-	prune <- time.Now()
-	quitc := make(chan bool)
-	timeout := time.NewTimer(1000 * time.Millisecond)
-	n := 0
-	dropped := make(map[string]error)
-	expDropped := []string{
-		"10010000",
-		"10100000",
-		"11000000",
-		"01000100",
-		"01100000",
-	}
-	go func() {
-		for e := range k.dropc {
-			err := e.(*dropError)
-			dropped[err.addr] = err.error
-			n++
-			if n == len(expDropped) {
-				break
-			}
-		}
-		close(quitc)
-	}()
-	select {
-	case <-quitc:
-	case <-timeout.C:
-		t.Fatalf("timeout waiting for dropped peers. expected %v, got %v", len(expDropped), len(dropped))
-	}
-	for _, addr := range expDropped {
-		err := dropped[addr]
-		if err == nil {
-			t.Fatalf("expected peer %v to be dropped", addr)
-		}
-		if err.Error() != "bucket full" {
-			t.Fatalf("incorrect error. expected %v, got %v", "bucket full", err)
-		}
-	}
-}
-
 func TestKademliaHiveString(t *testing.T) {
 	k := newTestKademlia("00000000").On("01000000", "00100000").Register("10000000", "10000001")
 	k.MaxProxDisplay = 8

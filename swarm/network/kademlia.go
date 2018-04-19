@@ -61,7 +61,6 @@ type KadParams struct {
 	RetryInterval  int64 // initial interval before a peer is first redialed
 	RetryExponent  int   // exponent to multiply retry intervals with
 	MaxRetries     int   // maximum number of redial attempts
-	PruneInterval  int   // interval between peer pruning cycles
 	// function to sanction or prevent suggesting a peer
 	Reachable func(OverlayAddr) bool
 }
@@ -76,7 +75,6 @@ func NewKadParams() *KadParams {
 		RetryInterval:  4200000000, // 4.2 sec
 		MaxRetries:     42,
 		RetryExponent:  2,
-		PruneInterval:  0, // TODO:
 	}
 }
 
@@ -574,38 +572,6 @@ func (k *Kademlia) string() string {
 	}
 	rows = append(rows, "=========================================================================")
 	return "\n" + strings.Join(rows, "\n")
-}
-
-// Prune implements a forever loop reacting to a ticker time channel given
-// as the first argument
-// the loop quits if the channel is closed
-// it checks each kademlia bin and if the peer count is higher than
-// the MaxBinSize parameter it drops the oldest n peers such that
-// the bin is reduced to MinBinSize peers thus leaving slots to newly
-// connecting peers
-func (k *Kademlia) Prune(c <-chan time.Time) {
-	go func() {
-		for range c {
-			k.lock.RLock()
-			conns := k.conns
-			k.lock.RUnlock()
-			total := 0
-			conns.EachBin(k.base, pof, 0, func(po, size int, f func(func(pot.Val, int) bool) bool) bool {
-				extra := size - k.MinBinSize
-				if size > k.MaxBinSize {
-					n := 0
-					f(func(v pot.Val, po int) bool {
-						v.(*entry).conn().Drop(fmt.Errorf("bucket full"))
-						n++
-						return n < extra
-					})
-					total += extra
-				}
-				return true
-			})
-			log.Trace(fmt.Sprintf("pruned %v peers", total))
-		}
-	}()
 }
 
 // PeerPot keeps info about expected nearest neighbours and empty bins
