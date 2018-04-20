@@ -282,7 +282,6 @@ func GetAllBlocks(sqldb *sql.DB) []SBlock {
 		FROM blocks`)
 	if err != nil {
 		fmt.Println("err")
-
 	}
 	defer rows.Close()
 
@@ -319,7 +318,7 @@ func GetBlock(sqldb *sql.DB) []SBlock {
 	case sql.ErrNoRows:
 		fmt.Println("No rows were returned!")
 	case nil:
-		fmt.Println(row)
+		fmt.Println(num, hash, coinbase)
 	default:
 		panic(err)
 	}
@@ -330,27 +329,6 @@ func GetBlock(sqldb *sql.DB) []SBlock {
 	})
 	return arr.Blocks
 }
-
-// []SBlock {
-// 	var block []SBlock
-// 	var number string
-// 	var hash string
-// 	var coinbase string
-
-// 	sqlStatement := `SELECT * FROM blocks WHERE number=$1;`
-// 	row := sqldb.QueryRow(sqlStatement, 3)
-// 	err := row.Scan(&number, &hash, &coinbase)
-// 	switch err {
-// 	case sql.ErrNoRows:
-// 		fmt.Println("No rows were returned")
-// 		return block
-// 	case nil:
-// 		fmt.Println("nil")
-// 	default:
-// 		panic(err)
-// 	}
-// 	fmt.Println("this is a query", row)
-// 	return block
 
 func GetAllTransactions(db *leveldb.DB) []ShyftTxEntryPretty {
 	var txs []ShyftTxEntryPretty

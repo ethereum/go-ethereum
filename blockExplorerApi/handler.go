@@ -74,7 +74,7 @@ func GetBlock(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	fmt.Fprintln(w, "block", getBlockResponse)
+	fmt.Fprintln(w, getBlockResponse)
 }
 
 // GetAllBlocks response
@@ -96,7 +96,7 @@ func GetAllBlocks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	fmt.Fprintln(w, "blocksss", block3)
+	fmt.Fprintln(w, block3)
 }
 
 //GetInternalTransactions gets internal txs
