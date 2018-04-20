@@ -2,9 +2,12 @@ package main
 
 ///@NOTE Shyft handler functions when endpoints are hit
 import (
+	"database/sql"
 	"fmt"
 	logger "log"
 	"net/http"
+
+	_ "github.com/lib/pq"
 
 	shyftdb "github.com/ethereum/shyft_go-ethereum/shyftdb"
 	"github.com/gorilla/mux"
@@ -57,12 +60,19 @@ func GetBalances(w http.ResponseWriter, r *http.Request) {
 
 //GetBlock returns block json
 func GetBlock(w http.ResponseWriter, r *http.Request) {
-	//block := shyftdb.GetBlock()
+
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	blockExplorerDb, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return
+	}
+
+	block3 := shyftdb.GetBlock(blockExplorerDb)
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	//fmt.Fprintln(w, "block", block)
+	fmt.Fprintln(w, "block", block3)
 }
 
 // GetAllBlocks response

@@ -17,11 +17,13 @@ import (
 	_ "github.com/lib/pq"
 )
 
+//SBlock type
 type SBlock struct {
 	hash string
 	txes []string
 }
 
+//ShyftTxEntry structure
 type ShyftTxEntry struct {
 	TxHash    common.Hash
 	To        *common.Address
@@ -98,11 +100,16 @@ func WriteBlock(sqldb *sql.DB, block *types.Block) error {
 
 	//sqldb.Exec("INSERT INTO block(hash, miner) VALUES ($1)", block)
 	//qerr := sqldb.QueryRow(`INSERT INTO block(hash, miner) VALUES('bark', 'willow')`).Scan(&fun)
-	res, qerr := sqldb.Exec(`INSERT INTO blocks(hash, coinbase, number) VALUES(($1), ($2), ($3))`, block.Header().Hash().Hex(), coinbase, number) //.Scan(&fun)
-	fmt.Println("insert ERROR")
-	fmt.Println(qerr)
-	fmt.Println(res)
-	fmt.Println(number)
+	sqlStatement := `INSERT INTO blocks(hash, coinbase, number) VALUES(($1), ($2), ($3)) RETURNING number`
+	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number).Scan(&number) //.Scan(&fun)
+	if qerr != nil {
+		panic(qerr)
+	}
+	fmt.Println("New record ID is:", number)
+	// fmt.Println("insert ERROR")
+	// fmt.Println(qerr)
+	// fmt.Println(res)
+	// fmt.Println(number)
 
 	return nil
 }
@@ -278,15 +285,28 @@ func GetAllBlocks(db *leveldb.DB) []SBlock {
 	return arr
 }
 
-func GetBlock(db *leveldb.DB, block *types.Block) []byte {
-	hash := block.Header().Hash().Bytes()
-	key := append([]byte("bk-")[:], hash[:]...)
-	data, err := db.Get(key, nil)
-	if err != nil {
-		log.Crit("Could not retrieve block", "err", err)
+//GetBlock queries to send single block info
+//TODO provide blockHash arg passed from handler.go
+func GetBlock(sqldb *sql.DB) []SBlock {
+	var block []SBlock
+	var number string
+	var hash string
+	var coinbase string
+
+	sqlStatement := `SELECT * FROM blocks WHERE number=$1;`
+	row := sqldb.QueryRow(sqlStatement, 3)
+	err := row.Scan(&number, &hash, &coinbase)
+	switch err {
+	case sql.ErrNoRows:
+		fmt.Println("No rows were returned")
+		return block
+	case nil:
+		fmt.Println("nil")
+	default:
+		panic(err)
 	}
-	fmt.Println("\nBLOCK Value: " + string(data))
-	return data
+	fmt.Println("this is a query", row)
+	return block
 }
 
 func GetAllTransactions(db *leveldb.DB) []ShyftTxEntryPretty {

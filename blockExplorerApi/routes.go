@@ -34,6 +34,12 @@ var routes = Routes{
 		GetAllBlocks,
 	},
 	Route{
+		"GetBlock",
+		"GET",
+		"/api/get_block",
+		GetBlock,
+	},
+	Route{
 		"GetAllTransactions",
 		"GET",
 		"/api/get_all_transactions",
