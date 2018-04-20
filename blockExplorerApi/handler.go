@@ -3,7 +3,6 @@ package main
 ///@NOTE Shyft handler functions when endpoints are hit
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -65,14 +64,8 @@ func GetBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	block3 := shyftdb.GetBlock(blockExplorerDb)
+	getBlockResponse := shyftdb.GetBlock(blockExplorerDb)
 
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	out, err := json.Marshal(block3)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -81,7 +74,7 @@ func GetBlock(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	fmt.Fprintln(w, "block", string(out))
+	fmt.Fprintln(w, "block", getBlockResponse)
 }
 
 // GetAllBlocks response
@@ -99,12 +92,6 @@ func GetAllBlocks(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-
-	// out, err := json.Marshal(block3)
-	// if err != nil {
-	// 	http.Error(w, err.Error(), 500)
-	// 	return
-	// }
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)

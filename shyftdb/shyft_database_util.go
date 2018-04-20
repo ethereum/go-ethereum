@@ -21,14 +21,14 @@ import (
 type SBlock struct {
 	hash     string
 	coinbase string
-	number   int
+	number   string
 }
 
 //blockRes struct
 type blockRes struct {
 	hash     string
 	coinbase string
-	number   int
+	number   string
 	Blocks   []SBlock
 }
 
@@ -287,7 +287,7 @@ func GetAllBlocks(sqldb *sql.DB) []SBlock {
 	defer rows.Close()
 
 	for rows.Next() {
-		var num int
+		var num string
 		var hash string
 		var coinbase string
 		err = rows.Scan(
@@ -301,34 +301,56 @@ func GetAllBlocks(sqldb *sql.DB) []SBlock {
 			coinbase: coinbase,
 		})
 	}
-	fmt.Println("++++++++++++++++", arr.Blocks)
-
 	return arr.Blocks
 }
 
 //GetBlock queries to send single block info
 //TODO provide blockHash arg passed from handler.go
 func GetBlock(sqldb *sql.DB) []SBlock {
-	var block []SBlock
-	var number string
-	var hash string
-	var coinbase string
-
+	var arr blockRes
 	sqlStatement := `SELECT * FROM blocks WHERE number=$1;`
 	row := sqldb.QueryRow(sqlStatement, 3)
-	err := row.Scan(&number, &hash, &coinbase)
+	var num string
+	var hash string
+	var coinbase string
+	err := row.Scan(&num, &hash, &coinbase)
+
 	switch err {
 	case sql.ErrNoRows:
-		fmt.Println("No rows were returned")
-		return block
+		fmt.Println("No rows were returned!")
 	case nil:
-		fmt.Println("nil")
+		fmt.Println(row)
 	default:
 		panic(err)
 	}
-	fmt.Println("this is a query", row)
-	return block
+	arr.Blocks = append(arr.Blocks, SBlock{
+		hash:     hash,
+		number:   num,
+		coinbase: coinbase,
+	})
+	return arr.Blocks
 }
+
+// []SBlock {
+// 	var block []SBlock
+// 	var number string
+// 	var hash string
+// 	var coinbase string
+
+// 	sqlStatement := `SELECT * FROM blocks WHERE number=$1;`
+// 	row := sqldb.QueryRow(sqlStatement, 3)
+// 	err := row.Scan(&number, &hash, &coinbase)
+// 	switch err {
+// 	case sql.ErrNoRows:
+// 		fmt.Println("No rows were returned")
+// 		return block
+// 	case nil:
+// 		fmt.Println("nil")
+// 	default:
+// 		panic(err)
+// 	}
+// 	fmt.Println("this is a query", row)
+// 	return block
 
 func GetAllTransactions(db *leveldb.DB) []ShyftTxEntryPretty {
 	var txs []ShyftTxEntryPretty
