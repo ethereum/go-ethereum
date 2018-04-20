@@ -100,16 +100,16 @@ func GetAllBlocks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out, err := json.Marshal(block3)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
+	// out, err := json.Marshal(block3)
+	// if err != nil {
+	// 	http.Error(w, err.Error(), 500)
+	// 	return
+	// }
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	fmt.Fprintln(w, "block", string(out))
+	fmt.Fprintln(w, "blocksss", block3)
 }
 
 //GetInternalTransactions gets internal txs

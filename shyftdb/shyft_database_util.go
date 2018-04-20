@@ -26,7 +26,10 @@ type SBlock struct {
 
 //blockRes struct
 type blockRes struct {
-	Blocks []SBlock
+	hash     string
+	coinbase string
+	number   int
+	Blocks   []SBlock
 }
 
 //ShyftTxEntry structure
@@ -270,8 +273,7 @@ func WriteMinerReward(db *leveldb.DB, block *types.Block) {
 //////////
 //GetAllBlocks returns []SBlock blocks for API
 func GetAllBlocks(sqldb *sql.DB) []SBlock {
-	var arr []SBlock
-	fmt.Println("HERE+++++++++++")
+	var arr blockRes
 	rows, err := sqldb.Query(`
 		SELECT
 			number,
@@ -282,8 +284,6 @@ func GetAllBlocks(sqldb *sql.DB) []SBlock {
 		fmt.Println("err")
 
 	}
-	fmt.Println("ROWS")
-	fmt.Println(rows)
 	defer rows.Close()
 
 	for rows.Next() {
@@ -295,21 +295,15 @@ func GetAllBlocks(sqldb *sql.DB) []SBlock {
 			&hash,
 			&coinbase,
 		)
-		sblock := SBlock{hash: hash, number: num, coinbase: coinbase}
-		arr := append(arr, sblock)
-		fmt.Println("++++++++++++++++", arr)
-		// fmt.Println("++++++++++++++++", hash)
-		// fmt.Println("++++++++++++++++", coinbase)
-
-		// }
-		// err = rows.Err()
-		// if err != nil {
-		// 	return err
-		// }
-
+		arr.Blocks = append(arr.Blocks, SBlock{
+			hash:     hash,
+			number:   num,
+			coinbase: coinbase,
+		})
 	}
+	fmt.Println("++++++++++++++++", arr.Blocks)
 
-	return arr
+	return arr.Blocks
 }
 
 //GetBlock queries to send single block info
