@@ -28,22 +28,22 @@ var routes = Routes{
 		GetBalances,
 	},
 	Route{
-		"GetBlocksMined",
+		"GetAllBlocks",
 		"GET",
-		"/api/get_blocks_mined",
-		GetBlocksMined,
-	},
-	Route{
-		"GetTransactions",
-		"GET",
-		"/api/get_transactions/{address}",
-		GetTransactions,
+		"/api/get_all_blocks",
+		GetAllBlocks,
 	},
 	Route{
 		"GetAllTransactions",
 		"GET",
-		"/api/get_all_transactions/",
+		"/api/get_all_transactions",
 		GetAllTransactions,
+	},
+	Route{
+		"GetTransaction",
+		"GET",
+		"/api/get_transaction/{address}",
+		GetTransaction,
 	},
 	Route{
 		"GetInternalTransactions",
