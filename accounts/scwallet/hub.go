@@ -36,6 +36,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -51,7 +52,7 @@ const Scheme = "pcsc"
 
 // refreshCycle is the maximum time between wallet refreshes (if USB hotplug
 // notifications don't work).
-const refreshCycle = 5 * time.Second
+const refreshCycle = time.Second
 
 // refreshThrottling is the minimum time between wallet refreshes to avoid thrashing.
 const refreshThrottling = 500 * time.Millisecond
@@ -132,7 +133,7 @@ func (hub *Hub) writePairings() error {
 	return pairingFile.Close()
 }
 
-func (hub *Hub) getPairing(wallet *Wallet) *smartcardPairing {
+func (hub *Hub) pairing(wallet *Wallet) *smartcardPairing {
 	pairing, ok := hub.pairings[string(wallet.PublicKey)]
 	if ok {
 		return &pairing
@@ -182,13 +183,7 @@ func (hub *Hub) Wallets() []accounts.Wallet {
 	for _, wallet := range hub.wallets {
 		cpy = append(cpy, wallet)
 	}
-	for i := 0; i < len(cpy); i++ {
-		for j := i + 1; j < len(cpy); j++ {
-			if cpy[i].URL().Cmp(cpy[j].URL()) > 0 {
-				cpy[i], cpy[j] = cpy[j], cpy[i]
-			}
-		}
-	}
+	sort.Sort(accounts.WalletsByURL(cpy))
 	return cpy
 }
 

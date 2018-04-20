@@ -17,7 +17,6 @@
 package scwallet
 
 import (
-	//"crypto/ecdsa"
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
@@ -25,10 +24,10 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"fmt"
-	//"math/big"
+
 	"github.com/ebfe/scard"
 	"github.com/ethereum/go-ethereum/crypto"
-	ecdh "github.com/wsddn/go-ecdh"
+	"github.com/wsddn/go-ecdh"
 )
 
 const (
@@ -38,6 +37,11 @@ const (
 
 	scSecretLength = 32
 	scBlockSize    = 16
+
+	insOpenSecureChannel    = 0x10
+	insMutuallyAuthenticate = 0x11
+	insPair                 = 0x12
+	insUnpair               = 0x13
 )
 
 // SecureChannelSession enables secure communication with a hardware wallet.
@@ -192,8 +196,8 @@ func (s *SecureChannelSession) mutuallyAuthenticate() error {
 }
 
 // open is an internal method that sends an open APDU.
-func (s *SecureChannelSession) open() (*ResponseAPDU, error) {
-	return transmit(s.card, &CommandAPDU{
+func (s *SecureChannelSession) open() (*responseAPDU, error) {
+	return transmit(s.card, &commandAPDU{
 		Cla:  claSCWallet,
 		Ins:  insOpenSecureChannel,
 		P1:   s.PairingIndex,
@@ -204,8 +208,8 @@ func (s *SecureChannelSession) open() (*ResponseAPDU, error) {
 }
 
 // pair is an internal method that sends a pair APDU.
-func (s *SecureChannelSession) pair(p1 uint8, data []byte) (*ResponseAPDU, error) {
-	return transmit(s.card, &CommandAPDU{
+func (s *SecureChannelSession) pair(p1 uint8, data []byte) (*responseAPDU, error) {
+	return transmit(s.card, &commandAPDU{
 		Cla:  claSCWallet,
 		Ins:  insPair,
 		P1:   p1,
@@ -216,7 +220,7 @@ func (s *SecureChannelSession) pair(p1 uint8, data []byte) (*ResponseAPDU, error
 }
 
 // TransmitEncrypted sends an encrypted message, and decrypts and returns the response.
-func (s *SecureChannelSession) TransmitEncrypted(cla, ins, p1, p2 byte, data []byte) (*ResponseAPDU, error) {
+func (s *SecureChannelSession) TransmitEncrypted(cla, ins, p1, p2 byte, data []byte) (*responseAPDU, error) {
 	if s.iv == nil {
 		return nil, fmt.Errorf("Channel not open")
 	}
@@ -234,7 +238,7 @@ func (s *SecureChannelSession) TransmitEncrypted(cla, ins, p1, p2 byte, data []b
 	copy(fulldata, s.iv)
 	copy(fulldata[len(s.iv):], data)
 
-	response, err := transmit(s.card, &CommandAPDU{
+	response, err := transmit(s.card, &commandAPDU{
 		Cla:  cla,
 		Ins:  ins,
 		P1:   p1,
@@ -260,7 +264,7 @@ func (s *SecureChannelSession) TransmitEncrypted(cla, ins, p1, p2 byte, data []b
 		return nil, fmt.Errorf("Invalid MAC in response")
 	}
 
-	rapdu := &ResponseAPDU{}
+	rapdu := &responseAPDU{}
 	rapdu.deserialize(plainData)
 
 	if rapdu.Sw1 != sw1Ok {

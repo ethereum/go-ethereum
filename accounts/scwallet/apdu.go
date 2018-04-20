@@ -21,29 +21,15 @@ import (
 	"encoding/binary"
 )
 
-const (
-	claISO7816 = 0
-
-	insSelect               = 0xA4
-	insGetResponse          = 0xC0
-	insPair                 = 0x12
-	insUnpair               = 0x13
-	insOpenSecureChannel    = 0x10
-	insMutuallyAuthenticate = 0x11
-
-	sw1GetResponse = 0x61
-	sw1Ok          = 0x90
-)
-
-// CommandAPDU represents an application data unit sent to a smartcard.
-type CommandAPDU struct {
+// commandAPDU represents an application data unit sent to a smartcard.
+type commandAPDU struct {
 	Cla, Ins, P1, P2 uint8  // Class, Instruction, Parameter 1, Parameter 2
 	Data             []byte // Command data
 	Le               uint8  // Command data length
 }
 
 // serialize serializes a command APDU.
-func (ca CommandAPDU) serialize() ([]byte, error) {
+func (ca commandAPDU) serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	if err := binary.Write(buf, binary.BigEndian, ca.Cla); err != nil {
@@ -72,14 +58,14 @@ func (ca CommandAPDU) serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// ResponseAPDU represents an application data unit received from a smart card.
-type ResponseAPDU struct {
+// responseAPDU represents an application data unit received from a smart card.
+type responseAPDU struct {
 	Data     []byte // response data
 	Sw1, Sw2 uint8  // status words 1 and 2
 }
 
 // deserialize deserializes a response APDU.
-func (ra *ResponseAPDU) deserialize(data []byte) error {
+func (ra *responseAPDU) deserialize(data []byte) error {
 	ra.Data = make([]byte, len(data)-2)
 
 	buf := bytes.NewReader(data)
