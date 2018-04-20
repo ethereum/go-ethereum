@@ -153,6 +153,18 @@
 			"revisionTime": "2017-02-15T23:32:05Z"
 		},
 		{
+			"checksumSHA1": "g/V4qrXjUGG9B+e3hB+4NAYJ5Gs=",
+			"path": "github.com/gorilla/context",
+			"revision": "08b5f424b9271eedf6f9f0ce86cb9396ed337a42",
+			"revisionTime": "2016-08-17T18:46:32Z"
+		},
+		{
+			"checksumSHA1": "YuYKzn2jczaM6DQcFDmukvAHUX4=",
+			"path": "github.com/gorilla/mux",
+			"revision": "b57cb1605fd11ba2ecfa7f68992b4b9cc791934d",
+			"revisionTime": "2018-04-16T20:45:19Z"
+		},
+		{
 			"checksumSHA1": "d9PxF1XQGLMJZRct2R8qVM/eYlE=",
 			"path": "github.com/hashicorp/golang-lru",
 			"revision": "0a025b7e63adc15a622f29b0b2c4c3848243bbf6",
@@ -772,5 +784,5 @@
 			"revisionTime": "2017-08-11T01:42:03Z"
 		}
 	],
-	"rootPath": "github.com/ethereum/go-ethereum"
+	"rootPath": "github.com/ethereum/shyft_go-ethereum"
 }

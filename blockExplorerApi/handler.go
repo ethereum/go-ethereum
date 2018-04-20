@@ -6,7 +6,7 @@ import (
 	logger "log"
 	"net/http"
 
-	shyftdb "github.com/ethereum/go-ethereum/shyftdb"
+	shyftdb "github.com/ethereum/shyft_go-ethereum/shyftdb"
 	"github.com/gorilla/mux"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
