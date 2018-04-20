@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const MaxPO = 7
+const MaxPO = 16
 const KeyLength = 32
 
 type Hasher func() hash.Hash
@@ -218,8 +218,9 @@ func (c *Chunk) markAsStored() {
 	}
 }
 
-func (c *Chunk) WaitToStore() {
+func (c *Chunk) WaitToStore() error {
 	<-c.dbStoredC
+	return c.GetErrored()
 }
 
 func GenerateRandomChunk(dataSize int64) *Chunk {

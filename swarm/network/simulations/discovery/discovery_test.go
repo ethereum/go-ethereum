@@ -416,7 +416,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				return fmt.Errorf("error stopping node %s: %s", node.ID().TerminalString(), err)
 			}
 		}
-		log.Info(fmt.Sprintf("shutting down nodes took: %s", time.Now().Sub(shutdownStarted)))
+		log.Info(fmt.Sprintf("shutting down nodes took: %s", time.Since(shutdownStarted)))
 		persistenceEnabled = true
 		discoveryEnabled = false
 		restartTime = time.Now()
@@ -430,7 +430,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 			}
 		}
 
-		log.Info(fmt.Sprintf("restarting nodes took: %s", time.Now().Sub(restartTime)))
+		log.Info(fmt.Sprintf("restarting nodes took: %s", time.Since(restartTime)))
 
 		return nil
 	}

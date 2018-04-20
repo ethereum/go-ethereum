@@ -99,13 +99,18 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	if to <= from || from >= s.sessionAt {
 		to = math.MaxUint64
 	}
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
+	var ticker *time.Ticker
+	var wait bool
 	for {
-		select {
-		case <-ticker.C:
-		case <-s.quit:
-			return nil, 0, 0, nil, nil
+		if wait {
+			if ticker == nil {
+				ticker = time.NewTicker(1000 * time.Millisecond)
+			}
+			select {
+			case <-ticker.C:
+			case <-s.quit:
+				return nil, 0, 0, nil, nil
+			}
 		}
 		err := s.db.Iterator(from, to, s.po, func(key storage.Key, idx uint64) bool {
 			batch = append(batch, key[:]...)
@@ -119,6 +124,10 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		if len(batch) > 0 {
 			break
 		}
+		wait = true
+	}
+	if wait {
+		ticker.Stop()
 	}
 
 	log.Debug("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.db.CurrentBucketStorageIndex(s.po))
@@ -134,18 +143,22 @@ type SwarmSyncerClient struct {
 	retrieveC     chan *storage.Chunk
 	storeC        chan *storage.Chunk
 	db            *storage.DBAPI
-	// chunker       storage.Chunker
+	// chunker               storage.Chunker
 	currentRoot           storage.Key
 	requestFunc           func(chunk *storage.Chunk)
 	end, start            uint64
+	peer                  *Peer
 	ignoreExistingRequest bool
+	stream                Stream
 }
 
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
-func NewSwarmSyncerClient(_ *Peer, db *storage.DBAPI, ignoreExistingRequest bool) (*SwarmSyncerClient, error) {
+func NewSwarmSyncerClient(p *Peer, db *storage.DBAPI, ignoreExistingRequest bool, stream Stream) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
-		db: db,
+		db:   db,
+		peer: p,
 		ignoreExistingRequest: ignoreExistingRequest,
+		stream:                stream,
 	}, nil
 }
 
@@ -188,16 +201,19 @@ func NewSwarmSyncerClient(_ *Peer, db *storage.DBAPI, ignoreExistingRequest bool
 // RegisterSwarmSyncerClient registers the client constructor function for
 // to handle incoming sync streams
 func RegisterSwarmSyncerClient(streamer *Registry, db *storage.DBAPI) {
-	streamer.RegisterClientFunc("SYNC", func(p *Peer, _ string, love bool) (Client, error) {
-		return NewSwarmSyncerClient(p, db, true)
+	streamer.RegisterClientFunc("SYNC", func(p *Peer, t string, live bool) (Client, error) {
+		return NewSwarmSyncerClient(p, db, true, NewStream("SYNC", t, live))
 	})
 }
 
 // NeedData
 func (s *SwarmSyncerClient) NeedData(key []byte) (wait func()) {
-	chunk, created := s.db.GetOrCreateRequest(key)
+	chunk, _ := s.db.GetOrCreateRequest(key)
 	// TODO: we may want to request from this peer anyway even if the request exists
-	if chunk.ReqC == nil || (s.ignoreExistingRequest && !created) {
+
+	// ignoreExistingRequest is temporary commented out until its functionality is verified.
+	// For now, this optimization can be disabled.
+	if chunk.ReqC == nil { //|| (s.ignoreExistingRequest && !created) {
 		return nil
 	}
 	// create request and wait until the chunk data arrives and is stored

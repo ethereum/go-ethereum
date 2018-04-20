@@ -115,5 +115,6 @@ func openLDBStore(path string, basekey []byte) (*storage.LDBStore, error) {
 
 	storeparams := storage.NewDefaultStoreParams()
 	ldbparams := storage.NewLDBStoreParams(storeparams, path)
+	ldbparams.BaseKey = basekey
 	return storage.NewLDBStore(ldbparams)
 }

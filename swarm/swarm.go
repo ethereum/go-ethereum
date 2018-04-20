@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/chequebook"
 	"github.com/ethereum/go-ethereum/contracts/ens"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -129,10 +128,18 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	//self.cloud = &storage.Forwarder{}
 	//self.storage = storage.NewNetStore(hash, self.lstore, self.cloud, config.StoreParams)
 	log.Debug(fmt.Sprintf("-> swarm net store shared access layer to Swarm Chunk Store"))
-	nodeid := discover.PubkeyID(crypto.ToECDSAPub(common.FromHex(config.PublicKey)))
-	addr := network.NewAddrFromNodeID(nodeid)
+
+	nodeID, err := discover.HexID(config.NodeID)
+	if err != nil {
+		return nil, err
+	}
+	addr := &network.BzzAddr{
+		OAddr: common.FromHex(config.BzzKey),
+		UAddr: []byte(discover.NewNode(nodeID, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
+	}
+
 	bzzconfig := &network.BzzConfig{
-		OverlayAddr:  common.FromHex(config.BzzKey),
+		OverlayAddr:  addr.OAddr,
 		UnderlayAddr: addr.UAddr,
 		HiveParams:   config.HiveParams,
 	}
@@ -220,10 +227,12 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
 	// Pss = postal service over swarm (devp2p over bzz)
-	pssparams := pss.NewPssParams(self.privateKey)
-	self.ps = pss.NewPss(to, pssparams)
-	if pss.IsActiveHandshake {
-		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
+	if config.PssEnabled {
+		pssparams := pss.NewPssParams(self.privateKey)
+		self.ps = pss.NewPss(to, pssparams)
+		if pss.IsActiveHandshake {
+			pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
+		}
 	}
 
 	self.api = api.NewApi(self.dpa, self.dns, resourceHandler)

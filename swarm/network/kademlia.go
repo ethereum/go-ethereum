@@ -204,6 +204,8 @@ func (k *Kademlia) Register(peers []OverlayAddr) error {
 		k.addrCountC <- k.addrs.Size()
 	}
 	// log.Trace(fmt.Sprintf("%x registered %v peers, %v known, total: %v", k.BaseAddr()[:4], size, known, k.addrs.Size()))
+
+	k.sendNeighbourhoodDepthChange()
 	return nil
 }
 
@@ -313,13 +315,7 @@ func (k *Kademlia) On(p OverlayConn) (uint8, bool) {
 		changed = true
 		k.depth = depth
 	}
-	if k.nDepthC != nil {
-		nDepth := k.neighbourhoodDepth()
-		if nDepth != k.nDepth {
-			k.nDepth = nDepth
-			k.nDepthC <- nDepth
-		}
-	}
+	k.sendNeighbourhoodDepthChange()
 	return k.depth, changed
 }
 
@@ -332,6 +328,21 @@ func (k *Kademlia) NeighbourhoodDepthC() <-chan int {
 		k.nDepthC = make(chan int)
 	}
 	return k.nDepthC
+}
+
+// sendNeighbourhoodDepthChange sends new neighbourhood depth to k.nDepth channel
+// if it is initialized.
+func (k *Kademlia) sendNeighbourhoodDepthChange() {
+	// nDepthC is initialized when NeighbourhoodDepthC is called and returned by it.
+	// It provides signaling of neighbourhood depth change.
+	// This part of the code is sending new neighbourhood depth to nDepthC if that condition is met.
+	if k.nDepthC != nil {
+		nDepth := k.neighbourhoodDepth()
+		if nDepth != k.nDepth {
+			k.nDepth = nDepth
+			k.nDepthC <- nDepth
+		}
+	}
 }
 
 // AddrCountC returns the channel that sends a new
@@ -367,6 +378,7 @@ func (k *Kademlia) Off(p OverlayConn) {
 		if k.addrCountC != nil {
 			k.addrCountC <- k.addrs.Size()
 		}
+		k.sendNeighbourhoodDepthChange()
 	}
 }
 

@@ -82,7 +82,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 
 	peer.handleSubscribeMsg(&SubscribeMsg{
 		Stream:   NewStream(swarmChunkServerStreamName, "", false),
-		History:  NewRange(0, 0),
+		History:  nil,
 		Priority: Top,
 	})
 
@@ -129,9 +129,11 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	peerID := tester.IDs[0]
 	peer := streamer.getPeer(peerID)
 
+	stream := NewStream(swarmChunkServerStreamName, "", false)
+
 	peer.handleSubscribeMsg(&SubscribeMsg{
-		Stream:   NewStream(swarmChunkServerStreamName, "", false),
-		History:  NewRange(0, 0),
+		Stream:   stream,
+		History:  nil,
 		Priority: Top,
 	})
 
@@ -163,7 +165,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 					From:   0,
 					// TODO: why is this 32???
 					To:     32,
-					Stream: NewStream(swarmChunkServerStreamName, "", false),
+					Stream: stream,
 				},
 				Peer: peerID,
 			},

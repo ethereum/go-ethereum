@@ -214,10 +214,7 @@ func (self *ResourceHandler) Validate(key Key, data []byte) bool {
 		}
 		return false
 	} else if signature == nil {
-		if !bytes.Equal(self.resourceHash(period, version, ens.EnsNode(name)), key) {
-			return false
-		}
-		return true
+		return bytes.Equal(self.resourceHash(period, version, ens.EnsNode(name)), key)
 	}
 	digest := self.keyDataHash(key, parseddata)
 	addr, err := getAddressFromDataSig(digest, *signature)

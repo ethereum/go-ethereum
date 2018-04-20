@@ -88,6 +88,18 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 	return localStore, nil
 }
 
+// Put is responsible for doing validation and storage of the chunk
+// by using configured ChunkValidators, MemStore and LDBStore.
+// If the chunk is not valid, its GetErrored function will
+// return ErrChunkInvalid.
+// This method will check if the chunk is already in the MemStore
+// and it will return it if it is. If there is an error from
+// the MemStore.Get, it will be returned by calling GetErrored
+// on the chunk.
+// This method is responsible for closing Chunk.ReqC channel
+// when the chunk is stored in memstore.
+// After the LDBStore.Put, it is ensured that the MemStore
+// contains the chunk with the same data, but nil ReqC channel.
 func (self *LocalStore) Put(chunk *Chunk) {
 	valid := true
 	for _, v := range self.Validators {
@@ -97,26 +109,52 @@ func (self *LocalStore) Put(chunk *Chunk) {
 	}
 	if !valid {
 		chunk.SetErrored(ErrChunkInvalid)
-		chunk.dbStoredC <- false
+		chunk.markAsStored()
 		return
 	}
+
 	log.Trace("localstore.put", "key", chunk.Key)
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-	c := &Chunk{
-		Key:        Key(append([]byte{}, chunk.Key...)),
-		SData:      append([]byte{}, chunk.SData...),
-		Size:       chunk.Size,
-		dbStored:   chunk.dbStored,
-		dbStoredC:  chunk.dbStoredC,
-		dbStoredMu: chunk.dbStoredMu,
+
+	memChunk, err := self.memStore.Get(chunk.Key)
+	switch err {
+	case nil:
+		if memChunk.ReqC == nil {
+			chunk.markAsStored()
+			return
+		}
+	case ErrChunkNotFound:
+	default:
+		chunk.SetErrored(err)
+		return
+	}
+
+	self.memStore.Put(chunk)
+
+	if memChunk != nil && memChunk.ReqC != nil {
+		close(memChunk.ReqC)
 	}
 
 	dbStorePutCounter.Inc(1)
-	self.memStore.Put(c)
-	self.DbStore.Put(c)
+	self.DbStore.Put(chunk)
+
+	newc := NewChunk(chunk.Key, nil)
+	newc.SData = chunk.SData
+	newc.Size = chunk.Size
+	//newc.dbStored = chunk.dbStored
+	newc.dbStoredC = chunk.dbStoredC
+	//newc.dbStoredMu = chunk.dbStoredMu
+	go func() {
+		<-chunk.dbStoredC
+
+		self.mu.Lock()
+		defer self.mu.Unlock()
+
+		self.memStore.Put(newc)
+	}()
 }
 
 // Get(chunk *Chunk) looks up a chunk in the local stores

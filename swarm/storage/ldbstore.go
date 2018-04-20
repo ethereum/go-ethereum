@@ -227,7 +227,11 @@ func encodeIndex(index *dpaDBIndex) []byte {
 }
 
 func encodeData(chunk *Chunk) []byte {
-	return append(chunk.Key[:], chunk.SData...)
+	// Always create a new underlying array for the returned byte slice.
+	// The chunk.Key array may be used in the returned slice which
+	// may be changed later in the code or by the LevelDB, resulting
+	// that the Key is changed as well.
+	return append(append([]byte{}, chunk.Key[:]...), chunk.SData...)
 }
 
 func decodeIndex(data []byte, index *dpaDBIndex) error {

@@ -265,6 +265,7 @@ func (p *Peer) getOrSetClient(s Stream, from, to uint64) (c *client, created boo
 		priority:       cp.priority,
 		to:             cp.to,
 		next:           next,
+		quit:           make(chan struct{}),
 		intervalsStore: p.streamer.intervalsStore,
 		intervalsKey:   intervalsKey,
 	}
