@@ -141,6 +141,24 @@ func (b *bridge) OpenWallet(call otto.FunctionCall) (response otto.Value) {
 			}
 		}
 
+	case strings.HasSuffix(err.Error(), scwallet.ErrPINUnblockNeeded.Error()):
+		// PIN unblock requested, fetch PUK and new PIN from the user
+		var pukpin string
+		if input, err := b.prompter.PromptPassword("Please enter current PUK: "); err != nil {
+			throwJSException(err.Error())
+		} else {
+			pukpin = input
+		}
+		if input, err := b.prompter.PromptPassword("Please enter new PIN: "); err != nil {
+			throwJSException(err.Error())
+		} else {
+			pukpin += input
+		}
+		passwd, _ = otto.ToValue(pukpin)
+		if val, err = call.Otto.Call("jeth.openWallet", nil, wallet, passwd); err != nil {
+			throwJSException(err.Error())
+		}
+
 	case strings.HasSuffix(err.Error(), scwallet.ErrPINNeeded.Error()):
 		// PIN input requested, fetch from the user and call open again
 		if input, err := b.prompter.PromptPassword("Please enter current PIN: "); err != nil {

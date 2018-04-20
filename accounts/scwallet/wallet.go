@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +52,12 @@ var ErrPUKNeeded = errors.New("smartcard: puk needed")
 // and send it back.
 var ErrPINNeeded = errors.New("smartcard: pin needed")
 
+// ErrPINUnblockNeeded is returned if opening the smart card requires a PIN code,
+// but all PIN attempts have already been exhausted. In this case the calling
+// application should request user input for the PUK and a new PIN code to set
+// fo the card.
+var ErrPINUnblockNeeded = errors.New("smartcard: pin unblock needed")
+
 // ErrAlreadyOpen is returned if the smart card is attempted to be opened, but
 // there is already a paired and unlocked session.
 var ErrAlreadyOpen = errors.New("smartcard: already open")
@@ -65,8 +72,16 @@ var (
 )
 
 const (
-	claSCWallet           = 0x80
+	claISO7816  = 0
+	claSCWallet = 0x80
+
+	insSelect      = 0xA4
+	insGetResponse = 0xC0
+	sw1GetResponse = 0x61
+	sw1Ok          = 0x90
+
 	insVerifyPin          = 0x20
+	insUnblockPin         = 0x22
 	insExportKey          = 0xC2
 	insSign               = 0xC0
 	insLoadKey            = 0xD0
@@ -117,7 +132,7 @@ func NewWallet(hub *Hub, card *scard.Card) *Wallet {
 // transmit sends an APDU to the smartcard and receives and decodes the response.
 // It automatically handles requests by the card to fetch the return data separately,
 // and returns an error if the response status code is not success.
-func transmit(card *scard.Card, command *CommandAPDU) (*ResponseAPDU, error) {
+func transmit(card *scard.Card, command *commandAPDU) (*responseAPDU, error) {
 	data, err := command.serialize()
 	if err != nil {
 		return nil, err
@@ -128,14 +143,14 @@ func transmit(card *scard.Card, command *CommandAPDU) (*ResponseAPDU, error) {
 		return nil, err
 	}
 
-	response := new(ResponseAPDU)
+	response := new(responseAPDU)
 	if err = response.deserialize(responseData); err != nil {
 		return nil, err
 	}
 
 	// Are we being asked to fetch the response separately?
 	if response.Sw1 == sw1GetResponse && (command.Cla != claISO7816 || command.Ins != insGetResponse) {
-		return transmit(card, &CommandAPDU{
+		return transmit(card, &commandAPDU{
 			Cla:  claISO7816,
 			Ins:  insGetResponse,
 			P1:   0,
@@ -186,7 +201,7 @@ func (w *Wallet) connect() error {
 
 // doselect is an internal (unlocked) function to send a SELECT APDU to the card.
 func (w *Wallet) doselect() (*applicationInfo, error) {
-	response, err := transmit(w.card, &CommandAPDU{
+	response, err := transmit(w.card, &commandAPDU{
 		Cla:  claISO7816,
 		Ins:  insSelect,
 		P1:   4,
@@ -209,13 +224,11 @@ func (w *Wallet) ping() error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
+	// We can't ping if not paired
 	if !w.session.paired() {
-		// We can't ping if not paired
 		return nil
 	}
-
-	_, err := w.session.getWalletStatus()
-	if err != nil {
+	if _, err := w.session.walletStatus(); err != nil {
 		return err
 	}
 	return nil
@@ -235,16 +248,13 @@ func (w *Wallet) pair(puk []byte) error {
 	if w.session.paired() {
 		return fmt.Errorf("Wallet already paired")
 	}
-
 	pairing, err := w.session.pair(puk)
 	if err != nil {
 		return err
 	}
-
 	if err = w.Hub.setPairing(w, &pairing); err != nil {
 		return err
 	}
-
 	return w.session.authenticate(pairing)
 }
 
@@ -285,19 +295,26 @@ func (w *Wallet) Status() (string, error) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
+	// If the card is not paired, we can only wait
 	if !w.session.paired() {
-		return "Unpaired", nil
+		return "Unpaired, waiting for PUK", nil
 	}
-
-	status, err := w.session.getWalletStatus()
+	// Yay, we have an encrypted session, retrieve the actual status
+	status, err := w.session.walletStatus()
 	if err != nil {
-		return "Error", err
+		return fmt.Sprintf("Failed: %v", err), err
 	}
-
-	if w.session.verified {
-		return fmt.Sprintf("Open, %s", status), nil
-	} else {
-		return fmt.Sprintf("Locked, %s", status), nil
+	switch {
+	case !w.session.verified && status.PinRetryCount == 0:
+		return fmt.Sprintf("Blocked, waiting for PUK and new PIN"), nil
+	case !w.session.verified:
+		return fmt.Sprintf("Locked, waiting for PIN (%d attempts left)", status.PinRetryCount), nil
+	case !status.Initialized:
+		return fmt.Sprintf("Empty, waiting for initialization"), nil
+	case status.SupportsPKDerivation:
+		return fmt.Sprintf("Online, can derive public keys"), nil
+	default:
+		return fmt.Sprintf("Online, cannot derive public keys"), nil
 	}
 }
 
@@ -324,29 +341,46 @@ func (w *Wallet) Open(passphrase string) error {
 	// pairing key or form the supplied PUK code.
 	if !w.session.paired() {
 		// If a previous pairing exists, only ever try to use that
-		if pairing := w.Hub.getPairing(w); pairing != nil {
+		if pairing := w.Hub.pairing(w); pairing != nil {
 			if err := w.session.authenticate(*pairing); err != nil {
 				return fmt.Errorf("failed to authenticate card %x: %s", w.PublicKey[:4], err)
 			}
-			return ErrPINNeeded
+			// Pairing still ok, fall through to PIN checks
+		} else {
+			// If no passphrase was supplied, request the PUK from the user
+			if passphrase == "" {
+				return ErrPUKNeeded
+			}
+			// Attempt to pair the smart card with the user supplied PUK
+			if err := w.pair([]byte(passphrase)); err != nil {
+				return err
+			}
+			// Pairing succeeded, fall through to PIN checks. This will of course fail,
+			// but we can't return ErrPINNeeded directly here becase we don't know whether
+			// a PIN check or a PIN reset is needed.
+			passphrase = ""
 		}
-		// If no passphrase was supplied, request the PUK from the user
-		if passphrase == "" {
-			return ErrPUKNeeded
-		}
-		// Attempt to pair the smart card with the user supplied PUK
-		if err := w.pair([]byte(passphrase)); err != nil {
+	}
+	// The smart card was successfully paired, retrieve its status to check whether
+	// PIN verification or unblocking is needed.
+	status, err := w.session.walletStatus()
+	if err != nil {
+		return err
+	}
+	// Request the appropriate next authentication data, or use the one supplied
+	switch {
+	case passphrase == "" && status.PinRetryCount > 0:
+		return ErrPINNeeded
+	case passphrase == "":
+		return ErrPINUnblockNeeded
+	case status.PinRetryCount > 0:
+		if err := w.session.verifyPin([]byte(passphrase)); err != nil {
 			return err
 		}
-		return ErrPINNeeded // We always need the PIN after the PUK
-	}
-	// The smart card was successfully paired, request a PIN code or use the one
-	// supplied by the user
-	if passphrase == "" {
-		return ErrPINNeeded
-	}
-	if err := w.session.verifyPin([]byte(passphrase)); err != nil {
-		return err
+	default:
+		if err := w.session.unblockPin([]byte(passphrase)); err != nil {
+			return err
+		}
 	}
 	// Smart card paired and unlocked, initialize and register
 	w.deriveReq = make(chan chan struct{})
@@ -415,7 +449,7 @@ func (w *Wallet) selfDerive() {
 			reqc <- struct{}{}
 			continue
 		}
-		pairing := w.Hub.getPairing(w)
+		pairing := w.Hub.pairing(w)
 
 		// Device lock obtained, derive the next batch of accounts
 		var (
@@ -519,18 +553,12 @@ func (w *Wallet) Accounts() []accounts.Account {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	if pairing := w.Hub.getPairing(w); pairing != nil {
+	if pairing := w.Hub.pairing(w); pairing != nil {
 		ret := make([]accounts.Account, 0, len(pairing.Accounts))
 		for address, path := range pairing.Accounts {
 			ret = append(ret, w.makeAccount(address, path))
 		}
-		for i := 0; i < len(ret); i++ {
-			for j := i + 1; j < len(ret); j++ {
-				if ret[i].URL.Cmp(ret[j].URL) > 0 {
-					ret[i], ret[j] = ret[j], ret[i]
-				}
-			}
-		}
+		sort.Sort(accounts.AccountsByURL(ret))
 		return ret
 	}
 	return nil
@@ -548,7 +576,7 @@ func (w *Wallet) makeAccount(address common.Address, path accounts.DerivationPat
 
 // Contains returns whether an account is part of this particular wallet or not.
 func (w *Wallet) Contains(account accounts.Account) bool {
-	if pairing := w.Hub.getPairing(w); pairing != nil {
+	if pairing := w.Hub.pairing(w); pairing != nil {
 		_, ok := pairing.Accounts[account.Address]
 		return ok
 	}
@@ -576,7 +604,7 @@ func (w *Wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 	}
 
 	if pin {
-		pairing := w.Hub.getPairing(w)
+		pairing := w.Hub.pairing(w)
 		pairing.Accounts[account.Address] = path
 		if err := w.Hub.setPairing(w, pairing); err != nil {
 			return accounts.Account{}, err
@@ -684,7 +712,7 @@ func (w *Wallet) SignTxWithPassphrase(account accounts.Account, passphrase strin
 // It first checks for the address in the list of pinned accounts, and if it is
 // not found, attempts to parse the derivation path from the account's URL.
 func (w *Wallet) findAccountPath(account accounts.Account) (accounts.DerivationPath, error) {
-	pairing := w.Hub.getPairing(w)
+	pairing := w.Hub.pairing(w)
 	if path, ok := pairing.Accounts[account.Address]; ok {
 		return path, nil
 	}
@@ -745,6 +773,16 @@ func (s *Session) verifyPin(pin []byte) error {
 	return nil
 }
 
+// unblockPin unblocks a wallet with the provided puk and resets the pin to the
+// new one specified.
+func (s *Session) unblockPin(pukpin []byte) error {
+	if _, err := s.Channel.TransmitEncrypted(claSCWallet, insUnblockPin, 0, 0, pukpin); err != nil {
+		return err
+	}
+	s.verified = true
+	return nil
+}
+
 // release releases resources associated with the channel.
 func (s *Session) release() error {
 	return s.Wallet.card.Disconnect(scard.LeaveCard)
@@ -773,32 +811,25 @@ type walletStatus struct {
 	SupportsPKDerivation bool // Whether the card supports doing public key derivation itself
 }
 
-func (w walletStatus) String() string {
-	return fmt.Sprintf("pinRetryCount=%d, pukRetryCount=%d, initialized=%t, supportsPkDerivation=%t", w.PinRetryCount, w.PukRetryCount, w.Initialized, w.SupportsPKDerivation)
-}
-
-// getWalletStatus fetches the wallet's status from the card.
-func (s *Session) getWalletStatus() (*walletStatus, error) {
+// walletStatus fetches the wallet's status from the card.
+func (s *Session) walletStatus() (*walletStatus, error) {
 	response, err := s.Channel.TransmitEncrypted(claSCWallet, insStatus, statusP1WalletStatus, 0, nil)
 	if err != nil {
 		return nil, err
 	}
-
 	status := new(walletStatus)
 	if _, err := asn1.UnmarshalWithParams(response.Data, status, "tag:3"); err != nil {
 		return nil, err
 	}
-
 	return status, nil
 }
 
-// getDerivationPath fetches the wallet's current derivation path from the card.
-func (s *Session) getDerivationPath() (accounts.DerivationPath, error) {
+// derivationPath fetches the wallet's current derivation path from the card.
+func (s *Session) derivationPath() (accounts.DerivationPath, error) {
 	response, err := s.Channel.TransmitEncrypted(claSCWallet, insStatus, statusP1Path, 0, nil)
 	if err != nil {
 		return nil, err
 	}
-
 	buf := bytes.NewReader(response.Data)
 	path := make(accounts.DerivationPath, len(response.Data)/4)
 	return path, binary.Read(buf, binary.BigEndian, &path)
@@ -845,11 +876,11 @@ func (s *Session) derive(path accounts.DerivationPath) (accounts.Account, error)
 	// start again.
 	remainingPath := path
 
-	pubkey, err := s.getPublicKey()
+	pubkey, err := s.publicKey()
 	if err != nil {
 		return accounts.Account{}, err
 	}
-	currentPath, err := s.getDerivationPath()
+	currentPath, err := s.derivationPath()
 	if err != nil {
 		return accounts.Account{}, err
 	}
@@ -910,7 +941,6 @@ func (s *Session) deriveKeyAssisted(reset bool, pathComponent uint32) ([]byte, e
 	if _, err := asn1.UnmarshalWithParams(response.Data, keyinfo, "tag:2"); err != nil {
 		return nil, err
 	}
-
 	rbytes, sbytes := keyinfo.Signature.R.Bytes(), keyinfo.Signature.S.Bytes()
 	sig := make([]byte, 65)
 	copy(sig[32-len(rbytes):32], rbytes)
@@ -920,12 +950,10 @@ func (s *Session) deriveKeyAssisted(reset bool, pathComponent uint32) ([]byte, e
 	if err != nil {
 		return nil, err
 	}
-
 	_, err = s.Channel.TransmitEncrypted(claSCWallet, insDeriveKey, deriveP1Assisted|deriveP1Append, deriveP2PublicKey, pubkey)
 	if err != nil {
 		return nil, err
 	}
-
 	return pubkey, nil
 }
 
@@ -935,18 +963,16 @@ type keyExport struct {
 	PrivateKey []byte `asn1:"tag:1,optional"`
 }
 
-// getPublicKey returns the public key for the current derivation path.
-func (s *Session) getPublicKey() ([]byte, error) {
+// publicKey returns the public key for the current derivation path.
+func (s *Session) publicKey() ([]byte, error) {
 	response, err := s.Channel.TransmitEncrypted(claSCWallet, insExportKey, exportP1Any, exportP2Pubkey, nil)
 	if err != nil {
 		return nil, err
 	}
-
 	keys := new(keyExport)
 	if _, err := asn1.UnmarshalWithParams(response.Data, keys, "tag:1"); err != nil {
 		return nil, err
 	}
-
 	return keys.PublicKey, nil
 }
 
@@ -974,12 +1000,10 @@ func (s *Session) sign(path accounts.DerivationPath, hash []byte) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-
 	sigdata := new(signatureData)
 	if _, err := asn1.UnmarshalWithParams(response.Data, sigdata, "tag:0"); err != nil {
 		return nil, err
 	}
-
 	// Serialize the signature
 	rbytes, sbytes := sigdata.Signature.R.Bytes(), sigdata.Signature.S.Bytes()
 	sig := make([]byte, 65)
@@ -991,7 +1015,6 @@ func (s *Session) sign(path accounts.DerivationPath, hash []byte) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-
 	log.Debug("Signed using smartcard", "deriveTime", deriveTime.Sub(startTime), "signingTime", time.Since(deriveTime))
 
 	return sig, nil
