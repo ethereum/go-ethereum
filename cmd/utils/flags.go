@@ -28,8 +28,6 @@ import (
 	"strconv"
 	"strings"
 	
-	"github.com/syndtr/goleveldb/leveldb"
-
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -59,6 +57,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"gopkg.in/urfave/cli.v1"
+	
+	// @shyft
+	"database/sql"
 )
 
 var (
@@ -1250,7 +1251,13 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		cache.TrieNodeLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
-	blockExplorerDb, _ := leveldb.OpenFile("./foo_data/", nil)
+	
+	// @NOTE:shyft instantiate BlockExplorerDB here?
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	blockExplorerDb, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, nil
+	}
 	fmt.Println("Calling NewBlock CHAIN in flags.go ******************************")
 	chain, err = core.NewBlockChain(chainDb, blockExplorerDb,cache, config, engine, vmcfg)
 	if err != nil {

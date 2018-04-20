@@ -250,6 +250,12 @@
 			"tree": true
 		},
 		{
+			"checksumSHA1": "F7vsuKOVSMnFSi90odRxfhBEBeA=",
+			"path": "github.com/lib/pq",
+			"revision": "d34b9ff171c21ad295489235aec8b6626023cd04",
+			"revisionTime": "2018-03-27T07:18:24Z"
+		},
+		{
 			"checksumSHA1": "7hln62oZPZmyqEmgXaybf9WxQ7A=",
 			"path": "github.com/maruel/panicparse/stack",
 			"revision": "ad661195ed0e88491e0f14be6613304e3b1141d6",

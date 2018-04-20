@@ -24,7 +24,6 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -48,6 +47,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	
+	// @shyft
+	"database/sql"
 )
 
 type LesServer interface {
@@ -74,7 +76,7 @@ type Ethereum struct {
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
-	blockExplorerDb *leveldb.DB
+	blockExplorerDb *sql.DB
 
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
@@ -103,7 +105,6 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
-    // @NOTE:shyft Where we instantiate BlockExplorerDB
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
 	}
@@ -115,8 +116,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 	
+	// @NOTE:shyft instantiate BlockExplorerDB here
+	// @TODO: Create Genesis Block
 	// @NOTE:shyft instantiate BlockExplorerDB here?
-	blockExplorerDb, err := leveldb.OpenFile("./shyftData/geth/blockExplorerDb/", nil)
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	blockExplorerDb, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, err
 	}

@@ -41,7 +41,10 @@ var (
 	ByzantiumBlockReward   *big.Int = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
 	maxUncles                       = 2                 // Maximum number of uncles allowed in a single block
 	allowedFutureBlockTime          = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
-	//@note: @shyft
+	//@note: @shyft This is the Shyft block reward numbers
+	// ShyftNetworkBlockReward    = Block reward for the shyft conduit contract.
+	// ShyftMinerBlockReward      = Block reward for the miner.
+	// ShyftNetworkConduitAddress = Shyft conduit contract
 	ShyftNetworkBlockReward	   *big.Int = big.NewInt(2.5e+18) // Block reward in wei for successfully mining a block, for the Shyft Network
 	ShyftMinerBlockReward  *big.Int = big.NewInt(2.5e+18) // Block reward in wei for successfully mining a block, for the Shyft Network
 	ShyftNetworkConduitAddress = common.HexToAddress("9db76b4bbaea76dfda4552b7b9d4e9d43abc55fd")
