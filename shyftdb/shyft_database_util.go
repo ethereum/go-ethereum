@@ -19,8 +19,14 @@ import (
 
 //SBlock type
 type SBlock struct {
-	hash string
-	txes []string
+	hash     string
+	coinbase string
+	number   int
+}
+
+//blockRes struct
+type blockRes struct {
+	Blocks []SBlock
 }
 
 //ShyftTxEntry structure
@@ -262,26 +268,47 @@ func WriteMinerReward(db *leveldb.DB, block *types.Block) {
 ///////////
 // Getters
 //////////
-
-func GetAllBlocks(db *leveldb.DB) []SBlock {
+//GetAllBlocks returns []SBlock blocks for API
+func GetAllBlocks(sqldb *sql.DB) []SBlock {
 	var arr []SBlock
-	iter := db.NewIterator(util.BytesPrefix([]byte("bk-")), nil)
-	for iter.Next() {
-		result := iter.Value()
-		buf := bytes.NewBuffer(result)
-		strs2 := []string{}
-		gob.NewDecoder(buf).Decode(&strs2)
-		//fmt.Println("the key is")
-		hash := common.BytesToHash(iter.Key())
-		hex := hash.Hex()
-		//fmt.Println(hex)
-		sblock := SBlock{hex, strs2}
-		arr = append(arr, sblock)
+	fmt.Println("HERE+++++++++++")
+	rows, err := sqldb.Query(`
+		SELECT
+			number,
+			hash,
+			coinbase
+		FROM blocks`)
+	if err != nil {
+		fmt.Println("err")
 
-		//fmt.Println("\n ALL BK BK VALUE" + string(result))
+	}
+	fmt.Println("ROWS")
+	fmt.Println(rows)
+	defer rows.Close()
+
+	for rows.Next() {
+		var num int
+		var hash string
+		var coinbase string
+		err = rows.Scan(
+			&num,
+			&hash,
+			&coinbase,
+		)
+		sblock := SBlock{hash: hash, number: num, coinbase: coinbase}
+		arr := append(arr, sblock)
+		fmt.Println("++++++++++++++++", arr)
+		// fmt.Println("++++++++++++++++", hash)
+		// fmt.Println("++++++++++++++++", coinbase)
+
+		// }
+		// err = rows.Err()
+		// if err != nil {
+		// 	return err
+		// }
+
 	}
 
-	iter.Release()
 	return arr
 }
 

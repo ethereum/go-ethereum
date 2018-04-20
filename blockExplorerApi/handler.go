@@ -3,16 +3,14 @@ package main
 ///@NOTE Shyft handler functions when endpoints are hit
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
-	logger "log"
 	"net/http"
 
 	_ "github.com/lib/pq"
 
 	shyftdb "github.com/ethereum/shyft_go-ethereum/shyftdb"
 	"github.com/gorilla/mux"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 // GetTransaction gets txs
@@ -69,28 +67,49 @@ func GetBlock(w http.ResponseWriter, r *http.Request) {
 
 	block3 := shyftdb.GetBlock(blockExplorerDb)
 
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	out, err := json.Marshal(block3)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	fmt.Fprintln(w, "block", block3)
+	fmt.Fprintln(w, "block", string(out))
 }
 
 // GetAllBlocks response
 func GetAllBlocks(w http.ResponseWriter, r *http.Request) {
-	blockExplorerDb, err := leveldb.OpenFile("./shyftData/geth/blockExplorerDb/", &opt.Options{
-		ErrorIfMissing: true,
-		ReadOnly:       true,
-	})
+
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	blockExplorerDb, err := sql.Open("postgres", connStr)
 	if err != nil {
-		logger.Print(err)
 		return
 	}
-	blocks := shyftdb.GetAllBlocks(blockExplorerDb)
+
+	block3 := shyftdb.GetAllBlocks(blockExplorerDb)
+
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	out, err := json.Marshal(block3)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	fmt.Fprintln(w, "blocks", blocks)
+	fmt.Fprintln(w, "block", string(out))
 }
 
 //GetInternalTransactions gets internal txs
