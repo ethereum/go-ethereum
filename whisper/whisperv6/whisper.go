@@ -99,6 +99,10 @@ type Whisper struct {
 	mailServer MailServer // MailServer interface
 }
 
+type DevP2PBridge struct {
+	*Whisper
+}
+
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
 func New(cfg *Config) *Whisper {
 	if cfg == nil {
@@ -608,7 +612,7 @@ func (whisper *Whisper) Send(envelope *Envelope) error {
 
 // Start implements node.Service, starting the background data propagation thread
 // of the Whisper protocol.
-func (whisper *Whisper) Start(WhisperServer) error {
+func (whisper *Whisper) Start(/* WhisperServer*/ *p2p.Server) error {
 	log.Info("started whisper v." + ProtocolVersionStr)
 	go whisper.update()
 

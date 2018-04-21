@@ -124,7 +124,7 @@ func newLibP2PPeer(s *LibP2PWhisperServer, w *Whisper, pid peer.ID, rw p2p.MsgRe
 			powRequirement: 0.0,
 			known:          set.New(),
 			quit:           make(chan struct{}),
-			bloomFilter:    makeFullNodeBloom(),
+			bloomFilter:    MakeFullNodeBloom(),
 			fullNode:       true,
 		},
 		pid,

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -82,19 +81,19 @@ func (peer *PeerBase) handshakeBase() error {
 		return err
 	}
 	if packet.Code != statusCode {
-		return fmt.Errorf("peer [%s] sent packet %x before status packet", peer.ID(), packet.Code)
+		return fmt.Errorf("sent packet %x before status packet", packet.Code)
 	}
 	s := rlp.NewStream(packet.Payload, uint64(packet.Size))
 	_, err = s.List()
 	if err != nil {
-		return fmt.Errorf("peer [%s] sent bad status message: %v", peer.ID(), err)
+		return fmt.Errorf("sent bad status message: %v", err)
 	}
 	peerVersion, err := s.Uint()
 	if err != nil {
-		return fmt.Errorf("peer [%s] sent bad status message (unable to decode version): %v", peer.ID(), err)
+		return fmt.Errorf("sent bad status message (unable to decode version): %v", err)
 	}
 	if peerVersion != ProtocolVersion {
-		return fmt.Errorf("peer [%s]: protocol version mismatch %d != %d", peer.ID(), peerVersion, ProtocolVersion)
+		return fmt.Errorf(": protocol version mismatch %d != %d", peerVersion, ProtocolVersion)
 	}
 
 	// only version is mandatory, subsequent parameters are optional
@@ -102,7 +101,7 @@ func (peer *PeerBase) handshakeBase() error {
 	if err == nil {
 		pow := math.Float64frombits(powRaw)
 		if math.IsInf(pow, 0) || math.IsNaN(pow) || pow < 0.0 {
-			return fmt.Errorf("peer [%s] sent bad status message: invalid pow", peer.ID())
+			return fmt.Errorf("sent bad status message: invalid pow")
 		}
 		peer.powRequirement = pow
 
@@ -111,14 +110,14 @@ func (peer *PeerBase) handshakeBase() error {
 		if err == nil {
 			sz := len(bloom)
 			if sz != BloomFilterSize && sz != 0 {
-				return fmt.Errorf("peer [%s] sent bad status message: wrong bloom filter size %d", peer.ID(), sz)
+				return fmt.Errorf("sent bad status message: wrong bloom filter size %d", sz)
 			}
 			peer.setBloomFilter(bloom)
 		}
 	}
 
 	if err := <-errc; err != nil {
-		return fmt.Errorf("peer [%s] failed to send status packet: %v", peer.ID(), err)
+		return fmt.Errorf("failed to send status packet: %v", err)
 	}
 	return nil
 }

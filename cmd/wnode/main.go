@@ -22,6 +22,7 @@ package main
 import (
 	"bufio"
 	"crypto/ecdsa"
+	crand "crypto/rand"
 	"crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
@@ -87,6 +88,7 @@ var (
 	asymmetricMode = flag.Bool("asym", false, "use asymmetric encryption")
 	generateKey    = flag.Bool("generatekey", false, "generate and show the private key")
 	fileExMode     = flag.Bool("fileexchange", false, "file exchange mode")
+	fileReader     = flag.Bool("filereader", false, "load and decrypt messages saved as files, display as plain text")
 	testMode       = flag.Bool("test", false, "use of predefined parameters for diagnostics")
 	echoMode       = flag.Bool("echo", false, "echo mode: prints some arguments for diagnostics")
 
@@ -106,7 +108,8 @@ var (
 	argTopic   = flag.String("topic", "", "topic in hexadecimal format (e.g. 70a4beef)")
 	argSaveDir = flag.String("savedir", "", "directory where incoming messages will be saved as files")
 
-	useLibP2P = flag.Bool("libp2p", false, "Use libp2p as the protocol layer")
+	useLibP2P    = flag.Bool("libp2p", false, "Use libp2p as the protocol layer")
+	useDeadlines = flag.Bool("deadlines", false, "When using libp2p, force deadline checking")
 )
 
 func main() {
@@ -649,7 +652,6 @@ func messageLoop() {
 					printMessageInfo(msg)
 					reportedOnce = true
 				}
-			}
 
 				// All messages are saved upon specifying argSaveDir.
 				// fileExMode only specifies how messages are displayed on the console after they are saved.
