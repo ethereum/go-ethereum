@@ -8,9 +8,20 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- Added missing runtime import for FreeBSD. #104
+
 ### Changed
 
 ### Deprecated
+
+## [0.9.0]
+
+### Added
+- Added support for huge TLB pages on Linux #97  
+- Added support for big endian platform #100 
+
+### Fixed
+- Add missing method for OpenBSD #99
 
 ## [0.8.0]
 
