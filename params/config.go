@@ -34,13 +34,13 @@ var (
 		ChainId:             big.NewInt(1),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
+		DAOForkSupport:      false,
 		EIP150Block:         big.NewInt(0),
 		EIP150Hash:          common.HexToHash("0x3f9c0f661c8b2aab93eafda1c97daed0d418c87cd300292ebcc1f7e03df0d8f3"),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(1000000),
-		ConstantinopleBlock: nil,
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
 		Ethash:              new(EthashConfig),
 	}
 
