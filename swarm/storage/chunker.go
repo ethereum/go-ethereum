@@ -519,9 +519,9 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 			childKey := chunkData[8+j*self.hashSize : 8+(j+1)*self.hashSize]
 			chunkData, err := self.getter.Get(Reference(childKey))
 			if err != nil {
-				log.Error("lazychunkreader.join", "key", childKey, "err", err)
+				log.Error("lazychunkreader.join", "key", fmt.Sprintf("%x", childKey), "err", err)
 				select {
-				case errC <- fmt.Errorf("chunk %v-%v not found", off, off+treeSize):
+				case errC <- fmt.Errorf("chunk %v-%v not found; key: %s", off, off+treeSize, fmt.Sprintf("%x", childKey)):
 				case <-quitC:
 				}
 				return
