@@ -393,7 +393,7 @@ type LazyChunkReader struct {
 }
 
 // implements the Joiner interface
-func (self *TreeChunker) Join() LazySectionReader {
+func (self *TreeChunker) Join() *LazyChunkReader {
 	return &LazyChunkReader{
 		key:       self.key,
 		chunkSize: self.chunkSize,
@@ -436,6 +436,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	quitC := make(chan bool)
 	size, err := self.Size(quitC)
 	if err != nil {
+		log.Error("lazychunkreader.readat.size", "size", size, "err", err)
 		return 0, err
 	}
 
@@ -464,6 +465,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 
 	err = <-errC
 	if err != nil {
+		log.Error("lazychunkreader.readat.errc", "err", err)
 		close(quitC)
 		return 0, err
 	}
@@ -517,6 +519,7 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 			childKey := chunkData[8+j*self.hashSize : 8+(j+1)*self.hashSize]
 			chunkData, err := self.getter.Get(Reference(childKey))
 			if err != nil {
+				log.Error("lazychunkreader.join", "key", childKey, "err", err)
 				select {
 				case errC <- fmt.Errorf("chunk %v-%v not found", off, off+treeSize):
 				case <-quitC:
@@ -535,6 +538,9 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 func (self *LazyChunkReader) Read(b []byte) (read int, err error) {
 	log.Debug("lazychunkreader.read", "key", self.key)
 	read, err = self.ReadAt(b, self.off)
+	if err != nil {
+		log.Error("lazychunkreader.readat", "read", read, "err", err)
+	}
 
 	self.off += int64(read)
 	return
