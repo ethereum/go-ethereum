@@ -577,16 +577,13 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 
 		var res []byte
 		var err error
-		for {
-			res, err = ioutil.ReadAll(reader)
-			if err != nil {
-				log.Error("handle.get", "ruid", r.ruid, "error", err)
-				time.Sleep(200 * time.Millisecond)
-				continue
-			}
-			log.Debug("handle.get.readall success", "ruid", r.ruid)
-			break
+		res, err = ioutil.ReadAll(reader)
+		if err != nil {
+			log.Error("handle.get", "ruid", r.ruid, "error", err)
+			Respond(w, r, fmt.Sprintf("chunk not found: %s", err), http.StatusNotFound)
+			return
 		}
+		log.Debug("handle.get.readall success", "ruid", r.ruid)
 
 		rdr := bytes.NewReader(res)
 
@@ -845,16 +842,13 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 
 	var res []byte
-	for {
-		res, err = ioutil.ReadAll(reader)
-		if err != nil {
-			log.Error("handle.get.file", "ruid", r.ruid, "error", err)
-			time.Sleep(200 * time.Millisecond)
-			continue
-		}
-		log.Debug("handle.get.file.readall success", "ruid", r.ruid)
-		break
+	res, err = ioutil.ReadAll(reader)
+	if err != nil {
+		log.Error("handle.get.file", "ruid", r.ruid, "error", err)
+		Respond(w, r, fmt.Sprintf("chunk not found %s: %s", r.uri, err), http.StatusNotFound)
+		return
 	}
+	log.Debug("handle.get.file.readall success", "ruid", r.ruid)
 
 	rdr := bytes.NewReader(res)
 
