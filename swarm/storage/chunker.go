@@ -538,7 +538,7 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 func (self *LazyChunkReader) Read(b []byte) (read int, err error) {
 	log.Debug("lazychunkreader.read", "key", self.key)
 	read, err = self.ReadAt(b, self.off)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		log.Error("lazychunkreader.readat", "read", read, "err", err)
 	}
 
