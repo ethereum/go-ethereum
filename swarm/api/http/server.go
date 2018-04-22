@@ -574,7 +574,23 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 			contentType = typ
 		}
 		w.Header().Set("Content-Type", contentType)
-		http.ServeContent(w, &r.Request, "", time.Now(), reader)
+
+		var res []byte
+		var err error
+		for {
+			res, err = ioutil.ReadAll(reader)
+			if err != nil {
+				log.Error("handle.get", "ruid", r.ruid, "error", err)
+				time.Sleep(200 * time.Millisecond)
+				continue
+			}
+			log.Debug("handle.get.readall success", "ruid", r.ruid)
+			break
+		}
+
+		rdr := bytes.NewReader(res)
+
+		http.ServeContent(w, &r.Request, "", time.Now(), rdr)
 	case r.uri.Hash():
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
