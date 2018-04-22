@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
@@ -184,19 +185,21 @@ updateLoop:
 	}
 
 	// Cleanup and remove the peer from the list
+	p.server.PeerMutex.Lock()
 	for i, it := range p.server.Peers {
 		if it.id == p.id {
 			p.server.Peers = append(p.server.Peers[:i], p.server.Peers[i+1:]...)
 			break
 		}
 	}
+	p.server.PeerMutex.Unlock()
 }
 
 // LibP2PWhisperServer implements WhisperServer for libp2p.
 type LibP2PWhisperServer struct {
 	Host host.Host
 
-	Peers []*LibP2PPeer
+	PeerMutex sync.RWMutex  // Guard the list of active peers
 
 	whisper *Whisper
 }
@@ -231,20 +234,23 @@ func (server *LibP2PWhisperServer) Start() error {
 
 		pid := stream.Conn().RemotePeer()
 		var peer Peer
+		server.PeerMutex.RLock()
 		for _, p := range server.Peers {
 			if p.id == pid {
 				peer = p
 				break
 			}
 		}
+		server.PeerMutex.RUnlock()
 
 		lps := newLibp2pStream(server, stream).(*LibP2PStream)
 
 		// Unknown peer
 		if peer == nil {
 			peer = newLibP2PPeer(server, server.whisper, pid, lps)
-			// TODO check critical section
+			server.PeerMutex.Lock()
 			server.Peers = append(server.Peers, peer.(*LibP2PPeer))
+			server.PeerMutex.Unlock()
 		}
 
 		go server.whisper.HandlePeer(peer, lps)
@@ -254,27 +260,33 @@ func (server *LibP2PWhisperServer) Start() error {
 
 	// Open a stream to every peer currently known
 	var err error
+	server.PeerMutex.RLock()
 	for _, p := range server.Peers {
 		if e := server.connectToPeer(p); e != nil {
 			err = e
 		}
 	}
+	server.PeerMutex.RUnlock()
 
 	return err
 }
 
 // Stop stops the server
 func (server *LibP2PWhisperServer) Stop() {
+	server.PeerMutex.RLock()
 	for _, p := range server.Peers {
 		// TODO send disconnect message
 		p.connectionStream.lp2pStream.Close()
 	}
+	server.PeerMutex.RUnlock()
 
 	server.Host.Close()
 }
 
 // PeerCount returns the peer count for the node
 func (server *LibP2PWhisperServer) PeerCount() int {
+	server.PeerMutex.RLock()
+	defer server.PeerMutex.RUnlock()
 	return len(server.Peers)
 }
 
@@ -302,7 +314,9 @@ func (server *LibP2PWhisperServer) AddPeer(addr ma.Multiaddr) *LibP2PPeer {
 	ipaddr := addr.Decapsulate(ipfsaddrpart)
 	server.Host.Peerstore().AddAddr(peerid, ipaddr, pstore.PermanentAddrTTL)
 	newPeer := newLibP2PPeer(server, server.whisper, peerid, nil).(*LibP2PPeer)
+	server.PeerMutex.Lock()
 	server.Peers = append(server.Peers, newPeer)
+	server.PeerMutex.Unlock()
 
 	return newPeer
 }
@@ -333,6 +347,10 @@ func NewLibP2PWhisperServer(port uint, whisper *Whisper) (WhisperServer, error) 
 	}
 	h := basichost.New(network)
 
-	server := &LibP2PWhisperServer{h, []*LibP2PPeer{}, whisper}
+	server := &LibP2PWhisperServer{
+		Host:    h,
+		Peers:   []*LibP2PPeer{},
+		whisper: whisper,
+	}
 	return server, nil
 }
