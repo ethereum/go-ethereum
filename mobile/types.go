@@ -80,7 +80,7 @@ func (h *Header) EncodeRLP() ([]byte, error) {
 	return rlp.EncodeToBytes(h.header)
 }
 
-// NewHeaderFromJSON parses a header from an JSON data dump.
+// NewHeaderFromJSON parses a header from a JSON data dump.
 func NewHeaderFromJSON(data string) (*Header, error) {
 	h := &Header{
 		header: new(types.Header),
@@ -91,16 +91,10 @@ func NewHeaderFromJSON(data string) (*Header, error) {
 	return h, nil
 }
 
-// EncodeJSON encodes a header into an JSON data dump.
+// EncodeJSON encodes a header into a JSON data dump.
 func (h *Header) EncodeJSON() (string, error) {
 	data, err := json.Marshal(h.header)
 	return string(data), err
-}
-
-// String implements the fmt.Stringer interface to print some semi-meaningful
-// data dump of the header for debugging purposes.
-func (h *Header) String() string {
-	return h.header.String()
 }
 
 func (h *Header) GetParentHash() *Hash   { return &Hash{h.header.ParentHash} }
@@ -157,7 +151,7 @@ func (b *Block) EncodeRLP() ([]byte, error) {
 	return rlp.EncodeToBytes(b.block)
 }
 
-// NewBlockFromJSON parses a block from an JSON data dump.
+// NewBlockFromJSON parses a block from a JSON data dump.
 func NewBlockFromJSON(data string) (*Block, error) {
 	b := &Block{
 		block: new(types.Block),
@@ -168,16 +162,10 @@ func NewBlockFromJSON(data string) (*Block, error) {
 	return b, nil
 }
 
-// EncodeJSON encodes a block into an JSON data dump.
+// EncodeJSON encodes a block into a JSON data dump.
 func (b *Block) EncodeJSON() (string, error) {
 	data, err := json.Marshal(b.block)
 	return string(data), err
-}
-
-// String implements the fmt.Stringer interface to print some semi-meaningful
-// data dump of the block for debugging purposes.
-func (b *Block) String() string {
-	return b.block.String()
 }
 
 func (b *Block) GetParentHash() *Hash   { return &Hash{b.block.ParentHash()} }
@@ -232,7 +220,7 @@ func (tx *Transaction) EncodeRLP() ([]byte, error) {
 	return rlp.EncodeToBytes(tx.tx)
 }
 
-// NewTransactionFromJSON parses a transaction from an JSON data dump.
+// NewTransactionFromJSON parses a transaction from a JSON data dump.
 func NewTransactionFromJSON(data string) (*Transaction, error) {
 	tx := &Transaction{
 		tx: new(types.Transaction),
@@ -243,16 +231,10 @@ func NewTransactionFromJSON(data string) (*Transaction, error) {
 	return tx, nil
 }
 
-// EncodeJSON encodes a transaction into an JSON data dump.
+// EncodeJSON encodes a transaction into a JSON data dump.
 func (tx *Transaction) EncodeJSON() (string, error) {
 	data, err := json.Marshal(tx.tx)
 	return string(data), err
-}
-
-// String implements the fmt.Stringer interface to print some semi-meaningful
-// data dump of the transaction for debugging purposes.
-func (tx *Transaction) String() string {
-	return tx.tx.String()
 }
 
 func (tx *Transaction) GetData() []byte      { return tx.tx.Data() }
@@ -330,7 +312,7 @@ func (r *Receipt) EncodeRLP() ([]byte, error) {
 	return rlp.EncodeToBytes(r.receipt)
 }
 
-// NewReceiptFromJSON parses a transaction receipt from an JSON data dump.
+// NewReceiptFromJSON parses a transaction receipt from a JSON data dump.
 func NewReceiptFromJSON(data string) (*Receipt, error) {
 	r := &Receipt{
 		receipt: new(types.Receipt),
@@ -341,16 +323,10 @@ func NewReceiptFromJSON(data string) (*Receipt, error) {
 	return r, nil
 }
 
-// EncodeJSON encodes a transaction receipt into an JSON data dump.
+// EncodeJSON encodes a transaction receipt into a JSON data dump.
 func (r *Receipt) EncodeJSON() (string, error) {
 	data, err := rlp.EncodeToBytes(r.receipt)
 	return string(data), err
-}
-
-// String implements the fmt.Stringer interface to print some semi-meaningful
-// data dump of the transaction receipt for debugging purposes.
-func (r *Receipt) String() string {
-	return r.receipt.String()
 }
 
 func (r *Receipt) GetPostState() []byte         { return r.receipt.PostState }

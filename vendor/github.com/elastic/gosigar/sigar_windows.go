@@ -120,6 +120,10 @@ func (self *Swap) Get() error {
 	return nil
 }
 
+func (self *HugeTLBPages) Get() error {
+	return ErrNotImplemented{runtime.GOOS}
+}
+
 func (self *Cpu) Get() error {
 	idle, kernel, user, err := windows.GetSystemTimes()
 	if err != nil {
