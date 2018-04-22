@@ -42,6 +42,24 @@ var (
 	allowedFutureBlockTime          = 15 * time.Second  // Max time from current time allowed for blocks, before they're considered future blocks
 )
 
+//  ETHF Variables
+var (
+	ethf0BlockReward                *big.Int = big.NewInt(7.5e+18)              //  7.5 ETHF Block reward in wei for successfully mining a block.
+	ethf1BlockReward                *big.Int = big.NewInt(5e+18)              //  5 ETHF Block reward in wei for successfully mining a block.
+	ethf2BlockReward                *big.Int = big.NewInt(2.5e+18)              //  2.5 ETHF Block reward in wei for successfully mining a block.
+	ethf3BlockReward                *big.Int = big.NewInt(1.5e+18)              //  1.5 ETHF Block reward in wei for successfully mining a block.
+	ethf4BlockReward                *big.Int = big.NewInt(1e+18) //  1 ETHF Block reward in wei for successfully mining a block.
+	ethf5BlockReward                *big.Int = big.NewInt(500000000000000000) //  0.5 ETHF Block reward in wei for successfully mining a block.
+	ethf6BlockReward                *big.Int = big.NewInt(250000000000000000) //  0.25 ETHF Block reward in wei for successfully mining a block.
+	ethfRewardSwitchBlockEra0       *big.Int = big.NewInt(5000)               //  5K Block transition
+	ethfRewardSwitchBlockEra1		*big.Int = big.NewInt(2500000)            //  2.5M block transition
+	ethfRewardSwitchBlockEra2       *big.Int = big.NewInt(5000000)            //  5M block transition
+	ethfRewardSwitchBlockEra3       *big.Int = big.NewInt(7500000)            //  7.5M block transition
+	ethfRewardSwitchBlockEra4       *big.Int = big.NewInt(10000000)           //  10M block transtiton
+	ethfRewardSwitchBlockEra5       *big.Int = big.NewInt(12500000)           //  12.5M block transtiton
+	ethfRewardSwitchBlockEra6       *big.Int = big.NewInt(15000000)           //  15M block transtiton
+)
+
 // Various error messages to mark blocks invalid. These should be private to
 // prevent engine specific errors from being referenced in the remainder of the
 // codebase, inherently breaking if the engine is swapped out. Please put common
@@ -533,22 +551,134 @@ var (
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
-	blockReward := FrontierBlockReward
-	if config.IsByzantium(header.Number) {
-		blockReward = ByzantiumBlockReward
-	}
+	block0Reward := ethf0BlockReward
+	block1Reward := ethf1BlockReward
+	block2Reward := ethf2BlockReward
+	block3Reward := ethf3BlockReward
+	block4Reward := ethf4BlockReward
+	block5Reward := ethf5BlockReward
+	block6Reward := ethf6BlockReward
+	
 	// Accumulate the rewards for the miner and any included uncles
-	reward := new(big.Int).Set(blockReward)
-	r := new(big.Int)
-	for _, uncle := range uncles {
-		r.Add(uncle.Number, big8)
-		r.Sub(r, header.Number)
-		r.Mul(r, blockReward)
-		r.Div(r, big8)
-		state.AddBalance(uncle.Coinbase, r)
+	if (header.Number.Cmp(ethfRewardSwitchBlockEra6) == 1) {
+			reward := new(big.Int).Set(block6Reward)
+			r := new(big.Int)
+			for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
 
-		r.Div(blockReward, big32)
-		reward.Add(reward, r)
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+		//fmt.Println("Miner Block Reward:", reward, "in Wei.")
+		state.AddBalance(header.Coinbase, reward)
+
+	} else if (header.Number.Cmp(ethfRewardSwitchBlockEra5) == 1) {
+			reward := new(big.Int).Set(block5Reward)
+			r := new(big.Int)
+			for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+		//fmt.Println("Miner Block Reward:", reward, "in Wei.")
+		state.AddBalance(header.Coinbase, reward)
+
+	} else if (header.Number.Cmp(ethfRewardSwitchBlockEra4) == 1) {
+			reward := new(big.Int).Set(block4Reward)
+			r := new(big.Int)
+			for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+		//fmt.Println("Miner Block Reward:", reward, "in Wei.")
+		state.AddBalance(header.Coinbase, reward)
+
+	} else if (header.Number.Cmp(ethfRewardSwitchBlockEra3) == 1) {
+			reward := new(big.Int).Set(block3Reward)
+			r := new(big.Int)
+			for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+		//fmt.Println("Miner Block Reward:", reward, "in Wei.")
+		state.AddBalance(header.Coinbase, reward)
+
+	} else if (header.Number.Cmp(ethfRewardSwitchBlockEra2) == 1) {
+			reward := new(big.Int).Set(block2Reward)
+			r := new(big.Int)
+			for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+		//fmt.Println("Miner Block Reward:", reward, "in Wei.")
+		state.AddBalance(header.Coinbase, reward)
+
+	} else if (header.Number.Cmp(ethfRewardSwitchBlockEra1) == 1) {
+			reward := new(big.Int).Set(block1Reward)
+			r := new(big.Int)
+			for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+		//fmt.Println("Miner Block Reward:", reward, "in Wei.")
+		state.AddBalance(header.Coinbase, reward)
+
+	} else if (header.Number.Cmp(ethfRewardSwitchBlockEra0) == 1) {
+			reward := new(big.Int).Set(block0Reward)
+			r := new(big.Int)
+			for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+		//fmt.Println("Miner Block Reward:", reward, "in Wei.")
+		state.AddBalance(header.Coinbase, reward)
+
+	} else {
+		reward := new(big.Int).Set(block0Reward)
+		r := new(big.Int)
+		for _, uncle := range uncles {
+					r.Add(uncle.Number, big8)
+					r.Sub(r, header.Number)
+					r.Mul(r, reward)
+					r.Div(r, big8)
+
+					r.Div(reward, big32)
+					reward.Add(reward, r)
+			}
+		//fmt.Println("Miner Block Reward:", reward, "in Wei.")
+		state.AddBalance(header.Coinbase, reward)
 	}
-	state.AddBalance(header.Coinbase, reward)
+
 }
