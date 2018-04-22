@@ -21,7 +21,6 @@ package storage
 import (
 	"sync"
 
-	"github.com/ethereum/go-ethereum/log"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -55,7 +54,7 @@ func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
 	}
 
 	requestEvicted := func(key interface{}, value interface{}) {
-		log.Error("evict called on outgoing request")
+		//log.Error("evict called on outgoing request")
 	}
 	r, err := lru.NewWithEvict(int(params.ChunkRequestsCacheCapacity), requestEvicted)
 	if err != nil {
