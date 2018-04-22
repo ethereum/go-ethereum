@@ -844,9 +844,23 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		return
 	}
 
+	var res []byte
+	for {
+		res, err = ioutil.ReadAll(reader)
+		if err != nil {
+			log.Error("handle.get.file", "ruid", r.ruid, "error", err)
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
+		log.Debug("handle.get.file.readall success", "ruid", r.ruid)
+		break
+	}
+
+	rdr := bytes.NewReader(res)
+
 	w.Header().Set("Content-Type", contentType)
 
-	http.ServeContent(w, &r.Request, "", time.Now(), reader)
+	http.ServeContent(w, &r.Request, "", time.Now(), rdr)
 }
 
 func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
