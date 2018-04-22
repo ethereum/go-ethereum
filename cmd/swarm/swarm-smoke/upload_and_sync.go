@@ -69,7 +69,7 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 	time.Sleep(10 * time.Second)
 
 	log.Trace("http get request", "ruid", ruid, "api", endpoint, "hash", hash)
-	res, err := http.Get(endpoint + "/bzz:/" + hash)
+	res, err := http.Get(endpoint + "/bzz:/" + hash + "/")
 	if err != nil {
 		log.Warn(err.Error(), "ruid", ruid)
 		return err

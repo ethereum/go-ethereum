@@ -841,20 +841,20 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	var res []byte
-	res, err = ioutil.ReadAll(reader)
-	if err != nil {
-		log.Error("handle.get.file", "ruid", r.ruid, "error", err)
-		Respond(w, r, fmt.Sprintf("chunk not found %s: %s", r.uri, err), http.StatusNotFound)
-		return
-	}
-	log.Debug("handle.get.file.readall success", "ruid", r.ruid)
+	//var res []byte
+	//res, err = ioutil.ReadAll(reader)
+	//if err != nil {
+	//log.Error("handle.get.file", "ruid", r.ruid, "error", err)
+	//Respond(w, r, fmt.Sprintf("chunk not found %s: %s", r.uri, err), http.StatusNotFound)
+	//return
+	//}
+	//log.Debug("handle.get.file.readall success", "ruid", r.ruid)
 
-	rdr := bytes.NewReader(res)
+	//rdr := bytes.NewReader(res)
 
 	w.Header().Set("Content-Type", contentType)
 
-	http.ServeContent(w, &r.Request, "", time.Now(), rdr)
+	http.ServeContent(w, &r.Request, "", time.Now(), reader)
 }
 
 func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
