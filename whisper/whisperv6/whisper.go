@@ -99,10 +99,6 @@ type Whisper struct {
 	mailServer MailServer // MailServer interface
 }
 
-type DevP2PBridge struct {
-	*Whisper
-}
-
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
 func New(cfg *Config) *Whisper {
 	if cfg == nil {
@@ -1045,6 +1041,7 @@ func isFullNode(bloom []byte) bool {
 	return true
 }
 
+// BloomFilterMatch checks if a bloom filter is a superset of a series of bytes
 func BloomFilterMatch(filter, sample []byte) bool {
 	if filter == nil {
 		return true

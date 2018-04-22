@@ -21,10 +21,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"io"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -197,11 +198,12 @@ updateLoop:
 
 // LibP2PWhisperServer implements WhisperServer for libp2p.
 type LibP2PWhisperServer struct {
-	Host host.Host
+	Host host.Host // Libp2p host structure
 
 	PeerMutex sync.RWMutex  // Guard the list of active peers
+	Peers     []*LibP2PPeer // List of active peers
 
-	whisper *Whisper
+	whisper *Whisper // Pointer to the whisper object
 }
 
 func (server *LibP2PWhisperServer) connectToPeer(p *LibP2PPeer) error {

@@ -18,10 +18,11 @@ package whisperv6
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	set "gopkg.in/fatih/set.v0"
-	"time"
 )
 
 // DevP2PPeer is the DevP2P implementation of the Peer interface

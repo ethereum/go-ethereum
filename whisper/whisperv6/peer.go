@@ -221,6 +221,7 @@ func (peer *PeerBase) stream() p2p.MsgReadWriter {
 	return peer.ws
 }
 
+// MakeFullNodeBloom returns a bloom filter that accepts all topics
 func MakeFullNodeBloom() []byte {
 	bloom := make([]byte, BloomFilterSize)
 	for i := 0; i < BloomFilterSize; i++ {
