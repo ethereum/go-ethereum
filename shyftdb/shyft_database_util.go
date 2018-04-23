@@ -3,6 +3,7 @@ package shyftdb
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -18,9 +19,9 @@ import (
 
 //SBlock type
 type SBlock struct {
-	hash     string
-	coinbase string
-	number   string
+	Hash     string
+	Coinbase string
+	Number   string
 }
 
 //blockRes struct
@@ -32,16 +33,7 @@ type blockRes struct {
 }
 
 type txRes struct {
-	txHash    string
-	to_addr   string
-	from_addr string
-	blockHash string
-	amount    string
-	gasPrice  string
-	gas       uint64
-	nonce     uint64
-	data      []byte
-	TxEntry   []ShyftTxEntryPretty
+	TxEntry []ShyftTxEntryPretty
 }
 
 //ShyftTxEntry structure
@@ -62,8 +54,8 @@ type ShyftTxEntryPretty struct {
 	To        string
 	From      string
 	BlockHash string
-	Amount    string
-	GasPrice  string
+	Amount    uint64
+	GasPrice  uint64
 	Gas       uint64
 	Nonce     uint64
 	Data      []byte
@@ -252,8 +244,9 @@ func WriteMinerReward(db *leveldb.DB, block *types.Block) {
 // Getters
 //////////
 //GetAllBlocks returns []SBlock blocks for API
-func GetAllBlocks(sqldb *sql.DB) []SBlock {
+func GetAllBlocks(sqldb *sql.DB) string {
 	var arr blockRes
+	var blockArr string
 	rows, err := sqldb.Query(`
 		SELECT
 			number,
@@ -274,45 +267,43 @@ func GetAllBlocks(sqldb *sql.DB) []SBlock {
 			&hash,
 			&coinbase,
 		)
+
 		arr.Blocks = append(arr.Blocks, SBlock{
-			hash:     hash,
-			number:   num,
-			coinbase: coinbase,
+			Hash:     hash,
+			Number:   num,
+			Coinbase: coinbase,
 		})
+
+		blocks, _ := json.Marshal(arr.Blocks)
+		blocksFmt := string(blocks)
+		blockArr = blocksFmt
 	}
-	return arr.Blocks
+	return blockArr
 }
 
 //GetBlock queries to send single block info
 //TODO provide blockHash arg passed from handler.go
-func GetBlock(sqldb *sql.DB) []SBlock {
-	var arr blockRes
+func GetBlock(sqldb *sql.DB) string {
 	sqlStatement := `SELECT * FROM blocks WHERE number=$1;`
 	row := sqldb.QueryRow(sqlStatement, 3)
 	var num string
 	var hash string
 	var coinbase string
-	err := row.Scan(&num, &hash, &coinbase)
+	row.Scan(&num, &hash, &coinbase)
 
-	switch err {
-	case sql.ErrNoRows:
-		fmt.Println("No rows were returned!")
-	case nil:
-		fmt.Println(num, hash, coinbase)
-	default:
-		panic(err)
+	block := SBlock{
+		Hash:     hash,
+		Number:   num,
+		Coinbase: coinbase,
 	}
-	arr.Blocks = append(arr.Blocks, SBlock{
-		hash:     hash,
-		number:   num,
-		coinbase: coinbase,
-	})
-	return arr.Blocks
+	json, _ := json.Marshal(block)
+	return string(json)
 }
 
 //GetAllTransactions getter fn for API
-func GetAllTransactions(sqldb *sql.DB) []ShyftTxEntryPretty {
+func GetAllTransactions(sqldb *sql.DB) string {
 	var arr txRes
+	var txx string
 	rows, err := sqldb.Query(`
 		SELECT
 			txhash,
@@ -328,14 +319,13 @@ func GetAllTransactions(sqldb *sql.DB) []ShyftTxEntryPretty {
 		fmt.Println("err")
 	}
 	defer rows.Close()
-
 	for rows.Next() {
 		var txhash string
 		var to_addr string
 		var from_addr string
 		var blockhash string
-		var amount string
-		var gasprice string
+		var amount uint64
+		var gasprice uint64
 		var gas uint64
 		var nonce uint64
 		err = rows.Scan(
@@ -348,6 +338,7 @@ func GetAllTransactions(sqldb *sql.DB) []ShyftTxEntryPretty {
 			&gas,
 			&nonce,
 		)
+
 		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
 			TxHash:    txhash,
 			To:        to_addr,
@@ -358,13 +349,16 @@ func GetAllTransactions(sqldb *sql.DB) []ShyftTxEntryPretty {
 			Gas:       gas,
 			Nonce:     nonce,
 		})
+
+		tx, _ := json.Marshal(arr.TxEntry)
+		newtx := string(tx)
+		txx = newtx
 	}
-	return arr.TxEntry
+	return txx
 }
 
 //GetTransaction fn returns single tx
-func GetTransaction(sqldb *sql.DB) []ShyftTxEntryPretty {
-	var arr txRes
+func GetTransaction(sqldb *sql.DB) string {
 	sqlStatement := `SELECT 
 	txhash,
 	to_addr,
@@ -380,22 +374,13 @@ func GetTransaction(sqldb *sql.DB) []ShyftTxEntryPretty {
 	var to_addr string
 	var from_addr string
 	var blockhash string
-	var amount string
-	var gasprice string
+	var amount uint64
+	var gasprice uint64
 	var gas uint64
 	var nonce uint64
 	row.Scan(&txhash, &to_addr, &from_addr, &blockhash, &amount, &gasprice, &gas, &nonce)
 
-	// switch err {
-	// case sql.ErrNoRows:
-	// 	fmt.Println("No rows were returned!")
-	// case nil:
-	// 	fmt.Println(txhash, to_addr, from_addr, blockhash, amount, gasprice, gas, nonce)
-	// default:
-	// 	panic(err)
-	// }
-
-	arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
+	tx := ShyftTxEntryPretty{
 		TxHash:    txhash,
 		To:        to_addr,
 		From:      from_addr,
@@ -404,6 +389,8 @@ func GetTransaction(sqldb *sql.DB) []ShyftTxEntryPretty {
 		GasPrice:  gasprice,
 		Gas:       gas,
 		Nonce:     nonce,
-	})
-	return arr.TxEntry
+	}
+	json, _ := json.Marshal(tx)
+
+	return string(json)
 }
