@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS blocks (
 );
 
 CREATE TABLE IF NOT EXISTS txs (
+  txHash text,
+  to_addr text,
   from_addr text,
   blockhash text,
   amount bigint,

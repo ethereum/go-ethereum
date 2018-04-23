@@ -1,47 +1,58 @@
 package shyftdb
 
 import (
-    "fmt"
-    "bytes"
-    "encoding/gob"
+	"bytes"
+	"encoding/gob"
+	"fmt"
 	"math/big"
 
-    "github.com/syndtr/goleveldb/leveldb"
-    "github.com/syndtr/goleveldb/leveldb/util"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/util"
+
 	"database/sql"
+
 	_ "github.com/lib/pq"
 )
 
-
+//SBlock type
 type SBlock struct {
-	hash string
-	txes []string
+	hash     string
+	coinbase string
+	number   string
 }
 
+//blockRes struct
+type blockRes struct {
+	hash     string
+	coinbase string
+	number   string
+	Blocks   []SBlock
+}
+
+//ShyftTxEntry structure
 type ShyftTxEntry struct {
 	TxHash    common.Hash
-	To   	  *common.Address
-	From 	  *common.Address
-	BlockHash common.Hash
-	Amount 	  *big.Int
+	To        *common.Address
+	From      *common.Address
+	BlockHash string
+	Amount    *big.Int
 	GasPrice  *big.Int
-	Gas 	  uint64
+	Gas       uint64
 	Nonce     uint64
 	Data      []byte
 }
 
 type ShyftTxEntryPretty struct {
 	TxHash    string
-	To   	  string
-	From 	  string
+	To        string
+	From      string
 	BlockHash string
-	Amount 	  *big.Int
+	Amount    *big.Int
 	GasPrice  *big.Int
-	Gas 	  uint64
+	Gas       uint64
 	Nonce     uint64
 	Data      []byte
 }
@@ -51,111 +62,101 @@ type ShyftAccountEntry struct {
 	Txs     []string
 }
 
-//func WriteBlock(db *leveldb.DB, block *types.Block) error {
-//	fmt.Println("+++++++++++++++++++++++++++ BLOCK NUMBER", block.Number())
-//	fmt.Println("+++++++++++++++++++++++++++ # of TX", len(block.Transactions()))
-//	leng := block.Transactions().Len()
-//	var tx_strs = make([]string, leng)
-//	hash := block.Header().Hash().Bytes()
-//
-//	buf := &bytes.Buffer{}
-//	gob.NewEncoder(buf).Encode(tx_strs)
-//	bs := buf.Bytes()
-//
-//    key := append([]byte("bk-")[:], hash[:]...)
-//	if err := db.Put(key, bs, nil); err != nil {
-//		log.Crit("Failed to store block", "err", err)
-//		return nil // Do we want to force an exit here?
-//	}
-//	WriteMinerReward(db, block)
-//
-//	if block.Transactions().Len() > 0 {
-//		for i, tx := range block.Transactions() {
-//			tx_strs[i] = WriteTransactions(db, tx, block.Header().Hash())
-//		}
-//	}
-
+//WriteBlock writes to block info to sql db
 func WriteBlock(sqldb *sql.DB, block *types.Block) error {
+	coinbase := block.Header().Coinbase.String()
+	number := block.Header().Number.String()
 
-    //hash := block.Header().Hash().Bytes()
-    coinbase := block.Header().Coinbase.String()
-    number := block.Header().Number.String()
-    
-// 	if block.Transactions().Len() > 0 {
-//		for i, tx := range block.Transactions() {
-// 			tx_strs[i] = WriteTransactions(db, tx, block.Header().Hash())
-// 			//tx_bytes[i] = tx.Hash().Bytes()
-//  		}
-// 	}
-	
-	//connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	//sqldb, err := sql.Open("postgres", connStr)
+	sqlStatement := `INSERT INTO blocks(hash, coinbase, number) VALUES(($1), ($2), ($3)) RETURNING number`
+	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number).Scan(&number) //.Scan(&fun)
+	if qerr != nil {
+		panic(qerr)
+	}
 
-	//if merr := sqldb.Ping(); merr != nil {
-	//    fmt.Println("ping ERROR")
-  	//	fmt.Println(merr)
-	//}
-
-    //sqldb.Exec("INSERT INTO block(hash, miner) VALUES ($1)", block)
-  	//qerr := sqldb.QueryRow(`INSERT INTO block(hash, miner) VALUES('bark', 'willow')`).Scan(&fun)
-  	res, qerr := sqldb.Exec(`INSERT INTO blocks(hash, coinbase, number) VALUES(($1), ($2), ($3))`, block.Header().Hash().Hex(), coinbase, number) //.Scan(&fun)
-  	fmt.Println("insert ERROR")
-  	fmt.Println(qerr)
-  	fmt.Println(res)
-  	fmt.Println(number)
-
+	if block.Transactions().Len() > 0 {
+		for _, tx := range block.Transactions() {
+			WriteTransactions(sqldb, tx, block.Header().Hash())
+			//tx_bytes[i] = tx.Hash().Bytes()
+		}
+	}
 	return nil
 }
 
-func WriteTransactions(db *leveldb.DB, tx *types.Transaction, blockHash common.Hash) string {
+//WriteTransactions writes to sqldb
+func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash) error {
 	txData := ShyftTxEntry{
 		TxHash:    tx.Hash(),
-		To:   	   tx.To(),
-		From: 	   tx.From(),
-		BlockHash: blockHash,
+		From:      tx.From(),
+		To:        tx.To(),
+		BlockHash: blockHash.Hex(),
 		Amount:    tx.Value(),
 		GasPrice:  tx.GasPrice(),
-		Gas:   	   tx.Gas(),
+		Gas:       tx.Gas(),
 		Nonce:     tx.Nonce(),
 		Data:      tx.Data(),
 	}
-	var encodedData bytes.Buffer
-	encoder := gob.NewEncoder(&encodedData)
-	if err := encoder.Encode(txData); err != nil {
-		log.Crit("Faild to encode TX data", "err", err)
+	// var encodedData bytes.Buffer
+	// encoder := gob.NewEncoder(&encodedData)
+	// if err := encoder.Encode(txData); err != nil {
+	// 	log.Crit("Faild to encode TX data", "err", err)
+	// }
+	txHash := txData.TxHash
+	from := txData.From
+	to := txData.To
+	blockHasher := txData.BlockHash
+	amount := txData.Amount
+	gasPrice := txData.GasPrice
+	nonce := txData.Nonce
+	gas := txData.Gas
+	data := txData.Data
+	fmt.Println("+++++++++txHash", txHash)
+	fmt.Println("+++++++++from", from)
+	fmt.Println("+++++++++to", to)
+	fmt.Println("+++++++++BLOCKHASHER", blockHasher)
+	fmt.Println("+++++++++amount", amount)
+	fmt.Println("+++++++++gas Price", gasPrice)
+	fmt.Println("+++++++++nonce", nonce)
+	fmt.Println("+++++++++Gas", gas)
+	fmt.Println("+++++++++Data", data)
+
+	sqlStatement := `INSERT INTO txs(blockHasher, amount, gasPrice, none, gas, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6) RETURNING nonce`
+	qerr := sqldb.QueryRow(sqlStatement, txHash, from, to, blockHasher, amount, gasPrice, nonce, gas, data).Scan(&nonce) //.Scan(&fun)
+	if qerr != nil {
+		panic(qerr)
 	}
-	key := append([]byte("tx-")[:], tx.Hash().Bytes()[:]...)
-	if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
-		log.Crit("Failed to store TX", "err", err)
-	}
-	//WriteAccountBalances(db, tx)
-	return tx.Hash().String()
+	return nil
 }
 
-func WriteFromBalance(db *leveldb.DB, tx *types.Transaction) {
-	key := append([]byte("acc-")[:], tx.From().Hash().Bytes()[:]...)
-	// The from (sender) addr must have balance. If it fails to retrieve there is a bigger issue.
-	retrievedData, err := db.Get(key, nil)
-	if err != nil {
-		log.Crit("From MUST have eth and no record found", "err", err)
-	}
-	var decodedData ShyftAccountEntry
-	d := gob.NewDecoder(bytes.NewBuffer(retrievedData))
-	if err := d.Decode(&decodedData); err != nil {
-		log.Crit("Failed to decode From data:", "err", err)
-	}
-	decodedData.Balance.Sub(decodedData.Balance, tx.Value())
-	decodedData.Txs = append(decodedData.Txs, tx.Hash().String())
-	// Encode updated data
-	var encodedData bytes.Buffer
-	encoder := gob.NewEncoder(&encodedData)
-	if err := encoder.Encode(decodedData); err != nil {
-		log.Crit("Faild to encode From Account data", "err", err)
-	}
-	if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
-		log.Crit("Could not write the From account data", "err", err)
-	}
-}
+// key := append([]byte("tx-")[:], tx.Hash().Bytes()[:]...)
+// if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
+// 	log.Crit("Failed to store TX", "err", err)
+// }
+//WriteAccountBalances(db, tx)
+
+// func WriteFromBalance(db *leveldb.DB, tx *types.Transaction) {
+// 	key := append([]byte("acc-")[:], tx.From().Hash().Bytes()[:]...)
+// 	// The from (sender) addr must have balance. If it fails to retrieve there is a bigger issue.
+// 	retrievedData, err := db.Get(key, nil)
+// 	if err != nil {
+// 		log.Crit("From MUST have eth and no record found", "err", err)
+// 	}
+// 	var decodedData ShyftAccountEntry
+// 	d := gob.NewDecoder(bytes.NewBuffer(retrievedData))
+// 	if err := d.Decode(&decodedData); err != nil {
+// 		log.Crit("Failed to decode From data:", "err", err)
+// 	}
+// 	decodedData.Balance.Sub(decodedData.Balance, tx.Value())
+// 	decodedData.Txs = append(decodedData.Txs, tx.Hash().String())
+// 	// Encode updated data
+// 	var encodedData bytes.Buffer
+// 	encoder := gob.NewEncoder(&encodedData)
+// 	if err := encoder.Encode(decodedData); err != nil {
+// 		log.Crit("Faild to encode From Account data", "err", err)
+// 	}
+// 	if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
+// 		log.Crit("Could not write the From account data", "err", err)
+// 	}
+// }
 
 func WriteToBalance(db *leveldb.DB, tx *types.Transaction) {
 	key := append([]byte("acc-")[:], tx.To().Hash().Bytes()[:]...)
@@ -165,7 +166,7 @@ func WriteToBalance(db *leveldb.DB, tx *types.Transaction) {
 	if err != nil {
 		accData := ShyftAccountEntry{
 			Balance: tx.Value(),
-			Txs: append(txs, tx.Hash().String()),
+			Txs:     append(txs, tx.Hash().String()),
 		}
 		var encodedData bytes.Buffer
 		encoder := gob.NewEncoder(&encodedData)
@@ -200,7 +201,7 @@ func WriteToBalance(db *leveldb.DB, tx *types.Transaction) {
 // @TODO: Calculate reward if there are uncles
 // @TODO: Calculate mining reward (most likely retrieve higher up in the operations)
 // @TODO: Calculate reorg
-func WriteMinerReward(db *leveldb.DB, block *types.Block)  {
+func WriteMinerReward(db *leveldb.DB, block *types.Block) {
 	var totalGas *big.Int
 	var txs []string
 	key := append([]byte("acc-")[:], block.Coinbase().Hash().Bytes()[:]...)
@@ -217,7 +218,7 @@ func WriteMinerReward(db *leveldb.DB, block *types.Block)  {
 		balance := totalGas
 		accData := ShyftAccountEntry{
 			Balance: balance,
-			Txs: txs,
+			Txs:     txs,
 		}
 		var encodedData bytes.Buffer
 		encoder := gob.NewEncoder(&encodedData)
@@ -255,38 +256,63 @@ func WriteMinerReward(db *leveldb.DB, block *types.Block)  {
 ///////////
 // Getters
 //////////
-
-func GetAllBlocks(db *leveldb.DB) []SBlock{
-	var arr []SBlock
-	iter := db.NewIterator(util.BytesPrefix([]byte("bk-")), nil)
-	for iter.Next() {
-	    result := iter.Value()
-	    buf := bytes.NewBuffer(result)
-		strs2 := []string{}
-		gob.NewDecoder(buf).Decode(&strs2)
-		//fmt.Println("the key is")
-		hash := common.BytesToHash(iter.Key())
-		hex := hash.Hex()
-		//fmt.Println(hex)
-		sblock := SBlock{hex, strs2}
-		arr = append(arr, sblock)
-
-		//fmt.Println("\n ALL BK BK VALUE" + string(result))
+//GetAllBlocks returns []SBlock blocks for API
+func GetAllBlocks(sqldb *sql.DB) []SBlock {
+	var arr blockRes
+	rows, err := sqldb.Query(`
+		SELECT
+			number,
+			hash,
+			coinbase
+		FROM blocks`)
+	if err != nil {
+		fmt.Println("err")
 	}
-	
-	iter.Release()
-	return arr
+	defer rows.Close()
+
+	for rows.Next() {
+		var num string
+		var hash string
+		var coinbase string
+		err = rows.Scan(
+			&num,
+			&hash,
+			&coinbase,
+		)
+		arr.Blocks = append(arr.Blocks, SBlock{
+			hash:     hash,
+			number:   num,
+			coinbase: coinbase,
+		})
+	}
+	return arr.Blocks
 }
 
-func GetBlock(db *leveldb.DB, block *types.Block) []byte {
-	hash := block.Header().Hash().Bytes()
-	key := append([]byte("bk-")[:], hash[:]...)
-	data, err := db.Get(key, nil)
-	if err != nil {
-		log.Crit("Could not retrieve block", "err", err)
+//GetBlock queries to send single block info
+//TODO provide blockHash arg passed from handler.go
+func GetBlock(sqldb *sql.DB) []SBlock {
+	var arr blockRes
+	sqlStatement := `SELECT * FROM blocks WHERE number=$1;`
+	row := sqldb.QueryRow(sqlStatement, 3)
+	var num string
+	var hash string
+	var coinbase string
+	err := row.Scan(&num, &hash, &coinbase)
+
+	switch err {
+	case sql.ErrNoRows:
+		fmt.Println("No rows were returned!")
+	case nil:
+		fmt.Println(num, hash, coinbase)
+	default:
+		panic(err)
 	}
-	fmt.Println("\nBLOCK Value: " + string(data))
-	return data
+	arr.Blocks = append(arr.Blocks, SBlock{
+		hash:     hash,
+		number:   num,
+		coinbase: coinbase,
+	})
+	return arr.Blocks
 }
 
 func GetAllTransactions(db *leveldb.DB) []ShyftTxEntryPretty {
@@ -300,9 +326,9 @@ func GetAllTransactions(db *leveldb.DB) []ShyftTxEntryPretty {
 		}
 		prettyFormat := ShyftTxEntryPretty{
 			TxHash:    txData.TxHash.Hex(),
-			From:  	   txData.From.Hex(),
-			To:  	   txData.To.Hex(),
-			BlockHash: txData.BlockHash.Hex(),
+			From:      txData.From.Hex(),
+			To:        txData.To.Hex(),
+			BlockHash: txData.BlockHash,
 			Amount:    txData.Amount,
 			Gas:       txData.Gas,
 			GasPrice:  txData.GasPrice,
@@ -326,7 +352,7 @@ func GetAllTransactions(db *leveldb.DB) []ShyftTxEntryPretty {
 	return txs
 }
 
-func GetTransaction (db *leveldb.DB, tx *types.Transaction) ShyftTxEntryPretty {
+func GetTransaction(db *leveldb.DB, tx *types.Transaction) ShyftTxEntryPretty {
 	var prettyFormat ShyftTxEntryPretty
 	key := append([]byte("tx-")[:], tx.Hash().Bytes()[:]...)
 	data, err := db.Get(key, nil)
@@ -341,9 +367,9 @@ func GetTransaction (db *leveldb.DB, tx *types.Transaction) ShyftTxEntryPretty {
 		}
 		prettyFormat = ShyftTxEntryPretty{
 			TxHash:    txData.TxHash.Hex(),
-			From:  	   txData.From.Hex(),
-			To:  	   txData.To.Hex(),
-			BlockHash: txData.BlockHash.Hex(),
+			From:      txData.From.Hex(),
+			To:        txData.To.Hex(),
+			BlockHash: txData.BlockHash,
 			Amount:    txData.Amount,
 			Gas:       txData.Gas,
 			GasPrice:  txData.GasPrice,
