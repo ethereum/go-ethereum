@@ -16,13 +16,3 @@ CREATE TABLE IF NOT EXISTS txs (
   data bytea,
   block text references blocks(hash)
 );
-
-	TxHash:    tx.Hash(),
-		From:      tx.From(),
-		To:        tx.To(),
-		BlockHash: blockHash.Hex(),
-		Amount:    tx.Value(),
-		GasPrice:  tx.GasPrice(),
-		Gas:       tx.Gas(),
-		Nonce:     tx.Nonce(),
-		Data:      tx.Data(),
