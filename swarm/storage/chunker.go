@@ -131,7 +131,7 @@ type TreeChunker struct {
 	The chunks are not meant to be validated by the chunker when joining. This
 	is because it is left to the DPA to decide which sources are trusted.
 */
-func TreeJoin(key Key, getter Getter, depth int) LazySectionReader {
+func TreeJoin(key Key, getter Getter, depth int) *LazyChunkReader {
 	return NewTreeJoiner(NewJoinerParams(key, getter, depth, DefaultChunkSize)).Join()
 }
 
@@ -392,8 +392,7 @@ type LazyChunkReader struct {
 	getter    Getter
 }
 
-// implements the Joiner interface
-func (self *TreeChunker) Join() LazySectionReader {
+func (self *TreeChunker) Join() *LazyChunkReader {
 	return &LazyChunkReader{
 		key:       self.key,
 		chunkSize: self.chunkSize,
@@ -436,6 +435,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	quitC := make(chan bool)
 	size, err := self.Size(quitC)
 	if err != nil {
+		log.Error("lazychunkreader.readat.size", "size", size, "err", err)
 		return 0, err
 	}
 
@@ -464,6 +464,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 
 	err = <-errC
 	if err != nil {
+		log.Error("lazychunkreader.readat.errc", "err", err)
 		close(quitC)
 		return 0, err
 	}
@@ -517,8 +518,9 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 			childKey := chunkData[8+j*self.hashSize : 8+(j+1)*self.hashSize]
 			chunkData, err := self.getter.Get(Reference(childKey))
 			if err != nil {
+				log.Error("lazychunkreader.join", "key", fmt.Sprintf("%x", childKey), "err", err)
 				select {
-				case errC <- fmt.Errorf("chunk %v-%v not found", off, off+treeSize):
+				case errC <- fmt.Errorf("chunk %v-%v not found; key: %s", off, off+treeSize, fmt.Sprintf("%x", childKey)):
 				case <-quitC:
 				}
 				return
@@ -535,6 +537,9 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 func (self *LazyChunkReader) Read(b []byte) (read int, err error) {
 	log.Debug("lazychunkreader.read", "key", self.key)
 	read, err = self.ReadAt(b, self.off)
+	if err != nil && err != io.EOF {
+		log.Error("lazychunkreader.readat", "read", read, "err", err)
+	}
 
 	self.off += int64(read)
 	return

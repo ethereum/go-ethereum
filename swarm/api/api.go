@@ -308,7 +308,7 @@ func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Key
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status and an error
-func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, err error) {
+func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkReader, mimeType string, status int, err error) {
 	log.Debug("api.get", "key", key, "path", path)
 	apiGetCount.Inc(1)
 	trie, err := loadManifest(self.dpa, key, nil)
