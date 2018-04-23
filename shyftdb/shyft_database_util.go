@@ -95,32 +95,19 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 		Nonce:     tx.Nonce(),
 		Data:      tx.Data(),
 	}
-	// var encodedData bytes.Buffer
-	// encoder := gob.NewEncoder(&encodedData)
-	// if err := encoder.Encode(txData); err != nil {
-	// 	log.Crit("Faild to encode TX data", "err", err)
-	// }
-	txHash := txData.TxHash
-	from := txData.From
-	to := txData.To
+
+	txHash := txData.TxHash.Hex()
+	from := txData.From.Hex()
+	to := txData.To.Hex()
 	blockHasher := txData.BlockHash
-	amount := txData.Amount
-	gasPrice := txData.GasPrice
+	amount := txData.Amount.String()
+	gasPrice := txData.GasPrice.String()
 	nonce := txData.Nonce
 	gas := txData.Gas
 	data := txData.Data
-	fmt.Println("+++++++++txHash", txHash)
-	fmt.Println("+++++++++from", from)
-	fmt.Println("+++++++++to", to)
-	fmt.Println("+++++++++BLOCKHASHER", blockHasher)
-	fmt.Println("+++++++++amount", amount)
-	fmt.Println("+++++++++gas Price", gasPrice)
-	fmt.Println("+++++++++nonce", nonce)
-	fmt.Println("+++++++++Gas", gas)
-	fmt.Println("+++++++++Data", data)
 
-	sqlStatement := `INSERT INTO txs(blockHasher, amount, gasPrice, none, gas, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6) RETURNING nonce`
-	qerr := sqldb.QueryRow(sqlStatement, txHash, from, to, blockHasher, amount, gasPrice, nonce, gas, data).Scan(&nonce) //.Scan(&fun)
+	sqlStatement := `INSERT INTO txs(txhash, to_addr, from_addr, blockhash, amount, gasprice, gas, nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9)) RETURNING nonce`
+	qerr := sqldb.QueryRow(sqlStatement, txHash, to, from, blockHasher, amount, gasPrice, gas, nonce, data).Scan(&nonce)
 	if qerr != nil {
 		panic(qerr)
 	}
