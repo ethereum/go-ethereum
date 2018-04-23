@@ -365,7 +365,16 @@ func GetAllTransactions(sqldb *sql.DB) []ShyftTxEntryPretty {
 //GetTransaction fn returns single tx
 func GetTransaction(sqldb *sql.DB) []ShyftTxEntryPretty {
 	var arr txRes
-	sqlStatement := `SELECT * FROM txs WHERE nonce=$1;`
+	sqlStatement := `SELECT 
+	txhash,
+	to_addr,
+	from_addr,
+	blockhash,
+	amount,
+	gasprice,
+	gas,
+	nonce 
+	FROM txs WHERE nonce=$1;`
 	row := sqldb.QueryRow(sqlStatement, 1)
 	var txhash string
 	var to_addr string
@@ -375,7 +384,7 @@ func GetTransaction(sqldb *sql.DB) []ShyftTxEntryPretty {
 	var gasprice string
 	var gas uint64
 	var nonce uint64
-	_ = row.Scan(&txhash, &to_addr, &from_addr, &blockhash, &amount, &gasprice, &gas, &nonce)
+	row.Scan(&txhash, &to_addr, &from_addr, &blockhash, &amount, &gasprice, &gas, &nonce)
 
 	// switch err {
 	// case sql.ErrNoRows:
@@ -396,6 +405,5 @@ func GetTransaction(sqldb *sql.DB) []ShyftTxEntryPretty {
 		Gas:       gas,
 		Nonce:     nonce,
 	})
-
 	return arr.TxEntry
 }
