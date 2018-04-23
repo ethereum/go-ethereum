@@ -366,7 +366,7 @@ func GetAllTransactions(sqldb *sql.DB) []ShyftTxEntryPretty {
 func GetTransaction(sqldb *sql.DB) []ShyftTxEntryPretty {
 	var arr txRes
 	sqlStatement := `SELECT * FROM txs WHERE nonce=$1;`
-	row := sqldb.QueryRow(sqlStatement, 7)
+	row := sqldb.QueryRow(sqlStatement, 1)
 	var txhash string
 	var to_addr string
 	var from_addr string
