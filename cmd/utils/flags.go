@@ -832,7 +832,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	if lightClient {
 		ethPeers = 0
 	}
-	log.Info("Welcome to GetF of EtherFact", "Go-EtherFact", "Beta")
+	log.Info("Welcome to GetF of EtherFact Version v1.0.0 Good Luck and Mining")
 	log.Info("Maximum peer count", "ETHF", ethPeers, "LES", lightPeers, "total", cfg.MaxPeers)
 
 	if ctx.GlobalIsSet(MaxPendingPeersFlag.Name) {

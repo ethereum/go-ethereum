@@ -227,15 +227,15 @@ func DefaultWSEndpoint() string {
 // NodeName returns the devp2p node identifier.
 func (c *Config) NodeName() string {
 	name := c.name()
-	// Backwards compatibility: previous versions used title-cased "Geth", keep that.
+	// Backwards compatibility: previous versions used title-cased "GetF", keep that.
 	if name == "getf" || name == "getf-testnet" {
-		name = "Geth"
+		name = "GetF"
 	}
 	if c.UserIdent != "" {
 		name += "/" + c.UserIdent
 	}
 	if c.Version != "" {
-		name += "/v" + c.Version
+		name += "/v1.0.0"
 	}
 	name += "/" + runtime.GOOS + "-" + runtime.GOARCH
 	name += "/" + runtime.Version()
