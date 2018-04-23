@@ -146,7 +146,7 @@ func init() {
 	// Initialize the CLI app and start Geth
 	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright 2013-2017 The go-ethereum Authors"
+	app.Copyright = "Copyright 2013-2018 The go-ethereum Authors"
 	app.Commands = []cli.Command{
 		// See chaincmd.go:
 		initCommand,
@@ -223,6 +223,8 @@ func geth(ctx *cli.Context) error {
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
 func startNode(ctx *cli.Context, stack *node.Node) {
+	debug.Memsize.Add("node", stack)
+
 	// Start up the node itself
 	utils.StartNode(stack)
 
@@ -241,7 +243,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	stack.AccountManager().Subscribe(events)
 
 	go func() {
-		// Create an chain state reader for self-derivation
+		// Create a chain state reader for self-derivation
 		rpcClient, err := stack.Attach()
 		if err != nil {
 			utils.Fatalf("Failed to attach to self: %v", err)

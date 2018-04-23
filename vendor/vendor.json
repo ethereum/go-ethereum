@@ -93,10 +93,10 @@
 			"revisionTime": "2016-05-12T03:30:02Z"
 		},
 		{
-			"checksumSHA1": "Fc8BCxCoQ7ZmghDT6X1cASR10Ec=",
+			"checksumSHA1": "jElNoLEe7m/iaoF1vYIHyNaS2SE=",
 			"path": "github.com/elastic/gosigar",
-			"revision": "a3814ce5008e612a0c6d027608b54e1d0d9a5613",
-			"revisionTime": "2018-01-22T22:25:45Z"
+			"revision": "37f05ff46ffa7a825d1b24cf2b62d4a4c1a9d2e8",
+			"revisionTime": "2018-03-30T10:04:40Z"
 		},
 		{
 			"checksumSHA1": "qDsgp2kAeI9nhj565HUScaUyjU4=",
@@ -109,6 +109,18 @@
 			"path": "github.com/fatih/color",
 			"revision": "5ec5d9d3c2cf82e9688b34e9bc27a94d616a7193",
 			"revisionTime": "2017-02-09T08:00:14Z"
+		},
+		{
+			"checksumSHA1": "Jq1rrHSGPfh689nA2hL1QVb62zE=",
+			"path": "github.com/fjl/memsize",
+			"revision": "ca190fb6ffbc076ff49197b7168a760f30182d2e",
+			"revisionTime": "2018-04-18T12:24:29Z"
+		},
+		{
+			"checksumSHA1": "Z13QAYTqeW4cTiglkc2F05gWLu4=",
+			"path": "github.com/fjl/memsize/memsizeui",
+			"revision": "ca190fb6ffbc076ff49197b7168a760f30182d2e",
+			"revisionTime": "2018-04-18T12:24:29Z"
 		},
 		{
 			"checksumSHA1": "0orwvPL96wFckVJyPl39fz2QsgA=",
