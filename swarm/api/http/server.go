@@ -574,20 +574,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 			contentType = typ
 		}
 		w.Header().Set("Content-Type", contentType)
-
-		var res []byte
-		var err error
-		res, err = ioutil.ReadAll(reader)
-		if err != nil {
-			log.Error("handle.get", "ruid", r.ruid, "error", err)
-			Respond(w, r, fmt.Sprintf("chunk not found: %s", err), http.StatusNotFound)
-			return
-		}
-		log.Debug("handle.get.readall success", "ruid", r.ruid)
-
-		rdr := bytes.NewReader(res)
-
-		http.ServeContent(w, &r.Request, "", time.Now(), rdr)
+		http.ServeContent(w, &r.Request, "", time.Now(), reader)
 	case r.uri.Hash():
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
@@ -840,17 +827,6 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		Respond(w, r, fmt.Sprintf("file not found %s: %s", r.uri, err), http.StatusNotFound)
 		return
 	}
-
-	//var res []byte
-	//res, err = ioutil.ReadAll(reader)
-	//if err != nil {
-	//log.Error("handle.get.file", "ruid", r.ruid, "error", err)
-	//Respond(w, r, fmt.Sprintf("chunk not found %s: %s", r.uri, err), http.StatusNotFound)
-	//return
-	//}
-	//log.Debug("handle.get.file.readall success", "ruid", r.ruid)
-
-	//rdr := bytes.NewReader(res)
 
 	w.Header().Set("Content-Type", contentType)
 
