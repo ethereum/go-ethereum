@@ -14,24 +14,44 @@ import (
 
 // GetTransaction gets txs
 func GetTransaction(w http.ResponseWriter, r *http.Request) {
-	// vars := mux.Vars(r)
-	// address := vars["address"]
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	blockExplorerDb, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return
+	}
 
-	//tx := shyftdb.GetTransaction()
+	getTxResponse := shyftdb.GetTransaction(blockExplorerDb)
+
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	//fmt.Fprintln(w, "Get All Transactions", addresses)
+	fmt.Fprintln(w, getTxResponse)
 }
 
 // GetAllTransactions gets txs
 func GetAllTransactions(w http.ResponseWriter, r *http.Request) {
-	//txs := shyftdb.GetAllTransactions()
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	blockExplorerDb, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return
+	}
+
+	txs := shyftdb.GetAllTransactions(blockExplorerDb)
+
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	//fmt.Fprintln(w, "Get All Transactions", address)
+	fmt.Fprintln(w, txs)
 }
 
 // GetBalance gets balance
@@ -57,7 +77,6 @@ func GetBalances(w http.ResponseWriter, r *http.Request) {
 
 //GetBlock returns block json
 func GetBlock(w http.ResponseWriter, r *http.Request) {
-
 	connStr := "user=postgres dbname=shyftdb sslmode=disable"
 	blockExplorerDb, err := sql.Open("postgres", connStr)
 	if err != nil {
