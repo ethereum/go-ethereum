@@ -19,7 +19,6 @@ package types
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 	"math/big"
 	"sort"
@@ -387,40 +386,6 @@ func (b *Block) Hash() common.Hash {
 	v := b.header.Hash()
 	b.hash.Store(v)
 	return v
-}
-
-func (b *Block) String() string {
-	str := fmt.Sprintf(`Block(#%v): Size: %v {
-MinerHash: %x
-%v
-Transactions:
-%v
-Uncles:
-%v
-}
-`, b.Number(), b.Size(), b.header.HashNoNonce(), b.header, b.transactions, b.uncles)
-	return str
-}
-
-func (h *Header) String() string {
-	return fmt.Sprintf(`Header(%x):
-[
-	ParentHash:	    %x
-	UncleHash:	    %x
-	Coinbase:	    %x
-	Root:		    %x
-	TxSha		    %x
-	ReceiptSha:	    %x
-	Bloom:		    %x
-	Difficulty:	    %v
-	Number:		    %v
-	GasLimit:	    %v
-	GasUsed:	    %v
-	Time:		    %v
-	Extra:		    %s
-	MixDigest:      %x
-	Nonce:		    %x
-]`, h.Hash(), h.ParentHash, h.UncleHash, h.Coinbase, h.Root, h.TxHash, h.ReceiptHash, h.Bloom, h.Difficulty, h.Number, h.GasLimit, h.GasUsed, h.Time, h.Extra, h.MixDigest, h.Nonce)
 }
 
 type Blocks []*Block

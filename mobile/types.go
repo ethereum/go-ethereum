@@ -97,12 +97,6 @@ func (h *Header) EncodeJSON() (string, error) {
 	return string(data), err
 }
 
-// String implements the fmt.Stringer interface to print some semi-meaningful
-// data dump of the header for debugging purposes.
-func (h *Header) String() string {
-	return h.header.String()
-}
-
 func (h *Header) GetParentHash() *Hash   { return &Hash{h.header.ParentHash} }
 func (h *Header) GetUncleHash() *Hash    { return &Hash{h.header.UncleHash} }
 func (h *Header) GetCoinbase() *Address  { return &Address{h.header.Coinbase} }
@@ -174,12 +168,6 @@ func (b *Block) EncodeJSON() (string, error) {
 	return string(data), err
 }
 
-// String implements the fmt.Stringer interface to print some semi-meaningful
-// data dump of the block for debugging purposes.
-func (b *Block) String() string {
-	return b.block.String()
-}
-
 func (b *Block) GetParentHash() *Hash   { return &Hash{b.block.ParentHash()} }
 func (b *Block) GetUncleHash() *Hash    { return &Hash{b.block.UncleHash()} }
 func (b *Block) GetCoinbase() *Address  { return &Address{b.block.Coinbase()} }
@@ -247,12 +235,6 @@ func NewTransactionFromJSON(data string) (*Transaction, error) {
 func (tx *Transaction) EncodeJSON() (string, error) {
 	data, err := json.Marshal(tx.tx)
 	return string(data), err
-}
-
-// String implements the fmt.Stringer interface to print some semi-meaningful
-// data dump of the transaction for debugging purposes.
-func (tx *Transaction) String() string {
-	return tx.tx.String()
 }
 
 func (tx *Transaction) GetData() []byte      { return tx.tx.Data() }
@@ -345,12 +327,6 @@ func NewReceiptFromJSON(data string) (*Receipt, error) {
 func (r *Receipt) EncodeJSON() (string, error) {
 	data, err := rlp.EncodeToBytes(r.receipt)
 	return string(data), err
-}
-
-// String implements the fmt.Stringer interface to print some semi-meaningful
-// data dump of the transaction receipt for debugging purposes.
-func (r *Receipt) String() string {
-	return r.receipt.String()
 }
 
 func (r *Receipt) GetPostState() []byte         { return r.receipt.PostState }

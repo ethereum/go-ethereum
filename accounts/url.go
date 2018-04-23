@@ -74,6 +74,22 @@ func (u URL) MarshalJSON() ([]byte, error) {
 	return json.Marshal(u.String())
 }
 
+// UnmarshalJSON parses url.
+func (u *URL) UnmarshalJSON(input []byte) error {
+	var textUrl string
+	err := json.Unmarshal(input, &textUrl)
+	if err != nil {
+		return err
+	}
+	url, err := parseURL(textUrl)
+	if err != nil {
+		return err
+	}
+	u.Scheme = url.Scheme
+	u.Path = url.Path
+	return nil
+}
+
 // Cmp compares x and y and returns:
 //
 //   -1 if x <  y

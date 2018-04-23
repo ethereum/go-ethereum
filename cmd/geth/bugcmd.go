@@ -49,15 +49,17 @@ func reportBug(ctx *cli.Context) error {
 	// execute template and write contents to buff
 	var buff bytes.Buffer
 
-	fmt.Fprintln(&buff, header)
+	fmt.Fprintln(&buff, "#### System information")
+	fmt.Fprintln(&buff)
 	fmt.Fprintln(&buff, "Version:", params.Version)
 	fmt.Fprintln(&buff, "Go Version:", runtime.Version())
 	fmt.Fprintln(&buff, "OS:", runtime.GOOS)
 	printOSDetails(&buff)
+	fmt.Fprintln(&buff, header)
 
 	// open a new GH issue
 	if !browser.Open(issueUrl + "?body=" + url.QueryEscape(buff.String())) {
-		fmt.Printf("Please file a new issue at %s using this template:\n%s", issueUrl, buff.String())
+		fmt.Printf("Please file a new issue at %s using this template:\n\n%s", issueUrl, buff.String())
 	}
 	return nil
 }
@@ -97,13 +99,15 @@ func printCmdOut(w io.Writer, prefix, path string, args ...string) {
 	fmt.Fprintf(w, "%s%s\n", prefix, bytes.TrimSpace(out))
 }
 
-const header = `Please answer these questions before submitting your issue. Thanks!
+const header = `
+#### Expected behaviour
 
-#### What did you do?
- 
-#### What did you expect to see?
- 
-#### What did you see instead?
- 
-#### System details
+
+#### Actual behaviour
+
+
+#### Steps to reproduce the behaviour
+
+
+#### Backtrace
 `

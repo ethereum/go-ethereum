@@ -76,6 +76,7 @@ func runCmd(ctx *cli.Context) error {
 	logconfig := &vm.LogConfig{
 		DisableMemory: ctx.GlobalBool(DisableMemoryFlag.Name),
 		DisableStack:  ctx.GlobalBool(DisableStackFlag.Name),
+		Debug:         ctx.GlobalBool(DebugFlag.Name),
 	}
 
 	var (
@@ -83,8 +84,8 @@ func runCmd(ctx *cli.Context) error {
 		debugLogger *vm.StructLogger
 		statedb     *state.StateDB
 		chainConfig *params.ChainConfig
-		sender      = common.StringToAddress("sender")
-		receiver    = common.StringToAddress("receiver")
+		sender      = common.BytesToAddress([]byte("sender"))
+		receiver    = common.BytesToAddress([]byte("receiver"))
 	)
 	if ctx.GlobalBool(MachineFlag.Name) {
 		tracer = NewJSONLogger(logconfig, os.Stdout)
@@ -234,9 +235,7 @@ Gas used:           %d
 
 `, execTime, mem.HeapObjects, mem.Alloc, mem.TotalAlloc, mem.NumGC, initialGas-leftOverGas)
 	}
-	if tracer != nil {
-		tracer.CaptureEnd(ret, initialGas-leftOverGas, execTime, err)
-	} else {
+	if tracer == nil {
 		fmt.Printf("0x%x\n", ret)
 		if err != nil {
 			fmt.Printf(" error: %v\n", err)

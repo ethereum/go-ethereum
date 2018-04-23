@@ -26,7 +26,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
-// Trie cache generation limit after which to evic trie nodes from memory.
+// Trie cache generation limit after which to evict trie nodes from memory.
 var MaxTrieCacheGen = uint16(120)
 
 const (
@@ -151,9 +151,6 @@ func (db *cachingDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, erro
 		return cached.(int), nil
 	}
 	code, err := db.ContractCode(addrHash, codeHash)
-	if err == nil {
-		db.codeSizeCache.Add(codeHash, len(code))
-	}
 	return len(code), err
 }
 

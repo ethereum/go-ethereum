@@ -28,7 +28,6 @@ import (
 	"github.com/EthereumCommonwealth/go-callisto/accounts"
 	"github.com/EthereumCommonwealth/go-callisto/accounts/keystore"
 	"github.com/EthereumCommonwealth/go-callisto/cmd/utils"
-	"github.com/EthereumCommonwealth/go-callisto/common"
 	"github.com/EthereumCommonwealth/go-callisto/console"
 	"github.com/EthereumCommonwealth/go-callisto/eth"
 	"github.com/EthereumCommonwealth/go-callisto/ethclient"
@@ -46,8 +45,6 @@ const (
 var (
 	// Git SHA1 commit hash of the release (set via linker flags)
 	gitCommit = ""
-	// Ethereum address of the Geth release oracle.
-	relOracle = common.HexToAddress("0xfa7b9770ca4cb04296cac84f37736d4041251cdf")
 	// The app that holds all commands and flags.
 	app = utils.NewApp(gitCommit, "the go-ethereum command line interface")
 	// flags that configure the node
