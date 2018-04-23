@@ -60,13 +60,13 @@ var (
 		Ethash:              new(EthashConfig),
 	}
 
-	CLOMinerReward, _ = new(big.Int).SetString("420000000000000000000", 10)
+	CLOMinerReward, _    = new(big.Int).SetString("420000000000000000000", 10)
 	CLOTreasuryReward, _ = new(big.Int).SetString("120000000000000000000", 10)
-	CLOStakeReward, _ = new(big.Int).SetString("60000000000000000000", 10)
+	CLOStakeReward, _    = new(big.Int).SetString("60000000000000000000", 10)
 
 	// CallistoMainnetChainConfig contains the chain parameters to run a node on the Callisto Main network.
 	CallistoMainnetChainConfig = &ChainConfig{
-		ChainId:        big.NewInt(820),
+		ChainId:                 big.NewInt(820),
 		HomesteadBlock:          big.NewInt(0),
 		DAOForkBlock:            nil,
 		DAOForkSupport:          false,
@@ -76,11 +76,11 @@ var (
 		EIP158Block:             big.NewInt(10),
 		ByzantiumBlock:          big.NewInt(20),
 		CallistoBlock:           big.NewInt(0),
-		CallistoMinerReward:  	 CLOMinerReward,
+		CallistoMinerReward:     CLOMinerReward,
 		CallistoTreasuryAddress: common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"),
 		CallistoTreasuryReward:  CLOTreasuryReward,
 		CallistoStakeAddress:    common.HexToAddress("0x3c06f218Ce6dD8E2c535a8925A2eDF81674984D9"),
-		CallistoStakeReward:	 CLOStakeReward,
+		CallistoStakeReward:     CLOStakeReward,
 
 		Ethash: new(EthashConfig),
 	}
@@ -96,11 +96,11 @@ var (
 		EIP158Block:             big.NewInt(10),
 		ByzantiumBlock:          big.NewInt(20),
 		CallistoBlock:           big.NewInt(0),
-		CallistoMinerReward:  	 CLOMinerReward,
+		CallistoMinerReward:     CLOMinerReward,
 		CallistoTreasuryAddress: common.HexToAddress("0x74682Fc32007aF0b6118F259cBe7bCCC21641600"),
 		CallistoTreasuryReward:  CLOTreasuryReward,
 		CallistoStakeAddress:    common.HexToAddress("0x3c06f218Ce6dD8E2c535a8925A2eDF81674984D9"),
-		CallistoStakeReward:	 CLOStakeReward,
+		CallistoStakeReward:     CLOStakeReward,
 
 		Ethash: new(EthashConfig),
 	}
@@ -128,14 +128,14 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0),common.Address{}, big.NewInt(0), common.Address{}, big.NewInt(0), new(EthashConfig), nil}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, big.NewInt(0), common.Address{}, big.NewInt(0), new(EthashConfig), nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0),common.Address{}, big.NewInt(0), common.Address{}, big.NewInt(0), nil, &CliqueConfig{Period: 0, Epoch: 30000}}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, big.NewInt(0), common.Address{}, big.NewInt(0), nil, &CliqueConfig{Period: 0, Epoch: 30000}}
 
 	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, big.NewInt(0), common.Address{}, big.NewInt(0), new(EthashConfig), nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
@@ -165,11 +165,11 @@ type ChainConfig struct {
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 
 	CallistoBlock           *big.Int       `json:"callistoBlock,omitempty"`
-	CallistoMinerReward		*big.Int	   `json:"callistoMinerReward,omitempty"`
+	CallistoMinerReward     *big.Int       `json:"callistoMinerReward,omitempty"`
 	CallistoTreasuryAddress common.Address `json:"callistoTreasuryAddress,omitempty"`
-	CallistoTreasuryReward	*big.Int	   `json:"callistoTreasuryReward,omitempty"`
+	CallistoTreasuryReward  *big.Int       `json:"callistoTreasuryReward,omitempty"`
 	CallistoStakeAddress    common.Address `json:"callistoStakeAddress,omitempty"`
-	CallistoStakeReward		*big.Int	   `json:"callistoStakeReward,omitempty"`
+	CallistoStakeReward     *big.Int       `json:"callistoStakeReward,omitempty"`
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
