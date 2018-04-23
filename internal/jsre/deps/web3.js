@@ -2193,7 +2193,7 @@ var toWei = function(number, unit) {
 };
 
 /**
- * Takes an input and transforms it into an bignumber
+ * Takes an input and transforms it into a bignumber
  *
  * @method toBigNumber
  * @param {Number|String|BigNumber} a number, string, HEX string or BigNumber
