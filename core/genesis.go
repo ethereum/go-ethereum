@@ -327,8 +327,12 @@ func DefaultCallistoMainnetGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.CallistoMainnetChainConfig,
 		ExtraData:  hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   4700000,
-		Difficulty: big.NewInt(4000000),
+		GasLimit:   10400000,
+		Difficulty: big.NewInt(524288),
+		Timestamp:  1519622213,
+		Nonce:		0,
+		Coinbase:   common.HexToAddress("0xc3F70b10CE5EC4aA47ce44Eb0B7900A883cd45Dd"),
+		Mixhash:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		Alloc:      decodePrealloc(callistoMainnetAllocData),
 	}
 }
@@ -349,9 +353,13 @@ func DefaultTestnetGenesisBlock() *Genesis {
 func DefaultCallistoTestnetGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.CallistoTestnetChainConfig,
-		ExtraData:  hexutil.MustDecode("0x00000000000000000000000000000000000000000000000000000000000000004fd2dead40490e7efb256899289896c844280e3dceb6e1affb81eae90695efd61e9d2c214f72b8cf0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   5200000,
-		Difficulty: big.NewInt(1),
+		ExtraData:  hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		GasLimit:   4700000,
+		Difficulty: big.NewInt(524288),
+		Timestamp:  1519622213,
+		Nonce:		0,
+		Coinbase:   common.HexToAddress("0xc3F70b10CE5EC4aA47ce44Eb0B7900A883cd45Dd"),
+		Mixhash:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		Alloc:      decodePrealloc(callistoTestnetAllocData),
 	}
 }
