@@ -36,25 +36,17 @@ const Version = 4
 
 // Errors
 var (
-	errPacketTooSmall   = errors.New("too small")
-	errBadPrefix        = errors.New("bad prefix")
-	errExpired          = errors.New("expired")
-	errUnsolicitedReply = errors.New("unsolicited reply")
-	errUnknownNode      = errors.New("unknown node")
-	errTimeout          = errors.New("RPC timeout")
-	errClockWarp        = errors.New("reply deadline too far in the future")
-	errClosed           = errors.New("socket closed")
+	errPacketTooSmall = errors.New("too small")
+	errBadPrefix      = errors.New("bad prefix")
+	errTimeout        = errors.New("RPC timeout")
 )
 
 // Timeouts
 const (
 	respTimeout = 500 * time.Millisecond
-	queryDelay  = 1000 * time.Millisecond
 	expiration  = 20 * time.Second
 
-	ntpFailureThreshold = 32               // Continuous timeouts after which to check NTP
-	ntpWarningCooldown  = 10 * time.Minute // Minimum amount of time to pass before repeating NTP warning
-	driftThreshold      = 10 * time.Second // Allowed clock drift before warning user
+	driftThreshold = 10 * time.Second // Allowed clock drift before warning user
 )
 
 // RPC request structures
