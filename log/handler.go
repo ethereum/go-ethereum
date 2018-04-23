@@ -88,7 +88,7 @@ func (w *writeCounter) Write(p []byte) (n int, err error) {
 // RotatingFileHandler returns a handler which writes log records to file chunks
 // at the given path. When a file's size reaches the limit, the handler creates
 // a new file named after the timestamp of the first log record it will contain.
-func RotatingFileHandler(path string, limit uint) Handler {
+func RotatingFileHandler(path string, limit uint, formatter Format) Handler {
 	if err := os.MkdirAll(path, 0755); err != nil {
 		panic(err)
 	}
@@ -98,7 +98,7 @@ func RotatingFileHandler(path string, limit uint) Handler {
 		panic(err)
 	}
 	counter := new(writeCounter)
-	h := StreamHandler(counter, JsonFormatOrderedCtx(false, true))
+	h := StreamHandler(counter, formatter)
 
 	re := regexp.MustCompile(".log$")
 	var i int

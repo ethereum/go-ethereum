@@ -116,7 +116,14 @@ func Setup(ctx *cli.Context, disklogs string) error {
 	// logging
 	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
 	if disklogs != "" {
-		glogger.SetHandler(log.MultiHandler(ostream, log.RotatingFileHandler(disklogs, 262144)))
+		glogger.SetHandler(log.MultiHandler(
+			ostream,
+			log.RotatingFileHandler(
+				disklogs,
+				262144,
+				log.JsonFormatOrderedCtx(false, true),
+			),
+		))
 	}
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
 	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
