@@ -51,13 +51,13 @@ var (
 	ethf4BlockReward                *big.Int = big.NewInt(1e+18) //  1 ETHF Block reward in wei for successfully mining a block.
 	ethf5BlockReward                *big.Int = big.NewInt(500000000000000000) //  0.5 ETHF Block reward in wei for successfully mining a block.
 	ethf6BlockReward                *big.Int = big.NewInt(250000000000000000) //  0.25 ETHF Block reward in wei for successfully mining a block.
-	ethfRewardSwitchBlockEra0       *big.Int = big.NewInt(5000)               //  5K Block transition
-	ethfRewardSwitchBlockEra1		*big.Int = big.NewInt(2500000)            //  2.5M block transition
-	ethfRewardSwitchBlockEra2       *big.Int = big.NewInt(5000000)            //  5M block transition
-	ethfRewardSwitchBlockEra3       *big.Int = big.NewInt(7500000)            //  7.5M block transition
-	ethfRewardSwitchBlockEra4       *big.Int = big.NewInt(10000000)           //  10M block transtiton
-	ethfRewardSwitchBlockEra5       *big.Int = big.NewInt(12500000)           //  12.5M block transtiton
-	ethfRewardSwitchBlockEra6       *big.Int = big.NewInt(15000000)           //  15M block transtiton
+	ethfRewardSwitchBlockEra0       *big.Int = big.NewInt(5000)               // 0-1M Block 5K Block transition
+	ethfRewardSwitchBlockEra1		*big.Int = big.NewInt(1000000)            // 1M-5M 1M block transition
+	ethfRewardSwitchBlockEra2       *big.Int = big.NewInt(5000000)            // 5M-7.5M 5M block transition
+	ethfRewardSwitchBlockEra3       *big.Int = big.NewInt(7500000)            // 7.5M-10M 7.5M block transition
+	ethfRewardSwitchBlockEra4       *big.Int = big.NewInt(10000000)           // 10M-12.5M 10M block transtiton
+	ethfRewardSwitchBlockEra5       *big.Int = big.NewInt(12500000)           // 12.5M- 12.5M block transtiton
+	ethfRewardSwitchBlockEra6       *big.Int = big.NewInt(15000000)           //  15M-Forever block transtiton
 )
 
 // Various error messages to mark blocks invalid. These should be private to
