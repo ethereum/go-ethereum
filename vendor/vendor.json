@@ -111,6 +111,18 @@
 			"revisionTime": "2017-02-09T08:00:14Z"
 		},
 		{
+			"checksumSHA1": "Jq1rrHSGPfh689nA2hL1QVb62zE=",
+			"path": "github.com/fjl/memsize",
+			"revision": "ca190fb6ffbc076ff49197b7168a760f30182d2e",
+			"revisionTime": "2018-04-18T12:24:29Z"
+		},
+		{
+			"checksumSHA1": "Z13QAYTqeW4cTiglkc2F05gWLu4=",
+			"path": "github.com/fjl/memsize/memsizeui",
+			"revision": "ca190fb6ffbc076ff49197b7168a760f30182d2e",
+			"revisionTime": "2018-04-18T12:24:29Z"
+		},
+		{
 			"checksumSHA1": "0orwvPL96wFckVJyPl39fz2QsgA=",
 			"path": "github.com/gizak/termui",
 			"revision": "991cd3d3809135dc24daf6188dc6edcaf3d7d2d9",
