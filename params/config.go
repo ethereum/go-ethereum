@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	CallistoMainnetGenesisHash = common.HexToHash("0x73ab688c08ff2062b61c301cd7abb13adf5cff3cf80e6238e129f03140183f01") // Callisto Mainnet genesis hash to enforce below configs on
+	CallistoMainnetGenesisHash = common.HexToHash("0x82270b80fc90beb005505a9ef95039639968a0e81b2904ad30128c93d713d2c4") // Callisto Mainnet genesis hash to enforce below configs on
 	MainnetGenesisHash         = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3") // Mainnet genesis hash to enforce below configs on
 	TestnetGenesisHash         = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d") // Testnet genesis hash to enforce below configs on
 )
