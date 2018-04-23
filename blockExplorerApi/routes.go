@@ -48,7 +48,7 @@ var routes = Routes{
 	Route{
 		"GetTransaction",
 		"GET",
-		"/api/get_transaction/{address}",
+		"/api/get_transaction",
 		GetTransaction,
 	},
 	Route{

@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/util"
 
 	"database/sql"
 
@@ -32,6 +31,19 @@ type blockRes struct {
 	Blocks   []SBlock
 }
 
+type txRes struct {
+	txHash    string
+	to_addr   string
+	from_addr string
+	blockHash string
+	amount    string
+	gasPrice  string
+	gas       uint64
+	nonce     uint64
+	data      []byte
+	TxEntry   []ShyftTxEntryPretty
+}
+
 //ShyftTxEntry structure
 type ShyftTxEntry struct {
 	TxHash    common.Hash
@@ -50,8 +62,8 @@ type ShyftTxEntryPretty struct {
 	To        string
 	From      string
 	BlockHash string
-	Amount    *big.Int
-	GasPrice  *big.Int
+	Amount    string
+	GasPrice  string
 	Gas       uint64
 	Nonce     uint64
 	Data      []byte
@@ -95,42 +107,25 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 		Nonce:     tx.Nonce(),
 		Data:      tx.Data(),
 	}
-	// var encodedData bytes.Buffer
-	// encoder := gob.NewEncoder(&encodedData)
-	// if err := encoder.Encode(txData); err != nil {
-	// 	log.Crit("Faild to encode TX data", "err", err)
-	// }
-	txHash := txData.TxHash
-	from := txData.From
-	to := txData.To
+
+	txHash := txData.TxHash.Hex()
+	from := txData.From.Hex()
+	to := txData.To.Hex()
 	blockHasher := txData.BlockHash
-	amount := txData.Amount
-	gasPrice := txData.GasPrice
+	amount := txData.Amount.String()
+	gasPrice := txData.GasPrice.String()
 	nonce := txData.Nonce
 	gas := txData.Gas
 	data := txData.Data
-	fmt.Println("+++++++++txHash", txHash)
-	fmt.Println("+++++++++from", from)
-	fmt.Println("+++++++++to", to)
-	fmt.Println("+++++++++BLOCKHASHER", blockHasher)
-	fmt.Println("+++++++++amount", amount)
-	fmt.Println("+++++++++gas Price", gasPrice)
-	fmt.Println("+++++++++nonce", nonce)
-	fmt.Println("+++++++++Gas", gas)
-	fmt.Println("+++++++++Data", data)
 
-	sqlStatement := `INSERT INTO txs(blockHasher, amount, gasPrice, none, gas, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6) RETURNING nonce`
-	qerr := sqldb.QueryRow(sqlStatement, txHash, from, to, blockHasher, amount, gasPrice, nonce, gas, data).Scan(&nonce) //.Scan(&fun)
+	sqlStatement := `INSERT INTO txs(txhash, to_addr, from_addr, blockhash, amount, gasprice, gas, nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9)) RETURNING nonce`
+	qerr := sqldb.QueryRow(sqlStatement, txHash, to, from, blockHasher, amount, gasPrice, gas, nonce, data).Scan(&nonce)
 	if qerr != nil {
 		panic(qerr)
 	}
 	return nil
 }
 
-// key := append([]byte("tx-")[:], tx.Hash().Bytes()[:]...)
-// if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
-// 	log.Crit("Failed to store TX", "err", err)
-// }
 //WriteAccountBalances(db, tx)
 
 // func WriteFromBalance(db *leveldb.DB, tx *types.Transaction) {
@@ -315,78 +310,92 @@ func GetBlock(sqldb *sql.DB) []SBlock {
 	return arr.Blocks
 }
 
-func GetAllTransactions(db *leveldb.DB) []ShyftTxEntryPretty {
-	var txs []ShyftTxEntryPretty
-	iter := db.NewIterator(util.BytesPrefix([]byte("tx-")), nil)
-	for iter.Next() {
-		var txData ShyftTxEntry
-		d := gob.NewDecoder(bytes.NewBuffer(iter.Value()))
-		if err := d.Decode(&txData); err != nil {
-			log.Crit("Failed to decode tx:", "err", err)
-		}
-		prettyFormat := ShyftTxEntryPretty{
-			TxHash:    txData.TxHash.Hex(),
-			From:      txData.From.Hex(),
-			To:        txData.To.Hex(),
-			BlockHash: txData.BlockHash,
-			Amount:    txData.Amount,
-			Gas:       txData.Gas,
-			GasPrice:  txData.GasPrice,
-			Nonce:     txData.Nonce,
-			Data:      txData.Data,
-		}
-		txs = append(txs, prettyFormat)
-		// Uncomment to view "pretty" version of data
-		//fmt.Println("DECODED TX")
-		//fmt.Println("Tx Hash: ", txData.TxHash.Hex())
-		//fmt.Println("From: ", txData.From.Hex())
-		//fmt.Println("To: ", txData.To.Hex())
-		//fmt.Println("BlockHash: ", txData.BlockHash.Hex())
-		//fmt.Println("Amount: ", txData.Amount)
-		//fmt.Println("Gas: ", txData.Gas)
-		//fmt.Println("GasPrice: ", txData.GasPrice)
-		//fmt.Println("Nonce: ", txData.Nonce)
-		//fmt.Println("Data: ", txData.Data)
+//GetAllTransactions getter fn for API
+func GetAllTransactions(sqldb *sql.DB) []ShyftTxEntryPretty {
+	var arr txRes
+	rows, err := sqldb.Query(`
+		SELECT
+			txhash,
+			to_addr,
+			from_addr,
+			blockhash,
+			amount,
+			gasprice,
+			gas,
+			nonce
+		FROM txs`)
+	if err != nil {
+		fmt.Println("err")
 	}
-	iter.Release()
-	return txs
+	defer rows.Close()
+
+	for rows.Next() {
+		var txhash string
+		var to_addr string
+		var from_addr string
+		var blockhash string
+		var amount string
+		var gasprice string
+		var gas uint64
+		var nonce uint64
+		err = rows.Scan(
+			&txhash,
+			&to_addr,
+			&from_addr,
+			&blockhash,
+			&amount,
+			&gasprice,
+			&gas,
+			&nonce,
+		)
+		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
+			TxHash:    txhash,
+			To:        to_addr,
+			From:      from_addr,
+			BlockHash: blockhash,
+			Amount:    amount,
+			GasPrice:  gasprice,
+			Gas:       gas,
+			Nonce:     nonce,
+		})
+	}
+	return arr.TxEntry
 }
 
-func GetTransaction(db *leveldb.DB, tx *types.Transaction) ShyftTxEntryPretty {
-	var prettyFormat ShyftTxEntryPretty
-	key := append([]byte("tx-")[:], tx.Hash().Bytes()[:]...)
-	data, err := db.Get(key, nil)
-	if err != nil {
-		log.Crit("Could not retrieve TX", "err", err)
-	}
-	if len(data) > 0 {
-		var txData ShyftTxEntry
-		d := gob.NewDecoder(bytes.NewBuffer(data))
-		if err := d.Decode(&txData); err != nil {
-			log.Crit("Failed to decode tx:", "err", err)
-		}
-		prettyFormat = ShyftTxEntryPretty{
-			TxHash:    txData.TxHash.Hex(),
-			From:      txData.From.Hex(),
-			To:        txData.To.Hex(),
-			BlockHash: txData.BlockHash,
-			Amount:    txData.Amount,
-			Gas:       txData.Gas,
-			GasPrice:  txData.GasPrice,
-			Nonce:     txData.Nonce,
-			Data:      txData.Data,
-		}
-		// Uncomment to view "pretty" version of data
-		//fmt.Println("DECODED TX")
-		//fmt.Println("Tx Hash: ", txData.TxHash.Hex())
-		//fmt.Println("From: ", txData.From.Hex())
-		//fmt.Println("To: ", txData.To.Hex())
-		//fmt.Println("BlockHash: ", txData.BlockHash.Hex())
-		//fmt.Println("Amount: ", txData.Amount)
-		//fmt.Println("Gas: ", txData.Gas)
-		//fmt.Println("GasPrice: ", txData.GasPrice)
-		//fmt.Println("Nonce: ", txData.Nonce)
-		//fmt.Println("Data: ", txData.Data)
-	}
-	return prettyFormat
+//GetTransaction fn returns single tx
+func GetTransaction(sqldb *sql.DB) []ShyftTxEntryPretty {
+	var arr txRes
+	sqlStatement := `SELECT * FROM txs WHERE nonce=$1;`
+	row := sqldb.QueryRow(sqlStatement, 7)
+	var txhash string
+	var to_addr string
+	var from_addr string
+	var blockhash string
+	var amount string
+	var gasprice string
+	var gas uint64
+	var nonce uint64
+	_ = row.Scan(&txhash, &to_addr, &from_addr, &blockhash, &amount, &gasprice, &gas, &nonce)
+
+	// switch err {
+	// case sql.ErrNoRows:
+	// 	fmt.Println("No rows were returned!")
+	// case nil:
+	// 	fmt.Println(txhash, to_addr, from_addr, blockhash, amount, gasprice, gas, nonce)
+	// default:
+	// 	panic(err)
+	// }
+
+	arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
+		TxHash:    txhash,
+		To:        to_addr,
+		From:      from_addr,
+		BlockHash: blockhash,
+		Amount:    amount,
+		GasPrice:  gasprice,
+		Gas:       gas,
+		Nonce:     nonce,
+	})
+
+	return arr.TxEntry
 }
