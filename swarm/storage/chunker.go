@@ -392,7 +392,6 @@ type LazyChunkReader struct {
 	getter    Getter
 }
 
-// implements the Joiner interface
 func (self *TreeChunker) Join() *LazyChunkReader {
 	return &LazyChunkReader{
 		key:       self.key,
