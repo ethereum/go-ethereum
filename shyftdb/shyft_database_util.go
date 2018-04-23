@@ -109,9 +109,9 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 	nonce := txData.Nonce
 	gas := txData.Gas
 	data := txData.Data
-	fmt.Println("+++++++++BLOCKHASHER", txHash)
-	fmt.Println("+++++++++BLOCKHASHER", from)
-	fmt.Println("+++++++++BLOCKHASHER", to)
+	fmt.Println("+++++++++txHash", txHash)
+	fmt.Println("+++++++++from", from)
+	fmt.Println("+++++++++to", to)
 	fmt.Println("+++++++++BLOCKHASHER", blockHasher)
 	fmt.Println("+++++++++amount", amount)
 	fmt.Println("+++++++++gas Price", gasPrice)

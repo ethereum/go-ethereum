@@ -8,7 +8,7 @@ import (
 
 	_ "github.com/lib/pq"
 
-	shyftdb "github.com/ethereum/shyft_go-ethereum/shyftdb"
+	shyftdb "github.com/ethereum/go-ethereum/shyftdb"
 	"github.com/gorilla/mux"
 )
 
