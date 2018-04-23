@@ -209,7 +209,7 @@ func DefaultHTTPEndpoint() string {
 	return config.HTTPEndpoint()
 }
 
-// WSEndpoint resolves an websocket endpoint based on the configured host interface
+// WSEndpoint resolves a websocket endpoint based on the configured host interface
 // and port parameters.
 func (c *Config) WSEndpoint() string {
 	if c.WSHost == "" {

@@ -53,10 +53,6 @@ var (
 		Name:  "json",
 		Usage: "output JSON instead of human-readable format",
 	}
-	messageFlag = cli.StringFlag{
-		Name:  "message",
-		Usage: "the file that contains the message to sign/verify",
-	}
 )
 
 func main() {

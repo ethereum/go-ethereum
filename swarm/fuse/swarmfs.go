@@ -17,9 +17,10 @@
 package fuse
 
 import (
-	"github.com/EthereumCommonwealth/go-callisto/swarm/api"
 	"sync"
 	"time"
+
+	"github.com/EthereumCommonwealth/go-callisto/swarm/api"
 )
 
 const (

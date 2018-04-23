@@ -54,7 +54,6 @@ const (
 
 	// key prefixes for leveldb storage
 	kpIndex = 0
-	kpData  = 1
 )
 
 var (

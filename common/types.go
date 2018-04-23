@@ -18,12 +18,11 @@ package common
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"math/rand"
 	"reflect"
-
-	"encoding/json"
 	"strings"
 
 	"github.com/EthereumCommonwealth/go-callisto/common/hexutil"

@@ -73,7 +73,6 @@ const (
 	// and a short term value which is adjusted exponentially with a factor of
 	// pstatRecentAdjust with each dial/connection and also returned exponentially
 	// to the average with the time constant pstatReturnToMeanTC
-	pstatRecentAdjust   = 0.1
 	pstatReturnToMeanTC = time.Hour
 	// node address selection weight is dropped by a factor of exp(-addrFailDropLn) after
 	// each unsuccessful connection (restored after a successful one)
@@ -83,9 +82,6 @@ const (
 	responseScoreTC = time.Millisecond * 100
 	delayScoreTC    = time.Second * 5
 	timeoutPow      = 10
-	// peerSelectMinWeight is added to calculated weights at request peer selection
-	// to give poorly performing peers a little chance of coming back
-	peerSelectMinWeight = 0.005
 	// initStatsWeight is used to initialize previously unknown peers with good
 	// statistics to give a chance to prove themselves
 	initStatsWeight = 1

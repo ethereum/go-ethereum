@@ -25,14 +25,13 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"os"
 
 	"github.com/EthereumCommonwealth/go-callisto/log"
 )
