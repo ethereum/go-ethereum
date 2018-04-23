@@ -683,7 +683,7 @@ func deployDashboard(client *sshClient, network string, conf *config, config *da
 	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build --force-recreate", workdir, network))
 }
 
-// dashboardInfos is returned from an dashboard status check to allow reporting
+// dashboardInfos is returned from a dashboard status check to allow reporting
 // various configuration parameters.
 type dashboardInfos struct {
 	host    string

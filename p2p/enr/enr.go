@@ -46,7 +46,6 @@ const ID_SECP256k1_KECCAK = ID("secp256k1-keccak") // the default identity schem
 
 var (
 	errNoID           = errors.New("unknown or unspecified identity scheme")
-	errInvalidSigsize = errors.New("invalid signature size")
 	errInvalidSig     = errors.New("invalid signature")
 	errNotSorted      = errors.New("record key/value pairs are not sorted by key")
 	errDuplicateKey   = errors.New("record contains duplicate key")

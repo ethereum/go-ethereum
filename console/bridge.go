@@ -87,7 +87,7 @@ func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 // OpenWallet is a wrapper around personal.openWallet which can interpret and
 // react to certain error messages, such as the Trezor PIN matrix request.
 func (b *bridge) OpenWallet(call otto.FunctionCall) (response otto.Value) {
-	// Make sure we have an wallet specified to open
+	// Make sure we have a wallet specified to open
 	if !call.Argument(0).IsString() {
 		throwJSException("first argument must be the wallet URL to open")
 	}

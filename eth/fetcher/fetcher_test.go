@@ -198,7 +198,7 @@ func (f *fetcherTester) makeBodyFetcher(peer string, blocks map[common.Hash]*typ
 	}
 }
 
-// verifyFetchingEvent verifies that one single event arrive on an fetching channel.
+// verifyFetchingEvent verifies that one single event arrive on a fetching channel.
 func verifyFetchingEvent(t *testing.T, fetching chan []common.Hash, arrive bool) {
 	if arrive {
 		select {
