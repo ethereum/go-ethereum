@@ -18,24 +18,24 @@
 
 export type Content = {
 	general: General,
-	home: Home,
-	chain: Chain,
-	txpool: TxPool,
+	home:    Home,
+	chain:   Chain,
+	txpool:  TxPool,
 	network: Network,
-	system: System,
-	logs: Logs,
+	system:  System,
+	logs:    Logs,
 };
 
 export type ChartEntries = Array<ChartEntry>;
 
 export type ChartEntry = {
-	time: Date,
+	time:  Date,
 	value: number,
 };
 
 export type General = {
     version: ?string,
-    commit: ?string,
+    commit:  ?string,
 };
 
 export type Home = {
@@ -55,16 +55,29 @@ export type Network = {
 };
 
 export type System = {
-    activeMemory: ChartEntries,
-    virtualMemory: ChartEntries,
+    activeMemory:   ChartEntries,
+    virtualMemory:  ChartEntries,
     networkIngress: ChartEntries,
-    networkEgress: ChartEntries,
-    processCPU: ChartEntries,
-    systemCPU: ChartEntries,
-    diskRead: ChartEntries,
-    diskWrite: ChartEntries,
+    networkEgress:  ChartEntries,
+    processCPU:     ChartEntries,
+    systemCPU:      ChartEntries,
+    diskRead:       ChartEntries,
+    diskWrite:      ChartEntries,
+};
+
+export type Record = {
+    t:   Object,
+    lvl: Object,
+    msg: string,
+    ctx: Array<string>
+};
+
+export type Chunk = {
+    content: string,
+    t:       string,
+    len:     int,
 };
 
 export type Logs = {
-	log: Array<string>,
+    chunk: Array<Chunk>,
 };

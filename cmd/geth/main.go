@@ -185,7 +185,12 @@ func init() {
 
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
-		if err := debug.Setup(ctx, ctx.GlobalBool(utils.DashboardEnabledFlag.Name), utils.DataDirFlag.Value.Value); err != nil {
+
+		disklogs := ""
+		if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
+			disklogs = (&node.Config{DataDir: utils.MakeDataDir(ctx)}).ResolvePath("logs")
+		}
+		if err := debug.Setup(ctx, disklogs); err != nil {
 			return err
 		}
 		// Start system runtime metrics collection

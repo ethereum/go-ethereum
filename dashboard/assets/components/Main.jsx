@@ -21,6 +21,7 @@ import React, {Component} from 'react';
 import withStyles from 'material-ui/styles/withStyles';
 
 import {MENU} from '../common';
+import Logs from './Logs';
 import Footer from './Footer';
 import type {Content} from '../types/content';
 
@@ -50,10 +51,32 @@ export type Props = {
 	active: string,
 	content: Content,
 	shouldUpdate: Object,
+    send: (string) => void,
+	logs: () => Object,
 };
 
 // Main renders the chosen content.
 class Main extends Component<Props> {
+	handleScroll = () => {
+		if (typeof this.container !== 'undefined') {
+			// console.log(this.container.scrollTop, this.container.scrollHeight);
+			if (this.container.scrollTop === 0) {
+				// this.props.send(JSON.stringify({Logs: {Time: '2018-04-11T12:48:18.181274193+03:00'}}));
+				console.log("Top");
+			}
+			if (this.container.scrollHeight - this.container.scrollTop === this.container.clientHeight) {
+				console.log("Bottom");
+				// this.container.scrollTop = 0;
+			}
+		}
+	};
+
+	componentDidUpdate() {
+		// if (typeof this.container !== 'undefined') {
+		// 	this.container.scrollTop = this.container.scrollHeight - this.container.clientHeight;
+		// }
+	}
+
 	render() {
 		const {
 			classes, active, content, shouldUpdate,
@@ -69,12 +92,19 @@ class Main extends Component<Props> {
 			children = <div>Work in progress.</div>;
 			break;
 		case MENU.get('logs').id:
-			children = <div>{content.logs.log.map((log, index) => <div key={index}>{log}</div>)}</div>;
+			children = <Logs logs={this.props.logs} />;
 		}
 
 		return (
 			<div style={styles.wrapper}>
-				<div className={classes.content} style={styles.content}>{children}</div>
+				<div
+					className={classes.content}
+					style={styles.content}
+					ref={(ref) => { this.container = ref; }}
+					onScroll={this.handleScroll}
+				>
+					{children}
+				</div>
 				<Footer
 					general={content.general}
 					system={content.system}

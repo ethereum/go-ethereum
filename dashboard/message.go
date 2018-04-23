@@ -16,7 +16,10 @@
 
 package dashboard
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Message struct {
 	General *GeneralMessage `json:"general,omitempty"`
@@ -28,16 +31,44 @@ type Message struct {
 	Logs    *LogsMessage    `json:"logs,omitempty"`
 }
 
+func (m *Message) DeepCopy() *Message {
+	return &Message{
+		m.General.DeepCopy(),
+		m.Home,
+		m.Chain,
+		m.TxPool,
+		m.Network,
+		m.System.DeepCopy(),
+		m.Logs,
+	}
+}
+
 type ChartEntries []*ChartEntry
+
+func (ce ChartEntries) DeepCopy() ChartEntries {
+	nce := make(ChartEntries, len(ce))
+	for i, v := range ce {
+		nce[i] = v.DeepCopy()
+	}
+	return nce
+}
 
 type ChartEntry struct {
 	Time  time.Time `json:"time,omitempty"`
 	Value float64   `json:"value,omitempty"`
 }
 
+func (ce *ChartEntry) DeepCopy() *ChartEntry {
+	return &ChartEntry{ce.Time, ce.Value}
+}
+
 type GeneralMessage struct {
 	Version string `json:"version,omitempty"`
 	Commit  string `json:"commit,omitempty"`
+}
+
+func (m *GeneralMessage) DeepCopy() *GeneralMessage {
+	return &GeneralMessage{m.Version, m.Commit}
 }
 
 type HomeMessage struct {
@@ -67,6 +98,27 @@ type SystemMessage struct {
 	DiskWrite      ChartEntries `json:"diskWrite,omitempty"`
 }
 
+func (m *SystemMessage) DeepCopy() *SystemMessage {
+	return &SystemMessage{
+		m.ActiveMemory.DeepCopy(),
+		m.VirtualMemory.DeepCopy(),
+		m.NetworkIngress.DeepCopy(),
+		m.NetworkEgress.DeepCopy(),
+		m.ProcessCPU.DeepCopy(),
+		m.SystemCPU.DeepCopy(),
+		m.DiskRead.DeepCopy(),
+		m.DiskWrite.DeepCopy(),
+	}
+}
+
 type LogsMessage struct {
-	Log []string `json:"log,omitempty"`
+	Chunk json.RawMessage `json:"chunk,omitempty"`
+}
+
+type Request struct {
+	Logs *LogsRequest `json:"logs,omitempty"`
+}
+
+type LogsRequest struct {
+	Time time.Time `json:"time,omitempty"`
 }

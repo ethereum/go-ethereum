@@ -95,7 +95,10 @@ var Flags = []cli.Flag{
 	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
 }
 
-var glogger *log.GlogHandler
+var (
+	ostream log.Handler
+	glogger *log.GlogHandler
+)
 
 func init() {
 	usecolor := term.IsTty(os.Stderr.Fd()) && os.Getenv("TERM") != "dumb"
@@ -103,22 +106,22 @@ func init() {
 	if usecolor {
 		output = colorable.NewColorableStderr()
 	}
-	glogger = log.NewGlogHandler(log.StreamHandler(output, log.TerminalFormat(usecolor)))
+	ostream = log.StreamHandler(output, log.TerminalFormat(usecolor))
+	glogger = log.NewGlogHandler(ostream)
 }
 
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
-func Setup(ctx *cli.Context, dashboard bool, path string) error {
+func Setup(ctx *cli.Context, disklogs string) error {
 	// logging
 	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
+	if disklogs != "" {
+		glogger.SetHandler(log.MultiHandler(ostream, log.RotatingFileHandler(disklogs, 262144)))
+	}
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
 	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
 	glogger.BacktraceAt(ctx.GlobalString(backtraceAtFlag.Name))
-	h := log.Handler(glogger)
-	if dashboard {
-		h = log.MultiHandler(h, log.DashboardHandler(path+"/dashboard/logs"))
-	}
-	log.Root().SetHandler(h)
+	log.Root().SetHandler(glogger)
 
 	// profiling, tracing
 	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)

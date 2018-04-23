@@ -32,13 +32,21 @@ import (
 	"sync/atomic"
 	"time"
 
+	"encoding/json"
 	"github.com/elastic/gosigar"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/fsnotify/fsnotify"
 	"golang.org/x/net/websocket"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
 )
 
 const (
@@ -60,9 +68,10 @@ type Dashboard struct {
 
 	listener net.Listener
 	conns    map[uint32]*client // Currently live websocket connections
-	charts   *SystemMessage
-	commit   string
+	history  *Message
 	lock     sync.RWMutex // Lock protecting the dashboard's internals
+
+	logdir string
 
 	quit chan chan error // Channel used for graceful exit
 	wg   sync.WaitGroup
@@ -71,30 +80,40 @@ type Dashboard struct {
 // client represents active websocket connection with a remote browser.
 type client struct {
 	conn   *websocket.Conn // Particular live websocket connection
-	msg    chan Message    // Message queue for the update messages
+	msg    chan *Message   // Message queue for the update messages
 	logger log.Logger      // Logger for the particular live websocket connection
 }
 
 // New creates a new dashboard instance with the given configuration.
-func New(config *Config, commit string) (*Dashboard, error) {
+func New(config *Config, commit string, logdir string) (*Dashboard, error) {
 	now := time.Now()
-	db := &Dashboard{
+	versionMeta := ""
+	if len(params.VersionMeta) > 0 {
+		versionMeta = fmt.Sprintf(" (%s)", params.VersionMeta)
+	}
+	return &Dashboard{
 		conns:  make(map[uint32]*client),
 		config: config,
 		quit:   make(chan chan error),
-		charts: &SystemMessage{
-			ActiveMemory:   emptyChartEntries(now, activeMemorySampleLimit, config.Refresh),
-			VirtualMemory:  emptyChartEntries(now, virtualMemorySampleLimit, config.Refresh),
-			NetworkIngress: emptyChartEntries(now, networkIngressSampleLimit, config.Refresh),
-			NetworkEgress:  emptyChartEntries(now, networkEgressSampleLimit, config.Refresh),
-			ProcessCPU:     emptyChartEntries(now, processCPUSampleLimit, config.Refresh),
-			SystemCPU:      emptyChartEntries(now, systemCPUSampleLimit, config.Refresh),
-			DiskRead:       emptyChartEntries(now, diskReadSampleLimit, config.Refresh),
-			DiskWrite:      emptyChartEntries(now, diskWriteSampleLimit, config.Refresh),
+		history: &Message{
+			General: &GeneralMessage{
+				Commit:  commit,
+				Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
+			},
+			System: &SystemMessage{
+				ActiveMemory:   emptyChartEntries(now, activeMemorySampleLimit, config.Refresh),
+				VirtualMemory:  emptyChartEntries(now, virtualMemorySampleLimit, config.Refresh),
+				NetworkIngress: emptyChartEntries(now, networkIngressSampleLimit, config.Refresh),
+				NetworkEgress:  emptyChartEntries(now, networkEgressSampleLimit, config.Refresh),
+				ProcessCPU:     emptyChartEntries(now, processCPUSampleLimit, config.Refresh),
+				SystemCPU:      emptyChartEntries(now, systemCPUSampleLimit, config.Refresh),
+				DiskRead:       emptyChartEntries(now, diskReadSampleLimit, config.Refresh),
+				DiskWrite:      emptyChartEntries(now, diskWriteSampleLimit, config.Refresh),
+			},
+			Logs: &LogsMessage{Chunk: json.RawMessage("[]")},
 		},
-		commit: commit,
-	}
-	return db, nil
+		logdir: logdir,
+	}, nil
 }
 
 // emptyChartEntries returns a ChartEntry array containing limit number of empty samples.
@@ -120,7 +139,7 @@ func (db *Dashboard) Start(server *p2p.Server) error {
 
 	db.wg.Add(2)
 	go db.collectData()
-	go db.collectLogs() // In case of removing this line change 2 back to 1 in wg.Add.
+	go db.streamLogs()
 
 	http.HandleFunc("/", db.webHandler)
 	http.Handle("/api", websocket.Handler(db.apiHandler))
@@ -194,7 +213,7 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 	id := atomic.AddUint32(&nextID, 1)
 	client := &client{
 		conn:   conn,
-		msg:    make(chan Message, 128),
+		msg:    make(chan *Message, 128),
 		logger: log.New("id", id),
 	}
 	done := make(chan struct{})
@@ -218,29 +237,10 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 		}
 	}()
 
-	versionMeta := ""
-	if len(params.VersionMeta) > 0 {
-		versionMeta = fmt.Sprintf(" (%s)", params.VersionMeta)
-	}
-	// Send the past data.
-	client.msg <- Message{
-		General: &GeneralMessage{
-			Version: fmt.Sprintf("v%d.%d.%d%s", params.VersionMajor, params.VersionMinor, params.VersionPatch, versionMeta),
-			Commit:  db.commit,
-		},
-		System: &SystemMessage{
-			ActiveMemory:   db.charts.ActiveMemory,
-			VirtualMemory:  db.charts.VirtualMemory,
-			NetworkIngress: db.charts.NetworkIngress,
-			NetworkEgress:  db.charts.NetworkEgress,
-			ProcessCPU:     db.charts.ProcessCPU,
-			SystemCPU:      db.charts.SystemCPU,
-			DiskRead:       db.charts.DiskRead,
-			DiskWrite:      db.charts.DiskWrite,
-		},
-	}
-	// Start tracking the connection and drop at connection loss.
 	db.lock.Lock()
+	// Send the past data.
+	client.msg <- db.history.DeepCopy()
+	// Start tracking the connection and drop at connection loss.
 	db.conns[id] = client
 	db.lock.Unlock()
 	defer func() {
@@ -249,18 +249,80 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 		db.lock.Unlock()
 	}()
 	for {
-		fail := []byte{}
-		if _, err := conn.Read(fail); err != nil {
+		var r Request
+		err := websocket.JSON.Receive(conn, &r)
+		if err != nil {
 			close(done)
 			return
 		}
-		// Ignore all messages
+		if r.Logs != nil {
+			db.handleLogs(r.Logs, client) // TODO (kurkomisi): concurrent function call?
+		}
+	}
+}
+
+// handleLogs searches for the log file specified by the timestamp of the request, creates a JSON array out of it
+// and sends it to the requesting client.
+func (db *Dashboard) handleLogs(r *LogsRequest, c *client) {
+	files, err := ioutil.ReadDir(db.logdir)
+	if err != nil {
+		log.Warn("Failed to open logdir", "logdir", db.logdir, "err", err)
+		return
+	}
+	re := regexp.MustCompile(".log$")
+	valid := make([]string, len(files))
+	n := 0
+	for _, f := range files {
+		if f.Mode().IsRegular() && re.Match([]byte(f.Name())) {
+			valid[n] = f.Name()
+			n++
+		}
+	}
+	if len(valid) < 1 {
+		log.Warn("There isn't any log file in the logdir", "logdir", db.logdir)
+		return
+	}
+	timestamp := fmt.Sprintf("%s.log", strings.Replace(r.Time.Format("060102150405.00"), ".", "", 1))
+	i := sort.Search(len(valid), func(i int) bool {
+		return valid[i] >= timestamp
+	})
+	if i >= len(valid) {
+		i = len(valid) - 1
+	}
+	f, err := os.OpenFile(filepath.Join(db.logdir, valid[i]), os.O_RDONLY, 0644)
+	if err != nil {
+		log.Warn("Failed to open file", "name", valid[i], "err", err)
+		return
+	}
+	defer f.Close()
+	buf, err := ioutil.ReadAll(f)
+	last := -1
+	for i := 0; i < len(buf); i++ {
+		if buf[i] == '\n' {
+			buf[i] = ','
+			last = i
+		}
+	}
+	if last >= 0 {
+		b := make([]byte, last+2)
+		b[0] = '['
+		copy(b[1:], buf[:last])
+		b[last+1] = ']'
+
+		db.lock.Lock() // TODO (kurkomisi): Maybe create mutex for the client.
+		c.msg <- &Message{
+			Logs: &LogsMessage{
+				Chunk: b,
+			},
+		}
+		db.lock.Unlock()
 	}
 }
 
 // collectData collects the required data to plot on the dashboard.
 func (db *Dashboard) collectData() {
 	defer db.wg.Done()
+
 	systemCPUUsage := gosigar.Cpu{}
 	systemCPUUsage.Get()
 	var (
@@ -275,6 +337,8 @@ func (db *Dashboard) collectData() {
 
 		frequency = float64(db.config.Refresh / time.Second)
 		numCPU    = float64(runtime.NumCPU())
+
+		sys = db.history.System
 	)
 
 	for {
@@ -341,14 +405,14 @@ func (db *Dashboard) collectData() {
 				Time:  now,
 				Value: float64(deltaDiskWrite) / frequency,
 			}
-			db.charts.ActiveMemory = append(db.charts.ActiveMemory[1:], activeMemory)
-			db.charts.VirtualMemory = append(db.charts.VirtualMemory[1:], virtualMemory)
-			db.charts.NetworkIngress = append(db.charts.NetworkIngress[1:], networkIngress)
-			db.charts.NetworkEgress = append(db.charts.NetworkEgress[1:], networkEgress)
-			db.charts.ProcessCPU = append(db.charts.ProcessCPU[1:], processCPU)
-			db.charts.SystemCPU = append(db.charts.SystemCPU[1:], systemCPU)
-			db.charts.DiskRead = append(db.charts.DiskRead[1:], diskRead)
-			db.charts.DiskWrite = append(db.charts.DiskRead[1:], diskWrite)
+			sys.ActiveMemory = append(sys.ActiveMemory[1:], activeMemory)
+			sys.VirtualMemory = append(sys.VirtualMemory[1:], virtualMemory)
+			sys.NetworkIngress = append(sys.NetworkIngress[1:], networkIngress)
+			sys.NetworkEgress = append(sys.NetworkEgress[1:], networkEgress)
+			sys.ProcessCPU = append(sys.ProcessCPU[1:], processCPU)
+			sys.SystemCPU = append(sys.SystemCPU[1:], systemCPU)
+			sys.DiskRead = append(sys.DiskRead[1:], diskRead)
+			sys.DiskWrite = append(sys.DiskRead[1:], diskWrite)
 
 			db.sendToAll(&Message{
 				System: &SystemMessage{
@@ -366,24 +430,130 @@ func (db *Dashboard) collectData() {
 	}
 }
 
-// collectLogs collects and sends the logs to the active dashboards.
-func (db *Dashboard) collectLogs() {
+// streamLogs watches the file system, and when the logger writes the new log records into the files, picks them up,
+// then makes JSON array out of them and sends them to the clients.
+// This could be embedded into collectData, but they shouldn't depend on each other, and also cleaner this way.
+func (db *Dashboard) streamLogs() {
 	defer db.wg.Done()
 
-	id := 1
-	// TODO (kurkomisi): log collection comes here.
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Warn("Failed to create fs watcher", "err", err)
+		return
+	}
+	defer watcher.Close()
+
+	files, err := ioutil.ReadDir(db.logdir)
+	if err != nil {
+		log.Warn("Failed to open logdir", "logdir", db.logdir, "err", err)
+		return
+	}
+	var (
+		opened *os.File // File descriptor for the opened active log file.
+		buf    []byte   // Contains the recently written log chunks, which are not sent to the clients yet.
+	)
+
+	// The log records are always written into the last file in alphabetical order, because of the timestamp.
+	re := regexp.MustCompile(".log$")
+	var i int
+	for i = len(files) - 1; i >= 0 && (!files[i].Mode().IsRegular() || !re.Match([]byte(files[i].Name()))); i-- {
+	}
+	if i >= 0 {
+		if opened, err = os.OpenFile(filepath.Join(db.logdir, files[i].Name()), os.O_RDONLY, 0644); err != nil {
+			log.Warn("Failed to open file", "name", files[i].Name(), "err", err)
+			return
+		}
+		if buf, err = ioutil.ReadAll(opened); err != nil {
+			log.Warn("Failed to read file", "name", opened.Name(), "err", err)
+			return
+		}
+	}
+
+	err = watcher.Add(db.logdir)
+	if err != nil {
+		log.Warn("Failed to add logdir to fs watcher", "logdir", db.logdir, "err", err)
+		return
+	}
+	change := fsnotify.Create | fsnotify.Remove | fsnotify.Rename
 	for {
 		select {
+		case event := <-watcher.Events:
+			switch {
+			// If new log file is opened.
+			case event.Op&change != 0:
+				if re.Match([]byte(event.Name)) && opened.Name() < event.Name {
+					if opened, err = os.OpenFile(event.Name, os.O_RDONLY, 0644); err != nil {
+						log.Warn("Failed to open file", "name", event.Name, "err", err)
+						return
+					}
+					db.lock.Lock()
+					db.history.Logs.Chunk = json.RawMessage("[]")
+					db.lock.Unlock()
+				}
+			// If new log records were written into the opened log file.
+			case event.Op&fsnotify.Write != 0:
+				if opened != nil {
+					chunk, err := ioutil.ReadAll(opened)
+					if err != nil {
+						log.Warn("Failed to read file", "name", opened.Name(), "err", err)
+						return
+					}
+					b := make([]byte, len(buf)+len(chunk))
+					copy(b, buf)
+					copy(b[len(buf):], chunk)
+					buf = b
+				}
+			}
+		case err := <-watcher.Errors:
+			if err != nil {
+				log.Warn("Fs watcher error", "err", err)
+			}
+			return
+		// Send log updates to the client.
+		case <-time.After(db.config.Refresh):
+			last := -1
+			for i := 0; i < len(buf); i++ {
+				if buf[i] == '\n' {
+					buf[i] = ','
+					last = i
+				}
+			}
+			if last >= 0 {
+				b := make([]byte, last+2)
+				b[0] = '['
+				copy(b[1:], buf[:last])
+				b[last+1] = ']'
+
+				db.sendToAll(&Message{
+					Logs: &LogsMessage{
+						Chunk: b,
+					},
+				})
+
+				b = make([]byte, len(db.history.Logs.Chunk)+last+1)
+				// Cut the ']' from the end in order to concatenate the two arrays.
+				n := len(db.history.Logs.Chunk) - 1
+				copy(b, db.history.Logs.Chunk[:n])
+				if len(db.history.Logs.Chunk) > 2 {
+					// In case the array already contained log records, put the comma separator.
+					b[n] = ','
+					n++
+				}
+				copy(b[n:], buf[:last])
+				n += last
+				b[n] = ']'
+				n++
+
+				db.lock.Lock()
+				db.history.Logs.Chunk = b[:n]
+				db.lock.Unlock()
+
+				// Clear the valid/sent part of the buffer.
+				buf = buf[last+1:]
+			}
 		case errc := <-db.quit:
 			errc <- nil
 			return
-		case <-time.After(db.config.Refresh / 2):
-			db.sendToAll(&Message{
-				Logs: &LogsMessage{
-					Log: []string{fmt.Sprintf("%-4d: This is a fake log.", id)},
-				},
-			})
-			id++
 		}
 	}
 }
@@ -393,7 +563,7 @@ func (db *Dashboard) sendToAll(msg *Message) {
 	db.lock.Lock()
 	for _, c := range db.conns {
 		select {
-		case c.msg <- *msg:
+		case c.msg <- msg:
 		default:
 			c.conn.Close()
 		}

@@ -57,6 +57,11 @@ func NewGlogHandler(h Handler) *GlogHandler {
 	}
 }
 
+// SetHandler updates the handler to write records to the specified sub-handler.
+func (h *GlogHandler) SetHandler(nh Handler) {
+	h.origin = nh
+}
+
 // pattern contains a filter for the Vmodule option, holding a verbosity level
 // and a file pattern to match.
 type pattern struct {

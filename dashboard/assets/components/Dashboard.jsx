@@ -18,12 +18,13 @@
 
 import React, {Component} from 'react';
 
+import List, {ListItem} from 'material-ui/List';
 import withStyles from 'material-ui/styles/withStyles';
 
 import Header from './Header';
 import Body from './Body';
 import {MENU} from '../common';
-import type {Content} from '../types/content';
+import type {Content, Record, Chunk} from '../types/content';
 
 // deepUpdate updates an object corresponding to the given update data, which has
 // the shape of the same structure as the original object. updater also has the same
@@ -75,6 +76,104 @@ const appender = <T>(limit: number, mapper = replacer) => (update: Array<T>, pre
 	...update.map(sample => mapper(sample)),
 ].slice(-limit);
 
+// fieldPadding is a global map with maximum field value lengths seen until now
+// to allow padding log contexts in a bit smarter way.
+const fieldPadding = new Map();
+
+// createLogChunk creates an HTML formatted object, which displays the given array similarly to
+// the server side terminal.
+const createLogChunk = (arr: Array<Record>) => {
+	let content = '';
+	arr.forEach((record) => {
+		let {t, lvl, msg, ctx} = record;
+		let color = '#ce3c23';
+		switch (lvl) {
+		case 'trace':
+		case 'trce':
+			lvl = 'TRACE';
+			color = '#3465a4';
+			break;
+		case 'debug':
+		case 'dbug':
+			lvl = 'DEBUG';
+			color = '#3d989b';
+			break;
+		case 'info':
+			lvl = 'INFO&nbsp;';
+			color = '#4c8f0f';
+			break;
+		case 'warn':
+			lvl = 'WARN&nbsp;';
+			color = '#b79a22';
+			break;
+		case 'error':
+		case 'eror':
+			lvl = 'ERROR';
+			color = '#754b70';
+			break;
+		case 'crit':
+			lvl = 'CRIT&nbsp;';
+			color = '#ce3c23';
+			break;
+		default:
+			lvl = '';
+		}
+		if (lvl === '' || typeof t !== 'string' || t.length < 19 || typeof msg !== 'string' || !Array.isArray(ctx)) {
+			content += `<span style="color:${color}">Invalid log record</span><br />`;
+			return;
+		}
+		if (ctx.length > 0) {
+			msg += '&nbsp;'.repeat(Math.max(40 - msg.length, 0));
+		}
+		// Time format: 2006-01-02T15:04:05-0700 -> 01-02|15:04:05
+		content += `<span style="color:${color}">${lvl}</span>[${t.substr(5, 5)}|${t.substr(11, 8)}] ${msg}`;
+
+		for (let i = 0; i < ctx.length; i += 2) {
+			const key = ctx[i];
+			const value = ctx[i + 1];
+			let padding = fieldPadding.get(key);
+			if (typeof padding === 'undefined' || padding < value.length) {
+				padding = value.length;
+				fieldPadding.set(key, padding);
+			}
+			content += ` <span style="color:${color}">${key}</span>=${value}${'&nbsp;'.repeat(padding - value.length)}`;
+		}
+		content += '<br />';
+	});
+	return content;
+};
+
+// logAppender is a state updater function, which appends the new log chunks to the existing ones.
+// In case the prev chunk array's last element doesn't have limit number of log record elements,
+// it will be extended.
+const logAppender = (limit: number) => (update: Array<Record>, prev: Array<Chunk>) => {
+	const newChunks = [];
+	let first = 0;
+	let last = 0;
+	let extended = 0;
+	if (prev.length > 0 && prev[prev.length - 1].len < limit) {
+		extended = 1;
+		const l = Math.min(limit - prev[prev.length - 1].len, update.length);
+		newChunks.push({
+			content: prev[prev.length - 1].content + createLogChunk(update.slice(0, l)),
+			t:       prev[prev.length - 1].t,
+			len:     prev[prev.length - 1].len + l,
+		});
+		first = l;
+		last = l;
+	}
+	while (last < update.length) {
+		last = Math.min(update.length, last + limit);
+		newChunks.push({
+			content: createLogChunk(update.slice(first, last)),
+			t:       update[first].t,
+			len:     last - first,
+		});
+		first += limit;
+	}
+	return [...prev.slice(0, prev.length - extended), ...newChunks];
+};
+
 // defaultContent is the initial value of the state content.
 const defaultContent: Content = {
 	general: {
@@ -96,7 +195,7 @@ const defaultContent: Content = {
 		diskWrite:      [],
 	},
 	logs:    {
-		log: [],
+		chunk: [],
 	},
 };
 
@@ -123,7 +222,7 @@ const updaters = {
 		diskWrite:      appender(200),
 	},
 	logs: {
-		log: appender(200),
+		chunk: logAppender(50),
 	},
 };
 
@@ -136,6 +235,10 @@ const styles = {
 		height:   '100%',
 		zIndex:   1,
 		overflow: 'hidden',
+	},
+	logChunk: {
+		color:      'white',
+		fontFamily: 'monospace',
 	},
 };
 
@@ -155,6 +258,7 @@ type State = {
 	sideBar: boolean, // true if the sidebar is opened
 	content: Content, // the visualized data
 	shouldUpdate: Object, // labels for the components, which need to re-render based on the incoming message
+	server: ?WebSocket,
 };
 
 // Dashboard is the main component, which renders the whole page, makes connection with the server and
@@ -167,6 +271,7 @@ class Dashboard extends Component<Props, State> {
 			sideBar:      true,
 			content:      defaultContent,
 			shouldUpdate: {},
+			server:       null,
 		};
 	}
 
@@ -181,7 +286,7 @@ class Dashboard extends Component<Props, State> {
 		// PROD is defined by webpack.
 		const server = new WebSocket(`${((window.location.protocol === 'https:') ? 'wss://' : 'ws://')}${PROD ? window.location.host : 'localhost:8080'}/api`);
 		server.onopen = () => {
-			this.setState({content: defaultContent, shouldUpdate: {}});
+			this.setState({content: defaultContent, shouldUpdate: {}, server});
 		};
 		server.onmessage = (event) => {
 			const msg: $Shape<Content> = JSON.parse(event.data);
@@ -192,8 +297,16 @@ class Dashboard extends Component<Props, State> {
 			this.update(msg);
 		};
 		server.onclose = () => {
+			this.setState({server: null});
 			setTimeout(this.reconnect, 3000);
 		};
+	};
+
+	// server can be accessed only through this function for safety reasons.
+	send = (msg: string) => {
+		if (this.state.server != null) {
+			this.state.server.send(msg);
+		}
 	};
 
 	// update updates the content corresponding to the incoming message.
@@ -214,6 +327,18 @@ class Dashboard extends Component<Props, State> {
 		this.setState(prevState => ({sideBar: !prevState.sideBar}));
 	};
 
+	// logsHTML visualizes the log chunks. It is more efficient to insert pure HTML into the component, than
+	// to create individual component for each log record and track them all. It also postpones the OOM issue.
+	logsHTML = () => (
+		<List>
+			{this.state.content.logs.chunk.map((c, index) => (
+				<ListItem key={index}>
+					<div style={styles.logChunk} dangerouslySetInnerHTML={{__html: c.content}} />
+				</ListItem>
+			))}
+		</List>
+	);
+
 	render() {
 		return (
 			<div className={this.props.classes.dashboard} style={styles.dashboard}>
@@ -226,6 +351,8 @@ class Dashboard extends Component<Props, State> {
 					active={this.state.active}
 					content={this.state.content}
 					shouldUpdate={this.state.shouldUpdate}
+					send={this.send}
+					logs={this.logsHTML}
 				/>
 			</div>
 		);
