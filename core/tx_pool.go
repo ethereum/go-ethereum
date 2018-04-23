@@ -192,6 +192,7 @@ type TxPool struct {
 	chainHeadSub event.Subscription
 	signer       types.Signer
 	mu           sync.RWMutex
+	promotedTxCh chan TxPreEvent
 
 	currentState  *state.StateDB      // Current state in the blockchain head
 	pendingState  *state.ManagedState // Pending state tracking virtual nonces
@@ -219,16 +220,17 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 
 	// Create the transaction pool with its initial settings
 	pool := &TxPool{
-		config:      config,
-		chainconfig: chainconfig,
-		chain:       chain,
-		signer:      types.NewEIP155Signer(chainconfig.ChainId),
-		pending:     make(map[common.Address]*txList),
-		queue:       make(map[common.Address]*txList),
-		beats:       make(map[common.Address]time.Time),
-		all:         make(map[common.Hash]*types.Transaction),
-		chainHeadCh: make(chan ChainHeadEvent, chainHeadChanSize),
-		gasPrice:    new(big.Int).SetUint64(config.PriceLimit),
+		config:       config,
+		chainconfig:  chainconfig,
+		chain:        chain,
+		signer:       types.NewEIP155Signer(chainconfig.ChainId),
+		pending:      make(map[common.Address]*txList),
+		queue:        make(map[common.Address]*txList),
+		beats:        make(map[common.Address]time.Time),
+		all:          make(map[common.Hash]*types.Transaction),
+		chainHeadCh:  make(chan ChainHeadEvent, chainHeadChanSize),
+		gasPrice:     new(big.Int).SetUint64(config.PriceLimit),
+		promotedTxCh: make(chan TxPreEvent, config.GlobalSlots),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	pool.priced = newTxPricedList(&pool.all)
@@ -333,6 +335,10 @@ func (pool *TxPool) loop() {
 				}
 				pool.mu.Unlock()
 			}
+
+		// Handle promoted transaction
+		case txPreEvent := <-pool.promotedTxCh:
+			pool.txFeed.Send(txPreEvent)
 		}
 	}
 }
@@ -653,7 +659,9 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 		log.Trace("Pooled new executable transaction", "hash", hash, "from", from, "to", tx.To())
 
 		// We've directly injected a replacement transaction, notify subsystems
-		go pool.txFeed.Send(TxPreEvent{tx})
+		go func(tx *types.Transaction) {
+			pool.promotedTxCh <- TxPreEvent{tx}
+		}(tx)
 
 		return old != nil, nil
 	}
@@ -747,7 +755,9 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	pool.beats[addr] = time.Now()
 	pool.pendingState.SetNonce(addr, tx.Nonce()+1)
 
-	go pool.txFeed.Send(TxPreEvent{tx})
+	go func(tx *types.Transaction) {
+		pool.promotedTxCh <- TxPreEvent{tx}
+	}(tx)
 }
 
 // AddLocal enqueues a single transaction into the pool if it is valid, marking
