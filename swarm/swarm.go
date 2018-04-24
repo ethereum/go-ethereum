@@ -196,6 +196,8 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 			return nil, err
 		}
 		resourceHandler.SetStore(self.lstore)
+	} else {
+		log.Warn("No ENS API specified, resource updates will be disabled")
 	}
 
 	var validators []storage.ChunkValidator
