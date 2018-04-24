@@ -178,7 +178,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	var resourceHandler *storage.ResourceHandler
 	// if use resource updates
 
-	if self.config.ResourceEnabled && resolver != nil {
+	if resolver != nil {
 		resolver.SetNameHash(ens.EnsNode)
 		rhparams := &storage.ResourceHandlerParams{
 			// TODO: config parameter to set limits
@@ -227,12 +227,10 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
 	// Pss = postal service over swarm (devp2p over bzz)
-	if config.PssEnabled {
-		pssparams := pss.NewPssParams(self.privateKey)
-		self.ps = pss.NewPss(to, pssparams)
-		if pss.IsActiveHandshake {
-			pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
-		}
+	pssparams := pss.NewPssParams(self.privateKey)
+	self.ps = pss.NewPss(to, pssparams)
+	if pss.IsActiveHandshake {
+		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
 	self.api = api.NewApi(self.dpa, self.dns, resourceHandler)

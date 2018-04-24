@@ -211,7 +211,6 @@ func testSwarmNetwork(t *testing.T, timeout time.Duration, steps ...testSwarmNet
 	services := map[string]adapters.ServiceFunc{
 		"swarm": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			config := api.NewConfig()
-			config.PssEnabled = false
 
 			dir, err := ioutil.TempDir(dir, "node")
 			if err != nil {
