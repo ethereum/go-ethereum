@@ -1184,10 +1184,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 				common.PrettyDuration(time.Since(bstart)), "txs", len(block.Transactions()), "gas", block.GasUsed(), "uncles", len(block.Uncles()))
 
 			blockInsertTimer.UpdateSince(bstart)
-			for _, txPostEvent := range txPostEvents {
-				txPostEvent.RetData.Removed = true
-				events = append(events, txPostEvent)
-			}
 			events = append(events, ChainSideEvent{block})
 		}
 		stats.processed++
@@ -1342,10 +1338,12 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	}
 	// calculate the difference between deleted and added transactions
 	diff := types.TxDifference(deletedTxs, addedTxs)
-	// When transactions get deleted from the database that means the
-	// receipts that were created in the fork must also be deleted
 	for _, tx := range diff {
+		// When transactions get deleted from the database that means the
+		// receipts that were created in the fork must also be deleted
 		DeleteTxLookupEntry(bc.db, tx.Hash())
+		// Let ReturnData subscribers know when a transaction is removed from canonical chain
+		bc.txPostFeed.Send(TransactionEvent{TxHash: tx.Hash(), RetData: &types.ReturnData{TxHash: tx.Hash(), Removed: true}})
 	}
 	if len(deletedLogs) > 0 {
 		go bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
