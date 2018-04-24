@@ -73,7 +73,7 @@ type NodeIterator interface {
 	// For leaf nodes, the last element of the path is the 'terminator symbol' 0x10.
 	Path() []byte
 
-	// Leaf returns true iff the current node is a leaf node.
+	// Leaf returns true if the current node is a leaf node.
 	// LeafBlob, LeafKey return the contents and key of the leaf node. These
 	// method panic if the iterator is not positioned at a leaf.
 	// Callers must not retain references to their return value after calling Next
