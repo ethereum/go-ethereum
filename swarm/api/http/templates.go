@@ -78,7 +78,6 @@ var landingPageTemplate = template.Must(template.New("landingPage").Parse(`
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <meta http-equiv="X-UA-Compatible" ww="chrome=1">
     <meta name="description" content="Ethereum/Swarm Landing page">
-    <meta property="og:url" content="https://swarm-gateways.net/bzz:/theswarm.eth">
 		<style>
 
       body, div, header, footer {
@@ -206,7 +205,7 @@ var landingPageTemplate = template.Must(template.New("landingPage").Parse(`
       <footer>
         <p>
           Swarm: Serverless Hosting Incentivised Peer-To-Peer Storage And Content Distribution<br/>
-          <a href="http://swarm-gateways.net/bzz:/theswarm.eth">Swarm</a>
+          <a href="/bzz:/theswarm.eth">Swarm</a>
         </p>
       </footer>
 
