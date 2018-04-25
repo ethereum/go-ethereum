@@ -17,7 +17,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"sort"
 
@@ -29,15 +28,12 @@ import (
 
 var (
 	endpoints []string
-	endpoint  string
+	cluster   string
+	scheme    string
 	filesize  int
+	from      int
+	to        int
 )
-
-func init() {
-	for port := 8501; port <= 8512; port++ {
-		endpoints = append(endpoints, fmt.Sprintf("http://%v.testing.swarm-gateways.net", port))
-	}
-}
 
 func main() {
 	log.PrintOrigins(true)
@@ -49,10 +45,28 @@ func main() {
 
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
-			Name:        "bzz-api",
-			Value:       endpoints[0],
-			Usage:       "upload node endpoint",
-			Destination: &endpoint,
+			Name:        "cluster-endpoint",
+			Value:       "testing",
+			Usage:       "cluster to point to (open, or testing)",
+			Destination: &cluster,
+		},
+		cli.IntFlag{
+			Name:        "cluster-from",
+			Value:       8501,
+			Usage:       "swarm node (from)",
+			Destination: &from,
+		},
+		cli.IntFlag{
+			Name:        "cluster-to",
+			Value:       8512,
+			Usage:       "swarm node (to)",
+			Destination: &to,
+		},
+		cli.StringFlag{
+			Name:        "cluster-scheme",
+			Value:       "http",
+			Usage:       "http or https",
+			Destination: &scheme,
 		},
 		cli.IntFlag{
 			Name:        "filesize",
