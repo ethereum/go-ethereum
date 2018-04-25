@@ -101,10 +101,10 @@ var (
 		Usage:  "URL of the Ethereum API provider to use to settle SWAP payments",
 		EnvVar: SWARM_ENV_SWAP_API,
 	}
-	SwarmSyncEnabledFlag = cli.BoolTFlag{
-		Name:   "sync",
-		Usage:  "Swarm Syncing enabled (default true)",
-		EnvVar: SWARM_ENV_SYNC_ENABLE,
+	SwarmSyncDisabledFlag = cli.BoolTFlag{
+		Name:   "nosync",
+		Usage:  "Disable swarm syncing",
+		EnvVar: SWARM_ENV_SYNC_DISABLE,
 	}
 	SwarmSyncUpdateDelay = cli.DurationFlag{
 		Name:   "sync-update-delay",
@@ -144,10 +144,6 @@ var (
 	SwarmEncryptedFlag = cli.BoolFlag{
 		Name:  "encrypted",
 		Usage: "use encrypted upload",
-	}
-	SwarmPssEnabledFlag = cli.BoolFlag{
-		Name:  "pss",
-		Usage: "Enable pss (message passing over swarm)",
 	}
 	CorsStringFlag = cli.StringFlag{
 		Name:   "corsdomain",
@@ -360,7 +356,7 @@ Remove corrupt entries from a local chunk database.
 		SwarmConfigPathFlag,
 		SwarmSwapEnabledFlag,
 		SwarmSwapAPIFlag,
-		SwarmSyncEnabledFlag,
+		SwarmSyncDisabledFlag,
 		SwarmSyncUpdateDelay,
 		SwarmListenAddrFlag,
 		SwarmPortFlag,
@@ -374,8 +370,6 @@ Remove corrupt entries from a local chunk database.
 		SwarmUploadDefaultPath,
 		SwarmUpFromStdinFlag,
 		SwarmUploadMimeType,
-		// pss flags
-		SwarmPssEnabledFlag,
 		// storage flags
 		SwarmStorePath,
 		SwarmStoreCapacity,
@@ -440,9 +434,7 @@ func bzzd(ctx *cli.Context) error {
 	cfg := defaultNodeConfig
 
 	//pss operates on ws
-	if bzzconfig.PssEnabled {
-		cfg.WSModules = append(cfg.WSModules, "pss")
-	}
+	cfg.WSModules = append(cfg.WSModules, "pss")
 
 	//geth only supports --datadir via command line
 	//in order to be consistent within swarm, if we pass --datadir via environment variable

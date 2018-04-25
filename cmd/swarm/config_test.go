@@ -85,8 +85,7 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
-		fmt.Sprintf("--%s", SwarmSyncEnabledFlag.Name),
-		fmt.Sprintf("--%s", SwarmPssEnabledFlag.Name),
+		fmt.Sprintf("--%s", SwarmSyncDisabledFlag.Name),
 		fmt.Sprintf("--%s", CorsStringFlag.Name), "*",
 		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),
 		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
@@ -125,12 +124,8 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		t.Fatalf("Expected network ID to be %d, got %d", 42, info.NetworkId)
 	}
 
-	if !info.SyncEnabled {
-		t.Fatal("Expected Sync to be enabled, but is false")
-	}
-
-	if !info.PssEnabled {
-		t.Fatal("Expected Pss to be enabled, but is false")
+	if info.SyncEnabled {
+		t.Fatal("Expected Sync to be disabled, but is true")
 	}
 
 	if info.Cors != "*" {
@@ -152,8 +147,7 @@ func TestConfigFileOverrides(t *testing.T) {
 	//first, create a default conf
 	defaultConf := api.NewConfig()
 	//change some values in order to test if they have been loaded
-	defaultConf.SyncEnabled = true
-	defaultConf.PssEnabled = true
+	defaultConf.SyncEnabled = false
 	defaultConf.NetworkId = 54
 	defaultConf.Port = httpPort
 	defaultConf.DbCapacity = 9000000
@@ -224,12 +218,8 @@ func TestConfigFileOverrides(t *testing.T) {
 		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkId)
 	}
 
-	if !info.SyncEnabled {
-		t.Fatal("Expected Sync to be enabled, but is false")
-	}
-
-	if !info.PssEnabled {
-		t.Fatal("Expected Pss to be enabled, but is false")
+	if info.SyncEnabled {
+		t.Fatal("Expected Sync to be disabled, but is true")
 	}
 
 	if info.DbCapacity != 9000000 {
@@ -262,8 +252,7 @@ func TestConfigEnvVars(t *testing.T) {
 	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmPortFlag.EnvVar, httpPort))
 	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmNetworkIdFlag.EnvVar, "999"))
 	envVars = append(envVars, fmt.Sprintf("%s=%s", CorsStringFlag.EnvVar, "*"))
-	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmSyncEnabledFlag.EnvVar, "true"))
-	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmPssEnabledFlag.EnvVar, "true"))
+	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmSyncDisabledFlag.EnvVar, "true"))
 
 	dir, err := ioutil.TempDir("", "bzztest")
 	if err != nil {
@@ -340,12 +329,8 @@ func TestConfigEnvVars(t *testing.T) {
 		t.Fatalf("Expected Cors flag to be set to %s, got %s", "*", info.Cors)
 	}
 
-	if !info.SyncEnabled {
-		t.Fatal("Expected Sync to be enabled, but is false")
-	}
-
-	if !info.PssEnabled {
-		t.Fatal("Expected Pss to be enabled, but is false")
+	if info.SyncEnabled {
+		t.Fatal("Expected Sync to be disabled, but is true")
 	}
 
 	node.Shutdown()
@@ -364,8 +349,7 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 	//first, create a default conf
 	defaultConf := api.NewConfig()
 	//change some values in order to test if they have been loaded
-	defaultConf.SyncEnabled = false
-	defaultConf.PssEnabled = false
+	defaultConf.SyncEnabled = true
 	defaultConf.NetworkId = 54
 	defaultConf.Port = "8588"
 	defaultConf.DbCapacity = 9000000
@@ -404,8 +388,7 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "77",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
-		fmt.Sprintf("--%s", SwarmSyncEnabledFlag.Name),
-		fmt.Sprintf("--%s", SwarmPssEnabledFlag.Name),
+		fmt.Sprintf("--%s", SwarmSyncDisabledFlag.Name),
 		fmt.Sprintf("--%s", SwarmTomlConfigPathFlag.Name), f.Name(),
 		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),
 		"--ens-api", "",
@@ -444,8 +427,8 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 		t.Fatalf("Expected network ID to be %d, got %d", expectNetworkId, info.NetworkId)
 	}
 
-	if !info.SyncEnabled {
-		t.Fatal("Expected Sync to be enabled, but is false")
+	if info.SyncEnabled {
+		t.Fatal("Expected Sync to be disabled, but is true")
 	}
 
 	if info.LocalStoreParams.DbCapacity != 9000000 {
@@ -458,10 +441,6 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 
 	if info.Swap.Params.Strategy.AutoCashInterval != 600*time.Second {
 		t.Fatalf("Expected SwapParams AutoCashInterval to be %ds, got %d", 600, info.Swap.Params.Strategy.AutoCashInterval)
-	}
-
-	if !info.PssEnabled {
-		t.Fatal("Expected Pss to be enabled, but is false")
 	}
 
 	//	if info.SyncParams.KeyBufferSize != 512 {

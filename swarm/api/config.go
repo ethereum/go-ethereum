@@ -61,8 +61,6 @@ type Config struct {
 	SwapEnabled     bool
 	SyncEnabled     bool
 	SyncUpdateDelay time.Duration
-	PssEnabled      bool
-	ResourceEnabled bool
 	SwapApi         string
 	Cors            string
 	BzzAccount      string
@@ -88,8 +86,6 @@ func NewConfig() (self *Config) {
 		SwapEnabled:     false,
 		SyncEnabled:     true,
 		SyncUpdateDelay: 15 * time.Second,
-		PssEnabled:      true,
-		ResourceEnabled: true,
 		SwapApi:         "",
 		BootNodes:       "",
 	}

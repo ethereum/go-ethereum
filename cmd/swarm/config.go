@@ -66,7 +66,7 @@ const (
 	SWARM_ENV_NETWORK_ID           = "SWARM_NETWORK_ID"
 	SWARM_ENV_SWAP_ENABLE          = "SWARM_SWAP_ENABLE"
 	SWARM_ENV_SWAP_API             = "SWARM_SWAP_API"
-	SWARM_ENV_SYNC_ENABLE          = "SWARM_SYNC_ENABLE"
+	SWARM_ENV_SYNC_DISABLE         = "SWARM_SYNC_DISABLE"
 	SWARM_ENV_SYNC_UPDATE_DELAY    = "SWARM_ENV_SYNC_UPDATE_DELAY"
 	SWARM_ENV_ENS_API              = "SWARM_ENS_API"
 	SWARM_ENV_ENS_ADDR             = "SWARM_ENS_ADDR"
@@ -197,8 +197,8 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.SwapEnabled = true
 	}
 
-	if ctx.GlobalIsSet(SwarmSyncEnabledFlag.Name) {
-		currentConfig.SyncEnabled = true
+	if ctx.GlobalIsSet(SwarmSyncDisabledFlag.Name) {
+		currentConfig.SyncEnabled = false
 	}
 
 	if d := ctx.GlobalDuration(SwarmSyncUpdateDelay.Name); d > 0 {
@@ -229,10 +229,6 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 
 	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) {
 		currentConfig.BootNodes = ctx.GlobalString(utils.BootnodesFlag.Name)
-	}
-
-	if ctx.GlobalIsSet(SwarmPssEnabledFlag.Name) {
-		currentConfig.PssEnabled = true
 	}
 
 	if storePath := ctx.GlobalString(SwarmStorePath.Name); storePath != "" {
@@ -288,9 +284,9 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 		}
 	}
 
-	if syncenable := os.Getenv(SWARM_ENV_SYNC_ENABLE); syncenable != "" {
-		if sync, err := strconv.ParseBool(syncenable); err != nil {
-			currentConfig.SyncEnabled = sync
+	if syncdisable := os.Getenv(SWARM_ENV_SYNC_DISABLE); syncdisable != "" {
+		if sync, err := strconv.ParseBool(syncdisable); err != nil {
+			currentConfig.SyncEnabled = !sync
 		}
 	}
 
@@ -322,12 +318,6 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 
 	if bootnodes := os.Getenv(SWARM_ENV_BOOTNODES); bootnodes != "" {
 		currentConfig.BootNodes = bootnodes
-	}
-
-	if pssenable := os.Getenv(SWARM_ENV_PSS_ENABLE); pssenable != "" {
-		if ps, err := strconv.ParseBool(pssenable); err != nil {
-			currentConfig.PssEnabled = ps
-		}
 	}
 
 	return currentConfig
