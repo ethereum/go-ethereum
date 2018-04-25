@@ -129,6 +129,21 @@ func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) 
 		}
 	}
 
+	// testing partial read
+	for i := 1; i < n; i += 10000 {
+		readableLength := n - i
+		output := make([]byte, readableLength)
+		r, err := reader.ReadAt(output, int64(i))
+		if r != readableLength || err != io.EOF {
+			tester.t.Fatalf("readAt error with offset %v read: %v  n = %v  err = %v\n", i, r, readableLength, err)
+		}
+		if input != nil {
+			if !bytes.Equal(output, input[i:]) {
+				tester.t.Fatalf("input and output mismatch\n IN: %v\nOUT: %v\n", input[i:], output)
+			}
+		}
+	}
+
 	return key
 }
 

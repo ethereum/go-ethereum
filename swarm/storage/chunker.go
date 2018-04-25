@@ -496,9 +496,14 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 	start := off / treeSize
 	end := (eoff + treeSize - 1) / treeSize
 
+	// last non-leaf chunk can be shorter than default chunk size, let's not read it further then its end
+	currentBranches := int64(len(chunkData)-8) / self.hashSize
+	if end > currentBranches {
+		end = currentBranches
+	}
+
 	wg := &sync.WaitGroup{}
 	defer wg.Wait()
-
 	for i := start; i < end; i++ {
 		soff := i * treeSize
 		roff := soff
