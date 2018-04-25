@@ -449,9 +449,6 @@ func (self *Swarm) Protocols() (protos []p2p.Protocol) {
 	if self.ps != nil {
 		protos = append(protos, self.ps.Protocols()...)
 	}
-	if self.streamer != nil {
-		protos = append(protos, self.streamer.Protocols()...)
-	}
 	return
 }
 
