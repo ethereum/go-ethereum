@@ -275,6 +275,100 @@ func TestPendingTxFilter(t *testing.T) {
 	}
 }
 
+// TestReturnDataFilter tests whether return data filters retrieve all relevant return data from transactions posted to the txPostFeed
+func TestReturnDataFilter(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mux        = new(event.TypeMux)
+		db         = ethdb.NewMemDatabase()
+		txPreFeed  = new(event.Feed)
+		txPostFeed = new(event.Feed)
+		rmLogsFeed = new(event.Feed)
+		logsFeed   = new(event.Feed)
+		chainFeed  = new(event.Feed)
+		//firstAddr 		= common.HexToAddress("0x1111111111111111111111111111111111111111")
+		//secondAddr		= common.HexToAddress("0x2222222222222222222222222222222222222222")
+		//thirdAddress	= common.HexToHash("0x3333333333333333333333333333333333333333")
+		//		notUsedAddress = common.HexToAddress("0x9999999999999999999999999999999999999999")  // TODO: will need these for testing of from: field criteria when impl
+		firstTx              = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
+		secondTx             = common.HexToHash("0x2222222222222222222222222222222222222222222222222222222222222222")
+		thirdTx              = common.HexToHash("0x3333333333333333333333333333333333333333333333333333333333333333")
+		forthTx              = common.HexToHash("0x4444444444444444444444444444444444444444444444444444444444444444")
+		firstRetData         = common.Hex2Bytes("0x535353535353535353535353535353535353535353535353535353")
+		secondRetData        = common.Hex2Bytes("0x8888888888888888888888888888888888888888888888888888888888888888888888888888888888888")
+		thirdRetData  []byte = nil // no return data for this tx
+		forthRetData         = common.Hex2Bytes("0x77")
+		backend              = &testBackend{mux, db, 0, txPreFeed, txPostFeed, rmLogsFeed, logsFeed, chainFeed}
+		api                  = NewPublicFilterAPI(backend, false)
+	)
+
+	retData := [...]types.ReturnData{
+		{TxHash: firstTx, Data: firstRetData, Removed: false},
+		{TxHash: secondTx, Data: secondRetData, Removed: false},
+		{TxHash: thirdTx, Data: forthRetData, Removed: false}, // third tx added to canonical chain
+		{TxHash: thirdTx, Data: forthRetData, Removed: true},  //  but later removed due to reorg
+		{TxHash: forthTx, Data: thirdRetData, Removed: false},
+	}
+
+	testCases := []struct {
+		expected []*types.ReturnData
+		id       rpc.ID
+	}{
+		0: {[]*types.ReturnData{&retData[0]}, ""},
+		1: {[]*types.ReturnData{&retData[1]}, ""},
+		2: {[]*types.ReturnData{&retData[2], &retData[3]}, ""},
+		3: {[]*types.ReturnData{&retData[3]}, ""},
+	}
+
+	// create all filters
+	for i := range testCases {
+		testCases[i].id = api.NewReturnDataFilter()
+	}
+
+	time.Sleep(1 * time.Second)
+
+	for _, r := range retData {
+		txPostFeed.Send(core.TransactionEvent{TxHash: r.TxHash, RetData: &r})
+	}
+
+	for i, tt := range testCases {
+		var fetched []types.ReturnData
+		timeout := time.Now().Add(1 * time.Second)
+		for {
+			results, err := api.GetFilterChanges(tt.id)
+			if err != nil {
+				t.Fatalf("Unable to fetch return data: %v", err)
+			}
+
+			fetched = append(fetched, results.([]types.ReturnData)...)
+			if len(fetched) >= len(tt.expected) {
+				break
+			}
+			// check timeout
+			if time.Now().After(timeout) {
+				break
+			}
+
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		if len(fetched) != len(tt.expected) {
+			t.Errorf("invalid number of return data events for case %d, want %d events, got %d", i, len(tt.expected), len(fetched))
+			return
+		}
+
+		for j := range fetched {
+			if fetched[j].Removed {
+				t.Errorf("expected tx not to be removed for tx %d in case %d", j, i)
+			}
+			if !reflect.DeepEqual(fetched[i], tt.expected[i]) {
+				t.Errorf("invalid return data for tx %d in case %d", j, i)
+			}
+		}
+	}
+}
+
 // TestLogFilterCreation test whether a given filter criteria makes sense.
 // If not it must return an error.
 func TestLogFilterCreation(t *testing.T) {
