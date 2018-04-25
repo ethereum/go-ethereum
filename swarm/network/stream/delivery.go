@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -32,6 +33,14 @@ import (
 const (
 	swarmChunkServerStreamName = "RETRIEVE_REQUEST"
 	deliveryCap                = 32
+)
+
+var (
+	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.stream.received_chunks.count", nil)
+	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.stream.handle_retrieve_request_msg.count", nil)
+
+	requestFromPeersCount     = metrics.NewRegisteredCounter("network.stream.request_from_peers.count", nil)
+	requestFromPeersEachCount = metrics.NewRegisteredCounter("network.stream.request_from_peers_each.count", nil)
 )
 
 type Delivery struct {
@@ -129,6 +138,8 @@ type RetrieveRequestMsg struct {
 
 func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) error {
 	log.Trace("received request", "peer", sp.ID(), "hash", req.Key)
+	handleRetrieveRequestMsgCount.Inc(1)
+
 	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", false))
 	if err != nil {
 		return err
@@ -194,6 +205,8 @@ func (d *Delivery) handleChunkDeliveryMsg(sp *Peer, req *ChunkDeliveryMsg) error
 func (d *Delivery) processReceivedChunks() {
 R:
 	for req := range d.receiveC {
+		processReceivedChunksCount.Inc(1)
+
 		// this should be has locally
 		chunk, err := d.db.Get(req.Key)
 		if !bytes.Equal(chunk.Key, req.Key) {
@@ -227,6 +240,7 @@ R:
 func (d *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...discover.NodeID) error {
 	var success bool
 	var err error
+	requestFromPeersCount.Inc(1)
 	d.overlay.EachConn(hash, 255, func(p network.OverlayConn, po int, nn bool) bool {
 		spId := p.(network.Peer).ID()
 		for _, p := range peersToSkip {
@@ -248,6 +262,7 @@ func (d *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...
 		if err != nil {
 			return true
 		}
+		requestFromPeersEachCount.Inc(1)
 		success = true
 		return false
 	})
