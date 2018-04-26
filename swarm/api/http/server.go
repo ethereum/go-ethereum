@@ -67,7 +67,6 @@ var (
 	getFilesFail     = metrics.NewRegisteredCounter("api.http.get.files.fail", nil)
 	getListCount     = metrics.NewRegisteredCounter("api.http.get.list.count", nil)
 	getListFail      = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
-	requestCount     = metrics.NewRegisteredCounter("http.request.count", nil)
 	htmlRequestCount = metrics.NewRegisteredCounter("http.request.html.count", nil)
 	jsonRequestCount = metrics.NewRegisteredCounter("http.request.json.count", nil)
 	requestTimer     = metrics.NewRegisteredResettingTimer("http.request.time", nil)
@@ -835,7 +834,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 
 func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	req := &Request{Request: *r, ruid: uuid.New()[:8]}
-	requestCount.Inc(1)
+	metrics.GetOrRegisterCounter(fmt.Sprintf("http.request.%s", r.Method), nil).Inc(1)
 	log.Info("serving request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
 
 	// wrapping the ResponseWriter, so that we get the response code set by http.ServeContent
