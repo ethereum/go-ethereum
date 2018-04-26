@@ -120,6 +120,11 @@ web3._extend({
 			params: 0
 		}),
 		new web3._extend.Method({
+			name: 'getHashrate',
+			call: 'ethash_getHashrate',
+			params: 0
+		}),
+		new web3._extend.Method({
 			name: 'submitWork',
 			call: 'ethash_submitWork',
 			params: 3,

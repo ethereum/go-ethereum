@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	errNoMiningWork      = errors.New("no mining work available yet, don't panic")
+	errNoMiningWork      = errors.New("no mining work available yet")
 	errInvalidSealResult = errors.New("invalid or stale proof-of-work solution")
 )
 
