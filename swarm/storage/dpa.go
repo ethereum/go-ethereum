@@ -41,7 +41,7 @@ const (
 
 var (
 	// timeout interval before retrieval is timed out
-	searchTimeout = 3 * time.Second
+	searchTimeout = 30 * time.Second
 )
 
 type DPA struct {
