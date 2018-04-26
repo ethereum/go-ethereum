@@ -59,7 +59,7 @@ const (
 // BzzSpec is the spec of the generic swarm handshake
 var BzzSpec = &protocols.Spec{
 	Name:       "bzz",
-	Version:    1,
+	Version:    3,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		HandshakeMsg{},
@@ -69,7 +69,7 @@ var BzzSpec = &protocols.Spec{
 // DiscoverySpec is the spec for the bzz discovery subprotocols
 var DiscoverySpec = &protocols.Spec{
 	Name:       "hive",
-	Version:    1,
+	Version:    3,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		peersMsg{},
@@ -188,7 +188,7 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 func (b *Bzz) APIs() []rpc.API {
 	return []rpc.API{{
 		Namespace: "hive",
-		Version:   "1.0",
+		Version:   "3.0",
 		Service:   b.Hive,
 	}}
 }

@@ -642,7 +642,7 @@ func (c *clientParams) clientCreated() {
 // Spec is the spec of the streamer protocol
 var Spec = &protocols.Spec{
 	Name:       "stream",
-	Version:    1,
+	Version:    3,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
 		UnsubscribeMsg{},
@@ -675,7 +675,7 @@ func (r *Registry) APIs() []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "stream",
-			Version:   "0.1",
+			Version:   "3.0",
 			Service:   r.api,
 			Public:    true,
 		},

@@ -221,7 +221,7 @@ func (r *TestRegistry) APIs() []rpc.API {
 	a := r.Registry.APIs()
 	a = append(a, rpc.API{
 		Namespace: "stream",
-		Version:   "0.1",
+		Version:   "3.0",
 		Service:   r,
 		Public:    true,
 	})
@@ -264,7 +264,7 @@ func (r *TestExternalRegistry) APIs() []rpc.API {
 	a := r.Registry.APIs()
 	a = append(a, rpc.API{
 		Namespace: "stream",
-		Version:   "0.1",
+		Version:   "3.0",
 		Service:   r,
 		Public:    true,
 	})

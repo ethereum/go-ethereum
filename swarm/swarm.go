@@ -468,14 +468,14 @@ func (self *Swarm) APIs() []rpc.API {
 		// public APIs
 		{
 			Namespace: "bzz",
-			Version:   "0.1",
+			Version:   "3.0",
 			Service:   &Info{self.config, chequebook.ContractParams},
 			Public:    true,
 		},
 		// admin APIs
 		{
 			Namespace: "bzz",
-			Version:   "0.1",
+			Version:   "3.0",
 			Service:   api.NewControl(self.api, self.bzz.Hive),
 			Public:    false,
 		},
