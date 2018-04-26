@@ -20,10 +20,22 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
+func generateEndpoints(scheme string, cluster string, from int, to int) {
+	for port := from; port <= to; port++ {
+		endpoints = append(endpoints, fmt.Sprintf("%s://%v.%s.swarm-gateways.net", scheme, port, cluster))
+	}
+
+	if includeLocalhost {
+		endpoints = append(endpoints, "http://localhost:8500")
+	}
+}
+
 func cliUploadAndSync(c *cli.Context) error {
 	defer func(now time.Time) { log.Info("total time", "time", time.Since(now), "size", filesize) }(time.Now())
 
-	log.Info("uploading and syncing")
+	generateEndpoints(scheme, cluster, from, to)
+
+	log.Info("uploading to " + endpoints[0] + " and syncing")
 
 	f, cleanup := generateRandomFile(filesize * 1000000)
 	defer cleanup()
