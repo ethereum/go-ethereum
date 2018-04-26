@@ -27,12 +27,13 @@ import (
 )
 
 var (
-	endpoints []string
-	cluster   string
-	scheme    string
-	filesize  int
-	from      int
-	to        int
+	endpoints        []string
+	includeLocalhost bool
+	cluster          string
+	scheme           string
+	filesize         int
+	from             int
+	to               int
 )
 
 func main() {
@@ -67,6 +68,11 @@ func main() {
 			Value:       "http",
 			Usage:       "http or https",
 			Destination: &scheme,
+		},
+		cli.BoolFlag{
+			Name:        "include-localhost",
+			Usage:       "whether to include localhost:8500 as an endpoint",
+			Destination: &includeLocalhost,
 		},
 		cli.IntFlag{
 			Name:        "filesize",
