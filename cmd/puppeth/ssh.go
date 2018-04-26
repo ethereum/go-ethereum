@@ -72,6 +72,15 @@ func dial(server string, pubkey []byte) (*sshClient, error) {
 	var auths []ssh.AuthMethod
 
 	path := filepath.Join(user.HomeDir, ".ssh", "id_rsa")
+	fmt.Printf("Which SSH key should be used? (default = %s)\n", path)
+	fmt.Printf("> ")
+	text, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		log.Crit("Failed to read user input", "err", err)
+	}
+	if text = strings.TrimSpace(text); text != "" {
+		path = text
+	}
 	if buf, err := ioutil.ReadFile(path); err != nil {
 		log.Warn("No SSH key, falling back to passwords", "path", path, "err", err)
 	} else {
