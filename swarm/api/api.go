@@ -319,9 +319,9 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 		return
 	}
 
-	log.Trace("trie getting entry", "key", key, "path", path)
+	log.Debug("trie getting entry", "key", key, "path", path)
 	entry, _ := trie.getEntry(path)
-	log.Trace("trie got entry", "key", key, "path", path)
+	log.Debug("trie got entry", "key", key, "path", path, "entry.Hash", entry.Hash)
 
 	if entry != nil {
 		// we want to be able to serve Mutable Resource Updates transparently using the bzz:// scheme
@@ -343,7 +343,7 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 			return
 		} else {
 			mimeType = entry.ContentType
-			log.Trace("content lookup key", "key", key, "mimetype", mimeType)
+			log.Debug("content lookup key", "key", key, "mimetype", mimeType)
 			reader, _ = self.dpa.Retrieve(key)
 		}
 	} else {

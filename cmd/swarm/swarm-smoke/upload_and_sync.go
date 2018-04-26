@@ -42,11 +42,13 @@ func cliUploadAndSync(c *cli.Context) error {
 
 	hash, err := upload(f, endpoints[0])
 	if err != nil {
+		log.Error(err.Error())
 		return err
 	}
 
 	fhash, err := digest(f)
 	if err != nil {
+		log.Error(err.Error())
 		return err
 	}
 
