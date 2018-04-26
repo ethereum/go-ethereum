@@ -321,9 +321,9 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 
 	log.Debug("trie getting entry", "key", key, "path", path)
 	entry, _ := trie.getEntry(path)
-	log.Debug("trie got entry", "key", key, "path", path, "entry.Hash", entry.Hash)
 
 	if entry != nil {
+		log.Debug("trie got entry", "key", key, "path", path, "entry.Hash", entry.Hash)
 		// we want to be able to serve Mutable Resource Updates transparently using the bzz:// scheme
 		//
 		// we use a special manifest hack for this purpose, which is pathless and where the resource root key
@@ -337,6 +337,7 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 			return nil, entry.ContentType, http.StatusOK, &ErrResourceReturn{entry.Hash}
 		}
 		key = common.Hex2Bytes(entry.Hash)
+		log.Debug("trie key", "key", key)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
 			apiGetHttp300.Inc(1)
