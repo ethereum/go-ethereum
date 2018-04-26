@@ -1,18 +1,16 @@
 package shyftdb
 
 import (
-	"bytes"
-	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/syndtr/goleveldb/leveldb"
 
 	"database/sql"
+
+	"log"
 
 	_ "github.com/lib/pq"
 )
@@ -32,8 +30,15 @@ type blockRes struct {
 	Blocks   []SBlock
 }
 
-type txRes struct {
-	TxEntry []ShyftTxEntryPretty
+type SAccounts struct {
+	Addr    string
+	Balance string
+}
+
+type accountRes struct {
+	addr        string
+	balance     string
+	AllAccounts []SAccounts
 }
 
 //ShyftTxEntry structure
@@ -49,6 +54,10 @@ type ShyftTxEntry struct {
 	Data      []byte
 }
 
+type txRes struct {
+	TxEntry []ShyftTxEntryPretty
+}
+
 type ShyftTxEntryPretty struct {
 	TxHash    string
 	To        string
@@ -62,8 +71,16 @@ type ShyftTxEntryPretty struct {
 }
 
 type ShyftAccountEntry struct {
-	Balance *big.Int
+	Balance string
 	Txs     []string
+}
+
+type SendAndReceive struct {
+	To        string
+	From      string
+	Amount    string
+	Address   string
+	Balance   string
 }
 
 //WriteBlock writes to block info to sql db
@@ -72,7 +89,7 @@ func WriteBlock(sqldb *sql.DB, block *types.Block) error {
 	number := block.Header().Number.String()
 
 	sqlStatement := `INSERT INTO blocks(hash, coinbase, number) VALUES(($1), ($2), ($3)) RETURNING number`
-	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number).Scan(&number) //.Scan(&fun)
+	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number).Scan(&number)
 	if qerr != nil {
 		panic(qerr)
 	}
@@ -80,7 +97,7 @@ func WriteBlock(sqldb *sql.DB, block *types.Block) error {
 	if block.Transactions().Len() > 0 {
 		for _, tx := range block.Transactions() {
 			WriteTransactions(sqldb, tx, block.Header().Hash())
-			//tx_bytes[i] = tx.Hash().Bytes()
+			WriteFromBalance(sqldb, tx)
 		}
 	}
 	return nil
@@ -130,68 +147,90 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 	return nil
 }
 
-//WriteAccountBalances(db, tx)
+//WriteFromBalance writes senders balance to accounts db
+func WriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
+	sendAndReceiveData, balanceRec, balanceSen := WriteBalanceHelper(sqldb, tx)
+	toAddr := sendAndReceiveData.To
+	fromAddr := sendAndReceiveData.From
+	amount := sendAndReceiveData.Amount
+	balanceReceiver := balanceRec
+	balanceSender := balanceSen
 
-// func WriteFromBalance(db *leveldb.DB, tx *types.Transaction) {
-// 	key := append([]byte("acc-")[:], tx.From().Hash().Bytes()[:]...)
-// 	// The from (sender) addr must have balance. If it fails to retrieve there is a bigger issue.
-// 	retrievedData, err := db.Get(key, nil)
-// 	if err != nil {
-// 		log.Crit("From MUST have eth and no record found", "err", err)
-// 	}
-// 	var decodedData ShyftAccountEntry
-// 	d := gob.NewDecoder(bytes.NewBuffer(retrievedData))
-// 	if err := d.Decode(&decodedData); err != nil {
-// 		log.Crit("Failed to decode From data:", "err", err)
-// 	}
-// 	decodedData.Balance.Sub(decodedData.Balance, tx.Value())
-// 	decodedData.Txs = append(decodedData.Txs, tx.Hash().String())
-// 	// Encode updated data
-// 	var encodedData bytes.Buffer
-// 	encoder := gob.NewEncoder(&encodedData)
-// 	if err := encoder.Encode(decodedData); err != nil {
-// 		log.Crit("Faild to encode From Account data", "err", err)
-// 	}
-// 	if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
-// 		log.Crit("Could not write the From account data", "err", err)
-// 	}
-// }
+	var response string
+	sqlExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
+	err := sqldb.QueryRow(sqlExistsStatement, toAddr).Scan(&response)
+	switch {
+	case err == sql.ErrNoRows:
+		fmt.Println("No rows error :)")
 
-func WriteToBalance(db *leveldb.DB, tx *types.Transaction) {
-	key := append([]byte("acc-")[:], tx.To().Hash().Bytes()[:]...)
-	var txs []string
+		sqlStatement := `INSERT INTO accounts(addr, balance) VALUES(($1), ($2)) RETURNING addr`
+		insertErr := sqldb.QueryRow(sqlStatement, toAddr, amount).Scan(&toAddr)
+		if insertErr != nil {
+			panic(insertErr)
+		}
+	case err != nil:
+		log.Fatal(err)
+	default:
 
-	retrievedData, err := db.Get(key, nil)
-	if err != nil {
-		accData := ShyftAccountEntry{
-			Balance: tx.Value(),
-			Txs:     append(txs, tx.Hash().String()),
+		var newBalanceReceiver big.Int
+		var newBalanceSender big.Int
+		updateSQLStatement := `UPDATE accounts SET balance = ($2) WHERE addr = ($1)`
+
+		r := new(big.Int)
+		_, err := fmt.Sscan(balanceReceiver, r)
+		if err != nil {
+			log.Println("error scanning value:", err)
 		}
-		var encodedData bytes.Buffer
-		encoder := gob.NewEncoder(&encodedData)
-		if err := encoder.Encode(accData); err != nil {
-			log.Crit("Faild to encode To Account data", "err", err)
+
+		s := new(big.Int)
+		_, error := fmt.Sscan(balanceSender, s)
+		if error != nil {
+			log.Println("error scanning value:", error)
 		}
-		if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
-			log.Crit("Could not write the TO account's first tx", "err", err)
+
+		newBalanceReceiver.Add(r, tx.Value())
+		newBalanceSender.Sub(s, tx.Value())
+
+		_, err = sqldb.Exec(updateSQLStatement, toAddr, newBalanceReceiver.String())
+		if err != nil {
+			panic(err)
+		}
+
+		_, err = sqldb.Exec(updateSQLStatement, fromAddr, newBalanceSender.String())
+		if err != nil {
+			panic(err)
 		}
 	}
-	var decodedData ShyftAccountEntry
-	d := gob.NewDecoder(bytes.NewBuffer(retrievedData))
-	if err := d.Decode(&decodedData); err != nil {
-		log.Crit("Failed to decode To account data:", "err", err)
+	return nil
+}
+
+func WriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string) {
+	sendAndReceiveData := SendAndReceive{
+		To: tx.To().Hex(),
+		From: tx.From().Hex(),
+		Amount: tx.Value().String(),
 	}
-	decodedData.Balance.Add(decodedData.Balance, tx.Value())
-	decodedData.Txs = append(decodedData.Txs, tx.Hash().String())
-	// Encode updated data
-	var encodedData bytes.Buffer
-	encoder := gob.NewEncoder(&encodedData)
-	if err := encoder.Encode(decodedData); err != nil {
-		log.Crit("Faild to encode To Account data", "err", err)
+
+	toAddr := sendAndReceiveData.To
+	fromAddr := sendAndReceiveData.From
+
+	getAccountBalanceReceiver := GetAccount(sqldb, toAddr)
+	getAccountBalanceSender:= GetAccount(sqldb, fromAddr)
+
+	var receiverBalance SendAndReceive
+	if err := json.Unmarshal([]byte(getAccountBalanceReceiver), &receiverBalance); err != nil {
+		log.Fatal(err)
 	}
-	if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
-		log.Crit("Could not write the To account data", "err", err)
+
+	var senderBalance SendAndReceive
+	if err := json.Unmarshal([]byte(getAccountBalanceSender), &senderBalance); err != nil {
+		log.Fatal(err)
 	}
+
+	balanceReceiver := receiverBalance.Balance
+	balanceSender := senderBalance.Balance
+
+	return sendAndReceiveData, balanceReceiver, balanceSender
 }
 
 // @NOTE: This function is extremely complex and requires heavy testing and knowdlege of edge cases:
@@ -200,57 +239,57 @@ func WriteToBalance(db *leveldb.DB, tx *types.Transaction) {
 // @TODO: Calculate reward if there are uncles
 // @TODO: Calculate mining reward (most likely retrieve higher up in the operations)
 // @TODO: Calculate reorg
-func WriteMinerReward(db *leveldb.DB, block *types.Block) {
-	var totalGas *big.Int
-	var txs []string
-	key := append([]byte("acc-")[:], block.Coinbase().Hash().Bytes()[:]...)
-	for _, tx := range block.Transactions() {
-		totalGas.Add(totalGas, new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas())))
-	}
-	retrievedData, err := db.Get(key, nil)
-	if err != nil {
-		// Assume time this account has had a tx
-		// Balacne is exclusively minerreward + total gas from the block b/c no prior evm activity
-		// Txs would be empty because they have not had any transactions on the EVM
-		// @TODO: Calc mining reward
-		//balance := totalGas.Add(totalGas, MINING_REWARD)
-		balance := totalGas
-		accData := ShyftAccountEntry{
-			Balance: balance,
-			Txs:     txs,
-		}
-		var encodedData bytes.Buffer
-		encoder := gob.NewEncoder(&encodedData)
-		if err := encoder.Encode(accData); err != nil {
-			log.Crit("Faild to encode Miner Account data", "err", err)
-		}
-		if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
-			log.Crit("Could not write the miner's first tx", "err", err)
-		}
-	} else {
-		// The account has already have previous data stored due to activity in the EVM
-		// Decode the data to update balance
-		var decodedData ShyftAccountEntry
-		d := gob.NewDecoder(bytes.NewBuffer(retrievedData))
-		if err := d.Decode(&decodedData); err != nil {
-			log.Crit("Failed to decode miner data:", "err", err)
-		}
-		// Write new balance
-		// @TODO: Calc mining reward
-		// decodedData.Balance.Add(decodedData.Balance, totalGas.Add(totalGas, MINING_REWARD)))
-		decodedData.Balance.Add(decodedData.Balance, totalGas)
-		// Encode the data to be written back to the db
-		var encodedData bytes.Buffer
-		encoder := gob.NewEncoder(&encodedData)
-		if err := encoder.Encode(decodedData); err != nil {
-			log.Crit("Faild to encode Miner Account data", "err", err)
-		}
-		// Write newly encoded data back to the db
-		if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
-			log.Crit("Could not update miner account data", "err", err)
-		}
-	}
-}
+// func WriteMinerReward(db *leveldb.DB, block *types.Block) {
+// 	var totalGas *big.Int
+// 	var txs []string
+// 	key := append([]byte("acc-")[:], block.Coinbase().Hash().Bytes()[:]...)
+// 	for _, tx := range block.Transactions() {
+// 		totalGas.Add(totalGas, new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas())))
+// 	}
+// 	retrievedData, err := db.Get(key, nil)
+// 	if err != nil {
+// 		// Assume time this account has had a tx
+// 		// Balacne is exclusively minerreward + total gas from the block b/c no prior evm activity
+// 		// Txs would be empty because they have not had any transactions on the EVM
+// 		// @TODO: Calc mining reward
+// 		//balance := totalGas.Add(totalGas, MINING_REWARD)
+// 		balance := totalGas
+// 		accData := ShyftAccountEntry{
+// 			Balance: balance,
+// 			Txs:     txs,
+// 		}
+// 		var encodedData bytes.Buffer
+// 		encoder := gob.NewEncoder(&encodedData)
+// 		if err := encoder.Encode(accData); err != nil {
+// 			log.Crit("Faild to encode Miner Account data", "err", err)
+// 		}
+// 		if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
+// 			log.Crit("Could not write the miner's first tx", "err", err)
+// 		}
+// 	} else {
+// 		// The account has already have previous data stored due to activity in the EVM
+// 		// Decode the data to update balance
+// 		var decodedData ShyftAccountEntry
+// 		d := gob.NewDecoder(bytes.NewBuffer(retrievedData))
+// 		if err := d.Decode(&decodedData); err != nil {
+// 			log.Crit("Failed to decode miner data:", "err", err)
+// 		}
+// 		// Write new balance
+// 		// @TODO: Calc mining reward
+// 		// decodedData.Balance.Add(decodedData.Balance, totalGas.Add(totalGas, MINING_REWARD)))
+// 		decodedData.Balance.Add(decodedData.Balance, totalGas)
+// 		// Encode the data to be written back to the db
+// 		var encodedData bytes.Buffer
+// 		encoder := gob.NewEncoder(&encodedData)
+// 		if err := encoder.Encode(decodedData); err != nil {
+// 			log.Crit("Faild to encode Miner Account data", "err", err)
+// 		}
+// 		// Write newly encoded data back to the db
+// 		if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
+// 			log.Crit("Could not update miner account data", "err", err)
+// 		}
+// 	}
+// }
 
 ///////////
 // Getters
@@ -372,14 +411,14 @@ func GetAllTransactions(sqldb *sql.DB) string {
 //GetTransaction fn returns single tx
 func GetTransaction(sqldb *sql.DB) string {
 	sqlStatement := `SELECT 
-	txhash,
-	to_addr,
-	from_addr,
-	blockhash,
-	amount,
-	gasprice,
-	gas,
-	nonce 
+		txhash,
+		to_addr,
+		from_addr,
+		blockhash,
+		amount,
+		gasprice,
+		gas,
+		nonce 
 	FROM txs WHERE nonce=$1;`
 	row := sqldb.QueryRow(sqlStatement, 1)
 	var txhash string
@@ -405,4 +444,56 @@ func GetTransaction(sqldb *sql.DB) string {
 	json, _ := json.Marshal(tx)
 
 	return string(json)
+}
+
+//GetAccount returns account balances
+func GetAccount(sqldb *sql.DB, address string) string {
+	sqlStatement := `SELECT * FROM accounts WHERE addr=$1;`
+	row := sqldb.QueryRow(sqlStatement, address)
+	var addr string
+	var balance string
+
+	row.Scan(&addr, &balance)
+
+	account := SAccounts{
+		Addr:    addr,
+		Balance: balance,
+	}
+	json, _ := json.Marshal(account)
+	return string(json)
+}
+
+//GetAllAccounts returns all accounts and balances
+func GetAllAccounts(sqldb *sql.DB) string {
+	var array accountRes
+	var accountsArr string
+	accs, err := sqldb.Query(`
+		SELECT
+			addr,
+			balance
+		FROM accounts`)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	defer accs.Close()
+	////
+	for accs.Next() {
+		var addr string
+		var balance string
+		err = accs.Scan(
+			&addr,
+			&balance,
+		)
+
+		array.AllAccounts = append(array.AllAccounts, SAccounts{
+			Addr:    addr,
+			Balance: balance,
+		})
+
+		accounts, _ := json.Marshal(array.AllAccounts)
+		accountsFmt := string(accounts)
+		accountsArr = accountsFmt
+	}
+	return accountsArr
 }

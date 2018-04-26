@@ -8,11 +8,15 @@ CREATE TABLE IF NOT EXISTS txs (
   txHash text,
   to_addr text,
   from_addr text,
-  blockhash text,
+  blockhash text references blocks(hash),
   amount numeric,
   gasprice numeric,
   gas numeric,
   nonce numeric,
-  data bytea,
-  block text references blocks(hash)
+  data bytea
+);
+
+CREATE TABLE IF NOT EXISTS accounts (
+  addr text primary key unique,
+  balance numeric
 );

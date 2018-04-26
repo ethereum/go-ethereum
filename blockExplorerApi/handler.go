@@ -54,25 +54,47 @@ func GetAllTransactions(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, txs)
 }
 
-// GetBalance gets balance
-func GetBalance(w http.ResponseWriter, r *http.Request) {
-	// vars := mux.Vars(r)
-	// address := vars["address"]
+// GetAccount gets balance
+func GetAccount(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	address := vars["address"]
 	//addressBytes := []byte(address)
+	fmt.Println("ADDRESS FROM ROUTE", address)
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	blockExplorerDb, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return
+	}
+
+	getAccountBalance := shyftdb.GetAccount(blockExplorerDb, address)
+
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	//fmt.Fprintln(w, "Get Balances", addresses)
+	fmt.Fprintln(w, getAccountBalance)
 }
 
-// GetBalances gets balances
-func GetBalances(w http.ResponseWriter, r *http.Request) {
-
+// GetAllAccounts gets balances
+func GetAllAccounts(w http.ResponseWriter, r *http.Request) {
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	blockExplorerDb, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return
+	}
+	allAccounts := shyftdb.GetAllAccounts(blockExplorerDb)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
-	//fmt.Fprintln(w, "Get Balances", addresses)
+	fmt.Fprintln(w, allAccounts)
 }
 
 //GetBlock returns block json
@@ -98,23 +120,18 @@ func GetBlock(w http.ResponseWriter, r *http.Request) {
 
 // GetAllBlocks response
 func GetAllBlocks(w http.ResponseWriter, r *http.Request) {
-
 	connStr := "user=postgres dbname=shyftdb sslmode=disable"
 	blockExplorerDb, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return
 	}
-
 	block3 := shyftdb.GetAllBlocks(blockExplorerDb)
-
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
-
 	fmt.Fprintln(w, block3)
 }
 
