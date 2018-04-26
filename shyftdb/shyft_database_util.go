@@ -102,19 +102,31 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 
 	txHash := txData.TxHash.Hex()
 	from := txData.From.Hex()
-	to := txData.To.Hex()
 	blockHasher := txData.BlockHash
 	amount := txData.Amount.String()
 	gasPrice := txData.GasPrice.String()
 	nonce := txData.Nonce
 	gas := txData.Gas
 	data := txData.Data
+	to := txData.To
+	if(to == nil){
+		var retNonce string
+		sqlStatement := `INSERT INTO txs(txhash, from_addr, blockhash, amount, gasprice, gas, nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8)) RETURNING nonce`
+		qerr := sqldb.QueryRow(sqlStatement, txHash, from, blockHasher, amount, gasPrice, gas, nonce, data).Scan(&retNonce)
 
-	sqlStatement := `INSERT INTO txs(txhash, to_addr, from_addr, blockhash, amount, gasprice, gas, nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9)) RETURNING nonce`
-	qerr := sqldb.QueryRow(sqlStatement, txHash, to, from, blockHasher, amount, gasPrice, gas, nonce, data).Scan(&nonce)
-	if qerr != nil {
-		panic(qerr)
+		if qerr != nil {
+			panic(qerr)
+		}
+	} else {
+		var retNonce string
+		sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, amount, gasprice, gas, nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9)) RETURNING nonce`
+		qerr := sqldb.QueryRow(sqlStatement, txHash, from, to.Hex(), blockHasher, amount, gasPrice, gas, nonce, data).Scan(&retNonce)
+
+		if qerr != nil {
+			panic(qerr)
+		}
 	}
+
 	return nil
 }
 
