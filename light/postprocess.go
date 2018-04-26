@@ -75,7 +75,7 @@ var (
 
 // trustedCheckpoints associates each known checkpoint with the genesis hash of the chain it belongs to
 var trustedCheckpoints = map[common.Hash]trustedCheckpoint{
-	params./: mainnetCheckpoint,
+	params.MainnetGenesisHash: mainnetCheckpoint,
 	params.TestnetGenesisHash: ropstenCheckpoint,
 }
 
