@@ -5,9 +5,9 @@ CREATE TABLE IF NOT EXISTS blocks (
 );
 
 CREATE TABLE IF NOT EXISTS txs (
-  txHash text primary key,
-  to_addr text references accounts(addr),
-  from_addr text references accounts(addr),
+  txHash text,
+  to_addr text,
+  from_addr text,
   blockhash text references blocks(hash),
   amount numeric,
   gasprice numeric,

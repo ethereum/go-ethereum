@@ -16,16 +16,16 @@ type Routes []Route
 
 var routes = Routes{
 	Route{
-		"GetBalance",
+		"GetAccount",
 		"GET",
-		"/api/get_balance/",
-		GetBalance,
+		"/api/get_account/{address}",
+		GetAccount,
 	},
 	Route{
-		"GetBalances",
+		"GetAllAccounts",
 		"GET",
-		"/api/get_balances/{addresses}",
-		GetBalances,
+		"/api/get_all_accounts",
+		GetAllAccounts,
 	},
 	Route{
 		"GetAllBlocks",
