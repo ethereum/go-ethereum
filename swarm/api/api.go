@@ -40,7 +40,7 @@ import (
 )
 
 // TODO: this is bad, it should not be hardcoded how long is a hash
-var hashMatcher = regexp.MustCompile("^([0-9A-Fa-f]{64})([0-9A-Fa-f]{64})?")
+var hashMatcher = regexp.MustCompile("^([0-9A-Fa-f]{64})([0-9A-Fa-f]{64})?$")
 
 type ErrResourceReturn struct {
 	key string
