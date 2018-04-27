@@ -500,7 +500,7 @@ func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *man
 			pos = epl
 		}
 	}
-	return
+	return nil, 0
 }
 
 // file system manifest always contains regularized paths
