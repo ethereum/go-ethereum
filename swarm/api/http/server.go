@@ -863,8 +863,7 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 	req.uri = uri
 
-	log.Debug("parsed request path", "ruid", req.ruid, "method", req.Method, "uri", req.uri)
-	log.Debug("parsed request path", "uri.Addr", req.uri.Addr, "uri.path", req.uri.Path, "uri.Scheme", req.uri.Scheme)
+	log.Debug("parsed request path", "ruid", req.ruid, "method", req.Method, "uri.Addr", req.uri.Addr, "uri.Path", req.uri.Path, "uri.Scheme", req.uri.Scheme)
 
 	switch r.Method {
 	case "POST":

@@ -58,7 +58,7 @@ var (
 	startCounter       = metrics.NewRegisteredCounter("stack,start", nil)
 	stopCounter        = metrics.NewRegisteredCounter("stack,stop", nil)
 	uptimeGauge        = metrics.NewRegisteredGauge("stack.uptime", nil)
-	cacheSizeGauge     = metrics.NewRegisteredGauge("storage.db.cache.size", nil)
+	requestsCacheGauge = metrics.NewRegisteredGauge("storage.cache.requests.size", nil)
 )
 
 // the swarm stack
@@ -420,6 +420,7 @@ func (self *Swarm) periodicallyUpdateGauges() {
 
 func (self *Swarm) updateGauges() {
 	uptimeGauge.Update(time.Since(startTime).Nanoseconds())
+	requestsCacheGauge.Update(int64(self.lstore.RequestsCacheLen()))
 }
 
 // implements the node.Service interface
