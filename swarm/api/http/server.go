@@ -52,24 +52,21 @@ type resourceResponse struct {
 }
 
 var (
-	postRawCount     = metrics.NewRegisteredCounter("api.http.post.raw.count", nil)
-	postRawFail      = metrics.NewRegisteredCounter("api.http.post.raw.fail", nil)
-	postFilesCount   = metrics.NewRegisteredCounter("api.http.post.files.count", nil)
-	postFilesFail    = metrics.NewRegisteredCounter("api.http.post.files.fail", nil)
-	deleteCount      = metrics.NewRegisteredCounter("api.http.delete.count", nil)
-	deleteFail       = metrics.NewRegisteredCounter("api.http.delete.fail", nil)
-	getCount         = metrics.NewRegisteredCounter("api.http.get.count", nil)
-	getFail          = metrics.NewRegisteredCounter("api.http.get.fail", nil)
-	getFileCount     = metrics.NewRegisteredCounter("api.http.get.file.count", nil)
-	getFileNotFound  = metrics.NewRegisteredCounter("api.http.get.file.notfound", nil)
-	getFileFail      = metrics.NewRegisteredCounter("api.http.get.file.fail", nil)
-	getFilesCount    = metrics.NewRegisteredCounter("api.http.get.files.count", nil)
-	getFilesFail     = metrics.NewRegisteredCounter("api.http.get.files.fail", nil)
-	getListCount     = metrics.NewRegisteredCounter("api.http.get.list.count", nil)
-	getListFail      = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
-	htmlRequestCount = metrics.NewRegisteredCounter("http.request.html.count", nil)
-	jsonRequestCount = metrics.NewRegisteredCounter("http.request.json.count", nil)
-	requestTimer     = metrics.NewRegisteredResettingTimer("http.request.time", nil)
+	postRawCount    = metrics.NewRegisteredCounter("api.http.post.raw.count", nil)
+	postRawFail     = metrics.NewRegisteredCounter("api.http.post.raw.fail", nil)
+	postFilesCount  = metrics.NewRegisteredCounter("api.http.post.files.count", nil)
+	postFilesFail   = metrics.NewRegisteredCounter("api.http.post.files.fail", nil)
+	deleteCount     = metrics.NewRegisteredCounter("api.http.delete.count", nil)
+	deleteFail      = metrics.NewRegisteredCounter("api.http.delete.fail", nil)
+	getCount        = metrics.NewRegisteredCounter("api.http.get.count", nil)
+	getFail         = metrics.NewRegisteredCounter("api.http.get.fail", nil)
+	getFileCount    = metrics.NewRegisteredCounter("api.http.get.file.count", nil)
+	getFileNotFound = metrics.NewRegisteredCounter("api.http.get.file.notfound", nil)
+	getFileFail     = metrics.NewRegisteredCounter("api.http.get.file.fail", nil)
+	getFilesCount   = metrics.NewRegisteredCounter("api.http.get.files.count", nil)
+	getFilesFail    = metrics.NewRegisteredCounter("api.http.get.files.fail", nil)
+	getListCount    = metrics.NewRegisteredCounter("api.http.get.list.count", nil)
+	getListFail     = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
 )
 
 // ServerConfig is the basic configuration needed for the HTTP server and also
@@ -860,8 +857,8 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode("Welcome to Swarm!")
 		return
-	}	
-	
+	}
+
 	uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
 	if err != nil {
 		Respond(w, req, fmt.Sprintf("invalid URI %q", r.URL.Path), http.StatusBadRequest)

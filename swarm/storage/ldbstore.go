@@ -43,7 +43,6 @@ import (
 
 //metrics variables
 var (
-	gcCounter            = metrics.NewRegisteredCounter("storage.db.dbstore.gc.count", nil)
 	dbStoreDeleteCounter = metrics.NewRegisteredCounter("storage.db.dbstore.rm.count", nil)
 )
 
@@ -58,7 +57,6 @@ var (
 	keyAccessCnt   = []byte{2}
 	keyEntryCnt    = []byte{3}
 	keyDataIdx     = []byte{4}
-	keyGCPos       = []byte{5}
 	keyData        = byte(6)
 	keyDistanceCnt = byte(7)
 )

@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 )
 
 /*
@@ -63,11 +62,6 @@ The hashing itself does use extra copies and allocation though, since it does ne
 var (
 	errAppendOppNotSuported = errors.New("Append operation not supported")
 	errOperationTimedOut    = errors.New("operation timed out")
-)
-
-//metrics variables
-var (
-	newChunkCounter = metrics.NewRegisteredCounter("storage.chunks.new", nil)
 )
 
 const (

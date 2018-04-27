@@ -35,26 +35,15 @@ import (
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
-const (
-	pssServiceName = "pss"
-	bzzServiceName = "bzz"
-)
-
 var (
-	initOnce         = sync.Once{}
-	snapshotfile     string
-	debugdebugflag   = flag.Bool("vv", false, "veryverbose")
-	debugflag        = flag.Bool("v", false, "verbose")
-	snapshotflag     = flag.String("s", "", "snapshot filename")
-	messagesflag     = flag.Int("m", 0, "number of messages to generate (default = number of nodes). Ignored if -s is not set")
-	addresssizeflag  = flag.Int("b", 32, "number of bytes to use for address. Ignored if -s is not set")
-	adaptertypeflag  = flag.String("a", "sim", "Adapter type to use. Ignored if -s is not set")
-	messagedelayflag = flag.Int("d", 1000, "Message max delay period, in ms")
-	w                *whisper.Whisper
-	wapi             *whisper.PublicWhisperAPI
-	psslogmain       log.Logger
-	pssprotocols     map[string]*protoCtrl
-	useHandshake     bool
+	initOnce       = sync.Once{}
+	debugdebugflag = flag.Bool("vv", false, "veryverbose")
+	debugflag      = flag.Bool("v", false, "verbose")
+	w              *whisper.Whisper
+	wapi           *whisper.PublicWhisperAPI
+	psslogmain     log.Logger
+	pssprotocols   map[string]*protoCtrl
+	useHandshake   bool
 )
 
 func init() {

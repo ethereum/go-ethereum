@@ -31,7 +31,6 @@ import (
 )
 
 var (
-	adapter  = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
 	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
 )
 

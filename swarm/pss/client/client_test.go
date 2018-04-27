@@ -24,11 +24,6 @@ import (
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
-const (
-	pssServiceName = "pss"
-	bzzServiceName = "bzz"
-)
-
 type protoCtrl struct {
 	C        chan bool
 	protocol *pss.Protocol

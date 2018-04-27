@@ -48,11 +48,10 @@ const MaxTimeout = 600
 var (
 	pof = pot.DefaultPof(256)
 
-	conf      *synctestConfig
-	startTime time.Time
-	ids       []discover.NodeID
-	datadirs  map[discover.NodeID]string
-	ppmap     map[string]*network.PeerPot
+	conf     *synctestConfig
+	ids      []discover.NodeID
+	datadirs map[discover.NodeID]string
+	ppmap    map[string]*network.PeerPot
 
 	live    bool
 	history bool

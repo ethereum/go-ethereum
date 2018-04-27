@@ -58,8 +58,6 @@ func NewSwarmSyncerServer(live bool, po uint8, db *storage.DBAPI) (*SwarmSyncerS
 	}, nil
 }
 
-const maxPO = 32
-
 func RegisterSwarmSyncerServer(streamer *Registry, db *storage.DBAPI) {
 	streamer.RegisterServerFunc("SYNC", func(p *Peer, t string, live bool) (Server, error) {
 		po, err := ParseSyncBinKey(t)

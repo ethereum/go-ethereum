@@ -32,7 +32,6 @@ const (
 	defaultWhisperPoW          = 0.0000000001
 	defaultMaxMsgSize          = 1024 * 1024
 	defaultCleanInterval       = time.Second * 60 * 10
-	defaultDequeueInterval     = time.Millisecond * 10
 	defaultOutboxCapacity      = 10000
 	pssProtocolName            = "pss"
 	pssVersion                 = 1
