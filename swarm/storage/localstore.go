@@ -211,6 +211,11 @@ func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool)
 	return chunk, true
 }
 
+// RequestsCacheLen returns the current number of outgoing requests stored in the cache
+func (self *LocalStore) RequestsCacheLen() int {
+	return self.memStore.requests.Len()
+}
+
 // Close the local store
 func (self *LocalStore) Close() {
 	self.DbStore.Close()
