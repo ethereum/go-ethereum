@@ -78,41 +78,25 @@ func (self *Network) Events() *event.Feed {
 	return &self.events
 }
 
-// NewNode adds a new node to the network with a random ID
-func (self *Network) NewNode() (*Node, error) {
-	conf := adapters.RandomNodeConfig()
-	conf.Services = []string{self.DefaultService}
-	return self.NewNodeWithConfig(conf)
-}
-
 // NewNodeWithConfig adds a new node to the network with the given config,
 // returning an error if a node with the same ID or name already exists
 func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	// create a random ID and PrivateKey if not set
-	if conf.ID == (discover.NodeID{}) {
-		c := adapters.RandomNodeConfig()
-		conf.ID = c.ID
-		conf.PrivateKey = c.PrivateKey
-	}
-	id := conf.ID
 	if conf.Reachable == nil {
 		conf.Reachable = func(otherID discover.NodeID) bool {
 			_, err := self.InitConn(conf.ID, otherID)
-			return err == nil
+			if err != nil && bytes.Compare(conf.ID.Bytes(), otherID.Bytes()) < 0 {
+				return false
+			}
+			return true
 		}
 	}
 
-	// assign a name to the node if not set
-	if conf.Name == "" {
-		conf.Name = fmt.Sprintf("node%02d", len(self.Nodes)+1)
-	}
-
 	// check the node doesn't already exist
-	if node := self.getNode(id); node != nil {
-		return nil, fmt.Errorf("node with ID %q already exists", id)
+	if node := self.getNode(conf.ID); node != nil {
+		return nil, fmt.Errorf("node with ID %q already exists", conf.ID)
 	}
 	if node := self.getNodeByName(conf.Name); node != nil {
 		return nil, fmt.Errorf("node with name %q already exists", conf.Name)
@@ -132,8 +116,8 @@ func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error)
 		Node:   adapterNode,
 		Config: conf,
 	}
-	log.Trace(fmt.Sprintf("node %v created", id))
-	self.nodeMap[id] = len(self.Nodes)
+	log.Trace(fmt.Sprintf("node %v created", conf.ID))
+	self.nodeMap[conf.ID] = len(self.Nodes)
 	self.Nodes = append(self.Nodes, node)
 
 	// emit a "control" event
@@ -467,9 +451,11 @@ func (self *Network) getConn(oneID, otherID discover.NodeID) *Conn {
 // this is cheating as the simulation is used as an oracle and know about
 // remote peers attempt to connect to a node which will then not initiate the connection
 func (self *Network) InitConn(oneID, otherID discover.NodeID) (*Conn, error) {
+	log.Debug(fmt.Sprintf("InitConn(oneID: %v, otherID: %v)", oneID, otherID))
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if oneID == otherID {
+		log.Trace(fmt.Sprintf("refusing to connect to self %v", oneID))
 		return nil, fmt.Errorf("refusing to connect to self %v", oneID)
 	}
 	conn, err := self.getOrCreateConn(oneID, otherID)
@@ -477,15 +463,19 @@ func (self *Network) InitConn(oneID, otherID discover.NodeID) (*Conn, error) {
 		return nil, err
 	}
 	if time.Since(conn.initiated) < dialBanTimeout {
+		log.Trace(fmt.Sprintf("connection between %v and %v recently attempted", oneID, otherID))
 		return nil, fmt.Errorf("connection between %v and %v recently attempted", oneID, otherID)
 	}
 	if conn.Up {
+		log.Trace(fmt.Sprintf("%v and %v already connected", oneID, otherID))
 		return nil, fmt.Errorf("%v and %v already connected", oneID, otherID)
 	}
 	err = conn.nodesUp()
 	if err != nil {
+		log.Trace(fmt.Sprintf("nodes not up: %v", err))
 		return nil, fmt.Errorf("nodes not up: %v", err)
 	}
+	log.Debug("InitConn - connection initiated")
 	conn.initiated = time.Now()
 	return conn, nil
 }

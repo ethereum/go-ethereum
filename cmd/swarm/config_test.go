@@ -34,7 +34,7 @@ import (
 
 func TestDumpConfig(t *testing.T) {
 	swarm := runSwarm(t, "dumpconfig")
-	defaultConf := api.NewDefaultConfig()
+	defaultConf := api.NewConfig()
 	out, err := tomlSettings.Marshal(&defaultConf)
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestDumpConfig(t *testing.T) {
 	swarm.ExpectExit()
 }
 
-func TestFailsSwapEnabledNoSwapApi(t *testing.T) {
+func TestConfigFailsSwapEnabledNoSwapApi(t *testing.T) {
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), "54545",
@@ -55,7 +55,7 @@ func TestFailsSwapEnabledNoSwapApi(t *testing.T) {
 	swarm.ExpectExit()
 }
 
-func TestFailsNoBzzAccount(t *testing.T) {
+func TestConfigFailsNoBzzAccount(t *testing.T) {
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), "54545",
@@ -66,7 +66,7 @@ func TestFailsNoBzzAccount(t *testing.T) {
 	swarm.ExpectExit()
 }
 
-func TestCmdLineOverrides(t *testing.T) {
+func TestConfigCmdLineOverrides(t *testing.T) {
 	dir, err := ioutil.TempDir("", "bzztest")
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +85,7 @@ func TestCmdLineOverrides(t *testing.T) {
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
-		fmt.Sprintf("--%s", SwarmSyncEnabledFlag.Name),
+		fmt.Sprintf("--%s", SwarmSyncDisabledFlag.Name),
 		fmt.Sprintf("--%s", CorsStringFlag.Name), "*",
 		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),
 		fmt.Sprintf("--%s", EnsAPIFlag.Name), "",
@@ -124,8 +124,8 @@ func TestCmdLineOverrides(t *testing.T) {
 		t.Fatalf("Expected network ID to be %d, got %d", 42, info.NetworkId)
 	}
 
-	if !info.SyncEnabled {
-		t.Fatal("Expected Sync to be enabled, but is false")
+	if info.SyncEnabled {
+		t.Fatal("Expected Sync to be disabled, but is true")
 	}
 
 	if info.Cors != "*" {
@@ -135,7 +135,7 @@ func TestCmdLineOverrides(t *testing.T) {
 	node.Shutdown()
 }
 
-func TestFileOverrides(t *testing.T) {
+func TestConfigFileOverrides(t *testing.T) {
 
 	// assign ports
 	httpPort, err := assignTCPPort()
@@ -145,16 +145,15 @@ func TestFileOverrides(t *testing.T) {
 
 	//create a config file
 	//first, create a default conf
-	defaultConf := api.NewDefaultConfig()
+	defaultConf := api.NewConfig()
 	//change some values in order to test if they have been loaded
-	defaultConf.SyncEnabled = true
+	defaultConf.SyncEnabled = false
 	defaultConf.NetworkId = 54
 	defaultConf.Port = httpPort
-	defaultConf.StoreParams.DbCapacity = 9000000
-	defaultConf.ChunkerParams.Branches = 64
-	defaultConf.HiveParams.CallInterval = 6000000000
+	defaultConf.DbCapacity = 9000000
+	defaultConf.HiveParams.KeepAliveInterval = 6000000000
 	defaultConf.Swap.Params.Strategy.AutoCashInterval = 600 * time.Second
-	defaultConf.SyncParams.KeyBufferSize = 512
+	//defaultConf.SyncParams.KeyBufferSize = 512
 	//create a TOML string
 	out, err := tomlSettings.Marshal(&defaultConf)
 	if err != nil {
@@ -219,34 +218,30 @@ func TestFileOverrides(t *testing.T) {
 		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkId)
 	}
 
-	if !info.SyncEnabled {
-		t.Fatal("Expected Sync to be enabled, but is false")
+	if info.SyncEnabled {
+		t.Fatal("Expected Sync to be disabled, but is true")
 	}
 
-	if info.StoreParams.DbCapacity != 9000000 {
+	if info.DbCapacity != 9000000 {
 		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkId)
 	}
 
-	if info.ChunkerParams.Branches != 64 {
-		t.Fatalf("Expected chunker params branches to be %d, got %d", 64, info.ChunkerParams.Branches)
-	}
-
-	if info.HiveParams.CallInterval != 6000000000 {
-		t.Fatalf("Expected HiveParams CallInterval to be %d, got %d", uint64(6000000000), uint64(info.HiveParams.CallInterval))
+	if info.HiveParams.KeepAliveInterval != 6000000000 {
+		t.Fatalf("Expected HiveParams KeepAliveInterval to be %d, got %d", uint64(6000000000), uint64(info.HiveParams.KeepAliveInterval))
 	}
 
 	if info.Swap.Params.Strategy.AutoCashInterval != 600*time.Second {
 		t.Fatalf("Expected SwapParams AutoCashInterval to be %ds, got %d", 600, info.Swap.Params.Strategy.AutoCashInterval)
 	}
 
-	if info.SyncParams.KeyBufferSize != 512 {
-		t.Fatalf("Expected info.SyncParams.KeyBufferSize to be %d, got %d", 512, info.SyncParams.KeyBufferSize)
-	}
+	//	if info.SyncParams.KeyBufferSize != 512 {
+	//		t.Fatalf("Expected info.SyncParams.KeyBufferSize to be %d, got %d", 512, info.SyncParams.KeyBufferSize)
+	//	}
 
 	node.Shutdown()
 }
 
-func TestEnvVars(t *testing.T) {
+func TestConfigEnvVars(t *testing.T) {
 	// assign ports
 	httpPort, err := assignTCPPort()
 	if err != nil {
@@ -257,7 +252,7 @@ func TestEnvVars(t *testing.T) {
 	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmPortFlag.EnvVar, httpPort))
 	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmNetworkIdFlag.EnvVar, "999"))
 	envVars = append(envVars, fmt.Sprintf("%s=%s", CorsStringFlag.EnvVar, "*"))
-	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmSyncEnabledFlag.EnvVar, "true"))
+	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmSyncDisabledFlag.EnvVar, "true"))
 
 	dir, err := ioutil.TempDir("", "bzztest")
 	if err != nil {
@@ -334,15 +329,15 @@ func TestEnvVars(t *testing.T) {
 		t.Fatalf("Expected Cors flag to be set to %s, got %s", "*", info.Cors)
 	}
 
-	if !info.SyncEnabled {
-		t.Fatal("Expected Sync to be enabled, but is false")
+	if info.SyncEnabled {
+		t.Fatal("Expected Sync to be disabled, but is true")
 	}
 
 	node.Shutdown()
 	cmd.Process.Kill()
 }
 
-func TestCmdLineOverridesFile(t *testing.T) {
+func TestConfigCmdLineOverridesFile(t *testing.T) {
 
 	// assign ports
 	httpPort, err := assignTCPPort()
@@ -352,26 +347,27 @@ func TestCmdLineOverridesFile(t *testing.T) {
 
 	//create a config file
 	//first, create a default conf
-	defaultConf := api.NewDefaultConfig()
+	defaultConf := api.NewConfig()
 	//change some values in order to test if they have been loaded
-	defaultConf.SyncEnabled = false
+	defaultConf.SyncEnabled = true
 	defaultConf.NetworkId = 54
 	defaultConf.Port = "8588"
-	defaultConf.StoreParams.DbCapacity = 9000000
-	defaultConf.ChunkerParams.Branches = 64
-	defaultConf.HiveParams.CallInterval = 6000000000
+	defaultConf.DbCapacity = 9000000
+	defaultConf.HiveParams.KeepAliveInterval = 6000000000
 	defaultConf.Swap.Params.Strategy.AutoCashInterval = 600 * time.Second
-	defaultConf.SyncParams.KeyBufferSize = 512
+	//defaultConf.SyncParams.KeyBufferSize = 512
 	//create a TOML file
 	out, err := tomlSettings.Marshal(&defaultConf)
 	if err != nil {
 		t.Fatalf("Error creating TOML file in TestFileOverride: %v", err)
 	}
 	//write file
-	f, err := ioutil.TempFile("", "testconfig.toml")
+	fname := "testconfig.toml"
+	f, err := ioutil.TempFile("", fname)
 	if err != nil {
 		t.Fatalf("Error writing TOML file in TestFileOverride: %v", err)
 	}
+	defer os.Remove(fname)
 	//write file
 	_, err = f.WriteString(string(out))
 	if err != nil {
@@ -392,7 +388,7 @@ func TestCmdLineOverridesFile(t *testing.T) {
 	flags := []string{
 		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "77",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
-		fmt.Sprintf("--%s", SwarmSyncEnabledFlag.Name),
+		fmt.Sprintf("--%s", SwarmSyncDisabledFlag.Name),
 		fmt.Sprintf("--%s", SwarmTomlConfigPathFlag.Name), f.Name(),
 		fmt.Sprintf("--%s", SwarmAccountFlag.Name), account.Address.String(),
 		"--ens-api", "",
@@ -431,29 +427,25 @@ func TestCmdLineOverridesFile(t *testing.T) {
 		t.Fatalf("Expected network ID to be %d, got %d", expectNetworkId, info.NetworkId)
 	}
 
-	if !info.SyncEnabled {
-		t.Fatal("Expected Sync to be enabled, but is false")
+	if info.SyncEnabled {
+		t.Fatal("Expected Sync to be disabled, but is true")
 	}
 
-	if info.StoreParams.DbCapacity != 9000000 {
-		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkId)
+	if info.LocalStoreParams.DbCapacity != 9000000 {
+		t.Fatalf("Expected Capacity to be %d, got %d", 9000000, info.LocalStoreParams.DbCapacity)
 	}
 
-	if info.ChunkerParams.Branches != 64 {
-		t.Fatalf("Expected chunker params branches to be %d, got %d", 64, info.ChunkerParams.Branches)
-	}
-
-	if info.HiveParams.CallInterval != 6000000000 {
-		t.Fatalf("Expected HiveParams CallInterval to be %d, got %d", uint64(6000000000), uint64(info.HiveParams.CallInterval))
+	if info.HiveParams.KeepAliveInterval != 6000000000 {
+		t.Fatalf("Expected HiveParams KeepAliveInterval to be %d, got %d", uint64(6000000000), uint64(info.HiveParams.KeepAliveInterval))
 	}
 
 	if info.Swap.Params.Strategy.AutoCashInterval != 600*time.Second {
 		t.Fatalf("Expected SwapParams AutoCashInterval to be %ds, got %d", 600, info.Swap.Params.Strategy.AutoCashInterval)
 	}
 
-	if info.SyncParams.KeyBufferSize != 512 {
-		t.Fatalf("Expected info.SyncParams.KeyBufferSize to be %d, got %d", 512, info.SyncParams.KeyBufferSize)
-	}
+	//	if info.SyncParams.KeyBufferSize != 512 {
+	//		t.Fatalf("Expected info.SyncParams.KeyBufferSize to be %d, got %d", 512, info.SyncParams.KeyBufferSize)
+	//	}
 
 	node.Shutdown()
 }

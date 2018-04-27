@@ -21,6 +21,7 @@ package fuse
 import (
 	"bytes"
 	"crypto/rand"
+	"flag"
 	"io"
 	"io/ioutil"
 	"os"
@@ -29,7 +30,22 @@ import (
 
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+
+	"github.com/ethereum/go-ethereum/log"
+
+	colorable "github.com/mattn/go-colorable"
 )
+
+var (
+	loglevel = flag.Int("loglevel", 4, "verbosity of logs")
+	rawlog   = flag.Bool("rawlog", false, "turn off terminal formatting in logs")
+)
+
+func init() {
+	flag.Parse()
+	log.PrintOrigins(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(!*rawlog))))
+}
 
 type fileInfo struct {
 	perm     uint64
@@ -38,7 +54,7 @@ type fileInfo struct {
 	contents []byte
 }
 
-func createTestFilesAndUploadToSwarm(t *testing.T, api *api.Api, files map[string]fileInfo, uploadDir string) string {
+func createTestFilesAndUploadToSwarm(t *testing.T, api *api.Api, files map[string]fileInfo, uploadDir string, toEncrypt bool) string {
 	os.RemoveAll(uploadDir)
 
 	for fname, finfo := range files {
@@ -62,9 +78,9 @@ func createTestFilesAndUploadToSwarm(t *testing.T, api *api.Api, files map[strin
 		fd.Close()
 	}
 
-	bzzhash, err := api.Upload(uploadDir, "")
+	bzzhash, err := api.Upload(uploadDir, "", toEncrypt)
 	if err != nil {
-		t.Fatalf("Error uploading directory %v: %v", uploadDir, err)
+		t.Fatalf("Error uploading directory %v: %vm encryption: %v", uploadDir, err, toEncrypt)
 	}
 
 	return bzzhash
@@ -84,6 +100,7 @@ func mountDir(t *testing.T, api *api.Api, files map[string]fileInfo, bzzHash str
 	found := false
 	mi := swarmfs.Listmounts()
 	for _, minfo := range mi {
+		minfo.lock.RLock()
 		if minfo.MountPoint == mountDir {
 			if minfo.StartManifest != bzzHash ||
 				minfo.LatestManifest != bzzHash ||
@@ -92,6 +109,7 @@ func mountDir(t *testing.T, api *api.Api, files map[string]fileInfo, bzzHash str
 			}
 			found = true
 		}
+		minfo.lock.RUnlock()
 	}
 
 	// Test listMounts
@@ -171,7 +189,7 @@ func checkFile(t *testing.T, testMountDir, fname string, contents []byte) {
 	}
 }
 
-func getRandomBtes(size int) []byte {
+func getRandomBytes(size int) []byte {
 	contents := make([]byte, size)
 	rand.Read(contents)
 	return contents
@@ -193,28 +211,37 @@ type testAPI struct {
 	api *api.Api
 }
 
-func (ta *testAPI) mountListAndUnmount(t *testing.T) {
+func (ta *testAPI) mountListAndUnmountEncrypted(t *testing.T) {
+	ta.mountListAndUnmount(t, true)
+}
+
+func (ta *testAPI) mountListAndUnmountNonEncrypted(t *testing.T) {
+	ta.mountListAndUnmount(t, false)
+}
+
+func (ta *testAPI) mountListAndUnmount(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "fuse-source")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "fuse-dest")
 
-	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["2.txt"] = fileInfo{0711, 333, 444, getRandomBtes(10)}
-	files["3.txt"] = fileInfo{0622, 333, 444, getRandomBtes(100)}
-	files["4.txt"] = fileInfo{0533, 333, 444, getRandomBtes(1024)}
-	files["5.txt"] = fileInfo{0544, 333, 444, getRandomBtes(10)}
-	files["6.txt"] = fileInfo{0555, 333, 444, getRandomBtes(10)}
-	files["7.txt"] = fileInfo{0666, 333, 444, getRandomBtes(10)}
-	files["8.txt"] = fileInfo{0777, 333, 333, getRandomBtes(10)}
-	files["11.txt"] = fileInfo{0777, 333, 444, getRandomBtes(10)}
-	files["111.txt"] = fileInfo{0777, 333, 444, getRandomBtes(10)}
-	files["two/2.txt"] = fileInfo{0777, 333, 444, getRandomBtes(10)}
-	files["two/2/2.txt"] = fileInfo{0777, 333, 444, getRandomBtes(10)}
-	files["two/2./2.txt"] = fileInfo{0777, 444, 444, getRandomBtes(10)}
-	files["twice/2.txt"] = fileInfo{0777, 444, 333, getRandomBtes(200)}
-	files["one/two/three/four/five/six/seven/eight/nine/10.txt"] = fileInfo{0777, 333, 444, getRandomBtes(10240)}
-	files["one/two/three/four/five/six/six"] = fileInfo{0777, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
+	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["2.txt"] = fileInfo{0711, 333, 444, getRandomBytes(10)}
+	files["3.txt"] = fileInfo{0622, 333, 444, getRandomBytes(100)}
+	files["4.txt"] = fileInfo{0533, 333, 444, getRandomBytes(1024)}
+	files["5.txt"] = fileInfo{0544, 333, 444, getRandomBytes(10)}
+	files["6.txt"] = fileInfo{0555, 333, 444, getRandomBytes(10)}
+	files["7.txt"] = fileInfo{0666, 333, 444, getRandomBytes(10)}
+	files["8.txt"] = fileInfo{0777, 333, 333, getRandomBytes(10)}
+	files["11.txt"] = fileInfo{0777, 333, 444, getRandomBytes(10)}
+	files["111.txt"] = fileInfo{0777, 333, 444, getRandomBytes(10)}
+	files["two/2.txt"] = fileInfo{0777, 333, 444, getRandomBytes(10)}
+	files["two/2/2.txt"] = fileInfo{0777, 333, 444, getRandomBytes(10)}
+	files["two/2./2.txt"] = fileInfo{0777, 444, 444, getRandomBytes(10)}
+	files["twice/2.txt"] = fileInfo{0777, 444, 333, getRandomBytes(200)}
+	files["one/two/three/four/five/six/seven/eight/nine/10.txt"] = fileInfo{0777, 333, 444, getRandomBytes(10240)}
+	files["one/two/three/four/five/six/six"] = fileInfo{0777, 333, 444, getRandomBytes(10)}
+
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 
 	swarmfs := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs.Stop()
@@ -227,49 +254,56 @@ func (ta *testAPI) mountListAndUnmount(t *testing.T) {
 	if !isDirEmpty(testMountDir) {
 		t.Fatalf("unmount didnt work for %v", testMountDir)
 	}
-
 }
 
-func (ta *testAPI) maxMounts(t *testing.T) {
+func (ta *testAPI) maxMountsEncrypted(t *testing.T) {
+	ta.runMaxMounts(t, true)
+}
+
+func (ta *testAPI) maxMountsNonEncrypted(t *testing.T) {
+	ta.runMaxMounts(t, false)
+}
+
+func (ta *testAPI) runMaxMounts(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
-	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
+	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
 	uploadDir1, _ := ioutil.TempDir(os.TempDir(), "max-upload1")
-	bzzHash1 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir1)
+	bzzHash1 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir1, toEncrypt)
 	mount1, _ := ioutil.TempDir(os.TempDir(), "max-mount1")
 	swarmfs1 := mountDir(t, ta.api, files, bzzHash1, mount1)
 	defer swarmfs1.Stop()
 
-	files["2.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
+	files["2.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
 	uploadDir2, _ := ioutil.TempDir(os.TempDir(), "max-upload2")
-	bzzHash2 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir2)
+	bzzHash2 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir2, toEncrypt)
 	mount2, _ := ioutil.TempDir(os.TempDir(), "max-mount2")
 	swarmfs2 := mountDir(t, ta.api, files, bzzHash2, mount2)
 	defer swarmfs2.Stop()
 
-	files["3.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
+	files["3.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
 	uploadDir3, _ := ioutil.TempDir(os.TempDir(), "max-upload3")
-	bzzHash3 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir3)
+	bzzHash3 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir3, toEncrypt)
 	mount3, _ := ioutil.TempDir(os.TempDir(), "max-mount3")
 	swarmfs3 := mountDir(t, ta.api, files, bzzHash3, mount3)
 	defer swarmfs3.Stop()
 
-	files["4.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
+	files["4.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
 	uploadDir4, _ := ioutil.TempDir(os.TempDir(), "max-upload4")
-	bzzHash4 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir4)
+	bzzHash4 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir4, toEncrypt)
 	mount4, _ := ioutil.TempDir(os.TempDir(), "max-mount4")
 	swarmfs4 := mountDir(t, ta.api, files, bzzHash4, mount4)
 	defer swarmfs4.Stop()
 
-	files["5.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
+	files["5.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
 	uploadDir5, _ := ioutil.TempDir(os.TempDir(), "max-upload5")
-	bzzHash5 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir5)
+	bzzHash5 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir5, toEncrypt)
 	mount5, _ := ioutil.TempDir(os.TempDir(), "max-mount5")
 	swarmfs5 := mountDir(t, ta.api, files, bzzHash5, mount5)
 	defer swarmfs5.Stop()
 
-	files["6.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
+	files["6.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
 	uploadDir6, _ := ioutil.TempDir(os.TempDir(), "max-upload6")
-	bzzHash6 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir6)
+	bzzHash6 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir6, toEncrypt)
 	mount6, _ := ioutil.TempDir(os.TempDir(), "max-mount6")
 
 	os.RemoveAll(mount6)
@@ -278,20 +312,26 @@ func (ta *testAPI) maxMounts(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Error: Going beyond max mounts  %v", bzzHash6)
 	}
-
 }
 
-func (ta *testAPI) remount(t *testing.T) {
+func (ta *testAPI) remountEncrypted(t *testing.T) {
+	ta.remount(t, true)
+}
+func (ta *testAPI) remountNonEncrypted(t *testing.T) {
+	ta.remount(t, false)
+}
+
+func (ta *testAPI) remount(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
-	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
+	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
 	uploadDir1, _ := ioutil.TempDir(os.TempDir(), "re-upload1")
-	bzzHash1 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir1)
+	bzzHash1 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir1, toEncrypt)
 	testMountDir1, _ := ioutil.TempDir(os.TempDir(), "re-mount1")
 	swarmfs := mountDir(t, ta.api, files, bzzHash1, testMountDir1)
 	defer swarmfs.Stop()
 
 	uploadDir2, _ := ioutil.TempDir(os.TempDir(), "re-upload2")
-	bzzHash2 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir2)
+	bzzHash2 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir2, toEncrypt)
 	testMountDir2, _ := ioutil.TempDir(os.TempDir(), "re-mount2")
 
 	// try mounting the same hash second time
@@ -315,13 +355,21 @@ func (ta *testAPI) remount(t *testing.T) {
 	}
 }
 
-func (ta *testAPI) unmount(t *testing.T) {
+func (ta *testAPI) unmountEncrypted(t *testing.T) {
+	ta.unmount(t, true)
+}
+
+func (ta *testAPI) unmountNonEncrypted(t *testing.T) {
+	ta.unmount(t, false)
+}
+
+func (ta *testAPI) unmount(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	uploadDir, _ := ioutil.TempDir(os.TempDir(), "ex-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "ex-mount")
 
-	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir)
+	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir, toEncrypt)
 
 	swarmfs := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs.Stop()
@@ -336,20 +384,27 @@ func (ta *testAPI) unmount(t *testing.T) {
 	}
 }
 
-func (ta *testAPI) unmountWhenResourceBusy(t *testing.T) {
+func (ta *testAPI) unmountWhenResourceBusyEncrypted(t *testing.T) {
+	ta.unmountWhenResourceBusy(t, true)
+}
+func (ta *testAPI) unmountWhenResourceBusyNonEncrypted(t *testing.T) {
+	ta.unmountWhenResourceBusy(t, false)
+}
+
+func (ta *testAPI) unmountWhenResourceBusy(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "ex-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "ex-mount")
 
-	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
+	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 
 	swarmfs := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs.Stop()
 
 	actualPath := filepath.Join(testMountDir, "2.txt")
 	d, err := os.OpenFile(actualPath, os.O_RDWR, os.FileMode(0700))
-	d.Write(getRandomBtes(10))
+	d.Write(getRandomBytes(10))
 
 	_, err = swarmfs.Unmount(testMountDir)
 	if err != nil {
@@ -365,13 +420,21 @@ func (ta *testAPI) unmountWhenResourceBusy(t *testing.T) {
 	}
 }
 
-func (ta *testAPI) seekInMultiChunkFile(t *testing.T) {
+func (ta *testAPI) seekInMultiChunkFileEncrypted(t *testing.T) {
+	ta.seekInMultiChunkFile(t, true)
+}
+
+func (ta *testAPI) seekInMultiChunkFileNonEncrypted(t *testing.T) {
+	ta.seekInMultiChunkFile(t, false)
+}
+
+func (ta *testAPI) seekInMultiChunkFile(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "seek-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "seek-mount")
 
-	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10240)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
+	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10240)}
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 
 	swarmfs := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs.Stop()
@@ -392,15 +455,23 @@ func (ta *testAPI) seekInMultiChunkFile(t *testing.T) {
 	d.Close()
 }
 
-func (ta *testAPI) createNewFile(t *testing.T) {
+func (ta *testAPI) createNewFileEncrypted(t *testing.T) {
+	ta.createNewFile(t, true)
+}
+
+func (ta *testAPI) createNewFileNonEncrypted(t *testing.T) {
+	ta.createNewFile(t, false)
+}
+
+func (ta *testAPI) createNewFile(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "create-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "create-mount")
 
-	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
+	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 
 	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
@@ -429,13 +500,21 @@ func (ta *testAPI) createNewFile(t *testing.T) {
 	checkFile(t, testMountDir, "2.txt", contents)
 }
 
-func (ta *testAPI) createNewFileInsideDirectory(t *testing.T) {
+func (ta *testAPI) createNewFileInsideDirectoryEncrypted(t *testing.T) {
+	ta.createNewFileInsideDirectory(t, true)
+}
+
+func (ta *testAPI) createNewFileInsideDirectoryNonEncrypted(t *testing.T) {
+	ta.createNewFileInsideDirectory(t, false)
+}
+
+func (ta *testAPI) createNewFileInsideDirectory(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "createinsidedir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "createinsidedir-mount")
 
-	files["one/1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
+	files["one/1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 
 	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
@@ -465,13 +544,21 @@ func (ta *testAPI) createNewFileInsideDirectory(t *testing.T) {
 	checkFile(t, testMountDir, "one/2.txt", contents)
 }
 
-func (ta *testAPI) createNewFileInsideNewDirectory(t *testing.T) {
+func (ta *testAPI) createNewFileInsideNewDirectoryEncrypted(t *testing.T) {
+	ta.createNewFileInsideNewDirectory(t, true)
+}
+
+func (ta *testAPI) createNewFileInsideNewDirectoryNonEncrypted(t *testing.T) {
+	ta.createNewFileInsideNewDirectory(t, false)
+}
+
+func (ta *testAPI) createNewFileInsideNewDirectory(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "createinsidenewdir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "createinsidenewdir-mount")
 
-	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
+	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 
 	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
@@ -502,15 +589,23 @@ func (ta *testAPI) createNewFileInsideNewDirectory(t *testing.T) {
 	checkFile(t, testMountDir, "one/2.txt", contents)
 }
 
-func (ta *testAPI) removeExistingFile(t *testing.T) {
+func (ta *testAPI) removeExistingFileEncrypted(t *testing.T) {
+	ta.removeExistingFile(t, true)
+}
+
+func (ta *testAPI) removeExistingFileNonEncrypted(t *testing.T) {
+	ta.removeExistingFile(t, false)
+}
+
+func (ta *testAPI) removeExistingFile(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "remove-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "remove-mount")
 
-	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
+	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 
 	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
@@ -530,15 +625,23 @@ func (ta *testAPI) removeExistingFile(t *testing.T) {
 	defer swarmfs2.Stop()
 }
 
-func (ta *testAPI) removeExistingFileInsideDir(t *testing.T) {
+func (ta *testAPI) removeExistingFileInsideDirEncrypted(t *testing.T) {
+	ta.removeExistingFileInsideDir(t, true)
+}
+
+func (ta *testAPI) removeExistingFileInsideDirNonEncrypted(t *testing.T) {
+	ta.removeExistingFileInsideDir(t, false)
+}
+
+func (ta *testAPI) removeExistingFileInsideDir(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "remove-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "remove-mount")
 
-	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["one/five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["one/six.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
+	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["one/five.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["one/six.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 
 	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
@@ -558,16 +661,23 @@ func (ta *testAPI) removeExistingFileInsideDir(t *testing.T) {
 	defer swarmfs2.Stop()
 }
 
-func (ta *testAPI) removeNewlyAddedFile(t *testing.T) {
+func (ta *testAPI) removeNewlyAddedFileEncrypted(t *testing.T) {
+	ta.removeNewlyAddedFile(t, true)
+}
 
+func (ta *testAPI) removeNewlyAddedFileNonEncrypted(t *testing.T) {
+	ta.removeNewlyAddedFile(t, false)
+}
+
+func (ta *testAPI) removeNewlyAddedFile(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "removenew-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "removenew-mount")
 
-	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
+	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 
 	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
@@ -603,15 +713,23 @@ func (ta *testAPI) removeNewlyAddedFile(t *testing.T) {
 	}
 }
 
-func (ta *testAPI) addNewFileAndModifyContents(t *testing.T) {
+func (ta *testAPI) addNewFileAndModifyContentsEncrypted(t *testing.T) {
+	ta.addNewFileAndModifyContents(t, true)
+}
+
+func (ta *testAPI) addNewFileAndModifyContentsNonEncrypted(t *testing.T) {
+	ta.addNewFileAndModifyContents(t, false)
+}
+
+func (ta *testAPI) addNewFileAndModifyContents(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "modifyfile-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "modifyfile-mount")
 
-	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
+	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 
 	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
@@ -673,15 +791,23 @@ func (ta *testAPI) addNewFileAndModifyContents(t *testing.T) {
 	checkFile(t, testMountDir, "2.txt", line1and2)
 }
 
-func (ta *testAPI) removeEmptyDir(t *testing.T) {
+func (ta *testAPI) removeEmptyDirEncrypted(t *testing.T) {
+	ta.removeEmptyDir(t, true)
+}
+
+func (ta *testAPI) removeEmptyDirNonEncrypted(t *testing.T) {
+	ta.removeEmptyDir(t, false)
+}
+
+func (ta *testAPI) removeEmptyDir(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-mount")
 
-	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
+	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 
 	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
@@ -697,15 +823,22 @@ func (ta *testAPI) removeEmptyDir(t *testing.T) {
 	}
 }
 
-func (ta *testAPI) removeDirWhichHasFiles(t *testing.T) {
+func (ta *testAPI) removeDirWhichHasFilesEncrypted(t *testing.T) {
+	ta.removeDirWhichHasFiles(t, true)
+}
+func (ta *testAPI) removeDirWhichHasFilesNonEncrypted(t *testing.T) {
+	ta.removeDirWhichHasFiles(t, false)
+}
+
+func (ta *testAPI) removeDirWhichHasFiles(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-mount")
 
-	files["one/1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["two/five.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["two/six.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
+	files["one/1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["two/five.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["two/six.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 
 	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
@@ -726,19 +859,26 @@ func (ta *testAPI) removeDirWhichHasFiles(t *testing.T) {
 	defer swarmfs2.Stop()
 }
 
-func (ta *testAPI) removeDirWhichHasSubDirs(t *testing.T) {
+func (ta *testAPI) removeDirWhichHasSubDirsEncrypted(t *testing.T) {
+	ta.removeDirWhichHasSubDirs(t, true)
+}
+
+func (ta *testAPI) removeDirWhichHasSubDirsNonEncrypted(t *testing.T) {
+	ta.removeDirWhichHasSubDirs(t, false)
+}
+func (ta *testAPI) removeDirWhichHasSubDirs(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "rmsubdir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "rmsubdir-mount")
 
-	files["one/1.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["two/three/2.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["two/three/3.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["two/four/5.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["two/four/6.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
-	files["two/four/six/7.txt"] = fileInfo{0700, 333, 444, getRandomBtes(10)}
+	files["one/1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["two/three/2.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["two/three/3.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["two/four/5.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["two/four/6.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
+	files["two/four/six/7.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
 
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 
 	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
@@ -762,7 +902,15 @@ func (ta *testAPI) removeDirWhichHasSubDirs(t *testing.T) {
 	defer swarmfs2.Stop()
 }
 
-func (ta *testAPI) appendFileContentsToEnd(t *testing.T) {
+func (ta *testAPI) appendFileContentsToEndEncrypted(t *testing.T) {
+	ta.appendFileContentsToEnd(t, true)
+}
+
+func (ta *testAPI) appendFileContentsToEndNonEncrypted(t *testing.T) {
+	ta.appendFileContentsToEnd(t, false)
+}
+
+func (ta *testAPI) appendFileContentsToEnd(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "appendlargefile-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "appendlargefile-mount")
@@ -770,7 +918,7 @@ func (ta *testAPI) appendFileContentsToEnd(t *testing.T) {
 	line1 := make([]byte, 10)
 	rand.Read(line1)
 	files["1.txt"] = fileInfo{0700, 333, 444, line1}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 
 	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	defer swarmfs1.Stop()
@@ -808,29 +956,44 @@ func TestFUSE(t *testing.T) {
 	}
 	os.RemoveAll(datadir)
 
-	dpa, err := storage.NewLocalDPA(datadir)
+	dpa, err := storage.NewLocalDPA(datadir, make([]byte, 32))
 	if err != nil {
 		t.Fatal(err)
 	}
-	ta := &testAPI{api: api.NewApi(dpa, nil)}
-	dpa.Start()
-	defer dpa.Stop()
+	ta := &testAPI{api: api.NewApi(dpa, nil, nil)}
 
-	t.Run("mountListAndUmount", ta.mountListAndUnmount)
-	t.Run("maxMounts", ta.maxMounts)
-	t.Run("remount", ta.remount)
-	t.Run("unmount", ta.unmount)
-	t.Run("unmountWhenResourceBusy", ta.unmountWhenResourceBusy)
-	t.Run("seekInMultiChunkFile", ta.seekInMultiChunkFile)
-	t.Run("createNewFile", ta.createNewFile)
-	t.Run("createNewFileInsideDirectory", ta.createNewFileInsideDirectory)
-	t.Run("createNewFileInsideNewDirectory", ta.createNewFileInsideNewDirectory)
-	t.Run("removeExistingFile", ta.removeExistingFile)
-	t.Run("removeExistingFileInsideDir", ta.removeExistingFileInsideDir)
-	t.Run("removeNewlyAddedFile", ta.removeNewlyAddedFile)
-	t.Run("addNewFileAndModifyContents", ta.addNewFileAndModifyContents)
-	t.Run("removeEmptyDir", ta.removeEmptyDir)
-	t.Run("removeDirWhichHasFiles", ta.removeDirWhichHasFiles)
-	t.Run("removeDirWhichHasSubDirs", ta.removeDirWhichHasSubDirs)
-	t.Run("appendFileContentsToEnd", ta.appendFileContentsToEnd)
+	t.Run("mountListAndUnmountEncrypted", ta.mountListAndUnmountEncrypted)
+	t.Run("mountListAndUnmountNonEncrypted", ta.mountListAndUnmountNonEncrypted)
+	t.Run("maxMountsEncrypted", ta.maxMountsEncrypted)
+	t.Run("maxMountsNonEncrypted", ta.maxMountsNonEncrypted)
+	t.Run("remountEncrypted", ta.remountEncrypted)
+	t.Run("remountNonEncrypted", ta.remountNonEncrypted)
+	t.Run("unmountEncrypted", ta.unmountEncrypted)
+	t.Run("unmountNonEncrypted", ta.unmountNonEncrypted)
+	t.Run("unmountWhenResourceBusyEncrypted", ta.unmountWhenResourceBusyEncrypted)
+	t.Run("unmountWhenResourceBusyNonEncrypted", ta.unmountWhenResourceBusyNonEncrypted)
+	t.Run("seekInMultiChunkFileEncrypted", ta.seekInMultiChunkFileEncrypted)
+	t.Run("seekInMultiChunkFileNonEncrypted", ta.seekInMultiChunkFileNonEncrypted)
+	t.Run("createNewFileEncrypted", ta.createNewFileEncrypted)
+	t.Run("createNewFileNonEncrypted", ta.createNewFileNonEncrypted)
+	t.Run("createNewFileInsideDirectoryEncrypted", ta.createNewFileInsideDirectoryEncrypted)
+	t.Run("createNewFileInsideDirectoryNonEncrypted", ta.createNewFileInsideDirectoryNonEncrypted)
+	t.Run("createNewFileInsideNewDirectoryEncrypted", ta.createNewFileInsideNewDirectoryEncrypted)
+	t.Run("createNewFileInsideNewDirectoryNonEncrypted", ta.createNewFileInsideNewDirectoryNonEncrypted)
+	t.Run("removeExistingFileEncrypted", ta.removeExistingFileEncrypted)
+	t.Run("removeExistingFileNonEncrypted", ta.removeExistingFileNonEncrypted)
+	t.Run("removeExistingFileInsideDirEncrypted", ta.removeExistingFileInsideDirEncrypted)
+	t.Run("removeExistingFileInsideDirNonEncrypted", ta.removeExistingFileInsideDirNonEncrypted)
+	t.Run("removeNewlyAddedFileEncrypted", ta.removeNewlyAddedFileEncrypted)
+	t.Run("removeNewlyAddedFileNonEncrypted", ta.removeNewlyAddedFileNonEncrypted)
+	t.Run("addNewFileAndModifyContentsEncrypted", ta.addNewFileAndModifyContentsEncrypted)
+	t.Run("addNewFileAndModifyContentsNonEncrypted", ta.addNewFileAndModifyContentsNonEncrypted)
+	t.Run("removeEmptyDirEncrypted", ta.removeEmptyDirEncrypted)
+	t.Run("removeEmptyDirNonEncrypted", ta.removeEmptyDirNonEncrypted)
+	t.Run("removeDirWhichHasFilesEncrypted", ta.removeDirWhichHasFilesEncrypted)
+	t.Run("removeDirWhichHasFilesNonEncrypted", ta.removeDirWhichHasFilesNonEncrypted)
+	t.Run("removeDirWhichHasSubDirsEncrypted", ta.removeDirWhichHasSubDirsEncrypted)
+	t.Run("removeDirWhichHasSubDirsNonEncrypted", ta.removeDirWhichHasSubDirsNonEncrypted)
+	t.Run("appendFileContentsToEndEncrypted", ta.appendFileContentsToEndEncrypted)
+	t.Run("appendFileContentsToEndNonEncrypted", ta.appendFileContentsToEndNonEncrypted)
 }

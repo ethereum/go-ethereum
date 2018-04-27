@@ -21,12 +21,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -41,47 +43,51 @@ const (
 // allow several bzz nodes running in parallel
 type Config struct {
 	// serialised/persisted fields
-	*storage.StoreParams
-	*storage.ChunkerParams
+	*storage.DPAParams
+	*storage.LocalStoreParams
 	*network.HiveParams
 	Swap *swap.SwapParams
-	*network.SyncParams
-	Contract    common.Address
-	EnsRoot     common.Address
-	EnsAPIs     []string
-	Path        string
-	ListenAddr  string
-	Port        string
-	PublicKey   string
-	BzzKey      string
-	NetworkId   uint64
-	SwapEnabled bool
-	SyncEnabled bool
-	SwapApi     string
-	Cors        string
-	BzzAccount  string
-	BootNodes   string
+	//*network.SyncParams
+	Contract        common.Address
+	EnsRoot         common.Address
+	EnsAPIs         []string
+	Path            string
+	ListenAddr      string
+	Port            string
+	PublicKey       string
+	BzzKey          string
+	NodeID          string
+	NetworkId       uint64
+	SwapEnabled     bool
+	SyncEnabled     bool
+	SyncUpdateDelay time.Duration
+	SwapApi         string
+	Cors            string
+	BzzAccount      string
+	BootNodes       string
+	privateKey      *ecdsa.PrivateKey
 }
 
 //create a default config with all parameters to set to defaults
-func NewDefaultConfig() (self *Config) {
+func NewConfig() (self *Config) {
 
 	self = &Config{
-		StoreParams:   storage.NewDefaultStoreParams(),
-		ChunkerParams: storage.NewChunkerParams(),
-		HiveParams:    network.NewDefaultHiveParams(),
-		SyncParams:    network.NewDefaultSyncParams(),
-		Swap:          swap.NewDefaultSwapParams(),
-		ListenAddr:    DefaultHTTPListenAddr,
-		Port:          DefaultHTTPPort,
-		Path:          node.DefaultDataDir(),
-		EnsAPIs:       nil,
-		EnsRoot:       ens.TestNetAddress,
-		NetworkId:     network.NetworkId,
-		SwapEnabled:   false,
-		SyncEnabled:   true,
-		SwapApi:       "",
-		BootNodes:     "",
+		LocalStoreParams: storage.NewDefaultLocalStoreParams(),
+		DPAParams:        storage.NewDPAParams(),
+		HiveParams:       network.NewHiveParams(),
+		//SyncParams:    network.NewDefaultSyncParams(),
+		Swap:            swap.NewDefaultSwapParams(),
+		ListenAddr:      DefaultHTTPListenAddr,
+		Port:            DefaultHTTPPort,
+		Path:            node.DefaultDataDir(),
+		EnsAPIs:         nil,
+		EnsRoot:         ens.TestNetAddress,
+		NetworkId:       network.NetworkID,
+		SwapEnabled:     false,
+		SyncEnabled:     true,
+		SyncUpdateDelay: 15 * time.Second,
+		SwapApi:         "",
+		BootNodes:       "",
 	}
 
 	return
@@ -105,9 +111,21 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 
 	self.PublicKey = pubkeyhex
 	self.BzzKey = keyhex
+	self.NodeID = discover.PubkeyID(&prvKey.PublicKey).String()
 
-	self.Swap.Init(self.Contract, prvKey)
-	self.SyncParams.Init(self.Path)
-	self.HiveParams.Init(self.Path)
-	self.StoreParams.Init(self.Path)
+	if self.SwapEnabled {
+		self.Swap.Init(self.Contract, prvKey)
+	}
+
+	self.privateKey = prvKey
+	self.LocalStoreParams.Init(self.Path)
+	self.LocalStoreParams.BaseKey = common.FromHex(keyhex)
+}
+
+func (self *Config) ShiftPrivateKey() (privKey *ecdsa.PrivateKey) {
+	if self.privateKey != nil {
+		privKey = self.privateKey
+		self.privateKey = nil
+	}
+	return privKey
 }
