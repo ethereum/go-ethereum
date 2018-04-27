@@ -1162,15 +1162,15 @@ type NodeInfo struct {
 }
 
 // NodeInfo retrieves some protocol metadata about the running host node.
-func (self *ProtocolManager) NodeInfo() *NodeInfo {
+func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 	head := self.blockchain.CurrentHeader()
 	hash := head.Hash()
 
 	return &NodeInfo{
-		Network:    self.networkId,
-		Difficulty: self.blockchain.GetTd(hash, head.Number.Uint64()),
-		Genesis:    self.blockchain.Genesis().Hash(),
-		Config:     self.blockchain.Config(),
+		Network:    pm.networkId,
+		Difficulty: pm.blockchain.GetTd(hash, head.Number.Uint64()),
+		Genesis:    pm.blockchain.Genesis().Hash(),
+		Config:     pm.blockchain.Config(),
 		Head:       hash,
 	}
 }
