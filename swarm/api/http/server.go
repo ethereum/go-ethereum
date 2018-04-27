@@ -855,6 +855,13 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.RequestURI == "/" && strings.Contains(r.Header.Get("Accept"), "application/json") {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode("Welcome to Swarm!")
+		return
+	}	
+	
 	uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
 	if err != nil {
 		Respond(w, req, fmt.Sprintf("invalid URI %q", r.URL.Path), http.StatusBadRequest)
