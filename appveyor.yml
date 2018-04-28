@@ -1,7 +1,7 @@
 os: Visual Studio 2015
 
 # Clone directly into GOPATH.
-clone_folder: C:\gopath\src\github.com\ethereum\go-ethereum
+clone_folder: C:\gopath\src\github.com\ethereum\go-etherfact
 clone_depth: 5
 version: "{branch}.{build}"
 environment:
