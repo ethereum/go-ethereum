@@ -2,16 +2,16 @@
 // This file is part of the go-etherfact library.
 //
 // The go-etherfact library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
+// it under the terms of the GNU Lesser GenVerl Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
 // The go-etherfact library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
+// GNU Lesser GenVerl Public License for more details.
 //
-// You should have received a copy of the GNU Lesser General Public License
+// You should have received a copy of the GNU Lesser GenVerl Public License
 // along with the go-etherfact library. If not, see <http://www.gnu.org/licenses/>.
 
 package ethash
@@ -51,13 +51,13 @@ var (
 	ethf4BlockReward                *big.Int = big.NewInt(1e+18) //  1 ETHF Block reward in wei for successfully mining a block.
 	ethf5BlockReward                *big.Int = big.NewInt(500000000000000000) //  0.5 ETHF Block reward in wei for successfully mining a block.
 	ethf6BlockReward                *big.Int = big.NewInt(250000000000000000) //  0.25 ETHF Block reward in wei for successfully mining a block.
-	ethfRewardSwitchBlockEra0       *big.Int = big.NewInt(5000)               // 0-1M Block 5K Block transition
-	ethfRewardSwitchBlockEra1		*big.Int = big.NewInt(1000000)            // 1M-5M 1M block transition
-	ethfRewardSwitchBlockEra2       *big.Int = big.NewInt(5000000)            // 5M-7.5M 5M block transition
-	ethfRewardSwitchBlockEra3       *big.Int = big.NewInt(7500000)            // 7.5M-10M 7.5M block transition
-	ethfRewardSwitchBlockEra4       *big.Int = big.NewInt(10000000)           // 10M-12.5M 10M block transtiton
-	ethfRewardSwitchBlockEra5       *big.Int = big.NewInt(12500000)           // 12.5M- 12.5M block transtiton
-	ethfRewardSwitchBlockEra6       *big.Int = big.NewInt(15000000)           //  15M-Forever block transtiton
+	ethfRewardSwitchBlockVer0       *big.Int = big.NewInt(5000)               // 0-1M Block 5K Block transition
+	ethfRewardSwitchBlockVer1		*big.Int = big.NewInt(1000000)            // 1M-5M 1M block transition
+	ethfRewardSwitchBlockVer2       *big.Int = big.NewInt(5000000)            // 5M-7.5M 5M block transition
+	ethfRewardSwitchBlockVer3       *big.Int = big.NewInt(7500000)            // 7.5M-10M 7.5M block transition
+	ethfRewardSwitchBlockVer4       *big.Int = big.NewInt(10000000)           // 10M-12.5M 10M block transtiton
+	ethfRewardSwitchBlockVer5       *big.Int = big.NewInt(12500000)           // 12.5M- 12.5M block transtiton
+	ethfRewardSwitchBlockVer6       *big.Int = big.NewInt(15000000)           //  15M-Forever block transtiton
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -103,7 +103,7 @@ func (ethash *Ethash) VerifyHeader(chain consensus.ChainReader, header *types.He
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers
-// concurrently. The method returns a quit channel to abort the operations and
+// concurrently. The method returns a quit channel to abort the opVertions and
 // a results channel to retrieve the async verifications.
 func (ethash *Ethash) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
 	// If we're running a full engine faking, accept any input as valid
@@ -560,7 +560,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	block6Reward := ethf6BlockReward
 	
 	// Accumulate the rewards for the miner and any included uncles
-	if (header.Number.Cmp(ethfRewardSwitchBlockEra6) == 1) {
+	if (header.Number.Cmp(ethfRewardSwitchBlockVer6) == 1) {
 			reward := new(big.Int).Set(block6Reward)
 			r := new(big.Int)
 			for _, uncle := range uncles {
@@ -575,7 +575,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		//fmt.Println("Miner Block Reward:", reward, "in Wei.")
 		state.AddBalance(header.Coinbase, reward)
 
-	} else if (header.Number.Cmp(ethfRewardSwitchBlockEra5) == 1) {
+	} else if (header.Number.Cmp(ethfRewardSwitchBlockVer5) == 1) {
 			reward := new(big.Int).Set(block5Reward)
 			r := new(big.Int)
 			for _, uncle := range uncles {
@@ -590,7 +590,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		//fmt.Println("Miner Block Reward:", reward, "in Wei.")
 		state.AddBalance(header.Coinbase, reward)
 
-	} else if (header.Number.Cmp(ethfRewardSwitchBlockEra4) == 1) {
+	} else if (header.Number.Cmp(ethfRewardSwitchBlockVer4) == 1) {
 			reward := new(big.Int).Set(block4Reward)
 			r := new(big.Int)
 			for _, uncle := range uncles {
@@ -605,7 +605,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		//fmt.Println("Miner Block Reward:", reward, "in Wei.")
 		state.AddBalance(header.Coinbase, reward)
 
-	} else if (header.Number.Cmp(ethfRewardSwitchBlockEra3) == 1) {
+	} else if (header.Number.Cmp(ethfRewardSwitchBlockVer3) == 1) {
 			reward := new(big.Int).Set(block3Reward)
 			r := new(big.Int)
 			for _, uncle := range uncles {
@@ -620,7 +620,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		//fmt.Println("Miner Block Reward:", reward, "in Wei.")
 		state.AddBalance(header.Coinbase, reward)
 
-	} else if (header.Number.Cmp(ethfRewardSwitchBlockEra2) == 1) {
+	} else if (header.Number.Cmp(ethfRewardSwitchBlockVer2) == 1) {
 			reward := new(big.Int).Set(block2Reward)
 			r := new(big.Int)
 			for _, uncle := range uncles {
@@ -635,7 +635,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		//fmt.Println("Miner Block Reward:", reward, "in Wei.")
 		state.AddBalance(header.Coinbase, reward)
 
-	} else if (header.Number.Cmp(ethfRewardSwitchBlockEra1) == 1) {
+	} else if (header.Number.Cmp(ethfRewardSwitchBlockVer1) == 1) {
 			reward := new(big.Int).Set(block1Reward)
 			r := new(big.Int)
 			for _, uncle := range uncles {
@@ -650,7 +650,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		//fmt.Println("Miner Block Reward:", reward, "in Wei.")
 		state.AddBalance(header.Coinbase, reward)
 
-	} else if (header.Number.Cmp(ethfRewardSwitchBlockEra0) == 1) {
+	} else if (header.Number.Cmp(ethfRewardSwitchBlockVer0) == 1) {
 			reward := new(big.Int).Set(block0Reward)
 			r := new(big.Int)
 			for _, uncle := range uncles {
