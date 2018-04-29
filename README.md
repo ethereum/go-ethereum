@@ -22,11 +22,11 @@ Building getf requires both a Go (version 1.7 or later) and a C compiler.
 You can install them using your favourite package manager.
 Once the dependencies are installed, run
 
-    make getf
+    go install ./cmd/getf
 
 or, to build the full suite of utilities:
 
-    make all
+    go install ./cmd/...
 
 ## Executables
 
