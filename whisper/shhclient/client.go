@@ -67,7 +67,6 @@ func (sc *Client) SetMaxMessageSize(ctx context.Context, size uint32) error {
 }
 
 // SetMinimumPoW (experimental) sets the minimal PoW required by this node.
-
 // This experimental function was introduced for the future dynamic adjustment of
 // PoW requirement. If the node is overwhelmed with messages, it should raise the
 // PoW requirement and notify the peers. The new value should be set relative to
@@ -77,7 +76,7 @@ func (sc *Client) SetMinimumPoW(ctx context.Context, pow float64) error {
 	return sc.c.CallContext(ctx, &ignored, "shh_setMinPoW", pow)
 }
 
-// Marks specific peer trusted, which will allow it to send historic (expired) messages.
+// MarkTrustedPeer marks specific peer trusted, which will allow it to send historic (expired) messages.
 // Note This function is not adding new nodes, the node needs to exists as a peer.
 func (sc *Client) MarkTrustedPeer(ctx context.Context, enode string) error {
 	var ignored bool
