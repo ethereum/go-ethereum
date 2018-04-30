@@ -15,7 +15,7 @@ For prerequisites and detailed build instructions please read the [Ethereum's In
 
 *Note*: Keep in mind that Ubiq aims to be 100% compatible with Ethereum, so mostly all the documentation you can find on Ethereum wiki, will apply for sure to Ubiq.
 
-Building gubiq requires both a Go and a C compiler. You can install them using your favourite package manager. Once the dependencies are installed, run
+Building gubiq requires both a Go and a C compiler (version 1.7 or later). You can install them using your favourite package manager. Once the dependencies are installed, run
 
     make gubiq
 

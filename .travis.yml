@@ -5,23 +5,27 @@ matrix:
   include:
     - os: linux
       dist: trusty
-      go: 1.5.4
-      env:
-        - GO15VENDOREXPERIMENT=1
+      go: 1.7.5
+
+    # These are the latest Go versions, only run go vet and misspell on these
     - os: linux
       dist: trusty
-      go: 1.6.2
-    - os: linux
-      dist: trusty
-      go: 1.7.4
+      go: 1.8
+      script:
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage -vet -misspell
+
     - os: osx
-      go: 1.7.4
+      go: 1.8
+      script:
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage -vet -misspell
 
     # This builder does the Ubuntu PPA and Linux Azure uploads
     - os: linux
       dist: trusty
       sudo: required
-      go: 1.7.4
+      go: 1.8
       env:
         - ubuntu-ppa
         - azure-linux
@@ -90,7 +94,7 @@ matrix:
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
     - os: osx
-      go: 1.7.4
+      go: 1.8
       env:
         - azure-osx
         - azure-ios
