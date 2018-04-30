@@ -491,7 +491,7 @@ func (self *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "chequebook",
 			Version:   chequebook.Version,
-			Service:   chequebook.NewApi(self.config.Swap.Chequebook),
+			Service:   chequebook.NewAPI(self.config.Swap.Chequebook),
 			Public:    false,
 		},
 		{
