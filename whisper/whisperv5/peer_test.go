@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 )
 
-var keys []string = []string{
+var keys = []string{
 	"d49dcf37238dc8a7aac57dc61b9fee68f0a97f062968978b9fafa7d1033d03a9",
 	"73fd6143c48e80ed3c56ea159fe7494a0b6b393a392227b422f4c3e8f1b54f98",
 	"119dd32adb1daa7a4c7bf77f847fb28730785aa92947edf42fdd997b54de40dc",
@@ -84,9 +84,9 @@ type TestNode struct {
 
 var result TestData
 var nodes [NumNodes]*TestNode
-var sharedKey []byte = []byte("some arbitrary data here")
+var sharedKey = []byte("some arbitrary data here")
 var sharedTopic TopicType = TopicType{0xF, 0x1, 0x2, 0}
-var expectedMessage []byte = []byte("per rectum ad astra")
+var expectedMessage = []byte("per rectum ad astra")
 
 // This test does the following:
 // 1. creates a chain of whisper nodes,
