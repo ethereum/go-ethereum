@@ -92,8 +92,8 @@ func NewDefaultHiveParams() *HiveParams {
 
 //this can only finally be set after all config options (file, cmd line, env vars)
 //have been evaluated
-func (self *HiveParams) Init(path string) {
-	self.KadDbPath = filepath.Join(path, "bzz-peers.json")
+func (params *HiveParams) Init(path string) {
+	params.KadDbPath = filepath.Join(path, "bzz-peers.json")
 }
 
 func NewHive(addr common.Hash, params *HiveParams, swapEnabled, syncEnabled bool) *Hive {
@@ -108,53 +108,53 @@ func NewHive(addr common.Hash, params *HiveParams, swapEnabled, syncEnabled bool
 	}
 }
 
-func (self *Hive) SyncEnabled(on bool) {
-	self.syncEnabled = on
+func (hive *Hive) SyncEnabled(on bool) {
+	hive.syncEnabled = on
 }
 
-func (self *Hive) SwapEnabled(on bool) {
-	self.swapEnabled = on
+func (hive *Hive) SwapEnabled(on bool) {
+	hive.swapEnabled = on
 }
 
-func (self *Hive) BlockNetworkRead(on bool) {
-	self.blockRead = on
+func (hive *Hive) BlockNetworkRead(on bool) {
+	hive.blockRead = on
 }
 
-func (self *Hive) BlockNetworkWrite(on bool) {
-	self.blockWrite = on
+func (hive *Hive) BlockNetworkWrite(on bool) {
+	hive.blockWrite = on
 }
 
 // public accessor to the hive base address
-func (self *Hive) Addr() kademlia.Address {
-	return self.addr
+func (hive *Hive) Addr() kademlia.Address {
+	return hive.addr
 }
 
 // Start receives network info only at startup
 // listedAddr is a function to retrieve listening address to advertise to peers
 // connectPeer is a function to connect to a peer based on its NodeID or enode URL
 // there are called on the p2p.Server which runs on the node
-func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPeer func(string) error) (err error) {
-	self.toggle = make(chan bool)
-	self.more = make(chan bool)
-	self.quit = make(chan bool)
-	self.id = id
-	self.listenAddr = listenAddr
-	err = self.kad.Load(self.path, nil)
+func (hive *Hive) Start(id discover.NodeID, listenAddr func() string, connectPeer func(string) error) (err error) {
+	hive.toggle = make(chan bool)
+	hive.more = make(chan bool)
+	hive.quit = make(chan bool)
+	hive.id = id
+	hive.listenAddr = listenAddr
+	err = hive.kad.Load(hive.path, nil)
 	if err != nil {
-		log.Warn(fmt.Sprintf("Warning: error reading kaddb '%s' (skipping): %v", self.path, err))
+		log.Warn(fmt.Sprintf("Warning: error reading kaddb '%s' (skipping): %v", hive.path, err))
 		err = nil
 	}
 	// this loop is doing bootstrapping and maintains a healthy table
-	go self.keepAlive()
+	go hive.keepAlive()
 	go func() {
 		// whenever toggled ask kademlia about most preferred peer
-		for alive := range self.more {
+		for alive := range hive.more {
 			if !alive {
 				// receiving false closes the loop while allowing parallel routines
 				// to attempt to write to more (remove Peer when shutting down)
 				return
 			}
-			node, need, proxLimit := self.kad.Suggest()
+			node, need, proxLimit := hive.kad.Suggest()
 
 			if node != nil && len(node.Url) > 0 {
 				log.Trace(fmt.Sprintf("call known bee %v", node.Url))
@@ -164,10 +164,10 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 			}
 			if need {
 				// a random peer is taken from the table
-				peers := self.kad.FindClosest(kademlia.RandomAddressAt(self.addr, rand.Intn(self.kad.MaxProx)), 1)
+				peers := hive.kad.FindClosest(kademlia.RandomAddressAt(hive.addr, rand.Intn(hive.kad.MaxProx)), 1)
 				if len(peers) > 0 {
 					// a random address at prox bin 0 is sent for lookup
-					randAddr := kademlia.RandomAddressAt(self.addr, proxLimit)
+					randAddr := kademlia.RandomAddressAt(hive.addr, proxLimit)
 					req := &retrieveRequestMsgData{
 						Key: storage.Key(randAddr[:]),
 					}
@@ -181,11 +181,11 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 				log.Info(fmt.Sprintf("no need for more bees"))
 			}
 			select {
-			case self.toggle <- need:
-			case <-self.quit:
+			case hive.toggle <- need:
+			case <-hive.quit:
 				return
 			}
-			log.Debug(fmt.Sprintf("queen's address: %v, population: %d (%d)", self.addr, self.kad.Count(), self.kad.DBCount()))
+			log.Debug(fmt.Sprintf("queen's address: %v, population: %d (%d)", hive.addr, hive.kad.Count(), hive.kad.DBCount()))
 		}
 	}()
 	return
@@ -193,8 +193,8 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 
 // keepAlive is a forever loop
 // in its awake state it periodically triggers connection attempts
-// by writing to self.more until Kademlia Table is saturated
-// wake state is toggled by writing to self.toggle
+// by writing to hive.more until Kademlia Table is saturated
+// wake state is toggled by writing to hive.toggle
 // it restarts if the table becomes non-full again due to disconnections
 func (self *Hive) keepAlive() {
 	alarm := time.NewTicker(time.Duration(self.callInterval)).C

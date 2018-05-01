@@ -24,9 +24,10 @@ they won't be found.
 For this reason we resort to save the HTML error pages as strings, which then can be
 parsed by Go's html/template package
 */
+
 package http
 
-//This returns the HTML for generic errors
+// GetGenericErrorPage returns the HTML for generic errors
 func GetGenericErrorPage() string {
 	page := `
 <html>
@@ -206,7 +207,7 @@ func GetGenericErrorPage() string {
 	return page
 }
 
-//This returns the HTML for a 404 Not Found error
+// GetNotFoundErrorPage returns the HTML for a 404 Not Found error
 func GetNotFoundErrorPage() string {
 	page := `
 <html>
@@ -386,7 +387,7 @@ func GetNotFoundErrorPage() string {
 	return page
 }
 
-//This returns the HTML for a page listing disambiguation options
+//GetMultipleChoicesErrorPage returns the HTML for a page listing disambiguation options
 //i.e. if user requested bzz:/<hash>/read and the manifest contains "readme.md" and "readinglist.txt",
 //this page is returned with a clickable list the existing disambiguation links in the manifest
 func GetMultipleChoicesErrorPage() string {

@@ -43,17 +43,17 @@ type NodeRecord struct {
 	node Node
 }
 
-func (self *NodeRecord) setSeen() {
+func (nr *NodeRecord) setSeen() {
 	t := time.Now()
-	self.Seen = t
-	self.After = t
+	nr.Seen = t
+	nr.After = t
 }
 
-func (self *NodeRecord) String() string {
-	return fmt.Sprintf("<%v>", self.Addr)
+func (nr *NodeRecord) String() string {
+	return fmt.Sprintf("<%v>", nr.Addr)
 }
 
-// persisted node record database ()
+// KadDb is a persisted node record database ()
 type KadDb struct {
 	Address              Address
 	Nodes                [][]*NodeRecord
@@ -77,11 +77,11 @@ func newKadDb(addr Address, params *KadParams) *KadDb {
 	}
 }
 
-func (self *KadDb) findOrCreate(index int, a Address, url string) *NodeRecord {
-	defer self.lock.Unlock()
-	self.lock.Lock()
+func (kdb *KadDb) findOrCreate(index int, a Address, url string) *NodeRecord {
+	defer kdb.lock.Unlock()
+	kdb.lock.Lock()
 
-	record, found := self.index[a]
+	record, found := kdb.index[a]
 	if !found {
 		record = &NodeRecord{
 			Addr: a,
@@ -89,8 +89,8 @@ func (self *KadDb) findOrCreate(index int, a Address, url string) *NodeRecord {
 		}
 		log.Info(fmt.Sprintf("add new record %v to kaddb", record))
 		// insert in kaddb
-		self.index[a] = record
-		self.Nodes[index] = append(self.Nodes[index], record)
+		kdb.index[a] = record
+		kdb.Nodes[index] = append(kdb.Nodes[index], record)
 	} else {
 		log.Info(fmt.Sprintf("found record %v in kaddb", record))
 	}
@@ -102,26 +102,26 @@ func (self *KadDb) findOrCreate(index int, a Address, url string) *NodeRecord {
 }
 
 // add adds node records to kaddb (persisted node record db)
-func (self *KadDb) add(nrs []*NodeRecord, proximityBin func(Address) int) {
-	defer self.lock.Unlock()
-	self.lock.Lock()
+func (kdb *KadDb) add(nrs []*NodeRecord, proximityBin func(Address) int) {
+	defer kdb.lock.Unlock()
+	kdb.lock.Lock()
 	var n int
 	var nodes []*NodeRecord
 	for _, node := range nrs {
-		_, found := self.index[node.Addr]
-		if !found && node.Addr != self.Address {
+		_, found := kdb.index[node.Addr]
+		if !found && node.Addr != kdb.Address {
 			node.setSeen()
-			self.index[node.Addr] = node
+			kdb.index[node.Addr] = node
 			index := proximityBin(node.Addr)
-			dbcursor := self.cursors[index]
-			nodes = self.Nodes[index]
+			dbcursor := kdb.cursors[index]
+			nodes = kdb.Nodes[index]
 			// this is inefficient for allocation, need to just append then shift
 			newnodes := make([]*NodeRecord, len(nodes)+1)
 			copy(newnodes[:], nodes[:dbcursor])
 			newnodes[dbcursor] = node
 			copy(newnodes[dbcursor+1:], nodes[dbcursor:])
 			log.Trace(fmt.Sprintf("new nodes: %v, nodes: %v", newnodes, nodes))
-			self.Nodes[index] = newnodes
+			kdb.Nodes[index] = newnodes
 			n++
 		}
 	}
@@ -168,10 +168,10 @@ offline past peer)
 
 The second argument returned names the first missing slot found
 */
-func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRecord, need bool, proxLimit int) {
+func (kdb *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRecord, need bool, proxLimit int) {
 	// return nil, proxLimit indicates that all buckets are filled
-	defer self.lock.Unlock()
-	self.lock.Lock()
+	defer kdb.lock.Unlock()
+	kdb.lock.Lock()
 
 	var interval time.Duration
 	var found bool
@@ -185,7 +185,7 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 	for rounds := 1; rounds <= maxBinSize; rounds++ {
 	ROUND:
 		// iterate over rows from PO 0 upto MaxProx
-		for po, dbrow := range self.Nodes {
+		for po, dbrow := range kdb.Nodes {
 			// if row has rounds connected peers, then take the next
 			if binSize(po) >= rounds {
 				continue ROUND
@@ -200,7 +200,7 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 			// there is a missing slot - finding a node to connect to
 			// select a node record from the relavant kaddb row (of identical prox order)
 		ROW:
-			for cursor = self.cursors[po]; !found && count < len(dbrow); cursor = (cursor + 1) % len(dbrow) {
+			for cursor = kdb.cursors[po]; !found && count < len(dbrow); cursor = (cursor + 1) % len(dbrow) {
 				count++
 				node = dbrow[cursor]
 
@@ -217,10 +217,10 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 				}
 
 				delta = time.Since(node.Seen)
-				if delta < self.initialRetryInterval {
-					delta = self.initialRetryInterval
+				if delta < kdb.initialRetryInterval {
+					delta = kdb.initialRetryInterval
 				}
-				if delta > self.purgeInterval {
+				if delta > kdb.purgeInterval {
 					// remove node
 					purge[cursor] = true
 					log.Debug(fmt.Sprintf("kaddb record %v (PO%03d:%d) unreachable since %v. Removed", node.Addr, po, cursor, node.Seen))
@@ -230,15 +230,15 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 				log.Debug(fmt.Sprintf("kaddb record %v (PO%03d:%d) ready to be tried. seen at %v (%v ago), scheduled at %v", node.Addr, po, cursor, node.Seen, delta, node.After))
 
 				// scheduling next check
-				interval = delta * time.Duration(self.connRetryExp)
+				interval = delta * time.Duration(kdb.connRetryExp)
 				after = time.Now().Add(interval)
 
 				log.Debug(fmt.Sprintf("kaddb record %v (PO%03d:%d) selected as candidate connection %v. seen at %v (%v ago), selectable since %v, retry after %v (in %v)", node.Addr, po, cursor, rounds, node.Seen, delta, node.After, after, interval))
 				node.After = after
 				found = true
 			} // ROW
-			self.cursors[po] = cursor
-			self.delete(po, purge)
+			kdb.cursors[po] = cursor
+			kdb.delete(po, purge)
 			if found {
 				return node, need, proxLimit
 			}
@@ -251,33 +251,33 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 // deletes the noderecords of a kaddb row corresponding to the indexes
 // caller must hold the dblock
 // the call is unsafe, no index checks
-func (self *KadDb) delete(row int, purge []bool) {
+func (kdb *KadDb) delete(row int, purge []bool) {
 	var nodes []*NodeRecord
-	dbrow := self.Nodes[row]
+	dbrow := kdb.Nodes[row]
 	for i, del := range purge {
-		if i == self.cursors[row] {
+		if i == kdb.cursors[row] {
 			//reset cursor
-			self.cursors[row] = len(nodes)
+			kdb.cursors[row] = len(nodes)
 		}
 		// delete the entry to be purged
 		if del {
-			delete(self.index, dbrow[i].Addr)
+			delete(kdb.index, dbrow[i].Addr)
 			continue
 		}
 		// otherwise append to new list
 		nodes = append(nodes, dbrow[i])
 	}
-	self.Nodes[row] = nodes
+	kdb.Nodes[row] = nodes
 }
 
 // save persists kaddb on disk (written to file on path in json format.
-func (self *KadDb) save(path string, cb func(*NodeRecord, Node)) error {
-	defer self.lock.Unlock()
-	self.lock.Lock()
+func (kdb *KadDb) save(path string, cb func(*NodeRecord, Node)) error {
+	defer kdb.lock.Unlock()
+	kdb.lock.Lock()
 
 	var n int
 
-	for _, b := range self.Nodes {
+	for _, b := range kdb.Nodes {
 		for _, node := range b {
 			n++
 			node.After = time.Now()
@@ -288,7 +288,7 @@ func (self *KadDb) save(path string, cb func(*NodeRecord, Node)) error {
 		}
 	}
 
-	data, err := json.MarshalIndent(self, "", " ")
+	data, err := json.MarshalIndent(kdb, "", " ")
 	if err != nil {
 		return err
 	}
@@ -302,9 +302,9 @@ func (self *KadDb) save(path string, cb func(*NodeRecord, Node)) error {
 }
 
 // Load(path) loads the node record database (kaddb) from file on path.
-func (self *KadDb) load(path string, cb func(*NodeRecord, Node) error) (err error) {
-	defer self.lock.Unlock()
-	self.lock.Lock()
+func (kdb *KadDb) load(path string, cb func(*NodeRecord, Node) error) (err error) {
+	defer kdb.lock.Unlock()
+	kdb.lock.Lock()
 
 	var data []byte
 	data, err = ioutil.ReadFile(path)
@@ -312,13 +312,13 @@ func (self *KadDb) load(path string, cb func(*NodeRecord, Node) error) (err erro
 		return
 	}
 
-	err = json.Unmarshal(data, self)
+	err = json.Unmarshal(data, kdb)
 	if err != nil {
 		return
 	}
 	var n int
 	var purge []bool
-	for po, b := range self.Nodes {
+	for po, b := range kdb.Nodes {
 		purge = make([]bool, len(b))
 	ROW:
 		for i, node := range b {
@@ -333,9 +333,9 @@ func (self *KadDb) load(path string, cb func(*NodeRecord, Node) error) (err erro
 			if node.After.IsZero() {
 				node.After = time.Now()
 			}
-			self.index[node.Addr] = node
+			kdb.index[node.Addr] = node
 		}
-		self.delete(po, purge)
+		kdb.delete(po, purge)
 	}
 	log.Info(fmt.Sprintf("loaded kaddb with %v nodes from %v", n, path))
 
@@ -343,8 +343,8 @@ func (self *KadDb) load(path string, cb func(*NodeRecord, Node) error) (err erro
 }
 
 // accessor for KAD offline db count
-func (self *KadDb) count() int {
-	defer self.lock.Unlock()
-	self.lock.Lock()
-	return len(self.index)
+func (kdb *KadDb) count() int {
+	defer kdb.lock.Unlock()
+	kdb.lock.Lock()
+	return len(kdb.index)
 }

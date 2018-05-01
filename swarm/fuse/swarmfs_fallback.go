@@ -34,18 +34,18 @@ type MountInfo struct {
 	LatestManifest string
 }
 
-func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
+func (sf *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 	return nil, errNoFUSE
 }
 
-func (self *SwarmFS) Unmount(mountpoint string) (bool, error) {
+func (sf *SwarmFS) Unmount(mountpoint string) (bool, error) {
 	return false, errNoFUSE
 }
 
-func (self *SwarmFS) Listmounts() ([]*MountInfo, error) {
+func (sf *SwarmFS) Listmounts() ([]*MountInfo, error) {
 	return nil, errNoFUSE
 }
 
-func (self *SwarmFS) Stop() error {
+func (sf *SwarmFS) Stop() error {
 	return nil
 }
