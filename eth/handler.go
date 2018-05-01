@@ -725,25 +725,25 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 }
 
 // Mined broadcast loop
-func (self *ProtocolManager) minedBroadcastLoop() {
+func (pm *ProtocolManager) minedBroadcastLoop() {
 	// automatically stops if unsubscribe
-	for obj := range self.minedBlockSub.Chan() {
+	for obj := range pm.minedBlockSub.Chan() {
 		switch ev := obj.Data.(type) {
 		case core.NewMinedBlockEvent:
-			self.BroadcastBlock(ev.Block, true)  // First propagate block to peers
-			self.BroadcastBlock(ev.Block, false) // Only then announce to the rest
+			pm.BroadcastBlock(ev.Block, true)  // First propagate block to peers
+			pm.BroadcastBlock(ev.Block, false) // Only then announce to the rest
 		}
 	}
 }
 
-func (self *ProtocolManager) txBroadcastLoop() {
+func (pm *ProtocolManager) txBroadcastLoop() {
 	for {
 		select {
-		case event := <-self.txCh:
-			self.BroadcastTx(event.Tx.Hash(), event.Tx)
+		case event := <-pm.txCh:
+			pm.BroadcastTx(event.Tx.Hash(), event.Tx)
 
 		// Err() channel will be closed when unsubscribing.
-		case <-self.txSub.Err():
+		case <-pm.txSub.Err():
 			return
 		}
 	}
@@ -760,13 +760,13 @@ type NodeInfo struct {
 }
 
 // NodeInfo retrieves some protocol metadata about the running host node.
-func (self *ProtocolManager) NodeInfo() *NodeInfo {
-	currentBlock := self.blockchain.CurrentBlock()
+func (pm *ProtocolManager) NodeInfo() *NodeInfo {
+	currentBlock := pm.blockchain.CurrentBlock()
 	return &NodeInfo{
-		Network:    self.networkId,
-		Difficulty: self.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64()),
-		Genesis:    self.blockchain.Genesis().Hash(),
-		Config:     self.blockchain.Config(),
+		Network:    pm.networkId,
+		Difficulty: pm.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64()),
+		Genesis:    pm.blockchain.Genesis().Hash(),
+		Config:     pm.blockchain.Config(),
 		Head:       currentBlock.Hash(),
 	}
 }
