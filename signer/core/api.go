@@ -474,7 +474,7 @@ func (api *SignerAPI) Export(ctx context.Context, addr common.Address) (json.Raw
 	return ioutil.ReadFile(wallet.URL().Path)
 }
 
-// Imports tries to import the given keyJSON in the local keystore. The keyJSON data is expected to be
+// Import tries to import the given keyJSON in the local keystore. The keyJSON data is expected to be
 // in web3 keystore format. It will decrypt the keyJSON with the given passphrase and on successful
 // decryption it will encrypt the key with the given newPassphrase and store it in the keystore.
 func (api *SignerAPI) Import(ctx context.Context, keyJSON json.RawMessage) (Account, error) {
