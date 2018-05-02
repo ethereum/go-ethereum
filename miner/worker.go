@@ -55,8 +55,8 @@ const (
 type Agent interface {
 	Work() chan<- *Work
 	SetReturnCh(chan<- *Result)
-	Stop()
 	Start()
+	Stop()
 }
 
 // Work is the workers current environment and holds
@@ -231,6 +231,7 @@ func (self *worker) register(agent Agent) {
 	defer self.mu.Unlock()
 	self.agents[agent] = struct{}{}
 	agent.SetReturnCh(self.recv)
+	agent.Start()
 }
 
 func (self *worker) unregister(agent Agent) {
@@ -342,9 +343,6 @@ func (self *worker) wait() {
 
 // push sends a new work task to currently live miner agents.
 func (self *worker) push(work *Work) {
-	if atomic.LoadInt32(&self.mining) != 1 {
-		return
-	}
 	for agent := range self.agents {
 		atomic.AddInt32(&self.atWork, 1)
 		if ch := agent.Work(); ch != nil {
@@ -415,8 +413,8 @@ func (self *worker) commitNewWork() {
 		Extra:      self.extra,
 		Time:       big.NewInt(tstamp),
 	}
-	// Only set the coinbase if we are mining (avoid spurious block rewards)
-	if atomic.LoadInt32(&self.mining) == 1 {
+	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
+	if self.engine.IsRunning() {
 		header.Coinbase = self.coinbase
 	}
 	if err := self.engine.Prepare(self.chain, header); err != nil {
@@ -479,7 +477,7 @@ func (self *worker) commitNewWork() {
 		// Push empty work in advance without applying pending transaction.
 		// The reason is transactions execution can cost a lot and sealer need to
 		// take advantage of this part time.
-		if atomic.LoadInt32(&self.mining) == 1 {
+		if self.engine.IsRunning() {
 			log.Info("Commit new empty mining work", "number", work.Block.Number(), "uncles", len(uncles))
 		}
 		self.push(work)
@@ -500,7 +498,7 @@ func (self *worker) commitNewWork() {
 		return
 	}
 	// We only care about logging if we're actually mining.
-	if atomic.LoadInt32(&self.mining) == 1 {
+	if self.engine.IsRunning() {
 		log.Info("Commit new full mining work", "number", work.Block.Number(), "txs", work.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}

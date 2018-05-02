@@ -44,12 +44,9 @@ type Backend interface {
 
 // Miner creates blocks and searches for proof-of-work values.
 type Miner struct {
-	mux *event.TypeMux
-
-	worker *worker
-
+	mux      *event.TypeMux
+	worker   *worker
 	coinbase common.Address
-	mining   int32
 	eth      Backend
 	engine   consensus.Engine
 
@@ -111,23 +108,19 @@ func (self *Miner) Start(coinbase common.Address) {
 		log.Info("Network syncing, will start miner afterwards")
 		return
 	}
-	atomic.StoreInt32(&self.mining, 1)
-
 	log.Info("Starting mining operation")
+	self.engine.Start()
 	self.worker.start()
 	self.worker.commitNewWork()
 }
 
 func (self *Miner) Stop() {
+	self.engine.Stop()
 	self.worker.stop()
-	atomic.StoreInt32(&self.mining, 0)
 	atomic.StoreInt32(&self.shouldStart, 0)
 }
 
 func (self *Miner) Register(agent Agent) {
-	if self.Mining() {
-		agent.Start()
-	}
 	self.worker.register(agent)
 }
 
@@ -136,7 +129,7 @@ func (self *Miner) Unregister(agent Agent) {
 }
 
 func (self *Miner) Mining() bool {
-	return atomic.LoadInt32(&self.mining) > 0
+	return self.engine.IsRunning()
 }
 
 func (self *Miner) HashRate() (tot int64) {
