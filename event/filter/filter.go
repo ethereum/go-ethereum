@@ -58,7 +58,7 @@ func (f *Filters) Notify(filter Filter, data interface{}) {
 }
 
 func (f *Filters) Install(watcher Filter) int {
-	f.watchers[self.id] = watcher
+	f.watchers[f.id] = watcher
 	f.id++
 
 	return f.id - 1
