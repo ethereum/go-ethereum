@@ -74,9 +74,9 @@ type SendTxArgs struct {
 }
 
 func (args SendTxArgs) String() string {
-	args, err := json.Marshal(args)
+	s, err := json.Marshal(args)
 	if err == nil {
-		return string(args)
+		return string(s)
 	}
 	return err.Error()
 }
