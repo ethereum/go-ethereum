@@ -48,14 +48,14 @@ func isFUSEUnsupportedError(err error) bool {
 	return err == fuse.ErrOSXFUSENotFound
 }
 
-// information about every active mount
+// MountInfo is information about every active mount
 type MountInfo struct {
 	MountPoint     string
 	StartManifest  string
 	LatestManifest string
 	rootDir        *SwarmDir
 	fuseConnection *fuse.Conn
-	swarmApi       *api.Api
+	swarmAPI       *api.Api
 	lock           *sync.RWMutex
 }
 
@@ -66,13 +66,13 @@ func NewMountInfo(mhash, mpoint string, sapi *api.Api) *MountInfo {
 		LatestManifest: mhash,
 		rootDir:        nil,
 		fuseConnection: nil,
-		swarmApi:       sapi,
+		swarmAPI:       sapi,
 		lock:           &sync.RWMutex{},
 	}
 	return newMountInfo
 }
 
-func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
+func (sf *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 
 	if mountpoint == "" {
 		return nil, errEmptyMountPoint
@@ -82,25 +82,25 @@ func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		return nil, err
 	}
 
-	self.swarmFsLock.Lock()
-	defer self.swarmFsLock.Unlock()
+	sf.swarmFsLock.Lock()
+	defer sf.swarmFsLock.Unlock()
 
-	noOfActiveMounts := len(self.activeMounts)
+	noOfActiveMounts := len(sf.activeMounts)
 	if noOfActiveMounts >= maxFuseMounts {
 		return nil, errMaxMountCount
 	}
 
-	if _, ok := self.activeMounts[cleanedMountPoint]; ok {
+	if _, ok := sf.activeMounts[cleanedMountPoint]; ok {
 		return nil, errAlreadyMounted
 	}
 
 	log.Info(fmt.Sprintf("Attempting to mount %s ", cleanedMountPoint))
-	_, manifestEntryMap, err := self.swarmApi.BuildDirectoryTree(mhash, true)
+	_, manifestEntryMap, err := sf.swarmAPI.BuildDirectoryTree(mhash, true)
 	if err != nil {
 		return nil, err
 	}
 
-	mi := NewMountInfo(mhash, cleanedMountPoint, self.swarmApi)
+	mi := NewMountInfo(mhash, cleanedMountPoint, sf.swarmAPI)
 
 	dirTree := map[string]*SwarmDir{}
 	rootDir := NewSwarmDir("/", mi)
@@ -174,21 +174,21 @@ func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		log.Info("Now serving swarm FUSE FS", "manifest", mhash, "mountpoint", cleanedMountPoint)
 	}
 
-	self.activeMounts[cleanedMountPoint] = mi
+	sf.activeMounts[cleanedMountPoint] = mi
 	return mi, nil
 }
 
-func (self *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
+func (sf *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 
-	self.swarmFsLock.Lock()
-	defer self.swarmFsLock.Unlock()
+	sf.swarmFsLock.Lock()
+	defer sf.swarmFsLock.Unlock()
 
 	cleanedMountPoint, err := filepath.Abs(filepath.Clean(mountpoint))
 	if err != nil {
 		return nil, err
 	}
 
-	mountInfo := self.activeMounts[cleanedMountPoint]
+	mountInfo := sf.activeMounts[cleanedMountPoint]
 
 	if mountInfo == nil || mountInfo.MountPoint != cleanedMountPoint {
 		return nil, fmt.Errorf("%s is not mounted", cleanedMountPoint)
@@ -204,7 +204,7 @@ func (self *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 	}
 
 	mountInfo.fuseConnection.Close()
-	delete(self.activeMounts, cleanedMountPoint)
+	delete(sf.activeMounts, cleanedMountPoint)
 
 	succString := fmt.Sprintf("UnMounting %v succeeded", cleanedMountPoint)
 	log.Info(succString)
@@ -212,21 +212,21 @@ func (self *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 	return mountInfo, nil
 }
 
-func (self *SwarmFS) Listmounts() []*MountInfo {
-	self.swarmFsLock.RLock()
-	defer self.swarmFsLock.RUnlock()
+func (sf *SwarmFS) Listmounts() []*MountInfo {
+	sf.swarmFsLock.RLock()
+	defer sf.swarmFsLock.RUnlock()
 
-	rows := make([]*MountInfo, 0, len(self.activeMounts))
-	for _, mi := range self.activeMounts {
+	rows := make([]*MountInfo, 0, len(sf.activeMounts))
+	for _, mi := range sf.activeMounts {
 		rows = append(rows, mi)
 	}
 	return rows
 }
 
-func (self *SwarmFS) Stop() bool {
-	for mp := range self.activeMounts {
-		mountInfo := self.activeMounts[mp]
-		self.Unmount(mountInfo.MountPoint)
+func (sf *SwarmFS) Stop() bool {
+	for mp := range sf.activeMounts {
+		mountInfo := sf.activeMounts[mp]
+		sf.Unmount(mountInfo.MountPoint)
 	}
 	return true
 }

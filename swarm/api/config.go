@@ -37,7 +37,7 @@ const (
 	DefaultHTTPPort       = "8500"
 )
 
-// separate bzz directories
+// Config separates bzz directories
 // allow several bzz nodes running in parallel
 type Config struct {
 	// serialised/persisted fields
@@ -63,10 +63,10 @@ type Config struct {
 	BootNodes   string
 }
 
-//create a default config with all parameters to set to defaults
-func NewDefaultConfig() (self *Config) {
+// NewDefaultConfig creates a default config with all parameters to set to defaults
+func NewDefaultConfig() (config *Config) {
 
-	self = &Config{
+	config = &Config{
 		StoreParams:   storage.NewDefaultStoreParams(),
 		ChunkerParams: storage.NewChunkerParams(),
 		HiveParams:    network.NewDefaultHiveParams(),
@@ -89,11 +89,11 @@ func NewDefaultConfig() (self *Config) {
 
 //some config params need to be initialized after the complete
 //config building phase is completed (e.g. due to overriding flags)
-func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
+func (config *Config) Init(prvKey *ecdsa.PrivateKey) {
 
 	address := crypto.PubkeyToAddress(prvKey.PublicKey)
-	self.Path = filepath.Join(self.Path, "bzz-"+common.Bytes2Hex(address.Bytes()))
-	err := os.MkdirAll(self.Path, os.ModePerm)
+	config.Path = filepath.Join(config.Path, "bzz-"+common.Bytes2Hex(address.Bytes()))
+	err := os.MkdirAll(config.Path, os.ModePerm)
 	if err != nil {
 		log.Error(fmt.Sprintf("Error creating root swarm data directory: %v", err))
 		return
@@ -103,11 +103,11 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 	pubkeyhex := common.ToHex(pubkey)
 	keyhex := crypto.Keccak256Hash(pubkey).Hex()
 
-	self.PublicKey = pubkeyhex
-	self.BzzKey = keyhex
+	config.PublicKey = pubkeyhex
+	config.BzzKey = keyhex
 
-	self.Swap.Init(self.Contract, prvKey)
-	self.SyncParams.Init(self.Path)
-	self.HiveParams.Init(self.Path)
-	self.StoreParams.Init(self.Path)
+	config.Swap.Init(config.Contract, prvKey)
+	config.SyncParams.Init(config.Path)
+	config.HiveParams.Init(config.Path)
+	config.StoreParams.Init(config.Path)
 }
