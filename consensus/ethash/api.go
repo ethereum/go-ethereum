@@ -44,6 +44,12 @@ func (api *API) GetWork() ([3]string, error) {
 		err    error
 	)
 
+	// Trigger ethash to start in remote mining mode(local/cpu mining is disabled)
+	// if ethash is not running.
+	if !api.ethash.IsRunning() {
+		api.ethash.StartMining(new(int))
+	}
+
 	select {
 	case api.ethash.fetchWorkCh <- &sealWork{errCh: errCh, resCh: workCh}:
 	case <-api.ethash.exitCh:

@@ -428,6 +428,7 @@ type Ethash struct {
 	threads  int           // Number of threads to mine on if mining
 	update   chan struct{} // Notification channel to update mining parameters
 	hashrate metrics.Meter // Meter tracking the average hashrate
+	running  int32         // Indicator whether ethash engine is running or not.
 
 	// Remote sealer related fields
 	workCh       chan *types.Block // Notification channel to push new work to remote sealer
@@ -486,6 +487,7 @@ func NewTester() *Ethash {
 		datasets:     newlru("dataset", 1, newDataset),
 		update:       make(chan struct{}),
 		hashrate:     metrics.NewMeter(),
+		running:      1, // enable local mining by default
 		workCh:       make(chan *types.Block),
 		resultCh:     make(chan *types.Block),
 		fetchWorkCh:  make(chan *sealWork),
@@ -678,6 +680,20 @@ func (ethash *Ethash) APIs(chain consensus.ChainReader) []rpc.API {
 			Public:    true,
 		},
 	}
+}
+
+// StartMining starts the ethash engine with the given number of threads.
+// If threads is nil the number of workers started is equal to the number of logical CPUs
+// that are usable by this process. If threads is 0, than local/cpu mining will be disabled.
+// If mining is already running, this method adjust the number of threads allowed to use.
+func (ethash *Ethash) StartMining(threads *int) {
+	if threads == nil {
+		threads = new(int)
+	} else if *threads == 0 {
+		*threads = -1 // Disable local/cpu mining.
+	}
+	ethash.Start()
+	ethash.SetThreads(*threads)
 }
 
 // SeedHash is the seed to use for generating a verification cache and the mining

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"runtime"
+	"sync/atomic"
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
@@ -551,4 +552,19 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		reward.Add(reward, r)
 	}
 	state.AddBalance(header.Coinbase, reward)
+}
+
+// Start implements consensus.Engine, starting the ethash engine.
+func (ethash *Ethash) Start() {
+	atomic.StoreInt32(&ethash.running, 1)
+}
+
+// Stop implements consensus.Engine, stopping the ethash engine.
+func (ethash *Ethash) Stop() {
+	atomic.StoreInt32(&ethash.running, 0)
+}
+
+// IsRunning implements consensus.Engine, returning an indication if the ethash engine is currently mining.
+func (ethash *Ethash) IsRunning() bool {
+	return atomic.LoadInt32(&ethash.running) > 0
 }

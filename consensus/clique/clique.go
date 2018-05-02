@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -194,8 +195,9 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 // Clique is the proof-of-authority consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
 type Clique struct {
-	config *params.CliqueConfig // Consensus engine configuration parameters
-	db     ethdb.Database       // Database to store and retrieve snapshot checkpoints
+	config  *params.CliqueConfig // Consensus engine configuration parameters
+	db      ethdb.Database       // Database to store and retrieve snapshot checkpoints
+	running int32                // Indicator whether clique engine is running or not.
 
 	recents    *lru.ARCCache // Snapshots for recent block to speed up reorgs
 	signatures *lru.ARCCache // Signatures of recent blocks to speed up mining
@@ -601,6 +603,10 @@ func (c *Clique) Seal(chain consensus.ChainReader, block *types.Block, stop <-ch
 	if c.config.Period == 0 && len(block.Transactions()) == 0 {
 		return nil, errWaitTransactions
 	}
+	// Make sure clique engine is started.
+	if !c.IsRunning() {
+		return nil, consensus.ErrEngineNotStart
+	}
 	// Don't hold the signer fields for the entire sealing procedure
 	c.lock.RLock()
 	signer, signFn := c.signer, c.signFn
@@ -670,6 +676,21 @@ func CalcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
 		return new(big.Int).Set(diffInTurn)
 	}
 	return new(big.Int).Set(diffNoTurn)
+}
+
+// Start implements consensus.Engine, starting the clique consensus engine.
+func (c *Clique) Start() {
+	atomic.StoreInt32(&c.running, 1)
+}
+
+// Stop implements consensus.Engine, stopping the clique consensus engine.
+func (c *Clique) Stop() {
+	atomic.StoreInt32(&c.running, 0)
+}
+
+// IsRunning implements consensus.Engine, returning an indication if the clique engine is currently mining.
+func (c *Clique) IsRunning() bool {
+	return atomic.LoadInt32(&c.running) > 0
 }
 
 // Close implements consensus.Engine, returning internal error and close the clique.

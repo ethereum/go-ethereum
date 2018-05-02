@@ -97,6 +97,15 @@ type Engine interface {
 	// APIs returns the RPC APIs this consensus engine provides.
 	APIs(chain ChainReader) []rpc.API
 
+	// Start starts the consensus engine.
+	Start()
+
+	// Stop stops the consensus engine.
+	Stop()
+
+	// IsRunning returns an indication whether consensus engine is running or not.
+	IsRunning() bool
+
 	// Close closes the consensus engine.
 	Close() error
 }

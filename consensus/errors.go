@@ -34,4 +34,7 @@ var (
 	// ErrInvalidNumber is returned if a block's number doesn't equal it's parent's
 	// plus one.
 	ErrInvalidNumber = errors.New("invalid block number")
+
+	// ErrEngineNotStart is returned if the consensus engine is not started.
+	ErrEngineNotStart = errors.New("consensus engine is not started")
 )
