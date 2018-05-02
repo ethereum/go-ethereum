@@ -26,7 +26,7 @@ type Response struct {
 	Content string
 }
 
-// implements a service
+// Storage implements a service
 //
 // DEPRECATED: Use the HTTP API instead
 type Storage struct {
@@ -41,8 +41,8 @@ func NewStorage(api *Api) *Storage {
 // its content type
 //
 // DEPRECATED: Use the HTTP API instead
-func (self *Storage) Put(content, contentType string) (string, error) {
-	key, err := self.api.Put(content, contentType)
+func (s *Storage) Put(content, contentType string) (string, error) {
+	key, err := s.api.Put(content, contentType)
 	if err != nil {
 		return "", err
 	}
@@ -57,16 +57,16 @@ func (self *Storage) Put(content, contentType string) (string, error) {
 // size is resp.Size
 //
 // DEPRECATED: Use the HTTP API instead
-func (self *Storage) Get(bzzpath string) (*Response, error) {
+func (s *Storage) Get(bzzpath string) (*Response, error) {
 	uri, err := Parse(path.Join("bzz:/", bzzpath))
 	if err != nil {
 		return nil, err
 	}
-	key, err := self.api.Resolve(uri)
+	key, err := s.api.Resolve(uri)
 	if err != nil {
 		return nil, err
 	}
-	reader, mimeType, status, err := self.api.Get(key, uri.Path)
+	reader, mimeType, status, err := s.api.Get(key, uri.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -83,20 +83,20 @@ func (self *Storage) Get(bzzpath string) (*Response, error) {
 	return &Response{mimeType, status, expsize, string(body[:size])}, err
 }
 
-// Modify(rootHash, basePath, contentHash, contentType) takes th e manifest trie rooted in rootHash,
+// Modify takes the manifest trie rooted in rootHash,
 // and merge on  to it. creating an entry w conentType (mime)
 //
 // DEPRECATED: Use the HTTP API instead
-func (self *Storage) Modify(rootHash, path, contentHash, contentType string) (newRootHash string, err error) {
+func (s *Storage) Modify(rootHash, path, contentHash, contentType string) (newRootHash string, err error) {
 	uri, err := Parse("bzz:/" + rootHash)
 	if err != nil {
 		return "", err
 	}
-	key, err := self.api.Resolve(uri)
+	key, err := s.api.Resolve(uri)
 	if err != nil {
 		return "", err
 	}
-	key, err = self.api.Modify(key, path, contentHash, contentType)
+	key, err = s.api.Modify(key, path, contentHash, contentType)
 	if err != nil {
 		return "", err
 	}

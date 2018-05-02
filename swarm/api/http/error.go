@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 /*
-Show nicely (but simple) formatted HTML error pages (or respond with JSON
+Package http shows nicely (but simple) formatted HTML error pages (or respond with JSON
 if the appropriate `Accept` header is set)) for the http package.
 */
 package http
@@ -43,7 +43,7 @@ var (
 	jsonCounter = metrics.NewRegisteredCounter("api.http.errorpage.json.count", nil)
 )
 
-//parameters needed for formatting the correct HTML page
+//ErrorParams needed for formatting the correct HTML page
 type ErrorParams struct {
 	Msg       string
 	Code      int
@@ -52,8 +52,8 @@ type ErrorParams struct {
 	Details   template.HTML
 }
 
-//a custom error case struct that would be used to store validators and
-//additional error info to display with client responses.
+//CaseError is a custom error case struct that would be used to store validators
+//and additional error info to display with client responses.
 type CaseError struct {
 	Validator func(*Request) bool
 	Msg       func(*Request) string
@@ -107,7 +107,7 @@ func ValidateCaseErrors(r *Request) string {
 	return ""
 }
 
-//ShowMultipeChoices is used when a user requests a resource in a manifest which results
+//ShowMultipleChoices is used when a user requests a resource in a manifest which results
 //in ambiguous results. It returns a HTML page with clickable links of each of the entry
 //in the manifest which fits the request URI ambiguity.
 //For example, if the user requests bzz:/<hash>/read and that manifest contains entries
@@ -164,14 +164,14 @@ func ShowError(w http.ResponseWriter, r *Request, msg string, code int) {
 func respond(w http.ResponseWriter, r *http.Request, params *ErrorParams) {
 	w.WriteHeader(params.Code)
 	if r.Header.Get("Accept") == "application/json" {
-		respondJson(w, params)
+		respondJSON(w, params)
 	} else {
-		respondHtml(w, params)
+		respondHTML(w, params)
 	}
 }
 
 //return a HTML page
-func respondHtml(w http.ResponseWriter, params *ErrorParams) {
+func respondHTML(w http.ResponseWriter, params *ErrorParams) {
 	htmlCounter.Inc(1)
 	err := params.template.Execute(w, params)
 	if err != nil {
@@ -180,7 +180,7 @@ func respondHtml(w http.ResponseWriter, params *ErrorParams) {
 }
 
 //return JSON
-func respondJson(w http.ResponseWriter, params *ErrorParams) {
+func respondJSON(w http.ResponseWriter, params *ErrorParams) {
 	jsonCounter.Inc(1)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(params)
@@ -190,7 +190,6 @@ func respondJson(w http.ResponseWriter, params *ErrorParams) {
 func getTemplate(code int) *template.Template {
 	if val, tmpl := templateMap[code]; tmpl {
 		return val
-	} else {
-		return templateMap[0]
 	}
+	return templateMap[0]
 }

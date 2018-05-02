@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 /*
-A simple http server interface to Swarm
+Package http implements a simple http server interface to Swarm
 */
 package http
 
@@ -78,7 +78,7 @@ type ServerConfig struct {
 // electron (chromium) api for registering bzz url scheme handlers:
 // https://github.com/atom/electron/blob/master/docs/api/protocol.md
 
-// starts up http server
+// StartHttpServer starts up http server
 func StartHttpServer(api *api.Api, config *ServerConfig) {
 	var allowedOrigins []string
 	for _, domain := range strings.Split(config.CorsString, ",") {
@@ -695,9 +695,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if uri.Raw() || uri.DeprecatedRaw() {
 			ShowError(w, req, fmt.Sprintf("No PUT to %s allowed.", uri), http.StatusBadRequest)
 			return
-		} else {
-			s.HandlePostFiles(w, req)
 		}
+		s.HandlePostFiles(w, req)
 
 	case "DELETE":
 		if uri.Raw() || uri.DeprecatedRaw() {

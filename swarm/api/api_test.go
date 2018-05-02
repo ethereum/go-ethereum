@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-func testApi(t *testing.T, f func(*Api)) {
+func testAPI(t *testing.T, f func(*Api)) {
 	datadir, err := ioutil.TempDir("", "bzz-test")
 	if err != nil {
 		t.Fatalf("unable to create temp dir: %v", err)
@@ -106,7 +106,7 @@ func testGet(t *testing.T, api *Api, bzzhash, path string) *testResponse {
 }
 
 func TestApiPut(t *testing.T) {
-	testApi(t, func(api *Api) {
+	testAPI(t, func(api *Api) {
 		content := "hello"
 		exp := expResponse(content, "text/plain", 0)
 		// exp := expResponse([]byte(content), "text/plain", 0)

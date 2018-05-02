@@ -39,7 +39,7 @@ func (a *Address) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
-// the string form of the binary representation of an address (only first 8 bits)
+// Bin returns the string form of the binary representation of an address (only first 8 bits)
 func (a Address) Bin() string {
 	var bs []string
 	for _, b := range a[:] {
@@ -75,7 +75,7 @@ func proximity(one, other Address) (ret int) {
 	return len(one) * 8
 }
 
-// Address.ProxCmp compares the distances a->target and b->target.
+// ProxCmp compares the distances a->target and b->target.
 // Returns -1 if a is closer to target, 1 if b is closer to target
 // and 0 if they are equal.
 func (target Address) ProxCmp(a, b Address) int {
@@ -91,7 +91,7 @@ func (target Address) ProxCmp(a, b Address) int {
 	return 0
 }
 
-// randomAddressAt(address, prox) generates a random address
+// RandomAddressAt generates a random address
 // at proximity order prox relative to address
 // if prox is negative a random address is generated
 func RandomAddressAt(self Address, prox int) (addr Address) {
@@ -116,7 +116,7 @@ func RandomAddressAt(self Address, prox int) (addr Address) {
 	return
 }
 
-// KeyRange(a0, a1, proxLimit) returns the address inclusive address
+// KeyRange returns the address inclusive address
 // range that contain addresses closer to one than other
 func KeyRange(one, other Address, proxLimit int) (start, stop Address) {
 	prox := proximity(one, other)
@@ -167,7 +167,7 @@ func CommonBitsAddrByte(self, other Address, b byte, prox int) (addr Address) {
 	return CommonBitsAddrF(self, other, func() byte { return b }, prox)
 }
 
-// randomAddressAt() generates a random address
+// RandomAddress generates a random address
 func RandomAddress() Address {
 	return RandomAddressAt(Address{}, -1)
 }
