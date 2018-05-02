@@ -51,14 +51,14 @@ func (m *Memory) Resize(size uint64) {
 }
 
 // Get returns offset + size as a new slice
-func (self *Memory) Get(offset, size int64) (cpy []byte) {
+func (m *Memory) Get(offset, size int64) (cpy []byte) {
 	if size == 0 {
 		return nil
 	}
 
-	if len(self.store) > int(offset) {
+	if len(m.store) > int(offset) {
 		cpy = make([]byte, size)
-		copy(cpy, self.store[offset:offset+size])
+		copy(cpy, m.store[offset:offset+size])
 
 		return
 	}
@@ -67,13 +67,13 @@ func (self *Memory) Get(offset, size int64) (cpy []byte) {
 }
 
 // GetPtr returns the offset + size
-func (self *Memory) GetPtr(offset, size int64) []byte {
+func (m *Memory) GetPtr(offset, size int64) []byte {
 	if size == 0 {
 		return nil
 	}
 
-	if len(self.store) > int(offset) {
-		return self.store[offset : offset+size]
+	if len(m.store) > int(offset) {
+		return m.store[offset : offset+size]
 	}
 
 	return nil
