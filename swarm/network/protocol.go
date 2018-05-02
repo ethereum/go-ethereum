@@ -229,7 +229,7 @@ func (bzz *bzz) handle() error {
 			return fmt.Errorf("<- %v: Data too short (%v)", msg, n)
 		}
 		// last Active time is set only when receiving chunks
-		self.lastActive = time.Now()
+		bzz.lastActive = time.Now()
 		log.Trace(fmt.Sprintf("incoming store request: %s", req.String()))
 		// swap accounting is done within forwarding
 		bzz.storage.HandleStoreRequestMsg(&req, &peer{bzz: bzz})

@@ -262,24 +262,23 @@ func decodeSync(meta *json.RawMessage) (*syncState, error) {
    * if Last  < LastSeenAt then all items in between then process all
      backlog from upto last disconnect
    * if Last > 0 &&
-
  sync is called from the syncer constructor and is not supposed to be used externally
 */
-func (sync *syncer) sync() {
-	state := sync.state
+func (s *syncer) sync() {
+	state := s.state
 	// sync finished
-	defer close(sync.syncStates)
+	defer close(s.syncStates)
 
 	// 0. first replay stale requests from request db
 	if state.SessionAt == 0 {
-		log.Debug(fmt.Sprintf("syncer[%v]: nothing to sync", sync.key.Log()))
+		log.Debug(fmt.Sprintf("syncer[%v]: nothing to sync", s.key.Log()))
 		return
 	}
-	log.Debug(fmt.Sprintf("syncer[%v]: start replaying stale requests from request db", sync.key.Log()))
+	log.Debug(fmt.Sprintf("syncer[%v]: start replaying stale requests from request db", s.key.Log()))
 	for p := priorities - 1; p >= 0; p-- {
-		sync.queues[p].dbRead(false, 0, sync.replay())
+		s.queues[p].dbRead(false, 0, s.replay())
 	}
-	log.Debug(fmt.Sprintf("syncer[%v]: done replaying stale requests from request db", sync.key.Log()))
+	log.Debug(fmt.Sprintf("syncer[%v]: done replaying stale requests from request db", s.key.Log()))
 
 	// unless peer is synced sync unfinished history beginning on
 	if !state.Synced {
@@ -288,9 +287,9 @@ func (sync *syncer) sync() {
 		if !storage.IsZeroKey(state.Latest) {
 			// 1. there is unfinished earlier sync
 			state.Start = state.Latest
-			log.Debug(fmt.Sprintf("syncer[%v]: start syncronising backlog (unfinished sync: %v)", sync.key.Log(), state))
+			log.Debug(fmt.Sprintf("syncer[%v]: start syncronising backlog (unfinished sync: %v)", s.key.Log(), state))
 			// blocks while the entire history upto state is synced
-			sync.syncState(state)
+			s.syncState(state)
 			if state.Last < state.SessionAt {
 				state.First = state.Last + 1
 			}
@@ -300,8 +299,8 @@ func (sync *syncer) sync() {
 		// 2. sync up to last disconnect1
 		if state.First < state.LastSeenAt {
 			state.Last = state.LastSeenAt
-			log.Debug(fmt.Sprintf("syncer[%v]: start syncronising history upto last disconnect at %v: %v", sync.key.Log(), state.LastSeenAt, state))
-			sync.syncState(state)
+			log.Debug(fmt.Sprintf("syncer[%v]: start syncronising history upto last disconnect at %v: %v", s.key.Log(), state.LastSeenAt, state))
+			s.syncState(state)
 			state.First = state.LastSeenAt
 		}
 		state.Latest = storage.ZeroKey
@@ -315,28 +314,28 @@ func (sync *syncer) sync() {
 	// if there have been new chunks since last session
 	if state.LastSeenAt < state.SessionAt {
 		state.Last = state.SessionAt
-		log.Debug(fmt.Sprintf("syncer[%v]: start syncronising history since last disconnect at %v up until session start at %v: %v", sync.key.Log(), state.LastSeenAt, state.SessionAt, state))
+		log.Debug(fmt.Sprintf("syncer[%v]: start syncronising history since last disconnect at %v up until session start at %v: %v", s.key.Log(), state.LastSeenAt, state.SessionAt, state))
 		// blocks until state syncing is finished
-		sync.syncState(state)
+		s.syncState(state)
 	}
-	log.Info(fmt.Sprintf("syncer[%v]: syncing all history complete", sync.key.Log()))
+	log.Info(fmt.Sprintf("syncer[%v]: syncing all history complete", s.key.Log()))
 
 }
 
 // wait till syncronised block uptil state is synced
-func (sync *syncer) syncState(state *syncState) {
-	sync.syncStates <- state
+func (s *syncer) syncState(state *syncState) {
+	s.syncStates <- state
 	select {
 	case <-state.synced:
-	case <-sync.quit:
+	case <-s.quit:
 	}
 }
 
 // stop quits both request processor and saves the request cache to disk
-func (sync *syncer) stop() {
-	close(sync.quit)
-	log.Trace(fmt.Sprintf("syncer[%v]: stop and save sync request db backlog", sync.key.Log()))
-	for _, db := range sync.queues {
+func (s *syncer) stop() {
+	close(s.quit)
+	log.Trace(fmt.Sprintf("syncer[%v]: stop and save sync request db backlog", s.key.Log()))
+	for _, db := range s.queues {
 		db.stop()
 	}
 }
@@ -351,7 +350,7 @@ func (req *syncRequest) String() string {
 	return fmt.Sprintf("<Key: %v, Priority: %v>", req.Key.Log(), req.Priority)
 }
 
-func (sync *syncer) newSyncRequest(req interface{}, p int) (*syncRequest, error) {
+func (s *syncer) newSyncRequest(req interface{}, p int) (*syncRequest, error) {
 	key, _, _, _, err := parseRequest(req)
 	// TODO: if req has chunk, it should be put in a cache
 	// create
@@ -365,11 +364,11 @@ func (sync *syncer) newSyncRequest(req interface{}, p int) (*syncRequest, error)
 // * read is on demand, blocking unless history channel is read
 // * accepts sync requests (syncStates) to create new db iterator
 // * closes the channel one iteration finishes
-func (sync *syncer) syncHistory(state *syncState) chan interface{} {
+func (s *syncer) syncHistory(state *syncState) chan interface{} {
 	var n uint
 	history := make(chan interface{})
-	log.Debug(fmt.Sprintf("syncer[%v]: syncing history between %v - %v for chunk addresses %v - %v", sync.key.Log(), state.First, state.Last, state.Start, state.Stop))
-	it := sync.dbAccess.iterator(state)
+	log.Debug(fmt.Sprintf("syncer[%v]: syncing history between %v - %v for chunk addresses %v - %v", s.key.Log(), state.First, state.Last, state.Start, state.Stop))
+	it := s.dbAccess.iterator(state)
 	if it != nil {
 		go func() {
 			// signal end of the iteration ended
@@ -384,22 +383,22 @@ func (sync *syncer) syncHistory(state *syncState) chan interface{} {
 				// blocking until history channel is read from
 				case history <- key:
 					n++
-					log.Trace(fmt.Sprintf("syncer[%v]: history: %v (%v keys)", sync.key.Log(), key.Log(), n))
+					log.Trace(fmt.Sprintf("syncer[%v]: history: %v (%v keys)", s.key.Log(), key.Log(), n))
 					state.Latest = key
-				case <-sync.quit:
+				case <-s.quit:
 					return
 				}
 			}
-			log.Debug(fmt.Sprintf("syncer[%v]: finished syncing history between %v - %v for chunk addresses %v - %v (at %v) (chunks = %v)", sync.key.Log(), state.First, state.Last, state.Start, state.Stop, state.Latest, n))
+			log.Debug(fmt.Sprintf("syncer[%v]: finished syncing history between %v - %v for chunk addresses %v - %v (at %v) (chunks = %v)", s.key.Log(), state.First, state.Last, state.Start, state.Stop, state.Latest, n))
 		}()
 	}
 	return history
 }
 
 // triggers key syncronisation
-func (sync *syncer) sendUnsyncedKeys() {
+func (s *syncer) sendUnsyncedKeys() {
 	select {
-	case sync.deliveryRequest <- true:
+	case s.deliveryRequest <- true:
 	default:
 	}
 }
@@ -410,7 +409,7 @@ func (sync *syncer) sendUnsyncedKeys() {
 //   historical data is used so historical items are lower priority within
 //   their priority group.
 // * Order of historical data is unspecified
-func (sync *syncer) syncUnsyncedKeys() {
+func (s *syncer) syncUnsyncedKeys() {
 	// send out new
 	var unsynced []*syncRequest
 	var more, justSynced bool
@@ -418,12 +417,12 @@ func (sync *syncer) syncUnsyncedKeys() {
 	var history chan interface{}
 
 	priority := High
-	keys := sync.keys[priority]
+	keys := s.keys[priority]
 	var newUnsyncedKeys, deliveryRequest chan bool
 	keyCounts := make([]int, priorities)
-	histPrior := sync.SyncPriorities[HistoryReq]
-	syncStates := sync.syncStates
-	state := sync.state
+	histPrior := s.SyncPriorities[HistoryReq]
+	syncStates := s.syncStates
+	state := s.state
 
 LOOP:
 	for {
@@ -439,15 +438,15 @@ LOOP:
 		PRIORITIES:
 			for priority = High; priority >= 0; priority-- {
 				// the first priority channel that is non-empty will be assigned to keys
-				if len(sync.keys[priority]) > 0 {
-					log.Trace(fmt.Sprintf("syncer[%v]: reading request with	priority %v", sync.key.Log(), priority))
-					keys = sync.keys[priority]
+				if len(s.keys[priority]) > 0 {
+					log.Trace(fmt.Sprintf("syncer[%v]: reading request with	priority %v", s.key.Log(), priority))
+					keys = s.keys[priority]
 					break PRIORITIES
 				}
-				log.Trace(fmt.Sprintf("syncer[%v/%v]: queue: [%v, %v, %v]", sync.key.Log(), priority, len(sync.keys[High]), len(sync.keys[Medium]), len(sync.keys[Low])))
+				log.Trace(fmt.Sprintf("syncer[%v/%v]: queue: [%v, %v, %v]", s.key.Log(), priority, len(s.keys[High]), len(s.keys[Medium]), len(s.keys[Low])))
 				// if the input queue is empty on this level, resort to history if there is any
 				if uint(priority) == histPrior && history != nil {
-					log.Trace(fmt.Sprintf("syncer[%v]: reading history for %v", sync.key.Log(), sync.key))
+					log.Trace(fmt.Sprintf("syncer[%v]: reading history for %v", s.key.Log(), s.key))
 					keys = history
 					break PRIORITIES
 				}
@@ -457,8 +456,8 @@ LOOP:
 		// if peer ready to receive but nothing to send
 		if keys == nil && deliveryRequest == nil {
 			// if no items left and switch to waiting mode
-			log.Trace(fmt.Sprintf("syncer[%v]: buffers consumed. Waiting", sync.key.Log()))
-			newUnsyncedKeys = sync.newUnsyncedKeys
+			log.Trace(fmt.Sprintf("syncer[%v]: buffers consumed. Waiting", s.key.Log()))
+			newUnsyncedKeys = s.newUnsyncedKeys
 		}
 
 		// send msg iff
@@ -469,48 +468,48 @@ LOOP:
 		if deliveryRequest == nil &&
 			(justSynced ||
 				len(unsynced) > 0 && keys == nil ||
-				len(unsynced) == int(sync.SyncBatchSize)) {
+				len(unsynced) == int(s.SyncBatchSize)) {
 			justSynced = false
 			// listen to requests
-			deliveryRequest = sync.deliveryRequest
+			deliveryRequest = s.deliveryRequest
 			newUnsyncedKeys = nil // not care about data until next req comes in
 			// set sync to current counter
 			// (all nonhistorical outgoing traffic sheduled and persisted
-			state.LastSeenAt = sync.dbAccess.counter()
+			state.LastSeenAt = s.dbAccess.counter()
 			state.Latest = storage.ZeroKey
-			log.Trace(fmt.Sprintf("syncer[%v]: sending %v", sync.key.Log(), unsynced))
-			//  send the unsynced keyssync
+			log.Trace(fmt.Sprintf("syncer[%v]: sending %v", s.key.Log(), unsynced))
+			//  send the unsynced keys
 			stateCopy := *state
-			err := sync.unsyncedKeys(unsynced, &stateCopy)
+			err := s.unsyncedKeys(unsynced, &stateCopy)
 			if err != nil {
-				log.Warn(fmt.Sprintf("syncer[%v]: unable to send unsynced keys: %v", sync.key.Log(), err))
+				log.Warn(fmt.Sprintf("syncer[%v]: unable to send unsynced keys: %v", s.key.Log(), err))
 			}
-			sync.state = state
-			log.Debug(fmt.Sprintf("syncer[%v]: --> %v keys sent: (total: %v (%v), history: %v), sent sync state: %v", sync.key.Log(), len(unsynced), keyCounts, keyCount, historyCnt, stateCopy))
+			s.state = state
+			log.Debug(fmt.Sprintf("syncer[%v]: --> %v keys sent: (total: %v (%v), history: %v), sent sync state: %v", s.key.Log(), len(unsynced), keyCounts, keyCount, historyCnt, stateCopy))
 			unsynced = nil
 			keys = nil
 		}
 
 		// process item and add it to the batch
 		select {
-		case <-sync.quit:
+		case <-s.quit:
 			break LOOP
 		case req, more = <-keys:
 			if keys == history && !more {
-				log.Trace(fmt.Sprintf("syncer[%v]: syncing history segment complete", sync.key.Log()))
+				log.Trace(fmt.Sprintf("syncer[%v]: syncing history segment complete", s.key.Log()))
 				// history channel is closed, waiting for new state (called from sync())
-				syncStates = sync.syncStates
+				syncStates = s.syncStates
 				state.Synced = true // this signals that the  current segment is complete
 				select {
 				case state.synced <- false:
-				case <-sync.quit:
+				case <-s.quit:
 					break LOOP
 				}
 				justSynced = true
 				history = nil
 			}
 		case <-deliveryRequest:
-			log.Trace(fmt.Sprintf("syncer[%v]: peer ready to receive", sync.key.Log()))
+			log.Trace(fmt.Sprintf("syncer[%v]: peer ready to receive", s.key.Log()))
 
 			// this 1 cap channel can wake up the loop
 			// signaling that peer is ready to receive unsynced Keys
@@ -518,23 +517,23 @@ LOOP:
 			deliveryRequest = nil
 
 		case <-newUnsyncedKeys:
-			log.Trace(fmt.Sprintf("syncer[%v]: new unsynced keys available", sync.key.Log()))
+			log.Trace(fmt.Sprintf("syncer[%v]: new unsynced keys available", s.key.Log()))
 			// this 1 cap channel can wake up the loop
 			// signals that data is available to send if peer is ready to receive
 			newUnsyncedKeys = nil
-			keys = sync.keys[High]
+			keys = s.keys[High]
 
 		case state, more = <-syncStates:
 			// this resets the state
 			if !more {
-				state = sync.state
-				log.Trace(fmt.Sprintf("syncer[%v]: (priority %v) syncing complete upto %v)", sync.key.Log(), priority, state))
+				state = s.state
+				log.Trace(fmt.Sprintf("syncer[%v]: (priority %v) syncing complete upto %v)", s.key.Log(), priority, state))
 				state.Synced = true
 				syncStates = nil
 			} else {
-				log.Trace(fmt.Sprintf("syncer[%v]: (priority %v) syncing history upto %v priority %v)", sync.key.Log(), priority, state, histPrior))
+				log.Trace(fmt.Sprintf("syncer[%v]: (priority %v) syncing history upto %v priority %v)", s.key.Log(), priority, state, histPrior))
 				state.Synced = false
-				history = sync.syncHistory(state)
+				history = s.syncHistory(state)
 				// only one history at a time, only allow another one once the
 				// history channel is closed
 				syncStates = nil
@@ -544,19 +543,19 @@ LOOP:
 			continue LOOP
 		}
 
-		log.Trace(fmt.Sprintf("syncer[%v]: (priority %v) added to unsynced keys: %v", sync.key.Log(), priority, req))
+		log.Trace(fmt.Sprintf("syncer[%v]: (priority %v) added to unsynced keys: %v", s.key.Log(), priority, req))
 		keyCounts[priority]++
 		keyCount++
 		if keys == history {
-			log.Trace(fmt.Sprintf("syncer[%v]: (priority %v) history item %v (synced = %v)", sync.key.Log(), priority, req, state.Synced))
+			log.Trace(fmt.Sprintf("syncer[%v]: (priority %v) history item %v (synced = %v)", s.key.Log(), priority, req, state.Synced))
 			historyCnt++
 		}
-		if sreq, err := sync.newSyncRequest(req, priority); err == nil {
+		if sreq, err := s.newSyncRequest(req, priority); err == nil {
 			// extract key from req
-			log.Trace(fmt.Sprintf("syncer[%v]: (priority %v): request %v (synced = %v)", sync.key.Log(), priority, req, state.Synced))
+			log.Trace(fmt.Sprintf("syncer[%v]: (priority %v): request %v (synced = %v)", s.key.Log(), priority, req, state.Synced))
 			unsynced = append(unsynced, sreq)
 		} else {
-			log.Warn(fmt.Sprintf("syncer[%v]: (priority %v): error creating request for %v: %v)", sync.key.Log(), priority, req, err))
+			log.Warn(fmt.Sprintf("syncer[%v]: (priority %v): error creating request for %v: %v)", s.key.Log(), priority, req, err))
 		}
 
 	}
@@ -565,7 +564,7 @@ LOOP:
 // delivery loop
 // takes into account priority, send store Requests with chunk (delivery)
 // idle blocking if no new deliveries in any of the queues
-func (sync *syncer) syncDeliveries() {
+func (s *syncer) syncDeliveries() {
 	var req *storeRequestMsgData
 	p := High
 	var deliveries chan *storeRequestMsgData
@@ -576,7 +575,7 @@ func (sync *syncer) syncDeliveries() {
 	var total, success uint
 
 	for {
-		deliveries = sync.deliveries[p]
+		deliveries = s.deliveries[p]
 		select {
 		case req = <-deliveries:
 			n[p]++
@@ -585,13 +584,13 @@ func (sync *syncer) syncDeliveries() {
 			if p == Low {
 				// blocking, depletion on all channels, no preference for priority
 				select {
-				case req = <-sync.deliveries[High]:
+				case req = <-s.deliveries[High]:
 					n[High]++
-				case req = <-sync.deliveries[Medium]:
+				case req = <-s.deliveries[Medium]:
 					n[Medium]++
-				case req = <-sync.deliveries[Low]:
+				case req = <-s.deliveries[Low]:
 					n[Low]++
-				case <-sync.quit:
+				case <-s.quit:
 					return
 				}
 				p = High
@@ -601,20 +600,20 @@ func (sync *syncer) syncDeliveries() {
 			}
 		}
 		total++
-		msg, err = sync.newStoreRequestMsgData(req)
+		msg, err = s.newStoreRequestMsgData(req)
 		if err != nil {
-			log.Warn(fmt.Sprintf("syncer[%v]: failed to create store request for %v: %v", sync.key.Log(), req, err))
+			log.Warn(fmt.Sprintf("syncer[%v]: failed to create store request for %v: %v", s.key.Log(), req, err))
 		} else {
-			err = sync.store(msg)
+			err = s.store(msg)
 			if err != nil {
-				log.Warn(fmt.Sprintf("syncer[%v]: failed to deliver %v: %v", sync.key.Log(), req, err))
+				log.Warn(fmt.Sprintf("syncer[%v]: failed to deliver %v: %v", s.key.Log(), req, err))
 			} else {
 				success++
-				log.Trace(fmt.Sprintf("syncer[%v]: %v successfully delivered", sync.key.Log(), req))
+				log.Trace(fmt.Sprintf("syncer[%v]: %v successfully delivered", s.key.Log(), req))
 			}
 		}
-		if total%sync.SyncBatchSize == 0 {
-			log.Debug(fmt.Sprintf("syncer[%v]: deliver Total: %v, Success: %v, High: %v/%v, Medium: %v/%v, Low %v/%v", sync.key.Log(), total, success, c[High], n[High], c[Medium], n[Medium], c[Low], n[Low]))
+		if total%s.SyncBatchSize == 0 {
+			log.Debug(fmt.Sprintf("syncer[%v]: deliver Total: %v, Success: %v, High: %v/%v, Medium: %v/%v, Low %v/%v", s.key.Log(), total, success, c[High], n[High], c[Medium], n[Medium], c[Low], n[Low]))
 		}
 	}
 }
@@ -622,40 +621,37 @@ func (sync *syncer) syncDeliveries() {
 /*
  addRequest handles requests for delivery
  it accepts 4 types:
-
  * storeRequestMsgData: coming from netstore propagate response
  * chunk: coming from forwarding (questionable: id?)
  * key: from incoming syncRequest
  * syncDbEntry: key,id encoded in db
-
  If sync mode is on for the type of request, then
  it sends the request to the keys queue of the correct priority
  channel buffered with capacity (SyncBufferSize)
-
  If sync mode is off then, requests are directly sent to deliveries
 */
-func (sync *syncer) addRequest(req interface{}, ty int) {
+func (s *syncer) addRequest(req interface{}, ty int) {
 	// retrieve priority for request type name int8
 
-	priority := sync.SyncPriorities[ty]
+	priority := s.SyncPriorities[ty]
 	// sync mode for this type ON
-	if sync.syncF() || ty == DeliverReq {
-		if sync.SyncModes[ty] {
-			sync.addKey(req, priority, sync.quit)
+	if s.syncF() || ty == DeliverReq {
+		if s.SyncModes[ty] {
+			s.addKey(req, priority, s.quit)
 		} else {
-			sync.addDelivery(req, priority, sync.quit)
+			s.addDelivery(req, priority, s.quit)
 		}
 	}
 }
 
 // addKey queues sync request for sync confirmation with given priority
 // ie the key will go out in an unsyncedKeys message
-func (sync *syncer) addKey(req interface{}, priority uint, quit chan bool) bool {
+func (s *syncer) addKey(req interface{}, priority uint, quit chan bool) bool {
 	select {
-	case sync.keys[priority] <- req:
+	case s.keys[priority] <- req:
 		// this wakes up the unsynced keys loop if idle
 		select {
-		case sync.newUnsyncedKeys <- true:
+		case s.newUnsyncedKeys <- true:
 		default:
 		}
 		return true
@@ -667,9 +663,9 @@ func (sync *syncer) addKey(req interface{}, priority uint, quit chan bool) bool 
 // addDelivery queues delivery request for with given priority
 // ie the chunk will be delivered ASAP mod priority queueing handled by syncdb
 // requests are persisted across sessions for correct sync
-func (sync *syncer) addDelivery(req interface{}, priority uint, quit chan bool) bool {
+func (s *syncer) addDelivery(req interface{}, priority uint, quit chan bool) bool {
 	select {
-	case sync.queues[priority].buffer <- req:
+	case s.queues[priority].buffer <- req:
 		return true
 	case <-quit:
 		return false
@@ -678,14 +674,14 @@ func (sync *syncer) addDelivery(req interface{}, priority uint, quit chan bool) 
 
 // doDelivery delivers the chunk for the request with given priority
 // without queuing
-func (sync *syncer) doDelivery(req interface{}, priority uint, quit chan bool) bool {
-	msgdata, err := sync.newStoreRequestMsgData(req)
+func (s *syncer) doDelivery(req interface{}, priority uint, quit chan bool) bool {
+	msgdata, err := s.newStoreRequestMsgData(req)
 	if err != nil {
 		log.Warn(fmt.Sprintf("unable to deliver request %v: %v", msgdata, err))
 		return false
 	}
 	select {
-	case sync.deliveries[priority] <- msgdata:
+	case s.deliveries[priority] <- msgdata:
 		return true
 	case <-quit:
 		return false
@@ -694,9 +690,9 @@ func (sync *syncer) doDelivery(req interface{}, priority uint, quit chan bool) b
 
 // returns the delivery function for given priority
 // passed on to syncDb
-func (sync *syncer) deliver(priority uint) func(req interface{}, quit chan bool) bool {
+func (s *syncer) deliver(priority uint) func(req interface{}, quit chan bool) bool {
 	return func(req interface{}, quit chan bool) bool {
-		return sync.doDelivery(req, priority, quit)
+		return s.doDelivery(req, priority, quit)
 	}
 }
 
@@ -704,23 +700,23 @@ func (sync *syncer) deliver(priority uint) func(req interface{}, quit chan bool)
 // depending on sync mode settings for BacklogReq,
 // re	play of request db backlog sends items via confirmation
 // or directly delivers
-func (sync *syncer) replay() func(req interface{}, quit chan bool) bool {
-	sync := sync.SyncModes[BacklogReq]
-	priority := sync.SyncPriorities[BacklogReq]
+func (s *syncer) replay() func(req interface{}, quit chan bool) bool {
+	sync := s.SyncModes[BacklogReq]
+	priority := s.SyncPriorities[BacklogReq]
 	// sync mode for this type ON
 	if sync {
 		return func(req interface{}, quit chan bool) bool {
-			return sync.addKey(req, priority, quit)
+			return s.addKey(req, priority, quit)
 		}
 	}
 	return func(req interface{}, quit chan bool) bool {
-		return sync.doDelivery(req, priority, quit)
+		return s.doDelivery(req, priority, quit)
 	}
 }
 
 // given a request, extends it to a full storeRequestMsgData
 // polimorphic: see addRequest for the types accepted
-func (sync *syncer) newStoreRequestMsgData(req interface{}) (*storeRequestMsgData, error) {
+func (s *syncer) newStoreRequestMsgData(req interface{}) (*storeRequestMsgData, error) {
 
 	key, id, chunk, sreq, err := parseRequest(req)
 	if err != nil {
@@ -730,7 +726,7 @@ func (sync *syncer) newStoreRequestMsgData(req interface{}) (*storeRequestMsgDat
 	if sreq == nil {
 		if chunk == nil {
 			var err error
-			chunk, err = sync.dbAccess.get(key)
+			chunk, err = s.dbAccess.get(key)
 			if err != nil {
 				return nil, err
 			}
@@ -758,7 +754,7 @@ func parseRequest(req interface{}) (storage.Key, uint64, *storage.Chunk, *storeR
 	var err error
 
 	if key, ok = req.(storage.Key); ok {
-		id = generateId()
+		id = generateID()
 
 	} else if entry, ok = req.(*syncDbEntry); ok {
 		id = binary.BigEndian.Uint64(entry.val[32:])
@@ -766,7 +762,7 @@ func parseRequest(req interface{}) (storage.Key, uint64, *storage.Chunk, *storeR
 
 	} else if chunk, ok = req.(*storage.Chunk); ok {
 		key = chunk.Key
-		id = generateId()
+		id = generateID()
 
 	} else if sreq, ok = req.(*storeRequestMsgData); ok {
 		key = sreq.Key

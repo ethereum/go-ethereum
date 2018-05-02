@@ -31,13 +31,11 @@ const counterKeyPrefix = 0x01
 /*
 syncDb is a queueing service for outgoing deliveries.
 One instance per priority queue for each peer
-
 a syncDb instance maintains an in-memory buffer (of capacity bufferSize)
 once its in-memory buffer is full it switches to persisting in db
 and dbRead iterator iterates through the items keeping their order
 once the db read catches up (there is no more items in the db) then
 it switches back to in-memory buffer.
-
 when syncdb is stopped all items in the buffer are saved to the db
 */
 type syncDb struct {
@@ -89,26 +87,21 @@ func newSyncDb(db *storage.LDBDatabase, key storage.Key, priority uint, bufferSi
 /*
 bufferRead is a forever iterator loop that takes care of delivering
 outgoing store requests reads from incoming buffer
-
 its argument is the deliver function taking the item as first argument
 and a quit channel as second.
 Closing of this channel is supposed to abort all waiting for delivery
 (typically network write)
-
 The iteration switches between 2 modes,
 * buffer mode reads the in-memory buffer and delivers the items directly
 * db mode reads from the buffer and writes to the db, parallelly another
 routine is started that reads from the db and delivers items
-
 If there is buffer contention in buffer mode (slow network, high upload volume)
 syncdb switches to db mode and starts dbRead
 Once db backlog is delivered, it reverts back to in-memory buffer
-
 It is automatically started when syncdb is initialised.
-
 It saves the buffer to db upon receiving quit signal. syncDb#stop()
 */
-func (db *syncDb) bufferRead(deliver func(interface{}, chan bool) bool) {
+func (sdb *syncDb) bufferRead(deliver func(interface{}, chan bool) bool) {
 	var buffer, db chan interface{} // channels representing the two read modes
 	var more bool
 	var req interface{}
@@ -116,18 +109,18 @@ func (db *syncDb) bufferRead(deliver func(interface{}, chan bool) bool) {
 	var inBatch, inDb int
 	batch := new(leveldb.Batch)
 	var dbSize chan int
-	quit := db.quit
+	quit := sdb.quit
 	counterValue := make([]byte, 8)
 
 	// counter is used for keeping the items in order, persisted to db
 	// start counter where db was at, 0 if not found
-	data, err := db.db.Get(db.counterKey)
+	data, err := sdb.db.Get(sdb.counterKey)
 	var counter uint64
 	if err == nil {
 		counter = binary.BigEndian.Uint64(data)
-		log.Trace(fmt.Sprintf("syncDb[%v/%v] - counter read from db at %v", db.key.Log(), db.priority, counter))
+		log.Trace(fmt.Sprintf("syncDb[%v/%v] - counter read from db at %v", sdb.key.Log(), sdb.priority, counter))
 	} else {
-		log.Trace(fmt.Sprintf("syncDb[%v/%v] - counter starts at %v", db.key.Log(), db.priority, counter))
+		log.Trace(fmt.Sprintf("syncDb[%v/%v] - counter starts at %v", sdb.key.Log(), sdb.priority, counter))
 	}
 
 LOOP:
@@ -139,26 +132,26 @@ LOOP:
 			// deliver request : this is blocking on network write so
 			// it is passed the quit channel as argument, so that it returns
 			// if syncdb is stopped. In this case we need to save the item to the db
-			more = deliver(req, db.quit)
+			more = deliver(req, sdb.quit)
 			if !more {
-				log.Debug(fmt.Sprintf("syncDb[%v/%v] quit: switching to db. session tally (db/total): %v/%v", db.key.Log(), db.priority, db.dbTotal, db.total))
+				log.Debug(fmt.Sprintf("syncDb[%v/%v] quit: switching to db. session tally (db/total): %v/%v", sdb.key.Log(), sdb.priority, sdb.dbTotal, sdb.total))
 				// received quit signal, save request currently waiting delivery
 				// by switching to db mode and closing the buffer
 				buffer = nil
-				db = db.buffer
+				db = sdb.buffer
 				close(db)
 				quit = nil // needs to block the quit case in select
 				break      // break from select, this item will be written to the db
 			}
-			db.total++
-			log.Trace(fmt.Sprintf("syncDb[%v/%v] deliver (db/total): %v/%v", db.key.Log(), db.priority, db.dbTotal, db.total))
+			sdb.total++
+			log.Trace(fmt.Sprintf("syncDb[%v/%v] deliver (db/total): %v/%v", sdb.key.Log(), sdb.priority, sdb.dbTotal, sdb.total))
 			// by the time deliver returns, there were new writes to the buffer
 			// if buffer contention is detected, switch to db mode which drains
 			// the buffer so no process will block on pushing store requests
 			if len(buffer) == cap(buffer) {
-				log.Debug(fmt.Sprintf("syncDb[%v/%v] buffer full %v: switching to db. session tally (db/total): %v/%v", db.key.Log(), db.priority, cap(buffer), db.dbTotal, db.total))
+				log.Debug(fmt.Sprintf("syncDb[%v/%v] buffer full %v: switching to db. session tally (db/total): %v/%v", sdb.key.Log(), sdb.priority, cap(buffer), sdb.dbTotal, sdb.total))
 				buffer = nil
-				db = db.buffer
+				db = sdb.buffer
 			}
 			continue LOOP
 
@@ -167,30 +160,30 @@ LOOP:
 			if !more {
 				// only if quit is called, saved all the buffer
 				binary.BigEndian.PutUint64(counterValue, counter)
-				batch.Put(db.counterKey, counterValue) // persist counter in batch
-				db.writeSyncBatch(batch)               // save batch
-				log.Trace(fmt.Sprintf("syncDb[%v/%v] quitting: save current batch to db", db.key.Log(), db.priority))
+				batch.Put(sdb.counterKey, counterValue) // persist counter in batch
+				sdb.writeSyncBatch(batch)               // save batch
+				log.Trace(fmt.Sprintf("syncDb[%v/%v] quitting: save current batch to db", sdb.key.Log(), sdb.priority))
 				break LOOP
 			}
-			db.dbTotal++
-			db.total++
+			sdb.dbTotal++
+			sdb.total++
 			// otherwise break after select
-		case dbSize = <-db.batch:
+		case dbSize = <-sdb.batch:
 			// explicit request for batch
 			if inBatch == 0 && quit != nil {
 				// there was no writes since the last batch so db depleted
 				// switch to buffer mode
-				log.Debug(fmt.Sprintf("syncDb[%v/%v] empty db: switching to buffer", db.key.Log(), db.priority))
+				log.Debug(fmt.Sprintf("syncDb[%v/%v] empty db: switching to buffer", sdb.key.Log(), sdb.priority))
 				db = nil
-				buffer = db.buffer
+				buffer = sdb.buffer
 				dbSize <- 0 // indicates to 'caller' that batch has been written
 				inDb = 0
 				continue LOOP
 			}
 			binary.BigEndian.PutUint64(counterValue, counter)
-			batch.Put(db.counterKey, counterValue)
-			log.Debug(fmt.Sprintf("syncDb[%v/%v] write batch %v/%v - %x - %x", db.key.Log(), db.priority, inBatch, counter, db.counterKey, counterValue))
-			batch = db.writeSyncBatch(batch)
+			batch.Put(sdb.counterKey, counterValue)
+			log.Debug(fmt.Sprintf("syncDb[%v/%v] write batch %v/%v - %x - %x", sdb.key.Log(), sdb.priority, inBatch, counter, sdb.counterKey, counterValue))
+			batch = sdb.writeSyncBatch(batch)
 			dbSize <- inBatch // indicates to 'caller' that batch has been written
 			inBatch = 0
 			continue LOOP
@@ -198,45 +191,45 @@ LOOP:
 			// closing syncDb#quit channel is used to signal to all goroutines to quit
 		case <-quit:
 			// need to save backlog, so switch to db mode
-			db = db.buffer
+			db = sdb.buffer
 			buffer = nil
 			quit = nil
-			log.Trace(fmt.Sprintf("syncDb[%v/%v] quitting: save buffer to db", db.key.Log(), db.priority))
+			log.Trace(fmt.Sprintf("syncDb[%v/%v] quitting: save buffer to db", sdb.key.Log(), sdb.priority))
 			close(db)
 			continue LOOP
 		}
 
 		// only get here if we put req into db
-		entry, err = db.newSyncDbEntry(req, counter)
+		entry, err = sdb.newSyncDbEntry(req, counter)
 		if err != nil {
-			log.Warn(fmt.Sprintf("syncDb[%v/%v] saving request %v (#%v/%v) failed: %v", db.key.Log(), db.priority, req, inBatch, inDb, err))
+			log.Warn(fmt.Sprintf("syncDb[%v/%v] saving request %v (#%v/%v) failed: %v", sdb.key.Log(), sdb.priority, req, inBatch, inDb, err))
 			continue LOOP
 		}
 		batch.Put(entry.key, entry.val)
-		log.Trace(fmt.Sprintf("syncDb[%v/%v] to batch %v '%v' (#%v/%v/%v)", db.key.Log(), db.priority, req, entry, inBatch, inDb, counter))
+		log.Trace(fmt.Sprintf("syncDb[%v/%v] to batch %v '%v' (#%v/%v/%v)", sdb.key.Log(), sdb.priority, req, entry, inBatch, inDb, counter))
 		// if just switched to db mode and not quitting, then launch dbRead
 		// in a parallel go routine to send deliveries from db
 		if inDb == 0 && quit != nil {
-			log.Trace(fmt.Sprintf("syncDb[%v/%v] start dbRead", db.key.Log(), db.priority))
-			go db.dbRead(true, counter, deliver)
+			log.Trace(fmt.Sprintf("syncDb[%v/%v] start dbRead", sdb.key.Log(), sdb.priority))
+			go sdb.dbRead(true, counter, deliver)
 		}
 		inDb++
 		inBatch++
 		counter++
 		// need to save the batch if it gets too large (== dbBatchSize)
-		if inBatch%int(db.dbBatchSize) == 0 {
-			batch = db.writeSyncBatch(batch)
+		if inBatch%int(sdb.dbBatchSize) == 0 {
+			batch = sdb.writeSyncBatch(batch)
 		}
 	}
-	log.Info(fmt.Sprintf("syncDb[%v:%v]: saved %v keys (saved counter at %v)", db.key.Log(), db.priority, inBatch, counter))
-	close(db.done)
+	log.Info(fmt.Sprintf("syncDb[%v:%v]: saved %v keys (saved counter at %v)", sdb.key.Log(), sdb.priority, inBatch, counter))
+	close(sdb.done)
 }
 
 // writes the batch to the db and returns a new batch object
-func (db *syncDb) writeSyncBatch(batch *leveldb.Batch) *leveldb.Batch {
-	err := db.db.Write(batch)
+func (sdb *syncDb) writeSyncBatch(batch *leveldb.Batch) *leveldb.Batch {
+	err := sdb.db.Write(batch)
 	if err != nil {
-		log.Warn(fmt.Sprintf("syncDb[%v/%v] saving batch to db failed: %v", db.key.Log(), db.priority, err))
+		log.Warn(fmt.Sprintf("syncDb[%v/%v] saving batch to db failed: %v", sdb.key.Log(), sdb.priority, err))
 		return batch
 	}
 	return new(leveldb.Batch)
@@ -256,25 +249,22 @@ func (entry syncDbEntry) String() string {
 	this is mainly to prevent crashes due to network output buffer contention (???)
 	as well as to make syncronisation resilient to disconnects
 	the messages are supposed to be sent in the p2p priority queue.
-
 	the request DB is shared between peers, but domains for each syncdb
 	are disjoint. dbkeys (42 bytes) are structured:
 	* 0: 0x00 (0x01 reserved for counter key)
 	* 1: priorities - priority (so that high priority can be replayed first)
 	* 2-33: peers address
 	* 34-41: syncdb counter to preserve order (this field is missing for the counter key)
-
 	values (40 bytes) are:
 	* 0-31: key
 	* 32-39: request id
-
 dbRead needs a boolean to indicate if on first round all the historical
 record is synced. Second argument to indicate current db counter
 The third is the function to apply
 */
-func (db *syncDb) dbRead(useBatches bool, counter uint64, fun func(interface{}, chan bool) bool) {
+func (sdb *syncDb) dbRead(useBatches bool, counter uint64, fun func(interface{}, chan bool) bool) {
 	key := make([]byte, 42)
-	copy(key, db.start)
+	copy(key, sdb.start)
 	binary.BigEndian.PutUint64(key[34:], counter)
 	var batches, n, cnt, total int
 	var more bool
@@ -290,8 +280,8 @@ func (db *syncDb) dbRead(useBatches bool, counter uint64, fun func(interface{}, 
 			// so that loop is not blocking while delivering
 			// only relevant if cnt is large
 			select {
-			case db.batch <- batchSizes:
-			case <-db.quit:
+			case sdb.batch <- batchSizes:
+			case <-sdb.quit:
 				return
 			}
 			// wait for the write to finish and get the item count in the next batch
@@ -302,31 +292,31 @@ func (db *syncDb) dbRead(useBatches bool, counter uint64, fun func(interface{}, 
 				return
 			}
 		}
-		it = db.db.NewIterator()
+		it = sdb.db.NewIterator()
 		it.Seek(key)
 		if !it.Valid() {
-			copy(key, db.start)
+			copy(key, sdb.start)
 			useBatches = true
 			continue
 		}
 		del = new(leveldb.Batch)
-		log.Trace(fmt.Sprintf("syncDb[%v/%v]: new iterator: %x (batch %v, count %v)", db.key.Log(), db.priority, key, batches, cnt))
+		log.Trace(fmt.Sprintf("syncDb[%v/%v]: new iterator: %x (batch %v, count %v)", sdb.key.Log(), sdb.priority, key, batches, cnt))
 
 		for n = 0; !useBatches || n < cnt; it.Next() {
 			copy(key, it.Key())
 			if len(key) == 0 || key[0] != 0 {
-				copy(key, db.start)
+				copy(key, sdb.start)
 				useBatches = true
 				break
 			}
 			val := make([]byte, 40)
 			copy(val, it.Value())
 			entry = &syncDbEntry{key, val}
-			// log.Trace(fmt.Sprintf("syncDb[%v/%v] - %v, batches: %v, total: %v, session total from db: %v/%v", db.key.Log(), db.priority, db.key.Log(), batches, total, db.dbTotal, db.total))
-			more = fun(entry, db.quit)
+			// log.Trace(fmt.Sprintf("syncDb[%v/%v] - %v, batches: %v, total: %v, session total from db: %v/%v", sdb.key.Log(), sdb.priority, sdb.key.Log(), batches, total, sdb.dbTotal, sdb.total))
+			more = fun(entry, sdb.quit)
 			if !more {
 				// quit received when waiting to deliver entry, the entry will not be deleted
-				log.Trace(fmt.Sprintf("syncDb[%v/%v] batch %v quit after %v/%v items", db.key.Log(), db.priority, batches, n, cnt))
+				log.Trace(fmt.Sprintf("syncDb[%v/%v] batch %v quit after %v/%v items", sdb.key.Log(), sdb.priority, batches, n, cnt))
 				break
 			}
 			// since subsequent batches of the same db session are indexed incrementally
@@ -336,22 +326,22 @@ func (db *syncDb) dbRead(useBatches bool, counter uint64, fun func(interface{}, 
 			n++
 			total++
 		}
-		log.Debug(fmt.Sprintf("syncDb[%v/%v] - db session closed, batches: %v, total: %v, session total from db: %v/%v", db.key.Log(), db.priority, batches, total, db.dbTotal, db.total))
-		db.db.Write(del) // this could be async called only when db is idle
+		log.Debug(fmt.Sprintf("syncDb[%v/%v] - db session closed, batches: %v, total: %v, session total from db: %v/%v", sdb.key.Log(), sdb.priority, batches, total, sdb.dbTotal, sdb.total))
+		sdb.db.Write(del) // this could be async called only when db is idle
 		it.Release()
 	}
 }
 
 //
-func (db *syncDb) stop() {
-	close(db.quit)
-	<-db.done
+func (sdb *syncDb) stop() {
+	close(sdb.quit)
+	<-sdb.done
 }
 
 // calculate a dbkey for the request, for the db to work
 // see syncdb for db key structure
 // polimorphic: accepted types, see syncer#addRequest
-func (db *syncDb) newSyncDbEntry(req interface{}, counter uint64) (entry *syncDbEntry, err error) {
+func (sdb *syncDb) newSyncDbEntry(req interface{}, counter uint64) (entry *syncDbEntry, err error) {
 	var key storage.Key
 	var chunk *storage.Chunk
 	var id uint64
@@ -359,10 +349,10 @@ func (db *syncDb) newSyncDbEntry(req interface{}, counter uint64) (entry *syncDb
 	var sreq *storeRequestMsgData
 
 	if key, ok = req.(storage.Key); ok {
-		id = generateId()
+		id = generateID()
 	} else if chunk, ok = req.(*storage.Chunk); ok {
 		key = chunk.Key
-		id = generateId()
+		id = generateID()
 	} else if sreq, ok = req.(*storeRequestMsgData); ok {
 		key = sreq.Key
 		id = sreq.Id
@@ -377,7 +367,7 @@ func (db *syncDb) newSyncDbEntry(req interface{}, counter uint64) (entry *syncDb
 		dbval := make([]byte, 40)
 
 		// encode key
-		copy(dbkey[:], db.start[:34]) // db  peer
+		copy(dbkey[:], sdb.start[:34]) // db  peer
 		binary.BigEndian.PutUint64(dbkey[34:], counter)
 		// encode value
 		copy(dbval, key[:])
