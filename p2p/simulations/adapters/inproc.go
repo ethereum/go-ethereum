@@ -266,7 +266,6 @@ func (sn *SimNode) Start(snapshots map[string][]byte) error {
 	return nil
 }
 
-
 // Stop closes the RPC client and stops the underlying devp2p node
 func (sn *SimNode) Stop() error {
 	sn.lock.Lock()

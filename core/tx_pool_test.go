@@ -1346,7 +1346,7 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 	defer sub.Unsubscribe()
 
 	// Create a number of test accounts and fund them
-	keys := make([]*ecdsa.PrivateKey, 3)
+	keys := make([]*ecdsa.PrivateKey, 4)
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
@@ -1406,18 +1406,22 @@ func TestTransactionPoolUnderpricing(t *testing.T) {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 	// Ensure that adding local transactions can push out even higher priced ones
-	tx := pricedTransaction(1, 100000, big.NewInt(0), keys[2])
-	if err := pool.AddLocal(tx); err != nil {
-		t.Fatalf("failed to add underpriced local transaction: %v", err)
+	ltx = pricedTransaction(1, 100000, big.NewInt(0), keys[2])
+	if err := pool.AddLocal(ltx); err != nil {
+		t.Fatalf("failed to append underpriced local transaction: %v", err)
+	}
+	ltx = pricedTransaction(0, 100000, big.NewInt(0), keys[3])
+	if err := pool.AddLocal(ltx); err != nil {
+		t.Fatalf("failed to add new underpriced local transaction: %v", err)
 	}
 	pending, queued = pool.Stats()
-	if pending != 2 {
-		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
+	if pending != 3 {
+		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 3)
 	}
-	if queued != 2 {
-		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
+	if queued != 1 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
 	}
-	if err := validateEvents(events, 1); err != nil {
+	if err := validateEvents(events, 2); err != nil {
 		t.Fatalf("local event firing failed: %v", err)
 	}
 	if err := validateTxPoolInternals(pool); err != nil {

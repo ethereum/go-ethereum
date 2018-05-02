@@ -265,11 +265,11 @@ type preminedTestnet struct {
 	net       *Network
 }
 
-func (net *preminedTestnet) sendFindnode(to *Node, target NodeID) {
+func (tn *preminedTestnet) sendFindnode(to *Node, target NodeID) {
 	panic("sendFindnode called")
 }
 
-func (net *preminedTestnet) sendFindnodeHash(to *Node, target common.Hash) {
+func (tn *preminedTestnet) sendFindnodeHash(to *Node, target common.Hash) {
 	// current log distance is encoded in port number
 	// fmt.Println("findnode query at dist", toaddr.Port)
 	if to.UDP <= lowPort {
@@ -277,21 +277,21 @@ func (net *preminedTestnet) sendFindnodeHash(to *Node, target common.Hash) {
 	}
 	next := to.UDP - 1
 	var result []rpcNode
-	for i, id := range net.dists[to.UDP-lowPort] {
+	for i, id := range tn.dists[to.UDP-lowPort] {
 		result = append(result, nodeToRPC(NewNode(id, net.ParseIP("10.0.2.99"), next, uint16(i)+1+lowPort)))
 	}
-	injectResponse(net.net, to, neighborsPacket, &neighbors{Nodes: result})
+	injectResponse(tn.net, to, neighborsPacket, &neighbors{Nodes: result})
 }
 
-func (net *preminedTestnet) sendPing(to *Node, addr *net.UDPAddr, topics []Topic) []byte {
-	injectResponse(net.net, to, pongPacket, &pong{ReplyTok: []byte{1}})
+func (tn *preminedTestnet) sendPing(to *Node, addr *net.UDPAddr, topics []Topic) []byte {
+	injectResponse(tn.net, to, pongPacket, &pong{ReplyTok: []byte{1}})
 	return []byte{1}
 }
 
-func (net *preminedTestnet) send(to *Node, ptype nodeEvent, data interface{}) (hash []byte) {
+func (tn *preminedTestnet) send(to *Node, ptype nodeEvent, data interface{}) (hash []byte) {
 	switch ptype {
 	case pingPacket:
-		injectResponse(net.net, to, pongPacket, &pong{ReplyTok: []byte{1}})
+		injectResponse(tn.net, to, pongPacket, &pong{ReplyTok: []byte{1}})
 	case pongPacket:
 		// ignored
 	case findnodeHashPacket:
@@ -302,29 +302,29 @@ func (net *preminedTestnet) send(to *Node, ptype nodeEvent, data interface{}) (h
 		}
 		next := to.UDP - 1
 		var result []rpcNode
-		for i, id := range net.dists[to.UDP-lowPort] {
+		for i, id := range tn.dists[to.UDP-lowPort] {
 			result = append(result, nodeToRPC(NewNode(id, net.ParseIP("10.0.2.99"), next, uint16(i)+1+lowPort)))
 		}
-		injectResponse(net.net, to, neighborsPacket, &neighbors{Nodes: result})
+		injectResponse(tn.net, to, neighborsPacket, &neighbors{Nodes: result})
 	default:
 		panic("send(" + ptype.String() + ")")
 	}
 	return []byte{2}
 }
 
-func (net *preminedTestnet) sendNeighbours(to *Node, nodes []*Node) {
+func (tn *preminedTestnet) sendNeighbours(to *Node, nodes []*Node) {
 	panic("sendNeighbours called")
 }
 
-func (net *preminedTestnet) sendTopicQuery(to *Node, topic Topic) {
+func (tn *preminedTestnet) sendTopicQuery(to *Node, topic Topic) {
 	panic("sendTopicQuery called")
 }
 
-func (net *preminedTestnet) sendTopicNodes(to *Node, queryHash common.Hash, nodes []*Node) {
+func (tn *preminedTestnet) sendTopicNodes(to *Node, queryHash common.Hash, nodes []*Node) {
 	panic("sendTopicNodes called")
 }
 
-func (net *preminedTestnet) sendTopicRegister(to *Node, topics []Topic, idx int, pong []byte) {
+func (tn *preminedTestnet) sendTopicRegister(to *Node, topics []Topic, idx int, pong []byte) {
 	panic("sendTopicRegister called")
 }
 
@@ -336,26 +336,26 @@ func (*preminedTestnet) localAddr() *net.UDPAddr {
 
 // mine generates a testnet struct literal with nodes at
 // various distances to the given target.
-func (net *preminedTestnet) mine(target NodeID) {
-	net.target = target
-	net.targetSha = crypto.Keccak256Hash(net.target[:])
+func (tn *preminedTestnet) mine(target NodeID) {
+	tn.target = target
+	tn.targetSha = crypto.Keccak256Hash(tn.target[:])
 	found := 0
 	for found < bucketSize*10 {
 		k := newkey()
 		id := PubkeyID(&k.PublicKey)
 		sha := crypto.Keccak256Hash(id[:])
-		ld := logdist(net.targetSha, sha)
-		if len(net.dists[ld]) < bucketSize {
-			net.dists[ld] = append(net.dists[ld], id)
+		ld := logdist(tn.targetSha, sha)
+		if len(tn.dists[ld]) < bucketSize {
+			tn.dists[ld] = append(tn.dists[ld], id)
 			fmt.Println("found ID with ld", ld)
 			found++
 		}
 	}
-	fmt.Println("&preminedTesnetet{")
-	fmt.Printf("	target: %#v,\n", net.target)
-	fmt.Printf("	targetSha: %#v,\n", net.targetSha)
-	fmt.Printf("	dists: [%d][]NodeID{\n", len(net.dists))
-	for ld, ns := range net.dists {
+	fmt.Println("&preminedTestnet{")
+	fmt.Printf("	target: %#v,\n", tn.target)
+	fmt.Printf("	targetSha: %#v,\n", tn.targetSha)
+	fmt.Printf("	dists: [%d][]NodeID{\n", len(tn.dists))
+	for ld, ns := range tn.dists {
 		if len(ns) == 0 {
 			continue
 		}

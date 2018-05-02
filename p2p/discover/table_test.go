@@ -562,7 +562,7 @@ type preminedTestnet struct {
 	dists     [hashBits + 1][]NodeID
 }
 
-func (net *preminedTestnet) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node, error) {
+func (tn *preminedTestnet) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node, error) {
 	// current log distance is encoded in port number
 	// fmt.Println("findnode query at dist", toaddr.Port)
 	if toaddr.Port == 0 {
@@ -570,7 +570,7 @@ func (net *preminedTestnet) findnode(toid NodeID, toaddr *net.UDPAddr, target No
 	}
 	next := uint16(toaddr.Port) - 1
 	var result []*Node
-	for i, id := range net.dists[toaddr.Port] {
+	for i, id := range tn.dists[toaddr.Port] {
 		result = append(result, NewNode(id, net.ParseIP("127.0.0.1"), next, uint16(i)))
 	}
 	return result, nil
@@ -582,26 +582,26 @@ func (*preminedTestnet) ping(toid NodeID, toaddr *net.UDPAddr) error { return ni
 
 // mine generates a testnet struct literal with nodes at
 // various distances to the given target.
-func (net *preminedTestnet) mine(target NodeID) {
-	net.target = target
-	net.targetSha = crypto.Keccak256Hash(net.target[:])
+func (tn *preminedTestnet) mine(target NodeID) {
+	tn.target = target
+	tn.targetSha = crypto.Keccak256Hash(tn.target[:])
 	found := 0
 	for found < bucketSize*10 {
 		k := newkey()
 		id := PubkeyID(&k.PublicKey)
 		sha := crypto.Keccak256Hash(id[:])
-		ld := logdist(net.targetSha, sha)
-		if len(net.dists[ld]) < bucketSize {
-			net.dists[ld] = append(net.dists[ld], id)
+		ld := logdist(tn.targetSha, sha)
+		if len(tn.dists[ld]) < bucketSize {
+			tn.dists[ld] = append(tn.dists[ld], id)
 			fmt.Println("found ID with ld", ld)
 			found++
 		}
 	}
 	fmt.Println("&preminedTestnet{")
-	fmt.Printf("	target: %#v,\n", net.target)
-	fmt.Printf("	targetSha: %#v,\n", net.targetSha)
-	fmt.Printf("	dists: [%d][]NodeID{\n", len(net.dists))
-	for ld, ns := range net.dists {
+	fmt.Printf("	target: %#v,\n", tn.target)
+	fmt.Printf("	targetSha: %#v,\n", tn.targetSha)
+	fmt.Printf("	dists: [%d][]NodeID{\n", len(tn.dists))
+	for ld, ns := range tn.dists {
 		if len(ns) == 0 {
 			continue
 		}
