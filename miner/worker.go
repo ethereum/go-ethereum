@@ -127,8 +127,8 @@ type worker struct {
 	unconfirmed *unconfirmedBlocks // set of locally mined blocks pending canonicalness confirmations
 
 	// atomic status counters
-	mining int32
-	atWork int32
+	running int32
+	atWork  int32
 }
 
 func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux) *worker {
@@ -175,7 +175,7 @@ func (self *worker) setExtra(extra []byte) {
 }
 
 func (self *worker) pending() (*types.Block, *state.StateDB) {
-	if atomic.LoadInt32(&self.mining) == 0 {
+	if atomic.LoadInt32(&self.running) == 0 {
 		// return a snapshot to avoid contention on currentMu mutex
 		self.snapshotMu.RLock()
 		defer self.snapshotMu.RUnlock()
@@ -188,7 +188,7 @@ func (self *worker) pending() (*types.Block, *state.StateDB) {
 }
 
 func (self *worker) pendingBlock() *types.Block {
-	if atomic.LoadInt32(&self.mining) == 0 {
+	if atomic.LoadInt32(&self.running) == 0 {
 		// return a snapshot to avoid contention on currentMu mutex
 		self.snapshotMu.RLock()
 		defer self.snapshotMu.RUnlock()
@@ -204,7 +204,7 @@ func (self *worker) start() {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	atomic.StoreInt32(&self.mining, 1)
+	atomic.StoreInt32(&self.running, 1)
 
 	// spin up agents
 	for agent := range self.agents {
@@ -217,13 +217,18 @@ func (self *worker) stop() {
 
 	self.mu.Lock()
 	defer self.mu.Unlock()
-	if atomic.LoadInt32(&self.mining) == 1 {
+	if atomic.LoadInt32(&self.running) == 1 {
 		for agent := range self.agents {
 			agent.Stop()
 		}
 	}
-	atomic.StoreInt32(&self.mining, 0)
+	atomic.StoreInt32(&self.running, 0)
 	atomic.StoreInt32(&self.atWork, 0)
+}
+
+// isRunning returns an indicator whether worker is currently running or not.
+func (self *worker) isRunning() bool {
+	return atomic.LoadInt32(&self.running) > 0
 }
 
 func (self *worker) register(agent Agent) {
@@ -266,7 +271,7 @@ func (self *worker) update() {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current mining block. These transactions will
 			// be automatically eliminated.
-			if atomic.LoadInt32(&self.mining) == 0 {
+			if atomic.LoadInt32(&self.running) == 0 {
 				self.currentMu.Lock()
 				txs := make(map[common.Address]types.Transactions)
 				for _, tx := range ev.Txs {

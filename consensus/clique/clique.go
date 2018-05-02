@@ -680,11 +680,13 @@ func CalcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
 
 // Start implements consensus.Engine, starting the clique consensus engine.
 func (c *Clique) Start() {
+	log.Info("Start clique consensus engine")
 	atomic.StoreInt32(&c.running, 1)
 }
 
 // Stop implements consensus.Engine, stopping the clique consensus engine.
 func (c *Clique) Stop() {
+	log.Info("Stop clique consensus engine")
 	atomic.StoreInt32(&c.running, 0)
 }
 

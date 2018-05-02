@@ -54,12 +54,13 @@ type Miner struct {
 	shouldStart int32 // should start indicates whether we should start after sync
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine) *Miner {
+func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, coinbase common.Address) *Miner {
 	miner := &Miner{
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
-		worker:   newWorker(config, engine, common.Address{}, eth, mux),
+		coinbase: coinbase,
+		worker:   newWorker(config, engine, coinbase, eth, mux),
 		canStart: 1,
 	}
 	miner.Register(NewCpuAgent(eth.BlockChain(), engine))
@@ -108,15 +109,22 @@ func (self *Miner) Start(coinbase common.Address) {
 		log.Info("Network syncing, will start miner afterwards")
 		return
 	}
-	log.Info("Starting mining operation")
-	self.engine.Start()
-	self.worker.start()
-	self.worker.commitNewWork()
+	if !self.engine.IsRunning() {
+		self.engine.Start()
+	}
+	if !self.worker.isRunning() {
+		self.worker.start()
+		self.worker.commitNewWork()
+	}
 }
 
 func (self *Miner) Stop() {
-	self.engine.Stop()
-	self.worker.stop()
+	if self.engine.IsRunning() {
+		self.engine.Stop()
+	}
+	if self.worker.isRunning() {
+		self.worker.stop()
+	}
 	atomic.StoreInt32(&self.shouldStart, 0)
 }
 
@@ -132,9 +140,9 @@ func (self *Miner) Mining() bool {
 	return self.engine.IsRunning()
 }
 
-func (self *Miner) HashRate() (tot int64) {
+func (self *Miner) HashRate() (tot uint64) {
 	if pow, ok := self.engine.(consensus.PoW); ok {
-		tot += int64(pow.Hashrate())
+		tot += uint64(pow.Hashrate())
 	}
 	return
 }

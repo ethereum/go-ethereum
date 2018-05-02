@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -556,11 +557,13 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 // Start implements consensus.Engine, starting the ethash engine.
 func (ethash *Ethash) Start() {
+	log.Info("Start ethash consensus engine")
 	atomic.StoreInt32(&ethash.running, 1)
 }
 
 // Stop implements consensus.Engine, stopping the ethash engine.
 func (ethash *Ethash) Stop() {
+	log.Info("Stop ethash consensus engine")
 	atomic.StoreInt32(&ethash.running, 0)
 }
 

@@ -96,7 +96,8 @@ func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 // Start the miner with the given number of threads. If threads is nil the number
 // of workers started is equal to the number of logical CPUs that are usable by
 // this process. If mining is already running, this method adjust the number of
-// threads allowed to use.
+// threads allowed to use and updates the minimum price required by the transaction
+// pool.
 func (api *PrivateMinerAPI) Start(threads *int) error {
 	// Set the number of threads if the seal engine supports it
 	if threads == nil {
@@ -111,17 +112,14 @@ func (api *PrivateMinerAPI) Start(threads *int) error {
 		log.Info("Updated mining threads", "threads", *threads)
 		th.SetThreads(*threads)
 	}
-	// Start the miner and return
-	if !api.e.IsMining() {
-		// Propagate the initial price point to the transaction pool
-		api.e.lock.RLock()
-		price := api.e.gasPrice
-		api.e.lock.RUnlock()
+	// Propagate the initial price point to the transaction pool
+	api.e.lock.RLock()
+	price := api.e.gasPrice
+	api.e.lock.RUnlock()
+	api.e.txPool.SetGasPrice(price)
 
-		api.e.txPool.SetGasPrice(price)
-		return api.e.StartMining(true)
-	}
-	return nil
+	// Start the miner and return
+	return api.e.StartMining(true)
 }
 
 // Stop the miner
@@ -162,7 +160,7 @@ func (api *PrivateMinerAPI) SetEtherbase(etherbase common.Address) bool {
 
 // GetHashrate returns the current hashrate of the miner.
 func (api *PrivateMinerAPI) GetHashrate() uint64 {
-	return uint64(api.e.miner.HashRate())
+	return api.e.miner.HashRate()
 }
 
 // PrivateAdminAPI is the collection of Ethereum full node-related APIs
