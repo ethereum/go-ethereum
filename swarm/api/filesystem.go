@@ -46,7 +46,7 @@ func NewFileSystem(api *Api) *FileSystem {
 // TODO: localpath should point to a manifest
 //
 // DEPRECATED: Use the HTTP API instead
-func (self *FileSystem) Upload(lpath, index string) (string, error) {
+func (fs *FileSystem) Upload(lpath, index string) (string, error) {
 	var list []*manifestTrieEntry
 	localpath, err := filepath.Abs(filepath.Clean(lpath))
 	if err != nil {
@@ -113,7 +113,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 				stat, _ := f.Stat()
 				var hash storage.Key
 				wg := &sync.WaitGroup{}
-				hash, err = self.api.dpa.Store(f, stat.Size(), wg, nil)
+				hash, err = fs.api.dpa.Store(f, stat.Size(), wg, nil)
 				if hash != nil {
 					list[i].Hash = hash.String()
 				}
@@ -142,7 +142,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 	}
 
 	trie := &manifestTrie{
-		dpa: self.api.dpa,
+		dpa: fs.api.dpa,
 	}
 	quitC := make(chan bool)
 	for i, entry := range list {
@@ -173,7 +173,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 // under localpath
 //
 // DEPRECATED: Use the HTTP API instead
-func (self *FileSystem) Download(bzzpath, localpath string) error {
+func (fs *FileSystem) Download(bzzpath, localpath string) error {
 	lpath, err := filepath.Abs(filepath.Clean(localpath))
 	if err != nil {
 		return err
@@ -188,7 +188,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	if err != nil {
 		return err
 	}
-	key, err := self.api.Resolve(uri)
+	key, err := fs.api.Resolve(uri)
 	if err != nil {
 		return err
 	}
@@ -199,7 +199,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	}
 
 	quitC := make(chan bool)
-	trie, err := loadManifest(self.api.dpa, key, quitC)
+	trie, err := loadManifest(fs.api.dpa, key, quitC)
 	if err != nil {
 		log.Warn(fmt.Sprintf("fs.Download: loadManifestTrie error: %v", err))
 		return err
@@ -244,7 +244,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 		}
 		go func(i int, entry *downloadListEntry) {
 			defer wg.Done()
-			err := retrieveToFile(quitC, self.api.dpa, entry.key, entry.path)
+			err := retrieveToFile(quitC, fs.api.dpa, entry.key, entry.path)
 			if err != nil {
 				select {
 				case errC <- err:

@@ -94,50 +94,50 @@ func (file *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
 	return nil
 }
 
-func (sf *SwarmFile) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
+func (file *SwarmFile) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
 
-	sf.lock.RLock()
-	defer sf.lock.RUnlock()
-	if sf.reader == nil {
-		sf.reader = sf.mountInfo.swarmApi.Retrieve(sf.key)
+	file.lock.RLock()
+	defer file.lock.RUnlock()
+	if file.reader == nil {
+		file.reader = file.mountInfo.swarmApi.Retrieve(file.key)
 	}
 	buf := make([]byte, req.Size)
-	n, err := sf.reader.ReadAt(buf, req.Offset)
+	n, err := file.reader.ReadAt(buf, req.Offset)
 	if err == io.ErrUnexpectedEOF || err == io.EOF {
 		err = nil
 	}
 	resp.Data = buf[:n]
-	sf.reader = nil
+	file.reader = nil
 	return err
 
 }
 
-func (sf *SwarmFile) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
+func (file *SwarmFile) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
 
-	if sf.fileSize == 0 && req.Offset == 0 {
+	if file.fileSize == 0 && req.Offset == 0 {
 
 		// A new file is created
-		err := addFileToSwarm(sf, req.Data, len(req.Data))
+		err := addFileToSwarm(file, req.Data, len(req.Data))
 		if err != nil {
 			return err
 		}
 		resp.Size = len(req.Data)
 
-	} else if req.Offset <= sf.fileSize {
+	} else if req.Offset <= file.fileSize {
 
-		totalSize := sf.fileSize + int64(len(req.Data))
+		totalSize := file.fileSize + int64(len(req.Data))
 		if totalSize > MaxAppendFileSize {
-			log.Warn("Append file size reached (%v) : (%v)", sf.fileSize, len(req.Data))
+			log.Warn("Append file size reached (%v) : (%v)", file.fileSize, len(req.Data))
 			return errFileSizeMaxLimixReached
 		}
 
-		err := appendToExistingFileInSwarm(sf, req.Data, req.Offset, int64(len(req.Data)))
+		err := appendToExistingFileInSwarm(file, req.Data, req.Offset, int64(len(req.Data)))
 		if err != nil {
 			return err
 		}
 		resp.Size = len(req.Data)
 	} else {
-		log.Warn("Invalid write request size(%v) : off(%v)", sf.fileSize, req.Offset)
+		log.Warn("Invalid write request size(%v) : off(%v)", file.fileSize, req.Offset)
 		return errInvalidOffset
 	}
 

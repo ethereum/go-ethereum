@@ -243,6 +243,6 @@ type LazyTestSectionReader struct {
 	*io.SectionReader
 }
 
-func (self *LazyTestSectionReader) Size(chan bool) (int64, error) {
-	return self.SectionReader.Size(), nil
+func (r *LazyTestSectionReader) Size(chan bool) (int64, error) {
+	return r.SectionReader.Size(), nil
 }

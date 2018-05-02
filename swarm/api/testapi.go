@@ -29,18 +29,18 @@ func NewControl(api *Api, hive *network.Hive) *Control {
 	return &Control{api, hive}
 }
 
-func (self *Control) BlockNetworkRead(on bool) {
-	self.hive.BlockNetworkRead(on)
+func (c *Control) BlockNetworkRead(on bool) {
+	c.hive.BlockNetworkRead(on)
 }
 
-func (self *Control) SyncEnabled(on bool) {
-	self.hive.SyncEnabled(on)
+func (c *Control) SyncEnabled(on bool) {
+	c.hive.SyncEnabled(on)
 }
 
-func (self *Control) SwapEnabled(on bool) {
-	self.hive.SwapEnabled(on)
+func (c *Control) SwapEnabled(on bool) {
+	c.hive.SwapEnabled(on)
 }
 
-func (self *Control) Hive() string {
-	return self.hive.String()
+func (c *Control) Hive() string {
+	return c.hive.String()
 }
