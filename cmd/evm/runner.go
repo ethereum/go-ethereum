@@ -21,11 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
+	goruntime "runtime"
 	"runtime/pprof"
 	"time"
-
-	goruntime "runtime"
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/compiler"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -86,6 +86,7 @@ func runCmd(ctx *cli.Context) error {
 		chainConfig *params.ChainConfig
 		sender      = common.BytesToAddress([]byte("sender"))
 		receiver    = common.BytesToAddress([]byte("receiver"))
+		blockNumber uint64
 	)
 	if ctx.GlobalBool(MachineFlag.Name) {
 		tracer = NewJSONLogger(logconfig, os.Stdout)
@@ -101,6 +102,7 @@ func runCmd(ctx *cli.Context) error {
 		genesis := gen.ToBlock(db)
 		statedb, _ = state.New(genesis.Root(), state.NewDatabase(db))
 		chainConfig = gen.Config
+		blockNumber = gen.Number
 	} else {
 		db, _ := ethdb.NewMemDatabase()
 		statedb, _ = state.New(common.Hash{}, state.NewDatabase(db))
@@ -156,11 +158,12 @@ func runCmd(ctx *cli.Context) error {
 
 	initialGas := ctx.GlobalUint64(GasFlag.Name)
 	runtimeConfig := runtime.Config{
-		Origin:   sender,
-		State:    statedb,
-		GasLimit: initialGas,
-		GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
-		Value:    utils.GlobalBig(ctx, ValueFlag.Name),
+		Origin:      sender,
+		State:       statedb,
+		GasLimit:    initialGas,
+		GasPrice:    utils.GlobalBig(ctx, PriceFlag.Name),
+		Value:       utils.GlobalBig(ctx, ValueFlag.Name),
+		BlockNumber: new(big.Int).SetUint64(blockNumber),
 		EVMConfig: vm.Config{
 			Tracer: tracer,
 			Debug:  ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
