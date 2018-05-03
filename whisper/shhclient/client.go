@@ -135,9 +135,9 @@ func (sc *Client) AddSymmetricKey(ctx context.Context, key []byte) (string, erro
 }
 
 // GenerateSymmetricKeyFromPassword generates the key from password, stores it, and returns its identifier.
-func (sc *Client) GenerateSymmetricKeyFromPassword(ctx context.Context, passwd []byte) (string, error) {
+func (sc *Client) GenerateSymmetricKeyFromPassword(ctx context.Context, passwd string) (string, error) {
 	var id string
-	return id, sc.c.CallContext(ctx, &id, "shh_generateSymKeyFromPassword", hexutil.Bytes(passwd))
+	return id, sc.c.CallContext(ctx, &id, "shh_generateSymKeyFromPassword", passwd)
 }
 
 // HasSymmetricKey returns an indication if the key associated with the given id is stored in the node.
