@@ -25,9 +25,9 @@ import (
 )
 
 var (
-	//EmptyString is a common encoded values useful when implementing EncodeRLP.
+	//EmptyString accepts a common encoded value useful for implementing EncodeRLP.
 	EmptyString = []byte{0x80}
-	//EmptyList is a common encoded values useful when implementing EncodeRLP.
+	//EmptyList accepts a common encoded value useful for implementing EncodeRLP.
 	EmptyList   = []byte{0xC0}
 )
 
