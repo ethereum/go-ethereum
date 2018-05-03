@@ -325,13 +325,13 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
 }
 
-// set in js console via admin interface or wrapper from cli flags
-func (self *Ethereum) SetEtherbase(etherbase common.Address) {
-	self.lock.Lock()
-	self.etherbase = etherbase
-	self.lock.Unlock()
+// SetEtherbase sets the mining reward address.
+func (s *Ethereum) SetEtherbase(etherbase common.Address) {
+	s.lock.Lock()
+	s.etherbase = etherbase
+	s.lock.Unlock()
 
-	self.miner.SetEtherbase(etherbase)
+	s.miner.SetEtherbase(etherbase)
 }
 
 func (s *Ethereum) StartMining(local bool) error {
