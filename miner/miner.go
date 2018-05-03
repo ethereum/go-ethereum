@@ -114,7 +114,6 @@ func (self *Miner) Start(coinbase common.Address) {
 	}
 	if !self.worker.isRunning() {
 		self.worker.start()
-		self.worker.commitNewWork()
 	}
 }
 

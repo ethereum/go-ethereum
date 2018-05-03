@@ -251,6 +251,11 @@ func (self *worker) update() {
 	defer self.chainHeadSub.Unsubscribe()
 	defer self.chainSideSub.Unsubscribe()
 
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	var started bool // Indication whether consensus engine is started
+
 	for {
 		// A real event arrived, process interesting content
 		select {
@@ -287,6 +292,17 @@ func (self *worker) update() {
 				if self.config.Clique != nil && self.config.Clique.Period == 0 {
 					self.commitNewWork()
 				}
+			}
+
+		// Commit new work when consensus engine is started.
+		case <-ticker.C:
+			if self.engine.IsRunning() {
+				if !started {
+					self.commitNewWork()
+					started = true
+				}
+			} else {
+				started = false
 			}
 
 		// System stopped
