@@ -738,7 +738,6 @@ func (self *Network) executeNodeEvent(e *Event) error {
 func (self *Network) executeConnEvent(e *Event) error {
 	if e.Conn.Up {
 		return self.Connect(e.Conn.One, e.Conn.Other)
-	} else {
-		return self.Disconnect(e.Conn.One, e.Conn.Other)
 	}
+	return self.Disconnect(e.Conn.One, e.Conn.Other)
 }
