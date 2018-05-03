@@ -26,6 +26,7 @@ import (
 	"math/big"
 	"reflect"
 	"strings"
+	customErr "github.com/pkg/errors"
 )
 
 var (
@@ -274,9 +275,8 @@ func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
 	if etype.Kind() == reflect.Uint8 && !reflect.PtrTo(etype).Implements(decoderInterface) {
 		if typ.Kind() == reflect.Array {
 			return decodeByteArray, nil
-		} else {
-			return decodeByteSlice, nil
 		}
+		return decodeByteSlice, nil
 	}
 	etypeinfo, err := cachedTypeInfo1(etype, tags{})
 	if err != nil {
@@ -536,6 +536,8 @@ func decodeDecoder(s *Stream, val reflect.Value) error {
 // Kind represents the kind of value contained in an RLP stream.
 type Kind int
 
+// Const list indicates the kind of value in an RLP stream 
+// and and its next value is incremented by Kind().
 const (
 	Byte Kind = iota
 	String
@@ -558,18 +560,23 @@ func (k Kind) String() string {
 var (
 	// EOL is returned when the end of the current list
 	// has been reached during streaming.
-	EOL = errors.New("rlp: end of list")
+	EOL = customErr.New(fmt.Sprintf("rlp: end of list"))
 
-	// Actual Errors
+	//ActualErrors
+
+	//ErrExpectedString is returned if kind is not string or Byte.
 	ErrExpectedString = errors.New("rlp: expected String or Byte")
+	//ErrExpectedList is returned if kind is not a list.
 	ErrExpectedList   = errors.New("rlp: expected List")
+	//ErrCanonInt is returned if integer is a non-canonical format .
 	ErrCanonInt       = errors.New("rlp: non-canonical integer format")
+	//ErrCanonSize is returned if integer has non-canonical size information. 
 	ErrCanonSize      = errors.New("rlp: non-canonical size information")
+	//ErrElemTooLarge is returned if the element is larger than the list. 
 	ErrElemTooLarge   = errors.New("rlp: element is larger than containing list")
+	//ErrValueTooLarge is returned if the element is larger than available input length. 
 	ErrValueTooLarge  = errors.New("rlp: value size exceeds available input length")
-
-	// This error is reported by DecodeBytes if the slice contains
-	// additional data after the first RLP value.
+	//ErrMoreThanOneValue is reported by DecodeBytes if the slice contains additional data after the first RLP value.
 	ErrMoreThanOneValue = errors.New("rlp: input contains more than one value")
 
 	// internal errors
