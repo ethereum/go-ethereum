@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -31,10 +32,10 @@ var sha3_nil = crypto.Keccak256Hash(nil)
 
 func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*types.Header, error) {
 	db := odr.Database()
-	hash := core.GetCanonicalHash(db, number)
+	hash := rawdb.ReadCanonicalHash(db, number)
 	if (hash != common.Hash{}) {
 		// if there is a canonical hash, there is a header too
-		header := core.GetHeader(db, hash, number)
+		header := rawdb.ReadHeader(db, hash, number)
 		if header == nil {
 			panic("Canonical hash present but header not found")
 		}
@@ -47,14 +48,14 @@ func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*typ
 	)
 	if odr.ChtIndexer() != nil {
 		chtCount, sectionHeadNum, sectionHead = odr.ChtIndexer().Sections()
-		canonicalHash := core.GetCanonicalHash(db, sectionHeadNum)
+		canonicalHash := rawdb.ReadCanonicalHash(db, sectionHeadNum)
 		// if the CHT was injected as a trusted checkpoint, we have no canonical hash yet so we accept zero hash too
 		for chtCount > 0 && canonicalHash != sectionHead && canonicalHash != (common.Hash{}) {
 			chtCount--
 			if chtCount > 0 {
 				sectionHeadNum = chtCount*CHTFrequencyClient - 1
 				sectionHead = odr.ChtIndexer().SectionHead(chtCount - 1)
-				canonicalHash = core.GetCanonicalHash(db, sectionHeadNum)
+				canonicalHash = rawdb.ReadCanonicalHash(db, sectionHeadNum)
 			}
 		}
 	}
@@ -69,7 +70,7 @@ func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*typ
 }
 
 func GetCanonicalHash(ctx context.Context, odr OdrBackend, number uint64) (common.Hash, error) {
-	hash := core.GetCanonicalHash(odr.Database(), number)
+	hash := rawdb.ReadCanonicalHash(odr.Database(), number)
 	if (hash != common.Hash{}) {
 		return hash, nil
 	}
@@ -82,7 +83,7 @@ func GetCanonicalHash(ctx context.Context, odr OdrBackend, number uint64) (commo
 
 // GetBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
 func GetBodyRLP(ctx context.Context, odr OdrBackend, hash common.Hash, number uint64) (rlp.RawValue, error) {
-	if data := core.GetBodyRLP(odr.Database(), hash, number); data != nil {
+	if data := rawdb.ReadBodyRLP(odr.Database(), hash, number); data != nil {
 		return data, nil
 	}
 	r := &BlockRequest{Hash: hash, Number: number}
@@ -111,7 +112,7 @@ func GetBody(ctx context.Context, odr OdrBackend, hash common.Hash, number uint6
 // back from the stored header and body.
 func GetBlock(ctx context.Context, odr OdrBackend, hash common.Hash, number uint64) (*types.Block, error) {
 	// Retrieve the block header and body contents
-	header := core.GetHeader(odr.Database(), hash, number)
+	header := rawdb.ReadHeader(odr.Database(), hash, number)
 	if header == nil {
 		return nil, ErrNoHeader
 	}
@@ -127,7 +128,7 @@ func GetBlock(ctx context.Context, odr OdrBackend, hash common.Hash, number uint
 // in a block given by its hash.
 func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, number uint64) (types.Receipts, error) {
 	// Retrieve the potentially incomplete receipts from disk or network
-	receipts := core.GetBlockReceipts(odr.Database(), hash, number)
+	receipts := rawdb.ReadReceipts(odr.Database(), hash, number)
 	if receipts == nil {
 		r := &ReceiptsRequest{Hash: hash, Number: number}
 		if err := odr.Retrieve(ctx, r); err != nil {
@@ -141,13 +142,13 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		if err != nil {
 			return nil, err
 		}
-		genesis := core.GetCanonicalHash(odr.Database(), 0)
-		config, _ := core.GetChainConfig(odr.Database(), genesis)
+		genesis := rawdb.ReadCanonicalHash(odr.Database(), 0)
+		config := rawdb.ReadChainConfig(odr.Database(), genesis)
 
 		if err := core.SetReceiptsData(config, block, receipts); err != nil {
 			return nil, err
 		}
-		core.WriteBlockReceipts(odr.Database(), hash, number, receipts)
+		rawdb.WriteReceipts(odr.Database(), hash, number, receipts)
 	}
 	return receipts, nil
 }
@@ -156,7 +157,7 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 // block given by its hash.
 func GetBlockLogs(ctx context.Context, odr OdrBackend, hash common.Hash, number uint64) ([][]*types.Log, error) {
 	// Retrieve the potentially incomplete receipts from disk or network
-	receipts := core.GetBlockReceipts(odr.Database(), hash, number)
+	receipts := rawdb.ReadReceipts(odr.Database(), hash, number)
 	if receipts == nil {
 		r := &ReceiptsRequest{Hash: hash, Number: number}
 		if err := odr.Retrieve(ctx, r); err != nil {
@@ -187,24 +188,24 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint, sectionIdxLi
 	)
 	if odr.BloomTrieIndexer() != nil {
 		bloomTrieCount, sectionHeadNum, sectionHead = odr.BloomTrieIndexer().Sections()
-		canonicalHash := core.GetCanonicalHash(db, sectionHeadNum)
+		canonicalHash := rawdb.ReadCanonicalHash(db, sectionHeadNum)
 		// if the BloomTrie was injected as a trusted checkpoint, we have no canonical hash yet so we accept zero hash too
 		for bloomTrieCount > 0 && canonicalHash != sectionHead && canonicalHash != (common.Hash{}) {
 			bloomTrieCount--
 			if bloomTrieCount > 0 {
 				sectionHeadNum = bloomTrieCount*BloomTrieFrequency - 1
 				sectionHead = odr.BloomTrieIndexer().SectionHead(bloomTrieCount - 1)
-				canonicalHash = core.GetCanonicalHash(db, sectionHeadNum)
+				canonicalHash = rawdb.ReadCanonicalHash(db, sectionHeadNum)
 			}
 		}
 	}
 
 	for i, sectionIdx := range sectionIdxList {
-		sectionHead := core.GetCanonicalHash(db, (sectionIdx+1)*BloomTrieFrequency-1)
+		sectionHead := rawdb.ReadCanonicalHash(db, (sectionIdx+1)*BloomTrieFrequency-1)
 		// if we don't have the canonical hash stored for this section head number, we'll still look for
 		// an entry with a zero sectionHead (we store it with zero section head too if we don't know it
 		// at the time of the retrieval)
-		bloomBits, err := core.GetBloomBits(db, bitIdx, sectionIdx, sectionHead)
+		bloomBits, err := rawdb.ReadBloomBits(db, bitIdx, sectionIdx, sectionHead)
 		if err == nil {
 			result[i] = bloomBits
 		} else {
