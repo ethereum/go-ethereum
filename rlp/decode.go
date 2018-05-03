@@ -537,7 +537,7 @@ func decodeDecoder(s *Stream, val reflect.Value) error {
 type Kind int
 
 // Const list indicates the kind of value in an RLP stream 
-// and and its next value is incremented by Kind().
+// and its next value is incremented by Kind().
 const (
 	Byte Kind = iota
 	String
