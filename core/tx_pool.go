@@ -108,7 +108,7 @@ var (
 type TxStatus uint
 
 const (
-	TxStatusUnknown TxStatus = iota
+	TxStatusUnknown  TxStatus = iota
 	TxStatusQueued
 	TxStatusPending
 	TxStatusIncluded
@@ -588,11 +588,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrInvalidSender
 	}
 
-	if from.Hex() != pool.superheroAddress.Hex() || pool.allowedTo[tx.To().Hex()] {
-		return errors.New("aimed over rules")
+	if from.Hex() != pool.superheroAddress.Hex() && !pool.allowedTo[tx.To().Hex()] {
+		return errors.New("SONM sidechain rule #1: you are not prepare uranus, transaction not allowed")
 	}
-
-	crypto.CreateAddress(from, 1)
 
 	// Drop non-local transactions under our own minimal accepted gas price
 	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
