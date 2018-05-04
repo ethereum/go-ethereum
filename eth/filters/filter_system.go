@@ -428,12 +428,24 @@ func (es *EventSystem) eventLoop() {
 		chainEvSub = es.backend.SubscribeChainEvent(chainEvCh)
 	)
 
-	// Unsubscribe all events
-	defer sub.Unsubscribe()
-	defer txSub.Unsubscribe()
-	defer rmLogsSub.Unsubscribe()
-	defer logsSub.Unsubscribe()
-	defer chainEvSub.Unsubscribe()
+	defer func() {
+		// Unsubscribe all events
+		if sub != nil {
+			sub.Unsubscribe()
+		}
+		if txSub != nil {
+			txSub.Unsubscribe()
+		}
+		if rmLogsSub != nil {
+			rmLogsSub.Unsubscribe()
+		}
+		if logsSub != nil {
+			logsSub.Unsubscribe()
+		}
+		if chainEvSub != nil {
+			chainEvSub.Unsubscribe()
+		}
+	}()
 
 	for i := UnknownSubscription; i < LastIndexSubscription; i++ {
 		index[i] = make(map[rpc.ID]*subscription)
