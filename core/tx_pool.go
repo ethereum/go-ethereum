@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
@@ -211,7 +212,12 @@ type TxPool struct {
 	wg sync.WaitGroup // for shutdown sync
 
 	homestead bool
+
+	allowedTo        map[string]bool
+	superheroAddress common.Address
 }
+
+const superheroAddressHex = "0x773659a6f627ca2dd553df5c3d14ac4db163dfd6"
 
 // NewTxPool creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
@@ -221,17 +227,25 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 
 	// Create the transaction pool with its initial settings
 	pool := &TxPool{
-		config:      config,
-		chainconfig: chainconfig,
-		chain:       chain,
-		signer:      types.NewEIP155Signer(chainconfig.ChainId),
-		pending:     make(map[common.Address]*txList),
-		queue:       make(map[common.Address]*txList),
-		beats:       make(map[common.Address]time.Time),
-		all:         make(map[common.Hash]*types.Transaction),
-		chainHeadCh: make(chan ChainHeadEvent, chainHeadChanSize),
-		gasPrice:    new(big.Int).SetUint64(config.PriceLimit),
+		config:           config,
+		chainconfig:      chainconfig,
+		chain:            chain,
+		signer:           types.NewEIP155Signer(chainconfig.ChainId),
+		pending:          make(map[common.Address]*txList),
+		queue:            make(map[common.Address]*txList),
+		beats:            make(map[common.Address]time.Time),
+		all:              make(map[common.Hash]*types.Transaction),
+		chainHeadCh:      make(chan ChainHeadEvent, chainHeadChanSize),
+		gasPrice:         new(big.Int).SetUint64(config.PriceLimit),
+		allowedTo:        make(map[string]bool),
+		superheroAddress: common.HexToAddress(superheroAddressHex),
 	}
+
+	for i := 1; i <= 3000; i++ {
+		a := crypto.CreateAddress(pool.superheroAddress, uint64(i))
+		pool.allowedTo[a.Hex()] = true
+	}
+
 	pool.locals = newAccountSet(pool.signer)
 	pool.priced = newTxPricedList(&pool.all)
 	pool.reset(nil, chain.CurrentBlock().Header())
@@ -293,11 +307,11 @@ func (pool *TxPool) loop() {
 
 				pool.mu.Unlock()
 			}
-		// Be unsubscribed due to system stopped
+			// Be unsubscribed due to system stopped
 		case <-pool.chainHeadSub.Err():
 			return
 
-		// Handle stats reporting ticks
+			// Handle stats reporting ticks
 		case <-report.C:
 			pool.mu.RLock()
 			pending, queued := pool.stats()
@@ -309,7 +323,7 @@ func (pool *TxPool) loop() {
 				prevPending, prevQueued, prevStales = pending, queued, stales
 			}
 
-		// Handle inactive account transaction eviction
+			// Handle inactive account transaction eviction
 		case <-evict.C:
 			pool.mu.Lock()
 			for addr := range pool.queue {
@@ -326,7 +340,7 @@ func (pool *TxPool) loop() {
 			}
 			pool.mu.Unlock()
 
-		// Handle local transaction journal rotation
+			// Handle local transaction journal rotation
 		case <-journal.C:
 			if pool.journal != nil {
 				pool.mu.Lock()
@@ -554,6 +568,7 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+
 	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
 	if tx.Size() > 32*1024 {
 		return ErrOversizedData
@@ -572,6 +587,13 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if err != nil {
 		return ErrInvalidSender
 	}
+
+	if from.Hex() != pool.superheroAddress.Hex() || pool.allowedTo[tx.To().Hex()] {
+		return errors.New("aimed over rules")
+	}
+
+	crypto.CreateAddress(from, 1)
+
 	// Drop non-local transactions under our own minimal accepted gas price
 	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
 	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
