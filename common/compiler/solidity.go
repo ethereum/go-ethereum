@@ -148,8 +148,22 @@ func (s *Solidity) run(cmd *exec.Cmd, source string) (map[string]*Contract, erro
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("solc: %v\n%s", err, stderr.Bytes())
 	}
+
+	return ParseCombinedJSON(stdout.Bytes(), source, s.Version, s.Version, strings.Join(s.makeArgs(), " "))
+}
+
+// ParseCombinedJSON takes the direct output of a solc --combined-output run and
+// parses it into a map of string contract name to Contract structs. The
+// provided source, language and compiler version, and compiler options are all
+// passed through into the Contract structs.
+//
+// The solc output is expected to contain ABI, user docs, and dev docs.
+//
+// Returns an error if the JSON is malformed or missing data, or if the JSON
+// embedded within the JSON is malformed.
+func ParseCombinedJSON(combinedJSON []byte, source string, languageVersion string, compilerVersion string, compilerOptions string) (map[string]*Contract, error) {
 	var output solcOutput
-	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+	if err := json.Unmarshal(combinedJSON, &output); err != nil {
 		return nil, err
 	}
 
@@ -174,9 +188,9 @@ func (s *Solidity) run(cmd *exec.Cmd, source string) (map[string]*Contract, erro
 			Info: ContractInfo{
 				Source:          source,
 				Language:        "Solidity",
-				LanguageVersion: s.Version,
-				CompilerVersion: s.Version,
-				CompilerOptions: strings.Join(s.makeArgs(), " "),
+				LanguageVersion: languageVersion,
+				CompilerVersion: compilerVersion,
+				CompilerOptions: compilerOptions,
 				AbiDefinition:   abi,
 				UserDoc:         userdoc,
 				DeveloperDoc:    devdoc,
