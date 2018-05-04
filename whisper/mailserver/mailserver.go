@@ -60,12 +60,12 @@ func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, p
 	}
 
 	if len(password) == 0 {
-		fmt.Errorf("password is not specified")
+		return fmt.Errorf("password is not specified")
 	}
 
 	s.db, err = leveldb.OpenFile(path, nil)
 	if err != nil {
-		fmt.Errorf("open DB file: %s", err)
+		return fmt.Errorf("open DB file: %s", err)
 	}
 
 	s.w = shh
@@ -73,11 +73,11 @@ func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, p
 
 	MailServerKeyID, err := s.w.AddSymKeyFromPassword(password)
 	if err != nil {
-		fmt.Errorf("create symmetric key: %s", err)
+		return fmt.Errorf("create symmetric key: %s", err)
 	}
 	s.key, err = s.w.GetSymKey(MailServerKeyID)
 	if err != nil {
-		fmt.Errorf("save symmetric key: %s", err)
+		return fmt.Errorf("save symmetric key: %s", err)
 	}
 	return nil
 }
