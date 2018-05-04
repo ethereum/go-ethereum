@@ -113,7 +113,7 @@ func (alwaysDenyUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
 	panic("implement me")
 }
 
-func initRuleEngine(js string) (*rulesetUi, error) {
+func initRuleEngine(js string) (*rulesetUI, error) {
 	r, err := NewRuleEvaluator(&alwaysDenyUI{}, storage.NewEphemeralStorage(), storage.NewEphemeralStorage())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create js engine: %v", err)
