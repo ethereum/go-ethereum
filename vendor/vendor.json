@@ -754,10 +754,11 @@
 			"revisionTime": "2016-06-21T03:49:01Z"
 		},
 		{
-			"checksumSHA1": "vndxs5Tv09/8S+Dr2PBAiM557lI=",
+			"checksumSHA1": "1L0KyOtzKntNal1oA4HenpUTXDI=",
+			"origin": "gopkg.in/linuxion/go-duktape.v3",
 			"path": "gopkg.in/olebedev/go-duktape.v3",
-			"revision": "abf0ba0be5d5d36b1f9266463cc320b9a5ab224e",
-			"revisionTime": "2018-03-02T12:15:09Z"
+			"revision": "64a05d9b94299bc7e2c71766074360c3f938aacd",
+			"revisionTime": "2018-04-10T16:56:19Z"
 		},
 		{
 			"checksumSHA1": "4BwmmgQUhWtizsR2soXND0nqZ1I=",
