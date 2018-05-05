@@ -111,9 +111,14 @@ func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interfa
 	if err := requireUnpackKind(value, typ, kind, arguments); err != nil {
 		return err
 	}
-	// If the output interface is a struct, make sure names don't collide
+
+	// If the interface is a struct, get of abi->struct_field mapping
+
+	var abi2struct map[string]string
 	if kind == reflect.Struct {
-		if err := requireUniqueStructFieldNames(arguments); err != nil {
+		var err error
+		abi2struct, err = mapAbiToStructFields(arguments, value)
+		if err != nil {
 			return err
 		}
 	}
@@ -123,9 +128,10 @@ func (arguments Arguments) unpackTuple(v interface{}, marshalledValues []interfa
 
 		switch kind {
 		case reflect.Struct:
-			err := unpackStruct(value, reflectValue, arg)
-			if err != nil {
-				return err
+			if structField, ok := abi2struct[arg.Name]; ok {
+				if err := set(value.FieldByName(structField), reflectValue, arg); err != nil {
+					return err
+				}
 			}
 		case reflect.Slice, reflect.Array:
 			if value.Len() < i {
@@ -151,17 +157,22 @@ func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues []interf
 	if len(marshalledValues) != 1 {
 		return fmt.Errorf("abi: wrong length, expected single value, got %d", len(marshalledValues))
 	}
+
 	elem := reflect.ValueOf(v).Elem()
 	kind := elem.Kind()
 	reflectValue := reflect.ValueOf(marshalledValues[0])
 
+	var abi2struct map[string]string
 	if kind == reflect.Struct {
-		//make sure names don't collide
-		if err := requireUniqueStructFieldNames(arguments); err != nil {
+		var err error
+		if abi2struct, err = mapAbiToStructFields(arguments, elem); err != nil {
 			return err
 		}
-
-		return unpackStruct(elem, reflectValue, arguments[0])
+		arg := arguments.NonIndexed()[0]
+		if structField, ok := abi2struct[arg.Name]; ok {
+			return set(elem.FieldByName(structField), reflectValue, arg)
+		}
+		return nil
 	}
 
 	return set(elem, reflectValue, arguments.NonIndexed()[0])
@@ -276,19 +287,4 @@ func capitalise(input string) string {
 		return ""
 	}
 	return strings.ToUpper(input[:1]) + input[1:]
-}
-
-//unpackStruct extracts each argument into its corresponding struct field
-func unpackStruct(value, reflectValue reflect.Value, arg Argument) error {
-	name := capitalise(arg.Name)
-	typ := value.Type()
-	for j := 0; j < typ.NumField(); j++ {
-		// TODO read tags: `abi:"fieldName"`
-		if typ.Field(j).Name == name {
-			if err := set(value.Field(j), reflectValue, arg); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
