@@ -19,6 +19,7 @@ package downloader
 
 import (
 	"errors"
+	"os"
 	"fmt"
 	"math/big"
 	"sync"
@@ -1094,6 +1095,26 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 			// If there's nothing more to fetch, wait or terminate
 			if pending() == 0 {
 				if !inFlight() && finished {
+					// Exit when synced param should be executed after defined 'value' in seconds
+					// TODO:
+					//	1. Get the flag value - ctx.GlobalInt(util.ExitWhenSyncedFlag.Name)
+					//	2. Figure out where to put this
+					exitWhenSynced := 5
+					if exitWhenSynced > 0 {
+						exitCounter := exitWhenSynced
+						ticker := time.NewTicker(time.Second * 1)
+						go func() {
+							for range ticker.C {
+								fmt.Println("Exiting sync process in ", exitCounter)
+								exitCounter -= 1
+							}
+						}()
+						time.Sleep(time.Second * time.Duration(exitWhenSynced))
+						ticker.Stop()
+						fmt.Println("Exiting sync process in ", exitCounter)
+					}
+					fmt.Println("Exit sync")
+					os.Exit(3)
 					log.Debug("Data fetching completed", "type", kind)
 					return nil
 				}

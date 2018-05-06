@@ -139,6 +139,11 @@ var (
 		Name:  "rinkeby",
 		Usage: "Rinkeby network: pre-configured proof-of-authority test network",
 	}
+	ExitWhenSyncedFlag = cli.IntFlag{
+		Name:  "exit-when-synced",
+		Usage: "Exit after the chain is in sync",
+		Value: 0,
+	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
@@ -1033,6 +1038,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	}
 	if ctx.GlobalIsSet(LightServFlag.Name) {
 		cfg.LightServ = ctx.GlobalInt(LightServFlag.Name)
+	}
+	if ctx.GlobalIsSet(ExitWhenSyncedFlag.Name) {
+		cfg.ExitWhenSynced = ctx.GlobalInt(ExitWhenSyncedFlag.Name)
 	}
 	if ctx.GlobalIsSet(LightPeersFlag.Name) {
 		cfg.LightPeers = ctx.GlobalInt(LightPeersFlag.Name)
