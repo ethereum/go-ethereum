@@ -42,7 +42,7 @@ artifacts:
 deploy:
   artifact: /multi-geth-win64\.zip.*/
   auth_token:
-    secure: Or4bHgwveQXAjhl+UM1iRUsy5/zbcrk3lUDFFl0nOUyhyuf5PZuvBaEdR2bRW6nv
+    secure: 6NcsMzxggkLUTrKSB/oJQKMDORkvDIfa39CMSlF0+J4CaPScg3patFk755g+tHfA
   draft: true
   on:
     appveyor_repo_tag: true
