@@ -5,11 +5,10 @@ A distribution of go-ethereum with support of multiple Ethereum-like networks.
 [![API Reference](
 https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
 )](https://godoc.org/github.com/ethereum/go-ethereum)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ellaism/multi-geth)](https://goreportcard.com/report/github.com/ellaism/multi-geth)
-[![Travis](https://travis-ci.org/ellaism/multi-geth.svg?branch=master)](https://travis-ci.org/ellaism/multi-geth)
-[![Discord](https://img.shields.io/discord/422738190646902786.svg)](https://discord.gg/gz9tURY)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ethoxy/multi-geth)](https://goreportcard.com/report/github.com/ethoxy/multi-geth)
+[![Travis](https://travis-ci.org/ethoxy/multi-geth.svg?branch=master)](https://travis-ci.org/ethoxy/multi-geth)
 
-Binary archives are published at https://github.com/ellaism/multi-geth/releases.
+Binary archives are published at https://github.com/ethoxy/multi-geth/releases.
 
 ## Building the source
 
@@ -29,9 +28,12 @@ or, to build the full suite of utilities:
 
 ## Ellaism network
 
-The current version by default connect to Ethereum network, to get on Ellaism network, pass the `--ellaism` flag. For example:
-
-    geth --ellaism
+This is originally an [Ellaism
+Project](https://github.com/ellaism). However, A [recent hard
+fork](https://github.com/ellaism/specs/blob/master/specs/2018-0003-wasm-hardfork.md)
+makes Ellaism not feasible to support go-ethereum any more. Existing
+Ellaism users are asked to switch to
+[Parity](https://github.com/paritytech/parity).
 
 ## Executables
 
