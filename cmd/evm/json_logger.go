@@ -32,6 +32,7 @@ type JSONLogger struct {
 	cfg     *vm.LogConfig
 }
 
+// NewJSONLogger assigns values to JSONLogger struct.
 func NewJSONLogger(cfg *vm.LogConfig, writer io.Writer) *JSONLogger {
 	return &JSONLogger{json.NewEncoder(writer), cfg}
 }

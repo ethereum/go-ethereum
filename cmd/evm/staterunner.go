@@ -38,6 +38,7 @@ var stateTestCommand = cli.Command{
 	ArgsUsage: "<file>",
 }
 
+// StatetestResult values will be printed to the console by stateTestCmd.
 type StatetestResult struct {
 	Name  string      `json:"name"`
 	Pass  bool        `json:"pass"`
