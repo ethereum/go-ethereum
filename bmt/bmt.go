@@ -438,27 +438,27 @@ func (h *Hasher) releaseTree() {
 }
 
 func (h *Hasher) writeSegment(i int, s []byte, d int) {
-	h := h.pool.hasher()
+	hash := h.pool.hasher()
 	n := h.bmt.leaves[i]
 
 	if len(s) > h.size && n.parent != nil {
 		go func() {
-			h.Reset()
-			h.Write(s)
-			s = h.Sum(nil)
+			hash.Reset()
+			hash.Write(s)
+			s = hash.Sum(nil)
 
 			if n.root {
 				h.result <- s
 				return
 			}
-			h.run(n.parent, h, d, n.index, s)
+			h.run(n.parent, hash, d, n.index, s)
 		}()
 		return
 	}
-	go h.run(n, h, d, i*2, s)
+	go h.run(n, hash, d, i*2, s)
 }
 
-func (h *Hasher) run(n *Node, h hash.Hash, d int, i int, s []byte) {
+func (h *Hasher) run(n *Node, hash hash.Hash, d int, i int, s []byte) {
 	isLeft := i%2 == 0
 	for {
 		if isLeft {
@@ -470,10 +470,10 @@ func (h *Hasher) run(n *Node, h hash.Hash, d int, i int, s []byte) {
 			return
 		}
 		if !n.unbalanced || !isLeft || i == 0 && d == 0 {
-			h.Reset()
-			h.Write(n.left)
-			h.Write(n.right)
-			s = h.Sum(nil)
+			hash.Reset()
+			hash.Write(n.left)
+			hash.Write(n.right)
+			s = hash.Sum(nil)
 
 		} else {
 			s = append(n.left, n.right...)
