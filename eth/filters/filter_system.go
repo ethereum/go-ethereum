@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -129,25 +130,16 @@ func NewEventSystem(mux *event.TypeMux, backend Backend, lightMode bool) *EventS
 
 	// Subscribe events
 	m.txSub = m.backend.SubscribeTxPreEvent(m.txCh)
-	if m.txSub == nil {
-		return nil
-	}
 	m.logsSub = m.backend.SubscribeLogsEvent(m.logsCh)
-	if m.logsSub == nil {
-		return nil
-	}
 	m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
-	if m.rmLogsSub == nil {
-		return nil
-	}
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
-	if m.chainSub == nil {
-		return nil
-	}
 	// TODO(rjl493456442): use feed to subscribe pending log event
 	m.pendingLogSub = m.mux.Subscribe(core.PendingLogsEvent{})
-	if m.pendingLogSub.Closed() {
-		return nil
+
+	// Make sure all the subscriptions are not empty
+	if m.txSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil ||
+		m.pendingLogSub.Closed() {
+		log.Crit("Subscribe for event system failed")
 	}
 
 	go m.eventLoop()
