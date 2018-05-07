@@ -19,6 +19,7 @@ package common
 
 import "encoding/hex"
 
+// ToHex returns string representation of b and either prepends '0x' or initializes value of '0'.
 func ToHex(b []byte) string {
 	hex := Bytes2Hex(b)
 	// Prefer output of "0x0" instead of "0x"
@@ -28,6 +29,7 @@ func ToHex(b []byte) string {
 	return "0x" + hex
 }
 
+//FromHex returns bytes of s after removing prefix, or prepends 0 if s has odd length.
 func FromHex(s string) []byte {
 	if len(s) > 1 {
 		if s[0:2] == "0x" || s[0:2] == "0X" {
@@ -40,9 +42,7 @@ func FromHex(s string) []byte {
 	return Hex2Bytes(s)
 }
 
-// Copy bytes
-//
-// Returns an exact copy of the provided bytes
+// CopyBytes returns an exact copy of the provided bytes
 func CopyBytes(b []byte) (copiedBytes []byte) {
 	if b == nil {
 		return nil
@@ -53,14 +53,17 @@ func CopyBytes(b []byte) (copiedBytes []byte) {
 	return
 }
 
+// hasHexPrefix validates str begins with '0x' or '0X'.
 func hasHexPrefix(str string) bool {
 	return len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')
 }
 
+// isHexCharacter returns bool of c being a valid hexadecimal.
 func isHexCharacter(c byte) bool {
 	return ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')
 }
 
+// isHex validates whether each byte is valid hexadecimal string.
 func isHex(str string) bool {
 	if len(str)%2 != 0 {
 		return false
@@ -73,16 +76,19 @@ func isHex(str string) bool {
 	return true
 }
 
+//Bytes2Hex returns the hexadecimal encoding of d.
 func Bytes2Hex(d []byte) string {
 	return hex.EncodeToString(d)
 }
 
+// Hex2Bytes returns the bytes represented by the hexadecimal string str.
 func Hex2Bytes(str string) []byte {
 	h, _ := hex.DecodeString(str)
 
 	return h
 }
 
+// Hex2BytesFixed returns bytes of a specified fixed length flen.
 func Hex2BytesFixed(str string, flen int) []byte {
 	h, _ := hex.DecodeString(str)
 	if len(h) == flen {
@@ -96,6 +102,7 @@ func Hex2BytesFixed(str string, flen int) []byte {
 	return hh
 }
 
+// RightPadBytes copies slice into a byte slice of length l.
 func RightPadBytes(slice []byte, l int) []byte {
 	if l <= len(slice) {
 		return slice
@@ -107,6 +114,7 @@ func RightPadBytes(slice []byte, l int) []byte {
 	return padded
 }
 
+// LeftPadBytes copies via inverted index slice into a byte slice of length l.
 func LeftPadBytes(slice []byte, l int) []byte {
 	if l <= len(slice) {
 		return slice
