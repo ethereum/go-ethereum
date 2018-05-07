@@ -180,6 +180,10 @@ func (s *TypeMuxSubscription) Unsubscribe() {
 	s.closewait()
 }
 
+func (s *TypeMuxSubscription) Closed() bool {
+	return s.closed
+}
+
 func (s *TypeMuxSubscription) closewait() {
 	s.closeMu.Lock()
 	defer s.closeMu.Unlock()
