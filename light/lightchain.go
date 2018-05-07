@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -189,12 +190,9 @@ func (bc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	defer bc.mu.Unlock()
 
 	// Prepare the genesis block and reinitialise the chain
-	if err := core.WriteTd(bc.chainDb, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty()); err != nil {
-		log.Crit("Failed to write genesis block TD", "err", err)
-	}
-	if err := core.WriteBlock(bc.chainDb, genesis); err != nil {
-		log.Crit("Failed to write genesis block", "err", err)
-	}
+	rawdb.WriteTd(bc.chainDb, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
+	rawdb.WriteBlock(bc.chainDb, genesis)
+
 	bc.genesisBlock = genesis
 	bc.hc.SetGenesis(bc.genesisBlock.Header())
 	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())
@@ -274,7 +272,11 @@ func (bc *LightChain) GetBlock(ctx context.Context, hash common.Hash, number uin
 // GetBlockByHash retrieves a block from the database or ODR service by hash,
 // caching it if found.
 func (bc *LightChain) GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return bc.GetBlock(ctx, hash, bc.hc.GetBlockNumber(hash))
+	number := bc.hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil, errors.New("unknown block")
+	}
+	return bc.GetBlock(ctx, hash, *number)
 }
 
 // GetBlockByNumber retrieves a block from the database or ODR service by
