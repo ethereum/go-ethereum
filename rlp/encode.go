@@ -25,9 +25,9 @@ import (
 )
 
 var (
-	//EmptyString accepts a common encoded value useful for implementing EncodeRLP.
+	// Common encoded values.
+	// These are useful when implementing EncodeRLP.
 	EmptyString = []byte{0x80}
-	//EmptyList accepts a common encoded value useful for implementing EncodeRLP.
 	EmptyList   = []byte{0xC0}
 )
 
@@ -217,7 +217,7 @@ func (w *encbuf) list() *listhead {
 func (w *encbuf) listEnd(lh *listhead) {
 	lh.size = w.size() - lh.offset - lh.size
 	if lh.size < 56 {
-		w.lhsize ++ // length encoded into kind tag
+		w.lhsize++ // length encoded into kind tag
 	} else {
 		w.lhsize += 1 + intsize(uint64(lh.size))
 	}

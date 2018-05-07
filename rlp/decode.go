@@ -26,10 +26,26 @@ import (
 	"math/big"
 	"reflect"
 	"strings"
-	customErr "github.com/pkg/errors"
 )
 
 var (
+	// EOL is returned when the end of the current list
+	// has been reached during streaming.
+	EOL = errors.New("rlp: end of list")
+
+	// Actual Errors
+	ErrExpectedString   = errors.New("rlp: expected String or Byte")
+	ErrExpectedList     = errors.New("rlp: expected List")
+	ErrCanonInt         = errors.New("rlp: non-canonical integer format")
+	ErrCanonSize        = errors.New("rlp: non-canonical size information")
+	ErrElemTooLarge     = errors.New("rlp: element is larger than containing list")
+	ErrValueTooLarge    = errors.New("rlp: value size exceeds available input length")
+	ErrMoreThanOneValue = errors.New("rlp: input contains more than one value")
+
+	// internal errors
+	errNotInList     = errors.New("rlp: call of ListEnd outside of any list")
+	errNotAtEOL      = errors.New("rlp: call of ListEnd not positioned at EOL")
+	errUintOverflow  = errors.New("rlp: uint overflow")
 	errNoPointer     = errors.New("rlp: interface given to Decode must be a pointer")
 	errDecodeIntoNil = errors.New("rlp: pointer given to Decode must not be nil")
 )
@@ -536,8 +552,6 @@ func decodeDecoder(s *Stream, val reflect.Value) error {
 // Kind represents the kind of value contained in an RLP stream.
 type Kind int
 
-// Const list indicates the kind of value in an RLP stream 
-// and its next value is incremented by Kind().
 const (
 	Byte Kind = iota
 	String
@@ -556,34 +570,6 @@ func (k Kind) String() string {
 		return fmt.Sprintf("Unknown(%d)", k)
 	}
 }
-
-var (
-	// EOL is returned when the end of the current list
-	// has been reached during streaming.
-	EOL = customErr.New(fmt.Sprintf("rlp: end of list"))
-
-	//ActualErrors
-
-	//ErrExpectedString is returned if kind is not string or Byte.
-	ErrExpectedString = errors.New("rlp: expected String or Byte")
-	//ErrExpectedList is returned if kind is not a list.
-	ErrExpectedList   = errors.New("rlp: expected List")
-	//ErrCanonInt is returned if integer is a non-canonical format .
-	ErrCanonInt       = errors.New("rlp: non-canonical integer format")
-	//ErrCanonSize is returned if integer has non-canonical size information. 
-	ErrCanonSize      = errors.New("rlp: non-canonical size information")
-	//ErrElemTooLarge is returned if the element is larger than the list. 
-	ErrElemTooLarge   = errors.New("rlp: element is larger than containing list")
-	//ErrValueTooLarge is returned if the element is larger than available input length. 
-	ErrValueTooLarge  = errors.New("rlp: value size exceeds available input length")
-	//ErrMoreThanOneValue is reported by DecodeBytes if the slice contains additional data after the first RLP value.
-	ErrMoreThanOneValue = errors.New("rlp: input contains more than one value")
-
-	// internal errors
-	errNotInList    = errors.New("rlp: call of ListEnd outside of any list")
-	errNotAtEOL     = errors.New("rlp: call of ListEnd not positioned at EOL")
-	errUintOverflow = errors.New("rlp: uint overflow")
-)
 
 // ByteReader must be implemented by any input reader for a Stream. It
 // is implemented by e.g. bufio.Reader and bytes.Reader.
