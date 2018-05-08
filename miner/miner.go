@@ -40,12 +40,11 @@ type Backend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
 	ChainDb() ethdb.Database
+	Downloader() *downloader.Downloader
 }
 
 // Miner creates blocks and searches for proof-of-work values.
 type Miner struct {
-	mux *event.TypeMux
-
 	worker *worker
 
 	coinbase common.Address
@@ -55,16 +54,34 @@ type Miner struct {
 
 	canStart    int32 // can start indicates whether we can start the mining operation
 	shouldStart int32 // should start indicates whether we should start after sync
+
+	// Channels
+	startCh  chan downloader.StartEvent
+	finishCh chan downloader.FinishEvent
+
+	// Subscriptions
+	startSub  event.Subscription
+	finishSub event.Subscription
 }
 
 func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine) *Miner {
 	miner := &Miner{
 		eth:      eth,
-		mux:      mux,
 		engine:   engine,
 		worker:   newWorker(config, engine, common.Address{}, eth, mux),
 		canStart: 1,
+		startCh:  make(chan downloader.StartEvent, 10),
+		finishCh: make(chan downloader.FinishEvent, 10),
 	}
+
+	// Subscribe downloader events and make sure all the
+	// subscriptions are not empty.
+	miner.startSub = eth.Downloader().SubscribeStartEvent(miner.startCh)
+	miner.finishSub = eth.Downloader().SubscribeFinishEvent(miner.finishCh)
+	if miner.startSub == nil || miner.finishSub == nil {
+		log.Crit("Subscribe downloader events failed")
+	}
+
 	miner.Register(NewCpuAgent(eth.BlockChain(), engine))
 	go miner.update()
 
@@ -72,22 +89,28 @@ func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine con
 }
 
 // update keeps track of the downloader events. Please be aware that this is a one shot type of update loop.
-// It's entered once and as soon as `Done` or `Failed` has been broadcasted the events are unregistered and
+// It's entered once and as soon as finish event has been broadcasted the events are unregistered and
 // the loop is exited. This to prevent a major security vuln where external parties can DOS you with blocks
 // and halt your mining operation for as long as the DOS continues.
 func (self *Miner) update() {
-	events := self.mux.Subscribe(downloader.StartEvent{}, downloader.FinishEvent{})
-out:
-	for ev := range events.Chan() {
-		switch ev.Data.(type) {
-		case downloader.StartEvent:
+	defer func() {
+		// Unsubscribe all downloader events
+		self.startSub.Unsubscribe()
+		self.finishSub.Unsubscribe()
+	}()
+
+	for {
+		select {
+		case <-self.startCh:
 			atomic.StoreInt32(&self.canStart, 0)
 			if self.Mining() {
 				self.Stop()
 				atomic.StoreInt32(&self.shouldStart, 1)
 				log.Info("Mining aborted due to sync")
 			}
-		case downloader.FinishEvent:
+
+		case <-self.finishCh:
+			// We only interested the downloader finish event once.
 			shouldStart := atomic.LoadInt32(&self.shouldStart) == 1
 
 			atomic.StoreInt32(&self.canStart, 1)
@@ -95,10 +118,13 @@ out:
 			if shouldStart {
 				self.Start(self.coinbase)
 			}
-			// unsubscribe. we're only interested in this event once
-			events.Unsubscribe()
-			// stop immediately and ignore all further pending events
-			break out
+			// Stop immediately and ignore all further pending events
+			return
+
+		case <-self.startSub.Err():
+			return
+		case <-self.finishSub.Err():
+			return
 		}
 	}
 }
