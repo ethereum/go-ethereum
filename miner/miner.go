@@ -76,7 +76,7 @@ func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine con
 // the loop is exited. This to prevent a major security vuln where external parties can DOS you with blocks
 // and halt your mining operation for as long as the DOS continues.
 func (self *Miner) update() {
-	events := self.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
+	events := self.mux.Subscribe(downloader.StartEvent{}, downloader.FinishEvent{})
 out:
 	for ev := range events.Chan() {
 		switch ev.Data.(type) {
@@ -87,7 +87,7 @@ out:
 				atomic.StoreInt32(&self.shouldStart, 1)
 				log.Info("Mining aborted due to sync")
 			}
-		case downloader.DoneEvent, downloader.FailedEvent:
+		case downloader.FinishEvent:
 			shouldStart := atomic.LoadInt32(&self.shouldStart) == 1
 
 			atomic.StoreInt32(&self.canStart, 1)

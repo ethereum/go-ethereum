@@ -143,6 +143,11 @@ type Downloader struct {
 	quitCh   chan struct{} // Quit channel to signal termination
 	quitLock sync.RWMutex  // Lock to prevent double closes
 
+	// Subscriptions
+	startFeed  event.Feed              // Feed for downloader synchronization start subscription.
+	finishFeed event.Feed              // Feed for downloader synchronization finish subscription.
+	feedScope  event.SubscriptionScope // Manager of all feed subscriptions which can unsubscribe all at once
+
 	// Testing hooks
 	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run
 	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
@@ -198,7 +203,7 @@ type BlockChain interface {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn) *Downloader {
+func New(mode SyncMode, stateDb ethdb.Database, chain BlockChain, lightchain LightChain, dropPeer peerDropFn) *Downloader {
 	if lightchain == nil {
 		lightchain = chain
 	}
@@ -206,7 +211,6 @@ func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, chain BlockC
 	dl := &Downloader{
 		mode:           mode,
 		stateDB:        stateDb,
-		mux:            mux,
 		queue:          newQueue(),
 		peers:          newPeerSet(),
 		rttEstimate:    uint64(rttMaxEstimate),
@@ -402,14 +406,9 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
 func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.Int) (err error) {
-	d.mux.Post(StartEvent{})
+	d.startFeed.Send(StartEvent{})
 	defer func() {
-		// reset on error
-		if err != nil {
-			d.mux.Post(FailedEvent{err})
-		} else {
-			d.mux.Post(DoneEvent{})
-		}
+		d.finishFeed.Send(FinishEvent{Err: err})
 	}()
 	if p.version < 62 {
 		return errTooOld
@@ -539,6 +538,7 @@ func (d *Downloader) Terminate() {
 
 	// Cancel any pending download requests
 	d.Cancel()
+	d.feedScope.Close()
 }
 
 // fetchHeight retrieves the head header of the remote peer to aid in estimating
@@ -1639,4 +1639,14 @@ func (d *Downloader) requestTTL() time.Duration {
 		ttl = ttlLimit
 	}
 	return ttl
+}
+
+// SubscribeStartEvent registers a subscription of StartEvent.
+func (d *Downloader) SubscribeStartEvent(ch chan<- StartEvent) event.Subscription {
+	return d.feedScope.Track(d.startFeed.Subscribe(ch))
+}
+
+// SubscribeFinishEvent registers a subscription of FinishEvent.
+func (d *Downloader) SubscribeFinishEvent(ch chan<- FinishEvent) event.Subscription {
+	return d.feedScope.Track(d.finishFeed.Subscribe(ch))
 }
