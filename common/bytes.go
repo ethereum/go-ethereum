@@ -21,6 +21,8 @@ import "encoding/hex"
 
 // ToHex returns the hex representation of b, prefixed with '0x'.
 // For empty slices, the return value is "0x0".
+//
+// Deprecated: use hexutil.Encode instead.
 func ToHex(b []byte) string {
 	hex := Bytes2Hex(b)
 	if len(hex) == 0 {
