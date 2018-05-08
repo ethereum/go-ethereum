@@ -103,6 +103,8 @@ func (db *LDBDatabase) Put(key []byte, value []byte) error {
 	return db.db.Put(key, value, nil)
 }
 
+// Has returns true if the DB does contain the given key.
+// It is safe to modify the contents of the argument after Has returns.
 func (db *LDBDatabase) Has(key []byte) (bool, error) {
 	return db.db.Has(key, nil)
 }
@@ -121,6 +123,8 @@ func (db *LDBDatabase) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
 }
 
+// NewIterator returns an iterator for the latest snapshot of the underlying DB
+// and returns a range for all keys in db.
 func (db *LDBDatabase) NewIterator() iterator.Iterator {
 	return db.db.NewIterator(nil, nil)
 }
@@ -150,6 +154,7 @@ func (db *LDBDatabase) Close() {
 	}
 }
 
+// LDB returns the memory address for leveldb.DB.
 func (db *LDBDatabase) LDB() *leveldb.DB {
 	return db.db
 }
@@ -356,6 +361,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 	}
 }
 
+// NewBatch populates the ldbBatch for read and writes to the db.
 func (db *LDBDatabase) NewBatch() Batch {
 	return &ldbBatch{db: db.db, b: new(leveldb.Batch)}
 }

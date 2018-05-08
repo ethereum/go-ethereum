@@ -26,23 +26,28 @@ import (
 /*
  * This is a test memory database. Do not use for any production it does not get persisted
  */
+
+// MemDatabase imitates the key-value store levelDB for the test memory database.
 type MemDatabase struct {
 	db   map[string][]byte
 	lock sync.RWMutex
 }
 
+// NewMemDatabase inits a mock levelDB instance with a map.
 func NewMemDatabase() (*MemDatabase, error) {
 	return &MemDatabase{
 		db: make(map[string][]byte),
 	}, nil
 }
 
+// NewMemDatabaseWithCap inits a mock levelDB instance with a map and sets a maximum size..
 func NewMemDatabaseWithCap(size int) (*MemDatabase, error) {
 	return &MemDatabase{
 		db: make(map[string][]byte, size),
 	}, nil
 }
 
+// Put sets the value of the key.
 func (db *MemDatabase) Put(key []byte, value []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -51,6 +56,7 @@ func (db *MemDatabase) Put(key []byte, value []byte) error {
 	return nil
 }
 
+// Has checks if a given key exists.
 func (db *MemDatabase) Has(key []byte) (bool, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
@@ -59,6 +65,7 @@ func (db *MemDatabase) Has(key []byte) (bool, error) {
 	return ok, nil
 }
 
+// Get returns an error if the given key is not found.
 func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
@@ -69,6 +76,7 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	return nil, errors.New("not found")
 }
 
+// Keys returns a list of all keys in db.db.
 func (db *MemDatabase) Keys() [][]byte {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
@@ -80,6 +88,7 @@ func (db *MemDatabase) Keys() [][]byte {
 	return keys
 }
 
+// Delete deletes the key from db.db.
 func (db *MemDatabase) Delete(key []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -88,12 +97,15 @@ func (db *MemDatabase) Delete(key []byte) error {
 	return nil
 }
 
+// Close performs no operation but imitates invocation of levelDB.Close().
 func (db *MemDatabase) Close() {}
 
+// NewBatch sets memBatch.db equal to the receiver.
 func (db *MemDatabase) NewBatch() Batch {
 	return &memBatch{db: db}
 }
 
+// Len returns the number of keys in db.db.
 func (db *MemDatabase) Len() int { return len(db.db) }
 
 type kv struct{ k, v []byte }
