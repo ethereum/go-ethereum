@@ -21,8 +21,8 @@ import (
 	"math/big"
 )
 
-// stack is an object for basic stack operations. Items popped to the stack are
-// expected to be changed and modified. stack does not take care of adding newly
+// Stack is an object for basic stack operations. Items popped to the stack are
+// expected to be changed and modified. Stack does not take care of adding newly
 // initialised objects.
 type Stack struct {
 	data []*big.Int

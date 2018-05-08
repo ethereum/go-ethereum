@@ -39,7 +39,7 @@ type Compiler struct {
 	debug bool
 }
 
-// newCompiler returns a new allocated compiler.
+// NewCompiler returns a new allocated compiler.
 func NewCompiler(debug bool) *Compiler {
 	return &Compiler{
 		labels: make(map[string]int),
