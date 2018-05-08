@@ -16,7 +16,7 @@
 
 package ethdb
 
-// Code using batches should try to add this much data to the batch.
+// IdealBatchSize is the amount of data vode using batches should try to add to the batch.
 // The value was determined empirically.
 const IdealBatchSize = 100 * 1024
 
