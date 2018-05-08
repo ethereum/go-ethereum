@@ -48,7 +48,7 @@ import (
 
 var (
 	blockInsertTimer = metrics.NewRegisteredTimer("chain/inserts", nil)
-	
+
 	ErrNoGenesis = errors.New("Genesis not found in chain")
 )
 
