@@ -39,9 +39,8 @@ var (
 func deriveSigner(V *big.Int) Signer {
 	if V.Sign() != 0 && isProtectedV(V) {
 		return NewEIP155Signer(deriveChainId(V))
-	} else {
-		return HomesteadSigner{}
 	}
+	return HomesteadSigner{}
 }
 
 type Transaction struct {

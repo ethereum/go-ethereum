@@ -15,6 +15,7 @@ import (
 
 var _ = (*genesisSpecMarshaling)(nil)
 
+//MarshalJSON assigns receiver values to the Genesis struct and returns its JSON encoding.
 func (g Genesis) MarshalJSON() ([]byte, error) {
 	type Genesis struct {
 		Config     *params.ChainConfig                         `json:"config"`
@@ -51,6 +52,7 @@ func (g Genesis) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&enc)
 }
 
+//UnmarshalJSON parses JSON-encoded input and assigns resulting values to the receiver.
 func (g *Genesis) UnmarshalJSON(input []byte) error {
 	type Genesis struct {
 		Config     *params.ChainConfig                         `json:"config"`

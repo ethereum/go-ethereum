@@ -36,7 +36,7 @@ type ManagedState struct {
 	accounts map[common.Address]*account
 }
 
-// ManagedState returns a new managed state with the statedb as it's backing layer
+// ManageState returns a new managed state with the statedb as it's backing layer
 func ManageState(statedb *StateDB) *ManagedState {
 	return &ManagedState{
 		StateDB:  statedb.Copy(),
@@ -92,9 +92,8 @@ func (ms *ManagedState) GetNonce(addr common.Address) uint64 {
 	if ms.hasAccount(addr) {
 		account := ms.getAccount(addr)
 		return uint64(len(account.nonces)) + account.nstart
-	} else {
-		return ms.StateDB.GetNonce(addr)
 	}
+	return ms.StateDB.GetNonce(addr)
 }
 
 // SetNonce sets the new canonical nonce for the managed state
