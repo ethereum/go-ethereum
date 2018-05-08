@@ -191,7 +191,7 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer codec.Close()
 
 	w.Header().Set("content-type", contentType)
-	srv.ServeSingleRequest(codec, OptionMethodInvocation, ctx)
+	srv.ServeSingleRequest(ctx, codec, OptionMethodInvocation)
 }
 
 // validateRequest returns a non-zero response code and error message if the

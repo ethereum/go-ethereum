@@ -234,9 +234,8 @@ func FailoverHandler(hs ...Handler) Handler {
 			err = h.Log(r)
 			if err == nil {
 				return nil
-			} else {
-				r.Ctx = append(r.Ctx, fmt.Sprintf("failover_err_%d", i), err)
 			}
+			r.Ctx = append(r.Ctx, fmt.Sprintf("failover_err_%d", i), err)
 		}
 
 		return err
@@ -320,13 +319,12 @@ func evaluateLazy(lz Lazy) (interface{}, error) {
 	results := value.Call([]reflect.Value{})
 	if len(results) == 1 {
 		return results[0].Interface(), nil
-	} else {
-		values := make([]interface{}, len(results))
-		for i, v := range results {
-			values[i] = v.Interface()
-		}
-		return values, nil
 	}
+	values := make([]interface{}, len(results))
+	for i, v := range results {
+		values[i] = v.Interface()
+	}
+	return values, nil
 }
 
 // DiscardHandler reports success for all writes but does nothing.

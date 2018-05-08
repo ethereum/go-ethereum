@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,20 +14,20 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package rpc
+package rawdb
 
-import (
-	"context"
-	"net"
-)
+// DatabaseReader wraps the Has and Get method of a backing data store.
+type DatabaseReader interface {
+	Has(key []byte) (bool, error)
+	Get(key []byte) ([]byte, error)
+}
 
-// DialInProc attaches an in-process connection to the given RPC server.
-func DialInProc(handler *Server) *Client {
-	initctx := context.Background()
-	c, _ := newClient(initctx, func(context.Context) (net.Conn, error) {
-		p1, p2 := net.Pipe()
-		go handler.ServeCodec(NewJSONCodec(p1), OptionMethodInvocation|OptionSubscriptions)
-		return p2, nil
-	})
-	return c
+// DatabaseWriter wraps the Put method of a backing data store.
+type DatabaseWriter interface {
+	Put(key []byte, value []byte) error
+}
+
+// DatabaseDeleter wraps the Delete method of a backing data store.
+type DatabaseDeleter interface {
+	Delete(key []byte) error
 }
