@@ -418,6 +418,10 @@
 			"revisionTime": "2016-06-18T19:32:21Z"
 		},
 		{
+			"path": "github.com/shyft/shyft_go-ethereum/core",
+			"revision": ""
+		},
+		{
 			"checksumSHA1": "mGbTYZ8dHVTiPTTJu3ktp+84pPI=",
 			"path": "github.com/stretchr/testify/assert",
 			"revision": "890a5c3458b43e6104ff5da8dfa139d013d77544",

@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+
 
 	"database/sql"
 
@@ -83,11 +83,20 @@ type SendAndReceive struct {
 	Balance   string
 }
 
+//func WriteGen(sqldb *sql.DB, genesis *core.Genesis) error {
+//	for k, v := range genesis.Alloc {
+//		addr := k.String()
+//		fmt.Println(addr,v.Balance)
+//		fmt.Println("*************")
+//	}
+//	return nil
+//}
 //WriteBlock writes to block info to sql db
 func WriteBlock(sqldb *sql.DB, block *types.Block) error {
+
+	fmt.Println("******************")
 	coinbase := block.Header().Coinbase.String()
 	number := block.Header().Number.String()
-
 	sqlStatement := `INSERT INTO blocks(hash, coinbase, number) VALUES(($1), ($2), ($3)) RETURNING number`
 	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number).Scan(&number)
 	if qerr != nil {
@@ -305,6 +314,8 @@ func WriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, s
 //		}
 //	}
 //}
+
+
 
 ///////////
 // Getters

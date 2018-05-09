@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"strings"
 
+	_ "github.com/lib/pq"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -34,6 +35,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"database/sql"
+	"github.com/ethereum/go-ethereum/shyftdb"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -72,6 +75,7 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 	*ga = make(GenesisAlloc)
 	for addr, a := range m {
 		(*ga)[common.Address(addr)] = a
+		fmt.Println("GENESIS +++++++++", a)
 	}
 	return nil
 }
@@ -149,7 +153,56 @@ func (e *GenesisMismatchError) Error() string {
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 //
 // The returned chain configuration is never nil.
-func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
+//func SetupShyftGenesisBlock(sqldb *sql.DB,gen *Genesis) (common.Hash) {
+//	// Just commit the new block if there is no stored genesis block.
+//	//stored := GetCanonicalHash(db, 0)
+//	//if (stored == common.Hash{}) {
+//	//	if genesis == nil {
+//	//		log.Info("Writing default main-net genesis block")
+//	//		genesis = DefaultGenesisBlock()
+//	//	} else {
+//	//		log.Info("Writing custom genesis block")
+//	//	}
+//	//
+//		//shyftBlock := gen.ShyftCommit(sqldb)
+//		log.Info("Setup Shyft Gen")
+//		return shyftBlock.Hash()
+//}
+
+// SetupGenesisBlock writes or updates the genesis block in db.
+// The block that will be used is:
+//
+//                          genesis == nil       genesis != nil
+//                       +------------------------------------------
+//     db has no genesis |  main-net default  |  genesis
+//     db has genesis    |  from DB           |  genesis (if compatible)
+//
+// The stored chain configuration will be updated if it is compatible (i.e. does not
+// specify a fork block below the local head block). In case of a conflict, the
+// error is a *params.ConfigCompatError and the new, unwritten config is returned.
+//
+// The returned chain configuration is never nil.
+func WriteShyftGen(sqldb *sql.DB, gen *Genesis) {
+
+	if sqldb == nil {
+		fmt.Println("NIL POSTGRES")
+		connStr := "user=postgres dbname=shyftdb sslmode=disable"
+		blockExplorerDb, _ := sql.Open("postgres", connStr)
+		sqldb = blockExplorerDb
+	}
+
+	for k, v := range gen.Alloc {
+		addr := k.String()
+		fmt.Println(addr,v.Balance)
+		fmt.Println("*************")
+
+		sqlStatement := `INSERT INTO accounts(addr, balance) VALUES(($1), ($2)) RETURNING addr`
+		insertErr := sqldb.QueryRow(sqlStatement, addr, v.Balance.String()).Scan(&addr)
+		fmt.Println(insertErr)
+	}
+}
+
+func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, sqldb *sql.DB) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -162,6 +215,8 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 			genesis = DefaultGenesisBlock()
 		} else {
 			log.Info("Writing custom genesis block")
+
+			WriteShyftGen(sqldb, genesis)
 		}
 		block, err := genesis.Commit(db)
 		return genesis.Config, block.Hash(), err
@@ -217,6 +272,75 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	default:
 		return params.AllEthashProtocolChanges
 	}
+}
+
+// ToBlock creates the genesis block and writes state of a genesis specification
+// to the given database (or discards it if nil).
+func (ga *Genesis) ToShyftBlock(sqldb *sql.DB) *types.Block {
+	//actual return
+	fmt.Println("++++++++++++++++++++++++++++++++++++")
+	fmt.Println(ga.Alloc)
+	//for addr, account := range g.Alloc {
+	//	fmt.Println(addr, account.Balance)
+	//	//sqldb.AddBalance(addr, account.Balance)
+	//	//sqldb.SetCode(addr, account.Code)
+	//	//sqldb.SetNonce(addr, account.Nonce)
+	//}
+
+	head := &types.Header{
+		Number:     new(big.Int).SetUint64(ga.Number),
+		Nonce:      types.EncodeNonce(ga.Nonce),
+		Time:       new(big.Int).SetUint64(ga.Timestamp),
+		ParentHash: ga.ParentHash,
+		Extra:      ga.ExtraData,
+		GasLimit:   ga.GasLimit,
+		GasUsed:    ga.GasUsed,
+		Difficulty: ga.Difficulty,
+		MixDigest:  ga.Mixhash,
+		Coinbase:   ga.Coinbase,
+	}
+	//if g.GasLimit == 0 {
+	//	head.GasLimit = params.GenesisGasLimit
+	//}
+	//if g.Difficulty == nil {
+	//	head.Difficulty = params.GenesisDifficulty
+	//}
+	//statedb.Commit(false)
+	//statedb.Database().TrieDB().Commit(root, true)
+
+	return types.NewBlock(head, nil, nil, nil)
+
+}
+//@NOTE:SHYFT
+func (ga *Genesis) ShyftCommit(sqldb *sql.DB) (*types.Block) {
+	fmt.Println("********************************* GENESIS")
+	shyftBlock := ga.ToShyftBlock(sqldb)
+	//if shyftBlock.Number().Sign() != 0 {
+	//	return nil
+	//}
+	//if err := WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty); err != nil {
+	//	return nil, err
+	//}
+	if err := shyftdb.WriteBlock(sqldb, shyftBlock); err != nil {
+		return nil
+	}
+	//if err := WriteBlockReceipts(db, block.Hash(), block.NumberU64(), nil); err != nil {
+	//	return nil, err
+	//}
+	//if err := WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
+	//	return nil, err
+	//}
+	//if err := WriteHeadBlockHash(db, block.Hash()); err != nil {
+	//	return nil, err
+	//}
+	//if err := WriteHeadHeaderHash(db, block.Hash()); err != nil {
+	//	return nil, err
+	//}
+	//config := g.Config
+	//if config == nil {
+	//	config = params.AllEthashProtocolChanges
+	//}
+	return shyftBlock
 }
 
 // ToBlock creates the genesis block and writes state of a genesis specification
@@ -341,6 +465,17 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 		GasLimit:   4700000,
 		Difficulty: big.NewInt(1),
 		Alloc:      decodePrealloc(rinkebyAllocData),
+	}
+}
+// DefaultShyftGenesisBlock returns the Shyft network genesis block.
+func DefaultShyftGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.ShyftNetworkChainConfig,
+		Timestamp:  1492009146,
+		ExtraData:  hexutil.MustDecode("0x52657370656374206d7920617574686f7269746168207e452e436172746d616e42eb768f2244c8811c63729a21a3569731535f067ffc57839b00206d1ad20c69a1981b489f772031b279182d99e65703f0076e4812653aab85fca0f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+		GasLimit:   4700000,
+		Difficulty: big.NewInt(1),
+		Alloc:      decodePrealloc(shyftAllocData),
 	}
 }
 
