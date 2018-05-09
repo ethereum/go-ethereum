@@ -47,11 +47,11 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// ExternalApiVersion -- see extapi_changelog.md
-const ExternalApiVersion = "2.0.0"
+// ExternalAPIVersion -- see extapi_changelog.md
+const ExternalAPIVersion = "2.0.0"
 
-// InternalApiVersion -- see intapi_changelog.md
-const InternalApiVersion = "2.0.0"
+// InternalAPIVersion -- see intapi_changelog.md
+const InternalAPIVersion = "2.0.0"
 
 const legalWarning = `
 WARNING! 
@@ -398,10 +398,10 @@ func signer(c *cli.Context) error {
 	}
 	// register signer API with server
 	var (
-		extapiUrl = "n/a"
-		ipcApiUrl = "n/a"
+		extapiURL = "n/a"
+		ipcapiURL = "n/a"
 	)
-	rpcApi := []rpc.API{
+	rpcAPI := []rpc.API{
 		{
 			Namespace: "account",
 			Public:    true,
@@ -415,12 +415,12 @@ func signer(c *cli.Context) error {
 
 		// start http server
 		httpEndpoint := fmt.Sprintf("%s:%d", c.String(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
-		listener, _, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcApi, []string{"account"}, cors, vhosts)
+		listener, _, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"account"}, cors, vhosts)
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
 		}
-		extapiUrl = fmt.Sprintf("http://%s", httpEndpoint)
-		log.Info("HTTP endpoint opened", "url", extapiUrl)
+		extapiURL = fmt.Sprintf("http://%s", httpEndpoint)
+		log.Info("HTTP endpoint opened", "url", extapiURL)
 
 		defer func() {
 			listener.Close()
@@ -430,19 +430,19 @@ func signer(c *cli.Context) error {
 	}
 	if !c.Bool(utils.IPCDisabledFlag.Name) {
 		if c.IsSet(utils.IPCPathFlag.Name) {
-			ipcApiUrl = c.String(utils.IPCPathFlag.Name)
+			ipcapiURL = c.String(utils.IPCPathFlag.Name)
 		} else {
-			ipcApiUrl = filepath.Join(configDir, "clef.ipc")
+			ipcapiURL = filepath.Join(configDir, "clef.ipc")
 		}
 
-		listener, _, err := rpc.StartIPCEndpoint(ipcApiUrl, rpcApi)
+		listener, _, err := rpc.StartIPCEndpoint(ipcapiURL, rpcAPI)
 		if err != nil {
 			utils.Fatalf("Could not start IPC api: %v", err)
 		}
-		log.Info("IPC endpoint opened", "url", ipcApiUrl)
+		log.Info("IPC endpoint opened", "url", ipcapiURL)
 		defer func() {
 			listener.Close()
-			log.Info("IPC endpoint closed", "url", ipcApiUrl)
+			log.Info("IPC endpoint closed", "url", ipcapiURL)
 		}()
 
 	}
@@ -453,10 +453,10 @@ func signer(c *cli.Context) error {
 	}
 	ui.OnSignerStartup(core.StartupInfo{
 		Info: map[string]interface{}{
-			"extapi_version": ExternalApiVersion,
-			"intapi_version": InternalApiVersion,
-			"extapi_http":    extapiUrl,
-			"extapi_ipc":     ipcApiUrl,
+			"extapi_version": ExternalAPIVersion,
+			"intapi_version": InternalAPIVersion,
+			"extapi_http":    extapiURL,
+			"extapi_ipc":     ipcapiURL,
 		},
 	})
 
