@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"database/sql"
-	"github.com/ethereum/go-ethereum/shyftdb"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -193,8 +192,6 @@ func WriteShyftGen(sqldb *sql.DB, gen *Genesis) {
 
 	for k, v := range gen.Alloc {
 		addr := k.String()
-		fmt.Println(addr,v.Balance)
-		fmt.Println("*************")
 
 		sqlStatement := `INSERT INTO accounts(addr, balance) VALUES(($1), ($2)) RETURNING addr`
 		insertErr := sqldb.QueryRow(sqlStatement, addr, v.Balance.String()).Scan(&addr)
@@ -273,76 +270,6 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.AllEthashProtocolChanges
 	}
 }
-
-// ToBlock creates the genesis block and writes state of a genesis specification
-// to the given database (or discards it if nil).
-func (ga *Genesis) ToShyftBlock(sqldb *sql.DB) *types.Block {
-	//actual return
-	fmt.Println("++++++++++++++++++++++++++++++++++++")
-	fmt.Println(ga.Alloc)
-	//for addr, account := range g.Alloc {
-	//	fmt.Println(addr, account.Balance)
-	//	//sqldb.AddBalance(addr, account.Balance)
-	//	//sqldb.SetCode(addr, account.Code)
-	//	//sqldb.SetNonce(addr, account.Nonce)
-	//}
-
-	head := &types.Header{
-		Number:     new(big.Int).SetUint64(ga.Number),
-		Nonce:      types.EncodeNonce(ga.Nonce),
-		Time:       new(big.Int).SetUint64(ga.Timestamp),
-		ParentHash: ga.ParentHash,
-		Extra:      ga.ExtraData,
-		GasLimit:   ga.GasLimit,
-		GasUsed:    ga.GasUsed,
-		Difficulty: ga.Difficulty,
-		MixDigest:  ga.Mixhash,
-		Coinbase:   ga.Coinbase,
-	}
-	//if g.GasLimit == 0 {
-	//	head.GasLimit = params.GenesisGasLimit
-	//}
-	//if g.Difficulty == nil {
-	//	head.Difficulty = params.GenesisDifficulty
-	//}
-	//statedb.Commit(false)
-	//statedb.Database().TrieDB().Commit(root, true)
-
-	return types.NewBlock(head, nil, nil, nil)
-
-}
-//@NOTE:SHYFT
-func (ga *Genesis) ShyftCommit(sqldb *sql.DB) (*types.Block) {
-	fmt.Println("********************************* GENESIS")
-	shyftBlock := ga.ToShyftBlock(sqldb)
-	//if shyftBlock.Number().Sign() != 0 {
-	//	return nil
-	//}
-	//if err := WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty); err != nil {
-	//	return nil, err
-	//}
-	if err := shyftdb.WriteBlock(sqldb, shyftBlock); err != nil {
-		return nil
-	}
-	//if err := WriteBlockReceipts(db, block.Hash(), block.NumberU64(), nil); err != nil {
-	//	return nil, err
-	//}
-	//if err := WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
-	//	return nil, err
-	//}
-	//if err := WriteHeadBlockHash(db, block.Hash()); err != nil {
-	//	return nil, err
-	//}
-	//if err := WriteHeadHeaderHash(db, block.Hash()); err != nil {
-	//	return nil, err
-	//}
-	//config := g.Config
-	//if config == nil {
-	//	config = params.AllEthashProtocolChanges
-	//}
-	return shyftBlock
-}
-
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
 func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {

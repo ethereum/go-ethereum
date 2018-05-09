@@ -93,8 +93,6 @@ type SendAndReceive struct {
 //}
 //WriteBlock writes to block info to sql db
 func WriteBlock(sqldb *sql.DB, block *types.Block) error {
-
-	fmt.Println("******************")
 	coinbase := block.Header().Coinbase.String()
 	number := block.Header().Number.String()
 	sqlStatement := `INSERT INTO blocks(hash, coinbase, number) VALUES(($1), ($2), ($3)) RETURNING number`
