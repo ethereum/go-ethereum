@@ -43,8 +43,7 @@ func init() {
 
 // Used for testing
 func newEmpty() *Trie {
-	diskdb := ethdb.NewMemDatabase()
-	trie, _ := New(common.Hash{}, NewDatabase(diskdb))
+	trie, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()))
 	return trie
 }
 
@@ -68,8 +67,7 @@ func TestNull(t *testing.T) {
 }
 
 func TestMissingRoot(t *testing.T) {
-	diskdb := ethdb.NewMemDatabase()
-	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), NewDatabase(diskdb))
+	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), NewDatabase(ethdb.NewMemDatabase()))
 	if trie != nil {
 		t.Error("New returned non-nil trie for invalid root")
 	}
@@ -413,8 +411,7 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 }
 
 func runRandTest(rt randTest) bool {
-	diskdb := ethdb.NewMemDatabase()
-	triedb := NewDatabase(diskdb)
+	triedb := NewDatabase(ethdb.NewMemDatabase())
 
 	tr, _ := New(common.Hash{}, triedb)
 	values := make(map[string]string) // tracks content of the trie

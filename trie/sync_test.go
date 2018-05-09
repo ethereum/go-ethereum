@@ -27,8 +27,7 @@ import (
 // makeTestTrie create a sample test trie to test node-wise reconstruction.
 func makeTestTrie() (*Database, *Trie, map[string][]byte) {
 	// Create an empty trie
-	diskdb := ethdb.NewMemDatabase()
-	triedb := NewDatabase(diskdb)
+	triedb := NewDatabase(ethdb.NewMemDatabase())
 	trie, _ := New(common.Hash{}, triedb)
 
 	// Fill it with some arbitrary data
@@ -89,18 +88,13 @@ func checkTrieConsistency(db *Database, root common.Hash) error {
 
 // Tests that an empty trie is not scheduled for syncing.
 func TestEmptyTrieSync(t *testing.T) {
-	diskdbA := ethdb.NewMemDatabase()
-	triedbA := NewDatabase(diskdbA)
-
-	diskdbB := ethdb.NewMemDatabase()
-	triedbB := NewDatabase(diskdbB)
-
-	emptyA, _ := New(common.Hash{}, triedbA)
-	emptyB, _ := New(emptyRoot, triedbB)
+	dbA := NewDatabase(ethdb.NewMemDatabase())
+	dbB := NewDatabase(ethdb.NewMemDatabase())
+	emptyA, _ := New(common.Hash{}, dbA)
+	emptyB, _ := New(emptyRoot, dbB)
 
 	for i, trie := range []*Trie{emptyA, emptyB} {
-		diskdb := ethdb.NewMemDatabase()
-		if req := NewTrieSync(trie.Hash(), diskdb, nil).Missing(1); len(req) != 0 {
+		if req := NewTrieSync(trie.Hash(), ethdb.NewMemDatabase(), nil).Missing(1); len(req) != 0 {
 			t.Errorf("test %d: content requested for empty trie: %v", i, req)
 		}
 	}

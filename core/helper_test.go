@@ -76,14 +76,11 @@ func (tm *TestManager) Db() ethdb.Database {
 }
 
 func NewTestManager() *TestManager {
-	db := ethdb.NewMemDatabase()
-
 	testManager := &TestManager{}
 	testManager.eventMux = new(event.TypeMux)
-	testManager.db = db
+	testManager.db = ethdb.NewMemDatabase()
 	// testManager.txPool = NewTxPool(testManager)
 	// testManager.blockChain = NewBlockChain(testManager)
 	// testManager.stateManager = NewStateManager(testManager)
-
 	return testManager
 }
