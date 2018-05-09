@@ -181,6 +181,8 @@ func (s *TypeMuxSubscription) Unsubscribe() {
 }
 
 func (s *TypeMuxSubscription) Closed() bool {
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
 	return s.closed
 }
 

@@ -136,7 +136,7 @@ func NewEventSystem(mux *event.TypeMux, backend Backend, lightMode bool) *EventS
 	// TODO(rjl493456442): use feed to subscribe pending log event
 	m.pendingLogSub = m.mux.Subscribe(core.PendingLogsEvent{})
 
-	// Make sure all the subscriptions are not empty
+	// Make sure none of the subscriptions are empty
 	if m.txSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil ||
 		m.pendingLogSub.Closed() {
 		log.Crit("Subscribe for event system failed")
@@ -442,10 +442,8 @@ func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.
 
 // eventLoop (un)installs filters and processes mux events.
 func (es *EventSystem) eventLoop() {
-	var index = make(filterIndex)
-
+	// Ensure all subscriptions get cleaned up
 	defer func() {
-		// Unsubscribe all events
 		es.pendingLogSub.Unsubscribe()
 		es.txSub.Unsubscribe()
 		es.logsSub.Unsubscribe()
@@ -453,6 +451,7 @@ func (es *EventSystem) eventLoop() {
 		es.chainSub.Unsubscribe()
 	}()
 
+	index := make(filterIndex)
 	for i := UnknownSubscription; i < LastIndexSubscription; i++ {
 		index[i] = make(map[rpc.ID]*subscription)
 	}
