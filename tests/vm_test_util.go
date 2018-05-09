@@ -79,7 +79,7 @@ type vmExecMarshaling struct {
 }
 
 func (t *VMTest) Run(vmconfig vm.Config) error {
-	db, _ := ethdb.NewMemDatabase()
+	db := ethdb.NewMemDatabase()
 	statedb := MakePreState(db, t.json.Pre)
 	ret, gasRemaining, err := t.exec(statedb, vmconfig)
 
