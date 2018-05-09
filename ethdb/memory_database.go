@@ -34,19 +34,18 @@ type MemDatabase struct {
 }
 
 // NewMemDatabase inits a mock levelDB instance with a map.
-func NewMemDatabase() (*MemDatabase, error) {
+func NewMemDatabase() *MemDatabase {
 	return &MemDatabase{
 		db: make(map[string][]byte),
-	}, nil
+	}
 }
 
 // NewMemDatabaseWithCap inits a mock levelDB instance with a map and sets a maximum size..
-func NewMemDatabaseWithCap(size int) (*MemDatabase, error) {
+func NewMemDatabaseWithCap(size int) *MemDatabase {
 	return &MemDatabase{
 		db: make(map[string][]byte, size),
-	}, nil
+	}
 }
-
 // Put sets the value of the key.
 func (db *MemDatabase) Put(key []byte, value []byte) error {
 	db.lock.Lock()
