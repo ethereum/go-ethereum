@@ -6,8 +6,8 @@ import (
 	"math/big"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-
-
+	"time"
+	"strconv"
 	"database/sql"
 
 	"log"
@@ -91,11 +91,16 @@ func WriteBlock(sqldb *sql.DB, block *types.Block) error {
 	gasLimit := block.Header().GasLimit
 	txCount := block.Transactions().Len()
 	uncleCount := len(block.Uncles())
-	age := block.Time()
-	fmt.Println("TIMESTAMP+++++++", age)
-	
-	sqlStatement := `INSERT INTO blocks(hash, coinbase, number, gasUsed, gasLimit, txcount, uncleCount) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7)) RETURNING number`
-	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number, gasUsed, gasLimit, txCount, uncleCount).Scan(&number)
+
+	i, err := strconv.ParseInt(block.Time().String(), 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	age := time.Unix(i, 0)
+	fmt.Println("TIME++++++++++++++", age)
+
+	sqlStatement := `INSERT INTO blocks(hash, coinbase, number, gasUsed, gasLimit, txcount, uncleCount, age) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8)) RETURNING number`
+	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age).Scan(&number)
 	if qerr != nil {
 		panic(qerr)
 	}

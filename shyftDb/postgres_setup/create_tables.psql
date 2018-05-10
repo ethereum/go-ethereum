@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS blocks (
   gasLimit numeric,
   txCount numeric,
   uncleCount numeric,
+  age timestamp,
   number bigint
 );
 
