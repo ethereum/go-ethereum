@@ -105,8 +105,6 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
-	fmt.Println("check//////////")
-
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
 	}
@@ -118,25 +116,21 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	//for k, v := range &config.Genesis.Alloc {
-	//	fmt.Printf("key[%s] value[%s]\n", k, v)
-	//}
-
 	// @NOTE:shyft instantiate BlockExplorerDB here
 	// @TODO: Create Genesis Block
 	// @NOTE:shyft instantiate BlockExplorerDB here?
 	connStr := "user=postgres dbname=shyftdb sslmode=disable"
 	blockExplorerDb, err := sql.Open("postgres", connStr)
-
+	if err != nil {
+		return nil, err
+	}
 	stopDbUpgrade := upgradeDeduplicateData(chainDb)
 	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis, blockExplorerDb)
-	//core.SetupShyftGenesisBlock(blockExplorerDb, config.Genesis)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
 	log.Info("Initialised chain configuration", "config", chainConfig)
 	fmt.Println(config.GasPrice)
-
 	eth := &Ethereum{
 		config:         config,
 		chainDb:        chainDb,
