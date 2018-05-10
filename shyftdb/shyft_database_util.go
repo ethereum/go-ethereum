@@ -87,8 +87,15 @@ type SendAndReceive struct {
 func WriteBlock(sqldb *sql.DB, block *types.Block) error {
 	coinbase := block.Header().Coinbase.String()
 	number := block.Header().Number.String()
-	sqlStatement := `INSERT INTO blocks(hash, coinbase, number) VALUES(($1), ($2), ($3)) RETURNING number`
-	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number).Scan(&number)
+	gasUsed := block.Header().GasUsed
+	gasLimit := block.Header().GasLimit
+	txCount := block.Transactions().Len()
+	uncleCount := len(block.Uncles())
+	age := block.Time()
+	fmt.Println("TIMESTAMP+++++++", age)
+	
+	sqlStatement := `INSERT INTO blocks(hash, coinbase, number, gasUsed, gasLimit, txcount, uncleCount) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7)) RETURNING number`
+	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number, gasUsed, gasLimit, txCount, uncleCount).Scan(&number)
 	if qerr != nil {
 		panic(qerr)
 	}
@@ -126,7 +133,7 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 	gas := txData.Gas
 	data := txData.Data
 	to := txData.To
-	if(to == nil){
+	if to == nil{
 		var retNonce string
 		sqlStatement := `INSERT INTO txs(txhash, from_addr, blockhash, amount, gasprice, gas, nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8)) RETURNING nonce`
 		qerr := sqldb.QueryRow(sqlStatement, txHash, from, blockHasher, amount, gasPrice, gas, nonce, data).Scan(&retNonce)

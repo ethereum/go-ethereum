@@ -1,6 +1,10 @@
 CREATE TABLE IF NOT EXISTS blocks (
   hash text primary key,
-  coinbase text, 
+  coinbase text,
+  gasUsed numeric,
+  gasLimit numeric,
+  txCount numeric,
+  uncleCount numeric,
   number bigint
 );
 
