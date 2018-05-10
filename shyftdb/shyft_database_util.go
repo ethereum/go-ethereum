@@ -20,6 +20,11 @@ type SBlock struct {
 	Hash     string
 	Coinbase string
 	Number   string
+	GasUsed	 string
+	GasLimit string
+	TxCount  string
+	UncleCount string
+	Age        string
 }
 
 //blockRes struct
@@ -97,9 +102,8 @@ func WriteBlock(sqldb *sql.DB, block *types.Block) error {
 		panic(err)
 	}
 	age := time.Unix(i, 0)
-	fmt.Println("TIME++++++++++++++", age)
 
-	sqlStatement := `INSERT INTO blocks(hash, coinbase, number, gasUsed, gasLimit, txcount, uncleCount, age) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8)) RETURNING number`
+	sqlStatement := `INSERT INTO blocks(hash, coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8)) RETURNING number`
 	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age).Scan(&number)
 	if qerr != nil {
 		panic(qerr)
@@ -325,11 +329,18 @@ func WriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, s
 func GetAllBlocks(sqldb *sql.DB) string {
 	var arr blockRes
 	var blockArr string
+
 	rows, err := sqldb.Query(`
 		SELECT
 			number,
 			hash,
-			coinbase
+			coinbase,
+			gasused,
+			gaslimit,
+			txcount,
+			unclecount,
+			age
+			
 		FROM blocks`)
 	if err != nil {
 		fmt.Println("err")
@@ -340,16 +351,32 @@ func GetAllBlocks(sqldb *sql.DB) string {
 		var num string
 		var hash string
 		var coinbase string
+		var gasUsed string
+		var gasLimit string
+		var txCount string
+		var uncleCount string
+		var age string
+
 		err = rows.Scan(
 			&num,
 			&hash,
 			&coinbase,
+			&gasUsed,
+			&gasLimit,
+			&txCount,
+			&uncleCount,
+			&age,
 		)
 
 		arr.Blocks = append(arr.Blocks, SBlock{
 			Hash:     hash,
 			Number:   num,
 			Coinbase: coinbase,
+			GasUsed: gasUsed,
+			GasLimit: gasLimit,
+			TxCount: txCount,
+			UncleCount: uncleCount,
+			Age: age,
 		})
 
 		blocks, _ := json.Marshal(arr.Blocks)
@@ -367,12 +394,27 @@ func GetBlock(sqldb *sql.DB) string {
 	var num string
 	var hash string
 	var coinbase string
-	row.Scan(&num, &hash, &coinbase)
+	var gasUsed string
+	var gasLimit string
+	var txCount string
+	var uncleCount string
+	var age string
+
+	row.Scan(&num, &hash, &coinbase, &gasUsed,
+		&gasLimit,
+		&txCount,
+		&uncleCount,
+		&age,)
 
 	block := SBlock{
 		Hash:     hash,
 		Number:   num,
 		Coinbase: coinbase,
+		GasUsed: gasUsed,
+		GasLimit: gasLimit,
+		TxCount: txCount,
+		UncleCount: uncleCount,
+		Age: age,
 	}
 	json, _ := json.Marshal(block)
 	return string(json)
