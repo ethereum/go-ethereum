@@ -8,7 +8,7 @@ import (
 
 	_ "github.com/lib/pq"
 
-	shyftdb "github.com/ethereum/go-ethereum/shyftdb"
+	"github.com/ethereum/go-ethereum/shyftdb"
 	"github.com/gorilla/mux"
 )
 
@@ -47,6 +47,7 @@ func GetAllTransactions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)

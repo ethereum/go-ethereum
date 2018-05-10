@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"strings"
 
+	_ "github.com/lib/pq"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -34,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"database/sql"
 )
 
 //go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -136,6 +138,36 @@ func (e *GenesisMismatchError) Error() string {
 	return fmt.Sprintf("database already contains an incompatible genesis block (have %x, new %x)", e.Stored[:8], e.New[:8])
 }
 
+//WriteShyftGen writes the genesis block to Shyft db
+//@NOTE:SHYFT
+func WriteShyftGen(sqldb *sql.DB, gen *Genesis) {
+	if sqldb == nil {
+		log.Info("Initializing Shyft Postgres DB")
+		connStr := "user=postgres dbname=shyftdb sslmode=disable"
+		blockExplorerDb, _ := sql.Open("postgres", connStr)
+		sqldb = blockExplorerDb
+	}
+
+	for k := range gen.Alloc {
+		addr := k.String()
+		var response string
+		sqlExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
+		err := sqldb.QueryRow(sqlExistsStatement, addr).Scan(&response)
+	switch {
+	case err == sql.ErrNoRows:
+		for k, v := range gen.Alloc {
+			addr := k.String()
+
+			sqlStatement := `INSERT INTO accounts(addr, balance) VALUES(($1), ($2)) RETURNING addr`
+			insertErr := sqldb.QueryRow(sqlStatement, addr, v.Balance.String()).Scan(&addr)
+			if insertErr != nil {
+				panic(insertErr)
+			}
+		}
+	default:
+		log.Info("Found Genesis Block")
+}}}
+
 // SetupGenesisBlock writes or updates the genesis block in db.
 // The block that will be used is:
 //
@@ -149,7 +181,7 @@ func (e *GenesisMismatchError) Error() string {
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 //
 // The returned chain configuration is never nil.
-func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, sqldb *sql.DB) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -162,6 +194,8 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 			genesis = DefaultGenesisBlock()
 		} else {
 			log.Info("Writing custom genesis block")
+			//@NOTE:SHYFT WRITE TO DB
+			WriteShyftGen(sqldb, genesis)
 		}
 		block, err := genesis.Commit(db)
 		return genesis.Config, block.Hash(), err
@@ -218,7 +252,6 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.AllEthashProtocolChanges
 	}
 }
-
 // ToBlock creates the genesis block and writes state of a genesis specification
 // to the given database (or discards it if nil).
 func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
@@ -343,7 +376,6 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 		Alloc:      decodePrealloc(rinkebyAllocData),
 	}
 }
-
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block. Note, this must
 // be seeded with the
 func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
