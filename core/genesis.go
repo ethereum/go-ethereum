@@ -139,66 +139,49 @@ func (e *GenesisMismatchError) Error() string {
 	return fmt.Sprintf("database already contains an incompatible genesis block (have %x, new %x)", e.Stored[:8], e.New[:8])
 }
 
-// SetupGenesisBlock writes or updates the genesis block in db.
-// The block that will be used is:
-//
-//                          genesis == nil       genesis != nil
-//                       +------------------------------------------
-//     db has no genesis |  main-net default  |  genesis
-//     db has genesis    |  from DB           |  genesis (if compatible)
-//
-// The stored chain configuration will be updated if it is compatible (i.e. does not
-// specify a fork block below the local head block). In case of a conflict, the
-// error is a *params.ConfigCompatError and the new, unwritten config is returned.
-//
-// The returned chain configuration is never nil.
-//func SetupShyftGenesisBlock(sqldb *sql.DB,gen *Genesis) (common.Hash) {
-//	// Just commit the new block if there is no stored genesis block.
-//	//stored := GetCanonicalHash(db, 0)
-//	//if (stored == common.Hash{}) {
-//	//	if genesis == nil {
-//	//		log.Info("Writing default main-net genesis block")
-//	//		genesis = DefaultGenesisBlock()
-//	//	} else {
-//	//		log.Info("Writing custom genesis block")
-//	//	}
-//	//
-//		//shyftBlock := gen.ShyftCommit(sqldb)
-//		log.Info("Setup Shyft Gen")
-//		return shyftBlock.Hash()
-//}
-
-// SetupGenesisBlock writes or updates the genesis block in db.
-// The block that will be used is:
-//
-//                          genesis == nil       genesis != nil
-//                       +------------------------------------------
-//     db has no genesis |  main-net default  |  genesis
-//     db has genesis    |  from DB           |  genesis (if compatible)
-//
-// The stored chain configuration will be updated if it is compatible (i.e. does not
-// specify a fork block below the local head block). In case of a conflict, the
-// error is a *params.ConfigCompatError and the new, unwritten config is returned.
-//
-// The returned chain configuration is never nil.
+//WriteShyftGen writes the genesis block to Shyft db
+//@NOTE:SHYFT
 func WriteShyftGen(sqldb *sql.DB, gen *Genesis) {
-
 	if sqldb == nil {
-		fmt.Println("NIL POSTGRES")
+		log.Info("Initializing Shyft Postgres DB")
 		connStr := "user=postgres dbname=shyftdb sslmode=disable"
 		blockExplorerDb, _ := sql.Open("postgres", connStr)
 		sqldb = blockExplorerDb
 	}
 
-	for k, v := range gen.Alloc {
+	for k := range gen.Alloc {
 		addr := k.String()
+		var response string
+		sqlExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
+		err := sqldb.QueryRow(sqlExistsStatement, addr).Scan(&response)
+	switch {
+	case err == sql.ErrNoRows:
+		for k, v := range gen.Alloc {
+			addr := k.String()
 
-		sqlStatement := `INSERT INTO accounts(addr, balance) VALUES(($1), ($2)) RETURNING addr`
-		insertErr := sqldb.QueryRow(sqlStatement, addr, v.Balance.String()).Scan(&addr)
-		fmt.Println(insertErr)
-	}
-}
+			sqlStatement := `INSERT INTO accounts(addr, balance) VALUES(($1), ($2)) RETURNING addr`
+			insertErr := sqldb.QueryRow(sqlStatement, addr, v.Balance.String()).Scan(&addr)
+			if insertErr != nil {
+				panic(insertErr)
+			}
+		}
+	default:
+		log.Info("Found Genesis Block")
+}}}
 
+// SetupGenesisBlock writes or updates the genesis block in db.
+// The block that will be used is:
+//
+//                          genesis == nil       genesis != nil
+//                       +------------------------------------------
+//     db has no genesis |  main-net default  |  genesis
+//     db has genesis    |  from DB           |  genesis (if compatible)
+//
+// The stored chain configuration will be updated if it is compatible (i.e. does not
+// specify a fork block below the local head block). In case of a conflict, the
+// error is a *params.ConfigCompatError and the new, unwritten config is returned.
+//
+// The returned chain configuration is never nil.
 func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, sqldb *sql.DB) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
@@ -212,7 +195,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, sqldb *sql.DB) (*par
 			genesis = DefaultGenesisBlock()
 		} else {
 			log.Info("Writing custom genesis block")
-
+			//@NOTE:SHYFT WRITE TO DB
 			WriteShyftGen(sqldb, genesis)
 		}
 		block, err := genesis.Commit(db)

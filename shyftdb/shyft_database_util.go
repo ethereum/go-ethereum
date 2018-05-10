@@ -83,14 +83,6 @@ type SendAndReceive struct {
 	Balance   string
 }
 
-//func WriteGen(sqldb *sql.DB, genesis *core.Genesis) error {
-//	for k, v := range genesis.Alloc {
-//		addr := k.String()
-//		fmt.Println(addr,v.Balance)
-//		fmt.Println("*************")
-//	}
-//	return nil
-//}
 //WriteBlock writes to block info to sql db
 func WriteBlock(sqldb *sql.DB, block *types.Block) error {
 	coinbase := block.Header().Coinbase.String()
@@ -169,7 +161,6 @@ func WriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	err := sqldb.QueryRow(sqlExistsStatement, toAddr).Scan(&response)
 	switch {
 	case err == sql.ErrNoRows:
-		fmt.Println("No rows error :)")
 
 		sqlStatement := `INSERT INTO accounts(addr, balance) VALUES(($1), ($2)) RETURNING addr`
 		insertErr := sqldb.QueryRow(sqlStatement, toAddr, amount).Scan(&toAddr)
