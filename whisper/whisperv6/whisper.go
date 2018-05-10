@@ -55,6 +55,7 @@ const (
 	minPowToleranceIdx             // Minimal PoW tolerated by the whisper node for a limited time
 	bloomFilterIdx                 // Bloom filter for topics of interest for this node
 	bloomFilterToleranceIdx        // Bloom filter tolerated by the whisper node for a limited time
+	lightClientModeIdx             // Pure light client mode. (does not forward any messages)
 )
 
 // Whisper represents a dark communication interface through the Ethereum
@@ -81,8 +82,6 @@ type Whisper struct {
 	settings syncmap.Map // holds configuration settings that can be dynamically changed
 
 	syncAllowance int // maximum time in seconds allowed to process the whisper-related messages
-
-	lightClient bool // indicates is this node is pure light client (does not forward any messages)
 
 	statsMu sync.Mutex // guard stats
 	stats   Statistics // Statistics of whisper node
@@ -274,6 +273,24 @@ func (whisper *Whisper) SetMinimumPowTest(val float64) {
 	whisper.settings.Store(minPowIdx, val)
 	whisper.notifyPeersAboutPowRequirementChange(val)
 	whisper.settings.Store(minPowToleranceIdx, val)
+}
+
+//SetLightClientMode makes node pure light client (does not forward any messages)
+func (whisper *Whisper) SetLightClientMode(v bool) {
+	whisper.settings.Store(lightClientModeIdx, v)
+}
+
+//LightClientMode indicates is this node is pure light client (does not forward any messages)
+func (whisper *Whisper) LightClientMode() bool {
+	val, exist := whisper.settings.Load(lightClientModeIdx)
+	if !exist || val == nil {
+		return false
+	}
+	v, ok := val.(bool)
+	if !ok {
+		return false
+	}
+	return v
 }
 
 func (whisper *Whisper) notifyPeersAboutPowRequirementChange(pow float64) {
@@ -672,7 +689,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 
 			trouble := false
 			for _, env := range envelopes {
-				cached, err := whisper.add(env, whisper.lightClient)
+				cached, err := whisper.add(env, whisper.LightClientMode())
 				if err != nil {
 					trouble = true
 					log.Error("bad envelope received, peer will be disconnected", "peer", p.peer.ID(), "err", err)

@@ -79,11 +79,13 @@ func (peer *Peer) stop() {
 func (peer *Peer) handshake() error {
 	// Send the handshake status message asynchronously
 	errc := make(chan error, 1)
+	isLightNode := peer.host.LightClientMode()
 	go func() {
 		pow := peer.host.MinPow()
 		powConverted := math.Float64bits(pow)
 		bloom := peer.host.BloomFilter()
-		errc <- p2p.SendItems(peer.ws, statusCode, ProtocolVersion, powConverted, bloom)
+
+		errc <- p2p.SendItems(peer.ws, statusCode, ProtocolVersion, powConverted, bloom, isLightNode)
 	}()
 
 	// Fetch the remote status packet and verify protocol match
@@ -125,6 +127,11 @@ func (peer *Peer) handshake() error {
 			}
 			peer.setBloomFilter(bloom)
 		}
+	}
+
+	b, err := s.Bool()
+	if b && isLightNode {
+		return fmt.Errorf("peer [%x]: useless peer: two pure light node communication", peer.ID())
 	}
 
 	if err := <-errc; err != nil {
