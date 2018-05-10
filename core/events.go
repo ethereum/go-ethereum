@@ -21,8 +21,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// TxPreEvent is posted when a transaction enters the transaction pool.
-type TxPreEvent struct{ Tx *types.Transaction }
+// TxsPreEvent is posted when a batch of transactions enter the transaction pool.
+type TxsPreEvent struct{ Txs types.Transactions }
 
 // PendingLogsEvent is posted pre mining and notifies of pending logs.
 type PendingLogsEvent struct {

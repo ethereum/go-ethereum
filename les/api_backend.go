@@ -136,7 +136,7 @@ func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, 
 	return b.eth.txPool.Content()
 }
 
-func (b *LesApiBackend) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
+func (b *LesApiBackend) SubscribeTxPreEvent(ch chan<- core.TxsPreEvent) event.Subscription {
 	return b.eth.txPool.SubscribeTxPreEvent(ch)
 }
 

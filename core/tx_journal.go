@@ -56,7 +56,7 @@ func newTxJournal(path string) *txJournal {
 
 // load parses a transaction journal dump from disk, loading its contents into
 // the specified pool.
-func (journal *txJournal) load(add func(*types.Transaction) error) error {
+func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 	// Skip the parsing if the journal file doens't exist at all
 	if _, err := os.Stat(journal.path); os.IsNotExist(err) {
 		return nil
@@ -76,7 +76,22 @@ func (journal *txJournal) load(add func(*types.Transaction) error) error {
 	stream := rlp.NewStream(input, 0)
 	total, dropped := 0, 0
 
-	var failure error
+	// flush imports a batch of transactions and bump the appropriate progress counters
+	flush := func(txs types.Transactions) {
+		errs := add(txs)
+		for _, err := range errs {
+			if err != nil {
+				log.Debug("Failed to add journaled transaction", "err", err)
+				dropped++
+			}
+		}
+	}
+
+	var (
+		failure error
+		txs     types.Transactions
+	)
+
 	for {
 		// Parse the next transaction and terminate on error
 		tx := new(types.Transaction)
@@ -86,13 +101,16 @@ func (journal *txJournal) load(add func(*types.Transaction) error) error {
 			}
 			break
 		}
-		// Import the transaction and bump the appropriate progress counters
+		txs = append(txs, tx)
 		total++
-		if err = add(tx); err != nil {
-			log.Debug("Failed to add journaled transaction", "err", err)
-			dropped++
-			continue
+		if txs.Len() > 1024 {
+			flush(txs)
+			txs = types.Transactions{}
 		}
+	}
+	if txs.Len() > 0 {
+		flush(txs)
+		txs = types.Transactions{}
 	}
 	log.Info("Loaded local transaction journal", "transactions", total, "dropped", dropped)
 

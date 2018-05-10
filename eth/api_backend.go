@@ -188,7 +188,7 @@ func (b *EthAPIBackend) TxPoolContent() (map[common.Address]types.Transactions, 
 	return b.eth.TxPool().Content()
 }
 
-func (b *EthAPIBackend) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
+func (b *EthAPIBackend) SubscribeTxPreEvent(ch chan<- core.TxsPreEvent) event.Subscription {
 	return b.eth.TxPool().SubscribeTxPreEvent(ch)
 }
 

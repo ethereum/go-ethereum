@@ -104,8 +104,8 @@ type txPool interface {
 	Pending() (map[common.Address]types.Transactions, error)
 
 	// SubscribeTxPreEvent should return an event subscription of
-	// TxPreEvent and send events to the given channel.
-	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
+	// TxsPreEvent and send events to the given channel.
+	SubscribeTxPreEvent(chan<- core.TxsPreEvent) event.Subscription
 }
 
 // statusData is the network packet for the status message.
