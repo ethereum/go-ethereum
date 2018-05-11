@@ -116,7 +116,7 @@ func requireUnpackKind(v reflect.Value, t reflect.Type, k reflect.Kind,
 // first round: for each Exportable field that contains a `abi:""` tag
 //   and this field name exists in the arguments, pair them together.
 // second round: for each argument field that has not been already linked,
-//   find what variable is expected to be mapped into, if exists and has not been
+//   find what variable is expected to be mapped into, if it exists and has not been
 //   used, pair them.
 func mapAbiToStructFields(args Arguments, value reflect.Value) (map[string]string, error) {
 
@@ -134,14 +134,14 @@ func mapAbiToStructFields(args Arguments, value reflect.Value) (map[string]strin
 			continue
 		}
 
-		// skip fields that has not `abi:""` tag.
+		// skip fields that have no abi:"" tag.
 		var ok bool
 		var tagName string
 		if tagName, ok = typ.Field(i).Tag.Lookup("abi"); !ok {
 			continue
 		}
 
-		// check if tag is emmpty.
+		// check if tag is empty.
 		if tagName == "" {
 			return nil, fmt.Errorf("struct: abi tag in '%s' is empty", structFieldName)
 		}
@@ -177,9 +177,11 @@ func mapAbiToStructFields(args Arguments, value reflect.Value) (map[string]strin
 			return nil, fmt.Errorf("abi: purely underscored output cannot unpack to struct")
 		}
 
-		// this abi been already paired, skip
+		// this abi has already been paired, skip... unless exists another not still assigned
+		// struct field with the same field name, in the case raise an error:
+		//    abi: [ { "name": "value" } ]
+		//    struct { Value  *big.Int , Value1 *big.Int `abi:"value"`}
 		if abi2struct[abiFieldName] != "" {
-			// unless if exists another not still assigned struct field with the same name
 			if abi2struct[abiFieldName] != structFieldName &&
 				struct2abi[structFieldName] == "" &&
 				value.FieldByName(structFieldName).IsValid() {
@@ -188,7 +190,7 @@ func mapAbiToStructFields(args Arguments, value reflect.Value) (map[string]strin
 			continue
 		}
 
-		// error if this struct field been already paired.
+		// return an error if this struct field has already been paired.
 		if struct2abi[structFieldName] != "" {
 			return nil, fmt.Errorf("abi: multiple outputs mapping to the same struct field '%s'", structFieldName)
 		}
