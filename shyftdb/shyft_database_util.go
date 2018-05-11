@@ -6,8 +6,8 @@ import (
 	"math/big"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-
-
+	"time"
+	"strconv"
 	"database/sql"
 
 	"log"
@@ -20,6 +20,11 @@ type SBlock struct {
 	Hash     string
 	Coinbase string
 	Number   string
+	GasUsed	 string
+	GasLimit string
+	TxCount  string
+	UncleCount string
+	Age        string
 }
 
 //blockRes struct
@@ -87,8 +92,19 @@ type SendAndReceive struct {
 func WriteBlock(sqldb *sql.DB, block *types.Block) error {
 	coinbase := block.Header().Coinbase.String()
 	number := block.Header().Number.String()
-	sqlStatement := `INSERT INTO blocks(hash, coinbase, number) VALUES(($1), ($2), ($3)) RETURNING number`
-	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number).Scan(&number)
+	gasUsed := block.Header().GasUsed
+	gasLimit := block.Header().GasLimit
+	txCount := block.Transactions().Len()
+	uncleCount := len(block.Uncles())
+
+	i, err := strconv.ParseInt(block.Time().String(), 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	age := time.Unix(i, 0)
+
+	sqlStatement := `INSERT INTO blocks(hash, coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8)) RETURNING number`
+	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age).Scan(&number)
 	if qerr != nil {
 		panic(qerr)
 	}
@@ -126,7 +142,7 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 	gas := txData.Gas
 	data := txData.Data
 	to := txData.To
-	if(to == nil){
+	if (to == nil){
 		var retNonce string
 		sqlStatement := `INSERT INTO txs(txhash, from_addr, blockhash, amount, gasprice, gas, nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8)) RETURNING nonce`
 		qerr := sqldb.QueryRow(sqlStatement, txHash, from, blockHasher, amount, gasPrice, gas, nonce, data).Scan(&retNonce)
@@ -317,7 +333,12 @@ func GetAllBlocks(sqldb *sql.DB) string {
 		SELECT
 			number,
 			hash,
-			coinbase
+			coinbase,
+			gasused,
+			gaslimit,
+			txcount,
+			unclecount,
+			age
 		FROM blocks`)
 	if err != nil {
 		fmt.Println("err")
@@ -328,16 +349,32 @@ func GetAllBlocks(sqldb *sql.DB) string {
 		var num string
 		var hash string
 		var coinbase string
+		var gasUsed string
+		var gasLimit string
+		var txCount string
+		var uncleCount string
+		var age string
+
 		err = rows.Scan(
 			&num,
 			&hash,
 			&coinbase,
+			&gasUsed,
+			&gasLimit,
+			&txCount,
+			&uncleCount,
+			&age,
 		)
 
 		arr.Blocks = append(arr.Blocks, SBlock{
 			Hash:     hash,
 			Number:   num,
 			Coinbase: coinbase,
+			GasUsed: gasUsed,
+			GasLimit: gasLimit,
+			TxCount: txCount,
+			UncleCount: uncleCount,
+			Age: age,
 		})
 
 		blocks, _ := json.Marshal(arr.Blocks)
@@ -355,12 +392,31 @@ func GetBlock(sqldb *sql.DB) string {
 	var num string
 	var hash string
 	var coinbase string
-	row.Scan(&num, &hash, &coinbase)
+	var gasUsed string
+	var gasLimit string
+	var txCount string
+	var uncleCount string
+	var age string
+
+	row.Scan(
+		&num,
+		&hash,
+		&coinbase,
+		&gasUsed,
+		&gasLimit,
+		&txCount,
+		&uncleCount,
+		&age,)
 
 	block := SBlock{
 		Hash:     hash,
 		Number:   num,
 		Coinbase: coinbase,
+		GasUsed: gasUsed,
+		GasLimit: gasLimit,
+		TxCount: txCount,
+		UncleCount: uncleCount,
+		Age: age,
 	}
 	json, _ := json.Marshal(block)
 	return string(json)
