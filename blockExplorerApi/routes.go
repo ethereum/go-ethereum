@@ -36,7 +36,7 @@ var routes = Routes{
 	Route{
 		"GetBlock",
 		"GET",
-		"/api/get_block",
+		"/api/get_block/{blockNumber}",
 		GetBlock,
 	},
 	Route{

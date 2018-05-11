@@ -100,13 +100,15 @@ func GetAllAccounts(w http.ResponseWriter, r *http.Request) {
 
 //GetBlock returns block json
 func GetBlock(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	blockNumber := vars["blockNumber"]
 	connStr := "user=postgres dbname=shyftdb sslmode=disable"
 	blockExplorerDb, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return
 	}
 
-	getBlockResponse := shyftdb.GetBlock(blockExplorerDb)
+	getBlockResponse := shyftdb.GetBlock(blockExplorerDb, blockNumber)
 
 	if err != nil {
 		http.Error(w, err.Error(), 500)
