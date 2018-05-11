@@ -102,7 +102,7 @@ type EventSystem struct {
 	lastHead  *types.Header
 
 	// Subscriptions
-  txPreSub      event.Subscription         // Subscription for pre transaction events
+	txPreSub      event.Subscription         // Subscription for pre transaction events
 	txSub         event.Subscription         // Subscription for transaction events
 	logsSub       event.Subscription         // Subscription for new log event
 	rmLogsSub     event.Subscription         // Subscription for removed log event
@@ -110,13 +110,13 @@ type EventSystem struct {
 	pendingLogSub *event.TypeMuxSubscription // Subscription for pending log event
 
 	// Channels
-	install   chan *subscription          // install filter for event notification
-	uninstall chan *subscription          // remove filter for event notification
-  txPreCh   chan core.TxPreEvent        // Channel to recieve new pre transaction events
-	txCh      chan core.TransactionEvent  // Channel to receive new transaction events
-	logsCh    chan []*types.Log           // Channel to receive new log event
-	rmLogsCh  chan core.RemovedLogsEvent  // Channel to receive removed log event
-	chainCh   chan core.ChainEvent        // Channel to receive new chain event
+	install   chan *subscription         // install filter for event notification
+	uninstall chan *subscription         // remove filter for event notification
+	txPreCh   chan core.TxPreEvent       // Channel to receive new pre transaction events
+	txCh      chan core.TransactionEvent // Channel to receive new transaction events
+	logsCh    chan []*types.Log          // Channel to receive new log event
+	rmLogsCh  chan core.RemovedLogsEvent // Channel to receive removed log event
+	chainCh   chan core.ChainEvent       // Channel to receive new chain event
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -132,7 +132,7 @@ func NewEventSystem(mux *event.TypeMux, backend Backend, lightMode bool) *EventS
 		lightMode: lightMode,
 		install:   make(chan *subscription),
 		uninstall: make(chan *subscription),
-    txPrech:   make(chan core.TxPreEvent, txPreChanSize),
+		txPreCh:   make(chan core.TxPreEvent, txPreChanSize),
 		txCh:      make(chan core.TransactionEvent, txPostChanSize),
 		logsCh:    make(chan []*types.Log, logsChanSize),
 		rmLogsCh:  make(chan core.RemovedLogsEvent, rmLogsChanSize),
@@ -140,7 +140,7 @@ func NewEventSystem(mux *event.TypeMux, backend Backend, lightMode bool) *EventS
 	}
 
 	// Subscribe events
-  m.txPreSub = m.backend.SubscribeTxPreEvent(m.txPreCh)
+	m.txPreSub = m.backend.SubscribeTxPreEvent(m.txPreCh)
 	m.txSub = m.backend.SubscribeTransactionEvent(m.txCh)
 	m.logsSub = m.backend.SubscribeLogsEvent(m.logsCh)
 	m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
@@ -475,7 +475,7 @@ func (es *EventSystem) eventLoop() {
 	// Ensure all subscriptions get cleaned up
 	defer func() {
 		es.pendingLogSub.Unsubscribe()
-    es.txPreSub.Unsubscribe()
+		es.txPreSub.Unsubscribe()
 		es.txSub.Unsubscribe()
 		es.logsSub.Unsubscribe()
 		es.rmLogsSub.Unsubscribe()
@@ -483,7 +483,7 @@ func (es *EventSystem) eventLoop() {
 	}()
 
 	index := make(filterIndex)
-  
+
 	for i := UnknownSubscription; i < LastIndexSubscription; i++ {
 		index[i] = make(map[rpc.ID]*subscription)
 	}

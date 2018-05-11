@@ -158,7 +158,7 @@ func TestBlockSubscription(t *testing.T) {
 
 	var (
 		mux         = new(event.TypeMux)
-		db       = ethdb.NewMemDatabase()
+		db          = ethdb.NewMemDatabase()
 		txPreFeed   = new(event.Feed)
 		txPostFeed  = new(event.Feed)
 		rmLogsFeed  = new(event.Feed)
@@ -332,7 +332,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 		mux        = new(event.TypeMux)
 		db         = ethdb.NewMemDatabase()
 		txPreFeed  = new(event.Feed)
-    txPostFeed = new(evnt.Feed)
+		txPostFeed = new(event.Feed)
 		rmLogsFeed = new(event.Feed)
 		logsFeed   = new(event.Feed)
 		chainFeed  = new(event.Feed)
@@ -481,7 +481,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 
 	var (
 		mux        = new(event.TypeMux)
-		db      = ethdb.NewMemDatabase()
+		db         = ethdb.NewMemDatabase()
 		txPreFeed  = new(event.Feed)
 		txPostFeed = new(event.Feed)
 		rmLogsFeed = new(event.Feed)
