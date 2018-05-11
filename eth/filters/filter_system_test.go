@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -57,26 +58,37 @@ func (b *testBackend) EventMux() *event.TypeMux {
 }
 
 func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
-	var hash common.Hash
-	var num uint64
+	var (
+		hash common.Hash
+		num  uint64
+	)
 	if blockNr == rpc.LatestBlockNumber {
-		hash = core.GetHeadBlockHash(b.db)
-		num = core.GetBlockNumber(b.db, hash)
+		hash = rawdb.ReadHeadBlockHash(b.db)
+		number := rawdb.ReadHeaderNumber(b.db, hash)
+		if number == nil {
+			return nil, nil
+		}
+		num = *number
 	} else {
 		num = uint64(blockNr)
-		hash = core.GetCanonicalHash(b.db, num)
+		hash = rawdb.ReadCanonicalHash(b.db, num)
 	}
-	return core.GetHeader(b.db, hash, num), nil
+	return rawdb.ReadHeader(b.db, hash, num), nil
 }
 
-func (b *testBackend) GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
-	number := core.GetBlockNumber(b.db, blockHash)
-	return core.GetBlockReceipts(b.db, blockHash, number), nil
+func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
+	if number := rawdb.ReadHeaderNumber(b.db, hash); number != nil {
+		return rawdb.ReadReceipts(b.db, hash, *number), nil
+	}
+	return nil, nil
 }
 
-func (b *testBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
-	number := core.GetBlockNumber(b.db, blockHash)
-	receipts := core.GetBlockReceipts(b.db, blockHash, number)
+func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
+	number := rawdb.ReadHeaderNumber(b.db, hash)
+	if number == nil {
+		return nil, nil
+	}
+	receipts := rawdb.ReadReceipts(b.db, hash, *number)
 
 	logs := make([][]*types.Log, len(receipts))
 	for i, receipt := range receipts {
@@ -126,8 +138,8 @@ func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 				task.Bitsets = make([][]byte, len(task.Sections))
 				for i, section := range task.Sections {
 					if rand.Int()%4 != 0 { // Handle occasional missing deliveries
-						head := core.GetCanonicalHash(b.db, (section+1)*params.BloomBitsBlocks-1)
-						task.Bitsets[i], _ = core.GetBloomBits(b.db, task.Bit, section, head)
+						head := rawdb.ReadCanonicalHash(b.db, (section+1)*params.BloomBitsBlocks-1)
+						task.Bitsets[i], _ = rawdb.ReadBloomBits(b.db, task.Bit, section, head)
 					}
 				}
 				request <- task
@@ -146,7 +158,7 @@ func TestBlockSubscription(t *testing.T) {
 
 	var (
 		mux         = new(event.TypeMux)
-		db, _       = ethdb.NewMemDatabase()
+		db       = ethdb.NewMemDatabase()
 		txPreFeed   = new(event.Feed)
 		txPostFeed  = new(event.Feed)
 		rmLogsFeed  = new(event.Feed)
@@ -204,7 +216,7 @@ func TestPendingTxFilter(t *testing.T) {
 
 	var (
 		mux        = new(event.TypeMux)
-		db, _      = ethdb.NewMemDatabase()
+		db         = ethdb.NewMemDatabase()
 		txPreFeed  = new(event.Feed)
 		txPostFeed = new(event.Feed)
 		rmLogsFeed = new(event.Feed)
@@ -268,7 +280,7 @@ func TestPendingTxFilter(t *testing.T) {
 func TestLogFilterCreation(t *testing.T) {
 	var (
 		mux        = new(event.TypeMux)
-		db, _      = ethdb.NewMemDatabase()
+		db         = ethdb.NewMemDatabase()
 		txPreFeed  = new(event.Feed)
 		txPostFeed = new(event.Feed)
 		rmLogsFeed = new(event.Feed)
@@ -318,9 +330,9 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 
 	var (
 		mux        = new(event.TypeMux)
-		db, _      = ethdb.NewMemDatabase()
+		db         = ethdb.NewMemDatabase()
 		txPreFeed  = new(event.Feed)
-		txPostFeed = new(event.Feed)
+    txPostFeed = new(evnt.Feed)
 		rmLogsFeed = new(event.Feed)
 		logsFeed   = new(event.Feed)
 		chainFeed  = new(event.Feed)
@@ -349,7 +361,7 @@ func TestLogFilter(t *testing.T) {
 
 	var (
 		mux        = new(event.TypeMux)
-		db, _      = ethdb.NewMemDatabase()
+		db         = ethdb.NewMemDatabase()
 		txPreFeed  = new(event.Feed)
 		txPostFeed = new(event.Feed)
 		rmLogsFeed = new(event.Feed)
@@ -469,7 +481,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 
 	var (
 		mux        = new(event.TypeMux)
-		db, _      = ethdb.NewMemDatabase()
+		db      = ethdb.NewMemDatabase()
 		txPreFeed  = new(event.Feed)
 		txPostFeed = new(event.Feed)
 		rmLogsFeed = new(event.Feed)

@@ -28,8 +28,10 @@ import (
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -98,8 +100,23 @@ type EventSystem struct {
 	backend   Backend
 	lightMode bool
 	lastHead  *types.Header
-	install   chan *subscription // install filter for event notification
-	uninstall chan *subscription // remove filter for event notification
+
+	// Subscriptions
+  txPreSub      event.Subscription         // Subscription for pre transaction events
+	txSub         event.Subscription         // Subscription for transaction events
+	logsSub       event.Subscription         // Subscription for new log event
+	rmLogsSub     event.Subscription         // Subscription for removed log event
+	chainSub      event.Subscription         // Subscription for new chain event
+	pendingLogSub *event.TypeMuxSubscription // Subscription for pending log event
+
+	// Channels
+	install   chan *subscription          // install filter for event notification
+	uninstall chan *subscription          // remove filter for event notification
+  txPreCh   chan core.TxPreEvent        // Channel to recieve new pre transaction events
+	txCh      chan core.TransactionEvent  // Channel to receive new transaction events
+	logsCh    chan []*types.Log           // Channel to receive new log event
+	rmLogsCh  chan core.RemovedLogsEvent  // Channel to receive removed log event
+	chainCh   chan core.ChainEvent        // Channel to receive new chain event
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -115,10 +132,29 @@ func NewEventSystem(mux *event.TypeMux, backend Backend, lightMode bool) *EventS
 		lightMode: lightMode,
 		install:   make(chan *subscription),
 		uninstall: make(chan *subscription),
+    txPrech:   make(chan core.TxPreEvent, txPreChanSize),
+		txCh:      make(chan core.TransactionEvent, txPostChanSize),
+		logsCh:    make(chan []*types.Log, logsChanSize),
+		rmLogsCh:  make(chan core.RemovedLogsEvent, rmLogsChanSize),
+		chainCh:   make(chan core.ChainEvent, chainEvChanSize),
+	}
+
+	// Subscribe events
+  m.txPreSub = m.backend.SubscribeTxPreEvent(m.txPreCh)
+	m.txSub = m.backend.SubscribeTransactionEvent(m.txCh)
+	m.logsSub = m.backend.SubscribeLogsEvent(m.logsCh)
+	m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
+	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
+	// TODO(rjl493456442): use feed to subscribe pending log event
+	m.pendingLogSub = m.mux.Subscribe(core.PendingLogsEvent{})
+
+	// Make sure none of the subscriptions are empty
+	if m.txSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil ||
+		m.pendingLogSub.Closed() {
+		log.Crit("Subscribe for event system failed")
 	}
 
 	go m.eventLoop()
-
 	return m
 }
 
@@ -373,11 +409,11 @@ func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func
 	for oldh.Hash() != newh.Hash() {
 		if oldh.Number.Uint64() >= newh.Number.Uint64() {
 			oldHeaders = append(oldHeaders, oldh)
-			oldh = core.GetHeader(es.backend.ChainDb(), oldh.ParentHash, oldh.Number.Uint64()-1)
+			oldh = rawdb.ReadHeader(es.backend.ChainDb(), oldh.ParentHash, oldh.Number.Uint64()-1)
 		}
 		if oldh.Number.Uint64() < newh.Number.Uint64() {
 			newHeaders = append(newHeaders, newh)
-			newh = core.GetHeader(es.backend.ChainDb(), newh.ParentHash, newh.Number.Uint64()-1)
+			newh = rawdb.ReadHeader(es.backend.ChainDb(), newh.ParentHash, newh.Number.Uint64()-1)
 			if newh == nil {
 				// happens when CHT syncing, nothing to do
 				newh = oldh
@@ -436,56 +472,39 @@ func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.
 
 // eventLoop (un)installs filters and processes mux events.
 func (es *EventSystem) eventLoop() {
-	var (
-		index = make(filterIndex)
-		sub   = es.mux.Subscribe(core.PendingLogsEvent{})
-		// Subscribe to TxPreEvent from txpool
-		txPreCh  = make(chan core.TxPreEvent, txPreChanSize)
-		txPreSub = es.backend.SubscribeTxPreEvent(txPreCh)
-		// Subscribe to TransactionEvent from applyTransaction
-		txCh  = make(chan core.TransactionEvent, txPostChanSize)
-		txSub = es.backend.SubscribeTransactionEvent(txCh)
-		// Subscribe RemovedLogsEvent
-		rmLogsCh  = make(chan core.RemovedLogsEvent, rmLogsChanSize)
-		rmLogsSub = es.backend.SubscribeRemovedLogsEvent(rmLogsCh)
-		// Subscribe []*types.Log
-		logsCh  = make(chan []*types.Log, logsChanSize)
-		logsSub = es.backend.SubscribeLogsEvent(logsCh)
-		// Subscribe ChainEvent
-		chainEvCh  = make(chan core.ChainEvent, chainEvChanSize)
-		chainEvSub = es.backend.SubscribeChainEvent(chainEvCh)
-	)
+	// Ensure all subscriptions get cleaned up
+	defer func() {
+		es.pendingLogSub.Unsubscribe()
+    es.txPreSub.Unsubscribe()
+		es.txSub.Unsubscribe()
+		es.logsSub.Unsubscribe()
+		es.rmLogsSub.Unsubscribe()
+		es.chainSub.Unsubscribe()
+	}()
 
-	// Unsubscribe all events
-	defer sub.Unsubscribe()
-	defer txPreSub.Unsubscribe()
-	defer txSub.Unsubscribe()
-	defer rmLogsSub.Unsubscribe()
-	defer logsSub.Unsubscribe()
-	defer chainEvSub.Unsubscribe()
-
+	index := make(filterIndex)
+  
 	for i := UnknownSubscription; i < LastIndexSubscription; i++ {
 		index[i] = make(map[rpc.ID]*subscription)
 	}
 
 	for {
 		select {
-		case ev, active := <-sub.Chan():
+		// Handle subscribed events
+		case ev := <-es.txPreCh:
+			es.broadcast(index, ev)
+		case ev := <-es.txCh:
+			es.broadcast(index, ev)
+		case ev := <-es.logsCh:
+			es.broadcast(index, ev)
+		case ev := <-es.rmLogsCh:
+			es.broadcast(index, ev)
+		case ev := <-es.chainCh:
+			es.broadcast(index, ev)
+		case ev, active := <-es.pendingLogSub.Chan():
 			if !active { // system stopped
 				return
 			}
-			es.broadcast(index, ev)
-
-		// Handle subscribed events
-		case ev := <-txPreCh:
-			es.broadcast(index, ev)
-		case ev := <-txCh:
-			es.broadcast(index, ev)
-		case ev := <-rmLogsCh:
-			es.broadcast(index, ev)
-		case ev := <-logsCh:
-			es.broadcast(index, ev)
-		case ev := <-chainEvCh:
 			es.broadcast(index, ev)
 
 		case f := <-es.install:
@@ -497,6 +516,7 @@ func (es *EventSystem) eventLoop() {
 				index[f.typ][f.id] = f
 			}
 			close(f.installed)
+
 		case f := <-es.uninstall:
 			if f.typ == MinedAndPendingLogsSubscription {
 				// the type are logs and pending logs subscriptions
@@ -508,15 +528,15 @@ func (es *EventSystem) eventLoop() {
 			close(f.err)
 
 		// System stopped
-		case <-txPreSub.Err():
+		case <-es.txPreSub.Err():
 			return
-		case <-txSub.Err():
+		case <-es.txSub.Err():
 			return
-		case <-rmLogsSub.Err():
+		case <-es.logsSub.Err():
 			return
-		case <-logsSub.Err():
+		case <-es.rmLogsSub.Err():
 			return
-		case <-chainEvSub.Err():
+		case <-es.chainSub.Err():
 			return
 		}
 	}

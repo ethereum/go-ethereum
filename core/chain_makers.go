@@ -256,11 +256,12 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
 func newCanonical(engine consensus.Engine, n int, full bool) (ethdb.Database, *BlockChain, error) {
-	// Initialize a fresh chain with only a genesis block
-	gspec := new(Genesis)
-	db, _ := ethdb.NewMemDatabase()
-	genesis := gspec.MustCommit(db)
+	var (
+		db      = ethdb.NewMemDatabase()
+		genesis = new(Genesis).MustCommit(db)
+	)
 
+	// Initialize a fresh chain with only a genesis block
 	blockchain, _ := NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{})
 	// Create and inject the requested chain
 	if n == 0 {
