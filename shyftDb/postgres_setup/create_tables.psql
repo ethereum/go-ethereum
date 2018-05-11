@@ -14,14 +14,17 @@ CREATE TABLE IF NOT EXISTS txs (
   to_addr text,
   from_addr text,
   blockhash text references blocks(hash),
+  blocknumber text,
   amount numeric,
   gasprice numeric,
   gas numeric,
+  txFee numeric,
   nonce numeric,
   data bytea
 );
 
 CREATE TABLE IF NOT EXISTS accounts (
   addr text primary key unique,
-  balance numeric
+  balance numeric,
+  txCountAccount numeric
 );

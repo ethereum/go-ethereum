@@ -38,6 +38,7 @@ type blockRes struct {
 type SAccounts struct {
 	Addr    string
 	Balance string
+	TxCountAccount string
 }
 
 type accountRes struct {
@@ -55,6 +56,7 @@ type ShyftTxEntry struct {
 	Amount    *big.Int
 	GasPrice  *big.Int
 	Gas       uint64
+	Cost	  *big.Int
 	Nonce     uint64
 	Data      []byte
 }
@@ -86,6 +88,7 @@ type SendAndReceive struct {
 	Amount    string
 	Address   string
 	Balance   string
+	TxCountAccount string
 }
 
 //WriteBlock writes to block info to sql db
@@ -112,7 +115,7 @@ func WriteBlock(sqldb *sql.DB, block *types.Block) error {
 	if block.Transactions().Len() > 0 && block.Transactions()[0].To() != nil {
 		for _, tx := range block.Transactions() {
 			//WriteMinerRewards(sqldb, block)
-			WriteTransactions(sqldb, tx, block.Header().Hash())
+			WriteTransactions(sqldb, tx, block.Header().Hash(), block.Header().Number.String())
 			WriteFromBalance(sqldb, tx)
 		}
 	}
@@ -120,13 +123,14 @@ func WriteBlock(sqldb *sql.DB, block *types.Block) error {
 }
 
 //WriteTransactions writes to sqldb
-func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash) error {
+func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash, blockNumber string) error {
 	txData := ShyftTxEntry{
 		TxHash:    tx.Hash(),
 		From:      tx.From(),
 		To:        tx.To(),
 		BlockHash: blockHash.Hex(),
 		Amount:    tx.Value(),
+		Cost:	   tx.Cost(),
 		GasPrice:  tx.GasPrice(),
 		Gas:       tx.Gas(),
 		Nonce:     tx.Nonce(),
@@ -138,22 +142,23 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 	blockHasher := txData.BlockHash
 	amount := txData.Amount.String()
 	gasPrice := txData.GasPrice.String()
+	txFee := txData.Cost.String()
 	nonce := txData.Nonce
 	gas := txData.Gas
 	data := txData.Data
 	to := txData.To
 	if (to == nil){
 		var retNonce string
-		sqlStatement := `INSERT INTO txs(txhash, from_addr, blockhash, amount, gasprice, gas, nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8)) RETURNING nonce`
-		qerr := sqldb.QueryRow(sqlStatement, txHash, from, blockHasher, amount, gasPrice, gas, nonce, data).Scan(&retNonce)
+		sqlStatement := `INSERT INTO txs(txhash, from_addr, blockhash, blockNumber, amount, gasprice, gas, txfee nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING nonce`
+		qerr := sqldb.QueryRow(sqlStatement, txHash, from, blockHasher, blockNumber, amount, gasPrice, gas, txFee, data).Scan(&retNonce)
 
 		if qerr != nil {
 			panic(qerr)
 		}
 	} else {
 		var retNonce string
-		sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, amount, gasprice, gas, nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9)) RETURNING nonce`
-		qerr := sqldb.QueryRow(sqlStatement, txHash, from, to.Hex(), blockHasher, amount, gasPrice, gas, nonce, data).Scan(&retNonce)
+		sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, txfee, nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11)) RETURNING nonce`
+		qerr := sqldb.QueryRow(sqlStatement, txHash, from, to.Hex(), blockHasher, blockNumber, amount, gasPrice, gas, txFee, nonce, data).Scan(&retNonce)
 
 		if qerr != nil {
 			panic(qerr)
@@ -165,7 +170,7 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 
 //WriteFromBalance writes senders balance to accounts db
 func WriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
-	sendAndReceiveData, balanceRec, balanceSen := WriteBalanceHelper(sqldb, tx)
+	sendAndReceiveData, balanceRec, balanceSen, accountNonceRec, accountNonceSen := WriteBalanceHelper(sqldb, tx)
 	toAddr := sendAndReceiveData.To
 	fromAddr := sendAndReceiveData.From
 	amount := sendAndReceiveData.Amount
@@ -177,19 +182,20 @@ func WriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	err := sqldb.QueryRow(sqlExistsStatement, toAddr).Scan(&response)
 	switch {
 	case err == sql.ErrNoRows:
-
-		sqlStatement := `INSERT INTO accounts(addr, balance) VALUES(($1), ($2)) RETURNING addr`
-		insertErr := sqldb.QueryRow(sqlStatement, toAddr, amount).Scan(&toAddr)
+		sqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
+		insertErr := sqldb.QueryRow(sqlStatement, toAddr, amount, accountNonceRec).Scan(&toAddr)
 		if insertErr != nil {
 			panic(insertErr)
 		}
 	case err != nil:
 		log.Fatal(err)
 	default:
-
 		var newBalanceReceiver big.Int
 		var newBalanceSender big.Int
-		updateSQLStatement := `UPDATE accounts SET balance = ($2) WHERE addr = ($1)`
+		var newAccountNonceReceiver big.Int
+		var newAccountNonceSender big.Int
+		var nonceIncrement = big.NewInt(1)
+		updateSQLStatement := `UPDATE accounts SET balance = ($2), txCountAccount = ($3) WHERE addr = ($1)`
 
 		r := new(big.Int)
 		_, err := fmt.Sscan(balanceReceiver, r)
@@ -203,15 +209,30 @@ func WriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
 			log.Println("error scanning value:", error)
 		}
 
+		accountR := new(big.Int)
+		_, er := fmt.Sscan(accountNonceRec, accountR)
+		if er != nil {
+			log.Println("error scanning value:", er)
+		}
+
+		accountS := new(big.Int)
+		_, errors := fmt.Sscan(accountNonceSen, accountS)
+		if errors != nil {
+			log.Println("error scanning value:", error)
+		}
+
 		newBalanceReceiver.Add(r, tx.Value())
 		newBalanceSender.Sub(s, tx.Value())
 
-		_, err = sqldb.Exec(updateSQLStatement, toAddr, newBalanceReceiver.String())
+		newAccountNonceReceiver.Add(accountR, nonceIncrement)
+		newAccountNonceSender.Add(accountS, nonceIncrement)
+
+		_, err = sqldb.Exec(updateSQLStatement, toAddr, newBalanceReceiver.String(), newAccountNonceReceiver.String())
 		if err != nil {
 			panic(err)
 		}
 
-		_, err = sqldb.Exec(updateSQLStatement, fromAddr, newBalanceSender.String())
+		_, err = sqldb.Exec(updateSQLStatement, fromAddr, newBalanceSender.String(), newAccountNonceSender.String())
 		if err != nil {
 			panic(err)
 		}
@@ -219,7 +240,7 @@ func WriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	return nil
 }
 
-func WriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string) {
+func WriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string, string, string) {
 	sendAndReceiveData := SendAndReceive{
 		To: tx.To().Hex(),
 		From: tx.From().Hex(),
@@ -245,7 +266,10 @@ func WriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, s
 	balanceReceiver := receiverBalance.Balance
 	balanceSender := senderBalance.Balance
 
-	return sendAndReceiveData, balanceReceiver, balanceSender
+	accountNonceReceiver := receiverBalance.TxCountAccount
+	accountNonceSender := senderBalance.TxCountAccount
+
+	return sendAndReceiveData, balanceReceiver, balanceSender, accountNonceReceiver, accountNonceSender
 }
 
 //func WriteMinerRewards(sqldb *sql.DB, block *types.Block) {
@@ -523,12 +547,16 @@ func GetAccount(sqldb *sql.DB, address string) string {
 	row := sqldb.QueryRow(sqlStatement, address)
 	var addr string
 	var balance string
-
-	row.Scan(&addr, &balance)
+	var txCountAccount string
+	row.Scan(
+		&addr,
+		&balance,
+		&txCountAccount)
 
 	account := SAccounts{
 		Addr:    addr,
 		Balance: balance,
+		TxCountAccount: txCountAccount,
 	}
 	json, _ := json.Marshal(account)
 	return string(json)
@@ -538,10 +566,12 @@ func GetAccount(sqldb *sql.DB, address string) string {
 func GetAllAccounts(sqldb *sql.DB) string {
 	var array accountRes
 	var accountsArr string
+	var txCountAccount string
 	accs, err := sqldb.Query(`
 		SELECT
 			addr,
-			balance
+			balance,
+			txCountAccount
 		FROM accounts`)
 	if err != nil {
 		fmt.Println(err)
@@ -555,11 +585,13 @@ func GetAllAccounts(sqldb *sql.DB) string {
 		err = accs.Scan(
 			&addr,
 			&balance,
+			&txCountAccount,
 		)
 
 		array.AllAccounts = append(array.AllAccounts, SAccounts{
 			Addr:    addr,
 			Balance: balance,
+			TxCountAccount: txCountAccount,
 		})
 
 		accounts, _ := json.Marshal(array.AllAccounts)
