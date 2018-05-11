@@ -142,7 +142,7 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 	gas := txData.Gas
 	data := txData.Data
 	to := txData.To
-	if to == nil{
+	if (to == nil){
 		var retNonce string
 		sqlStatement := `INSERT INTO txs(txhash, from_addr, blockhash, amount, gasprice, gas, nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8)) RETURNING nonce`
 		qerr := sqldb.QueryRow(sqlStatement, txHash, from, blockHasher, amount, gasPrice, gas, nonce, data).Scan(&retNonce)
@@ -329,7 +329,6 @@ func WriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, s
 func GetAllBlocks(sqldb *sql.DB) string {
 	var arr blockRes
 	var blockArr string
-
 	rows, err := sqldb.Query(`
 		SELECT
 			number,
@@ -340,7 +339,6 @@ func GetAllBlocks(sqldb *sql.DB) string {
 			txcount,
 			unclecount,
 			age
-			
 		FROM blocks`)
 	if err != nil {
 		fmt.Println("err")
@@ -400,7 +398,11 @@ func GetBlock(sqldb *sql.DB) string {
 	var uncleCount string
 	var age string
 
-	row.Scan(&num, &hash, &coinbase, &gasUsed,
+	row.Scan(
+		&num,
+		&hash,
+		&coinbase,
+		&gasUsed,
 		&gasLimit,
 		&txCount,
 		&uncleCount,
