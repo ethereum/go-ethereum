@@ -996,16 +996,14 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 					for i := 0; i < len(offenders)-1; i++ {
 						list := pool.pending[offenders[i]]
 						for _, tx := range list.Cap(list.Len() - 1) {
-							// Drop the transaction from the global pools too
-							hash := tx.Hash()
-							pool.all.Remove(hash)
-							pool.priced.Removed()
+							// Re-enqueue transaction to future queue.
+							pool.enqueueTx(tx.Hash(), tx)
 
 							// Update the account nonce to the dropped transaction
 							if nonce := tx.Nonce(); pool.pendingState.GetNonce(offenders[i]) > nonce {
 								pool.pendingState.SetNonce(offenders[i], nonce)
 							}
-							log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
+							log.Trace("Re-enqueue fairness-exceeding pending transaction", "hash", tx.Hash())
 						}
 						pending--
 					}
@@ -1018,16 +1016,14 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 				for _, addr := range offenders {
 					list := pool.pending[addr]
 					for _, tx := range list.Cap(list.Len() - 1) {
-						// Drop the transaction from the global pools too
-						hash := tx.Hash()
-						pool.all.Remove(hash)
-						pool.priced.Removed()
+						// Re-enqueue transaction to future queue.
+						pool.enqueueTx(tx.Hash(), tx)
 
 						// Update the account nonce to the dropped transaction
 						if nonce := tx.Nonce(); pool.pendingState.GetNonce(addr) > nonce {
 							pool.pendingState.SetNonce(addr, nonce)
 						}
-						log.Trace("Removed fairness-exceeding pending transaction", "hash", hash)
+						log.Trace("Re-enqueue fairness-exceeding pending transaction", "hash", tx.Hash())
 					}
 					pending--
 				}
