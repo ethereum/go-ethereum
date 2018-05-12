@@ -1050,6 +1050,13 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	checkExclusive(ctx, LightServFlag, LightModeFlag)
 	checkExclusive(ctx, LightServFlag, SyncModeFlag, "light")
 
+	if ctx.GlobalIsSet(EllaismFlag.Name) {
+		log.Warn("-------------------------------------------------------------------")
+		log.Warn("multi-geth Ellaism support is deprecated, please upgrade to Parity")
+		log.Warn("(https://github.com/paritytech/parity) before block 2,000,000.")
+		log.Warn("-------------------------------------------------------------------")
+	}
+
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	setEtherbase(ctx, ks, cfg)
 	setGPO(ctx, &cfg.GPO)
