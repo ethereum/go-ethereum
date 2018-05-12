@@ -303,7 +303,7 @@ func (it *nodeIterator) push(state *nodeIteratorState, parentIndex *int, path []
 	it.path = path
 	it.stack = append(it.stack, state)
 	if parentIndex != nil {
-		*parentIndex += 1
+		*parentIndex++
 	}
 }
 
@@ -380,7 +380,7 @@ func (it *differenceIterator) Next(bool) bool {
 	if !it.b.Next(true) {
 		return false
 	}
-	it.count += 1
+	it.count++
 
 	if it.eof {
 		// a has reached eof, so we just return all elements from b
@@ -395,7 +395,7 @@ func (it *differenceIterator) Next(bool) bool {
 				it.eof = true
 				return true
 			}
-			it.count += 1
+			it.count++
 		case 1:
 			// b is before a
 			return true
@@ -405,12 +405,12 @@ func (it *differenceIterator) Next(bool) bool {
 			if !it.b.Next(hasHash) {
 				return false
 			}
-			it.count += 1
+			it.count++
 			if !it.a.Next(hasHash) {
 				it.eof = true
 				return true
 			}
-			it.count += 1
+			it.count++
 		}
 	}
 }
@@ -504,14 +504,14 @@ func (it *unionIterator) Next(descend bool) bool {
 		skipped := heap.Pop(it.items).(NodeIterator)
 		// Skip the whole subtree if the nodes have hashes; otherwise just skip this node
 		if skipped.Next(skipped.Hash() == common.Hash{}) {
-			it.count += 1
+			it.count++
 			// If there are more elements, push the iterator back on the heap
 			heap.Push(it.items, skipped)
 		}
 	}
 
 	if least.Next(descend) {
-		it.count += 1
+		it.count++
 		heap.Push(it.items, least)
 	}
 
