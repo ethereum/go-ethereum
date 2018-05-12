@@ -28,6 +28,7 @@ import (
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -324,15 +325,35 @@ func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_getlogs
 func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*types.Log, error) {
-	// Convert the RPC block numbers into internal representations
-	if crit.FromBlock == nil {
-		crit.FromBlock = big.NewInt(rpc.LatestBlockNumber.Int64())
+	var (
+		fromBlock int64
+		toBlock   int64
+	)
+
+	if crit.BlockHash != nil {
+		// look up block number from block hash
+		if block := rawdb.ReadHeaderNumber(api.chainDb, *crit.BlockHash); block != nil {
+			// verify block is part of canonical chain
+			if canonical := rawdb.ReadCanonicalHash(api.chainDb, *block); canonical != *crit.BlockHash {
+				return nil, fmt.Errorf("Block with hash %s was removed from canonical chain", crit.BlockHash.Hex())
+			}
+			fromBlock = int64(*block)
+			toBlock = fromBlock
+		} else {
+			return nil, fmt.Errorf("Block with hash %s was not found", crit.BlockHash.Hex())
+		}
+	} else {
+		// Convert the RPC block numbers into internal representations
+		if crit.FromBlock == nil {
+			fromBlock = int64(rpc.LatestBlockNumber)
+		}
+		if crit.ToBlock == nil {
+			toBlock = int64(rpc.LatestBlockNumber)
+		}
 	}
-	if crit.ToBlock == nil {
-		crit.ToBlock = big.NewInt(rpc.LatestBlockNumber.Int64())
-	}
+
 	// Create and run the filter to get all the logs
-	filter := New(api.backend, crit.FromBlock.Int64(), crit.ToBlock.Int64(), crit.Addresses, crit.Topics)
+	filter := New(api.backend, fromBlock, toBlock, crit.Addresses, crit.Topics)
 
 	logs, err := filter.Logs(ctx)
 	if err != nil {
@@ -444,7 +465,8 @@ func returnLogs(logs []*types.Log) []*types.Log {
 // UnmarshalJSON sets *args fields with given data.
 func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	type input struct {
-		From      *rpc.BlockNumber `json:"fromBlock"`
+		BlockHash *common.Hash     `json:"blockHash"`
+		FromBlock *rpc.BlockNumber `json:"fromBlock"`
 		ToBlock   *rpc.BlockNumber `json:"toBlock"`
 		Addresses interface{}      `json:"address"`
 		Topics    []interface{}    `json:"topics"`
@@ -455,12 +477,20 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	if raw.From != nil {
-		args.FromBlock = big.NewInt(raw.From.Int64())
-	}
+	if raw.BlockHash != nil {
+		if raw.FromBlock != nil || raw.ToBlock != nil {
+			// BlockHash is mutually exclusive with FromBlock/ToBlock criteria
+			return fmt.Errorf("cannot specify both BlockHash and FromBlock/ToBlock, choose one or the other")
+		}
+		args.BlockHash = raw.BlockHash
+	} else {
+		if raw.FromBlock != nil {
+			args.FromBlock = big.NewInt(raw.FromBlock.Int64())
+		}
 
-	if raw.ToBlock != nil {
-		args.ToBlock = big.NewInt(raw.ToBlock.Int64())
+		if raw.ToBlock != nil {
+			args.ToBlock = big.NewInt(raw.ToBlock.Int64())
+		}
 	}
 
 	args.Addresses = []common.Address{}
