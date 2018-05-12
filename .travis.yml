@@ -24,7 +24,7 @@ matrix:
         file_glob: true
         draft: true
         on:
-          repo: ellaism/multi-geth
+          repo: ethoxy/multi-geth
           tags: true
         skip_cleanup: true
         tag_name: "$TRAVIS_TAG"
@@ -47,7 +47,7 @@ matrix:
         file_glob: true
         draft: true
         on:
-          repo: ellaism/multi-geth
+          repo: ethoxy/multi-geth
           tags: true
         skip_cleanup: true
         tag_name: "$TRAVIS_TAG"
