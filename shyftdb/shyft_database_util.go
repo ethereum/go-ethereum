@@ -513,20 +513,9 @@ func GetAllTransactions(sqldb *sql.DB) string {
 }
 
 //GetTransaction fn returns single tx
-func GetTransaction(sqldb *sql.DB) string {
-	sqlStatement := `SELECT
-		txhash,
-			to_addr,
-			from_addr,
-			blockhash,
-			blocknumber,
-			amount,
-			gasprice,
-			gas,
-			txfee,
-			nonce
-	FROM txs WHERE nonce=$1;`
-	row := sqldb.QueryRow(sqlStatement, 1)
+func GetTransaction(sqldb *sql.DB, TxHash string) string {
+	sqlStatement := `SELECT * FROM txs WHERE txhash=$1;`
+	row := sqldb.QueryRow(sqlStatement, TxHash)
 		var txhash string
 		var to_addr string
 		var from_addr string
@@ -546,7 +535,6 @@ func GetTransaction(sqldb *sql.DB) string {
 		&gas,
 		&txfee,
 		&nonce)
-
 	tx := ShyftTxEntryPretty{
 		TxHash:    txhash,
 		To:        to_addr,

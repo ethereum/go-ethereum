@@ -14,13 +14,17 @@ import (
 
 // GetTransaction gets txs
 func GetTransaction(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	txHash := vars["txHash"]
+	fmt.Println(txHash)
 	connStr := "user=postgres dbname=shyftdb sslmode=disable"
 	blockExplorerDb, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return
 	}
 
-	getTxResponse := shyftdb.GetTransaction(blockExplorerDb)
+	getTxResponse := shyftdb.GetTransaction(blockExplorerDb, txHash)
+	fmt.Println(getTxResponse)
 
 	if err != nil {
 		http.Error(w, err.Error(), 500)

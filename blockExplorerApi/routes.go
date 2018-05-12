@@ -48,7 +48,7 @@ var routes = Routes{
 	Route{
 		"GetTransaction",
 		"GET",
-		"/api/get_transaction",
+		"/api/get_transaction/{txHash}",
 		GetTransaction,
 	},
 	Route{
