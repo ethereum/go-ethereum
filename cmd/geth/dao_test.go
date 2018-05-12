@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -131,8 +131,8 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 	if genesis != "" {
 		genesisHash = daoGenesisHash
 	}
-	config, err := core.GetChainConfig(db, genesisHash)
-	if err != nil {
+	config := rawdb.ReadChainConfig(db, genesisHash)
+	if config == nil {
 		t.Errorf("test %d: failed to retrieve chain config: %v", test, err)
 		return // we want to return here, the other checks can't make it past this point (nil panic).
 	}
