@@ -177,8 +177,8 @@ func mapAbiToStructFields(args Arguments, value reflect.Value) (map[string]strin
 			return nil, fmt.Errorf("abi: purely underscored output cannot unpack to struct")
 		}
 
-		// this abi has already been paired, skip... unless exists another not still assigned
-		// struct field with the same field name, in the case raise an error:
+		// this abi has already been paired, skip it... unless there exists another, yet unassigned
+		// struct field with the same field name. If so, raise an error:
 		//    abi: [ { "name": "value" } ]
 		//    struct { Value  *big.Int , Value1 *big.Int `abi:"value"`}
 		if abi2struct[abiFieldName] != "" {
