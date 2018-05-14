@@ -23,18 +23,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-/*
- * This is a test memory database. Do not use for any production it does not get persisted
- */
-
-// MemDatabase imitates the key-value store levelDB for the test memory database.
+// MemDatabase is an in-memory key-value store.
 type MemDatabase struct {
 	db   map[string][]byte
 	lock sync.RWMutex
 }
 
 // NewMemDatabase inits a mock levelDB instance with a map.
-func NewMemDatabase() (*MemDatabase, error) {
+func NewMemDatabase() *MemDatabase {
 	return &MemDatabase{
 		db: make(map[string][]byte),
 	}
@@ -76,7 +72,7 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	return nil, errors.New("not found")
 }
 
-// Keys returns a list of all keys in db.db.
+// Keys returns a list of all the keys present in the database.
 func (db *MemDatabase) Keys() [][]byte {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
@@ -88,7 +84,7 @@ func (db *MemDatabase) Keys() [][]byte {
 	return keys
 }
 
-// Delete deletes the key from db.db.
+// Delete removes the specified entry from the database.
 func (db *MemDatabase) Delete(key []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -97,15 +93,16 @@ func (db *MemDatabase) Delete(key []byte) error {
 	return nil
 }
 
-// Close performs no operation but imitates invocation of levelDB.Close().
+// Close implements the closer interface. For the memory database, this is a noop.
 func (db *MemDatabase) Close() {}
 
-// NewBatch sets memBatch.db equal to the receiver.
+// NewBatch creates a memory buffer to group together database writes and flush
+// them out in one go. Batches are not atomic, just an performance optimization.
 func (db *MemDatabase) NewBatch() Batch {
 	return &memBatch{db: db}
 }
 
-// Len returns the number of keys in db.db.
+// Len returns the number of entries in the database.
 func (db *MemDatabase) Len() int { return len(db.db) }
 
 type kv struct{ k, v []byte }
