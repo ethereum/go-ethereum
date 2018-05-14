@@ -16,8 +16,7 @@
 
 package ethdb
 
-// IdealBatchSize is the amount of data vode using batches should try to add to the batch.
-// The value was determined empirically.
+// IdealBatchSize is the amount of data batches should accumulate before flushing.
 const IdealBatchSize = 100 * 1024
 
 // Putter wraps the database write operation supported by both batches and regular databases.
