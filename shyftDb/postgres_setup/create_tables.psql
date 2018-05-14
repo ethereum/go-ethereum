@@ -28,3 +28,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   balance numeric,
   txCountAccount numeric
 );
+
+CREATE TABLE IF NOT EXISTS contracts (
+  txHash text
+);

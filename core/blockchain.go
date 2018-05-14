@@ -908,7 +908,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		return NonStatTy, err
 	}
 	// @NOTE:SHYFT - Write block data for block explorer
-	if err := shyftdb.WriteBlock(bc.blockExplorerDb, block); err != nil {
+	if err := shyftdb.WriteBlock(bc.blockExplorerDb, block, receipts); err != nil {
 		return NonStatTy, err
 	}
 

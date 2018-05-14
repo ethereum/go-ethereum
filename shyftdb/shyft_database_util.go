@@ -9,7 +9,6 @@ import (
 	"time"
 	"strconv"
 	"database/sql"
-
 	"log"
 
 	_ "github.com/lib/pq"
@@ -94,13 +93,46 @@ type SendAndReceive struct {
 }
 
 //WriteBlock writes to block info to sql db
-func WriteBlock(sqldb *sql.DB, block *types.Block) error {
+	func WriteBlock(sqldb *sql.DB, block *types.Block, receipts []*types.Receipt) error {
+		//Need to create field in postgres db isContract : True || False
+		//Need to fix nonce numeric issue (attempt to reproduce and record)
+		//Need to update tx To Field where null with Contract Address
+		//Need to update account table with that Contract Address
+		//Need to update AccountNonce and Balance of Tx To field || Contract Address
+
 	coinbase := block.Header().Coinbase.String()
 	number := block.Header().Number.String()
 	gasUsed := block.Header().GasUsed
 	gasLimit := block.Header().GasLimit
 	txCount := block.Transactions().Len()
 	uncleCount := len(block.Uncles())
+
+		// Convert the receipts into their storage form and serialize them
+		storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
+		for i, receipt := range receipts {
+			storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
+			var txHashFromReciept = (*types.ReceiptForStorage)(receipt).TxHash
+			var statusFromReciept = (*types.ReceiptForStorage)(receipt).Status
+			var contractAddressFromReciept = (*types.ReceiptForStorage)(receipt).ContractAddress
+			if statusFromReciept == 1 {
+				fmt.Println("THIS IS statusFromReciept", "SUCCESS", statusFromReciept)
+			}
+			if statusFromReciept == 0 {
+				fmt.Println("THIS IS statusFromReciept", "FAIL", statusFromReciept)
+			}
+
+			if block.Transactions()[0].To() == nil {
+				updateSQLStatement := `UPDATE txs SET to_addr = ($2) WHERE txHash = ($1)`
+				_, error := sqldb.Exec(updateSQLStatement, txHashFromReciept.String(), contractAddressFromReciept.String())
+				if error != nil {
+					panic(error)
+				}
+			}
+
+
+			fmt.Println("THIS IS txHashFromReciept", txHashFromReciept.String())
+			fmt.Println("THIS IS contractAddressFromReciept", contractAddressFromReciept.String())
+		}
 
 	i, err := strconv.ParseInt(block.Time().String(), 10, 64)
 	if err != nil {
@@ -114,11 +146,17 @@ func WriteBlock(sqldb *sql.DB, block *types.Block) error {
 		panic(qerr)
 	}
 
-	if block.Transactions().Len() > 0 && block.Transactions()[0].To() != nil {
+	if block.Transactions().Len() > 0 {
 		for _, tx := range block.Transactions() {
 			//WriteMinerRewards(sqldb, block)
 			WriteTransactions(sqldb, tx, block.Header().Hash(), block.Header().Number.String())
-			WriteFromBalance(sqldb, tx)
+			if block.Transactions()[0].To() != nil {
+				WriteFromBalance(sqldb, tx)
+			}
+			if block.Transactions()[0].To() == nil {
+				WriteContractBalance(sqldb, tx)
+				WriteContractsTxHashReferences(sqldb, tx)
+			}
 		}
 	}
 	return nil
@@ -151,8 +189,8 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 	to := txData.To
 	if (to == nil){
 		var retNonce string
-		sqlStatement := `INSERT INTO txs(txhash, from_addr, blockhash, blockNumber, amount, gasprice, gas, txfee nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING nonce`
-		qerr := sqldb.QueryRow(sqlStatement, txHash, from, blockHasher, blockNumber, amount, gasPrice, gas, txFee, data).Scan(&retNonce)
+		sqlStatement := `INSERT INTO txs(txhash, from_addr, blockhash, blockNumber, amount, gasprice, gas, txfee, nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING nonce`
+		qerr := sqldb.QueryRow(sqlStatement, txHash, from, blockHasher, blockNumber, amount, gasPrice, gas, txFee, nonce, data).Scan(&retNonce)
 
 		if qerr != nil {
 			panic(qerr)
@@ -170,8 +208,94 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 	return nil
 }
 
+func WriteContractsTxHashReferences(sqldb *sql.DB, tx *types.Transaction) error {
+	txHash := tx.Hash().Hex()
+
+	sqlStatement := `INSERT INTO contracts(txHash) VALUES(($1)) RETURNING txHash`
+	insertErr := sqldb.QueryRow(sqlStatement, txHash).Scan(&txHash)
+	if insertErr != nil {
+		panic(insertErr)
+	}
+	return nil
+}
+
+func WriteContractBalance(sqldb *sql.DB, tx *types.Transaction) error {
+	sendAndReceiveData,balanceSen,accountNonceSen := WriteContractBalanceHelper(sqldb, tx)
+	fromAddr := sendAndReceiveData.From
+	amount := sendAndReceiveData.Amount
+	balanceSender := balanceSen
+
+	var response string
+	sqlExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
+	err := sqldb.QueryRow(sqlExistsStatement, fromAddr).Scan(&response)
+	switch {
+	case err == sql.ErrNoRows:
+		fmt.Println("NO ROWS RAN")
+		//i, err := strconv.Atoi(accountNonceSen)
+		//if err !=  nil {
+		//	fmt.Println(err)
+		//}
+		//fmt.Println("accountnonce", i)
+		//fmt.Println(reflect.TypeOf(i))
+		sqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
+		insertErr := sqldb.QueryRow(sqlStatement, fromAddr, amount, accountNonceSen).Scan(&fromAddr)
+		if insertErr != nil {
+			panic(insertErr)
+		}
+	case err != nil:
+		log.Fatal(err)
+	default:
+		var newBalanceSender big.Int
+		var newAccountNonceSender big.Int
+		var nonceIncrement = big.NewInt(1)
+		updateSQLStatement := `UPDATE accounts SET balance = ($2), txCountAccount = ($3) WHERE addr = ($1)`
+
+		s := new(big.Int)
+		_, error := fmt.Sscan(balanceSender, s)
+		if error != nil {
+			log.Println("error scanning value:", error)
+		}
+
+		accountS := new(big.Int)
+		_, errors := fmt.Sscan(accountNonceSen, accountS)
+		if errors != nil {
+			log.Println("error scanning value:", error)
+		}
+
+		newBalanceSender.Sub(s, tx.Value())
+		newAccountNonceSender.Add(accountS, nonceIncrement)
+
+		_, err = sqldb.Exec(updateSQLStatement, fromAddr, newBalanceSender.String(), newAccountNonceSender.String())
+		if err != nil {
+			panic(err)
+		}
+	}
+	return nil
+}
+
+func WriteContractBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, string, string) {
+	sendAndReceiveData := SendAndReceive{
+		From: tx.From().Hex(),
+		Amount: tx.Value().String(),
+	}
+
+	fromAddr := sendAndReceiveData.From
+	getAccountBalanceSender:= GetAccount(sqldb, fromAddr)
+
+	var senderBalance SendAndReceive
+	if err := json.Unmarshal([]byte(getAccountBalanceSender), &senderBalance); err != nil {
+		log.Fatal(err)
+	}
+	balanceSender := senderBalance.Balance
+	accountNonceSender := senderBalance.TxCountAccount
+
+	return sendAndReceiveData, balanceSender, accountNonceSender
+}
+
 //WriteFromBalance writes senders balance to accounts db
 func WriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
+	//IF to address is nil (which means its contract creation)
+	//Need to create a condition (flag) check and then change how the nonce increment works
 	sendAndReceiveData, balanceRec, balanceSen, accountNonceRec, accountNonceSen := WriteBalanceHelper(sqldb, tx)
 	toAddr := sendAndReceiveData.To
 	fromAddr := sendAndReceiveData.From
@@ -184,6 +308,13 @@ func WriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	err := sqldb.QueryRow(sqlExistsStatement, toAddr).Scan(&response)
 	switch {
 	case err == sql.ErrNoRows:
+		fmt.Println("NO ROWS RAN")
+		//i, err := strconv.Atoi(accountNonceRec)
+		//if err !=  nil {
+		//	fmt.Println(err)
+		//}
+		//fmt.Println("accountnonce", i)
+		//fmt.Println(reflect.TypeOf(i))
 		sqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
 		insertErr := sqldb.QueryRow(sqlStatement, toAddr, amount, accountNonceRec).Scan(&toAddr)
 		if insertErr != nil {
