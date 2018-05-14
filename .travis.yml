@@ -126,7 +126,7 @@ matrix:
 
     # This builder does the Android Maven and Azure uploads
     - os: linux
-      dist: precise # Needed for the android tools
+      dist: trusty
       addons:
         apt:
           packages:
