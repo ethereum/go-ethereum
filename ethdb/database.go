@@ -154,7 +154,7 @@ func (db *LDBDatabase) Close() {
 	}
 }
 
-// LDB returns the memory address for leveldb.DB.
+// LDB returns the internal leveldb.DB instance.
 func (db *LDBDatabase) LDB() *leveldb.DB {
 	return db.db
 }
@@ -361,7 +361,8 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 	}
 }
 
-// NewBatch populates the ldbBatch for read and writes to the db.
+// NewBatch creates a memory buffer to group together database writes and flush
+// them out in one go. Batches are not atomic, just an performance optimization.
 func (db *LDBDatabase) NewBatch() Batch {
 	return &ldbBatch{db: db.db, b: new(leveldb.Batch)}
 }
