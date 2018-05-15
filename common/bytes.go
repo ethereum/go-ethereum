@@ -19,17 +19,20 @@ package common
 
 import "encoding/hex"
 
-// ToHex returns string representation of b and either prepends '0x' or initializes value of '0'.
+// ToHex returns the hex representation of b, prefixed with '0x'.
+// For empty slices, the return value is "0x0".
+//
+// Deprecated: use hexutil.Encode instead.
 func ToHex(b []byte) string {
 	hex := Bytes2Hex(b)
-	// Prefer output of "0x0" instead of "0x"
 	if len(hex) == 0 {
 		hex = "0"
 	}
 	return "0x" + hex
 }
 
-//FromHex returns bytes of s after removing prefix, or prepends 0 if s has odd length.
+// FromHex returns the bytes represented by the hexadecimal string s.
+// s may be prefixed with "0x".
 func FromHex(s string) []byte {
 	if len(s) > 1 {
 		if s[0:2] == "0x" || s[0:2] == "0X" {
@@ -42,7 +45,7 @@ func FromHex(s string) []byte {
 	return Hex2Bytes(s)
 }
 
-// CopyBytes returns an exact copy of the provided bytes
+// CopyBytes returns an exact copy of the provided bytes.
 func CopyBytes(b []byte) (copiedBytes []byte) {
 	if b == nil {
 		return nil
@@ -76,7 +79,7 @@ func isHex(str string) bool {
 	return true
 }
 
-//Bytes2Hex returns the hexadecimal encoding of d.
+// Bytes2Hex returns the hexadecimal encoding of d.
 func Bytes2Hex(d []byte) string {
 	return hex.EncodeToString(d)
 }
@@ -84,7 +87,6 @@ func Bytes2Hex(d []byte) string {
 // Hex2Bytes returns the bytes represented by the hexadecimal string str.
 func Hex2Bytes(str string) []byte {
 	h, _ := hex.DecodeString(str)
-
 	return h
 }
 
@@ -102,7 +104,7 @@ func Hex2BytesFixed(str string, flen int) []byte {
 	return hh
 }
 
-// RightPadBytes copies slice into a byte slice of length l.
+// RightPadBytes zero-pads slice to the right up to length l.
 func RightPadBytes(slice []byte, l int) []byte {
 	if l <= len(slice) {
 		return slice
@@ -114,7 +116,7 @@ func RightPadBytes(slice []byte, l int) []byte {
 	return padded
 }
 
-// LeftPadBytes copies via inverted index slice into a byte slice of length l.
+// LeftPadBytes zero-pads slice to the left up to length l.
 func LeftPadBytes(slice []byte, l int) []byte {
 	if l <= len(slice) {
 		return slice
