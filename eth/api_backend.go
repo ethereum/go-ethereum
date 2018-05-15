@@ -18,11 +18,13 @@ package eth
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -33,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -53,7 +56,28 @@ func (b *EthAPIBackend) CurrentBlock() *types.Block {
 
 func (b *EthAPIBackend) SetHead(number uint64) {
 	b.eth.protocolManager.downloader.Cancel()
+
+	// Note: Suddenly changing the state of the blockchain can break other parts
+	// of the codebase that are holding on to some state, in some cases causing
+	// crashes. In order to prevent that, we need to stop and reset the miner,
+	// txpool, and consensus engine.
+	wasMining := b.eth.miner.Mining()
+	if wasMining {
+		b.eth.miner.Stop()
+	}
+	b.eth.txPool.Stop()
 	b.eth.blockchain.SetHead(number)
+	b.eth.txPool = core.NewTxPool(b.eth.config.TxPool, b.eth.chainConfig, b.eth.blockchain)
+	if b.eth.chainConfig.Clique != nil {
+		b.eth.engine = clique.New(b.eth.chainConfig.Clique, b.eth.chainDb)
+	}
+	b.eth.miner = miner.New(b.eth, b.eth.chainConfig, b.eth.EventMux(), b.eth.engine)
+
+	if wasMining {
+		if err := b.eth.StartMining(true); err != nil {
+			panic(fmt.Errorf("could not start miner: %s", err.Error()))
+		}
+	}
 }
 
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
