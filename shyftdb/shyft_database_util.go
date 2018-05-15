@@ -106,6 +106,11 @@ type SendAndReceive struct {
 	gasLimit := block.Header().GasLimit
 	txCount := block.Transactions().Len()
 	uncleCount := len(block.Uncles())
+	parentHash := block.ParentHash().String()
+	uncleHash := block.UncleHash().String()
+	blockDifficulty := block.Difficulty().String()
+	blockSize := block.Size().String()
+	blockNonce := block.Nonce()
 
 		// Convert the receipts into their storage form and serialize them
 		storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
@@ -140,8 +145,8 @@ type SendAndReceive struct {
 	}
 	age := time.Unix(i, 0)
 
-	sqlStatement := `INSERT INTO blocks(hash, coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8)) RETURNING number`
-	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age).Scan(&number)
+	sqlStatement := `INSERT INTO blocks(hash, coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age, parentHash, uncleHash, difficulty, size, nonce) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12),($13)) RETURNING number`
+	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age, parentHash, uncleHash, blockDifficulty, blockSize, blockNonce).Scan(&number)
 	if qerr != nil {
 		panic(qerr)
 	}
