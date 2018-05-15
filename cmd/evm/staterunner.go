@@ -38,6 +38,8 @@ var stateTestCommand = cli.Command{
 	ArgsUsage: "<file>",
 }
 
+// StatetestResult contains the execution status after running a state test, any
+// error that might have occurred and a dump of the final state if requested.
 type StatetestResult struct {
 	Name  string      `json:"name"`
 	Pass  bool        `json:"pass"`

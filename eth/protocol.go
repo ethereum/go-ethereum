@@ -34,13 +34,13 @@ const (
 	eth63 = 63
 )
 
-// Official short name of the protocol used during capability negotiation.
+// ProtocolName is the official short name of the protocol used during capability negotiation.
 var ProtocolName = "eth"
 
-// Supported versions of the eth protocol (first is primary).
+// ProtocolVersions are the upported versions of the eth protocol (first is primary).
 var ProtocolVersions = []uint{eth63, eth62}
 
-// Number of implemented message corresponding to different protocol versions.
+// ProtocolLengths are the number of implemented message corresponding to different protocol versions.
 var ProtocolLengths = []uint64{17, 8}
 
 const ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
