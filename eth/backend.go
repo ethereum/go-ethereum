@@ -343,7 +343,7 @@ func (s *Ethereum) ValidateMiner() (bool, error) {
 		return false, fmt.Errorf("Only verify miners in Clique protocol")
 	} else {
 		//check if miner's wallet is in set of validators
-		snap, err := c.GetSnapshot(chain, header)
+		snap, err := c.GetSnapshot(s.blockchain, s.blockchain.CurrentHeader())
 		if err != nil {
 			return false, fmt.Errorf("Can't verify miner: %v", err)
 		}
