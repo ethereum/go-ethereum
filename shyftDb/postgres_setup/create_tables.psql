@@ -6,6 +6,11 @@ CREATE TABLE IF NOT EXISTS blocks (
   txCount numeric,
   uncleCount numeric,
   age timestamp,
+  parentHash text,
+  uncleHash text,
+  difficulty bigint,
+  size text,
+  nonce numeric,
   number bigint
 );
 
