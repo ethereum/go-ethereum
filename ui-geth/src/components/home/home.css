@@ -1,0 +1,14 @@
+.Home{
+    margin-top: 10%;
+    text-align: center;
+    margin-left: 12%;
+    width: 75%;
+    height: 350px;
+    box-sizing: border-box;
+    align-content: center;
+    box-shadow: 0 2px 2px 0 rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.08);
+}
+
+.Transactions {
+    font-size: 1rem;
+}
