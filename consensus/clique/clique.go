@@ -367,6 +367,18 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainReader, header *type
 	return c.verifySeal(chain, header, parents)
 }
 
+func (c *Clique) GetSnapshot(chain consensus.ChainReader, header *types.Header) (*Snapshot, error) {
+	number := header.Number.Uint64()
+	if number == 0 {
+		return nil, nil
+	}
+	snap, err := c.snapshot(chain, number-1, header.ParentHash, nil)
+	if err != nil {
+		return nil, err
+	}
+	return snap, nil
+}
+
 // snapshot retrieves the authorization snapshot at a given point in time.
 func (c *Clique) snapshot(chain consensus.ChainReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
 	// Search for a snapshot in memory or on disk for checkpoints
