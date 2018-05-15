@@ -24,6 +24,11 @@ type SBlock struct {
 	TxCount  string
 	UncleCount string
 	Age        string
+	ParentHash string
+	UncleHash string
+	Difficulty string
+	Size string
+	Nonce string
 }
 
 //blockRes struct
@@ -558,6 +563,11 @@ func GetBlock(sqldb *sql.DB, blockNumber string) string {
 	var txCount string
 	var uncleCount string
 	var age string
+	var parentHash string
+	var uncleHash string
+	var difficulty string
+	var size string
+	var nonce string
 	var num string
 	row.Scan(
 		&hash,
@@ -567,6 +577,11 @@ func GetBlock(sqldb *sql.DB, blockNumber string) string {
 		&txCount,
 		&uncleCount,
 		&age,
+		&parentHash,
+		&uncleHash,
+		&difficulty,
+		&size,
+		&nonce,
 		&num,)
 
 	block := SBlock{
@@ -577,6 +592,11 @@ func GetBlock(sqldb *sql.DB, blockNumber string) string {
 		TxCount: txCount,
 		UncleCount: uncleCount,
 		Age: age,
+		ParentHash:parentHash,
+		UncleHash:uncleHash,
+		Difficulty:difficulty,
+		Size: size,
+		Nonce:nonce,
 		Number:   num,
 	}
 	json, _ := json.Marshal(block)
@@ -598,7 +618,8 @@ func GetAllTransactions(sqldb *sql.DB) string {
 			gasprice,
 			gas,
 			txfee,
-			nonce
+			nonce,
+			data
 		FROM txs`)
 	if err != nil {
 		fmt.Println("err")
@@ -615,6 +636,7 @@ func GetAllTransactions(sqldb *sql.DB) string {
 		var gas uint64
 		var txfee uint64
 		var nonce uint64
+		var data []byte
 		err = rows.Scan(
 			&txhash,
 			&to_addr,
@@ -626,6 +648,7 @@ func GetAllTransactions(sqldb *sql.DB) string {
 			&gas,
 			&txfee,
 			&nonce,
+			&data,
 		)
 
 		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
@@ -639,6 +662,7 @@ func GetAllTransactions(sqldb *sql.DB) string {
 			Gas:       gas,
 			Cost:      txfee,
 			Nonce:     nonce,
+			Data: 		data,
 		})
 
 		tx, _ := json.Marshal(arr.TxEntry)
@@ -649,9 +673,9 @@ func GetAllTransactions(sqldb *sql.DB) string {
 }
 
 //GetTransaction fn returns single tx
-func GetTransaction(sqldb *sql.DB, TxHash string) string {
+func GetTransaction(sqldb *sql.DB, txHash string) string {
 	sqlStatement := `SELECT * FROM txs WHERE txhash=$1;`
-	row := sqldb.QueryRow(sqlStatement, TxHash)
+	row := sqldb.QueryRow(sqlStatement, txHash)
 		var txhash string
 		var to_addr string
 		var from_addr string
@@ -662,7 +686,9 @@ func GetTransaction(sqldb *sql.DB, TxHash string) string {
 		var gas uint64
 		var txfee uint64
 		var nonce uint64
-	row.Scan(&txhash,
+		var data []byte
+	row.Scan(
+		&txhash,
 		&to_addr,
 		&from_addr,
 		&blockhash,
@@ -670,7 +696,8 @@ func GetTransaction(sqldb *sql.DB, TxHash string) string {
 		&gasprice,
 		&gas,
 		&txfee,
-		&nonce)
+		&nonce,
+		&data)
 	tx := ShyftTxEntryPretty{
 		TxHash:    txhash,
 		To:        to_addr,
@@ -682,6 +709,7 @@ func GetTransaction(sqldb *sql.DB, TxHash string) string {
 		Gas:       gas,
 		Cost:      txfee,
 		Nonce:     nonce,
+		Data:	   data,
 	}
 	json, _ := json.Marshal(tx)
 

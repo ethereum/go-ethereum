@@ -13,9 +13,7 @@ class BlocksTable extends Component {
 
     async componentDidMount() {
         try {
-            const response = await axios.get(
-                "http://localhost:8080/api/get_all_blocks"
-            )
+            const response = await axios.get("http://localhost:8080/api/get_all_blocks")
             await this.setState({data: response.data});
         } catch (err) {
             console.log(err);
@@ -35,6 +33,7 @@ class BlocksTable extends Component {
                 GasLimit={data.GasLimit}
                 UncleCount={data.UncleCount}
                 TxCount={data.TxCount}
+                detailBlockHandler={this.props.detailBlockHandler}
             />
         })
 

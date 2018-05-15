@@ -1,13 +1,16 @@
 import React, { Component } from 'react';
 import classes from './table.css';
 import arrow from '../../assets/arrow_right.png';
+import { Link } from 'react-router-dom'
 
 const TransactionTable = (props) => {
-    console.log(props)
     return (
           <tbody>
             <tr>
-                <td className={classes.addressTag}>{props.txHash}</td>
+                <td className={classes.addressTag}>
+                    <Link to="/transaction/details" onClick={() => props.detailTransactionHandler(props.txHash)}>
+                        {props.txHash}</Link>
+                </td>
                 <td>{props.blockNumber}</td>
                 <td>30 secs ago</td>
                 <td className={classes.fromTag}>{props.from}</td>

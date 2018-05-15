@@ -1,12 +1,15 @@
 import React, { Component } from 'react';
 import classes from './table.css';
 import arrow from '../../assets/arrow_right.png';
+import { Link } from 'react-router-dom'
 
 const BlockTable = (props) => {
     return (
           <tbody key={props.key}>
             <tr>
-                <td>{props.Number}</td>
+                <td><Link to="/blocks/detail" onClick={() => props.detailBlockHandler(props.Number)}>
+                    {props.Number}
+                </Link></td>
                 <td className={classes.addressTag}>{props.Hash}</td>
                 <td>{props.Age}</td>
                 <td>{props.TxCount}</td>

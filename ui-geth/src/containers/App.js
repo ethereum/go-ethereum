@@ -1,22 +1,45 @@
 import React, { Component } from "react";
+import axios from 'axios';
 import Nav from "../components/nav/nav";
-import axios from "axios";
-import BlockInfoTable from "../components/table/transactions/transactionTable";
 import { BrowserRouter, Route, Link } from 'react-router-dom'
 import TransactionRow from '../components/table/transactions/transactionRow';
 import BlocksRow from '../components/table/blocks/blockRows';
-import TransactionHeader from "../components/nav/transactionHeader";
-import BlockHeader from "../components/nav/blockHeader";
+import DetailBlockHeader from '../components/table/blocks/blocksDetailsRow';
+import TransactionHeader from "../components/nav/transactionHeader/transactionHeader";
+import TransactionDetailHeader from "../components/nav/transactionHeader/transactionDetailHeader";
+import BlockDetailHeader from "../components/nav/blockHeaders/blockDetailHeader";
+import BlockHeader from "../components/nav/blockHeaders/blockHeader";
 import Home from '../components/home/home';
-import classes from "./App.css";
+import DetailTransactionTable from "../components/table/transactions/transactionDetailsRow";
 
 class App extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      data: []
+        blockDetailData: [],
+        transactionDetailData: []
     };
   }
+
+    detailBlockHandler = async(blockNumber) => {
+        try {
+            const response = await axios.get(`http://localhost:8080/api/get_block/${blockNumber}`)
+            await this.setState({ blockDetailData: response.data })
+        }
+        catch(error) {
+           console.log(error)
+        }
+    }
+
+    detailTransactionHandler = async(txHash) => {
+        try {
+            const response = await axios.get(`http://localhost:8080/api/get_transaction/${txHash}`)
+            await this.setState({ transactionDetailData: response.data })
+        }
+        catch(error) {
+            console.log(error)
+        }
+    }
 
   render() {
     return (
@@ -31,14 +54,32 @@ class App extends Component {
           <Route path="/transactions" render={({match}) =>
               <div>
                   <TransactionHeader />
-              <TransactionRow />
+                  <TransactionRow detailTransactionHandler={this.detailTransactionHandler}/>
               </div>}
           />
 
-          <Route path="/blocks" render={({match}) =>
+          <Route path="/blocks" exact render={({match}) =>
               <div>
                   <BlockHeader/>
-                  <BlocksRow />
+                  <BlocksRow detailBlockHandler={this.detailBlockHandler}/>
+              </div>}
+          />
+
+          <Route path="/transaction/details" exact render={({match}) =>
+              <div>
+                  <TransactionDetailHeader
+                    txHash={this.state.transactionDetailData.TxHash}/>
+                  <DetailTransactionTable
+                    data={this.state.transactionDetailData}/>
+              </div>}
+          />
+
+          <Route path="/blocks/detail" exact render={({match}) =>
+              <div>
+                  <BlockDetailHeader
+                      blockNumber={this.state.blockDetailData.Number}/>
+                  <DetailBlockHeader
+                      data={this.state.blockDetailData}/>
               </div>}
           />
 

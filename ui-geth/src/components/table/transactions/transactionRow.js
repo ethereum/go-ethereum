@@ -14,9 +14,7 @@ class TransactionTable extends Component {
     async componentDidMount() {
         try {
             const response = await axios.get(
-                "http://localhost:8080/api/get_all_transactions"
-            )
-            console.log(response.data)
+                "http://localhost:8080/api/get_all_transactions")
             await this.setState({data: response.data});
         } catch (err) {
             console.log(err);

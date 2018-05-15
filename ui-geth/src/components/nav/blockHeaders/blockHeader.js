@@ -1,5 +1,5 @@
 import React from 'react';
-import classes from './nav.css';
+import classes from '../nav.css';
 
 const blocksHeader = (props) => {
     return (
