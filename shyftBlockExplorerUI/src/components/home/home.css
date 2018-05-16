@@ -9,6 +9,23 @@
     box-shadow: 0 2px 2px 0 rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.08);
 }
 
+.Greeting {
+    display: block;
+}
+
 .Transactions {
+    display: inline-block;
+    font-size: 1rem;
+    margin-right: 5px;
+}
+
+.BlockButton {
+    background-color: darkorange;
+    border-color: darkorange;
+}
+
+.Blocks {
+    display: inline-block;
     font-size: 1rem;
 }
+
