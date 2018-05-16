@@ -6,6 +6,11 @@ CREATE TABLE IF NOT EXISTS blocks (
   txCount numeric,
   uncleCount numeric,
   age timestamp,
+  parentHash text,
+  uncleHash text,
+  difficulty bigint,
+  size text,
+  nonce numeric,
   number bigint
 );
 
@@ -14,14 +19,22 @@ CREATE TABLE IF NOT EXISTS txs (
   to_addr text,
   from_addr text,
   blockhash text references blocks(hash),
+  blocknumber text,
   amount numeric,
   gasprice numeric,
   gas numeric,
+  txFee numeric,
   nonce numeric,
+  isContract bool,
   data bytea
 );
 
 CREATE TABLE IF NOT EXISTS accounts (
   addr text primary key unique,
-  balance numeric
+  balance numeric,
+  txCountAccount numeric
+);
+
+CREATE TABLE IF NOT EXISTS contracts (
+  txHash text
 );

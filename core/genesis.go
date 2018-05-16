@@ -157,9 +157,9 @@ func WriteShyftGen(sqldb *sql.DB, gen *Genesis) {
 	case err == sql.ErrNoRows:
 		for k, v := range gen.Alloc {
 			addr := k.String()
-
-			sqlStatement := `INSERT INTO accounts(addr, balance) VALUES(($1), ($2)) RETURNING addr`
-			insertErr := sqldb.QueryRow(sqlStatement, addr, v.Balance.String()).Scan(&addr)
+			txCountAccount := v.Nonce +1
+			sqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
+			insertErr := sqldb.QueryRow(sqlStatement, addr, v.Balance.String(), txCountAccount).Scan(&addr)
 			if insertErr != nil {
 				panic(insertErr)
 			}

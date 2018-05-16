@@ -36,7 +36,7 @@ var routes = Routes{
 	Route{
 		"GetBlock",
 		"GET",
-		"/api/get_block",
+		"/api/get_block/{blockNumber}",
 		GetBlock,
 	},
 	Route{
@@ -48,7 +48,7 @@ var routes = Routes{
 	Route{
 		"GetTransaction",
 		"GET",
-		"/api/get_transaction",
+		"/api/get_transaction/{txHash}",
 		GetTransaction,
 	},
 	Route{
