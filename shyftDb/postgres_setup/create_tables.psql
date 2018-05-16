@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS txs (
   gas numeric,
   txFee numeric,
   nonce numeric,
+  isContract bool,
   data bytea
 );
 

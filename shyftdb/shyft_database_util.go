@@ -197,18 +197,21 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 	gas := txData.Gas
 	data := txData.Data
 	to := txData.To
+	var isContract bool
 	if (to == nil){
 		var retNonce string
-		sqlStatement := `INSERT INTO txs(txhash, from_addr, blockhash, blockNumber, amount, gasprice, gas, txfee, nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING nonce`
-		qerr := sqldb.QueryRow(sqlStatement, txHash, from, blockHasher, blockNumber, amount, gasPrice, gas, txFee, nonce, data).Scan(&retNonce)
+		isContract = true
+		sqlStatement := `INSERT INTO txs(txhash, from_addr, blockhash, blockNumber, amount, gasprice, gas, txfee, nonce, isContract, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11)) RETURNING nonce`
+		qerr := sqldb.QueryRow(sqlStatement, txHash, from, blockHasher, blockNumber, amount, gasPrice, gas, txFee, nonce, isContract, data).Scan(&retNonce)
 
 		if qerr != nil {
 			panic(qerr)
 		}
 	} else {
 		var retNonce string
-		sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, txfee, nonce, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11)) RETURNING nonce`
-		qerr := sqldb.QueryRow(sqlStatement, txHash, from, to.Hex(), blockHasher, blockNumber, amount, gasPrice, gas, txFee, nonce, data).Scan(&retNonce)
+		isContract = false
+		sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, txfee, nonce, isContract, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12)) RETURNING nonce`
+		qerr := sqldb.QueryRow(sqlStatement, txHash, from, to.Hex(), blockHasher, blockNumber, amount, gasPrice, gas, txFee, nonce, isContract, data).Scan(&retNonce)
 
 		if qerr != nil {
 			panic(qerr)
@@ -319,14 +322,14 @@ func WriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
 	switch {
 	case err == sql.ErrNoRows:
 		fmt.Println("NO ROWS RAN")
-		//i, err := strconv.Atoi(accountNonceRec)
-		//if err !=  nil {
-		//	fmt.Println(err)
-		//}
+		i, err := strconv.Atoi(accountNonceRec)
+		if err !=  nil {
+			fmt.Println(err)
+		}
 		//fmt.Println("accountnonce", i)
 		//fmt.Println(reflect.TypeOf(i))
 		sqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
-		insertErr := sqldb.QueryRow(sqlStatement, toAddr, amount, accountNonceRec).Scan(&toAddr)
+		insertErr := sqldb.QueryRow(sqlStatement, toAddr, amount, i).Scan(&toAddr)
 		if insertErr != nil {
 			panic(insertErr)
 		}
