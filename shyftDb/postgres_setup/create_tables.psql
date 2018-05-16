@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS txs (
   txFee numeric,
   nonce numeric,
   isContract bool,
+  txStatus text,
   data bytea
 );
 
