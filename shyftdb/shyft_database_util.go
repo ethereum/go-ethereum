@@ -80,6 +80,8 @@ type ShyftTxEntryPretty struct {
 	Gas       uint64
 	Cost	  uint64
 	Nonce     uint64
+	Status	  string
+	IsContract bool
 	Data      []byte
 }
 
@@ -116,33 +118,6 @@ type SendAndReceive struct {
 	blockDifficulty := block.Difficulty().String()
 	blockSize := block.Size().String()
 	blockNonce := block.Nonce()
-
-		// Convert the receipts into their storage form and serialize them
-		//storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
-		//for i, receipt := range receipts {
-		//	storageReceipts[i] = (*types.ReceiptForStorage)(receipt)
-		//	var txHashFromReciept = (*types.ReceiptForStorage)(receipt).TxHash
-		//	//var statusFromReciept = (*types.ReceiptForStorage)(receipt).Status
-		//	var contractAddressFromReciept = (*types.ReceiptForStorage)(receipt).ContractAddress
-		//	//if statusFromReciept == 1 {
-		//	//	fmt.Println("THIS IS statusFromReciept", "SUCCESS", statusFromReciept)
-		//	//}
-		//	//if statusFromReciept == 0 {
-		//	//	fmt.Println("THIS IS statusFromReciept", "FAIL", statusFromReciept)
-		//	//}
-		//
-		//	if block.Transactions()[0].To() == nil {
-		//		updateSQLStatement := `UPDATE txs SET to_addr = ($2) WHERE txHash = ($1)`
-		//		_, error := sqldb.Exec(updateSQLStatement, txHashFromReciept.String(), contractAddressFromReciept.String())
-		//		if error != nil {
-		//			panic(error)
-		//		}
-		//	}
-		//
-		//
-		//	//fmt.Println("THIS IS txHashFromReciept", txHashFromReciept.String())
-		//	//fmt.Println("THIS IS contractAddressFromReciept", contractAddressFromReciept.String())
-		//}
 
 	i, err := strconv.ParseInt(block.Time().String(), 10, 64)
 	if err != nil {
@@ -199,7 +174,7 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 	to := txData.To
 	var isContract bool
 	var statusFromReciept string
-	
+
 	if (to == nil){
 		var contractAddressFromReciept string
 		for _, receipt := range receipts {
@@ -324,8 +299,6 @@ func WriteContractBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndRe
 
 //WriteFromBalance writes senders balance to accounts db
 func WriteFromBalance(sqldb *sql.DB, tx *types.Transaction) error {
-	//IF to address is nil (which means its contract creation)
-	//Need to create a condition (flag) check and then change how the nonce increment works
 	sendAndReceiveData, balanceRec, balanceSen, accountNonceRec, accountNonceSen := WriteBalanceHelper(sqldb, tx)
 	toAddr := sendAndReceiveData.To
 	fromAddr := sendAndReceiveData.From
@@ -625,19 +598,7 @@ func GetAllTransactions(sqldb *sql.DB) string {
 	var arr txRes
 	var txx string
 	rows, err := sqldb.Query(`
-		SELECT
-			txhash,
-			to_addr,
-			from_addr,
-			blockhash,
-			blocknumber,
-			amount,
-			gasprice,
-			gas,
-			txfee,
-			nonce,
-			data
-		FROM txs`)
+		SELECT * FROM txs`)
 	if err != nil {
 		fmt.Println("err")
 	}
@@ -653,6 +614,8 @@ func GetAllTransactions(sqldb *sql.DB) string {
 		var gas uint64
 		var txfee uint64
 		var nonce uint64
+		var status string
+		var isContract bool
 		var data []byte
 		err = rows.Scan(
 			&txhash,
@@ -665,6 +628,8 @@ func GetAllTransactions(sqldb *sql.DB) string {
 			&gas,
 			&txfee,
 			&nonce,
+			&status,
+			&isContract,
 			&data,
 		)
 
@@ -679,6 +644,8 @@ func GetAllTransactions(sqldb *sql.DB) string {
 			Gas:       gas,
 			Cost:      txfee,
 			Nonce:     nonce,
+			Status:    status,
+			IsContract: isContract,
 			Data: 		data,
 		})
 
@@ -703,6 +670,8 @@ func GetTransaction(sqldb *sql.DB, txHash string) string {
 		var gas uint64
 		var txfee uint64
 		var nonce uint64
+		var status string
+		var isContract bool
 		var data []byte
 	row.Scan(
 		&txhash,
@@ -714,6 +683,8 @@ func GetTransaction(sqldb *sql.DB, txHash string) string {
 		&gas,
 		&txfee,
 		&nonce,
+		&status,
+		&isContract,
 		&data)
 	tx := ShyftTxEntryPretty{
 		TxHash:    txhash,
@@ -726,6 +697,8 @@ func GetTransaction(sqldb *sql.DB, txHash string) string {
 		Gas:       gas,
 		Cost:      txfee,
 		Nonce:     nonce,
+		Status:    status,
+		IsContract: isContract,
 		Data:	   data,
 	}
 	json, _ := json.Marshal(tx)
