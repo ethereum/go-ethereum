@@ -12,7 +12,6 @@ import (
 	"log"
 
 	_ "github.com/lib/pq"
-	"reflect"
 )
 
 //SBlock type
@@ -421,17 +420,16 @@ func WriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, s
 
 func WriteMinerRewards(sqldb *sql.DB, block *types.Block) {
 	minerAddr := block.Coinbase().String()
-	fmt.Println("\n\n\t\t", minerAddr, "\n\n")
+
 	// Calculate the total gas used in the block
-	var totalGas big.Int
+	totalGas := new(big.Int)
 	for _, tx := range block.Transactions() {
-		totalGas.Add(&totalGas, new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas())))
+		totalGas.Add(totalGas, new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas())))
 	}
 
 	//TODO: Calculate Block Reward
 	// totalReward := totalGas.Add(&totalGas, MINER_REWARD)
 	totalReward := totalGas
-	totalRewardString := totalReward.String()
 
 	// check if addr exists and update
 	var minerBalance string
@@ -442,7 +440,9 @@ func WriteMinerRewards(sqldb *sql.DB, block *types.Block) {
 	if err == sql.ErrNoRows {
 		// Addr does not exist, thus create new entry
 		createAddrSqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
-		_, insertErr := sqldb.Exec(createAddrSqlStatement, minerAddr, totalRewardString, 0)
+
+		// We convert totalReward into a string and postgres converts into number
+		_, insertErr := sqldb.Exec(createAddrSqlStatement, minerAddr, totalReward.String(), 0)
 		if insertErr != nil {
 			panic(insertErr)
 		}
@@ -451,10 +451,22 @@ func WriteMinerRewards(sqldb *sql.DB, block *types.Block) {
 		panic(err)
 	} else {
 		// Addr exists, update existing balance
-		var newBalance big.Int
-		newBalance.Add(addrInfo.balance, totalReward)
-		updateSQLStatement := `UPDATE accounts SET balance = ($1), txCountAccount = ($2) WHERE addr = ($3)`
-		_, updateErr := sqldb.Exec(updateSQLStatement, )
+		bigMinerBalance := new(big.Int)
+		bigMinerBalance, err := bigMinerBalance.SetString(minerBalance, 0)
+		if !err {
+			panic(err)
+		}
+		newBalance := new(big.Int)
+		newBalance.Add(newBalance, bigMinerBalance)
+		newBalance.Add(newBalance, totalReward)
+
+		updateSQLStatement := `UPDATE accounts SET balance = ($1) WHERE addr = ($2)`
+
+		// We convert totalReward into a string and postgres converts into number
+		_, updateErr := sqldb.Exec(updateSQLStatement, newBalance.String(), minerAddr)
+		if updateErr != nil {
+			panic(updateErr)
+		}
 	}
 }
 
