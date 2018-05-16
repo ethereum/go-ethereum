@@ -23,10 +23,12 @@ CREATE TABLE IF NOT EXISTS txs (
   amount numeric,
   gasprice numeric,
   gas numeric,
+  gasLimit numeric,
   txFee numeric,
   nonce numeric,
   txStatus text,
   isContract bool,
+  age timestamp,
   data bytea
 );
 

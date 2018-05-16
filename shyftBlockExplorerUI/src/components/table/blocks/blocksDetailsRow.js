@@ -8,6 +8,7 @@ class DetailBlockTable extends Component {
         let combinedClasses = ['responsive-table', classes.table];
         return (
             <table className={combinedClasses.join(' ')}>
+                <tbody>
                 <tr>
                     <th scope="col">Height:</th>
                     <td>{data.Number}</td>
@@ -68,6 +69,7 @@ class DetailBlockTable extends Component {
                     <th scope="col">Reward:</th>
                     <td>TBD</td>
                 </tr>
+                </tbody>
             </table>
         );
     }

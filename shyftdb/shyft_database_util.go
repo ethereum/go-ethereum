@@ -78,10 +78,12 @@ type ShyftTxEntryPretty struct {
 	Amount    uint64
 	GasPrice  uint64
 	Gas       uint64
+	GasLimit  uint64
 	Cost	  uint64
 	Nonce     uint64
 	Status	  string
 	IsContract bool
+	Age        time.Time
 	Data      []byte
 }
 
@@ -100,13 +102,7 @@ type SendAndReceive struct {
 }
 
 //WriteBlock writes to block info to sql db
-	func WriteBlock(sqldb *sql.DB, block *types.Block, receipts []*types.Receipt) error {
-		//Need to create field in postgres db isContract : True || False
-		//Need to fix nonce numeric issue (attempt to reproduce and record)
-		//Need to update tx To Field where null with Contract Address
-		//Need to update account table with that Contract Address
-		//Need to update AccountNonce and Balance of Tx To field || Contract Address
-
+func WriteBlock(sqldb *sql.DB, block *types.Block, receipts []*types.Receipt) error {
 	coinbase := block.Header().Coinbase.String()
 	number := block.Header().Number.String()
 	gasUsed := block.Header().GasUsed
@@ -134,7 +130,7 @@ type SendAndReceive struct {
 	if block.Transactions().Len() > 0 {
 		for _, tx := range block.Transactions() {
 			//WriteMinerRewards(sqldb, block)
-			WriteTransactions(sqldb, tx, block.Header().Hash(), block.Header().Number.String(), receipts)
+			WriteTransactions(sqldb, tx, block.Header().Hash(), block.Header().Number.String(), receipts, age, gasLimit)
 			if block.Transactions()[0].To() != nil {
 				WriteFromBalance(sqldb, tx)
 			}
@@ -148,7 +144,7 @@ type SendAndReceive struct {
 }
 
 //WriteTransactions writes to sqldb
-func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash, blockNumber string,  receipts []*types.Receipt) error {
+func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Hash, blockNumber string,  receipts []*types.Receipt, age time.Time, gasLimit uint64) error {
 	txData := ShyftTxEntry{
 		TxHash:    tx.Hash(),
 		From:      tx.From(),
@@ -161,7 +157,8 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 		Nonce:     tx.Nonce(),
 		Data:      tx.Data(),
 	}
-
+	fmt.Println("THIS IS AGE", age)
+	fmt.Println("THIS IS GAS LIMIT", gasLimit)
 	txHash := txData.TxHash.Hex()
 	from := txData.From.Hex()
 	blockHasher := txData.BlockHash
@@ -190,8 +187,8 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 
 		var retNonce string
 		isContract = true
-		sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, txfee, nonce, isContract, txStatus, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13)) RETURNING nonce`
-		qerr := sqldb.QueryRow(sqlStatement, txHash, from, contractAddressFromReciept, blockHasher, blockNumber, amount, gasPrice, gas, txFee, nonce, isContract, statusFromReciept, data).Scan(&retNonce)
+		sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, gasLimit,txfee, nonce, isContract, txStatus, age, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13), ($14), ($15)) RETURNING nonce`
+		qerr := sqldb.QueryRow(sqlStatement, txHash, from, contractAddressFromReciept, blockHasher, blockNumber, amount, gasPrice, gas, gasLimit, txFee, nonce, isContract, statusFromReciept, age,data).Scan(&retNonce)
 
 		if qerr != nil {
 			panic(qerr)
@@ -209,8 +206,8 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 			}
 		}
 
-		sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, txfee, nonce, isContract, txStatus, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13)) RETURNING nonce`
-		qerr := sqldb.QueryRow(sqlStatement, txHash, from, to.Hex(), blockHasher, blockNumber, amount, gasPrice, gas, txFee, nonce, isContract, statusFromReciept, data).Scan(&retNonce)
+		sqlStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gasprice, gas, gasLimit, txfee, nonce, isContract, txStatus, age, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13), ($14), ($15)) RETURNING nonce`
+		qerr := sqldb.QueryRow(sqlStatement, txHash, from, to.Hex(), blockHasher, blockNumber, amount, gasPrice, gas, gasLimit, txFee, nonce, isContract, statusFromReciept, age,data).Scan(&retNonce)
 
 		if qerr != nil {
 			panic(qerr)
@@ -612,10 +609,12 @@ func GetAllTransactions(sqldb *sql.DB) string {
 		var amount uint64
 		var gasprice uint64
 		var gas uint64
+		var gasLimit uint64
 		var txfee uint64
 		var nonce uint64
 		var status string
 		var isContract bool
+		var age time.Time
 		var data []byte
 		err = rows.Scan(
 			&txhash,
@@ -626,10 +625,12 @@ func GetAllTransactions(sqldb *sql.DB) string {
 			&amount,
 			&gasprice,
 			&gas,
+			&gasLimit,
 			&txfee,
 			&nonce,
 			&status,
 			&isContract,
+			&age,
 			&data,
 		)
 
@@ -642,10 +643,12 @@ func GetAllTransactions(sqldb *sql.DB) string {
 			Amount:    amount,
 			GasPrice:  gasprice,
 			Gas:       gas,
+			GasLimit: gasLimit,
 			Cost:      txfee,
 			Nonce:     nonce,
 			Status:    status,
 			IsContract: isContract,
+			Age:		age,
 			Data: 		data,
 		})
 
@@ -660,32 +663,39 @@ func GetAllTransactions(sqldb *sql.DB) string {
 func GetTransaction(sqldb *sql.DB, txHash string) string {
 	sqlStatement := `SELECT * FROM txs WHERE txhash=$1;`
 	row := sqldb.QueryRow(sqlStatement, txHash)
-		var txhash string
-		var to_addr string
-		var from_addr string
-		var blockhash string
-		var blocknumber string
-		var amount uint64
-		var gasprice uint64
-		var gas uint64
-		var txfee uint64
-		var nonce uint64
-		var status string
-		var isContract bool
-		var data []byte
+	var txhash string
+	var to_addr string
+	var from_addr string
+	var blockhash string
+	var blocknumber string
+	var amount uint64
+	var gasprice uint64
+	var gas uint64
+	var gasLimit uint64
+	var txfee uint64
+	var nonce uint64
+	var status string
+	var isContract bool
+	var age time.Time
+	var data []byte
+
 	row.Scan(
 		&txhash,
 		&to_addr,
 		&from_addr,
 		&blockhash,
+		&blocknumber,
 		&amount,
 		&gasprice,
 		&gas,
+		&gasLimit,
 		&txfee,
 		&nonce,
 		&status,
 		&isContract,
+		&age,
 		&data)
+
 	tx := ShyftTxEntryPretty{
 		TxHash:    txhash,
 		To:        to_addr,
@@ -695,10 +705,12 @@ func GetTransaction(sqldb *sql.DB, txHash string) string {
 		Amount:    amount,
 		GasPrice:  gasprice,
 		Gas:       gas,
+		GasLimit:	gasLimit,
 		Cost:      txfee,
 		Nonce:     nonce,
 		Status:    status,
 		IsContract: isContract,
+		Age:		age,
 		Data:	   data,
 	}
 	json, _ := json.Marshal(tx)
