@@ -369,10 +369,8 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainReader, header *type
 
 func (c *Clique) GetSnapshot(chain consensus.ChainReader, header *types.Header) (*Snapshot, error) {
 	number := header.Number.Uint64()
-	if number == 0 {
-		return nil, nil
-	}
-	snap, err := c.snapshot(chain, number-1, header.ParentHash, nil)
+	log.Trace("take snapshot", "number", number, "hash", header.Hash())
+	snap, err := c.snapshot(chain, number, header.Hash(), nil)
 	if err != nil {
 		return nil, err
 	}
