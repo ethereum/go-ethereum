@@ -249,6 +249,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, sqldb *sql.DB) (*par
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
+	
 	// Just commit the new block if there is no stored genesis block.
 	stored := GetCanonicalHash(db, 0)
 	if (stored == common.Hash{}) {
