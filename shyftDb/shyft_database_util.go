@@ -438,7 +438,7 @@ func WriteMinerRewards(sqldb *sql.DB, block *types.Block) {
 	StoreReward(sqldb, minerAddr, totalMinerReward)
 	StoreReward(sqldb, shyftConduitAddress, Rewards.ShyftNetworkBlockReward)
 
-
+	//https://ethereum.stackexchange.com/questions/27172/different-uncles-reward
 	// Accumulate the rewards for the miner and any included uncles
 	//reward := new(big.Int).Set(blockReward)
 	//r := new(big.Int)
