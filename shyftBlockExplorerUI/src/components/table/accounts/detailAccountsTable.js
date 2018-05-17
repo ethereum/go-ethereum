@@ -1,9 +1,14 @@
 import React from 'react';
 import classes from './table.css';
-import arrow from '../../assets/arrow_right.png';
 import { Link } from 'react-router-dom'
 
-const TransactionTable = (props) => {
+const DetailAccountsTable = (props) => {
+    let flag;
+        if(props.addr === props.to) {
+            flag = true
+        }else {
+            flag = false
+        }
     return (
           <tbody>
             <tr>
@@ -14,8 +19,8 @@ const TransactionTable = (props) => {
                 <td>{props.blockNumber}</td>
                 <td>{props.age}</td>
                 <td className={classes.fromTag}>{props.from}</td>
-                <td><img className={classes.arrow} src={arrow} alt="arrow"/></td>
-                <td className={classes.toTag}>{props.to}</td>
+                <td><div className={ flag ? classes.incoming : classes.out }>{ flag ? "IN" : "OUT" }</div></td>
+                <td>{props.to}</td>
                 <td>{props.value}</td>
                 <td>{props.cost}</td>
             </tr>
@@ -23,4 +28,4 @@ const TransactionTable = (props) => {
     )
 }
 
-export default TransactionTable;
+export default DetailAccountsTable;

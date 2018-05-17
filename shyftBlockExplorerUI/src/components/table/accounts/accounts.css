@@ -1,0 +1,65 @@
+.table {
+    border-spacing: 100rem;
+    width: 100%;
+    margin-top: 50px;
+}
+
+.tHead {
+    font-size: 1rem;
+}
+
+th {
+    background-color: aliceblue;
+    padding-right: 10px;
+}
+
+td {
+    padding-left: 5px;
+    font-size: .5rem;
+}
+
+.addressTag {
+    display: inline-block;
+    vertical-align: bottom;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    width: 132px;
+}
+
+.ageTag{
+    display: inline-block;
+    vertical-align: bottom;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    width: 80px;
+}
+
+.fromTag{
+    display: inline-block;
+    vertical-align: bottom;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    width: 100px;
+}
+
+.toTag{
+    display: inline-block;
+    vertical-align: bottom;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    width: 100px;
+}
+
+.valueTag{
+    display: inline-block;
+    vertical-align: bottom;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    width: 80px;
+}
+
+.arrow {
+    width: 25px;
+    height: 25px;
+    margin-left: 15px;
+}

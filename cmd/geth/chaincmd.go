@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"gopkg.in/urfave/cli.v1"
+	"database/sql"
 )
 
 var (
@@ -168,7 +169,13 @@ func initGenesis(ctx *cli.Context) error {
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
-		_, hash, err := core.SetupGenesisBlock(chaindb, genesis, nil)
+		// @NOTE:shyft instantiate BlockExplorerDB here
+		connStr := "user=postgres dbname=shyftdb sslmode=disable"
+		blockExplorerDb, err := sql.Open("postgres", connStr)
+		if err != nil {
+			return nil
+		}
+		_, hash, err := core.SetupGenesisBlock(chaindb, genesis, blockExplorerDb)
 		if err != nil {
 			utils.Fatalf("Failed to write genesis block: %v", err)
 		}

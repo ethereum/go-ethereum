@@ -61,8 +61,6 @@ func GetAllTransactions(w http.ResponseWriter, r *http.Request) {
 func GetAccount(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	address := vars["address"]
-	//addressBytes := []byte(address)
-	fmt.Println("ADDRESS FROM ROUTE", address)
 	connStr := "user=postgres dbname=shyftdb sslmode=disable"
 	blockExplorerDb, err := sql.Open("postgres", connStr)
 	if err != nil {
@@ -80,6 +78,29 @@ func GetAccount(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	fmt.Fprintln(w, getAccountBalance)
+}
+
+// GetAccount gets balance
+func GetAccountTxs(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	address := vars["address"]
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	blockExplorerDb, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return
+	}
+
+	getAccountTxs := shyftdb.GetAccountTxs(blockExplorerDb, address)
+
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
+
+	fmt.Fprintln(w, getAccountTxs)
 }
 
 // GetAllAccounts gets balances
@@ -139,6 +160,16 @@ func GetAllBlocks(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintln(w, block3)
 }
+
+//func GetRecentBlock(w http.ResponseWriter, r *http.Request) {
+//	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+//	blockExplorerDb, err := sql.Open("postgres", connStr)
+//	if err != nil {
+//		return
+//	}
+//
+//
+//}
 
 //GetInternalTransactions gets internal txs
 func GetInternalTransactions(w http.ResponseWriter, r *http.Request) {

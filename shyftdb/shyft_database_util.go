@@ -774,3 +774,72 @@ func GetAllAccounts(sqldb *sql.DB) string {
 	}
 	return accountsArr
 }
+
+//GetAccount returns account balances
+func GetAccountTxs(sqldb *sql.DB, address string) string {
+	var arr txRes
+	var txx string
+	sqlStatement := `SELECT * FROM txs WHERE to_addr=$1 OR from_addr=$1;`
+	rows, err := sqldb.Query(sqlStatement, address)
+	if err != nil {
+		fmt.Println("err")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var txhash string
+		var to_addr string
+		var from_addr string
+		var blockhash string
+		var blocknumber string
+		var amount uint64
+		var gasprice uint64
+		var gas uint64
+		var gasLimit uint64
+		var txfee uint64
+		var nonce uint64
+		var status string
+		var isContract bool
+		var age time.Time
+		var data []byte
+		err = rows.Scan(
+			&txhash,
+			&to_addr,
+			&from_addr,
+			&blockhash,
+			&blocknumber,
+			&amount,
+			&gasprice,
+			&gas,
+			&gasLimit,
+			&txfee,
+			&nonce,
+			&status,
+			&isContract,
+			&age,
+			&data,
+		)
+
+		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
+			TxHash:    txhash,
+			To:        to_addr,
+			From:      from_addr,
+			BlockHash: blockhash,
+			BlockNumber: blocknumber,
+			Amount:    amount,
+			GasPrice:  gasprice,
+			Gas:       gas,
+			GasLimit: gasLimit,
+			Cost:      txfee,
+			Nonce:     nonce,
+			Status:    status,
+			IsContract: isContract,
+			Age:		age,
+			Data: 		data,
+		})
+
+		tx, _ := json.Marshal(arr.TxEntry)
+		newtx := string(tx)
+		txx = newtx
+	}
+	return txx
+}
