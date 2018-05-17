@@ -435,24 +435,30 @@ func WriteMinerRewards(sqldb *sql.DB, block *types.Block) {
 
 	totalMinerReward := totalGas.Add(totalGas, Rewards.ShyftMinerBlockReward)
 
+	// References:
+	// https://ethereum.stackexchange.com/questions/27172/different-uncles-reward
+	// line 551 in consensus.go (shyft_go-ethereum/consensus/ethash/consensus.go)
+	// Some weird constants to avoid constant memory allocs for them.
+	var big8   = big.NewInt(8)
+	var uncleRewards []*big.Int
+	var uncleAddrs []string
+
+	// uncleReward is overwritten after each iteration
+	uncleReward := new(big.Int)
+	for _, uncle := range block.Uncles() {
+		uncleReward.Add(uncle.Number, big8)
+		uncleReward.Sub(uncleReward, block.Number())
+		uncleReward.Mul(uncleReward, Rewards.ShyftMinerBlockReward)
+		uncleReward.Div(uncleReward, big8)
+		uncleRewards = append(uncleRewards, uncleReward)
+		uncleAddrs = append(uncleAddrs, uncle.Coinbase.String())
+	}
+
 	StoreReward(sqldb, minerAddr, totalMinerReward)
 	StoreReward(sqldb, shyftConduitAddress, Rewards.ShyftNetworkBlockReward)
-
-	//https://ethereum.stackexchange.com/questions/27172/different-uncles-reward
-	// Accumulate the rewards for the miner and any included uncles
-	//reward := new(big.Int).Set(blockReward)
-	//r := new(big.Int)
-	//for _, uncle := range uncles {
-	//	r.Add(uncle.Number, big8)
-	//	r.Sub(r, header.Number)
-	//	r.Mul(r, blockReward)
-	//	r.Div(r, big8)
-	//	state.AddBalance(uncle.Coinbase, r)
-	//
-	//	r.Div(blockReward, big32)
-	//	reward.Add(reward, r)
-	//}
-	//state.AddBalance(header.Coinbase, reward)
+	for i := 0; i < len(uncleAddrs); i++ {
+		StoreReward(sqldb, uncleAddrs[i], uncleRewards[i])
+	}
 }
 
 func StoreReward(sqldb *sql.DB, address string, reward *big.Int) {
