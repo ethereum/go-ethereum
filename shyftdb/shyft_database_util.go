@@ -422,7 +422,6 @@ func WriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, s
 // @NOTE: This function is extremely complex and requires heavy testing and knowdlege of edge cases:
 // uncle blocks, account balance updates based on reorgs, diverges that get dropped.
 // Reason for this is because the accounts are not deterministic like the block and tx hashes.
-// @TODO: Calculate reward if there are uncles
 // @TODO: Calculate reorg
 func WriteMinerRewards(sqldb *sql.DB, block *types.Block) {
 	minerAddr := block.Coinbase().String()
