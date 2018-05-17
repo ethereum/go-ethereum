@@ -509,61 +509,21 @@ func WriteMinerRewards(sqldb *sql.DB, block *types.Block) {
 			panic(updateErr)
 		}
 	}
+	// Accumulate the rewards for the miner and any included uncles
+	//reward := new(big.Int).Set(blockReward)
+	//r := new(big.Int)
+	//for _, uncle := range uncles {
+	//	r.Add(uncle.Number, big8)
+	//	r.Sub(r, header.Number)
+	//	r.Mul(r, blockReward)
+	//	r.Div(r, big8)
+	//	state.AddBalance(uncle.Coinbase, r)
+	//
+	//	r.Div(blockReward, big32)
+	//	reward.Add(reward, r)
+	//}
+	//state.AddBalance(header.Coinbase, reward)
 }
-
-
-//func WriteMinerReward(db *leveldb.DB, block *types.Block) {
-//	var totalGas *big.Int
-//	var txs []string
-//	key := append([]byte("acc-")[:], block.Coinbase().Hash().Bytes()[:]...)
-//	for _, tx := range block.Transactions() {
-//		totalGas.Add(totalGas, new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas())))
-//	}
-////	retrievedData, err := db.Get(key, nil)
-//	if err != nil {
-//		// Assume time this account has had a tx
-//		// Balacne is exclusively minerreward + total gas from the block b/c no prior evm activity
-//		// Txs would be empty because they have not had any transactions on the EVM
-//		// @TODO: Calc mining reward
-//		//balance := totalGas.Add(totalGas, MINING_REWARD)
-//		balance := totalGas
-//		accData := ShyftAccountEntry{
-//			Balance: balance,
-//			Txs:     txs,
-//		}
-//		var encodedData bytes.Buffer
-//		encoder := gob.NewEncoder(&encodedData)
-//		if err := encoder.Encode(accData); err != nil {
-//			log.Crit("Faild to encode Miner Account data", "err", err)
-//		}
-//		if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
-//			log.Crit("Could not write the miner's first tx", "err", err)
-//		}
-//	} else {
-//		// The account has already have previous data stored due to activity in the EVM
-//		// Decode the data to update balance
-//		var decodedData ShyftAccountEntry
-//		d := gob.NewDecoder(bytes.NewBuffer(retrievedData))
-//		if err := d.Decode(&decodedData); err != nil {
-//			log.Crit("Failed to decode miner data:", "err", err)
-//		}
-//		// Write new balance
-//		// @TODO: Calc mining reward
-//		// decodedData.Balance.Add(decodedData.Balance, totalGas.Add(totalGas, MINING_REWARD)))
-//		decodedData.Balance.Add(decodedData.Balance, totalGas)
-//		// Encode the data to be written back to the db
-//		var encodedData bytes.Buffer
-//		encoder := gob.NewEncoder(&encodedData)
-//		if err := encoder.Encode(decodedData); err != nil {
-//			log.Crit("Faild to encode Miner Account data", "err", err)
-//		}
-//		// Write newly encoded data back to the db
-//		if err := db.Put(key, encodedData.Bytes(), nil); err != nil {
-//			log.Crit("Could not update miner account data", "err", err)
-//		}
-//	}
-//}
-
 
 
 ///////////
