@@ -12,6 +12,7 @@ import (
 	"log"
 
 	_ "github.com/lib/pq"
+	Rewards "github.com/ethereum/go-ethereum/consensus/ethash"
 )
 
 //SBlock type
@@ -418,25 +419,65 @@ func WriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, s
 	return sendAndReceiveData, balanceReceiver, balanceSender, accountNonceReceiver, accountNonceSender
 }
 
+// @NOTE: This function is extremely complex and requires heavy testing and knowdlege of edge cases:
+// uncle blocks, account balance updates based on reorgs, diverges that get dropped.
+// Reason for this is because the accounts are not deterministic like the block and tx hashes.
+// @TODO: Calculate reward if there are uncles
+// @TODO: Calculate reorg
 func WriteMinerRewards(sqldb *sql.DB, block *types.Block) {
 	minerAddr := block.Coinbase().String()
-
+	shyftConduitAddress := Rewards.ShyftNetworkConduitAddress.String()
 	// Calculate the total gas used in the block
 	totalGas := new(big.Int)
 	for _, tx := range block.Transactions() {
 		totalGas.Add(totalGas, new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas())))
 	}
 
-	//TODO: Calculate Block Reward
-	// totalReward := totalGas.Add(&totalGas, MINER_REWARD)
-	totalReward := totalGas
+	totalReward := totalGas.Add(totalGas, Rewards.ShyftMinerBlockReward)
 
-	// check if addr exists and update
+	// Check if shyft conduit exists
+	var shyftBalance string
+	shyftExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
+	shyftErr := sqldb.QueryRow(shyftExistsStatement, shyftConduitAddress).Scan(&shyftBalance)
+
+	// Create shyft conduit addr or update exisitng balance
+	if shyftErr == sql.ErrNoRows {
+		// Addr does not exist, thus create new entry
+		createAddrSqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
+
+		// We convert ShyftConduitReward into a string and postgres converts into number
+		_, insertErr := sqldb.Exec(createAddrSqlStatement, shyftConduitAddress, Rewards.ShyftNetworkBlockReward.String(), 0)
+		if insertErr != nil {
+			panic(insertErr)
+		}
+	} else if shyftErr != nil {
+		panic(shyftErr)
+	} else {
+		// shyftAddr exists, update existing balance
+		bigShyftBalance := new(big.Int)
+		bigShyftBalance, err := bigShyftBalance.SetString(shyftBalance, 0)
+		if !err {
+			panic(err)
+		}
+		newBalance := new(big.Int)
+		newBalance.Add(newBalance, bigShyftBalance)
+		newBalance.Add(newBalance, totalReward)
+
+		updateSQLStatement := `UPDATE accounts SET balance = ($1) WHERE addr = ($2)`
+
+		// We convert totalReward into a string and postgres converts into number
+		_, updateErr := sqldb.Exec(updateSQLStatement, newBalance.String(), shyftConduitAddress)
+		if updateErr != nil {
+			panic(updateErr)
+		}
+	}
+
+	// Check if miner exists
 	var minerBalance string
-	addrExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
-	err := sqldb.QueryRow(addrExistsStatement, minerAddr).Scan(&minerBalance)
+	minerExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
+	err := sqldb.QueryRow(minerExistsStatement, minerAddr).Scan(&minerBalance)
 
-	// Create addr or update existing balance
+	// Create miner or update existing balance
 	if err == sql.ErrNoRows {
 		// Addr does not exist, thus create new entry
 		createAddrSqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
@@ -470,12 +511,7 @@ func WriteMinerRewards(sqldb *sql.DB, block *types.Block) {
 	}
 }
 
-// @NOTE: This function is extremely complex and requires heavy testing and knowdlege of edge cases:
-// uncle blocks, account balance updates based on reorgs, diverges that get dropped.
-// Reason for this is because the accounts are not deterministic like the block and tx hashes.
-// @TODO: Calculate reward if there are uncles
-// @TODO: Calculate mining reward (most likely retrieve higher up in the operations)
-// @TODO: Calculate reorg
+
 //func WriteMinerReward(db *leveldb.DB, block *types.Block) {
 //	var totalGas *big.Int
 //	var txs []string
