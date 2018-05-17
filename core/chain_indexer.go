@@ -18,6 +18,7 @@ package core
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -41,22 +42,19 @@ type ChainIndexerBackend interface {
 
 	// Process crunches through the next header in the chain segment. The caller
 	// will ensure a sequential order of headers.
-	Process(header *types.Header)
+	Process(header *types.Header) error
 
 	// Commit finalizes the section metadata and stores it into the database.
 	Commit() error
 
-	// Closing signals the backend about the indexer shutting down. After Closing
-	// is called the backend should not block waiting for any external events and
-	// may return with an error if it cannot finish the current operation. If there
-	// are no blocking operations and result is guaranteed in a limited time then
-	// Closing can be ignored.
-	//
-	// Note: Closing may be called during any phase of section processing or also
-	// when no processing is happening at all. It applies to all current and
-	// subsequent blocking operations.
-	Closing()
+	// Close shuts the backend down. After Close returns, all subsequent calls to
+	// the backend should return with ErrIndexerBackendClosed. Any blocking operations
+	// should be cancelled and return with ErrIndexerBackendClosed. Shorter operations
+	// may be finished and return normally while Close is blocking.
+	Close()
 }
+
+var ErrIndexerBackendClosed = errors.New("Indexer already closed")
 
 // ChainIndexerChain interface is used for connecting the indexer to a blockchain
 type ChainIndexerChain interface {
@@ -149,7 +147,7 @@ func (c *ChainIndexer) Start(chain ChainIndexerChain) {
 func (c *ChainIndexer) Close() error {
 	var errs []error
 
-	c.backend.Closing()
+	c.backend.Close()
 
 	// Tear down the primary update loop
 	errc := make(chan error)
@@ -310,6 +308,9 @@ func (c *ChainIndexer) updateLoop() {
 				c.lock.Unlock()
 				newHead, err := c.processSection(section, oldHead)
 				if err != nil {
+					if err == ErrIndexerBackendClosed {
+						continue
+					}
 					c.log.Error("Section processing failed", "error", err)
 				}
 				c.lock.Lock()
@@ -373,11 +374,12 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 		} else if header.ParentHash != lastHead {
 			return common.Hash{}, fmt.Errorf("chain reorged during section processing")
 		}
-		c.backend.Process(header)
+		if err := c.backend.Process(header); err != nil {
+			return common.Hash{}, err
+		}
 		lastHead = header.Hash()
 	}
 	if err := c.backend.Commit(); err != nil {
-		c.log.Error("Section commit failed", "error", err)
 		return common.Hash{}, err
 	}
 	return lastHead, nil

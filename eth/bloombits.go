@@ -92,21 +92,22 @@ const (
 // BloomIndexer implements a core.ChainIndexer, building up a rotated bloom bits index
 // for the Ethereum header bloom filters, permitting blazing fast filtering.
 type BloomIndexer struct {
-	size uint64 // section size to generate bloombits for
-
-	db  ethdb.Database       // database instance to write index data and metadata into
-	gen *bloombits.Generator // generator to rotate the bloom bits crating the bloom index
-
-	section uint64      // Section is the section number being processed currently
-	head    common.Hash // Head is the hash of the last header processed
+	size         uint64               // section size to generate bloombits for
+	db           ethdb.Database       // database instance to write index data and metadata into
+	gen          *bloombits.Generator // generator to rotate the bloom bits crating the bloom index
+	section      uint64               // Section is the section number being processed currently
+	head         common.Hash          // Head is the hash of the last header processed
+	quit, locked chan struct{}
 }
 
 // NewBloomIndexer returns a chain indexer that generates bloom bits data for the
 // canonical chain for fast logs filtering.
 func NewBloomIndexer(db ethdb.Database, size, confReq uint64) *core.ChainIndexer {
 	backend := &BloomIndexer{
-		db:   db,
-		size: size,
+		db:     db,
+		size:   size,
+		quit:   make(chan struct{}),
+		locked: make(chan struct{}, 1),
 	}
 	table := ethdb.NewTable(db, string(rawdb.BloomBitsIndexPrefix))
 
@@ -116,6 +117,13 @@ func NewBloomIndexer(db ethdb.Database, size, confReq uint64) *core.ChainIndexer
 // Reset implements core.ChainIndexerBackend, starting a new bloombits index
 // section.
 func (b *BloomIndexer) Reset(section uint64, lastSectionHead common.Hash) error {
+	select {
+	case b.locked <- struct{}{}:
+		defer func() { <-b.locked }()
+	case <-b.quit:
+		return core.ErrIndexerBackendClosed
+	}
+
 	gen, err := bloombits.NewGenerator(uint(b.size))
 	b.gen, b.section, b.head = gen, section, common.Hash{}
 	return err
@@ -123,16 +131,30 @@ func (b *BloomIndexer) Reset(section uint64, lastSectionHead common.Hash) error 
 
 // Process implements core.ChainIndexerBackend, adding a new header's bloom into
 // the index.
-func (b *BloomIndexer) Process(header *types.Header) {
+func (b *BloomIndexer) Process(header *types.Header) error {
+	select {
+	case b.locked <- struct{}{}:
+		defer func() { <-b.locked }()
+	case <-b.quit:
+		return core.ErrIndexerBackendClosed
+	}
+
 	b.gen.AddBloom(uint(header.Number.Uint64()-b.section*b.size), header.Bloom)
 	b.head = header.Hash()
+	return nil
 }
 
 // Commit implements core.ChainIndexerBackend, finalizing the bloom section and
 // writing it out into the database.
 func (b *BloomIndexer) Commit() error {
-	batch := b.db.NewBatch()
+	select {
+	case b.locked <- struct{}{}:
+		defer func() { <-b.locked }()
+	case <-b.quit:
+		return core.ErrIndexerBackendClosed
+	}
 
+	batch := b.db.NewBatch()
 	for i := 0; i < types.BloomBitLength; i++ {
 		bits, err := b.gen.Bitset(uint(i))
 		if err != nil {
@@ -143,5 +165,8 @@ func (b *BloomIndexer) Commit() error {
 	return batch.Write()
 }
 
-// Cancel implements core.ChainIndexerBackend
-func (b *BloomIndexer) Closing() {}
+// Close implements core.ChainIndexerBackend
+func (b *BloomIndexer) Close() {
+	close(b.quit)
+	b.locked <- struct{}{}
+}

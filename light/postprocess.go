@@ -127,7 +127,7 @@ type ChtIndexerBackend struct {
 	section, sectionSize uint64
 	lastHash             common.Hash
 	trie                 *trie.Trie
-	quit                 chan struct{}
+	quit, locked         chan struct{}
 }
 
 // NewBloomTrieIndexer creates a BloomTrie chain indexer
@@ -149,6 +149,7 @@ func NewChtIndexer(db ethdb.Database, clientMode bool, odr OdrBackend) *core.Cha
 		triedb:      trie.NewDatabase(trieTable),
 		sectionSize: sectionSize,
 		quit:        make(chan struct{}),
+		locked:      make(chan struct{}, 1),
 	}
 	return core.NewChainIndexer(db, idb, backend, sectionSize, confirmReq, time.Millisecond*100, "cht")
 }
@@ -187,11 +188,21 @@ func (c *ChtIndexerBackend) fetchMissingNodes(section uint64, root common.Hash) 
 		r.Proof.Store(batch)
 		err = batch.Write()
 	}
+	if err == ctx.Err() {
+		return core.ErrIndexerBackendClosed
+	}
 	return err
 }
 
 // Reset implements core.ChainIndexerBackend
 func (c *ChtIndexerBackend) Reset(section uint64, lastSectionHead common.Hash) error {
+	select {
+	case c.locked <- struct{}{}:
+		defer func() { <-c.locked }()
+	case <-c.quit:
+		return core.ErrIndexerBackendClosed
+	}
+
 	var root common.Hash
 	if section > 0 {
 		root = GetChtRoot(c.diskdb, section-1, lastSectionHead)
@@ -211,7 +222,14 @@ func (c *ChtIndexerBackend) Reset(section uint64, lastSectionHead common.Hash) e
 }
 
 // Process implements core.ChainIndexerBackend
-func (c *ChtIndexerBackend) Process(header *types.Header) {
+func (c *ChtIndexerBackend) Process(header *types.Header) error {
+	select {
+	case c.locked <- struct{}{}:
+		defer func() { <-c.locked }()
+	case <-c.quit:
+		return core.ErrIndexerBackendClosed
+	}
+
 	hash, num := header.Hash(), header.Number.Uint64()
 	c.lastHash = hash
 
@@ -223,10 +241,18 @@ func (c *ChtIndexerBackend) Process(header *types.Header) {
 	binary.BigEndian.PutUint64(encNumber[:], num)
 	data, _ := rlp.EncodeToBytes(ChtNode{hash, td})
 	c.trie.Update(encNumber[:], data)
+	return nil
 }
 
 // Commit implements core.ChainIndexerBackend
 func (c *ChtIndexerBackend) Commit() error {
+	select {
+	case c.locked <- struct{}{}:
+		defer func() { <-c.locked }()
+	case <-c.quit:
+		return core.ErrIndexerBackendClosed
+	}
+
 	root, err := c.trie.Commit(nil)
 	if err != nil {
 		return err
@@ -240,9 +266,10 @@ func (c *ChtIndexerBackend) Commit() error {
 	return nil
 }
 
-// Cancel implements core.ChainIndexerBackend
-func (c *ChtIndexerBackend) Closing() {
+// Close implements core.ChainIndexerBackend
+func (c *ChtIndexerBackend) Close() {
 	close(c.quit)
+	c.locked <- struct{}{}
 }
 
 const (
@@ -278,7 +305,7 @@ type BloomTrieIndexerBackend struct {
 	section, parentSectionSize, bloomTrieRatio uint64
 	trie                                       *trie.Trie
 	sectionHeads                               []common.Hash
-	quit                                       chan struct{}
+	quit, locked                               chan struct{}
 }
 
 // NewBloomTrieIndexer creates a BloomTrie chain indexer
@@ -290,6 +317,7 @@ func NewBloomTrieIndexer(db ethdb.Database, clientMode bool, odr OdrBackend) *co
 		trieTable: trieTable,
 		triedb:    trie.NewDatabase(trieTable),
 		quit:      make(chan struct{}),
+		locked:    make(chan struct{}, 1),
 	}
 	idb := ethdb.NewTable(db, "bltIndex-")
 
@@ -359,6 +387,9 @@ func (b *BloomTrieIndexerBackend) fetchMissingNodes(section uint64, root common.
 	for i := uint(0); i < types.BloomBitLength; i++ {
 		res := <-resCh
 		if res.err != nil {
+			if res.err == ctx.Err() {
+				return core.ErrIndexerBackendClosed
+			}
 			return res.err
 		}
 		res.nodes.Store(batch)
@@ -368,6 +399,13 @@ func (b *BloomTrieIndexerBackend) fetchMissingNodes(section uint64, root common.
 
 // Reset implements core.ChainIndexerBackend
 func (b *BloomTrieIndexerBackend) Reset(section uint64, lastSectionHead common.Hash) error {
+	select {
+	case b.locked <- struct{}{}:
+		defer func() { <-b.locked }()
+	case <-b.quit:
+		return core.ErrIndexerBackendClosed
+	}
+
 	var root common.Hash
 	if section > 0 {
 		root = GetBloomTrieRoot(b.diskdb, section-1, lastSectionHead)
@@ -385,15 +423,30 @@ func (b *BloomTrieIndexerBackend) Reset(section uint64, lastSectionHead common.H
 }
 
 // Process implements core.ChainIndexerBackend
-func (b *BloomTrieIndexerBackend) Process(header *types.Header) {
+func (b *BloomTrieIndexerBackend) Process(header *types.Header) error {
+	select {
+	case b.locked <- struct{}{}:
+		defer func() { <-b.locked }()
+	case <-b.quit:
+		return core.ErrIndexerBackendClosed
+	}
+
 	num := header.Number.Uint64() - b.section*BloomTrieFrequency
 	if (num+1)%b.parentSectionSize == 0 {
 		b.sectionHeads[num/b.parentSectionSize] = header.Hash()
 	}
+	return nil
 }
 
 // Commit implements core.ChainIndexerBackend
 func (b *BloomTrieIndexerBackend) Commit() error {
+	select {
+	case b.locked <- struct{}{}:
+		defer func() { <-b.locked }()
+	case <-b.quit:
+		return core.ErrIndexerBackendClosed
+	}
+
 	var compSize, decompSize uint64
 
 	for i := uint(0); i < types.BloomBitLength; i++ {
@@ -435,7 +488,8 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 	return nil
 }
 
-// Cancel implements core.ChainIndexerBackend
-func (b *BloomTrieIndexerBackend) Closing() {
+// Close implements core.ChainIndexerBackend
+func (b *BloomTrieIndexerBackend) Close() {
 	close(b.quit)
+	b.locked <- struct{}{}
 }

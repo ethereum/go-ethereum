@@ -216,7 +216,7 @@ func (b *testChainIndexBackend) Reset(section uint64, prevHead common.Hash) erro
 	return nil
 }
 
-func (b *testChainIndexBackend) Process(header *types.Header) {
+func (b *testChainIndexBackend) Process(header *types.Header) error {
 	b.headerCnt++
 	if b.headerCnt > b.indexer.sectionSize {
 		b.t.Error("Processing too many headers")
@@ -227,6 +227,7 @@ func (b *testChainIndexBackend) Process(header *types.Header) {
 		b.t.Fatal("Unexpected call to Process")
 	case b.processCh <- header.Number.Uint64():
 	}
+	return nil
 }
 
 func (b *testChainIndexBackend) Commit() error {
@@ -236,4 +237,4 @@ func (b *testChainIndexBackend) Commit() error {
 	return nil
 }
 
-func (b *testChainIndexBackend) Closing() {}
+func (b *testChainIndexBackend) Close() {}
