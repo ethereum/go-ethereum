@@ -32,10 +32,8 @@ class App extends Component {
     }
 
     detailTransactionHandler = async(txHash) => {
-      console.log("THIS RAN")
         try {
             const response = await axios.get(`http://localhost:8080/api/get_transaction/${txHash}`)
-            console.log("THIS IS RESPONSE", response)
             await this.setState({ transactionDetailData: response.data })
         }
         catch(error) {

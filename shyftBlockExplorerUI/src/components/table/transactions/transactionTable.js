@@ -4,7 +4,6 @@ import arrow from '../../assets/arrow_right.png';
 import { Link } from 'react-router-dom'
 
 const TransactionTable = (props) => {
-    console.log(props)
     return (
           <tbody>
             <tr>

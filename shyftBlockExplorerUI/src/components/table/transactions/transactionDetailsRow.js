@@ -5,7 +5,6 @@ class DetailTransactionTable extends Component {
 
     render() {
         let data = this.props.data
-        console.log(data)
         let combinedClasses = ['responsive-table', classes.table];
         return (
             <table className={combinedClasses.join(' ')}>
