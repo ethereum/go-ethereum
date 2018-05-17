@@ -433,82 +433,12 @@ func WriteMinerRewards(sqldb *sql.DB, block *types.Block) {
 		totalGas.Add(totalGas, new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas())))
 	}
 
-	totalReward := totalGas.Add(totalGas, Rewards.ShyftMinerBlockReward)
+	totalMinerReward := totalGas.Add(totalGas, Rewards.ShyftMinerBlockReward)
 
-	// Check if shyft conduit exists
-	var shyftBalance string
-	shyftExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
-	shyftErr := sqldb.QueryRow(shyftExistsStatement, shyftConduitAddress).Scan(&shyftBalance)
+	StoreReward(sqldb, minerAddr, totalMinerReward)
+	StoreReward(sqldb, shyftConduitAddress, Rewards.ShyftNetworkBlockReward)
 
-	// Create shyft conduit addr or update exisitng balance
-	if shyftErr == sql.ErrNoRows {
-		// Addr does not exist, thus create new entry
-		createAddrSqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
 
-		// We convert ShyftConduitReward into a string and postgres converts into number
-		_, insertErr := sqldb.Exec(createAddrSqlStatement, shyftConduitAddress, Rewards.ShyftNetworkBlockReward.String(), 0)
-		if insertErr != nil {
-			panic(insertErr)
-		}
-	} else if shyftErr != nil {
-		panic(shyftErr)
-	} else {
-		// shyftAddr exists, update existing balance
-		bigShyftBalance := new(big.Int)
-		bigShyftBalance, err := bigShyftBalance.SetString(shyftBalance, 0)
-		if !err {
-			panic(err)
-		}
-		newBalance := new(big.Int)
-		newBalance.Add(newBalance, bigShyftBalance)
-		newBalance.Add(newBalance, totalReward)
-
-		updateSQLStatement := `UPDATE accounts SET balance = ($1) WHERE addr = ($2)`
-
-		// We convert totalReward into a string and postgres converts into number
-		_, updateErr := sqldb.Exec(updateSQLStatement, newBalance.String(), shyftConduitAddress)
-		if updateErr != nil {
-			panic(updateErr)
-		}
-	}
-
-	// Check if miner exists
-	var minerBalance string
-	minerExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
-	err := sqldb.QueryRow(minerExistsStatement, minerAddr).Scan(&minerBalance)
-
-	// Create miner or update existing balance
-	if err == sql.ErrNoRows {
-		// Addr does not exist, thus create new entry
-		createAddrSqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
-
-		// We convert totalReward into a string and postgres converts into number
-		_, insertErr := sqldb.Exec(createAddrSqlStatement, minerAddr, totalReward.String(), 0)
-		if insertErr != nil {
-			panic(insertErr)
-		}
-	} else if err != nil {
-		// Something went wrong panic
-		panic(err)
-	} else {
-		// Addr exists, update existing balance
-		bigMinerBalance := new(big.Int)
-		bigMinerBalance, err := bigMinerBalance.SetString(minerBalance, 0)
-		if !err {
-			panic(err)
-		}
-		newBalance := new(big.Int)
-		newBalance.Add(newBalance, bigMinerBalance)
-		newBalance.Add(newBalance, totalReward)
-
-		updateSQLStatement := `UPDATE accounts SET balance = ($1) WHERE addr = ($2)`
-
-		// We convert totalReward into a string and postgres converts into number
-		_, updateErr := sqldb.Exec(updateSQLStatement, newBalance.String(), minerAddr)
-		if updateErr != nil {
-			panic(updateErr)
-		}
-	}
 	// Accumulate the rewards for the miner and any included uncles
 	//reward := new(big.Int).Set(blockReward)
 	//r := new(big.Int)
@@ -525,6 +455,46 @@ func WriteMinerRewards(sqldb *sql.DB, block *types.Block) {
 	//state.AddBalance(header.Coinbase, reward)
 }
 
+func StoreReward(sqldb *sql.DB, address string, reward *big.Int) {
+	// Check if address exists
+	var addressBalance string
+	addressExistsStatement := `SELECT balance from accounts WHERE addr = ($1)`
+	err := sqldb.QueryRow(addressExistsStatement, address).Scan(&addressBalance)
+
+	if err == sql.ErrNoRows {
+		// Addr does not exist, thus create new entry
+		createAddressSqlStatement := `INSERT INTO accounts(addr, balance, txCountAccount) VALUES(($1), ($2), ($3)) RETURNING addr`
+
+		// We convert totalReward into a string and postgres converts into number
+		_, insertErr := sqldb.Exec(createAddressSqlStatement, address, reward.String(), 0)
+		if insertErr != nil {
+			panic(insertErr)
+		}
+		return
+	} else if err != nil {
+		// Something went wrong panic
+		panic(err)
+	} else {
+		// Addr exists, update existing balance
+		bigBalance := new(big.Int)
+		bigBalance, err := bigBalance.SetString(addressBalance, 0)
+		if !err {
+			panic(err)
+		}
+		newBalance := new(big.Int)
+		newBalance.Add(newBalance, bigBalance)
+		newBalance.Add(newBalance, reward)
+
+		updateAddressSQLStatement := `UPDATE accounts SET balance = ($1) WHERE addr = ($2)`
+
+		// We convert totalReward into a string and postgres converts into number
+		_, updateErr := sqldb.Exec(updateAddressSQLStatement, newBalance.String(), address)
+		if updateErr != nil {
+			panic(updateErr)
+		}
+		return
+	}
+}
 
 ///////////
 // Getters
