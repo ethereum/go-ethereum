@@ -157,8 +157,6 @@ func WriteTransactions(sqldb *sql.DB, tx *types.Transaction, blockHash common.Ha
 		Nonce:     tx.Nonce(),
 		Data:      tx.Data(),
 	}
-	fmt.Println("THIS IS AGE", age)
-	fmt.Println("THIS IS GAS LIMIT", gasLimit)
 	txHash := txData.TxHash.Hex()
 	from := txData.From.Hex()
 	blockHasher := txData.BlockHash
@@ -678,7 +676,6 @@ func GetTransaction(sqldb *sql.DB, txHash string) string {
 	var isContract bool
 	var age time.Time
 	var data []byte
-
 	row.Scan(
 		&txhash,
 		&to_addr,
