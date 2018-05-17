@@ -24,7 +24,7 @@ class BlocksTable extends Component {
     render() {
         const table = this.state.data.map((data, i) => {
             return <BlockTable
-                key={data.Hash[i]}
+                key={`${data.TxHash}${i}`}
                 Hash={data.Hash}
                 Number={data.Number}
                 Coinbase={data.Coinbase}

@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 
 const BlockTable = (props) => {
     return (
-          <tbody key={props.key}>
+          <tbody>
             <tr>
                 <td><Link to="/blocks/detail" onClick={() => props.detailBlockHandler(props.Number)}>
                     {props.Number}

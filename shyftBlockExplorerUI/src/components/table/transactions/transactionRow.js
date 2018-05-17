@@ -26,25 +26,28 @@ class TransactionTable extends Component {
 
         const table = this.state.data.map((data, i) => {
             return <TransactionsTable
-                key={data.TxHash[i]}
+                key={`${data.TxHash}${i}`}
+                age={data.Age}
                 txHash={data.TxHash}
                 blockNumber={data.BlockNumber}
                 to={data.To}
                 from={data.From}
                 value={data.Amount}
                 cost={data.Cost}
+                detailTransactionHandler={this.props.detailTransactionHandler}
             />
         })
 
         let combinedClasses = ['responsive-table', classes.table];
         return (
-            <table className={combinedClasses.join(' ')}>
+            <table key={this.state.data.TxHash} className={combinedClasses.join(' ')}>
                 <thead className={classes.tHead}>
                 <tr>
                     <th scope="col">TxHash</th>
                     <th scope="col">Block</th>
                     <th scope="col">Age</th>
                     <th scope="col">From</th>
+                    <th scope="col"></th>
                     <th scope="col">To</th>
                     <th scope="col">Value</th>
                     <th scope="col">TxFee</th>
