@@ -76,22 +76,21 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 	stream := rlp.NewStream(input, 0)
 	total, dropped := 0, 0
 
-	// flush imports a batch of transactions and bump the appropriate progress counters
-	flush := func(txs types.Transactions) {
-		errs := add(txs)
-		for _, err := range errs {
+	// Create a method to load a limited batch of transactions and bump the
+	// appropriate progress counters. Then use this method to load all the
+	// journalled transactions in small-ish batches.
+	loadBatch := func(txs types.Transactions) {
+		for _, err := range add(txs) {
 			if err != nil {
 				log.Debug("Failed to add journaled transaction", "err", err)
 				dropped++
 			}
 		}
 	}
-
 	var (
 		failure error
-		txs     types.Transactions
+		batch   types.Transactions
 	)
-
 	for {
 		// Parse the next transaction and terminate on error
 		tx := new(types.Transaction)
@@ -99,18 +98,18 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 			if err != io.EOF {
 				failure = err
 			}
+			if batch.Len() > 0 {
+				loadBatch(batch)
+			}
 			break
 		}
-		txs = append(txs, tx)
+		// New transaction parsed, queue up for later, import if threnshold is reached
 		total++
-		if txs.Len() > 1024 {
-			flush(txs)
-			txs = types.Transactions{}
+
+		if batch = append(batch, tx); batch.Len() > 1024 {
+			loadBatch(batch)
+			batch = batch[:0]
 		}
-	}
-	if txs.Len() > 0 {
-		flush(txs)
-		txs = types.Transactions{}
 	}
 	log.Info("Loaded local transaction journal", "transactions", total, "dropped", dropped)
 

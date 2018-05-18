@@ -42,7 +42,7 @@ const (
 	resultQueueSize  = 10
 	miningLogAtDepth = 5
 
-	// txChanSize is the size of channel listening to TxsPreEvent.
+	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
@@ -71,7 +71,7 @@ type Work struct {
 	family    *set.Set       // family set (used for checking uncle invalidity)
 	uncles    *set.Set       // uncle set
 	tcount    int            // tx count in cycle
-	gasPool   *core.GasPool  // available gas used to pack transaction.
+	gasPool   *core.GasPool  // available gas used to pack transactions
 
 	Block *types.Block // the new block
 
@@ -96,7 +96,7 @@ type worker struct {
 
 	// update loop
 	mux          *event.TypeMux
-	txsCh        chan core.TxsPreEvent
+	txsCh        chan core.NewTxsEvent
 	txsSub       event.Subscription
 	chainHeadCh  chan core.ChainHeadEvent
 	chainHeadSub event.Subscription
@@ -138,7 +138,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		engine:         engine,
 		eth:            eth,
 		mux:            mux,
-		txsCh:          make(chan core.TxsPreEvent, txChanSize),
+		txsCh:          make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
 		chainDb:        eth.ChainDb(),
@@ -150,8 +150,8 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		agents:         make(map[Agent]struct{}),
 		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
 	}
-	// Subscribe TxsPreEvent for tx pool
-	worker.txsSub = eth.TxPool().SubscribeTxPreEvent(worker.txsCh)
+	// Subscribe NewTxsEvent for tx pool
+	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
@@ -259,7 +259,7 @@ func (self *worker) update() {
 			self.possibleUncles[ev.Block.Hash()] = ev.Block
 			self.uncleMu.Unlock()
 
-		// Handle TxsPreEvent
+		// Handle NewTxsEvent
 		case ev := <-self.txsCh:
 			// Apply transactions to the pending state if we're not mining.
 			//
@@ -538,7 +538,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 	for {
 		// If we don't have enough gas for any further transactions then we're done
 		if env.gasPool.Gas() < params.TxGas {
-			log.Trace("Not enough gas for further transactions", "gp", env.gasPool)
+			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
 			break
 		}
 		// Retrieve the next transaction and abort if all done

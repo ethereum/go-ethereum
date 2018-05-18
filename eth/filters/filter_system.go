@@ -59,7 +59,7 @@ const (
 
 const (
 
-	// txChanSize is the size of channel listening to TxsPreEvent.
+	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
 	// rmLogsChanSize is the size of channel listening to RemovedLogsEvent.
@@ -104,7 +104,7 @@ type EventSystem struct {
 	// Channels
 	install   chan *subscription         // install filter for event notification
 	uninstall chan *subscription         // remove filter for event notification
-	txsCh     chan core.TxsPreEvent      // Channel to receive new transactions event
+	txsCh     chan core.NewTxsEvent      // Channel to receive new transactions event
 	logsCh    chan []*types.Log          // Channel to receive new log event
 	rmLogsCh  chan core.RemovedLogsEvent // Channel to receive removed log event
 	chainCh   chan core.ChainEvent       // Channel to receive new chain event
@@ -123,14 +123,14 @@ func NewEventSystem(mux *event.TypeMux, backend Backend, lightMode bool) *EventS
 		lightMode: lightMode,
 		install:   make(chan *subscription),
 		uninstall: make(chan *subscription),
-		txsCh:     make(chan core.TxsPreEvent, txChanSize),
+		txsCh:     make(chan core.NewTxsEvent, txChanSize),
 		logsCh:    make(chan []*types.Log, logsChanSize),
 		rmLogsCh:  make(chan core.RemovedLogsEvent, rmLogsChanSize),
 		chainCh:   make(chan core.ChainEvent, chainEvChanSize),
 	}
 
 	// Subscribe events
-	m.txsSub = m.backend.SubscribeTxPreEvent(m.txsCh)
+	m.txsSub = m.backend.SubscribeNewTxsEvent(m.txsCh)
 	m.logsSub = m.backend.SubscribeLogsEvent(m.logsCh)
 	m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
@@ -298,9 +298,9 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 	return es.subscribe(sub)
 }
 
-// SubscribePendingTxEvents creates a subscription that writes transaction hashes for
+// SubscribePendingTxs creates a subscription that writes transaction hashes for
 // transactions that enter the transaction pool.
-func (es *EventSystem) SubscribePendingTxEvents(hashes chan []common.Hash) *Subscription {
+func (es *EventSystem) SubscribePendingTxs(hashes chan []common.Hash) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       PendingTransactionsSubscription,
@@ -348,8 +348,8 @@ func (es *EventSystem) broadcast(filters filterIndex, ev interface{}) {
 				}
 			}
 		}
-	case core.TxsPreEvent:
-		hashes := make([]common.Hash, 0, e.Txs.Len())
+	case core.NewTxsEvent:
+		hashes := make([]common.Hash, 0, len(e.Txs))
 		for _, tx := range e.Txs {
 			hashes = append(hashes, tx.Hash())
 		}

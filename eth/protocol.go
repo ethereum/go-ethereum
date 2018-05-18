@@ -103,9 +103,9 @@ type txPool interface {
 	// The slice should be modifiable by the caller.
 	Pending() (map[common.Address]types.Transactions, error)
 
-	// SubscribeTxPreEvent should return an event subscription of
-	// TxsPreEvent and send events to the given channel.
-	SubscribeTxPreEvent(chan<- core.TxsPreEvent) event.Subscription
+	// SubscribeNewTxsEvent should return an event subscription of
+	// NewTxsEvent and send events to the given channel.
+	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 }
 
 // statusData is the network packet for the status message.

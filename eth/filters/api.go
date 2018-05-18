@@ -105,7 +105,7 @@ func (api *PublicFilterAPI) timeoutLoop() {
 func (api *PublicFilterAPI) NewPendingTransactionFilter() rpc.ID {
 	var (
 		pendingTxs   = make(chan []common.Hash)
-		pendingTxSub = api.events.SubscribePendingTxEvents(pendingTxs)
+		pendingTxSub = api.events.SubscribePendingTxs(pendingTxs)
 	)
 
 	api.filtersMu.Lock()
@@ -145,7 +145,7 @@ func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Su
 
 	go func() {
 		txHashes := make(chan []common.Hash, 128)
-		pendingTxSub := api.events.SubscribePendingTxEvents(txHashes)
+		pendingTxSub := api.events.SubscribePendingTxs(txHashes)
 
 		for {
 			select {
