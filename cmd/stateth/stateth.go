@@ -115,10 +115,7 @@ func main() {
 		fmt.Println("waiting for SIGINT or SIGTERM (CTRL^C) to stop service and remove containers...")
 		<-done
 
-		if err := cleanupContainers(c); err != nil {
-			return err
-		}
-		return nil
+		return cleanupContainers(c)
 	}
 
 	app.Run(os.Args)
