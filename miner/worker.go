@@ -66,6 +66,7 @@ type Work struct {
 	config *params.ChainConfig
 	signer types.Signer
 
+	stateMu   sync.RWMutex   // protects state
 	state     *state.StateDB // apply state changes here
 	ancestors *set.Set       // ancestor set (used for checking uncle parent validity)
 	family    *set.Set       // family set (used for checking uncle invalidity)
@@ -184,6 +185,8 @@ func (self *worker) pending() (*types.Block, *state.StateDB) {
 
 	self.currentMu.Lock()
 	defer self.currentMu.Unlock()
+	self.current.stateMu.RLock()
+	defer self.current.stateMu.RUnlock()
 	return self.current.Block, self.current.state.Copy()
 }
 
@@ -263,12 +266,16 @@ func (self *worker) update() {
 			// Apply transaction to the pending state if we're not mining
 			if atomic.LoadInt32(&self.mining) == 0 {
 				self.currentMu.Lock()
+				self.current.stateMu.Lock()
+
 				acc, _ := types.Sender(self.current.signer, ev.Tx)
 				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
 				txset := types.NewTransactionsByPriceAndNonce(self.current.signer, txs)
 
 				self.current.commitTransactions(self.mux, txset, self.chain, self.coinbase)
 				self.updateSnapshot()
+
+				self.current.stateMu.Unlock()
 				self.currentMu.Unlock()
 			} else {
 				// If we're mining, but nothing is being processed, wake on new transactions
@@ -307,6 +314,8 @@ func (self *worker) wait() {
 					l.BlockHash = block.Hash()
 				}
 			}
+
+			work.stateMu.Lock()
 			for _, log := range work.state.Logs() {
 				log.BlockHash = block.Hash()
 			}
@@ -315,6 +324,8 @@ func (self *worker) wait() {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
 			}
+			work.stateMu.Unlock()
+
 			// check if canon block and write transactions
 			if stat == core.CanonStatTy {
 				// implicit by posting ChainHeadEvent
@@ -322,10 +333,13 @@ func (self *worker) wait() {
 			}
 			// Broadcast the block and announce chain insertion event
 			self.mux.Post(core.NewMinedBlockEvent{Block: block})
-			var (
-				events []interface{}
-				logs   = work.state.Logs()
-			)
+
+			var events []interface{}
+
+			work.stateMu.RLock()
+			logs := work.state.Logs()
+			work.stateMu.RUnlock()
+
 			events = append(events, core.ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 			if stat == core.CanonStatTy {
 				events = append(events, core.ChainHeadEvent{Block: block})
@@ -444,6 +458,11 @@ func (self *worker) commitNewWork() {
 		log.Error("Failed to create mining context", "err", err)
 		return
 	}
+
+	// Obtain current work's state lock after we receive new work assignment.
+	self.current.stateMu.Lock()
+	defer self.current.stateMu.Unlock()
+
 	// Create the current work task and check any fork transitions needed
 	work := self.current
 	if self.config.DAOForkSupport && self.config.DAOForkBlock != nil && self.config.DAOForkBlock.Cmp(header.Number) == 0 {
