@@ -290,7 +290,6 @@ func (self *worker) update() {
 
 func (self *worker) wait() {
 	for {
-		mustCommitNewWork := true
 		for result := range self.recv {
 			atomic.AddInt32(&self.atWork, -1)
 
@@ -315,11 +314,6 @@ func (self *worker) wait() {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
 			}
-			// check if canon block and write transactions
-			if stat == core.CanonStatTy {
-				// implicit by posting ChainHeadEvent
-				mustCommitNewWork = false
-			}
 			// Broadcast the block and announce chain insertion event
 			self.mux.Post(core.NewMinedBlockEvent{Block: block})
 			var (
@@ -334,10 +328,6 @@ func (self *worker) wait() {
 
 			// Insert the block into the set of pending ones to wait for confirmations
 			self.unconfirmed.Insert(block.NumberU64(), block.Hash())
-
-			if mustCommitNewWork {
-				self.commitNewWork()
-			}
 		}
 	}
 }
