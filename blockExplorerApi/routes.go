@@ -57,12 +57,18 @@ var routes = Routes{
 		"/api/get_transaction/{txHash}",
 		GetTransaction,
 	},
-	//Route{
-	//	Name: "GetRecentBlock",
-	//	Method: "GET",
-	//	Pattern: "/api/get_recent_block",
-	//	HandlerFunc: GetRecentBlock,
-	//},
+	Route{
+		Name: "GetRecentBlock",
+		Method: "GET",
+		Pattern: "/api/get_recent_block",
+		HandlerFunc: GetRecentBlock,
+	},
+	Route{
+		Name: "GetAllTransactionsFromBlock",
+		Method: "GET",
+		Pattern: "/api/get_all_transactions_from_block/{blockNumber}",
+		HandlerFunc: GetAllTransactionsFromBlock,
+	},
 	Route{
 		"GetInternalTransactions",
 		"GET",

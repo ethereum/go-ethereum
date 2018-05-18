@@ -4,11 +4,18 @@ import arrow from '../../assets/arrow_right.png';
 import { Link } from 'react-router-dom'
 
 const TransactionTable = (props) => {
+    let flag;
+    if(props.txHash.indexOf("GENESIS") != -1) {
+        flag = false
+    }else {
+        flag = true
+    }
+
     return (
           <tbody>
             <tr>
                 <td className={classes.addressTag}>
-                    <Link to="/transaction/details" onClick={() => props.detailTransactionHandler(props.txHash)}>
+                    <Link to="/transaction/details" className={flag ? "" : classes.disabled} onClick={() => props.detailTransactionHandler(props.txHash)}>
                         {props.txHash}</Link>
                 </td>
                 <td>{props.blockNumber}</td>

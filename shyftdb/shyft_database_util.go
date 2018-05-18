@@ -588,6 +588,124 @@ func GetBlock(sqldb *sql.DB, blockNumber string) string {
 	return string(json)
 }
 
+func GetRecentBlock(sqldb *sql.DB) string {
+	sqlStatement := `SELECT * FROM blocks WHERE number=(SELECT MAX(number) FROM blocks);`
+	row := sqldb.QueryRow(sqlStatement)
+	var hash string
+	var coinbase string
+	var gasUsed string
+	var gasLimit string
+	var txCount string
+	var uncleCount string
+	var age string
+	var parentHash string
+	var uncleHash string
+	var difficulty string
+	var size string
+	var nonce string
+	var num string
+	row.Scan(
+		&hash,
+		&coinbase,
+		&gasUsed,
+		&gasLimit,
+		&txCount,
+		&uncleCount,
+		&age,
+		&parentHash,
+		&uncleHash,
+		&difficulty,
+		&size,
+		&nonce,
+		&num,)
+
+	block := SBlock{
+		Hash:     hash,
+		Coinbase: coinbase,
+		GasUsed: gasUsed,
+		GasLimit: gasLimit,
+		TxCount: txCount,
+		UncleCount: uncleCount,
+		Age: age,
+		ParentHash:parentHash,
+		UncleHash:uncleHash,
+		Difficulty:difficulty,
+		Size: size,
+		Nonce:nonce,
+		Number:   num,
+	}
+	json, _ := json.Marshal(block)
+	return string(json)
+}
+
+func GetAllTransactionsFromBlock(sqldb *sql.DB, blockNumber string) string {
+	var arr txRes
+	var txx string
+	sqlStatement := `SELECT * FROM txs WHERE blockNumber=$1`
+	rows, err := sqldb.Query(sqlStatement, blockNumber)
+	if err != nil {
+		fmt.Println("err")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var txhash string
+		var to_addr string
+		var from_addr string
+		var blockhash string
+		var blocknumber string
+		var amount uint64
+		var gasprice uint64
+		var gas uint64
+		var gasLimit uint64
+		var txfee uint64
+		var nonce uint64
+		var status string
+		var isContract bool
+		var age time.Time
+		var data []byte
+		err = rows.Scan(
+			&txhash,
+			&to_addr,
+			&from_addr,
+			&blockhash,
+			&blocknumber,
+			&amount,
+			&gasprice,
+			&gas,
+			&gasLimit,
+			&txfee,
+			&nonce,
+			&status,
+			&isContract,
+			&age,
+			&data,
+		)
+
+		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
+			TxHash:    txhash,
+			To:        to_addr,
+			From:      from_addr,
+			BlockHash: blockhash,
+			BlockNumber: blocknumber,
+			Amount:    amount,
+			GasPrice:  gasprice,
+			Gas:       gas,
+			GasLimit: gasLimit,
+			Cost:      txfee,
+			Nonce:     nonce,
+			Status:    status,
+			IsContract: isContract,
+			Age:		age,
+			Data: 		data,
+		})
+
+		tx, _ := json.Marshal(arr.TxEntry)
+		newtx := string(tx)
+		txx = newtx
+	}
+	return txx
+}
+
 //GetAllTransactions getter fn for API
 func GetAllTransactions(sqldb *sql.DB) string {
 	var arr txRes

@@ -58,3 +58,8 @@ th {
     height: 25px;
     margin-left: 15px;
 }
+
+.disabled {
+    pointer-events: none;
+    color: black;
+}
