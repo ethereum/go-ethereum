@@ -185,11 +185,13 @@ func WriteShyftGen(sqldb *sql.DB, gen *Genesis, block *types.Block) {
 				panic(insertError)
 			}
 		}
+
+
 	default:
 		log.Info("Found Genesis Block")
 }}}
 
-func WriteShyftBlockZero(sqldb *sql.DB, block *types.Block) error {
+func WriteShyftBlockZero(sqldb *sql.DB, block *types.Block, gen *Genesis) error {
 	if sqldb == nil {
 		log.Info("Initializing Shyft Postgres DB")
 		connStr := "user=postgres dbname=shyftdb sslmode=disable"
@@ -201,13 +203,13 @@ func WriteShyftBlockZero(sqldb *sql.DB, block *types.Block) error {
 	number := block.Header().Number.String()
 	gasUsed := block.Header().GasUsed
 	gasLimit := block.Header().GasLimit
-	txCount := block.Transactions().Len()
 	uncleCount := len(block.Uncles())
 	parentHash := block.ParentHash().String()
 	uncleHash := block.UncleHash().String()
 	blockDifficulty := block.Difficulty().String()
 	blockSize := block.Size().String()
 	blockNonce := block.Nonce()
+	genesisTxCount := len(gen.Alloc)
 
 	i, err := strconv.ParseInt(block.Time().String(), 10, 64)
 	if err != nil {
@@ -221,7 +223,7 @@ func WriteShyftBlockZero(sqldb *sql.DB, block *types.Block) error {
 	switch {
 	case err == sql.ErrNoRows:
 		sqlStatement := `INSERT INTO blocks(hash, coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age, parentHash, uncleHash, difficulty, size, nonce) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12),($13)) RETURNING number`
-		qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age, parentHash, uncleHash, blockDifficulty, blockSize, blockNonce).Scan(&number)
+		qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number, gasUsed, gasLimit, genesisTxCount, uncleCount, age, parentHash, uncleHash, blockDifficulty, blockSize, blockNonce).Scan(&number)
 		if qerr != nil {
 			panic(qerr)
 		}
@@ -260,7 +262,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis, sqldb *sql.DB) (*par
 		}
 		block, err := genesis.Commit(db)
 		//@NOTE:SHYFT WRITE TO BLOCK ZERO DB
-		WriteShyftBlockZero(sqldb, block)
+		WriteShyftBlockZero(sqldb, block, genesis)
 		//@NOTE:SHYFT WRITE TO DB
 		WriteShyftGen(sqldb, genesis, block)
 
