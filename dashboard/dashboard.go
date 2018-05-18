@@ -81,7 +81,7 @@ type client struct {
 }
 
 // New creates a new dashboard instance with the given configuration.
-func New(config *Config, commit string, _ethServ *eth.Ethereum, _lesserv *les.LightEthereum) (*Dashboard, error) {
+func New(config *Config, commit string, ethServ *eth.Ethereum, lesServ *les.LightEthereum) (*Dashboard, error) {
 	now := time.Now()
 	db := &Dashboard{
 		conns:  make(map[uint32]*client),
@@ -98,8 +98,8 @@ func New(config *Config, commit string, _ethServ *eth.Ethereum, _lesserv *les.Li
 			DiskWrite:      emptyChartEntries(now, diskWriteSampleLimit, config.Refresh),
 		},
 		commit:  commit,
-		ethServ: _ethServ,
-		lesServ: _lesserv,
+		ethServ: ethServ,
+		lesServ: lesServ,
 	}
 	return db, nil
 }
@@ -313,7 +313,7 @@ func (db *Dashboard) collectData() {
 			prevDiskRead = curDiskRead
 			prevDiskWrite = curDiskWrite
 
-			// extract metrics from downloaded and push to registry
+			// extract measurements from eth.Downloader and push to metrics registry
 			p := db.ethServ.Downloader().Progress()
 
 			metrics.GetOrRegisterGauge("currentBlock", nil).Update(int64(p.CurrentBlock))
@@ -321,14 +321,6 @@ func (db *Dashboard) collectData() {
 			metrics.GetOrRegisterGauge("highestBlock", nil).Update(int64(p.HighestBlock))
 			metrics.GetOrRegisterGauge("pulledStates", nil).Update(int64(p.PulledStates))
 			metrics.GetOrRegisterGauge("knownStates", nil).Update(int64(p.KnownStates))
-
-			syncing := db.ethServ.BlockChain().CurrentHeader().Number.Uint64() >= p.HighestBlock
-
-			if syncing {
-				metrics.GetOrRegisterGauge("isSyncing", nil).Update(1)
-			} else {
-				metrics.GetOrRegisterGauge("isSyncing", nil).Update(0)
-			}
 
 			now := time.Now()
 
