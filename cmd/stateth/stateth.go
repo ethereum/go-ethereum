@@ -38,6 +38,13 @@ var (
 	influxdbPort int    // expose port for the InfluxDB HTTP interface
 )
 
+const (
+	influxdbAdminUser = "admin" // admin username for InfluxDB
+	influxdbAdminPass = "admin" // admin password for InfluxDB
+	grafanaUser       = "admin" // default Grafana username - should not be changed here without first updating the docker image
+	grafanaPass       = "admin" // default Grafana password - should not be changed here without first udpating the docker image
+)
+
 func main() {
 	app := cli.NewApp()
 	app.Name = "stateth"
@@ -102,8 +109,8 @@ func main() {
 		}()
 
 		fmt.Println(fmt.Sprintf("grafana listening on http://localhost:%d", grafanaPort))
-		fmt.Println("username: admin")
-		fmt.Println("password: admin")
+		fmt.Println(fmt.Sprintf("username: %s", grafanaUser))
+		fmt.Println(fmt.Sprintf("password: %s", grafanaPass))
 		fmt.Println()
 		fmt.Println("waiting for SIGINT or SIGTERM (CTRL^C) to stop service and remove containers...")
 		<-done
@@ -138,7 +145,7 @@ func runInfluxDB(c *cli.Context) error {
 	}
 
 	log.Info("running influxdb docker container", "container", fmt.Sprintf("%s_influxdb", dockerPrefix))
-	command = strings.Split(fmt.Sprintf("docker run --network %s --name %s_influxdb -e INFLUXDB_DB=metrics -e INFLUXDB_ADMIN_USER=admin -e INFLUXDB_ADMIN_PASSWORD=admin -p %d:8086 -d influxdb:1.5.2", dockerPrefix, dockerPrefix, influxdbPort), " ")
+	command = strings.Split(fmt.Sprintf("docker run --network %s --name %s_influxdb -e INFLUXDB_DB=metrics -e INFLUXDB_ADMIN_USER=%s -e INFLUXDB_ADMIN_PASSWORD=%s -p %d:8086 -d influxdb:1.5.2", dockerPrefix, dockerPrefix, influxdbAdminUser, influxdbAdminPass, influxdbPort), " ")
 	r, err = exec.Command(command[0], command[1:]...).CombinedOutput()
 	if err != nil {
 		log.Error(string(r))
@@ -193,7 +200,7 @@ func cleanupContainers(c *cli.Context) error {
 
 func importGrafanaDatasource(c *cli.Context) error {
 	log.Info("importing grafana datasource")
-	gclient, err := gapi.New("admin:admin", fmt.Sprintf("http://localhost:%d", grafanaPort))
+	gclient, err := gapi.New(fmt.Sprintf("%s:%s", grafanaUser, grafanaPass), fmt.Sprintf("http://localhost:%d", grafanaPort))
 	if err != nil {
 		log.Warn(err.Error())
 		return nil
@@ -202,11 +209,11 @@ func importGrafanaDatasource(c *cli.Context) error {
 	dataSource := &gapi.DataSource{
 		Name:      "metrics",
 		Type:      "influxdb",
-		URL:       "http://stateth_influxdb:8086",
+		URL:       fmt.Sprintf("http://%s_influxdb:%d", dockerPrefix, influxdbPort),
 		Access:    "proxy",
 		Database:  "metrics",
-		User:      "admin",
-		Password:  "admin",
+		User:      influxdbAdminUser,
+		Password:  influxdbAdminPass,
 		IsDefault: true,
 		BasicAuth: false,
 	}
@@ -222,7 +229,7 @@ func importGrafanaDatasource(c *cli.Context) error {
 
 func importGrafanaDashboard(c *cli.Context) error {
 	log.Info("importing grafana dashboards")
-	gclient, err := gapi.New("admin:admin", fmt.Sprintf("http://localhost:%d", grafanaPort))
+	gclient, err := gapi.New(fmt.Sprintf("%s:%s", grafanaUser, grafanaPass), fmt.Sprintf("http://localhost:%d", grafanaPort))
 	if err != nil {
 		log.Warn(err.Error())
 		return nil
