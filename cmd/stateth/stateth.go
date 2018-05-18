@@ -39,8 +39,8 @@ var (
 )
 
 const (
-	influxdbAdminUser = "admin" // admin username for InfluxDB
-	influxdbAdminPass = "admin" // admin password for InfluxDB
+	influxdbAdminUser = "test"  // admin username for InfluxDB
+	influxdbAdminPass = "test"  // admin password for InfluxDB
 	grafanaUser       = "admin" // default Grafana username - should not be changed here without first updating the docker image
 	grafanaPass       = "admin" // default Grafana password - should not be changed here without first udpating the docker image
 )
