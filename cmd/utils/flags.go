@@ -543,7 +543,7 @@ var (
 	MetricsInfluxDBEndpointFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.endpoint",
 		Usage: "Metrics InfluxDB endpoint",
-		Value: "http://127.0.0.1:8086",
+		Value: "http://localhost:8086",
 	}
 	MetricsInfluxDBDatabaseFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.database",
@@ -553,12 +553,12 @@ var (
 	MetricsInfluxDBUsernameFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.username",
 		Usage: "Metrics InfluxDB username",
-		Value: "",
+		Value: "test",
 	}
 	MetricsInfluxDBPasswordFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.password",
 		Usage: "Metrics InfluxDB password",
-		Value: "",
+		Value: "test",
 	}
 	// The `host` tag is part of every measurement sent to InfluxDB. Queries on tags are faster in InfluxDB.
 	// It is used so that we can group all nodes and average a measurement across all of them, but also so
