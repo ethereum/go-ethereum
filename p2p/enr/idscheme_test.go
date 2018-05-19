@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,32 +14,23 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package params
+package enr
 
 import (
-	"fmt"
+	"crypto/ecdsa"
+	"math/big"
+	"testing"
 )
 
-const (
-	VersionMajor = 1          // Major version component of the current release
-	VersionMinor = 8          // Minor version component of the current release
-	VersionPatch = 9          // Patch version component of the current release
-	VersionMeta  = "unstable" // Version metadata to append to the version string
-)
+// Checks that failure to sign leaves the record unmodified.
+func TestSignError(t *testing.T) {
+	invalidKey := &ecdsa.PrivateKey{D: new(big.Int), PublicKey: *pubkey}
 
-// Version holds the textual version string.
-var Version = func() string {
-	v := fmt.Sprintf("%d.%d.%d", VersionMajor, VersionMinor, VersionPatch)
-	if VersionMeta != "" {
-		v += "-" + VersionMeta
+	var r Record
+	if err := SignV4(&r, invalidKey); err == nil {
+		t.Fatal("expected error from SignV4")
 	}
-	return v
-}()
-
-func VersionWithCommit(gitCommit string) string {
-	vsn := Version
-	if len(gitCommit) >= 8 {
-		vsn += "-" + gitCommit[:8]
+	if len(r.pairs) > 0 {
+		t.Fatal("expected empty record, have", r.pairs)
 	}
-	return vsn
 }
