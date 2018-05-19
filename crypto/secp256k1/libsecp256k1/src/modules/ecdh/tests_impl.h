@@ -4,8 +4,8 @@
  * file COPYING or http://www.opensource.org/licenses/mit-license.php.*
  **********************************************************************/
 
-#ifndef _SECP256K1_MODULE_ECDH_TESTS_
-#define _SECP256K1_MODULE_ECDH_TESTS_
+#ifndef SECP256K1_MODULE_ECDH_TESTS_H
+#define SECP256K1_MODULE_ECDH_TESTS_H
 
 void test_ecdh_api(void) {
     /* Setup context that just counts errors */
@@ -44,7 +44,7 @@ void test_ecdh_generator_basepoint(void) {
     s_one[31] = 1;
     /* Check against pubkey creation when the basepoint is the generator */
     for (i = 0; i < 100; ++i) {
-        secp256k1_sha256_t sha;
+        secp256k1_sha256 sha;
         unsigned char s_b32[32];
         unsigned char output_ecdh[32];
         unsigned char output_ser[32];
@@ -102,4 +102,4 @@ void run_ecdh_tests(void) {
     test_bad_scalar();
 }
 
-#endif
+#endif /* SECP256K1_MODULE_ECDH_TESTS_H */
