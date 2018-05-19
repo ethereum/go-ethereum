@@ -4,8 +4,8 @@
  * file COPYING or http://www.opensource.org/licenses/mit-license.php.*
  **********************************************************************/
 
-#ifndef _SECP256K1_MODULE_ECDH_MAIN_
-#define _SECP256K1_MODULE_ECDH_MAIN_
+#ifndef SECP256K1_MODULE_ECDH_MAIN_H
+#define SECP256K1_MODULE_ECDH_MAIN_H
 
 #include "include/secp256k1_ecdh.h"
 #include "ecmult_const_impl.h"
@@ -28,9 +28,9 @@ int secp256k1_ecdh(const secp256k1_context* ctx, unsigned char *result, const se
     } else {
         unsigned char x[32];
         unsigned char y[1];
-        secp256k1_sha256_t sha;
+        secp256k1_sha256 sha;
 
-        secp256k1_ecmult_const(&res, &pt, &s);
+        secp256k1_ecmult_const(&res, &pt, &s, 256);
         secp256k1_ge_set_gej(&pt, &res);
         /* Compute a hash of the point in compressed form
          * Note we cannot use secp256k1_eckey_pubkey_serialize here since it does not
@@ -51,4 +51,4 @@ int secp256k1_ecdh(const secp256k1_context* ctx, unsigned char *result, const se
     return ret;
 }
 
-#endif
+#endif /* SECP256K1_MODULE_ECDH_MAIN_H */
