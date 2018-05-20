@@ -113,6 +113,9 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	}
 	fmt.Printf("from:  %v\n", request.Transaction.From.String())
 	fmt.Printf("value: %v wei\n", weival)
+	fmt.Printf("gas: %v\n", request.Transaction.Gas)
+	fmt.Printf("gasprice: %v wei\n", request.Transaction.GasPrice)
+	fmt.Printf("nonce: %v\n", request.Transaction.Nonce)
 	if request.Transaction.Data != nil {
 		d := *request.Transaction.Data
 		if len(d) > 0 {
@@ -122,7 +125,7 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	if request.Callinfo != nil {
 		fmt.Printf("\nTransaction validation:\n")
 		for _, m := range request.Callinfo {
-			fmt.Printf("  * %s : %s", m.Typ, m.Message)
+			fmt.Printf("  * %s : %s\n", m.Typ, m.Message)
 		}
 		fmt.Println()
 

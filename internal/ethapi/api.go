@@ -206,20 +206,33 @@ type PrivateAccountAPI struct {
 	am        *accounts.Manager
 	nonceLock *AddrLocker
 	b         Backend
+	extapi    *ExternalSignerAPI // external signer, nil if not used
 }
 
 // NewPrivateAccountAPI create a new PrivateAccountAPI.
 func NewPrivateAccountAPI(b Backend, nonceLock *AddrLocker) *PrivateAccountAPI {
+
+	extapi, _ := NewExternalSigner()
+
 	return &PrivateAccountAPI{
 		am:        b.AccountManager(),
 		nonceLock: nonceLock,
 		b:         b,
+		extapi:extapi,
 	}
 }
 
 // ListAccounts will return a list of addresses for accounts this node manages.
 func (s *PrivateAccountAPI) ListAccounts() []common.Address {
 	addresses := make([]common.Address, 0) // return [] instead of nil if empty
+	if s.extapi != nil{
+		if accounts, err := s.extapi.listAccounts(); err == nil{
+			for _, account := range accounts {
+				addresses = append(addresses, account.Address)
+			}
+		}
+		return addresses
+	}
 	for _, wallet := range s.am.Wallets() {
 		for _, account := range wallet.Accounts() {
 			addresses = append(addresses, account.Address)
@@ -340,14 +353,23 @@ func (s *PrivateAccountAPI) LockAccount(addr common.Address) bool {
 // NOTE: the caller needs to ensure that the nonceLock is held, if applicable,
 // and release it after the transaction has been submitted to the tx pool
 func (s *PrivateAccountAPI) signTransaction(ctx context.Context, args SendTxArgs, passwd string) (*types.Transaction, error) {
+	// Set some sanity defaults and terminate on failure
+	if err := args.setDefaults(ctx, s.b); err != nil {
+		return nil, err
+	}
+	if true{
+		extapi, err := NewExternalSigner()
+		if err != nil {
+			return nil, err
+		}
+		tx, err := extapi.signTransaction(ctx, args)
+		return tx, err
+	}
+
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: args.From}
 	wallet, err := s.am.Find(account)
 	if err != nil {
-		return nil, err
-	}
-	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and sign with the wallet
@@ -943,11 +965,12 @@ func newRPCTransactionFromBlockHash(b *types.Block, hash common.Hash) *RPCTransa
 type PublicTransactionPoolAPI struct {
 	b         Backend
 	nonceLock *AddrLocker
+	extapi    *ExternalSignerAPI // external signer, nil if not used
 }
 
 // NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
 func NewPublicTransactionPoolAPI(b Backend, nonceLock *AddrLocker) *PublicTransactionPoolAPI {
-	return &PublicTransactionPoolAPI{b, nonceLock}
+	return &PublicTransactionPoolAPI{b, nonceLock, nil}
 }
 
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
@@ -1288,7 +1311,14 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Sen
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
 	}
-	tx, err := s.sign(args.From, args.toTransaction())
+
+	extapi, err := NewExternalSigner()
+	if err != nil {
+		return nil, err
+	}
+	tx, err := extapi.signTransaction(ctx, args)
+	//tx, err := s.sign(args.From, args.toTransaction())
+
 	if err != nil {
 		return nil, err
 	}
@@ -1488,4 +1518,36 @@ func (s *PublicNetAPI) PeerCount() hexutil.Uint {
 // Version returns the current ethereum protocol version.
 func (s *PublicNetAPI) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
+}
+
+// ExternalSignerAPI provides an API to interact with an external signer (clef)
+// It proxies request to the external signer while forwarding relevant
+// request headers
+type ExternalSignerAPI struct {
+	client *rpc.Client
+}
+
+func NewExternalSigner() (*ExternalSignerAPI, error) {
+	client, err := rpc.DialHTTP("http://localhost:8550")
+	if err != nil {
+		return nil, err
+	}
+	return &ExternalSignerAPI{
+		client: client,
+	}, nil
+}
+
+func (api *ExternalSignerAPI) signTransaction(ctx context.Context, args SendTxArgs) (*types.Transaction, error) {
+	res := SignTransactionResult{}
+	if err := api.client.Call(&res, "account_signTransaction", args); err != nil {
+		return nil, err
+	}
+	return res.Tx, nil
+}
+func (api *ExternalSignerAPI) listAccounts() ([]accounts.Account, error) {
+	var res []accounts.Account
+	if err := api.client.Call(&res, "account_list"); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
