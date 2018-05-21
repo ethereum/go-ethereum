@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-// Initial slice capacity for the values stored in a ResettingTimer
+// InitialResettingTimerSliceCap is the initial slice capacity for the values
+// stored in a ResettingTimer.
 const InitialResettingTimerSliceCap = 10
 
 // ResettingTimer is used for storing aggregated values for timers, which are reset on every flush interval.
@@ -113,21 +114,21 @@ func (t *StandardResettingTimer) Mean() float64 {
 	panic("Mean called on a StandardResettingTimer")
 }
 
-// Record the duration of the execution of the given function.
+// Time records the duration of the execution of the given function.
 func (t *StandardResettingTimer) Time(f func()) {
 	ts := time.Now()
 	f()
 	t.Update(time.Since(ts))
 }
 
-// Record the duration of an event.
+// Update records the duration of an event.
 func (t *StandardResettingTimer) Update(d time.Duration) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.values = append(t.values, int64(d))
 }
 
-// Record the duration of an event that started at a time and ends now.
+// UpdateSince records the duration of an event that started at a time and ends now.
 func (t *StandardResettingTimer) UpdateSince(ts time.Time) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -211,7 +212,7 @@ func (t *ResettingTimerSnapshot) calc(percentiles []float64) {
 				// math.Floor(x + 0.5)
 				indexOfPerc := int(math.Floor(((abs / 100.0) * float64(count)) + 0.5))
 				if pct >= 0 {
-					indexOfPerc -= 1 // index offset=0
+					indexOfPerc-- // index offset=0
 				}
 				thresholdBoundary = t.values[indexOfPerc]
 			}

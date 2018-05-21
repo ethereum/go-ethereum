@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 )
 
-// EWMAs continuously calculate an exponentially-weighted moving average
+// EWMA continuously calculates an exponentially-weighted moving average
 // based on an outside source of clock ticks.
 type EWMA interface {
 	Rate() float64

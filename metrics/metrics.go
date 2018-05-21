@@ -2,7 +2,7 @@
 //
 // <https://github.com/rcrowley/go-metrics>
 //
-// Coda Hale's original work: <https://github.com/codahale/metrics>
+// Package metrics is a go port of Coda Hale's original work: <https://github.com/codahale/metrics>
 package metrics
 
 import (
@@ -19,7 +19,7 @@ import (
 //
 // This global kill-switch helps quantify the observer effect and makes
 // for less cluttered pprof profiles.
-var Enabled bool = false
+var Enabled = false
 
 // MetricsEnabledFlag is the CLI flag name to use to enable metrics collections.
 const MetricsEnabledFlag = "metrics"

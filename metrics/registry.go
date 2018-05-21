@@ -50,33 +50,32 @@ type Registry interface {
 	UnregisterAll()
 }
 
-// The standard implementation of a Registry is a mutex-protected map
-// of names to metrics.
+// StandardRegistry is a mutex protected implementation of a Registry.
 type StandardRegistry struct {
 	metrics map[string]interface{}
 	mutex   sync.Mutex
 }
 
-// Create a new registry.
+// NewRegistry creates a new registry.
 func NewRegistry() Registry {
 	return &StandardRegistry{metrics: make(map[string]interface{})}
 }
 
-// Call the given function for each registered metric.
+// Each calls the given function for each registered metric.
 func (r *StandardRegistry) Each(f func(string, interface{})) {
 	for name, i := range r.registered() {
 		f(name, i)
 	}
 }
 
-// Get the metric by the given name or nil if none is registered.
+// Get gets the metric by the given name or nil if none is registered.
 func (r *StandardRegistry) Get(name string) interface{} {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	return r.metrics[name]
 }
 
-// Gets an existing metric or creates and registers a new one. Threadsafe
+// GetOrRegister gets an existing metric or creates and registers a new one. Threadsafe
 // alternative to calling Get and Register on failure.
 // The interface can be the metric to register if not found in registry,
 // or a function returning the metric for lazy instantiation.
@@ -101,7 +100,7 @@ func (r *StandardRegistry) Register(name string, i interface{}) error {
 	return r.register(name, i)
 }
 
-// Run all registered healthchecks.
+// RunHealthchecks runs all registered healthchecks.
 func (r *StandardRegistry) RunHealthchecks() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -181,7 +180,7 @@ func (r *StandardRegistry) Unregister(name string) {
 	delete(r.metrics, name)
 }
 
-// Unregister all metrics.  (Mostly for testing.)
+// UnregisterAll unregisters all metrics. Mostly for testing.
 func (r *StandardRegistry) UnregisterAll() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -244,7 +243,7 @@ func NewPrefixedChildRegistry(parent Registry, prefix string) Registry {
 	}
 }
 
-// Call the given function for each registered metric.
+// Each calls the given function for each registered metric.
 func (r *PrefixedRegistry) Each(fn func(string, interface{})) {
 	wrappedFn := func(prefix string) func(string, interface{}) {
 		return func(name string, iface interface{}) {
@@ -276,7 +275,7 @@ func (r *PrefixedRegistry) Get(name string) interface{} {
 	return r.underlying.Get(realName)
 }
 
-// Gets an existing metric or registers the given one.
+// GetOrRegister gets an existing metric or registers the given one.
 // The interface can be the metric to register if not found in registry,
 // or a function returning the metric for lazy instantiation.
 func (r *PrefixedRegistry) GetOrRegister(name string, metric interface{}) interface{} {
@@ -290,7 +289,7 @@ func (r *PrefixedRegistry) Register(name string, metric interface{}) error {
 	return r.underlying.Register(realName, metric)
 }
 
-// Run all registered healthchecks.
+// RunHealthchecks runs all registered healthchecks.
 func (r *PrefixedRegistry) RunHealthchecks() {
 	r.underlying.RunHealthchecks()
 }
@@ -306,14 +305,14 @@ func (r *PrefixedRegistry) Unregister(name string) {
 	r.underlying.Unregister(realName)
 }
 
-// Unregister all metrics.  (Mostly for testing.)
+// UnregisterAll unregisters all metrics. Mostly for testing.
 func (r *PrefixedRegistry) UnregisterAll() {
 	r.underlying.UnregisterAll()
 }
 
-var DefaultRegistry Registry = NewRegistry()
+var DefaultRegistry = NewRegistry()
 
-// Call the given function for each registered metric.
+// Each calls the given function for each registered metric.
 func Each(f func(string, interface{})) {
 	DefaultRegistry.Each(f)
 }
@@ -323,7 +322,7 @@ func Get(name string) interface{} {
 	return DefaultRegistry.Get(name)
 }
 
-// Gets an existing metric or creates and registers a new one. Threadsafe
+// GetOrRegister gets an existing metric or creates and registers a new one. Threadsafe
 // alternative to calling Get and Register on failure.
 func GetOrRegister(name string, i interface{}) interface{} {
 	return DefaultRegistry.GetOrRegister(name, i)
@@ -335,7 +334,7 @@ func Register(name string, i interface{}) error {
 	return DefaultRegistry.Register(name, i)
 }
 
-// Register the given metric under the given name.  Panics if a metric by the
+// MustRegister registers the given metric under the given name.  Panics if a metric by the
 // given name is already registered.
 func MustRegister(name string, i interface{}) {
 	if err := Register(name, i); err != nil {
@@ -343,7 +342,7 @@ func MustRegister(name string, i interface{}) {
 	}
 }
 
-// Run all registered healthchecks.
+// RunHealthchecks runs all registered healthchecks.
 func RunHealthchecks() {
 	DefaultRegistry.RunHealthchecks()
 }

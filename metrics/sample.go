@@ -10,7 +10,7 @@ import (
 
 const rescaleThreshold = time.Hour
 
-// Samples maintain a statistically-significant selection of values from
+// Sample maintains a statistically-significant selection of values from
 // a stream.
 type Sample interface {
 	Clear()
@@ -214,7 +214,7 @@ func (NilSample) Percentiles(ps []float64) []float64 {
 // Size is a no-op.
 func (NilSample) Size() int { return 0 }
 
-// Sample is a no-op.
+// Snapshot is a no-op.
 func (NilSample) Snapshot() Sample { return NilSample{} }
 
 // StdDev is a no-op.
@@ -268,7 +268,7 @@ func SampleMin(values []int64) int64 {
 	return min
 }
 
-// SamplePercentiles returns an arbitrary percentile of the slice of int64.
+// SamplePercentile returns an arbitrary percentile of the slice of int64.
 func SamplePercentile(values int64Slice, p float64) float64 {
 	return SamplePercentiles(values, []float64{p})[0]
 }
@@ -302,6 +302,7 @@ type SampleSnapshot struct {
 	values []int64
 }
 
+// NewSampleSnapshot creates a new sample snapshot.
 func NewSampleSnapshot(count int64, values []int64) *SampleSnapshot {
 	return &SampleSnapshot{
 		count:  count,
@@ -394,7 +395,7 @@ func SampleVariance(values []int64) float64 {
 	return sum / float64(len(values))
 }
 
-// A uniform sample using Vitter's Algorithm R.
+// UniformSample represents a uniform sample using Vitter's Algorithm R.
 //
 // <http://www.cs.umd.edu/~samir/498/vitter.pdf>
 type UniformSample struct {

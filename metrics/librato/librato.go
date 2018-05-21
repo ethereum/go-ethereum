@@ -43,7 +43,7 @@ func Librato(r metrics.Registry, d time.Duration, e string, t string, s string, 
 func (rep *Reporter) Run() {
 	log.Printf("WARNING: This client has been DEPRECATED! It has been moved to https://github.com/mihasya/go-metrics-librato and will be removed from rcrowley/go-metrics on August 5th 2015")
 	ticker := time.Tick(rep.Interval)
-	metricsApi := &LibratoClient{rep.Email, rep.Token}
+	metricsAPI := &LibratoClient{rep.Email, rep.Token}
 	for now := range ticker {
 		var metrics Batch
 		var err error
@@ -51,7 +51,7 @@ func (rep *Reporter) Run() {
 			log.Printf("ERROR constructing librato request body %s", err)
 			continue
 		}
-		if err := metricsApi.PostMetrics(metrics); err != nil {
+		if err := metricsAPI.PostMetrics(metrics); err != nil {
 			log.Printf("ERROR sending metrics to librato %s", err)
 			continue
 		}

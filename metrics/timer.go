@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Timers capture the duration and rate of events.
+// Timer captures the duration and rate of events.
 type Timer interface {
 	Count() int64
 	Max() int64
@@ -221,14 +221,14 @@ func (t *StandardTimer) Sum() int64 {
 	return t.histogram.Sum()
 }
 
-// Record the duration of the execution of the given function.
+// Time records the duration of the execution of the given function.
 func (t *StandardTimer) Time(f func()) {
 	ts := time.Now()
 	f()
 	t.Update(time.Since(ts))
 }
 
-// Record the duration of an event.
+// Update records the duration of an event.
 func (t *StandardTimer) Update(d time.Duration) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -236,7 +236,7 @@ func (t *StandardTimer) Update(d time.Duration) {
 	t.meter.Mark(1)
 }
 
-// Record the duration of an event that started at a time and ends now.
+// UpdateSince records the duration of an event that started at a time and ends now.
 func (t *StandardTimer) UpdateSince(ts time.Time) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()

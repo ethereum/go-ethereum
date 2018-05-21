@@ -2,7 +2,7 @@ package metrics
 
 import "sync"
 
-// GaugeFloat64s hold a float64 value that can be set arbitrarily.
+// GaugeFloat64 holds a float64 value that can be set arbitrarily.
 type GaugeFloat64 interface {
 	Snapshot() GaugeFloat64
 	Update(float64)
@@ -38,7 +38,7 @@ func NewRegisteredGaugeFloat64(name string, r Registry) GaugeFloat64 {
 	return c
 }
 
-// NewFunctionalGauge constructs a new FunctionalGauge.
+// NewFunctionalGaugeFloat64 constructs a new FunctionalGauge.
 func NewFunctionalGaugeFloat64(f func() float64) GaugeFloat64 {
 	if !Enabled {
 		return NilGaugeFloat64{}
@@ -46,7 +46,7 @@ func NewFunctionalGaugeFloat64(f func() float64) GaugeFloat64 {
 	return &FunctionalGaugeFloat64{value: f}
 }
 
-// NewRegisteredFunctionalGauge constructs and registers a new StandardGauge.
+// NewRegisteredFunctionalGaugeFloat64 constructs and registers a new StandardGauge.
 func NewRegisteredFunctionalGaugeFloat64(name string, r Registry, f func() float64) GaugeFloat64 {
 	c := NewFunctionalGaugeFloat64(f)
 	if nil == r {
@@ -70,7 +70,7 @@ func (GaugeFloat64Snapshot) Update(float64) {
 // Value returns the value at the time the snapshot was taken.
 func (g GaugeFloat64Snapshot) Value() float64 { return float64(g) }
 
-// NilGauge is a no-op Gauge.
+// NilGaugeFloat64 is a no-op Gauge.
 type NilGaugeFloat64 struct{}
 
 // Snapshot is a no-op.

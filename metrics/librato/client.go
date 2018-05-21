@@ -11,6 +11,7 @@ import (
 const Operations = "operations"
 const OperationsShort = "ops"
 
+// LibratoClient holds an email and a token.
 type LibratoClient struct {
 	Email, Token string
 }
@@ -52,7 +53,7 @@ const (
 	Counters = "counters"
 	Gauges   = "gauges"
 
-	MetricsPostUrl = "https://metrics-api.librato.com/v1/metrics"
+	MetricsPostURL = "https://metrics-api.librato.com/v1/metrics"
 )
 
 type Measurement map[string]interface{}
@@ -80,7 +81,7 @@ func (c *LibratoClient) PostMetrics(batch Batch) (err error) {
 		return
 	}
 
-	if req, err = http.NewRequest("POST", MetricsPostUrl, bytes.NewBuffer(js)); err != nil {
+	if req, err = http.NewRequest("POST", MetricsPostURL, bytes.NewBuffer(js)); err != nil {
 		return
 	}
 

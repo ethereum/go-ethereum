@@ -52,18 +52,18 @@ var (
 	threadCreateProfile = pprof.Lookup("threadcreate")
 )
 
-// Capture new values for the Go runtime statistics exported in
-// runtime.MemStats.  This is designed to be called as a goroutine.
+// CaptureRuntimeMemStats captures new values for the Go runtime statistics exported 
+// in runtime.MemStats.  This is designed to be called as a goroutine.
 func CaptureRuntimeMemStats(r Registry, d time.Duration) {
 	for range time.Tick(d) {
 		CaptureRuntimeMemStatsOnce(r)
 	}
 }
 
-// Capture new values for the Go runtime statistics exported in
-// runtime.MemStats.  This is designed to be called in a background
-// goroutine.  Giving a registry which has not been given to
-// RegisterRuntimeMemStats will panic.
+// CaptureRuntimeMemStatsOnce captures new values for the Go runtime statistics 
+// exported in runtime.MemStats.  This is designed to be called in a background
+// goroutine.  Giving a registry which has not been given to RegisterRuntimeMemStats
+// will panic.
 //
 // Be very careful with this because runtime.ReadMemStats calls the C
 // functions runtime·semacquire(&runtime·worldsema) and runtime·stoptheworld()
@@ -142,7 +142,7 @@ func CaptureRuntimeMemStatsOnce(r Registry) {
 	runtimeMetrics.NumThread.Update(int64(threadCreateProfile.Count()))
 }
 
-// Register runtimeMetrics for the Go runtime statistics exported in runtime and
+// RegisterRuntimeMemStats registers runtimeMetrics for the Go runtime statistics exported in runtime and
 // specifically runtime.MemStats.  The runtimeMetrics are named by their
 // fully-qualified Go symbols, i.e. runtime.MemStats.Alloc.
 func RegisterRuntimeMemStats(r Registry) {

@@ -1,6 +1,6 @@
 package metrics
 
-// Histograms calculate distribution statistics from a series of int64 values.
+// Histogram calculates distribution statistics from a series of int64 values.
 type Histogram interface {
 	Clear()
 	Count() int64
