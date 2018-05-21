@@ -113,7 +113,7 @@ func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 	return b.chainFeed.Subscribe(ch)
 }
 
-func (b *testBackend) SubscribeTransactionEvent(ch chan<- core.TransactionEvent) event.Subscription {
+func (b *testBackend) SubscribeTransactionEvent(ch chan<- []*core.TransactionEvent) event.Subscription {
 	return b.txPostFeed.Subscribe(ch)
 }
 
@@ -280,57 +280,76 @@ func TestReturnDataFilter(t *testing.T) {
 	t.Parallel()
 
 	var (
-		mux        = new(event.TypeMux)
-		db         = ethdb.NewMemDatabase()
-		txPreFeed  = new(event.Feed)
-		txPostFeed = new(event.Feed)
-		rmLogsFeed = new(event.Feed)
-		logsFeed   = new(event.Feed)
-		chainFeed  = new(event.Feed)
-		//firstAddr 		= common.HexToAddress("0x1111111111111111111111111111111111111111")
-		//secondAddr		= common.HexToAddress("0x2222222222222222222222222222222222222222")
-		//thirdAddress	= common.HexToHash("0x3333333333333333333333333333333333333333")
-		//		notUsedAddress = common.HexToAddress("0x9999999999999999999999999999999999999999")  // TODO: will need these for testing of from: field criteria when impl
-		firstTx              = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
-		secondTx             = common.HexToHash("0x2222222222222222222222222222222222222222222222222222222222222222")
-		thirdTx              = common.HexToHash("0x3333333333333333333333333333333333333333333333333333333333333333")
-		forthTx              = common.HexToHash("0x4444444444444444444444444444444444444444444444444444444444444444")
-		firstRetData         = common.Hex2Bytes("0x535353535353535353535353535353535353535353535353535353")
-		secondRetData        = common.Hex2Bytes("0x8888888888888888888888888888888888888888888888888888888888888888888888888888888888888")
-		thirdRetData  []byte = nil // no return data for this tx
-		forthRetData         = common.Hex2Bytes("0x77")
-		backend              = &testBackend{mux, db, 0, txPreFeed, txPostFeed, rmLogsFeed, logsFeed, chainFeed}
-		api                  = NewPublicFilterAPI(backend, false)
+		mux                   = new(event.TypeMux)
+		db                    = ethdb.NewMemDatabase()
+		txPreFeed             = new(event.Feed)
+		txPostFeed            = new(event.Feed)
+		rmLogsFeed            = new(event.Feed)
+		logsFeed              = new(event.Feed)
+		chainFeed             = new(event.Feed)
+		firstFromAddr         = common.HexToAddress("0x1111111111111111111111111111111111111111")
+		secondFromAddr        = common.HexToAddress("0x2222222222222222222222222222222222222222")
+		firstToAddr           = common.HexToAddress("0x3333333333333333333333333333333333333333")
+		secondToAddr          = common.HexToAddress("0x0000000000000000000000000000000000000000") // contract creation
+		notUsedAddr           = common.HexToAddress("0x9999999999999999999999999999999999999999")
+		firstTx               = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
+		secondTx              = common.HexToHash("0x2222222222222222222222222222222222222222222222222222222222222222")
+		thirdTx               = common.HexToHash("0x3333333333333333333333333333333333333333333333333333333333333333")
+		forthTx               = common.HexToHash("4444444444444444444444444444444444444444444444444444444444444444")
+		firstRetData          = common.Hex2Bytes("535353535353535353535353535353535353535353535353535353")
+		secondRetData         = common.Hex2Bytes("8888888888888888888888888888888888888888888888888888888888888888888888888888888888888")
+		thirdRetData   []byte = nil // no return data for this tx
+		forthRetData          = common.Hex2Bytes("0x77")
+		backend               = &testBackend{mux, db, 0, txPreFeed, txPostFeed, rmLogsFeed, logsFeed, chainFeed}
+		api                   = NewPublicFilterAPI(backend, false)
 	)
 
 	retData := [...]types.ReturnData{
 		{TxHash: firstTx, Data: firstRetData, Removed: false},
 		{TxHash: secondTx, Data: secondRetData, Removed: false},
-		{TxHash: thirdTx, Data: forthRetData, Removed: false}, // third tx added to canonical chain
-		{TxHash: thirdTx, Data: forthRetData, Removed: true},  //  but later removed due to reorg
-		{TxHash: forthTx, Data: thirdRetData, Removed: false},
+		{TxHash: thirdTx, Data: thirdRetData, Removed: false}, // third tx added to canonical chain
+		{TxHash: forthTx, Data: forthRetData, Removed: false},
+		{TxHash: thirdTx, Data: thirdRetData, Removed: true}, //  third tx removed from canonical chain due to reorg
+	}
+
+	txEvents := [...]*core.TransactionEvent{
+		{TxHash: retData[0].TxHash, RetData: &retData[0], From: &firstFromAddr, To: &firstToAddr},
+		{TxHash: retData[1].TxHash, RetData: &retData[1], From: &secondFromAddr, To: &secondToAddr},
+		{TxHash: retData[2].TxHash, RetData: &retData[2], From: &firstFromAddr, To: &secondToAddr},
+		{TxHash: retData[3].TxHash, RetData: &retData[3], From: &secondFromAddr, To: &firstToAddr},
+		{TxHash: retData[4].TxHash, RetData: &retData[4], From: &firstFromAddr, To: &secondToAddr},
 	}
 
 	testCases := []struct {
-		expected []*types.ReturnData
+		crit     TxFilterCriteria
+		expected []types.ReturnData
 		id       rpc.ID
 	}{
-		0: {[]*types.ReturnData{&retData[0]}, ""},
-		1: {[]*types.ReturnData{&retData[1]}, ""},
-		2: {[]*types.ReturnData{&retData[2], &retData[3]}, ""},
-		3: {[]*types.ReturnData{&retData[3]}, ""},
+		0:  {TxFilterCriteria{From: []common.Address{secondFromAddr}}, []types.ReturnData{retData[1], retData[3]}, ""},
+		1:  {TxFilterCriteria{From: []common.Address{firstFromAddr}}, []types.ReturnData{retData[0], retData[2], retData[4]}, ""},
+		2:  {TxFilterCriteria{From: []common.Address{notUsedAddr}}, []types.ReturnData{}, ""},
+		3:  {TxFilterCriteria{From: []common.Address{notUsedAddr, secondFromAddr}}, []types.ReturnData{retData[1], retData[3]}, ""},
+		4:  {TxFilterCriteria{From: []common.Address{notUsedAddr, firstFromAddr, secondFromAddr}}, []types.ReturnData{retData[0], retData[1], retData[2], retData[3], retData[4]}, ""},
+		5:  {TxFilterCriteria{To: []common.Address{firstToAddr}}, []types.ReturnData{retData[0], retData[3]}, ""},
+		6:  {TxFilterCriteria{To: []common.Address{secondToAddr}}, []types.ReturnData{retData[1], retData[2], retData[4]}, ""},
+		7:  {TxFilterCriteria{To: []common.Address{firstToAddr, secondToAddr}}, []types.ReturnData{retData[0], retData[1], retData[2], retData[3], retData[4]}, ""},
+		8:  {TxFilterCriteria{To: []common.Address{notUsedAddr}}, []types.ReturnData{}, ""},
+		9:  {TxFilterCriteria{From: []common.Address{firstFromAddr}, To: []common.Address{secondToAddr}}, []types.ReturnData{retData[2], retData[4]}, ""},
+		10: {TxFilterCriteria{From: []common.Address{notUsedAddr}, To: []common.Address{secondToAddr}}, []types.ReturnData{}, ""},
+		11: {TxFilterCriteria{From: []common.Address{secondFromAddr}, To: []common.Address{secondToAddr, notUsedAddr}}, []types.ReturnData{retData[1]}, ""},
+		12: {TxFilterCriteria{}, []types.ReturnData{retData[0], retData[1], retData[2], retData[3], retData[4]}, ""},
 	}
 
 	// create all filters
 	for i := range testCases {
-		testCases[i].id = api.NewReturnDataFilter()
+		testCases[i].id = api.NewReturnDataFilter(testCases[i].crit)
 	}
 
 	time.Sleep(1 * time.Second)
 
-	for _, r := range retData {
-		txPostFeed.Send(core.TransactionEvent{TxHash: r.TxHash, RetData: &r})
-	}
+	txPostFeed.Send([]*core.TransactionEvent{txEvents[0]})
+	txPostFeed.Send(txEvents[1:3])
+	txPostFeed.Send(txEvents[3:5])
 
 	for i, tt := range testCases {
 		var fetched []types.ReturnData
@@ -355,14 +374,16 @@ func TestReturnDataFilter(t *testing.T) {
 
 		if len(fetched) != len(tt.expected) {
 			t.Errorf("invalid number of return data events for case %d, want %d events, got %d", i, len(tt.expected), len(fetched))
-			return
+			//return
 		}
 
 		for j := range fetched {
-			if fetched[j].Removed {
-				t.Errorf("expected tx not to be removed for tx %d in case %d", j, i)
+			if fetched[j].Removed && !tt.expected[j].Removed {
+				t.Errorf("expected tx not to be removed for tx 0x%x in case %d", tt.expected[j].TxHash, i)
+			} else if !fetched[j].Removed && tt.expected[j].Removed {
+				t.Errorf("expected tx to be removed for tx 0x%xin case %d", tt.expected[j].TxHash, i)
 			}
-			if !reflect.DeepEqual(fetched[i], tt.expected[i]) {
+			if !reflect.DeepEqual(fetched[j], tt.expected[j]) {
 				t.Errorf("invalid return data for tx %d in case %d", j, i)
 			}
 		}

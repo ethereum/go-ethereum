@@ -149,6 +149,11 @@ type FilterQuery struct {
 	Topics [][]common.Hash
 }
 
+type TxFilterQuery struct {
+	From []common.Address // restricts matches to transactions originating from specific addresses
+	To   []common.Address // restricts matches to transactions sent to specific addresses
+}
+
 // LogFilterer provides access to contract log events using a one-off query or continuous
 // event subscription.
 //

@@ -37,7 +37,7 @@ type Backend interface {
 	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error)
 
 	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
-	SubscribeTransactionEvent(chan<- core.TransactionEvent) event.Subscription
+	SubscribeTransactionEvent(chan<- []*core.TransactionEvent) event.Subscription
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
@@ -274,6 +274,40 @@ Logs:
 		ret = append(ret, log)
 	}
 	return ret
+}
+
+func filterTxs(txEvents []*core.TransactionEvent, from []common.Address, to []common.Address) (retData []*types.ReturnData) {
+	for _, ev := range txEvents {
+		// check that From and To fields each match one address in the lists from and to, if specified
+
+		if from != nil {
+			for _, addr := range from {
+				if ev.From != nil && addr == *ev.From {
+					goto checkRecipient
+				}
+			}
+			continue
+		}
+
+	checkRecipient:
+		if to != nil {
+			for _, addr := range to {
+				ev_to := ev.To
+				if ev_to == nil { // contract creation
+					ev_to = &common.Address{}
+				}
+				if addr == *ev_to {
+					goto bothMatch
+				}
+			}
+			continue
+		}
+
+	bothMatch:
+		retData = append(retData, ev.RetData)
+	}
+
+	return retData
 }
 
 func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]common.Hash) bool {

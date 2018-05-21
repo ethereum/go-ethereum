@@ -19,7 +19,6 @@ package filters
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -232,10 +231,10 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 	return rpcSub, nil
 }
 
-func (api *PublicFilterAPI) NewReturnDataFilter() rpc.ID {
+func (api *PublicFilterAPI) NewReturnDataFilter(crit TxFilterCriteria) rpc.ID {
 	var (
-		retCh  = make(chan *types.ReturnData)
-		retSub = api.events.SubscribeReturnData(retCh)
+		retCh  = make(chan []*types.ReturnData)
+		retSub = api.events.SubscribeReturnData(retCh, ethereum.TxFilterQuery(crit))
 	)
 
 	api.filtersMu.Lock()
@@ -246,11 +245,16 @@ func (api *PublicFilterAPI) NewReturnDataFilter() rpc.ID {
 		for {
 			select {
 			case retData := <-retCh:
-				api.filtersMu.Lock()
-				if f, found := api.filters[retSub.ID]; found {
-					f.retData = append(f.retData, *retData)
+				if len(retData) > 0 {
+					api.filtersMu.Lock()
+					f, found := api.filters[retSub.ID]
+					api.filtersMu.Unlock()
+					if found {
+						for _, data := range retData {
+							f.retData = append(f.retData, *data)
+						}
+					}
 				}
-				api.filtersMu.Unlock()
 			case <-retSub.Err():
 				api.filtersMu.Lock()
 				delete(api.filters, retSub.ID)
@@ -263,7 +267,7 @@ func (api *PublicFilterAPI) NewReturnDataFilter() rpc.ID {
 	return retSub.ID
 }
 
-func (api *PublicFilterAPI) ReturnData(ctx context.Context) (*rpc.Subscription, error) {
+func (api *PublicFilterAPI) ReturnData(ctx context.Context, crit TxFilterCriteria) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -275,8 +279,8 @@ func (api *PublicFilterAPI) ReturnData(ctx context.Context) (*rpc.Subscription, 
 	rpcSub.SetType(rpc.ReturnDataSubscription)
 
 	go func() {
-		retCh := make(chan *types.ReturnData)
-		retSub := api.events.SubscribeReturnData(retCh)
+		retCh := make(chan []*types.ReturnData)
+		retSub := api.events.SubscribeReturnData(retCh, ethereum.TxFilterQuery(crit))
 
 		for {
 			select {
@@ -289,9 +293,13 @@ func (api *PublicFilterAPI) ReturnData(ctx context.Context) (*rpc.Subscription, 
 					log.Warn(fmt.Sprintf("Received update msg of invalid type %s for ReturnData subscription", reflect.TypeOf(msg).String()))
 				}
 			case retData := <-retCh:
-				if _, has := txListen[retData.TxHash]; has {
-					// tx from client just completed execution--send back return data
-					notifier.Notify(rpcSub.ID, retData)
+				if len(retData) > 0 {
+					for _, data := range retData {
+						if _, has := txListen[data.TxHash]; has {
+							// tx from client just completed execution--send back return data
+							notifier.Notify(rpcSub.ID, retData)
+						}
+					}
 				}
 			case <-rpcSub.Err():
 				retSub.Unsubscribe()
@@ -344,9 +352,13 @@ func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc
 	return rpcSub, nil
 }
 
-// FilterCriteria represents a request to create a new filter.
+// FilterCriteria represents a request to create a new log filter.
 // Same as ethereum.FilterQuery but with UnmarshalJSON() method.
 type FilterCriteria ethereum.FilterQuery
+
+// TxFilterCriteria represents a request to create a new transaction filter.
+// Adds UnmarshallJSON() method to ethereum.TxFilterQuery
+type TxFilterCriteria ethereum.TxFilterQuery
 
 // NewFilter creates a new filter and returns the filter id. It can be
 // used to retrieve logs when the state changes. This method cannot be
@@ -534,6 +546,7 @@ func returnRetData(rdata []types.ReturnData) []types.ReturnData {
 
 // UnmarshalJSON sets *args fields with given data.
 func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
+	var err error
 	type input struct {
 		From      *rpc.BlockNumber `json:"fromBlock"`
 		ToBlock   *rpc.BlockNumber `json:"toBlock"`
@@ -542,7 +555,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	}
 
 	var raw input
-	if err := json.Unmarshal(data, &raw); err != nil {
+	if err = json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 
@@ -558,27 +571,9 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 
 	if raw.Addresses != nil {
 		// raw.Address can contain a single address or an array of addresses
-		switch rawAddr := raw.Addresses.(type) {
-		case []interface{}:
-			for i, addr := range rawAddr {
-				if strAddr, ok := addr.(string); ok {
-					addr, err := decodeAddress(strAddr)
-					if err != nil {
-						return fmt.Errorf("invalid address at index %d: %v", i, err)
-					}
-					args.Addresses = append(args.Addresses, addr)
-				} else {
-					return fmt.Errorf("non-string address at index %d", i)
-				}
-			}
-		case string:
-			addr, err := decodeAddress(rawAddr)
-			if err != nil {
-				return fmt.Errorf("invalid address: %v", err)
-			}
-			args.Addresses = []common.Address{addr}
-		default:
-			return errors.New("invalid addresses in query")
+		args.Addresses, err = decodeAddresses(raw.Addresses, "query")
+		if err != nil {
+			return err
 		}
 	}
 
@@ -624,6 +619,75 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// UnmarshalJSON sets *args fields with given data.
+func (args *TxFilterCriteria) UnmarshalJSON(data []byte) error {
+	var err error
+	type input struct {
+		From interface{} `json:"from"`
+		To   interface{} `json:"to"`
+	}
+
+	var raw input
+	if err = json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	args.From = nil
+	args.To = nil
+
+	if raw.From != nil {
+		args.From, err = decodeAddresses(raw.From, "from")
+		if err != nil {
+			return err
+		}
+	}
+
+	if raw.To != nil {
+		args.To, err = decodeAddresses(raw.To, "to")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Decodes address field from JSON, which could be either
+// a single common.Address or an array []common.Address.
+// second arg is the name of the field being decoded, for error reporting.
+func decodeAddresses(addresses interface{}, field string) ([]common.Address, error) {
+	decoded := []common.Address{}
+
+	if addresses == nil {
+		return decoded, nil
+	}
+
+	switch rawAddr := addresses.(type) {
+	case []interface{}:
+		for i, addr := range rawAddr {
+			if strAddr, ok := addr.(string); ok {
+				addr, err := decodeAddress(strAddr)
+				if err != nil {
+					return decoded, fmt.Errorf("invalid address at index %d: %v", i, err)
+				}
+				decoded = append(decoded, addr)
+			} else {
+				return decoded, fmt.Errorf("non-string address at index %d", i)
+			}
+		}
+	case string:
+		addr, err := decodeAddress(rawAddr)
+		if err != nil {
+			return decoded, fmt.Errorf("invalid address: %v", err)
+		}
+		decoded = []common.Address{addr}
+	default:
+		return decoded, fmt.Errorf("invalid addresses in %s", field)
+	}
+
+	return decoded, nil
 }
 
 func decodeAddress(s string) (common.Address, error) {

@@ -1168,10 +1168,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			coalescedLogs = append(coalescedLogs, logs...)
 			blockInsertTimer.UpdateSince(bstart)
 			events = append(events, ChainEvent{block, block.Hash(), logs})
-			for _, txPostEvent := range txPostEvents {
-				events = append(events, txPostEvent)
-			}
-			lastCanon = block
+			events = append(events, txPostEvents)
 
 			// Only count canonical blocks for GC processing time
 			bc.gcproc += proctime
@@ -1249,11 +1246,12 @@ func countTransactions(chain []*types.Block) (c int) {
 // event about them
 func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	var (
-		newChain    types.Blocks
-		oldChain    types.Blocks
-		commonBlock *types.Block
-		deletedTxs  types.Transactions
-		deletedLogs []*types.Log
+		newChain     types.Blocks
+		oldChain     types.Blocks
+		commonBlock  *types.Block
+		deletedTxs   types.Transactions
+		txPostEvents []*TransactionEvent
+		deletedLogs  []*types.Log
 		// collectLogs collects the logs that were generated during the
 		// processing of the block that corresponds with the given hash.
 		// These logs are later announced as deleted.
@@ -1296,6 +1294,8 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		return fmt.Errorf("Invalid new chain")
 	}
 
+	blockLookup := make(map[common.Hash]*big.Int)
+
 	for {
 		if oldBlock.Hash() == newBlock.Hash() {
 			commonBlock = oldBlock
@@ -1306,6 +1306,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		newChain = append(newChain, newBlock)
 		deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
 		collectLogs(oldBlock.Hash())
+		// save block # of each deleted transaction; will need this to deduce signer for TransactionEvent
+		for _, tx := range oldBlock.Transactions() {
+			blockLookup[tx.Hash()] = oldBlock.Number()
+		}
 
 		oldBlock, newBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1), bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1)
 		if oldBlock == nil {
@@ -1341,9 +1345,22 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// When transactions get deleted from the database that means the
 		// receipts that were created in the fork must also be deleted
 		rawdb.DeleteTxLookupEntry(bc.db, tx.Hash())
-		// Let ReturnData subscribers know when a transaction is removed from canonical chain
-		bc.txPostFeed.Send(TransactionEvent{TxHash: tx.Hash(), RetData: &types.ReturnData{TxHash: tx.Hash(), Removed: true}})
+
+		// Construct TransactionEvent for subscribers of txPostFeed
+		from, _ := types.Sender(types.MakeSigner(bc.chainConfig, blockLookup[tx.Hash()]), tx)
+
+		data := types.ReturnData{TxHash: tx.Hash(), Removed: true}
+		txEvent := TransactionEvent{TxHash: tx.Hash(),
+			From:    &from,
+			To:      tx.To(),
+			RetData: &data,
+		}
+		txPostEvents = append(txPostEvents, &txEvent)
 	}
+
+	// Let subscribers know when a transaction is removed from canonical chain
+	bc.txPostFeed.Send(txPostEvents)
+
 	if len(deletedLogs) > 0 {
 		go bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
 	}
@@ -1377,7 +1394,7 @@ func (bc *BlockChain) PostChainEvents(events []interface{}, logs []*types.Log) {
 		case ChainSideEvent:
 			bc.chainSideFeed.Send(ev)
 
-		case TransactionEvent:
+		case []*TransactionEvent:
 			bc.txPostFeed.Send(ev)
 		}
 	}
@@ -1567,7 +1584,7 @@ func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Su
 }
 
 // SubscribeTransactionEvent registers a subscription of SubscribeTransactionEvent.
-func (bc *BlockChain) SubscribeTransactionEvent(ch chan<- TransactionEvent) event.Subscription {
+func (bc *BlockChain) SubscribeTransactionEvent(ch chan<- []*TransactionEvent) event.Subscription {
 	return bc.scope.Track(bc.txPostFeed.Subscribe(ch))
 }
 

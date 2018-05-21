@@ -38,6 +38,8 @@ type NewMinedBlockEvent struct{ Block *types.Block }
 // TransactionEvent is posted when a transaction completes execution
 type TransactionEvent struct {
 	TxHash  common.Hash
+	From    *common.Address
+	To      *common.Address
 	RetData *types.ReturnData
 }
 

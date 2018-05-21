@@ -88,7 +88,8 @@ type subscription struct {
 	logs      chan []*types.Log
 	hashes    chan common.Hash
 	headers   chan *types.Header
-	retData   chan *types.ReturnData
+	txCrit    ethereum.TxFilterQuery
+	retData   chan []*types.ReturnData
 	installed chan struct{} // closed when the filter is installed
 	err       chan error    // closed when the filter is uninstalled
 }
@@ -110,13 +111,13 @@ type EventSystem struct {
 	pendingLogSub *event.TypeMuxSubscription // Subscription for pending log event
 
 	// Channels
-	install   chan *subscription         // install filter for event notification
-	uninstall chan *subscription         // remove filter for event notification
-	txPreCh   chan core.TxPreEvent       // Channel to receive new pre transaction events
-	txCh      chan core.TransactionEvent // Channel to receive new transaction events
-	logsCh    chan []*types.Log          // Channel to receive new log event
-	rmLogsCh  chan core.RemovedLogsEvent // Channel to receive removed log event
-	chainCh   chan core.ChainEvent       // Channel to receive new chain event
+	install   chan *subscription            // install filter for event notification
+	uninstall chan *subscription            // remove filter for event notification
+	txPreCh   chan core.TxPreEvent          // Channel to receive new pre transaction events
+	txCh      chan []*core.TransactionEvent // Channel to receive new transaction events
+	logsCh    chan []*types.Log             // Channel to receive new log event
+	rmLogsCh  chan core.RemovedLogsEvent    // Channel to receive removed log event
+	chainCh   chan core.ChainEvent          // Channel to receive new chain event
 }
 
 // NewEventSystem creates a new manager that listens for event on the given mux,
@@ -133,7 +134,7 @@ func NewEventSystem(mux *event.TypeMux, backend Backend, lightMode bool) *EventS
 		install:   make(chan *subscription),
 		uninstall: make(chan *subscription),
 		txPreCh:   make(chan core.TxPreEvent, txPreChanSize),
-		txCh:      make(chan core.TransactionEvent, txPostChanSize),
+		txCh:      make(chan []*core.TransactionEvent, txPostChanSize),
 		logsCh:    make(chan []*types.Log, logsChanSize),
 		rmLogsCh:  make(chan core.RemovedLogsEvent, rmLogsChanSize),
 		chainCh:   make(chan core.ChainEvent, chainEvChanSize),
@@ -327,11 +328,12 @@ func (es *EventSystem) SubscribePendingTxEvents(hashes chan common.Hash) *Subscr
 
 // SubscribeReturnData creates a subscription that captures return data for transactions
 //  executed by a particular rpc client
-func (es *EventSystem) SubscribeReturnData(retCh chan *types.ReturnData) *Subscription {
+func (es *EventSystem) SubscribeReturnData(retCh chan []*types.ReturnData, crit ethereum.TxFilterQuery) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       ReturnDataSubscription,
 		created:   time.Now(),
+		txCrit:    crit,
 		retData:   retCh,
 		installed: make(chan struct{}),
 		err:       make(chan error),
@@ -377,9 +379,13 @@ func (es *EventSystem) broadcast(filters filterIndex, ev interface{}) {
 		for _, f := range filters[PendingTransactionsSubscription] {
 			f.hashes <- e.Tx.Hash()
 		}
-	case core.TransactionEvent:
-		for _, f := range filters[ReturnDataSubscription] {
-			f.retData <- e.RetData
+	case []*core.TransactionEvent:
+		if len(e) > 0 {
+			for _, f := range filters[ReturnDataSubscription] {
+				if matchedTxs := filterTxs(e, f.txCrit.From, f.txCrit.To); len(matchedTxs) > 0 {
+					f.retData <- matchedTxs
+				}
+			}
 		}
 	case core.ChainEvent:
 		for _, f := range filters[BlocksSubscription] {

@@ -53,7 +53,7 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, []TransactionEvent, error) {
+func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, []*TransactionEvent, error) {
 	var (
 		receipts     types.Receipts
 		usedGas      = new(uint64)
@@ -61,7 +61,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs      []*types.Log
 		gp           = new(GasPool).AddGas(block.GasLimit())
 		retData      *types.ReturnData
-		txPostEvents []TransactionEvent
+		txPostEvents []*TransactionEvent
+		signer       = types.MakeSigner(p.config, block.Number())
 	)
 	// Mutate the the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
@@ -77,7 +78,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 		retData = &types.ReturnData{TxHash: tx.Hash(), Data: data}
-		txPostEvents = append(txPostEvents, TransactionEvent{TxHash: tx.Hash(), RetData: retData})
+		from, _ := types.Sender(signer, tx)
+		txPostEvents = append(txPostEvents, &TransactionEvent{TxHash: tx.Hash(), From: &from, To: tx.To(), RetData: retData})
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts)
