@@ -268,6 +268,7 @@ func (r *sentReq) update(ev reqPeerEvent) {
 		r.reqSent = false
 		r.reqSrtoCount++
 	case rpHardTimeout, rpDeliveredValid, rpDeliveredInvalid:
+		r.reqSent = false
 		r.reqSrtoCount--
 	}
 }
