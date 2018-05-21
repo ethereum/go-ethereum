@@ -334,6 +334,7 @@ func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 	self.miner.SetEtherbase(etherbase)
 }
 
+// ValidateMiner checks if node's address is in set of validators
 func (s *Ethereum) ValidateMiner() (bool, error) {
 	eb, err := s.Etherbase()
 	if err != nil {
@@ -354,6 +355,11 @@ func (s *Ethereum) ValidateMiner() (bool, error) {
 		return false, fmt.Errorf("Only verify miners in Clique protocol")
 	}
 	return true, nil
+}
+
+func (s *Ethereum) Checkpoint() bool {
+	number := s.blockchain.CurrentHeader().Number.Uint64()
+	return number%s.chainConfig.Clique.Epoch == 1 || number == 0
 }
 
 func (s *Ethereum) StartMining(local bool) error {
