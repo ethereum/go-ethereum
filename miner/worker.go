@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/fatih/set.v0"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 )
 
 const (
@@ -487,6 +488,10 @@ func (self *worker) commitNewWork() {
 	if atomic.LoadInt32(&self.mining) == 1 {
 		log.Info("Commit new mining work", "number", work.Block.Number(), "txs", work.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
+	}
+	if (work.Block.NumberU64() % work.config.Clique.Epoch) == 0 {
+		log.Info("hey checkpoint")
+		clique.Checkpoint <- 1
 	}
 	self.push(work)
 }

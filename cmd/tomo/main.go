@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -315,10 +316,12 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				started = true
 				log.Info("Enabled mining node!!!")
 			}
+			defer close(clique.Checkpoint)
 
 			for {
-				if ethereum.Checkpoint() {
-					//Checkpoint!!! It's time to reconcile node's state...
+				select {
+				case _ = <-clique.Checkpoint:
+					log.Info("Checkpoint!!! It's time to reconcile node's state...")
 					ok, err := ethereum.ValidateMiner()
 					if err != nil {
 						utils.Fatalf("Can't verify validator permission: %v", err)
