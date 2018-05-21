@@ -132,7 +132,7 @@ func (peer *Peer) handshake() error {
 
 	b, err := s.Bool()
 	if b && isLightNode && isRestrictedLightNodeConnection {
-		return fmt.Errorf("peer [%x] is useless: two pure light node communication restricted", peer.ID())
+		return fmt.Errorf("peer [%x] is useless: two light client communication restricted", peer.ID())
 	}
 
 	if err := <-errc; err != nil {

@@ -535,7 +535,7 @@ func TestHandshakeWithOldVersionWithoutLightModeFlag(t *testing.T) {
 }
 
 //two light nodes handshake. restriction disabled
-func TestPureLightPeerHandshakeRestrictionOff(t *testing.T) {
+func TestTwoLightPeerHandshakeRestrictionOff(t *testing.T) {
 	w1 := Whisper{}
 	w1.settings.Store(restrictConnectionBetweenLightClientsIdx, false)
 	w1.SetLightClientMode(true)
@@ -547,7 +547,7 @@ func TestPureLightPeerHandshakeRestrictionOff(t *testing.T) {
 }
 
 //two light nodes handshake. restriction enabled
-func TestPureLightPeerHandshakeError(t *testing.T) {
+func TestTwoLightPeerHandshakeError(t *testing.T) {
 	w1 := Whisper{}
 	w1.settings.Store(restrictConnectionBetweenLightClientsIdx, true)
 	w1.SetLightClientMode(true)
