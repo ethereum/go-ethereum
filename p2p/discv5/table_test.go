@@ -176,9 +176,8 @@ func (t *pingRecorder) ping(toid NodeID, toaddr *net.UDPAddr) error {
 	t.pinged[toid] = true
 	if t.responding[toid] {
 		return nil
-	} else {
-		return errTimeout
 	}
+	return errTimeout
 }
 
 func TestTable_closest(t *testing.T) {

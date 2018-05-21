@@ -689,7 +689,7 @@ func (b *topicRadiusBucket) update(now mclock.AbsTime) {
 
 	for target, tm := range b.lookupSent {
 		if now-tm > mclock.AbsTime(respTimeout) {
-			b.weights[trNoAdjust] += 1
+			b.weights[trNoAdjust]++
 			delete(b.lookupSent, target)
 		}
 	}
@@ -698,10 +698,10 @@ func (b *topicRadiusBucket) update(now mclock.AbsTime) {
 func (b *topicRadiusBucket) adjust(now mclock.AbsTime, inside float64) {
 	b.update(now)
 	if inside <= 0 {
-		b.weights[trOutside] += 1
+		b.weights[trOutside]++
 	} else {
 		if inside >= 1 {
-			b.weights[trInside] += 1
+			b.weights[trInside]++
 		} else {
 			b.weights[trInside] += inside
 			b.weights[trOutside] += 1 - inside

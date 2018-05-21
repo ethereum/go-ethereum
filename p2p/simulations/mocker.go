@@ -28,19 +28,19 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
-//a map of mocker names to its function
+// mockerList maps mocker names to its function
 var mockerList = map[string]func(net *Network, quit chan struct{}, nodeCount int){
 	"startStop":     startStop,
 	"probabilistic": probabilistic,
 	"boot":          boot,
 }
 
-//Lookup a mocker by its name, returns the mockerFn
+// LookupMocker retrieves a mocker by its name, returns the mockerFn
 func LookupMocker(mockerType string) func(net *Network, quit chan struct{}, nodeCount int) {
 	return mockerList[mockerType]
 }
 
-//Get a list of mockers (keys of the map)
+// GetMockerList returns a list of mockers (keys of the map)
 //Useful for frontend to build available mocker selection
 func GetMockerList() []string {
 	list := make([]string, 0, len(mockerList))
@@ -50,7 +50,7 @@ func GetMockerList() []string {
 	return list
 }
 
-//The boot mockerFn only connects the node in a ring and doesn't do anything else
+// boot mockerFn only connects the node in a ring and doesn't do anything else
 func boot(net *Network, quit chan struct{}, nodeCount int) {
 	_, err := connectNodesInRing(net, nodeCount)
 	if err != nil {
@@ -58,7 +58,7 @@ func boot(net *Network, quit chan struct{}, nodeCount int) {
 	}
 }
 
-//The startStop mockerFn stops and starts nodes in a defined period (ticker)
+// startStop mockerFn stops and starts nodes in a defined period (ticker)
 func startStop(net *Network, quit chan struct{}, nodeCount int) {
 	nodes, err := connectNodesInRing(net, nodeCount)
 	if err != nil {
@@ -95,10 +95,10 @@ func startStop(net *Network, quit chan struct{}, nodeCount int) {
 	}
 }
 
-//The probabilistic mocker func has a more probabilistic pattern
-//(the implementation could probably be improved):
-//nodes are connected in a ring, then a varying number of random nodes is selected,
-//mocker then stops and starts them in random intervals, and continues the loop
+// probabilistic mocker func has a more probabilistic pattern
+// (the implementation could probably be improved):
+// nodes are connected in a ring, then a varying number of random nodes is selected,
+// mocker then stops and starts them in random intervals, and continues the loop
 func probabilistic(net *Network, quit chan struct{}, nodeCount int) {
 	nodes, err := connectNodesInRing(net, nodeCount)
 	if err != nil {

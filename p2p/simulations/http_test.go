@@ -385,11 +385,11 @@ func startTestNetwork(t *testing.T, client *Client) []string {
 
 	// connect the nodes
 	for i := 0; i < nodeCount-1; i++ {
-		peerId := i + 1
+		peerID := i + 1
 		if i == nodeCount-1 {
-			peerId = 0
+			peerID = 0
 		}
-		if err := client.ConnectNode(nodeIDs[i], nodeIDs[peerId]); err != nil {
+		if err := client.ConnectNode(nodeIDs[i], nodeIDs[peerID]); err != nil {
 			t.Fatalf("error connecting nodes: %s", err)
 		}
 	}

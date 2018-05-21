@@ -300,7 +300,7 @@ func (srv *Server) RemovePeer(node *discover.Node) {
 	}
 }
 
-// SubscribePeers subscribes the given channel to peer events
+// SubscribeEvents subscribes the given channel to peer events
 func (srv *Server) SubscribeEvents(ch chan *PeerEvent) event.Subscription {
 	return srv.peerFeed.Subscribe(ch)
 }
