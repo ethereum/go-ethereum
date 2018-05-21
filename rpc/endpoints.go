@@ -17,8 +17,9 @@
 package rpc
 
 import (
-	"github.com/ethereum/go-ethereum/log"
 	"net"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint, configured with cors/vhosts/modules
@@ -81,9 +82,9 @@ func StartWSEndpoint(endpoint string, apis []API, modules []string, wsOrigins []
 
 }
 
-// StartIPCEndpoint starts an IPC endpoint
-func StartIPCEndpoint(isClosedFn func() bool, ipcEndpoint string, apis []API) (net.Listener, *Server, error) {
-	// Register all the APIs exposed by the services
+// StartIPCEndpoint starts an IPC endpoint.
+func StartIPCEndpoint(ipcEndpoint string, apis []API) (net.Listener, *Server, error) {
+	// Register all the APIs exposed by the services.
 	handler := NewServer()
 	for _, api := range apis {
 		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
@@ -91,30 +92,11 @@ func StartIPCEndpoint(isClosedFn func() bool, ipcEndpoint string, apis []API) (n
 		}
 		log.Debug("IPC registered", "namespace", api.Namespace)
 	}
-	// All APIs registered, start the IPC listener
-	var (
-		listener net.Listener
-		err      error
-	)
-	if listener, err = CreateIPCListener(ipcEndpoint); err != nil {
+	// All APIs registered, start the IPC listener.
+	listener, err := ipcListen(ipcEndpoint)
+	if err != nil {
 		return nil, nil, err
 	}
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				// Terminate if the listener was closed
-				if isClosedFn() {
-					log.Info("IPC closed", "err", err)
-				} else {
-					// Not closed, just some error; report and continue
-					log.Error("IPC accept failed", "err", err)
-				}
-				continue
-			}
-			go handler.ServeCodec(NewJSONCodec(conn), OptionMethodInvocation|OptionSubscriptions)
-		}
-	}()
-
+	go handler.ServeListener(listener)
 	return listener, handler, nil
 }

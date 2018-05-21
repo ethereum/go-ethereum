@@ -12,6 +12,11 @@ synchronised with the chain or a particular Ethereum node that has no built-in (
 Clef can run as a daemon on the same machine, or off a usb-stick like [usb armory](https://inversepath.com/usbarmory),
 or a separate VM in a [QubesOS](https://www.qubes-os.org/) type os setup.
 
+Check out 
+
+* the [tutorial](tutorial.md) for some concrete examples on how the signer works.
+* the [setup docs](docs/setup.md) for some information on how to configure it to work on QubesOS or USBArmory. 
+
 
 ## Command line flags
 Clef accepts the following command line options:
@@ -49,7 +54,6 @@ Example:
 signer -keystore /my/keystore -chainid 4
 ```
 
-Check out the [tutorial](tutorial.md) for some concrete examples on how the signer works.
 
 ## Security model
 
@@ -862,3 +866,12 @@ A UI should conform to the following rules.
 along with the UI.
 
 
+### UI Implementations 
+
+There are a couple of implementation for a UI. We'll try to keep this list up to date. 
+
+| Name | Repo | UI type| No external resources| Blocky support| Verifies permissions | Hash information | No secondary storage | Statically linked| Can modify parameters|
+| ---- | ---- | -------| ---- | ---- | ---- |---- | ---- | ---- | ---- |
+| QtSigner| https://github.com/holiman/qtsigner/| Python3/QT-based| :+1:| :+1:| :+1:| :+1:| :+1:| :x: |  :+1: (partially)|
+| GtkSigner| https://github.com/holiman/gtksigner| Python3/GTK-based| :+1:| :x:| :x:| :+1:| :+1:| :x: |  :x: |
+| Frame | https://github.com/floating/frame/commits/go-signer| Electron-based| :x:| :x:| :x:| :x:| ?| :x: |  :x: |

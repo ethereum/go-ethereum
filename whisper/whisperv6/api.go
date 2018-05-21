@@ -227,8 +227,9 @@ type newMessageOverride struct {
 	Padding   hexutil.Bytes
 }
 
-// Post a message on the Whisper network.
-func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, error) {
+// Post posts a message on the Whisper network.
+// returns the hash of the message in case of success.
+func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (hexutil.Bytes, error) {
 	var (
 		symKeyGiven = len(req.SymKeyID) > 0
 		pubKeyGiven = len(req.PublicKey) > 0
@@ -237,7 +238,7 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 
 	// user must specify either a symmetric or an asymmetric key
 	if (symKeyGiven && pubKeyGiven) || (!symKeyGiven && !pubKeyGiven) {
-		return false, ErrSymAsym
+		return nil, ErrSymAsym
 	}
 
 	params := &MessageParams{
@@ -252,20 +253,20 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 	// Set key that is used to sign the message
 	if len(req.Sig) > 0 {
 		if params.Src, err = api.w.GetPrivateKey(req.Sig); err != nil {
-			return false, err
+			return nil, err
 		}
 	}
 
 	// Set symmetric key that is used to encrypt the message
 	if symKeyGiven {
 		if params.Topic == (TopicType{}) { // topics are mandatory with symmetric encryption
-			return false, ErrNoTopics
+			return nil, ErrNoTopics
 		}
 		if params.KeySym, err = api.w.GetSymKey(req.SymKeyID); err != nil {
-			return false, err
+			return nil, err
 		}
 		if !validateDataIntegrity(params.KeySym, aesKeyLength) {
-			return false, ErrInvalidSymmetricKey
+			return nil, ErrInvalidSymmetricKey
 		}
 	}
 
@@ -273,36 +274,47 @@ func (api *PublicWhisperAPI) Post(ctx context.Context, req NewMessage) (bool, er
 	if pubKeyGiven {
 		params.Dst = crypto.ToECDSAPub(req.PublicKey)
 		if !ValidatePublicKey(params.Dst) {
-			return false, ErrInvalidPublicKey
+			return nil, ErrInvalidPublicKey
 		}
 	}
 
 	// encrypt and sent message
 	whisperMsg, err := NewSentMessage(params)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
+	var result []byte
 	env, err := whisperMsg.Wrap(params)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	// send to specific node (skip PoW check)
 	if len(req.TargetPeer) > 0 {
 		n, err := discover.ParseNode(req.TargetPeer)
 		if err != nil {
-			return false, fmt.Errorf("failed to parse target peer: %s", err)
+			return nil, fmt.Errorf("failed to parse target peer: %s", err)
 		}
-		return true, api.w.SendP2PMessage(n.ID[:], env)
+		err = api.w.SendP2PMessage(n.ID[:], env)
+		if err == nil {
+			hash := env.Hash()
+			result = hash[:]
+		}
+		return result, err
 	}
 
 	// ensure that the message PoW meets the node's minimum accepted PoW
 	if req.PowTarget < api.w.MinPow() {
-		return false, ErrTooLowPoW
+		return nil, ErrTooLowPoW
 	}
 
-	return true, api.w.Send(env)
+	err = api.w.Send(env)
+	if err == nil {
+		hash := env.Hash()
+		result = hash[:]
+	}
+	return result, err
 }
 
 //go:generate gencodec -type Criteria -field-override criteriaOverride -out gen_criteria_json.go
