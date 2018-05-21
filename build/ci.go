@@ -329,7 +329,10 @@ func doLint(cmdline []string) {
 	// Run fast linters batched together
 	configs := []string{
 		"--vendor",
+		"--tests",
 		"--disable-all",
+		"--enable=goimports",
+		"--enable=varcheck",
 		"--enable=vet",
 		"--enable=gofmt",
 		"--enable=misspell",
@@ -340,7 +343,7 @@ func doLint(cmdline []string) {
 
 	// Run slow linters one by one
 	for _, linter := range []string{"unconvert", "gosimple"} {
-		configs = []string{"--vendor", "--deadline=10m", "--disable-all", "--enable=" + linter}
+		configs = []string{"--vendor", "--tests", "--deadline=10m", "--disable-all", "--enable=" + linter}
 		build.MustRunCommand(filepath.Join(GOBIN, "gometalinter.v2"), append(configs, packages...)...)
 	}
 }
@@ -728,7 +731,7 @@ func doAndroidArchive(cmdline []string) {
 	// Build the Android archive and Maven resources
 	build.MustRun(goTool("get", "golang.org/x/mobile/cmd/gomobile", "golang.org/x/mobile/cmd/gobind"))
 	build.MustRun(gomobileTool("init", "--ndk", os.Getenv("ANDROID_NDK")))
-	build.MustRun(gomobileTool("bind", "--target", "android", "--javapkg", "org.ethereum", "-v", "github.com/ethereum/go-ethereum/mobile"))
+	build.MustRun(gomobileTool("bind", "-ldflags", "-s -w", "--target", "android", "--javapkg", "org.ethereum", "-v", "github.com/ethereum/go-ethereum/mobile"))
 
 	if *local {
 		// If we're building locally, copy bundle to build dir and skip Maven
@@ -752,22 +755,27 @@ func doAndroidArchive(cmdline []string) {
 	os.Rename(archive, meta.Package+".aar")
 	if *signer != "" && *deploy != "" {
 		// Import the signing key into the local GPG instance
-		if b64key := os.Getenv(*signer); b64key != "" {
-			key, err := base64.StdEncoding.DecodeString(b64key)
-			if err != nil {
-				log.Fatalf("invalid base64 %s", *signer)
-			}
-			gpg := exec.Command("gpg", "--import")
-			gpg.Stdin = bytes.NewReader(key)
-			build.MustRun(gpg)
+		b64key := os.Getenv(*signer)
+		key, err := base64.StdEncoding.DecodeString(b64key)
+		if err != nil {
+			log.Fatalf("invalid base64 %s", *signer)
+		}
+		gpg := exec.Command("gpg", "--import")
+		gpg.Stdin = bytes.NewReader(key)
+		build.MustRun(gpg)
+
+		keyID, err := build.PGPKeyID(string(key))
+		if err != nil {
+			log.Fatal(err)
 		}
 		// Upload the artifacts to Sonatype and/or Maven Central
 		repo := *deploy + "/service/local/staging/deploy/maven2"
 		if meta.Develop {
 			repo = *deploy + "/content/repositories/snapshots"
 		}
-		build.MustRunCommand("mvn", "gpg:sign-and-deploy-file",
+		build.MustRunCommand("mvn", "gpg:sign-and-deploy-file", "-e", "-X",
 			"-settings=build/mvn.settings", "-Durl="+repo, "-DrepositoryId=ossrh",
+			"-Dgpg.keyname="+keyID,
 			"-DpomFile="+meta.Package+".pom", "-Dfile="+meta.Package+".aar")
 	}
 }
@@ -849,7 +857,7 @@ func doXCodeFramework(cmdline []string) {
 	// Build the iOS XCode framework
 	build.MustRun(goTool("get", "golang.org/x/mobile/cmd/gomobile", "golang.org/x/mobile/cmd/gobind"))
 	build.MustRun(gomobileTool("init"))
-	bind := gomobileTool("bind", "--target", "ios", "--tags", "ios", "-v", "github.com/ethereum/go-ethereum/mobile")
+	bind := gomobileTool("bind", "-ldflags", "-s -w", "--target", "ios", "--tags", "ios", "-v", "github.com/ethereum/go-ethereum/mobile")
 
 	if *local {
 		// If we're building locally, use the build folder and stop afterwards
