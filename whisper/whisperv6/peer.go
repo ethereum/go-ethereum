@@ -80,6 +80,7 @@ func (peer *Peer) handshake() error {
 	// Send the handshake status message asynchronously
 	errc := make(chan error, 1)
 	isLightNode := peer.host.LightClientMode()
+	isRestrictedLightNodeConnection := peer.host.LightClientModeConnectionRestricted()
 	go func() {
 		pow := peer.host.MinPow()
 		powConverted := math.Float64bits(pow)
@@ -130,8 +131,8 @@ func (peer *Peer) handshake() error {
 	}
 
 	b, err := s.Bool()
-	if b && isLightNode {
-		return fmt.Errorf("peer [%x]: useless peer: two pure light node communication", peer.ID())
+	if b && isLightNode && isRestrictedLightNodeConnection {
+		return fmt.Errorf("peer [%x] is useless: two pure light node communication restricted", peer.ID())
 	}
 
 	if err := <-errc; err != nil {

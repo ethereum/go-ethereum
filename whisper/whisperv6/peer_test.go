@@ -514,7 +514,8 @@ func waitForServersToStart(t *testing.T) {
 	t.Fatalf("Failed to start all the servers, running: %d", started)
 }
 
-func TestPureLightPeerHandshake(t *testing.T) {
+//two generic whisper node handshake
+func TestPeerHandshakeWithTwoFullNode(t *testing.T) {
 	w1 := Whisper{}
 	p1 := newPeer(&w1, p2p.NewPeer(discover.NodeID{}, "test", []p2p.Cap{}), &rwStub{[]interface{}{ProtocolVersion, uint64(123), make([]byte, BloomFilterSize), false}})
 	err := p1.handshake()
@@ -523,7 +524,8 @@ func TestPureLightPeerHandshake(t *testing.T) {
 	}
 }
 
-func TestPureLightPeerHandshakeWithOldVersion(t *testing.T) {
+//two generic whisper node handshake. one don't send light flag
+func TestHandshakeWithOldVersionWithoutLightModeFlag(t *testing.T) {
 	w1 := Whisper{}
 	p1 := newPeer(&w1, p2p.NewPeer(discover.NodeID{}, "test", []p2p.Cap{}), &rwStub{[]interface{}{ProtocolVersion, uint64(123), make([]byte, BloomFilterSize)}})
 	err := p1.handshake()
@@ -532,8 +534,22 @@ func TestPureLightPeerHandshakeWithOldVersion(t *testing.T) {
 	}
 }
 
+//two light nodes handshake. restriction disabled
+func TestPureLightPeerHandshakeRestrictionOff(t *testing.T) {
+	w1 := Whisper{}
+	w1.settings.Store(restrictConnectionBetweenLightClientsIdx, false)
+	w1.SetLightClientMode(true)
+	p1 := newPeer(&w1, p2p.NewPeer(discover.NodeID{}, "test", []p2p.Cap{}), &rwStub{[]interface{}{ProtocolVersion, uint64(123), make([]byte, BloomFilterSize), true}})
+	err := p1.handshake()
+	if err != nil {
+		t.FailNow()
+	}
+}
+
+//two light nodes handshake. restriction enabled
 func TestPureLightPeerHandshakeError(t *testing.T) {
 	w1 := Whisper{}
+	w1.settings.Store(restrictConnectionBetweenLightClientsIdx, true)
 	w1.SetLightClientMode(true)
 	p1 := newPeer(&w1, p2p.NewPeer(discover.NodeID{}, "test", []p2p.Cap{}), &rwStub{[]interface{}{ProtocolVersion, uint64(123), make([]byte, BloomFilterSize), true}})
 	err := p1.handshake()
