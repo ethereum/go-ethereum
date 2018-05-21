@@ -99,8 +99,8 @@ type nodeIterator struct {
 	err   error                // Failure set in case of an internal error in the iterator
 }
 
-// iteratorEnd is stored in nodeIterator.err when iteration is done.
-var iteratorEnd = errors.New("end of iteration")
+// errIteratorEnd is stored in nodeIterator.err when iteration is done.
+var errIteratorEnd = errors.New("end of iteration")
 
 // seekError is stored in nodeIterator.err if the initial seek has failed.
 type seekError struct {
@@ -162,7 +162,7 @@ func (it *nodeIterator) Path() []byte {
 }
 
 func (it *nodeIterator) Error() error {
-	if it.err == iteratorEnd {
+	if it.err == errIteratorEnd {
 		return nil
 	}
 	if seek, ok := it.err.(seekError); ok {
@@ -176,7 +176,7 @@ func (it *nodeIterator) Error() error {
 // sets the Error field to the encountered failure. If `descend` is false,
 // skips iterating over any subnodes of the current node.
 func (it *nodeIterator) Next(descend bool) bool {
-	if it.err == iteratorEnd {
+	if it.err == errIteratorEnd {
 		return false
 	}
 	if seek, ok := it.err.(seekError); ok {
@@ -201,8 +201,8 @@ func (it *nodeIterator) seek(prefix []byte) error {
 	// Move forward until we're just before the closest match to key.
 	for {
 		state, parentIndex, path, err := it.peek(bytes.HasPrefix(key, it.path))
-		if err == iteratorEnd {
-			return iteratorEnd
+		if err == errIteratorEnd {
+			return errIteratorEnd
 		} else if err != nil {
 			return seekError{prefix, err}
 		} else if bytes.Compare(path, key) >= 0 {
@@ -246,7 +246,7 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 		// No more child nodes, move back up.
 		it.pop()
 	}
-	return nil, nil, nil, iteratorEnd
+	return nil, nil, nil, errIteratorEnd
 }
 
 func (st *nodeIteratorState) resolve(tr *Trie, path []byte) error {

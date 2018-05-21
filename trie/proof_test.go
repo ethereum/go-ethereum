@@ -40,7 +40,7 @@ func TestProof(t *testing.T) {
 		if trie.Prove(kv.k, 0, proofs) != nil {
 			t.Fatalf("missing key %x while constructing proof", kv.k)
 		}
-		val, err, _ := VerifyProof(root, kv.k, proofs)
+		val, _, err := VerifyProof(root, kv.k, proofs)
 		if err != nil {
 			t.Fatalf("VerifyProof error for key %x: %v\nraw proof: %v", kv.k, err, proofs)
 		}
@@ -58,7 +58,7 @@ func TestOneElementProof(t *testing.T) {
 	if len(proofs.Keys()) != 1 {
 		t.Error("proof should have one element")
 	}
-	val, err, _ := VerifyProof(trie.Hash(), []byte("k"), proofs)
+	val, _, err := VerifyProof(trie.Hash(), []byte("k"), proofs)
 	if err != nil {
 		t.Fatalf("VerifyProof error: %v\nproof hashes: %v", err, proofs.Keys())
 	}
@@ -82,7 +82,7 @@ func TestVerifyBadProof(t *testing.T) {
 		proofs.Delete(key)
 		mutateByte(node)
 		proofs.Put(crypto.Keccak256(node), node)
-		if _, err, _ := VerifyProof(root, kv.k, proofs); err == nil {
+		if _, _, err := VerifyProof(root, kv.k, proofs); err == nil {
 			t.Fatalf("expected proof to fail for key %x", kv.k)
 		}
 	}
@@ -131,7 +131,7 @@ func BenchmarkVerifyProof(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		im := i % len(keys)
-		if _, err, _ := VerifyProof(root, []byte(keys[im]), proofs[im]); err != nil {
+		if _, _, err := VerifyProof(root, []byte(keys[im]), proofs[im]); err != nil {
 			b.Fatalf("key %x: %v", keys[im], err)
 		}
 	}
