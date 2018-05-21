@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 )
 
+// Const variables set HTTP and WS ports for localhost.
 const (
 	DefaultHTTPHost = "localhost" // Default host interface for the HTTP RPC server
 	DefaultHTTPPort = 8545        // Default TCP port for the HTTP RPC server
