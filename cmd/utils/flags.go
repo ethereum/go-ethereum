@@ -112,7 +112,7 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
-	// General settings
+	// DataDirFlag general settings
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
 		Usage: "Data directory for the databases and keystore",
@@ -189,7 +189,7 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
-	// Dashboard settings
+	// DashboardEnabledFlag dashboard settings
 	DashboardEnabledFlag = cli.BoolFlag{
 		Name:  "dashboard",
 		Usage: "Enable the dashboard",
@@ -209,7 +209,7 @@ var (
 		Usage: "Dashboard metrics collection refresh rate",
 		Value: dashboard.DefaultConfig.Refresh,
 	}
-	// Ethash settings
+	// EthashCacheDirFlag ethash settings
 	EthashCacheDirFlag = DirectoryFlag{
 		Name:  "ethash.cachedir",
 		Usage: "Directory to store the ethash verification caches (default = inside the datadir)",
@@ -239,7 +239,7 @@ var (
 		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
 		Value: eth.DefaultConfig.Ethash.DatasetsOnDisk,
 	}
-	// Transaction pool settings
+	// TxPoolNoLocalsFlag transaction pool settings
 	TxPoolNoLocalsFlag = cli.BoolFlag{
 		Name:  "txpool.nolocals",
 		Usage: "Disables price exemptions for locally submitted transactions",
@@ -289,7 +289,7 @@ var (
 		Usage: "Maximum amount of time non-executable transaction are queued",
 		Value: eth.DefaultConfig.TxPool.Lifetime,
 	}
-	// Performance tuning settings
+	// CacheFlag performance tuning settings
 	CacheFlag = cli.IntFlag{
 		Name:  "cache",
 		Usage: "Megabytes of memory allocated to internal caching",
@@ -310,7 +310,7 @@ var (
 		Usage: "Number of trie node generations to keep in memory",
 		Value: int(state.MaxTrieCacheGen),
 	}
-	// Miner settings
+	// MiningEnabledFlag miner settings
 	MiningEnabledFlag = cli.BoolFlag{
 		Name:  "mine",
 		Usage: "Enable mining",
@@ -339,7 +339,7 @@ var (
 		Name:  "extradata",
 		Usage: "Block extra data set by the miner (default = client version)",
 	}
-	// Account settings
+	// UnlockedAccountFlag account settings
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
 		Usage: "Comma separated list of accounts to unlock",
@@ -355,7 +355,7 @@ var (
 		Name:  "vmdebug",
 		Usage: "Record information useful for VM and contract debugging",
 	}
-	// Logging and debug settings
+	// EthStatsURLFlag logging and debug settings
 	EthStatsURLFlag = cli.StringFlag{
 		Name:  "ethstats",
 		Usage: "Reporting URL of a ethstats service (nodename:secret@host:port)",
@@ -372,7 +372,7 @@ var (
 		Name:  "nocompaction",
 		Usage: "Disables db compaction after import",
 	}
-	// RPC settings
+	// RPCEnabledFlag RPC settings
 	RPCEnabledFlag = cli.BoolFlag{
 		Name:  "rpc",
 		Usage: "Enable the HTTP-RPC server",
@@ -443,7 +443,7 @@ var (
 		Usage: "Comma separated list of JavaScript files to preload into the console",
 	}
 
-	// Network Settings
+	// MaxPeersFlag network settings
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
 		Usage: "Maximum number of network peers (network disabled if set to 0)",
@@ -500,14 +500,14 @@ var (
 		Usage: "Restricts network communication to the given IP networks (CIDR masks)",
 	}
 
-	// ATM the url is left to the user and deployment to
+	// JSpathFlag ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
 		Usage: "JavaScript root path for `loadScript`",
 		Value: ".",
 	}
 
-	// Gas price oracle settings
+	// GpoBlocksFlag gas price oracle settings
 	GpoBlocksFlag = cli.IntFlag{
 		Name:  "gpoblocks",
 		Usage: "Number of recent blocks to check for gas prices",
