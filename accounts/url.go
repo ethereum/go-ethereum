@@ -76,12 +76,12 @@ func (u URL) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON parses url.
 func (u *URL) UnmarshalJSON(input []byte) error {
-	var textUrl string
-	err := json.Unmarshal(input, &textUrl)
+	var textURL string
+	err := json.Unmarshal(input, &textURL)
 	if err != nil {
 		return err
 	}
-	url, err := parseURL(textUrl)
+	url, err := parseURL(textURL)
 	if err != nil {
 		return err
 	}

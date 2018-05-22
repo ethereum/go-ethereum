@@ -37,7 +37,7 @@ func verify(t *testing.T, jsondata, calldata string, exp []interface{}) {
 	}
 	cd := common.Hex2Bytes(calldata)
 	sigdata, argdata := cd[:4], cd[4:]
-	method, err := abispec.MethodById(sigdata)
+	method, err := abispec.MethodByID(sigdata)
 
 	if err != nil {
 		t.Fatal(err)
@@ -199,7 +199,7 @@ func TestSelectorUnmarshalling(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		m, err := abistruct.MethodById(common.Hex2Bytes(id[2:]))
+		m, err := abistruct.MethodByID(common.Hex2Bytes(id[2:]))
 		if err != nil {
 			t.Error(err)
 			return

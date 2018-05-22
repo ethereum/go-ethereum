@@ -671,7 +671,7 @@ func TestUnpackEvent(t *testing.T) {
 	}
 }
 
-func TestABI_MethodById(t *testing.T) {
+func TestABI_MethodByID(t *testing.T) {
 	const abiJSON = `[
 		{"type":"function","name":"receive","constant":false,"inputs":[{"name":"memo","type":"bytes"}],"outputs":[],"payable":true,"stateMutability":"payable"},
 		{"type":"event","name":"received","anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}]},
@@ -702,7 +702,7 @@ func TestABI_MethodById(t *testing.T) {
 	}
 	for name, m := range abi.Methods {
 		a := fmt.Sprintf("%v", m)
-		m2, err := abi.MethodById(m.Id())
+		m2, err := abi.MethodByID(m.Id())
 		if err != nil {
 			t.Fatalf("Failed to look up ABI method: %v", err)
 		}

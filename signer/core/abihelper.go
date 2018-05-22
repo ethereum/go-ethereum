@@ -79,7 +79,7 @@ func parseCallData(calldata []byte, abidata string) (*decodedCallData, error) {
 		return nil, fmt.Errorf("Failed parsing JSON ABI: %v, abidata: %v", err, abidata)
 	}
 
-	method, err := abispec.MethodById(sigdata)
+	method, err := abispec.MethodByID(sigdata)
 	if err != nil {
 		return nil, err
 	}

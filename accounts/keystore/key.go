@@ -40,7 +40,7 @@ const (
 )
 
 type Key struct {
-	Id uuid.UUID // Version 4 "random" for unique id not derived from key data
+	ID uuid.UUID // Version 4 "random" for unique id not derived from key data
 	// to simplify lookups we also store the address
 	Address common.Address
 	// we only store privkey as pubkey/address can be derived from it
@@ -60,21 +60,21 @@ type keyStore interface {
 type plainKeyJSON struct {
 	Address    string `json:"address"`
 	PrivateKey string `json:"privatekey"`
-	Id         string `json:"id"`
+	ID         string `json:"id"`
 	Version    int    `json:"version"`
 }
 
 type encryptedKeyJSONV3 struct {
 	Address string     `json:"address"`
 	Crypto  cryptoJSON `json:"crypto"`
-	Id      string     `json:"id"`
+	ID      string     `json:"id"`
 	Version int        `json:"version"`
 }
 
 type encryptedKeyJSONV1 struct {
 	Address string     `json:"address"`
 	Crypto  cryptoJSON `json:"crypto"`
-	Id      string     `json:"id"`
+	ID      string     `json:"id"`
 	Version string     `json:"version"`
 }
 
@@ -95,7 +95,7 @@ func (k *Key) MarshalJSON() (j []byte, err error) {
 	jStruct := plainKeyJSON{
 		hex.EncodeToString(k.Address[:]),
 		hex.EncodeToString(crypto.FromECDSA(k.PrivateKey)),
-		k.Id.String(),
+		k.ID.String(),
 		version,
 	}
 	j, err = json.Marshal(jStruct)
@@ -110,8 +110,8 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 	}
 
 	u := new(uuid.UUID)
-	*u = uuid.Parse(keyJSON.Id)
-	k.Id = *u
+	*u = uuid.Parse(keyJSON.ID)
+	k.ID = *u
 	addr, err := hex.DecodeString(keyJSON.Address)
 	if err != nil {
 		return err
@@ -130,7 +130,7 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 func newKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
 	id := uuid.NewRandom()
 	key := &Key{
-		Id:         id,
+		ID:         id,
 		Address:    crypto.PubkeyToAddress(privateKeyECDSA.PublicKey),
 		PrivateKey: privateKeyECDSA,
 	}
