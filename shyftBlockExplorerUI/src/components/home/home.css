@@ -27,5 +27,15 @@
 .Blocks {
     display: inline-block;
     font-size: 1rem;
+    margin-right: 5px;
 }
 
+.Accounts {
+    display: inline-block;
+    font-size: 1rem;
+}
+
+.AccountButton {
+    background-color: forestgreen;
+    border-color: forestgreen;
+}

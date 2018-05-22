@@ -53,13 +53,28 @@ th {
     width: 80px;
 }
 
-.arrow {
-    width: 25px;
+.incoming {
     height: 25px;
-    margin-left: 15px;
+    width: 35px;
+    border: 1px forestgreen;
+    border-radius: 5px;
+    background-color: forestgreen;
+    color: white;
+    font-size: 1rem;
+    text-transform: uppercase;
+    text-align: center;
+    vertical-align: middle;
 }
 
-.disabled {
-    pointer-events: none;
-    color: black;
+.out {
+    height: 25px;
+    width: 35px;
+    border: 1px orangered;
+    border-radius: 5px;
+    background-color: orangered;
+    color: white;
+    font-size: .8rem;
+    text-transform: uppercase;
+    text-align: center;
+    vertical-align: middle;
 }
