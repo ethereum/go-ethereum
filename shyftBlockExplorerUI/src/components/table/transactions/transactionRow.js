@@ -35,6 +35,7 @@ class TransactionTable extends Component {
                 value={data.Amount}
                 cost={data.Cost}
                 detailTransactionHandler={this.props.detailTransactionHandler}
+                detailAccountHandler={this.props.detailAccountHandler}
             />
         })
 

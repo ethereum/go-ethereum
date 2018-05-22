@@ -9,11 +9,17 @@ const DetailAccountsTable = (props) => {
         }else {
             flag = false
         }
+    let genFlag;
+    if(props.txHash.indexOf("GENESIS") !== -1) {
+        genFlag = false
+    }else {
+        genFlag = true
+    }
     return (
           <tbody>
             <tr>
                 <td className={classes.addressTag}>
-                    <Link to="/transaction/details" onClick={() => props.detailTransactionHandler(props.txHash)}>
+                    <Link to="/transaction/details" className={genFlag ? "" : classes.disabled} onClick={() => props.detailTransactionHandler(props.txHash)}>
                         {props.txHash}</Link>
                 </td>
                 <td>{props.blockNumber}</td>

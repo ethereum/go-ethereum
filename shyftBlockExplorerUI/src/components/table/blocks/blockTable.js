@@ -16,8 +16,8 @@ const BlockTable = (props) => {
                 <td className={classes.addressTag}>{props.Coinbase}</td>
                 <td>{props.GasUsed}</td>
                 <td>{props.GasLimit}</td>
-                <td>12.01</td>
-                <td>3.2</td>
+                <td>TBD</td>
+                <td>TBD</td>
             </tr>
             </tbody>
     )

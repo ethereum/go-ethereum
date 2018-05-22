@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 import BlockTable from './blockTable';
+import Loading from '../../UI materials/loading'
 import classes from './table.css';
 import axios from "axios/index";
 
@@ -35,7 +36,7 @@ class BlocksTable extends Component {
                 TxCount={data.TxCount}
                 detailBlockHandler={this.props.detailBlockHandler}
             />
-        })
+        });
 
         let combinedClasses = ['responsive-table', classes.table];
         return (
@@ -54,7 +55,7 @@ class BlocksTable extends Component {
                     <th scope="col">Reward</th>
                 </tr>
                 </thead>
-                {table}
+                        {table}
             </table>
         );
     }

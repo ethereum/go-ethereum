@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 
 const TransactionTable = (props) => {
     let flag;
-    if(props.txHash.indexOf("GENESIS") != -1) {
+    if(props.txHash.indexOf("GENESIS") !== -1) {
         flag = false
     }else {
         flag = true
@@ -20,9 +20,9 @@ const TransactionTable = (props) => {
                 </td>
                 <td>{props.blockNumber}</td>
                 <td>{props.age}</td>
-                <td className={classes.fromTag}>{props.from}</td>
+                <td className={flag ? classes.fromTag : classes.disabled }><Link to="/account/detail" onClick={() => props.detailAccountHandler(props.from)}>{props.from}</Link></td>
                 <td><img className={classes.arrow} src={arrow} alt="arrow"/></td>
-                <td className={classes.toTag}>{props.to}</td>
+                <td className={classes.toTag}><Link to="/account/detail" onClick={() => props.detailAccountHandler(props.to)}>{props.to}</Link></td>
                 <td>{props.value}</td>
                 <td>{props.cost}</td>
             </tr>

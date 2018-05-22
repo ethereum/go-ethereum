@@ -43,7 +43,7 @@ class App extends Component {
         catch(error) {
            console.log(error)
         }
-    }
+    };
 
     detailTransactionHandler = async(txHash) => {
         try {
@@ -53,7 +53,7 @@ class App extends Component {
         catch(error) {
             console.log(error)
         }
-    }
+    };
 
     detailAccountHandler = async(addr) => {
         try {
@@ -63,7 +63,7 @@ class App extends Component {
         catch(error) {
             console.log(error)
         }
-    }
+    };
 
   render() {
     return (
@@ -78,7 +78,9 @@ class App extends Component {
           <Route path="/transactions" render={({match}) =>
               <div>
                   <TransactionHeader />
-                  <TransactionRow detailTransactionHandler={this.detailTransactionHandler}/>
+                  <TransactionRow
+                      detailTransactionHandler={this.detailTransactionHandler}
+                      detailAccountHandler={this.detailAccountHandler}/>
               </div>}
           />
 

@@ -78,3 +78,8 @@ th {
     text-align: center;
     vertical-align: middle;
 }
+
+.disabled {
+    pointer-events: none;
+    color: black;
+}
