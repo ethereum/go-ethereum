@@ -1160,19 +1160,28 @@ func (as *accountSet) add(addr common.Address) {
 	as.accounts[addr] = struct{}{}
 }
 
-// txLookup is used to track all transactions to allow lookups without contention
+// txLookup is used internally by TxPool to track transactions while allowing lookup without
+// mutex contention.
+//
+// Note, although this type is properly protected against concurrent access, it
+// is **not** a type that should ever be mutated or even exposed outside of the
+// transaction pool, since its internal state is tightly coupled with the pools
+// internal mechanisms. The sole purpose of the type is to permit out-of-bound
+// peeking into the pool in TxPool.Get without having to acquire the widely scoped
+// TxPool.mu mutex.
 type txLookup struct {
 	all  map[common.Hash]*types.Transaction
 	lock sync.RWMutex
 }
 
+// newTxLookup returns a new txLookup structure.
 func newTxLookup() *txLookup {
 	return &txLookup{
 		all: make(map[common.Hash]*types.Transaction),
 	}
 }
 
-// calls f on each key and value present in the map
+// Range calls f on each key and value present in the map.
 func (t *txLookup) Range(f func(hash common.Hash, tx *types.Transaction) bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -1184,7 +1193,7 @@ func (t *txLookup) Range(f func(hash common.Hash, tx *types.Transaction) bool) {
 	}
 }
 
-// returns a transaction if it exists in the lookup, or nil if not found
+// Get returns a transaction if it exists in the lookup, or nil if not found.
 func (t *txLookup) Get(hash common.Hash) *types.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -1192,16 +1201,7 @@ func (t *txLookup) Get(hash common.Hash) *types.Transaction {
 	return t.all[hash]
 }
 
-// returns a transaction if it exists in the lookup, and a bool indicating if it was found
-func (t *txLookup) Find(hash common.Hash) (*types.Transaction, bool) {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-
-	value, ok := t.all[hash]
-	return value, ok
-}
-
-// returns the current number of items in the lookup
+// Count returns the current number of items in the lookup.
 func (t *txLookup) Count() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
@@ -1209,7 +1209,7 @@ func (t *txLookup) Count() int {
 	return len(t.all)
 }
 
-// add a transaction to the lookup
+// Add adds a transaction to the lookup.
 func (t *txLookup) Add(tx *types.Transaction) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -1217,7 +1217,7 @@ func (t *txLookup) Add(tx *types.Transaction) {
 	t.all[tx.Hash()] = tx
 }
 
-// remove a transaction from the lookup
+// Remove removes a transaction from the lookup.
 func (t *txLookup) Remove(hash common.Hash) {
 	t.lock.Lock()
 	defer t.lock.Unlock()

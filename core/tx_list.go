@@ -444,7 +444,7 @@ func (l *txPricedList) Cap(threshold *big.Int, local *accountSet) types.Transact
 	for len(*l.items) > 0 {
 		// Discard stale transactions if found during cleanup
 		tx := heap.Pop(l.items).(*types.Transaction)
-		if _, ok := l.all.Find(tx.Hash()); !ok {
+		if l.all.Get(tx.Hash()) == nil {
 			l.stales--
 			continue
 		}
@@ -476,7 +476,7 @@ func (l *txPricedList) Underpriced(tx *types.Transaction, local *accountSet) boo
 	// Discard stale price points if found at the heap start
 	for len(*l.items) > 0 {
 		head := []*types.Transaction(*l.items)[0]
-		if _, ok := l.all.Find(head.Hash()); !ok {
+		if l.all.Get(head.Hash()) == nil {
 			l.stales--
 			heap.Pop(l.items)
 			continue
@@ -501,7 +501,7 @@ func (l *txPricedList) Discard(count int, local *accountSet) types.Transactions 
 	for len(*l.items) > 0 && count > 0 {
 		// Discard stale transactions if found during cleanup
 		tx := heap.Pop(l.items).(*types.Transaction)
-		if _, ok := l.all.Find(tx.Hash()); !ok {
+		if l.all.Get(tx.Hash()) == nil {
 			l.stales--
 			continue
 		}
