@@ -22,7 +22,7 @@ type SBlock struct {
 	Number   string
 	GasUsed	 string
 	GasLimit string
-	TxCount  stringgit@github.com:ShyftNetwork/shyft_go-ethereum.git
+	TxCount  string
 	UncleCount string
 	Age        string
 	ParentHash string
