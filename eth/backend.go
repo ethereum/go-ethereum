@@ -357,11 +357,6 @@ func (s *Ethereum) ValidateMiner() (bool, error) {
 	return true, nil
 }
 
-func (s *Ethereum) Checkpoint() bool {
-	number := s.blockchain.CurrentHeader().Number.Uint64()
-	return number%s.chainConfig.Clique.Epoch == 1 || number == 0
-}
-
 func (s *Ethereum) StartMining(local bool) error {
 	eb, err := s.Etherbase()
 	if err != nil {
