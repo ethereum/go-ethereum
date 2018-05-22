@@ -31,7 +31,7 @@ import (
 var testDownloadDir, _ = ioutil.TempDir(os.TempDir(), "bzz-test")
 
 func testFileSystem(t *testing.T, f func(*FileSystem)) {
-	testApi(t, func(api *Api) {
+	testAPI(t, func(api *Api) {
 		f(NewFileSystem(api))
 	})
 }
