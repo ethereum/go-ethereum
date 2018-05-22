@@ -303,12 +303,11 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 				lastWriteDelay = time.Now()
 			}
 		}
-		// If leveldb's compaction has been going on for a long time, print a warning log here.
-		// If a warning that db is performing compaction has been displayed,
-		// any subsequent warnings will be withhold for 1 minute to don't overwhelm the user.
+		// If a warning that db is performing compaction has been displayed, any subsequent
+		// warnings will be withheld for one minute not to overwhelm the user.
 		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
 			time.Now().After(lastWritePaused.Add(writeDelayWarningThrottler)) {
-			db.log.Warn("Database is performing the compaction, all write operations will be paused")
+			db.log.Warn("Database compacting, degraded performance")
 			lastWritePaused = time.Now()
 		}
 
