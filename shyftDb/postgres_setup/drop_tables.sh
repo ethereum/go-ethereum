@@ -1,1 +1,0 @@
-psql -U postgres -d shyftdb -f drop_tables.psql

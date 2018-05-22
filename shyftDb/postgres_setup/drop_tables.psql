@@ -1,5 +1,0 @@
-DROP TABLE txs;
-DROP TABLE blocks;
-DROP TABLE accounts;
-DROP TABLE contracts;
-DROP TABLE mined_blocks;
