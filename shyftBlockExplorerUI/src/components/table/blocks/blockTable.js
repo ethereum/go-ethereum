@@ -1,6 +1,5 @@
-import React, { Component } from 'react';
+import React from 'react';
 import classes from './table.css';
-import arrow from '../../assets/arrow_right.png';
 import { Link } from 'react-router-dom'
 
 const BlockTable = (props) => {

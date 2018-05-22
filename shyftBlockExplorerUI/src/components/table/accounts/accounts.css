@@ -13,6 +13,11 @@ th {
     padding-right: 10px;
 }
 
+td {
+    padding-left: 5px;
+    font-size: .5rem;
+}
+
 .addressTag {
     display: inline-block;
     vertical-align: bottom;
@@ -57,9 +62,4 @@ th {
     width: 25px;
     height: 25px;
     margin-left: 15px;
-}
-
-.disabled {
-    pointer-events: none;
-    color: black;
 }

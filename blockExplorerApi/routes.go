@@ -22,6 +22,12 @@ var routes = Routes{
 		GetAccount,
 	},
 	Route{
+		"GetAccountTxs",
+		"GET",
+		"/api/get_account_txs/{address}",
+		GetAccountTxs,
+	},
+	Route{
 		"GetAllAccounts",
 		"GET",
 		"/api/get_all_accounts",
@@ -50,6 +56,18 @@ var routes = Routes{
 		"GET",
 		"/api/get_transaction/{txHash}",
 		GetTransaction,
+	},
+	Route{
+		Name: "GetRecentBlock",
+		Method: "GET",
+		Pattern: "/api/get_recent_block",
+		HandlerFunc: GetRecentBlock,
+	},
+	Route{
+		Name: "GetAllTransactionsFromBlock",
+		Method: "GET",
+		Pattern: "/api/get_all_transactions_from_block/{blockNumber}",
+		HandlerFunc: GetAllTransactionsFromBlock,
 	},
 	Route{
 		"GetInternalTransactions",

@@ -57,12 +57,34 @@ func GetAllTransactions(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, txs)
 }
 
+// GetAllTransactions gets txs
+func GetAllTransactionsFromBlock(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	blockNumber := vars["blockNumber"]
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	blockExplorerDb, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return
+	}
+
+	txsFromBlock := shyftdb.GetAllTransactionsFromBlock(blockExplorerDb, blockNumber)
+
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
+
+	fmt.Fprintln(w, txsFromBlock)
+}
+
 // GetAccount gets balance
 func GetAccount(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	address := vars["address"]
-	//addressBytes := []byte(address)
-	fmt.Println("ADDRESS FROM ROUTE", address)
 	connStr := "user=postgres dbname=shyftdb sslmode=disable"
 	blockExplorerDb, err := sql.Open("postgres", connStr)
 	if err != nil {
@@ -80,6 +102,29 @@ func GetAccount(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	fmt.Fprintln(w, getAccountBalance)
+}
+
+// GetAccount gets balance
+func GetAccountTxs(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	address := vars["address"]
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	blockExplorerDb, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return
+	}
+
+	getAccountTxs := shyftdb.GetAccountTxs(blockExplorerDb, address)
+
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
+
+	fmt.Fprintln(w, getAccountTxs)
 }
 
 // GetAllAccounts gets balances
@@ -138,6 +183,23 @@ func GetAllBlocks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintln(w, block3)
+}
+
+func GetRecentBlock(w http.ResponseWriter, r *http.Request) {
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	blockExplorerDb, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return
+	}
+	mostRecentBlock := shyftdb.GetRecentBlock(blockExplorerDb)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, mostRecentBlock)
+
 }
 
 //GetInternalTransactions gets internal txs
