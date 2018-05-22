@@ -36,7 +36,7 @@ var (
 		ArgsUsage: "",
 		Category:  "ACCOUNT COMMANDS",
 		Description: `
-    geth wallet import /path/to/my/presale.wallet
+    XDC wallet import /path/to/my/presale.wallet
 
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
@@ -56,7 +56,7 @@ passwordfile as argument containing the wallet password in plaintext.`,
 					utils.LightKDFFlag,
 				},
 				Description: `
-	geth wallet [options] /path/to/my/presale.wallet
+	XDC wallet [options] /path/to/my/presale.wallet
 
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
@@ -112,7 +112,7 @@ Print a short summary of all accounts`,
 					utils.LightKDFFlag,
 				},
 				Description: `
-    geth account new
+    XDC account new
 
 Creates a new account and prints the address.
 
@@ -137,7 +137,7 @@ password to file or expose in any other way.
 					utils.LightKDFFlag,
 				},
 				Description: `
-    geth account update <address>
+    XDC account update <address>
 
 Update an existing account.
 
