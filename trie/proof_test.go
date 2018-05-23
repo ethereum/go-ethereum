@@ -32,20 +32,46 @@ func init() {
 	mrand.Seed(time.Now().Unix())
 }
 
+// makeProvers creates Merkle trie provers based on different implementations to
+// test all variations.
+func makeProvers(trie *Trie) []func(key []byte) *ethdb.MemDatabase {
+	var provers []func(key []byte) *ethdb.MemDatabase
+
+	// Create a direct trie based Merkle prover
+	provers = append(provers, func(key []byte) *ethdb.MemDatabase {
+		proof := ethdb.NewMemDatabase()
+		trie.Prove(key, 0, proof)
+		return proof
+	})
+	// Create a leaf iterator based Merkle prover
+	provers = append(provers, func(key []byte) *ethdb.MemDatabase {
+		proof := ethdb.NewMemDatabase()
+		if it := NewIterator(trie.NodeIterator(key)); it.Next() && bytes.Equal(key, it.Key) {
+			for _, p := range it.Prove() {
+				proof.Put(crypto.Keccak256(p), p)
+			}
+		}
+		return proof
+	})
+	return provers
+}
+
 func TestProof(t *testing.T) {
 	trie, vals := randomTrie(500)
 	root := trie.Hash()
-	for _, kv := range vals {
-		proofs := ethdb.NewMemDatabase()
-		if trie.Prove(kv.k, 0, proofs) != nil {
-			t.Fatalf("missing key %x while constructing proof", kv.k)
-		}
-		val, _, err := VerifyProof(root, kv.k, proofs)
-		if err != nil {
-			t.Fatalf("VerifyProof error for key %x: %v\nraw proof: %v", kv.k, err, proofs)
-		}
-		if !bytes.Equal(val, kv.v) {
-			t.Fatalf("VerifyProof returned wrong value for key %x: got %x, want %x", kv.k, val, kv.v)
+	for i, prover := range makeProvers(trie) {
+		for _, kv := range vals {
+			proof := prover(kv.k)
+			if proof == nil {
+				t.Fatalf("prover %d: missing key %x while constructing proof", i, kv.k)
+			}
+			val, _, err := VerifyProof(root, kv.k, proof)
+			if err != nil {
+				t.Fatalf("prover %d: failed to verify proof for key %x: %v\nraw proof: %x", i, kv.k, err, proof)
+			}
+			if !bytes.Equal(val, kv.v) {
+				t.Fatalf("prover %d: verified value mismatch for key %x: have %x, want %x", i, kv.k, val, kv.v)
+			}
 		}
 	}
 }
@@ -53,37 +79,66 @@ func TestProof(t *testing.T) {
 func TestOneElementProof(t *testing.T) {
 	trie := new(Trie)
 	updateString(trie, "k", "v")
-	proofs := ethdb.NewMemDatabase()
-	trie.Prove([]byte("k"), 0, proofs)
-	if len(proofs.Keys()) != 1 {
-		t.Error("proof should have one element")
-	}
-	val, _, err := VerifyProof(trie.Hash(), []byte("k"), proofs)
-	if err != nil {
-		t.Fatalf("VerifyProof error: %v\nproof hashes: %v", err, proofs.Keys())
-	}
-	if !bytes.Equal(val, []byte("v")) {
-		t.Fatalf("VerifyProof returned wrong value: got %x, want 'k'", val)
+	for i, prover := range makeProvers(trie) {
+		proof := prover([]byte("k"))
+		if proof == nil {
+			t.Fatalf("prover %d: nil proof", i)
+		}
+		if proof.Len() != 1 {
+			t.Errorf("prover %d: proof should have one element", i)
+		}
+		val, _, err := VerifyProof(trie.Hash(), []byte("k"), proof)
+		if err != nil {
+			t.Fatalf("prover %d: failed to verify proof: %v\nraw proof: %x", i, err, proof)
+		}
+		if !bytes.Equal(val, []byte("v")) {
+			t.Fatalf("prover %d: verified value mismatch: have %x, want 'k'", i, val)
+		}
 	}
 }
 
-func TestVerifyBadProof(t *testing.T) {
+func TestBadProof(t *testing.T) {
 	trie, vals := randomTrie(800)
 	root := trie.Hash()
-	for _, kv := range vals {
-		proofs := ethdb.NewMemDatabase()
-		trie.Prove(kv.k, 0, proofs)
-		if len(proofs.Keys()) == 0 {
-			t.Fatal("zero length proof")
+	for i, prover := range makeProvers(trie) {
+		for _, kv := range vals {
+			proof := prover(kv.k)
+			if proof == nil {
+				t.Fatalf("prover %d: nil proof", i)
+			}
+			key := proof.Keys()[mrand.Intn(proof.Len())]
+			val, _ := proof.Get(key)
+			proof.Delete(key)
+
+			mutateByte(val)
+			proof.Put(crypto.Keccak256(val), val)
+
+			if _, _, err := VerifyProof(root, kv.k, proof); err == nil {
+				t.Fatalf("prover %d: expected proof to fail for key %x", i, kv.k)
+			}
 		}
-		keys := proofs.Keys()
-		key := keys[mrand.Intn(len(keys))]
-		node, _ := proofs.Get(key)
-		proofs.Delete(key)
-		mutateByte(node)
-		proofs.Put(crypto.Keccak256(node), node)
-		if _, _, err := VerifyProof(root, kv.k, proofs); err == nil {
-			t.Fatalf("expected proof to fail for key %x", kv.k)
+	}
+}
+
+// Tests that missing keys can also be proven. The test explicitly uses a single
+// entry trie and checks for missing keys both before and after the single entry.
+func TestMissingKeyProof(t *testing.T) {
+	trie := new(Trie)
+	updateString(trie, "k", "v")
+
+	for i, key := range []string{"a", "j", "l", "z"} {
+		proof := ethdb.NewMemDatabase()
+		trie.Prove([]byte(key), 0, proof)
+
+		if proof.Len() != 1 {
+			t.Errorf("test %d: proof should have one element", i)
+		}
+		val, _, err := VerifyProof(trie.Hash(), []byte(key), proof)
+		if err != nil {
+			t.Fatalf("test %d: failed to verify proof: %v\nraw proof: %x", i, err, proof)
+		}
+		if val != nil {
+			t.Fatalf("test %d: verified value mismatch: have %x, want nil", i, val)
 		}
 	}
 }
