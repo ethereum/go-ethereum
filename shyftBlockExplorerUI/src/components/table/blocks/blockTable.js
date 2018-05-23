@@ -17,7 +17,7 @@ const BlockTable = (props) => {
                 <td>{props.GasUsed}</td>
                 <td>{props.GasLimit}</td>
                 <td>TBD</td>
-                <td>TBD</td>
+                <td>{props.Reward}</td>
             </tr>
             </tbody>
     )

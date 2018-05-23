@@ -14,7 +14,7 @@ class BlocksTable extends Component {
 
     async componentDidMount() {
         try {
-            const response = await axios.get("http://localhost:8080/api/get_all_blocks")
+            const response = await axios.get("http://localhost:8080/api/get_all_blocks");
             await this.setState({data: response.data});
         } catch (err) {
             console.log(err);
@@ -24,6 +24,7 @@ class BlocksTable extends Component {
 
     render() {
         const table = this.state.data.map((data, i) => {
+            const conversion = data.Rewards / 10000000000000000000;
             return <BlockTable
                 key={`${data.TxHash}${i}`}
                 Hash={data.Hash}
@@ -34,6 +35,7 @@ class BlocksTable extends Component {
                 GasLimit={data.GasLimit}
                 UncleCount={data.UncleCount}
                 TxCount={data.TxCount}
+                Reward={conversion}
                 detailBlockHandler={this.props.detailBlockHandler}
             />
         });

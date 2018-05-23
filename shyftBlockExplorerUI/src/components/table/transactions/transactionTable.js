@@ -18,7 +18,7 @@ const TransactionTable = (props) => {
                     <Link to="/transaction/details" className={flag ? "" : classes.disabled} onClick={() => props.detailTransactionHandler(props.txHash)}>
                         {props.txHash}</Link>
                 </td>
-                <td>{props.blockNumber}</td>
+                <td><Link to="/block/transactions" onClick={() => props.getBlockTransactions(props.blockNumber)}>{props.blockNumber}</Link></td>
                 <td>{props.age}</td>
                 <td className={flag ? classes.fromTag : classes.disabled }><Link to="/account/detail" onClick={() => props.detailAccountHandler(props.from)}>{props.from}</Link></td>
                 <td><img className={classes.arrow} src={arrow} alt="arrow"/></td>

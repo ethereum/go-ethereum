@@ -11,6 +11,8 @@ import TransactionRow from '../components/table/transactions/transactionRow';
 import TransactionHeader from "../components/nav/transactionHeader/transactionHeader";
 import TransactionDetailHeader from "../components/nav/transactionHeader/transactionDetailHeader";
 import DetailTransactionTable from "../components/table/transactions/transactionDetailsRow";
+import BlockTxs from "../components/table/transactions/blockTx";
+
 ///**BLOCKS**///
 import BlocksRow from '../components/table/blocks/blockRows';
 import DetailBlockTable from '../components/table/blocks/blocksDetailsRow';
@@ -31,6 +33,7 @@ class App extends Component {
         blockDetailData: [],
         transactionDetailData: [],
         accountDetailData: [],
+        blockTransactions: [],
         reqAccount: ''
     };
   }
@@ -65,6 +68,16 @@ class App extends Component {
         }
     };
 
+    getBlockTransactions = async(blockNumber) => {
+        try {
+            const response = await axios.get(`http://localhost:8080/api/get_all_transactions_from_block/${blockNumber}`)
+            await this.setState({ blockTransactions: response.data })
+        }
+        catch(error) {
+            console.log(error)
+        }
+    };
+
   render() {
     return (
         <BrowserRouter>
@@ -79,6 +92,7 @@ class App extends Component {
               <div>
                   <TransactionHeader />
                   <TransactionRow
+                      getBlockTransactions={this.getBlockTransactions}
                       detailTransactionHandler={this.detailTransactionHandler}
                       detailAccountHandler={this.detailAccountHandler}/>
               </div>}
@@ -87,7 +101,9 @@ class App extends Component {
           <Route path="/blocks" exact render={({match}) =>
               <div>
                   <BlockHeader/>
-                  <BlocksRow detailBlockHandler={this.detailBlockHandler}/>
+                  <BlocksRow
+                      getBlockTransactions={this.getBlockTransactions}
+                      detailBlockHandler={this.detailBlockHandler}/>
               </div>}
           />
 
@@ -112,7 +128,21 @@ class App extends Component {
                   <BlockDetailHeader
                       blockNumber={this.state.blockDetailData.Number}/>
                   <DetailBlockTable
+                      getBlockTransactions={this.getBlockTransactions}
                       data={this.state.blockDetailData}/>
+              </div>}
+          />
+
+          <Route path="/block/transactions" exact render={({match}) =>
+              <div>
+                  {/*<BlockDetailHeader*/}
+                      {/*blockNumber={this.state.blockTransactions.BlockNumber}/>*/}
+                  <BlockTxs
+                      data={this.state.blockTransactions}
+                      getBlockTransactions={this.getBlockTransactions}
+                      detailTransactionHandler={this.detailTransactionHandler}
+                      detailAccountHandler={this.detailAccountHandler}/>
+
               </div>}
           />
 

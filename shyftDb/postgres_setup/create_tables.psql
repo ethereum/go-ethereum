@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS blocks (
   difficulty bigint,
   size text,
   nonce numeric,
+  rewards numeric,
   number bigint
 );
 

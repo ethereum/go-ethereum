@@ -6,6 +6,7 @@ class DetailTransactionTable extends Component {
     render() {
         let data = this.props.data
         let combinedClasses = ['responsive-table', classes.table];
+        const conversion = data.Cost / 10000000000000000000;
         return (
             <table className={combinedClasses.join(' ')}>
                 <tbody>
@@ -51,7 +52,7 @@ class DetailTransactionTable extends Component {
                 </tr>
                 <tr>
                     <th scope="col">Actual Tx Cost/Fee:</th>
-                    <td>{data.Cost}</td>
+                    <td>{conversion}</td>
                 </tr>
                 <tr>
                     <th scope="col">Nonce:</th>
