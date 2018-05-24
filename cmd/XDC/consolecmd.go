@@ -41,7 +41,7 @@ var (
 		Flags:    append(append(append(nodeFlags, rpcFlags...), consoleFlags...), whisperFlags...),
 		Category: "CONSOLE COMMANDS",
 		Description: `
-The Geth console is an interactive shell for the JavaScript runtime environment
+The XDC console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console.`,
 	}
@@ -57,7 +57,7 @@ See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console.`,
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console.
-This command allows to open a console on a running geth node.`,
+This command allows to open a console on a running XDC node.`,
 	}
 
 	javascriptCommand = cli.Command{
@@ -73,7 +73,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/JavaScript-Cons
 	}
 )
 
-// localConsole starts a new geth node, attaching a JavaScript console to it at the
+// localConsole starts a new XDC node, attaching a JavaScript console to it at the
 // same time.
 func localConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
@@ -84,7 +84,7 @@ func localConsole(ctx *cli.Context) error {
 	// Attach to the newly started node and start the JavaScript console
 	client, err := node.Attach()
 	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
+		utils.Fatalf("Failed to attach to the inproc XDC: %v", err)
 	}
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),
@@ -111,10 +111,10 @@ func localConsole(ctx *cli.Context) error {
 	return nil
 }
 
-// remoteConsole will connect to a remote geth instance, attaching a JavaScript
+// remoteConsole will connect to a remote XDC instance, attaching a JavaScript
 // console to it.
 func remoteConsole(ctx *cli.Context) error {
-	// Attach to a remotely running geth instance and start the JavaScript console
+	// Attach to a remotely running XDC instance and start the JavaScript console
 	endpoint := ctx.Args().First()
 	if endpoint == "" {
 		path := node.DefaultDataDir()
