@@ -13,7 +13,6 @@ import (
 
 	_ "github.com/lib/pq"
 	Rewards "github.com/ethereum/go-ethereum/consensus/ethash"
-	"reflect"
 )
 
 //SBlock type
@@ -995,7 +994,6 @@ func GetAllAccounts(sqldb *sql.DB) string {
 
 //GetAccount returns account balances
 func GetAccountTxs(sqldb *sql.DB, address string) string {
-	fmt.Println(address)
 	var arr txRes
 	var txx string
 	sqlStatement := `SELECT * FROM txs WHERE to_addr=$1 OR from_addr=$1;`
@@ -1037,7 +1035,6 @@ func GetAccountTxs(sqldb *sql.DB, address string) string {
 			&age,
 			&data,
 		)
-		fmt.Println(reflect.TypeOf(amount))
 
 		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
 			TxHash:    txhash,
