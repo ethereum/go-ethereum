@@ -28,7 +28,7 @@ import (
 func makeTestTrie() (*Database, *Trie, map[string][]byte) {
 	// Create an empty trie
 	triedb := NewDatabase(ethdb.NewMemDatabase())
-	trie, _ := New(common.Hash{}, triedb)
+	trie, _ := New(nil, common.Hash{}, triedb)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
@@ -59,7 +59,7 @@ func makeTestTrie() (*Database, *Trie, map[string][]byte) {
 // content map.
 func checkTrieContents(t *testing.T, db *Database, root []byte, content map[string][]byte) {
 	// Check root availability and trie contents
-	trie, err := New(common.BytesToHash(root), db)
+	trie, err := New(nil, common.BytesToHash(root), db)
 	if err != nil {
 		t.Fatalf("failed to create trie at %x: %v", root, err)
 	}
@@ -76,7 +76,7 @@ func checkTrieContents(t *testing.T, db *Database, root []byte, content map[stri
 // checkTrieConsistency checks that all nodes in a trie are indeed present.
 func checkTrieConsistency(db *Database, root common.Hash) error {
 	// Create and iterate a trie rooted in a subnode
-	trie, err := New(root, db)
+	trie, err := New(nil, root, db)
 	if err != nil {
 		return nil // Consider a non existent state consistent
 	}
@@ -90,8 +90,8 @@ func checkTrieConsistency(db *Database, root common.Hash) error {
 func TestEmptyTrieSync(t *testing.T) {
 	dbA := NewDatabase(ethdb.NewMemDatabase())
 	dbB := NewDatabase(ethdb.NewMemDatabase())
-	emptyA, _ := New(common.Hash{}, dbA)
-	emptyB, _ := New(emptyRoot, dbB)
+	emptyA, _ := New(nil, common.Hash{}, dbA)
+	emptyB, _ := New(nil, emptyRoot, dbB)
 
 	for i, trie := range []*Trie{emptyA, emptyB} {
 		if req := NewTrieSync(trie.Hash(), ethdb.NewMemDatabase(), nil).Missing(1); len(req) != 0 {
@@ -118,7 +118,7 @@ func testIterativeTrieSync(t *testing.T, batch int) {
 	for len(queue) > 0 {
 		results := make([]SyncResult, len(queue))
 		for i, hash := range queue {
-			data, err := srcDb.Node(hash)
+			data, err := srcDb.Node(nil /*TODO*/, hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
@@ -152,7 +152,7 @@ func TestIterativeDelayedTrieSync(t *testing.T) {
 		// Sync only half of the scheduled nodes
 		results := make([]SyncResult, len(queue)/2+1)
 		for i, hash := range queue[:len(results)] {
-			data, err := srcDb.Node(hash)
+			data, err := srcDb.Node(nil /*TODO*/, hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
@@ -193,7 +193,7 @@ func testIterativeRandomTrieSync(t *testing.T, batch int) {
 		// Fetch all the queued nodes in a random order
 		results := make([]SyncResult, 0, len(queue))
 		for hash := range queue {
-			data, err := srcDb.Node(hash)
+			data, err := srcDb.Node(nil /*TODO*/, hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
@@ -234,7 +234,7 @@ func TestIterativeRandomDelayedTrieSync(t *testing.T) {
 		// Sync only half of the scheduled nodes, even those in random order
 		results := make([]SyncResult, 0, len(queue)/2+1)
 		for hash := range queue {
-			data, err := srcDb.Node(hash)
+			data, err := srcDb.Node(nil /*TODO*/, hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
@@ -279,7 +279,7 @@ func TestDuplicateAvoidanceTrieSync(t *testing.T) {
 	for len(queue) > 0 {
 		results := make([]SyncResult, len(queue))
 		for i, hash := range queue {
-			data, err := srcDb.Node(hash)
+			data, err := srcDb.Node(nil /*TODO*/, hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
@@ -319,7 +319,7 @@ func TestIncompleteTrieSync(t *testing.T) {
 		// Fetch a batch of trie nodes
 		results := make([]SyncResult, len(queue))
 		for i, hash := range queue {
-			data, err := srcDb.Node(hash)
+			data, err := srcDb.Node(nil /*TODO*/, hash)
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}

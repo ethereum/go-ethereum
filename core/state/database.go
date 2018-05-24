@@ -100,7 +100,7 @@ func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 			return cachedTrie{db.pastTries[i].Copy(), db}, nil
 		}
 	}
-	tr, err := trie.NewSecure(root, db.db, MaxTrieCacheGen)
+	tr, err := trie.NewSecure(nil, root, db.db, MaxTrieCacheGen)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func (db *cachingDB) pushTrie(t *trie.SecureTrie) {
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(addrHash, root common.Hash) (Trie, error) {
-	return trie.NewSecure(root, db.db, 0)
+	return trie.NewSecure(addrHash[:], root, db.db, 0)
 }
 
 // CopyTrie returns an independent copy of the given trie.
@@ -138,7 +138,7 @@ func (db *cachingDB) CopyTrie(t Trie) Trie {
 
 // ContractCode retrieves a particular contract's code.
 func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error) {
-	code, err := db.db.Node(codeHash)
+	code, err := db.db.Node(nil, codeHash)
 	if err == nil {
 		db.codeSizeCache.Add(codeHash, len(code))
 	}
