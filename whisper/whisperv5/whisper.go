@@ -442,7 +442,6 @@ func (w *Whisper) Send(envelope *Envelope) error {
 	if !ok {
 		return fmt.Errorf("failed to add envelope")
 	}
-	// I think this part return nil will be better clean. 
 	return nil
 }
 
