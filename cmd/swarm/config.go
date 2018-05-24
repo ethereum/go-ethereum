@@ -38,7 +38,7 @@ import (
 )
 
 var (
-	// DumpConfigCommand flag definition for the dumpconfig command
+	// DumpConfigCommand defines the flag for the dumpconfig command.
 	DumpConfigCommand = cli.Command{
 		Action:      utils.MigrateFlags(dumpConfig),
 		Name:        "dumpconfig",
@@ -49,7 +49,7 @@ var (
 		Description: `The dumpconfig command shows configuration values.`,
 	}
 
-	// SwarmTomlConfigPathFlag flag definition for the config file command
+	// SwarmTomlConfigPathFlag defines the flag for the config file command.
 	SwarmTomlConfigPathFlag = cli.StringFlag{
 		Name:  "config",
 		Usage: "TOML configuration file",

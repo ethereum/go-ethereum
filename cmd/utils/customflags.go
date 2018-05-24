@@ -31,9 +31,9 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// DirectoryString custom type which is registered in the flags library which cli uses for
-// argument parsing. This allows us to expand Value to an absolute path when
-// the argument is parsed
+// DirectoryString is a custom type that is registered in the flags library which cli
+// uses for argument parsing. This allows us to expand Value to an absolute path when
+// the argument is parsed.
 type DirectoryString struct {
 	Value string
 }
@@ -47,7 +47,7 @@ func (ds *DirectoryString) Set(value string) error {
 	return nil
 }
 
-// DirectoryFlag custom cli.Flag type which expand the received string to an absolute path.
+// DirectoryFlag is a custom cli.Flag type that expands the received string to an absolute path.
 // e.g. ~/.ethereum -> /home/username/.ethereum
 type DirectoryFlag struct {
 	Name  string
@@ -71,8 +71,8 @@ func eachName(longName string, fn func(string)) {
 	}
 }
 
-// Apply called by cli library, grabs variable from environment (if in env)
-// and adds variable to flag set for parsing.
+// Apply grabs variable from environment (if in env) and adds the variable to flagSet for parsing.
+// It is called by cli library.
 func (df DirectoryFlag) Apply(set *flag.FlagSet) {
 	eachName(df.Name, func(name string) {
 		set.Var(&df.Value, df.Name, df.Usage)
