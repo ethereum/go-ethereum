@@ -13,7 +13,7 @@ const BlockTable = (props) => {
                 <td>{props.Age}</td>
                 <td>{props.TxCount}</td>
                 <td>{props.UncleCount}</td>
-                <td className={classes.addressTag}>{props.Coinbase}</td>
+                <td className={classes.addressTag}><Link to="/mined/blocks" onClick={() => props.getBlocksMined(props.Coinbase)}>{props.Coinbase}</Link></td>
                 <td>{props.GasUsed}</td>
                 <td>{props.GasLimit}</td>
                 <td>TBD</td>

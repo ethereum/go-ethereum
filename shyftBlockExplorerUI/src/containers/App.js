@@ -18,7 +18,8 @@ import BlocksRow from '../components/table/blocks/blockRows';
 import DetailBlockTable from '../components/table/blocks/blocksDetailsRow';
 import BlockDetailHeader from "../components/nav/blockHeaders/blockDetailHeader";
 import BlockHeader from "../components/nav/blockHeaders/blockHeader";
-
+import BlocksMinedTable from "../components/table/blocks/blocksMined";
+import BlockCoinbaseHeader from "../components/nav/blockHeaders/blockCoinbaseHeader";
 ///**ACCOUNTS**///
 import AccountsRow from '../components/table/accounts/accountRows';
 import DetailAccountsTable from "../components/table/accounts/detailAccountsRow";
@@ -33,6 +34,7 @@ class App extends Component {
         blockDetailData: [],
         transactionDetailData: [],
         accountDetailData: [],
+        blocksMined: [],
         blockTransactions: [],
         reqAccount: ''
     };
@@ -78,6 +80,18 @@ class App extends Component {
         }
     };
 
+    getBlocksMined = async(coinbase) => {
+        console.log("THIS RAN")
+        try {
+            const response = await axios.get(`http://localhost:8080/api/get_blocks_mined/${coinbase}`)
+            console.log(response.data);
+            await this.setState({ blocksMined: response.data })
+        }
+        catch(error) {
+            console.log(error)
+        }
+    };
+
   render() {
     return (
         <BrowserRouter>
@@ -102,6 +116,7 @@ class App extends Component {
               <div>
                   <BlockHeader/>
                   <BlocksRow
+                      getBlocksMined={this.getBlocksMined}
                       getBlockTransactions={this.getBlockTransactions}
                       detailBlockHandler={this.detailBlockHandler}/>
               </div>}
@@ -135,14 +150,25 @@ class App extends Component {
 
           <Route path="/block/transactions" exact render={({match}) =>
               <div>
-                  {/*<BlockDetailHeader*/}
-                      {/*blockNumber={this.state.blockTransactions.BlockNumber}/>*/}
+                  <BlockDetailHeader
+                      blockNumber={this.state.blockTransactions.BlockNumber}/>
                   <BlockTxs
                       data={this.state.blockTransactions}
                       getBlockTransactions={this.getBlockTransactions}
                       detailTransactionHandler={this.detailTransactionHandler}
                       detailAccountHandler={this.detailAccountHandler}/>
 
+              </div>}
+          />
+
+          <Route path="/mined/blocks" exact render={({match}) =>
+              <div>
+                  <BlockCoinbaseHeader
+                      data={this.state.blocksMined}/>
+                  <BlocksMinedTable
+                      getBlockTransactions={this.getBlockTransactions}
+                      getBlocksMined={this.getBlocksMined}
+                      data={this.state.blocksMined}/>
               </div>}
           />
 

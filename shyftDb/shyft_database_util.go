@@ -739,6 +739,72 @@ func GetAllTransactionsFromBlock(sqldb *sql.DB, blockNumber string) string {
 	return txx
 }
 
+func GetAllBlocksMinedByAddress(sqldb *sql.DB, coinbase string) string {
+	var arr blockRes
+	var blockArr string
+	sqlStatement := `SELECT * FROM blocks WHERE coinbase=$1`
+	rows, err := sqldb.Query(sqlStatement, coinbase)
+	if err != nil {
+		fmt.Println("err")
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var hash string
+		var coinbase string
+		var gasUsed string
+		var gasLimit string
+		var txCount string
+		var uncleCount string
+		var age string
+		var parentHash string
+		var uncleHash string
+		var difficulty string
+		var size string
+		var nonce string
+		var rewards string
+		var num string
+
+		err = rows.Scan(
+			&hash,
+			&coinbase,
+			&gasUsed,
+			&gasLimit,
+			&txCount,
+			&uncleCount,
+			&age,
+			&parentHash,
+			&uncleHash,
+			&difficulty,
+			&size,
+			&nonce,
+			&rewards,
+			&num,)
+
+		arr.Blocks = append(arr.Blocks, SBlock{
+			Hash:     hash,
+			Coinbase: coinbase,
+			GasUsed: gasUsed,
+			GasLimit: gasLimit,
+			TxCount: txCount,
+			UncleCount: uncleCount,
+			Age: age,
+			ParentHash:parentHash,
+			UncleHash:uncleHash,
+			Difficulty:difficulty,
+			Size: size,
+			Nonce:nonce,
+			Rewards: rewards,
+			Number:   num,
+		})
+
+		blocks, _ := json.Marshal(arr.Blocks)
+		blocksFmt := string(blocks)
+		blockArr = blocksFmt
+	}
+	return blockArr
+}
+
 //GetAllTransactions getter fn for API
 func GetAllTransactions(sqldb *sql.DB) string {
 	var arr txRes
