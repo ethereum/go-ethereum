@@ -43,6 +43,7 @@ type EthAPIBackend struct {
 	gpo *gasprice.Oracle
 }
 
+// ChainConfig returns the the core config which determined the blockchain settings
 func (b *EthAPIBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.chainConfig
 }

@@ -6,7 +6,7 @@
 //
 // Bilinear groups are the basis of many of the new cryptographic protocols
 // that have been proposed over the past decade. They consist of a triplet of
-// groups (G₁, G₂ and GT) such that there exists a function e(g₁ˣ,g₂ʸ)=gTˣʸ
+// groups (G₁, G₂ and GT) such that there exists a function g(g₁ˣ,g₂ʸ)=gTˣʸ
 // (where gₓ is a generator of the respective group). That function is called
 // a pairing function.
 //
@@ -55,54 +55,54 @@ func (g *G1) String() string {
 }
 
 // CurvePoints returns p's curve points in big integer
-func (e *G1) CurvePoints() (*big.Int, *big.Int, *big.Int, *big.Int) {
-	return e.p.x, e.p.y, e.p.z, e.p.t
+func (g *G1) CurvePoints() (*big.Int, *big.Int, *big.Int, *big.Int) {
+	return g.p.x, g.p.y, g.p.z, g.p.t
 }
 
-// ScalarBaseMult sets e to g*k where g is the generator of the group and
-// then returns e.
-func (e *G1) ScalarBaseMult(k *big.Int) *G1 {
-	if e.p == nil {
-		e.p = newCurvePoint(nil)
+// ScalarBaseMult sets g to g*k where g is the generator of the group and
+// then returns g.
+func (g *G1) ScalarBaseMult(k *big.Int) *G1 {
+	if g.p == nil {
+		g.p = newCurvePoint(nil)
 	}
-	e.p.Mul(curveGen, k, new(bnPool))
-	return e
+	g.p.Mul(curveGen, k, new(bnPool))
+	return g
 }
 
-// ScalarMult sets e to a*k and then returns e.
-func (e *G1) ScalarMult(a *G1, k *big.Int) *G1 {
-	if e.p == nil {
-		e.p = newCurvePoint(nil)
+// ScalarMult sets g to a*k and then returns g.
+func (g *G1) ScalarMult(a *G1, k *big.Int) *G1 {
+	if g.p == nil {
+		g.p = newCurvePoint(nil)
 	}
-	e.p.Mul(a.p, k, new(bnPool))
-	return e
+	g.p.Mul(a.p, k, new(bnPool))
+	return g
 }
 
-// Add sets e to a+b and then returns e.
+// Add sets g to a+b and then returns g.
 // BUG(agl): this function is not complete: a==b fails.
-func (e *G1) Add(a, b *G1) *G1 {
-	if e.p == nil {
-		e.p = newCurvePoint(nil)
+func (g *G1) Add(a, b *G1) *G1 {
+	if g.p == nil {
+		g.p = newCurvePoint(nil)
 	}
-	e.p.Add(a.p, b.p, new(bnPool))
-	return e
+	g.p.Add(a.p, b.p, new(bnPool))
+	return g
 }
 
-// Neg sets e to -a and then returns e.
-func (e *G1) Neg(a *G1) *G1 {
-	if e.p == nil {
-		e.p = newCurvePoint(nil)
+// Neg sets g to -a and then returns g.
+func (g *G1) Neg(a *G1) *G1 {
+	if g.p == nil {
+		g.p = newCurvePoint(nil)
 	}
-	e.p.Negative(a.p)
-	return e
+	g.p.Negative(a.p)
+	return g
 }
 
-// Marshal converts n to a byte slice.
-func (n *G1) Marshal() []byte {
-	n.p.MakeAffine(nil)
+// Marshal converts g to a byte slice.
+func (g *G1) Marshal() []byte {
+	g.p.MakeAffine(nil)
 
-	xBytes := new(big.Int).Mod(n.p.x, P).Bytes()
-	yBytes := new(big.Int).Mod(n.p.y, P).Bytes()
+	xBytes := new(big.Int).Mod(g.p.x, P).Bytes()
+	yBytes := new(big.Int).Mod(g.p.y, P).Bytes()
 
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
@@ -114,37 +114,37 @@ func (n *G1) Marshal() []byte {
 	return ret
 }
 
-// Unmarshal sets e to the result of converting the output of Marshal back into
-// a group element and then returns e.
-func (e *G1) Unmarshal(m []byte) ([]byte, error) {
+// Unmarshal sets g to the result of converting the output of Marshal back into
+// a group element and then returns g.
+func (g *G1) Unmarshal(m []byte) ([]byte, error) {
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
 	if len(m) != 2*numBytes {
 		return nil, errors.New("bn256: not enough data")
 	}
 	// Unmarshal the points and check their caps
-	if e.p == nil {
-		e.p = newCurvePoint(nil)
+	if g.p == nil {
+		g.p = newCurvePoint(nil)
 	}
-	e.p.x.SetBytes(m[0*numBytes : 1*numBytes])
-	if e.p.x.Cmp(P) >= 0 {
+	g.p.x.SetBytes(m[0*numBytes : 1*numBytes])
+	if g.p.x.Cmp(P) >= 0 {
 		return nil, errors.New("bn256: coordinate exceeds modulus")
 	}
-	e.p.y.SetBytes(m[1*numBytes : 2*numBytes])
-	if e.p.y.Cmp(P) >= 0 {
+	g.p.y.SetBytes(m[1*numBytes : 2*numBytes])
+	if g.p.y.Cmp(P) >= 0 {
 		return nil, errors.New("bn256: coordinate exceeds modulus")
 	}
 	// Ensure the point is on the curve
-	if e.p.x.Sign() == 0 && e.p.y.Sign() == 0 {
+	if g.p.x.Sign() == 0 && g.p.y.Sign() == 0 {
 		// This is the point at infinity.
-		e.p.y.SetInt64(1)
-		e.p.z.SetInt64(0)
-		e.p.t.SetInt64(0)
+		g.p.y.SetInt64(1)
+		g.p.z.SetInt64(0)
+		g.p.t.SetInt64(0)
 	} else {
-		e.p.z.SetInt64(1)
-		e.p.t.SetInt64(1)
+		g.p.z.SetInt64(1)
+		g.p.t.SetInt64(1)
 
-		if !e.p.IsOnCurve() {
+		if !g.p.IsOnCurve() {
 			return nil, errors.New("bn256: malformed point")
 		}
 	}
@@ -157,7 +157,7 @@ type G2 struct {
 	p *twistPoint
 }
 
-// RandomG1 returns x and g₂ˣ where x is a random, non-zero number read from r.
+// RandomG2 returns x and g₂ˣ where x is a random, non-zero number read from r.
 func RandomG2(r io.Reader) (*big.Int, *G2, error) {
 	var k *big.Int
 	var err error
@@ -181,47 +181,47 @@ func (g *G2) String() string {
 
 // CurvePoints returns the curve points of p which includes the real
 // and imaginary parts of the curve point.
-func (e *G2) CurvePoints() (*gfP2, *gfP2, *gfP2, *gfP2) {
-	return e.p.x, e.p.y, e.p.z, e.p.t
+func (g *G2) CurvePoints() (*gfP2, *gfP2, *gfP2, *gfP2) {
+	return g.p.x, g.p.y, g.p.z, g.p.t
 }
 
-// ScalarBaseMult sets e to g*k where g is the generator of the group and
+// ScalarBaseMult sets g to g*k where g is the generator of the group and
 // then returns out.
-func (e *G2) ScalarBaseMult(k *big.Int) *G2 {
-	if e.p == nil {
-		e.p = newTwistPoint(nil)
+func (g *G2) ScalarBaseMult(k *big.Int) *G2 {
+	if g.p == nil {
+		g.p = newTwistPoint(nil)
 	}
-	e.p.Mul(twistGen, k, new(bnPool))
-	return e
+	g.p.Mul(twistGen, k, new(bnPool))
+	return g
 }
 
-// ScalarMult sets e to a*k and then returns e.
-func (e *G2) ScalarMult(a *G2, k *big.Int) *G2 {
-	if e.p == nil {
-		e.p = newTwistPoint(nil)
+// ScalarMult sets g to a*k and then returns g.
+func (g *G2) ScalarMult(a *G2, k *big.Int) *G2 {
+	if g.p == nil {
+		g.p = newTwistPoint(nil)
 	}
-	e.p.Mul(a.p, k, new(bnPool))
-	return e
+	g.p.Mul(a.p, k, new(bnPool))
+	return g
 }
 
-// Add sets e to a+b and then returns e.
+// Add sets g to a+b and then returns g.
 // BUG(agl): this function is not complete: a==b fails.
-func (e *G2) Add(a, b *G2) *G2 {
-	if e.p == nil {
-		e.p = newTwistPoint(nil)
+func (g *G2) Add(a, b *G2) *G2 {
+	if g.p == nil {
+		g.p = newTwistPoint(nil)
 	}
-	e.p.Add(a.p, b.p, new(bnPool))
-	return e
+	g.p.Add(a.p, b.p, new(bnPool))
+	return g
 }
 
-// Marshal converts n into a byte slice.
-func (n *G2) Marshal() []byte {
-	n.p.MakeAffine(nil)
+// Marshal converts g into a byte slice.
+func (g *G2) Marshal() []byte {
+	g.p.MakeAffine(nil)
 
-	xxBytes := new(big.Int).Mod(n.p.x.x, P).Bytes()
-	xyBytes := new(big.Int).Mod(n.p.x.y, P).Bytes()
-	yxBytes := new(big.Int).Mod(n.p.y.x, P).Bytes()
-	yyBytes := new(big.Int).Mod(n.p.y.y, P).Bytes()
+	xxBytes := new(big.Int).Mod(g.p.x.x, P).Bytes()
+	xyBytes := new(big.Int).Mod(g.p.x.y, P).Bytes()
+	yxBytes := new(big.Int).Mod(g.p.y.x, P).Bytes()
+	yyBytes := new(big.Int).Mod(g.p.y.y, P).Bytes()
 
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
@@ -235,48 +235,48 @@ func (n *G2) Marshal() []byte {
 	return ret
 }
 
-// Unmarshal sets e to the result of converting the output of Marshal back into
-// a group element and then returns e.
-func (e *G2) Unmarshal(m []byte) ([]byte, error) {
+// Unmarshal sets g to the result of converting the output of Marshal back into
+// a group element and then returns g.
+func (g *G2) Unmarshal(m []byte) ([]byte, error) {
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
 	if len(m) != 4*numBytes {
 		return nil, errors.New("bn256: not enough data")
 	}
 	// Unmarshal the points and check their caps
-	if e.p == nil {
-		e.p = newTwistPoint(nil)
+	if g.p == nil {
+		g.p = newTwistPoint(nil)
 	}
-	e.p.x.x.SetBytes(m[0*numBytes : 1*numBytes])
-	if e.p.x.x.Cmp(P) >= 0 {
+	g.p.x.x.SetBytes(m[0*numBytes : 1*numBytes])
+	if g.p.x.x.Cmp(P) >= 0 {
 		return nil, errors.New("bn256: coordinate exceeds modulus")
 	}
-	e.p.x.y.SetBytes(m[1*numBytes : 2*numBytes])
-	if e.p.x.y.Cmp(P) >= 0 {
+	g.p.x.y.SetBytes(m[1*numBytes : 2*numBytes])
+	if g.p.x.y.Cmp(P) >= 0 {
 		return nil, errors.New("bn256: coordinate exceeds modulus")
 	}
-	e.p.y.x.SetBytes(m[2*numBytes : 3*numBytes])
-	if e.p.y.x.Cmp(P) >= 0 {
+	g.p.y.x.SetBytes(m[2*numBytes : 3*numBytes])
+	if g.p.y.x.Cmp(P) >= 0 {
 		return nil, errors.New("bn256: coordinate exceeds modulus")
 	}
-	e.p.y.y.SetBytes(m[3*numBytes : 4*numBytes])
-	if e.p.y.y.Cmp(P) >= 0 {
+	g.p.y.y.SetBytes(m[3*numBytes : 4*numBytes])
+	if g.p.y.y.Cmp(P) >= 0 {
 		return nil, errors.New("bn256: coordinate exceeds modulus")
 	}
 	// Ensure the point is on the curve
-	if e.p.x.x.Sign() == 0 &&
-		e.p.x.y.Sign() == 0 &&
-		e.p.y.x.Sign() == 0 &&
-		e.p.y.y.Sign() == 0 {
+	if g.p.x.x.Sign() == 0 &&
+		g.p.x.y.Sign() == 0 &&
+		g.p.y.x.Sign() == 0 &&
+		g.p.y.y.Sign() == 0 {
 		// This is the point at infinity.
-		e.p.y.SetOne()
-		e.p.z.SetZero()
-		e.p.t.SetZero()
+		g.p.y.SetOne()
+		g.p.z.SetZero()
+		g.p.t.SetZero()
 	} else {
-		e.p.z.SetOne()
-		e.p.t.SetOne()
+		g.p.z.SetOne()
+		g.p.t.SetOne()
 
-		if !e.p.IsOnCurve() {
+		if !g.p.IsOnCurve() {
 			return nil, errors.New("bn256: malformed point")
 		}
 	}
@@ -293,49 +293,49 @@ func (g *GT) String() string {
 	return "bn256.GT" + g.p.String()
 }
 
-// ScalarMult sets e to a*k and then returns e.
-func (e *GT) ScalarMult(a *GT, k *big.Int) *GT {
-	if e.p == nil {
-		e.p = newGFp12(nil)
+// ScalarMult sets g to a*k and then returns g.
+func (g *GT) ScalarMult(a *GT, k *big.Int) *GT {
+	if g.p == nil {
+		g.p = newGFp12(nil)
 	}
-	e.p.Exp(a.p, k, new(bnPool))
-	return e
+	g.p.Exp(a.p, k, new(bnPool))
+	return g
 }
 
-// Add sets e to a+b and then returns e.
-func (e *GT) Add(a, b *GT) *GT {
-	if e.p == nil {
-		e.p = newGFp12(nil)
+// Add sets g to a+b and then returns g.
+func (g *GT) Add(a, b *GT) *GT {
+	if g.p == nil {
+		g.p = newGFp12(nil)
 	}
-	e.p.Mul(a.p, b.p, new(bnPool))
-	return e
+	g.p.Mul(a.p, b.p, new(bnPool))
+	return g
 }
 
-// Neg sets e to -a and then returns e.
-func (e *GT) Neg(a *GT) *GT {
-	if e.p == nil {
-		e.p = newGFp12(nil)
+// Neg sets g to -a and then returns g.
+func (g *GT) Neg(a *GT) *GT {
+	if g.p == nil {
+		g.p = newGFp12(nil)
 	}
-	e.p.Invert(a.p, new(bnPool))
-	return e
+	g.p.Invert(a.p, new(bnPool))
+	return g
 }
 
-// Marshal converts n into a byte slice.
-func (n *GT) Marshal() []byte {
-	n.p.Minimal()
+// Marshal converts g into a byte slice.
+func (g *GT) Marshal() []byte {
+	g.p.Minimal()
 
-	xxxBytes := n.p.x.x.x.Bytes()
-	xxyBytes := n.p.x.x.y.Bytes()
-	xyxBytes := n.p.x.y.x.Bytes()
-	xyyBytes := n.p.x.y.y.Bytes()
-	xzxBytes := n.p.x.z.x.Bytes()
-	xzyBytes := n.p.x.z.y.Bytes()
-	yxxBytes := n.p.y.x.x.Bytes()
-	yxyBytes := n.p.y.x.y.Bytes()
-	yyxBytes := n.p.y.y.x.Bytes()
-	yyyBytes := n.p.y.y.y.Bytes()
-	yzxBytes := n.p.y.z.x.Bytes()
-	yzyBytes := n.p.y.z.y.Bytes()
+	xxxBytes := g.p.x.x.x.Bytes()
+	xxyBytes := g.p.x.x.y.Bytes()
+	xyxBytes := g.p.x.y.x.Bytes()
+	xyyBytes := g.p.x.y.y.Bytes()
+	xzxBytes := g.p.x.z.x.Bytes()
+	xzyBytes := g.p.x.z.y.Bytes()
+	yxxBytes := g.p.y.x.x.Bytes()
+	yxyBytes := g.p.y.x.y.Bytes()
+	yyxBytes := g.p.y.y.x.Bytes()
+	yyyBytes := g.p.y.y.y.Bytes()
+	yzxBytes := g.p.y.z.x.Bytes()
+	yzyBytes := g.p.y.z.y.Bytes()
 
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
@@ -357,9 +357,9 @@ func (n *GT) Marshal() []byte {
 	return ret
 }
 
-// Unmarshal sets e to the result of converting the output of Marshal back into
-// a group element and then returns e.
-func (e *GT) Unmarshal(m []byte) (*GT, bool) {
+// Unmarshal sets g to the result of converting the output of Marshal back into
+// a group element and then returns g.
+func (g *GT) Unmarshal(m []byte) (*GT, bool) {
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
 
@@ -367,24 +367,24 @@ func (e *GT) Unmarshal(m []byte) (*GT, bool) {
 		return nil, false
 	}
 
-	if e.p == nil {
-		e.p = newGFp12(nil)
+	if g.p == nil {
+		g.p = newGFp12(nil)
 	}
 
-	e.p.x.x.x.SetBytes(m[0*numBytes : 1*numBytes])
-	e.p.x.x.y.SetBytes(m[1*numBytes : 2*numBytes])
-	e.p.x.y.x.SetBytes(m[2*numBytes : 3*numBytes])
-	e.p.x.y.y.SetBytes(m[3*numBytes : 4*numBytes])
-	e.p.x.z.x.SetBytes(m[4*numBytes : 5*numBytes])
-	e.p.x.z.y.SetBytes(m[5*numBytes : 6*numBytes])
-	e.p.y.x.x.SetBytes(m[6*numBytes : 7*numBytes])
-	e.p.y.x.y.SetBytes(m[7*numBytes : 8*numBytes])
-	e.p.y.y.x.SetBytes(m[8*numBytes : 9*numBytes])
-	e.p.y.y.y.SetBytes(m[9*numBytes : 10*numBytes])
-	e.p.y.z.x.SetBytes(m[10*numBytes : 11*numBytes])
-	e.p.y.z.y.SetBytes(m[11*numBytes : 12*numBytes])
+	g.p.x.x.x.SetBytes(m[0*numBytes : 1*numBytes])
+	g.p.x.x.y.SetBytes(m[1*numBytes : 2*numBytes])
+	g.p.x.y.x.SetBytes(m[2*numBytes : 3*numBytes])
+	g.p.x.y.y.SetBytes(m[3*numBytes : 4*numBytes])
+	g.p.x.z.x.SetBytes(m[4*numBytes : 5*numBytes])
+	g.p.x.z.y.SetBytes(m[5*numBytes : 6*numBytes])
+	g.p.y.x.x.SetBytes(m[6*numBytes : 7*numBytes])
+	g.p.y.x.y.SetBytes(m[7*numBytes : 8*numBytes])
+	g.p.y.y.x.SetBytes(m[8*numBytes : 9*numBytes])
+	g.p.y.y.y.SetBytes(m[9*numBytes : 10*numBytes])
+	g.p.y.z.x.SetBytes(m[10*numBytes : 11*numBytes])
+	g.p.y.z.y.SetBytes(m[11*numBytes : 12*numBytes])
 
-	return e, true
+	return g, true
 }
 
 // Pair calculates an Optimal Ate pairing.
