@@ -211,22 +211,20 @@ type PrivateAccountAPI struct {
 
 // NewPrivateAccountAPI create a new PrivateAccountAPI.
 func NewPrivateAccountAPI(b Backend, nonceLock *AddrLocker) *PrivateAccountAPI {
-
 	extapi, _ := NewExternalSigner()
-
 	return &PrivateAccountAPI{
 		am:        b.AccountManager(),
 		nonceLock: nonceLock,
 		b:         b,
-		extapi:extapi,
+		extapi:    extapi,
 	}
 }
 
 // ListAccounts will return a list of addresses for accounts this node manages.
 func (s *PrivateAccountAPI) ListAccounts() []common.Address {
 	addresses := make([]common.Address, 0) // return [] instead of nil if empty
-	if s.extapi != nil{
-		if accounts, err := s.extapi.listAccounts(); err == nil{
+	if s.extapi != nil {
+		if accounts, err := s.extapi.listAccounts(); err == nil {
 			for _, account := range accounts {
 				addresses = append(addresses, account.Address)
 			}
@@ -253,6 +251,9 @@ type rawWallet struct {
 // ListWallets will return a list of wallets this node manages.
 func (s *PrivateAccountAPI) ListWallets() []rawWallet {
 	wallets := make([]rawWallet, 0) // return [] instead of nil if empty
+	if s.extapi != nil {
+		return wallets
+	}
 	for _, wallet := range s.am.Wallets() {
 		status, failure := wallet.Status()
 
@@ -274,6 +275,10 @@ func (s *PrivateAccountAPI) ListWallets() []rawWallet {
 // the method may return an extra challenge requiring a second open (e.g. the
 // Trezor PIN matrix challenge).
 func (s *PrivateAccountAPI) OpenWallet(url string, passphrase *string) error {
+	if s.extapi != nil {
+		return errors.New("openWallet disabled when external signer is used")
+	}
+
 	wallet, err := s.am.Wallet(url)
 	if err != nil {
 		return err
@@ -288,6 +293,9 @@ func (s *PrivateAccountAPI) OpenWallet(url string, passphrase *string) error {
 // DeriveAccount requests a HD wallet to derive a new account, optionally pinning
 // it for later reuse.
 func (s *PrivateAccountAPI) DeriveAccount(url string, path string, pin *bool) (accounts.Account, error) {
+	if s.extapi != nil {
+		return accounts.Account{}, errors.New("deriveAccount disabled when external signer is used")
+	}
 	wallet, err := s.am.Wallet(url)
 	if err != nil {
 		return accounts.Account{}, err
@@ -304,6 +312,9 @@ func (s *PrivateAccountAPI) DeriveAccount(url string, path string, pin *bool) (a
 
 // NewAccount will create a new account and returns the address for the new account.
 func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) {
+	if s.extapi != nil {
+		return s.extapi.newAccount()
+	}
 	acc, err := fetchKeystore(s.am).NewAccount(password)
 	if err == nil {
 		return acc.Address, nil
@@ -319,6 +330,10 @@ func fetchKeystore(am *accounts.Manager) *keystore.KeyStore {
 // ImportRawKey stores the given hex encoded ECDSA key into the key directory,
 // encrypting it with the passphrase.
 func (s *PrivateAccountAPI) ImportRawKey(privkey string, password string) (common.Address, error) {
+	if s.extapi != nil {
+		return common.Address{}, errors.New("Importing of raw keys is disabled when external signer is used.")
+	}
+
 	key, err := crypto.HexToECDSA(privkey)
 	if err != nil {
 		return common.Address{}, err
@@ -331,6 +346,9 @@ func (s *PrivateAccountAPI) ImportRawKey(privkey string, password string) (commo
 // the given password for duration seconds. If duration is nil it will use a
 // default of 300 seconds. It returns an indication if the account was unlocked.
 func (s *PrivateAccountAPI) UnlockAccount(addr common.Address, password string, duration *uint64) (bool, error) {
+	if s.extapi != nil {
+		return false, errors.New("Unlock is disabled when external signer is used.")
+	}
 	const max = uint64(time.Duration(math.MaxInt64) / time.Second)
 	var d time.Duration
 	if duration == nil {
@@ -346,6 +364,9 @@ func (s *PrivateAccountAPI) UnlockAccount(addr common.Address, password string, 
 
 // LockAccount will lock the account associated with the given address when it's unlocked.
 func (s *PrivateAccountAPI) LockAccount(addr common.Address) bool {
+	if s.extapi != nil {
+		return false
+	}
 	return fetchKeystore(s.am).Lock(addr) == nil
 }
 
@@ -357,13 +378,8 @@ func (s *PrivateAccountAPI) signTransaction(ctx context.Context, args SendTxArgs
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
 	}
-	if true{
-		extapi, err := NewExternalSigner()
-		if err != nil {
-			return nil, err
-		}
-		tx, err := extapi.signTransaction(ctx, args)
-		return tx, err
+	if s.extapi != nil {
+		return s.extapi.signTransaction(ctx, args)
 	}
 
 	// Look up the wallet containing the requested signer
@@ -644,8 +660,8 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	addr := args.From
 	if addr == (common.Address{}) {
 		if wallets := s.b.AccountManager().Wallets(); len(wallets) > 0 {
-			if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-				addr = accounts[0].Address
+			if accts := wallets[0].Accounts(); len(accts) > 0 {
+				addr = accts[0].Address
 			}
 		}
 	}
@@ -1220,34 +1236,20 @@ func submitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the
 // transaction pool.
 func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args SendTxArgs) (common.Hash, error) {
-
-	// Look up the wallet containing the requested signer
-	account := accounts.Account{Address: args.From}
-
-	wallet, err := s.b.AccountManager().Find(account)
-	if err != nil {
-		return common.Hash{}, err
+	if s.extapi == nil {
+		return common.Hash{}, errors.New("No external signer configured")
 	}
-
 	if args.Nonce == nil {
 		// Hold the addresse's mutex around signing to prevent concurrent assignment of
 		// the same nonce to multiple accounts.
 		s.nonceLock.LockAddr(args.From)
 		defer s.nonceLock.UnlockAddr(args.From)
 	}
-
 	// Set some sanity defaults and terminate on failure
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return common.Hash{}, err
 	}
-	// Assemble the transaction and sign with the wallet
-	tx := args.toTransaction()
-
-	var chainID *big.Int
-	if config := s.b.ChainConfig(); config.IsEIP155(s.b.CurrentBlock().Number()) {
-		chainID = config.ChainID
-	}
-	signed, err := wallet.SignTx(account, tx, chainID)
+	signed, err := s.extapi.signTransaction(ctx, args)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1311,14 +1313,15 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Sen
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
 	}
-
-	extapi, err := NewExternalSigner()
-	if err != nil {
-		return nil, err
+	var (
+		tx  *types.Transaction
+		err error
+	)
+	if s.extapi != nil {
+		tx, err = s.extapi.signTransaction(ctx, args)
+	} else {
+		tx, err = s.sign(args.From, args.toTransaction())
 	}
-	tx, err := extapi.signTransaction(ctx, args)
-	//tx, err := s.sign(args.From, args.toTransaction())
-
 	if err != nil {
 		return nil, err
 	}
@@ -1370,7 +1373,9 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs SendTxAr
 	if err != nil {
 		return common.Hash{}, err
 	}
-
+	var (
+		signedTx *types.Transaction
+	)
 	for _, p := range pending {
 		var signer types.Signer = types.HomesteadSigner{}
 		if p.Protected() {
@@ -1386,7 +1391,11 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs SendTxAr
 			if gasLimit != nil && *gasLimit != 0 {
 				sendArgs.Gas = gasLimit
 			}
-			signedTx, err := s.sign(sendArgs.From, sendArgs.toTransaction())
+			if s.extapi != nil {
+				signedTx, err = s.extapi.signTransaction(ctx, sendArgs)
+			} else {
+				signedTx, err = s.sign(sendArgs.From, sendArgs.toTransaction())
+			}
 			if err != nil {
 				return common.Hash{}, err
 			}
@@ -1550,4 +1559,13 @@ func (api *ExternalSignerAPI) listAccounts() ([]accounts.Account, error) {
 		return nil, err
 	}
 	return res, nil
+}
+func (api *ExternalSignerAPI) newAccount() (common.Address, error) {
+	var res accounts.Account
+
+	if err := api.client.Call(&res, "account_new"); err != nil {
+		return res.Address, nil
+	}
+	return common.Address{}, nil
+
 }
