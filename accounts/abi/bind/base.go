@@ -251,8 +251,14 @@ func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]int
 	if opts == nil {
 		opts = new(FilterOpts)
 	}
-	// Append the event selector to the query parameters and construct the topic set
-	query = append([][]interface{}{{c.abi.Events[name].Id()}}, query...)
+
+	var e abi.Event
+	var exist bool
+	if e, exist = c.abi.Events[name]; !exist {
+		return nil, nil, fmt.Errorf("abi: event [%v] not found", name)
+	}
+	// Append the event selector to the query parameters and construct the topic seft
+	query = append([][]interface{}{{e.Id()}}, query...)
 
 	topics, err := makeTopics(query...)
 	if err != nil {
@@ -300,8 +306,14 @@ func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]inter
 	if opts == nil {
 		opts = new(WatchOpts)
 	}
+	var e abi.Event
+	var exist bool
+	if e, exist = c.abi.Events[name]; !exist {
+		return nil, nil, fmt.Errorf("abi: event [%v] not found", name)
+	}
+
 	// Append the event selector to the query parameters and construct the topic set
-	query = append([][]interface{}{{c.abi.Events[name].Id()}}, query...)
+	query = append([][]interface{}{{e.Id()}}, query...)
 
 	topics, err := makeTopics(query...)
 	if err != nil {
@@ -325,14 +337,21 @@ func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]inter
 }
 
 // UnpackLog unpacks a retrieved log into the provided output structure.
-func (c *BoundContract) UnpackLog(out interface{}, event string, log types.Log) error {
+func (c *BoundContract) UnpackLog(out interface{}, eventName string, log types.Log) error {
 	if len(log.Data) > 0 {
-		if err := c.abi.Unpack(out, event, log.Data); err != nil {
+		if err := c.abi.Unpack(out, eventName, log.Data); err != nil {
 			return err
 		}
 	}
+
+	var e abi.Event
+	var exist bool
+	if e, exist = c.abi.Events[eventName]; !exist {
+		return fmt.Errorf("abi: event [%v] not found", eventName)
+	}
+
 	var indexed abi.Arguments
-	for _, arg := range c.abi.Events[event].Inputs {
+	for _, arg := range e.Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}
