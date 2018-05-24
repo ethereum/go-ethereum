@@ -107,6 +107,7 @@ var (
 		utils.DeveloperPeriodFlag,
 		utils.TestnetFlag,
 		utils.RinkebyFlag,
+		utils.ExitWhenSyncedFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
