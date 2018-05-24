@@ -142,14 +142,14 @@ Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
 Passphrase: {{.InputLine "foobar"}}
 `)
-	geth.ExpectExit()
+	XDC.ExpectExit()
 
 	wantMessages := []string{
 		"Unlocked account",
 		"=0xf466859eAD1932D743d622CB74FC058882E8648A",
 	}
 	for _, m := range wantMessages {
-		if !strings.Contains(geth.StderrText(), m) {
+		if !strings.Contains(XDC.StderrText(), m) {
 			t.Errorf("stderr text does not contain %q", m)
 		}
 	}
@@ -157,11 +157,11 @@ Passphrase: {{.InputLine "foobar"}}
 
 func TestUnlockFlagWrongPassword(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
-	geth := runGeth(t,
+	XDC := runGeth(t,
 		"--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
 		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a")
-	defer geth.ExpectExit()
-	geth.Expect(`
+	defer XDC.ExpectExit()
+	XDC.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
 Passphrase: {{.InputLine "wrong1"}}
@@ -176,18 +176,18 @@ Fatal: Failed to unlock account f466859ead1932d743d622cb74fc058882e8648a (could 
 // https://github.com/ethereum/go-ethereum/issues/1785
 func TestUnlockFlagMultiIndex(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
-	geth := runGeth(t,
+	XDC := runGeth(t,
 		"--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
 		"--unlock", "0,2",
 		"js", "testdata/empty.js")
-	geth.Expect(`
+	XDC.Expect(`
 Unlocking account 0 | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
 Passphrase: {{.InputLine "foobar"}}
 Unlocking account 2 | Attempt 1/3
 Passphrase: {{.InputLine "foobar"}}
 `)
-	geth.ExpectExit()
+	XDC.ExpectExit()
 
 	wantMessages := []string{
 		"Unlocked account",
@@ -195,7 +195,7 @@ Passphrase: {{.InputLine "foobar"}}
 		"=0x289d485D9771714CCe91D3393D764E1311907ACc",
 	}
 	for _, m := range wantMessages {
-		if !strings.Contains(geth.StderrText(), m) {
+		if !strings.Contains(XDC.StderrText(), m) {
 			t.Errorf("stderr text does not contain %q", m)
 		}
 	}
@@ -203,11 +203,11 @@ Passphrase: {{.InputLine "foobar"}}
 
 func TestUnlockFlagPasswordFile(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
-	geth := runGeth(t,
+	XDC := runGeth(t,
 		"--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
 		"--password", "testdata/passwords.txt", "--unlock", "0,2",
 		"js", "testdata/empty.js")
-	geth.ExpectExit()
+	XDC.ExpectExit()
 
 	wantMessages := []string{
 		"Unlocked account",
@@ -215,7 +215,7 @@ func TestUnlockFlagPasswordFile(t *testing.T) {
 		"=0x289d485D9771714CCe91D3393D764E1311907ACc",
 	}
 	for _, m := range wantMessages {
-		if !strings.Contains(geth.StderrText(), m) {
+		if !strings.Contains(XDC.StderrText(), m) {
 			t.Errorf("stderr text does not contain %q", m)
 		}
 	}
@@ -223,29 +223,29 @@ func TestUnlockFlagPasswordFile(t *testing.T) {
 
 func TestUnlockFlagPasswordFileWrongPassword(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
-	geth := runGeth(t,
+	XDC := runGeth(t,
 		"--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
 		"--password", "testdata/wrong-passwords.txt", "--unlock", "0,2")
-	defer geth.ExpectExit()
-	geth.Expect(`
+	defer XDC.ExpectExit()
+	XDC.Expect(`
 Fatal: Failed to unlock account 0 (could not decrypt key with given passphrase)
 `)
 }
 
 func TestUnlockFlagAmbiguous(t *testing.T) {
 	store := filepath.Join("..", "..", "accounts", "keystore", "testdata", "dupes")
-	geth := runGeth(t,
+	XDC := runGeth(t,
 		"--keystore", store, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
 		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a",
 		"js", "testdata/empty.js")
-	defer geth.ExpectExit()
+	defer XDC.ExpectExit()
 
 	// Helper for the expect template, returns absolute keystore path.
-	geth.SetTemplateFunc("keypath", func(file string) string {
+	XDC.SetTemplateFunc("keypath", func(file string) string {
 		abs, _ := filepath.Abs(filepath.Join(store, file))
 		return abs
 	})
-	geth.Expect(`
+	XDC.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
 Passphrase: {{.InputLine "foobar"}}
@@ -257,14 +257,14 @@ Your passphrase unlocked keystore://{{keypath "1"}}
 In order to avoid this warning, you need to remove the following duplicate key files:
    keystore://{{keypath "2"}}
 `)
-	geth.ExpectExit()
+	XDC.ExpectExit()
 
 	wantMessages := []string{
 		"Unlocked account",
 		"=0xf466859eAD1932D743d622CB74FC058882E8648A",
 	}
 	for _, m := range wantMessages {
-		if !strings.Contains(geth.StderrText(), m) {
+		if !strings.Contains(XDC.StderrText(), m) {
 			t.Errorf("stderr text does not contain %q", m)
 		}
 	}
@@ -272,17 +272,17 @@ In order to avoid this warning, you need to remove the following duplicate key f
 
 func TestUnlockFlagAmbiguousWrongPassword(t *testing.T) {
 	store := filepath.Join("..", "..", "accounts", "keystore", "testdata", "dupes")
-	geth := runGeth(t,
+	XDC := runGeth(t,
 		"--keystore", store, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
 		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a")
-	defer geth.ExpectExit()
+	defer XDC.ExpectExit()
 
 	// Helper for the expect template, returns absolute keystore path.
-	geth.SetTemplateFunc("keypath", func(file string) string {
+	XDC.SetTemplateFunc("keypath", func(file string) string {
 		abs, _ := filepath.Abs(filepath.Join(store, file))
 		return abs
 	})
-	geth.Expect(`
+	XDC.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
 Passphrase: {{.InputLine "wrong"}}
@@ -292,5 +292,5 @@ Multiple key files exist for address f466859ead1932d743d622cb74fc058882e8648a:
 Testing your passphrase against all of them...
 Fatal: None of the listed files could be unlocked.
 `)
-	geth.ExpectExit()
+	XDC.ExpectExit()
 }
