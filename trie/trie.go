@@ -57,7 +57,7 @@ func CacheUnloads() int64 {
 // LeafCallback is a callback type invoked when a trie operation reaches a leaf
 // node. It's used by state sync and commit to allow handling external references
 // between account and storage tries.
-type LeafCallback func(leaf []byte, parent common.Hash) error
+type LeafCallback func(path []byte, leaf []byte, parent common.Hash) error
 
 // Trie is a Merkle Patricia Trie.
 // The zero value is an empty trie with no database.
@@ -67,6 +67,7 @@ type LeafCallback func(leaf []byte, parent common.Hash) error
 type Trie struct {
 	db           *Database
 	root         node
+	prefix       []byte
 	originalRoot common.Hash
 
 	// Cache generation values.
@@ -93,12 +94,13 @@ func (t *Trie) newFlag() nodeFlag {
 // trie is initially empty and does not require a database. Otherwise,
 // New will panic if db is nil and returns a MissingNodeError if root does
 // not exist in the database. Accessing the trie loads nodes from db on demand.
-func New(root common.Hash, db *Database) (*Trie, error) {
+func New(prefix []byte, root common.Hash, db *Database) (*Trie, error) {
 	if db == nil {
 		panic("trie.New called without a database")
 	}
 	trie := &Trie{
 		db:           db,
+		prefix:       prefix,
 		originalRoot: root,
 	}
 	if (root != common.Hash{}) && root != emptyRoot {
@@ -434,7 +436,7 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 
 	hash := common.BytesToHash(n)
 
-	enc, err := t.db.Node(hash)
+	enc, err := t.db.Node(t.prefix, hash)
 	if err != nil || enc == nil {
 		return nil, &MissingNodeError{NodeHash: hash, Path: prefix}
 	}
@@ -474,5 +476,6 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
 	}
 	h := newHasher(t.cachegen, t.cachelimit, onleaf)
 	defer returnHasherToPool(h)
-	return h.hash(t.root, db, true)
+
+	return h.hash(t.prefix, nil, t.root, db, true)
 }

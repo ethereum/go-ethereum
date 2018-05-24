@@ -592,7 +592,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					if err != nil {
 						continue
 					}
-					code, _ := statedb.Database().TrieDB().Node(common.BytesToHash(account.CodeHash))
+					code, _ := statedb.Database().TrieDB().Node(nil, common.BytesToHash(account.CodeHash))
 
 					data = append(data, code)
 					if bytes += len(code); bytes >= softResponseLimit {
@@ -873,7 +873,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			if header := pm.blockchain.GetHeaderByNumber(req.BlockNum); header != nil {
 				sectionHead := rawdb.ReadCanonicalHash(pm.chainDb, req.ChtNum*light.CHTFrequencyServer-1)
 				if root := light.GetChtRoot(pm.chainDb, req.ChtNum-1, sectionHead); root != (common.Hash{}) {
-					trie, err := trie.New(root, trieDb)
+					trie, err := trie.New(nil, root, trieDb)
 					if err != nil {
 						continue
 					}
@@ -927,7 +927,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 				var prefix string
 				if root, prefix = pm.getHelperTrie(req.Type, req.TrieIdx); root != (common.Hash{}) {
-					auxTrie, _ = trie.New(root, trie.NewDatabase(ethdb.NewTable(pm.chainDb, prefix)))
+					auxTrie, _ = trie.New(nil, root, trie.NewDatabase(ethdb.NewTable(pm.chainDb, prefix)))
 				}
 			}
 			if req.AuxReq == auxRoot {
@@ -1107,7 +1107,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 // getAccount retrieves an account from the state based at root.
 func (pm *ProtocolManager) getAccount(statedb *state.StateDB, root, hash common.Hash) (state.Account, error) {
-	trie, err := trie.New(root, statedb.Database().TrieDB())
+	trie, err := trie.New(nil, root, statedb.Database().TrieDB())
 	if err != nil {
 		return state.Account{}, err
 	}
