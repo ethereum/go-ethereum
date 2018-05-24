@@ -70,6 +70,12 @@ var routes = Routes{
 		HandlerFunc: GetAllTransactionsFromBlock,
 	},
 	Route{
+		Name: "GetAllBlocksMinedByAddress",
+		Method: "GET",
+		Pattern: "/api/get_blocks_mined/{coinbase}",
+		HandlerFunc: GetAllBlocksMinedByAddress,
+	},
+	Route{
 		"GetInternalTransactions",
 		"GET",
 		"/api/get_internal_transactions/{address}",

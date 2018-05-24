@@ -74,11 +74,32 @@ func GetAllTransactionsFromBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 
 	fmt.Fprintln(w, txsFromBlock)
+}
+
+func GetAllBlocksMinedByAddress(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	coinbase := vars["coinbase"]
+	connStr := "user=postgres dbname=shyftdb sslmode=disable"
+	blockExplorerDb, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return
+	}
+
+	blocksMined := shyftdb.GetAllBlocksMinedByAddress(blockExplorerDb, coinbase)
+
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
+
+	fmt.Fprintln(w, blocksMined)
 }
 
 // GetAccount gets balance

@@ -21,15 +21,27 @@ class AccountTable extends Component {
     }
 
     render() {
-        const table = this.state.data.map((data, i) => {
+
+        let startNum = 1;
+        const sorted = [...this.state.data];
+            sorted.sort((a, b) => Number(a.Balance) > Number(b.Balance));
+            console.log(sorted);
+        const table = sorted.reverse().map((data, i) => {
+            const conversion = Number(data.Balance) / 10000000000000000000;
+            const total = sorted
+                .map(num => Number(num.Balance) / 10000000000000000000)
+                .reduce((acc, cur) => acc + cur ,0);
+            const percentage = ( (conversion / total) *100);
             return <AccountsTable
                 key={`${data.addr}${i}`}
+                Rank={startNum++}
+                Percentage={percentage.toFixed(2)}
                 Addr={data.Addr}
-                Balance={data.Balance}
+                Balance={conversion}
                 TxCountAccount={data.TxCountAccount}
                 detailAccountHandler={this.props.detailAccountHandler}
             />
-        })
+        });
 
         let combinedClasses = ['responsive-table', classes.table];
         return (

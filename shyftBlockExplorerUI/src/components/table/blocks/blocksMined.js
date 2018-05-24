@@ -1,10 +1,9 @@
 import React, { Component } from 'react';
-import BlockTable from './blockTable';
+import MinedBlockTable from './blocksMinedTable';
 import Loading from '../../UI materials/loading'
 import classes from './table.css';
-import axios from "axios/index";
 
-class BlocksTable extends Component {
+class BlocksMinedTable extends Component {
     constructor(props) {
         super(props);
         this.state = {
@@ -12,21 +11,11 @@ class BlocksTable extends Component {
         };
     }
 
-    async componentDidMount() {
-        try {
-            const response = await axios.get("http://localhost:8080/api/get_all_blocks");
-            await this.setState({data: response.data});
-        } catch (err) {
-            console.log(err);
-        }
-    }
-
-
     render() {
-        const table = this.state.data.map((data, i) => {
+        const table = this.props.data.map((data, i) => {
             const conversion = data.Rewards / 10000000000000000000;
-            return <BlockTable
-                key={`${data.TxHash}${i}`}
+            return <MinedBlockTable
+                key={`${data.Hash}${i}`}
                 Hash={data.Hash}
                 Number={data.Number}
                 Coinbase={data.Coinbase}
@@ -58,9 +47,9 @@ class BlocksTable extends Component {
                     <th scope="col">Reward</th>
                 </tr>
                 </thead>
-                        {table}
+                {table}
             </table>
         );
     }
 }
-export default BlocksTable;
+export default BlocksMinedTable;

@@ -1,10 +1,11 @@
 import React, { Component } from 'react';
 import classes from './table.css';
+import { Link } from 'react-router-dom'
 
 class DetailBlockTable extends Component {
 
     render() {
-        let data = this.props.data
+        let data = this.props.data;
         let combinedClasses = ['responsive-table', classes.table];
         return (
             <table className={combinedClasses.join(' ')}>
@@ -19,7 +20,7 @@ class DetailBlockTable extends Component {
                 </tr>
                 <tr>
                     <th scope="col">Txn:</th>
-                    <td>{data.TxCount} transactions</td>
+                    <td><Link to="/block/transactions" onClick={() => this.props.getBlockTransactions(data.Number)}>{data.TxCount} transactions</Link></td>
                 </tr>
                 <tr>
                     <th scope="col">Block Hash:</th>
@@ -67,7 +68,7 @@ class DetailBlockTable extends Component {
                 </tr>
                 <tr>
                     <th scope="col">Reward:</th>
-                    <td>TBD</td>
+                    <td>{data.Rewards}</td>
                 </tr>
                 </tbody>
             </table>
