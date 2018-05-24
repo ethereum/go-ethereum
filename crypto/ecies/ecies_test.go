@@ -101,9 +101,8 @@ func cmpPrivate(prv1, prv2 *PrivateKey) bool {
 		return false
 	} else if prv1.D.Cmp(prv2.D) != 0 {
 		return false
-	} else {
-		return cmpPublic(prv1.PublicKey, prv2.PublicKey)
 	}
+	return cmpPublic(prv1.PublicKey, prv2.PublicKey)
 }
 
 // Validate the ECDH component.

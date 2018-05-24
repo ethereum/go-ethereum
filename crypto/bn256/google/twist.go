@@ -171,12 +171,12 @@ func (c *twistPoint) Double(a *twistPoint, pool *bnPool) {
 	// See http://hyperelliptic.org/EFD/g1p/auto-code/shortw/jacobian-0/doubling/dbl-2009-l.op3
 	A := newGFp2(pool).Square(a.x, pool)
 	B := newGFp2(pool).Square(a.y, pool)
-	C_ := newGFp2(pool).Square(B, pool)
+	_C := newGFp2(pool).Square(B, pool)
 
 	t := newGFp2(pool).Add(a.x, B)
 	t2 := newGFp2(pool).Square(t, pool)
 	t.Sub(t2, A)
-	t2.Sub(t, C_)
+	t2.Sub(t, _C)
 	d := newGFp2(pool).Add(t2, t2)
 	t.Add(A, A)
 	e := newGFp2(pool).Add(t, A)
@@ -185,7 +185,7 @@ func (c *twistPoint) Double(a *twistPoint, pool *bnPool) {
 	t.Add(d, d)
 	c.x.Sub(f, t)
 
-	t.Add(C_, C_)
+	t.Add(_C, _C)
 	t2.Add(t, t)
 	t.Add(t2, t2)
 	c.y.Sub(d, c.x)
@@ -197,7 +197,7 @@ func (c *twistPoint) Double(a *twistPoint, pool *bnPool) {
 
 	A.Put(pool)
 	B.Put(pool)
-	C_.Put(pool)
+	_C.Put(pool)
 	t.Put(pool)
 	t2.Put(pool)
 	d.Put(pool)

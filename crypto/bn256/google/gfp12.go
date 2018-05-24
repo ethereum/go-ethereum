@@ -130,7 +130,7 @@ func (e *gfP12) MulScalar(a *gfP12, b *gfP6, pool *bnPool) *gfP12 {
 	return e
 }
 
-func (c *gfP12) Exp(a *gfP12, power *big.Int, pool *bnPool) *gfP12 {
+func (e *gfP12) Exp(a *gfP12, power *big.Int, pool *bnPool) *gfP12 {
 	sum := newGFp12(pool)
 	sum.SetOne()
 	t := newGFp12(pool)
@@ -144,12 +144,12 @@ func (c *gfP12) Exp(a *gfP12, power *big.Int, pool *bnPool) *gfP12 {
 		}
 	}
 
-	c.Set(sum)
+	e.Set(sum)
 
 	sum.Put(pool)
 	t.Put(pool)
 
-	return c
+	return e
 }
 
 func (e *gfP12) Square(a *gfP12, pool *bnPool) *gfP12 {

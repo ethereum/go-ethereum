@@ -102,7 +102,7 @@ func (e *gfP2) Double(a *gfP2) *gfP2 {
 	return e
 }
 
-func (c *gfP2) Exp(a *gfP2, power *big.Int, pool *bnPool) *gfP2 {
+func (e *gfP2) Exp(a *gfP2, power *big.Int, pool *bnPool) *gfP2 {
 	sum := newGFp2(pool)
 	sum.SetOne()
 	t := newGFp2(pool)
@@ -116,12 +116,12 @@ func (c *gfP2) Exp(a *gfP2, power *big.Int, pool *bnPool) *gfP2 {
 		}
 	}
 
-	c.Set(sum)
+	e.Set(sum)
 
 	sum.Put(pool)
 	t.Put(pool)
 
-	return c
+	return e
 }
 
 // See "Multiplication and Squaring in Pairing-Friendly Fields",
