@@ -13,6 +13,7 @@ import (
 
 	_ "github.com/lib/pq"
 	Rewards "github.com/ethereum/go-ethereum/consensus/ethash"
+	"reflect"
 )
 
 //SBlock type
@@ -77,10 +78,10 @@ type ShyftTxEntryPretty struct {
 	From      string
 	BlockHash string
 	BlockNumber string
-	Amount    uint64
+	Amount   string
 	GasPrice  uint64
 	Gas       uint64
-	GasLimit  uint64
+	GasLimit  string
 	Cost	  uint64
 	Nonce     uint64
 	Status	  string
@@ -686,10 +687,10 @@ func GetAllTransactionsFromBlock(sqldb *sql.DB, blockNumber string) string {
 		var from_addr string
 		var blockhash string
 		var blocknumber string
-		var amount uint64
+		var amount string
 		var gasprice uint64
 		var gas uint64
-		var gasLimit uint64
+		var gasLimit string
 		var txfee uint64
 		var nonce uint64
 		var status string
@@ -821,10 +822,10 @@ func GetAllTransactions(sqldb *sql.DB) string {
 		var from_addr string
 		var blockhash string
 		var blocknumber string
-		var amount uint64
+		var amount string
 		var gasprice uint64
 		var gas uint64
-		var gasLimit uint64
+		var gasLimit string
 		var txfee uint64
 		var nonce uint64
 		var status string
@@ -883,10 +884,10 @@ func GetTransaction(sqldb *sql.DB, txHash string) string {
 	var from_addr string
 	var blockhash string
 	var blocknumber string
-	var amount uint64
+	var amount string
 	var gasprice uint64
 	var gas uint64
-	var gasLimit uint64
+	var gasLimit string
 	var txfee uint64
 	var nonce uint64
 	var status string
@@ -994,6 +995,7 @@ func GetAllAccounts(sqldb *sql.DB) string {
 
 //GetAccount returns account balances
 func GetAccountTxs(sqldb *sql.DB, address string) string {
+	fmt.Println(address)
 	var arr txRes
 	var txx string
 	sqlStatement := `SELECT * FROM txs WHERE to_addr=$1 OR from_addr=$1;`
@@ -1008,10 +1010,10 @@ func GetAccountTxs(sqldb *sql.DB, address string) string {
 		var from_addr string
 		var blockhash string
 		var blocknumber string
-		var amount uint64
+		var amount string
 		var gasprice uint64
 		var gas uint64
-		var gasLimit uint64
+		var gasLimit string
 		var txfee uint64
 		var nonce uint64
 		var status string
@@ -1035,6 +1037,7 @@ func GetAccountTxs(sqldb *sql.DB, address string) string {
 			&age,
 			&data,
 		)
+		fmt.Println(reflect.TypeOf(amount))
 
 		arr.TxEntry = append(arr.TxEntry, ShyftTxEntryPretty{
 			TxHash:    txhash,

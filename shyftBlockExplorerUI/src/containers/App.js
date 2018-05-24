@@ -73,7 +73,7 @@ class App extends Component {
     getBlockTransactions = async(blockNumber) => {
         try {
             const response = await axios.get(`http://localhost:8080/api/get_all_transactions_from_block/${blockNumber}`)
-            await this.setState({ blockTransactions: response.data })
+            await this.setState({ blockTransactions: response.data, reqBlockNum: blockNumber })
         }
         catch(error) {
             console.log(error)
@@ -81,11 +81,9 @@ class App extends Component {
     };
 
     getBlocksMined = async(coinbase) => {
-        console.log("THIS RAN")
         try {
             const response = await axios.get(`http://localhost:8080/api/get_blocks_mined/${coinbase}`)
-            console.log(response.data);
-            await this.setState({ blocksMined: response.data })
+            await this.setState({ blocksMined: response.data, reqCoinbase: coinbase })
         }
         catch(error) {
             console.log(error)
@@ -151,7 +149,7 @@ class App extends Component {
           <Route path="/block/transactions" exact render={({match}) =>
               <div>
                   <BlockDetailHeader
-                      blockNumber={this.state.blockTransactions.BlockNumber}/>
+                      blockNumber={this.state.reqBlockNum}/>
                   <BlockTxs
                       data={this.state.blockTransactions}
                       getBlockTransactions={this.getBlockTransactions}
@@ -164,7 +162,7 @@ class App extends Component {
           <Route path="/mined/blocks" exact render={({match}) =>
               <div>
                   <BlockCoinbaseHeader
-                      data={this.state.blocksMined}/>
+                      coinbase={this.state.reqCoinbase}/>
                   <BlocksMinedTable
                       getBlockTransactions={this.getBlockTransactions}
                       getBlocksMined={this.getBlocksMined}
@@ -175,7 +173,8 @@ class App extends Component {
           <Route path="/account/detail" exact render={({match}) =>
               <div>
                   <AccountDetailHeader
-                      addr={this.state.reqAccount}/>
+                      addr={this.state.reqAccount}
+                      data={this.state.accountDetailData}/>
                   <DetailAccountsTable
                       transactionDetailHandler={this.detailTransactionHandler}
                       addr={this.state.reqAccount}

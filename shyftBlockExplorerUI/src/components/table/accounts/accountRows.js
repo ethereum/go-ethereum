@@ -24,11 +24,12 @@ class AccountTable extends Component {
 
         let startNum = 1;
         const sorted = [...this.state.data];
-            sorted.sort((a, b) => a.Balance > b.Balance);
+            sorted.sort((a, b) => Number(a.Balance) > Number(b.Balance));
+            console.log(sorted);
         const table = sorted.reverse().map((data, i) => {
-            const conversion = data.Balance / 10000000000000000000;
+            const conversion = Number(data.Balance) / 10000000000000000000;
             const total = sorted
-                .map(num => num.Balance / 10000000000000000000)
+                .map(num => Number(num.Balance) / 10000000000000000000)
                 .reduce((acc, cur) => acc + cur ,0);
             const percentage = ( (conversion / total) *100);
             return <AccountsTable

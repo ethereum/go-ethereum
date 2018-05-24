@@ -32,6 +32,6 @@ const DetailAccountsTable = (props) => {
             </tr>
             </tbody>
     )
-}
+};
 
 export default DetailAccountsTable;

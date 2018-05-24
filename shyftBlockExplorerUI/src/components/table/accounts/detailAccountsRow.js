@@ -10,11 +10,8 @@ class AccountTransactionTable extends Component {
            return <ErrorHandler />
         }else {
             table = this.props.data.map((data, i) => {
-                console.log(this.props.data)
-                // const total = this.props.data
-                //     .map(num => num.Balance / 10000000000000000000)
-                //     .reduce((acc, cur) => acc + cur ,0);
-                const conversion = data.Cost / 10000000000000000000;
+                const costConversion = data.Cost / 10000000000000000000;
+                const amountConversion = data.Amount / 10000000000000000000;
                 return <DetailAccountsTable
                     key={`${data.TxHash}${i}`}
                     age={data.Age}
@@ -22,8 +19,8 @@ class AccountTransactionTable extends Component {
                     blockNumber={data.BlockNumber}
                     to={data.To}
                     from={data.From}
-                    value={data.Amount}
-                    cost={conversion}
+                    value={amountConversion}
+                    cost={costConversion}
                     addr={this.props.addr}
                     detailTransactionHandler={this.props.transactionDetailHandler}
                 />
