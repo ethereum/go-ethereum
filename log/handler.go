@@ -92,7 +92,6 @@ func RotatingFileHandler(path string, limit uint, formatter Format) Handler {
 	if err := os.MkdirAll(path, 0755); err != nil {
 		panic(err)
 	}
-	fmt.Println(path)
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		panic(err)
