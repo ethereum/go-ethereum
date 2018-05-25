@@ -72,6 +72,7 @@ type Work struct {
 	uncles    *set.Set       // uncle set
 	tcount    int            // tx count in cycle
 	gasPool   *core.GasPool  // available gas used to pack transactions
+	vGasPool  *core.GasPool  // available gas used to pack Casper votes
 
 	Block *types.Block // the new block
 
@@ -269,12 +270,17 @@ func (self *worker) update() {
 			if atomic.LoadInt32(&self.mining) == 0 {
 				self.currentMu.Lock()
 				txs := make(map[common.Address]types.Transactions)
+				var votes types.Transactions
 				for _, tx := range ev.Txs {
 					acc, _ := types.Sender(self.current.signer, tx)
-					txs[acc] = append(txs[acc], tx)
+					if acc.IsNullSender() {
+						votes = append(votes, tx)
+					} else {
+						txs[acc] = append(txs[acc], tx)
+					}
 				}
 				txset := types.NewTransactionsByPriceAndNonce(self.current.signer, txs)
-				self.current.commitTransactions(self.mux, txset, self.chain, self.coinbase)
+				self.current.commitTransactions(self.mux, txset, votes, self.chain, self.coinbase)
 				self.updateSnapshot()
 				self.currentMu.Unlock()
 			} else {
@@ -370,7 +376,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 	}
 	work := &Work{
 		config:    self.config,
-		signer:    types.NewEIP155Signer(self.config.ChainId),
+		signer:    types.NewEIP1011Signer(self.config),
 		state:     state,
 		ancestors: set.New(),
 		family:    set.New(),
@@ -462,7 +468,8 @@ func (self *worker) commitNewWork() {
 		return
 	}
 	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
-	work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
+	votes := self.eth.TxPool().Votes()
+	work.commitTransactions(self.mux, txs, votes, self.chain, self.coinbase)
 
 	// compute uncles for the new block.
 	var (
@@ -528,13 +535,11 @@ func (self *worker) updateSnapshot() {
 	self.snapshotState = self.current.state.Copy()
 }
 
-func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsByPriceAndNonce, bc *core.BlockChain, coinbase common.Address) {
+func (env *Work) commitTxs(txs *types.TransactionsByPriceAndNonce, bc *core.BlockChain, coinbase common.Address) []*types.Log {
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(env.header.GasLimit)
 	}
-
 	var coalescedLogs []*types.Log
-
 	for {
 		// If we don't have enough gas for any further transactions then we're done
 		if env.gasPool.Gas() < params.TxGas {
@@ -591,6 +596,45 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
 			txs.Shift()
 		}
+	}
+	return coalescedLogs
+}
+
+func (env *Work) commitVotes(votes types.Transactions, bc *core.BlockChain, coinbase common.Address) []*types.Log {
+	if env.vGasPool == nil {
+		env.vGasPool = new(core.GasPool).AddGas(env.header.GasLimit)
+	}
+	var coalescedLogs []*types.Log
+	for _, vote := range votes {
+		hash := vote.Hash()
+		// If we don't have enough gas for any further transactions then we're done
+		if env.vGasPool.Gas() < params.TxGas {
+			log.Trace("Not enough gas for further votes", "gp", env.vGasPool)
+			break
+		}
+		// Start executing the transaction
+		env.state.Prepare(hash, common.Hash{}, env.tcount)
+
+		err, logs := env.commitTransaction(vote, bc, coinbase, env.vGasPool)
+		switch err {
+		case core.ErrGasLimitReached:
+			log.Trace("Vote gas limit exceeded for current block", "vote", hash)
+		case nil:
+			// Everything ok, collect the logs
+			coalescedLogs = append(coalescedLogs, logs...)
+			env.tcount++
+		default:
+			// Strange error, discard the transaction.
+			log.Debug("Transaction failed, vote skipped", "hash", hash, "err", err)
+		}
+	}
+	return coalescedLogs
+}
+
+func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsByPriceAndNonce, votes types.Transactions, bc *core.BlockChain, coinbase common.Address) {
+	coalescedLogs := env.commitTxs(txs, bc, coinbase)
+	if len(votes) > 0 {
+		coalescedLogs = append(coalescedLogs, env.commitVotes(votes, bc, coinbase)...)
 	}
 
 	if len(coalescedLogs) > 0 || env.tcount > 0 {

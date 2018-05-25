@@ -35,8 +35,9 @@ const (
 )
 
 var (
-	hashT    = reflect.TypeOf(Hash{})
-	addressT = reflect.TypeOf(Address{})
+	hashT          = reflect.TypeOf(Hash{})
+	addressT       = reflect.TypeOf(Address{})
+	NullSenderAddr = HexToAddress("0xffffffffffffffffffffffffffffffffffffffff")
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
@@ -193,6 +194,11 @@ func (a Address) String() string {
 // without going through the stringer interface used for logging.
 func (a Address) Format(s fmt.State, c rune) {
 	fmt.Fprintf(s, "%"+string(c), a[:])
+}
+
+// IsNullSender returns true if this address is NullSenderAddr
+func (a Address) IsNullSender() bool {
+	return a == NullSenderAddr
 }
 
 // Sets the address to the value of b. If b is larger than len(a) it will panic

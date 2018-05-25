@@ -17,6 +17,7 @@
 package types
 
 import (
+	"bytes"
 	"container/heap"
 	"errors"
 	"io"
@@ -32,7 +33,8 @@ import (
 //go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
 
 var (
-	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
+	ErrInvalidSig          = errors.New("invalid transaction v, r, s values")
+	CasperVoteFunctionByte = common.Hex2Bytes("e9dc0614")
 )
 
 // deriveSigner makes a *best* guess about which signer to use.
@@ -235,6 +237,22 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	var err error
 	msg.from, err = Sender(s, tx)
 	return msg, err
+}
+
+// IsCasperVote returns true if all the following conditions are true:
+// - it's sending to Casper's contract address
+// - it's calling contract method "vote"
+// - its signature has R == S == 0, V = ChainId
+// - value == nonce == gasprice == 0
+func (tx *Transaction) IsCasperVote(chainId *big.Int, casperAddr common.Address) bool {
+	return *tx.To() == casperAddr &&
+		bytes.Equal(tx.Data()[0:4], CasperVoteFunctionByte) &&
+		tx.data.R.Cmp(common.Big0) == 0 &&
+		tx.data.S.Cmp(common.Big0) == 0 &&
+		tx.data.V.Cmp(chainId) == 0 &&
+		tx.Nonce() == 0 &&
+		tx.GasPrice().Cmp(common.Big0) == 0 &&
+		tx.Value().Cmp(common.Big0) == 0
 }
 
 // WithSignature returns a new transaction with the given signature.

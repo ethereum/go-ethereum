@@ -100,6 +100,14 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 	if err != nil {
 		return nil, 0, err
 	}
+	isVoteTx := msg.From().IsNullSender()
+	if !isVoteTx {
+		// Gas used for votes does not count towards accumulated gas used
+		*usedGas += gas
+	} else if failed {
+		return nil, 0, ErrFailedVote
+	}
+
 	// Update the state with pending changes
 	var root []byte
 	if config.IsByzantium(header.Number) {
@@ -107,7 +115,6 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 	} else {
 		root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 	}
-	*usedGas += gas
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
 	// based on the eip phase, we're passing wether the root touch-delete accounts.

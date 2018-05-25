@@ -76,6 +76,12 @@ var (
 	// than some meaningful limit a user might use. This is not a consensus error
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
+
+	// ErrInvalidVote is returned if the vote is invalid per Casper contract.
+	ErrInvalidVote = errors.New("invalid vote")
+
+	// ErrTooManyVote is returned if the vote is invalid per Casper contract.
+	ErrTooManyVote = errors.New("too many vote")
 )
 
 var (
@@ -99,6 +105,8 @@ var (
 	// General tx metrics
 	invalidTxCounter     = metrics.NewRegisteredCounter("txpool/invalid", nil)
 	underpricedTxCounter = metrics.NewRegisteredCounter("txpool/underpriced", nil)
+	invalidVoteCounter   = metrics.NewRegisteredCounter("txpool/invalidvote", nil)
+	overflowVoteCounter  = metrics.NewRegisteredCounter("txpool/overflowvote", nil)
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -205,6 +213,7 @@ type TxPool struct {
 	beats   map[common.Address]time.Time // Last heartbeat from each known account
 	all     *txLookup                    // All transactions to allow lookups
 	priced  *txPricedList                // All transactions sorted by price
+	votes   *txLookup                    // Votes transactions to allow lookups
 
 	wg sync.WaitGroup // for shutdown sync
 
@@ -222,17 +231,18 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		config:      config,
 		chainconfig: chainconfig,
 		chain:       chain,
-		signer:      types.NewEIP155Signer(chainconfig.ChainId),
+		signer:      types.NewEIP1011Signer(chainconfig),
 		pending:     make(map[common.Address]*txList),
 		queue:       make(map[common.Address]*txList),
 		beats:       make(map[common.Address]time.Time),
 		all:         newTxLookup(),
+		votes:       newTxLookup(),
 		chainHeadCh: make(chan ChainHeadEvent, chainHeadChanSize),
 		gasPrice:    new(big.Int).SetUint64(config.PriceLimit),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	pool.priced = newTxPricedList(pool.all)
-	pool.reset(nil, chain.CurrentBlock().Header())
+	pool.reset(nil, chain.CurrentBlock().Header(), nil)
 
 	// If local transactions and journaling is enabled, load from disk
 	if !config.NoLocals && config.Journal != "" {
@@ -286,7 +296,7 @@ func (pool *TxPool) loop() {
 				if pool.chainconfig.IsHomestead(ev.Block.Number()) {
 					pool.homestead = true
 				}
-				pool.reset(head.Header(), ev.Block.Header())
+				pool.reset(head.Header(), ev.Block.Header(), ev.Block.Transactions())
 				head = ev.Block
 
 				pool.mu.Unlock()
@@ -343,14 +353,14 @@ func (pool *TxPool) lockedReset(oldHead, newHead *types.Header) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	pool.reset(oldHead, newHead)
+	pool.reset(oldHead, newHead, nil)
 }
 
 // reset retrieves the current state of the blockchain and ensures the content
 // of the transaction pool is valid with regard to the chain state.
-func (pool *TxPool) reset(oldHead, newHead *types.Header) {
+func (pool *TxPool) reset(oldHead, newHead *types.Header, txs types.Transactions) {
 	// If we're reorging an old state, reinject all dropped transactions
-	var reinject types.Transactions
+	var reinject, included types.Transactions
 
 	if oldHead != nil && oldHead.Hash() != newHead.ParentHash {
 		// If the reorg is too deep, avoid doing it (will happen during fast sync)
@@ -361,7 +371,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 			log.Debug("Skipping deep transaction reorg", "depth", depth)
 		} else {
 			// Reorg seems shallow enough to pull in all transactions into memory
-			var discarded, included types.Transactions
+			var discarded types.Transactions
 
 			var (
 				rem = pool.chain.GetBlock(oldHead.Hash(), oldHead.Number.Uint64())
@@ -427,6 +437,13 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	// Check the queue and move transactions over to the pending if possible
 	// or remove those that have become invalid
 	pool.promoteExecutables(nil)
+
+	// De-dup vote transactions
+	if included != nil {
+		pool.dedupCasperVotes(included)
+	} else {
+		pool.dedupCasperVotes(txs)
+	}
 }
 
 // Stop terminates the transaction pool.
@@ -533,6 +550,12 @@ func (pool *TxPool) Pending() (map[common.Address]types.Transactions, error) {
 	return pending, nil
 }
 
+// Votes returns all currently pooled vote transactions.
+// The returned votes is a copy and can be freely modified by calling code.
+func (pool *TxPool) Votes() types.Transactions {
+	return pool.votes.Flatten()
+}
+
 // local retrieves all currently known local transactions, groupped by origin
 // account and sorted by nonce. The returned transaction set is a copy and can be
 // freely modified by calling code.
@@ -570,19 +593,28 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if err != nil {
 		return ErrInvalidSender
 	}
-	// Drop non-local transactions under our own minimal accepted gas price
-	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
-	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
-		return ErrUnderpriced
-	}
-	// Ensure the transaction adheres to nonce ordering
-	if pool.currentState.GetNonce(from) > tx.Nonce() {
-		return ErrNonceTooLow
-	}
-	// Transactor should have enough funds to cover the costs
-	// cost == V + GP * GL
-	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-		return ErrInsufficientFunds
+
+	// Skip checking for gas price, nonce, and acct balance for null senders (Casper votes)
+	if from.IsNullSender() {
+		if err := pool.validateVote(tx); err != nil {
+			invalidVoteCounter.Inc(1)
+			return ErrInvalidVote
+		}
+	} else {
+		// Drop non-local transactions under our own minimal accepted gas price
+		local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
+		if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
+			return ErrUnderpriced
+		}
+		// Ensure the transaction adheres to nonce ordering
+		if pool.currentState.GetNonce(from) > tx.Nonce() {
+			return ErrNonceTooLow
+		}
+		// Transactor should have enough funds to cover the costs
+		// cost == V + GP * GL
+		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+			return ErrInsufficientFunds
+		}
 	}
 	intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
 	if err != nil {
@@ -591,6 +623,13 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if tx.Gas() < intrGas {
 		return ErrIntrinsicGas
 	}
+	return nil
+}
+
+// validateVote checks whether a vote transaction is valid according the
+// Casper contract.
+func (pool *TxPool) validateVote(tx *types.Transaction) error {
+	// Call Casper Contract validate_vote_signature and votable
 	return nil
 }
 
@@ -615,8 +654,20 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 		invalidTxCounter.Inc(1)
 		return false, err
 	}
+
+	from, _ := types.Sender(pool.signer, tx) // already validated
+	txCap := pool.config.GlobalSlots + pool.config.GlobalQueue
+	if from.IsNullSender() {
+		if uint64(pool.votes.Count()) >= txCap {
+			overflowVoteCounter.Inc(1)
+			return false, ErrTooManyVote
+		}
+		pool.enqueueCasperVote(hash, tx, local)
+		return false, nil
+	}
+
 	// If the transaction pool is full, discard underpriced transactions
-	if uint64(pool.all.Count()) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
+	if uint64(pool.all.Count()) >= txCap {
 		// If the new transaction is underpriced, don't accept it
 		if !local && pool.priced.Underpriced(tx, pool.locals) {
 			log.Trace("Discarding underpriced transaction", "hash", hash, "price", tx.GasPrice())
@@ -632,7 +683,6 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 		}
 	}
 	// If the transaction is replacing an already pending one, do directly
-	from, _ := types.Sender(pool.signer, tx) // already validated
 	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
 		// Nonce already pending, check if required price bump is met
 		inserted, old := list.Add(tx, pool.config.PriceBump)
@@ -670,6 +720,26 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 
 	log.Trace("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To())
 	return replace, nil
+}
+
+// dedupCasperVotes removes txs from the vote collection.
+func (pool *TxPool) dedupCasperVotes(txs types.Transactions) {
+	for _, tx := range txs {
+		pool.votes.Remove(tx.Hash())
+	}
+}
+
+// enqueueCasperVote inserts a new Casper vote into the vote collection.
+//
+// Note, this method assumes the pool lock is held!
+func (pool *TxPool) enqueueCasperVote(hash common.Hash, tx *types.Transaction, local bool) {
+	pool.votes.Add(tx)
+	// Mark local addresses and journal local transactions
+	if local {
+		pool.locals.add(common.NullSenderAddr)
+	}
+	pool.journalTx(common.NullSenderAddr, tx)
+	log.Trace("Pooled new casper vote", "hash", hash, "local", local)
 }
 
 // enqueueTx inserts a new transaction into the non-executable transaction queue.
@@ -1233,4 +1303,16 @@ func (t *txLookup) Remove(hash common.Hash) {
 	defer t.lock.Unlock()
 
 	delete(t.all, hash)
+}
+
+// Flatten returns a flattened list of all transactions in the lookup.
+func (t *txLookup) Flatten() types.Transactions {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	var txs types.Transactions
+	for _, value := range t.all {
+		txs = append(txs, value)
+	}
+	return txs
 }
