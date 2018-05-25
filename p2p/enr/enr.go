@@ -29,20 +29,15 @@ package enr
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"io"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const SizeLimit = 300 // maximum encoded size of a node record in bytes
-
-const ID_SECP256k1_KECCAK = ID("secp256k1-keccak") // the default identity scheme
 
 var (
 	errNoID           = errors.New("unknown or unspecified identity scheme")
@@ -80,8 +75,8 @@ func (r *Record) Seq() uint64 {
 }
 
 // SetSeq updates the record sequence number. This invalidates any signature on the record.
-// Calling SetSeq is usually not required because signing the redord increments the
-// sequence number.
+// Calling SetSeq is usually not required because setting any key in a signed record
+// increments the sequence number.
 func (r *Record) SetSeq(s uint64) {
 	r.signature = nil
 	r.raw = nil
@@ -104,33 +99,42 @@ func (r *Record) Load(e Entry) error {
 	return &KeyError{Key: e.ENRKey(), Err: errNotFound}
 }
 
-// Set adds or updates the given entry in the record.
-// It panics if the value can't be encoded.
+// Set adds or updates the given entry in the record. It panics if the value can't be
+// encoded. If the record is signed, Set increments the sequence number and invalidates
+// the sequence number.
 func (r *Record) Set(e Entry) {
-	r.signature = nil
-	r.raw = nil
 	blob, err := rlp.EncodeToBytes(e)
 	if err != nil {
 		panic(fmt.Errorf("enr: can't encode %s: %v", e.ENRKey(), err))
 	}
+	r.invalidate()
 
-	i := sort.Search(len(r.pairs), func(i int) bool { return r.pairs[i].k >= e.ENRKey() })
-
-	if i < len(r.pairs) && r.pairs[i].k == e.ENRKey() {
+	pairs := make([]pair, len(r.pairs))
+	copy(pairs, r.pairs)
+	i := sort.Search(len(pairs), func(i int) bool { return pairs[i].k >= e.ENRKey() })
+	switch {
+	case i < len(pairs) && pairs[i].k == e.ENRKey():
 		// element is present at r.pairs[i]
-		r.pairs[i].v = blob
-		return
-	} else if i < len(r.pairs) {
+		pairs[i].v = blob
+	case i < len(r.pairs):
 		// insert pair before i-th elem
 		el := pair{e.ENRKey(), blob}
-		r.pairs = append(r.pairs, pair{})
-		copy(r.pairs[i+1:], r.pairs[i:])
-		r.pairs[i] = el
-		return
+		pairs = append(pairs, pair{})
+		copy(pairs[i+1:], pairs[i:])
+		pairs[i] = el
+	default:
+		// element should be placed at the end of r.pairs
+		pairs = append(pairs, pair{e.ENRKey(), blob})
 	}
+	r.pairs = pairs
+}
 
-	// element should be placed at the end of r.pairs
-	r.pairs = append(r.pairs, pair{e.ENRKey(), blob})
+func (r *Record) invalidate() {
+	if r.signature == nil {
+		r.seq++
+	}
+	r.signature = nil
+	r.raw = nil
 }
 
 // EncodeRLP implements rlp.Encoder. Encoding fails if
@@ -196,39 +200,55 @@ func (r *Record) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 
-	// Verify signature.
-	if err = dec.verifySignature(); err != nil {
+	_, scheme := dec.idScheme()
+	if scheme == nil {
+		return errNoID
+	}
+	if err := scheme.Verify(&dec, dec.signature); err != nil {
 		return err
 	}
 	*r = dec
 	return nil
 }
 
-type s256raw []byte
-
-func (s256raw) ENRKey() string { return "secp256k1" }
-
 // NodeAddr returns the node address. The return value will be nil if the record is
-// unsigned.
+// unsigned or uses an unknown identity scheme.
 func (r *Record) NodeAddr() []byte {
-	var entry s256raw
-	if r.Load(&entry) != nil {
+	_, scheme := r.idScheme()
+	if scheme == nil {
 		return nil
 	}
-	return crypto.Keccak256(entry)
+	return scheme.NodeAddr(r)
 }
 
-// Sign signs the record with the given private key. It updates the record's identity
-// scheme, public key and increments the sequence number. Sign returns an error if the
-// encoded record is larger than the size limit.
-func (r *Record) Sign(privkey *ecdsa.PrivateKey) error {
-	r.seq = r.seq + 1
-	r.Set(ID_SECP256k1_KECCAK)
-	r.Set(Secp256k1(privkey.PublicKey))
-	return r.signAndEncode(privkey)
+// SetSig sets the record signature. It returns an error if the encoded record is larger
+// than the size limit or if the signature is invalid according to the passed scheme.
+func (r *Record) SetSig(idscheme string, sig []byte) error {
+	// Check that "id" is set and matches the given scheme. This panics because
+	// inconsitencies here are always implementation bugs in the signing function calling
+	// this method.
+	id, s := r.idScheme()
+	if s == nil {
+		panic(errNoID)
+	}
+	if id != idscheme {
+		panic(fmt.Errorf("identity scheme mismatch in Sign: record has %s, want %s", id, idscheme))
+	}
+
+	// Verify against the scheme.
+	if err := s.Verify(r, sig); err != nil {
+		return err
+	}
+	raw, err := r.encode(sig)
+	if err != nil {
+		return err
+	}
+	r.signature, r.raw = sig, raw
+	return nil
 }
 
-func (r *Record) appendPairs(list []interface{}) []interface{} {
+// AppendElements appends the sequence number and entries to the given slice.
+func (r *Record) AppendElements(list []interface{}) []interface{} {
 	list = append(list, r.seq)
 	for _, p := range r.pairs {
 		list = append(list, p.k, p.v)
@@ -236,54 +256,23 @@ func (r *Record) appendPairs(list []interface{}) []interface{} {
 	return list
 }
 
-func (r *Record) signAndEncode(privkey *ecdsa.PrivateKey) error {
-	// Put record elements into a flat list. Leave room for the signature.
-	list := make([]interface{}, 1, len(r.pairs)*2+2)
-	list = r.appendPairs(list)
-
-	// Sign the tail of the list.
-	h := sha3.NewKeccak256()
-	rlp.Encode(h, list[1:])
-	sig, err := crypto.Sign(h.Sum(nil), privkey)
-	if err != nil {
-		return err
+func (r *Record) encode(sig []byte) (raw []byte, err error) {
+	list := make([]interface{}, 1, 2*len(r.pairs)+1)
+	list[0] = sig
+	list = r.AppendElements(list)
+	if raw, err = rlp.EncodeToBytes(list); err != nil {
+		return nil, err
 	}
-	sig = sig[:len(sig)-1] // remove v
-
-	// Put signature in front.
-	r.signature, list[0] = sig, sig
-	r.raw, err = rlp.EncodeToBytes(list)
-	if err != nil {
-		return err
+	if len(raw) > SizeLimit {
+		return nil, errTooBig
 	}
-	if len(r.raw) > SizeLimit {
-		return errTooBig
-	}
-	return nil
+	return raw, nil
 }
 
-func (r *Record) verifySignature() error {
-	// Get identity scheme, public key, signature.
+func (r *Record) idScheme() (string, IdentityScheme) {
 	var id ID
-	var entry s256raw
 	if err := r.Load(&id); err != nil {
-		return err
-	} else if id != ID_SECP256k1_KECCAK {
-		return errNoID
+		return "", nil
 	}
-	if err := r.Load(&entry); err != nil {
-		return err
-	} else if len(entry) != 33 {
-		return fmt.Errorf("invalid public key")
-	}
-
-	// Verify the signature.
-	list := make([]interface{}, 0, len(r.pairs)*2+1)
-	list = r.appendPairs(list)
-	h := sha3.NewKeccak256()
-	rlp.Encode(h, list)
-	if !crypto.VerifySignature(entry, h.Sum(nil), r.signature) {
-		return errInvalidSig
-	}
-	return nil
+	return string(id), FindIdentityScheme(string(id))
 }
