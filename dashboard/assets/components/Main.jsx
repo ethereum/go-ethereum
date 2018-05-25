@@ -47,35 +47,26 @@ const themeStyles = theme => ({
 });
 
 export type Props = {
-	classes: Object,
-	active: string,
-	content: Content,
+	classes:      Object,
+	active:       string,
+	content:      Content,
 	shouldUpdate: Object,
-    send: (string) => void,
-	logs: () => Object,
+	send:         string => void,
 };
 
 // Main renders the chosen content.
-class Main extends Component<Props> {
-	handleScroll = () => {
-		if (typeof this.container !== 'undefined') {
-			// console.log(this.container.scrollTop, this.container.scrollHeight);
-			if (this.container.scrollTop === 0) {
-				// this.props.send(JSON.stringify({Logs: {Time: '2018-04-11T12:48:18.181274193+03:00'}}));
-				console.log("Top");
-			}
-			if (this.container.scrollHeight - this.container.scrollTop === this.container.clientHeight) {
-				console.log("Bottom");
-				// this.container.scrollTop = 0;
-			}
+class Main extends Component<Props, State> {
+	componentDidUpdate() {
+		if (this.content && typeof this.content.didUpdate === 'function') {
+			this.content.didUpdate();
+		}
+	}
+
+	onScroll = () => {
+		if (this.content && typeof this.content.onScroll === 'function') {
+			this.content.onScroll();
 		}
 	};
-
-	componentDidUpdate() {
-		// if (typeof this.container !== 'undefined') {
-		// 	this.container.scrollTop = this.container.scrollHeight - this.container.clientHeight;
-		// }
-	}
 
 	render() {
 		const {
@@ -92,7 +83,15 @@ class Main extends Component<Props> {
 			children = <div>Work in progress.</div>;
 			break;
 		case MENU.get('logs').id:
-			children = <Logs logs={this.props.logs} />;
+			children = (
+				<Logs
+					ref={(ref) => { this.content = ref; }}
+					container={this.container}
+					send={this.props.send}
+					content={this.props.content}
+					shouldUpdate={shouldUpdate}
+				/>
+			);
 		}
 
 		return (
@@ -101,7 +100,7 @@ class Main extends Component<Props> {
 					className={classes.content}
 					style={styles.content}
 					ref={(ref) => { this.container = ref; }}
-					onScroll={this.handleScroll}
+					onScroll={this.onScroll}
 				>
 					{children}
 				</div>

@@ -32,13 +32,12 @@ const styles = {
 };
 
 export type Props = {
-	opened: boolean,
+	opened:        boolean,
 	changeContent: string => void,
-	active: string,
-	content: Content,
-	shouldUpdate: Object,
-	send: (string) => void,
-	logs: () => Object,
+	active:        string,
+	content:       Content,
+	shouldUpdate:  Object,
+	send:          string => void,
 };
 
 // Body renders the body of the dashboard.
@@ -55,7 +54,6 @@ class Body extends Component<Props> {
 					content={this.props.content}
 					shouldUpdate={this.props.shouldUpdate}
 					send={this.props.send}
-					logs={this.props.logs}
 				/>
 			</div>
 		);

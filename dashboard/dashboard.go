@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/fsnotify/fsnotify"
+	"github.com/mohae/deepcopy"
 	"golang.org/x/net/websocket"
 	"io/ioutil"
 	"os"
@@ -110,7 +111,11 @@ func New(config *Config, commit string, logdir string) (*Dashboard, error) {
 				DiskRead:       emptyChartEntries(now, diskReadSampleLimit, config.Refresh),
 				DiskWrite:      emptyChartEntries(now, diskWriteSampleLimit, config.Refresh),
 			},
-			Logs: &LogsMessage{Chunk: json.RawMessage("[]")},
+			Logs: &LogsMessage{
+				Stream: true,
+				End:    false,
+				Chunk:  json.RawMessage("[]"),
+			},
 		},
 		logdir: logdir,
 	}, nil
@@ -239,7 +244,7 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 
 	db.lock.Lock()
 	// Send the past data.
-	client.msg <- db.history.DeepCopy()
+	client.msg <- deepcopy.Copy(db.history).(*Message)
 	// Start tracking the connection and drop at connection loss.
 	db.conns[id] = client
 	db.lock.Unlock()
@@ -252,70 +257,121 @@ func (db *Dashboard) apiHandler(conn *websocket.Conn) {
 		var r Request
 		err := websocket.JSON.Receive(conn, &r)
 		if err != nil {
+			client.logger.Warn("Failed to receive request", "err", err)
 			close(done)
 			return
 		}
 		if r.Logs != nil {
-			db.handleLogs(r.Logs, client) // TODO (kurkomisi): concurrent function call?
+			db.handleLogRequest(r.Logs, client) // TODO (kurkomisi): concurrent function call?
 		}
 	}
 }
 
-// handleLogs searches for the log file specified by the timestamp of the request, creates a JSON array out of it
+func validateLogFile(path string) ([]byte, bool) {
+	f, err := os.OpenFile(path, os.O_RDONLY, 0644)
+	if err != nil {
+		log.Warn("Failed to open file", "path", path, "err", err)
+		return nil, false
+	}
+	defer f.Close()
+	var buf []byte
+	if buf, err = ioutil.ReadAll(f); err != nil {
+		log.Warn("Failed to read file", "path", path, "err", err)
+		return nil, false
+	}
+	end := -1
+	for j := 0; j < len(buf); j++ {
+		if buf[j] == '\n' {
+			buf[j] = ','
+			end = j
+		}
+	}
+	if end < 0 {
+		return nil, false
+	}
+
+	return buf[:end], true
+}
+
+// handleLogRequest searches for the log file specified by the timestamp of the request, creates a JSON array out of it
 // and sends it to the requesting client.
-func (db *Dashboard) handleLogs(r *LogsRequest, c *client) {
+func (db *Dashboard) handleLogRequest(r *LogsRequest, c *client) {
 	files, err := ioutil.ReadDir(db.logdir)
 	if err != nil {
 		log.Warn("Failed to open logdir", "logdir", db.logdir, "err", err)
 		return
 	}
 	re := regexp.MustCompile(".log$")
-	valid := make([]string, len(files))
+	fileNames := make([]string, len(files))
 	n := 0
 	for _, f := range files {
 		if f.Mode().IsRegular() && re.Match([]byte(f.Name())) {
-			valid[n] = f.Name()
+			fileNames[n] = f.Name()
 			n++
 		}
 	}
-	if len(valid) < 1 {
-		log.Warn("There isn't any log file in the logdir", "logdir", db.logdir)
+	n-- // The last file is handled by the stream handler in order to avoid log duplication on the client side.
+	if n < 1 {
+		log.Warn("There isn't any old log file in the logdir", "path", db.logdir)
 		return
 	}
 	timestamp := fmt.Sprintf("%s.log", strings.Replace(r.Time.Format("060102150405.00"), ".", "", 1))
-	i := sort.Search(len(valid), func(i int) bool {
-		return valid[i] >= timestamp
-	})
-	if i >= len(valid) {
-		i = len(valid) - 1
-	}
-	f, err := os.OpenFile(filepath.Join(db.logdir, valid[i]), os.O_RDONLY, 0644)
-	if err != nil {
-		log.Warn("Failed to open file", "name", valid[i], "err", err)
-		return
-	}
-	defer f.Close()
-	buf, err := ioutil.ReadAll(f)
-	last := -1
-	for i := 0; i < len(buf); i++ {
-		if buf[i] == '\n' {
-			buf[i] = ','
-			last = i
-		}
-	}
-	if last >= 0 {
-		b := make([]byte, last+2)
-		b[0] = '['
-		copy(b[1:], buf[:last])
-		b[last+1] = ']'
 
-		db.lock.Lock() // TODO (kurkomisi): Maybe create mutex for the client.
-		c.msg <- &Message{
-			Logs: &LogsMessage{
-				Chunk: b,
-			},
+	i := sort.Search(n, func(i int) bool {
+		return fileNames[i] >= timestamp // Returns the smallest index such as fileNames[i] >= timestamp.
+	})
+	ok := false
+	var buf json.RawMessage
+	if r.Past {
+		if i >= n {
+			i = n - 1
 		}
-		db.lock.Unlock()
+		for i >= 0 && fileNames[i] >= timestamp {
+			i--
+		}
+		for i >= 0 && !ok {
+			buf, ok = validateLogFile(filepath.Join(db.logdir, fileNames[i]))
+			i--
+		}
+	} else {
+		for i < n && fileNames[i] <= timestamp {
+			i++
+		}
+		for i < n && !ok {
+			buf, ok = validateLogFile(filepath.Join(db.logdir, fileNames[i]))
+			i++
+		}
+	}
+	if buf == nil {
+		buf = json.RawMessage{}
+	}
+	b := make(json.RawMessage, len(buf)+2)
+	b[0] = '['
+	copy(b[1:], buf)
+	b[len(buf)+1] = ']'
+
+	db.lock.Lock()
+	c.msg <- &Message{
+		Logs: &LogsMessage{
+			Stream: false,
+			Past:   r.Past,
+			End:    !ok,
+			Chunk:  b,
+		},
+	}
+	db.lock.Unlock()
+}
+
+// metricCollector returns a function, which retrieves a specific metric.
+func metricCollector(name string) func() int64 {
+	if metric := metrics.DefaultRegistry.Get(name); metric != nil {
+		m := metric.(metrics.Meter)
+		return func() int64 {
+			return m.Count()
+		}
+	}
+	return func() int64 {
+		return 0
 	}
 }
 
@@ -328,12 +384,17 @@ func (db *Dashboard) collectData() {
 	var (
 		mem runtime.MemStats
 
-		prevNetworkIngress = metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Count()
-		prevNetworkEgress  = metrics.DefaultRegistry.Get("p2p/OutboundTraffic").(metrics.Meter).Count()
+		collectNetworkIngress = metricCollector("p2p/InboundTraffic")
+		collectNetworkEgress  = metricCollector("p2p/OutboundTraffic")
+		collectDiskRead       = metricCollector("eth/db/chaindata/disk/read")
+		collectDiskWrite      = metricCollector("eth/db/chaindata/disk/write")
+
+		prevNetworkIngress = collectNetworkIngress()
+		prevNetworkEgress  = collectNetworkEgress()
 		prevProcessCPUTime = getProcessCPUTime()
 		prevSystemCPUUsage = systemCPUUsage
-		prevDiskRead       = metrics.DefaultRegistry.Get("eth/db/chaindata/disk/read").(metrics.Meter).Count()
-		prevDiskWrite      = metrics.DefaultRegistry.Get("eth/db/chaindata/disk/write").(metrics.Meter).Count()
+		prevDiskRead       = collectDiskRead()
+		prevDiskWrite      = collectDiskWrite()
 
 		frequency = float64(db.config.Refresh / time.Second)
 		numCPU    = float64(runtime.NumCPU())
@@ -349,12 +410,12 @@ func (db *Dashboard) collectData() {
 		case <-time.After(db.config.Refresh):
 			systemCPUUsage.Get()
 			var (
-				curNetworkIngress = metrics.DefaultRegistry.Get("p2p/InboundTraffic").(metrics.Meter).Count()
-				curNetworkEgress  = metrics.DefaultRegistry.Get("p2p/OutboundTraffic").(metrics.Meter).Count()
+				curNetworkIngress = collectNetworkIngress()
+				curNetworkEgress  = collectNetworkEgress()
 				curProcessCPUTime = getProcessCPUTime()
 				curSystemCPUUsage = systemCPUUsage
-				curDiskRead       = metrics.DefaultRegistry.Get("eth/db/chaindata/disk/read").(metrics.Meter).Count()
-				curDiskWrite      = metrics.DefaultRegistry.Get("eth/db/chaindata/disk/write").(metrics.Meter).Count()
+				curDiskRead       = collectDiskRead()
+				curDiskWrite      = collectDiskWrite()
 
 				deltaNetworkIngress = float64(curNetworkIngress - prevNetworkIngress)
 				deltaNetworkEgress  = float64(curNetworkEgress - prevNetworkEgress)
@@ -436,13 +497,6 @@ func (db *Dashboard) collectData() {
 func (db *Dashboard) streamLogs() {
 	defer db.wg.Done()
 
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Warn("Failed to create fs watcher", "err", err)
-		return
-	}
-	defer watcher.Close()
-
 	files, err := ioutil.ReadDir(db.logdir)
 	if err != nil {
 		log.Warn("Failed to open logdir", "logdir", db.logdir, "err", err)
@@ -468,31 +522,34 @@ func (db *Dashboard) streamLogs() {
 			return
 		}
 	}
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Warn("Failed to create fs watcher", "err", err)
+		return
+	}
+	defer watcher.Close()
 
 	err = watcher.Add(db.logdir)
 	if err != nil {
 		log.Warn("Failed to add logdir to fs watcher", "logdir", db.logdir, "err", err)
 		return
 	}
-	change := fsnotify.Create | fsnotify.Remove | fsnotify.Rename
+	defer opened.Close() // Close the lastly opened file.
+	ticker := time.NewTicker(db.config.Refresh)
+	defer ticker.Stop()
+
+	newFile := false
 	for {
 		select {
 		case event := <-watcher.Events:
-			switch {
-			// If new log file is opened.
-			case event.Op&change != 0:
-				if re.Match([]byte(event.Name)) && opened.Name() < event.Name {
-					if opened, err = os.OpenFile(event.Name, os.O_RDONLY, 0644); err != nil {
-						log.Warn("Failed to open file", "name", event.Name, "err", err)
-						return
-					}
-					db.lock.Lock()
-					db.history.Logs.Chunk = json.RawMessage("[]")
-					db.lock.Unlock()
-				}
-			// If new log records were written into the opened log file.
-			case event.Op&fsnotify.Write != 0:
+			// If new log file was created.
+			if event.Op&fsnotify.Create != 0 && re.Match([]byte(event.Name)) {
 				if opened != nil {
+					// The new log file's timestamp is always greater, since it is created of the actual time.
+					if opened.Name() >= event.Name {
+						break
+					}
+					// Read the rest of the previously opened file.
 					chunk, err := ioutil.ReadAll(opened)
 					if err != nil {
 						log.Warn("Failed to read file", "name", opened.Name(), "err", err)
@@ -502,6 +559,37 @@ func (db *Dashboard) streamLogs() {
 					copy(b, buf)
 					copy(b[len(buf):], chunk)
 					buf = b
+					opened.Close()
+				}
+				last := -1
+				for i := 0; i < len(buf); i++ {
+					if buf[i] == '\n' {
+						buf[i] = ','
+						last = i
+					}
+				}
+				if last >= 0 {
+					msg := make([]byte, last+2)
+					msg[0] = '['
+					copy(msg[1:], buf[:last])
+					msg[last+1] = ']'
+
+					db.sendToAll(&Message{
+						Logs: &LogsMessage{
+							Stream: true,
+							End:    false,
+							Chunk:  msg,
+						},
+					})
+					db.lock.Lock()
+					db.history.Logs.Chunk = json.RawMessage("[]")
+					db.lock.Unlock()
+				}
+				buf = buf[:0]
+				newFile = true
+				if opened, err = os.OpenFile(event.Name, os.O_RDONLY, 0644); err != nil {
+					log.Warn("Failed to open file", "name", event.Name, "err", err)
+					return
 				}
 			}
 		case err := <-watcher.Errors:
@@ -509,51 +597,62 @@ func (db *Dashboard) streamLogs() {
 				log.Warn("Fs watcher error", "err", err)
 			}
 			return
-		// Send log updates to the client.
-		case <-time.After(db.config.Refresh):
-			last := -1
-			for i := 0; i < len(buf); i++ {
-				if buf[i] == '\n' {
-					buf[i] = ','
-					last = i
-				}
-			}
-			if last >= 0 {
-				b := make([]byte, last+2)
-				b[0] = '['
-				copy(b[1:], buf[:last])
-				b[last+1] = ']'
-
-				db.sendToAll(&Message{
-					Logs: &LogsMessage{
-						Chunk: b,
-					},
-				})
-
-				b = make([]byte, len(db.history.Logs.Chunk)+last+1)
-				// Cut the ']' from the end in order to concatenate the two arrays.
-				n := len(db.history.Logs.Chunk) - 1
-				copy(b, db.history.Logs.Chunk[:n])
-				if len(db.history.Logs.Chunk) > 2 {
-					// In case the array already contained log records, put the comma separator.
-					b[n] = ','
-					n++
-				}
-				copy(b[n:], buf[:last])
-				n += last
-				b[n] = ']'
-				n++
-
-				db.lock.Lock()
-				db.history.Logs.Chunk = b[:n]
-				db.lock.Unlock()
-
-				// Clear the valid/sent part of the buffer.
-				buf = buf[last+1:]
-			}
 		case errc := <-db.quit:
 			errc <- nil
 			return
+		// Send log updates to the client.
+		case <-ticker.C:
+			if opened == nil {
+				break
+			}
+
+			// Read the new logs created since the last read.
+			chunk, err := ioutil.ReadAll(opened)
+			if err != nil {
+				log.Warn("Failed to read file", "name", opened.Name(), "err", err)
+				return
+			}
+			b := make([]byte, len(buf)+len(chunk))
+			copy(b, buf)
+			copy(b[len(buf):], chunk)
+			last := -1
+			for i := 0; i < len(b); i++ {
+				if b[i] == '\n' {
+					b[i] = ','
+					last = i
+				}
+			}
+			if last < 0 {
+				break
+			}
+			// Clear the valid/sent part of the buffer.
+			buf = b[last+1:]
+
+			msg := make([]byte, last+2)
+			msg[0] = '['
+			copy(msg[1:], b[:last])
+			msg[last+1] = ']'
+
+			db.sendToAll(&Message{
+				Logs: &LogsMessage{
+					Stream: true,
+					End:    newFile,
+					Chunk:  msg,
+				},
+			})
+			newFile = false
+
+			db.lock.Lock()
+			if len(db.history.Logs.Chunk) == 2 {
+				db.history.Logs.Chunk = msg
+			} else {
+				b = make([]byte, len(db.history.Logs.Chunk)+len(msg)-1)
+				copy(b, db.history.Logs.Chunk)
+				b[len(db.history.Logs.Chunk)-1] = ','
+				copy(b[len(db.history.Logs.Chunk):], msg[1:])
+				db.history.Logs.Chunk = b
+			}
+			db.lock.Unlock()
 		}
 	}
 }

@@ -34,8 +34,8 @@ export type ChartEntry = {
 };
 
 export type General = {
-    version: ?string,
-    commit:  ?string,
+	version: ?string,
+	commit:  ?string,
 };
 
 export type Home = {
@@ -55,29 +55,40 @@ export type Network = {
 };
 
 export type System = {
-    activeMemory:   ChartEntries,
-    virtualMemory:  ChartEntries,
-    networkIngress: ChartEntries,
-    networkEgress:  ChartEntries,
-    processCPU:     ChartEntries,
-    systemCPU:      ChartEntries,
-    diskRead:       ChartEntries,
-    diskWrite:      ChartEntries,
+	activeMemory:   ChartEntries,
+	virtualMemory:  ChartEntries,
+	networkIngress: ChartEntries,
+	networkEgress:  ChartEntries,
+	processCPU:     ChartEntries,
+	systemCPU:      ChartEntries,
+	diskRead:       ChartEntries,
+	diskWrite:      ChartEntries,
 };
 
 export type Record = {
-    t:   Object,
-    lvl: Object,
-    msg: string,
-    ctx: Array<string>
+	t:   string,
+	lvl: Object,
+	msg: string,
+	ctx: Array<string>
 };
 
 export type Chunk = {
-    content: string,
-    t:       string,
-    len:     int,
+	content: string,
+	tFirst:  string,
+	tLast:   string,
 };
 
 export type Logs = {
-    chunk: Array<Chunk>,
+	chunks:        Array<Chunk>,
+	endTop:        boolean,
+	endBottom:     boolean,
+	topChanged:    number,
+	bottomChanged: number,
+};
+
+export type LogsMessage = {
+	stream: boolean,
+	past:   boolean,
+	end:    boolean,
+	chunk:  Array<Record>,
 };

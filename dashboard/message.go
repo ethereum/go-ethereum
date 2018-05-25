@@ -31,44 +31,16 @@ type Message struct {
 	Logs    *LogsMessage    `json:"logs,omitempty"`
 }
 
-func (m *Message) DeepCopy() *Message {
-	return &Message{
-		m.General.DeepCopy(),
-		m.Home,
-		m.Chain,
-		m.TxPool,
-		m.Network,
-		m.System.DeepCopy(),
-		m.Logs,
-	}
-}
-
 type ChartEntries []*ChartEntry
-
-func (ce ChartEntries) DeepCopy() ChartEntries {
-	nce := make(ChartEntries, len(ce))
-	for i, v := range ce {
-		nce[i] = v.DeepCopy()
-	}
-	return nce
-}
 
 type ChartEntry struct {
 	Time  time.Time `json:"time,omitempty"`
 	Value float64   `json:"value,omitempty"`
 }
 
-func (ce *ChartEntry) DeepCopy() *ChartEntry {
-	return &ChartEntry{ce.Time, ce.Value}
-}
-
 type GeneralMessage struct {
 	Version string `json:"version,omitempty"`
 	Commit  string `json:"commit,omitempty"`
-}
-
-func (m *GeneralMessage) DeepCopy() *GeneralMessage {
-	return &GeneralMessage{m.Version, m.Commit}
 }
 
 type HomeMessage struct {
@@ -98,21 +70,11 @@ type SystemMessage struct {
 	DiskWrite      ChartEntries `json:"diskWrite,omitempty"`
 }
 
-func (m *SystemMessage) DeepCopy() *SystemMessage {
-	return &SystemMessage{
-		m.ActiveMemory.DeepCopy(),
-		m.VirtualMemory.DeepCopy(),
-		m.NetworkIngress.DeepCopy(),
-		m.NetworkEgress.DeepCopy(),
-		m.ProcessCPU.DeepCopy(),
-		m.SystemCPU.DeepCopy(),
-		m.DiskRead.DeepCopy(),
-		m.DiskWrite.DeepCopy(),
-	}
-}
-
 type LogsMessage struct {
-	Chunk json.RawMessage `json:"chunk,omitempty"`
+	Stream bool            `json:"stream"` // Denotes if the chunk is part of the stream or if it contains the records from a file.
+	Past   bool            `json:"past"`   // Denotes whether the logs in the chunk were issued before or after the time given in the request.
+	End    bool            `json:"end"`    // In case of stream denotes if new file was opened, otherwise denotes if there isn't more file.
+	Chunk  json.RawMessage `json:"chunk"`  // Contains log records.
 }
 
 type Request struct {
@@ -120,5 +82,6 @@ type Request struct {
 }
 
 type LogsRequest struct {
-	Time time.Time `json:"time,omitempty"`
+	Time time.Time `json:"time"` // The request handler searches for log file based on this timestamp.
+	Past bool      `json:"past"` // Denotes whether the message should contain logs issued before or after the given time.
 }
