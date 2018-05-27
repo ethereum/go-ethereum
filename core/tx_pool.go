@@ -581,7 +581,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	if tx.To() == nil && from.Hex() != pool.superheroAddress.Hex() {
-		return errors.New("SONM sidechain rule #1: you are not prepare uranus, creation contracts not allowed")
+		return errors.New("SONM sidechain rule #1: contracts creation not allowed")
 	}
 
 	// Drop non-local transactions under our own minimal accepted gas price
