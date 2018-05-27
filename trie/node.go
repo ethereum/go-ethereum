@@ -123,17 +123,17 @@ func decodeNode(hash, buf []byte, cachegen uint16) (node, error) {
 	}
 	switch c, _ := rlp.CountValues(elems); c {
 	case 2:
-		n, err := decodeShort(hash, buf, elems, cachegen)
+		n, err := decodeShort(hash, elems, cachegen)
 		return n, wrapError(err, "short")
 	case 17:
-		n, err := decodeFull(hash, buf, elems, cachegen)
+		n, err := decodeFull(hash, elems, cachegen)
 		return n, wrapError(err, "full")
 	default:
 		return nil, fmt.Errorf("invalid number of list elements: %v", c)
 	}
 }
 
-func decodeShort(hash, buf, elems []byte, cachegen uint16) (node, error) {
+func decodeShort(hash, elems []byte, cachegen uint16) (node, error) {
 	kbuf, rest, err := rlp.SplitString(elems)
 	if err != nil {
 		return nil, err
@@ -155,7 +155,7 @@ func decodeShort(hash, buf, elems []byte, cachegen uint16) (node, error) {
 	return &shortNode{key, r, flag}, nil
 }
 
-func decodeFull(hash, buf, elems []byte, cachegen uint16) (*fullNode, error) {
+func decodeFull(hash, elems []byte, cachegen uint16) (*fullNode, error) {
 	n := &fullNode{flags: nodeFlag{hash: hash, gen: cachegen}}
 	for i := 0; i < 16; i++ {
 		cld, rest, err := decodeRef(elems, cachegen)

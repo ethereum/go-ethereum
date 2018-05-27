@@ -329,6 +329,7 @@ func (r *Receipt) EncodeJSON() (string, error) {
 	return string(data), err
 }
 
+func (r *Receipt) GetStatus() int               { return int(r.receipt.Status) }
 func (r *Receipt) GetPostState() []byte         { return r.receipt.PostState }
 func (r *Receipt) GetCumulativeGasUsed() int64  { return int64(r.receipt.CumulativeGasUsed) }
 func (r *Receipt) GetBloom() *Bloom             { return &Bloom{r.receipt.Bloom} }

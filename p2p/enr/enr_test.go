@@ -54,35 +54,35 @@ func TestGetSetID(t *testing.T) {
 	assert.Equal(t, id, id2)
 }
 
-// TestGetSetIP4 tests encoding/decoding and setting/getting of the IP4 key.
+// TestGetSetIP4 tests encoding/decoding and setting/getting of the IP key.
 func TestGetSetIP4(t *testing.T) {
-	ip := IP4{192, 168, 0, 3}
+	ip := IP{192, 168, 0, 3}
 	var r Record
 	r.Set(ip)
 
-	var ip2 IP4
+	var ip2 IP
 	require.NoError(t, r.Load(&ip2))
 	assert.Equal(t, ip, ip2)
 }
 
-// TestGetSetIP6 tests encoding/decoding and setting/getting of the IP6 key.
+// TestGetSetIP6 tests encoding/decoding and setting/getting of the IP key.
 func TestGetSetIP6(t *testing.T) {
-	ip := IP6{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68}
+	ip := IP{0x20, 0x01, 0x48, 0x60, 0, 0, 0x20, 0x01, 0, 0, 0, 0, 0, 0, 0x00, 0x68}
 	var r Record
 	r.Set(ip)
 
-	var ip2 IP6
+	var ip2 IP
 	require.NoError(t, r.Load(&ip2))
 	assert.Equal(t, ip, ip2)
 }
 
 // TestGetSetDiscPort tests encoding/decoding and setting/getting of the DiscPort key.
-func TestGetSetDiscPort(t *testing.T) {
-	port := DiscPort(30309)
+func TestGetSetUDP(t *testing.T) {
+	port := UDP(30309)
 	var r Record
 	r.Set(port)
 
-	var port2 DiscPort
+	var port2 UDP
 	require.NoError(t, r.Load(&port2))
 	assert.Equal(t, port, port2)
 }
@@ -90,7 +90,7 @@ func TestGetSetDiscPort(t *testing.T) {
 // TestGetSetSecp256k1 tests encoding/decoding and setting/getting of the Secp256k1 key.
 func TestGetSetSecp256k1(t *testing.T) {
 	var r Record
-	if err := r.Sign(privkey); err != nil {
+	if err := SignV4(&r, privkey); err != nil {
 		t.Fatal(err)
 	}
 
@@ -101,16 +101,16 @@ func TestGetSetSecp256k1(t *testing.T) {
 
 func TestLoadErrors(t *testing.T) {
 	var r Record
-	ip4 := IP4{127, 0, 0, 1}
+	ip4 := IP{127, 0, 0, 1}
 	r.Set(ip4)
 
 	// Check error for missing keys.
-	var ip6 IP6
-	err := r.Load(&ip6)
+	var udp UDP
+	err := r.Load(&udp)
 	if !IsNotFound(err) {
 		t.Error("IsNotFound should return true for missing key")
 	}
-	assert.Equal(t, &KeyError{Key: ip6.ENRKey(), Err: errNotFound}, err)
+	assert.Equal(t, &KeyError{Key: udp.ENRKey(), Err: errNotFound}, err)
 
 	// Check error for invalid keys.
 	var list []uint
@@ -174,7 +174,7 @@ func TestDirty(t *testing.T) {
 		t.Errorf("expected errEncodeUnsigned, got %#v", err)
 	}
 
-	require.NoError(t, r.Sign(privkey))
+	require.NoError(t, SignV4(&r, privkey))
 	if !r.Signed() {
 		t.Error("Signed return false for signed record")
 	}
@@ -194,13 +194,13 @@ func TestDirty(t *testing.T) {
 func TestGetSetOverwrite(t *testing.T) {
 	var r Record
 
-	ip := IP4{192, 168, 0, 3}
+	ip := IP{192, 168, 0, 3}
 	r.Set(ip)
 
-	ip2 := IP4{192, 168, 0, 4}
+	ip2 := IP{192, 168, 0, 4}
 	r.Set(ip2)
 
-	var ip3 IP4
+	var ip3 IP
 	require.NoError(t, r.Load(&ip3))
 	assert.Equal(t, ip2, ip3)
 }
@@ -208,9 +208,9 @@ func TestGetSetOverwrite(t *testing.T) {
 // TestSignEncodeAndDecode tests signing, RLP encoding and RLP decoding of a record.
 func TestSignEncodeAndDecode(t *testing.T) {
 	var r Record
-	r.Set(DiscPort(30303))
-	r.Set(IP4{127, 0, 0, 1})
-	require.NoError(t, r.Sign(privkey))
+	r.Set(UDP(30303))
+	r.Set(IP{127, 0, 0, 1})
+	require.NoError(t, SignV4(&r, privkey))
 
 	blob, err := rlp.EncodeToBytes(r)
 	require.NoError(t, err)
@@ -230,12 +230,12 @@ func TestNodeAddr(t *testing.T) {
 		t.Errorf("wrong address on empty record: got %v, want %v", addr, nil)
 	}
 
-	require.NoError(t, r.Sign(privkey))
-	expected := "caaa1485d83b18b32ed9ad666026151bf0cae8a0a88c857ae2d4c5be2daa6726"
+	require.NoError(t, SignV4(&r, privkey))
+	expected := "a448f24c6d18e575453db13171562b71999873db5b286df957af199ec94617f7"
 	assert.Equal(t, expected, hex.EncodeToString(r.NodeAddr()))
 }
 
-var pyRecord, _ = hex.DecodeString("f896b840954dc36583c1f4b69ab59b1375f362f06ee99f3723cd77e64b6de6d211c27d7870642a79d4516997f94091325d2a7ca6215376971455fb221d34f35b277149a1018664697363763582765f82696490736563703235366b312d6b656363616b83697034847f00000189736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
+var pyRecord, _ = hex.DecodeString("f884b8407098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c01826964827634826970847f00000189736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd31388375647082765f")
 
 // TestPythonInterop checks that we can decode and verify a record produced by the Python
 // implementation.
@@ -246,10 +246,10 @@ func TestPythonInterop(t *testing.T) {
 	}
 
 	var (
-		wantAddr, _  = hex.DecodeString("caaa1485d83b18b32ed9ad666026151bf0cae8a0a88c857ae2d4c5be2daa6726")
-		wantSeq      = uint64(1)
-		wantIP       = IP4{127, 0, 0, 1}
-		wantDiscport = DiscPort(30303)
+		wantAddr, _ = hex.DecodeString("a448f24c6d18e575453db13171562b71999873db5b286df957af199ec94617f7")
+		wantSeq     = uint64(1)
+		wantIP      = IP{127, 0, 0, 1}
+		wantUDP     = UDP(30303)
 	)
 	if r.Seq() != wantSeq {
 		t.Errorf("wrong seq: got %d, want %d", r.Seq(), wantSeq)
@@ -257,7 +257,7 @@ func TestPythonInterop(t *testing.T) {
 	if addr := r.NodeAddr(); !bytes.Equal(addr, wantAddr) {
 		t.Errorf("wrong addr: got %x, want %x", addr, wantAddr)
 	}
-	want := map[Entry]interface{}{new(IP4): &wantIP, new(DiscPort): &wantDiscport}
+	want := map[Entry]interface{}{new(IP): &wantIP, new(UDP): &wantUDP}
 	for k, v := range want {
 		desc := fmt.Sprintf("loading key %q", k.ENRKey())
 		if assert.NoError(t, r.Load(k), desc) {
@@ -272,14 +272,14 @@ func TestRecordTooBig(t *testing.T) {
 	key := randomString(10)
 
 	// set a big value for random key, expect error
-	r.Set(WithEntry(key, randomString(300)))
-	if err := r.Sign(privkey); err != errTooBig {
+	r.Set(WithEntry(key, randomString(SizeLimit)))
+	if err := SignV4(&r, privkey); err != errTooBig {
 		t.Fatalf("expected to get errTooBig, got %#v", err)
 	}
 
 	// set an acceptable value for random key, expect no error
 	r.Set(WithEntry(key, randomString(100)))
-	require.NoError(t, r.Sign(privkey))
+	require.NoError(t, SignV4(&r, privkey))
 }
 
 // TestSignEncodeAndDecodeRandom tests encoding/decoding of records containing random key/value pairs.
@@ -295,7 +295,7 @@ func TestSignEncodeAndDecodeRandom(t *testing.T) {
 		r.Set(WithEntry(key, &value))
 	}
 
-	require.NoError(t, r.Sign(privkey))
+	require.NoError(t, SignV4(&r, privkey))
 	_, err := rlp.EncodeToBytes(r)
 	require.NoError(t, err)
 

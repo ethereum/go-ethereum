@@ -271,7 +271,9 @@ func initialize() {
 
 	if *mailServerMode {
 		shh.RegisterServer(&mailServer)
-		mailServer.Init(shh, *argDBPath, msPassword, *argServerPoW)
+		if err := mailServer.Init(shh, *argDBPath, msPassword, *argServerPoW); err != nil {
+			utils.Fatalf("Failed to init MailServer: %s", err)
+		}
 	}
 
 	server = &p2p.Server{

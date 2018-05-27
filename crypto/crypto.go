@@ -35,8 +35,8 @@ import (
 )
 
 var (
-	secp256k1_N, _  = new(big.Int).SetString("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
-	secp256k1_halfN = new(big.Int).Div(secp256k1_N, big.NewInt(2))
+	secp256k1N, _  = new(big.Int).SetString("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
+	secp256k1halfN = new(big.Int).Div(secp256k1N, big.NewInt(2))
 )
 
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
@@ -68,7 +68,7 @@ func Keccak512(data ...[]byte) []byte {
 	return d.Sum(nil)
 }
 
-// Creates an ethereum address given the bytes and the nonce
+// CreateAddress creates an ethereum address given the bytes and the nonce
 func CreateAddress(b common.Address, nonce uint64) common.Address {
 	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})
 	return common.BytesToAddress(Keccak256(data)[12:])
@@ -99,7 +99,7 @@ func toECDSA(d []byte, strict bool) (*ecdsa.PrivateKey, error) {
 	priv.D = new(big.Int).SetBytes(d)
 
 	// The priv.D must < N
-	if priv.D.Cmp(secp256k1_N) >= 0 {
+	if priv.D.Cmp(secp256k1N) >= 0 {
 		return nil, fmt.Errorf("invalid private key, >=N")
 	}
 	// The priv.D must not be zero or negative.
@@ -184,11 +184,11 @@ func ValidateSignatureValues(v byte, r, s *big.Int, homestead bool) bool {
 	}
 	// reject upper range of s values (ECDSA malleability)
 	// see discussion in secp256k1/libsecp256k1/include/secp256k1.h
-	if homestead && s.Cmp(secp256k1_halfN) > 0 {
+	if homestead && s.Cmp(secp256k1halfN) > 0 {
 		return false
 	}
 	// Frontier: allow s to be in full N range
-	return r.Cmp(secp256k1_N) < 0 && s.Cmp(secp256k1_N) < 0 && (v == 0 || v == 1)
+	return r.Cmp(secp256k1N) < 0 && s.Cmp(secp256k1N) < 0 && (v == 0 || v == 1)
 }
 
 func PubkeyToAddress(p ecdsa.PublicKey) common.Address {

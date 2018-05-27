@@ -27,7 +27,7 @@ import (
 	set "gopkg.in/fatih/set.v0"
 )
 
-// peer represents a whisper protocol peer connection.
+// Peer represents a whisper protocol peer connection.
 type Peer struct {
 	host    *Whisper
 	peer    *p2p.Peer
@@ -53,51 +53,51 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 
 // start initiates the peer updater, periodically broadcasting the whisper packets
 // into the network.
-func (p *Peer) start() {
-	go p.update()
-	log.Trace("start", "peer", p.ID())
+func (peer *Peer) start() {
+	go peer.update()
+	log.Trace("start", "peer", peer.ID())
 }
 
 // stop terminates the peer updater, stopping message forwarding to it.
-func (p *Peer) stop() {
-	close(p.quit)
-	log.Trace("stop", "peer", p.ID())
+func (peer *Peer) stop() {
+	close(peer.quit)
+	log.Trace("stop", "peer", peer.ID())
 }
 
 // handshake sends the protocol initiation status message to the remote peer and
 // verifies the remote status too.
-func (p *Peer) handshake() error {
+func (peer *Peer) handshake() error {
 	// Send the handshake status message asynchronously
 	errc := make(chan error, 1)
 	go func() {
-		errc <- p2p.Send(p.ws, statusCode, ProtocolVersion)
+		errc <- p2p.Send(peer.ws, statusCode, ProtocolVersion)
 	}()
 	// Fetch the remote status packet and verify protocol match
-	packet, err := p.ws.ReadMsg()
+	packet, err := peer.ws.ReadMsg()
 	if err != nil {
 		return err
 	}
 	if packet.Code != statusCode {
-		return fmt.Errorf("peer [%x] sent packet %x before status packet", p.ID(), packet.Code)
+		return fmt.Errorf("peer [%x] sent packet %x before status packet", peer.ID(), packet.Code)
 	}
 	s := rlp.NewStream(packet.Payload, uint64(packet.Size))
 	peerVersion, err := s.Uint()
 	if err != nil {
-		return fmt.Errorf("peer [%x] sent bad status message: %v", p.ID(), err)
+		return fmt.Errorf("peer [%x] sent bad status message: %v", peer.ID(), err)
 	}
 	if peerVersion != ProtocolVersion {
-		return fmt.Errorf("peer [%x]: protocol version mismatch %d != %d", p.ID(), peerVersion, ProtocolVersion)
+		return fmt.Errorf("peer [%x]: protocol version mismatch %d != %d", peer.ID(), peerVersion, ProtocolVersion)
 	}
 	// Wait until out own status is consumed too
 	if err := <-errc; err != nil {
-		return fmt.Errorf("peer [%x] failed to send status packet: %v", p.ID(), err)
+		return fmt.Errorf("peer [%x] failed to send status packet: %v", peer.ID(), err)
 	}
 	return nil
 }
 
 // update executes periodic operations on the peer, including message transmission
 // and expiration.
-func (p *Peer) update() {
+func (peer *Peer) update() {
 	// Start the tickers for the updates
 	expire := time.NewTicker(expirationCycle)
 	transmit := time.NewTicker(transmissionCycle)
@@ -106,15 +106,15 @@ func (p *Peer) update() {
 	for {
 		select {
 		case <-expire.C:
-			p.expire()
+			peer.expire()
 
 		case <-transmit.C:
-			if err := p.broadcast(); err != nil {
-				log.Trace("broadcast failed", "reason", err, "peer", p.ID())
+			if err := peer.broadcast(); err != nil {
+				log.Trace("broadcast failed", "reason", err, "peer", peer.ID())
 				return
 			}
 
-		case <-p.quit:
+		case <-peer.quit:
 			return
 		}
 	}
@@ -148,16 +148,16 @@ func (peer *Peer) expire() {
 
 // broadcast iterates over the collection of envelopes and transmits yet unknown
 // ones over the network.
-func (p *Peer) broadcast() error {
+func (peer *Peer) broadcast() error {
 	var cnt int
-	envelopes := p.host.Envelopes()
+	envelopes := peer.host.Envelopes()
 	for _, envelope := range envelopes {
-		if !p.marked(envelope) {
-			err := p2p.Send(p.ws, messagesCode, envelope)
+		if !peer.marked(envelope) {
+			err := p2p.Send(peer.ws, messagesCode, envelope)
 			if err != nil {
 				return err
 			} else {
-				p.mark(envelope)
+				peer.mark(envelope)
 				cnt++
 			}
 		}
@@ -168,7 +168,7 @@ func (p *Peer) broadcast() error {
 	return nil
 }
 
-func (p *Peer) ID() []byte {
-	id := p.peer.ID()
+func (peer *Peer) ID() []byte {
+	id := peer.peer.ID()
 	return id[:]
 }

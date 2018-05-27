@@ -56,7 +56,6 @@ func (ks keyStorePlain) StoreKey(filename string, key *Key, auth string) error {
 func (ks keyStorePlain) JoinPath(filename string) string {
 	if filepath.IsAbs(filename) {
 		return filename
-	} else {
-		return filepath.Join(ks.keysDirPath, filename)
 	}
+	return filepath.Join(ks.keysDirPath, filename)
 }
