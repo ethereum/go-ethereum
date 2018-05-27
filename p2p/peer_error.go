@@ -17,6 +17,7 @@
 package p2p
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -47,9 +48,11 @@ func newPeerError(code int, format string, v ...interface{}) *peerError {
 	return err
 }
 
-func (self *peerError) Error() string {
-	return self.message
+func (pe *peerError) Error() string {
+	return pe.message
 }
+
+var errProtocolReturned = errors.New("protocol returned")
 
 type DiscReason uint
 
@@ -66,28 +69,28 @@ const (
 	DiscUnexpectedIdentity
 	DiscSelf
 	DiscReadTimeout
-	DiscSubprotocolError
+	DiscSubprotocolError = 0x10
 )
 
 var discReasonToString = [...]string{
-	DiscRequested:           "Disconnect requested",
-	DiscNetworkError:        "Network error",
-	DiscProtocolError:       "Breach of protocol",
-	DiscUselessPeer:         "Useless peer",
-	DiscTooManyPeers:        "Too many peers",
-	DiscAlreadyConnected:    "Already connected",
-	DiscIncompatibleVersion: "Incompatible P2P protocol version",
-	DiscInvalidIdentity:     "Invalid node identity",
-	DiscQuitting:            "Client quitting",
-	DiscUnexpectedIdentity:  "Unexpected identity",
-	DiscSelf:                "Connected to self",
-	DiscReadTimeout:         "Read timeout",
-	DiscSubprotocolError:    "Subprotocol error",
+	DiscRequested:           "disconnect requested",
+	DiscNetworkError:        "network error",
+	DiscProtocolError:       "breach of protocol",
+	DiscUselessPeer:         "useless peer",
+	DiscTooManyPeers:        "too many peers",
+	DiscAlreadyConnected:    "already connected",
+	DiscIncompatibleVersion: "incompatible p2p protocol version",
+	DiscInvalidIdentity:     "invalid node identity",
+	DiscQuitting:            "client quitting",
+	DiscUnexpectedIdentity:  "unexpected identity",
+	DiscSelf:                "connected to self",
+	DiscReadTimeout:         "read timeout",
+	DiscSubprotocolError:    "subprotocol error",
 }
 
 func (d DiscReason) String() string {
 	if len(discReasonToString) < int(d) {
-		return fmt.Sprintf("Unknown Reason(%d)", d)
+		return fmt.Sprintf("unknown disconnect reason %d", d)
 	}
 	return discReasonToString[d]
 }
@@ -99,6 +102,9 @@ func (d DiscReason) Error() string {
 func discReasonForError(err error) DiscReason {
 	if reason, ok := err.(DiscReason); ok {
 		return reason
+	}
+	if err == errProtocolReturned {
+		return DiscQuitting
 	}
 	peerError, ok := err.(*peerError)
 	if ok {

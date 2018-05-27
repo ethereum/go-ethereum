@@ -26,14 +26,11 @@ import (
 var addr = common.BytesToAddress([]byte("test"))
 
 func create() (*ManagedState, *account) {
-	db, _ := ethdb.NewMemDatabase()
-	statedb := New(common.Hash{}, db)
+	statedb, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()))
 	ms := ManageState(statedb)
-	so := &StateObject{address: addr, nonce: 100}
-	ms.StateDB.stateObjects[addr.Str()] = so
-	ms.accounts[addr.Str()] = newAccount(so)
-
-	return ms, ms.accounts[addr.Str()]
+	ms.StateDB.SetNonce(addr, 100)
+	ms.accounts[addr] = newAccount(ms.StateDB.getStateObject(addr))
+	return ms, ms.accounts[addr]
 }
 
 func TestNewNonce(t *testing.T) {
@@ -54,7 +51,7 @@ func TestRemove(t *testing.T) {
 	ms, account := create()
 
 	nn := make([]bool, 10)
-	for i, _ := range nn {
+	for i := range nn {
 		nn[i] = true
 	}
 	account.nonces = append(account.nonces, nn...)
@@ -70,7 +67,7 @@ func TestReuse(t *testing.T) {
 	ms, account := create()
 
 	nn := make([]bool, 10)
-	for i, _ := range nn {
+	for i := range nn {
 		nn[i] = true
 	}
 	account.nonces = append(account.nonces, nn...)
@@ -86,24 +83,24 @@ func TestReuse(t *testing.T) {
 func TestRemoteNonceChange(t *testing.T) {
 	ms, account := create()
 	nn := make([]bool, 10)
-	for i, _ := range nn {
+	for i := range nn {
 		nn[i] = true
 	}
 	account.nonces = append(account.nonces, nn...)
-	nonce := ms.NewNonce(addr)
+	ms.NewNonce(addr)
 
-	ms.StateDB.stateObjects[addr.Str()].nonce = 200
-	nonce = ms.NewNonce(addr)
+	ms.StateDB.stateObjects[addr].data.Nonce = 200
+	nonce := ms.NewNonce(addr)
 	if nonce != 200 {
-		t.Error("expected nonce after remote update to be", 201, "got", nonce)
+		t.Error("expected nonce after remote update to be", 200, "got", nonce)
 	}
 	ms.NewNonce(addr)
 	ms.NewNonce(addr)
 	ms.NewNonce(addr)
-	ms.StateDB.stateObjects[addr.Str()].nonce = 200
+	ms.StateDB.stateObjects[addr].data.Nonce = 200
 	nonce = ms.NewNonce(addr)
 	if nonce != 204 {
-		t.Error("expected nonce after remote update to be", 201, "got", nonce)
+		t.Error("expected nonce after remote update to be", 204, "got", nonce)
 	}
 }
 

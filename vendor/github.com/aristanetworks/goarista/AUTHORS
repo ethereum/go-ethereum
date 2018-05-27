@@ -1,0 +1,25 @@
+All contributors are required to sign a "Contributor License Agreement" at
+  <TBD>
+
+The following organizations and people have contributed code to this library.
+(Please keep both lists sorted alphabetically.)
+
+
+Arista Networks, Inc.
+
+
+Benoit Sigoure
+Fabrice Rabaute
+
+
+
+The list of individual contributors for code currently in HEAD can be obtained
+at any time with the following script:
+
+find . -type f \
+| while read i; do \
+  git blame -t $i 2>/dev/null; \
+  done \
+| sed 's/^[0-9a-f]\{8\} [^(]*(\([^)]*\) [-+0-9 ]\{14,\}).*/\1/;s/ *$//' \
+| awk '{a[$0]++; t++} END{for(n in a) print n}' \
+| sort

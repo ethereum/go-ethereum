@@ -17,7 +17,6 @@
 package p2p
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -25,16 +24,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
-	baseProtocolVersion    = 4
+	baseProtocolVersion    = 5
 	baseProtocolLength     = uint64(16)
 	baseProtocolMaxMsgSize = 2 * 1024
+
+	snappyProtocolVersion = 5
 
 	pingInterval = 15 * time.Second
 )
@@ -45,8 +47,6 @@ const (
 	discMsg      = 0x01
 	pingMsg      = 0x02
 	pongMsg      = 0x03
-	getPeersMsg  = 0x04
-	peersMsg     = 0x05
 )
 
 // protoHandshake is the RLP structure of the protocol handshake.
@@ -56,17 +56,57 @@ type protoHandshake struct {
 	Caps       []Cap
 	ListenPort uint64
 	ID         discover.NodeID
+
+	// Ignore additional fields (for forward compatibility).
+	Rest []rlp.RawValue `rlp:"tail"`
+}
+
+// PeerEventType is the type of peer events emitted by a p2p.Server
+type PeerEventType string
+
+const (
+	// PeerEventTypeAdd is the type of event emitted when a peer is added
+	// to a p2p.Server
+	PeerEventTypeAdd PeerEventType = "add"
+
+	// PeerEventTypeDrop is the type of event emitted when a peer is
+	// dropped from a p2p.Server
+	PeerEventTypeDrop PeerEventType = "drop"
+
+	// PeerEventTypeMsgSend is the type of event emitted when a
+	// message is successfully sent to a peer
+	PeerEventTypeMsgSend PeerEventType = "msgsend"
+
+	// PeerEventTypeMsgRecv is the type of event emitted when a
+	// message is received from a peer
+	PeerEventTypeMsgRecv PeerEventType = "msgrecv"
+)
+
+// PeerEvent is an event emitted when peers are either added or dropped from
+// a p2p.Server or when a message is sent or received on a peer connection
+type PeerEvent struct {
+	Type     PeerEventType   `json:"type"`
+	Peer     discover.NodeID `json:"peer"`
+	Error    string          `json:"error,omitempty"`
+	Protocol string          `json:"protocol,omitempty"`
+	MsgCode  *uint64         `json:"msg_code,omitempty"`
+	MsgSize  *uint32         `json:"msg_size,omitempty"`
 }
 
 // Peer represents a connected remote node.
 type Peer struct {
 	rw      *conn
 	running map[string]*protoRW
+	log     log.Logger
+	created mclock.AbsTime
 
 	wg       sync.WaitGroup
 	protoErr chan error
 	closed   chan struct{}
 	disc     chan DiscReason
+
+	// events receives message send / receive events if set
+	events *event.Feed
 }
 
 // NewPeer returns a peer for testing purposes.
@@ -118,25 +158,35 @@ func (p *Peer) String() string {
 	return fmt.Sprintf("Peer %x %v", p.rw.id[:8], p.RemoteAddr())
 }
 
+// Inbound returns true if the peer is an inbound connection
+func (p *Peer) Inbound() bool {
+	return p.rw.flags&inboundConn != 0
+}
+
 func newPeer(conn *conn, protocols []Protocol) *Peer {
 	protomap := matchProtocols(protocols, conn.caps, conn)
 	p := &Peer{
 		rw:       conn,
 		running:  protomap,
+		created:  mclock.Now(),
 		disc:     make(chan DiscReason),
 		protoErr: make(chan error, len(protomap)+1), // protocols + pingLoop
 		closed:   make(chan struct{}),
+		log:      log.New("id", conn.id, "conn", conn.flags),
 	}
 	return p
 }
 
-func (p *Peer) run() DiscReason {
+func (p *Peer) Log() log.Logger {
+	return p.log
+}
+
+func (p *Peer) run() (remoteRequested bool, err error) {
 	var (
 		writeStart = make(chan struct{}, 1)
 		writeErr   = make(chan error, 1)
 		readErr    = make(chan error, 1)
-		reason     DiscReason
-		requested  bool
+		reason     DiscReason // sent to the peer
 	)
 	p.wg.Add(2)
 	go p.readLoop(readErr)
@@ -150,31 +200,27 @@ func (p *Peer) run() DiscReason {
 loop:
 	for {
 		select {
-		case err := <-writeErr:
+		case err = <-writeErr:
 			// A write finished. Allow the next write to start if
 			// there was no error.
 			if err != nil {
-				glog.V(logger.Detail).Infof("%v: write error: %v\n", p, err)
 				reason = DiscNetworkError
 				break loop
 			}
 			writeStart <- struct{}{}
-		case err := <-readErr:
+		case err = <-readErr:
 			if r, ok := err.(DiscReason); ok {
-				glog.V(logger.Debug).Infof("%v: remote requested disconnect: %v\n", p, r)
-				requested = true
+				remoteRequested = true
 				reason = r
 			} else {
-				glog.V(logger.Detail).Infof("%v: read error: %v\n", p, err)
 				reason = DiscNetworkError
 			}
 			break loop
-		case err := <-p.protoErr:
+		case err = <-p.protoErr:
 			reason = discReasonForError(err)
-			glog.V(logger.Debug).Infof("%v: protocol error: %v (%v)\n", p, err, reason)
 			break loop
-		case reason = <-p.disc:
-			glog.V(logger.Debug).Infof("%v: locally requested disconnect: %v\n", p, reason)
+		case err = <-p.disc:
+			reason = discReasonForError(err)
 			break loop
 		}
 	}
@@ -182,14 +228,11 @@ loop:
 	close(p.closed)
 	p.rw.close(reason)
 	p.wg.Wait()
-	if requested {
-		reason = DiscRequested
-	}
-	return reason
+	return remoteRequested, err
 }
 
 func (p *Peer) pingLoop() {
-	ping := time.NewTicker(pingInterval)
+	ping := time.NewTimer(pingInterval)
 	defer p.wg.Done()
 	defer ping.Stop()
 	for {
@@ -199,6 +242,7 @@ func (p *Peer) pingLoop() {
 				p.protoErr <- err
 				return
 			}
+			ping.Reset(pingInterval)
 		case <-p.closed:
 			return
 		}
@@ -295,14 +339,18 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 		proto.closed = p.closed
 		proto.wstart = writeStart
 		proto.werr = writeErr
-		glog.V(logger.Detail).Infof("%v: Starting protocol %s/%d\n", p, proto.Name, proto.Version)
+		var rw MsgReadWriter = proto
+		if p.events != nil {
+			rw = newMsgEventer(rw, p.events, p.ID(), proto.Name)
+		}
+		p.log.Trace(fmt.Sprintf("Starting protocol %s/%d", proto.Name, proto.Version))
 		go func() {
-			err := proto.Run(p, proto)
+			err := proto.Run(p, rw)
 			if err == nil {
-				glog.V(logger.Detail).Infof("%v: Protocol %s/%d returned\n", p, proto.Name, proto.Version)
-				err = errors.New("protocol returned")
+				p.log.Trace(fmt.Sprintf("Protocol %s/%d returned", proto.Name, proto.Version))
+				err = errProtocolReturned
 			} else if err != io.EOF {
-				glog.V(logger.Detail).Infof("%v: Protocol %s/%d error: %v\n", p, proto.Name, proto.Version, err)
+				p.log.Trace(fmt.Sprintf("Protocol %s/%d failed", proto.Name, proto.Version), "err", err)
 			}
 			p.protoErr <- err
 			p.wg.Done()
@@ -358,4 +406,56 @@ func (rw *protoRW) ReadMsg() (Msg, error) {
 	case <-rw.closed:
 		return Msg{}, io.EOF
 	}
+}
+
+// PeerInfo represents a short summary of the information known about a connected
+// peer. Sub-protocol independent fields are contained and initialized here, with
+// protocol specifics delegated to all connected sub-protocols.
+type PeerInfo struct {
+	ID      string   `json:"id"`   // Unique node identifier (also the encryption key)
+	Name    string   `json:"name"` // Name of the node, including client type, version, OS, custom data
+	Caps    []string `json:"caps"` // Sum-protocols advertised by this particular peer
+	Network struct {
+		LocalAddress  string `json:"localAddress"`  // Local endpoint of the TCP data connection
+		RemoteAddress string `json:"remoteAddress"` // Remote endpoint of the TCP data connection
+		Inbound       bool   `json:"inbound"`
+		Trusted       bool   `json:"trusted"`
+		Static        bool   `json:"static"`
+	} `json:"network"`
+	Protocols map[string]interface{} `json:"protocols"` // Sub-protocol specific metadata fields
+}
+
+// Info gathers and returns a collection of metadata known about a peer.
+func (p *Peer) Info() *PeerInfo {
+	// Gather the protocol capabilities
+	var caps []string
+	for _, cap := range p.Caps() {
+		caps = append(caps, cap.String())
+	}
+	// Assemble the generic peer metadata
+	info := &PeerInfo{
+		ID:        p.ID().String(),
+		Name:      p.Name(),
+		Caps:      caps,
+		Protocols: make(map[string]interface{}),
+	}
+	info.Network.LocalAddress = p.LocalAddr().String()
+	info.Network.RemoteAddress = p.RemoteAddr().String()
+	info.Network.Inbound = p.rw.is(inboundConn)
+	info.Network.Trusted = p.rw.is(trustedConn)
+	info.Network.Static = p.rw.is(staticDialedConn)
+
+	// Gather all the running protocol infos
+	for _, proto := range p.running {
+		protoInfo := interface{}("unknown")
+		if query := proto.Protocol.PeerInfo; query != nil {
+			if metadata := query(p.ID()); metadata != nil {
+				protoInfo = metadata
+			} else {
+				protoInfo = "handshake"
+			}
+		}
+		info.Protocols[proto.Name] = protoInfo
+	}
+	return info
 }

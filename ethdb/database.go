@@ -17,67 +17,67 @@
 package ethdb
 
 import (
-	"path/filepath"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
+	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/util"
+)
 
-	gometrics "github.com/rcrowley/go-metrics"
+const (
+	writeDelayNThreshold       = 200
+	writeDelayThreshold        = 350 * time.Millisecond
+	writeDelayWarningThrottler = 1 * time.Minute
 )
 
 var OpenFileLimit = 64
-
-// cacheRatio specifies how the total alloted cache is distributed between the
-// various system databases.
-var cacheRatio = map[string]float64{
-	"blockchain": 1.0 / 13.0,
-	"extra":      2.0 / 13.0,
-	"state":      10.0 / 13.0,
-}
 
 type LDBDatabase struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
 
-	getTimer       gometrics.Timer // Timer for measuring the database get request counts and latencies
-	putTimer       gometrics.Timer // Timer for measuring the database put request counts and latencies
-	delTimer       gometrics.Timer // Timer for measuring the database delete request counts and latencies
-	missMeter      gometrics.Meter // Meter for measuring the missed database get requests
-	readMeter      gometrics.Meter // Meter for measuring the database get request data usage
-	writeMeter     gometrics.Meter // Meter for measuring the database put request data usage
-	compTimeMeter  gometrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter  gometrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter gometrics.Meter // Meter for measuring the data written during compaction
+	compTimeMeter    metrics.Meter // Meter for measuring the total time spent in database compaction
+	compReadMeter    metrics.Meter // Meter for measuring the data read during compaction
+	compWriteMeter   metrics.Meter // Meter for measuring the data written during compaction
+	writeDelayNMeter metrics.Meter // Meter for measuring the write delay number due to database compaction
+	writeDelayMeter  metrics.Meter // Meter for measuring the write delay duration due to database compaction
+	diskReadMeter    metrics.Meter // Meter for measuring the effective amount of data read
+	diskWriteMeter   metrics.Meter // Meter for measuring the effective amount of data written
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
+
+	log log.Logger // Contextual logger tracking the database path
 }
 
-// NewLDBDatabase returns a LevelDB wrapped object. LDBDatabase does not persist data by
-// it self but requires a background poller which syncs every X. `Flush` should be called
-// when data needs to be stored and written to disk.
-func NewLDBDatabase(file string, cache int) (*LDBDatabase, error) {
-	// Calculate the cache allowance for this particular database
-	cache = int(float64(cache) * cacheRatio[filepath.Base(file)])
+// NewLDBDatabase returns a LevelDB wrapped object.
+func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
+	logger := log.New("database", file)
+
+	// Ensure we have some minimal caching and file guarantees
 	if cache < 16 {
 		cache = 16
 	}
-	glog.V(logger.Info).Infof("Alloted %dMB cache to %s", cache, file)
+	if handles < 16 {
+		handles = 16
+	}
+	logger.Info("Allocated cache and file handles", "cache", cache, "handles", handles)
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, &opt.Options{
-		OpenFilesCacheCapacity: OpenFileLimit,
+		OpenFilesCacheCapacity: handles,
 		BlockCacheCapacity:     cache / 2 * opt.MiB,
 		WriteBuffer:            cache / 4 * opt.MiB, // Two of these are used internally
+		Filter:                 filter.NewBloomFilter(10),
 	})
 	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
 		db, err = leveldb.RecoverFile(file, nil)
@@ -87,110 +87,93 @@ func NewLDBDatabase(file string, cache int) (*LDBDatabase, error) {
 		return nil, err
 	}
 	return &LDBDatabase{
-		fn: file,
-		db: db,
+		fn:  file,
+		db:  db,
+		log: logger,
 	}, nil
 }
 
-// Put puts the given key / value to the queue
-func (self *LDBDatabase) Put(key []byte, value []byte) error {
-	// Measure the database put latency, if requested
-	if self.putTimer != nil {
-		defer self.putTimer.UpdateSince(time.Now())
-	}
-	// Generate the data to write to disk, update the meter and write
-	//value = rle.Compress(value)
+// Path returns the path to the database directory.
+func (db *LDBDatabase) Path() string {
+	return db.fn
+}
 
-	if self.writeMeter != nil {
-		self.writeMeter.Mark(int64(len(value)))
-	}
-	return self.db.Put(key, value, nil)
+// Put puts the given key / value to the queue
+func (db *LDBDatabase) Put(key []byte, value []byte) error {
+	return db.db.Put(key, value, nil)
+}
+
+func (db *LDBDatabase) Has(key []byte) (bool, error) {
+	return db.db.Has(key, nil)
 }
 
 // Get returns the given key if it's present.
-func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
-	// Measure the database get latency, if requested
-	if self.getTimer != nil {
-		defer self.getTimer.UpdateSince(time.Now())
-	}
-	// Retrieve the key and increment the miss counter if not found
-	dat, err := self.db.Get(key, nil)
+func (db *LDBDatabase) Get(key []byte) ([]byte, error) {
+	dat, err := db.db.Get(key, nil)
 	if err != nil {
-		if self.missMeter != nil {
-			self.missMeter.Mark(1)
-		}
 		return nil, err
 	}
-	// Otherwise update the actually retrieved amount of data
-	if self.readMeter != nil {
-		self.readMeter.Mark(int64(len(dat)))
-	}
 	return dat, nil
-	//return rle.Decompress(dat)
 }
 
 // Delete deletes the key from the queue and database
-func (self *LDBDatabase) Delete(key []byte) error {
-	// Measure the database delete latency, if requested
-	if self.delTimer != nil {
-		defer self.delTimer.UpdateSince(time.Now())
-	}
-	// Execute the actual operation
-	return self.db.Delete(key, nil)
+func (db *LDBDatabase) Delete(key []byte) error {
+	return db.db.Delete(key, nil)
 }
 
-func (self *LDBDatabase) NewIterator() iterator.Iterator {
-	return self.db.NewIterator(nil, nil)
+func (db *LDBDatabase) NewIterator() iterator.Iterator {
+	return db.db.NewIterator(nil, nil)
 }
 
-// Flush flushes out the queue to leveldb
-func (self *LDBDatabase) Flush() error {
-	return nil
+// NewIteratorWithPrefix returns a iterator to iterate over subset of database content with a particular prefix.
+func (db *LDBDatabase) NewIteratorWithPrefix(prefix []byte) iterator.Iterator {
+	return db.db.NewIterator(util.BytesPrefix(prefix), nil)
 }
 
-func (self *LDBDatabase) Close() {
+func (db *LDBDatabase) Close() {
 	// Stop the metrics collection to avoid internal database races
-	self.quitLock.Lock()
-	defer self.quitLock.Unlock()
+	db.quitLock.Lock()
+	defer db.quitLock.Unlock()
 
-	if self.quitChan != nil {
+	if db.quitChan != nil {
 		errc := make(chan error)
-		self.quitChan <- errc
+		db.quitChan <- errc
 		if err := <-errc; err != nil {
-			glog.V(logger.Error).Infof("metrics failure in '%s': %v\n", self.fn, err)
+			db.log.Error("Metrics collection failed", "err", err)
 		}
 	}
-	// Flush and close the database
-	if err := self.Flush(); err != nil {
-		glog.V(logger.Error).Infof("flushing '%s' failed: %v\n", self.fn, err)
+	err := db.db.Close()
+	if err == nil {
+		db.log.Info("Database closed")
+	} else {
+		db.log.Error("Failed to close database", "err", err)
 	}
-	self.db.Close()
-	glog.V(logger.Error).Infoln("flushed and closed db:", self.fn)
 }
 
-func (self *LDBDatabase) LDB() *leveldb.DB {
-	return self.db
+func (db *LDBDatabase) LDB() *leveldb.DB {
+	return db.db
 }
 
 // Meter configures the database metrics collectors and
-func (self *LDBDatabase) Meter(prefix string) {
-	// Initialize all the metrics collector at the requested prefix
-	self.getTimer = metrics.NewTimer(prefix + "user/gets")
-	self.putTimer = metrics.NewTimer(prefix + "user/puts")
-	self.delTimer = metrics.NewTimer(prefix + "user/dels")
-	self.missMeter = metrics.NewMeter(prefix + "user/misses")
-	self.readMeter = metrics.NewMeter(prefix + "user/reads")
-	self.writeMeter = metrics.NewMeter(prefix + "user/writes")
-	self.compTimeMeter = metrics.NewMeter(prefix + "compact/time")
-	self.compReadMeter = metrics.NewMeter(prefix + "compact/input")
-	self.compWriteMeter = metrics.NewMeter(prefix + "compact/output")
+func (db *LDBDatabase) Meter(prefix string) {
+	if metrics.Enabled {
+		// Initialize all the metrics collector at the requested prefix
+		db.compTimeMeter = metrics.NewRegisteredMeter(prefix+"compact/time", nil)
+		db.compReadMeter = metrics.NewRegisteredMeter(prefix+"compact/input", nil)
+		db.compWriteMeter = metrics.NewRegisteredMeter(prefix+"compact/output", nil)
+		db.diskReadMeter = metrics.NewRegisteredMeter(prefix+"disk/read", nil)
+		db.diskWriteMeter = metrics.NewRegisteredMeter(prefix+"disk/write", nil)
+	}
+	// Initialize write delay metrics no matter we are in metric mode or not.
+	db.writeDelayMeter = metrics.NewRegisteredMeter(prefix+"compact/writedelay/duration", nil)
+	db.writeDelayNMeter = metrics.NewRegisteredMeter(prefix+"compact/writedelay/counter", nil)
 
 	// Create a quit channel for the periodic collector and run it
-	self.quitLock.Lock()
-	self.quitChan = make(chan chan error)
-	self.quitLock.Unlock()
+	db.quitLock.Lock()
+	db.quitChan = make(chan chan error)
+	db.quitLock.Unlock()
 
-	go self.meter(3 * time.Second)
+	go db.meter(3 * time.Second)
 }
 
 // meter periodically retrieves internal leveldb counters and reports them to
@@ -204,18 +187,34 @@ func (self *LDBDatabase) Meter(prefix string) {
 //      1   |         85 |     109.27913 |      28.09293 |     213.92493 |     214.26294
 //      2   |        523 |    1000.37159 |       7.26059 |      66.86342 |      66.77884
 //      3   |        570 |    1113.18458 |       0.00000 |       0.00000 |       0.00000
-func (self *LDBDatabase) meter(refresh time.Duration) {
-	// Create the counters to store current and previous values
-	counters := make([][]float64, 2)
+//
+// This is how the write delay look like (currently):
+// DelayN:5 Delay:406.604657ms
+//
+// This is how the iostats look like (currently):
+// Read(MB):3895.04860 Write(MB):3654.64712
+func (db *LDBDatabase) meter(refresh time.Duration) {
+	// Create the counters to store current and previous compaction values
+	compactions := make([][]float64, 2)
 	for i := 0; i < 2; i++ {
-		counters[i] = make([]float64, 3)
+		compactions[i] = make([]float64, 3)
 	}
+	// Create storage for iostats.
+	var iostats [2]float64
+
+	// Create storage and warning log tracer for write delay.
+	var (
+		delaystats      [2]int64
+		lastWriteDelay  time.Time
+		lastWriteDelayN time.Time
+	)
+
 	// Iterate ad infinitum and collect the stats
 	for i := 1; ; i++ {
 		// Retrieve the database stats
-		stats, err := self.db.GetProperty("leveldb.stats")
+		stats, err := db.db.GetProperty("leveldb.stats")
 		if err != nil {
-			glog.V(logger.Error).Infof("failed to read database stats: %v", err)
+			db.log.Error("Failed to read database stats", "err", err)
 			return
 		}
 		// Find the compaction table, skip the header
@@ -224,14 +223,14 @@ func (self *LDBDatabase) meter(refresh time.Duration) {
 			lines = lines[1:]
 		}
 		if len(lines) <= 3 {
-			glog.V(logger.Error).Infof("compaction table not found")
+			db.log.Error("Compaction table not found")
 			return
 		}
 		lines = lines[3:]
 
 		// Iterate over all the table rows, and accumulate the entries
-		for j := 0; j < len(counters[i%2]); j++ {
-			counters[i%2][j] = 0
+		for j := 0; j < len(compactions[i%2]); j++ {
+			compactions[i%2][j] = 0
 		}
 		for _, line := range lines {
 			parts := strings.Split(line, "|")
@@ -239,27 +238,114 @@ func (self *LDBDatabase) meter(refresh time.Duration) {
 				break
 			}
 			for idx, counter := range parts[3:] {
-				if value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64); err != nil {
-					glog.V(logger.Error).Infof("compaction entry parsing failed: %v", err)
+				value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64)
+				if err != nil {
+					db.log.Error("Compaction entry parsing failed", "err", err)
 					return
-				} else {
-					counters[i%2][idx] += value
 				}
+				compactions[i%2][idx] += value
 			}
 		}
 		// Update all the requested meters
-		if self.compTimeMeter != nil {
-			self.compTimeMeter.Mark(int64((counters[i%2][0] - counters[(i-1)%2][0]) * 1000 * 1000 * 1000))
+		if db.compTimeMeter != nil {
+			db.compTimeMeter.Mark(int64((compactions[i%2][0] - compactions[(i-1)%2][0]) * 1000 * 1000 * 1000))
 		}
-		if self.compReadMeter != nil {
-			self.compReadMeter.Mark(int64((counters[i%2][1] - counters[(i-1)%2][1]) * 1024 * 1024))
+		if db.compReadMeter != nil {
+			db.compReadMeter.Mark(int64((compactions[i%2][1] - compactions[(i-1)%2][1]) * 1024 * 1024))
 		}
-		if self.compWriteMeter != nil {
-			self.compWriteMeter.Mark(int64((counters[i%2][2] - counters[(i-1)%2][2]) * 1024 * 1024))
+		if db.compWriteMeter != nil {
+			db.compWriteMeter.Mark(int64((compactions[i%2][2] - compactions[(i-1)%2][2]) * 1024 * 1024))
 		}
+
+		// Retrieve the write delay statistic
+		writedelay, err := db.db.GetProperty("leveldb.writedelay")
+		if err != nil {
+			db.log.Error("Failed to read database write delay statistic", "err", err)
+			return
+		}
+		var (
+			delayN        int64
+			delayDuration string
+			duration      time.Duration
+		)
+		if n, err := fmt.Sscanf(writedelay, "DelayN:%d Delay:%s", &delayN, &delayDuration); n != 2 || err != nil {
+			db.log.Error("Write delay statistic not found")
+			return
+		}
+		duration, err = time.ParseDuration(delayDuration)
+		if err != nil {
+			db.log.Error("Failed to parse delay duration", "err", err)
+			return
+		}
+		if db.writeDelayNMeter != nil {
+			db.writeDelayNMeter.Mark(delayN - delaystats[0])
+			// If the write delay number been collected in the last minute exceeds the predefined threshold,
+			// print a warning log here.
+			// If a warning that db performance is laggy has been displayed,
+			// any subsequent warnings will be withhold for 1 minute to don't overwhelm the user.
+			if int(db.writeDelayNMeter.Rate1()) > writeDelayNThreshold &&
+				time.Now().After(lastWriteDelayN.Add(writeDelayWarningThrottler)) {
+				db.log.Warn("Write delay number exceeds the threshold (200 per second) in the last minute")
+				lastWriteDelayN = time.Now()
+			}
+		}
+		if db.writeDelayMeter != nil {
+			db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
+			// If the write delay duration been collected in the last minute exceeds the predefined threshold,
+			// print a warning log here.
+			// If a warning that db performance is laggy has been displayed,
+			// any subsequent warnings will be withhold for 1 minute to don't overwhelm the user.
+			if int64(db.writeDelayMeter.Rate1()) > writeDelayThreshold.Nanoseconds() &&
+				time.Now().After(lastWriteDelay.Add(writeDelayWarningThrottler)) {
+				db.log.Warn("Write delay duration exceeds the threshold (35% of the time) in the last minute")
+				lastWriteDelay = time.Now()
+			}
+		}
+		delaystats[0], delaystats[1] = delayN, duration.Nanoseconds()
+
+		// Retrieve the database iostats.
+		ioStats, err := db.db.GetProperty("leveldb.iostats")
+		if err != nil {
+			db.log.Error("Failed to read database iostats", "err", err)
+			return
+		}
+		parts := strings.Split(ioStats, " ")
+		if len(parts) < 2 {
+			db.log.Error("Bad syntax of ioStats", "ioStats", ioStats)
+			return
+		}
+		r := strings.Split(parts[0], ":")
+		if len(r) < 2 {
+			db.log.Error("Bad syntax of read entry", "entry", parts[0])
+			return
+		}
+		read, err := strconv.ParseFloat(r[1], 64)
+		if err != nil {
+			db.log.Error("Read entry parsing failed", "err", err)
+			return
+		}
+		w := strings.Split(parts[1], ":")
+		if len(w) < 2 {
+			db.log.Error("Bad syntax of write entry", "entry", parts[1])
+			return
+		}
+		write, err := strconv.ParseFloat(w[1], 64)
+		if err != nil {
+			db.log.Error("Write entry parsing failed", "err", err)
+			return
+		}
+		if db.diskReadMeter != nil {
+			db.diskReadMeter.Mark(int64((read - iostats[0]) * 1024 * 1024))
+		}
+		if db.diskWriteMeter != nil {
+			db.diskWriteMeter.Mark(int64((write - iostats[1]) * 1024 * 1024))
+		}
+		iostats[0] = read
+		iostats[1] = write
+
 		// Sleep a bit, then repeat the stats collection
 		select {
-		case errc := <-self.quitChan:
+		case errc := <-db.quitChan:
 			// Quit requesting, stop hammering the database
 			errc <- nil
 			return
@@ -268,4 +354,97 @@ func (self *LDBDatabase) meter(refresh time.Duration) {
 			// Timeout, gather a new set of stats
 		}
 	}
+}
+
+func (db *LDBDatabase) NewBatch() Batch {
+	return &ldbBatch{db: db.db, b: new(leveldb.Batch)}
+}
+
+type ldbBatch struct {
+	db   *leveldb.DB
+	b    *leveldb.Batch
+	size int
+}
+
+func (b *ldbBatch) Put(key, value []byte) error {
+	b.b.Put(key, value)
+	b.size += len(value)
+	return nil
+}
+
+func (b *ldbBatch) Write() error {
+	return b.db.Write(b.b, nil)
+}
+
+func (b *ldbBatch) ValueSize() int {
+	return b.size
+}
+
+func (b *ldbBatch) Reset() {
+	b.b.Reset()
+	b.size = 0
+}
+
+type table struct {
+	db     Database
+	prefix string
+}
+
+// NewTable returns a Database object that prefixes all keys with a given
+// string.
+func NewTable(db Database, prefix string) Database {
+	return &table{
+		db:     db,
+		prefix: prefix,
+	}
+}
+
+func (dt *table) Put(key []byte, value []byte) error {
+	return dt.db.Put(append([]byte(dt.prefix), key...), value)
+}
+
+func (dt *table) Has(key []byte) (bool, error) {
+	return dt.db.Has(append([]byte(dt.prefix), key...))
+}
+
+func (dt *table) Get(key []byte) ([]byte, error) {
+	return dt.db.Get(append([]byte(dt.prefix), key...))
+}
+
+func (dt *table) Delete(key []byte) error {
+	return dt.db.Delete(append([]byte(dt.prefix), key...))
+}
+
+func (dt *table) Close() {
+	// Do nothing; don't close the underlying DB.
+}
+
+type tableBatch struct {
+	batch  Batch
+	prefix string
+}
+
+// NewTableBatch returns a Batch object which prefixes all keys with a given string.
+func NewTableBatch(db Database, prefix string) Batch {
+	return &tableBatch{db.NewBatch(), prefix}
+}
+
+func (dt *table) NewBatch() Batch {
+	return &tableBatch{dt.db.NewBatch(), dt.prefix}
+}
+
+func (tb *tableBatch) Put(key, value []byte) error {
+	return tb.batch.Put(append([]byte(tb.prefix), key...), value)
+}
+
+func (tb *tableBatch) Write() error {
+	return tb.batch.Write()
+}
+
+func (tb *tableBatch) ValueSize() int {
+	return tb.batch.ValueSize()
+}
+
+func (tb *tableBatch) Reset() {
+	tb.batch.Reset()
 }

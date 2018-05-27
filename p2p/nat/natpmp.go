@@ -82,7 +82,7 @@ func discoverPMP() Interface {
 	// any responses after a very short timeout.
 	timeout := time.NewTimer(1 * time.Second)
 	defer timeout.Stop()
-	for _ = range gws {
+	for range gws {
 		select {
 		case c := <-found:
 			if c != nil {

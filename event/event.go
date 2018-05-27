@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package event implements an event multiplexer.
+// Package event deals with subscriptions to real-time events.
 package event
 
 import (
@@ -22,19 +22,13 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"time"
 )
 
-// Subscription is implemented by event subscriptions.
-type Subscription interface {
-	// Chan returns a channel that carries events.
-	// Implementations should return the same channel
-	// for any subsequent calls to Chan.
-	Chan() <-chan interface{}
-
-	// Unsubscribe stops delivery of events to a subscription.
-	// The event channel is closed.
-	// Unsubscribe can be called more than once.
-	Unsubscribe()
+// TypeMuxEvent is a time-tagged notification pushed to subscribers.
+type TypeMuxEvent struct {
+	Time time.Time
+	Data interface{}
 }
 
 // A TypeMux dispatches events to registered receivers. Receivers can be
@@ -42,9 +36,11 @@ type Subscription interface {
 // called after mux is stopped will return ErrMuxClosed.
 //
 // The zero value is ready to use.
+//
+// Deprecated: use Feed
 type TypeMux struct {
 	mutex   sync.RWMutex
-	subm    map[reflect.Type][]*muxsub
+	subm    map[reflect.Type][]*TypeMuxSubscription
 	stopped bool
 }
 
@@ -54,15 +50,18 @@ var ErrMuxClosed = errors.New("event: mux closed")
 // Subscribe creates a subscription for events of the given types. The
 // subscription's channel is closed when it is unsubscribed
 // or the mux is closed.
-func (mux *TypeMux) Subscribe(types ...interface{}) Subscription {
+func (mux *TypeMux) Subscribe(types ...interface{}) *TypeMuxSubscription {
 	sub := newsub(mux)
 	mux.mutex.Lock()
 	defer mux.mutex.Unlock()
 	if mux.stopped {
+		// set the status to closed so that calling Unsubscribe after this
+		// call will short circuit.
+		sub.closed = true
 		close(sub.postC)
 	} else {
 		if mux.subm == nil {
-			mux.subm = make(map[reflect.Type][]*muxsub)
+			mux.subm = make(map[reflect.Type][]*TypeMuxSubscription)
 		}
 		for _, t := range types {
 			rtyp := reflect.TypeOf(t)
@@ -70,7 +69,7 @@ func (mux *TypeMux) Subscribe(types ...interface{}) Subscription {
 			if find(oldsubs, sub) != -1 {
 				panic(fmt.Sprintf("event: duplicate type %s in Subscribe", rtyp))
 			}
-			subs := make([]*muxsub, len(oldsubs)+1)
+			subs := make([]*TypeMuxSubscription, len(oldsubs)+1)
 			copy(subs, oldsubs)
 			subs[len(oldsubs)] = sub
 			mux.subm[rtyp] = subs
@@ -82,6 +81,10 @@ func (mux *TypeMux) Subscribe(types ...interface{}) Subscription {
 // Post sends an event to all receivers registered for the given type.
 // It returns ErrMuxClosed if the mux has been stopped.
 func (mux *TypeMux) Post(ev interface{}) error {
+	event := &TypeMuxEvent{
+		Time: time.Now(),
+		Data: ev,
+	}
 	rtyp := reflect.TypeOf(ev)
 	mux.mutex.RLock()
 	if mux.stopped {
@@ -91,7 +94,7 @@ func (mux *TypeMux) Post(ev interface{}) error {
 	subs := mux.subm[rtyp]
 	mux.mutex.RUnlock()
 	for _, sub := range subs {
-		sub.deliver(ev)
+		sub.deliver(event)
 	}
 	return nil
 }
@@ -111,7 +114,7 @@ func (mux *TypeMux) Stop() {
 	mux.mutex.Unlock()
 }
 
-func (mux *TypeMux) del(s *muxsub) {
+func (mux *TypeMux) del(s *TypeMuxSubscription) {
 	mux.mutex.Lock()
 	for typ, subs := range mux.subm {
 		if pos := find(subs, s); pos >= 0 {
@@ -125,7 +128,7 @@ func (mux *TypeMux) del(s *muxsub) {
 	s.mux.mutex.Unlock()
 }
 
-func find(slice []*muxsub, item *muxsub) int {
+func find(slice []*TypeMuxSubscription, item *TypeMuxSubscription) int {
 	for i, v := range slice {
 		if v == item {
 			return i
@@ -134,15 +137,17 @@ func find(slice []*muxsub, item *muxsub) int {
 	return -1
 }
 
-func posdelete(slice []*muxsub, pos int) []*muxsub {
-	news := make([]*muxsub, len(slice)-1)
+func posdelete(slice []*TypeMuxSubscription, pos int) []*TypeMuxSubscription {
+	news := make([]*TypeMuxSubscription, len(slice)-1)
 	copy(news[:pos], slice[:pos])
 	copy(news[pos:], slice[pos+1:])
 	return news
 }
 
-type muxsub struct {
+// TypeMuxSubscription is a subscription established through TypeMux.
+type TypeMuxSubscription struct {
 	mux     *TypeMux
+	created time.Time
 	closeMu sync.Mutex
 	closing chan struct{}
 	closed  bool
@@ -151,30 +156,37 @@ type muxsub struct {
 	// postC can be set to nil without affecting the return value of
 	// Chan.
 	postMu sync.RWMutex
-	readC  <-chan interface{}
-	postC  chan<- interface{}
+	readC  <-chan *TypeMuxEvent
+	postC  chan<- *TypeMuxEvent
 }
 
-func newsub(mux *TypeMux) *muxsub {
-	c := make(chan interface{})
-	return &muxsub{
+func newsub(mux *TypeMux) *TypeMuxSubscription {
+	c := make(chan *TypeMuxEvent)
+	return &TypeMuxSubscription{
 		mux:     mux,
+		created: time.Now(),
 		readC:   c,
 		postC:   c,
 		closing: make(chan struct{}),
 	}
 }
 
-func (s *muxsub) Chan() <-chan interface{} {
+func (s *TypeMuxSubscription) Chan() <-chan *TypeMuxEvent {
 	return s.readC
 }
 
-func (s *muxsub) Unsubscribe() {
+func (s *TypeMuxSubscription) Unsubscribe() {
 	s.mux.del(s)
 	s.closewait()
 }
 
-func (s *muxsub) closewait() {
+func (s *TypeMuxSubscription) Closed() bool {
+	s.closeMu.Lock()
+	defer s.closeMu.Unlock()
+	return s.closed
+}
+
+func (s *TypeMuxSubscription) closewait() {
 	s.closeMu.Lock()
 	defer s.closeMu.Unlock()
 	if s.closed {
@@ -189,11 +201,17 @@ func (s *muxsub) closewait() {
 	s.postMu.Unlock()
 }
 
-func (s *muxsub) deliver(ev interface{}) {
+func (s *TypeMuxSubscription) deliver(event *TypeMuxEvent) {
+	// Short circuit delivery if stale event
+	if s.created.After(event.Time) {
+		return
+	}
+	// Otherwise deliver the event
 	s.postMu.RLock()
+	defer s.postMu.RUnlock()
+
 	select {
-	case s.postC <- ev:
+	case s.postC <- event:
 	case <-s.closing:
 	}
-	s.postMu.RUnlock()
 }

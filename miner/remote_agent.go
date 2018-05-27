@@ -17,31 +17,56 @@
 package miner
 
 import (
+	"errors"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 )
+
+type hashrate struct {
+	ping time.Time
+	rate uint64
+}
 
 type RemoteAgent struct {
 	mu sync.Mutex
 
-	quit     chan struct{}
+	quitCh   chan struct{}
 	workCh   chan *Work
 	returnCh chan<- *Result
 
+	chain       consensus.ChainReader
+	engine      consensus.Engine
 	currentWork *Work
 	work        map[common.Hash]*Work
+
+	hashrateMu sync.RWMutex
+	hashrate   map[common.Hash]hashrate
+
+	running int32 // running indicates whether the agent is active. Call atomically
 }
 
-func NewRemoteAgent() *RemoteAgent {
-	agent := &RemoteAgent{work: make(map[common.Hash]*Work)}
+func NewRemoteAgent(chain consensus.ChainReader, engine consensus.Engine) *RemoteAgent {
+	return &RemoteAgent{
+		chain:    chain,
+		engine:   engine,
+		work:     make(map[common.Hash]*Work),
+		hashrate: make(map[common.Hash]hashrate),
+	}
+}
 
-	return agent
+func (a *RemoteAgent) SubmitHashrate(id common.Hash, rate uint64) {
+	a.hashrateMu.Lock()
+	defer a.hashrateMu.Unlock()
+
+	a.hashrate[id] = hashrate{time.Now(), rate}
 }
 
 func (a *RemoteAgent) Work() chan<- *Work {
@@ -53,19 +78,35 @@ func (a *RemoteAgent) SetReturnCh(returnCh chan<- *Result) {
 }
 
 func (a *RemoteAgent) Start() {
-	a.quit = make(chan struct{})
+	if !atomic.CompareAndSwapInt32(&a.running, 0, 1) {
+		return
+	}
+	a.quitCh = make(chan struct{})
 	a.workCh = make(chan *Work, 1)
-	go a.maintainLoop()
+	go a.loop(a.workCh, a.quitCh)
 }
 
 func (a *RemoteAgent) Stop() {
-	close(a.quit)
+	if !atomic.CompareAndSwapInt32(&a.running, 1, 0) {
+		return
+	}
+	close(a.quitCh)
 	close(a.workCh)
 }
 
-func (a *RemoteAgent) GetHashRate() int64 { return 0 }
+// GetHashRate returns the accumulated hashrate of all identifier combined
+func (a *RemoteAgent) GetHashRate() (tot int64) {
+	a.hashrateMu.RLock()
+	defer a.hashrateMu.RUnlock()
 
-func (a *RemoteAgent) GetWork() [3]string {
+	// this could overflow
+	for _, hashrate := range a.hashrate {
+		tot += int64(hashrate.rate)
+	}
+	return
+}
+
+func (a *RemoteAgent) GetWork() ([3]string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -75,7 +116,7 @@ func (a *RemoteAgent) GetWork() [3]string {
 		block := a.currentWork.Block
 
 		res[0] = block.HashNoNonce().Hex()
-		seedHash, _ := ethash.GetSeedHash(block.NumberU64())
+		seedHash := ethash.SeedHash(block.NumberU64())
 		res[1] = common.BytesToHash(seedHash).Hex()
 		// Calculate the "target" to be returned to the external miner
 		n := big.NewInt(1)
@@ -85,44 +126,61 @@ func (a *RemoteAgent) GetWork() [3]string {
 		res[2] = common.BytesToHash(n.Bytes()).Hex()
 
 		a.work[block.HashNoNonce()] = a.currentWork
+		return res, nil
 	}
-
-	return res
+	return res, errors.New("No work available yet, don't panic.")
 }
 
-// Returns true or false, but does not indicate if the PoW was correct
-func (a *RemoteAgent) SubmitWork(nonce uint64, mixDigest, hash common.Hash) bool {
+// SubmitWork tries to inject a pow solution into the remote agent, returning
+// whether the solution was accepted or not (not can be both a bad pow as well as
+// any other error, like no work pending).
+func (a *RemoteAgent) SubmitWork(nonce types.BlockNonce, mixDigest, hash common.Hash) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	// Make sure the work submitted is present
-	if a.work[hash] != nil {
-		block := a.work[hash].Block.WithMiningResult(nonce, mixDigest)
-		a.returnCh <- &Result{a.work[hash], block}
-
-		delete(a.work, hash)
-
-		return true
-	} else {
-		glog.V(logger.Info).Infof("Work was submitted for %x but no pending work found\n", hash)
+	work := a.work[hash]
+	if work == nil {
+		log.Info("Work submitted but none pending", "hash", hash)
+		return false
 	}
+	// Make sure the Engine solutions is indeed valid
+	result := work.Block.Header()
+	result.Nonce = nonce
+	result.MixDigest = mixDigest
 
-	return false
+	if err := a.engine.VerifySeal(a.chain, result); err != nil {
+		log.Warn("Invalid proof-of-work submitted", "hash", hash, "err", err)
+		return false
+	}
+	block := work.Block.WithSeal(result)
+
+	// Solutions seems to be valid, return to the miner and notify acceptance
+	a.returnCh <- &Result{work, block}
+	delete(a.work, hash)
+
+	return true
 }
 
-func (a *RemoteAgent) maintainLoop() {
-	ticker := time.Tick(5 * time.Second)
+// loop monitors mining events on the work and quit channels, updating the internal
+// state of the remote miner until a termination is requested.
+//
+// Note, the reason the work and quit channels are passed as parameters is because
+// RemoteAgent.Start() constantly recreates these channels, so the loop code cannot
+// assume data stability in these member fields.
+func (a *RemoteAgent) loop(workCh chan *Work, quitCh chan struct{}) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
 
-out:
 	for {
 		select {
-		case <-a.quit:
-			break out
-		case work := <-a.workCh:
+		case <-quitCh:
+			return
+		case work := <-workCh:
 			a.mu.Lock()
 			a.currentWork = work
 			a.mu.Unlock()
-		case <-ticker:
+		case <-ticker.C:
 			// cleanup
 			a.mu.Lock()
 			for hash, work := range a.work {
@@ -131,6 +189,14 @@ out:
 				}
 			}
 			a.mu.Unlock()
+
+			a.hashrateMu.Lock()
+			for id, hashrate := range a.hashrate {
+				if time.Since(hashrate.ping) > 10*time.Second {
+					delete(a.hashrate, id)
+				}
+			}
+			a.hashrateMu.Unlock()
 		}
 	}
 }

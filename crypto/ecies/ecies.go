@@ -60,7 +60,7 @@ type PublicKey struct {
 
 // Export an ECIES public key as an ECDSA public key.
 func (pub *PublicKey) ExportECDSA() *ecdsa.PublicKey {
-	return &ecdsa.PublicKey{pub.Curve, pub.X, pub.Y}
+	return &ecdsa.PublicKey{Curve: pub.Curve, X: pub.X, Y: pub.Y}
 }
 
 // Import an ECDSA public key as an ECIES public key.
@@ -83,7 +83,7 @@ type PrivateKey struct {
 func (prv *PrivateKey) ExportECDSA() *ecdsa.PrivateKey {
 	pub := &prv.PublicKey
 	pubECDSA := pub.ExportECDSA()
-	return &ecdsa.PrivateKey{*pubECDSA, prv.D}
+	return &ecdsa.PrivateKey{PublicKey: *pubECDSA, D: prv.D}
 }
 
 // Import an ECDSA private key as an ECIES private key.
@@ -93,7 +93,7 @@ func ImportECDSA(prv *ecdsa.PrivateKey) *PrivateKey {
 }
 
 // Generate an elliptic curve public / private keypair. If params is nil,
-// the recommended default paramters for the key will be chosen.
+// the recommended default parameters for the key will be chosen.
 func GenerateKey(rand io.Reader, curve elliptic.Curve, params *ECIESParams) (prv *PrivateKey, err error) {
 	pb, x, y, err := elliptic.GenerateKey(curve, rand)
 	if err != nil {
@@ -125,6 +125,7 @@ func (prv *PrivateKey) GenerateShared(pub *PublicKey, skLen, macLen int) (sk []b
 	if skLen+macLen > MaxSharedKeyLength(pub) {
 		return nil, ErrSharedKeyTooBig
 	}
+
 	x, _ := pub.Curve.ScalarMult(pub.X, pub.Y, prv.D.Bytes())
 	if x == nil {
 		return nil, ErrSharedKeyIsPointAtInfinity
@@ -150,14 +151,16 @@ var (
 func incCounter(ctr []byte) {
 	if ctr[3]++; ctr[3] != 0 {
 		return
-	} else if ctr[2]++; ctr[2] != 0 {
-		return
-	} else if ctr[1]++; ctr[1] != 0 {
-		return
-	} else if ctr[0]++; ctr[0] != 0 {
+	}
+	if ctr[2]++; ctr[2] != 0 {
 		return
 	}
-	return
+	if ctr[1]++; ctr[1] != 0 {
+		return
+	}
+	if ctr[0]++; ctr[0] != 0 {
+		return
+	}
 }
 
 // NIST SP 800-56 Concatenation Key Derivation Function (see section 5.8.1).
@@ -191,11 +194,9 @@ func concatKDF(hash hash.Hash, z, s1 []byte, kdLen int) (k []byte, err error) {
 // messageTag computes the MAC of a message (called the tag) as per
 // SEC 1, 3.5.
 func messageTag(hash func() hash.Hash, km, msg, shared []byte) []byte {
-	if shared == nil {
-		shared = make([]byte, 0)
-	}
 	mac := hmac.New(hash, km)
 	mac.Write(msg)
+	mac.Write(shared)
 	tag := mac.Sum(nil)
 	return tag
 }
@@ -229,7 +230,7 @@ func symEncrypt(rand io.Reader, params *ECIESParams, key, m []byte) (ct []byte, 
 
 // symDecrypt carries out CTR decryption using the block cipher specified in
 // the parameters
-func symDecrypt(rand io.Reader, params *ECIESParams, key, ct []byte) (m []byte, err error) {
+func symDecrypt(params *ECIESParams, key, ct []byte) (m []byte, err error) {
 	c, err := params.Cipher(key)
 	if err != nil {
 		return
@@ -242,9 +243,11 @@ func symDecrypt(rand io.Reader, params *ECIESParams, key, ct []byte) (m []byte, 
 	return
 }
 
-// Encrypt encrypts a message using ECIES as specified in SEC 1, 5.1. If
-// the shared information parameters aren't being used, they should be
-// nil.
+// Encrypt encrypts a message using ECIES as specified in SEC 1, 5.1.
+//
+// s1 and s2 contain shared information that is not part of the resulting
+// ciphertext. s1 is fed into key derivation, s2 is fed into the MAC. If the
+// shared information parameters aren't being used, they should be nil.
 func Encrypt(rand io.Reader, pub *PublicKey, m, s1, s2 []byte) (ct []byte, err error) {
 	params := pub.Params
 	if params == nil {
@@ -289,10 +292,9 @@ func Encrypt(rand io.Reader, pub *PublicKey, m, s1, s2 []byte) (ct []byte, err e
 }
 
 // Decrypt decrypts an ECIES ciphertext.
-func (prv *PrivateKey) Decrypt(rand io.Reader, c, s1, s2 []byte) (m []byte, err error) {
-	if c == nil || len(c) == 0 {
-		err = ErrInvalidMessage
-		return
+func (prv *PrivateKey) Decrypt(c, s1, s2 []byte) (m []byte, err error) {
+	if len(c) == 0 {
+		return nil, ErrInvalidMessage
 	}
 	params := prv.PublicKey.Params
 	if params == nil {
@@ -312,7 +314,7 @@ func (prv *PrivateKey) Decrypt(rand io.Reader, c, s1, s2 []byte) (m []byte, err 
 
 	switch c[0] {
 	case 2, 3, 4:
-		rLen = ((prv.PublicKey.Curve.Params().BitSize + 7) / 4)
+		rLen = (prv.PublicKey.Curve.Params().BitSize + 7) / 4
 		if len(c) < (rLen + hLen + 1) {
 			err = ErrInvalidMessage
 			return
@@ -359,6 +361,6 @@ func (prv *PrivateKey) Decrypt(rand io.Reader, c, s1, s2 []byte) (m []byte, err 
 		return
 	}
 
-	m, err = symDecrypt(rand, params, Ke, c[mStart:mEnd])
+	m, err = symDecrypt(params, Ke, c[mStart:mEnd])
 	return
 }

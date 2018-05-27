@@ -45,10 +45,19 @@ var (
 	// paths with any of these prefixes will be skipped
 	skipPrefixes = []string{
 		// boring stuff
-		"Godeps/", "tests/files/", "build/",
-		// don't relicense vendored packages
-		"crypto/sha3/", "crypto/ecies/", "logger/glog/",
-		"crypto/curve.go",
+		"vendor/", "tests/testdata/", "build/",
+		// don't relicense vendored sources
+		"cmd/internal/browser",
+		"consensus/ethash/xor.go",
+		"crypto/bn256/",
+		"crypto/ecies/",
+		"crypto/secp256k1/curve.go",
+		"crypto/sha3/",
+		"internal/jsre/deps",
+		"log/",
+		"common/bitutil/bitutil",
+		// don't license generated files
+		"contracts/chequebook/contract/code.go",
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.
@@ -150,14 +159,24 @@ func main() {
 	writeLicenses(infoc)
 }
 
+func skipFile(path string) bool {
+	if strings.Contains(path, "/testdata/") {
+		return true
+	}
+	for _, p := range skipPrefixes {
+		if strings.HasPrefix(path, p) {
+			return true
+		}
+	}
+	return false
+}
+
 func getFiles() []string {
 	cmd := exec.Command("git", "ls-tree", "-r", "--name-only", "HEAD")
 	var files []string
 	err := doLines(cmd, func(line string) {
-		for _, p := range skipPrefixes {
-			if strings.HasPrefix(line, p) {
-				return
-			}
+		if skipFile(line) {
+			return
 		}
 		ext := filepath.Ext(line)
 		for _, wantExt := range extensions {
@@ -170,7 +189,7 @@ func getFiles() []string {
 		files = append(files, line)
 	})
 	if err != nil {
-		log.Fatalf("error getting files:", err)
+		log.Fatal("error getting files:", err)
 	}
 	return files
 }
@@ -269,6 +288,9 @@ func getInfo(files <-chan string, out chan<- *info, wg *sync.WaitGroup) {
 		if !stat.Mode().IsRegular() {
 			continue
 		}
+		if isGenerated(file) {
+			continue
+		}
 		info, err := fileInfo(file)
 		if err != nil {
 			fmt.Printf("ERROR %s: %v\n", file, err)
@@ -279,10 +301,27 @@ func getInfo(files <-chan string, out chan<- *info, wg *sync.WaitGroup) {
 	wg.Done()
 }
 
-// fileInfo finds the lowest year in which the given file was commited.
+func isGenerated(file string) bool {
+	fd, err := os.Open(file)
+	if err != nil {
+		return false
+	}
+	defer fd.Close()
+	buf := make([]byte, 2048)
+	n, _ := fd.Read(buf)
+	buf = buf[:n]
+	for _, l := range bytes.Split(buf, []byte("\n")) {
+		if bytes.HasPrefix(l, []byte("// Code generated")) {
+			return true
+		}
+	}
+	return false
+}
+
+// fileInfo finds the lowest year in which the given file was committed.
 func fileInfo(file string) (*info, error) {
 	info := &info{file: file, Year: int64(time.Now().Year())}
-	cmd := exec.Command("git", "log", "--follow", "--find-copies", "--pretty=format:%ai", "--", file)
+	cmd := exec.Command("git", "log", "--follow", "--find-renames=80", "--find-copies=80", "--pretty=format:%ai", "--", file)
 	err := doLines(cmd, func(line string) {
 		y, err := strconv.ParseInt(line[:4], 10, 64)
 		if err != nil {

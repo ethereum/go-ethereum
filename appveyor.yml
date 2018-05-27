@@ -1,0 +1,49 @@
+os: Visual Studio 2015
+
+# Clone directly into GOPATH.
+clone_folder: C:\gopath\src\github.com\ethereum\go-ethereum
+clone_depth: 5
+version: "{branch}.{build}"
+environment:
+  global:
+    GOPATH: C:\gopath
+    CC: gcc.exe
+  matrix:
+    - GETH_ARCH: amd64
+      MSYS2_ARCH: x86_64
+      MSYS2_BITS: 64
+      MSYSTEM: MINGW64
+      PATH: C:\msys64\mingw64\bin\;C:\Program Files (x86)\NSIS\;%PATH%
+
+install:
+  - git submodule update --init
+  - rmdir C:\go /s /q
+  - appveyor DownloadFile https://storage.googleapis.com/golang/go1.10.2.windows-%GETH_ARCH%.zip
+  - 7z x go1.10.2.windows-%GETH_ARCH%.zip -y -oC:\ > NUL
+  - go version
+  - gcc --version
+
+build_script:
+  - go run build\ci.go install
+  - 7z a multi-geth-win64.zip .\build\bin\geth.exe
+  - ps: Get-FileHash multi-geth-win64.zip -Algorithm SHA256
+  - ps: Get-FileHash multi-geth-win64.zip -Algorithm SHA256 | Out-File multi-geth-win64.zip.sha256
+
+test_script:
+  - set CGO_ENABLED=1
+  - go run build\ci.go test
+
+artifacts:
+  - path: '*.zip'
+    name: geth
+  - path: '*.zip.sha256'
+    name: geth-sha256
+
+deploy:
+  artifact: /multi-geth-win64\.zip.*/
+  auth_token:
+    secure: 6NcsMzxggkLUTrKSB/oJQKMDORkvDIfa39CMSlF0+J4CaPScg3patFk755g+tHfA
+  draft: true
+  on:
+    appveyor_repo_tag: true
+  provider: GitHub

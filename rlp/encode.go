@@ -45,12 +45,6 @@ type Encoder interface {
 	EncodeRLP(io.Writer) error
 }
 
-// ListSize returns the encoded size of an RLP list with the given
-// content size.
-func ListSize(contentSize uint64) uint64 {
-	return uint64(headsize(contentSize)) + contentSize
-}
-
 // Encode writes the RLP encoding of val to w. Note that Encode may
 // perform many small writes in some cases. Consider making w
 // buffered.
@@ -90,27 +84,27 @@ func Encode(w io.Writer, val interface{}) error {
 		return outer.encode(val)
 	}
 	eb := encbufPool.Get().(*encbuf)
-	eb.reset()
 	defer encbufPool.Put(eb)
+	eb.reset()
 	if err := eb.encode(val); err != nil {
 		return err
 	}
 	return eb.toWriter(w)
 }
 
-// EncodeBytes returns the RLP encoding of val.
+// EncodeToBytes returns the RLP encoding of val.
 // Please see the documentation of Encode for the encoding rules.
 func EncodeToBytes(val interface{}) ([]byte, error) {
 	eb := encbufPool.Get().(*encbuf)
-	eb.reset()
 	defer encbufPool.Put(eb)
+	eb.reset()
 	if err := eb.encode(val); err != nil {
 		return nil, err
 	}
 	return eb.toBytes(), nil
 }
 
-// EncodeReader returns a reader from which the RLP encoding of val
+// EncodeToReader returns a reader from which the RLP encoding of val
 // can be read. The returned size is the total size of the encoded
 // data.
 //
@@ -157,11 +151,10 @@ func puthead(buf []byte, smalltag, largetag byte, size uint64) int {
 	if size < 56 {
 		buf[0] = smalltag + byte(size)
 		return 1
-	} else {
-		sizesize := putint(buf[1:], size)
-		buf[0] = largetag + byte(sizesize)
-		return sizesize + 1
 	}
+	sizesize := putint(buf[1:], size)
+	buf[0] = largetag + byte(sizesize)
+	return sizesize + 1
 }
 
 // encbufs are pooled.
@@ -224,7 +217,7 @@ func (w *encbuf) list() *listhead {
 func (w *encbuf) listEnd(lh *listhead) {
 	lh.size = w.size() - lh.offset - lh.size
 	if lh.size < 56 {
-		w.lhsize += 1 // length encoded into kind tag
+		w.lhsize++ // length encoded into kind tag
 	} else {
 		w.lhsize += 1 + intsize(uint64(lh.size))
 	}
@@ -288,8 +281,13 @@ type encReader struct {
 func (r *encReader) Read(b []byte) (n int, err error) {
 	for {
 		if r.piece = r.next(); r.piece == nil {
-			encbufPool.Put(r.buf)
-			r.buf = nil
+			// Put the encode buffer back into the pool at EOF when it
+			// is first encountered. Subsequent calls still return EOF
+			// as the error but the buffer is no longer valid.
+			if r.buf != nil {
+				encbufPool.Put(r.buf)
+				r.buf = nil
+			}
 			return n, io.EOF
 		}
 		nn := copy(b[n:], r.piece)
@@ -301,7 +299,6 @@ func (r *encReader) Read(b []byte) (n int, err error) {
 		}
 		r.piece = nil
 	}
-	panic("not reached")
 }
 
 // next returns the next piece of data to be read.
@@ -324,10 +321,9 @@ func (r *encReader) next() []byte {
 			p := r.buf.str[r.strpos:head.offset]
 			r.strpos += sizebefore
 			return p
-		} else {
-			r.lhpos++
-			return head.encode(r.buf.sizebuf)
 		}
+		r.lhpos++
+		return head.encode(r.buf.sizebuf)
 
 	case r.strpos < len(r.buf.str):
 		// String data at the end, after all list headers.
@@ -346,9 +342,11 @@ var (
 )
 
 // makeWriter creates a writer function for the given type.
-func makeWriter(typ reflect.Type) (writer, error) {
+func makeWriter(typ reflect.Type, ts tags) (writer, error) {
 	kind := typ.Kind()
 	switch {
+	case typ == rawValueType:
+		return writeRawValue, nil
 	case typ.Implements(encoderInterface):
 		return writeEncoder, nil
 	case kind != reflect.Ptr && reflect.PtrTo(typ).Implements(encoderInterface):
@@ -361,6 +359,8 @@ func makeWriter(typ reflect.Type) (writer, error) {
 		return writeBigIntNoPtr, nil
 	case isUint(kind):
 		return writeUint, nil
+	case kind == reflect.Bool:
+		return writeBool, nil
 	case kind == reflect.String:
 		return writeString, nil
 	case kind == reflect.Slice && isByte(typ.Elem()):
@@ -368,7 +368,7 @@ func makeWriter(typ reflect.Type) (writer, error) {
 	case kind == reflect.Array && isByte(typ.Elem()):
 		return writeByteArray, nil
 	case kind == reflect.Slice || kind == reflect.Array:
-		return makeSliceWriter(typ)
+		return makeSliceWriter(typ, ts)
 	case kind == reflect.Struct:
 		return makeStructWriter(typ)
 	case kind == reflect.Ptr:
@@ -380,6 +380,11 @@ func makeWriter(typ reflect.Type) (writer, error) {
 
 func isByte(typ reflect.Type) bool {
 	return typ.Kind() == reflect.Uint8 && !typ.Implements(encoderInterface)
+}
+
+func writeRawValue(val reflect.Value, w *encbuf) error {
+	w.str = append(w.str, val.Bytes()...)
+	return nil
 }
 
 func writeUint(val reflect.Value, w *encbuf) error {
@@ -394,6 +399,15 @@ func writeUint(val reflect.Value, w *encbuf) error {
 		s := putint(w.sizebuf[1:], i)
 		w.sizebuf[0] = 0x80 + byte(s)
 		w.str = append(w.str, w.sizebuf[:s+1]...)
+	}
+	return nil
+}
+
+func writeBool(val reflect.Value, w *encbuf) error {
+	if val.Bool() {
+		w.str = append(w.str, 0x01)
+	} else {
+		w.str = append(w.str, 0x80)
 	}
 	return nil
 }
@@ -462,7 +476,7 @@ func writeEncoder(val reflect.Value, w *encbuf) error {
 // with a pointer receiver.
 func writeEncoderNoPtr(val reflect.Value, w *encbuf) error {
 	if !val.CanAddr() {
-		// We can't get the address. It would be possible make the
+		// We can't get the address. It would be possible to make the
 		// value addressable by creating a shallow copy, but this
 		// creates other problems so we're not doing it (yet).
 		//
@@ -490,20 +504,21 @@ func writeInterface(val reflect.Value, w *encbuf) error {
 	return ti.writer(eval, w)
 }
 
-func makeSliceWriter(typ reflect.Type) (writer, error) {
+func makeSliceWriter(typ reflect.Type, ts tags) (writer, error) {
 	etypeinfo, err := cachedTypeInfo1(typ.Elem(), tags{})
 	if err != nil {
 		return nil, err
 	}
 	writer := func(val reflect.Value, w *encbuf) error {
-		lh := w.list()
+		if !ts.tail {
+			defer w.listEnd(w.list())
+		}
 		vlen := val.Len()
 		for i := 0; i < vlen; i++ {
 			if err := etypeinfo.writer(val.Index(i), w); err != nil {
 				return err
 			}
 		}
-		w.listEnd(lh)
 		return nil
 	}
 	return writer, nil
@@ -559,14 +574,13 @@ func makePtrWriter(typ reflect.Type) (writer, error) {
 	writer := func(val reflect.Value, w *encbuf) error {
 		if val.IsNil() {
 			return nilfunc(w)
-		} else {
-			return etypeinfo.writer(val.Elem(), w)
 		}
+		return etypeinfo.writer(val.Elem(), w)
 	}
 	return writer, err
 }
 
-// putint writes i to the beginning of b in with big endian byte
+// putint writes i to the beginning of b in big endian byte
 // order, using the least number of bytes needed to represent i.
 func putint(b []byte, i uint64) (size int) {
 	switch {
@@ -632,5 +646,4 @@ func intsize(i uint64) (size int) {
 			return size
 		}
 	}
-	panic("not reached")
 }

@@ -18,6 +18,7 @@ package discover
 
 import (
 	"bytes"
+	"container/list"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
@@ -25,10 +26,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/fdtrack"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -39,20 +39,21 @@ var (
 	errPacketTooSmall   = errors.New("too small")
 	errBadHash          = errors.New("bad hash")
 	errExpired          = errors.New("expired")
-	errBadVersion       = errors.New("version mismatch")
 	errUnsolicitedReply = errors.New("unsolicited reply")
 	errUnknownNode      = errors.New("unknown node")
 	errTimeout          = errors.New("RPC timeout")
+	errClockWarp        = errors.New("reply deadline too far in the future")
 	errClosed           = errors.New("socket closed")
 )
 
 // Timeouts
 const (
 	respTimeout = 500 * time.Millisecond
-	sendTimeout = 500 * time.Millisecond
 	expiration  = 20 * time.Second
 
-	refreshInterval = 1 * time.Hour
+	ntpFailureThreshold = 32               // Continuous timeouts after which to check NTP
+	ntpWarningCooldown  = 10 * time.Minute // Minimum amount of time to pass before repeating NTP warning
+	driftThreshold      = 10 * time.Second // Allowed clock drift before warning user
 )
 
 // RPC packet types
@@ -69,6 +70,8 @@ type (
 		Version    uint
 		From, To   rpcEndpoint
 		Expiration uint64
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	// pong is the reply to ping.
@@ -80,18 +83,24 @@ type (
 
 		ReplyTok   []byte // This contains the hash of the ping packet.
 		Expiration uint64 // Absolute timestamp at which the packet becomes invalid.
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	// findnode is a query for nodes close to the given target.
 	findnode struct {
 		Target     NodeID // doesn't need to be an actual public key
 		Expiration uint64
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	// reply to findnode
 	neighbors struct {
 		Nodes      []rpcNode
 		Expiration uint64
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	rpcNode struct {
@@ -116,13 +125,19 @@ func makeEndpoint(addr *net.UDPAddr, tcpPort uint16) rpcEndpoint {
 	return rpcEndpoint{IP: ip, UDP: uint16(addr.Port), TCP: tcpPort}
 }
 
-func nodeFromRPC(rn rpcNode) (n *Node, valid bool) {
-	// TODO: don't accept localhost, LAN addresses from internet hosts
-	// TODO: check public key is on secp256k1 curve
-	if rn.IP.IsMulticast() || rn.IP.IsUnspecified() || rn.UDP == 0 {
-		return nil, false
+func (t *udp) nodeFromRPC(sender *net.UDPAddr, rn rpcNode) (*Node, error) {
+	if rn.UDP <= 1024 {
+		return nil, errors.New("low port")
 	}
-	return newNode(rn.ID, rn.IP, rn.UDP, rn.TCP), true
+	if err := netutil.CheckRelayIP(sender.IP, rn.IP); err != nil {
+		return nil, err
+	}
+	if t.netrestrict != nil && !t.netrestrict.Contains(rn.IP) {
+		return nil, errors.New("not contained in netrestrict whitelist")
+	}
+	n := NewNode(rn.ID, rn.IP, rn.UDP, rn.TCP)
+	err := n.validateComplete()
+	return n, err
 }
 
 func nodeToRPC(n *Node) rpcNode {
@@ -131,6 +146,7 @@ func nodeToRPC(n *Node) rpcNode {
 
 type packet interface {
 	handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error
+	name() string
 }
 
 type conn interface {
@@ -143,6 +159,7 @@ type conn interface {
 // udp implements the RPC protocol.
 type udp struct {
 	conn        conn
+	netrestrict *netutil.Netlist
 	priv        *ecdsa.PrivateKey
 	ourEndpoint rpcEndpoint
 
@@ -192,65 +209,83 @@ type reply struct {
 	matched chan<- bool
 }
 
+// ReadPacket is sent to the unhandled channel when it could not be processed
+type ReadPacket struct {
+	Data []byte
+	Addr *net.UDPAddr
+}
+
+// Config holds Table-related settings.
+type Config struct {
+	// These settings are required and configure the UDP listener:
+	PrivateKey *ecdsa.PrivateKey
+
+	// These settings are optional:
+	AnnounceAddr *net.UDPAddr      // local address announced in the DHT
+	NodeDBPath   string            // if set, the node database is stored at this filesystem location
+	NetRestrict  *netutil.Netlist  // network whitelist
+	Bootnodes    []*Node           // list of bootstrap nodes
+	Unhandled    chan<- ReadPacket // unhandled packets are sent on this channel
+}
+
 // ListenUDP returns a new table that listens for UDP packets on laddr.
-func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, nodeDBPath string) (*Table, error) {
-	addr, err := net.ResolveUDPAddr("udp", laddr)
+func ListenUDP(c conn, cfg Config) (*Table, error) {
+	tab, _, err := newUDP(c, cfg)
 	if err != nil {
 		return nil, err
 	}
-	fdtrack.Open("p2p")
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return nil, err
-	}
-	tab, _ := newUDP(priv, conn, natm, nodeDBPath)
-	glog.V(logger.Info).Infoln("Listening,", tab.self)
+	log.Info("UDP listener up", "self", tab.self)
 	return tab, nil
 }
 
-func newUDP(priv *ecdsa.PrivateKey, c conn, natm nat.Interface, nodeDBPath string) (*Table, *udp) {
+func newUDP(c conn, cfg Config) (*Table, *udp, error) {
 	udp := &udp{
-		conn:       c,
-		priv:       priv,
-		closing:    make(chan struct{}),
-		gotreply:   make(chan reply),
-		addpending: make(chan *pending),
+		conn:        c,
+		priv:        cfg.PrivateKey,
+		netrestrict: cfg.NetRestrict,
+		closing:     make(chan struct{}),
+		gotreply:    make(chan reply),
+		addpending:  make(chan *pending),
 	}
 	realaddr := c.LocalAddr().(*net.UDPAddr)
-	if natm != nil {
-		if !realaddr.IP.IsLoopback() {
-			go nat.Map(natm, udp.closing, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
-		}
-		// TODO: react to external IP changes over time.
-		if ext, err := natm.ExternalIP(); err == nil {
-			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
-		}
+	if cfg.AnnounceAddr != nil {
+		realaddr = cfg.AnnounceAddr
 	}
 	// TODO: separate TCP port
 	udp.ourEndpoint = makeEndpoint(realaddr, uint16(realaddr.Port))
-	udp.Table = newTable(udp, PubkeyID(&priv.PublicKey), realaddr, nodeDBPath)
+	tab, err := newTable(udp, PubkeyID(&cfg.PrivateKey.PublicKey), realaddr, cfg.NodeDBPath, cfg.Bootnodes)
+	if err != nil {
+		return nil, nil, err
+	}
+	udp.Table = tab
+
 	go udp.loop()
-	go udp.readLoop()
-	return udp.Table, udp
+	go udp.readLoop(cfg.Unhandled)
+	return udp.Table, udp, nil
 }
 
 func (t *udp) close() {
 	close(t.closing)
-	fdtrack.Close("p2p")
 	t.conn.Close()
 	// TODO: wait for the loops to end.
 }
 
 // ping sends a ping message to the given node and waits for a reply.
 func (t *udp) ping(toid NodeID, toaddr *net.UDPAddr) error {
-	// TODO: maybe check for ReplyTo field in callback to measure RTT
-	errc := t.pending(toid, pongPacket, func(interface{}) bool { return true })
-	t.send(toaddr, pingPacket, ping{
+	req := &ping{
 		Version:    Version,
 		From:       t.ourEndpoint,
 		To:         makeEndpoint(toaddr, 0), // TODO: maybe use known TCP port from DB
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
+	}
+	packet, hash, err := encodePacket(t.priv, pingPacket, req)
+	if err != nil {
+		return err
+	}
+	errc := t.pending(toid, pongPacket, func(p interface{}) bool {
+		return bytes.Equal(p.(*pong).ReplyTok, hash)
 	})
+	t.write(toaddr, req.name(), packet)
 	return <-errc
 }
 
@@ -267,13 +302,16 @@ func (t *udp) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node
 		reply := r.(*neighbors)
 		for _, rn := range reply.Nodes {
 			nreceived++
-			if n, valid := nodeFromRPC(rn); valid {
-				nodes = append(nodes, n)
+			n, err := t.nodeFromRPC(toaddr, rn)
+			if err != nil {
+				log.Trace("Invalid neighbor node received", "ip", rn.IP, "addr", toaddr, "err", err)
+				continue
 			}
+			nodes = append(nodes, n)
 		}
 		return nreceived >= bucketSize
 	})
-	t.send(toaddr, findnodePacket, findnode{
+	t.send(toaddr, findnodePacket, &findnode{
 		Target:     target,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
@@ -296,7 +334,7 @@ func (t *udp) pending(id NodeID, ptype byte, callback func(interface{}) bool) <-
 }
 
 func (t *udp) handleReply(from NodeID, ptype byte, req packet) bool {
-	matched := make(chan bool)
+	matched := make(chan bool, 1)
 	select {
 	case t.gotreply <- reply{from, ptype, req, matched}:
 		// loop will handle it
@@ -306,72 +344,95 @@ func (t *udp) handleReply(from NodeID, ptype byte, req packet) bool {
 	}
 }
 
-// loop runs in its own goroutin. it keeps track of
+// loop runs in its own goroutine. it keeps track of
 // the refresh timer and the pending reply queue.
 func (t *udp) loop() {
 	var (
-		pending      []*pending
-		nextDeadline time.Time
+		plist        = list.New()
 		timeout      = time.NewTimer(0)
-		refresh      = time.NewTicker(refreshInterval)
+		nextTimeout  *pending // head of plist when timeout was last reset
+		contTimeouts = 0      // number of continuous timeouts to do NTP checks
+		ntpWarnTime  = time.Unix(0, 0)
 	)
 	<-timeout.C // ignore first timeout
-	defer refresh.Stop()
 	defer timeout.Stop()
 
-	rearmTimeout := func() {
-		now := time.Now()
-		if len(pending) == 0 || now.Before(nextDeadline) {
+	resetTimeout := func() {
+		if plist.Front() == nil || nextTimeout == plist.Front().Value {
 			return
 		}
-		nextDeadline = pending[0].deadline
-		timeout.Reset(nextDeadline.Sub(now))
+		// Start the timer so it fires when the next pending reply has expired.
+		now := time.Now()
+		for el := plist.Front(); el != nil; el = el.Next() {
+			nextTimeout = el.Value.(*pending)
+			if dist := nextTimeout.deadline.Sub(now); dist < 2*respTimeout {
+				timeout.Reset(dist)
+				return
+			}
+			// Remove pending replies whose deadline is too far in the
+			// future. These can occur if the system clock jumped
+			// backwards after the deadline was assigned.
+			nextTimeout.errc <- errClockWarp
+			plist.Remove(el)
+		}
+		nextTimeout = nil
+		timeout.Stop()
 	}
 
 	for {
-		select {
-		case <-refresh.C:
-			go t.refresh()
+		resetTimeout()
 
+		select {
 		case <-t.closing:
-			for _, p := range pending {
-				p.errc <- errClosed
+			for el := plist.Front(); el != nil; el = el.Next() {
+				el.Value.(*pending).errc <- errClosed
 			}
-			pending = nil
 			return
 
 		case p := <-t.addpending:
 			p.deadline = time.Now().Add(respTimeout)
-			pending = append(pending, p)
-			rearmTimeout()
+			plist.PushBack(p)
 
 		case r := <-t.gotreply:
 			var matched bool
-			for i := 0; i < len(pending); i++ {
-				if p := pending[i]; p.from == r.from && p.ptype == r.ptype {
+			for el := plist.Front(); el != nil; el = el.Next() {
+				p := el.Value.(*pending)
+				if p.from == r.from && p.ptype == r.ptype {
 					matched = true
+					// Remove the matcher if its callback indicates
+					// that all replies have been received. This is
+					// required for packet types that expect multiple
+					// reply packets.
 					if p.callback(r.data) {
-						// callback indicates the request is done, remove it.
 						p.errc <- nil
-						copy(pending[i:], pending[i+1:])
-						pending = pending[:len(pending)-1]
-						i--
+						plist.Remove(el)
 					}
+					// Reset the continuous timeout counter (time drift detection)
+					contTimeouts = 0
 				}
 			}
 			r.matched <- matched
 
 		case now := <-timeout.C:
-			// notify and remove callbacks whose deadline is in the past.
-			i := 0
-			for ; i < len(pending) && now.After(pending[i].deadline); i++ {
-				pending[i].errc <- errTimeout
+			nextTimeout = nil
+
+			// Notify and remove callbacks whose deadline is in the past.
+			for el := plist.Front(); el != nil; el = el.Next() {
+				p := el.Value.(*pending)
+				if now.After(p.deadline) || now.Equal(p.deadline) {
+					p.errc <- errTimeout
+					plist.Remove(el)
+					contTimeouts++
+				}
 			}
-			if i > 0 {
-				copy(pending, pending[i:])
-				pending = pending[:len(pending)-i]
+			// If we've accumulated too many timeouts, do an NTP time sync check
+			if contTimeouts > ntpFailureThreshold {
+				if time.Since(ntpWarnTime) >= ntpWarningCooldown {
+					ntpWarnTime = time.Now()
+					go checkClockDrift()
+				}
+				contTimeouts = 0
 			}
-			rearmTimeout()
 		}
 	}
 }
@@ -385,7 +446,7 @@ const (
 var (
 	headSpace = make([]byte, headSize)
 
-	// Neighbors responses are sent across multiple packets to
+	// Neighbors replies are sent across multiple packets to
 	// stay below the 1280 byte limit. We compute the maximum number
 	// of entries by stuffing a packet until it grows too large.
 	maxNeighbors int
@@ -408,67 +469,81 @@ func init() {
 	}
 }
 
-func (t *udp) send(toaddr *net.UDPAddr, ptype byte, req interface{}) error {
-	packet, err := encodePacket(t.priv, ptype, req)
+func (t *udp) send(toaddr *net.UDPAddr, ptype byte, req packet) ([]byte, error) {
+	packet, hash, err := encodePacket(t.priv, ptype, req)
 	if err != nil {
-		return err
+		return hash, err
 	}
-	glog.V(logger.Detail).Infof(">>> %v %T\n", toaddr, req)
-	if _, err = t.conn.WriteToUDP(packet, toaddr); err != nil {
-		glog.V(logger.Detail).Infoln("UDP send failed:", err)
-	}
+	return hash, t.write(toaddr, req.name(), packet)
+}
+
+func (t *udp) write(toaddr *net.UDPAddr, what string, packet []byte) error {
+	_, err := t.conn.WriteToUDP(packet, toaddr)
+	log.Trace(">> "+what, "addr", toaddr, "err", err)
 	return err
 }
 
-func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, error) {
+func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) (packet, hash []byte, err error) {
 	b := new(bytes.Buffer)
 	b.Write(headSpace)
 	b.WriteByte(ptype)
 	if err := rlp.Encode(b, req); err != nil {
-		glog.V(logger.Error).Infoln("error encoding packet:", err)
-		return nil, err
+		log.Error("Can't encode discv4 packet", "err", err)
+		return nil, nil, err
 	}
-	packet := b.Bytes()
-	sig, err := crypto.Sign(crypto.Sha3(packet[headSize:]), priv)
+	packet = b.Bytes()
+	sig, err := crypto.Sign(crypto.Keccak256(packet[headSize:]), priv)
 	if err != nil {
-		glog.V(logger.Error).Infoln("could not sign packet:", err)
-		return nil, err
+		log.Error("Can't sign discv4 packet", "err", err)
+		return nil, nil, err
 	}
 	copy(packet[macSize:], sig)
 	// add the hash to the front. Note: this doesn't protect the
 	// packet in any way. Our public key will be part of this hash in
 	// The future.
-	copy(packet, crypto.Sha3(packet[macSize:]))
-	return packet, nil
+	hash = crypto.Keccak256(packet[macSize:])
+	copy(packet, hash)
+	return packet, hash, nil
 }
 
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
-func (t *udp) readLoop() {
+func (t *udp) readLoop(unhandled chan<- ReadPacket) {
 	defer t.conn.Close()
+	if unhandled != nil {
+		defer close(unhandled)
+	}
 	// Discovery packets are defined to be no larger than 1280 bytes.
 	// Packets larger than this size will be cut at the end and treated
 	// as invalid because their hash won't match.
 	buf := make([]byte, 1280)
 	for {
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
-		if err != nil {
+		if netutil.IsTemporaryError(err) {
+			// Ignore temporary read errors.
+			log.Debug("Temporary UDP read error", "err", err)
+			continue
+		} else if err != nil {
+			// Shut down the loop for permament errors.
+			log.Debug("UDP read error", "err", err)
 			return
 		}
-		t.handlePacket(from, buf[:nbytes])
+		if t.handlePacket(from, buf[:nbytes]) != nil && unhandled != nil {
+			select {
+			case unhandled <- ReadPacket{buf[:nbytes], from}:
+			default:
+			}
+		}
 	}
 }
 
 func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
 	packet, fromID, hash, err := decodePacket(buf)
 	if err != nil {
-		glog.V(logger.Debug).Infof("Bad packet from %v: %v\n", from, err)
+		log.Debug("Bad discv4 packet", "addr", from, "err", err)
 		return err
 	}
-	status := "ok"
-	if err = packet.handle(t, from, fromID, hash); err != nil {
-		status = err.Error()
-	}
-	glog.V(logger.Detail).Infof("<<< %v %T: %s\n", from, packet, status)
+	err = packet.handle(t, from, fromID, hash)
+	log.Trace("<< "+packet.name(), "addr", from, "err", err)
 	return err
 }
 
@@ -477,11 +552,11 @@ func decodePacket(buf []byte) (packet, NodeID, []byte, error) {
 		return nil, NodeID{}, nil, errPacketTooSmall
 	}
 	hash, sig, sigdata := buf[:macSize], buf[macSize:headSize], buf[headSize:]
-	shouldhash := crypto.Sha3(buf[macSize:])
+	shouldhash := crypto.Keccak256(buf[macSize:])
 	if !bytes.Equal(hash, shouldhash) {
 		return nil, NodeID{}, nil, errBadHash
 	}
-	fromID, err := recoverNodeID(crypto.Sha3(buf[headSize:]), sig)
+	fromID, err := recoverNodeID(crypto.Keccak256(buf[headSize:]), sig)
 	if err != nil {
 		return nil, NodeID{}, hash, err
 	}
@@ -498,7 +573,8 @@ func decodePacket(buf []byte) (packet, NodeID, []byte, error) {
 	default:
 		return nil, fromID, hash, fmt.Errorf("unknown type: %d", ptype)
 	}
-	err = rlp.DecodeBytes(sigdata[1:], req)
+	s := rlp.NewStream(bytes.NewReader(sigdata[1:]), 0)
+	err = s.Decode(req)
 	return req, fromID, hash, err
 }
 
@@ -506,10 +582,7 @@ func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) er
 	if expired(req.Expiration) {
 		return errExpired
 	}
-	if req.Version != Version {
-		return errBadVersion
-	}
-	t.send(from, pongPacket, pong{
+	t.send(from, pongPacket, &pong{
 		To:         makeEndpoint(from, req.From.TCP),
 		ReplyTok:   mac,
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
@@ -521,6 +594,8 @@ func (req *ping) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) er
 	return nil
 }
 
+func (req *ping) name() string { return "PING/v4" }
+
 func (req *pong) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
 	if expired(req.Expiration) {
 		return errExpired
@@ -531,11 +606,13 @@ func (req *pong) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) er
 	return nil
 }
 
+func (req *pong) name() string { return "PONG/v4" }
+
 func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
 	if expired(req.Expiration) {
 		return errExpired
 	}
-	if t.db.node(fromID) == nil {
+	if !t.db.hasBond(fromID) {
 		// No bond exists, we don't process the packet. This prevents
 		// an attack vector where the discovery protocol could be used
 		// to amplify traffic in a DDOS attack. A malicious actor
@@ -545,23 +622,32 @@ func (req *findnode) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte
 		// (which is a much bigger packet than findnode) to the victim.
 		return errUnknownNode
 	}
-	target := crypto.Sha3Hash(req.Target[:])
+	target := crypto.Keccak256Hash(req.Target[:])
 	t.mutex.Lock()
 	closest := t.closest(target, bucketSize).entries
 	t.mutex.Unlock()
 
 	p := neighbors{Expiration: uint64(time.Now().Add(expiration).Unix())}
+	var sent bool
 	// Send neighbors in chunks with at most maxNeighbors per packet
 	// to stay below the 1280 byte limit.
-	for i, n := range closest {
-		p.Nodes = append(p.Nodes, nodeToRPC(n))
-		if len(p.Nodes) == maxNeighbors || i == len(closest)-1 {
-			t.send(from, neighborsPacket, p)
-			p.Nodes = p.Nodes[:0]
+	for _, n := range closest {
+		if netutil.CheckRelayIP(from.IP, n.IP) == nil {
+			p.Nodes = append(p.Nodes, nodeToRPC(n))
 		}
+		if len(p.Nodes) == maxNeighbors {
+			t.send(from, neighborsPacket, &p)
+			p.Nodes = p.Nodes[:0]
+			sent = true
+		}
+	}
+	if len(p.Nodes) > 0 || !sent {
+		t.send(from, neighborsPacket, &p)
 	}
 	return nil
 }
+
+func (req *findnode) name() string { return "FINDNODE/v4" }
 
 func (req *neighbors) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byte) error {
 	if expired(req.Expiration) {
@@ -572,6 +658,8 @@ func (req *neighbors) handle(t *udp, from *net.UDPAddr, fromID NodeID, mac []byt
 	}
 	return nil
 }
+
+func (req *neighbors) name() string { return "NEIGHBORS/v4" }
 
 func expired(ts uint64) bool {
 	return time.Unix(int64(ts), 0).Before(time.Now())

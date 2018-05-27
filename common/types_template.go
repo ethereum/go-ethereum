@@ -37,7 +37,7 @@ func HexTo_N_(s string) _N_    { return BytesTo_N_(FromHex(s)) }
 // Get the string representation of the underlying hash
 func (h _N_) Str() string   { return string(h[:]) }
 func (h _N_) Bytes() []byte { return h[:] }
-func (h _N_) Big() *big.Int { return Bytes2Big(h[:]) }
+func (h _N_) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
 func (h _N_) Hex() string   { return "0x" + Bytes2Hex(h[:]) }
 
 // Sets the hash to the value of b. If b is larger than len(h) it will panic

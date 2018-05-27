@@ -18,166 +18,84 @@
 package utils
 
 import (
-	"bufio"
+	"compress/gzip"
 	"fmt"
 	"io"
-	"math/big"
 	"os"
 	"os/signal"
-	"regexp"
+	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/debug"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/peterh/liner"
 )
 
 const (
 	importBatchSize = 2500
 )
 
-var interruptCallbacks = []func(os.Signal){}
-
-func openLogFile(Datadir string, filename string) *os.File {
-	path := common.AbsolutePath(Datadir, filename)
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		panic(fmt.Sprintf("error opening log file '%s': %v", filename, err))
-	}
-	return file
-}
-
-func PromptConfirm(prompt string) (bool, error) {
-	var (
-		input string
-		err   error
-	)
-	prompt = prompt + " [y/N] "
-
-	// if liner.TerminalSupported() {
-	// 	fmt.Println("term")
-	// 	lr := liner.NewLiner()
-	// 	defer lr.Close()
-	// 	input, err = lr.Prompt(prompt)
-	// } else {
-	fmt.Print(prompt)
-	input, err = bufio.NewReader(os.Stdin).ReadString('\n')
-	fmt.Println()
-	// }
-
-	if len(input) > 0 && strings.ToUpper(input[:1]) == "Y" {
-		return true, nil
-	} else {
-		return false, nil
-	}
-
-	return false, err
-}
-
-func PromptPassword(prompt string, warnTerm bool) (string, error) {
-	if liner.TerminalSupported() {
-		lr := liner.NewLiner()
-		defer lr.Close()
-		return lr.PasswordPrompt(prompt)
-	}
-	if warnTerm {
-		fmt.Println("!! Unsupported terminal, password will be echoed.")
-	}
-	fmt.Print(prompt)
-	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	fmt.Println()
-	return input, err
-}
-
-func CheckLegalese(datadir string) {
-	// check "first run"
-	if !common.FileExist(datadir) {
-		r, _ := PromptConfirm(legalese)
-		if !r {
-			Fatalf("Must accept to continue. Shutting down...\n")
-		}
-	}
-}
-
 // Fatalf formats a message to standard error and exits the program.
 // The message is also printed to standard output if standard error
 // is redirected to a different file.
 func Fatalf(format string, args ...interface{}) {
 	w := io.MultiWriter(os.Stdout, os.Stderr)
-	outf, _ := os.Stdout.Stat()
-	errf, _ := os.Stderr.Stat()
-	if outf != nil && errf != nil && os.SameFile(outf, errf) {
-		w = os.Stderr
+	if runtime.GOOS == "windows" {
+		// The SameFile check below doesn't work on Windows.
+		// stdout is unlikely to get redirected though, so just print there.
+		w = os.Stdout
+	} else {
+		outf, _ := os.Stdout.Stat()
+		errf, _ := os.Stderr.Stat()
+		if outf != nil && errf != nil && os.SameFile(outf, errf) {
+			w = os.Stderr
+		}
 	}
 	fmt.Fprintf(w, "Fatal: "+format+"\n", args...)
-	logger.Flush()
 	os.Exit(1)
 }
 
-func StartEthereum(ethereum *eth.Ethereum) {
-	glog.V(logger.Info).Infoln("Starting", ethereum.Name())
-	if err := ethereum.Start(); err != nil {
-		Fatalf("Error starting Ethereum: %v", err)
+func StartNode(stack *node.Node) {
+	if err := stack.Start(); err != nil {
+		Fatalf("Error starting protocol stack: %v", err)
 	}
 	go func() {
 		sigc := make(chan os.Signal, 1)
-		signal.Notify(sigc, os.Interrupt)
+		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
 		<-sigc
-		glog.V(logger.Info).Infoln("Got interrupt, shutting down...")
-		go ethereum.Stop()
-		logger.Flush()
+		log.Info("Got interrupt, shutting down...")
+		go stack.Stop()
 		for i := 10; i > 0; i-- {
 			<-sigc
 			if i > 1 {
-				glog.V(logger.Info).Infoln("Already shutting down, please be patient.")
-				glog.V(logger.Info).Infoln("Interrupt", i-1, "more times to induce panic.")
+				log.Warn("Already shutting down, interrupt more to panic.", "times", i-1)
 			}
 		}
-		glog.V(logger.Error).Infof("Force quitting: this might not end so well.")
-		panic("boom")
+		debug.Exit() // ensure trace and CPU profile data is flushed.
+		debug.LoudPanic("boom")
 	}()
 }
 
-func InitOlympic() {
-	params.DurationLimit = big.NewInt(8)
-	params.GenesisGasLimit = big.NewInt(3141592)
-	params.MinGasLimit = big.NewInt(125000)
-	params.MaximumExtraDataSize = big.NewInt(1024)
-	NetworkIdFlag.Value = 0
-	core.BlockReward = big.NewInt(1.5e+18)
-}
-
-func FormatTransactionData(data string) []byte {
-	d := common.StringToByteFunc(data, func(s string) (ret []byte) {
-		slice := regexp.MustCompile("\\n|\\s").Split(s, 1000000000)
-		for _, dataItem := range slice {
-			d := common.FormatData(dataItem)
-			ret = append(ret, d...)
-		}
-		return
-	})
-
-	return d
-}
-
-func ImportChain(chain *core.ChainManager, fn string) error {
+func ImportChain(chain *core.BlockChain, fn string) error {
 	// Watch for Ctrl-C while the import is running.
 	// If a signal is received, the import will stop at the next batch.
 	interrupt := make(chan os.Signal, 1)
 	stop := make(chan struct{})
-	signal.Notify(interrupt, os.Interrupt)
+	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(interrupt)
 	defer close(interrupt)
 	go func() {
 		if _, ok := <-interrupt; ok {
-			glog.Info("caught interrupt during import, will stop at next batch")
+			log.Info("Interrupted during import, stopping at next batch")
 		}
 		close(stop)
 	}()
@@ -190,13 +108,22 @@ func ImportChain(chain *core.ChainManager, fn string) error {
 		}
 	}
 
-	glog.Infoln("Importing blockchain", fn)
+	log.Info("Importing blockchain", "file", fn)
+
+	// Open the file handle and potentially unwrap the gzip stream
 	fh, err := os.Open(fn)
 	if err != nil {
 		return err
 	}
 	defer fh.Close()
-	stream := rlp.NewStream(fh, 0)
+
+	var reader io.Reader = fh
+	if strings.HasSuffix(fn, ".gz") {
+		if reader, err = gzip.NewReader(reader); err != nil {
+			return err
+		}
+	}
+	stream := rlp.NewStream(reader, 0)
 
 	// Run actual the import.
 	blocks := make(types.Blocks, importBatchSize)
@@ -229,53 +156,157 @@ func ImportChain(chain *core.ChainManager, fn string) error {
 		if checkInterrupt() {
 			return fmt.Errorf("interrupted")
 		}
-		if hasAllBlocks(chain, blocks[:i]) {
-			glog.Infof("skipping batch %d, all blocks present [%x / %x]",
-				batch, blocks[0].Hash().Bytes()[:4], blocks[i-1].Hash().Bytes()[:4])
+		missing := missingBlocks(chain, blocks[:i])
+		if len(missing) == 0 {
+			log.Info("Skipping batch as all blocks present", "batch", batch, "first", blocks[0].Hash(), "last", blocks[i-1].Hash())
 			continue
 		}
-
-		if _, err := chain.InsertChain(blocks[:i]); err != nil {
+		if _, err := chain.InsertChain(missing); err != nil {
 			return fmt.Errorf("invalid block %d: %v", n, err)
 		}
 	}
 	return nil
 }
 
-func hasAllBlocks(chain *core.ChainManager, bs []*types.Block) bool {
-	for _, b := range bs {
-		if !chain.HasBlock(b.Hash()) {
-			return false
+func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block {
+	head := chain.CurrentBlock()
+	for i, block := range blocks {
+		// If we're behind the chain head, only check block, state is available at head
+		if head.NumberU64() > block.NumberU64() {
+			if !chain.HasBlock(block.Hash(), block.NumberU64()) {
+				return blocks[i:]
+			}
+			continue
+		}
+		// If we're above the chain head, state availability is a must
+		if !chain.HasBlockAndState(block.Hash(), block.NumberU64()) {
+			return blocks[i:]
 		}
 	}
-	return true
+	return nil
 }
 
-func ExportChain(chainmgr *core.ChainManager, fn string) error {
-	glog.Infoln("Exporting blockchain to", fn)
+// ExportChain exports a blockchain into the specified file, truncating any data
+// already present in the file.
+func ExportChain(blockchain *core.BlockChain, fn string) error {
+	log.Info("Exporting blockchain", "file", fn)
+
+	// Open the file handle and potentially wrap with a gzip stream
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return err
 	}
 	defer fh.Close()
-	if err := chainmgr.Export(fh); err != nil {
+
+	var writer io.Writer = fh
+	if strings.HasSuffix(fn, ".gz") {
+		writer = gzip.NewWriter(writer)
+		defer writer.(*gzip.Writer).Close()
+	}
+	// Iterate over the blocks and export them
+	if err := blockchain.Export(writer); err != nil {
 		return err
 	}
-	glog.Infoln("Exported blockchain to", fn)
+	log.Info("Exported blockchain", "file", fn)
+
 	return nil
 }
 
-func ExportAppendChain(chainmgr *core.ChainManager, fn string, first uint64, last uint64) error {
-	glog.Infoln("Exporting blockchain to", fn)
-	// TODO verify mode perms
+// ExportAppendChain exports a blockchain into the specified file, appending to
+// the file if data already exists in it.
+func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, last uint64) error {
+	log.Info("Exporting blockchain", "file", fn)
+
+	// Open the file handle and potentially wrap with a gzip stream
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return err
 	}
 	defer fh.Close()
-	if err := chainmgr.ExportN(fh, first, last); err != nil {
+
+	var writer io.Writer = fh
+	if strings.HasSuffix(fn, ".gz") {
+		writer = gzip.NewWriter(writer)
+		defer writer.(*gzip.Writer).Close()
+	}
+	// Iterate over the blocks and export them
+	if err := blockchain.ExportN(writer, first, last); err != nil {
 		return err
 	}
-	glog.Infoln("Exported blockchain to", fn)
+	log.Info("Exported blockchain to", "file", fn)
+	return nil
+}
+
+// ImportPreimages imports a batch of exported hash preimages into the database.
+func ImportPreimages(db *ethdb.LDBDatabase, fn string) error {
+	log.Info("Importing preimages", "file", fn)
+
+	// Open the file handle and potentially unwrap the gzip stream
+	fh, err := os.Open(fn)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	var reader io.Reader = fh
+	if strings.HasSuffix(fn, ".gz") {
+		if reader, err = gzip.NewReader(reader); err != nil {
+			return err
+		}
+	}
+	stream := rlp.NewStream(reader, 0)
+
+	// Import the preimages in batches to prevent disk trashing
+	preimages := make(map[common.Hash][]byte)
+
+	for {
+		// Read the next entry and ensure it's not junk
+		var blob []byte
+
+		if err := stream.Decode(&blob); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		// Accumulate the preimages and flush when enough ws gathered
+		preimages[crypto.Keccak256Hash(blob)] = common.CopyBytes(blob)
+		if len(preimages) > 1024 {
+			rawdb.WritePreimages(db, 0, preimages)
+			preimages = make(map[common.Hash][]byte)
+		}
+	}
+	// Flush the last batch preimage data
+	if len(preimages) > 0 {
+		rawdb.WritePreimages(db, 0, preimages)
+	}
+	return nil
+}
+
+// ExportPreimages exports all known hash preimages into the specified file,
+// truncating any data already present in the file.
+func ExportPreimages(db *ethdb.LDBDatabase, fn string) error {
+	log.Info("Exporting preimages", "file", fn)
+
+	// Open the file handle and potentially wrap with a gzip stream
+	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	var writer io.Writer = fh
+	if strings.HasSuffix(fn, ".gz") {
+		writer = gzip.NewWriter(writer)
+		defer writer.(*gzip.Writer).Close()
+	}
+	// Iterate over the preimages and export them
+	it := db.NewIteratorWithPrefix([]byte("secure-key-"))
+	for it.Next() {
+		if err := rlp.Encode(writer, it.Value()); err != nil {
+			return err
+		}
+	}
+	log.Info("Exported preimages", "file", fn)
 	return nil
 }

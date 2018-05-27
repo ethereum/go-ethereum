@@ -19,74 +19,118 @@ package main
 
 import (
 	"crypto/ecdsa"
-	"encoding/hex"
 	"flag"
 	"fmt"
-	"io/ioutil"
-	"log"
+	"net"
 	"os"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 func main() {
 	var (
 		listenAddr  = flag.String("addr", ":30301", "listen address")
-		genKey      = flag.String("genkey", "", "generate a node key and quit")
+		genKey      = flag.String("genkey", "", "generate a node key")
+		writeAddr   = flag.Bool("writeaddress", false, "write out the node's pubkey hash and quit")
 		nodeKeyFile = flag.String("nodekey", "", "private key filename")
 		nodeKeyHex  = flag.String("nodekeyhex", "", "private key as hex (for testing)")
 		natdesc     = flag.String("nat", "none", "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)")
+		netrestrict = flag.String("netrestrict", "", "restrict network communication to the given IP networks (CIDR masks)")
+		runv5       = flag.Bool("v5", false, "run a v5 topic discovery bootnode")
+		verbosity   = flag.Int("verbosity", int(log.LvlInfo), "log verbosity (0-9)")
+		vmodule     = flag.String("vmodule", "", "log verbosity pattern")
 
 		nodeKey *ecdsa.PrivateKey
 		err     error
 	)
 	flag.Parse()
-	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.DebugLevel))
 
-	if *genKey != "" {
-		writeKey(*genKey)
-		os.Exit(0)
-	}
+	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
+	glogger.Verbosity(log.Lvl(*verbosity))
+	glogger.Vmodule(*vmodule)
+	log.Root().SetHandler(glogger)
 
 	natm, err := nat.Parse(*natdesc)
 	if err != nil {
-		log.Fatalf("-nat: %v", err)
+		utils.Fatalf("-nat: %v", err)
 	}
 	switch {
+	case *genKey != "":
+		nodeKey, err = crypto.GenerateKey()
+		if err != nil {
+			utils.Fatalf("could not generate key: %v", err)
+		}
+		if err = crypto.SaveECDSA(*genKey, nodeKey); err != nil {
+			utils.Fatalf("%v", err)
+		}
+		return
 	case *nodeKeyFile == "" && *nodeKeyHex == "":
-		log.Fatal("Use -nodekey or -nodekeyhex to specify a private key")
+		utils.Fatalf("Use -nodekey or -nodekeyhex to specify a private key")
 	case *nodeKeyFile != "" && *nodeKeyHex != "":
-		log.Fatal("Options -nodekey and -nodekeyhex are mutually exclusive")
+		utils.Fatalf("Options -nodekey and -nodekeyhex are mutually exclusive")
 	case *nodeKeyFile != "":
 		if nodeKey, err = crypto.LoadECDSA(*nodeKeyFile); err != nil {
-			log.Fatalf("-nodekey: %v", err)
+			utils.Fatalf("-nodekey: %v", err)
 		}
 	case *nodeKeyHex != "":
 		if nodeKey, err = crypto.HexToECDSA(*nodeKeyHex); err != nil {
-			log.Fatalf("-nodekeyhex: %v", err)
+			utils.Fatalf("-nodekeyhex: %v", err)
 		}
 	}
 
-	if _, err := discover.ListenUDP(nodeKey, *listenAddr, natm, ""); err != nil {
-		log.Fatal(err)
+	if *writeAddr {
+		fmt.Printf("%v\n", discover.PubkeyID(&nodeKey.PublicKey))
+		os.Exit(0)
 	}
-	select {}
-}
 
-func writeKey(target string) {
-	key, err := crypto.GenerateKey()
+	var restrictList *netutil.Netlist
+	if *netrestrict != "" {
+		restrictList, err = netutil.ParseNetlist(*netrestrict)
+		if err != nil {
+			utils.Fatalf("-netrestrict: %v", err)
+		}
+	}
+
+	addr, err := net.ResolveUDPAddr("udp", *listenAddr)
 	if err != nil {
-		log.Fatal("could not generate key: %v", err)
+		utils.Fatalf("-ResolveUDPAddr: %v", err)
 	}
-	b := crypto.FromECDSA(key)
-	if target == "-" {
-		fmt.Println(hex.EncodeToString(b))
-	} else {
-		if err := ioutil.WriteFile(target, b, 0600); err != nil {
-			log.Fatal("write error: ", err)
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		utils.Fatalf("-ListenUDP: %v", err)
+	}
+
+	realaddr := conn.LocalAddr().(*net.UDPAddr)
+	if natm != nil {
+		if !realaddr.IP.IsLoopback() {
+			go nat.Map(natm, nil, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+		}
+		// TODO: react to external IP changes over time.
+		if ext, err := natm.ExternalIP(); err == nil {
+			realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
 		}
 	}
+
+	if *runv5 {
+		if _, err := discv5.ListenUDP(nodeKey, conn, realaddr, "", restrictList); err != nil {
+			utils.Fatalf("%v", err)
+		}
+	} else {
+		cfg := discover.Config{
+			PrivateKey:   nodeKey,
+			AnnounceAddr: realaddr,
+			NetRestrict:  restrictList,
+		}
+		if _, err := discover.ListenUDP(conn, cfg); err != nil {
+			utils.Fatalf("%v", err)
+		}
+	}
+
+	select {}
 }
