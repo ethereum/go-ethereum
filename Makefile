@@ -144,3 +144,12 @@ geth-windows-amd64:
 	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=windows/amd64 -v ./cmd/geth
 	@echo "Windows amd64 cross compilation done:"
 	@ls -ld $(GOBIN)/geth-windows-* | grep amd64
+
+vet:
+	@echo "+ $@"
+	@go tool vet $(shell ls -1 -d */ | grep -v -e vendor -e contracts)
+
+fmt:
+	@echo "+ $@"
+	@test -z "$$(gofmt -s -l . 2>&1 | grep -v ^vendor/ | tee /dev/stderr)" || \
+		(echo >&2 "+ please format Go code with 'gofmt -s'" && false)

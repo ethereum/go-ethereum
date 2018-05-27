@@ -107,7 +107,7 @@ var (
 type TxStatus uint
 
 const (
-	TxStatusUnknown  TxStatus = iota
+	TxStatusUnknown TxStatus = iota
 	TxStatusQueued
 	TxStatusPending
 	TxStatusIncluded
@@ -580,7 +580,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrInvalidSender
 	}
 
-	if tx.To() == nil && from.Hex() != pool.superheroAddress.Hex(){
+	if tx.To() == nil && from.Hex() != pool.superheroAddress.Hex() {
 		return errors.New("SONM sidechain rule #1: you are not prepare uranus, creation contracts not allowed")
 	}
 
