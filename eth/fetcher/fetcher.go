@@ -292,20 +292,20 @@ func (f *Fetcher) loop() {
 		height := f.chainHeight()
 		for !f.queue.Empty() {
 			op := f.queue.PopItem().(*inject)
+			hash := op.block.Hash()
 			if f.queueChangeHook != nil {
-				f.queueChangeHook(op.block.Hash(), false)
+				f.queueChangeHook(hash, false)
 			}
 			// If too high up the chain or phase, continue later
 			number := op.block.NumberU64()
 			if number > height+1 {
-				f.queue.Push(op, -float32(op.block.NumberU64()))
+				f.queue.Push(op, -float32(number))
 				if f.queueChangeHook != nil {
-					f.queueChangeHook(op.block.Hash(), true)
+					f.queueChangeHook(hash, true)
 				}
 				break
 			}
 			// Otherwise if fresh and still unknown, try and import
-			hash := op.block.Hash()
 			if number+maxUncleDist < height || f.getBlock(hash) != nil {
 				f.forgetBlock(hash)
 				continue
