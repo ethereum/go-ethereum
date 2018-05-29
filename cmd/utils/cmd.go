@@ -63,6 +63,8 @@ func Fatalf(format string, args ...interface{}) {
 	os.Exit(1)
 }
 
+// StartNode creates a live P2P node, starts running it, and blocks
+// until it receives a stopping signal.
 func StartNode(stack *node.Node) {
 	if err := stack.Start(); err != nil {
 		Fatalf("Error starting protocol stack: %v", err)
@@ -85,6 +87,14 @@ func StartNode(stack *node.Node) {
 	}()
 }
 
+// ImportChain attempts to insert the given batch of blocks in to the canonical
+// chain or, otherwise, create a fork. If an error is returned it will return
+// the index number of the failing block as well an error describing what went
+// wrong.
+//
+// ImportChain also listens for interrupting signals.
+// 
+// After insertion is done, all accumulated events will be fired.
 func ImportChain(chain *core.BlockChain, fn string) error {
 	// Watch for Ctrl-C while the import is running.
 	// If a signal is received, the import will stop at the next batch.

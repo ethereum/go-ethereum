@@ -31,23 +31,24 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// Custom type which is registered in the flags library which cli uses for
-// argument parsing. This allows us to expand Value to an absolute path when
-// the argument is parsed
+// DirectoryString is a custom type which is registered in the flags library
+// which cli uses for argument parsing. This allows us to expand Value to an 
+// absolute path when the argument is parsed
 type DirectoryString struct {
 	Value string
 }
 
-func (self *DirectoryString) String() string {
-	return self.Value
+// String returns the Value field of DirectoryString.
+func (s *DirectoryString) String() string {
+	return s.Value
 }
-
-func (self *DirectoryString) Set(value string) error {
-	self.Value = expandPath(value)
+// Set updates the field Value by passing it's parameter to the expandPath function.
+func (s *DirectoryString) Set(value string) error {
+	s.Value = expandPath(value)
 	return nil
 }
 
-// Custom cli.Flag type which expand the received string to an absolute path.
+// DirectoryFlag is a custom cli.Flag type which expands the received string to an absolute path.
 // e.g. ~/.ethereum -> /home/username/.ethereum
 type DirectoryFlag struct {
 	Name  string
@@ -55,12 +56,12 @@ type DirectoryFlag struct {
 	Usage string
 }
 
-func (self DirectoryFlag) String() string {
+func (df DirectoryFlag) String() string {
 	fmtString := "%s %v\t%v"
-	if len(self.Value.Value) > 0 {
+	if len(df.Value.Value) > 0 {
 		fmtString = "%s \"%v\"\t%v"
 	}
-	return fmt.Sprintf(fmtString, prefixedNames(self.Name), self.Value.Value, self.Usage)
+	return fmt.Sprintf(fmtString, prefixedNames(df.Name), df.Value.Value, df.Usage)
 }
 
 func eachName(longName string, fn func(string)) {
@@ -71,14 +72,16 @@ func eachName(longName string, fn func(string)) {
 	}
 }
 
-// called by cli library, grabs variable from environment (if in env)
+// Apply is called by cli library, grabs variable from environment (if in env)
 // and adds variable to flag set for parsing.
-func (self DirectoryFlag) Apply(set *flag.FlagSet) {
-	eachName(self.Name, func(name string) {
-		set.Var(&self.Value, self.Name, self.Usage)
+func (df DirectoryFlag) Apply(set *flag.FlagSet) {
+	eachName(df.Name, func(name string) {
+		set.Var(&df.Value, df.Name, df.Usage)
 	})
 }
 
+
+// TextMarshaler holds interfaces from the encoding package.
 type TextMarshaler interface {
 	encoding.TextMarshaler
 	encoding.TextUnmarshaler
@@ -89,6 +92,7 @@ type textMarshalerVal struct {
 	v TextMarshaler
 }
 
+// String returns an empty string or returns the receiver as UTF-8-encoded text.
 func (v textMarshalerVal) String() string {
 	if v.v == nil {
 		return ""
@@ -108,6 +112,7 @@ type TextMarshalerFlag struct {
 	Usage string
 }
 
+// GetName returns the value of the receiver's Name field.
 func (f TextMarshalerFlag) GetName() string {
 	return f.Name
 }
@@ -116,6 +121,8 @@ func (f TextMarshalerFlag) String() string {
 	return fmt.Sprintf("%s \"%v\"\t%v", prefixedNames(f.Name), f.Value, f.Usage)
 }
 
+// Apply is called by cli library, grabs variable from environment (if in env)
+// and adds variable to flag set for parsing.
 func (f TextMarshalerFlag) Apply(set *flag.FlagSet) {
 	eachName(f.Name, func(name string) {
 		set.Var(textMarshalerVal{f.Value}, f.Name, f.Usage)
@@ -158,6 +165,7 @@ func (b *bigValue) Set(s string) error {
 	return nil
 }
 
+// GetName returns the Name field from the receiver.
 func (f BigFlag) GetName() string {
 	return f.Name
 }
@@ -170,6 +178,8 @@ func (f BigFlag) String() string {
 	return fmt.Sprintf(fmtString, prefixedNames(f.Name), f.Value, f.Usage)
 }
 
+// Apply is called by cli library, grabs variable from environment (if in env)
+// and adds variable to flag set for parsing.
 func (f BigFlag) Apply(set *flag.FlagSet) {
 	eachName(f.Name, func(name string) {
 		set.Var((*bigValue)(f.Value), f.Name, f.Usage)
@@ -207,15 +217,17 @@ func prefixedNames(fullName string) (prefixed string) {
 	return
 }
 
-func (self DirectoryFlag) GetName() string {
-	return self.Name
+// GetName returns the Name field from the receiver.
+func (df DirectoryFlag) GetName() string {
+	return df.Name
 }
 
-func (self *DirectoryFlag) Set(value string) {
-	self.Value.Value = value
+// Set sets the value of the receivers' DirectoryString with the given parameter.
+func (df *DirectoryFlag) Set(value string) {
+	df.Value.Value = value
 }
 
-// Expands a file path
+// expandPath expands a file path
 // 1. replace tilde with users home dir
 // 2. expands embedded environment variables
 // 3. cleans the path, e.g. /a/b/../c -> /a/c

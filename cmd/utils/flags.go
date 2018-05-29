@@ -59,6 +59,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+// CommandHelpTemplate defines the structure for how user inputs will be read.
 var (
 	CommandHelpTemplate = `{{.cmd.Name}}{{if .cmd.Subcommands}} command{{end}}{{if .cmd.Flags}} [command options]{{end}} [arguments...]
 {{if .cmd.Description}}{{.cmd.Description}}
@@ -111,8 +112,8 @@ func NewApp(gitCommit, usage string) *cli.App {
 // The flags are defined here so their names and help texts
 // are the same for all commands.
 
+// General settings
 var (
-	// General settings
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
 		Usage: "Data directory for the databases and keystore",
@@ -126,7 +127,7 @@ var (
 		Name:  "nousb",
 		Usage: "Disables monitoring for and managing USB hardware wallets",
 	}
-	NetworkIdFlag = cli.Uint64Flag{
+	NetworkIDFlag = cli.Uint64Flag{
 		Name:  "networkid",
 		Usage: "Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby)",
 		Value: eth.DefaultConfig.NetworkId,
@@ -189,7 +190,7 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
-	// Dashboard settings
+	// DashboardEnabledFlag stires the dashboard settings.
 	DashboardEnabledFlag = cli.BoolFlag{
 		Name:  "dashboard",
 		Usage: "Enable the dashboard",
@@ -209,7 +210,7 @@ var (
 		Usage: "Dashboard metrics collection refresh rate",
 		Value: dashboard.DefaultConfig.Refresh,
 	}
-	// Ethash settings
+	// EthashCacheDirFlag stores the Ethash settings.
 	EthashCacheDirFlag = DirectoryFlag{
 		Name:  "ethash.cachedir",
 		Usage: "Directory to store the ethash verification caches (default = inside the datadir)",
@@ -239,7 +240,7 @@ var (
 		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
 		Value: eth.DefaultConfig.Ethash.DatasetsOnDisk,
 	}
-	// Transaction pool settings
+	// TxPoolNoLocalsFlag stores the Transaction pool settings.
 	TxPoolNoLocalsFlag = cli.BoolFlag{
 		Name:  "txpool.nolocals",
 		Usage: "Disables price exemptions for locally submitted transactions",
@@ -289,7 +290,7 @@ var (
 		Usage: "Maximum amount of time non-executable transaction are queued",
 		Value: eth.DefaultConfig.TxPool.Lifetime,
 	}
-	// Performance tuning settings
+	// CacheFlag stores the performance tuning settings.
 	CacheFlag = cli.IntFlag{
 		Name:  "cache",
 		Usage: "Megabytes of memory allocated to internal caching",
@@ -310,7 +311,7 @@ var (
 		Usage: "Number of trie node generations to keep in memory",
 		Value: int(state.MaxTrieCacheGen),
 	}
-	// Miner settings
+	// MiningEnabledFlag stores the miner settings.
 	MiningEnabledFlag = cli.BoolFlag{
 		Name:  "mine",
 		Usage: "Enable mining",
@@ -339,7 +340,7 @@ var (
 		Name:  "extradata",
 		Usage: "Block extra data set by the miner (default = client version)",
 	}
-	// Account settings
+	// UnlockedAccountFlag stores the Account settings.
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
 		Usage: "Comma separated list of accounts to unlock",
@@ -355,7 +356,7 @@ var (
 		Name:  "vmdebug",
 		Usage: "Record information useful for VM and contract debugging",
 	}
-	// Logging and debug settings
+	// EthStatsURLFlag stores the logging and debug settings.
 	EthStatsURLFlag = cli.StringFlag{
 		Name:  "ethstats",
 		Usage: "Reporting URL of a ethstats service (nodename:secret@host:port)",
@@ -372,7 +373,7 @@ var (
 		Name:  "nocompaction",
 		Usage: "Disables db compaction after import",
 	}
-	// RPC settings
+	// RPCEnabledFlag stores the RPC settings.
 	RPCEnabledFlag = cli.BoolFlag{
 		Name:  "rpc",
 		Usage: "Enable the HTTP-RPC server",
@@ -443,7 +444,7 @@ var (
 		Usage: "Comma separated list of JavaScript files to preload into the console",
 	}
 
-	// Network Settings
+	// MaxPeersFlag stores the Network settings.
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
 		Usage: "Maximum number of network peers (network disabled if set to 0)",
@@ -507,7 +508,7 @@ var (
 		Value: ".",
 	}
 
-	// Gas price oracle settings
+	// GpoBlocksFlag stores the Gas price oracle settings.
 	GpoBlocksFlag = cli.IntFlag{
 		Name:  "gpoblocks",
 		Usage: "Number of recent blocks to check for gas prices",
@@ -1037,8 +1038,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(LightPeersFlag.Name) {
 		cfg.LightPeers = ctx.GlobalInt(LightPeersFlag.Name)
 	}
-	if ctx.GlobalIsSet(NetworkIdFlag.Name) {
-		cfg.NetworkId = ctx.GlobalUint64(NetworkIdFlag.Name)
+	if ctx.GlobalIsSet(NetworkIDFlag.Name) {
+		cfg.NetworkId = ctx.GlobalUint64(NetworkIDFlag.Name)
 	}
 
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheDatabaseFlag.Name) {
@@ -1074,12 +1075,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.GlobalBool(TestnetFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+		if !ctx.GlobalIsSet(NetworkIDFlag.Name) {
 			cfg.NetworkId = 3
 		}
 		cfg.Genesis = core.DefaultTestnetGenesisBlock()
 	case ctx.GlobalBool(RinkebyFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+		if !ctx.GlobalIsSet(NetworkIDFlag.Name) {
 			cfg.NetworkId = 4
 		}
 		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
@@ -1198,6 +1199,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	return chainDb
 }
 
+// MakeGenesis returns a new genesis struct if a test net is specified.
 func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
 	switch {
