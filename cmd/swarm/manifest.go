@@ -126,7 +126,7 @@ func remove(ctx *cli.Context) {
 func addEntryToManifest(ctx *cli.Context, mhash, path, hash, ctype string) string {
 
 	var (
-		bzzapi           = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		bzzapi           = strings.TrimRight(ctx.GlobalString(SwarmAPIFlag.Name), "/")
 		client           = swarm.NewClient(bzzapi)
 		longestPathEntry = api.ManifestEntry{}
 	)
@@ -191,7 +191,7 @@ func addEntryToManifest(ctx *cli.Context, mhash, path, hash, ctype string) strin
 func updateEntryInManifest(ctx *cli.Context, mhash, path, hash, ctype string) string {
 
 	var (
-		bzzapi           = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		bzzapi           = strings.TrimRight(ctx.GlobalString(SwarmAPIFlag.Name), "/")
 		client           = swarm.NewClient(bzzapi)
 		newEntry         = api.ManifestEntry{}
 		longestPathEntry = api.ManifestEntry{}
@@ -267,7 +267,7 @@ func updateEntryInManifest(ctx *cli.Context, mhash, path, hash, ctype string) st
 func removeEntryFromManifest(ctx *cli.Context, mhash, path string) string {
 
 	var (
-		bzzapi           = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		bzzapi           = strings.TrimRight(ctx.GlobalString(SwarmAPIFlag.Name), "/")
 		client           = swarm.NewClient(bzzapi)
 		entryToRemove    = api.ManifestEntry{}
 		longestPathEntry = api.ManifestEntry{}

@@ -93,7 +93,7 @@ func StartNode(stack *node.Node) {
 // wrong.
 //
 // ImportChain also listens for interrupting signals.
-// 
+//
 // After insertion is done, all accumulated events will be fired.
 func ImportChain(chain *core.BlockChain, fn string) error {
 	// Watch for Ctrl-C while the import is running.

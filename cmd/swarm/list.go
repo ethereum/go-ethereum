@@ -42,7 +42,7 @@ func list(ctx *cli.Context) {
 		prefix = args[1]
 	}
 
-	bzzapi := strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+	bzzapi := strings.TrimRight(ctx.GlobalString(SwarmAPIFlag.Name), "/")
 	client := swarm.NewClient(bzzapi)
 	list, err := client.List(manifest, prefix)
 	if err != nil {

@@ -82,7 +82,7 @@ var (
 		Usage:  "Swarm local http api port",
 		EnvVar: SWARM_ENV_PORT,
 	}
-	SwarmNetworkIdFlag = cli.IntFlag{
+	SwarmNetworkIDFlag = cli.IntFlag{
 		Name:   "bzznetworkid",
 		Usage:  "Network identifier (integer, default 3=swarm testnet)",
 		EnvVar: SWARM_ENV_NETWORK_ID,
@@ -111,7 +111,7 @@ var (
 		Usage:  "ENS API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url",
 		EnvVar: SWARM_ENV_ENS_API,
 	}
-	SwarmApiFlag = cli.StringFlag{
+	SwarmAPIFlag = cli.StringFlag{
 		Name:  "bzzapi",
 		Usage: "Swarm HTTP endpoint",
 		Value: "http://127.0.0.1:8500",
@@ -346,10 +346,10 @@ DEPRECATED: use 'swarm db clean'.
 		SwarmListenAddrFlag,
 		SwarmPortFlag,
 		SwarmAccountFlag,
-		SwarmNetworkIdFlag,
+		SwarmNetworkIDFlag,
 		ChequebookAddrFlag,
 		// upload flags
-		SwarmApiFlag,
+		SwarmAPIFlag,
 		SwarmRecursiveUploadFlag,
 		SwarmWantManifestFlag,
 		SwarmUploadDefaultPath,
@@ -388,7 +388,7 @@ func version(ctx *cli.Context) error {
 	if gitCommit != "" {
 		fmt.Println("Git Commit:", gitCommit)
 	}
-	fmt.Println("Network Id:", ctx.GlobalInt(utils.NetworkIdFlag.Name))
+	fmt.Println("Network Id:", ctx.GlobalInt(utils.NetworkIDFlag.Name))
 	fmt.Println("Go Version:", runtime.Version())
 	fmt.Println("OS:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))

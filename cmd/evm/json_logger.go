@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
+// JSONLogger stores the EVM tracer.
 type JSONLogger struct {
 	encoder *json.Encoder
 	cfg     *vm.LogConfig

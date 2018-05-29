@@ -38,7 +38,7 @@ import (
 )
 
 var (
-	//flag definition for the dumpconfig command
+	//DumpConfigCommand is the definition for the dumpconfig command
 	DumpConfigCommand = cli.Command{
 		Action:      utils.MigrateFlags(dumpConfig),
 		Name:        "dumpconfig",
@@ -49,7 +49,7 @@ var (
 		Description: `The dumpconfig command shows configuration values.`,
 	}
 
-	//flag definition for the config file command
+	//SwarmTomlConfigPathFlag is the definition for the config file command
 	SwarmTomlConfigPathFlag = cli.StringFlag{
 		Name:  "config",
 		Usage: "TOML configuration file",
@@ -166,7 +166,7 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.Contract = common.HexToAddress(chbookaddr)
 	}
 
-	if networkid := ctx.GlobalString(SwarmNetworkIdFlag.Name); networkid != "" {
+	if networkid := ctx.GlobalString(SwarmNetworkIDFlag.Name); networkid != "" {
 		if id, _ := strconv.Atoi(networkid); id != 0 {
 			currentConfig.NetworkId = uint64(id)
 		}
@@ -357,7 +357,7 @@ func validateEnsAPIs(s string) (err error) {
 	return nil
 }
 
-//print a Config as string
+//printConfig prints a Config as string.
 func printConfig(config *bzzapi.Config) string {
 	out, err := tomlSettings.Marshal(&config)
 	if err != nil {

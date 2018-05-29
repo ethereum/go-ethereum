@@ -39,7 +39,7 @@ func upload(ctx *cli.Context) {
 
 	args := ctx.Args()
 	var (
-		bzzapi       = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		bzzapi       = strings.TrimRight(ctx.GlobalString(SwarmAPIFlag.Name), "/")
 		recursive    = ctx.GlobalBool(SwarmRecursiveUploadFlag.Name)
 		wantManifest = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
 		defaultPath  = ctx.GlobalString(SwarmUploadDefaultPath.Name)

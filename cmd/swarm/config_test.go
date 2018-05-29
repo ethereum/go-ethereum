@@ -45,7 +45,7 @@ func TestDumpConfig(t *testing.T) {
 
 func TestFailsSwapEnabledNoSwapApi(t *testing.T) {
 	flags := []string{
-		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
+		fmt.Sprintf("--%s", SwarmNetworkIDFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), "54545",
 		fmt.Sprintf("--%s", SwarmSwapEnabledFlag.Name),
 	}
@@ -57,7 +57,7 @@ func TestFailsSwapEnabledNoSwapApi(t *testing.T) {
 
 func TestFailsNoBzzAccount(t *testing.T) {
 	flags := []string{
-		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
+		fmt.Sprintf("--%s", SwarmNetworkIDFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), "54545",
 	}
 
@@ -83,7 +83,7 @@ func TestCmdLineOverrides(t *testing.T) {
 	}
 
 	flags := []string{
-		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "42",
+		fmt.Sprintf("--%s", SwarmNetworkIDFlag.Name), "42",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
 		fmt.Sprintf("--%s", SwarmSyncEnabledFlag.Name),
 		fmt.Sprintf("--%s", CorsStringFlag.Name), "*",
@@ -255,7 +255,7 @@ func TestEnvVars(t *testing.T) {
 
 	envVars := os.Environ()
 	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmPortFlag.EnvVar, httpPort))
-	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmNetworkIdFlag.EnvVar, "999"))
+	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmNetworkIDFlag.EnvVar, "999"))
 	envVars = append(envVars, fmt.Sprintf("%s=%s", CorsStringFlag.EnvVar, "*"))
 	envVars = append(envVars, fmt.Sprintf("%s=%s", SwarmSyncEnabledFlag.EnvVar, "true"))
 
@@ -387,10 +387,10 @@ func TestCmdLineOverridesFile(t *testing.T) {
 	conf, account := getTestAccount(t, dir)
 	node := &testNode{Dir: dir}
 
-	expectNetworkId := uint64(77)
+	expectNetworkID := uint64(77)
 
 	flags := []string{
-		fmt.Sprintf("--%s", SwarmNetworkIdFlag.Name), "77",
+		fmt.Sprintf("--%s", SwarmNetworkIDFlag.Name), "77",
 		fmt.Sprintf("--%s", SwarmPortFlag.Name), httpPort,
 		fmt.Sprintf("--%s", SwarmSyncEnabledFlag.Name),
 		fmt.Sprintf("--%s", SwarmTomlConfigPathFlag.Name), f.Name(),
@@ -427,8 +427,8 @@ func TestCmdLineOverridesFile(t *testing.T) {
 		t.Fatalf("Expected port to be %s, got %s", httpPort, info.Port)
 	}
 
-	if info.NetworkId != expectNetworkId {
-		t.Fatalf("Expected network ID to be %d, got %d", expectNetworkId, info.NetworkId)
+	if info.NetworkId != expectNetworkID {
+		t.Fatalf("Expected network ID to be %d, got %d", expectNetworkID, info.NetworkId)
 	}
 
 	if !info.SyncEnabled {

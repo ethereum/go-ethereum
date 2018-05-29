@@ -32,7 +32,7 @@ import (
 )
 
 // DirectoryString is a custom type which is registered in the flags library
-// which cli uses for argument parsing. This allows us to expand Value to an 
+// which cli uses for argument parsing. This allows us to expand Value to an
 // absolute path when the argument is parsed
 type DirectoryString struct {
 	Value string
@@ -42,6 +42,7 @@ type DirectoryString struct {
 func (s *DirectoryString) String() string {
 	return s.Value
 }
+
 // Set updates the field Value by passing it's parameter to the expandPath function.
 func (s *DirectoryString) Set(value string) error {
 	s.Value = expandPath(value)
@@ -79,7 +80,6 @@ func (df DirectoryFlag) Apply(set *flag.FlagSet) {
 		set.Var(&df.Value, df.Name, df.Usage)
 	})
 }
-
 
 // TextMarshaler holds interfaces from the encoding package.
 type TextMarshaler interface {
