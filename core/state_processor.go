@@ -17,7 +17,6 @@
 package core
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -25,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"math/big"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -66,29 +64,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
-
-	precompiles := vm.PrecompiledContractsHomestead
-	if p.config.ByzantiumBlock.Cmp(block.Number()) <= 0 {
-		precompiles = vm.PrecompiledContractsByzantium
-	}
+	// Ignore error, we're past header validation
 	beneficiary, _ := p.engine.Author(block.Header())
+	blockContext := NewBlockContext(block.Header(), beneficiary, p.config)
 
-	blockContext := &vm.BlockContext{
-		Intpool:     vm.NewIntpool(),
-		Precompiles: precompiles,
-
-		BlockNumber: new(big.Int).Set(block.Header().Number),
-		Time:        new(big.Int).Set(block.Header().Time),
-		Difficulty:  new(big.Int).Set(block.Header().Difficulty),
-		GasLimit:    block.Header().GasLimit,
-		Coinbase:    beneficiary,
-		Signer:      types.MakeSigner(p.config, block.Header().Number),
-	}
 	// Iterate over and process the individual transactions
 	receipts = make([]*types.Receipt, len(block.Transactions()))
 	for i, tx := range block.Transactions() {
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
-		receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, &cfg, blockContext)
+		receipt, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, usedGas, &cfg, blockContext)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -105,13 +89,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg *vm.Config, blockContext *vm.BlockContext) (*types.Receipt, uint64, error) {
+func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg *vm.Config, blockContext *vm.BlockContext) (*types.Receipt, uint64, error) {
 	msg, err := tx.AsMessage(blockContext.Signer)
 	if err != nil {
 		return nil, 0, err
 	}
 	// Create a new context to be used in the EVM environment
-	context := NewEVMContext(msg, header, bc, author)
+	context := NewEVMContext(msg, header, bc)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEVM(context, statedb, config, cfg, blockContext)

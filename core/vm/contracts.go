@@ -59,6 +59,14 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{8}): &bn256Pairing{},
 }
 
+// PrecompilesAt returns the map of active precompiled contracts at the given blocknumber and config
+func PrecompilesAt(c *params.ChainConfig, blockNumber *big.Int) map[common.Address]PrecompiledContract {
+	if c.ByzantiumBlock.Cmp(blockNumber) <= 0 {
+		return PrecompiledContractsByzantium
+	}
+	return PrecompiledContractsHomestead
+}
+
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
 func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contract) (ret []byte, err error) {
 	gas := p.RequiredGas(input)

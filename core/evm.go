@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the
@@ -36,13 +37,27 @@ type ChainContext interface {
 }
 
 // NewEVMContext creates a new context for use in the EVM.
-func NewEVMContext(msg Message, header *types.Header, chain ChainContext, author *common.Address) *vm.Context {
+func NewEVMContext(msg Message, header *types.Header, chain ChainContext) *vm.Context {
 	return &vm.Context{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
 		GetHash:     GetHashFn(header, chain),
 		Origin:      msg.From(),
 		GasPrice:    new(big.Int).Set(msg.GasPrice()),
+	}
+}
+
+// NewBlockContext creates a block-specific context for use in the EVM
+func NewBlockContext(header *types.Header, beneficiary common.Address, chainConfig *params.ChainConfig) *vm.BlockContext {
+	return &vm.BlockContext{
+		Intpool:     vm.NewIntpool(),
+		Coinbase:    beneficiary,
+		BlockNumber: new(big.Int).Set(header.Number),
+		Time:        new(big.Int).Set(header.Time),
+		Difficulty:  new(big.Int).Set(header.Difficulty),
+		GasLimit:    header.GasLimit,
+		Signer:      types.MakeSigner(chainConfig, header.Number),
+		Precompiles: vm.PrecompilesAt(chainConfig, header.Number),
 	}
 }
 

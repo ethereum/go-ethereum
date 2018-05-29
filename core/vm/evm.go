@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -63,18 +63,11 @@ type Context struct {
 	// Message information
 	Origin   common.Address // Provides information for ORIGIN
 	GasPrice *big.Int       // Provides information for GASPRICE
-
-	//// Block information
-	//Coinbase    common.Address // Provides information for COINBASE
-	//GasLimit    uint64         // Provides information for GASLIMIT
-	//BlockNumber *big.Int       // Provides information for NUMBER
-	//Time        *big.Int       // Provides information for TIME
-	//Difficulty  *big.Int       // Provides information for DIFFICULTY
 }
 
 // Blockcontext provides block-constant auxiliary information. Should never be modified after
 // creation
-type BlockContext struct{
+type BlockContext struct {
 	Precompiles map[common.Address]PrecompiledContract
 	Signer      types.Signer
 	Intpool     *IntPool
@@ -125,7 +118,7 @@ type EVM struct {
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewEVM(ctx *Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig *Config,blockContext *BlockContext) *EVM {
+func NewEVM(ctx *Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig *Config, blockContext *BlockContext) *EVM {
 	evm := &EVM{
 		Context:      ctx,
 		StateDB:      statedb,
@@ -170,7 +163,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	exists := evm.StateDB.Exist(addr)
 	precompile, isPrecompile := evm.BlockContext.Precompiles[addr]
 
-	if !exists{
+	if !exists {
 		if !isPrecompile && evm.ChainConfig().IsEIP158(evm.BlockContext.BlockNumber) && value.Sign() == 0 {
 			// Calling a non existing account, don't do anything, but ping the tracer
 			if evm.vmConfig.Debug && evm.depth == 0 {
@@ -184,7 +177,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
 
 	var contract *Contract
-	if isPrecompile{
+	if isPrecompile {
 		// A 'contract' is needed for gas accounting
 		contract = NewPrecompiledContract(caller, to, value, gas)
 		ret, err = RunPrecompiledContract(precompile, input, contract)
@@ -196,8 +189,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 				evm.vmConfig.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
 			}()
 		}
-	}else{
-		if !exists{
+	} else {
+		if !exists {
 			// Shortcut execution -- account didn't exist,
 			// so no need to lookup the code
 			// but make sure to set returndata to nil
