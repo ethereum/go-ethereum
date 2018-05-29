@@ -4,6 +4,8 @@
 
 package sha3
 
+import "encoding/binary"
+
 // spongeDirection indicates the direction bytes are flowing through the sponge.
 type spongeDirection int
 
@@ -189,4 +191,61 @@ func (d *state) Sum(in []byte) []byte {
 	hash := make([]byte, dup.outputLen)
 	dup.Read(hash)
 	return append(in, hash...)
+}
+
+
+
+func keccakFast(out []byte, bits int, data []byte) {
+	const wordSize = 8
+	hashSize := bits / 8
+	blockSize := (1600 - bits * 2) / 8
+
+	var state [25]uint64
+
+	dataIndex := 0
+
+	dataLen := len(data)
+	for dataLen >= blockSize {
+		for i := 0; i < (blockSize / wordSize); i++ {
+			state[i] ^= binary.LittleEndian.Uint64(data[dataIndex:])
+			dataIndex += wordSize
+		}
+		keccakF1600(&state)
+		dataLen -= blockSize
+	}
+
+	stateIndex := 0
+	for dataLen >= wordSize {
+		state[stateIndex] ^= binary.LittleEndian.Uint64(data[dataIndex:])
+		stateIndex++
+		dataIndex += wordSize
+		dataLen -= wordSize
+	}
+
+	var lastWord [8]byte
+	lastWordIndex := 0
+	for dataLen > 0 {
+		lastWord[lastWordIndex] = data[dataIndex]
+		lastWordIndex++
+		dataIndex++
+		dataLen--
+	}
+	lastWord[lastWordIndex] = 0x01
+	state[stateIndex] ^= binary.LittleEndian.Uint64(lastWord[:])
+
+	state[(blockSize/wordSize) - 1] ^= 0x8000000000000000
+
+	keccakF1600(&state)
+
+	for i := 0; i < (hashSize / wordSize); i++ {
+		binary.LittleEndian.PutUint64(out[i * 8:], state[i])
+	}
+}
+
+func KeccakFast256(dest []byte, data []byte) {
+	keccakFast(dest, 256, data)
+}
+
+func KeccakFast512(dest []byte, data []byte) {
+	keccakFast(dest, 512, data)
 }
