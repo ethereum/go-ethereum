@@ -35,6 +35,29 @@ type fileCache struct {
 	mu      sync.RWMutex
 }
 
+func (fc *fileCache) checkFile(path string) (created, deleted, updated bool, err error) {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+
+	created, deleted, updated, err = false, false, false, nil
+	previouslyKnown := fc.all.Has(path)
+	fi, err := os.Lstat(path)
+	if err != nil {
+		// A file has been deleted, but it can be a file which we
+		// were not previously watching.
+		deleted = previouslyKnown && os.IsNotExist(err)
+		return created, deleted, updated, err
+	}
+	if skipKeyFile(fi) {
+		log.Trace("Ignoring file on account scan", "path", path)
+		return created, deleted, updated, err
+	}
+
+	created = !previouslyKnown
+	updated = previouslyKnown
+	return created, deleted, updated, nil
+}
+
 // scan performs a new scan on the given directory, compares against the already
 // cached filenames, and returns file sets: creates, deletes, updates.
 func (fc *fileCache) scan(keyDir string) (set.Interface, set.Interface, set.Interface, error) {

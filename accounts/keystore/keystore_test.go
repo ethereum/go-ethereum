@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -376,6 +377,10 @@ func checkEvents(t *testing.T, want []walletEvent, have []walletEvent) {
 
 func tmpKeyStore(t *testing.T, encrypted bool) (string, *KeyStore) {
 	d, err := ioutil.TempDir("", "eth-keystore-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err = filepath.EvalSymlinks(d)
 	if err != nil {
 		t.Fatal(err)
 	}

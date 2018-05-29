@@ -51,6 +51,28 @@ var (
 	}
 )
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
+// newTempDir returns the name of new temporary folder (not created yet)
+func newTempDir() (string, error) {
+	// On OSX, there's  a problem
+	// https://stackoverflow.com/questions/45122459/docker-mounts-denied-the-paths-are-not-shared-from-os-x-and-are-not-known/45123074#45123074
+	//
+	// > /var in macOS is a symbolic link into /private.
+	//
+	// And when creating a tempdir, it returns a path into '/var/folders...'.
+	// However, if we start watching that directory, the notify-events will contain the
+	// canonical paths, and thus e.g. deleted/updated files won't match our existing files.
+	// TLDR; we need to use the canonical path, which we obtain via EvalSymlinks
+	tmpdir, err := filepath.EvalSymlinks(os.TempDir())
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(tmpdir, fmt.Sprintf("eth-keystore-watch-test-%d-%d", os.Getpid(), rand.Int())), nil
+}
+
 func TestWatchNewFile(t *testing.T) {
 	t.Parallel()
 
@@ -93,10 +115,12 @@ func TestWatchNewFile(t *testing.T) {
 
 func TestWatchNoDir(t *testing.T) {
 	t.Parallel()
-
 	// Create ks but not the directory that it watches.
-	rand.Seed(time.Now().UnixNano())
-	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-watch-test-%d-%d", os.Getpid(), rand.Int()))
+	dir, err := newTempDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	ks := NewKeyStore(dir, LightScryptN, LightScryptP)
 
 	list := ks.Accounts()
@@ -320,9 +344,11 @@ func waitForAccounts(wantAccounts []accounts.Account, ks *KeyStore) error {
 func TestUpdatedKeyfileContents(t *testing.T) {
 	t.Parallel()
 
-	// Create a temporary kesytore to test with
-	rand.Seed(time.Now().UnixNano())
-	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-watch-test-%d-%d", os.Getpid(), rand.Int()))
+	dir, err := newTempDir()
+
+	if err != nil {
+		t.Fatal(err)
+	}
 	ks := NewKeyStore(dir, LightScryptN, LightScryptP)
 
 	list := ks.Accounts()
@@ -349,8 +375,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		return
 	}
 
-	// needed so that modTime of `file` is different to its current value after forceCopyFile
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	// Now replace file contents
 	if err := forceCopyFile(file, cachetestAccounts[1].URL.Path); err != nil {
@@ -365,8 +390,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		return
 	}
 
-	// needed so that modTime of `file` is different to its current value after forceCopyFile
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	// Now replace file contents again
 	if err := forceCopyFile(file, cachetestAccounts[2].URL.Path); err != nil {
@@ -381,8 +405,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		return
 	}
 
-	// needed so that modTime of `file` is different to its current value after ioutil.WriteFile
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
 	// Now replace file contents with crap
 	if err := ioutil.WriteFile(file, []byte("foo"), 0644); err != nil {
