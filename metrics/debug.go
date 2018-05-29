@@ -19,7 +19,7 @@ var (
 	gcStats debug.GCStats
 )
 
-// CaptureDebugGCStats captures new values for the Go garbage collector statistics 
+// CaptureDebugGCStats captures new values for the Go garbage collector statistics
 // exported in debug.GCStats.  This is designed to be called as a goroutine.
 func CaptureDebugGCStats(r Registry, d time.Duration) {
 	for range time.Tick(d) {
@@ -28,8 +28,8 @@ func CaptureDebugGCStats(r Registry, d time.Duration) {
 }
 
 // CaptureDebugGCStatsOnce captures new values for the Go garbage collector
-// statistics exported in debug.GCStats.  This is designed to be called in a 
-// background goroutine.Giving a registry which has not been given to 
+// statistics exported in debug.GCStats.  This is designed to be called in a
+// background goroutine.Giving a registry which has not been given to
 // RegisterDebugGCStats will
 // panic.
 //

@@ -52,7 +52,7 @@ var (
 	threadCreateProfile = pprof.Lookup("threadcreate")
 )
 
-// CaptureRuntimeMemStats captures new values for the Go runtime statistics exported 
+// CaptureRuntimeMemStats captures new values for the Go runtime statistics exported
 // in runtime.MemStats.  This is designed to be called as a goroutine.
 func CaptureRuntimeMemStats(r Registry, d time.Duration) {
 	for range time.Tick(d) {
@@ -60,7 +60,7 @@ func CaptureRuntimeMemStats(r Registry, d time.Duration) {
 	}
 }
 
-// CaptureRuntimeMemStatsOnce captures new values for the Go runtime statistics 
+// CaptureRuntimeMemStatsOnce captures new values for the Go runtime statistics
 // exported in runtime.MemStats.  This is designed to be called in a background
 // goroutine.  Giving a registry which has not been given to RegisterRuntimeMemStats
 // will panic.
