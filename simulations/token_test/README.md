@@ -25,4 +25,4 @@ Then we can run:
 
 This will run several write transactions, the hash will be logged to the geth logs.
 
-To run trace transaction on these txes, run `./build/bin/geth  attach http://127.0.0.1:8545`, which will open an admin consile (similar to a node console). Then run `debug.traceTransaction("<tx_hash>", {tracer: "callTracer"})`, or `debug.traceTransaction("<tx_hash>")`
+To run trace transaction on these txes, run `./build/bin/geth  attach http://127.0.0.1:8545`, which will open an admin console (similar to a node console). Then run `debug.traceTransaction("<tx_hash>", {tracer: "callTracer"})`, or `debug.traceTransaction("<tx_hash>")`
