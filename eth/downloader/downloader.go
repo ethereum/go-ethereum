@@ -680,7 +680,7 @@ func (d *Downloader) findAncestor(p *peerConnection, height uint64) (uint64, err
 		}
 	}
 	// If the head fetch already found an ancestor, return
-	if !common.EmptyHash(hash) {
+	if hash != (common.Hash{}) {
 		if int64(number) <= floor {
 			p.log.Warn("Ancestor below allowance", "number", number, "hash", hash, "allowance", floor)
 			return 0, errInvalidAncestor
