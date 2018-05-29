@@ -65,7 +65,7 @@ type Contract struct {
 }
 
 // NewPrecompiledContract returns a new contract environment for the execution of a precompiled contract
-func NewPrecompiledContract( caller ContractRef,  object ContractRef,value *big.Int, gas uint64) *Contract{
+func NewPrecompiledContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64) *Contract {
 
 	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object, Args: nil}
 	// Gas should be a pointer so it can safely be reduced through the run

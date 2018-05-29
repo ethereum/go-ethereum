@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
 )
@@ -152,13 +153,16 @@ func TestCallTracer(t *testing.T) {
 				CanTransfer: core.CanTransfer,
 				Transfer:    core.Transfer,
 				Origin:      origin,
-				Coinbase:    test.Context.Miner,
-				BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-				Time:        new(big.Int).SetUint64(uint64(test.Context.Time)),
-				Difficulty:  (*big.Int)(test.Context.Difficulty),
-				GasLimit:    uint64(test.Context.GasLimit),
 				GasPrice:    tx.GasPrice(),
 			}
+			header := &types.Header{
+				Coinbase:   test.Context.Miner,
+				Number:     new(big.Int).SetUint64(uint64(test.Context.Number)),
+				Time:       new(big.Int).SetUint64(uint64(test.Context.Time)),
+				GasLimit:   uint64(test.Context.GasLimit),
+				Difficulty: (*big.Int)(test.Context.Difficulty),
+			}
+			blockContext := core.NewBlockContext(header, header.Coinbase, params.MainnetChainConfig)
 			statedb := tests.MakePreState(ethdb.NewMemDatabase(), test.Genesis.Alloc)
 
 			// Create the tracer, the EVM environment and run it
@@ -166,7 +170,7 @@ func TestCallTracer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
-			evm := vm.NewEVM(context, statedb, test.Genesis.Config, vm.Config{Debug: true, Tracer: tracer})
+			evm := vm.NewEVM(&context, statedb, test.Genesis.Config, &vm.Config{Debug: true, Tracer: tracer}, blockContext)
 
 			msg, err := tx.AsMessage(signer)
 			if err != nil {

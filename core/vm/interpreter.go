@@ -50,13 +50,13 @@ type Interpreter struct {
 	cfg      *Config
 	gasTable params.GasTable
 
-	readOnly    bool   // Whether to throw on stateful modifications
-	returnData  []byte // Last CALL's return data for subsequent reuse
+	readOnly     bool   // Whether to throw on stateful modifications
+	returnData   []byte // Last CALL's return data for subsequent reuse
 	blockContext *BlockContext
 }
 
 // NewInterpreter returns a new instance of the Interpreter.
-func NewInterpreter(evm *EVM, cfg *Config,blockContext *BlockContext) *Interpreter {
+func NewInterpreter(evm *EVM, cfg *Config, blockContext *BlockContext) *Interpreter {
 	// We use the STOP instruction whether to see
 	// the jump table was initialised. If it was not
 	// we'll set the default jump table.
@@ -74,9 +74,9 @@ func NewInterpreter(evm *EVM, cfg *Config,blockContext *BlockContext) *Interpret
 	}
 
 	return &Interpreter{
-		evm:         evm,
-		cfg:         cfg,
-		gasTable:    evm.ChainConfig().GasTable(blockContext.BlockNumber),
+		evm:          evm,
+		cfg:          cfg,
+		gasTable:     evm.ChainConfig().GasTable(blockContext.BlockNumber),
 		blockContext: blockContext,
 	}
 }

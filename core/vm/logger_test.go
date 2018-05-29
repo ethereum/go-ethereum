@@ -48,7 +48,10 @@ type dummyStateDB struct {
 
 func TestStoreCapture(t *testing.T) {
 	var (
-		env      = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		blkCtx = &BlockContext{
+			Intpool: NewIntpool(),
+		}
+		env      = NewEVM(&Context{}, nil, params.TestChainConfig, &Config{}, blkCtx)
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()
 		stack    = newstack()

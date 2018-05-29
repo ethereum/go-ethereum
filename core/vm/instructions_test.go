@@ -32,9 +32,10 @@ type twoOperandTest struct {
 
 func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)) {
 	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
-		stack = newstack()
-		pc    = uint64(0)
+		blockContext = &BlockContext{Coinbase: common.Address{}, BlockNumber: big.NewInt(1337), Intpool: NewIntpool()}
+		env          = NewEVM(&Context{}, nil, params.TestChainConfig, &Config{}, blockContext)
+		stack        = newstack()
+		pc           = uint64(0)
 	)
 	for i, test := range tests {
 		x := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
@@ -50,13 +51,13 @@ func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64
 		// Check pool usage
 		// 1.pool is not allowed to contain anything on the stack
 		// 2.pool is not allowed to contain the same pointers twice
-		if env.interpreter.intPool.pool.len() > 0 {
+		if env.BlockContext.Intpool.pool.len() > 0 {
 
 			poolvals := make(map[*big.Int]struct{})
 			poolvals[actual] = struct{}{}
 
-			for env.interpreter.intPool.pool.len() > 0 {
-				key := env.interpreter.intPool.get()
+			for env.BlockContext.Intpool.pool.len() > 0 {
+				key := env.BlockContext.Intpool.get()
 				if _, exist := poolvals[key]; exist {
 					t.Errorf("Testcase %d, pool contains double-entry", i)
 				}
@@ -68,8 +69,9 @@ func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64
 
 func TestByteOp(t *testing.T) {
 	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
-		stack = newstack()
+		blockContext = &BlockContext{Coinbase: common.Address{}, BlockNumber: big.NewInt(1337), Intpool: NewIntpool()}
+		env          = NewEVM(&Context{}, nil, params.TestChainConfig, &Config{}, blockContext)
+		stack        = newstack()
 	)
 	tests := []struct {
 		v        string
@@ -198,8 +200,9 @@ func TestSLT(t *testing.T) {
 
 func opBenchmark(bench *testing.B, op func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error), args ...string) {
 	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
-		stack = newstack()
+		blockContext = &BlockContext{Coinbase: common.Address{}, BlockNumber: big.NewInt(1337), Intpool: NewIntpool()}
+		env          = NewEVM(&Context{}, nil, params.TestChainConfig, &Config{}, blockContext)
+		stack        = newstack()
 	)
 	// convert args
 	byteArgs := make([][]byte, len(args))

@@ -25,6 +25,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -43,8 +45,19 @@ func (account) ReturnGas(*big.Int)                                  {}
 func (account) SetCode(common.Hash, []byte)                         {}
 func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
 
+func getEvm(tracer *Tracer) *vm.EVM {
+	header := &types.Header{
+		Number:     new(big.Int).SetUint64(1),
+		Time:       new(big.Int).SetUint64(0),
+		Coinbase:   common.Address{},
+		Difficulty: big.NewInt(1000000),
+	}
+	blockContext := core.NewBlockContext(header, header.Coinbase, params.MainnetChainConfig)
+	return vm.NewEVM(&vm.Context{}, nil, params.TestChainConfig, &vm.Config{Debug: true, Tracer: tracer}, blockContext)
+
+}
 func runTrace(tracer *Tracer) (json.RawMessage, error) {
-	env := vm.NewEVM(vm.Context{BlockNumber: big.NewInt(1)}, nil, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
+	env := getEvm(tracer)
 
 	contract := vm.NewContract(account{}, account{}, big.NewInt(0), 10000)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
@@ -125,8 +138,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	env := vm.NewEVM(vm.Context{BlockNumber: big.NewInt(1)}, nil, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
+	env := getEvm(tracer)
 	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), 0)
 
 	tracer.CaptureState(env, 0, 0, 0, 0, nil, nil, contract, 0, nil)

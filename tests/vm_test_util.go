@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -135,15 +136,18 @@ func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
 		Transfer:    transfer,
 		GetHash:     vmTestBlockHash,
 		Origin:      t.json.Exec.Origin,
-		Coinbase:    t.json.Env.Coinbase,
-		BlockNumber: new(big.Int).SetUint64(t.json.Env.Number),
-		Time:        new(big.Int).SetUint64(t.json.Env.Timestamp),
-		GasLimit:    t.json.Env.GasLimit,
-		Difficulty:  t.json.Env.Difficulty,
 		GasPrice:    t.json.Exec.GasPrice,
 	}
+	header := &types.Header{
+		Coinbase:   t.json.Env.Coinbase,
+		Number:     new(big.Int).SetUint64(t.json.Env.Number),
+		Time:       new(big.Int).SetUint64(t.json.Env.Timestamp),
+		GasLimit:   t.json.Env.GasLimit,
+		Difficulty: t.json.Env.Difficulty,
+	}
+	blockContext := core.NewBlockContext(header, header.Coinbase, params.MainnetChainConfig)
 	vmconfig.NoRecursion = true
-	return vm.NewEVM(context, statedb, params.MainnetChainConfig, vmconfig)
+	return vm.NewEVM(&context, statedb, params.MainnetChainConfig, &vmconfig, blockContext)
 }
 
 func vmTestBlockHash(n uint64) common.Hash {

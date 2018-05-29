@@ -282,7 +282,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	// Execute the call.
 	msg := callmsg{call}
 
-	evmContext := core.NewEVMContext(msg, block.Header(), b.blockchain, nil)
+	evmContext := core.NewEVMContext(msg, block.Header(), b.blockchain)
 	// Ignore error, we're past header validation
 	beneficiary, _ := b.blockchain.Engine().Author(block.Header())
 	blockContext := core.NewBlockContext(block.Header(), beneficiary, b.config)

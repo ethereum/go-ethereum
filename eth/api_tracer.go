@@ -17,15 +17,17 @@
 package eth
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"runtime"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-
-	"bytes"
-	"context"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -37,9 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
-	"io/ioutil"
-	"runtime"
-	"sync"
 )
 
 const (
