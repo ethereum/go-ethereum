@@ -43,6 +43,7 @@ func NewMemDatabaseWithCap(size int) *MemDatabase {
 		db: make(map[string][]byte, size),
 	}
 }
+
 // Put sets the value of the key.
 func (db *MemDatabase) Put(key []byte, value []byte) error {
 	db.lock.Lock()

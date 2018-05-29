@@ -99,7 +99,7 @@ func (it *instructionIterator) Arg() []byte {
 	return it.arg
 }
 
-// Pretty-print all disassembled EVM instructions to stdout.
+// PrintDisassembled pretty-print all disassembled EVM instructions to stdout.
 func PrintDisassembled(code string) error {
 	script, err := hex.DecodeString(code)
 	if err != nil {

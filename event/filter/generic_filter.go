@@ -23,18 +23,18 @@ type Generic struct {
 	Fn func(data interface{})
 }
 
-// self = registered, f = incoming
-func (self Generic) Compare(f Filter) bool {
+// g = registered, f = incoming
+func (g Generic) Compare(f Filter) bool {
 	var strMatch, dataMatch = true, true
 
 	filter := f.(Generic)
-	if (len(self.Str1) > 0 && filter.Str1 != self.Str1) ||
-		(len(self.Str2) > 0 && filter.Str2 != self.Str2) ||
-		(len(self.Str3) > 0 && filter.Str3 != self.Str3) {
+	if (len(g.Str1) > 0 && filter.Str1 != g.Str1) ||
+		(len(g.Str2) > 0 && filter.Str2 != g.Str2) ||
+		(len(g.Str3) > 0 && filter.Str3 != g.Str3) {
 		strMatch = false
 	}
 
-	for k := range self.Data {
+	for k := range g.Data {
 		if _, ok := filter.Data[k]; !ok {
 			return false
 		}
@@ -43,6 +43,6 @@ func (self Generic) Compare(f Filter) bool {
 	return strMatch && dataMatch
 }
 
-func (self Generic) Trigger(data interface{}) {
-	self.Fn(data)
+func (g Generic) Trigger(data interface{}) {
+	g.Fn(data)
 }
