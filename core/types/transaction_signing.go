@@ -42,6 +42,8 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
+	case config.IsCasper(blockNumber):
+		signer = NewEIP1011Signer(config)
 	case config.IsEIP155(blockNumber):
 		signer = NewEIP155Signer(config.ChainId)
 	case config.IsHomestead(blockNumber):
@@ -100,6 +102,26 @@ type Signer interface {
 	Hash(tx *Transaction) common.Hash
 	// Equal returns true if the given signer is the same as the receiver.
 	Equal(Signer) bool
+}
+
+// EIP1011Signer is a hybrid signer that understands both CasperFFG and EIP155Signer
+type EIP1011Signer struct {
+	EIP155Signer
+	ChainConfig *params.ChainConfig
+}
+
+func NewEIP1011Signer(config *params.ChainConfig) Signer {
+	return &EIP1011Signer{
+		EIP155Signer: NewEIP155Signer(config.ChainId),
+		ChainConfig:  config,
+	}
+}
+
+func (s EIP1011Signer) Sender(tx *Transaction) (common.Address, error) {
+	if s.ChainConfig.Casper != nil && tx.IsCasperVote(s.ChainConfig.ChainId, s.ChainConfig.Casper.ContractAddr) {
+		return common.NullSenderAddr, nil
+	}
+	return s.EIP155Signer.Sender(tx)
 }
 
 // EIP155Transaction implements Signer using the EIP155 rules.

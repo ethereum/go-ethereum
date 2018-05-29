@@ -41,7 +41,20 @@ var (
 		EIP158Block:         big.NewInt(2675000),
 		ByzantiumBlock:      big.NewInt(4370000),
 		ConstantinopleBlock: nil,
-		Ethash:              new(EthashConfig),
+		Casper: &CasperConfig{
+			ForkBlock:           big.NewInt(6666666),
+			ContractAddr:        common.HexToAddress("0x"),
+			ContractCode:        common.Hex2Bytes("0x"),
+			Balance:             new(big.Int).Mul(big.NewInt(1250000), big.NewInt(Ether)),
+			MsgHasherAddr:       common.HexToAddress("0x"),
+			MsgHasherCode:       common.Hex2Bytes("0x"),
+			PurityCheckerAddr:   common.HexToAddress("0x"),
+			PurityCheckerCode:   common.Hex2Bytes("0x"),
+			BlockReward:         new(big.Int).Mul(big.NewInt(600), big.NewInt(Finney)),
+			RewardStpDwnBlkCnt:  big.NewInt(550000),
+			NonRevertMinDeposit: new(big.Int).Mul(big.NewInt(100), big.NewInt(Ether)),
+		},
+		Ethash: new(EthashConfig),
 	}
 
 	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
@@ -56,6 +69,7 @@ var (
 		EIP158Block:         big.NewInt(10),
 		ByzantiumBlock:      big.NewInt(1700000),
 		ConstantinopleBlock: nil,
+		Casper:              nil,
 		Ethash:              new(EthashConfig),
 	}
 
@@ -71,6 +85,7 @@ var (
 		EIP158Block:         big.NewInt(3),
 		ByzantiumBlock:      big.NewInt(1035301),
 		ConstantinopleBlock: nil,
+		Casper:              nil,
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
@@ -82,16 +97,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, new(EthashConfig), nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, new(EthashConfig), nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -115,12 +130,29 @@ type ChainConfig struct {
 	EIP155Block *big.Int `json:"eip155Block,omitempty"` // EIP155 HF block
 	EIP158Block *big.Int `json:"eip158Block,omitempty"` // EIP158 HF block
 
-	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
-	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
+	ByzantiumBlock      *big.Int      `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
+	ConstantinopleBlock *big.Int      `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
+	Casper              *CasperConfig `json:"casper,omitempty"`
 
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
+}
+
+// CasperConfig is the configuration for applying Casper FFG rules on top of
+// the consensus engine that produces blocks.
+type CasperConfig struct {
+	ForkBlock           *big.Int       `json:"forkBlock,omitempty"`
+	ContractAddr        common.Address `json:"contractAddr,omitempty"`
+	ContractCode        []byte         `json:"contractCode,omitempty"`
+	Balance             *big.Int       `json:"balance,omitempty"`
+	MsgHasherAddr       common.Address `json:"msgHasherAddr,omitempty"`
+	MsgHasherCode       []byte         `json:"msgHasherCode,omitempty"`
+	PurityCheckerAddr   common.Address `json:"purityCheckerAddr,omitempty"`
+	PurityCheckerCode   []byte         `json:"purityCheckerCode,omitempty"`
+	BlockReward         *big.Int       `json:"blockReward,omitempty"`
+	RewardStpDwnBlkCnt  *big.Int       `json:"rewardStpDwnBlkCnt,omitempty"`
+	NonRevertMinDeposit *big.Int       `json:"nonRevertMinDeposit,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -153,7 +185,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Casper: %v Engine: %v}",
 		c.ChainId,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -163,6 +195,7 @@ func (c *ChainConfig) String() string {
 		c.EIP158Block,
 		c.ByzantiumBlock,
 		c.ConstantinopleBlock,
+		c.Casper,
 		engine,
 	)
 }
@@ -195,6 +228,10 @@ func (c *ChainConfig) IsByzantium(num *big.Int) bool {
 
 func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
+}
+
+func (c *ChainConfig) IsCasper(num *big.Int) bool {
+	return c.Casper != nil && isForked(c.Casper.ForkBlock, num)
 }
 
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
