@@ -1,7 +1,3 @@
-package main
-
-var (
-	jsonDashboard = `
 {
   "annotations": {
     "list": [
@@ -231,5 +227,5 @@ var (
   "uid": "dUpKvj7mz",
   "version": 7
 }
-`
-)
+
+

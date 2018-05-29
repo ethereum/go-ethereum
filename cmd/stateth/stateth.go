@@ -20,6 +20,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -33,9 +34,10 @@ import (
 )
 
 var (
-	dockerPrefix string // unique prefix used for the created docker resources
-	grafanaPort  int    // expose port for the Grafana HTTP interface
-	influxdbPort int    // expose port for the InfluxDB HTTP interface
+	dockerPrefix     string // unique prefix used for the created docker resources
+	dashboardsFolder string // folder containing all dashboards to be imported in Grafana
+	grafanaPort      int    // expose port for the Grafana HTTP interface
+	influxdbPort     int    // expose port for the InfluxDB HTTP interface
 )
 
 const (
@@ -67,6 +69,11 @@ func main() {
 			Usage: "default grafana http port",
 		},
 		cli.StringFlag{
+			Name:  "grafana-dashboards-folder",
+			Value: os.Getenv("GOPATH") + "/src/github.com/ethereum/go-ethereum/cmd/stateth/grafana_dashboards",
+			Usage: "default grafana dashboards folder",
+		},
+		cli.StringFlag{
 			Name:  "docker-prefix",
 			Value: "stateth",
 			Usage: "prefix to be used for docker network and containers. must be unique.",
@@ -78,6 +85,7 @@ func main() {
 		dockerPrefix = c.String("docker-prefix")
 		grafanaPort = c.Int("grafana-http-port")
 		influxdbPort = c.Int("influxdb-http-port")
+		dashboardsFolder = c.String("grafana-dashboards-folder")
 
 		if err := runNetwork(c); err != nil {
 			return err
@@ -93,7 +101,7 @@ func main() {
 		if err := importGrafanaDatasource(c); err != nil {
 			return err
 		}
-		if err := importGrafanaDashboard(c); err != nil {
+		if err := importGrafanaDashboards(c); err != nil {
 			return err
 		}
 
@@ -224,7 +232,7 @@ func importGrafanaDatasource(c *cli.Context) error {
 	return nil
 }
 
-func importGrafanaDashboard(c *cli.Context) error {
+func importGrafanaDashboards(c *cli.Context) error {
 	log.Info("importing grafana dashboards")
 	gclient, err := gapi.New(fmt.Sprintf("%s:%s", grafanaUser, grafanaPass), fmt.Sprintf("http://localhost:%d", grafanaPort))
 	if err != nil {
@@ -232,12 +240,32 @@ func importGrafanaDashboard(c *cli.Context) error {
 		return nil
 	}
 
-	model := prepareDashboardModel(jsonDashboard)
-
-	_, err = gclient.SaveDashboard(model, false)
+	files, err := ioutil.ReadDir(dashboardsFolder)
 	if err != nil {
 		log.Warn(err.Error())
-		return err
+		return nil
+	}
+
+	for _, f := range files {
+		name := f.Name()
+		if strings.Contains(name, "json") {
+			log.Info("importing dashboard", "dashboard", name)
+
+			blob, err := ioutil.ReadFile(dashboardsFolder + "/" + name)
+			if err != nil {
+				log.Warn(err.Error())
+				return nil
+			}
+
+			model := prepareDashboardModel(string(blob))
+
+			_, err = gclient.SaveDashboard(model, false)
+			if err != nil {
+				log.Warn(err.Error())
+				return nil
+			}
+
+		}
 	}
 
 	return nil
