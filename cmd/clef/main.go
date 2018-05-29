@@ -414,8 +414,8 @@ func signer(c *cli.Context) error {
 		cors := splitAndTrim(c.GlobalString(utils.RPCCORSDomainFlag.Name))
 
 		// start http server
-		httpEndpoint := fmt.Sprintf("%s:%d", c.String(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name))
-		listener, _, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"account"}, cors, vhosts)
+		httpEndpoint := fmt.Sprintf("%s:%d", c.String(utils.RPCListenAddrFlag.Name), c.Int(rpcPortFlag.Name)))
+		listener, _, err := rpc.StartHTTPEndpoint(httpEndpoint, rpcAPI, []string{"account"}, cors, vhosts, c.String(utils.RPCUserFlag.Name, c.String(utils.RPCPasswordFlag.Name))
 		if err != nil {
 			utils.Fatalf("Could not start RPC api: %v", err)
 		}

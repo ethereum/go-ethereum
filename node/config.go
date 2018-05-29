@@ -95,6 +95,14 @@ type Config struct {
 	// field is empty, no HTTP API endpoint will be started.
 	HTTPHost string `toml:",omitempty"`
 
+	// HTTPUser is the username on which the HTTP RPC server uses for basic authentication. If
+	// this field is empty, no basic authentication is used.
+	HTTPUser string `toml:",omitempty"`
+
+	// HTTPPassword is the password on which the HTTP RPC server uses for basic authentication. If
+	// this field is empty, no basic authentication is used.
+	HTTPPassword string `toml:",omitempty"`
+
 	// HTTPPort is the TCP port number on which to start the HTTP RPC server. The
 	// default zero value is/ valid and will pick a port number randomly (useful
 	// for ephemeral nodes).
