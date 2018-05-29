@@ -133,6 +133,10 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		port = &api.node.config.HTTPPort
 	}
 
+	user := api.node.config.HTTPUser
+
+	password := api.node.config.HTTPPassword
+
 	allowedOrigins := api.node.config.HTTPCors
 	if cors != nil {
 		allowedOrigins = nil
@@ -157,7 +161,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		}
 	}
 
-	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, allowedOrigins, allowedVHosts); err != nil {
+	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, allowedOrigins, allowedVHosts, user, password); err != nil {
 		return false, err
 	}
 	return true, nil
