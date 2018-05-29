@@ -22,6 +22,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Iterator is a key-value trie iterator that traverses a Trie.
@@ -55,31 +56,50 @@ func (it *Iterator) Next() bool {
 	return false
 }
 
+// Prove generates the Merkle proof for the leaf node the iterator is currently
+// positioned on.
+func (it *Iterator) Prove() [][]byte {
+	return it.nodeIt.LeafProof()
+}
+
 // NodeIterator is an iterator to traverse the trie pre-order.
 type NodeIterator interface {
 	// Next moves the iterator to the next node. If the parameter is false, any child
 	// nodes will be skipped.
 	Next(bool) bool
+
 	// Error returns the error status of the iterator.
 	Error() error
 
 	// Hash returns the hash of the current node.
 	Hash() common.Hash
+
 	// Parent returns the hash of the parent of the current node. The hash may be the one
 	// grandparent if the immediate parent is an internal node with no hash.
 	Parent() common.Hash
+
 	// Path returns the hex-encoded path to the current node.
 	// Callers must not retain references to the return value after calling Next.
 	// For leaf nodes, the last element of the path is the 'terminator symbol' 0x10.
 	Path() []byte
 
 	// Leaf returns true iff the current node is a leaf node.
-	// LeafBlob, LeafKey return the contents and key of the leaf node. These
-	// method panic if the iterator is not positioned at a leaf.
-	// Callers must not retain references to their return value after calling Next
 	Leaf() bool
-	LeafBlob() []byte
+
+	// LeafKey returns the key of the leaf. The method panics if the iterator is not
+	// positioned at a leaf. Callers must not retain references to the value after
+	// calling Next.
 	LeafKey() []byte
+
+	// LeafBlob returns the content of the leaf. The method panics if the iterator
+	// is not positioned at a leaf. Callers must not retain references to the value
+	// after calling Next.
+	LeafBlob() []byte
+
+	// LeafProof returns the Merkle proof of the leaf. The method panics if the
+	// iterator is not positioned at a leaf. Callers must not retain references
+	// to the value after calling Next.
+	LeafProof() [][]byte
 }
 
 // nodeIteratorState represents the iteration state at one particular node of the
@@ -99,8 +119,8 @@ type nodeIterator struct {
 	err   error                // Failure set in case of an internal error in the iterator
 }
 
-// iteratorEnd is stored in nodeIterator.err when iteration is done.
-var iteratorEnd = errors.New("end of iteration")
+// errIteratorEnd is stored in nodeIterator.err when iteration is done.
+var errIteratorEnd = errors.New("end of iteration")
 
 // seekError is stored in nodeIterator.err if the initial seek has failed.
 type seekError struct {
@@ -139,6 +159,15 @@ func (it *nodeIterator) Leaf() bool {
 	return hasTerm(it.path)
 }
 
+func (it *nodeIterator) LeafKey() []byte {
+	if len(it.stack) > 0 {
+		if _, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
+			return hexToKeybytes(it.path)
+		}
+	}
+	panic("not at leaf")
+}
+
 func (it *nodeIterator) LeafBlob() []byte {
 	if len(it.stack) > 0 {
 		if node, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
@@ -148,10 +177,22 @@ func (it *nodeIterator) LeafBlob() []byte {
 	panic("not at leaf")
 }
 
-func (it *nodeIterator) LeafKey() []byte {
+func (it *nodeIterator) LeafProof() [][]byte {
 	if len(it.stack) > 0 {
 		if _, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
-			return hexToKeybytes(it.path)
+			hasher := newHasher(0, 0, nil)
+			proofs := make([][]byte, 0, len(it.stack))
+
+			for i, item := range it.stack[:len(it.stack)-1] {
+				// Gather nodes that end up as hash nodes (or the root)
+				node, _, _ := hasher.hashChildren(item.node, nil)
+				hashed, _ := hasher.store(node, nil, false)
+				if _, ok := hashed.(hashNode); ok || i == 0 {
+					enc, _ := rlp.EncodeToBytes(node)
+					proofs = append(proofs, enc)
+				}
+			}
+			return proofs
 		}
 	}
 	panic("not at leaf")
@@ -162,7 +203,7 @@ func (it *nodeIterator) Path() []byte {
 }
 
 func (it *nodeIterator) Error() error {
-	if it.err == iteratorEnd {
+	if it.err == errIteratorEnd {
 		return nil
 	}
 	if seek, ok := it.err.(seekError); ok {
@@ -176,7 +217,7 @@ func (it *nodeIterator) Error() error {
 // sets the Error field to the encountered failure. If `descend` is false,
 // skips iterating over any subnodes of the current node.
 func (it *nodeIterator) Next(descend bool) bool {
-	if it.err == iteratorEnd {
+	if it.err == errIteratorEnd {
 		return false
 	}
 	if seek, ok := it.err.(seekError); ok {
@@ -201,8 +242,8 @@ func (it *nodeIterator) seek(prefix []byte) error {
 	// Move forward until we're just before the closest match to key.
 	for {
 		state, parentIndex, path, err := it.peek(bytes.HasPrefix(key, it.path))
-		if err == iteratorEnd {
-			return iteratorEnd
+		if err == errIteratorEnd {
+			return errIteratorEnd
 		} else if err != nil {
 			return seekError{prefix, err}
 		} else if bytes.Compare(path, key) >= 0 {
@@ -246,7 +287,7 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 		// No more child nodes, move back up.
 		it.pop()
 	}
-	return nil, nil, nil, iteratorEnd
+	return nil, nil, nil, errIteratorEnd
 }
 
 func (st *nodeIteratorState) resolve(tr *Trie, path []byte) error {
@@ -361,12 +402,16 @@ func (it *differenceIterator) Leaf() bool {
 	return it.b.Leaf()
 }
 
+func (it *differenceIterator) LeafKey() []byte {
+	return it.b.LeafKey()
+}
+
 func (it *differenceIterator) LeafBlob() []byte {
 	return it.b.LeafBlob()
 }
 
-func (it *differenceIterator) LeafKey() []byte {
-	return it.b.LeafKey()
+func (it *differenceIterator) LeafProof() [][]byte {
+	return it.b.LeafProof()
 }
 
 func (it *differenceIterator) Path() []byte {
@@ -464,12 +509,16 @@ func (it *unionIterator) Leaf() bool {
 	return (*it.items)[0].Leaf()
 }
 
+func (it *unionIterator) LeafKey() []byte {
+	return (*it.items)[0].LeafKey()
+}
+
 func (it *unionIterator) LeafBlob() []byte {
 	return (*it.items)[0].LeafBlob()
 }
 
-func (it *unionIterator) LeafKey() []byte {
-	return (*it.items)[0].LeafKey()
+func (it *unionIterator) LeafProof() [][]byte {
+	return (*it.items)[0].LeafProof()
 }
 
 func (it *unionIterator) Path() []byte {
@@ -509,12 +558,10 @@ func (it *unionIterator) Next(descend bool) bool {
 			heap.Push(it.items, skipped)
 		}
 	}
-
 	if least.Next(descend) {
 		it.count++
 		heap.Push(it.items, least)
 	}
-
 	return len(*it.items) > 0
 }
 

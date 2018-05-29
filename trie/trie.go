@@ -101,7 +101,7 @@ func New(root common.Hash, db *Database) (*Trie, error) {
 		db:           db,
 		originalRoot: root,
 	}
-	if (root != common.Hash{}) && root != emptyRoot {
+	if root != (common.Hash{}) && root != emptyRoot {
 		rootnode, err := trie.resolveHash(root[:], nil)
 		if err != nil {
 			return nil, err

@@ -24,7 +24,7 @@ const (
 	LvlTrace
 )
 
-// Aligned returns a 5-character string containing the name of a Lvl.
+// AlignedString returns a 5-character string containing the name of a Lvl.
 func (l Lvl) AlignedString() string {
 	switch l {
 	case LvlTrace:
@@ -64,7 +64,7 @@ func (l Lvl) String() string {
 	}
 }
 
-// Returns the appropriate Lvl from a string name.
+// LvlFromString returns the appropriate Lvl from a string name.
 // Useful for parsing command line args and configuration files.
 func LvlFromString(lvlString string) (Lvl, error) {
 	switch lvlString {
@@ -95,6 +95,7 @@ type Record struct {
 	KeyNames RecordKeyNames
 }
 
+// RecordKeyNames gets stored in a Record when the write function is executed.
 type RecordKeyNames struct {
 	Time string
 	Msg  string

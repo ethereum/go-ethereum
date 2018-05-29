@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,23 +14,23 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package adapters
+package enr
 
-type SimStateStore struct {
-	m map[string][]byte
-}
+import (
+	"crypto/ecdsa"
+	"math/big"
+	"testing"
+)
 
-func (st *SimStateStore) Load(s string) ([]byte, error) {
-	return st.m[s], nil
-}
+// Checks that failure to sign leaves the record unmodified.
+func TestSignError(t *testing.T) {
+	invalidKey := &ecdsa.PrivateKey{D: new(big.Int), PublicKey: *pubkey}
 
-func (st *SimStateStore) Save(s string, data []byte) error {
-	st.m[s] = data
-	return nil
-}
-
-func NewSimStateStore() *SimStateStore {
-	return &SimStateStore{
-		make(map[string][]byte),
+	var r Record
+	if err := SignV4(&r, invalidKey); err == nil {
+		t.Fatal("expected error from SignV4")
+	}
+	if len(r.pairs) > 0 {
+		t.Fatal("expected empty record, have", r.pairs)
 	}
 }

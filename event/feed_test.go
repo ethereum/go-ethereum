@@ -235,6 +235,45 @@ func TestFeedUnsubscribeBlockedPost(t *testing.T) {
 	wg.Wait()
 }
 
+// Checks that unsubscribing a channel during Send works even if that
+// channel has already been sent on.
+func TestFeedUnsubscribeSentChan(t *testing.T) {
+	var (
+		feed Feed
+		ch1  = make(chan int)
+		ch2  = make(chan int)
+		sub1 = feed.Subscribe(ch1)
+		sub2 = feed.Subscribe(ch2)
+		wg   sync.WaitGroup
+	)
+	defer sub2.Unsubscribe()
+
+	wg.Add(1)
+	go func() {
+		feed.Send(0)
+		wg.Done()
+	}()
+
+	// Wait for the value on ch1.
+	<-ch1
+	// Unsubscribe ch1, removing it from the send cases.
+	sub1.Unsubscribe()
+
+	// Receive ch2, finishing Send.
+	<-ch2
+	wg.Wait()
+
+	// Send again. This should send to ch2 only, so the wait group will unblock
+	// as soon as a value is received on ch2.
+	wg.Add(1)
+	go func() {
+		feed.Send(0)
+		wg.Done()
+	}()
+	<-ch2
+	wg.Wait()
+}
+
 func TestFeedUnsubscribeFromInbox(t *testing.T) {
 	var (
 		feed Feed
