@@ -46,7 +46,6 @@ import (
 	swarmmetrics "github.com/ethereum/go-ethereum/swarm/metrics"
 
 	"gopkg.in/urfave/cli.v1"
-	"path/filepath"
 )
 
 const clientIdentifier = "swarm"

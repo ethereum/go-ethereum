@@ -74,8 +74,7 @@ export type Record = {
 
 export type Chunk = {
 	content: string,
-	tFirst:  string,
-	tLast:   string,
+	name:    string,
 };
 
 export type Logs = {
@@ -87,8 +86,12 @@ export type Logs = {
 };
 
 export type LogsMessage = {
-	stream: boolean,
-	past:   boolean,
-	end:    boolean,
-	chunk:  Array<Record>,
+	old:   ?LogFile,
+	chunk: Array<Record>,
+};
+
+export type LogFile = {
+	name: string,
+	past: string,
+	last: string,
 };

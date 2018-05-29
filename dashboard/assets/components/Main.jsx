@@ -33,8 +33,8 @@ const styles = {
 		width:         '100%',
 	},
 	content: {
-		flex:     1,
-		overflow: 'auto',
+		flex:      1,
+		overflowX: 'auto',
 	},
 };
 
@@ -55,10 +55,23 @@ export type Props = {
 };
 
 // Main renders the chosen content.
-class Main extends Component<Props, State> {
-	componentDidUpdate() {
+class Main extends Component<Props> {
+	constructor(props) {
+		super(props);
+		this.container = React.createRef();
+		this.content = React.createRef();
+	}
+
+	getSnapshotBeforeUpdate() {
+		if (this.content && typeof this.content.beforeUpdate === 'function') {
+			return this.content.beforeUpdate();
+		}
+		return null;
+	}
+
+	componentDidUpdate(prevProps, prevState, snapshot) {
 		if (this.content && typeof this.content.didUpdate === 'function') {
-			this.content.didUpdate();
+			this.content.didUpdate(prevProps, prevState, snapshot);
 		}
 	}
 

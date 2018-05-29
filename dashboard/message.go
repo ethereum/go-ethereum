@@ -71,10 +71,14 @@ type SystemMessage struct {
 }
 
 type LogsMessage struct {
-	Stream bool            `json:"stream"` // Denotes if the chunk is part of the stream or if it contains the records from a file.
-	Past   bool            `json:"past"`   // Denotes whether the logs in the chunk were issued before or after the time given in the request.
-	End    bool            `json:"end"`    // In case of stream denotes if new file was opened, otherwise denotes if there isn't more file.
-	Chunk  json.RawMessage `json:"chunk"`  // Contains log records.
+	Old    *LogFile        `json:"old,omitempty"` // Attributes of the log file.
+	Chunk  json.RawMessage `json:"chunk"`         // Contains log records.
+}
+
+type LogFile struct {
+	Name string `json:"name"` // The name of the file.
+	Past bool   `json:"past"` // Denotes if the file is the previous or the next one.
+	Last bool   `json:"last"` // Denotes if there isn't more file.
 }
 
 type Request struct {
@@ -82,6 +86,6 @@ type Request struct {
 }
 
 type LogsRequest struct {
-	Time time.Time `json:"time"` // The request handler searches for log file based on this timestamp.
-	Past bool      `json:"past"` // Denotes whether the message should contain logs issued before or after the given time.
+	Name string `json:"name"` // The request handler searches for log file based on this file name.
+	Past bool   `json:"past"` // Denotes whether the client wants the previous or the next file.
 }

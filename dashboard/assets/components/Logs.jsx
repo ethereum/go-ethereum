@@ -21,8 +21,8 @@ import React, {Component} from 'react';
 import List, {ListItem} from 'material-ui/List';
 import type {Record, Content, LogsMessage, Logs as LogsType} from '../types/content';
 
-// if the scroll position is closer to the top/bottom than this value, the client sends a request for a new log chunk.
-const requestLimit = 100;
+// requestBand says how wide is the top/bottom zone, eg. 0.1 means 10% of the container height.
+const requestBand = 0.1;
 
 // fieldPadding is a global map with maximum field value lengths seen until now
 // to allow padding log contexts in a bit smarter way.
@@ -93,55 +93,37 @@ const createChunk = (records: Array<Record>) => {
 };
 
 // inserter is a state updater function for the main component, which inserts the new log chunk into the chunk array.
-// limit is the maximum length of the chunk array, used in order to prevent the OOM in the browser.
+// limit is the maximum length of the chunk array, used in order to prevent the browser from OOM.
 export const inserter = (limit: number) => (update: LogsMessage, prev: LogsType) => {
 	prev.topChanged = 0;
 	prev.bottomChanged = 0;
-	if (!update.stream && update.end) {
-		if (update.past) {
-			prev.endTop = true;
-		} else {
-			prev.endBottom = true;
-		}
-		return prev;
-	}
-	if (update.stream && !prev.endBottom) {
-		return prev;
-	}
 	if (!Array.isArray(update.chunk) || update.chunk.length < 1) {
 		return prev;
 	}
-	const chunk = {
-		content: createChunk(update.chunk),
-		tFirst:  update.chunk[0].t,
-		tLast:   update.chunk[update.chunk.length - 1].t,
-	};
-	if (!Array.isArray(prev.chunks) || prev.chunks.length < 1) {
-		prev.chunks = [chunk];
-		prev.topChanged = 1;
-		prev.bottomChanged = 1;
-		return prev;
+	if (!Array.isArray(prev.chunks)) {
+		prev.chunks = [];
 	}
-	if (update.stream) {
-		// The stream chunks are appended to the last chunk, because otherwise the small stream chunks would cause
-		// imbalance in the amount of the visualized logs. In order to protect a chunk from growing too large a new
-		// chunk is created when a new file is opened on the server side. In case of stream end indicates if a new file
-		// was opened.
-		if (update.end) {
-			if (prev.chunks.length >= limit) {
-				prev.endTop = false;
-				prev.chunks.splice(0, prev.chunks.length - limit + 1);
-				prev.topChanged = -1;
-			}
-			prev.chunks = [...prev.chunks, chunk];
-		} else {
-			prev.chunks[prev.chunks.length - 1].content += chunk.content;
-			prev.chunks[prev.chunks.length - 1].tLast = chunk.tLast;
+	const content = createChunk(update.chunk);
+	if (!update.old) {
+		// In case of stream chunk.
+		if (!prev.endBottom) {
+			return prev;
 		}
-		prev.bottomChanged = 1;
+		if (prev.chunks.length < 1) {
+			// This should never happen, because the first chunk is always a non-stream chunk.
+			return [{content, name: '00000000000000.log'}];
+		}
+		prev.chunks[prev.chunks.length - 1].content += content;
 		return prev;
 	}
-	if (update.past) {
+	const chunk = {
+		content,
+		name: update.old.name,
+	};
+	if (update.old.past) {
+		if (update.old.last) {
+			prev.endTop = true;
+		}
 		if (prev.chunks.length >= limit) {
 			prev.endBottom = false;
 			prev.chunks.splice(limit - 1, prev.chunks.length - limit + 1);
@@ -150,6 +132,9 @@ export const inserter = (limit: number) => (update: LogsMessage, prev: LogsType)
 		prev.chunks = [chunk, ...prev.chunks];
 		prev.topChanged = 1;
 		return prev;
+	}
+	if (update.old.last) {
+		prev.endBottom = true;
 	}
 	if (prev.chunks.length >= limit) {
 		prev.endTop = false;
@@ -190,51 +175,72 @@ type State = {
 class Logs extends Component<Props, State> {
 	constructor(props: Props) {
 		super(props);
+		this.content = React.createRef();
 		this.state = {
 			requestAllowed: true,
 		};
 	}
 
+	componentDidMount() {
+		const {container} = this.props;
+		container.scrollTop = container.scrollHeight - container.clientHeight;
+	}
+
 	// onScroll is triggered by the parent component's scroll event, and sends requests if the scroll position is
 	// at the top or at the bottom.
 	onScroll = () => {
-		const {logs} = this.props.content;
-		if (typeof this.props.container === 'undefined' || logs.chunks.length < 1 || !this.state.requestAllowed) {
+		if (!this.state.requestAllowed || typeof this.content === 'undefined') {
 			return;
 		}
-		if (this.atTop() && !logs.endTop) {
-			this.props.send(JSON.stringify({
-				Logs: {
-					Time: logs.chunks[0].tFirst,
-					Past: true,
-				},
-			}));
-			this.setState({requestAllowed: false});
+		const {logs} = this.props.content;
+		if (logs.chunks.length < 1) {
+			return;
 		}
-		if (this.atBottom() && !logs.endBottom) {
-			this.props.send(JSON.stringify({
-				Logs: {
-					Time: logs.chunks[logs.chunks.length - 1].tLast,
-					Past: false,
-				},
-			}));
-			this.setState({requestAllowed: false});
+		if (this.atTop()) {
+			if (!logs.endTop) {
+				this.setState({requestAllowed: false});
+				this.props.send(JSON.stringify({
+					Logs: {
+						Name: logs.chunks[0].name,
+						Past: true,
+					},
+				}));
+			}
+		} else if (this.atBottom()) {
+			if (!logs.endBottom) {
+				this.setState({requestAllowed: false});
+				this.props.send(JSON.stringify({
+					Logs: {
+						Name: logs.chunks[logs.chunks.length - 1].name,
+						Past: false,
+					},
+				}));
+			}
 		}
 	};
 
 	// atTop checks if the scroll position it at the top of the container.
-	atTop = () => this.props.container.scrollTop <= requestLimit;
+	atTop = () => this.props.container.scrollTop <= this.props.container.scrollHeight * requestBand;
 
 	// atBottom checks if the scroll position it at the bottom of the container.
-	atBottom = () =>
-		this.props.container.scrollHeight - this.props.container.scrollTop <=
-		this.props.container.clientHeight + requestLimit;
+	atBottom = () => {
+		const {container} = this.props;
+		return container.scrollHeight - container.scrollTop <=
+			container.clientHeight + container.scrollHeight * requestBand;
+	};
+
+	// beforeUpdate is called by the parent component, saves the previous scroll position
+	// and the height of the first log chunk, which can be deleted during the insertion.
+	beforeUpdate = () => ({
+		scrollTop:   this.props.container.scrollTop,
+		firstHeight: this.content.children[0].children[0].clientHeight,
+	});
 
 	// didUpdate is called by the parent component, which provides the container. Sends the first request if the
 	// visible part of the container isn't full, and resets the scroll position in order to avoid jumping when new
 	// chunk is inserted.
-	didUpdate = () => {
-		if (typeof this.props.shouldUpdate.logs === 'undefined' || typeof this.content === 'undefined') {
+	didUpdate = (prevProps, prevState, snapshot) => {
+		if (typeof this.props.shouldUpdate.logs === 'undefined' || typeof this.content === 'undefined' || snapshot === null) {
 			return;
 		}
 		const {logs} = this.props.content;
@@ -242,38 +248,34 @@ class Logs extends Component<Props, State> {
 		if (typeof container === 'undefined' || logs.chunks.length < 1) {
 			return;
 		}
-		this.setState({requestAllowed: true});
 		if (this.content.clientHeight < container.clientHeight) {
-			// Only enters here at the beginning, when there isn't enough log to fill the container.
-			//
-			// In case there isn't any log chunk in the array, a request with time (new Date()).toISOString()
-			// could be sent, but it would allow to duplicate the first few records from the stream, since the
-			// stream handler loads the last file. No log records will appear before the first stream chunk.
+			// Only enters here at the beginning, when there isn't enough log to fill the container
+			// and the scroll bar doesn't appear.
 			if (!logs.endTop) {
+				this.setState({requestAllowed: false});
 				this.props.send(JSON.stringify({
 					Logs: {
-						Time: logs.chunks[0].tFirst,
+						Name: logs.chunks[0].name,
 						Past: true,
 					},
 				}));
-				this.setState({requestAllowed: false});
 			}
 			return;
 		}
 		const chunks = this.content.children[0].children;
-		if (this.atTop()) {
-			if (logs.topChanged > 0) {
-				container.scrollTop = chunks[0].clientHeight;
-			}
-			return;
-		}
-		if (this.atBottom() && logs.bottomChanged > 0) {
-			if (logs.endBottom) {
-				container.scrollTop = container.scrollHeight - container.clientHeight;
-			} else {
-				container.scrollTop = container.scrollHeight - chunks[chunks.length - 1].clientHeight;
+		let {scrollTop} = snapshot;
+		if (logs.topChanged > 0) {
+			scrollTop += chunks[0].clientHeight;
+		} else if (logs.bottomChanged > 0) {
+			if (logs.topChanged < 0) {
+				scrollTop -= snapshot.firstHeight;
 			}
 		}
+		if (logs.endBottom && this.atBottom()) {
+			scrollTop = container.scrollHeight - container.clientHeight;
+		}
+		container.scrollTop = scrollTop;
+		this.setState({requestAllowed: true});
 	};
 
 	render() {
