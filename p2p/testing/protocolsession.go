@@ -91,9 +91,7 @@ func (s *ProtocolSession) trigger(trig Trigger) error {
 	errc := make(chan error)
 
 	go func() {
-		log.Trace(fmt.Sprintf("trigger %v (%v)....", trig.Msg, trig.Code))
 		errc <- mockNode.Trigger(&trig)
-		log.Trace(fmt.Sprintf("triggered %v (%v)", trig.Msg, trig.Code))
 	}()
 
 	t := trig.Timeout

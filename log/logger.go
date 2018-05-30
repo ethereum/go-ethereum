@@ -12,6 +12,7 @@ const timeKey = "t"
 const lvlKey = "lvl"
 const msgKey = "msg"
 const errorKey = "LOG15_ERROR"
+const skipLevel = 2
 
 type Lvl int
 
@@ -157,27 +158,27 @@ func newContext(prefix []interface{}, suffix []interface{}) []interface{} {
 }
 
 func (l *logger) Trace(msg string, ctx ...interface{}) {
-	l.write(msg, LvlTrace, ctx, 2)
+	l.write(msg, LvlTrace, ctx, skipLevel)
 }
 
 func (l *logger) Debug(msg string, ctx ...interface{}) {
-	l.write(msg, LvlDebug, ctx, 2)
+	l.write(msg, LvlDebug, ctx, skipLevel)
 }
 
 func (l *logger) Info(msg string, ctx ...interface{}) {
-	l.write(msg, LvlInfo, ctx, 2)
+	l.write(msg, LvlInfo, ctx, skipLevel)
 }
 
 func (l *logger) Warn(msg string, ctx ...interface{}) {
-	l.write(msg, LvlWarn, ctx, 2)
+	l.write(msg, LvlWarn, ctx, skipLevel)
 }
 
 func (l *logger) Error(msg string, ctx ...interface{}) {
-	l.write(msg, LvlError, ctx, 2)
+	l.write(msg, LvlError, ctx, skipLevel)
 }
 
 func (l *logger) Crit(msg string, ctx ...interface{}) {
-	l.write(msg, LvlCrit, ctx, 2)
+	l.write(msg, LvlCrit, ctx, skipLevel)
 	os.Exit(1)
 }
 

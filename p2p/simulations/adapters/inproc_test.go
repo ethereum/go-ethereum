@@ -22,10 +22,12 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 )
 
 func TestSocketPipe(t *testing.T) {
-	c1, c2, err := socketPipe()
+	c1, c2, err := pipes.SocketPipe()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +76,7 @@ func TestSocketPipe(t *testing.T) {
 }
 
 func TestSocketPipeBidirections(t *testing.T) {
-	c1, c2, err := socketPipe()
+	c1, c2, err := pipes.SocketPipe()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +140,7 @@ func TestSocketPipeBidirections(t *testing.T) {
 }
 
 func TestTcpPipe(t *testing.T) {
-	c1, c2, err := tcpPipe()
+	c1, c2, err := pipes.TCPPipe()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +185,7 @@ func TestTcpPipe(t *testing.T) {
 }
 
 func TestTcpPipeBidirections(t *testing.T) {
-	c1, c2, err := tcpPipe()
+	c1, c2, err := pipes.TCPPipe()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +248,7 @@ func TestTcpPipeBidirections(t *testing.T) {
 }
 
 func TestNetPipe(t *testing.T) {
-	c1, c2, err := netPipe()
+	c1, c2, err := pipes.NetPipe()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +297,7 @@ func TestNetPipe(t *testing.T) {
 }
 
 func TestNetPipeBidirections(t *testing.T) {
-	c1, c2, err := netPipe()
+	c1, c2, err := pipes.NetPipe()
 	if err != nil {
 		t.Fatal(err)
 	}
