@@ -962,7 +962,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 	}
 	// Notify subsystem for new promoted transactions.
 	if len(promoted) > 0 {
-		pool.txFeed.Send(NewTxsEvent{promoted})
+		go pool.txFeed.Send(NewTxsEvent{promoted})
 	}
 	// If the pending limit is overflown, start equalizing allowances
 	pending := uint64(0)
