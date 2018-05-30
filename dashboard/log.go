@@ -73,7 +73,7 @@ func (db *Dashboard) handleLogRequest(r *LogsRequest, c *client) {
 		return
 	}
 	i := sort.Search(n, func(i int) bool {
-		return fileNames[i] >= r.Name // Returns the smallest index such as fileNames[i] >= timestamp.
+		return fileNames[i] >= r.Name // Returns the smallest index such as fileNames[i] >= r.Name.
 	})
 
 	if i >= n || fileNames[i] != r.Name {

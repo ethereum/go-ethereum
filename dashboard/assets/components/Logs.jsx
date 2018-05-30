@@ -22,7 +22,7 @@ import List, {ListItem} from 'material-ui/List';
 import type {Record, Content, LogsMessage, Logs as LogsType} from '../types/content';
 
 // requestBand says how wide is the top/bottom zone, eg. 0.1 means 10% of the container height.
-const requestBand = 0.1;
+const requestBand = 0.05;
 
 // fieldPadding is a global map with maximum field value lengths seen until now
 // to allow padding log contexts in a bit smarter way.
@@ -114,6 +114,7 @@ export const inserter = (limit: number) => (update: LogsMessage, prev: LogsType)
 			return [{content, name: '00000000000000.log'}];
 		}
 		prev.chunks[prev.chunks.length - 1].content += content;
+		prev.bottomChanged = 1;
 		return prev;
 	}
 	const chunk = {
@@ -231,10 +232,16 @@ class Logs extends Component<Props, State> {
 
 	// beforeUpdate is called by the parent component, saves the previous scroll position
 	// and the height of the first log chunk, which can be deleted during the insertion.
-	beforeUpdate = () => ({
-		scrollTop:   this.props.container.scrollTop,
-		firstHeight: this.content.children[0].children[0].clientHeight,
-	});
+	beforeUpdate = () => {
+		let firstHeight = 0;
+		if (this.content && this.content.children[0] && this.content.children[0].children[0]) {
+			firstHeight = this.content.children[0].children[0].clientHeight;
+		}
+		return {
+			scrollTop: this.props.container.scrollTop,
+			firstHeight,
+		};
+	};
 
 	// didUpdate is called by the parent component, which provides the container. Sends the first request if the
 	// visible part of the container isn't full, and resets the scroll position in order to avoid jumping when new
@@ -269,10 +276,9 @@ class Logs extends Component<Props, State> {
 		} else if (logs.bottomChanged > 0) {
 			if (logs.topChanged < 0) {
 				scrollTop -= snapshot.firstHeight;
+			} else if (logs.endBottom && this.atBottom()) {
+				scrollTop = container.scrollHeight - container.clientHeight;
 			}
-		}
-		if (logs.endBottom && this.atBottom()) {
-			scrollTop = container.scrollHeight - container.clientHeight;
 		}
 		container.scrollTop = scrollTop;
 		this.setState({requestAllowed: true});

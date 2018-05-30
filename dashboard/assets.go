@@ -10351,7 +10351,7 @@ var _bundleJs = []byte((((((((((`!function(modules) {
             return protoProps && defineProperties(Constructor.prototype, protoProps), staticProps && defineProperties(Constructor, staticProps), 
             Constructor;
         };
-    }(), _react = __webpack_require__(0), _react2 = _interopRequireDefault(_react), _List = __webpack_require__(260), _List2 = _interopRequireDefault(_List), requestBand = .1, fieldPadding = new Map(), createChunk = function(records) {
+    }(), _react = __webpack_require__(0), _react2 = _interopRequireDefault(_react), _List = __webpack_require__(260), _List2 = _interopRequireDefault(_List), requestBand = .05, fieldPadding = new Map(), createChunk = function(records) {
         var content = "";
         return records.forEach(function(record) {
             var t = record.t, ctx = record.ctx, lvl = record.lvl, msg = record.msg, color = "#ce3c23";
@@ -10403,7 +10403,8 @@ var _bundleJs = []byte((((((((((`!function(modules) {
             if (!update.old) return prev.endBottom ? prev.chunks.length < 1 ? [ {
                 content: content,
                 name: "00000000000000.log"
-            } ] : (prev.chunks[prev.chunks.length - 1].content += content, prev) : prev;
+            } ] : (prev.chunks[prev.chunks.length - 1].content += content, prev.bottomChanged = 1, 
+            prev) : prev;
             var chunk = {
                 content: content,
                 name: update.old.name
@@ -10416,7 +10417,9 @@ var _bundleJs = []byte((((((((((`!function(modules) {
             prev.bottomChanged = 1, prev);
         };
     }, {
-        logs: {},
+        logs: {
+            overflowX: "auto"
+        },
         logListItem: {
             padding: 0
         },
@@ -10453,9 +10456,11 @@ var _bundleJs = []byte((((((((((`!function(modules) {
                 var container = _this.props.container;
                 return container.scrollHeight - container.scrollTop <= container.clientHeight + container.scrollHeight * requestBand;
             }, _this.beforeUpdate = function() {
-                return {
+                var firstHeight = 0;
+                return _this.content && _this.content.children[0] && _this.content.children[0].children[0] && (firstHeight = _this.content.children[0].children[0].clientHeight), 
+                {
                     scrollTop: _this.props.container.scrollTop,
-                    firstHeight: _this.content.children[0].children[0].clientHeight
+                    firstHeight: firstHeight
                 };
             }, _this.didUpdate = function(prevProps, prevState, snapshot) {
                 if (void 0 !== _this.props.shouldUpdate.logs && void 0 !== _this.content && null !== snapshot) {
@@ -10470,8 +10475,7 @@ var _bundleJs = []byte((((((((((`!function(modules) {
                             }
                         }))));
                         var chunks = _this.content.children[0].children, scrollTop = snapshot.scrollTop;
-                        logs.topChanged > 0 ? scrollTop += chunks[0].clientHeight : logs.bottomChanged > 0 && logs.topChanged < 0 && (scrollTop -= snapshot.firstHeight), 
-                        logs.endBottom && _this.atBottom() && (scrollTop = container.scrollHeight - container.clientHeight), 
+                        logs.topChanged > 0 ? scrollTop += chunks[0].clientHeight : logs.bottomChanged > 0 && (logs.topChanged < 0 ? scrollTop -= snapshot.firstHeight : logs.endBottom && _this.atBottom() && (scrollTop = container.scrollHeight - container.clientHeight)), 
                         container.scrollTop = scrollTop, _this.setState({
                             requestAllowed: !0
                         });
@@ -40568,7 +40572,7 @@ func bundleJs() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "bundle.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
-	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0xe6, 0x6d, 0x0, 0x7a, 0x5, 0xf3, 0x5c, 0xf1, 0x3, 0xa, 0xf6, 0x48, 0x7e, 0xc7, 0xf6, 0x43, 0xf0, 0x70, 0x72, 0x64, 0xaf, 0x3f, 0x58, 0x48, 0x3b, 0xd9, 0xc0, 0xbf, 0x9, 0xca, 0x9a, 0xe3}}
+	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0x88, 0x4d, 0x2e, 0x77, 0x25, 0xbe, 0x43, 0xdf, 0x86, 0xed, 0x5b, 0x2c, 0xa8, 0xdd, 0xa2, 0xd5, 0x38, 0xf3, 0x82, 0xbe, 0x29, 0x9d, 0x52, 0x3, 0xd4, 0x4c, 0xd3, 0x7e, 0xaa, 0x3e, 0xf6, 0x8c}}
 	return a, nil
 }
 
