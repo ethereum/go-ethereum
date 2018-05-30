@@ -30,3 +30,29 @@ type AbsTime time.Duration
 func Now() AbsTime {
 	return AbsTime(monotime.Now())
 }
+
+// Clock interface makes it possible to replace the monotonic system clock with
+// a simulated clock
+type Clock interface {
+	Now() AbsTime
+	Sleep(time.Duration)
+	After(time.Duration) <-chan time.Time
+}
+
+// MonotonicClock implements Clock using the system clock
+type MonotonicClock struct{}
+
+// Now implements Clock
+func (MonotonicClock) Now() AbsTime {
+	return AbsTime(monotime.Now())
+}
+
+// Sleep implements Clock
+func (MonotonicClock) Sleep(d time.Duration) {
+	time.Sleep(d)
+}
+
+// After implements Clock
+func (MonotonicClock) After(d time.Duration) <-chan time.Time {
+	return time.After(d)
+}
