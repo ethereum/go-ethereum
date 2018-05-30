@@ -374,6 +374,19 @@ func (c *Clique) GetSnapshot(chain consensus.ChainReader, header *types.Header) 
 	return snap, nil
 }
 
+func position(list []common.Address, x common.Address) int {
+	for i, item := range list {
+		if item == x {
+			return i
+		}
+	}
+	return -1
+}
+
+func YourTurn(snap *Snapshot, pre, cur common.Address) bool {
+	return (position(snap.signers(), pre)+1) % len(snap.signers()) == position(snap.signers(), cur)
+}
+
 // snapshot retrieves the authorization snapshot at a given point in time.
 func (c *Clique) snapshot(chain consensus.ChainReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
 	// Search for a snapshot in memory or on disk for checkpoints
