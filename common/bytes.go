@@ -17,7 +17,10 @@
 // Package common contains various helper functions.
 package common
 
-import "encoding/hex"
+import (
+	"encoding/hex"
+	"fmt"
+)
 
 func ToHex(b []byte) string {
 	hex := Bytes2Hex(b)
@@ -78,7 +81,10 @@ func Bytes2Hex(d []byte) string {
 }
 
 func Hex2Bytes(str string) []byte {
-	h, _ := hex.DecodeString(str)
+	h, err := hex.DecodeString(str)
+	if err != nil {
+		panic(fmt.Sprintf("cannot hex decode the string %s, got error %v", str, err))
+	}
 
 	return h
 }

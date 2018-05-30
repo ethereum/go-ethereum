@@ -127,13 +127,13 @@ type logger struct {
 	h   *swapHandler
 }
 
-func (l *logger) write(msg string, lvl Lvl, ctx []interface{}) {
+func (l *logger) write(msg string, lvl Lvl, ctx []interface{}, skip int) {
 	l.h.Log(&Record{
 		Time: time.Now(),
 		Lvl:  lvl,
 		Msg:  msg,
 		Ctx:  newContext(l.ctx, ctx),
-		Call: stack.Caller(2),
+		Call: stack.Caller(skip),
 		KeyNames: RecordKeyNames{
 			Time: timeKey,
 			Msg:  msgKey,
@@ -157,27 +157,27 @@ func newContext(prefix []interface{}, suffix []interface{}) []interface{} {
 }
 
 func (l *logger) Trace(msg string, ctx ...interface{}) {
-	l.write(msg, LvlTrace, ctx)
+	l.write(msg, LvlTrace, ctx, 2)
 }
 
 func (l *logger) Debug(msg string, ctx ...interface{}) {
-	l.write(msg, LvlDebug, ctx)
+	l.write(msg, LvlDebug, ctx, 2)
 }
 
 func (l *logger) Info(msg string, ctx ...interface{}) {
-	l.write(msg, LvlInfo, ctx)
+	l.write(msg, LvlInfo, ctx, 2)
 }
 
 func (l *logger) Warn(msg string, ctx ...interface{}) {
-	l.write(msg, LvlWarn, ctx)
+	l.write(msg, LvlWarn, ctx, 2)
 }
 
 func (l *logger) Error(msg string, ctx ...interface{}) {
-	l.write(msg, LvlError, ctx)
+	l.write(msg, LvlError, ctx, 2)
 }
 
 func (l *logger) Crit(msg string, ctx ...interface{}) {
-	l.write(msg, LvlCrit, ctx)
+	l.write(msg, LvlCrit, ctx, 2)
 	os.Exit(1)
 }
 

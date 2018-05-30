@@ -594,13 +594,13 @@ running:
 			// This channel is used by AddPeer to add to the
 			// ephemeral static peer list. Add it to the dialer,
 			// it will keep the node connected.
-			srv.log.Debug("Adding static node", "node", n)
+			srv.log.Trace("Adding static node", "node", n)
 			dialstate.addStatic(n)
 		case n := <-srv.removestatic:
 			// This channel is used by RemovePeer to send a
 			// disconnect request to a peer and begin the
 			// stop keeping the node connected
-			srv.log.Debug("Removing static node", "node", n)
+			srv.log.Trace("Removing static node", "node", n)
 			dialstate.removeStatic(n)
 			if p, ok := peers[n.ID]; ok {
 				p.Disconnect(DiscRequested)

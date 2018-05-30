@@ -399,15 +399,6 @@ func (net *Network) getNodeByName(name string) *Node {
 	return nil
 }
 
-// GetNodes returns the existing nodes
-func (net *Network) GetNodes() (nodes []*Node) {
-	net.lock.Lock()
-	defer net.lock.Unlock()
-
-	nodes = append(nodes, net.Nodes...)
-	return nodes
-}
-
 // GetConn returns the connection which exists between "one" and "other"
 // regardless of which node initiated the connection
 func (net *Network) GetConn(oneID, otherID discover.NodeID) *Conn {
