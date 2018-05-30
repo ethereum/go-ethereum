@@ -8,11 +8,15 @@ ie `export ADDR=<contract_addr>`
 
 then run `node calltx.js` 
 
+(TODO: trigger the `calltx.js` function in the `deploy.js` file immediately)
+
 ## TEST GREETERS / contract to contract txes
 
-First run `deploy_greeter_contracts.js`
+First run `node deploy_greeter_contracts.js`
 
-this will log the address of the greeter and proxygreeter contracts. You'll need to set the env variables:
+this will log the address of the greeter and proxygreeter contracts and run various transactions on the contracts.
+
+To re-run transactions on these contracts you'll need to set the env variables, using the addresses logged during the `node deploy_greeter_contracts.js` process:
 
 ```
 export GREETER=<greeter_address>
