@@ -490,6 +490,12 @@
 			"revisionTime": "2018-05-02T07:23:49Z"
 		},
 		{
+			"checksumSHA1": "2OAzyUvaUKVZkRx9f8NlbHT9cc0=",
+			"path": "github.com/teemupo/go-grafana-api",
+			"revision": "7380665c19d6fb0b587e654f25d2604787d890c8",
+			"revisionTime": "2018-02-22T10:42:15Z"
+		},
+		{
 			"checksumSHA1": "TT1rac6kpQp2vz24m5yDGUNQ/QQ=",
 			"path": "golang.org/x/crypto/cast5",
 			"revision": "6a293f2d4b14b8e6d3f0539e383f6d0d30fce3fd",

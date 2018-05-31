@@ -33,6 +33,8 @@ import (
 	"time"
 
 	"github.com/elastic/gosigar"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -64,6 +66,9 @@ type Dashboard struct {
 	commit   string
 	lock     sync.RWMutex // Lock protecting the dashboard's internals
 
+	ethServ *eth.Ethereum
+	lesServ *les.LightEthereum
+
 	quit chan chan error // Channel used for graceful exit
 	wg   sync.WaitGroup
 }
@@ -76,7 +81,7 @@ type client struct {
 }
 
 // New creates a new dashboard instance with the given configuration.
-func New(config *Config, commit string) (*Dashboard, error) {
+func New(config *Config, commit string, ethServ *eth.Ethereum, lesServ *les.LightEthereum) (*Dashboard, error) {
 	now := time.Now()
 	db := &Dashboard{
 		conns:  make(map[uint32]*client),
@@ -92,7 +97,9 @@ func New(config *Config, commit string) (*Dashboard, error) {
 			DiskRead:       emptyChartEntries(now, diskReadSampleLimit, config.Refresh),
 			DiskWrite:      emptyChartEntries(now, diskWriteSampleLimit, config.Refresh),
 		},
-		commit: commit,
+		commit:  commit,
+		ethServ: ethServ,
+		lesServ: lesServ,
 	}
 	return db, nil
 }
@@ -305,6 +312,15 @@ func (db *Dashboard) collectData() {
 			prevSystemCPUUsage = curSystemCPUUsage
 			prevDiskRead = curDiskRead
 			prevDiskWrite = curDiskWrite
+
+			// extract measurements from eth.Downloader and push to metrics registry
+			p := db.ethServ.Downloader().Progress()
+
+			metrics.GetOrRegisterGauge("currentBlock", nil).Update(int64(p.CurrentBlock))
+			metrics.GetOrRegisterGauge("startingBlock", nil).Update(int64(p.StartingBlock))
+			metrics.GetOrRegisterGauge("highestBlock", nil).Update(int64(p.HighestBlock))
+			metrics.GetOrRegisterGauge("pulledStates", nil).Update(int64(p.PulledStates))
+			metrics.GetOrRegisterGauge("knownStates", nil).Update(int64(p.KnownStates))
 
 			now := time.Now()
 
