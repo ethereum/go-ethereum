@@ -30,10 +30,11 @@ func TestValidator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("can't get candidates: %v", err)
 	}
-	t.Log("candidates", candidates)
 	for _, it := range candidates {
 		cap, _ := validator.GetCandidateCap(it)
 		t.Log("candidate", it.String(), "cap", cap)
+		backer, _ := validator.GetCandidateBacker(it)
+		t.Log("candidate", it.String(), "backer", backer.String())
 	}
 	contractBackend.Commit()
 }
