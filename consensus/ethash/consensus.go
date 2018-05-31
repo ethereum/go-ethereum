@@ -98,7 +98,7 @@ func (ethash *Ethash) VerifyHeaders(chain consensus.ChainReader, headers []*type
 	}
 
 	// Spawn as many workers as allowed threads
-	workers := runtime.GOMAXPROCS(0)
+	workers := runtime.NumCPU()
 	if len(headers) < workers {
 		workers = len(headers)
 	}
