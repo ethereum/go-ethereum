@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
+// Const expresses the required byte length for hashes and addresses.
 const (
 	HashLength    = 32
 	AddressLength = 20

@@ -22,6 +22,8 @@ import (
 	"math/big"
 )
 
+// Variables allocated a new Int set used to find complement numbers
+// and bound maximum byte lengths.
 var (
 	tt255     = BigPow(2, 255)
 	tt256     = BigPow(2, 256)
