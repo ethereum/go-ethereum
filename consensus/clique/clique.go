@@ -384,11 +384,15 @@ func position(list []common.Address, x common.Address) int {
 	return -1
 }
 
-func YourTurn(snap *Snapshot, pre, cur common.Address) bool {
+func YourTurn(snap *Snapshot, header *types.Header, cur common.Address) (bool, error) {
+	pre, err := ecrecover(header, snap.sigcache)
+	if err != nil {
+		return false, err
+	}
 	preIndex := position(snap.signers(), pre)
 	curIndex := position(snap.signers(), cur)
 	log.Info("Debugging info", "number of masternodes", len(snap.signers()), "previous", pre, "position", preIndex, "current", cur, "position", curIndex)
-	return (preIndex+1)%len(snap.signers()) == curIndex || pre.String() == genesisCoinBase
+	return (preIndex+1)%len(snap.signers()) == curIndex || pre.String() == genesisCoinBase, nil
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
@@ -530,8 +534,7 @@ func (c *Clique) verifySeal(chain consensus.ChainReader, header *types.Header, p
 // header for running the transactions on top.
 func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	// If the block isn't a checkpoint, cast a random vote (good enough for now)
-	//FIXME: keep header.Coinbase == miner's address
-	//header.Coinbase = common.Address{}
+	header.Coinbase = common.Address{}
 	header.Nonce = types.BlockNonce{}
 
 	number := header.Number.Uint64()
