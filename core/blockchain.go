@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -48,8 +47,8 @@ import (
 
 var (
 	blockInsertTimer = metrics.NewRegisteredTimer("chain/inserts", nil)
-
-	ErrNoGenesis = errors.New("Genesis not found in chain")
+	Checkpoint       = make(chan int)
+	ErrNoGenesis     = errors.New("Genesis not found in chain")
 )
 
 const (
@@ -1188,7 +1187,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		stats.report(chain, i, bc.stateCache.TrieDB().Size())
 		if i == len(chain)-1 {
 			if (chain[i].NumberU64() % bc.chainConfig.Clique.Epoch) == 0 {
-				clique.Checkpoint <- 1
+				Checkpoint <- 1
 			}
 		}
 	}
