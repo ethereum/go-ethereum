@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -82,25 +83,128 @@ type Database struct {
 	lock sync.RWMutex
 }
 
+// rawNode is a simple binary blob used to differentiate between collapsed trie
+// nodes and already encoded RLP binary blobs (while at the same time store them
+// in the same cache fields).
+type rawNode []byte
+
+func (n rawNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
+func (n rawNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
+func (n rawNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
+
 // cachedNode is all the information we know about a single cached node in the
 // memory database write layer.
 type cachedNode struct {
-	blob     []byte              // Cached data block of the trie node
-	parents  int                 // Number of live nodes referencing this one
-	children map[common.Hash]int // Children referenced by this nodes
+	node node   // Cached collapsed trie node, or raw rlp data
+	size uint16 // Byte size of the useful cached data
+
+	parents  uint16                 // Number of live nodes referencing this one
+	children map[common.Hash]uint16 // External children referenced by this node
 
 	flushPrev common.Hash // Previous node in the flush-list
 	flushNext common.Hash // Next node in the flush-list
+}
+
+// rlp returns the raw rlp encoded blob of the cached node, either directly from
+// the cache, or by regenerating it from the collapsed node.
+func (n *cachedNode) rlp() []byte {
+	if node, ok := n.node.(rawNode); ok {
+		return node
+	}
+	blob, err := rlp.EncodeToBytes(n.node)
+	if err != nil {
+		panic(err)
+	}
+	return blob
+}
+
+// obj returns the decoded and expanded trie node, either directly from the cache,
+// or by regenerating it from the rlp encoded blob.
+func (n *cachedNode) obj(hash common.Hash, cachegen uint16) node {
+	if node, ok := n.node.(rawNode); ok {
+		return mustDecodeNode(hash[:], node, cachegen)
+	}
+	return expandNode(n.node, cachegen)
+}
+
+// childs returns all the tracked children of this node, both the implicit ones
+// from inside the node as well as the explicit ones from outside the node.
+func (n *cachedNode) childs() []common.Hash {
+	children := make([]common.Hash, 0, 16)
+	for child := range n.children {
+		children = append(children, child)
+	}
+	gatherChildren(n.node, &children)
+
+	return children
+}
+
+// gatherChildren traverses the node hierarchy of a collapsed storage node and
+// retrieves all the hashnode children.
+func gatherChildren(n node, children *[]common.Hash) {
+	switch n := n.(type) {
+	case *shortNode:
+		gatherChildren(n.Val, children)
+
+	case *fullNode:
+		for i := 0; i < 16; i++ {
+			gatherChildren(n.Children[i], children)
+		}
+	case hashNode:
+		*children = append(*children, common.BytesToHash(n))
+	}
+}
+
+// expandNode traverses the node hierarchy of a collapsed storage node and converts
+// all fields and keys into expanded memory form.
+func expandNode(n node, cachegen uint16) node {
+	switch n := n.(type) {
+	case *shortNode:
+		// Short nodes need key and child expansion
+		return &shortNode{
+			Key: compactToHex(n.Key),
+			Val: expandNode(n.Val, cachegen),
+			flags: nodeFlag{
+				hash: n.flags.hash,
+				gen:  cachegen,
+			},
+		}
+
+	case *fullNode:
+		// Full nodes need child expansion
+		node := &fullNode{
+			flags: nodeFlag{
+				hash: n.flags.hash,
+				gen:  cachegen,
+			},
+		}
+		for i := 0; i < 17; i++ { // expand the term too (17)
+			node.Children[i] = expandNode(n.Children[i], cachegen)
+		}
+		return node
+
+	case valueNode:
+		// Values need to convert from "" to nil
+		if n == nil {
+			return nil
+		}
+		return n
+
+	case hashNode:
+		// Hashes are left as is
+		return n
+
+	default:
+		panic("unknown node type")
+	}
 }
 
 // NewDatabase creates a new trie database to store ephemeral trie content before
 // its written out to disk or garbage collected.
 func NewDatabase(diskdb ethdb.Database) *Database {
 	return &Database{
-		diskdb: diskdb,
-		nodes: map[common.Hash]*cachedNode{
-			{}: {children: make(map[common.Hash]int)},
-		},
+		diskdb:    diskdb,
+		nodes:     map[common.Hash]*cachedNode{{}: {}},
 		preimages: make(map[common.Hash][]byte),
 	}
 }
@@ -110,33 +214,46 @@ func (db *Database) DiskDB() DatabaseReader {
 	return db.diskdb
 }
 
-// Insert writes a new trie node to the memory database if it's yet unknown. The
-// method will make a copy of the slice.
-func (db *Database) Insert(hash common.Hash, blob []byte) {
+// InsertBlob writes a new reference tracked blob to the memory database if it's
+// yet unknown. This method should only be used for non-trie nodes that require
+// reference counting, since trie nodes are garbage collected directly through
+// their embedded children.
+func (db *Database) InsertBlob(hash common.Hash, blob []byte) {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	db.insert(hash, blob)
+	db.insert(hash, blob, rawNode(blob))
 }
 
-// insert is the private locked version of Insert.
-func (db *Database) insert(hash common.Hash, blob []byte) {
+// insert inserts a collapsed trie node into the memory database. This method is
+// a more generic version of InsertBlob, supporting both raw blob insertions as
+// well ex trie node insertions. The blob must always be specified to allow proper
+// size tracking.
+func (db *Database) insert(hash common.Hash, blob []byte, node node) {
 	// If the node's already cached, skip
 	if _, ok := db.nodes[hash]; ok {
 		return
 	}
-	db.nodes[hash] = &cachedNode{
-		blob:      common.CopyBytes(blob),
-		children:  make(map[common.Hash]int),
+	// Create the cached entry for this node
+	entry := &cachedNode{
+		node:      node,
+		size:      uint16(len(blob)),
 		flushPrev: db.newest,
 	}
+	for _, child := range entry.childs() {
+		if c := db.nodes[child]; c != nil {
+			c.parents++
+		}
+	}
+	db.nodes[hash] = entry
+
 	// Update the flush-list endpoints
 	if db.oldest == (common.Hash{}) {
 		db.oldest, db.newest = hash, hash
 	} else {
 		db.nodes[db.newest].flushNext, db.newest = hash, hash
 	}
-	db.nodesSize += common.StorageSize(common.HashLength + len(blob))
+	db.nodesSize += common.StorageSize(common.HashLength + entry.size)
 }
 
 // insertPreimage writes a new trie node pre-image to the memory database if it's
@@ -151,8 +268,27 @@ func (db *Database) insertPreimage(hash common.Hash, preimage []byte) {
 	db.preimagesSize += common.StorageSize(common.HashLength + len(preimage))
 }
 
-// Node retrieves a cached trie node from memory. If it cannot be found cached,
-// the method queries the persistent database for the content.
+// node retrieves a cached trie node from memory, or returns nil if none can be
+// found in the memory cache.
+func (db *Database) node(hash common.Hash, cachegen uint16) node {
+	// Retrieve the node from cache if available
+	db.lock.RLock()
+	node := db.nodes[hash]
+	db.lock.RUnlock()
+
+	if node != nil {
+		return node.obj(hash, cachegen)
+	}
+	// Content unavailable in memory, attempt to retrieve from disk
+	enc, err := db.diskdb.Get(hash[:])
+	if err != nil || enc == nil {
+		return nil
+	}
+	return mustDecodeNode(hash[:], enc, cachegen)
+}
+
+// Node retrieves an encoded cached trie node from memory. If it cannot be found
+// cached, the method queries the persistent database for the content.
 func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// Retrieve the node from cache if available
 	db.lock.RLock()
@@ -160,7 +296,7 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	db.lock.RUnlock()
 
 	if node != nil {
-		return node.blob, nil
+		return node.rlp(), nil
 	}
 	// Content unavailable in memory, attempt to retrieve from disk
 	return db.diskdb.Get(hash[:])
@@ -222,20 +358,22 @@ func (db *Database) reference(child common.Hash, parent common.Hash) {
 		return
 	}
 	// If the reference already exists, only duplicate for roots
-	if _, ok = db.nodes[parent].children[child]; ok && parent != (common.Hash{}) {
+	if db.nodes[parent].children == nil {
+		db.nodes[parent].children = make(map[common.Hash]uint16)
+	} else if _, ok = db.nodes[parent].children[child]; ok && parent != (common.Hash{}) {
 		return
 	}
 	node.parents++
 	db.nodes[parent].children[child]++
 }
 
-// Dereference removes an existing reference from a parent node to a child node.
-func (db *Database) Dereference(child common.Hash, parent common.Hash) {
+// Dereference removes an existing reference from a root node.
+func (db *Database) Dereference(root common.Hash) {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
 	nodes, storage, start := len(db.nodes), db.nodesSize, time.Now()
-	db.dereference(child, parent)
+	db.dereference(root, common.Hash{})
 
 	db.gcnodes += uint64(nodes - len(db.nodes))
 	db.gcsize += storage - db.nodesSize
@@ -254,9 +392,11 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 	// Dereference the parent-child
 	node := db.nodes[parent]
 
-	node.children[child]--
-	if node.children[child] == 0 {
-		delete(node.children, child)
+	if node.children != nil && node.children[child] > 0 {
+		node.children[child]--
+		if node.children[child] == 0 {
+			delete(node.children, child)
+		}
 	}
 	// If the child does not exist, it's a previously committed node.
 	node, ok := db.nodes[child]
@@ -274,11 +414,11 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 			db.nodes[node.flushNext].flushPrev = node.flushPrev
 		}
 		// Dereference all children and delete the node
-		for hash := range node.children {
+		for _, hash := range node.childs() {
 			db.dereference(hash, child)
 		}
 		delete(db.nodes, child)
-		db.nodesSize -= common.StorageSize(common.HashLength + len(node.blob))
+		db.nodesSize -= common.StorageSize(common.HashLength + int(node.size))
 	}
 }
 
@@ -323,7 +463,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	for size > limit && oldest != (common.Hash{}) {
 		// Fetch the oldest referenced node and push into the batch
 		node := db.nodes[oldest]
-		if err := batch.Put(oldest[:], node.blob); err != nil {
+		if err := batch.Put(oldest[:], node.rlp()); err != nil {
 			db.lock.RUnlock()
 			return err
 		}
@@ -340,7 +480,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		// is the total size, including both the useful cached data (hash -> blob), as
 		// well as the flushlist metadata (2*hash). When flushing items from the cache,
 		// we need to reduce both.
-		size -= common.StorageSize(3*common.HashLength + len(node.blob))
+		size -= common.StorageSize(3*common.HashLength + int(node.size))
 		oldest = node.flushNext
 	}
 	// Flush out any remainder data from the last batch
@@ -364,7 +504,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		delete(db.nodes, db.oldest)
 		db.oldest = node.flushNext
 
-		db.nodesSize -= common.StorageSize(common.HashLength + len(node.blob))
+		db.nodesSize -= common.StorageSize(common.HashLength + int(node.size))
 	}
 	if db.oldest != (common.Hash{}) {
 		db.nodes[db.oldest].flushPrev = common.Hash{}
@@ -460,12 +600,12 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch) error {
 	if !ok {
 		return nil
 	}
-	for child := range node.children {
+	for _, child := range node.childs() {
 		if err := db.commit(child, batch); err != nil {
 			return err
 		}
 	}
-	if err := batch.Put(hash[:], node.blob); err != nil {
+	if err := batch.Put(hash[:], node.rlp()); err != nil {
 		return err
 	}
 	// If we've reached an optimal batch size, commit and start over
@@ -496,11 +636,11 @@ func (db *Database) uncache(hash common.Hash) {
 		db.nodes[node.flushNext].flushPrev = node.flushPrev
 	}
 	// Uncache the node's subtries and remove the node itself too
-	for child := range node.children {
+	for _, child := range node.childs() {
 		db.uncache(child)
 	}
 	delete(db.nodes, hash)
-	db.nodesSize -= common.StorageSize(common.HashLength + len(node.blob))
+	db.nodesSize -= common.StorageSize(common.HashLength + int(node.size))
 }
 
 // Size returns the current storage size of the memory cache in front of the

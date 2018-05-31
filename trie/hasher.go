@@ -184,22 +184,10 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 
 	if db != nil {
 		// We are pooling the trie nodes into an intermediate memory cache
-		db.lock.Lock()
 		hash := common.BytesToHash(hash)
-		db.insert(hash, h.tmp)
-		// Track all direct parent->child node references
-		switch n := n.(type) {
-		case *shortNode:
-			if child, ok := n.Val.(hashNode); ok {
-				db.reference(common.BytesToHash(child), hash)
-			}
-		case *fullNode:
-			for i := 0; i < 16; i++ {
-				if child, ok := n.Children[i].(hashNode); ok {
-					db.reference(common.BytesToHash(child), hash)
-				}
-			}
-		}
+
+		db.lock.Lock()
+		db.insert(hash, h.tmp, n)
 		db.lock.Unlock()
 
 		// Track external references from account->storage trie
