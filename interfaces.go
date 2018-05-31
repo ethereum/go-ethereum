@@ -1,3 +1,4 @@
+// SUGGESTIONS BY NIKHIL KARKHANIS 
 // Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
