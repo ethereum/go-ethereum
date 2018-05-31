@@ -363,7 +363,11 @@ DEPRECATED: use 'swarm db clean'.
 	app.Flags = append(app.Flags, swarmmetrics.Flags...)
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
-		if err := debug.Setup(ctx); err != nil {
+		disklogs := ""
+		if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
+			disklogs = (&node.Config{DataDir: utils.MakeDataDir(ctx)}).ResolvePath("logs")
+		}
+		if err := debug.Setup(ctx, disklogs); err != nil {
 			return err
 		}
 		swarmmetrics.Setup(ctx)

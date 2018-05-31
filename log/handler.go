@@ -9,6 +9,10 @@ import (
 	"sync"
 
 	"github.com/go-stack/stack"
+	"io/ioutil"
+	"path/filepath"
+	"regexp"
+	"strings"
 )
 
 // Handler defines where and how log records are written.
@@ -68,6 +72,103 @@ func FileHandler(path string, fmtr Format) (Handler, error) {
 		return nil, err
 	}
 	return closingHandler{f, StreamHandler(f, fmtr)}, nil
+}
+
+type writeCounter struct {
+	w     io.Writer
+	count uint
+}
+
+func (w *writeCounter) Write(p []byte) (n int, err error) {
+	n, err = w.w.Write(p)
+	w.count += uint(n)
+	return n, err
+}
+
+// RotatingFileHandler returns a handler which writes log records to file chunks
+// at the given path. When a file's size reaches the limit, the handler creates
+// a new file named after the timestamp of the first log record it will contain.
+func RotatingFileHandler(path string, limit uint, formatter Format) Handler {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		panic(err)
+	}
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		panic(err)
+	}
+	counter := new(writeCounter)
+	h := StreamHandler(counter, formatter)
+
+	re := regexp.MustCompile(".log$")
+	var i int
+	for i = len(files) - 1; i >= 0 && (!files[i].Mode().IsRegular() || !re.Match([]byte(files[i].Name()))); i-- {
+	}
+	if i >= 0 {
+		// Open the last file, and continue to write into it until it's size reaches the limit.
+		last := files[i]
+		if last.Size() >= int64(limit) {
+			goto createNew
+		}
+		f, err := os.OpenFile(filepath.Join(path, last.Name()), os.O_RDWR|os.O_APPEND, 0644)
+		if err != nil {
+			goto createNew
+		}
+		// The previous execution could have been finished by interruption, in this case cut the invalid
+		// record from the end. Assume that every line ended by '\n' contains a valid log record.
+		bufSize := int64(100)
+		buf := make([]byte, bufSize)
+		cut := bufSize
+		if _, err = f.Seek(-bufSize, 2); err != nil {
+			goto createNew
+		}
+		n, err := f.Read(buf)
+		for err == nil {
+			for ; n > 0 && buf[n-1] != '\n'; n-- {
+			}
+			if n > 0 {
+				break
+			}
+			if _, err = f.Seek(-2*bufSize, 1); err != nil {
+				break
+			}
+			cut += bufSize
+			n, err = f.Read(buf)
+		}
+		if err != nil {
+			goto createNew
+		}
+		cut -= int64(n)
+
+		ns := last.Size() - cut
+		if err = f.Truncate(ns); err != nil {
+			goto createNew
+		}
+		counter.w = f
+		counter.count = uint(ns)
+	}
+createNew:
+
+	return FuncHandler(func(r *Record) error {
+		if counter.count > limit || counter.w == nil {
+			// TODO (kurkomisi): close the last file too.
+			if f, ok := counter.w.(*os.File); ok {
+				if err := f.Close(); err != nil {
+					return err
+				}
+			}
+			f, err := os.OpenFile(
+				filepath.Join(path, fmt.Sprintf("%s.log", strings.Replace(r.Time.Format("060102150405.00"), ".", "", 1))),
+				os.O_CREATE|os.O_APPEND|os.O_WRONLY,
+				0644,
+			)
+			if err != nil {
+				return err
+			}
+			counter.w = f
+			counter.count = 0
+		}
+		return h.Log(r)
+	})
 }
 
 // NetHandler opens a socket to the given address and writes records

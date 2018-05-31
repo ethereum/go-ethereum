@@ -1189,7 +1189,7 @@ func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config, commit st
 		var lesServ *les.LightEthereum
 		ctx.Service(&lesServ)
 
-		return dashboard.New(cfg, commit, ethServ, lesServ)
+		return dashboard.New(cfg, commit, ethServ, lesServ, ctx.ResolvePath("logs"))
 	})
 }
 
