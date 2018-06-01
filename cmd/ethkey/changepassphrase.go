@@ -10,6 +10,11 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var newPassphraseFlag = cli.StringFlag{
+	Name:  "newpassowrdfile",
+	Usage: "the file that contains the new passphrase for the keyfile",
+}
+
 var commandChangePassphrase = cli.Command{
 	Name:      "changepassphrase",
 	Usage:     "change the passphrase on a keyfile",
@@ -18,10 +23,7 @@ var commandChangePassphrase = cli.Command{
 Change the passphrase of a keyfile.`,
 	Flags: []cli.Flag{
 		passphraseFlag,
-		cli.StringFlag{
-			Name:  "newpassfile",
-			Usage: "the file that contains the new passphrase for the keyfile",
-		},
+		newPassphraseFlag,
 	},
 	Action: func(ctx *cli.Context) error {
 		keyfilepath := ctx.Args().First()
@@ -42,22 +44,18 @@ Change the passphrase of a keyfile.`,
 		// Get a new passphrase.
 		fmt.Println("Please provide a new passphrase")
 		var newPhrase string
-		// Look for the --newpassfile flag.
-		if passFile := ctx.String(passphraseFlag.Name); passFile != "" {
+		if passFile := ctx.String(newPassphraseFlag.Name); passFile != "" {
 			content, err := ioutil.ReadFile(passFile)
 			if err != nil {
-				utils.Fatalf("Failed to read new passphrase file '%s': %v",
-					passFile, err)
+				utils.Fatalf("Failed to read new passphrase file '%s': %v", passFile, err)
 			}
 			newPhrase = strings.TrimRight(string(content), "\r\n")
 		} else {
-			// If not present, ask for new passphrase.
 			newPhrase = promptPassphrase(true)
 		}
 
 		// Encrypt the key with the new passphrase.
-		newJson, err := keystore.EncryptKey(key, newPhrase,
-			keystore.StandardScryptN, keystore.StandardScryptP)
+		newJson, err := keystore.EncryptKey(key, newPhrase, keystore.StandardScryptN, keystore.StandardScryptP)
 		if err != nil {
 			utils.Fatalf("Error encrypting with new passphrase: %v", err)
 		}

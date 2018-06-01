@@ -49,11 +49,11 @@ func promptPassphrase(confirmation bool) string {
 	return passphrase
 }
 
-// getPassPhrase obtains a passphrase given by the user.  It first checks the
+// getPassphrase obtains a passphrase given by the user.  It first checks the
 // --passfile command line flag and ultimately prompts the user for a
 // passphrase.
 func getPassphrase(ctx *cli.Context) string {
-	// Look for the --passfile flag.
+	// Look for the --passwordfile flag.
 	passphraseFile := ctx.String(passphraseFlag.Name)
 	if passphraseFile != "" {
 		content, err := ioutil.ReadFile(passphraseFile)

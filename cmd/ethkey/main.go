@@ -47,7 +47,7 @@ func init() {
 // Commonly used command line flags.
 var (
 	passphraseFlag = cli.StringFlag{
-		Name:  "passfile",
+		Name:  "passwordfile",
 		Usage: "the file that contains the passphrase for the keyfile",
 	}
 	jsonFlag = cli.BoolFlag{
