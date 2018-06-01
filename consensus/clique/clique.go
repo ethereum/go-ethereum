@@ -47,7 +47,8 @@ const (
 	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	wiggleTime = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+	wiggleTime      = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+	genesisCoinBase = "0x0000000000000000000000000000000000000000"
 )
 
 // Clique proof-of-authority protocol constants.
@@ -372,6 +373,26 @@ func (c *Clique) GetSnapshot(chain consensus.ChainReader, header *types.Header) 
 		return nil, err
 	}
 	return snap, nil
+}
+
+func position(list []common.Address, x common.Address) int {
+	for i, item := range list {
+		if item == x {
+			return i
+		}
+	}
+	return -1
+}
+
+func YourTurn(snap *Snapshot, header *types.Header, cur common.Address) (bool, error) {
+	pre, err := ecrecover(header, snap.sigcache)
+	if err != nil {
+		return false, err
+	}
+	preIndex := position(snap.signers(), pre)
+	curIndex := position(snap.signers(), cur)
+	log.Info("Debugging info", "number of masternodes", len(snap.signers()), "previous", pre, "position", preIndex, "current", cur, "position", curIndex)
+	return (preIndex+1)%len(snap.signers()) == curIndex || pre.String() == genesisCoinBase, nil
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
