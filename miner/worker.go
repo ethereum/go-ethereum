@@ -26,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -489,9 +488,8 @@ func (self *worker) commitNewWork() {
 		log.Info("Commit new mining work", "number", work.Block.Number(), "txs", work.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}
-	if (work.Block.NumberU64() % work.config.Clique.Epoch) == 0 {
-		log.Info("hey checkpoint")
-		clique.Checkpoint <- 1
+	if (work.config.Clique != nil) && (work.Block.NumberU64()%work.config.Clique.Epoch) == 0 {
+		core.Checkpoint <- 1
 	}
 	self.push(work)
 }
