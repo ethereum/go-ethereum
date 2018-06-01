@@ -169,14 +169,14 @@ func (s *LesServer) APIs() []rpc.API {
 	}
 }
 
-// getCheckpoint finds the common stored section index and returns a set of
+// latestCheckpoint finds the common stored section index and returns a set of
 // post-processed trie roots (CHT and BloomTrie) associated with
 // the appropriate section index and head hash as a checkpoint package.
 //
 // Note for cht, the section size in LES1 is 4K, so indexer still uses LES/1
 // 4k section size for backwards server compatibility. For bloomTrie, the size
 // of the section used for indexer is 32K.
-func (s *LesServer) getCheckpoint() (uint64, common.Hash, common.Hash, common.Hash) {
+func (s *LesServer) latestCheckpoint() (uint64, common.Hash, common.Hash, common.Hash) {
 	chtCount, _, _ := s.chtIndexer.Sections()
 	bloomTrieCount, _, _ := s.bloomTrieIndexer.Sections()
 	count := chtCount / (light.CHTFrequencyClient / light.CHTFrequencyServer)
@@ -188,13 +188,20 @@ func (s *LesServer) getCheckpoint() (uint64, common.Hash, common.Hash, common.Ha
 		// No checkpoint information can be provided.
 		return 0, common.Hash{}, common.Hash{}, common.Hash{}
 	}
+	sectionHead, chtRoot, bloomTrieRoot := s.getCheckpoint(count - 1)
+	return count - 1, sectionHead, chtRoot, bloomTrieRoot
+}
+
+// getCheckpoint returns a set of post-processed trie roots (CHT and BloomTrie)
+// associated with the appropriate head hash by specific section index.
+func (s *LesServer) getCheckpoint(index uint64) (common.Hash, common.Hash, common.Hash) {
 	// convert last LES/2 section index back to LES/1 index for chtIndexer.SectionHead
-	latest := count*(light.CHTFrequencyClient/light.CHTFrequencyServer) - 1
+	latest := (index+1)*(light.CHTFrequencyClient/light.CHTFrequencyServer) - 1
 
 	sectionHead := s.chtIndexer.SectionHead(latest)
 	chtRoot := light.GetChtRoot(s.protocolManager.chainDb, latest, sectionHead)
-	bloomTrieRoot := light.GetBloomTrieRoot(s.protocolManager.chainDb, count-1, sectionHead)
-	return count - 1, sectionHead, chtRoot, bloomTrieRoot
+	bloomTrieRoot := light.GetBloomTrieRoot(s.protocolManager.chainDb, index, sectionHead)
+	return sectionHead, chtRoot, bloomTrieRoot
 }
 
 // checkpointLoop starts a standalone goroutine to watch new checkpoint event and updates local's stable checkpoint.
