@@ -636,12 +636,19 @@ web3._extend({
 const LES_JS = `
 web3._extend({
 	property: 'les',
-	methods: [],
+	methods: 
+	[
+		new web3._extend.Method({
+			name: 'getCheckpoint',
+			call: 'les_getCheckpoint',
+			params: 1
+		}),
+	],
 	properties: 
 	[
 		new web3._extend.Property({
-			name: 'checkpoint',
-			getter: 'les_checkpoint'
+			name: 'latestCheckpoint',
+			getter: 'les_latestCheckpoint'
 		}),
 	]
 });

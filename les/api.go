@@ -48,13 +48,29 @@ func NewPublicLesServerAPI(server *LesServer) *PublicLesServerAPI {
 //   result[1], 32 bytes hex encoded latest section head hash
 //   result[2], 32 bytes hex encoded latest section canonical hash trie root hash
 //   result[3], 32 bytes hex encoded latest section bloom trie root hash
-func (api *PublicLesServerAPI) Checkpoint() ([4]string, error) {
+func (api *PublicLesServerAPI) LatestCheckpoint() ([4]string, error) {
 	var res [4]string
-	sectionIdx, sectionHead, chtRoot, bloomTrieRoot := api.server.getCheckpoint()
+	sectionIdx, sectionHead, chtRoot, bloomTrieRoot := api.server.latestCheckpoint()
 	if sectionHead == (common.Hash{}) || chtRoot == (common.Hash{}) || bloomTrieRoot == (common.Hash{}) {
 		return res, errNoStableCheckpoint
 	}
 	res[0] = hexutil.Encode(big.NewInt(int64(sectionIdx)).Bytes())
 	res[1], res[2], res[3] = sectionHead.Hex(), chtRoot.Hex(), bloomTrieRoot.Hex()
+	return res, nil
+}
+
+// GetCheckpoint returns the specific checkpoint package.
+//
+// The checkpoint package consists of 3 strings:
+//   result[0], 32 bytes hex encoded latest section head hash
+//   result[1], 32 bytes hex encoded latest section canonical hash trie root hash
+//   result[2], 32 bytes hex encoded latest section bloom trie root hash
+func (api *PublicLesServerAPI) GetCheckpoint(index uint64) ([3]string, error) {
+	var res [3]string
+	sectionHead, chtRoot, bloomTrieRoot := api.server.getCheckpoint(index)
+	if sectionHead == (common.Hash{}) || chtRoot == (common.Hash{}) || bloomTrieRoot == (common.Hash{}) {
+		return res, errNoStableCheckpoint
+	}
+	res[0], res[1], res[2] = sectionHead.Hex(), chtRoot.Hex(), bloomTrieRoot.Hex()
 	return res, nil
 }
