@@ -30,6 +30,7 @@ var Modules = map[string]string{
 	"shh":        Shh_JS,
 	"swarmfs":    SWARMFS_JS,
 	"txpool":     TxPool_JS,
+	"les":        LES_JS,
 }
 
 const Chequebook_JS = `
@@ -627,6 +628,20 @@ web3._extend({
 				status.queued = web3._extend.utils.toDecimal(status.queued);
 				return status;
 			}
+		}),
+	]
+});
+`
+
+const LES_JS = `
+web3._extend({
+	property: 'les',
+	methods: [],
+	properties: 
+	[
+		new web3._extend.Property({
+			name: 'checkpoint',
+			getter: 'les_checkpoint'
 		}),
 	]
 });
