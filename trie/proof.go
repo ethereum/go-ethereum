@@ -102,28 +102,28 @@ func (t *SecureTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) err
 // VerifyProof checks merkle proofs. The given proof must contain the value for
 // key in a trie with the given root hash. VerifyProof returns an error if the
 // proof contains invalid trie nodes or the wrong value.
-func VerifyProof(rootHash common.Hash, key []byte, proofDb DatabaseReader) (value []byte, err error, nodes int) {
+func VerifyProof(rootHash common.Hash, key []byte, proofDb DatabaseReader) (value []byte, nodes int, err error) {
 	key = keybytesToHex(key)
 	wantHash := rootHash
 	for i := 0; ; i++ {
 		buf, _ := proofDb.Get(wantHash[:])
 		if buf == nil {
-			return nil, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash), i
+			return nil, i, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash)
 		}
 		n, err := decodeNode(wantHash[:], buf, 0)
 		if err != nil {
-			return nil, fmt.Errorf("bad proof node %d: %v", i, err), i
+			return nil, i, fmt.Errorf("bad proof node %d: %v", i, err)
 		}
 		keyrest, cld := get(n, key)
 		switch cld := cld.(type) {
 		case nil:
 			// The trie doesn't contain the key.
-			return nil, nil, i
+			return nil, i, nil
 		case hashNode:
 			key = keyrest
 			copy(wantHash[:], cld)
 		case valueNode:
-			return cld, nil, i + 1
+			return cld, i + 1, nil
 		}
 	}
 }

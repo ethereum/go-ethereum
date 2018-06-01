@@ -11,8 +11,8 @@ import (
 	"github.com/go-stack/stack"
 )
 
+// Handler defines where and how log records are written.
 // A Logger prints its log records by writing to a Handler.
-// The Handler interface defines where and how log records are written.
 // Handlers are composable, providing you great flexibility in combining
 // them to achieve the logging structure that suits your applications.
 type Handler interface {
@@ -193,7 +193,7 @@ func LvlFilterHandler(maxLvl Lvl, h Handler) Handler {
 	}, h)
 }
 
-// A MultiHandler dispatches any write to each of its handlers.
+// MultiHandler dispatches any write to each of its handlers.
 // This is useful for writing different types of log information
 // to different locations. For example, to log to a file and
 // standard error:
@@ -212,7 +212,7 @@ func MultiHandler(hs ...Handler) Handler {
 	})
 }
 
-// A FailoverHandler writes all log records to the first handler
+// FailoverHandler writes all log records to the first handler
 // specified, but will failover and write to the second handler if
 // the first handler has failed, and so on for all handlers specified.
 // For example you might want to log to a network socket, but failover
@@ -220,7 +220,7 @@ func MultiHandler(hs ...Handler) Handler {
 // standard out if the file write fails:
 //
 //     log.FailoverHandler(
-//         log.Must.NetHandler("tcp", ":9090", log.JsonFormat()),
+//         log.Must.NetHandler("tcp", ":9090", log.JSONFormat()),
 //         log.Must.FileHandler("/var/log/app.log", log.LogfmtFormat()),
 //         log.StdoutHandler)
 //
@@ -336,7 +336,7 @@ func DiscardHandler() Handler {
 	})
 }
 
-// The Must object provides the following Handler creation functions
+// Must provides the following Handler creation functions
 // which instead of returning an error parameter only return a Handler
 // and panic on failure: FileHandler, NetHandler, SyslogHandler, SyslogNetHandler
 var Must muster
