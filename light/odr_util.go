@@ -49,7 +49,8 @@ func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*typ
 	if odr.ChtIndexer() != nil {
 		chtCount, sectionHeadNum, sectionHead = odr.ChtIndexer().Sections()
 		canonicalHash := rawdb.ReadCanonicalHash(db, sectionHeadNum)
-		// if the CHT was injected as a trusted checkpoint, we have no canonical hash yet so we accept zero hash too
+		// if the CHT was injected as a trusted checkpoint,
+		// we have no canonical hash yet so we accept zero hash too
 		for chtCount > 0 && canonicalHash != sectionHead && canonicalHash != (common.Hash{}) {
 			chtCount--
 			if chtCount > 0 {
@@ -94,8 +95,7 @@ func GetBodyRLP(ctx context.Context, odr OdrBackend, hash common.Hash, number ui
 	}
 }
 
-// GetBody retrieves the block body (transactons, uncles) corresponding to the
-// hash.
+// GetBody retrieves the block body (transactons, uncles) corresponding to the hash.
 func GetBody(ctx context.Context, odr OdrBackend, hash common.Hash, number uint64) (*types.Body, error) {
 	data, err := GetBodyRLP(ctx, odr, hash, number)
 	if err != nil {
@@ -173,7 +173,8 @@ func GetBlockLogs(ctx context.Context, odr OdrBackend, hash common.Hash, number 
 	return logs, nil
 }
 
-// GetBloomBits retrieves a batch of compressed bloomBits vectors belonging to the given bit index and section indexes
+// GetBloomBits retrieves a batch of compressed bloomBits vectors
+// belonging to the given bit index and section indexes
 func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint, sectionIdxList []uint64) ([][]byte, error) {
 	db := odr.Database()
 	result := make([][]byte, len(sectionIdxList))
@@ -189,7 +190,8 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint, sectionIdxLi
 	if odr.BloomTrieIndexer() != nil {
 		bloomTrieCount, sectionHeadNum, sectionHead = odr.BloomTrieIndexer().Sections()
 		canonicalHash := rawdb.ReadCanonicalHash(db, sectionHeadNum)
-		// if the BloomTrie was injected as a trusted checkpoint, we have no canonical hash yet so we accept zero hash too
+		// if the BloomTrie was injected as a trusted checkpoint,
+		// we have no canonical hash yet so we accept zero hash too
 		for bloomTrieCount > 0 && canonicalHash != sectionHead && canonicalHash != (common.Hash{}) {
 			bloomTrieCount--
 			if bloomTrieCount > 0 {
@@ -220,7 +222,12 @@ func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint, sectionIdxLi
 		return result, nil
 	}
 
-	r := &BloomRequest{BloomTrieRoot: GetBloomTrieRoot(db, bloomTrieCount-1, sectionHead), BloomTrieNum: bloomTrieCount - 1, BitIdx: bitIdx, SectionIdxList: reqList}
+	r := &BloomRequest{
+		BloomTrieRoot:  GetBloomTrieRoot(db, bloomTrieCount-1, sectionHead),
+		BloomTrieNum:   bloomTrieCount - 1,
+		BitIdx:         bitIdx,
+		SectionIdxList: reqList,
+	}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
 	} else {
