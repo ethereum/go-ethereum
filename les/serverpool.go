@@ -85,10 +85,11 @@ const (
 	// initStatsWeight is used to initialize previously unknown peers with good
 	// statistics to give a chance to prove themselves
 	initStatsWeight = 1
+	baseStatsWeight = 1000000000
 )
 
 // serverPool implements a pool for storing and selecting newly discovered and already
-// known light server nodes. It received discovered nodes, stores statistics about
+// known light server nodes. It receives discovered nodes, stores statistics about
 // known nodes and takes care of always having enough good quality servers connected.
 type serverPool struct {
 	db     ethdb.Database
@@ -560,7 +561,15 @@ type poolEntry struct {
 }
 
 func (e *poolEntry) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{e.id, e.lastConnected.ip, e.lastConnected.port, e.lastConnected.fails, &e.connectStats, &e.delayStats, &e.responseStats, &e.timeoutStats})
+	return rlp.Encode(w, []interface{}{
+		e.id,
+		e.lastConnected.ip,
+		e.lastConnected.port,
+		e.lastConnected.fails,
+		&e.connectStats,
+		&e.delayStats,
+		&e.responseStats,
+		&e.timeoutStats})
 }
 
 func (e *poolEntry) DecodeRLP(s *rlp.Stream) error {
@@ -574,7 +583,12 @@ func (e *poolEntry) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&entry); err != nil {
 		return err
 	}
-	addr := &poolEntryAddress{ip: entry.IP, port: entry.Port, fails: entry.Fails, lastSeen: mclock.Now()}
+	addr := &poolEntryAddress{
+		ip:       entry.IP,
+		port:     entry.Port,
+		fails:    entry.Fails,
+		lastSeen: mclock.Now(),
+	}
 	e.id = entry.ID
 	e.addr = make(map[string]*poolEntryAddress)
 	e.addr[addr.strKey()] = addr
@@ -600,9 +614,9 @@ func (e *discoveredEntry) Weight() int64 {
 	}
 	t := time.Duration(mclock.Now() - e.lastDiscovered)
 	if t <= discoverExpireStart {
-		return 1000000000
+		return baseStatsWeight
 	}
-	return int64(1000000000 * math.Exp(-float64(t-discoverExpireStart)/float64(discoverExpireConst)))
+	return int64(baseStatsWeight * math.Exp(-float64(t-discoverExpireStart)/float64(discoverExpireConst)))
 }
 
 // knownEntry implements wrsItem
@@ -613,7 +627,12 @@ func (e *knownEntry) Weight() int64 {
 	if e.state != psNotConnected || !e.known || e.delayedRetry {
 		return 0
 	}
-	return int64(1000000000 * e.connectStats.recentAvg() * math.Exp(-float64(e.lastConnected.fails)*failDropLn-e.responseStats.recentAvg()/float64(responseScoreTC)-e.delayStats.recentAvg()/float64(delayScoreTC)) * math.Pow(1-e.timeoutStats.recentAvg(), timeoutPow))
+	return int64(baseStatsWeight *
+		e.connectStats.recentAvg() *
+		math.Exp(-float64(e.lastConnected.fails)*failDropLn-
+			e.responseStats.recentAvg()/float64(responseScoreTC)-
+			e.delayStats.recentAvg()/float64(delayScoreTC)) *
+		math.Pow(1-e.timeoutStats.recentAvg(), timeoutPow))
 }
 
 // poolEntryAddress is a separate object because currently it is necessary to remember
@@ -629,7 +648,9 @@ type poolEntryAddress struct {
 
 func (a *poolEntryAddress) Weight() int64 {
 	t := time.Duration(mclock.Now() - a.lastSeen)
-	return int64(1000000*math.Exp(-float64(t)/float64(discoverExpireConst)-float64(a.fails)*addrFailDropLn)) + 1
+	return 1 + int64(baseStatsWeight*
+		math.Exp(-float64(t)/float64(discoverExpireConst)-
+			float64(a.fails)*addrFailDropLn))
 }
 
 func (a *poolEntryAddress) strKey() string {
@@ -688,7 +709,9 @@ func (s *poolStats) recentAvg() float64 {
 }
 
 func (s *poolStats) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{math.Float64bits(s.sum), math.Float64bits(s.weight)})
+	return rlp.Encode(w, []interface{}{
+		math.Float64bits(s.sum),
+		math.Float64bits(s.weight)})
 }
 
 func (s *poolStats) DecodeRLP(st *rlp.Stream) error {
@@ -712,7 +735,11 @@ type poolEntryQueue struct {
 
 // newPoolEntryQueue returns a new poolEntryQueue
 func newPoolEntryQueue(maxCnt int, removeFromPool func(*poolEntry)) poolEntryQueue {
-	return poolEntryQueue{queue: make(map[int]*poolEntry), maxCnt: maxCnt, removeFromPool: removeFromPool}
+	return poolEntryQueue{
+		queue:          make(map[int]*poolEntry),
+		maxCnt:         maxCnt,
+		removeFromPool: removeFromPool,
+	}
 }
 
 // fetchOldest returns and removes the least recently accessed entry

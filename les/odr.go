@@ -33,7 +33,13 @@ type LesOdr struct {
 	stop                                       chan struct{}
 }
 
-func NewLesOdr(db ethdb.Database, chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer, retriever *retrieveManager) *LesOdr {
+// NewLesOdr creates a struct instance of LesOdr
+func NewLesOdr(
+	db ethdb.Database,
+	chtIndexer,
+	bloomTrieIndexer,
+	bloomIndexer *core.ChainIndexer,
+	retriever *retrieveManager) *LesOdr {
 	return &LesOdr{
 		db:               db,
 		chtIndexer:       chtIndexer,
@@ -108,7 +114,10 @@ func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err erro
 		},
 	}
 
-	if err = odr.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(odr.db, msg) }, odr.stop); err == nil {
+	if err = odr.retriever.retrieve(ctx, reqID, rq,
+		func(p distPeer, msg *Msg) error {
+			return lreq.Validate(odr.db, msg)
+		}, odr.stop); err == nil {
 		// retrieved from network, store in db
 		req.StoreResult(odr.db)
 	} else {

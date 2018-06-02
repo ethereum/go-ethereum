@@ -65,7 +65,8 @@ type LightEthereum struct {
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
 
-	bloomRequests                              chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
+	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
+
 	bloomIndexer, chtIndexer, bloomTrieIndexer *core.ChainIndexer
 
 	ApiBackend *LesApiBackend
@@ -127,7 +128,10 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	}
 
 	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
-	if leth.protocolManager, err = NewProtocolManager(leth.chainConfig, true, ClientProtocolVersions, config.NetworkId, leth.eventMux, leth.engine, leth.peers, leth.blockchain, nil, chainDb, leth.odr, leth.relay, quitSync, &leth.wg); err != nil {
+	if leth.protocolManager, err = NewProtocolManager(
+		leth.chainConfig, true, ClientProtocolVersions, config.NetworkId,
+		leth.eventMux, leth.engine, leth.peers, leth.blockchain,
+		nil, chainDb, leth.odr, leth.relay, quitSync, &leth.wg); err != nil {
 		return nil, err
 	}
 	leth.ApiBackend = &LesApiBackend{leth, nil}

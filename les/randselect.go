@@ -36,7 +36,10 @@ type weightedRandomSelect struct {
 
 // newWeightedRandomSelect returns a new weightedRandomSelect structure
 func newWeightedRandomSelect() *weightedRandomSelect {
-	return &weightedRandomSelect{root: &wrsNode{maxItems: wrsBranches}, idx: make(map[wrsItem]int)}
+	return &weightedRandomSelect{
+		root: &wrsNode{maxItems: wrsBranches},
+		idx:  make(map[wrsItem]int),
+	}
 }
 
 // update updates an item's weight, adds it if it was non-existent or removes it if
@@ -62,7 +65,12 @@ func (w *weightedRandomSelect) setWeight(item wrsItem, weight int64) {
 		if weight != 0 {
 			if w.root.itemCnt == w.root.maxItems {
 				// add a new level
-				newRoot := &wrsNode{sumWeight: w.root.sumWeight, itemCnt: w.root.itemCnt, level: w.root.level + 1, maxItems: w.root.maxItems * wrsBranches}
+				newRoot := &wrsNode{
+					sumWeight: w.root.sumWeight,
+					itemCnt:   w.root.itemCnt,
+					level:     w.root.level + 1,
+					maxItems:  w.root.maxItems * wrsBranches,
+				}
 				newRoot.items[0] = w.root
 				newRoot.weights[0] = w.root.sumWeight
 				w.root = newRoot

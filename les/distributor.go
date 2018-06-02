@@ -85,14 +85,14 @@ func newRequestDistributor(peers *peerSet, stopChn chan struct{}) *requestDistri
 	return d
 }
 
-// registerPeer implements peerSetNotify
+// registerPeer adds a new peer
 func (d *requestDistributor) registerPeer(p *peer) {
 	d.peerLock.Lock()
 	d.peers[p] = struct{}{}
 	d.peerLock.Unlock()
 }
 
-// unregisterPeer implements peerSetNotify
+// unregisterPeer deletes an old peer
 func (d *requestDistributor) unregisterPeer(p *peer) {
 	d.peerLock.Lock()
 	delete(d.peers, p)
@@ -144,9 +144,12 @@ func (d *requestDistributor) loop() {
 						// queued request will wake up the loop
 						break loop
 					}
-					d.loopNextSent = true // a "next" signal has been sent, do not send another one until this one has been received
+					// a "next" signal has been sent,
+					// do not send another one until this one has been received
+					d.loopNextSent = true
 					if wait > distMaxWait {
-						// waiting times may be reduced by incoming request replies, if it is too long, recalculate it periodically
+						// waiting times may be reduced by incoming request replies,
+						// if it is too long, recalculate it periodically
 						wait = distMaxWait
 					}
 					go func() {
@@ -200,7 +203,11 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 					if sel == nil {
 						sel = newWeightedRandomSelect()
 					}
-					sel.update(selectPeerItem{peer: peer, req: req, weight: int64(bufRemain*1000000) + 1})
+					sel.update(selectPeerItem{
+						peer:   peer,
+						req:    req,
+						weight: int64(bufRemain*1000000) + 1,
+					})
 				} else {
 					if bestReq == nil || wait < bestWait {
 						bestPeer = peer

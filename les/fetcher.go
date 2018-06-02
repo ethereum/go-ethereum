@@ -363,7 +363,8 @@ func (f *lightFetcher) peerHasBlock(p *peer, hash common.Hash, number uint64) bo
 	//
 	// when syncing, just check if it is part of the known chain, there is nothing better we
 	// can do since we do not know the most recent block hash yet
-	return rawdb.ReadCanonicalHash(f.pm.chainDb, fp.root.number) == fp.root.hash && rawdb.ReadCanonicalHash(f.pm.chainDb, number) == hash
+	return rawdb.ReadCanonicalHash(f.pm.chainDb, fp.root.number) == fp.root.hash &&
+		rawdb.ReadCanonicalHash(f.pm.chainDb, number) == hash
 }
 
 // requestAmount calculates the amount of headers to be downloaded starting
@@ -476,13 +477,20 @@ func (f *lightFetcher) nextRequest() (*distReq, uint64) {
 				cost := p.GetRequestCost(GetBlockHeadersMsg, int(bestAmount))
 				p.fcServer.QueueRequest(reqID, cost)
 				f.reqMu.Lock()
-				f.requested[reqID] = fetchRequest{hash: bestHash, amount: bestAmount, peer: p, sent: mclock.Now()}
+				f.requested[reqID] = fetchRequest{
+					hash:   bestHash,
+					amount: bestAmount,
+					peer:   p,
+					sent:   mclock.Now(),
+				}
 				f.reqMu.Unlock()
 				go func() {
 					time.Sleep(hardRequestTimeout)
 					f.timeoutChn <- reqID
 				}()
-				return func() { p.RequestHeadersByHash(reqID, cost, bestHash, int(bestAmount), 0, true) }
+				return func() {
+					p.RequestHeadersByHash(reqID, cost, bestHash, int(bestAmount), 0, true)
+				}
 			},
 		}
 	}
@@ -497,7 +505,8 @@ func (f *lightFetcher) deliverHeaders(peer *peer, reqID uint64, headers []*types
 // processResponse processes header download request responses, returns true if successful
 func (f *lightFetcher) processResponse(req fetchRequest, resp fetchResponse) bool {
 	if uint64(len(resp.headers)) != req.amount || resp.headers[0].Hash() != req.hash {
-		req.peer.Log().Debug("Response content mismatch", "requested", len(resp.headers), "reqfrom", resp.headers[0], "delivered", req.amount, "delfrom", req.hash)
+		req.peer.Log().Debug("Response content mismatch", "requested", len(resp.headers),
+			"reqfrom", resp.headers[0], "delivered", req.amount, "delfrom", req.hash)
 		return false
 	}
 	headers := make([]*types.Header, req.amount)
