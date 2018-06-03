@@ -50,47 +50,47 @@ func NewLesTxRelay(ps *peerSet, reqDist *requestDistributor) *LesTxRelay {
 	return r
 }
 
-func (self *LesTxRelay) registerPeer(p *peer) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (relay *LesTxRelay) registerPeer(p *peer) {
+	relay.lock.Lock()
+	defer relay.lock.Unlock()
 
-	self.peerList = self.ps.AllPeers()
+	relay.peerList = relay.ps.AllPeers()
 }
 
-func (self *LesTxRelay) unregisterPeer(p *peer) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (relay *LesTxRelay) unregisterPeer(p *peer) {
+	relay.lock.Lock()
+	defer relay.lock.Unlock()
 
-	self.peerList = self.ps.AllPeers()
+	relay.peerList = relay.ps.AllPeers()
 }
 
 // send sends a list of transactions to at most a given number of peers at
 // once, never resending any particular transaction to the same peer twice
-func (self *LesTxRelay) send(txs types.Transactions, count int) {
+func (relay *LesTxRelay) send(txs types.Transactions, count int) {
 	sendTo := make(map[*peer]types.Transactions)
 
-	self.peerStartPos++ // rotate the starting position of the peer list
-	if self.peerStartPos >= len(self.peerList) {
-		self.peerStartPos = 0
+	relay.peerStartPos++ // rotate the starting position of the peer list
+	if relay.peerStartPos >= len(relay.peerList) {
+		relay.peerStartPos = 0
 	}
 
 	for _, tx := range txs {
 		hash := tx.Hash()
-		ltr, ok := self.txSent[hash]
+		ltr, ok := relay.txSent[hash]
 		if !ok {
 			ltr = &ltrInfo{
 				tx:     tx,
 				sentTo: make(map[*peer]struct{}),
 			}
-			self.txSent[hash] = ltr
-			self.txPending[hash] = struct{}{}
+			relay.txSent[hash] = ltr
+			relay.txPending[hash] = struct{}{}
 		}
 
-		if len(self.peerList) > 0 {
+		if len(relay.peerList) > 0 {
 			cnt := count
-			pos := self.peerStartPos
+			pos := relay.peerStartPos
 			for {
-				peer := self.peerList[pos]
+				peer := relay.peerList[pos]
 				if _, ok := ltr.sentTo[peer]; !ok {
 					sendTo[peer] = append(sendTo[peer], tx)
 					ltr.sentTo[peer] = struct{}{}
@@ -100,10 +100,10 @@ func (self *LesTxRelay) send(txs types.Transactions, count int) {
 					break // sent it to the desired number of peers
 				}
 				pos++
-				if pos == len(self.peerList) {
+				if pos == len(relay.peerList) {
 					pos = 0
 				}
-				if pos == self.peerStartPos {
+				if pos == relay.peerStartPos {
 					break // tried all available peers
 				}
 			}
@@ -130,46 +130,46 @@ func (self *LesTxRelay) send(txs types.Transactions, count int) {
 				return func() { peer.SendTxs(reqID, cost, ll) }
 			},
 		}
-		self.reqDist.queue(rq)
+		relay.reqDist.queue(rq)
 	}
 }
 
-func (self *LesTxRelay) Send(txs types.Transactions) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (relay *LesTxRelay) Send(txs types.Transactions) {
+	relay.lock.Lock()
+	defer relay.lock.Unlock()
 
-	self.send(txs, 3)
+	relay.send(txs, 3)
 }
 
-func (self *LesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (relay *LesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
+	relay.lock.Lock()
+	defer relay.lock.Unlock()
 
 	for _, hash := range mined {
-		delete(self.txPending, hash)
+		delete(relay.txPending, hash)
 	}
 
 	for _, hash := range rollback {
-		self.txPending[hash] = struct{}{}
+		relay.txPending[hash] = struct{}{}
 	}
 
-	if len(self.txPending) > 0 {
-		txs := make(types.Transactions, len(self.txPending))
+	if len(relay.txPending) > 0 {
+		txs := make(types.Transactions, len(relay.txPending))
 		i := 0
-		for hash := range self.txPending {
-			txs[i] = self.txSent[hash].tx
+		for hash := range relay.txPending {
+			txs[i] = relay.txSent[hash].tx
 			i++
 		}
-		self.send(txs, 1)
+		relay.send(txs, 1)
 	}
 }
 
-func (self *LesTxRelay) Discard(hashes []common.Hash) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (relay *LesTxRelay) Discard(hashes []common.Hash) {
+	relay.lock.Lock()
+	defer relay.lock.Unlock()
 
 	for _, hash := range hashes {
-		delete(self.txSent, hash)
-		delete(self.txPending, hash)
+		delete(relay.txSent, hash)
+		delete(relay.txPending, hash)
 	}
 }

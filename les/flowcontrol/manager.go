@@ -89,16 +89,16 @@ func NewClientManager(rcTarget, maxSimReq, maxRcSum uint64) *ClientManager {
 	return cm
 }
 
-func (self *ClientManager) Stop() {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (cm *ClientManager) Stop() {
+	cm.lock.Lock()
+	defer cm.lock.Unlock()
 
 	// signal any waiting accept routines to return false
-	self.nodes = make(map[*cmNode]struct{})
-	close(self.resumeQueue)
+	cm.nodes = make(map[*cmNode]struct{})
+	close(cm.resumeQueue)
 }
 
-func (self *ClientManager) addNode(cnode *ClientNode) *cmNode {
+func (cm *ClientManager) addNode(cnode *ClientNode) *cmNode {
 	time := mclock.Now()
 	node := &cmNode{
 		node:           cnode,
@@ -106,28 +106,28 @@ func (self *ClientManager) addNode(cnode *ClientNode) *cmNode {
 		finishRecharge: time,
 		rcWeight:       1,
 	}
-	self.lock.Lock()
-	defer self.lock.Unlock()
+	cm.lock.Lock()
+	defer cm.lock.Unlock()
 
-	self.nodes[node] = struct{}{}
-	self.update(mclock.Now())
+	cm.nodes[node] = struct{}{}
+	cm.update(mclock.Now())
 	return node
 }
 
-func (self *ClientManager) removeNode(node *cmNode) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (cm *ClientManager) removeNode(node *cmNode) {
+	cm.lock.Lock()
+	defer cm.lock.Unlock()
 
 	time := mclock.Now()
-	self.stop(node, time)
-	delete(self.nodes, node)
-	self.update(time)
+	cm.stop(node, time)
+	delete(cm.nodes, node)
+	cm.update(time)
 }
 
 // recalc sumWeight
-func (self *ClientManager) updateNodes(time mclock.AbsTime) (rce bool) {
+func (cm *ClientManager) updateNodes(time mclock.AbsTime) (rce bool) {
 	var sumWeight, rcSum uint64
-	for node := range self.nodes {
+	for node := range cm.nodes {
 		rc := node.recharging
 		node.update(time)
 		if rc && !node.recharging {
@@ -138,44 +138,44 @@ func (self *ClientManager) updateNodes(time mclock.AbsTime) (rce bool) {
 		}
 		rcSum += uint64(node.rcValue)
 	}
-	self.sumWeight = sumWeight
-	self.rcSumValue = rcSum
+	cm.sumWeight = sumWeight
+	cm.rcSumValue = rcSum
 	return
 }
 
-func (self *ClientManager) update(time mclock.AbsTime) {
+func (cm *ClientManager) update(time mclock.AbsTime) {
 	for {
 		firstTime := time
-		for node := range self.nodes {
+		for node := range cm.nodes {
 			if node.recharging && node.finishRecharge < firstTime {
 				firstTime = node.finishRecharge
 			}
 		}
-		if self.updateNodes(firstTime) {
-			for node := range self.nodes {
+		if cm.updateNodes(firstTime) {
+			for node := range cm.nodes {
 				if node.recharging {
-					node.set(node.serving, self.simReqCnt, self.sumWeight)
+					node.set(node.serving, cm.simReqCnt, cm.sumWeight)
 				}
 			}
 		} else {
-			self.time = time
+			cm.time = time
 			return
 		}
 	}
 }
 
-func (self *ClientManager) canStartReq() bool {
-	return self.simReqCnt < self.maxSimReq && self.rcSumValue < self.maxRcSum
+func (cm *ClientManager) canStartReq() bool {
+	return cm.simReqCnt < cm.maxSimReq && cm.rcSumValue < cm.maxRcSum
 }
 
-func (self *ClientManager) queueProc() {
-	for rc := range self.resumeQueue {
+func (cm *ClientManager) queueProc() {
+	for rc := range cm.resumeQueue {
 		for {
 			time.Sleep(time.Millisecond * 10)
-			self.lock.Lock()
-			self.update(mclock.Now())
-			cs := self.canStartReq()
-			self.lock.Unlock()
+			cm.lock.Lock()
+			cm.update(mclock.Now())
+			cs := cm.canStartReq()
+			cm.lock.Unlock()
 			if cs {
 				break
 			}
@@ -184,41 +184,41 @@ func (self *ClientManager) queueProc() {
 	}
 }
 
-func (self *ClientManager) accept(node *cmNode, time mclock.AbsTime) bool {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (cm *ClientManager) accept(node *cmNode, time mclock.AbsTime) bool {
+	cm.lock.Lock()
+	defer cm.lock.Unlock()
 
-	self.update(time)
-	if !self.canStartReq() {
+	cm.update(time)
+	if !cm.canStartReq() {
 		resume := make(chan bool)
-		self.lock.Unlock()
-		self.resumeQueue <- resume
+		cm.lock.Unlock()
+		cm.resumeQueue <- resume
 		<-resume
-		self.lock.Lock()
-		if _, ok := self.nodes[node]; !ok {
+		cm.lock.Lock()
+		if _, ok := cm.nodes[node]; !ok {
 			return false // reject if node has been removed or manager has been stopped
 		}
 	}
-	self.simReqCnt++
-	node.set(true, self.simReqCnt, self.sumWeight)
+	cm.simReqCnt++
+	node.set(true, cm.simReqCnt, cm.sumWeight)
 	node.startValue = node.rcValue
-	self.update(self.time)
+	cm.update(cm.time)
 	return true
 }
 
-func (self *ClientManager) stop(node *cmNode, time mclock.AbsTime) {
+func (cm *ClientManager) stop(node *cmNode, time mclock.AbsTime) {
 	if node.serving {
-		self.update(time)
-		self.simReqCnt--
-		node.set(false, self.simReqCnt, self.sumWeight)
-		self.update(time)
+		cm.update(time)
+		cm.simReqCnt--
+		node.set(false, cm.simReqCnt, cm.sumWeight)
+		cm.update(time)
 	}
 }
 
-func (self *ClientManager) processed(node *cmNode, time mclock.AbsTime) (rcValue, rcCost uint64) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (cm *ClientManager) processed(node *cmNode, time mclock.AbsTime) (rcValue, rcCost uint64) {
+	cm.lock.Lock()
+	defer cm.lock.Unlock()
 
-	self.stop(node, time)
+	cm.stop(node, time)
 	return uint64(node.rcValue), uint64(node.rcValue - node.startValue)
 }
