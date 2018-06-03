@@ -58,7 +58,7 @@ type StoreParams struct {
 }
 
 //create params with default values
-func NewDefaultStoreParams() (self *StoreParams) {
+func NewDefaultStoreParams() *StoreParams {
 	return &StoreParams{
 		DbCapacity:    defaultDbCapacity,
 		CacheCapacity: defaultCacheCapacity,
@@ -68,8 +68,8 @@ func NewDefaultStoreParams() (self *StoreParams) {
 
 //this can only finally be set after all config options (file, cmd line, env vars)
 //have been evaluated
-func (self *StoreParams) Init(path string) {
-	self.ChunkDbPath = filepath.Join(path, "chunks")
+func (params *StoreParams) Init(path string) {
+	params.ChunkDbPath = filepath.Join(path, "chunks")
 }
 
 // netstore contructor, takes path argument that is used to initialise dbStore,
@@ -92,8 +92,8 @@ var (
 // ~ unsafe put in localdb no check if exists no extra copy no hash validation
 // the chunk is forced to propagate (Cloud.Store) even if locally found!
 // caller needs to make sure if that is wanted
-func (self *NetStore) Put(entry *Chunk) {
-	self.localStore.Put(entry)
+func (store *NetStore) Put(entry *Chunk) {
+	store.localStore.Put(entry)
 
 	// handle deliveries
 	if entry.Req != nil {
@@ -102,19 +102,19 @@ func (self *NetStore) Put(entry *Chunk) {
 		// that the chunk is has been retrieved
 		close(entry.Req.C)
 		// deliver the chunk to requesters upstream
-		go self.cloud.Deliver(entry)
+		go store.cloud.Deliver(entry)
 	} else {
 		log.Trace(fmt.Sprintf("NetStore.Put: localStore.Put %v stored locally", entry.Key.Log()))
 		// handle propagating store requests
-		// go self.cloud.Store(entry)
-		go self.cloud.Store(entry)
+		// go store.cloud.Store(entry)
+		go store.cloud.Store(entry)
 	}
 }
 
 // retrieve logic common for local and network chunk retrieval requests
-func (self *NetStore) Get(key Key) (*Chunk, error) {
+func (store *NetStore) Get(key Key) (*Chunk, error) {
 	var err error
-	chunk, err := self.localStore.Get(key)
+	chunk, err := store.localStore.Get(key)
 	if err == nil {
 		if chunk.Req == nil {
 			log.Trace(fmt.Sprintf("NetStore.Get: %v found locally", key))
@@ -127,10 +127,10 @@ func (self *NetStore) Get(key Key) (*Chunk, error) {
 	// no data and no request status
 	log.Trace(fmt.Sprintf("NetStore.Get: %v not found locally. open new request", key))
 	chunk = NewChunk(key, newRequestStatus(key))
-	self.localStore.memStore.Put(chunk)
-	go self.cloud.Retrieve(chunk)
+	store.localStore.memStore.Put(chunk)
+	go store.cloud.Retrieve(chunk)
 	return chunk, nil
 }
 
 // Close netstore
-func (self *NetStore) Close() {}
+func (store *NetStore) Close() {}
