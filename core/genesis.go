@@ -161,6 +161,11 @@ func WriteShyftGen(sqldb *sql.DB, gen *Genesis, block *types.Block) {
 			number := block.Header().Number.String()
 			gasUsed := block.Header().GasUsed
 			gasLimit := block.Header().GasLimit
+			gasPrice := 0
+			txFee := 0
+			txStatus := ""
+			isContract := false
+			data:= ""
 			addr := k.String()
 			txCountAccount := v.Nonce +1
 			i, err := strconv.ParseInt(block.Time().String(), 10, 64)
@@ -179,8 +184,8 @@ func WriteShyftGen(sqldb *sql.DB, gen *Genesis, block *types.Block) {
 			}
 
 			var retNonce string
-			sqlGenTxStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount, gas, gasLimit, nonce,age) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10)) RETURNING nonce`
-			insertError := sqldb.QueryRow(sqlGenTxStatement, txHash, GENESIS, addr, block.Header().Hash().Hex(), number, v.Balance.String(), gasUsed, gasLimit, txCountAccount, age).Scan(&retNonce)
+			sqlGenTxStatement := `INSERT INTO txs(txhash, from_addr, to_addr, blockhash, blockNumber, amount,gasPrice, gas, gasLimit,txFee,nonce,txstatus, iscontract,age, data) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12), ($13), ($14), ($15)) RETURNING nonce`
+			insertError := sqldb.QueryRow(sqlGenTxStatement, txHash, GENESIS, addr, block.Header().Hash().Hex(), number, v.Balance.String(), gasPrice, gasUsed, gasLimit, txFee,txCountAccount,txStatus, isContract, age, data).Scan(&retNonce)
 			if insertError != nil {
 				panic(insertError)
 			}

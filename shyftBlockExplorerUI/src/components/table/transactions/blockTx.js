@@ -1,9 +1,8 @@
 import React, { Component } from 'react';
 import TransactionsTable from './transactionTable';
 import classes from './table.css';
-import axios from "axios/index";
 
-class TransactionTable extends Component {
+class BlockTransactionTable extends Component {
     constructor(props) {
         super(props);
         this.state = {
@@ -11,20 +10,8 @@ class TransactionTable extends Component {
         };
     }
 
-    async componentDidMount() {
-        try {
-            const response = await axios.get(
-                "http://localhost:8080/api/get_all_transactions")
-            await this.setState({data: response.data});
-        } catch (err) {
-            console.log(err);
-        }
-    }
-
-
     render() {
-
-        const table = this.state.data.map((data, i) => {
+        const table = this.props.data.map((data, i) => {
             const conversion = data.Cost / 10000000000000000000;
             return <TransactionsTable
                 key={`${data.TxHash}${i}`}
@@ -43,7 +30,7 @@ class TransactionTable extends Component {
 
         let combinedClasses = ['responsive-table', classes.table];
         return (
-            <table key={this.state.data.TxHash} className={combinedClasses.join(' ')}>
+            <table key={this.props.data.TxHash} className={combinedClasses.join(' ')}>
                 <thead className={classes.tHead}>
                 <tr>
                     <th scope="col">TxHash</th>
@@ -61,4 +48,4 @@ class TransactionTable extends Component {
         );
     }
 }
-export default TransactionTable;
+export default BlockTransactionTable;

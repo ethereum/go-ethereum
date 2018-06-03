@@ -22,7 +22,7 @@ type SBlock struct {
 	Number   string
 	GasUsed	 string
 	GasLimit string
-	TxCount  stringgit@github.com:ShyftNetwork/shyft_go-ethereum.git
+	TxCount  string
 	UncleCount string
 	Age        string
 	ParentHash string
@@ -30,6 +30,7 @@ type SBlock struct {
 	Difficulty string
 	Size string
 	Nonce string
+	Rewards string
 }
 
 //blockRes struct
@@ -76,10 +77,10 @@ type ShyftTxEntryPretty struct {
 	From      string
 	BlockHash string
 	BlockNumber string
-	Amount    uint64
+	Amount   string
 	GasPrice  uint64
 	Gas       uint64
-	GasLimit  uint64
+	GasLimit  string
 	Cost	  uint64
 	Nonce     uint64
 	Status	  string
@@ -104,12 +105,7 @@ type SendAndReceive struct {
 
 //WriteBlock writes to block info to sql db
 func WriteBlock(sqldb *sql.DB, block *types.Block, receipts []*types.Receipt) error {
-	//Need to create field in postgres db isContract : True || False
-	//Need to fix nonce numeric issue (attempt to reproduce and record)
-	//Need to update tx To Field where null with Contract Address
-	//Need to update account table with that Contract Address
-	//Need to update AccountNonce and Balance of Tx To field || Contract Address
-	WriteMinerRewards(sqldb,block)
+	rewards := WriteMinerRewards(sqldb,block)
 	coinbase := block.Header().Coinbase.String()
 	number := block.Header().Number.String()
 	gasUsed := block.Header().GasUsed
@@ -128,15 +124,14 @@ func WriteBlock(sqldb *sql.DB, block *types.Block, receipts []*types.Receipt) er
 	}
 	age := time.Unix(i, 0)
 
-	sqlStatement := `INSERT INTO blocks(hash, coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age, parentHash, uncleHash, difficulty, size, nonce) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12),($13)) RETURNING number`
-	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age, parentHash, uncleHash, blockDifficulty, blockSize, blockNonce).Scan(&number)
+	sqlStatement := `INSERT INTO blocks(hash, coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age, parentHash, uncleHash, difficulty, size, rewards, nonce) VALUES(($1), ($2), ($3), ($4), ($5), ($6), ($7), ($8), ($9), ($10), ($11), ($12),($13), ($14)) RETURNING number`
+	qerr := sqldb.QueryRow(sqlStatement, block.Header().Hash().Hex(), coinbase, number, gasUsed, gasLimit, txCount, uncleCount, age, parentHash, uncleHash, blockDifficulty, blockSize, rewards, blockNonce).Scan(&number)
 	if qerr != nil {
 		panic(qerr)
 	}
 
 	if block.Transactions().Len() > 0 {
 		for _, tx := range block.Transactions() {
-			//WriteMinerRewards(sqldb, block)
 			WriteTransactions(sqldb, tx, block.Header().Hash(), block.Header().Number.String(), receipts, age, gasLimit)
 			if block.Transactions()[0].To() != nil {
 				WriteFromBalance(sqldb, tx)
@@ -411,7 +406,7 @@ func WriteBalanceHelper(sqldb *sql.DB, tx *types.Transaction) (SendAndReceive, s
 // uncle blocks, account balance updates based on reorgs, diverges that get dropped.
 // Reason for this is because the accounts are not deterministic like the block and tx hashes.
 // @TODO: Calculate reorg
-func WriteMinerRewards(sqldb *sql.DB, block *types.Block) {
+func WriteMinerRewards(sqldb *sql.DB, block *types.Block) string {
 	minerAddr := block.Coinbase().String()
 	shyftConduitAddress := Rewards.ShyftNetworkConduitAddress.String()
 	// Calculate the total gas used in the block
@@ -443,9 +438,18 @@ func WriteMinerRewards(sqldb *sql.DB, block *types.Block) {
 
 	StoreReward(sqldb, minerAddr, totalMinerReward)
 	StoreReward(sqldb, shyftConduitAddress, Rewards.ShyftNetworkBlockReward)
+	var uncRewards = new(big.Int)
 	for i := 0; i < len(uncleAddrs); i++ {
+		uncRewards := uncleRewards[i]
+		fmt.Println(uncRewards)
 		StoreReward(sqldb, uncleAddrs[i], uncleRewards[i])
 	}
+
+	fullRewardValue := new(big.Int)
+	fullRewardValue.Add(totalMinerReward, Rewards.ShyftNetworkBlockReward)
+	fullRewardValue.Add(fullRewardValue, uncRewards)
+
+	return fullRewardValue.String()
 }
 
 func StoreReward(sqldb *sql.DB, address string, reward *big.Int) {
@@ -497,16 +501,7 @@ func GetAllBlocks(sqldb *sql.DB) string {
 	var arr blockRes
 	var blockArr string
 	rows, err := sqldb.Query(`
-		SELECT
-			hash,
-			coinbase,
-			gasused,
-			gaslimit,
-			txcount,
-			unclecount,
-			age,
-			number
-		FROM blocks`)
+		SELECT * FROM blocks`)
 	if err != nil {
 		fmt.Println("err")
 	}
@@ -520,6 +515,12 @@ func GetAllBlocks(sqldb *sql.DB) string {
 		var txCount string
 		var uncleCount string
 		var age string
+		var parentHash string
+		var uncleHash string
+		var difficulty string
+		var size string
+		var nonce string
+		var rewards string
 		var num string
 
 		err = rows.Scan(
@@ -530,8 +531,13 @@ func GetAllBlocks(sqldb *sql.DB) string {
 			&txCount,
 			&uncleCount,
 			&age,
-			&num,
-		)
+			&parentHash,
+			&uncleHash,
+			&difficulty,
+			&size,
+			&nonce,
+			&rewards,
+			&num,)
 
 		arr.Blocks = append(arr.Blocks, SBlock{
 			Hash:     hash,
@@ -541,6 +547,12 @@ func GetAllBlocks(sqldb *sql.DB) string {
 			TxCount: txCount,
 			UncleCount: uncleCount,
 			Age: age,
+			ParentHash:parentHash,
+			UncleHash:uncleHash,
+			Difficulty:difficulty,
+			Size: size,
+			Nonce:nonce,
+			Rewards: rewards,
 			Number:   num,
 		})
 
@@ -568,6 +580,7 @@ func GetBlock(sqldb *sql.DB, blockNumber string) string {
 	var difficulty string
 	var size string
 	var nonce string
+	var rewards string
 	var num string
 	row.Scan(
 		&hash,
@@ -582,6 +595,7 @@ func GetBlock(sqldb *sql.DB, blockNumber string) string {
 		&difficulty,
 		&size,
 		&nonce,
+		&rewards,
 		&num,)
 
 	block := SBlock{
@@ -597,6 +611,7 @@ func GetBlock(sqldb *sql.DB, blockNumber string) string {
 		Difficulty:difficulty,
 		Size: size,
 		Nonce:nonce,
+		Rewards: rewards,
 		Number:   num,
 	}
 	json, _ := json.Marshal(block)
@@ -618,6 +633,7 @@ func GetRecentBlock(sqldb *sql.DB) string {
 	var difficulty string
 	var size string
 	var nonce string
+	var rewards string
 	var num string
 	row.Scan(
 		&hash,
@@ -632,6 +648,7 @@ func GetRecentBlock(sqldb *sql.DB) string {
 		&difficulty,
 		&size,
 		&nonce,
+		&rewards,
 		&num,)
 
 	block := SBlock{
@@ -647,6 +664,7 @@ func GetRecentBlock(sqldb *sql.DB) string {
 		Difficulty:difficulty,
 		Size: size,
 		Nonce:nonce,
+		Rewards: rewards,
 		Number:   num,
 	}
 	json, _ := json.Marshal(block)
@@ -656,7 +674,7 @@ func GetRecentBlock(sqldb *sql.DB) string {
 func GetAllTransactionsFromBlock(sqldb *sql.DB, blockNumber string) string {
 	var arr txRes
 	var txx string
-	sqlStatement := `SELECT * FROM txs WHERE blockNumber=$1`
+	sqlStatement := `SELECT * FROM txs WHERE blocknumber=$1`
 	rows, err := sqldb.Query(sqlStatement, blockNumber)
 	if err != nil {
 		fmt.Println("err")
@@ -668,10 +686,10 @@ func GetAllTransactionsFromBlock(sqldb *sql.DB, blockNumber string) string {
 		var from_addr string
 		var blockhash string
 		var blocknumber string
-		var amount uint64
+		var amount string
 		var gasprice uint64
 		var gas uint64
-		var gasLimit uint64
+		var gasLimit string
 		var txfee uint64
 		var nonce uint64
 		var status string
@@ -721,6 +739,72 @@ func GetAllTransactionsFromBlock(sqldb *sql.DB, blockNumber string) string {
 	return txx
 }
 
+func GetAllBlocksMinedByAddress(sqldb *sql.DB, coinbase string) string {
+	var arr blockRes
+	var blockArr string
+	sqlStatement := `SELECT * FROM blocks WHERE coinbase=$1`
+	rows, err := sqldb.Query(sqlStatement, coinbase)
+	if err != nil {
+		fmt.Println("err")
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var hash string
+		var coinbase string
+		var gasUsed string
+		var gasLimit string
+		var txCount string
+		var uncleCount string
+		var age string
+		var parentHash string
+		var uncleHash string
+		var difficulty string
+		var size string
+		var nonce string
+		var rewards string
+		var num string
+
+		err = rows.Scan(
+			&hash,
+			&coinbase,
+			&gasUsed,
+			&gasLimit,
+			&txCount,
+			&uncleCount,
+			&age,
+			&parentHash,
+			&uncleHash,
+			&difficulty,
+			&size,
+			&nonce,
+			&rewards,
+			&num,)
+
+		arr.Blocks = append(arr.Blocks, SBlock{
+			Hash:     hash,
+			Coinbase: coinbase,
+			GasUsed: gasUsed,
+			GasLimit: gasLimit,
+			TxCount: txCount,
+			UncleCount: uncleCount,
+			Age: age,
+			ParentHash:parentHash,
+			UncleHash:uncleHash,
+			Difficulty:difficulty,
+			Size: size,
+			Nonce:nonce,
+			Rewards: rewards,
+			Number:   num,
+		})
+
+		blocks, _ := json.Marshal(arr.Blocks)
+		blocksFmt := string(blocks)
+		blockArr = blocksFmt
+	}
+	return blockArr
+}
+
 //GetAllTransactions getter fn for API
 func GetAllTransactions(sqldb *sql.DB) string {
 	var arr txRes
@@ -737,10 +821,10 @@ func GetAllTransactions(sqldb *sql.DB) string {
 		var from_addr string
 		var blockhash string
 		var blocknumber string
-		var amount uint64
+		var amount string
 		var gasprice uint64
 		var gas uint64
-		var gasLimit uint64
+		var gasLimit string
 		var txfee uint64
 		var nonce uint64
 		var status string
@@ -799,10 +883,10 @@ func GetTransaction(sqldb *sql.DB, txHash string) string {
 	var from_addr string
 	var blockhash string
 	var blocknumber string
-	var amount uint64
+	var amount string
 	var gasprice uint64
 	var gas uint64
-	var gasLimit uint64
+	var gasLimit string
 	var txfee uint64
 	var nonce uint64
 	var status string
@@ -924,10 +1008,10 @@ func GetAccountTxs(sqldb *sql.DB, address string) string {
 		var from_addr string
 		var blockhash string
 		var blocknumber string
-		var amount uint64
+		var amount string
 		var gasprice uint64
 		var gas uint64
-		var gasLimit uint64
+		var gasLimit string
 		var txfee uint64
 		var nonce uint64
 		var status string

@@ -9,7 +9,7 @@ const home = props => {
     return (
        <div className={classes.Home}>
             <span className={classes.Greeting}>THIS IS A WIP</span>
-           <div className={classes.ButtonNav}>
+           <div>
            <div className={classes.Transactions}>
                <Link to="/transactions"><button className="btn btn-primary">Transactions</button></Link>
            </div>
