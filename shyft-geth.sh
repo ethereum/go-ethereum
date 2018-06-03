@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [[ $# -lt 1 ]]; then
+    echo Shyft-Geth: No flags detected, refer to readme for available commands.
+    exit 1
+fi
+
 illegalCommands=()
 while [[ $# -gt 0 ]]
 do
@@ -15,7 +20,7 @@ case $key in
     shift # past argument
     ;;
     --js)
-    sh ./shyft-cli/runJs.sh ./shyft-cli/web3/$2
+    sh ./shyft-cli/runJs.sh ./shyft-cli/web3/$2.js
     shift # past argument
     shift # past argument
     ;;
@@ -30,7 +35,7 @@ case $key in
 esac
 done
 
-if [[ "${#illegalCommands[@]}" -gt "0" ]] ; then
-    echo The following commands are not supported: "${illegalCommands[*]}"
+if [[ "${#illegalCommands[@]}" -gt "0" ]]; then
+    echo Shyft-Geth: The following commands are not supported: "${illegalCommands[*]}"
 fi
 
