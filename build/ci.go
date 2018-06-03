@@ -55,6 +55,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -288,6 +289,7 @@ func goToolArch(arch string, cc string, subcmd string, args ...string) *exec.Cmd
 func doTest(cmdline []string) {
 	var (
 		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
+		process  = flag.String("process", "1", "How many processes available to run tests")
 	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
@@ -305,7 +307,11 @@ func doTest(cmdline []string) {
 	gotest := goTool("test", buildFlags(env)...)
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.
-	gotest.Args = append(gotest.Args, "-p", "1")
+	if _, err := strconv.Atoi(*process); err == nil {
+		gotest.Args = append(gotest.Args, "-p", *process)
+	} else {
+		gotest.Args = append(gotest.Args, "-p", "1")
+	}
 	if *coverage {
 		gotest.Args = append(gotest.Args, "-covermode=atomic", "-cover")
 	}
