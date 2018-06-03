@@ -287,8 +287,6 @@ Run `./shyft-geth.sh` with one of the following flags:
 - `--reset`               - Drops postgress and chain db, and reinstantiates both.
 - `--js [web3 filename]`  - Executes web3 calls with a passed file name. If the file name is `sendTransactions.js`, `./shyft-geth.sh --js sendTransactions`.
 
-Note: An alias can be set for convenience `alias shyft-geth='<path/to/shyft/geth>/shyft_go-ethereum/shyft-geth.sh'`
-
 ## Contribution
 
 Thank you for considering to help out with the source code! We welcome contributions from
