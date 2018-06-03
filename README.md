@@ -282,10 +282,10 @@ limit blocks converge to (`--targetgaslimit`) and the price transactions are acc
 #### CLI
 Run `./shyft-geth.sh` with one of the following flags: 
 
-- `--setup`               - Setups postgres and the shyft chain db
-- `--start`               - Starts geth
+- `--setup`               - Setups postgres and the shyft chain db.
+- `--start`               - Starts geth.
 - `--reset`               - Drops postgress and chain db, and reinstantiates both.
-- `--js [web3 filename]`  - Executes web3 calls with a passed file name example: filename = sendTransactions.js `--js sendTransactions`
+- `--js [web3 filename]`  - Executes web3 calls with a passed file name. If the file name is `sendTransactions.js`, `./shyft-geth.sh --js sendTransactions`.
 
 Note: An alias can be set for convenience `alias shyft-geth='<path/to/shyft/geth>/shyft_go-ethereum/shyft-geth.sh'`
 
