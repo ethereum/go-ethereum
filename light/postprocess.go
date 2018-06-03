@@ -126,7 +126,7 @@ type ChtIndexerBackend struct {
 	trie                 *trie.Trie
 }
 
-// NewBloomTrieIndexer creates a BloomTrie chain indexer
+// NewChtIndexer creates a cht chain indexer
 func NewChtIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer {
 	var sectionSize, confirmReq uint64
 	if clientMode {
@@ -240,7 +240,8 @@ func NewBloomTrieIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer 
 	}
 	backend.bloomTrieRatio = BloomTrieFrequency / backend.parentSectionSize
 	backend.sectionHeads = make([]common.Hash, backend.bloomTrieRatio)
-	return core.NewChainIndexer(db, idb, backend, BloomTrieFrequency, confirmReq-ethBloomBitsConfirmations, time.Millisecond*100, "bloomtrie")
+	return core.NewChainIndexer(db, idb, backend, BloomTrieFrequency,
+		confirmReq-ethBloomBitsConfirmations, time.Millisecond*100, "bloomtrie")
 }
 
 // Reset implements core.ChainIndexerBackend
@@ -300,7 +301,8 @@ func (b *BloomTrieIndexerBackend) Commit() error {
 	b.triedb.Commit(root, false)
 
 	sectionHead := b.sectionHeads[b.bloomTrieRatio-1]
-	log.Info("Storing bloom trie", "section", b.section, "head", sectionHead, "root", root, "compression", float64(compSize)/float64(decompSize))
+	log.Info("Storing bloom trie", "section", b.section, "head", sectionHead,
+		"root", root, "compression", float64(compSize)/float64(decompSize))
 	StoreBloomTrieRoot(b.diskdb, b.section, sectionHead, root)
 
 	return nil

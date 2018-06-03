@@ -126,9 +126,15 @@ type ProtocolManager struct {
 	wg *sync.WaitGroup
 }
 
-// NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
-// with the ethereum network.
-func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, protocolVersions []uint, networkId uint64, mux *event.TypeMux, engine consensus.Engine, peers *peerSet, blockchain BlockChain, txpool txPool, chainDb ethdb.Database, odr *LesOdr, txrelay *LesTxRelay, quitSync chan struct{}, wg *sync.WaitGroup) (*ProtocolManager, error) {
+// NewProtocolManager returns a new ethereum sub protocol manager.
+// The Ethereum sub protocol manages peers capable with the ethereum network.
+func NewProtocolManager(
+	chainConfig *params.ChainConfig, lightSync bool,
+	protocolVersions []uint, networkId uint64,
+	mux *event.TypeMux, engine consensus.Engine, peers *peerSet,
+	blockchain BlockChain, txpool txPool, chainDb ethdb.Database,
+	odr *LesOdr, txrelay *LesTxRelay,
+	quitSync chan struct{}, wg *sync.WaitGroup) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		lightSync:   lightSync,
@@ -331,7 +337,19 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}
 }
 
-var reqList = []uint64{GetBlockHeadersMsg, GetBlockBodiesMsg, GetCodeMsg, GetReceiptsMsg, GetProofsV1Msg, SendTxMsg, SendTxV2Msg, GetTxStatusMsg, GetHeaderProofsMsg, GetProofsV2Msg, GetHelperTrieProofsMsg}
+var reqList = []uint64{
+	GetBlockHeadersMsg,
+	GetBlockBodiesMsg,
+	GetCodeMsg,
+	GetReceiptsMsg,
+	GetProofsV1Msg,
+	SendTxMsg,
+	SendTxV2Msg,
+	GetTxStatusMsg,
+	GetHeaderProofsMsg,
+	GetProofsV2Msg,
+	GetHelperTrieProofsMsg,
+}
 
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
