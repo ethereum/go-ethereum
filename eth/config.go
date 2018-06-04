@@ -47,7 +47,7 @@ var DefaultConfig = Config{
 	LightPeers:    100,
 	DatabaseCache: 768,
 	TrieCache:     256,
-	TrieTimeout:   5 * time.Minute,
+	TrieTimeout:   60 * time.Minute,
 	GasPrice:      big.NewInt(18 * params.Shannon),
 
 	TxPool: core.DefaultTxPoolConfig,
