@@ -277,6 +277,16 @@ Which will start mining blocks and transactions on a single CPU thread, creditin
 the account specified by `--etherbase`. You can further tune the mining by changing the default gas
 limit blocks converge to (`--targetgaslimit`) and the price transactions are accepted at (`--gasprice`).
 
+## SHYFT NOTES
+
+#### CLI
+Run `./shyft-geth.sh` with one of the following flags: 
+
+- `--setup`               - Setups postgres and the shyft chain db.
+- `--start`               - Starts geth.
+- `--reset`               - Drops postgress and chain db, and reinstantiates both.
+- `--js [web3 filename]`  - Executes web3 calls with a passed file name. If the file name is `sendTransactions.js`, `./shyft-geth.sh --js sendTransactions`.
+
 ## Contribution
 
 Thank you for considering to help out with the source code! We welcome contributions from

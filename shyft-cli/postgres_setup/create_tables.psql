@@ -42,8 +42,3 @@ CREATE TABLE IF NOT EXISTS accounts (
 CREATE TABLE IF NOT EXISTS contracts (
   txHash text
 );
-
-CREATE TABLE IF NOT EXISTS mined_blocks (
-  blockNumber bigint,
-  addr text
-);
