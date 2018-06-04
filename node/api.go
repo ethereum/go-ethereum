@@ -340,9 +340,10 @@ func (api *PublicDebugAPI) Metrics(raw bool) (map[string]interface{}, error) {
 
 			case metrics.ResettingTimer:
 				t := metric.Snapshot()
-				ps := t.Percentiles([]float64{0.05, 0.2, 0.5, 0.8, 0.95})
+				ps := t.Percentiles([]float64{5, 20, 50, 80, 95})
 				root[name] = map[string]interface{}{
-					"Overall": format(float64(len(t.Values())), t.Mean()),
+					"Measurements": len(t.Values()),
+					"Mean":         time.Duration(t.Mean()).String(),
 					"Percentiles": map[string]interface{}{
 						"5":  time.Duration(ps[0]).String(),
 						"20": time.Duration(ps[1]).String(),
@@ -389,9 +390,10 @@ func (api *PublicDebugAPI) Metrics(raw bool) (map[string]interface{}, error) {
 
 			case metrics.ResettingTimer:
 				t := metric.Snapshot()
-				ps := t.Percentiles([]float64{0.05, 0.2, 0.5, 0.8, 0.95})
+				ps := t.Percentiles([]float64{5, 20, 50, 80, 95})
 				root[name] = map[string]interface{}{
-					"Overall": format(float64(len(t.Values())), t.Mean()),
+					"Measurements": len(t.Values()),
+					"Mean":         time.Duration(t.Mean()).String(),
 					"Percentiles": map[string]interface{}{
 						"5":  time.Duration(ps[0]).String(),
 						"20": time.Duration(ps[1]).String(),
