@@ -66,7 +66,7 @@ func TestState(t *testing.T) {
 }
 
 // Transactions with gasLimit above this value will not get a VM trace on failure.
-const traceErrorLimit = 400000
+const traceErrorLimit = 5242880
 
 func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	err := test(vm.Config{})
@@ -75,7 +75,7 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	}
 	t.Error(err)
 	if gasLimit > traceErrorLimit {
-		t.Log("gas limit too high for EVM trace")
+		t.Log(fmt.Sprintf("gas limit too high for EVM trace %d > %d", gasLimit, traceErrorLimit))
 		return
 	}
 	tracer := vm.NewStructLogger(nil)

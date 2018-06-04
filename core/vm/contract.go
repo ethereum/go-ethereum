@@ -157,12 +157,12 @@ func (c *Contract) UseGas(gas uint64) (ok bool) {
 	return true
 }
 
-// Address returns the contracts address
+// Address returns the contract's address
 func (c *Contract) Address() common.Address {
 	return c.self.Address()
 }
 
-// Value returns the contracts value (sent to it from it's caller)
+// Value returns the contracts value (sent to it from its caller)
 func (c *Contract) Value() *big.Int {
 	return c.value
 }

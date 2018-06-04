@@ -129,6 +129,60 @@
 			"revisionTime": "2017-01-17T22:23:42Z"
 		},
 		{
+			"checksumSHA1": "O8hj2TjWxwLgPDVJeEwvuQFm664=",
+			"path": "github.com/go-interpreter/wagon",
+			"revision": "876a973424d4032ac0f0af8c78c0d22dc9b0249e",
+			"revisionTime": "2018-08-07T20:59:56Z"
+		},
+		{
+			"checksumSHA1": "zMJhaMOsF8AoZD1nF/geiD0EEiU=",
+			"path": "github.com/go-interpreter/wagon/disasm",
+			"revision": "876a973424d4032ac0f0af8c78c0d22dc9b0249e",
+			"revisionTime": "2018-08-07T20:59:56Z"
+		},
+		{
+			"checksumSHA1": "liSTT+2c8gy/07ueALb5+d5+cY8=",
+			"path": "github.com/go-interpreter/wagon/exec",
+			"revision": "876a973424d4032ac0f0af8c78c0d22dc9b0249e",
+			"revisionTime": "2018-08-07T20:59:56Z"
+		},
+		{
+			"checksumSHA1": "4yRxeKi6k5yIf87EwOXzbSTlTRU=",
+			"path": "github.com/go-interpreter/wagon/exec/internal/compile",
+			"revision": "876a973424d4032ac0f0af8c78c0d22dc9b0249e",
+			"revisionTime": "2018-08-07T20:59:56Z"
+		},
+		{
+			"checksumSHA1": "6zjjuEauIj/855KLJGKT2cgjVio=",
+			"path": "github.com/go-interpreter/wagon/internal/stack",
+			"revision": "876a973424d4032ac0f0af8c78c0d22dc9b0249e",
+			"revisionTime": "2018-08-07T20:59:56Z"
+		},
+		{
+			"checksumSHA1": "m8mlG4hbjWqwiwxUijPXDXq9wBc=",
+			"path": "github.com/go-interpreter/wagon/wasm",
+			"revision": "876a973424d4032ac0f0af8c78c0d22dc9b0249e",
+			"revisionTime": "2018-08-07T20:59:56Z"
+		},
+		{
+			"checksumSHA1": "kRHgYIzF9xTBn1Ai9h5H0wcPfp8=",
+			"path": "github.com/go-interpreter/wagon/wasm/internal/readpos",
+			"revision": "876a973424d4032ac0f0af8c78c0d22dc9b0249e",
+			"revisionTime": "2018-08-07T20:59:56Z"
+		},
+		{
+			"checksumSHA1": "PwuCAZewDWGOeIK2Ya8vh2ux3ik=",
+			"path": "github.com/go-interpreter/wagon/wasm/leb128",
+			"revision": "876a973424d4032ac0f0af8c78c0d22dc9b0249e",
+			"revisionTime": "2018-08-07T20:59:56Z"
+		},
+		{
+			"checksumSHA1": "eaISibWdQ9N489Att4HG3Xbg+jw=",
+			"path": "github.com/go-interpreter/wagon/wasm/operators",
+			"revision": "876a973424d4032ac0f0af8c78c0d22dc9b0249e",
+			"revisionTime": "2018-08-07T20:59:56Z"
+		},
+		{
 			"checksumSHA1": "gxV/cPPLkByTdY8y172t7v4qcZA=",
 			"path": "github.com/go-ole/go-ole",
 			"revision": "a41e3c4b706f6ae8dfbff342b06e40fa4d2d0506",
