@@ -51,6 +51,9 @@ contract Registrar {
         Public Functions
     */
     constructor(address[] _adminlist) public {
+        // regard contract creator as a default admin.
+        admins[msg.sender] = 1;
+        adminList.push(msg.sender);
         for (uint i = 0; i < _adminlist.length; i++) {
             admins[_adminlist[i]] = 1;
             adminList.push(_adminlist[i]);
@@ -113,6 +116,11 @@ contract Registrar {
         if (_sectionIndex != latest + 1 && latest != 0) {
             return false;
         }
+        // Ensure the checkpoint is stable enough to be registered.
+        if (block.number < (_sectionIndex+1)*sectionSize+confirmations) {
+            return false;
+        }
+
         checkpoints[_sectionIndex] = Checkpoint({
             sectionHead:   _sectionHead,
             chtRoot:       _chtRoot,
@@ -208,5 +216,11 @@ contract Registrar {
     // Latest stored section id
     // Note all registered checkpoint information should continuous with previous one.
     uint latest;
+
+    // The frequency for creating a checkpoint
+    uint constant sectionSize = 32768;
+
+    // The number of confirmations needed before a checkpoint can be registered.
+    uint constant confirmations = 10000;
 }
 
