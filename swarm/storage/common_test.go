@@ -46,12 +46,12 @@ func testDataReader(l int) (r io.Reader) {
 	return io.LimitReader(rand.Reader, int64(l))
 }
 
-func (self *brokenLimitedReader) Read(buf []byte) (int, error) {
-	if self.off+len(buf) > self.errAt {
+func (reader *brokenLimitedReader) Read(buf []byte) (int, error) {
+	if reader.off+len(buf) > reader.errAt {
 		return 0, fmt.Errorf("Broken reader")
 	}
-	self.off += len(buf)
-	return self.lr.Read(buf)
+	reader.off += len(buf)
+	return reader.lr.Read(buf)
 }
 
 func testDataReaderAndSlice(l int) (r io.Reader, slice []byte) {

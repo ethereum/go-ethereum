@@ -104,10 +104,10 @@ func NewDefaultSwapParams() *SwapParams {
 
 //this can only finally be set after all config options (file, cmd line, env vars)
 //have been evaluated
-func (self *SwapParams) Init(contract common.Address, prvkey *ecdsa.PrivateKey) {
+func (params *SwapParams) Init(contract common.Address, prvkey *ecdsa.PrivateKey) {
 	pubkey := &prvkey.PublicKey
 
-	self.PayProfile = &PayProfile{
+	params.PayProfile = &PayProfile{
 		PublicKey:   common.ToHex(crypto.FromECDSAPub(pubkey)),
 		Contract:    contract,
 		Beneficiary: crypto.PubkeyToAddress(*pubkey),
@@ -126,7 +126,7 @@ func (self *SwapParams) Init(contract common.Address, prvkey *ecdsa.PrivateKey) 
 // n < 0  called when receiving chunks = receiving delivery responses
 //                 OR receiving cheques.
 
-func NewSwap(local *SwapParams, remote *SwapProfile, backend chequebook.Backend, proto swap.Protocol) (self *swap.Swap, err error) {
+func NewSwap(local *SwapParams, remote *SwapProfile, backend chequebook.Backend, proto swap.Protocol) (s *swap.Swap, err error) {
 	var (
 		ctx = context.TODO()
 		ok  bool
@@ -162,19 +162,19 @@ func NewSwap(local *SwapParams, remote *SwapProfile, backend chequebook.Backend,
 		Buys:  out != nil,
 		Sells: in != nil,
 	}
-	self, err = swap.New(local.Params, pm, proto)
+	s, err = swap.New(local.Params, pm, proto)
 	if err != nil {
 		return
 	}
 	// remote profile given (first) in handshake
-	self.SetRemote(remote.Profile)
+	s.SetRemote(remote.Profile)
 	var buy, sell string
-	if self.Buys {
+	if s.Buys {
 		buy = "purchase from peer enabled at " + remote.SellAt.String() + " wei/chunk"
 	} else {
 		buy = "purchase from peer disabled"
 	}
-	if self.Sells {
+	if s.Sells {
 		sell = "selling to peer enabled at " + local.SellAt.String() + " wei/chunk"
 	} else {
 		sell = "selling to peer disabled"
@@ -184,44 +184,44 @@ func NewSwap(local *SwapParams, remote *SwapProfile, backend chequebook.Backend,
 	return
 }
 
-func (self *SwapParams) Chequebook() *chequebook.Chequebook {
-	defer self.lock.Unlock()
-	self.lock.Lock()
-	return self.chbook
+func (params *SwapParams) Chequebook() *chequebook.Chequebook {
+	defer params.lock.Unlock()
+	params.lock.Lock()
+	return params.chbook
 }
 
-func (self *SwapParams) PrivateKey() *ecdsa.PrivateKey {
-	return self.privateKey
+func (params *SwapParams) PrivateKey() *ecdsa.PrivateKey {
+	return params.privateKey
 }
 
-// func (self *SwapParams) PublicKey() *ecdsa.PublicKey {
-// 	return self.publicKey
+// func (params *SwapParams) PublicKey() *ecdsa.PublicKey {
+// 	return params.publicKey
 // }
 
-func (self *SwapParams) SetKey(prvkey *ecdsa.PrivateKey) {
-	self.privateKey = prvkey
-	self.publicKey = &prvkey.PublicKey
+func (params *SwapParams) SetKey(prvkey *ecdsa.PrivateKey) {
+	params.privateKey = prvkey
+	params.publicKey = &prvkey.PublicKey
 }
 
 // setChequebook(path, backend) wraps the
 // chequebook initialiser and sets up autoDeposit to cover spending.
-func (self *SwapParams) SetChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
-	self.lock.Lock()
-	contract := self.Contract
-	self.lock.Unlock()
+func (params *SwapParams) SetChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
+	params.lock.Lock()
+	contract := params.Contract
+	params.lock.Unlock()
 
 	valid, err := chequebook.ValidateCode(ctx, backend, contract)
 	if err != nil {
 		return err
 	} else if valid {
-		return self.newChequebookFromContract(path, backend)
+		return params.newChequebookFromContract(path, backend)
 	}
-	return self.deployChequebook(ctx, backend, path)
+	return params.deployChequebook(ctx, backend, path)
 }
 
-func (self *SwapParams) deployChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
-	opts := bind.NewKeyedTransactor(self.privateKey)
-	opts.Value = self.AutoDepositBuffer
+func (params *SwapParams) deployChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
+	opts := bind.NewKeyedTransactor(params.privateKey)
+	opts.Value = params.AutoDepositBuffer
 	opts.Context = ctx
 
 	log.Info(fmt.Sprintf("Deploying new chequebook (owner: %v)", opts.From.Hex()))
@@ -233,10 +233,10 @@ func (self *SwapParams) deployChequebook(ctx context.Context, backend chequebook
 	log.Info(fmt.Sprintf("new chequebook deployed at %v (owner: %v)", contract.Hex(), opts.From.Hex()))
 
 	// need to save config at this point
-	self.lock.Lock()
-	self.Contract = contract
-	err = self.newChequebookFromContract(path, backend)
-	self.lock.Unlock()
+	params.lock.Lock()
+	params.Contract = contract
+	err = params.newChequebookFromContract(path, backend)
+	params.lock.Unlock()
 	if err != nil {
 		log.Warn(fmt.Sprintf("error initialising cheque book (owner: %v): %v", opts.From.Hex(), err))
 	}
@@ -265,26 +265,26 @@ func deployChequebookLoop(opts *bind.TransactOpts, backend chequebook.Backend) (
 
 // initialise the chequebook from a persisted json file or create a new one
 // caller holds the lock
-func (self *SwapParams) newChequebookFromContract(path string, backend chequebook.Backend) error {
-	hexkey := common.Bytes2Hex(self.Contract.Bytes())
+func (params *SwapParams) newChequebookFromContract(path string, backend chequebook.Backend) error {
+	hexkey := common.Bytes2Hex(params.Contract.Bytes())
 	err := os.MkdirAll(filepath.Join(path, "chequebooks"), os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("unable to create directory for chequebooks: %v", err)
 	}
 
 	chbookpath := filepath.Join(path, "chequebooks", hexkey+".json")
-	self.chbook, err = chequebook.LoadChequebook(chbookpath, self.privateKey, backend, true)
+	params.chbook, err = chequebook.LoadChequebook(chbookpath, params.privateKey, backend, true)
 
 	if err != nil {
-		self.chbook, err = chequebook.NewChequebook(chbookpath, self.Contract, self.privateKey, backend)
+		params.chbook, err = chequebook.NewChequebook(chbookpath, params.Contract, params.privateKey, backend)
 		if err != nil {
-			log.Warn(fmt.Sprintf("unable to initialise chequebook (owner: %v): %v", self.owner.Hex(), err))
-			return fmt.Errorf("unable to initialise chequebook (owner: %v): %v", self.owner.Hex(), err)
+			log.Warn(fmt.Sprintf("unable to initialise chequebook (owner: %v): %v", params.owner.Hex(), err))
+			return fmt.Errorf("unable to initialise chequebook (owner: %v): %v", params.owner.Hex(), err)
 		}
 	}
 
-	self.chbook.AutoDeposit(self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer)
-	log.Info(fmt.Sprintf("auto deposit ON for %v -> %v: interval = %v, threshold = %v, buffer = %v)", crypto.PubkeyToAddress(*(self.publicKey)).Hex()[:8], self.Contract.Hex()[:8], self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer))
+	params.chbook.AutoDeposit(params.AutoDepositInterval, params.AutoDepositThreshold, params.AutoDepositBuffer)
+	log.Info(fmt.Sprintf("auto deposit ON for %v -> %v: interval = %v, threshold = %v, buffer = %v)", crypto.PubkeyToAddress(*(params.publicKey)).Hex()[:8], params.Contract.Hex()[:8], params.AutoDepositInterval, params.AutoDepositThreshold, params.AutoDepositBuffer))
 
 	return nil
 }

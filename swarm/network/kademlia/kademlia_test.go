@@ -272,31 +272,31 @@ func TestSaveLoad(t *testing.T) {
 	}
 }
 
-func (self *Kademlia) proxCheck(t *testing.T) bool {
+func (kad *Kademlia) proxCheck(t *testing.T) bool {
 	var sum int
-	for i, b := range self.buckets {
+	for i, b := range kad.buckets {
 		l := len(b)
 		// if we are in the high prox multibucket
-		if i >= self.proxLimit {
+		if i >= kad.proxLimit {
 			sum += l
 		} else if l == 0 {
-			t.Errorf("bucket %d empty, yet proxLimit is %d\n%v", len(b), self.proxLimit, self)
+			t.Errorf("bucket %d empty, yet proxLimit is %d\n%v", len(b), kad.proxLimit, kad)
 			return false
 		}
 	}
 	// check if merged high prox bucket does not exceed size
 	if sum > 0 {
-		if sum != self.proxSize {
-			t.Errorf("proxSize incorrect, expected %v, got %v", sum, self.proxSize)
+		if sum != kad.proxSize {
+			t.Errorf("proxSize incorrect, expected %v, got %v", sum, kad.proxSize)
 			return false
 		}
-		last := len(self.buckets[self.proxLimit])
-		if last > 0 && sum >= self.ProxBinSize+last {
-			t.Errorf("proxLimit %v incorrect, redundant non-empty bucket %d added to proxBin with %v (target %v)\n%v", self.proxLimit, last, sum-last, self.ProxBinSize, self)
+		last := len(kad.buckets[kad.proxLimit])
+		if last > 0 && sum >= kad.ProxBinSize+last {
+			t.Errorf("proxLimit %v incorrect, redundant non-empty bucket %d added to proxBin with %v (target %v)\n%v", kad.proxLimit, last, sum-last, kad.ProxBinSize, kad)
 			return false
 		}
-		if self.proxLimit > 0 && sum < self.ProxBinSize {
-			t.Errorf("proxLimit %v incorrect. proxSize %v is less than target %v, yet there is more peers", self.proxLimit, sum, self.ProxBinSize)
+		if kad.proxLimit > 0 && sum < kad.ProxBinSize {
+			t.Errorf("proxLimit %v incorrect. proxSize %v is less than target %v, yet there is more peers", kad.proxLimit, sum, kad.ProxBinSize)
 			return false
 		}
 	}

@@ -64,9 +64,9 @@ type Config struct {
 }
 
 //create a default config with all parameters to set to defaults
-func NewDefaultConfig() (self *Config) {
+func NewDefaultConfig() (cfg *Config) {
 
-	self = &Config{
+	cfg = &Config{
 		StoreParams:   storage.NewDefaultStoreParams(),
 		ChunkerParams: storage.NewChunkerParams(),
 		HiveParams:    network.NewDefaultHiveParams(),
@@ -89,11 +89,11 @@ func NewDefaultConfig() (self *Config) {
 
 //some config params need to be initialized after the complete
 //config building phase is completed (e.g. due to overriding flags)
-func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
+func (cfg *Config) Init(prvKey *ecdsa.PrivateKey) {
 
 	address := crypto.PubkeyToAddress(prvKey.PublicKey)
-	self.Path = filepath.Join(self.Path, "bzz-"+common.Bytes2Hex(address.Bytes()))
-	err := os.MkdirAll(self.Path, os.ModePerm)
+	cfg.Path = filepath.Join(cfg.Path, "bzz-"+common.Bytes2Hex(address.Bytes()))
+	err := os.MkdirAll(cfg.Path, os.ModePerm)
 	if err != nil {
 		log.Error(fmt.Sprintf("Error creating root swarm data directory: %v", err))
 		return
@@ -103,11 +103,11 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 	pubkeyhex := common.ToHex(pubkey)
 	keyhex := crypto.Keccak256Hash(pubkey).Hex()
 
-	self.PublicKey = pubkeyhex
-	self.BzzKey = keyhex
+	cfg.PublicKey = pubkeyhex
+	cfg.BzzKey = keyhex
 
-	self.Swap.Init(self.Contract, prvKey)
-	self.SyncParams.Init(self.Path)
-	self.HiveParams.Init(self.Path)
-	self.StoreParams.Init(self.Path)
+	cfg.Swap.Init(cfg.Contract, prvKey)
+	cfg.SyncParams.Init(cfg.Path)
+	cfg.HiveParams.Init(cfg.Path)
+	cfg.StoreParams.Init(cfg.Path)
 }

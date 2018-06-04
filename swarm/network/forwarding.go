@@ -54,8 +54,8 @@ var searchTimeout = 3 * time.Second
 
 // forwarding logic
 // logic propagating retrieve requests to peers given by the kademlia hive
-func (self *forwarder) Retrieve(chunk *storage.Chunk) {
-	peers := self.hive.getPeers(chunk.Key, 0)
+func (f *forwarder) Retrieve(chunk *storage.Chunk) {
+	peers := f.hive.getPeers(chunk.Key, 0)
 	log.Trace(fmt.Sprintf("forwarder.Retrieve: %v - received %d peers from KΛÐΞMLIΛ...", chunk.Key.Log(), len(peers)))
 OUT:
 	for _, p := range peers {
@@ -87,7 +87,7 @@ OUT:
 // requests to specific peers given by the kademlia hive
 // except for peers that the store request came from (if any)
 // delivery queueing taken care of by syncer
-func (self *forwarder) Store(chunk *storage.Chunk) {
+func (f *forwarder) Store(chunk *storage.Chunk) {
 	var n int
 	msg := &storeRequestMsgData{
 		Key:   chunk.Key,
@@ -97,7 +97,7 @@ func (self *forwarder) Store(chunk *storage.Chunk) {
 	if chunk.Source != nil {
 		source = chunk.Source.(*peer)
 	}
-	for _, p := range self.hive.getPeers(chunk.Key, 0) {
+	for _, p := range f.hive.getPeers(chunk.Key, 0) {
 		log.Trace(fmt.Sprintf("forwarder.Store: %v %v", p, chunk))
 
 		if p.syncer != nil && (source == nil || p.Addr() != source.Addr()) {
@@ -109,7 +109,7 @@ func (self *forwarder) Store(chunk *storage.Chunk) {
 }
 
 // once a chunk is found deliver it to its requesters unless timed out
-func (self *forwarder) Deliver(chunk *storage.Chunk) {
+func (f *forwarder) Deliver(chunk *storage.Chunk) {
 	// iterate over request entries
 	for id, requesters := range chunk.Req.Requesters {
 		counter := requesterCount

@@ -64,8 +64,8 @@ type statusMsgData struct {
 	NetworkId uint64
 }
 
-func (self *statusMsgData) String() string {
-	return fmt.Sprintf("Status: Version: %v, ID: %v, Addr: %v, Swap: %v, NetworkId: %v", self.Version, self.ID, self.Addr, self.Swap, self.NetworkId)
+func (data *statusMsgData) String() string {
+	return fmt.Sprintf("Status: Version: %v, ID: %v, Addr: %v, Swap: %v, NetworkId: %v", data.Version, data.ID, data.Addr, data.Swap, data.NetworkId)
 }
 
 /*
@@ -86,18 +86,18 @@ type storeRequestMsgData struct {
 	from           *peer      // [not serialised] protocol registers the requester
 }
 
-func (self storeRequestMsgData) String() string {
+func (data storeRequestMsgData) String() string {
 	var from string
-	if self.from == nil {
-		from = "self"
+	if data.from == nil {
+		from = "data"
 	} else {
-		from = self.from.Addr().String()
+		from = data.from.Addr().String()
 	}
-	end := len(self.SData)
-	if len(self.SData) > 10 {
+	end := len(data.SData)
+	if len(data.SData) > 10 {
 		end = 10
 	}
-	return fmt.Sprintf("from: %v, Key: %v; ID: %v, requestTimeout: %v, storageTimeout: %v, SData %x", from, self.Key, self.Id, self.requestTimeout, self.storageTimeout, self.SData[:end])
+	return fmt.Sprintf("from: %v, Key: %v; ID: %v, requestTimeout: %v, storageTimeout: %v, SData %x", from, data.Key, data.Id, data.requestTimeout, data.storageTimeout, data.SData[:end])
 }
 
 /*
@@ -133,40 +133,40 @@ type retrieveRequestMsgData struct {
 	from     *peer       //
 }
 
-func (self *retrieveRequestMsgData) String() string {
+func (data *retrieveRequestMsgData) String() string {
 	var from string
-	if self.from == nil {
+	if data.from == nil {
 		from = "ourselves"
 	} else {
-		from = self.from.Addr().String()
+		from = data.from.Addr().String()
 	}
 	var target []byte
-	if len(self.Key) > 3 {
-		target = self.Key[:4]
+	if len(data.Key) > 3 {
+		target = data.Key[:4]
 	}
-	return fmt.Sprintf("from: %v, Key: %x; ID: %v, MaxSize: %v, MaxPeers: %d", from, target, self.Id, self.MaxSize, self.MaxPeers)
+	return fmt.Sprintf("from: %v, Key: %x; ID: %v, MaxSize: %v, MaxPeers: %d", from, target, data.Id, data.MaxSize, data.MaxPeers)
 }
 
 // lookups are encoded by missing request ID
-func (self *retrieveRequestMsgData) isLookup() bool {
-	return self.Id == 0
+func (data *retrieveRequestMsgData) isLookup() bool {
+	return data.Id == 0
 }
 
 // sets timeout fields
-func (self *retrieveRequestMsgData) setTimeout(t *time.Time) {
-	self.timeout = t
+func (data *retrieveRequestMsgData) setTimeout(t *time.Time) {
+	data.timeout = t
 	if t != nil {
-		self.Timeout = uint64(t.UnixNano())
+		data.Timeout = uint64(t.UnixNano())
 	} else {
-		self.Timeout = 0
+		data.Timeout = 0
 	}
 }
 
-func (self *retrieveRequestMsgData) getTimeout() (t *time.Time) {
-	if self.Timeout > 0 && self.timeout == nil {
-		timeout := time.Unix(int64(self.Timeout), 0)
+func (data *retrieveRequestMsgData) getTimeout() (t *time.Time) {
+	if data.Timeout > 0 && data.timeout == nil {
+		timeout := time.Unix(int64(data.Timeout), 0)
 		t = &timeout
-		self.timeout = t
+		data.timeout = t
 	}
 	return
 }
@@ -180,10 +180,10 @@ type peerAddr struct {
 }
 
 // peerAddr pretty prints as enode
-func (self *peerAddr) String() string {
+func (data *peerAddr) String() string {
 	var nodeid discover.NodeID
-	copy(nodeid[:], self.ID)
-	return discover.NewNode(nodeid, self.IP, 0, self.Port).String()
+	copy(nodeid[:], data.ID)
+	return discover.NewNode(nodeid, data.IP, 0, data.Port).String()
 }
 
 /*
@@ -199,7 +199,7 @@ the timeout or not.
 NodeID serves as the owner of payment contracts and signer of proofs of transfer.
 
 The Key is the target (if response to a retrieval request) or missing (zero value)
-peers address (hash of NodeID) if retrieval request was a self lookup.
+peers address (hash of NodeID) if retrieval request was a data lookup.
 
 Peers message is requested by retrieval requests with a missing or zero value request ID
 */
@@ -213,26 +213,26 @@ type peersMsgData struct {
 }
 
 // peers msg pretty printer
-func (self *peersMsgData) String() string {
+func (data *peersMsgData) String() string {
 	var from string
-	if self.from == nil {
+	if data.from == nil {
 		from = "ourselves"
 	} else {
-		from = self.from.Addr().String()
+		from = data.from.Addr().String()
 	}
 	var target []byte
-	if len(self.Key) > 3 {
-		target = self.Key[:4]
+	if len(data.Key) > 3 {
+		target = data.Key[:4]
 	}
-	return fmt.Sprintf("from: %v, Key: %x; ID: %v, Peers: %v", from, target, self.Id, self.Peers)
+	return fmt.Sprintf("from: %v, Key: %x; ID: %v, Peers: %v", from, target, data.Id, data.Peers)
 }
 
-func (self *peersMsgData) setTimeout(t *time.Time) {
-	self.timeout = t
+func (data *peersMsgData) setTimeout(t *time.Time) {
+	data.timeout = t
 	if t != nil {
-		self.Timeout = uint64(t.UnixNano())
+		data.Timeout = uint64(t.UnixNano())
 	} else {
-		self.Timeout = 0
+		data.Timeout = 0
 	}
 }
 
@@ -248,8 +248,8 @@ type syncRequestMsgData struct {
 	SyncState *syncState `rlp:"nil"`
 }
 
-func (self *syncRequestMsgData) String() string {
-	return fmt.Sprintf("%v", self.SyncState)
+func (data *syncRequestMsgData) String() string {
+	return fmt.Sprintf("%v", data.SyncState)
 }
 
 /*
@@ -265,8 +265,8 @@ type deliveryRequestMsgData struct {
 	Deliver []*syncRequest
 }
 
-func (self *deliveryRequestMsgData) String() string {
-	return fmt.Sprintf("sync request for new chunks\ndelivery request for %v chunks", len(self.Deliver))
+func (data *deliveryRequestMsgData) String() string {
+	return fmt.Sprintf("sync request for new chunks\ndelivery request for %v chunks", len(data.Deliver))
 }
 
 /*
@@ -287,8 +287,8 @@ type unsyncedKeysMsgData struct {
 	State    *syncState
 }
 
-func (self *unsyncedKeysMsgData) String() string {
-	return fmt.Sprintf("sync: keys of %d new chunks (state %v) => synced: %v", len(self.Unsynced), self.State, self.State.Synced)
+func (data *unsyncedKeysMsgData) String() string {
+	return fmt.Sprintf("sync: keys of %d new chunks (state %v) => synced: %v", len(data.Unsynced), data.State, data.State.Synced)
 }
 
 /*
@@ -303,6 +303,6 @@ type paymentMsgData struct {
 	Promise *chequebook.Cheque // payment with cheque
 }
 
-func (self *paymentMsgData) String() string {
-	return fmt.Sprintf("payment for %d units: %v", self.Units, self.Promise)
+func (data *paymentMsgData) String() string {
+	return fmt.Sprintf("payment for %d units: %v", data.Units, data.Promise)
 }

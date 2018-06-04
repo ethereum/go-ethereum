@@ -100,45 +100,45 @@ func ensNode(name string) common.Hash {
 	return crypto.Keccak256Hash(parentNode[:], parentLabel[:])
 }
 
-func (self *ENS) getResolver(node [32]byte) (*contract.PublicResolverSession, error) {
-	resolverAddr, err := self.Resolver(node)
+func (e *ENS) getResolver(node [32]byte) (*contract.PublicResolverSession, error) {
+	resolverAddr, err := e.Resolver(node)
 	if err != nil {
 		return nil, err
 	}
 
-	resolver, err := contract.NewPublicResolver(resolverAddr, self.contractBackend)
+	resolver, err := contract.NewPublicResolver(resolverAddr, e.contractBackend)
 	if err != nil {
 		return nil, err
 	}
 
 	return &contract.PublicResolverSession{
 		Contract:     resolver,
-		TransactOpts: self.TransactOpts,
+		TransactOpts: e.TransactOpts,
 	}, nil
 }
 
-func (self *ENS) getRegistrar(node [32]byte) (*contract.FIFSRegistrarSession, error) {
-	registrarAddr, err := self.Owner(node)
+func (e *ENS) getRegistrar(node [32]byte) (*contract.FIFSRegistrarSession, error) {
+	registrarAddr, err := e.Owner(node)
 	if err != nil {
 		return nil, err
 	}
 
-	registrar, err := contract.NewFIFSRegistrar(registrarAddr, self.contractBackend)
+	registrar, err := contract.NewFIFSRegistrar(registrarAddr, e.contractBackend)
 	if err != nil {
 		return nil, err
 	}
 
 	return &contract.FIFSRegistrarSession{
 		Contract:     registrar,
-		TransactOpts: self.TransactOpts,
+		TransactOpts: e.TransactOpts,
 	}, nil
 }
 
 // Resolve is a non-transactional call that returns the content hash associated with a name.
-func (self *ENS) Resolve(name string) (common.Hash, error) {
+func (e *ENS) Resolve(name string) (common.Hash, error) {
 	node := ensNode(name)
 
-	resolver, err := self.getResolver(node)
+	resolver, err := e.getResolver(node)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -153,26 +153,26 @@ func (self *ENS) Resolve(name string) (common.Hash, error) {
 
 // Register registers a new domain name for the caller, making them the owner of the new name.
 // Only works if the registrar for the parent domain implements the FIFS registrar protocol.
-func (self *ENS) Register(name string) (*types.Transaction, error) {
+func (e *ENS) Register(name string) (*types.Transaction, error) {
 	parentNode, label := ensParentNode(name)
-	registrar, err := self.getRegistrar(parentNode)
+	registrar, err := e.getRegistrar(parentNode)
 	if err != nil {
 		return nil, err
 	}
-	return registrar.Contract.Register(&self.TransactOpts, label, self.TransactOpts.From)
+	return registrar.Contract.Register(&e.TransactOpts, label, e.TransactOpts.From)
 }
 
 // SetContentHash sets the content hash associated with a name. Only works if the caller
 // owns the name, and the associated resolver implements a `setContent` function.
-func (self *ENS) SetContentHash(name string, hash common.Hash) (*types.Transaction, error) {
+func (e *ENS) SetContentHash(name string, hash common.Hash) (*types.Transaction, error) {
 	node := ensNode(name)
 
-	resolver, err := self.getResolver(node)
+	resolver, err := e.getResolver(node)
 	if err != nil {
 		return nil, err
 	}
 
-	opts := self.TransactOpts
+	opts := e.TransactOpts
 	opts.GasLimit = 200000
 	return resolver.Contract.SetContent(&opts, node, hash)
 }

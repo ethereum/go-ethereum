@@ -45,27 +45,27 @@ func NewLDBDatabase(file string) (*LDBDatabase, error) {
 	return database, nil
 }
 
-func (self *LDBDatabase) Put(key []byte, value []byte) {
-	err := self.db.Put(key, value, nil)
+func (database *LDBDatabase) Put(key []byte, value []byte) {
+	err := database.db.Put(key, value, nil)
 	if err != nil {
 		fmt.Println("Error put", err)
 	}
 }
 
-func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
-	dat, err := self.db.Get(key, nil)
+func (database *LDBDatabase) Get(key []byte) ([]byte, error) {
+	dat, err := database.db.Get(key, nil)
 	if err != nil {
 		return nil, err
 	}
 	return dat, nil
 }
 
-func (self *LDBDatabase) Delete(key []byte) error {
-	return self.db.Delete(key, nil)
+func (database *LDBDatabase) Delete(key []byte) error {
+	return database.db.Delete(key, nil)
 }
 
-func (self *LDBDatabase) LastKnownTD() []byte {
-	data, _ := self.Get([]byte("LTD"))
+func (database *LDBDatabase) LastKnownTD() []byte {
+	data, _ := database.Get([]byte("LTD"))
 
 	if len(data) == 0 {
 		data = []byte{0x0}
@@ -74,15 +74,15 @@ func (self *LDBDatabase) LastKnownTD() []byte {
 	return data
 }
 
-func (self *LDBDatabase) NewIterator() iterator.Iterator {
-	return self.db.NewIterator(nil, nil)
+func (database *LDBDatabase) NewIterator() iterator.Iterator {
+	return database.db.NewIterator(nil, nil)
 }
 
-func (self *LDBDatabase) Write(batch *leveldb.Batch) error {
-	return self.db.Write(batch, nil)
+func (database *LDBDatabase) Write(batch *leveldb.Batch) error {
+	return database.db.Write(batch, nil)
 }
 
-func (self *LDBDatabase) Close() {
+func (database *LDBDatabase) Close() {
 	// Close the leveldb database
-	self.db.Close()
+	database.db.Close()
 }

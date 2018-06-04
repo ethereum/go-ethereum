@@ -559,12 +559,12 @@ type dbSyncIterator struct {
 }
 
 // initialises a sync iterator from a syncToken (passed in with the handshake)
-func (self *DbStore) NewSyncIterator(state DbSyncState) (si *dbSyncIterator, err error) {
+func (store *DbStore) NewSyncIterator(state DbSyncState) (si *dbSyncIterator, err error) {
 	if state.First > state.Last {
 		return nil, fmt.Errorf("no entries found")
 	}
 	si = &dbSyncIterator{
-		it:          self.db.NewIterator(),
+		it:          store.db.NewIterator(),
 		DbSyncState: state,
 	}
 	si.it.Seek(getIndexKey(state.Start))
@@ -573,28 +573,28 @@ func (self *DbStore) NewSyncIterator(state DbSyncState) (si *dbSyncIterator, err
 
 // walk the area from Start to Stop and returns items within time interval
 // First to Last
-func (self *dbSyncIterator) Next() (key Key) {
-	for self.it.Valid() {
-		dbkey := self.it.Key()
+func (iterator *dbSyncIterator) Next() (key Key) {
+	for iterator.it.Valid() {
+		dbkey := iterator.it.Key()
 		if dbkey[0] != 0 {
 			break
 		}
 		key = Key(make([]byte, len(dbkey)-1))
 		copy(key[:], dbkey[1:])
-		if bytes.Compare(key[:], self.Start) <= 0 {
-			self.it.Next()
+		if bytes.Compare(key[:], iterator.Start) <= 0 {
+			iterator.it.Next()
 			continue
 		}
-		if bytes.Compare(key[:], self.Stop) > 0 {
+		if bytes.Compare(key[:], iterator.Stop) > 0 {
 			break
 		}
 		var index dpaDBIndex
-		decodeIndex(self.it.Value(), &index)
-		self.it.Next()
-		if (index.Idx >= self.First) && (index.Idx < self.Last) {
+		decodeIndex(iterator.it.Value(), &index)
+		iterator.it.Next()
+		if (index.Idx >= iterator.First) && (index.Idx < iterator.Last) {
 			return
 		}
 	}
-	self.it.Release()
+	iterator.it.Release()
 	return nil
 }
