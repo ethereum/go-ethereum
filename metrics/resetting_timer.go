@@ -210,7 +210,7 @@ func (t *ResettingTimerSnapshot) calc(percentiles []float64) {
 				// poor man's math.Round(x):
 				// math.Floor(x + 0.5)
 				indexOfPerc := int(math.Floor(((abs / 100.0) * float64(count)) + 0.5))
-				if pct >= 0 {
+				if pct >= 0 && indexOfPerc > 0 {
 					indexOfPerc -= 1 // index offset=0
 				}
 				thresholdBoundary = t.values[indexOfPerc]
