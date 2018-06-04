@@ -16,7 +16,10 @@
 
 package dashboard
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Message struct {
 	General *GeneralMessage `json:"general,omitempty"`
@@ -68,5 +71,21 @@ type SystemMessage struct {
 }
 
 type LogsMessage struct {
-	Log []string `json:"log,omitempty"`
+	Old    *LogFile        `json:"old,omitempty"` // Attributes of the log file.
+	Chunk  json.RawMessage `json:"chunk"`         // Contains log records.
+}
+
+type LogFile struct {
+	Name string `json:"name"` // The name of the file.
+	Past bool   `json:"past"` // Denotes if the file is the previous or the next one.
+	Last bool   `json:"last"` // Denotes if there isn't more file.
+}
+
+type Request struct {
+	Logs *LogsRequest `json:"logs,omitempty"`
+}
+
+type LogsRequest struct {
+	Name string `json:"name"` // The request handler searches for log file based on this file name.
+	Past bool   `json:"past"` // Denotes whether the client wants the previous or the next file.
 }
