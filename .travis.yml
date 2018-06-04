@@ -1,5 +1,5 @@
 language: go
-go_import_path: github.com/ethereum/go-ethereum
+go_import_path: github.com/ShyftNetwork/shyft_go-ethereum
 sudo: false
 matrix:
   include:
@@ -151,7 +151,7 @@ matrix:
         - export GOROOT=`pwd`/go
         - export GOPATH=$HOME/go
       script:
-        # Build the Android archive and upload it to Maven Central and Azure
+        # Build the Android archive and upload it gto Maven Central and Azure
         - curl https://dl.google.com/android/repository/android-ndk-r15c-linux-x86_64.zip -o android-ndk-r15c.zip
         - unzip -q android-ndk-r15c.zip && rm android-ndk-r15c.zip
         - mv android-ndk-r15c $HOME
@@ -177,6 +177,7 @@ matrix:
         # Build the iOS framework and upload it to CocoaPods and Azure
         - gem uninstall cocoapods -a -x
         - gem install cocoapods
+
 
         - mv ~/.cocoapods/repos/master ~/.cocoapods/repos/master.bak
         - sed -i '.bak' 's/repo.join/!repo.join/g' $(dirname `gem which cocoapods`)/cocoapods/sources_manager.rb
