@@ -75,6 +75,11 @@ func NewPublicFilterAPI(backend Backend, lightMode bool) *PublicFilterAPI {
 	return api
 }
 
+// EventSystem returns
+func (filter *PublicFilterAPI) EventSystem() *EventSystem {
+	return filter.events
+}
+
 // timeoutLoop runs every 5 minutes and deletes filters that have not been recently used.
 // Tt is started when the api is created.
 func (api *PublicFilterAPI) timeoutLoop() {
