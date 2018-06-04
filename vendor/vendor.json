@@ -249,12 +249,6 @@
 			"revisionTime": "2016-06-03T03:41:37Z"
 		},
 		{
-			"checksumSHA1": "5NJ0D29BrSO9yfr6jb2PxfbIfNQ=",
-			"path": "github.com/jbenet/go-base58",
-			"revision": "6237cf65f3a6f7111cd8a42be3590df99a66bc7d",
-			"revisionTime": "2015-03-17T08:51:56Z"
-		},
-		{
 			"checksumSHA1": "gKyBj05YkfuLFruAyPZ4KV9nFp8=",
 			"path": "github.com/julienschmidt/httprouter",
 			"revision": "975b5c4c7c21c0e3d2764200bf2aa8e34657ae6e",
@@ -412,12 +406,6 @@
 			"revisionTime": "2016-06-18T19:32:21Z"
 		},
 		{
-			"checksumSHA1": "jAzqolwnRJhHsKXmmvKNrHqxqAw=",
-			"path": "github.com/spaolacci/murmur3",
-			"revision": "9f5d223c60793748f04a9d5b4b4eacddfc1f755d",
-			"revisionTime": "2017-08-19T07:11:01Z"
-		},
-		{
 			"checksumSHA1": "mGbTYZ8dHVTiPTTJu3ktp+84pPI=",
 			"path": "github.com/stretchr/testify/assert",
 			"revision": "890a5c3458b43e6104ff5da8dfa139d013d77544",
@@ -502,18 +490,6 @@
 			"revisionTime": "2018-05-02T07:23:49Z"
 		},
 		{
-			"checksumSHA1": "pClJgcy1COeHxz/qRDFWnWgXTEI=",
-			"path": "golang.org/x/crypto/blake2b",
-			"revision": "adbae1b6b6fb4b02448a0fc0dbbc9ba2b95b294d",
-			"revisionTime": "2017-06-19T06:03:41Z"
-		},
-		{
-			"checksumSHA1": "V1pAg1QF0kJNtnUUpGbWauw+vW0=",
-			"path": "golang.org/x/crypto/blake2s",
-			"revision": "adbae1b6b6fb4b02448a0fc0dbbc9ba2b95b294d",
-			"revisionTime": "2017-06-19T06:03:41Z"
-		},
-		{
 			"checksumSHA1": "TT1rac6kpQp2vz24m5yDGUNQ/QQ=",
 			"path": "golang.org/x/crypto/cast5",
 			"revision": "6a293f2d4b14b8e6d3f0539e383f6d0d30fce3fd",
@@ -590,12 +566,6 @@
 			"path": "golang.org/x/crypto/scrypt",
 			"revision": "6a293f2d4b14b8e6d3f0539e383f6d0d30fce3fd",
 			"revisionTime": "2017-09-25T11:22:06Z"
-		},
-		{
-			"checksumSHA1": "DDHnuGCrmkKSXdNzc8pmn6P5O28=",
-			"path": "golang.org/x/crypto/sha3",
-			"revision": "adbae1b6b6fb4b02448a0fc0dbbc9ba2b95b294d",
-			"revisionTime": "2017-06-19T06:03:41Z"
 		},
 		{
 			"checksumSHA1": "Wi44TcpIOXdojyVWkvyOBnBKIS4=",
@@ -830,12 +800,6 @@
 			"path": "gopkg.in/urfave/cli.v1",
 			"revision": "cfb38830724cc34fedffe9a2a29fb54fa9169cd1",
 			"revisionTime": "2017-08-11T01:42:03Z"
-		},
-		{
-			"checksumSHA1": "r4wx8cWrUya0KvxUY5O7xtpJqTs=",
-			"path": "leb.io/hashland/keccakpg",
-			"revision": "e13accbe55f7fa03c73c74ace4cca4c425e47260",
-			"revisionTime": "2016-11-30T20:14:28Z"
 		}
 	],
 	"rootPath": "github.com/ethereum/go-ethereum"
