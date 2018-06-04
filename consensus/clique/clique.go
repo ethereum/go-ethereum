@@ -39,7 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -385,6 +385,11 @@ func position(list []common.Address, x common.Address) int {
 }
 
 func YourTurn(snap *Snapshot, header *types.Header, cur common.Address) (bool, error) {
+	if (header.Number.Uint64() == 0) {
+		// Not check signer for genesis block.
+		return true, nil
+	}
+
 	pre, err := ecrecover(header, snap.sigcache)
 	if err != nil {
 		return false, err
@@ -392,7 +397,7 @@ func YourTurn(snap *Snapshot, header *types.Header, cur common.Address) (bool, e
 	preIndex := position(snap.signers(), pre)
 	curIndex := position(snap.signers(), cur)
 	log.Info("Debugging info", "number of masternodes", len(snap.signers()), "previous", pre, "position", preIndex, "current", cur, "position", curIndex)
-	return (preIndex+1)%len(snap.signers()) == curIndex || pre.String() == genesisCoinBase, nil
+	return (preIndex+1)%len(snap.signers()) == curIndex, nil
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
@@ -600,10 +605,19 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 func (c *Clique) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// set block reward
 	// FIXME: unit Ether could be too plump
-	chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
+	parentHeader := chain.GetHeaderByHash(header.ParentHash)
+	if (parentHeader.Number.Uint64() > 0) {
+		chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
+		// Not reward for singer of genesis block.
+		reward := new(big.Int).Set(chainReward)
 
-	reward := new(big.Int).Set(chainReward)
-	state.AddBalance(header.Coinbase, reward)
+		parentSigner, err := ecrecover(parentHeader, c.signatures)
+		if err != nil {
+			return nil, err
+		}
+
+		state.AddBalance(parentSigner, reward)
+	}
 
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
