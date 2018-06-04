@@ -1,5 +1,5 @@
 language: go
-go_import_path: github.com/shyftnetwork/shyft_go-ethereum
+go_import_path: github.com/ShyftNetwork/shyft_go-ethereum
 sudo: false
 matrix:
   include:
