@@ -173,6 +173,11 @@ func NewHTTPServer(cors []string, vhosts []string, srv *Server) *http.Server {
 	}
 }
 
+type contextKey string
+func contextString(c contextKey) string {
+    return string(c)
+}
+
 // ServeHTTP serves JSON-RPC requests over HTTP.
 func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Permit dumb empty requests for remote health-checks (AWS)
@@ -183,13 +188,16 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), code)
 		return
 	}
+
+	rem, sch, loc := contextKey("remote"), contextKey("scheme"), contextKey("local")
+
 	// All checks passed, create a codec that reads direct from the request body
 	// untilEOF and writes the response to w and order the server to process a
 	// single request.
 	ctx := r.Context()
-	ctx = context.WithValue(ctx, "remote", r.RemoteAddr)
-	ctx = context.WithValue(ctx, "scheme", r.Proto)
-	ctx = context.WithValue(ctx, "local", r.Host)
+	ctx = context.WithValue(ctx, remote, r.RemoteAddr)
+	ctx = context.WithValue(ctx, sch, r.Proto)
+	ctx = context.WithValue(ctx, loc, r.Host)
 
 	body := io.LimitReader(r.Body, maxRequestContentLength)
 	codec := NewJSONCodec(&httpReadWriteNopCloser{body, w})

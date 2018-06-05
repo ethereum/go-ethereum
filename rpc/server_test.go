@@ -59,8 +59,8 @@ func (s *Service) Rets() (string, error) {
 	return "", nil
 }
 
-func (s *Service) InvalidRets1() (error, string) {
-	return nil, ""
+func (s *Service) InvalidRets1() (string, error) {
+	return "", nil
 }
 
 func (s *Service) InvalidRets2() (string, string) {

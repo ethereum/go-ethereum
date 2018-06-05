@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// Vars hardcodes custom error messages.
 var (
 	ErrClientQuit                = errors.New("client is closed")
 	ErrNoResult                  = errors.New("no result in JSON-RPC response")
@@ -191,29 +192,37 @@ func (io StdIOConn) Write(b []byte) (n int, err error) {
 	return os.Stdout.Write(b)
 }
 
+// Close is a noop.
 func (io StdIOConn) Close() error {
 	return nil
 }
 
+// LocalAddr sets the address of a Unix domain socket end point.
 func (io StdIOConn) LocalAddr() net.Addr {
 	return &net.UnixAddr{Name: "stdio", Net: "stdio"}
 }
 
+// RemoteAddr sets the remote address of a Unix domain socket end point.
 func (io StdIOConn) RemoteAddr() net.Addr {
 	return &net.UnixAddr{Name: "stdio", Net: "stdio"}
 }
 
+// SetDeadline sets the operation, network type, and address of an error.
 func (io StdIOConn) SetDeadline(t time.Time) error {
 	return &net.OpError{Op: "set", Net: "stdio", Source: nil, Addr: nil, Err: errors.New("deadline not supported")}
 }
 
+// SetReadDeadline sets the operation, network type, and address of an error.
 func (io StdIOConn) SetReadDeadline(t time.Time) error {
 	return &net.OpError{Op: "set", Net: "stdio", Source: nil, Addr: nil, Err: errors.New("deadline not supported")}
 }
 
+// SetWriteDeadline sets the operation, network type, and address of an error.
 func (io StdIOConn) SetWriteDeadline(t time.Time) error {
 	return &net.OpError{Op: "set", Net: "stdio", Source: nil, Addr: nil, Err: errors.New("deadline not supported")}
 }
+
+// DialStdIO returns a new client instance with ctx values.
 func DialStdIO(ctx context.Context) (*Client, error) {
 	return newClient(ctx, func(_ context.Context) (net.Conn, error) {
 		return StdIOConn{}, nil
@@ -329,7 +338,7 @@ func (c *Client) BatchCall(b []BatchElem) error {
 	return c.BatchCallContext(ctx, b)
 }
 
-// BatchCall sends all given requests as a single batch and waits for the server
+// BatchCallContext sends all given requests as a single batch and waits for the server
 // to return a response for all of them. The wait duration is bounded by the
 // context's deadline.
 //
@@ -781,7 +790,7 @@ func (sub *ClientSubscription) start() {
 	sub.quitWithError(sub.forward())
 }
 
-func (sub *ClientSubscription) forward() (err error, unsubscribeServer bool) {
+func (sub *ClientSubscription) forward() (unsubscribeServer bool, err error) {
 	cases := []reflect.SelectCase{
 		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(sub.quit)},
 		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(sub.in)},
@@ -803,14 +812,14 @@ func (sub *ClientSubscription) forward() (err error, unsubscribeServer bool) {
 
 		switch chosen {
 		case 0: // <-sub.quit
-			return nil, false
+			return false, nil
 		case 1: // <-sub.in
 			val, err := sub.unmarshal(recv.Interface().(json.RawMessage))
 			if err != nil {
-				return err, true
+				return true, err
 			}
 			if buffer.Len() == maxClientSubscriptionBuffer {
-				return ErrSubscriptionQueueOverflow, true
+				return true, ErrSubscriptionQueueOverflow
 			}
 			buffer.PushBack(val)
 		case 2: // sub.channel<-
