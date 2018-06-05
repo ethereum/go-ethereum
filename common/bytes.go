@@ -17,7 +17,9 @@
 // Package common contains various helper functions.
 package common
 
-import "encoding/hex"
+import (
+	"encoding/hex"
+)
 
 // ToHex returns the hex representation of b, prefixed with '0x'.
 // For empty slices, the return value is "0x0".
