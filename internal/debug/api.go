@@ -33,6 +33,8 @@ import (
 	"sync"
 	"time"
 
+	"bufio"
+	"bytes"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -190,9 +192,13 @@ func (*HandlerT) WriteMemProfile(file string) error {
 
 // Stacks returns a printed representation of the stacks of all goroutines.
 func (*HandlerT) Stacks() string {
-	buf := make([]byte, 1024*1024)
-	buf = buf[:runtime.Stack(buf, true)]
-	return string(buf)
+	var b bytes.Buffer
+	b.Grow(1024 * 1024)
+	w := bufio.NewWriter(&b)
+	pprof.Lookup("goroutine").WriteTo(w, 2)
+	w.Flush()
+
+	return b.String()
 }
 
 // FreeOSMemory returns unused memory to the OS.
