@@ -26,11 +26,16 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
-	MainNetAddr = common.HexToAddress("")
-	TestNetAddr = common.HexToAddress("0x3b934494985d17bcb49557671e1bc8ec32cccdd5") // Rinkeby
+	// registrar contract address for mainnet or test chain.
+	RegistrarAddr = map[common.Hash]common.Address{
+		params.MainnetGenesisHash: common.HexToAddress(""),
+		params.TestnetGenesisHash: common.HexToAddress(""),
+		params.RinkebyGenesisHash: common.HexToAddress("0x3b934494985d17bcb49557671e1bc8ec32cccdd5"),
+	}
 )
 
 var errEventNotFound = errors.New("contract event not found")
@@ -39,18 +44,6 @@ const (
 	sectionSize            = 32768 // The frequency for creating a checkpoint
 	checkpointConfirmation = 10000 // The number of confirmations needed before a checkpoint becoming stable.
 )
-
-// Checkpoint represents a set of post-processed trie roots (CHT and BloomTrie) associated with
-// the appropriate section index and head hash.
-//
-// It is used to start light syncing from this checkpoint and avoid downloading the entire header chain
-// while still being able to securely access old headers/logs.
-type Checkpoint struct {
-	SectionIndex  uint64
-	SectionHead   common.Hash // Block Hash for the last block in the section
-	ChtRoot       common.Hash // CHT(Canonical Hash Trie) root associated to the section
-	BloomTrieRoot common.Hash // Bloom Trie root associated to the section
-}
 
 type Registrar struct {
 	contract *contract.Contract

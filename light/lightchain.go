@@ -98,7 +98,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	if bc.genesisBlock == nil {
 		return nil, core.ErrNoGenesis
 	}
-	if cp, ok := trustedCheckpoints[bc.genesisBlock.Hash()]; ok {
+	if cp, ok := TrustedCheckpoints[bc.genesisBlock.Hash()]; ok {
 		bc.addTrustedCheckpoint(cp)
 	}
 	if err := bc.loadLastState(); err != nil {
@@ -116,19 +116,19 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 }
 
 // addTrustedCheckpoint adds a trusted checkpoint to the blockchain
-func (self *LightChain) addTrustedCheckpoint(cp trustedCheckpoint) {
+func (self *LightChain) addTrustedCheckpoint(cp TrustedCheckpoint) {
 	if self.odr.ChtIndexer() != nil {
-		StoreChtRoot(self.chainDb, cp.sectionIdx, cp.sectionHead, cp.chtRoot)
-		self.odr.ChtIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
+		StoreChtRoot(self.chainDb, cp.SectionIdx, cp.SectionHead, cp.ChtRoot)
+		self.odr.ChtIndexer().AddKnownSectionHead(cp.SectionIdx, cp.SectionHead)
 	}
 	if self.odr.BloomTrieIndexer() != nil {
-		StoreBloomTrieRoot(self.chainDb, cp.sectionIdx, cp.sectionHead, cp.bloomTrieRoot)
-		self.odr.BloomTrieIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
+		StoreBloomTrieRoot(self.chainDb, cp.SectionIdx, cp.SectionHead, cp.BloomTrieRoot)
+		self.odr.BloomTrieIndexer().AddKnownSectionHead(cp.SectionIdx, cp.SectionHead)
 	}
 	if self.odr.BloomIndexer() != nil {
-		self.odr.BloomIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
+		self.odr.BloomIndexer().AddKnownSectionHead(cp.SectionIdx, cp.SectionHead)
 	}
-	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.sectionIdx+1)*CHTFrequencyClient-1, "hash", cp.sectionHead)
+	log.Info("Added trusted checkpoint", "chain", cp.Name, "block", (cp.SectionIdx+1)*CHTFrequencyClient-1, "hash", cp.SectionHead)
 }
 
 func (self *LightChain) getProcInterrupt() bool {

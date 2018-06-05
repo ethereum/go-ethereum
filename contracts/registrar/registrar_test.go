@@ -27,15 +27,16 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/registrar/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/light"
 )
 
 var (
-	key, _    = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	key, _    = crypto.GenerateKey()
 	addr      = crypto.PubkeyToAddress(key.PublicKey)
 	emptyHash = [32]byte{}
 
-	trustedCheckpoint = Checkpoint{
-		SectionIndex:  0,
+	trustedCheckpoint = light.TrustedCheckpoint{
+		SectionIdx:    0,
 		SectionHead:   common.HexToHash("14c8639dfc32812ed20839f5a11993cd59b22e5226cb2179640ba5c1f0c08f87"),
 		ChtRoot:       common.HexToHash("cf92fd2a79464354e8dae4d589ae92acdf90a3a4f8f7d8a3ec5fb9c114ae81cd"),
 		BloomTrieRoot: common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
@@ -115,10 +116,10 @@ func TestCheckpointRegister(t *testing.T) {
 	contractBackend.Commit()
 
 	// Register an unstable checkpoint
-	contract.SetCheckpoint(transactOpts, big.NewInt(int64(trustedCheckpoint.SectionIndex)), trustedCheckpoint.SectionHead,
+	contract.SetCheckpoint(transactOpts, big.NewInt(int64(trustedCheckpoint.SectionIdx)), trustedCheckpoint.SectionHead,
 		trustedCheckpoint.ChtRoot, trustedCheckpoint.BloomTrieRoot)
 	contractBackend.Commit()
-	head, chtRoot, bloomTrieRoot, err := contract.GetCheckpoint(nil, big.NewInt(int64(trustedCheckpoint.SectionIndex)))
+	head, chtRoot, bloomTrieRoot, err := contract.GetCheckpoint(nil, big.NewInt(int64(trustedCheckpoint.SectionIdx)))
 	if err != nil {
 		t.Error("fetch checkpoint failed", err)
 	}
@@ -128,10 +129,10 @@ func TestCheckpointRegister(t *testing.T) {
 
 	// Register a stable checkpoint
 	contractBackend.ShiftBlocks(sectionSize + checkpointConfirmation)
-	contract.SetCheckpoint(transactOpts, big.NewInt(int64(trustedCheckpoint.SectionIndex)), trustedCheckpoint.SectionHead,
+	contract.SetCheckpoint(transactOpts, big.NewInt(int64(trustedCheckpoint.SectionIdx)), trustedCheckpoint.SectionHead,
 		trustedCheckpoint.ChtRoot, trustedCheckpoint.BloomTrieRoot)
 	contractBackend.Commit()
-	head, chtRoot, bloomTrieRoot, err = contract.GetCheckpoint(nil, big.NewInt(int64(trustedCheckpoint.SectionIndex)))
+	head, chtRoot, bloomTrieRoot, err = contract.GetCheckpoint(nil, big.NewInt(int64(trustedCheckpoint.SectionIdx)))
 	if err != nil {
 		t.Error("fetch checkpoint failed", err)
 	}

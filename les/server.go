@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/registrar"
+	"github.com/ethereum/go-ethereum/contracts/registrar/contract"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -44,8 +45,9 @@ type LesServer struct {
 	privateKey      *ecdsa.PrivateKey
 	quitSync        chan struct{}
 
-	// Checkpoint contract relative fields
-	registrar *registrar.Registrar // Handler for checkpoint contract
+	// Checkpoint relative fields
+	registrar        *registrar.Registrar     // Handler for checkpoint contract
+	stableCheckpoint *light.TrustedCheckpoint // The nearest stable checkpoint
 
 	// Indexers
 	chtIndexer       *core.ChainIndexer // Indexers for creating cht root for each block section
@@ -102,6 +104,13 @@ func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
 	}
 	srv.fcManager = flowcontrol.NewClientManager(uint64(config.LightServ), 10, 1000000000)
 	srv.fcCostStats = newCostStats(eth.ChainDb())
+	if addr, ok := registrar.RegistrarAddr[eth.BlockChain().Genesis().Hash()]; ok {
+		registrar, err := registrar.NewRegistrar(addr, eth.APIBackend, false)
+		if err != nil {
+			return nil, err
+		}
+		srv.registrar = registrar
+	}
 	return srv, nil
 }
 
@@ -126,6 +135,9 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 	}
 	s.privateKey = srvr.PrivateKey
 	s.protocolManager.blockLoop()
+	if s.registrar != nil {
+		s.checkpointLoop()
+	}
 }
 
 func (s *LesServer) SetBloomBitsIndexer(bloomIndexer *core.ChainIndexer) {
@@ -142,6 +154,43 @@ func (s *LesServer) Stop() {
 		<-s.protocolManager.noMorePeers
 	}()
 	s.protocolManager.Stop()
+	close(s.quitSync)
+}
+
+// checkpointLoop starts a standalone goroutine to watch new checkpoint event and upgrades local's stable checkpoint.
+func (s *LesServer) checkpointLoop() (err error) {
+	sink := make(chan *contract.ContractNewCheckpointEvent)
+	sub, err := s.registrar.WatchNewCheckpointEvent(sink)
+	if err != nil {
+		return
+	}
+	defer func() {
+		sub.Unsubscribe()
+	}()
+
+	for {
+		select {
+		case event := <-sink:
+			// New stable checkpoint received
+			// Note several duplicate events can be received due to chain reorg, just track the first arrive one.
+			if event.Index.Uint64() > s.stableCheckpoint.SectionIdx {
+				checkpoint := &light.TrustedCheckpoint{
+					SectionIdx:    event.Index.Uint64(),
+					SectionHead:   common.Hash(event.SectionHead),
+					ChtRoot:       common.Hash(event.ChtRoot),
+					BloomTrieRoot: common.Hash(event.BloomTrieRoot),
+				}
+				light.WriteTrustedCheckpoint(s.protocolManager.chainDb, checkpoint)
+				s.stableCheckpoint = checkpoint
+				log.Info("update checkpoint", "section", checkpoint.SectionIdx, "head", checkpoint.SectionHead.Hex(),
+					"chtRoot", checkpoint.ChtRoot.Hex(), "bloomTrieRoot", checkpoint.BloomTrieRoot.Hex())
+			}
+
+		case <-s.quitSync:
+			// Les server is closed.
+			return
+		}
+	}
 }
 
 func (pm *ProtocolManager) blockLoop() {

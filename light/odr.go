@@ -164,7 +164,7 @@ func (req *BloomRequest) StoreResult(db ethdb.Database) {
 	for i, sectionIdx := range req.SectionIdxList {
 		sectionHead := rawdb.ReadCanonicalHash(db, (sectionIdx+1)*BloomTrieFrequency-1)
 		// if we don't have the canonical hash stored for this section head number, we'll still store it under
-		// a key with a zero sectionHead. GetBloomBits will look there too if we still don't have the canonical
+		// a key with a zero SectionHead. GetBloomBits will look there too if we still don't have the canonical
 		// hash. In the unlikely case we've retrieved the section head hash since then, we'll just retrieve the
 		// bit vector again from the network.
 		rawdb.WriteBloomBits(db, req.BitIdx, sectionIdx, sectionHead, req.BloomBits[i])

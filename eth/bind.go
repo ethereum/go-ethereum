@@ -89,7 +89,11 @@ func (b *ContractBackend) PendingNonceAt(ctx context.Context, account common.Add
 // SuggestGasPrice implements bind.ContractTransactor retrieving the currently
 // suggested gas price to allow a timely execution of a transaction.
 func (b *ContractBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
-	return b.eapi.GasPrice(ctx)
+	price, err := b.eapi.GasPrice(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return (*big.Int)(price), nil
 }
 
 // EstimateGasLimit implements bind.ContractTransactor trying to estimate the gas
