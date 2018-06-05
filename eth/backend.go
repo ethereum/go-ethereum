@@ -47,9 +47,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	
-	// @shyft
-	"database/sql"
 )
 
 type LesServer interface {
@@ -76,7 +73,6 @@ type Ethereum struct {
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
-	blockExplorerDb *sql.DB
 
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
@@ -116,16 +112,10 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	// @NOTE:shyft instantiate BlockExplorerDB here
 	// @TODO: Create Genesis Block
-	// @NOTE:shyft instantiate BlockExplorerDB here?
-	connStr := "user=postgres dbname=shyftdb sslmode=disable"
-	blockExplorerDb, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return nil, err
-	}
+
 	stopDbUpgrade := upgradeDeduplicateData(chainDb)
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis, blockExplorerDb)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
@@ -134,7 +124,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth := &Ethereum{
 		config:         config,
 		chainDb:        chainDb,
-		blockExplorerDb:  blockExplorerDb,
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
@@ -161,7 +150,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		vmConfig    = vm.Config{EnablePreimageRecording: config.EnablePreimageRecording}
 		cacheConfig = &core.CacheConfig{Disabled: config.NoPruning, TrieNodeLimit: config.TrieCache, TrieTimeLimit: config.TrieTimeout}
 	)
-	eth.blockchain, err = core.NewBlockChain(chainDb, blockExplorerDb, cacheConfig, eth.chainConfig, eth.engine, vmConfig)
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, eth.chainConfig, eth.engine, vmConfig)
 	if err != nil {
 		return nil, err
 	}

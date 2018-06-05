@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"gopkg.in/urfave/cli.v1"
-	"database/sql"
 )
 
 var (
@@ -169,13 +168,7 @@ func initGenesis(ctx *cli.Context) error {
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
-		// @NOTE:shyft instantiate BlockExplorerDB here
-		connStr := "user=postgres dbname=shyftdb sslmode=disable"
-		blockExplorerDb, err := sql.Open("postgres", connStr)
-		if err != nil {
-			return nil
-		}
-		_, hash, err := core.SetupGenesisBlock(chaindb, genesis, blockExplorerDb)
+		_, hash, err := core.SetupGenesisBlock(chaindb, genesis)
 		if err != nil {
 			utils.Fatalf("Failed to write genesis block: %v", err)
 		}
@@ -321,6 +314,7 @@ func copyDb(ctx *cli.Context) error {
 
 	syncmode := *utils.GlobalTextMarshaler(ctx, utils.SyncModeFlag.Name).(*downloader.SyncMode)
 	dl := downloader.New(syncmode, chainDb, new(event.TypeMux), chain, nil, nil)
+
 	// Create a source peer to satisfy downloader requests from
 	db, err := ethdb.NewLDBDatabase(ctx.Args().First(), ctx.GlobalInt(utils.CacheFlag.Name), 256)
 	if err != nil {
