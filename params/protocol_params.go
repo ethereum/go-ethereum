@@ -19,7 +19,7 @@ package params
 import "math/big"
 
 var (
-	TargetGasLimit uint64 = GenesisGasLimit // The artificial target
+	TargetGasLimit = GenesisGasLimit // The artificial target
 )
 
 const (
