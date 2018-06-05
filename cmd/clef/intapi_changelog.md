@@ -1,5 +1,9 @@
 ### Changelog for internal API (ui-api)
 
+### 3.0.0
+
+* The external `accounts_List`-method was changed to not expose `url`, which contained information about the local machine. Thus, the internal method `approveListing` was changed correspondingly, to contain only a set of addresses: `[]common.Address`
+
 ### 2.0.0
 
 * Modify how `call_info` on a transaction is conveyed. New format:

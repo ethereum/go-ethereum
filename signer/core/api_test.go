@@ -80,17 +80,17 @@ func (ui *HeadlessUI) ApproveImport(request *ImportRequest) (ImportResponse, err
 	}
 	return ImportResponse{false, "", ""}, nil
 }
-func (ui *HeadlessUI) ApproveListing(request *ListRequest) (ListResponse, error) {
+func (ui *HeadlessUI) ApproveListing(request *ListRequest) (ListAccountsResponse, error) {
 
 	switch <-ui.controller {
 	case "A":
-		return ListResponse{request.Accounts}, nil
+		return ListAccountsResponse{request.Accounts}, nil
 	case "1":
 		l := make([]Account, 1)
 		l[0] = request.Accounts[1]
-		return ListResponse{l}, nil
+		return ListAccountsResponse{l}, nil
 	default:
-		return ListResponse{nil}, nil
+		return ListAccountsResponse{nil}, nil
 	}
 }
 func (ui *HeadlessUI) ApproveNewAccount(request *NewAccountRequest) (NewAccountResponse, error) {

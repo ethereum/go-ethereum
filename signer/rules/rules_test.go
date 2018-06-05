@@ -93,8 +93,8 @@ func (alwaysDenyUI) ApproveImport(request *core.ImportRequest) (core.ImportRespo
 	return core.ImportResponse{Approved: false, OldPassword: "", NewPassword: ""}, nil
 }
 
-func (alwaysDenyUI) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
-	return core.ListResponse{Accounts: nil}, nil
+func (alwaysDenyUI) ApproveListing(request *core.ListRequest) (core.ListAccountsResponse, error) {
+	return core.ListAccountsResponse{Accounts: nil}, nil
 }
 
 func (alwaysDenyUI) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
@@ -220,9 +220,9 @@ func (d *dummyUI) ApproveImport(request *core.ImportRequest) (core.ImportRespons
 	return core.ImportResponse{}, core.ErrRequestDenied
 }
 
-func (d *dummyUI) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
+func (d *dummyUI) ApproveListing(request *core.ListRequest) (core.ListAccountsResponse, error) {
 	d.calls = append(d.calls, "ApproveListing")
-	return core.ListResponse{}, core.ErrRequestDenied
+	return core.ListAccountsResponse{}, core.ErrRequestDenied
 }
 
 func (d *dummyUI) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {
@@ -532,9 +532,9 @@ func (d *dontCallMe) ApproveImport(request *core.ImportRequest) (core.ImportResp
 	return core.ImportResponse{}, core.ErrRequestDenied
 }
 
-func (d *dontCallMe) ApproveListing(request *core.ListRequest) (core.ListResponse, error) {
+func (d *dontCallMe) ApproveListing(request *core.ListRequest) (core.ListAccountsResponse, error) {
 	d.t.Fatalf("Did not expect next-handler to be called")
-	return core.ListResponse{}, core.ErrRequestDenied
+	return core.ListAccountsResponse{}, core.ErrRequestDenied
 }
 
 func (d *dontCallMe) ApproveNewAccount(request *core.NewAccountRequest) (core.NewAccountResponse, error) {

@@ -38,8 +38,8 @@ import (
 
 // ExternalAPI defines the external API through which signing requests are made.
 type ExternalAPI interface {
-	// List available accounts
-	List(ctx context.Context) (Accounts, error)
+	// ListAccounts lists available accounts (addresses)
+	ListAccounts(ctx context.Context) ([]common.Address, error)
 	// New request to create a new account
 	New(ctx context.Context) (accounts.Account, error)
 	// SignTransaction request to sign the specified transaction
@@ -66,7 +66,7 @@ type SignerUI interface {
 	ApproveImport(request *ImportRequest) (ImportResponse, error)
 	// ApproveListing prompt the user for confirmation to list accounts
 	// the list of accounts to list can be modified by the UI
-	ApproveListing(request *ListRequest) (ListResponse, error)
+	ApproveListing(request *ListAccountsRequest) (ListAccountsResponse, error)
 	// ApproveNewAccount prompt the user for confirmation to create new Account, and reveal to caller
 	ApproveNewAccount(request *NewAccountRequest) (NewAccountResponse, error)
 	// ShowError displays error message to user
@@ -172,12 +172,12 @@ type (
 		Approved bool   `json:"approved"`
 		Password string `json:"password"`
 	}
-	ListRequest struct {
-		Accounts []Account `json:"accounts"`
+	ListAccountsRequest struct {
+		Accounts []common.Address `json:"accounts"`
 		Meta     Metadata  `json:"meta"`
 	}
-	ListResponse struct {
-		Accounts []Account `json:"accounts"`
+	ListAccountsResponse struct {
+		Accounts []common.Address `json:"accounts"`
 	}
 	Message struct {
 		Text string `json:"text"`
@@ -225,17 +225,16 @@ func NewSignerAPI(chainID int64, ksLocation string, noUSB bool, ui SignerUI, abi
 	return &SignerAPI{big.NewInt(chainID), accounts.NewManager(backends...), ui, NewValidator(abidb)}
 }
 
-// List returns the set of wallet this signer manages. Each wallet can contain
+// ListAccounts returns the set of wallet this signer manages. Each wallet can contain
 // multiple accounts.
-func (api *SignerAPI) List(ctx context.Context) (Accounts, error) {
-	var accs []Account
+func (api *SignerAPI) ListAccounts(ctx context.Context) ([]common.Address, error) {
+	addresses := make([]common.Address, 0) // return [] instead of nil if empty
 	for _, wallet := range api.am.Wallets() {
-		for _, acc := range wallet.Accounts() {
-			acc := Account{Typ: "Account", URL: wallet.URL(), Address: acc.Address}
-			accs = append(accs, acc)
+		for _, account := range wallet.Accounts() {
+			addresses = append(addresses, account.Address)
 		}
 	}
-	result, err := api.UI.ApproveListing(&ListRequest{Accounts: accs, Meta: MetadataFromContext(ctx)})
+	result, err := api.UI.ApproveListing(&ListAccountsRequest{Accounts: addresses, Meta: MetadataFromContext(ctx)})
 	if err != nil {
 		return nil, err
 	}

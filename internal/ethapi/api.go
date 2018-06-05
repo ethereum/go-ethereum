@@ -225,9 +225,7 @@ func (s *PrivateAccountAPI) ListAccounts() []common.Address {
 	addresses := make([]common.Address, 0) // return [] instead of nil if empty
 	if s.extapi != nil {
 		if accounts, err := s.extapi.listAccounts(); err == nil {
-			for _, account := range accounts {
-				addresses = append(addresses, account.Address)
-			}
+			return accounts
 		}
 		return addresses
 	}
@@ -1553,9 +1551,9 @@ func (api *ExternalSignerAPI) signTransaction(ctx context.Context, args SendTxAr
 	}
 	return res.Tx, nil
 }
-func (api *ExternalSignerAPI) listAccounts() ([]accounts.Account, error) {
-	var res []accounts.Account
-	if err := api.client.Call(&res, "account_list"); err != nil {
+func (api *ExternalSignerAPI) listAccounts() ([]common.Address, error) {
+	var res []common.Address
+	if err := api.client.Call(&res, "account_listAccounts"); err != nil {
 		return nil, err
 	}
 	return res, nil

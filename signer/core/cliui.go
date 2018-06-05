@@ -190,7 +190,7 @@ func (ui *CommandlineUI) ApproveImport(request *ImportRequest) (ImportResponse, 
 
 // ApproveListing prompt the user for confirmation to list accounts
 // the list of accounts to list can be modified by the UI
-func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, error) {
+func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListAccountsResponse, error) {
 
 	ui.mu.Lock()
 	defer ui.mu.Unlock()
@@ -204,9 +204,9 @@ func (ui *CommandlineUI) ApproveListing(request *ListRequest) (ListResponse, err
 	fmt.Printf("-------------------------------------------\n")
 	showMetadata(request.Meta)
 	if !ui.confirm() {
-		return ListResponse{nil}, nil
+		return ListAccountsResponse{nil}, nil
 	}
-	return ListResponse{request.Accounts}, nil
+	return ListAccountsResponse{request.Accounts}, nil
 }
 
 // ApproveNewAccount prompt the user for confirmation to create new Account, and reveal to caller
