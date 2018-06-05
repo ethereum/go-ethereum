@@ -46,9 +46,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/hashicorp/golang-lru"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
-	
-	// @shyft
-	"database/sql"
 )
 
 var (
@@ -96,7 +93,6 @@ type BlockChain struct {
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
 	db     ethdb.Database // Low level persistent database to store final content in
-	blockExplorerDb *sql.DB
 
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
@@ -141,7 +137,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(db ethdb.Database, blockExplorerDb *sql.DB, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
     fmt.Printf("+++++++++++++++++core/blockchain.GO+++++++++++++++++++++++++NewBlockChain()")
 	if cacheConfig == nil {
 		cacheConfig = &CacheConfig{
@@ -159,7 +155,6 @@ func NewBlockChain(db ethdb.Database, blockExplorerDb *sql.DB, cacheConfig *Cach
 		chainConfig:  chainConfig,
 		cacheConfig:  cacheConfig,
 		db:           db,
-		blockExplorerDb: blockExplorerDb,
 		triegc:       prque.New(),
 		stateCache:   state.NewDatabase(db),
 		quit:         make(chan struct{}),
@@ -908,7 +903,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		return NonStatTy, err
 	}
 	// @NOTE:SHYFT - Write block data for block explorer
-	if err := shyftdb.WriteBlock(bc.blockExplorerDb, block, receipts); err != nil {
+	if err := shyftdb.WriteBlock(block, receipts); err != nil {
 		return NonStatTy, err
 	}
 
