@@ -45,6 +45,7 @@ type Filters struct {
 	mutex    sync.RWMutex
 }
 
+// NewFilters initiliazes the Filterse struct with w.
 func NewFilters(w *Whisper) *Filters {
 	return &Filters{
 		watchers: make(map[string]*Filter),
@@ -52,6 +53,8 @@ func NewFilters(w *Whisper) *Filters {
 	}
 }
 
+// Install hashes the Topic's key and sets the watcher to a random ID
+// inside fs.watchers.
 func (fs *Filters) Install(watcher *Filter) (string, error) {
 	if watcher.Messages == nil {
 		watcher.Messages = make(map[common.Hash]*ReceivedMessage)
@@ -77,6 +80,7 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 	return id, err
 }
 
+// Uninstall deletes values associated with id from fs.watchers, if one exists.
 func (fs *Filters) Uninstall(id string) bool {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
@@ -87,12 +91,15 @@ func (fs *Filters) Uninstall(id string) bool {
 	return false
 }
 
+// Get returns the watcher with the associated id.
 func (fs *Filters) Get(id string) *Filter {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 	return fs.watchers[id]
 }
 
+// NotifyWatchers validates that messages are allowed to be read before
+// mapping the msg to fs Messages map.
 func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 	var msg *ReceivedMessage
 
@@ -136,9 +143,8 @@ func (f *Filter) processEnvelope(env *Envelope) *ReceivedMessage {
 		msg := env.Open(f)
 		if msg != nil {
 			return msg
-		} else {
-			log.Trace("processing envelope: failed to open", "hash", env.Hash().Hex())
 		}
+		log.Trace("processing envelope: failed to open", "hash", env.Hash().Hex())
 	} else {
 		log.Trace("processing envelope: does not match", "hash", env.Hash().Hex())
 	}
@@ -153,6 +159,8 @@ func (f *Filter) expectsSymmetricEncryption() bool {
 	return f.KeySym != nil
 }
 
+// Trigger will assign the msg to Filter's Messages map if the
+// EnvelopeHash has not already been used to set a msg.
 func (f *Filter) Trigger(msg *ReceivedMessage) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
@@ -162,6 +170,7 @@ func (f *Filter) Trigger(msg *ReceivedMessage) {
 	}
 }
 
+// Retrieve will return a slice of all messages the Filter stores.
 func (f *Filter) Retrieve() (all []*ReceivedMessage) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
@@ -201,6 +210,7 @@ func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
 	return false
 }
 
+// MatchTopic checks whether param topic exists in the f receiver.
 func (f *Filter) MatchTopic(topic TopicType) bool {
 	if len(f.Topics) == 0 {
 		// any topic matches
@@ -232,6 +242,8 @@ func matchSingleTopic(topic TopicType, bt []byte) bool {
 	return true
 }
 
+// IsPubKeyEqual checks the format of the given public keys a and b,
+// and compares where each sits on an elliptical curve.
 func IsPubKeyEqual(a, b *ecdsa.PublicKey) bool {
 	if !ValidatePublicKey(a) {
 		return false

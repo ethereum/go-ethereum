@@ -28,6 +28,7 @@ import (
 // SHA3 hash of some arbitrary data given by the original author of the message.
 type TopicType [TopicLength]byte
 
+// BytesToTopic will return passed parameters as a TopicType.
 func BytesToTopic(b []byte) (t TopicType) {
 	sz := TopicLength
 	if x := len(b); x < TopicLength {

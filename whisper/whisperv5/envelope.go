@@ -82,14 +82,17 @@ func NewEnvelope(ttl uint32, topic TopicType, aesNonce []byte, msg *sentMessage)
 	return &env
 }
 
+// IsSymmetric confirms the AESNonce has length greater than 0.
 func (e *Envelope) IsSymmetric() bool {
 	return len(e.AESNonce) > 0
 }
 
+// isAsymmetric confirms the AESNonce does not have a length greater than 0.
 func (e *Envelope) isAsymmetric() bool {
 	return !e.IsSymmetric()
 }
 
+//Ver converts the version to 64-bit unsigned integer.
 func (e *Envelope) Ver() uint64 {
 	return bytesToUintLittleEndian(e.Version)
 }
@@ -223,7 +226,7 @@ func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
 		if msg != nil {
 			msg.Dst = &watcher.KeyAsym.PublicKey
 		}
-	} else if e.IsSymmetric() {
+	} else {
 		msg, _ = e.OpenSymmetric(watcher.KeySym)
 		if msg != nil {
 			msg.SymKeyHash = crypto.Keccak256Hash(watcher.KeySym)

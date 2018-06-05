@@ -242,6 +242,8 @@ func (peer *Peer) setBloomFilter(bloom []byte) {
 	}
 }
 
+// MakeFullNodeBloom returns a bloom object with all entries
+// representing a single byte with the value of 255.
 func MakeFullNodeBloom() []byte {
 	bloom := make([]byte, BloomFilterSize)
 	for i := 0; i < BloomFilterSize; i++ {

@@ -34,6 +34,7 @@ import (
 	"time"
 )
 
+// Constants here define the configuration for the current release.
 const (
 	EnvelopeVersion    = uint64(0)
 	ProtocolVersion    = uint64(5)
@@ -53,7 +54,7 @@ const (
 	signatureLength = 65
 	aesKeyLength    = 32
 	AESNonceLength  = 12
-	keyIdSize       = 32
+	keyIDSize       = 32
 
 	MaxMessageSize        = uint32(10 * 1024 * 1024) // maximum accepted size of a message.
 	DefaultMaxMessageSize = uint32(1024 * 1024)
