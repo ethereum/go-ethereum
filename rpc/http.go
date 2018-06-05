@@ -174,8 +174,9 @@ func NewHTTPServer(cors []string, vhosts []string, srv *Server) *http.Server {
 }
 
 type contextKey string
+
 func contextString(c contextKey) string {
-    return string(c)
+	return string(c)
 }
 
 // ServeHTTP serves JSON-RPC requests over HTTP.
@@ -195,7 +196,7 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// untilEOF and writes the response to w and order the server to process a
 	// single request.
 	ctx := r.Context()
-	ctx = context.WithValue(ctx, remote, r.RemoteAddr)
+	ctx = context.WithValue(ctx, rem, r.RemoteAddr)
 	ctx = context.WithValue(ctx, sch, r.Proto)
 	ctx = context.WithValue(ctx, loc, r.Host)
 

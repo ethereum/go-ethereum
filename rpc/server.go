@@ -52,20 +52,20 @@ func NewServer() *Server {
 
 	// register a default service which will provide meta information about the RPC service such as the services and
 	// methods it offers.
-	rpcService := &Service{server}
+	rpcService := &RPCService{server}
 	server.RegisterName(MetadataAPI, rpcService)
 
 	return server
 }
 
-// Service gives meta information about the server.
+// RPCService gives meta information about the server.
 // e.g. gives information about the loaded modules.
-type Service struct {
+type RPCService struct {
 	server *Server
 }
 
 // Modules returns the list of RPC services with their version number
-func (s *Service) Modules() map[string]string {
+func (s *RPCService) Modules() map[string]string {
 	modules := make(map[string]string)
 	for name := range s.server.services {
 		modules[name] = "1.0"
