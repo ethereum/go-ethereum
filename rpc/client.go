@@ -631,7 +631,7 @@ func (c *Client) closeRequestOps(err error) {
 	}
 	for id, sub := range c.subs {
 		delete(c.subs, id)
-		sub.quitWithError(err, false)
+		sub.quitWithError(false, err)
 	}
 }
 
@@ -755,11 +755,11 @@ func (sub *ClientSubscription) Err() <-chan error {
 // Unsubscribe unsubscribes the notification and closes the error channel.
 // It can safely be called more than once.
 func (sub *ClientSubscription) Unsubscribe() {
-	sub.quitWithError(nil, true)
+	sub.quitWithError(true, nil)
 	sub.errOnce.Do(func() { close(sub.err) })
 }
 
-func (sub *ClientSubscription) quitWithError(err error, unsubscribeServer bool) {
+func (sub *ClientSubscription) quitWithError(unsubscribeServer bool, err error) {
 	sub.quitOnce.Do(func() {
 		// The dispatch loop won't be able to execute the unsubscribe call
 		// if it is blocked on deliver. Close sub.quit first because it
