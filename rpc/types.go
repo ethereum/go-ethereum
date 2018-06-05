@@ -160,6 +160,7 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Int64 casts the bn into int64.
 func (bn BlockNumber) Int64() int64 {
 	return (int64)(bn)
 }
