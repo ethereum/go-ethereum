@@ -742,12 +742,6 @@
 			"revisionTime": "2016-12-08T18:13:25Z"
 		},
 		{
-			"checksumSHA1": "NGg7/qIJVUfXi7xnEyyDLocdi6Y=",
-			"path": "gopkg.in/fatih/set.v0",
-			"revision": "27c40922c40b43fe04554d8223a402af3ea333f3",
-			"revisionTime": "2014-12-10T08:48:24Z"
-		},
-		{
 			"checksumSHA1": "DQXNV0EivoHm4q+bkdahYXrjjfE=",
 			"path": "gopkg.in/karalabe/cookiejar.v2/collections/prque",
 			"revision": "8dcd6a7f4951f6ff3ee9cbb919a06d8925822e57",
