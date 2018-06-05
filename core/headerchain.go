@@ -307,6 +307,27 @@ func (hc *HeaderChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []co
 	return chain
 }
 
+// GetAncestorBlockHashFromHash retrieves the block hash for the ancestor of a given
+// hash, fetching towards the genesis block.
+func (hc *HeaderChain) GetAncestorBlockHashFromHash(hash common.Hash, max uint64) common.Hash {
+	// Get the origin header from which to fetch
+	header := hc.GetHeaderByHash(hash)
+	if header == nil {
+		return common.Hash{}
+	}
+	// Iterate the headers until enough is collected or the genesis reached
+	next := common.Hash{}
+	for i := uint64(0); i < max; i++ {
+		next = header.ParentHash
+		if header = hc.GetHeader(next, header.Number.Uint64()-1); header == nil {
+			return common.Hash{}
+		}
+		if header.Number.Sign() == 0 {
+			return common.Hash{}
+		}
+	}
+	return next
+}
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
 func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {

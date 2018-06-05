@@ -387,7 +387,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					unknown = true
 				} else {
 					if header := pm.blockchain.GetHeaderByNumber(next); header != nil {
-						if pm.blockchain.GetBlockHashesFromHash(header.Hash(), query.Skip+1)[query.Skip] == query.Origin.Hash {
+						if pm.blockchain.GetAncestorBlockHashFromHash(header.Hash(), query.Skip+1) == query.Origin.Hash {
 							query.Origin.Hash = header.Hash()
 						} else {
 							unknown = true

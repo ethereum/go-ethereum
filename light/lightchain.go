@@ -433,6 +433,12 @@ func (self *LightChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []c
 	return self.hc.GetBlockHashesFromHash(hash, max)
 }
 
+// GetAncestorBlockHashFromHash retrieves the block hash for the ancestor of a given
+// hash, fetching towards the genesis block.
+func (self *LightChain) GetAncestorBlockHashFromHash(hash common.Hash, max uint64) common.Hash{
+	return self.hc.GetAncestorBlockHashFromHash(hash, max)
+}
+
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
 func (self *LightChain) GetHeaderByNumber(number uint64) *types.Header {
