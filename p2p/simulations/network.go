@@ -391,18 +391,6 @@ func (net *Network) GetNodes() (nodes []*Node) {
 	return nodes
 }
 
-// GetUpNodes returns the existing nodes that are up
-func (net *Network) GetUpNodes() (nodes []*Node) {
-	net.lock.Lock()
-	defer net.lock.Unlock()
-	for _, n := range net.Nodes {
-		if n.Up {
-			nodes = append(nodes, n)
-		}
-	}
-	return nodes
-}
-
 func (net *Network) getNode(id discover.NodeID) *Node {
 	i, found := net.nodeMap[id]
 	if !found {
