@@ -9,6 +9,7 @@
 .PHONY: XDC-windows XDC-windows-386 XDC-windows-amd64
 
 GOBIN = $(shell pwd)/build/bin
+GOFMT = gofmt
 GO ?= latest
 
 XDC:
@@ -143,4 +144,8 @@ XDC-windows-386:
 XDC-windows-amd64:
 	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=windows/amd64 -v ./cmd/XDC
 	@echo "Windows amd64 cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-windows-* | grep amd64
+		@ls -ld $(GOBIN)/geth-windows-* | grep amd64
+
+ gofmt:
+	$(GOFMT) -s -w $(GO_FILES)
+	$(GIT) checkout vendor
