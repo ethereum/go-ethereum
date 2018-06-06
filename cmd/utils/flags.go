@@ -57,6 +57,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/stateth"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -193,7 +194,7 @@ var (
 	}
 	// Dashboard settings
 	DashboardEnabledFlag = cli.BoolFlag{
-		Name:  "dashboard",
+		Name:  metrics.DashboardEnabledFlag,
 		Usage: "Enable the dashboard",
 	}
 	DashboardAddrFlag = cli.StringFlag{
@@ -210,6 +211,31 @@ var (
 		Name:  "dashboard.refresh",
 		Usage: "Dashboard metrics collection refresh rate",
 		Value: dashboard.DefaultConfig.Refresh,
+	}
+	// Stateth settings
+	StatethDockerPrefixFlag = cli.StringFlag{
+		Name:  "stateth.dockerprefix",
+		Usage: "Prefix to be used for docker network and containers. Must be unique.",
+		Value: stateth.DefaultConfig.DockerPrefix,
+	}
+	StatethDashboardsFolderFlag = cli.StringFlag{
+		Name:  "stateth.dashboardsfolder",
+		Usage: "Grafana dashboards folder",
+		Value: stateth.DefaultConfig.DashboardsFolder,
+	}
+	StatethGrafanaPortFlag = cli.IntFlag{
+		Name:  "stateth.grafanaport",
+		Usage: "Grafana http port",
+		Value: stateth.DefaultConfig.GrafanaPort,
+	}
+	StatethInfluxdbPortFlag = cli.IntFlag{
+		Name:  "stateth.influxdbport",
+		Usage: "Influxdb http port",
+		Value: stateth.DefaultConfig.InfluxDBPort,
+	}
+	StatethRmFlag = cli.BoolFlag{
+		Name:  "stateth.rm",
+		Usage: "Remove existing stateth network and stateth containers upon startup. Make sure that the start up works every time, even if the service wasn't shut down gracefully.",
 	}
 	// Ethash settings
 	EthashCacheDirFlag = DirectoryFlag{
@@ -1157,6 +1183,14 @@ func SetDashboardConfig(ctx *cli.Context, cfg *dashboard.Config) {
 	cfg.Refresh = ctx.GlobalDuration(DashboardRefreshFlag.Name)
 }
 
+func SetStatethConfig(ctx *cli.Context, cfg *stateth.Config) {
+	cfg.DockerPrefix = ctx.GlobalString(StatethDockerPrefixFlag.Name)
+	cfg.DashboardsFolder = ctx.GlobalString(StatethDashboardsFolderFlag.Name)
+	cfg.GrafanaPort = ctx.GlobalInt(StatethGrafanaPortFlag.Name)
+	cfg.InfluxDBPort = ctx.GlobalInt(StatethInfluxdbPortFlag.Name)
+	cfg.Rm = ctx.GlobalBool(StatethRmFlag.Name)
+}
+
 // RegisterEthService adds an Ethereum client to the stack.
 func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 	var err error
@@ -1190,6 +1224,12 @@ func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config, commit st
 		ctx.Service(&lesServ)
 
 		return dashboard.New(cfg, commit, ethServ, lesServ, ctx.ResolvePath("logs"))
+	})
+}
+
+func RegisterStatethService(stack *node.Node, cfg *stateth.Config, cliCtx *cli.Context) {
+	stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return stateth.New(cliCtx, cfg)
 	})
 }
 

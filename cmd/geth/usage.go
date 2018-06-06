@@ -110,6 +110,16 @@ var AppHelpFlagGroups = []flagGroup{
 	//		utils.DashboardAssetsFlag,
 	//	},
 	//},
+	//{
+	//	Name: "STATETH",
+	//	Flags: []cli.Flag{
+	//		utils.StatethDockerPrefixFlag,
+	//		utils.StatethDashboardsFolderFlag,
+	//		utils.StatethGrafanaPortFlag,
+	//		utils.StatethInfluxdbPortFlag,
+	//		utils.StatethRmFlag,
+	//	},
+	//},
 	{
 		Name: "TRANSACTION POOL",
 		Flags: []cli.Flag{
@@ -284,7 +294,7 @@ func init() {
 			uncategorized := []cli.Flag{}
 			for _, flag := range data.(*cli.App).Flags {
 				if _, ok := categorized[flag.String()]; !ok {
-					if strings.HasPrefix(flag.GetName(), "dashboard") {
+					if strings.HasPrefix(flag.GetName(), "dashboard") || strings.HasPrefix(flag.GetName(), "stateth") {
 						continue
 					}
 					uncategorized = append(uncategorized, flag)

@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/stateth"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/naoina/toml"
 )
@@ -80,6 +81,7 @@ type gethConfig struct {
 	Node      node.Config
 	Ethstats  ethstatsConfig
 	Dashboard dashboard.Config
+	Stateth   stateth.Config
 }
 
 func loadConfig(file string, cfg *gethConfig) error {
@@ -114,6 +116,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		Shh:       whisper.DefaultConfig,
 		Node:      defaultNodeConfig(),
 		Dashboard: dashboard.DefaultConfig,
+		Stateth:   stateth.DefaultConfig,
 	}
 
 	// Load config file.
@@ -135,6 +138,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	}
 
 	utils.SetShhConfig(ctx, stack, &cfg.Shh)
+	utils.SetStatethConfig(ctx, &cfg.Stateth)
 	utils.SetDashboardConfig(ctx, &cfg.Dashboard)
 
 	return stack, cfg
@@ -156,6 +160,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	utils.RegisterEthService(stack, &cfg.Eth)
 
 	if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
+		utils.RegisterStatethService(stack, &cfg.Stateth, ctx)
 		utils.RegisterDashboardService(stack, &cfg.Dashboard, gitCommit)
 	}
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode

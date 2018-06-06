@@ -29943,7 +29943,19 @@ var _bundleJs = []byte((((((((((`!function(modules) {
                     color: "inherit",
                     noWrap: !0,
                     className: classes.title
-                }, "Go Ethereum Dashboard")));
+                }, "Go Ethereum Dashboard"), _react2.default.createElement(_Typography2.default, {
+                    type: "title",
+                    color: "inherit",
+                    noWrap: !0,
+                    className: classes.title
+                }, _react2.default.createElement("a", {
+                    href: "http://localhost:3000",
+                    target: "_blank",
+                    style: {
+                        color: "inherit",
+                        textDecoration: "none"
+                    }
+                }, "Grafana"))));
             }
         } ]), Header;
     }(_react.Component);
@@ -40572,7 +40584,7 @@ func bundleJs() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "bundle.js", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
-	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0x88, 0x4d, 0x2e, 0x77, 0x25, 0xbe, 0x43, 0xdf, 0x86, 0xed, 0x5b, 0x2c, 0xa8, 0xdd, 0xa2, 0xd5, 0x38, 0xf3, 0x82, 0xbe, 0x29, 0x9d, 0x52, 0x3, 0xd4, 0x4c, 0xd3, 0x7e, 0xaa, 0x3e, 0xf6, 0x8c}}
+	a := &asset{bytes: bytes, info: info, digest: [32]uint8{0x49, 0x2b, 0x2a, 0x45, 0xb3, 0x61, 0xc, 0xc3, 0xa3, 0x8a, 0x9e, 0x66, 0x30, 0x3e, 0x98, 0xe7, 0xde, 0x48, 0x25, 0xf3, 0x77, 0x8f, 0xbe, 0x86, 0x48, 0x3, 0x1, 0x3a, 0x4a, 0xab, 0xac, 0x38}}
 	return a, nil
 }
 

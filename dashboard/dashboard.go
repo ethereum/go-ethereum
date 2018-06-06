@@ -111,7 +111,7 @@ func New(config *Config, commit string, ethServ *eth.Ethereum, lesServ *les.Ligh
 		},
 		ethServ: ethServ,
 		lesServ: lesServ,
-		logdir: logdir,
+		logdir:  logdir,
 	}, nil
 }
 
@@ -126,13 +126,14 @@ func emptyChartEntries(t time.Time, limit int, refresh time.Duration) ChartEntri
 	return ce
 }
 
-// Protocols is a meaningless implementation of node.Service.
+// Protocols implements the node.Service interface.
 func (db *Dashboard) Protocols() []p2p.Protocol { return nil }
 
-// APIs is a meaningless implementation of node.Service.
+// APIs implements the node.Service interface.
 func (db *Dashboard) APIs() []rpc.API { return nil }
 
-// Start implements node.Service, starting the data collection thread and the listening server of the dashboard.
+// Start starts the data collection thread and the listening server of the dashboard.
+// Implements the node.Service interface.
 func (db *Dashboard) Start(server *p2p.Server) error {
 	log.Info("Starting dashboard")
 
@@ -154,7 +155,8 @@ func (db *Dashboard) Start(server *p2p.Server) error {
 	return nil
 }
 
-// Stop implements node.Service, stopping the data collection thread and the connection listener of the dashboard.
+// Stop stops the data collection thread and the connection listener of the dashboard.
+// Implements the node.Service interface.
 func (db *Dashboard) Stop() error {
 	// Close the connection listener.
 	var errs []error

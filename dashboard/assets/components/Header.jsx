@@ -64,6 +64,9 @@ class Header extends Component<Props> {
 					<Typography type='title' color='inherit' noWrap className={classes.title}>
 						Go Ethereum Dashboard
 					</Typography>
+					<Typography type='title' color='inherit' noWrap className={classes.title}>
+						<a href={'http://localhost:3000'} target='_blank' style={{color: 'inherit', textDecoration: 'none'}} >Grafana</a>
+					</Typography>
 				</Toolbar>
 			</AppBar>
 		);

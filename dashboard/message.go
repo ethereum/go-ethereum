@@ -71,8 +71,8 @@ type SystemMessage struct {
 }
 
 type LogsMessage struct {
-	Old    *LogFile        `json:"old,omitempty"` // Attributes of the log file.
-	Chunk  json.RawMessage `json:"chunk"`         // Contains log records.
+	Old   *LogFile        `json:"old,omitempty"` // Attributes of the log file.
+	Chunk json.RawMessage `json:"chunk"`         // Contains log records.
 }
 
 type LogFile struct {
