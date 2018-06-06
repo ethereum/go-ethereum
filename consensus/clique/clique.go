@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"encoding/json"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -40,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru"
-	"encoding/json"
 )
 
 const (
@@ -386,7 +386,7 @@ func position(list []common.Address, x common.Address) int {
 }
 
 func YourTurn(snap *Snapshot, header *types.Header, cur common.Address) (bool, error) {
-	if (header.Number.Uint64() == 0) {
+	if header.Number.Uint64() == 0 {
 		// Not check signer for genesis block.
 		return true, nil
 	}
@@ -724,19 +724,19 @@ func (c *Clique) APIs(chain consensus.ChainReader) []rpc.API {
 	}}
 }
 
-func (c *Clique) accumulateRewards(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error) {
+func (c *Clique) accumulateRewards(chain consensus.ChainReader, state *state.StateDB, header *types.Header) error {
 	type rewardLog struct {
 		Sign   uint64  `json:"sign"`
 		Reward float64 `json:"reward"`
 	}
 
 	number := header.Number.Uint64()
-	checkpoint := chain.Config().Clique.Checkpoint
+	rCheckpoint := chain.Config().Clique.RewardCheckpoint
 
-	if number > 0 && number%checkpoint == 0 {
+	if number > 0 && rCheckpoint > 0 && number%rCheckpoint == 0 {
 		// Not reward for singer of genesis block and only calculate reward at checkpoint block.
 		parentHeader := chain.GetHeaderByHash(header.ParentHash)
-		startBlockNumber := number - checkpoint + 1
+		startBlockNumber := number - rCheckpoint + 1
 		endBlockNumber := parentHeader.Number.Uint64()
 		signers := make(map[common.Address]*rewardLog)
 		totalSigner := uint64(0)
@@ -759,10 +759,10 @@ func (c *Clique) accumulateRewards(chain consensus.ChainReader, state *state.Sta
 		chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
 		// Update balance reward.
 		calcReward := new(big.Int)
-		for signer, log := range signers {
-			calcReward.Mul(chainReward, new(big.Int).SetUint64(log.Sign))
+		for signer, rLog := range signers {
+			calcReward.Mul(chainReward, new(big.Int).SetUint64(rLog.Sign))
 			calcReward.Div(calcReward, new(big.Int).SetUint64(totalSigner))
-			log.Reward = float64(calcReward.Int64())
+			rLog.Reward = float64(calcReward.Int64())
 
 			state.AddBalance(signer, calcReward)
 		}
