@@ -411,6 +411,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
+	senderCacher.recover(pool.signer, reinject)
 	pool.addTxsLocked(reinject, false)
 
 	// validate the pool of pending transactions, this will remove
