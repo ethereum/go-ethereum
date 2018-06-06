@@ -11,6 +11,10 @@
 GOBIN = $(shell pwd)/build/bin
 GOFMT = gofmt
 GO ?= latest
+GO_PACKAGES = .
+GO_FILES := $(shell find $(shell go list -f '{{.Dir}}' $(GO_PACKAGES)) -name \*.go)
+
+ GIT = git
 
 XDC:
 	build/env.sh go run build/ci.go install ./cmd/XDC
