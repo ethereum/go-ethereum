@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru"
+	"encoding/json"
 )
 
 const (
@@ -605,18 +606,8 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 func (c *Clique) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// set block reward
 	// FIXME: unit Ether could be too plump
-	parentHeader := chain.GetHeaderByHash(header.ParentHash)
-	if (parentHeader.Number.Uint64() > 0) {
-		chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
-		// Not reward for singer of genesis block.
-		reward := new(big.Int).Set(chainReward)
-
-		parentSigner, err := ecrecover(parentHeader, c.signatures)
-		if err != nil {
-			return nil, err
-		}
-
-		state.AddBalance(parentSigner, reward)
+	if err := c.accumulateRewards(chain, state, header); err != nil {
+		return nil, err
 	}
 
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
@@ -731,4 +722,56 @@ func (c *Clique) APIs(chain consensus.ChainReader) []rpc.API {
 		Service:   &API{chain: chain, clique: c},
 		Public:    false,
 	}}
+}
+
+func (c *Clique) accumulateRewards(chain consensus.ChainReader, state *state.StateDB, header *types.Header) (error) {
+	type rewardLog struct {
+		Sign   uint64  `json:"sign"`
+		Reward float64 `json:"reward"`
+	}
+
+	number := header.Number.Uint64()
+	checkpoint := chain.Config().Clique.Checkpoint
+
+	if number > 0 && number%checkpoint == 0 {
+		// Not reward for singer of genesis block and only calculate reward at checkpoint block.
+		parentHeader := chain.GetHeaderByHash(header.ParentHash)
+		startBlockNumber := number - checkpoint + 1
+		endBlockNumber := parentHeader.Number.Uint64()
+		signers := make(map[common.Address]*rewardLog)
+		totalSigner := uint64(0)
+
+		for i := startBlockNumber; i <= endBlockNumber; i++ {
+			blockHeader := chain.GetHeaderByNumber(i)
+			if signer, err := ecrecover(blockHeader, c.signatures); err != nil {
+				return err
+			} else {
+				_, exist := signers[signer]
+				if exist {
+					signers[signer].Sign++
+				} else {
+					signers[signer] = &rewardLog{1, 0}
+				}
+				totalSigner++
+			}
+		}
+
+		chainReward := new(big.Int).SetUint64(chain.Config().Clique.Reward * params.Ether)
+		// Update balance reward.
+		calcReward := new(big.Int)
+		for signer, log := range signers {
+			calcReward.Mul(chainReward, new(big.Int).SetUint64(log.Sign))
+			calcReward.Div(calcReward, new(big.Int).SetUint64(totalSigner))
+			log.Reward = float64(calcReward.Int64())
+
+			state.AddBalance(signer, calcReward)
+		}
+		jsonSigners, err := json.Marshal(signers)
+		if err != nil {
+			return err
+		}
+		log.Info("TOMO - Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber, "signers", string(jsonSigners), "totalSigner", totalSigner, "totalReward", chainReward)
+	}
+
+	return nil
 }
