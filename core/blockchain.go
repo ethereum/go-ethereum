@@ -1385,34 +1385,16 @@ func (bc *BlockChain) update() {
 	}
 }
 
-// BadBlockArgs represents the entries in the list returned when bad blocks are queried.
-type BadBlockArgs struct {
-	Hash     common.Hash   `json:"hash"`
-	Header   *types.Header `json:"header"`
-	BlockRLP string        `json:"blockrlp"`
-}
-
 // BadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
-func (bc *BlockChain) BadBlocks() ([]BadBlockArgs, error) {
-	blocks := make([]BadBlockArgs, 0, bc.badBlocks.Len())
-	var (
-		err     error
-		rlpData []byte
-	)
+func (bc *BlockChain) BadBlocks() []*types.Block {
+	blocks := make([]*types.Block, 0, bc.badBlocks.Len())
 	for _, hash := range bc.badBlocks.Keys() {
 		if blk, exist := bc.badBlocks.Peek(hash); exist {
 			block := blk.(*types.Block)
-			rlpData, err = rlp.EncodeToBytes(block)
-			if err != nil {
-				break
-			}
-			blocks = append(blocks, BadBlockArgs{
-				Hash:     block.Hash(),
-				Header:   block.Header(),
-				BlockRLP: fmt.Sprintf("%x", rlpData)})
+			blocks = append(blocks, block)
 		}
 	}
-	return blocks, err
+	return blocks
 }
 
 // addBadBlock adds a bad block to the bad-block LRU cache

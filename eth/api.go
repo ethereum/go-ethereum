@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
@@ -351,10 +352,39 @@ func (api *PrivateDebugAPI) Preimage(ctx context.Context, hash common.Hash) (hex
 	return nil, errors.New("unknown preimage")
 }
 
+// BadBlockArgs represents the entries in the list returned when bad blocks are queried.
+type BadBlockArgs struct {
+	Hash  common.Hash            `json:"hash"`
+	Block map[string]interface{} `json:"block"`
+	RLP   string                 `json:"rlp"`
+}
+
 // GetBadBLocks returns a list of the last 'bad blocks' that the client has seen on the network
 // and returns them as a JSON list of block-hashes
-func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]core.BadBlockArgs, error) {
-	return api.eth.BlockChain().BadBlocks()
+func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]BadBlockArgs, error) {
+	blocks := api.eth.BlockChain().BadBlocks()
+	responseBlocks := make([]BadBlockArgs, 0, len(blocks))
+	for _, block := range blocks {
+		rlpData, err := rlp.EncodeToBytes(block)
+		if err != nil {
+			return responseBlocks, err
+		}
+		var (
+			blockdata map[string]interface{}
+			berr      error
+		)
+		// A bad block may be so malformed that it the expanded format fails to generate
+		// correctly. If so, provide the caller with error message and RLP anyway
+		if blockdata, berr = ethapi.RpcMarshalBlock(block, true, true); berr != nil {
+			blockdata["error"] = berr.Error()
+		}
+		responseBlocks = append(responseBlocks, BadBlockArgs{
+			Hash:  block.Hash(),
+			Block: blockdata,
+			RLP:   fmt.Sprintf("%x", rlpData),
+		})
+	}
+	return responseBlocks, nil
 }
 
 // StorageRangeResult is the result of a debug_storageRangeAt API call.
