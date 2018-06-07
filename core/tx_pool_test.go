@@ -661,6 +661,91 @@ func TestTransactionPostponing(t *testing.T) {
 	}
 }
 
+// Tests if the executable transaction count belonging to multiple accounts go above
+// some threshold, the higher transactions are postponing and rejecting as nonexecutable
+// transactions.
+//
+// This logic should not hold for local transactions, unless the local tracking
+// mechanism is disabled.
+func TestPendingLimitPostponing(t *testing.T) {
+	testPendingLimitPostponing(t, false)
+}
+
+func TestPendingLimitPostponingNoLocals(t *testing.T) {
+	testPendingLimitPostponing(t, true)
+}
+
+func testPendingLimitPostponing(t *testing.T, nolocals bool) {
+	t.Parallel()
+
+	// Create the pool to test the limit enforcement with
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
+	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
+
+	config := testTxPoolConfig
+	config.NoLocals = nolocals
+	config.GlobalSlots = config.AccountSlots * 2
+	config.GlobalQueue = config.AccountQueue * 2
+
+	pool := NewTxPool(config, params.TestChainConfig, blockchain)
+	defer pool.Stop()
+
+	// Create 2 test accounts and fund them (last one will be the local)
+	keys := make([]*ecdsa.PrivateKey, 3)
+	for i := 0; i < len(keys); i++ {
+		keys[i], _ = crypto.GenerateKey()
+		pool.currentState.AddBalance(crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
+	}
+	local := keys[len(keys)-1]
+
+	// Generate and queue a batch of transactions
+	txs := make(types.Transactions, 0, 2*config.AccountSlots+10)
+	for i := uint64(0); i < config.AccountSlots+5; i++ {
+		for j := 0; j < len(keys)-1; j++ {
+			txs = append(txs, transaction(i, 100000, keys[j]))
+		}
+	}
+
+	// Import the batch and verify that limits have been enforced
+	pool.AddRemotes(txs)
+
+	for i := 0; i < len(keys)-1; i++ {
+		if pending := pool.pending[crypto.PubkeyToAddress(keys[i].PublicKey)].Len(); uint64(pending) != config.AccountSlots {
+			t.Fatalf("remote account pending transaction count mismatch: have %v, want %v", pending, config.AccountSlots)
+		}
+		if queued := pool.queue[crypto.PubkeyToAddress(keys[i].PublicKey)].Len(); uint64(queued) != 5 {
+			t.Fatalf("remote account queued transaction count mismatch: have %v, want %v", queued, 5)
+		}
+	}
+
+	// Generate another batch of transactions from the local account and import them
+	txs = txs[:0]
+	for i := uint64(0); i < config.AccountSlots+5; i++ {
+		txs = append(txs, transaction(i, 100000, local))
+	}
+	pool.AddLocals(txs)
+
+	// If locals are disabled, the previous eviction algorithm should apply here too
+	if nolocals {
+		// Also ensure no local transactions are ever dropped, even if above global limits
+		if pending := pool.pending[crypto.PubkeyToAddress(local.PublicKey)].Len(); uint64(pending) != config.AccountSlots {
+			t.Fatalf("local account pending transaction count mismatch: have %v, want %v", pending, config.AccountSlots)
+		}
+		queued := 0
+		for _, list := range pool.queue {
+			queued += list.Len()
+		}
+		if queued != 15 {
+			t.Fatalf("total transactions overflow allowance: %d > %d", queued, 15)
+		}
+	} else {
+		// Also ensure no local transactions are ever dropped, even if above global limits
+		if pending := pool.pending[crypto.PubkeyToAddress(local.PublicKey)].Len(); uint64(pending) != config.AccountSlots+5 {
+			t.Fatalf("local account pending transaction count mismatch: have %v, want %v", pending, config.AccountSlots+5)
+		}
+	}
+}
+
 // Tests that if the transaction pool has both executable and non-executable
 // transactions from an origin account, filling the nonce gap moves all queued
 // ones into the pending pool.
