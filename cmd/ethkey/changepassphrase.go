@@ -11,7 +11,7 @@ import (
 )
 
 var newPassphraseFlag = cli.StringFlag{
-	Name:  "newpassowrdfile",
+	Name:  "newpasswordfile",
 	Usage: "the file that contains the new passphrase for the keyfile",
 }
 
