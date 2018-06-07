@@ -27,5 +27,5 @@ type Config struct {
 var DefaultConfig = Config{
 	MaxMessageSize:                        DefaultMaxMessageSize,
 	MinimumAcceptedPOW:                    DefaultMinimumPoW,
-	RestrictConnectionBetweenLightClients: false,
+	RestrictConnectionBetweenLightClients: true,
 }

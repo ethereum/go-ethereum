@@ -302,10 +302,7 @@ func (whisper *Whisper) LightClientModeConnectionRestricted() bool {
 		return false
 	}
 	v, ok := val.(bool)
-	if !ok {
-		return false
-	}
-	return v
+	return v && ok
 }
 
 func (whisper *Whisper) notifyPeersAboutPowRequirementChange(pow float64) {
