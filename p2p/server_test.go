@@ -181,6 +181,9 @@ func TestServerDial(t *testing.T) {
 			if peer := srv.Peers()[0]; !peer.Info().Network.Trusted {
 				t.Errorf("peer is not trusted after AddTrustedPeer: %v", peer)
 			}
+			if peer := srv.Peers()[0]; peer.Inbound() {
+				t.Errorf("peer is marked inbound")
+			}
 			srv.RemoveTrustedPeer(node)
 			if peer := srv.Peers()[0]; peer.Info().Network.Trusted {
 				t.Errorf("peer is trusted after RemoveTrustedPeer: %v", peer)
