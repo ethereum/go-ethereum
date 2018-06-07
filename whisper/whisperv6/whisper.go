@@ -289,10 +289,7 @@ func (whisper *Whisper) LightClientMode() bool {
 		return false
 	}
 	v, ok := val.(bool)
-	if !ok {
-		return false
-	}
-	return v
+	return v && ok
 }
 
 //LightClientModeConnectionRestricted indicates that connection to light client in light client mode not allowed
