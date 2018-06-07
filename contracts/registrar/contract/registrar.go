@@ -16,10 +16,10 @@ import (
 )
 
 // ContractABI is the input ABI used to generate the binding from.
-const ContractABI = "[{\"constant\":true,\"inputs\":[],\"name\":\"GetAllAdmin\",\"outputs\":[{\"name\":\"\",\"type\":\"address[]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"GetLatestCheckpoint\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"},{\"name\":\"\",\"type\":\"bytes32\"},{\"name\":\"\",\"type\":\"bytes32\"},{\"name\":\"\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"_sectionIndex\",\"type\":\"uint256\"},{\"name\":\"_sectionHead\",\"type\":\"bytes32\"},{\"name\":\"_chtRoot\",\"type\":\"bytes32\"},{\"name\":\"_bloomTrieRoot\",\"type\":\"bytes32\"}],\"name\":\"SetCheckpoint\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_sectionIndex\",\"type\":\"uint256\"}],\"name\":\"GetCheckpoint\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\"},{\"name\":\"\",\"type\":\"bytes32\"},{\"name\":\"\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"_addr\",\"type\":\"address\"}],\"name\":\"RemoveAdmin\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"_addr\",\"type\":\"address\"}],\"name\":\"AddAdmin\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"_adminlist\",\"type\":\"address[]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"index\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"sectionHead\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"chtRoot\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"bloomTrieRoot\",\"type\":\"bytes32\"}],\"name\":\"NewCheckpointEvent\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"AddAdminEvent\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"RemoveAdminEvent\",\"type\":\"event\"}]"
+const ContractABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"_addr\",\"type\":\"address\"},{\"name\":\"_description\",\"type\":\"string\"}],\"name\":\"AddAdmin\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"GetAllAdmin\",\"outputs\":[{\"name\":\"\",\"type\":\"address[]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"GetLatestCheckpoint\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"},{\"name\":\"\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"_sectionIndex\",\"type\":\"uint256\"},{\"name\":\"_sectionHead\",\"type\":\"bytes32\"},{\"name\":\"_chtRoot\",\"type\":\"bytes32\"},{\"name\":\"_bloomTrieRoot\",\"type\":\"bytes32\"}],\"name\":\"SetCheckpoint\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"_sectionIndex\",\"type\":\"uint256\"}],\"name\":\"GetCheckpoint\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"_addr\",\"type\":\"address\"},{\"name\":\"_reason\",\"type\":\"string\"}],\"name\":\"RemoveAdmin\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"name\":\"_adminlist\",\"type\":\"address[]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"index\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"grantor\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"checkpointHash\",\"type\":\"bytes32\"}],\"name\":\"NewCheckpointEvent\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"addr\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"grantor\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"description\",\"type\":\"string\"}],\"name\":\"AddAdminEvent\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"addr\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"grantor\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"reason\",\"type\":\"string\"}],\"name\":\"RemoveAdminEvent\",\"type\":\"event\"}]"
 
 // ContractBin is the compiled bytecode used for deploying new contracts.
-const ContractBin = `608060405234801561001057600080fd5b50604051610d06380380610d0683398101806040528101908080518201929190505050600060016000803373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000208190555060013390806001815401808255809150509060018203906000526020600020016000909192909190916101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555050600090505b81518110156101d2576001600080848481518110151561010057fe5b9060200190602002015173ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020819055506001828281518110151561015857fe5b9060200190602002015190806001815401808255809150509060018203906000526020600020016000909192909190916101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055505080806001019150506100e4565b5050610b23806101e36000396000f300608060405260043610610078576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806345848dfc1461007d5780634d6a304c146100e9578063651c7f4914610141578063710aeac8146101b0578063753f40ca14610217578063ad6de44514610272575b600080fd5b34801561008957600080fd5b506100926102cd565b6040518080602001828103825283818151815260200191508051906020019060200280838360005b838110156100d55780820151818401526020810190506100ba565b505050509050019250505060405180910390f35b3480156100f557600080fd5b506100fe6103b4565b6040518085815260200184600019166000191681526020018360001916600019168152602001826000191660001916815260200194505050505060405180910390f35b34801561014d57600080fd5b50610196600480360381019080803590602001909291908035600019169060200190929190803560001916906020019092919080356000191690602001909291905050506103e7565b604051808215151515815260200191505060405180910390f35b3480156101bc57600080fd5b506101db60048036038101908080359060200190929190505050610555565b60405180846000191660001916815260200183600019166000191681526020018260001916600019168152602001935050505060405180910390f35b34801561022357600080fd5b50610258600480360381019080803573ffffffffffffffffffffffffffffffffffffffff1690602001909291905050506105d6565b604051808215151515815260200191505060405180910390f35b34801561027e57600080fd5b506102b3600480360381019080803573ffffffffffffffffffffffffffffffffffffffff1690602001909291905050506108c6565b604051808215151515815260200191505060405180910390f35b60608060006001805490506040519080825280602002602001820160405280156103065781602001602082028038833980820191505090505b509150600090505b6001805490508110156103ac5760018181548110151561032a57fe5b9060005260206000200160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff16828281518110151561036357fe5b9060200190602002019073ffffffffffffffffffffffffffffffffffffffff16908173ffffffffffffffffffffffffffffffffffffffff1681525050808060010191505061030e565b819250505090565b60008060008060008060006103ca600354610555565b925092509250600354838383965096509650965050505090919293565b6000806000803373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000205411151561043557600080fd5b600160035401851415801561044d5750600060035414155b1561045b576000905061054d565b612710618000600187010201431015610477576000905061054d565b606060405190810160405280856000191681526020018460001916815260200183600019168152506002600087815260200190815260200160002060008201518160000190600019169055602082015181600101906000191690556040820151816002019060001916905590505084600381905550847fa9b81895520c1feeea26e91ca03e455eb4be8dc9ecb34071c362e67835a6fd4285858560405180846000191660001916815260200183600019166000191681526020018260001916600019168152602001935050505060405180910390a25b949350505050565b6000806000610562610a7b565b600260008681526020019081526020016000206060604051908101604052908160008201546000191660001916815260200160018201546000191660001916815260200160028201546000191660001916815250509050806000015181602001518260400151935093509350509193909250565b6000806000806000803373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000205411151561062757600080fd5b60008060008673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002054141561067757600092506108bf565b6000808573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060009055600091505b600180549050821015610857578373ffffffffffffffffffffffffffffffffffffffff166001838154811015156106f157fe5b9060005260206000200160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16141561084a578190505b60018080549050038110156107eb57600180820181548110151561075c57fe5b9060005260206000200160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1660018281548110151561079657fe5b9060005260206000200160006101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550808060010191505061073c565b60018080805490500381548110151561080057fe5b9060005260206000200160006101000a81549073ffffffffffffffffffffffffffffffffffffffff0219169055600180818180549050039150816108449190610aa6565b50610857565b81806001019250506106be565b7f16f0165239516629af323911340c1c906029142cb0dc3c32c93ce6808d98a4ee84604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390a1600192505b5050919050565b6000806000803373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000205411151561091457600080fd5b60008060008473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000205411156109645760009050610a76565b60016000808473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000208190555060018290806001815401808255809150509060018203906000526020600020016000909192909190916101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550507f68377f3d45858cbcc9e95998fb55b9c0f9e16b6ebf5f3602a40e2fcd0d7b8c0082604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390a1600190505b919050565b6060604051908101604052806000801916815260200160008019168152602001600080191681525090565b815481835581811115610acd57818360005260206000209182019101610acc9190610ad2565b5b505050565b610af491905b80821115610af0576000816000905550600101610ad8565b5090565b905600a165627a7a72305820de9e3481e0a4d931d0b0a0a34b53b4315479499d7deb6724e5de6d1f439d44e70029`
+const ContractBin = `608060405234801561001057600080fd5b50604051610e83380380610e8383398101806040528101908080518201929190505050600060016000803373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000208190555060013390806001815401808255809150509060018203906000526020600020016000909192909190916101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555050600090505b81518110156101d2576001600080848481518110151561010057fe5b9060200190602002015173ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020819055506001828281518110151561015857fe5b9060200190602002015190806001815401808255809150509060018203906000526020600020016000909192909190916101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055505080806001019150506100e4565b5050610ca0806101e36000396000f300608060405260043610610078576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff1680633561247d1461007d57806345848dfc1461011e5780634d6a304c1461018a578063651c7f49146101c4578063710aeac814610233578063a5ba0be21461027c575b600080fd5b34801561008957600080fd5b50610104600480360381019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803590602001908201803590602001908080601f016020809104026020016040519081016040528093929190818152602001838380828437820191505050505050919291929050505061031d565b604051808215151515815260200191505060405180910390f35b34801561012a57600080fd5b50610133610574565b6040518080602001828103825283818151815260200191508051906020019060200280838360005b8381101561017657808201518184015260208101905061015b565b505050509050019250505060405180910390f35b34801561019657600080fd5b5061019f61065b565b6040518083815260200182600019166000191681526020019250505060405180910390f35b3480156101d057600080fd5b506102196004803603810190808035906020019092919080356000191690602001909291908035600019169060200190929190803560001916906020019092919050505061067a565b604051808215151515815260200191505060405180910390f35b34801561023f57600080fd5b5061025e60048036038101908080359060200190929190505050610874565b60405180826000191660001916815260200191505060405180910390f35b34801561028857600080fd5b50610303600480360381019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803590602001908201803590602001908080601f0160208091040260200160405190810160405280939291908181526020018383808284378201915050505050509192919290505050610891565b604051808215151515815260200191505060405180910390f35b6000806000803373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000205411151561036b57600080fd5b60008060008573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000205411156103bb576000905061056e565b60016000808573ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000208190555060018390806001815401808255809150509060018203906000526020600020016000909192909190916101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550507fecd88a3d10808aac9f879bbae95f9e4f9687f6c9f0615b88af2085f226d3cf93833384604051808473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020018373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200180602001828103825283818151815260200191508051906020019080838360005b8381101561052d578082015181840152602081019050610512565b50505050905090810190601f16801561055a5780820380516001836020036101000a031916815260200191505b5094505050505060405180910390a1600190505b92915050565b60608060006001805490506040519080825280602002602001820160405280156105ad5781602001602082028038833980820191505090505b509150600090505b600180549050811015610653576001818154811015156105d157fe5b9060005260206000200160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff16828281518110151561060a57fe5b9060200190602002019073ffffffffffffffffffffffffffffffffffffffff16908173ffffffffffffffffffffffffffffffffffffffff168152505080806001019150506105b5565b819250505090565b600080600061066b600354610874565b90506003548192509250509091565b6000806000803373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020541115156106c857600080fd5b60035485141580156106df57506001600354018514155b80156106ee5750600060035414155b156106fc576000905061086c565b6101f4618000600187010201431015610718576000905061086c565b8383836040516020018084600019166000191681526020018360001916600019168152602001826000191660001916815260200193505050506040516020818303038152906040526040518082805190602001908083835b6020831015156107955780518252602082019150602081019050602083039250610770565b6001836020036101000a038019825116818451168082178552505050505050905001915050604051809103902060026000878152602001908152602001600020816000191690555084600381905550847f5b3eab050ccf1a983a26b4f6acb13c199093c7d2e7523a0ff036519f7ddaf560336002600089815260200190815260200160002054604051808373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200182600019166000191681526020019250505060405180910390a25b949350505050565b600060026000838152602001908152602001600020549050919050565b6000806000806000803373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff168152602001908152602001600020541115156108e257600080fd5b60008060008773ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019081526020016000205414156109325760009250610c1b565b6000808673ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200190815260200160002060009055600091505b600180549050821015610b12578473ffffffffffffffffffffffffffffffffffffffff166001838154811015156109ac57fe5b9060005260206000200160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff161415610b05578190505b6001808054905003811015610aa6576001808201815481101515610a1757fe5b9060005260206000200160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff16600182815481101515610a5157fe5b9060005260206000200160006101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555080806001019150506109f7565b600180808054905003815481101515610abb57fe5b9060005260206000200160006101000a81549073ffffffffffffffffffffffffffffffffffffffff021916905560018081818054905003915081610aff9190610c23565b50610b12565b8180600101925050610979565b7fe7d6ab069cde0507dc9c5971bf93e9fd183db04690725946e8cae907367e7c1f853386604051808473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020018373ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200180602001828103825283818151815260200191508051906020019080838360005b83811015610bda578082015181840152602081019050610bbf565b50505050905090810190601f168015610c075780820380516001836020036101000a031916815260200191505b5094505050505060405180910390a1600192505b505092915050565b815481835581811115610c4a57818360005260206000209182019101610c499190610c4f565b5b505050565b610c7191905b80821115610c6d576000816000905550600101610c55565b5090565b905600a165627a7a72305820791f0110aacecdc551cc4d3bda7cc4228762aa3acdce5f7b1b1d9efb1534b8320029`
 
 // DeployContract deploys a new Ethereum contract, binding an instance of Contract to it.
 func DeployContract(auth *bind.TransactOpts, backend bind.ContractBackend, _adminlist []common.Address) (common.Address, *types.Transaction, *Contract, error) {
@@ -204,110 +204,100 @@ func (_Contract *ContractCallerSession) GetAllAdmin() ([]common.Address, error) 
 
 // GetCheckpoint is a free data retrieval call binding the contract method 0x710aeac8.
 //
-// Solidity: function GetCheckpoint(_sectionIndex uint256) constant returns(bytes32, bytes32, bytes32)
-func (_Contract *ContractCaller) GetCheckpoint(opts *bind.CallOpts, _sectionIndex *big.Int) ([32]byte, [32]byte, [32]byte, error) {
+// Solidity: function GetCheckpoint(_sectionIndex uint256) constant returns(bytes32)
+func (_Contract *ContractCaller) GetCheckpoint(opts *bind.CallOpts, _sectionIndex *big.Int) ([32]byte, error) {
 	var (
 		ret0 = new([32]byte)
-		ret1 = new([32]byte)
-		ret2 = new([32]byte)
 	)
-	out := &[]interface{}{
-		ret0,
-		ret1,
-		ret2,
-	}
+	out := ret0
 	err := _Contract.contract.Call(opts, out, "GetCheckpoint", _sectionIndex)
-	return *ret0, *ret1, *ret2, err
+	return *ret0, err
 }
 
 // GetCheckpoint is a free data retrieval call binding the contract method 0x710aeac8.
 //
-// Solidity: function GetCheckpoint(_sectionIndex uint256) constant returns(bytes32, bytes32, bytes32)
-func (_Contract *ContractSession) GetCheckpoint(_sectionIndex *big.Int) ([32]byte, [32]byte, [32]byte, error) {
+// Solidity: function GetCheckpoint(_sectionIndex uint256) constant returns(bytes32)
+func (_Contract *ContractSession) GetCheckpoint(_sectionIndex *big.Int) ([32]byte, error) {
 	return _Contract.Contract.GetCheckpoint(&_Contract.CallOpts, _sectionIndex)
 }
 
 // GetCheckpoint is a free data retrieval call binding the contract method 0x710aeac8.
 //
-// Solidity: function GetCheckpoint(_sectionIndex uint256) constant returns(bytes32, bytes32, bytes32)
-func (_Contract *ContractCallerSession) GetCheckpoint(_sectionIndex *big.Int) ([32]byte, [32]byte, [32]byte, error) {
+// Solidity: function GetCheckpoint(_sectionIndex uint256) constant returns(bytes32)
+func (_Contract *ContractCallerSession) GetCheckpoint(_sectionIndex *big.Int) ([32]byte, error) {
 	return _Contract.Contract.GetCheckpoint(&_Contract.CallOpts, _sectionIndex)
 }
 
 // GetLatestCheckpoint is a free data retrieval call binding the contract method 0x4d6a304c.
 //
-// Solidity: function GetLatestCheckpoint() constant returns(uint256, bytes32, bytes32, bytes32)
-func (_Contract *ContractCaller) GetLatestCheckpoint(opts *bind.CallOpts) (*big.Int, [32]byte, [32]byte, [32]byte, error) {
+// Solidity: function GetLatestCheckpoint() constant returns(uint256, bytes32)
+func (_Contract *ContractCaller) GetLatestCheckpoint(opts *bind.CallOpts) (*big.Int, [32]byte, error) {
 	var (
 		ret0 = new(*big.Int)
 		ret1 = new([32]byte)
-		ret2 = new([32]byte)
-		ret3 = new([32]byte)
 	)
 	out := &[]interface{}{
 		ret0,
 		ret1,
-		ret2,
-		ret3,
 	}
 	err := _Contract.contract.Call(opts, out, "GetLatestCheckpoint")
-	return *ret0, *ret1, *ret2, *ret3, err
+	return *ret0, *ret1, err
 }
 
 // GetLatestCheckpoint is a free data retrieval call binding the contract method 0x4d6a304c.
 //
-// Solidity: function GetLatestCheckpoint() constant returns(uint256, bytes32, bytes32, bytes32)
-func (_Contract *ContractSession) GetLatestCheckpoint() (*big.Int, [32]byte, [32]byte, [32]byte, error) {
+// Solidity: function GetLatestCheckpoint() constant returns(uint256, bytes32)
+func (_Contract *ContractSession) GetLatestCheckpoint() (*big.Int, [32]byte, error) {
 	return _Contract.Contract.GetLatestCheckpoint(&_Contract.CallOpts)
 }
 
 // GetLatestCheckpoint is a free data retrieval call binding the contract method 0x4d6a304c.
 //
-// Solidity: function GetLatestCheckpoint() constant returns(uint256, bytes32, bytes32, bytes32)
-func (_Contract *ContractCallerSession) GetLatestCheckpoint() (*big.Int, [32]byte, [32]byte, [32]byte, error) {
+// Solidity: function GetLatestCheckpoint() constant returns(uint256, bytes32)
+func (_Contract *ContractCallerSession) GetLatestCheckpoint() (*big.Int, [32]byte, error) {
 	return _Contract.Contract.GetLatestCheckpoint(&_Contract.CallOpts)
 }
 
-// AddAdmin is a paid mutator transaction binding the contract method 0xad6de445.
+// AddAdmin is a paid mutator transaction binding the contract method 0x3561247d.
 //
-// Solidity: function AddAdmin(_addr address) returns(bool)
-func (_Contract *ContractTransactor) AddAdmin(opts *bind.TransactOpts, _addr common.Address) (*types.Transaction, error) {
-	return _Contract.contract.Transact(opts, "AddAdmin", _addr)
+// Solidity: function AddAdmin(_addr address, _description string) returns(bool)
+func (_Contract *ContractTransactor) AddAdmin(opts *bind.TransactOpts, _addr common.Address, _description string) (*types.Transaction, error) {
+	return _Contract.contract.Transact(opts, "AddAdmin", _addr, _description)
 }
 
-// AddAdmin is a paid mutator transaction binding the contract method 0xad6de445.
+// AddAdmin is a paid mutator transaction binding the contract method 0x3561247d.
 //
-// Solidity: function AddAdmin(_addr address) returns(bool)
-func (_Contract *ContractSession) AddAdmin(_addr common.Address) (*types.Transaction, error) {
-	return _Contract.Contract.AddAdmin(&_Contract.TransactOpts, _addr)
+// Solidity: function AddAdmin(_addr address, _description string) returns(bool)
+func (_Contract *ContractSession) AddAdmin(_addr common.Address, _description string) (*types.Transaction, error) {
+	return _Contract.Contract.AddAdmin(&_Contract.TransactOpts, _addr, _description)
 }
 
-// AddAdmin is a paid mutator transaction binding the contract method 0xad6de445.
+// AddAdmin is a paid mutator transaction binding the contract method 0x3561247d.
 //
-// Solidity: function AddAdmin(_addr address) returns(bool)
-func (_Contract *ContractTransactorSession) AddAdmin(_addr common.Address) (*types.Transaction, error) {
-	return _Contract.Contract.AddAdmin(&_Contract.TransactOpts, _addr)
+// Solidity: function AddAdmin(_addr address, _description string) returns(bool)
+func (_Contract *ContractTransactorSession) AddAdmin(_addr common.Address, _description string) (*types.Transaction, error) {
+	return _Contract.Contract.AddAdmin(&_Contract.TransactOpts, _addr, _description)
 }
 
-// RemoveAdmin is a paid mutator transaction binding the contract method 0x753f40ca.
+// RemoveAdmin is a paid mutator transaction binding the contract method 0xa5ba0be2.
 //
-// Solidity: function RemoveAdmin(_addr address) returns(bool)
-func (_Contract *ContractTransactor) RemoveAdmin(opts *bind.TransactOpts, _addr common.Address) (*types.Transaction, error) {
-	return _Contract.contract.Transact(opts, "RemoveAdmin", _addr)
+// Solidity: function RemoveAdmin(_addr address, _reason string) returns(bool)
+func (_Contract *ContractTransactor) RemoveAdmin(opts *bind.TransactOpts, _addr common.Address, _reason string) (*types.Transaction, error) {
+	return _Contract.contract.Transact(opts, "RemoveAdmin", _addr, _reason)
 }
 
-// RemoveAdmin is a paid mutator transaction binding the contract method 0x753f40ca.
+// RemoveAdmin is a paid mutator transaction binding the contract method 0xa5ba0be2.
 //
-// Solidity: function RemoveAdmin(_addr address) returns(bool)
-func (_Contract *ContractSession) RemoveAdmin(_addr common.Address) (*types.Transaction, error) {
-	return _Contract.Contract.RemoveAdmin(&_Contract.TransactOpts, _addr)
+// Solidity: function RemoveAdmin(_addr address, _reason string) returns(bool)
+func (_Contract *ContractSession) RemoveAdmin(_addr common.Address, _reason string) (*types.Transaction, error) {
+	return _Contract.Contract.RemoveAdmin(&_Contract.TransactOpts, _addr, _reason)
 }
 
-// RemoveAdmin is a paid mutator transaction binding the contract method 0x753f40ca.
+// RemoveAdmin is a paid mutator transaction binding the contract method 0xa5ba0be2.
 //
-// Solidity: function RemoveAdmin(_addr address) returns(bool)
-func (_Contract *ContractTransactorSession) RemoveAdmin(_addr common.Address) (*types.Transaction, error) {
-	return _Contract.Contract.RemoveAdmin(&_Contract.TransactOpts, _addr)
+// Solidity: function RemoveAdmin(_addr address, _reason string) returns(bool)
+func (_Contract *ContractTransactorSession) RemoveAdmin(_addr common.Address, _reason string) (*types.Transaction, error) {
+	return _Contract.Contract.RemoveAdmin(&_Contract.TransactOpts, _addr, _reason)
 }
 
 // SetCheckpoint is a paid mutator transaction binding the contract method 0x651c7f49.
@@ -400,13 +390,15 @@ func (it *ContractAddAdminEventIterator) Close() error {
 
 // ContractAddAdminEvent represents a AddAdminEvent event raised by the Contract contract.
 type ContractAddAdminEvent struct {
-	Addr common.Address
-	Raw  types.Log // Blockchain specific contextual infos
+	Addr        common.Address
+	Grantor     common.Address
+	Description string
+	Raw         types.Log // Blockchain specific contextual infos
 }
 
-// FilterAddAdminEvent is a free log retrieval operation binding the contract event 0x68377f3d45858cbcc9e95998fb55b9c0f9e16b6ebf5f3602a40e2fcd0d7b8c00.
+// FilterAddAdminEvent is a free log retrieval operation binding the contract event 0xecd88a3d10808aac9f879bbae95f9e4f9687f6c9f0615b88af2085f226d3cf93.
 //
-// Solidity: e AddAdminEvent(addr address)
+// Solidity: e AddAdminEvent(addr address, grantor address, description string)
 func (_Contract *ContractFilterer) FilterAddAdminEvent(opts *bind.FilterOpts) (*ContractAddAdminEventIterator, error) {
 
 	logs, sub, err := _Contract.contract.FilterLogs(opts, "AddAdminEvent")
@@ -416,9 +408,9 @@ func (_Contract *ContractFilterer) FilterAddAdminEvent(opts *bind.FilterOpts) (*
 	return &ContractAddAdminEventIterator{contract: _Contract.contract, event: "AddAdminEvent", logs: logs, sub: sub}, nil
 }
 
-// WatchAddAdminEvent is a free log subscription operation binding the contract event 0x68377f3d45858cbcc9e95998fb55b9c0f9e16b6ebf5f3602a40e2fcd0d7b8c00.
+// WatchAddAdminEvent is a free log subscription operation binding the contract event 0xecd88a3d10808aac9f879bbae95f9e4f9687f6c9f0615b88af2085f226d3cf93.
 //
-// Solidity: e AddAdminEvent(addr address)
+// Solidity: e AddAdminEvent(addr address, grantor address, description string)
 func (_Contract *ContractFilterer) WatchAddAdminEvent(opts *bind.WatchOpts, sink chan<- *ContractAddAdminEvent) (event.Subscription, error) {
 
 	logs, sub, err := _Contract.contract.WatchLogs(opts, "AddAdminEvent")
@@ -522,16 +514,15 @@ func (it *ContractNewCheckpointEventIterator) Close() error {
 
 // ContractNewCheckpointEvent represents a NewCheckpointEvent event raised by the Contract contract.
 type ContractNewCheckpointEvent struct {
-	Index         *big.Int
-	SectionHead   [32]byte
-	ChtRoot       [32]byte
-	BloomTrieRoot [32]byte
-	Raw           types.Log // Blockchain specific contextual infos
+	Index          *big.Int
+	Grantor        common.Address
+	CheckpointHash [32]byte
+	Raw            types.Log // Blockchain specific contextual infos
 }
 
-// FilterNewCheckpointEvent is a free log retrieval operation binding the contract event 0xa9b81895520c1feeea26e91ca03e455eb4be8dc9ecb34071c362e67835a6fd42.
+// FilterNewCheckpointEvent is a free log retrieval operation binding the contract event 0x5b3eab050ccf1a983a26b4f6acb13c199093c7d2e7523a0ff036519f7ddaf560.
 //
-// Solidity: e NewCheckpointEvent(index indexed uint256, sectionHead bytes32, chtRoot bytes32, bloomTrieRoot bytes32)
+// Solidity: e NewCheckpointEvent(index indexed uint256, grantor address, checkpointHash bytes32)
 func (_Contract *ContractFilterer) FilterNewCheckpointEvent(opts *bind.FilterOpts, index []*big.Int) (*ContractNewCheckpointEventIterator, error) {
 
 	var indexRule []interface{}
@@ -546,9 +537,9 @@ func (_Contract *ContractFilterer) FilterNewCheckpointEvent(opts *bind.FilterOpt
 	return &ContractNewCheckpointEventIterator{contract: _Contract.contract, event: "NewCheckpointEvent", logs: logs, sub: sub}, nil
 }
 
-// WatchNewCheckpointEvent is a free log subscription operation binding the contract event 0xa9b81895520c1feeea26e91ca03e455eb4be8dc9ecb34071c362e67835a6fd42.
+// WatchNewCheckpointEvent is a free log subscription operation binding the contract event 0x5b3eab050ccf1a983a26b4f6acb13c199093c7d2e7523a0ff036519f7ddaf560.
 //
-// Solidity: e NewCheckpointEvent(index indexed uint256, sectionHead bytes32, chtRoot bytes32, bloomTrieRoot bytes32)
+// Solidity: e NewCheckpointEvent(index indexed uint256, grantor address, checkpointHash bytes32)
 func (_Contract *ContractFilterer) WatchNewCheckpointEvent(opts *bind.WatchOpts, sink chan<- *ContractNewCheckpointEvent, index []*big.Int) (event.Subscription, error) {
 
 	var indexRule []interface{}
@@ -657,13 +648,15 @@ func (it *ContractRemoveAdminEventIterator) Close() error {
 
 // ContractRemoveAdminEvent represents a RemoveAdminEvent event raised by the Contract contract.
 type ContractRemoveAdminEvent struct {
-	Addr common.Address
-	Raw  types.Log // Blockchain specific contextual infos
+	Addr    common.Address
+	Grantor common.Address
+	Reason  string
+	Raw     types.Log // Blockchain specific contextual infos
 }
 
-// FilterRemoveAdminEvent is a free log retrieval operation binding the contract event 0x16f0165239516629af323911340c1c906029142cb0dc3c32c93ce6808d98a4ee.
+// FilterRemoveAdminEvent is a free log retrieval operation binding the contract event 0xe7d6ab069cde0507dc9c5971bf93e9fd183db04690725946e8cae907367e7c1f.
 //
-// Solidity: e RemoveAdminEvent(addr address)
+// Solidity: e RemoveAdminEvent(addr address, grantor address, reason string)
 func (_Contract *ContractFilterer) FilterRemoveAdminEvent(opts *bind.FilterOpts) (*ContractRemoveAdminEventIterator, error) {
 
 	logs, sub, err := _Contract.contract.FilterLogs(opts, "RemoveAdminEvent")
@@ -673,9 +666,9 @@ func (_Contract *ContractFilterer) FilterRemoveAdminEvent(opts *bind.FilterOpts)
 	return &ContractRemoveAdminEventIterator{contract: _Contract.contract, event: "RemoveAdminEvent", logs: logs, sub: sub}, nil
 }
 
-// WatchRemoveAdminEvent is a free log subscription operation binding the contract event 0x16f0165239516629af323911340c1c906029142cb0dc3c32c93ce6808d98a4ee.
+// WatchRemoveAdminEvent is a free log subscription operation binding the contract event 0xe7d6ab069cde0507dc9c5971bf93e9fd183db04690725946e8cae907367e7c1f.
 //
-// Solidity: e RemoveAdminEvent(addr address)
+// Solidity: e RemoveAdminEvent(addr address, grantor address, reason string)
 func (_Contract *ContractFilterer) WatchRemoveAdminEvent(opts *bind.WatchOpts, sink chan<- *ContractRemoveAdminEvent) (event.Subscription, error) {
 
 	logs, sub, err := _Contract.contract.WatchLogs(opts, "RemoveAdminEvent")

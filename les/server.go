@@ -136,7 +136,7 @@ func (s *LesServer) Start(srvr *p2p.Server) {
 	s.privateKey = srvr.PrivateKey
 	s.protocolManager.blockLoop()
 	if s.registrar != nil {
-		s.checkpointLoop()
+		go s.checkpointLoop()
 	}
 }
 
@@ -154,10 +154,9 @@ func (s *LesServer) Stop() {
 		<-s.protocolManager.noMorePeers
 	}()
 	s.protocolManager.Stop()
-	close(s.quitSync)
 }
 
-// checkpointLoop starts a standalone goroutine to watch new checkpoint event and upgrades local's stable checkpoint.
+// checkpointLoop starts a standalone goroutine to watch new checkpoint event and updates local's stable checkpoint.
 func (s *LesServer) checkpointLoop() (err error) {
 	sink := make(chan *contract.ContractNewCheckpointEvent)
 	sub, err := s.registrar.WatchNewCheckpointEvent(sink)
@@ -171,19 +170,12 @@ func (s *LesServer) checkpointLoop() (err error) {
 	for {
 		select {
 		case event := <-sink:
-			// New stable checkpoint received
-			// Note several duplicate events can be received due to chain reorg, just track the first arrive one.
-			if event.Index.Uint64() > s.stableCheckpoint.SectionIdx {
-				checkpoint := &light.TrustedCheckpoint{
-					SectionIdx:    event.Index.Uint64(),
-					SectionHead:   common.Hash(event.SectionHead),
-					ChtRoot:       common.Hash(event.ChtRoot),
-					BloomTrieRoot: common.Hash(event.BloomTrieRoot),
-				}
-				light.WriteTrustedCheckpoint(s.protocolManager.chainDb, checkpoint)
-				s.stableCheckpoint = checkpoint
-				log.Info("update checkpoint", "section", checkpoint.SectionIdx, "head", checkpoint.SectionHead.Hex(),
-					"chtRoot", checkpoint.ChtRoot.Hex(), "bloomTrieRoot", checkpoint.BloomTrieRoot.Hex())
+			// Note several duplicate events can be received because of latest checkpoint modification is allowed.
+			// Always update local checkpoint when the section index is not less than the local one.
+			// todo(rjl493456442) update local checkpoint
+			if event.Index.Uint64() >= s.stableCheckpoint.SectionIdx {
+				log.Info("update checkpoint", "section", event.Index, "hash", common.Hash(event.CheckpointHash).Hex(),
+					"grantor", event.Grantor.Hex())
 			}
 
 		case <-s.quitSync:

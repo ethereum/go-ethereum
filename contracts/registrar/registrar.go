@@ -30,11 +30,11 @@ import (
 )
 
 var (
-	// registrar contract address for mainnet or test chain.
+	// registrar contract address for mainnet and testnet.
 	RegistrarAddr = map[common.Hash]common.Address{
 		params.MainnetGenesisHash: common.HexToAddress(""),
 		params.TestnetGenesisHash: common.HexToAddress(""),
-		params.RinkebyGenesisHash: common.HexToAddress("0x3b934494985d17bcb49557671e1bc8ec32cccdd5"),
+		params.RinkebyGenesisHash: common.HexToAddress("0xe3f2686a5d0c56a2d853c19c46b173a755263be8"),
 	}
 )
 
@@ -42,7 +42,7 @@ var errEventNotFound = errors.New("contract event not found")
 
 const (
 	sectionSize            = 32768 // The frequency for creating a checkpoint
-	checkpointConfirmation = 10000 // The number of confirmations needed before a checkpoint becoming stable.
+	checkpointConfirmation = 500   // The number of confirmations needed before a checkpoint can be accepted
 )
 
 type Registrar struct {

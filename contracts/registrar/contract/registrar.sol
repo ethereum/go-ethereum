@@ -7,22 +7,6 @@ pragma solidity ^0.4.24;
  */
 contract Registrar {
     /*
-        Definitions
-    */
-
-    // Checkpoint represents a set of post-processed trie roots (CHT and BloomTrie)
-    // associated with the appropriate section head hash.
-    //
-    // It is used to start light syncing from this checkpoint
-    // and avoid downloading the entire header chain while still being able to securely
-    // access old headers/logs.
-    struct Checkpoint {
-        bytes32 sectionHead;
-        bytes32 chtRoot;
-        bytes32 bloomTrieRoot;
-    }
-
-    /*
         Modifiers
     */
 
@@ -39,13 +23,17 @@ contract Registrar {
     */
 
     // NewCheckpointEvent is emitted when new checkpoint is registered.
-    event NewCheckpointEvent(uint indexed index, bytes32 sectionHead, bytes32 chtRoot, bytes32 bloomTrieRoot);
+    // Grantor indicates the people register the checkpoint.
+    // We use checkpoint hash instead of the full checkpoint to make the transaction cheaper.
+    event NewCheckpointEvent(uint indexed index, address grantor, bytes32 checkpointHash);
 
     // AddAdminEvent is emitted when new address is accepted as admin.
-    event AddAdminEvent(address addr);
+    // Grantor indicates who authorizes the add admin operation.
+    event AddAdminEvent(address addr, address grantor, string description);
 
     // RemoveAdminEvent is emitted when an admin is removed.
-    event RemoveAdminEvent(address addr);
+    // Grantor indicates who authorizes the remove admin operation.
+    event RemoveAdminEvent(address addr, address grantor, string reason);
 
     /*
         Public Functions
@@ -63,36 +51,37 @@ contract Registrar {
     /**
      * @dev Get latest stable checkpoint information.
      * @return section index
-     * @return section head
-     * @return cht root hash
-     * @return bloom trie root hash
+     * @return checkpoint hash
      */
     function GetLatestCheckpoint()
     view
     public
-    returns(uint, bytes32, bytes32, bytes32) {
-        (bytes32 sectionHead, bytes32 chtRoot, bytes32 bloomRoot) = GetCheckpoint(latest);
-        return (latest, sectionHead, chtRoot, bloomRoot);
+    returns(uint, bytes32) {
+        bytes32 hash = GetCheckpoint(latest);
+        return (latest, hash);
     }
 
     /**
      * @dev Get a stable checkpoint information with specified section index.
      * @param _sectionIndex section index
-     * @return section head
-     * @return cht root hash
-     * @return bloom trie root hash
+     * @return checkpoint hash
      */
     function GetCheckpoint(uint _sectionIndex)
     view
     public
-    returns(bytes32, bytes32, bytes32)
+    returns(bytes32)
     {
-        Checkpoint memory checkpoint = checkpoints[_sectionIndex];
-        return (checkpoint.sectionHead, checkpoint.chtRoot, checkpoint.bloomTrieRoot);
+        return checkpoints[_sectionIndex];
     }
 
     /**
      * @dev Set stable checkpoint information.
+     * Checkpoint represents a set of post-processed trie roots (CHT and BloomTrie)
+     * associated with the appropriate section head hash.
+     *
+     * It is used to start light syncing from this checkpoint
+     * and avoid downloading the entire header chain while still being able to securely
+     * access old headers/logs.
      *
      * Note we trust the given information here provided by foundation,
      * need a trust less version for future.
@@ -113,7 +102,8 @@ contract Registrar {
     returns(bool)
     {
         // Ensure the checkpoint information provided is strictly continuous with previous one.
-        if (_sectionIndex != latest + 1 && latest != 0) {
+        // But the latest checkpoint modification is allowed.
+        if (_sectionIndex != latest && _sectionIndex != latest + 1 && latest != 0) {
             return false;
         }
         // Ensure the checkpoint is stable enough to be registered.
@@ -121,14 +111,10 @@ contract Registrar {
             return false;
         }
 
-        checkpoints[_sectionIndex] = Checkpoint({
-            sectionHead:   _sectionHead,
-            chtRoot:       _chtRoot,
-            bloomTrieRoot: _bloomTrieRoot
-        });
+        checkpoints[_sectionIndex] = keccak256(abi.encodePacked(_sectionHead, _chtRoot, _bloomTrieRoot));
         latest = _sectionIndex;
 
-        emit NewCheckpointEvent(_sectionIndex, _sectionHead, _chtRoot, _bloomTrieRoot);
+        emit NewCheckpointEvent(_sectionIndex, msg.sender, checkpoints[_sectionIndex]);
     }
 
     /**
@@ -136,7 +122,7 @@ contract Registrar {
      * @param _addr specified new admin address.
      * @return indicator whether add new admin successfully
      */
-    function AddAdmin(address _addr)
+    function AddAdmin(address _addr, string _description)
     OnlyAuthorized
     public
     returns(bool)
@@ -148,7 +134,7 @@ contract Registrar {
         admins[_addr] = 1;
         adminList.push(_addr);
 
-        emit AddAdminEvent(_addr);
+        emit AddAdminEvent(_addr, msg.sender, _description);
         return true;
     }
 
@@ -157,7 +143,7 @@ contract Registrar {
      * @param _addr specified admin address to remove.
      * @return indicator whether remove admin successfully
      */
-    function RemoveAdmin(address _addr)
+    function RemoveAdmin(address _addr, string _reason)
     OnlyAuthorized
     public
     returns(bool)
@@ -179,7 +165,7 @@ contract Registrar {
             }
         }
 
-        emit RemoveAdminEvent(_addr);
+        emit RemoveAdminEvent(_addr, msg.sender, _reason);
         return true;
     }
 
@@ -211,7 +197,7 @@ contract Registrar {
     address[] adminList;
 
     // Registered checkpoint information
-    mapping(uint => Checkpoint) checkpoints;
+    mapping(uint => bytes32) checkpoints;
 
     // Latest stored section id
     // Note all registered checkpoint information should continuous with previous one.
@@ -221,6 +207,8 @@ contract Registrar {
     uint constant sectionSize = 32768;
 
     // The number of confirmations needed before a checkpoint can be registered.
-    uint constant confirmations = 10000;
+    // We have to make sure the checkpoint registered will not be invalid due to
+    // chain reorg.
+    uint constant confirmations = 500;
 }
 
